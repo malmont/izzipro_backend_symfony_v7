@@ -18,7 +18,7 @@
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h2 class="h5 mb-0">Préparer la livraison</h2>
-                <span class="badge bg-{{ overview.level == 'manual' ? 'secondary' : (overview.level == 'estimation' ? 'info' : 'success') }}">{{ {manual: 'Expédition par vos soins', estimation: 'Estimation prête', labels: 'Étiquettes prêtes', platform: 'Étiquettes par la plateforme (à venir)'}[overview.level] }}</span>
+                <span class="badge bg-{{ overview.level == 'manual' ? 'secondary' : (overview.level == 'estimation' ? 'info' : 'success') }}">{{ {manual: 'Expédition par vos soins', estimation: 'Estimation prête', labels: 'Étiquettes prêtes', platform: 'Par la plateforme : solde ou clé en attente'}[overview.level] }}</span>
             </div>
             <ol class="mb-0">
                 {% for st in overview.steps %}
@@ -44,7 +44,7 @@
                             <select class="form-select" id="lv-mode" name="mode">
                                 <option value="none" {{ s.mode == 'none' ? 'selected' : '' }}>Estimation seule : transporteurs à prix fixe et retrait, j'expédie moi-même</option>
                                 <option value="own_key" {{ s.mode == 'own_key' ? 'selected' : '' }}>Mon compte EasyPost : tarifs en direct et étiquettes facturées par EasyPost</option>
-                                <option value="platform" {{ s.mode == 'platform' ? 'selected' : '' }}>Par la plateforme : étiquettes payées avec un solde prépayé (bientôt)</option>
+                                <option value="platform" {{ s.mode == 'platform' ? 'selected' : '' }}>Par la plateforme : étiquettes payées avec un solde prépayé</option>
                             </select>
                         </div>
                         <div class="mb-3">
@@ -73,6 +73,15 @@
             </div>
         </div>
         <div class="col-lg-5">
+            {% if s.mode == 'platform' %}
+            <div class="card mb-3" data-livraison-solde>
+                <div class="card-body">
+                    <h2 class="h5">Étiquettes par la plateforme</h2>
+                    <p class="display-6 mb-1">{{ (overview.platform.balanceCents / 100)|number_format(2, ',', ' ') }} {{ overview.platform.currency }}</p>
+                    <p class="small text-muted mb-0">Solde prépayé d'expédition : chaque étiquette achetée depuis une commande le débite du coût EasyPost{% if overview.platform.feeBp > 0 or overview.platform.feeFixedCents > 0 %} plus les frais de service ({{ (overview.platform.feeBp / 100)|number_format(2, ',', ' ') }} % + {{ (overview.platform.feeFixedCents / 100)|number_format(2, ',', ' ') }} {{ overview.platform.currency }} par étiquette){% endif %}. {% if not overview.platform.configured %}<span class="text-danger">La plateforme n'a pas encore branché sa clé EasyPost.</span>{% else %}Pour recharger, écrivez à la plateforme (bientôt : achat dans la boutique de forfaits).{% endif %}</p>
+                </div>
+            </div>
+            {% endif %}
             <div class="card mb-3">
                 <div class="card-body">
                     <h2 class="h5">Modes de remise proposés</h2>

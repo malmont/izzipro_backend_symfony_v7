@@ -119,7 +119,12 @@ class OrderCrudController extends BaseTenantCrudController
         $deliver = \EasyCorp\Bundle\EasyAdminBundle\Config\Action::new('deliverOrder', 'Marquer livrée', 'fas fa-box-open')
             ->linkToRoute('admin_order_ship', fn (Order $order) => ['id' => $order->getId()])
             ->displayIf(fn ($order) => $order instanceof Order && !self::isCounterSale($order) && (int) ($order->getStatus()?->getId() ?? 0) === \App\Services\OrderService\OrderShipmentService::STATUS_SHIPPED);
+        // « Acheter l'étiquette » (lot 2 Livraison, 07/11/2026) : étiquette EasyPost par la plateforme (solde prépayé) ou par le compte du site
+        $label = \EasyCorp\Bundle\EasyAdminBundle\Config\Action::new('buyLabel', 'Acheter l\'étiquette', 'fas fa-tag')
+            ->linkToRoute('admin_order_label', fn (Order $order) => ['id' => $order->getId()])
+            ->displayIf(fn ($order) => $order instanceof Order && !self::isCounterSale($order) && $order->getShippingAdress() !== null && in_array((int) ($order->getStatus()?->getId() ?? 0), \App\Services\OrderService\OrderShipmentService::SHIPPABLE_STATUSES, true));
         $actions = parent::configureActions($actions)
+            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, $label)->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $label)
             ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, $ship)->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $ship)
             ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, $deliver)->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $deliver);
 

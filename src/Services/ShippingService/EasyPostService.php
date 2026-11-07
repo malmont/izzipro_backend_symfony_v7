@@ -4,13 +4,21 @@
 namespace App\Services\ShippingService;
 
 use App\Entity\EasyPostConfiguration;
+use App\Services\BoutiqueSettingsService\BoutiqueSettingsService;
 use App\Services\TenantEntityManagerProvider;
 use EasyPost\EasyPostClient;
 use LogicException;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
 
-class EasyPostService
+/**
+ * Passerelle EasyPost (tarifs, achat d'étiquettes, suivi). Clé utilisée selon le mode d'expédition du site (lot 2 Livraison, 07/11/2026) :
+ * `own_key` → clé du site pour l'environnement choisi (test ou réel, réglage `shipping.easypost_environment`) ; `platform` → clé EasyPost
+ * de la plateforme (variables EASYPOST_SECRET_KEY et EASYPOST_PLATFORM_ENVIRONMENT), les étiquettes étant payées sur le solde prépayé du
+ * site ; `none` → clé du site si elle existe (adresses, essais), sinon aucune. Jamais de repli silencieux sur un autre tarif à l'achat ;
+ * étiquettes en PDF ; envoi international avec déclaration douanière fournie par l'appelant (`customs_info`).
+ */
+class EasyPostService implements ShippingCarrierGatewayInterface
 {
     private TenantEntityManagerProvider $emProvider;
     private string $appEnv;
@@ -20,16 +28,27 @@ class EasyPostService
         TenantEntityManagerProvider $emProvider,
         string $appEnv,
         LoggerInterface $logger,
-        private readonly ?\App\Services\BoutiqueSettingsService\BoutiqueSettingsService $settings = null
+        private readonly ?BoutiqueSettingsService $settings = null,
+        private readonly string $platformApiKey = '',
+        private readonly string $platformEnvironment = 'test',
     ) {
         $this->emProvider = $emProvider;
         $this->appEnv = $appEnv;
         $this->logger = $logger;
     }
 
-    /** `test` ou `live` : réglage du site, sinon l'environnement Symfony (`prod` = live) */
+    /** Mode d'expédition du site : none | own_key | platform */
+    public function mode(): string
+    {
+        return $this->settings?->shippingSettings()['mode'] ?? 'none';
+    }
+
+    /** `test` ou `live` : réglage du site (clé propre), environnement de la plateforme (mode plateforme), sinon l'environnement Symfony */
     public function environment(): string
     {
+        if ($this->mode() === 'platform') {
+            return $this->platformEnvironment === 'live' ? 'live' : 'test';
+        }
         $setting = $this->settings?->shippingSettings()['easypostEnvironment'] ?? null;
         if ($setting !== null) {
             return $setting;
@@ -38,28 +57,34 @@ class EasyPostService
         return $this->appEnv === 'prod' ? 'live' : 'test';
     }
 
+    /** Clé de la plateforme renseignée (mode plateforme possible) */
+    public function platformConfigured(): bool
+    {
+        return trim($this->platformApiKey) !== '';
+    }
+
     protected function getTenantClient(): EasyPostClient
     {
-        $em = $this->emProvider->getEntityManager();
-        $repo = $em->getRepository(EasyPostConfiguration::class);
-        $config = $repo->findOneBy([]);
+        if ($this->mode() === 'platform') {
+            if (!$this->platformConfigured()) {
+                throw new LogicException('Clé EasyPost de la plateforme absente : étiquettes par la plateforme indisponibles.');
+            }
 
+            return new EasyPostClient(trim($this->platformApiKey));
+        }
+        $em = $this->emProvider->getEntityManager();
+        $config = $em->getRepository(EasyPostConfiguration::class)->findOneBy([]);
         if (!$config) {
             throw new LogicException('Aucune configuration EasyPost trouvée pour ce tenant.');
         }
-
-        $apiKey = null;
-
-        // Livraison, lot 1 (07/11/2026) : l'environnement EasyPost est un réglage du site (commerce.easypostEnvironment, test par défaut),
-        // plus l'environnement Symfony : le serveur tourne en dev et la clé de production n'était jamais utilisée
         if ($this->environment() === 'live') {
             try {
                 $apiKey = $config->getEasypostApiKeyProd();
-                if (!$apiKey) {
-                    throw new LogicException('Clé API EasyPost de PRODUCTION manquante ou invalide pour ce tenant.');
-                }
             } catch (RuntimeException $e) {
                 throw new LogicException('Erreur lors du déchiffrement de la clé API EasyPost Production: ' . $e->getMessage(), 0, $e);
+            }
+            if (!$apiKey) {
+                throw new LogicException('Clé API EasyPost de PRODUCTION manquante ou invalide pour ce tenant.');
             }
         } else {
             $apiKey = $config->getEasypostApiKeySandbox();
@@ -71,18 +96,20 @@ class EasyPostService
         return new EasyPostClient($apiKey);
     }
 
-
     public function getClient(): EasyPostClient
     {
         return $this->getTenantClient();
     }
 
     /**
-     * Le site a-t-il une clé EasyPost pour l'environnement courant ? Sans lever d'exception : les adresses d'un site
-     * sans EasyPost sont gardées telles quelles (31/10/2026).
+     * Le site a-t-il une clé EasyPost pour l'environnement courant (ou la plateforme la sienne en mode plateforme) ? Sans lever
+     * d'exception : les adresses d'un site sans EasyPost se gèrent quand même.
      */
     public function hasConfiguration(): bool
     {
+        if ($this->mode() === 'platform') {
+            return $this->platformConfigured();
+        }
         $config = $this->emProvider->getEntityManager()->getRepository(EasyPostConfiguration::class)->findOneBy([]);
         if (!$config) {
             return false;
@@ -101,82 +128,66 @@ class EasyPostService
         $client = $this->getTenantClient();
         try {
             $shipment = $client->shipment->create($data);
-            // dd("DEBUG getRates (Purolator) :", $shipment);
             if (!empty($shipment->messages)) {
-                $this->logger->warning('Messages transporteur (getRates)', [
-                    'messages' => json_decode(json_encode($shipment->messages), true)
-                ]);
+                $this->logger->warning('[EasyPost] messages transporteur (tarifs)', ['messages' => json_decode(json_encode($shipment->messages), true)]);
             }
-            return $shipment->rates;
+
+            return is_array($shipment->rates ?? null) ? $shipment->rates : [];
         } catch (\EasyPost\Exception\Api\ApiException $e) {
-            error_log("EasyPost API Error (getRates): " . $e->getMessage());
-            throw new RuntimeException("Erreur lors de la récupération des tarifs EasyPost: " . $e->getMessage(), 0, $e);
+            $this->logger->error('[EasyPost] tarifs : ' . $e->getMessage());
+            throw new RuntimeException('Erreur lors de la récupération des tarifs EasyPost: ' . $e->getMessage(), 0, $e);
         }
     }
 
     public function createShipmentAndBuy(array $data, string $carrierAccountId, string $service): array
     {
         $client = $this->getTenantClient();
-
+        $data['options'] = ($data['options'] ?? []) + ['label_format' => 'PDF'];
         try {
             $shipment = $client->shipment->create($data);
-            // if (empty($shipment->rates)) {
-            //     dd(
-            //         "=== ERREUR PUROLATOR (Pas de tarifs) ===",
-            //         "ID du compte demandé : " . $carrierAccountId,
-            //         "MESSAGES D'ERREUR DU TRANSPORTEUR :",
-            //         $shipment->messages, // <--- C'est ici que la vérité se trouve
-            //         "Données envoyées :", 
-            //         $data
-            //     );
-            // }
-
-            $rateToBuy = null;
-
             $targetAccountId = trim($carrierAccountId);
             $targetService = trim($service);
-
-            foreach ($shipment->rates as $r) {
-                if ($r->carrier_account_id === $targetAccountId && $r->service === $targetService && isset($r->id)) {
+            $rateToBuy = null;
+            $available = [];
+            foreach (is_array($shipment->rates ?? null) ? $shipment->rates : [] as $r) {
+                $available[] = ($r->service ?? '?') . ' (' . ($r->carrier_account_id ?? '?') . ')';
+                if (($r->carrier_account_id ?? null) === $targetAccountId && ($r->service ?? null) === $targetService && isset($r->id)) {
                     $rateToBuy = $r;
                     break;
                 }
             }
-
-            if (!$rateToBuy) {
-
-                $availableServices = array_map(fn($r) => $r->service . ' (' . $r->carrier_account_id . ')', $shipment->rates);
-                error_log("Tarif introuvable. Cherché: [$targetService][$targetAccountId]. Trouvés: " . implode(', ', $availableServices));
-
-                $rateToBuy = $shipment->lowestRate();
-                if (!isset($rateToBuy->id)) {
-                    throw new RuntimeException("Impossible de trouver un tarif achetable pour cette expédition.");
-                }
+            if ($rateToBuy === null) {
+                // Jamais de repli sur le moins cher : le marchand (ou le client) a choisi un service, un autre serait facturé à sa place
+                $this->logger->warning('[EasyPost] tarif demandé introuvable', ['service' => $targetService, 'account' => $targetAccountId, 'available' => $available, 'messages' => json_decode(json_encode($shipment->messages ?? []), true)]);
+                throw new RateUnavailableException($targetService, $targetAccountId, $available);
             }
-
             $bought = $client->shipment->buy($shipment->id, ['rate' => ['id' => $rateToBuy->id]]);
 
             return [
-                'label_url'     => $bought->postage_label->label_url,
-                'tracking_code' => $bought->tracking_code,
-                'price'         => $rateToBuy->rate,
-                'currency'      => $rateToBuy->currency
+                'label_url' => (string) ($bought->postage_label->label_url ?? ''),
+                'tracking_code' => (string) ($bought->tracking_code ?? ''),
+                'price' => (string) $rateToBuy->rate,
+                'currency' => (string) $rateToBuy->currency,
+                'carrier' => (string) ($rateToBuy->carrier ?? ''),
+                'service' => (string) ($rateToBuy->service ?? ''),
             ];
         } catch (\EasyPost\Exception\Api\ApiException $e) {
-            error_log("EasyPost API Error (buyShipment): " . $e->getMessage());
-            throw new RuntimeException("Erreur lors de l'achat de l'étiquette EasyPost: " . $e->getMessage(), 0, $e);
+            $this->logger->error('[EasyPost] achat d\'étiquette : ' . $e->getMessage());
+            throw new RuntimeException('Erreur lors de l\'achat de l\'étiquette EasyPost: ' . $e->getMessage(), 0, $e);
         }
     }
 
-    public function track(string $code): array
+    public function track(string $trackingCode, ?string $carrier = null): array
     {
         $client = $this->getTenantClient();
         try {
-            $tracker = $client->tracker->create(['tracking_code' => $code]);
-            return $tracker->status_history ?? [];
+            $tracker = $client->tracker->create(array_filter(['tracking_code' => $trackingCode, 'carrier' => $carrier]));
+            $history = json_decode(json_encode($tracker->tracking_details ?? $tracker->status_history ?? []), true);
+
+            return ['status' => isset($tracker->status) ? (string) $tracker->status : null, 'history' => is_array($history) ? $history : []];
         } catch (\EasyPost\Exception\Api\ApiException $e) {
-            error_log("EasyPost API Error (track): " . $e->getMessage());
-            throw new RuntimeException("Erreur lors du suivi EasyPost: " . $e->getMessage(), 0, $e);
+            $this->logger->error('[EasyPost] suivi : ' . $e->getMessage());
+            throw new RuntimeException('Erreur lors du suivi EasyPost: ' . $e->getMessage(), 0, $e);
         }
     }
 }

@@ -29,6 +29,9 @@ services:
             $luluClientSecret: null
 
     # Assistant IA des landing pages : client Anthropic simulé (réponses scriptées par les tests)
+    # Passerelle EasyPost simulée (lot 2 Livraison, 07/11/2026)
+    App\Tests\Fake\FakeEasyPostGateway: ~
+    App\Services\ShippingService\ShippingCarrierGatewayInterface: '@App\Tests\Fake\FakeEasyPostGateway'
     App\Tests\Fake\FakeLandingAiClient:
         public: true
     App\Services\LandingAiService\LandingAiClientInterface: '@App\Tests\Fake\FakeLandingAiClient'

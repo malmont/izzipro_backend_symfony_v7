@@ -99,3 +99,48 @@ INSERT INTO platform_offers (code, label_fr, label_en, features, monthly_price_c
     ('boussole', 'Boussole ESG', 'ESG Compass', '["module.boussole"]', 4900, 30, 100),
     ('all', 'Tout compris', 'All inclusive', '["module.landing", "module.boutique", "module.pos", "module.memoires", "module.boussole", "app.mobile_shop", "app.management", "app.living_memory"]', 19900, 30, 110)
 ON CONFLICT (code) DO NOTHING;
+
+-- Livraison, lot 2 (07/11/2026) : étiquettes achetées par la plateforme pour le compte d'un site, payées sur un **solde prépayé** par site.
+-- platform_shipping_balances : un solde par site (cents, devise du solde) ; platform_shipping_balance_events : chaque mouvement
+-- (credit par le super admin ou par un achat dans la boutique de forfaits, label = débit d'une étiquette, refund) ;
+-- platform_shipping_charges : chaque étiquette achetée (coût EasyPost, frais de service, total, suivi). Réglages dans platform_settings :
+-- shipping_fee_bp (marge en points de base sur le coût EasyPost), shipping_fee_fixed_cents (frais fixes par étiquette),
+-- easypost_platform_carriers (JSON : comptes transporteurs de la clé EasyPost de la plateforme). Retour arrière : DROP TABLE des trois tables.
+CREATE TABLE IF NOT EXISTS platform_shipping_balances (
+    tenant_code VARCHAR(50) PRIMARY KEY,
+    balance_cents BIGINT NOT NULL DEFAULT 0,
+    currency VARCHAR(3) NOT NULL DEFAULT 'CAD',
+    updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS platform_shipping_balance_events (
+    id BIGSERIAL PRIMARY KEY,
+    tenant_code VARCHAR(50) NOT NULL,
+    kind VARCHAR(20) NOT NULL,
+    delta_cents BIGINT NOT NULL,
+    balance_after_cents BIGINT NOT NULL,
+    reference VARCHAR(255) DEFAULT NULL,
+    note TEXT DEFAULT NULL,
+    created_by VARCHAR(255) DEFAULT NULL,
+    created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_platform_shipping_balance_events_tenant ON platform_shipping_balance_events (tenant_code, id);
+CREATE TABLE IF NOT EXISTS platform_shipping_charges (
+    id BIGSERIAL PRIMARY KEY,
+    tenant_code VARCHAR(50) NOT NULL,
+    order_id INT NOT NULL,
+    order_reference VARCHAR(100) DEFAULT NULL,
+    carrier VARCHAR(100) DEFAULT NULL,
+    service VARCHAR(100) DEFAULT NULL,
+    parcels INT NOT NULL DEFAULT 1,
+    easypost_cost_cents INT NOT NULL,
+    fee_cents INT NOT NULL DEFAULT 0,
+    total_cents INT NOT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'CAD',
+    tracking_codes JSONB DEFAULT NULL,
+    environment VARCHAR(10) NOT NULL DEFAULT 'test',
+    created_by VARCHAR(255) DEFAULT NULL,
+    created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_platform_shipping_charges_tenant ON platform_shipping_charges (tenant_code, id);
+INSERT INTO platform_settings (key, value) VALUES ('shipping_fee_bp', '0'), ('shipping_fee_fixed_cents', '0') ON CONFLICT (key) DO NOTHING;
+

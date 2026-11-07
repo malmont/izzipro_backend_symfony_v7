@@ -19,7 +19,7 @@ class ShippingService
 
     public function __construct(
         private TenantEntityManagerProvider $emProvider,
-        private EasyPostService           $easyPostService,
+        private ShippingCarrierGatewayInterface $easyPostService, // EasyPost en production, simulée dans les tests (lot 2 Livraison)
         private PackagingService          $packager
     ) {}
 
@@ -79,7 +79,8 @@ class ShippingService
                     $r->service,
                     (float)$r->rate,
                     $r->currency,
-                    (int)($r->delivery_days ?? $r->est_delivery_days ?? 0)
+                    (int)($r->delivery_days ?? $r->est_delivery_days ?? 0),
+                    isset($r->carrier_account_id) ? (string) $r->carrier_account_id : null
                 );
             }
         }
@@ -106,6 +107,7 @@ class ShippingService
                     'total'         => 0.0,
                     'currency'      => $r->currency,
                     'estimatedDays' => 0,
+                    'carrierAccountId' => $r->carrierAccountId,
                 ];
             }
             $agg[$key]['total']         += $r->price;
@@ -118,7 +120,8 @@ class ShippingService
                 $v['service'],
                 $v['total'],
                 $v['currency'],
-                $v['estimatedDays']
+                $v['estimatedDays'],
+                $v['carrierAccountId']
             ),
             array_values($agg)
         );
@@ -162,7 +165,8 @@ class ShippingService
         array  $to,
         array  $from,
         string $carrierAccountId,
-        string $service
+        string $service,
+        ?array $customsInfo = null // envoi international (lot 2 Livraison, 07/11/2026) : déclaration douanière EasyPost
     ): array {
         $packedParcels = $this->getPackedParcels($items);
         $labels = [];
@@ -181,7 +185,11 @@ class ShippingService
                     'height' => $box->getOuterDepth() * self::MM_TO_IN,
                 ],
                 'carrier_accounts' => [$carrierAccountId],
+                'options'          => ['label_format' => 'PDF'], // étiquette à imprimer en PDF (lot 2 Livraison, 07/11/2026)
             ];
+            if ($customsInfo !== null) {
+                $payload['customs_info'] = $customsInfo;
+            }
 
             $labels[] = $this->easyPostService
                              ->createShipmentAndBuy($payload, $carrierAccountId, $service);

@@ -247,7 +247,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (289)
+## Boutique et commun (294)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -378,6 +378,10 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/platform/requests` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::requests` |
 | GET | `/api/platform/settings` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformSettingsController::show` |
 | PUT | `/api/platform/settings` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformSettingsController::update` |
+| POST | `/api/platform/shipping/balances/{code}/credit` | ROLE_SUPER_ADMIN | `Controller\PlatformController\PlatformShippingController::credit` |
+| GET | `/api/platform/shipping/balances/{code}` | ROLE_SUPER_ADMIN | `Controller\PlatformController\PlatformShippingController::balance` |
+| PUT | `/api/platform/shipping/settings` | ROLE_SUPER_ADMIN | `Controller\PlatformController\PlatformShippingController::settings` |
+| GET | `/api/platform/shipping` | ROLE_SUPER_ADMIN | `Controller\PlatformController\PlatformShippingController::index` |
 | GET | `/api/platform/sites` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::sites` |
 | POST | `/api/pos/approvals` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosPinController::approve` |
 | GET | `/api/pos/archive/{year}` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosArchiveController::download` |
@@ -479,6 +483,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/site/features` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteFeaturesController::show` |
 | PUT | `/api/site/features` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteFeaturesController::update` |
 | GET | `/api/site/readiness` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteReadinessController::show` |
+| GET | `/api/site/shipping` | ROLE_ADMIN | `Controller\SiteFeaturesController\SiteShippingController::index` |
 | GET | `/api/sizes` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\SizesController\SizeController::getSizes` |
 | POST | `/api/sizes` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::createSize` |
 | GET | `/api/social-networks` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\SocialNetworkController\SocialNetworkController::list` |
@@ -580,7 +585,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (54)
+## Administration (EasyAdmin) (57)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -604,6 +609,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/admin/mon-site/forfait` | ROLE_ADMIN | `Controller\Admin\SiteConsoleAdminController::plan` |
 | POST | `/admin/mon-site/regler` | ROLE_ADMIN | `Controller\Admin\SiteConsoleAdminController::settle` |
 | GET | `/admin/mon-site` | ROLE_ADMIN | `Controller\Admin\SiteConsoleAdminController::index` |
+| GET, POST | `/admin/orders/{id}/etiquette` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderLabelAdminController::label` |
 | GET, POST | `/admin/orders/{id}/expedier` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderShipmentAdminController::ship` |
 | POST | `/admin/orders/{id}/livree` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderShipmentAdminController::deliver` |
 | ANY | `/admin/pdf/print-barcode/{id}/{copies}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::pdfPrintBarcode` |
@@ -611,6 +617,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/plateforme/boutique` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shop` |
 | POST | `/admin/plateforme/demande/{id}/{decision}` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::request` |
 | POST | `/admin/plateforme/droit/{id}/{action}` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::act` |
+| POST | `/admin/plateforme/livraison/credit` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shippingCredit` |
+| POST | `/admin/plateforme/livraison/frais` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shippingFees` |
 | POST | `/admin/plateforme/mode` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::switchMode` |
 | POST | `/admin/plateforme/offre/{code}` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::offer` |
 | POST | `/admin/plateforme/politique/{feature}` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::policy` |

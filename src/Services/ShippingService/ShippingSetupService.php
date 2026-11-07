@@ -15,8 +15,29 @@ use App\Services\TenantEntityManagerProvider;
  */
 class ShippingSetupService
 {
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly BoutiqueSettingsService $settings)
+    public function __construct(
+        private readonly TenantEntityManagerProvider $emProvider,
+        private readonly BoutiqueSettingsService $settings,
+        private readonly ?\App\Services\TenantConnectionManager $tenants = null, // étiquettes par la plateforme (lot 2, 07/11/2026)
+        private readonly ?\App\Services\Platform\ShippingBalanceRepository $balances = null,
+        private readonly ?\App\Services\Platform\PlatformShippingService $platform = null,
+        private readonly ?ShippingCarrierGatewayInterface $gateway = null,
+    ) {
+    }
+
+    /** @return array{configured: bool, carriers: int, balanceCents: int, currency: string, feeBp: int, feeFixedCents: int} état des étiquettes par la plateforme pour ce site */
+    public function platform(): array
     {
+        $code = (string) ($this->tenants?->getCurrentTenantCode() ?? '');
+        $settings = $this->platform?->settings() ?? ['feeBp' => 0, 'feeFixedCents' => 0, 'carriers' => []];
+        $balance = $code !== '' && $this->balances !== null ? $this->balances->balance($code) : ['balanceCents' => 0, 'currency' => 'CAD'];
+        $configured = false;
+        try {
+            $configured = $this->gateway instanceof EasyPostService ? $this->gateway->platformConfigured() : ($this->gateway?->hasConfiguration() ?? false);
+        } catch (\Throwable) {
+        }
+
+        return ['configured' => $configured && $settings['carriers'] !== [], 'carriers' => count($settings['carriers']), 'balanceCents' => (int) $balance['balanceCents'], 'currency' => (string) $balance['currency'], 'feeBp' => $settings['feeBp'], 'feeFixedCents' => $settings['feeFixedCents']];
     }
 
     /**
@@ -46,15 +67,18 @@ class ShippingSetupService
             // clé de production indéchiffrable : comptée absente
         }
 
-        return ['settings' => $settings, 'carriers' => $carriers, 'counts' => $counts, 'easypostKeys' => $keys, 'steps' => $this->steps($settings, $counts, $keys), 'level' => $this->level($settings, $counts, $keys)];
+        $platform = $this->platform();
+        $senderPhone = trim((string) $this->one($connection, 'SELECT phone FROM address_entreprise ORDER BY id LIMIT 1')) !== '';
+
+        return ['settings' => $settings, 'carriers' => $carriers, 'counts' => $counts, 'easypostKeys' => $keys, 'platform' => $platform, 'senderPhone' => $senderPhone, 'steps' => $this->steps($settings, $counts, $keys, $platform, $senderPhone), 'level' => $this->level($settings, $counts, $keys, $platform)];
     }
 
     /** `manual` (retrait et prix fixes), `estimation` (poids et gabarits en place), `labels` (clé EasyPost prête), `platform` (étiquettes par la plateforme, lot 2) */
-    private function level(array $settings, array $counts, array $keys): string
+    private function level(array $settings, array $counts, array $keys, array $platform = []): string
     {
         $env = $settings['easypostEnvironment'];
         if ($settings['mode'] === 'platform') {
-            return 'platform';
+            return ($platform['configured'] ?? false) && ($platform['balanceCents'] ?? 0) > 0 ? 'labels' : 'platform';
         }
         if ($settings['mode'] === 'own_key' && $keys[$env]) {
             return 'labels';
@@ -64,7 +88,7 @@ class ShippingSetupService
     }
 
     /** @return list<array{key: string, title: string, description: string, status: string, screen: ?string}> */
-    private function steps(array $settings, array $counts, array $keys): array
+    private function steps(array $settings, array $counts, array $keys, array $platform = [], bool $senderPhone = true): array
     {
         $steps = [];
         $add = function (string $key, string $title, string $description, string $status, ?string $screen) use (&$steps) {
@@ -77,16 +101,30 @@ class ShippingSetupService
         $weightsNeeded = $settings['mode'] !== 'none';
         $add('shipping.weights', 'Poids et dimensions des produits', sprintf('%d produit(s) à expédier, %d sans poids. Grille de saisie rapide et estimation par l\'IA ; sans fiche, un produit hérite les valeurs de sa classe, sinon le poids par défaut (%s kg).', $counts['productsToShip'], $counts['productsWithoutWeight'], rtrim(rtrim(number_format($settings['defaultWeightKg'], 3, ',', ' '), '0'), ',')), $counts['productsToShip'] > 0 && $counts['productsWithoutWeight'] === 0 ? 'done' : ($weightsNeeded ? 'todo' : 'optional'), 'product_weights');
         $add('shipping.packaging', 'Gabarits d\'emballage et classes d\'expédition', 'Les gabarits (enveloppe, petite boîte…) et les classes (standard, fragile…) sont fournis d\'office ; adaptez-les à vos cartons pour des tarifs justes.', $counts['packagingTypes'] > 0 && $counts['shippingClasses'] > 0 ? 'done' : ($weightsNeeded ? 'todo' : 'optional'), 'packaging_types');
+        if ($settings['mode'] !== 'none' && !$senderPhone) {
+            $add('shipping.sender_phone', 'Téléphone de l\'expéditeur', 'Certains transporteurs refusent une étiquette sans téléphone d\'expéditeur : renseignez-le sur l\'adresse de l\'entreprise (fiche Entreprise).', 'todo', 'entreprise');
+        }
         if ($settings['mode'] === 'own_key') {
             $env = $settings['easypostEnvironment'];
             $add('shipping.easypost_key', sprintf('Clé EasyPost du site (%s)', $env === 'live' ? 'réel' : 'test'), 'Votre propre compte EasyPost : tarifs en direct au paiement et étiquettes facturées par EasyPost sur votre compte. Saisissez la clé de l\'environnement choisi.', $keys[$env] ? 'done' : 'todo', 'easypost');
         } elseif ($settings['mode'] === 'platform') {
-            $add('shipping.platform', 'Étiquettes par la plateforme (solde prépayé)', 'Achetez vos étiquettes depuis la commande avec un solde prépayé : disponible au prochain lot ; en attendant, expédiez vous-même.', 'pending', 'shipping');
+            $ok = ($platform['configured'] ?? false);
+            $balance = (int) ($platform['balanceCents'] ?? 0);
+            $add('shipping.platform', 'Étiquettes par la plateforme (solde prépayé)', $ok ? sprintf('Solde d\'expédition : %s %s. Depuis une commande, « Acheter l\'étiquette » débite le coût EasyPost%s ; sans solde, expédiez vous-même.', number_format($balance / 100, 2, ',', ' '), $platform['currency'] ?? 'CAD', ($platform['feeBp'] ?? 0) > 0 || ($platform['feeFixedCents'] ?? 0) > 0 ? ' plus les frais de service' : '') : 'La plateforme n\'a pas encore branché sa clé EasyPost et ses comptes transporteurs : en attendant, expédiez vous-même.', $ok && $balance > 0 ? 'done' : ($ok ? 'todo' : 'pending'), 'shipping');
         } else {
             $add('shipping.mode', 'Passer aux étiquettes (facultatif)', 'Aujourd\'hui : estimation et expédition par vos soins. Pour acheter des étiquettes depuis la commande, choisissez « clé EasyPost du site » ou, bientôt, « par la plateforme ».', 'optional', 'shipping');
         }
 
         return $steps;
+    }
+
+    private function one(\Doctrine\DBAL\Connection $connection, string $sql): mixed
+    {
+        try {
+            return $connection->fetchOne($sql);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function count(\Doctrine\DBAL\Connection $connection, string $sql): int

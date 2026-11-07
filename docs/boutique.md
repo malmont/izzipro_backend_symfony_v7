@@ -1122,6 +1122,40 @@ l'étiquette » depuis la commande, suivi automatique).
 
 Tests : `tests/Functional/Boutique/ShippingWeightsTest.php`.
 
+### Livraison, lot 2 (07/11/2026) : étiquettes par la plateforme et solde prépayé
+
+- **Passerelle** `Services/ShippingService/ShippingCarrierGatewayInterface` (EasyPost en production : `EasyPostService` ; simulée dans les
+  tests : `tests/Fake/FakeEasyPostGateway`). Clé selon le mode du site : `own_key` → clé du site pour l'environnement choisi ; `platform` →
+  clé EasyPost de la plateforme (variables `EASYPOST_SECRET_KEY`, `EASYPOST_PLATFORM_ENVIRONMENT` test | live, lues à la création du
+  conteneur). Achat : **tarif exact** (compte transporteur + service), `RateUnavailableException` sinon (plus de repli silencieux sur le
+  moins cher) ; étiquette en PDF ; suivi créé avec le transporteur ; journal applicatif.
+- **Plateforme** (base maître, `ops/sql/platform_master.sql`, idempotent) : `platform_shipping_balances` (solde prépayé par site),
+  `platform_shipping_balance_events` (credit | label | refund), `platform_shipping_charges` (chaque étiquette : coût EasyPost, frais,
+  total, suivis, environnement) ; réglages `shipping_fee_bp` (marge en points de base), `shipping_fee_fixed_cents` (par étiquette),
+  `easypost_platform_carriers` (JSON des comptes transporteurs de la clé de la plateforme, à propager dans `gmasuite` et les sites en
+  mode plateforme quand le propriétaire aura ses comptes). `Services/Platform/PlatformShippingService`, `ShippingBalanceRepository`
+  (débit sous verrou, refus `InsufficientShippingBalanceException`).
+- **Routes plateforme** (`ROLE_SUPER_ADMIN`) : `GET /api/platform/shipping` → `{settings: {feeBp, feeFixedCents, carriers}, balances}` ;
+  `PUT /api/platform/shipping/settings {feeBp?, feeFixedCents?, carriers?: [{id, carrier, label}]}` ; `GET /api/platform/shipping/balances/{code}`
+  → `{balance, events, charges}` ; `POST /api/platform/shipping/balances/{code}/credit {amountCents, note?}`. Page Plateforme : section
+  « Étiquettes par la plateforme » (frais, comptes, soldes, crédit). Un crédit par la boutique de forfaits viendra avec son lancement.
+- **Site** (`ROLE_ADMIN`) : `GET /api/site/shipping` → `{overview, balance, charges}` ; page Livraison : bloc solde en mode plateforme,
+  étape `shipping.platform` (faite quand clé + comptes de la plateforme et solde positif), étape `shipping.sender_phone` (téléphone de
+  l'expéditeur, exigé par certains transporteurs) ; registre `shipping.mode = platform` : prérequis `shipping.platform` et `shipping.balance`.
+- **« Acheter l'étiquette »** : action sur la commande (payée, avec adresse de livraison, hors caisse) → page `GET`/`POST
+  /admin/orders/{id}/etiquette` (`Controller/Admin/OrderLabelAdminController`, `Services/ShippingService/AdminLabelPurchaseService`) :
+  colis (poids effectifs des produits), tarifs **filtrés sur la devise du site**, frais de service en mode plateforme, solde, bloqueurs
+  (`SHIPPING_MODE_NONE`, `NO_SHIPPING_ADDRESS`, `NO_SENDER_ADDRESS`, `NO_ITEMS`, `EASYPOST_NOT_CONFIGURED`, `PLATFORM_NOT_READY`,
+  `NO_RATES`, `RATE_UNAVAILABLE`, `BALANCE_INSUFFICIENT`, `PURCHASE_FAILED`) ; achat : débit du solde **avant** l'achat (remboursé si
+  l'achat échoue), lignes `ShippingOrder` / `Parcel` / `ShippingLabel`, frais enregistrés, puis `OrderShipmentService::ship()` (statut 5,
+  suivi, courriel au client). Envoi international : `customs_info` (marchandise, lignes avec valeur et poids, pays d'origine = expéditeur).
+  Une commande déjà étiquetée montre ses PDF et ses suivis, sans second achat.
+- **Suivi automatique** : `app:shipping:track [--tenant=code]` (toutes les commandes « En cours de livraison » avec étiquette EasyPost ;
+  toutes livrées → « Livrée ») ; unités `ops/systemd/shipping-track.{service,timer}` (toutes les 6 h), à installer par le propriétaire.
+
+Tests : `tests/Functional/Boutique/ShippingLabelsTest.php`. Validation avec de vraies clés (bac à sable EasyPost : vraies étiquettes de
+test, rien n'est facturé) au lot des comptes tiers.
+
 ### Commandes du client
 
 - `GET /api/ordersuser` (connecté) : commandes de l'utilisateur connecté, jamais servies par le cache (lot 4 de l'invalidation ciblée,

@@ -28,7 +28,7 @@ class ShippingConsoleAdminController extends AbstractController
         'carriers' => ['crud' => CarrierCrudController::class], 'easypost' => ['crud' => EasyPostConfigurationCrudController::class],
         'product_shipping' => ['crud' => ProductShippingCrudController::class], 'packaging_types' => ['crud' => PackagingTypeCrudController::class],
         'shipping_classes' => ['crud' => ShippingClassCrudController::class], 'products' => ['crud' => ProductCrudController::class], 'shipping' => ['route' => 'admin_livraison'],
-        'product_weights' => ['route' => 'admin_livraison_poids'],
+        'product_weights' => ['route' => 'admin_livraison_poids'], 'entreprise' => ['crud' => EntrepriseCrudController::class],
     ];
 
     private const CSRF_WEIGHTS = 'admin_livraison_poids';

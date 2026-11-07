@@ -35,7 +35,39 @@ class PlatformConsoleAdminController extends AbstractController
         private readonly FeatureRequestRepository $requests,
         private readonly EntitlementRepository $repository,
         private readonly AdminUrlGenerator $urls,
+        private readonly ?\App\Services\Platform\PlatformShippingService $shipping = null, // étiquettes par la plateforme (lot 2 Livraison, 07/11/2026)
+        private readonly ?\App\Services\Platform\ShippingBalanceRepository $balances = null,
     ) {
+    }
+
+    #[Route('/admin/plateforme/livraison/frais', name: 'admin_plateforme_shipping_fees', methods: ['POST'])]
+    public function shippingFees(Request $request): Response
+    {
+        return $this->action($request, function () use ($request) {
+            $bp = (int) round((float) str_replace(',', '.', (string) $request->request->get('feePercent', '0')) * 100);
+            $fixed = (int) round((float) str_replace(',', '.', (string) $request->request->get('feeFixed', '0')) * 100);
+            $this->shipping?->setFees($bp, $fixed, $this->getUser()?->getUserIdentifier());
+            $carriers = [];
+            foreach (preg_split('/\R/', (string) $request->request->get('carriers', '')) ?: [] as $line) {
+                $parts = array_map('trim', explode('|', $line));
+                if (($parts[0] ?? '') !== '') {
+                    $carriers[] = ['id' => $parts[0], 'carrier' => $parts[1] ?? '', 'label' => $parts[2] ?? ($parts[1] ?? $parts[0])];
+                }
+            }
+            $this->shipping?->setCarriers($carriers, $this->getUser()?->getUserIdentifier());
+            $this->addFlash('success', 'Frais d\'étiquette et comptes transporteurs de la plateforme enregistrés.');
+        });
+    }
+
+    #[Route('/admin/plateforme/livraison/credit', name: 'admin_plateforme_shipping_credit', methods: ['POST'])]
+    public function shippingCredit(Request $request): Response
+    {
+        return $this->action($request, function () use ($request) {
+            $amount = (int) round((float) str_replace(',', '.', (string) $request->request->get('amount', '0')) * 100);
+            $code = trim((string) $request->request->get('tenant', ''));
+            $result = $this->shipping?->credit($code, $amount, (string) $request->request->get('note', ''), $this->getUser()?->getUserIdentifier());
+            $this->addFlash('success', sprintf('Solde d\'expédition de %s crédité : %s %s.', $code, number_format(($result['balanceCents'] ?? 0) / 100, 2, ',', ' '), $result['currency'] ?? 'CAD'));
+        });
     }
 
     #[Route('/admin/plateforme', name: 'admin_plateforme', methods: ['GET'])]
@@ -62,6 +94,8 @@ class PlatformConsoleAdminController extends AbstractController
             'events' => $this->repository->events($tenant !== '' ? $tenant : null, 50),
             'selected' => $tenant,
             'csrf_id' => self::CSRF_ID,
+            'shippingSettings' => $this->shipping?->settings() ?? ['feeBp' => 0, 'feeFixedCents' => 0, 'carriers' => []],
+            'shippingBalances' => $this->balances?->all() ?? [],
         ]);
     }
 

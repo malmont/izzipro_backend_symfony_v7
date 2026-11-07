@@ -265,6 +265,10 @@ services:
     App\Services\ShippingService\EasyPostService:
         arguments:
             $appEnv: '%kernel.environment%'
+            # Étiquettes par la plateforme (lot 2 Livraison, 07/11/2026) : clé EasyPost de la plateforme et son environnement (test | live)
+            $platformApiKey: '%env(string:default::EASYPOST_SECRET_KEY)%'
+            $platformEnvironment: '%env(string:default::EASYPOST_PLATFORM_ENVIRONMENT)%'
+    App\Services\ShippingService\ShippingCarrierGatewayInterface: '@App\Services\ShippingService\EasyPostService'
 
     App\Services\TenantPublicHostResolver:
         arguments:

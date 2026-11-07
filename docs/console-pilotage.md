@@ -262,7 +262,11 @@ Quatre clés de portée `site` dans le registre, groupe `commerce`, écran `ship
 ajoutés à la carte de Mon site et de l'assistant : `shipping` (page Livraison : réglages, cheminement, transporteurs, poids des produits),
 `product_shipping` (fiches une par une), `product_weights` (grille de saisie rapide et estimation par l'IA, lot 1 bis). Cheminement :
 étape `boutique.carrier` → écran `shipping` ; `boutique.shipping_weights` → écran `product_weights` quand le mode estime ou achète des
-étiquettes. Assistant : outil `estimate_product_dimensions` et action confirmée `apply_product_dimensions` (un crédit par estimation). La page Livraison a son propre cheminement (`ShippingSetupService::overview()['steps']`), le
+étiquettes. Assistant : outil `estimate_product_dimensions` et action confirmée `apply_product_dimensions` (un crédit par estimation).
+Lot 2 (07/11/2026) : étiquettes par la plateforme avec solde prépayé par site ; réglages de la plateforme `shipping_fee_bp`,
+`shipping_fee_fixed_cents`, `easypost_platform_carriers` (section « Étiquettes par la plateforme » de la page Plateforme, routes
+`/api/platform/shipping*`, super admin) ; `GET /api/site/shipping` pour le site ; prérequis `shipping.platform` et `shipping.balance` du
+registre. Détail : `docs/boutique.md`, « Livraison, lot 2 ». La page Livraison a son propre cheminement (`ShippingSetupService::overview()['steps']`), le
 modèle des cheminements par partie complexe demandés par le propriétaire (à décliner : Stripe, taxes, courriel, avis). Détail et
 routes : `docs/boutique.md`, « Livraison, lot 1 ». Référentiels de départ (classes, gabarits, types de fournisseur, retrait) :
 `docs/contenu-exemple.md`.

@@ -43,6 +43,7 @@ class SiteFeatureStateService
         private readonly EntitlementService $entitlements,
         private readonly FeatureRequestRepository $requests,
         private readonly CustomDomainService $domains,
+        private readonly ?\App\Services\ShippingService\ShippingSetupService $shippingSetup = null, // étiquettes par la plateforme (lot 2 Livraison, 07/11/2026)
     ) {
     }
 
@@ -209,7 +210,10 @@ class SiteFeatureStateService
                     $env = $shipping['easypostEnvironment'];
                     $prerequisites[] = $this->prereq('shipping.easypost', 'Clé EasyPost du site pour l\'environnement ' . $env, $this->present(fn () => $this->emProvider->getEntityManager()->getRepository(EasyPostConfiguration::class)->findOneBy([]), [$env === 'live' ? 'getEasypostApiKeyProd' : 'getEasypostApiKeySandbox']));
                 } elseif ($value === 'platform') {
-                    $prerequisites[] = $this->prereq('shipping.platform', 'Étiquettes par la plateforme (solde prépayé, lot 2 à venir)', false);
+                    $platform = $this->shippingSetup?->platform() ?? ['configured' => false, 'balanceCents' => 0];
+                    $prerequisites[] = $this->prereq('shipping.platform', 'Clé EasyPost et comptes transporteurs de la plateforme', (bool) $platform['configured']);
+                    $prerequisites[] = $this->prereq('shipping.balance', 'Solde prépayé d\'expédition positif', (int) $platform['balanceCents'] > 0);
+                    $details = ['balanceCents' => (int) $platform['balanceCents'], 'currency' => $platform['currency'] ?? 'CAD'];
                 }
                 $status = $this->allOk($prerequisites) ? 'ready' : 'incomplete';
                 break;

@@ -153,6 +153,38 @@
         </tbody>
     </table>
 
+    <h2 class="h5 mt-4" id="livraison">Étiquettes par la plateforme</h2>
+    <p class="text-muted small">Lot 2 Livraison (07/11/2026) : un site en mode « par la plateforme » achète ses étiquettes avec la clé EasyPost de la plateforme et un <strong>solde prépayé</strong>. Frais de service ajoutés au coût EasyPost ; comptes transporteurs de la clé de la plateforme (un par ligne : <code>ca_…|CanadaPost|Postes Canada</code>), à propager dans gmasuite et les sites en mode plateforme.</p>
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <form method="post" action="{{ path('admin_plateforme_shipping_fees') }}" class="card plateforme-livraison-frais"><div class="card-body">
+                <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+                <div class="row g-2">
+                    <div class="col-6"><label class="form-label" for="sf-percent">Marge (%)</label><input class="form-control" id="sf-percent" name="feePercent" value="{{ (shippingSettings.feeBp / 100)|number_format(2, '.', '') }}" inputmode="decimal"></div>
+                    <div class="col-6"><label class="form-label" for="sf-fixed">Frais fixes par étiquette (CAD)</label><input class="form-control" id="sf-fixed" name="feeFixed" value="{{ (shippingSettings.feeFixedCents / 100)|number_format(2, '.', '') }}" inputmode="decimal"></div>
+                    <div class="col-12"><label class="form-label" for="sf-carriers">Comptes transporteurs de la plateforme</label><textarea class="form-control" id="sf-carriers" name="carriers" rows="4" placeholder="ca_xxxxxxxx|CanadaPost|Postes Canada">{% for c in shippingSettings.carriers %}{{ c.id }}|{{ c.carrier }}|{{ c.label }}
+{% endfor %}</textarea></div>
+                </div>
+                <button type="submit" class="btn btn-sm btn-primary mt-2">Enregistrer</button>
+            </div></form>
+        </div>
+        <div class="col-lg-6">
+            <div class="card"><div class="card-body">
+                <h3 class="h6">Soldes prépayés</h3>
+                <table class="table table-sm mb-2 plateforme-soldes"><thead><tr><th>Site</th><th class="text-end">Solde</th></tr></thead><tbody>
+                {% for b in shippingBalances %}<tr><td>{{ b.tenantCode }}</td><td class="text-end">{{ (b.balanceCents / 100)|number_format(2, ',', ' ') }} {{ b.currency }}</td></tr>{% else %}<tr><td colspan="2" class="text-muted">Aucun solde encore.</td></tr>{% endfor %}
+                </tbody></table>
+                <form method="post" action="{{ path('admin_plateforme_shipping_credit') }}" class="row g-2 align-items-end plateforme-crediter">
+                    <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+                    <div class="col-5"><label class="form-label" for="sc-site">Site</label><select class="form-select form-select-sm" id="sc-site" name="tenant">{% for s in sites %}<option value="{{ s.code }}" {{ s.code == selected ? 'selected' : '' }}>{{ s.code }}</option>{% endfor %}</select></div>
+                    <div class="col-3"><label class="form-label" for="sc-amount">Montant (CAD)</label><input class="form-control form-control-sm" id="sc-amount" name="amount" inputmode="decimal" placeholder="50"></div>
+                    <div class="col-4"><label class="form-label" for="sc-note">Note</label><input class="form-control form-control-sm" id="sc-note" name="note" maxlength="200"></div>
+                    <div class="col-12"><button type="submit" class="btn btn-sm btn-outline-primary">Créditer</button></div>
+                </form>
+            </div></div>
+        </div>
+    </div>
+
     <h2 class="h5 mt-4">Offres et prix</h2>
     <p class="text-muted small">Prix mensuels par défaut provisoires (04/11/2026). Une offre réunit une ou plusieurs fonctionnalités ; la boutique de la plateforme vendra ces offres comme formules d'abonnement branchées (code de l'offre dans la formule).</p>
     <table class="table table-sm datagrid plateforme-offres">

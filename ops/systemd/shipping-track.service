@@ -1,0 +1,7 @@
+[Unit]
+Description=Izzipro : suivi EasyPost des commandes expédiées avec étiquette (app:shipping:track)
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker exec -w /var/www symfony_app_v2 php bin/console app:shipping:track --no-interaction

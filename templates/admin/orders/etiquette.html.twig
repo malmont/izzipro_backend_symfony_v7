@@ -1,0 +1,73 @@
+{# Habillage EasyAdmin depuis un lien habillé (ea() non nul), sinon page nue #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Acheter l'étiquette : commande {{ order.reference }}{% endblock %}
+{% block content_title %}Acheter l'étiquette : commande {{ order.reference }}{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}<div class="py-3">{{ block('panel') }}</div>{% endblock %}
+
+{% block panel %}
+<div class="container-fluid" style="max-width: 980px">
+    <h1 class="mb-3">Acheter l'étiquette : commande {{ order.reference }}</h1>
+    {% for label, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}{% endfor %}
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <p class="mb-1"><strong>Client :</strong> {{ order.userId ? (order.userId.firstname ~ ' ' ~ order.userId.lastname) : 'invité' }} · <strong>Statut :</strong> {{ order.status ? order.status.name : '-' }} · <strong>Transporteur choisi par le client :</strong> {{ order.carrier ? order.carrier.name : 'aucun' }}</p>
+            {% if order.shippingAdress %}<p class="mb-1 text-muted"><strong>Destination :</strong> {{ order.shippingAdress.fullname }}, {{ order.shippingAdress.address }}, {{ order.shippingAdress.city }} {{ order.shippingAdress.codepostal }} {{ order.shippingAdress.country }}{% if quote.international %} <span class="badge bg-warning text-dark">envoi international : déclaration douanière jointe</span>{% endif %}</p>{% endif %}
+            <p class="mb-0 small text-muted">Mode : {{ {none: 'estimation seule', own_key: 'compte EasyPost du site', platform: 'par la plateforme (solde prépayé)'}[quote.mode] }} · environnement {{ quote.environment == 'live' ? 'réel' : 'test (étiquettes d\'essai, rien n\'est facturé)' }}{% if quote.balance %} · solde du site : <strong>{{ (quote.balance.balanceCents / 100)|number_format(2, ',', ' ') }} {{ quote.balance.currency }}</strong>{% endif %}</p>
+        </div>
+    </div>
+
+    {% if labels is not empty %}
+        <div class="alert alert-success" data-label-bought>
+            <strong>Étiquette(s) déjà achetée(s) :</strong>
+            {% for l in labels %}<div>Colis {{ l.index }} : <a href="{{ l.url }}" target="_blank" rel="noopener">étiquette PDF</a> · suivi {{ l.tracking }}</div>{% endfor %}
+        </div>
+        <a class="btn btn-secondary" href="{{ backUrl }}">Retour à la commande</a>
+    {% elseif quote.blocker %}
+        <div class="alert alert-warning" data-label-blocked>{{ quote.blockerMessage }}</div>
+        <a class="btn btn-outline-primary" href="{{ shipUrl }}">J'expédie moi-même (saisir le suivi)</a>
+        <a class="btn btn-link" href="{{ shippingUrl }}">Réglages de livraison</a>
+        <a class="btn btn-link" href="{{ backUrl }}">Retour à la commande</a>
+    {% else %}
+        {% for w in quote.warnings %}<div class="alert alert-info small">{{ w }}</div>{% endfor %}
+        <div class="card mb-3">
+            <div class="card-body">
+                <h2 class="h6">Colis calculés ({{ quote.parcels|length }})</h2>
+                <ul class="mb-0 small">{% for p in quote.parcels %}<li>Colis {{ p.index }} : {{ p.weight }} kg, {{ p.length }} × {{ p.width }} × {{ p.height }} cm</li>{% endfor %}</ul>
+            </div>
+        </div>
+        <form method="post" action="{{ path('admin_order_label', {id: order.id}) }}" data-label-form>
+            <input type="hidden" name="_token" value="{{ csrf_token(csrfToken) }}">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th></th><th>Transporteur</th><th>Service</th><th>Délai</th><th class="text-end">Tarif EasyPost</th>{% if quote.mode == 'platform' %}<th class="text-end">Frais de service</th><th class="text-end">Total débité</th>{% endif %}</tr></thead>
+                    <tbody>
+                    {% for r in quote.rates %}
+                        <tr>
+                            <td><input class="form-check-input" type="radio" name="rate" value="{{ r.carrierAccountId }}|{{ r.service }}" {{ loop.first ? 'checked' : '' }} id="rate-{{ loop.index }}"></td>
+                            <td><label for="rate-{{ loop.index }}">{{ r.carrier }}</label></td>
+                            <td>{{ r.service }}</td>
+                            <td>{{ r.estimatedDays > 0 ? r.estimatedDays ~ ' j' : '—' }}</td>
+                            <td class="text-end">{{ (r.costCents / 100)|number_format(2, ',', ' ') }} {{ r.currency }}</td>
+                            {% if quote.mode == 'platform' %}<td class="text-end">{{ (r.feeCents / 100)|number_format(2, ',', ' ') }}</td><td class="text-end"><strong>{{ (r.totalCents / 100)|number_format(2, ',', ' ') }} {{ r.currency }}</strong></td>{% endif %}
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if quote.mode == 'platform' and quote.balance and quote.rates[0].totalCents > quote.balance.balanceCents %}
+                <div class="alert alert-danger" data-label-balance>Solde insuffisant pour le tarif le moins cher : créditez votre solde d'expédition (page Livraison) ou expédiez vous-même.</div>
+            {% endif %}
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="notify" value="1" id="label-notify" checked>
+                <label class="form-check-label" for="label-notify">Prévenir le client par courriel avec le suivi</label>
+            </div>
+            <button type="submit" class="btn btn-primary">Acheter l'étiquette et marquer expédiée</button>
+            <a class="btn btn-outline-secondary" href="{{ shipUrl }}">J'expédie moi-même</a>
+            <a class="btn btn-link" href="{{ backUrl }}">Annuler</a>
+        </form>
+    {% endif %}
+</div>
+{% endblock %}
