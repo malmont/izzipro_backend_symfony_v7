@@ -110,7 +110,7 @@ class OrderMailerService
     public function sendOperationNotice(Order $order, string $kind, array $data, string $domain): bool
     {
         $email = (string) ($order->getUserId()?->getEmail() ?? '');
-        if ($email === '' || str_ends_with($email, '@compte-supprime.invalid') || !in_array($kind, ['order_refunded', 'order_cancelled', 'order_receipt'], true)) {
+        if ($email === '' || str_ends_with($email, '@compte-supprime.invalid') || !in_array($kind, ['order_refunded', 'order_cancelled', 'order_receipt', 'order_returned'], true)) {
             return false;
         }
         $language = $this->emailLocale?->language(null) ?? EmailLocale::FRENCH;
@@ -121,6 +121,7 @@ class OrderMailerService
             'amountText' => $money($data['amountCents'] ?? null), 'reason' => isset($data['reason']) && trim((string) $data['reason']) !== '' ? trim((string) $data['reason']) : null,
             'totalText' => $money($data['totalCents'] ?? null), 'paidText' => $money($data['paidCents'] ?? null), 'refundedText' => ($data['refundedCents'] ?? 0) > 0 ? $money($data['refundedCents']) : null,
             'receiptUrls' => array_values(array_filter($data['receiptUrls'] ?? [])),
+            'lines' => array_values(array_map(fn ($l) => ['name' => (string) ($l['name'] ?? ''), 'quantity' => (int) ($l['quantity'] ?? 0)], $data['lines'] ?? [])), // retour web (lot 7)
             'dateText' => $order->getOrderDate() ? ($language === 'en' ? $order->getOrderDate()->format('Y-m-d') : $order->getOrderDate()->format('d/m/Y')) : '',
         ];
         try {

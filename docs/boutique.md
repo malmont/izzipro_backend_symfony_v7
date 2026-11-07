@@ -1209,6 +1209,31 @@ Test : `tests/Functional/Boutique/OrderDeskTest.php`.
 - **Menus** : section « Commandes » (À traiter, Commandes, Paiements, Paiements en ligne (Stripe)) ; les tables techniques (création
   interne, articles, paniers, statuts, sources, types, méthodes, devises) passent sous « Réglages avancés (commandes) ».
 
+### Retours web et changement d'adresse (lot 7, 07/11/2026)
+
+Code : `Services/OrderService/OrderReturnService`, `Services/OrderService/OrderAddressService`, `Controller/Admin/OrderReturnAdminController`
+(`ROLE_ADMIN`), entité `OrderReturn` (table `order_return`, migration `Version20261118100000` + `scripts/migrate_all_v2_order_returns.sh`,
+appliqué partout le 07/11/2026). Test : `tests/Functional/Boutique/OrderReturnsTest.php`. Les ventes au comptoir gardent les retours de la
+caisse (`pos_return`, lot F2).
+
+- **Retour d'articles** `GET|POST /admin/orders/{id}/retour` (CSRF `admin_order_return`, depuis la fiche de la commande) : le marchand coche
+  les quantités rendues par ligne (`quantity[orderItemId]`), un motif, « remettre en stock » (décoché pour un article défectueux) et « prévenir
+  le client ». Montant = prix payé des unités rendues (net des remises) **plus leur part des taxes de la commande**, au prorata et en cumul
+  exact comme en caisse (`PosReturnService::taxForQuantity`) ; en TTC la taxe est dans le net. **Les frais de livraison ne sont jamais
+  repris** (« Rembourser » sert pour un geste) ; le montant est plafonné à ce qui reste remboursable. Le remboursement est réel chez Stripe
+  (`OrderOperationsService::refund`, écritures négatives), la ligne `order_return` garde lignes, montant, motif, remboursements ; remise en stock
+  par `UpdateStockAndInventoryUseCase` (mouvement d'inventaire) ; courriel `order_returned` fr/en avec la liste des articles ; journal
+  `content_audit_log` action `return`. Refus : `COUNTER_SALE`, `ORDER_CANCELLED`, `NOT_PAID` (statuts 1 et 2), `NO_ONLINE_PAYMENT`,
+  `NOTHING_TO_RETURN`, `LINES_REQUIRED`, `LINE_UNKNOWN`, `QUANTITY_EXCEEDED`, `NOTHING_REFUNDABLE`. Un **échange web** = un retour puis une
+  nouvelle commande passée par le client. Le client voit ses retours : `GET /api/orders/{id}` → `returns: [{id, createdAt, amountCents, lines:
+  [{orderItemId, name, quantity, amountCents}]}]` (web seulement ; `paymentStatus` passe à `refunded`).
+- **Changement d'adresse de livraison** `GET|POST /admin/orders/{id}/adresse` (CSRF `admin_order_address`) tant que la commande n'est ni
+  expédiée, ni livrée, ni annulée : une **nouvelle ligne `adress`** est créée pour la commande (le carnet du client n'est pas touché ; téléphone
+  repris de l'ancienne adresse s'il manque), champs obligatoires prénom, nom, adresse, ville, code postal, pays ISO à deux lettres ; frais de
+  livraison et taxes déjà payés restent inchangés ; journal action `address`. Refus : `COUNTER_SALE`, `ALREADY_SHIPPED`, `VALIDATION`.
+- La fiche commande (lot 4) montre les retours sous les paiements et propose « Retour d'articles » et « Changer l'adresse » selon l'état ;
+  mêmes actions sur le détail EasyAdmin.
+
 ### Commandes du client
 
 - `GET /api/ordersuser` (connecté) : commandes de l'utilisateur connecté, jamais servies par le cache (lot 4 de l'invalidation ciblée,

@@ -137,6 +137,14 @@ order_refunded:
     reason: 'Motif : %reason%'
     delay: 'Le montant apparaîtra sur votre relevé sous 5 à 10 jours ouvrables, selon votre banque.'
     thanks: 'Merci de votre confiance.'
+order_returned:
+    subject: 'Retour d''articles sur votre commande n°%reference%'
+    title: 'Retour enregistré'
+    greeting: 'Bonjour %name%,'
+    body: 'Nous avons bien reçu le retour des articles ci-dessous de votre commande n°<strong>%reference%</strong> et remboursé <strong>%amount%</strong>.'
+    reason: 'Motif : %reason%'
+    delay: 'Le montant apparaîtra sur votre relevé sous 5 à 10 jours ouvrables, selon votre banque.'
+    thanks: 'Merci de votre confiance.'
 order_cancelled:
     subject: 'Votre commande n°%reference% est annulée'
     title: 'Commande annulée'

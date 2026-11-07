@@ -26,7 +26,9 @@
             {% if a.label %}<a class="btn btn-sm btn-primary" href="{{ links.label }}">Acheter l'étiquette</a>{% endif %}
             {% if a.ship %}<a class="btn btn-sm btn-outline-primary" href="{{ links.ship }}">Marquer expédiée</a>{% endif %}
             {% if a.deliver %}<form method="post" action="{{ path('admin_order_deliver', {id: orderId}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token('admin_order_deliver') }}"><button class="btn btn-sm btn-success">Marquer livrée</button></form>{% endif %}
+            {% if a.return %}<a class="btn btn-sm btn-outline-danger" href="{{ links.return }}">Retour d'articles</a>{% endif %}
             {% if a.refund %}<a class="btn btn-sm btn-outline-danger" href="{{ links.refund }}">Rembourser</a>{% endif %}
+            {% if a.address %}<a class="btn btn-sm btn-outline-secondary" href="{{ links.address }}">Changer l'adresse</a>{% endif %}
             {% if a.cancel %}<a class="btn btn-sm btn-outline-danger" href="{{ links.cancel }}">Annuler</a>{% endif %}
             {% if a.emails %}<a class="btn btn-sm btn-outline-secondary" href="{{ links.emails }}">Renvoyer un courriel</a>{% endif %}
             <a class="btn btn-sm btn-link" href="{{ links.edit }}">Modifier (avancé)</a>
@@ -54,6 +56,7 @@
                     <thead><tr><th>Date</th><th>Type</th><th>Moyen</th><th class="text-end">Montant</th><th>État</th><th></th></tr></thead>
                     <tbody>{% for p in sheet.payments %}<tr class="{{ p.amountCents < 0 ? 'table-light' : '' }}"><td>{{ p.date }}</td><td>{{ p.type == 'RemboursementClient' ? 'Remboursement' : 'Encaissement' }}</td><td>{{ p.method }}{% if p.card %} <span class="text-muted small">{{ p.card }}</span>{% endif %}</td><td class="text-end">{{ m.money(p.amountCents, cur) }}</td><td><span class="small">{{ p.status }}{% if p.stripeStatus %} · Stripe {{ p.stripeStatus }}{% endif %}</span></td><td>{% if p.receiptUrl %}<a href="{{ p.receiptUrl }}" target="_blank" rel="noopener" class="small">reçu</a>{% endif %}</td></tr>{% endfor %}</tbody>
                 </table>{% endif %}
+                {% if sheet.returns is not empty %}<div class="small mb-2" data-order-returns><strong>Retours :</strong> {% for r in sheet.returns %}{{ r.createdAt }} : {% for l in r.lines %}{{ l.quantity }} × {{ l.name }}{% if not loop.last %}, {% endif %}{% endfor %} ({{ m.money(r.amountCents, cur) }}{% if r.restock %}, remis en stock{% endif %}){% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}
                 <p class="small text-muted mb-0">Payé par carte {{ m.money(sheet.money.capturedCents, cur) }} · remboursé {{ m.money(sheet.money.refundedCents, cur) }} · remboursable {{ m.money(sheet.money.refundableCents, cur) }}{% if sheet.money.authorizedCents > 0 %} · <strong class="text-warning">autorisé non capturé {{ m.money(sheet.money.authorizedCents, cur) }}</strong>{% endif %}</p>
             </div></div>
 

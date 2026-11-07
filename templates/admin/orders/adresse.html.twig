@@ -1,0 +1,32 @@
+{# Changement d'adresse de livraison avant expédition (lot 7, 07/11/2026) #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+{% set title = 'Adresse de livraison — commande ' ~ order.reference %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block content_title %}{{ title }}{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}<div class="py-3">{{ block('panel') }}</div>{% endblock %}
+
+{% block panel %}
+<div class="container-fluid" style="max-width: 760px" data-address-page>
+    <h1 class="h3 mb-1">{{ title }}</h1>
+    <p class="text-muted">Le client a demandé une autre adresse avant l'expédition. La nouvelle adresse remplace l'ancienne sur cette commande seulement ; son carnet d'adresses n'est pas touché. Frais de livraison et taxes déjà payés restent inchangés.</p>
+    {% for label, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}{% endfor %}
+    {% if blockerMessage %}
+        <div class="alert alert-warning" data-address-blocked>{{ blockerMessage }}</div>
+        <a class="btn btn-link" href="{{ backUrl }}">Retour à la commande</a>
+    {% else %}
+    <form method="post" action="{{ path('admin_order_address', {id: order.id}) }}" class="card" data-address-form>
+        <div class="card-body">
+            <input type="hidden" name="_token" value="{{ csrf_token(csrfToken) }}">
+            <div class="row g-2">
+                {% for f, label in {firstname: 'Prénom *', lastname: 'Nom *', company: 'Entreprise', phone: 'Téléphone', address: 'Adresse *', complement: 'Complément', city: 'Ville *', province: 'Province ou région (code, ex. QC)', codepostal: 'Code postal *', country: 'Pays (code ISO, ex. CA) *'} %}
+                <div class="{{ f in ['address', 'complement'] ? 'col-12' : 'col-md-6' }}"><label class="form-label small">{{ label }}</label><input class="form-control" type="text" name="{{ f }}" value="{{ values[f] }}" {% if f == 'country' %}maxlength="2"{% endif %}></div>
+                {% endfor %}
+            </div>
+            <div class="mt-3"><button class="btn btn-primary">Remplacer l'adresse</button> <a class="btn btn-link" href="{{ backUrl }}">Annuler</a></div>
+        </div>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

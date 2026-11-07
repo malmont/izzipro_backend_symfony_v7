@@ -1,0 +1,43 @@
+{# Retour d'articles d'une commande web (lot 7, 07/11/2026) : habillage EasyAdmin depuis un lien habillé, sinon page nue #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+{% set title = 'Retour d\'articles — commande ' ~ order.reference %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block content_title %}{{ title }}{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}<div class="py-3">{{ block('panel') }}</div>{% endblock %}
+
+{% block panel %}
+<div class="container-fluid" style="max-width: 900px" data-return-page>
+    <h1 class="h3 mb-1">{{ title }}</h1>
+    <p class="text-muted">Le client vous a rendu des articles : indiquez les quantités. Chaque unité est remboursée au prix payé, taxes comprises au prorata ; les frais de livraison ne sont pas repris (utilisez « Rembourser » pour un geste). Le remboursement part aussitôt chez Stripe. Pour un échange, enregistrez le retour puis le client passe une nouvelle commande.</p>
+    {% for label, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}{% endfor %}
+
+    {% if returns is not empty %}
+    <div class="card mb-3"><div class="card-body" data-return-history>
+        <h2 class="h6">Retours déjà enregistrés</h2>
+        <ul class="mb-0 small">{% for r in returns %}<li>{{ r.createdAt }} : {{ (r.amountCents / 100)|number_format(2, ',', ' ') }} {{ currency }} remboursés{% if r.reason %} — « {{ r.reason }} »{% endif %} ({% for l in r.lines %}{{ l.quantity }} × {{ l.name }}{% if not loop.last %}, {% endif %}{% endfor %}){% if r.restock %}, remis en stock{% endif %}</li>{% endfor %}</ul>
+    </div></div>
+    {% endif %}
+
+    {% if blockerMessage %}
+        <div class="alert alert-warning" data-return-blocked>{{ blockerMessage }}</div>
+    {% else %}
+    <form method="post" action="{{ path('admin_order_return', {id: order.id}) }}" class="card" data-return-form>
+        <div class="card-body">
+            <input type="hidden" name="_token" value="{{ csrf_token(csrfToken) }}">
+            <table class="table table-sm align-middle">
+                <thead><tr><th>Article</th><th class="text-end">Commandé</th><th class="text-end">Déjà rendu</th><th class="text-end">Par unité rendue</th><th style="width: 9em">À rendre</th></tr></thead>
+                <tbody>{% for l in lines %}<tr data-return-line="{{ l.orderItemId }}"><td>{{ l.name }}{% if not l.hasVariant %} <span class="text-muted small">(sans stock)</span>{% endif %}</td><td class="text-end">{{ l.quantity }}</td><td class="text-end">{{ l.returnedQuantity }}</td><td class="text-end">{{ (l.unitRefundable / 100)|number_format(2, ',', ' ') }} {{ currency }}</td><td><input class="form-control form-control-sm" type="number" name="quantity[{{ l.orderItemId }}]" min="0" max="{{ l.returnableQuantity }}" value="0" {% if l.returnableQuantity == 0 %}disabled{% endif %}></td></tr>{% endfor %}</tbody>
+            </table>
+            <div class="mb-3"><label class="form-label">Motif (figure dans le courriel au client)</label><input class="form-control" type="text" name="reason" maxlength="200" placeholder="Taille, défectueux, ne convient pas…"></div>
+            <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="restock" value="1" id="restock" checked><label class="form-check-label" for="restock">Remettre les articles en stock (décochez pour un article défectueux)</label></div>
+            <div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="notify" value="1" id="notify" checked><label class="form-check-label" for="notify">Prévenir le client par courriel</label></div>
+            <button class="btn btn-danger">Enregistrer le retour et rembourser</button>
+            <a class="btn btn-link" href="{{ backUrl }}">Retour à la commande</a>
+        </div>
+    </form>
+    {% endif %}
+    {% if blockerMessage %}<a class="btn btn-link" href="{{ backUrl }}">Retour à la commande</a>{% endif %}
+</div>
+{% endblock %}

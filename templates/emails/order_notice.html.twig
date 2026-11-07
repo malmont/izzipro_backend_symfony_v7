@@ -1,6 +1,6 @@
 {% extends 'base.email.html.twig' %}
 
-{# Courriel d'opération sur une commande (lot 3, 07/11/2026) : remboursement, annulation ou reçu ; `kind` = order_refunded | order_cancelled | order_receipt ; langue du site (`locale`, `intlLocale`) #}
+{# Courriel d'opération sur une commande (lot 3, 07/11/2026) : remboursement, annulation ou reçu ; `kind` = order_refunded | order_cancelled | order_receipt | order_returned (lot 7) ; langue du site (`locale`, `intlLocale`) #}
 {% block title %}{{ (kind ~ '.subject')|trans({'%reference%': reference}, 'emails', locale)|raw }}{% endblock %}
 
 {% block body %}
@@ -21,6 +21,12 @@
                             {% if reason %}<p>{{ 'order_refunded.reason'|trans({'%reason%': reason|e}, 'emails', locale)|raw }}</p>{% endif %}
                             <p>{{ 'order_refunded.delay'|trans({}, 'emails', locale)|raw }}</p>
                             <p>{{ 'order_refunded.thanks'|trans({}, 'emails', locale)|raw }}</p>
+                        {% elseif kind == 'order_returned' %}
+                            <p>{{ 'order_returned.body'|trans({'%reference%': reference|e, '%amount%': amountText|e}, 'emails', locale)|raw }}</p>
+                            <ul>{% for l in lines %}<li>{{ l.quantity }} × {{ l.name|e }}</li>{% endfor %}</ul>
+                            {% if reason %}<p>{{ 'order_returned.reason'|trans({'%reason%': reason|e}, 'emails', locale)|raw }}</p>{% endif %}
+                            <p>{{ 'order_returned.delay'|trans({}, 'emails', locale)|raw }}</p>
+                            <p>{{ 'order_returned.thanks'|trans({}, 'emails', locale)|raw }}</p>
                         {% elseif kind == 'order_cancelled' %}
                             <p>{{ 'order_cancelled.body'|trans({'%reference%': reference|e}, 'emails', locale)|raw }}</p>
                             {% if amountText %}<p>{{ 'order_cancelled.refund'|trans({'%amount%': amountText|e}, 'emails', locale)|raw }}</p>{% endif %}

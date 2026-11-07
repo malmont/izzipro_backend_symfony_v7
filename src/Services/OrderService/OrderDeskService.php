@@ -25,6 +25,8 @@ class OrderDeskService
         private readonly OrderShipmentService $shipments,
         private readonly ContentAuditRecorder $audit,
         private readonly TenantCurrencyProvider $currency,
+        private readonly ?OrderReturnService $returns = null, // retours web (lot 7, 07/11/2026)
+        private readonly ?OrderAddressService $addresses = null,
     ) {
     }
 
@@ -71,12 +73,15 @@ class OrderDeskService
             'label' => !$counter && $this->shipments->shipBlocker($order) === null && $order->getShippingAdress() !== null,
             'deliver' => !$counter && $this->shipments->deliverBlocker($order) === null,
             'emails' => !$counter && (string) ($order->getUserId()?->getEmail() ?? '') !== '' && !str_ends_with((string) $order->getUserId()?->getEmail(), '@compte-supprime.invalid'),
+            'return' => !$counter && $this->returns !== null && $this->returns->blocker($order) === null,
+            'address' => !$counter && $this->addresses !== null && $this->addresses->blocker($order) === null,
             'counterSale' => $counter,
         ];
+        $returns = $this->returns !== null && !$counter ? array_map(fn ($r) => $r->toArray(), $this->returns->returns($order)) : [];
 
         return ['order' => $dto, 'statusId' => $status, 'statusLabel' => self::STATUS_LABELS[$status] ?? (string) $order->getStatus()?->getName(), 'currency' => $this->currency->code(), 'money' => $money, 'payments' => $payments, 'labels' => $labels,
             'shipment' => ['shippedAt' => $order->getShippedAt()?->format('Y-m-d H:i'), 'carrier' => $order->getTrackingCarrier(), 'trackingNumber' => $order->getTrackingNumber(), 'trackingUrl' => $order->getTrackingUrl()],
-            'timeline' => $timeline, 'journal' => $journal, 'customer' => $customer, 'actions' => $actions];
+            'timeline' => $timeline, 'journal' => $journal, 'customer' => $customer, 'actions' => $actions, 'returns' => $returns];
     }
 
     /** @return list<array{at: string, label: string, kind: string}> */
@@ -96,7 +101,7 @@ class OrderDeskService
         if ($order->getShippedAt()) {
             $events[] = ['at' => $order->getShippedAt()->format('Y-m-d H:i'), 'label' => 'Expédiée' . ($order->getTrackingCarrier() ? ' par ' . $order->getTrackingCarrier() : ''), 'kind' => 'shipped'];
         }
-        $labelsByAction = ['deliver' => 'Livrée', 'cancel' => 'Annulée', 'capture' => 'Paiement capturé', 'resend_confirmation' => 'Confirmation renvoyée', 'resend_receipt' => 'Reçu renvoyé', 'resend_shipped' => 'Avis d\'expédition renvoyé'];
+        $labelsByAction = ['deliver' => 'Livrée', 'cancel' => 'Annulée', 'capture' => 'Paiement capturé', 'return' => 'Retour d\'articles', 'address' => 'Adresse de livraison changée', 'resend_confirmation' => 'Confirmation renvoyée', 'resend_receipt' => 'Reçu renvoyé', 'resend_shipped' => 'Avis d\'expédition renvoyé'];
         foreach ($journal as $j) {
             if (isset($labelsByAction[$j['action']])) {
                 $events[] = ['at' => $j['at'], 'label' => $labelsByAction[$j['action']] . ($j['by'] ? ' (' . $j['by'] . ')' : ''), 'kind' => $j['action']];

@@ -133,6 +133,14 @@ order_refunded:
     reason: 'Reason: %reason%'
     delay: 'The amount will appear on your statement within 5 to 10 business days, depending on your bank.'
     thanks: 'Thank you for your trust.'
+order_returned:
+    subject: 'Items returned on your order no. %reference%'
+    title: 'Return recorded'
+    greeting: 'Hello %name%,'
+    body: 'We have received the items below from your order no. <strong>%reference%</strong> and refunded <strong>%amount%</strong>.'
+    reason: 'Reason: %reason%'
+    delay: 'The amount will appear on your statement within 5 to 10 business days, depending on your bank.'
+    thanks: 'Thank you for your trust.'
 order_cancelled:
     subject: 'Your order no. %reference% has been cancelled'
     title: 'Order cancelled'

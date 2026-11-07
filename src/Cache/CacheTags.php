@@ -277,6 +277,7 @@ final class CacheTags
 
         Order::class => [self::ORDERS],
         OrderItems::class => [self::ORDERS],
+        \App\Entity\OrderReturn::class => [self::ORDERS], // retours web (lot 7, 07/11/2026)
         OrderTax::class => [self::ORDERS],
         // un paiement est lu dans la liste des paiements et dans celle des commandes (état de paiement)
         Payments::class => [self::PAYMENTS, self::ORDERS],

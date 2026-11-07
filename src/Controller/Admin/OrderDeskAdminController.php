@@ -52,7 +52,7 @@ class OrderDeskAdminController extends AbstractController
         $links = [
             'edit' => $this->urls->unsetAll()->setController(OrderCrudController::class)->setAction(Action::EDIT)->setEntityId($id)->generateUrl(),
             'list' => $this->listUrl(), 'todo' => $this->urls->unsetAll()->setRoute('admin_orders_todo')->generateUrl(),
-            'ship' => $route('admin_order_ship'), 'label' => $route('admin_order_label'), 'refund' => $route('admin_order_refund'), 'cancel' => $route('admin_order_cancel'), 'emails' => $route('admin_order_emails'),
+            'ship' => $route('admin_order_ship'), 'label' => $route('admin_order_label'), 'refund' => $route('admin_order_refund'), 'cancel' => $route('admin_order_cancel'), 'emails' => $route('admin_order_emails'), 'return' => $route('admin_order_return'), 'address' => $route('admin_order_address'),
             'customer' => $sheet['customer'] ? $this->urls->unsetAll()->setController(UserCrudController::class)->setAction(Action::DETAIL)->setEntityId($sheet['customer']['id'])->generateUrl() : null,
         ];
 

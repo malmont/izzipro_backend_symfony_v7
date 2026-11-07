@@ -149,11 +149,17 @@ class OrderCrudController extends BaseTenantCrudController
             ->linkToRoute('admin_order_refund', fn (Order $order) => ['id' => $order->getId()])
             ->displayIf(fn ($order) => $web($order) && $order->getPayments()->exists(fn ($i, $p) => (float) $p->getAmount() > 0 && $p->getStripePaymentId() && $p->getStripeStatus() === 'requires_capture'));
         // « Fiche » (lot 4) : la fiche refondue remplace le détail EasyAdmin dans la liste ; le détail EasyAdmin reste joignable depuis la fiche (Modifier)
+        // retours web et adresse (lot 7, 07/11/2026)
+        $return = \EasyCorp\Bundle\EasyAdminBundle\Config\Action::new('returnOrder', 'Retour d\'articles', 'fas fa-exchange-alt')
+            ->linkToRoute('admin_order_return', fn (Order $order) => ['id' => $order->getId()])->displayIf(fn (Order $order) => $order->getOrderSource()?->getId() !== 2 && in_array((int) ($order->getStatus()?->getId() ?? 0), [3, 4, 5, 6], true));
+        $address = \EasyCorp\Bundle\EasyAdminBundle\Config\Action::new('orderAddress', 'Changer l\'adresse', 'fas fa-map-marker-alt')
+            ->linkToRoute('admin_order_address', fn (Order $order) => ['id' => $order->getId()])->displayIf(fn (Order $order) => $order->getOrderSource()?->getId() !== 2 && in_array((int) ($order->getStatus()?->getId() ?? 0), [1, 2, 3, 4], true));
         $sheet = \EasyCorp\Bundle\EasyAdminBundle\Config\Action::new('orderSheet', 'Fiche', 'fas fa-file-alt')
             ->linkToRoute('admin_order_sheet', fn (Order $order) => ['id' => $order->getId()]);
         $actions = parent::configureActions($actions)
             ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, $sheet)->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $sheet)
             ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $refund)
+            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $return)->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $address)
             ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $cancel)
             ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $emails)
             ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $capture)

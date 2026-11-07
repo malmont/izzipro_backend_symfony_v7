@@ -50,6 +50,9 @@ class OrderDTO
     /** Expédition (01/11/2026) : {carrier, trackingNumber, trackingUrl} dès qu'une étiquette existe, sinon null */
     public ?array $shipment = null;
 
+    /** @var list<array<string, mixed>> retours web (lot 7, 07/11/2026) : [{id, createdAt, amountCents, lines: [{orderItemId, name, quantity, amountCents}]}] */
+    public array $returns = [];
+
     public function __construct(
         int $id,
         string $reference,
@@ -101,6 +104,7 @@ class OrderDTO
             'pricesIncludeTax' => $this->pricesIncludeTax, // F18 partie 2b
             'taxes' => $this->taxes,
             'shipment' => $this->shipment,
+            'returns' => $this->returns,
         ] + ($this->pos ?? []);
     }
 

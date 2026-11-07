@@ -51,6 +51,9 @@ final class OrderPresenter
         }
         $dto->paymentStatus = $this->paymentStatus($order);
         $dto->shipment = $this->shipment($order, $locale);
+        if ($this->emProvider && $order->getId() !== null && $order->getOrderSource()?->getId() !== 2) { // retours web (lot 7) : le client voit ce qui lui a été repris
+            $dto->returns = array_map(fn (\App\Entity\OrderReturn $r) => ['id' => (int) $r->getId(), 'createdAt' => $r->getCreatedAt()->format('Y-m-d H:i'), 'amountCents' => $r->getAmount(), 'lines' => array_map(fn ($l) => ['orderItemId' => $l['orderItemId'], 'name' => $l['name'], 'quantity' => $l['quantity'], 'amountCents' => $l['amountCents']], $r->getLines())], $this->emProvider->getEntityManager()->getRepository(\App\Entity\OrderReturn::class)->findForOrder($order));
+        }
 
         return $dto;
     }
