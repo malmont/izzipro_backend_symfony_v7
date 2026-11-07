@@ -12,6 +12,7 @@
     <h1 class="h3 mb-1">Location et réservation</h1>
     <p class="text-muted">Pour louer un produit, il faut : le mode « location » activé, la case « Location » sur la fiche du produit, ses règles de stock et de créneaux, et une grille tarifaire rattachée à sa catégorie. Rouge = indispensable, orange = facultatif.</p>
     {% for label, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}{% endfor %}
+    <p><a class="btn btn-primary" href="{{ wizardUrl }}" data-rental-wizard>Configurer un produit pas à pas</a> <span class="small text-muted ms-2">Des questions en langage courant qui remplissent les règles et les prix, puis « ce que verra le client ».</span></p>
 
     <div class="card mb-4"><div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-2">
@@ -38,7 +39,7 @@
                     <td>{{ p.name }}<div class="small text-muted">{{ p.categories|join(', ') ?: 'sans catégorie' }}</div></td>
                     <td>{% if p.configured %}<span class="text-success">✔</span> {{ {days: 'journée', hours: 'heure', minutes_30: '30 min', minutes_15: '15 min'}[p.granularity] ?? p.granularity }}, stock {{ p.stock }}{% if p.minDuration %}, min. {{ p.minDuration }}{% endif %}{% else %}<span class="text-danger">✘ à régler</span>{% endif %}</td>
                     <td>{% if p.priced %}<span class="text-success">✔ pack de la catégorie</span>{% else %}<span class="text-danger">✘ aucun pack pour sa catégorie</span>{% endif %}</td>
-                    <td class="text-nowrap"><a class="small" href="{{ p.configUrl }}">règles</a> · <a class="small" href="{{ p.editUrl }}">fiche</a></td>
+                    <td class="text-nowrap"><a class="small" href="{{ p.wizardUrl }}">pas à pas</a> · <a class="small" href="{{ p.configUrl }}">règles</a> · <a class="small" href="{{ p.editUrl }}">fiche</a></td>
                 </tr>{% endfor %}
             </tbody></table>{% endif %}
         </div></div></div>

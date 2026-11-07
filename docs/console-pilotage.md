@@ -217,6 +217,22 @@ d'annulation, première réservation), l'état de chaque produit louable (règle
 Le cheminement du site (groupe Boutique, étapes `boutique.rental_*`, présentes quand le mode location est actif) renvoie à cette page
 (écran `rental`) ; écran `bookings` = planning. Test : `tests/Functional/Admin/RentalConsolePageTest.php`.
 
+**Configurer une location pas à pas (08/11/2026).** `GET /admin/location/configurer?product=` et `POST /admin/location/configurer/{productId}`
+(`RentalConfiguratorAdminController`, `ROLE_ADMIN`, CSRF ; écran `rental_configurator` ; bouton de la page Location, lien « pas à pas » par produit,
+action « Configurer pas à pas » de l'écran Règles de location) : huit questions en langage courant (comment le client réserve ; exemplaires et
+battement ; durées, dans l'unité de la grille ; heures d'ouverture, créneau du soir, demi-journées ; dates ouvertes ; prix, c'est-à-dire la grille
+tarifaire rattachée à la **catégorie** du produit : modifier une grille existante, en créer une, ou ne pas toucher ; caution, frais par
+passager, arrivée ; textes). `Services/Booking/RentalConfiguratorService` : `answers()` préremplit, `apply()` vérifie question par question
+(erreurs sous la question, rien n'est écrit tant qu'une réponse est fausse ; montants en dollars → cents) puis enregistre `booking_configuration`
+et `rental_pack` (audit `rental_setup`, cache du site invalidé). Après l'enregistrement, l'encadré **« Ce que verra le client »**
+(`Services/Booking/RentalSummaryService::describe()`) traduit les réglages en phrases et liste les incohérences : formule d'une grille hors
+d'atteinte (durée maximale trop courte ; grille horaire avec heures d'ouverture → la location finit le même jour, donc journée, semaine et
+mois ne servent jamais ; formules heure et demi-journée non proposées à la journée), durée maximale sous la minimale ou au-delà de l'amplitude
+d'ouverture, stock à zéro, produit sans catégorie ou sans grille, grille sans formule atteignable. Le même encadré ouvre la fiche et la
+modification de l'écran « Règles de location » (`BookingConfigurationCrudController`, panneaux explicites, devise du site sur la caution et les
+frais), et l'écran « Grilles tarifaires » dit quelles formules sont proposées selon la grille (devise du site, libellés en français).
+Test : `tests/Functional/Admin/RentalConfiguratorTest.php`.
+
 ## Crédits IA : réglés par la plateforme seulement (07/11/2026)
 
 Règle : **seul le propriétaire de la plateforme** fixe les crédits IA mensuels d'un site. Page Plateforme, section « Crédits IA par site »

@@ -1,0 +1,174 @@
+{# Questionnaire « Configurer une location pas à pas » (08/11/2026) : habillage EasyAdmin depuis le menu, sinon page nue #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Configurer une location{% endblock %}
+{% block content_title %}Configurer une location pas à pas{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}<div class="py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% macro err(errors, key) %}{% if errors[key] is defined %}<div class="text-danger small mt-1" data-error="{{ key }}">{{ errors[key] }}</div>{% endif %}{% endmacro %}
+{% import _self as m %}
+
+{% block panel %}
+<div class="container-fluid" style="max-width: 980px" data-rental-configurator>
+    <p class="mb-2"><a href="{{ locationUrl }}">← Location et réservation</a></p>
+    {% for label, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}{% endfor %}
+
+    {% if product is null %}
+        <h1 class="h3">Quel produit voulez-vous louer ?</h1>
+        <p class="text-muted">Seuls les produits dont la case « Location » est cochée sur la fiche apparaissent ici. Les questions suivantes remplissent ses règles de réservation et sa grille tarifaire.</p>
+        {% if products is empty %}<div class="alert alert-warning">Aucun produit en location. Ouvrez la fiche d'un produit et cochez « Location », puis revenez ici.</div>{% else %}
+        <div class="list-group" data-product-list>
+            {% for p in products %}<a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" href="{{ p.url }}" data-product="{{ p.id }}">
+                <span>{{ p.name }}<span class="small text-muted ms-2">{{ p.categories|join(', ') ?: 'sans catégorie' }}</span></span>
+                <span>{% if p.configured %}<span class="badge bg-success">règles posées</span>{% else %}<span class="badge bg-danger">à configurer</span>{% endif %} {% if not p.priced %}<span class="badge bg-warning text-dark">sans tarif</span>{% endif %}</span>
+            </a>{% endfor %}
+        </div>{% endif %}
+    {% else %}
+        {% set a = answers %}
+        <h1 class="h3 mb-1">{{ product.name }}</h1>
+        <p class="text-muted">Répondez dans l'ordre : chaque réponse se traduit directement en ce que le client verra sur le site. Catégories du produit : {{ a.categories|join(', ') ?: '<span class="text-danger">aucune (ajoutez-en une sur la fiche pour rattacher une grille tarifaire)</span>'|raw }}.
+            <a href="{{ productUrl }}">Fiche du produit</a>{% if rulesUrl %} · <a href="{{ rulesUrl }}">Écran détaillé des règles</a>{% endif %}</p>
+
+        {% if current %}
+        <div class="card mb-4 border-{{ current.warnings is empty ? 'success' : 'warning' }}" data-current-summary><div class="card-body">
+            <h2 class="h5">Ce que verra le client aujourd'hui</h2>
+            <ul class="mb-2">{% for l in current.lines %}<li>{{ l }}</li>{% endfor %}</ul>
+            {% if current.warnings is not empty %}<div class="alert alert-warning py-2 mb-0"><strong>À corriger :</strong><ul class="mb-0">{% for w in current.warnings %}<li>{{ w }}</li>{% endfor %}</ul></div>{% else %}<div class="text-success">Aucune incohérence relevée.</div>{% endif %}
+        </div></div>
+        {% endif %}
+
+        <form method="post" action="{{ path('admin_location_configurer_save', {productId: product.id}) }}" data-rental-form>
+            <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+
+            <div class="card mb-3"><div class="card-body">
+                <h2 class="h5">1. Comment le client réserve-t-il ?</h2>
+                {% for opt in [['days', 'À la journée', 'Le client choisit une date de début et une date de fin (nuitées, journées entières). Les durées se comptent en jours.'], ['hours', 'À l\'heure', 'Le client choisit une heure de début et une heure de fin le même jour. Les durées se comptent en heures.'], ['minutes_30', 'Par tranches de 30 minutes', 'Comme à l\'heure, avec des créneaux de 30 minutes.'], ['minutes_15', 'Par tranches de 15 minutes', 'Comme à l\'heure, avec des créneaux de 15 minutes.']] %}
+                <div class="form-check mb-1"><input class="form-check-input" type="radio" name="granularity" id="g-{{ opt[0] }}" value="{{ opt[0] }}" {{ a.granularity == opt[0] ? 'checked' }} data-granularity><label class="form-check-label" for="g-{{ opt[0] }}"><strong>{{ opt[1] }}</strong> <span class="text-muted small">{{ opt[2] }}</span></label></div>
+                {% endfor %}
+                {{ m.err(errors, 'granularity') }}
+            </div></div>
+
+            <div class="card mb-3"><div class="card-body">
+                <h2 class="h5">2. Combien d'exemplaires louez-vous en même temps ?</h2>
+                <div class="row g-3">
+                    <div class="col-md-4"><label class="form-label">Exemplaires identiques</label><input class="form-control" type="number" min="1" name="stock" value="{{ a.stock }}"><div class="form-text">Ex. : 3 motomarines → 3 clients à la même heure, pas plus.</div>{{ m.err(errors, 'stock') }}</div>
+                    <div class="col-md-4"><label class="form-label">Battement entre deux locations (minutes)</label><input class="form-control" type="number" min="0" name="bufferTime" value="{{ a.bufferTime }}"><div class="form-text">Temps de préparation : 30 → un créneau se libère 30 minutes après le retour.</div>{{ m.err(errors, 'bufferTime') }}</div>
+                </div>
+            </div></div>
+
+            <div class="card mb-3"><div class="card-body">
+                <h2 class="h5">3. Combien de temps une location peut-elle durer ?</h2>
+                <div class="row g-3">
+                    <div class="col-md-4"><label class="form-label">Durée minimale (<span data-unit>{{ a.granularity == 'days' ? 'jours' : 'heures' }}</span>)</label><input class="form-control" type="number" min="1" name="minDuration" value="{{ a.minDuration }}">{{ m.err(errors, 'minDuration') }}</div>
+                    <div class="col-md-4"><label class="form-label">Durée maximale (<span data-unit>{{ a.granularity == 'days' ? 'jours' : 'heures' }}</span>)</label><input class="form-control" type="number" min="1" name="maxDuration" value="{{ a.maxDuration }}" placeholder="vide = sans limite"><div class="form-text" data-max-hint></div>{{ m.err(errors, 'maxDuration') }}</div>
+                    <div class="col-md-4" data-daily-only><label class="form-label">Jours minimum facturés</label><input class="form-control" type="number" min="1" name="minDaysStandard" value="{{ a.minDaysStandard }}" placeholder="facultatif"><div class="form-text">Ex. : 2 → un séjour d'une nuit est refusé.</div>{{ m.err(errors, 'minDaysStandard') }}</div>
+                </div>
+            </div></div>
+
+            <div class="card mb-3" data-hourly-only><div class="card-body">
+                <h2 class="h5">4. À quelles heures peut-on réserver ?</h2>
+                <p class="text-muted small">Avec des heures d'ouverture, une location commence et finit le même jour. Sans heures, un créneau peut commencer à toute heure et finir un autre jour.</p>
+                <div class="row g-3">
+                    <div class="col-md-3"><label class="form-label">Ouverture</label><input class="form-control" name="openingStart" value="{{ a.openingStart }}" placeholder="09:00">{{ m.err(errors, 'openingStart') }}</div>
+                    <div class="col-md-3"><label class="form-label">Fermeture</label><input class="form-control" name="openingEnd" value="{{ a.openingEnd }}" placeholder="18:00">{{ m.err(errors, 'openingEnd') }}</div>
+                    <div class="col-md-3"><label class="form-label">Créneau du soir : début</label><input class="form-control" name="eveningStart" value="{{ a.eveningStart }}" placeholder="facultatif, 20:30">{{ m.err(errors, 'eveningStart') }}</div>
+                    <div class="col-md-3"><label class="form-label">Créneau du soir : fin</label><input class="form-control" name="eveningEnd" value="{{ a.eveningEnd }}" placeholder="23:00">{{ m.err(errors, 'eveningEnd') }}</div>
+                </div>
+                <h3 class="h6 mt-3">Demi-journées proposées (facultatif)</h3>
+                <p class="text-muted small">Le client pourra choisir « Matin » ou « Après-midi » d'un clic, au tarif demi-journée.</p>
+                {% for i in [1, 2] %}
+                <div class="row g-2 mb-2">
+                    <div class="col-md-4"><input class="form-control" name="halfDay{{ i }}Label" value="{{ a['halfDay' ~ i ~ 'Label'] }}" placeholder="{{ i == 1 ? 'Matin' : 'Après-midi' }}"></div>
+                    <div class="col-md-3"><input class="form-control" name="halfDay{{ i }}Start" value="{{ a['halfDay' ~ i ~ 'Start'] }}" placeholder="{{ i == 1 ? '09:00' : '14:00' }}"></div>
+                    <div class="col-md-3"><input class="form-control" name="halfDay{{ i }}End" value="{{ a['halfDay' ~ i ~ 'End'] }}" placeholder="{{ i == 1 ? '13:00' : '18:00' }}"></div>
+                    <div class="col-md-12">{{ m.err(errors, 'halfDay' ~ i ~ 'Label') }}{{ m.err(errors, 'halfDay' ~ i ~ 'Start') }}{{ m.err(errors, 'halfDay' ~ i ~ 'End') }}</div>
+                </div>
+                {% endfor %}
+            </div></div>
+
+            <div class="card mb-3"><div class="card-body">
+                <h2 class="h5">5. Quelles dates sont ouvertes ?</h2>
+                <div class="form-check"><input class="form-check-input" type="radio" name="datesMode" id="d-all" value="all" {{ a.datesMode != 'list' ? 'checked' }} data-dates-mode><label class="form-check-label" for="d-all">Toutes les dates (selon les disponibilités)</label></div>
+                <div class="form-check"><input class="form-check-input" type="radio" name="datesMode" id="d-list" value="list" {{ a.datesMode == 'list' ? 'checked' }} data-dates-mode><label class="form-check-label" for="d-list">Seulement certaines dates (événement, saison courte)</label></div>
+                <div class="mt-2" data-dates-list><textarea class="form-control" name="allowedDates" rows="3" placeholder="2026-07-14&#10;2026-07-15">{{ a.allowedDates }}</textarea><div class="form-text">Une date par ligne, au format AAAA-MM-JJ.</div>{{ m.err(errors, 'allowedDates') }}</div>
+            </div></div>
+
+            <div class="card mb-3"><div class="card-body">
+                <h2 class="h5">6. Quels prix ?</h2>
+                <p class="text-muted small">Les prix forment une grille tarifaire rattachée à la catégorie du produit : tous les produits en location de cette catégorie la partagent. Laissez vide les formules que vous n'offrez pas.</p>
+                {% for pk in a.packs %}
+                <div class="form-check"><input class="form-check-input" type="radio" name="pack" id="pack-{{ pk.id }}" value="{{ pk.id }}" {{ a.pack == pk.id ? 'checked' }} data-pack data-rates="{{ {rateHour: pk.rateHour, rateHalfDay: pk.rateHalfDay, rateDay: pk.rateDay, rateWeek: pk.rateWeek, rateMonth: pk.rateMonth}|json_encode }}"><label class="form-check-label" for="pack-{{ pk.id }}">Modifier la grille « {{ pk.name }} »</label></div>
+                {% endfor %}
+                <div class="form-check"><input class="form-check-input" type="radio" name="pack" id="pack-new" value="new" {{ a.pack == 'new' ? 'checked' }} data-pack><label class="form-check-label" for="pack-new">Créer une nouvelle grille nommée</label> <input class="form-control form-control-sm d-inline-block ms-1" style="width: 16rem" name="packName" value="{{ a.packName }}"></div>
+                {% if a.packs is not empty %}<div class="form-check"><input class="form-check-input" type="radio" name="pack" id="pack-keep" value="keep" {{ a.pack == 'keep' ? 'checked' }} data-pack><label class="form-check-label" for="pack-keep">Ne pas toucher aux prix</label></div>{% endif %}
+                {{ m.err(errors, 'pack') }}{{ m.err(errors, 'packName') }}
+                <div class="row g-3 mt-1" data-rates>
+                    {% for key, label in {rateHour: 'Prix à l\'heure', rateHalfDay: 'Prix à la demi-journée', rateDay: 'Prix à la journée', rateWeek: 'Prix à la semaine', rateMonth: 'Prix au mois'} %}
+                    <div class="col-md-4 col-lg-2" data-rate="{{ key }}"><label class="form-label">{{ label }}</label><div class="input-group"><input class="form-control" name="{{ key }}" value="{{ a[key] }}" placeholder="—"><span class="input-group-text">$</span></div><div class="form-text small" data-rate-hint></div></div>
+                    {% endfor %}
+                </div>
+                {{ m.err(errors, 'rates') }}
+            </div></div>
+
+            <div class="card mb-3"><div class="card-body">
+                <h2 class="h5">7. Caution, frais et arrivée</h2>
+                <div class="row g-3">
+                    <div class="col-md-4"><label class="form-label">Caution</label><div class="input-group"><input class="form-control" name="deposit" value="{{ a.deposit }}" placeholder="facultatif"><span class="input-group-text">$</span></div><div class="form-text">Affichée au client, non comprise dans le total payé en ligne.</div>{{ m.err(errors, 'deposit') }}</div>
+                    <div class="col-md-4"><label class="form-label">Frais par passager supplémentaire</label><div class="input-group"><input class="form-control" name="passengerFee" value="{{ a.passengerFee }}" placeholder="facultatif"><span class="input-group-text">$</span></div>{{ m.err(errors, 'passengerFee') }}</div>
+                    <div class="col-md-4"><label class="form-label">Arrivée en avance (minutes)</label><input class="form-control" type="number" min="0" name="arrivalLead" value="{{ a.arrivalLead }}" placeholder="facultatif, 45"><div class="form-text">Rappelé au client lors de la réservation.</div>{{ m.err(errors, 'arrivalLead') }}</div>
+                </div>
+            </div></div>
+
+            <div class="card mb-3"><div class="card-body">
+                <h2 class="h5">8. Ce que vous dites au client</h2>
+                <div class="row g-3">
+                    <div class="col-md-6"><label class="form-label">Inclus (une ligne par élément)</label><textarea class="form-control" name="included" rows="3" placeholder="Gilets de sauvetage&#10;Formation de 15 minutes">{{ a.included }}</textarea></div>
+                    <div class="col-md-6"><label class="form-label">Non inclus</label><textarea class="form-control" name="excluded" rows="3" placeholder="Essence">{{ a.excluded }}</textarea></div>
+                    <div class="col-md-6"><label class="form-label">Politique d'annulation</label><textarea class="form-control" name="cancellationPolicy" rows="3">{{ a.cancellationPolicy }}</textarea></div>
+                    <div class="col-md-6"><label class="form-label">Notes (FAQ, consignes)</label><textarea class="form-control" name="notes" rows="3">{{ a.notes }}</textarea></div>
+                </div>
+            </div></div>
+
+            <button class="btn btn-primary" type="submit">Enregistrer et voir ce que verra le client</button>
+        </form>
+
+        <script>
+        (function () {
+            var form = document.querySelector('[data-rental-form]'); if (!form) return;
+            var hours = {rateHour: 1, rateHalfDay: 4, rateDay: 24, rateWeek: 168, rateMonth: 720};
+            function val(name) { var el = form.querySelector('[name="' + name + '"]'); return el ? el.value.trim() : ''; }
+            function refresh() {
+                var g = (form.querySelector('[data-granularity]:checked') || {}).value || 'days';
+                var hourly = g !== 'days';
+                form.querySelectorAll('[data-hourly-only]').forEach(function (el) { el.style.display = hourly ? '' : 'none'; });
+                form.querySelectorAll('[data-daily-only]').forEach(function (el) { el.style.display = hourly ? 'none' : ''; });
+                form.querySelectorAll('[data-unit]').forEach(function (el) { el.textContent = hourly ? 'heures' : 'jours'; });
+                var listMode = (form.querySelector('[data-dates-mode]:checked') || {}).value === 'list';
+                form.querySelector('[data-dates-list]').style.display = listMode ? '' : 'none';
+                var max = parseInt(val('maxDuration'), 10); var sameDay = hourly && val('openingStart') && val('openingEnd');
+                var hint = form.querySelector('[data-max-hint]');
+                hint.textContent = hourly ? (sameDay ? 'Avec des heures d’ouverture, le client ne dépasse jamais une journée.' : 'En heures d’affilée. Vide : sans limite.') : 'En jours. Vide : sans limite.';
+                form.querySelectorAll('[data-rate]').forEach(function (box) {
+                    var key = box.getAttribute('data-rate'); var h = hours[key]; var why = '';
+                    if (!hourly && (key === 'rateHour' || key === 'rateHalfDay')) why = 'Non proposée à la journée.';
+                    else if (hourly && sameDay && h >= 24) why = 'Non proposée : la location finit le même jour.';
+                    else if (hourly && !isNaN(max) && max < h) why = 'Non proposée : durée max ' + max + ' h.';
+                    else if (!hourly && !isNaN(max) && max < h / 24) why = 'Non proposée : durée max ' + max + ' j.';
+                    box.querySelector('[data-rate-hint]').textContent = why; box.style.opacity = why ? '0.55' : '1';
+                });
+                var packChoice = (form.querySelector('[data-pack]:checked') || {}).value;
+                form.querySelector('[data-rates]').style.display = packChoice === 'keep' ? 'none' : '';
+            }
+            form.addEventListener('change', function (e) {
+                var pk = e.target.closest && e.target.closest('[data-pack][data-rates]');
+                if (pk && pk.checked) { var rates = JSON.parse(pk.getAttribute('data-rates')); Object.keys(rates).forEach(function (k) { var el = form.querySelector('[name="' + k + '"]'); if (el) el.value = rates[k]; }); }
+                refresh();
+            });
+            form.addEventListener('input', refresh);
+            refresh();
+        })();
+        </script>
+    {% endif %}
+</div>
+{% endblock %}

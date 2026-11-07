@@ -28,9 +28,10 @@ class RentalConsoleAdminController extends AbstractController
         }
         foreach ($overview['products'] as $i => $p) {
             $overview['products'][$i]['editUrl'] = $this->urls->unsetAll()->setController(ProductCrudController::class)->setAction(Action::EDIT)->setEntityId($p['id'])->generateUrl();
+            $overview['products'][$i]['wizardUrl'] = $this->urls->unsetAll()->setRoute('admin_location_configurer', ['product' => $p['id']])->generateUrl(); // questionnaire pas à pas (08/11/2026)
             $overview['products'][$i]['configUrl'] = $p['configId'] ? $this->urls->unsetAll()->setController(BookingConfigurationCrudController::class)->setAction(Action::EDIT)->setEntityId($p['configId'])->generateUrl() : $this->urls->unsetAll()->setController(BookingConfigurationCrudController::class)->setAction(Action::NEW)->generateUrl();
         }
 
-        return $this->render('admin/location/index.html.twig', ['overview' => $overview, 'packsUrl' => $this->screens->screenUrl('rental_packs'), 'newPackUrl' => $this->urls->unsetAll()->setController(RentalPackCrudController::class)->setAction(Action::NEW)->generateUrl(), 'monSiteUrl' => $this->screens->routeUrl('admin_mon_site')]);
+        return $this->render('admin/location/index.html.twig', ['overview' => $overview, 'packsUrl' => $this->screens->screenUrl('rental_packs'), 'newPackUrl' => $this->urls->unsetAll()->setController(RentalPackCrudController::class)->setAction(Action::NEW)->generateUrl(), 'monSiteUrl' => $this->screens->routeUrl('admin_mon_site'), 'wizardUrl' => $this->urls->unsetAll()->setRoute('admin_location_configurer')->generateUrl()]);
     }
 }
