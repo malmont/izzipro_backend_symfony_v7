@@ -7,6 +7,7 @@ use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
 use App\Services\EmailConfigurationService\EmailLocale;
 use App\Services\LandingAiService\LandingAiException;
 use App\Services\LandingAiService\LandingAiQuotaService;
+use App\Services\ProductAiService\ProductAiBulkService;
 use App\Services\ProductAiService\ProductSheetCreator;
 use App\Services\ProductAiService\ProductSheetDrafter;
 use App\Services\TenantEntityManagerProvider;
@@ -26,6 +27,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  *   402 AI_CREDITS_EXHAUSTED, 422 PHOTO_INVALID, 429 AI_TOO_MANY_FAILURES, 503 AI_UNAVAILABLE. Rien n'est créé ; les photos sont déposées
  *   dans la médiathèque (store) pour servir à la création.
  * - POST /api/products/ai/translate { name, description?, moreInformations?, tags?, source? (langue du site), targets? (fr, en) } → { translations, credits }.
+ * - GET /api/products/ai/bulk/plan?kind=, POST /api/products/ai/bulk, GET /api/products/ai/bulk/{jobId} : lots (fiches, traductions, images), voir ProductAiBulkService.
  * - POST /api/products/ai/create { name, description?, moreInformations?, tags?, language?, translations?, priceCents, stockQuantity?, categoryIds?,
  *   pictures? (URL https ou nom de fichier), channels? {web, pos, landing}, modes? {sale, rental, subscription}, barcode?, translate? (bool :
  *   traduction automatique dans l'autre langue du site, un crédit) } → 201 { productId, variantId, slug, code, languages, pictures, translated } ;
@@ -43,6 +45,7 @@ class ProductAiController extends AbstractController
         private readonly UploadMediaUseCase $upload,
         private readonly ?EmailLocale $siteLocale = null,
         private readonly ?TenantCurrencyProvider $currency = null,
+        private readonly ?ProductAiBulkService $bulk = null, // lots (07/11/2026)
     ) {
     }
 
@@ -131,6 +134,42 @@ class ProductAiController extends AbstractController
         }
 
         return $this->json($result['body'] + ['translated' => $translated], 201);
+    }
+
+    /** Estimation d'un lot : produits concernés, crédits nécessaires, restants, manquants (?kind=sheets|translations|images&overwrite=0|1) */
+    #[Route('/bulk/plan', name: 'api_products_ai_bulk_plan', methods: ['GET'])]
+    public function bulkPlan(Request $request): JsonResponse
+    {
+        $kind = (string) $request->query->get('kind', 'sheets');
+        if (!in_array($kind, ProductAiBulkService::KINDS, true)) {
+            return $this->json(['error' => 'KIND_INVALID', 'code' => 'KIND_INVALID', 'message' => 'kind : sheets, translations ou images.'], 422);
+        }
+
+        return $this->json($this->bulk->plan($kind, filter_var($request->query->get('overwrite', false), FILTER_VALIDATE_BOOLEAN), !$this->isGranted('ROLE_SUPER_ADMIN')));
+    }
+
+    /** Lance un lot : { kind, overwrite?, partial? (traiter ce que les crédits permettent), limit? } → 202 { jobId, products, creditsNeeded, partial } ; 402 / 409 */
+    #[Route('/bulk', name: 'api_products_ai_bulk_start', methods: ['POST'])]
+    public function bulkStart(Request $request): JsonResponse
+    {
+        $body = json_decode((string) $request->getContent(), true);
+        $body = is_array($body) ? $body : [];
+        $kind = (string) ($body['kind'] ?? 'sheets');
+        if (!in_array($kind, ProductAiBulkService::KINDS, true)) {
+            return $this->json(['error' => 'KIND_INVALID', 'code' => 'KIND_INVALID', 'message' => 'kind : sheets, translations ou images.'], 422);
+        }
+        $result = $this->bulk->start($kind, ($body['overwrite'] ?? false) === true, ($body['partial'] ?? false) === true, isset($body['limit']) ? (int) $body['limit'] : null, $this->getUser()?->getUserIdentifier(), !$this->isGranted('ROLE_SUPER_ADMIN'));
+
+        return $this->json($result['body'] + ($result['status'] >= 400 ? ['code' => $result['body']['error']] : []), $result['status']);
+    }
+
+    /** État d'un lot : status pending | running | done | failed, done, failed, skipped, creditsUsed, stoppedForCredits, items, current */
+    #[Route('/bulk/{jobId}', name: 'api_products_ai_bulk_status', methods: ['GET'], requirements: ['jobId' => '[0-9a-f-]{36}'])]
+    public function bulkStatus(string $jobId): JsonResponse
+    {
+        $status = $this->bulk->status($jobId);
+
+        return $status === null ? $this->json(['error' => 'JOB_NOT_FOUND', 'code' => 'JOB_NOT_FOUND', 'message' => 'Lot inconnu ou expiré.'], 404) : $this->json($status);
     }
 
     /** @return array<int, string> id => nom */

@@ -22,6 +22,13 @@ class ProductPicture
     #[ORM\JoinColumn(nullable: false)]
     private ?Product $product = null;
 
+    /** `upload` (photo déposée) ou `ai` (image mannequin générée, 07/11/2026) */
+    #[\Doctrine\ORM\Mapping\Column(length: 20, options: ['default' => 'upload'])]
+    private string $source = 'upload';
+
+    public function getSource(): string { return $this->source; }
+    public function setSource(string $source): static { $this->source = $source === 'ai' ? 'ai' : 'upload'; return $this; }
+
     public function getId(): ?int
     {
         return $this->id;

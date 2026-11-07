@@ -1256,6 +1256,29 @@ canaux `is_web` / `is_pos` / `is_landing_page`, modes de vente, journal `content
 slug est rendu unique (`-2`, `-3`…). À venir : mannequin ou personne portant le vêtement photographié (génération d'image, clé Gemini à
 fournir, cinq crédits, traitement asynchrone) et le même outil dans l'assistant.
 
+### IA en lot : toutes les fiches, toutes les traductions, toutes les images (07/11/2026)
+
+`Services/ProductAiService/ProductAiBulkService` : `plan(kind)` compte les produits concernés et les crédits ; `start()` crée une tâche
+`ai_job` (réservation à coût nul) et envoie `ProductAiBulkMessage` sur le transport `landing_ai` (worker IA, `ProductAiBulkHandler` qui
+sélectionne le site puis `run()`) ; `run()` traite produit par produit avec **un crédit réservé à la fois** (fiche : 1, traduction : 1,
+image : 5), met l'avancement dans `ai_job.result` (`done`, `failed`, `skipped`, `creditsUsed`, `stoppedForCredits`, `items`, `current`) et
+s'arrête proprement quand les crédits sont épuisés (402) ou après trop d'échecs (429). Candidats : `sheets` = produits dont la description
+fait moins de 40 caractères (ignorés sans photo) ; `translations` = produits sans traduction dans l'autre langue du site ; `images` =
+produits sans photo `product_picture.source = 'ai'` (disponible seulement quand `ProductImageGeneratorInterface::isConfigured()` ;
+aujourd'hui `NullProductImageGenerator`). `overwrite` réécrit même les fiches complètes. Photos envoyées à l'IA : fichiers locaux
+(`var/storage/public_bucket/assets/uploads/products`) en base64, adresses https telles quelles. Test : `tests/Functional/Boutique/ProductAiBulkTest.php`.
+
+| Route (`ROLE_ADMIN`) | Réponse |
+|---|---|
+| `GET /api/products/ai/bulk/plan?kind=sheets\|translations\|images&overwrite=0` | `{ kind, label, available, unavailableReason, total, items (50 premiers : id, name, reason), skipped, languages, creditsPerItem, creditsNeeded, creditsRemaining, monthlyCredits, resetAt, enough, missingCredits, doableNow, charge }` |
+| `POST /api/products/ai/bulk { kind, overwrite?, partial? (traiter ce que les crédits permettent), limit? }` | 202 `{ jobId, kind, products, creditsNeeded, partial }` ; 402 `AI_CREDITS_EXHAUSTED` (avec `plan`), 409 `NOTHING_TO_DO` / `IMAGE_PROVIDER_MISSING`, 422 `KIND_INVALID` |
+| `GET /api/products/ai/bulk/{jobId}` | `{ jobId, status: pending \| running \| done \| failed, kind, total, done, failed, skipped, creditsUsed, stoppedForCredits, items, current, error }` ; 404 `JOB_NOT_FOUND` |
+
+Back-office : page « IA en lot : fiches, traductions, images » (menu Catalogue, `/admin/produits/ia-en-lot`) : une carte par famille avec
+le nombre de produits, le coût, les crédits restants, ce qui manque et « Tout lancer » ou « Lancer pour N produit(s) » ; l'avancement du
+dernier lot se rafraîchit toutes les quatre secondes. Cheminement du site (groupe Boutique, améliorations) : « Fiches produit complètes »,
+« Fiches traduites », « Images mannequin » comptent les produits **en ligne** (`is_web`) incomplets et mènent à cette page.
+
 ### Commandes du client
 
 - `GET /api/ordersuser` (connecté) : commandes de l'utilisateur connecté, jamais servies par le cache (lot 4 de l'invalidation ciblée,

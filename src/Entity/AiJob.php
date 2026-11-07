@@ -91,6 +91,12 @@ class AiJob
         $this->createdAt = new \DateTimeImmutable();
     }
 
+    /** Avancement d'une tâche en cours (lot IA produits, 07/11/2026) : le résultat partiel est relu par l'interface */
+    public function progress(string $result): void
+    {
+        $this->result = $result;
+    }
+
     public function succeed(string $result): void
     {
         $this->finish(self::STATUS_DONE);

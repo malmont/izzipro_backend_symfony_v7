@@ -25,7 +25,7 @@ class AdminStepUrlResolver
         'booking_configuration' => ['crud' => \App\Controller\Admin\BookingConfigurationCrudController::class], 'rental_packs' => ['crud' => \App\Controller\Admin\RentalPackCrudController::class],
         'cash_registers' => ['crud' => \App\Controller\Admin\CashRegisterCrudController::class], 'users' => ['crud' => \App\Controller\Admin\UserCrudController::class], 'currencies' => ['crud' => \App\Controller\Admin\CurrencyCrudController::class],
         'esg_questions' => ['crud' => \App\Controller\Admin\ESG\DiagnosticQuestionCrudController::class], 'short_code' => ['route' => 'admin_short_code'],
-        'product_photo' => ['route' => 'admin_product_photo'], 'pos' => ['route' => 'admin_caisse'], 'denominations' => ['crud' => \App\Controller\Admin\TypeCashCrudController::class], // cheminement Caisse (07/11/2026)
+        'product_photo' => ['route' => 'admin_product_photo'], 'product_ai_bulk' => ['route' => 'admin_product_ai_bulk'], 'pos' => ['route' => 'admin_caisse'], 'denominations' => ['crud' => \App\Controller\Admin\TypeCashCrudController::class], // cheminement Caisse (07/11/2026)
     ];
 
     public function __construct(private readonly AdminUrlGenerator $urls, private readonly UrlGeneratorInterface $router)

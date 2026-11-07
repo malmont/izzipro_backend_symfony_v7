@@ -76,6 +76,7 @@ framework:
             'App\MemoiresVivantes\Message\GenerateChapterMessage': async
             'App\ESG\Message\GenerateEsgReportMessage': esg
             'App\Message\LandingAiJobMessage': landing_ai
+            'App\Message\ProductAiBulkMessage': landing_ai # lots IA produits (fiches, traductions, images), même worker IA (07/11/2026)
             'App\Message\PrepareScrollVideoMessage': media
             'App\Message\SendTenantEmailMessage': email
             'App\MemoiresVivantes\Message\GenerateBookPdfMessage': pdf

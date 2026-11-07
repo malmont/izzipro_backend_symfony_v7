@@ -1,0 +1,66 @@
+{# IA en lot : fiches, traductions, images (07/11/2026) : habillage EasyAdmin depuis le menu, sinon page nue #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}IA en lot{% endblock %}
+{% block content_title %}IA en lot : fiches, traductions, images{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}<div class="py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block panel %}
+<div class="container-fluid" style="max-width: 980px" data-ai-bulk>
+    <h1 class="h3 mb-1">IA en lot</h1>
+    <p class="text-muted">En un clic, l'IA complète tout le catalogue : les fiches sans description (rédigées depuis les photos), les traductions manquantes, et bientôt les images mannequin. Avant de lancer, vous voyez combien de produits sont concernés, combien de crédits il faut et s'il vous en reste assez. {% if charge %}Crédits restants ce mois-ci : <strong data-credits-remaining>{{ plans.sheets.creditsRemaining }}</strong> sur {{ plans.sheets.monthlyCredits }}.{% else %}Propriétaire de la plateforme : aucun crédit décompté.{% endif %}</p>
+    {% for label, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}{% endfor %}
+
+    {% if job %}
+    <div class="card mb-4" data-ai-bulk-job data-status="{{ job.status }}" data-status-url="{{ statusUrl }}">
+        <div class="card-body">
+            <h2 class="h5">Dernier lot : {{ job.kind ? plans[job.kind].label : '' }} <span class="badge bg-{{ job.status == 'done' ? 'success' : (job.status == 'failed' ? 'danger' : 'info') }}" data-job-badge>{{ {pending: 'en attente', running: 'en cours', done: 'terminé', failed: 'échoué'}[job.status] ?? job.status }}</span></h2>
+            <div class="progress mb-2" style="height: 12px"><div class="progress-bar" data-job-bar style="width: {{ job.total > 0 ? ((job.done + job.failed + job.skipped) * 100 / job.total)|round : 0 }}%"></div></div>
+            <p class="small mb-1" data-job-line>{{ job.done }} fait(s), {{ job.failed }} échec(s), {{ job.skipped }} ignoré(s) sur {{ job.total }} · {{ job.creditsUsed }} crédit(s) consommé(s){% if job.stoppedForCredits %} · <strong class="text-warning">arrêté : crédits épuisés</strong>{% endif %}{% if job.current %} · en cours : {{ job.current.name }}{% endif %}</p>
+            {% if job.error %}<p class="text-danger small mb-0">{{ job.error }}</p>{% endif %}
+            <details class="small"><summary>Détail par produit</summary><ul class="mb-0" data-job-items>{% for it in job.items %}<li>{{ it.name ?? it.id }} : {{ it.status }}{% if it.note %} ({{ it.note }}){% endif %}</li>{% endfor %}</ul></details>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="row g-3">
+        {% for kind, p in plans %}
+        <div class="col-lg-4" data-ai-bulk-kind="{{ kind }}" data-total="{{ p.total }}" data-enough="{{ p.enough ? 1 : 0 }}">
+            <div class="card h-100"><div class="card-body d-flex flex-column">
+                <h2 class="h5">{{ p.label }}</h2>
+                {% if not p.available %}<div class="alert alert-secondary small">{{ p.unavailableReason }}</div>{% endif %}
+                <p class="mb-1"><strong>{{ p.total }}</strong> produit(s) concerné(s){% if p.skipped is not empty %} · {{ p.skipped|length }} ignoré(s) (aucune photo){% endif %}</p>
+                {% if p.total > 0 %}
+                <p class="small text-muted mb-1">{% for it in p.items|slice(0, 5) %}{{ it.name }}{% if not loop.last %}, {% endif %}{% endfor %}{% if p.total > 5 %}…{% endif %}</p>
+                <p class="mb-1">Coût : <strong>{{ p.creditsNeeded }}</strong> crédit(s) ({{ p.creditsPerItem }} par produit){% if charge %} · restants : {{ p.creditsRemaining }}{% endif %}</p>
+                {% if charge and not p.enough %}<p class="text-warning small mb-1">Il manque <strong>{{ p.missingCredits }}</strong> crédit(s) : vous pouvez traiter les <strong>{{ p.doableNow }}</strong> premier(s) produit(s) maintenant, ou ajouter des crédits (page Assistant IA : crédits).</p>{% elseif p.total > 0 %}<p class="text-success small mb-1">Crédits suffisants.</p>{% endif %}
+                {% endif %}
+                <form method="post" class="mt-auto" data-ai-bulk-form="{{ kind }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token(csrfToken) }}"><input type="hidden" name="kind" value="{{ kind }}">
+                    {% if p.total > 0 and p.available %}
+                        {% if charge and not p.enough %}<input type="hidden" name="partial" value="1"><button class="btn btn-warning btn-sm">Lancer pour {{ p.doableNow }} produit(s)</button>{% else %}<button class="btn btn-primary btn-sm">Tout lancer ({{ p.total }})</button>{% endif %}
+                    {% else %}<button class="btn btn-outline-secondary btn-sm" disabled>Rien à faire</button>{% endif %}
+                </form>
+            </div></div>
+        </div>
+        {% endfor %}
+    </div>
+    <script>
+    (function () {
+        var box = document.querySelector('[data-ai-bulk-job]');
+        if (!box || ['done', 'failed'].indexOf(box.getAttribute('data-status')) !== -1) { return; }
+        var url = box.getAttribute('data-status-url');
+        function tick() {
+            fetch(url, {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (j) {
+                var total = j.total || 0, n = (j.done || 0) + (j.failed || 0) + (j.skipped || 0);
+                box.querySelector('[data-job-bar]').style.width = (total > 0 ? Math.round(n * 100 / total) : 0) + '%';
+                box.querySelector('[data-job-line]').textContent = j.done + ' fait(s), ' + j.failed + ' échec(s), ' + j.skipped + ' ignoré(s) sur ' + total + ' · ' + j.creditsUsed + ' crédit(s) consommé(s)' + (j.stoppedForCredits ? ' · arrêté : crédits épuisés' : '') + (j.current ? ' · en cours : ' + j.current.name : '');
+                if (j.status === 'done' || j.status === 'failed') { window.location.reload(); } else { setTimeout(tick, 4000); }
+            }).catch(function () { setTimeout(tick, 8000); });
+        }
+        setTimeout(tick, 4000);
+    })();
+    </script>
+</div>
+{% endblock %}

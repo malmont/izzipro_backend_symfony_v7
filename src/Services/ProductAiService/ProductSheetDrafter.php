@@ -31,7 +31,7 @@ class ProductSheetDrafter
     }
 
     /**
-     * @param list<array{data: string, mime: string}> $photos contenu binaire et type MIME
+     * @param list<array{data?: string, mime?: string, url?: string}> $photos contenu binaire et type MIME, ou adresse https
      * @param list<string> $categories noms des catégories du site (l'IA en choisit une ou aucune)
      * @return array{draft: array<string, mixed>, usage: array<string, mixed>}
      * @throws LandingAiException 402 crédits, 422 photo, 503 IA
@@ -42,7 +42,13 @@ class ProductSheetDrafter
             throw new LandingAiException(422, 'Photos', sprintf('De 1 à %d photos attendues.', self::MAX_PHOTOS));
         }
         foreach ($photos as $p) {
-            if (!in_array($p['mime'], self::MIME_TYPES, true) || strlen($p['data']) === 0 || strlen($p['data']) > self::MAX_PHOTO_BYTES) {
+            if (isset($p['url'])) {
+                if (!preg_match('#^https://#', (string) $p['url'])) {
+                    throw new LandingAiException(422, 'Photos', 'Photo invalide : adresse https attendue.');
+                }
+                continue;
+            }
+            if (!in_array($p['mime'] ?? '', self::MIME_TYPES, true) || strlen($p['data'] ?? '') === 0 || strlen($p['data']) > self::MAX_PHOTO_BYTES) {
                 throw new LandingAiException(422, 'Photos', 'Photo invalide : JPEG, PNG, WebP ou GIF de 8 Mo au plus.');
             }
         }
@@ -129,7 +135,7 @@ class ProductSheetDrafter
         $content = [['type' => 'text', 'text' => sprintf("Rédige la fiche de ce produit en %s%s.%s", self::LANGUAGES[$language] ?? 'français', $comment !== '' ? ". Indications du marchand : « " . mb_substr($comment, 0, 1000) . ' »' : '', $categories !== [] ? "\nCatégories du site (choisis la plus juste, ou aucune) : " . implode(' | ', array_slice($categories, 0, 80)) : '')]];
         foreach ($photos as $i => $p) {
             $content[] = ['type' => 'text', 'text' => sprintf('Photo %d :', $i + 1)];
-            $content[] = ['type' => 'image', 'source' => ['type' => 'base64', 'media_type' => $p['mime'], 'data' => base64_encode($p['data'])]];
+            $content[] = ['type' => 'image', 'source' => isset($p['url']) ? ['type' => 'url', 'url' => $p['url']] : ['type' => 'base64', 'media_type' => $p['mime'], 'data' => base64_encode($p['data'])]];
         }
         $system = <<<TXT
 Tu rédiges des fiches produit pour une boutique en ligne à partir de photos et des indications du marchand. Décris ce que tu vois sans inventer de caractéristique invérifiable (pas de matière ni de marque si rien ne l'indique : dis-le dans la note). Donne : name (court, vendeur, sans point final), shortDescription (une phrase), description (HTML simple : <p>, <ul><li>, <strong> ; 80 à 200 mots : usage, points forts, matières visibles, entretien si évident), moreInformations (HTML : dimensions ou tailles visibles, composition, conseils), categoryName (parmi la liste, sinon null), attributes {material, colors (liste), sizes (liste), gender (femme|homme|enfant|mixte|null), season}, tags (5 à 10 mots-clés séparés par des virgules), suggestedPriceCents (prix de vente conseillé en cents de $currency si le marchand a donné un coût ou si l'article est très courant, sinon null), shippingClass (standard|fragile|volumineux|lourd), confidence (high|medium|low), note (ce que tu n'as pas pu déterminer).
