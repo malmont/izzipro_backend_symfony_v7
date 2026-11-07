@@ -217,7 +217,9 @@ d'article**.
 - Sortie : `{ lines: [{ productVariantId, productId, name, kind: sale | rental, quantity, unitPrice, total,
   customizationId?, customizationPrice?, booking?: { start, end, rateId, rateName, durationType, units, rate, passengers,
   passengerFee, deposit } }], subtotal, shipping, taxes: [{ label, rate, amount }], deposit, total, currency, carrier: { id, name,
-  isFree } | null }`. `total` = articles + livraison + taxes ; la **caution** (`deposit`) est rapportée à part.
+  isFree, kind, freeShippingApplied } | null, shippingAddress, taxAddress, taxBasis: shipping | store }`. `total` = articles + livraison + taxes ;
+  la **caution** (`deposit`) est rapportée à part. `taxAddress` est l'adresse qui a servi aux taxes (B20, 08/11/2026) : l'adresse de
+  livraison normalisée, ou celle de la boutique pour un retrait en magasin (`taxBasis: store`).
 - Vente : `unitPrice` = prix de la variante (`product_variant.price`) sinon prix effectif du produit (promotion en
   cours) ; stock de la variante vérifié. Personnalisation (`customizationId`, 09/10/2026) : la combinaison doit appartenir à la
   variante (422 sinon) ; son supplément `customizationPrice` (somme des `price_delta` de ses options, en dollars en
@@ -235,7 +237,8 @@ d'article**.
   (colonne `carrier.estimated_days`, migration `Version20261008140000`, script
   `scripts/migrate_all_v2_carrier_estimated_days.sh`). `shipping/summary[].totalPrice` est en cents.
 - Taxes : selon l'adresse de livraison (`shippingAddress`), voir « Taxes par région » ci-dessous ; sans adresse,
-  `taxes: []` et `taxStatus: address_required`.
+  `taxes: []` et `taxStatus: address_required`. **Retrait en magasin** (`carrierId` d'un transporteur `kind: pickup`, B20, 08/11/2026) :
+  taxes à l'adresse de la fiche entreprise du site, avec ou sans `shippingAddress` (`taxStatus: calculated`, `taxBasis: store`).
 - Statuts : 400 corps illisible, 404 variante ou transporteur inconnu, 422 règle non respectée ; rien n'est réservé. Depuis le
   02/11/2026, la réponse porte `code` de premier niveau (`INVALID_BODY`, `VARIANT_NOT_FOUND`, `CARRIER_NOT_FOUND`, sinon `QUOTE_INVALID`,
   comme la caisse) et chaque entrée de `errors[]` porte `code` (+ `params`) : voir « Codes du devis, de l'adresse et de la commande ».
@@ -506,6 +509,12 @@ Le devis, `create-intent` et la commande calculent les taxes de la même façon,
 (`shippingAddress { country, province|state, city, postalCode }` dans le devis et `create-intent` ; adresse de la
 commande ensuite). Réglage `commerce.taxProvider` des réglages de la boutique : `table` (défaut) ou `stripe`.
 
+- **Retrait en magasin (B20, 08/11/2026)** : le bien est remis au magasin, donc les taxes suivent la province de la **boutique**
+  (adresse de la fiche entreprise), pas celle du client : règle du lieu de fourniture, la même qu'une vente au comptoir. Un client
+  de l'Ontario qui retire au Québec paie TPS et TVQ, pas la TVH ; un client hors Canada paie les taxes du magasin. La règle vaut
+  pour le devis (`taxBasis: store`), `create-intent` (montant toutes taxes comprises même sans `shippingAddress`) et la commande
+  (`OrderTaxAddressResolver::forOrder` : transporteur `pickup` → adresse de la boutique, même si la commande a une adresse).
+  Sans fiche entreprise, l'adresse du client sert comme avant. Stripe Tax reçoit la même adresse.
 - **Sans adresse** : `taxes: []`, `taxStatus: 'address_required'`, `total` hors taxes (le frontend affiche « taxes
   calculées au paiement »). Avec adresse : `taxStatus` = `calculated`, `no_tax` (aucune taxe pour cette région) ou
   `fallback_table` (Stripe demandé mais indisponible : table utilisée). Le devis renvoie aussi `taxProvider`,
@@ -584,7 +593,8 @@ Détails dans `docs/caisse.md`.
   (transporteur dans la langue demandée ; page de suivi connue pour Postes Canada, Purolator, UPS, FedEx, USPS, DHL, sinon
   `trackingUrl` null), sinon `null`.
 - **`GET /api/ordersuser`** : montants en **cents entiers** (`totalAmount`, `subTotal`, `priceTax`, `priceShipping`,
-  lignes `unitPrice`, `totalPrice`), `currency`, `statusId`, `carrier { id, name }`, lignes avec `productVariantId`,
+  lignes `unitPrice`, `totalPrice`), `currency`, `statusId`, `carrier { id, name, kind, isPickup }` (`kind` et `isPickup` : B20,
+  08/11/2026, liste et détail ; « Retrait en magasin » à afficher quand `isPickup` est vrai), lignes avec `productVariantId`,
   `booking { start, end, status, rateId }` et `customizationId` (combinaison de `GET /api/customization/config/{variantId}`
   envoyée dans l'article du devis et de la commande ; vérifiée contre la variante, 422 sinon ; colonne
   `order_items.customization_id`, migration `Version20261009150000`).
@@ -782,7 +792,7 @@ retire les droits d'usage du site cible (`Services/Platform/OfferFulfillmentServ
 |---|---|---|
 | `GET /api/subscription-plans?productId=&locale=` | public | formules actives (sans `productId` : toutes celles de la boutique, produits encore vendus par abonnement ; grille de formules `PlanGrid`) `{ id, productId, productName, name, interval (week\|month\|year), intervalCount, price (cents), currency, trialDays, minimumTerms, active, description (sous-titre), features (liste d'avantages, 20 au plus), highlighted (formule recommandée, une par produit), badge (texte du badge ou null) }`, textes en clair dans la langue demandée |
 | `POST /api/subscriptions { planId, quantity?, addressId?, carrierId? }` | client connecté | 201 `{ subscriptionId, clientSecret, intentType, status, subscription }` ; abonnement Stripe créé en `default_incomplete`, première facture payée par le `clientSecret` (Payment Element) ; `trialDays` > 0 → `trialing`, rien à payer : la carte s'enregistre par le `clientSecret` d'un SetupIntent. `intentType` (25/10/2026) dit lequel : `payment` → `stripe.confirmPayment`, `setup` → `stripe.confirmSetup` (sans cette confirmation, aucune carte n'est gardée et la fin de l'essai part en impayé). Un essai sans carte à la même formule et quantité est **repris** (200, `reused: true`, même `clientSecret` du SetupIntent, `intentType: setup`) au lieu d'un 409, depuis n'importe quel appareil ; un essai avec carte, ou à une autre formule ou quantité, reste refusé (409 `already_subscribed`) ; 403 si `commerce.subscriptionsEnabled` est `false` ; 404 formule ; 422 produit sans abonnement, quantité, adresse d'un autre client |
-| `GET /api/subscriptions`, `GET …/{id}` | client connecté | `{ id, plan, quantity, status, currentPeriodEnd, cancelAtPeriodEnd, address, carrier, shippingAmount, createdAt, canceledAt, orders: [{ id, reference, date, total, status }], latestInvoice, hasPaymentMethod }` ; `hasPaymentMethod` (25/10/2026) : carte enregistrée chez Stripe comme moyen par défaut de l'abonnement, recopiée à chaque lecture ou webhook de l'abonnement (`subscription.has_payment_method`, migration `Version20261025110000`, script `scripts/migrate_all_v2_subscription_payment_method.sh`) ; `null` : inconnu (abonnement antérieur, pas encore relu) ; autre client : 404 |
+| `GET /api/subscriptions`, `GET …/{id}` | client connecté | `{ id, plan, quantity, status, currentPeriodEnd, cancelAtPeriodEnd, address, carrier: { id, name, kind, isPickup } (kind et isPickup : B20, 08/11/2026), shippingAmount, createdAt, canceledAt, orders: [{ id, reference, date, total, status }], latestInvoice, hasPaymentMethod }` ; `hasPaymentMethod` (25/10/2026) : carte enregistrée chez Stripe comme moyen par défaut de l'abonnement, recopiée à chaque lecture ou webhook de l'abonnement (`subscription.has_payment_method`, migration `Version20261025110000`, script `scripts/migrate_all_v2_subscription_payment_method.sh`) ; `null` : inconnu (abonnement antérieur, pas encore relu) ; autre client : 404 |
 | `POST …/{id}/cancel { atPeriodEnd?: true }` | client | fin de période par défaut (`cancelAtPeriodEnd`), ou immédiate (`canceled`, courriel) |
 | `POST …/{id}/resume`, `…/{id}/pause` | client | reprise (annulation programmée levée, collecte reprise) ; pause (`pause_collection: void`, courriel) ; 409 si résilié ou pas actif |
 | `POST …/{id}/change-plan { planId }` | client | formule du même produit, prorata Stripe |
@@ -1073,6 +1083,27 @@ réglages, transporteurs, compteurs, liens vers les écrans.
 - **Devis** (`POST /api/cart/quote`, `CartQuoteCalculator::shipping`) : retrait en magasin → `shipping: 0` ; livraison offerte quand les
   lignes atteignent `freeShippingAbove` sur un transporteur payant (`carrier.freeShippingApplied` vrai, `carrier.kind` rendu) ; sinon
   prix fixe ou tarif EasyPost comme avant.
+
+#### Retrait en magasin : réponses B20 à l'application mobile et à Next (08/11/2026)
+
+1. **Taxes d'un retrait** : à l'adresse de la boutique (fiche entreprise), jamais celle du client ; sans `shippingAddress`, le devis
+   répond quand même `taxStatus: calculated` et `taxBasis: store` (voir « Taxes par région »). Test
+   `ShippingLot1Test::testPickupIsTaxedAtTheStoreAddressWithOrWithoutACustomerAddress`.
+2. **`POST /api/stripe/create-intent` avec un transporteur `pickup`** : accepté sans `shippingAddress` ; le montant de l'intent est le
+   `total` du devis, **taxes de la boutique comprises** (avant le 08/11/2026 il était hors taxes dans ce cas). Aucun champ ne remplace
+   `shippingAddress` : ne rien envoyer. Codes : ceux du devis (`VARIANT_NOT_FOUND`, `CARRIER_NOT_FOUND`, `QUOTE_INVALID`, 422), `AMOUNT_INVALID`,
+   `STRIPE_ACCOUNT_MISSING`. **`POST /api/order/create` et `create-guest` exigent toujours une adresse** (`addressId` : 400 `FIELDS_REQUIRED` ;
+   `shippingAddress` : 400 `GUEST_FIELDS_REQUIRED`), même en retrait : elle sert d'adresse de facturation et de contact, pas aux taxes.
+   Lever cette obligation (commande de retrait sans adresse, invité identifié par `guestInfo` seul) est un lot à part, à décider.
+3. **Invité en retrait** : tant que l'adresse reste obligatoire, rien ne change : `guestInfo.email` obligatoire (`EMAIL_REQUIRED`), nom et
+   prénom pris dans `guestInfo` sinon dans `shippingAddress`, téléphone dans l'adresse. Titrer la section « Vos coordonnées » et dire
+   que rien n'y est livré est le bon affichage.
+4. **Détail et liste d'une commande** (`GET /api/orders/{id}`, `GET /api/ordersuser`) : `shippingAdress` = l'adresse donnée à la
+   commande (jamais celle de la boutique ; `null` seulement pour une vente au comptoir) ; `carrier { id, name, kind, isPickup }`.
+5. **`kind: easypost`** : inchangé, un transporteur avec `carrierAccountId` est tarifé par `shipping/summary` et le tarif choisi est
+   envoyé en `shippingPrice` ; `kind: fixed` : prix du transporteur ; `kind: pickup` : 0.
+6. **Abonnements** : `GET /api/subscriptions` et `GET /api/subscriptions/{id}` rendent `carrier { id, name, kind, isPickup }` ; un
+   abonnement en retrait a `shippingAmount` égal au prix du transporteur, soit 0 (prix forcé à 0 pour un retrait).
 - **« Marquer expédiée »** : action sur la liste et la fiche Commandes (commande payée, en cours ou en préparation, jamais une vente au
   comptoir) → page `GET`/`POST /admin/orders/{id}/expedier` (`Controller/Admin/OrderShipmentAdminController`, CSRF) : transporteur ou mode
   de remise, numéro de suivi (lien de suivi déduit pour Postes Canada, Purolator, UPS, FedEx, USPS, DHL ; sinon lien saisi), courriel

@@ -167,6 +167,46 @@ class ShippingLot1Test extends WebTestCase
 
 
     /** Suit la redirection habillée EasyAdmin d'un POST refusé et rend la page (message flash compris) */
+    /** B20 (08/11/2026) : un bien retiré au magasin est taxé à l'adresse de la boutique, avec ou sans adresse du client ; la commande porte kind et isPickup */
+    public function testPickupIsTaxedAtTheStoreAddressWithOrWithoutACustomerAddress(): void
+    {
+        $pickup = (int) $this->db->fetchOne("SELECT id FROM carrier WHERE kind = 'pickup' ORDER BY id LIMIT 1");
+        $fixed = (int) $this->db->fetchOne("SELECT id FROM carrier WHERE kind = 'fixed' ORDER BY id LIMIT 1");
+        $variant = (int) $this->db->fetchOne("SELECT v.id FROM product_variant v JOIN product p ON p.id = v.product_id WHERE p.code = 'DEMO-CASQUETTE' ORDER BY v.id LIMIT 1");
+        $price = (int) round((float) $this->db->fetchOne("SELECT price FROM product WHERE code = 'DEMO-CASQUETTE'"));
+        $quote = fn (int $carrier, ?array $address) => json_decode((string) $this->api('POST', '/api/cart/quote', array_filter(['items' => [['productVariantId' => $variant, 'quantity' => 1]], 'carrierId' => $carrier, 'shippingAddress' => $address]), null)->getContent(), true);
+
+        // Boutique au Québec (setUp) : retrait sans adresse → taxes calculées quand même, à l'adresse de la boutique
+        $none = $quote($pickup, null);
+        $this->assertSame(['calculated', 'store', ['TPS', 'TVQ'], 'QC'], [$none['taxStatus'], $none['taxBasis'], array_column($none['taxes'], 'label'), $none['taxAddress']['province']], 'retrait sans adresse : taxes de la boutique');
+        $this->assertNull($none['shippingAddress']);
+        $this->assertSame($price + array_sum(array_column($none['taxes'], 'amount')), $none['total']);
+        $taxes = array_sum(array_column($none['taxes'], 'amount'));
+
+        // Client de l'Ontario : retrait → taxes du Québec quand même ; livraison → taxes de l'Ontario
+        $ontario = ['country' => 'CA', 'province' => 'ON', 'city' => 'Ottawa', 'postalCode' => 'K1A 0B1'];
+        $picked = $quote($pickup, $ontario);
+        $this->assertSame(['store', ['TPS', 'TVQ'], 'ON', $none['total']], [$picked['taxBasis'], array_column($picked['taxes'], 'label'), $picked['shippingAddress']['province'], $picked['total']], 'retrait : la province du client ne compte pas');
+        $shipped = $quote($fixed, $ontario);
+        $this->assertSame('shipping', $shipped['taxBasis']);
+        $this->assertNotContains('TVQ', array_column($shipped['taxes'], 'label'), 'livraison en Ontario : pas de TVQ');
+
+        // Commande en retrait d'un client de l'Ontario : taxes enregistrées = celles de la boutique ; carrier.kind et isPickup rendus
+        $admin = $this->userByEmail('admin@arkanoa-media.com');
+        $em = static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager();
+        $address = (new \App\Entity\Adress())->setFirstname('Client')->setLastname('Ontario')->setFullname('Client Ontario')->setAddress('1 Wellington St')->setCity('Ottawa')
+            ->setCodepostal('K1A 0B1')->setCountry('CA')->setPhone('+1 613 555 0000')->setProvince('ON')->setUserAdress($admin);
+        $em->persist($address);
+        $em->flush();
+        $created = $this->api('POST', '/api/order/create', ['addressId' => (int) $address->getId(), 'carrierId' => $pickup, 'items' => [['productVariantId' => $variant, 'quantity' => 1]]], 'admin');
+        $this->assertSame(201, $created->getStatusCode(), $created->getContent());
+        $orderId = (int) json_decode((string) $created->getContent(), true)['orderId'];
+        $row = $this->db->fetchAssociative('SELECT total_tax, shipping_cost FROM "order" WHERE id = ?', [$orderId]);
+        $this->assertSame([$taxes, 0], [(int) round((float) $row['total_tax']), (int) round((float) $row['shipping_cost'])], 'commande en retrait : taxes de la boutique (colonnes en cents), aucuns frais');
+        $order = json_decode((string) $this->api('GET', '/api/orders/' . $orderId, null, 'admin')->getContent(), true);
+        $this->assertSame(['pickup', true, 'ON'], [$order['carrier']['kind'], $order['carrier']['isPickup'], $order['shippingAdress']['province'] ?? null], 'kind et isPickup sur la commande, adresse du client conservée');
+    }
+
     private function page(): string
     {
         if ($this->client->getResponse()->isRedirect()) {

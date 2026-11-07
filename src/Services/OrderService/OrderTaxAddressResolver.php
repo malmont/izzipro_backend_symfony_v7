@@ -10,7 +10,8 @@ use App\Services\TenantEntityManagerProvider;
  * Adresse qui sert au calcul des taxes d'une commande (15/10/2026) : l'adresse de livraison de la commande, sinon
  * (vente au comptoir sans adresse, route caisse /api/order/create-multi-payment) l'adresse de la fiche entreprise du
  * site, c'est-à-dire le lieu de la vente. Sans l'une ni l'autre : null, et TaxEngine ne calcule aucune taxe (statut
- * address_required), comme avant. Les commandes web ont toujours une adresse : leur calcul ne change pas.
+ * address_required), comme avant. Commande web en retrait en magasin (transporteur `pickup`, B20, 08/11/2026) : l'adresse de la
+ * boutique aussi, même si le client a donné une adresse ; autres commandes web : leur adresse, comme avant.
  */
 class OrderTaxAddressResolver
 {
@@ -21,6 +22,12 @@ class OrderTaxAddressResolver
     /** @return array{country: ?string, province: ?string, city: ?string, postalCode: ?string}|null adresse brute, à normaliser par TaxEngine::normalizeAddress */
     public function forOrder(Order $order): ?array
     {
+        if ($order->getCarrier()?->isPickup()) { // retrait en magasin (B20, 08/11/2026) : lieu de remise = la boutique, comme au comptoir
+            $store = $this->forStore();
+            if ($store !== null) {
+                return $store;
+            }
+        }
         $address = $order->getShippingAdress();
         if ($address) {
             return ['country' => $address->getCountry(), 'province' => $address->getProvince(), 'city' => $address->getCity(), 'postalCode' => $address->getCodepostal()];

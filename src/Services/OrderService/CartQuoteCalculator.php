@@ -31,7 +31,8 @@ use App\Services\TenantEntityManagerProvider;
  *
  * Livraison : 0 sans transporteur ; prix fixe du transporteur ; pour un transporteur EasyPost (carrierAccountId),
  * le tarif choisi envoyé par le navigateur (shippingPrice, cents). Taxes : TaxEngine selon l'adresse de livraison
- * (table du site par région, ou Stripe Tax) ; sans adresse, aucune taxe et taxStatus address_required.
+ * (table du site par région, ou Stripe Tax) ; sans adresse, aucune taxe et taxStatus address_required. Retrait en magasin (B20,
+ * 08/11/2026) : taxes à l'adresse de la fiche entreprise (lieu de remise), avec ou sans adresse du client ; `taxBasis: store`.
  */
 final class CartQuoteCalculator
 {
@@ -45,7 +46,8 @@ final class CartQuoteCalculator
         private readonly TenantCurrencyProvider $currency,
         private readonly TaxEngine $taxes,
         private readonly ?\App\Services\Booking\BookingClock $clock = null, // fuseau de la boutique (04/11/2026)
-        private readonly ?\App\Services\BoutiqueSettingsService\BoutiqueSettingsService $settings = null // livraison offerte (lot 1, 07/11/2026)
+        private readonly ?\App\Services\BoutiqueSettingsService\BoutiqueSettingsService $settings = null, // livraison offerte (lot 1, 07/11/2026)
+        private readonly ?OrderTaxAddressResolver $taxAddress = null // retrait en magasin : taxes du lieu de remise (B20, 08/11/2026)
     ) {
     }
 
@@ -146,6 +148,15 @@ final class CartQuoteCalculator
         }
 
         [$shipping, $carrier] = $this->shipping($input, $subtotal);
+        // Retrait en magasin (B20, 08/11/2026) : le bien est remis au magasin, les taxes suivent la province de la boutique (règle du lieu de
+        // fourniture, comme une vente au comptoir), que le client ait donné une adresse ou non ; sans fiche entreprise, l'adresse donnée
+        [$taxAddress, $taxBasis] = [$input->address, 'shipping'];
+        if ($carrier?->isPickup() && $this->taxAddress !== null) {
+            $store = $this->taxAddress->forStore();
+            if ($store !== null && ($store['country'] ?? null) !== null) {
+                [$taxAddress, $taxBasis] = [TaxEngine::normalizeAddress($store), 'store'];
+            }
+        }
         $currency = $this->currency->code();
         // Remises de caisse (F1, 24/10/2026) : seulement si des remises sont demandées (le web n'en envoie jamais : calcul inchangé) ;
         // taxes calculées sur le NET de chaque ligne
@@ -157,7 +168,7 @@ final class CartQuoteCalculator
             $subtotal = (int) array_sum(array_map(fn ($l) => (int) $l['total'], $lines));
         }
         // Article libre non taxable (F7) : ligne exclue de l'assiette ; les lignes du catalogue restent taxables comme avant
-        $tax = $this->taxes->compute($input->address, array_map(fn ($line, $i) => ($discounts !== null && ($line['kind'] ?? 'sale') === 'sale' ? [
+        $tax = $this->taxes->compute($taxAddress, array_map(fn ($line, $i) => ($discounts !== null && ($line['kind'] ?? 'sale') === 'sale' ? [
             'amount' => (int) $line['total'], 'quantity' => 1, 'kind' => $line['kind'], 'reference' => sprintf('line-%d-variant-%d', $i, $line['productVariantId']),
         ] : [
             'amount' => (int) $line['unitPrice'], 'quantity' => (int) $line['quantity'], 'kind' => $line['kind'], 'reference' => sprintf('line-%d-variant-%d', $i, $line['productVariantId']),
@@ -171,6 +182,7 @@ final class CartQuoteCalculator
             'taxCalculationId' => $tax['calculationId'], 'deposit' => $deposit,
             'total' => $subtotal + $shipping + (($tax['inclusive'] ?? false) ? 0 : $tax['total']), 'currency' => $currency,
             'shippingAddress' => $input->address,
+            'taxAddress' => $taxAddress, 'taxBasis' => $taxBasis, // adresse qui a servi aux taxes : 'store' (retrait) ou 'shipping' (B20)
             'carrier' => $carrier ? ['id' => (int) $carrier->getId(), 'name' => $carrier->getName(), 'isFree' => $carrier->isFree(), 'kind' => $carrier->getKind(), 'freeShippingApplied' => $this->freeShippingApplied($carrier, $subtotal)] : null,
         ];
     }

@@ -87,6 +87,7 @@ class SubscriptionApiTest extends WebTestCase
         $this->assertSame('payment', $body['intentType'], 'première facture à payer : confirmPayment');
         $shipping = (int) round((float) $this->db->fetchOne('SELECT price FROM carrier WHERE id = 1'));
         $this->assertSame([2, 'incomplete', false, 1, $shipping], [$body['subscription']['quantity'], $body['subscription']['status'], $body['subscription']['cancelAtPeriodEnd'], $body['subscription']['carrier']['id'], $body['subscription']['shippingAmount']]);
+        $this->assertSame(['fixed', false], [$body['subscription']['carrier']['kind'], $body['subscription']['carrier']['isPickup']], 'nature du transporteur sur l\'abonnement (B20)');
         $create = FakeSubscriptionStripeGateway::$calls[array_search('create', array_column(FakeSubscriptionStripeGateway::$calls, 0), true)];
         $this->assertSame(MV_TEST_TENANT_CODE, $create[5]['tenant_code'], 'le site voyage dans les métadonnées Stripe');
         $this->assertSame(['txr_test_TPS', 'txr_test_TVQ'], $create[6], 'taux de taxe de la table pour l\'adresse (QC)');

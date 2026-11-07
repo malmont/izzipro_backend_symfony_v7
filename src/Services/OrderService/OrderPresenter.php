@@ -45,7 +45,7 @@ final class OrderPresenter
         $dto->currency = $this->currency->code();
         $dto->withTaxDetails($order); // taxes par taux et drapeau TTC (F18 partie 2b)
         $dto->statusId = $status?->getId();
-        $dto->carrier = $order->getCarrier() ? ['id' => $order->getCarrier()->getId(), 'name' => $order->getCarrier()->getTranslation($locale)?->getName() ?? $order->getCarrier()->getName()] : null;
+        $dto->carrier = $order->getCarrier() ? ['id' => $order->getCarrier()->getId(), 'name' => $order->getCarrier()->getTranslation($locale)?->getName() ?? $order->getCarrier()->getName(), 'kind' => $order->getCarrier()->getKind(), 'isPickup' => $order->getCarrier()->isPickup()] : null; // kind, isPickup : B20 (08/11/2026)
         if ($order->getOrderSource()?->getId() === 2 && $this->emProvider) { // vente au comptoir : numéros (C2)
             $dto->pos = OrderDTO::posFields($this->emProvider->getEntityManager()->getRepository(\App\Entity\PosReceipt::class)->forOrders([(int) $order->getId()])[$order->getId()] ?? []);
         }

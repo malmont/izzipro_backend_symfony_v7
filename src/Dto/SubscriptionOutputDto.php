@@ -47,7 +47,7 @@ final class SubscriptionOutputDto
             $subscription->getCurrentPeriodEnd()?->format(\DateTimeInterface::ATOM),
             $subscription->isCancelAtPeriodEnd(),
             $subscription->getAddress() ? new AdressOutputDTO($subscription->getAddress()) : null,
-            $carrier ? ['id' => (int) $carrier->getId(), 'name' => $carrier->getTranslation($locale)?->getName() ?? $carrier->getName()] : null,
+            $carrier ? ['id' => (int) $carrier->getId(), 'name' => $carrier->getTranslation($locale)?->getName() ?? $carrier->getName(), 'kind' => $carrier->getKind(), 'isPickup' => $carrier->isPickup()] : null, // kind, isPickup : B20 (08/11/2026)
             $subscription->getShippingAmount(),
             $subscription->getCreatedAt()->format(\DateTimeInterface::ATOM),
             $subscription->getCanceledAt()?->format(\DateTimeInterface::ATOM),
