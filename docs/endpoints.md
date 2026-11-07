@@ -247,7 +247,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (300)
+## Boutique et commun (302)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -488,6 +488,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/site/features/{key}/request` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteFeaturesController::request` |
 | GET | `/api/site/features` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteFeaturesController::show` |
 | PUT | `/api/site/features` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteFeaturesController::update` |
+| GET | `/api/site/help/{key}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\HelpController\HelpController::page` |
+| GET | `/api/site/help` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\HelpController\HelpController::list` |
 | GET | `/api/site/readiness` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteReadinessController::show` |
 | GET | `/api/site/shipping` | ROLE_ADMIN | `Controller\SiteFeaturesController\SiteShippingController::index` |
 | GET | `/api/sizes` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\SizesController\SizeController::getSizes` |
@@ -591,10 +593,12 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (77)
+## Administration (EasyAdmin) (81)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
+| GET | `/admin/aide/{key}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\HelpAdminController::page` |
+| GET | `/admin/aide` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\HelpAdminController::index` |
 | GET | `/admin/apercu/{code}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ApercuController::show` |
 | POST | `/admin/app-keys/generate` | ROLE_ADMIN | `Controller\Admin\AppKeyAdminController::generate` |
 | POST | `/admin/app-keys/{id}/revoke` | ROLE_ADMIN | `Controller\Admin\AppKeyAdminController::revoke` |
@@ -606,7 +610,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/admin/commandes/a-traiter` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderDeskAdminController::todo` |
 | GET | `/admin/commandes/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderDeskAdminController::sheet` |
 | POST | `/admin/configuration/courriel-essai` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ConfigurationConsoleAdminController::emailTest` |
+| POST | `/admin/configuration/referentiels` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ConfigurationConsoleAdminController::defaults` |
 | GET | `/admin/configuration` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ConfigurationConsoleAdminController::index` |
+| GET | `/admin/controles` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ControlsConsoleAdminController::index` |
 | GET, POST | `/admin/livraison/poids` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ShippingConsoleAdminController::weights` |
 | POST | `/admin/livraison/regler` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ShippingConsoleAdminController::settle` |
 | GET | `/admin/livraison` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ShippingConsoleAdminController::index` |

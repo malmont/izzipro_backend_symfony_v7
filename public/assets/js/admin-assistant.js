@@ -46,6 +46,17 @@
         }
 
         shown.forEach(function (s) { line(s.role, s.html, false); });
+        function prefillFromHash() {
+            var h = window.location.hash || '';
+            if (h.indexOf('#assistant=') !== 0) { return; }
+            panel.hidden = false; input.value = decodeURIComponent(h.substring(11).replace(/\+/g, ' ')); input.focus();
+            try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch (e) { /* ignoré */ }
+        }
+        prefillFromHash();
+        document.addEventListener('click', function (ev) {
+            var a = ev.target.closest('a[data-assistant-prefill]'); if (!a) { return; }
+            ev.preventDefault(); window.location.hash = a.getAttribute('href'); prefillFromHash();
+        });
         toggle.addEventListener('click', function () { panel.hidden = !panel.hidden; if (!panel.hidden) { input.focus(); log.scrollTop = log.scrollHeight; } });
         document.getElementById('ark-assistant-close').addEventListener('click', function () { panel.hidden = true; });
         document.getElementById('ark-assistant-clear').addEventListener('click', function () { history = []; shown = []; log.innerHTML = ''; save(); input.focus(); });

@@ -49,7 +49,7 @@
                 <p class="text-muted small mb-2">Suivez les étapes dans l'ordre ; chaque bouton mène à l'endroit exact. L'assistant IA s'appuiera sur cette même liste.</p>
                 <ol class="mb-0">
                 {% for s in readiness.steps %}{% if s.status == 'todo' %}
-                    <li class="mb-1" data-step="{{ s.key }}" data-blocking="{{ s.blocking|default(true) ? '1' : '0' }}">{% if s.blocking|default(true) %}<span class="badge bg-danger me-1">indispensable</span>{% else %}<span class="badge bg-warning text-dark me-1">amélioration</span>{% endif %}<strong>{{ s.title }}</strong> <span class="text-muted small">{{ s.description }}</span>
+                    <li class="mb-1" data-step="{{ s.key }}" data-blocking="{{ s.blocking|default(true) ? '1' : '0' }}">{% if s.blocking|default(true) %}<span class="badge bg-danger me-1">indispensable</span>{% else %}<span class="badge bg-warning text-dark me-1">amélioration</span>{% endif %}<strong>{{ s.title }}</strong> <span class="text-muted small">{{ s.description }}</span>{% if s.helpUrl is defined and s.helpUrl %} <a class="small" href="{{ s.helpUrl }}" title="Aide">?</a>{% endif %}
                         {% if s.url %}<a class="btn btn-sm btn-outline-primary ms-2" href="{{ s.url }}"{% if s.where == 'editor' %} target="_blank" rel="noopener"{% endif %}>{{ s.where == 'editor' ? 'Ouvrir l\'éditeur' : (s.where == 'platform' ? 'Choisir un forfait' : 'Faire') }}</a>{% endif %}
                     </li>
                 {% endif %}{% endfor %}

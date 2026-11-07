@@ -26,8 +26,27 @@ class ConfigurationConsoleAdminController extends AbstractController
         'review_settings' => ['crud' => ReviewSettingCrudController::class], 'reviews' => ['crud' => ReviewCrudController::class], 'google_places' => ['crud' => GooglePlacesConfigCrudController::class],
     ];
 
-    public function __construct(private readonly SiteConfigurationPathsService $paths, private readonly AdminUrlGenerator $urls, private readonly ?MediaUrlResolver $media = null)
+    public function __construct(private readonly SiteConfigurationPathsService $paths, private readonly AdminUrlGenerator $urls, private readonly ?MediaUrlResolver $media = null, private readonly ?\App\Services\Platform\SiteDefaultsService $defaults = null)
     {
+    }
+
+    /** Référentiels automatiques sur demande (07/11/2026) : taxes d'après l'adresse, expéditeur des courriels, profils des applications */
+    #[Route('/admin/configuration/referentiels', name: 'admin_configuration_defaults', methods: ['POST'])]
+    public function defaults(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid(self::CSRF_EMAIL_TEST, (string) $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Formulaire expiré : réessayez.');
+
+            return $this->redirect($this->pageUrl());
+        }
+        try {
+            $result = $this->defaults?->apply($this->getUser()?->getUserIdentifier()) ?? ['applied' => [], 'skipped' => ['service indisponible']];
+            $this->addFlash($result['applied'] !== [] ? 'success' : 'info', ($result['applied'] !== [] ? 'Posé automatiquement : ' . implode(' ; ', $result['applied']) . '.' : 'Rien à poser.') . ($result['skipped'] !== [] ? ' Laissé tel quel : ' . implode(' ; ', $result['skipped']) . '.' : ''));
+        } catch (\Throwable $e) {
+            $this->addFlash('danger', 'Référentiels non posés : ' . $e->getMessage());
+        }
+
+        return $this->redirect($this->pageUrl());
     }
 
     #[Route('/admin/configuration', name: 'admin_configuration', methods: ['GET'])]

@@ -18,7 +18,8 @@ class TenantSetupController extends AbstractController
     public function __construct(
         private string $frontendBaseDomain,
         private string $tenantCreationSecretKey = '',
-        private readonly ?\App\Services\Platform\TenantSetupFeaturesService $features = null // étape « Votre activité » (console de pilotage, lot 5, 04/11/2026)
+        private readonly ?\App\Services\Platform\TenantSetupFeaturesService $features = null, // étape « Votre activité » (console de pilotage, lot 5, 04/11/2026)
+        private readonly ?\App\Services\Platform\SiteDefaultsService $defaults = null // référentiels automatiques (07/11/2026)
     ) {}
 
     #[Route('/setup/new-store', name: 'app_tenant_setup')]
@@ -177,6 +178,15 @@ class TenantSetupController extends AbstractController
                     foreach ($outcome['errors'] as $error) {
                         $this->addFlash('warning', $error);
                     }
+                }
+                // Référentiels automatiques (07/11/2026) : taxes d'après l'adresse, expéditeur des courriels, profils des applications
+                try {
+                    $applied = $this->defaults?->apply('création du site')['applied'] ?? [];
+                    if ($applied !== []) {
+                        $this->addFlash('success', 'Posé automatiquement : ' . implode(' ; ', $applied) . '.');
+                    }
+                } catch (\Throwable $e) {
+                    $this->addFlash('warning', 'Référentiels automatiques non posés : ' . $e->getMessage());
                 }
 
             } catch (\Throwable $e) {

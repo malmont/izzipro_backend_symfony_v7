@@ -55,6 +55,8 @@ class SiteAssistantService
         private readonly ?\App\Services\OrderService\OrderShipmentService $shipments = null,
         private readonly ?\App\Services\Platform\SiteConfigurationPathsService $configuration = null,
         private readonly ?\App\Services\TenantEntityManagerProvider $emProvider = null,
+        private readonly ?\App\Services\Help\HelpCatalogService $help = null, // aide intégrée (07/11/2026)
+        private readonly ?\App\Services\Platform\SiteControlsService $controls = null, // contrôles (07/11/2026)
     ) {
     }
 
@@ -213,6 +215,26 @@ class SiteAssistantService
             return $this->runOrderTool($name, $input, $tenantCode);
         }
         switch ($name) {
+            case 'get_help':
+                if ($this->help === null) {
+                    return [['error' => 'aide indisponible'], null, null];
+                }
+                $key = trim((string) ($input['key'] ?? ''));
+                if ($key !== '') {
+                    $page = $this->help->get($key);
+
+                    return $page === null ? [['error' => 'page inconnue', 'pages' => array_column($this->help->all(), 'key')], null, null] : [['key' => $page['key'], 'title' => $page['title'], 'screen' => $page['screen'], 'text' => strip_tags(str_replace(['</p>', '</li>', '</h2>', '</h3>'], "\n", $page['html']))], null, ['label' => 'Aide : ' . $page['title'], 'screen' => 'aide']];
+                }
+                $query = trim((string) ($input['query'] ?? ''));
+
+                return [['pages' => array_map(fn ($p) => ['key' => $p['key'], 'title' => $p['title'], 'summary' => $p['summary'], 'screen' => $p['screen']], $query === '' ? $this->help->all() : $this->help->search($query))], null, null];
+            case 'get_controls':
+                if ($this->controls === null) {
+                    return [['error' => 'contrôles indisponibles'], null, null];
+                }
+                $overview = $this->controls->overview();
+
+                return [['problems' => $overview['problems'], 'warnings' => $overview['warnings'], 'controls' => array_values(array_filter(array_map(fn ($c) => ['key' => $c['key'], 'title' => $c['title'], 'count' => $c['count'], 'severity' => $c['severity'], 'description' => $c['description'], 'screen' => $c['screen']], $overview['controls']), fn ($c) => $c['count'] > 0))], null, ['label' => SiteAssistantTools::SCREENS['controles'], 'screen' => 'controles']];
             case 'set_entreprise_fields':
                 $fields = is_array($input['fields'] ?? null) ? $input['fields'] : [];
                 $clean = [];
@@ -467,6 +489,7 @@ class SiteAssistantService
 
 - lire les commandes à traiter (outil get_orders_todo) et une commande (get_order), puis proposer une opération de support : rembourser (refund_order, total ou partiel, motif), annuler (cancel_order, motif obligatoire, le paiement est remboursé), capturer un paiement autorisé (capture_order), marquer expédiée avec le suivi (ship_order), renvoyer un courriel (resend_order_email) ; l'administrateur confirme chaque opération ; jamais sur une vente au comptoir (la caisse s'en charge) ;
 - lire les cheminements de configuration (get_configuration_paths : paiements Stripe, taxes, courriels, avis clients) pour guider pas à pas ;
+- lire les contrôles du site (get_controls : ce qui cloche dans les données) et proposer de corriger ;
 OPS;
 
         return <<<TXT
@@ -478,6 +501,7 @@ Ce que tu peux faire :
 - remplir la fiche Entreprise (outil set_entreprise_fields : nom, courriel, téléphone, site web, textes légaux, à-propos, référencement, numéros de taxe) ; pour les textes légaux (mentions légales, CGV ou conditions d'utilisation, politique de confidentialité), rédige toi-même un texte complet et adapté au pays et à l'activité de l'entreprise, en HTML simple, puis propose-le ; l'administrateur confirme ;
 - proposer de demander une fonctionnalité non accordée (outil request_feature) ; {$this->shopHint($shop)}
 - estimer par l'IA le poids et les dimensions des produits sans fiche (outil estimate_product_dimensions, un crédit par appel) et proposer de les enregistrer ; l'administrateur confirme ;
+- lire l'aide intégrée (outil get_help : une page par sujet, écrite pour l'administrateur) et t'en servir pour expliquer, en citant la page ;
 - indiquer l'écran du back-office où agir (outil open_screen) quand l'étape se fait là-bas (produits, taxes, Stripe, transporteurs, clés d'activation, postes de caisse, formules d'abonnement, expéditeur des courriels) ;
 - confier à l'assistant de l'éditeur du site (front) ce qui se fait là-bas (outil delegate_to_editor) : composer ou modifier les pages, choisir un modèle de site, régler depuis le panneau de l'éditeur ; tu ne composes jamais une page toi-même ;
 - accompagner l'ajout d'un domaine propre : get_domain_status donne l'état, les enregistrements DNS attendus et la procédure (achat chez un registraire, enregistrement ici, DNS, propagation, certificat automatique) ; set_custom_domain propose l'enregistrement, l'administrateur confirme, puis il crée les enregistrements DNS et vérifie.$ops

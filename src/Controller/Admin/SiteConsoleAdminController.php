@@ -78,6 +78,7 @@ class SiteConsoleAdminController extends AbstractController
         $readiness = $this->readiness->forCurrentSite();
         foreach ($readiness['steps'] as $i => $step) {
             $readiness['steps'][$i]['url'] = $this->stepUrl($step);
+            $readiness['steps'][$i]['helpUrl'] = !empty($step['helpKey']) ? $this->screens->routeUrl('admin_aide_page', ['key' => $step['helpKey']]) : null; // aide intégrée (07/11/2026)
         }
         if ($readiness['next'] !== null) {
             $readiness['next']['url'] = $this->stepUrl($readiness['next']);

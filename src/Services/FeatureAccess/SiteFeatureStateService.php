@@ -44,6 +44,7 @@ class SiteFeatureStateService
         private readonly FeatureRequestRepository $requests,
         private readonly CustomDomainService $domains,
         private readonly ?\App\Services\ShippingService\ShippingSetupService $shippingSetup = null, // étiquettes par la plateforme (lot 2 Livraison, 07/11/2026)
+        private readonly ?\App\Services\Help\HelpCatalogService $help = null, // aide intégrée (07/11/2026)
     ) {
     }
 
@@ -59,6 +60,7 @@ class SiteFeatureStateService
         $out = [];
         foreach (FeatureCatalog::FEATURES as $key => $def) {
             $entry = $this->entry($key, $def, $e, $flags, $activeKeys, $commerce);
+            $entry['helpKey'] = $this->help?->forSetting($key) ?? $this->help?->forScreen($def['href'] ?? null); // page d'aide (07/11/2026)
             if ($def['scope'] === FeatureCatalog::SCOPE_PLATFORM) {
                 $ent = $entitlements[$key] ?? null;
                 $entry['entitlement'] = $ent && $ent['enabled'] ? ['id' => $ent['id'], 'source' => $ent['source'], 'status' => $ent['status'], 'endsAt' => $ent['endsAt'], 'graceUntil' => $ent['graceUntil'], 'offerCode' => $ent['offerCode']] : null;

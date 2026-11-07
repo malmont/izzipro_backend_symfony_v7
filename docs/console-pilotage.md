@@ -216,6 +216,30 @@ flottante préviennent quand il reste 20 % ou moins et mènent à l'achat de cr�
 plateforme si elle est renseignée, sinon « Mon site : pilotage ») ; à zéro, l'IA refuse (402 `AI_CREDITS_EXHAUSTED`).
 Test : `tests/Functional/Admin/PlatformAiCreditsTest.php`.
 
+## Référentiels automatiques, Contrôles, point hebdomadaire, aide intégrée (07/11/2026)
+
+- **Référentiels automatiques** (`Services/Platform/SiteDefaultsService::apply`) : à la création d'un site (`TenantSetupController`, après
+  l'étape « Votre activité ») et sur demande (page Configuration, bouton « Compléter automatiquement », `POST /admin/configuration/referentiels`) :
+  table des taxes d'après le pays de l'adresse (Canada : les sept lignes TPS/TVQ/TVH/TVP du modèle ; France : TVA 20, 10, 5,5 et 2,1 % avec
+  leurs catégories, prix TTC tant qu'aucune vente ; lignes d'un autre pays venues du modèle retirées si aucune commande ; autre pays : rien,
+  dit), expéditeur des courriels pris sur le courriel de l'entreprise, un profil d'apparence par application accordée. Idempotent, rien
+  n'est écrasé. Les textes légaux se rédigent avec l'assistant : bouton « Rédiger mes textes légaux avec l'assistant » (ouvre la console
+  flottante préremplie par l'ancre `#assistant=…`). Test : `tests/Functional/Platform/SiteDefaultsTest.php`.
+- **Contrôles** (`/admin/controles`, `Services/Platform/SiteControlsService`, menu Entreprise) : la vie courante, pas la configuration :
+  produits en ligne sans variante ni prix, sans photo, sans catégorie, stocks négatifs, catégories vides, transporteurs payants à zéro,
+  louables sans règles ni tarif, abonnements sans formule, avis en attente, commandes incomplètes > 24 h, payées non expédiées > 3 jours,
+  en transit > 10 jours, paiements autorisés non capturés, comptes sans courriel. Rouge = bloque, orange = à regarder ; chaque ligne mène à
+  l'écran. Outil de l'assistant `get_controls`. Test : `tests/Functional/Admin/ControlsConsolePageTest.php`.
+- **Point hebdomadaire** (`app:site:weekly-digest`, `ops/systemd/site-weekly-digest.{service,timer}` le lundi 07:00 UTC) : courriel de la
+  plateforme au courriel de la fiche Entreprise de chaque site, seulement s'il y a quelque chose à dire (`--always`, `--tenant`, `--dry-run`) :
+  étapes indispensables restantes, commandes à traiter, contrôles en défaut, crédits IA restants (≤ 20 %), alertes caisse ouvertes
+  (`pos_health_alert.resolved_at IS NULL`). Gabarit `emails/weekly_digest.html.twig`. Test : `tests/Functional/Admin/WeeklyDigestCommandTest.php`.
+- **Aide intégrée** (`docs/aide/<clé>.md` avec en-tête key, title, summary, screen, steps, settings ; `Services/Help/HelpCatalogService`,
+  convertisseur Markdown minimal) : `GET /api/site/help?q=` et `GET /api/site/help/{clé}` (`ROLE_ADMIN`), pages `/admin/aide` et
+  `/admin/aide/{clé}` (menu Entreprise → Aide, lien « Ouvrir l'écran concerné »), `helpKey` sur chaque étape de `GET /api/site/readiness`
+  et chaque entrée de `GET /api/site/features`, lien « ? » sur les étapes de l'accueil et de Mon site, outil de l'assistant `get_help`
+  (palier Aide IA compris). Captures d'écran à ajouter plus tard, prises sur `demo` seulement. Test : `tests/Functional/Admin/HelpTest.php`.
+
 ## Assistant IA de configuration (05/11/2026)
 
 `Services/SiteAssistantService/SiteAssistantService` (modèle Sonnet 5.5, client `LandingAiClientInterface`, un crédit IA du site par

@@ -1,0 +1,33 @@
+{# Aide intégrée (07/11/2026) : habillage EasyAdmin depuis le menu, sinon page nue #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}{{ page ? page.title : 'Aide' }}{% endblock %}
+{% block content_title %}{{ page ? page.title : 'Aide' }}{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}<div class="py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block panel %}
+<div class="container-fluid" style="max-width: 1100px" data-aide>
+    <div class="row g-3">
+        <div class="col-lg-4">
+            <div class="card"><div class="card-body">
+                <form method="get" action="{{ path('admin_aide') }}" class="d-flex gap-2 mb-2"><input class="form-control form-control-sm" type="search" name="q" value="{{ q }}" placeholder="Chercher dans l'aide…"><button class="btn btn-sm btn-outline-primary">Chercher</button></form>
+                <ul class="list-unstyled mb-0" data-aide-list>
+                    {% for p in pages %}<li class="mb-2"><a href="{{ p.url }}" class="{{ page and page.key == p.key ? 'fw-bold' : '' }}">{{ p.title }}</a><div class="small text-muted">{{ p.summary }}</div></li>{% else %}<li class="text-muted">Aucune page ne correspond.</li>{% endfor %}
+                </ul>
+            </div></div>
+        </div>
+        <div class="col-lg-8">
+            <div class="card"><div class="card-body" data-aide-page="{{ page ? page.key : '' }}">
+                {% if page %}
+                    {% if screenUrl %}<a class="btn btn-sm btn-primary float-end" href="{{ screenUrl }}">Ouvrir l'écran concerné</a>{% endif %}
+                    <div class="aide-contenu">{{ page.html|raw }}</div>
+                {% else %}
+                    <h2 class="h5">Aide du back-office</h2>
+                    <p class="text-muted">Une page par sujet, écrite pour vous et non pour les développeurs : choisissez à gauche, ou cherchez un mot. L'assistant IA cite ces pages quand il vous répond.</p>
+                {% endif %}
+            </div></div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends 'base.email.html.twig' %}
+
+{# Point hebdomadaire envoyé par la plateforme à l'administrateur d'un site (07/11/2026) #}
+{% block title %}{{ siteName }} : votre point de la semaine{% endblock %}
+
+{% block body %}
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <tr><td align="center">
+        <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden;">
+            <tr><td style="background: #1e293b; padding: 24px 20px;"><h1 style="color: #ffffff; margin: 0; font-size: 20px;">{{ siteName }} : votre point de la semaine</h1></td></tr>
+            <tr><td style="padding: 24px; font-size: 15px; color: #1e293b;">
+                <p style="margin-top: 0;">Bonjour,</p>
+                <p>Voici ce qui demande votre attention cette semaine. Chaque point se règle en quelques clics dans votre back-office.</p>
+                {% if blockingTodo > 0 %}
+                    <h2 style="font-size: 16px; color: #b91c1c;">{{ blockingTodo }} étape{{ blockingTodo > 1 ? 's' : '' }} indispensable{{ blockingTodo > 1 ? 's' : '' }} à faire</h2>
+                    <ul>{% for s in blocking %}<li>{{ s }}</li>{% endfor %}{% if blockingTodo > blocking|length %}<li>…</li>{% endif %}</ul>
+                {% else %}<p style="color: #15803d;">Toutes les étapes indispensables sont faites ({{ percent }} % du cheminement){% if improvements > 0 %} ; {{ improvements }} amélioration{{ improvements > 1 ? 's' : '' }} possible{{ improvements > 1 ? 's' : '' }}{% endif %}.</p>{% endif %}
+                {% if ordersTodo > 0 %}
+                    <h2 style="font-size: 16px; color: #b45309;">{{ ordersTodo }} commande{{ ordersTodo > 1 ? 's' : '' }} à traiter</h2>
+                    <p>{% if orders.toShip %}{{ orders.toShip }} à expédier · {% endif %}{% if orders.toCapture %}{{ orders.toCapture }} paiement(s) à capturer · {% endif %}{% if orders.incomplete %}{{ orders.incomplete }} incomplète(s) · {% endif %}{% if orders.inTransit %}{{ orders.inTransit }} en transit depuis longtemps{% endif %}</p>
+                {% endif %}
+                {% if problems > 0 %}
+                    <h2 style="font-size: 16px; color: #b91c1c;">{{ problems }} contrôle{{ problems > 1 ? 's' : '' }} en défaut</h2>
+                    <ul>{% for p in problemList %}<li>{{ p }}</li>{% endfor %}</ul>
+                {% endif %}
+                {% if lowCredits %}<p style="color: #b45309;"><strong>Crédits IA :</strong> il vous reste {{ creditsRemaining }} crédit(s) sur {{ creditsMonthly }} ce mois-ci. Achetez des crédits ou changez de forfait pour ne pas être bloqué.</p>{% endif %}
+                {% if posAlerts > 0 %}<p style="color: #b91c1c;"><strong>Caisse :</strong> {{ posAlerts }} alerte{{ posAlerts > 1 ? 's' : '' }} non résolue{{ posAlerts > 1 ? 's' : '' }} (écart, terminal, hors ligne).</p>{% endif %}
+                <p style="text-align: center; margin: 24px 0;"><a href="{{ adminUrl }}" style="background: #1e293b; color: #ffffff; text-decoration: none; padding: 12px 22px; border-radius: 8px; display: inline-block;">Ouvrir mon back-office</a></p>
+                <p style="color: #64748b; font-size: 13px;">Ce courriel part chaque lundi quand il y a quelque chose à signaler.</p>
+            </td></tr>
+        </table>
+    </td></tr>
+</table>
+{% endblock %}

@@ -32,6 +32,7 @@ class SiteReadinessService
         private readonly StripeAccountResolver $stripe,
         private readonly CustomDomainService $domains,
         private readonly LoggerInterface $logger,
+        private readonly ?\App\Services\Help\HelpCatalogService $help = null, // aide intégrée (07/11/2026)
     ) {
     }
 
@@ -58,6 +59,9 @@ class SiteReadinessService
             $this->logger->warning(sprintf('[Readiness] %s : cheminement illisible : %s', $code, $e->getMessage()));
 
             return $empty;
+        }
+        foreach ($steps as $i => $s) {
+            $steps[$i]['helpKey'] = $this->help?->forStep($s['key']) ?? (isset($s['action']['screen']) ? $this->help?->forScreen($s['action']['screen']) : null); // page d'aide (07/11/2026)
         }
         $counted = array_values(array_filter($steps, fn ($s) => in_array($s['status'], ['done', 'todo'], true)));
         $done = count(array_filter($counted, fn ($s) => $s['status'] === 'done'));

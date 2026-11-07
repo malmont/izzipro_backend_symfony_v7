@@ -56,7 +56,7 @@
                             <li class="mb-1 d-flex gap-2 align-items-start" data-step="{{ s.key }}" data-tone="{{ tone }}" title="{{ s.description }}">
                                 <span class="badge bg-{{ tone }} rounded-pill" style="width: 1.1em; height: 1.1em; padding: 0; margin-top: .2em;">&nbsp;</span>
                                 <span class="{{ s.status == 'done' ? 'text-muted' : '' }}">{{ s.title }}{% if s.status == 'todo' and s.blocking %} <span class="text-danger small">(indispensable)</span>{% elseif s.status != 'done' and s.status != 'pending' %} <span class="text-warning small">(amélioration)</span>{% endif %}</span>
-                                {% if s.url and s.status != 'done' %}<a class="ms-auto text-nowrap" href="{{ s.url }}"{% if s.where == 'editor' %} target="_blank" rel="noopener"{% endif %}>→ ouvrir</a>{% endif %}
+                                {% if s.url and s.status != 'done' %}<a class="ms-auto text-nowrap" href="{{ s.url }}"{% if s.where == 'editor' %} target="_blank" rel="noopener"{% endif %}>→ ouvrir</a>{% endif %}{% if s.helpUrl is defined and s.helpUrl %} <a class="text-nowrap {{ s.url and s.status != 'done' ? '' : 'ms-auto' }}" href="{{ s.helpUrl }}" title="Aide">?</a>{% endif %}
                             </li>
                         {% endfor %}
                     </ul>

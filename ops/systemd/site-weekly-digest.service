@@ -1,0 +1,7 @@
+[Unit]
+Description=Izzipro : point hebdomadaire aux administrateurs des sites (app:site:weekly-digest)
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker exec -w /var/www symfony_app_v2 php bin/console app:site:weekly-digest --no-interaction
