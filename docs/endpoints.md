@@ -591,7 +591,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (71)
+## Administration (EasyAdmin) (73)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -651,6 +651,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET, POST | `/admin/produits/depuis-photo` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ProductPhotoAdminController::index` |
 | GET | `/admin/produits/ia-en-lot/etat/{jobId}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ProductAiBulkAdminController::status` |
 | GET, POST | `/admin/produits/ia-en-lot` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ProductAiBulkAdminController::index` |
+| POST | `/admin/produits/{id}/ia/{action}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ProductAiAdminController::run` |
+| GET | `/admin/produits/{id}/ia` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ProductAiAdminController::index` |
 | GET, POST | `/admin/redis/flush` | ROLE_SUPER_ADMIN | `Controller\Admin\RedisAdminController::flushRedis` |
 | GET, POST | `/admin/short-code` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ShortCodeAdminController::index` |
 | GET, POST | `/admin/stripe/connect` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\AdminStripeController::connect` |

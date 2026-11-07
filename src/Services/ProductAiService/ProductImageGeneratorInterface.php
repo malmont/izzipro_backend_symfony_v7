@@ -15,7 +15,7 @@ interface ProductImageGeneratorInterface
 
     /**
      * @param array{data?: string, mime?: string, url?: string} $photo photo du vêtement
-     * @param array{model?: string, background?: string, pose?: string, comment?: string} $options
+     * @param array{style?: string, model?: string, background?: string, pose?: string, comment?: string} $options style = mannequin (personne portant le vêtement) | packshot (produit seul, fond propre)
      * @return list<array{data: string, mime: string}> images générées
      */
     public function generate(array $photo, array $options): array;

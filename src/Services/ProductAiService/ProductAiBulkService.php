@@ -148,9 +148,9 @@ class ProductAiBulkService
             $save();
             try {
                 $note = match ($kind) {
-                    'sheets' => $this->runSheet($product, $overwrite, $user, $charge),
-                    'translations' => $this->runTranslation($product, $overwrite, $user, $charge),
-                    'images' => $this->runImage($product, $user, $charge),
+                    'sheets' => $this->describeProduct($product, $overwrite, $user, $charge),
+                    'translations' => $this->translateProduct($product, $overwrite, $user, $charge),
+                    'images' => $this->generateProductImage($product, 'mannequin', $user, $charge),
                     default => throw new \InvalidArgumentException('kind inconnu'),
                 };
                 $result['done']++;
@@ -274,7 +274,8 @@ class ProductAiBulkService
 
     // ---------------------------------------------------------------- exécution par produit
 
-    private function runSheet(Product $product, bool $overwrite, ?string $user, bool $charge): string
+    /** Rédige (ou réécrit) la fiche d'un produit depuis ses photos : description, informations, mots-clés et traduction principale ; un crédit */
+    public function describeProduct(Product $product, bool $overwrite, ?string $user, bool $charge): string
     {
         $em = $this->emProvider->getEntityManager();
         $photos = $this->photos($product);
@@ -317,7 +318,8 @@ class ProductAiBulkService
         return 'rempli : ' . (implode(', ', $changed) ?: 'traduction principale');
     }
 
-    private function runTranslation(Product $product, bool $overwrite, ?string $user, bool $charge): string
+    /** Traduit la fiche dans les autres langues du site (manquantes, ou toutes si $overwrite) ; un crédit */
+    public function translateProduct(Product $product, bool $overwrite, ?string $user, bool $charge): string
     {
         $em = $this->emProvider->getEntityManager();
         $languages = $this->languages();
@@ -352,7 +354,8 @@ class ProductAiBulkService
         return 'traduit en ' . implode(', ', array_keys($translations));
     }
 
-    private function runImage(Product $product, ?string $user, bool $charge): string
+    /** Image générée depuis une photo existante : `mannequin` (personne portant le vêtement) ou `packshot` (produit seul, fond propre) ; cinq crédits */
+    public function generateProductImage(Product $product, string $style, ?string $user, bool $charge): string
     {
         if (!$this->images->isConfigured()) {
             throw new \RuntimeException('aucun fournisseur d\'images');
@@ -364,7 +367,7 @@ class ProductAiBulkService
         $stats = new LandingAiUsageStats('image-generator');
         $usage = $charge ? $this->quota->reserve('assistant', 'product_image', ProductImageGeneratorInterface::COST, $user, 'Image mannequin : ' . $product->getName()) : null;
         try {
-            $generated = $this->images->generate($photos[0], ['comment' => (string) $product->getName()]);
+            $generated = $this->images->generate($photos[0], ['style' => $style === 'packshot' ? 'packshot' : 'mannequin', 'comment' => (string) $product->getName()]);
             $dir = $this->projectDir . '/var/storage/public_bucket/assets/uploads/products';
             if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
                 throw new \RuntimeException('stockage des images indisponible');

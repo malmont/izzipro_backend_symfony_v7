@@ -1274,6 +1274,13 @@ aujourd'hui `NullProductImageGenerator`). `overwrite` réécrit même les fiches
 | `POST /api/products/ai/bulk { kind, overwrite?, partial? (traiter ce que les crédits permettent), limit? }` | 202 `{ jobId, kind, products, creditsNeeded, partial }` ; 402 `AI_CREDITS_EXHAUSTED` (avec `plan`), 409 `NOTHING_TO_DO` / `IMAGE_PROVIDER_MISSING`, 422 `KIND_INVALID` |
 | `GET /api/products/ai/bulk/{jobId}` | `{ jobId, status: pending \| running \| done \| failed, kind, total, done, failed, skipped, creditsUsed, stoppedForCredits, items, current, error }` ; 404 `JOB_NOT_FOUND` |
 
+**Depuis la fiche d'un produit** (action « IA » de la liste, de l'édition et du détail, 07/11/2026) : page `/admin/produits/{id}/ia`
+(`ProductAiAdminController`) avec trois boutons et leur coût : rédiger la description depuis les photos du produit (remplace la description,
+les informations et les mots-clés ; 1 crédit, `describeProduct`), traduire en français et en anglais (langues manquantes, ou toutes avec
+« retraduire » ; 1 crédit, `translateProduct`), produire une image depuis une photo existante (packshot sans mannequin, ou personne portant le
+vêtement ; 5 crédits, `generateProductImage`, disponible seulement avec un fournisseur d'images). `POST /admin/produits/{id}/ia/{decrire|traduire|image}`,
+CSRF `admin_product_ai`. Test : `tests/Functional/Boutique/ProductAiSingleTest.php`.
+
 Back-office : page « IA en lot : fiches, traductions, images » (menu Catalogue, `/admin/produits/ia-en-lot`) : une carte par famille avec
 le nombre de produits, le coût, les crédits restants, ce qui manque et « Tout lancer » ou « Lancer pour N produit(s) » ; l'avancement du
 dernier lot se rafraîchit toutes les quatre secondes. Cheminement du site (groupe Boutique, améliorations) : « Fiches produit complètes »,

@@ -161,6 +161,8 @@ class ProductCrudController extends BaseTenantCrudController
 
     public function configureActions(Actions $actions): Actions
     {
+        // IA pour ce produit (07/11/2026) : description depuis les photos, traductions, image générée
+        $ai = Action::new('productAi', 'IA', 'fas fa-magic')->linkToRoute('admin_product_ai', fn (\App\Entity\Product $p) => ['id' => $p->getId()]);
         $generateBarcode = Action::new('generateBarcode', 'Générer Code Barre', 'fa fa-barcode')
             ->linkToUrl(fn (Product $product) => $this->csrfActionUrl('generateBarcode', $product->getId()));
 
@@ -173,7 +175,8 @@ class ProductCrudController extends BaseTenantCrudController
             ->add(Crud::PAGE_INDEX, $manageSpecifications)
             ->add(Crud::PAGE_EDIT, $manageSpecifications)
             ->add(Crud::PAGE_INDEX, $generateBarcode)
-            ->add(Crud::PAGE_EDIT, $generateBarcode);
+            ->add(Crud::PAGE_EDIT, $generateBarcode)
+            ->add(Crud::PAGE_INDEX, $ai)->add(Crud::PAGE_EDIT, $ai)->add(Crud::PAGE_DETAIL, $ai);
     }
 
     public function generateBarcode(AdminContext $context): RedirectResponse
