@@ -196,7 +196,7 @@ class SiteConsoleAdminController extends AbstractController
         }
         $body = json_decode($request->getContent(), true);
         try {
-            $result = $this->assistantChat->execute(is_array($body) ? $body : [], $this->getUser()?->getUserIdentifier());
+            $result = $this->assistantChat->execute(is_array($body) ? $body : [], $this->getUser()?->getUserIdentifier(), $this->isGranted('ROLE_SUPER_ADMIN'));
         } catch (SiteAssistantValidationException $e) {
             return $this->json(['error' => 'VALIDATION_FAILED', 'message' => $e->getMessage(), 'errors' => $e->errors], 422);
         } catch (LandingAiException $e) {

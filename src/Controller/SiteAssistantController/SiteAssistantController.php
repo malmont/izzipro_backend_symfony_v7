@@ -41,7 +41,7 @@ class SiteAssistantController extends AbstractController
     {
         $body = json_decode($request->getContent(), true);
         try {
-            $result = $this->chat->execute(is_array($body) ? $body : [], $this->getUser()?->getUserIdentifier());
+            $result = $this->chat->execute(is_array($body) ? $body : [], $this->getUser()?->getUserIdentifier(), $this->isGranted('ROLE_SUPER_ADMIN'));
         } catch (SiteAssistantValidationException $e) {
             return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => $e->getMessage(), 'errors' => $e->errors], 422);
         } catch (LandingAiException $e) {

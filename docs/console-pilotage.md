@@ -165,7 +165,11 @@ outils ; dans l'autre sens, l'assistant de l'éditeur appelle cette route ou `PU
 `AI_CREDITS_EXHAUSTED`, 429 `AI_TOO_MANY_FAILURES`, 503 `AI_UNAVAILABLE` ; `POST …/actions/{id}/confirm` → `{ tool, input, result,
 readiness }`, 404 `ACTION_NOT_FOUND` ; `GET /api/site/assistant/credits`. Le front (éditeur Next, page Mon site à venir) affiche la
 réponse, les liens (`screen` → écran du back-office, même vocabulaire que la page Mon site) et les actions avec un bouton
-« Confirmer ». Jamais : paiements, forfaits, droits de la plateforme, autres sites. Test : `tests/Functional/Platform/SiteAssistantTest.php`.
+« Confirmer ». Jamais : paiements, forfaits, droits de la plateforme, autres sites. **Propriétaire de la plateforme (07/11/2026)** : pour un
+`ROLE_SUPER_ADMIN`, sur n'importe quel site, l'assistant est en **accès complet** (`access: "full"` dans la réponse, `"site"` sinon) : aucun
+crédit du site décompté, jamais bloqué par le quota ni par les échecs du site, consigne système adaptée (il agit sur ce site comme sur tout
+autre, les écritures restent confirmées) ; les outils sont les mêmes aujourd'hui, et c'est ce drapeau qui portera, plus tard, les familles
+d'outils des forfaits « Aide IA » / « IA complète » (le super admin les a toutes, sans droit d'usage). Test : `tests/Functional/Platform/SiteAssistantTest.php`.
 
 ## « Demander » une fonctionnalité : essai immédiat, puis demande (règle du 05/11/2026)
 

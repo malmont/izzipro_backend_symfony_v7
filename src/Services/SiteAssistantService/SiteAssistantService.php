@@ -53,16 +53,32 @@ class SiteAssistantService
      * @return array{reply: string, actions: list<array<string, mixed>>, links: list<array{label: string, screen: string}>, handoffs: list<array{task: string, section: string, feature: ?string}>, usage: array<string, mixed>}
      * @throws LandingAiException 402 crédits, 429 trop d'échecs, 503 IA indisponible
      */
-    public function chat(array $messages, ?string $user, string $tenantCode, string $language = 'fr'): array
+    public function chat(array $messages, ?string $user, string $tenantCode, string $language = 'fr', bool $fullAccess = false): array
     {
+        $stats = new LandingAiUsageStats(self::MODEL);
+        if ($fullAccess) {
+            // Propriétaire de la plateforme (ROLE_SUPER_ADMIN, 07/11/2026) : accès complet sur tout site, aucun crédit du site décompté,
+            // jamais bloqué par le quota ni par les échecs du site ; l'échange est seulement journalisé
+            try {
+                $result = $this->converse($messages, $stats, $tenantCode, $language, true);
+                $this->logger->info(sprintf('[SiteAssistant] échange du propriétaire de la plateforme sur le site %s (%s)', $tenantCode, $user ?? '-'));
+
+                return $result + ['usage' => $stats->toArray(), 'access' => 'full'];
+            } catch (\Throwable $e) {
+                $this->logger->error('[SiteAssistant] échange (accès complet) échoué : ' . $e->getMessage());
+                if ($e instanceof LandingAiException) {
+                    throw $e;
+                }
+                throw new LandingAiException(503, 'Assistant indisponible', 'L\'assistant ne répond pas pour le moment, réessayez dans un instant.');
+            }
+        }
         $last = $messages[array_key_last($messages)]['content'] ?? '';
         $usage = $this->quota->reserve(self::MODE, self::COMPONENT, self::COST, $user, mb_substr($last, 0, 200));
-        $stats = new LandingAiUsageStats(self::MODEL);
         try {
             $result = $this->converse($messages, $stats, $tenantCode, $language);
             $this->quota->complete($usage, $stats, mb_substr($result['reply'], 0, 200));
 
-            return $result + ['usage' => $stats->toArray()];
+            return $result + ['usage' => $stats->toArray(), 'access' => 'site'];
         } catch (\Throwable $e) {
             $this->quota->release($usage, $stats);
             $this->logger->error('[SiteAssistant] échange échoué : ' . $e->getMessage());
@@ -91,7 +107,7 @@ class SiteAssistantService
     }
 
     /** @return array{reply: string, actions: list<array<string, mixed>>, links: list<array{label: string, screen: string}>, handoffs: list<array{task: string, section: string, feature: ?string}>} */
-    private function converse(array $messages, LandingAiUsageStats $stats, string $tenantCode, string $language): array
+    private function converse(array $messages, LandingAiUsageStats $stats, string $tenantCode, string $language, bool $fullAccess = false): array
     {
         $registry = $this->state->all();
         $readiness = $this->readiness->forCurrentSite();
@@ -106,7 +122,7 @@ class SiteAssistantService
         for ($round = 0; $round < self::MAX_ROUNDS; $round++) {
             $stats->attempts++;
             $response = $this->client->createMessage([
-                'model' => self::MODEL, 'max_tokens' => 1500, 'system' => $this->system($registry, $readiness, $language), 'messages' => $payloadMessages, 'tools' => $this->tools(),
+                'model' => self::MODEL, 'max_tokens' => 1500, 'system' => $this->system($registry, $readiness, $language, $fullAccess), 'messages' => $payloadMessages, 'tools' => $this->tools(),
             ], self::TIMEOUT);
             $stats->add($response->usage ?? null);
             $content = is_array($response->content ?? null) ? $response->content : [];
@@ -242,14 +258,17 @@ class SiteAssistantService
         ], fn ($v) => $v !== null), $registry);
     }
 
-    private function system(array $registry, array $readiness, string $language): string
+    private function system(array $registry, array $readiness, string $language, bool $fullAccess = false): string
     {
         $shop = $this->platform->shopUrl();
         $lang = $language === 'en' ? 'Answer in English.' : 'Réponds en français.';
+        $who = $fullAccess
+            ? 'Tu parles au propriétaire de la plateforme (super administrateur), en accès complet : il agit sur ce site comme sur n\'importe quel autre, aucun crédit du site n\'est décompté, et il peut te demander toute action que tes outils permettent ; les écritures restent confirmées par lui avant d\'être appliquées. Les forfaits, droits et réglages de la plateforme se font dans sa page Plateforme du back-office : dis-le-lui quand il le faut.'
+            : 'Tu parles à l\'administrateur de ce site.';
 
         return <<<TXT
 Tu es l'assistant de configuration d'un site de la plateforme Arkanoa (site vitrine, boutique en ligne, caisse, Mémoires Vivantes, Boussole ESG, applications mobiles).
-Tu parles à l'administrateur de ce site. $lang Sois concret et court : une explication, puis l'action.
+$who $lang Sois concret et court : une explication, puis l'action.
 Ce que tu peux faire :
 - expliquer un réglage, un prérequis ou une étape du cheminement « Préparer mon site » ;
 - proposer de modifier les réglages du site (outil set_site_settings : seulement les clés de portée « site » du registre, avec la valeur exacte) ; l'administrateur confirme avant toute écriture ;

@@ -16,7 +16,7 @@ class ChatWithSiteAssistantUseCase
      * @param array<string, mixed> $body { messages: [{ role, content }], locale? }
      * @throws SiteAssistantValidationException
      */
-    public function execute(array $body, ?string $user): array
+    public function execute(array $body, ?string $user, bool $fullAccess = false): array
     {
         $messages = $body['messages'] ?? null;
         if (!is_array($messages) || $messages === [] || count($messages) > SiteAssistantService::MAX_MESSAGES) {
@@ -36,6 +36,7 @@ class ChatWithSiteAssistantUseCase
         }
         $language = ($body['locale'] ?? 'fr') === 'en' ? 'en' : 'fr';
 
-        return $this->assistant->chat($clean, $user, (string) $this->tenants->getCurrentTenantCode(), $language);
+        // $fullAccess : propriétaire de la plateforme (ROLE_SUPER_ADMIN, 07/11/2026) : accès complet sur tout site, sans crédit du site
+        return $this->assistant->chat($clean, $user, (string) $this->tenants->getCurrentTenantCode(), $language, $fullAccess);
     }
 }

@@ -120,6 +120,27 @@ class SiteAssistantTest extends WebTestCase
         $this->assertSame(1, json_decode((string) $this->api('GET', '/api/site/assistant/credits', null, 'admin')->getContent(), true)['credits']['used']);
     }
 
+    /** Propriétaire de la plateforme (07/11/2026) : accès complet sur tout site, aucun crédit du site décompté, consigne adaptée */
+    public function testThePlatformOwnerHasFullAccessWithoutSpendingTheSiteCredits(): void
+    {
+        $usedBefore = static::getContainer()->get(LandingAiQuotaService::class)->credits()['used'];
+        FakeLandingAiClient::$queue[] = (object) ['content' => [(object) ['type' => 'text', 'text' => 'Bonjour, propriétaire.']], 'usage' => (object) ['input_tokens' => 100, 'output_tokens' => 10]];
+        $r = $this->api('POST', '/api/site/assistant', ['messages' => [['role' => 'user', 'content' => 'Où en est ce site ?']]], 'super');
+        $this->assertSame(200, $r->getStatusCode(), $r->getContent());
+        $body = json_decode((string) $r->getContent(), true);
+        $this->assertSame(['full', 'Bonjour, propriétaire.'], [$body['access'], $body['reply']]);
+        $this->assertSame($usedBefore, $body['credits']['used'], 'aucun crédit du site décompté');
+        $this->assertSame($usedBefore, static::getContainer()->get(LandingAiQuotaService::class)->credits()['used']);
+        $system = (string) (end(FakeLandingAiClient::$requests)['system'] ?? '');
+        $this->assertStringContainsString('propriétaire de la plateforme', $system, 'consigne système adaptée');
+
+        FakeLandingAiClient::$queue[] = (object) ['content' => [(object) ['type' => 'text', 'text' => 'Bonjour.']], 'usage' => (object) ['input_tokens' => 100, 'output_tokens' => 10]];
+        $body = json_decode((string) $this->api('POST', '/api/site/assistant', ['messages' => [['role' => 'user', 'content' => 'Bonjour']]], 'admin')->getContent(), true);
+        $this->assertSame('site', $body['access'], 'un administrateur de site reste en accès site');
+        $this->assertSame($usedBefore + 1, $body['credits']['used'], 'et consomme un crédit');
+        $this->assertStringNotContainsString('propriétaire de la plateforme', (string) (end(FakeLandingAiClient::$requests)['system'] ?? ''));
+    }
+
     private function api(string $method, string $path, ?array $body, ?string $as): \Symfony\Component\HttpFoundation\Response
     {
         $server = ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json', 'CONTENT_TYPE' => 'application/json', 'HTTP_X_XSRF_TOKEN' => 'jeton-xsrf-de-test'];
@@ -136,10 +157,11 @@ class SiteAssistantTest extends WebTestCase
         $container = static::getContainer();
         $container->get(TenantEntityManagerProvider::class)->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
         $em = $container->get(TenantEntityManagerProvider::class)->getEntityManager();
-        $email = $as === 'admin' ? 'admin@arkanoa-media.com' : 'client-assistant@example.invalid';
+        $email = match ($as) { 'admin' => 'admin@arkanoa-media.com', 'super' => 'super-assistant@example.invalid', default => 'client-assistant@example.invalid' };
         $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
         if (!$user) {
-            $user = (new User())->setEmail($email)->setUsername($email)->setFirstname('Client')->setLastname('Test')->setRoles(['ROLE_USER_INTERNET'])->setPassword('inutilisable')->setIsVerified(true);
+            $roles = $as === 'super' ? ['ROLE_USER_INTERNET', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] : ['ROLE_USER_INTERNET'];
+            $user = (new User())->setEmail($email)->setUsername($email)->setFirstname('Client')->setLastname('Test')->setRoles($roles)->setPassword('inutilisable')->setIsVerified(true);
             $em->persist($user);
             $em->flush();
         }
