@@ -1274,6 +1274,14 @@ aujourd'hui `NullProductImageGenerator`). `overwrite` réécrit même les fiches
 | `POST /api/products/ai/bulk { kind, overwrite?, partial? (traiter ce que les crédits permettent), limit? }` | 202 `{ jobId, kind, products, creditsNeeded, partial }` ; 402 `AI_CREDITS_EXHAUSTED` (avec `plan`), 409 `NOTHING_TO_DO` / `IMAGE_PROVIDER_MISSING`, 422 `KIND_INVALID` |
 | `GET /api/products/ai/bulk/{jobId}` | `{ jobId, status: pending \| running \| done \| failed, kind, total, done, failed, skipped, creditsUsed, stoppedForCredits, items, current, error }` ; 404 `JOB_NOT_FOUND` |
 
+**Photos d'un produit** (action « Photos » de la fiche, 07/11/2026) : page `/admin/produits/{id}/photos` (`ProductPhotosAdminController`,
+`Services/ProductAiService/ProductPhotoService`) : galerie (photo principale `product.image` puis `product_picture`), dépôt de plusieurs photos
+d'un coup dans `var/storage/public_bucket/assets/uploads/products` (la première photo d'un produit nu devient principale), « Principale » (échange
+avec l'ancienne), « Retirer », et génération par l'IA avec options : vue (`face`, `back`, `detail`, `worn` = personne portant l'article,
+`packshot`), environnement (`studio`, `street`, `indoor`, `nature`), consigne libre ; `POST /admin/produits/{id}/photos/{ajouter|principale|supprimer|generer}`,
+CSRF `admin_product_photos` ; la génération est refusée sans fournisseur d'images (aucun crédit). La galerie de l'onglet « Organisation & Média »
+de la fiche reste disponible. Test : `tests/Functional/Boutique/ProductPhotosPageTest.php`.
+
 **Depuis la fiche d'un produit** (action « IA » de la liste, de l'édition et du détail, 07/11/2026) : page `/admin/produits/{id}/ia`
 (`ProductAiAdminController`) avec trois boutons et leur coût : rédiger la description depuis les photos du produit (remplace la description,
 les informations et les mots-clés ; 1 crédit, `describeProduct`), traduire en français et en anglais (langues manquantes, ou toutes avec

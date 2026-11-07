@@ -1,0 +1,54 @@
+{# Photos d'un produit (07/11/2026) : habillage EasyAdmin depuis la fiche, sinon page nue #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+{% set title = 'Photos de « ' ~ product.name ~ ' »' %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block content_title %}{{ title }}{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}<div class="py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block panel %}
+<div class="container-fluid" style="max-width: 980px" data-product-photos="{{ productId }}">
+    <h1 class="h3 mb-1">{{ title }}</h1>
+    <p class="text-muted">La photo principale s'affiche en premier sur le site, l'application et la caisse ; les autres forment la galerie. Déposez plusieurs photos d'un coup ({{ maxFiles }} au plus), choisissez la principale, retirez les inutiles.</p>
+    {% for label, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}{% endfor %}
+
+    <div class="card mb-3"><div class="card-body">
+        <form method="post" enctype="multipart/form-data" action="{{ path('admin_product_photos_act', {id: productId, action: 'ajouter'}) }}" class="d-flex flex-wrap gap-2 align-items-end" data-photos-add>
+            <input type="hidden" name="_token" value="{{ csrf_token(csrfToken) }}">
+            <div class="flex-grow-1"><label class="form-label">Ajouter des photos</label><input class="form-control" type="file" name="photos[]" accept="image/*" multiple required></div>
+            <button class="btn btn-primary">Déposer</button>
+        </form>
+    </div></div>
+
+    <div class="row g-3 mb-3" data-photos-gallery>
+        {% for p in gallery %}
+        <div class="col-6 col-md-3" data-photo="{{ p.id ?? 'main' }}" data-main="{{ p.main ? 1 : 0 }}">
+            <div class="card h-100">
+                <img src="{{ p.url }}" alt="" style="width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 8px 8px 0 0">
+                <div class="card-body p-2 small">
+                    {% if p.main %}<span class="badge bg-success">principale</span>{% else %}
+                        <form method="post" action="{{ path('admin_product_photos_act', {id: productId, action: 'principale'}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token(csrfToken) }}"><input type="hidden" name="pictureId" value="{{ p.id }}"><button class="btn btn-sm btn-outline-success">Principale</button></form>
+                        <form method="post" action="{{ path('admin_product_photos_act', {id: productId, action: 'supprimer'}) }}" class="d-inline" onsubmit="return confirm('Retirer cette photo ?');"><input type="hidden" name="_token" value="{{ csrf_token(csrfToken) }}"><input type="hidden" name="pictureId" value="{{ p.id }}"><button class="btn btn-sm btn-outline-danger">Retirer</button></form>
+                    {% endif %}
+                    {% if p.source == 'ai' %}<span class="badge bg-info">générée</span>{% endif %}
+                </div>
+            </div>
+        </div>
+        {% else %}<div class="col-12"><p class="text-muted">Aucune photo pour l'instant.</p></div>{% endfor %}
+    </div>
+
+    <div class="card mb-3"><div class="card-body" data-photos-ai>
+        <h2 class="h6">Produire une image avec l'IA</h2>
+        <p class="small text-muted">À partir de la photo principale : choisissez la vue et l'environnement, ajoutez une consigne. {{ imageCost }} crédits par image{% if charge %}, il vous reste {{ credits.remaining ?? '?' }} crédit(s){% endif %}.{% if not imagesAvailable %} <strong>Disponible dès que la plateforme branche son fournisseur d'images.</strong>{% endif %}</p>
+        <form method="post" action="{{ path('admin_product_photos_act', {id: productId, action: 'generer'}) }}" class="row g-2 align-items-end" data-photos-generate>
+            <input type="hidden" name="_token" value="{{ csrf_token(csrfToken) }}">
+            <div class="col-md-3"><label class="form-label small">Vue</label><select class="form-select form-select-sm" name="view">{% for k, v in views %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+            <div class="col-md-3"><label class="form-label small">Environnement</label><select class="form-select form-select-sm" name="environment">{% for k, v in environments %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+            <div class="col-md-4"><label class="form-label small">Consigne (facultatif)</label><input class="form-control form-control-sm" type="text" name="comment" maxlength="500" placeholder="Ex. : mannequin femme, 30 ans, sourire, fond flou"></div>
+            <div class="col-md-2"><button class="btn btn-primary btn-sm w-100" {% if gallery is empty or not imagesAvailable %}disabled{% endif %}>Produire</button></div>
+        </form>
+    </div></div>
+    <a class="btn btn-link" href="{{ backUrl }}">Retour à la fiche produit</a>
+</div>
+{% endblock %}

@@ -355,7 +355,7 @@ class ProductAiBulkService
     }
 
     /** Image générée depuis une photo existante : `mannequin` (personne portant le vêtement) ou `packshot` (produit seul, fond propre) ; cinq crédits */
-    public function generateProductImage(Product $product, string $style, ?string $user, bool $charge): string
+    public function generateProductImage(Product $product, string $style, ?string $user, bool $charge, array $options = []): string
     {
         if (!$this->images->isConfigured()) {
             throw new \RuntimeException('aucun fournisseur d\'images');
@@ -367,7 +367,7 @@ class ProductAiBulkService
         $stats = new LandingAiUsageStats('image-generator');
         $usage = $charge ? $this->quota->reserve('assistant', 'product_image', ProductImageGeneratorInterface::COST, $user, 'Image mannequin : ' . $product->getName()) : null;
         try {
-            $generated = $this->images->generate($photos[0], ['style' => $style === 'packshot' ? 'packshot' : 'mannequin', 'comment' => (string) $product->getName()]);
+            $generated = $this->images->generate($photos[0], ['style' => $style === 'packshot' ? 'packshot' : 'mannequin', 'view' => (string) ($options['view'] ?? ($style === 'packshot' ? 'packshot' : 'worn')), 'environment' => (string) ($options['environment'] ?? 'studio'), 'comment' => trim((string) ($options['comment'] ?? '')) !== '' ? (string) $options['comment'] : (string) $product->getName()]);
             $dir = $this->projectDir . '/var/storage/public_bucket/assets/uploads/products';
             if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
                 throw new \RuntimeException('stockage des images indisponible');
