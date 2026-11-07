@@ -694,6 +694,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('Catalogue & Véhicules');
         yield MenuItem::linkToCrud('Véhicules & Bateaux (Vente)', 'fas fa-ship', VehicleProduct::class)->setController(VehicleProductCrudController::class);
         yield MenuItem::linkToCrud('Produits & Accessoires', 'fas fa-shopping-cart', Product::class);
+        yield MenuItem::linkToRoute('Créer un produit depuis une photo', 'fas fa-camera', 'admin_product_photo'); // fiche produit par IA (07/11/2026)
         yield $this->reviewsMenuItem();
         yield MenuItem::linkToCrud('Réglages des avis', 'fas fa-sliders-h', \App\Entity\ReviewSetting::class)->setController(ReviewSettingCrudController::class);
         yield MenuItem::linkToCrud('Variants de Produits', 'fas fa-boxes', ProductVariant::class)->setController(ProductVariantCrudController::class);

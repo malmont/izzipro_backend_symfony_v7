@@ -1234,6 +1234,28 @@ caisse (`pos_return`, lot F2).
 - La fiche commande (lot 4) montre les retours sous les paiements et propose « Retour d'articles » et « Changer l'adresse » selon l'état ;
   mêmes actions sur le détail EasyAdmin.
 
+### Fiche produit par IA : photo → fiche, traduction automatique (07/11/2026)
+
+Pour le back-office, le site et l'application de gestion. Code : `Services/ProductAiService/ProductSheetDrafter` (Claude Sonnet 5.5 en
+vision : photos en base64, outil `propose_product_sheet` ; traduction `translate_product`), `Services/ProductAiService/ProductSheetCreator`
+(création du produit), `Controller/ProductAiController/ProductAiController` (API, `ROLE_ADMIN`), `Controller/Admin/ProductPhotoAdminController`
+(page « Créer un produit depuis une photo », menu Catalogue, deux étapes : photos et indications, puis fiche à corriger avec prix, stock,
+catégorie, canaux, modes, traduction automatique, puis ouverture de la fiche produit). Crédits IA du site : **1 par fiche, 1 par traduction**
+(toutes les langues d'un coup) ; refus 402 `AI_CREDITS_EXHAUSTED` avant tout appel ; le propriétaire de la plateforme ne paie pas. Test :
+`tests/Functional/Boutique/ProductAiSheetTest.php`.
+
+| Route | Corps | Réponse |
+|---|---|---|
+| `POST /api/products/ai/sheet` | multipart : `photos[]` (1 à 4, JPEG/PNG/WebP/GIF ≤ 8 Mo), `comment?` (matière, origine, coût d'achat…), `categoryId?`, `locale?` (fr, en ; défaut : langue du site), `store?` (défaut 1 : les photos sont déposées dans la médiathèque) | 200 `{ draft: { name, shortDescription, description (HTML simple), moreInformations, categoryName, categoryId, attributes {material, colors, sizes, gender, season}, tags, suggestedPriceCents, currency, shippingClass, confidence, note, language }, pictures: [{ id, url }], usage, credits }` ; 422 `PHOTO_REQUIRED` / `PHOTO_INVALID`, 402, 429, 503 |
+| `POST /api/products/ai/translate` | `{ name, description?, moreInformations?, tags?, source? (langue de la fiche), targets? (défaut : les autres langues du site) }` | 200 `{ translations: { en: { name, description, moreInformations, tags } }, usage, credits }` |
+| `POST /api/products/ai/create` | `{ name, description?, moreInformations?, tags?, language?, translations?, priceCents, stockQuantity?, categoryIds?, pictures? (URL https de la médiathèque ou nom de fichier), channels? { web, pos, landing }, modes? { sale, rental, subscription }, barcode?, requiresShipping?, translate? (bool : traduction automatique, un crédit) }` | 201 `{ productId, variantId, slug, code (IA-xxxxxxxx si absent), languages, pictures, translated }` ; 422 `NAME_REQUIRED` / `PRICE_INVALID` / `CATEGORY_UNKNOWN` / `PICTURE_INVALID` |
+
+Le produit créé : variante unique avec prix et stock (les tailles et couleurs se créent ensuite comme variantes), traductions
+`product_translation` (langue de rédaction + traductions), photos `product_picture` (la première devient l'image principale), catégorie,
+canaux `is_web` / `is_pos` / `is_landing_page`, modes de vente, journal `content_audit_log` (`product`, `create`, `source: ai_sheet`). Le
+slug est rendu unique (`-2`, `-3`…). À venir : mannequin ou personne portant le vêtement photographié (génération d'image, clé Gemini à
+fournir, cinq crédits, traitement asynchrone) et le même outil dans l'assistant.
+
 ### Commandes du client
 
 - `GET /api/ordersuser` (connecté) : commandes de l'utilisateur connecté, jamais servies par le cache (lot 4 de l'invalidation ciblée,

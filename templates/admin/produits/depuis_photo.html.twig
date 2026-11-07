@@ -1,0 +1,66 @@
+{# Créer un produit depuis une photo (07/11/2026) : habillage EasyAdmin depuis le menu, sinon page nue #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Créer un produit depuis une photo{% endblock %}
+{% block content_title %}Créer un produit depuis une photo{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}<div class="py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block panel %}
+<div class="container-fluid" style="max-width: 980px" data-product-photo>
+    <h1 class="h3 mb-1">Créer un produit depuis une photo</h1>
+    <p class="text-muted">Prenez le produit en photo, ajoutez une indication (matière, origine, coût d'achat…) : l'IA rédige le nom, les descriptions, les mots-clés, propose une catégorie et un prix. Vous corrigez, fixez le prix et créez. {% if charge %}Coût : {{ costDraft }} crédit par fiche, {{ costTranslate }} par traduction ; il vous reste <strong data-credits-remaining>{{ credits.remaining ?? '?' }}</strong> crédit(s) ce mois-ci.{% else %}Propriétaire de la plateforme : aucun crédit décompté.{% endif %}</p>
+    {% for label, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}{% endfor %}
+
+    {% if draft is null %}
+    <form method="post" enctype="multipart/form-data" class="card" data-photo-form>
+        <div class="card-body">
+            <input type="hidden" name="_token" value="{{ csrf_token(csrfToken) }}"><input type="hidden" name="step" value="draft">
+            <div class="mb-3"><label class="form-label">Photos (1 à 4, JPEG ou PNG)</label><input class="form-control" type="file" name="photos[]" accept="image/*" multiple required capture="environment"></div>
+            <div class="mb-3"><label class="form-label">Indications pour l'IA (facultatif)</label><input class="form-control" type="text" name="comment" maxlength="1000" placeholder="Ex. : robe en lin achetée 18 € au Portugal, tailles S à L, lavage à froid"></div>
+            <div class="row g-2 mb-3">
+                <div class="col-md-6"><label class="form-label">Catégorie (facultatif, sinon l'IA propose)</label><select class="form-select" name="categoryId"><option value="0">—</option>{% for id, name in categories %}<option value="{{ id }}">{{ name }}</option>{% endfor %}</select></div>
+                <div class="col-md-6"><label class="form-label d-block">Où vendre</label>
+                    <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="channel_web" value="1" id="cw" checked><label class="form-check-label" for="cw">Site et application</label></div>
+                    <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="channel_pos" value="1" id="cp"><label class="form-check-label" for="cp">Caisse</label></div>
+                    <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="channel_landing" value="1" id="cl"><label class="form-check-label" for="cl">Landing page</label></div>
+                </div>
+            </div>
+            <button class="btn btn-primary">Rédiger la fiche avec l'IA</button>
+        </div>
+    </form>
+    {% else %}
+    <form method="post" class="card" data-draft-form>
+        <div class="card-body">
+            <input type="hidden" name="_token" value="{{ csrf_token(csrfToken) }}"><input type="hidden" name="step" value="create">
+            {% if draft.pictures is not empty %}<div class="d-flex gap-2 mb-3">{% for p in draft.pictures %}<img src="{{ p }}" alt="" style="height: 90px; border-radius: 8px; object-fit: cover">{% endfor %}</div>{% endif %}
+            {% if draft.note %}<div class="alert alert-info small">L'IA précise : {{ draft.note }}{% if draft.confidence != 'high' %} (confiance {{ draft.confidence == 'medium' ? 'moyenne' : 'faible' }}){% endif %}</div>{% endif %}
+            <div class="mb-2"><label class="form-label">Nom *</label><input class="form-control" type="text" name="name" value="{{ draft.name }}" maxlength="255" required></div>
+            <div class="mb-2"><label class="form-label">Description</label><textarea class="form-control" name="description" rows="6">{{ draft.description }}</textarea></div>
+            <div class="mb-2"><label class="form-label">Informations complémentaires</label><textarea class="form-control" name="moreInformations" rows="3">{{ draft.moreInformations }}</textarea></div>
+            <div class="row g-2 mb-2">
+                <div class="col-md-4"><label class="form-label">Prix de vente ({{ currency }}) *</label><input class="form-control" type="number" step="0.01" min="0.01" name="price" value="{{ draft.suggestedPriceCents ? (draft.suggestedPriceCents / 100)|number_format(2, '.', '') : '' }}" required>{% if draft.suggestedPriceCents %}<div class="form-text">Suggestion de l'IA.</div>{% endif %}</div>
+                <div class="col-md-2"><label class="form-label">Stock</label><input class="form-control" type="number" min="0" name="stock" value="1"></div>
+                <div class="col-md-3"><label class="form-label">Catégorie</label><select class="form-select" name="categoryId"><option value="0">—</option>{% for id, name in categories %}<option value="{{ id }}" {{ draft.categoryId == id ? 'selected' : '' }}>{{ name }}</option>{% endfor %}</select></div>
+                <div class="col-md-3"><label class="form-label">Code-barres</label><input class="form-control" type="text" name="barcode" maxlength="64"></div>
+            </div>
+            <div class="mb-2"><label class="form-label">Mots-clés</label><input class="form-control" type="text" name="tags" value="{{ draft.tags }}" maxlength="500"></div>
+            {% if draft.attributes is defined %}<p class="small text-muted">Relevé par l'IA : {% if draft.attributes.material %}matière {{ draft.attributes.material }} · {% endif %}{% if draft.attributes.colors %}couleurs {{ draft.attributes.colors|join(', ') }} · {% endif %}{% if draft.attributes.sizes %}tailles {{ draft.attributes.sizes|join(', ') }} · {% endif %}classe d'expédition {{ draft.shippingClass }}. Les tailles et couleurs se créent ensuite comme variantes sur la fiche produit.</p>{% endif %}
+            <div class="row g-2 mb-3">
+                <div class="col-md-6"><label class="form-label d-block">Où vendre</label>
+                    <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="channel_web" value="1" id="cw2" {{ draft.channels.web ? 'checked' : '' }}><label class="form-check-label" for="cw2">Site et application</label></div>
+                    <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="channel_pos" value="1" id="cp2" {{ draft.channels.pos ? 'checked' : '' }}><label class="form-check-label" for="cp2">Caisse</label></div>
+                    <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="channel_landing" value="1" id="cl2" {{ draft.channels.landing ? 'checked' : '' }}><label class="form-check-label" for="cl2">Landing page</label></div></div>
+                <div class="col-md-6"><label class="form-label d-block">Modes de vente</label>
+                    <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="mode_sale" value="1" id="ms" {{ draft.modes.sale ? 'checked' : '' }}><label class="form-check-label" for="ms">Vente</label></div>
+                    <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="mode_rental" value="1" id="mr" {{ draft.modes.rental ? 'checked' : '' }}><label class="form-check-label" for="mr">Location</label></div>
+                    <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="mode_subscription" value="1" id="mb" {{ draft.modes.subscription ? 'checked' : '' }}><label class="form-check-label" for="mb">Abonnement</label></div></div>
+            </div>
+            {% if otherLanguages is not empty %}<div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="translate" value="1" id="tr" checked><label class="form-check-label" for="tr">Traduire automatiquement en {{ otherLanguages|join(', ') }} ({{ charge ? costTranslate ~ ' crédit' : 'sans crédit' }})</label></div>{% endif %}
+            <button class="btn btn-primary">Créer le produit</button>
+            <button class="btn btn-link" name="step" value="reset" formnovalidate>Recommencer avec d'autres photos</button>
+        </div>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

@@ -247,7 +247,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (294)
+## Boutique et commun (297)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -443,6 +443,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/pos/users` | PUBLIC_ACCESS | `Controller\PosController\PosPinController::users` |
 | POST | `/api/product-variants/{id}/customization-combinations` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::addCombination` |
 | DELETE | `/api/product-variants/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::deleteVariant` |
+| POST | `/api/products/ai/create` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\ProductAiController\ProductAiController::create` |
+| POST | `/api/products/ai/sheet` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\ProductAiController\ProductAiController::sheet` |
+| POST | `/api/products/ai/translate` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\ProductAiController\ProductAiController::translate` |
 | GET | `/api/products/by-category` | PUBLIC_ACCESS | `Controller\CategoriesControlleur\CategoryController::getProductsByCategory` |
 | GET | `/api/products/by-slug/{slug}` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getProductBySlug` |
 | GET | `/api/products/{id}/reviews/eligibility` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\ReviewController\ReviewController::eligibility` |
@@ -585,7 +588,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (68)
+## Administration (EasyAdmin) (69)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -642,6 +645,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/admin/print-barcode/{id}/{copies}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::printBarcode` |
 | ANY | `/admin/product-variant/{id}/edit-custom` | ROLE_ADMIN | `Controller\Admin\CustomProductVariantController::edit` |
 | ANY | `/admin/product/{id}/specifications` | ROLE_ADMIN | `Controller\Admin\ProductSpecificationController::edit` |
+| GET, POST | `/admin/produits/depuis-photo` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ProductPhotoAdminController::index` |
 | GET, POST | `/admin/redis/flush` | ROLE_SUPER_ADMIN | `Controller\Admin\RedisAdminController::flushRedis` |
 | GET, POST | `/admin/short-code` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ShortCodeAdminController::index` |
 | GET, POST | `/admin/stripe/connect` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\AdminStripeController::connect` |
