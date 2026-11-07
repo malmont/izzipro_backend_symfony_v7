@@ -15,6 +15,7 @@ Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne 
 | Caisse (POS : postes de caisse, sessions, vente `create-multi-payment`, remboursements, droits du caissier) | `docs/caisse.md` |
 | Mise en production de la caisse (paiements réels, mode Stripe par site, réconciliation planifiée, surveillance, liste de contrôle d'ouverture) | `docs/mise-en-production-caisse.md` |
 | Boutique (réglages de la boutique réglable ; produits, commandes, paiement, livraison : aucune en production) | `docs/boutique.md` ; routes dans `docs/endpoints.md` ; demandes du frontend `docs/boutique-reglable-backend-demandes.md` ; côté frontend `src/components/Boutique/README.md` |
+| Module Assistance (tickets, plaintes, aide IA au répondeur, chat : cadrage, responsabilités backend / Next / MAUI / caisse) | `docs/assistance.md` |
 | Contenu d'exemple des sites (site de référence `gmasuite`, `isDemo`, copie, suppression) | `docs/contenu-exemple.md` |
 | Console de pilotage des fonctionnalités (inventaire des réglages par module, registre, droits d'usage, onglets admin / super admin, lots) | `docs/console-pilotage.md` |
 | Contrats partagés avec le frontend (schéma, catalogue IA, jeu d'essai, libellés de l'éditeur) | `config/landingpage/` (synchronisés, ne pas modifier à la main) |
