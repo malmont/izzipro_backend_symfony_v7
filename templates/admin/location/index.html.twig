@@ -1,0 +1,54 @@
+{# Cheminement Location et réservation (07/11/2026) : habillage EasyAdmin depuis le menu, sinon page nue #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Location et réservation{% endblock %}
+{% block content_title %}Location et réservation : réglages et cheminement{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}<div class="py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block panel %}
+{% set c = overview.counts %}
+<div class="container-fluid" style="max-width: 980px" data-location-cheminement data-level="{{ overview.level }}">
+    <h1 class="h3 mb-1">Location et réservation</h1>
+    <p class="text-muted">Pour louer un produit, il faut : le mode « location » activé, la case « Location » sur la fiche du produit, ses règles de stock et de créneaux, et une grille tarifaire rattachée à sa catégorie. Rouge = indispensable, orange = facultatif.</p>
+    {% for label, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}{% endfor %}
+
+    <div class="card mb-4"><div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h2 class="h5 mb-0">Préparer la location</h2>
+            <span class="badge bg-{{ overview.level == 'ready' ? 'success' : (overview.level == 'off' ? 'secondary' : 'danger') }}">{{ overview.levelLabel }}</span>
+        </div>
+        <ol class="mb-0">
+            {% for st in overview.steps %}
+                <li class="mb-2" data-step="{{ st.key }}" data-status="{{ st.status }}">
+                    {% if st.status == 'done' %}<span class="text-success">✔</span>{% elseif st.status == 'todo' %}<span class="text-danger">✘</span>{% else %}<span class="text-warning">○</span>{% endif %}
+                    <strong>{{ st.title }}</strong>{% if st.status == 'todo' %} <span class="badge bg-danger">indispensable</span>{% elseif st.status != 'done' %} <span class="badge bg-warning text-dark">facultatif</span>{% endif %}
+                    <div class="small text-muted">{{ st.description }}{% if st.url and st.status != 'done' %} <a href="{{ st.url }}">→ ouvrir</a>{% endif %}</div>
+                </li>
+            {% endfor %}
+        </ol>
+    </div></div>
+
+    <div class="row g-4">
+        <div class="col-lg-7"><div class="card h-100"><div class="card-body" data-location-products>
+            <h2 class="h5">Produits louables ({{ c.rentable }})</h2>
+            {% if overview.products is empty %}<p class="text-muted mb-0">Aucun produit avec « Location » cochée.</p>{% else %}
+            <table class="table table-sm mb-0"><thead><tr><th>Produit</th><th>Règles de stock</th><th>Tarif</th><th></th></tr></thead><tbody>
+                {% for p in overview.products %}<tr data-rental-product="{{ p.id }}">
+                    <td>{{ p.name }}<div class="small text-muted">{{ p.categories|join(', ') ?: 'sans catégorie' }}</div></td>
+                    <td>{% if p.configured %}<span class="text-success">✔</span> {{ {days: 'journée', hours: 'heure', minutes_30: '30 min', minutes_15: '15 min'}[p.granularity] ?? p.granularity }}, stock {{ p.stock }}{% if p.minDuration %}, min. {{ p.minDuration }}{% endif %}{% else %}<span class="text-danger">✘ à régler</span>{% endif %}</td>
+                    <td>{% if p.priced %}<span class="text-success">✔ pack de la catégorie</span>{% else %}<span class="text-danger">✘ aucun pack pour sa catégorie</span>{% endif %}</td>
+                    <td class="text-nowrap"><a class="small" href="{{ p.configUrl }}">règles</a> · <a class="small" href="{{ p.editUrl }}">fiche</a></td>
+                </tr>{% endfor %}
+            </tbody></table>{% endif %}
+        </div></div></div>
+        <div class="col-lg-5"><div class="card h-100"><div class="card-body" data-location-packs>
+            <h2 class="h5">Grilles tarifaires ({{ overview.packs|length }})</h2>
+            {% if overview.packs is empty %}<p class="text-muted">Aucun pack de location.</p>{% else %}
+            <ul class="small mb-2">{% for pk in overview.packs %}<li>{{ pk.name }} : {% if pk.priced %}{{ pk.rates|map(r => {hour: 'heure', halfDay: 'demi-journée', day: 'journée', week: 'semaine', month: 'mois'}[r])|join(', ') }}{% else %}<span class="text-danger">aucun tarif</span>{% endif %} · catégories : {{ pk.categories|join(', ') ?: '<span class="text-danger">aucune</span>'|raw }}</li>{% endfor %}</ul>{% endif %}
+            <a class="btn btn-sm btn-primary" href="{{ newPackUrl }}">Créer un pack</a> <a class="btn btn-sm btn-outline-secondary" href="{{ packsUrl }}">Tous les packs</a>
+            <p class="small text-muted mt-2 mb-0">Un pack porte les tarifs (heure, demi-journée, journée, semaine, mois) et s'applique à toutes les catégories qui lui sont rattachées ; un produit sans pack pour sa catégorie ne peut pas être réservé.</p>
+        </div></div></div>
+    </div>
+</div>
+{% endblock %}

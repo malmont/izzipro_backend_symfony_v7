@@ -192,6 +192,16 @@ Stripe, alertes, conservation, **coupures de la devise** (`type_cash` actives da
 mode réel), **première vente d'essai** (une vente au comptoir). Sans caisse accordée, la page mène à l'essai ou à la demande (Mon site).
 Écrans ajoutés : `pos` (cette page), `denominations`. Test : `tests/Functional/Admin/CaisseConsolePageTest.php`.
 
+## Cheminement ciblé Location et réservation : page « Location et réservation » (07/11/2026)
+
+`GET /admin/location` (`RentalConsoleAdminController`, `ROLE_ADMIN`, menu Location / Réservation) : `Services/Booking/RentalSetupService::overview()`
+rend les étapes (mode de vente « location » dans `commerce.salesModes`, au moins un produit louable `product.rental_enabled`, règles de stock
+et de créneaux `booking_configuration` : unité de temps, stock du pool, durée minimale, battement ; grilles tarifaires `rental_pack` avec au
+moins un tarif, rattachées aux catégories du produit, ce que le devis utilise ; horaires et demi-journées, caution et conditions
+d'annulation, première réservation), l'état de chaque produit louable (règles, tarif, liens) et les packs. Niveau `off | todo | ready`.
+Le cheminement du site (groupe Boutique, étapes `boutique.rental_*`, présentes quand le mode location est actif) renvoie à cette page
+(écran `rental`) ; écran `bookings` = planning. Test : `tests/Functional/Admin/RentalConsolePageTest.php`.
+
 ## Assistant IA de configuration (05/11/2026)
 
 `Services/SiteAssistantService/SiteAssistantService` (modèle Sonnet 5.5, client `LandingAiClientInterface`, un crédit IA du site par

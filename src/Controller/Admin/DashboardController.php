@@ -714,6 +714,7 @@ class DashboardController extends AbstractDashboardController
         
 
         yield MenuItem::section('Location / Réservation');
+        yield MenuItem::linkToRoute('Location : réglages et cheminement', 'fas fa-tasks', 'admin_location'); // cheminement location (07/11/2026)
 
         yield MenuItem::linkToCrud('Planning & Réservations', 'fas fa-calendar-check', Booking::class)
             ->setController(BookingCrudController::class);
