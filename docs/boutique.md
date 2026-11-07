@@ -1061,7 +1061,9 @@ réglages, transporteurs, compteurs, liens vers les écrans.
 - **Réglages** (clés `commerce` des réglages de la boutique, validées par `BoutiqueConfigurationValidator`, lues par
   `BoutiqueSettingsService::shippingSettings()`), exposées dans le registre (`GET`/`PUT /api/site/features`, panneau Commerce de
   l'éditeur, assistant) : `shipping.mode` (`none` défaut | `own_key` | `platform`), `shipping.easypost_environment` (`test` défaut |
-  `live`), `shipping.default_weight_kg` (0,5 défaut), `shipping.free_above` (cents, `null` = jamais). **L'environnement EasyPost est
+  `live`), `shipping.default_weight_kg` (0,5 défaut), `shipping.free_above` (cents ; **`null`, le défaut, = la livraison n'est jamais offerte**, chaque
+  transporteur garde son prix ; avec un montant, les frais du transporteur payant passent à 0 dès que le total des articles, avant taxes et
+  livraison, l'atteint). **L'environnement EasyPost est
   un réglage du site**, plus l'environnement Symfony (`EasyPostService::environment()` ; le serveur tourne en `dev`, la clé de
   production n'était jamais utilisée).
 - **Transporteurs** : colonne `carrier.kind` (`fixed`, `pickup`, `easypost` ; migration `Version20261115100000`, script

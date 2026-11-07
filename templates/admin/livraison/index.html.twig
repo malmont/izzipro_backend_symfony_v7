@@ -58,8 +58,8 @@
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label" for="lv-free">Livraison offerte à partir de ({{ currency }})</label>
-                                <input class="form-control" id="lv-free" name="free_above" value="{{ s.freeShippingAbove is not null ? (s.freeShippingAbove / 100)|number_format(2, '.', '') : '' }}" inputmode="decimal" placeholder="vide : jamais">
-                                <div class="form-text">Montant des articles, avant taxes et livraison.</div>
+                                <input class="form-control" id="lv-free" name="free_above" value="{{ s.freeShippingAbove is not null ? (s.freeShippingAbove / 100)|number_format(2, '.', '') : '' }}" inputmode="decimal" placeholder="vide : jamais offerte">
+                                <div class="form-text"><strong>Champ vide (réglage par défaut) : la livraison n'est jamais offerte</strong>, chaque transporteur garde son prix. Avec un montant : au-dessus de ce total d'articles (avant taxes et livraison), les frais du transporteur payant choisi passent à 0 ; en dessous, prix normal. Le retrait en magasin est gratuit dans tous les cas.</div>
                             </div>
                         </div>
                         <button type="submit" class="btn btn-primary">Enregistrer</button>
