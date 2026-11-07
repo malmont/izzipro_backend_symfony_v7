@@ -60,6 +60,9 @@
                 if (j._status !== 200) { history.pop(); waiting.remove(); line('assistant', '<span class="text-danger">' + esc(j.message || 'Erreur') + '</span>'); return; }
                 history.push({role: 'assistant', content: j.reply});
                 waiting.remove(); line('assistant', render(j));
+                if (j.credits && j.credits.monthly > 0 && j.credits.remaining * 5 <= j.credits.monthly && root.getAttribute('data-mon-site')) {
+                    line('assistant', '<span class="text-warning">Il vous reste ' + j.credits.remaining + ' crédit(s) IA sur ' + j.credits.monthly + ' ce mois-ci.</span> <a class="btn btn-sm btn-outline-warning ms-1" href="' + esc(root.getAttribute('data-mon-site')) + '">Acheter des crédits ou changer de forfait</a>', false);
+                }
             }).catch(function () { send.disabled = false; waiting.remove(); line('assistant', '<span class="text-danger">Assistant injoignable.</span>'); });
         });
         log.addEventListener('click', function (ev) {

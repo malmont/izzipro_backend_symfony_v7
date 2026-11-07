@@ -37,7 +37,19 @@ class PlatformConsoleAdminController extends AbstractController
         private readonly AdminUrlGenerator $urls,
         private readonly ?\App\Services\Platform\PlatformShippingService $shipping = null, // étiquettes par la plateforme (lot 2 Livraison, 07/11/2026)
         private readonly ?\App\Services\Platform\ShippingBalanceRepository $balances = null,
+        private readonly ?\App\Services\Platform\PlatformAiCreditsService $aiCredits = null, // crédits IA par site (07/11/2026)
     ) {
+    }
+
+    #[Route('/admin/plateforme/ia-credits', name: 'admin_plateforme_ai_credits', methods: ['POST'])]
+    public function aiCredits(Request $request): Response
+    {
+        return $this->action($request, function () use ($request) {
+            $code = (string) $request->request->get('tenant', '');
+            $monthly = (int) $request->request->get('monthly', 0);
+            $this->aiCredits?->set($code, $monthly, $this->getUser()?->getUserIdentifier());
+            $this->addFlash('success', sprintf('%s : %d crédit(s) IA par mois.', $code, $monthly));
+        });
     }
 
     #[Route('/admin/plateforme/livraison/frais', name: 'admin_plateforme_shipping_fees', methods: ['POST'])]
@@ -96,6 +108,7 @@ class PlatformConsoleAdminController extends AbstractController
             'csrf_id' => self::CSRF_ID,
             'shippingSettings' => $this->shipping?->settings() ?? ['feeBp' => 0, 'feeFixedCents' => 0, 'carriers' => []],
             'shippingBalances' => $this->balances?->all() ?? [],
+            'aiCredits' => $this->aiCredits?->overview() ?? [],
         ]);
     }
 

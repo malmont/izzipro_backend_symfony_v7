@@ -53,6 +53,7 @@ class SiteConsoleAdminController extends AbstractController
         private readonly CustomDomainService $domains,
         private readonly TenantConnectionManager $tenants,
         private readonly \App\Services\Platform\AdminStepUrlResolver $screens,
+        private readonly ?\App\Services\LandingAiService\LandingAiQuotaService $quota = null, // crédits restants rendus à la console flottante (07/11/2026)
     ) {
     }
 
@@ -197,6 +198,11 @@ class SiteConsoleAdminController extends AbstractController
         }
         foreach ($result['links'] as $i => $link) {
             $result['links'][$i]['url'] = $this->screenUrl($link['screen']);
+        }
+        try {
+            $result['credits'] = $this->quota?->credits();
+        } catch (\Throwable) {
+            $result['credits'] = null;
         }
 
         return $this->json($result);

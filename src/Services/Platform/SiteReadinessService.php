@@ -267,8 +267,14 @@ class SiteReadinessService
         }
 
         // Assistant IA (cheminement complet, 07/11/2026)
-        $credits = (int) ($this->one($pdo, 'SELECT monthly_credits FROM ai_credit_setting ORDER BY id LIMIT 1') ?? 0);
-        $add('ai.credits', 'ai', 'Crédits IA du mois', $credits > 0 ? sprintf('%d crédit(s) par mois pour l\'assistant et l\'éditeur.', $credits) : 'Aucun crédit IA : l\'assistant et la rédaction assistée des pages refuseront ; réglez les crédits mensuels (page Assistant IA : crédits et consignes).', $credits > 0, 'backend', ['type' => 'screen', 'screen' => 'ai_credits'], false);
+        $creditsRaw = $this->one($pdo, 'SELECT monthly_credits FROM ai_credit_setting ORDER BY id LIMIT 1');
+        $credits = $creditsRaw === null ? \App\Entity\AiCreditSetting::DEFAULT_MONTHLY_CREDITS : (int) $creditsRaw;
+        $monthStart = (new \DateTimeImmutable('first day of this month 00:00:00', new \DateTimeZone(\App\Services\LandingAiService\LandingAiQuotaService::TIMEZONE)))->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+        $usedCredits = (int) ($this->one($pdo, sprintf("SELECT COALESCE(SUM(credits), 0) FROM ai_usage WHERE created_at >= '%s' AND (status = 'success' OR (status = 'reserved' AND reserved_until >= NOW()))", $monthStart)) ?? 0);
+        $remainingCredits = max(0, $credits - $usedCredits);
+        $creditsAction = $shopUrl !== null ? ['type' => 'shop', 'feature' => 'ai.credits', 'url' => $shopUrl] : ['type' => 'screen', 'screen' => 'mon_site'];
+        // Crédits réglés par la plateforme (07/11/2026) : l'étape ne mène plus au réglage mais à l'achat ou au changement de forfait
+        $add('ai.credits', 'ai', 'Crédits IA du mois', $credits === 0 ? 'Aucun crédit IA ce mois-ci : l\'assistant et la rédaction par l\'IA refuseront. Achetez des crédits ou changez de forfait.' : ($remainingCredits === 0 ? sprintf('Crédits épuisés (%d utilisés sur %d) : l\'IA refusera jusqu\'au mois prochain. Achetez des crédits ou changez de forfait.', $usedCredits, $credits) : ($remainingCredits * 5 <= $credits ? sprintf('Il reste %d crédit(s) sur %d : pensez à acheter des crédits ou à changer de forfait avant la panne.', $remainingCredits, $credits) : sprintf('%d crédit(s) restant(s) sur %d ce mois-ci pour l\'assistant, les pages et les fiches produit.', $remainingCredits, $credits))), $credits > 0 && $remainingCredits * 5 > $credits, 'backend', $creditsAction, false);
 
         // Fonctionnalités non accordées : à obtenir (hors avancement)
         foreach (array_keys(FeatureCatalog::GOVERNED) as $feature) {

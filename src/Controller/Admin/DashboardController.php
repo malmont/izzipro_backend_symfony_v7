@@ -466,9 +466,9 @@ class DashboardController extends AbstractDashboardController
                 return '';
             }
 
-            return sprintf('<div id="arkanoa-assistant" data-chat="%s" data-confirm="%s" data-token="%s" data-tier="%s" data-site="%s"></div>',
+            return sprintf('<div id="arkanoa-assistant" data-chat="%s" data-confirm="%s" data-token="%s" data-tier="%s" data-site="%s" data-mon-site="%s"></div>',
                 htmlspecialchars($this->generateUrl('admin_mon_site_assistant'), ENT_QUOTES), htmlspecialchars($this->generateUrl('admin_mon_site_assistant_confirm', ['id' => '0000000000000000']), ENT_QUOTES),
-                htmlspecialchars($this->csrf->getToken('admin_mon_site')->getValue(), ENT_QUOTES), $tier, htmlspecialchars($code, ENT_QUOTES));
+                htmlspecialchars($this->csrf->getToken('admin_mon_site')->getValue(), ENT_QUOTES), $tier, htmlspecialchars($code, ENT_QUOTES), htmlspecialchars((string) ($this->adminUrls?->unsetAll()->setRoute('admin_mon_site')->generateUrl() ?? ''), ENT_QUOTES));
         } catch (\Throwable) {
             return '';
         }
@@ -591,7 +591,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Présentations', 'fas fa-columns', Presentation::class);
         yield MenuItem::linkToCrud('Groupes de Présentation', 'fas fa-columns', PresentationGroup::class);
         yield MenuItem::linkToCrud('Assistant IA : historique', 'fas fa-robot', AiUsage::class);
-        yield MenuItem::linkToCrud('Assistant IA : crédits', 'fas fa-coins', AiCreditSetting::class);
+        yield MenuItem::linkToCrud('Assistant IA : consignes et crédits', 'fas fa-coins', AiCreditSetting::class);
 
         yield MenuItem::section('Médiathèque & Partage');
         yield MenuItem::linkToCrud('Partage de Fichiers & Médias', 'fas fa-share-alt', SharedMedia::class)

@@ -185,6 +185,16 @@
         </div>
     </div>
 
+    <h2 class="h5 mt-4" id="ia-credits">Crédits IA par site</h2>
+    <p class="text-muted small">Chaque appel à l'IA d'un site (assistant, pages, fiches produit, poids, lots) consomme ses crédits du mois ; à zéro, l'IA refuse. Seul le propriétaire de la plateforme règle ces crédits : l'administrateur du site les voit, et il est invité à acheter des crédits ou à changer de forfait quand il en reste peu. Les quotas IA de Mémoires Vivantes sont à part (par jour, page dédiée).</p>
+    <div class="card plateforme-ia-credits"><div class="card-body">
+        <table class="table table-sm mb-2"><thead><tr><th>Site</th><th class="text-end">Crédits / mois</th><th class="text-end">Utilisés</th><th class="text-end">Restants</th><th></th></tr></thead><tbody>
+        {% for c in aiCredits %}<tr data-ai-credits-site="{{ c.code }}"><td>{{ c.code }} <span class="text-muted small">{{ c.name }}</span></td><td class="text-end">{{ c.monthly }}{% if not c.hasSetting %} <span class="text-muted small">(défaut)</span>{% endif %}</td><td class="text-end">{{ c.used }}</td><td class="text-end {{ c.monthly > 0 and c.remaining * 5 <= c.monthly ? 'text-danger fw-bold' : '' }}">{{ c.remaining }}</td>
+            <td><form method="post" action="{{ path('admin_plateforme_ai_credits') }}" class="d-flex gap-1 justify-content-end"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><input type="hidden" name="tenant" value="{{ c.code }}"><input class="form-control form-control-sm" style="max-width: 7em" type="number" min="0" max="100000" name="monthly" value="{{ c.monthly }}"><button class="btn btn-sm btn-outline-primary">Régler</button></form></td></tr>
+        {% else %}<tr><td colspan="5" class="text-muted">Aucun site.</td></tr>{% endfor %}
+        </tbody></table>
+    </div></div>
+
     <h2 class="h5 mt-4">Offres et prix</h2>
     <p class="text-muted small">Prix mensuels par défaut provisoires (04/11/2026). Une offre réunit une ou plusieurs fonctionnalités ; la boutique de la plateforme vendra ces offres comme formules d'abonnement branchées (code de l'offre dans la formule).</p>
     <table class="table table-sm datagrid plateforme-offres">

@@ -202,6 +202,20 @@ d'annulation, première réservation), l'état de chaque produit louable (règle
 Le cheminement du site (groupe Boutique, étapes `boutique.rental_*`, présentes quand le mode location est actif) renvoie à cette page
 (écran `rental`) ; écran `bookings` = planning. Test : `tests/Functional/Admin/RentalConsolePageTest.php`.
 
+## Crédits IA : réglés par la plateforme seulement (07/11/2026)
+
+Règle : **seul le propriétaire de la plateforme** fixe les crédits IA mensuels d'un site. Page Plateforme, section « Crédits IA par site »
+(`Services/Platform/PlatformAiCreditsService` : crédits du mois, utilisés, restants par site ; `POST /admin/plateforme/ia-credits`
+`{tenant, monthly}`, 0 = assistant désactivé). Sur le site, l'écran « Assistant IA : consignes et crédits » montre les crédits en lecture
+seule (le champ reste réglable pour le super admin) ; l'administrateur règle seulement les consignes. Tout appel à l'IA d'un site passe par
+`LandingAiQuotaService::reserve` (assistant, pages, fiches produit, poids, lots : composants `site-config`, `page`, `product_sheet`,
+`product_translate`, `shipping_estimate`, `product_bulk_*`, `product_image`), donc tout est compté et additionné dans `ai_usage` ; le
+propriétaire de la plateforme n'est jamais débité. Mémoires Vivantes a ses propres quotas par jour (plafonds réservés au super admin, page
+« Quotas IA Mémoires Vivantes »). Côté administrateur, l'étape « Crédits IA du mois » du cheminement (groupe Assistant IA) et la console
+flottante préviennent quand il reste 20 % ou moins et mènent à l'achat de crédits ou au changement de forfait (boutique de forfaits de la
+plateforme si elle est renseignée, sinon « Mon site : pilotage ») ; à zéro, l'IA refuse (402 `AI_CREDITS_EXHAUSTED`).
+Test : `tests/Functional/Admin/PlatformAiCreditsTest.php`.
+
 ## Assistant IA de configuration (05/11/2026)
 
 `Services/SiteAssistantService/SiteAssistantService` (modèle Sonnet 5.5, client `LandingAiClientInterface`, un crédit IA du site par

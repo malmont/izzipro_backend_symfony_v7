@@ -56,7 +56,8 @@ class AiCreditSettingCrudController extends BaseTenantCrudController
         }
 
         return [
-            $creditsField,
+            // Crédits réglés par la plateforme seulement (07/11/2026) : l'administrateur les voit, sans champ modifiable
+            $isSuperAdmin ? $creditsField : IntegerField::new('monthlyCredits', 'Crédits par mois (réglés par la plateforme)')->setFormTypeOption('disabled', true)->setHelp('Il en reste peu ? Achetez des crédits ou changez de forfait depuis « Mon site : pilotage ».'),
             TextareaField::new('assistantInstructions', 'Consignes de l\'assistant')
                 ->setHelp(sprintf('Consignes permanentes redonnées à l\'assistant à chaque demande (ex. « garder nos couleurs, pas d\'animations, ton chaleureux »). Texte brut, %d caractères au plus. La demande du moment prime en cas de contradiction.', LandingAiInstructionsService::MAX_LENGTH))
                 ->setFormTypeOption('attr', ['maxlength' => LandingAiInstructionsService::MAX_LENGTH, 'rows' => 6])

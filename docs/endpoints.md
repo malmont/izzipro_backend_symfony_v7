@@ -591,7 +591,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (76)
+## Administration (EasyAdmin) (77)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -635,6 +635,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/plateforme/boutique` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shop` |
 | POST | `/admin/plateforme/demande/{id}/{decision}` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::request` |
 | POST | `/admin/plateforme/droit/{id}/{action}` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::act` |
+| POST | `/admin/plateforme/ia-credits` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::aiCredits` |
 | POST | `/admin/plateforme/livraison/credit` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shippingCredit` |
 | POST | `/admin/plateforme/livraison/frais` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shippingFees` |
 | POST | `/admin/plateforme/mode` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::switchMode` |
