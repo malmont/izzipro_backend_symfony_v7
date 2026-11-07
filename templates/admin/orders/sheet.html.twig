@@ -1,0 +1,89 @@
+{# Fiche commande refondue (lot 4, 07/11/2026) : habillage EasyAdmin depuis un lien habillé, sinon page nue #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+{% set o = sheet.order %}{% set a = sheet.actions %}{% set cur = sheet.currency %}
+{% set title = 'Commande ' ~ o.reference %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block content_title %}{{ title }}{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}<div class="py-3">{{ block('panel') }}</div>{% endblock %}
+
+{% macro money(cents, cur) %}{{ (cents / 100)|number_format(2, ',', ' ') }} {{ cur }}{% endmacro %}
+{% import _self as m %}
+
+{% block panel %}
+<div class="container-fluid" style="max-width: 1180px" data-order-sheet="{{ orderId }}">
+    {% for label, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}{% endfor %}
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+        <div>
+            <h1 class="h3 mb-1">{{ title }} <span class="badge bg-{{ {1: 'secondary', 2: 'info', 3: 'primary', 4: 'warning text-dark', 5: 'info', 6: 'success', 7: 'danger'}[sheet.statusId] ?? 'secondary' }}" data-order-status>{{ sheet.statusLabel }}</span>
+                <span class="badge bg-light text-dark">paiement : {{ {pending: 'en attente', authorized: 'autorisé, non capturé', paid: 'payé', failed: 'échoué', refunded: 'remboursé', canceled: 'annulé'}[o.paymentStatus] ?? o.paymentStatus }}</span></h1>
+            <div class="text-muted">Passée le {{ o.orderDate|date('d/m/Y à H:i') }} · {{ o.orderSource ?? 'web' }}{% if a.counterSale %} · <strong>vente au comptoir : opérations depuis la caisse</strong>{% endif %}</div>
+        </div>
+        <div class="d-flex flex-wrap gap-2" data-order-actions>
+            {% if a.capture %}<a class="btn btn-sm btn-primary" href="{{ links.refund }}">Capturer le paiement</a>{% endif %}
+            {% if a.label %}<a class="btn btn-sm btn-primary" href="{{ links.label }}">Acheter l'étiquette</a>{% endif %}
+            {% if a.ship %}<a class="btn btn-sm btn-outline-primary" href="{{ links.ship }}">Marquer expédiée</a>{% endif %}
+            {% if a.deliver %}<form method="post" action="{{ path('admin_order_deliver', {id: orderId}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token('admin_order_deliver') }}"><button class="btn btn-sm btn-success">Marquer livrée</button></form>{% endif %}
+            {% if a.refund %}<a class="btn btn-sm btn-outline-danger" href="{{ links.refund }}">Rembourser</a>{% endif %}
+            {% if a.cancel %}<a class="btn btn-sm btn-outline-danger" href="{{ links.cancel }}">Annuler</a>{% endif %}
+            {% if a.emails %}<a class="btn btn-sm btn-outline-secondary" href="{{ links.emails }}">Renvoyer un courriel</a>{% endif %}
+            <a class="btn btn-sm btn-link" href="{{ links.edit }}">Modifier (avancé)</a>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-8">
+            <div class="card mb-3"><div class="card-body">
+                <h2 class="h6">Articles</h2>
+                <table class="table table-sm mb-2">
+                    <thead><tr><th>Article</th><th class="text-end">Qté</th><th class="text-end">Prix unitaire</th><th class="text-end">Total</th></tr></thead>
+                    <tbody>{% for it in o.orderItems %}<tr><td>{{ it.productVariantName }}{% if it.productVariantSize or it.productVariantColor %} <span class="text-muted small">{{ it.productVariantSize }} {{ it.productVariantColor }}</span>{% endif %}{% if it.booking %}<div class="small text-muted">Réservation {{ it.booking.start|default('') }} → {{ it.booking.end|default('') }}</div>{% endif %}</td><td class="text-end">{{ it.quantity }}</td><td class="text-end">{{ m.money(it.unitPrice, cur) }}</td><td class="text-end">{{ m.money(it.totalPrice, cur) }}</td></tr>{% endfor %}</tbody>
+                </table>
+                <div class="text-end small">
+                    Sous-total {{ m.money(o.subTotal, cur) }}{% if o.priceShipping %} · Livraison {{ m.money(o.priceShipping, cur) }}{% endif %}{% if o.taxes is not empty %}{% for t in o.taxes %} · {{ t.label }} {{ m.money(t.amount, cur) }}{% endfor %}{% elseif o.priceTax %} · Taxes {{ m.money(o.priceTax, cur) }}{% endif %}
+                    <div class="fs-5"><strong>Total {{ m.money(o.totalAmount, cur) }}</strong>{% if o.pricesIncludeTax %} <span class="text-muted">(taxes comprises)</span>{% endif %}</div>
+                </div>
+            </div></div>
+
+            <div class="card mb-3"><div class="card-body">
+                <h2 class="h6">Paiements et remboursements</h2>
+                {% if sheet.payments is empty %}<p class="text-muted mb-0">Aucun paiement enregistré.</p>{% else %}
+                <table class="table table-sm mb-2" data-order-payments>
+                    <thead><tr><th>Date</th><th>Type</th><th>Moyen</th><th class="text-end">Montant</th><th>État</th><th></th></tr></thead>
+                    <tbody>{% for p in sheet.payments %}<tr class="{{ p.amountCents < 0 ? 'table-light' : '' }}"><td>{{ p.date }}</td><td>{{ p.type == 'RemboursementClient' ? 'Remboursement' : 'Encaissement' }}</td><td>{{ p.method }}{% if p.card %} <span class="text-muted small">{{ p.card }}</span>{% endif %}</td><td class="text-end">{{ m.money(p.amountCents, cur) }}</td><td><span class="small">{{ p.status }}{% if p.stripeStatus %} · Stripe {{ p.stripeStatus }}{% endif %}</span></td><td>{% if p.receiptUrl %}<a href="{{ p.receiptUrl }}" target="_blank" rel="noopener" class="small">reçu</a>{% endif %}</td></tr>{% endfor %}</tbody>
+                </table>{% endif %}
+                <p class="small text-muted mb-0">Payé par carte {{ m.money(sheet.money.capturedCents, cur) }} · remboursé {{ m.money(sheet.money.refundedCents, cur) }} · remboursable {{ m.money(sheet.money.refundableCents, cur) }}{% if sheet.money.authorizedCents > 0 %} · <strong class="text-warning">autorisé non capturé {{ m.money(sheet.money.authorizedCents, cur) }}</strong>{% endif %}</p>
+            </div></div>
+
+            <div class="card mb-3"><div class="card-body" data-order-shipment>
+                <h2 class="h6">Expédition</h2>
+                {% if o.shippingAdress %}<p class="mb-2"><strong>{{ o.shippingAdress.fullname }}</strong>{% if o.shippingAdress.company %}, {{ o.shippingAdress.company }}{% endif %}<br>{{ o.shippingAdress.addressLineOne }}{% if o.shippingAdress.addressLineTwo %}, {{ o.shippingAdress.addressLineTwo }}{% endif %}<br>{{ o.shippingAdress.city }} {{ o.shippingAdress.province }} {{ o.shippingAdress.zipCode }}, {{ o.shippingAdress.country }}{% if o.shippingAdress.contactNumber %} · {{ o.shippingAdress.contactNumber }}{% endif %}</p>{% else %}<p class="text-muted mb-2">Aucune adresse de livraison (retrait ou service).</p>{% endif %}
+                <p class="mb-1">Mode choisi par le client : <strong>{{ o.carrier ? o.carrier.name : 'aucun' }}</strong>{% if o.priceShipping %} ({{ m.money(o.priceShipping, cur) }}){% endif %}</p>
+                {% if sheet.shipment.shippedAt or sheet.shipment.trackingNumber %}
+                    <p class="mb-1">Expédiée {{ sheet.shipment.shippedAt ? 'le ' ~ sheet.shipment.shippedAt : '' }}{% if sheet.shipment.carrier %} par {{ sheet.shipment.carrier }}{% endif %}{% if sheet.shipment.trackingNumber %} · suivi {% if sheet.shipment.trackingUrl %}<a href="{{ sheet.shipment.trackingUrl }}" target="_blank" rel="noopener">{{ sheet.shipment.trackingNumber }}</a>{% else %}{{ sheet.shipment.trackingNumber }}{% endif %}{% endif %}</p>
+                {% else %}<p class="text-muted mb-1">Pas encore expédiée.</p>{% endif %}
+                {% for l in sheet.labels %}<div class="small">Colis {{ l.index }} ({{ l.weight }} kg) : {% if l.url %}<a href="{{ l.url }}" target="_blank" rel="noopener">étiquette PDF</a>{% endif %}{% if l.tracking %} · suivi {{ l.tracking }}{% endif %}</div>{% endfor %}
+            </div></div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card mb-3"><div class="card-body">
+                <h2 class="h6">Client</h2>
+                {% if sheet.customer %}<p class="mb-1"><strong>{{ sheet.customer.name }}</strong><br><a href="mailto:{{ sheet.customer.email }}">{{ sheet.customer.email }}</a></p><p class="small text-muted mb-1">{{ sheet.customer.ordersCount }} commande(s) au total</p>{% if links.customer %}<a class="small" href="{{ links.customer }}">Fiche du compte</a>{% endif %}{% else %}<p class="text-muted mb-0">Invité (sans compte).</p>{% endif %}
+            </div></div>
+            <div class="card mb-3"><div class="card-body" data-order-timeline>
+                <h2 class="h6">Chronologie</h2>
+                <ul class="list-unstyled mb-0">{% for e in sheet.timeline %}<li class="mb-1"><span class="text-muted small">{{ e.at }}</span><br>{{ e.label }}</li>{% endfor %}</ul>
+            </div></div>
+            <div class="card mb-3"><div class="card-body">
+                <h2 class="h6">Journal des opérations</h2>
+                {% if sheet.journal is empty %}<p class="text-muted small mb-0">Aucune opération depuis le back-office.</p>{% else %}
+                <ul class="list-unstyled small mb-0">{% for j in sheet.journal %}<li class="mb-1"><span class="text-muted">{{ j.at }}</span> · {{ j.action }}{% if j.by %} · {{ j.by }}{% endif %}{% if j.after.reason is defined and j.after.reason %} · « {{ j.after.reason }} »{% endif %}</li>{% endfor %}</ul>{% endif %}
+            </div></div>
+            <a class="btn btn-link btn-sm" href="{{ links.todo }}">Commandes à traiter</a> · <a class="btn btn-link btn-sm" href="{{ links.list }}">Toutes les commandes</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

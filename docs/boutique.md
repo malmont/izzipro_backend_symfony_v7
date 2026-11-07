@@ -1184,6 +1184,31 @@ dans la langue du site (`emails/order_notice.html.twig`, clés `order_refunded.*
 Tests : `tests/Functional/Boutique/OrderOperationsTest.php` (remboursement partiel puis total, dépassement refusé, annulation qui
 rembourse ou ne fait rien si Stripe refuse, capture, renvois, vente au comptoir exclue).
 
+### Fiche commande refondue et vue « À traiter » (lot 4, 07/11/2026)
+
+Une seule page par commande pour le support, et une liste de ce qui attend une action. Code : `Services/OrderService/OrderDeskService`
+(lecture seule : les actions restent celles des lots 1 à 3) et `Controller/Admin/OrderDeskAdminController` (`ROLE_ADMIN`).
+Test : `tests/Functional/Boutique/OrderDeskTest.php`.
+
+- **Fiche** `GET /admin/commandes/{id}` (`admin_order_sheet`) : statut en français (`OrderDeskService::STATUS_LABELS`), état du paiement,
+  client (nombre de commandes, lien vers le compte), articles et totaux dans la devise du site, paiements et remboursements (carte, état
+  Stripe, reçu), expédition (adresse, mode choisi, suivi, étiquettes PDF des colis), chronologie (commande, encaissements, remboursements,
+  expédition, livraison, annulation, courriels renvoyés : reconstruite depuis les paiements, les colonnes de suivi et le journal
+  `content_audit_log` de la ressource `order`), journal des opérations. **Actions permises par l'état** seulement : Capturer (paiement
+  autorisé), Acheter l'étiquette et Marquer expédiée (`OrderShipmentService::shipBlocker` nul et adresse), Marquer livrée (`deliverBlocker`
+  nul, formulaire direct), Rembourser (remboursable > 0, non annulée), Annuler (statuts 1 à 4), Renvoyer un courriel (client avec un
+  courriel réel), et toujours « Modifier (avancé) » vers le formulaire EasyAdmin. Une vente au comptoir (source 2) n'a aucune action : la
+  caisse s'en charge. Les liens sont habillés EasyAdmin (`routeName=…`) pour garder le menu.
+- **À traiter** `GET /admin/commandes/a-traiter` (`admin_orders_todo`), commandes web seulement, 100 lignes par liste : **à expédier**
+  (statut 3 ou 4, adresse de livraison, `shipped_at` nul), **paiement à capturer** (un paiement `stripe_status = requires_capture`, non
+  annulée), **incomplètes depuis plus d'une heure** (statut 1), **en transit depuis plus de 10 jours** (statut 5, `shipped_at` ou
+  `status_updated_at`). Le tableau de bord affiche un bandeau « Commandes à traiter » avec le total et les parts quand il y en a.
+- **Liste EasyAdmin des commandes** : « Commandes », plus récentes d'abord, recherche par référence, courriel, nom et suivi, montant dans
+  la devise du site, colonne « Suivi », aide en tête ; l'action « Fiche » ouvre la fiche refondue depuis la liste et le détail ; les
+  actions d'opération ne sont plus répétées dans la liste (elles sont sur la fiche et sur le détail).
+- **Menus** : section « Commandes » (À traiter, Commandes, Paiements, Paiements en ligne (Stripe)) ; les tables techniques (création
+  interne, articles, paniers, statuts, sources, types, méthodes, devises) passent sous « Réglages avancés (commandes) ».
+
 ### Commandes du client
 
 - `GET /api/ordersuser` (connecté) : commandes de l'utilisateur connecté, jamais servies par le cache (lot 4 de l'invalidation ciblée,

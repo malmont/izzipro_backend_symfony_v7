@@ -37,11 +37,20 @@ class OrderCrudController extends BaseTenantCrudController
     public function __construct(
         TenantEntityManagerProvider $emProvider, // Requis par le parent
         AdminUrlGenerator $adminUrlGenerator,
-        CancelOrderUseCase $cancelOrderUseCase
+        CancelOrderUseCase $cancelOrderUseCase,
+        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null // devise du site (lot 4, 07/11/2026)
     ) {
         parent::__construct($emProvider); // On passe la dépendance au parent
         $this->adminUrlGenerator = $adminUrlGenerator;
         $this->cancelOrderUseCase = $cancelOrderUseCase;
+    }
+
+    /** Fiche commande refondue (lot 4, 07/11/2026) : libellés en français, devise du site, plus récentes d'abord, aide */
+    public function configureCrud(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud $crud): \EasyCorp\Bundle\EasyAdminBundle\Config\Crud
+    {
+        return parent::configureCrud($crud)->setEntityLabelInSingular('Commande')->setEntityLabelInPlural('Commandes')->setDefaultSort(['id' => 'DESC'])
+            ->setSearchFields(['id', 'reference', 'userId.email', 'userId.lastname', 'trackingNumber'])
+            ->setHelp('index', 'Ouvrez une commande (« Fiche ») pour tout voir et agir : capturer, rembourser, annuler, expédier ou acheter l\'étiquette, renvoyer un courriel. « Modifier » ne sert qu\'aux corrections avancées. Les commandes qui attendent une action sont dans « À traiter ».');
     }
 
     public static function getEntityFqcn(): string
@@ -89,8 +98,9 @@ class OrderCrudController extends BaseTenantCrudController
                     'choice_label' => 'name'
                 ]),
             DateTimeField::new('orderDate', 'Date de commande')->setFormat('dd/MM/yyyy HH:mm'),
-            DateTimeField::new('statusUpdatedAt', 'Date de updateStatut')->setFormat('dd/MM/yyyy HH:mm'),
-            MoneyField::new('totalAmount', 'Montant total')->setCurrency('CAD'),
+            DateTimeField::new('statusUpdatedAt', 'Statut mis à jour le')->setFormat('dd/MM/yyyy HH:mm')->hideOnIndex(),
+            MoneyField::new('totalAmount', 'Montant total')->setCurrency($this->currency?->code() ?? 'CAD')->setStoredAsCents(true),
+            TextField::new('trackingNumber', 'Suivi')->hideOnForm()->hideOnDetail(),
             AssociationField::new('payments', 'Paiements')->onlyOnDetail(),
         ];
     }
@@ -138,14 +148,18 @@ class OrderCrudController extends BaseTenantCrudController
         $capture = \EasyCorp\Bundle\EasyAdminBundle\Config\Action::new('captureOrder', 'Capturer le paiement', 'fas fa-credit-card')
             ->linkToRoute('admin_order_refund', fn (Order $order) => ['id' => $order->getId()])
             ->displayIf(fn ($order) => $web($order) && $order->getPayments()->exists(fn ($i, $p) => (float) $p->getAmount() > 0 && $p->getStripePaymentId() && $p->getStripeStatus() === 'requires_capture'));
+        // « Fiche » (lot 4) : la fiche refondue remplace le détail EasyAdmin dans la liste ; le détail EasyAdmin reste joignable depuis la fiche (Modifier)
+        $sheet = \EasyCorp\Bundle\EasyAdminBundle\Config\Action::new('orderSheet', 'Fiche', 'fas fa-file-alt')
+            ->linkToRoute('admin_order_sheet', fn (Order $order) => ['id' => $order->getId()]);
         $actions = parent::configureActions($actions)
-            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $refund)->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, $refund)
-            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $cancel)->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, $cancel)
+            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, $sheet)->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $sheet)
+            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $refund)
+            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $cancel)
             ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $emails)
             ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $capture)
-            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, $label)->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $label)
-            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, $ship)->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $ship)
-            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, $deliver)->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $deliver);
+            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $label)
+            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $ship)
+            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $deliver);
 
         return $this->lockCashRecordActions($actions);
     }

@@ -1,0 +1,41 @@
+{# Vue « À traiter » (lot 4, 07/11/2026) : habillage EasyAdmin depuis le menu, sinon page nue #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Commandes à traiter{% endblock %}
+{% block content_title %}Commandes à traiter{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}<div class="py-3">{{ block('panel') }}</div>{% endblock %}
+
+{% macro rows(list, urls, extra) %}
+    {% if list is empty %}<p class="text-muted mb-0">Rien pour l'instant.</p>{% else %}
+    <table class="table table-sm mb-0"><thead><tr><th>Commande</th><th>Client</th><th>Date</th><th class="text-end">Total</th><th>Statut</th><th></th></tr></thead><tbody>
+    {% for r in list %}<tr data-todo-order="{{ r.id }}"><td><a href="{{ urls[r.id] }}"><strong>{{ r.reference }}</strong></a></td><td>{{ r.customer }}</td><td>{{ r.date }}</td><td class="text-end">{{ (r.totalCents / 100)|number_format(2, ',', ' ') }}</td><td class="small">{{ r.status }}{% if extra == 'shipped' and r.shippedAt %} · expédiée le {{ r.shippedAt }}{% endif %}</td><td><a class="btn btn-sm btn-outline-primary" href="{{ urls[r.id] }}">Ouvrir</a></td></tr>{% endfor %}
+    </tbody></table>{% endif %}
+{% endmacro %}
+{% import _self as m %}
+
+{% block panel %}
+<div class="container-fluid" style="max-width: 1180px" data-orders-todo>
+    <p class="text-muted">Les commandes web qui attendent une action de votre part. Les ventes au comptoir se gèrent depuis la caisse. <a href="{{ listUrl }}">Toutes les commandes</a>.</p>
+    <div class="card mb-3"><div class="card-body">
+        <h2 class="h5">À expédier <span class="badge bg-primary">{{ todo.counts.toShip }}</span></h2>
+        <p class="small text-muted">Payées, avec une adresse de livraison, pas encore expédiées : ouvrez la commande pour acheter l'étiquette ou saisir le suivi.</p>
+        {{ m.rows(todo.toShip, sheetUrls, '') }}
+    </div></div>
+    <div class="card mb-3"><div class="card-body">
+        <h2 class="h5">Paiement à capturer <span class="badge bg-warning text-dark">{{ todo.counts.toCapture }}</span></h2>
+        <p class="small text-muted">Le client a autorisé le paiement mais la capture n'a pas eu lieu (le client n'est pas débité ; l'autorisation expire au bout de 7 jours).</p>
+        {{ m.rows(todo.toCapture, sheetUrls, '') }}
+    </div></div>
+    <div class="card mb-3"><div class="card-body">
+        <h2 class="h5">Incomplètes depuis plus d'une heure <span class="badge bg-secondary">{{ todo.counts.incomplete }}</span></h2>
+        <p class="small text-muted">Paiement jamais finalisé : le client a abandonné ou son paiement a échoué. À annuler si elles s'accumulent, ou à contacter.</p>
+        {{ m.rows(todo.incomplete, sheetUrls, '') }}
+    </div></div>
+    <div class="card mb-3"><div class="card-body">
+        <h2 class="h5">En transit depuis plus de 10 jours <span class="badge bg-info">{{ todo.counts.inTransit }}</span></h2>
+        <p class="small text-muted">Expédiées mais toujours pas livrées : vérifiez le suivi, puis « Marquer livrée » ou contactez le transporteur.</p>
+        {{ m.rows(todo.inTransit, sheetUrls, 'shipped') }}
+    </div></div>
+</div>
+{% endblock %}

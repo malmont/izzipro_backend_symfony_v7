@@ -151,7 +151,8 @@ class DashboardController extends AbstractDashboardController
         private RequestStack $requestStack,
         private \App\Services\CaisseService\StoreClock $storeClock,
         private readonly ?\App\Services\Platform\SiteReadinessService $readiness = null, // cheminement de préparation du site (05/11/2026)
-        private readonly ?\EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator $adminUrls = null
+        private readonly ?\EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator $adminUrls = null,
+        private readonly ?\App\Services\OrderService\OrderDeskService $orderDesk = null // commandes à traiter (lot 4, 07/11/2026)
     ) {}
 
     #[Route('/admin', name: 'admin')]
@@ -373,7 +374,17 @@ class DashboardController extends AbstractDashboardController
         } catch (\Throwable) {
         }
 
+        $ordersTodo = null;
+        $ordersTodoUrl = null;
+        try {
+            $ordersTodo = $this->orderDesk?->todo(50)['counts'] ?? null;
+            $ordersTodoUrl = $this->adminUrls?->unsetAll()->setRoute('admin_orders_todo')->generateUrl();
+        } catch (\Throwable) {
+        }
+
         return $this->render('admin/dashboard.html.twig', [
+            'ordersTodo' => $ordersTodo,
+            'ordersTodoUrl' => $ordersTodoUrl,
             'readiness' => $readiness,
             'monSiteUrl' => $monSiteUrl,
             'tenantReport' => $tenantReport,
@@ -619,24 +630,25 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Cash Details', 'fas fa-money-bill-wave', CashDetails::class)->setController(CashDetailsCrudController::class);
         yield MenuItem::linkToCrud('Type Cash', 'fas fa-money-bill-wave', TypeCash::class)->setController(TypeCashCrudController::class);
 
-        yield MenuItem::section('Order');
-        yield MenuItem::linkToCrud('Create order', 'fas fa-list', Order::class)
-                ->setController(OrderAllCrudController::class);
-        yield MenuItem::linkToCrud('Status Order', 'fas fa-tags', StatusCommande::class);
-        yield MenuItem::linkToCrud('Order source', 'fas fa-shopping-cart', OrderSource::class);
-        yield MenuItem::linkToCrud('Order Types', 'fas fa-tags', OrderType::class);
-        yield MenuItem::linkToCrud('Order', 'fas fa-shopping-bag', Order::class);
-        yield MenuItem::linkToCrud('Order Items', 'fas fa-box', OrderItems::class)->setController(OrderItemsCrudController::class);
-        yield MenuItem::linkToCrud('Cart', 'fas fa-boxes', Cart::class);
-        
+        // Commandes et paiements (lot 4, 07/11/2026) : ce que le support utilise d'abord ; les tables techniques sous « Réglages avancés »
+        yield MenuItem::section('Commandes');
+        yield MenuItem::linkToRoute('À traiter', 'fas fa-inbox', 'admin_orders_todo');
+        yield MenuItem::linkToCrud('Commandes', 'fas fa-shopping-bag', Order::class);
+        yield MenuItem::linkToCrud('Paiements', 'fas fa-credit-card', Payments::class);
+        yield MenuItem::linkToCrud('Paiements en ligne (Stripe)', 'fab fa-stripe', StripeConfig::class);
 
-        yield MenuItem::section('Payment');
+        yield MenuItem::section('Réglages avancés (commandes)');
+        yield MenuItem::linkToCrud('Créer une commande (interne)', 'fas fa-list', Order::class)
+                ->setController(OrderAllCrudController::class);
+        yield MenuItem::linkToCrud('Articles de commande', 'fas fa-box', OrderItems::class)->setController(OrderItemsCrudController::class);
+        yield MenuItem::linkToCrud('Paniers', 'fas fa-boxes', Cart::class);
+        yield MenuItem::linkToCrud('Statuts de commande', 'fas fa-tags', StatusCommande::class);
+        yield MenuItem::linkToCrud('Sources de commande', 'fas fa-shopping-cart', OrderSource::class);
+        yield MenuItem::linkToCrud('Types de commande', 'fas fa-tags', OrderType::class);
+        yield MenuItem::linkToCrud('Types de paiement', 'fas fa-credit-card', PaymentType::class);
+        yield MenuItem::linkToCrud('Statuts de paiement', 'fas fa-credit-card', StatusPayment::class);
+        yield MenuItem::linkToCrud('Méthodes de paiement', 'fas fa-credit-card', PaymentMethod::class);
         yield MenuItem::linkToCrud('Devises', 'fas fa-money-bill-wave', Currency::class);
-        yield MenuItem::linkToCrud('Payments', 'fas fa-credit-card', Payments::class);
-        yield MenuItem::linkToCrud('Payment Types', 'fas fa-credit-card', PaymentType::class);
-        yield MenuItem::linkToCrud('Statuts de Paiement', 'fas fa-credit-card', StatusPayment::class);
-        yield MenuItem::linkToCrud('Méthodes de Paiement', 'fas fa-credit-card', PaymentMethod::class);
-        yield MenuItem::linkToCrud('Configuration Stripe', 'fab fa-stripe', StripeConfig::class);
          
 
         yield MenuItem::section('Taxe');

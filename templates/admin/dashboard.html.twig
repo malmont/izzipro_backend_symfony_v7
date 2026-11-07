@@ -41,6 +41,17 @@
     </div>
     {% endif %}
 
+    {% if ordersTodo is defined and ordersTodo and ordersTodo.total > 0 %}
+    <div class="card border-0 shadow-sm rounded-lg mb-4 p-3 bg-white dashboard-a-traiter" style="border-left: 4px solid #e74a3b !important;">
+        <div class="d-flex flex-wrap align-items-center gap-3">
+            <div class="text-xs font-weight-bold text-uppercase">Commandes à traiter</div>
+            <strong>{{ ordersTodo.total }}</strong>
+            <span class="small text-muted">{% if ordersTodo.toShip %}{{ ordersTodo.toShip }} à expédier{% endif %}{% if ordersTodo.toCapture %} · {{ ordersTodo.toCapture }} paiement(s) à capturer{% endif %}{% if ordersTodo.incomplete %} · {{ ordersTodo.incomplete }} incomplète(s){% endif %}{% if ordersTodo.inTransit %} · {{ ordersTodo.inTransit }} en transit depuis longtemps{% endif %}</span>
+            {% if ordersTodoUrl %}<a class="btn btn-sm btn-primary ms-auto" href="{{ ordersTodoUrl }}">Voir</a>{% endif %}
+        </div>
+    </div>
+    {% endif %}
+
     {# ------------------ KPIS / METRICS CARDS (ROW 1) ------------------ #}
     <div class="row mb-4">
         <!-- Total Sales Card -->
