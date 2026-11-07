@@ -560,6 +560,12 @@ idempotence 60 s et 7 jours (`PosIdempotencyService`), limites d'appels (`config
 `StripeService::onlineFee`, `Dto/StoreInfoDto` ; schéma `migrations/Version20261023120000.php`,
 `scripts/migrate_all_v2_pos_settings.sh` ; tests `tests/Functional/Boutique/PosSettingsApiTest.php`.
 
+## Cheminement d'ouverture dans le back-office (07/11/2026)
+
+Page « Caisse : réglages et cheminement » (`/admin/caisse`) : la liste de contrôle d'ouverture (`docs/mise-en-production-caisse.md`) en étapes
+colorées (indispensable / amélioration) reliées aux écrans exacts, résumé des réglages ; mêmes étapes sur l'accueil du back-office et dans
+`GET /api/site/readiness` (groupe `module.pos`). Détail : `docs/console-pilotage.md`, « Cheminement ciblé de la caisse ».
+
 ## Retours partiels et échanges (lot F2, 24/10/2026)
 
 Un client rapporte un ou plusieurs articles d'une vente, ou les échange. L'annulation complète

@@ -585,7 +585,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (67)
+## Administration (EasyAdmin) (68)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -596,6 +596,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/admin/barcode-image/{id}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::barcodeImage` |
 | GET | `/admin/barcode-management/search` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::search` |
 | ANY | `/admin/barcode-management` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::index` |
+| GET | `/admin/caisse` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\PosConsoleAdminController::index` |
 | GET | `/admin/commandes/a-traiter` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderDeskAdminController::todo` |
 | GET | `/admin/commandes/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderDeskAdminController::sheet` |
 | POST | `/admin/configuration/courriel-essai` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ConfigurationConsoleAdminController::emailTest` |

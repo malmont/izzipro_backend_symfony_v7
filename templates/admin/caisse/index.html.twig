@@ -1,0 +1,54 @@
+{# Cheminement d'ouverture du magasin (07/11/2026) : habillage EasyAdmin depuis le menu, sinon page nue #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Caisse{% endblock %}
+{% block content_title %}Caisse : réglages et cheminement{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}<div class="py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block panel %}
+{% set s = overview.summary %}
+<div class="container-fluid" style="max-width: 980px" data-caisse-cheminement data-level="{{ overview.level }}">
+    <h1 class="h3 mb-1">Caisse</h1>
+    <p class="text-muted">Tout ce qu'il faut pour ouvrir le magasin avec l'application Caisse : dans l'ordre, chaque étape mène à l'écran exact. Rouge = indispensable, orange = amélioration. Le mode test simule les cartes ; le passage en réel se fait sur la page Paiements de caisse (Stripe).</p>
+    {% for label, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}{% endfor %}
+
+    {% if not overview.granted %}
+        <div class="alert alert-warning" data-caisse-not-granted>La caisse n'est pas accordée à ce site : {% if overview.obtain and overview.obtain.action.type == 'trial' %}un essai gratuit de {{ overview.obtain.action.days }} jours est possible depuis{% else %}demandez-la dans{% endif %} <a href="{{ overview.obtainUrl ?? monSiteUrl }}">Mon site : pilotage</a>.</div>
+    {% else %}
+    <div class="card mb-4"><div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h2 class="h5 mb-0">Ouvrir le magasin</h2>
+            <span class="badge bg-{{ overview.level == 'live' ? 'success' : (overview.level == 'test' ? 'info' : 'danger') }}">{{ overview.levelLabel }}</span>
+        </div>
+        <ol class="mb-0">
+            {% for st in overview.steps %}
+                <li class="mb-2" data-step="{{ st.key }}" data-status="{{ st.status }}">
+                    {% if st.status == 'done' %}<span class="text-success">✔</span>{% elseif st.status == 'todo' and st.blocking %}<span class="text-danger">✘</span>{% elseif st.status == 'pending' %}<span class="text-warning">⏳</span>{% else %}<span class="text-warning">○</span>{% endif %}
+                    <strong>{{ st.title }}</strong>{% if st.status == 'todo' and st.blocking %} <span class="badge bg-danger">indispensable</span>{% elseif st.status != 'done' %} <span class="badge bg-warning text-dark">amélioration</span>{% endif %}
+                    <div class="small text-muted">{{ st.description }}{% if st.url and st.status != 'done' %} <a href="{{ st.url }}">→ ouvrir</a>{% endif %}</div>
+                </li>
+            {% endfor %}
+        </ol>
+    </div></div>
+
+    <div class="card"><div class="card-body" data-caisse-resume>
+        <h2 class="h5">Où en est la caisse</h2>
+        <div class="row small">
+            <div class="col-md-6">
+                <div>Mode des paiements : <strong>{{ s.stripeMode == 'live' ? 'réel' : 'test' }}</strong></div>
+                <div>Postes actifs : <strong>{{ s.registers }}</strong> · lecteurs appairés : <strong>{{ s.readers }}</strong></div>
+                <div>Comptes de caisse (caissiers, responsables) : <strong>{{ s.cashiers }}</strong></div>
+                <div>Ventes au comptoir enregistrées : <strong>{{ s.counterSales }}</strong></div>
+            </div>
+            <div class="col-md-6">
+                <div>Devise : <strong>{{ s.currency }}</strong> · coupures actives : <strong>{{ s.denominations }}</strong></div>
+                <div>Alertes par courriel : <strong>{{ s.alertsEmail ?: 'aucune adresse' }}</strong></div>
+                <div>Conservation des ventes : <strong>{{ s.retentionYears ? s.retentionYears ~ ' an(s)' : 'non réglée' }}</strong></div>
+            </div>
+        </div>
+        <p class="small text-muted mt-2 mb-0">Avant le premier vrai client : vente réelle de 1 $ au lecteur puis remboursement, sauvegardes hors serveur et surveillance en place (liste complète : <code>docs/mise-en-production-caisse.md</code>).</p>
+    </div></div>
+    {% endif %}
+</div>
+{% endblock %}

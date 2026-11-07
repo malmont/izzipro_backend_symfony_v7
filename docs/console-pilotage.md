@@ -182,6 +182,16 @@ légaux** adaptés au pays et à l'activité. `EntrepriseService::updateEntrepri
 palier complet. Tests : `tests/Functional/Platform/SiteReadinessCompleteTest.php`, `tests/Functional/Admin/DashboardReadinessTest.php`,
 `tests/Functional/Platform/SiteAssistantEntrepriseTest.php`.
 
+## Cheminement ciblé de la caisse : page « Caisse : réglages et cheminement » (07/11/2026)
+
+`GET /admin/caisse` (`PosConsoleAdminController`, `ROLE_ADMIN`, menu Caisse) : la liste de contrôle d'ouverture du magasin
+(`docs/mise-en-production-caisse.md`, § 1) sous forme d'étapes colorées avec l'écran exact de chacune, et un résumé des réglages
+(`Services/CaisseService/PosSetupService::overview()` : étapes du groupe `module.pos` du cheminement du site, `STEP_SCREENS`, niveau
+`none | todo | test | live`). Étapes caisse du cheminement (`SiteReadinessService`) : clé, poste, caissier, en-tête du ticket, terminal
+Stripe, alertes, conservation, **coupures de la devise** (`type_cash` actives dans la devise du site, écran Type Cash), **lecteur appairé** (en
+mode réel), **première vente d'essai** (une vente au comptoir). Sans caisse accordée, la page mène à l'essai ou à la demande (Mon site).
+Écrans ajoutés : `pos` (cette page), `denominations`. Test : `tests/Functional/Admin/CaisseConsolePageTest.php`.
+
 ## Assistant IA de configuration (05/11/2026)
 
 `Services/SiteAssistantService/SiteAssistantService` (modèle Sonnet 5.5, client `LandingAiClientInterface`, un crédit IA du site par
