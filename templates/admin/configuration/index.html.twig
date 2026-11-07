@@ -1,0 +1,46 @@
+{# Cheminements de configuration (lot 5, 07/11/2026) : habillage EasyAdmin depuis le menu, sinon page nue #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Configuration{% endblock %}
+{% block content_title %}Configuration : Stripe, taxes, courriels, avis{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}<div class="py-3">{{ block('panel') }}</div>{% endblock %}
+
+{% block panel %}
+<div class="container-fluid" style="max-width: 980px" data-configuration>
+    <h1 class="h3 mb-1">Configuration</h1>
+    <p class="text-muted">Les quatre réglages qui demandent un peu de méthode, chacun avec ses étapes dans l'ordre. Une coche verte : c'est fait ; une croix rouge : à faire ; un sablier : la plateforme s'en occupe. Le reste du site se règle dans « Mon site : pilotage » ; la livraison a sa propre page.</p>
+    {% for label, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}{% endfor %}
+
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        {% for p in overview %}<a class="btn btn-sm btn-outline-secondary" href="#{{ p.key }}">{{ p.title }}{% if p.todo > 0 %} <span class="badge bg-danger">{{ p.todo }}</span>{% endif %}</a>{% endfor %}
+    </div>
+
+    {% for p in overview %}
+    <div class="card mb-4" id="{{ p.key }}" data-configuration-path="{{ p.key }}" data-level="{{ p.level }}">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h2 class="h5 mb-0">{{ p.title }}</h2>
+                <span class="badge bg-{{ p.level in ['ready', 'proven'] ? 'success' : (p.level in ['off'] ? 'secondary' : 'info') }}">{{ p.levelLabel }}</span>
+            </div>
+            <p class="text-muted small">{{ p.intro }}</p>
+            <ol class="mb-0">
+                {% for st in p.steps %}
+                    <li class="mb-2" data-step="{{ st.key }}" data-status="{{ st.status }}">
+                        {% if st.status == 'done' %}<span class="text-success">✔</span>{% elseif st.status == 'todo' %}<span class="text-danger">✘</span>{% elseif st.status == 'pending' %}<span class="text-warning">⏳</span>{% else %}<span class="text-muted">○</span>{% endif %}
+                        <strong>{{ st.title }}</strong>{% if st.status == 'optional' %} <span class="badge bg-light text-dark">facultatif</span>{% endif %}{% if st.status == 'pending' %} <span class="badge bg-light text-dark">plateforme</span>{% endif %}
+                        <div class="small text-muted">{{ st.description }}{% if st.url %} <a href="{{ st.url }}">→ ouvrir</a>{% endif %}</div>
+                        {% if st.action and st.action.type == 'email_test' %}
+                            <form method="post" action="{{ path('admin_configuration_email_test') }}" class="mt-1" data-email-test-form>
+                                <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+                                <button class="btn btn-sm btn-primary" {% if adminEmail == '' %}disabled{% endif %}>M'envoyer un courriel d'essai{% if adminEmail %} ({{ adminEmail }}){% endif %}</button>
+                            </form>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ol>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

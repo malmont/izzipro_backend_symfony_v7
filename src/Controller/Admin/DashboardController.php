@@ -568,6 +568,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('Entreprise');
         // Console de pilotage du site : localisation, modules et droits, commerce, services (lot 5, 04/11/2026)
         yield MenuItem::linkToRoute('Mon site : pilotage', 'fas fa-sliders-h', 'admin_mon_site');
+        yield MenuItem::linkToRoute('Configuration : Stripe, taxes, courriels, avis', 'fas fa-tasks', 'admin_configuration'); // cheminements de configuration (lot 5, 07/11/2026)
         yield MenuItem::linkToCrud('Entreprise', 'fa fa-building', Entreprise::class);
         yield MenuItem::linkToCrud('Profils des applications', 'fas fa-id-card', \App\Entity\AppProfile::class)->setController(AppProfileCrudController::class);
         yield MenuItem::linkToRoute('Apparence de l\'app mobile', 'fas fa-mobile-alt', 'admin_mobile_theme'); // thème de l'application e-commerce mobile (31/10/2026)

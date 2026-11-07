@@ -102,7 +102,7 @@ class SiteReadinessService
         $add('site.identity', 'site', 'Identité du site', 'Nom et courriel de contact sur la fiche Entreprise : ils signent vos courriels et vos reçus.', trim((string) ($e['name'] ?? '')) !== '' && trim((string) ($e['email'] ?? '')) !== '', 'backend', ['type' => 'screen', 'screen' => 'entreprise']);
         $add('site.address', 'site', 'Adresse du site', 'Pays, province et ville : ils déterminent la langue, le fuseau, les taxes et les frais de livraison.', $address !== null && trim((string) ($address['country'] ?? '')) !== '', 'backend', ['type' => 'screen', 'screen' => 'entreprise']);
         $add('site.localisation', 'site', 'Langue, fuseau et devise', 'Vérifiez la langue du site, le fuseau horaire et la devise (déduits de l\'adresse, modifiables).', $address !== null && trim((string) ($address['country'] ?? '')) !== '' && trim((string) ($e['currency'] ?? '')) !== '', 'editor', ['type' => 'registry', 'feature' => 'site.locale', 'url' => $editorUrl]);
-        $add('site.email_sender', 'site', 'Adresse d\'envoi des courriels', 'L\'expéditeur de vos courriels (confirmation, reçus, codes) ; sans serveur propre, celui de la plateforme est utilisé.', $fromEmail !== '', 'backend', ['type' => 'screen', 'screen' => 'email_configuration']);
+        $add('site.email_sender', 'site', 'Adresse d\'envoi des courriels', 'L\'expéditeur de vos courriels (confirmation, reçus, codes) ; sans serveur propre, celui de la plateforme est utilisé.', $fromEmail !== '', 'backend', ['type' => 'screen', 'screen' => 'configuration']); // cheminement Courriels (lot 5, 07/11/2026)
         $add('site.logo', 'site', 'Logo', 'Le logo apparaît sur le site, les courriels et les reçus.', trim((string) ($e['logo'] ?? '')) !== '', 'backend', ['type' => 'screen', 'screen' => 'entreprise']);
         $domain = $this->domains->status($code); // HTTPS gardé dix minutes : pas d'appel à chaque affichage
         if ($domain['state'] === 'none') {
@@ -117,11 +117,11 @@ class SiteReadinessService
         }
         if ($effective['module.boutique']['enabled'] ?? false) {
             $taxOk = ($commerce['taxProvider'] ?? 'table') === 'stripe' || $this->count($pdo, 'tax') > 0;
-            $add('boutique.taxes', 'module.boutique', 'Taxes', 'Au moins une taxe dans la table du site (TPS, TVQ…), ou Stripe Tax.', $taxOk, 'backend', ['type' => 'screen', 'screen' => 'taxes']);
+            $add('boutique.taxes', 'module.boutique', 'Taxes', 'Au moins une taxe dans la table du site (TPS, TVQ…), ou Stripe Tax.', $taxOk, 'backend', ['type' => 'screen', 'screen' => 'configuration']); // cheminement Taxes (lot 5)
             $mode = $this->stripe->mode(StripeAccountResolver::CHANNEL_SHOP);
             $stripeRow = $this->row($pdo, 'SELECT account_id, live_account_id FROM stripe_config ORDER BY id LIMIT 1');
             $stripeOk = $this->tenants->isTenantInternal($code) || trim((string) ($mode === StripeAccountResolver::LIVE ? ($stripeRow['live_account_id'] ?? '') : ($stripeRow['account_id'] ?? ''))) !== '';
-            $add('boutique.stripe', 'module.boutique', 'Paiements en ligne (Stripe)', 'Compte Stripe connecté du site pour encaisser les commandes.', $stripeOk, 'backend', ['type' => 'screen', 'screen' => 'stripe_config']);
+            $add('boutique.stripe', 'module.boutique', 'Paiements en ligne (Stripe)', 'Compte Stripe connecté du site pour encaisser les commandes.', $stripeOk, 'backend', ['type' => 'screen', 'screen' => 'configuration']); // cheminement Stripe (lot 5)
             $add('boutique.product', 'module.boutique', 'Premier produit', 'Créez au moins un produit (vente, location ou abonnement).', $this->count($pdo, 'product') > 0, 'backend', ['type' => 'screen', 'screen' => 'products']);
             $add('boutique.carrier', 'module.boutique', 'Livraison', 'Au moins un mode de remise (transporteur à prix fixe, retrait en magasin ou EasyPost) ; vous expédiez vous-même en saisissant le suivi sur la commande. Réglages et cheminement : page Livraison.', $this->count($pdo, 'carrier') > 0, 'backend', ['type' => 'screen', 'screen' => 'shipping']);
             // Livraison, lot 1 (07/11/2026) : poids des produits exigé seulement quand le site estime ou achète des étiquettes (mode own_key ou platform)

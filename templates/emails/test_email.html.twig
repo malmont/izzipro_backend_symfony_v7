@@ -1,0 +1,19 @@
+{% extends 'base.email.html.twig' %}
+
+{# Courriel d'essai envoyé depuis la page Configuration (lot 5, 07/11/2026) ; `via` = site | platform #}
+{% block title %}Courriel d'essai de votre site{% endblock %}
+
+{% block body %}
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <tr><td align="center">
+        <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden;">
+            <tr><td style="padding: 28px 24px;">
+                <h1 style="font-size: 20px; margin: 0 0 12px;">Courriel d'essai</h1>
+                <p style="margin: 0 0 12px;">Si vous lisez ce message, l'envoi des courriels de votre site fonctionne.</p>
+                <p style="margin: 0 0 12px;">Parti le {{ sentAt|date('d/m/Y à H:i') }} par {{ via == 'site' ? 'votre serveur SMTP' : 'le serveur de la plateforme' }}{% if from %}, expéditeur affiché : {{ from }}{% endif %}.</p>
+                <p style="margin: 0; color: #64748b; font-size: 13px;">Vérifiez qu'il est arrivé dans la boîte de réception et non dans les indésirables, et que l'expéditeur affiché est le bon.</p>
+            </td></tr>
+        </table>
+    </td></tr>
+</table>
+{% endblock %}

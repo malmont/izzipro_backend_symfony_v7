@@ -11,7 +11,7 @@ final class SiteAssistantTools
         'taxes' => 'Taxes', 'stripe_config' => 'Paiements en ligne (Stripe)', 'pos_stripe' => 'Paiements de caisse (Stripe)', 'carriers' => 'Transporteurs',
         'subscription_plans' => 'Formules d\'abonnement', 'app_keys' => 'Clés d\'activation des applications', 'cash_registers' => 'Postes de caisse',
         'short_code' => 'Code court de la boutique', 'shipping' => 'Livraison : réglages, cheminement, transporteurs', 'product_weights' => 'Poids et dimensions des produits (grille de saisie, estimation par l\'IA)', 'easypost' => 'Clés EasyPost du site', 'google_places' => 'Adresses (Google Places)',
-        'ai_credits' => 'Assistant IA : crédits et consignes', 'mv_ai_quotas' => 'Quotas IA Mémoires Vivantes', 'review_settings' => 'Réglages des avis', 'esg_questions' => 'Questions du diagnostic ESG',
+        'ai_credits' => 'Assistant IA : crédits et consignes', 'mv_ai_quotas' => 'Quotas IA Mémoires Vivantes', 'review_settings' => 'Réglages des avis', 'configuration' => 'Configuration : cheminements Stripe, taxes, courriels, avis clients', 'reviews' => 'Avis clients à modérer', 'address_entreprise' => 'Adresse de l\'entreprise', 'esg_questions' => 'Questions du diagnostic ESG',
     ];
 
     /** @return list<array<string, mixed>> */

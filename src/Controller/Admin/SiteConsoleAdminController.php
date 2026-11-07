@@ -42,7 +42,7 @@ class SiteConsoleAdminController extends AbstractController
         'subscription_plans' => ['crud' => SubscriptionPlanCrudController::class], 'taxes' => ['crud' => TaxCrudController::class], 'stripe_config' => ['crud' => StripeConfigCrudController::class],
         'pos_stripe' => ['route' => 'admin_pos_stripe'], 'shipping' => ['route' => 'admin_livraison'], 'product_shipping' => ['crud' => ProductShippingCrudController::class], 'product_weights' => ['route' => 'admin_livraison_poids'], 'easypost' => ['crud' => EasyPostConfigurationCrudController::class], 'google_places' => ['crud' => GooglePlacesConfigCrudController::class],
         'email_configuration' => ['crud' => EmailConfigurationCrudController::class], 'ai_credits' => ['crud' => AiCreditSettingCrudController::class], 'mv_ai_quotas' => ['route' => 'admin_mv_ai_quotas'],
-        'review_settings' => ['crud' => ReviewSettingCrudController::class],
+        'review_settings' => ['crud' => ReviewSettingCrudController::class], 'configuration' => ['route' => 'admin_configuration'], 'reviews' => ['crud' => ReviewCrudController::class], 'address_entreprise' => ['crud' => AddressEntrepriseCrudController::class],
         'carriers' => ['crud' => CarrierCrudController::class], 'products' => ['crud' => ProductCrudController::class], 'cash_registers' => ['crud' => CashRegisterCrudController::class],
         'esg_questions' => ['crud' => \App\Controller\Admin\ESG\DiagnosticQuestionCrudController::class], 'short_code' => ['route' => 'admin_short_code'],
     ];

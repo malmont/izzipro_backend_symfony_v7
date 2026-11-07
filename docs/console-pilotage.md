@@ -272,6 +272,34 @@ modèle des cheminements par partie complexe demandés par le propriétaire (à 
 routes : `docs/boutique.md`, « Livraison, lot 1 ». Référentiels de départ (classes, gabarits, types de fournisseur, retrait) :
 `docs/contenu-exemple.md`.
 
+## Cheminements de configuration : page « Configuration » (lot 5, 07/11/2026)
+
+`GET /admin/configuration` (`ConfigurationConsoleAdminController`, `ROLE_ADMIN`, menu Entreprise → « Configuration : Stripe, taxes,
+courriels, avis ») : les quatre réglages qui demandent de la méthode, chacun comme une liste d'étapes dans l'ordre, sur le modèle de la
+page Livraison. Calcul en lecture seule dans `Services/Platform/SiteConfigurationPathsService::overview()` (étape = `{key, title,
+description, status done|todo|optional|pending, screen, action}` ; `pending` = la plateforme s'en occupe). Les étapes de préparation
+du site (`SiteReadinessService`) « Taxes », « Paiements en ligne (Stripe) » et « Adresse d'envoi des courriels » renvoient désormais à
+cette page (écran `configuration`, aussi connu de l'assistant : `SiteAssistantTools::SCREENS`).
+
+- **Paiements en ligne (Stripe)** : clés de la plateforme (`StripeAccountResolver::keysConfigured`), compte connecté du site dans le mode
+  courant (`stripe_config.account_id` ou `live_account_id` ; site interne = compte de la plateforme), compte vérifié par Stripe
+  (`PosStripeAccountGatewayInterface::retrieveAccount` : encaissements et virements activés, informations attendues ; `pending` si
+  Stripe est injoignable), notifications webhook (variables `STRIPE_*WEBHOOK_SECRET` de la plateforme), premier paiement reçu
+  (`payments.stripe_status = succeeded` ; en mode test, carte 4242…), commission de la plateforme (`online_fee_bp`). Niveaux `off`,
+  `connected`, `proven`.
+- **Taxes** : adresse de l'entreprise normalisée (`TaxEngine::normalizeAddress`), prix TTC ou HT, mode de calcul (`commerce.taxProvider`
+  : table ou Stripe Tax) ; en mode table : taxes saisies et celles qui s'appliquent à l'adresse du site (`TaxEngine::applicableTaxes`),
+  taux réduits par catégorie ; en mode Stripe : prix HT requis, immatriculations à déclarer chez Stripe.
+- **Courriels** : expéditeur (`email_configuration.from_email`), SMTP du site (facultatif : la plateforme envoie sinon,
+  `TenantEmailDelivery::isComplete`), autorisations DNS du domaine de l'expéditeur (TXT `v=spf1` et `_dmarc`, via `dns_get_record`,
+  ignoré pour un domaine réservé, `pending` si la résolution échoue), logo, **courriel d'essai** : `POST /admin/configuration/courriel-essai`
+  (CSRF `admin_configuration_email_test`) envoie `emails/test_email.html.twig` à l'administrateur connecté par le canal effectif et
+  l'annonce dans le message de retour.
+- **Avis clients** : réglages (`review_setting`, valeurs par défaut sans ligne), politique affichée par langue (à rédiger : la loi l'attend en
+  France et dans l'UE), avis en attente de modération (`reviews_product.status = pending`), clé Google Places (facultatif, adresses).
+
+Test : `tests/Functional/Admin/ConfigurationConsolePageTest.php`.
+
 ## Tenir cette fiche à jour
 
 À chaque lot : l'état du tableau ci-dessus, l'inventaire s'il change, et la fiche du module touché (`docs/boutique.md`,
