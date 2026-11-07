@@ -5,12 +5,12 @@
 {% block content_title %}Plateforme : pilotage des fonctionnalités{% endblock %}
 
 {% block main %}{{ block('plateforme_panel') }}{% endblock %}
-{% block body %}
+{% block body %}{% if ea() is null %}
     <div class="container-fluid py-3">
         <h1 class="h3 mb-3">Plateforme : pilotage des fonctionnalités</h1>
         {{ block('plateforme_panel') }}
     </div>
-{% endblock %}
+{% else %}{{ parent() }}{% endif %}{% endblock %}
 
 {% macro badge(e) %}
     {% if e.enabled %}

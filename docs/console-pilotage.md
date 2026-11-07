@@ -195,6 +195,22 @@ lots 1 à 3 (`OrderOperationsService`, `OrderShipmentService`) : mêmes refus qu
 vente au comptoir. `get_configuration_paths` lit la page Configuration (lot 5). Écran `orders` = « À traiter ».
 Tests : `tests/Functional/Platform/SiteAssistantOperationsTest.php` (remboursement puis annulation confirmés, refus, paliers en mode réel).
 
+## Console IA flottante du back-office (07/11/2026)
+
+Sur **toutes les pages EasyAdmin**, un administrateur du site a un bouton « ✦ Assistant IA » en bas à droite qui ouvre le même assistant
+que le panneau de « Mon site : pilotage » : `DashboardController::configureAssets()` ajoute `public/assets/js/admin-assistant.js` et injecte
+(`addHtmlContentToBody`) un conteneur `#arkanoa-assistant` portant les routes `admin_mon_site_assistant` et `…_confirm`, le jeton CSRF
+`admin_mon_site` et le palier (`data-tier`, lot 6) ; rien n'est injecté sans `ROLE_ADMIN` ni quand le palier est `none`. Le script garde
+l'historique de l'échange de page en page (`sessionStorage`, par site), signale la page courante à l'assistant (titre du document ajouté au
+message), rend les liens vers les écrans et les propositions avec « Confirmer » (en rouge pour l'argent : remboursement, annulation,
+capture), et s'efface sur la page Mon site qui a déjà son panneau. Styles dans `admin-arkanoa.css` (section « Console IA flottante »).
+Test : `tests/Functional/Admin/AssistantConsoleTest.php`.
+
+**Gabarits de route habillés EasyAdmin (règle, 07/11/2026).** Une page hors CRUD rendue depuis un lien habillé (`/admin?routeName=…`)
+étend `@EasyAdmin/page/content.html.twig` et met son contenu dans `block main` ; son `block body` (page nue, `base_admin.html.twig`) doit
+rendre `{{ parent() }}` quand `ea()` existe, sinon il remplace le `<body>` entier d'EasyAdmin (menu latéral, scripts et console perdus :
+cause des pages « blanches » vues avant). Modèle : `templates/admin/configuration/index.html.twig`, ligne `{% block body %}`.
+
 ## « Demander » une fonctionnalité : essai immédiat, puis demande (règle du 05/11/2026)
 
 `RequestSiteFeatureUseCase` : si la politique de la fonctionnalité autorise l'essai et que le site n'en a jamais eu pour elle, le clic

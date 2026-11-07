@@ -3,7 +3,7 @@
 {% block title %}Mettre à jour mon forfait{% endblock %}
 {% block content_title %}Mettre à jour mon forfait{% endblock %}
 {% block main %}{{ block('forfait_panel') }}{% endblock %}
-{% block body %}<div class="container-fluid py-3"><h1 class="h3 mb-3">Mettre à jour mon forfait</h1>{{ block('forfait_panel') }}</div>{% endblock %}
+{% block body %}{% if ea() is null %}<div class="container-fluid py-3"><h1 class="h3 mb-3">Mettre à jour mon forfait</h1>{{ block('forfait_panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
 {% block forfait_panel %}
     <div class="card"><div class="card-body">
         <p>La boutique des forfaits de la plateforme ouvre bientôt : vous pourrez y choisir, changer ou arrêter votre forfait, et vos services suivront automatiquement.</p>

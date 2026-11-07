@@ -5,12 +5,12 @@
 {% block content_title %}Mon site : pilotage{% endblock %}
 
 {% block main %}{{ block('mon_site_panel') }}{% endblock %}
-{% block body %}
+{% block body %}{% if ea() is null %}
     <div class="container-fluid py-3">
         <h1 class="h3 mb-3">Mon site : pilotage</h1>
         {{ block('mon_site_panel') }}
     </div>
-{% endblock %}
+{% else %}{{ parent() }}{% endif %}{% endblock %}
 
 {% macro status(e) %}
     {% if e.status == 'ready' %}<span class="badge bg-success">prêt</span>

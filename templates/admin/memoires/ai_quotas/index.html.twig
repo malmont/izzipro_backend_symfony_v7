@@ -5,10 +5,10 @@
 {% block content_title %}Quotas IA Mémoires Vivantes{% endblock %}
 
 {% block main %}{{ block('ai_quotas_panel') }}{% endblock %}
-{% block body %}
+{% block body %}{% if ea() is null %}
     <h1 class="mb-4">Quotas IA Mémoires Vivantes</h1>
     {{ block('ai_quotas_panel') }}
-{% endblock %}
+{% else %}{{ parent() }}{% endif %}{% endblock %}
 
 {% block ai_quotas_panel %}
     {% set tenant_query = app.request.query.get('tenant') ? {tenant: app.request.query.get('tenant')} : {} %}

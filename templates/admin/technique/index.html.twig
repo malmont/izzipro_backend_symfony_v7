@@ -5,12 +5,12 @@
 {% block content_title %}Tableau de bord technique{% endblock %}
 
 {% block main %}{{ block('technique_panel') }}{% endblock %}
-{% block body %}
+{% block body %}{% if ea() is null %}
     <div class="container-fluid py-3">
         <h1 class="h3 mb-3">Tableau de bord technique</h1>
         {{ block('technique_panel') }}
     </div>
-{% endblock %}
+{% else %}{{ parent() }}{% endif %}{% endblock %}
 
 {% macro statut(status) %}
     {%- if status == 'good' -%}<span class="badge bg-success tech-statut" title="Bon">● Bon</span>

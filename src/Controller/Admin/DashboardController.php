@@ -152,7 +152,9 @@ class DashboardController extends AbstractDashboardController
         private \App\Services\CaisseService\StoreClock $storeClock,
         private readonly ?\App\Services\Platform\SiteReadinessService $readiness = null, // cheminement de préparation du site (05/11/2026)
         private readonly ?\EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator $adminUrls = null,
-        private readonly ?\App\Services\OrderService\OrderDeskService $orderDesk = null // commandes à traiter (lot 4, 07/11/2026)
+        private readonly ?\App\Services\OrderService\OrderDeskService $orderDesk = null, // commandes à traiter (lot 4, 07/11/2026)
+        private readonly ?\Symfony\Component\Security\Csrf\CsrfTokenManagerInterface $csrf = null, // console IA flottante (07/11/2026)
+        private readonly ?\App\Services\SiteAssistantService\SiteAssistantService $assistant = null
     ) {}
 
     #[Route('/admin', name: 'admin')]
@@ -437,7 +439,33 @@ class DashboardController extends AbstractDashboardController
                 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Michroma&family=Outfit:wght@300;400;500;600;700&display=swap">
             ')
             ->addCssFile('assets/css/admin-arkanoa.css?v=' . $this->assetVersion('assets/css/admin-arkanoa.css'))
-            ->addJsFile('assets/js/admin-arkanoa.js?v=' . $this->assetVersion('assets/js/admin-arkanoa.js'));
+            ->addJsFile('assets/js/admin-arkanoa.js?v=' . $this->assetVersion('assets/js/admin-arkanoa.js'))
+            ->addJsFile('assets/js/admin-assistant.js?v=' . $this->assetVersion('assets/js/admin-assistant.js'))
+            ->addHtmlContentToBody($this->assistantConsoleHtml());
+    }
+
+    /**
+     * Console IA flottante (07/11/2026) : présente sur toutes les pages EasyAdmin pour un administrateur du site ; même assistant et mêmes
+     * routes que le panneau de « Mon site : pilotage » (jeton CSRF `admin_mon_site`). Rien pour un utilisateur sans ROLE_ADMIN.
+     */
+    private function assistantConsoleHtml(): string
+    {
+        try {
+            if ($this->csrf === null || !$this->isGranted('ROLE_ADMIN')) {
+                return '';
+            }
+            $code = (string) ($this->tenantConnectionManager->getCurrentTenantCode() ?? '');
+            $tier = $this->assistant?->tier($code, $this->isGranted('ROLE_SUPER_ADMIN')) ?? 'full';
+            if ($tier === 'none') {
+                return '';
+            }
+
+            return sprintf('<div id="arkanoa-assistant" data-chat="%s" data-confirm="%s" data-token="%s" data-tier="%s" data-site="%s"></div>',
+                htmlspecialchars($this->generateUrl('admin_mon_site_assistant'), ENT_QUOTES), htmlspecialchars($this->generateUrl('admin_mon_site_assistant_confirm', ['id' => '0000000000000000']), ENT_QUOTES),
+                htmlspecialchars($this->csrf->getToken('admin_mon_site')->getValue(), ENT_QUOTES), $tier, htmlspecialchars($code, ENT_QUOTES));
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     /** Date de modification du fichier en suffixe : nginx fait garder les fichiers statiques 30 jours au navigateur, une version changée force le rechargement */

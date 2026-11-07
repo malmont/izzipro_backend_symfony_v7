@@ -6,7 +6,7 @@
 {% block title %}{{ title }}{% endblock %}
 {% block content_title %}{{ title }}{% endblock %}
 {% block main %}{{ block('panel') }}{% endblock %}
-{% block body %}<div class="py-3">{{ block('panel') }}</div>{% endblock %}
+{% block body %}{% if ea() is null %}<div class="py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
 
 {% macro money(cents, cur) %}{{ (cents / 100)|number_format(2, ',', ' ') }} {{ cur }}{% endmacro %}
 {% import _self as m %}

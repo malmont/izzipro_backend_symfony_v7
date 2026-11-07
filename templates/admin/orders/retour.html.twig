@@ -5,7 +5,7 @@
 {% block title %}{{ title }}{% endblock %}
 {% block content_title %}{{ title }}{% endblock %}
 {% block main %}{{ block('panel') }}{% endblock %}
-{% block body %}<div class="py-3">{{ block('panel') }}</div>{% endblock %}
+{% block body %}{% if ea() is null %}<div class="py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
 
 {% block panel %}
 <div class="container-fluid" style="max-width: 900px" data-return-page>

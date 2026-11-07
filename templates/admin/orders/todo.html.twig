@@ -4,7 +4,7 @@
 {% block title %}Commandes à traiter{% endblock %}
 {% block content_title %}Commandes à traiter{% endblock %}
 {% block main %}{{ block('panel') }}{% endblock %}
-{% block body %}<div class="py-3">{{ block('panel') }}</div>{% endblock %}
+{% block body %}{% if ea() is null %}<div class="py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
 
 {% macro rows(list, urls, extra) %}
     {% if list is empty %}<p class="text-muted mb-0">Rien pour l'instant.</p>{% else %}

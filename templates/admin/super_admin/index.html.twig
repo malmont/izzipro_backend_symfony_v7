@@ -5,12 +5,12 @@
 {% block content_title %}Compte super administrateur{% endblock %}
 
 {% block main %}{{ block('super_admin_panel') }}{% endblock %}
-{% block body %}
+{% block body %}{% if ea() is null %}
     <div class="container-fluid py-3">
         <h1 class="h3 mb-3">Compte super administrateur</h1>
         {{ block('super_admin_panel') }}
     </div>
-{% endblock %}
+{% else %}{{ parent() }}{% endif %}{% endblock %}
 
 {% block super_admin_panel %}
     {% for label, messages in app.flashes %}

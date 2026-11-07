@@ -5,7 +5,7 @@
 {% block content_title %}Poids et dimensions des produits{% endblock %}
 {% block main %}{{ block('panel') }}{% endblock %}
 
-{% block body %}<div class="py-3">{{ block('panel') }}</div>{% endblock %}
+{% block body %}{% if ea() is null %}<div class="py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
 
 {% block panel %}
 <div class="container-fluid" style="max-width: 1180px">

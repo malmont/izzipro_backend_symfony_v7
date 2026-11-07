@@ -5,10 +5,10 @@
 {% block content_title %}Clés des applications (POS, e-commerce mobile, gestion, LivingMemory){% endblock %}
 
 {% block main %}{{ block('app_keys_panel') }}{% endblock %}
-{% block body %}
+{% block body %}{% if ea() is null %}
     <h1 class="mb-4">Clés des applications</h1>
     {{ block('app_keys_panel') }}
-{% endblock %}
+{% else %}{{ parent() }}{% endif %}{% endblock %}
 
 {% block app_keys_panel %}
     {% for type, messages in app.flashes %}
