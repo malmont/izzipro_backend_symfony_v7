@@ -120,7 +120,7 @@ class ShippingLot1Test extends WebTestCase
         $this->assertStringContainsString('data-ship-form', (string) $this->client->getResponse()->getContent());
         $token = $crawler->filter('form[data-ship-form] input[name="_token"]')->attr('value');
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . "/admin/orders/$orderId/expedier", ['_token' => $token, 'carrier' => '', 'trackingNumber' => 'X', 'notify' => '1']);
-        $this->assertStringContainsString('carrier :', html_entity_decode((string) $this->client->getResponse()->getContent()), 'transporteur obligatoire');
+        $this->assertStringContainsString('carrier :', $this->page(), 'transporteur obligatoire');
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . "/admin/orders/$orderId/expedier", ['_token' => $token, 'carrier' => 'Postes Canada', 'trackingNumber' => '7000123456789', 'notify' => '1']);
         $this->assertSame(302, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
         $this->assertEmailCount(1, null, 'courriel au client');
@@ -136,7 +136,7 @@ class ShippingLot1Test extends WebTestCase
 
         // Déjà expédiée : une seconde expédition est refusée, la page propose « Marquer livrée », puis livrée (statut 6)
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . "/admin/orders/$orderId/expedier", ['_token' => $token, 'carrier' => 'UPS', 'notify' => '1']);
-        $this->assertStringContainsString('déjà expédiée', html_entity_decode((string) $this->client->getResponse()->getContent()));
+        $this->assertStringContainsString('déjà expédiée', $this->page());
         $crawler = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . "/admin/orders/$orderId/expedier");
         $this->assertStringContainsString('data-deliver-form', (string) $this->client->getResponse()->getContent());
         $deliverToken = $crawler->filter('div[data-deliver-form] input[name="_token"]')->attr('value');
@@ -150,7 +150,7 @@ class ShippingLot1Test extends WebTestCase
         $this->assertStringContainsString('Vente au comptoir', (string) $this->client->getResponse()->getContent());
         $cancelled = (int) $this->db->fetchOne("INSERT INTO \"order\" (id, status_id, reference, order_date, total_amount, user_id_id, order_source_id) VALUES (nextval('order_id_seq'), 7, ?, NOW(), 0, ?, 1) RETURNING id", ['ANN-' . bin2hex(random_bytes(3)), $customerId]);
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . "/admin/orders/$cancelled/expedier", ['_token' => $token, 'carrier' => 'UPS', 'notify' => '1']);
-        $this->assertStringContainsString('annulée', (string) $this->client->getResponse()->getContent());
+        $this->assertStringContainsString('annulée', $this->page());
         $this->assertSame(7, (int) $this->db->fetchOne('SELECT status_id FROM "order" WHERE id = ?', [$cancelled]));
 
         // Le client lit le suivi dans sa commande (jeton, hors session admin)
@@ -163,6 +163,17 @@ class ShippingLot1Test extends WebTestCase
         $this->client->loginUser($this->userByEmail($customerEmail), 'main');
         $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . "/admin/orders/$orderId/expedier");
         $this->assertContains($this->client->getResponse()->getStatusCode(), [302, 403]);
+    }
+
+
+    /** Suit la redirection habillée EasyAdmin d'un POST refusé et rend la page (message flash compris) */
+    private function page(): string
+    {
+        if ($this->client->getResponse()->isRedirect()) {
+            $this->client->followRedirect();
+        }
+
+        return html_entity_decode((string) $this->client->getResponse()->getContent());
     }
 
     private function api(string $method, string $path, ?array $body, ?string $as, ?string $bearer = null): Response

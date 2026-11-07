@@ -80,7 +80,7 @@ class SiteAssistantTest extends WebTestCase
         $this->assertSame($this->before['locale'], $this->db->fetchOne('SELECT locale FROM entreprise ORDER BY id LIMIT 1'), 'rien n\'est écrit avant confirmation');
         $payload = FakeLandingAiClient::$requests[0];
         $this->assertSame('claude-sonnet-5-5', $payload['model']);
-        $this->assertSame(['get_settings', 'get_readiness', 'open_screen', 'set_site_settings', 'get_domain_status', 'set_custom_domain', 'delegate_to_editor', 'request_feature'], array_column($payload['tools'], 'name'));
+        $this->assertSame(['get_settings', 'get_readiness', 'open_screen', 'set_site_settings', 'get_domain_status', 'set_custom_domain', 'delegate_to_editor', 'estimate_product_dimensions', 'request_feature'], array_column($payload['tools'], 'name'));
         $this->assertStringContainsString('CHEMINEMENT', $payload['system']);
         $second = FakeLandingAiClient::$requests[1];
         $this->assertSame('tool_result', $second['messages'][2]['content'][0]['type'], 'résultats d\'outils renvoyés à l\'IA');

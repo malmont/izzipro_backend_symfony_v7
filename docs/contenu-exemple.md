@@ -97,8 +97,9 @@ Points d'attention :
 ## Référentiels fournis d'office (07/11/2026)
 
 Pour qu'un nouveau site soit opérationnel sans saisie, la base modèle `gmasuite` (et donc chaque site créé) porte des référentiels de
-départ, posés par `scripts/seed_all_v2_shipping_referentials.sh` (idempotent, par nom) : classes d'expédition (Standard, Fragile,
-Volumineux, Lourd), gabarits d'emballage (enveloppe matelassée, petite, moyenne et grande boîte, dimensions et poids réalistes, diviseur
+départ, posés par `scripts/seed_all_v2_shipping_referentials.sh` (idempotent, par nom) : classes d'expédition (Standard 0,5 kg, Fragile
+1 kg, Volumineux 8 kg, Lourd 15 kg, avec dimensions par défaut héritées par les produits sans fiche ; valeurs posées par
+`scripts/migrate_all_v2_shipping_class_defaults.sh`), gabarits d'emballage (enveloppe matelassée, petite, moyenne et grande boîte, dimensions et poids réalistes, diviseur
 volumétrique 5000), types de fournisseur (Grossiste, Fabricant, Prestataire de services, Autre), et le transporteur « Retrait en
 magasin » (`kind = pickup`, 0 $, traductions fr/en). Les trois premiers sont posés sur **toutes** les bases (jamais visibles des
 clients) ; le transporteur seulement sur `gmasuite`, `db_demo` et le modèle des tests. Déjà en place dans `gmasuite` : statuts de

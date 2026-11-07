@@ -23,6 +23,20 @@ class ShippingLabelCrudController extends BaseTenantCrudController
     }
 
     // 4. On conserve configureFields car il est spécifique ET il a besoin de l'emProvider du parent
+    public function configureCrud(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud $crud): \EasyCorp\Bundle\EasyAdminBundle\Config\Crud
+    {
+        return parent::configureCrud($crud)->setEntityLabelInSingular('Étiquette')->setEntityLabelInPlural('Étiquettes')
+            ->setHelp('index', 'Les étiquettes achetées chez EasyPost : lien vers le PDF à imprimer et numéro de suivi. Consultation seulement ; l\'achat se fait depuis la commande.');
+    }
+
+    /** Écran de consultation (lot 1 bis, 07/11/2026) : ces lignes naissent de l'achat d'une étiquette, elles ne se créent ni ne se modifient à la main */
+    public function configureActions(\EasyCorp\Bundle\EasyAdminBundle\Config\Actions $actions): \EasyCorp\Bundle\EasyAdminBundle\Config\Actions
+    {
+        return parent::configureActions($actions)
+            ->disable(\EasyCorp\Bundle\EasyAdminBundle\Config\Action::NEW, \EasyCorp\Bundle\EasyAdminBundle\Config\Action::EDIT, \EasyCorp\Bundle\EasyAdminBundle\Config\Action::DELETE, \EasyCorp\Bundle\EasyAdminBundle\Config\Action::BATCH_DELETE)
+            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, \EasyCorp\Bundle\EasyAdminBundle\Config\Action::DETAIL);
+    }
+
     public function configureFields(string $pageName): iterable
     {
         // $this->emProvider est accessible car il est 'protected' dans le parent
@@ -38,8 +52,8 @@ class ShippingLabelCrudController extends BaseTenantCrudController
                     },
                     'choice_label' => 'id', // ou une autre propriété de Parcel
                 ]),
-            UrlField::new('labelUrl', 'URL Étiquette')->hideOnForm(),
-            TextField::new('trackingCode', 'Tracking Code')->onlyOnIndex(),
+            UrlField::new('labelUrl', 'Étiquette à imprimer (PDF)')->hideOnForm(),
+            TextField::new('trackingCode', 'Numéro de suivi')->onlyOnIndex(),
             DateTimeField::new('createdAt', 'Créé le')->onlyOnIndex(),
         ];
     }

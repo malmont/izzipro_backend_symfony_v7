@@ -22,6 +22,19 @@ class ShippingClass
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $description = null;
 
+    // Valeurs par défaut héritées par les produits de la classe sans fiche poids (livraison, lot 1 bis, 07/11/2026)
+    #[ORM\Column(name: 'default_weight_kg', nullable: true)]
+    private ?float $defaultWeightKg = null;
+
+    #[ORM\Column(name: 'default_length_cm', nullable: true)]
+    private ?float $defaultLengthCm = null;
+
+    #[ORM\Column(name: 'default_width_cm', nullable: true)]
+    private ?float $defaultWidthCm = null;
+
+    #[ORM\Column(name: 'default_height_cm', nullable: true)]
+    private ?float $defaultHeightCm = null;
+
     /**
      * @var Collection<int, ProductShipping>
      */
@@ -61,6 +74,15 @@ class ShippingClass
 
         return $this;
     }
+
+    public function getDefaultWeightKg(): ?float { return $this->defaultWeightKg; }
+    public function setDefaultWeightKg(?float $v): static { $this->defaultWeightKg = $v; return $this; }
+    public function getDefaultLengthCm(): ?float { return $this->defaultLengthCm; }
+    public function setDefaultLengthCm(?float $v): static { $this->defaultLengthCm = $v; return $this; }
+    public function getDefaultWidthCm(): ?float { return $this->defaultWidthCm; }
+    public function setDefaultWidthCm(?float $v): static { $this->defaultWidthCm = $v; return $this; }
+    public function getDefaultHeightCm(): ?float { return $this->defaultHeightCm; }
+    public function setDefaultHeightCm(?float $v): static { $this->defaultHeightCm = $v; return $this; }
 
     /**
      * @return Collection<int, ProductShipping>

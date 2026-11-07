@@ -20,7 +20,8 @@ class PurchaseShippingForCart
     public function __construct(
         private TenantEntityManagerProvider $emProvider,
         private ShippingService           $shippingService,
-        private ShipmentAddressBuilder    $builder
+        private ShipmentAddressBuilder    $builder,
+        private readonly ?\App\Services\ShippingService\ProductShippingResolver $resolver = null
     ) {}
 
     /**
@@ -46,10 +47,8 @@ class PurchaseShippingForCart
 
         $items = [];
         foreach ($cartItems as $ci) {
-            $ps = $shippingRepo->findOneBy(['product' => $ci->productId]);
-            if (!$ps) {
-                throw new LogicException("Pas de config shipping pour le produit {$ci->productId}");
-            }
+            // Fiche poids du produit, sinon valeurs de sa classe, sinon poids par défaut du site (livraison, lot 1 bis, 07/11/2026)
+            $ps = $this->resolver->forProductId((int) $ci->productId);
             for ($i = 0; $i < $ci->quantity; $i++) {
                 $items[] = $ps;
             }

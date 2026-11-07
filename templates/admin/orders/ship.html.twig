@@ -1,11 +1,16 @@
-{% extends 'base_admin.html.twig' %}
+{# Habillage EasyAdmin depuis le menu ou un lien habillé (ea() non nul), sinon page nue #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
 
 {% block title %}Expédier la commande {{ order.reference }}{% endblock %}
+{% block content_title %}Expédier la commande {{ order.reference }}{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
 
-{% block body %}
+{% block body %}<div class="py-3">{{ block('panel') }}</div>{% endblock %}
+
+{% block panel %}
 <div class="container-fluid" style="max-width: 860px">
     <h1 class="mb-3">Expédier la commande {{ order.reference }}</h1>
-    {% for message in app.flashes('danger') %}<div class="alert alert-danger">{{ message }}</div>{% endfor %}
+    {% for label, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}{% endfor %}
     {% if error %}<div class="alert alert-danger" data-ship-error>{{ error }}{% if errors is not empty %}<ul class="mb-0">{% for e in errors %}<li>{{ e.path }} : {{ e.message }}</li>{% endfor %}</ul>{% endif %}</div>{% endif %}
 
     <div class="card mb-3">
@@ -38,7 +43,7 @@
                 <p class="text-muted mb-0">Vous déposez le colis vous-même (comptoir postal, transporteur, livraison locale). Saisissez le transporteur et, si vous l'avez, le numéro de suivi : le client reçoit un courriel avec le lien de suivi et la commande passe « En cours de livraison ». Pour un retrait en magasin, indiquez simplement « Retrait en magasin ».</p>
             </div>
         </div>
-        <form method="post" data-ship-form>
+        <form method="post" action="{{ path('admin_order_ship', {id: order.id}) }}" data-ship-form>
             <input type="hidden" name="_token" value="{{ csrf_token(csrfToken) }}">
             <div class="mb-3">
                 <label class="form-label" for="ship-carrier">Transporteur ou mode de remise</label>

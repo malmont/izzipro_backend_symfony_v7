@@ -10,7 +10,7 @@ final class SiteAssistantTools
         'entreprise' => 'Fiche Entreprise (identité, adresse, caisse, SEO)', 'email_configuration' => 'Expéditeur des courriels', 'products' => 'Produits',
         'taxes' => 'Taxes', 'stripe_config' => 'Paiements en ligne (Stripe)', 'pos_stripe' => 'Paiements de caisse (Stripe)', 'carriers' => 'Transporteurs',
         'subscription_plans' => 'Formules d\'abonnement', 'app_keys' => 'Clés d\'activation des applications', 'cash_registers' => 'Postes de caisse',
-        'short_code' => 'Code court de la boutique', 'shipping' => 'Livraison : réglages, cheminement, transporteurs, poids des produits', 'easypost' => 'Clés EasyPost du site', 'google_places' => 'Adresses (Google Places)',
+        'short_code' => 'Code court de la boutique', 'shipping' => 'Livraison : réglages, cheminement, transporteurs', 'product_weights' => 'Poids et dimensions des produits (grille de saisie, estimation par l\'IA)', 'easypost' => 'Clés EasyPost du site', 'google_places' => 'Adresses (Google Places)',
         'ai_credits' => 'Assistant IA : crédits et consignes', 'mv_ai_quotas' => 'Quotas IA Mémoires Vivantes', 'review_settings' => 'Réglages des avis', 'esg_questions' => 'Questions du diagnostic ESG',
     ];
 
@@ -25,6 +25,7 @@ final class SiteAssistantTools
             ['name' => 'get_domain_status', 'description' => 'Lit le domaine propre du site : état, enregistrements DNS attendus, procédure.', 'input_schema' => ['type' => 'object', 'properties' => new \stdClass()]],
             ['name' => 'set_custom_domain', 'description' => 'Propose d\'enregistrer le domaine propre du site (acheté par l\'administrateur chez un registraire). L\'administrateur confirme ; ensuite il crée les enregistrements DNS indiqués.', 'input_schema' => ['type' => 'object', 'properties' => ['domain' => ['type' => 'string'], 'summary' => ['type' => 'string']], 'required' => ['domain', 'summary']]],
             ['name' => 'delegate_to_editor', 'description' => 'Confie une tâche à l\'assistant de l\'éditeur du site (front) : composition des pages, panneau de réglages de l\'éditeur, contenus. Ne fait rien côté serveur : le front exécute avec ses propres outils.', 'input_schema' => ['type' => 'object', 'properties' => ['task' => ['type' => 'string', 'description' => 'consigne en langage courant pour l\'assistant de l\'éditeur'], 'section' => ['type' => 'string', 'enum' => ['pages', 'commerce', 'site', 'landing', 'boutique']], 'feature' => ['type' => 'string']], 'required' => ['task', 'section']]],
+            ['name' => 'estimate_product_dimensions', 'description' => 'Estime par l\'IA le poids et les dimensions des produits à expédier qui n\'ont pas de fiche (25 au plus par appel, un crédit), puis propose de les enregistrer ; l\'administrateur confirme. Rend les propositions avec leur niveau de confiance.', 'input_schema' => ['type' => 'object', 'properties' => ['limit' => ['type' => 'integer', 'description' => 'nombre de produits, 25 au plus']]]],
             ['name' => 'request_feature', 'description' => 'Propose de demander à la plateforme une fonctionnalité non accordée (module ou application). L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['feature' => ['type' => 'string'], 'message' => ['type' => 'string']], 'required' => ['feature']]],
         ];
     }

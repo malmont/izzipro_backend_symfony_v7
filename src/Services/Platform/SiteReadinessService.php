@@ -127,7 +127,7 @@ class SiteReadinessService
             // Livraison, lot 1 (07/11/2026) : poids des produits exigé seulement quand le site estime ou achète des étiquettes (mode own_key ou platform)
             if (in_array($commerce['shippingMode'] ?? 'none', ['own_key', 'platform'], true)) {
                 $withoutWeight = $this->count($pdo, 'product p', 'p.requires_shipping = TRUE AND NOT EXISTS (SELECT 1 FROM product_shipping ps WHERE ps.product_id = p.id AND ps.weight > 0)');
-                $add('boutique.shipping_weights', 'module.boutique', 'Poids et dimensions des produits', sprintf('%d produit(s) à expédier sans poids : indispensable pour estimer un tarif ou acheter une étiquette.', $withoutWeight), $withoutWeight === 0, 'backend', ['type' => 'screen', 'screen' => 'product_shipping']);
+                $add('boutique.shipping_weights', 'module.boutique', 'Poids et dimensions des produits', sprintf('%d produit(s) à expédier sans poids : indispensable pour estimer un tarif ou acheter une étiquette.', $withoutWeight), $withoutWeight === 0, 'backend', ['type' => 'screen', 'screen' => 'product_weights']);
             }
             if (($commerce['subscriptionsEnabled'] ?? false) === true) {
                 $add('boutique.subscriptions', 'module.boutique', 'Abonnements', 'Au moins une formule d\'abonnement active et un transporteur à prix fixe ou gratuit.', $this->count($pdo, 'subscription_plan', 'active = TRUE') > 0 && $this->count($pdo, 'carrier', 'carrier_account_id IS NULL') > 0, 'backend', ['type' => 'screen', 'screen' => 'subscription_plans']);

@@ -56,8 +56,14 @@ class CustomerAccountEraseAdminController extends AbstractController
                 }
                 $error = $result['body']['message'];
             }
+            if ($error !== null) {
+                $this->addFlash('danger', $error);
+
+                return $this->redirect($this->selfUrl($id));
+            }
         }
         $preview = $this->erase->preview($target, $actor);
+        $selfUrl = $this->selfUrl($id);
         $detail = fn (string $controller, int $entityId): string => $this->adminUrls->unsetAll()->setController($controller)->setAction(Action::DETAIL)->setEntityId($entityId)->generateUrl();
 
         return $this->render('admin/users/erase.html.twig', [
@@ -70,5 +76,15 @@ class CustomerAccountEraseAdminController extends AbstractController
             'csrfId' => $csrfId,
             'error' => $error,
         ]);
+    }
+
+    /** URL habillée EasyAdmin de cette page (sinon page blanche après redirection) */
+    private function selfUrl(int $id): string
+    {
+        try {
+            return $this->adminUrls->unsetAll()->setRoute('admin_user_erase', ['id' => $id])->generateUrl();
+        } catch (\Throwable) {
+            return $this->generateUrl('admin_user_erase', ['id' => $id]);
+        }
     }
 }

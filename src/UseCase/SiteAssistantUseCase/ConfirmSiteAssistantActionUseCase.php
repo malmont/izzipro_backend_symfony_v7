@@ -14,7 +14,7 @@ use App\UseCase\SiteFeaturesUseCase\UpdateSiteFeaturesUseCase;
  */
 class ConfirmSiteAssistantActionUseCase
 {
-    public function __construct(private readonly SiteAssistantService $assistant, private readonly UpdateSiteFeaturesUseCase $update, private readonly RequestSiteFeatureUseCase $request, private readonly CustomDomainService $domains, private readonly TenantConnectionManager $tenants)
+    public function __construct(private readonly SiteAssistantService $assistant, private readonly UpdateSiteFeaturesUseCase $update, private readonly RequestSiteFeatureUseCase $request, private readonly CustomDomainService $domains, private readonly TenantConnectionManager $tenants, private readonly ?\App\Services\ShippingService\ProductDimensionsService $dimensions = null)
     {
     }
 
@@ -33,6 +33,8 @@ class ConfirmSiteAssistantActionUseCase
             'set_site_settings' => $this->settings($action['input']['values'] ?? [], $host),
             'request_feature' => $this->request->execute((string) ($action['input']['feature'] ?? ''), $action['input']['message'] ?? null, $user),
             'set_custom_domain' => ['domain' => $this->domains->set($tenant, (string) ($action['input']['domain'] ?? ''), $user)],
+            // poids estimés par l'IA (lot 1 bis, 07/11/2026) : mêmes règles que la grille « Poids et dimensions »
+            'apply_product_dimensions' => $this->dimensions?->save(is_array($action['input']['rows'] ?? null) ? $action['input']['rows'] : [], 'assistant') ?? throw new \OutOfBoundsException('Outil indisponible'),
             default => throw new \OutOfBoundsException('Outil inconnu'),
         };
         $this->assistant->forgetAction($tenant, $id);

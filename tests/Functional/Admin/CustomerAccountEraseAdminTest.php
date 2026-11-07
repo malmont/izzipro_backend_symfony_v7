@@ -57,9 +57,9 @@ class CustomerAccountEraseAdminTest extends WebTestCase
         $token = $crawler->filter('input[name="_token"]')->attr('value');
 
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . "/admin/users/$id/effacer", ['_token' => 'faux', 'confirm' => '1']);
-        $this->assertStringContainsString('Jeton de sécurité invalide', (string) $this->client->getResponse()->getContent());
+        $this->assertStringContainsString('Jeton de sécurité invalide', $this->page());
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . "/admin/users/$id/effacer", ['_token' => $token]);
-        $this->assertStringContainsString('Cochez la case', (string) $this->client->getResponse()->getContent());
+        $this->assertStringContainsString('Cochez la case', $this->page());
         $this->assertNull($db->fetchOne('SELECT deleted_at FROM "user" WHERE id = ?', [$id]), 'rien n\'est effacé sans confirmation');
 
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . "/admin/users/$id/effacer", ['_token' => $token, 'confirm' => '1']);
@@ -89,7 +89,7 @@ class CustomerAccountEraseAdminTest extends WebTestCase
         $this->client->request('GET', $this->crudUrl(['crudAction' => 'detail', 'entityId' => $id]));
         $this->assertStringNotContainsString('admin_user_erase', (string) $this->client->getResponse()->getContent());
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . "/admin/users/$id/effacer", ['_token' => $token, 'confirm' => '1']);
-        $this->assertStringContainsString('déjà été effacé', (string) $this->client->getResponse()->getContent());
+        $this->assertStringContainsString('déjà été effacé', $this->page());
     }
 
     public function testASubscriptionOrAnUpcomingReservationBlocksWithALinkToSettleIt(): void
@@ -112,7 +112,7 @@ class CustomerAccountEraseAdminTest extends WebTestCase
         // Formulaire forgé (jeton valable pris sur la page d'un autre compte) : refusé, rien n'est effacé
         $token = $this->tokenFromAnErasablePage();
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . "/admin/users/$id/effacer", ['_token' => $token, 'confirm' => '1']);
-        $this->assertStringContainsString('Réservations', (string) $this->client->getResponse()->getContent());
+        $this->assertStringContainsString('Réservations', $this->page());
         $this->assertNull($db->fetchOne('SELECT deleted_at FROM "user" WHERE id = ?', [$id]));
 
         // Réservation annulée depuis le back-office : l'effacement redevient possible
@@ -150,11 +150,11 @@ class CustomerAccountEraseAdminTest extends WebTestCase
             $this->client->request('GET', $this->crudUrl(['crudAction' => 'detail', 'entityId' => $id]));
             $this->assertStringNotContainsString('admin_user_erase', (string) $this->client->getResponse()->getContent(), 'pas d\'action pour un compte interne');
             $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . "/admin/users/$id/effacer", ['_token' => $token, 'confirm' => '1']);
-            $this->assertStringContainsString('Seul un compte client du site peut être effacé ici', html_entity_decode((string) $this->client->getResponse()->getContent()));
+            $this->assertStringContainsString('Seul un compte client du site peut être effacé ici', $this->page());
             $this->assertNull($db->fetchOne('SELECT deleted_at FROM "user" WHERE id = ?', [$id]));
         }
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . "/admin/users/{$admin->getId()}/effacer", ['_token' => $token, 'confirm' => '1']);
-        $this->assertStringContainsString('votre propre compte', (string) $this->client->getResponse()->getContent());
+        $this->assertStringContainsString('votre propre compte', $this->page());
 
         // La suppression physique d'un compte client est refusée même par une URL forgée
         [, $customerId] = $this->customer();
@@ -179,6 +179,17 @@ class CustomerAccountEraseAdminTest extends WebTestCase
         $this->assertSame(200, $this->client->getResponse()->getStatusCode());
 
         return $crawler->filter('input[name="_token"]')->attr('value');
+    }
+
+
+    /** Suit la redirection habillée EasyAdmin d'un POST refusé et rend la page (message flash compris) */
+    private function page(): string
+    {
+        if ($this->client->getResponse()->isRedirect()) {
+            $this->client->followRedirect();
+        }
+
+        return html_entity_decode((string) $this->client->getResponse()->getContent());
     }
 
     private function crudUrl(array $params): string

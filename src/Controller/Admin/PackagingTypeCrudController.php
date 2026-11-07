@@ -18,6 +18,12 @@ class PackagingTypeCrudController extends BaseTenantCrudController
         return PackagingType::class;
     }
 
+    public function configureCrud(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud $crud): \EasyCorp\Bundle\EasyAdminBundle\Config\Crud
+    {
+        return parent::configureCrud($crud)->setEntityLabelInSingular('Gabarit d\'emballage')->setEntityLabelInPlural('Gabarits d\'emballage')
+            ->setHelp('index', 'Vos cartons et enveloppes : le calcul des colis choisit le plus petit gabarit qui contient les produits. Quatre gabarits courants sont fournis d\'office ; remplacez-les par vos propres cartons pour des tarifs justes.');
+    }
+
     public function configureFields(string $pageName): iterable
     {
         return [

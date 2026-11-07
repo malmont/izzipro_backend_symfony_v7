@@ -28,18 +28,24 @@ class EasyPostConfigurationCrudController extends BaseTenantCrudController
             ->setPermission(Action::DELETE, 'ROLE_SUPER_ADMIN');
     }
 
+    public function configureCrud(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud $crud): \EasyCorp\Bundle\EasyAdminBundle\Config\Crud
+    {
+        return parent::configureCrud($crud)->setEntityLabelInSingular('Clés EasyPost')->setEntityLabelInPlural('Clés EasyPost')
+            ->setHelp('index', 'Votre compte EasyPost (easypost.com) : tarifs en direct au paiement et étiquettes facturées sur votre compte. Une seule ligne par site ; l\'environnement utilisé (test ou réel) se choisit dans la page Livraison. Sans compte, vos clients choisissent un transporteur à prix fixe et vous expédiez vous-même.');
+    }
+
     public function configureFields(string $pageName): iterable
     {
 
         return [
             IdField::new('id')->hideOnForm(),
-            TextField::new('easypostApiKeySandbox', 'Sandbox API Key')
+            TextField::new('easypostApiKeySandbox', 'Clé de test (sandbox)')
                 ->setFormType(PasswordType::class)
                 ->setRequired(false)
                 ->setFormTypeOption('empty_data', '')
                 ->setTemplatePath('admin/field/masked_secret.html.twig') // index et détail : jamais la valeur, même dans title
                 ->setHelp('Clé utilisée pour l\'environnement de test. Laissez vide lors d\'une modification pour conserver la clé actuelle.'),
-            TextField::new('easypostApiKeyProd', 'Production API Key')
+            TextField::new('easypostApiKeyProd', 'Clé réelle (production)')
                 ->setFormType(PasswordType::class)
                 ->setRequired(false)
                 ->setFormTypeOption('empty_data', '')

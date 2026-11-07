@@ -1094,6 +1094,34 @@ réglages, transporteurs, compteurs, liens vers les écrans.
 Tests : `tests/Functional/Boutique/ShippingLot1Test.php`. À venir : lot 2 (clé EasyPost de la plateforme, solde prépayé, « Acheter
 l'étiquette » depuis la commande, suivi automatique).
 
+### Livraison, lot 1 bis (07/11/2026) : poids et dimensions sans effort
+
+- **Valeurs effectives d'un produit** (`Services/ShippingService/ProductShippingResolver`) : sa fiche `product_shipping` si elle porte un
+  poids, sinon les **valeurs par défaut de sa classe d'expédition** (`shipping_class.default_weight_kg`, `default_length_cm`,
+  `default_width_cm`, `default_height_cm` ; migration `Version20261116100000`, script `scripts/migrate_all_v2_shipping_class_defaults.sh`,
+  valeurs posées pour Standard 0,5 kg, Fragile 1 kg, Volumineux 8 kg, Lourd 15 kg), sinon le poids par défaut du site
+  (`shipping.default_weight_kg`) avec des dimensions types (20 × 15 × 10 cm). Les colis, tarifs, résumés et achats d'étiquettes
+  (`UseCase/ShippingUseCase/*`) passent par le résolveur : **un produit sans fiche ne fait plus échouer le panier** (avant : erreur
+  « aucune configuration d'expédition »). L'objet de repli est transitoire, jamais persisté.
+- **Grille de saisie rapide** `GET`/`POST /admin/livraison/poids` (`?tous=1` pour tous les produits, sinon ceux sans poids ;
+  `Services/ShippingService/ProductDimensionsService`) : une ligne par produit à expédier (photo, catégories, source des valeurs),
+  enregistrement en un envoi, tout ou rien ; une ligne sans poids est ignorée ; dimensions absentes = celles de la classe choisie, sinon
+  types. Trace `content_audit_log` (ressource `product_shipping`, action `bulk_grid` ou `bulk_assistant`).
+- **Estimation par l'IA** (`Services/ShippingService/ShippingDimensionsEstimator`, modèle Sonnet 5.5, outil forcé `propose_dimensions`,
+  25 produits et 8 photos au plus par appel, **un crédit IA du site** par appel, remboursé si l'IA échoue, aucun crédit pour le
+  super administrateur) : à partir du nom, de la description, des catégories et de la photo, poids, dimensions (remises dans l'ordre
+  longueur ≥ largeur ≥ hauteur), classe et niveau de confiance. Bouton « Laisser l'IA estimer » de la grille : les propositions
+  préremplissent les lignes (surbrillance, confiance, note) **sans rien enregistrer** ; l'administrateur corrige puis enregistre.
+- **Assistant** : outil `estimate_product_dimensions` (limite ≤ 25) → propositions + action `apply_product_dimensions` confirmée par
+  `POST /api/site/assistant/actions/{id}/confirm` (mêmes règles que la grille) ; lien vers l'écran `product_weights`.
+- Écrans : `product_weights` (grille) dans la carte de Mon site, de l'assistant et du cheminement (`boutique.shipping_weights`) ; fiches
+  une par une : écran `product_shipping`. Les écrans Expéditions, Colis et Étiquettes sont en **consultation seule** (ils naissent de
+  l'achat d'une étiquette) ; libellés en français et devise du site sur tout le menu Livraison.
+- Pages du back-office hors CRUD (Livraison, grille, expédition d'une commande, effacement d'un compte) : habillage EasyAdmin quand elles
+  sont ouvertes depuis le menu ou un lien habillé, redirection habillée après chaque POST (sinon page nue).
+
+Tests : `tests/Functional/Boutique/ShippingWeightsTest.php`.
+
 ### Commandes du client
 
 - `GET /api/ordersuser` (connecté) : commandes de l'utilisateur connecté, jamais servies par le cache (lot 4 de l'invalidation ciblée,

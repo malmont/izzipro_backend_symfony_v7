@@ -1,8 +1,13 @@
-{% extends 'base_admin.html.twig' %}
+{# Habillage EasyAdmin depuis le menu ou un lien habillé (ea() non nul), sinon page nue #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
 
 {% block title %}Livraison{% endblock %}
+{% block content_title %}Livraison{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
 
-{% block body %}
+{% block body %}<div class="py-3">{{ block('panel') }}</div>{% endblock %}
+
+{% block panel %}
 {% set s = overview.settings %}{% set c = overview.counts %}
 <div class="container-fluid" style="max-width: 980px">
     <h1 class="h3 mb-1">Livraison</h1>
@@ -82,7 +87,8 @@
                 <div class="card-body">
                     <h2 class="h5">Produits et emballages</h2>
                     <p class="mb-2">{{ c.productsToShip }} produit(s) à expédier, {{ c.productsWithoutWeight }} sans poids · {{ c.packagingTypes }} gabarit(s), {{ c.shippingClasses }} classe(s).</p>
-                    <a class="btn btn-sm btn-outline-primary" href="{{ screens.product_shipping }}">Poids et dimensions</a>
+                    <a class="btn btn-sm btn-primary" href="{{ screens.product_weights }}">Saisir les poids (grille, estimation par l'IA)</a>
+                    <a class="btn btn-sm btn-outline-primary" href="{{ screens.product_shipping }}">Fiches une par une</a>
                     <a class="btn btn-sm btn-outline-secondary" href="{{ screens.packaging_types }}">Gabarits</a>
                     <a class="btn btn-sm btn-outline-secondary" href="{{ screens.shipping_classes }}">Classes</a>
                 </div>

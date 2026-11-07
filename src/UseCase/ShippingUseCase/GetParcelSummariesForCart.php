@@ -13,7 +13,8 @@ class GetParcelSummariesForCart
     // MODIFICATION 1 : Le constructeur est refactorisé
     public function __construct(
         private TenantEntityManagerProvider $emProvider,
-        private ShippingService           $shippingService
+        private ShippingService           $shippingService,
+        private readonly ?\App\Services\ShippingService\ProductShippingResolver $resolver = null
     ) {}
 
     /**
@@ -30,13 +31,8 @@ class GetParcelSummariesForCart
 
         $items = [];
         foreach ($cartItems as $ci) {
-            $ps = $shippingRepo->findOneBy(['product' => $ci->productId]);
-            if (! $ps) {
-                throw new LogicException(
-                    "Aucune configuration d'expédition trouvée pour le produit ID {$ci->productId}. "
-                  . "Merci de créer une ProductShipping pour ce produit."
-                );
-            }
+            // Fiche poids du produit, sinon valeurs de sa classe, sinon poids par défaut du site (livraison, lot 1 bis, 07/11/2026)
+            $ps = $this->resolver->forProductId((int) $ci->productId);
 
             for ($i = 0; $i < $ci->quantity; $i++) {
                 $items[] = $ps;

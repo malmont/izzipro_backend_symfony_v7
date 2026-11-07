@@ -260,8 +260,9 @@ Quatre clés de portée `site` dans le registre, groupe `commerce`, écran `ship
 `own_key`, « lot 2 » en `platform`), `shipping.easypost_environment` (`test` | `live`), `shipping.default_weight_kg` (détail :
 `productsWithoutWeight`), `shipping.free_above` (cents, nullable). `shipping.easypost` (service) indique l'environnement lu. Écrans
 ajoutés à la carte de Mon site et de l'assistant : `shipping` (page Livraison : réglages, cheminement, transporteurs, poids des produits),
-`product_shipping` (poids et dimensions). Cheminement : étape `boutique.carrier` → écran `shipping` ; `boutique.shipping_weights` quand
-le mode estime ou achète des étiquettes. La page Livraison a son propre cheminement (`ShippingSetupService::overview()['steps']`), le
+`product_shipping` (fiches une par une), `product_weights` (grille de saisie rapide et estimation par l'IA, lot 1 bis). Cheminement :
+étape `boutique.carrier` → écran `shipping` ; `boutique.shipping_weights` → écran `product_weights` quand le mode estime ou achète des
+étiquettes. Assistant : outil `estimate_product_dimensions` et action confirmée `apply_product_dimensions` (un crédit par estimation). La page Livraison a son propre cheminement (`ShippingSetupService::overview()['steps']`), le
 modèle des cheminements par partie complexe demandés par le propriétaire (à décliner : Stripe, taxes, courriel, avis). Détail et
 routes : `docs/boutique.md`, « Livraison, lot 1 ». Référentiels de départ (classes, gabarits, types de fournisseur, retrait) :
 `docs/contenu-exemple.md`.

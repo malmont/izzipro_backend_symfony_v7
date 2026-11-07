@@ -45,6 +45,8 @@ class SiteAssistantService
         private readonly CustomDomainService $domains,
         private readonly CacheInterface $cache,
         private readonly LoggerInterface $logger,
+        private readonly ?\App\Services\ShippingService\ProductDimensionsService $dimensions = null, // poids des produits (lot 1 bis, 07/11/2026)
+        private readonly ?\App\Services\ShippingService\ShippingDimensionsEstimator $estimator = null,
     ) {
     }
 
@@ -143,7 +145,7 @@ class SiteAssistantService
             $results = [];
             foreach ($toolUses as $use) {
                 $input = json_decode(json_encode($use->input ?? new \stdClass()), true) ?: [];
-                [$result, $action, $link] = $this->runTool((string) ($use->name ?? ''), $input, $registry, $readiness, $tenantCode);
+                [$result, $action, $link] = $this->runTool((string) ($use->name ?? ''), $input, $registry, $readiness, $tenantCode, $fullAccess);
                 if ($action !== null) {
                     $actions[] = $action;
                 }
@@ -168,9 +170,31 @@ class SiteAssistantService
      * Exécute un outil immédiat ou enregistre une proposition.
      * @return array{0: mixed, 1: ?array<string, mixed>, 2: ?array{label: string, screen: string}} [résultat pour l'IA, action en attente, lien]
      */
-    private function runTool(string $name, array $input, array $registry, array $readiness, string $tenantCode): array
+    private function runTool(string $name, array $input, array $registry, array $readiness, string $tenantCode, bool $fullAccess = false): array
     {
         switch ($name) {
+            case 'estimate_product_dimensions':
+                if ($this->dimensions === null || $this->estimator === null) {
+                    return [['error' => 'estimation indisponible'], null, null];
+                }
+                $limit = max(1, min((int) ($input['limit'] ?? \App\Services\ShippingService\ShippingDimensionsEstimator::MAX_PRODUCTS), \App\Services\ShippingService\ShippingDimensionsEstimator::MAX_PRODUCTS));
+                $rows = $this->dimensions->rows(true, null, $limit);
+                if ($rows === []) {
+                    return [['proposals' => [], 'note' => 'Tous les produits à expédier ont déjà une fiche poids.'], null, null];
+                }
+                try {
+                    $estimated = $this->estimator->estimate($rows, $this->dimensions->classes(), null, 'fr', !$fullAccess);
+                } catch (LandingAiException $e) {
+                    return [['error' => $e->getMessage()], null, null];
+                }
+                $names = array_column($rows, 'name', 'productId');
+                $proposals = array_map(fn ($p) => $p + ['name' => $names[$p['productId']] ?? ''], $estimated['proposals']);
+                if ($proposals === []) {
+                    return [['proposals' => [], 'note' => 'Aucune proposition exploitable.'], null, null];
+                }
+                $action = $this->remember($tenantCode, 'apply_product_dimensions', ['rows' => array_map(fn ($p) => ['productId' => $p['productId'], 'weightKg' => $p['weightKg'], 'lengthCm' => $p['lengthCm'], 'widthCm' => $p['widthCm'], 'heightCm' => $p['heightCm'], 'shippingClassId' => $p['shippingClassId']], $proposals)], sprintf('Enregistrer le poids et les dimensions estimés de %d produit(s)', count($proposals)));
+
+                return [['proposed' => true, 'actionId' => $action['id'], 'proposals' => $proposals, 'note' => 'Présente les propositions (poids, dimensions, confiance) et demande confirmation ; l\'administrateur peut aussi les corriger dans la grille « Poids et dimensions ».'], $action, ['label' => SiteAssistantTools::SCREENS['product_weights'], 'screen' => 'product_weights']];
             case 'get_settings':
                 return [$this->compactRegistry($registry), null, null];
             case 'get_readiness':
@@ -273,6 +297,7 @@ Ce que tu peux faire :
 - expliquer un réglage, un prérequis ou une étape du cheminement « Préparer mon site » ;
 - proposer de modifier les réglages du site (outil set_site_settings : seulement les clés de portée « site » du registre, avec la valeur exacte) ; l'administrateur confirme avant toute écriture ;
 - proposer de demander une fonctionnalité non accordée (outil request_feature) ; {$this->shopHint($shop)}
+- estimer par l'IA le poids et les dimensions des produits sans fiche (outil estimate_product_dimensions, un crédit par appel) et proposer de les enregistrer ; l'administrateur confirme ;
 - indiquer l'écran du back-office où agir (outil open_screen) quand l'étape se fait là-bas (produits, taxes, Stripe, transporteurs, clés d'activation, postes de caisse, formules d'abonnement, expéditeur des courriels) ;
 - confier à l'assistant de l'éditeur du site (front) ce qui se fait là-bas (outil delegate_to_editor) : composer ou modifier les pages, choisir un modèle de site, régler depuis le panneau de l'éditeur ; tu ne composes jamais une page toi-même ;
 - accompagner l'ajout d'un domaine propre : get_domain_status donne l'état, les enregistrements DNS attendus et la procédure (achat chez un registraire, enregistrement ici, DNS, propagation, certificat automatique) ; set_custom_domain propose l'enregistrement, l'administrateur confirme, puis il crée les enregistrements DNS et vérifie.

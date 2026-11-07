@@ -48,8 +48,14 @@ class OrderShipmentAdminController extends AbstractController
 
                     return $this->redirect($this->orderUrl($id));
                 }
-                $error = $result['body']['message'];
-                $errors = $result['body']['errors'] ?? [];
+                $this->addFlash('danger', $result['body']['message'] . (isset($result['body']['errors']) ? ' (' . implode(' ; ', array_map(fn ($e) => $e['path'] . ' : ' . $e['message'], $result['body']['errors'])) . ')' : ''));
+
+                return $this->redirect($this->selfUrl($id));
+            }
+            if ($error !== null) {
+                $this->addFlash('danger', $error);
+
+                return $this->redirect($this->selfUrl($id));
             }
         }
         $blocker = $this->rules->shipBlocker($order);
@@ -78,6 +84,16 @@ class OrderShipmentAdminController extends AbstractController
         }
 
         return $this->redirect($this->orderUrl($id));
+    }
+
+    /** URL habillée EasyAdmin de la page d'expédition (sinon page blanche après redirection) */
+    private function selfUrl(int $id): string
+    {
+        try {
+            return $this->adminUrls->unsetAll()->setRoute('admin_order_ship', ['id' => $id])->generateUrl();
+        } catch (\Throwable) {
+            return $this->generateUrl('admin_order_ship', ['id' => $id]);
+        }
     }
 
     private function orderUrl(int $id): string

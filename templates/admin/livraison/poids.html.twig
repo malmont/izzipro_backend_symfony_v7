@@ -1,0 +1,56 @@
+{# Habillage EasyAdmin depuis le menu ou un lien habillé (ea() non nul), sinon page nue #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Poids et dimensions des produits{% endblock %}
+{% block content_title %}Poids et dimensions des produits{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+
+{% block body %}<div class="py-3">{{ block('panel') }}</div>{% endblock %}
+
+{% block panel %}
+<div class="container-fluid" style="max-width: 1180px">
+    <h1 class="h3 mb-1">Poids et dimensions des produits</h1>
+    <p class="text-muted">Une ligne par produit à expédier{% if not all %} sans fiche poids{% endif %}. Saisissez au moins le poids ; les dimensions absentes prennent celles de la classe choisie, sinon des valeurs types. Laissez l'IA proposer, vérifiez, corrigez, puis enregistrez : rien n'est écrit avant « Enregistrer ».
+        {% if all %}<a href="{{ gridUrl }}">Voir seulement les produits sans poids</a>{% else %}<a href="{{ gridAllUrl }}">Voir tous les produits</a>{% endif %} · <a href="{{ backUrl }}">Retour à Livraison</a></p>
+    {% for label, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}{% endfor %}
+    {% if error %}<div class="alert alert-danger" data-poids-error>{{ error }}</div>{% endif %}
+
+    {% if rows is empty %}
+        <div class="alert alert-success" data-poids-empty>Tous les produits à expédier ont une fiche poids. <a href="{{ gridAllUrl }}">Voir tous les produits</a>.</div>
+    {% else %}
+        <form method="post" action="{{ path('admin_livraison_poids') }}" class="mb-3" data-poids-estimate>
+            <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+            <input type="hidden" name="action" value="estimate">
+            {% if all %}<input type="hidden" name="tous" value="1">{% endif %}
+            <button type="submit" class="btn btn-outline-primary">✨ Laisser l'IA estimer les {{ rows|length > maxEstimate ? maxEstimate ~ ' premiers' : rows|length }} produit(s)</button>
+            <span class="text-muted small ms-2">Un crédit IA du site par estimation ; à partir du nom, de la description, des catégories et de la photo. Les propositions se préremplissent en surbrillance.</span>
+        </form>
+        <form method="post" action="{{ path('admin_livraison_poids') }}" data-poids-form>
+            <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+            <input type="hidden" name="action" value="save">
+            {% if all %}<input type="hidden" name="tous" value="1">{% endif %}
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Produit</th><th style="width:9rem">Poids (kg)</th><th style="width:7rem">Long. (cm)</th><th style="width:7rem">Larg. (cm)</th><th style="width:7rem">Haut. (cm)</th><th style="width:12rem">Classe</th><th>Source / proposition</th></tr></thead>
+                    <tbody>
+                    {% for r in rows %}
+                        {% set p = proposals[r.productId] ?? null %}
+                        <tr data-product-row="{{ r.productId }}" class="{{ p ? 'table-warning' : '' }}">
+                            <td>{% if r.imageUrl %}<img src="{{ r.imageUrl }}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:4px" class="me-2">{% endif %}<strong>{{ r.name }}</strong>{% if r.categories is not empty %}<div class="small text-muted">{{ r.categories|join(', ') }}</div>{% endif %}</td>
+                            <td><input class="form-control form-control-sm" name="rows[{{ r.productId }}][weightKg]" value="{{ p ? p.weightKg : (r.weightKg ?? '') }}" inputmode="decimal" placeholder="0,5"></td>
+                            <td><input class="form-control form-control-sm" name="rows[{{ r.productId }}][lengthCm]" value="{{ p ? p.lengthCm : (r.lengthCm ?? '') }}" inputmode="decimal"></td>
+                            <td><input class="form-control form-control-sm" name="rows[{{ r.productId }}][widthCm]" value="{{ p ? p.widthCm : (r.widthCm ?? '') }}" inputmode="decimal"></td>
+                            <td><input class="form-control form-control-sm" name="rows[{{ r.productId }}][heightCm]" value="{{ p ? p.heightCm : (r.heightCm ?? '') }}" inputmode="decimal"></td>
+                            <td><select class="form-select form-select-sm" name="rows[{{ r.productId }}][shippingClassId]"><option value="">—</option>{% for c in classes %}<option value="{{ c.id }}" {{ (p and p.shippingClassId == c.id) or (not p and r.shippingClassId == c.id) ? 'selected' : '' }}>{{ c.name }}</option>{% endfor %}</select></td>
+                            <td class="small">{% if p %}<span class="badge bg-{{ p.confidence == 'high' ? 'success' : (p.confidence == 'medium' ? 'warning text-dark' : 'secondary') }}">IA : confiance {{ {high: 'haute', medium: 'moyenne', low: 'faible'}[p.confidence] }}</span> {{ p.note }}{% else %}{{ {product: 'fiche du produit', class: 'valeurs de la classe', site: 'poids par défaut du site'}[r.source] }}{% endif %}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <button type="submit" class="btn btn-primary">Enregistrer les poids saisis</button>
+            <a class="btn btn-link" href="{{ backUrl }}">Annuler</a>
+        </form>
+    {% endif %}
+</div>
+{% endblock %}

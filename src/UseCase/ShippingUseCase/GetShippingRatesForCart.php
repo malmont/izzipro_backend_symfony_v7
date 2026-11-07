@@ -16,7 +16,8 @@ class GetShippingRatesForCart
     public function __construct(
         private TenantEntityManagerProvider $emProvider,
         private ShippingService           $shippingService,
-        private ShipmentAddressBuilder    $builder
+        private ShipmentAddressBuilder    $builder,
+        private readonly ?\App\Services\ShippingService\ProductShippingResolver $resolver = null
     ) {}
 
     /**
@@ -39,13 +40,8 @@ class GetShippingRatesForCart
         // 1. Récupérer et valider ProductShipping pour chaque item
         $items = [];
         foreach ($cartItems as $ci) {
-            $ps = $shippingRepo->findOneBy(['product' => $ci->productId]);
-            if (! $ps) {
-                throw new LogicException(
-                    "Aucune configuration d'expédition trouvée pour le produit ID {$ci->productId}. "
-                  . "Merci de créer une ProductShipping pour ce produit."
-                );
-            }
+            // Fiche poids du produit, sinon valeurs de sa classe, sinon poids par défaut du site (livraison, lot 1 bis, 07/11/2026)
+            $ps = $this->resolver->forProductId((int) $ci->productId);
             for ($i = 0; $i < $ci->quantity; $i++) {
                 $items[] = $ps;
             }

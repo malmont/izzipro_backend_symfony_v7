@@ -28,6 +28,12 @@ class GooglePlacesConfigCrudController extends BaseTenantCrudController
             ->setPermission(Action::DELETE, 'ROLE_SUPER_ADMIN');
     }
 
+    public function configureCrud(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud $crud): \EasyCorp\Bundle\EasyAdminBundle\Config\Crud
+    {
+        return parent::configureCrud($crud)->setEntityLabelInSingular('Clés Google Places')->setEntityLabelInPlural('Adresses (Google Places)')
+            ->setHelp('index', 'Clé d\'un projet Google Cloud avec l\'API Places : complète les adresses saisies par vos clients et affiche vos avis Google. Sans clé, l\'adresse se saisit à la main. Le texte d\'adresse tapé par le client est envoyé à Google : à mentionner dans votre politique de confidentialité.');
+    }
+
     public function configureFields(string $pageName): iterable
     {
 

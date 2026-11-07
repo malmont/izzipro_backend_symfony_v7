@@ -24,6 +24,11 @@ class ShippingClassCrudController extends BaseTenantCrudController
                 ->setRequired(true),
             TextareaField::new('description', 'Description')
                 ->setRequired(false),
+            // Valeurs héritées par les produits de la classe sans fiche poids (lot 1 bis, 07/11/2026)
+            \EasyCorp\Bundle\EasyAdminBundle\Field\NumberField::new('defaultWeightKg', 'Poids par défaut (kg)')->setNumDecimals(3)->setRequired(false)->setHelp('Un produit de cette classe sans fiche poids hérite cette valeur.'),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\NumberField::new('defaultLengthCm', 'Longueur par défaut (cm)')->setNumDecimals(1)->setRequired(false)->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\NumberField::new('defaultWidthCm', 'Largeur par défaut (cm)')->setNumDecimals(1)->setRequired(false)->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\NumberField::new('defaultHeightCm', 'Hauteur par défaut (cm)')->setNumDecimals(1)->setRequired(false)->hideOnIndex(),
         ];
     }
 }
