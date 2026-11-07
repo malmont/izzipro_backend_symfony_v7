@@ -1,0 +1,36 @@
+{% extends 'base.email.html.twig' %}
+
+{# Commande expédiée par le marchand (livraison, lot 1, 07/11/2026) : langue du site (`locale` fr|en, domaine `emails`), lien de suivi quand il existe #}
+{% block title %}{{ 'order_shipped.subject'|trans({'%reference%': reference}, 'emails', locale)|raw }}{% endblock %}
+
+{% block body %}
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <tr>
+        <td align="center">
+            <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden;">
+                <tr>
+                    <td align="center" style="background: #1e293b; padding: 28px 20px;">
+                        <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700;">{{ 'order_shipped.title'|trans({'%reference%': reference}, 'emails', locale)|raw }}</h1>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 30px; font-size: 15px; color: #1e293b;">
+                        {% set shippedAtText = locale == 'fr' ? shippedAt|date('d/m/Y') : shippedAt|format_date('medium', locale=intlLocale) %}
+                        <p style="margin-top: 0;">{{ 'order_shipped.greeting'|trans({'%name%': firstname|default('')|e}, 'emails', locale)|raw }}</p>
+                        <p>{{ 'order_shipped.body'|trans({'%reference%': reference|e, '%carrier%': carrier|e, '%date%': shippedAtText}, 'emails', locale)|raw }}</p>
+                        {% if trackingNumber %}
+                            <p>{{ 'order_shipped.tracking'|trans({'%number%': trackingNumber|e}, 'emails', locale)|raw }}</p>
+                            {% if trackingUrl %}
+                                <p style="text-align: center; margin: 24px 0;"><a href="{{ trackingUrl }}" style="background: #1e293b; color: #ffffff; text-decoration: none; padding: 12px 22px; border-radius: 8px; display: inline-block;">{{ 'order_shipped.track_button'|trans({}, 'emails', locale)|raw }}</a></p>
+                            {% endif %}
+                        {% else %}
+                            <p>{{ 'order_shipped.no_tracking'|trans({}, 'emails', locale)|raw }}</p>
+                        {% endif %}
+                        <p>{{ 'order_shipped.thanks'|trans({}, 'emails', locale)|raw }}</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+{% endblock %}

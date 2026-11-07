@@ -11,11 +11,13 @@ class CarrierRepository extends EntityRepository
   
     public function findAllByLocale(string $locale): array
     {
+        // Un transporteur sans traduction dans la langue demandée reste proposé avec son nom de base (07/11/2026 : avant, il disparaissait
+        // de la liste publique, comme le retrait en magasin fourni d'office) ; la jointure porte la condition, pas le filtre
         return $this->createQueryBuilder('c')
-            ->leftJoin('c.translations', 't')
+            ->leftJoin('c.translations', 't', 'WITH', 't.language = :locale')
             ->addSelect('t')
-            ->andWhere('t.language = :locale') 
             ->setParameter('locale', $locale)
+            ->orderBy('c.id', 'ASC')
             ->getQuery()
             ->getResult();
     }

@@ -1,0 +1,93 @@
+{% extends 'base_admin.html.twig' %}
+
+{% block title %}Livraison{% endblock %}
+
+{% block body %}
+{% set s = overview.settings %}{% set c = overview.counts %}
+<div class="container-fluid" style="max-width: 980px">
+    <h1 class="h3 mb-1">Livraison</h1>
+    <p class="text-muted">Comment vos commandes sont remises à vos clients. Sans rien régler, vos clients choisissent un transporteur à prix fixe ou le retrait en magasin, et vous expédiez vous-même en saisissant le suivi sur la commande (« Marquer expédiée »). Les poids et gabarits servent à estimer un tarif ; une clé EasyPost permet d'acheter les étiquettes.</p>
+    {% for label, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}{% endfor %}
+
+    <div class="card mb-4" data-livraison-cheminement>
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h2 class="h5 mb-0">Préparer la livraison</h2>
+                <span class="badge bg-{{ overview.level == 'manual' ? 'secondary' : (overview.level == 'estimation' ? 'info' : 'success') }}">{{ {manual: 'Expédition par vos soins', estimation: 'Estimation prête', labels: 'Étiquettes prêtes', platform: 'Étiquettes par la plateforme (à venir)'}[overview.level] }}</span>
+            </div>
+            <ol class="mb-0">
+                {% for st in overview.steps %}
+                    <li class="mb-2">
+                        {% if st.status == 'done' %}<span class="text-success">✔</span>{% elseif st.status == 'todo' %}<span class="text-danger">✘</span>{% elseif st.status == 'pending' %}<span class="text-warning">⏳</span>{% else %}<span class="text-muted">○</span>{% endif %}
+                        <strong>{{ st.title }}</strong>{% if st.status == 'optional' %} <span class="badge bg-light text-dark">facultatif</span>{% endif %}
+                        <div class="small text-muted">{{ st.description }}{% if st.url and st.screen != 'shipping' %} <a href="{{ st.url }}">→ ouvrir</a>{% endif %}</div>
+                    </li>
+                {% endfor %}
+            </ol>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="h5">Réglages d'expédition</h2>
+                    <form method="post" action="{{ path('admin_livraison_regler') }}" data-livraison-form>
+                        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+                        <div class="mb-3">
+                            <label class="form-label" for="lv-mode">Mode d'expédition</label>
+                            <select class="form-select" id="lv-mode" name="mode">
+                                <option value="none" {{ s.mode == 'none' ? 'selected' : '' }}>Estimation seule : transporteurs à prix fixe et retrait, j'expédie moi-même</option>
+                                <option value="own_key" {{ s.mode == 'own_key' ? 'selected' : '' }}>Mon compte EasyPost : tarifs en direct et étiquettes facturées par EasyPost</option>
+                                <option value="platform" {{ s.mode == 'platform' ? 'selected' : '' }}>Par la plateforme : étiquettes payées avec un solde prépayé (bientôt)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="lv-env">Environnement EasyPost</label>
+                            <select class="form-select" id="lv-env" name="easypost_environment">
+                                <option value="test" {{ s.easypostEnvironment == 'test' ? 'selected' : '' }}>Test (aucune étiquette réelle, aucune facture)</option>
+                                <option value="live" {{ s.easypostEnvironment == 'live' ? 'selected' : '' }}>Réel (chaque étiquette est facturée)</option>
+                            </select>
+                            <div class="form-text">Clés du site : test {{ overview.easypostKeys.test ? 'présente' : 'absente' }}, réel {{ overview.easypostKeys.live ? 'présente' : 'absente' }} (<a href="{{ screens.easypost }}">clés EasyPost</a>).</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label" for="lv-weight">Poids par défaut d'un produit (kg)</label>
+                                <input class="form-control" id="lv-weight" name="default_weight_kg" value="{{ s.defaultWeightKg }}" inputmode="decimal">
+                                <div class="form-text">Pour les produits sans fiche poids et dimensions.</div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label" for="lv-free">Livraison offerte à partir de ({{ currency }})</label>
+                                <input class="form-control" id="lv-free" name="free_above" value="{{ s.freeShippingAbove is not null ? (s.freeShippingAbove / 100)|number_format(2, '.', '') : '' }}" inputmode="decimal" placeholder="vide : jamais">
+                                <div class="form-text">Montant des articles, avant taxes et livraison.</div>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Enregistrer</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h2 class="h5">Modes de remise proposés</h2>
+                    {% if overview.carriers is empty %}<p class="text-danger mb-2">Aucun transporteur : vos clients ne peuvent pas choisir de livraison.</p>{% endif %}
+                    <ul class="list-unstyled mb-2" data-livraison-carriers>
+                        {% for ca in overview.carriers %}<li>{{ {fixed: '🚚', pickup: '🏪', easypost: '🧾'}[ca.kind] }} {{ ca.name }} · {{ ca.kind == 'pickup' ? 'retrait, gratuit' : (ca.kind == 'easypost' ? 'tarif EasyPost' : (ca.price > 0 ? (ca.price / 100)|number_format(2, ',', ' ') ~ ' ' ~ currency : 'gratuit')) }}{% if ca.estimatedDays %} · {{ ca.estimatedDays }}{% endif %}</li>{% endfor %}
+                    </ul>
+                    <a class="btn btn-sm btn-outline-primary" href="{{ screens.carriers }}">Gérer les transporteurs</a>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="h5">Produits et emballages</h2>
+                    <p class="mb-2">{{ c.productsToShip }} produit(s) à expédier, {{ c.productsWithoutWeight }} sans poids · {{ c.packagingTypes }} gabarit(s), {{ c.shippingClasses }} classe(s).</p>
+                    <a class="btn btn-sm btn-outline-primary" href="{{ screens.product_shipping }}">Poids et dimensions</a>
+                    <a class="btn btn-sm btn-outline-secondary" href="{{ screens.packaging_types }}">Gabarits</a>
+                    <a class="btn btn-sm btn-outline-secondary" href="{{ screens.shipping_classes }}">Classes</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

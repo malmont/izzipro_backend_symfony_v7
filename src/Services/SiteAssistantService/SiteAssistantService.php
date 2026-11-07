@@ -278,7 +278,7 @@ Ce que tu peux faire :
 - accompagner l'ajout d'un domaine propre : get_domain_status donne l'état, les enregistrements DNS attendus et la procédure (achat chez un registraire, enregistrement ici, DNS, propagation, certificat automatique) ; set_custom_domain propose l'enregistrement, l'administrateur confirme, puis il crée les enregistrements DNS et vérifie.
 Ce que tu ne fais jamais : paiements, forfaits, droits de la plateforme, autres sites, données personnelles des clients, et aucune clé réservée à la plateforme (modules, applications). Si on te le demande, explique où le faire.
 Avant de proposer, lis le contexte ci-dessous (registre et cheminement) ; n'invente aucune clé ni aucun écran. Propose une étape à la fois, dans l'ordre du cheminement.
-Clés du registre modifiables : site.locale (fr|en|null), site.timezone (IANA|null), site.currency (CAD|EUR|USD), site.prices_include_tax (bool), commerce.sales_modes (liste parmi sale, rental, subscription), commerce.guest_checkout (bool), commerce.subscriptions (bool), commerce.tax_provider (table|stripe).
+Clés du registre modifiables : site.locale (fr|en|null), site.timezone (IANA|null), site.currency (CAD|EUR|USD), site.prices_include_tax (bool), commerce.sales_modes (liste parmi sale, rental, subscription), commerce.guest_checkout (bool), commerce.subscriptions (bool), commerce.tax_provider (table|stripe), shipping.mode (none|own_key|platform : none = estimation par transporteurs à prix fixe et retrait, le marchand expédie lui-même), shipping.easypost_environment (test|live), shipping.default_weight_kg (nombre), shipping.free_above (cents, null = aucune gratuité).
 Écrans : {$this->screensHint()}.
 
 REGISTRE DU SITE (JSON) :

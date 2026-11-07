@@ -112,7 +112,18 @@ class OrderCrudController extends BaseTenantCrudController
 
     public function configureActions(\EasyCorp\Bundle\EasyAdminBundle\Config\Actions $actions): \EasyCorp\Bundle\EasyAdminBundle\Config\Actions
     {
-        return $this->lockCashRecordActions(parent::configureActions($actions));
+        // « J'expédie moi-même » (livraison, lot 1, 07/11/2026) : page d'expédition, puis « Marquer livrée » ; jamais sur une vente au comptoir
+        $ship = \EasyCorp\Bundle\EasyAdminBundle\Config\Action::new('shipOrder', 'Marquer expédiée', 'fas fa-truck')
+            ->linkToRoute('admin_order_ship', fn (Order $order) => ['id' => $order->getId()])
+            ->displayIf(fn ($order) => $order instanceof Order && !self::isCounterSale($order) && in_array((int) ($order->getStatus()?->getId() ?? 0), \App\Services\OrderService\OrderShipmentService::SHIPPABLE_STATUSES, true));
+        $deliver = \EasyCorp\Bundle\EasyAdminBundle\Config\Action::new('deliverOrder', 'Marquer livrée', 'fas fa-box-open')
+            ->linkToRoute('admin_order_ship', fn (Order $order) => ['id' => $order->getId()])
+            ->displayIf(fn ($order) => $order instanceof Order && !self::isCounterSale($order) && (int) ($order->getStatus()?->getId() ?? 0) === \App\Services\OrderService\OrderShipmentService::STATUS_SHIPPED);
+        $actions = parent::configureActions($actions)
+            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, $ship)->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $ship)
+            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, $deliver)->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $deliver);
+
+        return $this->lockCashRecordActions($actions);
     }
 
     public function deleteEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void

@@ -88,6 +88,19 @@ class Order
     #[ORM\Column(nullable: true)]
     private ?float $shippingCost = null;
 
+    // Expédition manuelle par le marchand (livraison, lot 1, 07/11/2026) : « j'expédie moi-même » ; une étiquette EasyPost garde shippingOrder
+    #[ORM\Column(name: 'shipped_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $shippedAt = null;
+
+    #[ORM\Column(name: 'tracking_carrier', length: 100, nullable: true)]
+    private ?string $trackingCarrier = null;
+
+    #[ORM\Column(name: 'tracking_number', length: 100, nullable: true)]
+    private ?string $trackingNumber = null;
+
+    #[ORM\Column(name: 'tracking_url', length: 500, nullable: true)]
+    private ?string $trackingUrl = null;
+
     // Arrondi de la part payée en espèces (cents, signé ; vente en caisse, 19/10/2026) : somme des paiements = total + arrondi
     #[ORM\Column(options: ['default' => 0])]
     private int $cashRounding = 0;
@@ -508,6 +521,15 @@ class Order
     {
         return $this->shippingCost;
     }
+
+    public function getShippedAt(): ?\DateTimeImmutable { return $this->shippedAt; }
+    public function setShippedAt(?\DateTimeImmutable $shippedAt): self { $this->shippedAt = $shippedAt; return $this; }
+    public function getTrackingCarrier(): ?string { return $this->trackingCarrier; }
+    public function setTrackingCarrier(?string $trackingCarrier): self { $this->trackingCarrier = $trackingCarrier !== null ? mb_substr(trim($trackingCarrier), 0, 100) : null; return $this; }
+    public function getTrackingNumber(): ?string { return $this->trackingNumber; }
+    public function setTrackingNumber(?string $trackingNumber): self { $this->trackingNumber = $trackingNumber !== null ? mb_substr(trim($trackingNumber), 0, 100) : null; return $this; }
+    public function getTrackingUrl(): ?string { return $this->trackingUrl; }
+    public function setTrackingUrl(?string $trackingUrl): self { $this->trackingUrl = $trackingUrl !== null ? mb_substr(trim($trackingUrl), 0, 500) : null; return $this; }
 
     public function setShippingCost(?float $shippingCost): self
     {

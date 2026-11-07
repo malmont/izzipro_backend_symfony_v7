@@ -123,7 +123,12 @@ class SiteReadinessService
             $stripeOk = $this->tenants->isTenantInternal($code) || trim((string) ($mode === StripeAccountResolver::LIVE ? ($stripeRow['live_account_id'] ?? '') : ($stripeRow['account_id'] ?? ''))) !== '';
             $add('boutique.stripe', 'module.boutique', 'Paiements en ligne (Stripe)', 'Compte Stripe connecté du site pour encaisser les commandes.', $stripeOk, 'backend', ['type' => 'screen', 'screen' => 'stripe_config']);
             $add('boutique.product', 'module.boutique', 'Premier produit', 'Créez au moins un produit (vente, location ou abonnement).', $this->count($pdo, 'product') > 0, 'backend', ['type' => 'screen', 'screen' => 'products']);
-            $add('boutique.carrier', 'module.boutique', 'Livraison', 'Au moins un transporteur (prix fixe, gratuit ou EasyPost) pour expédier les commandes.', $this->count($pdo, 'carrier') > 0, 'backend', ['type' => 'screen', 'screen' => 'carriers']);
+            $add('boutique.carrier', 'module.boutique', 'Livraison', 'Au moins un mode de remise (transporteur à prix fixe, retrait en magasin ou EasyPost) ; vous expédiez vous-même en saisissant le suivi sur la commande. Réglages et cheminement : page Livraison.', $this->count($pdo, 'carrier') > 0, 'backend', ['type' => 'screen', 'screen' => 'shipping']);
+            // Livraison, lot 1 (07/11/2026) : poids des produits exigé seulement quand le site estime ou achète des étiquettes (mode own_key ou platform)
+            if (in_array($commerce['shippingMode'] ?? 'none', ['own_key', 'platform'], true)) {
+                $withoutWeight = $this->count($pdo, 'product p', 'p.requires_shipping = TRUE AND NOT EXISTS (SELECT 1 FROM product_shipping ps WHERE ps.product_id = p.id AND ps.weight > 0)');
+                $add('boutique.shipping_weights', 'module.boutique', 'Poids et dimensions des produits', sprintf('%d produit(s) à expédier sans poids : indispensable pour estimer un tarif ou acheter une étiquette.', $withoutWeight), $withoutWeight === 0, 'backend', ['type' => 'screen', 'screen' => 'product_shipping']);
+            }
             if (($commerce['subscriptionsEnabled'] ?? false) === true) {
                 $add('boutique.subscriptions', 'module.boutique', 'Abonnements', 'Au moins une formule d\'abonnement active et un transporteur à prix fixe ou gratuit.', $this->count($pdo, 'subscription_plan', 'active = TRUE') > 0 && $this->count($pdo, 'carrier', 'carrier_account_id IS NULL') > 0, 'backend', ['type' => 'screen', 'screen' => 'subscription_plans']);
             }

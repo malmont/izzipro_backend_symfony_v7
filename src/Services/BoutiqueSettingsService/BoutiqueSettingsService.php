@@ -70,6 +70,22 @@ class BoutiqueSettingsService
         return $this->commerceSetting('guestCheckout') !== false;
     }
 
+    /** Livraison, lot 1 (07/11/2026) : réglages d'expédition du site avec leurs valeurs par défaut (voir BoutiqueConfigurationValidator) @return array{mode: string, easypostEnvironment: string, defaultWeightKg: float, freeShippingAbove: ?int} */
+    public function shippingSettings(): array
+    {
+        $mode = $this->commerceSetting('shippingMode');
+        $env = $this->commerceSetting('easypostEnvironment');
+        $weight = $this->commerceSetting('defaultWeightKg');
+        $free = $this->commerceSetting('freeShippingAbove');
+
+        return [
+            'mode' => in_array($mode, BoutiqueConfigurationValidator::SHIPPING_MODES, true) ? $mode : 'none',
+            'easypostEnvironment' => $env === 'live' ? 'live' : 'test',
+            'defaultWeightKg' => is_numeric($weight) && (float) $weight > 0 ? (float) $weight : 0.5,
+            'freeShippingAbove' => is_int($free) && $free >= 0 ? $free : null,
+        ];
+    }
+
     /** Une clé de « commerce » des réglages publiés (guestCheckout, currency, subscriptionsEnabled, taxProvider…), null si absente */
     public function commerceSetting(string $key): mixed
     {

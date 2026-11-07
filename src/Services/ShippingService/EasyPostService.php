@@ -19,11 +19,23 @@ class EasyPostService
     public function __construct(
         TenantEntityManagerProvider $emProvider,
         string $appEnv,
-        LoggerInterface $logger
+        LoggerInterface $logger,
+        private readonly ?\App\Services\BoutiqueSettingsService\BoutiqueSettingsService $settings = null
     ) {
         $this->emProvider = $emProvider;
         $this->appEnv = $appEnv;
         $this->logger = $logger;
+    }
+
+    /** `test` ou `live` : réglage du site, sinon l'environnement Symfony (`prod` = live) */
+    public function environment(): string
+    {
+        $setting = $this->settings?->shippingSettings()['easypostEnvironment'] ?? null;
+        if ($setting !== null) {
+            return $setting;
+        }
+
+        return $this->appEnv === 'prod' ? 'live' : 'test';
     }
 
     protected function getTenantClient(): EasyPostClient
@@ -38,7 +50,9 @@ class EasyPostService
 
         $apiKey = null;
 
-        if ($this->appEnv === 'prod') {
+        // Livraison, lot 1 (07/11/2026) : l'environnement EasyPost est un réglage du site (commerce.easypostEnvironment, test par défaut),
+        // plus l'environnement Symfony : le serveur tourne en dev et la clé de production n'était jamais utilisée
+        if ($this->environment() === 'live') {
             try {
                 $apiKey = $config->getEasypostApiKeyProd();
                 if (!$apiKey) {
@@ -74,7 +88,7 @@ class EasyPostService
             return false;
         }
         try {
-            $key = $this->appEnv === 'prod' ? $config->getEasypostApiKeyProd() : $config->getEasypostApiKeySandbox();
+            $key = $this->environment() === 'live' ? $config->getEasypostApiKeyProd() : $config->getEasypostApiKeySandbox();
         } catch (RuntimeException) {
             return false;
         }

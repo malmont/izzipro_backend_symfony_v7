@@ -112,11 +112,16 @@ final class OrderPresenter
         };
     }
 
-    /** @return array{carrier: ?string, trackingNumber: ?string, trackingUrl: ?string}|null null tant qu'aucune étiquette n'existe */
+    /** @return array{carrier: ?string, trackingNumber: ?string, trackingUrl: ?string}|null null tant qu'aucune étiquette ni expédition manuelle n'existe */
     public function shipment(Order $order, string $locale): ?array
     {
         $shippingOrder = $order->getShippingOrder();
         if ($shippingOrder === null) {
+            // Expédition manuelle par le marchand (livraison, lot 1, 07/11/2026) : transporteur et suivi saisis dans le back-office
+            if ($order->getShippedAt() !== null || $order->getTrackingNumber() !== null) {
+                return ['carrier' => $order->getTrackingCarrier(), 'trackingNumber' => $order->getTrackingNumber(), 'trackingUrl' => $order->getTrackingUrl()];
+            }
+
             return null;
         }
         foreach ($shippingOrder->getParcels() as $parcel) {

@@ -116,3 +116,13 @@ entitlement:
     next_expiring_1_noshop: 'After that date the feature will be disabled on your site; your data is kept. Write to us to continue.'
     next_expired_noshop: 'To reactivate it, write to us.'
     next_suspended_noshop: 'To restore it, write to us.'
+order_shipped:
+    subject: 'Your order no. %reference% is on its way'
+    title: 'Order no. %reference% shipped'
+    greeting: 'Hello %name%,'
+    body: 'Your order no. <strong>%reference%</strong> was shipped on %date% by <strong>%carrier%</strong>.'
+    tracking: 'Tracking number: <strong>%number%</strong>'
+    track_button: 'Track my parcel'
+    no_tracking: 'This delivery method does not provide a tracking number; we will let you know if anything changes.'
+    thanks: 'Thank you for your trust.'
+

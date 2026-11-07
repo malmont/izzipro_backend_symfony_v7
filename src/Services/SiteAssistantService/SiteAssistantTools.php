@@ -10,7 +10,7 @@ final class SiteAssistantTools
         'entreprise' => 'Fiche Entreprise (identité, adresse, caisse, SEO)', 'email_configuration' => 'Expéditeur des courriels', 'products' => 'Produits',
         'taxes' => 'Taxes', 'stripe_config' => 'Paiements en ligne (Stripe)', 'pos_stripe' => 'Paiements de caisse (Stripe)', 'carriers' => 'Transporteurs',
         'subscription_plans' => 'Formules d\'abonnement', 'app_keys' => 'Clés d\'activation des applications', 'cash_registers' => 'Postes de caisse',
-        'short_code' => 'Code court de la boutique', 'easypost' => 'Tarifs de livraison (EasyPost)', 'google_places' => 'Adresses (Google Places)',
+        'short_code' => 'Code court de la boutique', 'shipping' => 'Livraison : réglages, cheminement, transporteurs, poids des produits', 'easypost' => 'Clés EasyPost du site', 'google_places' => 'Adresses (Google Places)',
         'ai_credits' => 'Assistant IA : crédits et consignes', 'mv_ai_quotas' => 'Quotas IA Mémoires Vivantes', 'review_settings' => 'Réglages des avis', 'esg_questions' => 'Questions du diagnostic ESG',
     ];
 

@@ -1044,8 +1044,53 @@ module tel qu'il existe ; aucune de ces routes n'est en production avec de vrais
 
 ### Transporteurs
 
-- `GET /api/Carrier` (public, `CarrierControleur`) : transporteurs du site avec leurs traductions, pour le choix de livraison.
+- `GET /api/Carrier` (public, `CarrierControleur`) : transporteurs du site avec leurs traductions, pour le choix de livraison. Depuis le
+  07/11/2026 : `kind` (`fixed` | `pickup` | `easypost`) et `isPickup` ; un transporteur **sans traduction** dans la langue demandée reste
+  proposé avec son nom de base (avant, il disparaissait de la liste : `CarrierRepository::findAllByLocale`, jointure conditionnelle).
 - `GET /api/carrier/statistics` (administrateur) : statistiques par transporteur du tableau de bord.
+
+### Livraison, lot 1 (07/11/2026) : réglages, estimation, « j'expédie moi-même »
+
+Trois niveaux voulus par le propriétaire : **sans rien** (transporteurs à prix fixe et retrait en magasin, le marchand expédie lui-même et
+saisit le suivi), **estimation** (poids et dimensions des produits, gabarits d'emballage et classes d'expédition), **étiquettes** (clé
+EasyPost du site, ou, au lot 2, étiquettes achetées par la plateforme avec un solde prépayé). Page du back-office **« Livraison »**
+(`GET /admin/livraison`, `POST /admin/livraison/regler`, `Controller/Admin/ShippingConsoleAdminController`, menu Livraison) : cheminement
+(`Services/ShippingService/ShippingSetupService` : modes de remise, retrait, gratuité, poids, gabarits, clé EasyPost, niveau atteint),
+réglages, transporteurs, compteurs, liens vers les écrans.
+
+- **Réglages** (clés `commerce` des réglages de la boutique, validées par `BoutiqueConfigurationValidator`, lues par
+  `BoutiqueSettingsService::shippingSettings()`), exposées dans le registre (`GET`/`PUT /api/site/features`, panneau Commerce de
+  l'éditeur, assistant) : `shipping.mode` (`none` défaut | `own_key` | `platform`), `shipping.easypost_environment` (`test` défaut |
+  `live`), `shipping.default_weight_kg` (0,5 défaut), `shipping.free_above` (cents, `null` = jamais). **L'environnement EasyPost est
+  un réglage du site**, plus l'environnement Symfony (`EasyPostService::environment()` ; le serveur tourne en `dev`, la clé de
+  production n'était jamais utilisée).
+- **Transporteurs** : colonne `carrier.kind` (`fixed`, `pickup`, `easypost` ; migration `Version20261115100000`, script
+  `scripts/migrate_all_v2_shipping_lot1.sh`). Retrait en magasin : prix forcé à 0, aucun compte EasyPost ; CRUD « Transporteurs et
+  retrait » (nature, devise du site). Produit : `product.requires_shipping` (vrai par défaut ; case « À expédier » de la fiche produit :
+  service, numérique ou retiré sur place → aucun colis ni étiquette).
+- **Devis** (`POST /api/cart/quote`, `CartQuoteCalculator::shipping`) : retrait en magasin → `shipping: 0` ; livraison offerte quand les
+  lignes atteignent `freeShippingAbove` sur un transporteur payant (`carrier.freeShippingApplied` vrai, `carrier.kind` rendu) ; sinon
+  prix fixe ou tarif EasyPost comme avant.
+- **« Marquer expédiée »** : action sur la liste et la fiche Commandes (commande payée, en cours ou en préparation, jamais une vente au
+  comptoir) → page `GET`/`POST /admin/orders/{id}/expedier` (`Controller/Admin/OrderShipmentAdminController`, CSRF) : transporteur ou mode
+  de remise, numéro de suivi (lien de suivi déduit pour Postes Canada, Purolator, UPS, FedEx, USPS, DHL ; sinon lien saisi), courriel
+  au client dans la langue du site (`emails/order_shipped.html.twig`, clés `order_shipped.*`). `UseCase/OrderUseCase/AdminOrderShipmentUseCase`
+  → `Services/OrderService/OrderShipmentService` : statut **5 « En cours de livraison »**, `order.shipped_at`, `tracking_carrier`,
+  `tracking_number`, `tracking_url` ; refus `COUNTER_SALE`, `ORDER_CANCELLED`, `ORDER_UNPAID`, `ALREADY_SHIPPED`. Puis **« Marquer
+  livrée »** (`POST /admin/orders/{id}/livree`, depuis la même page) → statut **6**. Trace `content_audit_log` (ressource `order`,
+  actions `ship` et `deliver`).
+- **Lecture par le client et les applications** : `GET /api/orders/{id}`, `/api/ordersuser`, `/api/orders` rendent `shipment:
+  {carrier, trackingNumber, trackingUrl}` aussi pour une expédition manuelle (`OrderPresenter::shipment`, repli sur les colonnes de la
+  commande quand aucune étiquette EasyPost n'existe) : aucun changement de forme.
+- **Cheminement du site** (`GET /api/site/readiness`) : l'étape `boutique.carrier` mène à l'écran `shipping` (page Livraison) ; en mode
+  `own_key` ou `platform`, étape `boutique.shipping_weights` (produits à expédier sans poids, écran `product_shipping`).
+- **Référentiels fournis d'office** (`scripts/seed_all_v2_shipping_referentials.sh`, idempotent) : classes d'expédition (Standard, Fragile,
+  Volumineux, Lourd), gabarits d'emballage (enveloppe matelassée, petite, moyenne et grande boîte), types de fournisseur, et, sur les
+  seules bases modèles et d'essai (`gmasuite`, `db_demo`, `db_mv_test_booktypes`), le transporteur « Retrait en magasin » avec ses
+  traductions fr/en (jamais ajouté à un site client : un transporteur est visible de ses clients aussitôt).
+
+Tests : `tests/Functional/Boutique/ShippingLot1Test.php`. À venir : lot 2 (clé EasyPost de la plateforme, solde prépayé, « Acheter
+l'étiquette » depuis la commande, suivi automatique).
 
 ### Commandes du client
 

@@ -195,8 +195,36 @@ class SiteFeatureStateService
                 $status = !($flags['pos'] ?? true) ? 'off' : ($this->stripeReady($mode) ? 'ready' : 'incomplete');
                 break;
             case 'shipping.easypost':
-                $value = $this->present(fn () => $this->emProvider->getEntityManager()->getRepository(EasyPostConfiguration::class)->findOneBy([]), ['getEasypostApiKeyProd', 'getEasypostApiKeySandbox']);
+                $env = $this->boutique->shippingSettings()['easypostEnvironment'];
+                $value = $this->present(fn () => $this->emProvider->getEntityManager()->getRepository(EasyPostConfiguration::class)->findOneBy([]), [$env === 'live' ? 'getEasypostApiKeyProd' : 'getEasypostApiKeySandbox']);
+                $details = ['environment' => $env];
                 $status = $value ? 'ready' : 'off';
+                break;
+            case 'shipping.mode':
+                $shipping = $this->boutique->shippingSettings();
+                $value = $shipping['mode'];
+                $prerequisites[] = $this->prereq('module.boutique', 'Module Boutique activé', $boutiqueOn);
+                $prerequisites[] = $this->prereq('carrier.any', 'Au moins un transporteur ou le retrait en magasin', $this->count('carrier') > 0);
+                if ($value === 'own_key') {
+                    $env = $shipping['easypostEnvironment'];
+                    $prerequisites[] = $this->prereq('shipping.easypost', 'Clé EasyPost du site pour l\'environnement ' . $env, $this->present(fn () => $this->emProvider->getEntityManager()->getRepository(EasyPostConfiguration::class)->findOneBy([]), [$env === 'live' ? 'getEasypostApiKeyProd' : 'getEasypostApiKeySandbox']));
+                } elseif ($value === 'platform') {
+                    $prerequisites[] = $this->prereq('shipping.platform', 'Étiquettes par la plateforme (solde prépayé, lot 2 à venir)', false);
+                }
+                $status = $this->allOk($prerequisites) ? 'ready' : 'incomplete';
+                break;
+            case 'shipping.easypost_environment':
+                $value = $this->boutique->shippingSettings()['easypostEnvironment'];
+                $status = 'ready';
+                break;
+            case 'shipping.default_weight_kg':
+                $value = $this->boutique->shippingSettings()['defaultWeightKg'];
+                $details = ['productsWithoutWeight' => $this->count('product', 'requires_shipping = TRUE AND id NOT IN (SELECT product_id FROM product_shipping WHERE product_id IS NOT NULL)')];
+                $status = 'ready';
+                break;
+            case 'shipping.free_above':
+                $value = $this->boutique->shippingSettings()['freeShippingAbove'];
+                $status = $value === null ? 'off' : 'ready';
                 break;
             case 'maps.google_places':
                 $value = $this->present(fn () => $this->emProvider->getEntityManager()->getRepository(GooglePlacesConfig::class)->findOneBy([]), ['getGoogleApiKeyProd', 'getGoogleApiKeyTest']);

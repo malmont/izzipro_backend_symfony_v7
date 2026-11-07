@@ -42,6 +42,11 @@ final class FeatureCatalog
         'commerce.guest_checkout' => ['label' => 'Paiement sans compte', 'group' => 'commerce', 'scope' => self::SCOPE_SITE, 'type' => 'boolean', 'storage' => 'commerce.guestCheckout', 'href' => 'boutique_settings'],
         'commerce.subscriptions' => ['label' => 'Abonnements (paiement récurrent)', 'group' => 'commerce', 'scope' => self::SCOPE_SITE, 'type' => 'boolean', 'storage' => 'commerce.subscriptionsEnabled', 'href' => 'subscription_plans'],
         'commerce.tax_provider' => ['label' => 'Calcul des taxes', 'group' => 'commerce', 'scope' => self::SCOPE_SITE, 'type' => 'enum', 'options' => ['table', 'stripe'], 'storage' => 'commerce.taxProvider', 'href' => 'taxes'],
+        // Livraison, lot 1 (07/11/2026) : réglables par l'administrateur du site, écran « Livraison » (cheminement et réglages)
+        'shipping.mode' => ['label' => 'Expédition des commandes', 'group' => 'commerce', 'scope' => self::SCOPE_SITE, 'type' => 'enum', 'options' => ['none', 'own_key', 'platform'], 'storage' => 'commerce.shippingMode', 'href' => 'shipping'],
+        'shipping.easypost_environment' => ['label' => 'Environnement EasyPost (test ou réel)', 'group' => 'commerce', 'scope' => self::SCOPE_SITE, 'type' => 'enum', 'options' => ['test', 'live'], 'storage' => 'commerce.easypostEnvironment', 'href' => 'shipping'],
+        'shipping.default_weight_kg' => ['label' => 'Poids par défaut d\'un produit (kg)', 'group' => 'commerce', 'scope' => self::SCOPE_SITE, 'type' => 'number', 'storage' => 'commerce.defaultWeightKg', 'href' => 'shipping'],
+        'shipping.free_above' => ['label' => 'Livraison offerte à partir de (cents)', 'group' => 'commerce', 'scope' => self::SCOPE_SITE, 'type' => 'integer', 'nullable' => true, 'storage' => 'commerce.freeShippingAbove', 'href' => 'shipping'],
         // Services et quotas (lecture)
         'stripe.online' => ['label' => 'Paiements en ligne (Stripe)', 'group' => 'services', 'scope' => self::SCOPE_SERVICE, 'type' => 'info', 'href' => 'stripe_config'],
         'stripe.pos' => ['label' => 'Paiements de caisse (Stripe)', 'group' => 'services', 'scope' => self::SCOPE_SERVICE, 'type' => 'info', 'href' => 'pos_stripe'],

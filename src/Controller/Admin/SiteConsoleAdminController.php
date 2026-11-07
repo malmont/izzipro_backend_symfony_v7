@@ -40,7 +40,7 @@ class SiteConsoleAdminController extends AbstractController
     private const SCREENS = [
         'entreprise' => ['crud' => EntrepriseCrudController::class], 'app_keys' => ['route' => 'admin_app_keys'], 'boutique_settings' => ['crud' => BoutiqueSettingCrudController::class],
         'subscription_plans' => ['crud' => SubscriptionPlanCrudController::class], 'taxes' => ['crud' => TaxCrudController::class], 'stripe_config' => ['crud' => StripeConfigCrudController::class],
-        'pos_stripe' => ['route' => 'admin_pos_stripe'], 'easypost' => ['crud' => EasyPostConfigurationCrudController::class], 'google_places' => ['crud' => GooglePlacesConfigCrudController::class],
+        'pos_stripe' => ['route' => 'admin_pos_stripe'], 'shipping' => ['route' => 'admin_livraison'], 'product_shipping' => ['crud' => ProductShippingCrudController::class], 'easypost' => ['crud' => EasyPostConfigurationCrudController::class], 'google_places' => ['crud' => GooglePlacesConfigCrudController::class],
         'email_configuration' => ['crud' => EmailConfigurationCrudController::class], 'ai_credits' => ['crud' => AiCreditSettingCrudController::class], 'mv_ai_quotas' => ['route' => 'admin_mv_ai_quotas'],
         'review_settings' => ['crud' => ReviewSettingCrudController::class],
         'carriers' => ['crud' => CarrierCrudController::class], 'products' => ['crud' => ProductCrudController::class], 'cash_registers' => ['crud' => CashRegisterCrudController::class],

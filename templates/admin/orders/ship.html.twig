@@ -1,0 +1,65 @@
+{% extends 'base_admin.html.twig' %}
+
+{% block title %}Expédier la commande {{ order.reference }}{% endblock %}
+
+{% block body %}
+<div class="container-fluid" style="max-width: 860px">
+    <h1 class="mb-3">Expédier la commande {{ order.reference }}</h1>
+    {% for message in app.flashes('danger') %}<div class="alert alert-danger">{{ message }}</div>{% endfor %}
+    {% if error %}<div class="alert alert-danger" data-ship-error>{{ error }}{% if errors is not empty %}<ul class="mb-0">{% for e in errors %}<li>{{ e.path }} : {{ e.message }}</li>{% endfor %}</ul>{% endif %}</div>{% endif %}
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <p class="mb-1"><strong>Client :</strong> {{ order.userId ? (order.userId.firstname ~ ' ' ~ order.userId.lastname ~ ' <' ~ order.userId.email ~ '>') : 'invité' }}</p>
+            <p class="mb-1"><strong>Statut actuel :</strong> {{ order.status ? order.status.name : '-' }} · <strong>Transporteur choisi :</strong> {{ order.carrier ? order.carrier.name : 'aucun' }}</p>
+            {% if order.shippingAdress %}<p class="mb-0 text-muted"><strong>Adresse :</strong> {{ order.shippingAdress.fullname }}, {{ order.shippingAdress.address }}, {{ order.shippingAdress.city }} {{ order.shippingAdress.codepostal }} {{ order.shippingAdress.country }}</p>{% endif %}
+        </div>
+    </div>
+
+    {% if deliverable %}
+        <div class="card mb-3" data-deliver-form>
+            <div class="card-body">
+                <h2 class="h6">Commande expédiée{% if order.shippedAt %} le {{ order.shippedAt|date('d/m/Y') }}{% endif %}{% if order.trackingCarrier %} par {{ order.trackingCarrier }}{% endif %}</h2>
+                {% if order.trackingNumber %}<p class="mb-2">Suivi : {% if order.trackingUrl %}<a href="{{ order.trackingUrl }}" target="_blank" rel="noopener">{{ order.trackingNumber }}</a>{% else %}{{ order.trackingNumber }}{% endif %}</p>{% endif %}
+                <form method="post" action="{{ path('admin_order_deliver', {id: order.id}) }}" class="d-inline">
+                    <input type="hidden" name="_token" value="{{ csrf_token(deliverCsrfToken) }}">
+                    <button type="submit" class="btn btn-success">Marquer livrée</button>
+                </form>
+                <a class="btn btn-link" href="{{ backUrl }}">Retour à la commande</a>
+            </div>
+        </div>
+    {% elseif blockerMessage %}
+        <div class="alert alert-warning" data-ship-blocked>{{ blockerMessage }}</div>
+        <a class="btn btn-secondary" href="{{ backUrl }}">Retour à la commande</a>
+    {% else %}
+        <div class="card mb-3">
+            <div class="card-body">
+                <h2 class="h6">J'expédie moi-même</h2>
+                <p class="text-muted mb-0">Vous déposez le colis vous-même (comptoir postal, transporteur, livraison locale). Saisissez le transporteur et, si vous l'avez, le numéro de suivi : le client reçoit un courriel avec le lien de suivi et la commande passe « En cours de livraison ». Pour un retrait en magasin, indiquez simplement « Retrait en magasin ».</p>
+            </div>
+        </div>
+        <form method="post" data-ship-form>
+            <input type="hidden" name="_token" value="{{ csrf_token(csrfToken) }}">
+            <div class="mb-3">
+                <label class="form-label" for="ship-carrier">Transporteur ou mode de remise</label>
+                <input class="form-control" id="ship-carrier" name="carrier" value="{{ input.carrier }}" maxlength="100" required placeholder="Postes Canada, Purolator, UPS, livraison locale, retrait en magasin…">
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="ship-tracking">Numéro de suivi (facultatif)</label>
+                <input class="form-control" id="ship-tracking" name="trackingNumber" value="{{ input.trackingNumber }}" maxlength="100">
+                {% if previewUrl %}<div class="form-text">Lien de suivi déduit : <a href="{{ previewUrl }}" target="_blank" rel="noopener">{{ previewUrl }}</a></div>{% else %}<div class="form-text">Postes Canada, Purolator, UPS, FedEx, USPS et DHL : le lien de suivi est déduit du numéro.</div>{% endif %}
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="ship-url">Lien de suivi (facultatif, pour un autre transporteur)</label>
+                <input class="form-control" id="ship-url" name="trackingUrl" value="{{ input.trackingUrl }}" maxlength="500" placeholder="https://…">
+            </div>
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="notify" value="1" id="ship-notify" {{ input.notify ? 'checked' : '' }}>
+                <label class="form-check-label" for="ship-notify">Prévenir le client par courriel (dans la langue du site)</label>
+            </div>
+            <button type="submit" class="btn btn-primary">Marquer expédiée</button>
+            <a class="btn btn-link" href="{{ backUrl }}">Annuler</a>
+        </form>
+    {% endif %}
+</div>
+{% endblock %}

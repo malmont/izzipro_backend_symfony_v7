@@ -49,6 +49,15 @@ class Carrier implements TranslatableInterface
     #[ORM\Column(name: 'estimated_days', length: 30, nullable: true)]
     private ?string $estimatedDays = null;
 
+    /** Nature du transporteur (livraison, lot 1, 07/11/2026) : prix fixe, retrait en magasin (toujours 0 $, aucune adresse d'expédition) ou tarif EasyPost */
+    public const KIND_FIXED = 'fixed';
+    public const KIND_PICKUP = 'pickup';
+    public const KIND_EASYPOST = 'easypost';
+    public const KINDS = [self::KIND_FIXED, self::KIND_PICKUP, self::KIND_EASYPOST];
+
+    #[ORM\Column(length: 20, options: ['default' => self::KIND_FIXED])]
+    private string $kind = self::KIND_FIXED;
+
     /**
      * @var Collection<int, CarrierTranslation>
      */
@@ -204,6 +213,24 @@ class Carrier implements TranslatableInterface
     public function isFree(): bool
     {
         return (float) $this->price <= 0.0;
+    }
+
+    public function getKind(): string
+    {
+        return in_array($this->kind, self::KINDS, true) ? $this->kind : self::KIND_FIXED;
+    }
+
+    public function setKind(string $kind): static
+    {
+        $this->kind = in_array($kind, self::KINDS, true) ? $kind : self::KIND_FIXED;
+
+        return $this;
+    }
+
+    /** Retrait en magasin : jamais de frais, pas d'étiquette */
+    public function isPickup(): bool
+    {
+        return $this->getKind() === self::KIND_PICKUP;
     }
 
     /**

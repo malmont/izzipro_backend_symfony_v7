@@ -566,15 +566,17 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Équipes', 'fa fa-users', Team::class);
 
         yield MenuItem::section('Livraison');
-        yield MenuItem::linkToCrud('EasyPost Configuration', 'fa fa-cogs', EasyPostConfiguration::class);
-        yield MenuItem::linkToCrud('Shipping Classes', 'fas fa-tags', ShippingClass::class);
-        yield MenuItem::linkToCrud('ProductShipping', 'fas fa-truck', ProductShipping::class);
-        yield MenuItem::linkToCrud('PackagingType', 'fas fa-box', PackagingType::class);
-        yield MenuItem::linkToCrud('GooglePlacesConfig', 'fa fa-map-marker', GooglePlacesConfig::class)
+        yield MenuItem::linkToRoute('Livraison : réglages et cheminement', 'fas fa-truck-loading', 'admin_livraison'); // lot 1 (07/11/2026)
+        yield MenuItem::linkToCrud('Transporteurs et retrait', 'fas fa-truck', Carrier::class);
+        yield MenuItem::linkToCrud('Poids et dimensions des produits', 'fas fa-weight-hanging', ProductShipping::class);
+        yield MenuItem::linkToCrud('Gabarits d\'emballage', 'fas fa-box', PackagingType::class);
+        yield MenuItem::linkToCrud('Classes d\'expédition', 'fas fa-tags', ShippingClass::class);
+        yield MenuItem::linkToCrud('Clés EasyPost', 'fa fa-cogs', EasyPostConfiguration::class);
+        yield MenuItem::linkToCrud('Adresses (Google Places)', 'fa fa-map-marker', GooglePlacesConfig::class)
             ->setController(GooglePlacesConfigCrudController::class);
-        yield MenuItem::linkToCrud('Shipping Orders', 'fas fa-shipping-fast', ShippingOrder::class);
-        yield MenuItem::linkToCrud('Parcels',         'fas fa-box',          Parcel::class);
-        yield MenuItem::linkToCrud('Shipping Labels', 'fas fa-tag',          ShippingLabel::class);
+        yield MenuItem::linkToCrud('Expéditions (étiquettes achetées)', 'fas fa-shipping-fast', ShippingOrder::class);
+        yield MenuItem::linkToCrud('Colis', 'fas fa-box', Parcel::class);
+        yield MenuItem::linkToCrud('Étiquettes', 'fas fa-tag', ShippingLabel::class);
 
         yield MenuItem::section('IIZIMANAGER');
         yield MenuItem::linkToRoute('Exports comptables (caisse)', 'fas fa-file-csv', 'admin_pos_exports'); // F14 (29/10/2026)
@@ -626,7 +628,6 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Order', 'fas fa-shopping-bag', Order::class);
         yield MenuItem::linkToCrud('Order Items', 'fas fa-box', OrderItems::class)->setController(OrderItemsCrudController::class);
         yield MenuItem::linkToCrud('Cart', 'fas fa-boxes', Cart::class);
-        yield MenuItem::linkToCrud('Carrier', 'fas fa-truck', Carrier::class);
         
 
         yield MenuItem::section('Payment');

@@ -56,7 +56,7 @@ class CartQuoteApiTest extends WebTestCase
         $taxable = 16500 + $shipping;
         $this->assertSame([['label' => 'TPS', 'rate' => 0.05, 'amount' => (int) round($taxable * 0.05)], ['label' => 'TVQ', 'rate' => 0.09975, 'amount' => (int) round($taxable * 0.09975)]], array_map(fn ($t) => array_intersect_key($t, ['label' => 1, 'rate' => 1, 'amount' => 1]), $body['taxes']));
         $this->assertSame($taxable + (int) round($taxable * 0.14975), $body['total']);
-        $this->assertSame([0, 'CAD', ['id' => 1, 'name' => $carrier['name'], 'isFree' => false]], [$body['deposit'], $body['currency'], $body['carrier']]);
+        $this->assertSame([0, 'CAD', ['id' => 1, 'name' => $carrier['name'], 'isFree' => false, 'kind' => 'fixed', 'freeShippingApplied' => false]], [$body['deposit'], $body['currency'], $body['carrier']]); // kind et gratuité : livraison, lot 1 (07/11/2026)
         $this->assertSame(['calculated', 'table'], [$body['taxStatus'], $body['taxProvider']]);
         $this->assertSame(['country' => 'CA', 'province' => 'QC', 'city' => 'Montréal', 'postalCode' => 'H2X 1Y4'], $body['shippingAddress'], 'adresse normalisée (nom de province → code)');
 

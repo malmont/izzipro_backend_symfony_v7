@@ -253,6 +253,19 @@ Hors backend : comptes Apple Developer et Google Play (publication des applicati
 clients pour leurs domaines propres (procédure dans la section « Domaine propre »). Internes, sans compte tiers : `APP_SECRET`,
 clés JWT, clés d'activation des applications (`tenant_app_keys`, base maître).
 
+## Livraison dans la console (lot 1, 07/11/2026)
+
+Quatre clés de portée `site` dans le registre, groupe `commerce`, écran `shipping` (page `/admin/livraison`) : `shipping.mode`
+(`none` | `own_key` | `platform` ; prérequis : module Boutique, un transporteur ou le retrait, clé EasyPost de l'environnement choisi en
+`own_key`, « lot 2 » en `platform`), `shipping.easypost_environment` (`test` | `live`), `shipping.default_weight_kg` (détail :
+`productsWithoutWeight`), `shipping.free_above` (cents, nullable). `shipping.easypost` (service) indique l'environnement lu. Écrans
+ajoutés à la carte de Mon site et de l'assistant : `shipping` (page Livraison : réglages, cheminement, transporteurs, poids des produits),
+`product_shipping` (poids et dimensions). Cheminement : étape `boutique.carrier` → écran `shipping` ; `boutique.shipping_weights` quand
+le mode estime ou achète des étiquettes. La page Livraison a son propre cheminement (`ShippingSetupService::overview()['steps']`), le
+modèle des cheminements par partie complexe demandés par le propriétaire (à décliner : Stripe, taxes, courriel, avis). Détail et
+routes : `docs/boutique.md`, « Livraison, lot 1 ». Référentiels de départ (classes, gabarits, types de fournisseur, retrait) :
+`docs/contenu-exemple.md`.
+
 ## Tenir cette fiche à jour
 
 À chaque lot : l'état du tableau ci-dessus, l'inventaire s'il change, et la fiche du module touché (`docs/boutique.md`,

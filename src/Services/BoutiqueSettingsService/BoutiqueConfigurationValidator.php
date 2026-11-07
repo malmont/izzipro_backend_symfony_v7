@@ -35,6 +35,9 @@ final class BoutiqueConfigurationValidator
     private const CHARTER_COLORS = ['primaryColor', 'accentColor', 'textColor', 'backgroundColor'];
     private const CHARTER_FONTS = ['headingFont', 'bodyFont'];
     private const COMMERCE_FLAGS = ['guestCheckout', 'subscriptionsEnabled'];
+    /** Livraison, lot 1 (07/11/2026) : `none` = estimation par prix fixe seulement, `own_key` = clés EasyPost du site, `platform` = étiquettes achetées par la plateforme (lot 2) */
+    public const SHIPPING_MODES = ['none', 'own_key', 'platform'];
+    public const EASYPOST_ENVIRONMENTS = ['test', 'live'];
     /** Modes de vente acceptés par la boutique (console de pilotage, lot 2, 04/11/2026) ; absent = les trois */
     public const SALES_MODES = ['sale', 'rental', 'subscription'];
 
@@ -184,6 +187,19 @@ final class BoutiqueConfigurationValidator
             if (!is_array($modes) || $modes === [] || array_diff($modes, self::SALES_MODES) !== [] || count(array_unique($modes)) !== count($modes)) {
                 $errors[] = ['path' => 'commerce.salesModes', 'message' => sprintf('liste non vide, sans doublon, parmi : %s', implode(', ', self::SALES_MODES))];
             }
+        }
+        // Livraison, lot 1 (07/11/2026) : mode d'expédition, environnement EasyPost, poids par défaut, livraison offerte au-dessus d'un montant
+        if (isset($commerce->shippingMode) && !in_array($commerce->shippingMode, self::SHIPPING_MODES, true)) {
+            $errors[] = ['path' => 'commerce.shippingMode', 'message' => sprintf('valeur attendue : %s', implode(', ', self::SHIPPING_MODES))];
+        }
+        if (isset($commerce->easypostEnvironment) && !in_array($commerce->easypostEnvironment, self::EASYPOST_ENVIRONMENTS, true)) {
+            $errors[] = ['path' => 'commerce.easypostEnvironment', 'message' => 'valeur attendue : test ou live'];
+        }
+        if (isset($commerce->defaultWeightKg) && (!is_numeric($commerce->defaultWeightKg) || (float) $commerce->defaultWeightKg <= 0 || (float) $commerce->defaultWeightKg > 1000)) {
+            $errors[] = ['path' => 'commerce.defaultWeightKg', 'message' => 'poids en kilogrammes attendu, entre 0,001 et 1000'];
+        }
+        if (isset($commerce->freeShippingAbove) && $commerce->freeShippingAbove !== null && (!is_int($commerce->freeShippingAbove) || $commerce->freeShippingAbove < 0)) {
+            $errors[] = ['path' => 'commerce.freeShippingAbove', 'message' => 'montant en cents attendu (entier positif), ou null pour aucune gratuité'];
         }
         if (isset($commerce->taxProvider) && !in_array($commerce->taxProvider, ['table', 'stripe'], true)) {
             $errors[] = ['path' => 'commerce.taxProvider', 'message' => 'valeur attendue : table ou stripe'];

@@ -149,6 +149,10 @@ class Product implements TranslatableInterface, DemoContentInterface
     #[Groups(['product:list'])]
     private ?bool $isWeb = null;
 
+    /** Produit à expédier (livraison, lot 1, 07/11/2026) : faux pour un service, un produit numérique ou retiré sur place ; les colis et étiquettes l'ignorent */
+    #[ORM\Column(name: 'requires_shipping', options: ['default' => true])]
+    private bool $requiresShipping = true;
+
     #[ORM\Column(nullable: true)]
     #[Groups(['product:list'])]
     private ?bool $isPos = null;
@@ -649,6 +653,18 @@ class Product implements TranslatableInterface, DemoContentInterface
     public function isWeb(): ?bool
     {
         return $this->isWeb;
+    }
+
+    public function isRequiresShipping(): bool
+    {
+        return $this->requiresShipping;
+    }
+
+    public function setRequiresShipping(bool $requiresShipping): static
+    {
+        $this->requiresShipping = $requiresShipping;
+
+        return $this;
     }
 
     public function setIsWeb(?bool $isWeb): static

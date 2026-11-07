@@ -44,7 +44,8 @@ final class CartQuoteCalculator
         private readonly BookingAvailabilityService $availability,
         private readonly TenantCurrencyProvider $currency,
         private readonly TaxEngine $taxes,
-        private readonly ?\App\Services\Booking\BookingClock $clock = null // fuseau de la boutique (04/11/2026)
+        private readonly ?\App\Services\Booking\BookingClock $clock = null, // fuseau de la boutique (04/11/2026)
+        private readonly ?\App\Services\BoutiqueSettingsService\BoutiqueSettingsService $settings = null // livraison offerte (lot 1, 07/11/2026)
     ) {
     }
 
@@ -144,7 +145,7 @@ final class CartQuoteCalculator
             throw new CartQuoteException(422, $errors[0]['path'] . ' : ' . $errors[0]['message'] . (count($errors) > 1 ? sprintf(' (et %d autre(s) erreur(s))', count($errors) - 1) : ''), $errors);
         }
 
-        [$shipping, $carrier] = $this->shipping($input);
+        [$shipping, $carrier] = $this->shipping($input, $subtotal);
         $currency = $this->currency->code();
         // Remises de caisse (F1, 24/10/2026) : seulement si des remises sont demandées (le web n'en envoie jamais : calcul inchangé) ;
         // taxes calculées sur le NET de chaque ligne
@@ -170,7 +171,7 @@ final class CartQuoteCalculator
             'taxCalculationId' => $tax['calculationId'], 'deposit' => $deposit,
             'total' => $subtotal + $shipping + (($tax['inclusive'] ?? false) ? 0 : $tax['total']), 'currency' => $currency,
             'shippingAddress' => $input->address,
-            'carrier' => $carrier ? ['id' => (int) $carrier->getId(), 'name' => $carrier->getName(), 'isFree' => $carrier->isFree()] : null,
+            'carrier' => $carrier ? ['id' => (int) $carrier->getId(), 'name' => $carrier->getName(), 'isFree' => $carrier->isFree(), 'kind' => $carrier->getKind(), 'freeShippingApplied' => $this->freeShippingApplied($carrier, $subtotal)] : null,
         ];
     }
 
@@ -320,8 +321,11 @@ final class CartQuoteCalculator
         };
     }
 
-    /** @return array{0: int, 1: ?Carrier} frais de livraison en cents, transporteur */
-    private function shipping(CartQuoteInputDto $input): array
+    /**
+     * @param int $subtotal lignes seules, en cents (livraison offerte au-dessus d'un montant, lot 1, 07/11/2026)
+     * @return array{0: int, 1: ?Carrier} frais de livraison en cents, transporteur
+     */
+    private function shipping(CartQuoteInputDto $input, int $subtotal = 0): array
     {
         if ($input->carrierId === null) {
             return [0, null];
@@ -330,9 +334,24 @@ final class CartQuoteCalculator
         if ($carrier === null) {
             throw new CartQuoteException(404, 'carrierId : transporteur introuvable', [CartQuoteException::error('carrierId', 'CARRIER_NOT_FOUND', 'transporteur introuvable')]);
         }
+        // Retrait en magasin : jamais de frais ; livraison offerte à partir d'un montant de lignes (réglage commerce.freeShippingAbove)
+        if ($carrier->isPickup() || $this->freeShippingApplied($carrier, $subtotal)) {
+            return [0, $carrier];
+        }
         // Transporteur EasyPost : le tarif dépend des colis et de l'adresse (shipping/summary) ; sinon prix fixe du transporteur
         $price = $carrier->getCarrierAccountId() ? ($input->shippingPrice ?? (int) round((float) $carrier->getPrice())) : (int) round((float) $carrier->getPrice());
 
         return [max(0, $price), $carrier];
+    }
+
+    /** Livraison offerte (lot 1) : seuil réglé, atteint par les lignes, transporteur payant (le retrait est déjà gratuit) */
+    private function freeShippingApplied(Carrier $carrier, int $subtotal): bool
+    {
+        if ($carrier->isPickup() || $this->settings === null) {
+            return false;
+        }
+        $threshold = $this->settings->shippingSettings()['freeShippingAbove'];
+
+        return $threshold !== null && $subtotal >= $threshold && !$carrier->isFree();
     }
 }

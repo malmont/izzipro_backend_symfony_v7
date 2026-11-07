@@ -93,3 +93,16 @@ Points d'attention :
   `SqlRowWriter` appelle `nextval('<table>_id_seq')` explicitement.
 - `ProductVariant` relance un `flush()` imbriqué après chaque écriture (quantité du produit) : il écrase les autres
   changements en attente du produit. Le marquage `isDemo` est donc enregistré à part, après l'écriture.
+
+## Référentiels fournis d'office (07/11/2026)
+
+Pour qu'un nouveau site soit opérationnel sans saisie, la base modèle `gmasuite` (et donc chaque site créé) porte des référentiels de
+départ, posés par `scripts/seed_all_v2_shipping_referentials.sh` (idempotent, par nom) : classes d'expédition (Standard, Fragile,
+Volumineux, Lourd), gabarits d'emballage (enveloppe matelassée, petite, moyenne et grande boîte, dimensions et poids réalistes, diviseur
+volumétrique 5000), types de fournisseur (Grossiste, Fabricant, Prestataire de services, Autre), et le transporteur « Retrait en
+magasin » (`kind = pickup`, 0 $, traductions fr/en). Les trois premiers sont posés sur **toutes** les bases (jamais visibles des
+clients) ; le transporteur seulement sur `gmasuite`, `db_demo` et le modèle des tests. Déjà en place dans `gmasuite` : statuts de
+commande et de paiement, types et méthodes de paiement, sources et types de commande, taxes canadiennes, trois transporteurs à prix
+fixe, quatre types de livre Mémoires Vivantes. Encore vides, à décider : devises, réglage des avis, configurations de réservation,
+crédits IA, profils d'application, formules d'abonnement.
+

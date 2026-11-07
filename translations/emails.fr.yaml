@@ -118,3 +118,14 @@ entitlement:
     next_expiring_1_noshop: 'Après cette date, la fonctionnalité sera désactivée sur votre site ; vos données sont conservées. Écrivez-nous pour continuer.'
     next_expired_noshop: 'Pour la réactiver, écrivez-nous.'
     next_suspended_noshop: 'Pour la rétablir, écrivez-nous.'
+# Commande expédiée par le marchand (livraison, lot 1, 07/11/2026)
+order_shipped:
+    subject: 'Votre commande n°%reference% est en route'
+    title: 'Commande n°%reference% expédiée'
+    greeting: 'Bonjour %name%,'
+    body: 'Votre commande n°<strong>%reference%</strong> a été expédiée le %date% par <strong>%carrier%</strong>.'
+    tracking: 'Numéro de suivi : <strong>%number%</strong>'
+    track_button: 'Suivre mon colis'
+    no_tracking: 'Ce mode de remise ne fournit pas de numéro de suivi ; nous vous prévenons si quelque chose change.'
+    thanks: 'Merci de votre confiance.'
+
