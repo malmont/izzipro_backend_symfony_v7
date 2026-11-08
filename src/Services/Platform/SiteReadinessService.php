@@ -20,6 +20,12 @@ use Psr\Log\LoggerInterface;
  */
 class SiteReadinessService
 {
+    /**
+     * Pages publiques des produits sur le site Next, relatives à l'hôte public du site (08/11/2026) : liens « Voir le résultat » du tableau
+     * « Préparer mes produits » et de `GET /api/site/readiness` (`links`). Le socle (`site`) mène à l'accueil ; un module n'a son lien que s'il est accordé.
+     */
+    public const PUBLIC_PATHS = ['module.boutique' => '/catalogue', 'module.memoires' => '/memoires', 'module.boussole' => '/boussole'];
+
     public function __construct(
         private readonly TenantConnectionManager $tenants,
         private readonly TenantDatabaseConnector $connector,
@@ -48,13 +54,13 @@ class SiteReadinessService
     public function forSite(string $code): array
     {
         $tenant = $this->connector->tenant($code);
-        $empty = ['code' => $code, 'percent' => 0, 'done' => 0, 'total' => 0, 'next' => null, 'steps' => []];
+        $empty = ['code' => $code, 'percent' => 0, 'done' => 0, 'total' => 0, 'next' => null, 'steps' => [], 'links' => null];
         if ($tenant === null) {
             return $empty;
         }
         try {
             $pdo = $this->connector->pdo($tenant['dbname']);
-            $steps = $this->build($code, $pdo);
+            ['steps' => $steps, 'links' => $links] = $this->build($code, $pdo);
         } catch (\Throwable $e) {
             $this->logger->warning(sprintf('[Readiness] %s : cheminement illisible : %s', $code, $e->getMessage()));
 
@@ -100,7 +106,7 @@ class SiteReadinessService
         }
 
         return ['code' => $code, 'percent' => $total > 0 ? (int) round($done * 100 / $total) : 100, 'done' => $done, 'total' => $total, 'next' => $next, 'steps' => $steps,
-            'blockingTodo' => $blockingTodo, 'improvementTodo' => $improvementTodo, 'groups' => array_values($groups)];
+            'blockingTodo' => $blockingTodo, 'improvementTodo' => $improvementTodo, 'groups' => array_values($groups), 'links' => $links];
     }
 
     /** Libellé d'un groupe d'étapes : produit (module ou application), socle du site, assistant IA */
@@ -109,7 +115,7 @@ class SiteReadinessService
         return ['site' => 'Site : identité et socle', 'ai' => 'Assistant IA'][$group] ?? (FeatureCatalog::exists($group) ? FeatureCatalog::label($group) : $group);
     }
 
-    /** @return list<array<string, mixed>> */
+    /** @return array{steps: list<array<string, mixed>>, links: array<string, mixed>} */
     private function build(string $code, \PDO $pdo): array
     {
         $e = $this->row($pdo, 'SELECT name, email, logo, locale, currency, pos_timezone, tel, favicon_filename, meta_title, meta_description, gst_number, qst_number, siret, tva_intracommunautaire, pos_receipt_header, pos_alerts_email, pos_stripe_mode, data_retention_years FROM entreprise ORDER BY id LIMIT 1') ?? [];
@@ -302,7 +308,28 @@ class SiteReadinessService
             ];
         }
 
-        return $steps;
+        return ['steps' => $steps, 'links' => $this->links($domain, $effective)];
+    }
+
+    /**
+     * Liens « Voir le résultat » (08/11/2026) : l'hôte est le domaine propre dès qu'il sert le site en HTTPS, sinon l'adresse de la plateforme
+     * (un domaine encore en attente de DNS donnerait des liens morts). `pages` : l'accueil toujours, puis chaque module accordé qui a une page.
+     *
+     * @param array<string, mixed> $domain état du domaine propre (`CustomDomainService::status`)
+     * @param array<string, array<string, mixed>> $effective droits effectifs du site
+     * @return array{host: string, platformHost: string, customDomain: ?string, customState: string, pages: list<array{key: string, label: string, url: string}>}
+     */
+    private function links(array $domain, array $effective): array
+    {
+        $host = $domain['state'] === 'live' && is_string($domain['domain']) ? $domain['domain'] : (string) $domain['platformHost'];
+        $pages = [['key' => 'site', 'label' => 'Accueil du site', 'url' => 'https://' . $host . '/']];
+        foreach (self::PUBLIC_PATHS as $feature => $path) {
+            if ($effective[$feature]['enabled'] ?? false) {
+                $pages[] = ['key' => $feature, 'label' => FeatureCatalog::label($feature), 'url' => 'https://' . $host . $path];
+            }
+        }
+
+        return ['host' => $host, 'platformHost' => (string) $domain['platformHost'], 'customDomain' => $domain['domain'], 'customState' => (string) $domain['state'], 'pages' => $pages];
     }
 
     /** @return array<string, mixed> clés commerce des réglages de la boutique */

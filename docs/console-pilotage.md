@@ -154,7 +154,15 @@ Demandé par le propriétaire : chaque produit actif a toutes ses étapes, indis
 montre avec deux couleurs. `SiteReadinessService` : chaque étape porte **`blocking`** (vrai = indispensable au fonctionnement du produit, rouge ;
 faux = amélioration ou facultatif, orange) ; `forSite()` rend en plus `blockingTodo`, `improvementTodo` et `groups` (un groupe par produit : `key`,
 `label` via `groupLabel()`, `blockingTodo`, `improvementTodo`, `done`, `pending`, `total`, `ready`), aussi dans `GET /api/site/readiness`
-(contrat front). Les « Obtenir : … » restent hors groupes. Les étapes, par groupe :
+(contrat front). Les « Obtenir : … » restent hors groupes.
+
+**Voir mon site en ligne (08/11/2026).** `forSite()` et `GET /api/site/readiness` rendent aussi `links` : `{ host, platformHost, customDomain,
+customState, pages: [{ key, label, url }] }`. `pages` commence toujours par l'accueil (`site`, `/`), puis chaque module accordé qui a une page
+publique (`SiteReadinessService::PUBLIC_PATHS` : `module.boutique` → `/catalogue`, `module.memoires` → `/memoires`, `module.boussole` →
+`/boussole`). L'hôte est le domaine propre dès qu'il sert le site en HTTPS (`customState` = `live`), sinon l'adresse de la plateforme
+`<code>.<FRONTEND_BASE_DOMAIN>` : un domaine en attente de DNS donnerait des liens morts. Le tableau « Préparer mes produits » de l'accueil du
+back-office les montre dans un bandeau « Voir mon site en ligne » (boutons, nouvel onglet, adresse de la plateforme et état du domaine propre) et
+chaque groupe qui a une page porte un lien « voir en ligne » ; le front peut faire de même avec `links`. Les étapes, par groupe :
 
 - **Site** : identité, téléphone (amélioration), adresse, langue/fuseau/devise, expéditeur des courriels (amélioration), logo, favicon, **textes
   légaux** (`entreprise_translation` : mentions légales, CGV/CGU, politique de confidentialité ; bloquants dès que Boutique ou Caisse est accordée),

@@ -39,6 +39,16 @@ class DashboardReadinessTest extends WebTestCase
         }
         $this->assertSame([], array_diff(array_unique($tones), ['danger', 'warning', 'success', 'secondary']), 'quatre couleurs seulement');
         $this->assertSame(0, $crawler->filter('[data-readiness-card] [data-step^="obtain."]')->count(), 'les fonctionnalités à obtenir ne sont pas des étapes de produit');
+        // Voir mon site en ligne (08/11/2026) : un bandeau de liens vers l'accueil et les produits accordés, un lien par groupe qui a une page
+        $links = $crawler->filter('[data-readiness-card] [data-readiness-links] a[data-public-link]');
+        $this->assertGreaterThanOrEqual(1, $links->count(), 'bandeau « Voir mon site en ligne »');
+        $this->assertSame('site', $links->first()->attr('data-public-link'));
+        $this->assertStringStartsWith('https://', (string) $links->first()->attr('href'));
+        $this->assertSame('_blank', $links->first()->attr('target'));
+        $this->assertSame(1, $crawler->filter('[data-readiness-group="site"] a[data-group-link="site"]')->count(), 'le socle mène à l\'accueil');
+        foreach ($crawler->filter('[data-readiness-card] a[data-group-link]') as $a) {
+            $this->assertStringStartsWith('https://', (string) $a->getAttribute('href'));
+        }
         $todo = $crawler->filter('[data-readiness-card] [data-tone="danger"], [data-readiness-card] [data-tone="warning"]');
         if ($todo->count() > 0) {
             $this->assertGreaterThan(0, $todo->filter('a[href]')->count(), 'une étape à faire mène quelque part');

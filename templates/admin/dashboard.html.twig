@@ -42,12 +42,32 @@
             {% if monSiteUrl %}<a class="btn btn-sm btn-outline-primary ms-auto" href="{{ monSiteUrl }}">Mon site : pilotage</a>{% endif %}
         </div>
         <p class="small text-muted mb-2"><span class="badge bg-danger">rouge</span> indispensable au fonctionnement du produit · <span class="badge bg-warning text-dark">orange</span> amélioration ou facultatif · <span class="badge bg-success">vert</span> fait · <span class="badge bg-secondary">gris</span> la plateforme s'en occupe. Chaque ligne mène à l'écran ou au cheminement ciblé.</p>
+        {# Voir le résultat en ligne (08/11/2026) : l'accueil et chaque produit accordé qui a une page publique, sur le domaine propre dès qu'il est actif #}
+        {% set pageByKey = {} %}
+        {% if readiness.links is defined and readiness.links %}
+            {% for p in readiness.links.pages %}{% set pageByKey = pageByKey|merge({(p.key): p}) %}{% endfor %}
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-3 p-2 rounded" style="background: rgba(78, 115, 223, .08); border: 1px dashed #4e73df;" data-readiness-links>
+                <strong class="me-1"><i class="fas fa-eye"></i> Voir mon site en ligne :</strong>
+                {% for p in readiness.links.pages %}
+                    <a class="btn btn-sm btn-primary" href="{{ p.url }}" target="_blank" rel="noopener" data-public-link="{{ p.key }}">{{ p.label }} <i class="fas fa-external-link-alt small"></i></a>
+                {% endfor %}
+                <span class="small text-muted ms-auto">
+                    Adresse : <a href="https://{{ readiness.links.platformHost }}/" target="_blank" rel="noopener">{{ readiness.links.platformHost }}</a>
+                    {% if readiness.links.customDomain %}
+                        · domaine propre <a href="https://{{ readiness.links.customDomain }}/" target="_blank" rel="noopener">{{ readiness.links.customDomain }}</a>
+                        {% if readiness.links.customState == 'live' %}<span class="badge bg-success">actif</span>{% elseif readiness.links.customState == 'dns_ok' %}<span class="badge bg-warning text-dark">certificat en cours</span>{% else %}<span class="badge bg-warning text-dark">DNS en attente</span>{% endif %}
+                    {% endif %}
+                </span>
+            </div>
+        {% endif %}
         <div class="row g-3">
             {% for g in readiness.groups %}
+            {% set page = pageByKey[g.key == 'module.landing' ? 'site' : g.key] ?? null %}
             <div class="col-md-6 col-xl-4" data-readiness-group="{{ g.key }}" data-blocking="{{ g.blockingTodo }}">
                 <div class="border rounded p-2 h-100">
-                    <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div class="d-flex justify-content-between align-items-center mb-1 gap-2">
                         <strong>{{ g.label }}</strong>
+                        {% if page %}<a class="small text-nowrap ms-auto" href="{{ page.url }}" target="_blank" rel="noopener" title="Voir cette partie du site en ligne" data-group-link="{{ g.key }}"><i class="fas fa-external-link-alt"></i> voir en ligne</a>{% endif %}
                         {% if g.blockingTodo > 0 %}<span class="badge bg-danger">{{ g.blockingTodo }} à faire</span>{% elseif g.improvementTodo > 0 %}<span class="badge bg-warning text-dark">{{ g.improvementTodo }} à améliorer</span>{% elseif g.pending > 0 %}<span class="badge bg-secondary">plateforme</span>{% else %}<span class="badge bg-success">prêt</span>{% endif %}
                     </div>
                     <ul class="list-unstyled mb-0 small">

@@ -50,6 +50,20 @@ class SiteReadinessCompleteTest extends WebTestCase
             $this->assertSame(['done', false, 'ai'], [$byKey['ai.access']['status'], $byKey['ai.access']['blocking'], $byKey['ai.access']['group']], 'accès à l\'assistant (08/11/2026)');
             $this->assertStringContainsString('IA complète', $byKey['ai.access']['title'], 'le site de test a le droit « IA complète » (amorçage) ; le mode démo seul n\'ouvre plus l\'assistant');
             $this->assertContains('site.phone', array_keys($byKey));
+            // Liens « Voir le résultat » (08/11/2026) : accueil toujours, modules accordés qui ont une page, domaine propre seulement s'il est actif
+            $links = $body['links'];
+            $this->assertSame('site', $links['pages'][0]['key']);
+            $this->assertSame('https://' . $links['host'] . '/', $links['pages'][0]['url']);
+            $this->assertSame($links['customState'] === 'live' ? $links['customDomain'] : $links['platformHost'], $links['host']);
+            $this->assertStringContainsString('.', $links['platformHost']);
+            $pageKeys = array_column($links['pages'], 'key');
+            foreach (['module.boutique' => '/catalogue', 'module.memoires' => '/memoires', 'module.boussole' => '/boussole'] as $feature => $path) {
+                $granted = in_array($feature, array_column($body['groups'], 'key'), true);
+                $this->assertSame($granted, in_array($feature, $pageKeys, true), $feature);
+                if ($granted) {
+                    $this->assertSame('https://' . $links['host'] . $path, array_column($links['pages'], 'url', 'key')[$feature]);
+                }
+            }
             $this->assertSame($body['blockingTodo'], count(array_filter($body['steps'], fn ($s) => $s['status'] === 'todo' && $s['blocking'])));
             $site = array_column($body['groups'], null, 'key')['site'];
             $this->assertSame('Site : identité et socle', $site['label']);
