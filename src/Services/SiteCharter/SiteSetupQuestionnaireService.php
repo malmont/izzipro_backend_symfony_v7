@@ -6,6 +6,7 @@ use App\Dto\LandingAiComposeInputDto;
 use App\Entity\Entreprise;
 use App\Services\BoutiqueSettingsService\BoutiqueConfigurationValidator;
 use App\Services\BoutiqueSettingsService\BoutiqueSettingsService;
+use App\Services\LandingAiService\LandingAiCatalogue;
 use App\Services\LandingAiService\LandingAiException;
 use App\Services\LandingAiService\LandingAiQuotaService;
 use App\Services\LandingAiService\LandingAiSiteOrchestrator;
@@ -35,7 +36,52 @@ class SiteSetupQuestionnaireService
         private readonly ComposeLandingSectionUseCase $compose,
         private readonly LandingAiQuotaService $quota,
         private readonly ?SiteDemoContentService $demo = null, // contenu d'exemple (lot 3, 08/11/2026)
+        private readonly ?LandingAiCatalogue $catalogue = null, // pages de la boutique (08/11/2026)
     ) {
+    }
+
+    /** Pages système de la boutique par défaut dans le questionnaire */
+    public const SHOP_PAGES_DEFAULT = ['catalogue', 'product', 'cart', 'checkout', 'account', 'login'];
+
+    /** @return array<string, string> clé de page système => titre dans la langue du site */
+    public function shopPages(): array
+    {
+        $locale = $this->answers()['locale'] === 'en' ? 'en' : 'fr';
+        $pages = [];
+        foreach ($this->catalogue?->systemPages() ?? [] as $key => $page) {
+            $pages[$key] = (string) ($page['title'][$locale] ?? $page['title']['fr'] ?? $key);
+        }
+
+        return $pages;
+    }
+
+    /**
+     * Compose les pages de la boutique (accueil de la boutique + pages système choisies), avec la charte du site.
+     *
+     * @param list<string> $pages clés de pages système
+     * @return array{jobId: string, credits: array<string, mixed>}
+     * @throws LandingAiException
+     */
+    public function composeShop(array $pages, ?string $by): array
+    {
+        $known = array_keys($this->shopPages());
+        $pages = array_values(array_unique(array_filter($pages, fn ($p) => is_string($p) && in_array($p, $known, true))));
+        if ($pages === []) {
+            throw LandingAiException::badRequest('Choisissez au moins une page de la boutique.');
+        }
+        $a = $this->answers();
+        $body = (object) [
+            'mode' => 'site', 'app' => 'boutique', 'locale' => $a['locale'] === 'en' ? 'en' : 'fr',
+            'prompt' => mb_substr('Pages de la boutique en ligne. ' . $this->prompt(), 0, LandingAiComposeInputDto::MAX_PROMPT_LENGTH),
+            'pages' => array_slice($pages, 0, LandingAiComposeInputDto::MAX_SITE_PAGES),
+        ];
+        $result = $this->compose->execute(LandingAiComposeInputDto::fromRequestBody($body), $by);
+        if ($result->status !== 202 || !isset($result->body['jobId'])) {
+            throw LandingAiException::badRequest('La composition n\'a pas pu être lancée.');
+        }
+        $this->charters->rememberJob((string) $result->body['jobId'], $by);
+
+        return ['jobId' => (string) $result->body['jobId'], 'credits' => $result->body['credits'] ?? []];
     }
 
     /** Fiches d'exemple de la landing page encore présentes (lot 3) */

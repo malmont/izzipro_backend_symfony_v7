@@ -18,6 +18,9 @@ final class Version20261121100000 extends AbstractMigration
     public function up(Schema $schema): void
     {
         $this->addSql('CREATE TABLE IF NOT EXISTS site_charter (id SERIAL PRIMARY KEY, brief JSON DEFAULT NULL, charter JSON DEFAULT NULL, style JSON DEFAULT NULL, design_md TEXT DEFAULT NULL, document_name VARCHAR(255) DEFAULT NULL, document_path VARCHAR(255) DEFAULT NULL, pages_saved_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, composed_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, last_job_id VARCHAR(36) DEFAULT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, updated_by VARCHAR(255) DEFAULT NULL)');
+        // Pages de la boutique composées par le questionnaire (08/11/2026)
+        $this->addSql('ALTER TABLE site_charter ADD COLUMN IF NOT EXISTS shop_composed_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL');
+        $this->addSql('ALTER TABLE site_charter ADD COLUMN IF NOT EXISTS shop_job_id VARCHAR(36) DEFAULT NULL');
     }
 
     public function down(Schema $schema): void

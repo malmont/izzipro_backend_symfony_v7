@@ -23,6 +23,7 @@ class SiteSetupQuestionnaireTest extends WebTestCase
     private KernelBrowser $client;
     private \Doctrine\DBAL\Connection $db;
     private ?string $landingBefore = null;
+    private ?string $boutiqueBefore = null;
 
     protected function setUp(): void
     {
@@ -41,8 +42,12 @@ class SiteSetupQuestionnaireTest extends WebTestCase
         $master = static::getContainer()->get(\App\Services\TenantConnectionManager::class)->getPdoMaster();
         $master->prepare("DELETE FROM tenant_entitlements WHERE tenant_code = ? AND feature_key = 'module.landing'")->execute([MV_TEST_TENANT_CODE]);
         $master->prepare("INSERT INTO tenant_entitlements (tenant_code, feature_key, source, status, granted_by, note) VALUES (?, 'module.landing', 'manual', 'active', 'test', 'questionnaire')")->execute([MV_TEST_TENANT_CODE]);
+        $master->prepare("DELETE FROM tenant_entitlements WHERE tenant_code = ? AND feature_key = 'module.boutique' AND granted_by = 'test'")->execute([MV_TEST_TENANT_CODE]);
+        $master->prepare("INSERT INTO tenant_entitlements (tenant_code, feature_key, source, status, granted_by, note) SELECT ?, 'module.boutique', 'manual', 'active', 'test', 'questionnaire' WHERE NOT EXISTS (SELECT 1 FROM tenant_entitlements WHERE tenant_code = ? AND feature_key = 'module.boutique' AND status = 'active')")->execute([MV_TEST_TENANT_CODE, MV_TEST_TENANT_CODE]);
         $raw = $this->db->fetchOne('SELECT configuration::text FROM landing_page_setting ORDER BY id LIMIT 1');
         $this->landingBefore = is_string($raw) ? $raw : null;
+        $raw = $this->db->fetchOne('SELECT configuration::text FROM boutique_setting ORDER BY id LIMIT 1');
+        $this->boutiqueBefore = is_string($raw) ? $raw : null;
         $this->loginAs(['ROLE_ADMIN', 'ROLE_USER_INTERNET']);
     }
 
@@ -54,12 +59,15 @@ class SiteSetupQuestionnaireTest extends WebTestCase
         if ($this->landingBefore !== null) {
             $db->executeStatement('UPDATE landing_page_setting SET configuration = ?', [$this->landingBefore]);
         }
+        if ($this->boutiqueBefore !== null) {
+            $db->executeStatement('UPDATE boutique_setting SET configuration = ?', [$this->boutiqueBefore]);
+        }
         $db->executeStatement('DELETE FROM site_charter');
         $db->executeStatement('DELETE FROM ai_job');
         $db->executeStatement('DELETE FROM ai_usage');
         $db->executeStatement("DELETE FROM presentation WHERE titre = 'Exemple questionnaire test'");
         $db->executeStatement('UPDATE presentation SET is_demo = FALSE');
-        static::getContainer()->get(\App\Services\TenantConnectionManager::class)->getPdoMaster()->prepare("DELETE FROM tenant_entitlements WHERE tenant_code = ? AND feature_key = 'module.landing' AND granted_by = 'test'")->execute([MV_TEST_TENANT_CODE]);
+        static::getContainer()->get(\App\Services\TenantConnectionManager::class)->getPdoMaster()->prepare("DELETE FROM tenant_entitlements WHERE tenant_code = ? AND feature_key IN ('module.landing', 'module.boutique') AND granted_by = 'test'")->execute([MV_TEST_TENANT_CODE]);
         \App\Tests\Functional\Support\AiRightTestHelper::restoreFullAi(static::getContainer());
         static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateTenant();
         parent::tearDown();
@@ -189,6 +197,67 @@ class SiteSetupQuestionnaireTest extends WebTestCase
         $readiness = $this->readiness();
         $this->assertSame('done', $readiness['landing.pages']['status'], 'pages composées et appliquées');
         @unlink($pdf);
+    }
+
+    public function testTheShopPagesAreComposedAndApplied(): void
+    {
+        $url = 'https://' . MV_TEST_TENANT_HOST . '/admin/site/configurer';
+        $crawler = $this->client->request('GET', $url);
+        $this->assertSame(1, $crawler->filter('[data-compose-shop-form]')->count(), 'bouton « Composer les pages de ma boutique » (boutique accordée)');
+        $token = $crawler->filter('[data-site-setup-form] input[name="_token"]')->attr('value');
+        $this->client->request('POST', $url, ['_token' => $token, 'activity' => 'Boutique de vélos reconditionnés', 'pages' => ['Contact'], 'salesModes' => ['sale'], 'sells' => 'vélos reconditionnés']);
+        $this->assertSame(302, $this->client->getResponse()->getStatusCode());
+
+        $catalogue = static::getContainer()->get(LandingAiCatalogue::class);
+        $preset = fn (string $id) => json_decode(json_encode($catalogue->preset($id)[1]['composition'], JSON_PRESERVE_ZERO_FRACTION), false);
+        $presentationId = (int) static::getContainer()->get(\App\Services\LandingAiService\LandingAiDataSources::class)->availableIds('Presentation')[0];
+        $home = FakeLandingAiClient::pageResponse([
+            ['componentKey' => 'Navbar', 'dataType' => null, 'composition' => $preset('boutique-navbar-type-a')],
+            ['componentKey' => 'Presentation', 'dataType' => $presentationId, 'composition' => $preset('presentation-type-b')],
+            ['componentKey' => 'Footer', 'dataType' => null, 'composition' => $preset('boutique-footer-type-a')],
+        ], 'Accueil de la boutique composé.');
+        $home->content[0]->input->charter = (object) ['primaryColor' => '#FFA552', 'buttonStyle' => 'pill'];
+        FakeLandingAiClient::$queue[] = $home;
+
+        $crawler = $this->client->request('GET', $url);
+        $shopToken = $crawler->filter('[data-compose-shop-form] input[name="_token"]')->attr('value');
+        $this->client->request('POST', $url . '/composer-boutique', ['_token' => $shopToken, 'shopPages' => ['login', 'checkout']]);
+        $this->assertSame(302, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
+        $this->assertSame(1, preg_match('/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/', (string) $this->client->getResponse()->headers->get('Location'), $m));
+        $compositionUrl = 'https://' . MV_TEST_TENANT_HOST . '/admin/site/configurer/composition/' . $m[1];
+        $messages = $this->sentJobMessages();
+        $this->assertCount(1, $messages);
+        $this->runWorker($messages);
+        $this->assertStringContainsString('Pages de la boutique en ligne', json_encode(FakeLandingAiClient::$requests[0], JSON_UNESCAPED_UNICODE));
+        $children = array_values(array_filter($this->sentJobMessages(), fn ($msg) => $msg->jobId !== $messages[0]->jobId));
+        $this->assertCount(2, $children, 'connexion et paiement');
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([['componentKey' => 'AuthPage', 'dataType' => null, 'composition' => $preset('auth-login')]]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([['componentKey' => 'Checkout', 'dataType' => null, 'composition' => $preset('checkout-type-a')]]);
+        $this->runWorker($children);
+
+        $crawler = $this->client->request('GET', $compositionUrl);
+        $html = (string) $this->client->getResponse()->getContent();
+        $this->assertStringContainsString('data-status="done"', $html);
+        $this->assertStringContainsString('data-app="boutique"', $html);
+        $this->assertStringContainsString('Connexion', $html, 'titre de la page système');
+        $this->assertStringContainsString('Appliquer sur ma boutique', $html);
+        $applyToken = $crawler->filter('[data-apply-form] input[name="_token"]')->attr('value');
+        $this->client->request('POST', $compositionUrl . '/appliquer', ['_token' => $applyToken]);
+        $this->assertSame(302, $this->client->getResponse()->getStatusCode());
+
+        $config = json_decode((string) $this->db->fetchOne('SELECT configuration::text FROM boutique_setting ORDER BY id LIMIT 1'), true);
+        $bySystem = [];
+        foreach ($config['tabs'] as $tab) {
+            $bySystem[($tab['system'] ?? '') . (isset($tab['variant']) ? '/' . $tab['variant'] : '')] = $tab;
+        }
+        $this->assertSame(['Presentation'], array_column($bySystem['']['sections'], 'componentKey'), 'accueil de la boutique');
+        $this->assertSame(['AuthPage'], array_column($bySystem['login']['sections'], 'componentKey'));
+        $this->assertSame(['Checkout'], array_column($bySystem['checkout']['sections'], 'componentKey'));
+        $this->assertSame('typeReglable', $config['navbar']['componentTypeKey']);
+        $this->assertSame('#FFA552', $config['charter']['primaryColor'] ?? null, 'charte déduite posée sur la boutique si elle n\'en avait pas');
+        $this->assertNotNull($this->db->fetchOne('SELECT shop_composed_at FROM site_charter ORDER BY id LIMIT 1'));
+        $this->assertNull($this->db->fetchOne('SELECT composed_at FROM site_charter ORDER BY id LIMIT 1'), 'les pages de la landing page ne sont pas marquées composées');
+        $this->assertStringContainsString('data-applied', (string) $this->client->request('GET', $compositionUrl)->html());
     }
 
     /** @return array<string, array<string, mixed>> étapes par clé */

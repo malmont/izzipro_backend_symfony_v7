@@ -253,6 +253,13 @@ class SiteCharterService
         $this->emProvider->getEntityManager()->flush();
     }
 
+    public function markShopComposed(string $jobId): void
+    {
+        $entity = $this->getOrCreate();
+        $entity->setShopComposedAt(new \DateTimeImmutable())->setShopJobId($jobId);
+        $this->emProvider->getEntityManager()->flush();
+    }
+
     public function rememberJob(string $jobId, ?string $by): void
     {
         $entity = $this->getOrCreate();
@@ -273,7 +280,7 @@ class SiteCharterService
             'brief' => $c?->getBrief(), 'charter' => $c?->getCharter(), 'style' => $c?->getStyle(), 'designMd' => $c?->getDesignMd(),
             'document' => $c?->getDocumentName() !== null ? ['name' => $c->getDocumentName()] : null,
             'pagesSavedAt' => $c?->getPagesSavedAt()?->format(\DateTimeInterface::ATOM), 'composedAt' => $c?->getComposedAt()?->format(\DateTimeInterface::ATOM),
-            'lastJobId' => $c?->getLastJobId(), 'updatedAt' => $c?->getUpdatedAt()?->format(\DateTimeInterface::ATOM), 'updatedBy' => $c?->getUpdatedBy(),
+            'lastJobId' => $c?->getLastJobId(), 'shopComposedAt' => $c?->getShopComposedAt()?->format(\DateTimeInterface::ATOM), 'updatedAt' => $c?->getUpdatedAt()?->format(\DateTimeInterface::ATOM), 'updatedBy' => $c?->getUpdatedBy(),
             'options' => ['goals' => self::BRIEF_GOALS, 'pages' => self::PAGE_CHOICES, 'style' => self::STYLE_OPTIONS, 'handover' => self::HANDOVER],
         ];
     }

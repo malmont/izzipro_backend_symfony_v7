@@ -87,6 +87,27 @@ class SiteSetupAdminController extends AbstractController
         return $this->redirect($this->compositionUrl($launch['jobId']));
     }
 
+    #[Route('/admin/site/configurer/composer-boutique', name: 'admin_site_configurer_compose_shop', methods: ['POST'])]
+    public function composeShop(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid(self::CSRF, (string) $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Formulaire expiré : réessayez.');
+
+            return $this->redirect($this->pageUrl());
+        }
+        $pages = array_values(array_filter(array_map('strval', (array) $request->request->all('shopPages'))));
+        try {
+            $launch = $this->questionnaire->composeShop($pages, $this->getUser()?->getUserIdentifier());
+        } catch (LandingAiException $e) {
+            $this->addFlash('danger', 'Composition non lancée : ' . $e->getMessage());
+
+            return $this->redirect($this->pageUrl() . '#resume');
+        }
+        $this->addFlash('success', 'L\'assistant compose les pages de votre boutique : comptez une à trois minutes.');
+
+        return $this->redirect($this->compositionUrl($launch['jobId']));
+    }
+
     #[Route('/admin/site/configurer/composition/{jobId}', name: 'admin_site_configurer_composition', methods: ['GET'], requirements: ['jobId' => '[0-9a-f-]{36}'])]
     public function composition(string $jobId): Response
     {
@@ -96,7 +117,8 @@ class SiteSetupAdminController extends AbstractController
             'jobId' => $jobId, 'status' => $status, 'pageUrl' => $this->pageUrl(), 'refreshUrl' => $this->compositionUrl($jobId),
             'applyUrl' => $this->urls->unsetAll()->setRoute('admin_site_configurer_apply', ['jobId' => $jobId])->generateUrl(),
             'csrf_id' => self::CSRF,
-            'composedAt' => $this->charters->get()?->getComposedAt(), 'applied' => $this->charters->get()?->getLastJobId() === $jobId && $this->charters->get()?->getComposedAt() !== null,
+            'composedAt' => $this->charters->get()?->getComposedAt(),
+            'applied' => $status['app'] === 'boutique' ? $this->charters->get()?->getShopJobId() === $jobId : ($this->charters->get()?->getLastJobId() === $jobId && $this->charters->get()?->getComposedAt() !== null),
         ]);
     }
 
@@ -114,7 +136,7 @@ class SiteSetupAdminController extends AbstractController
 
             return $this->redirect($this->compositionUrl($jobId));
         }
-        $this->addFlash('success', sprintf('Votre site est composé : %d page(s) enregistrée(s)%s. Regardez-le en ligne, puis retouchez dans l\'éditeur si besoin.', $result['tabs'], $result['demoDeleted'] > 0 ? sprintf(', %d contenu(s) d\'exemple effacé(s)', $result['demoDeleted']) : ''));
+        $this->addFlash('success', sprintf('%s : %d page(s) enregistrée(s)%s. Regardez le résultat en ligne, puis retouchez dans l\'éditeur si besoin.', $this->applier->status($jobId)['app'] === 'boutique' ? 'Pages de la boutique composées' : 'Votre site est composé', $result['tabs'], $result['demoDeleted'] > 0 ? sprintf(', %d contenu(s) d\'exemple effacé(s)', $result['demoDeleted']) : ''));
 
         return $this->redirect($this->compositionUrl($jobId));
     }
@@ -133,6 +155,9 @@ class SiteSetupAdminController extends AbstractController
             'options' => ['goals' => SiteCharterService::BRIEF_GOALS, 'pages' => SiteCharterService::PAGE_CHOICES, 'style' => SiteCharterService::STYLE_OPTIONS, 'handover' => SiteCharterService::HANDOVER],
             'saveUrl' => $this->urls->unsetAll()->setRoute('admin_site_configurer_save')->generateUrl(),
             'composeUrl' => $this->urls->unsetAll()->setRoute('admin_site_configurer_compose')->generateUrl(),
+            'composeShopUrl' => $this->urls->unsetAll()->setRoute('admin_site_configurer_compose_shop')->generateUrl(),
+            'shopPages' => $this->questionnaire->shopEnabled() ? $this->questionnaire->shopPages() : [], 'shopPagesDefault' => SiteSetupQuestionnaireService::SHOP_PAGES_DEFAULT,
+            'pageCost' => \App\Services\LandingAiService\LandingAiQuotaService::cost('page'), 'siteCost' => \App\Services\LandingAiService\LandingAiQuotaService::cost('site'),
             'lastJobUrl' => ($job = $this->charters->get()?->getLastJobId()) !== null ? $this->compositionUrl($job) : null,
             'csrf_id' => self::CSRF,
             'monSiteUrl' => $this->urls->unsetAll()->setRoute('admin_mon_site')->generateUrl(),

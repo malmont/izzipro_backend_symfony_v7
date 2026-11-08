@@ -52,6 +52,13 @@ class SiteCharter
     #[ORM\Column(name: 'last_job_id', length: 36, nullable: true)]
     private ?string $lastJobId = null;
 
+    /** Dernière composition des pages de la boutique appliquée (08/11/2026) */
+    #[ORM\Column(name: 'shop_composed_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $shopComposedAt = null;
+
+    #[ORM\Column(name: 'shop_job_id', length: 36, nullable: true)]
+    private ?string $shopJobId = null;
+
     #[ORM\Column(name: 'updated_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $updatedAt = null;
 
@@ -76,6 +83,10 @@ class SiteCharter
     public function getComposedAt(): ?\DateTimeImmutable { return $this->composedAt; }
     public function setComposedAt(?\DateTimeImmutable $at): static { $this->composedAt = $at; return $this; }
     public function getLastJobId(): ?string { return $this->lastJobId; }
+    public function getShopComposedAt(): ?\DateTimeImmutable { return $this->shopComposedAt; }
+    public function setShopComposedAt(?\DateTimeImmutable $at): static { $this->shopComposedAt = $at; return $this; }
+    public function getShopJobId(): ?string { return $this->shopJobId; }
+    public function setShopJobId(?string $id): static { $this->shopJobId = $id; return $this; }
     public function setLastJobId(?string $id): static { $this->lastJobId = $id; return $this; }
     public function getUpdatedAt(): ?\DateTimeImmutable { return $this->updatedAt; }
     public function getUpdatedBy(): ?string { return $this->updatedBy; }

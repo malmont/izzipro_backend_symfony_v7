@@ -597,7 +597,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (90)
+## Administration (EasyAdmin) (91)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -673,6 +673,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/admin/produits/{id}/photos` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ProductPhotosAdminController::index` |
 | GET, POST | `/admin/redis/flush` | ROLE_SUPER_ADMIN | `Controller\Admin\RedisAdminController::flushRedis` |
 | GET, POST | `/admin/short-code` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ShortCodeAdminController::index` |
+| POST | `/admin/site/configurer/composer-boutique` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\SiteSetupAdminController::composeShop` |
 | POST | `/admin/site/configurer/composer` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\SiteSetupAdminController::compose` |
 | POST | `/admin/site/configurer/composition/{jobId}/appliquer` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\SiteSetupAdminController::apply` |
 | GET | `/admin/site/configurer/composition/{jobId}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\SiteSetupAdminController::composition` |

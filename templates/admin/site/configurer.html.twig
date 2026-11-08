@@ -104,6 +104,16 @@
             <span class="small text-muted">Il reste {{ summary.credits.remaining|default(0) }} crédit(s) ce mois-ci. Vous relisez le résultat avant qu'il remplace quoi que ce soit.</span>
             {% if lastJobUrl %}<a class="small" href="{{ lastJobUrl }}">Voir la dernière composition</a>{% endif %}
         </form>
+        {% if shop and shopPages is not empty %}
+        <hr>
+        <h2 class="h6">Et les pages de ma boutique ?</h2>
+        <p class="small text-muted mb-2">L'assistant compose l'accueil de la boutique et les pages cochées (catalogue, fiche produit, panier, paiement…) dans votre charte. {{ siteCost }} crédits pour l'accueil, {{ pageCost }} par page. Les pages non cochées gardent leur composition actuelle.</p>
+        <form method="post" action="{{ composeShopUrl }}" data-compose-shop-form>
+            <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+            <div class="row g-1 mb-2">{% for key, label in shopPages %}<div class="col-md-3 col-6"><label class="form-check small"><input class="form-check-input" type="checkbox" name="shopPages[]" value="{{ key }}" {{ key in shopPagesDefault ? 'checked' }}> <span class="form-check-label">{{ label }}</span></label></div>{% endfor %}</div>
+            <button class="btn btn-outline-success" type="submit" {{ summary.ready ? '' : 'disabled' }} onclick="return confirm('L\'assistant va composer les pages cochées de la boutique. Vous relirez le résultat avant de l\'appliquer. Continuer ?')">✦ Composer les pages de ma boutique</button>
+        </form>
+        {% endif %}
     </div></div>
 
     <div class="card mb-4" data-site-routing><div class="card-body">

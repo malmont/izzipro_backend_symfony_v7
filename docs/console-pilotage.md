@@ -515,7 +515,11 @@ back-office et l'éditeur Next. Trois pièces :
   transforme l'accueil (sections, navbar, footer) et les pages composées en `landing_page_setting.configuration` dans la forme de l'éditeur
   (`tabs[].sections[] { id, uid, dataType, componentKey, componentTypeKey: typeReglable, reglableConfig }`), après le contrôle de
   `ReglableCompositionValidator`, enregistre par `UpdateLandingPageSettingsUseCase` (journal `content_audit_log`, donc restaurable), garde la
-  charte déduite si le site n'en avait pas, pose `composed_at`.
+  charte déduite si le site n'en avait pas, pose `composed_at`. **Pages de la boutique** (08/11/2026) : second bouton « Composer les pages de ma
+  boutique » (boutique accordée ; pages système cochables, `SHOP_PAGES_DEFAULT`, coût affiché) → mode `site`, app `boutique`, même écran
+  d'attente ; à l'application, `SiteCompositionApplier::applyShop` remplace les sections du premier onglet sans `system` (accueil de la boutique)
+  et de chaque onglet `system` composé (sans variante, créé `sys-<clé>` s'il manque), navbar et footer, pose la charte déduite si la boutique
+  n'en a pas, et passe par `UpdateBoutiqueSettingsUseCase` (validateur de la boutique, journal) ; `site_charter.shop_composed_at` / `shop_job_id`.
 - **Aiguillage** : `Services/SiteCharter/SiteRouting::TABLE` (où se fait quoi : back-office ou éditeur), rendu en bas du questionnaire avec les
   liens, ajouté aux consignes de l'assistant (`promptText()`, il oriente vers l'éditeur par `delegate_to_editor` et vers les écrans par
   `open_screen`), repris dans l'aide (`docs/aide/site.md`, `demarrer.md`). Cheminement : étape **`site.brief`** (amélioration, groupe Site,

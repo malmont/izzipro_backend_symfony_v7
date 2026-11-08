@@ -26,6 +26,10 @@ Une case **« Remplacer le contenu d'exemple »** : les fiches fournies avec le 
 
 Sous les questions, « Ce que l'assistant va composer » redit vos réponses en phrases. Le bouton **« Composer mon site »** lance l'assistant (accueil, pages, menu, pied de page, charte) ; comptez une à trois minutes. Vous relisez l'état des pages, puis **« Appliquer sur mon site »** remplace la composition actuelle. L'ancienne reste dans le journal des écritures. Le bandeau « Voir mon site en ligne » du tableau de bord vous mène au résultat.
 
+## Et la boutique ?
+
+Sous le résumé, « Composer les pages de ma boutique » compose l'accueil de la boutique et les pages cochées (catalogue, fiche produit, panier, paiement, compte, connexion…) dans votre charte. Les pages non cochées gardent leur composition. Même attente, même « Appliquer » ; l'ancienne composition reste dans le journal.
+
 ## Où se fait quoi
 
 Le back-office règle et remplit ; l'éditeur du site retouche ce que l'on voit. Le questionnaire, l'assistant et cette aide vous aiguillent toujours vers le bon endroit :
