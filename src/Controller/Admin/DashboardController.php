@@ -378,8 +378,10 @@ class DashboardController extends AbstractDashboardController
         } catch (\Throwable) {
         }
         $monSiteUrl = null;
+        $siteSetupUrl = null;
         try {
             $monSiteUrl = $this->adminUrls?->unsetAll()->setRoute('admin_mon_site')->generateUrl();
+            $siteSetupUrl = $this->adminUrls?->unsetAll()->setRoute('admin_site_configurer')->generateUrl(); // « Mon site pas à pas » (08/11/2026)
         } catch (\Throwable) {
         }
 
@@ -396,6 +398,7 @@ class DashboardController extends AbstractDashboardController
             'ordersTodoUrl' => $ordersTodoUrl,
             'readiness' => $readiness,
             'monSiteUrl' => $monSiteUrl,
+            'siteSetupUrl' => $siteSetupUrl,
             'tenantReport' => $tenantReport,
             'storeTimezone' => $tz->getName(),
             'currentTenantCode' => $currentTenantCode,
@@ -572,6 +575,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Cartes « Explorer »', 'fa fa-th-large', ExploreCard::class);
 
         yield MenuItem::section('Site vitrine (Landing Page)');
+        yield MenuItem::linkToRoute('Mon site pas à pas', 'fas fa-magic', 'admin_site_configurer'); // questionnaire + composition par l'assistant (08/11/2026), aussi sous Entreprise
 
 
         yield MenuItem::linkToCrud('Diaporama d\'accueil (bannières)', 'fas fa-image', Banniere::class);

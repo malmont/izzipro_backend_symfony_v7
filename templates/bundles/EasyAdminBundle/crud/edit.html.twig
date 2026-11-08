@@ -3,13 +3,10 @@
 
 {% block main %}
     {% set guide = admin_component_guide(ea.crud.controllerFqcn) %}
+    {% set demo = null %}
     {% if guide %}
-        <div class="d-flex flex-wrap align-items-start gap-3" data-component-guide-layout>
-            {# la colonne de gauche défile horizontalement si le tableau ou le formulaire est plus large qu'elle : rien ne passe sous le panneau #}
-            <div class="flex-grow-1" style="min-width: 0; flex: 1 1 560px; overflow-x: auto">{{ parent() }}</div>
-            {{ include('admin/guide/_panel.html.twig', { guide: guide }) }}
-        </div>
-    {% else %}
-        {{ parent() }}
+        {# Guide en bandeau au-dessus du contenu (08/11/2026) : ne prend aucune largeur au tableau ni au formulaire ; repliable, choix mémorisé #}
+        {{ include('admin/guide/_panel.html.twig', { guide: guide, demo: demo }) }}
     {% endif %}
+    {{ parent() }}
 {% endblock %}

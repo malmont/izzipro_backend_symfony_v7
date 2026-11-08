@@ -39,7 +39,8 @@
             {% if readiness.blockingTodo > 0 %}<span class="badge bg-danger">{{ readiness.blockingTodo }} indispensable{{ readiness.blockingTodo > 1 ? 's' : '' }}</span>{% endif %}
             {% if readiness.improvementTodo > 0 %}<span class="badge bg-warning text-dark">{{ readiness.improvementTodo }} amélioration{{ readiness.improvementTodo > 1 ? 's' : '' }}</span>{% endif %}
             {% if readiness.blockingTodo == 0 and readiness.improvementTodo == 0 %}<span class="badge bg-success">Tout est prêt</span>{% endif %}
-            {% if monSiteUrl %}<a class="btn btn-sm btn-outline-primary ms-auto" href="{{ monSiteUrl }}">Mon site : pilotage</a>{% endif %}
+            {% if siteSetupUrl is defined and siteSetupUrl %}<a class="btn btn-sm btn-primary ms-auto" href="{{ siteSetupUrl }}" data-site-setup-link>✦ Mon site pas à pas</a>{% endif %}
+            {% if monSiteUrl %}<a class="btn btn-sm btn-outline-primary {{ siteSetupUrl is defined and siteSetupUrl ? '' : 'ms-auto' }}" href="{{ monSiteUrl }}">Mon site : pilotage</a>{% endif %}
         </div>
         <p class="small text-muted mb-2"><span class="badge bg-danger">rouge</span> indispensable au fonctionnement du produit · <span class="badge bg-warning text-dark">orange</span> amélioration ou facultatif · <span class="badge bg-success">vert</span> fait · <span class="badge bg-secondary">gris</span> la plateforme s'en occupe. Chaque ligne mène à l'écran ou au cheminement ciblé.</p>
         {# Voir le résultat en ligne (08/11/2026) : l'accueil et chaque produit accordé qui a une page publique, sur le domaine propre dès qu'il est actif #}

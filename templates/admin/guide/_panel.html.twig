@@ -1,26 +1,43 @@
-{# Panneau « À quoi sert cet écran » (08/11/2026) : illustration et explication d'un composant du site #}
-<aside class="card shadow-sm" style="flex: 0 0 340px; width: 340px; max-width: 100%; position: sticky; top: 1rem; align-self: flex-start" data-component-guide="{{ guide.key }}">
-    <div class="card-body">
-        <div class="text-xs text-uppercase text-muted mb-1">À quoi ça ressemble sur le site</div>
-        <div class="rounded p-2 mb-3" style="background: rgba(127, 127, 127, .08); border: 1px solid rgba(127, 127, 127, .25)" data-guide-illustration>
-            {{ include('admin/guide/svg/' ~ guide.svg ~ '.html.twig') }}
+{# Bandeau « À quoi sert cet écran » (08/11/2026) : illustration à gauche, explication à droite, repliable (mémorisé par écran dans le navigateur) #}
+<section class="card shadow-sm mb-3" data-component-guide="{{ guide.key }}">
+    <div class="card-body py-2">
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="text-xs text-uppercase text-muted">À quoi ça ressemble sur le site</span>
+            <button type="button" class="btn btn-link btn-sm p-0 ms-auto" data-guide-toggle>masquer</button>
         </div>
-        <h2 class="h6 mb-2">{{ guide.title }}</h2>
-        <p class="small mb-2">{{ guide.purpose }}</p>
-        <p class="small mb-2"><strong>Où :</strong> {{ guide.where }}</p>
-        <div class="small"><strong>Quoi remplir :</strong>
-            <ul class="mb-2 ps-3">{% for f in guide.fields %}<li>{{ f }}</li>{% endfor %}</ul>
-        </div>
-        {% if guide.tip is defined %}<p class="small text-muted mb-0"><i class="fas fa-lightbulb"></i> {{ guide.tip }}</p>{% endif %}
-        {% if demo is defined and demo and demo.count > 0 %}
-            {# Contenu d'exemple (lot 3, 08/11/2026) : fourni à la création du site, à remplacer ou à effacer #}
-            <div class="mt-3 p-2 rounded" style="background: rgba(246, 194, 62, .12); border: 1px solid rgba(246, 194, 62, .5)" data-demo-content-panel data-count="{{ demo.count }}">
-                <div class="small mb-2"><strong>{{ demo.count }} contenu(s) d'exemple</strong> fourni(s) avec le site, marqué(s) « exemple à remplacer » dans la liste. Modifiez-en un : il devient le vôtre. Ou effacez-les tous.</div>
-                <form method="post" action="{{ demo.deleteUrl }}" onsubmit="return confirm('Effacer le contenu d\'exemple de cet écran ? Les fiches dont une fiche du site se sert sont gardées.')">
-                    <input type="hidden" name="_token" value="{{ csrf_token('demo_content') }}">
-                    <button class="btn btn-sm btn-outline-warning" type="submit">Effacer le contenu d'exemple de cet écran</button>
-                </form>
+        <div class="d-flex flex-wrap gap-3 align-items-start" data-guide-body>
+            <div class="rounded p-2" style="flex: 0 0 280px; max-width: 100%; background: rgba(127, 127, 127, .08); border: 1px solid rgba(127, 127, 127, .25)" data-guide-illustration>
+                {{ include('admin/guide/svg/' ~ guide.svg ~ '.html.twig') }}
             </div>
-        {% endif %}
+            <div class="flex-grow-1" style="min-width: 260px; flex-basis: 320px">
+                <h2 class="h6 mb-1">{{ guide.title }}</h2>
+                <p class="small mb-1">{{ guide.purpose }}</p>
+                <p class="small mb-1"><strong>Où :</strong> {{ guide.where }}</p>
+                <div class="small"><strong>Quoi remplir :</strong> {{ guide.fields|join(' · ') }}</div>
+                {% if guide.tip is defined %}<p class="small text-muted mb-0 mt-1"><i class="fas fa-lightbulb"></i> {{ guide.tip }}</p>{% endif %}
+            </div>
+            {% if demo is defined and demo and demo.count > 0 %}
+                {# Contenu d'exemple (lot 3, 08/11/2026) : fourni à la création du site, à remplacer ou à effacer #}
+                <div class="p-2 rounded small" style="flex: 0 0 260px; max-width: 100%; background: rgba(246, 194, 62, .12); border: 1px solid rgba(246, 194, 62, .5)" data-demo-content-panel data-count="{{ demo.count }}">
+                    <div class="mb-2"><strong>{{ demo.count }} contenu(s) d'exemple</strong> fourni(s) avec le site, marqué(s) « exemple à remplacer » dans la liste. Modifiez-en un : il devient le vôtre. Ou effacez-les tous.</div>
+                    <form method="post" action="{{ demo.deleteUrl }}" onsubmit="return confirm('Effacer le contenu d\'exemple de cet écran ? Les fiches dont une fiche du site se sert sont gardées.')">
+                        <input type="hidden" name="_token" value="{{ csrf_token('demo_content') }}">
+                        <button class="btn btn-sm btn-outline-warning" type="submit">Effacer le contenu d'exemple de cet écran</button>
+                    </form>
+                </div>
+            {% endif %}
+        </div>
     </div>
-</aside>
+</section>
+<script>
+(function () {
+    var section = document.querySelector('[data-component-guide="{{ guide.key }}"]');
+    if (!section) { return; }
+    var key = 'guide-hidden-{{ guide.key }}', body = section.querySelector('[data-guide-body]'), toggle = section.querySelector('[data-guide-toggle]');
+    function render(hidden) { body.style.display = hidden ? 'none' : ''; toggle.textContent = hidden ? 'afficher le guide' : 'masquer'; }
+    var hidden = false;
+    try { hidden = window.localStorage.getItem(key) === '1'; } catch (e) {}
+    render(hidden);
+    toggle.addEventListener('click', function () { hidden = !hidden; render(hidden); try { window.localStorage.setItem(key, hidden ? '1' : '0'); } catch (e) {} });
+})();
+</script>
