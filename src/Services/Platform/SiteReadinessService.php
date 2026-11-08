@@ -22,8 +22,8 @@ class SiteReadinessService
 {
     /**
      * Pages publiques des produits sur le site Next, relatives à l'hôte public du site (08/11/2026) : liens « Voir le résultat » du tableau
-     * « Préparer mes produits » et de `GET /api/site/readiness` (`links`). La landing page est à `/landingpage/<slug de l'onglet>` (un lien par
-     * onglet, le premier porte la clé `site`) ; un module n'a son lien que s'il est accordé.
+     * « Préparer mes produits » et de `GET /api/site/readiness` (`links`). La landing page est à `/landingpage` (clé `site`, Next sert l'accueil)
+     * et chaque autre onglet à `/landingpage/<slug>` ; un module n'a son lien que s'il est accordé.
      */
     public const PUBLIC_PATHS = ['module.boutique' => '/catalogue', 'module.memoires' => '/memoires', 'module.boussole' => '/boussole'];
 
@@ -348,8 +348,8 @@ class SiteReadinessService
 
     /**
      * Liens « Voir le résultat » (08/11/2026) : l'hôte est le domaine propre dès qu'il sert le site en HTTPS, sinon l'adresse de la plateforme
-     * (un domaine encore en attente de DNS donnerait des liens morts). `pages` : la landing page d'abord (`site` = premier onglet,
-     * `/landingpage/<slug>` ; les autres onglets en `landing.<slug>`), puis chaque module accordé qui a une page.
+     * (un domaine encore en attente de DNS donnerait des liens morts). `pages` : la landing page d'abord (`site` = `/landingpage`, l'accueil ;
+     * les autres onglets en `landing.<slug>` à `/landingpage/<slug>`), puis chaque module accordé qui a une page.
      *
      * @param array<string, mixed> $domain état du domaine propre (`CustomDomainService::status`)
      * @param array<string, array<string, mixed>> $effective droits effectifs du site
@@ -361,7 +361,10 @@ class SiteReadinessService
         $host = $domain['state'] === 'live' && is_string($domain['domain']) ? $domain['domain'] : (string) $domain['platformHost'];
         $pages = [];
         foreach ($tabs as $i => $tab) {
-            $pages[] = ['key' => $i === 0 ? 'site' : 'landing.' . $tab['slug'], 'label' => ($i === 0 ? 'Site : ' : '') . $tab['title'], 'url' => 'https://' . $host . '/landingpage/' . $tab['slug']];
+            // Premier onglet : /landingpage sans slug, Next y sert l'accueil lui-même (décision du propriétaire, 08/11/2026)
+            $pages[] = $i === 0
+                ? ['key' => 'site', 'label' => 'Site : ' . $tab['title'], 'url' => 'https://' . $host . '/landingpage']
+                : ['key' => 'landing.' . $tab['slug'], 'label' => $tab['title'], 'url' => 'https://' . $host . '/landingpage/' . $tab['slug']];
         }
         if ($pages === []) {
             $pages[] = ['key' => 'site', 'label' => 'Accueil du site', 'url' => 'https://' . $host . '/'];

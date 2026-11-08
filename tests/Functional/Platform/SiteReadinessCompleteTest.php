@@ -53,7 +53,7 @@ class SiteReadinessCompleteTest extends WebTestCase
             // Liens « Voir le résultat » (08/11/2026) : accueil toujours, modules accordés qui ont une page, domaine propre seulement s'il est actif
             $links = $body['links'];
             $this->assertSame('site', $links['pages'][0]['key']);
-            $this->assertMatchesRegularExpression('#^https://' . preg_quote($links['host'], '#') . '/(landingpage/[a-z0-9-]+)?$#', $links['pages'][0]['url'], 'landing page : /landingpage/<slug du premier onglet>, sinon l\'accueil');
+            $this->assertMatchesRegularExpression('#^https://' . preg_quote($links['host'], '#') . '/(landingpage)?$#', $links['pages'][0]['url'], 'landing page : /landingpage (Next sert l\'accueil), sinon la racine');
             foreach ($links['pages'] as $pg) {
                 if (str_starts_with($pg['key'], 'landing.')) {
                     $this->assertSame('https://' . $links['host'] . '/landingpage/' . substr($pg['key'], 8), $pg['url']);
