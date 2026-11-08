@@ -268,7 +268,7 @@ d'un service à drapeau (`scope: platform`) se lit « accordé » / « non accor
 
 Règle : **seul le propriétaire de la plateforme** fixe les crédits IA mensuels d'un site. Page Plateforme, section « Crédits IA par site »
 (`Services/Platform/PlatformAiCreditsService` : crédits du mois, utilisés, restants par site ; `POST /admin/plateforme/ia-credits`
-`{tenant, monthly}`, 0 = assistant désactivé). Sur le site, l'écran « Assistant IA : consignes et crédits » montre les crédits en lecture
+`{tenant, monthly}`, 0 = assistant désactivé). Sur le site, l'écran « Consignes et crédits » (section « Assistant IA » du menu depuis le 08/11/2026, avec « Historique des demandes ») montre les crédits en lecture
 seule (le champ reste réglable pour le super admin) ; l'administrateur règle seulement les consignes. Tout appel à l'IA d'un site passe par
 `LandingAiQuotaService::reserve` (assistant, pages, fiches produit, poids, lots : composants `site-config`, `page`, `product_sheet`,
 `product_translate`, `shipping_estimate`, `product_bulk_*`, `product_image`), donc tout est compté et additionné dans `ai_usage` ; le

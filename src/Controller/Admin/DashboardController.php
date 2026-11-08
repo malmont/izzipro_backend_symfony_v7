@@ -499,7 +499,7 @@ class DashboardController extends AbstractDashboardController
 
     /** Icône de chaque groupe du menu (sections repliables, 31/10/2026) */
     private const MENU_GROUP_ICONS = [
-        'Maintenance' => 'fas fa-tools', 'UI' => 'fas fa-palette', 'Landing Page' => 'fas fa-window-maximize', 'Médiathèque & Partage' => 'fas fa-photo-video',
+        'Maintenance' => 'fas fa-tools', 'UI' => 'fas fa-palette', 'Landing Page' => 'fas fa-window-maximize', 'Assistant IA' => 'fas fa-magic', 'Médiathèque & Partage' => 'fas fa-photo-video',
         'Entreprise' => 'fa fa-building', 'Livraison' => 'fas fa-truck', 'IIZIMANAGER' => 'fas fa-briefcase', 'Réservations & Clients' => 'fas fa-users',
         'Mouvements stock' => 'fas fa-dolly', 'Caisse' => 'fas fa-cash-register', 'Order' => 'fas fa-shopping-bag', 'Payment' => 'fas fa-credit-card',
         'Taxe' => 'fas fa-percent', 'Catalogue & Véhicules' => 'fas fa-boxes', 'Location / Réservation' => 'fas fa-calendar-check',
@@ -591,8 +591,11 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Bannières Statiques', 'fas fa-image', BaniereStatique::class);
         yield MenuItem::linkToCrud('Présentations', 'fas fa-columns', Presentation::class);
         yield MenuItem::linkToCrud('Groupes de Présentation', 'fas fa-columns', PresentationGroup::class);
-        yield MenuItem::linkToCrud('Assistant IA : historique', 'fas fa-robot', AiUsage::class);
-        yield MenuItem::linkToCrud('Assistant IA : consignes et crédits', 'fas fa-coins', AiCreditSetting::class);
+
+        // Assistant IA : section à part (08/11/2026) ; l'assistant touche la landing page, la boutique, les fiches produit et le pilotage
+        yield MenuItem::section('Assistant IA');
+        yield MenuItem::linkToCrud('Historique des demandes', 'fas fa-robot', AiUsage::class);
+        yield MenuItem::linkToCrud('Consignes et crédits', 'fas fa-coins', AiCreditSetting::class);
 
         yield MenuItem::section('Médiathèque & Partage');
         yield MenuItem::linkToCrud('Partage de Fichiers & Médias', 'fas fa-share-alt', SharedMedia::class)
