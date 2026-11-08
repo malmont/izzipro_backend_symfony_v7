@@ -18,7 +18,7 @@ use App\Services\TenantEntityManagerProvider;
  */
 class RentalConfiguratorService
 {
-    public const GRIDS = ['days', 'hours', 'minutes_30', 'minutes_15'];
+    public const GRIDS = ['days', 'datetime', 'hours', 'minutes_30', 'minutes_15'];
     public const RATE_FIELDS = ['hour' => 'HourRate', 'halfDay' => 'HalfDayRate', 'day' => 'DayRate', 'week' => 'WeekRate', 'month' => 'MonthRate'];
 
     public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly RentalSummaryService $summary, private readonly ?ContentAuditRecorder $audit = null, private readonly ?TenantCacheService $cache = null)
@@ -67,6 +67,7 @@ class RentalConfiguratorService
             'eveningStart' => (string) ($evening['start'] ?? ''), 'eveningEnd' => (string) ($evening['end'] ?? ''),
             'halfDay1Label' => (string) ($half[0]['label'] ?? ''), 'halfDay1Start' => (string) ($half[0]['start'] ?? ''), 'halfDay1End' => (string) ($half[0]['end'] ?? ''),
             'halfDay2Label' => (string) ($half[1]['label'] ?? ''), 'halfDay2Start' => (string) ($half[1]['start'] ?? ''), 'halfDay2End' => (string) ($half[1]['end'] ?? ''),
+            'returnTolerance' => $c?->getReturnToleranceMinutes() ?? 0, 'timeStep' => $c?->getTimeStepMinutes() ?? 60,
             'datesMode' => $c?->getAllowedDates() ? 'list' : 'all',
             'allowedDates' => implode("\n", $c?->getAllowedDates() ?: []),
             'pack' => $first !== null ? (string) $first['id'] : 'new',
@@ -142,7 +143,16 @@ class RentalConfiguratorService
         if (!in_array($grid, self::GRIDS, true)) {
             $errors['granularity'] = 'Choisissez comment le client réserve.';
         }
-        $hourly = in_array($grid, ['hours', 'minutes_30', 'minutes_15'], true);
+        $datetime = $grid === 'datetime';
+        $hourly = $datetime || in_array($grid, ['hours', 'minutes_30', 'minutes_15'], true);
+        $returnTolerance = $datetime ? ($int('returnTolerance', false, 0) ?? 0) : null;
+        if ($returnTolerance !== null && $returnTolerance > 1439) {
+            $errors['returnTolerance'] = 'Au plus 1 439 minutes (moins d\'un jour).';
+        }
+        $timeStep = $datetime ? ($int('timeStep', false, 5) ?? 60) : null;
+        if ($timeStep !== null && !in_array($timeStep, [5, 10, 15, 20, 30, 60, 120], true)) {
+            $errors['timeStep'] = 'Pas possible : 5, 10, 15, 20, 30, 60 ou 120 minutes.';
+        }
         $stock = $int('stock', true, 1);
         $minDuration = $int('minDuration', true, 1);
         $maxDuration = $int('maxDuration', false, 1);
@@ -167,7 +177,7 @@ class RentalConfiguratorService
             }
         }
         $halfDays = [];
-        if ($hourly) {
+        if ($hourly && !$datetime) {
             foreach ([1, 2] as $i) {
                 $label = $str("halfDay{$i}Label");
                 $hs = $time("halfDay{$i}Start", false);
@@ -233,6 +243,7 @@ class RentalConfiguratorService
         $config = $product->getBookingConfiguration() ?? (new BookingConfiguration())->setProduct($product);
         $config->setGranularity($grid)->setStockQuantity($stock)->setMinDuration($minDuration)->setMaxDuration($maxDuration)->setMinDaysStandard($minDays)->setBufferTime($buffer)
             ->setOpeningStart($openingStart)->setOpeningEnd($openingEnd)->setEveningSlot($evening)->setHalfDays($halfDays !== [] ? $halfDays : null)->setAllowedDates($allowedDates)
+            ->setReturnToleranceMinutes($returnTolerance)->setTimeStepMinutes($timeStep)
             ->setDeposit($deposit)->setExtraPassengerFee($passengerFee)->setArrivalLeadMinutes($arrivalLead)
             ->setIncluded($this->lines($str('included')))->setExcluded($this->lines($str('excluded')))
             ->setCancellationPolicy($str('cancellationPolicy') !== '' ? mb_substr($str('cancellationPolicy'), 0, 5000) : null)->setNotes($str('notes') !== '' ? mb_substr($str('notes'), 0, 10000) : null);

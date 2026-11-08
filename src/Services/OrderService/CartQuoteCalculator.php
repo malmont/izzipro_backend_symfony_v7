@@ -213,12 +213,15 @@ final class CartQuoteCalculator
             return null;
         }
         $granularity = $config?->getGranularity() ?? 'days';
-        $hourly = in_array($granularity, self::HOURLY, true);
+        $datetime = $granularity === 'datetime'; // prise et retour avec date et heure (08/11/2026) : durées en heures, formules jour/semaine/mois, tolérance de retard
+        $hourly = $datetime || in_array($granularity, self::HOURLY, true);
         $hours = ($end->getTimestamp() - $start->getTimestamp()) / 3600;
-        $days = (int) ceil($hours / 24);
-        $measure = $hourly ? $hours : $days; // durée dans l'unité de la grille
+        // Heures facturées : la tolérance de retard (grille datetime) n'est pas comptée ; les unités partent de là
+        $billableHours = max(0.0, $hours - ($datetime ? (int) ($config?->getReturnToleranceMinutes() ?? 0) / 60 : 0));
+        $days = (int) ceil($billableHours / 24);
+        $measure = $hourly ? $hours : $days; // durée dans l'unité de la grille (contrôles min/max sur la durée réelle)
 
-        $type = $booking['durationType'] ?? $booking['duration_type'] ?? ($hourly ? 'hour' : 'day');
+        $type = $booking['durationType'] ?? $booking['duration_type'] ?? ($hourly && !$datetime ? 'hour' : 'day');
         $type = match ($type) { 'half_day' => 'halfDay', default => $type };
         if (!isset(self::UNITS[$type])) {
             $errors[] = CartQuoteException::error("$path.booking.durationType", 'DURATION_TYPE_INVALID', 'valeur attendue : hour, halfDay, day, week, month', ['allowed' => array_keys(self::UNITS)]);
@@ -228,6 +231,9 @@ final class CartQuoteCalculator
         $before = count($errors);
         if ($config !== null) {
             $this->checkConfiguration($config, $hourly, $measure, $days, $start, $end, $path, $errors);
+            if ($datetime) {
+                $this->checkPickupAndReturn($config, $start, $end, $path, $errors);
+            }
         }
         $remaining = $this->availability->getRemainingStock($product, \App\Services\Booking\BookingClock::utc($start), \App\Services\Booking\BookingClock::utc($end)); // requête en UTC, comme la base
         if ($remaining < $quantity) {
@@ -246,7 +252,7 @@ final class CartQuoteCalculator
             return null;
         }
         [$length, $in] = self::UNITS[$type];
-        $units = max(1, (int) ceil(($in === 'h' ? $hours : $days) / $length));
+        $units = max(1, (int) ceil(($in === 'h' ? $billableHours : $days) / $length));
         $rate = (int) round($this->rate($pack, $type));
         if ($rate <= 0) {
             $errors[] = CartQuoteException::error("$path.booking.durationType", 'RATE_NOT_FOUND', sprintf('aucun tarif « %s » pour ce produit', $type), ['durationType' => $type]);
@@ -290,7 +296,7 @@ final class CartQuoteCalculator
         if ($allowed !== null && !in_array($start->format('Y-m-d'), $allowed, true)) {
             $errors[] = CartQuoteException::error("$path.booking.start", 'DATE_NOT_OFFERED', 'date non proposée (voir rental.allowedDates)');
         }
-        if ($hourly && $config->getOpeningStart() !== null && $config->getOpeningEnd() !== null) {
+        if ($hourly && !$config->isDatetime() && $config->getOpeningStart() !== null && $config->getOpeningEnd() !== null) {
             $from = $start->format('H:i');
             $to = $end->format('H:i');
             $inside = fn (string $open, string $close) => $from >= $open && ($to <= $close || $to === '00:00') && $start->format('Y-m-d') === $end->modify('-1 second')->format('Y-m-d');
@@ -301,6 +307,49 @@ final class CartQuoteCalculator
                     $hasEvening ? sprintf(', ou %s à %s', $evening['start'], $evening['end']) : ''),
                     ['start' => $config->getOpeningStart(), 'end' => $config->getOpeningEnd()] + ($hasEvening ? ['eveningStart' => (string) $evening['start'], 'eveningEnd' => (string) $evening['end']] : []));
             }
+        }
+    }
+
+    /**
+     * Grille `datetime` (08/11/2026) : la prise et le retour tombent chacun dans les heures d'ouverture (ou le créneau du soir), n'importe
+     * quel jour ; les heures suivent le pas réglé (60 min par défaut).
+     *
+     * @param list<array{path: string, message: string, code: string, params?: array<string, mixed>}> $errors
+     */
+    private function checkPickupAndReturn(BookingConfiguration $config, \DateTimeImmutable $start, \DateTimeImmutable $end, string $path, array &$errors): void
+    {
+        $step = (int) ($config->effectiveTimeStepMinutes() ?? 60);
+        foreach (['start' => $start, 'end' => $end] as $which => $moment) {
+            if ($step > 0 && (((int) $moment->format('H') * 60 + (int) $moment->format('i')) % $step !== 0 || (int) $moment->format('s') !== 0)) {
+                $errors[] = CartQuoteException::error("$path.booking.$which", 'TIME_STEP_INVALID', sprintf('heure attendue par pas de %d minutes', $step), ['stepMinutes' => $step]);
+            }
+        }
+        if ($config->getOpeningStart() === null || $config->getOpeningEnd() === null) {
+            return;
+        }
+        $evening = $config->getEveningSlot();
+        $hasEvening = is_array($evening) && isset($evening['start'], $evening['end']);
+        $windows = [[$config->getOpeningStart(), $config->getOpeningEnd()]];
+        if ($hasEvening) {
+            $windows[] = [(string) $evening['start'], (string) $evening['end']];
+        }
+        $inside = function (\DateTimeImmutable $moment) use ($windows): bool {
+            $t = $moment->format('H:i');
+            foreach ($windows as [$open, $close]) {
+                if ($t >= $open && ($t <= $close || $close === '00:00')) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+        $params = ['start' => $config->getOpeningStart(), 'end' => $config->getOpeningEnd()] + ($hasEvening ? ['eveningStart' => (string) $evening['start'], 'eveningEnd' => (string) $evening['end']] : []);
+        $label = sprintf('%s à %s%s', $config->getOpeningStart(), $config->getOpeningEnd(), $hasEvening ? sprintf(', ou %s à %s', $evening['start'], $evening['end']) : '');
+        if (!$inside($start)) {
+            $errors[] = CartQuoteException::error("$path.booking.start", 'OUTSIDE_PICKUP_HOURS', sprintf('heure de prise hors des heures d\'ouverture (%s)', $label), $params);
+        }
+        if (!$inside($end)) {
+            $errors[] = CartQuoteException::error("$path.booking.end", 'OUTSIDE_RETURN_HOURS', sprintf('heure de retour hors des heures d\'ouverture (%s)', $label), $params);
         }
     }
 

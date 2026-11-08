@@ -116,7 +116,7 @@ Toutes les routes qui renvoient un produit (`/api/products/by-slug/{slug}`, `/ap
 | `kind` | `standard` ou `vehicle` (un `VehicleProduct`, même table : les véhicules sont servis par `by-slug`) |
 | `sale.enabled`, `rental.enabled`, `subscription.enabled` | modes explicites, cumulables (colonnes `product.sale_enabled`, `rental_enabled`, `subscription_enabled` ; EasyAdmin « Modes de vente »). L'ancien `mode` est dérivé : `booking` = location seule, `retail` sinon ; `isBookable()` = location activée |
 | `customizable` | **calculé** (09/10/2026, `Product::hasCustomizationConfig`) : vrai dès qu'une variante du produit a au moins une combinaison de personnalisation portant au moins une valeur d'option (ce que `GET /api/customization/config/{variantId}` affiche), quel que soit le nombre de variantes ; même règle dans la fiche, les listes, les sélections et par catégorie. La case `product.customizable` ne compte plus et a quitté les formulaires EasyAdmin (jamais cochée sur les sites existants, elle masquait la personnalisation de Kara & B) ; combinaisons préchargées dans les requêtes de fiche et de liste |
-| `rental` (si activée) | `bookingConfig` complet, montants en **cents** : `granularity`, `minDuration`, `maxDuration`, `stockQuantity`, `bufferTime`, `rates[]` (`hourRate`…`monthRate`), `openingHours { start, end }`, `halfDays[]`, `allowedDates` (null = toutes), `eveningSlot`, `minDaysStandard`, `deposit`, `extraPassengerFee`, `arrivalLeadMinutes`, `cancellationPolicy`, `included[]`, `excluded[]`, `notes` (colonnes de `booking_configuration`, EasyAdmin « Configuration de location », panneau « Boutique réglable ») |
+| `rental` (si activée) | `bookingConfig` complet, montants en **cents** : `granularity` (`days` \| `hours` \| `minutes_30` \| `minutes_15` \| `datetime`), `timeStepMinutes` (pas des heures : 60 / 30 / 15 selon la grille horaire, réglage de la grille `datetime`, null à la journée), `returnToleranceMinutes` (grille `datetime` seulement, sinon null), `minDuration`, `maxDuration`, `stockQuantity`, `bufferTime`, `rates[]` (`hourRate`…`monthRate`), `openingHours { start, end }`, `halfDays[]`, `allowedDates` (null = toutes), `eveningSlot`, `minDaysStandard`, `deposit`, `extraPassengerFee`, `arrivalLeadMinutes`, `cancellationPolicy`, `included[]`, `excluded[]`, `notes` (colonnes de `booking_configuration`, EasyAdmin « Configuration de location », panneau « Boutique réglable ») |
 | `pricing` | `{ currency, regular, special: { amount, from, to, active } | null, amount }` en cents ; `amount` = promotion en cours, sinon prix de vente |
 | `variants[]` | `price` en cents (null = prix du produit, colonne `product_variant.price`), `stockQuantity`, `options[] { code, name, value, … anciens noms }`. Ordre (31/10/2026, `ProductCommerceDto::orderedVariants`) : variantes par identifiant croissant, options de chaque variante par type d'option puis valeur, identique dans la fiche (`by-slug`, `/api/products/{id}`), les listes, les sélections et `/api/products/{id}/variants` ; aucune position saisie dans EasyAdmin (la fiche rendait « L, XL, M, S » : aucun `ORDER BY`) |
 | `vehicleDetails` | `{ year, brand, model, vin, transmission, gasType, enginePower, hoursOrMileage, condition, color }` ou null |
@@ -231,7 +231,8 @@ d'article**.
   `day`, `week`, `month`, par défaut `hour` (grille horaire) ou `day` ; unités = durée arrondie au-dessus en longueurs
   d'unité (heure 1 h, demi-journée 4 h, jour, semaine 7 j, mois 30 j). Règles de `booking_configuration`, 422
   `errors[{ path, message }]` : `minDuration` / `maxDuration` (heures ou jours selon la grille), `minDaysStandard`,
-  `allowedDates`, `openingHours` ou `eveningSlot` (grille horaire), disponibilité (`remaining` dans l'erreur).
+  `allowedDates`, `openingHours` ou `eveningSlot` (grille horaire), disponibilité (`remaining` dans l'erreur). Grille `datetime` :
+  voir « Prise et retour avec date et heure » ci-dessous (tolérance de retard, pas des heures, heures de prise et de retour).
 - Livraison : 0 sans `carrierId` ; prix fixe du transporteur ; transporteur EasyPost (`carrierAccountId`) : tarif
   choisi dans `shipping/summary`, envoyé en `shippingPrice`. `GET /api/Carrier` : `isFree`, `estimatedDays`
   (colonne `carrier.estimated_days`, migration `Version20261008140000`, script
@@ -247,6 +248,43 @@ d'article**.
   boutique (`BoutiqueSettingsService::isGuestCheckoutAllowed`). `GET /api/booking/check/{id}` : **409** avec
   `remaining_stock` quand la quantité n'est pas disponible (200 auparavant).
 - Tests : `tests/Functional/Boutique/CartQuoteApiTest.php`.
+
+### Prise et retour avec date et heure (grille `datetime`, 08/11/2026, réponse à Next, à l'application mobile et à la caisse)
+
+Le modèle le plus courant : le client choisit **une date et une heure de prise, puis une date et une heure de retour**, sur un ou
+plusieurs jours (du 2 à 9 h au 9 à 10 h). Réglage du backend, pas du front : `booking_configuration.granularity = 'datetime'`
+(questionnaire « Configurer une location pas à pas », option « Avec date et heure de prise et de retour » ; écran Règles de location),
+exposé dans `rental.granularity` de la fiche produit, pour que le site, l'application mobile et la caisse montrent le même écran.
+Colonnes ajoutées (migration `Version20261120100000`, script `scripts/migrate_all_v2_booking_datetime.sh` appliqué partout) :
+`return_tolerance_minutes`, `time_step_minutes`.
+
+1. **Calcul des jours, règle exacte** (`CartQuoteCalculator::rental`) : `heuresFacturées = max(0, heures − toléranceMinutes / 60)` ;
+   `jours = ceil(heuresFacturées / 24)` ; unités = `max(1, ceil(jours / longueur))` avec jour 1, semaine 7, mois 30 ;
+   formule `hour` : `max(1, ceil(heuresFacturées))` ; `halfDay` : `max(1, ceil(heuresFacturées / 4))`. Prix = tarif de la formule
+   × unités (+ frais par passager). La tolérance (`returnToleranceMinutes`, 0 par défaut, au plus 1 439) **s'applique à toutes
+   les formules**, semaine et mois compris. Sans tolérance : 169 h → 8 jours, 167 h → 7 jours, 16 h → 1 jour. Avec 60 minutes :
+   169 h → 7 jours, 170 h → 8 jours, 16 h → 1 jour (ou 15 h à l'heure). Pas d'heures supplémentaires au tarif horaire au-delà des
+   jours entiers : une formule, un arrondi. `minDuration` / `maxDuration` sont **en heures** sur cette grille et se vérifient sur la
+   durée réelle (pas la durée facturée) ; `minDaysStandard` sur les jours facturés. `durationType` par défaut : `day`.
+2. **Heures de prise et de retour** : si `openingHours` (ou `eveningSlot`) est réglé, l'heure de prise **et** l'heure de retour
+   doivent chacune tomber dans ces plages, **n'importe quel jour** (pas de contrainte « même jour », contrairement aux grilles
+   horaires). Codes 422 `OUTSIDE_PICKUP_HOURS` (`items[i].booking.start`) et `OUTSIDE_RETURN_HOURS` (`items[i].booking.end`),
+   `params { start, end, eveningStart?, eveningEnd? }`. Pas d'heures de prise et de retour distinctes des heures d'ouverture : les
+   heures d'ouverture servent aux deux. Sans heures d'ouverture : à toute heure.
+3. **Disponibilité** : à l'heure près sur plusieurs jours, avec `bufferTime` : un retour le 9 à 10 h et un battement de 30 min
+   laissent le produit pris jusqu'à 10 h 30 et libre à 11 h (pas des heures). Avant le devis : `GET /api/booking/check/{productId}
+   ?start=&end=&quantity=` → 200 disponible, 409 `{ available: false, remaining_stock }`. `GET /api/booking/calendar/{productId}`
+   rend des créneaux au pas réglé (`timeStepMinutes`), filtrés par les heures d'ouverture, utilisables sur plusieurs jours (lourd sur
+   une longue plage : préférer `check` pour la plage choisie). Le devis répond `DATES_UNAVAILABLE` avec `remaining`.
+4. **Pas des heures** : `timeStepMinutes` (`time_step_minutes`, 60 par défaut ; 5, 10, 15, 20, 30, 60 ou 120 dans le questionnaire).
+   Les minutes de la prise et du retour doivent être des multiples du pas : 422 `TIME_STEP_INVALID` (`items[i].booking.start` /
+   `.end`, `params { stepMinutes }`). Exposé pour toutes les grilles (`hours` → 60, `minutes_30` → 30, `minutes_15` → 15, `days` → null).
+5. **Activation** : `granularity: "datetime"` dans la fiche produit ; le front affiche alors deux sélecteurs date + heure (prise, retour)
+   au pas `timeStepMinutes`, dans `openingHours` si présent, et calcule l'affichage du prix avec la règle du point 1 ; le serveur
+   reste la référence (devis, intent, commande). Les autres grilles ne changent pas (`days` : jours de calendrier bornes incluses envoyés
+   à l'ouverture et à la fermeture ; `hours` : même jour).
+6. **Essai sur demo** : le Ponton (`DEMO-PONTON`) est réglé en `datetime` sur demo (prise et retour de 08:00 à 20:00, pas 60 min,
+   tolérance 60 min, 24 h minimum, caution et frais par passager inchangés). Test : `tests/Functional/Boutique/RentalDatetimeApiTest.php`.
 
 ### Fuseau horaire de la boutique et dates des réservations (04/11/2026, application e-commerce mobile, lot L7b)
 

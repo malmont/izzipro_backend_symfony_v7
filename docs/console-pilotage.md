@@ -231,7 +231,8 @@ mois ne servent jamais ; formules heure et demi-journée non proposées à la jo
 d'ouverture, stock à zéro, produit sans catégorie ou sans grille, grille sans formule atteignable. Le même encadré ouvre la fiche et la
 modification de l'écran « Règles de location » (`BookingConfigurationCrudController`, panneaux explicites, devise du site sur la caution et les
 frais), et l'écran « Grilles tarifaires » dit quelles formules sont proposées selon la grille (devise du site, libellés en français).
-Test : `tests/Functional/Admin/RentalConfiguratorTest.php`.
+Test : `tests/Functional/Admin/RentalConfiguratorTest.php`. Depuis le 08/11/2026 le questionnaire propose aussi « Avec date et heure de
+prise et de retour » (grille `datetime` : tolérance de retard, pas des heures ; règle de calcul dans `docs/boutique.md`).
 
 ## Crédits IA : réglés par la plateforme seulement (07/11/2026)
 

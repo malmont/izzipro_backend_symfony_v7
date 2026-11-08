@@ -109,6 +109,19 @@ class RentalConfiguratorTest extends WebTestCase
         $this->assertSame('8', $crawler->filter('[data-rental-form] input[name="maxDuration"]')->attr('value'), 'questionnaire prérempli');
         $this->assertSame((string) $pack['id'], $crawler->filter('[data-rental-form] [data-pack]:checked')->attr('value'), 'la grille existante est proposée à la modification');
 
+        // Prise et retour avec date et heure (08/11/2026) : tolérance et pas enregistrés, résumé adapté
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . "/admin/location/configurer/$id", ['granularity' => 'datetime', 'returnTolerance' => '60', 'timeStep' => '30', 'maxDuration' => '', 'pack' => 'keep'] + $answers, [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        $this->assertSame(302, $this->client->getResponse()->getStatusCode(), $this->client->getResponse()->getContent());
+        $this->assertSame(['datetime', 60, 30, null], array_values($this->db->fetchAssociative('SELECT granularity, return_tolerance_minutes, time_step_minutes, max_duration FROM booking_configuration WHERE product_id = ?', [$id])));
+        $crawler = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin?routeName=admin_location_configurer&product=' . $id, [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        $summary = $crawler->filter('[data-current-summary]')->text();
+        $this->assertStringContainsString('date et une heure de prise', $summary);
+        $this->assertStringContainsString('Prise et retour entre 09:00 et 18:00', $summary);
+        $this->assertStringContainsString('par pas de 30 minutes', $summary);
+        $this->assertStringContainsString('60 minutes de retard tolérées', $summary);
+        $this->assertStringNotContainsString('hors d\'atteinte', $summary, 'la journée redevient atteignable : la location peut durer plusieurs jours');
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . "/admin/location/configurer/$id", ['granularity' => 'hours', 'pack' => 'keep'] + $answers, [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]); // retour à la grille horaire pour la suite
+
         // L'écran Règles de location reprend l'encadré
         $configId = (int) $this->db->fetchOne('SELECT id FROM booking_configuration WHERE product_id = ?', [$id]);
         $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin?' . http_build_query(['crudAction' => 'edit', 'crudControllerFqcn' => 'App\Controller\Admin\BookingConfigurationCrudController', 'entityId' => $configId]), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);

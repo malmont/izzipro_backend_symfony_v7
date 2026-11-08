@@ -37,7 +37,7 @@
             <table class="table table-sm mb-0"><thead><tr><th>Produit</th><th>Règles de stock</th><th>Tarif</th><th></th></tr></thead><tbody>
                 {% for p in overview.products %}<tr data-rental-product="{{ p.id }}">
                     <td>{{ p.name }}<div class="small text-muted">{{ p.categories|join(', ') ?: 'sans catégorie' }}</div></td>
-                    <td>{% if p.configured %}<span class="text-success">✔</span> {{ {days: 'journée', hours: 'heure', minutes_30: '30 min', minutes_15: '15 min'}[p.granularity] ?? p.granularity }}, stock {{ p.stock }}{% if p.minDuration %}, min. {{ p.minDuration }}{% endif %}{% else %}<span class="text-danger">✘ à régler</span>{% endif %}</td>
+                    <td>{% if p.configured %}<span class="text-success">✔</span> {{ {days: 'journée', datetime: 'date et heure', hours: 'heure', minutes_30: '30 min', minutes_15: '15 min'}[p.granularity] ?? p.granularity }}, stock {{ p.stock }}{% if p.minDuration %}, min. {{ p.minDuration }}{% endif %}{% else %}<span class="text-danger">✘ à régler</span>{% endif %}</td>
                     <td>{% if p.priced %}<span class="text-success">✔ pack de la catégorie</span>{% else %}<span class="text-danger">✘ aucun pack pour sa catégorie</span>{% endif %}</td>
                     <td class="text-nowrap"><a class="small" href="{{ p.wizardUrl }}">pas à pas</a> · <a class="small" href="{{ p.configUrl }}">règles</a> · <a class="small" href="{{ p.editUrl }}">fiche</a></td>
                 </tr>{% endfor %}

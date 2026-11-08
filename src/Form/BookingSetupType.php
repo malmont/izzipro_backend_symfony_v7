@@ -26,6 +26,7 @@ class BookingSetupType extends AbstractType
                 'label' => 'Unité de temps (Grille)',
                 'choices' => [
                     'À la journée / Nuitée' => 'days',
+                    'Date et heure de prise et de retour' => 'datetime',
                     'À l\'heure' => 'hours',
                     'À la demi-heure (30 min)' => 'minutes_30',
                     'Au quart d\'heure (15 min)' => 'minutes_15',

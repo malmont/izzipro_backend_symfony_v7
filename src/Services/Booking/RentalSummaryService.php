@@ -17,7 +17,7 @@ use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
  */
 class RentalSummaryService
 {
-    public const GRIDS = ['days' => 'à la journée', 'hours' => 'à l\'heure', 'minutes_30' => 'par tranches de 30 minutes', 'minutes_15' => 'par tranches de 15 minutes'];
+    public const GRIDS = ['days' => 'à la journée', 'datetime' => 'avec une date et une heure de prise, puis une date et une heure de retour', 'hours' => 'à l\'heure', 'minutes_30' => 'par tranches de 30 minutes', 'minutes_15' => 'par tranches de 15 minutes'];
     public const FORMULAS = ['hour' => 'l\'heure', 'halfDay' => 'la demi-journée', 'day' => 'la journée', 'week' => 'la semaine', 'month' => 'le mois'];
     /** longueur d'une formule, en heures */
     private const HOURS = ['hour' => 1, 'halfDay' => 4, 'day' => 24, 'week' => 168, 'month' => 720];
@@ -34,14 +34,15 @@ class RentalSummaryService
     {
         $product ??= $config->getProduct();
         $grid = $config->getGranularity() ?? 'days';
-        $hourly = in_array($grid, ['hours', 'minutes_30', 'minutes_15'], true);
+        $datetime = $grid === 'datetime';
+        $hourly = $datetime || in_array($grid, ['hours', 'minutes_30', 'minutes_15'], true);
         $unit = $hourly ? 'h' : 'jour(s)';
         $min = $config->getMinDuration();
         $max = $config->getMaxDuration();
         $lines = [];
         $warnings = [];
 
-        $lines[] = sprintf('Le client réserve %s%s.', self::GRIDS[$grid] ?? $grid, $grid === 'days' ? ' : il choisit une date de début et une date de fin' : ' : il choisit un créneau de début et un créneau de fin dans la journée');
+        $lines[] = sprintf('Le client réserve %s%s.', self::GRIDS[$grid] ?? $grid, $grid === 'days' ? ' : il choisit une date de début et une date de fin' : ($datetime ? ', sur un ou plusieurs jours (ex. : du 2 à 9 h au 9 à 10 h)' : ' : il choisit un créneau de début et un créneau de fin dans la journée'));
         if ($min !== null && $max !== null) {
             $lines[] = sprintf('Durée de %d à %d %s d\'affilée.', $min, $max, $unit);
         } elseif ($min !== null) {
@@ -58,7 +59,15 @@ class RentalSummaryService
             $lines[] = sprintf('%d jour(s) minimum.', $config->getMinDaysStandard());
         }
         $openingSameDay = false;
-        if ($hourly) {
+        if ($datetime) {
+            $step = (int) ($config->effectiveTimeStepMinutes() ?? 60);
+            $tolerance = (int) ($config->getReturnToleranceMinutes() ?? 0);
+            $evening = $config->getEveningSlot();
+            $lines[] = $config->getOpeningStart() !== null && $config->getOpeningEnd() !== null
+                ? sprintf('Prise et retour entre %s et %s%s, n\'importe quel jour, par pas de %d minutes.', $config->getOpeningStart(), $config->getOpeningEnd(), is_array($evening) && isset($evening['start'], $evening['end']) ? sprintf(' (ou le soir de %s à %s)', $evening['start'], $evening['end']) : '', $step)
+                : sprintf('Prise et retour à toute heure, par pas de %d minutes.', $step);
+            $lines[] = sprintf('Prix : la formule choisie (journée, semaine, mois, ou heure) × le nombre d\'unités, arrondi au-dessus%s. Ex. : du 2 à 9 h au 9 à 10 h = 169 h → %s.', $tolerance > 0 ? sprintf(', après %d minutes de retard tolérées', $tolerance) : '', $tolerance >= 60 ? '7 jours' : '8 jours');
+        } elseif ($hourly) {
             if ($config->getOpeningStart() !== null && $config->getOpeningEnd() !== null) {
                 $openingSameDay = true;
                 $evening = $config->getEveningSlot();
@@ -103,6 +112,9 @@ class RentalSummaryService
         $formulas = [];
         foreach (self::FORMULAS as $type => $label) {
             [$reachable, $hint] = $this->reachable($type, $hourly, $min, $max, $openingSameDay);
+            if ($datetime && $type === 'halfDay' && $reachable) {
+                $hint = null;
+            }
             $formulas[$type] = ['label' => $label, 'priced' => $priced[$type], 'reachable' => $reachable, 'hint' => $hint];
         }
         if ($packs === []) {

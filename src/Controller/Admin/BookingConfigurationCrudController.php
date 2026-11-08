@@ -76,20 +76,22 @@ class BookingConfigurationCrudController extends BaseTenantCrudController
             ->setFormTypeOptions(['em' => $tenantEm, 'query_builder' => fn ($repo) => $repo->createQueryBuilder('p')->where('p.rentalEnabled = true')->orderBy('p.name', 'ASC')])
             ->setHelp('Seuls les produits dont la case « Location » est cochée sur la fiche apparaissent ici.');
         yield ChoiceField::new('granularity', 'Comment le client réserve')
-            ->setChoices(['À la journée : une date de début et une date de fin, durées comptées en jours' => 'days', 'À l\'heure : un créneau de début et de fin dans la journée, durées comptées en heures' => 'hours', 'Par tranches de 30 minutes (durées en heures)' => 'minutes_30', 'Par tranches de 15 minutes (durées en heures)' => 'minutes_15'])
+            ->setChoices(['À la journée : une date de début et une date de fin, durées comptées en jours' => 'days', 'Avec date et heure de prise et de retour, sur un ou plusieurs jours (durées en heures, prix par tranches de 24 h arrondies au-dessus)' => 'datetime', 'À l\'heure : un créneau de début et de fin dans la journée, durées comptées en heures' => 'hours', 'Par tranches de 30 minutes (durées en heures)' => 'minutes_30', 'Par tranches de 15 minutes (durées en heures)' => 'minutes_15'])
             ->setHelp('Décide du calendrier affiché au client et de l\'unité des durées ci-dessous.')
             ->formatValue(fn ($v) => RentalSummaryService::GRIDS[$v] ?? $v);
 
         yield FormField::addPanel('Durées autorisées')->setIcon('fas fa-hourglass-half')->collapsible();
         yield IntegerField::new('minDuration', 'Durée minimale')->setHelp('En heures pour une grille horaire, en jours à la journée. Ex. : 1 → au moins 1 h (ou 1 jour).')->setColumns('col-md-4');
         yield IntegerField::new('maxDuration', 'Durée maximale')->setHelp('Même unité. Vide : sans limite. Ex. : grille à l\'heure, 8 → au plus 8 h d\'affilée ; les formules « journée », « semaine », « mois » des grilles tarifaires deviennent alors hors d\'atteinte.')->setColumns('col-md-4')->hideOnIndex();
+        yield IntegerField::new('returnToleranceMinutes', 'Retard toléré au retour (minutes, prise et retour)')->setHelp('Grille « date et heure » seulement. Ex. : 60 → une heure de plus au retour ne coûte pas une journée de plus.')->setColumns('col-md-4')->hideOnIndex();
+        yield IntegerField::new('timeStepMinutes', 'Pas des heures (minutes, prise et retour)')->setHelp('Heures proposées au client : 60 = heures pleines, 30 = demi-heures. Vide : 60.')->setColumns('col-md-4')->hideOnIndex();
         yield IntegerField::new('minDaysStandard', 'Jours minimum facturés (grille à la journée)')->setHelp('Facultatif. Ex. : 2 → un séjour d\'une nuit est refusé.')->setColumns('col-md-4')->hideOnIndex();
 
         yield FormField::addPanel('Exemplaires, horaires et dates')->setIcon('fas fa-clock')->collapsible();
         yield IntegerField::new('stockQuantity', 'Exemplaires identiques')->setHelp('Combien de clients peuvent louer en même temps (ex. : 3 motomarines → 3).')->setColumns('col-md-4');
         yield IntegerField::new('bufferTime', 'Battement entre deux locations (minutes)')->setHelp('Temps de préparation : le créneau suivant commence après ce délai.')->setColumns('col-md-4')->hideOnIndex();
         yield IntegerField::new('arrivalLeadMinutes', 'Arrivée en avance (minutes)')->setHelp('Rappelé au client ; n\'influe pas sur les créneaux.')->setColumns('col-md-4')->hideOnIndex();
-        yield TextField::new('openingStart', 'Ouverture (HH:MM)')->setHelp('Grille horaire seulement. Avec des heures d\'ouverture, une location commence et finit le même jour.')->setColumns('col-md-3')->hideOnIndex();
+        yield TextField::new('openingStart', 'Ouverture (HH:MM)')->setHelp('Grilles horaires : une location commence et finit le même jour. Grille « date et heure » : la prise et le retour tombent dans ces heures, n\'importe quel jour.')->setColumns('col-md-3')->hideOnIndex();
         yield TextField::new('openingEnd', 'Fermeture (HH:MM)')->setColumns('col-md-3')->hideOnIndex();
         yield JsonTextField::new('eveningSlot', 'Créneau du soir (facultatif)')->hideOnIndex()->setColumns('col-md-6')
             ->setHelp('Second créneau après la fermeture, par exemple {"start": "20:30", "end": "23:00"}.');

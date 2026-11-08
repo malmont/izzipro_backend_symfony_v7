@@ -78,7 +78,8 @@ final class ProductCommerceDto
         ], $product->getRentalPacks()));
 
         return [
-            'granularity' => $config?->getGranularity(),
+            'granularity' => $config?->getGranularity(), // days | hours | minutes_30 | minutes_15 | datetime (prise et retour avec date et heure, 08/11/2026)
+            'timeStepMinutes' => $config?->effectiveTimeStepMinutes(), 'returnToleranceMinutes' => $config?->isDatetime() ? (int) ($config->getReturnToleranceMinutes() ?? 0) : null,
             'minDuration' => $config?->getMinDuration(),
             'maxDuration' => $config?->getMaxDuration(),
             'stockQuantity' => $config?->getStockQuantity(),

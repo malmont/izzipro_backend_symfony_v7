@@ -43,7 +43,7 @@
 
             <div class="card mb-3"><div class="card-body">
                 <h2 class="h5">1. Comment le client réserve-t-il ?</h2>
-                {% for opt in [['days', 'À la journée', 'Le client choisit une date de début et une date de fin (nuitées, journées entières). Les durées se comptent en jours.'], ['hours', 'À l\'heure', 'Le client choisit une heure de début et une heure de fin le même jour. Les durées se comptent en heures.'], ['minutes_30', 'Par tranches de 30 minutes', 'Comme à l\'heure, avec des créneaux de 30 minutes.'], ['minutes_15', 'Par tranches de 15 minutes', 'Comme à l\'heure, avec des créneaux de 15 minutes.']] %}
+                {% for opt in [['days', 'À la journée', 'Le client choisit une date de début et une date de fin (nuitées, journées entières). Les durées se comptent en jours.'], ['datetime', 'Avec date et heure de prise et de retour', 'Le modèle le plus courant : le client choisit le jour et l\'heure où il prend le bien, puis le jour et l\'heure où il le rend, sur un ou plusieurs jours. Prix à la journée, à la semaine ou au mois par tranches de 24 h arrondies au-dessus (ou à l\'heure). Les durées se comptent en heures.'], ['hours', 'À l\'heure', 'Le client choisit une heure de début et une heure de fin le même jour. Les durées se comptent en heures.'], ['minutes_30', 'Par tranches de 30 minutes', 'Comme à l\'heure, avec des créneaux de 30 minutes.'], ['minutes_15', 'Par tranches de 15 minutes', 'Comme à l\'heure, avec des créneaux de 15 minutes.']] %}
                 <div class="form-check mb-1"><input class="form-check-input" type="radio" name="granularity" id="g-{{ opt[0] }}" value="{{ opt[0] }}" {{ a.granularity == opt[0] ? 'checked' }} data-granularity><label class="form-check-label" for="g-{{ opt[0] }}"><strong>{{ opt[1] }}</strong> <span class="text-muted small">{{ opt[2] }}</span></label></div>
                 {% endfor %}
                 {{ m.err(errors, 'granularity') }}
@@ -62,19 +62,22 @@
                 <div class="row g-3">
                     <div class="col-md-4"><label class="form-label">Durée minimale (<span data-unit>{{ a.granularity == 'days' ? 'jours' : 'heures' }}</span>)</label><input class="form-control" type="number" min="1" name="minDuration" value="{{ a.minDuration }}">{{ m.err(errors, 'minDuration') }}</div>
                     <div class="col-md-4"><label class="form-label">Durée maximale (<span data-unit>{{ a.granularity == 'days' ? 'jours' : 'heures' }}</span>)</label><input class="form-control" type="number" min="1" name="maxDuration" value="{{ a.maxDuration }}" placeholder="vide = sans limite"><div class="form-text" data-max-hint></div>{{ m.err(errors, 'maxDuration') }}</div>
+                    <div class="col-md-4" data-datetime-only><label class="form-label">Retard toléré au retour (minutes)</label><input class="form-control" type="number" min="0" max="1439" name="returnTolerance" value="{{ a.returnTolerance }}"><div class="form-text">Ex. : 60 → rendre avec une heure de plus ne coûte pas une journée de plus.</div>{{ m.err(errors, 'returnTolerance') }}</div>
+                    <div class="col-md-4" data-datetime-only><label class="form-label">Pas des heures (minutes)</label><select class="form-select" name="timeStep">{% for st in [15, 30, 60, 120] %}<option value="{{ st }}" {{ a.timeStep == st ? 'selected' }}>{{ st == 60 ? 'Heure pleine (60)' : (st == 120 ? 'Deux heures (120)' : st ~ ' minutes') }}</option>{% endfor %}</select><div class="form-text">Heures proposées au client : 9:00, 10:00… ou par demi-heure.</div>{{ m.err(errors, 'timeStep') }}</div>
                     <div class="col-md-4" data-daily-only><label class="form-label">Jours minimum facturés</label><input class="form-control" type="number" min="1" name="minDaysStandard" value="{{ a.minDaysStandard }}" placeholder="facultatif"><div class="form-text">Ex. : 2 → un séjour d'une nuit est refusé.</div>{{ m.err(errors, 'minDaysStandard') }}</div>
                 </div>
             </div></div>
 
             <div class="card mb-3" data-hourly-only><div class="card-body">
                 <h2 class="h5">4. À quelles heures peut-on réserver ?</h2>
-                <p class="text-muted small">Avec des heures d'ouverture, une location commence et finit le même jour. Sans heures, un créneau peut commencer à toute heure et finir un autre jour.</p>
+                <p class="text-muted small" data-hours-hint></p>
                 <div class="row g-3">
                     <div class="col-md-3"><label class="form-label">Ouverture</label><input class="form-control" name="openingStart" value="{{ a.openingStart }}" placeholder="09:00">{{ m.err(errors, 'openingStart') }}</div>
                     <div class="col-md-3"><label class="form-label">Fermeture</label><input class="form-control" name="openingEnd" value="{{ a.openingEnd }}" placeholder="18:00">{{ m.err(errors, 'openingEnd') }}</div>
                     <div class="col-md-3"><label class="form-label">Créneau du soir : début</label><input class="form-control" name="eveningStart" value="{{ a.eveningStart }}" placeholder="facultatif, 20:30">{{ m.err(errors, 'eveningStart') }}</div>
                     <div class="col-md-3"><label class="form-label">Créneau du soir : fin</label><input class="form-control" name="eveningEnd" value="{{ a.eveningEnd }}" placeholder="23:00">{{ m.err(errors, 'eveningEnd') }}</div>
                 </div>
+                <div data-slots-only>
                 <h3 class="h6 mt-3">Demi-journées proposées (facultatif)</h3>
                 <p class="text-muted small">Le client pourra choisir « Matin » ou « Après-midi » d'un clic, au tarif demi-journée.</p>
                 {% for i in [1, 2] %}
@@ -85,6 +88,7 @@
                     <div class="col-md-12">{{ m.err(errors, 'halfDay' ~ i ~ 'Label') }}{{ m.err(errors, 'halfDay' ~ i ~ 'Start') }}{{ m.err(errors, 'halfDay' ~ i ~ 'End') }}</div>
                 </div>
                 {% endfor %}
+                </div>
             </div></div>
 
             <div class="card mb-3"><div class="card-body">
@@ -140,15 +144,18 @@
             function val(name) { var el = form.querySelector('[name="' + name + '"]'); return el ? el.value.trim() : ''; }
             function refresh() {
                 var g = (form.querySelector('[data-granularity]:checked') || {}).value || 'days';
-                var hourly = g !== 'days';
+                var hourly = g !== 'days'; var datetime = g === 'datetime';
                 form.querySelectorAll('[data-hourly-only]').forEach(function (el) { el.style.display = hourly ? '' : 'none'; });
                 form.querySelectorAll('[data-daily-only]').forEach(function (el) { el.style.display = hourly ? 'none' : ''; });
+                form.querySelectorAll('[data-datetime-only]').forEach(function (el) { el.style.display = datetime ? '' : 'none'; });
+                form.querySelectorAll('[data-slots-only]').forEach(function (el) { el.style.display = datetime ? 'none' : ''; });
+                var hh = form.querySelector('[data-hours-hint]'); if (hh) hh.textContent = datetime ? 'La prise et le retour doivent tomber dans ces heures, n’importe quel jour. Sans heures : à toute heure.' : 'Avec des heures d’ouverture, une location commence et finit le même jour. Sans heures, un créneau peut commencer à toute heure et finir un autre jour.';
                 form.querySelectorAll('[data-unit]').forEach(function (el) { el.textContent = hourly ? 'heures' : 'jours'; });
                 var listMode = (form.querySelector('[data-dates-mode]:checked') || {}).value === 'list';
                 form.querySelector('[data-dates-list]').style.display = listMode ? '' : 'none';
-                var max = parseInt(val('maxDuration'), 10); var sameDay = hourly && val('openingStart') && val('openingEnd');
+                var max = parseInt(val('maxDuration'), 10); var sameDay = hourly && !datetime && val('openingStart') && val('openingEnd');
                 var hint = form.querySelector('[data-max-hint]');
-                hint.textContent = hourly ? (sameDay ? 'Avec des heures d’ouverture, le client ne dépasse jamais une journée.' : 'En heures d’affilée. Vide : sans limite.') : 'En jours. Vide : sans limite.';
+                hint.textContent = datetime ? 'En heures (24 = un jour, 168 = une semaine). Vide : sans limite.' : (hourly ? (sameDay ? 'Avec des heures d’ouverture, le client ne dépasse jamais une journée.' : 'En heures d’affilée. Vide : sans limite.') : 'En jours. Vide : sans limite.');
                 form.querySelectorAll('[data-rate]').forEach(function (box) {
                     var key = box.getAttribute('data-rate'); var h = hours[key]; var why = '';
                     if (!hourly && (key === 'rateHour' || key === 'rateHalfDay')) why = 'Non proposée à la journée.';

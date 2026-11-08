@@ -82,11 +82,12 @@ class BookingAvailabilityService
             'hours' => 'PT1H',
             'minutes_30' => 'PT30M',
             'minutes_15' => 'PT15M',
+            'datetime' => 'PT' . (int) ($config->effectiveTimeStepMinutes() ?? 60) . 'M', // prise et retour avec date et heure (08/11/2026) : créneaux au pas réglé
             default => 'P1D'
         };
 
         // Grille horaire : seuls les créneaux des heures d'ouverture (ou du créneau du soir) sont renvoyés (08/10/2026)
-        $opening = in_array($granularity, ['hours', 'minutes_30', 'minutes_15'], true) && $config->getOpeningStart() !== null && $config->getOpeningEnd() !== null
+        $opening = in_array($granularity, ['hours', 'minutes_30', 'minutes_15', 'datetime'], true) && $config->getOpeningStart() !== null && $config->getOpeningEnd() !== null
             ? array_values(array_filter([[$config->getOpeningStart(), $config->getOpeningEnd()], [$config->getEveningSlot()['start'] ?? null, $config->getEveningSlot()['end'] ?? null]], fn ($w) => $w[0] !== null && $w[1] !== null))
             : null;
 

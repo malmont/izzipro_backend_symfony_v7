@@ -83,6 +83,13 @@ class BookingConfiguration
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $notes = null;
 
+    // Prise et retour avec date et heure (grille `datetime`, 08/11/2026) : tolérance de retard non facturée (minutes) et pas des heures (minutes)
+    #[ORM\Column(name: 'return_tolerance_minutes', nullable: true)]
+    private ?int $returnToleranceMinutes = null;
+
+    #[ORM\Column(name: 'time_step_minutes', nullable: true)]
+    private ?int $timeStepMinutes = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -98,6 +105,16 @@ class BookingConfiguration
     public function setHalfDays(?array $halfDays): static { $this->halfDays = $halfDays; return $this; }
     public function getAllowedDates(): ?array { return $this->allowedDates; }
     public function setAllowedDates(?array $allowedDates): static { $this->allowedDates = $allowedDates; return $this; }
+    public function getReturnToleranceMinutes(): ?int { return $this->returnToleranceMinutes; }
+    public function setReturnToleranceMinutes(?int $minutes): static { $this->returnToleranceMinutes = $minutes; return $this; }
+    public function getTimeStepMinutes(): ?int { return $this->timeStepMinutes; }
+    public function setTimeStepMinutes(?int $minutes): static { $this->timeStepMinutes = $minutes; return $this; }
+    /** Pas des heures exposé au client : réglage de la grille `datetime` (60 par défaut), déduit des grilles horaires, null à la journée */
+    public function effectiveTimeStepMinutes(): ?int
+    {
+        return match ($this->granularity) { 'datetime' => $this->timeStepMinutes ?: 60, 'hours' => 60, 'minutes_30' => 30, 'minutes_15' => 15, default => null };
+    }
+    public function isDatetime(): bool { return $this->granularity === 'datetime'; }
     public function getEveningSlot(): ?array { return $this->eveningSlot; }
     public function setEveningSlot(?array $eveningSlot): static { $this->eveningSlot = $eveningSlot; return $this; }
     public function getMinDaysStandard(): ?int { return $this->minDaysStandard; }
