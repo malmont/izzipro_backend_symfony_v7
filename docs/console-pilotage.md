@@ -493,6 +493,18 @@ cette page (écran `configuration`, aussi connu de l'assistant : `SiteAssistantT
 
 Test : `tests/Functional/Admin/ConfigurationConsolePageTest.php`.
 
+## Guide des composants du site (08/11/2026)
+
+Demandé par le propriétaire : un administrateur doit comprendre d'un coup d'œil à quoi sert chaque écran de composant de la landing page et de la
+boutique. `Services/Admin/ComponentGuideCatalog` décrit, par contrôleur EasyAdmin, un **nom explicite** (« Blocs de présentation (image, titre,
+texte, bouton) », « Groupes de blocs (côte à côte) », « Logos de marques et partenaires », « Boutons de liens », « Diaporama de l'accueil »,
+« Atouts (icône + phrase) », « Cartes « Explorer » », « Pages du site (composition) »…), ce que le composant montre sur le site, où il apparaît,
+quoi remplir, un conseil, et une **illustration** (gabarit SVG `templates/admin/guide/svg/<clé>.html.twig`, schéma filaire lisible sur le thème
+sombre). `BaseTenantCrudController::configureCrud` applique le nom à l'écran ; les gabarits `templates/bundles/EasyAdminBundle/crud/{index,new,edit}.html.twig`
+ajoutent, sur ces écrans seulement, un **panneau de droite** « À quoi ça ressemble sur le site » (fonction Twig `admin_component_guide`,
+`Twig/ComponentGuideExtension`). Sections du menu renommées : « Site vitrine (Landing Page) », « Boutique : accueil et pages ». Vingt écrans couverts.
+Pour ajouter un écran : une entrée dans `GUIDES` et son SVG. Test : `tests/Functional/Admin/ComponentGuideTest.php`.
+
 ## Tenir cette fiche à jour
 
 À chaque lot : l'état du tableau ci-dessus, l'inventaire s'il change, et la fiche du module touché (`docs/boutique.md`,

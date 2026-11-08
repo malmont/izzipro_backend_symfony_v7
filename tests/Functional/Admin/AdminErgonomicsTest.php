@@ -141,10 +141,10 @@ class AdminErgonomicsTest extends WebTestCase
         $this->assertStringContainsString(number_format($expected, 2, ',', ' ') . ' $', $html, 'chiffre d\'affaires des commandes validées');
         $this->assertStringNotContainsString(number_format($expected + 999.99, 2, ',', ' ') . ' $', $html, 'la commande annulée n\'est pas comptée');
         $this->assertStringContainsString('hors annulées et incomplètes', $html);
-        // Menu de gauche : le tableau de bord à plat, puis 16 groupes repliables (flèche) à la place des sections ; le groupe
-        // « Maintenance » (cache Redis, workers, tableau de bord technique, compte super administrateur) n'existe que pour le propriétaire (03/11/2026)
-        $this->assertSame(16, substr_count($html, 'has-submenu'), 'chaque section du menu est un groupe repliable');
-        $this->assertSame(16, substr_count($html, 'submenu-toggle-icon'), 'une flèche par groupe');
+        // Menu de gauche : le tableau de bord à plat, puis 17 groupes repliables (flèche) à la place des sections (« Assistant IA » depuis le
+        // 08/11/2026) ; le groupe « Maintenance » (cache Redis, workers, tableau de bord technique, compte super administrateur) n'existe que pour le propriétaire (03/11/2026)
+        $this->assertSame(17, substr_count($html, 'has-submenu'), 'chaque section du menu est un groupe repliable');
+        $this->assertSame(17, substr_count($html, 'submenu-toggle-icon'), 'une flèche par groupe');
         $this->assertStringNotContainsString('Maintenance', $html, 'groupe Maintenance absent pour un administrateur de site');
         $this->assertStringNotContainsString('class="menu-header', $html, 'plus de section non repliable');
         $this->assertStringContainsString('>Caisse<', preg_replace('/\s+/', '', $html), 'groupe Caisse');

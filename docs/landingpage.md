@@ -313,6 +313,7 @@ par lui : l'éditeur les fait valider puis appelle les routes ci-dessous (détai
 | Worker | `Message/LandingAiJobMessage.php`, `MessageHandler/LandingAiJobHandler.php` (transport `landing_ai`) |
 | Synchronisation | `Services/LandingConfigService/` (`LandingConfigStore` : versions dans `var/landingpage-config/`, `FrontendConfigFetcher`, `LandingConfigCompatibilityChecker`), `UseCase/LandingConfigUseCase/`, `Controller/LandingConfigController/`, `Repository/LandingConfigSyncRepository.php` |
 | Administration | `Controller/Admin/AiUsageCrudController.php` (historique), `AiCreditSettingCrudController.php` (crédits mensuels réservés à `ROLE_SUPER_ADMIN`, consignes modifiables par `ROLE_ADMIN`) |
+| Guide des composants (08/11/2026) | `Services/Admin/ComponentGuideCatalog` : nom explicite, explication et illustration de chaque écran de composant (bannières, blocs de présentation, logos, liens, prestations, vidéos, contenus intégrés, pages du site…), panneau de droite des pages EasyAdmin ; détail dans `docs/console-pilotage.md` |
 | Évaluation | `Command/LandingAiEvalCommand.php`, `Services/LandingAiService/Eval/` (cas R, C, P, B, S, Y ; vérifications V7 contraste, V8 alignement, V9 mise en page, V10 goût (`LandingAiTasteCheck`) ; images dans `Eval/fixtures/`) |
 
 ## Tables

@@ -1,0 +1,14 @@
+{# Guide des composants (08/11/2026) : panneau de droite sur les écrans de composants du site, sinon page EasyAdmin inchangée #}
+{% extends '@!EasyAdmin/crud/index.html.twig' %}
+
+{% block main %}
+    {% set guide = admin_component_guide(ea.crud.controllerFqcn) %}
+    {% if guide %}
+        <div class="d-flex flex-wrap align-items-start gap-3" data-component-guide-layout>
+            <div class="flex-grow-1" style="min-width: 0; flex-basis: 560px">{{ parent() }}</div>
+            {{ include('admin/guide/_panel.html.twig', { guide: guide }) }}
+        </div>
+    {% else %}
+        {{ parent() }}
+    {% endif %}
+{% endblock %}

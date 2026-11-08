@@ -1,0 +1,16 @@
+{# Panneau « À quoi sert cet écran » (08/11/2026) : illustration et explication d'un composant du site #}
+<aside class="card shadow-sm" style="width: 340px; max-width: 100%; position: sticky; top: 1rem" data-component-guide="{{ guide.key }}">
+    <div class="card-body">
+        <div class="text-xs text-uppercase text-muted mb-1">À quoi ça ressemble sur le site</div>
+        <div class="rounded p-2 mb-3" style="background: rgba(127, 127, 127, .08); border: 1px solid rgba(127, 127, 127, .25)" data-guide-illustration>
+            {{ include('admin/guide/svg/' ~ guide.svg ~ '.html.twig') }}
+        </div>
+        <h2 class="h6 mb-2">{{ guide.title }}</h2>
+        <p class="small mb-2">{{ guide.purpose }}</p>
+        <p class="small mb-2"><strong>Où :</strong> {{ guide.where }}</p>
+        <div class="small"><strong>Quoi remplir :</strong>
+            <ul class="mb-2 ps-3">{% for f in guide.fields %}<li>{{ f }}</li>{% endfor %}</ul>
+        </div>
+        {% if guide.tip is defined %}<p class="small text-muted mb-0"><i class="fas fa-lightbulb"></i> {{ guide.tip }}</p>{% endif %}
+    </div>
+</aside>

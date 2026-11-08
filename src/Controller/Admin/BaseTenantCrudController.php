@@ -28,8 +28,13 @@ abstract class BaseTenantCrudController extends AbstractCrudController
 
     public function configureCrud(Crud $crud): Crud
     {
-        return parent::configureCrud($crud)
-            ->setDefaultSort(['id' => 'ASC']);
+        $crud = parent::configureCrud($crud)->setDefaultSort(['id' => 'ASC']);
+        // Guide des composants (08/11/2026) : nom explicite de l'écran ; un contrôleur qui pose ses propres libellés après parent::configureCrud() garde les siens
+        if (($guide = \App\Services\Admin\ComponentGuideCatalog::for(static::class)) !== null) {
+            $crud->setEntityLabelInSingular($guide['singular'])->setEntityLabelInPlural($guide['title'])->setPageTitle(Crud::PAGE_INDEX, $guide['title']);
+        }
+
+        return $crud;
     }
 
     /**

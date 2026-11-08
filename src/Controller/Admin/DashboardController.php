@@ -499,7 +499,7 @@ class DashboardController extends AbstractDashboardController
 
     /** Icône de chaque groupe du menu (sections repliables, 31/10/2026) */
     private const MENU_GROUP_ICONS = [
-        'Maintenance' => 'fas fa-tools', 'UI' => 'fas fa-palette', 'Landing Page' => 'fas fa-window-maximize', 'Assistant IA' => 'fas fa-magic', 'Médiathèque & Partage' => 'fas fa-photo-video',
+        'Maintenance' => 'fas fa-tools', 'Boutique : accueil et pages' => 'fas fa-palette', 'Site vitrine (Landing Page)' => 'fas fa-window-maximize', 'Assistant IA' => 'fas fa-magic', 'Médiathèque & Partage' => 'fas fa-photo-video',
         'Entreprise' => 'fa fa-building', 'Livraison' => 'fas fa-truck', 'IIZIMANAGER' => 'fas fa-briefcase', 'Réservations & Clients' => 'fas fa-users',
         'Mouvements stock' => 'fas fa-dolly', 'Caisse' => 'fas fa-cash-register', 'Order' => 'fas fa-shopping-bag', 'Payment' => 'fas fa-credit-card',
         'Taxe' => 'fas fa-percent', 'Catalogue & Véhicules' => 'fas fa-boxes', 'Location / Réservation' => 'fas fa-calendar-check',
@@ -564,33 +564,33 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToRoute('Plateforme : pilotage', 'fas fa-sliders-h', 'admin_plateforme')
             ->setPermission('ROLE_SUPER_ADMIN');
         
-        yield MenuItem::section('UI');
-        yield MenuItem::linkToCrud('Home Slider', 'fas fa-images', HomeSlider::class);
-        yield MenuItem::linkToCrud('Admin Settings', 'fas fa-cogs', AdminSettings::class);
-        yield MenuItem::linkToCrud('Configuration boutique réglable', 'fas fa-store', BoutiqueSetting::class);
+        yield MenuItem::section('Boutique : accueil et pages');
+        yield MenuItem::linkToCrud('Diaporama de l\'accueil', 'fas fa-images', HomeSlider::class);
+        yield MenuItem::linkToCrud('Réglages d\'affichage (ancien)', 'fas fa-cogs', AdminSettings::class);
+        yield MenuItem::linkToCrud('Pages de la boutique (composition)', 'fas fa-store', BoutiqueSetting::class);
         yield MenuItem::linkToCrud('Formules d\'abonnement', 'fas fa-sync-alt', SubscriptionPlan::class);
         yield MenuItem::linkToCrud('Abonnements', 'fas fa-id-card', Subscription::class);
-        yield MenuItem::linkToCrud('Features', 'fa fa-star', Feature::class);
-        yield MenuItem::linkToCrud('Explore Cards', 'fa fa-th-large', ExploreCard::class);
+        yield MenuItem::linkToCrud('Atouts (icône + phrase)', 'fa fa-star', Feature::class);
+        yield MenuItem::linkToCrud('Cartes « Explorer »', 'fa fa-th-large', ExploreCard::class);
 
-        yield MenuItem::section('Landing Page');
+        yield MenuItem::section('Site vitrine (Landing Page)');
 
 
-        yield MenuItem::linkToCrud('Bannières', 'fas fa-image', Banniere::class);
-        yield MenuItem::linkToCrud('Offres d\'emploi', 'fas fa-briefcase', Emploi::class);
-        yield MenuItem::linkToCrud('Candidatures', 'fas fa-file-alt', Candidature::class);
-        yield MenuItem::linkToCrud('Marques', 'fas fa-tags', Marque::class);
-        yield MenuItem::linkToCrud('Catégories de Marque', 'fas fa-sitemap', CategorieMarque::class);
-        yield MenuItem::linkToCrud('Multiliens', 'fas fa-link', Multilien::class);
-        yield MenuItem::linkToCrud('Section Recherche', 'fas fa-search', Recherche::class);
-        yield MenuItem::linkToCrud('Offres de Service', 'fas fa-concierge-bell', ServiceOffer::class);
+        yield MenuItem::linkToCrud('Diaporama d\'accueil (bannières)', 'fas fa-image', Banniere::class);
+        yield MenuItem::linkToCrud('Offres d\'emploi (Carrières)', 'fas fa-briefcase', Emploi::class);
+        yield MenuItem::linkToCrud('Candidatures reçues', 'fas fa-file-alt', Candidature::class);
+        yield MenuItem::linkToCrud('Logos de marques et partenaires', 'fas fa-tags', Marque::class);
+        yield MenuItem::linkToCrud('Groupes de logos', 'fas fa-sitemap', CategorieMarque::class);
+        yield MenuItem::linkToCrud('Boutons de liens', 'fas fa-link', Multilien::class);
+        yield MenuItem::linkToCrud('Barre de recherche (section)', 'fas fa-search', Recherche::class);
+        yield MenuItem::linkToCrud('Prestations réservables', 'fas fa-concierge-bell', ServiceOffer::class);
         yield MenuItem::linkToCrud('Familles de prestations', 'fas fa-layer-group', \App\Entity\ServiceFamily::class);
-        yield MenuItem::linkToCrud('Vidéos', 'fas fa-video', Video::class);
-        yield MenuItem::linkToCrud('Contenus Intégrés', 'fas fa-code', Embed::class);
-        yield MenuItem::linkToCrud('Configuration', 'fas fa-cogs', LandingPageSetting::class);
-        yield MenuItem::linkToCrud('Bannières Statiques', 'fas fa-image', BaniereStatique::class);
-        yield MenuItem::linkToCrud('Présentations', 'fas fa-columns', Presentation::class);
-        yield MenuItem::linkToCrud('Groupes de Présentation', 'fas fa-columns', PresentationGroup::class);
+        yield MenuItem::linkToCrud('Vidéos (section vidéo)', 'fas fa-video', Video::class);
+        yield MenuItem::linkToCrud('Contenus intégrés (carte, agenda…)', 'fas fa-code', Embed::class);
+        yield MenuItem::linkToCrud('Pages du site (composition)', 'fas fa-cogs', LandingPageSetting::class);
+        yield MenuItem::linkToCrud('Bannières fixes (image, titre, bouton)', 'fas fa-image', BaniereStatique::class);
+        yield MenuItem::linkToCrud('Blocs de présentation', 'fas fa-columns', Presentation::class);
+        yield MenuItem::linkToCrud('Groupes de blocs (côte à côte)', 'fas fa-columns', PresentationGroup::class);
 
         // Assistant IA : section à part (08/11/2026) ; l'assistant touche la landing page, la boutique, les fiches produit et le pilotage
         yield MenuItem::section('Assistant IA');
