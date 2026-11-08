@@ -499,7 +499,7 @@ class DashboardController extends AbstractDashboardController
 
     /** Icône de chaque groupe du menu (sections repliables, 31/10/2026) */
     private const MENU_GROUP_ICONS = [
-        'Maintenance' => 'fas fa-tools', 'Boutique : accueil et pages' => 'fas fa-palette', 'Site vitrine (Landing Page)' => 'fas fa-window-maximize', 'Assistant IA' => 'fas fa-magic', 'Médiathèque & Partage' => 'fas fa-photo-video',
+        'Maintenance' => 'fas fa-tools', 'Boutique : accueil et pages' => 'fas fa-palette', 'Site vitrine (Landing Page)' => 'fas fa-window-maximize', 'Assistant IA' => 'fas fa-magic', 'Réglages avancés (site)' => 'fas fa-code', 'Médiathèque & Partage' => 'fas fa-photo-video',
         'Entreprise' => 'fa fa-building', 'Livraison' => 'fas fa-truck', 'IIZIMANAGER' => 'fas fa-briefcase', 'Réservations & Clients' => 'fas fa-users',
         'Mouvements stock' => 'fas fa-dolly', 'Caisse' => 'fas fa-cash-register', 'Order' => 'fas fa-shopping-bag', 'Payment' => 'fas fa-credit-card',
         'Taxe' => 'fas fa-percent', 'Catalogue & Véhicules' => 'fas fa-boxes', 'Location / Réservation' => 'fas fa-calendar-check',
@@ -566,7 +566,6 @@ class DashboardController extends AbstractDashboardController
         
         yield MenuItem::section('Boutique : accueil et pages');
         yield MenuItem::linkToCrud('Diaporama de l\'accueil', 'fas fa-images', HomeSlider::class);
-        yield MenuItem::linkToCrud('Pages de la boutique (composition)', 'fas fa-store', BoutiqueSetting::class);
         yield MenuItem::linkToCrud('Formules d\'abonnement', 'fas fa-sync-alt', SubscriptionPlan::class);
         yield MenuItem::linkToCrud('Abonnements', 'fas fa-id-card', Subscription::class);
         yield MenuItem::linkToCrud('Atouts (icône + phrase)', 'fa fa-star', Feature::class);
@@ -586,10 +585,14 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Familles de prestations', 'fas fa-layer-group', \App\Entity\ServiceFamily::class);
         yield MenuItem::linkToCrud('Vidéos (section vidéo)', 'fas fa-video', Video::class);
         yield MenuItem::linkToCrud('Contenus intégrés (carte, agenda…)', 'fas fa-code', Embed::class);
-        yield MenuItem::linkToCrud('Pages du site (composition)', 'fas fa-cogs', LandingPageSetting::class);
         yield MenuItem::linkToCrud('Bannières fixes (image, titre, bouton)', 'fas fa-image', BaniereStatique::class);
         yield MenuItem::linkToCrud('Blocs de présentation', 'fas fa-columns', Presentation::class);
         yield MenuItem::linkToCrud('Groupes de blocs (côte à côte)', 'fas fa-columns', PresentationGroup::class);
+
+        // Réglages avancés du site (lot 3, 08/11/2026) : les compositions brutes, pour les utilisateurs techniques ; tout le monde passe par l'éditeur ou « Mon site pas à pas »
+        yield MenuItem::section('Réglages avancés (site)');
+        yield MenuItem::linkToCrud('Pages du site (composition JSON)', 'fas fa-cogs', LandingPageSetting::class);
+        yield MenuItem::linkToCrud('Pages de la boutique (composition JSON)', 'fas fa-store', BoutiqueSetting::class);
 
         // Assistant IA : section à part (08/11/2026) ; l'assistant touche la landing page, la boutique, les fiches produit et le pilotage
         yield MenuItem::section('Assistant IA');

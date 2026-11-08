@@ -1,15 +1,23 @@
-{# Guide des composants (08/11/2026) : panneau de droite sur les écrans de composants du site, sinon page EasyAdmin inchangée #}
+{# Guide des composants (08/11/2026) : panneau de droite sur les écrans de composants du site, sinon page EasyAdmin inchangée ;
+   contenu d'exemple (lot 3) : lignes marquées « exemple à remplacer », bouton pour les effacer #}
 {% extends '@!EasyAdmin/crud/index.html.twig' %}
 
 {% block main %}
     {% set guide = admin_component_guide(ea.crud.controllerFqcn) %}
+    {% set demo = guide ? admin_demo_content(ea.crud.controllerFqcn) : null %}
     {% if guide %}
+        <style>
+            tr[data-demo-content] > td.batch-actions-selector + td::after, tr[data-demo-content] > td:first-child:not(.batch-actions-selector)::after { content: "exemple à remplacer"; display: inline-block; margin-left: .5em; padding: 0 .5em; border-radius: 1em; background: #f6c23e; color: #222; font-size: .7em; vertical-align: middle; white-space: nowrap; }
+            tr[data-demo-content] { background: rgba(246, 194, 62, .07); }
+        </style>
         <div class="d-flex flex-wrap align-items-start gap-3" data-component-guide-layout>
             {# la colonne de gauche défile horizontalement si le tableau ou le formulaire est plus large qu'elle : rien ne passe sous le panneau #}
             <div class="flex-grow-1" style="min-width: 0; flex: 1 1 560px; overflow-x: auto">{{ parent() }}</div>
-            {{ include('admin/guide/_panel.html.twig', { guide: guide }) }}
+            {{ include('admin/guide/_panel.html.twig', { guide: guide, demo: demo }) }}
         </div>
     {% else %}
         {{ parent() }}
     {% endif %}
 {% endblock %}
+
+{% block entity_row_attributes %}{% set demoRow = admin_demo_content(ea.crud.controllerFqcn) %}{% if demoRow and entity.instance.id in demoRow.ids %}data-demo-content="1"{% endif %}{% endblock %}

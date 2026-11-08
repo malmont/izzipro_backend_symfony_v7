@@ -129,6 +129,7 @@ class SiteCharterService
             $errors[] = ['path' => 'brief.pages', 'message' => '8 pages au plus après l\'accueil'];
         }
         $clean['pages'] = $pages;
+        $clean['replaceDemo'] = (bool) ($brief['replaceDemo'] ?? false); // lot 3 : effacer le contenu d'exemple à l'application de la composition
         $handover = array_values(array_unique(array_filter(is_array($brief['handover'] ?? null) ? $brief['handover'] : [], fn ($h) => is_string($h) && isset(self::HANDOVER[$h]))));
         if ($handover !== []) {
             $clean['handover'] = $handover;

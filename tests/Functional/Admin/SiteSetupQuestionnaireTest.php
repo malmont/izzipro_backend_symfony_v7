@@ -57,6 +57,8 @@ class SiteSetupQuestionnaireTest extends WebTestCase
         $db->executeStatement('DELETE FROM site_charter');
         $db->executeStatement('DELETE FROM ai_job');
         $db->executeStatement('DELETE FROM ai_usage');
+        $db->executeStatement("DELETE FROM presentation WHERE titre = 'Exemple questionnaire test'");
+        $db->executeStatement('UPDATE presentation SET is_demo = FALSE');
         static::getContainer()->get(\App\Services\TenantConnectionManager::class)->getPdoMaster()->prepare("DELETE FROM tenant_entitlements WHERE tenant_code = ? AND feature_key = 'module.landing' AND granted_by = 'test'")->execute([MV_TEST_TENANT_CODE]);
         \App\Tests\Functional\Support\AiRightTestHelper::restoreFullAi(static::getContainer());
         static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateTenant();
@@ -86,13 +88,14 @@ class SiteSetupQuestionnaireTest extends WebTestCase
             '_token' => $token, 'activity' => 'Atelier de réparation de vélos à Québec', 'audience' => 'cyclistes du quotidien', 'place' => 'Québec',
             'goals' => ['found', 'book'], 'pages' => ['Services', 'Contact'], 'pagesExtra' => 'Galerie', 'tone' => 'sobre', 'motion' => 'discret', 'density' => 'normale',
             'primaryColor' => '#1d4ed8', 'headingFont' => 'Outfit', 'buttonStyle' => 'pill', 'radius' => '8', 'designMd' => 'Charte test ABC : bleu profond, titres Outfit.',
-            'sells' => 'vélos reconditionnés', 'salesModes' => ['sale', 'rental'], 'handover' => ['pickup'],
+            'sells' => 'vélos reconditionnés', 'salesModes' => ['sale', 'rental'], 'handover' => ['pickup'], 'replaceDemo' => '1',
         ], ['document' => new UploadedFile($pdf, 'charte.pdf', 'application/pdf', null, true)]);
         $this->assertSame(302, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
         $row = $this->db->fetchAssociative('SELECT brief::text AS brief, charter::text AS charter, style::text AS style, design_md, document_name FROM site_charter ORDER BY id LIMIT 1');
         $brief = json_decode((string) $row['brief'], true);
         $this->assertSame(['Services', 'Contact', 'Galerie'], $brief['pages']);
         $this->assertSame(['found', 'book'], $brief['goals']);
+        $this->assertTrue($brief['replaceDemo'], 'remplacer le contenu d\'exemple (lot 3)');
         $this->assertSame('#1d4ed8', json_decode((string) $row['charter'], true)['primaryColor']);
         $this->assertSame(8, json_decode((string) $row['charter'], true)['radius']);
         $this->assertSame('sobre', json_decode((string) $row['style'], true)['tone']);
@@ -112,10 +115,15 @@ class SiteSetupQuestionnaireTest extends WebTestCase
         $this->assertSame('todo', $readiness['landing.pages']['status'], 'les pages du modèle ne comptent pas');
         $this->assertSame('site_setup', $readiness['landing.pages']['action']['screen']);
 
-        // Composer : accueil puis 3 pages
+        // Composer : accueil puis 3 pages. Contenu d'exemple (lot 3) : la présentation affichée par l'accueil est gardée, l'autre effacée
         $catalogue = static::getContainer()->get(LandingAiCatalogue::class);
         $preset = fn (string $id) => json_decode(json_encode($catalogue->preset($id)[1]['composition'], JSON_PRESERVE_ZERO_FRACTION), false);
         $presentationId = (int) static::getContainer()->get(\App\Services\LandingAiService\LandingAiDataSources::class)->availableIds('Presentation')[0];
+        $this->db->executeStatement('UPDATE presentation SET is_demo = TRUE WHERE id = ?', [$presentationId]);
+        $this->db->executeStatement("INSERT INTO presentation (id, titre, texte, is_demo) VALUES (nextval('presentation_id_seq'), 'Exemple questionnaire test', 'x', TRUE)");
+        $unusedDemoId = (int) $this->db->fetchOne("SELECT MAX(id) FROM presentation WHERE titre = 'Exemple questionnaire test'");
+        static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateTenant();
+        $this->assertStringContainsString('sera effacé quand vous appliquerez', (string) $this->client->request('GET', $url)->html(), 'le résumé annonce le remplacement');
         $home = FakeLandingAiClient::pageResponse([
             ['componentKey' => 'Navbar', 'dataType' => null, 'composition' => $preset('boutique-navbar-type-a')],
             ['componentKey' => 'Presentation', 'dataType' => $presentationId, 'composition' => $preset('presentation-type-b')],
@@ -160,6 +168,9 @@ class SiteSetupQuestionnaireTest extends WebTestCase
 
         $this->client->request('POST', $compositionUrl . '/appliquer', ['_token' => $applyToken]);
         $this->assertSame(302, $this->client->getResponse()->getStatusCode());
+        $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM presentation WHERE id = ?', [$unusedDemoId]), 'fiche d\'exemple non affichée : effacée');
+        $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM presentation WHERE id = ? AND is_demo', [$presentationId]), 'fiche d\'exemple affichée par l\'accueil : gardée, toujours marquée');
+        $this->db->executeStatement('UPDATE presentation SET is_demo = FALSE WHERE id = ?', [$presentationId]);
         $config = json_decode((string) $this->db->fetchOne('SELECT configuration::text FROM landing_page_setting ORDER BY id LIMIT 1'), true);
         $this->assertSame(['Accueil', 'Services', 'Contact', 'Galerie'], array_map(fn ($t) => $t['title']['fr'], $config['tabs']));
         $this->assertSame(['Presentation'], array_column($config['tabs'][0]['sections'], 'componentKey'), 'navbar et footer à part');

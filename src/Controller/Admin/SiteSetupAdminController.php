@@ -114,7 +114,7 @@ class SiteSetupAdminController extends AbstractController
 
             return $this->redirect($this->compositionUrl($jobId));
         }
-        $this->addFlash('success', sprintf('Votre site est composé : %d page(s) enregistrée(s). Regardez-le en ligne, puis retouchez dans l\'éditeur si besoin.', $result['tabs']));
+        $this->addFlash('success', sprintf('Votre site est composé : %d page(s) enregistrée(s)%s. Regardez-le en ligne, puis retouchez dans l\'éditeur si besoin.', $result['tabs'], $result['demoDeleted'] > 0 ? sprintf(', %d contenu(s) d\'exemple effacé(s)', $result['demoDeleted']) : ''));
 
         return $this->redirect($this->compositionUrl($jobId));
     }

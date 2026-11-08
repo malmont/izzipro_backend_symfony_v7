@@ -56,19 +56,19 @@ final class ManageSiteContentUseCase
     }
 
     /** @return list<array{resource: string, id: int, label: ?string, fields: list<string>}> */
-    public function list(string $locale): array
+    public function list(string $locale, ?array $resources = null): array
     {
-        return $this->demo->list(self::locale($locale));
+        return $this->demo->list(self::locale($locale), $resources);
     }
 
     /**
      * @return array{deleted: array<string, int>, kept: list<array>}
      * @throws SiteContentException 409 (liste des produits utilisés)
      */
-    public function delete(string $locale): array
+    public function delete(string $locale, ?array $resources = null, array $protect = []): array
     {
-        $before = $this->demo->list(self::locale($locale));
-        $result = $this->demo->delete(self::locale($locale));
+        $before = $this->demo->list(self::locale($locale), $resources);
+        $result = $this->demo->delete(self::locale($locale), $resources, $protect);
         if ($result['deleted'] !== [] || $result['kept'] !== []) {
             $this->audit->record('site-content', null, 'demo-delete', $before, $result, array_keys($result['deleted']), $locale);
             $this->cache->invalidateTenant();

@@ -20,6 +20,8 @@ Vous n'avez rien à dessiner ni à remplir case par case. Vous répondez à huit
 7. **Couleurs, polices, charte.** Si vous avez une charte, mettez les couleurs et déposez le PDF : l'assistant la suit, ici comme dans l'éditeur du site. Sinon, il en propose une et la garde.
 8. **Votre boutique** (si elle est accordée) : ce que vous vendez, vente ou location ou abonnement, livraison ou retrait.
 
+Une case **« Remplacer le contenu d'exemple »** : les fiches fournies avec le site (blocs, bannières, logos, prestations, vidéos) sont effacées quand vous appliquez la composition, sauf celles que les pages composées affichent encore. Décochez pour les garder et les remplacer vous-même : sur chaque écran, elles sont marquées « exemple à remplacer », avec un bouton pour les effacer.
+
 ## Composer, puis appliquer
 
 Sous les questions, « Ce que l'assistant va composer » redit vos réponses en phrases. Le bouton **« Composer mon site »** lance l'assistant (accueil, pages, menu, pied de page, charte) ; comptez une à trois minutes. Vous relisez l'état des pages, puis **« Appliquer sur mon site »** remplace la composition actuelle. L'ancienne reste dans le journal des écritures. Le bandeau « Voir mon site en ligne » du tableau de bord vous mène au résultat.

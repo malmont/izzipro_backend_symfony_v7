@@ -597,7 +597,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (89)
+## Administration (EasyAdmin) (90)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -616,6 +616,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/configuration/courriel-essai` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ConfigurationConsoleAdminController::emailTest` |
 | POST | `/admin/configuration/referentiels` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ConfigurationConsoleAdminController::defaults` |
 | GET | `/admin/configuration` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ConfigurationConsoleAdminController::index` |
+| POST | `/admin/contenu-exemple/effacer/{resource}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\SiteDemoContentAdminController::delete` |
 | GET | `/admin/controles` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ControlsConsoleAdminController::index` |
 | GET, POST | `/admin/livraison/poids` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ShippingConsoleAdminController::weights` |
 | POST | `/admin/livraison/regler` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ShippingConsoleAdminController::settle` |

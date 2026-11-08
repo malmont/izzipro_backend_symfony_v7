@@ -23,8 +23,12 @@ class SiteCompositionApplier
         private readonly LandingPageSettingsService $settings,
         private readonly UpdateLandingPageSettingsUseCase $update,
         private readonly SiteCharterService $charters,
+        private readonly ?\App\Services\SiteContentService\SiteDemoContentService $demo = null, // contenu d'exemple (lot 3, 08/11/2026)
     ) {
     }
+
+    /** Famille de section → ressource de contenu d'exemple (fiche liée par dataType) */
+    private const RESOURCE_OF = ['Presentation' => 'presentations', 'PresentationGroup' => 'presentation-groups', 'BaniereStatique' => 'baniere-statiques', 'Baniere' => 'bannieres', 'Video' => 'videos', 'Marque' => 'marques', 'Reservation' => 'service-offers', 'Service' => 'service-offers', 'ExploreCards' => 'explore-cards'];
 
     /**
      * État d'une tâche de composition, pour l'écran d'attente.
@@ -54,17 +58,17 @@ class SiteCompositionApplier
     }
 
     /**
-     * @return array{applied: bool, errors: list<string>, tabs: int}
+     * @return array{applied: bool, errors: list<string>, tabs: int, demoDeleted: int}
      */
     public function apply(string $jobId, string $locale = 'fr'): array
     {
         $job = $this->jobs->find($jobId);
         if ($job === null || $job->getStatus() !== 'done' || $job->getResult() === null) {
-            return ['applied' => false, 'errors' => ['La composition n\'est pas terminée ou a expiré.'], 'tabs' => 0];
+            return ['applied' => false, 'errors' => ['La composition n\'est pas terminée ou a expiré.'], 'tabs' => 0, 'demoDeleted' => 0];
         }
         $home = json_decode($job->getResult(), false);
         if (!is_object($home) || ($home->mode ?? null) !== 'site' || !is_array($home->sections ?? null) || !is_object($home->navbar ?? null) || !is_object($home->footer ?? null)) {
-            return ['applied' => false, 'errors' => ['Résultat inattendu : ce n\'est pas une composition de site complet.'], 'tabs' => 0];
+            return ['applied' => false, 'errors' => ['Résultat inattendu : ce n\'est pas une composition de site complet.'], 'tabs' => 0, 'demoDeleted' => 0];
         }
         $nextId = 1;
         $section = function (object $s) use (&$nextId): array {
@@ -74,7 +78,7 @@ class SiteCompositionApplier
         foreach (is_object($home->pages ?? null) ? get_object_vars($home->pages) : [] as $slug => $page) {
             $child = isset($page->jobId) ? $this->jobs->find((string) $page->jobId) : null;
             if ($child === null || $child->getStatus() !== 'done' || $child->getResult() === null) {
-                return ['applied' => false, 'errors' => [sprintf('La page « %s » n\'est pas composée.', $page->title ?? $slug)], 'tabs' => 0];
+                return ['applied' => false, 'errors' => [sprintf('La page « %s » n\'est pas composée.', $page->title ?? $slug)], 'tabs' => 0, 'demoDeleted' => 0];
             }
             $result = json_decode($child->getResult(), false);
             $title = (string) ($page->title ?? $result->tab->title ?? $slug);
@@ -89,7 +93,7 @@ class SiteCompositionApplier
         $asObject = json_decode(json_encode($configuration, JSON_PRESERVE_ZERO_FRACTION), false);
         $errors = $this->validator->validateConfiguration($asObject);
         if ($errors !== []) {
-            return ['applied' => false, 'errors' => array_map(fn ($e) => $e['path'] . ' : ' . $e['message'], array_slice($errors, 0, 10)), 'tabs' => 0];
+            return ['applied' => false, 'errors' => array_map(fn ($e) => $e['path'] . ' : ' . $e['message'], array_slice($errors, 0, 10)), 'tabs' => 0, 'demoDeleted' => 0];
         }
         $this->update->execute(new LandingPageSettingsInputDto(json_decode(json_encode($asObject, JSON_PRESERVE_ZERO_FRACTION), true)));
         if (is_object($home->charter ?? null) && $this->charters->get()?->getCharter() === null) {
@@ -97,7 +101,26 @@ class SiteCompositionApplier
         }
         $this->charters->markComposed($jobId);
 
-        return ['applied' => true, 'errors' => [], 'tabs' => count($tabs)];
+        // Contenu d'exemple (lot 3) : effacé sur demande, sauf les fiches que les pages composées affichent encore
+        $demoDeleted = 0;
+        if ($this->demo !== null && (bool) (($this->charters->get()?->getBrief() ?? [])['replaceDemo'] ?? false)) {
+            $protect = [];
+            foreach ($tabs as $tab) {
+                foreach ($tab['sections'] as $section) {
+                    $resource = self::RESOURCE_OF[$section['componentKey']] ?? null;
+                    if ($resource !== null && $section['dataType'] !== null && ctype_digit((string) $section['dataType'])) {
+                        $protect[$resource][] = (int) $section['dataType'];
+                    }
+                }
+            }
+            try {
+                $demoDeleted = (int) array_sum($this->demo->delete($locale, \App\Services\SiteContentService\SiteContentSpec::resourcesFor(['landing']), $protect)['deleted']);
+            } catch (\Throwable) {
+                $demoDeleted = 0; // un refus (fiche utilisée) n'empêche pas la composition d'être appliquée
+            }
+        }
+
+        return ['applied' => true, 'errors' => [], 'tabs' => count($tabs), 'demoDeleted' => $demoDeleted];
     }
 
     private static function uuid(): string

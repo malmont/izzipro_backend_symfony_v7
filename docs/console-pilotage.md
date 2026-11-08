@@ -524,6 +524,18 @@ back-office et l'éditeur Next. Trois pièces :
 
 Tests : `tests/Functional/Admin/SiteSetupQuestionnaireTest.php`, `tests/Functional/LandingPage/SiteCharterApiTest.php`.
 
+**Lot 3 (08/11/2026) : contenu d'exemple et réglages avancés.** Sur les écrans de composants qui portent du contenu d'exemple (`resource` dans
+`ComponentGuideCatalog` : bannières, bannières fixes, blocs, groupes, logos, prestations, vidéos, cartes, diaporama, atouts), les lignes
+`is_demo` sont marquées « exemple à remplacer » (attribut `data-demo-content`, fonction Twig `admin_demo_content`) et le panneau de droite porte
+le compteur et un bouton « Effacer le contenu d'exemple de cet écran » (`POST /admin/contenu-exemple/effacer/{resource}`,
+`SiteDemoContentAdminController`, CSRF `demo_content`) : `SiteDemoContentService::delete($locale, $resources, $protect)` accepte désormais une
+liste de ressources et des fiches protégées. Le questionnaire a une case **« Remplacer le contenu d'exemple »** (`brief.replaceDemo`, cochée par
+défaut tant qu'aucun brief n'existe) : à l'application de la composition, `SiteCompositionApplier` efface le contenu d'exemple de la landing page
+**sauf les fiches que les pages composées affichent** (sections liées par `dataType`), et le brief dit à l'assistant d'écrire ses textes plutôt
+que de se lier aux exemples. Menu : groupe « Réglages avancés (site) » (compositions JSON de la landing page et de la boutique) à part des
+rubriques de composants. Ce qui n'est pas fait, volontairement : réécrire par l'IA les prestations et les logos depuis le brief (l'utilisateur
+les saisit ; l'assistant flottant peut l'y aider).
+
 ## Guide des composants du site (08/11/2026)
 
 Demandé par le propriétaire : un administrateur doit comprendre d'un coup d'œil à quoi sert chaque écran de composant de la landing page et de la

@@ -40,6 +40,14 @@ d'attente, sans vidéo), 4 services, 6 marques, 3 cartes, 3 catégories, 8 produ
 `gmasuite` a aussi les référentiels de la boutique (statuts de commande et de paiement, moyens de paiement, taxes,
 transporteurs, unité de vente), copiés de `demo` : sans eux, un site boutique neuf n'avait aucun statut de commande.
 
+## Dans le back-office (lot 3 « Mon site pas à pas », 08/11/2026)
+
+Sur chaque écran de composant (blocs, bannières, logos, prestations, vidéos, cartes, diaporama, atouts), les fiches `is_demo` sont marquées
+« exemple à remplacer » et le panneau de droite offre « Effacer le contenu d'exemple de cet écran » (`POST /admin/contenu-exemple/effacer/{resource}`,
+mêmes règles de garde que la suppression complète). Le questionnaire « Mon site pas à pas » efface le contenu d'exemple de la landing page quand
+la composition de l'assistant est appliquée (case « Remplacer le contenu d'exemple »), sauf les fiches que les pages composées affichent.
+`SiteDemoContentService::delete($locale, $resources = null, $protect = [])`. Détail : `docs/console-pilotage.md`.
+
 ## Routes (`ROLE_ADMIN`, `SiteContentController`)
 
 - `POST /api/site-content/seed` `{ "scope": ["landing", "boutique"], "mode": "empty" | "add" }` → 201

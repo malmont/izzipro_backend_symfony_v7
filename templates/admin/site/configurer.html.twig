@@ -82,6 +82,11 @@
         </div></div>
         {% endif %}
 
+        {% if a.demoCount > 0 %}
+        <div class="card mb-3"><div class="card-body">
+            <label class="form-check"><input class="form-check-input" type="checkbox" name="replaceDemo" value="1" {{ a.replaceDemo ? 'checked' }} data-replace-demo> <span class="form-check-label"><strong>Remplacer le contenu d'exemple</strong> : les {{ a.demoCount }} fiche(s) fournies avec le site (blocs, bannières, vidéos, logos, prestations) seront effacées quand vous appliquerez la composition, sauf celles que les pages composées affichent encore. Décochez pour les garder et les remplacer vous-même, écran par écran.</span></label>
+        </div></div>
+        {% endif %}
         <div class="card mb-3"><div class="card-body">
             <label class="form-label">Autre chose à dire à l'assistant ?</label>
             <textarea class="form-control" name="extra" rows="2" maxlength="600" placeholder="horaires, valeurs, ce qu'il ne faut surtout pas dire…">{{ a.extra }}</textarea>{{ m.err(errors, 'extra') }}

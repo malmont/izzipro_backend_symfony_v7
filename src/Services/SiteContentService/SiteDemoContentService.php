@@ -35,11 +35,14 @@ final class SiteDemoContentService
     }
 
     /** @return list<array{resource: string, id: int, label: ?string, fields: list<string>}> */
-    public function list(string $locale): array
+    public function list(string $locale, ?array $resources = null): array
     {
         $db = $this->connections->getConnection();
         $items = [];
         foreach (SiteContentSpec::RESOURCES as $resource => $spec) {
+            if ($resources !== null && !in_array($resource, $resources, true)) {
+                continue;
+            }
             foreach ($this->demoRows($db, $resource, $locale) as $row) {
                 $items[] = ['resource' => $resource, 'id' => (int) $row['id'], 'label' => $row['label'], 'fields' => $spec['fields']];
             }
@@ -52,13 +55,21 @@ final class SiteDemoContentService
      * @return array{deleted: array<string, int>, kept: list<array{resource: string, id: int, label: ?string, reason: string}>}
      * @throws SiteContentException 409 (liste des produits utilisés)
      */
-    public function delete(string $locale): array
+    public function delete(string $locale, ?array $resources = null, array $protect = []): array
     {
+        // Lot 3 « Mon site pas à pas » (08/11/2026) : $resources limite la suppression à certaines ressources (un écran, ou la landing page
+        // seule) ; $protect [ressource => ids] garde telles quelles (marque d'exemple comprise) les fiches que les pages composées affichent
         $db = $this->connections->getConnection();
         $ids = [];
         $labels = [];
-        foreach (array_keys(SiteContentSpec::RESOURCES) as $resource) {
+        foreach ($resources ?? array_keys(SiteContentSpec::RESOURCES) as $resource) {
+            if (!isset(SiteContentSpec::RESOURCES[$resource])) {
+                continue;
+            }
             foreach ($this->demoRows($db, $resource, $locale) as $row) {
+                if (in_array((int) $row['id'], array_map('intval', $protect[$resource] ?? []), true)) {
+                    continue;
+                }
                 $ids[$resource][] = (int) $row['id'];
                 $labels[$resource][(int) $row['id']] = $row['label'];
             }

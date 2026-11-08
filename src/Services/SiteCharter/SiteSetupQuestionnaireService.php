@@ -10,6 +10,8 @@ use App\Services\LandingAiService\LandingAiException;
 use App\Services\LandingAiService\LandingAiQuotaService;
 use App\Services\LandingAiService\LandingAiSiteOrchestrator;
 use App\Services\Platform\EntitlementService;
+use App\Services\SiteContentService\SiteContentSpec;
+use App\Services\SiteContentService\SiteDemoContentService;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use App\UseCase\LandingAiUseCase\ComposeLandingSectionUseCase;
@@ -32,7 +34,18 @@ class SiteSetupQuestionnaireService
         private readonly UpdateSiteFeaturesUseCase $siteFeatures,
         private readonly ComposeLandingSectionUseCase $compose,
         private readonly LandingAiQuotaService $quota,
+        private readonly ?SiteDemoContentService $demo = null, // contenu d'exemple (lot 3, 08/11/2026)
     ) {
+    }
+
+    /** Fiches d'exemple de la landing page encore présentes (lot 3) */
+    public function demoCount(): int
+    {
+        try {
+            return $this->demo !== null ? count($this->demo->list('fr', SiteContentSpec::resourcesFor(['landing']))) : 0;
+        } catch (\Throwable) {
+            return 0;
+        }
     }
 
     public function shopEnabled(): bool
@@ -66,6 +79,7 @@ class SiteSetupQuestionnaireService
             'headingFont' => $c['headingFont'] ?? '', 'bodyFont' => $c['bodyFont'] ?? '', 'buttonStyle' => $c['buttonStyle'] ?? '', 'radius' => isset($c['radius']) ? (string) $c['radius'] : '',
             'designMd' => $charter?->getDesignMd() ?? '', 'documentName' => $charter?->getDocumentName(),
             'sells' => $brief['sells'] ?? '', 'salesModes' => $salesModes, 'handover' => $brief['handover'] ?? [], 'extra' => $brief['extra'] ?? '',
+            'replaceDemo' => $brief === [] ? true : (bool) ($brief['replaceDemo'] ?? false), 'demoCount' => $this->demoCount(),
             'locale' => (string) ($entreprise?->getLocale() ?? 'fr'),
         ];
     }
@@ -91,7 +105,7 @@ class SiteSetupQuestionnaireService
         }
         $brief = [
             'activity' => $text('activity'), 'audience' => $text('audience'), 'place' => $text('place'), 'goals' => $list('goals'), 'pages' => $pages,
-            'sells' => $text('sells'), 'handover' => $list('handover'), 'extra' => $text('extra'),
+            'sells' => $text('sells'), 'handover' => $list('handover'), 'extra' => $text('extra'), 'replaceDemo' => (bool) ($post['replaceDemo'] ?? false),
         ];
         $charter = array_filter([
             'primaryColor' => $text('primaryColor'), 'accentColor' => $text('accentColor'), 'textColor' => $text('textColor'), 'backgroundColor' => $text('backgroundColor'),
@@ -158,6 +172,11 @@ class SiteSetupQuestionnaireService
             $modes = array_map(fn ($m) => ['sale' => 'vente', 'rental' => 'location', 'subscription' => 'abonnement'][$m] ?? $m, $a['salesModes']);
             $lines[] = sprintf('Boutique : %s%s%s.', $a['sells'] !== '' ? $a['sells'] . ' ; ' : '', 'modes ' . implode(', ', $modes), $a['handover'] !== [] ? ' ; remise par ' . mb_strtolower(implode(' ou ', array_map(fn ($h) => SiteCharterService::HANDOVER[$h] ?? $h, $a['handover']))) : '');
         }
+        if ($a['demoCount'] > 0) {
+            $lines[] = $a['replaceDemo']
+                ? sprintf('Le contenu d\'exemple de la landing page (%d fiche(s)) sera effacé quand vous appliquerez la composition, sauf ce que les pages composées affichent encore.', $a['demoCount'])
+                : sprintf('Le contenu d\'exemple de la landing page (%d fiche(s)) est gardé : remplacez-le ou effacez-le depuis chaque écran.', $a['demoCount']);
+        }
         $cost = LandingAiQuotaService::cost('site') + count($a['pages']) * LandingAiQuotaService::cost('page');
 
         return ['lines' => $lines, 'pages' => $pages, 'next' => SiteRouting::TABLE, 'cost' => $cost, 'credits' => $this->quota->credits(), 'ready' => $a['activity'] !== ''];
@@ -182,6 +201,9 @@ class SiteSetupQuestionnaireService
         }
         if ($a['extra'] !== '') {
             $parts[] = 'Précisions : ' . $a['extra'];
+        }
+        if ($a['replaceDemo'] && $a['demoCount'] > 0) {
+            $parts[] = 'Les contenus existants du site (présentations, bannières, vidéos, logos) sont des exemples fournis à la création : ne t\'y lie que si c\'est indispensable et écris toi-même les textes.';
         }
         $parts[] = 'Écris de vrais textes en ' . ($a['locale'] === 'en' ? 'anglais' : 'français') . ', adaptés à cette entreprise, jamais de texte d\'exemple.';
 

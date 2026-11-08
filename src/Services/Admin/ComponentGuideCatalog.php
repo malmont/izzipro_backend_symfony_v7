@@ -10,9 +10,10 @@ namespace App\Services\Admin;
  */
 class ComponentGuideCatalog
 {
-    /** @var array<string, array{key: string, title: string, singular: string, purpose: string, where: string, fields: list<string>, tip?: string, svg: string}> */
+    /** @var array<string, array{key: string, title: string, singular: string, purpose: string, where: string, fields: list<string>, tip?: string, svg: string, resource?: string}> */
     public const GUIDES = [
         \App\Controller\Admin\BanniereCrudController::class => [
+            'resource' => 'bannieres', // contenu d'exemple (lot 3, 08/11/2026) : marqué sur l'écran, effaçable
             'key' => 'banniere', 'title' => 'Diaporama d\'accueil (bannières)', 'singular' => 'Bannière du diaporama',
             'purpose' => 'Les grandes images qui défilent en haut de votre page d\'accueil, avec un titre et une phrase par image.',
             'where' => 'Section « Bannière (diaporama) » de la landing page. Les images défilent toutes seules, le visiteur peut passer à la suivante.',
@@ -20,6 +21,7 @@ class ComponentGuideCatalog
             'tip' => 'Trois à cinq bannières suffisent ; une seule donne une image fixe.', 'svg' => 'banniere',
         ],
         \App\Controller\Admin\BaniereStatiqueCrudController::class => [
+            'resource' => 'baniere-statiques', // contenu d'exemple (lot 3, 08/11/2026) : marqué sur l'écran, effaçable
             'key' => 'banniere_statique', 'title' => 'Bannières fixes (image, titre, bouton)', 'singular' => 'Bannière fixe',
             'purpose' => 'Un bandeau qui ne bouge pas : une image ou une couleur de fond, un titre, un texte et un bouton.',
             'where' => 'Section « Bannière statique » de la landing page, souvent entre deux parties de la page pour appeler à l\'action.',
@@ -27,6 +29,7 @@ class ComponentGuideCatalog
             'svg' => 'banniere_statique',
         ],
         \App\Controller\Admin\PresentationCrudController::class => [
+            'resource' => 'presentations', // contenu d'exemple (lot 3, 08/11/2026) : marqué sur l'écran, effaçable
             'key' => 'presentation', 'title' => 'Blocs de présentation (image, titre, texte, bouton)', 'singular' => 'Bloc de présentation',
             'purpose' => 'Une « carte » qui présente une chose : un service, une offre, un produit phare, un projet. Image, titre, texte et bouton.',
             'where' => 'Section « Présentation » de la landing page (un bloc seul), ou dans un « Groupe de blocs » (plusieurs côte à côte).',
@@ -34,6 +37,7 @@ class ComponentGuideCatalog
             'tip' => 'Pour afficher plusieurs blocs ensemble, créez-les ici puis rassemblez-les dans un Groupe de blocs.', 'svg' => 'presentation',
         ],
         \App\Controller\Admin\PresentationGroupCrudController::class => [
+            'resource' => 'presentation-groups', // contenu d'exemple (lot 3, 08/11/2026) : marqué sur l'écran, effaçable
             'key' => 'presentation_group', 'title' => 'Groupes de blocs (plusieurs présentations côte à côte)', 'singular' => 'Groupe de blocs',
             'purpose' => 'Rassemble plusieurs blocs de présentation sous un même titre : « Nos services », « Nos formules », « Comment ça marche ».',
             'where' => 'Section « Groupe de présentations » de la landing page : le titre du groupe, puis les blocs en rangée ou en grille.',
@@ -41,6 +45,7 @@ class ComponentGuideCatalog
             'svg' => 'presentation_group',
         ],
         \App\Controller\Admin\MarqueCrudController::class => [
+            'resource' => 'marques', // contenu d'exemple (lot 3, 08/11/2026) : marqué sur l'écran, effaçable
             'key' => 'marque', 'title' => 'Logos de marques et partenaires', 'singular' => 'Marque (logos)',
             'purpose' => 'Une rangée de logos : les marques que vous vendez, vos partenaires, vos certifications.',
             'where' => 'Section « Marque » de la landing page : les logos défilent ou s\'alignent sur une ligne.',
@@ -69,6 +74,7 @@ class ComponentGuideCatalog
             'svg' => 'recherche',
         ],
         \App\Controller\Admin\ServiceOfferCrudController::class => [
+            'resource' => 'service-offers', // contenu d'exemple (lot 3, 08/11/2026) : marqué sur l'écran, effaçable
             'key' => 'service_offer', 'title' => 'Prestations réservables (rendez-vous et devis)', 'singular' => 'Prestation',
             'purpose' => 'Vos prestations avec leur photo, leur description et leur durée. Le visiteur choisit une prestation puis demande un rendez-vous ou un devis.',
             'where' => 'Sections « Services » et « Réservation & Devis » de la landing page.',
@@ -83,6 +89,7 @@ class ComponentGuideCatalog
             'svg' => 'service_family',
         ],
         \App\Controller\Admin\VideoCrudController::class => [
+            'resource' => 'videos', // contenu d'exemple (lot 3, 08/11/2026) : marqué sur l'écran, effaçable
             'key' => 'video', 'title' => 'Vidéos (section vidéo)', 'singular' => 'Vidéo',
             'purpose' => 'Une vidéo mise en avant avec un titre, un texte et un bouton. Lien YouTube, Vimeo ou fichier de la médiathèque.',
             'where' => 'Section « Vidéo » de la landing page.',
@@ -118,6 +125,7 @@ class ComponentGuideCatalog
             'tip' => 'Les contenus (textes, images) des sections se règlent dans les écrans de cette rubrique ; la mise en page, dans l\'éditeur.', 'svg' => 'landing_config',
         ],
         \App\Controller\Admin\HomeSliderCrudController::class => [
+            'resource' => 'homeslider', // contenu d'exemple (lot 3, 08/11/2026) : marqué sur l'écran, effaçable
             'key' => 'home_slider', 'title' => 'Diaporama de l\'accueil de la boutique', 'singular' => 'Image du diaporama',
             'purpose' => 'Les images qui défilent en haut de l\'accueil de la boutique, avec un titre, un texte et un bouton vers une page ou un produit.',
             'where' => 'Accueil de la boutique, famille « Diaporama de l\'accueil ».',
@@ -125,6 +133,7 @@ class ComponentGuideCatalog
             'svg' => 'home_slider',
         ],
         \App\Controller\Admin\FeatureCrudController::class => [
+            'resource' => 'features', // contenu d'exemple (lot 3, 08/11/2026) : marqué sur l'écran, effaçable
             'key' => 'feature', 'title' => 'Atouts de la boutique (icône + phrase)', 'singular' => 'Atout',
             'purpose' => 'Une rangée de petits arguments avec une icône : « Livraison 48 h », « Paiement sécurisé », « Fabriqué ici ».',
             'where' => 'Accueil de la boutique, famille « Atouts ».',
@@ -132,6 +141,7 @@ class ComponentGuideCatalog
             'svg' => 'feature',
         ],
         \App\Controller\Admin\ExploreCardCrudController::class => [
+            'resource' => 'explore-cards', // contenu d'exemple (lot 3, 08/11/2026) : marqué sur l'écran, effaçable
             'key' => 'explore_card', 'title' => 'Cartes « Explorer » (accueil de la boutique)', 'singular' => 'Carte Explorer',
             'purpose' => 'Des cartes avec image ou vidéo, titre et lien, pour envoyer le visiteur vers une catégorie, une collection ou une page.',
             'where' => 'Accueil de la boutique, famille « Cartes explorer » ; aussi utilisable sur la landing page.',
