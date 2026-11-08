@@ -1,0 +1,46 @@
+{# Composition du site par l'assistant (08/11/2026) : attente, résultat, application #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Composition de mon site{% endblock %}
+{% block content_title %}Composition de mon site{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}<div class="py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block panel %}
+<div class="container-fluid" style="max-width: 900px" data-site-composition data-status="{{ status.status }}">
+    <p class="mb-2"><a href="{{ pageUrl }}">← Mon site pas à pas</a></p>
+    {% for label, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}{% endfor %}
+
+    {% if status.status == 'running' %}
+        <div class="alert alert-info"><span class="spinner-border spinner-border-sm me-2"></span> L'assistant compose votre site. Cette page se rafraîchit toute seule ; comptez une à trois minutes.</div>
+    {% elseif status.status == 'failed' %}
+        <div class="alert alert-danger">La composition a échoué{% if status.error %} : {{ status.error }}{% endif %}. Les crédits des pages non composées sont rendus. Vous pouvez relancer depuis le questionnaire.</div>
+    {% elseif status.status == 'unknown' %}
+        <div class="alert alert-warning">{{ status.error }}</div>
+    {% else %}
+        <div class="alert alert-success">Composition terminée{% if status.summary %} : {{ status.summary }}{% endif %}</div>
+    {% endif %}
+
+    <div class="card mb-3"><div class="card-body">
+        <h2 class="h6">Pages</h2>
+        <ul class="mb-0">
+            <li>Accueil : <span class="badge bg-{{ status.status == 'failed' ? 'danger' : (status.status == 'running' ? 'secondary' : 'success') }}">{{ status.status == 'running' ? 'en cours' : (status.status == 'failed' ? 'échec' : 'composé') }}</span></li>
+            {% for p in status.pages %}<li>{{ p.title }} : <span class="badge bg-{{ p.status == 'done' ? 'success' : (p.status == 'failed' ? 'danger' : 'secondary') }}">{{ p.status == 'done' ? 'composée' : (p.status == 'failed' ? 'échec' : 'en cours') }}</span></li>{% endfor %}
+        </ul>
+        {% if status.warnings %}<div class="small text-muted mt-2">Remarques de l'assistant : {{ status.warnings|join(' · ') }}</div>{% endif %}
+    </div></div>
+
+    {% if status.status == 'done' %}
+        {% if applied %}
+            <div class="alert alert-success" data-applied>Cette composition est appliquée sur votre site{% if composedAt %} (le {{ composedAt|date('d/m/Y à H:i') }}){% endif %}. Ouvrez le tableau de bord : le bandeau « Voir mon site en ligne » vous y mène. Pour retoucher : l'éditeur, sur le site.</div>
+        {% else %}
+            <form method="post" action="{{ applyUrl }}" data-apply-form>
+                <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+                <button class="btn btn-success" type="submit" onclick="return confirm('Remplacer la composition actuelle des pages du site par celle-ci ? L\'ancienne reste dans le journal des écritures.')">Appliquer sur mon site</button>
+                <span class="small text-muted ms-2">Vous pourrez retoucher chaque section dans l'éditeur ensuite.</span>
+            </form>
+        {% endif %}
+    {% endif %}
+</div>
+{% if status.status == 'running' %}<script>setTimeout(function () { window.location.reload(); }, 8000);</script>{% endif %}
+{% endblock %}

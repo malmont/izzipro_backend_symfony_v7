@@ -1,0 +1,111 @@
+<?php
+
+namespace App\Services\SiteCharter;
+
+use App\Dto\LandingPageSettingsInputDto;
+use App\Services\LandingAiService\LandingAiJobService;
+use App\Services\LandingPageSettingsService\LandingPageSettingsService;
+use App\Services\LandingPageSettingsService\ReglableCompositionValidator;
+use App\UseCase\LandingPageSettingsUseCase\UpdateLandingPageSettingsUseCase;
+
+/**
+ * Applique sur le site le résultat d'une composition « site complet » de l'assistant (08/11/2026) : l'accueil (sections, navbar, footer)
+ * et chaque page composée deviennent les onglets de `landing_page_setting.configuration`, dans la forme que l'éditeur Next enregistre
+ * (`tabs[].sections[] { id, uid, dataType, componentKey, componentTypeKey, reglableConfig }`, `navbar`, `footer`), après le même
+ * contrôle que `PUT /api/landingpage-settings` (`ReglableCompositionValidator`). L'ancienne configuration reste dans le journal des
+ * écritures (`content_audit_log`, restauration possible). La charte déduite par l'assistant est gardée si le site n'en avait pas.
+ */
+class SiteCompositionApplier
+{
+    public function __construct(
+        private readonly LandingAiJobService $jobs,
+        private readonly ReglableCompositionValidator $validator,
+        private readonly LandingPageSettingsService $settings,
+        private readonly UpdateLandingPageSettingsUseCase $update,
+        private readonly SiteCharterService $charters,
+    ) {
+    }
+
+    /**
+     * État d'une tâche de composition, pour l'écran d'attente.
+     *
+     * @return array{status: string, pages: list<array{title: string, status: string}>, error: ?string, warnings: list<string>, summary: ?string}
+     */
+    public function status(string $jobId): array
+    {
+        $job = $this->jobs->find($jobId);
+        if ($job === null) {
+            return ['status' => 'unknown', 'pages' => [], 'error' => 'Tâche introuvable ou expirée (les résultats sont gardés une heure).', 'warnings' => [], 'summary' => null];
+        }
+        $result = $job->getResult() !== null ? json_decode($job->getResult(), true) : null;
+        $pages = [];
+        foreach (is_array($result['pages'] ?? null) ? $result['pages'] : [] as $slug => $page) {
+            $child = isset($page['jobId']) ? $this->jobs->find((string) $page['jobId']) : null;
+            $pages[] = ['title' => (string) ($page['title'] ?? $slug), 'status' => $child?->getStatus() ?? (string) ($page['status'] ?? 'pending')];
+        }
+        $error = $job->getError() !== null ? (json_decode($job->getError(), true)['message'] ?? $job->getError()) : null;
+        $allDone = $job->getStatus() === 'done' && array_filter($pages, fn ($p) => $p['status'] !== 'done') === [];
+        $anyFailed = $job->getStatus() === 'failed' || array_filter($pages, fn ($p) => $p['status'] === 'failed') !== [];
+
+        return [
+            'status' => $anyFailed ? 'failed' : ($allDone ? 'done' : 'running'), 'pages' => $pages, 'error' => $error,
+            'warnings' => array_values(array_filter(array_map('strval', is_array($result['warnings'] ?? null) ? $result['warnings'] : []))), 'summary' => isset($result['summary']) ? (string) $result['summary'] : null,
+        ];
+    }
+
+    /**
+     * @return array{applied: bool, errors: list<string>, tabs: int}
+     */
+    public function apply(string $jobId, string $locale = 'fr'): array
+    {
+        $job = $this->jobs->find($jobId);
+        if ($job === null || $job->getStatus() !== 'done' || $job->getResult() === null) {
+            return ['applied' => false, 'errors' => ['La composition n\'est pas terminée ou a expiré.'], 'tabs' => 0];
+        }
+        $home = json_decode($job->getResult(), false);
+        if (!is_object($home) || ($home->mode ?? null) !== 'site' || !is_array($home->sections ?? null) || !is_object($home->navbar ?? null) || !is_object($home->footer ?? null)) {
+            return ['applied' => false, 'errors' => ['Résultat inattendu : ce n\'est pas une composition de site complet.'], 'tabs' => 0];
+        }
+        $nextId = 1;
+        $section = function (object $s) use (&$nextId): array {
+            return ['id' => $nextId++, 'uid' => self::uuid(), 'dataType' => isset($s->dataType) && $s->dataType !== null ? (string) $s->dataType : null, 'componentKey' => (string) $s->componentKey, 'componentTypeKey' => 'typeReglable', 'reglableConfig' => $s->composition];
+        };
+        $tabs = [['id' => 1, 'title' => ['fr' => 'Accueil', 'en' => 'Home'], 'sections' => array_map($section, $home->sections)]];
+        foreach (is_object($home->pages ?? null) ? get_object_vars($home->pages) : [] as $slug => $page) {
+            $child = isset($page->jobId) ? $this->jobs->find((string) $page->jobId) : null;
+            if ($child === null || $child->getStatus() !== 'done' || $child->getResult() === null) {
+                return ['applied' => false, 'errors' => [sprintf('La page « %s » n\'est pas composée.', $page->title ?? $slug)], 'tabs' => 0];
+            }
+            $result = json_decode($child->getResult(), false);
+            $title = (string) ($page->title ?? $result->tab->title ?? $slug);
+            $tabs[] = ['id' => count($tabs) + 1, 'title' => ['fr' => $title, 'en' => $title], 'sections' => array_map($section, is_array($result->sections ?? null) ? $result->sections : [])];
+        }
+        $current = json_decode((string) $this->settings->getRawConfiguration($this->settings->findOrCreateSettings()), true) ?: [];
+        $configuration = array_merge($current, [
+            'tabs' => $tabs,
+            'navbar' => ['componentTypeKey' => 'typeReglable', 'reglableConfig' => $home->navbar],
+            'footer' => ['componentTypeKey' => 'typeReglable', 'reglableConfig' => $home->footer],
+        ]);
+        $asObject = json_decode(json_encode($configuration, JSON_PRESERVE_ZERO_FRACTION), false);
+        $errors = $this->validator->validateConfiguration($asObject);
+        if ($errors !== []) {
+            return ['applied' => false, 'errors' => array_map(fn ($e) => $e['path'] . ' : ' . $e['message'], array_slice($errors, 0, 10)), 'tabs' => 0];
+        }
+        $this->update->execute(new LandingPageSettingsInputDto(json_decode(json_encode($asObject, JSON_PRESERVE_ZERO_FRACTION), true)));
+        if (is_object($home->charter ?? null) && $this->charters->get()?->getCharter() === null) {
+            $this->charters->save(['charter' => (array) $home->charter], 'assistant');
+        }
+        $this->charters->markComposed($jobId);
+
+        return ['applied' => true, 'errors' => [], 'tabs' => count($tabs)];
+    }
+
+    private static function uuid(): string
+    {
+        $b = random_bytes(16);
+        $b[6] = chr((ord($b[6]) & 0x0f) | 0x40);
+        $b[8] = chr((ord($b[8]) & 0x3f) | 0x80);
+
+        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($b), 4));
+    }
+}

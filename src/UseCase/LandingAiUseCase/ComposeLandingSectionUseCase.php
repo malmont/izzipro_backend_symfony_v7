@@ -40,7 +40,8 @@ class ComposeLandingSectionUseCase
         private readonly TenantConnectionProvider $tenantProvider,
         private readonly RateLimiterFactory $landingAiTenantLimiter,
         private readonly LandingAiSiteOrchestrator $sites,
-        private readonly BoutiqueConfigurationValidator $boutiqueValidator
+        private readonly BoutiqueConfigurationValidator $boutiqueValidator,
+        private readonly ?\App\Services\SiteCharter\SiteCharterService $siteCharter = null // charte du site (08/11/2026)
     ) {
     }
 
@@ -55,6 +56,11 @@ class ComposeLandingSectionUseCase
             throw LandingAiException::badRequest('Requête invalide : ' . $errors[0]['path'] . ' : ' . $errors[0]['message'], $errors);
         }
         $dto->children = []; // usage interne : jamais lu depuis la requête
+        // Charte du site (08/11/2026) : charte, style, DESIGN.md et PDF enregistrés dans le back-office, sans que la demande les redonne
+        if ($this->siteCharter !== null && $dto->useSiteCharter && ($stored = $this->siteCharter->get()) !== null) {
+            $pdf = in_array($dto->mode, ['page', 'site'], true) ? $this->siteCharter->documentDataUri() : null;
+            $dto->applySiteCharter($stored->getCharter(), $stored->getStyle(), $stored->getDesignMd(), $pdf !== null ? substr($pdf, strlen('data:application/pdf;base64,')) : null);
+        }
         $defaultDataType = $dto->dataType !== null ? (string) $dto->dataType : null;
         if ($dto->mode === 'create' && $defaultDataType !== null) {
             if (!$this->data->familyUsesData((string) $dto->componentKey)) {

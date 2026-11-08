@@ -114,9 +114,39 @@ class LandingAiComposeInputDto
      * au modèle (LandingAiMemoryService).
      */
     public ?string $memoryKey = null;
+    /** Charte du site (08/11/2026) : false pour composer sans la charte, le style, le DESIGN.md et le PDF enregistrés dans le back-office */
+    public bool $useSiteCharter = true;
 
     /** @var list<array{path: string, message: string}> erreurs de forme relevées à la lecture */
     private array $shapeErrors = [];
+
+    /**
+     * Charte du site enregistrée dans le back-office (08/11/2026) : complète ce que la demande ne donne pas (charte, style, DESIGN.md) ;
+     * le PDF de charte s'ajoute aux images pour une page ou un site seulement (une retouche ne lit pas d'images), s'il reste une place
+     * et qu'aucun PDF n'est joint.
+     *
+     * @param array<string, mixed>|null $charter
+     * @param array<string, string>|null $style
+     */
+    public function applySiteCharter(?array $charter, ?array $style, ?string $designMd, ?string $pdfBase64): void
+    {
+        if (!$this->useSiteCharter) {
+            return;
+        }
+        if ($this->charter === null && $charter !== null && $charter !== []) {
+            $this->charter = (object) $charter;
+        }
+        if ($this->style === null && $style !== null && $style !== []) {
+            $this->style = $style;
+        }
+        if (($this->designMd === null || trim($this->designMd) === '') && $designMd !== null && trim($designMd) !== '') {
+            $this->designMd = mb_substr($designMd, 0, self::MAX_DESIGN_MD_LENGTH);
+        }
+        $hasPdf = array_filter($this->images, fn ($i) => $i['mediaType'] === self::PDF_TYPE) !== [];
+        if ($pdfBase64 !== null && !$hasPdf && in_array($this->mode, ['page', 'site'], true) && count($this->images) < self::MAX_IMAGES) {
+            $this->images[] = ['mediaType' => self::PDF_TYPE, 'data' => $pdfBase64];
+        }
+    }
 
     public static function fromRequestBody(mixed $body): self
     {
@@ -265,6 +295,9 @@ class LandingAiComposeInputDto
         }
         if (isset($body->images) && !is_array($body->images)) {
             $dto->shapeErrors[] = ['path' => 'images', 'message' => 'liste de data URL attendue'];
+        }
+        if (isset($body->useSiteCharter)) {
+            $dto->useSiteCharter = (bool) $body->useSiteCharter;
         }
         $images = is_array($body->images ?? null) ? $body->images : [];
         if (count($images) > self::MAX_IMAGES) {

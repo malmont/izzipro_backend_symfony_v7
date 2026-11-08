@@ -247,7 +247,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (302)
+## Boutique et commun (306)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -481,6 +481,10 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/site/assistant/actions/{id}/confirm` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteAssistantController\SiteAssistantController::confirm` |
 | GET | `/api/site/assistant/credits` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteAssistantController\SiteAssistantController::credits` |
 | POST | `/api/site/assistant` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteAssistantController\SiteAssistantController::chat` |
+| DELETE | `/api/site/charter/document` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteCharterController::removeDocument` |
+| POST | `/api/site/charter/document` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteCharterController::document` |
+| GET | `/api/site/charter` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteCharterController::show` |
+| PUT | `/api/site/charter` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteCharterController::update` |
 | POST | `/api/site/domain/check` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteDomainController::check` |
 | DELETE | `/api/site/domain` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteDomainController::delete` |
 | GET | `/api/site/domain` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteDomainController::show` |
@@ -593,7 +597,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (84)
+## Administration (EasyAdmin) (89)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -668,6 +672,11 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/admin/produits/{id}/photos` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ProductPhotosAdminController::index` |
 | GET, POST | `/admin/redis/flush` | ROLE_SUPER_ADMIN | `Controller\Admin\RedisAdminController::flushRedis` |
 | GET, POST | `/admin/short-code` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ShortCodeAdminController::index` |
+| POST | `/admin/site/configurer/composer` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\SiteSetupAdminController::compose` |
+| POST | `/admin/site/configurer/composition/{jobId}/appliquer` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\SiteSetupAdminController::apply` |
+| GET | `/admin/site/configurer/composition/{jobId}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\SiteSetupAdminController::composition` |
+| GET | `/admin/site/configurer` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\SiteSetupAdminController::index` |
+| POST | `/admin/site/configurer` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\SiteSetupAdminController::save` |
 | GET, POST | `/admin/stripe/connect` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\AdminStripeController::connect` |
 | GET, POST | `/admin/stripe/disconnect` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\AdminStripeController::disconnect` |
 | GET | `/admin/stripe/success` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\AdminStripeController::success` |

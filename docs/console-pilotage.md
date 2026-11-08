@@ -493,6 +493,37 @@ cette page (écran `configuration`, aussi connu de l'assistant : `SiteAssistantT
 
 Test : `tests/Functional/Admin/ConfigurationConsolePageTest.php`.
 
+## « Mon site pas à pas », charte du site et aiguillage (lot 1, 08/11/2026)
+
+Demandé par le propriétaire : rendre la configuration du site aussi simple que le questionnaire de location, avec une vraie cohérence entre le
+back-office et l'éditeur Next. Trois pièces :
+
+- **Charte et brief du site** : table `site_charter` (une ligne par site ; migration `Version20261121100000`, script
+  `scripts/migrate_all_v2_site_charter.sh` : les sites existants reçoivent une ligne `pages_saved_at = NOW()`, `gmasuite` et le modèle des tests
+  non), entité `SiteCharter`, `Services/SiteCharter/SiteCharterService` (brief : activité, public, lieu, objectifs, pages, boutique ; charte aux
+  clés de la charte de la boutique ; style ton / mouvement / densité ; DESIGN.md ; PDF dans `var/storage/private_media/site-charter/<code>/`).
+  API `ROLE_ADMIN` : `GET`/`PUT /api/site/charter`, `POST`/`DELETE /api/site/charter/document` (`SiteCharterController`, `SiteCharterUseCase`).
+  **L'assistant la relit tout seul** : `ComposeLandingSectionUseCase` complète chaque demande (`charter`, `style`, `designMd` absents ; PDF
+  joint aux modes `page` et `site` s'il reste une place et qu'aucun PDF n'est envoyé) ; `useSiteCharter: false` dans le corps pour composer
+  sans. L'éditeur Next n'a donc rien à renvoyer ; il peut lire `GET /api/site/charter` pour afficher la charte. Un site neuf part sans charte
+  (`TenantSetupController` : `reset()` après le clonage du modèle).
+- **Questionnaire « Mon site pas à pas »** (`/admin/site/configurer`, `SiteSetupAdminController`, `SiteSetupQuestionnaireService`, menu
+  Entreprise) : huit questions en langage courant, rien d'écrit tant qu'une réponse est fausse, modes de vente écrits par le registre
+  (`commerce.sales_modes`), résumé « Ce que l'assistant va composer » (coût en crédits, crédits restants), bouton « Composer mon site » (mode
+  `site` de l'assistant, app `landingpage`, un onglet par page voulue ; brief → `prompt`), écran d'attente
+  `/admin/site/configurer/composition/{jobId}` (rafraîchi toutes les 8 s), puis **« Appliquer sur mon site »** : `SiteCompositionApplier`
+  transforme l'accueil (sections, navbar, footer) et les pages composées en `landing_page_setting.configuration` dans la forme de l'éditeur
+  (`tabs[].sections[] { id, uid, dataType, componentKey, componentTypeKey: typeReglable, reglableConfig }`), après le contrôle de
+  `ReglableCompositionValidator`, enregistre par `UpdateLandingPageSettingsUseCase` (journal `content_audit_log`, donc restaurable), garde la
+  charte déduite si le site n'en avait pas, pose `composed_at`.
+- **Aiguillage** : `Services/SiteCharter/SiteRouting::TABLE` (où se fait quoi : back-office ou éditeur), rendu en bas du questionnaire avec les
+  liens, ajouté aux consignes de l'assistant (`promptText()`, il oriente vers l'éditeur par `delegate_to_editor` et vers les écrans par
+  `open_screen`), repris dans l'aide (`docs/aide/site.md`, `demarrer.md`). Cheminement : étape **`site.brief`** (amélioration, groupe Site,
+  écran `site_setup`) et **`landing.pages`** faite seulement quand les pages ont été enregistrées par l'éditeur (`UpdateLandingPageSettingsUseCase`
+  pose `pages_saved_at`) ou composées ici, plus par la seule présence du contenu d'exemple.
+
+Tests : `tests/Functional/Admin/SiteSetupQuestionnaireTest.php`, `tests/Functional/LandingPage/SiteCharterApiTest.php`.
+
 ## Guide des composants du site (08/11/2026)
 
 Demandé par le propriétaire : un administrateur doit comprendre d'un coup d'œil à quoi sert chaque écran de composant de la landing page et de la

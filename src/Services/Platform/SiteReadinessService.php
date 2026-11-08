@@ -179,6 +179,13 @@ class SiteReadinessService
         $add('site.favicon', 'site', 'Icône du site (favicon)', 'La petite icône de l\'onglet du navigateur et de l\'écran d\'accueil mobile.', $filled($e['favicon_filename'] ?? null), 'backend', ['type' => 'screen', 'screen' => 'entreprise'], false);
         $add('site.seo', 'site', 'Référencement : titre et description', 'Le titre et la description que Google affiche ; sans eux, le site est mal présenté dans les résultats.', $filled($e['meta_title'] ?? null) && $filled($e['meta_description'] ?? null), 'backend', ['type' => 'screen', 'screen' => 'entreprise'], false);
         $add('site.social', 'site', 'Réseaux sociaux', 'Liens affichés sur le site et dans les courriels.', $this->count($pdo, 'social_network') > 0, 'backend', ['type' => 'screen', 'screen' => 'social_networks'], false);
+        // Charte et brief du site (08/11/2026) : questionnaire « Mon site pas à pas » ; table absente sur une base non migrée = rien
+        $siteCharter = null;
+        try {
+            $siteCharter = $this->row($pdo, 'SELECT brief, pages_saved_at, composed_at FROM site_charter ORDER BY id LIMIT 1');
+        } catch (\Throwable) {
+        }
+        $add('site.brief', 'site', 'Mon site pas à pas : brief et charte', 'Dites ce que fait le site, pour qui, avec quelles pages et quelles couleurs : l\'assistant compose ensuite le site, et l\'éditeur comme l\'assistant suivent cette charte.', is_string($siteCharter['brief'] ?? null) && $siteCharter['brief'] !== '' && $siteCharter['brief'] !== 'null', 'backend', ['type' => 'screen', 'screen' => 'site_setup'], false);
         $domain = $this->domains->status($code); // HTTPS gardé dix minutes : pas d'appel à chaque affichage
         if ($domain['state'] === 'none') {
             $steps[] = ['key' => 'site.domain', 'group' => 'site', 'title' => 'Domaine propre (facultatif)', 'description' => sprintf('Votre site répond déjà sur %s ; ajoutez votre propre domaine (achat chez un registraire, enregistrements DNS, certificat automatique).', $domain['platformHost']), 'status' => 'optional', 'where' => 'backend', 'action' => ['type' => 'domain'], 'blocking' => false];
@@ -193,7 +200,9 @@ class SiteReadinessService
 
         // Modules et applications accordés
         if ($effective['module.landing']['enabled'] ?? false) {
-            $add('landing.pages', 'module.landing', 'Pages du site', 'Composez vos pages dans l\'éditeur (modèles prêts à l\'emploi, assistant IA).', $this->count($pdo, 'landing_page_setting') > 0, 'editor', ['type' => 'editor', 'url' => $editorUrl]);
+            // Pages du site (08/11/2026) : faites dès que les pages ont été enregistrées (éditeur) ou composées (« Mon site pas à pas ») ; le contenu d'exemple cloné ne compte pas
+            $pagesDone = !empty($siteCharter['pages_saved_at']) || !empty($siteCharter['composed_at']);
+            $add('landing.pages', 'module.landing', 'Pages du site', 'Laissez l\'assistant composer le site depuis « Mon site pas à pas », ou composez vos pages dans l\'éditeur du site ; tant que rien n\'est enregistré, le site montre le contenu d\'exemple.', $pagesDone, 'backend', ['type' => 'screen', 'screen' => 'site_setup']);
         }
         if ($effective['module.boutique']['enabled'] ?? false) {
             $taxOk = ($commerce['taxProvider'] ?? 'table') === 'stripe' || $this->count($pdo, 'tax') > 0;

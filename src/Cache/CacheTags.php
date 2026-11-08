@@ -376,6 +376,7 @@ final class CacheTags
         AiUsage::class,
         AiJob::class,
         AiCreditSetting::class,
+        \App\Entity\SiteCharter::class, // charte et brief du site (08/11/2026) : lu par le back-office et l'assistant, jamais en cache applicatif
         ContentAuditLog::class,
         SyncJob::class,
         Contact::class,

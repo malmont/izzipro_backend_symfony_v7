@@ -9,7 +9,7 @@ use App\Services\LandingPageSettingsService\LandingPageSettingsService;
 
 class UpdateLandingPageSettingsUseCase
 {
-    public function __construct(private LandingPageSettingsService $service, private readonly ContentAuditRecorder $audit)
+    public function __construct(private LandingPageSettingsService $service, private readonly ContentAuditRecorder $audit, private readonly ?\App\Services\SiteCharter\SiteCharterService $charters = null)
     {
     }
 
@@ -26,6 +26,7 @@ class UpdateLandingPageSettingsUseCase
         if ($changed || $before === null) {
             $this->audit->record('landingpage-settings', $setting->getId(), 'update', $before, $after, $changed);
         }
+        $this->charters?->markPagesSaved(); // étape « Pages du site » du cheminement (08/11/2026)
 
         return $setting;
     }

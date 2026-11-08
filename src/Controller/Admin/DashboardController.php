@@ -605,6 +605,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('Entreprise');
         // Console de pilotage du site : localisation, modules et droits, commerce, services (lot 5, 04/11/2026)
         yield MenuItem::linkToRoute('Mon site : pilotage', 'fas fa-sliders-h', 'admin_mon_site');
+        yield MenuItem::linkToRoute('Mon site pas à pas', 'fas fa-magic', 'admin_site_configurer'); // brief, charte, composition par l'assistant (08/11/2026)
         yield MenuItem::linkToRoute('Configuration : Stripe, taxes, courriels, avis', 'fas fa-tasks', 'admin_configuration'); // cheminements de configuration (lot 5, 07/11/2026)
         yield MenuItem::linkToRoute('Contrôles : ce qui cloche', 'fas fa-stethoscope', 'admin_controles'); // contrôles du quotidien (07/11/2026)
         yield MenuItem::linkToRoute('Aide', 'fas fa-question-circle', 'admin_aide'); // aide intégrée (07/11/2026)

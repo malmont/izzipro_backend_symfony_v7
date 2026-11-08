@@ -17,6 +17,7 @@ Routes et rôles : `docs/endpoints.md`, section « Landing Page » ; données de
 | Assistant IA : mémoire par section ou page (consulter, oublier) ; issue d'une proposition | `GET`, `DELETE /api/landingpage-ai/memory?memoryKey=` ; `POST /api/landingpage-ai/usage/{id}/outcome` | `ROLE_ADMIN` |
 | Assistant IA : consignes permanentes du site (journalisées) | `GET`, `PUT /api/landingpage-ai/instructions` | `ROLE_ADMIN` |
 | Assistant IA : charte du site en texte (DESIGN.md, sans IA) | `GET /api/landingpage-ai/design-md?app=landingpage\|boutique` | `ROLE_ADMIN` |
+| Charte et brief du site (08/11/2026) : brief, charte, style, DESIGN.md, document PDF ; **relus par l'assistant à chaque composition** (`useSiteCharter: false` pour s'en passer) | `GET`, `PUT /api/site/charter` ; `POST`, `DELETE /api/site/charter/document` | `ROLE_ADMIN` |
 | Assistant IA : prompt d'une vidéo pour une scène au défilement (1 crédit, synchrone) | `POST /api/landingpage-ai/video-prompt` | `ROLE_ADMIN` |
 | Résultat d'une tâche de fond | `GET /api/landingpage-ai/jobs/{jobId}` (même tenant, 1 h) | `ROLE_ADMIN` |
 | Crédits et historique | `GET /api/landingpage-ai/usage` | `ROLE_ADMIN` |

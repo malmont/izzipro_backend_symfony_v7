@@ -1,0 +1,121 @@
+{# Questionnaire « Mon site pas à pas » (08/11/2026) : habillage EasyAdmin depuis le menu, sinon page nue #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Mon site pas à pas{% endblock %}
+{% block content_title %}Mon site pas à pas{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}<div class="py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% macro err(errors, key) %}{% if errors[key] is defined %}<div class="text-danger small mt-1" data-error="{{ key }}">{{ errors[key] }}</div>{% endif %}{% endmacro %}
+{% import _self as m %}
+
+{% block panel %}
+<div class="container-fluid" style="max-width: 980px" data-site-setup>
+    <p class="mb-2"><a href="{{ monSiteUrl }}">← Mon site : pilotage</a></p>
+    {% for label, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}{% endfor %}
+
+    <p class="text-muted">Répondez dans l'ordre, avec vos mots. Rien n'est enregistré tant qu'une réponse est fausse. À la fin, l'assistant compose le site avec de vrais textes ; vous retouchez ensuite dans l'éditeur si vous voulez.</p>
+
+    <form method="post" action="{{ saveUrl }}" enctype="multipart/form-data" data-site-setup-form>
+        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+
+        <div class="card mb-3"><div class="card-body">
+            <h2 class="h5">1. Que faites-vous ?</h2>
+            <p class="small text-muted">Une ou deux phrases, comme vous le diriez à un client. Exemple : « Atelier de réparation de vélos à Québec, entretien, pièces et vélos reconditionnés ».</p>
+            <textarea class="form-control" name="activity" rows="2" maxlength="400" required>{{ a.activity }}</textarea>{{ m.err(errors, 'activity') }}
+            <div class="row g-3 mt-1">
+                <div class="col-md-6"><label class="form-label">2. Pour qui ?</label><input class="form-control" name="audience" maxlength="300" value="{{ a.audience }}" placeholder="familles, cyclistes du quotidien, entreprises…">{{ m.err(errors, 'audience') }}</div>
+                <div class="col-md-6"><label class="form-label">3. Où ?</label><input class="form-control" name="place" maxlength="120" value="{{ a.place }}" placeholder="ville, quartier, région">{{ m.err(errors, 'place') }}</div>
+            </div>
+        </div></div>
+
+        <div class="card mb-3"><div class="card-body">
+            <h2 class="h5">4. Que doit faire le site pour vous ?</h2>
+            <div class="row g-2">{% for key, label in options.goals %}<div class="col-md-6"><label class="form-check"><input class="form-check-input" type="checkbox" name="goals[]" value="{{ key }}" {{ key in a.goals ? 'checked' }}> <span class="form-check-label">{{ label }}</span></label></div>{% endfor %}</div>
+        </div></div>
+
+        <div class="card mb-3"><div class="card-body">
+            <h2 class="h5">5. Quelles pages dans le menu ?</h2>
+            <p class="small text-muted">L'accueil est toujours là. Cochez les autres ; ajoutez les vôtres séparées par des virgules. Huit pages au plus après l'accueil ; chaque page coûte des crédits IA à composer.</p>
+            <div class="row g-2">{% for title in options.pages %}<div class="col-md-3 col-6"><label class="form-check"><input class="form-check-input" type="checkbox" name="pages[]" value="{{ title }}" {{ title in a.pages ? 'checked' }}> <span class="form-check-label">{{ title }}</span></label></div>{% endfor %}</div>
+            <input class="form-control mt-2" name="pagesExtra" value="{{ a.pages|filter(p => p not in options.pages)|join(', ') }}" placeholder="Autres pages : Galerie, Nos engagements…">{{ m.err(errors, 'pages') }}
+        </div></div>
+
+        <div class="card mb-3"><div class="card-body">
+            <h2 class="h5">6. Quel style ?</h2>
+            <div class="row g-3">
+                <div class="col-md-4"><label class="form-label">Ton</label><select class="form-select" name="tone">{% for v in options.style.tone %}<option value="{{ v }}" {{ a.tone == v ? 'selected' }}>{{ {'sobre': 'Sobre', 'equilibre': 'Équilibré', 'expressif': 'Expressif'}[v] }}</option>{% endfor %}</select></div>
+                <div class="col-md-4"><label class="form-label">Animations</label><select class="form-select" name="motion">{% for v in options.style.motion %}<option value="{{ v }}" {{ a.motion == v ? 'selected' }}>{{ {'aucun': 'Aucune', 'discret': 'Discrètes', 'vivant': 'Vivantes'}[v] }}</option>{% endfor %}</select></div>
+                <div class="col-md-4"><label class="form-label">Densité</label><select class="form-select" name="density">{% for v in options.style.density %}<option value="{{ v }}" {{ a.density == v ? 'selected' }}>{{ {'aeree': 'Aérée', 'normale': 'Normale', 'dense': 'Dense'}[v] }}</option>{% endfor %}</select></div>
+            </div>
+        </div></div>
+
+        <div class="card mb-3"><div class="card-body">
+            <h2 class="h5">7. Vos couleurs et vos polices (si vous les avez)</h2>
+            <p class="small text-muted">Laissez vide : l'assistant propose une charte et la garde ici. Si vous avez déjà une charte, remplissez, ou déposez-la en PDF ci-dessous.</p>
+            <div class="row g-3">
+                {% for key, label in {'primaryColor': 'Couleur principale', 'accentColor': 'Couleur d\'accent', 'textColor': 'Couleur du texte', 'backgroundColor': 'Couleur de fond'} %}
+                <div class="col-md-3 col-6"><label class="form-label">{{ label }}</label><div class="d-flex gap-2 align-items-center"><input type="color" value="{{ a[key] matches '/^#[0-9a-f]{6}$/i' ? a[key] : '#ffffff' }}" data-color-for="{{ key }}" style="width: 2.6em; height: 2.3em; padding: 0; border: 0; background: none"><input class="form-control" name="{{ key }}" value="{{ a[key] }}" placeholder="#1d4ed8" data-color-text="{{ key }}"></div>{{ m.err(errors, key) }}</div>
+                {% endfor %}
+                <div class="col-md-4"><label class="form-label">Police des titres</label><input class="form-control" name="headingFont" value="{{ a.headingFont }}" placeholder="Outfit, Montserrat…">{{ m.err(errors, 'headingFont') }}</div>
+                <div class="col-md-4"><label class="form-label">Police du texte</label><input class="form-control" name="bodyFont" value="{{ a.bodyFont }}" placeholder="Inter">{{ m.err(errors, 'bodyFont') }}</div>
+                <div class="col-md-2 col-6"><label class="form-label">Boutons</label><select class="form-select" name="buttonStyle"><option value="">Au choix</option>{% for v, l in {'solid': 'Pleins', 'outline': 'Contour', 'pill': 'Pilule'} %}<option value="{{ v }}" {{ a.buttonStyle == v ? 'selected' }}>{{ l }}</option>{% endfor %}</select>{{ m.err(errors, 'buttonStyle') }}</div>
+                <div class="col-md-2 col-6"><label class="form-label">Arrondi (px)</label><input class="form-control" name="radius" value="{{ a.radius }}" placeholder="8">{{ m.err(errors, 'radius') }}</div>
+            </div>
+            <div class="row g-3 mt-1">
+                <div class="col-md-6"><label class="form-label">Charte en texte (DESIGN.md ou description libre)</label><textarea class="form-control" name="designMd" rows="4" maxlength="40000" placeholder="Couleurs par rôle, typographie, formes, ton des textes…">{{ a.designMd }}</textarea>{{ m.err(errors, 'designMd') }}</div>
+                <div class="col-md-6"><label class="form-label">Charte ou maquette en PDF (7,5 Mo au plus)</label><input class="form-control" type="file" name="document" accept="application/pdf">{{ m.err(errors, 'document') }}
+                    {% if a.documentName %}<div class="small mt-1">Document actuel : <strong data-document-name>{{ a.documentName }}</strong> <label class="ms-2"><input type="checkbox" name="removeDocument" value="1"> retirer</label></div>{% endif %}
+                    <div class="form-text">Lu par l'assistant à chaque composition, ici comme dans l'éditeur du site.</div></div>
+            </div>
+        </div></div>
+
+        {% if shop %}
+        <div class="card mb-3"><div class="card-body">
+            <h2 class="h5">8. Votre boutique</h2>
+            <div class="row g-3">
+                <div class="col-md-6"><label class="form-label">Que vendez-vous ?</label><input class="form-control" name="sells" maxlength="300" value="{{ a.sells }}" placeholder="vêtements en coton bio, location de kayaks…">{{ m.err(errors, 'sells') }}</div>
+                <div class="col-md-3"><label class="form-label">Façons de vendre</label>{% for v, l in {'sale': 'Vente', 'rental': 'Location', 'subscription': 'Abonnement'} %}<label class="form-check"><input class="form-check-input" type="checkbox" name="salesModes[]" value="{{ v }}" {{ v in a.salesModes ? 'checked' }}> <span class="form-check-label">{{ l }}</span></label>{% endfor %}{{ m.err(errors, 'salesModes') }}</div>
+                <div class="col-md-3"><label class="form-label">Remise des commandes</label>{% for v, l in options.handover %}<label class="form-check"><input class="form-check-input" type="checkbox" name="handover[]" value="{{ v }}" {{ v in a.handover ? 'checked' }}> <span class="form-check-label">{{ l }}</span></label>{% endfor %}</div>
+            </div>
+            <div class="form-text">La livraison, les taxes et les paiements se règlent ensuite, chacun avec son cheminement.</div>
+        </div></div>
+        {% endif %}
+
+        <div class="card mb-3"><div class="card-body">
+            <label class="form-label">Autre chose à dire à l'assistant ?</label>
+            <textarea class="form-control" name="extra" rows="2" maxlength="600" placeholder="horaires, valeurs, ce qu'il ne faut surtout pas dire…">{{ a.extra }}</textarea>{{ m.err(errors, 'extra') }}
+        </div></div>
+
+        <button class="btn btn-primary" type="submit">Enregistrer mes réponses</button>
+    </form>
+
+    <div class="card mt-4 mb-3" id="resume" data-site-summary><div class="card-body">
+        <h2 class="h5">Ce que l'assistant va composer</h2>
+        <ul class="mb-3">{% for line in summary.lines %}<li>{{ line }}</li>{% endfor %}</ul>
+        <form method="post" action="{{ composeUrl }}" class="d-flex flex-wrap align-items-center gap-2" data-compose-form>
+            <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+            <button class="btn btn-success" type="submit" {{ summary.ready ? '' : 'disabled' }} onclick="return confirm('L\'assistant va composer {{ summary.pages|length }} page(s) et remplacer la composition actuelle du site une fois que vous l\'aurez appliquée. Continuer ?')">✦ Composer mon site ({{ summary.cost }} crédits IA)</button>
+            <span class="small text-muted">Il reste {{ summary.credits.remaining|default(0) }} crédit(s) ce mois-ci. Vous relisez le résultat avant qu'il remplace quoi que ce soit.</span>
+            {% if lastJobUrl %}<a class="small" href="{{ lastJobUrl }}">Voir la dernière composition</a>{% endif %}
+        </form>
+    </div></div>
+
+    <div class="card mb-4" data-site-routing><div class="card-body">
+        <h2 class="h5">Ce qu'il vous reste à faire, et où</h2>
+        <p class="small text-muted">Le back-office règle et remplit ; l'éditeur du site retouche ce que l'on voit. Chaque ligne vous mène au bon endroit.</p>
+        <table class="table table-sm mb-0"><tbody>
+            {% for row in next %}<tr><td>{{ row.need }}</td><td class="text-nowrap">{% if row.where == 'editor' %}<span class="badge bg-info text-dark">sur le site</span>{% else %}<span class="badge bg-secondary">back-office</span>{% endif %}</td><td>{% if row.url %}<a href="{{ row.url }}">{{ row.label }}</a>{% else %}{{ row.label }}{% endif %}</td></tr>{% endfor %}
+        </tbody></table>
+    </div></div>
+</div>
+<script>
+(function () {
+    document.querySelectorAll('[data-color-for]').forEach(function (picker) {
+        var text = document.querySelector('[data-color-text="' + picker.getAttribute('data-color-for') + '"]');
+        picker.addEventListener('input', function () { text.value = picker.value; });
+        text.addEventListener('input', function () { if (/^#[0-9a-f]{6}$/i.test(text.value)) { picker.value = text.value; } });
+    });
+})();
+</script>
+{% endblock %}
