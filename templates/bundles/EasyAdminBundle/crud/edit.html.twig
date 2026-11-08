@@ -5,7 +5,8 @@
     {% set guide = admin_component_guide(ea.crud.controllerFqcn) %}
     {% if guide %}
         <div class="d-flex flex-wrap align-items-start gap-3" data-component-guide-layout>
-            <div class="flex-grow-1" style="min-width: 0; flex-basis: 560px">{{ parent() }}</div>
+            {# la colonne de gauche défile horizontalement si le tableau ou le formulaire est plus large qu'elle : rien ne passe sous le panneau #}
+            <div class="flex-grow-1" style="min-width: 0; flex: 1 1 560px; overflow-x: auto">{{ parent() }}</div>
             {{ include('admin/guide/_panel.html.twig', { guide: guide }) }}
         </div>
     {% else %}
