@@ -157,8 +157,10 @@ faux = amélioration ou facultatif, orange) ; `forSite()` rend en plus `blocking
 (contrat front). Les « Obtenir : … » restent hors groupes.
 
 **Voir mon site en ligne (08/11/2026).** `forSite()` et `GET /api/site/readiness` rendent aussi `links` : `{ host, platformHost, customDomain,
-customState, pages: [{ key, label, url }] }`. `pages` commence toujours par l'accueil (`site`, `/`), puis chaque module accordé qui a une page
-publique (`SiteReadinessService::PUBLIC_PATHS` : `module.boutique` → `/catalogue`, `module.memoires` → `/memoires`, `module.boussole` →
+customState, pages: [{ key, label, url }] }`. `pages` commence par la landing page : un lien par onglet de `landing_page_setting.tabs`, à
+`/landingpage/<slug>` (slug du titre dans la langue du site : ascii minuscule, tirets, suffixe -2, -3… en cas de doublon, même règle que
+l'assistant IA), le premier onglet avec la clé `site` et les suivants `landing.<slug>` ; sans landing page, `site` mène à `/`. Puis chaque module
+accordé qui a une page publique (`SiteReadinessService::PUBLIC_PATHS` : `module.boutique` → `/catalogue`, `module.memoires` → `/memoires`, `module.boussole` →
 `/boussole`). L'hôte est le domaine propre dès qu'il sert le site en HTTPS (`customState` = `live`), sinon l'adresse de la plateforme
 `<code>.<FRONTEND_BASE_DOMAIN>` : un domaine en attente de DNS donnerait des liens morts. Le tableau « Préparer mes produits » de l'accueil du
 back-office les montre dans un bandeau « Voir mon site en ligne » (boutons, nouvel onglet, adresse de la plateforme et état du domaine propre) et

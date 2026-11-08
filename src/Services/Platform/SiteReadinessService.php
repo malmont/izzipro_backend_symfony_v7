@@ -22,7 +22,8 @@ class SiteReadinessService
 {
     /**
      * Pages publiques des produits sur le site Next, relatives à l'hôte public du site (08/11/2026) : liens « Voir le résultat » du tableau
-     * « Préparer mes produits » et de `GET /api/site/readiness` (`links`). Le socle (`site`) mène à l'accueil ; un module n'a son lien que s'il est accordé.
+     * « Préparer mes produits » et de `GET /api/site/readiness` (`links`). La landing page est à `/landingpage/<slug de l'onglet>` (un lien par
+     * onglet, le premier porte la clé `site`) ; un module n'a son lien que s'il est accordé.
      */
     public const PUBLIC_PATHS = ['module.boutique' => '/catalogue', 'module.memoires' => '/memoires', 'module.boussole' => '/boussole'];
 
@@ -308,21 +309,63 @@ class SiteReadinessService
             ];
         }
 
-        return ['steps' => $steps, 'links' => $this->links($domain, $effective)];
+        return ['steps' => $steps, 'links' => $this->links($domain, $effective, $this->landingTabs($pdo, (string) ($e['locale'] ?? 'fr')))];
+    }
+
+    /**
+     * Onglets de la landing page, dans l'ordre, avec le slug que le site Next met dans l'adresse (`/landingpage/<slug>`) : titre dans la
+     * langue du site, en ascii minuscule avec des tirets, rendu unique par un suffixe -2, -3… (même règle que l'assistant IA, `pageKeys`).
+     *
+     * @return list<array{title: string, slug: string}>
+     */
+    private function landingTabs(\PDO $pdo, string $locale): array
+    {
+        $raw = $this->one($pdo, 'SELECT configuration FROM landing_page_setting ORDER BY id LIMIT 1');
+        $config = is_string($raw) ? json_decode($raw, true) : null;
+        $tabs = [];
+        $seen = [];
+        foreach (is_array($config['tabs'] ?? null) ? $config['tabs'] : [] as $tab) {
+            $title = $tab['title'] ?? null;
+            if (is_array($title)) {
+                $title = $title[$locale] ?? $title['fr'] ?? $title['en'] ?? (reset($title) ?: null);
+            }
+            $title = trim((string) $title);
+            if ($title === '') {
+                continue;
+            }
+            $ascii = class_exists(\Transliterator::class) ? transliterator_transliterate('Any-Latin; Latin-ASCII', $title) : iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $title);
+            $base = trim((string) preg_replace('/[^a-z0-9]+/', '-', strtolower((string) $ascii)), '-') ?: 'onglet';
+            $slug = $base;
+            for ($n = 2; isset($seen[$slug]); $n++) {
+                $slug = "$base-$n";
+            }
+            $seen[$slug] = true;
+            $tabs[] = ['title' => $title, 'slug' => $slug];
+        }
+
+        return $tabs;
     }
 
     /**
      * Liens « Voir le résultat » (08/11/2026) : l'hôte est le domaine propre dès qu'il sert le site en HTTPS, sinon l'adresse de la plateforme
-     * (un domaine encore en attente de DNS donnerait des liens morts). `pages` : l'accueil toujours, puis chaque module accordé qui a une page.
+     * (un domaine encore en attente de DNS donnerait des liens morts). `pages` : la landing page d'abord (`site` = premier onglet,
+     * `/landingpage/<slug>` ; les autres onglets en `landing.<slug>`), puis chaque module accordé qui a une page.
      *
      * @param array<string, mixed> $domain état du domaine propre (`CustomDomainService::status`)
      * @param array<string, array<string, mixed>> $effective droits effectifs du site
+     * @param list<array{title: string, slug: string}> $tabs onglets de la landing page
      * @return array{host: string, platformHost: string, customDomain: ?string, customState: string, pages: list<array{key: string, label: string, url: string}>}
      */
-    private function links(array $domain, array $effective): array
+    private function links(array $domain, array $effective, array $tabs): array
     {
         $host = $domain['state'] === 'live' && is_string($domain['domain']) ? $domain['domain'] : (string) $domain['platformHost'];
-        $pages = [['key' => 'site', 'label' => 'Accueil du site', 'url' => 'https://' . $host . '/']];
+        $pages = [];
+        foreach ($tabs as $i => $tab) {
+            $pages[] = ['key' => $i === 0 ? 'site' : 'landing.' . $tab['slug'], 'label' => ($i === 0 ? 'Site : ' : '') . $tab['title'], 'url' => 'https://' . $host . '/landingpage/' . $tab['slug']];
+        }
+        if ($pages === []) {
+            $pages[] = ['key' => 'site', 'label' => 'Accueil du site', 'url' => 'https://' . $host . '/'];
+        }
         foreach (self::PUBLIC_PATHS as $feature => $path) {
             if ($effective[$feature]['enabled'] ?? false) {
                 $pages[] = ['key' => $feature, 'label' => FeatureCatalog::label($feature), 'url' => 'https://' . $host . $path];
