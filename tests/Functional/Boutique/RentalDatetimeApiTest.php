@@ -120,6 +120,16 @@ class RentalDatetimeApiTest extends WebTestCase
         $this->assertSame(409, $check($at(3, '09:00'), $at(4, '09:00')), 'pris au milieu de la location');
         $this->assertContains(['items[0].quantity', 'DATES_UNAVAILABLE'], $codes($quote($at(7, '10:00'), $at(8, '10:00'))));
         $this->assertSame(200, $quote($at(7, '11:00'), $at(8, '10:00'))['status']);
+
+        // Jours minimum facturés sur la grille datetime (question de Next et de l'application mobile, 08/11/2026) : après la tolérance
+        $this->db->executeStatement('UPDATE booking_configuration SET min_days_standard = 2 WHERE product_id = ?', [$this->productId]);
+        static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager()->clear();
+        static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateTenant();
+        $short = $quote($at(10, '09:00'), $at(11, '10:00'));
+        $this->assertSame(422, $short['status'], '25 h moins 60 min = 1 jour facturé : moins que 2');
+        $this->assertContains(['items[0].booking.end', 'DAYS_MINIMUM'], $codes($short));
+        $this->assertSame(['value' => 2], array_column($short['body']['errors'], 'params', 'code')['DAYS_MINIMUM']);
+        $this->assertSame(200, $quote($at(10, '09:00'), $at(12, '10:00'))['status'], '49 h moins 60 min = 2 jours facturés');
     }
 
     /** @return array{status: int, body: array} */

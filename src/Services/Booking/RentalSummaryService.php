@@ -55,8 +55,8 @@ class RentalSummaryService
         if ($min !== null && $max !== null && $max < $min) {
             $warnings[] = sprintf('La durée maximale (%d) est plus petite que la durée minimale (%d) : aucune réservation ne sera acceptée.', $max, $min);
         }
-        if (!$hourly && $config->getMinDaysStandard()) {
-            $lines[] = sprintf('%d jour(s) minimum.', $config->getMinDaysStandard());
+        if ((!$hourly || $datetime) && $config->getMinDaysStandard()) {
+            $lines[] = $datetime ? sprintf('%d jour(s) facturé(s) minimum (après le retard toléré).', $config->getMinDaysStandard()) : sprintf('%d jour(s) minimum.', $config->getMinDaysStandard());
         }
         $openingSameDay = false;
         if ($datetime) {

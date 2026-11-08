@@ -289,8 +289,9 @@ final class CartQuoteCalculator
         if ($config->getMaxDuration() !== null && $measure > $config->getMaxDuration()) {
             $errors[] = CartQuoteException::error("$path.booking.end", 'DURATION_TOO_LONG', sprintf('durée maximale : %d %s', $config->getMaxDuration(), $unit), ['value' => (int) $config->getMaxDuration(), 'unit' => $unitCode]);
         }
-        if (!$hourly && $config->getMinDaysStandard() !== null && $days < $config->getMinDaysStandard()) {
-            $errors[] = CartQuoteException::error("$path.booking.end", 'DAYS_MINIMUM', sprintf('%d jour(s) minimum à la journée', $config->getMinDaysStandard()), ['value' => (int) $config->getMinDaysStandard()]);
+        // Jours minimum facturés : grille à la journée, et grille datetime sur les jours facturés après tolérance (08/11/2026) ; jamais sur les grilles à l'heure
+        if ((!$hourly || $config->isDatetime()) && $config->getMinDaysStandard() !== null && $days < $config->getMinDaysStandard()) {
+            $errors[] = CartQuoteException::error("$path.booking.end", 'DAYS_MINIMUM', sprintf('%d jour(s) minimum (facturés)', $config->getMinDaysStandard()), ['value' => (int) $config->getMinDaysStandard()]);
         }
         $allowed = $config->getAllowedDates() ?: null;
         if ($allowed !== null && !in_array($start->format('Y-m-d'), $allowed, true)) {

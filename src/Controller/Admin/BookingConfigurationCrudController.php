@@ -85,7 +85,7 @@ class BookingConfigurationCrudController extends BaseTenantCrudController
         yield IntegerField::new('maxDuration', 'Durée maximale')->setHelp('Même unité. Vide : sans limite. Ex. : grille à l\'heure, 8 → au plus 8 h d\'affilée ; les formules « journée », « semaine », « mois » des grilles tarifaires deviennent alors hors d\'atteinte.')->setColumns('col-md-4')->hideOnIndex();
         yield IntegerField::new('returnToleranceMinutes', 'Retard toléré au retour (minutes, prise et retour)')->setHelp('Grille « date et heure » seulement. Ex. : 60 → une heure de plus au retour ne coûte pas une journée de plus.')->setColumns('col-md-4')->hideOnIndex();
         yield IntegerField::new('timeStepMinutes', 'Pas des heures (minutes, prise et retour)')->setHelp('Heures proposées au client : 60 = heures pleines, 30 = demi-heures. Vide : 60.')->setColumns('col-md-4')->hideOnIndex();
-        yield IntegerField::new('minDaysStandard', 'Jours minimum facturés (grille à la journée)')->setHelp('Facultatif. Ex. : 2 → un séjour d\'une nuit est refusé.')->setColumns('col-md-4')->hideOnIndex();
+        yield IntegerField::new('minDaysStandard', 'Jours minimum facturés (grilles à la journée et avec date et heure)')->setHelp('Facultatif. Ex. : 2 → un séjour d\'une nuit est refusé. Ignoré sur les grilles à l\'heure. Avec date et heure : jours facturés, après le retard toléré.')->setColumns('col-md-4')->hideOnIndex();
 
         yield FormField::addPanel('Exemplaires, horaires et dates')->setIcon('fas fa-clock')->collapsible();
         yield IntegerField::new('stockQuantity', 'Exemplaires identiques')->setHelp('Combien de clients peuvent louer en même temps (ex. : 3 motomarines → 3).')->setColumns('col-md-4');

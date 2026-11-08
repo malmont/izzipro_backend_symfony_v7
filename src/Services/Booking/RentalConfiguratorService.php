@@ -159,7 +159,7 @@ class RentalConfiguratorService
         if ($minDuration !== null && $maxDuration !== null && $maxDuration < $minDuration) {
             $errors['maxDuration'] = 'La durée maximale doit être au moins égale à la durée minimale (ou laissée vide).';
         }
-        $minDays = $hourly ? null : $int('minDaysStandard', false, 1);
+        $minDays = $hourly && !$datetime ? null : $int('minDaysStandard', false, 1); // jours facturés : grille à la journée et grille datetime
         $buffer = $int('bufferTime', false, 0) ?? 0;
         $openingStart = $hourly ? $time('openingStart', false) : null;
         $openingEnd = $hourly ? $time('openingEnd', false) : null;

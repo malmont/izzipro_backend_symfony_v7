@@ -64,7 +64,7 @@
                     <div class="col-md-4"><label class="form-label">Durée maximale (<span data-unit>{{ a.granularity == 'days' ? 'jours' : 'heures' }}</span>)</label><input class="form-control" type="number" min="1" name="maxDuration" value="{{ a.maxDuration }}" placeholder="vide = sans limite"><div class="form-text" data-max-hint></div>{{ m.err(errors, 'maxDuration') }}</div>
                     <div class="col-md-4" data-datetime-only><label class="form-label">Retard toléré au retour (minutes)</label><input class="form-control" type="number" min="0" max="1439" name="returnTolerance" value="{{ a.returnTolerance }}"><div class="form-text">Ex. : 60 → rendre avec une heure de plus ne coûte pas une journée de plus.</div>{{ m.err(errors, 'returnTolerance') }}</div>
                     <div class="col-md-4" data-datetime-only><label class="form-label">Pas des heures (minutes)</label><select class="form-select" name="timeStep">{% for st in [15, 30, 60, 120] %}<option value="{{ st }}" {{ a.timeStep == st ? 'selected' }}>{{ st == 60 ? 'Heure pleine (60)' : (st == 120 ? 'Deux heures (120)' : st ~ ' minutes') }}</option>{% endfor %}</select><div class="form-text">Heures proposées au client : 9:00, 10:00… ou par demi-heure.</div>{{ m.err(errors, 'timeStep') }}</div>
-                    <div class="col-md-4" data-daily-only><label class="form-label">Jours minimum facturés</label><input class="form-control" type="number" min="1" name="minDaysStandard" value="{{ a.minDaysStandard }}" placeholder="facultatif"><div class="form-text">Ex. : 2 → un séjour d'une nuit est refusé.</div>{{ m.err(errors, 'minDaysStandard') }}</div>
+                    <div class="col-md-4" data-days-billed><label class="form-label">Jours minimum facturés</label><input class="form-control" type="number" min="1" name="minDaysStandard" value="{{ a.minDaysStandard }}" placeholder="facultatif"><div class="form-text">Ex. : 2 → un séjour d'une nuit est refusé. Avec date et heure : jours facturés, après le retard toléré.</div>{{ m.err(errors, 'minDaysStandard') }}</div>
                 </div>
             </div></div>
 
@@ -148,6 +148,7 @@
                 form.querySelectorAll('[data-hourly-only]').forEach(function (el) { el.style.display = hourly ? '' : 'none'; });
                 form.querySelectorAll('[data-daily-only]').forEach(function (el) { el.style.display = hourly ? 'none' : ''; });
                 form.querySelectorAll('[data-datetime-only]').forEach(function (el) { el.style.display = datetime ? '' : 'none'; });
+                form.querySelectorAll('[data-days-billed]').forEach(function (el) { el.style.display = hourly && !datetime ? 'none' : ''; });
                 form.querySelectorAll('[data-slots-only]').forEach(function (el) { el.style.display = datetime ? 'none' : ''; });
                 var hh = form.querySelector('[data-hours-hint]'); if (hh) hh.textContent = datetime ? 'La prise et le retour doivent tomber dans ces heures, n’importe quel jour. Sans heures : à toute heure.' : 'Avec des heures d’ouverture, une location commence et finit le même jour. Sans heures, un créneau peut commencer à toute heure et finir un autre jour.';
                 form.querySelectorAll('[data-unit]').forEach(function (el) { el.textContent = hourly ? 'heures' : 'jours'; });

@@ -265,7 +265,10 @@ Colonnes ajoutées (migration `Version20261120100000`, script `scripts/migrate_a
    les formules**, semaine et mois compris. Sans tolérance : 169 h → 8 jours, 167 h → 7 jours, 16 h → 1 jour. Avec 60 minutes :
    169 h → 7 jours, 170 h → 8 jours, 16 h → 1 jour (ou 15 h à l'heure). Pas d'heures supplémentaires au tarif horaire au-delà des
    jours entiers : une formule, un arrondi. `minDuration` / `maxDuration` sont **en heures** sur cette grille et se vérifient sur la
-   durée réelle (pas la durée facturée) ; `minDaysStandard` sur les jours facturés. `durationType` par défaut : `day`.
+   durée réelle (pas la durée facturée) ; **`minDaysStandard` sur les jours facturés après tolérance** (règle tranchée le 08/11/2026,
+   réponse (a) : 422 `DAYS_MINIMUM`, `items[i].booking.end`, `params { value }`, contrat inchangé ; grille à la journée
+   inchangée ; grilles à l'heure : jamais). Ponton de demo (`minDaysStandard` 2, tolérance 60) : 25 h → 1 jour facturé → refusé ; 49 h →
+   2 jours → accepté. `durationType` par défaut : `day`.
 2. **Heures de prise et de retour** : si `openingHours` (ou `eveningSlot`) est réglé, l'heure de prise **et** l'heure de retour
    doivent chacune tomber dans ces plages, **n'importe quel jour** (pas de contrainte « même jour », contrairement aux grilles
    horaires). Codes 422 `OUTSIDE_PICKUP_HOURS` (`items[i].booking.start`) et `OUTSIDE_RETURN_HOURS` (`items[i].booking.end`),
@@ -283,6 +286,8 @@ Colonnes ajoutées (migration `Version20261120100000`, script `scripts/migrate_a
    au pas `timeStepMinutes`, dans `openingHours` si présent, et calcule l'affichage du prix avec la règle du point 1 ; le serveur
    reste la référence (devis, intent, commande). Les autres grilles ne changent pas (`days` : jours de calendrier bornes incluses envoyés
    à l'ouverture et à la fermeture ; `hours` : même jour).
+   **Où lire les réglages** : `rental` de la fiche produit est la **seule source** (`granularity`, `timeStepMinutes`, `returnToleranceMinutes`,
+   `minDaysStandard`…). L'ancien champ de premier niveau `bookingConfig` (carrousel des landing pages) ne change pas et ne porte pas ces champs.
 6. **Essai sur demo** : le Ponton (`DEMO-PONTON`) est réglé en `datetime` sur demo (prise et retour de 08:00 à 20:00, pas 60 min,
    tolérance 60 min, 24 h minimum, caution et frais par passager inchangés). Test : `tests/Functional/Boutique/RentalDatetimeApiTest.php`.
 
