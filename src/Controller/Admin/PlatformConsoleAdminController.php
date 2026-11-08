@@ -41,6 +41,18 @@ class PlatformConsoleAdminController extends AbstractController
     ) {
     }
 
+    /** Crédits IA par défaut des sites sans réglage et durée de l'essai « Aide IA » à la création (IA bornée, 08/11/2026) */
+    #[Route('/admin/plateforme/ia-defauts', name: 'admin_plateforme_ai_defaults', methods: ['POST'])]
+    public function aiDefaults(Request $request): Response
+    {
+        return $this->action($request, function () use ($request) {
+            $credits = (int) $request->request->get('defaultCredits', 0);
+            $days = (int) $request->request->get('trialDays', 0);
+            $this->mode->setAiDefaults($credits, $days, $this->getUser()?->getUserIdentifier());
+            $this->addFlash('success', sprintf('Nouveaux sites : %d crédit(s) IA par mois, essai « Aide IA » de %d jour(s).', $credits, $days));
+        });
+    }
+
     #[Route('/admin/plateforme/ia-credits', name: 'admin_plateforme_ai_credits', methods: ['POST'])]
     public function aiCredits(Request $request): Response
     {
@@ -109,6 +121,7 @@ class PlatformConsoleAdminController extends AbstractController
             'shippingSettings' => $this->shipping?->settings() ?? ['feeBp' => 0, 'feeFixedCents' => 0, 'carriers' => []],
             'shippingBalances' => $this->balances?->all() ?? [],
             'aiCredits' => $this->aiCredits?->overview() ?? [],
+            'aiDefaults' => $this->mode->settings(), // aiDefaultCredits, aiTrialDays (08/11/2026)
         ]);
     }
 

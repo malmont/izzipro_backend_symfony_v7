@@ -10,6 +10,9 @@ use App\Services\TenantEntityManagerProvider;
 /**
  * Client et adresses d'une commande payée en ligne (reprise de OrderController, 09/10/2026) : adresse d'un client
  * connecté vérifiée ; invité : compte trouvé par son e-mail ou créé (jamais modifié s'il existait), adresses créées.
+ * Retrait en magasin (B20 bis, 08/11/2026) : avec un transporteur `pickup`, l'adresse devient facultative (client : `addressId` absent ;
+ * invité : `shippingAddress` absente, `guestInfo` porte alors prénom, nom, courriel et téléphone) ; la commande n'a pas d'adresse de
+ * livraison, les taxes suivent la boutique (OrderTaxAddressResolver). Sans transporteur de retrait, l'adresse reste exigée.
  */
 final class CheckoutCustomerService
 {
@@ -17,11 +20,19 @@ final class CheckoutCustomerService
     {
     }
 
-    /** @return array{address: Adress} @throws CheckoutException 400, 403, 404 */
+    /** @return array{address: ?Adress} @throws CheckoutException 400, 403, 404 */
     public function customer(User $user, array $data): array
     {
-        if (!isset($data['addressId'], $data['items'])) {
+        if (!isset($data['items'])) {
             throw new CheckoutException(400, 'Missing required fields (addressId, items)', [], 'FIELDS_REQUIRED');
+        }
+        if (!isset($data['addressId'])) {
+            if (!$this->isPickup($data)) {
+                throw new CheckoutException(400, 'Missing required fields (addressId, items)', [], 'FIELDS_REQUIRED');
+            }
+            $this->checkCarrier($data);
+
+            return ['address' => null]; // retrait en magasin : commande sans adresse
         }
         $em = $this->emProvider->getEntityManager();
         $address = $em->getRepository(Adress::class)->find($data['addressId']);
@@ -34,18 +45,25 @@ final class CheckoutCustomerService
     }
 
     /**
-     * @return array{user: User, address: Adress, isNewUser: bool}
+     * @return array{user: User, address: ?Adress, isNewUser: bool}
      * @throws CheckoutException 400
      */
     public function guest(array $data): array
     {
-        if (!isset($data['guestInfo'], $data['items'], $data['shippingAddress'])) {
+        if (!isset($data['guestInfo'], $data['items']) || !is_array($data['guestInfo'])) {
+            throw new CheckoutException(400, 'Missing required guest fields', [], 'GUEST_FIELDS_REQUIRED');
+        }
+        $pickupWithoutAddress = !isset($data['shippingAddress']) && $this->isPickup($data);
+        if (!isset($data['shippingAddress']) && !$pickupWithoutAddress) {
             throw new CheckoutException(400, 'Missing required guest fields', [], 'GUEST_FIELDS_REQUIRED');
         }
         $guestInfo = $data['guestInfo'];
         $email = is_string($guestInfo['email'] ?? null) ? trim($guestInfo['email']) : '';
         if ($email === '') {
             throw new CheckoutException(400, 'Email is required', [], 'EMAIL_REQUIRED');
+        }
+        if ($pickupWithoutAddress && (trim((string) ($guestInfo['firstName'] ?? '')) === '' || trim((string) ($guestInfo['lastName'] ?? '')) === '')) {
+            throw new CheckoutException(400, 'Prénom et nom requis pour un retrait en magasin', [['path' => 'guestInfo.firstName', 'message' => 'prénom et nom requis', 'code' => 'GUEST_NAME_REQUIRED']], 'GUEST_NAME_REQUIRED');
         }
         // Permis exigé seulement pour une location (un article avec réservation)
         foreach (is_array($data['items']) ? $data['items'] : [] as $item) {
@@ -55,7 +73,7 @@ final class CheckoutCustomerService
         }
         $this->checkCarrier($data);
 
-        $shippingData = $data['shippingAddress'];
+        $shippingData = is_array($data['shippingAddress'] ?? null) ? $data['shippingAddress'] : [];
         $firstName = $guestInfo['firstName'] ?? $shippingData['firstname'] ?? null;
         $lastName = $guestInfo['lastName'] ?? $shippingData['lastname'] ?? null;
         if ((!$firstName || !$lastName) && isset($shippingData['fullname'])) {
@@ -84,6 +102,15 @@ final class CheckoutCustomerService
         }
 
         $phone = $guestInfo['phone'] ?? $shippingData['contactNumber'] ?? null;
+        if ($pickupWithoutAddress) { // retrait : aucune adresse créée ; une adresse de facturation fournie est gardée dans le carnet
+            if (is_array($data['billingAddress'] ?? null) && $data['billingAddress'] !== []) {
+                $billing = self::address($data['billingAddress'], $user, $phone);
+                $em->persist($billing);
+                $em->flush();
+            }
+
+            return ['user' => $user, 'address' => null, 'isNewUser' => $isNewUser];
+        }
         $shipping = self::address($shippingData, $user, $phone);
         $billing = self::address($data['billingAddress'] ?? $shippingData, $user, $phone);
         $em->persist($shipping);
@@ -112,6 +139,17 @@ final class CheckoutCustomerService
         if ($changed) {
             $this->emProvider->getEntityManager()->flush();
         }
+    }
+
+    /** Transporteur de retrait en magasin (`carrier.kind = pickup`) ? */
+    private function isPickup(array $data): bool
+    {
+        if (empty($data['carrierId'])) {
+            return false;
+        }
+        $carrier = $this->emProvider->getEntityManager()->getRepository(Carrier::class)->find($data['carrierId']);
+
+        return $carrier instanceof Carrier && $carrier->isPickup();
     }
 
     private function checkCarrier(array $data): void

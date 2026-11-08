@@ -32,7 +32,7 @@ class SiteDefaultsService
     /** application (profil) ← fonctionnalité accordée */
     private const APP_FEATURES = ['pos' => 'module.pos', 'mobile' => 'app.mobile_shop', 'admin' => 'app.management', 'livingmemory' => 'app.living_memory', 'memoires' => 'module.memoires', 'boussole' => 'module.boussole'];
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly TenantConnectionManager $tenants, private readonly EntitlementService $entitlements, private readonly LoggerInterface $logger)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly TenantConnectionManager $tenants, private readonly EntitlementService $entitlements, private readonly LoggerInterface $logger, private readonly ?PlatformModeService $platform = null)
     {
     }
 
@@ -105,6 +105,22 @@ class SiteDefaultsService
             $applied[] = sprintf('profil de l\'application %s', AppProfile::APPS[$app] ?? $app);
         }
         $em->flush();
+
+        // Essai « Aide IA » à la création (IA bornée, 08/11/2026) : une seule fois, jamais si le site a déjà eu un droit IA (essai expiré compris)
+        $trialDays = $this->platform?->aiTrialDays() ?? 0;
+        if ($code !== '' && $trialDays > 0) {
+            try {
+                $hadAi = array_filter($this->entitlements->listForTenant($code), fn ($row) => in_array((string) ($row['feature_key'] ?? $row['featureKey'] ?? ''), ['ai.help', 'ai.full'], true)) !== [];
+                if ($hadAi) {
+                    $skipped[] = 'essai « Aide IA » : le site a déjà eu un droit sur l\'assistant';
+                } else {
+                    $this->entitlements->trial($code, 'ai.help', $trialDays, $by, 'Essai automatique à la création du site');
+                    $applied[] = sprintf('essai « Aide IA » de %d jours', $trialDays);
+                }
+            } catch (\Throwable $e) {
+                $skipped[] = 'essai « Aide IA » : ' . $e->getMessage();
+            }
+        }
         if ($applied !== []) {
             $this->logger->info(sprintf('[Référentiels] %s : %s (par %s)', $code, implode(' ; ', $applied), $by ?? 'création du site'));
         }

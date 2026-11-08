@@ -84,7 +84,7 @@ final class FinalizeCheckoutOrderUseCase
 
             return ['status' => 'ignored', 'detail' => 'corps de commande absent (create-intent sans « order »)'];
         }
-        $mode = $session->getUser() !== null && isset($data['addressId']) ? self::MODE_CUSTOMER : self::MODE_GUEST;
+        $mode = $session->getUser() !== null && (isset($data['addressId']) || !isset($data['guestInfo'])) ? self::MODE_CUSTOMER : self::MODE_GUEST; // client connecté sans adresse = retrait (B20 bis)
         try {
             $result = $this->finalize($mode, $paymentIntentId, $data + $session->getCart(), $session->getUser(), $session->getLocale(), (string) $session->getHost());
         } catch (CheckoutException $e) {
@@ -140,11 +140,12 @@ final class FinalizeCheckoutOrderUseCase
             if ($mode === self::MODE_GUEST) {
                 $guest = $this->customers->guest($data);
                 $user = $guest['user'];
-                $addressId = (int) $guest['address']->getId();
+                $addressId = $guest['address'] !== null ? (int) $guest['address']->getId() : null; // retrait en magasin : sans adresse (B20 bis, 08/11/2026)
                 $license = [$data['guestInfo']['licenseNumber'] ?? null, $data['guestInfo']['licenseExpirationDate'] ?? null];
                 $source = self::ORDER_SOURCE_ECOMMERCE;
             } else {
-                $addressId = (int) $this->customers->customer($user, $data)['address']->getId();
+                $address = $this->customers->customer($user, $data)['address'];
+                $addressId = $address !== null ? (int) $address->getId() : null;
                 $license = [$data['licenseNumber'] ?? null, $data['licenseExpirationDate'] ?? null];
                 $source = in_array((int) ($data['orderSource'] ?? 0), [self::ORDER_SOURCE_ECOMMERCE, self::ORDER_SOURCE_MOBILE_APP], true) ? (int) $data['orderSource'] : self::ORDER_SOURCE_ECOMMERCE;
             }

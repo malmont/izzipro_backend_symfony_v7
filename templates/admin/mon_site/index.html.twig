@@ -222,7 +222,7 @@
             <tr data-key="{{ e.key }}">
                 <td>{{ e.label }}</td>
                 <td>{{ m.status(e) }}</td>
-                <td class="small">{% if e.value is iterable %}{% for k, v in e.value %}{{ k }} : {{ v is same as(true) ? 'oui' : (v is same as(false) ? 'non' : v) }}{% if not loop.last %}, {% endif %}{% endfor %}{% elseif e.value is same as(true) %}configuré{% elseif e.value is same as(false) %}non configuré{% else %}{{ e.value }}{% endif %}</td>
+                <td class="small">{% if e.value is iterable %}{% for k, v in e.value %}{{ k }} : {{ v is same as(true) ? 'oui' : (v is same as(false) ? 'non' : v) }}{% if not loop.last %}, {% endif %}{% endfor %}{% elseif e.scope == 'platform' and e.value is same as(true) %}accordé{% elseif e.scope == 'platform' and e.value is same as(false) %}non accordé{% elseif e.value is same as(true) %}configuré{% elseif e.value is same as(false) %}non configuré{% else %}{{ e.value }}{% endif %}</td>
                 <td>{{ m.prereqs(e) }}</td>
                 <td>{% if e.screenUrl %}<a class="btn btn-sm btn-outline-secondary" href="{{ e.screenUrl }}">Ouvrir</a>{% endif %}</td>
             </tr>

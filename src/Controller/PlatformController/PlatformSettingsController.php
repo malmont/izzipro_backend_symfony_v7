@@ -11,7 +11,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Réglages de la plateforme (console de pilotage, 04/11/2026), super administrateur : GET → { mode, updatedAt, updatedBy, shopUrl } ;
- * PUT { mode?: demo | live, shopUrl?: https… | null, shopTenant?: code | null } → même réponse ; 422 VALIDATION_FAILED. shopTenant : le seul site dont
+ * PUT { mode?: demo | live, shopUrl?: https… | null, shopTenant?: code | null, aiDefaultCredits?: 0..100000, aiTrialDays?: 0..365 } → même réponse ; 422 VALIDATION_FAILED. shopTenant : le seul site dont
  * les formules branchées produisent des droits (OfferFulfillmentService). Contrat : docs/console-pilotage.md.
  */
 #[Route('/api/platform/settings')]
@@ -33,6 +33,16 @@ class PlatformSettingsController extends AbstractController
     {
         $data = json_decode($request->getContent(), true);
         $data = is_array($data) ? $data : [];
+        if (array_key_exists('aiDefaultCredits', $data) || array_key_exists('aiTrialDays', $data)) { // IA bornée (08/11/2026)
+            try {
+                $this->mode->setAiDefaults(array_key_exists('aiDefaultCredits', $data) ? (is_numeric($data['aiDefaultCredits']) ? (int) $data['aiDefaultCredits'] : -1) : null, array_key_exists('aiTrialDays', $data) ? (is_numeric($data['aiTrialDays']) ? (int) $data['aiTrialDays'] : -1) : null, $this->getUser()?->getUserIdentifier());
+            } catch (\InvalidArgumentException $e) {
+                return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => $e->getMessage(), 'errors' => [['path' => str_starts_with($e->getMessage(), 'aiTrialDays') ? 'aiTrialDays' : 'aiDefaultCredits', 'message' => $e->getMessage()]]], 422);
+            }
+            if (!array_key_exists('mode', $data) && !array_key_exists('shopUrl', $data) && !array_key_exists('shopTenant', $data)) {
+                return $this->json($this->mode->settings());
+            }
+        }
         if (!array_key_exists('mode', $data) && !array_key_exists('shopUrl', $data) && !array_key_exists('shopTenant', $data)) {
             return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => 'mode, shopUrl ou shopTenant attendu', 'errors' => [['path' => '', 'message' => 'mode, shopUrl ou shopTenant attendu']]], 422);
         }

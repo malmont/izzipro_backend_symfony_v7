@@ -35,6 +35,7 @@ class SiteReadinessTest extends WebTestCase
         $this->clean();
         static::getContainer()->get(PlatformModeService::class)->setShopUrl(null, 'test');
         static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateTenant();
+        \App\Tests\Functional\Support\AiRightTestHelper::restoreFullAi(static::getContainer()); // le site de test garde « IA complète » (08/11/2026)
         parent::tearDown();
     }
 

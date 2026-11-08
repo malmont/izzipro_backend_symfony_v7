@@ -40,7 +40,8 @@ final class LandingAiQuotaService
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
-        private readonly TenantConnectionProvider $tenantProvider
+        private readonly TenantConnectionProvider $tenantProvider,
+        private readonly ?\App\Services\Platform\PlatformModeService $platform = null // crédits par défaut de la plateforme (IA bornée, 08/11/2026)
     ) {
     }
 
@@ -142,7 +143,7 @@ final class LandingAiQuotaService
         $resetAt = $monthStart->modify('first day of next month');
         $utc = new \DateTimeZone(date_default_timezone_get());
 
-        $monthly = $this->settings()->monthlyCredits();
+        $monthly = $this->settings()->monthlyCredits($this->platform?->aiDefaultCredits());
         $used = $this->usages()->sumCommittedCredits($monthStart->setTimezone($utc), new \DateTimeImmutable());
 
         return [

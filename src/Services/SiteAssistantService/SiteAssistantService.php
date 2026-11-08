@@ -66,7 +66,7 @@ class SiteAssistantService
      */
     public function tier(string $tenantCode, bool $fullAccess): string
     {
-        if ($fullAccess || $this->entitlements === null || $this->platform->isDemo()) {
+        if ($fullAccess || $this->entitlements === null) { // depuis le 08/11/2026 le mode démo n'ouvre plus l'assistant : les droits ai.help / ai.full s'appliquent toujours (IA bornée)
             return 'full';
         }
         try {

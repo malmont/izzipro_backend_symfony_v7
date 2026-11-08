@@ -14,7 +14,7 @@ use Psr\Log\LoggerInterface;
  */
 class PlatformAiCreditsService
 {
-    public function __construct(private readonly TenantConnectionManager $tenants, private readonly TenantDatabaseConnector $connector, private readonly LoggerInterface $logger)
+    public function __construct(private readonly TenantConnectionManager $tenants, private readonly TenantDatabaseConnector $connector, private readonly LoggerInterface $logger, private readonly ?PlatformModeService $platform = null)
     {
     }
 
@@ -34,7 +34,7 @@ class PlatformAiCreditsService
                 $stmt = $pdo->prepare("SELECT COALESCE(SUM(credits), 0) FROM ai_usage WHERE created_at >= ? AND (status = 'success' OR (status = 'reserved' AND reserved_until >= NOW()))");
                 $stmt->execute([$monthStart]);
                 $used = (int) $stmt->fetchColumn();
-                $m = $monthly === false || $monthly === null ? AiCreditSetting::DEFAULT_MONTHLY_CREDITS : (int) $monthly;
+                $m = $monthly === false || $monthly === null ? ($this->platform?->aiDefaultCredits() ?? AiCreditSetting::DEFAULT_MONTHLY_CREDITS) : (int) $monthly;
                 $rows[] = ['code' => $code, 'name' => (string) $tenant['name'], 'monthly' => $m, 'used' => $used, 'remaining' => max(0, $m - $used), 'hasSetting' => $monthly !== false && $monthly !== null];
             } catch (\Throwable $e) {
                 $this->logger->warning(sprintf('[Crédits IA] %s illisible : %s', $code, $e->getMessage()));

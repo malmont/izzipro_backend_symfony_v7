@@ -298,7 +298,7 @@ class OrderController extends AbstractController
             return $this->json(['error' => 'La commande sans compte est désactivée sur ce site.', 'code' => 'GUEST_CHECKOUT_DISABLED', 'message' => 'La commande sans compte est désactivée sur ce site.'], JsonResponse::HTTP_FORBIDDEN);
         }
 
-        if (!is_array($data) || !isset($data['guestInfo'], $data['items'], $data['shippingAddress'], $data['paymentIntentId'])) {
+        if (!is_array($data) || !isset($data['guestInfo'], $data['items'], $data['paymentIntentId'])) { // shippingAddress : exigée par CheckoutCustomerService sauf retrait en magasin (B20 bis, 08/11/2026)
             return $this->json(['error' => 'Missing required guest fields', 'code' => 'GUEST_FIELDS_REQUIRED', 'message' => 'Missing required guest fields'], JsonResponse::HTTP_BAD_REQUEST);
         }
 

@@ -47,6 +47,7 @@ class EntitlementsTest extends WebTestCase
         $this->db->executeStatement('UPDATE entreprise SET ' . implode(', ', $sets) . ' WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1)', $params, array_fill(0, count($params), \Doctrine\DBAL\ParameterType::BOOLEAN));
         $this->cleanMaster();
         static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateTenant();
+        \App\Tests\Functional\Support\AiRightTestHelper::restoreFullAi(static::getContainer()); // le site de test garde « IA complète » (08/11/2026)
         parent::tearDown();
     }
 

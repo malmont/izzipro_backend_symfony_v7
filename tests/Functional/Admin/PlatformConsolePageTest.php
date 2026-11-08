@@ -38,6 +38,7 @@ class PlatformConsolePageTest extends WebTestCase
         static::getContainer()->get(PlatformModeService::class)->setMode('demo', 'test');
         $this->master->exec("UPDATE platform_offers SET monthly_price_cents = 2900, trial_days = 30, is_active = TRUE WHERE code = 'landing'");
         static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateTenant();
+        \App\Tests\Functional\Support\AiRightTestHelper::restoreFullAi(static::getContainer()); // le site de test garde « IA complète » (08/11/2026)
         parent::tearDown();
     }
 

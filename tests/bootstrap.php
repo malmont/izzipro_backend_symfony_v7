@@ -93,6 +93,8 @@ $master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_master.sql'));
 $insertTenant = $master->prepare('INSERT INTO tenants (code, name, dbname, custom_domain, short_code) VALUES (?, ?, ?, ?, ?)');
 $insertTenant->execute([MV_TEST_TENANT_CODE, 'Tenant de test', MV_TEST_TENANT_DB, MV_TEST_TENANT_HOST, 'MVT001']);
 $insertTenant->execute([MV_TEST_TENANT2_CODE, 'Second tenant de test', MV_TEST_TENANT2_DB, MV_TEST_TENANT2_HOST, 'MVT002']);
+// IA bornée (08/11/2026) : l'assistant suit les droits même en mode démo ; le site de test a « IA complète » (comme les sites existants)
+$master->prepare("INSERT INTO tenant_entitlements (tenant_code, feature_key, source, status, granted_by, note) VALUES (?, 'ai.full', 'manual', 'active', 'bootstrap', 'IA complète du site de test')")->execute([MV_TEST_TENANT_CODE]);
 
 // Aucun e-mail réel pendant les tests : le modèle des bases de test porte la configuration SMTP d'un vrai site, que
 // TenantMailerFactory utiliserait à la place de MAILER_DSN (null://). Sans serveur propre, tout part vers null://.

@@ -17,10 +17,10 @@ class AiCreditSettingRepository extends EntityRepository
     }
 
     /** Crédits mensuels du tenant ; valeur par défaut tant qu'aucune ligne n'existe */
-    public function monthlyCredits(): int
+    public function monthlyCredits(?int $default = null): int
     {
         $setting = $this->findOneBy([], ['id' => 'ASC']);
 
-        return $setting?->getMonthlyCredits() ?? AiCreditSetting::DEFAULT_MONTHLY_CREDITS;
+        return $setting?->getMonthlyCredits() ?? $default ?? AiCreditSetting::DEFAULT_MONTHLY_CREDITS;
     }
 }

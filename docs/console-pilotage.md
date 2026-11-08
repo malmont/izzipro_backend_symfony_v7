@@ -236,6 +236,25 @@ prise et de retour » (grille `datetime` : tolérance de retard, pas des heures 
 
 ## Crédits IA : réglés par la plateforme seulement (07/11/2026)
 
+**IA bornée, même en mode démonstration (08/11/2026).** Décision du propriétaire : donner un site à tester ne doit pas vider ses crédits ni
+ouvrir l'assistant sans limite. Trois règles :
+
+1. **Crédits par défaut réglés par la plateforme** : clé `ai_default_credits` de `platform_settings` (page Plateforme, formulaire en tête de
+   « Crédits IA par site » ; `PUT /api/platform/settings { aiDefaultCredits }`, 0 à 100 000, 100 si absent). Elle vaut pour tout site sans
+   ligne `ai_credit_setting` propre (`AiCreditSettingRepository::monthlyCredits($default)`, `LandingAiQuotaService::credits`, grille de la page
+   Plateforme, étape « Crédits IA du mois »). Un site réglé à la main garde sa valeur.
+2. **L'assistant suit les droits `ai.help` / `ai.full` quel que soit le mode** (`SiteAssistantService::tier`, étape `ai.access` du
+   cheminement) ; le propriétaire (`ROLE_SUPER_ADMIN`) garde l'accès complet partout. Les sites existants ont reçu « IA complète » sans fin
+   le 08/11/2026 par `app:entitlements:grant ai.full --all` (commande idempotente : `--tenant=code`, `--days=N` pour un essai, `--dry-run`).
+3. **Essai « Aide IA » à la création d'un site** : `SiteDefaultsService::apply` pose un essai de `ai_trial_days` jours (clé `platform_settings`,
+   même formulaire, `aiTrialDays`, 0 = aucun, 30 si absent) **une seule fois** : jamais si le site a déjà eu un droit IA, essai expiré
+   compris. Ensuite : « Demander », « Essayer » (politique de la fonctionnalité) ou forfait.
+
+**Carte « Assistant IA » de l'aperçu (08/11/2026).** Le groupe `ai` du cheminement porte désormais l'étape `ai.access` (titre « Assistant IA :
+IA complète / aide IA / non activé », faite dès qu'un service est accordé, non bloquante, écran Mon site) devant `ai.credits`, qui devient
+**bloquante** quand il ne reste aucun crédit : la carte passe « à faire » au lieu d'un « prêt » permanent. Dans Services et quotas, la valeur
+d'un service à drapeau (`scope: platform`) se lit « accordé » / « non accordé ».
+
 Règle : **seul le propriétaire de la plateforme** fixe les crédits IA mensuels d'un site. Page Plateforme, section « Crédits IA par site »
 (`Services/Platform/PlatformAiCreditsService` : crédits du mois, utilisés, restants par site ; `POST /admin/plateforme/ia-credits`
 `{tenant, monthly}`, 0 = assistant désactivé). Sur le site, l'écran « Assistant IA : consignes et crédits » montre les crédits en lecture
@@ -302,8 +321,8 @@ d'outils des forfaits « Aide IA » / « IA complète » (le super admin les a t
 `entreprise.is_ai_help_active`) et `ai.full` (IA complète, `is_ai_full_active`) ; offres `ai_help` (9 $) et `ai_full` (29 $, inclut l'aide)
 dans `platform_offers` (prix provisoires) ; champs super admin sur la fiche Entreprise (panneau « Assistant IA ») ; migration
 `Version20261117100000` + `scripts/migrate_all_v2_ai_tiers.sh` (appliqué partout le 07/11/2026, défaut faux). Palier effectif
-(`SiteAssistantService::tier`) : **`full`** pour le propriétaire de la plateforme (`ROLE_SUPER_ADMIN`) et **en mode `demo` de la
-plateforme** (rien ne change pour les sites actuels) ; en mode `live`, `full` si `ai.full`, `help` si `ai.help`, sinon **403
+(`SiteAssistantService::tier`) : **`full`** pour le propriétaire de la plateforme (`ROLE_SUPER_ADMIN`) ; pour les autres, **quel que
+soit le mode de la plateforme** (depuis le 08/11/2026 le mode `demo` n'ouvre plus l'assistant : IA bornée), `full` si `ai.full`, `help` si `ai.help`, sinon **403
 `AI_NOT_INCLUDED`** avant tout appel à l'IA. La réponse de l'assistant porte `tier: full | help` à côté d'`access`.
 - **Aide IA** : outils de lecture et d'orientation seulement (`SiteAssistantTools::HELP_TOOLS` : registre, cheminement, écran, domaine,
   relais à l'éditeur, commandes à traiter, fiche d'une commande, cheminements de configuration) ; consigne système « tu expliques, tu

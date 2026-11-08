@@ -22,6 +22,8 @@ class SiteDefaultsTest extends KernelTestCase
     private array $orderTaxes = [];
     /** plus grand id de app_profile avant le test : les profils créés par le service sont retirés (sinon doublon « boussole » dans un autre test) */
     private int $profileMax = 0;
+    private \PDO $master;
+    private array $aiFlags = [];
 
     protected function setUp(): void
     {
@@ -37,6 +39,10 @@ class SiteDefaultsTest extends KernelTestCase
         $this->address = $this->db->fetchAssociative('SELECT id, country, state FROM address_entreprise ORDER BY id LIMIT 1') ?: null;
         $this->ttc = (bool) $this->db->fetchOne('SELECT prices_include_tax FROM entreprise ORDER BY id LIMIT 1');
         $this->emailBefore = $this->db->fetchOne('SELECT email FROM entreprise ORDER BY id LIMIT 1');
+        // Essai « Aide IA » à la création (08/11/2026) : on part d'un site sans aucun droit IA, puis on remet « IA complète » de l'amorçage
+        $this->master = static::getContainer()->get(\App\Services\TenantConnectionManager::class)->getPdoMaster();
+        $this->master->prepare("DELETE FROM tenant_entitlements WHERE tenant_code = ? AND feature_key IN ('ai.help', 'ai.full')")->execute([MV_TEST_TENANT_CODE]);
+        $this->aiFlags = $this->db->fetchAssociative('SELECT is_ai_help_active, is_ai_full_active FROM entreprise ORDER BY id LIMIT 1') ?: [];
     }
 
     protected function tearDown(): void
@@ -58,6 +64,12 @@ class SiteDefaultsTest extends KernelTestCase
         $this->db->executeStatement('UPDATE entreprise SET prices_include_tax = ?', [$this->ttc], [\Doctrine\DBAL\ParameterType::BOOLEAN]);
         $this->db->executeStatement('UPDATE entreprise SET email = ?', [$this->emailBefore]);
         $this->db->executeStatement('DELETE FROM app_profile WHERE id > ?', [$this->profileMax]);
+        $this->master->prepare("DELETE FROM tenant_entitlements WHERE tenant_code = ? AND feature_key IN ('ai.help', 'ai.full')")->execute([MV_TEST_TENANT_CODE]);
+        $this->master->exec("DELETE FROM tenant_entitlement_events WHERE feature_key IN ('ai.help', 'ai.full')");
+        $this->master->prepare("INSERT INTO tenant_entitlements (tenant_code, feature_key, source, status, granted_by, note) VALUES (?, 'ai.full', 'manual', 'active', 'bootstrap', 'IA complète du site de test')")->execute([MV_TEST_TENANT_CODE]);
+        if ($this->aiFlags !== []) {
+            $this->db->executeStatement('UPDATE entreprise SET is_ai_help_active = ?, is_ai_full_active = ?', [$this->aiFlags['is_ai_help_active'], $this->aiFlags['is_ai_full_active']], [\Doctrine\DBAL\ParameterType::BOOLEAN, \Doctrine\DBAL\ParameterType::BOOLEAN]);
+        }
         static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateTenant();
         parent::tearDown();
     }
@@ -78,12 +90,15 @@ class SiteDefaultsTest extends KernelTestCase
         $this->assertSame($email, $this->db->fetchOne('SELECT from_email FROM email_configuration ORDER BY id LIMIT 1'));
         $this->assertStringContainsString('Canada', implode(' ', $result['applied']));
         $this->assertStringContainsString('expéditeur', implode(' ', $result['applied']));
+        $this->assertStringContainsString('essai « Aide IA » de 30 jours', implode(' ', $result['applied']), 'essai automatique à la création (08/11/2026)');
+        $this->assertSame(1, (int) $this->master->query("SELECT COUNT(*) FROM tenant_entitlements WHERE tenant_code = '" . MV_TEST_TENANT_CODE . "' AND feature_key = 'ai.help' AND source = 'trial' AND status = 'active'")->fetchColumn());
 
         // Second passage : rien de plus
         $result = $service->apply('test');
         $this->assertSame(7, (int) $this->db->fetchOne('SELECT COUNT(*) FROM tax'));
         $this->assertSame([], array_filter($result['applied'], fn ($a) => str_contains($a, 'taxes')));
         $this->assertStringContainsString('déjà saisie', implode(' ', $result['skipped']));
+        $this->assertStringContainsString('déjà eu un droit', implode(' ', $result['skipped']), 'pas de second essai');
 
         // France : les lignes du modèle canadien sont retirées (aucune commande), la TVA posée avec ses catégories, prix TTC
         $this->db->executeStatement("UPDATE address_entreprise SET country = 'France', state = ''");

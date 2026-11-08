@@ -1130,14 +1130,17 @@ réglages, transporteurs, compteurs, liens vers les écrans.
 2. **`POST /api/stripe/create-intent` avec un transporteur `pickup`** : accepté sans `shippingAddress` ; le montant de l'intent est le
    `total` du devis, **taxes de la boutique comprises** (avant le 08/11/2026 il était hors taxes dans ce cas). Aucun champ ne remplace
    `shippingAddress` : ne rien envoyer. Codes : ceux du devis (`VARIANT_NOT_FOUND`, `CARRIER_NOT_FOUND`, `QUOTE_INVALID`, 422), `AMOUNT_INVALID`,
-   `STRIPE_ACCOUNT_MISSING`. **`POST /api/order/create` et `create-guest` exigent toujours une adresse** (`addressId` : 400 `FIELDS_REQUIRED` ;
-   `shippingAddress` : 400 `GUEST_FIELDS_REQUIRED`), même en retrait : elle sert d'adresse de facturation et de contact, pas aux taxes.
-   Lever cette obligation (commande de retrait sans adresse, invité identifié par `guestInfo` seul) est un lot à part, à décider.
-3. **Invité en retrait** : tant que l'adresse reste obligatoire, rien ne change : `guestInfo.email` obligatoire (`EMAIL_REQUIRED`), nom et
-   prénom pris dans `guestInfo` sinon dans `shippingAddress`, téléphone dans l'adresse. Titrer la section « Vos coordonnées » et dire
-   que rien n'y est livré est le bon affichage.
+   `STRIPE_ACCOUNT_MISSING`. **Depuis le 08/11/2026 (B20 bis), avec un transporteur `pickup` l'adresse n'est plus exigée** : `POST /api/order/create`
+   sans `addressId` et `POST /api/order/create-guest` sans `shippingAddress` créent la commande sans adresse de livraison (taxes de la boutique,
+   `shippingAdress: null`). Sans transporteur de retrait, rien ne change : 400 `FIELDS_REQUIRED` (client) / `GUEST_FIELDS_REQUIRED` (invité).
+3. **Invité en retrait** sans `shippingAddress` : `guestInfo { email, firstName, lastName, phone? }` ; `EMAIL_REQUIRED` sans courriel,
+   400 `GUEST_NAME_REQUIRED` (`errors[0].path = guestInfo.firstName`) sans prénom ou nom. Aucune adresse n'est créée dans le carnet du client
+   (une `billingAddress` fournie est gardée, facultative). Le front peut donc n'afficher que « Vos coordonnées ». Avec `shippingAddress`,
+   l'ancien comportement reste (adresse créée, nom et prénom pris dans `guestInfo` sinon dans l'adresse).
 4. **Détail et liste d'une commande** (`GET /api/orders/{id}`, `GET /api/ordersuser`) : `shippingAdress` = l'adresse donnée à la
-   commande (jamais celle de la boutique ; `null` seulement pour une vente au comptoir) ; `carrier { id, name, kind, isPickup }`.
+   commande (jamais celle de la boutique ; `null` pour une vente au comptoir ou un retrait sans adresse) ; `carrier { id, name, kind, isPickup }`.
+   Fiche commande du back-office, courriels et expédition manuelle tolèrent l'absence d'adresse (« Marquer expédiée » reste possible pour
+   noter la remise). Test : `tests/Functional/Boutique/PickupCheckoutApiTest.php`.
 5. **`kind: easypost`** : inchangé, un transporteur avec `carrierAccountId` est tarifé par `shipping/summary` et le tarif choisi est
    envoyé en `shippingPrice` ; `kind: fixed` : prix du transporteur ; `kind: pickup` : 0.
 6. **Abonnements** : `GET /api/subscriptions` et `GET /api/subscriptions/{id}` rendent `carrier { id, name, kind, isPickup }` ; un

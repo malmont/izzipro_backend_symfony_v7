@@ -59,6 +59,7 @@ class OfferFulfillmentTest extends WebTestCase
         $this->master->exec("UPDATE platform_offers SET monthly_price_cents = 5900, trial_days = 30 WHERE code = 'boutique'");
         static::getContainer()->get(TenantCacheService::class)->invalidateSite(MV_TEST_TENANT2_CODE, MV_TEST_TENANT2_DB);
         static::getContainer()->get(\App\Services\Platform\PlatformModeService::class)->setShopTenant(null, 'test');
+        \App\Tests\Functional\Support\AiRightTestHelper::restoreFullAi(static::getContainer()); // le site de test garde « IA complète » (08/11/2026)
         parent::tearDown();
     }
 

@@ -9,7 +9,7 @@ class CreateOrderDTO implements ICreateOrderDTO
     private int $userId;
     private int $orderSource;
     private int $paymentMethod;
-    private int $addressId;
+    private ?int $addressId;
 
     // CORRECTION 1 : Ajout du '?' pour accepter null
     private ?int $carrierId;
@@ -42,7 +42,7 @@ class CreateOrderDTO implements ICreateOrderDTO
         int $userId,
         int $orderSource,
         int $paymentMethod,
-        int $addressId,
+        ?int $addressId, // nulle pour un retrait en magasin (B20 bis, 08/11/2026)
 
         // CORRECTION 2 : Ajout du '?' ici aussi dans le constructeur
         ?int $carrierId,
@@ -102,7 +102,7 @@ class CreateOrderDTO implements ICreateOrderDTO
     {
         return $this->orderSource;
     }
-    public function getAddressId(): int
+    public function getAddressId(): ?int
     {
         return $this->addressId;
     }

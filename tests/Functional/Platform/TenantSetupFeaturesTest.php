@@ -49,6 +49,7 @@ class TenantSetupFeaturesTest extends WebTestCase
         $this->clean();
         $this->master->exec("DELETE FROM platform_feature_policies WHERE feature_key = 'module.memoires'");
         static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateSite(MV_TEST_TENANT2_CODE, MV_TEST_TENANT2_DB);
+        \App\Tests\Functional\Support\AiRightTestHelper::restoreFullAi(static::getContainer()); // le site de test garde « IA complète » (08/11/2026)
         parent::tearDown();
     }
 

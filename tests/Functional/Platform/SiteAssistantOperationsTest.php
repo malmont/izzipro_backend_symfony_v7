@@ -48,12 +48,14 @@ class SiteAssistantOperationsTest extends WebTestCase
         $this->master->exec("DELETE FROM tenant_entitlement_events WHERE feature_key IN ('ai.help', 'ai.full')");
         static::getContainer()->get(PlatformModeService::class)->setMode(PlatformModeService::DEMO, 'test');
         $this->db->executeStatement('UPDATE entreprise SET is_ai_help_active = FALSE, is_ai_full_active = FALSE');
+        $this->master->prepare("INSERT INTO tenant_entitlements (tenant_code, feature_key, source, status, granted_by, note) VALUES (?, 'ai.full', 'manual', 'active', 'bootstrap', 'IA complète du site de test')")->execute([MV_TEST_TENANT_CODE]); // comme l'amorçage : les autres tests comptent dessus (08/11/2026)
         static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateTenant();
         parent::tearDown();
     }
 
     public function testTheAssistantReadsOrdersAndRefundsThenCancelsOnlyAfterConfirmation(): void
     {
+        static::getContainer()->get(EntitlementService::class)->free(MV_TEST_TENANT_CODE, 'ai.full', 'test'); // depuis le 08/11/2026 le mode démo n'ouvre plus l'assistant : droit explicite
         [$orderId, $pi, $total] = $this->paidOrder();
         $reference = (string) $this->db->fetchOne('SELECT reference FROM "order" WHERE id = ?', [$orderId]);
 
@@ -68,7 +70,7 @@ class SiteAssistantOperationsTest extends WebTestCase
         $r = $this->api('POST', '/api/site/assistant', ['messages' => [['role' => 'user', 'content' => "Rembourse 5 $ sur la commande $reference"]]], 'admin');
         $this->assertSame(200, $r->getStatusCode(), $r->getContent());
         $body = json_decode((string) $r->getContent(), true);
-        $this->assertSame('full', $body['tier'], 'mode démo de la plateforme : palier complet');
+        $this->assertSame('full', $body['tier'], 'droit « IA complète » : palier complet (le mode démo seul n\'ouvre plus l\'assistant, 08/11/2026)');
         $this->assertCount(1, $body['actions'], 'une seule proposition : le dépassement et la capture sans autorisation sont refusés');
         $this->assertSame('refund_order', $body['actions'][0]['tool']);
         $this->assertStringContainsString('5,00', $body['actions'][0]['summary']);
@@ -122,6 +124,7 @@ class SiteAssistantOperationsTest extends WebTestCase
     {
         $mode = static::getContainer()->get(PlatformModeService::class);
         $entitlements = static::getContainer()->get(EntitlementService::class);
+        $this->master->prepare("DELETE FROM tenant_entitlements WHERE tenant_code = ? AND feature_key IN ('ai.help', 'ai.full')")->execute([MV_TEST_TENANT_CODE]); // l'amorçage donne « IA complète » au site de test (08/11/2026) : on part de rien
         $mode->setMode(PlatformModeService::LIVE, 'test');
 
         // Aucun forfait IA : refusé avant tout appel à l'IA ; le propriétaire de la plateforme passe toujours

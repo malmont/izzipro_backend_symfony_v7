@@ -270,15 +270,22 @@ class SiteReadinessService
             $add('living_memory.profile', 'app.living_memory', 'Apparence de l\'application Living Memory', 'Logo, couleurs et textes de l\'application (profil « livingmemory »).', $this->count($pdo, 'app_profile', "app = 'livingmemory'") > 0, 'backend', ['type' => 'screen', 'screen' => 'app_profiles'], false);
         }
 
-        // Assistant IA (cheminement complet, 07/11/2026)
+        // Assistant IA (cheminement complet, 07/11/2026). Accès réel (08/11/2026) : même règle que SiteAssistantService::tier, pour que la carte
+        // « Assistant IA » dise le palier du site au lieu de « prêt » en toute circonstance
+        $tier = $this->entitlements->isEnabled($code, 'ai.full') ? 'full' : ($this->entitlements->isEnabled($code, 'ai.help') ? 'help' : 'none'); // même en mode démo : l'IA suit les droits (IA bornée, 08/11/2026)
+        $add('ai.access', 'ai', ['full' => 'Assistant IA : IA complète', 'help' => 'Assistant IA : aide IA', 'none' => 'Assistant IA : non activé'][$tier],
+            ['full' => 'Le service « IA complète » est accordé : l\'assistant explique, propose des réglages et des opérations, toujours après votre confirmation.',
+                'help' => 'Le service « Aide IA » est accordé : l\'assistant explique vos réglages, votre cheminement et vos commandes, sans rien modifier. « IA complète » s\'obtient par forfait ou sur demande.',
+                'none' => 'Aucun service d\'assistant n\'est accordé au site : demandez ou essayez « Aide IA » ou « IA complète » dans Services et quotas, ou prenez un forfait.'][$tier],
+            $tier !== 'none', 'backend', ['type' => 'screen', 'screen' => 'mon_site'], false);
         $creditsRaw = $this->one($pdo, 'SELECT monthly_credits FROM ai_credit_setting ORDER BY id LIMIT 1');
-        $credits = $creditsRaw === null ? \App\Entity\AiCreditSetting::DEFAULT_MONTHLY_CREDITS : (int) $creditsRaw;
+        $credits = $creditsRaw === null ? $this->platform->aiDefaultCredits() : (int) $creditsRaw; // défaut réglé par la plateforme (08/11/2026)
         $monthStart = (new \DateTimeImmutable('first day of this month 00:00:00', new \DateTimeZone(\App\Services\LandingAiService\LandingAiQuotaService::TIMEZONE)))->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
         $usedCredits = (int) ($this->one($pdo, sprintf("SELECT COALESCE(SUM(credits), 0) FROM ai_usage WHERE created_at >= '%s' AND (status = 'success' OR (status = 'reserved' AND reserved_until >= NOW()))", $monthStart)) ?? 0);
         $remainingCredits = max(0, $credits - $usedCredits);
         $creditsAction = $shopUrl !== null ? ['type' => 'shop', 'feature' => 'ai.credits', 'url' => $shopUrl] : ['type' => 'screen', 'screen' => 'mon_site'];
         // Crédits réglés par la plateforme (07/11/2026) : l'étape ne mène plus au réglage mais à l'achat ou au changement de forfait
-        $add('ai.credits', 'ai', 'Crédits IA du mois', $credits === 0 ? 'Aucun crédit IA ce mois-ci : l\'assistant et la rédaction par l\'IA refuseront. Achetez des crédits ou changez de forfait.' : ($remainingCredits === 0 ? sprintf('Crédits épuisés (%d utilisés sur %d) : l\'IA refusera jusqu\'au mois prochain. Achetez des crédits ou changez de forfait.', $usedCredits, $credits) : ($remainingCredits * 5 <= $credits ? sprintf('Il reste %d crédit(s) sur %d : pensez à acheter des crédits ou à changer de forfait avant la panne.', $remainingCredits, $credits) : sprintf('%d crédit(s) restant(s) sur %d ce mois-ci pour l\'assistant, les pages et les fiches produit.', $remainingCredits, $credits))), $credits > 0 && $remainingCredits * 5 > $credits, 'backend', $creditsAction, false);
+        $add('ai.credits', 'ai', 'Crédits IA du mois', $credits === 0 ? 'Aucun crédit IA ce mois-ci : l\'assistant et la rédaction par l\'IA refuseront. Achetez des crédits ou changez de forfait.' : ($remainingCredits === 0 ? sprintf('Crédits épuisés (%d utilisés sur %d) : l\'IA refusera jusqu\'au mois prochain. Achetez des crédits ou changez de forfait.', $usedCredits, $credits) : ($remainingCredits * 5 <= $credits ? sprintf('Il reste %d crédit(s) sur %d : pensez à acheter des crédits ou à changer de forfait avant la panne.', $remainingCredits, $credits) : sprintf('%d crédit(s) restant(s) sur %d ce mois-ci pour l\'assistant, les pages et les fiches produit.', $remainingCredits, $credits))), $credits > 0 && $remainingCredits * 5 > $credits, 'backend', $creditsAction, $credits === 0 || $remainingCredits === 0); // bloquant sans crédit (08/11/2026) : la carte passe « à faire »
 
         // Fonctionnalités non accordées : à obtenir (hors avancement)
         foreach (array_keys(FeatureCatalog::GOVERNED) as $feature) {

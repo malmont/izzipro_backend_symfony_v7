@@ -47,6 +47,8 @@ class SiteReadinessCompleteTest extends WebTestCase
             $this->assertFalse($byKey['site.logo']['blocking'], 'le logo est une amélioration');
             $this->assertFalse($byKey['site.email_sender']['blocking']);
             $this->assertFalse($byKey['ai.credits']['blocking']);
+            $this->assertSame(['done', false, 'ai'], [$byKey['ai.access']['status'], $byKey['ai.access']['blocking'], $byKey['ai.access']['group']], 'accès à l\'assistant (08/11/2026)');
+            $this->assertStringContainsString('IA complète', $byKey['ai.access']['title'], 'le site de test a le droit « IA complète » (amorçage) ; le mode démo seul n\'ouvre plus l\'assistant');
             $this->assertContains('site.phone', array_keys($byKey));
             $this->assertSame($body['blockingTodo'], count(array_filter($body['steps'], fn ($s) => $s['status'] === 'todo' && $s['blocking'])));
             $site = array_column($body['groups'], null, 'key')['site'];
