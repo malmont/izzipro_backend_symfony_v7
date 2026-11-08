@@ -296,6 +296,6 @@ class BookController extends AbstractController
     {
         $denied = $this->accessGuard->canView($book, $request, $attribute);
 
-        return $denied === null ? null : $this->json(['error' => $denied[1]], $denied[0]);
+        return $denied === null ? null : $this->json($this->accessGuard->deniedBody($denied), $denied[0]);
     }
 }

@@ -1117,7 +1117,8 @@ class ChapterController extends AbstractController
 
         if ($expires !== null && $signature !== null && $chapterId !== null) {
             if (time() > (int)$expires) {
-                return $this->json(['error' => 'This sharing link has expired.'], \Symfony\Component\HttpFoundation\Response::HTTP_UNAUTHORIZED);
+                // Code stable et renouvellement à venir par invitation e-mail (08/11/2026) : voir BookAccessGuard::expiredLinkExtra
+                return $this->json(['error' => 'This sharing link has expired.'] + $this->accessGuard->expiredLinkExtra((string) $chapterId, $contributorId === null ? null : (string) $contributorId), \Symfony\Component\HttpFoundation\Response::HTTP_UNAUTHORIZED);
             }
             return $this->json(['error' => 'Invalid signature or resource mismatch.'], \Symfony\Component\HttpFoundation\Response::HTTP_UNAUTHORIZED);
         }
@@ -1130,6 +1131,6 @@ class ChapterController extends AbstractController
     {
         $denied = $this->accessGuard->canView($book, $request, $attribute);
 
-        return $denied === null ? null : $this->json(['error' => $denied[1]], $denied[0]);
+        return $denied === null ? null : $this->json($this->accessGuard->deniedBody($denied), $denied[0]);
     }
 }

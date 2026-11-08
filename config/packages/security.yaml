@@ -62,6 +62,11 @@ security:
         - { path: ^/api/memoires/books/[^/]+/(pdf/generate|pdf/status|payment-link|send-payment-link)$, roles: IS_AUTHENTICATED_FULLY }
         # Routes de l'application mobile Living Memory (16/10/2026) : connexion obligatoire
         - { path: ^/api/memoires/mobile/, roles: IS_AUTHENTICATED_FULLY }
+        # Invitations par e-mail des chapitres (08/11/2026) : création, suivi, renvoi, arrêt par le propriétaire connecté (voter ensuite) ;
+        # la fin par la personne invitée (…/invitation/complete, lien signé) et la désinscription (…/invitations/unsubscribe/{code}/{token}) restent publiques
+        - { path: ^/api/memoires/chapters/[^/]+/invitations$, roles: IS_AUTHENTICATED_FULLY }
+        - { path: ^/api/memoires/books/[^/]+/invitations$, roles: IS_AUTHENTICATED_FULLY }
+        - { path: ^/api/memoires/invitations/[^/]+(/resend)?$, roles: IS_AUTHENTICATED_FULLY }
         - { path: ^/api/memoires/, roles: PUBLIC_ACCESS }
 
         # 🔹 Demandes reçues des formulaires à étapes (28/10/2026) : lecture, statut, suppression, export pour l'administrateur

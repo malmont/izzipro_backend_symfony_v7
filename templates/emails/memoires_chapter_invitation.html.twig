@@ -1,0 +1,53 @@
+{% extends 'base.email.html.twig' %}
+
+{# Invitation à répondre aux questions d'un chapitre (08/11/2026) : premier envoi, renvoi manuel ou renouvellement automatique
+   (`kind`), dans la langue de l'invitation (`locale`, domaine `emails`). Le lien expire à `expiresAt` ; le pied donne le lien
+   « ne plus recevoir ». #}
+{% block title %}{{ 'chapter_invitation.subject'|trans({'%book%': bookTitle|e}, 'emails', locale)|raw }}{% endblock %}
+
+{% block body %}
+{% set owner = ownerName is not empty ? ownerName|e : 'chapter_invitation.default_owner'|trans({}, 'emails', locale) %}
+{% set expiresText = locale == 'fr' ? expiresAt|date('d/m/Y') : expiresAt|format_datetime('long', 'none', locale=intlLocale) %}
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <tr>
+        <td align="center">
+            <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden;">
+                <tr>
+                    <td align="center" style="background: #3e5c4e; padding: 28px 20px;">
+                        <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700;">{{ 'chapter_invitation.title'|trans({}, 'emails', locale)|raw }}</h1>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 30px; font-size: 15px; color: #1e293b; line-height: 1.55;">
+                        <p style="margin-top: 0;">
+                            {% if firstName is not empty %}{{ 'chapter_invitation.greeting'|trans({'%name%': firstName|e}, 'emails', locale)|raw }}{% else %}{{ 'chapter_invitation.greeting_anonymous'|trans({}, 'emails', locale)|raw }}{% endif %}
+                        </p>
+                        <p>
+                            {% if kind == 'renewal' %}
+                                {{ 'chapter_invitation.renewal'|trans({'%chapter%': chapterTitle|e, '%book%': bookTitle|e}, 'emails', locale)|raw }}
+                            {% elseif kind == 'resend' %}
+                                {{ 'chapter_invitation.resend'|trans({'%owner%': owner, '%chapter%': chapterTitle|e, '%book%': bookTitle|e}, 'emails', locale)|raw }}
+                            {% else %}
+                                {{ 'chapter_invitation.first'|trans({'%owner%': owner, '%chapter%': chapterTitle|e, '%book%': bookTitle|e}, 'emails', locale)|raw }}
+                            {% endif %}
+                        </p>
+                        <p style="text-align: center; margin: 28px 0;">
+                            <a href="{{ shareUrl }}" style="display: inline-block; background: #3e5c4e; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 999px; font-weight: 600;">{{ 'chapter_invitation.button'|trans({}, 'emails', locale)|raw }}</a>
+                        </p>
+                        <p>{{ 'chapter_invitation.valid_until'|trans({'%date%': expiresText}, 'emails', locale)|raw }}
+                            {% if isLastRenewal %}
+                                {{ 'chapter_invitation.last_renewal'|trans({'%owner%': owner}, 'emails', locale)|raw }}
+                            {% elseif renewalsLeft > 0 %}
+                                {{ 'chapter_invitation.auto_renew'|trans({}, 'emails', locale)|raw }}
+                            {% endif %}
+                        </p>
+                        <p>{{ 'chapter_invitation.done_hint'|trans({}, 'emails', locale)|raw }}</p>
+                        <p style="font-size: 13px; color: #64748b;">{{ 'chapter_invitation.link_fallback'|trans({}, 'emails', locale)|raw }}<br><a href="{{ shareUrl }}" style="color: #3e5c4e; word-break: break-all;">{{ shareUrl }}</a></p>
+                        <p style="font-size: 12px; color: #94a3b8; margin-bottom: 0;">{{ 'chapter_invitation.unsubscribe'|trans({'%url%': unsubscribeUrl}, 'emails', locale)|raw }}</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+{% endblock %}

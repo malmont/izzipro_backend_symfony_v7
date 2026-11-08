@@ -106,7 +106,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/videos` | PUBLIC_ACCESS | `Controller\VideoApiController\VideoApiController::list` |
 | POST | `/api/videos` | ROLE_ADMIN | `Controller\VideoApiController\VideoApiController::create` |
 
-## Mémoires Vivantes (95)
+## Mémoires Vivantes (101)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -157,6 +157,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/memoires/books/{id}/contributors` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ContributorController::create` |
 | DELETE | `/api/memoires/books/{id}/cover` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\BookController::removeCover` |
 | POST | `/api/memoires/books/{id}/cover` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\BookController::uploadCover` |
+| GET | `/api/memoires/books/{id}/invitations` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\ChapterInvitationController::listForBook` |
 | POST | `/api/memoires/books/{id}/payment-link` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPaymentApiController::generateAndSendPaymentLink` |
 | GET | `/api/memoires/books/{id}/payment-status` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\BookPaymentApiController::getPaymentStatus` |
 | POST | `/api/memoires/books/{id}/pdf/generate` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPdfController::generatePdfs` |
@@ -180,6 +181,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/memoires/chapters/{id}/contributor-links` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ChapterController::getContributorLinks` |
 | POST | `/api/memoires/chapters/{id}/generate` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ChapterController::generate` |
 | POST | `/api/memoires/chapters/{id}/improve-answer` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ChapterController::improveAnswer` |
+| POST | `/api/memoires/chapters/{id}/invitation/complete` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ChapterInvitationController::complete` |
+| POST | `/api/memoires/chapters/{id}/invitations` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\ChapterInvitationController::create` |
 | POST | `/api/memoires/chapters/{id}/photos/layout` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ChapterController::updatePhotosLayout` |
 | POST | `/api/memoires/chapters/{id}/photos` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ChapterController::addPhoto` |
 | POST | `/api/memoires/chapters/{id}/reset` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ChapterController::reset` |
@@ -191,6 +194,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/memoires/contributors/{id}/approve` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ContributorController::approve` |
 | DELETE | `/api/memoires/contributors/{id}` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ContributorController::delete` |
 | PUT | `/api/memoires/contributors/{id}` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ContributorController::update` |
+| GET | `/api/memoires/invitations/unsubscribe/{code}/{token}` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ChapterInvitationController::unsubscribe` |
+| POST | `/api/memoires/invitations/{id}/resend` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\ChapterInvitationController::resend` |
+| DELETE | `/api/memoires/invitations/{id}` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\ChapterInvitationController::cancel` |
 | DELETE | `/api/memoires/mobile/account` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\MobileAccountController::delete` |
 | POST | `/api/memoires/mobile/books` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\MobileBookController::create` |
 | POST | `/api/memoires/mobile/chapters/{id}/unlock` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\MobilePurchaseController::unlock` |

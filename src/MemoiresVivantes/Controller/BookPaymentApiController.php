@@ -133,7 +133,7 @@ class BookPaymentApiController extends AbstractController
             return $this->json(['error' => 'Livre introuvable'], Response::HTTP_NOT_FOUND);
         }
         if ($denied = $this->accessGuard->canView($book, $request)) {
-            return $this->json(['error' => $denied[1]], $denied[0]);
+            return $this->json($this->accessGuard->deniedBody($denied), $denied[0]);
         }
 
         $paymentStatus = $this->getBookPaymentStatusUseCase->execute($book);

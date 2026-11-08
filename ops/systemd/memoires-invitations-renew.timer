@@ -1,0 +1,10 @@
+[Unit]
+Description=Arkanoa : invitations de chapitre Mémoires Vivantes, toutes les heures
+
+[Timer]
+OnCalendar=*-*-* *:20:00 UTC
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

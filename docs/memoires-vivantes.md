@@ -42,6 +42,7 @@ Tous sous `/api/memoires/` : liste complète et accès dans `docs/endpoints.md`,
 | Chapitres | `/books/{id}/chapters`, `/chapters/{id}` (+ `status`, `generate`, `reset`, `audio`, `improve-answer`, `share-link`, `contributor-links`) | `ChapterController` |
 | Photos | `/chapters/{id}/photos`, `/photos/{id}`, mise en page | `ChapterController`, `ChapterPhotoController` |
 | Contributeurs | `/books/{id}/contributors`, `/contributors/{id}` (+ `approve`) | `ContributorController` |
+| Invitations par e-mail (08/11/2026) | `POST /chapters/{id}/invitations`, `GET /books/{id}/invitations`, `POST /invitations/{id}/resend`, `DELETE /invitations/{id}` (connecté + droit d'édition) ; `POST /chapters/{id}/invitation/complete` (lien signé) ; `GET /invitations/unsubscribe/{code}/{token}` (public) | `ChapterInvitationController` ; voir « Invitations par e-mail des chapitres » |
 | PDF | `/books/{id}/pdf/preview-interior`, `preview-cover`, `generate` | `BookPdfController` |
 | Paiement du livre | `/books/{id}/payment-link`, `send-payment-link`, `payment-status` | `BookPaymentApiController` (Stripe Checkout du compte connecté du tenant) |
 | Impression | `/books/{id}/print/estimate`, `print/payment-intent`, `print/order`, `print/orders` ; `POST /api/webhooks/lulu` | `BookPrintApiController`, `LuluWebhookController` |
@@ -326,6 +327,51 @@ mobile fait son propre livre, avec des quotas et, à venir, des chapitres payant
   `chapter`) ; cumuls IA à partir du 16/10/2026 et seulement pour les appels soumis aux quotas (plus `generation`
   pour les livres mobile). `createdAt` est null pour les comptes antérieurs au 16/10/2026.
 - Tests : `MobileUserAdminTest`.
+
+## Invitations par e-mail des chapitres (08/11/2026)
+
+Le backend envoie lui-même le lien signé d'un chapitre (ou le lien personnel d'un contributeur) à une adresse donnée, puis
+en renvoie un nouveau à l'expiration du précédent tant que la personne n'a pas terminé : `ChapterInvitation::RENEWALS_MAX`
+= 3 renouvellements (4 semaines en tout), puis `exhausted` avec un avis au propriétaire du livre. Avant, le lien de 7 jours
+était copié à la main depuis le frontend et jamais renouvelé (`share-link` et `contributor-links` ne changent pas : un lien
+copié reste possible, mais n'est pas renouvelé).
+
+- Code : `Entity/ChapterInvitation` (table `mv_chapter_invitation`, hors cache : `Cache/CacheTags` NO_CACHE_READ),
+  `Repository/ChapterInvitationRepository`, `Services/ChapterInvitationService`, `Services/ShareLinkSigner` (même donnée
+  signée et même URL que `share-link`), `UseCase/Invitation/*`, `Controller/ChapterInvitationController`,
+  `Dto/ChapterInvitationOutputDto` ; commande `app:memoires:invitations:renew` (`Command/MemoiresInvitationsRenewCommand`,
+  tous les sites ou `--tenant`) lancée toutes les heures par le timer de l'hôte `ops/systemd/memoires-invitations-renew.timer`
+  (installation avec `sudo`, en tête du `.service`). Migration `Version20261122100000`, script
+  `scripts/migrate_all_v2_chapter_invitations.sh`.
+- Routes (préfixe `/api/memoires`) : `POST /chapters/{id}/invitations` `{email, contributorId?, locale?}` (201),
+  `GET /books/{id}/invitations` (les plus récentes d'abord), `POST /invitations/{id}/resend`, `DELETE /invitations/{id}` :
+  compte connecté (`access_control` IS_AUTHENTICATED_FULLY) **et** droit d'édition (`ChapterVoter::EDIT` / `BookVoter::EDIT`,
+  propriétaire ou administrateur) ; `POST /chapters/{id}/invitation/complete` : lien signé (`BookAccessGuard::canView`),
+  renvoie `{status: "completed", applied}` (`applied` faux sans invitation ouverte : lien copié à la main, invitation déjà
+  fermée) ; `GET /invitations/unsubscribe/{code}/{token}` : page HTML publique du lien « ne plus recevoir », le code du site
+  est dans l'URL (un client de messagerie n'envoie pas `X-Tenant-Host`) et l'origine du backend vue à la création est gardée
+  (`backend_origin`) pour les e-mails de la tâche planifiée.
+- Statuts : `active` (renouvellements en cours) ; `completed` (terminé : `complete` sur le lien du chapitre, ou validation du
+  contributeur par `POST /contributors/{id}/approve` : par le lien signé, le chapitre du `chapterId` du lien seulement ; par
+  le propriétaire, tous ses chapitres) ; `exhausted` (3 renouvellements consommés, renvoi manuel toujours possible) ;
+  `cancelled` (arrêt par le propriétaire : le dernier lien parti reste valable jusqu'à sa date) ; `unsubscribed` (lien de
+  l'e-mail : l'adresse n'est plus invitée sur ce site). Le renvoi manuel repart pour 7 jours et remet le compteur à 0, au plus
+  un toutes les 10 minutes. Une nouvelle invitation est possible après `completed`, `exhausted` et `cancelled` (changer
+  d'adresse : arrêter puis créer) ; refusée tant qu'une est `active` pour le même chapitre et le même contributeur.
+- Codes d'erreur (`{error, code, params?}`) : 400 `EMAIL_INVALID` ; 401 `UNAUTHENTICATED` ; 403 `FORBIDDEN` ; 404 `NOT_FOUND`,
+  `CONTRIBUTOR_NOT_FOUND`, `INVITATION_NOT_FOUND` ; 409 `INVITATION_ALREADY_ACTIVE` (`params.invitationId`), `INVITATION_CLOSED`
+  (`params.status`), `EMAIL_UNSUBSCRIBED` ; 429 `RESEND_TOO_SOON` (`params.retryAfterSeconds`) ; 502 `EMAIL_SEND_FAILED` (rien
+  n'est enregistré). **Lien expiré**, sur toutes les lectures par lien signé : 401 `{error, code: "SHARE_LINK_EXPIRED",
+  params: {renewalPending}}`, vrai quand une invitation active renverra un lien (`BookAccessGuard::expiredLinkExtra`,
+  `deniedBody`).
+- E-mails : `emails/memoires_chapter_invitation.html.twig` (premier envoi, renvoi, renouvellement, dernier renouvellement) et
+  `emails/memoires_invitation_exhausted.html.twig` (propriétaire), par `EmailSenderService::sendCustomerEmail` (serveur du
+  site ; fr ou en d'après `locale` de la demande, sinon langue du site ; clés `chapter_invitation.*` de
+  `translations/emails.{fr,en}.yaml`). La date d'expiration du lien est celle de la signature : le lien se recalcule sans
+  être stocké.
+- Hors lot : couper un lien avant sa date (arrêter une invitation ne révoque pas le dernier lien parti) ; plafonner `duration`
+  de `share-link` (le web ne le passe jamais, l'application mobile n'a pas été vérifiée).
+- Tests : `tests/Functional/MemoiresVivantes/ChapterInvitationTest.php`.
 
 ## Génération d'un chapitre (tâche de fond)
 

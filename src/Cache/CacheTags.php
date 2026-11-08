@@ -370,6 +370,8 @@ final class CacheTags
         // Jeton de rafraîchissement JWT : le bundle Gesdinet persiste sa propre classe, pas App\Entity\RefreshToken
         // (journal du 28/10/2026 : chaque connexion vidait tout le cache du site), d'où l'interface du bundle
         RefreshTokenInterface::class,
+        // Invitations par e-mail des chapitres Mémoires Vivantes (08/11/2026) : lues en SQL direct, jamais mises en cache
+        \App\MemoiresVivantes\Entity\ChapterInvitation::class,
         AppProfile::class, // profils d'application (thème, image de marque) : aucune lecture en cache applicatif
         OtpCode::class,
         ResetPasswordRequest::class,

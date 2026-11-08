@@ -4,6 +4,8 @@ namespace App\MemoiresVivantes\Security;
 
 use App\MemoiresVivantes\Entity\Book;
 use App\MemoiresVivantes\Entity\Chapter;
+use App\MemoiresVivantes\Entity\ChapterInvitation;
+use App\MemoiresVivantes\Repository\ChapterInvitationRepository;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -73,10 +75,45 @@ class BookAccessGuard
         }
 
         if ($expires !== null && $signature !== null && $chapterId !== null) {
-            return [Response::HTTP_UNAUTHORIZED, time() > (int) $expires ? 'This sharing link has expired.' : 'Invalid signature or resource mismatch.'];
+            if (time() > (int) $expires) {
+                return [Response::HTTP_UNAUTHORIZED, 'This sharing link has expired.', $this->expiredLinkExtra((string) $chapterId, $contributorId === null ? null : (string) $contributorId)];
+            }
+
+            return [Response::HTTP_UNAUTHORIZED, 'Invalid signature or resource mismatch.'];
         }
 
         return [Response::HTTP_UNAUTHORIZED, 'Access denied. Missing or invalid signature.'];
+    }
+
+    /**
+     * Corps JSON d'un refus de canView : le message, et pour un lien expiré le code et `renewalPending`.
+     *
+     * @param array{0: int, 1: string, 2?: array<string, mixed>} $denied
+     * @return array<string, mixed>
+     */
+    public function deniedBody(array $denied): array
+    {
+        return ['error' => $denied[1]] + ($denied[2] ?? []);
+    }
+
+    /**
+     * Lien expiré (08/11/2026) : code stable SHARE_LINK_EXPIRED et `renewalPending`, vrai quand une invitation par e-mail
+     * (Entity/ChapterInvitation) enverra d'elle-même un nouveau lien pour ce chapitre et ce contributeur. Le frontend
+     * adapte son message ; sans invitation (lien copié à la main), il invite à redemander un lien.
+     *
+     * @return array{code: string, params: array{renewalPending: bool}}
+     */
+    public function expiredLinkExtra(string $chapterId, ?string $contributorId): array
+    {
+        try {
+            /** @var ChapterInvitationRepository $repository */
+            $repository = $this->emProvider->getEntityManager()->getRepository(ChapterInvitation::class);
+            $pending = $repository->renewalPending($chapterId, $contributorId);
+        } catch (\Throwable) {
+            $pending = false;
+        }
+
+        return ['code' => 'SHARE_LINK_EXPIRED', 'params' => ['renewalPending' => $pending]];
     }
 
     /**

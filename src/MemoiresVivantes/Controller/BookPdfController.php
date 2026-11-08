@@ -37,7 +37,7 @@ class BookPdfController extends AbstractController
             return $this->json(['error' => 'Livre introuvable'], 404);
         }
         if ($denied = $this->accessGuard->canView($book, $request)) {
-            return $this->json(['error' => $denied[1]], $denied[0]);
+            return $this->json($this->accessGuard->deniedBody($denied), $denied[0]);
         }
 
         // Livre de l'application mobile sans aucun chapitre payé et rédigé : rien à mettre en page (16/10/2026)
@@ -66,7 +66,7 @@ class BookPdfController extends AbstractController
             return $this->json(['error' => 'Livre introuvable'], 404);
         }
         if ($denied = $this->accessGuard->canView($book, $request)) {
-            return $this->json(['error' => $denied[1]], $denied[0]);
+            return $this->json($this->accessGuard->deniedBody($denied), $denied[0]);
         }
 
         // Choix de couverture enregistrés sur le livre par défaut (17/10/2026) ; un paramètre fourni garde la priorité
@@ -152,7 +152,7 @@ class BookPdfController extends AbstractController
             return $this->json(['error' => 'Livre introuvable'], 404);
         }
         if ($denied = $this->accessGuard->canView($book, $request)) {
-            return $this->json(['error' => $denied[1]], $denied[0]);
+            return $this->json($this->accessGuard->deniedBody($denied), $denied[0]);
         }
 
         return $this->json($this->generation->status($book));

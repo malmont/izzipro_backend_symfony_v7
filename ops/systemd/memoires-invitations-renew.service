@@ -1,0 +1,10 @@
+# Mémoires Vivantes (08/11/2026) : renouvellement des liens d'invitation expirés des chapitres, avis au propriétaire après le dernier.
+# Installation : sudo cp ops/systemd/memoires-invitations-renew.{service,timer} /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now memoires-invitations-renew.timer
+[Unit]
+Description=Arkanoa : renouvellement des invitations de chapitre Mémoires Vivantes
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker exec -w /var/www symfony_app_v2 php bin/console app:memoires:invitations:renew --no-interaction

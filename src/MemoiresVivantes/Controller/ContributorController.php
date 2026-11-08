@@ -5,6 +5,7 @@ namespace App\MemoiresVivantes\Controller;
 use App\MemoiresVivantes\BookType\BookTypeResolver;
 use App\MemoiresVivantes\Entity\Book;
 use App\MemoiresVivantes\Entity\Contributor;
+use App\MemoiresVivantes\Services\ChapterInvitationService;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -17,7 +18,8 @@ class ContributorController extends AbstractController
 {
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
-        private readonly BookTypeResolver $bookTypeResolver
+        private readonly BookTypeResolver $bookTypeResolver,
+        private readonly ChapterInvitationService $invitations
     ) {}
 
     /**
@@ -141,7 +143,8 @@ class ContributorController extends AbstractController
 
         // Autorisation : propriétaire authentifié ou lien signé
         $isAuthorized = false;
-        if ($this->getUser() && $this->isGranted('BOOK_EDIT', $contributor->getBook())) {
+        $byOwner = $this->getUser() && $this->isGranted('BOOK_EDIT', $contributor->getBook());
+        if ($byOwner) {
             $isAuthorized = true;
         } else {
             $expires = $request->query->get('expires') ?? $request->request->get('expires');
@@ -170,6 +173,12 @@ class ContributorController extends AbstractController
         $contributor->setIsApproved(true);
         $contributor->setApprovedAt(new \DateTimeImmutable());
         $em->flush();
+
+        // Invitation par e-mail (08/11/2026) : la validation arrête les renouvellements du lien. Par le lien signé, ceux du
+        // chapitre du lien seulement (un contributeur invité sur deux chapitres valide l'un sans fermer l'autre) ; par le
+        // propriétaire, tous les chapitres du contributeur.
+        $chapterId = $request->query->get('chapterId') ?? $request->request->get('chapterId');
+        $this->invitations->completeForContributor($contributor, $byOwner || !$chapterId ? null : (string) $chapterId);
 
         return $this->json([
             'status' => 'approved',
