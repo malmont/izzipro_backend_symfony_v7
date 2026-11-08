@@ -145,13 +145,6 @@ class ComponentGuideCatalog
             'fields' => ['Réservé aux utilisateurs techniques : la composition en JSON', 'Un contenu invalide est refusé'],
             'svg' => 'boutique_config',
         ],
-        \App\Controller\Admin\AdminSettingsCrudController::class => [
-            'key' => 'admin_settings', 'title' => 'Réglages d\'affichage de la boutique (ancien)', 'singular' => 'Réglage d\'affichage',
-            'purpose' => 'Choix des modèles d\'affichage de l\'ancienne boutique : barre de menu, thème, sections de l\'accueil, cartes produit, panier.',
-            'where' => 'Ancien front de la boutique. Un site composé dans l\'éditeur n\'en a pas besoin.',
-            'fields' => ['À ne toucher que si votre boutique utilise encore ces modèles'],
-            'svg' => 'admin_settings',
-        ],
     ];
 
     /** @return array{key: string, title: string, singular: string, purpose: string, where: string, fields: list<string>, tip?: string, svg: string}|null */

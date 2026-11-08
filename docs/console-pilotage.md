@@ -502,7 +502,7 @@ texte, bouton) », « Groupes de blocs (côte à côte) », « Logos de marques 
 quoi remplir, un conseil, et une **illustration** (gabarit SVG `templates/admin/guide/svg/<clé>.html.twig`, schéma filaire lisible sur le thème
 sombre). `BaseTenantCrudController::configureCrud` applique le nom à l'écran ; les gabarits `templates/bundles/EasyAdminBundle/crud/{index,new,edit}.html.twig`
 ajoutent, sur ces écrans seulement, un **panneau de droite** « À quoi ça ressemble sur le site » (fonction Twig `admin_component_guide`,
-`Twig/ComponentGuideExtension`). Sections du menu renommées : « Site vitrine (Landing Page) », « Boutique : accueil et pages ». Vingt écrans couverts.
+`Twig/ComponentGuideExtension`). Sections du menu renommées : « Site vitrine (Landing Page) », « Boutique : accueil et pages » ; l'écran « Admin Settings » (ancien front) est retiré du back-office, ses routes API restent. Dix-neuf écrans couverts.
 Pour ajouter un écran : une entrée dans `GUIDES` et son SVG. Test : `tests/Functional/Admin/ComponentGuideTest.php`.
 
 ## Tenir cette fiche à jour

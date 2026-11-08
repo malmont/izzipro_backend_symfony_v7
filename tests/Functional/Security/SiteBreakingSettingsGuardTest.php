@@ -2,7 +2,6 @@
 
 namespace App\Tests\Functional\Security;
 
-use App\Controller\Admin\AdminSettingsCrudController;
 use App\Controller\Admin\AppProfileCrudController;
 use App\Controller\Admin\BoutiqueSettingCrudController;
 use App\Controller\Admin\LandingPageSettingCrudController;
@@ -81,15 +80,14 @@ class SiteBreakingSettingsGuardTest extends WebTestCase
         $this->assertSame(302, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
     }
 
-    public function testRawJsonSettingsAndAdminSettingsAreWritableBySuperAdminOnlyAndJsonNeverDeleted(): void
+    public function testRawJsonSettingsAreWritableBySuperAdminOnlyAndJsonNeverDeleted(): void
     {
         $landingId = (int) $this->db()->fetchOne('SELECT MIN(id) FROM landing_page_setting');
-        $adminSettingsId = (int) $this->db()->fetchOne('SELECT MIN(id) FROM admin_settings');
         $this->assertGreaterThan(0, $landingId);
-        $this->assertGreaterThan(0, $adminSettingsId);
 
+        // L'écran EasyAdmin « Réglages d'affichage (ancien) » (AdminSettings) a été retiré le 08/11/2026 ; les routes /api/admin-settings restent
         $this->loginAs(['ROLE_ADMIN']);
-        foreach ([[LandingPageSettingCrudController::class, $landingId], [AdminSettingsCrudController::class, $adminSettingsId]] as [$controller, $id]) {
+        foreach ([[LandingPageSettingCrudController::class, $landingId]] as [$controller, $id]) {
             $this->assertSame(200, $this->status($controller, 'index'), "$controller : liste lisible");
             $this->assertSame(403, $this->status($controller, 'new'), "$controller : création refusée");
             $this->assertSame(403, $this->status($controller, 'edit', $id), "$controller : modification refusée");
@@ -102,11 +100,6 @@ class SiteBreakingSettingsGuardTest extends WebTestCase
         $this->loginAs(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']);
         $this->assertSame(200, $this->status(LandingPageSettingCrudController::class, 'edit', $landingId));
         $this->assertSame(200, $this->status(BoutiqueSettingCrudController::class, 'new'));
-        $this->assertSame(200, $this->status(AdminSettingsCrudController::class, 'detail', $adminSettingsId), 'détail AdminSettings lisible');
-        $crawler = $this->client->request('GET', $this->adminUrl(AdminSettingsCrudController::class, 'edit', $adminSettingsId));
-        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
-        $this->client->submit($crawler->filter('form[method="post"]')->form());
-        $this->assertSame(302, $this->client->getResponse()->getStatusCode(), 'AdminSettings enregistré par le super admin');
         // Suppression des JSON bruts : désactivée même pour le super admin
         $this->client->request('POST', $this->adminUrl(LandingPageSettingCrudController::class, 'delete', $landingId), ['token' => 'x']);
         $this->assertSame(403, $this->client->getResponse()->getStatusCode(), 'suppression de la configuration landing refusée au super admin');

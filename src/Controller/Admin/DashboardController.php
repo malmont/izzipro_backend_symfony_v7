@@ -566,7 +566,6 @@ class DashboardController extends AbstractDashboardController
         
         yield MenuItem::section('Boutique : accueil et pages');
         yield MenuItem::linkToCrud('Diaporama de l\'accueil', 'fas fa-images', HomeSlider::class);
-        yield MenuItem::linkToCrud('Réglages d\'affichage (ancien)', 'fas fa-cogs', AdminSettings::class);
         yield MenuItem::linkToCrud('Pages de la boutique (composition)', 'fas fa-store', BoutiqueSetting::class);
         yield MenuItem::linkToCrud('Formules d\'abonnement', 'fas fa-sync-alt', SubscriptionPlan::class);
         yield MenuItem::linkToCrud('Abonnements', 'fas fa-id-card', Subscription::class);
