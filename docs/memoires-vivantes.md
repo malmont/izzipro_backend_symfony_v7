@@ -358,7 +358,8 @@ copié reste possible, mais n'est pas renouvelé).
   l'e-mail : l'adresse n'est plus invitée sur ce site). Le renvoi manuel repart pour 7 jours et remet le compteur à 0, au plus
   un toutes les 10 minutes. Une nouvelle invitation est possible après `completed`, `exhausted` et `cancelled` (changer
   d'adresse : arrêter puis créer) ; refusée tant qu'une est `active` pour le même chapitre et le même contributeur.
-- Codes d'erreur (`{error, code, params?}`) : 400 `EMAIL_INVALID` ; 401 `UNAUTHENTICATED` ; 403 `FORBIDDEN` ; 404 `NOT_FOUND`,
+- Codes d'erreur (`{error, code, params?}`) : 400 `EMAIL_INVALID` ; 401 sans session : réponse de la couche JWT
+  (`{code: 401, message}`, `access_control`, avant le contrôleur) ; 403 `FORBIDDEN` ; 404 `NOT_FOUND`,
   `CONTRIBUTOR_NOT_FOUND`, `INVITATION_NOT_FOUND` ; 409 `INVITATION_ALREADY_ACTIVE` (`params.invitationId`), `INVITATION_CLOSED`
   (`params.status`), `EMAIL_UNSUBSCRIBED` ; 429 `RESEND_TOO_SOON` (`params.retryAfterSeconds`) ; 502 `EMAIL_SEND_FAILED` (rien
   n'est enregistré). **Lien expiré**, sur toutes les lectures par lien signé : 401 `{error, code: "SHARE_LINK_EXPIRED",
