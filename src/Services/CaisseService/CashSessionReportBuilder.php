@@ -139,6 +139,8 @@ class CashSessionReportBuilder
                 'loyalty' => $this->loyalty->reportBlock((int) $session->getId())],
             // Cartes-cadeaux et avoirs (F9, 27/10/2026) : vendu, utilisé, avoirs émis, remboursé, ajusté (session) ; solde en cours du site (passif)
             'giftCards' => $em->getRepository(\App\Entity\PosGiftCardTransaction::class)->totalsForSession((int) $session->getId()) + ['outstanding' => $em->getRepository(\App\Entity\PosGiftCard::class)->outstanding()],
+            // Cautions de location au comptoir (09/11/2026) : encaissées et restituées sur la session (espèces à part), retenues, en cours sur le site (passif)
+            'rentalDeposits' => $em->getRepository(\App\Entity\PosRentalDeposit::class)->totalsForSession((int) $session->getId()),
             // Coupons de fabricant (F17, 01/11/2026) : acceptés sur la session (à réclamer au fabricant), annulés par les retours de la session
             'manufacturerCoupons' => $em->getRepository(\App\Entity\PosManufacturerCoupon::class)->totalsForSession((int) $session->getId()),
         ];

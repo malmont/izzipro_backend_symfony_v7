@@ -379,6 +379,7 @@ final class CacheTags
         AiJob::class,
         AiCreditSetting::class,
         \App\Entity\SiteCharter::class, // charte et brief du site (08/11/2026) : lu par le back-office et l'assistant, jamais en cache applicatif
+        \App\Entity\PosRentalDeposit::class, // cautions de location au comptoir (09/11/2026) : données de caisse, jamais en cache applicatif
         ContentAuditLog::class,
         SyncJob::class,
         Contact::class,

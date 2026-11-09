@@ -184,6 +184,8 @@ security:
         - { path: ^/api/pos/health$, roles: [ROLE_ADMIN] }
         # 🔹 Grille de favoris (F10) : grille (caisse) ; épinglés et leur remplacement réservés au responsable (dans le service)
         - { path: ^/api/pos/favorites(/|$), roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
+        # 🔹 Location au comptoir (09/11/2026) : catalogue des locations, cautions, locations en cours (caisse ; retenue validée par un responsable dans le service)
+        - { path: ^/api/pos/rentals(/|$), roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
         # 🔹 Mode hors ligne (25/10/2026, C5 partie 2) : pack, jeu de cas, synchronisation des ventes (terminal exigé dans le contrôleur)
         - { path: ^/api/pos/offline-(pack|cases|sales)(/|$), roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
         # 🔹 Clés d'activation des applications mobiles (15/10/2026) : activation publique (hors pare-feu JWT, limitée en

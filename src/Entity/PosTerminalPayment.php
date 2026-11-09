@@ -157,6 +157,7 @@ class PosTerminalPayment
     // vérifiée au rattachement pour empêcher l'usage croisé
     public const PURPOSE_SALE = 'sale';
     public const PURPOSE_GIFT_CARD = 'gift_card';
+    public const PURPOSE_RENTAL_DEPOSIT = 'rental_deposit'; // caution de location débitée sur le lecteur (09/11/2026)
 
     #[ORM\Column(length: 16, options: ['default' => self::PURPOSE_SALE])]
     private string $purpose = self::PURPOSE_SALE;
@@ -169,7 +170,7 @@ class PosTerminalPayment
     public function setStripeMode(string $mode): static { $this->stripeMode = $mode === 'live' ? 'live' : 'test'; return $this; }
 
     public function getPurpose(): string { return $this->purpose; }
-    public function setPurpose(string $purpose): static { $this->purpose = $purpose === self::PURPOSE_GIFT_CARD ? self::PURPOSE_GIFT_CARD : self::PURPOSE_SALE; return $this; }
+    public function setPurpose(string $purpose): static { $this->purpose = in_array($purpose, [self::PURPOSE_GIFT_CARD, self::PURPOSE_RENTAL_DEPOSIT], true) ? $purpose : self::PURPOSE_SALE; return $this; }
 
     public function getChannel(): string { return $this->channel; }
     public function setChannel(string $channel): static { $this->channel = $channel === self::CHANNEL_SDK ? self::CHANNEL_SDK : self::CHANNEL_SERVER; return $this; }

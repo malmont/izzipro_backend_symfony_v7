@@ -406,7 +406,7 @@ expose `terminal: null | {readerId, label, simulated}`.
 | Méthode, route | Corps | Réponse |
 |---|---|---|
 | `GET /api/pos/terminal?cashRegisterId=` | — | 200 `{available, cashRegisterId, reader: null \| {id, label, simulated, status: online \| offline, error}, paymentMethods: ["card_present", "interac_present"?], currentPayment, simulationAllowed, settings {cardWaitSeconds, customerCancel, interac}}` ; `available: false` sans terminal (garder la carte déclarée) |
-| `POST /api/pos/terminal/payments` | `{cashRegisterId?, amount (cents, part carte), items (comme la vente) **ou `giftCardAmount` (cents, vente d'une carte-cadeau, complément F9 / C4 du 01/11/2026 : exactement l'un des deux)**, otherPayments?: [{type (2 espèces, 3 PayPal, **4 carte-cadeau, 5 avoir, 6 coupon de fabricant**, jamais 1), amount (cents)}]}` : les autres parts entrent dans la part carte attendue (`expectedCard` = devis − espèces − autres parts) ; la carte-cadeau ou l'avoir n'est débité qu'à la vente, avec son `code` | 201 paiement (ci-dessous), `status: waiting_for_card`. Refus : 409 `TERMINAL_UNAVAILABLE`, 409 `CASH_REGISTER_CLOSED`, 422 `AMOUNT_MISMATCH {quoteTotal, otherPayments, expectedCard, amount}` (part carte ≠ devis du serveur, arrondi des espèces admis), 400 `AMOUNT_TOO_SMALL`, 409 `READER_BUSY {paymentId}`, 409 `READER_OFFLINE`, 409 `READER_NOT_FOUND`, 504 `READER_TIMEOUT` (réessayer), 503 `STRIPE_UNAVAILABLE`, 502 `STRIPE_ERROR` |
+| `POST /api/pos/terminal/payments` | `{cashRegisterId?, amount (cents, part carte), items (comme la vente) **ou `giftCardAmount` (cents, vente d'une carte-cadeau, complément F9 / C4 du 01/11/2026) ou `depositAmount` (cents, caution de location, 09/11/2026 ; exactement l'un des trois)**, otherPayments?: [{type (2 espèces, 3 PayPal, **4 carte-cadeau, 5 avoir, 6 coupon de fabricant**, jamais 1), amount (cents)}]}` : les autres parts entrent dans la part carte attendue (`expectedCard` = devis − espèces − autres parts) ; la carte-cadeau ou l'avoir n'est débité qu'à la vente, avec son `code` | 201 paiement (ci-dessous), `status: waiting_for_card`. Refus : 409 `TERMINAL_UNAVAILABLE`, 409 `CASH_REGISTER_CLOSED`, 422 `AMOUNT_MISMATCH {quoteTotal, otherPayments, expectedCard, amount}` (part carte ≠ devis du serveur, arrondi des espèces admis), 400 `AMOUNT_TOO_SMALL`, 409 `READER_BUSY {paymentId}`, 409 `READER_OFFLINE`, 409 `READER_NOT_FOUND`, 504 `READER_TIMEOUT` (réessayer), 503 `STRIPE_UNAVAILABLE`, 502 `STRIPE_ERROR` |
 | `GET /api/pos/terminal/payments/{id}` | — | 200 paiement relu chez Stripe ; le POS interroge toutes les 1 à 2 s |
 | `POST /api/pos/terminal/payments/{id}/cancel` | — | 200 paiement `canceled` (`failureCode: canceled_by_cashier`) ; 409 `READER_BUSY` pendant une autorisation (attendre puis réessayer) ; 409 `PAYMENT_ALREADY_CAPTURED` (passer par le remboursement) ; rejeu sans effet |
 | `POST /api/pos/terminal/payments/{id}/refund` | `{amount?}` cents (partiel possible) | Caissier : **403 `APPROVAL_REQUIRED`** (C3, action `refund`, contexte `{orderId}` du paiement rattaché, sinon `{orderId: 0, terminalPaymentId}`), puis rejeu avec `X-Pos-Approval` ; responsable : direct. 200 paiement avec `refund` ; carte de crédit : remboursement en ligne aussitôt ; Interac : `refund.status: waiting_for_card`, le client présente sa carte, suivi par `GET` ; autorisation non capturée : libérée (`canceled`, `voided_by_manager`) ; 409 `PAYMENT_NOT_CAPTURED`, 400 `REFUND_AMOUNT_INVALID`, 502 `TERMINAL_REFUND_FAILED` |
@@ -1141,6 +1141,75 @@ l'effacement : anonymisation, pas de suppression (les ventes restent rattachées
 | Expiration des points (mois sans activité) | vide = jamais | `loyalty.expiryMonths` |
 
 `settings.approvals.loyaltyAdjust` et `customerErase` : `{required: true}`.
+
+## Location au comptoir et caution (09/11/2026)
+
+Accord du propriétaire du 09/11/2026 (aucune caisse en production) : la caisse vend des locations, encaisse et restitue la caution.
+Code : `Services/PosRentalService/PosRentalService`, `UseCase/PosRentalUseCase`, `Controller/PosController/PosRentalController`, entité
+`PosRentalDeposit` (table `pos_rental_deposit`, migration `Version20261123100000`, script `scripts/migrate_all_v2_pos_rentals.sh`), types de
+mouvement **11 « Caution encaissée »** et **12 « Caution restituée »** (`HandleCaisseTransactionUseCase::RENTAL_DEPOSIT`,
+`RENTAL_DEPOSIT_RETURN`). Montants en cents. Test : `tests/Functional/Boutique/PosRentalApiTest.php`.
+
+**Ce qui existait déjà.** `create-multi-payment` tarifie une ligne `booking { start, end, durationType?, rateId?, passengers? }` au tarif de
+location (même `CartQuoteCalculator` que le web : grilles, tolérance, heures, `DAYS_MINIMUM`, `TIME_STEP_INVALID`…), vérifie la disponibilité
+(409) et crée la réservation. `POST /api/pos/quote` rend par ligne `booking { start, end, durationType, units, rate, deposit }` et au total
+`deposit` (hors `total`). Disponibilité : `GET /api/booking/check/{productId}?start=&end=&quantity=` (200 / 409).
+
+**Catalogue des locations** : `GET /api/pos/rentals` (caisse, en ligne seulement) → `[{ id, code, barcode, name, image, categoryIds,
+variants [{ id, label, barcode }], rental }]`, `rental` = bloc `bookingConfig` de la fiche produit (`docs/boutique.md` : `granularity`,
+`timeStepMinutes`, `returnToleranceMinutes`, `minDuration`, `maxDuration`, `minDaysStandard`, `openingHours`, `eveningSlot`, `allowedDates`,
+`rates[] { id, name, hourRate, halfDayRate, dayRate, weekRate, monthRate }`, `deposit`, `extraPassengerFee`, `stockQuantity`, `bufferTime`…).
+Produits `isPos` avec la location activée et une configuration. **Jamais** dans le pack hors ligne ni dans les favoris (la disponibilité exige
+le réseau). `booking.rateId` choisit la grille parmi `rental.rates[].id` ; `durationType` la formule (`day` par défaut en grille `datetime`).
+
+**Vente** : `create-multi-payment` inchangé, plus un bloc facultatif **`deposit: { amount, method: cash | card | declared_card,
+cashDetails?, terminalPaymentId? }`**. `paymentMethods` règle le `total` comme avant : la caution est à part et n'entre pas dans
+`PAYMENT_TOTAL_MISMATCH`. Refus 422 `DEPOSIT_WITHOUT_RENTAL` (aucune ligne de location), 422 `DEPOSIT_INVALID` (montant ≤ 0, moyen inconnu,
+`card` sans `terminalPaymentId`, hors vente au comptoir), 409 `DEPOSIT_ALREADY_HELD`. Tout est contrôlé avant la moindre écriture. À la vente :
+réservations **`CONFIRMED`** (journal `RENTAL_BOOKING_CONFIRMED`), caution **en cours** (`held`, journal `RENTAL_DEPOSIT_COLLECTED`) ;
+espèces → mouvement 11 dans le tiroir ; `card` → paiement du lecteur **créé avec `depositAmount`** (ci-dessous), vérifié (même montant, même
+poste, jamais rattaché, destination `rental_deposit`), capturé et rattaché dans la transaction de la vente ; `declared_card` → déclaré, rien
+côté Stripe. Réponse 201 : le ticket habituel plus **`rental: { lines: [{ orderItemId, bookingId, productName, start, end, quantity,
+status }], deposits: [{ id, amount, method, status, … }] }`** (aussi sur la réimpression et le courriel ; absent sans location).
+
+**Caution sur le lecteur Stripe** : `POST /api/pos/terminal/payments { cashRegisterId?, amount, depositAmount }` (exactement l'un de `items`,
+`giftCardAmount`, `depositAmount` ; `depositAmount` = `amount`, 422 sinon) → paiement `purpose: "rental_deposit"`, qui ne règle ni une vente
+ni une carte-cadeau (409 `TERMINAL_PAYMENT_PURPOSE_MISMATCH`). Débit réel ; pas de préautorisation dans cette version.
+
+**Caution après coup** (remise du matériel) : `POST /api/pos/rentals/deposits { orderId, amount, method, cashDetails?, terminalPaymentId?,
+cashRegisterId? }` → 201 la caution ; mêmes refus ; 404 `ORDER_NOT_FOUND`.
+
+**Cautions et locations en cours** : `GET /api/pos/rentals/deposits?status=held|returned|retained&cashRegisterId=` → `[{ id, orderId,
+reference, receiptReference, customer, product, booking { id, start, end, quantity, status }, amount, method, status, collectedAt,
+cashRegisterId, returnedAt, returnMethod, returnedAmount, retainedAmount, retainedReason, terminalPaymentId, terminalRefundId }]` ;
+`GET /api/pos/rentals/deposits/{id}` ; `GET /api/pos/rentals/ongoing?cashRegisterId=` → réservations confirmées non rendues
+`[{ bookingId, orderId, reference, receiptReference, product, variant, start, end, quantity, status, finalized, customer, deposit | null }]`.
+
+**Restitution** : `POST /api/pos/rentals/deposits/{id}/return { retainedAmount? (défaut 0), reason? (requis si retenue, 422
+`RETENTION_REASON_REQUIRED`), method? (défaut : moyen d'encaissement), terminalRefundId?, cashRegisterId? }` → 200 la caution (`status`
+`returned` ou `retained`, `returnedAmount = amount − retainedAmount`) + `receipt { kind: "deposit_return", amount, returnedAmount,
+retainedAmount, reason, method, action: cash_returned | refunded_on_terminal | declared, terminal | null, returnedAt, cashRegister }`.
+Espèces : mouvement 12, sortie du tiroir (400 `INSUFFICIENT_FUNDS`) ; `card` : remboursement Stripe du montant rendu sur le paiement de la
+caution (Interac : 409 `TERMINAL_REFUND_REQUIRED`, présenter d'abord le remboursement sur le lecteur puis rejouer avec `terminalRefundId`) ;
+`declared_card` : à rembourser sur le terminal non relié. Une **retenue** exige la validation d'un responsable comme un remboursement
+(C3, action `refund`, contexte `{ depositId, amount }`, seuil « remboursement » du site ; un responsable passe). 409 `DEPOSIT_NOT_HELD`,
+422 `RETENTION_INVALID`. Les réservations de la commande passent **`RETURNED`** (finalisées). Journal `RENTAL_DEPOSIT_RETURNED` (`approvedBy`).
+
+**Matériel rendu sans caution** : `POST /api/pos/rentals/bookings/{bookingId}/return { cashRegisterId? }` → réservation `RETURNED`
+(409 `BOOKING_ALREADY_RETURNED`, `BOOKING_CANCELLED`). Journal `RENTAL_RETURNED`.
+
+**Annulation** (`POST /api/order/cancel/{id}`) : les réservations de la commande passent `CANCELLED` (créneau libéré ; web comme caisse) ;
+vente au comptoir avec caution en cours : caution **restituée en entier par son moyen d'encaissement dans la même transaction** (espèces :
+400 `INSUFFICIENT_FUNDS` et rien n'est annulé ; carte du lecteur : remboursement Stripe ; déclarée : `action: "declared"`). Réponse :
+`rentalDeposit: { …caution, action, terminal } | null`. **Retour partiel** (`POST /api/pos/returns`) d'une ligne de location : réservation
+réduite à la quantité restante, `CANCELLED` si tout est rendu ; la caution ne change pas (une par commande, montant figé).
+
+**Rapports X et Z** : bloc **`rentalDeposits: { collected { count, total, cash }, returned { count, total, cash }, retained { count, total },
+outstanding { count, total } }`** (`outstanding` = cautions en cours du site, passif) ; `expectedCash` tient compte des cautions en espèces
+encaissées et rendues ; `sales`, `refunds` et `movements` ne changent pas (une caution n'est ni une vente ni un dépôt).
+
+**Non-régression** : une vente sans `booking` ni `deposit` suit le code d'avant ; aucune route existante ne change de forme (clés ajoutées
+seulement) ; le pack hors ligne garde sa version. Hors de ce lot : préautorisation (empreinte) de la caution par carte.
 
 ## Statistiques par caissier et exports comptables (lot F14, 29/10/2026)
 

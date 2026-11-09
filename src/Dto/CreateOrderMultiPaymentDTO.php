@@ -43,6 +43,8 @@ class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
     /** Remise de ticket de caisse (F1) {type, value, reasonCode?, reasonText?} */
     private ?array $ticketDiscount = null;
     private ?int $nonCashCents = null;
+    /** Caution de location au comptoir (09/11/2026) : { amount (cents), method, cashDetails?, terminalPaymentId? } */
+    private ?array $deposit = null;
 
     public function __construct(
         int $userId,
@@ -146,6 +148,17 @@ class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
     public function getVerifiedPaymentAmount(): ?int
     {
         return $this->verifiedPaymentAmount;
+    }
+
+    public function setDeposit(?array $deposit): self
+    {
+        $this->deposit = $deposit;
+        return $this;
+    }
+
+    public function getDeposit(): ?array
+    {
+        return $this->deposit;
     }
 
     public function setCashRegisterId(?int $cashRegisterId): self

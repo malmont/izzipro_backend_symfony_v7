@@ -59,7 +59,8 @@ class CreateOrderUseCase
         private readonly \App\Services\PosGiftCardService\PosGiftCardService $giftCards, // cartes-cadeaux et avoirs (F9)
         private readonly \App\Services\PosCustomerService\PosCustomerService $customers, // fiche client (F8)
         private readonly \App\Services\PosCustomerService\PosLoyaltyService $loyalty, // fidélité (F8)
-        private readonly \App\Services\PosCouponService\PosCouponService $coupons // coupons de fabricant (F17)
+        private readonly \App\Services\PosCouponService\PosCouponService $coupons, // coupons de fabricant (F17)
+        private readonly ?\App\Services\PosRentalService\PosRentalService $rentals = null // location au comptoir : réservations confirmées, caution (09/11/2026)
     ) {
         $this->createOrderCommandUseCase = $createOrderCommandUseCase;
         $this->processOrderItemsUseCase = $processOrderItemsUseCase;
@@ -104,6 +105,8 @@ class CreateOrderUseCase
             // Remises de caisse (F1), article libre et prix manuel (F7) : vente au comptoir seulement ; structure, motifs, plafonds
             // par rôle et validation C3 AVANT toute écriture ; toutes les validations de la vente demandées en une fois (P2-a)
             $ticketDiscount = $orderDTO instanceof CreateOrderMultiPaymentDTO ? $orderDTO->getTicketDiscount() : null;
+            // Caution de location au comptoir (09/11/2026) : contrôlée AVANT toute écriture ; exige une ligne de location
+            $rentalDeposit = $orderDTO instanceof CreateOrderMultiPaymentDTO && $this->rentals !== null ? $this->rentals->checkDepositInput($orderDTO->getDeposit(), $orderDTO->getItems(), $orderDTO->getOrderSource(), $typeOrderId) : null;
             // Fiche client et fidélité (F8) : client rattaché (vente au comptoir seulement) ; points rachetés → remise de ticket calculée
             // par le serveur (valeur du site), hors plafonds caissier ; incompatible avec une remise de ticket saisie
             $customer = null;
@@ -319,6 +322,10 @@ class CreateOrderUseCase
                     }
                 }
                 $this->handleCaisseTransactionUseCase->execute($caisse, $order, $user, $totalAmount, $transactionTypeId, [], $caisseAmount, $orderDTO instanceof CreateOrderMultiPaymentDTO ? $cashRounding : null);
+                // Location au comptoir (09/11/2026) : réservations confirmées par la vente, caution encaissée dans la même transaction
+                if ($typeOrderId === 1) {
+                    $this->rentals?->afterSale($order, $user instanceof \App\Entity\User ? $user : null, $caisse, $rentalDeposit);
+                }
                 // Numéro de ticket (vente) ou d'avoir (retour), suite continue par poste, et entrée au journal de caisse (C2)
                 $receipt = $this->receipts->issue($order, $caisse, $typeOrderId === 1 ? \App\Entity\PosReceipt::TICKET : \App\Entity\PosReceipt::CREDIT_NOTE, (int) round($totalAmount));
                 $this->audit->record($typeOrderId === 1 ? \App\Services\PosAuditService\PosAuditService::SALE : \App\Services\PosAuditService\PosAuditService::REFUND, [

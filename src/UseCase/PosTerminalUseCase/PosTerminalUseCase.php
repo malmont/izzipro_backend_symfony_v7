@@ -30,15 +30,21 @@ class PosTerminalUseCase
         }
         // Vente d'une carte-cadeau (complément F9 / C4) : giftCardAmount (cents) à la place de items, exactement l'un des deux
         $giftCard = array_key_exists('giftCardAmount', $body) && $body['giftCardAmount'] !== null;
+        // Caution de location débitée sur le lecteur (09/11/2026) : depositAmount (cents) ; exactement l'un de items, giftCardAmount, depositAmount
+        $deposit = array_key_exists('depositAmount', $body) && $body['depositAmount'] !== null;
         $hasItems = !empty($body['items']) && is_array($body['items']);
-        if ($giftCard && $hasItems) {
-            $errors[] = ['path' => 'giftCardAmount', 'message' => 'items ou giftCardAmount, pas les deux'];
+        if (($giftCard ? 1 : 0) + ($deposit ? 1 : 0) + ($hasItems ? 1 : 0) > 1) {
+            $errors[] = ['path' => $deposit ? 'depositAmount' : 'giftCardAmount', 'message' => 'items, giftCardAmount ou depositAmount : un seul des trois'];
         } elseif ($giftCard) {
             if (!is_numeric($body['giftCardAmount']) || (int) $body['giftCardAmount'] <= 0 || (float) $body['giftCardAmount'] !== (float) (int) $body['giftCardAmount']) {
                 $errors[] = ['path' => 'giftCardAmount', 'message' => 'entier positif en cents attendu (montant de la carte-cadeau)'];
             }
+        } elseif ($deposit) {
+            if (!is_numeric($body['depositAmount']) || (int) $body['depositAmount'] <= 0 || (float) $body['depositAmount'] !== (float) (int) $body['depositAmount'] || (int) $body['depositAmount'] !== (int) ($body['amount'] ?? 0)) {
+                $errors[] = ['path' => 'depositAmount', 'message' => 'entier positif en cents attendu, égal à amount (la caution se débite seule sur le lecteur)'];
+            }
         } elseif (!$hasItems) {
-            $errors[] = ['path' => 'items', 'message' => 'au moins un article attendu (ou giftCardAmount pour une carte-cadeau)'];
+            $errors[] = ['path' => 'items', 'message' => 'au moins un article attendu (ou giftCardAmount pour une carte-cadeau, depositAmount pour une caution de location)'];
         }
         $others = [];
         foreach (is_array($body['otherPayments'] ?? null) ? $body['otherPayments'] : [] as $i => $other) {
@@ -57,16 +63,16 @@ class PosTerminalUseCase
         $ticketDiscount = is_array($body['ticketDiscount'] ?? null) ? $body['ticketDiscount'] : null;
         $customerId = is_numeric($body['customerId'] ?? null) ? (int) $body['customerId'] : null;
         $redeemPoints = \App\Services\PosCustomerService\PosLoyaltyQuote::redeemPoints($body);
-        if ($giftCard && $redeemPoints > 0) {
-            throw new CashRegisterException('TERMINAL_PAYMENT_PURPOSE_MISMATCH', 'Pas de rachat de points sur la vente d\'une carte-cadeau', 409, [], ['purpose' => PosTerminalPayment::PURPOSE_GIFT_CARD]);
+        if (($giftCard || $deposit) && $redeemPoints > 0) {
+            throw new CashRegisterException('TERMINAL_PAYMENT_PURPOSE_MISMATCH', 'Pas de rachat de points sur la vente d\'une carte-cadeau ni sur une caution', 409, [], ['purpose' => $giftCard ? PosTerminalPayment::PURPOSE_GIFT_CARD : PosTerminalPayment::PURPOSE_RENTAL_DEPOSIT]);
         }
-        if (!$giftCard && ($customerId !== null || $redeemPoints > 0)) {
+        if (!$giftCard && !$deposit && ($customerId !== null || $redeemPoints > 0)) {
             $ticketDiscount = $this->loyalty->apply($customerId, $redeemPoints, $ticketDiscount)['ticketDiscount'];
         }
 
         $reader = is_array($body['reader'] ?? null) ? array_intersect_key($body['reader'], array_flip(['id', 'label', 'type'])) : null; // kit (F13/F16) : lecteur déclaré par l'application, journal seulement
 
-        return $this->payments->start($user, is_numeric($body['cashRegisterId'] ?? null) ? (int) $body['cashRegisterId'] : null, $hasItems ? $body['items'] : [], $others, (int) $body['amount'], $posKey, $ticketDiscount, $reader, $giftCard ? (int) $body['giftCardAmount'] : null);
+        return $this->payments->start($user, is_numeric($body['cashRegisterId'] ?? null) ? (int) $body['cashRegisterId'] : null, $hasItems ? $body['items'] : [], $others, (int) $body['amount'], $posKey, $ticketDiscount, $reader, $giftCard ? (int) $body['giftCardAmount'] : null, $deposit ? (int) $body['depositAmount'] : null);
     }
 
     public function get(int $id, ?User $user = null): PosTerminalPayment

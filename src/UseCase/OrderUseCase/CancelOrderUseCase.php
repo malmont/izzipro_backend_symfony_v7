@@ -40,6 +40,7 @@ class CancelOrderUseCase
         private readonly \App\Services\PosAuditService\PosApprovalContext $approvalContext,
         private readonly \App\Services\PosCustomerService\PosLoyaltyService $loyalty, // fidélité (F8)
         private readonly \App\Services\PosCouponService\PosCouponService $coupons, // coupons de fabricant (F17)
+        private readonly ?\App\Services\PosRentalService\PosRentalService $rentals = null, // location au comptoir (09/11/2026)
         private readonly ?\App\Services\CheckoutService\CheckoutPaymentGatewayInterface $checkout = null // remboursement Stripe d'une commande web (lot 3 Opérations, 07/11/2026)
     ) {
         $this->paymentHandlerUseCase = $paymentHandlerUseCase;
@@ -149,6 +150,8 @@ class CancelOrderUseCase
             }
             $order->setStatus($cancelStatus);
             $order->setStatusUpdatedAt(new \DateTime());
+            $this->rentals?->cancelBookings($order); // créneaux libérés (web et caisse), 09/11/2026
+            $rentalDepositBlock = null;
             $order->setTotalAmount(0);
             $order->setSubTotal(0);
             $order->setTotalTax(0);
@@ -220,6 +223,8 @@ class CancelOrderUseCase
                 $couponsVoided = $couponApplied > 0 ? $this->coupons->onReturn($order, null, [], true, $caisse, $refundedBy) : null;
                 $this->handleCaisseTransactionUseCase->execute($caisse, $order, $refundedBy ?? $order->getUserId(), $refundAmount, $transactionTypeId, [], $caisseAmount,
                     $posCashRefund ? -($cashRefund - (int) round($refundAmount)) : null);
+                // Caution de location en cours (09/11/2026) : restituée en entier par son moyen d'encaissement, dans la même transaction
+                $rentalDepositBlock = $this->rentals?->onCancelDeposit($order, ($refundedBy ?? $order->getUserId()) instanceof \App\Entity\User ? ($refundedBy ?? $order->getUserId()) : null, $caisse, $terminalRefundId);
                 // Avoir (suite continue par poste) et entrée au journal, avec les montants d'origine (C2)
                 $creditNote = $this->receipts->issue($order, $caisse, \App\Entity\PosReceipt::CREDIT_NOTE, -(int) round((float) $refundAmount));
                 $this->audit->record(\App\Services\PosAuditService\PosAuditService::REFUND, [
@@ -233,7 +238,7 @@ class CancelOrderUseCase
                 ], $caisse, null, 'order', $order->getId(), $refundedBy);
                 // Clé d'idempotence validée avec le remboursement, réponse gardée dans le même ordre SQL (C5)
                 $this->idempotency->attach('cancel', $order->getId(), ['message' => 'Order canceled and refunded successfully',
-                    'creditNoteNumber' => $creditNote->getNumber(), 'creditNoteReference' => $creditNote->getCashRegister()->receiptReference($creditNote->getNumber()), 'barcode' => \App\Services\PosReturnService\PosReturnService::barcode($creditNote), 'cashRegister' => ['id' => $creditNote->getCashRegister()->getId(), 'name' => $creditNote->getCashRegister()->getName()]], 200);
+                    'rentalDeposit' => $rentalDepositBlock, 'creditNoteNumber' => $creditNote->getNumber(), 'creditNoteReference' => $creditNote->getCashRegister()->receiptReference($creditNote->getNumber()), 'barcode' => \App\Services\PosReturnService\PosReturnService::barcode($creditNote), 'cashRegister' => ['id' => $creditNote->getCashRegister()->getId(), 'name' => $creditNote->getCashRegister()->getName()]], 200);
             }
 
             // Valider la transaction en base de données
@@ -242,6 +247,7 @@ class CancelOrderUseCase
 
             // Vente au comptoir : numéro d'avoir et poste en plus (C2) ; annulation web : réponse inchangée
             return new JsonResponse(['message' => 'Order canceled and refunded successfully'] + ($creditNote ? [
+                'rentalDeposit' => $rentalDepositBlock, // caution de location rendue avec l'annulation (09/11/2026), null sans caution
                 'creditNoteNumber' => $creditNote->getNumber(),
                 'creditNoteReference' => $creditNote->getCashRegister()->receiptReference($creditNote->getNumber()), // préfixe du poste (R1)
                 'barcode' => \App\Services\PosReturnService\PosReturnService::barcode($creditNote), // code-barres de l'avoir (F2)

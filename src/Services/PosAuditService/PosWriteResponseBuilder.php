@@ -23,7 +23,8 @@ class PosWriteResponseBuilder
     public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly CaisseService $caisseService, private readonly PosReceiptService $receipts, private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments, private readonly \App\Services\PosReturnService\PosReturnService $returns, private readonly PosReceiptLinkService $links,
         private readonly \App\Services\PosGiftCardService\PosGiftCardService $giftCards, // cartes-cadeaux et avoirs (F9, 27/10/2026)
         private readonly \App\Services\PosCustomerService\PosCustomerService $customers, // fiche client et fidélité (F8, 28/10/2026)
-        private readonly \App\Services\PosCouponService\PosCouponService $coupons) // coupons de fabricant (F17, 01/11/2026)
+        private readonly \App\Services\PosCouponService\PosCouponService $coupons, // coupons de fabricant (F17, 01/11/2026)
+        private readonly ?\App\Services\PosRentalService\PosRentalService $rentals = null) // location au comptoir (09/11/2026)
     {
     }
 
@@ -55,8 +56,12 @@ class PosWriteResponseBuilder
             $giftCards['storeCredit'] = $credit ? $this->giftCards->toArray($credit) : null;
         }
 
-        return PosReceiptDto::fromOrder($order, $em->getRepository(Entreprise::class)->findOneBy([]), $this->caisseService->getCaisseOfOrder($order), $locale, $receipts,
+        $block = PosReceiptDto::fromOrder($order, $em->getRepository(Entreprise::class)->findOneBy([]), $this->caisseService->getCaisseOfOrder($order), $locale, $receipts,
             $this->terminalPayments->findByOrder((int) $order->getId()), $receipt ? $this->links->url($receipt) : null, $duplicate, $receipt, $giftCards, $this->customers->receiptBlock($order), $this->coupons->receiptBlock($order));
+        // Location au comptoir (09/11/2026) : lignes de location (dates) et cautions de la commande, seulement s'il y en a
+        $rental = $this->rentals?->receiptBlock($order);
+
+        return $rental !== null ? $block + ['rental' => $rental] : $block;
     }
 
     /** POST /api/order/cancel/{id} d'une vente au comptoir (200) : dernier avoir de la commande */

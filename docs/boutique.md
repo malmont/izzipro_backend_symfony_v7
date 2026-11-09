@@ -291,6 +291,14 @@ Colonnes ajoutées (migration `Version20261120100000`, script `scripts/migrate_a
 6. **Essai sur demo** : le Ponton (`DEMO-PONTON`) est réglé en `datetime` sur demo (prise et retour de 08:00 à 20:00, pas 60 min,
    tolérance 60 min, 24 h minimum, caution et frais par passager inchangés). Test : `tests/Functional/Boutique/RentalDatetimeApiTest.php`.
 
+### Location au comptoir (caisse, 09/11/2026)
+
+La caisse vend les locations (catalogue `GET /api/pos/rentals`, devis `POST /api/pos/quote` avec `booking`, vente `create-multi-payment` avec
+`deposit`), confirme les réservations (`CONFIRMED`), encaisse et restitue la caution (espèces, lecteur Stripe ou carte déclarée), finalise la
+réservation au retour du matériel (`RETURNED`) ; annulation et retours libèrent les créneaux (`CANCELLED`), **web compris**. Contrat complet :
+`docs/caisse.md`, « Location au comptoir et caution ». Statuts de `booking.status` : `PENDING_PAYMENT` (créée), `CONFIRMED` (vente au
+comptoir), `RETURNED` (matériel rendu, `is_finalized`), `CANCELLED` ; la disponibilité ignore `CANCELLED`, `REFUNDED`, `CART_ABANDONED`.
+
 ### Fuseau horaire de la boutique et dates des réservations (04/11/2026, application e-commerce mobile, lot L7b)
 
 - **Un seul fuseau**, `Services/Booking/BookingClock` : réglage du site (fiche Entreprise « Fuseau horaire du magasin », sinon

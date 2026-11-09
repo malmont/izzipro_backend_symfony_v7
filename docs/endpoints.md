@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (306)
+## Boutique et commun (313)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -432,6 +432,13 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/pos/receipts/email` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReceiptController::email` |
 | POST | `/api/pos/receipts/revoke-link` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReceiptController::revokeLink` |
 | GET | `/api/pos/receipts` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReceiptController::reprint` |
+| POST | `/api/pos/rentals/bookings/{id}/return` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosRentalController::returnBooking` |
+| POST | `/api/pos/rentals/deposits/{id}/return` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosRentalController::returnDeposit` |
+| GET | `/api/pos/rentals/deposits/{id}` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosRentalController::deposit` |
+| GET | `/api/pos/rentals/deposits` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosRentalController::deposits` |
+| POST | `/api/pos/rentals/deposits` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosRentalController::collect` |
+| GET | `/api/pos/rentals/ongoing` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosRentalController::ongoing` |
+| GET | `/api/pos/rentals` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosRentalController::catalogue` |
 | GET | `/api/pos/returns/lookup` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReturnController::lookup` |
 | POST | `/api/pos/returns` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReturnController::create` |
 | GET | `/api/pos/settings` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosPinController::settings` |

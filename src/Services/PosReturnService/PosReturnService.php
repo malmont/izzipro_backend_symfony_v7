@@ -70,6 +70,7 @@ class PosReturnService
         private readonly \App\Services\PosCustomerService\PosCustomerService $customers, // fiche client (F8, 28/10/2026)
         private readonly \App\Services\PosCustomerService\PosLoyaltyService $loyalty, // fidélité (F8)
         private readonly \App\Services\PosCouponService\PosCouponService $coupons, // coupons de fabricant (F17, 01/11/2026)
+        private readonly ?\App\Services\PosRentalService\PosRentalService $rentals = null, // location au comptoir (09/11/2026)
     ) {
     }
 
@@ -317,6 +318,9 @@ class PosReturnService
                 $item->setTotalPrice((float) $line['net']); // net exact (cumul), le prix unitaire étant le net moyen
             }
             $em->persist($item);
+            if ($line['item'] !== null) {
+                $this->rentals?->onReturnLine($line['item'], (int) $line['quantity']); // location : créneau réduit ou libéré (09/11/2026)
+            }
             if ($restock && $line['variant'] !== null) {
                 $this->stock->execute($line['variant'], $line['quantity'], true);
             }

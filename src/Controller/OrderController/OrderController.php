@@ -443,6 +443,7 @@ class OrderController extends AbstractController
             $data['licenseNumber'] ?? null,
             $data['licenseExpirationDate'] ?? null
         );
+        $dto->setDeposit(is_array($data['deposit'] ?? null) && $data['deposit'] !== [] ? $data['deposit'] : null); // caution de location (09/11/2026)
         // Les moyens de paiement doivent couvrir exactement le total calculé par le serveur (négatif pour un retour)
         $paid = (int) round(array_sum(array_map(fn (PaymentMethodDTO $m) => $m->getAmount(), $paymentMethods)) * 100);
         $dto->setVerifiedPaymentAmount($typeOrder === self::TYPE_ORDER_SALE ? $paid : -$paid);
