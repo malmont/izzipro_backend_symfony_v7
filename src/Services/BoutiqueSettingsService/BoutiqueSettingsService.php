@@ -52,6 +52,14 @@ class BoutiqueSettingsService
     }
 
     /** Texte JSON tel qu'il est stocké (colonne json : le texte n'est pas réécrit par PostgreSQL) */
+    /** JSON enregistré du site sans créer de ligne (verrou de version, 09/11/2026) ; null sans réglage */
+    public function currentRawConfiguration(): ?string
+    {
+        $setting = $this->emProvider->getEntityManager()->getRepository(BoutiqueSetting::class)->findOneBy([], ['id' => 'ASC']);
+
+        return $setting !== null && !empty($setting->getConfiguration()) ? $this->getRawConfiguration($setting) : null;
+    }
+
     public function getRawConfiguration(BoutiqueSetting $setting): ?string
     {
         if ($setting->getId() === null) {

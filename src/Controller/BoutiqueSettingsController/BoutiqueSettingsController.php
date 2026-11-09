@@ -35,7 +35,8 @@ class BoutiqueSettingsController extends AbstractController
         private readonly ?\App\Services\TenantEntityManagerProvider $emProvider = null, // devise et TTC du site (F18 partie 2a)
         private readonly ?\App\Services\OrderService\OrderTaxAddressResolver $storeAddress = null, // pays du site (F18 partie 2a, complément)
         private readonly ?\App\Services\Booking\BookingClock $clock = null, // fuseau de la boutique (04/11/2026)
-        private readonly ?\App\Services\CaisseService\SiteLocaleResolver $siteLocale = null // langue du site (04/11/2026)
+        private readonly ?\App\Services\CaisseService\SiteLocaleResolver $siteLocale = null, // langue du site (04/11/2026)
+        private readonly ?BoutiqueSettingsService $settings = null // verrou de version (09/11/2026)
     ) {
     }
 
@@ -49,7 +50,8 @@ class BoutiqueSettingsController extends AbstractController
         // JSON stocké restitué sans transformation (un {} reste {}, l'ordre des clés est conservé)
         $json = $this->cache->get('boutique_settings', fn (): string => $this->getUseCase->execute() ?? 'null', 3600, CacheTags::listTags(CacheTags::BOUTIQUE_SETTINGS));
 
-        return new JsonResponse($this->withSiteCommerce($json), Response::HTTP_OK, [], true);
+        // Verrou de version (09/11/2026) : empreinte du JSON enregistré (avant les clés de commerce en lecture seule), à reprendre au PUT
+        return new JsonResponse($this->withSiteCommerce($json), Response::HTTP_OK, \App\Services\SettingsVersion\SettingsVersion::headers(\App\Services\SettingsVersion\SettingsVersion::of($json)), true);
     }
 
     /**
@@ -84,7 +86,16 @@ class BoutiqueSettingsController extends AbstractController
     public function updateSettings(Request $request): JsonResponse
     {
         try {
-            $this->updateUseCase->execute($this->body($request));
+            $dto = $this->body($request);
+            // Verrou de version (09/11/2026) : une version donnée qui ne correspond plus à l'enregistrement → 409, rien n'est écrit
+            $expected = \App\Services\SettingsVersion\SettingsVersion::expected($request);
+            if ($expected !== null) {
+                $current = \App\Services\SettingsVersion\SettingsVersion::of($this->settings?->currentRawConfiguration());
+                if ($expected !== $current) {
+                    return $this->json(\App\Services\SettingsVersion\SettingsVersion::conflictBody($current), Response::HTTP_CONFLICT);
+                }
+            }
+            $this->updateUseCase->execute($dto);
         } catch (BoutiqueSettingsException $e) {
             return $this->json(array_filter([
                 'error' => $e->getStatusCode() === 422 ? 'Configuration de la boutique invalide' : $e->getMessage(),
@@ -93,7 +104,9 @@ class BoutiqueSettingsController extends AbstractController
             ]), $e->getStatusCode());
         }
 
-        return $this->json(['status' => 'Configuration sauvegardée']);
+        $version = \App\Services\SettingsVersion\SettingsVersion::of($this->settings?->currentRawConfiguration());
+
+        return $this->json(['status' => 'Configuration sauvegardée', 'version' => $version], Response::HTTP_OK, \App\Services\SettingsVersion\SettingsVersion::headers($version));
     }
 
     /**

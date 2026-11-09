@@ -32,7 +32,10 @@ Code : `Controller/BoutiqueSettingsController/`, `UseCase/BoutiqueSettingsUseCas
   `reglableConfig`), `tabs[]` (onglets du menu et pages système), `reglablePresets[]`, `charter`, `commerce`. Tout
   champ hors des points contrôlés ci-dessous est conservé sans contrôle.
 - **Compositions** (`tabs[].sections[].reglableConfig` des sections `typeReglable`, `navbar`, `footer`,
-  `reglablePresets[].config`) et **noms de section** : mêmes règles que `PUT /api/landingpage-settings`
+  `reglablePresets[].config`) et **noms de section** : mêmes règles que `PUT /api/landingpage-settings` ; **verrou de version** (09/11/2026,
+  `Services/SettingsVersion/SettingsVersion`) : `GET` rend `X-Settings-Version` (empreinte du JSON enregistré, hors clés de commerce ajoutées en
+  lecture ; l'`ETag` reste celui du cache HTTP), le `PUT` accepte `X-Settings-Version` et répond 409 `SETTINGS_CHANGED { currentVersion }` si les réglages ont
+  changé depuis la lecture (rien d'écrit) ; sans en-tête, écriture comme avant ; réponse du `PUT` : `{ status, version }` + mêmes en-têtes
   (`ReglableCompositionValidator` : schéma synchronisé, règles entre blocs, `RichTextPolicy`). Les types de blocs de la
   boutique (`stripePayment`, `cartLines`, `bookingCalendar`…) viennent du schéma publié par le frontend : rien à déclarer
   côté backend.

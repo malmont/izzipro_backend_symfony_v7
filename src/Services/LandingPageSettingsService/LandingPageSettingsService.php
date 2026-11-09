@@ -29,6 +29,14 @@ class LandingPageSettingsService
     }
 
 
+    /** JSON enregistré du site sans créer de ligne (verrou de version, 09/11/2026) ; null sans réglage */
+    public function currentRawConfiguration(): ?string
+    {
+        $setting = $this->emProvider->getEntityManager()->getRepository(LandingPageSetting::class)->findOneBy([], ['id' => 'ASC']);
+
+        return $setting !== null && !empty($setting->getConfiguration()) ? $this->getRawConfiguration($setting) : null;
+    }
+
     /** Texte JSON tel qu'il est stocké (colonne json : le texte n'est pas réécrit par PostgreSQL) */
     public function getRawConfiguration(LandingPageSetting $setting): ?string
     {

@@ -45,7 +45,8 @@ class LandingPageSettingsController extends AbstractController
             return $this->service->getRawConfiguration($setting) ?? (string) json_encode($setting->getConfiguration());
         }, 3600, CacheTags::listTags(CacheTags::LANDING_SETTINGS));
 
-        return new JsonResponse($json, Response::HTTP_OK, [], true);
+        // Verrou de version (09/11/2026) : ETag / X-Settings-Version à reprendre dans If-Match ou X-Settings-Version du PUT
+        return new JsonResponse($json, Response::HTTP_OK, \App\Services\SettingsVersion\SettingsVersion::headers(\App\Services\SettingsVersion\SettingsVersion::of($json)), true);
     }
 
     #[Route('', name: 'api_landingpage_settings_update', methods: ['PUT'])]
@@ -66,8 +67,17 @@ class LandingPageSettingsController extends AbstractController
         if (is_object($configuration)) {
             $dto->configuration = get_object_vars($configuration); // sous-objets conservés tels quels
         }
+        // Verrou de version (09/11/2026) : une version donnée qui ne correspond plus à l'enregistrement → 409, rien n'est écrit
+        $expected = \App\Services\SettingsVersion\SettingsVersion::expected($request);
+        if ($expected !== null) {
+            $current = \App\Services\SettingsVersion\SettingsVersion::of($this->service->currentRawConfiguration());
+            if ($expected !== $current) {
+                return $this->json(\App\Services\SettingsVersion\SettingsVersion::conflictBody($current), Response::HTTP_CONFLICT);
+            }
+        }
         $this->updateUseCase->execute($dto);
+        $version = \App\Services\SettingsVersion\SettingsVersion::of($this->service->currentRawConfiguration());
 
-        return $this->json(['status' => 'Configuration sauvegardée']);
+        return $this->json(['status' => 'Configuration sauvegardée', 'version' => $version], Response::HTTP_OK, \App\Services\SettingsVersion\SettingsVersion::headers($version));
     }
 }

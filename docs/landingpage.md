@@ -11,7 +11,7 @@ Routes et rôles : `docs/endpoints.md`, section « Landing Page » ; données de
 
 | Besoin | Endpoint | Accès |
 |---|---|---|
-| Lire / enregistrer les réglages du site | `GET` / `PUT /api/landingpage-settings` | public / `ROLE_ADMIN` |
+| Lire / enregistrer les réglages du site ; **verrou de version** (09/11/2026) : `X-Settings-Version` en lecture (empreinte du JSON enregistré ; l'`ETag` reste celui du cache HTTP et ne sert pas), repris dans le même en-tête au `PUT` → 409 `SETTINGS_CHANGED { currentVersion }` si les réglages ont changé entre-temps, rien d'écrit ; sans en-tête, écriture comme avant ; la réponse du `PUT` rend `version` et les mêmes en-têtes | `GET` / `PUT /api/landingpage-settings` | public / `ROLE_ADMIN` |
 | Familles de sections et source de leurs données | `GET /api/components-config` | public |
 | Assistant IA (retouche, création, page, page système, site complet, images et PDF) | `POST /api/landingpage-ai/compose` → 200, ou 202 `{ jobId }` | `ROLE_ADMIN` |
 | Assistant IA : mémoire par section ou page (consulter, oublier) ; issue d'une proposition | `GET`, `DELETE /api/landingpage-ai/memory?memoryKey=` ; `POST /api/landingpage-ai/usage/{id}/outcome` | `ROLE_ADMIN` |

@@ -41,6 +41,36 @@ class LandingPageSettingsApiTest extends WebTestCase
         );
     }
 
+    /** Verrou de version (09/11/2026) : X-Settings-Version en lecture et au PUT, 409 si les réglages ont changé entre-temps, sans en-tête rien ne change */
+    public function testVersionLockRefusesAStaleWriteAndAcceptsAFreshOne(): void
+    {
+        $this->loginAsAdmin();
+        $first = $this->configurationJson('{"id": "titre", "type": "title", "parentId": null, "text": "Première", "lineHeight": 1.0, "bindings": {}, "translations": {}}');
+        $second = $this->configurationJson('{"id": "titre", "type": "title", "parentId": null, "text": "Seconde", "lineHeight": 1.0, "bindings": {}, "translations": {}}');
+        $third = $this->configurationJson('{"id": "titre", "type": "title", "parentId": null, "text": "Troisième", "lineHeight": 1.0, "bindings": {}, "translations": {}}');
+        $this->assertSame(200, $this->request('PUT', $first)->getStatusCode());
+
+        $get = $this->request('GET');
+        $version = $get->headers->get('X-Settings-Version');
+        $this->assertNotEmpty($version);
+
+        // Écriture d'un autre poste (sans en-tête : comme avant), puis écriture avec la version périmée : refusée, rien d'écrit
+        $this->assertSame(200, $this->request('PUT', $second)->getStatusCode());
+        $stale = $this->request('PUT', $third, ['HTTP_X_SETTINGS_VERSION' => '"' . $version . '"']); // guillemets tolérés
+        $this->assertSame(409, $stale->getStatusCode(), $stale->getContent());
+        $body = json_decode($stale->getContent(), true);
+        $this->assertSame('SETTINGS_CHANGED', $body['error']);
+        $this->assertNotSame($version, $body['currentVersion']);
+        $this->assertStringContainsString('Seconde', $this->request('GET')->getContent(), 'la seconde reste enregistrée');
+
+        // Avec la version courante : acceptée, nouvelle version rendue
+        $ok = $this->request('PUT', $third, ['HTTP_X_SETTINGS_VERSION' => $body['currentVersion']]);
+        $this->assertSame(200, $ok->getStatusCode(), $ok->getContent());
+        $this->assertSame(json_decode($ok->getContent(), true)['version'], $ok->headers->get('X-Settings-Version'));
+        $this->assertSame($ok->headers->get('X-Settings-Version'), $this->request('GET')->headers->get('X-Settings-Version'));
+        $this->assertStringContainsString('Troisi', $this->request('GET')->getContent()); // accent échappé dans le JSON enregistré
+    }
+
     public function testInvalidConfigurationIsRefusedWithPathsAndNotStored(): void
     {
         $this->loginAsAdmin();
@@ -136,7 +166,7 @@ class LandingPageSettingsApiTest extends WebTestCase
             JSON;
     }
 
-    private function request(string $method, ?string $body = null): Response
+    private function request(string $method, ?string $body = null, array $headers = []): Response
     {
         $jar = $this->client->getCookieJar();
         $jar->clear();
@@ -149,7 +179,7 @@ class LandingPageSettingsApiTest extends WebTestCase
             'CONTENT_TYPE' => 'application/json',
             'HTTP_ACCEPT' => 'application/json',
             'HTTP_X_XSRF_TOKEN' => $xsrf,
-        ]), $body);
+        ]) + $headers, $body);
 
         return $this->client->getResponse();
     }

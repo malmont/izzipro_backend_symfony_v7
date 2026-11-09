@@ -26,6 +26,31 @@ class BoutiqueSettingsApiTest extends WebTestCase
         $this->client = static::createClient();
         $this->db()->executeStatement('DELETE FROM boutique_setting');
         $this->db()->executeStatement("DELETE FROM content_audit_log WHERE resource = 'boutique-settings'");
+        static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateTenant(); // GET en cache : les suppressions SQL ne le vident pas
+    }
+
+    /** Verrou de version (09/11/2026) : X-Settings-Version calculée sur le JSON enregistré (hors clés de commerce ajoutées en lecture), 409 sur une version périmée */
+    public function testVersionLockOnShopSettings(): void
+    {
+        $this->loginAsAdmin();
+        $this->assertSame('empty', $this->request('GET')->headers->get('X-Settings-Version'), 'aucun réglage : version « empty »');
+        $configuration = $this->configuration();
+        $put = $this->request('PUT', $this->encode(['configuration' => $configuration]), '/api/boutique-settings', ['HTTP_X_SETTINGS_VERSION' => 'empty']);
+        $this->assertSame(200, $put->getStatusCode(), $put->getContent());
+        $version = $put->headers->get('X-Settings-Version');
+        $this->assertNotSame('empty', $version);
+        $get = $this->request('GET');
+        $this->assertSame($version, $get->headers->get('X-Settings-Version'), 'même version en lecture, malgré les clés de commerce ajoutées');
+
+        $changed = $configuration;
+        $changed['productPageStyle'] = ['detailsCardType' => 'typeB'];
+        $this->assertSame(200, $this->request('PUT', $this->encode(['configuration' => $changed]))->getStatusCode(), 'écriture sans en-tête : comme avant');
+        $stale = $this->request('PUT', $this->encode(['configuration' => $configuration]), '/api/boutique-settings', ['HTTP_X_SETTINGS_VERSION' => $version]);
+        $this->assertSame(409, $stale->getStatusCode(), $stale->getContent());
+        $body = json_decode($stale->getContent(), true);
+        $this->assertSame('SETTINGS_CHANGED', $body['code']);
+        $this->assertSame('typeB', json_decode($this->request('GET')->getContent(), true)['productPageStyle']['detailsCardType'], 'rien d\'écrit');
+        $this->assertSame(200, $this->request('PUT', $this->encode(['configuration' => $configuration]), '/api/boutique-settings', ['HTTP_X_SETTINGS_VERSION' => $body['currentVersion']])->getStatusCode(), 'version courante acceptée');
     }
 
     public function testValidConfigurationIsStoredReturnedUnchangedAndJournaled(): void
@@ -367,7 +392,7 @@ class BoutiqueSettingsApiTest extends WebTestCase
         return json_encode($body, JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
     }
 
-    private function request(string $method, ?string $body = null, string $path = '/api/boutique-settings'): Response
+    private function request(string $method, ?string $body = null, string $path = '/api/boutique-settings', array $headers = []): Response
     {
         $jar = $this->client->getCookieJar();
         $jar->clear();
@@ -379,7 +404,7 @@ class BoutiqueSettingsApiTest extends WebTestCase
             'CONTENT_TYPE' => 'application/json',
             'HTTP_ACCEPT' => 'application/json',
             'HTTP_X_XSRF_TOKEN' => $this->session['XSRF-TOKEN_' . MV_TEST_TENANT_CODE] ?? null,
-        ]), $body);
+        ]) + $headers, $body);
 
         return $this->client->getResponse();
     }
