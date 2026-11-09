@@ -33,10 +33,12 @@ class ProductService
         $this->emProvider = $emProvider;
     }
 
-    public function getProductsByCommande(Commande $commande, string $host): array
+    public function getProductsByCommande(Commande $commande, string $host, string $locale = 'fr'): array
     {
         $products = $commande->getProducts();
-        return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host, 'fr', $this->currency->code()), $products->toArray());
+        $currency = $this->currency->code();
+        // langue demandée (?locale=) au lieu de « fr » figé (lot G3, 09/11/2026)
+        return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host, $locale, $currency), $products->toArray());
     }
 
     public function createProductByCommande(Commande $commande, ProductInputDTO $inputDTO, Request $request, string $uploadDir): Product

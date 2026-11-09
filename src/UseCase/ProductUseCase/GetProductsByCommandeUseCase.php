@@ -14,8 +14,8 @@ class GetProductsByCommandeUseCase
         $this->productService = $productService;
     }
 
-    public function execute(Commande $commande, string $host): array
+    public function execute(Commande $commande, string $host, string $locale = 'fr'): array
     {
-        return $this->productService->getProductsByCommande($commande, $host);
+        return $this->productService->getProductsByCommande($commande, $host, $locale);
     }
 }

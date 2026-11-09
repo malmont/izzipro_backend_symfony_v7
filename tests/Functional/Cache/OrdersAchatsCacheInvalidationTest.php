@@ -87,8 +87,8 @@ class OrdersAchatsCacheInvalidationTest extends WebTestCase
             "/api/collections/$id/commandes" => "commandes_collection_$id",
             "/api/collections/$id/notes-de-frais" => "notes_de_frais_collection_$id",
             '/api/fournisseurs' => 'fournisseurs_all',
-            '/api/type-fournisseurs' => 'api_type_fournisseurs_all',
-            '/api/type-note-de-frais' => 'api_type_note_de_frais_all',
+            '/api/type-fournisseurs' => 'api_type_fournisseurs_all_fr', // clé par langue depuis le lot G3 de la gestion (09/11/2026)
+            '/api/type-note-de-frais' => 'api_type_note_de_frais_all_fr',
         ];
         foreach ($lists as $route => $key) {
             $this->get($route);
@@ -101,17 +101,17 @@ class OrdersAchatsCacheInvalidationTest extends WebTestCase
         $this->assertTrue($this->cached("notes_de_frais_collection_$id") && $this->cached('fournisseurs_all') && $this->cached($witnessKey), 'les autres listes restent en cache');
 
         $this->get("/api/commandes/{$commande->getId()}/products");
-        $this->assertTrue($this->cached('products_by_commande_' . $commande->getId()));
+        $this->assertTrue($this->cached('products_by_commande_' . $commande->getId() . '_fr'));
         $this->create(NoteDeFrais::class, [], fn (NoteDeFrais $n, EntityManagerInterface $em) => $n->setCollection($em->find(Collections::class, $id)));
         $this->assertFalse($this->cached("notes_de_frais_collection_$id"), 'note de frais : la liste de sa collection est vidée');
-        $this->assertTrue($this->cached('products_by_commande_' . $commande->getId()) && $this->cached('fournisseurs_all'), 'les autres listes restent en cache');
+        $this->assertTrue($this->cached('products_by_commande_' . $commande->getId() . '_fr') && $this->cached('fournisseurs_all'), 'les autres listes restent en cache');
 
         $this->create(Fournisseur::class);
         $this->assertFalse($this->cached('fournisseurs_all'));
         $this->create(TypeFournisseur::class);
-        $this->assertFalse($this->cached('api_type_fournisseurs_all'));
+        $this->assertFalse($this->cached('api_type_fournisseurs_all_fr'));
         $this->create(TypeNoteDeFrais::class);
-        $this->assertFalse($this->cached('api_type_note_de_frais_all'));
+        $this->assertFalse($this->cached('api_type_note_de_frais_all_fr'));
         $this->assertTrue($this->cached($witnessKey));
         $this->endOfWrite();
     }

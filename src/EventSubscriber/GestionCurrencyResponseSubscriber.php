@@ -19,7 +19,7 @@ class GestionCurrencyResponseSubscriber implements EventSubscriberInterface
     /** Routes dont la réponse 200 est un objet JSON portant des montants */
     public const ROUTES = [
         'dashboard_commande', 'dashboard_collection', 'dashboard_collections_combined', 'close_command', 'close_collection',
-        'statistiques_chiffre_affaires', 'statistiques_panier_moyen', 'get_payments_statistics', 'frais_total', 'get_monthly_taxes',
+        'statistiques_chiffre_affaires', 'statistiques_nombre_commandes', 'statistiques_panier_moyen', 'get_payments_statistics', 'frais_total', 'get_monthly_taxes', 'get_carrier_statistics',
         'stock_value_all', 'stock_evolution_all',
     ];
 

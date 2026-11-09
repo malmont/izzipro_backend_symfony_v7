@@ -1,19 +1,17 @@
 <?php
 namespace App\UseCase\StatistiqueUseCase\StatistiqueCarrierUseCase;
 
-use App\Services\StatistiqueService\CarrierStatisticsService;
+use App\Services\StatistiqueService\SalesStatisticsService;
 
 class GetMonthlyCarrierStatisticsUseCase
 {
-    private $carrierStatisticsService;
 
-    public function __construct(CarrierStatisticsService $carrierStatisticsService)
+    public function __construct(private readonly SalesStatisticsService $statistics) // lot G3 (09/11/2026) : une requête agrégée, fuseau du magasin
     {
-        $this->carrierStatisticsService = $carrierStatisticsService;
     }
 
     public function execute(): array
     {
-        return $this->carrierStatisticsService->getMonthlyCarrierStatisticsForCurrentYear();
+        return $this->statistics->carrierMonthly();
     }
 }

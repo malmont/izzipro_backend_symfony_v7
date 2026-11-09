@@ -16,18 +16,13 @@ class GetTotalFraisUseCase
 
     public function execute(): array
     {
-        $currentYear = (new DateTime())->format('Y');
-        $currentWeekStart = (new DateTime())->modify('monday this week');
-        $currentWeekEnd = (new DateTime())->modify('sunday this week');
-
-        $totalFraisAnnee = $this->fraisService->getTotalFraisForYear($currentYear);
-        $fraisParMois = $this->fraisService->getTotalFraisByMonth($currentYear);
-        $fraisParJour = $this->fraisService->getTotalFraisByDay($currentWeekStart, $currentWeekEnd);
+        // Année et semaine courantes du magasin (lot G3, 09/11/2026)
+        $periods = $this->fraisService->currentPeriods();
 
         return [
-            'total_frais_annee' => $totalFraisAnnee,
-            'frais_par_mois' => $fraisParMois,
-            'frais_par_jour' => $fraisParJour,
+            'total_frais_annee' => $this->fraisService->getTotalFraisForYear($periods['year']),
+            'frais_par_mois' => $this->fraisService->getTotalFraisByMonth($periods['year']),
+            'frais_par_jour' => $this->fraisService->getTotalFraisByDay($periods['weekStart'], $periods['weekEnd']),
         ];
     }
 }

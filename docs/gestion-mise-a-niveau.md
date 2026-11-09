@@ -135,7 +135,7 @@ Toute correction de calcul doit commencer par un test qui fixe les chiffres atte
 
 ## 3. Recommandations : lots proposés
 
-**État (09/11/2026)** : G0 et G1 livrés en production (non commités, accord du propriétaire attendu) ; G2 en validation ; G3, G4, G5 à faire.
+**État (09/11/2026)** : G0, G1, G2 livrés et poussés (70150e36) ; G3 livré (commit séparé) ; G4, G5 à faire. Un commit poussé par lot (demande du propriétaire).
 
 Ordre pensé pour ne rien casser côté MAUI pendant la transition : chaque lot est additif, la conversion de données est
 faite une fois par script, et le contrat est annoncé à « new easymakemoney » avant d'être activé.

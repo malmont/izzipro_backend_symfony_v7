@@ -1,0 +1,12 @@
+referentiel:
+    type_fournisseur:
+        Grossiste: Wholesaler
+        Fabricant: Manufacturer
+        'Prestataire de services': Service provider
+        Autre: Other
+    type_note_de_frais:
+        Déplacement: Travel
+        Repas: Meals
+        Hébergement: Lodging
+        Fournitures: Supplies
+        Autre: Other

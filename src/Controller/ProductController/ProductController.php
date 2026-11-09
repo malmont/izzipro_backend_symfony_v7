@@ -73,11 +73,12 @@ class ProductController extends AbstractController
     public function getProductsByCommande(Commande $commande, Request $request): JsonResponse
     {
         $host = $this->resolveHost($request);
-        $cacheKey = 'products_by_commande_' . $commande->getId();
+        $locale = CacheLocale::normalize($request->query->get('locale')); // lot G3 (09/11/2026)
+        $cacheKey = 'products_by_commande_' . $commande->getId() . '_' . $locale;
 
         $products = $this->cache->get(
             $cacheKey,
-            fn () => $this->getProductsByCommandeUseCase->execute($commande, $host),
+            fn () => $this->getProductsByCommandeUseCase->execute($commande, $host, $locale),
             300,
             [...CacheTags::productListTags(), ...CacheTags::itemTags(CacheTags::COMMANDES, $commande->getId())]
         );

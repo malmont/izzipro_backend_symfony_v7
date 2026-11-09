@@ -1,0 +1,14 @@
+# Libellés des référentiels de l'application de gestion (lot G3, 09/11/2026) : clé = nom enregistré en base (langue par défaut),
+# traduit par GET /api/type-fournisseurs et GET /api/type-note-de-frais selon ?locale= ; un nom sans clé est rendu tel quel.
+referentiel:
+    type_fournisseur:
+        Grossiste: Grossiste
+        Fabricant: Fabricant
+        'Prestataire de services': Prestataire de services
+        Autre: Autre
+    type_note_de_frais:
+        Déplacement: Déplacement
+        Repas: Repas
+        Hébergement: Hébergement
+        Fournitures: Fournitures
+        Autre: Autre

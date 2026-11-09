@@ -2,15 +2,13 @@
 
 namespace App\UseCase\StatistiqueUseCase\TaxUseCase;
 
-use App\Services\StatistiqueService\TaxService;
+use App\Services\StatistiqueService\SalesStatisticsService;
 
 class GetMonthlyTaxesUseCase
 {
-    private $taxService;
 
-    public function __construct(TaxService $taxService)
+    public function __construct(private readonly SalesStatisticsService $statistics) // lot G3 (09/11/2026)
     {
-        $this->taxService = $taxService;
     }
 
     /**
@@ -20,7 +18,6 @@ class GetMonthlyTaxesUseCase
      */
     public function execute(): array
     {
-        $year = (int)date('Y');
-        return $this->taxService->getMonthlyTaxesForYear($year);
+        return $this->statistics->taxesMonthly();
     }
 }

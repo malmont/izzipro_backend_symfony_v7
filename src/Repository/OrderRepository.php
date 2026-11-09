@@ -108,28 +108,6 @@ class OrderRepository extends EntityRepository
         return (float) ($result ?? 0.0);
     }
     
-    public function getTotalCarrierByMonth(int $year): array
-    {
-        $result = [];
-
-        for ($month = 1; $month <= 12; $month++) {
-            $startDate = new DateTime("$year-$month-01");
-            $endDate = (clone $startDate)->modify('last day of this month');
-
-            $total = $this->createQueryBuilder('o')
-                ->select('SUM(c.price) as total')
-                ->join('o.carrier', 'c')
-                ->where('o.orderDate BETWEEN :start AND :end')
-                ->setParameter('start', $startDate->format('Y-m-d 00:00:00'))
-                ->setParameter('end', $endDate->format('Y-m-d 23:59:59'))
-                ->getQuery()
-                ->getSingleScalarResult();
-
-            $result[$month] = (float) ($total ?? 0.0);
-        }
-
-        return $result;
-    }
 
     public function findWithDetailsByUser(int $userId): array
     {
