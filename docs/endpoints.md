@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (328)
+## Boutique et commun (332)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -361,6 +361,10 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/fournisseurs` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::createFournisseur` |
 | GET | `/api/frais/total` | ROLE_ADMIN | `Controller\StatistiqueDashboard\FraisController::getTotalFrais` |
 | GET | `/api/gestion/exports/achats.csv` | ROLE_ADMIN | `Controller\GestionController\GestionExportController::purchases` |
+| POST | `/api/gestion/reprise/annuler` | ROLE_ADMIN | `Controller\GestionController\RepriseController::cancel` |
+| POST | `/api/gestion/reprise/appliquer` | ROLE_ADMIN | `Controller\GestionController\RepriseController::apply` |
+| POST | `/api/gestion/reprise/simulation` | ROLE_ADMIN | `Controller\GestionController\RepriseController::simulate` |
+| GET | `/api/gestion/reprise` | ROLE_ADMIN | `Controller\GestionController\RepriseController::state` |
 | GET | `/api/homeslider` | PUBLIC_ACCESS | `Controller\HomeSliderController\HomeSliderController::getHomeSlider` |
 | DELETE | `/api/media/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::delete` |
 | PATCH | `/api/media/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::rename` |

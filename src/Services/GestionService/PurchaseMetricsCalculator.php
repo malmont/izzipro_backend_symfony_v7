@@ -130,7 +130,7 @@ class PurchaseMetricsCalculator
     private static function sums(): string
     {
         $cost = self::UNIT_COST;
-        $qty = 'COALESCE(p.quantity, 0)';
+        $qty = 'COALESCE(p.commande_quantity, p.quantity, 0)'; // quantité de la ligne de commande si posée (reprise d'historique, lot P3), sinon le stock
         $coef = 'COALESCE(p.coefficient_multiplier, 0)';
 
         return "COALESCE(SUM($cost * $qty), 0) AS purchase_cost, COALESCE(SUM($cost * $qty * $coef), 0) AS stock_value, COALESCE(SUM($qty), 0) AS item_count, COUNT(p.id) AS model_count, COALESCE(SUM($coef * $qty), 0) AS multiplier_sum";

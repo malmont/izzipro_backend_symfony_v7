@@ -40,7 +40,7 @@ class PurchaseExportService
         $totals = ['products' => 0, 'shipping' => 0, 'expenses' => 0];
 
         $products = $conn->fetchAllAssociative(
-            'SELECT col.nom_collection AS collection, c.name AS commande, c.date AS day, f.name AS fournisseur, p.name AS label, COALESCE(p.quantity, 0) AS quantity,' .
+            'SELECT col.nom_collection AS collection, c.name AS commande, c.date AS day, f.name AS fournisseur, p.name AS label, COALESCE(p.commande_quantity, p.quantity, 0) AS quantity,' .
             ' COALESCE(p.commande_cost_cents, p.purchase_price, p.price, 0) * COALESCE(c.exchange_rate, 1) AS unit_cost, p.coefficient_multiplier AS coefficient, c.currency AS purchase_currency, c.exchange_rate AS rate' .
             ' FROM product p JOIN commande c ON c.id = p.commande_id JOIN collections col ON col.id = c.collections_id LEFT JOIN fournisseur f ON f.id = c.fournisseur_id' .
             ' WHERE c.date >= :from AND c.date < (CAST(:to AS date) + 1)' . $collectionWhere . ' ORDER BY c.date, c.id, p.id',

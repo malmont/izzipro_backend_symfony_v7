@@ -114,7 +114,7 @@ class PeriodResultApiTest extends WebTestCase
         $this->assertSame(['revenue' => 12000, 'orders' => 4, 'items' => 7, 'returns' => ['amount' => 2500, 'orders' => 1, 'items' => 1], 'unknownCostRevenue' => 4000, 'shippingBilled' => 700,
             'bySource' => ['ecommerce' => 4000, 'pos' => 5000, 'mobile_app' => 3000]], $result['sales'], 'ventes nettes des retours, hors taxes (1150 TTC → 1000), annulée / carte-cadeau / incomplète exclues');
         $this->assertSame(['rentals' => 5000, 'subscriptions' => 2000, 'total' => 7000], $result['otherRevenue']);
-        $this->assertSame(['amount' => 2900, 'items' => 6, 'unknownCostItems' => 1], $result['cogs'], 'A 3 × 1000 + D 3 × 300 − retour 1 × 1000 ; C inconnu');
+        $this->assertSame(['amount' => 2900, 'items' => 6, 'unknownCostItems' => 1, 'estimatedItems' => 0, 'estimatedAmount' => 0], $result['cogs'], 'A 3 × 1000 + D 3 × 300 − retour 1 × 1000 ; C inconnu');
         $this->assertSame(['shipping' => 150, 'notes' => 500, 'other' => [], 'total' => 650], $result['expenses']);
         $this->assertSame(['gross' => 5100, 'net' => 4450, 'tauxMarge' => 175.86, 'tauxMarque' => 63.75, 'netRate' => 55.63], $result['result'], 'gross = (12000 − 4000) − 2900 ; net = gross − 650 ; taux sur le coût et sur les ventes au coût connu');
         $this->assertSame(['purchases' => 2000, 'shipping' => 150, 'total' => 2150], $result['investment']);
@@ -132,7 +132,7 @@ class PeriodResultApiTest extends WebTestCase
         $this->assertSame(0, (int) $this->em()->getConnection()->fetchOne('SELECT COUNT(*) FROM period_result WHERE collection_id = ?', [$periodId]));
         $live = $this->get("/api/periodes/$periodId/resultat");
         $this->assertSame([false, null, 'open', 14500], [$live['frozen'], $live['frozenAt'], $live['period']['status'], $live['sales']['revenue']], 'vivant après réouverture');
-        $this->assertSame(['amount' => 6100, 'items' => 8, 'unknownCostItems' => 0], $live['cogs'], 'rouverte : le coût tardif de C (2200) compte');
+        $this->assertSame(['amount' => 6100, 'items' => 8, 'unknownCostItems' => 0, 'estimatedItems' => 0, 'estimatedAmount' => 0], $live['cogs'], 'rouverte : le coût tardif de C (2200) compte');
         $this->request('POST', "/api/dashboard/collection/$periodId/close");
         $this->assertSame(200, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
         $frozen = $this->get("/api/periodes/$periodId/resultat");

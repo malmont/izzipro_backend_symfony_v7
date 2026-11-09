@@ -150,6 +150,14 @@ class Product implements TranslatableInterface, DemoContentInterface
     #[ORM\Column(name: 'commande_attached_at', type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $commandeAttachedAt = null;
 
+    /** Quantité de la ligne de commande fournisseur (lot P3, 10/11/2026) : distincte du stock `quantity` ; les calculs d'achat lisent `commande_quantity ?? quantity` */
+    #[ORM\Column(name: 'commande_quantity', nullable: true)]
+    private ?int $commandeQuantity = null;
+
+    /** Coût de commande estimé par le coefficient de la reprise d'historique (lot P3) */
+    #[ORM\Column(name: 'commande_cost_estimated', options: ['default' => false])]
+    private bool $commandeCostEstimated = false;
+
     #[ORM\Column(nullable: true)]
     private ?int $freezeQuantity = null;
 
@@ -632,6 +640,30 @@ class Product implements TranslatableInterface, DemoContentInterface
     public function setCommandeAttachedAt(?\DateTimeImmutable $at): static
     {
         $this->commandeAttachedAt = $at;
+
+        return $this;
+    }
+
+    public function getCommandeQuantity(): ?int
+    {
+        return $this->commandeQuantity;
+    }
+
+    public function setCommandeQuantity(?int $quantity): static
+    {
+        $this->commandeQuantity = $quantity;
+
+        return $this;
+    }
+
+    public function isCommandeCostEstimated(): bool
+    {
+        return $this->commandeCostEstimated;
+    }
+
+    public function setCommandeCostEstimated(bool $estimated): static
+    {
+        $this->commandeCostEstimated = $estimated;
 
         return $this;
     }

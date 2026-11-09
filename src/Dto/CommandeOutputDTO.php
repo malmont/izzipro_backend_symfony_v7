@@ -17,6 +17,7 @@ class CommandeOutputDTO
     public ?string $photo;
     public int $collectionId;
     public ?FournisseurOutputDTO $fournisseur;
+    public string $kind; // standard | reprise (lot P3, 10/11/2026)
 
     public function __construct(Commande $commande, string $host, string $currency = \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT)
     {
@@ -27,6 +28,7 @@ class CommandeOutputDTO
         $this->budget = (int) $commande->getBudget();
         $this->date = $commande->getDate()->format('Y-m-d H:i:s');
         $this->name = $commande->getName();
+        $this->kind = $commande->getKind();
         $photoCommande = $commande->getCommandepictures();
         $this->photo = $photoCommande ? $host . '/assets/images/' . $photoCommande->getImageUrl() : null;
 

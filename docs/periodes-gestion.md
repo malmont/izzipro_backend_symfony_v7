@@ -121,16 +121,50 @@ n'est touchée. Contrat envoyé à l'application avant le code de chaque lot (`d
 
 ## 4. Reprise d'historique (site qui arrive après coup)
 
-- `POST /api/gestion/reprise/simulation { months: 12 }` → périodes qui seraient créées, ventes par période, articles vendus avec
-  ou sans coût connu, investissement estimé ; rien n'est écrit.
-- `POST /api/gestion/reprise/appliquer { months, costs: [{ productId, purchasePrice }] }` → périodes manquantes (fermées par
-  la date), **une commande de reprise par période** (« Reprise d'historique — Été 2025 », fournisseur « Reprise d'historique »,
-  `kind = 'reprise'` sur la commande) avec les produits vendus pendant la période rattachés au coût fourni ; sans coût fourni :
-  coût inconnu. Journal `content_audit_log`. Une seule reprise active par site.
-- `POST /api/gestion/reprise/annuler` → commandes de reprise supprimées (produits détachés), périodes créées sans autre contenu
-  supprimées.
-- Déjà en place depuis P1 : `PeriodCalendar::ensurePeriods($from)` crée aussi les périodes manquantes **avant** la première
-  période existante quand `$from` lui est antérieur (24 mois au plus) ; le semis demo et la reprise s'appuient dessus.
+Contrat P3 validé par l'application le 10/11/2026 (cinq corrections intégrées), **livré le 10/11/2026**. Un site qui arrive avec
+des ventes mais sans commandes fournisseurs donne un coût aux articles déjà vendus, pour que les résultats des périodes passées
+(§ 3) aient un coût des articles vendus. Routes `ROLE_ADMIN`, devise du site, cents (`Controller/GestionController/RepriseController`,
+`UseCase/GestionUseCase/RepriseHistoriqueUseCase`, `Services/GestionService/RepriseHistoriqueService`).
+
+- **Créneau** : périodes **fermées**, du début de la période contenant (aujourd'hui − `months` mois) au début de la période
+  courante ; `months` 1..24 (profondeur du calendrier), défaut 12.
+- **Articles vendus** : lignes d'articles des commandes clients du créneau (mêmes règles que le résultat : ventes et retours,
+  statuts incomplète / annulée et cartes-cadeaux exclus, locations et abonnements exclus), quantité nette > 0, classés par
+  chiffre d'affaires hors taxes décroissant ; `firstPeriodKey` = période de la première vente.
+- **Coût par article, dans l'ordre** : `costs` du corps, puis `purchase_price` de la fiche (rattaché automatiquement, sans
+  l'envoyer dans `costs`), puis estimation `prix de vente / estimateCoefficient` (marquée estimée, `costSource: "estimated"`,
+  `product.commande_cost_estimated`), sinon coût inconnu (hors reprise). Un article déjà rattaché à une commande fournisseur
+  n'est jamais touché ni remplacé : `skipped: [{ productId, code: "ALREADY_ATTACHED" }]` quand il figure dans `costs`.
+  Les articles jamais vendus restent hors reprise (« À classer », lot à cadrer plus tard).
+- `POST /api/gestion/reprise/simulation { months?, estimateCoefficient?, page?, limit? }` → rien n'est écrit :
+  `{ from, to, months, estimateCoefficient, periods: [{ periodKey, name, start, end, exists, status }], sales: { revenue, orders,
+  items, unknownCostItems }, products: [{ productId, name, code, quantitySold, revenue, firstSoldAt, firstPeriodKey, costKnown,
+  costSource: "commande" | "purchasePrice" | "estimated" | null, unitCost }], productsTotal, page, limit (défaut 100, plafond 200),
+  investment: { known, estimated } }` ; les totaux portent sur tout le créneau, `products` est paginé.
+- `POST /api/gestion/reprise/appliquer { months?, estimateCoefficient?, costs?: [{ productId, purchasePrice }] }` → 201 état
+  (forme du `GET`) : périodes manquantes du créneau créées (fermées par la date) ; une **commande de reprise** par période de
+  première vente (`commande.kind = "reprise"`, exposé dans les lectures de commandes ; nom « Reprise d'historique — <période> »,
+  fournisseur « Reprise d'historique » créé s'il manque, type Autre, date = début de la période, budget = Σ coût × quantité,
+  figée) ; article rattaché avec sa **quantité vendue sur la ligne** (`product.commande_quantity`, lue par les calculs d'achat
+  et l'export à la place du stock quand elle est posée), coût, rattachement horodaté au début de la période (donc compté par
+  toutes les périodes suivantes) ; résultats figés (`period_result`) des périodes du créneau effacés, recalculés à la lecture
+  suivante ; `gestion_reprise` (une seule reprise active par site : 409 `REPRISE_ACTIVE`) ; journal `content_audit_log`
+  (`gestion-reprise`, `apply`). 422 `VALIDATION_FAILED` (`months` `OUT_OF_RANGE`, `estimateCoefficient` `MUST_BE_POSITIVE`,
+  `costs[i].productId` `INVALID_ID` / `PRODUCT_NOT_FOUND`, `costs[i].purchasePrice` `MUST_BE_INTEGER_CENTS`) : rien n'est écrit.
+- **Aucun effet sur la vente** (priorité absolue du propriétaire, testé) : appliquer et annuler ne modifient jamais le prix de
+  vente, le prix d'achat de la fiche, le stock (`quantity`), les variantes ni la visibilité d'un produit.
+- `POST /api/gestion/reprise/annuler` → 200 `{ cancelled, commandesRemoved, productsDetached, periodsRemoved }` : commandes de
+  reprise supprimées (produits détachés : commande, coût, quantité de ligne, horodatage et marque estimée effacés ; statistiques
+  figées de la commande effacées), périodes créées par la reprise restées sans commande, sans note et sans budget supprimées,
+  résultats figés du créneau effacés ; 404 `REPRISE_NOT_FOUND`. N'efface que ce que la reprise a posé.
+- `GET /api/gestion/reprise` → `{ active, appliedAt, months, from, to, estimateCoefficient, periods: [{ id, periodKey, name,
+  created }], commandes: [{ id, periodKey, periodName, productCount, estimatedCount, investment }], skipped }` ; `active: false`
+  et le reste `null` sans reprise.
+- Résultat de période (§ 3) : `cogs.estimatedItems` et `cogs.estimatedAmount` (part estimée, déjà comprise dans `cogs.amount`)
+  pour afficher « dont X estimé ».
+- Schéma : migration `Version20261130100000`, script `scripts/migrate_all_v2_gestion_reprise.sh` (`commande.kind`,
+  `product.commande_quantity`, `product.commande_cost_estimated`, table `gestion_reprise`). Test :
+  `tests/Functional/Gestion/RepriseHistoriqueApiTest.php`.
 
 ## 5. Routes (ROLE_ADMIN, additives)
 
@@ -142,7 +176,7 @@ n'est touchée. Contrat envoyé à l'application avant le code de chaque lot (`d
 | `POST /api/dashboard/collection/{id}/reopen` | réouverture manuelle |
 | `GET /api/dashboard/collections-combined?kind=` | combiné des manuelles (défaut) ou des périodes |
 | `GET`/`PUT /api/site/features` | réglage `gestion.periods` |
-| `POST /api/gestion/reprise/simulation` / `appliquer` / `annuler` | reprise d'historique |
+| `POST /api/gestion/reprise/simulation` / `appliquer` / `annuler`, `GET /api/gestion/reprise` | reprise d'historique (§ 4, lot P3) |
 
 Les réponses des collections gagnent `kind`, `periodKey`, `status` (`open` | `closed`), `closedAt`, `reopenedAt`
 (`manual`, null, état réel, null, null pour une collection manuelle).
@@ -153,6 +187,6 @@ Les réponses des collections gagnent `kind`, `periodKey`, `status` (`open` | `c
 |---|---|
 | **P1** | colonnes et réglage, calendrier, création à la lecture, noms, état par date, gardes d'écriture (409 `PERIOD_CLOSED`), figé à la première lecture, réouverture, `GET /api/periodes*`, combiné par `kind`, tableau de bord de période par date, semis demo avec périodes ; **livré le 10/11/2026** (ligne « Gestion : périodes de calendrier, lot P1 » de `docs/architecture.md`). Même lot : `tauxMarge` = marge / coût total et `tauxMarque` = marge / valeur de vente (définitions usuelles, inversées avant ; lignes figées remises d'équerre par la migration, anomalie signalée par l'application) |
 | **P2** | résultat de période (§ 3) : ventes par source et par nature, coût des articles vendus avec coût inconnu, frais, investissement ; **livré le 10/11/2026** (`Version20261129100000`, `scripts/migrate_all_v2_gestion_periode_resultat.sh`, `PeriodResultCalculator`, `GetPeriodResultUseCase`, test `PeriodResultApiTest`) |
-| **P3** | reprise d'historique (§ 4) |
+| **P3** | reprise d'historique (§ 4) ; **livré le 10/11/2026** |
 
 Chaque lot : contrat envoyé à l'application avant le code, tests fonctionnels, suite complète, commit poussé.

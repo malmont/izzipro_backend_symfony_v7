@@ -20,7 +20,8 @@ use App\Services\TenantEntityManagerProvider;
  * - `otherRevenue` : lignes de location (réservation liée) et commandes d'abonnement, hors résultat.
  * - `cogs` : Σ quantité × coût unitaire des lignes au coût connu ; retours déduits au même coût ; coût unitaire = coût de la
  *   commande fournisseur du produit × taux (G6) si le rattachement est antérieur à la coupure (`$costCutoff` : échéance ou
- *   clôture d'une période fermée), sinon `purchase_price`, sinon inconnu (`unknownCostItems`, jamais le prix de vente).
+ *   clôture d'une période fermée), sinon `purchase_price`, sinon inconnu (`unknownCostItems`, jamais le prix de vente) ;
+ *   `estimatedItems` / `estimatedAmount` = part au coût estimé par la reprise d'historique (lot P3), comprise dans `amount`.
  * - `result` : `gross` = (revenue − unknownCostRevenue) − cogs ; `net` = gross − expenses.total ; `tauxMarge` = gross / cogs ;
  *   `tauxMarque` = gross / (revenue − unknownCostRevenue) ; `netRate` = net / (revenue − unknownCostRevenue).
  * - `expenses` : frais de port des commandes fournisseurs et notes de frais datés dans la période ; `other` extensible (publicité…).
@@ -58,7 +59,8 @@ class PeriodResultCalculator
             . " ABS(oi.total_price) * ($factor) AS net,"
             . " (CASE WHEN o.order_type_id = 2 THEN -ABS(oi.total_price) ELSE oi.total_price END) * ($factor) AS signed,"
             . ' (b.id IS NOT NULL) AS rental, (o.subscription_id IS NOT NULL) AS sub, (b.id IS NULL AND o.subscription_id IS NULL) AS article,'
-            . " ($cost) AS cost"
+            . " ($cost) AS cost,"
+            . " (CASE WHEN p.commande_cost_cents IS NOT NULL AND c.id IS NOT NULL" . $attachedBeforeCutoff . " THEN p.commande_cost_estimated ELSE false END) AS estimated"
             . ' FROM order_items oi JOIN "order" o ON o.id = oi.order_associated_id'
             . ' LEFT JOIN booking b ON b.order_item_id = oi.id'
             . ' LEFT JOIN product_variant pv ON pv.id = oi.product_variant_id'
@@ -76,6 +78,8 @@ class PeriodResultCalculator
             . ' COALESCE(SUM(qty) FILTER (WHERE article AND cost IS NULL AND t = 1), 0) AS unknown_items,'
             . ' COALESCE(SUM((CASE WHEN t = 2 THEN -qty ELSE qty END) * cost) FILTER (WHERE article AND cost IS NOT NULL), 0) AS cogs,'
             . ' COALESCE(SUM(qty) FILTER (WHERE article AND cost IS NOT NULL AND t = 1), 0) AS cogs_items,'
+            . ' COALESCE(SUM(qty) FILTER (WHERE article AND estimated AND t = 1), 0) AS estimated_items,'
+            . ' COALESCE(SUM((CASE WHEN t = 2 THEN -qty ELSE qty END) * cost) FILTER (WHERE article AND estimated), 0) AS estimated_amount,'
             . ' COALESCE(SUM(signed) FILTER (WHERE rental), 0) AS rentals,'
             . ' COALESCE(SUM(signed) FILTER (WHERE sub AND NOT rental), 0) AS subscriptions,'
             . ' COALESCE(SUM(signed) FILTER (WHERE article AND src = 1), 0) AS src_1,'
@@ -122,7 +126,8 @@ class PeriodResultCalculator
                 'bySource' => ['ecommerce' => $c($row['src_1'] ?? 0), 'pos' => $c($row['src_2'] ?? 0), 'mobile_app' => $c($row['src_3'] ?? 0)],
             ],
             'otherRevenue' => ['rentals' => $rentals, 'subscriptions' => $subscriptions, 'total' => $rentals + $subscriptions],
-            'cogs' => ['amount' => $cogs, 'items' => (int) ($row['cogs_items'] ?? 0), 'unknownCostItems' => (int) ($row['unknown_items'] ?? 0)],
+            'cogs' => ['amount' => $cogs, 'items' => (int) ($row['cogs_items'] ?? 0), 'unknownCostItems' => (int) ($row['unknown_items'] ?? 0),
+                'estimatedItems' => (int) ($row['estimated_items'] ?? 0), 'estimatedAmount' => $c($row['estimated_amount'] ?? 0)], // part estimée (reprise d'historique, lot P3), déjà comprise dans amount
             'expenses' => ['shipping' => $shipping, 'notes' => $notes, 'other' => [], 'total' => $expensesTotal],
             'result' => ['gross' => $gross, 'net' => $net, 'tauxMarge' => $rate($gross, $cogs), 'tauxMarque' => $rate($gross, $effective), 'netRate' => $rate($net, $effective)],
             'investment' => ['purchases' => $investmentPurchases, 'shipping' => $shipping, 'total' => $investmentPurchases + $shipping],

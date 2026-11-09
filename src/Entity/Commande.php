@@ -41,6 +41,13 @@ class Commande
     #[ORM\ManyToOne(inversedBy: 'commandes')]
     private ?Fournisseur $fournisseur = null;
 
+    public const KIND_STANDARD = 'standard';
+    public const KIND_REPRISE = 'reprise';
+
+    /** `standard`, ou `reprise` pour une commande posée par la reprise d'historique (lot P3, 10/11/2026) */
+    #[ORM\Column(length: 16, options: ['default' => 'standard'])]
+    private string $kind = self::KIND_STANDARD;
+
     #[ORM\OneToOne(mappedBy: 'commande', cascade: ['persist', 'remove'])]
     private ?FraisDePort $fraisDePort = null;
 
@@ -159,6 +166,23 @@ class Commande
     public function __toString(): string
     {
         return (string) $this->name;
+    }
+
+    public function getKind(): string
+    {
+        return $this->kind;
+    }
+
+    public function setKind(string $kind): static
+    {
+        $this->kind = $kind;
+
+        return $this;
+    }
+
+    public function isReprise(): bool
+    {
+        return $this->kind === self::KIND_REPRISE;
     }
 
     public function getFournisseur(): ?Fournisseur
