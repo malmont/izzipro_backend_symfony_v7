@@ -45,6 +45,8 @@ class FournisseurCrudController extends BaseTenantCrudController
             TextField::new('ville', 'Ville'),
             TextField::new('pays', 'Pays'),
             TextField::new('tel', 'Téléphone'),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField::new('currency', 'Devise d\'achat')->setChoices(array_combine(\App\Services\BoutiqueSettingsService\SiteCurrencyService::SUPPORTED, \App\Services\BoutiqueSettingsService\SiteCurrencyService::SUPPORTED))->setRequired(false)
+                ->setHelp('Devise des commandes passées à ce fournisseur (budget, coût d\'achat des produits rattachés, frais de port). Vide : devise du site. Une commande en devise étrangère porte un taux vers la devise du site (lot G6, 10/11/2026).'),
         ];
     }
 }

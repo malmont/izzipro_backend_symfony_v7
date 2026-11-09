@@ -15,7 +15,7 @@ class CommandeService
     // MODIFICATION 1 : Le service ne dépend plus que du provider
     private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(TenantEntityManagerProvider $emProvider)
+    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null) // devise du site (lot G6)
     {
         $this->emProvider = $emProvider;
     }
@@ -41,6 +41,15 @@ class CommandeService
         $commande->setName($data['name']);
         $commande->setCollections($collection);
         $commande->setFournisseur($fournisseur);
+        // devise d'achat figée d'après le fournisseur (lot G6, 10/11/2026) ; taux obligatoire si elle diffère de celle du site
+        $siteCurrency = strtoupper($this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT);
+        $purchaseCurrency = $fournisseur->getCurrency();
+        if ($purchaseCurrency !== null && $purchaseCurrency !== $siteCurrency) {
+            if (!isset($data['exchangeRate']) || (float) $data['exchangeRate'] <= 0) {
+                throw new \App\Services\GestionService\GestionValidationException(['exchangeRate' => 'EXCHANGE_RATE_REQUIRED'], sprintf('Fournisseur en %s : taux vers %s requis', $purchaseCurrency, $siteCurrency));
+            }
+            $commande->setCurrency($purchaseCurrency)->setExchangeRate((float) $data['exchangeRate']);
+        }
         
         // On passe l'EM du tenant à la méthode privée
         $randomPicture = $this->getRandomCollectionPicture($em);
@@ -80,5 +89,37 @@ class CommandeService
 
         return $em->createNativeQuery($sql, $rsm)
             ->getOneOrNullResult();
+    }
+
+    /**
+     * Modification d'une commande ouverte (PATCH /api/commandes/{id}, lot G6, 10/11/2026) : budget, nom, date, taux de change.
+     *
+     * @param array<string, mixed> $data champs validés présents seulement
+     */
+    public function updateCommande(Commande $commande, array $data): Commande
+    {
+        if ($commande->getIsClosed()) {
+            throw new \App\Services\GestionService\GestionConflictException('COMMANDE_CLOSED', 'La commande est figée.');
+        }
+        if (array_key_exists('budget', $data)) {
+            $commande->setBudget((int) $data['budget']);
+        }
+        if (array_key_exists('name', $data)) {
+            $commande->setName((string) $data['name']);
+        }
+        if (array_key_exists('date', $data)) {
+            $commande->setDate(new \DateTime((string) $data['date']));
+        }
+        if (array_key_exists('exchangeRate', $data)) {
+            if ($commande->getCurrency() === null) {
+                throw new \App\Services\GestionService\GestionValidationException(['exchangeRate' => 'NOT_APPLICABLE'], 'Commande dans la devise du site : aucun taux');
+            }
+            $commande->setExchangeRate((float) $data['exchangeRate']);
+        }
+        $em = $this->emProvider->getEntityManager();
+        $em->persist($commande);
+        $em->flush();
+
+        return $commande;
     }
 }

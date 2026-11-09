@@ -8,6 +8,8 @@ class DashboardCommandeDTO
     public array $budgetGeneral;
     public int $totalItemCost; // cents (lot G1)
     public int $purchaseCost = 0; // = totalItemCost, nom explicite (lot G2)
+    /** Montants d'origine quand la commande est dans une devise d'achat (lot G6) : {currency, exchangeRate, generalBudget, purchaseCost, shippingCost} ; null sinon */
+    public ?array $purchase = null;
     public int $totalFraisDePort;
     public array $statistics;
     public array $valeurStock;
@@ -47,6 +49,7 @@ class DashboardCommandeDTO
             $data['Transporteur']
         );
         $dto->purchaseCost = (int) ($data['purchaseCost'] ?? $data['totalItemCost']);
+        $dto->purchase = $data['purchase'] ?? null;
 
         return $dto;
     }
@@ -91,6 +94,7 @@ class DashboardCommandeDTO
             'averageMultiplier' => $this->averageMultiplier,
             'BudgetGeneral' => $this->budgetGeneral,
             'purchaseCost' => $this->purchaseCost,
+            'purchase' => $this->purchase,
             'totalItemCost' => $this->totalItemCost,
             'totalFraisDePort' => $this->totalFraisDePort,
             'Statistics' => $this->statistics,

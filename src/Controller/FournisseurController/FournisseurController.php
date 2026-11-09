@@ -26,7 +26,8 @@ class FournisseurController extends AbstractController
         GetAllFournisseursUseCase $getAllFournisseursUseCase,
         CreateFournisseurUseCase $createFournisseurUseCase,
         DeleteFournisseurUseCase $deleteFournisseurUseCase,
-        TenantCacheService $cache
+        TenantCacheService $cache,
+        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null // devise du site (lot G6, 10/11/2026)
     ) {
         $this->getAllFournisseursUseCase = $getAllFournisseursUseCase;
         $this->createFournisseurUseCase = $createFournisseurUseCase;
@@ -44,7 +45,7 @@ class FournisseurController extends AbstractController
             $cacheKey,
             function () use ($host, $query) {
                 $result = $this->getAllFournisseursUseCase->search($query);
-                return ['items' => array_map(fn ($fournisseur) => new FournisseurOutputDTO($fournisseur, $host), $result['items']), 'total' => $result['total']];
+                return ['items' => array_map(fn ($fournisseur) => new FournisseurOutputDTO($fournisseur, $host, $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT), $result['items']), 'total' => $result['total']];
             },
             3600,
             CacheTags::listTags(CacheTags::FOURNISSEURS)
@@ -60,7 +61,7 @@ class FournisseurController extends AbstractController
         $fournisseur = $this->createFournisseurUseCase->execute($fournisseurInputDTO);
         // Invalidation gérée ailleurs si nécessaire
         // 201 avec l'objet créé (lot G4, 09/11/2026 ; avant : {"success", "fournisseur_id"})
-        return $this->json(new FournisseurOutputDTO($fournisseur, $request->getSchemeAndHttpHost()), JsonResponse::HTTP_CREATED);
+        return $this->json(new FournisseurOutputDTO($fournisseur, $request->getSchemeAndHttpHost(), $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT), JsonResponse::HTTP_CREATED);
     }
 
     #[Route('/api/fournisseurs/{id}', name: 'delete_fournisseur', methods: ['DELETE'])]

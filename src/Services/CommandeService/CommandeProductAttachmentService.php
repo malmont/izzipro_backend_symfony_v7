@@ -17,7 +17,7 @@ class CommandeProductAttachmentService
 {
     public const MAX_LIMIT = 100;
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly ContentAuditRecorder $audit)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly ContentAuditRecorder $audit, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null) // devise du site (lot G6 de la gestion, 10/11/2026)
     {
     }
 
@@ -101,6 +101,10 @@ class CommandeProductAttachmentService
                 } else {
                     $quantity = (int) $line['quantity'];
                 }
+            }
+            // commande dans une devise d'achat (lot G6 de la gestion, 10/11/2026) : le coût par défaut (prix d'achat ou prix de vente du produit) est en devise du site, donc refusé
+            if ($cost === null && $commande->getCurrency() !== null && $commande->getCurrency() !== strtoupper($this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT)) {
+                $errors[] = ['path' => "products[$i].purchasePrice", 'message' => sprintf('requis : commande en %s (coût en devise d\'achat)', $commande->getCurrency()), 'code' => 'PURCHASE_PRICE_REQUIRED'];
             }
             $plan[] = ['productId' => $productId, 'cost' => $cost, 'coefficient' => $coefficient, 'quantity' => $quantity, 'path' => "products[$i]"];
         }

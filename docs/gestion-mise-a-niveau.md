@@ -135,7 +135,7 @@ Toute correction de calcul doit commencer par un test qui fixe les chiffres atte
 
 ## 3. Recommandations : lots proposés
 
-**État (10/11/2026)** : G0, G1, G2 poussés (70150e36) ; G3 (334f41e9) ; G4 (bd6d1c2d) ; jeu de données demo (890598c4) ; G5 livré (commit séparé : filtres et pagination, export CSV des achats, API Platform réduit à la suppression) ; devise par fournisseur non faite (sur demande). Un commit poussé par lot (demande du propriétaire).
+**État (10/11/2026)** : G0, G1, G2 poussés (70150e36) ; G3 (334f41e9) ; G4 (bd6d1c2d) ; jeu de données demo (890598c4) ; G5 poussé (6e0c2fe7) ; G6 devise d'achat livré (commit séparé) ; reste la fenêtre glissante du jeton de rafraîchissement pour « admin » et « pos » (validée par le propriétaire). Un commit poussé par lot (demande du propriétaire).
 
 Ordre pensé pour ne rien casser côté MAUI pendant la transition : chaque lot est additif, la conversion de données est
 faite une fois par script, et le contrat est annoncé à « new easymakemoney » avant d'être activé.
@@ -205,7 +205,7 @@ faite une fois par script, et le contrat est annoncé à « new easymakemoney »
 
 ### Lot G5 : préparation du clone web et de l'espace partenaire
 
-**Livré le 10/11/2026** (pagination et filtres, export CSV, API Platform réduit) ; la devise par fournisseur reste à la demande.
+**Livré le 10/11/2026** (pagination et filtres, export CSV, API Platform réduit) ; devise d'achat par fournisseur livrée ensuite (lot G6 : voir la ligne « Gestion : devise d'achat » de `docs/architecture.md`).
 
 - Pagination et filtres sur `GET /api/collections` (ouvertes / fermées / supprimées), `GET /api/fournisseurs` (`q`).
 - Export comptable des achats (CSV) sur le modèle de l'export des ventes de la caisse (F14).
@@ -226,8 +226,7 @@ ces routes ; G1 convertit les autres colonnes (budgets, frais de port, notes de 
    mode de transition. Oui / non ?
 2. **Règles de calcul** du § 3 (lot G2) : budget utilisé au prix d'achat, valeur de stock au prix de vente, marge et
    taux. Confirmer ou préciser (par exemple : la valeur de stock doit-elle tenir compte du prix promotionnel ?).
-3. **Devise des achats** : une seule devise (celle du site) pour tout, ou devise par fournisseur avec taux saisi ?
-   Recommandation : devise du site seulement dans G1 ; devise par fournisseur plus tard (G5) si un client le demande.
+3. ~~Devise des achats~~ : tranché le 10/11/2026 (G6) : devise par fournisseur (CAD, EUR, USD) avec taux saisi sur la commande, tableaux de bord et export dans la devise du site.
 4. ~~`GET /api/commandes` API Platform~~ : tranché le 10/11/2026 (G5), seule la suppression reste ; l'application n'appelait pas les autres opérations.
 5. **Suppression d'une commande** : détacher les produits (recommandé) ou interdire si des produits ont été vendus ?
 6. ~~Rattachement~~ : tranché le 09/11/2026, porté par « posflutter backend » (§ 4).

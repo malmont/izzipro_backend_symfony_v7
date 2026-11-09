@@ -68,7 +68,7 @@ class CommandeController extends AbstractController
         }
 
         $input = new \App\Services\GestionService\GestionInput(is_array($data) ? $data : []);
-        $data = ['budget' => $input->cents('budget'), 'name' => $input->text('name'), 'date' => $input->date('date')?->format('Y-m-d H:i:s')];
+        $data = ['budget' => $input->cents('budget'), 'name' => $input->text('name'), 'date' => $input->date('date')?->format('Y-m-d H:i:s'), 'exchangeRate' => $input->decimal('exchangeRate', false)]; // taux vers la devise du site (lot G6)
         $fournisseurId = $input->id('fournisseur');
         $input->check(); // 422 VALIDATION_FAILED (lot G1, 09/11/2026)
         if ($collection->getIsClosed()) {

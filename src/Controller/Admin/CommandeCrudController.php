@@ -38,7 +38,9 @@ class CommandeCrudController extends BaseTenantCrudController
 
         return [
             IdField::new('id')->hideOnForm(),
-            MoneyField::new('budget', 'Budget')->setCurrency($this->currency?->code() ?? 'CAD')->setStoredAsCents(true),
+            MoneyField::new('budget', 'Budget')->setCurrency($this->currency?->code() ?? 'CAD')->setStoredAsCents(true)->setHelp('Dans la devise de la commande (celle du fournisseur si elle est renseignée, sinon celle du site).'),
+            TextField::new('currency', 'Devise d\'achat')->hideOnForm()->setHelp('Figée à la création d\'après le fournisseur ; vide : devise du site.'),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\NumberField::new('exchangeRate', 'Taux vers la devise du site')->setNumDecimals(6)->setRequired(false)->setHelp('1 unité de la devise d\'achat = taux unités de la devise du site (lot G6, 10/11/2026) ; sans objet dans la devise du site.'),
             DateField::new('date', 'Date'),
             TextField::new('name', 'Nom de la Commande'),
             BooleanField::new('isClosed', 'isClosed'),

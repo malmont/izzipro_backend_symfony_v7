@@ -10,6 +10,7 @@ class FournisseurInputDTO
     public ?string $ville;
     public ?string $pays;
     public ?string $tel;
+    public ?string $currency; // devise d'achat (lot G6)
 
     public function __construct(array $data)
     {
@@ -20,5 +21,6 @@ class FournisseurInputDTO
         $this->ville = $data['ville'] ?? null;
         $this->pays = $data['pays'] ?? null;
         $this->tel = $data['tel'] ?? null;
+        $this->currency = $data['currency'] ?? null;
     }
 }

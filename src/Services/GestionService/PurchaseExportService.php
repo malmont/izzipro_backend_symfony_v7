@@ -41,7 +41,7 @@ class PurchaseExportService
 
         $products = $conn->fetchAllAssociative(
             'SELECT col.nom_collection AS collection, c.name AS commande, c.date AS day, f.name AS fournisseur, p.name AS label, COALESCE(p.quantity, 0) AS quantity,' .
-            ' COALESCE(p.commande_cost_cents, p.purchase_price, p.price, 0) AS unit_cost, p.coefficient_multiplier AS coefficient' .
+            ' COALESCE(p.commande_cost_cents, p.purchase_price, p.price, 0) * COALESCE(c.exchange_rate, 1) AS unit_cost, p.coefficient_multiplier AS coefficient, c.currency AS purchase_currency, c.exchange_rate AS rate' .
             ' FROM product p JOIN commande c ON c.id = p.commande_id JOIN collections col ON col.id = c.collections_id LEFT JOIN fournisseur f ON f.id = c.fournisseur_id' .
             ' WHERE c.date >= :from AND c.date < (CAST(:to AS date) + 1)' . $collectionWhere . ' ORDER BY c.date, c.id, p.id',
             $params
@@ -50,18 +50,18 @@ class PurchaseExportService
             $unit = (int) round((float) $r['unit_cost']);
             $qty = (int) $r['quantity'];
             $totals['products'] += $unit * $qty;
-            $rows[] = self::row(self::TYPE_PRODUCT, $r['collection'], $r['commande'], $r['day'], $r['fournisseur'], $r['label'], $qty, $unit, $unit * $qty, $r['coefficient'], null);
+            $rows[] = self::row(self::TYPE_PRODUCT, $r['collection'], $r['commande'], $r['day'], $r['fournisseur'], $r['label'], $qty, $unit, $unit * $qty, $r['coefficient'], null, $r['purchase_currency'], $r['rate']);
         }
         $shipping = $conn->fetchAllAssociative(
-            'SELECT col.nom_collection AS collection, c.name AS commande, c.date AS day, f.name AS fournisseur, s.name AS label, s.price AS amount, t.name AS carrier' .
+            'SELECT col.nom_collection AS collection, c.name AS commande, c.date AS day, f.name AS fournisseur, s.name AS label, s.price * COALESCE(c.exchange_rate, 1) AS amount, t.name AS carrier, c.currency AS purchase_currency, c.exchange_rate AS rate' .
             ' FROM frais_de_port s JOIN commande c ON c.id = s.commande_id JOIN collections col ON col.id = c.collections_id LEFT JOIN fournisseur f ON f.id = c.fournisseur_id LEFT JOIN transporteur t ON t.id = s.transporteur_id' .
             ' WHERE c.date >= :from AND c.date < (CAST(:to AS date) + 1)' . $collectionWhere . ' ORDER BY c.date, c.id',
             $params
         );
         foreach ($shipping as $r) {
-            $amount = (int) $r['amount'];
+            $amount = (int) round((float) $r['amount']);
             $totals['shipping'] += $amount;
-            $rows[] = self::row(self::TYPE_SHIPPING, $r['collection'], $r['commande'], $r['day'], $r['fournisseur'], $r['label'], 1, $amount, $amount, null, $r['carrier']);
+            $rows[] = self::row(self::TYPE_SHIPPING, $r['collection'], $r['commande'], $r['day'], $r['fournisseur'], $r['label'], 1, $amount, $amount, null, $r['carrier'], $r['purchase_currency'], $r['rate']);
         }
         $expenses = $conn->fetchAllAssociative(
             'SELECT col.nom_collection AS collection, n.date AS day, COALESCE(n.description, n.name) AS label, n.montant AS amount, tn.name AS type' .
@@ -83,16 +83,16 @@ class PurchaseExportService
     public function csv(array $export): string
     {
         $cur = $export['currency'];
-        $header = ['Type', 'Collection', 'Commande', 'Date', 'Fournisseur', 'Libellé', 'Quantité', "Coût unitaire ($cur)", "Total ($cur)", 'Coefficient', 'Transporteur / Type de note'];
+        $header = ['Type', 'Collection', 'Commande', 'Date', 'Fournisseur', 'Libellé', 'Quantité', "Coût unitaire ($cur)", "Total ($cur)", 'Coefficient', 'Transporteur / Type de note', 'Devise d\'achat', 'Taux'];
         $lines = [];
         foreach ($export['rows'] as $r) {
-            $lines[] = [$r['type'], $r['collection'], $r['commande'], $r['date'], $r['fournisseur'], $r['label'], $r['quantity'], self::money($r['unitCost']), self::money($r['total']), $r['coefficient'] === null ? '' : str_replace('.', ',', (string) $r['coefficient']), $r['detail']];
+            $lines[] = [$r['type'], $r['collection'], $r['commande'], $r['date'], $r['fournisseur'], $r['label'], $r['quantity'], self::money($r['unitCost']), self::money($r['total']), $r['coefficient'] === null ? '' : str_replace('.', ',', (string) $r['coefficient']), $r['detail'], $r['purchaseCurrency'] ?? '', isset($r['exchangeRate']) ? str_replace('.', ',', (string) $r['exchangeRate']) : ''];
         }
         $t = $export['totals'];
-        $lines[] = ['Total produits', '', '', '', '', '', '', '', self::money($t['products']), '', ''];
-        $lines[] = ['Total frais de port', '', '', '', '', '', '', '', self::money($t['shipping']), '', ''];
-        $lines[] = ['Total notes de frais', '', '', '', '', '', '', '', self::money($t['expenses']), '', ''];
-        $lines[] = ['Total achats', '', '', '', '', '', '', '', self::money($t['total']), '', ''];
+        $lines[] = ['Total produits', '', '', '', '', '', '', '', self::money($t['products']), '', '', '', ''];
+        $lines[] = ['Total frais de port', '', '', '', '', '', '', '', self::money($t['shipping']), '', '', '', ''];
+        $lines[] = ['Total notes de frais', '', '', '', '', '', '', '', self::money($t['expenses']), '', '', '', ''];
+        $lines[] = ['Total achats', '', '', '', '', '', '', '', self::money($t['total']), '', '', '', ''];
 
         return AccountingCsv::write($header, $lines);
     }
@@ -121,11 +121,12 @@ class PurchaseExportService
     }
 
     /** @return array<string, mixed> */
-    private static function row(string $type, ?string $collection, ?string $commande, mixed $day, ?string $fournisseur, ?string $label, int $quantity, int $unitCost, int $total, mixed $coefficient, ?string $detail): array
+    private static function row(string $type, ?string $collection, ?string $commande, mixed $day, ?string $fournisseur, ?string $label, int $quantity, int $unitCost, int $total, mixed $coefficient, ?string $detail, ?string $purchaseCurrency = null, mixed $rate = null): array
     {
         return [
             'type' => $type, 'collection' => $collection, 'commande' => $commande, 'date' => substr((string) $day, 0, 10), 'fournisseur' => $fournisseur, 'label' => $label,
             'quantity' => $quantity, 'unitCost' => $unitCost, 'total' => $total, 'coefficient' => $coefficient === null ? null : round((float) $coefficient, 2), 'detail' => $detail,
+            'purchaseCurrency' => $purchaseCurrency, 'exchangeRate' => $rate === null ? null : (float) $rate, // devise d'achat et taux de la commande (lot G6), montants déjà convertis
         ];
     }
 

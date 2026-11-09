@@ -121,6 +121,23 @@ class Fournisseur
         return $this;
     }
 
+    /** Devise d'achat du fournisseur (ISO 4217, lot G6, 10/11/2026) ; null = devise du site */
+    #[ORM\Column(length: 3, nullable: true)]
+    private ?string $currency = null;
+
+    public function getCurrency(): ?string
+    {
+        return $this->currency;
+    }
+
+    public function setCurrency(?string $currency): static
+    {
+        $currency = strtoupper(trim((string) $currency));
+        $this->currency = $currency === '' ? null : $currency;
+
+        return $this;
+    }
+
     /**
      * @return Collection<int, Commande>
      */

@@ -21,9 +21,13 @@ class CommandeDashboardService
     {
         $totals = $this->calculator->commandeTotals((int) $commande->getId());
         $usedBudget = $totals['purchaseCost'] + $totals['shippingCost'];
+        // devise d'achat (lot G6, 10/11/2026) : budget ramené dans la devise du site ; montants d'origine dans `purchase`
+        $rate = $commande->rate();
+        $generalBudget = (int) round((int) $commande->getBudget() * $rate);
         $transporteur = $commande->getFraisDePort()?->getTransporteur();
 
-        return DashboardCommandeDTO::fromArray(PurchaseMetricsCalculator::blocks($totals, (int) $commande->getBudget(), $usedBudget) + [
+        return DashboardCommandeDTO::fromArray(PurchaseMetricsCalculator::blocks($totals, $generalBudget, $usedBudget) + [
+            'purchase' => $commande->getCurrency() === null ? null : ['currency' => $commande->getCurrency(), 'exchangeRate' => $rate, 'generalBudget' => (int) $commande->getBudget(), 'purchaseCost' => (int) round($totals['purchaseCost'] / $rate), 'shippingCost' => (int) round($totals['shippingCost'] / $rate)],
             'totalItemCost' => $totals['purchaseCost'],
             'totalFraisDePort' => $totals['shippingCost'],
             'Statistics' => ['itemCount' => $totals['itemCount'], 'modelCount' => $totals['modelCount']],

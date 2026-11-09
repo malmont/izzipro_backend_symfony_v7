@@ -208,6 +208,45 @@ class Commande
         return $this;
     }
 
+    /** Devise d'achat de la commande, figée à sa création d'après le fournisseur (ISO 4217, lot G6, 10/11/2026) ; null = devise du site */
+    #[ORM\Column(length: 3, nullable: true)]
+    private ?string $currency = null;
+
+    /** Taux de change vers la devise du site (1 unité de la devise d'achat = taux unités du site), null = 1 ; colonne décimale, lue en texte par DBAL */
+    #[ORM\Column(name: 'exchange_rate', type: 'decimal', precision: 12, scale: 6, nullable: true)]
+    private ?string $exchangeRate = null;
+
+    public function getCurrency(): ?string
+    {
+        return $this->currency;
+    }
+
+    public function setCurrency(?string $currency): static
+    {
+        $currency = strtoupper(trim((string) $currency));
+        $this->currency = $currency === '' ? null : $currency;
+
+        return $this;
+    }
+
+    public function getExchangeRate(): ?float
+    {
+        return $this->exchangeRate === null ? null : (float) $this->exchangeRate;
+    }
+
+    public function setExchangeRate(?float $rate): static
+    {
+        $this->exchangeRate = $rate === null ? null : number_format($rate, 6, '.', '');
+
+        return $this;
+    }
+
+    /** Taux appliqué aux montants de la commande pour les ramener dans la devise du site (1 sans devise d'achat) */
+    public function rate(): float
+    {
+        return $this->currency === null ? 1.0 : ($this->getExchangeRate() ?? 1.0);
+    }
+
     /**
      * @return Collection<int, CommandeStatistiques>
      */

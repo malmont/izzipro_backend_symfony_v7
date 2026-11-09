@@ -12,14 +12,15 @@ use App\Services\TenantEntityManagerProvider;
  *
  * Coût d'achat unitaire d'un produit : `commande_cost_cents ?? purchase_price ?? price` (règle du 09/11/2026, décision du
  * propriétaire, même règle que `Product::commandeUnitCost()`).
- *   purchaseCost (= totalItemCost) = Σ coût × quantité
+ *   purchaseCost (= totalItemCost) = Σ coût × quantité, dans la devise du site (coût et frais de port × taux de la commande, lot G6)
  *   stockValue                     = Σ coût × quantité × coefficient (valeur de vente attendue du stock acheté)
  *   usedBudget                     = purchaseCost + frais de port (+ notes de frais pour une collection)
  *   marge                          = stockValue − usedBudget ; tauxMarge = marge / stockValue ; tauxMarque = marge / usedBudget
  */
 class PurchaseMetricsCalculator
 {
-    private const UNIT_COST = 'COALESCE(p.commande_cost_cents, p.purchase_price, p.price, 0)';
+    /** Coût unitaire ramené dans la devise du site : coût de la commande (devise d'achat) × taux (lot G6, 10/11/2026) */
+    private const UNIT_COST = 'COALESCE(p.commande_cost_cents, p.purchase_price, p.price, 0) * COALESCE(c.exchange_rate, 1)';
 
     public function __construct(private readonly TenantEntityManagerProvider $emProvider)
     {
@@ -29,8 +30,8 @@ class PurchaseMetricsCalculator
     public function commandeTotals(int $commandeId): array
     {
         $row = $this->connection()->fetchAssociative(
-            'SELECT ' . self::sums() . ', (SELECT COALESCE(SUM(f.price), 0) FROM frais_de_port f WHERE f.commande_id = :id) AS shipping_cost' .
-            ' FROM product p WHERE p.commande_id = :id',
+            'SELECT ' . self::sums() . ', (SELECT COALESCE(SUM(f.price * COALESCE(c2.exchange_rate, 1)), 0) FROM frais_de_port f JOIN commande c2 ON c2.id = f.commande_id WHERE f.commande_id = :id) AS shipping_cost' .
+            ' FROM product p JOIN commande c ON c.id = p.commande_id WHERE p.commande_id = :id',
             ['id' => $commandeId]
         ) ?: [];
 
@@ -81,7 +82,7 @@ class PurchaseMetricsCalculator
             $params
         ) ?: [];
         $costs = $connection->fetchAssociative(
-            'SELECT (SELECT COALESCE(SUM(f.price), 0) FROM frais_de_port f JOIN commande c ON c.id = f.commande_id WHERE ' . $where . ') AS shipping_cost,' .
+            'SELECT (SELECT COALESCE(SUM(f.price * COALESCE(c.exchange_rate, 1)), 0) FROM frais_de_port f JOIN commande c ON c.id = f.commande_id WHERE ' . $where . ') AS shipping_cost,' .
             ' (SELECT COUNT(*) FROM commande c WHERE ' . $where . ') AS order_count,' .
             ' (SELECT COALESCE(SUM(n.montant), 0) FROM note_de_frais n WHERE n.collection_id ' . ($params === [] ? 'IN (SELECT id FROM collections WHERE del = false)' : '= :id') . ') AS expense_cost',
             $params

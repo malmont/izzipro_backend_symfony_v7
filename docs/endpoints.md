@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (317)
+## Boutique et commun (318)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -324,6 +324,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/commandes/{id}/products/{productId}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\CommandeController\CommandeProductAttachmentController::detach` |
 | GET | `/api/commandes/{id}/products` | ROLE_ADMIN | `Controller\ProductController\ProductController::getProductsByCommande` |
 | POST | `/api/commandes/{id}/products` | ROLE_ADMIN | `Controller\ProductController\ProductController::createProductByCommande` |
+| PATCH | `/api/commandes/{id}` | ROLE_ADMIN | `Controller\CommandeController\CommandeUpdateController::patch` |
 | POST | `/api/createcollections` | ROLE_ADMIN | `Controller\CollectionsController\CollectionController::createCollection` |
 | GET | `/api/currencies` | PUBLIC_ACCESS | `App\Controller\CurrencyController\CurrencyController` |
 | DELETE | `/api/customization-combinations/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::deleteCombination` |

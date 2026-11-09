@@ -33,6 +33,7 @@ class FournisseurService
         $fournisseur->setVille($inputDTO->ville);
         $fournisseur->setPays($inputDTO->pays);
         $fournisseur->setTel($inputDTO->tel);
+        $fournisseur->setCurrency(self::currency($inputDTO->currency)); // devise d'achat (lot G6, 10/11/2026)
         
         $em->persist($fournisseur);
         $em->flush();
@@ -65,5 +66,19 @@ class FournisseurService
         $em->remove($fournisseur);
         
         $em->flush();
+    }
+
+    /** Devise d'achat validée (CAD, EUR, USD : mêmes devises que le site) ; vide → null (devise du site) ; 422 INVALID_CURRENCY sinon */
+    public static function currency(mixed $value): ?string
+    {
+        $code = strtoupper(trim((string) $value));
+        if ($code === '') {
+            return null;
+        }
+        if (!\App\Services\BoutiqueSettingsService\SiteCurrencyService::isSupported($code)) {
+            throw new \App\Services\GestionService\GestionValidationException(['currency' => 'INVALID_CURRENCY'], 'Devise inconnue : ' . $code . ' (devises possibles : ' . implode(', ', \App\Services\BoutiqueSettingsService\SiteCurrencyService::SUPPORTED) . ')');
+        }
+
+        return $code;
     }
 }

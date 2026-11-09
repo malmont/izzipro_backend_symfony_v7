@@ -95,11 +95,11 @@ class ListsAndExportApiTest extends WebTestCase
         $csv = (string) $response->getContent();
         $this->assertStringStartsWith("\xEF\xBB\xBF", $csv, 'BOM UTF-8');
         $lines = array_values(array_filter(explode("\r\n", substr($csv, 3))));
-        $this->assertSame('Type;Collection;Commande;Date;Fournisseur;Libellé;Quantité;"Coût unitaire (CAD)";"Total (CAD)";Coefficient;"Transporteur / Type de note"', $lines[0]);
-        $this->assertSame("Produit;\"Export $tag\";\"Commande $tag\";2026-04-15;\"Fournisseur $tag\";\"Produit $tag\";3;20,00;60,00;2,5;", $lines[1], 'coût d\'achat × quantité, virgule décimale');
-        $this->assertSame("\"Frais de port\";\"Export $tag\";\"Commande $tag\";2026-04-15;\"Fournisseur $tag\";\"Livraison $tag\";1;25,00;25,00;;\"Transporteur $tag\"", $lines[2]);
-        $this->assertSame("\"Note de frais\";\"Export $tag\";;2026-04-20;;\"Repas $tag\";1;12,50;12,50;;\"Repas $tag\"", $lines[3]);
-        $this->assertSame('"Total achats";;;;;;;;97,50;;', end($lines));
+        $this->assertSame('Type;Collection;Commande;Date;Fournisseur;Libellé;Quantité;"Coût unitaire (CAD)";"Total (CAD)";Coefficient;"Transporteur / Type de note";"Devise d\'achat";Taux', $lines[0]);
+        $this->assertSame("Produit;\"Export $tag\";\"Commande $tag\";2026-04-15;\"Fournisseur $tag\";\"Produit $tag\";3;20,00;60,00;2,5;;;", $lines[1], 'coût d\'achat × quantité, virgule décimale ; devise d\'achat et taux vides dans la devise du site (lot G6)');
+        $this->assertSame("\"Frais de port\";\"Export $tag\";\"Commande $tag\";2026-04-15;\"Fournisseur $tag\";\"Livraison $tag\";1;25,00;25,00;;\"Transporteur $tag\";;", $lines[2]);
+        $this->assertSame("\"Note de frais\";\"Export $tag\";;2026-04-20;;\"Repas $tag\";1;12,50;12,50;;\"Repas $tag\";;", $lines[3]);
+        $this->assertSame('"Total achats";;;;;;;;97,50;;;;', end($lines));
 
         $this->request('GET', '/api/gestion/exports/achats.csv?from=2026-05-01&to=2026-04-01');
         $this->assertSame(422, $this->client->getResponse()->getStatusCode());
