@@ -256,6 +256,9 @@ Décisions de contrat prises pour les lots :
   aucune clé renommée (les clés accentuées de `nombre-commandes` sont gardées).
 - G4 : les champs en trop dans un corps restent ignorés (l'application sérialise ses modèles entiers) ; `quantity` (entier
   ≥ 0) accepté sur `POST /api/commandes/{id}/products`.
+- Autres lecteurs des statistiques (G3) : le front Next n'en lit aucune ; l'application mobile e-commerce non plus ; la **caisse Flutter**
+  lit `chiffre-affaires/pos` et `nombre-commandes/pos` et a adapté son modèle au mois en entier (commit 71a1d87, « posflutter front »,
+  10/11/2026) ; aucune caisse en production.
 - `carrier_count` (`GET /api/carrier/statistics`) est en réalité un **montant en cents** (`SUM(carrier.price)` des commandes clients du mois,
   `OrderRepository::getTotalCarrierByMonth`), malgré son nom : l'application divise par 100 à bon droit ; G3 ajoute `shippingAmount` (même
   valeur) et `currency`, `carrier_count` conservé.
