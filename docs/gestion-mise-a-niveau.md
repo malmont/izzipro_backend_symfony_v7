@@ -135,7 +135,7 @@ Toute correction de calcul doit commencer par un test qui fixe les chiffres atte
 
 ## 3. Recommandations : lots proposés
 
-**État (09/11/2026)** : G0, G1, G2 livrés et poussés (70150e36) ; G3 poussé (334f41e9) ; G4 livré (commit séparé) ; G5 et le jeu de données demo (§ 8) à faire. Un commit poussé par lot (demande du propriétaire).
+**État (09/11/2026)** : G0, G1, G2 poussés (70150e36) ; G3 poussé (334f41e9) ; G4 poussé (bd6d1c2d) ; jeu de données demo (§ 8) livré (commit séparé) ; G5 à faire. Un commit poussé par lot (demande du propriétaire).
 
 Ordre pensé pour ne rien casser côté MAUI pendant la transition : chaque lot est additif, la conversion de données est
 faite une fois par script, et le contrat est annoncé à « new easymakemoney » avant d'être activé.
@@ -267,5 +267,14 @@ dans l'application avec les **produits actuels** de demo : collections (ouvertes
 fournisseurs et types, produits rattachés aux commandes (`POST /api/commandes/{id}/products/rattacher` : coût d'achat
 `commande_cost_cents`, coefficient), frais de port avec transporteurs, notes de frais, puis **des ventes** (boutique web ou
 caisse sur demo) pour que les tableaux de bord et les statistiques de la gestion montrent des achats et des ventes réels.
-Moyen : commande Symfony `app:gestion:demo-seed` (idempotente, réservée au site demo, rejouable) ou script, à écrire dans
-G2 ; données marquées `is_demo` si le modèle le permet. Pas de données sur un site client.
+Moyen (livré le 09/11/2026) : commande `app:gestion:seed-demo --tenant=demo` (`Command/SeedGestionDemoCommand`,
+`UseCase/GestionUseCase/SeedGestionDemoUseCase` qui refuse tout site autre que `demo`, `Services/GestionService/GestionDemoSeeder`) :
+types de fournisseur et de note de frais, trois fournisseurs (Atelier Nord Textile, Distribution Laurentides, Logistique
+Saint-Laurent), deux transporteurs d'achat (Purolator, Nationex), deux collections (« Démo gestion — Printemps 2026 », figée ;
+« Démo gestion — Automne 2026 », ouverte) appartenant au premier administrateur du site, trois commandes fournisseurs
+auxquelles les **produits existants sans commande** sont rattachés par `CommandeProductAttachmentService` (coût d'achat
+55 % du prix de vente, coefficient 1,8 posé sur les produits qui n'en ont pas, prix de vente intacts), frais de port et
+notes de frais en cents. Rejouable : chaque élément est reconnu par son nom, rien n'est effacé ; s'il n'y a plus de
+produit libre (par exemple après « Effacer le contenu d'exemple »), rien n'est rattaché : rejouer `app:boutique:seed-demo`
+d'abord. Les ventes existantes du site (commandes clients) alimentent déjà les statistiques. Test :
+`tests/Functional/Gestion/GestionDemoSeederTest.php`. Pas de données sur un site client.
