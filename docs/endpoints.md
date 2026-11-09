@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (326)
+## Boutique et commun (328)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -312,6 +312,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/collections/{id}/commandes` | ROLE_ADMIN | `Controller\CommandeController\CommandeController::createCommande` |
 | GET | `/api/collections/{id}/notes-de-frais` | ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::getNotesDeFraisByCollection` |
 | POST | `/api/collections/{id}/notes-de-frais` | ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::createNoteDeFrais` |
+| GET | `/api/collections/{id}/resultat` | ROLE_ADMIN | `Controller\GestionController\PeriodeController::result` |
 | DELETE | `/api/collections/{id}` | ROLE_ADMIN | `Controller\CollectionsController\CollectionController::deleteCollection` |
 | PATCH | `/api/collections/{id}` | ROLE_ADMIN | `Controller\CollectionsController\CollectionController::patchCollection` |
 | GET | `/api/collections` | ROLE_ADMIN | `Controller\CollectionsController\CollectionController::getCollections` |
@@ -382,6 +383,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/payments/statistics/{source}` | ROLE_ADMIN | `Controller\StatistiqueDashboard\PaymentsController::getPaymentStatistics` |
 | GET | `/api/payments` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\paymentController\PaymentsController::getPayments` |
 | GET | `/api/periodes/courante` | ROLE_ADMIN | `Controller\GestionController\PeriodeController::current` |
+| GET | `/api/periodes/{id}/resultat` | ROLE_ADMIN | `Controller\GestionController\PeriodeController::result` |
 | PATCH | `/api/periodes/{id}` | ROLE_ADMIN | `Controller\GestionController\PeriodeController::patch` |
 | GET | `/api/periodes` | ROLE_ADMIN | `Controller\GestionController\PeriodeController::list` |
 | POST | `/api/platform/billing-events` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformBillingEventsController::receive` |

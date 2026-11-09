@@ -76,6 +76,26 @@ class PeriodeController extends AbstractController
         return $this->json($this->dto($this->update->execute($collection, $fields, $guard), $request));
     }
 
+    /**
+     * Résultat de période (lot P2, 10/11/2026, `docs/periodes-gestion.md` § 3) : ventes d'articles, autres revenus à part, coût des
+     * articles vendus, frais, résultat, investissement ; figé à la première lecture d'une période fermée. 404 NOT_A_PERIOD.
+     */
+    #[Route('/api/periodes/{id}/resultat', name: 'gestion_periode_resultat', methods: ['GET'], requirements: ['id' => '\d+'])]
+    #[Route('/api/collections/{id}/resultat', name: 'gestion_collection_resultat', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function result(Collections $collection, \App\UseCase\GestionUseCase\GetPeriodResultUseCase $useCase): JsonResponse
+    {
+        $closed = $this->calendar->isClosed($collection);
+        $payload = $this->cache->get(
+            'periode_resultat_' . $collection->getId() . ($closed ? '_closed' : '_open'),
+            fn () => $useCase->execute($collection),
+            $closed ? 3600 : 60,
+            [...CacheTags::itemTags(CacheTags::COLLECTIONS, $collection->getId()), ...CacheTags::listTags(CacheTags::ORDERS), ...CacheTags::listTags(CacheTags::COMMANDES),
+                ...CacheTags::listTags(CacheTags::NOTES_DE_FRAIS), ...CacheTags::listTags(CacheTags::PRODUCTS)]
+        );
+
+        return $this->json($payload);
+    }
+
     private function dto(Collections $collection, Request $request): CollectionOutputDTO
     {
         return new CollectionOutputDTO($collection, $request->getSchemeAndHttpHost(), $this->currency?->code() ?? TenantCurrencyProvider::DEFAULT, $this->calendar);

@@ -146,6 +146,10 @@ class Product implements TranslatableInterface, DemoContentInterface
     #[ORM\Column(name: 'commande_cost_cents', nullable: true)]
     private ?int $commandeCostCents = null;
 
+    /** Date du rattachement à la commande fournisseur (lot P2 périodes, 10/11/2026) : un rattachement postérieur à l'échéance d'une période fermée n'entre pas dans son résultat */
+    #[ORM\Column(name: 'commande_attached_at', type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $commandeAttachedAt = null;
+
     #[ORM\Column(nullable: true)]
     private ?int $freezeQuantity = null;
 
@@ -618,6 +622,18 @@ class Product implements TranslatableInterface, DemoContentInterface
     public function getCommandeCostCents(): ?int
     {
         return $this->commandeCostCents;
+    }
+
+    public function getCommandeAttachedAt(): ?\DateTimeImmutable
+    {
+        return $this->commandeAttachedAt;
+    }
+
+    public function setCommandeAttachedAt(?\DateTimeImmutable $at): static
+    {
+        $this->commandeAttachedAt = $at;
+
+        return $this;
     }
 
     /** Sans effet sur le prix de vente ni sur purchasePrice / coefficient (jamais de recalcul) */

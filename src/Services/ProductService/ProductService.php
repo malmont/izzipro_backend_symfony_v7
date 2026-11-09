@@ -51,6 +51,7 @@ class ProductService
         $product->setPurchasePrice($inputDTO->purchasePrice);
         $product->setCoefficientMultiplier($inputDTO->coefficientMultiplier);
         $product->setCommande($commande);
+        $product->setCommandeAttachedAt(new \DateTimeImmutable()); // lot P2 périodes (10/11/2026)
         if ($inputDTO->quantity !== null) {
             $product->setQuantity($inputDTO->quantity); // quantité facultative (lot G4, 09/11/2026) ; sinon celle des variantes
         }

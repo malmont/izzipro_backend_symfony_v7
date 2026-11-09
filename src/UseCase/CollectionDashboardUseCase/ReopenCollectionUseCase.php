@@ -35,6 +35,7 @@ class ReopenCollectionUseCase
         }
         $em->persist($collection);
         $em->flush();
+        $em->getRepository(\App\Entity\PeriodResult::class)->deleteByCollection($collection); // résultat figé effacé : recalculé à la prochaine clôture (lot P2)
 
         return $this->dashboard->execute($collection);
     }

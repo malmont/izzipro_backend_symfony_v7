@@ -136,6 +136,7 @@ class CommandeProductAttachmentService
         foreach ($products as [$product, $p]) {
             $before[] = ['productId' => $product->getId(), 'commandeId' => $product->getCommande()?->getId(), 'commandeCostCents' => $product->getCommandeCostCents(), 'quantity' => $product->getQuantity()];
             $product->setCommande($commande);
+            $product->setCommandeAttachedAt(new \DateTimeImmutable()); // lot P2 périodes (10/11/2026)
             // coût retenu : purchasePrice du corps (cents), sinon celui déjà posé, sinon le prix d'achat du produit, sinon son prix de vente ; jamais setPurchasePrice (recalcul du prix)
             $product->setCommandeCostCents($p['cost'] ?? $product->getCommandeCostCents() ?? (int) round((float) ($product->getPurchasePrice() ?? $product->getPrice() ?? 0)));
             if ($p['quantity'] !== null) {
@@ -172,6 +173,7 @@ class CommandeProductAttachmentService
         $before = ['productId' => $productId, 'commandeId' => $commande->getId(), 'commandeCostCents' => $product->getCommandeCostCents()];
         $product->setCommande(null);
         $product->setCommandeCostCents(null);
+        $product->setCommandeAttachedAt(null);
         $em->flush();
         $this->audit->record('commande-products', $commande->getId(), 'detach', $before, ['productId' => $productId, 'commandeId' => null], ['product:' . $productId]);
     }

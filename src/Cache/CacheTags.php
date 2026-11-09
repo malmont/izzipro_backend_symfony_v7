@@ -373,6 +373,7 @@ final class CacheTags
         // Invitations par e-mail des chapitres Mémoires Vivantes (08/11/2026) : lues en SQL direct, jamais mises en cache
         \App\MemoiresVivantes\Entity\ChapterInvitation::class,
         AppProfile::class, // profils d'application (thème, image de marque) : aucune lecture en cache applicatif
+        \App\Entity\PeriodResult::class, // résultat de période figé (lot P2, 10/11/2026) : lu par son dépôt, la route est cachée sous l'étiquette de la collection
         OtpCode::class,
         ResetPasswordRequest::class,
         AiUsage::class,

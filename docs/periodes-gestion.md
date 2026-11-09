@@ -70,32 +70,54 @@ n'est touchée. Contrat envoyé à l'application avant le code de chaque lot (`d
   la période), mêmes clés qu'aujourd'hui.
 - **Combiné** `GET /api/dashboard/collections-combined?kind=manual|period` : `manual` par défaut (comportement actuel sur les
   collections manuelles seulement) ; `period` = somme des périodes. Jamais les deux ensemble (décision 2).
-- **Résultat de période** `GET /api/periodes/{id}/resultat` (alias `GET /api/collections/{id}/resultat`), devise du site :
+- **Résultat de période** `GET /api/periodes/{id}/resultat` (alias `GET /api/collections/{id}/resultat` ; 404 `NOT_A_PERIOD`
+  pour une collection manuelle), devise du site, cents entiers, taux en % à 2 décimales ou `null` sans dénominateur (contrat P2
+  validé par l'application le 10/11/2026, cinq corrections intégrées) :
 
 ```
 {
   period: { id, name, periodKey, start, end, status, closedAt, reopenedAt },
-  currency,
-  sales:      { revenue, orders, items, returns, bySource: { ecommerce, pos, mobile_app } },   // ventes d'articles seulement
-  otherRevenue: { rentals, subscriptions, total },                                                 // à part, hors résultat
-  cogs:       { amount, items, unknownCostItems },
-  expenses:   { shipping, notes, total },
-  result:     { gross, net, marginRate },
-  investment: { purchases, shipping, total }
+  currency, frozen, frozenAt,
+  sales:        { revenue, orders, items, returns: { amount, orders, items }, unknownCostRevenue, shippingBilled,
+                  bySource: { ecommerce, pos, mobile_app } },
+  otherRevenue: { rentals, subscriptions, total },
+  cogs:         { amount, items, unknownCostItems },
+  expenses:     { shipping, notes, other: [], total },
+  result:       { gross, net, tauxMarge, tauxMarque, netRate },
+  investment:   { purchases, shipping, total }
 }
 ```
 
-  - `sales` : commandes clients de la période (`order_date`), types vente et retour (1, 2), montants en cents.
-  - `sales` ne compte que les **ventes d'articles** ; les lignes de **location** (`booking` lié à la ligne) et les commandes
-    d'**abonnement** (`order.subscription_id`) sont renvoyées à part : `otherRevenue: { rentals, subscriptions, total }`,
-    hors `result` (décision 3 corrigée).
-  - `cogs` (coût des articles vendus) : Σ quantité vendue × coût unitaire des lignes produits ; coût unitaire = coût de la
-    commande fournisseur du produit ramené par son taux (G6), sinon `purchase_price` ; **sinon coût inconnu** : ligne comptée
-    dans `unknownCostItems` et exclue de `cogs` (jamais le prix de vente). Un rattachement postérieur à la clôture ne modifie
-    pas les chiffres figés (décision 6).
-  - `expenses` : frais de port des commandes fournisseurs de la période + notes de frais de la période.
-  - `result.gross = revenue − cogs`, `result.net = gross − expenses`, `marginRate = net / revenue × 100` (2 décimales).
-  - `investment` : commandes fournisseurs de la période (coût × quantité × taux) + leurs frais de port.
+  - `sales` : commandes clients datées dans la période (`order_date` au fuseau du magasin), types vente (1) et retour (2) ;
+    cartes-cadeaux (type 3), commandes incomplètes (statut 1) et annulées (statut 7) exclues. **Ventes d'articles seulement** :
+    les lignes de location (réservation liée) et les commandes d'abonnement (`order.subscription_id`) sont exclues de
+    `revenue` et de `cogs` et renvoyées dans `otherRevenue`, hors `result` (décision 3 corrigée). `revenue` = ventes − retours,
+    **hors taxes** (lignes TTC ramenées au prorata de la taxe de la commande) et **nettes des remises** (les lignes sont
+    enregistrées nettes ; le guide IA s'appuiera sur cette valeur). `returns` détaille les retours ; un retour compte dans la
+    période de sa date, même pour une vente d'une période précédente. `unknownCostRevenue` = part de `revenue` dont le coût est
+    inconnu. `shippingBilled` = livraison facturée au client, hors `revenue`. `orders` = commandes de vente avec au moins une
+    ligne d'article.
+  - `cogs` (coût des articles vendus) : Σ quantité × coût unitaire des lignes au coût connu ; **un retour retire son coût au même
+    coût unitaire** (l'article revient en stock). Coût unitaire = coût de la commande fournisseur du produit ramené par son taux
+    (G6) si le rattachement est antérieur à la **coupure** (ci-dessous), sinon `purchase_price` du produit, **sinon coût
+    inconnu** : la ligne est comptée dans `unknownCostItems` (articles vendus) et exclue de `cogs`, jamais valorisée au prix de
+    vente. `items` = articles vendus au coût connu.
+  - `expenses` : frais de port des commandes fournisseurs datées dans la période + notes de frais datées dans la période ;
+    `other` est un tableau vide, extensible (`{ kind, label, amount }`) pour la publicité et les frais fixes sans changer la forme.
+  - `result` : les ventes au coût inconnu sont **exclues des marges** (décision du propriétaire) : `gross` = (revenue −
+    unknownCostRevenue) − cogs ; `net` = gross − expenses.total ; `tauxMarge` = gross / cogs ; `tauxMarque` = gross / (revenue −
+    unknownCostRevenue) ; `netRate` = net / (revenue − unknownCostRevenue) ; `null` quand le dénominateur est nul (l'application
+    affiche un tiret ; 0 % et « pas de donnée » ne disent pas la même chose).
+  - `investment` : commandes fournisseurs datées dans la période (coût × quantité × taux) + leurs frais de port ; informatif,
+    ce n'est pas une charge du résultat (le coût de l'article n'entre qu'à la vente).
+  - **Figé à la première lecture** d'une période fermée (`period_result`, `frozen: true`, `frozenAt`) ; **coupure des coûts** :
+    les rattachements horodatés (`product.commande_attached_at`, posé par `rattacher` et par la création d'un produit dans une
+    commande) postérieurs à la fermeture effective (clôture manuelle, sinon échéance = fin + 15 jours) sont ignorés, quelle que
+    soit la date de la première lecture ; le coût d'un rattachement tardif ne compte que pour les ventes suivantes (décision 6).
+    Une période **rouverte** se calcule sans coupure (les rattachements faits pendant la réouverture comptent), son résultat
+    figé est effacé, et sa nouvelle clôture devient la coupure. Période ouverte : calcul à chaque lecture, cache 60 s invalidé
+    par toute écriture (commandes clients, commandes fournisseurs, notes, produits, collection).
+  - Combiné annuel `GET /api/periodes/resultats?from=&to=` : plus tard, après P3 (usage web).
 
 ## 4. Reprise d'historique (site qui arrive après coup)
 
@@ -116,7 +138,7 @@ n'est touchée. Contrat envoyé à l'application avant le code de chaque lot (`d
 |---|---|
 | `GET /api/periodes` (= `GET /api/collections?kind=period`) | périodes du site (créées si manquantes), filtres et pagination de G5 |
 | `GET /api/periodes/courante` | période en cours |
-| `GET /api/periodes/{id}/resultat` | résultat (§ 3) |
+| `GET /api/periodes/{id}/resultat` (= `GET /api/collections/{id}/resultat`) | résultat (§ 3, lot P2) |
 | `POST /api/dashboard/collection/{id}/reopen` | réouverture manuelle |
 | `GET /api/dashboard/collections-combined?kind=` | combiné des manuelles (défaut) ou des périodes |
 | `GET`/`PUT /api/site/features` | réglage `gestion.periods` |
@@ -130,7 +152,7 @@ Les réponses des collections gagnent `kind`, `periodKey`, `status` (`open` | `c
 | Lot | Contenu |
 |---|---|
 | **P1** | colonnes et réglage, calendrier, création à la lecture, noms, état par date, gardes d'écriture (409 `PERIOD_CLOSED`), figé à la première lecture, réouverture, `GET /api/periodes*`, combiné par `kind`, tableau de bord de période par date, semis demo avec périodes ; **livré le 10/11/2026** (ligne « Gestion : périodes de calendrier, lot P1 » de `docs/architecture.md`). Même lot : `tauxMarge` = marge / coût total et `tauxMarque` = marge / valeur de vente (définitions usuelles, inversées avant ; lignes figées remises d'équerre par la migration, anomalie signalée par l'application) |
-| **P2** | résultat de période (§ 3) : ventes par source et par nature, coût des articles vendus avec coût inconnu, frais, investissement |
+| **P2** | résultat de période (§ 3) : ventes par source et par nature, coût des articles vendus avec coût inconnu, frais, investissement ; **livré le 10/11/2026** (`Version20261129100000`, `scripts/migrate_all_v2_gestion_periode_resultat.sh`, `PeriodResultCalculator`, `GetPeriodResultUseCase`, test `PeriodResultApiTest`) |
 | **P3** | reprise d'historique (§ 4) |
 
 Chaque lot : contrat envoyé à l'application avant le code, tests fonctionnels, suite complète, commit poussé.
