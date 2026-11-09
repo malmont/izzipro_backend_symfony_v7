@@ -22,10 +22,10 @@ class CollectionDashboardService
             $products = $commande->getProducts();
             $countProduct += count($products);
             foreach ($products as $product) {
-                $totalItemCost += $product->getPrice() * $product->getQuantity();
+                $totalItemCost += $product->commandeUnitCost() * $product->getQuantity(); // coût d'achat : coût retenu au rattachement, sinon prix d'achat, sinon prix de vente (09/11/2026)
                 $totalQuantity += $product->getQuantity();
                 $totalMultiplier += $product->getCoefficientMultiplier() * $product->getQuantity();
-                $stockValue += $product->getPrice() * $product->getQuantity() * $product->getCoefficientMultiplier();
+                $stockValue += $product->commandeUnitCost() * $product->getQuantity() * $product->getCoefficientMultiplier();
                 $itemCount += $product->getQuantity();
             }
             if ($commande->getFraisDePort()) {

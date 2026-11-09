@@ -16,7 +16,7 @@ class CommandeDashboardService
         foreach ($commande->getProducts() as $product) {
             $totalMultiplier += $product->getCoefficientMultiplier() * $product->getQuantity();
             $totalItems += $product->getQuantity();
-            $totalItemCost += $product->getPrice() * $product->getQuantity();
+            $totalItemCost += $product->commandeUnitCost() * $product->getQuantity(); // coût d'achat : coût retenu au rattachement, sinon prix d'achat, sinon prix de vente (09/11/2026)
             $modelCount++;
         }
 

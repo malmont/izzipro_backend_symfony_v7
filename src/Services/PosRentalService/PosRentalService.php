@@ -325,7 +325,16 @@ class PosRentalService
         $terminal = null;
         if ($d->getMethod() === 'card' && $d->getTerminalPaymentId() !== null && $user !== null) {
             $terminal = $this->terminalPayments->find((int) $d->getTerminalPaymentId());
-            $d->setTerminalRefundId($this->terminalPayments->refundForReturn($terminal, $d->getAmount(), $terminalRefundId, $user, null));
+            try {
+                $d->setTerminalRefundId($this->terminalPayments->refundForReturn($terminal, $d->getAmount(), $terminalRefundId, $user, null));
+            } catch (CashRegisterException $e) {
+                if ($e->errorCode !== 'TERMINAL_REFUND_REQUIRED') {
+                    throw $e;
+                }
+                // Interac : le refus dit que c'est la caution qui attend sa présentation sur le lecteur, à rejouer avec depositTerminalRefundId
+                throw new CashRegisterException('TERMINAL_REFUND_REQUIRED', 'Caution Interac : présentez d\'abord son remboursement sur le terminal (POST /api/pos/terminal/payments/{id}/refund {amount}), puis rejouez l\'annulation avec depositTerminalRefundId', 409, [],
+                    $e->context + ['deposit' => ['id' => $d->getId(), 'amount' => $d->getAmount(), 'terminalPaymentId' => $d->getTerminalPaymentId()], 'field' => 'depositTerminalRefundId']);
+            }
         }
         $d->settle(0, null, $d->getMethod(), $user?->getId(), $caisse->getId());
         $em->flush();

@@ -76,7 +76,7 @@ class CancelOrderUseCase
     }
 
     /** @param ?int $cashRegisterId poste du remboursement d'une vente POS si la session d'origine est fermée (15/10/2026) */
-    public function execute(int $orderId, ?int $paymentMethod = null, ?int $cashRegisterId = null, ?\App\Entity\User $refundedBy = null, ?string $terminalRefundId = null): JsonResponse
+    public function execute(int $orderId, ?int $paymentMethod = null, ?int $cashRegisterId = null, ?\App\Entity\User $refundedBy = null, ?string $terminalRefundId = null, ?string $depositTerminalRefundId = null): JsonResponse
     {
         // On récupère l'EM du tenant une seule fois
         $em = $this->emProvider->getEntityManager();
@@ -224,7 +224,8 @@ class CancelOrderUseCase
                 $this->handleCaisseTransactionUseCase->execute($caisse, $order, $refundedBy ?? $order->getUserId(), $refundAmount, $transactionTypeId, [], $caisseAmount,
                     $posCashRefund ? -($cashRefund - (int) round($refundAmount)) : null);
                 // Caution de location en cours (09/11/2026) : restituée en entier par son moyen d'encaissement, dans la même transaction
-                $rentalDepositBlock = $this->rentals?->onCancelDeposit($order, ($refundedBy ?? $order->getUserId()) instanceof \App\Entity\User ? ($refundedBy ?? $order->getUserId()) : null, $caisse, $terminalRefundId);
+                // Interac : la caution a son propre remboursement présenté sur le lecteur (depositTerminalRefundId), distinct de celui de la vente
+                $rentalDepositBlock = $this->rentals?->onCancelDeposit($order, ($refundedBy ?? $order->getUserId()) instanceof \App\Entity\User ? ($refundedBy ?? $order->getUserId()) : null, $caisse, $depositTerminalRefundId);
                 // Avoir (suite continue par poste) et entrée au journal, avec les montants d'origine (C2)
                 $creditNote = $this->receipts->issue($order, $caisse, \App\Entity\PosReceipt::CREDIT_NOTE, -(int) round((float) $refundAmount));
                 $this->audit->record(\App\Services\PosAuditService\PosAuditService::REFUND, [

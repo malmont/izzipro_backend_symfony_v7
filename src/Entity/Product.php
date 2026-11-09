@@ -139,6 +139,13 @@ class Product implements TranslatableInterface, DemoContentInterface
     #[ORM\JoinColumn(nullable: true)]
     private ?Commande $commande = null;
 
+    /**
+     * Coût d'achat retenu pour la commande fournisseur, en cents (09/11/2026) : posé seulement par le rattachement d'un produit existant
+     * (POST /api/commandes/{id}/products/rattacher), null pour tout autre produit. Les tableaux de bord lisent `commande_cost_cents ?? price`.
+     */
+    #[ORM\Column(name: 'commande_cost_cents', nullable: true)]
+    private ?int $commandeCostCents = null;
+
     #[ORM\Column(nullable: true)]
     private ?int $freezeQuantity = null;
 
@@ -606,6 +613,29 @@ class Product implements TranslatableInterface, DemoContentInterface
         }
 
         return $this;
+    }
+
+    public function getCommandeCostCents(): ?int
+    {
+        return $this->commandeCostCents;
+    }
+
+    /** Sans effet sur le prix de vente ni sur purchasePrice / coefficient (jamais de recalcul) */
+    public function setCommandeCostCents(?int $cents): static
+    {
+        $this->commandeCostCents = $cents;
+
+        return $this;
+    }
+
+    /**
+     * Coût unitaire d'achat pris en compte par les tableaux de bord de la commande fournisseur et de la collection (décision du propriétaire,
+     * 09/11/2026) : coût retenu au rattachement, sinon prix d'achat, sinon prix de vente (produit sans prix d'achat). Le calcul d'avant lisait
+     * le prix de vente (achat × coefficient) et réappliquait le coefficient dans la valeur de stock.
+     */
+    public function commandeUnitCost(): float
+    {
+        return (float) ($this->commandeCostCents ?? $this->purchasePrice ?? $this->price ?? 0);
     }
 
     public function getCommande(): ?Commande

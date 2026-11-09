@@ -567,7 +567,8 @@ class OrderController extends AbstractController
         // terminalRefundId (C4) : remboursement Interac déjà présenté sur le terminal, exigé avant l'annulation d'une vente payée par Interac
         return $this->cancelOrderUseCase->execute($id, is_numeric($data['paymentMethod'] ?? null) ? (int) $data['paymentMethod'] : null,
             is_numeric($data['cashRegisterId'] ?? null) ? (int) $data['cashRegisterId'] : null, $user instanceof User ? $user : null,
-            is_string($data['terminalRefundId'] ?? null) ? $data['terminalRefundId'] : null);
+            is_string($data['terminalRefundId'] ?? null) ? $data['terminalRefundId'] : null,
+            is_string($data['depositTerminalRefundId'] ?? null) ? $data['depositTerminalRefundId'] : null); // caution Interac d'une location (09/11/2026)
     }
 
     /**

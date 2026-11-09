@@ -1200,7 +1200,10 @@ caution (Interac : 409 `TERMINAL_REFUND_REQUIRED`, présenter d'abord le rembour
 
 **Annulation** (`POST /api/order/cancel/{id}`) : les réservations de la commande passent `CANCELLED` (créneau libéré ; web comme caisse) ;
 vente au comptoir avec caution en cours : caution **restituée en entier par son moyen d'encaissement dans la même transaction** (espèces :
-400 `INSUFFICIENT_FUNDS` et rien n'est annulé ; carte du lecteur : remboursement Stripe ; déclarée : `action: "declared"`). Réponse :
+400 `INSUFFICIENT_FUNDS` et rien n'est annulé ; carte du lecteur : remboursement Stripe ; déclarée : `action: "declared"`). Caution **Interac** : son
+remboursement est présenté sur le lecteur à part de celui de la vente, puis l'annulation est rejouée avec **`depositTerminalRefundId`** (corps,
+en plus de `terminalRefundId`) ; tant qu'il manque : 409 `TERMINAL_REFUND_REQUIRED` avec `context.deposit { id, amount, terminalPaymentId }` et
+`context.field: "depositTerminalRefundId"`. Réponse :
 `rentalDeposit: { …caution, action, terminal } | null`. **Retour partiel** (`POST /api/pos/returns`) d'une ligne de location : réservation
 réduite à la quantité restante, `CANCELLED` si tout est rendu ; la caution ne change pas (une par commande, montant figé).
 

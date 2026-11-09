@@ -213,6 +213,37 @@ class PosRentalApiTest extends WebTestCase
         $this->assertSame(150000, (int) $this->db->fetchOne('SELECT refunded_total FROM pos_terminal_payment WHERE id = ?', [$tp['paymentId']]), 'remboursé chez Stripe');
     }
 
+    public function testInteracDepositNeedsItsOwnRefundOnCancellation(): void
+    {
+        $this->configureSimulatedReader();
+        $this->loginAs(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
+        $this->terminal = $this->posTerminal();
+        $this->request('POST', '/api/caisse/open', ['cashRegisterId' => $this->register, 'cashFund' => 10000]);
+        $error = fn (Response $r) => [$r->getStatusCode(), json_decode($r->getContent(), true)['error'] ?? null];
+        $d = (new \DateTimeImmutable('+30 days'))->setTime(0, 0);
+        $items = [['productVariantId' => $this->ponton, 'quantity' => 1, 'booking' => ['start' => $d->format('Y-m-d') . 'T09:00:00', 'end' => $d->modify('+2 days')->format('Y-m-d') . 'T19:00:00']]];
+        $quote = $this->json($this->request('POST', '/api/pos/quote', ['items' => $items, 'cashRegisterId' => $this->register]));
+        $tp = $this->json($this->request('POST', '/api/pos/terminal/payments', ['cashRegisterId' => $this->register, 'amount' => 150000, 'depositAmount' => 150000]), 201);
+        $this->json($this->request('POST', '/api/pos/terminal/payments/' . $tp['paymentId'] . '/simulate', ['type' => 'interac_present']));
+        $sale = $this->json($this->request('POST', '/api/order/create-multi-payment', ['items' => $items, 'paymentMethods' => [['type' => 2, 'amount' => $quote['cashTotal'] / 100]], 'cashRegisterId' => $this->register, 'deposit' => ['amount' => 150000, 'method' => 'card', 'terminalPaymentId' => $tp['paymentId']]]), 201);
+        $depositId = (int) $sale['rental']['deposits'][0]['id'];
+
+        // Annulation sans remboursement présenté : refus qui désigne la caution ; rien n'est annulé
+        $refused = $this->request('POST', '/api/order/cancel/' . $sale['orderId'], ['paymentMethod' => 2, 'cashRegisterId' => $this->register]);
+        $this->assertSame([409, 'TERMINAL_REFUND_REQUIRED'], $error($refused), $refused->getContent());
+        $body = json_decode($refused->getContent(), true);
+        $this->assertSame([$depositId, 150000, 'depositTerminalRefundId'], [$body['deposit']['id'], $body['deposit']['amount'], $body['field']]);
+        $this->assertSame('held', $this->db->fetchOne('SELECT status FROM pos_rental_deposit WHERE id = ?', [$depositId]));
+        $this->assertSame('CONFIRMED', $this->db->fetchOne('SELECT b.status FROM booking b JOIN order_items i ON i.id = b.order_item_id WHERE i.order_associated_id = ?', [$sale['orderId']]), 'rien n\'est annulé');
+
+        // Remboursement de la caution présenté sur le lecteur, puis annulation rejouée avec son identifiant
+        $this->json($this->request('POST', '/api/pos/terminal/payments/' . $tp['paymentId'] . '/refund', ['amount' => 150000]));
+        $done = $this->json($this->request('POST', '/api/pos/terminal/payments/' . $tp['paymentId'] . '/simulate', ['type' => 'interac_present']));
+        $cancel = $this->json($this->request('POST', '/api/order/cancel/' . $sale['orderId'], ['paymentMethod' => 2, 'cashRegisterId' => $this->register, 'depositTerminalRefundId' => $done['refund']['id']]));
+        $this->assertSame(['returned', 150000, 'refunded_on_terminal', $done['refund']['id']], [$cancel['rentalDeposit']['status'], $cancel['rentalDeposit']['returnedAmount'], $cancel['rentalDeposit']['action'], $cancel['rentalDeposit']['terminalRefundId']]);
+        $this->assertSame('CANCELLED', $this->db->fetchOne('SELECT b.status FROM booking b JOIN order_items i ON i.id = b.order_item_id WHERE i.order_associated_id = ?', [$sale['orderId']]));
+    }
+
     private function configureSimulatedReader(): void
     {
         $provider = static::getContainer()->get(TenantEntityManagerProvider::class);
