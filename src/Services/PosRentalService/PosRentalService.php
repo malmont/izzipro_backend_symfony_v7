@@ -42,7 +42,29 @@ class PosRentalService
         private readonly PosAuditService $audit,
         private readonly PosApprovalService $approvals,
         private readonly PosTerminalPaymentService $terminalPayments,
+        private readonly ?\App\Services\Booking\BookingClock $clock = null, // dates au fuseau de la boutique (09/11/2026)
     ) {
+    }
+
+    /** Date au fuseau de la boutique avec son décalage (ATOM), comme le devis et la commande ; UTC sans horloge */
+    private function at(?\DateTimeInterface $at): ?string
+    {
+        if ($at === null) {
+            return null;
+        }
+
+        return $this->clock !== null ? $this->clock->format($at) : $at->format(\DateTimeInterface::ATOM);
+    }
+
+    /** @return array{id: int, name: ?string, phone: ?string}|null client de caisse rattaché à la vente */
+    private function customerBlock(?Order $order): ?array
+    {
+        if ($order?->getCustomerId() === null) {
+            return null;
+        }
+        $customer = $this->emProvider->getEntityManager()->find(\App\Entity\PosCustomer::class, $order->getCustomerId());
+
+        return ['id' => $order->getCustomerId(), 'name' => $customer !== null ? trim(implode(' ', array_filter([$customer->getFirstName(), $customer->getLastName()]))) ?: null : null, 'phone' => $customer?->getPhone()];
     }
 
     // ---------------------------------------------------------------- catalogue
@@ -149,7 +171,7 @@ class PosRentalService
         $this->emProvider->getEntityManager()->flush();
         $this->audit->record(PosAuditService::RENTAL_BOOKING_CONFIRMED, [
             'reference' => $order->getReference(),
-            'bookings' => array_map(fn (Booking $b) => ['bookingId' => $b->getId(), 'productId' => $b->getProduct()?->getId(), 'start' => $b->getStartAt()?->format(\DateTimeInterface::ATOM), 'end' => $b->getEndAt()?->format(\DateTimeInterface::ATOM), 'quantity' => $b->getQuantity()], $bookings),
+            'bookings' => array_map(fn (Booking $b) => ['bookingId' => $b->getId(), 'productId' => $b->getProduct()?->getId(), 'start' => $this->at($b->getStartAt()), 'end' => $this->at($b->getEndAt()), 'quantity' => $b->getQuantity()], $bookings),
         ], $caisse, null, 'order', $order->getId(), $user);
         if ($deposit !== null) {
             $this->collect($order, $user, $caisse, $deposit, $bookings[0]);
@@ -383,7 +405,7 @@ class PosRentalService
             if ($booking === null) {
                 continue;
             }
-            $lines[] = ['orderItemId' => $item->getId(), 'bookingId' => $booking->getId(), 'productName' => $item->displayName(), 'start' => $booking->getStartAt()?->format(\DateTimeInterface::ATOM), 'end' => $booking->getEndAt()?->format(\DateTimeInterface::ATOM), 'quantity' => $booking->getQuantity(), 'status' => $booking->getStatus()];
+            $lines[] = ['orderItemId' => $item->getId(), 'bookingId' => $booking->getId(), 'productName' => $item->displayName(), 'start' => $this->at($booking->getStartAt()), 'end' => $this->at($booking->getEndAt()), 'quantity' => $booking->getQuantity(), 'status' => $booking->getStatus()];
         }
         $deposits = array_map(fn (PosRentalDeposit $d) => $this->toArray($d), $this->emProvider->getEntityManager()->getRepository(PosRentalDeposit::class)->forOrder((int) $order->getId()));
         if ($lines === [] && $deposits === []) {
@@ -404,9 +426,9 @@ class PosRentalService
         return [
             'id' => $d->getId(), 'orderId' => $d->getOrderId(), 'reference' => $order?->getReference(),
             'receiptReference' => $receipt !== null ? $receipt->getCashRegister()->receiptReference($receipt->getNumber()) : null,
-            'customer' => $order?->getCustomerId() !== null ? ['id' => $order->getCustomerId()] : null,
+            'customer' => $this->customerBlock($order),
             'product' => $booking?->getProduct() !== null ? ['id' => $booking->getProduct()->getId(), 'name' => $booking->getProduct()->getName()] : null,
-            'booking' => $booking !== null ? ['id' => $booking->getId(), 'start' => $booking->getStartAt()?->format(\DateTimeInterface::ATOM), 'end' => $booking->getEndAt()?->format(\DateTimeInterface::ATOM), 'quantity' => $booking->getQuantity(), 'status' => $booking->getStatus()] : null,
+            'booking' => $booking !== null ? ['id' => $booking->getId(), 'start' => $this->at($booking->getStartAt()), 'end' => $this->at($booking->getEndAt()), 'quantity' => $booking->getQuantity(), 'status' => $booking->getStatus()] : null,
             'amount' => $d->getAmount(), 'method' => $d->getMethod(), 'status' => $d->getStatus(),
             'collectedAt' => $d->getCollectedAt()->format(\DateTimeInterface::ATOM), 'cashRegisterId' => $d->getCashRegisterId(),
             'returnedAt' => $d->getReturnedAt()?->format(\DateTimeInterface::ATOM), 'returnMethod' => $d->getReturnMethod(), 'returnedAmount' => $d->getReturnedAmount(),
@@ -429,9 +451,10 @@ class PosRentalService
             'receiptReference' => $receipt !== null ? $receipt->getCashRegister()->receiptReference($receipt->getNumber()) : null,
             'product' => $booking->getProduct() !== null ? ['id' => $booking->getProduct()->getId(), 'name' => $booking->getProduct()->getName()] : null,
             'variant' => $item?->getProductVariant() !== null ? ['id' => $item->getProductVariant()->getId(), 'label' => $item->getVariantLabel()] : null,
-            'start' => $booking->getStartAt()?->format(\DateTimeInterface::ATOM), 'end' => $booking->getEndAt()?->format(\DateTimeInterface::ATOM), 'quantity' => $booking->getQuantity(),
+            'start' => $this->at($booking->getStartAt()), 'end' => $this->at($booking->getEndAt()), 'quantity' => $booking->getQuantity(),
             'status' => $booking->getStatus(), 'finalized' => $booking->isFinalized(),
-            'customer' => $order?->getCustomerId() !== null ? ['id' => $order->getCustomerId()] : null,
+            'customer' => $this->customerBlock($order),
+            'expectedDeposit' => (int) ($booking->getProduct()?->getBookingConfiguration()?->getDeposit() ?? 0) * max(1, (int) $booking->getQuantity()), // caution prévue par la fiche (09/11/2026)
             'deposit' => $deposit !== null ? ['id' => $deposit->getId(), 'amount' => $deposit->getAmount(), 'method' => $deposit->getMethod(), 'status' => $deposit->getStatus()] : null,
         ];
     }

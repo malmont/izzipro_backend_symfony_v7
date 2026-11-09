@@ -1183,7 +1183,7 @@ cashRegisterId? }` → 201 la caution ; mêmes refus ; 404 `ORDER_NOT_FOUND`.
 reference, receiptReference, customer, product, booking { id, start, end, quantity, status }, amount, method, status, collectedAt,
 cashRegisterId, returnedAt, returnMethod, returnedAmount, retainedAmount, retainedReason, terminalPaymentId, terminalRefundId }]` ;
 `GET /api/pos/rentals/deposits/{id}` ; `GET /api/pos/rentals/ongoing?cashRegisterId=` → réservations confirmées non rendues
-`[{ bookingId, orderId, reference, receiptReference, product, variant, start, end, quantity, status, finalized, customer, deposit | null }]`.
+`[{ bookingId, orderId, reference, receiptReference, product, variant, start, end, quantity, status, finalized, customer { id, name, phone } | null, expectedDeposit (caution prévue par la fiche × quantité, cents), deposit | null }]`. Dates `start` / `end` (locations en cours, cautions, bloc `rental` du ticket) **au fuseau de la boutique avec son décalage** (ATOM), comme le devis et la commande (09/11/2026).
 
 **Restitution** : `POST /api/pos/rentals/deposits/{id}/return { retainedAmount? (défaut 0), reason? (requis si retenue, 422
 `RETENTION_REASON_REQUIRED`), method? (défaut : moyen d'encaissement), terminalRefundId?, cashRegisterId? }` → 200 la caution (`status`

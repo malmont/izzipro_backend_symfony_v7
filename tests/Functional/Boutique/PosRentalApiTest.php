@@ -114,6 +114,10 @@ class PosRentalApiTest extends WebTestCase
         $this->assertSame(1, $x['sales']['count'], 'la caution n\'est pas une vente');
         $ongoing = $this->json($this->request('GET', '/api/pos/rentals/ongoing'));
         $this->assertSame([$orderId, 'CONFIRMED', $depositId], [$ongoing[0]['orderId'], $ongoing[0]['status'], $ongoing[0]['deposit']['id']]);
+        $this->assertSame(150000, $ongoing[0]['expectedDeposit'], 'caution prévue par la fiche × quantité');
+        $this->assertStringStartsWith($start, $ongoing[0]['start'], 'dates au fuseau de la boutique, avec son décalage');
+        $this->assertMatchesRegularExpression('/[+-]\d{2}:\d{2}$/', $ongoing[0]['start']);
+        $this->assertNull($ongoing[0]['customer'], 'vente sans client de caisse');
         $held = $this->json($this->request('GET', '/api/pos/rentals/deposits?status=held'));
         $this->assertSame([$depositId, $sale['reference']], [$held[0]['id'], $held[0]['reference']]);
         $this->assertSame('held', $this->json($this->request('GET', '/api/pos/rentals/deposits/' . $depositId))['status']);
