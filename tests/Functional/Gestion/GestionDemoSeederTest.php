@@ -35,7 +35,7 @@ class GestionDemoSeederTest extends KernelTestCase
         $seeder = $container->get(GestionDemoSeeder::class);
         $report = $seeder->seed();
         $this->assertNotEmpty($report);
-        $this->assertContains('collection « ' . GestionDemoSeeder::COLLECTION_CLOSED . ' » figée (tableaux de bord conservés)', $report);
+        $this->assertContains('collection « ' . GestionDemoSeeder::COLLECTION_CLOSED . ' » figée avec ses commandes (tableaux de bord conservés)', $report);
 
         $em->clear();
         $closed = $em->getRepository(Collections::class)->findOneBy(['nomCollection' => GestionDemoSeeder::COLLECTION_CLOSED]);
@@ -51,12 +51,14 @@ class GestionDemoSeederTest extends KernelTestCase
         }
         $attached = $em->getRepository(Product::class)->createQueryBuilder('p')->where('p.commande IS NOT NULL')->getQuery()->getResult();
         $this->assertGreaterThanOrEqual(min($freeBefore, 14), count($attached), 'les produits existants sont répartis sur les commandes');
-        $this->assertGreaterThan(0, count($attached));
         foreach ($attached as $product) {
             $this->assertNotNull($product->getCommandeCostCents(), 'coût d\'achat posé au rattachement');
             $this->assertNotNull($product->getCoefficientMultiplier(), 'coefficient posé pour la valeur de stock');
         }
-        $this->assertCount(4, $em->getRepository(\App\Entity\NoteDeFrais::class)->findBy(['Collection' => [$closed, $open]]));
+        $this->assertGreaterThanOrEqual(6, count($em->getRepository(\App\Entity\NoteDeFrais::class)->findBy(['Collection' => [$closed, $open]])));
+        $this->assertTrue($em->getRepository(Commande::class)->findOneBy(['name' => 'Commande textile printemps'])->getIsClosed(), 'les commandes d\'une collection figée sont figées avec elle');
+        $this->assertGreaterThanOrEqual(8, count($em->getRepository(Commande::class)->findBy(['name' => ['Commande textile printemps', 'Réassort automne', 'Accessoires des fêtes', 'Collection hiver — manteaux', 'Accessoires d\'hiver', 'Chaussures et sacs', 'Maillots et serviettes', 'Location nautique — matériel']])), 'huit commandes sur quatre collections');
+        $this->assertGreaterThanOrEqual(GestionDemoSeeder::MIN_PRODUCTS, count($attached), 'produits de démonstration créés et rattachés');
 
         // Rejouable : rien n'est recréé
         $this->assertSame([], $seeder->seed(), 'second passage : rien à ajouter');

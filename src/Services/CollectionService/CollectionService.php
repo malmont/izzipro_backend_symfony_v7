@@ -54,17 +54,18 @@ class CollectionService
         return $collection;
     }
 
-    public function getCollections(string $host): array
+    /**
+     * Liste filtrée et paginable (lot G5, 10/11/2026 ; sans filtre : ouvertes et fermées, les supprimées exclues depuis le lot G4).
+     *
+     * @return array{items: list<CollectionOutputDTO>, total: int}
+     */
+    public function getCollections(string $host, ?\App\Services\GestionService\GestionListQuery $query = null): array
     {
-        // On récupère l'EntityManager du tenant.
         $em = $this->emProvider->getEntityManager();
-
-        // On utilise l'EM du tenant pour obtenir le repository et les données.
-        $collections = $em->getRepository(Collections::class)->findBy(['del' => false], ['id' => 'ASC']); // les collections supprimées (logiquement) ne sont plus listées (lot G4, 09/11/2026)
-        
+        $result = $em->getRepository(Collections::class)->search($query?->status, $query?->q, $query?->page, $query?->limit);
         $currency = $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT;
 
-        return array_map(fn($collection) => new CollectionOutputDTO($collection, $host, $currency), $collections);
+        return ['items' => array_map(fn($collection) => new CollectionOutputDTO($collection, $host, $currency), $result['items']), 'total' => $result['total']];
     }
 
     /** Suppression logique (`del`, lot G4, 09/11/2026) : les commandes, notes de frais et statistiques restent en base, la collection disparaît des listes et du combiné */

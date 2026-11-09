@@ -46,6 +46,16 @@ class FournisseurService
         return $em->getRepository(Fournisseur::class)->findAll();
     }
 
+    /**
+     * Liste filtrée et paginable (lot G5, 10/11/2026).
+     *
+     * @return array{items: list<Fournisseur>, total: int}
+     */
+    public function searchFournisseurs(?\App\Services\GestionService\GestionListQuery $query): array
+    {
+        return $this->emProvider->getEntityManager()->getRepository(Fournisseur::class)->search($query?->q, $query?->page, $query?->limit);
+    }
+
     public function deleteFournisseur(Fournisseur $fournisseur): void
     {
         $em = $this->emProvider->getEntityManager();

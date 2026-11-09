@@ -12,8 +12,8 @@ class GetCollectionsUseCase
         $this->collectionService = $collectionService;
     }
 
-    public function execute(string $host): array
+    public function execute(string $host, ?\App\Services\GestionService\GestionListQuery $query = null): array
     {
-        return $this->collectionService->getCollections( $host);
+        return $this->collectionService->getCollections($host, $query); // {items, total} (lot G5, 10/11/2026)
     }
 }

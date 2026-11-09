@@ -61,16 +61,16 @@ class CollectionController extends AbstractController
     public function getCollections(Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $cacheKey = 'collections_all';
+        $query = \App\Services\GestionService\GestionListQuery::fromRequest($request, true); // ?status=&q=&page=&limit= (lot G5, 10/11/2026)
+        $cacheKey = 'collections_all' . $query->cacheSuffix();
         // une collection est listée avec ses commandes fournisseurs : elle suit aussi leurs écritures
-        $collections = $this->cache->get(
+        $result = $this->cache->get(
             $cacheKey,
-            fn () => $this->getCollectionsUseCase->execute($host),
+            fn () => $this->getCollectionsUseCase->execute($host, $query),
             600,
             [...CacheTags::listTags(CacheTags::COLLECTIONS), ...CacheTags::listTags(CacheTags::COMMANDES)]
         );
-
-        return new JsonResponse($collections, JsonResponse::HTTP_OK);
+        return new JsonResponse($result['items'], JsonResponse::HTTP_OK, $query->headers($result['total']));
     }
 
     #[Route('/api/collections/{id}', name: 'delete_collection', methods: ['DELETE'])]

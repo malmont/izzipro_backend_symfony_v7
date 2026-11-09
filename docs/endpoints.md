@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (316)
+## Boutique et commun (317)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -354,6 +354,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/fournisseurs` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::getAllFournisseurs` |
 | POST | `/api/fournisseurs` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::createFournisseur` |
 | GET | `/api/frais/total` | ROLE_ADMIN | `Controller\StatistiqueDashboard\FraisController::getTotalFrais` |
+| GET | `/api/gestion/exports/achats.csv` | ROLE_ADMIN | `Controller\GestionController\GestionExportController::purchases` |
 | GET | `/api/homeslider` | PUBLIC_ACCESS | `Controller\HomeSliderController\HomeSliderController::getHomeSlider` |
 | DELETE | `/api/media/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::delete` |
 | PATCH | `/api/media/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::rename` |
@@ -709,7 +710,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/admin/workers` | ROLE_SUPER_ADMIN | `Controller\Admin\WorkerAdminController::index` |
 | ANY | `/admin` | ROLE_ADMIN | `Controller\Admin\DashboardController::index` |
 
-## API Platform (34)
+## API Platform (30)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -719,12 +720,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
 | PATCH | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
 | PUT | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
-| GET | `/api/commandes.{_format}` | ROLE_ADMIN | API Platform (Commande) |
-| POST | `/api/commandes.{_format}` | ROLE_ADMIN | API Platform (Commande) |
 | DELETE | `/api/commandes/{id}.{_format}` | ROLE_ADMIN | API Platform (Commande) |
 | GET | `/api/commandes/{id}.{_format}` | ROLE_ADMIN | API Platform (Commande) |
-| PATCH | `/api/commandes/{id}.{_format}` | ROLE_ADMIN | API Platform (Commande) |
-| PUT | `/api/commandes/{id}.{_format}` | ROLE_ADMIN | API Platform (Commande) |
 | GET, HEAD | `/api/errors/{status}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (?) |
 | GET | `/api/products.{_format}` | ROLE_ADMIN | API Platform (Product) |
 | POST | `/api/products.{_format}` | ROLE_ADMIN | API Platform (Product) |

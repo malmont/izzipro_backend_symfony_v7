@@ -38,22 +38,18 @@ class FournisseurController extends AbstractController
     public function getAllFournisseurs(Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $cacheKey = 'fournisseurs_all';
-
-        $fournisseursArray = $this->cache->get(
+        $query = \App\Services\GestionService\GestionListQuery::fromRequest($request); // ?q=&page=&limit= (lot G5, 10/11/2026)
+        $cacheKey = 'fournisseurs_all' . $query->cacheSuffix();
+        $result = $this->cache->get(
             $cacheKey,
-            function () use ($host) {
-                $fournisseurs = $this->getAllFournisseursUseCase->execute();
-                return array_map(function ($fournisseur) use ($host) {
-                    $dto = new FournisseurOutputDTO($fournisseur, $host);
-                    return method_exists($dto, 'toArray') ? $dto->toArray() : $dto;
-                }, $fournisseurs);
+            function () use ($host, $query) {
+                $result = $this->getAllFournisseursUseCase->search($query);
+                return ['items' => array_map(fn ($fournisseur) => new FournisseurOutputDTO($fournisseur, $host), $result['items']), 'total' => $result['total']];
             },
             3600,
             CacheTags::listTags(CacheTags::FOURNISSEURS)
         );
-
-        return new JsonResponse($fournisseursArray, JsonResponse::HTTP_OK);
+        return new JsonResponse($result['items'], JsonResponse::HTTP_OK, $query->headers($result['total']));
     }
 
     #[Route('/api/fournisseurs', name: 'create_fournisseur', methods: ['POST'])]

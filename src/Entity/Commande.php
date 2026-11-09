@@ -2,6 +2,7 @@
 namespace App\Entity;
 
 use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Delete;
 use App\Repository\CommandeRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -9,7 +10,8 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: CommandeRepository::class)]
-#[ApiResource]
+/** API Platform : suppression seulement (lot G5, 10/11/2026) ; lectures et écritures par les contrôleurs dédiés (`/api/collections/{id}/commandes`…), l'application n'appelait pas les autres opérations */
+#[ApiResource(operations: [new Delete()])]
 class Commande
 {
     #[ORM\Id]

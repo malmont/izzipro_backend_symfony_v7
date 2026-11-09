@@ -15,4 +15,23 @@ class FournisseurRepository extends EntityRepository
      * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
      */
     // public function __construct(ManagerRegistry $registry) { ... }
+
+    /**
+     * Liste filtrée (lot G5, 10/11/2026) : `q` sur le nom ou la ville, pagination facultative.
+     *
+     * @return array{items: list<Fournisseur>, total: int}
+     */
+    public function search(?string $q, ?int $page, ?int $limit): array
+    {
+        $qb = $this->createQueryBuilder('f')->orderBy('f.name', 'ASC')->addOrderBy('f.id', 'ASC');
+        if ($q !== null && $q !== '') {
+            $qb->andWhere('LOWER(f.name) LIKE :q OR LOWER(f.ville) LIKE :q')->setParameter('q', '%' . mb_strtolower($q) . '%');
+        }
+        $total = (int) (clone $qb)->select('COUNT(f.id)')->resetDQLPart('orderBy')->getQuery()->getSingleScalarResult();
+        if ($page !== null && $limit !== null) {
+            $qb->setFirstResult(($page - 1) * $limit)->setMaxResults($limit);
+        }
+
+        return ['items' => $qb->getQuery()->getResult(), 'total' => $total];
+    }
 }

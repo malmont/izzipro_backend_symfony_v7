@@ -135,7 +135,7 @@ Toute correction de calcul doit commencer par un test qui fixe les chiffres atte
 
 ## 3. Recommandations : lots proposés
 
-**État (09/11/2026)** : G0, G1, G2 poussés (70150e36) ; G3 poussé (334f41e9) ; G4 poussé (bd6d1c2d) ; jeu de données demo (§ 8) livré (commit séparé) ; G5 à faire. Un commit poussé par lot (demande du propriétaire).
+**État (10/11/2026)** : G0, G1, G2 poussés (70150e36) ; G3 (334f41e9) ; G4 (bd6d1c2d) ; jeu de données demo (890598c4) ; G5 livré (commit séparé : filtres et pagination, export CSV des achats, API Platform réduit à la suppression) ; devise par fournisseur non faite (sur demande). Un commit poussé par lot (demande du propriétaire).
 
 Ordre pensé pour ne rien casser côté MAUI pendant la transition : chaque lot est additif, la conversion de données est
 faite une fois par script, et le contrat est annoncé à « new easymakemoney » avant d'être activé.
@@ -205,6 +205,8 @@ faite une fois par script, et le contrat est annoncé à « new easymakemoney »
 
 ### Lot G5 : préparation du clone web et de l'espace partenaire
 
+**Livré le 10/11/2026** (pagination et filtres, export CSV, API Platform réduit) ; la devise par fournisseur reste à la demande.
+
 - Pagination et filtres sur `GET /api/collections` (ouvertes / fermées / supprimées), `GET /api/fournisseurs` (`q`).
 - Export comptable des achats (CSV) sur le modèle de l'export des ventes de la caisse (F14).
 - Devise d'achat par fournisseur (si décidé) avec taux saisi à la commande et montants convertis en devise du site
@@ -226,7 +228,7 @@ ces routes ; G1 convertit les autres colonnes (budgets, frais de port, notes de 
    taux. Confirmer ou préciser (par exemple : la valeur de stock doit-elle tenir compte du prix promotionnel ?).
 3. **Devise des achats** : une seule devise (celle du site) pour tout, ou devise par fournisseur avec taux saisi ?
    Recommandation : devise du site seulement dans G1 ; devise par fournisseur plus tard (G5) si un client le demande.
-4. **`GET /api/commandes` API Platform** : garder (avec groupes) ou retirer au profit des contrôleurs dédiés ?
+4. ~~`GET /api/commandes` API Platform~~ : tranché le 10/11/2026 (G5), seule la suppression reste ; l'application n'appelait pas les autres opérations.
 5. **Suppression d'une commande** : détacher les produits (recommandé) ou interdire si des produits ont été vendus ?
 6. ~~Rattachement~~ : tranché le 09/11/2026, porté par « posflutter backend » (§ 4).
 7. **Rôles** : la gestion reste réservée à `ROLE_ADMIN` (recommandé) ; les notes de frais par un utilisateur non
@@ -273,11 +275,13 @@ caisse sur demo) pour que les tableaux de bord et les statistiques de la gestion
 Moyen (livré le 09/11/2026) : commande `app:gestion:seed-demo --tenant=demo` (`Command/SeedGestionDemoCommand`,
 `UseCase/GestionUseCase/SeedGestionDemoUseCase` qui refuse tout site autre que `demo`, `Services/GestionService/GestionDemoSeeder`) :
 types de fournisseur et de note de frais, trois fournisseurs (Atelier Nord Textile, Distribution Laurentides, Logistique
-Saint-Laurent), deux transporteurs d'achat (Purolator, Nationex), deux collections (« Démo gestion — Printemps 2026 », figée ;
-« Démo gestion — Automne 2026 », ouverte) appartenant au premier administrateur du site, trois commandes fournisseurs
-auxquelles les **produits existants sans commande** sont rattachés par `CommandeProductAttachmentService` (coût d'achat
-55 % du prix de vente, coefficient 1,8 posé sur les produits qui n'en ont pas, prix de vente intacts), frais de port et
-notes de frais en cents. Rejouable : chaque élément est reconnu par son nom, rien n'est effacé ; s'il n'y a plus de
-produit libre (par exemple après « Effacer le contenu d'exemple »), rien n'est rattaché : rejouer `app:boutique:seed-demo`
-d'abord. Les ventes existantes du site (commandes clients) alimentent déjà les statistiques. Test :
+Saint-Laurent), deux transporteurs d'achat (Purolator, Nationex), **quatre collections** sur l'année (Hiver 2025-2026 et
+Printemps 2026 figées avec leurs commandes ; Été 2026 et Automne 2026 ouvertes) appartenant au premier administrateur du
+site, **huit commandes fournisseurs**, les **produits existants sans commande** plus, si le site compte moins de 32 produits,
+jusqu'à 36 **produits de démonstration** (`is_demo`, vêtements et accessoires, effacés par « Effacer le contenu d'exemple »),
+répartis sur les commandes ouvertes par `CommandeProductAttachmentService` (coût d'achat 55 % du prix de vente, coefficient 1,8
+posé sur les produits qui n'en ont pas, prix de vente intacts), un frais de port par commande et onze notes de frais, en cents ;
+le cache du site est invalidé en fin de semis (un semis en console ne passe pas par l'invalidation des requêtes HTTP : avant
+le 10/11/2026, l'application voyait des listes vides pendant cinq minutes). Rejouable : chaque élément est reconnu par son nom,
+rien n'est effacé ni recréé ; s'il n'y a plus de produit libre, rien n'est rattaché. Les ventes existantes du site (commandes clients) alimentent déjà les statistiques. Test :
 `tests/Functional/Gestion/GestionDemoSeederTest.php`. Pas de données sur un site client.
