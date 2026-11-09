@@ -12,24 +12,27 @@ class CloseCollectionUseCase
     private CollectionStatistiquesService $collectionStatistiquesService;
     private CommandeStatistiquesService $commandeStatistiquesService;
     private DashboardCommandeUseCase $dashboardCommandeUseCase;
-    private TenantEntityManagerProvider $emProvider; 
+    private DashboardCollectionUseCase $dashboardCollectionUseCase;
+    private TenantEntityManagerProvider $emProvider;
 
     public function __construct(
         CollectionStatistiquesService $collectionStatistiquesService,
         CommandeStatistiquesService $commandeStatistiquesService,
         DashboardCommandeUseCase $dashboardCommandeUseCase,
-        TenantEntityManagerProvider $emProvider 
+        DashboardCollectionUseCase $dashboardCollectionUseCase, // manquait jusqu'au 09/11/2026 : la clôture d'une collection échouait toujours (propriété indéfinie)
+        TenantEntityManagerProvider $emProvider
     ) {
         $this->collectionStatistiquesService = $collectionStatistiquesService;
         $this->commandeStatistiquesService = $commandeStatistiquesService;
         $this->dashboardCommandeUseCase = $dashboardCommandeUseCase;
+        $this->dashboardCollectionUseCase = $dashboardCollectionUseCase;
         $this->emProvider = $emProvider;
     }
 
-    public function execute(Collections $collection): void
+    public function execute(Collections $collection): \App\Dto\DashboardCollectionDTO
     {
         if ($collection->getIsClosed()) {
-            throw new \Exception('La collection est déjà figée.');
+            throw new \App\Services\GestionService\GestionConflictException('ALREADY_CLOSED', 'La collection est déjà figée.'); // 409 (lot G2, 09/11/2026)
         }
         
         // On récupère l'EM du tenant une seule fois au début de l'opération
@@ -62,5 +65,7 @@ class CloseCollectionUseCase
 
         // Le flush final sauvegarde toutes les modifications dans la BDD du tenant
         $em->flush();
+
+        return $metricsDTO; // chiffres figés rendus par la route (lot G2)
     }
 }

@@ -6,10 +6,10 @@ class FraisDePortInputDTO
     public string $name;
     public string $facture;
     public string $tracknumber;
-    public float $price;
+    public int $price; // cents (lot G1, 09/11/2026)
     public int $transporteurId;
 
-    public function __construct(string $name, string $facture, string $tracknumber, float $price, int $transporteurId)
+    public function __construct(string $name, string $facture, string $tracknumber, int $price, int $transporteurId)
     {
         $this->name = $name;
         $this->facture = $facture;

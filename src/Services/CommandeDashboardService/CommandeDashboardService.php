@@ -1,81 +1,33 @@
 <?php
+
 namespace App\Services\CommandeDashboardService;
 
 use App\Dto\DashboardCommandeDTO;
 use App\Entity\Commande;
+use App\Services\GestionService\PurchaseMetricsCalculator;
 
+/**
+ * Tableau de bord d'une commande fournisseur (lot G2, 09/11/2026) : chiffres calculés par `PurchaseMetricsCalculator`
+ * (agrégats SQL, cents entiers, taux arrondis), mêmes clés JSON qu'avant. Jusqu'au 09/11/2026, le calcul parcourait les
+ * produits (une requête par commande) et, avant le lot « rattachement », lisait le prix de vente au lieu du coût d'achat.
+ */
 class CommandeDashboardService
 {
+    public function __construct(private readonly PurchaseMetricsCalculator $calculator)
+    {
+    }
+
     public function calculateCommandeMetrics(Commande $commande): DashboardCommandeDTO
     {
-        $totalMultiplier = 0;
-        $totalItems = 0;
-        $totalItemCost = 0;
-        $modelCount = 0;
+        $totals = $this->calculator->commandeTotals((int) $commande->getId());
+        $usedBudget = $totals['purchaseCost'] + $totals['shippingCost'];
+        $transporteur = $commande->getFraisDePort()?->getTransporteur();
 
-        foreach ($commande->getProducts() as $product) {
-            $totalMultiplier += $product->getCoefficientMultiplier() * $product->getQuantity();
-            $totalItems += $product->getQuantity();
-            $totalItemCost += $product->commandeUnitCost() * $product->getQuantity(); // coût d'achat : coût retenu au rattachement, sinon prix d'achat, sinon prix de vente (09/11/2026)
-            $modelCount++;
-        }
-
-        $averageMultiplier = $totalItems ? $totalMultiplier / $totalItems : 0;
-
-        // Calcul du budget
-        $generalBudget = $commande->getBudget();
-        $usedBudget = $totalItemCost;
-
-        if ($commande->getFraisDePort()) {
-            $usedBudget += $commande->getFraisDePort()->getPrice();
-        }
-
-        $remainingBudget = $generalBudget - $usedBudget;
-
-        // Calcul des revenus
-        $stockValue = $totalItemCost * $averageMultiplier;
-
-        // Calcul de la marge
-        $marge = $stockValue - $usedBudget;
-
-        // Transporteur
-        $shippingCost = 0;
-        $transporteur = null;
-        if ($commande->getFraisDePort()) {
-            $shippingCost = $commande->getFraisDePort()->getPrice();
-            $transporteur = $commande->getFraisDePort()->getTransporteur() ? [
-                'name' => $commande->getFraisDePort()->getTransporteur()->getName(),
-                'logo' => $commande->getFraisDePort()->getTransporteur()->getLogo(),
-                'contact' => $commande->getFraisDePort()->getTransporteur()->getContact(),
-            ] : null;
-        }
-
-        // Construction des données pour le DTO
-        $data = [
-            'averageMultiplier' => $averageMultiplier,
-            'BudgetGeneral' => [
-                'generalBudget' => $generalBudget,
-                'usedBudget' => $usedBudget,
-                'remainingBudget' => $remainingBudget,
-            ],
-            'totalItemCost' => $totalItemCost,
-            'totalFraisDePort' => $shippingCost,
-            'Statistics' => [
-                'itemCount' => $totalItems,
-                'modelCount' => $modelCount,
-            ],
-            'ValeurStock' => [
-                'stockValue' => $stockValue,
-                'marge' => $marge,
-            ],
-            'TauxMarge' => [
-                'tauxMarge' => ($stockValue > 0) ? (($stockValue - $usedBudget) / $stockValue) * 100 : 0,
-                // Commande sans produit (budget utilisé nul) : taux à 0 plutôt qu'une division par zéro (erreur 500 constatée le 03/11/2026)
-                'tauxMarque' => ($usedBudget > 0) ? (($stockValue - $usedBudget) / $usedBudget) * 100 : 0,
-            ],
-            'Transporteur' => $transporteur,
-        ];
-
-        return DashboardCommandeDTO::fromArray($data);
+        return DashboardCommandeDTO::fromArray(PurchaseMetricsCalculator::blocks($totals, (int) $commande->getBudget(), $usedBudget) + [
+            'totalItemCost' => $totals['purchaseCost'],
+            'totalFraisDePort' => $totals['shippingCost'],
+            'Statistics' => ['itemCount' => $totals['itemCount'], 'modelCount' => $totals['modelCount']],
+            'Transporteur' => $transporteur ? ['name' => $transporteur->getName(), 'logo' => $transporteur->getLogo(), 'contact' => $transporteur->getContact()] : null,
+        ]);
     }
 }

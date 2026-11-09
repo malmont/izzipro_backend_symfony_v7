@@ -18,7 +18,7 @@ class Commande
     private ?int $id = null;
 
     #[ORM\Column]
-    private ?float $budget = null;
+    private ?int $budget = null; // cents (lot G1, 09/11/2026)
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
     private ?\DateTimeInterface $date = null;
@@ -67,12 +67,12 @@ class Commande
         return $this->id;
     }
 
-    public function getBudget(): ?float
+    public function getBudget(): ?int
     {
         return $this->budget;
     }
 
-    public function setBudget(float $budget): static
+    public function setBudget(int $budget): static
     {
         $this->budget = $budget;
 

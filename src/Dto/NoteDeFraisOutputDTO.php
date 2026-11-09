@@ -7,15 +7,17 @@ class NoteDeFraisOutputDTO
 {
     public int $id;
     public string $description;
-    public float $montant;
+    public int $montant; // cents (lot G1, 09/11/2026)
+    public string $currency;
     public string $date;
     public ?string $imageNdf;
 
-    public function __construct(NoteDeFrais $noteDeFrais, string $host)
+    public function __construct(NoteDeFrais $noteDeFrais, string $host, string $currency = \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT)
     {
+        $this->currency = $currency;
         $this->id = $noteDeFrais->getId();
         $this->description = $noteDeFrais->getDescription();
-        $this->montant = $noteDeFrais->getMontant();
+        $this->montant = (int) $noteDeFrais->getMontant();
         $this->date = $noteDeFrais->getDate()->format('Y-m-d');
         $photo = $noteDeFrais->getTypeNoteDeFrais();
         $this->imageNdf = $photo ? $host . '/assets/images/' . $photo->getImage() : null;

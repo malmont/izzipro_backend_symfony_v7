@@ -17,7 +17,7 @@ class CollectionService
     private TenantEntityManagerProvider $emProvider;
 
     // MODIFICATION 2 : Le constructeur n'injecte plus que le provider.
-    public function __construct(TenantEntityManagerProvider $emProvider)
+    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null) // devise du site (lot G1, 09/11/2026)
     {
         $this->emProvider = $emProvider;
     }
@@ -62,7 +62,9 @@ class CollectionService
         // On utilise l'EM du tenant pour obtenir le repository et les données.
         $collections = $em->getRepository(Collections::class)->findAll();
         
-        return array_map(fn($collection) => new CollectionOutputDTO($collection, $host), $collections);
+        $currency = $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT;
+
+        return array_map(fn($collection) => new CollectionOutputDTO($collection, $host, $currency), $collections);
     }
 
     public function deleteCollection(Collections $collection): void

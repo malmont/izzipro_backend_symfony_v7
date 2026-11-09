@@ -20,19 +20,19 @@ class CommandeStatistiques
     private ?float $averageMultiplier = null;
 
     #[ORM\Column(nullable: true)]
-    private ?float $generalBudget = null;
+    private ?int $generalBudget = null; // cents (lot G1, 09/11/2026)
 
     #[ORM\Column(nullable: true)]
-    private ?float $usedBudget = null;
+    private ?int $usedBudget = null; // cents (lot G1, 09/11/2026)
 
     #[ORM\Column(nullable: true)]
-    private ?float $remainingBudget = null;
+    private ?int $remainingBudget = null; // cents (lot G1, 09/11/2026)
 
     #[ORM\Column(nullable: true)]
-    private ?float $totalItemCost = null;
+    private ?int $totalItemCost = null; // cents (lot G1, 09/11/2026)
 
     #[ORM\Column(nullable: true)]
-    private ?float $totalFraisDePort = null;
+    private ?int $totalFraisDePort = null; // cents (lot G1, 09/11/2026)
 
     #[ORM\Column(nullable: true)]
     private ?int $itemCount = null;
@@ -41,10 +41,10 @@ class CommandeStatistiques
     private ?int $modelCount = null;
 
     #[ORM\Column(nullable: true)]
-    private ?float $stockValue = null;
+    private ?int $stockValue = null; // cents (lot G1, 09/11/2026)
 
     #[ORM\Column(nullable: true)]
-    private ?float $marge = null;
+    private ?int $marge = null; // cents (lot G1, 09/11/2026)
 
     #[ORM\Column(nullable: true)]
     private ?float $tauxMarge = null;
@@ -84,60 +84,60 @@ class CommandeStatistiques
         return $this;
     }
 
-    public function getGeneralBudget(): ?float
+    public function getGeneralBudget(): ?int
     {
         return $this->generalBudget;
     }
 
-    public function setGeneralBudget(?float $generalBudget): static
+    public function setGeneralBudget(?int $generalBudget): static
     {
         $this->generalBudget = $generalBudget;
 
         return $this;
     }
 
-    public function getUsedBudget(): ?float
+    public function getUsedBudget(): ?int
     {
         return $this->usedBudget;
     }
 
-    public function setUsedBudget(?float $usedBudget): static
+    public function setUsedBudget(?int $usedBudget): static
     {
         $this->usedBudget = $usedBudget;
 
         return $this;
     }
 
-    public function getRemainingBudget(): ?float
+    public function getRemainingBudget(): ?int
     {
         return $this->remainingBudget;
     }
 
-    public function setRemainingBudget(?float $remainingBudget): static
+    public function setRemainingBudget(?int $remainingBudget): static
     {
         $this->remainingBudget = $remainingBudget;
 
         return $this;
     }
 
-    public function getTotalItemCost(): ?float
+    public function getTotalItemCost(): ?int
     {
         return $this->totalItemCost;
     }
 
-    public function setTotalItemCost(?float $totalItemCost): static
+    public function setTotalItemCost(?int $totalItemCost): static
     {
         $this->totalItemCost = $totalItemCost;
 
         return $this;
     }
 
-    public function getTotalFraisDePort(): ?float
+    public function getTotalFraisDePort(): ?int
     {
         return $this->totalFraisDePort;
     }
 
-    public function setTotalFraisDePort(?float $totalFraisDePort): static
+    public function setTotalFraisDePort(?int $totalFraisDePort): static
     {
         $this->totalFraisDePort = $totalFraisDePort;
 
@@ -168,24 +168,24 @@ class CommandeStatistiques
         return $this;
     }
 
-    public function getStockValue(): ?float
+    public function getStockValue(): ?int
     {
         return $this->stockValue;
     }
 
-    public function setStockValue(?float $stockValue): static
+    public function setStockValue(?int $stockValue): static
     {
         $this->stockValue = $stockValue;
 
         return $this;
     }
 
-    public function getMarge(): ?float
+    public function getMarge(): ?int
     {
         return $this->marge;
     }
 
-    public function setMarge(?float $marge): static
+    public function setMarge(?int $marge): static
     {
         $this->marge = $marge;
 

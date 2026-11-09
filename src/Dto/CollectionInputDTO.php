@@ -7,7 +7,7 @@ use DateTime;
 
 class CollectionInputDTO
 {
-    public float $budgetCollection;
+    public int $budgetCollection;
     public DateTime $startDateCollection;
     public DateTime $endDateCollection;
     public bool $del;
@@ -17,7 +17,7 @@ class CollectionInputDTO
 
     public function __construct(array $data)
     {
-        $this->budgetCollection = (float)($data['budgetCollection'] ?? 0);
+        $this->budgetCollection = (int) ($data['budgetCollection'] ?? 0); // cents (lot G1, 09/11/2026)
         $this->startDateCollection = new DateTime($data['startDateCollection'] ?? 'now');
         $this->endDateCollection = new DateTime($data['endDateCollection'] ?? 'now');
         $this->del = (bool)($data['del'] ?? false);

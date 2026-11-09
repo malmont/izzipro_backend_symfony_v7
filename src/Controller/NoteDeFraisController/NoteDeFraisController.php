@@ -62,12 +62,14 @@ class NoteDeFraisController extends AbstractController
             return new JsonResponse(['error' => 'Invalid JSON'], JsonResponse::HTTP_BAD_REQUEST);
         }
 
+        $input = new \App\Services\GestionService\GestionInput($data);
         $inputDTO = new NoteDeFraisInputDTO(
-            $data['description'] ?? '',
-            isset($data['montant']) ? (float)$data['montant'] : 0.0,
-            $data['date'] ?? null,
-            $data['typeNoteDeFraisId'] ?? null
+            (string) $input->text('description', false, 255),
+            (int) $input->cents('montant'),
+            (string) $input->date('date')?->format('Y-m-d'),
+            (int) $input->id('typeNoteDeFraisId')
         );
+        $input->check(); // 422 VALIDATION_FAILED (lot G1, 09/11/2026)
 
         $this->createNoteDeFraisUseCase->execute($collection, $inputDTO);
 
@@ -88,12 +90,14 @@ class NoteDeFraisController extends AbstractController
             return new JsonResponse(['error' => 'Invalid JSON'], JsonResponse::HTTP_BAD_REQUEST);
         }
 
+        $input = new \App\Services\GestionService\GestionInput($data);
         $inputDTO = new NoteDeFraisInputDTO(
-            $data['description'] ?? '',
-            isset($data['montant']) ? (float)$data['montant'] : 0.0,
-            $data['date'] ?? null,
-            $data['typeNoteDeFraisId'] ?? null
+            (string) $input->text('description', false, 255),
+            (int) $input->cents('montant'),
+            (string) $input->date('date')?->format('Y-m-d'),
+            (int) $input->id('typeNoteDeFraisId')
         );
+        $input->check(); // 422 VALIDATION_FAILED (lot G1, 09/11/2026)
 
         $this->updateNoteDeFraisUseCase->execute($note, $inputDTO);
 

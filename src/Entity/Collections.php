@@ -19,7 +19,7 @@ class Collections
     private ?int $id = null;
 
     #[ORM\Column]
-    private ?float $budgetCollection = null;
+    private ?int $budgetCollection = null; // cents (lot G1, 09/11/2026)
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
     private ?\DateTimeInterface $startDateCollection = null;
@@ -75,12 +75,12 @@ class Collections
         return $this->id;
     }
 
-    public function getBudgetCollection(): ?float
+    public function getBudgetCollection(): ?int
     {
         return $this->budgetCollection;
     }
 
-    public function setBudgetCollection(float $budgetCollection): static
+    public function setBudgetCollection(int $budgetCollection): static
     {
         $this->budgetCollection = $budgetCollection;
 

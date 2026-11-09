@@ -9,7 +9,7 @@ class GetNotesDeFraisByCollectionUseCase
 {
     private NoteDeFraisService $noteDeFraisService;
 
-    public function __construct(NoteDeFraisService $noteDeFraisService)
+    public function __construct(NoteDeFraisService $noteDeFraisService, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null) // devise du site (lot G1, 09/11/2026)
     {
         $this->noteDeFraisService = $noteDeFraisService;
     }
@@ -18,8 +18,10 @@ class GetNotesDeFraisByCollectionUseCase
     public function execute(Collections $collection, string $host): array
     {
         $notes = $this->noteDeFraisService->getNotesByCollection($collection);
-        return array_map(function($note) use ($host) {
-            return new NoteDeFraisOutputDTO($note, $host);
+        $currency = $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT;
+
+        return array_map(function($note) use ($host, $currency) {
+            return new NoteDeFraisOutputDTO($note, $host, $currency);
         }, $notes);
     }
     

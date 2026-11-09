@@ -26,7 +26,8 @@ class CommandeController extends AbstractController
         GetCommandesByCollectionUseCase $getCommandesByCollectionUseCase,
         CreateCommandeUseCase $createCommandeUseCase,
         Security $security,
-        TenantCacheService $cache
+        TenantCacheService $cache,
+        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null // devise du site (lot G1, 09/11/2026)
     ) {
         $this->getCommandesByCollectionUseCase = $getCommandesByCollectionUseCase;
         $this->createCommandeUseCase = $createCommandeUseCase;
@@ -45,7 +46,7 @@ class CommandeController extends AbstractController
                 $commandes = $this->getCommandesByCollectionUseCase->execute($collection);
                 $commandesArray = $commandes->toArray();
                 return array_map(function ($commande) use ($host) {
-                    $dto = new CommandeOutputDTO($commande, $host);
+                    $dto = new CommandeOutputDTO($commande, $host, $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT);
                     return method_exists($dto, 'toArray') ? $dto->toArray() : $dto;
                 }, $commandesArray);
             },
@@ -66,7 +67,11 @@ class CommandeController extends AbstractController
             return $this->json(['error' => 'Unauthenticated'], JsonResponse::HTTP_UNAUTHORIZED);
         }
 
-        $fournisseurDTO = new FournisseurInputDTO($data['fournisseur'] ?? []);
+        $input = new \App\Services\GestionService\GestionInput(is_array($data) ? $data : []);
+        $data = ['budget' => $input->cents('budget'), 'name' => $input->text('name'), 'date' => $input->date('date')?->format('Y-m-d H:i:s')];
+        $fournisseurId = $input->id('fournisseur');
+        $input->check(); // 422 VALIDATION_FAILED (lot G1, 09/11/2026)
+        $fournisseurDTO = new FournisseurInputDTO(['id' => $fournisseurId]);
         $this->createCommandeUseCase->execute($data, $collection, $fournisseurDTO);
 
         return $this->json(['success' => 'Commande created'], JsonResponse::HTTP_CREATED);

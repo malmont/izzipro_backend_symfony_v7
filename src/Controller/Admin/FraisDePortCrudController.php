@@ -17,6 +17,11 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 // 2. On étend notre contrôleur de base
 class FraisDePortCrudController extends BaseTenantCrudController
 {
+    public function __construct(\App\Services\TenantEntityManagerProvider $emProvider, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null) // montants en cents, devise du site (lot G1, 09/11/2026)
+    {
+        parent::__construct($emProvider);
+    }
+
     // 3. Le constructeur est SUPPRIMÉ. Le parent s'en occupe !
 
     public static function getEntityFqcn(): string
@@ -35,7 +40,7 @@ class FraisDePortCrudController extends BaseTenantCrudController
             TextField::new('name', 'Nom'),
             TextField::new('facture', 'Facture'),
             TextField::new('tracknumber', 'Numéro de suivi'),
-            MoneyField::new('price', 'Prix')->setCurrency('EUR')->setStoredAsCents(false),
+            MoneyField::new('price', 'Prix')->setCurrency($this->currency?->code() ?? 'CAD')->setStoredAsCents(true),
 
             AssociationField::new('commande', 'Commande')
                 ->autocomplete()

@@ -6,8 +6,9 @@ class DashboardCommandeDTO
 {
     public float $averageMultiplier;
     public array $budgetGeneral;
-    public float $totalItemCost;
-    public float $totalFraisDePort;
+    public int $totalItemCost; // cents (lot G1)
+    public int $purchaseCost = 0; // = totalItemCost, nom explicite (lot G2)
+    public int $totalFraisDePort;
     public array $statistics;
     public array $valeurStock;
     public array $tauxMarge;
@@ -16,8 +17,8 @@ class DashboardCommandeDTO
     public function __construct(
         float $averageMultiplier,
         array $budgetGeneral,
-        float $totalItemCost,
-        float $totalFraisDePort,
+        int $totalItemCost,
+        int $totalFraisDePort,
         array $statistics,
         array $valeurStock,
         array $tauxMarge,
@@ -35,29 +36,32 @@ class DashboardCommandeDTO
 
     public static function fromArray(array $data): self
     {
-        return new self(
+        $dto = new self(
             $data['averageMultiplier'],
             $data['BudgetGeneral'],
-            $data['totalItemCost'],
-            $data['totalFraisDePort'],
+            (int) $data['totalItemCost'],
+            (int) $data['totalFraisDePort'],
             $data['Statistics'],
             $data['ValeurStock'],
             $data['TauxMarge'],
             $data['Transporteur']
         );
+        $dto->purchaseCost = (int) ($data['purchaseCost'] ?? $data['totalItemCost']);
+
+        return $dto;
     }
 
     public static function fromEntity(CommandeStatistiques $statistiques): self
     {
-        return new self(
+        $dto = new self(
             $statistiques->getAverageMultiplier(),
             [
                 'generalBudget' => $statistiques->getGeneralBudget(),
                 'usedBudget' => $statistiques->getUsedBudget(),
                 'remainingBudget' => $statistiques->getRemainingBudget(),
             ],
-            $statistiques->getTotalItemCost(),
-            $statistiques->getTotalFraisDePort(),
+            (int) $statistiques->getTotalItemCost(),
+            (int) $statistiques->getTotalFraisDePort(),
             [
                 'itemCount' => $statistiques->getItemCount(),
                 'modelCount' => $statistiques->getModelCount(),
@@ -76,6 +80,9 @@ class DashboardCommandeDTO
                 'contact' => $statistiques->getTransporteur()->getContact(),
             ] : null
         );
+        $dto->purchaseCost = (int) $statistiques->getTotalItemCost();
+
+        return $dto;
     }
 
     public function toArray(): array
@@ -83,6 +90,7 @@ class DashboardCommandeDTO
         return [
             'averageMultiplier' => $this->averageMultiplier,
             'BudgetGeneral' => $this->budgetGeneral,
+            'purchaseCost' => $this->purchaseCost,
             'totalItemCost' => $this->totalItemCost,
             'totalFraisDePort' => $this->totalFraisDePort,
             'Statistics' => $this->statistics,

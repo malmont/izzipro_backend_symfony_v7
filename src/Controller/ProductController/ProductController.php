@@ -88,6 +88,12 @@ class ProductController extends AbstractController
     #[Route('/api/commandes/{id}/products', name: 'create_product_by_commande', methods: ['POST'])]
     public function createProductByCommande(Commande $commande, Request $request): JsonResponse
     {
+        // Prix d'achat en cents entiers, coefficient décimal (lot G1, 09/11/2026) ; 422 VALIDATION_FAILED, hors du try (le 500 ne le masque pas)
+        $input = new \App\Services\GestionService\GestionInput($request->request->all());
+        $input->cents('purchasePrice', false);
+        $input->decimal('coefficientMultiplier', false);
+        $input->text('name');
+        $input->check();
         try {
 
             $uploadDir = $this->getParameter('kernel.project_dir') . '/public/assets/uploads/products/';

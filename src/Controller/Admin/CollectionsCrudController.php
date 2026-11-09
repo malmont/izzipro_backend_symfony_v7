@@ -18,6 +18,11 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
 class CollectionsCrudController extends BaseTenantCrudController
 {
+    public function __construct(\App\Services\TenantEntityManagerProvider $emProvider, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null) // montants en cents, devise du site (lot G1, 09/11/2026)
+    {
+        parent::__construct($emProvider);
+    }
+
 
     public static function getEntityFqcn(): string
     {
@@ -31,7 +36,7 @@ class CollectionsCrudController extends BaseTenantCrudController
         return [
             IdField::new('id')->hideOnForm(),
             TextField::new('nomCollection', 'Nom de la Collection'),
-            MoneyField::new('budgetCollection', 'Budget')->setCurrency('USD')->setStoredAsCents(false),
+            MoneyField::new('budgetCollection', 'Budget')->setCurrency($this->currency?->code() ?? 'CAD')->setStoredAsCents(true),
             DateField::new('startDateCollection', 'Date de Début'),
             DateField::new('endDateCollection', 'Date de Fin'),
             BooleanField::new('del', 'Supprimé'),

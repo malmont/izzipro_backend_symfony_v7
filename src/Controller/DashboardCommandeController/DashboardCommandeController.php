@@ -38,12 +38,8 @@ class DashboardCommandeController extends AbstractController
     #[Route('/api/dashboard/commande/{id}/close', name: 'close_command', methods: ['POST'])]
     public function closeCommand(Commande $commande): JsonResponse
     {
-        try {
-            $this->freezeCommandeMetricsUseCase->execute($commande);
-            return new JsonResponse(['message' => 'La commande a été figée avec succès.']);
-        } catch (\Exception $e) {
-            return new JsonResponse(['error' => $e->getMessage()], 400);
-        }
+        // 200 avec le tableau de bord figé, 409 ALREADY_CLOSED si déjà fermée (lot G2, 09/11/2026 ; avant : {"message"} / 400)
+        return new JsonResponse($this->freezeCommandeMetricsUseCase->execute($commande)->toArray(), JsonResponse::HTTP_OK);
     }
 
     /**

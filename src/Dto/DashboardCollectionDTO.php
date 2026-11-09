@@ -8,7 +8,8 @@ class DashboardCollectionDTO
     public float $averageMultiplier;
     public array $budgetGeneral;
     public array $collectionDuration;
-    public float $totalItemCost;
+    public int $totalItemCost; // cents (lot G1)
+    public int $purchaseCost = 0; // = totalItemCost, nom explicite (lot G2)
     public array $generalExpenses;
     public array $statistics;
     public array $valeurStock;
@@ -18,7 +19,7 @@ class DashboardCollectionDTO
         float $averageMultiplier,
         array $budgetGeneral,
         array $collectionDuration,
-        float $totalItemCost,
+        int $totalItemCost,
         array $generalExpenses,
         array $statistics,
         array $valeurStock,
@@ -36,22 +37,25 @@ class DashboardCollectionDTO
 
     public static function fromArray(array $data): self
     {
-        return new self(
+        $dto = new self(
             $data['averageMultiplier'],
             $data['BudgetGeneral'],
             $data['CollectionDuration'],
-            $data['totalItemCost'],
+            (int) $data['totalItemCost'],
             $data['GeneralExpenses'],
             $data['Statistics'],
             $data['ValeurStock'],
             $data['TauxMarge']
         );
+        $dto->purchaseCost = (int) ($data['purchaseCost'] ?? $data['totalItemCost']);
+
+        return $dto;
     }
 
     // Nouvelle méthode pour créer un DashboardCollectionDTO à partir de CollectionStatistiques
     public static function fromCollectionStatistiques(CollectionStatistiques $collectionStatistiques): self
     {
-        return new self(
+        $dto = new self(
             $collectionStatistiques->getAverageMultiplier(),
             [
                 'generalBudget' => $collectionStatistiques->getGeneralBudget(),
@@ -63,7 +67,7 @@ class DashboardCollectionDTO
                 'endDate' => $collectionStatistiques->getEndDate()->format('Y-m-d'),
                 'days' => $collectionStatistiques->getDurationDays(),
             ],
-            $collectionStatistiques->getTotalItemCost(),
+            (int) $collectionStatistiques->getTotalItemCost(),
             [
                 'totalShippingCost' => $collectionStatistiques->getTotalShippingCost(),
                 'totalExpenseCost' => $collectionStatistiques->getTotalExpenseCost(),
@@ -83,6 +87,9 @@ class DashboardCollectionDTO
                 'tauxMarque' => $collectionStatistiques->getTauxMarque(),
             ]
         );
+        $dto->purchaseCost = (int) $collectionStatistiques->getTotalItemCost();
+
+        return $dto;
     }
 
     public function toArray(): array
@@ -91,6 +98,7 @@ class DashboardCollectionDTO
             'averageMultiplier' => $this->averageMultiplier,
             'BudgetGeneral' => $this->budgetGeneral,
             'CollectionDuration' => $this->collectionDuration,
+            'purchaseCost' => $this->purchaseCost,
             'totalItemCost' => $this->totalItemCost,
             'GeneralExpenses' => $this->generalExpenses,
             'Statistics' => $this->statistics,

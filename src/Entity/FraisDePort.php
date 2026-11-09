@@ -26,9 +26,10 @@ class FraisDePort
     private ?string $tracknumber = null;
 
     #[ORM\Column(nullable: true)]
-    private ?float $price = null;
+    private ?int $price = null; // cents (lot G1, 09/11/2026)
 
-    #[ORM\OneToOne(inversedBy: 'fraisDePort', cascade: ['persist', 'remove'])]
+    /** Côté propriétaire : jamais de `remove` en cascade (jusqu'au 09/11/2026, supprimer le frais de port supprimait la commande et ses produits) */
+    #[ORM\OneToOne(inversedBy: 'fraisDePort', cascade: ['persist'])]
     private ?Commande $commande = null;
 
     #[ORM\ManyToOne(inversedBy: 'fraisDePorts')]
@@ -87,12 +88,12 @@ class FraisDePort
         return $this;
     }
 
-    public function getPrice(): ?float
+    public function getPrice(): ?int
     {
         return $this->price;
     }
 
-    public function setPrice(?float $price): static
+    public function setPrice(?int $price): static
     {
         $this->price = $price;
 

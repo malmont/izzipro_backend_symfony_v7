@@ -18,22 +18,22 @@ class CollectionStatistiques
     private ?Collections $collection = null;
 
     #[ORM\Column]
-    private ?float $generalBudget = null;
+    private ?int $generalBudget = null; // cents (lot G1, 09/11/2026)
 
     #[ORM\Column]
-    private ?float $usedBudget = null;
+    private ?int $usedBudget = null; // cents (lot G1, 09/11/2026)
 
     #[ORM\Column]
-    private ?float $remainingBudget = null;
+    private ?int $remainingBudget = null; // cents (lot G1, 09/11/2026)
 
     #[ORM\Column]
-    private ?float $totalItemCost = null;
+    private ?int $totalItemCost = null; // cents (lot G1, 09/11/2026)
 
     #[ORM\Column]
-    private ?float $totalShippingCost = null;
+    private ?int $totalShippingCost = null; // cents (lot G1, 09/11/2026)
 
     #[ORM\Column]
-    private ?float $totalExpenseCost = null;
+    private ?int $totalExpenseCost = null; // cents (lot G1, 09/11/2026)
 
     #[ORM\Column]
     private ?int $orderCount = null;
@@ -45,10 +45,10 @@ class CollectionStatistiques
     private ?int $modelCount = null;
 
     #[ORM\Column]
-    private ?float $stockValue = null;
+    private ?int $stockValue = null; // cents (lot G1, 09/11/2026)
 
     #[ORM\Column]
-    private ?float $margin = null;
+    private ?int $margin = null; // cents (lot G1, 09/11/2026)
 
     #[ORM\Column]
     private ?float $tauxMarge = null;
@@ -85,72 +85,72 @@ class CollectionStatistiques
         return $this;
     }
 
-    public function getGeneralBudget(): ?float
+    public function getGeneralBudget(): ?int
     {
         return $this->generalBudget;
     }
 
-    public function setGeneralBudget(float $generalBudget): static
+    public function setGeneralBudget(int $generalBudget): static
     {
         $this->generalBudget = $generalBudget;
 
         return $this;
     }
 
-    public function getUsedBudget(): ?float
+    public function getUsedBudget(): ?int
     {
         return $this->usedBudget;
     }
 
-    public function setUsedBudget(float $usedBudget): static
+    public function setUsedBudget(int $usedBudget): static
     {
         $this->usedBudget = $usedBudget;
 
         return $this;
     }
 
-    public function getRemainingBudget(): ?float
+    public function getRemainingBudget(): ?int
     {
         return $this->remainingBudget;
     }
 
-    public function setRemainingBudget(float $remainingBudget): static
+    public function setRemainingBudget(int $remainingBudget): static
     {
         $this->remainingBudget = $remainingBudget;
 
         return $this;
     }
 
-    public function getTotalItemCost(): ?float
+    public function getTotalItemCost(): ?int
     {
         return $this->totalItemCost;
     }
 
-    public function setTotalItemCost(float $totalItemCost): static
+    public function setTotalItemCost(int $totalItemCost): static
     {
         $this->totalItemCost = $totalItemCost;
 
         return $this;
     }
 
-    public function getTotalShippingCost(): ?float
+    public function getTotalShippingCost(): ?int
     {
         return $this->totalShippingCost;
     }
 
-    public function setTotalShippingCost(float $totalShippingCost): static
+    public function setTotalShippingCost(int $totalShippingCost): static
     {
         $this->totalShippingCost = $totalShippingCost;
 
         return $this;
     }
 
-    public function getTotalExpenseCost(): ?float
+    public function getTotalExpenseCost(): ?int
     {
         return $this->totalExpenseCost;
     }
 
-    public function setTotalExpenseCost(float $totalExpenseCost): static
+    public function setTotalExpenseCost(int $totalExpenseCost): static
     {
         $this->totalExpenseCost = $totalExpenseCost;
 
@@ -193,24 +193,24 @@ class CollectionStatistiques
         return $this;
     }
 
-    public function getStockValue(): ?float
+    public function getStockValue(): ?int
     {
         return $this->stockValue;
     }
 
-    public function setStockValue(float $stockValue): static
+    public function setStockValue(int $stockValue): static
     {
         $this->stockValue = $stockValue;
 
         return $this;
     }
 
-    public function getMargin(): ?float
+    public function getMargin(): ?int
     {
         return $this->margin;
     }
 
-    public function setMargin(float $margin): static
+    public function setMargin(int $margin): static
     {
         $this->margin = $margin;
 

@@ -7,7 +7,8 @@ use App\Entity\Collections;
 class CollectionOutputDTO
 {
     public int $id;
-    public float $budgetCollection;
+    public int $budgetCollection; // cents (lot G1, 09/11/2026)
+    public string $currency;
     public string $startDateCollection;
     public string $endDateCollection;
     public bool $del;
@@ -16,10 +17,11 @@ class CollectionOutputDTO
     public ?string $photoCollection;
     public ?array $user;
 
-    public function __construct(Collections $collection, string $host)
+    public function __construct(Collections $collection, string $host, string $currency = \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT)
     {
+        $this->currency = $currency;
         $this->id = $collection->getId();
-        $this->budgetCollection = $collection->getBudgetCollection();
+        $this->budgetCollection = (int) $collection->getBudgetCollection();
         $this->startDateCollection = $collection->getStartDateCollection()->format('Y-m-d H:i:s');
         $this->endDateCollection = $collection->getEndDateCollection()->format('Y-m-d H:i:s');
         $this->del = $collection->isDel();
@@ -37,8 +39,8 @@ class CollectionOutputDTO
         ] : null;
     }
 
-    public static function fromEntity(Collections $collection, string $host): self
+    public static function fromEntity(Collections $collection, string $host, string $currency = \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT): self
     {
-        return new self($collection, $host);
+        return new self($collection, $host, $currency);
     }
 }

@@ -43,7 +43,13 @@ class CollectionController extends AbstractController
             return new JsonResponse(['error' => 'Unauthenticated'], Response::HTTP_UNAUTHORIZED);
         }
 
-        $inputDTO = new CollectionInputDTO($data);
+        $input = new \App\Services\GestionService\GestionInput(is_array($data) ? $data : []);
+        $budget = $input->cents('budgetCollection');
+        $name = $input->text('nomCollection');
+        $input->date('startDateCollection', false);
+        $input->date('endDateCollection', false);
+        $input->check(); // 422 VALIDATION_FAILED (lot G1, 09/11/2026)
+        $inputDTO = new CollectionInputDTO(['budgetCollection' => $budget, 'nomCollection' => $name] + $data);
         $collectionDTO = $this->createCollectionUseCase->execute($inputDTO);
 
         return $this->json($collectionDTO, Response::HTTP_CREATED);

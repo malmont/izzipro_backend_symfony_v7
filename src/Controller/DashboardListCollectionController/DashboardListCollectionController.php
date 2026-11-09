@@ -72,18 +72,20 @@ class DashboardListCollectionController extends AbstractController
     #[Route('/api/dashboard/collections-combined', name: 'dashboard_collections_combined', methods: ['GET'])]
     public function getCombinedCollectionsData(): JsonResponse
     {
-        $combinedData = $this->getCombinedCollectionsDataUseCase->execute();
+        // cache 60 s comme les autres tableaux de bord (lot G2, 09/11/2026) : suit les écritures des collections, commandes, notes de frais et produits
+        $combinedData = $this->cache->get(
+            'dashboard_collections_combined',
+            fn () => $this->getCombinedCollectionsDataUseCase->execute(),
+            60,
+            [...CacheTags::listTags(CacheTags::COLLECTIONS), ...CacheTags::listTags(CacheTags::COMMANDES), ...CacheTags::listTags(CacheTags::NOTES_DE_FRAIS), ...CacheTags::listTags(CacheTags::PRODUCTS)]
+        );
         return new JsonResponse($combinedData, JsonResponse::HTTP_OK);
     }
 
     #[Route('/api/dashboard/collection/{id}/close', name: 'close_collection', methods: ['POST'])]
     public function closeCollection(Collections $collection): JsonResponse
     {
-        try {
-            $this->closeCollectionUseCase->execute($collection);
-            return new JsonResponse(['message' => 'La collection a été figée avec succès.'], JsonResponse::HTTP_OK);
-        } catch (\Exception $e) {
-            return new JsonResponse(['error' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
-        }
+        // 200 avec le tableau de bord figé, 409 ALREADY_CLOSED si déjà fermée (lot G2, 09/11/2026 ; avant : {"message"} / 400)
+        return new JsonResponse($this->closeCollectionUseCase->execute($collection)->toArray(), JsonResponse::HTTP_OK);
     }
 }

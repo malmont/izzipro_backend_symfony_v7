@@ -10,18 +10,20 @@ class FraisDePortOutputDTO
     public ?string $facture; // Modifier pour accepter null
     public ?string $image;
     public string $tracknumber;
-    public float $price;
+    public int $price; // cents (lot G1, 09/11/2026)
+    public string $currency;
     public array $transporteur;
 
-    public function __construct(FraisDePort $fraisDePort,string $host)
+    public function __construct(FraisDePort $fraisDePort, string $host, string $currency = \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT)
     {
+        $this->currency = $currency;
         $this->id = $fraisDePort->getId();
         $this->name = $fraisDePort->getName();
         $this->facture = $fraisDePort->getFacture() ?? ''; 
         $photo = $fraisDePort->getTransporteur();
         $this->image = $photo ? $host . '/assets/uploads/Carrier/' . $photo->getLogo() : null;
         $this->tracknumber = $fraisDePort->getTracknumber();
-        $this->price = $fraisDePort->getPrice();
+        $this->price = (int) $fraisDePort->getPrice();
         $this->transporteur = [
             'id' => $fraisDePort->getTransporteur()->getId(),
             'name' => $fraisDePort->getTransporteur()->getName(),

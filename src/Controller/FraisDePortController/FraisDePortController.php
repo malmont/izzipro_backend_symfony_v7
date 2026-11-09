@@ -45,13 +45,15 @@ class FraisDePortController extends AbstractController
             return new JsonResponse(['error' => 'Invalid JSON'], JsonResponse::HTTP_BAD_REQUEST);
         }
 
+        $input = new \App\Services\GestionService\GestionInput($data);
         $inputDTO = new FraisDePortInputDTO(
-            $data['name'] ?? '',
-            $data['facture'] ?? '',
-            $data['tracknumber'] ?? '',
-            (float)($data['price'] ?? 0),
-            (int)($data['transporteur']['id'] ?? 0)
+            (string) $input->text('name'),
+            (string) $input->text('facture', false),
+            (string) $input->text('tracknumber', false),
+            (int) $input->cents('price'),
+            (int) $input->id('transporteur')
         );
+        $input->check(); // 422 VALIDATION_FAILED (lot G1, 09/11/2026)
 
         $this->createFraisDePortUseCase->execute($commande, $inputDTO);
         return $this->json(['success' => 'Frais de port created'], JsonResponse::HTTP_CREATED);

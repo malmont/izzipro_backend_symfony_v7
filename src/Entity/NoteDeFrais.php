@@ -25,7 +25,7 @@ class NoteDeFrais
     // private ?string $imageNdf = null;
 
     #[ORM\Column]
-    private ?float $montant = null;
+    private ?int $montant = null; // cents (lot G1, 09/11/2026)
 
     #[ORM\Column(type: Types::DATE_MUTABLE)]
     private ?\DateTimeInterface $date = null;
@@ -85,12 +85,12 @@ class NoteDeFrais
     //     return $this;
     // }
 
-    public function getMontant(): ?float
+    public function getMontant(): ?int
     {
         return $this->montant;
     }
 
-    public function setMontant(float $montant): static
+    public function setMontant(int $montant): static
     {
         $this->montant = $montant;
 
