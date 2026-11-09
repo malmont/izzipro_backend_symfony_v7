@@ -21,6 +21,7 @@ class GestionCurrencyResponseSubscriber implements EventSubscriberInterface
         'dashboard_commande', 'dashboard_collection', 'dashboard_collections_combined', 'close_command', 'close_collection',
         'statistiques_chiffre_affaires', 'statistiques_nombre_commandes', 'statistiques_panier_moyen', 'get_payments_statistics', 'frais_total', 'get_monthly_taxes', 'get_carrier_statistics',
         'stock_value_all', 'stock_evolution_all',
+        'gestion_reprise_simulation', 'gestion_reprise_appliquer', 'gestion_reprise_annuler', 'gestion_reprise_etat', // reprise d'historique (lot P3, demande de l'application du 10/11/2026)
     ];
 
     public function __construct(private readonly TenantCurrencyProvider $currency)

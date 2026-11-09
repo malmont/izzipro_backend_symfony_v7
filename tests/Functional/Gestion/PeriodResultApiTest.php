@@ -28,7 +28,7 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
  * coût unitaire (retour d'une vente d'une période précédente compris), locations et abonnements à part, livraison facturée à
  * part, annulations et cartes-cadeaux exclues, frais et investissement de la période, taux null sans dénominateur, figé à la
  * première lecture d'une période fermée en ignorant les rattachements postérieurs à l'échéance, réouverture, 404 NOT_A_PERIOD.
- * Les ventes sont datées dans la période d'il y a 400 jours (aucun autre test n'y écrit) ; les taux null dans celle d'il y a 300 jours.
+ * Les ventes sont datées dans la période d'il y a 400 jours (aucun autre test n'y écrit) ; les taux null dans celle d'il y a 650 jours.
  */
 class PeriodResultApiTest extends WebTestCase
 {
@@ -139,7 +139,7 @@ class PeriodResultApiTest extends WebTestCase
         $this->assertSame([true, 'closed', 14500, 0, 6100], [$frozen['frozen'], $frozen['period']['status'], $frozen['sales']['revenue'], $frozen['sales']['unknownCostRevenue'], $frozen['cogs']['amount']], 'refigée avec les coûts connus à sa clôture');
 
         // Période sans vente : taux null ; collection manuelle : 404 NOT_A_PERIOD ; période courante : vivante
-        $empty = $calendar->periodFor($today->modify('-300 days'));
+        $empty = $calendar->periodFor($today->modify('-650 days')); // hors des périodes du semis demo (2025-12 → 2026), dans les 24 mois du calendrier
         $emptyResult = $this->get('/api/periodes/' . $empty->getId() . '/resultat');
         $this->assertSame([0, null, null, null], [$emptyResult['sales']['revenue'], $emptyResult['result']['tauxMarge'], $emptyResult['result']['tauxMarque'], $emptyResult['result']['netRate']]);
         $manual = $this->post('/api/createcollections', ['budgetCollection' => 1000, 'nomCollection' => "Manuelle $tag"], 201);

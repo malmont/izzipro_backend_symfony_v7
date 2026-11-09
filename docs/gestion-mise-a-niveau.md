@@ -284,3 +284,13 @@ le cache du site est invalidé en fin de semis (un semis en console ne passe pas
 le 10/11/2026, l'application voyait des listes vides pendant cinq minutes). Rejouable : chaque élément est reconnu par son nom,
 rien n'est effacé ni recréé ; s'il n'y a plus de produit libre, rien n'est rattaché. Les ventes existantes du site (commandes clients) alimentent déjà les statistiques. Test :
 `tests/Functional/Gestion/GestionDemoSeederTest.php`. Pas de données sur un site client.
+
+Depuis les périodes (lots P1–P3, 10/11/2026) : les quatre collections sont les **périodes du calendrier** (Hiver 2025-2026,
+Printemps 2026, Été 2026, Automne 2026 ; les anciennes collections manuelles « Démo gestion — … » sont fusionnées dedans), les
+périodes passées sont refigées à chaque rejeu (commandes, tableau de bord et résultat de période recalculés). À la demande de
+l'application (10/11/2026) : **sept produits « Trouvaille — … »** (`is_demo`, sans prix d'achat ni commande, jamais rattachés par
+le semis : matière pour la reprise d'historique) et **dix-huit ventes de démonstration** réparties sur Hiver, Printemps et Été
+(six par période, caisse / web / mobile, dont un retour au printemps d'une vente d'hiver ; références `DEMO-GESTION-<clé>-<n°>`,
+statut complétée, lignes aux prix de vente, totaux hors taxes ; une variante créée par produit vendu avec le stock du produit, la
+quantité ne change pas). Les commandes clients n'ont pas de marque `is_demo` : « Effacer le contenu d'exemple » ne les retire
+pas ; elles se reconnaissent à leur référence.

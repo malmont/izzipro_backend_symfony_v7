@@ -102,6 +102,15 @@ final class SiteDemoContentService
 
             if ($products = $ids['products'] ?? []) {
                 $variants = $this->ints($db, 'SELECT id FROM product_variant WHERE product_id IN (?)', $products);
+                // ventes de démonstration de la gestion (semis demo, 10/11/2026) : effacées avec les produits d'exemple qu'elles vendent
+                $demoSales = $db->fetchFirstColumn('SELECT id FROM "order" WHERE reference LIKE ?', [\App\Services\GestionService\GestionDemoSeeder::SALE_REFERENCE_PREFIX . '%']);
+                if ($demoSales !== []) {
+                    $demoSales = array_map('intval', $demoSales);
+                    foreach (['order_items' => 'order_associated_id', 'order_tax' => 'order_tax_id', 'payments' => 'order_payment_id'] as $table => $column) {
+                        $this->deleteIn($db, $table, $column, $demoSales);
+                    }
+                    $deleted['demo-sales'] = $this->deleteIn($db, '"order"', 'id', $demoSales);
+                }
                 if ($variants !== []) {
                     $this->deleteIn($db, 'product_customization_image', 'product_variant_id', $variants);
                     $this->deleteIn($db, 'inventory_movements', 'product_variant_id', $variants);
@@ -138,7 +147,8 @@ final class SiteDemoContentService
             return [];
         }
         $used = [];
-        foreach ($this->ints($db, 'SELECT DISTINCT v.product_id FROM order_items i JOIN product_variant v ON v.id = i.product_variant_id WHERE v.product_id IN (?)', $products) as $id) {
+        // ventes de démonstration de la gestion (références DEMO-GESTION-…, 10/11/2026) : contenu d'exemple, supprimées avec les produits, jamais un usage
+        foreach ($this->ints($db, 'SELECT DISTINCT v.product_id FROM order_items i JOIN product_variant v ON v.id = i.product_variant_id JOIN "order" o ON o.id = i.order_associated_id WHERE v.product_id IN (?) AND o.reference NOT LIKE ' . $db->quote(\App\Services\GestionService\GestionDemoSeeder::SALE_REFERENCE_PREFIX . '%'), $products) as $id) {
             $used[$id][] = 'commande';
         }
         foreach (self::PRODUCT_USES as $table => [$column, $label]) {

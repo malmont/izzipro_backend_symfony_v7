@@ -141,7 +141,8 @@ class SiteContentApiTest extends WebTestCase
 
         $refused = $this->json($this->request('DELETE', '/api/site-content/demo'), 409);
         $this->assertSame([['resource' => 'products', 'id' => $product]], array_map(fn ($e) => ['resource' => $e['resource'], 'id' => $e['id']], array_values(array_filter($refused['errors'], fn ($e) => $e['id'] === $product))));
-        $this->assertContains('paiement en cours', $refused['errors'][0]['usedBy']);
+        $ownError = array_values(array_filter($refused['errors'], fn ($e) => $e['id'] === $product))[0]; // d'autres produits d'exemple vendus par un test précédent (semis de la gestion) peuvent être refusés aussi
+        $this->assertContains('paiement en cours', $ownError['usedBy']);
         $this->assertTrue((bool) $this->db->fetchOne('SELECT is_demo FROM product WHERE id = ?', [$product]), 'rien n\'a été supprimé');
 
         $this->db->executeStatement("DELETE FROM checkout_session WHERE payment_intent_id = 'pi_demo_test'");

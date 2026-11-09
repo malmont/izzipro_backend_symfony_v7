@@ -64,6 +64,9 @@ la composition de l'assistant est appliquée (case « Remplacer le contenu d'exe
   - 409 `{ error, errors: [{ resource, id, label, usedBy }] }` et **rien n'est supprimé** si un produit d'exemple sert
     ailleurs : commande, paiement en cours (`checkout_session` ouverte), réservation, formule d'abonnement, avis, véhicule,
     produit lié, livraison.
+  - Les **ventes de démonstration de la gestion** (commandes clients `DEMO-GESTION-<clé de période>-<n°>`, semées par
+    `app:gestion:seed-demo` sur les produits d'exemple, 10/11/2026) sont du contenu d'exemple : elles ne comptent pas comme un
+    usage et sont supprimées avec les produits (`deleted['demo-sales']`).
   - Gardée et rendue définitive (`kept`) : une fiche d'exemple qu'utilise une fiche du client (présentation dans un
     groupe du client, catégorie d'un produit du client, option d'un produit du client).
   - Les fichiers d'images ne sont jamais effacés (images communes).

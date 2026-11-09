@@ -8,6 +8,12 @@ use App\Entity\Commande;
 use App\Entity\Fournisseur;
 use App\Entity\FraisDePort;
 use App\Entity\NoteDeFrais;
+use App\Entity\Order;
+use App\Entity\OrderItems;
+use App\Entity\OrderSource;
+use App\Entity\OrderType;
+use App\Entity\ProductVariant;
+use App\Entity\StatusCommande;
 use App\Entity\Product;
 use App\Entity\Transporteur;
 use App\Entity\TypeFournisseur;
@@ -41,6 +47,37 @@ class GestionDemoSeeder
     public const MIN_PRODUCTS = 32;
 
     /** Produits de démonstration : [nom, prix de vente (cents), quantité, catégorie] */
+    /** Produits de démonstration sans coût ni commande fournisseur (matière pour la reprise d'historique, lot P3) : jamais rattachés par le semis */
+    public const UNCOSTED_PRODUCTS = [
+        ['Trouvaille — foulard vintage', 3200, 6], ['Trouvaille — ceinture tressée', 2600, 8], ['Trouvaille — bonnet artisanal', 2200, 10], ['Trouvaille — gants tricotés', 1900, 9],
+        ['Trouvaille — sac en toile', 4500, 5], ['Trouvaille — lunettes rétro', 3900, 6], ['Trouvaille — sandales en cuir', 5900, 4],
+    ];
+
+    /** Préfixe des références des ventes de démonstration (les commandes clients n'ont pas de marque `is_demo`) */
+    public const SALE_REFERENCE_PREFIX = 'DEMO-GESTION-';
+
+    /**
+     * Ventes de démonstration réparties sur les périodes passées (demande de l'application, 10/11/2026) : par période, [n°, source
+     * (1 web, 2 caisse, 3 mobile), jour depuis le début de la période, lignes [nom du produit, quantité]] ; type 2 = retour d'une vente d'Hiver
+     */
+    private const SALES = [
+        self::COLLECTION_WINTER => [
+            [1, 2, 9, [['Manteau de laine doublé', 1], ['Tuque en tricot torsadé', 2]]], [2, 1, 14, [['Parka isolée grand froid', 1]]],
+            [3, 3, 22, [['Pull col roulé mérinos', 2], ['Gants doublés en cuir', 1]]], [4, 2, 30, [['Trouvaille — bonnet artisanal', 3], ['Trouvaille — gants tricotés', 2]]],
+            [5, 1, 45, [['Chemise en flanelle à carreaux', 2]]], [6, 2, 60, [['Foulard en cachemire', 1], ['Trouvaille — foulard vintage', 1]]],
+        ],
+        self::COLLECTION_CLOSED => [
+            [1, 2, 7, [['Jean coupe droite brut', 2], ['T-shirt coton biologique', 3]]], [2, 1, 12, [['Trouvaille — ceinture tressée', 2]]],
+            [3, 3, 20, [['Espadrilles de toile', 1], ['Chaussettes en laine (lot de 3)', 2]]], [4, 2, 33, [['Bottes de pluie doublées', 1]]],
+            [5, 1, 50, [['Trouvaille — sac en toile', 1], ['Sac à dos urbain 20 L', 1]]], [6, 2, 15, [['Tuque en tricot torsadé', 1]], 'return', self::COLLECTION_WINTER, 1],
+        ],
+        self::COLLECTION_SUMMER => [
+            [1, 2, 5, [['Robe d\'été en lin', 2], ['Chapeau de paille à large bord', 1]]], [2, 1, 12, [['Maillot de bain une pièce', 1], ['Serviette de plage éponge', 2]]],
+            [3, 3, 19, [['Lunettes de soleil polarisées', 1]]], [4, 2, 28, [['Trouvaille — lunettes rétro', 2], ['Short cargo léger', 2]]],
+            [5, 1, 40, [['Sac fourre-tout en toile', 3]]], [6, 2, 55, [['Trouvaille — sandales en cuir', 1], ['Portefeuille compact', 1]]],
+        ],
+    ];
+
     private const PRODUCTS = [
         ['Manteau de laine doublé', 24900, 12, 'Vêtements'], ['Parka isolée grand froid', 32900, 8, 'Vêtements'], ['Pull col roulé mérinos', 11900, 20, 'Vêtements'],
         ['Chandail à capuchon molletonné', 7900, 30, 'Vêtements'], ['Tuque en tricot torsadé', 2999, 40, 'Accessoires'], ['Foulard en cachemire', 8900, 15, 'Accessoires'],
@@ -66,6 +103,7 @@ class GestionDemoSeeder
         private readonly CacheInvalidationSubscriber $cacheInvalidation,
         private readonly \App\Services\GestionService\PeriodCalendar $calendar,
         private readonly ?\App\UseCase\CollectionDashboardUseCase\GetCollectionStatistiquesUseCase $collectionStatistiques = null,
+        private readonly ?\App\UseCase\GestionUseCase\GetPeriodResultUseCase $periodResult = null,
     ) {
     }
 
@@ -148,7 +186,9 @@ class GestionDemoSeeder
 
         // Produits : ceux du site sans commande, complétés par des produits de démonstration s'il en manque
         $this->ensureDemoProducts();
-        $free = $em->getRepository(Product::class)->createQueryBuilder('p')->where('p.commande IS NULL')->orderBy('p.id', 'ASC')->getQuery()->getResult();
+        $this->ensureUncostedProducts();
+        $free = $em->getRepository(Product::class)->createQueryBuilder('p')->where('p.commande IS NULL')->andWhere('p.name NOT IN (:uncosted)')
+            ->setParameter('uncosted', array_column(self::UNCOSTED_PRODUCTS, 0))->orderBy('p.id', 'ASC')->getQuery()->getResult(); // les « Trouvailles » restent sans coût ni commande
         // reprise d'historique de démonstration : les périodes passées (fermées par la date) sont rouvertes le temps du rattachement, puis refermées
         $reopened = [];
         foreach ($collections as $collection) {
@@ -236,6 +276,8 @@ class GestionDemoSeeder
         }
         $em->flush();
 
+        $this->ensureSales($collections, $owner);
+
         // périodes passées : fermées par la date (fin + 15 jours) ; leurs commandes et la période sont (re)figées à chaque semis, statistiques
         // recalculées (tableaux de bord complets et à jour des règles de calcul dès la fin du semis)
         foreach ($collections as $name => $collection) {
@@ -250,6 +292,8 @@ class GestionDemoSeeder
                 $this->freezeCommande->execute($commande);
             }
             $this->collectionStatistiques?->executeOrFreeze($collection);
+            $em->createQuery('DELETE FROM App\\Entity\\PeriodResult r WHERE r.collection = :c')->setParameter('c', $collection)->execute();
+            $this->periodResult?->execute($collection); // résultat de période (P2) refigé avec les ventes du semis
             $this->report[] = sprintf('période « %s » figée avec ses %d commande(s) (tableaux de bord recalculés)', $name, count($commandes));
         }
         $this->cacheInvalidation->invalidateWrittenTenants(); // listes et tableaux de bord en cache : à jour dès la fin du semis
@@ -286,6 +330,105 @@ class GestionDemoSeeder
         if ($created > 0) {
             $this->report[] = sprintf('%d produit(s) de démonstration créé(s) (marqués contenu d\'exemple)', $created);
         }
+    }
+
+    /** Produits « Trouvaille » (`is_demo`), sans prix d'achat ni commande : la reprise d'historique a de quoi simuler ; reconnus par leur nom */
+    private function ensureUncostedProducts(): void
+    {
+        $em = $this->emProvider->getEntityManager();
+        $category = $em->getRepository(Categories::class)->findOneBy(['name' => 'Accessoires']);
+        $created = 0;
+        foreach (self::UNCOSTED_PRODUCTS as $i => [$name, $price, $quantity]) {
+            if ($em->getRepository(Product::class)->findOneBy(['name' => $name])) {
+                continue;
+            }
+            $product = (new Product())->setName($name)->setDescription('Produit de démonstration sans coût connu (matière pour la reprise d\'historique).')
+                ->setPrice($price)->setQuantity($quantity)->setSlug('demo-trouvaille-' . ($i + 1) . '-' . substr(md5($name), 0, 6))->setCreatedAt(new \DateTimeImmutable())
+                ->setIsWeb(true)->setIsPos(true)->setIsPreOrder(false)->setIsDemo(true);
+            if ($category !== null) {
+                $product->addCategory($category);
+            }
+            $em->persist($product);
+            $created++;
+        }
+        $em->flush();
+        if ($created > 0) {
+            $this->report[] = sprintf('%d produit(s) de démonstration sans coût créé(s) (marqués contenu d\'exemple, jamais rattachés)', $created);
+        }
+    }
+
+    /**
+     * Ventes de démonstration sur les périodes passées (`SALES`) : commandes clients `DEMO-GESTION-<clé>-<n°>` (statut complétée),
+     * une variante par produit vendu (stock de la variante = stock du produit : la quantité du produit ne change pas), lignes aux prix
+     * de vente en cents, totaux hors taxes ; reconnues par leur référence, jamais recréées.
+     *
+     * @param array<string, Collections> $collections
+     */
+    private function ensureSales(array $collections, ?User $owner): void
+    {
+        $em = $this->emProvider->getEntityManager();
+        $status = $em->find(StatusCommande::class, 3);
+        $typeSale = $em->find(OrderType::class, 1);
+        $typeReturn = $em->find(OrderType::class, 2);
+        if ($status === null || $typeSale === null || $typeReturn === null) {
+            return;
+        }
+        $created = 0;
+        foreach (self::SALES as $periodName => $sales) {
+            $period = $collections[$periodName] ?? null;
+            if ($period === null) {
+                continue;
+            }
+            $start = \DateTimeImmutable::createFromInterface($period->getStartDateCollection())->setTime(12, 0);
+            foreach ($sales as $sale) {
+                [$n, $source, $day, $lines] = $sale;
+                $isReturn = ($sale[4] ?? null) === 'return';
+                $reference = self::SALE_REFERENCE_PREFIX . $period->getPeriodKey() . '-' . $n;
+                if ($em->getRepository(Order::class)->findOneBy(['reference' => $reference])) {
+                    continue;
+                }
+                $order = (new Order())->setReference($reference)->setOrderDate(\DateTime::createFromImmutable($start->modify("+$day days")))->setStatus($status)
+                    ->setOrderType($isReturn ? $typeReturn : $typeSale)->setOrderSource($em->find(OrderSource::class, $source))->setUserId($owner)->setTotalTax(0.0)->setPricesIncludeTax(false);
+                if ($isReturn && isset($collections[$sale[5]])) {
+                    $order->setReturnedFrom($em->getRepository(Order::class)->findOneBy(['reference' => self::SALE_REFERENCE_PREFIX . $collections[$sale[5]]->getPeriodKey() . '-' . $sale[6]]));
+                }
+                $em->persist($order);
+                $total = 0;
+                foreach ($lines as [$productName, $quantity]) {
+                    $product = $em->getRepository(Product::class)->findOneBy(['name' => $productName]);
+                    if ($product === null) {
+                        continue;
+                    }
+                    $unit = (int) round((float) ($product->getPrice() ?? 0));
+                    $item = (new OrderItems())->setOrderAssociated($order)->setProductVariant($this->variantFor($product))->setQuantity($quantity)->setUnitPrice((float) $unit)->setTotalPrice((float) ($unit * $quantity));
+                    $em->persist($item);
+                    $total += $unit * $quantity;
+                }
+                $signed = $isReturn ? -$total : $total;
+                $order->setSubTotal((float) $signed)->setTotalAmount((float) $signed);
+                $em->flush();
+                $created++;
+            }
+        }
+        if ($created > 0) {
+            $this->report[] = sprintf('%d vente(s) de démonstration créée(s) sur les périodes passées (références %s…)', $created, self::SALE_REFERENCE_PREFIX);
+        }
+    }
+
+    /** Première variante du produit, sinon une variante créée avec le stock du produit (sa quantité reste la même) */
+    private function variantFor(Product $product): ProductVariant
+    {
+        $existing = $product->getVariants()->first();
+        if ($existing instanceof ProductVariant) {
+            return $existing;
+        }
+        $em = $this->emProvider->getEntityManager();
+        $variant = (new ProductVariant())->setProduct($product)->setStockQuantity((int) ($product->getQuantity() ?? 0))->setPrice((int) round((float) ($product->getPrice() ?? 0)));
+        $product->addVariant($variant);
+        $em->persist($variant);
+        $em->flush();
+
+        return $variant;
     }
 
     /**

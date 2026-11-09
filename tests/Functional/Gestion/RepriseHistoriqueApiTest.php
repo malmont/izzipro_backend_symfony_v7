@@ -49,7 +49,8 @@ class RepriseHistoriqueApiTest extends WebTestCase
         $def = PeriodCalendar::definition($today->modify('-500 days'), $calendar->frequency());
         $periodKey = $def['key'];
         $inPeriod = $def['start']->modify('+5 days')->setTime(12, 0);
-        $this->assertNull($this->em()->getRepository(Collections::class)->findOneBy(['periodKey' => $periodKey, 'kind' => Collections::KIND_PERIOD]), 'la période d\'il y a 500 jours n\'existe pas encore');
+        $existedBefore = $this->em()->getRepository(Collections::class)->findOneBy(['periodKey' => $periodKey, 'kind' => Collections::KIND_PERIOD]) !== null; // créée par un autre test si la suite a déjà repris le calendrier plus loin
+        $exists = fn (): bool => $this->em()->getRepository(Collections::class)->findOneBy(['periodKey' => $periodKey, 'kind' => Collections::KIND_PERIOD]) !== null;
 
         // Produits : E sans coût (coût fourni), F au prix d'achat de la fiche, G et J sans rien (estimés), H déjà rattaché à une commande fournisseur
         $conn = $this->em()->getConnection();
@@ -82,7 +83,7 @@ class RepriseHistoriqueApiTest extends WebTestCase
         $this->assertSame([422, ['months' => 'OUT_OF_RANGE']], [$this->client->getResponse()->getStatusCode(), $this->body()['fields']]);
         $this->request('POST', '/api/gestion/reprise/appliquer', ['months' => 20, 'estimateCoefficient' => 0, 'costs' => [['productId' => 999999999, 'purchasePrice' => 1], ['productId' => $ids['E'], 'purchasePrice' => 12.5]]]);
         $this->assertSame([422, ['costs[0].productId' => 'PRODUCT_NOT_FOUND', 'costs[1].purchasePrice' => 'MUST_BE_INTEGER_CENTS', 'estimateCoefficient' => 'MUST_BE_POSITIVE']], [$this->client->getResponse()->getStatusCode(), $this->body()['fields']]);
-        $this->assertNull($this->em()->getRepository(Collections::class)->findOneBy(['periodKey' => $periodKey, 'kind' => Collections::KIND_PERIOD]), 'une requête invalide n\'écrit rien');
+        $this->assertSame($existedBefore, $exists(), 'une requête invalide n\'écrit rien');
 
         // Simulation sans coefficient : coûts connus / inconnus, pagination
         $sim = $this->post('/api/gestion/reprise/simulation', ['months' => 20, 'limit' => 200], 200);
@@ -92,7 +93,8 @@ class RepriseHistoriqueApiTest extends WebTestCase
         $this->assertSame([true, 'commande', 200], [$mine['H']['costKnown'], $mine['H']['costSource'], $mine['H']['unitCost']]);
         $this->assertSame([null, 3], [$mine['G']['costSource'], $mine['G']['quantitySold']]);
         $this->assertGreaterThanOrEqual(5, $sim['productsTotal']);
-        $this->assertSame([$periodKey, false], [$sim['periods'][array_search($periodKey, array_column($sim['periods'], 'periodKey'), true)]['periodKey'], $sim['periods'][array_search($periodKey, array_column($sim['periods'], 'periodKey'), true)]['exists']], 'période à créer');
+        $this->assertSame('CAD', $sim['currency'], 'devise du site à la racine (demande de l\'application)');
+        $this->assertSame([$periodKey, $existedBefore], [$sim['periods'][array_search($periodKey, array_column($sim['periods'], 'periodKey'), true)]['periodKey'], $sim['periods'][array_search($periodKey, array_column($sim['periods'], 'periodKey'), true)]['exists']], 'période du créneau');
         $this->assertGreaterThanOrEqual(5, $sim['sales']['unknownCostItems']);
         $page = $this->post('/api/gestion/reprise/simulation', ['months' => 20, 'limit' => 2, 'page' => 1], 200);
         $this->assertSame([2, 2, 1, $sim['productsTotal'], $sim['sales']], [count($page['products']), $page['limit'], $page['page'], $page['productsTotal'], $page['sales']], 'page de 2 ; totaux sur tout le créneau');
@@ -102,14 +104,14 @@ class RepriseHistoriqueApiTest extends WebTestCase
         $mine2 = $this->mine($sim2['products'], $ids);
         $this->assertSame(['estimated', 500, false], [$mine2['G']['costSource'], $mine2['G']['unitCost'], $mine2['G']['costKnown']]);
         $this->assertGreaterThanOrEqual(3 * 500 + 350, $sim2['investment']['estimated']);
-        $this->assertNull($this->em()->getRepository(Collections::class)->findOneBy(['periodKey' => $periodKey, 'kind' => Collections::KIND_PERIOD]), 'la simulation n\'écrit rien');
-        $this->assertSame(false, $this->get('/api/gestion/reprise')['active']);
+        $this->assertSame($existedBefore, $exists(), 'la simulation n\'écrit rien');
+        $this->assertSame([false, 'CAD'], [$this->get('/api/gestion/reprise')['active'], $this->get('/api/gestion/reprise')['currency']]);
 
         // Application : E au coût fourni, F au prix d'achat, G et J estimés, H ignoré (skipped)
         $applied = $this->post('/api/gestion/reprise/appliquer', ['months' => 20, 'estimateCoefficient' => 2, 'costs' => [['productId' => $ids['E'], 'purchasePrice' => 400], ['productId' => $ids['H'], 'purchasePrice' => 999]]], 201);
         $this->assertSame([true, 20, 2.0, [['productId' => $ids['H'], 'code' => 'ALREADY_ATTACHED']]], [$applied['active'], $applied['months'], (float) $applied['estimateCoefficient'], $applied['skipped']]);
         $periodRow = $applied['periods'][array_search($periodKey, array_column($applied['periods'], 'periodKey'), true)];
-        $this->assertTrue($periodRow['created'], 'période créée par la reprise');
+        $this->assertSame(!$existedBefore, $periodRow['created'], 'période créée par la reprise quand elle manquait');
         $commandeRow = $applied['commandes'][array_search($periodKey, array_column($applied['commandes'], 'periodKey'), true)];
         $this->assertSame([4, 2, 400 + 300 + 1500 + 350], [$commandeRow['productCount'], $commandeRow['estimatedCount'], $commandeRow['investment']], 'E 1 × 400, F 1 × 300, G 3 × 500, J 1 × 350');
         $rows = $this->em()->getConnection()->fetchAllAssociative('SELECT id, commande_id, commande_cost_cents, commande_quantity, commande_attached_at, commande_cost_estimated FROM product WHERE id IN (:ids) ORDER BY id', ['ids' => array_values($ids)], ['ids' => \Doctrine\DBAL\ArrayParameterType::INTEGER]);
@@ -137,7 +139,7 @@ class RepriseHistoriqueApiTest extends WebTestCase
         $this->assertTrue($cancelled['cancelled']);
         $this->assertGreaterThanOrEqual(1, $cancelled['commandesRemoved']);
         $this->assertGreaterThanOrEqual(4, $cancelled['productsDetached']);
-        $this->assertContains($periodKey, $cancelled['periodsRemoved']);
+        $this->assertSame(!$existedBefore, in_array($periodKey, $cancelled['periodsRemoved'], true), 'période créée par la reprise et restée vide : supprimée ; préexistante : gardée');
         $rows = $this->em()->getConnection()->fetchAllAssociative('SELECT id, commande_id, commande_cost_cents, commande_quantity, commande_attached_at, commande_cost_estimated FROM product WHERE id IN (:ids) ORDER BY id', ['ids' => array_values($ids)], ['ids' => \Doctrine\DBAL\ArrayParameterType::INTEGER]);
         foreach ($rows as $row) {
             if ((int) $row['id'] === $ids['H']) {
@@ -147,7 +149,7 @@ class RepriseHistoriqueApiTest extends WebTestCase
             }
         }
         $this->assertSame($snapshot, $this->snapshot(array_values($ids)), 'annulation : vente intacte');
-        $this->assertNull($this->em()->getRepository(Collections::class)->findOneBy(['periodKey' => $periodKey, 'kind' => Collections::KIND_PERIOD]), 'période créée par la reprise et restée vide : supprimée');
+        $this->assertSame($existedBefore, $exists(), 'période : état d\'avant la reprise');
         $this->assertSame(0, (int) $this->em()->getConnection()->fetchOne('SELECT COUNT(*) FROM commande WHERE kind = ?', ['reprise']));
         $this->assertFalse($this->get('/api/gestion/reprise')['active']);
         $this->request('POST', '/api/gestion/reprise/annuler');

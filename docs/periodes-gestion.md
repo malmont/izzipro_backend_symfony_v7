@@ -160,6 +160,7 @@ des ventes mais sans commandes fournisseurs donne un coût aux articles déjà v
 - `GET /api/gestion/reprise` → `{ active, appliedAt, months, from, to, estimateCoefficient, periods: [{ id, periodKey, name,
   created }], commandes: [{ id, periodKey, periodName, productCount, estimatedCount, investment }], skipped }` ; `active: false`
   et le reste `null` sans reprise.
+- `currency` (devise du site) à la racine des quatre réponses (`GestionCurrencyResponseSubscriber`, demande de l'application du 10/11/2026).
 - Résultat de période (§ 3) : `cogs.estimatedItems` et `cogs.estimatedAmount` (part estimée, déjà comprise dans `cogs.amount`)
   pour afficher « dont X estimé ».
 - Schéma : migration `Version20261130100000`, script `scripts/migrate_all_v2_gestion_reprise.sh` (`commande.kind`,

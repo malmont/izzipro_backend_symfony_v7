@@ -65,6 +65,19 @@ class GestionDemoSeederTest extends KernelTestCase
         $this->assertTrue($em->getRepository(Commande::class)->findOneBy(['name' => 'Commande textile printemps'])->getIsClosed(), 'les commandes d\'une collection figée sont figées avec elle');
         $this->assertGreaterThanOrEqual(8, count($em->getRepository(Commande::class)->findBy(['name' => ['Commande textile printemps', 'Réassort automne', 'Accessoires des fêtes', 'Collection hiver — manteaux', 'Accessoires d\'hiver', 'Chaussures et sacs', 'Maillots et serviettes', 'Location nautique — matériel']])), 'huit commandes sur quatre collections');
         $this->assertGreaterThanOrEqual(GestionDemoSeeder::MIN_PRODUCTS, count($attached), 'produits de démonstration créés et rattachés');
+        // Ventes de démonstration sur les périodes passées (demande de l'application, 10/11/2026) et produits sans coût pour la reprise
+        $sales = $em->getRepository(\App\Entity\Order::class)->createQueryBuilder('o')->where('o.reference LIKE :p')->setParameter('p', GestionDemoSeeder::SALE_REFERENCE_PREFIX . '%')->getQuery()->getResult();
+        $this->assertGreaterThanOrEqual(18, count($sales), 'ventes de démonstration sur Hiver, Printemps et Été');
+        foreach ($sales as $sale) {
+            $this->assertGreaterThan(0, count($sale->getOrderItems()), $sale->getReference() . ' : lignes');
+        }
+        foreach (GestionDemoSeeder::UNCOSTED_PRODUCTS as [$name]) {
+            $uncosted = $em->getRepository(Product::class)->findOneBy(['name' => $name]);
+            $this->assertNotNull($uncosted, $name);
+            $this->assertSame([null, null, true], [$uncosted->getCommande(), $uncosted->getPurchasePrice(), $uncosted->isDemo()], $name . ' : sans coût ni commande, contenu d\'exemple');
+        }
+        $this->assertSame(12, $em->getRepository(Product::class)->findOneBy(['name' => 'Manteau de laine doublé'])->getQuantity(), 'la variante créée pour la vente garde le stock du produit');
+        $this->assertSame(1, (int) $em->getConnection()->fetchOne('SELECT COUNT(*) FROM period_result WHERE collection_id = ?', [$closed->getId()]), 'résultat de période figé dès le semis');
 
         // Rejouable : rien n'est recréé ; les périodes fermées sont refigées (statistiques recalculées) à chaque passage
         $em->getConnection()->executeStatement('UPDATE commande SET is_closed = false WHERE name = ?', ['Chaussures et sacs']);
