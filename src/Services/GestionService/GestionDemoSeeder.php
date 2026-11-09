@@ -17,6 +17,7 @@ use App\EventSubscriber\CacheInvalidationSubscriber;
 use App\Services\CommandeService\CommandeProductAttachmentService;
 use App\Services\TenantEntityManagerProvider;
 use App\UseCase\CollectionDashboardUseCase\CloseCollectionUseCase;
+use App\UseCase\CommandeDashboardUseCase\FreezeCommandeMetricsUseCase;
 
 /**
  * Jeu de données de l'application de gestion pour le site de démonstration (demande du propriétaire, 09/11/2026,
@@ -61,6 +62,7 @@ class GestionDemoSeeder
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly CommandeProductAttachmentService $attachments,
         private readonly CloseCollectionUseCase $closeCollection,
+        private readonly FreezeCommandeMetricsUseCase $freezeCommande,
         private readonly CacheInvalidationSubscriber $cacheInvalidation,
     ) {
     }
@@ -192,10 +194,18 @@ class GestionDemoSeeder
 
         foreach ([self::COLLECTION_WINTER, self::COLLECTION_CLOSED] as $name) {
             $collection = $collections[$name];
+            $em->refresh($collection); // commandes créées après le chargement de la collection : relues avant de les figer avec elle
             if (!$collection->getIsClosed()) {
-                $em->refresh($collection); // commandes créées après le chargement de la collection : relues avant de les figer avec elle
                 $this->closeCollection->execute($collection);
                 $this->report[] = "collection « $name » figée avec ses commandes (tableaux de bord conservés)";
+                continue;
+            }
+            // rejeu : une collection déjà figée peut avoir reçu une commande encore ouverte (semis précédent) : figée à son tour
+            foreach ($collection->getCommandes() as $commande) {
+                if (!$commande->getIsClosed()) {
+                    $this->freezeCommande->execute($commande);
+                    $this->report[] = sprintf('commande « %s » figée avec sa collection', $commande->getName());
+                }
             }
         }
         $this->cacheInvalidation->invalidateWrittenTenants(); // listes et tableaux de bord en cache : à jour dès la fin du semis

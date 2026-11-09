@@ -60,8 +60,12 @@ class GestionDemoSeederTest extends KernelTestCase
         $this->assertGreaterThanOrEqual(8, count($em->getRepository(Commande::class)->findBy(['name' => ['Commande textile printemps', 'Réassort automne', 'Accessoires des fêtes', 'Collection hiver — manteaux', 'Accessoires d\'hiver', 'Chaussures et sacs', 'Maillots et serviettes', 'Location nautique — matériel']])), 'huit commandes sur quatre collections');
         $this->assertGreaterThanOrEqual(GestionDemoSeeder::MIN_PRODUCTS, count($attached), 'produits de démonstration créés et rattachés');
 
-        // Rejouable : rien n'est recréé
-        $this->assertSame([], $seeder->seed(), 'second passage : rien à ajouter');
+        // Rejouable : rien n'est recréé ; une commande rouverte à la main dans une collection figée est refigée au rejeu
+        $em->getConnection()->executeStatement('UPDATE commande SET is_closed = false WHERE name = ?', ['Chaussures et sacs']);
+        $em->clear();
+        $this->assertSame(['commande « Chaussures et sacs » figée avec sa collection'], $seeder->seed(), 'second passage : seule la commande rouverte est refigée');
+        $em->clear();
+        $this->assertSame([], $seeder->seed(), 'troisième passage : rien à ajouter');
         $em->clear();
         $this->assertCount(3, $em->getRepository(Commande::class)->findBy(['name' => ['Commande textile printemps', 'Réassort automne', 'Accessoires des fêtes']]));
 
