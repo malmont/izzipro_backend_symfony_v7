@@ -44,6 +44,24 @@ class MobileSessionLifetimeTest extends WebTestCase
         $this->assertGreaterThan(6.9, $this->daysLeft($refreshToken), 'platform mobile : prolongé de 7 jours');
     }
 
+    /** Gestion (« admin ») et caisse (« pos ») : même fenêtre glissante depuis le 10/11/2026 ; le web reste à expiration fixe */
+    public function testAdminAndPosRefreshesExtendTooButNotTheWeb(): void
+    {
+        foreach (['admin', 'pos'] as $platform) {
+            $email = $this->user();
+            $refreshToken = json_decode($this->request('POST', '/api/login', json_encode(['username' => $email, 'password' => self::PASSWORD, 'platform' => 'mobile']))->getContent(), true)['refresh_token'];
+            $this->db()->executeStatement("UPDATE refresh_tokens SET valid = NOW() + INTERVAL '1 day' WHERE refresh_token = ?", [$refreshToken]);
+            $response = $this->request('POST', '/api/token/refresh', json_encode(['refresh_token' => $refreshToken, 'platform' => $platform]));
+            $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+            $this->assertGreaterThan(6.9, $this->daysLeft($refreshToken), "platform $platform : prolongé de 7 jours");
+        }
+        $email = $this->user();
+        $refreshToken = json_decode($this->request('POST', '/api/login', json_encode(['username' => $email, 'password' => self::PASSWORD, 'platform' => 'mobile']))->getContent(), true)['refresh_token'];
+        $this->db()->executeStatement("UPDATE refresh_tokens SET valid = NOW() + INTERVAL '1 day' WHERE refresh_token = ?", [$refreshToken]);
+        $this->assertSame(200, $this->request('POST', '/api/token/refresh', json_encode(['refresh_token' => $refreshToken, 'platform' => 'web']))->getStatusCode());
+        $this->assertLessThan(2, $this->daysLeft($refreshToken), 'platform web : expiration fixe');
+    }
+
     public function testAPasswordResetRevokesTheRefreshTokens(): void
     {
         $email = $this->user();

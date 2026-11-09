@@ -25,6 +25,9 @@ use App\Services\TenantConnectionProvider;
 
 class SecurityController extends AbstractController
 {
+    /** Plateformes dont le jeton de rafraîchissement est prolongé à chaque usage (fenêtre glissante de 7 jours) */
+    public const SLIDING_REFRESH_PLATFORMS = ['mobile', 'admin', 'pos'];
+
     private TenantEntityManagerProvider $tenantEmProvider;
     private TenantConnectionProvider $tenantConnProvider;
     private TokenService $tokenService;
@@ -89,13 +92,14 @@ class SecurityController extends AbstractController
         $isWebSession = (bool) $refreshToken;
 
         // 2. Fallback payload JSON si le front envoie le token dans le body
-        $slidingMobile = false;
+        $sliding = false;
         if (!$refreshToken) {
             $data = json_decode($request->getContent(), true) ?? [];
             $refreshToken = $data['refresh_token'] ?? $data['refreshToken'] ?? null;
-            // Application mobile (01/11/2026) : {"platform": "mobile"} dans le corps → le jeton de rafraîchissement est prolongé de 7 jours
-            // à chaque rafraîchissement (expiration glissante, même jeton) ; sans ce champ, rien ne change pour les clients existants
-            $slidingMobile = strtolower(trim((string) ($data['platform'] ?? ''))) === 'mobile';
+            // Applications installées (mobile 01/11/2026 ; gestion « admin » et caisse « pos » 10/11/2026, décision du propriétaire) :
+            // {"platform": "mobile" | "admin" | "pos"} dans le corps → le jeton de rafraîchissement est prolongé de 7 jours à chaque
+            // rafraîchissement (expiration glissante, même jeton) ; sans ce champ ou pour le web, rien ne change (expiration fixe)
+            $sliding = in_array(strtolower(trim((string) ($data['platform'] ?? ''))), self::SLIDING_REFRESH_PLATFORMS, true);
         }
 
         if (!$refreshToken) {
@@ -145,7 +149,7 @@ class SecurityController extends AbstractController
             return $response;
         }
 
-        if ($slidingMobile) {
+        if ($sliding) {
             $validRefreshToken->setValid((new DateTime())->modify('+7 days'));
             $refreshTokenManager->save($validRefreshToken);
         }
