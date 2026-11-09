@@ -29,7 +29,8 @@ class NoteDeFraisController extends AbstractController
         CreateNoteDeFraisUseCase $createNoteDeFraisUseCase,
         UpdateNoteDeFraisUseCase $updateNoteDeFraisUseCase,
         DeleteNoteDeFraisUseCase $deleteNoteDeFraisUseCase,
-        TenantCacheService $cache
+        TenantCacheService $cache,
+        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null // devise du site (lot G4, 09/11/2026)
     ) {
         $this->getNotesDeFraisByCollectionUseCase = $getNotesDeFraisByCollectionUseCase;
         $this->createNoteDeFraisUseCase = $createNoteDeFraisUseCase;
@@ -59,7 +60,7 @@ class NoteDeFraisController extends AbstractController
     {
         $data = json_decode($request->getContent(), true);
         if (!$data) {
-            return new JsonResponse(['error' => 'Invalid JSON'], JsonResponse::HTTP_BAD_REQUEST);
+            return new JsonResponse(['error' => 'INVALID_JSON', 'code' => 'INVALID_JSON', 'message' => 'Corps JSON invalide'], JsonResponse::HTTP_BAD_REQUEST); // lot G4 (09/11/2026)
         }
 
         $input = new \App\Services\GestionService\GestionInput($data);
@@ -71,11 +72,9 @@ class NoteDeFraisController extends AbstractController
         );
         $input->check(); // 422 VALIDATION_FAILED (lot G1, 09/11/2026)
 
-        $this->createNoteDeFraisUseCase->execute($collection, $inputDTO);
-
-        // L'invalidation est gérée par l'event subscriber existant, donc on ne l'ajoute pas ici.
-
-        return new JsonResponse(['success' => 'Note de frais created'], JsonResponse::HTTP_CREATED);
+        $note = $this->createNoteDeFraisUseCase->execute($collection, $inputDTO);
+        // 201 avec l'objet créé (lot G4, 09/11/2026 ; avant : {"success"})
+        return $this->json(new \App\Dto\NoteDeFraisOutputDTO($note, $this->host($request), $this->currencyCode()), JsonResponse::HTTP_CREATED);
     }
 
     /** Écriture : administrateur ou propriétaire de la collection de la note (S2.7, 30/10/2026 : avant, tout utilisateur connecté, toute note) */
@@ -87,7 +86,7 @@ class NoteDeFraisController extends AbstractController
         }
         $data = json_decode($request->getContent(), true);
         if (!$data) {
-            return new JsonResponse(['error' => 'Invalid JSON'], JsonResponse::HTTP_BAD_REQUEST);
+            return new JsonResponse(['error' => 'INVALID_JSON', 'code' => 'INVALID_JSON', 'message' => 'Corps JSON invalide'], JsonResponse::HTTP_BAD_REQUEST); // lot G4 (09/11/2026)
         }
 
         $input = new \App\Services\GestionService\GestionInput($data);
@@ -99,22 +98,18 @@ class NoteDeFraisController extends AbstractController
         );
         $input->check(); // 422 VALIDATION_FAILED (lot G1, 09/11/2026)
 
-        $this->updateNoteDeFraisUseCase->execute($note, $inputDTO);
-
-        // Invalidation gérée ailleurs
-        return new JsonResponse(['success' => 'Note de frais updated'], JsonResponse::HTTP_OK);
+        $note = $this->updateNoteDeFraisUseCase->execute($note, $inputDTO);
+        return $this->json(new \App\Dto\NoteDeFraisOutputDTO($note, $this->host($request), $this->currencyCode()), JsonResponse::HTTP_OK); // 200 avec l'objet (lot G4)
     }
 
     #[Route('/api/notes-de-frais/{id}', name: 'delete_note_de_frais', methods: ['DELETE'])]
-    public function deleteNoteDeFrais(NoteDeFrais $note): JsonResponse
+    public function deleteNoteDeFrais(NoteDeFrais $note): \Symfony\Component\HttpFoundation\Response
     {
         if (($refused = $this->refuseUnlessOwnerOrAdmin($note)) !== null) {
             return $refused;
         }
         $this->deleteNoteDeFraisUseCase->execute($note);
-
-        // Invalidation gérée par l'event subscriber existant
-        return new JsonResponse(['success' => 'Note de frais deleted'], JsonResponse::HTTP_NO_CONTENT);
+        return new \Symfony\Component\HttpFoundation\Response('', \Symfony\Component\HttpFoundation\Response::HTTP_NO_CONTENT); // 204 sans corps (lot G4)
     }
 
     /** 403 FORBIDDEN sauf administrateur ou propriétaire de la collection de la note (la note elle-même n'a pas de propriétaire) */
@@ -125,5 +120,16 @@ class NoteDeFraisController extends AbstractController
         }
 
         return new JsonResponse(['error' => 'FORBIDDEN', 'message' => 'Cette note de frais ne vous appartient pas'], JsonResponse::HTTP_FORBIDDEN);
+    }
+
+    /** Même hôte que la liste GET (images des types de note de frais sous /assets/images/) */
+    private function host(Request $request): string
+    {
+        return $request->getSchemeAndHttpHost();
+    }
+
+    private function currencyCode(): string
+    {
+        return $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT;
     }
 }

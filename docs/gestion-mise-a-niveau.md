@@ -85,7 +85,7 @@ Note : si `commande_cost_cents` (lot « rattachement », § 4) est posé, le cal
 `getTotalRevenueBetweenDates` compare `o.orderDate` à des chaînes `Y-m-d 00:00:00` (heure murale), piège déjà
 documenté (`docs/caisse.md`, « Doctrine wall-time »).
 
-### 2.5 Contrat HTTP irrégulier
+### 2.5 Contrat HTTP irrégulier (corrigé par le lot G4, sauf la forme API Platform de `GET /api/commandes`, inutilisée par l'application)
 
 | Route | Constat | Norme |
 |---|---|---|
@@ -135,7 +135,7 @@ Toute correction de calcul doit commencer par un test qui fixe les chiffres atte
 
 ## 3. Recommandations : lots proposés
 
-**État (09/11/2026)** : G0, G1, G2 livrés et poussés (70150e36) ; G3 livré (commit séparé) ; G4, G5 à faire. Un commit poussé par lot (demande du propriétaire).
+**État (09/11/2026)** : G0, G1, G2 livrés et poussés (70150e36) ; G3 poussé (334f41e9) ; G4 livré (commit séparé) ; G5 et le jeu de données demo (§ 8) à faire. Un commit poussé par lot (demande du propriétaire).
 
 Ordre pensé pour ne rien casser côté MAUI pendant la transition : chaque lot est additif, la conversion de données est
 faite une fois par script, et le contrat est annoncé à « new easymakemoney » avant d'être activé.

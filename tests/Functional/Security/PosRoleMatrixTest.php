@@ -77,13 +77,15 @@ class PosRoleMatrixTest extends WebTestCase
         $refused('POST', '/api/order/create-multi-payment', ['items' => $big, 'paymentMethods' => [['type' => 2, 'amount' => $q['cashTotal'] / 100]], 'cashRegisterId' => $this->register], 'APPROVAL_REQUIRED', 403, 'remise au-delà du plafond');
         // Routes partagées avec le web (audit S2.7) : notes de frais (administrateur), étiquettes (sa commande), commande web d'un caissier (vente web seulement)
         $noteId = (int) $this->db->fetchOne("INSERT INTO note_de_frais (id, name, montant, date) VALUES (nextval('note_de_frais_id_seq'), 'Rôle test', 1, CURRENT_DATE) RETURNING id");
-        $this->assertSame([403, 'FORBIDDEN'], $this->error($this->request('PUT', "/api/notes-de-frais/$noteId", ['description' => 'x'])), 'note de frais d\'autrui : refusée');
-        $this->assertSame([403, 'FORBIDDEN'], $this->error($this->request('DELETE', "/api/notes-de-frais/$noteId")), 'note de frais d\'autrui : refusée');
+        // Lot G4 de la gestion (09/11/2026) : les notes de frais sont réservées aux administrateurs (access_control), même la sienne
+        $this->assertSame(403, $this->request('PUT', "/api/notes-de-frais/$noteId", ['description' => 'x'])->getStatusCode(), 'note de frais d\'autrui : refusée');
+        $this->assertSame(403, $this->request('DELETE', "/api/notes-de-frais/$noteId")->getStatusCode(), 'note de frais d\'autrui : refusée');
         $collectionId = (int) $this->db->fetchOne("INSERT INTO collections (id, user_collections_id, budget_collection, start_date_collection, end_date_collection, del, nom_collection) VALUES (nextval('collections_id_seq'), ?, 0, CURRENT_DATE, CURRENT_DATE, false, 'Rôle test') RETURNING id", [$cashier->getId()]);
         $this->db->executeStatement('UPDATE note_de_frais SET collection_id = ? WHERE id = ?', [$collectionId, $noteId]);
         $typeId = (int) $this->db->fetchOne("INSERT INTO type_note_de_frais (id, name) VALUES (nextval('type_note_de_frais_id_seq'), 'Rôle test') RETURNING id");
-        $this->assertSame(200, $this->request('PUT', "/api/notes-de-frais/$noteId", ['description' => 'la mienne', 'montant' => 2, 'date' => date('Y-m-d'), 'typeNoteDeFraisId' => $typeId])->getStatusCode(), 'sa propre note (collection à lui) : modifiable');
-        $this->assertSame(204, $this->request('DELETE', "/api/notes-de-frais/$noteId")->getStatusCode(), 'sa propre note : supprimable');
+        $this->assertSame(403, $this->request('PUT', "/api/notes-de-frais/$noteId", ['description' => 'la mienne', 'montant' => 2, 'date' => date('Y-m-d'), 'typeNoteDeFraisId' => $typeId])->getStatusCode(), 'sa propre note (collection à lui) : refusée aussi (gestion réservée aux administrateurs, lot G4)');
+        $this->assertSame(403, $this->request('DELETE', "/api/notes-de-frais/$noteId")->getStatusCode(), 'sa propre note : refusée aussi');
+        $this->db->executeStatement('DELETE FROM note_de_frais WHERE id = ?', [$noteId]);
         $this->db->executeStatement('DELETE FROM collections WHERE id = ?', [$collectionId]);
         $this->db->executeStatement('DELETE FROM type_note_de_frais WHERE id = ?', [$typeId]);
         $refused('POST', '/api/shipping/buy', ['orderId' => $card['issuedOrderId'], 'cartItems' => []], 'FORBIDDEN', 403, 'étiquette pour une commande qui n\'est pas la sienne (vente du responsable)');

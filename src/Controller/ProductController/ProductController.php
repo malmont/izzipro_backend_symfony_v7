@@ -93,8 +93,12 @@ class ProductController extends AbstractController
         $input = new \App\Services\GestionService\GestionInput($request->request->all());
         $input->cents('purchasePrice', false);
         $input->decimal('coefficientMultiplier', false);
+        $input->integer('quantity', false);
         $input->text('name');
         $input->check();
+        if ($commande->getIsClosed()) {
+            throw new \App\Services\GestionService\GestionConflictException('COMMANDE_CLOSED', 'La commande est figée : aucun produit ne peut y être ajouté.'); // 409 (lot G4, 09/11/2026)
+        }
         try {
 
             $uploadDir = $this->getParameter('kernel.project_dir') . '/public/assets/uploads/products/';
@@ -104,17 +108,21 @@ class ProductController extends AbstractController
             $productDTO = new ProductOutputDTO($product, $host);
 
             return $this->json($productDTO, JsonResponse::HTTP_CREATED);
+        } catch (\App\Services\GestionService\GestionConflictException $e) {
+            throw $e; // 404 / 409 à code via le gestionnaire d'exceptions
         } catch (\Exception $e) {
             return $this->json(['error' => $e->getMessage()], JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
     #[Route('/api/products/{id}', name: 'delete_product', methods: ['DELETE'])]
-    public function deleteProduct(int $id): JsonResponse
+    public function deleteProduct(int $id): \Symfony\Component\HttpFoundation\Response
     {
         try {
             $this->deleteProductUseCase->execute($id);
-            return new JsonResponse(['success' => 'Product deleted'], JsonResponse::HTTP_OK);
+            return new \Symfony\Component\HttpFoundation\Response('', \Symfony\Component\HttpFoundation\Response::HTTP_NO_CONTENT); // 204 sans corps (lot G4, 09/11/2026 ; avant : 200 avec message)
+        } catch (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e) {
+            throw $e; // 404 via le gestionnaire d'exceptions
         } catch (\Exception $e) {
             return new JsonResponse(['error' => $e->getMessage()], JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
         }

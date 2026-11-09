@@ -58,7 +58,7 @@ class BoutiqueCacheInvalidationTest extends WebTestCase
         yield 'sizes' => [Size::class, '/api/sizes', 'sizes_all_en', true];
         yield 'styles' => [Style::class, '/api/styles', 'styles_all', true];
         yield 'carriers' => [Carrier::class, '/api/Carrier?locale=fr', 'carriers_fr', false];
-        yield 'transporteurs' => [Transporteur::class, '/api/transporteurs', 'transporteurs_all', false];
+        yield 'transporteurs' => [Transporteur::class, '/api/transporteurs', 'transporteurs_all', true]; // réservée à ROLE_ADMIN depuis le lot G4 de la gestion (09/11/2026)
     }
 
     /**

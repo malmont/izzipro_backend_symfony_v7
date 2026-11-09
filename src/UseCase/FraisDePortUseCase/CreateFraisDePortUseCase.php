@@ -14,8 +14,8 @@ class CreateFraisDePortUseCase
         $this->fraisDePortService = $fraisDePortService;
     }
 
-    public function execute(Commande $commande, FraisDePortInputDTO $inputDTO): void
+    public function execute(Commande $commande, FraisDePortInputDTO $inputDTO): \App\Entity\FraisDePort
     {
-        $this->fraisDePortService->createFraisDePort($commande, $inputDTO);
+        return $this->fraisDePortService->createFraisDePort($commande, $inputDTO);
     }
 }

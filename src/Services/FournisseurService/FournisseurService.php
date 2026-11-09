@@ -25,7 +25,7 @@ class FournisseurService
         
         $typeFournisseur = $typeFournisseurRepository->find($inputDTO->typeFournisseur);
         if (!$typeFournisseur) {
-            throw new \Exception('TypeFournisseur not found');
+            throw new \App\Services\GestionService\GestionConflictException('TYPE_FOURNISSEUR_NOT_FOUND', 'Type de fournisseur inconnu : ' . $inputDTO->typeFournisseur, 404); // lot G4 (09/11/2026)
         }
         $fournisseur->setTypeFournisseur($typeFournisseur);
 
@@ -49,6 +49,9 @@ class FournisseurService
     public function deleteFournisseur(Fournisseur $fournisseur): void
     {
         $em = $this->emProvider->getEntityManager();
+        if (!$fournisseur->getCommandes()->isEmpty()) {
+            throw new \App\Services\GestionService\GestionConflictException('FOURNISSEUR_IN_USE', 'Ce fournisseur a des commandes : il ne peut pas être supprimé.'); // 409 (lot G4, 09/11/2026 ; avant : violation de clé étrangère)
+        }
         $em->remove($fournisseur);
         
         $em->flush();

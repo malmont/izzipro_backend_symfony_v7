@@ -25,7 +25,7 @@ class NoteDeFraisService
         return $collection->getNoteDeFrais()->toArray();
     }
 
-    public function createNoteDeFrais(Collections $collection, NoteDeFraisInputDTO $inputDTO): void
+    public function createNoteDeFrais(Collections $collection, NoteDeFraisInputDTO $inputDTO): NoteDeFrais
     {
         // MODIFICATION 2 : On récupère l'EM et les dépendances ici
         $em = $this->emProvider->getEntityManager();
@@ -37,13 +37,18 @@ class NoteDeFraisService
         $note->setDate(new \DateTime($inputDTO->date));
         
         $typeNoteDeFrais = $typeNoteDeFraisRepository->find($inputDTO->typeNoteDeFraisId);
+        if (!$typeNoteDeFrais) {
+            throw new \App\Services\GestionService\GestionConflictException('TYPE_NOTE_DE_FRAIS_NOT_FOUND', 'Type de note de frais inconnu : ' . $inputDTO->typeNoteDeFraisId, 404); // lot G4 (09/11/2026)
+        }
         $note->setTypeNoteDeFrais($typeNoteDeFrais);
         $note->setCollection($collection);
         $em->persist($note);
         $em->flush();
+
+        return $note;
     }
 
-    public function updateNoteDeFrais(NoteDeFrais $note, NoteDeFraisInputDTO $inputDTO): void
+    public function updateNoteDeFrais(NoteDeFrais $note, NoteDeFraisInputDTO $inputDTO): NoteDeFrais
     {
         $em = $this->emProvider->getEntityManager();
         $typeNoteDeFraisRepository = $em->getRepository(TypeNoteDeFrais::class);
@@ -51,10 +56,13 @@ class NoteDeFraisService
         $note->setMontant($inputDTO->montant);
         $note->setDate(new \DateTime($inputDTO->date));
         $typeNoteDeFrais = $typeNoteDeFraisRepository->find($inputDTO->typeNoteDeFraisId);
+        if (!$typeNoteDeFrais) {
+            throw new \App\Services\GestionService\GestionConflictException('TYPE_NOTE_DE_FRAIS_NOT_FOUND', 'Type de note de frais inconnu : ' . $inputDTO->typeNoteDeFraisId, 404); // lot G4 (09/11/2026)
+        }
         $note->setTypeNoteDeFrais($typeNoteDeFrais);
-
- 
         $em->flush();
+
+        return $note;
     }
 
     public function deleteNoteDeFrais(NoteDeFrais $note): void

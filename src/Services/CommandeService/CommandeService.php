@@ -60,8 +60,10 @@ class CommandeService
     {
         $em = $this->emProvider->getEntityManager();
         $fournisseur = $em->getRepository(Fournisseur::class)->find($fournisseurDTO->id);
-        
-        // Note: La logique "ou Créer" n'est pas implémentée ici, mais la recherche est maintenant correcte.
+        if (!$fournisseur) {
+            throw new \App\Services\GestionService\GestionConflictException('FOURNISSEUR_NOT_FOUND', 'Fournisseur inconnu : ' . $fournisseurDTO->id, 404); // lot G4 (09/11/2026)
+        }
+
         return $fournisseur;
     }
 

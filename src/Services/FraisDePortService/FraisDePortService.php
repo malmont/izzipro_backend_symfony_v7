@@ -27,10 +27,16 @@ class FraisDePortService
         return $commande->getFraisDePort();
     }
 
-    public function createFraisDePort(Commande $commande, FraisDePortInputDTO $inputDTO): void
+    public function createFraisDePort(Commande $commande, FraisDePortInputDTO $inputDTO): FraisDePort
     {
-        // MODIFICATION 2 : On récupère l'EM du tenant ici
         $em = $this->emProvider->getEntityManager();
+        // lot G4 (09/11/2026) : un seul frais de port par commande (409), commande fermée (409), transporteur inconnu (404)
+        if ($commande->getIsClosed()) {
+            throw new \App\Services\GestionService\GestionConflictException('COMMANDE_CLOSED', 'La commande est figée.');
+        }
+        if ($commande->getFraisDePort()) {
+            throw new \App\Services\GestionService\GestionConflictException('SHIPPING_COST_ALREADY_SET', 'La commande a déjà un frais de port : supprimez-le avant d\'en créer un autre.');
+        }
 
         $fraisDePort = new FraisDePort();
         $fraisDePort->setName($inputDTO->name);
@@ -42,11 +48,14 @@ class FraisDePortService
         // On récupère le repository depuis l'EM du tenant
         $transporteurRepository = $em->getRepository(Transporteur::class);
         $transporteur = $transporteurRepository->find($inputDTO->transporteurId);
-        if ($transporteur) {
-            $fraisDePort->setTransporteur($transporteur);
+        if (!$transporteur) {
+            throw new \App\Services\GestionService\GestionConflictException('TRANSPORTEUR_NOT_FOUND', 'Transporteur inconnu : ' . $inputDTO->transporteurId, 404);
         }
+        $fraisDePort->setTransporteur($transporteur);
         $em->persist($fraisDePort);
         $em->flush();
+
+        return $fraisDePort;
     }
 
     public function deleteFraisDePort(Commande $commande): void

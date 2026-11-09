@@ -71,9 +71,12 @@ class CommandeController extends AbstractController
         $data = ['budget' => $input->cents('budget'), 'name' => $input->text('name'), 'date' => $input->date('date')?->format('Y-m-d H:i:s')];
         $fournisseurId = $input->id('fournisseur');
         $input->check(); // 422 VALIDATION_FAILED (lot G1, 09/11/2026)
+        if ($collection->getIsClosed()) {
+            throw new \App\Services\GestionService\GestionConflictException('COLLECTION_CLOSED', 'La collection est figée : aucune commande ne peut y être ajoutée.'); // 409 (lot G4, 09/11/2026)
+        }
         $fournisseurDTO = new FournisseurInputDTO(['id' => $fournisseurId]);
-        $this->createCommandeUseCase->execute($data, $collection, $fournisseurDTO);
-
-        return $this->json(['success' => 'Commande created'], JsonResponse::HTTP_CREATED);
+        $commande = $this->createCommandeUseCase->execute($data, $collection, $fournisseurDTO);
+        // 201 avec l'objet créé (lot G4, 09/11/2026 ; avant : {"success"})
+        return $this->json(new CommandeOutputDTO($commande, $request->getSchemeAndHttpHost(), $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT), JsonResponse::HTTP_CREATED);
     }
 }

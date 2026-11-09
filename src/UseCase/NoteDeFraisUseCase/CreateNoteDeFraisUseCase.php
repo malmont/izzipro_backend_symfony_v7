@@ -14,8 +14,8 @@ class CreateNoteDeFraisUseCase
         $this->noteDeFraisService = $noteDeFraisService;
     }
 
-    public function execute(Collections $collection, NoteDeFraisInputDTO $inputDTO): void
+    public function execute(Collections $collection, NoteDeFraisInputDTO $inputDTO): \App\Entity\NoteDeFrais
     {
-        $this->noteDeFraisService->createNoteDeFrais($collection, $inputDTO);
+        return $this->noteDeFraisService->createNoteDeFrais($collection, $inputDTO);
     }
 }

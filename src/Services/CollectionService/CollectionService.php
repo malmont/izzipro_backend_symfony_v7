@@ -60,20 +60,19 @@ class CollectionService
         $em = $this->emProvider->getEntityManager();
 
         // On utilise l'EM du tenant pour obtenir le repository et les données.
-        $collections = $em->getRepository(Collections::class)->findAll();
+        $collections = $em->getRepository(Collections::class)->findBy(['del' => false], ['id' => 'ASC']); // les collections supprimées (logiquement) ne sont plus listées (lot G4, 09/11/2026)
         
         $currency = $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT;
 
         return array_map(fn($collection) => new CollectionOutputDTO($collection, $host, $currency), $collections);
     }
 
+    /** Suppression logique (`del`, lot G4, 09/11/2026) : les commandes, notes de frais et statistiques restent en base, la collection disparaît des listes et du combiné */
     public function deleteCollection(Collections $collection): void
     {
-        // On récupère l'EntityManager du tenant.
         $em = $this->emProvider->getEntityManager();
-
-        // On utilise l'EM du tenant pour supprimer.
-        $em->remove($collection);
+        $collection->setDel(true);
+        $em->persist($collection);
         $em->flush();
     }
     

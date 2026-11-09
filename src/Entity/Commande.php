@@ -35,7 +35,8 @@ class Commande
     /**
      * @var Collection<int, Product>
      */
-    #[ORM\OneToMany(mappedBy: 'commande', targetEntity: Product::class, cascade: ['persist', 'remove'])]
+    /** Les produits de la boutique survivent à la commande : détachés à sa suppression (FK ON DELETE SET NULL, lot G4, 09/11/2026 ; avant : supprimés en cascade) */
+    #[ORM\OneToMany(mappedBy: 'commande', targetEntity: Product::class, cascade: ['persist'])]
     private Collection $products;
 
     #[ORM\ManyToOne(inversedBy: 'commandes')]
@@ -50,7 +51,7 @@ class Commande
     /**
      * @var Collection<int, CommandeStatistiques>
      */
-    #[ORM\OneToMany(mappedBy: 'commande', targetEntity: CommandeStatistiques::class)]
+    #[ORM\OneToMany(mappedBy: 'commande', targetEntity: CommandeStatistiques::class, cascade: ['remove'])] // statistiques figées supprimées avec la commande (lot G4)
     private Collection $commandeStatistiques;
 
     #[ORM\ManyToOne(inversedBy: 'commandes')]

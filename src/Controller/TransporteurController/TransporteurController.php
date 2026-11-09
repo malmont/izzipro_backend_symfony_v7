@@ -54,17 +54,15 @@ class TransporteurController extends AbstractController
         $transporteurDTO = TransporteurDTO::fromArray($data);
         $transporteur = $this->createTransporteurUseCase->execute($transporteurDTO);
 
-        return $this->json([
-            'success' => 'Transporteur created',
-            'transporteur_id' => $transporteur->getId(),
-        ], JsonResponse::HTTP_CREATED);
+        // 201 avec l'objet créé (lot G4, 09/11/2026 ; avant : {"success", "transporteur_id"})
+        return $this->json(['id' => $transporteur->getId(), 'name' => $transporteur->getName(), 'logo' => $transporteur->getLogo(), 'contact' => $transporteur->getContact()], JsonResponse::HTTP_CREATED);
     }
 
     #[Route('/api/transporteurs/{id}', name: 'delete_transporteur', methods: ['DELETE'])]
-    public function deleteTransporteur(\App\Entity\Transporteur $transporteur): JsonResponse
+    public function deleteTransporteur(\App\Entity\Transporteur $transporteur): \Symfony\Component\HttpFoundation\Response
     {
         $this->deleteTransporteurUseCase->execute($transporteur);
 
-        return new JsonResponse(['success' => 'Transporteur deleted'], JsonResponse::HTTP_NO_CONTENT);
+        return new \Symfony\Component\HttpFoundation\Response('', \Symfony\Component\HttpFoundation\Response::HTTP_NO_CONTENT); // 204 sans corps (lot G4)
     }
 }

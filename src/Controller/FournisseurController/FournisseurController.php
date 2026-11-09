@@ -63,17 +63,15 @@ class FournisseurController extends AbstractController
         $fournisseurInputDTO = new FournisseurInputDTO($data);
         $fournisseur = $this->createFournisseurUseCase->execute($fournisseurInputDTO);
         // Invalidation gérée ailleurs si nécessaire
-        return new JsonResponse(
-            ['success' => 'Fournisseur créé avec succès', 'fournisseur_id' => $fournisseur->getId()],
-            JsonResponse::HTTP_CREATED
-        );
+        // 201 avec l'objet créé (lot G4, 09/11/2026 ; avant : {"success", "fournisseur_id"})
+        return $this->json(new FournisseurOutputDTO($fournisseur, $request->getSchemeAndHttpHost()), JsonResponse::HTTP_CREATED);
     }
 
     #[Route('/api/fournisseurs/{id}', name: 'delete_fournisseur', methods: ['DELETE'])]
-    public function deleteFournisseur(Fournisseur $fournisseur): JsonResponse
+    public function deleteFournisseur(Fournisseur $fournisseur): \Symfony\Component\HttpFoundation\Response
     {
         $this->deleteFournisseurUseCase->execute($fournisseur);
         // Invalidation gérée ailleurs si nécessaire
-        return new JsonResponse(['success' => 'Fournisseur supprimé avec succès'], JsonResponse::HTTP_NO_CONTENT);
+        return new \Symfony\Component\HttpFoundation\Response('', \Symfony\Component\HttpFoundation\Response::HTTP_NO_CONTENT); // 204 sans corps (lot G4)
     }
 }

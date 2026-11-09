@@ -2,6 +2,7 @@
 
 namespace App\Tests\Functional\Gestion;
 
+use App\Entity\Collections;
 use App\Entity\Product;
 use App\Entity\Transporteur;
 use App\Entity\TypeFournisseur;
@@ -23,8 +24,9 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  *
  * État fixé par G1 : tous les montants en cents entiers (entrée et sortie), `currency` du site sur chaque réponse portant un
  * montant, 422 VALIDATION_FAILED à l'entrée ; tableaux de bord au coût d'achat (`Product::commandeUnitCost()`, lot
- * « rattachement ») calculés par agrégats SQL (G2 : taux arrondis, purchaseCost, clôture 200 objet / 409) ; messages de
- * succès et codes 404 historiques (G4).
+ * « rattachement ») calculés par agrégats SQL (G2 : taux arrondis, purchaseCost, clôture 200 objet / 409) ; contrat HTTP
+ * (G4) : 201 avec l'objet créé, 204 sans corps, 200 null sans frais de port, 404 / 409 à code, propriétaire = jeton,
+ * suppression logique des collections, produits détachés à la suppression d'une commande, rôles administrateur.
  */
 class PurchasesApiTest extends WebTestCase
 {
@@ -50,46 +52,61 @@ class PurchasesApiTest extends WebTestCase
         $transporteur = $this->create(Transporteur::class, ['name' => 'Transporteur test']);
         $this->endOfWrite();
 
-        // Collection : 201 avec une chaîne « Collection creer avec succes » (état avant G4), relue par la liste ; budget en unités monétaires (avant G1)
+        // Collection : 201 avec l'objet créé (lot G4) ; propriétaire = utilisateur du jeton (le userId du corps est ignoré)
         $name = 'Collection G0 ' . bin2hex(random_bytes(2));
-        $this->assertSame('Collection creer avec succes', $this->post('/api/createcollections', [
+        $collection = $this->post('/api/createcollections', [
             'budgetCollection' => 1000000.0, 'startDateCollection' => '2026-11-01 00:00:00', 'endDateCollection' => '2026-11-30 00:00:00',
-            'nomCollection' => $name, 'userId' => $this->userId,
-        ], 201), 'un nombre JSON intégral (1000000.0) vaut 1000000 cents');
-        $collection = $this->collectionByName($name);
+            'nomCollection' => $name, 'userId' => 999999,
+        ], 201);
         $collectionId = (int) $collection['id'];
-        $this->assertSame([1000000, $name, false, false, 'CAD'], [$collection['budgetCollection'], $collection['nomCollection'], $collection['isClosed'], $collection['del'], $collection['currency']]);
-        $this->assertSame($this->userId, $collection['user']['id'] ?? null, 'la collection appartient à l\'utilisateur indiqué (userId du corps, avant G4)');
+        $this->assertSame([1000000, $name, false, false, 'CAD'], [$collection['budgetCollection'], $collection['nomCollection'], $collection['isClosed'], $collection['del'], $collection['currency']], 'un nombre JSON intégral (1000000.0) vaut 1000000 cents');
+        $this->assertSame($this->userId, $collection['user']['id'] ?? null, 'propriétaire = utilisateur du jeton, pas le userId du corps');
+        $this->assertSame($collection, $this->collectionByName($name), 'la réponse 201 a la forme de la liste');
 
-        // Fournisseur : 201 avec son identifiant seulement (état avant G4)
+        // Fournisseur : 201 avec l'objet créé (lot G4) ; type inconnu → 404
+        $this->request('POST', '/api/fournisseurs', ['name' => 'Sans type', 'typeFournisseur' => 999999]);
+        $this->assertSame([404, 'TYPE_FOURNISSEUR_NOT_FOUND'], [$this->client->getResponse()->getStatusCode(), json_decode((string) $this->client->getResponse()->getContent(), true)['error']]);
         $fournisseur = $this->post('/api/fournisseurs', ['name' => 'Fournisseur G0', 'typeFournisseur' => $typeFournisseur->getId(), 'ville' => 'Montréal', 'pays' => 'Canada', 'tel' => '514'], 201);
-        $fournisseurId = (int) $fournisseur['fournisseur_id'];
+        $fournisseurId = (int) $fournisseur['id'];
+        $this->assertSame(['Fournisseur G0', 'Montréal'], [$fournisseur['name'], $fournisseur['ville']]);
         $fournisseurs = $this->get('/api/fournisseurs');
         $this->assertContains($fournisseurId, array_column($fournisseurs, 'id'));
 
-        // Commande fournisseur : 201 {"success"} sans l'objet (état avant G4) ; relue par la liste de la collection
-        $this->post("/api/collections/$collectionId/commandes", ['budget' => 500000, 'date' => '2026-11-05 10:00:00', 'name' => 'Commande G0', 'fournisseur' => ['id' => $fournisseurId]], 201);
+        // Commande fournisseur : 201 avec l'objet créé (lot G4) ; fournisseur inconnu → 404
+        $this->request('POST', "/api/collections/$collectionId/commandes", ['budget' => 1, 'date' => '2026-11-05 10:00:00', 'name' => 'Inconnu', 'fournisseur' => ['id' => 999999]]);
+        $this->assertSame([404, 'FOURNISSEUR_NOT_FOUND'], [$this->client->getResponse()->getStatusCode(), json_decode((string) $this->client->getResponse()->getContent(), true)['error']]);
+        $created = $this->post("/api/collections/$collectionId/commandes", ['budget' => 500000, 'date' => '2026-11-05 10:00:00', 'name' => 'Commande G0', 'fournisseur' => ['id' => $fournisseurId]], 201);
         $commandes = $this->get("/api/collections/$collectionId/commandes");
         $this->assertCount(1, $commandes);
         $commande = $commandes[0];
         $commandeId = (int) $commande['id'];
+        $this->assertSame($commande, $created, 'la réponse 201 a la forme de la liste');
         $this->assertSame([500000, 'Commande G0', $collectionId, $fournisseurId, 'CAD'], [$commande['budget'], $commande['name'], $commande['collectionId'], $commande['fournisseur']['id'], $commande['currency']]);
 
         // Produit de la commande (multipart) : prix d'achat en CENTS, prix de vente dérivé = achat × coefficient
-        $product = $this->postMultipart("/api/commandes/$commandeId/products", ['name' => 'Produit G0', 'description' => 'Description', 'purchasePrice' => '1000', 'coefficientMultiplier' => '2'], 201);
+        $this->client->request('POST', "/api/commandes/$commandeId/products", ['name' => 'Sans style', 'description' => 'd', 'purchasePrice' => '1', 'style_id' => '999999'], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json', 'HTTP_AUTHORIZATION' => 'Bearer ' . $this->token]);
+        $this->assertSame([404, 'STYLE_NOT_FOUND'], [$this->client->getResponse()->getStatusCode(), json_decode((string) $this->client->getResponse()->getContent(), true)['error']], 'style inconnu → 404 à code (lot G4, avant : 500)');
+        // quantité facultative à la création (lot G4) ; sinon elle vient des variantes (rappels Doctrine de ProductVariant)
+        $product = $this->postMultipart("/api/commandes/$commandeId/products", ['name' => 'Produit G0', 'description' => 'Description', 'purchasePrice' => '1000', 'coefficientMultiplier' => '2', 'quantity' => '3'], 201);
         $productId = (int) $product['id'];
         $this->assertSame([1000.0, 2.0], array_map('floatval', [$product['purchasePrice'], $product['coefficientMultiplier']]), 'création : ProductOutputDTO (sans price)');
-        // La route ne reçoit pas de quantité : elle vient des variantes (rappels Doctrine de ProductVariant) ; posée ici directement
-        $this->setQuantity($productId, 3);
 
         $products = $this->get("/api/commandes/$commandeId/products");
         $this->assertSame([$productId], array_column($products, 'id'));
         $this->assertSame([3, 2000.0, 1000.0], [$products[0]['quantity'], (float) $products[0]['price'], (float) $products[0]['purchasePrice']], 'lecture : ProductDetailedOutputDTO, price = purchasePrice × coefficient');
 
         // Frais de port : un seul par commande ; prix en unités monétaires (état avant G1) ; 201 {"success"}
-        $this->post("/api/commandes/$commandeId/frais-de-port", ['name' => 'Expédition', 'facture' => 'F-1', 'tracknumber' => 'T-1', 'price' => 15000, 'transporteur' => ['id' => $transporteur->getId()]], 201);
+        $this->assertNull($this->getRaw("/api/commandes/$commandeId/frais-de-port"), 'commande sans frais de port : 200 null (lot G4, avant : 404)');
+        $this->request('POST', "/api/commandes/$commandeId/frais-de-port", ['name' => 'X', 'price' => 1, 'transporteur' => ['id' => 999999]]);
+        $this->assertSame([404, 'TRANSPORTEUR_NOT_FOUND'], [$this->client->getResponse()->getStatusCode(), json_decode((string) $this->client->getResponse()->getContent(), true)['error']]);
+        $createdShipping = $this->post("/api/commandes/$commandeId/frais-de-port", ['name' => 'Expédition', 'facture' => 'F-1', 'tracknumber' => 'T-1', 'price' => 15000, 'transporteur' => ['id' => $transporteur->getId()]], 201);
         $shipping = $this->get("/api/commandes/$commandeId/frais-de-port");
         $this->assertSame([15000, 'Expédition', $transporteur->getId(), 'CAD'], [$shipping['price'], $shipping['name'], $shipping['transporteur']['id'], $shipping['currency']]);
+        $this->assertSame($shipping, $createdShipping, 'la réponse 201 a la forme de la lecture');
+        $this->request('POST', "/api/commandes/$commandeId/frais-de-port", ['name' => 'Second', 'price' => 1, 'transporteur' => ['id' => $transporteur->getId()]]);
+        $this->assertSame([409, 'SHIPPING_COST_ALREADY_SET'], [$this->client->getResponse()->getStatusCode(), json_decode((string) $this->client->getResponse()->getContent(), true)['error']], 'un seul frais de port par commande (avant : 500)');
+        $this->request('DELETE', '/api/transporteurs/' . $transporteur->getId());
+        $this->assertSame([409, 'TRANSPORTEUR_IN_USE'], [$this->client->getResponse()->getStatusCode(), json_decode((string) $this->client->getResponse()->getContent(), true)['error']], 'transporteur utilisé par un frais de port (avant : violation de clé)');
 
         // Tableau de bord de la commande : chiffres actuels (prix de vente × quantité, coefficient réappliqué)
         $dashboard = $this->get("/api/dashboard/commande/$commandeId");
@@ -104,14 +121,18 @@ class PurchasesApiTest extends WebTestCase
         $this->assertSame('Transporteur test', $dashboard['Transporteur']['name']);
 
         // Notes de frais de la collection : montant en unités monétaires (état avant G1)
-        $this->post("/api/collections/$collectionId/notes-de-frais", ['description' => 'Essence', 'montant' => 8000, 'date' => '2026-11-06', 'typeNoteDeFraisId' => $typeNote->getId()], 201);
+        $this->request('POST', "/api/collections/$collectionId/notes-de-frais", ['description' => 'X', 'montant' => 1, 'date' => '2026-11-06', 'typeNoteDeFraisId' => 999999]);
+        $this->assertSame([404, 'TYPE_NOTE_DE_FRAIS_NOT_FOUND'], [$this->client->getResponse()->getStatusCode(), json_decode((string) $this->client->getResponse()->getContent(), true)['error']]);
+        $createdNote = $this->post("/api/collections/$collectionId/notes-de-frais", ['description' => 'Essence', 'montant' => 8000, 'date' => '2026-11-06', 'typeNoteDeFraisId' => $typeNote->getId()], 201);
         $notes = $this->get("/api/collections/$collectionId/notes-de-frais");
         $this->assertCount(1, $notes);
         $noteId = (int) $notes[0]['id'];
         $this->assertSame([8000, 'Essence', '2026-11-06', 'CAD'], [$notes[0]['montant'], $notes[0]['description'], $notes[0]['date'], $notes[0]['currency']]);
+        $this->assertSame($notes[0], $createdNote, 'la réponse 201 a la forme de la liste (lot G4)');
 
         $this->request('PUT', "/api/notes-de-frais/$noteId", ['description' => 'Essence', 'montant' => 9000, 'date' => '2026-11-06', 'typeNoteDeFraisId' => $typeNote->getId()]);
         $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+        $this->assertSame(9000, json_decode((string) $this->client->getResponse()->getContent(), true)['montant'], 'PUT : 200 avec l\'objet (lot G4)');
         $this->assertSame(9000, $this->get("/api/collections/$collectionId/notes-de-frais")[0]['montant']);
 
         // Tableau de bord de la collection : produits + frais de port + notes de frais, durée
@@ -130,8 +151,7 @@ class PurchasesApiTest extends WebTestCase
         $this->request('DELETE', "/api/commandes/$commandeId/frais-de-port");
         $this->assertSame(204, $this->client->getResponse()->getStatusCode());
         $this->assertSame('', (string) $this->client->getResponse()->getContent());
-        $this->request('GET', "/api/commandes/$commandeId/frais-de-port");
-        $this->assertSame(404, $this->client->getResponse()->getStatusCode());
+        $this->assertNull($this->getRaw("/api/commandes/$commandeId/frais-de-port"), 'après suppression : 200 null');
         $this->assertSame([$commandeId], array_column($this->get("/api/collections/$collectionId/commandes"), 'id'), 'la commande survit à la suppression de son frais de port (FraisDePort::commande ne doit pas porter cascade remove)');
         $this->assertSame([$productId], array_column($this->get("/api/commandes/$commandeId/products"), 'id'), 'ses produits aussi');
 
@@ -162,19 +182,36 @@ class PurchasesApiTest extends WebTestCase
         $this->request('POST', "/api/dashboard/collection/$collectionId/close");
         $this->assertSame(409, $this->client->getResponse()->getStatusCode());
         $this->assertSame('ALREADY_CLOSED', json_decode((string) $this->client->getResponse()->getContent(), true)['error']);
+
+        // Lot G4 : fournisseur et transporteur utilisés → 409 ; commande supprimée → produit détaché, pas supprimé ; collection supprimée logiquement
+        $this->request('DELETE', "/api/fournisseurs/$fournisseurId");
+        $this->assertSame([409, 'FOURNISSEUR_IN_USE'], [$this->client->getResponse()->getStatusCode(), json_decode((string) $this->client->getResponse()->getContent(), true)['error']]);
+        $this->request('DELETE', '/api/transporteurs/' . $transporteur->getId());
+        $this->assertSame([204, ''], [$this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent()], 'plus utilisé (frais de port supprimé avant la clôture) : 204 sans corps');
+        $this->request('DELETE', "/api/commandes/$commandeId");
+        $this->assertSame(204, $this->client->getResponse()->getStatusCode(), 'API Platform : ' . substr((string) $this->client->getResponse()->getContent(), 0, 200));
+        $this->endOfWrite();
+        $product = $this->em()->find(Product::class, $productId);
+        $this->assertNotNull($product, 'le produit de la boutique survit à la commande');
+        $this->assertNull($product->getCommande(), 'détaché (FK ON DELETE SET NULL)');
+        $this->assertSame([], $this->get("/api/collections/$collectionId/commandes"));
+        $this->request('DELETE', "/api/collections/$collectionId");
+        $this->assertSame([204, ''], [$this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent()]);
+        $this->assertNotContains($collectionId, array_column($this->get('/api/collections'), 'id'), 'suppression logique : plus listée');
+        $this->assertTrue($this->em()->find(Collections::class, $collectionId)->isDel(), 'toujours en base, del = true');
+        $this->request('DELETE', "/api/products/$productId");
+        $this->assertSame([204, ''], [$this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent()], 'DELETE produit : 204 sans corps (avant : 200)');
     }
 
     public function testShippingCostNotFoundAndInvalidJson(): void
     {
-        $name = 'Collection vide ' . bin2hex(random_bytes(2));
-        $this->post('/api/createcollections', ['budgetCollection' => 100, 'nomCollection' => $name, 'userId' => $this->userId], 201);
-        $collection = $this->collectionByName($name);
+        $collection = $this->post('/api/createcollections', ['budgetCollection' => 100, 'nomCollection' => 'Collection vide ' . bin2hex(random_bytes(2))], 201);
         $this->request('GET', '/api/commandes/999999/frais-de-port');
         $this->assertSame(404, $this->client->getResponse()->getStatusCode(), 'commande inconnue');
 
         $this->client->request('POST', '/api/collections/' . $collection['id'] . '/notes-de-frais', [], [], $this->headers(), 'pas du json');
         $this->assertSame(400, $this->client->getResponse()->getStatusCode());
-        $this->assertSame('Invalid JSON', json_decode((string) $this->client->getResponse()->getContent(), true)['error'] ?? null);
+        $this->assertSame('INVALID_JSON', json_decode((string) $this->client->getResponse()->getContent(), true)['error'] ?? null);
     }
 
     public function testAmountsMustBeIntegerCents(): void
@@ -201,11 +238,38 @@ class PurchasesApiTest extends WebTestCase
 
     public function testPurchaseRoutesRequireAnAdministrator(): void
     {
-        $this->client->request('GET', '/api/collections', [], [], $this->headers(false));
-        $this->assertSame(401, $this->client->getResponse()->getStatusCode());
+        foreach (['/api/collections', '/api/transporteurs', '/api/type-fournisseurs', '/api/type-note-de-frais'] as $route) {
+            $this->client->request('GET', $route, [], [], $this->headers(false));
+            $this->assertSame(401, $this->client->getResponse()->getStatusCode(), $route . ' sans jeton (lot G4 : transporteurs n\'est plus public)');
+        }
+        $customer = $this->tokenFor(['ROLE_USER_INTERNET']);
+        foreach (['/api/transporteurs', '/api/type-fournisseurs', '/api/type-note-de-frais'] as $route) {
+            $this->client->request('GET', $route, [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json', 'HTTP_AUTHORIZATION' => 'Bearer ' . $customer]);
+            $this->assertSame(403, $this->client->getResponse()->getStatusCode(), $route . ' : client connecté non administrateur (lot G4)');
+        }
     }
 
     // ----- helpers -----
+
+    /** GET : corps JSON décodé tel quel (null compris) */
+    private function getRaw(string $route): mixed
+    {
+        $this->request('GET', $route);
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode(), $route . ' : ' . substr((string) $this->client->getResponse()->getContent(), 0, 300));
+
+        return json_decode((string) $this->client->getResponse()->getContent(), true);
+    }
+
+    private function tokenFor(array $roles): string
+    {
+        $email = 'gestion-client-' . bin2hex(random_bytes(3)) . '@example.invalid';
+        $em = $this->em();
+        $user = (new User())->setEmail($email)->setUsername($email)->setFirstname('Client')->setLastname('Test')->setRoles($roles)->setIsVerified(true)->setPassword('inutilisable');
+        $em->persist($user);
+        $em->flush();
+
+        return static::getContainer()->get('lexik_jwt_authentication.jwt_manager')->create($user);
+    }
 
     private function collectionById(int $id): array
     {

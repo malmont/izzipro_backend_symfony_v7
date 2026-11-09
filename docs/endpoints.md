@@ -360,8 +360,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/media` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::list` |
 | POST | `/api/media` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::upload` |
 | GET | `/api/mobile/app-theme` | PUBLIC_ACCESS | `Controller\AppProfileController\AppThemeController::show` |
-| DELETE | `/api/notes-de-frais/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::deleteNoteDeFrais` |
-| PUT | `/api/notes-de-frais/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::updateNoteDeFrais` |
+| DELETE | `/api/notes-de-frais/{id}` | ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::deleteNoteDeFrais` |
+| PUT | `/api/notes-de-frais/{id}` | ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::updateNoteDeFrais` |
 | GET | `/api/offers` | PUBLIC_ACCESS | `Controller\PlatformController\PublicOffersController::list` |
 | GET | `/api/order-statuses` | PUBLIC_ACCESS | `Controller\OrderController\OrderController::getOrderStatuses` |
 | POST | `/api/order/cancel/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\OrderController\OrderController::cancelOrder` |
@@ -535,10 +535,10 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/subscriptions` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::subscribe` |
 | GET | `/api/taxes/monthly` | ROLE_ADMIN | `Controller\StatistiqueDashboard\TaxController::getMonthlyTaxes` |
 | DELETE | `/api/transporteurs/{id}` | ROLE_ADMIN | `Controller\TransporteurController\TransporteurController::deleteTransporteur` |
-| GET | `/api/transporteurs` | PUBLIC_ACCESS | `Controller\TransporteurController\TransporteurController::getTransporteurs` |
+| GET | `/api/transporteurs` | ROLE_ADMIN | `Controller\TransporteurController\TransporteurController::getTransporteurs` |
 | POST | `/api/transporteurs` | ROLE_ADMIN | `Controller\TransporteurController\TransporteurController::createTransporteur` |
-| GET | `/api/type-fournisseurs` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\TypeFournisseurController\TypeFournisseurController::list` |
-| GET | `/api/type-note-de-frais` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\TypeNoteDeFraisController\TypeNoteDeFraisController::list` |
+| GET | `/api/type-fournisseurs` | ROLE_ADMIN | `Controller\TypeFournisseurController\TypeFournisseurController::list` |
+| GET | `/api/type-note-de-frais` | ROLE_ADMIN | `Controller\TypeNoteDeFraisController\TypeNoteDeFraisController::list` |
 | GET | `/api/vehicles/carousel` | PUBLIC_ACCESS | `Controller\Api\VehicleApiController::getCarouselVehicles` |
 | DELETE | `/api/{app}-site-models/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::delete` |
 | GET | `/api/{app}-site-models/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::getOne` |

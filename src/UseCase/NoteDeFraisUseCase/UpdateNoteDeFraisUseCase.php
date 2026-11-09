@@ -14,8 +14,8 @@ class UpdateNoteDeFraisUseCase
         $this->noteDeFraisService = $noteDeFraisService;
     }
 
-    public function execute(NoteDeFrais $note, NoteDeFraisInputDTO $inputDTO): void
+    public function execute(NoteDeFrais $note, NoteDeFraisInputDTO $inputDTO): NoteDeFrais
     {
-        $this->noteDeFraisService->updateNoteDeFrais($note, $inputDTO);
+        return $this->noteDeFraisService->updateNoteDeFrais($note, $inputDTO);
     }
 }

@@ -27,7 +27,8 @@ class FraisDePortController extends AbstractController
         CreateFraisDePortUseCase $createFraisDePortUseCase,
         DeleteFraisDePortUseCase $deleteFraisDePortUseCase,
         TenantCacheService $cache,
-        ?\App\Services\MediaUrlResolver $mediaUrlResolver = null
+        ?\App\Services\MediaUrlResolver $mediaUrlResolver = null,
+        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null // lot G4 (09/11/2026)
     ) {
         $this->getFraisDePortByCommandeUseCase = $getFraisDePortByCommandeUseCase;
         $this->createFraisDePortUseCase = $createFraisDePortUseCase;
@@ -55,8 +56,10 @@ class FraisDePortController extends AbstractController
         );
         $input->check(); // 422 VALIDATION_FAILED (lot G1, 09/11/2026)
 
-        $this->createFraisDePortUseCase->execute($commande, $inputDTO);
-        return $this->json(['success' => 'Frais de port created'], JsonResponse::HTTP_CREATED);
+        $fraisDePort = $this->createFraisDePortUseCase->execute($commande, $inputDTO);
+        $host = $this->mediaUrlResolver ? $this->mediaUrlResolver->getPublicHost($request->getSchemeAndHttpHost()) : $request->getSchemeAndHttpHost();
+        // 201 avec l'objet créé (lot G4, 09/11/2026 ; avant : {"success"})
+        return $this->json(new \App\Dto\FraisDePortOutputDTO($fraisDePort, $host, $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT), JsonResponse::HTTP_CREATED);
     }
 
     #[Route('/api/commandes/{id}/frais-de-port', name: 'get_frais_de_port', methods: ['GET'])]
@@ -74,19 +77,14 @@ class FraisDePortController extends AbstractController
             3600,
             [...CacheTags::itemTags(CacheTags::COMMANDES, $commande->getId()), ...CacheTags::listTags(CacheTags::TRANSPORTEURS)]
         );
-        if (!$fraisDePort) {
-            return $this->json(
-                ['error' => 'No shipping cost associated with this order'],
-                JsonResponse::HTTP_NOT_FOUND
-            );
-        }
-        return $this->json($fraisDePort, JsonResponse::HTTP_OK);
+        // commande sans frais de port : 200 null (lot G4, 09/11/2026 ; avant : 404)
+        return $this->json($fraisDePort ?: null, JsonResponse::HTTP_OK);
     }
 
     #[Route('/api/commandes/{id}/frais-de-port', name: 'delete_frais_de_port', methods: ['DELETE'])]
-    public function deleteFraisDePort(Commande $commande): JsonResponse
+    public function deleteFraisDePort(Commande $commande): \Symfony\Component\HttpFoundation\Response
     {
         $this->deleteFraisDePortUseCase->execute($commande);
-        return $this->json(['success' => 'Frais de port deleted'], JsonResponse::HTTP_NO_CONTENT);
+        return new \Symfony\Component\HttpFoundation\Response('', \Symfony\Component\HttpFoundation\Response::HTTP_NO_CONTENT); // 204 sans corps (lot G4, 09/11/2026)
     }
 }

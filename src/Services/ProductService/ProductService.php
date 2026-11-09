@@ -51,14 +51,24 @@ class ProductService
         $product->setPurchasePrice($inputDTO->purchasePrice);
         $product->setCoefficientMultiplier($inputDTO->coefficientMultiplier);
         $product->setCommande($commande);
+        if ($inputDTO->quantity !== null) {
+            $product->setQuantity($inputDTO->quantity); // quantité facultative (lot G4, 09/11/2026) ; sinon celle des variantes
+        }
 
+        // lot G4 (09/11/2026) : références inconnues → 404 à code (avant : 500 avec le message)
         if ($inputDTO->styleId) {
-            $style = $this->entityRetrieverService->findOrFail(Style::class, $inputDTO->styleId, 'Style not found');
+            $style = $em->getRepository(Style::class)->find($inputDTO->styleId);
+            if (!$style) {
+                throw new \App\Services\GestionService\GestionConflictException('STYLE_NOT_FOUND', 'Style inconnu : ' . $inputDTO->styleId, 404);
+            }
             $product->setStyle($style);
         }
 
         foreach ($inputDTO->categoryIds as $categoryId) {
-            $category = $this->entityRetrieverService->findOrFail(Categories::class, $categoryId, "Category not found for ID: $categoryId");
+            $category = $em->getRepository(Categories::class)->find((int) $categoryId);
+            if (!$category) {
+                throw new \App\Services\GestionService\GestionConflictException('CATEGORY_NOT_FOUND', 'Catégorie inconnue : ' . $categoryId, 404);
+            }
             $product->addCategory($category);
         }
 

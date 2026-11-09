@@ -54,7 +54,7 @@ class Collections
     /**
      * @var Collection<int, CollectionStatistiques>
      */
-    #[ORM\OneToMany(mappedBy: 'collection', targetEntity: CollectionStatistiques::class)]
+    #[ORM\OneToMany(mappedBy: 'collection', targetEntity: CollectionStatistiques::class, cascade: ['remove'])] // lot G4 (09/11/2026)
     private Collection $collectionStatistiques;
 
     #[ORM\Column(nullable: true)]

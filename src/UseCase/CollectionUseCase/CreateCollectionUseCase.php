@@ -14,9 +14,8 @@ class CreateCollectionUseCase
         $this->collectionService = $collectionService;
     }
 
-    public function execute(CollectionInputDTO $inputDTO): String
+    public function execute(CollectionInputDTO $inputDTO): \App\Entity\Collections
     {
-        $collection = $this->collectionService->createCollection($inputDTO);
-        return 'Collection creer avec succes';
+        return $this->collectionService->createCollection($inputDTO); // l'entité créée (lot G4, 09/11/2026 ; avant : une chaîne « Collection creer avec succes »)
     }
 }

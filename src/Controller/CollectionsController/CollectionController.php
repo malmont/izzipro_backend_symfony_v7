@@ -3,6 +3,7 @@
 namespace App\Controller\CollectionsController;
 
 use App\Dto\CollectionInputDTO;
+use App\Dto\CollectionOutputDTO;
 use App\UseCase\CollectionUseCase\CreateCollectionUseCase;
 use App\UseCase\CollectionUseCase\GetCollectionsUseCase;
 use App\UseCase\CollectionUseCase\DeleteCollectionUseCase;
@@ -26,7 +27,8 @@ class CollectionController extends AbstractController
         CreateCollectionUseCase $createCollectionUseCase,
         GetCollectionsUseCase $getCollectionsUseCase,
         DeleteCollectionUseCase $deleteCollectionUseCase,
-        TenantCacheService $cache
+        TenantCacheService $cache,
+        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null // lot G4 (09/11/2026)
     ) {
         $this->createCollectionUseCase = $createCollectionUseCase;
         $this->getCollectionsUseCase = $getCollectionsUseCase;
@@ -49,10 +51,10 @@ class CollectionController extends AbstractController
         $input->date('startDateCollection', false);
         $input->date('endDateCollection', false);
         $input->check(); // 422 VALIDATION_FAILED (lot G1, 09/11/2026)
-        $inputDTO = new CollectionInputDTO(['budgetCollection' => $budget, 'nomCollection' => $name] + $data);
-        $collectionDTO = $this->createCollectionUseCase->execute($inputDTO);
-
-        return $this->json($collectionDTO, Response::HTTP_CREATED);
+        // propriétaire = utilisateur du jeton (le userId du corps est ignoré) ; 201 avec l'objet créé (lot G4, 09/11/2026)
+        $inputDTO = new CollectionInputDTO(['budgetCollection' => $budget, 'nomCollection' => $name, 'userId' => $this->getUser()->getId()] + $data);
+        $collection = $this->createCollectionUseCase->execute($inputDTO);
+        return $this->json(new CollectionOutputDTO($collection, $request->getSchemeAndHttpHost(), $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT), Response::HTTP_CREATED);
     }
 
     #[Route('/api/collections', name: 'get_collections', methods: ['GET'])]
@@ -72,9 +74,9 @@ class CollectionController extends AbstractController
     }
 
     #[Route('/api/collections/{id}', name: 'delete_collection', methods: ['DELETE'])]
-    public function deleteCollection(Collections $collection): JsonResponse
+    public function deleteCollection(Collections $collection): \Symfony\Component\HttpFoundation\Response
     {
-        $this->deleteCollectionUseCase->execute($collection);
-        return $this->json(['message' => 'Collection deleted successfully'], Response::HTTP_OK);
+        $this->deleteCollectionUseCase->execute($collection); // suppression logique
+        return new \Symfony\Component\HttpFoundation\Response('', \Symfony\Component\HttpFoundation\Response::HTTP_NO_CONTENT); // 204 sans corps (lot G4, 09/11/2026 ; avant : 200 avec message)
     }
 }
