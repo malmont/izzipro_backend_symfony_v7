@@ -26,6 +26,7 @@ final class FeatureCatalog
         'site.country' => ['label' => 'Pays du site', 'group' => 'localisation', 'scope' => self::SCOPE_SERVICE, 'type' => 'info', 'href' => 'entreprise'],
         'site.currency' => ['label' => 'Devise', 'group' => 'localisation', 'scope' => self::SCOPE_SITE, 'type' => 'currency', 'storage' => 'entreprise.currency', 'href' => 'entreprise'],
         'site.prices_include_tax' => ['label' => 'Prix taxes comprises', 'group' => 'localisation', 'scope' => self::SCOPE_SITE, 'type' => 'boolean', 'storage' => 'entreprise.pricesIncludeTax', 'href' => 'entreprise'],
+        'gestion.periods' => ['label' => 'Périodes de gestion (découpage)', 'group' => 'localisation', 'scope' => self::SCOPE_SITE, 'type' => 'enum', 'options' => ['quarterly', 'semester', 'monthly'], 'nullable' => true, 'storage' => 'entreprise.purchasePeriodFrequency', 'href' => 'entreprise'], // lot P1 périodes (10/11/2026) : trimestres saisonniers (défaut), semestres ou mois ; effet après la période en cours
         'site.domain' => ['label' => 'Domaine propre', 'group' => 'localisation', 'scope' => self::SCOPE_SERVICE, 'type' => 'info', 'href' => 'domain'],
         // Modules (plateforme)
         'module.landing' => ['label' => 'Landing Page', 'group' => 'modules', 'scope' => self::SCOPE_PLATFORM, 'type' => 'boolean', 'storage' => 'entreprise.isLandingPageActive', 'href' => 'entreprise'],

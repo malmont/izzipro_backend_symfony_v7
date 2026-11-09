@@ -9,7 +9,8 @@ namespace App\Services\GestionService;
  */
 class GestionConflictException extends \RuntimeException
 {
-    public function __construct(public readonly string $errorCode, string $message, public readonly int $status = 409)
+    /** @param array<string, mixed> $details champs ajoutés au corps (ex. periodId, periodKey) */
+    public function __construct(public readonly string $errorCode, string $message, public readonly int $status = 409, public readonly array $details = [])
     {
         parent::__construct($message);
     }
@@ -17,6 +18,6 @@ class GestionConflictException extends \RuntimeException
     /** @return array<string, mixed> corps JSON de la réponse */
     public function toArray(): array
     {
-        return ['error' => $this->errorCode, 'code' => $this->errorCode, 'message' => $this->getMessage()];
+        return ['error' => $this->errorCode, 'code' => $this->errorCode, 'message' => $this->getMessage()] + $this->details;
     }
 }

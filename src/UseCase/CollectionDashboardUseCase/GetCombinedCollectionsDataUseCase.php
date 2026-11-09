@@ -13,8 +13,8 @@ class GetCombinedCollectionsDataUseCase
         $this->combinedCollectionDashboardService = $combinedCollectionDashboardService;
     }
 
-    public function execute(): array
+    public function execute(string $kind = 'manual'): array
     {
-        return $this->combinedCollectionDashboardService->getCombinedCollectionsData();
+        return $this->combinedCollectionDashboardService->getCombinedCollectionsData($kind);
     }
 }

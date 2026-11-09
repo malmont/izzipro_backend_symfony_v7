@@ -343,6 +343,10 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(length: 64, nullable: true)]
     private ?string $posTimezone = null;
 
+    /** Fréquence des périodes de gestion (lot P1, 10/11/2026) : quarterly (défaut) | semester | monthly ; null = quarterly ; registre `gestion.periods` */
+    #[ORM\Column(name: 'purchase_period_frequency', length: 16, nullable: true)]
+    private ?string $purchasePeriodFrequency = null;
+
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $accountingAccounts = null;
 
@@ -1046,6 +1050,8 @@ class Entreprise implements TranslatableInterface
 
     // Fuseau horaire et plan de comptes (F14, 29/10/2026)
     public function getPosTimezone(): ?string { return $this->posTimezone; }
+    public function getPurchasePeriodFrequency(): ?string { return $this->purchasePeriodFrequency; }
+    public function setPurchasePeriodFrequency(?string $f): static { $f = $f !== null ? strtolower(trim($f)) : ''; $this->purchasePeriodFrequency = in_array($f, ['quarterly', 'semester', 'monthly'], true) ? $f : null; return $this; }
     public function setPosTimezone(?string $tz): static { $t = $tz !== null ? trim($tz) : ''; $this->posTimezone = $t !== '' && in_array($t, \DateTimeZone::listIdentifiers(), true) ? $t : null; return $this; }
     public function getAccountingAccounts(): ?string { return $this->accountingAccounts; }
     /** Plan de comptes (F14) : une clé inconnue, un doublon ou une ligne mal formée sont refusés à l'enregistrement (EasyAdmin), jamais ignorés */

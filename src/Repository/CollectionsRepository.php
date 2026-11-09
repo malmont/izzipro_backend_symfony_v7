@@ -33,16 +33,23 @@ class CollectionsRepository extends EntityRepository
      *
      * @return array{items: list<Collections>, total: int}
      */
-    public function search(?string $status, ?string $q, ?int $page, ?int $limit): array
+    public function search(?string $status, ?string $q, ?int $page, ?int $limit, ?string $kind = null, ?\DateTimeInterface $today = null): array
     {
-        $qb = $this->createQueryBuilder('c')->orderBy('c.id', 'ASC');
+        $qb = $this->createQueryBuilder('c')->orderBy('c.startDateCollection', 'DESC')->addOrderBy('c.id', 'DESC');
+        // période fermée par la date : fin + 15 jours < aujourd'hui, sans réouverture ; ou clôture manuelle (lot P1, 10/11/2026)
+        $edge = \DateTimeImmutable::createFromInterface($today ?? new \DateTimeImmutable('today'))->setTime(0, 0)->modify('-' . \App\Services\GestionService\PeriodCalendar::GRACE_DAYS . ' days')->format('Y-m-d 00:00:00');
+        $periodClosed = "(c.kind = 'period' AND (c.closedAt IS NOT NULL OR (c.reopenedAt IS NULL AND c.endDateCollection < :edge)))";
+        $manualClosed = "(c.kind <> 'period' AND c.isClosed = true)";
         match ($status) {
-            'open' => $qb->andWhere('c.del = false')->andWhere('c.isClosed = false OR c.isClosed IS NULL'),
-            'closed' => $qb->andWhere('c.del = false')->andWhere('c.isClosed = true'),
+            'open' => $qb->andWhere('c.del = false')->andWhere("NOT ($periodClosed OR $manualClosed)")->setParameter('edge', $edge),
+            'closed' => $qb->andWhere('c.del = false')->andWhere("$periodClosed OR $manualClosed")->setParameter('edge', $edge),
             'deleted' => $qb->andWhere('c.del = true'),
             'all' => $qb,
             default => $qb->andWhere('c.del = false'),
         };
+        if ($kind !== null) {
+            $qb->andWhere('c.kind = :kind')->setParameter('kind', $kind);
+        }
         if ($q !== null && $q !== '') {
             $qb->andWhere('LOWER(c.nomCollection) LIKE :q')->setParameter('q', '%' . mb_strtolower($q) . '%');
         }

@@ -16,13 +16,12 @@ use App\Entity\User;
 use App\EventSubscriber\CacheInvalidationSubscriber;
 use App\Services\CommandeService\CommandeProductAttachmentService;
 use App\Services\TenantEntityManagerProvider;
-use App\UseCase\CollectionDashboardUseCase\CloseCollectionUseCase;
 use App\UseCase\CommandeDashboardUseCase\FreezeCommandeMetricsUseCase;
 
 /**
  * Jeu de données de l'application de gestion pour le site de démonstration (demande du propriétaire, 09/11/2026,
  * `docs/gestion-mise-a-niveau.md` § 8 ; enrichi le 10/11/2026 « le maximum de données ») : trois fournisseurs, deux
- * transporteurs d'achat, quatre collections sur l'année (hiver et printemps figées, été et automne ouvertes), huit
+ * transporteurs d'achat, quatre périodes du calendrier sur l'année (les périodes passées sont figées par la date, lot P1), huit
  * commandes fournisseurs, les **produits existants du site** plus des produits de démonstration (`is_demo`, créés quand le
  * site compte moins de 32 produits) rattachés aux commandes (coût d'achat = 55 % du prix de vente, coefficient 1,8 posé sur les
  * produits qui n'en ont pas : `CommandeProductAttachmentService`, prix de vente intacts), un frais de port par commande,
@@ -32,10 +31,12 @@ use App\UseCase\CommandeDashboardUseCase\FreezeCommandeMetricsUseCase;
  */
 class GestionDemoSeeder
 {
-    public const COLLECTION_WINTER = 'Démo gestion — Hiver 2025-2026';
-    public const COLLECTION_CLOSED = 'Démo gestion — Printemps 2026';
-    public const COLLECTION_SUMMER = 'Démo gestion — Été 2026';
-    public const COLLECTION_OPEN = 'Démo gestion — Automne 2026';
+    // Depuis le lot P1 (10/11/2026) : les quatre collections de démonstration sont les PÉRIODES du calendrier (trimestres), créées par PeriodCalendar
+    public const COLLECTION_WINTER = 'Hiver 2025-2026';
+    public const COLLECTION_CLOSED = 'Printemps 2026';
+    public const COLLECTION_SUMMER = 'Été 2026';
+    public const COLLECTION_OPEN = 'Automne 2026';
+    private const PERIOD_KEYS = [self::COLLECTION_WINTER => '2026-Q1', self::COLLECTION_CLOSED => '2026-Q2', self::COLLECTION_SUMMER => '2026-Q3', self::COLLECTION_OPEN => '2026-Q4'];
     /** En dessous de ce nombre de produits dans le site, les produits de démonstration manquants sont créés (une seule fois : ils comptent ensuite) */
     public const MIN_PRODUCTS = 32;
 
@@ -61,9 +62,10 @@ class GestionDemoSeeder
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly CommandeProductAttachmentService $attachments,
-        private readonly CloseCollectionUseCase $closeCollection,
         private readonly FreezeCommandeMetricsUseCase $freezeCommande,
         private readonly CacheInvalidationSubscriber $cacheInvalidation,
+        private readonly \App\Services\GestionService\PeriodCalendar $calendar,
+        private readonly ?\App\UseCase\CollectionDashboardUseCase\GetCollectionStatistiquesUseCase $collectionStatistiques = null,
     ) {
     }
 
@@ -94,15 +96,39 @@ class GestionDemoSeeder
         $ownerId = $em->getConnection()->fetchOne('SELECT id FROM "user" WHERE roles::text LIKE :r ORDER BY id ASC LIMIT 1', ['r' => '%ROLE_ADMIN%']);
         $owner = $ownerId ? $em->find(User::class, (int) $ownerId) : null;
 
+        // périodes du calendrier (créées sans trou depuis la plus ancienne commande de démonstration), budgets posés une fois
+        $this->calendar->ensurePeriods(new \DateTimeImmutable('2025-12-05'));
         $collections = [];
-        foreach ([
-            [self::COLLECTION_WINTER, 900000, '2025-12-01', '2026-02-28'],
-            [self::COLLECTION_CLOSED, 1200000, '2026-03-01', '2026-05-31'],
-            [self::COLLECTION_SUMMER, 1800000, '2026-06-01', '2026-08-31'],
-            [self::COLLECTION_OPEN, 2500000, '2026-09-01', '2026-11-30'],
-        ] as [$name, $budget, $start, $end]) {
-            $collections[$name] = $this->ensure(Collections::class, ['nomCollection' => $name], fn () => (new Collections())->setNomCollection($name)->setBudgetCollection($budget)
-                ->setStartDateCollection(new \DateTime($start))->setEndDateCollection(new \DateTime($end))->setDel(false)->setUserCollections($owner), "collection « $name »");
+        foreach ([self::COLLECTION_WINTER => 900000, self::COLLECTION_CLOSED => 1200000, self::COLLECTION_SUMMER => 1800000, self::COLLECTION_OPEN => 2500000] as $name => $budget) {
+            $period = $em->getRepository(Collections::class)->findOneBy(['periodKey' => self::PERIOD_KEYS[$name], 'kind' => Collections::KIND_PERIOD]);
+            if ($period === null) {
+                throw new \RuntimeException("Période $name absente après création du calendrier");
+            }
+            if ((int) $period->getBudgetCollection() === 0) {
+                $period->setBudgetCollection($budget);
+                if ($owner && $period->getUserCollections() === null) {
+                    $period->setUserCollections($owner);
+                }
+                $em->flush();
+                $this->report[] = "période « $name » : budget posé";
+            }
+            $collections[$name] = $period;
+        }
+        // semis d'avant P1 (collections manuelles « Démo gestion — <nom> ») : fusionnées dans la période de même nom, une seule fois
+        foreach ($collections as $name => $period) {
+            $legacy = $em->getRepository(Collections::class)->findOneBy(['nomCollection' => 'Démo gestion — ' . $name, 'kind' => Collections::KIND_MANUAL]);
+            if ($legacy === null) {
+                continue;
+            }
+            foreach ($legacy->getCommandes() as $commande) {
+                $commande->setCollections($period);
+            }
+            $em->flush();
+            $em->createQuery('DELETE FROM App\\Entity\\NoteDeFrais n WHERE n.Collection = :c')->setParameter('c', $legacy)->execute(); // recréées sous la période ci-dessous
+            $em->createQuery('DELETE FROM App\\Entity\\CollectionStatistiques s WHERE s.collection = :c')->setParameter('c', $legacy)->execute();
+            $em->remove($legacy);
+            $em->flush();
+            $this->report[] = sprintf('ancienne collection « Démo gestion — %s » fusionnée dans la période « %s »', $name, $name);
         }
 
         $commandes = [];
@@ -123,6 +149,17 @@ class GestionDemoSeeder
         // Produits : ceux du site sans commande, complétés par des produits de démonstration s'il en manque
         $this->ensureDemoProducts();
         $free = $em->getRepository(Product::class)->createQueryBuilder('p')->where('p.commande IS NULL')->orderBy('p.id', 'ASC')->getQuery()->getResult();
+        // reprise d'historique de démonstration : les périodes passées (fermées par la date) sont rouvertes le temps du rattachement, puis refermées
+        $reopened = [];
+        foreach ($collections as $collection) {
+            if ($this->calendar->isClosed($collection) && $collection->getClosedAt() === null) {
+                $collection->setReopenedAt(new \DateTime());
+                $reopened[] = $collection;
+            }
+        }
+        if ($reopened !== []) {
+            $em->flush();
+        }
         $targets = array_values(array_filter($commandes, fn (Commande $c) => !$c->getIsClosed()));
         if ($free !== [] && $targets !== []) {
             $perCommande = array_fill(0, count($targets), []);
@@ -149,6 +186,13 @@ class GestionDemoSeeder
                 $em->flush();
                 $this->report[] = sprintf('%d produit(s) rattaché(s) à « %s » (coût d\'achat 55 %% du prix de vente, coefficient 1,8)', count($lines), $commande->getName());
             }
+        }
+
+        foreach ($reopened as $collection) {
+            $collection->setReopenedAt(null); // refermée par la date
+        }
+        if ($reopened !== []) {
+            $em->flush();
         }
 
         $shipping = [
@@ -192,21 +236,21 @@ class GestionDemoSeeder
         }
         $em->flush();
 
-        foreach ([self::COLLECTION_WINTER, self::COLLECTION_CLOSED] as $name) {
-            $collection = $collections[$name];
-            $em->refresh($collection); // commandes créées après le chargement de la collection : relues avant de les figer avec elle
-            if (!$collection->getIsClosed()) {
-                $this->closeCollection->execute($collection);
-                $this->report[] = "collection « $name » figée avec ses commandes (tableaux de bord conservés)";
+        // périodes passées : fermées par la date (fin + 15 jours) ; leurs commandes et la période sont (re)figées à chaque semis, statistiques
+        // recalculées (tableaux de bord complets et à jour des règles de calcul dès la fin du semis)
+        foreach ($collections as $name => $collection) {
+            if (!$this->calendar->isClosed($collection)) {
                 continue;
             }
-            // rejeu : une collection déjà figée peut avoir reçu une commande encore ouverte (semis précédent) : figée à son tour
-            foreach ($collection->getCommandes() as $commande) {
-                if (!$commande->getIsClosed()) {
-                    $this->freezeCommande->execute($commande);
-                    $this->report[] = sprintf('commande « %s » figée avec sa collection', $commande->getName());
-                }
+            $em->createQuery('DELETE FROM App\\Entity\\CollectionStatistiques s WHERE s.collection = :c')->setParameter('c', $collection)->execute();
+            $commandes = $em->getRepository(Commande::class)->createQueryBuilder('c')->where('c.date >= :from AND c.date < :to')->setParameter('from', $collection->getStartDateCollection()->format('Y-m-d 00:00:00'))->setParameter('to', \DateTimeImmutable::createFromInterface($collection->getEndDateCollection())->modify('+1 day')->format('Y-m-d 00:00:00'))->getQuery()->getResult();
+            foreach ($commandes as $commande) {
+                $em->createQuery('DELETE FROM App\\Entity\\CommandeStatistiques s WHERE s.commande = :c')->setParameter('c', $commande)->execute();
+                $commande->setIsClosed(false);
+                $this->freezeCommande->execute($commande);
             }
+            $this->collectionStatistiques?->executeOrFreeze($collection);
+            $this->report[] = sprintf('période « %s » figée avec ses %d commande(s) (tableaux de bord recalculés)', $name, count($commandes));
         }
         $this->cacheInvalidation->invalidateWrittenTenants(); // listes et tableaux de bord en cache : à jour dès la fin du semis
 

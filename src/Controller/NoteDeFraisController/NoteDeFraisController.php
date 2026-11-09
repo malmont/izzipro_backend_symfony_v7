@@ -30,7 +30,8 @@ class NoteDeFraisController extends AbstractController
         UpdateNoteDeFraisUseCase $updateNoteDeFraisUseCase,
         DeleteNoteDeFraisUseCase $deleteNoteDeFraisUseCase,
         TenantCacheService $cache,
-        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null // devise du site (lot G4, 09/11/2026)
+        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null, // devise du site (lot G4, 09/11/2026)
+        private readonly ?\App\Services\GestionService\PeriodGuard $periodGuard = null // périodes (lot P1, 10/11/2026)
     ) {
         $this->getNotesDeFraisByCollectionUseCase = $getNotesDeFraisByCollectionUseCase;
         $this->createNoteDeFraisUseCase = $createNoteDeFraisUseCase;
@@ -72,6 +73,8 @@ class NoteDeFraisController extends AbstractController
         );
         $input->check(); // 422 VALIDATION_FAILED (lot G1, 09/11/2026)
 
+        $this->periodGuard->assertCollectionWritable($collection); // lot P1 (10/11/2026)
+        $this->periodGuard->assertDateWritable(new \DateTimeImmutable($inputDTO->date));
         $note = $this->createNoteDeFraisUseCase->execute($collection, $inputDTO);
         // 201 avec l'objet créé (lot G4, 09/11/2026 ; avant : {"success"})
         return $this->json(new \App\Dto\NoteDeFraisOutputDTO($note, $this->host($request), $this->currencyCode()), JsonResponse::HTTP_CREATED);
@@ -98,6 +101,8 @@ class NoteDeFraisController extends AbstractController
         );
         $input->check(); // 422 VALIDATION_FAILED (lot G1, 09/11/2026)
 
+        $this->periodGuard->assertDateWritable($note->getDate()); // lot P1 : ni l'ancienne ni la nouvelle date dans une période fermée
+        $this->periodGuard->assertDateWritable(new \DateTimeImmutable($inputDTO->date));
         $note = $this->updateNoteDeFraisUseCase->execute($note, $inputDTO);
         return $this->json(new \App\Dto\NoteDeFraisOutputDTO($note, $this->host($request), $this->currencyCode()), JsonResponse::HTTP_OK); // 200 avec l'objet (lot G4)
     }
@@ -108,6 +113,7 @@ class NoteDeFraisController extends AbstractController
         if (($refused = $this->refuseUnlessOwnerOrAdmin($note)) !== null) {
             return $refused;
         }
+        $this->periodGuard->assertDateWritable($note->getDate()); // lot P1 (10/11/2026)
         $this->deleteNoteDeFraisUseCase->execute($note);
         return new \Symfony\Component\HttpFoundation\Response('', \Symfony\Component\HttpFoundation\Response::HTTP_NO_CONTENT); // 204 sans corps (lot G4)
     }
@@ -131,5 +137,30 @@ class NoteDeFraisController extends AbstractController
     private function currencyCode(): string
     {
         return $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT;
+    }
+
+    /** Note de frais classée par sa date, sans choix de collection (lot P1, 10/11/2026) : période de la date, créée si manquante ; 409 PERIOD_CLOSED */
+    #[Route('/api/notes-de-frais', name: 'create_note_de_frais_by_date', methods: ['POST'])]
+    public function createNoteDeFraisByDate(Request $request): JsonResponse
+    {
+        $data = json_decode((string) $request->getContent(), true);
+        if (!is_array($data)) {
+            return new JsonResponse(['error' => 'INVALID_JSON', 'code' => 'INVALID_JSON', 'message' => 'Corps JSON invalide'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+        $input = new \App\Services\GestionService\GestionInput($data);
+        $inputDTO = new NoteDeFraisInputDTO(
+            (string) $input->text('description', false, 255),
+            (int) $input->cents('montant'),
+            (string) $input->date('date')?->format('Y-m-d'),
+            (int) $input->id('typeNoteDeFraisId')
+        );
+        $input->check();
+        $period = $this->periodGuard->assertDateWritable(new \DateTimeImmutable($inputDTO->date));
+        if ($period === null) {
+            throw new \App\Services\GestionService\GestionValidationException(['date' => 'OUT_OF_CALENDAR'], 'Aucune période du calendrier ne couvre cette date (plus de 24 mois)');
+        }
+        $note = $this->createNoteDeFraisUseCase->execute($period, $inputDTO);
+
+        return $this->json(new \App\Dto\NoteDeFraisOutputDTO($note, $this->host($request), $this->currencyCode()), JsonResponse::HTTP_CREATED);
     }
 }

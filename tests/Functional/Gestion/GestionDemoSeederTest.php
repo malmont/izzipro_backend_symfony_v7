@@ -31,17 +31,23 @@ class GestionDemoSeederTest extends KernelTestCase
                 ['n' => $name . ' ' . $suffix, 'p' => $price, 's' => 'demo-' . $i . '-' . $suffix, 't' => 'standard']);
         }
         $freeBefore = count($em->getRepository(Product::class)->findBy(['commande' => null]));
+        // semis d'avant P1 : une collection manuelle « Démo gestion — <nom> » avec une note, fusionnée dans la période au semis
+        $em->getConnection()->executeStatement("INSERT INTO collections (id, budget_collection, start_date_collection, end_date_collection, del, nom_collection, is_closed, kind) VALUES (nextval('collections_id_seq'), 1, '2026-09-01', '2026-11-30', false, :n, false, 'manual')", ['n' => 'Démo gestion — ' . GestionDemoSeeder::COLLECTION_OPEN]);
+        $legacyId = (int) $em->getConnection()->fetchOne('SELECT id FROM collections WHERE nom_collection = :n', ['n' => 'Démo gestion — ' . GestionDemoSeeder::COLLECTION_OPEN]);
 
         $seeder = $container->get(GestionDemoSeeder::class);
         $report = $seeder->seed();
         $this->assertNotEmpty($report);
-        $this->assertContains('collection « ' . GestionDemoSeeder::COLLECTION_CLOSED . ' » figée avec ses commandes (tableaux de bord conservés)', $report);
+        $this->assertContains('période « ' . GestionDemoSeeder::COLLECTION_CLOSED . ' » figée avec ses 2 commande(s) (tableaux de bord recalculés)', $report);
 
+        $this->assertContains('ancienne collection « Démo gestion — ' . GestionDemoSeeder::COLLECTION_OPEN . ' » fusionnée dans la période « ' . GestionDemoSeeder::COLLECTION_OPEN . ' »', $report);
         $em->clear();
+        $this->assertNull($em->find(Collections::class, $legacyId), 'ancienne collection manuelle supprimée');
         $closed = $em->getRepository(Collections::class)->findOneBy(['nomCollection' => GestionDemoSeeder::COLLECTION_CLOSED]);
         $open = $em->getRepository(Collections::class)->findOneBy(['nomCollection' => GestionDemoSeeder::COLLECTION_OPEN]);
-        $this->assertTrue($closed->getIsClosed());
-        $this->assertFalse($open->getIsClosed());
+        $calendar = $container->get(\App\Services\GestionService\PeriodCalendar::class);
+        $this->assertSame(['period', 'period', true, false], [$closed->getKind(), $open->getKind(), $calendar->isClosed($closed), $calendar->isClosed($open)], 'périodes du calendrier : état par la date (lot P1)');
+        $this->assertSame(1, (int) $em->getConnection()->fetchOne('SELECT COUNT(*) FROM collection_statistiques WHERE collection_id = ?', [$closed->getId()]), 'période fermée : statistiques figées une fois');
         $this->assertSame([1200000, 2500000], [$closed->getBudgetCollection(), $open->getBudgetCollection()], 'budgets en cents');
         $commandes = $em->getRepository(Commande::class)->findBy(['name' => ['Commande textile printemps', 'Réassort automne', 'Accessoires des fêtes']]);
         $this->assertCount(3, $commandes);
@@ -60,12 +66,20 @@ class GestionDemoSeederTest extends KernelTestCase
         $this->assertGreaterThanOrEqual(8, count($em->getRepository(Commande::class)->findBy(['name' => ['Commande textile printemps', 'Réassort automne', 'Accessoires des fêtes', 'Collection hiver — manteaux', 'Accessoires d\'hiver', 'Chaussures et sacs', 'Maillots et serviettes', 'Location nautique — matériel']])), 'huit commandes sur quatre collections');
         $this->assertGreaterThanOrEqual(GestionDemoSeeder::MIN_PRODUCTS, count($attached), 'produits de démonstration créés et rattachés');
 
-        // Rejouable : rien n'est recréé ; une commande rouverte à la main dans une collection figée est refigée au rejeu
+        // Rejouable : rien n'est recréé ; les périodes fermées sont refigées (statistiques recalculées) à chaque passage
         $em->getConnection()->executeStatement('UPDATE commande SET is_closed = false WHERE name = ?', ['Chaussures et sacs']);
         $em->clear();
-        $this->assertSame(['commande « Chaussures et sacs » figée avec sa collection'], $seeder->seed(), 'second passage : seule la commande rouverte est refigée');
+        $refreeze = [];
+        foreach ([GestionDemoSeeder::COLLECTION_WINTER, GestionDemoSeeder::COLLECTION_CLOSED, GestionDemoSeeder::COLLECTION_SUMMER, GestionDemoSeeder::COLLECTION_OPEN] as $name) {
+            if ($calendar->isClosed($em->getRepository(Collections::class)->findOneBy(['nomCollection' => $name]))) {
+                $refreeze[] = "période « $name » figée avec ses 2 commande(s) (tableaux de bord recalculés)"; // toutes les périodes passées (par la date du jour)
+            }
+        }
+        $this->assertSame($refreeze, $seeder->seed(), 'second passage : seul le refigeage des périodes fermées');
         $em->clear();
-        $this->assertSame([], $seeder->seed(), 'troisième passage : rien à ajouter');
+        $this->assertTrue($em->getRepository(Commande::class)->findOneBy(['name' => 'Chaussures et sacs'])->getIsClosed(), 'commande rouverte à la main : refigée');
+        $this->assertSame(1, (int) $em->getConnection()->fetchOne('SELECT COUNT(*) FROM collection_statistiques WHERE collection_id = ?', [$closed->getId()]), 'refigeage : une seule ligne figée conservée');
+        $this->assertSame($refreeze, $seeder->seed(), 'troisième passage : idem');
         $em->clear();
         $this->assertCount(3, $em->getRepository(Commande::class)->findBy(['name' => ['Commande textile printemps', 'Réassort automne', 'Accessoires des fêtes']]));
 

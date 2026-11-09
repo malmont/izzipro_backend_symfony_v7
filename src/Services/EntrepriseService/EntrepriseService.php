@@ -78,7 +78,7 @@ class EntrepriseService
         'isBoussoleEsgActive' => 'isBoussoleEsgActive', 'isMemoireVivanteActive' => 'isMemoireVivanteActive',
         'metaTitle' => 'getMetaTitle', 'metaDescription' => 'getMetaDescription', 'seoKeywords' => 'getSeoKeywords',
         'ogImage' => 'getOgImage', 'googleSiteVerification' => 'getGoogleSiteVerification', 'currency' => 'getCurrency',
-        'siteLocale' => 'getLocale', 'posTimezone' => 'getPosTimezone', 'pricesIncludeTax' => 'isPricesIncludeTax', // console de pilotage, lot 2 (04/11/2026) ; « locale » seul = langue de la requête
+        'siteLocale' => 'getLocale', 'posTimezone' => 'getPosTimezone', 'pricesIncludeTax' => 'isPricesIncludeTax', 'purchasePeriodFrequency' => 'getPurchasePeriodFrequency', // console de pilotage, lot 2 (04/11/2026) ; « locale » seul = langue de la requête
     ];
     private const TRANSLATION_GETTERS = ['LegalNotice' => 'getLegalNotice', 'conditionOfUse' => 'getConditionOfUse', 'privacyPolicy' => 'getPrivacyPolicy', 'apropos' => 'getApropos'];
 
@@ -224,6 +224,13 @@ class EntrepriseService
                 throw new EntrepriseValidationException([['path' => 'posTimezone', 'message' => 'fuseau horaire IANA attendu (ex. America/Toronto), ou vide (déduit du pays et de la province)']]);
             }
             $entreprise->setPosTimezone($tz === '' ? null : $tz);
+        }
+        if (array_key_exists('purchasePeriodFrequency', $data)) { // périodes de gestion (lot P1, 10/11/2026) : registre gestion.periods
+            $f = $data['purchasePeriodFrequency'];
+            if ($f !== null && $f !== '' && (!is_string($f) || !in_array(strtolower(trim($f)), \App\Services\GestionService\PeriodCalendar::FREQUENCIES, true))) {
+                throw new EntrepriseValidationException([['path' => 'purchasePeriodFrequency', 'message' => 'quarterly, semester ou monthly attendu, ou vide (trimestres)']]);
+            }
+            $entreprise->setPurchasePeriodFrequency($f === '' ? null : $f);
         }
         if (array_key_exists('pricesIncludeTax', $data)) {
             $bool = filter_var($data['pricesIncludeTax'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);

@@ -12,7 +12,7 @@ class FraisDePortService
     // MODIFICATION 1 : Le service ne dépend plus que du provider
     private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(TenantEntityManagerProvider $emProvider)
+    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Services\GestionService\PeriodGuard $periodGuard = null)
     {
         $this->emProvider = $emProvider;
     }
@@ -31,6 +31,7 @@ class FraisDePortService
     {
         $em = $this->emProvider->getEntityManager();
         // lot G4 (09/11/2026) : un seul frais de port par commande (409), commande fermée (409), transporteur inconnu (404)
+        $this->periodGuard?->assertCommandeWritable($commande); // figée ou datée dans une période fermée (lot P1, 10/11/2026)
         if ($commande->getIsClosed()) {
             throw new \App\Services\GestionService\GestionConflictException('COMMANDE_CLOSED', 'La commande est figée.');
         }
@@ -60,6 +61,7 @@ class FraisDePortService
 
     public function deleteFraisDePort(Commande $commande): void
     {
+        $this->periodGuard?->assertCommandeWritable($commande); // lot P1 (10/11/2026)
         $fraisDePort = $commande->getFraisDePort();
 
         if ($fraisDePort) {

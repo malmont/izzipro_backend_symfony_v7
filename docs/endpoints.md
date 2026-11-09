@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (318)
+## Boutique et commun (326)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -313,6 +313,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/collections/{id}/notes-de-frais` | ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::getNotesDeFraisByCollection` |
 | POST | `/api/collections/{id}/notes-de-frais` | ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::createNoteDeFrais` |
 | DELETE | `/api/collections/{id}` | ROLE_ADMIN | `Controller\CollectionsController\CollectionController::deleteCollection` |
+| PATCH | `/api/collections/{id}` | ROLE_ADMIN | `Controller\CollectionsController\CollectionController::patchCollection` |
 | GET | `/api/collections` | ROLE_ADMIN | `Controller\CollectionsController\CollectionController::getCollections` |
 | GET | `/api/colors` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\ColorsController\ColorController::getColors` |
 | POST | `/api/colors` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::createColor` |
@@ -324,7 +325,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/commandes/{id}/products/{productId}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\CommandeController\CommandeProductAttachmentController::detach` |
 | GET | `/api/commandes/{id}/products` | ROLE_ADMIN | `Controller\ProductController\ProductController::getProductsByCommande` |
 | POST | `/api/commandes/{id}/products` | ROLE_ADMIN | `Controller\ProductController\ProductController::createProductByCommande` |
+| DELETE | `/api/commandes/{id}` | ROLE_ADMIN | `Controller\CommandeController\CommandeUpdateController::delete` |
 | PATCH | `/api/commandes/{id}` | ROLE_ADMIN | `Controller\CommandeController\CommandeUpdateController::patch` |
+| POST | `/api/commandes` | ROLE_ADMIN | `Controller\CommandeController\CommandeController::createCommandeByDate` |
 | POST | `/api/createcollections` | ROLE_ADMIN | `Controller\CollectionsController\CollectionController::createCollection` |
 | GET | `/api/currencies` | PUBLIC_ACCESS | `App\Controller\CurrencyController\CurrencyController` |
 | DELETE | `/api/customization-combinations/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::deleteCombination` |
@@ -332,6 +335,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/customization-values/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::deleteValue` |
 | GET | `/api/customization/config/{variantId}` | PUBLIC_ACCESS | `App\Controller\ProductVariantController\CustomizationConfigController` |
 | POST | `/api/dashboard/collection/{id}/close` | ROLE_ADMIN | `Controller\DashboardListCollectionController\DashboardListCollectionController::closeCollection` |
+| POST | `/api/dashboard/collection/{id}/reopen` | ROLE_ADMIN | `Controller\DashboardListCollectionController\DashboardListCollectionController::reopenCollection` |
 | GET | `/api/dashboard/collection/{id}` | ROLE_ADMIN | `Controller\DashboardListCollectionController\DashboardListCollectionController::dashboardCollection` |
 | GET | `/api/dashboard/collections-combined` | ROLE_ADMIN | `Controller\DashboardListCollectionController\DashboardListCollectionController::getCombinedCollectionsData` |
 | POST | `/api/dashboard/commande/{id}/close` | ROLE_ADMIN | `Controller\DashboardCommandeController\DashboardCommandeController::closeCommand` |
@@ -364,6 +368,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/mobile/app-theme` | PUBLIC_ACCESS | `Controller\AppProfileController\AppThemeController::show` |
 | DELETE | `/api/notes-de-frais/{id}` | ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::deleteNoteDeFrais` |
 | PUT | `/api/notes-de-frais/{id}` | ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::updateNoteDeFrais` |
+| POST | `/api/notes-de-frais` | ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::createNoteDeFraisByDate` |
 | GET | `/api/offers` | PUBLIC_ACCESS | `Controller\PlatformController\PublicOffersController::list` |
 | GET | `/api/order-statuses` | PUBLIC_ACCESS | `Controller\OrderController\OrderController::getOrderStatuses` |
 | POST | `/api/order/cancel/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\OrderController\OrderController::cancelOrder` |
@@ -376,6 +381,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/payment` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\paymentController\PaymentsController::processPayment` |
 | GET | `/api/payments/statistics/{source}` | ROLE_ADMIN | `Controller\StatistiqueDashboard\PaymentsController::getPaymentStatistics` |
 | GET | `/api/payments` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\paymentController\PaymentsController::getPayments` |
+| GET | `/api/periodes/courante` | ROLE_ADMIN | `Controller\GestionController\PeriodeController::current` |
+| PATCH | `/api/periodes/{id}` | ROLE_ADMIN | `Controller\GestionController\PeriodeController::patch` |
+| GET | `/api/periodes` | ROLE_ADMIN | `Controller\GestionController\PeriodeController::list` |
 | POST | `/api/platform/billing-events` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformBillingEventsController::receive` |
 | PATCH | `/api/platform/entitlements/{id}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::act` |
 | GET | `/api/platform/entitlements` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::list` |
@@ -711,7 +719,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/admin/workers` | ROLE_SUPER_ADMIN | `Controller\Admin\WorkerAdminController::index` |
 | ANY | `/admin` | ROLE_ADMIN | `Controller\Admin\DashboardController::index` |
 
-## API Platform (30)
+## API Platform (28)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -721,8 +729,6 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
 | PATCH | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
 | PUT | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
-| DELETE | `/api/commandes/{id}.{_format}` | ROLE_ADMIN | API Platform (Commande) |
-| GET | `/api/commandes/{id}.{_format}` | ROLE_ADMIN | API Platform (Commande) |
 | GET, HEAD | `/api/errors/{status}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (?) |
 | GET | `/api/products.{_format}` | ROLE_ADMIN | API Platform (Product) |
 | POST | `/api/products.{_format}` | ROLE_ADMIN | API Platform (Product) |

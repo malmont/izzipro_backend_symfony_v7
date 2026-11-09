@@ -21,7 +21,7 @@ use Symfony\Component\Routing\Attribute\Route;
  */
 class CommandeUpdateController extends AbstractController
 {
-    public function __construct(private readonly UpdateCommandeUseCase $update, private readonly ?TenantCurrencyProvider $currency = null)
+    public function __construct(private readonly UpdateCommandeUseCase $update, private readonly ?TenantCurrencyProvider $currency = null, private readonly ?\App\Services\GestionService\PeriodGuard $periodGuard = null, private readonly ?\App\UseCase\CommandeUseCase\DeleteCommandeUseCase $delete = null)
     {
     }
 
@@ -51,8 +51,22 @@ class CommandeUpdateController extends AbstractController
             $fields['exchangeRate'] = $rate;
         }
         $input->check();
+        // lot P1 (10/11/2026) : commande ouverte et datée dans une période ouverte ; une date déplacée vers une période fermée est refusée
+        $this->periodGuard->assertCommandeWritable($commande);
+        if (isset($fields['date'])) {
+            $this->periodGuard->assertDateWritable(new \DateTimeImmutable($fields['date']));
+        }
         $commande = $this->update->execute($commande, $fields);
 
         return $this->json(new CommandeOutputDTO($commande, $request->getSchemeAndHttpHost(), $this->currency?->code() ?? TenantCurrencyProvider::DEFAULT), JsonResponse::HTTP_OK);
+    }
+
+    /** Suppression dédiée (lot P1, 10/11/2026 ; avant : API Platform) : 204 sans corps, produits détachés ; 409 COMMANDE_CLOSED / PERIOD_CLOSED */
+    #[Route('/api/commandes/{id}', name: 'delete_commande', methods: ['DELETE'], requirements: ['id' => '\d+'])]
+    public function delete(Commande $commande): \Symfony\Component\HttpFoundation\Response
+    {
+        $this->delete->execute($commande);
+
+        return new \Symfony\Component\HttpFoundation\Response('', \Symfony\Component\HttpFoundation\Response::HTTP_NO_CONTENT);
     }
 }

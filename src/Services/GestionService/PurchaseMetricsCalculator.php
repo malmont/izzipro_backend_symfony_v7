@@ -15,7 +15,7 @@ use App\Services\TenantEntityManagerProvider;
  *   purchaseCost (= totalItemCost) = Σ coût × quantité, dans la devise du site (coût et frais de port × taux de la commande, lot G6)
  *   stockValue                     = Σ coût × quantité × coefficient (valeur de vente attendue du stock acheté)
  *   usedBudget                     = purchaseCost + frais de port (+ notes de frais pour une collection)
- *   marge                          = stockValue − usedBudget ; tauxMarge = marge / stockValue ; tauxMarque = marge / usedBudget
+ *   marge                          = stockValue − usedBudget ; tauxMarge = marge / usedBudget ; tauxMarque = marge / stockValue (définitions usuelles, lot P1)
  */
 class PurchaseMetricsCalculator
 {
@@ -44,10 +44,41 @@ class PurchaseMetricsCalculator
         return $this->collectionsTotals('c.collections_id = :id', ['id' => $collectionId]);
     }
 
+    /** Période (lot P1, 10/11/2026) : commandes datées dans [start, end] quelle que soit leur collection, notes de frais datées dans la période */
+    public function periodTotals(\DateTimeInterface $start, \DateTimeInterface $end): array
+    {
+        $params = ['from' => $start->format('Y-m-d 00:00:00'), 'to' => \DateTimeImmutable::createFromInterface($end)->modify('+1 day')->format('Y-m-d 00:00:00')];
+        $connection = $this->connection();
+        $row = $connection->fetchAssociative('SELECT ' . self::sums() . ' FROM product p JOIN commande c ON c.id = p.commande_id WHERE c.date >= :from AND c.date < :to', $params) ?: [];
+        $costs = $connection->fetchAssociative(
+            'SELECT (SELECT COALESCE(SUM(f.price * COALESCE(c.exchange_rate, 1)), 0) FROM frais_de_port f JOIN commande c ON c.id = f.commande_id WHERE c.date >= :from AND c.date < :to) AS shipping_cost,' .
+            ' (SELECT COUNT(*) FROM commande c WHERE c.date >= :from AND c.date < :to) AS order_count,' .
+            ' (SELECT COALESCE(SUM(n.montant), 0) FROM note_de_frais n WHERE n.date >= :from AND n.date < :to) AS expense_cost',
+            $params
+        ) ?: [];
+
+        return self::totals($row) + ['shippingCost' => (int) ($costs['shipping_cost'] ?? 0), 'expenseCost' => (int) ($costs['expense_cost'] ?? 0), 'orderCount' => (int) ($costs['order_count'] ?? 0)];
+    }
+
+    /** Toutes les périodes du calendrier (tableau combiné `kind=period`) : union de leurs plages de dates = commandes et notes datées dans une période existante */
+    public function allPeriodsTotals(): array
+    {
+        $connection = $this->connection();
+        $in = "EXISTS (SELECT 1 FROM collections pc WHERE pc.kind = 'period' AND pc.del = false AND pc.start_date_collection <= c.date AND c.date < pc.end_date_collection + INTERVAL '1 day')";
+        $row = $connection->fetchAssociative('SELECT ' . self::sums() . ' FROM product p JOIN commande c ON c.id = p.commande_id WHERE ' . $in) ?: [];
+        $costs = $connection->fetchAssociative(
+            'SELECT (SELECT COALESCE(SUM(f.price * COALESCE(c.exchange_rate, 1)), 0) FROM frais_de_port f JOIN commande c ON c.id = f.commande_id WHERE ' . $in . ') AS shipping_cost,' .
+            ' (SELECT COUNT(*) FROM commande c WHERE ' . $in . ') AS order_count,' .
+            " (SELECT COALESCE(SUM(n.montant), 0) FROM note_de_frais n WHERE EXISTS (SELECT 1 FROM collections pc WHERE pc.kind = 'period' AND pc.del = false AND pc.start_date_collection <= n.date AND n.date <= pc.end_date_collection)) AS expense_cost"
+        ) ?: [];
+
+        return self::totals($row) + ['shippingCost' => (int) ($costs['shipping_cost'] ?? 0), 'expenseCost' => (int) ($costs['expense_cost'] ?? 0), 'orderCount' => (int) ($costs['order_count'] ?? 0)];
+    }
+
     /** Toutes les collections non supprimées (tableau combiné) */
     public function allCollectionsTotals(): array
     {
-        return $this->collectionsTotals('c.collections_id IN (SELECT id FROM collections WHERE del = false)', []);
+        return $this->collectionsTotals("c.collections_id IN (SELECT id FROM collections WHERE del = false AND kind = 'manual')", []); // manuelles seulement : les périodes ont leur propre combiné (lot P1, 10/11/2026)
     }
 
     /**
@@ -68,8 +99,9 @@ class PurchaseMetricsCalculator
             'BudgetGeneral' => ['generalBudget' => $generalBudget, 'usedBudget' => $usedBudget, 'remainingBudget' => $generalBudget - $usedBudget],
             'ValeurStock' => ['stockValue' => $stockValue, 'marge' => $margin],
             'TauxMarge' => [
-                'tauxMarge' => $stockValue > 0 ? round($margin / $stockValue * 100, 2) : 0.0,
-                'tauxMarque' => $usedBudget > 0 ? round($margin / $usedBudget * 100, 2) : 0.0, // dénominateur inchangé depuis l'origine : coût total (achats + frais)
+                // définitions usuelles depuis le lot P1 (10/11/2026 ; inversées avant) : taux de marge = marge / coût total (achats + frais), taux de marque = marge / valeur de vente
+                'tauxMarge' => $usedBudget > 0 ? round($margin / $usedBudget * 100, 2) : 0.0,
+                'tauxMarque' => $stockValue > 0 ? round($margin / $stockValue * 100, 2) : 0.0,
             ],
         ];
     }

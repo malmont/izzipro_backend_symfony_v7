@@ -19,7 +19,10 @@ class CollectionDashboardService
 
     public function calculateDashboardMetrics(Collections $collection): DashboardCollectionDTO
     {
-        $totals = $this->calculator->collectionTotals((int) $collection->getId());
+        // période du calendrier : par date (commandes et notes datées dedans, quelle que soit leur collection) ; collection manuelle : par rattachement (lot P1, 10/11/2026)
+        $totals = $collection->isPeriod()
+            ? $this->calculator->periodTotals($collection->getStartDateCollection(), $collection->getEndDateCollection())
+            : $this->calculator->collectionTotals((int) $collection->getId());
 
         return DashboardCollectionDTO::fromArray(self::data($totals, (int) $collection->getBudgetCollection(), $collection->getStartDateCollection(), $collection->getEndDateCollection()));
     }

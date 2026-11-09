@@ -28,6 +28,9 @@ class CollectionController extends AbstractController
         GetCollectionsUseCase $getCollectionsUseCase,
         DeleteCollectionUseCase $deleteCollectionUseCase,
         TenantCacheService $cache,
+        private readonly ?\App\UseCase\CollectionUseCase\UpdateCollectionUseCase $updateCollectionUseCase = null, // lot P1 (10/11/2026)
+        private readonly ?\App\Services\GestionService\PeriodGuard $periodGuard = null,
+        private readonly ?\App\Services\GestionService\PeriodCalendar $calendar = null,
         private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null // lot G4 (09/11/2026)
     ) {
         $this->createCollectionUseCase = $createCollectionUseCase;
@@ -54,7 +57,7 @@ class CollectionController extends AbstractController
         // propriétaire = utilisateur du jeton (le userId du corps est ignoré) ; 201 avec l'objet créé (lot G4, 09/11/2026)
         $inputDTO = new CollectionInputDTO(['budgetCollection' => $budget, 'nomCollection' => $name, 'userId' => $this->getUser()->getId()] + $data);
         $collection = $this->createCollectionUseCase->execute($inputDTO);
-        return $this->json(new CollectionOutputDTO($collection, $request->getSchemeAndHttpHost(), $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT), Response::HTTP_CREATED);
+        return $this->json(new CollectionOutputDTO($collection, $request->getSchemeAndHttpHost(), $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT, $this->calendar), Response::HTTP_CREATED);
     }
 
     #[Route('/api/collections', name: 'get_collections', methods: ['GET'])]
@@ -78,5 +81,27 @@ class CollectionController extends AbstractController
     {
         $this->deleteCollectionUseCase->execute($collection); // suppression logique
         return new \Symfony\Component\HttpFoundation\Response('', \Symfony\Component\HttpFoundation\Response::HTTP_NO_CONTENT); // 204 sans corps (lot G4, 09/11/2026 ; avant : 200 avec message)
+    }
+
+    /** Budget (cents) et nom d'une collection manuelle (lot P1, 10/11/2026) ; 409 COLLECTION_CLOSED / PERIOD_CLOSED si fermée ; une période se règle par PATCH /api/periodes/{id} */
+    #[Route('/api/collections/{id}', name: 'patch_collection', methods: ['PATCH'], requirements: ['id' => '\d+'])]
+    public function patchCollection(Collections $collection, Request $request): JsonResponse
+    {
+        $data = json_decode((string) $request->getContent(), true);
+        if (!is_array($data)) {
+            return $this->json(['error' => 'INVALID_JSON', 'code' => 'INVALID_JSON', 'message' => 'Corps JSON invalide'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+        $input = new \App\Services\GestionService\GestionInput($data);
+        $fields = [];
+        if (array_key_exists('budget', $data)) {
+            $fields['budget'] = $input->cents('budget');
+        }
+        if (array_key_exists('nomCollection', $data)) {
+            $fields['nomCollection'] = $input->text('nomCollection');
+        }
+        $input->check();
+        $collection = $this->updateCollectionUseCase->execute($collection, $fields, $this->periodGuard);
+
+        return $this->json(new CollectionOutputDTO($collection, $request->getSchemeAndHttpHost(), $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT, $this->calendar), JsonResponse::HTTP_OK);
     }
 }

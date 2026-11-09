@@ -18,6 +18,7 @@ Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne 
 | Aide intégrée pour les administrateurs (pages `docs/aide/<clé>.md`, API `/api/site/help`, page `/admin/aide`) | `docs/console-pilotage.md`, « aide intégrée » ; pages dans `docs/aide/` |
 | Module Assistance (tickets, plaintes, aide IA au répondeur, chat : cadrage, responsabilités backend / Next / MAUI / caisse) | `docs/assistance.md` |
 | Application de gestion (achats : collections, commandes fournisseurs, frais de port, notes de frais, tableaux de bord, statistiques ; mise au niveau cents / devise / langue / fuseau, lots G0–G5, contrat avec l'application) | `docs/gestion-mise-a-niveau.md` ; ligne « Gestion (achats) » de `docs/architecture.md` |
+| Périodes de gestion (collections automatiques par calendrier de site, état par date, résultat de période, reprise d'historique) | `docs/periodes-gestion.md` |
 | Contenu d'exemple des sites (site de référence `gmasuite`, `isDemo`, copie, suppression) | `docs/contenu-exemple.md` |
 | Console de pilotage des fonctionnalités (inventaire des réglages par module, registre, droits d'usage, onglets admin / super admin, lots) | `docs/console-pilotage.md` |
 | Contrats partagés avec le frontend (schéma, catalogue IA, jeu d'essai, libellés de l'éditeur) | `config/landingpage/` (synchronisés, ne pas modifier à la main) |

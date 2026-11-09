@@ -199,7 +199,7 @@ security:
         - { path: ^/api/statistiques/(chiffre-affaires|nombre-commandes|panier-moyen)/pos$, roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
         - { path: ^/api/payments/statistics/pos$, roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
         # Gestion (lot G4, 09/11/2026) : notes de frais, référentiels et transporteurs d'achat réservés aux administrateurs (avant : tout utilisateur connecté, transporteurs publics)
-        - { path: ^/api/(collections|createcollections|commandes|fournisseurs|transporteurs|notes-de-frais|type-fournisseurs|type-note-de-frais|gestion|dashboard|caisse|statistiques|stock-evolution|stock-value|frais|payments/statistics|taxes/monthly|carrier/statistics), roles: ROLE_ADMIN }
+        - { path: ^/api/(collections|createcollections|commandes|fournisseurs|transporteurs|notes-de-frais|type-fournisseurs|type-note-de-frais|gestion|periodes|dashboard|caisse|statistiques|stock-evolution|stock-value|frais|payments/statistics|taxes/monthly|carrier/statistics), roles: ROLE_ADMIN }
         # 🔹 Boutique réglable (08/10/2026) : détail d'une commande pour son client connecté ou pour un invité muni de son
         #    jeton (vérifiés par le contrôleur) ; liste des statuts de commande. Avant la règle générale ^/api.
         - { path: ^/api/orders/\d+$, methods: [GET], roles: PUBLIC_ACCESS }

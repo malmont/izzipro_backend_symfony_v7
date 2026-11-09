@@ -105,6 +105,12 @@ class SiteFeatureStateService
                 $effective = $this->locale->siteLocale();
                 $status = 'ready';
                 break;
+            case 'gestion.periods': // lot P1 périodes (10/11/2026)
+                $value = $e?->getPurchasePeriodFrequency();
+                $effective = $value ?? \App\Services\GestionService\PeriodCalendar::DEFAULT_FREQUENCY;
+                $details = ['graceDays' => \App\Services\GestionService\PeriodCalendar::GRACE_DAYS, 'appliesAfterCurrentPeriod' => true];
+                $status = 'ready';
+                break;
             case 'site.timezone':
                 $settings = $this->clock->settings();
                 $value = $e?->getPosTimezone();

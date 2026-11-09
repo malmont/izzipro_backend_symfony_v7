@@ -18,12 +18,15 @@ class CombinedCollectionDashboardService
     }
 
     /** @return array<string, mixed> */
-    public function getCombinedCollectionsData(): array
+    /** @param string $kind `manual` (collections manuelles, défaut) ou `period` (périodes du calendrier) : jamais les deux ensemble (lot P1, 10/11/2026) */
+    public function getCombinedCollectionsData(string $kind = 'manual'): array
     {
-        $totals = $this->calculator->allCollectionsTotals();
+        $kind = $kind === 'period' ? 'period' : 'manual';
+        $totals = $kind === 'period' ? $this->calculator->allPeriodsTotals() : $this->calculator->allCollectionsTotals();
         $summary = $this->emProvider->getEntityManager()->getConnection()->fetchAssociative(
             'SELECT COALESCE(SUM(budget_collection), 0) AS budget, MIN(start_date_collection) AS start_date, MAX(end_date_collection) AS end_date,' .
-            ' COALESCE(SUM(GREATEST(0, (end_date_collection::date - start_date_collection::date))), 0) AS days FROM collections WHERE del = false'
+            ' COALESCE(SUM(GREATEST(0, (end_date_collection::date - start_date_collection::date))), 0) AS days FROM collections WHERE del = false AND kind = :kind',
+            ['kind' => $kind]
         ) ?: [];
         $data = CollectionDashboardService::data($totals, (int) ($summary['budget'] ?? 0), null, null);
         $data['CollectionDuration'] = [
@@ -31,6 +34,8 @@ class CombinedCollectionDashboardService
             'endDate' => isset($summary['end_date']) ? substr((string) $summary['end_date'], 0, 10) : null,
             'days' => (int) ($summary['days'] ?? 0),
         ];
+
+        $data['kind'] = $kind;
 
         return $data;
     }

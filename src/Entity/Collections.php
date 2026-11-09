@@ -265,6 +265,35 @@ class Collections
         return $this;
     }
 
+    // Périodes de gestion (lot P1, 10/11/2026, docs/periodes-gestion.md) : collection créée par le calendrier du site
+    public const KIND_MANUAL = 'manual';
+    public const KIND_PERIOD = 'period';
+
+    #[ORM\Column(length: 16, options: ['default' => 'manual'])]
+    private string $kind = self::KIND_MANUAL;
+
+    /** `2026-Q2`, `2026-S1`, `2026-M07` ; unique parmi les périodes ; null pour une collection manuelle */
+    #[ORM\Column(name: 'period_key', length: 16, nullable: true)]
+    private ?string $periodKey = null;
+
+    /** Réouverture manuelle d'une période fermée par la date : reste ouverte jusqu'à une clôture manuelle */
+    #[ORM\Column(name: 'reopened_at', type: 'datetime', nullable: true)]
+    private ?\DateTimeInterface $reopenedAt = null;
+
+    /** Clôture manuelle (close) ; null : état calculé d'après la date (fin + 15 jours) */
+    #[ORM\Column(name: 'closed_at', type: 'datetime', nullable: true)]
+    private ?\DateTimeInterface $closedAt = null;
+
+    public function getKind(): string { return $this->kind; }
+    public function setKind(string $kind): static { $this->kind = $kind === self::KIND_PERIOD ? self::KIND_PERIOD : self::KIND_MANUAL; return $this; }
+    public function isPeriod(): bool { return $this->kind === self::KIND_PERIOD; }
+    public function getPeriodKey(): ?string { return $this->periodKey; }
+    public function setPeriodKey(?string $periodKey): static { $this->periodKey = $periodKey; return $this; }
+    public function getReopenedAt(): ?\DateTimeInterface { return $this->reopenedAt; }
+    public function setReopenedAt(?\DateTimeInterface $at): static { $this->reopenedAt = $at; return $this; }
+    public function getClosedAt(): ?\DateTimeInterface { return $this->closedAt; }
+    public function setClosedAt(?\DateTimeInterface $at): static { $this->closedAt = $at; return $this; }
+
     public function getPhotoCollections(): ?CollectionPicture
     {
         return $this->photoCollections;

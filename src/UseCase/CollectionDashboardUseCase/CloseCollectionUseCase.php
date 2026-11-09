@@ -20,7 +20,8 @@ class CloseCollectionUseCase
         CommandeStatistiquesService $commandeStatistiquesService,
         DashboardCommandeUseCase $dashboardCommandeUseCase,
         DashboardCollectionUseCase $dashboardCollectionUseCase, // manquait jusqu'au 09/11/2026 : la clôture d'une collection échouait toujours (propriété indéfinie)
-        TenantEntityManagerProvider $emProvider
+        TenantEntityManagerProvider $emProvider,
+        private readonly ?\App\Services\GestionService\PeriodCalendar $calendar = null // périodes (lot P1, 10/11/2026)
     ) {
         $this->collectionStatistiquesService = $collectionStatistiquesService;
         $this->commandeStatistiquesService = $commandeStatistiquesService;
@@ -31,8 +32,8 @@ class CloseCollectionUseCase
 
     public function execute(Collections $collection): \App\Dto\DashboardCollectionDTO
     {
-        if ($collection->getIsClosed()) {
-            throw new \App\Services\GestionService\GestionConflictException('ALREADY_CLOSED', 'La collection est déjà figée.'); // 409 (lot G2, 09/11/2026)
+        if ($this->calendar ? $this->calendar->isClosed($collection) : $collection->getIsClosed()) {
+            throw new \App\Services\GestionService\GestionConflictException('ALREADY_CLOSED', 'La collection est déjà figée.'); // 409 (lot G2, 09/11/2026 ; période fermée par la date : lot P1)
         }
         
         // On récupère l'EM du tenant une seule fois au début de l'opération
@@ -42,7 +43,11 @@ class CloseCollectionUseCase
         $metricsDTO = $this->dashboardCollectionUseCase->execute($collection);
         $this->collectionStatistiquesService->createAndSaveMetrics($collection, $metricsDTO);
 
-        foreach ($collection->getCommandes() as $commande) {
+        // période : ses commandes sont celles datées dedans ; collection manuelle : celles rattachées (lot P1, 10/11/2026)
+        $commandes = $collection->isPeriod()
+            ? $em->getRepository(\App\Entity\Commande::class)->createQueryBuilder('c')->where('c.date >= :from AND c.date < :to')->setParameter('from', $collection->getStartDateCollection()->format('Y-m-d 00:00:00'))->setParameter('to', \DateTimeImmutable::createFromInterface($collection->getEndDateCollection())->modify('+1 day')->format('Y-m-d 00:00:00'))->getQuery()->getResult()
+            : $collection->getCommandes();
+        foreach ($commandes as $commande) {
             if (!$commande->getIsClosed()) {
                 $commandeMetricsDTO = $this->dashboardCommandeUseCase->execute($commande);
                 $this->commandeStatistiquesService->createAndSaveMetrics($commande, $commandeMetricsDTO);
@@ -59,7 +64,7 @@ class CloseCollectionUseCase
             }
         }
 
-        $collection->setIsClosed(true);
+        $collection->setIsClosed(true)->setClosedAt(new \DateTime())->setReopenedAt(null); // clôture manuelle datée (lot P1)
         // On utilise l'EM du tenant
         $em->persist($collection);
 

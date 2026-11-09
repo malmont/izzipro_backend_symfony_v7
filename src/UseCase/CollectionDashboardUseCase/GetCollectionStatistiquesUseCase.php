@@ -10,7 +10,7 @@ class GetCollectionStatistiquesUseCase
 {
     private CollectionStatistiquesService $collectionStatistiquesService;
 
-    public function __construct(CollectionStatistiquesService $collectionStatistiquesService)
+    public function __construct(CollectionStatistiquesService $collectionStatistiquesService, private readonly ?DashboardCollectionUseCase $dashboard = null)
     {
         $this->collectionStatistiquesService = $collectionStatistiquesService;
     }
@@ -24,5 +24,18 @@ class GetCollectionStatistiquesUseCase
         }
 
         return DashboardCollectionDTO::fromCollectionStatistiques($collectionStatistiques);
+    }
+
+    /** Chiffres figés, calculés et enregistrés à la première lecture d'une collection fermée par la date (lot P1, 10/11/2026) */
+    public function executeOrFreeze(Collections $collection): DashboardCollectionDTO
+    {
+        $frozen = $this->execute($collection);
+        if ($frozen !== null) {
+            return $frozen;
+        }
+        $metrics = $this->dashboard->execute($collection);
+        $this->collectionStatistiquesService->createAndSaveMetrics($collection, $metrics);
+
+        return $metrics;
     }
 }

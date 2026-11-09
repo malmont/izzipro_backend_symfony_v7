@@ -16,16 +16,28 @@ class CollectionOutputDTO
     public string $nomCollection;
     public ?string $photoCollection;
     public ?array $user;
+    /** Périodes (lot P1, 10/11/2026) : manual | period ; periodKey null pour une manuelle ; status open | closed calculé d'après la date */
+    public string $kind;
+    public ?string $periodKey;
+    public string $status;
+    public ?string $closedAt;
+    public ?string $reopenedAt;
 
-    public function __construct(Collections $collection, string $host, string $currency = \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT)
+    public function __construct(Collections $collection, string $host, string $currency = \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT, ?\App\Services\GestionService\PeriodCalendar $calendar = null)
     {
         $this->currency = $currency;
+        $this->kind = $collection->getKind();
+        $this->periodKey = $collection->getPeriodKey();
+        $closed = $calendar ? $calendar->isClosed($collection) : (bool) $collection->getIsClosed();
+        $this->status = $closed ? 'closed' : 'open';
+        $this->closedAt = $calendar ? $calendar->closedAt($collection)?->format('Y-m-d') : ($collection->getClosedAt()?->format('Y-m-d'));
+        $this->reopenedAt = $collection->getReopenedAt()?->format('Y-m-d');
         $this->id = $collection->getId();
         $this->budgetCollection = (int) $collection->getBudgetCollection();
         $this->startDateCollection = $collection->getStartDateCollection()->format('Y-m-d H:i:s');
         $this->endDateCollection = $collection->getEndDateCollection()->format('Y-m-d H:i:s');
         $this->del = $collection->isDel();
-        $this->isClosed = $collection->getIsClosed();
+        $this->isClosed = $closed; // vrai aussi pour une période fermée par la date
         $this->nomCollection = $collection->getNomCollection();
 
         $photo = $collection->getPhotoCollections();
@@ -39,8 +51,8 @@ class CollectionOutputDTO
         ] : null;
     }
 
-    public static function fromEntity(Collections $collection, string $host, string $currency = \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT): self
+    public static function fromEntity(Collections $collection, string $host, string $currency = \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT, ?\App\Services\GestionService\PeriodCalendar $calendar = null): self
     {
-        return new self($collection, $host, $currency);
+        return new self($collection, $host, $currency, $calendar);
     }
 }

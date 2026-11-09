@@ -36,6 +36,7 @@ class PurchaseCurrencyApiTest extends WebTestCase
     public function testSupplierCurrencyFlowsToOrdersDashboardsAndExport(): void
     {
         $tag = bin2hex(random_bytes(2));
+        $today = static::getContainer()->get(\App\Services\GestionService\PeriodCalendar::class)->today(); // dates dans la période ouverte (lot P1)
         $type = $this->create(TypeFournisseur::class, ['name' => 'Type devise ' . $tag]);
         $this->endOfWrite();
 
@@ -51,12 +52,12 @@ class PurchaseCurrencyApiTest extends WebTestCase
         $collectionId = (int) $collection['id'];
 
         // Commande chez le fournisseur USD : taux obligatoire ; budget en USD
-        $this->request('POST', "/api/collections/$collectionId/commandes", ['budget' => 100000, 'date' => '2026-05-05 10:00:00', 'name' => 'Sans taux', 'fournisseur' => ['id' => $supplier['id']]]);
+        $this->request('POST', "/api/collections/$collectionId/commandes", ['budget' => 100000, 'date' => $today->format('Y-m-d') . ' 10:00:00', 'name' => 'Sans taux', 'fournisseur' => ['id' => $supplier['id']]]);
         $this->assertSame([422, ['exchangeRate' => 'EXCHANGE_RATE_REQUIRED']], [$this->client->getResponse()->getStatusCode(), $this->body()['fields']]);
-        $commande = $this->post("/api/collections/$collectionId/commandes", ['budget' => 100000, 'date' => '2026-05-05 10:00:00', 'name' => "Import $tag", 'fournisseur' => ['id' => $supplier['id']], 'exchangeRate' => 1.35], 201);
+        $commande = $this->post("/api/collections/$collectionId/commandes", ['budget' => 100000, 'date' => $today->format('Y-m-d') . ' 10:00:00', 'name' => "Import $tag", 'fournisseur' => ['id' => $supplier['id']], 'exchangeRate' => 1.35], 201);
         $commandeId = (int) $commande['id'];
         $this->assertSame(['USD', 'CAD', 1.35, 100000], [$commande['currency'], $commande['siteCurrency'], $commande['exchangeRate'], $commande['budget']]);
-        $localOrder = $this->post("/api/collections/$collectionId/commandes", ['budget' => 50000, 'date' => '2026-05-06 10:00:00', 'name' => "Local $tag", 'fournisseur' => ['id' => $local['id']], 'exchangeRate' => 9.9], 201);
+        $localOrder = $this->post("/api/collections/$collectionId/commandes", ['budget' => 50000, 'date' => $today->format('Y-m-d') . ' 11:00:00', 'name' => "Local $tag", 'fournisseur' => ['id' => $local['id']], 'exchangeRate' => 9.9], 201);
         $this->assertSame(['CAD', null], [$localOrder['currency'], $localOrder['exchangeRate']], 'fournisseur sans devise : taux ignoré, devise du site');
 
         // Rattachement d'un produit existant : prix d'achat requis en devise étrangère, puis coût 2000 USD × 2
@@ -91,10 +92,10 @@ class PurchaseCurrencyApiTest extends WebTestCase
         $this->assertSame(422, $this->client->getResponse()->getStatusCode());
 
         // Export : montants en CAD, devise d'achat et taux en fin de ligne
-        $this->request('GET', '/api/gestion/exports/achats.csv?from=2026-05-01&to=2026-05-31&collectionId=' . $collectionId);
+        $this->request('GET', '/api/gestion/exports/achats.csv?from=' . $today->format('Y-m-01') . '&to=' . $today->format('Y-m-t') . '&collectionId=' . $collectionId);
         $lines = array_values(array_filter(explode("\r\n", substr((string) $this->client->getResponse()->getContent(), 3))));
         $this->assertStringEndsWith(';"Devise d\'achat";Taux', $lines[0]);
-        $this->assertStringContainsString("\"Import $tag\";2026-05-05;\"Importateur $tag\";\"Produit devise $tag\";2;28,00;56,00;2;;USD;1,4", $lines[1], 'coût 2000 USD × 1,4 = 28,00 CAD');
+        $this->assertStringContainsString("\"Import $tag\";" . $today->format('Y-m-d') . ";\"Importateur $tag\";\"Produit devise $tag\";2;28,00;56,00;2;;USD;1,4", $lines[1], 'coût 2000 USD × 1,4 = 28,00 CAD');
         $this->assertStringContainsString(';USD;1,4', $lines[2]);
 
         // Clôture : chiffres figés convertis ; rattachement refusé ensuite

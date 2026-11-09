@@ -117,7 +117,7 @@ class PurchasesApiTest extends WebTestCase
         $this->assertSame([3, 1], [$dashboard['Statistics']['itemCount'], $dashboard['Statistics']['modelCount']]);
         $this->assertSame(2.0, (float) $dashboard['averageMultiplier']);
         $this->assertSame([6000, -12000], [$dashboard['ValeurStock']['stockValue'], $dashboard['ValeurStock']['marge']], 'stockValue = totalItemCost × coefficient moyen');
-        $this->assertSame([-200.0, -66.67], [(float) $dashboard['TauxMarge']['tauxMarge'], (float) $dashboard['TauxMarge']['tauxMarque']], 'taux en %, arrondis à 2 décimales (lot G2)');
+        $this->assertSame([-66.67, -200.0], [(float) $dashboard['TauxMarge']['tauxMarge'], (float) $dashboard['TauxMarge']['tauxMarque']], 'taux de marge = marge / coût, taux de marque = marge / valeur de vente, en %, 2 décimales (lots G2 et P1)');
         $this->assertSame('Transporteur test', $dashboard['Transporteur']['name']);
 
         // Notes de frais de la collection : montant en unités monétaires (état avant G1)
@@ -189,7 +189,11 @@ class PurchasesApiTest extends WebTestCase
         $this->request('DELETE', '/api/transporteurs/' . $transporteur->getId());
         $this->assertSame([204, ''], [$this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent()], 'plus utilisé (frais de port supprimé avant la clôture) : 204 sans corps');
         $this->request('DELETE', "/api/commandes/$commandeId");
-        $this->assertSame(204, $this->client->getResponse()->getStatusCode(), 'API Platform : ' . substr((string) $this->client->getResponse()->getContent(), 0, 200));
+        $this->assertSame(409, $this->client->getResponse()->getStatusCode(), 'commande figée : non supprimable (lot P1)');
+        $this->request('POST', "/api/dashboard/collection/$collectionId/reopen");
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode(), 'réouverture manuelle de la collection (lot P1) : ' . substr((string) $this->client->getResponse()->getContent(), 0, 200));
+        $this->request('DELETE', "/api/commandes/$commandeId");
+        $this->assertSame(204, $this->client->getResponse()->getStatusCode(), 'route dédiée (lot P1) : ' . substr((string) $this->client->getResponse()->getContent(), 0, 200));
         $this->endOfWrite();
         $product = $this->em()->find(Product::class, $productId);
         $this->assertNotNull($product, 'le produit de la boutique survit à la commande');

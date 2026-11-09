@@ -17,7 +17,7 @@ class CommandeProductAttachmentService
 {
     public const MAX_LIMIT = 100;
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly ContentAuditRecorder $audit, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null) // devise du site (lot G6 de la gestion, 10/11/2026)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly ContentAuditRecorder $audit, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null, private readonly ?\App\Services\GestionService\PeriodCalendar $calendar = null) // devise du site (lot G6) ; calendrier des périodes (lot P1, 10/11/2026)
     {
     }
 
@@ -62,6 +62,12 @@ class CommandeProductAttachmentService
     {
         if ($commande->getIsClosed()) {
             throw new CommandeProductException('COMMANDE_CLOSED', 'Cette commande est close : aucun rattachement possible', 409, [], ['commandeId' => $commande->getId()]);
+        }
+        if ($this->calendar !== null && $commande->getDate() !== null) { // période fermée par la date (lot P1 de la gestion, 10/11/2026)
+            $period = $this->calendar->periodFor($commande->getDate());
+            if ($period !== null && $this->calendar->isClosed($period)) {
+                throw new CommandeProductException('PERIOD_CLOSED', sprintf('La période « %s » est clôturée : aucun rattachement', $period->getNomCollection()), 409, [], ['commandeId' => $commande->getId(), 'periodId' => $period->getId(), 'periodKey' => $period->getPeriodKey()]);
+            }
         }
         $em = $this->emProvider->getEntityManager();
         $errors = [];
@@ -151,6 +157,12 @@ class CommandeProductAttachmentService
     {
         if ($commande->getIsClosed()) {
             throw new CommandeProductException('COMMANDE_CLOSED', 'Cette commande est close : aucun détachement possible', 409, [], ['commandeId' => $commande->getId()]);
+        }
+        if ($this->calendar !== null && $commande->getDate() !== null) { // période fermée par la date (lot P1 de la gestion, 10/11/2026)
+            $period = $this->calendar->periodFor($commande->getDate());
+            if ($period !== null && $this->calendar->isClosed($period)) {
+                throw new CommandeProductException('PERIOD_CLOSED', sprintf('La période « %s » est clôturée : aucun rattachement', $period->getNomCollection()), 409, [], ['commandeId' => $commande->getId(), 'periodId' => $period->getId(), 'periodKey' => $period->getPeriodKey()]);
+            }
         }
         $em = $this->emProvider->getEntityManager();
         $product = $em->find(Product::class, $productId);

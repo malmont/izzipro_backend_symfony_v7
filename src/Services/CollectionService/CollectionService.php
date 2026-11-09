@@ -17,7 +17,7 @@ class CollectionService
     private TenantEntityManagerProvider $emProvider;
 
     // MODIFICATION 2 : Le constructeur n'injecte plus que le provider.
-    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null) // devise du site (lot G1, 09/11/2026)
+    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null, private readonly ?\App\Services\GestionService\PeriodCalendar $calendar = null) // devise du site (lot G1, 09/11/2026) ; calendrier des périodes (lot P1, 10/11/2026)
     {
         $this->emProvider = $emProvider;
     }
@@ -62,15 +62,19 @@ class CollectionService
     public function getCollections(string $host, ?\App\Services\GestionService\GestionListQuery $query = null): array
     {
         $em = $this->emProvider->getEntityManager();
-        $result = $em->getRepository(Collections::class)->search($query?->status, $query?->q, $query?->page, $query?->limit);
+        $this->calendar?->ensurePeriods(); // périodes créées à la lecture, sans trou (lot P1, 10/11/2026)
+        $result = $em->getRepository(Collections::class)->search($query?->status, $query?->q, $query?->page, $query?->limit, $query?->kind, $this->calendar?->today());
         $currency = $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT;
 
-        return ['items' => array_map(fn($collection) => new CollectionOutputDTO($collection, $host, $currency), $result['items']), 'total' => $result['total']];
+        return ['items' => array_map(fn($collection) => new CollectionOutputDTO($collection, $host, $currency, $this->calendar), $result['items']), 'total' => $result['total']];
     }
 
     /** Suppression logique (`del`, lot G4, 09/11/2026) : les commandes, notes de frais et statistiques restent en base, la collection disparaît des listes et du combiné */
     public function deleteCollection(Collections $collection): void
     {
+        if ($collection->isPeriod()) {
+            throw new \App\Services\GestionService\GestionConflictException('PERIOD_NOT_DELETABLE', 'Une période du calendrier ne se supprime pas (elle serait recréée à la lecture).'); // lot P1 (10/11/2026)
+        }
         $em = $this->emProvider->getEntityManager();
         $collection->setDel(true);
         $em->persist($collection);
@@ -93,5 +97,30 @@ class CollectionService
         // On utilise l'EM qui a été passé en argument.
         return $em->createNativeQuery($sql, $rsm)
             ->getOneOrNullResult();
+    }
+
+    /**
+     * Budget (cents) et, pour une collection manuelle, nom (lot P1, 10/11/2026 : PATCH /api/collections/{id}, PATCH /api/periodes/{id}) ;
+     * refusé si fermée (409 PERIOD_CLOSED / COLLECTION_CLOSED).
+     *
+     * @param array<string, mixed> $fields champs validés présents seulement
+     */
+    public function updateCollection(Collections $collection, array $fields, \App\Services\GestionService\PeriodGuard $guard): Collections
+    {
+        $guard->assertCollectionWritable($collection);
+        if (array_key_exists('budget', $fields)) {
+            $collection->setBudgetCollection((int) $fields['budget']);
+        }
+        if (array_key_exists('nomCollection', $fields)) {
+            if ($collection->isPeriod()) {
+                throw new \App\Services\GestionService\GestionValidationException(['nomCollection' => 'NOT_APPLICABLE'], 'Le nom d\'une période vient du calendrier');
+            }
+            $collection->setNomCollection((string) $fields['nomCollection']);
+        }
+        $em = $this->emProvider->getEntityManager();
+        $em->persist($collection);
+        $em->flush();
+
+        return $collection;
     }
 }

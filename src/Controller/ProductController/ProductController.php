@@ -48,7 +48,8 @@ class ProductController extends AbstractController
         TenantCacheService $cache,
         GetProductByIdUseCase $getProductByIdUseCase,
         GetProductBySlugUseCase $getProductBySlugUseCase,
-        ?MediaUrlResolver $mediaUrlResolver = null
+        ?MediaUrlResolver $mediaUrlResolver = null,
+        private readonly ?\App\Services\GestionService\PeriodGuard $periodGuard = null // périodes (lot P1, 10/11/2026)
     ) {
         $this->getProductsByCommandeUseCase = $getProductsByCommandeUseCase;
         $this->createProductByCommandeUseCase = $createProductByCommandeUseCase;
@@ -96,9 +97,7 @@ class ProductController extends AbstractController
         $input->integer('quantity', false);
         $input->text('name');
         $input->check();
-        if ($commande->getIsClosed()) {
-            throw new \App\Services\GestionService\GestionConflictException('COMMANDE_CLOSED', 'La commande est figée : aucun produit ne peut y être ajouté.'); // 409 (lot G4, 09/11/2026)
-        }
+        $this->periodGuard->assertCommandeWritable($commande); // 409 COMMANDE_CLOSED / PERIOD_CLOSED (lots G4 et P1)
         try {
 
             $uploadDir = $this->getParameter('kernel.project_dir') . '/public/assets/uploads/products/';

@@ -13,12 +13,14 @@ use Symfony\Component\HttpFoundation\Request;
 final class GestionListQuery
 {
     public const STATUSES = ['open', 'closed', 'deleted', 'all'];
+    public const KINDS = ['manual', 'period'];
 
     public function __construct(
         public readonly ?string $q,
         public readonly ?string $status,
         public readonly ?int $page,
         public readonly ?int $limit,
+        public readonly ?string $kind = null, // collections : manual | period (lot P1, 10/11/2026)
     ) {
     }
 
@@ -29,6 +31,10 @@ final class GestionListQuery
         if ($status !== '' && !in_array($status, self::STATUSES, true)) {
             throw new GestionValidationException(['status' => 'INVALID_VALUE'], 'status : open, closed, deleted ou all attendu');
         }
+        $kind = $withStatus ? strtolower(trim((string) $request->query->get('kind', ''))) : '';
+        if ($kind !== '' && !in_array($kind, self::KINDS, true)) {
+            throw new GestionValidationException(['kind' => 'INVALID_VALUE'], 'kind : manual ou period attendu');
+        }
         $paged = $request->query->has('page') || $request->query->has('limit');
 
         return new self(
@@ -36,6 +42,7 @@ final class GestionListQuery
             $status !== '' ? $status : null,
             $paged ? max(1, $request->query->getInt('page', 1)) : null,
             $paged ? min(100, max(1, $request->query->getInt('limit', 20))) : null,
+            $kind !== '' ? $kind : null,
         );
     }
 
@@ -47,11 +54,11 @@ final class GestionListQuery
     /** Suffixe de clé de cache : vide pour la liste complète par défaut */
     public function cacheSuffix(): string
     {
-        if ($this->q === null && $this->status === null && !$this->isPaged()) {
+        if ($this->q === null && $this->status === null && $this->kind === null && !$this->isPaged()) {
             return '';
         }
 
-        return '_' . ($this->status ?? 'default') . '_' . md5((string) $this->q) . '_' . ($this->page ?? 0) . '_' . ($this->limit ?? 0);
+        return '_' . ($this->status ?? 'default') . '_' . ($this->kind ?? 'all') . '_' . md5((string) $this->q) . '_' . ($this->page ?? 0) . '_' . ($this->limit ?? 0);
     }
 
     /** @return array<string, string> en-têtes de pagination (vides sans pagination) */
