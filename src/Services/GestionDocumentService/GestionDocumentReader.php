@@ -8,6 +8,7 @@ use App\Repository\GestionDocumentRepository;
 use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
 use App\Services\LandingAiService\LandingAiClientInterface;
 use App\Services\LandingAiService\LandingAiException;
+use App\Services\LandingAiService\LandingAiPromptBuilder;
 use App\Services\LandingAiService\LandingAiQuotaService;
 use App\Services\LandingAiService\LandingAiUsageStats;
 use App\Services\TenantEntityManagerProvider;
@@ -94,11 +95,12 @@ class GestionDocumentReader
         $language = $document->getLocale() === 'en' ? 'anglais' : 'français';
         $content[] = ['type' => 'text', 'text' => $this->instruction($document->getType(), $language)];
         [$toolName, $schema] = $this->tool($document->getType());
+        $content[] = ['type' => 'text', 'text' => sprintf('Réponds uniquement par l\'outil %s.', $toolName)]; // tool_choice forcé refusé par Sonnet 5.5 (10/11/2026)
         $response = $this->client->createMessage([
             'model' => self::MODEL, 'max_tokens' => 6000, 'system' => $this->system($document->getType()),
             'messages' => [['role' => 'user', 'content' => $content]],
             'tools' => [['name' => $toolName, 'description' => 'Contenu lu sur le document', 'input_schema' => $schema]],
-            'tool_choice' => ['type' => 'tool', 'name' => $toolName],
+            'tool_choice' => LandingAiPromptBuilder::toolChoice(self::MODEL, $toolName),
         ], self::TIMEOUT);
         $stats->attempts++;
         $stats->add($response->usage ?? null);

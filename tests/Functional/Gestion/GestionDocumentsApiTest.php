@@ -181,7 +181,8 @@ class GestionDocumentsApiTest extends WebTestCase
         $this->runWorker($id);
         $this->assertCount(1, FakeLandingAiClient::$requests);
         $request = FakeLandingAiClient::$requests[0];
-        $this->assertSame('lire_facture_fournisseur', $request['tool_choice']['name']);
+        $this->assertSame(['type' => 'auto'], $request['tool_choice'], 'Sonnet 5.5 refuse l\'outil forcé : auto + consigne');
+        $this->assertStringContainsString('lire_facture_fournisseur', json_encode($request['messages'][0]['content'], JSON_UNESCAPED_UNICODE) ?: '', 'la consigne nomme l\'outil');
         $this->assertCount(2, array_filter($request['messages'][0]['content'], fn ($b) => $b['type'] === 'image'), 'les deux pages partent en base64');
         $read = $this->get("/api/gestion/documents/$id");
         $this->assertSame('extracted', $read['status']);
