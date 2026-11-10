@@ -201,7 +201,7 @@ class PeriodResultCalculator
      *
      * @return array{amount: int, campaigns: list<array{id: int, name: string, amount: int}>}
      */
-    private function advertising(Collections $period): array
+    public function advertising(Collections $period): array
     {
         $rows = $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
             'SELECT id, name, ROUND(amount_cents * COALESCE(exchange_rate, 1)) AS amount FROM marketing_campaign WHERE start_date >= :from AND start_date <= :to ORDER BY start_date, id',

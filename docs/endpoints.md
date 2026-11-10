@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (363)
+## Boutique et commun (373)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -394,6 +394,13 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/gestion/reprise/appliquer` | ROLE_ADMIN | `Controller\GestionController\RepriseController::apply` |
 | POST | `/api/gestion/reprise/simulation` | ROLE_ADMIN | `Controller\GestionController\RepriseController::simulate` |
 | GET | `/api/gestion/reprise` | ROLE_ADMIN | `Controller\GestionController\RepriseController::state` |
+| POST | `/api/gestion/voyages/rattacher` | ROLE_ADMIN | `Controller\GestionController\GestionTripController::attach` |
+| GET | `/api/gestion/voyages/{id}/suivi` | ROLE_ADMIN | `Controller\GestionController\GestionTripController::follow` |
+| DELETE | `/api/gestion/voyages/{id}` | ROLE_ADMIN | `Controller\GestionController\GestionTripController::delete` |
+| GET | `/api/gestion/voyages/{id}` | ROLE_ADMIN | `Controller\GestionController\GestionTripController::get` |
+| PATCH | `/api/gestion/voyages/{id}` | ROLE_ADMIN | `Controller\GestionController\GestionTripController::update` |
+| GET | `/api/gestion/voyages` | ROLE_ADMIN | `Controller\GestionController\GestionTripController::list` |
+| POST | `/api/gestion/voyages` | ROLE_ADMIN | `Controller\GestionController\GestionTripController::create` |
 | GET | `/api/homeslider` | PUBLIC_ACCESS | `Controller\HomeSliderController\HomeSliderController::getHomeSlider` |
 | DELETE | `/api/media/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::delete` |
 | PATCH | `/api/media/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::rename` |
@@ -418,6 +425,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/payments/statistics/{source}` | ROLE_ADMIN | `Controller\StatistiqueDashboard\PaymentsController::getPaymentStatistics` |
 | GET | `/api/payments` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\paymentController\PaymentsController::getPayments` |
 | GET | `/api/periodes/courante` | ROLE_ADMIN | `Controller\GestionController\PeriodeController::current` |
+| POST | `/api/periodes/{id}/budget/copier` | ROLE_ADMIN | `Controller\GestionController\GestionBudgetController::copy` |
+| GET | `/api/periodes/{id}/budget` | ROLE_ADMIN | `Controller\GestionController\GestionBudgetController::get` |
+| PUT | `/api/periodes/{id}/budget` | ROLE_ADMIN | `Controller\GestionController\GestionBudgetController::put` |
 | GET | `/api/periodes/{id}/resultat` | ROLE_ADMIN | `Controller\GestionController\PeriodeController::result` |
 | PATCH | `/api/periodes/{id}` | ROLE_ADMIN | `Controller\GestionController\PeriodeController::patch` |
 | GET | `/api/periodes` | ROLE_ADMIN | `Controller\GestionController\PeriodeController::list` |

@@ -27,6 +27,14 @@ tiles:
     sources:
         sold_last_30_days: Sales in the last 30 days
         current_stock: Current stock
+        trip_spent: Spent during the trip
+        trip_allowance: Budget planned to date
+    budget_over:
+        title: Budget exceeded
+        text: '{1}1 item is over plan.|]1,Inf[%count% items are over plan.'
+    trip_budget:
+        title: Trip budget
+        text: 'Trip to %place%: %amount% over the budget planned to date.'
 # Phone notifications (lot N1, 11/11/2026, docs/notifications-gestion.md)
 notifications:
     kinds:
@@ -40,3 +48,14 @@ notifications:
     duplicate_invoice:
         title: Duplicate invoice
         body: 'This invoice from %supplier% seems to be entered already.'
+    trip_budget:
+        title: Trip budget exceeded
+        body: 'Trip to %place%: %amount% over the budget planned to date.'
+# Budget by item and buying trips (lot B1a, 11/11/2026, docs/budgets-gestion.md)
+budget:
+    categories:
+        purchases: Stock
+        trip: Trip
+        shipping: Shipping
+        advertising: Advertising
+        other: Other expenses

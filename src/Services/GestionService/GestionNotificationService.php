@@ -27,7 +27,8 @@ class GestionNotificationService
     public const LOW_STOCK = 'low_stock';
     public const DUPLICATE_INVOICE = 'duplicate_invoice';
     /** type → disponible (cash_critical et trip_budget arrivent avec B1 ; coupables dès maintenant) */
-    public const KINDS = [self::LOW_STOCK => true, self::DUPLICATE_INVOICE => true, 'cash_critical' => false, 'trip_budget' => false];
+    public const TRIP_BUDGET = 'trip_budget';
+    public const KINDS = [self::LOW_STOCK => true, self::DUPLICATE_INVOICE => true, 'cash_critical' => false, self::TRIP_BUDGET => true]; // trip_budget : lot B1a
     public const DAILY_HOUR = 10;
     public const DAY_FROM_HOUR = 8;
     public const DAY_TO_HOUR = 20; // exclu
@@ -42,6 +43,8 @@ class GestionNotificationService
         private readonly TranslatorInterface $translator,
         private readonly LoggerInterface $logger,
         private readonly ?EmailLocale $siteLocale = null,
+        private readonly ?GestionTripService $trips = null,
+        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null,
     ) {
     }
 
@@ -96,13 +99,26 @@ class GestionNotificationService
         if (!$force && (int) $now->setTimezone($this->clock->timezone())->format('G') !== self::DAILY_HOUR) {
             return ['ran' => false, 'notified' => 0, 'skipped' => 0];
         }
-        $low = $this->tiles->lowStock(self::LOW_STOCK_COVERAGE_DAYS);
         $notified = 0;
         $skipped = 0;
-        if ($low['all'] === []) {
-            return ['ran' => true, 'notified' => 0, 'skipped' => 0];
+        $users = $this->devices()->usersWithActiveDevice(self::PLATFORM);
+        // Voyage en cours au-delà de son budget (lot B1a) : avant le stock bas, la limite d'une par jour laisse passer la plus urgente
+        $localDay = \DateTimeImmutable::createFromInterface($now)->setTimezone($this->clock->timezone())->setTime(0, 0);
+        $trip = $this->trips?->current($localDay);
+        $follow = $trip !== null ? $this->trips->follow($trip, $localDay) : null;
+        if ($trip !== null && $follow['status'] === 'over') {
+            $siteLocale = $this->siteLocale?->language(null) ?? 'fr';
+            foreach ($users as $userId) {
+                $status = $this->notify($userId, self::TRIP_BUDGET, ['%place%' => $trip->getPlace() ?? $trip->getName(), '%amount%' => HomeTilesService::money($follow['overBy'], $siteLocale, $this->currency?->code() ?? 'CAD')],
+                    ['screen' => 'voyages.suivi', 'params' => ['tripId' => (int) $trip->getId()]], ['tripId' => (int) $trip->getId()], $now);
+                $status !== null ? ++$notified : ++$skipped;
+            }
         }
-        foreach ($this->devices()->usersWithActiveDevice(self::PLATFORM) as $userId) {
+        $low = $this->tiles->lowStock(self::LOW_STOCK_COVERAGE_DAYS);
+        if ($low['all'] === []) {
+            return ['ran' => true, 'notified' => $notified, 'skipped' => $skipped];
+        }
+        foreach ($users as $userId) {
             $since = $now->modify('-' . self::LOW_STOCK_REPEAT_DAYS . ' days');
             $already = [];
             foreach ($this->log()->subjectsSince($userId, self::LOW_STOCK, $since) as $subject) {

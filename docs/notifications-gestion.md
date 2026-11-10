@@ -34,7 +34,7 @@ Code : `Services/NotificationService/` (`PushSenderInterface`, `NotConfiguredPus
 - `GET /api/gestion/notifications/preferences?locale=` → `{ kinds: [{ kind, label, enabled, available }] }` ; tout est actif par défaut.
 - `PATCH /api/gestion/notifications/preferences { kinds: { low_stock: false, … } }` → même forme ; 422 `kinds` `MUST_BE_OBJECT`,
   `kinds.<x>` `UNKNOWN_KIND` / `MUST_BE_BOOLEAN` (rien n'est écrit).
-- Types : `low_stock`, `duplicate_invoice` (disponibles) ; `cash_critical`, `trip_budget` (`available: false` jusqu'à B1, coupables dès
+- Types : `low_stock`, `duplicate_invoice`, `trip_budget` (disponibles) ; `cash_critical` (`available: false` jusqu'à B1b, coupable dès
   maintenant).
 - `GET /api/gestion/notifications/journal?limit=20` (100 au plus) → `[{ id, kind, title, body, action: { screen, params }, status, sentAt }]`
   du gérant connecté ; `status` `sent` | `not_configured` | `failed` | `no_device`.
@@ -53,7 +53,9 @@ Code : `Services/NotificationService/` (`PushSenderInterface`, `NotConfiguredPus
   concernées ont déjà été notifiées à ce gérant dans les 7 derniers jours. Écran `stock.low` `{ variantIds }`.
 - **`duplicate_invoice`** : à la fin de la lecture d'une facture reconnue comme déjà saisie (`extraction.duplicate`, worker `gestion_ai`), à
   celui qui l'a envoyée, **entre 8 h et 20 h du magasin**. Écran `documents.review` `{ documentId }`. Un échec d'envoi ne touche jamais la lecture.
-- `cash_critical`, `trip_budget` : avec B1.
+- **`trip_budget`** (lot B1a) : au passage quotidien de 10 h, avant le stock bas, si un voyage en cours dépasse son budget à date
+  (`docs/budgets-gestion.md` § 2). Écran `voyages.suivi` `{ tripId }`.
+- `cash_critical` : avec B1b.
 
 Installation du timer sur l'hôte (propriétaire) :
 

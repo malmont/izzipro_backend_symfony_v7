@@ -20,7 +20,10 @@ class HomeTilesService
     public const FIRST_NOTE = 'first-note';
     public const FIRST_CAMPAIGN = 'first-campaign';
     public const LOW_STOCK = 'low-stock';
-    public const KNOWN = [self::FIRST_INVOICE, self::FIRST_NOTE, self::FIRST_CAMPAIGN, self::LOW_STOCK];
+    public const BUDGET_OVER = 'budget-over';   // lot B1a : poste du budget de la période en cours au-delà du prévu
+    public const TRIP_BUDGET = 'trip-budget';   // lot B1a : voyage en cours au-delà de son budget à date
+    public const KNOWN = [self::FIRST_INVOICE, self::FIRST_NOTE, self::FIRST_CAMPAIGN, self::LOW_STOCK, self::BUDGET_OVER, self::TRIP_BUDGET];
+    public const ALERTS = [self::LOW_STOCK, self::BUDGET_OVER, self::TRIP_BUDGET];
     public const MAX_TILES = 3;
     public const LOW_STOCK_WINDOW_DAYS = 30;  // ventes prises en compte
     public const LOW_STOCK_MIN_SOLD = 2;      // une variante vendue au moins 2 fois sur la fenêtre « se vend »
@@ -28,8 +31,13 @@ class HomeTilesService
     public const LOW_STOCK_MAX_FIGURES = 20;
     public const ALERT_SNOOZE_DAYS = 7;
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly TranslatorInterface $translator)
-    {
+    public function __construct(
+        private readonly TenantEntityManagerProvider $emProvider,
+        private readonly TranslatorInterface $translator,
+        private readonly ?GestionBudgetService $budgets = null,
+        private readonly ?GestionTripService $trips = null,
+        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null,
+    ) {
     }
 
     /** @return list<array<string, mixed>> vignettes visibles pour cet utilisateur, 3 au plus */
@@ -62,8 +70,12 @@ class HomeTilesService
     {
         $signature = null;
         $until = null;
-        if ($tileId === self::LOW_STOCK) {
-            $signature = $this->lowStock()['signature'];
+        if (in_array($tileId, self::ALERTS, true)) {
+            foreach ($this->candidates('fr') as $t) {
+                if ($t['id'] === $tileId) {
+                    $signature = $t['signature'];
+                }
+            }
             $until = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->modify('+' . self::ALERT_SNOOZE_DAYS . ' days');
         }
         /** @var GestionTileDismissalRepository $repo */
@@ -83,6 +95,24 @@ class HomeTilesService
                 ['label' => $this->t('tiles.sources.sold_last_30_days', $locale), 'value' => $low['sold']],
                 ['label' => $this->t('tiles.sources.current_stock', $locale), 'value' => $low['stock']],
             ], $low['items'], $low['signature']);
+        }
+        $trip = $this->trips?->current();
+        if ($trip !== null) {
+            $follow = $this->trips->follow($trip);
+            if ($follow['status'] === 'over') {
+                $tiles[] = $this->tile(self::TRIP_BUDGET, 'alert', 75, 'trip_budget', $locale, ['%place%' => $trip->getPlace() ?? $trip->getName(), '%amount%' => self::money($follow['overBy'], $locale, $this->siteCurrency())],
+                    ['screen' => 'voyages.suivi', 'params' => ['tripId' => (int) $trip->getId()]],
+                    [['label' => $this->t('tiles.sources.trip_spent', $locale), 'value' => $follow['totals']['spent']], ['label' => $this->t('tiles.sources.trip_allowance', $locale), 'value' => $follow['totals']['allowanceToDate']]],
+                    [['tripId' => (int) $trip->getId(), 'spent' => $follow['totals']['spent'], 'allowanceToDate' => $follow['totals']['allowanceToDate'], 'budget' => $follow['totals']['budget'], 'overBy' => $follow['overBy']]],
+                    'trip:' . $trip->getId());
+            }
+        }
+        $over = $this->budgets?->overCurrent($locale) ?? [];
+        if (($over['lines'] ?? []) !== []) {
+            $tiles[] = $this->tile(self::BUDGET_OVER, 'alert', 70, 'budget_over', $locale, ['%count%' => count($over['lines'])],
+                ['screen' => 'periode.budget', 'params' => ['periodId' => (int) $over['period']['id']]], [],
+                array_map(fn ($l) => ['category' => $l['category'], 'label' => $l['label'], 'planned' => $l['planned'], 'actual' => $l['actual']], $over['lines']),
+                sha1($over['period']['id'] . ':' . implode(',', array_column($over['lines'], 'category'))));
         }
         $noInvoice = $conn->fetchOne('SELECT 1 FROM commande_line LIMIT 1') === false
             && $conn->fetchOne('SELECT 1 FROM gestion_document WHERE type = ? AND status = ? LIMIT 1', [GestionDocument::TYPE_FACTURE, GestionDocument::STATUS_CONFIRMED]) === false;
@@ -157,6 +187,19 @@ class HomeTilesService
             'title' => $this->t("tiles.$key.title", $locale, $params), 'text' => $this->t("tiles.$key.text", $locale, $params),
             'action' => $action, 'sources' => $sources, 'dismissible' => true, 'figures' => $figures, 'signature' => $signature,
         ];
+    }
+
+    /** Montant en cents écrit pour un texte (format monétaire de la langue) */
+    public static function money(int $cents, string $locale, string $currency): string
+    {
+        $formatted = (new \NumberFormatter($locale === 'en' ? 'en_CA' : 'fr_CA', \NumberFormatter::CURRENCY))->formatCurrency($cents / 100, $currency);
+
+        return $formatted === false ? number_format($cents / 100, 2) . ' ' . $currency : $formatted;
+    }
+
+    private function siteCurrency(): string
+    {
+        return $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT;
     }
 
     private function t(string $key, string $locale, array $params = []): string

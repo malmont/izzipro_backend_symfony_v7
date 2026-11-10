@@ -380,6 +380,8 @@ final class CacheTags
         \App\Entity\PushDevice::class, // notifications sur téléphone (lot N1, 11/11/2026) : appareils, préférences, journal, en SQL par leurs dépôts
         \App\Entity\NotificationPreference::class,
         \App\Entity\NotificationLog::class,
+        \App\Entity\GestionTrip::class, // voyages d'achat et budget par poste (lot B1a, 11/11/2026) : lus par leurs services, jamais en cache applicatif
+        \App\Entity\GestionBudgetLine::class,
         \App\Entity\GestionTileDismissal::class, // vignettes d'accueil écartées (11/11/2026) : écrites et lues en SQL par leur dépôt
         \App\Entity\GestionReprise::class, // reprise d'historique (lot P3, 10/11/2026) : une ligne par site, lue par son dépôt
         \App\Entity\PeriodResult::class, // résultat de période figé (lot P2, 10/11/2026) : lu par son dépôt, la route est cachée sous l'étiquette de la collection

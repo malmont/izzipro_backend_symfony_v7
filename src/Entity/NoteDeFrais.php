@@ -30,6 +30,14 @@ class NoteDeFrais
     #[ORM\Column(type: Types::DATE_MUTABLE)]
     private ?\DateTimeInterface $date = null;
 
+    // Voyage d'achat (lot B1a, 11/11/2026, docs/budgets-gestion.md § 3) : rattachement par la date (auto) ou choix du gérant (manual) ;
+    // trip_source manual + trip_id null = détaché par le gérant, jamais rattaché de nouveau automatiquement ; libre = les deux null
+    #[ORM\Column(name: 'trip_id', nullable: true)]
+    private ?int $tripId = null;
+
+    #[ORM\Column(name: 'trip_source', length: 10, nullable: true)]
+    private ?string $tripSource = null;
+
     #[ORM\ManyToOne(inversedBy: 'noteDeFrais')]
     private ?Collections $Collection = null;
 
@@ -146,6 +154,25 @@ class NoteDeFrais
     public function setTypeNoteDeFrais(?TypeNoteDeFrais $typeNoteDeFrais): static
     {
         $this->typeNoteDeFrais = $typeNoteDeFrais;
+
+        return $this;
+    }
+
+    public function getTripId(): ?int
+    {
+        return $this->tripId;
+    }
+
+    public function getTripSource(): ?string
+    {
+        return $this->tripSource;
+    }
+
+    /** @param 'auto'|'manual'|null $source */
+    public function setTrip(?int $tripId, ?string $source): static
+    {
+        $this->tripId = $tripId;
+        $this->tripSource = $source;
 
         return $this;
     }

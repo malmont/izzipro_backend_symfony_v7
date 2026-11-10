@@ -29,6 +29,14 @@ tiles:
     sources:
         sold_last_30_days: Ventes des 30 derniers jours
         current_stock: Stock actuel
+        trip_spent: Dépensé pendant le voyage
+        trip_allowance: Budget prévu à ce jour
+    budget_over:
+        title: Budget dépassé
+        text: "{1}1 poste dépasse le prévu.|]1,Inf[%count% postes dépassent le prévu."
+    trip_budget:
+        title: Budget du voyage
+        text: 'Voyage à %place% : %amount% au-dessus du budget prévu à ce jour.'
 # Notifications sur téléphone (lot N1, 11/11/2026, docs/notifications-gestion.md)
 notifications:
     kinds:
@@ -42,3 +50,14 @@ notifications:
     duplicate_invoice:
         title: Facture en double
         body: 'Cette facture de %supplier% semble déjà saisie.'
+    trip_budget:
+        title: Budget du voyage dépassé
+        body: 'Voyage à %place% : %amount% au-dessus du budget prévu à ce jour.'
+# Budget par poste et voyages d'achat (lot B1a, 11/11/2026, docs/budgets-gestion.md)
+budget:
+    categories:
+        purchases: Stock
+        trip: Voyage
+        shipping: Frais de port
+        advertising: Publicité
+        other: Autres frais

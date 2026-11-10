@@ -20,6 +20,7 @@ class CommandeOutputDTO
     public string $kind; // standard | reprise (lot P3, 10/11/2026)
     public ?array $document; // justificatif lu par IA { id, type, invoiceNumber, invoiceDate } | null (lot L1, 10/11/2026)
     public string $receptionStatus; // none | partial | complete (lot R1)
+    public ?int $tripId; // voyage d'achat rattaché (lot B1a, 11/11/2026)
 
     public function __construct(Commande $commande, string $host, string $currency = \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT)
     {
@@ -33,6 +34,7 @@ class CommandeOutputDTO
         $this->kind = $commande->getKind();
         $this->document = $commande->getDocument()?->invoiceSummary();
         $this->receptionStatus = $commande->receptionStatus();
+        $this->tripId = $commande->getTripId();
         $photoCommande = $commande->getCommandepictures();
         $this->photo = $photoCommande ? $host . '/assets/images/' . $photoCommande->getImageUrl() : null;
 

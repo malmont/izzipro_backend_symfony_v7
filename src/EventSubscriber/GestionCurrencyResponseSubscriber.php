@@ -22,6 +22,7 @@ class GestionCurrencyResponseSubscriber implements EventSubscriberInterface
         'statistiques_chiffre_affaires', 'statistiques_nombre_commandes', 'statistiques_panier_moyen', 'get_payments_statistics', 'frais_total', 'get_monthly_taxes', 'get_carrier_statistics',
         'stock_value_all', 'stock_evolution_all',
         'gestion_campagnes_rentabilite', // rentabilité perçue d'une campagne (lot A1, 10/11/2026)
+        'gestion_voyages_suivi', // suivi d'un voyage d'achat (lot B1a, 11/11/2026)
         'gestion_reprise_simulation', 'gestion_reprise_appliquer', 'gestion_reprise_annuler', 'gestion_reprise_etat', // reprise d'historique (lot P3, demande de l'application du 10/11/2026)
     ];
 
