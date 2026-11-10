@@ -24,8 +24,9 @@ class HomeTilesService
     public const TRIP_BUDGET = 'trip-budget';   // lot B1a : voyage en cours au-delà de son budget à date
     public const CASH_LOW = 'cash-low';         // lot B1b-1 : point bas de trésorerie des 14 prochains jours sous le seuil
     public const CASH_FIRST_BALANCE = 'cash-first-balance'; // lot B1b-1 : aucun solde saisi, mais un mouvement prévu ou une période en cours
-    public const KNOWN = [self::FIRST_INVOICE, self::FIRST_NOTE, self::FIRST_CAMPAIGN, self::LOW_STOCK, self::BUDGET_OVER, self::TRIP_BUDGET, self::CASH_LOW, self::CASH_FIRST_BALANCE];
-    public const ALERTS = [self::LOW_STOCK, self::BUDGET_OVER, self::TRIP_BUDGET, self::CASH_LOW];
+    public const ADVICE = 'advice';             // lot G1a : premier conseil du guide de la période en cours (hors trésorerie et voyage, déjà en alerte)
+    public const KNOWN = [self::FIRST_INVOICE, self::FIRST_NOTE, self::FIRST_CAMPAIGN, self::LOW_STOCK, self::BUDGET_OVER, self::TRIP_BUDGET, self::CASH_LOW, self::CASH_FIRST_BALANCE, self::ADVICE];
+    public const ALERTS = [self::LOW_STOCK, self::BUDGET_OVER, self::TRIP_BUDGET, self::CASH_LOW, self::ADVICE];
     public const MAX_TILES = 3;
     public const LOW_STOCK_WINDOW_DAYS = 30;  // ventes prises en compte
     public const LOW_STOCK_MIN_SOLD = 2;      // une variante vendue au moins 2 fois sur la fenêtre « se vend »
@@ -41,6 +42,7 @@ class HomeTilesService
         private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null,
         private readonly ?GestionCashService $cash = null,
         private readonly ?PeriodCalendar $calendar = null,
+        private readonly ?GestionAdviceService $advice = null,
     ) {
     }
 
@@ -103,6 +105,17 @@ class HomeTilesService
         }
         if ($this->cash !== null && !$this->cash->hasBalance() && ($this->cash->hasMovement() || $this->calendar?->findByDate($this->calendar->today()) !== null)) {
             $tiles[] = $this->tile(self::CASH_FIRST_BALANCE, 'first_steps', 20, 'cash_first_balance', $locale, [], ['screen' => 'tresorerie', 'params' => new \stdClass()]);
+        }
+        // Guide (lot G1a) : le premier GET du jour calcule aussi les règles (sans IA), pour que la vignette paraisse sans ouvrir l'écran des conseils
+        $advice = $this->advice?->tileAdvice($locale);
+        if ($advice !== null) {
+            $tiles[] = [
+                'id' => self::ADVICE, 'kind' => 'advice', 'priority' => GestionAdviceService::TILE_PRIORITY[$advice['confidence']] ?? 60,
+                'title' => $advice['title'], 'text' => $advice['text'], 'action' => ['screen' => 'conseils', 'params' => ['adviceId' => $advice['id']]],
+                'sources' => array_map(fn ($s) => ['label' => $s['label'], 'value' => $s['value']], $advice['sources']), 'dismissible' => true,
+                'figures' => [['adviceId' => $advice['id'], 'kind' => $advice['kind'], 'effect' => $advice['effect'], 'confidence' => $advice['confidence']]],
+                'signature' => 'advice:' . $advice['id'],
+            ];
         }
         $low = $this->lowStock();
         if ($low['items'] !== []) {

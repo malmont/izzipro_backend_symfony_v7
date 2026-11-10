@@ -24,6 +24,7 @@ Migration `Version20261205100000`, script `scripts/migrate_all_v2_gestion_vignet
 | id | kind | priorité | condition | écran |
 |---|---|---|---|---|
 | `cash-low` | alert | 85 | point bas de trésorerie des 14 prochains jours sous le seuil (lot B1b-1, `docs/tresorerie-gestion.md` § 5) | `tresorerie` `{}` |
+| `advice` | advice | 68 / 64 / 60 | premier conseil du guide de la période en cours, selon sa confiance ; jamais trésorerie ni voyage (lot G1a, `docs/guide-ia-gestion.md` § 6) | `conseils` `{ adviceId }` |
 | `low-stock` | alert | 80 | au moins un article qui se vend va manquer (§ 3) | `stock.low` `{ variantIds }` |
 | `trip-budget` | alert | 75 | voyage en cours au-delà de son budget à date (lot B1a, `docs/budgets-gestion.md`) | `voyages.suivi` `{ tripId }` |
 | `budget-over` | alert | 70 | un poste du budget de la période en cours dépasse le prévu (lot B1a) | `periode.budget` `{ periodId }` |

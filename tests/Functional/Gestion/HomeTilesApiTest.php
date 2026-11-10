@@ -113,7 +113,7 @@ class HomeTilesApiTest extends WebTestCase
         $conn->executeStatement('UPDATE gestion_document SET campaign_id = NULL WHERE campaign_id IS NOT NULL');
         $conn->executeStatement('DELETE FROM marketing_campaign');
         $this->endOfWrite();
-        foreach (['low-stock', 'first-invoice', 'first-note', 'cash-first-balance', 'cash-low'] as $id) { // trésorerie (B1b-1) : dépend de l'état de la base partagée
+        foreach (['low-stock', 'first-invoice', 'first-note', 'cash-first-balance', 'cash-low', 'advice'] as $id) { // trésorerie (B1b-1) et guide (G1a) : dépendent de l'état de la base partagée
             $this->post("/api/gestion/accueil/vignettes/$id/ecarter", 204);
         }
         $tiles = $this->get('/api/gestion/accueil/vignettes');

@@ -237,7 +237,7 @@ class GestionSimulationService
      *
      * @return array<int, array{productId: int, qty: int, unitPrice: float, stock: int, cost: ?float}>
      */
-    private function soldByVariant(string $from, string $to, string $today): array
+    public function soldByVariant(string $from, string $to, string $today): array
     {
         [$start, $endExclusive] = $this->clock->range($from, $to);
         $rows = $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
@@ -264,7 +264,7 @@ class GestionSimulationService
      *
      * @return array<int, array{productId: int, stock: int, price: int, cost: ?float}>
      */
-    private function stockByVariant(string $today): array
+    public function stockByVariant(string $today): array
     {
         $rows = $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
             'SELECT pv.id, pv.product_id, pv.stock_quantity AS stock, COALESCE(pv.price, p.price, 0) AS price, ' . self::COST . ' AS cost'

@@ -385,6 +385,8 @@ final class CacheTags
         \App\Entity\GestionCashBalance::class, // trésorerie saisie (lot B1b-1, 11/11/2026) : soldes, mouvements prévus, réglages, en SQL par GestionCashService
         \App\Entity\GestionCashMovement::class,
         \App\Entity\GestionCashSetting::class,
+        \App\Entity\GestionAdvice::class, // guide IA de la gestion (lot G1a, 11/11/2026) : conseils et générations, en SQL par GestionAdviceService
+        \App\Entity\GestionAdviceRun::class,
         \App\Entity\GestionTileDismissal::class, // vignettes d'accueil écartées (11/11/2026) : écrites et lues en SQL par leur dépôt
         \App\Entity\GestionReprise::class, // reprise d'historique (lot P3, 10/11/2026) : une ligne par site, lue par son dépôt
         \App\Entity\PeriodResult::class, // résultat de période figé (lot P2, 10/11/2026) : lu par son dépôt, la route est cachée sous l'étiquette de la collection

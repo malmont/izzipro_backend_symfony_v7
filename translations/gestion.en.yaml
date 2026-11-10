@@ -97,3 +97,116 @@ simulation:
         STALE_BALANCE: 'Cash balance entered %days% days ago: update it.'
         PLANNED_PURCHASES_NOT_IN_STOCK: 'End-of-period stock does not include purchases still planned.'
         TAXES_EXCLUDED: 'Cash after purchases: upcoming sales are counted before taxes.'
+# Management guide (lot G1a, 11/11/2026, docs/guide-ia-gestion.md): rule fallback texts, labels
+advice:
+    kinds:
+        FAST_SELLER:
+            title: "%name% is selling fast"
+            text: "%name%: %sold_30_days% sales in 30 days, %coverage_days% days of stock left. A %price_increase% price increase would bring about %effect% by the end of the period."
+        SLOW_STOCK:
+            title: "%name% is not selling"
+            text: "No sales for %days_without_sale% days, %cost_value% tied up at cost. Try a %promotion% promotion in the simulator."
+        AD_RELAUNCH:
+            title: "Run the %channel% ad again"
+            text: "Your %channel% campaign brought %gain_per_dollar% $ of margin per 1 $ spent. Running it again with %campaign_amount% would bring about %effect% of net margin."
+        BUDGET_PACE:
+            title: "%category%: watch out"
+            text: "Planned %planned%, already %actual% spent at %elapsed_share% of the period: about %effect% over."
+        TRIP_BUDGET:
+            title: "Trip budget in %place%"
+            text: "Spent %trip_spent% of %trip_budget%: %trip_remaining% left, %trip_daily_left% a day for %trip_days_left% days."
+        TRIP_COEFFICIENT:
+            title: "Markup of purchases in %place%"
+            text: "Trip purchases are at a %trip_coefficient% markup versus %reference_coefficient% usually. At the usual markup they would be worth about %effect% more at retail."
+        CASH_TIGHT:
+            title: "Cash is tight"
+            text: "Your expected balance drops to %cash_low% on %cash_low_date%, below your %cash_threshold% threshold."
+        PURCHASE_CAPACITY:
+            title: "Postpone stock purchases"
+            text: "%remaining_purchases% of planned stock purchases remain: your cash does not allow them before %date%."
+            text_later: "%remaining_purchases% of planned stock purchases remain: your cash does not allow them within the next %horizon_days% days."
+        END_CLEARANCE:
+            title: "Clear the remaining stock"
+            text: "About %end_stock_value% of stock at cost will be left at the end of the period. A %promotion% promotion on %count% slow items could free about %effect%."
+        PACE_BEHIND:
+            title: "Behind last year"
+            text: "Expected sales for the period: %expected_sales%, versus %last_year_sales% last year (%sales_ratio%)."
+        PACE_AHEAD:
+            title: "Ahead of last year"
+            text: "Expected sales for the period: %expected_sales%, versus %last_year_sales% last year (%sales_ratio%)."
+        CLOSING_REVIEW:
+            title: "Period review"
+            text: "Sales %revenue%, margin %gross_margin%, net result %net_result%."
+        LESSON_STOCKOUT:
+            title: "Lesson: stockouts"
+            text: "%count% items sold out (%units_sold% sales): plan more of them for the same period next year."
+        LESSON_OVERSTOCK:
+            title: "Lesson: unsold stock"
+            text: "%count% items did not sell: %cost_value% remain tied up at cost. Buy fewer next year."
+        LESSON_BUDGET:
+            title: "Lesson: %category% over budget"
+            text: "Planned %planned%, spent %actual%: plan more, or watch this item earlier next year."
+    sources:
+        sold_30_days: "Sales in the last 30 days"
+        stock: "Current stock"
+        coverage_days: "Days of stock at the current pace"
+        average_price: "Average price obtained"
+        price_increase: "Suggested increase"
+        projected_units: "Expected remaining sales"
+        cost_value: "Value at cost"
+        days_without_sale: "Days without a sale"
+        promotion: "Suggested promotion"
+        campaign_amount: "Campaign amount"
+        gain_per_dollar: "Margin per 1 $ spent"
+        margin_uplift: "Margin uplift during the campaign"
+        campaign_end: "Campaign end"
+        planned: "Planned"
+        actual: "Actual"
+        elapsed_share: "Share of the period elapsed"
+        overrun: "Overrun"
+        trip_budget: "Trip budget"
+        trip_spent: "Spent"
+        trip_remaining: "Remaining"
+        trip_days_left: "Days left"
+        trip_daily_left: "Per remaining day"
+        trip_coefficient: "Trip markup"
+        reference_coefficient: "Usual markup (365 days)"
+        trip_purchases: "Trip purchases at cost"
+        expected_margin: "Expected margin on purchases"
+        cash_low: "Expected low point"
+        cash_low_date: "Low point date"
+        cash_threshold: "Alert threshold"
+        remaining_purchases: "Planned purchases left"
+        horizon_days: "Horizon"
+        purchase_from: "Purchase possible from"
+        end_stock_value: "End stock at cost"
+        period_purchases: "Purchases of the period"
+        targeted_value: "Targeted items, at cost"
+        products: "Items"
+        expected_sales: "Expected sales for the period"
+        last_year_sales: "Sales of the same period last year"
+        sales_ratio: "Compared with last year"
+        revenue: "Sales"
+        gross_margin: "Gross margin"
+        net_result: "Net result"
+        last_year_net_result: "Net result last year"
+        net_result_change: "Change from last year"
+        sold_out_products: "Sold-out items"
+        units_sold: "Units sold"
+        margin: "Margin on these sales"
+        unsold_products: "Unsold items"
+    effects:
+        extra_margin: "Estimated extra margin"
+        tied_up: "Money tied up"
+        net_margin_same_spend: "Estimated net margin for the same spend"
+        over_budget: "Over budget"
+        projected_overrun: "Expected overrun"
+        trip_remaining: "Trip budget left"
+        extra_sale_value: "Extra retail value"
+        cash_shortfall: "Gap to the cash threshold"
+        purchases_on_hold: "Purchases on hold"
+        cash_to_free: "Cash to free"
+        sales_gap: "Sales gap"
+        sales_lead: "Sales lead"
+        net_result: "Net result"
+        margin_of_sold_out: "Margin of sold-out items"

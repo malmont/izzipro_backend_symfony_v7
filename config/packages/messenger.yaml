@@ -89,6 +89,7 @@ framework:
             'App\Message\SendTenantEmailMessage': email
             'App\MemoiresVivantes\Message\GenerateBookPdfMessage': pdf
             'App\Message\ReadGestionDocumentMessage': gestion_ai # lecture de documents de la gestion (lot L1, 10/11/2026)
+            'App\Message\GenerateGestionAdviceMessage': gestion_ai # rédaction des conseils du guide de la gestion (lot G1a, 11/11/2026)
             'App\Message\EntitlementChangedMessage': email # courriels des droits d'usage (console de pilotage, lot 3, 04/11/2026)
 
 # Tests : Messenger en mémoire (tests/bootstrap.php) ; les courriels partent tout de suite (vers null://) pour que les

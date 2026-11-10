@@ -99,3 +99,116 @@ simulation:
         STALE_BALANCE: 'Solde de trésorerie saisi il y a %days% jours : mettez-le à jour.'
         PLANNED_PURCHASES_NOT_IN_STOCK: 'Le stock de fin de période ne compte pas les achats encore prévus.'
         TAXES_EXCLUDED: 'Trésorerie après achats : les ventes à venir y sont comptées hors taxes.'
+# Guide IA de la gestion (lot G1a, 11/11/2026, docs/guide-ia-gestion.md) : textes de repli des règles, libellés
+advice:
+    kinds:
+        FAST_SELLER:
+            title: "%name% part vite"
+            text: "%name% : %sold_30_days% ventes en 30 jours, %coverage_days% jours de stock. Une hausse de %price_increase% rapporterait environ %effect% d’ici la fin de la période."
+        SLOW_STOCK:
+            title: "%name% dort en stock"
+            text: "Aucune vente depuis %days_without_sale% jours, %cost_value% immobilisés au coût. Essayez une promotion de %promotion% dans le simulateur."
+        AD_RELAUNCH:
+            title: "Relancer la publicité %channel%"
+            text: "Votre campagne %channel% a rapporté %gain_per_dollar% $ de marge pour 1 $ dépensé. La relancer avec %campaign_amount% rapporterait environ %effect% de marge nette."
+        BUDGET_PACE:
+            title: "Poste %category% : attention"
+            text: "Prévu %planned%, déjà %actual% dépensés à %elapsed_share% de la période : dépassement d’environ %effect%."
+        TRIP_BUDGET:
+            title: "Budget du voyage à %place%"
+            text: "Dépensé %trip_spent% sur %trip_budget% : il reste %trip_remaining%, soit %trip_daily_left% par jour pour %trip_days_left% jours."
+        TRIP_COEFFICIENT:
+            title: "Coefficient des achats à %place%"
+            text: "Les achats du voyage sont au coefficient %trip_coefficient% contre %reference_coefficient% d’habitude. Au coefficient habituel, ils vaudraient environ %effect% de plus à la vente."
+        CASH_TIGHT:
+            title: "Trésorerie tendue"
+            text: "Le solde prévu descend à %cash_low% le %cash_low_date%, sous votre seuil de %cash_threshold%."
+        PURCHASE_CAPACITY:
+            title: "Achats de stock à décaler"
+            text: "Il reste %remaining_purchases% d’achats de stock prévus : la trésorerie ne le permet pas avant le %date%."
+            text_later: "Il reste %remaining_purchases% d’achats de stock prévus : la trésorerie ne le permet pas dans les %horizon_days% prochains jours."
+        END_CLEARANCE:
+            title: "Écouler le stock restant"
+            text: "Il restera environ %end_stock_value% de stock au coût en fin de période. Une promotion de %promotion% sur %count% articles lents pourrait libérer environ %effect%."
+        PACE_BEHIND:
+            title: "En retard sur l’an dernier"
+            text: "Ventes prévues de la période : %expected_sales%, contre %last_year_sales% l’an dernier (%sales_ratio%)."
+        PACE_AHEAD:
+            title: "En avance sur l’an dernier"
+            text: "Ventes prévues de la période : %expected_sales%, contre %last_year_sales% l’an dernier (%sales_ratio%)."
+        CLOSING_REVIEW:
+            title: "Bilan de la période"
+            text: "Ventes %revenue%, marge %gross_margin%, résultat net %net_result%."
+        LESSON_STOCKOUT:
+            title: "Leçon : ruptures de stock"
+            text: "%count% articles se sont vendus jusqu’à épuisement (%units_sold% ventes) : prévoyez-en davantage pour la même période l’an prochain."
+        LESSON_OVERSTOCK:
+            title: "Leçon : invendus"
+            text: "%count% articles ne se sont pas vendus : %cost_value% restent immobilisés au coût. Achetez-en moins l’an prochain."
+        LESSON_BUDGET:
+            title: "Leçon : poste %category% dépassé"
+            text: "Prévu %planned%, dépensé %actual% : prévoyez plus large, ou surveillez ce poste plus tôt l’an prochain."
+    sources:
+        sold_30_days: "Ventes des 30 derniers jours"
+        stock: "Stock actuel"
+        coverage_days: "Jours de stock au rythme actuel"
+        average_price: "Prix moyen obtenu"
+        price_increase: "Hausse proposée"
+        projected_units: "Ventes restantes prévues"
+        cost_value: "Valeur au coût"
+        days_without_sale: "Jours sans vente"
+        promotion: "Promotion proposée"
+        campaign_amount: "Montant de la campagne"
+        gain_per_dollar: "Marge pour 1 $ dépensé"
+        margin_uplift: "Hausse de marge pendant la campagne"
+        campaign_end: "Fin de la campagne"
+        planned: "Prévu"
+        actual: "Réel"
+        elapsed_share: "Part de la période écoulée"
+        overrun: "Dépassement"
+        trip_budget: "Budget du voyage"
+        trip_spent: "Dépensé"
+        trip_remaining: "Reste"
+        trip_days_left: "Jours restants"
+        trip_daily_left: "Par jour restant"
+        trip_coefficient: "Coefficient du voyage"
+        reference_coefficient: "Coefficient habituel (365 jours)"
+        trip_purchases: "Achats du voyage au coût"
+        expected_margin: "Marge prévue des achats"
+        cash_low: "Point bas prévu"
+        cash_low_date: "Date du point bas"
+        cash_threshold: "Seuil d’alerte"
+        remaining_purchases: "Reste à acheter (prévu)"
+        horizon_days: "Horizon"
+        purchase_from: "Achat possible à partir du"
+        end_stock_value: "Stock de fin au coût"
+        period_purchases: "Achats de la période"
+        targeted_value: "Articles visés, au coût"
+        products: "Articles"
+        expected_sales: "Ventes prévues de la période"
+        last_year_sales: "Ventes de la même période l’an dernier"
+        sales_ratio: "Par rapport à l’an dernier"
+        revenue: "Ventes"
+        gross_margin: "Marge brute"
+        net_result: "Résultat net"
+        last_year_net_result: "Résultat net l’an dernier"
+        net_result_change: "Écart avec l’an dernier"
+        sold_out_products: "Articles en rupture"
+        units_sold: "Ventes"
+        margin: "Marge de ces ventes"
+        unsold_products: "Articles invendus"
+    effects:
+        extra_margin: "Marge en plus estimée"
+        tied_up: "Argent immobilisé"
+        net_margin_same_spend: "Marge nette estimée pour la même dépense"
+        over_budget: "Dépassement"
+        projected_overrun: "Dépassement prévu"
+        trip_remaining: "Reste du budget du voyage"
+        extra_sale_value: "Valeur de vente en plus"
+        cash_shortfall: "Écart au seuil de trésorerie"
+        purchases_on_hold: "Achats à décaler"
+        cash_to_free: "Argent à libérer"
+        sales_gap: "Retard de ventes"
+        sales_lead: "Avance de ventes"
+        net_result: "Résultat net"
+        margin_of_sold_out: "Marge des articles en rupture"
