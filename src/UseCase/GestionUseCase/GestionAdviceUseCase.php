@@ -33,7 +33,12 @@ class GestionAdviceUseCase
 
     public function setStatus(int $id, string $status, array $body, ?string $user, string $locale): array
     {
-        return $this->advices->setStatus($id, $status, $user, $body['note'] ?? ($body['reason'] ?? null), $locale);
+        return $this->advices->setStatus($id, $status, $user, $body['note'] ?? ($body['reason'] ?? null), $locale, $body['applied'] ?? null);
+    }
+
+    public function measure(int $id, string $locale): array
+    {
+        return $this->advices->measure($id, $locale);
     }
 
     private function period(mixed $id): Collections

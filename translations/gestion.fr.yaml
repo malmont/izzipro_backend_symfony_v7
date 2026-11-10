@@ -14,6 +14,9 @@ referentiel:
         Autre: Autre
 # Vignettes d'accueil (11/11/2026, docs/vignettes-gestion.md)
 tiles:
+    advice_result:
+        title: "Résultat d'un conseil"
+        text: ""
     first_invoice:
         title: Votre première facture
         text: 'Lisez votre première facture : le stock se créera seul.'
@@ -212,3 +215,15 @@ advice:
         sales_lead: "Avance de ventes"
         net_result: "Résultat net"
         margin_of_sold_out: "Marge des articles en rupture"
+# Mesure après application d'un conseil (lot G1b-1, 11/11/2026, docs/guide-ia-gestion.md § 8)
+measure:
+    caveats:
+        TOO_EARLY: "Seulement %days% jours sur 14 : trop tôt pour conclure."
+        SEASONAL: "L’an dernier, aux mêmes dates, les ventes ont varié de la même façon : la saison explique sans doute une partie de l’écart."
+    texts:
+        price: "Hausse de %percent% appliquée le %date% : marge %change% en %days% jours (estimé : %estimated%)."
+        promotion: "Promotion de %percent% appliquée le %date% : marge %change% en %days% jours."
+        promotion_sales: "%units% ventes depuis la promotion du %date% (%days% jours) : %revenue% de ventes, %margin% de marge."
+        promotion_sales_named: "%name% : %units% ventes depuis la promotion du %date% (%days% jours), %revenue% de ventes, %margin% de marge."
+        too_early: "Appliqué le %date% : trop tôt pour mesurer (%days% jours sur 14)."
+        campaign: "Campagne relancée le %date% : marge %change% sur %days% jours de campagne."

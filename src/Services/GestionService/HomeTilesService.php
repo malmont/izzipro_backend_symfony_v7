@@ -25,7 +25,8 @@ class HomeTilesService
     public const CASH_LOW = 'cash-low';         // lot B1b-1 : point bas de trésorerie des 14 prochains jours sous le seuil
     public const CASH_FIRST_BALANCE = 'cash-first-balance'; // lot B1b-1 : aucun solde saisi, mais un mouvement prévu ou une période en cours
     public const ADVICE = 'advice';             // lot G1a : premier conseil du guide de la période en cours (hors trésorerie et voyage, déjà en alerte)
-    public const KNOWN = [self::FIRST_INVOICE, self::FIRST_NOTE, self::FIRST_CAMPAIGN, self::LOW_STOCK, self::BUDGET_OVER, self::TRIP_BUDGET, self::CASH_LOW, self::CASH_FIRST_BALANCE, self::ADVICE];
+    public const ADVICE_RESULT = 'advice-result'; // lot G1b-1 : mesure complète d'un conseil appliqué ; écartée pour toujours (par conseil)
+    public const KNOWN = [self::FIRST_INVOICE, self::FIRST_NOTE, self::FIRST_CAMPAIGN, self::LOW_STOCK, self::BUDGET_OVER, self::TRIP_BUDGET, self::CASH_LOW, self::CASH_FIRST_BALANCE, self::ADVICE, self::ADVICE_RESULT];
     public const ALERTS = [self::LOW_STOCK, self::BUDGET_OVER, self::TRIP_BUDGET, self::CASH_LOW, self::ADVICE];
     public const MAX_TILES = 3;
     public const LOW_STOCK_WINDOW_DAYS = 30;  // ventes prises en compte
@@ -76,7 +77,13 @@ class HomeTilesService
     {
         $signature = null;
         $until = null;
-        if (in_array($tileId, self::ALERTS, true)) {
+        if ($tileId === self::ADVICE_RESULT) { // écartée pour toujours, pour ce conseil seulement (signature gardée, sans échéance)
+            foreach ($this->candidates('fr') as $t) {
+                if ($t['id'] === $tileId) {
+                    $signature = $t['signature'];
+                }
+            }
+        } elseif (in_array($tileId, self::ALERTS, true)) {
             foreach ($this->candidates('fr') as $t) {
                 if ($t['id'] === $tileId) {
                     $signature = $t['signature'];
@@ -99,7 +106,7 @@ class HomeTilesService
             $tiles[] = $this->tile(self::CASH_LOW, 'alert', 85, 'cash_low', $locale,
                 ['%amount%' => self::money($cash['low14']['amount'], $locale, $this->siteCurrency()), '%date%' => self::day($cash['low14']['date'], $locale)],
                 ['screen' => 'tresorerie', 'params' => new \stdClass()],
-                [['label' => $this->t('tiles.sources.cash_balance', $locale, ['%date%' => self::day($cash['balance']['date'], $locale)]), 'value' => $cash['balance']['amount']], ['label' => $this->t('tiles.sources.cash_threshold', $locale), 'value' => $cash['threshold']]],
+                [['label' => $this->t('tiles.sources.cash_balance', $locale, ['%date%' => self::day($cash['balance']['date'], $locale)]), 'value' => $cash['balance']['amount'], 'unit' => 'money'], ['label' => $this->t('tiles.sources.cash_threshold', $locale), 'value' => $cash['threshold'], 'unit' => 'money']],
                 [['date' => $cash['low14']['date'], 'amount' => $cash['low14']['amount'], 'threshold' => $cash['threshold'], 'status' => $cash['status'], 'series' => $cash['series']]],
                 $cash['low14']['date'] . ':' . $cash['status']);
         }
@@ -112,17 +119,23 @@ class HomeTilesService
             $tiles[] = [
                 'id' => self::ADVICE, 'kind' => 'advice', 'priority' => GestionAdviceService::TILE_PRIORITY[$advice['confidence']] ?? 60,
                 'title' => $advice['title'], 'text' => $advice['text'], 'action' => ['screen' => 'conseils', 'params' => ['adviceId' => $advice['id']]],
-                'sources' => array_map(fn ($s) => ['label' => $s['label'], 'value' => $s['value']], $advice['sources']), 'dismissible' => true,
+                'sources' => array_map(fn ($s) => ['label' => $s['label'], 'value' => $s['value'], 'unit' => $s['unit']], $advice['sources']), 'dismissible' => true,
                 'figures' => [['adviceId' => $advice['id'], 'kind' => $advice['kind'], 'effect' => $advice['effect'], 'confidence' => $advice['confidence']]],
                 'signature' => 'advice:' . $advice['id'],
             ];
+        }
+        $result = $this->advice?->resultTile($locale);
+        if ($result !== null) {
+            $tiles[] = $this->tile(self::ADVICE_RESULT, 'advice', 50, 'advice_result', $locale, [], ['screen' => 'conseils', 'params' => ['adviceId' => $result['adviceId']]], [],
+                [['adviceId' => $result['adviceId'], 'kind' => $result['kind'], 'appliedOn' => $result['appliedOn'], 'change' => $result['change']]], 'advice-result:' . $result['adviceId']);
+            $tiles[array_key_last($tiles)]['text'] = $result['text'];
         }
         $low = $this->lowStock();
         if ($low['items'] !== []) {
             $count = count($low['all']);
             $tiles[] = $this->tile(self::LOW_STOCK, 'alert', 80, 'low_stock', $locale, ['%count%' => $count], ['screen' => 'stock.low', 'params' => ['variantIds' => $low['all']]], [
-                ['label' => $this->t('tiles.sources.sold_last_30_days', $locale), 'value' => $low['sold']],
-                ['label' => $this->t('tiles.sources.current_stock', $locale), 'value' => $low['stock']],
+                ['label' => $this->t('tiles.sources.sold_last_30_days', $locale), 'value' => $low['sold'], 'unit' => 'count'],
+                ['label' => $this->t('tiles.sources.current_stock', $locale), 'value' => $low['stock'], 'unit' => 'count'],
             ], $low['items'], $low['signature']);
         }
         $trip = $this->trips?->current();
@@ -131,7 +144,7 @@ class HomeTilesService
             if ($follow['status'] === 'over') {
                 $tiles[] = $this->tile(self::TRIP_BUDGET, 'alert', 75, 'trip_budget', $locale, ['%place%' => $trip->getPlace() ?? $trip->getName(), '%amount%' => self::money($follow['overBy'], $locale, $this->siteCurrency())],
                     ['screen' => 'voyages.suivi', 'params' => ['tripId' => (int) $trip->getId()]],
-                    [['label' => $this->t('tiles.sources.trip_spent', $locale), 'value' => $follow['totals']['spent']], ['label' => $this->t('tiles.sources.trip_allowance', $locale), 'value' => $follow['totals']['allowanceToDate']]],
+                    [['label' => $this->t('tiles.sources.trip_spent', $locale), 'value' => $follow['totals']['spent'], 'unit' => 'money'], ['label' => $this->t('tiles.sources.trip_allowance', $locale), 'value' => $follow['totals']['allowanceToDate'], 'unit' => 'money']],
                     [['tripId' => (int) $trip->getId(), 'spent' => $follow['totals']['spent'], 'allowanceToDate' => $follow['totals']['allowanceToDate'], 'budget' => $follow['totals']['budget'], 'overBy' => $follow['overBy']]],
                     'trip:' . $trip->getId());
             }

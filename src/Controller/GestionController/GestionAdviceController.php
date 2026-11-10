@@ -40,6 +40,12 @@ class GestionAdviceController extends AbstractController
         return $this->json($this->useCase->setStatus($id, 'done', $this->body($request), $this->getUser()?->getUserIdentifier(), $this->locale($request)));
     }
 
+    #[Route('/{id}/mesure', name: 'gestion_conseils_mesure', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function measure(int $id, Request $request): JsonResponse
+    {
+        return $this->json($this->useCase->measure($id, $this->locale($request)));
+    }
+
     #[Route('/{id}/ecarter', name: 'gestion_conseils_ecarter', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function dismiss(int $id, Request $request): JsonResponse
     {

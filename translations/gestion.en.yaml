@@ -12,6 +12,9 @@ referentiel:
         Autre: Other
 # Home tiles (11/11/2026, docs/vignettes-gestion.md)
 tiles:
+    advice_result:
+        title: "Advice result"
+        text: ""
     first_invoice:
         title: Your first invoice
         text: 'Scan your first invoice: your stock will build itself.'
@@ -210,3 +213,15 @@ advice:
         sales_lead: "Sales lead"
         net_result: "Net result"
         margin_of_sold_out: "Margin of sold-out items"
+# Measure after applying an advice (lot G1b-1, 11/11/2026)
+measure:
+    caveats:
+        TOO_EARLY: "Only %days% days out of 14: too early to conclude."
+        SEASONAL: "Last year, on the same dates, sales moved the same way: the season probably explains part of the gap."
+    texts:
+        price: "%percent% price increase applied on %date%: margin %change% in %days% days (estimated: %estimated%)."
+        promotion: "%percent% promotion applied on %date%: margin %change% in %days% days."
+        promotion_sales: "%units% sales since the promotion of %date% (%days% days): %revenue% in sales, %margin% in margin."
+        promotion_sales_named: "%name%: %units% sales since the promotion of %date% (%days% days), %revenue% in sales, %margin% in margin."
+        too_early: "Applied on %date%: too early to measure (%days% days out of 14)."
+        campaign: "Campaign run again on %date%: margin %change% over %days% campaign days."

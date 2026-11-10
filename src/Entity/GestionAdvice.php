@@ -87,6 +87,12 @@ class GestionAdvice
     #[ORM\Column(name: 'dismissed_at', type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $dismissedAt = null;
 
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $applied = null; // lot G1b-1 : ce que le gérant a appliqué (pourcentage, articles, campagne)
+
+    #[ORM\Column(name: 'applied_on', type: 'date_immutable', nullable: true)]
+    private ?\DateTimeImmutable $appliedOn = null;
+
     #[ORM\Column(name: 'detected_on', type: 'date_immutable')]
     private ?\DateTimeImmutable $detectedOn = null;
 

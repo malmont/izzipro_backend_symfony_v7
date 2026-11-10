@@ -18,6 +18,7 @@ Migration `Version20261205100000`, script `scripts/migrate_all_v2_gestion_vignet
 
 `{ id, kind: "first_steps" | "alert", priority, title, text, action: { screen, params }, sources: [{ label, value }], dismissible, figures }`
 
+- `sources[]` : `{ label, value, unit }`, `unit` = money | percent | count | days | date | ratio comme les conseils du guide (11/11/2026, additif : absent = valeur brute).
 - `priority` de 1 à 100, plus haut = plus urgent ; `title` et `text` prêts à afficher dans la langue demandée (`?locale=`, sinon langue du site).
 - `action.screen` : code d'écran que l'application traduit en navigation ; `dismissible` toujours vrai.
 
@@ -25,6 +26,7 @@ Migration `Version20261205100000`, script `scripts/migrate_all_v2_gestion_vignet
 |---|---|---|---|---|
 | `cash-low` | alert | 85 | point bas de trésorerie des 14 prochains jours sous le seuil (lot B1b-1, `docs/tresorerie-gestion.md` § 5) | `tresorerie` `{}` |
 | `advice` | advice | 68 / 64 / 60 | premier conseil du guide de la période en cours, selon sa confiance ; jamais trésorerie ni voyage (lot G1a, `docs/guide-ia-gestion.md` § 6) | `conseils` `{ adviceId }` |
+| `advice-result` | advice | 50 | mesure complète d'un conseil appliqué depuis moins de 30 jours ; écartée pour toujours pour ce conseil (lot G1b-1, `docs/guide-ia-gestion.md` § 8) | `conseils` `{ adviceId }` |
 | `low-stock` | alert | 80 | au moins un article qui se vend va manquer (§ 3) | `stock.low` `{ variantIds }` |
 | `trip-budget` | alert | 75 | voyage en cours au-delà de son budget à date (lot B1a, `docs/budgets-gestion.md`) | `voyages.suivi` `{ tripId }` |
 | `budget-over` | alert | 70 | un poste du budget de la période en cours dépasse le prévu (lot B1a) | `periode.budget` `{ periodId }` |

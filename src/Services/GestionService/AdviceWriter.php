@@ -165,6 +165,17 @@ class AdviceWriter
             ...($cash['balance'] === null ? [] : [['value' => $cash[$cash['alertSeries']]['low14']['amount'], 'unit' => 'money'], ['value' => $cash[$cash['alertSeries']]['low14']['date'], 'unit' => 'date'], ['value' => $cash['settings']['threshold'], 'unit' => 'money']]),
             ...array_merge(...array_map(fn ($c) => [['value' => $c['in'], 'unit' => 'money'], ['value' => $c['out'], 'unit' => 'money']], $cash['byCategory'])),
         ], 0);
+        // Conseils appliqués de la période dont la mesure est complète (lot G1b-1) : l'IA peut s'appuyer sur leurs résultats
+        $applied = [];
+        foreach ($this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative("SELECT * FROM gestion_advice WHERE period_id = ? AND status = 'done' ORDER BY done_at DESC LIMIT 8", [$period->getId()]) as $done) {
+            $a = $this->advices->toArray($done, $locale);
+            if (($a['measurement']['complete'] ?? false) !== true) {
+                continue;
+            }
+            $applied[] = ['kind' => $a['kind'], 'appliedOn' => $f((string) $a['appliedOn'], 'date'), 'marginChange' => $f($a['measurement']['change']['grossMargin'], 'money'), 'salesChange' => $f($a['measurement']['change']['revenue'], 'money'), 'days' => AdviceMeasure::WINDOW_DAYS];
+            $contextNumbers = array_merge($contextNumbers, GestionAdviceService::allowedNumbers([['value' => (string) $a['appliedOn'], 'unit' => 'date'], ['value' => $a['measurement']['change']['revenue'], 'unit' => 'money']], $a['measurement']['change']['grossMargin']));
+        }
+        $context['appliedResults'] = $applied;
         $advices = [];
         $allowed = [];
         foreach ($rows as $r) {

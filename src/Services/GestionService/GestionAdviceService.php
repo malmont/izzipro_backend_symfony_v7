@@ -39,6 +39,7 @@ class GestionAdviceService
         private readonly TranslatorInterface $translator,
         private readonly ?EmailLocale $siteLocale = null,
         private readonly ?TenantCurrencyProvider $currency = null,
+        private readonly ?AdviceMeasure $measures = null,
     ) {
     }
 
@@ -180,8 +181,11 @@ class GestionAdviceService
         return $row === false ? null : $this->toArray($row, $locale);
     }
 
-    /** Fait / écarté : statut porté par le site, auteur et date gardés (le sujet reste en base pour la mesure de G1b) */
-    public function setStatus(int $id, string $status, ?string $user, mixed $note, string $locale): array
+    /**
+     * Fait / écarté : statut porté par le site, auteur et date gardés (le sujet reste en base pour la mesure). « Fait » peut dire ce qui a été
+     * appliqué (lot G1b-1) : `applied { appliedOn?, pricePercent?, promotionPercent?, productIds?, campaignId? }`, facultatif.
+     */
+    public function setStatus(int $id, string $status, ?string $user, mixed $note, string $locale, mixed $applied = null): array
     {
         $row = $this->conn()->fetchAssociative('SELECT * FROM gestion_advice WHERE id = ?', [$id]);
         if ($row === false) {
@@ -193,9 +197,10 @@ class GestionAdviceService
         if ($note !== null && !is_string($note)) {
             throw new GestionValidationException(['note' => 'MUST_BE_STRING']);
         }
+        [$appliedJson, $appliedOn] = $status === 'done' ? $this->applied($applied) : [null, null];
         $column = $status === 'done' ? 'done_at' : 'dismissed_at';
-        $this->conn()->executeStatement("UPDATE gestion_advice SET status = ?, status_by = ?, status_note = ?, $column = NOW(), updated_at = NOW() WHERE id = ?",
-            [$status, $user, $note === null ? null : mb_substr(trim($note), 0, 1000), $id]);
+        $this->conn()->executeStatement("UPDATE gestion_advice SET status = ?, status_by = ?, status_note = ?, applied = ?, applied_on = ?, $column = NOW(), updated_at = NOW() WHERE id = ?",
+            [$status, $user, $note === null ? null : mb_substr(trim($note), 0, 1000), $appliedJson, $appliedOn, $id]);
 
         return $this->toArray($this->conn()->fetchAssociative('SELECT * FROM gestion_advice WHERE id = ?', [$id]), $locale);
     }
@@ -225,7 +230,116 @@ class GestionAdviceService
             'updatedAt' => (new \DateTimeImmutable((string) $r['updated_at']))->format(\DateTimeInterface::ATOM),
             'doneAt' => $r['done_at'] === null ? null : (new \DateTimeImmutable((string) $r['done_at']))->format(\DateTimeInterface::ATOM),
             'dismissedAt' => $r['dismissed_at'] === null ? null : (new \DateTimeImmutable((string) $r['dismissed_at']))->format(\DateTimeInterface::ATOM),
+            'applied' => ($r['applied'] ?? null) === null ? null : json_decode((string) $r['applied'], true),
+            'appliedOn' => ($r['applied_on'] ?? null) === null ? null : substr((string) $r['applied_on'], 0, 10),
+            'measurement' => $r['status'] === 'done' ? $this->measures?->summary($r, $locale) : null,
         ];
+    }
+
+    /** Mesure après application (lot G1b-1) : 404 ADVICE_NOT_FOUND, 409 ADVICE_NOT_DONE */
+    public function measure(int $id, string $locale): array
+    {
+        $row = $this->conn()->fetchAssociative('SELECT * FROM gestion_advice WHERE id = ?', [$id]);
+        if ($row === false) {
+            throw new GestionConflictException('ADVICE_NOT_FOUND', 'Conseil introuvable.', 404, ['adviceId' => $id]);
+        }
+        if ($row['status'] !== 'done' || $this->measures === null) {
+            throw new GestionConflictException('ADVICE_NOT_DONE', 'Ce conseil n\'est pas marqué fait : rien à mesurer.', 409, ['adviceId' => $id, 'status' => $row['status']]);
+        }
+
+        return $this->measures->measure($row, $locale);
+    }
+
+    /**
+     * Vignette « advice-result » (lot G1b-1) : le dernier conseil fait dont la mesure est complète depuis moins de 30 jours.
+     *
+     * @return array{adviceId: int, kind: string, text: string, change: array<string, int>, appliedOn: string}|null
+     */
+    public function resultTile(string $locale, ?\DateTimeImmutable $today = null): ?array
+    {
+        if ($this->measures === null) {
+            return null;
+        }
+        $today ??= $this->calendar->today();
+        $since = $today->modify('-' . (AdviceMeasure::WINDOW_DAYS + AdviceMeasure::RESULT_TILE_DAYS) . ' days')->format('Y-m-d');
+        $rows = $this->conn()->fetchAllAssociative(
+            "SELECT * FROM gestion_advice WHERE status = 'done' AND kind IN ('FAST_SELLER', 'SLOW_STOCK', 'END_CLEARANCE', 'AD_RELAUNCH') AND COALESCE(applied_on, CAST(done_at AS date)) >= ?"
+            . ' ORDER BY COALESCE(applied_on, CAST(done_at AS date)) DESC, id DESC LIMIT 5', [$since]
+        );
+        foreach ($rows as $r) {
+            $m = $this->measures->measure($r, $locale, $today);
+            if ($m['measurable'] && $m['window']['complete']) {
+                return ['adviceId' => (int) $r['id'], 'kind' => (string) $r['kind'], 'text' => $m['text'], 'change' => $m['change'], 'appliedOn' => $m['appliedOn']];
+            }
+        }
+
+        return null;
+    }
+
+    /** @return array{0: ?string, 1: ?string} applied (JSON) et applied_on validés */
+    private function applied(mixed $applied): array
+    {
+        if ($applied === null) {
+            return [null, null];
+        }
+        if (!is_array($applied) || ($applied !== [] && array_is_list($applied))) {
+            throw new GestionValidationException(['applied' => 'MUST_BE_OBJECT']);
+        }
+        $errors = [];
+        $out = [];
+        $today = $this->calendar->today()->format('Y-m-d');
+        $on = null;
+        if (isset($applied['appliedOn'])) {
+            $on = is_string($applied['appliedOn']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $applied['appliedOn']) ? $applied['appliedOn'] : null;
+            if ($on === null) {
+                $errors['applied.appliedOn'] = 'INVALID_DATE';
+            } elseif ($on > $today) {
+                $errors['applied.appliedOn'] = 'DATE_IN_FUTURE';
+            }
+        }
+        foreach (['pricePercent' => [-90, 300], 'promotionPercent' => [0, 90]] as $field => [$min, $max]) {
+            if (!array_key_exists($field, $applied) || $applied[$field] === null) {
+                continue;
+            }
+            $v = $applied[$field];
+            if (!is_int($v) && !(is_float($v) && is_finite($v))) {
+                $errors["applied.$field"] = 'MUST_BE_NUMBER';
+            } elseif ($v < $min || $v > $max) {
+                $errors["applied.$field"] = 'OUT_OF_RANGE';
+            } else {
+                $out[$field] = $v;
+            }
+        }
+        if (isset($applied['productIds'])) {
+            $ids = $applied['productIds'];
+            if (!is_array($ids) || !array_is_list($ids)) {
+                $errors['applied.productIds'] = 'MUST_BE_LIST';
+            } else {
+                $known = $ids === [] ? [] : array_map('intval', $this->conn()->fetchFirstColumn('SELECT id FROM product WHERE id IN (?)', [array_values(array_filter($ids, 'is_int'))], [\Doctrine\DBAL\ArrayParameterType::INTEGER]));
+                foreach ($ids as $i => $pid) {
+                    if (!is_int($pid) || !in_array($pid, $known, true)) {
+                        $errors["applied.productIds[$i]"] = 'PRODUCT_NOT_FOUND';
+                    }
+                }
+                $out['productIds'] = array_values(array_unique(array_filter($ids, 'is_int')));
+            }
+        }
+        if (isset($applied['campaignId'])) {
+            $cid = $applied['campaignId'];
+            if (!is_int($cid) || $this->conn()->fetchOne('SELECT 1 FROM marketing_campaign WHERE id = ?', [$cid]) === false) {
+                $errors['applied.campaignId'] = 'CAMPAIGN_NOT_FOUND';
+            } else {
+                $out['campaignId'] = $cid;
+            }
+        }
+        if ($errors !== []) {
+            throw new GestionValidationException($errors, 'Application invalide');
+        }
+        if ($on !== null) {
+            $out['appliedOn'] = $on;
+        }
+
+        return [json_encode($out ?: new \stdClass()), $on ?? $today];
     }
 
     // ----- textes de repli, formats, vérification -----

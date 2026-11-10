@@ -70,8 +70,9 @@ Calculés pour la période demandée, à la date du jour (plusieurs peuvent coex
     les GET suivants rendent ses textes. Une période fermée n'a qu'une génération, ensuite figée.
   - `ai.status` : `rules_only` (règles seules), `pending`, `ok`, `not_included` (pas de droit « Aide IA » / « IA complète »),
     `credits_exhausted`, `error`. Une rédaction perdue (worker arrêté) passe en `error` après 15 minutes.
-- `POST /api/gestion/conseils/{id}/fait { note? }`, `POST /api/gestion/conseils/{id}/ecarter { reason? }` → le conseil ; 404 `ADVICE_NOT_FOUND`,
-  409 `ADVICE_CLOSED`.
+- `POST /api/gestion/conseils/{id}/fait { note?, applied? }`, `POST /api/gestion/conseils/{id}/ecarter { reason? }` → le conseil ; 404
+  `ADVICE_NOT_FOUND`, 409 `ADVICE_CLOSED` ; `applied` (lot G1b-1) : § 8.
+- `GET /api/gestion/conseils/{id}/mesure` (lot G1b-1) : § 8.
 - `POST /api/gestion/conseils/actualiser { periodId? }` → 202 `{ runId, manualRefreshesLeft }` ; 429 `ADVICE_REFRESH_LIMIT` (3 par site et par
   jour), 409 `ADVICE_GENERATING` (une rédaction en cours), 409 `PERIOD_CLOSED`.
 - Commande `app:gestion:conseils --tenant= [--period=] [--locale=]` : règles du jour sans IA et même réponse que le GET (contrôle, exemples).
@@ -103,4 +104,36 @@ calcule les règles (sans jamais demander l'IA) et crée la période en cours au
 | Lot | Contenu |
 |---|---|
 | **G1a** | règles R1–R11, conseils, générations, rédaction vérifiée par l'IA, routes, vignette ; livré le 11/11/2026 |
-| G1b | mesure après application (« fait » avec ce qui a été appliqué ; marge des N jours après contre N jours avant), commentaire du simulateur (répartitions calculées par le backend) |
+| **G1b-1** | mesure après application (§ 8), vignette `advice-result`, résultats des conseils appliqués dans le contexte de l'IA ; livré le 11/11/2026 |
+| G1b-2 | commentaire du simulateur (répartitions calculées par le backend) |
+| Plus tard | mesure des leçons de clôture sur la période suivante de même saison |
+
+## 8. Mesure après application (lot G1b-1)
+
+- **« Fait » avec ce qui a été appliqué** : `applied { appliedOn?, pricePercent?, promotionPercent?, productIds?, campaignId? }`, facultatif
+  (l'application propose le pourcentage du conseil et la date du jour). `appliedOn` : aujourd'hui par défaut, jamais dans le futur ; `productIds` :
+  les articles du sujet par défaut ; `campaignId` : la campagne créée pour une relance. Colonnes `gestion_advice.applied`, `applied_on`
+  (`Version20261210100000`, `scripts/migrate_all_v2_gestion_conseils_mesure.sh`). 422 `applied` `MUST_BE_OBJECT` ; `applied.appliedOn`
+  `INVALID_DATE` | `DATE_IN_FUTURE` ; `applied.pricePercent` (−90 à 300) / `applied.promotionPercent` (0 à 90) `MUST_BE_NUMBER` | `OUT_OF_RANGE` ;
+  `applied.productIds[i]` `PRODUCT_NOT_FOUND` ; `applied.campaignId` `CAMPAIGN_NOT_FOUND`. Sans `applied` : date du « fait », sujet du conseil.
+- `GET /api/gestion/conseils/{id}/mesure` (`AdviceMeasure`) → `{ adviceId, kind, measurable, appliedOn, applied, window { days, before { from, to },
+  after { from, to }, complete }, scope { kind: products | campaign, productIds, campaignId? }, before, after, change { revenue, grossMargin, units },
+  lastYear { before, after, change } | null, estimatedEffect, confidence, caveats [{ code, text }], text }` ; 404 `ADVICE_NOT_FOUND`,
+  409 `ADVICE_NOT_DONE`.
+  - Fenêtre : `after` = 14 jours à partir de `appliedOn`, coupés à hier ; `before` = autant de jours juste avant ; `complete` à 14 jours ;
+    moins de 7 jours : remarque `TOO_EARLY`, confiance low.
+  - Ventes et marge des articles du conseil, mêmes règles que le résultat de période (`PeriodResultCalculator::salesMetrics`).
+  - Saison : mêmes fenêtres l'an dernier ; si les ventes y ont varié dans le même sens et d'une ampleur comparable (± 50 % de la variation de
+    cette année), remarque `SEASONAL`, confiance low. Sinon : medium si complète, low sinon.
+  - Mesurables : `FAST_SELLER`, `SLOW_STOCK`, `END_CLEARANCE` (articles), `AD_RELAUNCH` avec `applied.campaignId` (rentabilité A1 de la
+    campagne reprise : `before` = référence, `after` = pendant). Les autres, **leçons de clôture comprises**, rendent `measurable: false` sans
+    chiffre (la vraie mesure d'une leçon viendra en comparant la période suivante de même saison).
+  - `text` (repli des règles) : hausse de prix « Hausse de 5 % appliquée le 12 novembre : marge +35,00 $ en 14 jours (estimé : +3,00 $). » ;
+    promotion sur un article qui ne se vendait pas (aucune vente avant) : les ventes obtenues (« Manteau : 3 ventes depuis la promotion du … ») ;
+    sinon l'écart de marge ; trop tôt : « trop tôt pour mesurer (n jours sur 14) ».
+- Liste `GET conseils` : chaque conseil fait porte `applied`, `appliedOn` et `measurement { complete, change { grossMargin, revenue }, text } | null`.
+- Contexte de l'IA : `appliedResults` (genre, date, écarts de marge et de ventes des conseils de la période dont la mesure est complète) ; ces
+  chiffres sont admis par la vérification.
+- Vignette **`advice-result`** (`kind: "advice"`, priorité 50) : le dernier conseil fait dont la mesure est complète depuis moins de 30 jours ;
+  texte = texte de la mesure ; action `conseils { adviceId }` ; écartée pour toujours pour ce conseil (un conseil suivant la fait revenir).
+

@@ -15,6 +15,7 @@ use App\EventSubscriber\CacheInvalidationSubscriber;
 use App\Message\GenerateGestionAdviceMessage;
 use App\MessageHandler\GenerateGestionAdviceHandler;
 use App\Services\CaisseService\StoreClock;
+use App\Services\GestionService\AdviceMeasure;
 use App\Services\GestionService\AdviceRules;
 use App\Services\GestionService\GestionAdviceService;
 use App\Services\GestionService\PeriodCalendar;
@@ -244,6 +245,22 @@ class AdviceApiTest extends WebTestCase
             $this->assertNotContains($advice['kind'], GestionAdviceService::NO_TILE_KINDS);
         }
 
+        // Texte rédigé par l'IA (dernier texte valide) : la vignette le reprend aussi ; conseil inséré en tête de la période en cours, alertes plus
+        // urgentes de la base partagée écartées
+        $conn = $this->em()->getConnection();
+        $conn->executeStatement("INSERT INTO gestion_advice (period_id, signature, moment, kind, subject, action, effect_cents, effect_label, confidence, sources, figures, params, ai_title, ai_text, ai_locale, rank, detected_on, created_at, updated_at)"
+            . " VALUES (?, 'TEST:tile', 'selling', 'FAST_SELLER', '{}', '{\"screen\": \"articles\", \"params\": {}}', 100, 'extra_margin', 'high', '[]', '[]', '{\"name\": \"X\"}', 'Titre IA', 'Texte IA', 'fr', 0, CURRENT_DATE, NOW(), NOW())", [$current->getId()]);
+        foreach (['low-stock', 'budget-over', 'trip-budget', 'cash-low'] as $id) {
+            $this->request('POST', "/api/gestion/accueil/vignettes/$id/ecarter", []);
+        }
+        $aiTile = array_values(array_filter($this->get('/api/gestion/accueil/vignettes?locale=fr'), fn ($t) => $t['id'] === 'advice'))[0] ?? null;
+        $this->assertSame(['Titre IA', 'Texte IA', 68], [$aiTile['title'] ?? null, $aiTile['text'] ?? null, $aiTile['priority'] ?? null], 'vignette : texte de l\'IA');
+        foreach ($this->get('/api/gestion/accueil/vignettes?locale=fr') as $t) {
+            foreach ($t['sources'] as $src) {
+                $this->assertContains($src['unit'] ?? null, ['money', 'percent', 'count', 'days', 'date', 'ratio'], $t['id'] . ' : unit sur chaque source');
+            }
+        }
+
         // Vérification des nombres : écritures admises, valeurs recalculées refusées
         $allowed = GestionAdviceService::allowedNumbers([['key' => 'a', 'value' => 123456, 'unit' => 'money'], ['key' => 'p', 'value' => 5, 'unit' => 'percent'], ['key' => 'd', 'value' => '2026-11-12', 'unit' => 'date'], ['key' => 'r', 'value' => 2.35, 'unit' => 'ratio']], -50000);
         foreach (['1 234,56 $', '1 235 $', '1 234 $', "1\u{202F}234,56", '5 %', '5,0 %', 'le 12 novembre 2026', '2,35 $ pour 1 $', 'environ 500 $', 'en 30 jours'] as $ok) {
@@ -252,6 +269,74 @@ class AdviceApiTest extends WebTestCase
         foreach (['1 300 $' => [1300.0], 'soit 1 734,56 $ en tout' => [1734.56], '6 %' => [6.0], 'le 13' => [13.0]] as $bad => $unknown) {
             $this->assertSame($unknown, GestionAdviceService::unknownNumbers($bad, $allowed), $bad);
         }
+    }
+
+    public function testMeasureAfterApplication(): void
+    {
+        $measure = static::getContainer()->get(\App\Services\GestionService\AdviceMeasure::class);
+        $advices = static::getContainer()->get(GestionAdviceService::class);
+        $today = static::getContainer()->get(PeriodCalendar::class)->today();
+        $b = $today->modify('+7200 days');
+        $d = fn (int $n) => $b->modify("$n days")->format('Y-m-d');
+        $pid = $this->period(7200, 'adv-mes');
+        $conn = $this->em()->getConnection();
+        // A : coût 10,00 ; 2 ventes à 20,00 avant (B+3), 5 ventes à 21,00 après la hausse du B+10 (B+12). S : jamais vendu avant, 3 ventes après.
+        [$a, $av] = $this->variant('Mesure hausse', 20, 1000, $d(-100));
+        [$s, $sv] = $this->variant('Mesure promo', 20, 1000, $d(-100));
+        $this->sale($av, 2, 2000, $d(3));
+        $this->sale($av, 5, 2100, $d(12));
+        $this->sale($sv, 3, 1000, $d(15));
+        $this->endOfWrite();
+        $insert = fn (string $kind, int $product, string $status, ?array $applied, ?string $on) => (int) $conn->fetchOne(
+            "INSERT INTO gestion_advice (period_id, signature, moment, kind, subject, action, effect_cents, effect_label, confidence, sources, figures, params, rank, status, applied, applied_on, done_at, detected_on, created_at, updated_at)"
+            . " VALUES (?, ?, 'selling', ?, ?, '{}', 300, 'extra_margin', 'low', '[]', '[]', ?, 1, ?, ?, ?, NOW(), CURRENT_DATE, NOW(), NOW()) RETURNING id",
+            [$pid, "$kind:p$product:$status", $kind, json_encode(['productIds' => [$product]]), json_encode(['name' => $kind === 'SLOW_STOCK' ? 'Mesure promo' : 'Mesure hausse']), $status, $applied === null ? null : json_encode($applied), $on]
+        );
+        $row = fn (int $id) => $conn->fetchAssociative('SELECT * FROM gestion_advice WHERE id = ?', [$id]);
+
+        // Hausse appliquée le B+10, mesurée au B+30 : 14 jours complets contre les 14 jours d'avant
+        $fast = $insert('FAST_SELLER', $a, 'done', ['pricePercent' => 5], $d(10));
+        $m = $measure->measure($row($fast), 'fr', $b->modify('+30 days'));
+        $this->assertSame([true, 14, true, $d(10), $d(23), $d(-4), $d(9)], [$m['measurable'], $m['window']['days'], $m['window']['complete'], $m['window']['after']['from'], $m['window']['after']['to'], $m['window']['before']['from'], $m['window']['before']['to']]);
+        $this->assertSame([['revenue' => 4000, 'grossMargin' => 2000, 'units' => 2], ['revenue' => 10500, 'grossMargin' => 5500, 'units' => 5], ['revenue' => 6500, 'grossMargin' => 3500, 'units' => 3]], [$m['before'], $m['after'], $m['change']]);
+        $this->assertSame(['medium', [], 300], [$m['confidence'], $m['caveats'], $m['estimatedEffect']]);
+        $this->assertStringStartsWith('Hausse de 5', $m['text']);
+        $this->assertStringContainsString('+35,00', $m['text']);
+        $this->assertStringContainsString('(estimé : +3,00', $m['text']);
+        // Trop tôt : 4 jours au B+14
+        $early = $measure->measure($row($fast), 'fr', $b->modify('+14 days'));
+        $this->assertSame([4, false, 'low', ['TOO_EARLY']], [$early['window']['days'], $early['window']['complete'], $early['confidence'], array_column($early['caveats'], 'code')]);
+        $this->assertStringContainsString('trop tôt', $early['text']);
+        // Promotion sur un article qui ne se vendait pas : le texte parle des ventes obtenues
+        $slow = $insert('SLOW_STOCK', $s, 'done', ['promotionPercent' => 20], $d(10));
+        $ms = $measure->measure($row($slow), 'fr', $b->modify('+30 days'));
+        $this->assertSame([0, 3], [$ms['before']['units'], $ms['after']['units']]);
+        $this->assertStringStartsWith('Mesure promo : 3 ventes depuis la promotion', $ms['text']);
+        // Leçons et autres genres : non mesurables (C1)
+        $lesson = $insert('LESSON_STOCKOUT', $a, 'done', null, null);
+        $this->assertSame(['measurable' => false], array_intersect_key($measure->measure($row($lesson), 'fr', $b->modify('+30 days')), ['measurable' => 1]));
+        // Saison : même sens, ampleur comparable (± 50 %)
+        $this->assertSame([true, false, false, false, false, true], [AdviceMeasure::seasonal(100, 150, 100, 140), AdviceMeasure::seasonal(100, 150, 100, 100), AdviceMeasure::seasonal(100, 150, 100, 60), AdviceMeasure::seasonal(0, 150, 100, 140), AdviceMeasure::seasonal(100, 150, 100, 110), AdviceMeasure::seasonal(100, 150, 100, 170)], 'même sens et ± 50 % : +40 % et +70 % pour +50 % oui ; +10 % non');
+        // Vignette advice-result : la dernière mesure complète
+        $tile = $advices->resultTile('fr', $b->modify('+30 days'));
+        $this->assertSame([$slow, 'SLOW_STOCK'], [$tile['adviceId'], $tile['kind']], 'la plus récente d\'abord (même date : la dernière)');
+
+        // Routes : validation de applied, fait, mesure (409 tant que le conseil n'est pas fait)
+        $new = $insert('FAST_SELLER', $a, 'new', null, null);
+        $this->request('GET', "/api/gestion/conseils/$new/mesure");
+        $this->assertSame([409, 'ADVICE_NOT_DONE'], [$this->status(), $this->body()['error']]);
+        $this->request('POST', "/api/gestion/conseils/$new/fait", ['applied' => ['appliedOn' => $today->modify('+1 day')->format('Y-m-d'), 'pricePercent' => 400, 'productIds' => [999999999], 'campaignId' => 999999999]]);
+        $this->assertSame([422, ['applied.appliedOn' => 'DATE_IN_FUTURE', 'applied.pricePercent' => 'OUT_OF_RANGE', 'applied.productIds[0]' => 'PRODUCT_NOT_FOUND', 'applied.campaignId' => 'CAMPAIGN_NOT_FOUND']], [$this->status(), $this->body()['fields']]);
+        $this->assertSame('new', $conn->fetchOne('SELECT status FROM gestion_advice WHERE id = ?', [$new]), 'rien n\'est écrit');
+        $done = $this->send('POST', "/api/gestion/conseils/$new/fait", ['applied' => ['pricePercent' => 7.5]], 200);
+        $this->assertSame([['pricePercent' => 7.5], $today->format('Y-m-d')], [$done['applied'], $done['appliedOn']], 'date par défaut : aujourd\'hui');
+        $mr = $this->get("/api/gestion/conseils/$new/mesure");
+        $this->assertSame([true, 0, ['TOO_EARLY']], [$mr['measurable'], $mr['window']['days'], array_column($mr['caveats'], 'code')]);
+        $this->request('GET', '/api/gestion/conseils/999999999/mesure');
+        $this->assertSame([404, 'ADVICE_NOT_FOUND'], [$this->status(), $this->body()['error']]);
+        $all = $this->get("/api/gestion/conseils?periodId=$pid&status=all");
+        $listed = array_column($all['advices'], null, 'id');
+        $this->assertSame([false, null], [$listed[$new]['measurement']['complete'], $listed[$lesson]['measurement']], 'résumé de mesure dans la liste ; leçon : aucune');
     }
 
     // ----- helpers -----
