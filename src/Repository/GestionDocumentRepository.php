@@ -19,7 +19,7 @@ class GestionDocumentRepository extends EntityRepository
     {
         $qb = $this->createQueryBuilder('d')
             ->where('(d.status != :confirmed AND d.expiresAt IS NOT NULL AND d.expiresAt < :now)')
-            ->orWhere('(d.status = :confirmed AND d.commandeId IS NULL AND d.noteDeFraisId IS NULL AND d.fraisDePortId IS NULL)')
+            ->orWhere('(d.status = :confirmed AND d.commandeId IS NULL AND d.noteDeFraisId IS NULL AND d.fraisDePortId IS NULL AND d.campaignId IS NULL)')
             ->setParameter('confirmed', GestionDocument::STATUS_CONFIRMED)->setParameter('now', $now);
 
         return $qb->getQuery()->getResult();

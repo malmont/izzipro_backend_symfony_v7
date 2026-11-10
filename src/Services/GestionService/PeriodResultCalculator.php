@@ -49,10 +49,80 @@ class PeriodResultCalculator
         [$from, $to] = $this->clock->range($period->getStartDateCollection()->format('Y-m-d'), $period->getEndDateCollection()->format('Y-m-d'));
         $conn = $this->emProvider->getEntityManager()->getConnection();
         $params = ['from' => $from->format('Y-m-d H:i:s'), 'to' => $to->format('Y-m-d H:i:s')];
+        $row = $this->salesRow($params['from'], $params['to'], $costCutoff, $legacy);
+        $shippingBilled = (int) round((float) $conn->fetchOne(
+            'SELECT COALESCE(SUM(CASE WHEN o.order_type_id = 2 THEN -ABS(COALESCE(o.shipping_cost, 0)) ELSE COALESCE(o.shipping_cost, 0) END), 0) FROM "order" o'
+            . ' WHERE o.order_date >= :from AND o.order_date < :to AND o.order_type_id IN (1, 2) AND o.status_id NOT IN (1, 7)',
+            ['from' => $params['from'], 'to' => $params['to']]
+        ));
+        $totals = fn () => $this->purchases->periodTotals($period->getStartDateCollection(), $period->getEndDateCollection());
+        $purchases = $legacy ? $this->purchases->legacy($totals) : $totals();
+
+        $c = static fn (mixed $v): int => (int) round((float) $v);
+        $revenue = $c($row['sales_amount'] ?? 0) - $c($row['returns_amount'] ?? 0);
+        $unknownRevenue = $c($row['unknown_revenue'] ?? 0);
+        $cogs = $c($row['cogs'] ?? 0);
+        $rentals = $c($row['rentals'] ?? 0);
+        $subscriptions = $c($row['subscriptions'] ?? 0);
+        $shipping = (int) ($purchases['shippingCost'] ?? 0);
+        $notes = (int) ($purchases['expenseCost'] ?? 0);
+        $advertising = $this->advertising($period);
+        $other = $advertising['campaigns'] === [] ? [] : [['kind' => 'advertising', 'label' => 'Publicité', 'amount' => $advertising['amount'], 'campaigns' => $advertising['campaigns']]];
+        $expensesTotal = $shipping + $notes + $advertising['amount'];
+        $effective = $revenue - $unknownRevenue; // ventes au coût connu : seule base des marges (décision « exclu des marges »)
+        $gross = $effective - $cogs;
+        $net = $gross - $expensesTotal;
+        $rate = static fn (int $num, int $den): ?float => $den > 0 ? round($num / $den * 100, 2) : null;
+        $investmentPurchases = (int) ($purchases['purchaseCost'] ?? 0);
+
+        return [
+            'period' => [
+                'id' => $period->getId(), 'name' => $period->getNomCollection(), 'periodKey' => $period->getPeriodKey(),
+                'start' => $period->getStartDateCollection()->format('Y-m-d'), 'end' => $period->getEndDateCollection()->format('Y-m-d'),
+                'status' => $this->calendar->status($period), 'closedAt' => $this->calendar->closedAt($period)?->format(\DateTimeInterface::ATOM),
+                'reopenedAt' => $period->getReopenedAt()?->format(\DateTimeInterface::ATOM),
+            ],
+            'currency' => $this->currency?->code() ?? TenantCurrencyProvider::DEFAULT,
+            'sales' => [
+                'revenue' => $revenue, 'orders' => (int) ($row['orders_sold'] ?? 0), 'items' => (int) ($row['items_sold'] ?? 0),
+                'returns' => ['amount' => $c($row['returns_amount'] ?? 0), 'orders' => (int) ($row['orders_returned'] ?? 0), 'items' => (int) ($row['items_returned'] ?? 0)],
+                'unknownCostRevenue' => $unknownRevenue,
+                'shippingBilled' => $shippingBilled,
+                'bySource' => ['ecommerce' => $c($row['src_1'] ?? 0), 'pos' => $c($row['src_2'] ?? 0), 'mobile_app' => $c($row['src_3'] ?? 0)],
+            ],
+            'otherRevenue' => ['rentals' => $rentals, 'subscriptions' => $subscriptions, 'total' => $rentals + $subscriptions],
+            'cogs' => ['amount' => $cogs, 'items' => (int) ($row['cogs_items'] ?? 0), 'unknownCostItems' => (int) ($row['unknown_items'] ?? 0),
+                'estimatedItems' => (int) ($row['estimated_items'] ?? 0), 'estimatedAmount' => $c($row['estimated_amount'] ?? 0)], // part estimée (reprise d'historique, lot P3), déjà comprise dans amount
+            'expenses' => ['shipping' => $shipping, 'notes' => $notes, 'other' => $other, 'total' => $expensesTotal], // other : publicité (lot A1), extensible
+            'result' => ['gross' => $gross, 'net' => $net, 'tauxMarge' => $rate($gross, $cogs), 'tauxMarque' => $rate($gross, $effective), 'netRate' => $rate($net, $effective)],
+            'investment' => ['purchases' => $investmentPurchases, 'shipping' => $shipping, 'total' => $investmentPurchases + $shipping],
+        ];
+    }
+
+    /**
+     * Agrégats des lignes vendues entre deux instants UTC (mêmes règles que le résultat : ventes d'articles nettes des retours, hors taxes,
+     * coût moyen pondéré des lignes d'achat à la date de la vente, coupure facultative), éventuellement limitées à des articles.
+     *
+     * @param list<int>|null $productIds null = tous les articles
+     * @return array<string, mixed>
+     */
+    private function salesRow(string $fromUtc, string $toUtc, ?\DateTimeImmutable $costCutoff, bool $legacy, ?array $productIds = null): array
+    {
+        $conn = $this->emProvider->getEntityManager()->getConnection();
+        $params = ['from' => $fromUtc, 'to' => $toUtc];
         $attachedBeforeCutoff = '';
         if ($costCutoff !== null) {
             $attachedBeforeCutoff = $legacy ? ' AND (p.commande_attached_at IS NULL OR p.commande_attached_at <= :cutoff)' : ' AND l.attached_at <= :cutoff';
             $params['cutoff'] = $costCutoff->format('Y-m-d H:i:s');
+        }
+        $scope = '';
+        $types = [];
+        if ($productIds !== null) { // périmètre d'articles (rentabilité d'une campagne ciblée, lot A1)
+            $scope = $productIds === [] ? ' AND FALSE' : ' AND p.id IN (:pids)';
+            if ($productIds !== []) {
+                $params['pids'] = array_values(array_map('intval', $productIds));
+                $types['pids'] = \Doctrine\DBAL\ArrayParameterType::INTEGER;
+            }
         }
         $factor = 'CASE WHEN o.prices_include_tax AND COALESCE(o.sub_total, 0) <> 0 THEN (o.sub_total - COALESCE(o.total_tax, 0)) / o.sub_total ELSE 1 END';
         if ($legacy) {
@@ -82,8 +152,9 @@ class PeriodResultCalculator
             . ' LEFT JOIN product_variant pv ON pv.id = oi.product_variant_id'
             . ' LEFT JOIN product p ON p.id = pv.product_id'
             . $costJoin
-            . ' WHERE o.order_date >= :from AND o.order_date < :to AND o.order_type_id IN (1, 2) AND o.status_id NOT IN (1, 7)';
-        $row = $conn->fetchAssociative(
+            . ' WHERE o.order_date >= :from AND o.order_date < :to AND o.order_type_id IN (1, 2) AND o.status_id NOT IN (1, 7)'
+            . $scope;
+        return $conn->fetchAssociative(
             'SELECT COALESCE(SUM(net) FILTER (WHERE article AND t = 1), 0) AS sales_amount,'
             . ' COALESCE(SUM(net) FILTER (WHERE article AND t = 2), 0) AS returns_amount,'
             . ' COALESCE(SUM(qty) FILTER (WHERE article AND t = 1), 0) AS items_sold,'
@@ -102,52 +173,42 @@ class PeriodResultCalculator
             . ' COALESCE(SUM(signed) FILTER (WHERE article AND src = 2), 0) AS src_2,'
             . ' COALESCE(SUM(signed) FILTER (WHERE article AND src = 3), 0) AS src_3'
             . " FROM ($lines) l",
-            $params
+            $params,
+            $types
         ) ?: [];
-        $shippingBilled = (int) round((float) $conn->fetchOne(
-            'SELECT COALESCE(SUM(CASE WHEN o.order_type_id = 2 THEN -ABS(COALESCE(o.shipping_cost, 0)) ELSE COALESCE(o.shipping_cost, 0) END), 0) FROM "order" o'
-            . ' WHERE o.order_date >= :from AND o.order_date < :to AND o.order_type_id IN (1, 2) AND o.status_id NOT IN (1, 7)',
-            ['from' => $params['from'], 'to' => $params['to']]
-        ));
-        $totals = fn () => $this->purchases->periodTotals($period->getStartDateCollection(), $period->getEndDateCollection());
-        $purchases = $legacy ? $this->purchases->legacy($totals) : $totals();
+    }
 
+    /**
+     * Ventes d'articles et marge brute sur des jours du magasin [fromDay, toDay] (rentabilité perçue d'une campagne, lot A1) ; marge brute = ventes
+     * au coût connu − coût des articles vendus ; la part au coût inconnu est exclue et rendue à part.
+     *
+     * @param list<int>|null $productIds null = tous les articles
+     * @return array{revenue: int, grossMargin: int, orders: int, items: int, unknownCostRevenue: int}
+     */
+    public function salesMetrics(\DateTimeImmutable $fromDay, \DateTimeImmutable $toDay, ?array $productIds = null): array
+    {
+        [$from, $to] = $this->clock->range($fromDay->format('Y-m-d'), $toDay->format('Y-m-d'));
+        $row = $this->salesRow($from->format('Y-m-d H:i:s'), $to->format('Y-m-d H:i:s'), null, false, $productIds);
         $c = static fn (mixed $v): int => (int) round((float) $v);
         $revenue = $c($row['sales_amount'] ?? 0) - $c($row['returns_amount'] ?? 0);
-        $unknownRevenue = $c($row['unknown_revenue'] ?? 0);
-        $cogs = $c($row['cogs'] ?? 0);
-        $rentals = $c($row['rentals'] ?? 0);
-        $subscriptions = $c($row['subscriptions'] ?? 0);
-        $shipping = (int) ($purchases['shippingCost'] ?? 0);
-        $notes = (int) ($purchases['expenseCost'] ?? 0);
-        $expensesTotal = $shipping + $notes;
-        $effective = $revenue - $unknownRevenue; // ventes au coût connu : seule base des marges (décision « exclu des marges »)
-        $gross = $effective - $cogs;
-        $net = $gross - $expensesTotal;
-        $rate = static fn (int $num, int $den): ?float => $den > 0 ? round($num / $den * 100, 2) : null;
-        $investmentPurchases = (int) ($purchases['purchaseCost'] ?? 0);
+        $unknown = $c($row['unknown_revenue'] ?? 0);
 
-        return [
-            'period' => [
-                'id' => $period->getId(), 'name' => $period->getNomCollection(), 'periodKey' => $period->getPeriodKey(),
-                'start' => $period->getStartDateCollection()->format('Y-m-d'), 'end' => $period->getEndDateCollection()->format('Y-m-d'),
-                'status' => $this->calendar->status($period), 'closedAt' => $this->calendar->closedAt($period)?->format(\DateTimeInterface::ATOM),
-                'reopenedAt' => $period->getReopenedAt()?->format(\DateTimeInterface::ATOM),
-            ],
-            'currency' => $this->currency?->code() ?? TenantCurrencyProvider::DEFAULT,
-            'sales' => [
-                'revenue' => $revenue, 'orders' => (int) ($row['orders_sold'] ?? 0), 'items' => (int) ($row['items_sold'] ?? 0),
-                'returns' => ['amount' => $c($row['returns_amount'] ?? 0), 'orders' => (int) ($row['orders_returned'] ?? 0), 'items' => (int) ($row['items_returned'] ?? 0)],
-                'unknownCostRevenue' => $unknownRevenue,
-                'shippingBilled' => $shippingBilled,
-                'bySource' => ['ecommerce' => $c($row['src_1'] ?? 0), 'pos' => $c($row['src_2'] ?? 0), 'mobile_app' => $c($row['src_3'] ?? 0)],
-            ],
-            'otherRevenue' => ['rentals' => $rentals, 'subscriptions' => $subscriptions, 'total' => $rentals + $subscriptions],
-            'cogs' => ['amount' => $cogs, 'items' => (int) ($row['cogs_items'] ?? 0), 'unknownCostItems' => (int) ($row['unknown_items'] ?? 0),
-                'estimatedItems' => (int) ($row['estimated_items'] ?? 0), 'estimatedAmount' => $c($row['estimated_amount'] ?? 0)], // part estimée (reprise d'historique, lot P3), déjà comprise dans amount
-            'expenses' => ['shipping' => $shipping, 'notes' => $notes, 'other' => [], 'total' => $expensesTotal],
-            'result' => ['gross' => $gross, 'net' => $net, 'tauxMarge' => $rate($gross, $cogs), 'tauxMarque' => $rate($gross, $effective), 'netRate' => $rate($net, $effective)],
-            'investment' => ['purchases' => $investmentPurchases, 'shipping' => $shipping, 'total' => $investmentPurchases + $shipping],
-        ];
+        return ['revenue' => $revenue, 'grossMargin' => $revenue - $unknown - $c($row['cogs'] ?? 0), 'orders' => (int) ($row['orders_sold'] ?? 0), 'items' => (int) ($row['items_sold'] ?? 0), 'unknownCostRevenue' => $unknown];
+    }
+
+    /**
+     * Publicité de la période (lot A1) : campagnes classées par leur date de début, montant ramené dans la devise du site.
+     *
+     * @return array{amount: int, campaigns: list<array{id: int, name: string, amount: int}>}
+     */
+    private function advertising(Collections $period): array
+    {
+        $rows = $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
+            'SELECT id, name, ROUND(amount_cents * COALESCE(exchange_rate, 1)) AS amount FROM marketing_campaign WHERE start_date >= :from AND start_date <= :to ORDER BY start_date, id',
+            ['from' => $period->getStartDateCollection()->format('Y-m-d'), 'to' => $period->getEndDateCollection()->format('Y-m-d')]
+        );
+        $campaigns = array_map(fn ($r) => ['id' => (int) $r['id'], 'name' => (string) $r['name'], 'amount' => (int) $r['amount']], $rows);
+
+        return ['amount' => array_sum(array_column($campaigns, 'amount')), 'campaigns' => $campaigns];
     }
 }

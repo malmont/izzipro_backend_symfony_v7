@@ -327,7 +327,7 @@ class GestionDocumentService
             'confirmedAt' => $document->getConfirmedAt()?->format(\DateTimeInterface::ATOM), 'draftUpdatedAt' => $document->getDraftUpdatedAt()?->format(\DateTimeInterface::ATOM),
             'error' => $document->getErrorCode(),
             'files' => array_map(fn ($p) => ['n' => $p['n'], 'name' => $p['name'], 'mime' => $p['mime'], 'size' => $p['size'], 'pages' => $p['pages'] ?? 1], $files['pages'] ?? []),
-            'commandeId' => $document->getCommandeId(), 'noteDeFraisId' => $document->getNoteDeFraisId(), 'fraisDePortId' => $document->getFraisDePortId(),
+            'commandeId' => $document->getCommandeId(), 'noteDeFraisId' => $document->getNoteDeFraisId(), 'fraisDePortId' => $document->getFraisDePortId(), 'campaignId' => $document->getCampaignId(),
         ];
         if ($withDetails) {
             $out['extraction'] = $document->getExtraction();

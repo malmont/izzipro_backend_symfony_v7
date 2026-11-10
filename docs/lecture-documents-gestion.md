@@ -100,6 +100,9 @@ productId }], created: [{ lineN, productId, name }], shipping: FraisDePortOutput
 - `shipping` sans `transporteurId` : frais de port posé sur le transporteur « Sur facture fournisseur » (créé une fois).
 - Doublon : 409 `INVOICE_ALREADY_CONFIRMED { documentId, commandeId }`, levé par `force: true`.
 
+**Note confirmée en campagne de publicité** (lot A1) : `{ as: "campaign", name, channel, startDate, endDate, amount, currency?, exchangeRate?,
+productIds?, commandeIds?, notes? }` → 201 `{ campaign, document }` (facture d'une régie ; aucune note de frais ; `docs/publicite-gestion.md`).
+
 **Note** : `{ montant, date, classificationDate?, description, typeNoteDeFraisId, name? }` → 201 `{ noteDeFrais, document }` (note
 datée à `classificationDate ?? date`, même garde de période).
 

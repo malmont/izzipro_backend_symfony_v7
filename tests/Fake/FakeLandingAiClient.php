@@ -94,6 +94,21 @@ class FakeLandingAiClient implements LandingAiClientInterface
         ], JSON_PRESERVE_ZERO_FRACTION), false);
     }
 
+    public const MAX_UNION_PARAMETERS = 16;
+
+    /** Nombre de paramètres à union de types d'un schéma JSON (anyOf, ou type donné en tableau), comme les compte l'API */
+    public static function unionParameters(array $schema): int
+    {
+        $n = (isset($schema['anyOf']) || (isset($schema['type']) && is_array($schema['type']) && array_is_list($schema['type']))) ? 1 : 0;
+        foreach ($schema as $value) {
+            if (is_array($value)) {
+                $n += self::unionParameters($value);
+            }
+        }
+
+        return $n;
+    }
+
     public function createMessage(array $payload, float $timeoutSeconds): object
     {
         self::$requests[] = json_decode(json_encode($payload), true);
@@ -101,6 +116,12 @@ class FakeLandingAiClient implements LandingAiClientInterface
         // Comme l'API réelle (HTTP 400) : tool_choice forcé refusé par Sonnet 5.5, Opus 5.5, Fable 5.1 (incident du 10/11/2026)
         if (in_array($payload['tool_choice']['type'] ?? 'auto', ['any', 'tool'], true) && in_array($payload['model'] ?? '', \App\Services\LandingAiService\LandingAiPromptBuilder::MODELS_WITHOUT_FORCED_TOOL, true)) {
             throw new \RuntimeException(sprintf('FakeLandingAiClient : tool_choice: type "tool" and "any" are not supported for this model (%s) ; passer par LandingAiPromptBuilder::toolChoice()', $payload['model']));
+        }
+        // Comme l'API réelle (HTTP 400) : au plus 16 paramètres à union de types (anyOf ou type en tableau) par schéma de sortie structurée
+        // (incident du 11/11/2026, lecture de facture à 26 unions)
+        $schema = json_decode(json_encode($payload['output_config']['format']['schema'] ?? null), true);
+        if (is_array($schema) && ($unions = self::unionParameters($schema)) > self::MAX_UNION_PARAMETERS) {
+            throw new \RuntimeException(sprintf('FakeLandingAiClient : Schemas contains too many parameters with union types (%d parameters with type arrays or anyOf, limit: %d)', $unions, self::MAX_UNION_PARAMETERS));
         }
         $next = array_shift(self::$queue);
         if ($next === null) {

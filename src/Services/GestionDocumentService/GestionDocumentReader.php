@@ -193,7 +193,7 @@ class GestionDocumentReader
     private function system(string $type): string
     {
         return "Tu lis des documents comptables d'un commerce (photos ou PDF) et tu rends fidèlement ce qui est écrit, sans rien inventer ni calculer : "
-            . "quand une valeur est absente ou illisible, rends null. Le champ notes est lu tel quel par le commerçant : n'y mets que ce qu'il doit vérifier (valeur illisible, devise ou date supposée, ligne douteuse, total qui ne tombe pas juste), en phrases courtes de français simple, sans aucun nom de champ ni code (jamais amountsMode, HT, TTC ni JSON), et rien d'évident (nombre de pages, ce qui est bien lu). Exemple : « La devise n'est pas écrite sur le reçu : dollars canadiens supposés. » Liste vide si tout est clair. Montants en cents entiers (12,50 → 1250), tels qu'ils sont écrits "
+            . "quand une valeur est absente ou illisible, rends null (chaîne vide pour un texte). Le champ notes est lu tel quel par le commerçant : n'y mets que ce qu'il doit vérifier (valeur illisible, devise ou date supposée, ligne douteuse, total qui ne tombe pas juste), en phrases courtes de français simple, sans aucun nom de champ ni code (jamais amountsMode, HT, TTC ni JSON), et rien d'évident (nombre de pages, ce qui est bien lu), ni l'absence d'un renseignement que le document n'a pas à porter (date d'échéance, total des taxes quand chaque taxe est écrite, code article, numéro de suivi) : il n'y a rien à vérifier. Exemple : « La devise n'est pas écrite sur le reçu : dollars canadiens supposés. » Liste vide si tout est clair. Montants en cents entiers (12,50 → 1250), tels qu'ils sont écrits "
             . "(précise dans amountsMode si les lignes sont hors taxes « ht », taxes incluses « ttc », ou « unknown »). Dates au format AAAA-MM-JJ. "
             . "Ne fais aucune correspondance avec un catalogue : le serveur s'en charge. Aucune donnée personnelle au-delà du contenu du document. "
             . 'Type de document attendu : ' . match ($type) { GestionDocument::TYPE_FACTURE => 'facture ou bon de commande d\'un fournisseur (articles achetés par le commerce).', GestionDocument::TYPE_TRANSPORT => 'facture de transport ou de livraison (frais de port).', default => 'reçu ou facture de dépense (note de frais).' };
@@ -211,15 +211,19 @@ class GestionDocumentReader
     /**
      * Schéma JSON de la réponse par type (sortie structurée de l'API) : chaque objet porte additionalProperties: false, les valeurs facultatives
      * sont des anyOf [type, null], aucune contrainte numérique (non prises en charge) : les bornes sont appliquées au post-traitement.
+     * L'API refuse plus de 16 paramètres à union de types par schéma (HTTP 400, incident du 11/11/2026 sur la facture, 26 unions) : les textes
+     * sont des chaînes simples (vide = inconnu, que `short()`, `date()` et `currencyCode()` lisent comme absent), `taxable` un booléen
+     * (vrai par défaut), les frais de port un objet toujours présent (montant null = aucun). Seuls montants, taux, quantités et confiances
+     * restent nullables. Garde : `MAX_UNION_PARAMETERS` et le test `GestionDocumentsApiTest`.
      *
      * @return array<string, mixed>
      */
-    private function schema(string $type): array
+    public function schema(string $type): array
     {
         $nullable = fn (string $t): array => ['anyOf' => [['type' => $t], ['type' => 'null']]];
         $object = fn (array $properties, array $required = []): array => ['type' => 'object', 'properties' => $properties, 'required' => $required, 'additionalProperties' => false];
         $money = $nullable('integer');
-        $str = $nullable('string');
+        $str = ['type' => 'string'];
         $taxes = ['type' => 'array', 'items' => $object(['label' => $str, 'rate' => $nullable('number'), 'amount' => $money], ['label', 'rate', 'amount'])];
         $confidence = fn (array $keys): array => $object(array_fill_keys(array_merge(['overall'], $keys), $nullable('number')), array_merge(['overall'], $keys));
         $notes = ['type' => 'array', 'items' => ['type' => 'string']];
@@ -229,9 +233,9 @@ class GestionDocumentReader
             GestionDocument::TYPE_FACTURE => $object([
                 'supplierName' => $str, 'invoiceNumber' => $str, 'invoiceDate' => $str, 'dueDate' => $str, 'currency' => $str, 'amountsMode' => $amountsMode,
                 'lines' => ['type' => 'array', 'items' => $object([
-                    'baseLabel' => ['type' => 'string'], 'size' => $str, 'color' => $str, 'supplierCode' => $str, 'quantity' => $nullable('number'), 'unitCost' => $money, 'total' => $money, 'taxable' => $nullable('boolean'),
+                    'baseLabel' => ['type' => 'string'], 'size' => $str, 'color' => $str, 'supplierCode' => $str, 'quantity' => $nullable('number'), 'unitCost' => $money, 'total' => $money, 'taxable' => ['type' => 'boolean'],
                 ], ['baseLabel', 'size', 'color', 'supplierCode', 'quantity', 'unitCost', 'total', 'taxable'])],
-                'taxes' => $taxes, 'shipping' => ['anyOf' => [$object(['label' => $str, 'amount' => $money], ['label', 'amount']), ['type' => 'null']]],
+                'taxes' => $taxes, 'shipping' => $object(['label' => $str, 'amount' => $money], ['label', 'amount']),
                 'subtotal' => $money, 'taxTotal' => $money, 'total' => $money,
                 'confidence' => $confidence(['number', 'date', 'lines', 'totals']), 'notes' => $notes,
             ], ['supplierName', 'invoiceNumber', 'invoiceDate', 'dueDate', 'currency', 'amountsMode', 'lines', 'taxes', 'shipping', 'subtotal', 'taxTotal', 'total', 'confidence', 'notes']),
@@ -384,11 +388,13 @@ class GestionDocumentReader
     /** Taux de taxe global : montants du document, sinon taux lus, sinon taux par défaut */
     private function taxRate(string $mode, array $taxes, ?int $subtotal, ?int $taxTotal, ?int $total): float
     {
+        // Base des taxes = total − taxes quand les deux sont lus : elle inclut la livraison, que le sous-total écrit omet souvent
+        // (retour du 11/11/2026 : sous-total 378,00 avant 20,00 de livraison, taux 15,77 % au lieu de 14,975 %, écart faux de 3,15)
+        if ($mode !== 'unknown' && $taxTotal !== null && $total && $total > $taxTotal) {
+            return max(0.0, $taxTotal / ($total - $taxTotal));
+        }
         if ($mode === 'ht' && $taxTotal !== null && $subtotal) {
             return max(0.0, $taxTotal / $subtotal);
-        }
-        if ($mode === 'ttc' && $taxTotal !== null && $total && $total > $taxTotal) {
-            return max(0.0, $taxTotal / ($total - $taxTotal));
         }
         $rates = array_filter(array_column($taxes, 'rate'), fn ($r) => $r !== null && $r > 0);
         if ($rates !== []) {

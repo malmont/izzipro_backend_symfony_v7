@@ -115,6 +115,31 @@ class GestionDocumentsApiTest extends WebTestCase
         $this->assertSame(['image/png', $original], [$this->client->getResponse()->headers->get('Content-Type'), (int) filesize($this->client->getResponse()->getFile()->getPathname())], 'justificatif d\'origine intact');
     }
 
+    public function testInvoiceWithShippingAndSubtotalWrittenBeforeShippingHasNoFalseGap(): void
+    {
+        // Retour du 11/11/2026 : lignes 378,00 + livraison 20,00 ; sous-total écrit avant la livraison ; TPS 19,90 + TVQ 39,70 ; total 457,60
+        [$status, $doc] = $this->multipartBody('/api/gestion/documents', ['type' => 'facture'], ['files' => [$this->image('nord.png')]]);
+        $this->assertSame(202, $status);
+        FakeLandingAiClient::$queue[] = $this->toolResponse('lire_facture_fournisseur', [
+            'supplierName' => 'Atelier Nord Textile', 'invoiceNumber' => 'AN-1', 'invoiceDate' => '', 'dueDate' => '', 'currency' => '', 'amountsMode' => 'ht',
+            'lines' => [['baseLabel' => 'Parka', 'size' => '', 'color' => '', 'supplierCode' => '', 'quantity' => 1, 'unitCost' => 37800, 'total' => 37800, 'taxable' => true]],
+            'taxes' => [['label' => 'TPS', 'rate' => 5, 'amount' => 1990], ['label' => 'TVQ', 'rate' => 9.975, 'amount' => 3970]],
+            'shipping' => ['label' => 'Livraison', 'amount' => 2000], 'subtotal' => 37800, 'taxTotal' => null, 'total' => 45760,
+            'confidence' => ['overall' => 0.9, 'number' => 0.9, 'date' => null, 'lines' => 0.9, 'totals' => 0.9], 'notes' => [],
+        ]);
+        $this->runWorker((int) $doc['id']);
+        $request = FakeLandingAiClient::$requests[count(FakeLandingAiClient::$requests) - 1];
+        $this->assertLessThanOrEqual(FakeLandingAiClient::MAX_UNION_PARAMETERS, FakeLandingAiClient::unionParameters($request['output_config']['format']['schema']), 'limite de l\'API sur les unions');
+        $x = $this->get('/api/gestion/documents/' . $doc['id'])['extraction'];
+        $this->assertSame([37800, 2000, 0.14975, 45760, 0], [$x['computed']['linesTotal'], $x['computed']['shipping'], $x['computed']['taxRate'], $x['computed']['total'], $x['computed']['difference']], 'taux sur total − taxes : la livraison est dans la base');
+        $this->assertSame([null, null, null, null, 'Livraison'], [$x['invoice']['date'], $x['invoice']['dueDate'], $x['invoice']['currency'], $x['lines'][0]['size'], $x['shipping']['label']], 'chaîne vide = inconnu');
+        // Sans livraison, l'objet est toujours présent avec un montant null : aucun frais de port
+        [, $doc2] = $this->multipartBody('/api/gestion/documents', ['type' => 'facture'], ['files' => [$this->image('nord2.png')]]);
+        FakeLandingAiClient::$queue[] = $this->toolResponse('lire_facture_fournisseur', ['supplierName' => 'Atelier Nord Textile', 'amountsMode' => 'ht', 'lines' => [], 'taxes' => [], 'shipping' => ['label' => '', 'amount' => null], 'confidence' => ['overall' => 0.5], 'notes' => []]);
+        $this->runWorker((int) $doc2['id']);
+        $this->assertNull($this->get('/api/gestion/documents/' . $doc2['id'])['extraction']['shipping']);
+    }
+
     public function testInvoiceFlowFromUploadToConfirmation(): void
     {
         $tag = bin2hex(random_bytes(2));

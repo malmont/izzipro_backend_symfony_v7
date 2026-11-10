@@ -90,7 +90,7 @@ class PeriodeController extends AbstractController
             fn () => $useCase->execute($collection),
             $closed ? 3600 : 60,
             [...CacheTags::itemTags(CacheTags::COLLECTIONS, $collection->getId()), ...CacheTags::listTags(CacheTags::ORDERS), ...CacheTags::listTags(CacheTags::COMMANDES),
-                ...CacheTags::listTags(CacheTags::NOTES_DE_FRAIS), ...CacheTags::listTags(CacheTags::PRODUCTS)]
+                ...CacheTags::listTags(CacheTags::NOTES_DE_FRAIS), ...CacheTags::listTags(CacheTags::PRODUCTS), ...CacheTags::listTags(CacheTags::CAMPAGNES)]
         );
 
         return $this->json($payload);

@@ -68,6 +68,10 @@ class GestionDocument
     #[ORM\Column(name: 'frais_de_port_id', nullable: true)]
     private ?int $fraisDePortId = null;
 
+    /** Campagne de publicité créée en confirmant ce document (lot A1, 10/11/2026) */
+    #[ORM\Column(name: 'campaign_id', nullable: true)]
+    private ?int $campaignId = null;
+
     #[ORM\Column(name: 'created_by', length: 255, nullable: true)]
     private ?string $createdBy = null;
 
@@ -111,6 +115,8 @@ class GestionDocument
     public function setNoteDeFraisId(?int $id): static { $this->noteDeFraisId = $id; return $this; }
     public function getFraisDePortId(): ?int { return $this->fraisDePortId; }
     public function setFraisDePortId(?int $id): static { $this->fraisDePortId = $id; return $this; }
+    public function getCampaignId(): ?int { return $this->campaignId; }
+    public function setCampaignId(?int $id): static { $this->campaignId = $id; return $this; }
     public function getCreatedBy(): ?string { return $this->createdBy; }
     public function setCreatedBy(?string $by): static { $this->createdBy = $by; return $this; }
     public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }

@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (350)
+## Boutique et commun (356)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -367,6 +367,12 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/fournisseurs` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::getAllFournisseurs` |
 | POST | `/api/fournisseurs` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::createFournisseur` |
 | GET | `/api/frais/total` | ROLE_ADMIN | `Controller\StatistiqueDashboard\FraisController::getTotalFrais` |
+| GET | `/api/gestion/campagnes/{id}/rentabilite` | ROLE_ADMIN | `Controller\GestionController\MarketingCampaignController::profitability` |
+| DELETE | `/api/gestion/campagnes/{id}` | ROLE_ADMIN | `Controller\GestionController\MarketingCampaignController::delete` |
+| GET | `/api/gestion/campagnes/{id}` | ROLE_ADMIN | `Controller\GestionController\MarketingCampaignController::get` |
+| PATCH | `/api/gestion/campagnes/{id}` | ROLE_ADMIN | `Controller\GestionController\MarketingCampaignController::update` |
+| GET | `/api/gestion/campagnes` | ROLE_ADMIN | `Controller\GestionController\MarketingCampaignController::list` |
+| POST | `/api/gestion/campagnes` | ROLE_ADMIN | `Controller\GestionController\MarketingCampaignController::create` |
 | PATCH | `/api/gestion/documents/{id}/brouillon` | ROLE_ADMIN | `Controller\GestionController\GestionDocumentController::draft` |
 | POST | `/api/gestion/documents/{id}/confirmer` | ROLE_ADMIN | `Controller\GestionController\GestionDocumentController::confirm` |
 | GET | `/api/gestion/documents/{id}/fichier/{n}` | ROLE_ADMIN | `Controller\GestionController\GestionDocumentController::page` |

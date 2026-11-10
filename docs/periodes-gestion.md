@@ -104,7 +104,8 @@ n'est touchée. Contrat envoyé à l'application avant le code de chaque lot (`d
     inconnu** : la ligne est comptée dans `unknownCostItems` (articles vendus) et exclue de `cogs`, jamais valorisée au prix de
     vente. `items` = articles vendus au coût connu.
   - `expenses` : frais de port des commandes fournisseurs datées dans la période + notes de frais datées dans la période ;
-    `other` est un tableau vide, extensible (`{ kind, label, amount }`) pour la publicité et les frais fixes sans changer la forme.
+    `other` est extensible (`{ kind, label, amount }`) : depuis le lot A1, `{ kind: "advertising", label: "Publicité", amount, campaigns }`
+    (campagnes classées à leur date de début, `docs/publicite-gestion.md`) ; vide sinon ; les frais fixes viendront de la même façon.
   - `result` : les ventes au coût inconnu sont **exclues des marges** (décision du propriétaire) : `gross` = (revenue −
     unknownCostRevenue) − cogs ; `net` = gross − expenses.total ; `tauxMarge` = gross / cogs ; `tauxMarque` = gross / (revenue −
     unknownCostRevenue) ; `netRate` = net / (revenue − unknownCostRevenue) ; `null` quand le dénominateur est nul (l'application

@@ -227,6 +227,7 @@ final class CacheTags
     public const COLLECTIONS = 'collections';
     public const FOURNISSEURS = 'fournisseurs';
     public const NOTES_DE_FRAIS = 'notes_de_frais';
+    public const CAMPAGNES = 'campagnes'; // publicité de la gestion (lot A1, 10/11/2026)
 
     /**
      * Entité → composants qu'une écriture vide (liste du composant et fiche de l'entité).
@@ -301,7 +302,8 @@ final class CacheTags
         PaymentType::class => [self::ORDERS, self::PAYMENTS],
 
         Commande::class => [self::COMMANDES],
-        \App\Entity\CommandeLine::class => [self::COMMANDES, self::PRODUCTS], // lignes d'achat (lot L0, 10/11/2026) : commandes, produits (raccourcis, « à classer »)
+        \App\Entity\CommandeLine::class => [self::COMMANDES, self::PRODUCTS],
+        \App\Entity\MarketingCampaign::class => [self::CAMPAGNES], // campagnes de publicité (lot A1) : résultat de période // lignes d'achat (lot L0, 10/11/2026) : commandes, produits (raccourcis, « à classer »)
         Collections::class => [self::COLLECTIONS],
         Fournisseur::class => [self::FOURNISSEURS],
         TypeFournisseur::class => [self::FOURNISSEURS],

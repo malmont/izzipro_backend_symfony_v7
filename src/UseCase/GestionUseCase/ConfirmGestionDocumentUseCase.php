@@ -61,6 +61,7 @@ class ConfirmGestionDocumentUseCase
         private readonly \App\Services\CommandeService\CommandeLineService $lines,
         private readonly ?UploadMediaUseCase $upload = null,
         private readonly ?TenantCurrencyProvider $currency = null,
+        private readonly ?\App\Services\GestionService\MarketingCampaignService $campaigns = null, // lot A1 : facture de régie confirmée en campagne
     ) {
     }
 
@@ -355,6 +356,13 @@ class ConfirmGestionDocumentUseCase
     /** @param array<string, mixed> $body */
     private function note(EntityManagerInterface $em, GestionDocument $document, array $body, string $host): array
     {
+        if (($body['as'] ?? null) === 'campaign') { // facture d'une régie publicitaire : campagne au lieu d'une note de frais (lot A1)
+            $campaign = $this->campaigns->create($body, $document, null);
+            $document->setCampaignId($campaign->getId());
+            $em->flush();
+
+            return ['campaign' => $this->campaigns->toArray($campaign), 'confirmed' => ['as' => 'campaign', 'campaignId' => $campaign->getId()] + array_intersect_key($body, array_flip(['name', 'channel', 'startDate', 'endDate', 'amount', 'currency', 'exchangeRate']))];
+        }
         $input = new GestionInput($body);
         $montant = $input->cents('montant');
         $date = $input->date('date');
