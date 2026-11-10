@@ -67,6 +67,14 @@ framework:
                     dbindex: 1
                 retry_strategy:
                     max_retries: 0
+            # Application de gestion (lecture de documents par IA, lot L1 du 10/11/2026) : worker dédié à la gestion, demandé par le
+            # propriétaire pour ne rien mêler aux autres files ; jamais relancé, le gestionnaire note lui-même l'échec sur le document
+            gestion_ai:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%_gestion_ai'
+                options:
+                    dbindex: 1
+                retry_strategy:
+                    max_retries: 0
             failed:
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%_failed'
                 options:
@@ -80,6 +88,7 @@ framework:
             'App\Message\PrepareScrollVideoMessage': media
             'App\Message\SendTenantEmailMessage': email
             'App\MemoiresVivantes\Message\GenerateBookPdfMessage': pdf
+            'App\Message\ReadGestionDocumentMessage': gestion_ai # lecture de documents de la gestion (lot L1, 10/11/2026)
             'App\Message\EntitlementChangedMessage': email # courriels des droits d'usage (console de pilotage, lot 3, 04/11/2026)
 
 # Tests : Messenger en mémoire (tests/bootstrap.php) ; les courriels partent tout de suite (vers null://) pour que les

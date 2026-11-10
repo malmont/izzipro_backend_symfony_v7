@@ -11,6 +11,7 @@ class NoteDeFraisOutputDTO
     public string $currency;
     public string $date;
     public ?string $imageNdf;
+    public ?array $document; // justificatif lu par IA { id, type, invoiceNumber, invoiceDate } | null (lot L1, 10/11/2026)
 
     public function __construct(NoteDeFrais $noteDeFrais, string $host, string $currency = \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT)
     {
@@ -21,5 +22,6 @@ class NoteDeFraisOutputDTO
         $this->date = $noteDeFrais->getDate()->format('Y-m-d');
         $photo = $noteDeFrais->getTypeNoteDeFrais();
         $this->imageNdf = $photo ? $host . '/assets/images/' . $photo->getImage() : null;
+        $this->document = $noteDeFrais->getDocument()?->invoiceSummary();
     }
 }

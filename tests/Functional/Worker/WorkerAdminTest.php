@@ -76,7 +76,8 @@ class WorkerAdminTest extends WebTestCase
         $crawler = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin?routeName=admin_workers', [], [], $server);
         $this->assertSame(200, $this->client->getResponse()->getStatusCode());
         $this->assertSame('idle', $crawler->filter('[data-worker="async"]')->attr('data-state'));
-        $this->assertCount(6, $crawler->filter('[data-worker]'), 'chapitres, ESG, assistant IA, médiathèque, courriels, PDF des livres (03/11/2026)');
+        $this->assertCount(7, $crawler->filter('[data-worker]'), 'chapitres, ESG, assistant IA, médiathèque, courriels, PDF des livres (03/11/2026), lecture de documents de la gestion (10/11/2026)');
+        $this->assertCount(1, $crawler->filter('[data-worker="gestion_ai"]'), 'worker dédié à la gestion (lot L1)');
         $this->assertCount(1, $crawler->filter('[data-worker="pdf"]'), 'worker de mise en page PDF (lot 3)');
         $this->assertCount(1, $crawler->filter('[data-worker="media"]'));
         $this->assertCount(1, $crawler->filter('[data-worker="email"]'), 'worker des courriels (09/10/2026)');

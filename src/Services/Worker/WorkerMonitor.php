@@ -23,6 +23,7 @@ class WorkerMonitor
         'media' => ['label' => 'Médiathèque — vidéos pour le défilement', 'suffix' => '_media'],
         'email' => ['label' => 'Courriels — tous les sites', 'suffix' => '_email'],
         'pdf' => ['label' => 'Mémoires Vivantes — mise en page PDF', 'suffix' => '_pdf'],
+        'gestion_ai' => ['label' => 'Gestion — lecture de documents par IA', 'suffix' => '_gestion_ai'],
     ];
 
     /** Secondes entre deux battements d'un worker au repos */

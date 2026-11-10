@@ -35,6 +35,11 @@ class FraisDePort
     #[ORM\ManyToOne(inversedBy: 'fraisDePorts')]
     private ?Transporteur $transporteur = null;
 
+    /** Justificatif lu par IA (lot L1, 10/11/2026) ; effacé avec le document (ON DELETE SET NULL) */
+    #[ORM\ManyToOne(targetEntity: GestionDocument::class)]
+    #[ORM\JoinColumn(name: 'document_id', nullable: true, onDelete: 'SET NULL')]
+    private ?GestionDocument $document = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -115,6 +120,18 @@ class FraisDePort
     public function getTransporteur(): ?Transporteur
     {
         return $this->transporteur;
+    }
+
+    public function getDocument(): ?GestionDocument
+    {
+        return $this->document;
+    }
+
+    public function setDocument(?GestionDocument $document): static
+    {
+        $this->document = $document;
+
+        return $this;
     }
 
     public function setTransporteur(?Transporteur $transporteur): static

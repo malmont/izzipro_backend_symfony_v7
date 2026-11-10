@@ -41,6 +41,11 @@ class Commande
     #[ORM\ManyToOne(inversedBy: 'commandes')]
     private ?Fournisseur $fournisseur = null;
 
+    /** Justificatif lu par IA (lot L1, 10/11/2026) ; effacé avec le document (ON DELETE SET NULL) */
+    #[ORM\ManyToOne(targetEntity: GestionDocument::class)]
+    #[ORM\JoinColumn(name: 'document_id', nullable: true, onDelete: 'SET NULL')]
+    private ?GestionDocument $document = null;
+
     public const KIND_STANDARD = 'standard';
     public const KIND_REPRISE = 'reprise';
 
@@ -166,6 +171,18 @@ class Commande
     public function __toString(): string
     {
         return (string) $this->name;
+    }
+
+    public function getDocument(): ?GestionDocument
+    {
+        return $this->document;
+    }
+
+    public function setDocument(?GestionDocument $document): static
+    {
+        $this->document = $document;
+
+        return $this;
     }
 
     public function getKind(): string

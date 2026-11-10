@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (332)
+## Boutique et commun (343)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -360,6 +360,17 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/fournisseurs` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::getAllFournisseurs` |
 | POST | `/api/fournisseurs` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::createFournisseur` |
 | GET | `/api/frais/total` | ROLE_ADMIN | `Controller\StatistiqueDashboard\FraisController::getTotalFrais` |
+| PATCH | `/api/gestion/documents/{id}/brouillon` | ROLE_ADMIN | `Controller\GestionController\GestionDocumentController::draft` |
+| POST | `/api/gestion/documents/{id}/confirmer` | ROLE_ADMIN | `Controller\GestionController\GestionDocumentController::confirm` |
+| GET | `/api/gestion/documents/{id}/fichier/{n}` | ROLE_ADMIN | `Controller\GestionController\GestionDocumentController::page` |
+| DELETE | `/api/gestion/documents/{id}/lignes/{n}/photo` | ROLE_ADMIN | `Controller\GestionController\GestionDocumentController::linePhotoDelete` |
+| GET | `/api/gestion/documents/{id}/lignes/{n}/photo` | ROLE_ADMIN | `Controller\GestionController\GestionDocumentController::linePhotoGet` |
+| POST | `/api/gestion/documents/{id}/lignes/{n}/photo` | ROLE_ADMIN | `Controller\GestionController\GestionDocumentController::linePhoto` |
+| POST | `/api/gestion/documents/{id}/relire` | ROLE_ADMIN | `Controller\GestionController\GestionDocumentController::reread` |
+| DELETE | `/api/gestion/documents/{id}` | ROLE_ADMIN | `Controller\GestionController\GestionDocumentController::delete` |
+| GET | `/api/gestion/documents/{id}` | ROLE_ADMIN | `Controller\GestionController\GestionDocumentController::get` |
+| GET | `/api/gestion/documents` | ROLE_ADMIN | `Controller\GestionController\GestionDocumentController::list` |
+| POST | `/api/gestion/documents` | ROLE_ADMIN | `Controller\GestionController\GestionDocumentController::create` |
 | GET | `/api/gestion/exports/achats.csv` | ROLE_ADMIN | `Controller\GestionController\GestionExportController::purchases` |
 | POST | `/api/gestion/reprise/annuler` | ROLE_ADMIN | `Controller\GestionController\RepriseController::cancel` |
 | POST | `/api/gestion/reprise/appliquer` | ROLE_ADMIN | `Controller\GestionController\RepriseController::apply` |

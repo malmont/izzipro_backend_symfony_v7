@@ -122,6 +122,13 @@ services:
     # Courriels de tous les sites (09/10/2026) : la requête n'attend plus le serveur SMTP ; envois courts, nombreux
     command: ["sh", "docker/worker/consume.sh", "email", "--limit=500", "--time-limit=900", "--memory-limit=256M"]
 
+  messenger_worker_gestion:
+    <<: *messenger_worker
+    container_name: symfony_messenger_worker_gestion_v2
+    # Application de gestion : lecture de documents par IA (factures, notes de frais, transport ; lot L1 du 10/11/2026). Worker dédié
+    # à la gestion (demande du propriétaire) ; un PDF de 20 Mo encodé en base64 tient dans 384 Mo
+    command: ["sh", "docker/worker/consume.sh", "gestion_ai", "--limit=50", "--time-limit=900", "--memory-limit=384M"]
+
 volumes:
   db_data_v2:
   redis_data_v2:

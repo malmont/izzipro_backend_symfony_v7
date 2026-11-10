@@ -13,6 +13,7 @@ class FraisDePortOutputDTO
     public int $price; // cents (lot G1, 09/11/2026)
     public string $currency;
     public array $transporteur;
+    public ?array $document; // justificatif lu par IA { id, type, invoiceNumber, invoiceDate } | null (lot L1, 10/11/2026)
 
     public function __construct(FraisDePort $fraisDePort, string $host, string $currency = \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT)
     {
@@ -30,5 +31,6 @@ class FraisDePortOutputDTO
             'logo' => $fraisDePort->getTransporteur()->getLogo(),
             'contact' => $fraisDePort->getTransporteur()->getContact(),
         ];
+        $this->document = $fraisDePort->getDocument()?->invoiceSummary();
     }
 }

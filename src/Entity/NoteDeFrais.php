@@ -36,6 +36,11 @@ class NoteDeFrais
     #[ORM\ManyToOne(inversedBy: 'noteDeFrais')]
     private ?TypeNoteDeFrais $typeNoteDeFrais = null;
 
+    /** Justificatif lu par IA (lot L1, 10/11/2026) ; effacé avec le document (ON DELETE SET NULL) */
+    #[ORM\ManyToOne(targetEntity: GestionDocument::class)]
+    #[ORM\JoinColumn(name: 'document_id', nullable: true, onDelete: 'SET NULL')]
+    private ?GestionDocument $document = null;
+
     #[ORM\PrePersist] // Annotation pour générer le nom avant de persister
     public function generateName(): void
     {
@@ -105,6 +110,18 @@ class NoteDeFrais
     public function setDate(\DateTimeInterface $date): static
     {
         $this->date = $date;
+
+        return $this;
+    }
+
+    public function getDocument(): ?GestionDocument
+    {
+        return $this->document;
+    }
+
+    public function setDocument(?GestionDocument $document): static
+    {
+        $this->document = $document;
 
         return $this;
     }
