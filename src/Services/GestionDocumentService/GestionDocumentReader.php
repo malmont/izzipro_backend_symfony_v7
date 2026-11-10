@@ -8,7 +8,6 @@ use App\Repository\GestionDocumentRepository;
 use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
 use App\Services\LandingAiService\LandingAiClientInterface;
 use App\Services\LandingAiService\LandingAiException;
-use App\Services\LandingAiService\LandingAiPromptBuilder;
 use App\Services\LandingAiService\LandingAiQuotaService;
 use App\Services\LandingAiService\LandingAiUsageStats;
 use App\Services\TenantEntityManagerProvider;
@@ -16,7 +15,7 @@ use Psr\Log\LoggerInterface;
 
 /**
  * Lecture d'un document par IA (lot L1, 10/11/2026, `docs/lecture-documents-gestion.md`) dans le worker `gestion_ai` : les pages
- * (images ou PDF, lus nativement par Claude) partent au modèle avec un outil JSON strict par type ; le backend fait ensuite tout
+ * (images ou PDF, lus nativement par Claude) partent au modèle avec une sortie structurée (schéma JSON) par type ; le backend fait ensuite tout
  * ce qui est chiffre ou catalogue : montants ramenés hors taxes (`amountsMode`), totaux recalculés et écart, correspondances
  * (`GestionDocumentMatcher`), regroupement taille / couleur (`groupKey`), doublon de numéro de facture. Un crédit réservé à l'envoi
  * est facturé en succès et libéré en échec (`failed` + `errorCode`, sans crédit retenu).
@@ -27,6 +26,9 @@ class GestionDocumentReader
     private const TIMEOUT = 180.0;
     private const MAX_IMAGE_EDGE = 2400; // pixels, côté le plus long d'une page envoyée au modèle
     private const MAX_IMAGE_SEND_BYTES = 1_500_000;
+    /** Remarques ajoutées par le serveur, lues telles quelles par le commerçant (français simple, aucun code) */
+    public const NOTE_AMOUNTS_UNKNOWN = 'Le document ne dit pas si les prix sont avec ou sans taxes : ils sont pris sans taxes, à vérifier.';
+    public const NOTE_AMOUNT_UNKNOWN = 'Le document ne dit pas si le montant est avec ou sans taxes : il est pris sans taxes, à vérifier.';
     public const DEFAULT_TAX_RATE = 0.14975; // TPS + TVQ, quand ni le document ni le site ne donnent de taux
 
     public function __construct(
@@ -94,19 +96,22 @@ class GestionDocumentReader
         }
         $language = $document->getLocale() === 'en' ? 'anglais' : 'français';
         $content[] = ['type' => 'text', 'text' => $this->instruction($document->getType(), $language)];
-        [$toolName, $schema] = $this->tool($document->getType());
-        $content[] = ['type' => 'text', 'text' => sprintf('Réponds uniquement par l\'outil %s.', $toolName)]; // tool_choice forcé refusé par Sonnet 5.5 (10/11/2026)
+        // Sortie structurée (output_config.format, schéma JSON) : depuis Sonnet 5.5 l'API refuse l'outil imposé (tool_choice « tool » : HTTP 400,
+        // constaté en production le 10/11/2026) ; la réponse est un bloc texte JSON conforme au schéma
         $response = $this->client->createMessage([
-            'model' => self::MODEL, 'max_tokens' => 6000, 'system' => $this->system($document->getType()),
+            'model' => self::MODEL, 'max_tokens' => 8000, 'system' => $this->system($document->getType()),
             'messages' => [['role' => 'user', 'content' => $content]],
-            'tools' => [['name' => $toolName, 'description' => 'Contenu lu sur le document', 'input_schema' => $schema]],
-            'tool_choice' => LandingAiPromptBuilder::toolChoice(self::MODEL, $toolName),
+            'output_config' => ['format' => ['type' => 'json_schema', 'schema' => $this->schema($document->getType())]],
         ], self::TIMEOUT);
         $stats->attempts++;
         $stats->add($response->usage ?? null);
+        $stop = (string) ($response->stop_reason ?? '');
+        if ($stop === 'refusal' || $stop === 'max_tokens') {
+            throw new LandingAiException(422, 'Document illisible', 'Lecture interrompue (' . $stop . ').');
+        }
         foreach (is_array($response->content ?? null) ? $response->content : [] as $block) {
-            if (($block->type ?? null) === 'tool_use' && ($block->name ?? null) === $toolName) {
-                $input = json_decode(json_encode($block->input ?? new \stdClass()), true);
+            if (($block->type ?? null) === 'text') {
+                $input = json_decode((string) ($block->text ?? ''), true);
                 if (is_array($input) && $input !== []) {
                     return $input;
                 }
@@ -188,7 +193,7 @@ class GestionDocumentReader
     private function system(string $type): string
     {
         return "Tu lis des documents comptables d'un commerce (photos ou PDF) et tu rends fidèlement ce qui est écrit, sans rien inventer ni calculer : "
-            . "quand une valeur est absente ou illisible, rends null et signale-le dans notes. Montants en cents entiers (12,50 → 1250), tels qu'ils sont écrits "
+            . "quand une valeur est absente ou illisible, rends null. Le champ notes est lu tel quel par le commerçant : n'y mets que ce qu'il doit vérifier (valeur illisible, devise ou date supposée, ligne douteuse, total qui ne tombe pas juste), en phrases courtes de français simple, sans aucun nom de champ ni code (jamais amountsMode, HT, TTC ni JSON), et rien d'évident (nombre de pages, ce qui est bien lu). Exemple : « La devise n'est pas écrite sur le reçu : dollars canadiens supposés. » Liste vide si tout est clair. Montants en cents entiers (12,50 → 1250), tels qu'ils sont écrits "
             . "(précise dans amountsMode si les lignes sont hors taxes « ht », taxes incluses « ttc », ou « unknown »). Dates au format AAAA-MM-JJ. "
             . "Ne fais aucune correspondance avec un catalogue : le serveur s'en charge. Aucune donnée personnelle au-delà du contenu du document. "
             . 'Type de document attendu : ' . match ($type) { GestionDocument::TYPE_FACTURE => 'facture ou bon de commande d\'un fournisseur (articles achetés par le commerce).', GestionDocument::TYPE_TRANSPORT => 'facture de transport ou de livraison (frais de port).', default => 'reçu ou facture de dépense (note de frais).' };
@@ -203,38 +208,42 @@ class GestionDocumentReader
         };
     }
 
-    /** @return array{0: string, 1: array<string, mixed>} nom de l'outil et schéma JSON */
-    private function tool(string $type): array
+    /**
+     * Schéma JSON de la réponse par type (sortie structurée de l'API) : chaque objet porte additionalProperties: false, les valeurs facultatives
+     * sont des anyOf [type, null], aucune contrainte numérique (non prises en charge) : les bornes sont appliquées au post-traitement.
+     *
+     * @return array<string, mixed>
+     */
+    private function schema(string $type): array
     {
-        $money = ['type' => ['integer', 'null']];
-        $str = ['type' => ['string', 'null']];
-        $taxes = ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['label' => $str, 'rate' => ['type' => ['number', 'null']], 'amount' => $money]]];
-        $confidence = ['type' => 'number', 'minimum' => 0, 'maximum' => 1];
+        $nullable = fn (string $t): array => ['anyOf' => [['type' => $t], ['type' => 'null']]];
+        $object = fn (array $properties, array $required = []): array => ['type' => 'object', 'properties' => $properties, 'required' => $required, 'additionalProperties' => false];
+        $money = $nullable('integer');
+        $str = $nullable('string');
+        $taxes = ['type' => 'array', 'items' => $object(['label' => $str, 'rate' => $nullable('number'), 'amount' => $money], ['label', 'rate', 'amount'])];
+        $confidence = fn (array $keys): array => $object(array_fill_keys(array_merge(['overall'], $keys), $nullable('number')), array_merge(['overall'], $keys));
         $notes = ['type' => 'array', 'items' => ['type' => 'string']];
         $amountsMode = ['type' => 'string', 'enum' => ['ht', 'ttc', 'unknown']];
 
         return match ($type) {
-            GestionDocument::TYPE_FACTURE => ['lire_facture_fournisseur', ['type' => 'object', 'properties' => [
+            GestionDocument::TYPE_FACTURE => $object([
                 'supplierName' => $str, 'invoiceNumber' => $str, 'invoiceDate' => $str, 'dueDate' => $str, 'currency' => $str, 'amountsMode' => $amountsMode,
-                'lines' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => [
-                    'baseLabel' => ['type' => 'string'], 'size' => $str, 'color' => $str, 'supplierCode' => $str, 'quantity' => ['type' => ['number', 'null']], 'unitCost' => $money, 'total' => $money, 'taxable' => ['type' => ['boolean', 'null']],
-                ], 'required' => ['baseLabel']]],
-                'taxes' => $taxes, 'shipping' => ['type' => ['object', 'null'], 'properties' => ['label' => $str, 'amount' => $money]],
+                'lines' => ['type' => 'array', 'items' => $object([
+                    'baseLabel' => ['type' => 'string'], 'size' => $str, 'color' => $str, 'supplierCode' => $str, 'quantity' => $nullable('number'), 'unitCost' => $money, 'total' => $money, 'taxable' => $nullable('boolean'),
+                ], ['baseLabel', 'size', 'color', 'supplierCode', 'quantity', 'unitCost', 'total', 'taxable'])],
+                'taxes' => $taxes, 'shipping' => ['anyOf' => [$object(['label' => $str, 'amount' => $money], ['label', 'amount']), ['type' => 'null']]],
                 'subtotal' => $money, 'taxTotal' => $money, 'total' => $money,
-                'confidence' => ['type' => 'object', 'properties' => ['overall' => $confidence, 'number' => $confidence, 'date' => $confidence, 'lines' => $confidence, 'totals' => $confidence]],
-                'notes' => $notes,
-            ], 'required' => ['lines', 'confidence']]],
-            GestionDocument::TYPE_TRANSPORT => ['lire_facture_transport', ['type' => 'object', 'properties' => [
+                'confidence' => $confidence(['number', 'date', 'lines', 'totals']), 'notes' => $notes,
+            ], ['supplierName', 'invoiceNumber', 'invoiceDate', 'dueDate', 'currency', 'amountsMode', 'lines', 'taxes', 'shipping', 'subtotal', 'taxTotal', 'total', 'confidence', 'notes']),
+            GestionDocument::TYPE_TRANSPORT => $object([
                 'carrierName' => $str, 'invoiceNumber' => $str, 'invoiceDate' => $str, 'currency' => $str, 'trackingNumber' => $str, 'amountsMode' => $amountsMode,
                 'amount' => $money, 'taxes' => $taxes, 'subtotal' => $money, 'taxTotal' => $money, 'total' => $money,
-                'confidence' => ['type' => 'object', 'properties' => ['overall' => $confidence, 'number' => $confidence, 'date' => $confidence, 'amount' => $confidence]],
-                'notes' => $notes,
-            ], 'required' => ['confidence']]],
-            default => ['lire_note_de_frais', ['type' => 'object', 'properties' => [
+                'confidence' => $confidence(['number', 'date', 'amount']), 'notes' => $notes,
+            ], ['carrierName', 'invoiceNumber', 'invoiceDate', 'currency', 'trackingNumber', 'amountsMode', 'amount', 'taxes', 'subtotal', 'taxTotal', 'total', 'confidence', 'notes']),
+            default => $object([
                 'merchant' => $str, 'date' => $str, 'currency' => $str, 'amount' => $money, 'taxes' => $taxes, 'kind' => $str, 'description' => $str,
-                'confidence' => ['type' => 'object', 'properties' => ['overall' => $confidence, 'amount' => $confidence, 'date' => $confidence]],
-                'notes' => $notes,
-            ], 'required' => ['confidence']]],
+                'confidence' => $confidence(['amount', 'date']), 'notes' => $notes,
+            ], ['merchant', 'date', 'currency', 'amount', 'taxes', 'kind', 'description', 'confidence', 'notes']),
         };
     }
 
@@ -252,7 +261,7 @@ class GestionDocumentReader
         $totalRead = $this->cents($raw['total'] ?? null);
         $taxRate = $this->taxRate($mode, $taxes, $subtotalRead, $taxTotalRead, $totalRead);
         if ($mode === 'unknown') {
-            $notes[] = 'Montants supposés hors taxes : à vérifier.';
+            $notes[] = self::NOTE_AMOUNTS_UNKNOWN;
         }
         $lines = [];
         $linesTotal = 0;
@@ -329,7 +338,7 @@ class GestionDocumentReader
         $amountRead = $this->cents($raw['amount'] ?? null) ?? $subtotalRead;
         $amount = $amountRead !== null ? (int) round($amountRead * (($mode === 'ttc' && $taxRate > 0) ? 1 / (1 + $taxRate) : 1)) : null;
         if ($mode === 'unknown') {
-            $notes[] = 'Montant supposé hors taxes : à vérifier.';
+            $notes[] = self::NOTE_AMOUNT_UNKNOWN;
         }
         $carrier = $this->matcher->party('transporteur', $this->short($raw['carrierName'] ?? null, 255));
         $number = $this->short($raw['invoiceNumber'] ?? null, 80);

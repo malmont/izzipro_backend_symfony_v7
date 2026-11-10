@@ -12,7 +12,8 @@ entité `GestionDocument` (table `gestion_document`). Test : `tests/Functional/G
 Le gérant photographie (ou envoie en PDF) une facture fournisseur, un reçu de dépense ou une facture de transport. Le serveur
 réserve un crédit IA, stocke les fichiers en privé et confie la lecture au **worker dédié `gestion_ai`** (conteneur
 `symfony_messenger_worker_gestion_v2`, file `messages_gestion_ai`, jamais relancée ; demande du propriétaire : rien de mêlé aux
-autres files). Le modèle (`claude-sonnet-5-5`, images et PDF lus nativement, outil JSON strict par type) rend ce qui est écrit ;
+autres files). Le modèle (`claude-sonnet-5-5`, images et PDF lus nativement, **sortie structurée** `output_config.format` avec un schéma
+JSON par type : depuis Sonnet 5.5 l'API refuse l'outil imposé, constaté en production le 10/11/2026) rend ce qui est écrit ;
 **le backend fait tout ce qui est chiffre ou catalogue** : montants ramenés hors taxes, totaux recalculés et écart, correspondances
 avec les articles, fournisseurs, transporteurs et types de note (SQL + similarité, jamais l'IA), regroupement taille / couleur,
 doublon de numéro. Rien n'est créé avant la **confirmation** par le gérant, qui envoie les données vérifiées. Le document reste
@@ -54,7 +55,7 @@ Les erreurs de la confirmation suivent `GestionValidationExceptionListener` : 42
 - `unitCost`, `total`, `computed.linesTotal` sont **hors taxes**, en cents, dans la devise du document ; `unitCostRead` / `totalRead`
   gardent les montants lus. `amountsMode = "ttc"` : chaque ligne taxable est ramenée en HT au taux global du document
   (`taxes / (total − taxes)`, sinon somme des taux lus, sinon 14,975 %) ; `"unknown"` : montants traités comme HT, note
-  « Montants supposés hors taxes : à vérifier », `confidence.totals` plafonnée à 0,5. Le gérant corrige `unitCost` ligne par ligne
+  « Le document ne dit pas si les prix sont avec ou sans taxes : ils sont pris sans taxes, à vérifier », `confidence.totals` plafonnée à 0,5. Le gérant corrige `unitCost` ligne par ligne
   dans la confirmation : c'est la valeur confirmée qui devient `commande_cost_cents`, donc le coût des articles vendus (P2).
 - `quantity` absente → 1 ; `unitCost` absent mais `total` présent → déduit.
 - `groupKey` = clé normalisée de `baseLabel` (sans taille ni couleur) ; `groupSize > 1` : l'application propose un seul article
@@ -75,7 +76,8 @@ confidence: { overall, number, date, amount }, notes, duplicate }`.
 
 > **En sommeil jusqu'au lot L0** (lignes d'achat, décision du propriétaire du 10/11/2026) : pour `type = facture`, la confirmation rend
 > 409 `INVOICE_CONFIRMATION_PENDING` et ne crée rien ; lecture, brouillon et photos restent disponibles. Elle sera rebranchée sur
-> `commande_line`, car sur `product.commande_id` tout réassort finirait en `PRODUCT_ALREADY_ATTACHED`. Notes de frais et transport : actifs.
+> `commande_line` (lignes d'achat, livrées au lot L0 : `docs/lignes-achat-gestion.md`), car sur `product.commande_id` tout réassort finissait
+> en `PRODUCT_ALREADY_ATTACHED`. Notes de frais et transport : actifs.
 
 **Facture** : `{ supplier: { id } | { create: { name, typeFournisseurId?, currency? } }, invoice: { number?, date, exchangeRate? },
 classificationDate?, name?, lines: [{ n?, label?, quantity, unitCost, productId? | create?: { name, coefficient?, groupKey? }, size?,
@@ -116,6 +118,8 @@ commande ; 404 `COMMANDE_NOT_FOUND`, `TRANSPORTEUR_NOT_FOUND`) ; doublon par tra
   de la plateforme n'y est pas soumis. La confirmation est l'acte du gérant : pas de `ai.full`.
 - Lecture perdue (worker arrêté, message disparu) : une lecture dont la réservation est échue passe en `failed` (`AI_UNAVAILABLE`, crédit libéré)
   à la lecture suivante de l'état, de la liste ou au prochain envoi ; le site n'est plus bloqué.
+- `notes` (toutes les extractions) est affiché tel quel au commerçant : le modèle n'y met que ce qu'il faut vérifier, en français simple, sans
+  nom de champ ni code, liste vide si tout est clair (retour de l'application du 10/11/2026).
 - Envoi au modèle : les photos JPEG et PNG de plus de 1,5 Mo ou 2400 px sont réduites à 2400 px en JPEG (orientation EXIF appliquée) pour tenir
   dans la taille de requête de l'API ; le fichier d'origine reste le justificatif. WebP : envoyé tel quel (GD du serveur sans WebP).
 - Limite connue : le nombre de pages d'un PDF est compté sur sa structure ; un PDF à flux d'objets compressés peut échapper à `PDF_TOO_MANY_PAGES`
