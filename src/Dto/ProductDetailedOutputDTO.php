@@ -30,6 +30,9 @@ class ProductDetailedOutputDTO
     public ?float $specialPrice = null;
     public ?string $specialPriceFrom = null;
     public ?string $specialPriceTo = null;
+    /** Mêmes instants en ISO 8601 UTC (+00:00), sans ambiguïté de fuseau (lot P5b, 11/11/2026, additif) */
+    public ?string $specialPriceFromIso = null;
+    public ?string $specialPriceToIso = null;
     public ?string $image;
     public array $pictures = [];
     public int $quantity;
@@ -86,6 +89,8 @@ class ProductDetailedOutputDTO
         $this->specialPrice = $product->getSpecialPrice();
         $this->specialPriceFrom = $product->getSpecialPriceFrom()?->format('Y-m-d H:i:s');
         $this->specialPriceTo = $product->getSpecialPriceTo()?->format('Y-m-d H:i:s');
+        $this->specialPriceFromIso = $product->getSpecialPriceFrom() === null ? null : (new \DateTimeImmutable($product->getSpecialPriceFrom()->format('Y-m-d H:i:s'), new \DateTimeZone('UTC')))->format(\DateTimeInterface::ATOM);
+        $this->specialPriceToIso = $product->getSpecialPriceTo() === null ? null : (new \DateTimeImmutable($product->getSpecialPriceTo()->format('Y-m-d H:i:s'), new \DateTimeZone('UTC')))->format(\DateTimeInterface::ATOM);
         
         // Nom de fichier téléversé, URL, ou clé de la médiathèque (/media/secure/…) posée depuis l'éditeur
         $this->image = MediaUrlResolver::joinStored($product->getImage(), rtrim($host, '/') . '/assets/uploads/products');

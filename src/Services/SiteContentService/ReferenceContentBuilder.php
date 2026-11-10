@@ -53,6 +53,18 @@ final class ReferenceContentBuilder
     }
 
     /** Fiches simples (avec traductions) ; $extra : colonnes ajoutées (fiche, rang) */
+    /** Fuseau du magasin du site de référence (réglage de caisse), sinon America/Toronto (site de référence canadien) */
+    private function storeTimezone(): \DateTimeZone
+    {
+        try {
+            $tz = $this->db->fetchOne('SELECT pos_timezone FROM entreprise ORDER BY id LIMIT 1');
+
+            return new \DateTimeZone(is_string($tz) && $tz !== '' ? $tz : 'America/Toronto');
+        } catch (\Throwable) {
+            return new \DateTimeZone('America/Toronto');
+        }
+    }
+
     private function each(string $resource, array $items, ?callable $extra = null): void
     {
         $i = 0;
@@ -135,8 +147,11 @@ final class ReferenceContentBuilder
             ];
             if (!empty($product['promotion'])) {
                 // Promotion datée : du premier jour du mois de la construction à un an plus tard
-                $from = $now->modify('first day of this month')->setTime(0, 0);
-                $columns += ['special_price_from' => $from->format('Y-m-d H:i:s'), 'special_price_to' => $from->modify('+1 year -1 minute')->format('Y-m-d H:i:s')];
+                // bornes des jours du magasin stockées en UTC, comme les promotions de la gestion (lot P5b, 11/11/2026)
+                $tz = $this->storeTimezone();
+                $from = (new \DateTimeImmutable($now->modify('first day of this month')->format('Y-m-d') . ' 00:00:00', $tz));
+                $utc = new \DateTimeZone('UTC');
+                $columns += ['special_price_from' => $from->setTimezone($utc)->format('Y-m-d H:i:s'), 'special_price_to' => $from->modify('+1 year -1 second')->setTimezone($utc)->format('Y-m-d H:i:s')];
             }
             $id = $this->translated('products', $product, $columns);
             $this->keys['products'][$key] = $id;

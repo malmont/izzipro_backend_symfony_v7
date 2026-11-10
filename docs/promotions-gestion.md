@@ -21,8 +21,7 @@ applicatif). Migration `Version20261213100000`, script `scripts/migrate_all_v2_g
   (règle hors ligne partagée) et les fronts : décision du propriétaire à part.
 - **Fuseau** : les instants sont comparés en UTC (PHP du serveur en UTC). P5 écrit **le début (00:00) et la fin (23:59:59) des jours du
   magasin convertis en UTC** (Toronto en hiver : début stocké 05:00, fin 04:59:59 le lendemain). EasyAdmin affiche donc ces bornes décalées
-  (par exemple « 05:00 ») ; les promotions saisies à la main dans EasyAdmin ou par `PATCH` avec un décalage horaire sont aujourd'hui décalées de
-  quelques heures : correction prévue dans un lot séparé (décision du propriétaire du 10/11/2026).
+  (par exemple « 05:00 ») ; depuis le lot P5b (§ 7), toutes les saisies suivent la même règle.
 
 ## 2. Aperçu (aucune écriture)
 
@@ -78,3 +77,26 @@ juste autour d'une borne ; le panier est toujours juste.
   remarque `PROMOTIONS_INCLUDED { productIds }`.
 - Guide (`docs/guide-ia-gestion.md`) : R2 SLOW_STOCK et R9 END_CLEARANCE ne proposent pas de promotion pour un article qui en a déjà une (en cours
   ou à venir) ; R1 FAST_SELLER ne propose pas de hausse pendant une promotion.
+
+## 7. Fuseau des dates de promotion (lot P5b, 11/11/2026)
+
+Décision du propriétaire du 10/11/2026 : **jours du magasin stockés en UTC**, comme P5. Avant, les saisies à la main tombaient 4 à 5 h trop tôt
+(stockées à l'heure saisie, relues en UTC). Toutes les lectures comparaient déjà des instants UTC et restaient justes entre elles.
+
+- **EasyAdmin** (`ProductCrudController`) : « Promotion du / au (heure du magasin) », `DateTimeField::setTimezone(fuseau du magasin)` ; EasyAdmin
+  convertit entre l'heure affichée (magasin) et le stockage (UTC).
+- **PATCH `/api/products/{id}`** (`LandingContentEditor::dateValue`, seuls champs de type date de l'éditeur) : avec décalage (`…-05:00`, `…Z`) =
+  même instant, converti en UTC ; heure sans décalage (`2026-11-12T23:30:00`) = heure du magasin ; date seule (`2026-11-12`) = jour du magasin,
+  00:00 pour `specialPriceFrom`, 23:59:59 pour `specialPriceTo`.
+- **Semis** : `BoutiqueDemoSeeder` (heures du jeu d'exemple en heure du magasin) et `ReferenceContentBuilder` (site de référence : du premier jour du
+  mois au même jour un an plus tard − 1 s, en heure du magasin du site de référence, sinon America/Toronto) écrivent de l'UTC.
+- **Sorties** : format inchangé (`Y-m-d H:i:s` UTC dans `ProductOutputCategoryDto`, `ProductDetailedOutputDTO`) + `specialPriceFromIso`,
+  `specialPriceToIso` (ISO 8601 +00:00, additifs) ; `ProductCommerceDto` et le pack hors ligne étaient déjà en ISO.
+- **P4** : l'alerte SPECIAL_PRICE_ACTIVE compare des instants (avant : la date seule).
+- **Promotions déjà saisies** : `app:gestion:promotions:fuseau --tenant= --ids= [--apply]` relit les dates comme l'heure du magasin voulue et les
+  remet en UTC (hiver + 5 h, été + 4 h à Toronto), simulation par défaut, anciennes valeurs dans `gestion_promotion_tz_fix` (`Version20261214100000`,
+  `scripts/migrate_all_v2_gestion_promotions_fuseau.sh`), rejeu sans effet, SQL direct avec invalidation du cache de l'article (un article
+  d'exemple le reste). Appliquée le 11/11/2026 aux 3 seules promotions existantes (demo n° 3 et 6, gmasuite n° 2), accord du chef de projet.
+- Test : `tests/Functional/Gestion/PromotionTimezoneTest.php` (formats du PATCH, même instant pour le prix effectif, la boutique, le pack et la
+  règle pos-offline-v1, champ EasyAdmin, commande).
+

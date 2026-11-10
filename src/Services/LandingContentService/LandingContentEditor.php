@@ -29,7 +29,8 @@ final class LandingContentEditor
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
-        private readonly ?LandingContentHooks $hooks = null
+        private readonly ?LandingContentHooks $hooks = null,
+        private readonly ?\App\Services\CaisseService\StoreClock $clock = null, // dates de promotion en jours du magasin (lot P5b, 11/11/2026)
     ) {
     }
 
@@ -141,7 +142,7 @@ final class LandingContentEditor
                 LandingContentSpec::COLOR => [$value, preg_match(self::COLOR, $value) ? null : 'couleur attendue (#rrggbb, rgb(…), rgba(…) ou transparent)'],
                 LandingContentSpec::IMAGE => $this->media($value, SharedMedia::TYPE_IMAGE),
                 LandingContentSpec::VIDEO => $this->media($value, SharedMedia::TYPE_VIDEO),
-                LandingContentSpec::DATE => self::date($value),
+                LandingContentSpec::DATE => $this->dateValue((string) $name, $value),
             };
             if ($error === null && $kind !== LandingContentSpec::DATE && mb_strlen((string) $stored) > $max) {
                 $error = sprintf('%d caractères au plus', $max);
@@ -315,6 +316,32 @@ final class LandingContentEditor
     }
 
     /** @return array{0: ?string, 1: ?string} date ISO 8601 normalisée, erreur */
+    /**
+     * Date d'une promotion (lot P5b, 11/11/2026, `docs/promotions-gestion.md` § 1) : rendue en ISO 8601 UTC, car les instants sont stockés sans
+     * fuseau et comparés en UTC. Avec décalage : même instant, converti. Heure sans décalage : heure du magasin. Date seule : jour du magasin,
+     * début (00:00) pour une date de début, fin (23:59:59) pour une date de fin (champ qui finit par « To »).
+     *
+     * @return array{0: ?string, 1: ?string}
+     */
+    private function dateValue(string $name, string $value): array
+    {
+        $tz = $this->clock?->timezone() ?? new \DateTimeZone('UTC');
+        try {
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+                $day = new \DateTimeImmutable($value . ' 00:00:00', $tz);
+                $at = str_ends_with($name, 'To') ? $day->modify('+1 day')->modify('-1 second') : $day;
+            } elseif (preg_match('/(Z|[+-]\d{2}:?\d{2})$/i', $value)) {
+                $at = new \DateTimeImmutable($value);
+            } else {
+                $at = new \DateTimeImmutable($value, $tz);
+            }
+        } catch (\Exception) {
+            return [null, 'date ISO 8601 attendue (ex. 2026-10-31T23:59:00-04:00 ; sans décalage : heure du magasin ; date seule : jour du magasin)'];
+        }
+
+        return [$at->setTimezone(new \DateTimeZone('UTC'))->format(\DateTimeInterface::ATOM), null];
+    }
+
     private static function date(string $value): array
     {
         try {

@@ -382,10 +382,11 @@ class GestionPriceService
     {
         $cost = $lineCost ?? ($p['cost'] === null ? null : (float) $p['cost']);
         $saleItem = $p['product_type'] === 'standard' && !in_array($p['rental'], [true, 't', 1, '1'], true);
-        $todayKey = $today->format('Y-m-d');
+        // promotion active maintenant, en instants UTC comme Product::getEffectivePrice (lot P5b, 11/11/2026)
+        $now = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s');
         $special = $p['special_price'] !== null && (float) $p['special_price'] > 0
-            && ($p['special_price_from'] === null || substr((string) $p['special_price_from'], 0, 10) <= $todayKey)
-            && ($p['special_price_to'] === null || substr((string) $p['special_price_to'], 0, 10) >= $todayKey);
+            && ($p['special_price_from'] === null || substr((string) $p['special_price_from'], 0, 19) <= $now)
+            && ($p['special_price_to'] === null || substr((string) $p['special_price_to'], 0, 19) >= $now);
         $inheriting = array_values(array_filter($p['variants'], fn ($v) => $v['price'] === null));
         $own = array_values(array_filter($p['variants'], fn ($v) => $v['price'] !== null));
         $rows = [];

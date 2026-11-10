@@ -193,7 +193,7 @@ inscrite au journal (`GET /api/landingpage-audit?resource=products`…) et resta
 
 | Ressource | Champs (traduits en gras) |
 |---|---|
-| `products` | **`name`**, **`description`**, **`moreinformations`**, `price` (cents, obligatoire), `specialPrice` (cents ou null), `specialPriceFrom`, `specialPriceTo` (ISO 8601 ou null), `image`, `pictures` (liste de clés de la médiathèque ou d'URL https : remplace la galerie, 10 au plus) |
+| `products` | **`name`**, **`description`**, **`moreinformations`**, `price` (cents, obligatoire), `specialPrice` (cents ou null), `specialPriceFrom`, `specialPriceTo` (ISO 8601 ou null), `image`, `pictures` (liste de clés de la médiathèque ou d'URL https : remplace la galerie, 10 au plus) ; depuis le 11/11/2026 : avec décalage = cet instant, heure sans décalage = heure du magasin, date seule = jour du magasin ; stockés en UTC, `docs/promotions-gestion.md` § 7) |
 | `category` | **`name`**, **`description`**, `image` |
 | `homeslider` | **`title`**, **`description`**, **`buttonMessage`**, **`buttonUrl`**, `image` (il n'existe pas de champ `imageMobile`) |
 | `explore-cards` | **`standardTitle`**, **`differentTitle`**, **`description`**, `link`, `imageUrl`, `videoUrl` (noms de l'API ; enregistrés dans `imagePath`, `videoPath`) |

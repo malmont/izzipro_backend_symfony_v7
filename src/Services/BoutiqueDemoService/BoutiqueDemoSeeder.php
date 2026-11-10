@@ -55,7 +55,8 @@ final class BoutiqueDemoSeeder
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly DemoImageGenerator $images,
         private readonly UserPasswordHasherInterface $hasher,
-        private readonly ReviewAggregateService $reviewAggregates
+        private readonly ReviewAggregateService $reviewAggregates,
+        private readonly ?\App\Services\CaisseService\StoreClock $clock = null // dates de promotion en heure du magasin, stockées en UTC (lot P5b)
     ) {
     }
 
@@ -302,7 +303,10 @@ final class BoutiqueDemoSeeder
             ->addCategory($categories[$d['category']]);
         if (isset($d['special'])) {
             [$amount, $from, $to] = $d['special'];
-            $product->setSpecialPrice($amount)->setSpecialPriceFrom($from)->setSpecialPriceTo($to);
+            // heures du jeu d'exemple lues en heure du magasin, stockées en UTC (instants comparés en UTC, lot P5b, 11/11/2026)
+            $tz = $this->clock?->timezone() ?? new \DateTimeZone('UTC');
+            $utc = fn (?\DateTimeImmutable $d) => $d === null ? null : (new \DateTimeImmutable($d->format('Y-m-d H:i:s'), $tz))->setTimezone(new \DateTimeZone('UTC'));
+            $product->setSpecialPrice($amount)->setSpecialPriceFrom($utc($from))->setSpecialPriceTo($utc($to));
         }
         if (($d['saleUnit'] ?? null) === 'kg') {
             $product->setSaleUnit($saleUnit);

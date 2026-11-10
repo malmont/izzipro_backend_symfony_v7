@@ -392,6 +392,7 @@ final class CacheTags
         \App\Entity\GestionPriceChange::class,
         \App\Entity\GestionPromotionBatch::class, // journal des promotions datées (lot P5, 11/11/2026), en SQL ; la promotion passe par le chemin d'un article (étiquette PRODUCTS)
         \App\Entity\GestionPromotionChange::class,
+        \App\Entity\GestionPromotionTzFix::class, // journal de la remise en UTC des dates de promotion (lot P5b, 11/11/2026), en SQL
         \App\Entity\GestionTileDismissal::class, // vignettes d'accueil écartées (11/11/2026) : écrites et lues en SQL par leur dépôt
         \App\Entity\GestionReprise::class, // reprise d'historique (lot P3, 10/11/2026) : une ligne par site, lue par son dépôt
         \App\Entity\PeriodResult::class, // résultat de période figé (lot P2, 10/11/2026) : lu par son dépôt, la route est cachée sous l'étiquette de la collection
