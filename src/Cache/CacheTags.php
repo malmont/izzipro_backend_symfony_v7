@@ -390,6 +390,8 @@ final class CacheTags
         \App\Entity\GestionSimulationComment::class, // commentaires du simulateur (lot G1b-2, 11/11/2026), en SQL par GestionSimulationCommentService
         \App\Entity\GestionPriceBatch::class, // journal des prix appliqués (lot P4, 11/11/2026), en SQL ; les prix passent par le chemin d'un article (étiquette PRODUCTS)
         \App\Entity\GestionPriceChange::class,
+        \App\Entity\GestionPromotionBatch::class, // journal des promotions datées (lot P5, 11/11/2026), en SQL ; la promotion passe par le chemin d'un article (étiquette PRODUCTS)
+        \App\Entity\GestionPromotionChange::class,
         \App\Entity\GestionTileDismissal::class, // vignettes d'accueil écartées (11/11/2026) : écrites et lues en SQL par leur dépôt
         \App\Entity\GestionReprise::class, // reprise d'historique (lot P3, 10/11/2026) : une ligne par site, lue par son dépôt
         \App\Entity\PeriodResult::class, // résultat de période figé (lot P2, 10/11/2026) : lu par son dépôt, la route est cachée sous l'étiquette de la collection

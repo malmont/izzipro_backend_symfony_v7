@@ -67,6 +67,7 @@ class AdviceRules
         private readonly GestionCashService $cash,
         private readonly GestionSimulationService $simulation,
         private readonly CampaignProfitabilityCalculator $campaigns,
+        private readonly ?\App\Services\CaisseService\StoreClock $clock = null,
     ) {
     }
 
@@ -187,8 +188,12 @@ class AdviceRules
             $p['effect'] = ($p['effect'] ?? 0.0) + min($v['qty'] * $daysRemaining / 30, (float) $v['stock']) * $v['unitPrice'] * self::FAST_PRICE_PERCENT / 100;
             unset($p);
         }
+        $onPromotion = $this->promoted(false); // lot P5 : pas de hausse du prix normal pendant une promotion
         $out = [];
         foreach ($byProduct as $pid => $p) {
+            if (isset($onPromotion[$pid])) {
+                continue;
+            }
             if ($p['qty'] < self::FAST_MIN_SOLD || $p['cost'] === null || $p['stock'] * 30 >= self::FAST_MAX_COVERAGE_DAYS * $p['qty'] || round($p['effect']) <= 0) {
                 continue;
             }
@@ -226,8 +231,12 @@ class AdviceRules
             . " FROM product p JOIN st ON st.pid = p.id LEFT JOIN sold ON sold.pid = p.id WHERE p.product_type = 'standard' AND NOT COALESCE(p.rental_enabled, false) AND st.stock > 0",
             ['since' => $since, 'now' => $today->modify('+1 day')->format('Y-m-d'), 'today' => $today->format('Y-m-d')]
         );
+        $promoted = $this->promoted(true); // lot P5 : pas de nouvelle promotion pour un article qui en a déjà une, en cours ou à venir
         $out = [];
         foreach ($rows as $r) {
+            if (isset($promoted[(int) $r['id']])) {
+                continue;
+            }
             $value = (int) round((int) $r['stock'] * (float) ($r['cost'] ?? 0));
             if ((int) $r['recent'] > 0 || $r['cost'] === null || $value < self::SLOW_MIN_COST_VALUE || $r['since'] === null || substr((string) $r['since'], 0, 10) > $since) {
                 continue;
@@ -421,7 +430,8 @@ class AdviceRules
         if ($purchases > 0 ? $total < self::CLEARANCE_SHARE * $purchases : $total < self::CLEARANCE_MIN) {
             return [];
         }
-        $slow = array_filter($byProduct, fn ($p) => $p['sold'] <= self::CLEARANCE_SLOW_MAX_SOLD && $p['value'] > 0);
+        $promoted = $this->promoted(true); // lot P5 : articles déjà en promotion (en cours ou à venir) exclus
+        $slow = array_filter($byProduct, fn ($p, $pid) => $p['sold'] <= self::CLEARANCE_SLOW_MAX_SOLD && $p['value'] > 0 && !isset($promoted[$pid]), ARRAY_FILTER_USE_BOTH);
         uasort($slow, fn ($a, $b) => $b['value'] <=> $a['value']);
         $slow = array_slice($slow, 0, self::CLEARANCE_MAX_PRODUCTS, true);
         if ($slow === []) {
@@ -519,6 +529,21 @@ class AdviceRules
     }
 
     // ----- interne -----
+
+    /**
+     * Articles en promotion le jour de calcul (lot P5), et à venir si `$planned` : prix promotionnel posé, dont la fin n'est pas passée au début du
+     * jour du magasin (et, sans `$planned`, dont le début est avant la fin de ce jour). Instants comparés en UTC, comme `Product::getEffectivePrice`.
+     *
+     * @return array<int, true>
+     */
+    private function promoted(bool $planned): array
+    {
+        $day = $this->asOf ?? (new \DateTimeImmutable())->format('Y-m-d');
+        [$start, $end] = $this->clock !== null ? $this->clock->range($day, $day) : [new \DateTimeImmutable($day), (new \DateTimeImmutable($day))->modify('+1 day')];
+        $sql = 'SELECT id FROM product WHERE special_price > 0 AND (special_price_to IS NULL OR special_price_to >= :start)' . ($planned ? '' : ' AND (special_price_from IS NULL OR special_price_from < :end)');
+
+        return array_fill_keys(array_map('intval', $this->conn()->fetchFirstColumn($sql, ['start' => $start->format('Y-m-d H:i:s'), 'end' => $end->format('Y-m-d H:i:s')])), true);
+    }
 
     private function advice(string $kind, string $moment, string $signature, array $subject, array $action, int $effect, string $effectLabel, string $confidence, array $sources, array $figures, array $params): array
     {

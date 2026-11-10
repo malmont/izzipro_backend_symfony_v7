@@ -114,6 +114,13 @@ class AdviceApiTest extends WebTestCase
         $this->sale($lyv, 10, 10000, $b->modify('+3 days')->modify('-1 year')->format('Y-m-d'));
         $this->endOfWrite();
 
+        // Lot P5 : un article déjà en promotion (même à venir) n'a plus de conseil de promotion ; pas de hausse pendant une promotion
+        [$sp] = $this->variant('Conseil déjà en promo', 1000, 100000, $d(-100));
+        $conn->executeStatement("UPDATE product SET special_price = 1000, special_price_from = ?, special_price_to = ? WHERE id = ?", [$d(20) . ' 05:00:00', $d(40) . ' 05:00:00', $sp]);
+        [$fp, $fpv] = $this->variant('Conseil rapide en promo', 3, 1000, $d(-60));
+        $this->sale($fpv, 6, 2000, $d(-5));
+        $conn->executeStatement("UPDATE product SET special_price = 1500, special_price_from = ?, special_price_to = ? WHERE id = ?", [$d(0) . ' 05:00:00', $d(20) . ' 05:00:00', $fp]);
+        $this->endOfWrite();
         $r = $rules->detect($period, $t);
         $by = [];
         foreach ($r['advices'] as $a) {
@@ -127,6 +134,8 @@ class AdviceApiTest extends WebTestCase
         $this->assertSame([6, 3, 15], [$fast['sources'][0]['value'], $fast['sources'][1]['value'], $fast['sources'][2]['value']], 'ventes, stock, jours de stock');
         $this->assertArrayHasKey("SLOW_STOCK:p$s", $by);
         $this->assertArrayNotHasKey("SLOW_STOCK:p$s2", $by, '50,00 au coût : sous 100 $');
+        $this->assertArrayNotHasKey("SLOW_STOCK:p$sp", $by, 'promotion à venir : pas de nouveau conseil de promotion');
+        $this->assertArrayNotHasKey("FAST_SELLER:p$fp", $by, 'promotion en cours : pas de hausse');
         $slow = $by["SLOW_STOCK:p$s"];
         $this->assertSame([100000000, 'simulateur', 20, [$s]], [$slow['effect']['amount'], $slow['action']['screen'], $slow['action']['params']['promotion']['percent'], $slow['action']['params']['promotion']['productIds']]);
         $this->assertSame(109, $slow['sources'][2]['value'], 'jours sans vente depuis l\'achat');

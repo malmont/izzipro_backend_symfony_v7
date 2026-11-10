@@ -223,12 +223,22 @@ class GestionPriceService
     /** Écriture d'un prix par le chemin d'un article (mêmes règles, cache, marque d'exemple, journal d'audit que PATCH /api/products|product-variants/{id}) */
     private function writePrice(string $level, int $id, int $cents): void
     {
-        $resource = $level === 'product' ? 'products' : 'product-variants';
+        $this->writeFields($level === 'product' ? 'products' : 'product-variants', $id, ['price' => $cents]);
+    }
+
+    /**
+     * Écriture de champs d'un article ou d'une variante par le chemin de l'éditeur (P4, promotions P5) : validation, hooks, flush, invalidation du
+     * cache, marque d'exemple, journal d'audit ; unité de travail vidée ensuite.
+     *
+     * @param array<string, mixed> $fields
+     */
+    public function writeFields(string $resource, int $id, array $fields): void
+    {
         $entity = $this->editor->find($resource, $id);
         if ($entity === null) {
             throw new LandingContentException(404, 'Article introuvable : ' . $id);
         }
-        ['values' => $values, 'errors' => $errors] = $this->editor->validate($resource, (object) ['price' => $cents]);
+        ['values' => $values, 'errors' => $errors] = $this->editor->validate($resource, (object) $fields);
         if ($errors) {
             throw new LandingContentException(422, 'Prix refusé : ' . $errors[0]['message'], $errors);
         }
@@ -306,7 +316,7 @@ class GestionPriceService
     }
 
     /** @return array{0: list<array<string, mixed>>, 1: array<int, float>} articles du périmètre, coûts de la commande par article */
-    private function scope(array $in): array
+    public function scope(array $in): array
     {
         $conn = $this->conn();
         $lineCosts = [];

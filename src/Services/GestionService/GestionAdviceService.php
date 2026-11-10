@@ -205,6 +205,22 @@ class GestionAdviceService
         return $this->toArray($this->conn()->fetchAssociative('SELECT * FROM gestion_advice WHERE id = ?', [$id]), $locale);
     }
 
+    /**
+     * Conseil marqué fait par une application de la gestion (promotion datée, lot P5) : `appliedOn` peut être à venir (début de la promotion),
+     * ce que la route publique « fait » refuse ; rien si le conseil n'est plus new.
+     *
+     * @param array<string, mixed> $applied
+     */
+    public function markDoneByApplication(int $id, ?string $user, array $applied, string $appliedOn, string $locale): ?array
+    {
+        $done = $this->conn()->executeStatement(
+            "UPDATE gestion_advice SET status = 'done', status_by = ?, applied = ?, applied_on = ?, done_at = NOW(), updated_at = NOW() WHERE id = ? AND status = 'new'",
+            [$user, json_encode($applied + ['appliedOn' => $appliedOn]), $appliedOn, $id]
+        );
+
+        return $done === 0 ? null : $this->toArray($this->conn()->fetchAssociative('SELECT * FROM gestion_advice WHERE id = ?', [$id]), $locale);
+    }
+
     /** Forme rendue par l'API */
     public function toArray(array $r, string $locale): array
     {

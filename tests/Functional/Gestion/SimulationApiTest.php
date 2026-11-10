@@ -151,6 +151,14 @@ class SimulationApiTest extends WebTestCase
         $this->assertSame(['SAME_QUANTITIES', 'UNKNOWN_COST', 'NO_CASH_BALANCE', 'PLANNED_PURCHASES_NOT_IN_STOCK'], array_column($s['caveats'], 'code'));
         $this->assertNull($s['lastYear']);
 
+        // Promotion datée sur A (lot P5) : 15,00 $ au lieu de 25,00 $ du B+20 au B+29, soit 10 des 20 jours restants → ventes restantes de A
+        // valorisées à 30,00 × (1 − 0,5 × (1 − 0,6)) = 24,00 ; B inchangé
+        $utc = fn (string $day, string $time) => (new \DateTimeImmutable("$day $time", static::getContainer()->get(\App\Services\CaisseService\StoreClock::class)->timezone()))->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+        $conn->executeStatement('UPDATE product SET special_price = 1500, special_price_from = ?, special_price_to = ? WHERE id = ?', [$utc($d(20), '00:00:00'), $utc($d(29), '23:59:59'), $aProduct]);
+        $sp = $service->simulate($period, [], 'fr', $t);
+        $this->assertSame([6 * 2400 + 1000, ['PROMOTIONS_INCLUDED', [$aProduct]]], [$sp['base']['sales']['projected'], [$sp['caveats'][array_search('PROMOTIONS_INCLUDED', array_column($sp['caveats'], 'code'), true)]['code'] ?? null, $sp['caveats'][array_search('PROMOTIONS_INCLUDED', array_column($sp['caveats'], 'code'), true)]['productIds'] ?? null]]);
+        $conn->executeStatement('UPDATE product SET special_price = NULL, special_price_from = NULL, special_price_to = NULL WHERE id = ?', [$aProduct]);
+
         // Trésorerie saisie : 1 000,00 à B+7 → après achats = solde + ventes à venir − reste à acheter − reste des frais prévus
         $conn->executeStatement('INSERT INTO gestion_cash_balance (balance_date, amount_cents, created_at, updated_at) VALUES (?, 100000, NOW(), NOW())', [$d(7)]);
         $s2 = $service->simulate($period, $body, 'fr', $t);

@@ -87,6 +87,30 @@ class GestionSimulationService
                 }
             }
         }
+        // Promotions datées en cours ou à venir (lot P5) : la part des ventes restantes qui tombe pendant la promotion est valorisée au prix
+        // promotionnel (prix moyen × prix promotionnel ÷ prix normal), à quantités égales ; jamais pour une variante à prix propre (règle de prix)
+        $promoted = [];
+        if ($variants !== [] && $daysRemaining > 0) {
+            $promos = [];
+            foreach ($this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
+                'SELECT id, price, special_price, special_price_from, special_price_to FROM product WHERE id IN (?) AND special_price > 0 AND price > 0',
+                [array_values(array_unique(array_column($variants, 'productId')))], [\Doctrine\DBAL\ArrayParameterType::INTEGER]
+            ) as $r) {
+                $utc = new \DateTimeZone('UTC');
+                $from = $r['special_price_from'] === null ? $remainingFrom : max($remainingFrom, $this->clock->day(new \DateTimeImmutable((string) $r['special_price_from'], $utc)));
+                $to = $r['special_price_to'] === null ? $end : min($end, $this->clock->day(new \DateTimeImmutable((string) $r['special_price_to'], $utc)));
+                if ($to >= $from) {
+                    $promos[(int) $r['id']] = ['share' => $this->days($from, $to) / $daysRemaining, 'ratio' => (float) $r['special_price'] / (float) $r['price']];
+                }
+            }
+            foreach ($variants as $vid => &$v) {
+                if (isset($promos[$v['productId']]) && !$v['ownPrice']) {
+                    $v['unitPrice'] *= 1 - $promos[$v['productId']]['share'] * (1 - $promos[$v['productId']]['ratio']);
+                    $promoted[$v['productId']] = true;
+                }
+            }
+            unset($v);
+        }
         $stock = $this->stockByVariant($todayKey);
         $promoProducts = $levers['promotion'] === null ? [] : ($levers['promotion']['scope'] === 'all' ? null : array_flip($levers['promotion']['productIds']));
 
@@ -174,6 +198,9 @@ class GestionSimulationService
         if ($method === 'none' && $daysRemaining > 0) {
             $caveats[] = 'NO_SALES_PACE';
         }
+        if ($promoted !== []) {
+            $caveats[] = 'PROMOTIONS_INCLUDED';
+        }
         if ($cashBase === null) {
             $caveats[] = 'NO_CASH_BALANCE';
         } else {
@@ -200,7 +227,8 @@ class GestionSimulationService
             'simulated' => $simulated,
             'delta' => self::delta($base, $simulated),
             'plannedToSave' => ['lines' => array_map(fn (string $c) => ['category' => $c, 'planned' => (int) ($plannedSim[$c] ?? 0)], GestionBudgetLine::CATEGORIES)],
-            'caveats' => array_map(fn (string $code) => ['code' => $code, 'text' => $this->translator->trans("simulation.caveats.$code", ['%days%' => $cashBase['balance']['ageDays'] ?? 0], 'gestion', $locale)], $caveats),
+            'caveats' => array_map(fn (string $code) => ['code' => $code, 'text' => $this->translator->trans("simulation.caveats.$code", ['%days%' => $cashBase['balance']['ageDays'] ?? 0], 'gestion', $locale)]
+                + ($code === 'PROMOTIONS_INCLUDED' ? ['productIds' => array_keys($promoted)] : []), $caveats),
         ];
     }
 
@@ -246,14 +274,15 @@ class GestionSimulationService
             . ' FROM order_items oi JOIN "order" o ON o.id = oi.order_associated_id LEFT JOIN booking b ON b.order_item_id = oi.id'
             . ' WHERE o.order_date >= :from AND o.order_date < :to AND o.order_type_id IN (1, 2) AND o.status_id NOT IN (1, 7) AND b.id IS NULL AND o.subscription_id IS NULL AND oi.product_variant_id IS NOT NULL'
             . ' GROUP BY oi.product_variant_id)'
-            . ' SELECT s.vid, s.qty, s.net, pv.product_id, GREATEST(COALESCE(pv.stock_quantity, 0), 0) AS stock, ' . self::COST . ' AS cost'
+            . ' SELECT s.vid, s.qty, s.net, pv.product_id, (pv.price IS NOT NULL) AS own_price, GREATEST(COALESCE(pv.stock_quantity, 0), 0) AS stock, ' . self::COST . ' AS cost'
             . ' FROM s JOIN product_variant pv ON pv.id = s.vid JOIN product p ON p.id = pv.product_id WHERE s.qty > 0',
             ['from' => $start->format('Y-m-d H:i:s'), 'to' => $endExclusive->format('Y-m-d H:i:s'), 'today' => $today]
         );
         $out = [];
         foreach ($rows as $r) {
             $qty = (int) $r['qty'];
-            $out[(int) $r['vid']] = ['productId' => (int) $r['product_id'], 'qty' => $qty, 'unitPrice' => max(0.0, (float) $r['net'] / $qty), 'stock' => (int) $r['stock'], 'cost' => $r['cost'] === null ? null : (float) $r['cost']];
+            $out[(int) $r['vid']] = ['productId' => (int) $r['product_id'], 'qty' => $qty, 'unitPrice' => max(0.0, (float) $r['net'] / $qty), 'stock' => (int) $r['stock'], 'cost' => $r['cost'] === null ? null : (float) $r['cost'],
+                'ownPrice' => in_array($r['own_price'], [true, 't', 1, '1'], true)];
         }
 
         return $out;

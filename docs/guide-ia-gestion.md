@@ -43,6 +43,7 @@ Calculés pour la période demandée, à la date du jour (plusieurs peuvent coex
 | R11 `LESSON_OVERSTOCK` | closing | articles invendus dans la période, ≥ 100 $ au coût | valeur au coût | medium | `articles` |
 | R11 `LESSON_BUDGET` | closing | poste dépassé de plus de 10 % | −dépassement | high | `periode.budget` |
 
+- Lot P5 : R2 et R9 s'abstiennent pour un article déjà en promotion (en cours ou à venir), R1 pendant une promotion (`docs/promotions-gestion.md` § 6).
 - R1, R2 : 3 conseils au plus (plus gros effets) ; R3 : 2 au plus. Plafond de 8 conseils, R7 et R8 gardés au-delà. Rang de départ =
   |effet| × poids (high 1, medium 0,6, low 0,3) ; l'IA peut réordonner.
 - `figures` des conseils sur des articles (R1, R2, R9, leçons) : `[{ productId, variantId: null, name, price (affiché), cost (courant), stock, soldLast30Days }]`.

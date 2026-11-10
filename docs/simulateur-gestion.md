@@ -58,6 +58,9 @@ SCÉNARIO = { sales: { realized, projected, total }, units: { realized, projecte
     moyenne pondérée des lignes d'achat de l'article (règle L0) au coût connu, sinon prix d'achat de la fiche ; sinon **coût inconnu** : la
     vente compte dans `unknownCostRevenue` et reste hors des marges. Locations, abonnements et lignes libres exclus.
   - **À quantités vendues égales** : un prix ou une promotion ne change pas le nombre de ventes (remarque `SAME_QUANTITIES`).
+  - Promotions datées en cours ou à venir (lot P5, `docs/promotions-gestion.md` § 6) : la part des ventes restantes d'une variante sans prix
+    propre qui tombe pendant la promotion de son article est valorisée à prix moyen × (prix promotionnel ÷ prix normal) ; remarque
+    `PROMOTIONS_INCLUDED { productIds }`.
 - `grossMargin` = (ventes − ventes au coût inconnu) − coût des articles vendus ; `tauxMarque` = marge ÷ ventes au coût connu, en % (2
   décimales, `null` sans vente au coût connu) ; `result` = marge − `expenses.total`.
 - `expenses` : postes `trip`, `shipping`, `advertising`, `other` du budget, chacun **au plus grand du prévu et du réel** à ce jour

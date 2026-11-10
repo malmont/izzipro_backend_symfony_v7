@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (396)
+## Boutique et commun (402)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -400,6 +400,12 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/gestion/prix/appliquer` | ROLE_ADMIN | `Controller\GestionController\GestionPriceController::apply` |
 | GET | `/api/gestion/prix/lots/{id}` | ROLE_ADMIN | `Controller\GestionController\GestionPriceController::batch` |
 | GET | `/api/gestion/prix/lots` | ROLE_ADMIN | `Controller\GestionController\GestionPriceController::batches` |
+| POST | `/api/gestion/promotions/apercu` | ROLE_ADMIN | `Controller\GestionController\GestionPromotionController::preview` |
+| POST | `/api/gestion/promotions/appliquer` | ROLE_ADMIN | `Controller\GestionController\GestionPromotionController::apply` |
+| GET | `/api/gestion/promotions/lots/{id}` | ROLE_ADMIN | `Controller\GestionController\GestionPromotionController::batch` |
+| GET | `/api/gestion/promotions/lots` | ROLE_ADMIN | `Controller\GestionController\GestionPromotionController::batches` |
+| POST | `/api/gestion/promotions/terminer` | ROLE_ADMIN | `Controller\GestionController\GestionPromotionController::end` |
+| GET | `/api/gestion/promotions` | ROLE_ADMIN | `Controller\GestionController\GestionPromotionController::current` |
 | POST | `/api/gestion/reprise/annuler` | ROLE_ADMIN | `Controller\GestionController\RepriseController::cancel` |
 | POST | `/api/gestion/reprise/appliquer` | ROLE_ADMIN | `Controller\GestionController\RepriseController::apply` |
 | POST | `/api/gestion/reprise/simulation` | ROLE_ADMIN | `Controller\GestionController\RepriseController::simulate` |

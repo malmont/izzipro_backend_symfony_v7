@@ -106,6 +106,7 @@ simulation:
         best_text: "« %label% » donne le meilleur résultat : %result%, soit %delta% d’écart avec le prévu actuel."
         keep_text: "Le prévu actuel donne le meilleur résultat : %result%."
     caveats:
+        PROMOTIONS_INCLUDED: "Promotions en cours ou à venir comptées pour les jours qu’elles couvrent, à quantités égales."
         SAME_QUANTITIES: "À quantités vendues égales : l'effet d'un prix ou d'une promotion sur le nombre de ventes n'est pas estimé."
         UNKNOWN_COST: 'Des articles sans coût connu sont exclus des marges.'
         LAST_YEAR_USED: "Aucune vente ces 30 derniers jours : les ventes restantes reprennent celles des mêmes jours l'an dernier."
