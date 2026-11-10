@@ -70,9 +70,7 @@ TXT;
             'system' => [['type' => 'text', 'text' => self::SYSTEM]],
             'tools' => [$this->tool()],
             'messages' => [['role' => 'user', 'content' => $user]],
-            'tool_choice' => in_array($model, LandingAiPromptBuilder::MODELS_WITHOUT_FORCED_TOOL, true)
-                ? ['type' => 'auto']
-                : ['type' => 'tool', 'name' => LandingAiPromptBuilder::VIDEO_PROMPT_TOOL],
+            'tool_choice' => LandingAiPromptBuilder::toolChoice($model, LandingAiPromptBuilder::VIDEO_PROMPT_TOOL),
         ];
         if (($effort = $this->tuning->effort('edit')) !== null) {
             $payload['output_config'] = ['effort' => $effort];

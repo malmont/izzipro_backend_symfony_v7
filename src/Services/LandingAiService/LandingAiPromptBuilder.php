@@ -40,6 +40,18 @@ final class LandingAiPromptBuilder
     /** Modèles qui refusent tool_choice forcé (any / tool) : auto + consigne explicite */
     public const MODELS_WITHOUT_FORCED_TOOL = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-fable-5-1', 'claude-mythos-5-1'];
 
+    /**
+     * `tool_choice` d'un appel qui attend un outil précis : forcé quand le modèle l'accepte, sinon `auto` (la consigne doit alors nommer
+     * l'outil). Depuis Sonnet 5.5, Opus 5.5 et Fable 5.1, `any` et `tool` renvoient HTTP 400 (constaté en production le 10/11/2026) :
+     * tout appel d'outil passe par ici, jamais par un `['type' => 'tool']` écrit en dur.
+     *
+     * @return array{type: string, name?: string}
+     */
+    public static function toolChoice(string $model, string $tool): array
+    {
+        return in_array($model, self::MODELS_WITHOUT_FORCED_TOOL, true) ? ['type' => 'auto'] : ['type' => 'tool', 'name' => $tool];
+    }
+
     private const SYSTEM = <<<'TXT'
 Tu es l'assistant de l'éditeur de landing pages. Tu produis des compositions de section (JSON « schemaVersion 2 ») conformes au contrat fourni, rien d'autre.
 
@@ -528,9 +540,7 @@ TXT;
         if (($effort = $this->tuning->effort($kind)) !== null) {
             $payload['output_config'] = ['effort' => $effort];
         }
-        $payload['tool_choice'] = in_array($model, self::MODELS_WITHOUT_FORCED_TOOL, true)
-            ? ['type' => 'auto']
-            : ['type' => 'tool', 'name' => $tool['name']];
+        $payload['tool_choice'] = self::toolChoice($model, $tool['name']);
 
         return $payload;
     }

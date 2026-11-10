@@ -82,7 +82,8 @@ class ProductAiSheetTest extends WebTestCase
         $this->assertStringStartsWith('http', (string) $body['pictures'][0]['url']);
         $this->assertSame(1, $body['credits']['used'], 'un crédit pour la fiche');
         $request = FakeLandingAiClient::$requests[0];
-        $this->assertSame('propose_product_sheet', $request['tool_choice']['name']);
+        $this->assertSame(['type' => 'auto'], $request['tool_choice'], 'Sonnet 5.5 refuse l\'outil forcé : auto + consigne');
+        $this->assertStringContainsString('propose_product_sheet', (string) $request['system'], 'la consigne nomme l\'outil');
         $images = array_filter($request['messages'][0]['content'], fn ($c) => $c['type'] === 'image');
         $this->assertCount(2, $images, 'les deux photos partent à l\'IA en base64');
         $this->assertSame('base64', array_values($images)[0]['source']['type']);

@@ -86,7 +86,7 @@ TXT;
                 'productId' => ['type' => 'integer'], 'weightKg' => ['type' => 'number'], 'lengthCm' => ['type' => 'number'], 'widthCm' => ['type' => 'number'], 'heightCm' => ['type' => 'number'],
                 'shippingClass' => ['type' => ['string', 'null']], 'confidence' => ['type' => 'string', 'enum' => ['high', 'medium', 'low']], 'note' => ['type' => 'string'],
             ], 'required' => ['productId', 'weightKg', 'lengthCm', 'widthCm', 'heightCm', 'confidence']]]], 'required' => ['items']]]],
-            'tool_choice' => ['type' => 'tool', 'name' => 'propose_dimensions'],
+            'tool_choice' => \App\Services\LandingAiService\LandingAiPromptBuilder::toolChoice(self::MODEL, 'propose_dimensions'),
         ], self::TIMEOUT);
         $stats->attempts++;
         $stats->add($response->usage ?? null);

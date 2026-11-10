@@ -4,6 +4,7 @@ namespace App\Services\ProductAiService;
 
 use App\Services\LandingAiService\LandingAiClientInterface;
 use App\Services\LandingAiService\LandingAiException;
+use App\Services\LandingAiService\LandingAiPromptBuilder;
 use App\Services\LandingAiService\LandingAiQuotaService;
 use App\Services\LandingAiService\LandingAiUsageStats;
 use Psr\Log\LoggerInterface;
@@ -91,10 +92,10 @@ class ProductSheetDrafter
             }
             $response = $this->client->createMessage([
                 'model' => self::MODEL, 'max_tokens' => 4000,
-                'system' => 'Tu traduis des fiches produit de boutique en ligne, fidèlement, dans un style commercial naturel pour chaque langue ; conserve les balises HTML simples, ne traduis pas les noms de marque ni les codes.',
+                'system' => 'Tu traduis des fiches produit de boutique en ligne, fidèlement, dans un style commercial naturel pour chaque langue ; conserve les balises HTML simples, ne traduis pas les noms de marque ni les codes. Réponds uniquement par l\'outil translate_product.',
                 'messages' => [['role' => 'user', 'content' => sprintf("Langue source : %s. Traduire en : %s.\n\nFiche :\n%s", self::LANGUAGES[$source] ?? $source, implode(', ', array_map(fn ($t) => self::LANGUAGES[$t], $targets)), json_encode(['name' => $sheet['name'], 'description' => $sheet['description'] ?? '', 'moreInformations' => $sheet['moreInformations'] ?? '', 'tags' => $sheet['tags'] ?? ''], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES))]],
                 'tools' => [['name' => 'translate_product', 'description' => 'Traductions de la fiche, une clé par langue cible', 'input_schema' => ['type' => 'object', 'properties' => $properties, 'required' => $targets]]],
-                'tool_choice' => ['type' => 'tool', 'name' => 'translate_product'],
+                'tool_choice' => LandingAiPromptBuilder::toolChoice(self::MODEL, 'translate_product'),
             ], self::TIMEOUT);
             $stats->attempts++;
             $stats->add($response->usage ?? null);
@@ -138,7 +139,7 @@ class ProductSheetDrafter
             $content[] = ['type' => 'image', 'source' => isset($p['url']) ? ['type' => 'url', 'url' => $p['url']] : ['type' => 'base64', 'media_type' => $p['mime'], 'data' => base64_encode($p['data'])]];
         }
         $system = <<<TXT
-Tu rédiges des fiches produit pour une boutique en ligne à partir de photos et des indications du marchand. Décris ce que tu vois sans inventer de caractéristique invérifiable (pas de matière ni de marque si rien ne l'indique : dis-le dans la note). Donne : name (court, vendeur, sans point final), shortDescription (une phrase), description (HTML simple : <p>, <ul><li>, <strong> ; 80 à 200 mots : usage, points forts, matières visibles, entretien si évident), moreInformations (HTML : dimensions ou tailles visibles, composition, conseils), categoryName (parmi la liste, sinon null), attributes {material, colors (liste), sizes (liste), gender (femme|homme|enfant|mixte|null), season}, tags (5 à 10 mots-clés séparés par des virgules), suggestedPriceCents (prix de vente conseillé en cents de $currency si le marchand a donné un coût ou si l'article est très courant, sinon null), shippingClass (standard|fragile|volumineux|lourd), confidence (high|medium|low), note (ce que tu n'as pas pu déterminer).
+Tu rédiges des fiches produit pour une boutique en ligne à partir de photos et des indications du marchand. Décris ce que tu vois sans inventer de caractéristique invérifiable (pas de matière ni de marque si rien ne l'indique : dis-le dans la note). Donne : name (court, vendeur, sans point final), shortDescription (une phrase), description (HTML simple : <p>, <ul><li>, <strong> ; 80 à 200 mots : usage, points forts, matières visibles, entretien si évident), moreInformations (HTML : dimensions ou tailles visibles, composition, conseils), categoryName (parmi la liste, sinon null), attributes {material, colors (liste), sizes (liste), gender (femme|homme|enfant|mixte|null), season}, tags (5 à 10 mots-clés séparés par des virgules), suggestedPriceCents (prix de vente conseillé en cents de $currency si le marchand a donné un coût ou si l'article est très courant, sinon null), shippingClass (standard|fragile|volumineux|lourd), confidence (high|medium|low), note (ce que tu n'as pas pu déterminer). Réponds uniquement par l'outil propose_product_sheet.
 TXT;
         $response = $this->client->createMessage([
             'model' => self::MODEL, 'max_tokens' => 3000, 'system' => $system, 'messages' => [['role' => 'user', 'content' => $content]],
@@ -147,7 +148,7 @@ TXT;
                 'attributes' => ['type' => 'object', 'properties' => ['material' => ['type' => ['string', 'null']], 'colors' => ['type' => 'array', 'items' => ['type' => 'string']], 'sizes' => ['type' => 'array', 'items' => ['type' => 'string']], 'gender' => ['type' => ['string', 'null']], 'season' => ['type' => ['string', 'null']]]],
                 'tags' => ['type' => 'string'], 'suggestedPriceCents' => ['type' => ['integer', 'null']], 'shippingClass' => ['type' => 'string', 'enum' => self::SHIPPING_CLASSES], 'confidence' => ['type' => 'string', 'enum' => ['high', 'medium', 'low']], 'note' => ['type' => 'string'],
             ], 'required' => ['name', 'shortDescription', 'description', 'confidence']]]],
-            'tool_choice' => ['type' => 'tool', 'name' => 'propose_product_sheet'],
+            'tool_choice' => LandingAiPromptBuilder::toolChoice(self::MODEL, 'propose_product_sheet'),
         ], self::TIMEOUT);
         $stats->attempts++;
         $stats->add($response->usage ?? null);

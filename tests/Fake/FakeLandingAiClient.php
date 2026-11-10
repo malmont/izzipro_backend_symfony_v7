@@ -98,6 +98,10 @@ class FakeLandingAiClient implements LandingAiClientInterface
     {
         self::$requests[] = json_decode(json_encode($payload), true);
         self::$timeouts[] = $timeoutSeconds;
+        // Comme l'API réelle (HTTP 400) : tool_choice forcé refusé par Sonnet 5.5, Opus 5.5, Fable 5.1 (incident du 10/11/2026)
+        if (in_array($payload['tool_choice']['type'] ?? 'auto', ['any', 'tool'], true) && in_array($payload['model'] ?? '', \App\Services\LandingAiService\LandingAiPromptBuilder::MODELS_WITHOUT_FORCED_TOOL, true)) {
+            throw new \RuntimeException(sprintf('FakeLandingAiClient : tool_choice: type "tool" and "any" are not supported for this model (%s) ; passer par LandingAiPromptBuilder::toolChoice()', $payload['model']));
+        }
         $next = array_shift(self::$queue);
         if ($next === null) {
             throw new \RuntimeException('FakeLandingAiClient : aucune réponse prévue');

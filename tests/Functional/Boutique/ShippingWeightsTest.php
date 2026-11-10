@@ -112,7 +112,8 @@ class ShippingWeightsTest extends WebTestCase
         $this->assertSame($usedBefore + 1, static::getContainer()->get(LandingAiQuotaService::class)->credits()['used'], 'un crédit');
         $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM product_shipping'), 'rien d\'enregistré avant confirmation');
         $request = end(FakeLandingAiClient::$requests);
-        $this->assertSame('propose_dimensions', $request['tool_choice']['name']);
+        $this->assertSame(['type' => 'auto'], $request['tool_choice'], 'Sonnet 5.5 refuse l\'outil forcé : auto + consigne');
+        $this->assertStringContainsString('propose_dimensions', (string) $request['system'], 'la consigne nomme l\'outil');
         $this->assertStringContainsString('Produits à estimer', json_encode($request['messages'][0]['content'], JSON_UNESCAPED_UNICODE) ?: '', 'produits décrits dans la demande');
     }
 
