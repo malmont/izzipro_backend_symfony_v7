@@ -26,7 +26,7 @@ class CommandeLine
     #[ORM\Column]
     private ?int $id = null;
 
-    #[ORM\ManyToOne(targetEntity: Commande::class)]
+    #[ORM\ManyToOne(targetEntity: Commande::class, inversedBy: 'lines')]
     #[ORM\JoinColumn(name: 'commande_id', nullable: false, onDelete: 'CASCADE')]
     private ?Commande $commande = null;
 

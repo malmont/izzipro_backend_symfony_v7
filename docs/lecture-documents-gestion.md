@@ -74,10 +74,9 @@ confidence: { overall, number, date, amount }, notes, duplicate }`.
 
 ## 4. Confirmation
 
-> **En sommeil jusqu'au lot L0** (lignes d'achat, décision du propriétaire du 10/11/2026) : pour `type = facture`, la confirmation rend
-> 409 `INVOICE_CONFIRMATION_PENDING` et ne crée rien ; lecture, brouillon et photos restent disponibles. Elle sera rebranchée sur
-> `commande_line` (lignes d'achat, livrées au lot L0 : `docs/lignes-achat-gestion.md`), car sur `product.commande_id` tout réassort finissait
-> en `PRODUCT_ALREADY_ATTACHED`. Notes de frais et transport : actifs.
+> **Factures fournisseurs** (fin du lot L1, 10/11/2026) : la confirmation crée des **lignes d'achat à recevoir** et un nouvel article à
+> **stock 0**, invisible ; le stock n'entre qu'à la réception (`docs/lignes-achat-gestion.md` § 6 et § 7). Le code `INVOICE_CONFIRMATION_PENDING`
+> n'existe plus.
 
 **Facture** : `{ supplier: { id } | { create: { name, typeFournisseurId?, currency? } }, invoice: { number?, date, exchangeRate? },
 classificationDate?, name?, lines: [{ n?, label?, quantity, unitCost, productId? | create?: { name, coefficient?, groupKey? }, size?,
@@ -90,13 +89,14 @@ productId }], created: [{ lineN, productId, name }], shipping: FraisDePortOutput
   invoiceNumber, invoiceDate } | null`.
 - Devise de la commande = devise du fournisseur ; `exchangeRate` obligatoire si elle diffère du site (422 `EXCHANGE_RATE_REQUIRED`) ;
   budget = Σ quantité × `unitCost` + port, dans la devise de la commande ; nom par défaut « Facture <numéro> — <fournisseur> ».
-- Ligne avec `productId` : rattachement **sans effet sur le stock, le prix de vente, le prix d'achat de la fiche ni la visibilité**
-  (seulement `commande`, `commande_cost_cents`, `commande_quantity`, `commande_attached_at`). Ligne avec `create` : un article par
+- Ligne avec `productId` (et `variantId` facultatif) : une **ligne d'achat à recevoir** de plus (réassort), **sans effet sur le stock, le prix
+  de vente, le prix d'achat de la fiche ni la visibilité**. Ligne avec `create` : un article par
   `groupKey` (nom du premier `create.name`, prix d'achat = moyenne pondérée des `unitCost`, coefficient donné sinon 2, prix de vente =
-  achat × coefficient, **stock = quantités des lignes**, invisible en boutique et en caisse, sans catégorie), une variante par ligne
-  quand taille ou couleur sont données (référentiels créés s'ils manquent, stock de la variante = quantité de la ligne) ; la photo
+  achat × coefficient, **stock 0** (il n'entre qu'à la réception), invisible en boutique et en caisse, sans catégorie), une variante par ligne
+  quand taille ou couleur sont données (référentiels créés s'ils manquent, stock 0) ; la photo
   de la première ligne du groupe devient l'image de l'article (médiathèque publique). Ligne sans l'un ni l'autre → 422 `lines[n]:
-  LINE_UNRESOLVED` ; déjà rattaché → `lines[n].productId: PRODUCT_ALREADY_ATTACHED` ; inconnu → `PRODUCT_NOT_FOUND`. Tout ou rien.
+  LINE_UNRESOLVED` ; inconnu → `PRODUCT_NOT_FOUND` ; variante d'un autre article → `lines[n].variantId: VARIANT_NOT_IN_PRODUCT`. Tout ou rien.
+  La réponse porte `lines` (lignes à recevoir, avec `remaining`).
 - `shipping` sans `transporteurId` : frais de port posé sur le transporteur « Sur facture fournisseur » (créé une fois).
 - Doublon : 409 `INVOICE_ALREADY_CONFIRMED { documentId, commandeId }`, levé par `force: true`.
 

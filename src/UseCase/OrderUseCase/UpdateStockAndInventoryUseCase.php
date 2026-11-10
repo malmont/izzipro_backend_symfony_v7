@@ -76,4 +76,27 @@ class UpdateStockAndInventoryUseCase
         );
         $em->persist($inventoryMovement);
     }
+
+    /**
+     * Réception fournisseur d'une ligne d'achat (lot R1 de la gestion, 10/11/2026, relu par la session de la caisse) : la quantité (positive)
+     * s'ajoute au stock de la variante, mouvement type 5 « Réception fournisseur » ; une quantité négative annule une réception, mouvement
+     * type 4 « Ajustement ». Aucun flush : l'appelant tient une transaction explicite (les rappels de ProductVariant re-flushent). La vente
+     * (`execute`) et la création de variante (`executeNewProductVariant`) ne sont pas touchées.
+     */
+    public function executeReception(ProductVariant $productVariant, int $quantity, ?\App\Entity\CommandeLine $line = null): \App\Entity\InventoryMovements
+    {
+        $em = $this->emProvider->getEntityManager();
+        $stockBefore = $productVariant->getStockQuantity();
+        $productVariant->setStockQuantity($stockBefore + $quantity);
+        $em->persist($productVariant);
+        $movementType = $em->getRepository(MovementType::class)->find($quantity >= 0 ? 5 : 4);
+        if ($movementType === null) {
+            throw new \LogicException(sprintf('Type de mouvement %d absent : migration gestion_reception non appliquée sur cette base.', $quantity >= 0 ? 5 : 4));
+        }
+        $movement = $this->inventoryMovementService->createInventoryMovement($productVariant, $stockBefore, $productVariant->getStockQuantity(), $quantity, $movementType, false);
+        $movement->setCommandeLine($line);
+        $em->persist($movement);
+
+        return $movement;
+    }
 }

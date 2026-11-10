@@ -18,7 +18,6 @@ use App\Services\GestionService\PeriodCalendar;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use App\Tests\Functional\Support\AiRightTestHelper;
-use App\UseCase\GestionUseCase\ConfirmGestionDocumentUseCase;
 use App\Tests\Fake\FakeLandingAiClient;
 use App\Tests\Functional\Cache\CacheTestEntityFactory;
 use Doctrine\ORM\EntityManagerInterface;
@@ -44,32 +43,9 @@ class GestionDocumentsApiTest extends WebTestCase
     {
         $this->client = static::createClient();
         FakeLandingAiClient::reset();
-        ConfirmGestionDocumentUseCase::$invoiceConfirmationEnabled = true; // en sommeil en production jusqu'au lot L0 : le code reste éprouvé
         AiRightTestHelper::restoreFullAi(static::getContainer()); // droits partagés : un test précédent peut les avoir vidés
         $this->login();
         $this->em()->getConnection()->executeStatement("UPDATE gestion_document SET status = 'failed' WHERE status = 'reading'"); // base partagée : une lecture à la fois par site
-    }
-
-    protected function tearDown(): void
-    {
-        ConfirmGestionDocumentUseCase::$invoiceConfirmationEnabled = false;
-        parent::tearDown();
-    }
-
-    public function testInvoiceConfirmationIsDormantUntilPurchaseLines(): void
-    {
-        ConfirmGestionDocumentUseCase::$invoiceConfirmationEnabled = false;
-        [$status, $doc] = $this->multipartBody('/api/gestion/documents', ['type' => 'facture'], ['files' => [$this->image('f.png')]]);
-        $this->assertSame(202, $status, json_encode($doc));
-        FakeLandingAiClient::$queue[] = $this->toolResponse('lire_facture_fournisseur', ['supplierName' => 'X', 'invoiceNumber' => 'A1', 'amountsMode' => 'ht', 'lines' => [['baseLabel' => 'Ceinture', 'quantity' => 1, 'unitCost' => 900]], 'confidence' => ['overall' => 0.8]]);
-        $this->runWorker((int) $doc['id']);
-        $this->assertSame('extracted', $this->get('/api/gestion/documents/' . $doc['id'])['status'], 'la lecture d\'une facture reste disponible');
-        $this->patch('/api/gestion/documents/' . $doc['id'] . '/brouillon', ['lines' => ['1' => ['validated' => true]]]);
-        $commandes = (int) $this->em()->getConnection()->fetchOne('SELECT COUNT(*) FROM commande');
-        $this->request('POST', '/api/gestion/documents/' . $doc['id'] . '/confirmer', ['lines' => []]);
-        $this->assertSame([409, 'INVOICE_CONFIRMATION_PENDING'], [$this->client->getResponse()->getStatusCode(), $this->body()['error']]);
-        $this->assertSame($commandes, (int) $this->em()->getConnection()->fetchOne('SELECT COUNT(*) FROM commande'), 'rien n\'est créé');
-        $this->assertSame('extracted', $this->get('/api/gestion/documents/' . $doc['id'])['status'], 'document et brouillon conservés');
     }
 
     public function testReadingRequiresAiRightAndLostReadingsDoNotBlockTheSite(): void
@@ -214,6 +190,11 @@ class GestionDocumentsApiTest extends WebTestCase
         $this->assertSame(404, $this->client->getResponse()->getStatusCode());
 
         // Confirmation : période clôturée → 409, puis date de classement du jour ; tout ou rien
+        // Réassort (lot L0) : la tuque est déjà achetée dans une autre commande ; la facture lui ajoute une ligne, sans refus
+        $conn->executeStatement("INSERT INTO commande (id, budget, date, name, is_closed) VALUES (nextval('commande_id_seq'), 1000, NOW(), :n, false)", ['n' => "Achat précédent $tag"]);
+        $previous = (int) $conn->fetchOne('SELECT id FROM commande WHERE name = ?', ["Achat précédent $tag"]);
+        $conn->executeStatement("INSERT INTO commande_line (commande_id, product_id, quantity_ordered, quantity_received, unit_cost_cents, attached_at, source, created_at, updated_at) VALUES (?, ?, 5, 5, 900, NOW() - INTERVAL '1 day', 'manual', NOW(), NOW())", [$previous, $tuque]);
+        $this->endOfWrite();
         $tuqueBefore = $conn->fetchAssociative('SELECT price, purchase_price, quantity, is_web, is_pos FROM product WHERE id = ?', [$tuque]);
         $body = ['supplier' => ['id' => $supplier->getId()], 'invoice' => ['number' => "F-$tag", 'date' => $invoiceDate], 'lines' => [
             ['n' => 1, 'quantity' => 2, 'unitCost' => 2000, 'size' => 'S', 'color' => 'Écru', 'create' => ['name' => "Robe en lin $tag", 'coefficient' => 2.5, 'groupKey' => 'robe-en-lin']],
@@ -231,8 +212,23 @@ class GestionDocumentsApiTest extends WebTestCase
         $this->assertSame([[['lineN' => 3, 'productId' => $tuque]], 2], [$confirmed['attached'], count($confirmed['created'])]);
         $this->assertSame($confirmed['created'][0]['productId'], $confirmed['created'][1]['productId'], 'un seul article pour les deux tailles');
         $robeId = (int) $confirmed['created'][0]['productId'];
-        $robe = $conn->fetchAssociative('SELECT name, price, purchase_price, coefficient_multiplier, quantity, is_web, is_pos, commande_id, commande_cost_cents, commande_quantity, image FROM product WHERE id = ?', [$robeId]);
-        $this->assertSame(["Robe en lin $tag", 5000.0, 2000.0, 2.5, 3, false, false, $commande['id'], 2000, 3], [$robe['name'], (float) $robe['price'], (float) $robe['purchase_price'], (float) $robe['coefficient_multiplier'], (int) $robe['quantity'], (bool) $robe['is_web'], (bool) $robe['is_pos'], (int) $robe['commande_id'], (int) $robe['commande_cost_cents'], (int) $robe['commande_quantity']], 'article créé : prix = achat × coefficient, stock = lignes, invisible');
+        $robe = $conn->fetchAssociative('SELECT name, price, purchase_price, coefficient_multiplier, quantity, is_web, is_pos, commande_id, image FROM product WHERE id = ?', [$robeId]);
+        $this->assertSame(["Robe en lin $tag", 5000.0, 2000.0, 2.5, 0, false, false, $commande['id']], [$robe['name'], (float) $robe['price'], (float) $robe['purchase_price'], (float) $robe['coefficient_multiplier'], (int) $robe['quantity'], (bool) $robe['is_web'], (bool) $robe['is_pos'], (int) $robe['commande_id']], 'article créé : prix = achat × coefficient, STOCK 0 (il n\'entre qu\'à la réception), invisible');
+        $this->assertSame([0, 0], array_map('intval', $conn->fetchFirstColumn('SELECT stock_quantity FROM product_variant WHERE product_id = ? ORDER BY id', [$robeId])), 'variantes à stock 0');
+        $byProduct = [];
+        foreach ($confirmed['lines'] as $l) {
+            $byProduct[$l['productId']][] = [$l['variant'] !== null, $l['quantityOrdered'], $l['quantityReceived'], $l['remaining'], $l['unitCost'], $l['source']];
+        }
+        $this->assertSame([[true, 2, 0, 2, 2000, 'document'], [true, 1, 0, 1, 2000, 'document']], $byProduct[$robeId], 'une ligne par variante, à recevoir');
+        $this->assertSame([[false, 3, 0, 3, 1000, 'document']], $byProduct[$tuque], 'réassort : une ligne de plus, à recevoir');
+        $this->assertSame(2, (int) $conn->fetchOne('SELECT COUNT(*) FROM commande_line WHERE product_id = ?', [$tuque]), 'la tuque a désormais deux achats');
+        $this->assertSame('none', $confirmed['commande']['receptionStatus'], 'rien reçu');
+        // « Marquer comme reçue maintenant » (lot R1) : le stock n'entre qu'ici
+        $received = $this->post('/api/commandes/' . $commande['id'] . '/reception', [], 200);
+        $this->assertSame([3, [], 'complete'], [count($received['received']), $received['needsVariant'], $received['commande']['receptionStatus']]);
+        $this->assertSame([2, 1], array_map('intval', $conn->fetchFirstColumn('SELECT stock_quantity FROM product_variant WHERE product_id = ? ORDER BY id', [$robeId])), 'robe : S 2, M 1');
+        $this->assertSame([3, (int) $tuqueBefore['quantity'] + 3], [(int) $conn->fetchOne('SELECT quantity FROM product WHERE id = ?', [$robeId]), (int) $conn->fetchOne('SELECT quantity FROM product WHERE id = ?', [$tuque])], 'stocks reçus');
+        $tuqueBefore['quantity'] = $conn->fetchOne('SELECT quantity FROM product WHERE id = ?', [$tuque]); // la suite compare la fiche hors stock
         $this->assertNotNull($robe['image'], 'photo de ligne devenue image de l\'article');
         $this->assertSame(['M', 'S'], $conn->fetchFirstColumn('SELECT s.name FROM product_variant v JOIN size s ON s.id = v.size_id WHERE v.product_id = ? ORDER BY s.name', [$robeId]), 'variantes par taille');
         $tuqueAfter = $conn->fetchAssociative('SELECT price, purchase_price, quantity, is_web, is_pos, commande_id, commande_cost_cents, commande_quantity FROM product WHERE id = ?', [$tuque]);

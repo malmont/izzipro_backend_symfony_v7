@@ -78,8 +78,58 @@ période sans vente antérieure à la date de l'achat (seule cause admise : la r
 Cache : `CommandeLine` est déclarée dans `CacheTags::ENTITY_TAGS` (commandes, produits) ; l'écriture SQL des raccourcis invalide en plus la
 fiche et les listes du produit (`CacheInvalidationQueue`).
 
-## 6. Hors L0
+## 6. Confirmation des factures fournisseurs (fin du lot L1, 10/11/2026)
 
-- Confirmation des factures fournisseurs lues par IA (fin de L1) : créera des lignes `source = document`.
-- Réception (R1, contrat à part, recommandations de la caisse) : `POST /api/commandes/{id}/lignes/{lineId}/reception`, mouvement de stock
-  type 5 « Réception fournisseur » par variante, annulation par mouvement inverse type 4, jamais automatique, sans effet sur la vente.
+La confirmation d'une facture lue par IA (`docs/lecture-documents-gestion.md` § 4) crée la commande et ses lignes `source = document`,
+**à recevoir** (quantité reçue 0) : article existant = une ligne de plus (réassort, avec `variantId` facultatif), sans effet sur le stock ni
+la fiche ; nouvel article (par `groupKey`) créé invisible avec un **stock de 0**, variantes comprises, une ligne par variante (sinon une pour
+l'article) ; deux lignes de facture pour le même article et la même variante sont regroupées (quantités additionnées, coût moyen pondéré).
+La réponse de `confirmer` porte `lines` ; l'application enchaîne sur « Marquer comme reçue maintenant » (§ 7). Règle du propriétaire :
+aucune écriture de stock hors de la réception.
+
+## 7. Réception de stock (lot R1, 10/11/2026)
+
+Contrat validé par l'application ; partie stock relue par la session de la caisse. Code : `Services/CommandeService/CommandeReceptionService`
+(seule écriture de stock de la gestion), `UseCase/OrderUseCase/UpdateStockAndInventoryUseCase::executeReception`, routes dans
+`CommandeLineController`. Migration `Version20261203100000`, script `scripts/migrate_all_v2_gestion_reception.sh` (type de mouvement 5
+« Réception fournisseur » à id fixe, `inventory_movements.commande_line_id`). Test : `tests/Functional/Gestion/CommandeReceptionApiTest.php`.
+
+- `POST /api/commandes/{id}/lignes/{lineId}/reception { quantity?, variantId? }` → 200 `{ line, movement: { id, variantId, quantity, type,
+  stockBefore, stockAfter } }` ; quantité par défaut : tout le reste ; 422 `VALIDATION_FAILED` (`quantity` : `MUST_BE_POSITIVE` |
+  `EXCEEDS_REMAINING` ; `variantId` : `VARIANT_NOT_IN_PRODUCT`), 422 `VARIANT_REQUIRED { lineId, variants: [{ id, size, color }] }`,
+  409 `NOTHING_TO_RECEIVE`, 404 `LINE_NOT_FOUND`.
+- `POST /api/commandes/{id}/reception { lines?: [{ lineId, quantity?, variantId? }] }` (« Marquer comme reçue maintenant ») → 200 `{ received:
+  [{ lineId, quantity, movementId }], needsVariant: [{ lineId, product: { id, name, code }, variants }], lines, commande: { id, remaining,
+  receptionStatus } }` : reçoit tout ce qui peut l'être (sans corps : tout le reste de la commande) ; les lignes dont la variante est à
+  choisir reviennent dans `needsVariant`, sans être reçues ; **idempotent** (commande déjà reçue : `received` vide) ; les vraies erreurs
+  (ligne inconnue, quantité invalide, base) annulent tout.
+- `POST /api/commandes/{id}/lignes/{lineId}/reception/annuler { quantity? }` → 200 `{ line, movement }` : mouvement inverse **type 4
+  « Ajustement »** (quantité négative) sur la variante qui a reçu, jamais une suppression ; 409 `STOCK_INSUFFICIENT { variantId, stock }`
+  (jamais de stock négatif), 409 `NOTHING_TO_CANCEL`, 422 `EXCEEDS_RECEIVED`.
+- `GET /api/commandes/lignes/a-recevoir?page=&limit=` (50, au plus 200) → lignes au reste > 0, toutes commandes, avec `commande { id, name,
+  date }`, triées par date de commande ; `X-Total-Count`, `X-Page`, `X-Limit`. Les lignes portent `remaining`, les commandes `receptionStatus`
+  (`none` | `partial` | `complete`).
+
+Règles :
+- **Variante reçue** : celle de la ligne ; sinon l'unique variante de l'article ; sinon (plusieurs) le choix du gérant (`variantId`) ; sinon
+  (aucune) une **variante par défaut** créée sous verrou : `color_id` et `size_id` NULL, **aucune option, prix NULL** (le prix de la fiche
+  s'applique et suit ses changements ; jamais une couleur ou une taille de remplacement : l'application e-commerce afficherait à tort une
+  personnalisation), stock initial = stock actuel de l'article (le recalcul `Product::updateQuantity` ne l'efface pas), puis la réception
+  s'ajoute. Ce format est le cas courant (5 articles sur 8 dans `gmasuite`) ; les trois fronts ont confirmé, code à l'appui, qu'il s'affiche
+  et se vend comme un article simple (boutique web : `getOptionTypes`, `isSimpleProduct`, `resolveSalePrice` ; application e-commerce :
+  `optionTypes`, `defaultSelection`, `resolveSalePrice` ; caisse : choix de variante seulement si plus d'une variante (`article_card.dart`, `product_details_view_page.dart`, `barcode_scan_listener.dart`), prix de la fiche par `Variant.priceOr` en ligne et `resolveUnitPrice` hors ligne, scan par `findByBarcode`). Effet visible : un article sans
+  variante, invendable jusque-là (le panier exige une variante), devient vendable après sa première réception s'il est actif à la vente.
+- **Transaction explicite** (`wrapInTransaction`, les rappels de `ProductVariant` re-flushent) ; **verrous** `SELECT … FOR UPDATE` dans
+  l'ordre de la vente, pour éviter tout interblocage avec un ticket de caisse : commande (geste unique), ligne, puis variante ; l'article
+  n'est verrouillé que s'il n'a aucune variante (aucune vente possible en face), puis revérifié avant de créer la variante par défaut.
+- Limite connue, hors R1 (chemin de la vente, signalée par la session de la caisse) : la vente écrit le stock depuis la valeur en mémoire,
+  sans verrou ; une vente et une réception simultanées sur la même variante peuvent perdre l'une des deux mises à jour, comme deux ventes.
+- Mouvement type 5 relié à la ligne (`commande_line_id`), stock avant et après ; `product.quantity` se recalcule depuis les variantes.
+  Aucun autre effet : prix, prix d'achat, coefficient, visibilité, vente et pack hors ligne de la caisse intacts.
+- Réception **permise sur une commande figée ou une période fermée** (c'est du stock) ; les chiffres figés ne changent pas.
+- Journal `content_audit_log` (`commande-reception` : receive, cancel).
+
+## 8. Hors de ces lots
+
+- Réception depuis EasyAdmin : non (l'application et la future version web suffisent).
+

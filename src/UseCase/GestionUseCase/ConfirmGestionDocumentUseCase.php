@@ -37,21 +37,17 @@ use Symfony\Component\String\Slugger\AsciiSlugger;
 
 /**
  * POST /api/gestion/documents/{id}/confirmer (lot L1, 10/11/2026, `docs/lecture-documents-gestion.md`) : crée ce que le gérant a vérifié,
- * tout ou rien, dans une transaction. Facture → commande fournisseur classée à `classificationDate ?? invoice.date` (409 `PERIOD_CLOSED`),
- * articles rattachés (sans effet sur le stock, le prix ni la visibilité) ou créés (un article par `groupKey`, variantes taille / couleur,
- * stock = quantités des lignes, invisible en boutique et en caisse, photo de ligne comme image), frais de port facultatif. Note → note
- * de frais. Transport → frais de port d'une commande. Le document devient le justificatif (`document_id`).
+ * tout ou rien, dans une transaction. Facture → commande fournisseur classée à `classificationDate ?? invoice.date` (409 `PERIOD_CLOSED`)
+ * et ses LIGNES D'ACHAT (`source = document`, « à recevoir » : quantité reçue 0 ; fin du lot L1 sur les lignes du lot L0, 10/11/2026) :
+ * article existant = une ligne de plus (réassort), sans effet sur le stock, le prix ni la visibilité ; nouvel article (un par `groupKey`,
+ * variantes taille / couleur) créé invisible en boutique et en caisse avec un STOCK DE 0 (le stock n'entre qu'à la réception, lot R1),
+ * photo de ligne comme image ; frais de port facultatif. Note → note de frais. Transport → frais de port d'une commande. Le document devient le justificatif (`document_id`).
  */
 class ConfirmGestionDocumentUseCase
 {
     public const SHIPPING_CARRIER = 'Sur facture fournisseur';
     public const DEFAULT_COEFFICIENT = 2.0;
 
-    /**
-     * Confirmation des factures fournisseurs en sommeil jusqu'au lot L0 (lignes d'achat, décision du propriétaire du 10/11/2026) : sur
-     * `product.commande_id`, tout réassort finirait en PRODUCT_ALREADY_ATTACHED. Les tests l'activent pour garder ce code éprouvé ; L0 retire ce verrou.
-     */
-    public static bool $invoiceConfirmationEnabled = false;
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -62,6 +58,7 @@ class ConfirmGestionDocumentUseCase
         private readonly FraisDePortService $shipping,
         private readonly NoteDeFraisService $notes,
         private readonly ContentAuditRecorder $audit,
+        private readonly \App\Services\CommandeService\CommandeLineService $lines,
         private readonly ?UploadMediaUseCase $upload = null,
         private readonly ?TenantCurrencyProvider $currency = null,
     ) {
@@ -71,9 +68,6 @@ class ConfirmGestionDocumentUseCase
     public function execute(GestionDocument $document, array $body, string $host, ?string $user): array
     {
         $this->documents->assertOpen($document);
-        if ($document->getType() === GestionDocument::TYPE_FACTURE && !self::$invoiceConfirmationEnabled) {
-            throw new GestionConflictException('INVOICE_CONFIRMATION_PENDING', 'La confirmation des factures fournisseurs arrive avec les lignes d\'achat : le document et son brouillon sont conservés.');
-        }
         if (!in_array($document->getStatus(), [GestionDocument::STATUS_EXTRACTED, GestionDocument::STATUS_FAILED], true)) {
             throw new GestionConflictException('DOCUMENT_IN_PROGRESS', 'Lecture en cours : attendez son résultat avant de confirmer.');
         }
@@ -81,7 +75,7 @@ class ConfirmGestionDocumentUseCase
         $em->getConnection()->beginTransaction();
         try {
             $result = match ($document->getType()) {
-                GestionDocument::TYPE_FACTURE => $this->invoice($em, $document, $body, $host),
+                GestionDocument::TYPE_FACTURE => $this->invoice($em, $document, $body, $host, $user),
                 GestionDocument::TYPE_TRANSPORT => $this->transport($em, $document, $body, $host),
                 default => $this->note($em, $document, $body, $host),
             };
@@ -101,7 +95,7 @@ class ConfirmGestionDocumentUseCase
     // ----- facture fournisseur -----
 
     /** @param array<string, mixed> $body */
-    private function invoice(EntityManagerInterface $em, GestionDocument $document, array $body, string $host): array
+    private function invoice(EntityManagerInterface $em, GestionDocument $document, array $body, string $host, ?string $user = null): array
     {
         $errors = [];
         $input = new GestionInput($body);
@@ -151,6 +145,7 @@ class ConfirmGestionDocumentUseCase
             $quantity = $lineInput->integer('quantity');
             $unitCost = $lineInput->cents('unitCost');
             $productId = $lineInput->id('productId', false);
+            $variantId = $lineInput->id('variantId', false);
             $label = $lineInput->text('label', false);
             $size = $lineInput->text('size', false, 40);
             $color = $lineInput->text('color', false, 40);
@@ -178,7 +173,7 @@ class ConfirmGestionDocumentUseCase
                     $errors["lines[$n].create.coefficient"] = 'MUST_BE_POSITIVE';
                 }
             }
-            $lines[] = ['n' => $n, 'label' => $label, 'quantity' => $quantity, 'unitCost' => $unitCost, 'productId' => $productId, 'size' => $size, 'color' => $color,
+            $lines[] = ['n' => $n, 'label' => $label, 'quantity' => $quantity, 'unitCost' => $unitCost, 'productId' => $productId, 'variantId' => $variantId, 'size' => $size, 'color' => $color,
                 'create' => $create !== null ? ['name' => $createName, 'coefficient' => $coefficient, 'groupKey' => $groupKey] : null];
         }
         if ($lines === []) {
@@ -222,11 +217,17 @@ class ConfirmGestionDocumentUseCase
             $product = $em->find(Product::class, $line['productId']);
             if ($product === null) {
                 $errors["lines[{$line['n']}].productId"] = 'PRODUCT_NOT_FOUND';
-            } elseif ($product->getCommande() !== null) {
-                $errors["lines[{$line['n']}].productId"] = 'PRODUCT_ALREADY_ATTACHED';
-            } else {
-                $products[$line['n']] = $product;
+                continue;
             }
+            $variant = null;
+            if ($line['variantId'] !== null) {
+                $variant = $em->find(ProductVariant::class, $line['variantId']);
+                if ($variant === null || $variant->getProduct()?->getId() !== $product->getId()) {
+                    $errors["lines[{$line['n']}].variantId"] = 'VARIANT_NOT_IN_PRODUCT';
+                    continue;
+                }
+            }
+            $products[$line['n']] = [$product, $variant]; // lot L0 : plus de PRODUCT_ALREADY_ATTACHED, un article déjà acheté reçoit une ligne de plus (réassort)
         }
         if ($errors !== []) {
             throw new GestionValidationException($errors, 'Confirmation invalide : ' . implode(', ', array_keys($errors)));
@@ -237,10 +238,17 @@ class ConfirmGestionDocumentUseCase
         $commande = $this->commandes->createCommande(['budget' => $budget, 'name' => $name, 'date' => $date->format('Y-m-d') . ' 12:00:00', 'exchangeRate' => $exchangeRate], $period, $supplier);
         $now = new \DateTimeImmutable();
         $attached = [];
-        foreach ($products as $n => $product) {
+        $merged = []; // deux lignes de facture pour le même article (et la même variante) : une ligne d'achat, quantités additionnées, coût moyen pondéré
+        foreach ($products as $n => [$product, $variant]) {
             $line = $this->line($lines, $n);
-            $product->setCommande($commande)->setCommandeCostCents($line['unitCost'])->setCommandeQuantity($line['quantity'])->setCommandeAttachedAt($now)->setCommandeCostEstimated(false);
+            $key = $product->getId() . '/' . ($variant?->getId() ?? '-');
+            $merged[$key] ??= ['product' => $product, 'variant' => $variant, 'quantity' => 0, 'cost' => 0];
+            $merged[$key]['quantity'] += $line['quantity'];
+            $merged[$key]['cost'] += $line['quantity'] * $line['unitCost'];
             $attached[] = ['lineN' => $n, 'productId' => $product->getId()];
+        }
+        foreach ($merged as $m) {
+            $this->lines->upsert($commande, $m['product'], $m['variant'], $m['quantity'], $m['quantity'] > 0 ? (int) round($m['cost'] / $m['quantity']) : null, false, \App\Entity\CommandeLine::SOURCE_DOCUMENT, $now, 0, $user);
         }
         // Articles créés : un par groupKey
         $groups = [];
@@ -253,7 +261,7 @@ class ConfirmGestionDocumentUseCase
         }
         $created = [];
         foreach ($groups as $group) {
-            $product = $this->createProduct($em, $document, $commande, $group, $host, $now);
+            $product = $this->createProduct($em, $document, $commande, $group, $host, $now, $user);
             foreach ($group as $line) {
                 $created[] = ['lineN' => $line['n'], 'productId' => $product->getId(), 'name' => $product->getName()];
             }
@@ -274,6 +282,7 @@ class ConfirmGestionDocumentUseCase
 
         return [
             'commande' => new CommandeOutputDTO($commande, $host, $currency), 'attached' => $attached, 'created' => $created,
+            'lines' => array_map(fn ($l) => \App\Services\CommandeService\CommandeProductAttachmentService::lineArray($l), $em->getRepository(\App\Entity\CommandeLine::class)->forCommande($commande)), // à recevoir (lot R1)
             'shipping' => $fraisDePort !== null ? new FraisDePortOutputDTO($fraisDePort, $host, $currency) : null,
             'confirmed' => ['supplier' => ['id' => $supplier->getId(), 'name' => $supplier->getName()], 'invoice' => ['number' => $number, 'date' => $invoiceDate->format('Y-m-d'), 'exchangeRate' => $exchangeRate],
                 'classificationDate' => $date->format('Y-m-d'), 'lines' => $lines, 'shipping' => $shippingAmount !== null ? ['amount' => $shippingAmount, 'transporteurId' => $fraisDePort?->getTransporteur()?->getId()] : null, 'force' => $force],
@@ -281,7 +290,7 @@ class ConfirmGestionDocumentUseCase
     }
 
     /** @param list<array> $group lignes de même groupKey */
-    private function createProduct(EntityManagerInterface $em, GestionDocument $document, Commande $commande, array $group, string $host, \DateTimeImmutable $now): Product
+    private function createProduct(EntityManagerInterface $em, GestionDocument $document, Commande $commande, array $group, string $host, \DateTimeImmutable $now, ?string $user = null): Product
     {
         $first = $group[0];
         $quantity = array_sum(array_column($group, 'quantity'));
@@ -289,13 +298,13 @@ class ConfirmGestionDocumentUseCase
         $coefficient = $first['create']['coefficient'] ?? self::DEFAULT_COEFFICIENT;
         $name = (string) $first['create']['name'];
         $product = (new Product())->setName($name)->setDescription(null)->setPurchasePrice((float) $cost)->setCoefficientMultiplier($coefficient)->setPrice((float) round($cost * $coefficient))
-            ->setQuantity((int) $quantity)->setSlug($this->uniqueSlug($em, $name))->setCreatedAt($now)->setIsWeb(false)->setIsPos(false)->setIsPreOrder(false)
-            ->setCommande($commande)->setCommandeCostCents($cost)->setCommandeQuantity((int) $quantity)->setCommandeAttachedAt($now)->setCommandeCostEstimated(false);
+            ->setQuantity(0)->setSlug($this->uniqueSlug($em, $name))->setCreatedAt($now)->setIsWeb(false)->setIsPos(false)->setIsPreOrder(false); // stock 0 : il n'entre qu'à la réception (lot R1)
         $em->persist($product);
         $withAttributes = array_filter($group, fn ($l) => ($l['size'] ?? null) !== null || ($l['color'] ?? null) !== null);
+        $variants = [];
         if ($withAttributes !== [] || count($group) > 1) {
             foreach ($group as $line) {
-                $variant = (new ProductVariant())->setStockQuantity((int) $line['quantity'])->setPrice((int) round($cost * $coefficient));
+                $variant = (new ProductVariant())->setStockQuantity(0)->setPrice((int) round($cost * $coefficient));
                 if (($line['size'] ?? null) !== null) {
                     $variant->setSize($this->size($em, $line['size']));
                 }
@@ -305,8 +314,8 @@ class ConfirmGestionDocumentUseCase
                 $variant->setProduct($product);
                 $product->addVariant($variant);
                 $em->persist($variant);
+                $variants[$line['n']] = $variant;
             }
-            $product->setQuantity((int) $quantity);
         }
         // Photo de ligne → image de l'article (médiathèque publique), facultative
         foreach ($group as $line) {
@@ -326,6 +335,16 @@ class ConfirmGestionDocumentUseCase
                 }
                 break;
             }
+        }
+
+        $em->flush();
+        // lignes d'achat à recevoir : une par variante, sinon une pour l'article
+        if ($variants !== []) {
+            foreach ($group as $line) {
+                $this->lines->upsert($commande, $product, $variants[$line['n']], (int) $line['quantity'], (int) $line['unitCost'], false, \App\Entity\CommandeLine::SOURCE_DOCUMENT, $now, 0, $user);
+            }
+        } else {
+            $this->lines->upsert($commande, $product, null, (int) $quantity, $cost, false, \App\Entity\CommandeLine::SOURCE_DOCUMENT, $now, 0, $user);
         }
 
         return $product;

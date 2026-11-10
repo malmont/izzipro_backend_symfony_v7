@@ -32,6 +32,11 @@ class InventoryMovements
     #[ORM\Column(nullable: true)]
     private ?float $stockAfterMovement = null;
 
+    /** Ligne d'achat réceptionnée (lot R1 de la gestion, 10/11/2026) ; NULL pour les ventes, retours et ajustements de la caisse */
+    #[ORM\ManyToOne(targetEntity: CommandeLine::class)]
+    #[ORM\JoinColumn(name: 'commande_line_id', nullable: true, onDelete: 'SET NULL')]
+    private ?CommandeLine $commandeLine = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -100,6 +105,18 @@ class InventoryMovements
     public function getStockAfterMovement(): ?float
     {
         return $this->stockAfterMovement;
+    }
+
+    public function getCommandeLine(): ?CommandeLine
+    {
+        return $this->commandeLine;
+    }
+
+    public function setCommandeLine(?CommandeLine $line): static
+    {
+        $this->commandeLine = $line;
+
+        return $this;
     }
 
     public function setStockAfterMovement(?float $stockAfterMovement): static

@@ -38,6 +38,15 @@ class CommandeLineRepository extends EntityRepository
         return $this->findBy(['commande' => $commande, 'product' => $product], ['id' => 'ASC']);
     }
 
+    /** @return array{0: list<CommandeLine>, 1: int} lignes dont il reste à recevoir, triées par date de commande, et leur nombre */
+    public function toReceive(int $page, int $limit): array
+    {
+        $qb = $this->createQueryBuilder('l')->join('l.commande', 'c')->where('l.quantityReceived < l.quantityOrdered');
+        $total = (int) (clone $qb)->select('COUNT(l.id)')->getQuery()->getSingleScalarResult();
+
+        return [$qb->orderBy('c.date', 'ASC')->addOrderBy('l.id', 'ASC')->setFirstResult(($page - 1) * $limit)->setMaxResults($limit)->getQuery()->getResult(), $total];
+    }
+
     public function hasAny(Product $product): bool
     {
         return $this->count(['product' => $product]) > 0;

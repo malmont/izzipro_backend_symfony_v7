@@ -194,6 +194,7 @@ class CommandeProductAttachmentService
             'variant' => $variant === null ? null : ['id' => $variant->getId(), 'size' => $variant->getSize()?->getName(), 'color' => $variant->getColor()?->getName()],
             'variantId' => $variant?->getId(),
             'quantity' => $line->getQuantityOrdered(), 'quantityOrdered' => $line->getQuantityOrdered(), 'quantityReceived' => $line->getQuantityReceived(),
+            'remaining' => max(0, $line->getQuantityOrdered() - $line->getQuantityReceived()), // à recevoir (lot R1)
             'unitCost' => $line->getUnitCostCents(), 'currency' => $line->getCommande()?->getCurrency(), 'estimated' => $line->isEstimated(),
             'attachedAt' => $line->getAttachedAt()?->format(\DateTimeInterface::ATOM), 'source' => $line->getSource(),
         ];

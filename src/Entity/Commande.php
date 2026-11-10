@@ -46,6 +46,10 @@ class Commande
     #[ORM\JoinColumn(name: 'document_id', nullable: true, onDelete: 'SET NULL')]
     private ?GestionDocument $document = null;
 
+    /** Lignes d'achat (lot L0), côté inverse : lecture seule ici, écrites par CommandeLineService */
+    #[ORM\OneToMany(mappedBy: 'commande', targetEntity: CommandeLine::class)]
+    private Collection $lines;
+
     public const KIND_STANDARD = 'standard';
     public const KIND_REPRISE = 'reprise';
 
@@ -71,6 +75,7 @@ class Commande
     public function __construct()
     {
         $this->products = new ArrayCollection();
+        $this->lines = new ArrayCollection();
         $this->commandeStatistiques = new ArrayCollection();
     }
 
@@ -171,6 +176,28 @@ class Commande
     public function __toString(): string
     {
         return (string) $this->name;
+    }
+
+    /** @return Collection<int, CommandeLine> */
+    public function getLines(): Collection
+    {
+        return $this->lines;
+    }
+
+    /** État de réception (lot R1) : none (rien reçu ou aucune ligne), partial, complete */
+    public function receptionStatus(): string
+    {
+        $ordered = 0;
+        $received = 0;
+        foreach ($this->lines as $line) {
+            $ordered += $line->getQuantityOrdered();
+            $received += min($line->getQuantityReceived(), $line->getQuantityOrdered());
+        }
+        if ($ordered === 0 || $received === 0) {
+            return $ordered > 0 || $this->lines->count() === 0 ? 'none' : 'complete';
+        }
+
+        return $received >= $ordered ? 'complete' : 'partial';
     }
 
     public function getDocument(): ?GestionDocument
