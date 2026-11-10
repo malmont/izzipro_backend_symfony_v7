@@ -188,10 +188,19 @@ class GestionPriceService
         if ($b === false) {
             throw new GestionConflictException('BATCH_NOT_FOUND', 'Lot de prix introuvable.', 404, ['batchId' => $id]);
         }
-        $changes = $this->conn()->fetchAllAssociative('SELECT c.*, p.name FROM gestion_price_change c LEFT JOIN product p ON p.id = c.product_id WHERE c.batch_id = ? ORDER BY c.id', [$id]);
+        $changes = $this->conn()->fetchAllAssociative('SELECT c.*, p.name, sz.name AS size, co.name AS color FROM gestion_price_change c LEFT JOIN product p ON p.id = c.product_id'
+            . ' LEFT JOIN product_variant pv ON pv.id = c.variant_id LEFT JOIN size sz ON sz.id = pv.size_id LEFT JOIN color co ON co.id = pv.color_id WHERE c.batch_id = ? ORDER BY c.id', [$id]);
 
         return $this->batchRow($b) + ['rows' => array_map(fn ($c) => ['productId' => (int) $c['product_id'], 'variantId' => $c['variant_id'] === null ? null : (int) $c['variant_id'], 'level' => $c['level'],
-            'name' => $c['name'], 'oldPrice' => (int) $c['old_price'], 'newPrice' => (int) $c['new_price']], $changes)];
+            'name' => $c['name'], 'variantLabel' => $c['level'] === 'variant' ? self::variantLabel($c['size'], $c['color']) : null, 'oldPrice' => (int) $c['old_price'], 'newPrice' => (int) $c['new_price']], $changes)];
+    }
+
+    /** Libellé d'une variante : « XL · Noir » (taille puis couleur, celles qui existent), null sans l'une ni l'autre */
+    public static function variantLabel(?string $size, ?string $color): ?string
+    {
+        $parts = array_values(array_filter([trim((string) $size), trim((string) $color)], fn ($x) => $x !== ''));
+
+        return $parts === [] ? null : implode(' · ', $parts);
     }
 
     /**
@@ -375,7 +384,8 @@ class GestionPriceService
         if ($in['includeVariants']) {
             foreach ($own as $v) {
                 $label = trim((string) $p['name'] . ' ' . trim(($v['size'] ?? '') . ' ' . ($v['color'] ?? '')));
-                $rows[] = $this->row($p, (int) $v['id'], 'variant', $label, (int) $v['price'], $cost, (int) $v['stock'], $in, $saleItem, $special);
+                $rows[] = $this->row($p, (int) $v['id'], 'variant', $label, (int) $v['price'], $cost, (int) $v['stock'], $in, $saleItem, $special)
+                    + ['variantLabel' => self::variantLabel($v['size'] ?? null, $v['color'] ?? null)];
             }
         }
 

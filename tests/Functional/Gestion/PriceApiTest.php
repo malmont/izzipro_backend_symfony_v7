@@ -57,6 +57,8 @@ class PriceApiTest extends WebTestCase
         $a = $this->product('A', 2000, 1000);
         $inherit = $this->variant($a, null, 5);
         $own = $this->variant($a, 2500, 3);
+        $conn->executeStatement("UPDATE product_variant SET size_id = (SELECT id FROM size ORDER BY id LIMIT 1), color_id = (SELECT id FROM color ORDER BY id LIMIT 1) WHERE id = ?", [$own]);
+        $expectedLabel = GestionPriceService::variantLabel($conn->fetchOne('SELECT name FROM size ORDER BY id LIMIT 1') ?: null, $conn->fetchOne('SELECT name FROM color ORDER BY id LIMIT 1') ?: null);
         $b = $this->product('B', 1000, 900);
         $conn->executeStatement("UPDATE product SET special_price = 800, special_price_from = CURRENT_DATE - 1, special_price_to = CURRENT_DATE + 1 WHERE id = ?", [$b]);
         $r = $this->product('R', 5000, 1000);
@@ -75,6 +77,8 @@ class PriceApiTest extends WebTestCase
         ], $rows);
         $this->assertSame([1, $own, 1000, 1299, 50, 56.5], [$p['rows'][0]['inheritingVariants'], $p['rows'][1]['variantId'], $p['rows'][0]['marginBefore'], $p['rows'][0]['marginAfter'], $p['rows'][0]['marginRateBefore'], $p['rows'][0]['marginRateAfter']]);
         $this->assertSame(['products' => 3, 'rows' => 4, 'changed' => 3, 'skipped' => 1], $p['summary']);
+        $this->assertSame([$expectedLabel, false], [$p['rows'][1]['variantLabel'], array_key_exists('variantLabel', $p['rows'][0])], 'variantLabel sur les lignes de variante');
+        $this->assertSame(['XL · Noir', 'XL', 'Noir', null], [GestionPriceService::variantLabel('XL', 'Noir'), GestionPriceService::variantLabel('XL', null), GestionPriceService::variantLabel(' ', 'Noir'), GestionPriceService::variantLabel(null, null)]);
         $this->assertSame([2000, 2500], [(int) $conn->fetchOne('SELECT price FROM product WHERE id = ?', [$a]), (int) $conn->fetchOne('SELECT price FROM product_variant WHERE id = ?', [$own])], 'aperçu : aucune écriture');
 
         // Empreinte périmée : 409 avec l'aperçu à jour ; sans empreinte : 422
@@ -123,6 +127,7 @@ class PriceApiTest extends WebTestCase
         $this->assertSame([409, 'ALREADY_UNDONE'], [$this->status(), $this->body()['error']]);
         $lot = $this->get('/api/gestion/prix/lots/' . $applied['batchId']);
         $this->assertSame([false, 'ALREADY_UNDONE', 3, 1], [$lot['undoable'], $lot['undoBlockedBy'], count($lot['rows']), count($lot['undoSkipped'])]);
+        $this->assertSame([null, $expectedLabel], [$lot['rows'][0]['variantLabel'], $lot['rows'][1]['variantLabel']], 'variantLabel dans le détail du lot');
 
         // Grand écart et prix sous le coût : écrits seulement avec l'accord explicite
         $big = ['productIds' => [$b], 'mode' => 'percent', 'value' => 60];

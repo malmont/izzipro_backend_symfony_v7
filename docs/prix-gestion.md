@@ -47,7 +47,8 @@ l'administration (`Product::updatePrice()` : prix = prix d'achat × coefficient)
 - Arrondi, appliqué en dernier : `ends_99` (le plus petit X,99 ≥ prix : 26,24 → 26,99 ; 26,00 → 26,99), `up_50` (0,50 supérieur), `up_100`
   (dollar supérieur), `none` (au cent).
 - Lignes : une ligne « article » (`level: product`, `product.price`, que suivent les variantes sans prix propre : `inheritingVariants`) et une ligne
-  par variante qui a son propre prix (`level: variant`, sauf `includeVariants: false`).
+  par variante qui a son propre prix (`level: variant`, sauf `includeVariants: false`), avec `variantLabel` (« XL · Noir » : taille puis couleur,
+  celles qui existent ; aussi dans le détail d'un lot).
 - Réponse : `{ rows: [{ productId, variantId, level, name, inheritingVariants?, oldPrice, newPrice, cost, marginBefore, marginAfter, marginRateBefore,
   marginRateAfter, stock, changed, alerts }], summary { products, rows, changed, skipped }, pricesIncludeTax, previewHash, caveats }`.
 - Alertes : `NOT_A_SALE_ITEM` (location, abonnement : grille ou formule, jamais modifié), `PRICE_MISSING` (prix nul en `percent`), `COST_UNKNOWN`
