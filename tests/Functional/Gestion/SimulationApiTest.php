@@ -59,6 +59,8 @@ class SimulationApiTest extends WebTestCase
         $conn->executeStatement("DELETE FROM commande_line WHERE commande_id IN (SELECT id FROM commande WHERE name = 'Simulation')");
         $conn->executeStatement("DELETE FROM commande WHERE name = 'Simulation'");
         $conn->executeStatement('DELETE FROM gestion_cash_balance');
+        $conn->executeStatement("DELETE FROM marketing_campaign WHERE name = 'Simulation LY'");
+        \App\Tests\Functional\Support\AiRightTestHelper::restoreFullAi(static::getContainer());
         parent::tearDown();
     }
 
@@ -176,6 +178,82 @@ class SimulationApiTest extends WebTestCase
         $none = $service->simulate($this->em()->find(Collections::class, $this->period(6000, 'sim-none')), [], 'fr', $today->modify('+6009 days'));
         $this->assertSame(['none', 0], [$none['method'], $none['base']['sales']['projected']]);
         $this->assertContains('NO_SALES_PACE', array_column($none['caveats'], 'code'));
+    }
+
+    public function testGuideCommentCandidatesCacheLimitAndAi(): void
+    {
+        \App\Tests\Fake\FakeLandingAiClient::reset();
+        $service = static::getContainer()->get(\App\Services\GestionService\GestionSimulationCommentService::class);
+        $today = static::getContainer()->get(PeriodCalendar::class)->today();
+        $b = $today->modify('+8000 days');
+        $pid = $this->period(8000, 'sim-com');
+        $lyStart = $b->modify('-1 year');
+        $lyId = $this->period((int) $today->diff($lyStart)->format('%r%a'), 'sim-cly');
+        $period = $this->em()->find(Collections::class, $pid);
+        $conn = $this->em()->getConnection();
+        foreach (['purchases' => 50000, 'advertising' => 5000, 'other' => 2000] as $category => $planned) {
+            $conn->executeStatement('INSERT INTO gestion_budget_line (period_id, category, planned_cents, updated_at) VALUES (?, ?, ?, NOW())', [$pid, $category, $planned]);
+        }
+        // L'an dernier : stock 100,00, publicité 10,00, autres frais 30,00
+        [$p] = $this->variant('Simulation commentaire', 0);
+        $cid = (int) $conn->fetchOne("INSERT INTO commande (id, date, name, kind, budget) VALUES (nextval('commande_id_seq'), ?, 'Simulation', 'standard', 0) RETURNING id", [$lyStart->modify('+2 days')->format('Y-m-d') . ' 09:00:00']);
+        $conn->executeStatement('INSERT INTO commande_line (commande_id, product_id, quantity_ordered, unit_cost_cents, attached_at, created_at, updated_at) VALUES (?, ?, 4, 2500, NOW(), NOW(), NOW())', [$cid, $p]);
+        $conn->executeStatement("INSERT INTO note_de_frais (id, name, montant, date) VALUES (nextval('note_de_frais_id_seq'), 'Simulation', 3000, ?)", [$lyStart->modify('+3 days')->format('Y-m-d')]);
+        $conn->executeStatement("INSERT INTO marketing_campaign (id, name, channel, start_date, end_date, amount_cents, created_at, updated_at) VALUES (nextval('marketing_campaign_id_seq'), 'Simulation LY', 'social', ?, ?, 1000, NOW(), NOW())", [$lyStart->modify('+4 days')->format('Y-m-d'), $lyStart->modify('+4 days')->format('Y-m-d')]);
+        // Trésorerie : 300,00 au B+5, seuil 0
+        $conn->executeStatement('INSERT INTO gestion_cash_balance (balance_date, amount_cents, created_at, updated_at) VALUES (?, 30000, NOW(), NOW())', [$b->modify('+5 days')->format('Y-m-d')]);
+        $this->endOfWrite();
+        $t = $b->modify('+9 days');
+
+        \App\Tests\Fake\FakeLandingAiClient::$queue[] = $this->aiResponse(['recommended' => 'cashSafe', 'title' => 'Protégez la trésorerie', 'text' => 'Réduisez les achats de stock de 270,00 $ : la trésorerie reste à 0,00 $, le résultat ne bouge pas.']);
+        $r = $service->comment($period, [], 'fr', 'gerant@example.invalid', $t);
+        $c = array_column($r['candidates'], null, 'key');
+        $this->assertSame(['keep', 'lastYearShares', 'lastYearActual', 'cashSafe'], array_keys($c), 'sans prévu dans le corps : pas de « simulated »');
+        $this->assertSame(['purchases' => 10000, 'trip' => 0, 'shipping' => 0, 'advertising' => 1000, 'other' => 3000], $c['lastYearActual']['planned'], 'C2 : réel de l\'an dernier par poste');
+        $this->assertSame(['purchases' => 40715, 'trip' => 0, 'shipping' => 0, 'advertising' => 4071, 'other' => 12214], $c['lastYearShares']['planned'], 'même total (570,00), parts de l\'an dernier');
+        $this->assertSame([-7000, -16285, -4000, -7000], [$c['keep']['result'], $c['lastYearShares']['result'], $c['lastYearActual']['result'], $c['cashSafe']['result']], 'résultat = − frais (aucune vente) ; achats seuls : résultat inchangé');
+        $this->assertSame([-27000, 0, 27000, 23000, true], [$c['keep']['cashAfterPurchases'], $c['cashSafe']['cashAfterPurchases'], $c['cashSafe']['purchasesCut'], $c['cashSafe']['planned']['purchases'], $c['cashSafe']['reachesThreshold']]);
+        $this->assertSame([['result' => 3000, 'cashAfterPurchases' => 43000], ['result' => 0, 'cashAfterPurchases' => 27000]], [$c['lastYearActual']['delta'], $c['cashSafe']['delta']]);
+        $this->assertSame([['recommended' => 'cashSafe', 'title' => 'Protégez la trésorerie', 'text' => 'Réduisez les achats de stock de 270,00 $ : la trésorerie reste à 0,00 $, le résultat ne bouge pas.', 'textSource' => 'ai'], 'ok', false], [$r['comment'], $r['ai']['status'], $r['cached']]);
+        $this->assertStringNotContainsString('gerant@example.invalid', json_encode(\App\Tests\Fake\FakeLandingAiClient::$requests[0], JSON_UNESCAPED_UNICODE));
+
+        // Même corps, même jour : même avis, sans nouvel appel
+        $again = $service->comment($period, [], 'fr', null, $t);
+        $this->assertSame([true, 'ai', 1], [$again['cached'], $again['comment']['textSource'], count(\App\Tests\Fake\FakeLandingAiClient::$requests)]);
+        // Chiffre inventé : avis des règles (cashSafe : la trésorerie l'impose)
+        \App\Tests\Fake\FakeLandingAiClient::$queue[] = $this->aiResponse(['recommended' => 'keep', 'title' => 'Gardez', 'text' => 'Vous gagnerez 999,00 $.']);
+        $rejected = $service->comment($period, ['pricePercent' => 10], 'fr', null, $t);
+        $this->assertSame(['rules', 'cashSafe', true], [$rejected['comment']['textSource'], $rejected['comment']['recommended'], $rejected['comment']['rejected'] ?? false]);
+        $this->assertStringContainsString('270,00', $rejected['comment']['text']);
+        // Sans droit IA : avis des règles, rien d'envoyé
+        $master = static::getContainer()->get(\App\Services\TenantConnectionManager::class)->getPdoMaster();
+        $master->prepare("DELETE FROM tenant_entitlements WHERE tenant_code = ? AND feature_key IN ('ai.full', 'ai.help')")->execute([MV_TEST_TENANT_CODE]);
+        try {
+            $calls = count(\App\Tests\Fake\FakeLandingAiClient::$requests);
+            $none = $service->comment($period, ['pricePercent' => 20], 'fr', null, $t);
+            $this->assertSame(['not_included', 'rules', $calls], [$none['ai']['status'], $none['comment']['textSource'], count(\App\Tests\Fake\FakeLandingAiClient::$requests)]);
+        } finally {
+            \App\Tests\Functional\Support\AiRightTestHelper::restoreFullAi(static::getContainer());
+        }
+        // Plafond : 10 avis par jour, puis 429 COMMENT_LIMIT avec l'avis des règles
+        for ($i = 0; $i < 7; ++$i) {
+            $conn->executeStatement("INSERT INTO gestion_simulation_comment (period_id, body_hash, store_day, response, ai_status, created_at) VALUES (?, ?, ?, '{}', 'ok', NOW())", [$pid, "x$i", $t->format('Y-m-d')]);
+        }
+        try {
+            $service->comment($period, ['pricePercent' => 30], 'fr', null, $t);
+            $this->fail('429 attendu');
+        } catch (\App\Services\GestionService\GestionConflictException $e) {
+            $this->assertSame([429, 'COMMENT_LIMIT', 'cashSafe', 'rules'], [$e->status, $e->errorCode, $e->details['comment']['recommended'], $e->details['comment']['textSource']]);
+        }
+    }
+
+    private function aiResponse(array $out): object
+    {
+        return json_decode(json_encode([
+            'id' => 'msg_' . bin2hex(random_bytes(4)), 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-sonnet-5-5', 'stop_reason' => 'end_turn',
+            'content' => [['type' => 'text', 'text' => json_encode($out, JSON_UNESCAPED_UNICODE)]],
+            'usage' => ['input_tokens' => 2000, 'output_tokens' => 300, 'cache_read_input_tokens' => 0, 'cache_creation_input_tokens' => 0],
+        ]), false);
     }
 
     // ----- helpers -----

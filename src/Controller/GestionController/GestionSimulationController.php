@@ -32,6 +32,18 @@ class GestionSimulationController extends AbstractController
         return $this->json($this->useCase->simulate($collection, $body, $this->locale($request)));
     }
 
+    /** Avis du guide (lot G1b-2, `docs/guide-ia-gestion.md` § 9) : répartitions calculées par le backend, recommandation rédigée par l'IA */
+    #[Route('/api/periodes/{id}/simulation/commentaire', name: 'gestion_periode_simulation_commentaire', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function comment(Collections $collection, Request $request): JsonResponse
+    {
+        $body = $request->getContent() === '' ? [] : json_decode((string) $request->getContent(), true);
+        if (!is_array($body)) {
+            throw new GestionValidationException(['body' => 'INVALID_JSON']);
+        }
+
+        return $this->json($this->useCase->comment($collection, $body, $this->locale($request), $this->getUser()?->getUserIdentifier()));
+    }
+
     private function locale(Request $request): string
     {
         $asked = $request->query->get('locale');

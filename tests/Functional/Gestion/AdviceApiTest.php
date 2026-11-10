@@ -256,6 +256,7 @@ class AdviceApiTest extends WebTestCase
         $aiTile = array_values(array_filter($this->get('/api/gestion/accueil/vignettes?locale=fr'), fn ($t) => $t['id'] === 'advice'))[0] ?? null;
         $this->assertSame(['Titre IA', 'Texte IA', 68], [$aiTile['title'] ?? null, $aiTile['text'] ?? null, $aiTile['priority'] ?? null], 'vignette : texte de l\'IA');
         foreach ($this->get('/api/gestion/accueil/vignettes?locale=fr') as $t) {
+            $this->assertSame('CAD', $t['currency'] ?? null, $t['id'] . ' : devise du site');
             foreach ($t['sources'] as $src) {
                 $this->assertContains($src['unit'] ?? null, ['money', 'percent', 'count', 'days', 'date', 'ratio'], $t['id'] . ' : unit sur chaque source');
             }

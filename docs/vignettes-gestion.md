@@ -18,6 +18,7 @@ Migration `Version20261205100000`, script `scripts/migrate_all_v2_gestion_vignet
 
 `{ id, kind: "first_steps" | "alert", priority, title, text, action: { screen, params }, sources: [{ label, value }], dismissible, figures }`
 
+- `currency` : devise du site (ISO 4217) sur chaque vignette (11/11/2026, additif : la réponse est une liste sans racine).
 - `sources[]` : `{ label, value, unit }`, `unit` = money | percent | count | days | date | ratio comme les conseils du guide (11/11/2026, additif : absent = valeur brute).
 - `priority` de 1 à 100, plus haut = plus urgent ; `title` et `text` prêts à afficher dans la langue demandée (`?locale=`, sinon langue du site).
 - `action.screen` : code d'écran que l'application traduit en navigation ; `dismissible` toujours vrai.

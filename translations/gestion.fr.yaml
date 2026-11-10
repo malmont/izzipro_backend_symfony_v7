@@ -93,6 +93,18 @@ cash:
         NO_SALES_HISTORY: 'Aucune vente sur les 30 derniers jours : pas de moyenne des encaissements.'
 # Simulateur de période (lot B1b-2, 11/11/2026, docs/simulateur-gestion.md)
 simulation:
+    candidates:
+        keep: "Prévu actuel"
+        simulated: "Votre répartition"
+        lastYearShares: "Mêmes parts que l’an dernier"
+        lastYearActual: "Dépenses de l’an dernier"
+        cashSafe: "Achats réduits pour la trésorerie"
+    comment:
+        title: "Avis du guide"
+        cash_title: "Protéger la trésorerie"
+        cash_text: "Après les achats prévus, la trésorerie descendrait à %cash%, sous votre seuil de %threshold%. Réduire les achats de stock de %cut% la garde au-dessus, sans changer le résultat."
+        best_text: "« %label% » donne le meilleur résultat : %result%, soit %delta% d’écart avec le prévu actuel."
+        keep_text: "Le prévu actuel donne le meilleur résultat : %result%."
     caveats:
         SAME_QUANTITIES: "À quantités vendues égales : l'effet d'un prix ou d'une promotion sur le nombre de ventes n'est pas estimé."
         UNKNOWN_COST: 'Des articles sans coût connu sont exclus des marges.'

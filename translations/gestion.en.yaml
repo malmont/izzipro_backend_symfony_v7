@@ -91,6 +91,18 @@ cash:
         NO_SALES_HISTORY: 'No sales in the last 30 days: no receipts average.'
 # Period simulator (lot B1b-2, 11/11/2026, docs/simulateur-gestion.md)
 simulation:
+    candidates:
+        keep: "Current plan"
+        simulated: "Your split"
+        lastYearShares: "Same shares as last year"
+        lastYearActual: "Last year’s spending"
+        cashSafe: "Purchases cut for cash"
+    comment:
+        title: "Guide’s view"
+        cash_title: "Protect your cash"
+        cash_text: "After planned purchases, cash would drop to %cash%, below your %threshold% threshold. Cutting stock purchases by %cut% keeps it above, without changing the result."
+        best_text: "“%label%” gives the best result: %result%, %delta% away from the current plan."
+        keep_text: "The current plan gives the best result: %result%."
     caveats:
         SAME_QUANTITIES: 'Same quantities sold: the effect of a price or a promotion on the number of sales is not estimated.'
         UNKNOWN_COST: 'Items without a known cost are left out of margins.'

@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (390)
+## Boutique et commun (391)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -445,6 +445,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/periodes/{id}/budget` | ROLE_ADMIN | `Controller\GestionController\GestionBudgetController::get` |
 | PUT | `/api/periodes/{id}/budget` | ROLE_ADMIN | `Controller\GestionController\GestionBudgetController::put` |
 | GET | `/api/periodes/{id}/resultat` | ROLE_ADMIN | `Controller\GestionController\PeriodeController::result` |
+| POST | `/api/periodes/{id}/simulation/commentaire` | ROLE_ADMIN | `Controller\GestionController\GestionSimulationController::comment` |
 | POST | `/api/periodes/{id}/simulation` | ROLE_ADMIN | `Controller\GestionController\GestionSimulationController::simulate` |
 | PATCH | `/api/periodes/{id}` | ROLE_ADMIN | `Controller\GestionController\PeriodeController::patch` |
 | GET | `/api/periodes` | ROLE_ADMIN | `Controller\GestionController\PeriodeController::list` |

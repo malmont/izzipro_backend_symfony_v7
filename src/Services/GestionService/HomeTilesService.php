@@ -66,10 +66,11 @@ class HomeTilesService
         }));
         usort($tiles, fn (array $a, array $b) => $b['priority'] <=> $a['priority']);
 
-        return array_map(function (array $t): array {
+        $currency = $this->siteCurrency(); // devise du site sur chaque vignette (11/11/2026) : la réponse est une liste sans racine
+        return array_map(function (array $t) use ($currency): array {
             unset($t['signature']);
 
-            return $t;
+            return $t + ['currency' => $currency];
         }, array_slice($tiles, 0, self::MAX_TILES));
     }
 

@@ -105,7 +105,7 @@ calcule les règles (sans jamais demander l'IA) et crée la période en cours au
 |---|---|
 | **G1a** | règles R1–R11, conseils, générations, rédaction vérifiée par l'IA, routes, vignette ; livré le 11/11/2026 |
 | **G1b-1** | mesure après application (§ 8), vignette `advice-result`, résultats des conseils appliqués dans le contexte de l'IA ; livré le 11/11/2026 |
-| G1b-2 | commentaire du simulateur (répartitions calculées par le backend) |
+| **G1b-2** | avis du guide sur le simulateur (§ 9) ; `currency` sur chaque vignette ; livré le 11/11/2026 |
 | Plus tard | mesure des leçons de clôture sur la période suivante de même saison |
 
 ## 8. Mesure après application (lot G1b-1)
@@ -136,4 +136,40 @@ calcule les règles (sans jamais demander l'IA) et crée la période en cours au
   chiffres sont admis par la vérification.
 - Vignette **`advice-result`** (`kind: "advice"`, priorité 50) : le dernier conseil fait dont la mesure est complète depuis moins de 30 jours ;
   texte = texte de la mesure ; action `conseils { adviceId }` ; écartée pour toujours pour ce conseil (un conseil suivant la fait revenir).
+
+## 9. Avis du guide sur le simulateur (lot G1b-2)
+
+`POST /api/periodes/{id}/simulation/commentaire` (même corps que `POST /api/periodes/{id}/simulation`, bouton « Avis du guide » de l'application,
+jamais à chaque mouvement d'un curseur ; `GestionSimulationCommentService`) →
+
+```
+{ simulation: (réponse de POST simulation, inchangée),
+  candidates: [{ key, label, planned { purchases, trip, shipping, advertising, other }, result, cashAfterPurchases, breakEven, expenses,
+                 delta { result, cashAfterPurchases }, purchasesCut?, reachesThreshold? }],
+  comment: { recommended, title, text, textSource: "ai" | "rules", rejected? },
+  ai: { status: ok | not_included | credits_exhausted | error }, cached }
+```
+
+- Candidats, tous calculés par le backend et repassés dans le simulateur avec les leviers du gérant (seul le prévu change) ; `delta` par
+  rapport à `keep` :
+  - `keep` : le prévu enregistré ;
+  - `simulated` : le prévu du corps (seulement si le corps en porte un) ;
+  - `lastYearShares` : le même total prévu, réparti selon les parts réelles des postes de la même période l'an dernier (l'arrondi va au
+    stock) ; absent sans période l'an dernier, sans dépense l'an dernier ou sans prévu ;
+  - `lastYearActual` : chaque poste au réel de la même période l'an dernier, sans ramener au total actuel (« et si je dépense comme l'an
+    dernier ? ») ; absent sans période l'an dernier ;
+  - `cashSafe` : achats prévus (de `simulated`, sinon `keep`) réduits juste assez pour que la trésorerie après achats atteigne le seuil, jamais
+    sous les achats déjà faits (`purchasesCut`, `reachesThreshold`) ; absent sans solde saisi ou si la trésorerie est déjà au-dessus.
+- **Un changement des seuls achats ne modifie pas `result`** (le stock n'est pas une charge du résultat) : seule la trésorerie après achats
+  change (le stock de fin du simulateur ne compte pas les achats prévus). L'IA reçoit cette règle : elle ne présente jamais `cashSafe` comme une
+  perte de résultat.
+- Avis : l'IA choisit `recommended` parmi les clés et explique en deux ou trois phrases (Sonnet 5.5, sortie structurée, 1 crédit, droit Aide
+  IA, appel synchrone de 30 s au plus). Mêmes vérifications qu'au § 5 : tout nombre écrit doit venir des candidats, de la simulation ou des
+  leviers, sinon avis des règles (`rejected: true`). Avis des règles : `cashSafe` si la trésorerie l'impose, sinon le meilleur résultat (à
+  égalité, garder le prévu).
+- Cache : même période, mêmes leviers, même langue, même jour → même réponse (`cached: true`), sans nouveau crédit (table
+  `gestion_simulation_comment`, `Version20261211100000`, `scripts/migrate_all_v2_gestion_simulation_commentaire.sh`).
+- Plafond : 10 avis par site et par jour, puis 429 `COMMENT_LIMIT` dont le corps porte quand même `simulation`, `candidates` et l'avis des
+  règles. 404 `NOT_A_PERIOD`, 409 `PERIOD_CLOSED`, 422 comme la simulation.
+- Appliquer = `PUT /api/periodes/{id}/budget` avec le `planned` du candidat choisi ; aucune écriture ici hors du cache.
 
