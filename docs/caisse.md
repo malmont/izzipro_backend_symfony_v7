@@ -2400,6 +2400,13 @@ mise à jour de `amountTotal`, puis écrit la `TransactionCaisse` ; il s'exécut
 détail des Z), `CaisseOperationsUseCase::close` (comptage, Z) ; coupures : `DenominationService` ; arrondi :
 `CashRoundingService`. Schéma : `migrations/Version20261019130000.php`, `scripts/migrate_all_v2_caisse_closing.sh`.
 
+**Écriture du stock** (10/11/2026) : vente, annulation et retour passent par `UpdateStockAndInventoryUseCase::execute`, qui
+**verrouille la ligne de la variante** (`SELECT … FOR UPDATE`) et relit son stock en base avant d'écrire, en gardant ce que la
+requête a déjà changé en mémoire (deux lignes de la même variante sur un ticket). Avant, le stock partait de la valeur chargée au
+début de la requête : deux ventes simultanées, ou une vente et une réception de la gestion, pouvaient perdre une mise à jour.
+Ordre des verrous : variante, puis article (rappel `PostUpdate` de la variante), le même que la réception de la gestion
+(`CommandeReceptionService`). Test : `tests/Functional/Boutique/StockConcurrentWriteTest.php`.
+
 ## Connexion du POS
 
 Au premier lancement, le POS s'active avec une clé générée par l'administrateur du site (`POST /api/app/activate`,

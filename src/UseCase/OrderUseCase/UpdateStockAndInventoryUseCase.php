@@ -26,7 +26,7 @@ class UpdateStockAndInventoryUseCase
         $em = $this->emProvider->getEntityManager();
         $movementTypeRepository = $em->getRepository(MovementType::class);
 
-        $stockBeforeMovement = $productVariant->getStockQuantity();
+        $stockBeforeMovement = $this->lockedStock($productVariant); // relu sous verrou : plus de mise à jour perdue (10/11/2026)
         $newQuantity = $isCancellation ? $quantity : -$quantity;
         $productVariant->setStockQuantity($stockBeforeMovement + $newQuantity);
 
@@ -48,6 +48,37 @@ class UpdateStockAndInventoryUseCase
 
         // On utilise l'EM du tenant pour la persistance
         $em->persist($inventoryMovement);
+    }
+
+    /**
+     * Stock de départ d'une vente, d'une annulation ou d'un retour (10/11/2026). Avant, l'écriture partait de la valeur chargée en mémoire au
+     * début de la requête, puis l'écrivait en valeur absolue : deux ventes simultanées de la même variante, ou une vente et une réception,
+     * pouvaient perdre l'une des deux mises à jour. Désormais, la ligne est verrouillée (SELECT … FOR UPDATE, efficace dans la transaction de
+     * la vente ou de l'annulation) et relue en base. On y ajoute ce que la requête a déjà changé en mémoire sur cette variante (deux lignes de
+     * la même variante sur un ticket, ou un appelant qui a préparé l'entité). La valeur d'origine connue de Doctrine est recalée sur la base,
+     * sinon un stock final égal à la valeur chargée ne serait pas écrit. Variante pas encore enregistrée : valeur en mémoire, comme avant.
+     */
+    private function lockedStock(ProductVariant $variant): int
+    {
+        $current = (int) $variant->getStockQuantity();
+        if ($variant->getId() === null) {
+            return $current;
+        }
+        $em = $this->emProvider->getEntityManager();
+        $uow = $em->getUnitOfWork();
+        if (!$uow->isInIdentityMap($variant)) {
+            return $current;
+        }
+        $db = $em->getConnection()->fetchOne('SELECT stock_quantity FROM product_variant WHERE id = ? FOR UPDATE', [$variant->getId()]);
+        if ($db === false || $db === null) {
+            return $current;
+        }
+        $original = (int) ($uow->getOriginalEntityData($variant)['stockQuantity'] ?? $current);
+        $uow->setOriginalEntityProperty(spl_object_id($variant), 'stockQuantity', (int) $db);
+        $fresh = (int) $db + ($current - $original);
+        $variant->setStockQuantity($fresh);
+
+        return $fresh;
     }
 
     public function executeNewProductVariant(ProductVariant $productVariant, int $stockBeforeMovement, int $movementTypeId): void
