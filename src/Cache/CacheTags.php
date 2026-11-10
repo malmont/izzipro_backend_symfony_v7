@@ -302,8 +302,8 @@ final class CacheTags
         PaymentType::class => [self::ORDERS, self::PAYMENTS],
 
         Commande::class => [self::COMMANDES],
-        \App\Entity\CommandeLine::class => [self::COMMANDES, self::PRODUCTS],
-        \App\Entity\MarketingCampaign::class => [self::CAMPAGNES], // campagnes de publicité (lot A1) : résultat de période // lignes d'achat (lot L0, 10/11/2026) : commandes, produits (raccourcis, « à classer »)
+        \App\Entity\CommandeLine::class => [self::COMMANDES, self::PRODUCTS], // lignes d'achat (lot L0, 10/11/2026) : commandes, produits (raccourcis, « à classer »)
+        \App\Entity\MarketingCampaign::class => [self::CAMPAGNES], // campagnes de publicité (lot A1) : résultat de période
         Collections::class => [self::COLLECTIONS],
         Fournisseur::class => [self::FOURNISSEURS],
         TypeFournisseur::class => [self::FOURNISSEURS],
@@ -377,6 +377,7 @@ final class CacheTags
         \App\MemoiresVivantes\Entity\ChapterInvitation::class,
         AppProfile::class, // profils d'application (thème, image de marque) : aucune lecture en cache applicatif
         \App\Entity\GestionDocument::class, // documents lus par IA (lot L1, 10/11/2026) : lus par leur dépôt, jamais en cache
+        \App\Entity\GestionTileDismissal::class, // vignettes d'accueil écartées (11/11/2026) : écrites et lues en SQL par leur dépôt
         \App\Entity\GestionReprise::class, // reprise d'historique (lot P3, 10/11/2026) : une ligne par site, lue par son dépôt
         \App\Entity\PeriodResult::class, // résultat de période figé (lot P2, 10/11/2026) : lu par son dépôt, la route est cachée sous l'étiquette de la collection
         OtpCode::class,

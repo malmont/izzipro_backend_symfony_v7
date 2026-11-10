@@ -22,6 +22,7 @@ Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne 
 | Périodes de gestion (collections automatiques par calendrier de site, état par date, résultat de période, reprise d'historique) | `docs/periodes-gestion.md` |
 | Lignes d'achat de la gestion (commande_line : réassorts, coût moyen à la date de la vente, rattacher idempotent, vérification `app:gestion:lignes:verifier`) | `docs/lignes-achat-gestion.md` |
 | Volet publicité de la gestion (campagnes, devise de la régie, dépense de période, rentabilité perçue avant / après et l'an dernier) | `docs/publicite-gestion.md` |
+| Vignettes d'accueil de la gestion (premiers pas, alerte de stock bas, écart par utilisateur) | `docs/vignettes-gestion.md` |
 | Lecture de documents par IA pour la gestion (factures fournisseurs, notes de frais, transport : envoi asynchrone, extraction, confirmation, justificatifs, worker `gestion_ai`) | `docs/lecture-documents-gestion.md` |
 | Contenu d'exemple des sites (site de référence `gmasuite`, `isDemo`, copie, suppression) | `docs/contenu-exemple.md` |
 | Console de pilotage des fonctionnalités (inventaire des réglages par module, registre, droits d'usage, onglets admin / super admin, lots) | `docs/console-pilotage.md` |

@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (356)
+## Boutique et commun (358)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -367,6 +367,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/fournisseurs` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::getAllFournisseurs` |
 | POST | `/api/fournisseurs` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::createFournisseur` |
 | GET | `/api/frais/total` | ROLE_ADMIN | `Controller\StatistiqueDashboard\FraisController::getTotalFrais` |
+| POST | `/api/gestion/accueil/vignettes/{id}/ecarter` | ROLE_ADMIN | `Controller\GestionController\HomeTilesController::dismiss` |
+| GET | `/api/gestion/accueil/vignettes` | ROLE_ADMIN | `Controller\GestionController\HomeTilesController::list` |
 | GET | `/api/gestion/campagnes/{id}/rentabilite` | ROLE_ADMIN | `Controller\GestionController\MarketingCampaignController::profitability` |
 | DELETE | `/api/gestion/campagnes/{id}` | ROLE_ADMIN | `Controller\GestionController\MarketingCampaignController::delete` |
 | GET | `/api/gestion/campagnes/{id}` | ROLE_ADMIN | `Controller\GestionController\MarketingCampaignController::get` |

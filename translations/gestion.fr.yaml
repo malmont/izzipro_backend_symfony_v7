@@ -12,3 +12,20 @@ referentiel:
         Hébergement: Hébergement
         Fournitures: Fournitures
         Autre: Autre
+# Vignettes d'accueil (11/11/2026, docs/vignettes-gestion.md)
+tiles:
+    first_invoice:
+        title: Votre première facture
+        text: 'Lisez votre première facture : le stock se créera seul.'
+    first_note:
+        title: Vos reçus
+        text: 'Photographiez vos reçus : vos dépenses se classeront seules.'
+    first_campaign:
+        title: Votre publicité
+        text: "Notez ce que vous dépensez en publicité pour savoir ce qu'elle rapporte."
+    low_stock:
+        title: Stock bas
+        text: "{1}1 article qui se vend n'en a plus que pour moins de 2 semaines.|]1,Inf[%count% articles qui se vendent n'en ont plus que pour moins de 2 semaines."
+    sources:
+        sold_last_30_days: Ventes des 30 derniers jours
+        current_stock: Stock actuel

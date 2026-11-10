@@ -10,3 +10,20 @@ referentiel:
         Hébergement: Lodging
         Fournitures: Supplies
         Autre: Other
+# Home tiles (11/11/2026, docs/vignettes-gestion.md)
+tiles:
+    first_invoice:
+        title: Your first invoice
+        text: 'Scan your first invoice: your stock will build itself.'
+    first_note:
+        title: Your receipts
+        text: 'Take photos of your receipts: your expenses will sort themselves.'
+    first_campaign:
+        title: Your advertising
+        text: 'Record what you spend on advertising to see what it brings in.'
+    low_stock:
+        title: Low stock
+        text: '{1}1 item that sells has less than 2 weeks of stock left.|]1,Inf[%count% items that sell have less than 2 weeks of stock left.'
+    sources:
+        sold_last_30_days: Sales in the last 30 days
+        current_stock: Current stock
