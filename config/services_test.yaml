@@ -35,6 +35,9 @@ services:
     App\Tests\Fake\FakeLandingAiClient:
         public: true
     App\Services\LandingAiService\LandingAiClientInterface: '@App\Tests\Fake\FakeLandingAiClient'
+    # Notifications sur téléphone (lot N1, 11/11/2026) : envoi simulé
+    App\Tests\Fake\FakePushSender: ~
+    App\Services\NotificationService\PushSenderInterface: '@App\Tests\Fake\FakePushSender'
 
     # Synchronisation de la configuration des landing pages : faux frontend (aucun appel réseau)
     App\Tests\Fake\FakeFrontendConfigHttpClient:

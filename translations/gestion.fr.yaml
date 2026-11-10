@@ -29,3 +29,16 @@ tiles:
     sources:
         sold_last_30_days: Ventes des 30 derniers jours
         current_stock: Stock actuel
+# Notifications sur téléphone (lot N1, 11/11/2026, docs/notifications-gestion.md)
+notifications:
+    kinds:
+        low_stock: Articles qui vont manquer
+        duplicate_invoice: Facture déjà saisie
+        cash_critical: Trésorerie critique
+        trip_budget: Budget du voyage dépassé
+    low_stock:
+        title: Stock bas
+        body: "{1}1 article qui se vend bien va manquer d'ici une semaine.|]1,Inf[%count% articles qui se vendent bien vont manquer d'ici une semaine."
+    duplicate_invoice:
+        title: Facture en double
+        body: 'Cette facture de %supplier% semble déjà saisie.'

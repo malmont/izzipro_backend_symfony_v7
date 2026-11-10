@@ -39,6 +39,7 @@ class GestionDocumentReader
         private readonly GestionDocumentMatcher $matcher,
         private readonly LoggerInterface $logger,
         private readonly ?TenantCurrencyProvider $currency = null,
+        private readonly ?\App\Services\GestionService\GestionNotificationService $notifications = null,
     ) {
     }
 
@@ -65,6 +66,7 @@ class GestionDocumentReader
             if ($usage !== null && $usage->getStatus() === AiUsage::STATUS_RESERVED) {
                 $this->quota->complete($usage, $stats, mb_substr(sprintf('%s %s', $document->getType(), $extraction['invoice']['number'] ?? $extraction['merchant'] ?? ''), 0, 200));
             }
+            $this->notifyDuplicate($document, $extraction);
         } catch (\Throwable $e) {
             $code = $e instanceof LandingAiException ? match ($e->getStatusCode()) { 429 => 'AI_TOO_MANY_FAILURES', 422 => 'DOCUMENT_UNREADABLE', default => 'AI_UNAVAILABLE' } : 'AI_UNAVAILABLE';
             $this->logger->error(sprintf('[Lecture de document %d] %s', $documentId, $e->getMessage()));
@@ -73,6 +75,19 @@ class GestionDocumentReader
             if ($usage !== null && $usage->getStatus() === AiUsage::STATUS_RESERVED) {
                 $this->quota->release($usage, $stats);
             }
+        }
+    }
+
+    /** Facture déjà saisie : notification sur téléphone (lot N1) ; un échec d'envoi ne touche jamais la lecture */
+    private function notifyDuplicate(GestionDocument $document, array $extraction): void
+    {
+        if ($this->notifications === null || empty($extraction['duplicate'])) {
+            return;
+        }
+        try {
+            $this->notifications->duplicateInvoice($document, $extraction);
+        } catch (\Throwable $e) {
+            $this->logger->warning(sprintf('[Lecture de document %d] notification de doublon non envoyée : %s', (int) $document->getId(), $e->getMessage()));
         }
     }
 

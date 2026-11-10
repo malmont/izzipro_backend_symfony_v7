@@ -377,6 +377,9 @@ final class CacheTags
         \App\MemoiresVivantes\Entity\ChapterInvitation::class,
         AppProfile::class, // profils d'application (thème, image de marque) : aucune lecture en cache applicatif
         \App\Entity\GestionDocument::class, // documents lus par IA (lot L1, 10/11/2026) : lus par leur dépôt, jamais en cache
+        \App\Entity\PushDevice::class, // notifications sur téléphone (lot N1, 11/11/2026) : appareils, préférences, journal, en SQL par leurs dépôts
+        \App\Entity\NotificationPreference::class,
+        \App\Entity\NotificationLog::class,
         \App\Entity\GestionTileDismissal::class, // vignettes d'accueil écartées (11/11/2026) : écrites et lues en SQL par leur dépôt
         \App\Entity\GestionReprise::class, // reprise d'historique (lot P3, 10/11/2026) : une ligne par site, lue par son dépôt
         \App\Entity\PeriodResult::class, // résultat de période figé (lot P2, 10/11/2026) : lu par son dépôt, la route est cachée sous l'étiquette de la collection

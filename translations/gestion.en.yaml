@@ -27,3 +27,16 @@ tiles:
     sources:
         sold_last_30_days: Sales in the last 30 days
         current_stock: Current stock
+# Phone notifications (lot N1, 11/11/2026, docs/notifications-gestion.md)
+notifications:
+    kinds:
+        low_stock: Items about to run out
+        duplicate_invoice: Invoice already entered
+        cash_critical: Critical cash position
+        trip_budget: Trip budget exceeded
+    low_stock:
+        title: Low stock
+        body: '{1}1 item that sells well will run out within a week.|]1,Inf[%count% items that sell well will run out within a week.'
+    duplicate_invoice:
+        title: Duplicate invoice
+        body: 'This invoice from %supplier% seems to be entered already.'

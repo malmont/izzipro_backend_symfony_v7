@@ -43,3 +43,5 @@ Un premier pas disparaît seul une fois l'action faite.
 
 Par utilisateur. Un premier pas écarté ne revient plus (`until` null). Une alerte écartée revient au bout de 7 jours, ou plus tôt si la liste
 des variantes concernées change (`signature` = empreinte de la liste au moment d'écarter).
+
+Les alertes urgentes partent aussi en notification sur téléphone, avec un seuil plus strict : `docs/notifications-gestion.md`.

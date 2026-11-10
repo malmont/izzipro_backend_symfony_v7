@@ -106,9 +106,11 @@ class HomeTilesService
      * (un article créé par une facture reste invisible jusqu'à son activation). Locations, abonnements et lignes libres
      * (cartes-cadeaux, articles divers) exclus : ils n'ont pas de variante ou passent par une réservation.
      *
+     * Aussi lue par les notifications (lot N1) avec un seuil plus strict (`$coverageDays` = 7).
+     *
      * @return array{items: list<array<string, mixed>>, all: list<int>, sold: int, stock: int, signature: ?string}
      */
-    private function lowStock(): array
+    public function lowStock(int $coverageDays = self::LOW_STOCK_DAYS): array
     {
         $conn = $this->emProvider->getEntityManager()->getConnection();
         $from = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->modify('-' . self::LOW_STOCK_WINDOW_DAYS . ' days')->format('Y-m-d H:i:s');
@@ -124,7 +126,7 @@ class HomeTilesService
             . " WHERE s.qty >= :minSold AND p.product_type = 'standard' AND p.sale_enabled AND NOT p.rental_enabled AND (p.is_web OR p.is_pos)"
             . ' AND COALESCE(pv.stock_quantity, 0) * :window < :days * s.qty'
             . ' ORDER BY COALESCE(pv.stock_quantity, 0)::numeric / s.qty, s.qty DESC, pv.id',
-            ['from' => $from, 'minSold' => self::LOW_STOCK_MIN_SOLD, 'window' => self::LOW_STOCK_WINDOW_DAYS, 'days' => self::LOW_STOCK_DAYS]
+            ['from' => $from, 'minSold' => self::LOW_STOCK_MIN_SOLD, 'window' => self::LOW_STOCK_WINDOW_DAYS, 'days' => $coverageDays]
         );
         $items = [];
         $all = [];
