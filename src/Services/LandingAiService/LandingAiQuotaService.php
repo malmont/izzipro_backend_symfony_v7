@@ -87,6 +87,7 @@ final class LandingAiQuotaService
             }
 
             $usage = (new AiUsage())
+                ->setCreatedAt($now) // même instant que reserved_until : l'écart vaut exactement le TTL (course à la seconde vue en suite le 10/11/2026)
                 ->setTenant((string) ($this->tenantProvider->getTenantCode() ?? ''))
                 ->setUser($user)
                 ->setMode($mode)
