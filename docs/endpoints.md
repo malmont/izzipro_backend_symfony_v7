@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (384)
+## Boutique et commun (385)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -440,6 +440,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/periodes/{id}/budget` | ROLE_ADMIN | `Controller\GestionController\GestionBudgetController::get` |
 | PUT | `/api/periodes/{id}/budget` | ROLE_ADMIN | `Controller\GestionController\GestionBudgetController::put` |
 | GET | `/api/periodes/{id}/resultat` | ROLE_ADMIN | `Controller\GestionController\PeriodeController::result` |
+| POST | `/api/periodes/{id}/simulation` | ROLE_ADMIN | `Controller\GestionController\GestionSimulationController::simulate` |
 | PATCH | `/api/periodes/{id}` | ROLE_ADMIN | `Controller\GestionController\PeriodeController::patch` |
 | GET | `/api/periodes` | ROLE_ADMIN | `Controller\GestionController\PeriodeController::list` |
 | POST | `/api/platform/billing-events` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformBillingEventsController::receive` |

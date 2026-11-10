@@ -86,3 +86,14 @@ cash:
         RECORDED_EXPENSES_INCLUDED: 'Expenses recorded in the app (supplier orders, shipping, expense reports, advertising) count on their date, as if paid that day.'
         TAXES_INCLUDED: 'Receipts include collected taxes, which will be paid back: plan them as a "Taxes" movement.'
         NO_SALES_HISTORY: 'No sales in the last 30 days: no receipts average.'
+# Period simulator (lot B1b-2, 11/11/2026, docs/simulateur-gestion.md)
+simulation:
+    caveats:
+        SAME_QUANTITIES: 'Same quantities sold: the effect of a price or a promotion on the number of sales is not estimated.'
+        UNKNOWN_COST: 'Items without a known cost are left out of margins.'
+        LAST_YEAR_USED: 'No sales in the last 30 days: remaining sales follow the same days last year.'
+        NO_SALES_PACE: 'No sales in the last 30 days nor on the same dates last year: no remaining sales are forecast.'
+        NO_CASH_BALANCE: 'No cash balance entered: no cash after purchases.'
+        STALE_BALANCE: 'Cash balance entered %days% days ago: update it.'
+        PLANNED_PURCHASES_NOT_IN_STOCK: 'End-of-period stock does not include purchases still planned.'
+        TAXES_EXCLUDED: 'Cash after purchases: upcoming sales are counted before taxes.'

@@ -3,7 +3,7 @@
 Contrat validé par l'application (« new easymakemoney ») le 11/11/2026, sur `docs/propositions-pilotage.md` de l'application : « le backend
 ne connaît pas le solde bancaire. La trésorerie est donc saisie par le gérant, datée, et une liaison bancaire pourra venir plus tard. »
 Tout est additif. `ROLE_ADMIN` (`access_control` `/api/gestion`), montants en cents dans la devise du site. Code d'écran : `tresorerie`.
-Le simulateur (lot B1b-2) lira cette trésorerie pour sa « trésorerie après achats ».
+Le simulateur (lot B1b-2, `docs/simulateur-gestion.md`) lit cette trésorerie pour sa « trésorerie après achats » (`GestionCashService::cashUntil`).
 
 Code : `Services/GestionService/GestionCashService`, `UseCase/GestionUseCase/GestionCashUseCase`, `Controller/GestionController/GestionCashController`,
 entités `GestionCashBalance` (`gestion_cash_balance`), `GestionCashMovement` (`gestion_cash_movement`), `GestionCashSetting` (`gestion_cash_setting`),
@@ -107,5 +107,5 @@ Test : `tests/Functional/Gestion/CashApiTest.php`.
 | Lot | Contenu |
 |---|---|
 | **B1b-1** | soldes, mouvements prévus, réglages, projection en deux séries avec dépenses saisies et encaissements réels, vignettes `cash-low` / `cash-first-balance`, notification `cash_critical` ; livré le 11/11/2026 |
-| B1b-2 | simulateur de période (aucune écriture), trésorerie après achats à partir de cette fiche |
+| **B1b-2** | simulateur de période (aucune écriture), trésorerie après achats par `cashUntil` : `docs/simulateur-gestion.md` ; livré le 11/11/2026 |
 | Plus tard | liaison bancaire ; « marquer payé » ou « sauter une occurrence » si besoin ; frais fixes du résultat appuyés sur les mouvements prévus |

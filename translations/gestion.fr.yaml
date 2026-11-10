@@ -88,3 +88,14 @@ cash:
         RECORDED_EXPENSES_INCLUDED: "Les dépenses saisies dans l'application (commandes fournisseurs, frais de port, notes de frais, publicité) sont comptées à leur date, comme si elles étaient payées ce jour-là."
         TAXES_INCLUDED: 'Les encaissements comprennent les taxes perçues, qui seront reversées : prévoyez-les en mouvement « Taxes et impôts ».'
         NO_SALES_HISTORY: 'Aucune vente sur les 30 derniers jours : pas de moyenne des encaissements.'
+# Simulateur de période (lot B1b-2, 11/11/2026, docs/simulateur-gestion.md)
+simulation:
+    caveats:
+        SAME_QUANTITIES: "À quantités vendues égales : l'effet d'un prix ou d'une promotion sur le nombre de ventes n'est pas estimé."
+        UNKNOWN_COST: 'Des articles sans coût connu sont exclus des marges.'
+        LAST_YEAR_USED: "Aucune vente ces 30 derniers jours : les ventes restantes reprennent celles des mêmes jours l'an dernier."
+        NO_SALES_PACE: "Aucune vente ces 30 derniers jours ni l'an dernier aux mêmes dates : aucune vente restante n'est prévue."
+        NO_CASH_BALANCE: 'Aucun solde de trésorerie saisi : pas de trésorerie après achats.'
+        STALE_BALANCE: 'Solde de trésorerie saisi il y a %days% jours : mettez-le à jour.'
+        PLANNED_PURCHASES_NOT_IN_STOCK: 'Le stock de fin de période ne compte pas les achats encore prévus.'
+        TAXES_EXCLUDED: 'Trésorerie après achats : les ventes à venir y sont comptées hors taxes.'

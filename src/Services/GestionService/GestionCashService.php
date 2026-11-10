@@ -381,6 +381,37 @@ class GestionCashService
     }
 
     /**
+     * Trésorerie connue à la fin d'un jour (simulateur, lot B1b-2) : solde de référence + mouvements prévus − dépenses saisies jusqu'à ce jour
+     * + encaissements nets réels du lendemain du solde à hier ; sans aucune vente estimée. null sans solde saisi.
+     *
+     * @return array{amount: int, balance: array<string, mixed>}|null
+     */
+    public function cashUntil(string $endDate, ?\DateTimeImmutable $today = null): ?array
+    {
+        $today ??= $this->calendar->today();
+        $balance = $this->referenceBalance($today);
+        if ($balance === null) {
+            return null;
+        }
+        $from = (new \DateTimeImmutable($balance['date']))->modify('+1 day')->format('Y-m-d');
+        $amount = $balance['amount'];
+        if ($endDate >= $from) {
+            foreach ($this->conn()->fetchAllAssociative('SELECT direction, amount_cents, start_date, recurrence, end_date FROM gestion_cash_movement') as $r) {
+                $n = count(self::occurrences((string) $r['start_date'], (string) $r['recurrence'], $r['end_date'], $from, $endDate));
+                $amount += ($r['direction'] === 'in' ? 1 : -1) * $n * (int) $r['amount_cents'];
+            }
+            $amount -= array_sum($this->recordedExpenses($from, $endDate)['days']);
+            $yesterday = $today->modify('-1 day')->format('Y-m-d');
+            $receiptsTo = min($yesterday, $endDate);
+            if ($receiptsTo >= $from) {
+                $amount += array_sum($this->receiptsByDay($from, $receiptsTo)['days']);
+            }
+        }
+
+        return ['amount' => $amount, 'balance' => $balance];
+    }
+
+    /**
      * État de l'alerte (vignette, notification) : null sans solde saisi.
      *
      * @return array{status: string, series: string, low14: array{date: string, amount: int}, threshold: int, balance: array<string, mixed>}|null
