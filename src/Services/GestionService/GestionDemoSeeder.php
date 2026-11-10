@@ -29,7 +29,7 @@ use App\UseCase\CommandeDashboardUseCase\FreezeCommandeMetricsUseCase;
  * `docs/gestion-mise-a-niveau.md` § 8 ; enrichi le 10/11/2026 « le maximum de données ») : trois fournisseurs, deux
  * transporteurs d'achat, quatre périodes du calendrier sur l'année (les périodes passées sont figées par la date, lot P1), huit
  * commandes fournisseurs, les **produits existants du site** plus des produits de démonstration (`is_demo`, créés quand le
- * site compte moins de 32 produits) rattachés aux commandes (coût d'achat = 55 % du prix de vente, coefficient 1,8 posé sur les
+ * site compte moins de 32 produits ; au-delà, ceux que vendent les ventes de démonstration) rattachés aux commandes (coût d'achat = 55 % du prix de vente, coefficient 1,8 posé sur les
  * produits qui n'en ont pas : `CommandeProductAttachmentService`, prix de vente intacts), un frais de port par commande,
  * des notes de frais, le tout en cents. Les ventes (commandes clients) existantes alimentent déjà les statistiques.
  * Rejouable : chaque élément est reconnu par son nom, rien n'est effacé ni recréé ; le cache du site est invalidé à la fin
@@ -104,6 +104,7 @@ class GestionDemoSeeder
         private readonly \App\Services\GestionService\PeriodCalendar $calendar,
         private readonly ?\App\UseCase\CollectionDashboardUseCase\GetCollectionStatistiquesUseCase $collectionStatistiques = null,
         private readonly ?\App\UseCase\GestionUseCase\GetPeriodResultUseCase $periodResult = null,
+        private readonly ?\App\Services\CommandeService\CommandeLineService $lines = null, // lignes d'achat (lot L0)
     ) {
     }
 
@@ -277,6 +278,7 @@ class GestionDemoSeeder
         $em->flush();
 
         $this->ensureSales($collections, $owner);
+        $this->alignPurchasesBeforeSales($commandes);
 
         // périodes passées : fermées par la date (fin + 15 jours) ; leurs commandes et la période sont (re)figées à chaque semis, statistiques
         // recalculées (tableaux de bord complets et à jour des règles de calcul dès la fin du semis)
@@ -292,8 +294,9 @@ class GestionDemoSeeder
                 $this->freezeCommande->execute($commande);
             }
             $this->collectionStatistiques?->executeOrFreeze($collection);
-            $em->createQuery('DELETE FROM App\\Entity\\PeriodResult r WHERE r.collection = :c')->setParameter('c', $collection)->execute();
-            $this->periodResult?->execute($collection); // résultat de période (P2) refigé avec les ventes du semis
+            if ($em->getRepository(\App\Entity\PeriodResult::class)->findLatestByCollection($collection) === null) {
+                $this->periodResult?->execute($collection); // résultat de période (P2) figé une fois ; jamais recalculé ensuite (chiffres figés intacts, 10/11/2026)
+            }
             $this->report[] = sprintf('période « %s » figée avec ses %d commande(s) (tableaux de bord recalculés)', $name, count($commandes));
         }
         $this->cacheInvalidation->invalidateWrittenTenants(); // listes et tableaux de bord en cache : à jour dès la fin du semis
@@ -305,8 +308,17 @@ class GestionDemoSeeder
     private function ensureDemoProducts(): void
     {
         $em = $this->emProvider->getEntityManager();
+        // au-delà de 32 articles, seuls ceux que vendent les ventes de démonstration sont garantis (sinon ces ventes resteraient sans lignes)
+        $only = null;
         if ((int) $em->getConnection()->fetchOne('SELECT COUNT(*) FROM product') >= self::MIN_PRODUCTS) {
-            return;
+            $only = [];
+            foreach (self::SALES as $sales) {
+                foreach ($sales as $sale) {
+                    foreach ($sale[3] as [$productName]) {
+                        $only[$productName] = true;
+                    }
+                }
+            }
         }
         $categories = [];
         foreach ($em->getRepository(Categories::class)->findAll() as $category) {
@@ -314,7 +326,7 @@ class GestionDemoSeeder
         }
         $created = 0;
         foreach (self::PRODUCTS as $i => [$name, $price, $quantity, $categoryName]) {
-            if ($em->getRepository(Product::class)->findOneBy(['name' => $name])) {
+            if (($only !== null && !isset($only[$name])) || $em->getRepository(Product::class)->findOneBy(['name' => $name])) {
                 continue;
             }
             $product = (new Product())->setName($name)->setDescription('Produit de démonstration de la gestion (rattaché à une commande fournisseur).')
@@ -329,6 +341,61 @@ class GestionDemoSeeder
         $em->flush();
         if ($created > 0) {
             $this->report[] = sprintf('%d produit(s) de démonstration créé(s) (marqués contenu d\'exemple)', $created);
+        }
+    }
+
+    /**
+     * Achats avant ventes (retour de l'application, 10/11/2026) : sur un vrai site, un article est acheté avant d'être vendu. Les lignes d'achat
+     * du semis sont datées de leur commande (historique saisi au fil de l'eau, donc avant la coupure des périodes fermées), et un article vendu
+     * par une vente de démonstration avant toute commande qui le contient est déplacé vers la commande du semis la plus récente datée au plus
+     * tard le jour de sa première vente. Sans cela, la démonstration affichait des « coûts inconnus » qu'aucun vrai client n'aurait. Rejouable.
+     *
+     * @param array<string, Commande> $commandes commandes du semis, par nom
+     */
+    private function alignPurchasesBeforeSales(array $commandes): void
+    {
+        $em = $this->emProvider->getEntityManager();
+        $conn = $em->getConnection();
+        $ids = array_values(array_filter(array_map(fn (Commande $c) => $c->getId(), $commandes)));
+        if ($ids === []) {
+            return;
+        }
+        $types = ['ids' => \Doctrine\DBAL\ArrayParameterType::INTEGER];
+        $dated = (int) $conn->executeStatement('UPDATE commande_line l SET attached_at = c.date FROM commande c WHERE c.id = l.commande_id AND l.commande_id IN (:ids) AND l.attached_at > c.date', ['ids' => $ids], $types);
+        if ($dated > 0) {
+            $this->report[] = sprintf('%d ligne(s) d\'achat du semis datée(s) de leur commande', $dated);
+        }
+        $dates = $conn->fetchAllKeyValue('SELECT id, CAST(date AS date) FROM commande WHERE id IN (:ids) ORDER BY date', ['ids' => $ids], $types);
+        $firstSales = $conn->fetchAllKeyValue(
+            'SELECT v.product_id, CAST(MIN(o.order_date) AS date) FROM order_items oi JOIN "order" o ON o.id = oi.order_associated_id JOIN product_variant v ON v.id = oi.product_variant_id'
+            . ' WHERE o.reference LIKE :p AND o.order_type_id = 1 GROUP BY v.product_id',
+            ['p' => self::SALE_REFERENCE_PREFIX . '%']
+        );
+        $moved = 0;
+        foreach ($firstSales as $productId => $firstSale) {
+            $bought = $conn->fetchOne('SELECT 1 FROM commande_line l JOIN commande c ON c.id = l.commande_id WHERE l.product_id = :p AND CAST(c.date AS date) <= :d LIMIT 1', ['p' => $productId, 'd' => $firstSale]);
+            if ($bought !== false) {
+                continue;
+            }
+            $target = null;
+            foreach ($dates as $commandeId => $date) {
+                if ($date <= $firstSale) {
+                    $target = (int) $commandeId; // la plus récente datée au plus tard le jour de la première vente (dates croissantes)
+                }
+            }
+            $lineId = $conn->fetchOne('SELECT id FROM commande_line WHERE product_id = :p AND commande_id IN (:ids) AND product_variant_id IS NULL ORDER BY id LIMIT 1', ['p' => $productId, 'ids' => $ids], $types);
+            if ($target === null || $lineId === false || $conn->fetchOne('SELECT 1 FROM commande_line WHERE product_id = :p AND commande_id = :c AND product_variant_id IS NULL', ['p' => $productId, 'c' => $target]) !== false) {
+                continue;
+            }
+            $conn->executeStatement('UPDATE commande_line l SET commande_id = :c, attached_at = c.date, updated_at = NOW() FROM commande c WHERE c.id = :c AND l.id = :l', ['c' => $target, 'l' => $lineId]);
+            $product = $em->find(Product::class, (int) $productId);
+            if ($product !== null) {
+                $this->lines?->refreshShortcuts($product);
+            }
+            $moved++;
+        }
+        if ($moved > 0) {
+            $this->report[] = sprintf('%d article(s) vendu(s) avant leur achat : ligne d\'achat déplacée vers une commande antérieure à la première vente', $moved);
         }
     }
 

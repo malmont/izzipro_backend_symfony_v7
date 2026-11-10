@@ -55,7 +55,8 @@ class GestionDemoSeederTest extends KernelTestCase
             $this->assertNotNull($commande->getFraisDePort(), $commande->getName() . ' : frais de port');
             $this->assertNotNull($commande->getFournisseur());
         }
-        $attached = $em->getRepository(Product::class)->createQueryBuilder('p')->where('p.commande IS NOT NULL')->getQuery()->getResult();
+        // depuis le lot L0, un article acheté = au moins une ligne d'achat (le raccourci commande_id n'est qu'un reflet)
+        $attached = $em->getRepository(Product::class)->createQueryBuilder('p')->where('EXISTS (SELECT 1 FROM App\\Entity\\CommandeLine cl WHERE cl.product = p)')->getQuery()->getResult();
         $this->assertGreaterThanOrEqual(min($freeBefore, 14), count($attached), 'les produits existants sont répartis sur les commandes');
         $seederCommandes = ['Commande textile printemps', 'Réassort automne', 'Accessoires des fêtes', 'Collection hiver — manteaux', 'Accessoires d\'hiver', 'Chaussures et sacs', 'Maillots et serviettes', 'Location nautique — matériel'];
         foreach ($attached as $product) {
@@ -82,6 +83,16 @@ class GestionDemoSeederTest extends KernelTestCase
         }
         $this->assertSame(12, $em->getRepository(Product::class)->findOneBy(['name' => 'Manteau de laine doublé'])->getQuantity(), 'la variante créée pour la vente garde le stock du produit');
         $this->assertSame(1, (int) $em->getConnection()->fetchOne('SELECT COUNT(*) FROM period_result WHERE collection_id = ?', [$closed->getId()]), 'résultat de période figé dès le semis');
+        // Achats avant ventes (10/11/2026) : aucun article vendu par le semis avant toute commande qui le contient ; lignes datées de leur commande
+        $soldBeforeBought = (int) $em->getConnection()->fetchOne(
+            'SELECT COUNT(*) FROM order_items oi JOIN "order" o ON o.id = oi.order_associated_id JOIN product_variant v ON v.id = oi.product_variant_id'
+            . ' WHERE o.reference LIKE ? AND EXISTS (SELECT 1 FROM commande_line l WHERE l.product_id = v.product_id)'
+            . ' AND NOT EXISTS (SELECT 1 FROM commande_line l JOIN commande c ON c.id = l.commande_id WHERE l.product_id = v.product_id AND CAST(c.date AS date) <= CAST(o.order_date AS date))',
+            [GestionDemoSeeder::SALE_REFERENCE_PREFIX . '%']
+        );
+        $this->assertSame(0, $soldBeforeBought, 'chaque article vendu par le semis a été acheté avant');
+        $this->assertSame(0, (int) $em->getConnection()->fetchOne("SELECT COUNT(*) FROM commande_line l JOIN commande c ON c.id = l.commande_id WHERE c.name = 'Commande textile printemps' AND l.attached_at > c.date"), 'lignes du semis datées de leur commande');
+        $frozenAt = $em->getConnection()->fetchOne('SELECT computed_at FROM period_result WHERE collection_id = ?', [$closed->getId()]);
 
         // Rejouable : rien n'est recréé ; les périodes fermées sont refigées (statistiques recalculées) à chaque passage
         $em->getConnection()->executeStatement('UPDATE commande SET is_closed = false WHERE name = ?', ['Chaussures et sacs']);
@@ -97,6 +108,7 @@ class GestionDemoSeederTest extends KernelTestCase
         $this->assertTrue($em->getRepository(Commande::class)->findOneBy(['name' => 'Chaussures et sacs'])->getIsClosed(), 'commande rouverte à la main : refigée');
         $this->assertSame(1, (int) $em->getConnection()->fetchOne('SELECT COUNT(*) FROM collection_statistiques WHERE collection_id = ?', [$closed->getId()]), 'refigeage : une seule ligne figée conservée');
         $this->assertSame($refreeze, $seeder->seed(), 'troisième passage : idem');
+        $this->assertSame($frozenAt, $em->getConnection()->fetchOne('SELECT computed_at FROM period_result WHERE collection_id = ?', [$closed->getId()]), 'résultat de période figé : jamais recalculé au rejeu');
         $em->clear();
         $this->assertCount(3, $em->getRepository(Commande::class)->findBy(['name' => ['Commande textile printemps', 'Réassort automne', 'Accessoires des fêtes']]));
 
