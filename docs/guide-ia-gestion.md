@@ -106,6 +106,7 @@ calcule les règles (sans jamais demander l'IA) et crée la période en cours au
 | **G1a** | règles R1–R11, conseils, générations, rédaction vérifiée par l'IA, routes, vignette ; livré le 11/11/2026 |
 | **G1b-1** | mesure après application (§ 8), vignette `advice-result`, résultats des conseils appliqués dans le contexte de l'IA ; livré le 11/11/2026 |
 | **G1b-2** | avis du guide sur le simulateur (§ 9) ; `currency` sur chaque vignette ; livré le 11/11/2026 |
+| P4 | appliquer un prix depuis un conseil (`adviceId`, conseil marqué fait dans le même appel) : `docs/prix-gestion.md` |
 | Plus tard | mesure des leçons de clôture sur la période suivante de même saison |
 
 ## 8. Mesure après application (lot G1b-1)

@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (391)
+## Boutique et commun (396)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -395,6 +395,11 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/notifications/journal` | ROLE_ADMIN | `Controller\GestionController\GestionNotificationController::journal` |
 | GET | `/api/gestion/notifications/preferences` | ROLE_ADMIN | `Controller\GestionController\GestionNotificationController::preferences` |
 | PATCH | `/api/gestion/notifications/preferences` | ROLE_ADMIN | `Controller\GestionController\GestionNotificationController::updatePreferences` |
+| POST | `/api/gestion/prix/annuler` | ROLE_ADMIN | `Controller\GestionController\GestionPriceController::undo` |
+| POST | `/api/gestion/prix/apercu` | ROLE_ADMIN | `Controller\GestionController\GestionPriceController::preview` |
+| POST | `/api/gestion/prix/appliquer` | ROLE_ADMIN | `Controller\GestionController\GestionPriceController::apply` |
+| GET | `/api/gestion/prix/lots/{id}` | ROLE_ADMIN | `Controller\GestionController\GestionPriceController::batch` |
+| GET | `/api/gestion/prix/lots` | ROLE_ADMIN | `Controller\GestionController\GestionPriceController::batches` |
 | POST | `/api/gestion/reprise/annuler` | ROLE_ADMIN | `Controller\GestionController\RepriseController::cancel` |
 | POST | `/api/gestion/reprise/appliquer` | ROLE_ADMIN | `Controller\GestionController\RepriseController::apply` |
 | POST | `/api/gestion/reprise/simulation` | ROLE_ADMIN | `Controller\GestionController\RepriseController::simulate` |

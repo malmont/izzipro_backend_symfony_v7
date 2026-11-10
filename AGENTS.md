@@ -26,6 +26,7 @@ Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne 
 | Trésorerie saisie de la gestion (soldes datés, mouvements prévus récurrents, projection avec dépenses saisies et encaissements, alerte et notification de trésorerie basse) | `docs/tresorerie-gestion.md` |
 | Simulateur de période de la gestion (leviers prix, promotion, publicité, prévu ; ventes restantes au rythme, marge, résultat, point mort, stock de fin, trésorerie après achats ; aucune écriture) | `docs/simulateur-gestion.md` |
 | Guide IA de la gestion (conseils calculés par règles R1–R11 avec effet, confiance et sources ; rédaction vérifiée par l'IA ; fait / écarté ; vignette « advice ») | `docs/guide-ia-gestion.md` |
+| Appliquer un prix depuis la gestion (aperçu, pourcentage ou coefficient sur le coût, arrondi, application par le chemin d'un article, annulation 24 h, lien avec le guide) | `docs/prix-gestion.md` |
 | Vignettes d'accueil de la gestion (premiers pas, alerte de stock bas, écart par utilisateur) | `docs/vignettes-gestion.md` |
 | Notifications sur téléphone de la gestion (appareils, préférences, une par jour, stock bas à 10 h, facture en double ; Firebase à brancher) | `docs/notifications-gestion.md` |
 | Lecture de documents par IA pour la gestion (factures fournisseurs, notes de frais, transport : envoi asynchrone, extraction, confirmation, justificatifs, worker `gestion_ai`) | `docs/lecture-documents-gestion.md` |
