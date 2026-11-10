@@ -31,12 +31,20 @@ tiles:
         current_stock: Stock actuel
         trip_spent: Dépensé pendant le voyage
         trip_allowance: Budget prévu à ce jour
+        cash_balance: 'Solde saisi le %date%'
+        cash_threshold: Seuil d'alerte
     budget_over:
         title: Budget dépassé
         text: "{1}1 poste dépasse le prévu.|]1,Inf[%count% postes dépassent le prévu."
     trip_budget:
         title: Budget du voyage
         text: 'Voyage à %place% : %amount% au-dessus du budget prévu à ce jour.'
+    cash_low:
+        title: Trésorerie basse
+        text: 'Le solde prévu descend à %amount% le %date%.'
+    cash_first_balance:
+        title: Votre trésorerie
+        text: "Saisissez le solde de votre compte : l'application vous préviendra avant qu'il ne manque."
 # Notifications sur téléphone (lot N1, 11/11/2026, docs/notifications-gestion.md)
 notifications:
     kinds:
@@ -53,6 +61,9 @@ notifications:
     trip_budget:
         title: Budget du voyage dépassé
         body: 'Voyage à %place% : %amount% au-dessus du budget prévu à ce jour.'
+    cash_critical:
+        title: Trésorerie basse
+        body: 'Le solde prévu descend à %amount% le %date%.'
 # Budget par poste et voyages d'achat (lot B1a, 11/11/2026, docs/budgets-gestion.md)
 budget:
     categories:
@@ -61,3 +72,19 @@ budget:
         shipping: Frais de port
         advertising: Publicité
         other: Autres frais
+# Trésorerie saisie (lot B1b-1, 11/11/2026, docs/tresorerie-gestion.md)
+cash:
+    categories:
+        rent: Loyer
+        salaries: Salaires
+        insurance: Assurances
+        subscription: Abonnements
+        loan: Prêt
+        tax: Taxes et impôts
+        other: Autres
+        recorded: Dépenses saisies
+    caveats:
+        STALE_BALANCE: 'Solde saisi il y a %days% jours : mettez-le à jour pour une projection juste.'
+        RECORDED_EXPENSES_INCLUDED: "Les dépenses saisies dans l'application (commandes fournisseurs, frais de port, notes de frais, publicité) sont comptées à leur date, comme si elles étaient payées ce jour-là."
+        TAXES_INCLUDED: 'Les encaissements comprennent les taxes perçues, qui seront reversées : prévoyez-les en mouvement « Taxes et impôts ».'
+        NO_SALES_HISTORY: 'Aucune vente sur les 30 derniers jours : pas de moyenne des encaissements.'

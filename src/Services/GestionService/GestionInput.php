@@ -43,6 +43,28 @@ final class GestionInput
         return null;
     }
 
+    /** Montant en cents entiers signés (solde de trésorerie, seuil : un découvert est négatif, lot B1b-1) ; null si absent et facultatif */
+    public function signedCents(string $field, bool $required = true): ?int
+    {
+        if (!array_key_exists($field, $this->data) || $this->data[$field] === null || $this->data[$field] === '') {
+            if ($required) {
+                $this->errors[$field] = 'REQUIRED';
+            }
+
+            return null;
+        }
+        $value = $this->data[$field];
+        if (is_int($value)) {
+            return $value;
+        }
+        if (is_float($value) && is_finite($value) && floor($value) === $value && abs($value) < 9.0e15) {
+            return (int) $value;
+        }
+        $this->errors[$field] = 'MUST_BE_INTEGER_CENTS';
+
+        return null;
+    }
+
     /** Nombre décimal (coefficient) ≥ 0 ; null si absent et facultatif */
     public function decimal(string $field, bool $required = true): ?float
     {

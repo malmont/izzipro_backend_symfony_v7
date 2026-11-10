@@ -23,6 +23,7 @@ Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne 
 | Lignes d'achat de la gestion (commande_line : réassorts, coût moyen à la date de la vente, rattacher idempotent, vérification `app:gestion:lignes:verifier`) | `docs/lignes-achat-gestion.md` |
 | Volet publicité de la gestion (campagnes, devise de la régie, dépense de période, rentabilité perçue avant / après et l'an dernier) | `docs/publicite-gestion.md` |
 | Budgets par poste et voyages d'achat de la gestion (prévu / réel par période, voyage avec budget journalier, rattachement des notes et commandes) | `docs/budgets-gestion.md` |
+| Trésorerie saisie de la gestion (soldes datés, mouvements prévus récurrents, projection avec dépenses saisies et encaissements, alerte et notification de trésorerie basse) | `docs/tresorerie-gestion.md` |
 | Vignettes d'accueil de la gestion (premiers pas, alerte de stock bas, écart par utilisateur) | `docs/vignettes-gestion.md` |
 | Notifications sur téléphone de la gestion (appareils, préférences, une par jour, stock bas à 10 h, facture en double ; Firebase à brancher) | `docs/notifications-gestion.md` |
 | Lecture de documents par IA pour la gestion (factures fournisseurs, notes de frais, transport : envoi asynchrone, extraction, confirmation, justificatifs, worker `gestion_ai`) | `docs/lecture-documents-gestion.md` |

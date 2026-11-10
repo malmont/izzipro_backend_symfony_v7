@@ -34,8 +34,7 @@ Code : `Services/NotificationService/` (`PushSenderInterface`, `NotConfiguredPus
 - `GET /api/gestion/notifications/preferences?locale=` → `{ kinds: [{ kind, label, enabled, available }] }` ; tout est actif par défaut.
 - `PATCH /api/gestion/notifications/preferences { kinds: { low_stock: false, … } }` → même forme ; 422 `kinds` `MUST_BE_OBJECT`,
   `kinds.<x>` `UNKNOWN_KIND` / `MUST_BE_BOOLEAN` (rien n'est écrit).
-- Types : `low_stock`, `duplicate_invoice`, `trip_budget` (disponibles) ; `cash_critical` (`available: false` jusqu'à B1b, coupable dès
-  maintenant).
+- Types : `low_stock`, `duplicate_invoice`, `trip_budget`, `cash_critical` (tous disponibles depuis le lot B1b-1).
 - `GET /api/gestion/notifications/journal?limit=20` (100 au plus) → `[{ id, kind, title, body, action: { screen, params }, status, sentAt }]`
   du gérant connecté ; `status` `sent` | `not_configured` | `failed` | `no_device`.
 
@@ -55,7 +54,9 @@ Code : `Services/NotificationService/` (`PushSenderInterface`, `NotConfiguredPus
   celui qui l'a envoyée, **entre 8 h et 20 h du magasin**. Écran `documents.review` `{ documentId }`. Un échec d'envoi ne touche jamais la lecture.
 - **`trip_budget`** (lot B1a) : au passage quotidien de 10 h, avant le stock bas, si un voyage en cours dépasse son budget à date
   (`docs/budgets-gestion.md` § 2). Écran `voyages.suivi` `{ tripId }`.
-- `cash_critical` : avec B1b.
+- **`cash_critical`** (lot B1b-1) : au passage quotidien de 10 h, **en premier**, si le point bas de trésorerie des 14 prochains jours passe
+  sous le seuil (`warning` ou `critical`) ; pas de répétition de la même alerte pendant 7 jours, sauf si le point bas avance ou se creuse
+  (`docs/tresorerie-gestion.md` § 5). Écran `tresorerie` `{}`.
 
 Installation du timer sur l'hôte (propriétaire) :
 

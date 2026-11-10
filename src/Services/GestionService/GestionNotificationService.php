@@ -28,7 +28,9 @@ class GestionNotificationService
     public const DUPLICATE_INVOICE = 'duplicate_invoice';
     /** type → disponible (cash_critical et trip_budget arrivent avec B1 ; coupables dès maintenant) */
     public const TRIP_BUDGET = 'trip_budget';
-    public const KINDS = [self::LOW_STOCK => true, self::DUPLICATE_INVOICE => true, 'cash_critical' => false, self::TRIP_BUDGET => true]; // trip_budget : lot B1a
+    public const CASH_CRITICAL = 'cash_critical';
+    public const KINDS = [self::LOW_STOCK => true, self::DUPLICATE_INVOICE => true, self::CASH_CRITICAL => true, self::TRIP_BUDGET => true]; // trip_budget : lot B1a ; cash_critical : lot B1b-1
+    public const CASH_REPEAT_DAYS = 7;
     public const DAILY_HOUR = 10;
     public const DAY_FROM_HOUR = 8;
     public const DAY_TO_HOUR = 20; // exclu
@@ -45,6 +47,7 @@ class GestionNotificationService
         private readonly ?EmailLocale $siteLocale = null,
         private readonly ?GestionTripService $trips = null,
         private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null,
+        private readonly ?GestionCashService $cash = null,
     ) {
     }
 
@@ -102,8 +105,31 @@ class GestionNotificationService
         $notified = 0;
         $skipped = 0;
         $users = $this->devices()->usersWithActiveDevice(self::PLATFORM);
-        // Voyage en cours au-delà de son budget (lot B1a) : avant le stock bas, la limite d'une par jour laisse passer la plus urgente
         $localDay = \DateTimeImmutable::createFromInterface($now)->setTimezone($this->clock->timezone())->setTime(0, 0);
+        // Trésorerie sous le seuil dans les 14 prochains jours (lot B1b-1) : la plus urgente, en premier ; pas de répétition de la même
+        // alerte pendant 7 jours, sauf si le point bas avance ou se creuse
+        $cash = $this->cash?->alert(new \DateTimeImmutable($localDay->format('Y-m-d')));
+        if ($cash !== null && $cash['status'] !== 'ok') {
+            $siteLocale = $this->siteLocale?->language(null) ?? 'fr';
+            $subject = ['date' => $cash['low14']['date'], 'amount' => $cash['low14']['amount'], 'status' => $cash['status']];
+            foreach ($users as $userId) {
+                $repeat = false;
+                foreach ($this->log()->subjectsSince($userId, self::CASH_CRITICAL, $now->modify('-' . self::CASH_REPEAT_DAYS . ' days')) as $previous) {
+                    if (($previous['date'] ?? null) !== null && $subject['date'] >= $previous['date'] && $subject['amount'] >= (int) ($previous['amount'] ?? PHP_INT_MIN)) {
+                        $repeat = true;
+                    }
+                }
+                if ($repeat) {
+                    ++$skipped;
+
+                    continue;
+                }
+                $status = $this->notify($userId, self::CASH_CRITICAL, ['%amount%' => HomeTilesService::money($cash['low14']['amount'], $siteLocale, $this->currency?->code() ?? 'CAD'), '%date%' => HomeTilesService::day($cash['low14']['date'], $siteLocale)],
+                    ['screen' => 'tresorerie', 'params' => []], $subject, $now);
+                $status !== null ? ++$notified : ++$skipped;
+            }
+        }
+        // Voyage en cours au-delà de son budget (lot B1a) : avant le stock bas, la limite d'une par jour laisse passer la plus urgente
         $trip = $this->trips?->current($localDay);
         $follow = $trip !== null ? $this->trips->follow($trip, $localDay) : null;
         if ($trip !== null && $follow['status'] === 'over') {

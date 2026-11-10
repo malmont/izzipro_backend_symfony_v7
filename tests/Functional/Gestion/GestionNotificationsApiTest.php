@@ -105,7 +105,7 @@ class GestionNotificationsApiTest extends WebTestCase
         $p = $this->get('/api/gestion/notifications/preferences');
         $this->assertSame(['low_stock', 'duplicate_invoice', 'cash_critical', 'trip_budget'], array_column($p['kinds'], 'kind'));
         $this->assertSame([true, true, true, true], array_column($p['kinds'], 'enabled'), 'tout est actif par défaut');
-        $this->assertSame([true, true, false, true], array_column($p['kinds'], 'available'), 'trip_budget disponible depuis B1a');
+        $this->assertSame([true, true, true, true], array_column($p['kinds'], 'available'), 'trip_budget disponible depuis B1a, cash_critical depuis B1b-1');
         $this->assertSame('Articles qui vont manquer', $p['kinds'][0]['label']);
         $this->assertSame('Items about to run out', $this->get('/api/gestion/notifications/preferences?locale=en')['kinds'][0]['label']);
         $u = $this->send('PATCH', '/api/gestion/notifications/preferences', ['kinds' => ['low_stock' => false, 'trip_budget' => false]], 200);

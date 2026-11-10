@@ -29,12 +29,20 @@ tiles:
         current_stock: Current stock
         trip_spent: Spent during the trip
         trip_allowance: Budget planned to date
+        cash_balance: 'Balance entered on %date%'
+        cash_threshold: Alert threshold
     budget_over:
         title: Budget exceeded
         text: '{1}1 item is over plan.|]1,Inf[%count% items are over plan.'
     trip_budget:
         title: Trip budget
         text: 'Trip to %place%: %amount% over the budget planned to date.'
+    cash_low:
+        title: Low cash
+        text: 'Your expected balance drops to %amount% on %date%.'
+    cash_first_balance:
+        title: Your cash
+        text: 'Enter your account balance: the app will warn you before you run short.'
 # Phone notifications (lot N1, 11/11/2026, docs/notifications-gestion.md)
 notifications:
     kinds:
@@ -51,6 +59,9 @@ notifications:
     trip_budget:
         title: Trip budget exceeded
         body: 'Trip to %place%: %amount% over the budget planned to date.'
+    cash_critical:
+        title: Low cash
+        body: 'Your expected balance drops to %amount% on %date%.'
 # Budget by item and buying trips (lot B1a, 11/11/2026, docs/budgets-gestion.md)
 budget:
     categories:
@@ -59,3 +70,19 @@ budget:
         shipping: Shipping
         advertising: Advertising
         other: Other expenses
+# Cash entered by the manager (lot B1b-1, 11/11/2026, docs/tresorerie-gestion.md)
+cash:
+    categories:
+        rent: Rent
+        salaries: Salaries
+        insurance: Insurance
+        subscription: Subscriptions
+        loan: Loan
+        tax: Taxes
+        other: Other
+        recorded: Recorded expenses
+    caveats:
+        STALE_BALANCE: 'Balance entered %days% days ago: update it for an accurate projection.'
+        RECORDED_EXPENSES_INCLUDED: 'Expenses recorded in the app (supplier orders, shipping, expense reports, advertising) count on their date, as if paid that day.'
+        TAXES_INCLUDED: 'Receipts include collected taxes, which will be paid back: plan them as a "Taxes" movement.'
+        NO_SALES_HISTORY: 'No sales in the last 30 days: no receipts average.'

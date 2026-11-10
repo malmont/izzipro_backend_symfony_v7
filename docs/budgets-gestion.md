@@ -3,7 +3,7 @@
 Contrat validé par l'application (« new easymakemoney »), recalé sur `docs/propositions-pilotage.md` de l'application (décisions du
 10/11/2026) : « avant ou pendant une période, le gérant répartit son budget : stock, voyage, frais de port, publicité, autres ; l'écran compare
 le prévu au réel ». Tout est additif : les routes et calculs existants ne changent pas, les lectures des notes de frais et des commandes gagnent
-seulement `tripId`. `ROLE_ADMIN`. Le lot B1b (trésorerie saisie, simulateur) viendra ensuite.
+seulement `tripId`. `ROLE_ADMIN`. Trésorerie saisie : `docs/tresorerie-gestion.md` (lot B1b-1) ; le simulateur (B1b-2) viendra ensuite.
 
 Code : `Services/GestionService/GestionBudgetService`, `GestionTripService`, `UseCase/GestionUseCase/GestionBudgetUseCase`,
 `GestionTripUseCase`, `Controller/GestionController/GestionBudgetController`, `GestionTripController`, `EventListener/TripAutoAssignListener`,

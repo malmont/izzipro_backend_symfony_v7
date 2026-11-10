@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (373)
+## Boutique et commun (384)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -394,6 +394,17 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/gestion/reprise/appliquer` | ROLE_ADMIN | `Controller\GestionController\RepriseController::apply` |
 | POST | `/api/gestion/reprise/simulation` | ROLE_ADMIN | `Controller\GestionController\RepriseController::simulate` |
 | GET | `/api/gestion/reprise` | ROLE_ADMIN | `Controller\GestionController\RepriseController::state` |
+| DELETE | `/api/gestion/tresorerie/mouvements/{id}` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::deleteMovement` |
+| PATCH | `/api/gestion/tresorerie/mouvements/{id}` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::updateMovement` |
+| GET | `/api/gestion/tresorerie/mouvements` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::movements` |
+| POST | `/api/gestion/tresorerie/mouvements` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::createMovement` |
+| GET | `/api/gestion/tresorerie/reglages` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::settings` |
+| PUT | `/api/gestion/tresorerie/reglages` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::putSettings` |
+| DELETE | `/api/gestion/tresorerie/soldes/{id}` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::deleteBalance` |
+| PATCH | `/api/gestion/tresorerie/soldes/{id}` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::updateBalance` |
+| GET | `/api/gestion/tresorerie/soldes` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::balances` |
+| POST | `/api/gestion/tresorerie/soldes` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::saveBalance` |
+| GET | `/api/gestion/tresorerie` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::projection` |
 | POST | `/api/gestion/voyages/rattacher` | ROLE_ADMIN | `Controller\GestionController\GestionTripController::attach` |
 | GET | `/api/gestion/voyages/{id}/suivi` | ROLE_ADMIN | `Controller\GestionController\GestionTripController::follow` |
 | DELETE | `/api/gestion/voyages/{id}` | ROLE_ADMIN | `Controller\GestionController\GestionTripController::delete` |

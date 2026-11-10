@@ -22,8 +22,10 @@ class HomeTilesService
     public const LOW_STOCK = 'low-stock';
     public const BUDGET_OVER = 'budget-over';   // lot B1a : poste du budget de la période en cours au-delà du prévu
     public const TRIP_BUDGET = 'trip-budget';   // lot B1a : voyage en cours au-delà de son budget à date
-    public const KNOWN = [self::FIRST_INVOICE, self::FIRST_NOTE, self::FIRST_CAMPAIGN, self::LOW_STOCK, self::BUDGET_OVER, self::TRIP_BUDGET];
-    public const ALERTS = [self::LOW_STOCK, self::BUDGET_OVER, self::TRIP_BUDGET];
+    public const CASH_LOW = 'cash-low';         // lot B1b-1 : point bas de trésorerie des 14 prochains jours sous le seuil
+    public const CASH_FIRST_BALANCE = 'cash-first-balance'; // lot B1b-1 : aucun solde saisi, mais un mouvement prévu ou une période en cours
+    public const KNOWN = [self::FIRST_INVOICE, self::FIRST_NOTE, self::FIRST_CAMPAIGN, self::LOW_STOCK, self::BUDGET_OVER, self::TRIP_BUDGET, self::CASH_LOW, self::CASH_FIRST_BALANCE];
+    public const ALERTS = [self::LOW_STOCK, self::BUDGET_OVER, self::TRIP_BUDGET, self::CASH_LOW];
     public const MAX_TILES = 3;
     public const LOW_STOCK_WINDOW_DAYS = 30;  // ventes prises en compte
     public const LOW_STOCK_MIN_SOLD = 2;      // une variante vendue au moins 2 fois sur la fenêtre « se vend »
@@ -37,6 +39,8 @@ class HomeTilesService
         private readonly ?GestionBudgetService $budgets = null,
         private readonly ?GestionTripService $trips = null,
         private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null,
+        private readonly ?GestionCashService $cash = null,
+        private readonly ?PeriodCalendar $calendar = null,
     ) {
     }
 
@@ -88,6 +92,18 @@ class HomeTilesService
     {
         $conn = $this->emProvider->getEntityManager()->getConnection();
         $tiles = [];
+        $cash = $this->cash?->alert();
+        if ($cash !== null && $cash['status'] !== 'ok') {
+            $tiles[] = $this->tile(self::CASH_LOW, 'alert', 85, 'cash_low', $locale,
+                ['%amount%' => self::money($cash['low14']['amount'], $locale, $this->siteCurrency()), '%date%' => self::day($cash['low14']['date'], $locale)],
+                ['screen' => 'tresorerie', 'params' => new \stdClass()],
+                [['label' => $this->t('tiles.sources.cash_balance', $locale, ['%date%' => self::day($cash['balance']['date'], $locale)]), 'value' => $cash['balance']['amount']], ['label' => $this->t('tiles.sources.cash_threshold', $locale), 'value' => $cash['threshold']]],
+                [['date' => $cash['low14']['date'], 'amount' => $cash['low14']['amount'], 'threshold' => $cash['threshold'], 'status' => $cash['status'], 'series' => $cash['series']]],
+                $cash['low14']['date'] . ':' . $cash['status']);
+        }
+        if ($this->cash !== null && !$this->cash->hasBalance() && ($this->cash->hasMovement() || $this->calendar?->findByDate($this->calendar->today()) !== null)) {
+            $tiles[] = $this->tile(self::CASH_FIRST_BALANCE, 'first_steps', 20, 'cash_first_balance', $locale, [], ['screen' => 'tresorerie', 'params' => new \stdClass()]);
+        }
         $low = $this->lowStock();
         if ($low['items'] !== []) {
             $count = count($low['all']);
@@ -195,6 +211,14 @@ class HomeTilesService
         $formatted = (new \NumberFormatter($locale === 'en' ? 'en_CA' : 'fr_CA', \NumberFormatter::CURRENCY))->formatCurrency($cents / 100, $currency);
 
         return $formatted === false ? number_format($cents / 100, 2) . ' ' . $currency : $formatted;
+    }
+
+    /** Date (Y-m-d) écrite pour un texte : « 14 novembre » / « November 14 » */
+    public static function day(string $date, string $locale): string
+    {
+        $formatted = (new \IntlDateFormatter($locale === 'en' ? 'en_CA' : 'fr_CA', \IntlDateFormatter::NONE, \IntlDateFormatter::NONE, 'UTC', null, $locale === 'en' ? 'MMMM d' : 'd MMMM'))->format(new \DateTimeImmutable($date . ' 12:00:00', new \DateTimeZone('UTC')));
+
+        return $formatted === false ? $date : $formatted;
     }
 
     private function siteCurrency(): string
