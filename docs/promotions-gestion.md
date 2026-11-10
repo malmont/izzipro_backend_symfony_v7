@@ -96,7 +96,8 @@ Décision du propriétaire du 10/11/2026 : **jours du magasin stockés en UTC**,
 - **Promotions déjà saisies** : `app:gestion:promotions:fuseau --tenant= --ids= [--apply]` relit les dates comme l'heure du magasin voulue et les
   remet en UTC (hiver + 5 h, été + 4 h à Toronto), simulation par défaut, anciennes valeurs dans `gestion_promotion_tz_fix` (`Version20261214100000`,
   `scripts/migrate_all_v2_gestion_promotions_fuseau.sh`), rejeu sans effet, SQL direct avec invalidation du cache de l'article (un article
-  d'exemple le reste). Appliquée le 11/11/2026 aux 3 seules promotions existantes (demo n° 3 et 6, gmasuite n° 2), accord du chef de projet.
+  d'exemple le reste). À appliquer aux 3 seules promotions existantes (demo n° 3 et 6, gmasuite n° 2), accord du chef de projet du 11/11/2026 ;
+  lancée par le propriétaire (`--tenant=demo --ids=3,6 --apply`, puis `--tenant=gmasuite --ids=2 --apply`).
 - Test : `tests/Functional/Gestion/PromotionTimezoneTest.php` (formats du PATCH, même instant pour le prix effectif, la boutique, le pack et la
   règle pos-offline-v1, champ EasyAdmin, commande).
 
