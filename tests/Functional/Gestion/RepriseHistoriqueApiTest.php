@@ -68,6 +68,7 @@ class RepriseHistoriqueApiTest extends WebTestCase
         $conn->executeStatement("INSERT INTO commande (id, budget, date, name, is_closed) VALUES (nextval('commande_id_seq'), 20000, :d, :n, false)", ['d' => $inPeriod->format('Y-m-d H:i:s'), 'n' => "Commande H $tag"]);
         $commandeH = (int) $conn->fetchOne('SELECT id FROM commande WHERE name = :n', ['n' => "Commande H $tag"]);
         $conn->executeStatement('UPDATE product SET commande_id = :c, commande_cost_cents = 200, commande_attached_at = :at WHERE id = :p', ['c' => $commandeH, 'at' => $inPeriod->format('Y-m-d H:i:s'), 'p' => $ids['H']]);
+        static::getContainer()->get(\App\Services\CommandeService\CommandeLineService::class)->backfill(); // rattachement d'avant le lot L0 : repris en ligne d'achat, comme la migration
         // Ventes dans la période : E 2 vendus puis 1 retourné, F 1, G 3, H 1, J 1
         $this->item($this->order(1, 3, 2, $inPeriod), $variants['E'], 2, 1500);
         $this->item($this->order(2, 3, 2, $inPeriod->modify('+1 day')), $variants['E'], 1, 1500);

@@ -41,31 +41,47 @@ class PeriodResultCalculator
     }
 
     /** @return array<string, mixed> charge utile du résultat (sans `frozen` / `frozenAt`, posés par le use case) */
-    public function compute(Collections $period, ?\DateTimeImmutable $costCutoff): array
+    /**
+     * @param bool $legacy calcul d'avant le lot L0 (coût du produit rattaché), pour la seule vérification `app:gestion:lignes:verifier`
+     */
+    public function compute(Collections $period, ?\DateTimeImmutable $costCutoff, bool $legacy = false): array
     {
         [$from, $to] = $this->clock->range($period->getStartDateCollection()->format('Y-m-d'), $period->getEndDateCollection()->format('Y-m-d'));
         $conn = $this->emProvider->getEntityManager()->getConnection();
         $params = ['from' => $from->format('Y-m-d H:i:s'), 'to' => $to->format('Y-m-d H:i:s')];
         $attachedBeforeCutoff = '';
         if ($costCutoff !== null) {
-            $attachedBeforeCutoff = ' AND (p.commande_attached_at IS NULL OR p.commande_attached_at <= :cutoff)';
+            $attachedBeforeCutoff = $legacy ? ' AND (p.commande_attached_at IS NULL OR p.commande_attached_at <= :cutoff)' : ' AND l.attached_at <= :cutoff';
             $params['cutoff'] = $costCutoff->format('Y-m-d H:i:s');
         }
         $factor = 'CASE WHEN o.prices_include_tax AND COALESCE(o.sub_total, 0) <> 0 THEN (o.sub_total - COALESCE(o.total_tax, 0)) / o.sub_total ELSE 1 END';
-        $cost = 'CASE WHEN p.id IS NULL THEN NULL'
-            . ' WHEN p.commande_cost_cents IS NOT NULL AND c.id IS NOT NULL' . $attachedBeforeCutoff . ' THEN p.commande_cost_cents * COALESCE(c.exchange_rate, 1)'
-            . ' WHEN p.purchase_price IS NOT NULL THEN p.purchase_price ELSE NULL END';
+        if ($legacy) {
+            $cost = 'CASE WHEN p.id IS NULL THEN NULL'
+                . ' WHEN p.commande_cost_cents IS NOT NULL AND c.id IS NOT NULL' . $attachedBeforeCutoff . ' THEN p.commande_cost_cents * COALESCE(c.exchange_rate, 1)'
+                . ' WHEN p.purchase_price IS NOT NULL THEN p.purchase_price ELSE NULL END';
+            $estimated = "(CASE WHEN p.commande_cost_cents IS NOT NULL AND c.id IS NOT NULL$attachedBeforeCutoff THEN p.commande_cost_estimated ELSE false END)";
+            $costJoin = ' LEFT JOIN commande c ON c.id = p.commande_id';
+        } else {
+            // lot L0 (10/11/2026) : coût moyen pondéré glissant des lignes d'achat de l'article dont la commande est datée au plus tard le jour de
+            // la vente (jour du magasin) et, pour une période fermée, saisies avant la coupure ; lignes au coût inconnu exclues de la moyenne
+            $params['tz'] = $this->clock->timezone()->getName();
+            $costJoin = ' LEFT JOIN LATERAL (SELECT COALESCE(SUM(l.quantity_ordered * l.unit_cost_cents * COALESCE(lc.exchange_rate, 1)) / NULLIF(SUM(l.quantity_ordered), 0), AVG(l.unit_cost_cents * COALESCE(lc.exchange_rate, 1))) AS avg_cost, BOOL_OR(l.estimated) AS est'
+                . ' FROM commande_line l JOIN commande lc ON lc.id = l.commande_id WHERE l.product_id = p.id AND l.unit_cost_cents IS NOT NULL'
+                . " AND CAST(lc.date AS date) <= CAST((o.order_date AT TIME ZONE 'UTC') AT TIME ZONE :tz AS date)" . $attachedBeforeCutoff . ') lw ON TRUE';
+            $cost = 'CASE WHEN p.id IS NULL THEN NULL WHEN lw.avg_cost IS NOT NULL THEN lw.avg_cost WHEN p.purchase_price IS NOT NULL THEN p.purchase_price ELSE NULL END';
+            $estimated = '(lw.avg_cost IS NOT NULL AND COALESCE(lw.est, false))';
+        }
         $lines = 'SELECT o.id AS oid, o.order_type_id AS t, o.order_source_id AS src, oi.quantity AS qty,'
             . " ABS(oi.total_price) * ($factor) AS net,"
             . " (CASE WHEN o.order_type_id = 2 THEN -ABS(oi.total_price) ELSE oi.total_price END) * ($factor) AS signed,"
             . ' (b.id IS NOT NULL) AS rental, (o.subscription_id IS NOT NULL) AS sub, (b.id IS NULL AND o.subscription_id IS NULL) AS article,'
             . " ($cost) AS cost,"
-            . " (CASE WHEN p.commande_cost_cents IS NOT NULL AND c.id IS NOT NULL" . $attachedBeforeCutoff . " THEN p.commande_cost_estimated ELSE false END) AS estimated"
+            . " $estimated AS estimated"
             . ' FROM order_items oi JOIN "order" o ON o.id = oi.order_associated_id'
             . ' LEFT JOIN booking b ON b.order_item_id = oi.id'
             . ' LEFT JOIN product_variant pv ON pv.id = oi.product_variant_id'
             . ' LEFT JOIN product p ON p.id = pv.product_id'
-            . ' LEFT JOIN commande c ON c.id = p.commande_id'
+            . $costJoin
             . ' WHERE o.order_date >= :from AND o.order_date < :to AND o.order_type_id IN (1, 2) AND o.status_id NOT IN (1, 7)';
         $row = $conn->fetchAssociative(
             'SELECT COALESCE(SUM(net) FILTER (WHERE article AND t = 1), 0) AS sales_amount,'
@@ -93,7 +109,8 @@ class PeriodResultCalculator
             . ' WHERE o.order_date >= :from AND o.order_date < :to AND o.order_type_id IN (1, 2) AND o.status_id NOT IN (1, 7)',
             ['from' => $params['from'], 'to' => $params['to']]
         ));
-        $purchases = $this->purchases->periodTotals($period->getStartDateCollection(), $period->getEndDateCollection());
+        $totals = fn () => $this->purchases->periodTotals($period->getStartDateCollection(), $period->getEndDateCollection());
+        $purchases = $legacy ? $this->purchases->legacy($totals) : $totals();
 
         $c = static fn (mixed $v): int => (int) round((float) $v);
         $revenue = $c($row['sales_amount'] ?? 0) - $c($row['returns_amount'] ?? 0);

@@ -88,6 +88,7 @@ class ListsAndExportApiTest extends WebTestCase
         $this->create(NoteDeFrais::class, ['name' => 'Note ' . $tag, 'montant' => 1250], fn (NoteDeFrais $n, EntityManagerInterface $em) => $n->setDescription('Repas ' . $tag)->setDate(new \DateTime('2026-04-20'))->setCollection($em->find(Collections::class, $collection->getId()))->setTypeNoteDeFrais($em->find(TypeNoteDeFrais::class, $noteType->getId())));
         $em = $this->em();
         $em->getConnection()->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type, commande_id, commande_cost_cents, coefficient_multiplier) VALUES (nextval('product_id_seq'), :n, 4999, false, 3, NOW(), :s, 'standard', :c, 2000, 2.5)", ['n' => 'Produit ' . $tag, 's' => 'export-' . $tag, 'c' => $commande->getId()]);
+        static::getContainer()->get(\App\Services\CommandeService\CommandeLineService::class)->backfill(); // rattachement d'avant le lot L0 : repris en ligne d'achat, comme la migration
         $this->endOfWrite();
 
         $this->request('GET', '/api/gestion/exports/achats.csv?from=2026-04-01&to=2026-04-30&collectionId=' . $collection->getId());

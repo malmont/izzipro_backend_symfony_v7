@@ -15,23 +15,56 @@ use App\Services\TenantEntityManagerProvider;
  *   purchaseCost (= totalItemCost) = Σ coût × quantité, dans la devise du site (coût et frais de port × taux de la commande, lot G6)
  *   stockValue                     = Σ coût × quantité × coefficient (valeur de vente attendue du stock acheté)
  *   usedBudget                     = purchaseCost + frais de port (+ notes de frais pour une collection)
+ *   (lot L0, 10/11/2026 : produits et quantités lus sur les lignes d'achat `commande_line`)
  *   marge                          = stockValue − usedBudget ; tauxMarge = marge / usedBudget ; tauxMarque = marge / stockValue (définitions usuelles, lot P1)
  */
 class PurchaseMetricsCalculator
 {
-    /** Coût unitaire ramené dans la devise du site : coût de la commande (devise d'achat) × taux (lot G6, 10/11/2026) */
-    private const UNIT_COST = 'COALESCE(p.commande_cost_cents, p.purchase_price, p.price, 0) * COALESCE(c.exchange_rate, 1)';
+    /**
+     * Coût unitaire ramené dans la devise du site (lot G6) : depuis le lot L0 (10/11/2026), celui de la LIGNE D'ACHAT, sinon le prix d'achat de
+     * la fiche, sinon le prix de vente (repli historique des tableaux de bord, inchangé) ; × taux de la commande.
+     */
+    private const UNIT_COST = 'COALESCE(l.unit_cost_cents, p.purchase_price, p.price, 0) * COALESCE(c.exchange_rate, 1)';
+    /** Calcul d'avant le lot L0, sur le produit rattaché : gardé pour la seule vérification `app:gestion:lignes:verifier` */
+    private const LEGACY_UNIT_COST = 'COALESCE(p.commande_cost_cents, p.purchase_price, p.price, 0) * COALESCE(c.exchange_rate, 1)';
+
+    private bool $legacy = false;
 
     public function __construct(private readonly TenantEntityManagerProvider $emProvider)
     {
+    }
+
+    /**
+     * Exécute `$fn` avec le calcul d'avant le lot L0 (produits par `product.commande_id`, quantité `commande_quantity ?? quantity`) : sert à
+     * prouver que les lignes d'achat rendent les mêmes chiffres (`app:gestion:lignes:verifier`). Jamais utilisé par une route.
+     *
+     * @template T
+     * @param callable(): T $fn
+     * @return T
+     */
+    public function legacy(callable $fn): mixed
+    {
+        $this->legacy = true;
+        try {
+            return $fn();
+        } finally {
+            $this->legacy = false;
+        }
+    }
+
+    private function from(): string
+    {
+        return $this->legacy
+            ? 'FROM product p JOIN commande c ON c.id = p.commande_id'
+            : 'FROM commande_line l JOIN product p ON p.id = l.product_id JOIN commande c ON c.id = l.commande_id';
     }
 
     /** @return array{purchaseCost: int, stockValue: int, itemCount: int, modelCount: int, averageMultiplier: float, shippingCost: int} */
     public function commandeTotals(int $commandeId): array
     {
         $row = $this->connection()->fetchAssociative(
-            'SELECT ' . self::sums() . ', (SELECT COALESCE(SUM(f.price * COALESCE(c2.exchange_rate, 1)), 0) FROM frais_de_port f JOIN commande c2 ON c2.id = f.commande_id WHERE f.commande_id = :id) AS shipping_cost' .
-            ' FROM product p JOIN commande c ON c.id = p.commande_id WHERE p.commande_id = :id',
+            'SELECT ' . $this->sums() . ', (SELECT COALESCE(SUM(f.price * COALESCE(c2.exchange_rate, 1)), 0) FROM frais_de_port f JOIN commande c2 ON c2.id = f.commande_id WHERE f.commande_id = :id) AS shipping_cost' .
+            ' ' . $this->from() . ' WHERE c.id = :id',
             ['id' => $commandeId]
         ) ?: [];
 
@@ -49,7 +82,7 @@ class PurchaseMetricsCalculator
     {
         $params = ['from' => $start->format('Y-m-d 00:00:00'), 'to' => \DateTimeImmutable::createFromInterface($end)->modify('+1 day')->format('Y-m-d 00:00:00')];
         $connection = $this->connection();
-        $row = $connection->fetchAssociative('SELECT ' . self::sums() . ' FROM product p JOIN commande c ON c.id = p.commande_id WHERE c.date >= :from AND c.date < :to', $params) ?: [];
+        $row = $connection->fetchAssociative('SELECT ' . $this->sums() . ' ' . $this->from() . ' WHERE c.date >= :from AND c.date < :to', $params) ?: [];
         $costs = $connection->fetchAssociative(
             'SELECT (SELECT COALESCE(SUM(f.price * COALESCE(c.exchange_rate, 1)), 0) FROM frais_de_port f JOIN commande c ON c.id = f.commande_id WHERE c.date >= :from AND c.date < :to) AS shipping_cost,' .
             ' (SELECT COUNT(*) FROM commande c WHERE c.date >= :from AND c.date < :to) AS order_count,' .
@@ -65,7 +98,7 @@ class PurchaseMetricsCalculator
     {
         $connection = $this->connection();
         $in = "EXISTS (SELECT 1 FROM collections pc WHERE pc.kind = 'period' AND pc.del = false AND pc.start_date_collection <= c.date AND c.date < pc.end_date_collection + INTERVAL '1 day')";
-        $row = $connection->fetchAssociative('SELECT ' . self::sums() . ' FROM product p JOIN commande c ON c.id = p.commande_id WHERE ' . $in) ?: [];
+        $row = $connection->fetchAssociative('SELECT ' . $this->sums() . ' ' . $this->from() . ' WHERE ' . $in) ?: [];
         $costs = $connection->fetchAssociative(
             'SELECT (SELECT COALESCE(SUM(f.price * COALESCE(c.exchange_rate, 1)), 0) FROM frais_de_port f JOIN commande c ON c.id = f.commande_id WHERE ' . $in . ') AS shipping_cost,' .
             ' (SELECT COUNT(*) FROM commande c WHERE ' . $in . ') AS order_count,' .
@@ -110,7 +143,7 @@ class PurchaseMetricsCalculator
     {
         $connection = $this->connection();
         $row = $connection->fetchAssociative(
-            'SELECT ' . self::sums() . ' FROM product p JOIN commande c ON c.id = p.commande_id WHERE ' . $where,
+            'SELECT ' . $this->sums() . ' ' . $this->from() . ' WHERE ' . $where,
             $params
         ) ?: [];
         $costs = $connection->fetchAssociative(
@@ -127,13 +160,15 @@ class PurchaseMetricsCalculator
         ];
     }
 
-    private static function sums(): string
+    private function sums(): string
     {
-        $cost = self::UNIT_COST;
-        $qty = 'COALESCE(p.commande_quantity, p.quantity, 0)'; // quantité de la ligne de commande si posée (reprise d'historique, lot P3), sinon le stock
+        $cost = $this->legacy ? self::LEGACY_UNIT_COST : self::UNIT_COST;
+        // lot L0 : quantité commandée de la ligne ; avant : commande_quantity (reprise, lot P3) sinon le stock
+        $qty = $this->legacy ? 'COALESCE(p.commande_quantity, p.quantity, 0)' : 'l.quantity_ordered';
         $coef = 'COALESCE(p.coefficient_multiplier, 0)';
+        $models = $this->legacy ? 'COUNT(p.id)' : 'COUNT(DISTINCT p.id)'; // un article en deux variantes dans la même commande reste un modèle
 
-        return "COALESCE(SUM($cost * $qty), 0) AS purchase_cost, COALESCE(SUM($cost * $qty * $coef), 0) AS stock_value, COALESCE(SUM($qty), 0) AS item_count, COUNT(p.id) AS model_count, COALESCE(SUM($coef * $qty), 0) AS multiplier_sum";
+        return "COALESCE(SUM($cost * $qty), 0) AS purchase_cost, COALESCE(SUM($cost * $qty * $coef), 0) AS stock_value, COALESCE(SUM($qty), 0) AS item_count, $models AS model_count, COALESCE(SUM($coef * $qty), 0) AS multiplier_sum";
     }
 
     /** @param array<string, mixed> $row */

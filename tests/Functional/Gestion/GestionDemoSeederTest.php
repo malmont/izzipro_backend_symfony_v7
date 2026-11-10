@@ -57,7 +57,11 @@ class GestionDemoSeederTest extends KernelTestCase
         }
         $attached = $em->getRepository(Product::class)->createQueryBuilder('p')->where('p.commande IS NOT NULL')->getQuery()->getResult();
         $this->assertGreaterThanOrEqual(min($freeBefore, 14), count($attached), 'les produits existants sont répartis sur les commandes');
+        $seederCommandes = ['Commande textile printemps', 'Réassort automne', 'Accessoires des fêtes', 'Collection hiver — manteaux', 'Accessoires d\'hiver', 'Chaussures et sacs', 'Maillots et serviettes', 'Location nautique — matériel'];
         foreach ($attached as $product) {
+            if (!in_array($product->getCommande()?->getName(), $seederCommandes, true)) {
+                continue; // base partagée : depuis le lot L0, un article d'un autre test peut avoir un coût inconnu (NULL, jamais le prix de vente)
+            }
             $this->assertNotNull($product->getCommandeCostCents(), 'coût d\'achat posé au rattachement');
             $this->assertNotNull($product->getCoefficientMultiplier(), 'coefficient posé pour la valeur de stock');
         }

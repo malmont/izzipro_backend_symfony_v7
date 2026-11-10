@@ -98,7 +98,8 @@ n'est touchée. Contrat envoyé à l'application avant le code de chaque lot (`d
     inconnu. `shippingBilled` = livraison facturée au client, hors `revenue`. `orders` = commandes de vente avec au moins une
     ligne d'article.
   - `cogs` (coût des articles vendus) : Σ quantité × coût unitaire des lignes au coût connu ; **un retour retire son coût au même
-    coût unitaire** (l'article revient en stock). Coût unitaire = coût de la commande fournisseur du produit ramené par son taux
+    coût unitaire** (l'article revient en stock). Depuis le lot L0 (`docs/lignes-achat-gestion.md` § 4), le coût unitaire est la moyenne
+    pondérée des lignes d'achat de l'article dont la commande est datée au plus tard le jour de la vente (coupure inchangée). Coût unitaire = coût de la commande fournisseur du produit ramené par son taux
     (G6) si le rattachement est antérieur à la **coupure** (ci-dessous), sinon `purchase_price` du produit, **sinon coût
     inconnu** : la ligne est comptée dans `unknownCostItems` (articles vendus) et exclue de `cogs`, jamais valorisée au prix de
     vente. `items` = articles vendus au coût connu.

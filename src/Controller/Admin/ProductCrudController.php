@@ -139,9 +139,12 @@ class ProductCrudController extends BaseTenantCrudController
         yield BooleanField::new('isPos', 'Actif sur le Point de vente')->setColumns('col-md-3');
         
         yield FormField::addPanel('Données Externes')->collapsible();
-        yield AssociationField::new('commande', 'Commande Associée')
+        // lot L0 de la gestion (10/11/2026) : la commande du produit est un raccourci de sa dernière ligne d'achat, en lecture seule ici
+        yield AssociationField::new('commande', 'Dernière commande fournisseur')
             ->setFormTypeOptions(['em' => $tenantEm, 'query_builder' => fn(CommandeRepository $repo) => $repo->createQueryBuilder('cmd')->orderBy('cmd.date', 'DESC')])
             ->hideOnIndex()
+            ->setDisabled(true)
+            ->setHelp('Tenue par les lignes d\'achat de l\'application de gestion (rattacher un article à une commande).')
             ->setColumns('col-md-6');
 
        yield AssociationField::new('variants', 'Variantes de Produit')

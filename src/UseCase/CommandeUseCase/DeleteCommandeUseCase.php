@@ -13,7 +13,7 @@ use App\Services\TenantEntityManagerProvider;
  */
 class DeleteCommandeUseCase
 {
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly PeriodGuard $guard)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly PeriodGuard $guard, private readonly ?\App\Services\CommandeService\CommandeLineService $lines = null)
     {
     }
 
@@ -21,7 +21,13 @@ class DeleteCommandeUseCase
     {
         $this->guard->assertCommandeWritable($commande);
         $em = $this->emProvider->getEntityManager();
+        // lignes d'achat supprimées avec la commande (ON DELETE CASCADE, lot L0) : les raccourcis de leurs produits sont recalculés ensuite
+        $products = array_map(fn ($l) => $l->getProduct(), $em->getRepository(\App\Entity\CommandeLine::class)->forCommande($commande));
         $em->remove($commande);
         $em->flush();
+        foreach ($products as $product) {
+            $em->refresh($product);
+            $this->lines?->refreshShortcuts($product);
+        }
     }
 }

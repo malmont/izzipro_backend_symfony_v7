@@ -3,30 +3,34 @@
 namespace App\Services\CommandeService;
 
 use App\Entity\Commande;
+use App\Entity\CommandeLine;
 use App\Entity\Product;
+use App\Entity\ProductVariant;
 use App\Services\ContentAuditService\ContentAuditRecorder;
 use App\Services\MediaUrlResolver;
 use App\Services\TenantEntityManagerProvider;
 
 /**
- * Rattachement de produits existants à une commande fournisseur (09/11/2026, application de gestion) : liste des produits sans commande
- * (recherche, pagination), rattachement tout ou rien, détachement. Jamais `setPurchasePrice` ni `setCoefficientMultiplier` (ils recalculent
- * le prix de vente) : seuls `commande`, `commande_cost_cents` et, si fournie, `quantity` sont écrits. Montants en cents.
+ * Rattachement de produits existants à une commande fournisseur (09/11/2026, application de gestion) : liste des produits à classer
+ * (recherche, pagination), rattachement tout ou rien, détachement. Depuis le lot L0 (10/11/2026, `docs/lignes-achat-gestion.md`), un
+ * rattachement crée ou met à jour une LIGNE D'ACHAT (`CommandeLineService`) : un article peut être acheté dans plusieurs commandes
+ * (réassort), et un rattachement répété dans la même commande met sa ligne à jour (idempotent). Rien d'autre du produit n'est écrit :
+ * ni le stock, ni le prix de vente, ni le prix d'achat de la fiche, ni le coefficient. Montants en cents.
  */
 class CommandeProductAttachmentService
 {
     public const MAX_LIMIT = 100;
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly ContentAuditRecorder $audit, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null, private readonly ?\App\Services\GestionService\PeriodCalendar $calendar = null) // devise du site (lot G6) ; calendrier des périodes (lot P1, 10/11/2026)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly ContentAuditRecorder $audit, private readonly CommandeLineService $lines, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null, private readonly ?\App\Services\GestionService\PeriodCalendar $calendar = null) // devise du site (lot G6) ; calendrier des périodes (lot P1, 10/11/2026)
     {
     }
 
     /**
-     * Produits sans commande, recherche sur nom (traduction ou nom de base), code et code-barres, tri par nom.
+     * Produits à classer (sans ligne d'achat ; `scope=all` : tous), recherche sur nom (traduction ou nom de base), code et code-barres, tri par nom.
      *
      * @return array{items: list<array<string, mixed>>, total: int, page: int, limit: int}
      */
-    public function available(?string $q, int $page, int $limit, string $productsBaseUrl, string $locale = 'fr'): array
+    public function available(?string $q, int $page, int $limit, string $productsBaseUrl, string $locale = 'fr', string $scope = 'unclassified'): array
     {
         $limit = max(1, min(self::MAX_LIMIT, $limit));
         $page = max(1, $page);
@@ -34,7 +38,10 @@ class CommandeProductAttachmentService
         // Identifiants d'abord (DISTINCT sur des scalaires : la fiche produit porte des colonnes json sans opérateur d'égalité), puis les entités
         $qb = $em->createQueryBuilder()->select('DISTINCT p.id AS id, p.name AS name')->from(Product::class, 'p')
             ->leftJoin('p.translations', 't', 'WITH', 't.locale = :locale')->setParameter('locale', $locale)
-            ->andWhere('p.commande IS NULL');
+            ;
+        if ($scope !== 'all') { // « À classer » (lot L0) : articles sans aucune ligne d'achat ; scope=all : tout le catalogue (réassort)
+            $qb->andWhere('NOT EXISTS (SELECT 1 FROM ' . CommandeLine::class . ' l WHERE l.product = p)');
+        }
         $q = trim((string) $q);
         if ($q !== '') {
             $qb->andWhere('LOWER(p.name) LIKE :q OR LOWER(t.name) LIKE :q OR LOWER(p.code) LIKE :q OR LOWER(p.barcode) LIKE :q')->setParameter('q', '%' . mb_strtolower($q) . '%');
@@ -79,11 +86,19 @@ class CommandeProductAttachmentService
                 continue;
             }
             $productId = (int) $line['productId'];
-            if (isset($seen[$productId])) {
+            $variantId = null;
+            if (array_key_exists('variantId', $line) && $line['variantId'] !== null) {
+                if (!is_numeric($line['variantId']) || (int) $line['variantId'] <= 0) {
+                    $errors[] = ['path' => "products[$i].variantId", 'message' => 'identifiant de variante attendu'];
+                    continue;
+                }
+                $variantId = (int) $line['variantId'];
+            }
+            if (isset($seen[$productId . '/' . $variantId])) {
                 $errors[] = ['path' => "products[$i].productId", 'message' => 'produit en double dans la demande'];
                 continue;
             }
-            $seen[$productId] = true;
+            $seen[$productId . '/' . $variantId] = true;
             $cost = null;
             if (array_key_exists('purchasePrice', $line) && $line['purchasePrice'] !== null) {
                 if (!is_numeric($line['purchasePrice']) || (float) $line['purchasePrice'] < 0 || (float) $line['purchasePrice'] !== (float) (int) $line['purchasePrice']) {
@@ -112,7 +127,7 @@ class CommandeProductAttachmentService
             if ($cost === null && $commande->getCurrency() !== null && $commande->getCurrency() !== strtoupper($this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT)) {
                 $errors[] = ['path' => "products[$i].purchasePrice", 'message' => sprintf('requis : commande en %s (coût en devise d\'achat)', $commande->getCurrency()), 'code' => 'PURCHASE_PRICE_REQUIRED'];
             }
-            $plan[] = ['productId' => $productId, 'cost' => $cost, 'coefficient' => $coefficient, 'quantity' => $quantity, 'path' => "products[$i]"];
+            $plan[] = ['productId' => $productId, 'variantId' => $variantId, 'cost' => $cost, 'coefficient' => $coefficient, 'quantity' => $quantity, 'path' => "products[$i]"];
         }
         if ($plan === [] && $errors === []) {
             $errors[] = ['path' => 'products', 'message' => 'au moins un produit attendu'];
@@ -126,31 +141,62 @@ class CommandeProductAttachmentService
             if ($product === null) {
                 throw new CommandeProductException('PRODUCT_NOT_FOUND', sprintf('Produit %d introuvable', $p['productId']), 404, [], ['productId' => $p['productId']]);
             }
-            if ($product->getCommande() !== null && $product->getCommande()->getId() !== $commande->getId()) {
-                throw new CommandeProductException('PRODUCT_ALREADY_ATTACHED', sprintf('Le produit %d est déjà dans la commande %d', $p['productId'], $product->getCommande()->getId()), 409, [], ['productId' => $p['productId'], 'commandeId' => $product->getCommande()->getId()]);
+            $variant = null;
+            if ($p['variantId'] !== null) {
+                $variant = $em->find(ProductVariant::class, $p['variantId']);
+                if ($variant === null || $variant->getProduct()?->getId() !== $product->getId()) {
+                    throw new CommandeProductException('VALIDATION_FAILED', sprintf('%s.variantId : variante %d absente du produit %d', $p['path'], $p['variantId'], $p['productId']), 422, [['path' => $p['path'] . '.variantId', 'message' => 'variante absente du produit', 'code' => 'VARIANT_NOT_IN_PRODUCT']]);
+                }
             }
-            $products[] = [$product, $p];
+            $products[] = [$product, $variant, $p];
         }
+        // lot L0 : plus de PRODUCT_ALREADY_ATTACHED ; un article acheté ailleurs reçoit une ligne de plus (réassort), le même dans cette commande est mis à jour
         $attached = [];
+        $lines = [];
+        $updated = [];
         $before = [];
-        foreach ($products as [$product, $p]) {
-            $before[] = ['productId' => $product->getId(), 'commandeId' => $product->getCommande()?->getId(), 'commandeCostCents' => $product->getCommandeCostCents(), 'quantity' => $product->getQuantity()];
-            $product->setCommande($commande);
-            $product->setCommandeAttachedAt(new \DateTimeImmutable()); // lot P2 périodes (10/11/2026)
-            // coût retenu : purchasePrice du corps (cents), sinon celui déjà posé, sinon le prix d'achat du produit, sinon son prix de vente ; jamais setPurchasePrice (recalcul du prix)
-            $product->setCommandeCostCents($p['cost'] ?? $product->getCommandeCostCents() ?? (int) round((float) ($product->getPurchasePrice() ?? $product->getPrice() ?? 0)));
-            if ($p['quantity'] !== null) {
-                $product->setQuantity($p['quantity']);
+        $repo = $em->getRepository(CommandeLine::class);
+        foreach ($products as [$product, $variant, $p]) {
+            $existing = $repo->findOne($commande, $product, $variant);
+            $before[] = ['productId' => $product->getId(), 'variantId' => $variant?->getId(), 'lineId' => $existing?->getId(), 'quantity' => $existing?->getQuantityOrdered(), 'unitCost' => $existing?->getUnitCostCents()];
+            // coût : purchasePrice du corps, sinon celui de la ligne déjà là, sinon le prix d'achat de la fiche ; sinon inconnu (NULL), jamais le prix de vente
+            $cost = $p['cost'] ?? $existing?->getUnitCostCents() ?? ($product->getPurchasePrice() !== null ? (int) round((float) $product->getPurchasePrice()) : null);
+            // quantité de la ligne : celle du corps, sinon celle de la ligne déjà là, sinon le stock actuel de l'article (comme avant L0)
+            $quantity = $p['quantity'] ?? $existing?->getQuantityOrdered() ?? (int) ($product->getQuantity() ?? 0);
+            $result = $this->lines->upsert($commande, $product, $variant, $quantity, $cost, false, CommandeLine::SOURCE_MANUAL, null, null, $by);
+            $line = $result['line'];
+            if (!$result['created']) {
+                $updated[] = $line->getId();
             }
+            $effective = $cost ?? (int) round((float) ($product->getPrice() ?? 0)); // coût retenu par les tableaux de bord (repli sur le prix de vente quand le coût est inconnu, inchangé)
             $attached[] = [
-                'productId' => $product->getId(), 'name' => $product->getName(), 'commandeCostCents' => $product->getCommandeCostCents(),
-                'coefficientMultiplier' => $p['coefficient'] ?? $product->getCoefficientMultiplier(), 'quantity' => $product->getQuantity(), 'price' => $product->getPrice(),
+                'productId' => $product->getId(), 'name' => $product->getName(), 'commandeCostCents' => $effective,
+                'coefficientMultiplier' => $p['coefficient'] ?? $product->getCoefficientMultiplier(), 'quantity' => $line->getQuantityOrdered(), 'price' => $product->getPrice(),
+                'lineId' => $line->getId(), 'variantId' => $variant?->getId(),
             ];
+            $lines[] = self::lineArray($line);
         }
-        $em->flush();
         $this->audit->record('commande-products', $commande->getId(), 'attach', $before, $attached, array_map(fn ($a) => 'product:' . $a['productId'], $attached));
 
-        return ['attached' => $attached];
+        return ['attached' => $attached, 'lines' => $lines, 'updated' => $updated];
+    }
+
+    /** Forme d'une ligne d'achat dans les réponses */
+    public static function lineArray(CommandeLine $line): array
+    {
+        $variant = $line->getVariant();
+        $product = $line->getProduct();
+
+        return [
+            'id' => $line->getId(), 'commandeId' => $line->getCommande()?->getId(),
+            'product' => ['id' => $product?->getId(), 'name' => $product?->getName(), 'code' => $product?->getCode()],
+            'productId' => $product?->getId(),
+            'variant' => $variant === null ? null : ['id' => $variant->getId(), 'size' => $variant->getSize()?->getName(), 'color' => $variant->getColor()?->getName()],
+            'variantId' => $variant?->getId(),
+            'quantity' => $line->getQuantityOrdered(), 'quantityOrdered' => $line->getQuantityOrdered(), 'quantityReceived' => $line->getQuantityReceived(),
+            'unitCost' => $line->getUnitCostCents(), 'currency' => $line->getCommande()?->getCurrency(), 'estimated' => $line->isEstimated(),
+            'attachedAt' => $line->getAttachedAt()?->format(\DateTimeInterface::ATOM), 'source' => $line->getSource(),
+        ];
     }
 
     /** @throws CommandeProductException */
@@ -167,14 +213,12 @@ class CommandeProductAttachmentService
         }
         $em = $this->emProvider->getEntityManager();
         $product = $em->find(Product::class, $productId);
-        if ($product === null || $product->getCommande()?->getId() !== $commande->getId()) {
+        $lines = $product !== null ? $em->getRepository(CommandeLine::class)->forCommandeAndProduct($commande, $product) : [];
+        if ($lines === []) {
             throw new CommandeProductException('PRODUCT_NOT_IN_COMMANDE', sprintf('Le produit %d n\'est pas dans cette commande', $productId), 404, [], ['productId' => $productId, 'commandeId' => $commande->getId()]);
         }
-        $before = ['productId' => $productId, 'commandeId' => $commande->getId(), 'commandeCostCents' => $product->getCommandeCostCents()];
-        $product->setCommande(null);
-        $product->setCommandeCostCents(null);
-        $product->setCommandeAttachedAt(null);
-        $em->flush();
+        $before = ['productId' => $productId, 'commandeId' => $commande->getId(), 'lines' => array_map(fn (CommandeLine $l) => ['id' => $l->getId(), 'quantity' => $l->getQuantityOrdered(), 'unitCost' => $l->getUnitCostCents()], $lines)];
+        $this->lines->deleteProductLines($commande, $product); // lignes de cet article dans cette commande (lot L0) ; raccourcis du produit recalculés
         $this->audit->record('commande-products', $commande->getId(), 'detach', $before, ['productId' => $productId, 'commandeId' => null], ['product:' . $productId]);
     }
 

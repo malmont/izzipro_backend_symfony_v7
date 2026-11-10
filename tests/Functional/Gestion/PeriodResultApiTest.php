@@ -72,6 +72,7 @@ class PeriodResultApiTest extends WebTestCase
         $conn->executeStatement("INSERT INTO commande (id, budget, date, name, is_closed, collections_id) VALUES (nextval('commande_id_seq'), 500000, :d, :n, false, :col)", ['d' => $inPeriod->format('Y-m-d H:i:s'), 'n' => "Achat $tag", 'col' => $periodId]);
         $commandeId = (int) $conn->fetchOne('SELECT id FROM commande WHERE name = :n', ['n' => "Achat $tag"]);
         $conn->executeStatement('UPDATE product SET commande_id = :c, commande_cost_cents = 1000, commande_attached_at = :at, quantity = 2 WHERE id = :p', ['c' => $commandeId, 'at' => $inPeriod->format('Y-m-d H:i:s'), 'p' => $a]);
+        static::getContainer()->get(\App\Services\CommandeService\CommandeLineService::class)->backfill(); // rattachement d'avant le lot L0 : repris en ligne d'achat, comme la migration
         $conn->executeStatement("INSERT INTO frais_de_port (id, name, price, commande_id) VALUES (nextval('frais_de_port_id_seq'), 'Fret', 150, :c)", ['c' => $commandeId]);
         $conn->executeStatement("INSERT INTO note_de_frais (id, name, montant, date, description, collection_id) VALUES (nextval('note_de_frais_id_seq'), 'Essence', 500, :d, 'Essence', :col)", ['d' => $inPeriod->format('Y-m-d'), 'col' => $periodId]);
 
@@ -126,17 +127,18 @@ class PeriodResultApiTest extends WebTestCase
         $this->assertSame($result, $this->get("/api/periodes/$periodId/resultat"), 'figé');
         $this->assertSame($result, $this->get("/api/collections/$periodId/resultat"), 'alias');
 
-        // Réouverture : résultat figé effacé, calcul vivant sans coupure (la vente ajoutée et le coût tardif de C comptent) ; nouvelle clôture : refigé, coupure = cette clôture
+        // Réouverture : résultat figé effacé, calcul vivant sans coupure (la vente ajoutée compte) ; nouvelle clôture : refigé, coupure = cette clôture.
+        // Lot L0 : le coût de C vient d'un achat daté d'aujourd'hui, après ses ventes : il ne leur est jamais imputé (coût à la date de la vente)
         $this->request('POST', "/api/dashboard/collection/$periodId/reopen");
         $this->assertSame(200, $this->client->getResponse()->getStatusCode());
         $this->assertSame(0, (int) $this->em()->getConnection()->fetchOne('SELECT COUNT(*) FROM period_result WHERE collection_id = ?', [$periodId]));
         $live = $this->get("/api/periodes/$periodId/resultat");
         $this->assertSame([false, null, 'open', 14500], [$live['frozen'], $live['frozenAt'], $live['period']['status'], $live['sales']['revenue']], 'vivant après réouverture');
-        $this->assertSame(['amount' => 6100, 'items' => 8, 'unknownCostItems' => 0, 'estimatedItems' => 0, 'estimatedAmount' => 0], $live['cogs'], 'rouverte : le coût tardif de C (2200) compte');
+        $this->assertSame(['amount' => 3900, 'items' => 7, 'unknownCostItems' => 1, 'estimatedItems' => 0, 'estimatedAmount' => 0], $live['cogs'], 'rouverte : la vente ajoutée compte (A 1000) ; C, acheté après ses ventes, reste au coût inconnu');
         $this->request('POST', "/api/dashboard/collection/$periodId/close");
         $this->assertSame(200, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
         $frozen = $this->get("/api/periodes/$periodId/resultat");
-        $this->assertSame([true, 'closed', 14500, 0, 6100], [$frozen['frozen'], $frozen['period']['status'], $frozen['sales']['revenue'], $frozen['sales']['unknownCostRevenue'], $frozen['cogs']['amount']], 'refigée avec les coûts connus à sa clôture');
+        $this->assertSame([true, 'closed', 14500, 4000, 3900], [$frozen['frozen'], $frozen['period']['status'], $frozen['sales']['revenue'], $frozen['sales']['unknownCostRevenue'], $frozen['cogs']['amount']], 'refigée : coûts à la date de chaque vente');
 
         // Période sans vente : taux null ; collection manuelle : 404 NOT_A_PERIOD ; période courante : vivante
         $empty = $calendar->periodFor($today->modify('-650 days')); // hors des périodes du semis demo (2025-12 → 2026), dans les 24 mois du calendrier

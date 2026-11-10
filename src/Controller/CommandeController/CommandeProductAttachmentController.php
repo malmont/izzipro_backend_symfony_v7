@@ -27,7 +27,7 @@ class CommandeProductAttachmentController extends AbstractController
     #[Route('/api/commandes/products/disponibles', name: 'commande_products_available', methods: ['GET'])]
     public function available(Request $request): JsonResponse
     {
-        return $this->guard(fn () => $this->json($this->useCase->available($request->query->get('q'), $request->query->get('page'), $request->query->get('limit'), $this->media->getProductsBaseUrl($request->getSchemeAndHttpHost()), (string) $request->query->get('locale', 'fr'))));
+        return $this->guard(fn () => $this->json($this->useCase->available($request->query->get('q'), $request->query->get('page'), $request->query->get('limit'), $this->media->getProductsBaseUrl($request->getSchemeAndHttpHost()), (string) $request->query->get('locale', 'fr'), $request->query->get('scope'))));
     }
 
     #[Route('/api/commandes/{id}/products/rattacher', name: 'commande_products_attach', methods: ['POST'], requirements: ['id' => '\d+'])]

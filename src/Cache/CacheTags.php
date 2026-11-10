@@ -301,6 +301,7 @@ final class CacheTags
         PaymentType::class => [self::ORDERS, self::PAYMENTS],
 
         Commande::class => [self::COMMANDES],
+        \App\Entity\CommandeLine::class => [self::COMMANDES, self::PRODUCTS], // lignes d'achat (lot L0, 10/11/2026) : commandes, produits (raccourcis, « à classer »)
         Collections::class => [self::COLLECTIONS],
         Fournisseur::class => [self::FOURNISSEURS],
         TypeFournisseur::class => [self::FOURNISSEURS],

@@ -25,7 +25,8 @@ class ProductService
     public function __construct(
         TenantEntityManagerProvider $emProvider,
         EntityRetrieverService $entityRetrieverService,
-        private readonly TenantCurrencyProvider $currency
+        private readonly TenantCurrencyProvider $currency,
+        private readonly ?\App\Services\CommandeService\CommandeLineService $lines = null, // lignes d'achat (lot L0 de la gestion, 10/11/2026)
     ) {
         $em = $emProvider->getEntityManager();
         $this->repository = $em->getRepository(Product::class);
@@ -35,7 +36,9 @@ class ProductService
 
     public function getProductsByCommande(Commande $commande, string $host, string $locale = 'fr'): array
     {
-        $products = $commande->getProducts();
+        // lot L0 (10/11/2026) : produits distincts des lignes d'achat de la commande (un article peut être acheté dans plusieurs commandes)
+        $ids = $this->lines !== null ? $this->emProvider->getEntityManager()->getRepository(\App\Entity\CommandeLine::class)->productIdsOf($commande) : null;
+        $products = $ids === null ? $commande->getProducts() : new \Doctrine\Common\Collections\ArrayCollection($ids === [] ? [] : $this->emProvider->getEntityManager()->getRepository(Product::class)->findBy(['id' => $ids], ['id' => 'ASC']));
         $currency = $this->currency->code();
         // langue demandée (?locale=) au lieu de « fr » figé (lot G3, 09/11/2026)
         return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host, $locale, $currency), $products->toArray());
@@ -85,6 +88,8 @@ class ProductService
         
         $em->persist($product);
         $em->flush();
+        // ligne d'achat de l'article créé dans la commande (lot L0) : quantité = stock de l'article, coût = prix d'achat saisi (cents) ou inconnu
+        $this->lines?->upsert($commande, $product, null, (int) ($product->getQuantity() ?? 0), $inputDTO->purchasePrice !== null ? (int) round((float) $inputDTO->purchasePrice) : null, false, \App\Entity\CommandeLine::SOURCE_MANUAL);
 
         return $product;
     }

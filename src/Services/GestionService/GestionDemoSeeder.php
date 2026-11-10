@@ -187,7 +187,7 @@ class GestionDemoSeeder
         // Produits : ceux du site sans commande, complétés par des produits de démonstration s'il en manque
         $this->ensureDemoProducts();
         $this->ensureUncostedProducts();
-        $free = $em->getRepository(Product::class)->createQueryBuilder('p')->where('p.commande IS NULL')->andWhere('p.name NOT IN (:uncosted)')
+        $free = $em->getRepository(Product::class)->createQueryBuilder('p')->where('NOT EXISTS (SELECT 1 FROM App\\Entity\\CommandeLine cl WHERE cl.product = p)')->andWhere('p.name NOT IN (:uncosted)')
             ->setParameter('uncosted', array_column(self::UNCOSTED_PRODUCTS, 0))->orderBy('p.id', 'ASC')->getQuery()->getResult(); // les « Trouvailles » restent sans coût ni commande
         // reprise d'historique de démonstration : les périodes passées (fermées par la date) sont rouvertes le temps du rattachement, puis refermées
         $reopened = [];

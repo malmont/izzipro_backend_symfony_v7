@@ -15,9 +15,9 @@ class CommandeProductAttachmentUseCase
     }
 
     /** @return array{items: list<array<string, mixed>>, total: int, page: int, limit: int} */
-    public function available(mixed $q, mixed $page, mixed $limit, string $productsBaseUrl, string $locale): array
+    public function available(mixed $q, mixed $page, mixed $limit, string $productsBaseUrl, string $locale, mixed $scope = null): array
     {
-        return $this->service->available(is_string($q) ? $q : null, is_numeric($page) ? (int) $page : 1, is_numeric($limit) ? (int) $limit : 30, $productsBaseUrl, $locale);
+        return $this->service->available(is_string($q) ? $q : null, is_numeric($page) ? (int) $page : 1, is_numeric($limit) ? (int) $limit : 30, $productsBaseUrl, $locale, $scope === 'all' ? 'all' : 'unclassified');
     }
 
     /** @return array{attached: list<array<string, mixed>>} */

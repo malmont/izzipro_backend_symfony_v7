@@ -47,6 +47,7 @@ class RepriseHistoriqueService
         private readonly StoreClock $clock,
         private readonly FreezeCommandeMetricsUseCase $freezeCommande,
         private readonly ContentAuditRecorder $audit,
+        private readonly ?\App\Services\CommandeService\CommandeLineService $lines = null, // lignes d'achat (lot L0, 10/11/2026)
     ) {
     }
 
@@ -172,10 +173,11 @@ class RepriseHistoriqueService
             $em->flush();
             foreach ($lines as $line) {
                 $product = $em->find(Product::class, $line['productId']);
-                if ($product === null || $product->getCommande() !== null) {
-                    continue;
+                if ($product === null || $em->getRepository(\App\Entity\CommandeLine::class)->hasAny($product)) {
+                    continue; // lot L0 : un article ayant déjà une ligne d'achat n'est jamais touché
                 }
-                $product->setCommande($commande)->setCommandeCostCents($line['cost'])->setCommandeQuantity($line['quantity'])->setCommandeAttachedAt($start)->setCommandeCostEstimated($line['estimated']);
+                // ligne d'achat de reprise (lot L0) : historique, réputée reçue ; datée du début de la période
+                $this->lines->upsert($commande, $product, null, $line['quantity'], $line['cost'], $line['estimated'], \App\Entity\CommandeLine::SOURCE_REPRISE, $start, $line['quantity'], 'reprise');
             }
             $em->flush();
             $this->freezeCommande->execute($commande); // figée : chiffres de la période conservés
@@ -207,12 +209,19 @@ class RepriseHistoriqueService
         $em = $this->emProvider->getEntityManager();
         $detached = 0;
         $commandes = $em->getRepository(Commande::class)->findBy(['kind' => Commande::KIND_REPRISE]);
+        $touched = [];
         foreach ($commandes as $commande) {
-            foreach ($em->getRepository(Product::class)->findBy(['commande' => $commande]) as $product) {
-                $product->setCommande(null)->setCommandeCostCents(null)->setCommandeQuantity(null)->setCommandeAttachedAt(null)->setCommandeCostEstimated(false);
+            foreach ($em->getRepository(\App\Entity\CommandeLine::class)->forCommande($commande) as $line) { // lot L0 : seules les lignes de reprise sont retirées
+                $touched[$line->getProduct()->getId()] = $line->getProduct();
+                $em->remove($line);
                 $detached++;
             }
             $em->flush();
+        }
+        foreach ($touched as $product) {
+            $this->lines->refreshShortcuts($product); // raccourcis du produit (son autre ligne d'achat, ou NULL) avant de retirer la commande qu'ils désignaient
+        }
+        foreach ($commandes as $commande) {
             $em->createQuery('DELETE FROM App\Entity\CommandeStatistiques s WHERE s.commande = :c')->setParameter('c', $commande)->execute();
             $em->remove($commande);
         }
@@ -251,15 +260,18 @@ class RepriseHistoriqueService
         [$fromUtc, $toUtc] = $this->bounds($from, $to);
         $factor = 'CASE WHEN o.prices_include_tax AND COALESCE(o.sub_total, 0) <> 0 THEN (o.sub_total - COALESCE(o.total_tax, 0)) / o.sub_total ELSE 1 END';
         $rows = $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
-            'SELECT p.id, p.name, p.code, p.price, p.purchase_price, p.commande_id, p.commande_cost_cents, p.commande_cost_estimated, c.exchange_rate,'
+            'SELECT p.id, p.name, p.code, p.price, p.purchase_price,'
+            . ' (SELECT COUNT(*) FROM commande_line l WHERE l.product_id = p.id) AS line_count,' // lot L0 : article déjà acheté = au moins une ligne d'achat
+            . ' (SELECT COALESCE(SUM(l.quantity_ordered * l.unit_cost_cents * COALESCE(lc.exchange_rate, 1)) / NULLIF(SUM(l.quantity_ordered), 0), AVG(l.unit_cost_cents * COALESCE(lc.exchange_rate, 1)))'
+            . ' FROM commande_line l JOIN commande lc ON lc.id = l.commande_id WHERE l.product_id = p.id AND l.unit_cost_cents IS NOT NULL) AS line_cost,'
             . ' SUM(CASE WHEN o.order_type_id = 2 THEN -oi.quantity ELSE oi.quantity END) AS qty,'
             . " SUM((CASE WHEN o.order_type_id = 2 THEN -ABS(oi.total_price) ELSE oi.total_price END) * ($factor)) AS revenue,"
             . ' MIN(o.order_date) FILTER (WHERE o.order_type_id = 1) AS first_sold'
             . ' FROM order_items oi JOIN "order" o ON o.id = oi.order_associated_id'
             . ' JOIN product_variant pv ON pv.id = oi.product_variant_id JOIN product p ON p.id = pv.product_id'
-            . ' LEFT JOIN booking b ON b.order_item_id = oi.id LEFT JOIN commande c ON c.id = p.commande_id'
+            . ' LEFT JOIN booking b ON b.order_item_id = oi.id'
             . ' WHERE o.order_date >= :from AND o.order_date < :to AND o.order_type_id IN (1, 2) AND o.status_id NOT IN (1, 7) AND b.id IS NULL AND o.subscription_id IS NULL'
-            . ' GROUP BY p.id, c.exchange_rate HAVING SUM(CASE WHEN o.order_type_id = 2 THEN -oi.quantity ELSE oi.quantity END) > 0 AND MIN(o.order_date) FILTER (WHERE o.order_type_id = 1) IS NOT NULL'
+            . ' GROUP BY p.id HAVING SUM(CASE WHEN o.order_type_id = 2 THEN -oi.quantity ELSE oi.quantity END) > 0 AND MIN(o.order_date) FILTER (WHERE o.order_type_id = 1) IS NOT NULL'
             . ' ORDER BY revenue DESC, p.id',
             ['from' => $fromUtc, 'to' => $toUtc]
         );
@@ -269,15 +281,12 @@ class RepriseHistoriqueService
         foreach ($rows as $r) {
             $firstSold = (new \DateTimeImmutable((string) $r['first_sold'], new \DateTimeZone('UTC')))->setTimezone($tz);
             [$source, $unit] = match (true) {
-                $r['commande_id'] !== null && $r['commande_cost_cents'] !== null => [$r['commande_cost_estimated'] ? 'estimated' : 'commande', (int) round((float) $r['commande_cost_cents'] * (float) ($r['exchange_rate'] ?? 1))],
-                $r['commande_id'] !== null => ['commande', $r['purchase_price'] !== null ? (int) round((float) $r['purchase_price']) : (int) round((float) $r['price'])],
+                (int) $r['line_count'] > 0 && $r['line_cost'] !== null => ['commande', (int) round((float) $r['line_cost'])], // moyenne pondérée de ses lignes d'achat
+                (int) $r['line_count'] > 0 => ['commande', $r['purchase_price'] !== null ? (int) round((float) $r['purchase_price']) : (int) round((float) $r['price'])],
                 $r['purchase_price'] !== null => ['purchasePrice', (int) round((float) $r['purchase_price'])],
                 $coefficient !== null && $coefficient > 0 && $r['price'] !== null => ['estimated', (int) round((float) $r['price'] / $coefficient)],
                 default => [null, null],
             };
-            if ($r['commande_id'] !== null && $source === 'estimated') {
-                $source = 'commande'; // déjà rattaché (par une reprise précédente) : jamais touché
-            }
             $out[] = ['productId' => (int) $r['id'], 'name' => $r['name'], 'code' => $r['code'], 'quantitySold' => (int) $r['qty'], 'revenue' => (int) round((float) $r['revenue']),
                 'firstSoldAt' => $firstSold->format('Y-m-d'), 'firstPeriodKey' => PeriodCalendar::definition($firstSold, $frequency)['key'],
                 'costKnown' => $source !== null && $source !== 'estimated', 'costSource' => $source, 'unitCost' => $unit];

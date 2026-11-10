@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (343)
+## Boutique et commun (346)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -322,6 +322,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/commandes/{id}/frais-de-port` | ROLE_ADMIN | `Controller\FraisDePortController\FraisDePortController::deleteFraisDePort` |
 | GET | `/api/commandes/{id}/frais-de-port` | ROLE_ADMIN | `Controller\FraisDePortController\FraisDePortController::getFraisDePort` |
 | POST | `/api/commandes/{id}/frais-de-port` | ROLE_ADMIN | `Controller\FraisDePortController\FraisDePortController::createFraisDePort` |
+| DELETE | `/api/commandes/{id}/lignes/{lineId}` | ROLE_ADMIN | `Controller\CommandeController\CommandeLineController::delete` |
+| PATCH | `/api/commandes/{id}/lignes/{lineId}` | ROLE_ADMIN | `Controller\CommandeController\CommandeLineController::update` |
+| GET | `/api/commandes/{id}/lignes` | ROLE_ADMIN | `Controller\CommandeController\CommandeLineController::list` |
 | POST | `/api/commandes/{id}/products/rattacher` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\CommandeController\CommandeProductAttachmentController::attach` |
 | DELETE | `/api/commandes/{id}/products/{productId}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\CommandeController\CommandeProductAttachmentController::detach` |
 | GET | `/api/commandes/{id}/products` | ROLE_ADMIN | `Controller\ProductController\ProductController::getProductsByCommande` |
