@@ -36,7 +36,9 @@ en cours, sinon 422 `INVALID_YEAR` ; `pricePercent` de 1 à 30, 5 par défaut, s
 
 - Mois dans l'ordre de l'exercice, chacun `{ month, year, from, to, elapsed: true | partial | false, sales, grossMargin, grossMarginRate,
   otherRevenue { rentals, subscriptions, total }, variableCosts { shipping, advertising, notes, trip, total }, fixedCosts,
-  resultBeforeOtherRevenue, result }` ; un mois à venir : valeurs nulles. `cumulative` : cumul depuis le premier mois de l'exercice.
+  resultBeforeOtherRevenue, result }` ; un mois à venir : valeurs nulles. `cumulative` : cumul depuis le premier mois de l'exercice,
+  forme **plate** `{ month, sales, grossMargin, otherRevenue, variableCosts, fixedCosts, result }` où `otherRevenue` et `variableCosts` sont des
+  **totaux** (nombres), pas les objets détaillés d'un mois ; un mois à venir : valeurs nulles.
 - Règles (aucune deuxième) : ventes et marge par `PeriodResultCalculator::dailySales` (P2 : hors taxes, retours retirés, incomplètes et annulées
   exclues, marge au coût connu) ; frais variables à leur date comme P2 : port d'achat (date de la commande fournisseur), publicité (date de
   début), notes de frais hors voyage, notes de voyage (`trip_id`) ; les achats de stock ne sont pas une charge (ils sont dans le coût des
