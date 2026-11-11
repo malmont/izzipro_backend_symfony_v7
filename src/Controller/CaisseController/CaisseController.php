@@ -172,11 +172,24 @@ class CaisseController extends AbstractController
     }
 
     /** Transactions de la session ouverte du poste (?cashRegisterId=, sinon poste unique) ; 404 si aucune, comme avant */
+    /**
+     * Transactions de la session ouverte du poste. Sans session ou sans transaction : 404 (comme avant, lu par la caisse). `?asList=1`
+     * (application de gestion, correctif B7 du 11/11/2026) : toujours 200 `{cashRegisterId, sessionOpen, transactions}`, y compris sans poste
+     * actif (`cashRegisterId` null) ; plusieurs postes sans `cashRegisterId` : 400 CASH_REGISTER_REQUIRED inchangé.
+     */
     #[Route('/api/caisse/transactions', name: 'get_open_caisse_transactions', methods: ['GET'])]
     public function getOpenCaisseTransactions(Request $request): JsonResponse
     {
         return $this->guard(function () use ($request) {
-            $register = $this->registers->resolve($this->registerIdFromQuery($request));
+            $asList = $request->query->getBoolean('asList');
+            try {
+                $register = $this->registers->resolve($this->registerIdFromQuery($request));
+            } catch (CashRegisterException $e) {
+                if ($asList && $e->errorCode === 'CASH_REGISTER_REQUIRED' && !$this->registers->hasActive()) {
+                    return new JsonResponse(['cashRegisterId' => null, 'sessionOpen' => false, 'transactions' => []]);
+                }
+                throw $e;
+            }
             $transactions = array_map(fn ($transaction) => [
                 'id' => $transaction->getId(),
                 'amount' => $transaction->getAmount(),
@@ -185,6 +198,9 @@ class CaisseController extends AbstractController
                 'cashRegisterId' => $register->getId(),
             ], $this->getTransactionsForOpenCaisseUseCase->execute($register));
 
+            if ($asList) {
+                return new JsonResponse(['cashRegisterId' => $register->getId(), 'sessionOpen' => $this->registers->openSession($register) !== null, 'transactions' => $transactions]);
+            }
             if (empty($transactions)) {
                 return new JsonResponse(['message' => 'Aucune transaction trouvée pour la caisse ouverte', 'cashRegisterId' => $register->getId()], 404);
             }

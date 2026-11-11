@@ -252,6 +252,7 @@ preparation:
         cash_text: "With these purchases, cash would drop to %low% on %date%, below your %threshold% threshold. Cutting purchases by %cut% keeps it above."
         stock_title: "Adjust purchases"
         stock_short: "Available stock does not cover the target: planning %purchases% of purchases covers it with a safety margin."
+        stock_none: "Your current stock already covers the target with a safety margin: no purchase is needed for this period."
         stock_over: "Your purchases exceed the need: %purchases% of purchases cover the target with a safety margin."
     caveats:
         TARGET_EXCEEDS_STOCK: "The target exceeds available stock (current stock and planned purchases): planned sales are capped."

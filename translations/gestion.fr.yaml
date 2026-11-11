@@ -254,6 +254,7 @@ preparation:
         cash_text: "Avec ces achats, la trésorerie descendrait à %low% le %date%, sous votre seuil de %threshold%. Réduire les achats de %cut% la garde au-dessus."
         stock_title: "Ajuster les achats"
         stock_short: "Le stock disponible ne couvre pas l’objectif : prévoir %purchases% d’achats couvre l’objectif avec une marge de sécurité."
+        stock_none: "Votre stock actuel couvre déjà l’objectif avec une marge de sécurité : aucun achat n’est nécessaire pour cette période."
         stock_over: "Vos achats dépassent le besoin : %purchases% d’achats suffisent à couvrir l’objectif avec une marge de sécurité."
     caveats:
         TARGET_EXCEEDS_STOCK: "L’objectif dépasse le stock disponible (stock actuel et achats prévus) : les ventes prévues sont plafonnées."

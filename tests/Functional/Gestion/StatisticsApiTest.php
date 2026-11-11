@@ -19,6 +19,7 @@ use App\Entity\TypeNoteDeFrais;
 use App\Entity\User;
 use App\EventSubscriber\CacheInvalidationSubscriber;
 use App\Services\CaisseService\StoreClock;
+use App\Services\StatistiqueService\SalesStatisticsService;
 use App\Services\TenantEntityManagerProvider;
 use App\Tests\Functional\Cache\CacheTestEntityFactory;
 use Doctrine\ORM\EntityManagerInterface;
@@ -127,6 +128,51 @@ class StatisticsApiTest extends WebTestCase
         $this->assertSame($m + 1, $taxAfter['monthly_taxes_for_current_year'][$m]['month']);
     }
 
+    /**
+     * Correctifs B3 à B5 (11/11/2026) : panier moyen sans incomplètes ni annulées + lastYearAverage ; nombre de ventes (type 1, mêmes statuts)
+     * en clés additives, anciennes clés inchangées ; frais de port réellement facturés et ventes avec transporteur par mois. Source mobile_app (3).
+     */
+    public function testSalesFixesKeepOnlyRealSales(): void
+    {
+        $today = $this->storeNow();
+        $lastYear = $today->modify('-1 year');
+        $count0 = $this->get('/api/statistiques/nombre-commandes/mobile_app');
+        $carrier0 = $this->get('/api/carrier/statistics');
+        $p = static::getContainer()->get(SalesStatisticsService::class)->periods();
+        $base = fn (string $period) => $this->kept(3, $p[$period]);
+        [$yearN, $yearSum] = $base('currentYear');
+        [$lastN, $lastSum] = $base('lastYear');
+
+        $carrier = $this->create(Carrier::class, ['price' => 1500.0]);
+        $this->order(1, 3, 3, 1000.0, $today, $carrier, 500.0);   // vente avec transporteur, 5,00 $ de port facturés
+        $this->order(1, 1, 3, 9000.0, $today, $carrier, 700.0);   // incomplète : exclue
+        $this->order(1, 7, 3, 8000.0, $today, null, 300.0);       // annulée : exclue
+        $this->order(2, 6, 3, -400.0, $today);                    // retour
+        $this->order(1, 3, 3, 3000.0, $today, null, 0.0);         // vente sans transporteur
+        $this->order(1, 3, 3, 2600.0, $lastYear);
+        $this->order(1, 7, 3, 6000.0, $lastYear);
+        $this->endOfWrite();
+
+        $count = $this->get('/api/statistiques/nombre-commandes/mobile_app');
+        $delta = fn (string $k) => $count[$k] - $count0[$k];
+        $this->assertSame([2, 2, 1], [$delta('currentMonthSalesCount'), $delta('currentYearSalesCount'), $delta('lastYearSalesCount')], 'ventes (type 1) hors incomplètes et annulées');
+        $this->assertSame(0, $delta('lastMonthSalesCount'));
+        $this->assertSame(5, $delta('currentMonthCount'), 'ancienne clé inchangée : ventes et retours, tous statuts');
+        $this->assertSame(2, array_sum(array_column($count['weeklySalesCountForCurrentMonth'], 'orderCount')) - array_sum(array_column($count0['weeklySalesCountForCurrentMonth'], 'orderCount')));
+        $m = (int) $today->format('n') - 1;
+        $this->assertSame(['month' => $m + 1, 'orderCount' => $count0['monthlySalesCountForCurrentYear'][$m]['orderCount'] + 2], $count['monthlySalesCountForCurrentYear'][$m]);
+
+        $average = $this->get('/api/statistiques/panier-moyen/mobile_app');
+        $this->assertSame((int) round(($yearSum + 4000) / ($yearN + 2)), $average['currentYearAverage'], 'panier moyen de l\'année : 1000 et 3000 seulement');
+        $this->assertSame((int) round(($lastSum + 2600) / ($lastN + 1)), $average['lastYearAverage'], 'an dernier : l\'annulée exclue');
+        $this->assertIsInt($average['lastYearAverage']);
+
+        $carrierAfter = $this->get('/api/carrier/statistics')['monthly_carrier_for_current_year'][$m];
+        $before = $carrier0['monthly_carrier_for_current_year'][$m];
+        $this->assertSame([500, 1, 3000], [$carrierAfter['shippingBilled'] - $before['shippingBilled'], $carrierAfter['orders'] - $before['orders'], $carrierAfter['carrier_count'] - $before['carrier_count']],
+            'port facturé et ventes avec transporteur (hors incomplètes et annulées) ; ancien montant catalogue inchangé (2 × 15,00 $)');
+    }
+
     public function testPurchaseExpensesTotals(): void
     {
         $today = $this->storeNow();
@@ -176,9 +222,18 @@ class StatisticsApiTest extends WebTestCase
 
     // ----- helpers -----
 
-    private function order(int $type, int $status, int $source, float $amount, \DateTimeImmutable $at, ?Carrier $carrier = null): Order
+    /** @return array{0: int, 1: float} commandes gardées (ventes et retours > 0, hors incomplètes et annulées) d'une source sur [début, fin[ */
+    private function kept(int $source, array $period): array
     {
-        return $this->create(Order::class, ['totalAmount' => $amount], function (Order $o, EntityManagerInterface $em) use ($type, $status, $source, $carrier, $at): void {
+        $row = $this->em()->getConnection()->fetchAssociative('SELECT COUNT(*) AS n, COALESCE(SUM(total_amount), 0) AS s FROM "order" WHERE order_type_id IN (1, 2) AND total_amount > 0 AND status_id NOT IN (1, 7) AND order_source_id = ? AND order_date >= ? AND order_date < ?',
+            [$source, $period[0]->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s'), $period[1]->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s')]);
+
+        return [(int) $row['n'], (float) $row['s']];
+    }
+
+    private function order(int $type, int $status, int $source, float $amount, \DateTimeImmutable $at, ?Carrier $carrier = null, ?float $shipping = null): Order
+    {
+        return $this->create(Order::class, ['totalAmount' => $amount, 'shippingCost' => $shipping], function (Order $o, EntityManagerInterface $em) use ($type, $status, $source, $carrier, $at): void {
             $o->setOrderDate(\DateTime::createFromInterface($at))->setStatus($em->find(StatusCommande::class, $status))->setOrderType($em->find(OrderType::class, $type))->setOrderSource($em->find(OrderSource::class, $source))
                 ->setUserId($em->find(User::class, $this->userId));
             if ($carrier) {

@@ -160,7 +160,7 @@ class GestionPreparationAdviceService
         }
         if (isset($by['enoughStock']) && ($sim['plan']['sales']['capped'] || $by['enoughStock']['delta']['purchases'] < 0)) {
             return ['recommended' => 'enoughStock', 'textSource' => 'rules', 'title' => $this->translator->trans('preparation.comment.stock_title', [], 'gestion', $locale),
-                'text' => $this->translator->trans($sim['plan']['sales']['capped'] ? 'preparation.comment.stock_short' : 'preparation.comment.stock_over', ['%purchases%' => $money($by['enoughStock']['purchases'])], 'gestion', $locale)];
+                'text' => $this->translator->trans($sim['plan']['sales']['capped'] ? 'preparation.comment.stock_short' : ($by['enoughStock']['purchases'] === 0 ? 'preparation.comment.stock_none' : 'preparation.comment.stock_over'), ['%purchases%' => $money($by['enoughStock']['purchases'])], 'gestion', $locale)];
         }
 
         return ['recommended' => 'myPlan', 'textSource' => 'rules', 'title' => $this->translator->trans('preparation.comment.title', [], 'gestion', $locale),

@@ -87,6 +87,13 @@ class PreparationApiTest extends WebTestCase
             // achats réduits : point bas au seuil ; le disponible (470,00 $) ne couvre plus l'objectif, ventes plafonnées : marge 26 000, résultat − 12,73 $
             $this->assertSame([-4000, -1273, ['date' => $d(-10), 'amount' => 90000], 47000], [$cands['cashSafe']['delta']['purchases'], $cands['cashSafe']['delta']['result'], $cands['cashSafe']['cashLow'], $cands['cashSafe']['sales']]);
             $this->assertSame(17143, $cands['enoughStock']['purchases'], '40 000 de valeur de vente à acheter, aux coefficients du plan');
+            // Stock actuel suffisant (objectif 100,00 $ × 1,2 sous les 200,00 $ en stock) : aucun achat ; texte propre au cas (sans « 0,00 $ d'achats »)
+            $small = ['sales' => ['method' => 'custom', 'amount' => 10000]] + $body;
+            $smallSim = $prep->simulate($small, $t);
+            $smallCands = array_values(array_filter($advice->candidates($small, $smallSim, $t, 'fr'), fn ($c) => $c['key'] !== 'cashSafe'));
+            $this->assertSame(0, array_column($smallCands, null, 'key')['enoughStock']['purchases']);
+            $rule = (new \ReflectionMethod($advice, 'fallback'))->invoke($advice, $smallSim, $smallCands, 'fr');
+            $this->assertSame(['enoughStock', 'Votre stock actuel couvre déjà l’objectif avec une marge de sécurité : aucun achat n’est nécessaire pour cette période.'], [$rule['recommended'], $rule['text']]);
             // Avis : texte de l'IA rejeté (chiffre inventé) → avis des règles cashSafe
             FakeLandingAiClient::reset();
             FakeLandingAiClient::$queue[] = json_decode(json_encode(['type' => 'message', 'role' => 'assistant', 'model' => 'claude-sonnet-5-5', 'stop_reason' => 'end_turn',

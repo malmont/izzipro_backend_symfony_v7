@@ -119,6 +119,35 @@ class CashRegisterApiTest extends WebTestCase
         $this->assertNotSame('00:00:00', substr((string) $session['createdAt'], 11), 'GET /api/caisse : heure d\'ouverture');
     }
 
+    /** B7 (11/11/2026) : `?asList=1` pour l'application de gestion, toujours 200 ; sans le paramètre, comportement de la caisse inchangé */
+    public function testTransactionsAsListAlwaysAnswers200(): void
+    {
+        $this->loginAs(['ROLE_ADMIN'], 'admin');
+        $closed = $this->request('GET', '/api/caisse/transactions');
+        $this->assertSame(404, $closed->getStatusCode(), 'sans session : 404 comme avant');
+        $this->assertSame(['cashRegisterId' => $this->mainRegister, 'sessionOpen' => false, 'transactions' => []], $this->json($this->request('GET', '/api/caisse/transactions?asList=1')));
+
+        $this->loginAs(['ROLE_USER_POS']); // ouvrir est un geste de caissier ; la lecture reste celle de l'administrateur
+        $this->assertSame(201, $this->open($this->mainRegister)->getStatusCode());
+        $this->loginAs(['ROLE_ADMIN'], 'admin');
+        $open = $this->json($this->request('GET', '/api/caisse/transactions?asList=1'));
+        $this->assertSame([$this->mainRegister, true, ['Ouverture']], [$open['cashRegisterId'], $open['sessionOpen'], array_column($open['transactions'], 'transactionType')]);
+        $this->assertSame(['id', 'amount', 'transactionDate', 'transactionType', 'cashRegisterId'], array_keys($open['transactions'][0]), 'mêmes éléments que la liste de la caisse');
+
+        $second = $this->createRegister('Comptoir ' . bin2hex(random_bytes(2)));
+        $several = $this->request('GET', '/api/caisse/transactions?asList=1');
+        $this->assertSame([400, 'CASH_REGISTER_REQUIRED'], [$several->getStatusCode(), json_decode($several->getContent(), true)['error']], 'plusieurs postes : il faut choisir');
+        $this->assertSame([$second, false, []], array_values($this->json($this->request('GET', "/api/caisse/transactions?asList=1&cashRegisterId=$second"))));
+
+        try {
+            $this->db->executeStatement('UPDATE cash_register SET is_active = false');
+            $this->assertSame(['cashRegisterId' => null, 'sessionOpen' => false, 'transactions' => []], $this->json($this->request('GET', '/api/caisse/transactions?asList=1')), 'aucun poste actif');
+            $this->assertSame(400, $this->request('GET', '/api/caisse/transactions')->getStatusCode(), 'sans asList : 400 comme avant');
+        } finally {
+            $this->db->executeStatement('UPDATE cash_register SET is_active = (id = (SELECT MIN(id) FROM cash_register))');
+        }
+    }
+
     public function testTheRegisterMustBeNamedWhenSeveralAreActive(): void
     {
         $second = $this->createRegister('Comptoir ' . bin2hex(random_bytes(2)));

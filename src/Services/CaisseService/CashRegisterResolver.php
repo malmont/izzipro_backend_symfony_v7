@@ -45,6 +45,12 @@ class CashRegisterResolver
             : 'Aucun poste de caisse actif sur ce site', 400);
     }
 
+    /** Au moins un poste de caisse actif sur le site */
+    public function hasActive(): bool
+    {
+        return $this->emProvider->getEntityManager()->getRepository(CashRegister::class)->findAllOrdered(true) !== [];
+    }
+
     public function openSession(CashRegister $register): ?Caisse
     {
         return $this->emProvider->getEntityManager()->getRepository(Caisse::class)->findOpenSession($register);

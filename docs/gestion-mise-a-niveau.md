@@ -274,6 +274,19 @@ Décisions de contrat prises pour les lots :
     `in` (Entrant), `out` (Sortant), `return` (Return, écrit par aucun chemin aujourd'hui : 0), `adjustment` (Ajustement) ; **5e élément**
     `{ type: "Réception fournisseur", code: "reception" }` (type 5, réception d'une ligne d'achat, lot R1). Les quatre premiers gardent ordre et
     `type`. L'application lit `code`. Code `StockEvolutionService` ; test `StatisticsFixesTest`.
+  - Règle des ventes de B3 à B5 : commandes **incomplètes (statut 1) et annulées (7) exclues**, comme le résultat de période ; cartes-cadeaux
+    (type 3) exclues. Code `SalesStatisticsService::KEPT_STATUS` ; test `StatisticsApiTest::testSalesFixesKeepOnlyRealSales`.
+  - B3 `GET /api/statistiques/panier-moyen/{source}` : incomplètes et annulées exclues de **toutes** les clés (correction ; la caisse ne lit pas
+    cette route) ; `lastYearAverage` (année civile précédente, cents) ajouté.
+  - B4 `GET /api/statistiques/nombre-commandes/{source}` : anciennes clés inchangées (ventes et retours, tous statuts ; la caisse lit `/pos`) ;
+    ajout de `currentMonthSalesCount`, `lastMonthSalesCount`, `currentYearSalesCount`, `lastYearSalesCount` et des séries
+    `weeklySalesCountForCurrentMonth` `[{ week, orderCount }]`, `monthlySalesCountForCurrentYear` `[{ month, orderCount }]` : ventes (type 1) seulement.
+  - B5 `GET /api/carrier/statistics` : chaque mois gagne `shippingBilled` (cents : `order.shipping_cost` réellement facturé des ventes et retours ;
+    un remboursement de port, négatif, se déduirait ; aucun chemin n'en écrit aujourd'hui) et `orders` (ventes avec transporteur).
+    `carrier_count` / `shippingAmount` (prix catalogue du transporteur, sans filtre) restent tels quels.
+  - B7 `GET /api/caisse/transactions?asList=1` : toujours 200 `{ cashRegisterId, sessionOpen, transactions }` (mêmes éléments que la liste de la
+    caisse), y compris sans session (`sessionOpen` false, liste vide) et sans poste actif (`cashRegisterId` null) ; plusieurs postes actifs sans
+    `cashRegisterId` : 400 `CASH_REGISTER_REQUIRED` inchangé. Sans `asList`, le 404 de la caisse reste. Test `CashRegisterApiTest`.
 - `carrier_count` (`GET /api/carrier/statistics`) est en réalité un **montant en cents** (`SUM(carrier.price)` des commandes clients du mois,
   `OrderRepository::getTotalCarrierByMonth`), malgré son nom : l'application divise par 100 à bon droit ; G3 ajoute `shippingAmount` (même
   valeur) et `currency`, `carrier_count` conservé.

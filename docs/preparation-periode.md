@@ -71,6 +71,6 @@ ai { status }, cached }`.
   couvre l'objectif **+ 20 %**). Chacun : `{ key, label, purchases, sales, grossMargin, result, cashLow, stockEndSaleValue, planned, delta { result,
   purchases, cashLow } }` (écarts avec mon plan).
 - Avis des règles : `cashSafe` si la trésorerie passe sous le seuil ; sinon `enoughStock` si l'objectif dépasse le stock ou si l'on achète plus que
-  le besoin ; sinon `myPlan`.
+  le besoin (stock actuel suffisant : « aucun achat n'est nécessaire », `preparation.comment.stock_none`) ; sinon `myPlan`.
 - IA, vérification des chiffres, cache (même plan, même jour) et plafond **partagé avec G1b-2** (10 avis par jour, 429 `COMMENT_LIMIT` avec l'avis
   des règles) : comme `docs/guide-ia-gestion.md` § 9 ; consigne propre (ici, moins d'achats peut baisser le résultat).

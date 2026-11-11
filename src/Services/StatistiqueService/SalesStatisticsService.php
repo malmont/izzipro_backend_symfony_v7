@@ -22,6 +22,8 @@ use Doctrine\DBAL\Connection;
 class SalesStatisticsService
 {
     private const REVENUE_TYPES = '(1, 2)';
+    /** Commandes incomplètes (1) et annulées (7) : hors des ventes, comme le résultat de période (correctifs B3 à B5, 11/11/2026) */
+    private const KEPT_STATUS = ' AND COALESCE(o.status_id, 0) NOT IN (1, 7)';
 
     public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly StoreClock $clock)
     {
@@ -107,15 +109,28 @@ class SalesStatisticsService
         $statistics['lastYearCount'] = (int) $totals['lastYear'];
         $statistics['monthlyCountForCurrentYear'] = $this->monthly('COUNT(*)', $base, $p['currentYear'], $source, 'orderCount', 'int');
 
+        // B4 (additif) : ventes seulement (type 1), hors incomplètes et annulées ; les clés ci-dessus restent (la caisse lit /pos)
+        $sales = 'o.order_type_id = 1' . self::KEPT_STATUS . $this->sourceWhere($source);
+        $salesTotals = $this->filtered('COUNT(*)', $sales, $p, $source, ['currentMonth', 'lastMonth', 'currentYear', 'lastYear']);
+        $statistics['currentMonthSalesCount'] = (int) $salesTotals['currentMonth'];
+        $statistics['lastMonthSalesCount'] = (int) $salesTotals['lastMonth'];
+        $statistics['weeklySalesCountForCurrentMonth'] = $this->weekly('COUNT(*)', $sales, $p['currentMonth'], $source, 'orderCount', 'int');
+        $statistics['currentYearSalesCount'] = (int) $salesTotals['currentYear'];
+        $statistics['lastYearSalesCount'] = (int) $salesTotals['lastYear'];
+        $statistics['monthlySalesCountForCurrentYear'] = $this->monthly('COUNT(*)', $sales, $p['currentYear'], $source, 'orderCount', 'int');
+
         return $statistics;
     }
 
-    /** GET /api/statistiques/panier-moyen/{source} (clé historique `lastAverageCount` = mois précédent) */
+    /**
+     * GET /api/statistiques/panier-moyen/{source} (clé historique `lastAverageCount` = mois précédent) ; B3 (11/11/2026) : commandes incomplètes
+     * et annulées exclues, `lastYearAverage` (année civile précédente) ajouté
+     */
     public function averageOrderValueOverview(?int $source): array
     {
         $p = $this->periods();
-        $where = 'o.order_type_id IN ' . self::REVENUE_TYPES . ' AND o.total_amount > 0' . $this->sourceWhere($source);
-        $totals = $this->filtered('AVG(o.total_amount)', $where, $p, $source, ['currentWeek', 'lastWeek', 'currentMonth', 'lastMonth', 'currentYear']);
+        $where = 'o.order_type_id IN ' . self::REVENUE_TYPES . ' AND o.total_amount > 0' . self::KEPT_STATUS . $this->sourceWhere($source);
+        $totals = $this->filtered('AVG(o.total_amount)', $where, $p, $source, ['currentWeek', 'lastWeek', 'currentMonth', 'lastMonth', 'currentYear', 'lastYear']);
 
         return [
             'currentWeekAverage' => self::cents($totals['currentWeek']),
@@ -126,18 +141,26 @@ class SalesStatisticsService
             'weeklyAverageForCurrentMonth' => $this->weekly('AVG(o.total_amount)', $where, $p['currentMonth'], $source, 'averageOrderValue', 'cents'),
             'currentYearAverage' => self::cents($totals['currentYear']),
             'monthlyAverageForCurrentYear' => $this->monthly('AVG(o.total_amount)', $where, $p['currentYear'], $source, 'averageOrderValue', 'cents'),
+            'lastYearAverage' => self::cents($totals['lastYear']),
         ];
     }
 
-    /** GET /api/carrier/statistics : montant des transporteurs de livraison par mois de l'année courante (cents) */
+    /**
+     * GET /api/carrier/statistics : montant des transporteurs de livraison par mois de l'année courante (cents). `carrier_count` / `shippingAmount`
+     * (historiques) = prix catalogue des transporteurs, sans filtre ; B5 (11/11/2026, additif) : `shippingBilled` = frais de port réellement
+     * facturés (`order.shipping_cost` des ventes et retours hors incomplètes et annulées, un remboursement de port négatif se déduirait),
+     * `orders` = ventes avec transporteur (mêmes statuts)
+     */
     public function carrierMonthly(): array
     {
         $p = $this->periods();
         $rows = $this->groupBy('SUM(c.price)', 'o.carrier_id IS NOT NULL', $p['currentYear'], null, $this->monthExpr(), 'JOIN carrier c ON c.id = o.carrier_id');
+        $billed = $this->groupBy('SUM(o.shipping_cost)', 'o.order_type_id IN ' . self::REVENUE_TYPES . self::KEPT_STATUS, $p['currentYear'], null, $this->monthExpr());
+        $orders = $this->groupBy('COUNT(*)', 'o.order_type_id = 1 AND o.carrier_id IS NOT NULL' . self::KEPT_STATUS, $p['currentYear'], null, $this->monthExpr());
         $months = [];
         for ($m = 1; $m <= 12; $m++) {
             $amount = self::cents($rows[$m] ?? 0);
-            $months[] = ['month' => $m, 'carrier_count' => $amount, 'shippingAmount' => $amount];
+            $months[] = ['month' => $m, 'carrier_count' => $amount, 'shippingAmount' => $amount, 'shippingBilled' => self::cents($billed[$m] ?? 0), 'orders' => (int) ($orders[$m] ?? 0)];
         }
 
         return ['monthly_carrier_for_current_year' => $months];

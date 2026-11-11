@@ -62,7 +62,7 @@ Codes de succès inchangés depuis l'origine : `close` répond **200**, les autr
 | `GET /api/caisse/report/z/{id}` | identifiant unique du rapport (le numéro n'est unique que par poste) | 200 rapport Z complet ; inconnu → 404 `REPORT_NOT_FOUND` |
 | `POST /api/caisse/deposit` (3), `withdraw` (6), `cashfunddeposit` (8), `cashfundwithdraw` (7) | `amount` > 0, `cashDetails?`, `cashRegisterId?` | 201 `{message, new_total, cashRegisterId}` ; `amount` invalide → 400 `INVALID_AMOUNT` ; retrait supérieur au solde → 400 `INSUFFICIENT_FUNDS` |
 | `GET /api/caisse?days=&cashRegisterId=` | `days` : sessions créées depuis N jours | 200 liste de sessions : `{id, amountTotal, fonDeCaisse, createdAt, isOpen, transactionCaisses[], cashRegister{id, name}, closedAt}` |
-| `GET /api/caisse/transactions?cashRegisterId=` | poste (règle ci-dessus) | 200 `[{id, amount, transactionDate, transactionType, cashRegisterId}]` de la session ouverte ; aucune → 404 (comme avant) |
+| `GET /api/caisse/transactions?cashRegisterId=&asList=` | poste (règle ci-dessus) | 200 `[{id, amount, transactionDate, transactionType, cashRegisterId}]` de la session ouverte ; aucune → 404 (comme avant). `asList=1` (application de gestion, 11/11/2026) : toujours 200 `{cashRegisterId, sessionOpen, transactions}`, `cashRegisterId` null sans poste actif ; plusieurs postes sans `cashRegisterId` : 400 comme sans le paramètre |
 
 Les montants (`amountTotal`, `new_total`, `amount` des dépôts et retraits) sont en **cents**, comme la part en espèces
 d'une vente qui entre en caisse. Les listes de sessions et de transactions sont lues en base à chaque appel (donnée vive
