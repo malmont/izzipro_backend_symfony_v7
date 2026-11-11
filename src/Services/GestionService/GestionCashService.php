@@ -163,8 +163,8 @@ class GestionCashService
     {
         $f = $this->validateMovement($data);
         $id = (int) $this->conn()->fetchOne(
-            'INSERT INTO gestion_cash_movement (label, category, direction, amount_cents, start_date, recurrence, end_date, notes, created_by, created_at, updated_at)'
-            . ' VALUES (:label, :category, :direction, :amount, :start, :recurrence, :end, :notes, :by, NOW(), NOW()) RETURNING id',
+            'INSERT INTO gestion_cash_movement (label, category, direction, amount_cents, start_date, recurrence, end_date, notes, fixed_cost, created_by, created_at, updated_at)'
+            . ' VALUES (:label, :category, :direction, :amount, :start, :recurrence, :end, :notes, :fixed, :by, NOW(), NOW()) RETURNING id',
             $f + ['by' => $by]
         );
         $out = $this->findMovement($id, $locale);
@@ -179,6 +179,7 @@ class GestionCashService
         $merged = array_replace([
             'label' => $current['label'], 'category' => $current['category'], 'direction' => $current['direction'], 'amount' => $current['amount'],
             'startDate' => $current['startDate'], 'recurrence' => $current['recurrence'], 'endDate' => $current['endDate'], 'notes' => $current['notes'],
+            'fixedCost' => ($raw = $this->conn()->fetchOne('SELECT fixed_cost FROM gestion_cash_movement WHERE id = ?', [$id])) === null ? null : (bool) $raw, // choix du gérant gardé ; null = règle par défaut
         ], $data);
         if (array_key_exists('date', $data) && !array_key_exists('startDate', $data)) {
             $merged['startDate'] = $data['date'];
@@ -186,7 +187,7 @@ class GestionCashService
         $f = $this->validateMovement($merged);
         $this->conn()->executeStatement(
             'UPDATE gestion_cash_movement SET label = :label, category = :category, direction = :direction, amount_cents = :amount, start_date = :start,'
-            . ' recurrence = :recurrence, end_date = :end, notes = :notes, updated_at = NOW() WHERE id = :id',
+            . ' recurrence = :recurrence, end_date = :end, notes = :notes, fixed_cost = :fixed, updated_at = NOW() WHERE id = :id',
             $f + ['id' => $id]
         );
         $after = $this->findMovement($id, $locale);
@@ -635,6 +636,10 @@ class GestionCashService
         if ($start !== null && $end !== null && $end->format('Y-m-d') < $start->format('Y-m-d')) {
             $errors['endDate'] = 'BEFORE_START';
         }
+        $fixed = $data['fixedCost'] ?? null; // lot FF1 : null = règle par défaut de la catégorie
+        if ($fixed !== null && !is_bool($fixed)) {
+            $errors['fixedCost'] = 'MUST_BE_BOOLEAN';
+        }
         if ($errors !== []) {
             throw new GestionValidationException($errors, 'Mouvement invalide : ' . implode(', ', array_keys($errors)));
         }
@@ -642,6 +647,7 @@ class GestionCashService
         return [
             'label' => $label, 'category' => $category, 'direction' => $direction, 'amount' => $amount, 'start' => $start->format('Y-m-d'),
             'recurrence' => $recurrence, 'end' => $recurrence === 'none' || $end === null ? null : $end->format('Y-m-d'), 'notes' => $notes,
+            'fixed' => $fixed === null ? null : ($fixed ? 'true' : 'false'),
         ];
     }
 
@@ -689,6 +695,9 @@ class GestionCashService
             'id' => (int) $r['id'], 'label' => (string) $r['label'], 'category' => (string) $r['category'], 'categoryLabel' => $this->label((string) $r['category'], $locale),
             'direction' => (string) $r['direction'], 'amount' => (int) $r['amount_cents'], 'startDate' => $start, 'recurrence' => (string) $r['recurrence'],
             'endDate' => $end, 'notes' => $r['notes'], 'nextDate' => $next,
+            // lot FF1 : frais fixe effectif (sortant et récurrent seulement) et origine (règle par défaut ou choix du gérant)
+            'fixedCost' => GestionFixedCostService::isFixed($r), 'fixedCostDefault' => ($r['fixed_cost'] ?? null) === null,
+            'monthlyEquivalent' => GestionFixedCostService::monthlyEquivalent((int) $r['amount_cents'], (string) $r['recurrence']),
         ];
     }
 

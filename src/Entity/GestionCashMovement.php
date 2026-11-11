@@ -15,7 +15,9 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Index(name: 'idx_gestion_cash_movement_category', columns: ['category'])]
 class GestionCashMovement
 {
-    public const CATEGORIES = ['rent', 'salaries', 'insurance', 'subscription', 'loan', 'tax', 'other'];
+    public const CATEGORIES = ['rent', 'salaries', 'insurance', 'subscription', 'utilities', 'loan', 'tax', 'other']; // utilities : lot FF1 (énergie, eau, internet)
+    /** Lot FF1 : catégories dont un mouvement sortant récurrent est un frais fixe par défaut (loan : capital, tax, other : non) */
+    public const FIXED_COST_CATEGORIES = ['rent', 'salaries', 'insurance', 'subscription', 'utilities'];
     public const DIRECTIONS = ['out', 'in'];
     public const RECURRENCES = ['none', 'weekly', 'monthly', 'quarterly', 'yearly'];
 
@@ -47,6 +49,10 @@ class GestionCashMovement
 
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $notes = null;
+
+    /** Lot FF1 : frais fixe choisi par le gérant ; null = règle par défaut (FIXED_COST_CATEGORIES, sortant, récurrent) */
+    #[ORM\Column(name: 'fixed_cost', nullable: true)]
+    private ?bool $fixedCost = null;
 
     #[ORM\Column(name: 'created_by', length: 255, nullable: true)]
     private ?string $createdBy = null;

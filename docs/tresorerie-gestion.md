@@ -24,10 +24,11 @@ Test : `tests/Functional/Gestion/CashApiTest.php`.
 
 ## 2. Mouvements prévus
 
-- `GET /api/gestion/tresorerie/mouvements?category=&locale=` → `[{ id, label, category, categoryLabel, direction, amount, startDate, recurrence, endDate, notes, nextDate }]`.
-- `POST /api/gestion/tresorerie/mouvements { label, category, direction?, amount, startDate (ou date), recurrence?, endDate?, notes? }` → 201.
+- `GET /api/gestion/tresorerie/mouvements?category=&locale=` → `[{ id, label, category, categoryLabel, direction, amount, startDate, recurrence, endDate, notes, nextDate, fixedCost,
+  fixedCostDefault, monthlyEquivalent }]` (frais fixes, lot FF1 : `docs/frais-fixes-gestion.md`).
+- `POST /api/gestion/tresorerie/mouvements { label, category, direction?, amount, startDate (ou date), recurrence?, endDate?, notes?, fixedCost? }` → 201.
 - `PATCH /api/gestion/tresorerie/mouvements/{id}`, `DELETE …/{id}` → 204.
-- `category` : `rent` (Loyer) | `salaries` (Salaires) | `insurance` (Assurances) | `subscription` (Abonnements) | `loan` (Prêt) | `tax`
+- `category` : `rent` (Loyer) | `salaries` (Salaires) | `insurance` (Assurances) | `subscription` (Abonnements) | `utilities` (Énergie et télécoms, lot FF1) | `loan` (Prêt) | `tax`
   (Taxes et impôts) | `other` (Autres). `direction` : `out` (défaut) | `in` (un prêt reçu, un remboursement de taxe).
 - `recurrence` : `none` (défaut) | `weekly` | `monthly` | `quarterly` | `yearly` ; mensuel, trimestriel, annuel le même jour du mois que
   `startDate`, **le dernier jour du mois quand il est plus court** (31 → 30, 28 ou 29 ; 29 février → 28 février les autres années).

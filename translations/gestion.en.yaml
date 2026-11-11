@@ -80,6 +80,7 @@ cash:
         salaries: Salaries
         insurance: Insurance
         subscription: Subscriptions
+        utilities: Utilities and telecoms
         loan: Loan
         tax: Taxes
         other: Other
@@ -263,3 +264,8 @@ preparation:
         NO_CASH_BALANCE: "No cash balance entered: no cash projection."
         TRIP_IN_OTHER_PERIOD: "The trip falls in another period: its expenses are planned there, not in the target period result."
         NO_LAST_YEAR: "No sales in the same period last year."
+# Frais fixes (lot FF1, 11/11/2026, docs/frais-fixes-gestion.md)
+fixed_costs:
+    caveats:
+        FIXED_COSTS_MAY_OVERLAP_NOTES: 'Some expense notes of the period look like fixed costs (%names%): a fixed cost must not also be entered as an expense note, or it is counted twice.'
+        FIXED_COSTS_PRORATED: 'Fixed costs are spread over the days of the period, whatever their actual payment date.'

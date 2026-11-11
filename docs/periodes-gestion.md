@@ -83,7 +83,8 @@ n'est touchée. Contrat envoyé à l'application avant le code de chaque lot (`d
   otherRevenue: { rentals, subscriptions, total },
   cogs:         { amount, items, unknownCostItems },
   expenses:     { shipping, notes, other: [], total },
-  result:       { gross, net, tauxMarge, tauxMarque, netRate },
+  result:       { gross, net, tauxMarge, tauxMarque, netRate, netAfterFixed, netAfterFixedRate },
+  fixedCosts:   { total, byCategory, days, caveats },          // lot FF1 : docs/frais-fixes-gestion.md § 3
   investment:   { purchases, shipping, total }
 }
 ```

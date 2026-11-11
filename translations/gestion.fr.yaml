@@ -82,6 +82,7 @@ cash:
         salaries: Salaires
         insurance: Assurances
         subscription: Abonnements
+        utilities: Énergie et télécoms
         loan: Prêt
         tax: Taxes et impôts
         other: Autres
@@ -265,3 +266,8 @@ preparation:
         NO_CASH_BALANCE: "Aucun solde de trésorerie saisi : pas de trésorerie au fil des jours."
         TRIP_IN_OTHER_PERIOD: "Le voyage tombe dans une autre période : ses frais y sont prévus, pas dans le résultat de la période visée."
         NO_LAST_YEAR: "Aucune vente la même période l’an dernier."
+# Frais fixes (lot FF1, 11/11/2026, docs/frais-fixes-gestion.md)
+fixed_costs:
+    caveats:
+        FIXED_COSTS_MAY_OVERLAP_NOTES: 'Des notes de frais de la période ressemblent à des frais fixes (%names%) : un frais fixe ne se saisit pas aussi en note de frais, sinon il compte deux fois.'
+        FIXED_COSTS_PRORATED: 'Les frais fixes sont répartis sur les jours de la période, quelle que soit leur date de paiement réelle.'

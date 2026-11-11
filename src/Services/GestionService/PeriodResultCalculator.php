@@ -37,6 +37,7 @@ class PeriodResultCalculator
         private readonly PurchaseMetricsCalculator $purchases,
         private readonly PeriodCalendar $calendar,
         private readonly ?TenantCurrencyProvider $currency = null,
+        private readonly ?GestionFixedCostService $fixedCosts = null, // lot FF1
     ) {
     }
 
@@ -73,6 +74,10 @@ class PeriodResultCalculator
         $gross = $effective - $cogs;
         $net = $gross - $expensesTotal;
         $rate = static fn (int $num, int $den): ?float => $den > 0 ? round($num / $den * 100, 2) : null;
+        // lot FF1 : frais fixes au prorata des jours de la période, en ajout (net inchangé) ; figés avec le résultat à la fermeture
+        $fixed = $this->fixedCosts?->between($period->getStartDateCollection()->format('Y-m-d'), $period->getEndDateCollection()->format('Y-m-d'))
+            ?? ['total' => 0, 'byCategory' => [], 'days' => 0, 'caveats' => []];
+        $netAfterFixed = $net - $fixed['total'];
         $investmentPurchases = (int) ($purchases['purchaseCost'] ?? 0);
 
         return [
@@ -94,7 +99,9 @@ class PeriodResultCalculator
             'cogs' => ['amount' => $cogs, 'items' => (int) ($row['cogs_items'] ?? 0), 'unknownCostItems' => (int) ($row['unknown_items'] ?? 0),
                 'estimatedItems' => (int) ($row['estimated_items'] ?? 0), 'estimatedAmount' => $c($row['estimated_amount'] ?? 0)], // part estimée (reprise d'historique, lot P3), déjà comprise dans amount
             'expenses' => ['shipping' => $shipping, 'notes' => $notes, 'other' => $other, 'total' => $expensesTotal], // other : publicité (lot A1), extensible
-            'result' => ['gross' => $gross, 'net' => $net, 'tauxMarge' => $rate($gross, $cogs), 'tauxMarque' => $rate($gross, $effective), 'netRate' => $rate($net, $effective)],
+            'result' => ['gross' => $gross, 'net' => $net, 'tauxMarge' => $rate($gross, $cogs), 'tauxMarque' => $rate($gross, $effective), 'netRate' => $rate($net, $effective),
+                'netAfterFixed' => $netAfterFixed, 'netAfterFixedRate' => $rate($netAfterFixed, $effective)],
+            'fixedCosts' => $fixed,
             'investment' => ['purchases' => $investmentPurchases, 'shipping' => $shipping, 'total' => $investmentPurchases + $shipping],
         ];
     }

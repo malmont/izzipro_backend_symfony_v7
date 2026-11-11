@@ -117,7 +117,7 @@ class PeriodResultApiTest extends WebTestCase
         $this->assertSame(['rentals' => 5000, 'subscriptions' => 2000, 'total' => 7000], $result['otherRevenue']);
         $this->assertSame(['amount' => 2900, 'items' => 6, 'unknownCostItems' => 1, 'estimatedItems' => 0, 'estimatedAmount' => 0], $result['cogs'], 'A 3 × 1000 + D 3 × 300 − retour 1 × 1000 ; C inconnu');
         $this->assertSame(['shipping' => 150, 'notes' => 500, 'other' => [], 'total' => 650], $result['expenses']);
-        $this->assertSame(['gross' => 5100, 'net' => 4450, 'tauxMarge' => 175.86, 'tauxMarque' => 63.75, 'netRate' => 55.63], $result['result'], 'gross = (12000 − 4000) − 2900 ; net = gross − 650 ; taux sur le coût et sur les ventes au coût connu');
+        $this->assertSame(['gross' => 5100, 'net' => 4450, 'tauxMarge' => 175.86, 'tauxMarque' => 63.75, 'netRate' => 55.63, 'netAfterFixed' => 4450, 'netAfterFixedRate' => 55.63], $result['result'], 'gross = (12000 − 4000) − 2900 ; net = gross − 650 ; taux sur le coût et sur les ventes au coût connu ; sans frais fixe (FF1) : après frais fixes = net');
         $this->assertSame(['purchases' => 2000, 'shipping' => 150, 'total' => 2150], $result['investment']);
         $this->assertSame(1, (int) $this->em()->getConnection()->fetchOne('SELECT COUNT(*) FROM period_result WHERE collection_id = ?', [$periodId]));
 
