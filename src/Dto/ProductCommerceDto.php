@@ -43,7 +43,7 @@ final class ProductCommerceDto
     {
         $regular = self::cents($product->getPrice());
         $special = null;
-        if ($product->getSpecialPrice() !== null) {
+        if ($product->getSpecialPrice() !== null && $product->getSpecialPrice() > 0) { // même règle que la vente (Product::getEffectivePrice, 11/11/2026) : un prix promotionnel à 0 n'est pas une promotion
             $now = new \DateTimeImmutable();
             $from = $product->getSpecialPriceFrom();
             $to = $product->getSpecialPriceTo();
