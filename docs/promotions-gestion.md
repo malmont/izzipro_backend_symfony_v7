@@ -131,7 +131,12 @@ produit. Ordre sur une ligne : prix (promotion) → personnalisation → prix ma
   c'est le prix barré que la fiche affichait déjà à côté de la promotion de l'article). `amount` = `catalogUnitPrice − unitPrice`, par rapport
   à ce même prix. Exemple : sweat à 6 900 en promotion d'article à 4 900, promotion de variante de 30 % à 4 830 → `unitPrice` 4 830,
   `catalogUnitPrice` 6 900, `amount` 2 070 (et non 70 par rapport à 4 900).
-- Commande : `order_items.variant_promotion_id` (mesures de la gestion), **non exposé** par les API de commande (photo de non-régression).
+- Commande : `order_items.variant_promotion_id` (mesures de la gestion) et `variant_catalog_unit_price` (prix barré figé à la vente, cents ;
+  hors ligne : `basePrice` de l'instantané v4), **non exposés** par les API de commande (photo de non-régression).
+- Reçu de caisse (`create-multi-payment`, duplicata `GET /api/pos/receipts`, montants en dollars) : `lines[].promotion { kind: "variant", percent,
+  amount, catalogUnitPrice }` seulement si la ligne a eu une promotion de variante, figée à la vente (même réimprimée après la fin de la promotion
+  ou un changement de prix) ; `amount` = prix barré − prix promotionnel (avec un prix manuel par-dessus, le prix manuel reste dans
+  `catalogUnitPrice` / `priceReason` de la ligne, comme avant, et son prix catalogue est le prix promotionnel).
 - Fiche (`ProductCommerceDto.variants[]`, donc `/api/products/{id}`, `by-slug`, `productsid`, `by-category` et les listes) : `promotion { id,
   percent, price, basePrice, startDate, endDate, startsAt, endsAt, active }` (en cours, sinon la prochaine ; `basePrice` = même prix catalogue
   que `catalogUnitPrice`) ; clé absente sans promotion ou interrupteur éteint. `variants[].price` reste brut, `pricing` reste au niveau de l'article.

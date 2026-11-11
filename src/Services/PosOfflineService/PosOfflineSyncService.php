@@ -291,6 +291,7 @@ class PosOfflineSyncService
             $line = ['unitPrice' => $unit, 'quantity' => $qty, 'discounts' => is_array($item['discounts'] ?? null) ? $item['discounts'] : [], 'taxCategory' => $price['taxCategory'] ?? null]; // catégorie de l'instantané (F18 partie 2a)
             if ($variantPromotion !== null) {
                 $line['variantPromotionId'] = (int) $variantPromotion['id'];
+                $line['variantCatalogUnitPrice'] = isset($variantPromotion['basePrice']) ? (int) $variantPromotion['basePrice'] : null;
             }
             if (is_array($item['priceOverride'] ?? null)) { // prix manuel : remplace le prix du pack, prix du pack gardé comme prix catalogue
                 if (!$lineSettings['priceOverride']['enabled']) {
@@ -406,7 +407,9 @@ class PosOfflineSyncService
             $unitPrice = isset($line['priceOverride']) ? (int) $line['priceOverride']['unitPrice'] : (int) $line['unitPrice'];
             $item = $this->orderItems->createOrderItem($order, $variant, $line['quantity'], (float) $unitPrice);
             $item->setTaxCategory($line['taxCategory'] ?? null); // F18 partie 2a
-            $item->setVariantPromotionId($line['variantPromotionId'] ?? null); // promotion de variante appliquée hors ligne (lot VAR, pack v4)
+            if (isset($line['variantPromotionId'])) { // promotion de variante appliquée hors ligne (lot VAR, pack v4) : prix barré de l'instantané
+                $item->setVariantPromotion($em->getReference(\App\Entity\VariantPromotion::class, $line['variantPromotionId']), $line['variantCatalogUnitPrice']);
+            }
             if (isset($line['priceOverride'])) { // prix manuel (F7) : prix du pack gardé comme prix catalogue, motif
                 $item->setCatalogUnitPrice((int) $line['catalogUnitPrice'])->setPriceReasonCode($line['priceOverride']['reasonCode'])->setPriceReasonText($line['priceOverride']['reasonText']);
             }

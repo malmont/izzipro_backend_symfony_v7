@@ -74,9 +74,14 @@ class OrderItems
     #[ORM\Column(nullable: true)]
     private ?int $catalogUnitPrice = null;
 
-    /** Promotion de variante appliquée à la vente (lot VAR, 11/11/2026) : mesures de la gestion ; non exposée par les API de commande */
-    #[ORM\Column(name: 'variant_promotion_id', nullable: true)]
-    private ?int $variantPromotionId = null;
+    /** Promotion de variante appliquée à la vente (lot VAR, 11/11/2026) : mesures de la gestion, reçu de caisse ; non exposée par les API de commande */
+    #[ORM\ManyToOne(targetEntity: VariantPromotion::class)]
+    #[ORM\JoinColumn(name: 'variant_promotion_id', nullable: true)]
+    private ?VariantPromotion $variantPromotion = null;
+
+    /** Prix catalogue figé à la vente (cents) quand une promotion de variante s'applique : le prix barré du reçu, même réimprimé après la fin */
+    #[ORM\Column(name: 'variant_catalog_unit_price', nullable: true)]
+    private ?int $variantCatalogUnitPrice = null;
 
     #[ORM\Column(length: 40, nullable: true)]
     private ?string $priceReasonCode = null;
@@ -229,8 +234,11 @@ class OrderItems
     public function getCatalogUnitPrice(): ?int { return $this->catalogUnitPrice; }
     public function setCatalogUnitPrice(?int $cents): static { $this->catalogUnitPrice = $cents; return $this; }
     public function hasPriceOverride(): bool { return $this->catalogUnitPrice !== null; }
-    public function getVariantPromotionId(): ?int { return $this->variantPromotionId; }
-    public function setVariantPromotionId(?int $id): static { $this->variantPromotionId = $id; return $this; }
+    public function getVariantPromotion(): ?VariantPromotion { return $this->variantPromotion; }
+    public function getVariantPromotionId(): ?int { return $this->variantPromotion?->getId(); }
+    /** @param ?int $catalogCents prix catalogue au moment de la vente */
+    public function setVariantPromotion(?VariantPromotion $promotion, ?int $catalogCents): static { $this->variantPromotion = $promotion; $this->variantCatalogUnitPrice = $promotion !== null ? $catalogCents : null; return $this; }
+    public function getVariantCatalogUnitPrice(): ?int { return $this->variantCatalogUnitPrice; }
     public function getPriceReasonCode(): ?string { return $this->priceReasonCode; }
     public function setPriceReasonCode(?string $code): static { $this->priceReasonCode = $code !== null ? mb_substr($code, 0, 40) : null; return $this; }
     public function getPriceReasonText(): ?string { return $this->priceReasonText; }

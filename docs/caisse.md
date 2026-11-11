@@ -2127,6 +2127,8 @@ les applications (caisse, e-commerce) qui savent l'afficher sont publiées. Tous
   variante dont `[from, to[` contient l'heure de vente (si deux se recoupent, l'identifiant le plus grand ; elle remplace la promotion de
   l'article, sans cumul), sinon la règle v3 ; montants (remises, taxes, arrondi) comme v3. L'ETag dépend de la règle : passer de v3 à v4 avec
   l'ETag du pack v3 donne 200 et la v4. Depuis le 11/11/2026, les variantes du pack sont rangées par identifiant croissant (ETag stable).
+  Reçu (en ligne et duplicata) : `lines[].promotion { kind: "variant", percent, amount, catalogUnitPrice }` (dollars) seulement pour une ligne
+  vendue en promotion de variante, figée à la vente ; le ticket lit le reçu (`docs/promotions-gestion.md` § 8).
   Le serveur rejoue avec l'instantané de la version du pack : promotion de variante seulement si ce pack était v4 ; la ligne garde
   `variant_promotion_id`.
   **Tablette encore en v3 pendant une promotion de variante (interrupteur allumé)** : elle encaisse le prix v3 (sans la promotion de variante)

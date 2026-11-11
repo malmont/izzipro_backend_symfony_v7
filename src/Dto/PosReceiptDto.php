@@ -31,7 +31,10 @@ class PosReceiptDto
                 'custom' => $item->isCustom(), 'taxable' => $item->isTaxable(),
                 'catalogUnitPrice' => $item->getCatalogUnitPrice() !== null ? $dollars($item->getCatalogUnitPrice()) : null,
                 'priceReason' => $item->hasPriceOverride() ? ['code' => $item->getPriceReasonCode(), 'text' => $item->getPriceReasonText()] : null,
-            ];
+            ] + (($vp = $item->getVariantPromotion()) !== null && $item->getVariantCatalogUnitPrice() !== null ? ['promotion' => [ // lot VAR (11/11/2026) : promotion figée à la vente, clé absente sinon
+                'kind' => 'variant', 'percent' => floor($vp->getPercent()) === $vp->getPercent() ? (int) $vp->getPercent() : $vp->getPercent(),
+                'amount' => $dollars($item->getVariantCatalogUnitPrice() - $vp->getPrice()), 'catalogUnitPrice' => $dollars($item->getVariantCatalogUnitPrice()),
+            ]] : []);
         }
         $cashier = $order->getUserId();
         $taxes = [];

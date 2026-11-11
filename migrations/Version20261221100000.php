@@ -10,7 +10,7 @@ use Doctrine\Migrations\AbstractMigration;
 /**
  * Lot VAR (11/11/2026, `docs/promotions-gestion.md` § 8) : promotions par variante (`variant_promotion` : pourcentage, prix promotionnel
  * figé, prix de départ, fenêtre de jours du magasin en UTC [starts_at, ends_at[, lot) et leur journal (`variant_promotion_batch`) ; ligne de
- * commande `order_items.variant_promotion_id` (non exposée) ; interrupteur du site `entreprise.variant_promotions_enabled` (faux partout,
+ * commande `order_items.variant_promotion_id` et prix barré figé `variant_catalog_unit_price` (reçu de caisse) ; interrupteur du site `entreprise.variant_promotions_enabled` (faux partout,
  * allumé par le super admin). Additive, idempotente ; équivalent `scripts/migrate_all_v2_gestion_promotions_variantes.sh`.
  */
 final class Version20261221100000 extends AbstractMigration
@@ -32,6 +32,7 @@ final class Version20261221100000 extends AbstractMigration
         $this->addSql('DROP TABLE IF EXISTS variant_promotion');
         $this->addSql('DROP TABLE IF EXISTS variant_promotion_batch');
         $this->addSql('ALTER TABLE order_items DROP COLUMN IF EXISTS variant_promotion_id');
+        $this->addSql('ALTER TABLE order_items DROP COLUMN IF EXISTS variant_catalog_unit_price');
         $this->addSql('ALTER TABLE entreprise DROP COLUMN IF EXISTS variant_promotions_enabled');
     }
 
@@ -41,6 +42,7 @@ final class Version20261221100000 extends AbstractMigration
         'CREATE INDEX IF NOT EXISTS idx_variant_promotion_variant ON variant_promotion (product_variant_id, ends_at)',
         'CREATE INDEX IF NOT EXISTS idx_variant_promotion_batch ON variant_promotion (batch_id)',
         'ALTER TABLE order_items ADD COLUMN IF NOT EXISTS variant_promotion_id INT DEFAULT NULL',
+        'ALTER TABLE order_items ADD COLUMN IF NOT EXISTS variant_catalog_unit_price INT DEFAULT NULL',
         'ALTER TABLE entreprise ADD COLUMN IF NOT EXISTS variant_promotions_enabled BOOLEAN DEFAULT false NOT NULL',
     ];
 }

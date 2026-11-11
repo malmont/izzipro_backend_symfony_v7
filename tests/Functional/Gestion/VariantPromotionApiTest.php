@@ -203,6 +203,13 @@ class VariantPromotionApiTest extends WebTestCase
         $lines = $this->db->fetchAllAssociative('SELECT id, unit_price, total_price, catalog_unit_price, variant_promotion_id FROM order_items WHERE order_associated_id = ? ORDER BY id', [$sale['orderId']]);
         $this->assertSame([$tshirtPromo, null, $sweatPromo, null, $capPromo], array_map(fn ($l) => $l['variant_promotion_id'] === null ? null : (int) $l['variant_promotion_id'], $lines));
         $this->assertSame([6240.0, 3500.0, 4347.0, 3800.0, 2000.0], array_map(fn ($l) => (float) $l['total_price'], $lines));
+        // Reçu de la vente (dollars) : promotion figée sur les lignes concernées, clé absente ailleurs ; prix manuel par-dessus : remise de la promotion
+        // calculée sur son prix promotionnel (2 900 − 2 299), le prix manuel restant dans catalogUnitPrice / priceReason
+        $promotionOf = fn (array $line) => $line['promotion'] ?? null;
+        $this->assertSame([['kind' => 'variant', 'percent' => 20, 'amount' => 7.8, 'catalogUnitPrice' => 39], null, ['kind' => 'variant', 'percent' => 30, 'amount' => 20.7, 'catalogUnitPrice' => 69], null,
+            ['kind' => 'variant', 'percent' => 20, 'amount' => 6.01, 'catalogUnitPrice' => 29]], array_map($promotionOf, $sale['lines']));
+        $this->assertArrayNotHasKey('promotion', $sale['lines'][1]);
+        $this->assertSame([2299, 22.99], [(int) $this->db->fetchOne('SELECT catalog_unit_price FROM order_items WHERE id = ?', [$lines[4]['id']]), $sale['lines'][4]['catalogUnitPrice']], 'prix manuel : son prix catalogue est le prix promotionnel');
         foreach (["/api/orders/{$sale['orderId']}", '/api/orders?orderSource=2'] as $path) {
             $this->assertStringNotContainsString('ariantPromotion', (string) $this->request('GET', $path)->getContent(), "$path : colonne non exposée");
         }
@@ -254,6 +261,14 @@ class VariantPromotionApiTest extends WebTestCase
         $favoritesOff = array_column($this->json($this->request('GET', '/api/pos/favorites'))['items'], null, 'defaultVariantId');
         $this->assertSame(2900, $favoritesOff[$this->cap]['price']);
         $this->assertArrayNotHasKey('promotion', $favoritesOff[$this->cap]);
+
+        // Réimpression après la fin de la promotion et un changement de prix : le reçu garde la promotion figée à la vente
+        $this->db->executeStatement("UPDATE variant_promotion SET ends_at = NOW() - INTERVAL '1 minute'");
+        $this->db->executeStatement('UPDATE product_variant SET price = 4500 WHERE id = ?', [$this->tshirtOwn]);
+        $this->loginPos(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
+        $reprint = $this->json($this->request('GET', '/api/pos/receipts?orderId=' . $sale['orderId']));
+        $this->assertTrue($reprint['duplicate']);
+        $this->assertSame(array_map($promotionOf, $sale['lines']), array_map($promotionOf, $reprint['lines']), 'duplicata : promotion figée');
     }
 
     public function testOfflinePackV4OnlyOnRequestAndReplayRules(): void
@@ -291,6 +306,7 @@ class VariantPromotionApiTest extends WebTestCase
         $r = $this->json($this->request('POST', '/api/pos/offline-sales', ['packVersion' => $v4['packVersion'], 'sales' => [$saleV4]]));
         $this->assertSame(['accepted', 0], [$r['results'][0]['status'], $r['results'][0]['priceDrift']['amount']], json_encode($r));
         $this->assertSame([2299.0, $promo['id']], $this->orderLine($r['results'][0]['orderId']));
+        $this->assertSame(2900, (int) $this->db->fetchOne('SELECT variant_catalog_unit_price FROM order_items WHERE order_associated_id = ?', [$r['results'][0]['orderId']]), 'prix barré de l\'instantané v4 figé');
         $v3Pack = json_decode((string) $v3->getContent(), true);
         $saleV3 = $this->offlineSale($seller, 'P-' . $this->terminalId . '-2', 2900, $v3Pack, $saleV4['chain']['hash']);
         $r = $this->json($this->request('POST', '/api/pos/offline-sales', ['packVersion' => $v3Pack['packVersion'], 'sales' => [$saleV3]]));
