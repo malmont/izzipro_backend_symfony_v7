@@ -12,6 +12,9 @@ use DateTime;
  */
 class PaymentsRepository extends EntityRepository
 {
+    /** Statut « Complété » de status_payment (1 En cours, 2 Complété, 3 Échoué) */
+    public const STATUS_COMPLETED = 2;
+
     /**
      * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
      */
@@ -36,6 +39,7 @@ class PaymentsRepository extends EntityRepository
             ->join('p.orderPayment', 'o') // Jointure avec Order
             ->where('pt.name = :type')
             ->andWhere('p.paymentDate BETWEEN :start AND :end')
+            ->andWhere('IDENTITY(p.statutPayment) = ' . self::STATUS_COMPLETED) // paiements réussis seulement (B6, 11/11/2026) : en cours (1) et échoués (3) exclus
             ->setParameter('type', $paymentType)
             ->setParameter('start', $startOfWeek)
             ->setParameter('end', $endOfWeek);
@@ -72,6 +76,7 @@ class PaymentsRepository extends EntityRepository
             ->join('p.orderPayment', 'o') // Jointure avec Order
             ->where('pt.name = :type')
             ->andWhere('p.paymentDate BETWEEN :start AND :end')
+            ->andWhere('IDENTITY(p.statutPayment) = ' . self::STATUS_COMPLETED) // paiements réussis seulement (B6, 11/11/2026) : en cours (1) et échoués (3) exclus
             ->setParameter('type', $paymentType)
             ->setParameter('start', $startOfWeek)
             ->setParameter('end', $endOfWeek);
@@ -143,6 +148,7 @@ class PaymentsRepository extends EntityRepository
             ->join('p.orderPayment', 'o') // Jointure avec Order
             ->where('pt.name = :type')
             ->andWhere('p.paymentDate BETWEEN :start AND :end')
+            ->andWhere('IDENTITY(p.statutPayment) = ' . self::STATUS_COMPLETED) // paiements réussis seulement (B6, 11/11/2026) : en cours (1) et échoués (3) exclus
             ->setParameter('type', $paymentType)
             ->setParameter('start', $startDate)
             ->setParameter('end', $endDate);

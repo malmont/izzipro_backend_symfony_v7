@@ -15,7 +15,7 @@ class StockValueService
      */
     private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(TenantEntityManagerProvider $emProvider)
+    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Services\CaisseService\StoreClock $clock = null)
     {
         $this->emProvider = $emProvider;
     }
@@ -97,14 +97,32 @@ class StockValueService
         $productRepository = $this->getProductRepository();
         $currentDate = new DateTime('last day of this month');
         $totalValue = $productRepository->calculateCurrentStockValue();
+        $storeNow = new \DateTimeImmutable('now', $this->clock?->timezone() ?? new \DateTimeZone('UTC'));
 
         return [
             'stock_value_current_month' => [
                 [
                     'month' => $currentDate->format('F Y'),
                     'stock_value' => $totalValue,
+                    // B1 (11/11/2026, additif) : en cents, calculé par variante (stock × prix de la variante, sinon de l'article ; article sans
+                    // variante : sa quantité × son prix) ; diffère de stock_value, qui ne lit que la quantité et le prix de l'article
+                    'stock_value_cents' => $this->stockValueCents(),
+                    'month_number' => (int) $storeNow->format('n'),
+                    'year' => (int) $storeNow->format('Y'),
                 ]
             ]
         ];
+    }
+
+    /** Valeur du stock en cents, par variante (B1) ; articles sans variante : quantité × prix de l'article */
+    private function stockValueCents(): int
+    {
+        $conn = $this->emProvider->getEntityManager()->getConnection();
+
+        return (int) round((float) $conn->fetchOne(
+            'SELECT COALESCE((SELECT SUM(pv.stock_quantity * COALESCE(pv.price, p.price)) FROM product_variant pv JOIN product p ON p.id = pv.product_id'
+            . ' WHERE pv.stock_quantity > 0 AND COALESCE(pv.price, p.price) IS NOT NULL), 0)'
+            . ' + COALESCE((SELECT SUM(p.quantity * p.price) FROM product p WHERE p.quantity > 0 AND p.price IS NOT NULL AND NOT EXISTS (SELECT 1 FROM product_variant v WHERE v.product_id = p.id)), 0)'
+        ));
     }
 }

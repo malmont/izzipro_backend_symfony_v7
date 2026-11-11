@@ -260,6 +260,15 @@ Décisions de contrat prises pour les lots :
 - Autres lecteurs des statistiques (G3) : le front Next n'en lit aucune ; l'application mobile e-commerce non plus ; la **caisse Flutter**
   lit `chiffre-affaires/pos` et `nombre-commandes/pos` et a adapté son modèle au mois en entier (commit 71a1d87, « posflutter front »,
   10/11/2026) ; aucune caisse en production.
+- Correctifs des statistiques du 11/11/2026 (demande de l'application, relevé B1–B8) :
+  - B1 `GET /api/stock-value` : chaque élément de `stock_value_current_month` gagne `stock_value_cents` (entier, **par variante** : stock de la
+    variante × son prix, sinon le prix de l'article ; article sans variante : sa quantité × son prix), `month_number` (1..12) et `year` au fuseau
+    du magasin. `stock_value` (dollars, quantité et prix de l'article) et `month` (« November 2026 ») restent inchangés : les deux valeurs
+    diffèrent dès qu'une variante a son propre prix ou que la quantité de l'article ne suit pas ses variantes (demo : 1 010,17 $ contre 816,51 $
+    le 10/11/2026). L'application lit `stock_value_cents` en priorité. Test : `tests/Functional/Gestion/StatisticsFixesTest.php`.
+  - B6 `GET /api/payments/statistics/{source}` : seuls les paiements **réussis** (`status_payment` 2 « Complété ») comptent ; en cours (1) et
+    échoués (3) exclus (correction, formes inchangées ; la caisse, qui lit `/pos`, en est prévenue).
+  - B8 `GET /api/frais/total` : correctif du 09/11 (commit 334f41e9) en ligne.
 - `carrier_count` (`GET /api/carrier/statistics`) est en réalité un **montant en cents** (`SUM(carrier.price)` des commandes clients du mois,
   `OrderRepository::getTotalCarrierByMonth`), malgré son nom : l'application divise par 100 à bon droit ; G3 ajoute `shippingAmount` (même
   valeur) et `currency`, `carrier_count` conservé.

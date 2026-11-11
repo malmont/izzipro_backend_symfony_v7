@@ -935,7 +935,7 @@ autres sources (e-commerce, application mobile) ne changent pas. Le parcours à 
 
 ## Statistiques de paiement : répartition journalière (lot P2-a, point B, 26/10/2026)
 
-`GET /api/payments/statistics/{source}` : `current_week.*.daily` cumule désormais **par jour** (lundi 00:00:00 → dimanche
+`GET /api/payments/statistics/{source}` (depuis le 11/11/2026 : **paiements réussis seulement**, statut « Complété » ; en cours et échoués exclus) : `current_week.*.daily` cumule désormais **par jour** (lundi 00:00:00 → dimanche
 23:59:59). Avant : regroupement par horodatage exact (deux paiements du même jour n'en comptaient qu'un) et semaine commençant
 le lundi à l'heure courante. Changement visible (administration, application MAUI), voulu ; les autres statistiques ne changent pas.
 
