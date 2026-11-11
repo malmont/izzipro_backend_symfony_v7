@@ -157,7 +157,7 @@ class GestionAdviceService
             'period' => ['id' => $pid, 'name' => $period->getNomCollection(), 'start' => $period->getStartDateCollection()->format('Y-m-d'), 'end' => $period->getEndDateCollection()->format('Y-m-d')],
             'moments' => $this->rules->moments($period, $today)['moments'],
             'currency' => $this->siteCurrency(),
-            'headline' => $headline !== false && $headline['headline_locale'] === $locale ? $headline['headline'] : null,
+            'headline' => $headline !== false && $headline['headline_locale'] === $locale ? self::cleanText((string) $headline['headline']) : null,
             'ai' => ['status' => $run['status'] === 'rules' ? 'rules_only' : $run['status'], 'generatedAt' => $run['finished_at'] === null ? null : (new \DateTimeImmutable((string) $run['finished_at']))->format(\DateTimeInterface::ATOM)],
             'generating' => $run['status'] === 'pending',
             'manualRefreshesLeft' => max(0, self::MANUAL_PER_DAY - $this->manualToday($today)),
@@ -226,8 +226,10 @@ class GestionAdviceService
     {
         $sources = json_decode((string) $r['sources'], true) ?: [];
         $params = json_decode((string) $r['params'], true) ?: [];
-        $useAi = $r['ai_text'] !== null && $r['ai_locale'] === $locale;
-        [$title, $text] = $useAi ? [(string) $r['ai_title'], (string) $r['ai_text']] : $this->fallback((string) $r['kind'], $sources, $params, (int) $r['effect_cents'], $locale);
+        $aiTitle = self::cleanText($r['ai_title'] ?? null);
+        $aiText = self::cleanText($r['ai_text'] ?? null);
+        $useAi = $aiTitle !== null && $aiText !== null && $r['ai_locale'] === $locale; // texte stocké avant le nettoyage : nettoyé ici, sinon repli
+        [$title, $text] = $useAi ? [$aiTitle, $aiText] : $this->fallback((string) $r['kind'], $sources, $params, (int) $r['effect_cents'], $locale);
         $action = json_decode((string) $r['action'], true) ?: [];
         if (($action['params'] ?? []) === []) {
             $action['params'] = new \stdClass();
@@ -433,6 +435,25 @@ class GestionAdviceService
         preg_match_all('/\d{1,3}(?:[ \x{00A0}\x{202F}]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?/u', $text, $m);
 
         return array_map(fn ($s) => (float) str_replace([' ', "\u{00A0}", "\u{202F}", ','], ['', '', '', '.'], $s), $m[0]);
+    }
+
+    /**
+     * Texte rédigé par l'IA nettoyé des restes de sa sortie JSON (11/11/2026 : « …à vous de décider.} » vu sur demo) : blancs, accolades,
+     * crochets et guillemets droits en trop retirés au début et à la fin ; null (texte rejeté, repli des règles) s'il reste un caractère de
+     * structure : accolade, crochet, `\"` ou `\n` littéral. Appliqué à l'écriture (conseils, synthèse, avis du simulateur et de la
+     * préparation) et à la lecture (textes déjà stockés).
+     */
+    public static function cleanText(?string $text): ?string
+    {
+        if ($text === null) {
+            return null;
+        }
+        $clean = preg_replace('/^[\s{}\[\]"]+|[\s{}\[\]"]+$/u', '', $text) ?? '';
+        if ($clean === '' || preg_match('/[{}\[\]]|\\\\["nrt]/u', $clean)) {
+            return null;
+        }
+
+        return $clean;
     }
 
     /** @return list<float> nombres du texte qui ne sont pas admis (vide = texte accepté) */

@@ -94,8 +94,8 @@ class AdviceWriter
                 if (!isset($byId[$id])) {
                     continue;
                 }
-                $title = mb_substr(trim((string) ($item['title'] ?? '')), 0, self::MAX_TITLE);
-                $text = mb_substr(trim((string) ($item['text'] ?? '')), 0, self::MAX_TEXT);
+                $title = mb_substr(GestionAdviceService::cleanText((string) ($item['title'] ?? '')) ?? '', 0, self::MAX_TITLE);
+                $text = mb_substr(GestionAdviceService::cleanText((string) ($item['text'] ?? '')) ?? '', 0, self::MAX_TEXT);
                 $unknown = GestionAdviceService::unknownNumbers($title . ' ' . $text, $allowed[$id]);
                 if ($title === '' || $text === '' || $unknown !== []) {
                     ++$rejected;
@@ -110,7 +110,11 @@ class AdviceWriter
             foreach (array_values(array_unique(array_merge(array_values(array_filter(array_map('intval', is_array($out['order'] ?? null) ? $out['order'] : []), fn ($id) => isset($byId[$id]))), array_map('intval', array_keys($byId))))) as $id) {
                 $conn->executeStatement('UPDATE gestion_advice SET rank = ? WHERE id = ?', [$rank++, $id]);
             }
-            $headline = trim((string) ($out['headline'] ?? ''));
+            $rawHeadline = trim((string) ($out['headline'] ?? ''));
+            $headline = GestionAdviceService::cleanText($rawHeadline) ?? '';
+            if ($rawHeadline !== '' && $headline === '') {
+                ++$rejected; // caractères de structure restés dans la phrase
+            }
             $all = array_merge($contextNumbers, ...array_values($allowed));
             if ($headline !== '' && GestionAdviceService::unknownNumbers($headline, $all) !== []) {
                 ++$rejected;

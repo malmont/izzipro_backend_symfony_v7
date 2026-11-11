@@ -55,9 +55,8 @@ class GestionSimulationCommentService
         $hash = hash('sha256', (string) json_encode([$levers['pricePercent'], $levers['promotion'], $levers['advertisingDelta'], (array) $levers['planned'], $locale]));
         $conn = $this->emProvider->getEntityManager()->getConnection();
         $day = $today->format('Y-m-d');
-        $cached = $conn->fetchOne('SELECT response FROM gestion_simulation_comment WHERE period_id = ? AND body_hash = ? AND store_day = ?', [$period->getId(), $hash, $day]);
-        if ($cached !== false) {
-            return (json_decode((string) $cached, true) ?: []) + ['cached' => true];
+        if (($cached = $this->cached($period, $hash, $day)) !== null) {
+            return $cached + ['cached' => true];
         }
         $candidates = $this->candidates($period, $body, $simulation, $locale, $today);
         $fallback = $this->fallback($candidates, $locale);
@@ -80,7 +79,21 @@ class GestionSimulationCommentService
     {
         $cached = $this->emProvider->getEntityManager()->getConnection()->fetchOne('SELECT response FROM gestion_simulation_comment WHERE period_id = ? AND body_hash = ? AND store_day = ?', [$period->getId(), $hash, $day]);
 
-        return $cached === false ? null : (json_decode((string) $cached, true) ?: []);
+        if ($cached === false) {
+            return null;
+        }
+        $response = json_decode((string) $cached, true) ?: [];
+        if (($response['comment']['textSource'] ?? null) === 'ai') { // avis stocké avant le nettoyage (11/11/2026) : nettoyé, sinon recalculé
+            $title = GestionAdviceService::cleanText($response['comment']['title'] ?? null);
+            $text = GestionAdviceService::cleanText($response['comment']['text'] ?? null);
+            if ($title === null || $text === null) {
+                return null;
+            }
+            $response['comment']['title'] = $title;
+            $response['comment']['text'] = $text;
+        }
+
+        return $response;
     }
 
     public function underLimit(string $day): bool
@@ -277,8 +290,8 @@ class GestionSimulationCommentService
                 }
             }
             $this->quota->complete($this->emProvider->getEntityManager()->find(AiUsage::class, $usage->getId()), $stats, null);
-            $title = mb_substr(trim((string) ($out['title'] ?? '')), 0, 80);
-            $text = mb_substr(trim((string) ($out['text'] ?? '')), 0, 600);
+            $title = mb_substr(GestionAdviceService::cleanText((string) ($out['title'] ?? '')) ?? '', 0, 80);
+            $text = mb_substr(GestionAdviceService::cleanText((string) ($out['text'] ?? '')) ?? '', 0, 600);
             $unknown = GestionAdviceService::unknownNumbers($title . ' ' . $text, $allowedNumbers);
             if (!is_array($out) || !in_array($out['recommended'] ?? null, $keys, true) || $title === '' || $text === '' || $unknown !== []) {
                 if ($this->debug) {

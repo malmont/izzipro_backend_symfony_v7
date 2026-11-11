@@ -92,6 +92,10 @@ Calculés pour la période demandée, à la date du jour (plusieurs peuvent coex
   fixe (1, 7, 14, 21, 30, 45, 60, 90). Une valeur recalculée (somme, écart) est refusée : le texte est rejeté et le dernier texte valide, sinon
   le texte de repli, reste. La phrase de synthèse est vérifiée sur les valeurs du contexte et des conseils. Rejets comptés
   (`gestion_advice_run.rejected`) ; le texte rejeté n'est journalisé qu'en débogage (`kernel.debug`).
+- **Nettoyage** (11/11/2026, `GestionAdviceService::cleanText`) : l'IA laissait parfois un reste de sa sortie JSON (« …à vous de décider.} »,
+  vu sur demo). Blancs, accolades, crochets et guillemets droits en trop sont retirés au début et à la fin ; un texte qui garde un caractère de
+  structure (accolade, crochet, `\"` ou `\n` littéral) est rejeté (repli). Appliqué à l'écriture (titres et textes des conseils, synthèse,
+  avis du simulateur § 9 et de la préparation P6) et à la lecture (conseils et synthèses déjà stockés, avis en cache) : aucune donnée à réécrire.
 - Langue : celle du site ; une autre langue demandée reçoit les textes de repli.
 
 ## 6. Vignette « advice »

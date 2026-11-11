@@ -213,7 +213,7 @@ class SimulationApiTest extends WebTestCase
         $this->endOfWrite();
         $t = $b->modify('+9 days');
 
-        \App\Tests\Fake\FakeLandingAiClient::$queue[] = $this->aiResponse(['recommended' => 'cashSafe', 'title' => 'Protégez la trésorerie', 'text' => 'Réduisez les achats de stock de 270,00 $ : la trésorerie reste à 0,00 $, le résultat ne bouge pas.']);
+        \App\Tests\Fake\FakeLandingAiClient::$queue[] = $this->aiResponse(['recommended' => 'cashSafe', 'title' => '"Protégez la trésorerie"', 'text' => ' Réduisez les achats de stock de 270,00 $ : la trésorerie reste à 0,00 $, le résultat ne bouge pas.} ']); // restes de JSON (11/11/2026) : nettoyés
         $r = $service->comment($period, [], 'fr', 'gerant@example.invalid', $t);
         $c = array_column($r['candidates'], null, 'key');
         $this->assertSame(['keep', 'lastYearShares', 'lastYearActual', 'cashSafe'], array_keys($c), 'sans prévu dans le corps : pas de « simulated »');
@@ -228,6 +228,10 @@ class SimulationApiTest extends WebTestCase
         // Même corps, même jour : même avis, sans nouvel appel
         $again = $service->comment($period, [], 'fr', null, $t);
         $this->assertSame([true, 'ai', 1], [$again['cached'], $again['comment']['textSource'], count(\App\Tests\Fake\FakeLandingAiClient::$requests)]);
+        // Avis mis en cache avant le nettoyage (11/11/2026) : nettoyé à la lecture
+        $db = $this->em()->getConnection();
+        $db->executeStatement("UPDATE gestion_simulation_comment SET response = jsonb_set(response::jsonb, '{comment,text}', to_jsonb((response->'comment'->>'text') || '}'))::json WHERE period_id = ?", [$period->getId()]);
+        $this->assertSame('Réduisez les achats de stock de 270,00 $ : la trésorerie reste à 0,00 $, le résultat ne bouge pas.', $service->comment($period, [], 'fr', null, $t)['comment']['text']);
         // Chiffre inventé : avis des règles (cashSafe : la trésorerie l'impose)
         \App\Tests\Fake\FakeLandingAiClient::$queue[] = $this->aiResponse(['recommended' => 'keep', 'title' => 'Gardez', 'text' => 'Vous gagnerez 999,00 $.']);
         $rejected = $service->comment($period, ['pricePercent' => 10], 'fr', null, $t);

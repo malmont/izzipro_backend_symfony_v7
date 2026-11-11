@@ -183,7 +183,7 @@ class AdviceApiTest extends WebTestCase
 
         // Rédaction : texte accepté (chiffres des sources), phrase de synthèse ; aucune donnée personnelle envoyée
         $run = (int) $conn->fetchOne('SELECT MAX(id) FROM gestion_advice_run');
-        FakeLandingAiClient::$queue[] = $this->aiResponse(['headline' => 'Période à venir : un poste dépasse déjà.', 'advices' => [['id' => $a['id'], 'title' => 'Autres frais déjà dépassés', 'text' => 'Prévu 10 $, déjà 15,00 $ dépensés : 5 $ de trop.']], 'order' => [$a['id']]]);
+        FakeLandingAiClient::$queue[] = $this->aiResponse(['headline' => 'Période à venir : un poste dépasse déjà.}', 'advices' => [['id' => $a['id'], 'title' => 'Autres frais déjà dépassés', 'text' => 'Prévu 10 $, déjà 15,00 $ dépensés : 5 $ de trop.}']], 'order' => [$a['id']]]); // « texte.} » : reste de JSON vu sur demo le 11/11/2026
         $this->runWorker($run);
         $request = json_encode(FakeLandingAiClient::$requests[0], JSON_UNESCAPED_UNICODE);
         $this->assertStringNotContainsString($this->email, $request, 'aucun utilisateur');
@@ -192,6 +192,16 @@ class AdviceApiTest extends WebTestCase
         $this->assertSame(['ok', false, 'Période à venir : un poste dépasse déjà.'], [$l2['ai']['status'], $l2['generating'], $l2['headline']]);
         $this->assertSame(['ai', 'Autres frais déjà dépassés'], [$l2['advices'][0]['textSource'], $l2['advices'][0]['title']]);
         $this->assertSame('rules', $this->get("/api/gestion/conseils?periodId=$pid&locale=en")['advices'][0]['textSource'], 'autre langue : texte de repli');
+        $this->assertSame(['Prévu 10 $, déjà 15,00 $ dépensés : 5 $ de trop.', 'Période à venir : un poste dépasse déjà.'], [$conn->fetchOne('SELECT ai_text FROM gestion_advice WHERE id = ?', [$a['id']]), $conn->fetchOne('SELECT headline FROM gestion_advice_run WHERE id = ?', [$run])], 'nettoyés avant d\'être stockés');
+        // Textes stockés avant le nettoyage : nettoyés à la lecture ; un caractère de structure au milieu : texte de repli
+        $conn->executeStatement("UPDATE gestion_advice SET ai_text = ai_text || '}' WHERE id = ?", [$a['id']]);
+        $conn->executeStatement("UPDATE gestion_advice_run SET headline = headline || '\"}' WHERE id = ?", [$run]);
+        $dirty = $this->get("/api/gestion/conseils?periodId=$pid");
+        $this->assertSame(['ai', 'Prévu 10 $, déjà 15,00 $ dépensés : 5 $ de trop.', 'Période à venir : un poste dépasse déjà.'], [$dirty['advices'][0]['textSource'], $dirty['advices'][0]['text'], $dirty['headline']]);
+        $conn->executeStatement("UPDATE gestion_advice SET ai_text = 'Prévu {\"x\": 10 $} de trop.' WHERE id = ?", [$a['id']]);
+        $this->assertSame('rules', $this->get("/api/gestion/conseils?periodId=$pid")['advices'][0]['textSource'], 'accolade au milieu : repli');
+        $conn->executeStatement("UPDATE gestion_advice SET ai_text = 'Prévu 10 $, déjà 15,00 $ dépensés : 5 $ de trop.' WHERE id = ?", [$a['id']]);
+        $conn->executeStatement("UPDATE gestion_advice_run SET headline = 'Période à venir : un poste dépasse déjà.' WHERE id = ?", [$run]);
 
         // Relance : chiffre inventé (somme) → rejeté, texte de repli ; limite de 3 par jour ; une seule à la fois
         $r1 = $this->send('POST', '/api/gestion/conseils/actualiser', ['periodId' => $pid], 202);
