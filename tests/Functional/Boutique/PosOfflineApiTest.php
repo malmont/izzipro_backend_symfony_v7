@@ -263,6 +263,34 @@ class PosOfflineApiTest extends WebTestCase
     // ---------------------------------------------------------------- aides
 
     /** Vente hors ligne calculée avec la règle partagée à partir du pack (prix, taxes, pas), chaînée */
+    /**
+     * Ordre des variantes du pack fixé par identifiant (11/11/2026) : une écriture sans changement réel (PostgreSQL range alors la ligne ailleurs)
+     * ne change plus l'ETag ; avant, le pack se retéléchargeait pour rien.
+     */
+    public function testPackVariantOrderIsStableAcrossNoOpWrites(): void
+    {
+        $this->loginAs(['ROLE_USER_POS']);
+        $variants = array_map('intval', $this->db->fetchFirstColumn("SELECT v.id FROM product_variant v JOIN product p ON p.id = v.product_id WHERE p.code = 'DEMO-TSHIRT' ORDER BY v.id"));
+        $this->assertGreaterThan(2, count($variants));
+        // stocks décroissants avec l'identifiant : un rangement physique par stock inverse l'ordre des lignes
+        foreach ($variants as $rank => $id) {
+            $this->db->executeStatement('UPDATE product_variant SET stock_quantity = ? WHERE id = ?', [900 - $rank * 10, $id]);
+        }
+        $etag = fn () => $this->request('GET', "/api/pos/offline-pack?cashRegisterId=$this->register")->headers->get('ETag');
+        $before = $etag();
+        // aucune donnée ne change : la table est seulement rangée autrement sur le disque (comme après des écritures)
+        $this->db->executeStatement('CREATE INDEX tmp_pv_stock ON product_variant (stock_quantity)');
+        try {
+            $this->db->executeStatement('CLUSTER product_variant USING tmp_pv_stock');
+        } finally {
+            $this->db->executeStatement('DROP INDEX tmp_pv_stock');
+        }
+        $this->assertNotSame($variants, array_map('intval', $this->db->fetchFirstColumn("SELECT v.id FROM product_variant v JOIN product p ON p.id = v.product_id WHERE p.code = 'DEMO-TSHIRT'")), 'lignes rangées autrement (sans ORDER BY)');
+        $this->assertSame($before, $etag(), 'même contenu, même ETag');
+        $tshirt = array_values(array_filter($this->json($this->request('GET', "/api/pos/offline-pack?cashRegisterId=$this->register"))['products'], fn ($p) => $p['code'] === 'DEMO-TSHIRT'))[0];
+        $this->assertSame($variants, array_column($tshirt['variants'], 'id'), 'variantes par identifiant croissant');
+    }
+
     private function offlineSale(User $seller, string $provisional, array $items, array $pack, string $prevHash = '', string $soldAt = '-30 seconds'): array
     {
         $lines = [];

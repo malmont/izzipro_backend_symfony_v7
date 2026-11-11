@@ -65,7 +65,7 @@ class PosOfflinePackService
                 continue;
             }
             $variants = [];
-            foreach ($product->getVariants() as $variant) {
+            foreach (\App\Dto\ProductCommerceDto::orderedVariants($product) as $variant) { // ordre fixe par identifiant (11/11/2026) : l'ETag ne change plus sans changement réel
                 $variants[] = [
                     'id' => (int) $variant->getId(), 'label' => trim(implode(' / ', array_filter([$variant->getColor()?->getName(), $variant->getSize()?->getName()]))) ?: null,
                     'price' => $variant->getPrice(), 'barcode' => $variant->getBarcode(), 'stock' => $variant->getStockQuantity(),
