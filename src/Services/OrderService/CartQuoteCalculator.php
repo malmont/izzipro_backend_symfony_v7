@@ -47,7 +47,8 @@ final class CartQuoteCalculator
         private readonly TaxEngine $taxes,
         private readonly ?\App\Services\Booking\BookingClock $clock = null, // fuseau de la boutique (04/11/2026)
         private readonly ?\App\Services\BoutiqueSettingsService\BoutiqueSettingsService $settings = null, // livraison offerte (lot 1, 07/11/2026)
-        private readonly ?OrderTaxAddressResolver $taxAddress = null // retrait en magasin : taxes du lieu de remise (B20, 08/11/2026)
+        private readonly ?OrderTaxAddressResolver $taxAddress = null, // retrait en magasin : taxes du lieu de remise (B20, 08/11/2026)
+        private readonly ?\App\Services\Booking\RentalPromotionService $rentalPromotions = null // promotion de location (lot LOC3, 11/11/2026)
     ) {
     }
 
@@ -261,15 +262,23 @@ final class CartQuoteCalculator
         }
         $passengers = max(0, (int) ($booking['passengers'] ?? 0));
         $passengerFee = (int) ($config?->getExtraPassengerFee() ?? 0) * $passengers;
-
-        return [
-            'unitPrice' => $rate * $units + $passengerFee,
+        // Promotion de location (lot LOC3, 11/11/2026) : sur le tarif × unités seulement (jamais le supplément passagers ni la caution), selon le
+        // jour de DÉBUT de la location au fuseau de la boutique ; sans promotion, la ligne est exactement celle d'avant (aucune clé de plus)
+        $promotion = $this->rentalPromotions?->activeFor((int) $product->getId(), $start);
+        $discount = $promotion === null ? 0 : (int) round($rate * $units * $promotion['percent'] / 100);
+        $line = [
+            'unitPrice' => $rate * $units - $discount + $passengerFee,
             'booking' => [
                 'start' => $start->format(\DateTimeInterface::ATOM), 'end' => $end->format(\DateTimeInterface::ATOM), // ATOM dans le fuseau de la boutique
                 'rateId' => $pack?->getId(), 'rateName' => $pack?->getName(), 'durationType' => $type, 'units' => $units, 'rate' => $rate,
                 'passengers' => $passengers, 'passengerFee' => $passengerFee, 'deposit' => (int) ($config?->getDeposit() ?? 0),
             ],
         ];
+        if ($promotion !== null) {
+            $line['booking']['promotion'] = ['id' => $promotion['id'], 'percent' => $promotion['percent'], 'amount' => $discount, 'catalogUnitPrice' => $rate * $units + $passengerFee];
+        }
+
+        return $line;
     }
 
     /** @throws \Exception chaîne illisible */

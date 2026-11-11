@@ -339,6 +339,7 @@ final class CacheTags
         RelatedProduct::class => 'getProduct',
         ProductShipping::class => 'getProduct',
         BookingConfiguration::class => 'getProduct',
+        \App\Entity\RentalPromotion::class => 'getProduct', // promotion de location (lot LOC3, 11/11/2026) : vide le cache de son article
         ProductCustomizationImage::class => 'getProductVariant',
         CategoriesTranslation::class => 'getCategory',
         ColorTranslation::class => 'getColor',
@@ -385,7 +386,8 @@ final class CacheTags
         \App\Entity\GestionCashBalance::class, // trésorerie saisie (lot B1b-1, 11/11/2026) : soldes, mouvements prévus, réglages, en SQL par GestionCashService
         \App\Entity\GestionCashMovement::class,
         \App\Entity\GestionCashSetting::class,
-        \App\Entity\GestionStockSnapshot::class, // instantané quotidien de la valeur du stock (lot S1, 11/11/2026), en SQL par GestionStockSnapshotService
+        \App\Entity\GestionStockSnapshot::class,
+        \App\Entity\RentalPromotionBatch::class, // journal des promotions de location (lot LOC3, 11/11/2026), en SQL par GestionRentalPromotionService // instantané quotidien de la valeur du stock (lot S1, 11/11/2026), en SQL par GestionStockSnapshotService
         \App\Entity\GestionAdvice::class, // guide IA de la gestion (lot G1a, 11/11/2026) : conseils et générations, en SQL par GestionAdviceService
         \App\Entity\GestionAdviceRun::class,
         \App\Entity\GestionSimulationComment::class, // commentaires du simulateur (lot G1b-2, 11/11/2026), en SQL par GestionSimulationCommentService

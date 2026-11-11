@@ -56,12 +56,64 @@ moments `selling` et `end` de la période ; `docs/guide-ia-gestion.md` § 2. Éc
   après ; vignette « advice-result » comprise.
 - Test : `tests/Functional/Gestion/RentalAdviceTest.php`.
 
-## 3. Lots
+## 3. Promotion de location par article (LOC3)
+
+Plan validé par l'application le 11/11/2026 ; **mise en ligne sur feu vert du propriétaire seulement** (§ 3.4).
+
+### 3.1 Règle du prix
+
+- Table `rental_promotion` (article, `percent`, jours du magasin `start_date` … `end_date` inclus et leurs bornes UTC `starts_at` … `ends_at`
+  exclusive, `weekdays`, lot) et journal `rental_promotion_batch`. Lue par `Services/Booking/RentalPromotionService::activeFor()` dans
+  `CartQuoteCalculator::rental()`, le seul calcul du prix d'une location : devis de la boutique (`/api/cart/quote`), paiement Stripe
+  (`PrepareCheckoutUseCase`), devis de la caisse (`/api/pos/quote`), lignes de commande web et caisse (prix figé).
+- Une location reçoit la promotion si son **jour de début**, lu au fuseau de la boutique (`BookingClock`), est dans la fenêtre et coché
+  (un départ à 22 h le vendredi est un vendredi, même si c'est samedi en UTC). Remise = `round(rate × units × percent / 100)`, jamais sur le
+  supplément passagers ni la caution. Sans promotion qui s'applique : ligne strictement identique (aucune clé de plus).
+- Ligne du devis : `booking.promotion { id, percent, amount, catalogUnitPrice }`. Fiche de l'article (`ProductCommerceDto`, donc boutique,
+  catalogue de la caisse `/api/pos/rentals`, applications) : `rental.promotion { percent, startDate, endDate, startsAt, endsAt, weekdays }`, la
+  promotion en cours sinon la prochaine, clé absente sinon. Créer ou terminer une promotion vide le cache de l'article (`CacheTags`).
+- Remises de caisse F1 : elles ne s'appliquent pas aux lignes de location (règle existante) ; sur un ticket mixte, la location garde son prix
+  promotionnel et la remise F1 porte sur les articles vendus.
+
+### 3.2 Routes de gestion (`ROLE_ADMIN`)
+
+- `POST /api/gestion/locations/promotions/apercu { productIds | adviceId, percent (5 à 90, entier), startDate? (aujourd'hui par défaut),
+  endDate (90 jours au plus), weekdays? (1 à 7, tous par défaut) }` → `{ percent, startDate, endDate, days, weekdays, adviceId, items [{ productId,
+  name, status: ok | NOT_RENTABLE | PROMOTION_OVERLAP, conflicts [], example { durationType, rate, discounted } | null }], counts { ok,
+  notRentable, overlap }, warnings [BIG_DISCOUNT au-delà de 50 %], previewHash }`. Aucune écriture. Avec `adviceId` (conseil RENT1 à RENT3) :
+  articles, pourcentage et jours du conseil par défaut.
+- `POST …/appliquer { …même corps…, previewHash }` → 201 `{ batch, advice }` ; tout ou rien : 409 `PRICES_CHANGED { preview }`, 409
+  `PROMOTION_OVERLAP { preview }` (même article, fenêtres et jours cochés qui se recoupent), 422 `NOT_RENTABLE { preview }` ; conseil du guide
+  marqué fait (date de début).
+- `POST …/terminer { batchId }` → le lot : une promotion pas encore commencée ne s'appliquera jamais (`status: cancelled`), une promotion en
+  cours s'arrête à la fin de la journée du magasin (une location qui commence aujourd'hui la garde) ; 404 `BATCH_NOT_FOUND`, 409 `ALREADY_ENDED`.
+  Les commandes déjà passées ne changent jamais.
+- `GET /api/gestion/locations/promotions` (en cours et à venir) ; `GET …/promotions/lots?limit=` ; chaque promotion `{ id, batchId, productId,
+  name, percent, startDate, endDate, startsAt, endsAt, weekdays, status: upcoming | active | ended | cancelled, endedAt }`.
+- Erreurs 422 : `percent` `REQUIRED` | `MUST_BE_INTEGER` | `OUT_OF_RANGE`, `startDate` `INVALID_DATE` | `DATE_IN_PAST`, `endDate` `REQUIRED` |
+  `INVALID_DATE` | `BEFORE_START` | `TOO_LONG`, `weekdays` `INVALID_WEEKDAYS`, `productIds` `SCOPE_REQUIRED` | `REQUIRED` | `TOO_MANY` (50) |
+  `INVALID_ID` | `NOT_FOUND`, `adviceId` `INVALID_ID` | `NOT_A_RENTAL_ADVICE`.
+
+### 3.3 Tests
+
+`tests/Functional/Gestion/RentalPromotionApiTest.php` : devis boutique et caisse identiques (tableau entier) quand une promotion ne s'applique
+pas ; remise et clés ; jour de début au fuseau (départ à 22 h) ; promotion qui commence plus tard ; paiement Stripe ; vente en caisse figée ;
+ticket mixte avec remise F1 au centime ; aperçu sans écriture, empreinte, chevauchement, non louable, fin, lots, fiche.
+
+### 3.4 Mise en ligne et retour arrière
+
+Mise en ligne (sur feu vert du propriétaire) : 1) `scripts/migrate_all_v2_gestion_promotions_location.sh` (toutes les bases ; tables vides,
+sans effet tant qu'aucune promotion n'est créée) ; 2) copie des fichiers du lot dans l'arbre vivant puis `cache:clear` et `lint:container`
+(dans la même minute que l'étape 1) ; 3) contrôle : devis d'une location de demo identique avant / après, routes en 401 sans jeton.
+Retour arrière : terminer les lots créés (`…/terminer`) puis remettre les fichiers du commit précédent et `cache:clear` ; les tables peuvent
+rester (inertes sans le code) ou être supprimées (`down` de la migration). Les commandes déjà passées gardent leur prix.
+
+## 4. Lots
 
 | Lot | Contenu |
 |---|---|
 | **LOC1** | statistiques : revenu à la date de vente et par date de location, occupation par article et par jour de la semaine ; livré le 11/11/2026 |
 | **LOC2** | règles du guide RENT1 (jours pleins), RENT2 (jours creux en semaine), RENT3 (article qui ne se loue plus), mesure après application ; livré le 11/11/2026 |
-| LOC3 | promotion de location par article (`rental_promotion`, lue par le calcul commun boutique et caisse) : plan détaillé avant le code, feu vert du propriétaire avant la mise en ligne |
+| **LOC3** | promotion de location par article (§ 3) : développée et testée le 11/11/2026, **en attente du feu vert du propriétaire** pour la mise en ligne |
 | LOC4 | changement de grille (aperçu, `SHARED_GRID` et `allowShared`, annulation 24 h) |
 | LOC5 | projection des locations de la période |

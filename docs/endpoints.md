@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (415)
+## Boutique et commun (420)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -393,6 +393,11 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/gestion/documents` | ROLE_ADMIN | `Controller\GestionController\GestionDocumentController::create` |
 | GET | `/api/gestion/exports/achats.csv` | ROLE_ADMIN | `Controller\GestionController\GestionExportController::purchases` |
 | GET | `/api/gestion/frais-fixes` | ROLE_ADMIN | `Controller\GestionController\GestionFixedCostController::list` |
+| POST | `/api/gestion/locations/promotions/apercu` | ROLE_ADMIN | `Controller\GestionController\GestionRentalController::promotionPreview` |
+| POST | `/api/gestion/locations/promotions/appliquer` | ROLE_ADMIN | `Controller\GestionController\GestionRentalController::promotionApply` |
+| GET | `/api/gestion/locations/promotions/lots` | ROLE_ADMIN | `Controller\GestionController\GestionRentalController::promotionBatches` |
+| POST | `/api/gestion/locations/promotions/terminer` | ROLE_ADMIN | `Controller\GestionController\GestionRentalController::promotionEnd` |
+| GET | `/api/gestion/locations/promotions` | ROLE_ADMIN | `Controller\GestionController\GestionRentalController::promotions` |
 | GET | `/api/gestion/locations/statistiques` | ROLE_ADMIN | `Controller\GestionController\GestionRentalController::statistics` |
 | GET | `/api/gestion/notifications/journal` | ROLE_ADMIN | `Controller\GestionController\GestionNotificationController::journal` |
 | GET | `/api/gestion/notifications/preferences` | ROLE_ADMIN | `Controller\GestionController\GestionNotificationController::preferences` |

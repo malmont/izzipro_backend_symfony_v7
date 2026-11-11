@@ -1152,8 +1152,11 @@ mouvement **11 « Caution encaissée »** et **12 « Caution restituée »** (`H
 
 **Ce qui existait déjà.** `create-multi-payment` tarifie une ligne `booking { start, end, durationType?, rateId?, passengers? }` au tarif de
 location (même `CartQuoteCalculator` que le web : grilles, tolérance, heures, `DAYS_MINIMUM`, `TIME_STEP_INVALID`…), vérifie la disponibilité
-(409) et crée la réservation. `POST /api/pos/quote` rend par ligne `booking { start, end, durationType, units, rate, deposit }` et au total
-`deposit` (hors `total`). Disponibilité : `GET /api/booking/check/{productId}?start=&end=&quantity=` (200 / 409).
+(409) et crée la réservation. `POST /api/pos/quote` rend par ligne `booking { start, end, durationType, units, rate, deposit, promotion? }` et au total
+`deposit` (hors `total`). Promotion de location (lot LOC3, 11/11/2026, `docs/boutique.md`, devis) : `booking.promotion { id, percent, amount,
+catalogUnitPrice }` quand elle s'applique (jour de début coché, fuseau de la boutique) ; à afficher sur la ligne : prix barré
+(`catalogUnitPrice`), « Promotion location −`percent` % », remise `amount` × quantité ; le total vient du serveur. Les remises de caisse F1
+ne s'appliquent pas aux lignes de location (règle existante, inchangée) : une ligne de location garde son prix, promotionnel ou non. Disponibilité : `GET /api/booking/check/{productId}?start=&end=&quantity=` (200 / 409).
 
 **Catalogue des locations** : `GET /api/pos/rentals` (caisse, en ligne seulement) → `[{ id, code, barcode, name, image, categoryIds,
 variants [{ id, label, barcode }], rental }]`, `rental` = bloc `bookingConfig` de la fiche produit (`docs/boutique.md` : `granularity`,

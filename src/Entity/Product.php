@@ -266,6 +266,15 @@ class Product implements TranslatableInterface, DemoContentInterface
     #[ORM\OneToMany(mappedBy: 'product', targetEntity: Booking::class)]
     private Collection $bookings;
 
+    /**
+     * Promotions de location de l'article (lot LOC3, 11/11/2026), lues seulement : rental.promotion de ProductCommerceDto
+     *
+     * @var Collection<int, RentalPromotion>
+     */
+    #[ORM\OneToMany(mappedBy: 'product', targetEntity: RentalPromotion::class)]
+    #[ORM\OrderBy(['startsAt' => 'ASC'])]
+    private Collection $rentalPromotions;
+
     #[ORM\ManyToOne(inversedBy: 'products')]
     #[Groups(['product:read'])]
     private ?SaleUnit $saleUnit = null;
@@ -288,6 +297,7 @@ class Product implements TranslatableInterface, DemoContentInterface
         $this->updateQuantity();
         $this->translations = new ArrayCollection();
         $this->bookings = new ArrayCollection(); 
+        $this->rentalPromotions = new ArrayCollection();
         $this->pictures = new ArrayCollection();
     }
 
@@ -1143,6 +1153,12 @@ class Product implements TranslatableInterface, DemoContentInterface
     /**
      * @return Collection<int, Booking>
      */
+    /** @return Collection<int, RentalPromotion> */
+    public function getRentalPromotions(): Collection
+    {
+        return $this->rentalPromotions;
+    }
+
     public function getBookings(): Collection
     {
         return $this->bookings;
