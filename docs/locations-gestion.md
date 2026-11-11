@@ -58,7 +58,7 @@ moments `selling` et `end` de la période ; `docs/guide-ia-gestion.md` § 2. Éc
 
 ## 3. Promotion de location par article (LOC3)
 
-Plan validé par l'application le 11/11/2026 ; **mise en ligne sur feu vert du propriétaire seulement** (§ 3.4).
+Plan validé par l'application le 11/11/2026 ; **mis en ligne le 11/11/2026 sur feu vert du propriétaire** (91c1b09e, procédure du § 3.4).
 
 ### 3.1 Règle du prix
 
@@ -108,12 +108,35 @@ sans effet tant qu'aucune promotion n'est créée) ; 2) copie des fichiers du lo
 Retour arrière : terminer les lots créés (`…/terminer`) puis remettre les fichiers du commit précédent et `cache:clear` ; les tables peuvent
 rester (inertes sans le code) ou être supprimées (`down` de la migration). Les commandes déjà passées gardent leur prix.
 
-## 4. Lots
+## 4. Changement de grille (LOC4)
+
+Une grille (`rental_pack`) est rattachée à des **catégories** : la changer change le prix de tous les articles louables de ces catégories. Les
+réservations déjà faites gardent leur prix (figé dans la ligne de commande). Pour un seul article sur une grille partagée : une promotion de
+location par article (LOC3). Code `Services/GestionService/GestionRentalGridService` ; test `tests/Functional/Gestion/RentalGridApiTest.php`.
+
+- `GET /api/gestion/locations/grilles` → `[{ id, name, rates { hour, halfDay, day, week, month } (cents, null = pas de tarif), products [{ productId,
+  name }] }]` (articles louables des catégories de la grille).
+- `POST /api/gestion/locations/grilles/apercu { rentalPackId, rates { hour?, halfDay?, day?, week?, month? } | percent (−50 à 200, entier, non nul),
+  rounding? (none | dollar) }` → `{ pack { id, name }, before, after, changes [{ type, before, after, percent }], products, shared, warnings
+  [SHARED_GRID, BIG_CHANGE au-delà de 30 %], previewHash }`. **Aucune écriture.** `rates` : seuls les tarifs donnés changent (`null` retire un
+  tarif) ; `percent` : tous les tarifs existants, arrondis au cent ou au dollar.
+- `POST …/grilles/appliquer { …même corps…, previewHash, allowShared?, adviceId? }` → 201 le changement. 409 `PRICES_CHANGED { preview }` ;
+  **409 `SHARED_GRID { products, preview }`** si la grille sert à plus d'un article et que `allowShared` n'est pas `true` ; 422 `NOTHING_TO_CHANGE`.
+  Écriture par l'entité (comme le questionnaire `/admin/location/configurer`) : cache du site vidé, journal d'audit `rental_pack` (`source:
+  gestion`) ; anciens tarifs gardés dans `gestion_rental_grid_change`.
+- `POST …/grilles/annuler { changeId }` → le changement (`undoneAt`) : dans les **24 h** (`undoUntil`) et si la grille n'a pas été retouchée
+  depuis ; 404 `CHANGE_NOT_FOUND`, 409 `ALREADY_UNDONE` | `UNDO_EXPIRED` | `GRID_EDITED_SINCE { current }`.
+- `GET …/grilles/modifications?limit=` → `[{ id, pack, before, after, productIds, adviceId, createdBy, createdAt, undoUntil, undoneAt, undoneBy }]`.
+- Erreurs 422 : `rentalPackId` `REQUIRED` | `INVALID_ID`, `rates` `RATES_OR_PERCENT` | `MUST_BE_OBJECT` | `AT_LEAST_ONE_RATE`, `rates.<type>`
+  `UNKNOWN_RATE` | `MUST_BE_POSITIVE_INTEGER_CENTS`, `percent` `MUST_BE_INTEGER` | `OUT_OF_RANGE`, `rounding` `INVALID_ROUNDING` ; 404 `PACK_NOT_FOUND`.
+- Schéma : `gestion_rental_grid_change` (Version20261220100000, `scripts/migrate_all_v2_gestion_grilles_location.sh`).
+
+## 5. Lots
 
 | Lot | Contenu |
 |---|---|
 | **LOC1** | statistiques : revenu à la date de vente et par date de location, occupation par article et par jour de la semaine ; livré le 11/11/2026 |
 | **LOC2** | règles du guide RENT1 (jours pleins), RENT2 (jours creux en semaine), RENT3 (article qui ne se loue plus), mesure après application ; livré le 11/11/2026 |
-| **LOC3** | promotion de location par article (§ 3) : développée et testée le 11/11/2026, **en attente du feu vert du propriétaire** pour la mise en ligne |
-| LOC4 | changement de grille (aperçu, `SHARED_GRID` et `allowShared`, annulation 24 h) |
+| **LOC3** | promotion de location par article (§ 3) : mise en ligne le 11/11/2026 sur feu vert du propriétaire (91c1b09e) |
+| **LOC4** | changement de grille (§ 4) : aperçu, `SHARED_GRID` et `allowShared`, annulation 24 h ; livré le 11/11/2026 |
 | LOC5 | projection des locations de la période |

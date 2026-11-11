@@ -12,7 +12,7 @@ use Symfony\Component\Routing\Attribute\Route;
 /**
  * Locations de la gestion (lot LOC, 11/11/2026, `docs/locations-gestion.md`), `ROLE_ADMIN` (`access_control` `/api/gestion`) : statistiques
  * (LOC1 : revenu à la date de vente et par date de location, occupation par article et par jour de la semaine) ; promotions de location
- * par article (LOC3). Écran : `locations`.
+ * par article (LOC3) ; changement de grille (LOC4). Écran : `locations`.
  */
 #[Route('/api/gestion/locations')]
 class GestionRentalController extends AbstractController
@@ -58,6 +58,40 @@ class GestionRentalController extends AbstractController
     public function promotionBatches(Request $request): JsonResponse
     {
         return $this->json($this->useCase->promotionBatches(max(1, min(100, (int) $request->query->get('limit', 20)))));
+    }
+
+    /** Lot LOC4 : grilles de location, tarifs et articles qui les utilisent */
+    #[Route('/grilles', name: 'gestion_locations_grilles', methods: ['GET'])]
+    public function grids(): JsonResponse
+    {
+        return $this->json($this->useCase->grids());
+    }
+
+    /** Lot LOC4 : aperçu d'un changement de grille (aucune écriture) */
+    #[Route('/grilles/apercu', name: 'gestion_locations_grilles_apercu', methods: ['POST'])]
+    public function gridPreview(Request $request): JsonResponse
+    {
+        return $this->json($this->useCase->gridPreview($this->body($request)));
+    }
+
+    /** Lot LOC4 : application (empreinte, allowShared pour une grille partagée) */
+    #[Route('/grilles/appliquer', name: 'gestion_locations_grilles_appliquer', methods: ['POST'])]
+    public function gridApply(Request $request): JsonResponse
+    {
+        return $this->json($this->useCase->gridApply($this->body($request), $this->getUser()?->getUserIdentifier()), 201);
+    }
+
+    /** Lot LOC4 : annulation dans les 24 h si la grille n'a pas été retouchée */
+    #[Route('/grilles/annuler', name: 'gestion_locations_grilles_annuler', methods: ['POST'])]
+    public function gridUndo(Request $request): JsonResponse
+    {
+        return $this->json($this->useCase->gridUndo($this->body($request), $this->getUser()?->getUserIdentifier()));
+    }
+
+    #[Route('/grilles/modifications', name: 'gestion_locations_grilles_modifications', methods: ['GET'])]
+    public function gridChanges(Request $request): JsonResponse
+    {
+        return $this->json($this->useCase->gridChanges(max(1, min(100, (int) $request->query->get('limit', 20)))));
     }
 
     private function body(Request $request): array

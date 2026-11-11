@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (420)
+## Boutique et commun (425)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -393,6 +393,11 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/gestion/documents` | ROLE_ADMIN | `Controller\GestionController\GestionDocumentController::create` |
 | GET | `/api/gestion/exports/achats.csv` | ROLE_ADMIN | `Controller\GestionController\GestionExportController::purchases` |
 | GET | `/api/gestion/frais-fixes` | ROLE_ADMIN | `Controller\GestionController\GestionFixedCostController::list` |
+| POST | `/api/gestion/locations/grilles/annuler` | ROLE_ADMIN | `Controller\GestionController\GestionRentalController::gridUndo` |
+| POST | `/api/gestion/locations/grilles/apercu` | ROLE_ADMIN | `Controller\GestionController\GestionRentalController::gridPreview` |
+| POST | `/api/gestion/locations/grilles/appliquer` | ROLE_ADMIN | `Controller\GestionController\GestionRentalController::gridApply` |
+| GET | `/api/gestion/locations/grilles/modifications` | ROLE_ADMIN | `Controller\GestionController\GestionRentalController::gridChanges` |
+| GET | `/api/gestion/locations/grilles` | ROLE_ADMIN | `Controller\GestionController\GestionRentalController::grids` |
 | POST | `/api/gestion/locations/promotions/apercu` | ROLE_ADMIN | `Controller\GestionController\GestionRentalController::promotionPreview` |
 | POST | `/api/gestion/locations/promotions/appliquer` | ROLE_ADMIN | `Controller\GestionController\GestionRentalController::promotionApply` |
 | GET | `/api/gestion/locations/promotions/lots` | ROLE_ADMIN | `Controller\GestionController\GestionRentalController::promotionBatches` |
