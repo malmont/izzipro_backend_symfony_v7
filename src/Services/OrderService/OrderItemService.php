@@ -16,7 +16,9 @@ class OrderItemService
         $orderItem->snapshotFrom($productVariant); // libellés figés à la vente (A1, 30/10/2026)
         $orderItem->setQuantity($quantity);
         
-        $finalUnitPrice = $unitPrice ?? (float)$productVariant->getProduct()->getEffectivePrice();
+        // Repli sans prix fourni : même règle que le devis, prix propre de la variante d'abord (11/11/2026, écart relevé au lot VAR ; aucun appelant
+        // actuel ne s'en sert : le devis fournit toujours le prix)
+        $finalUnitPrice = $unitPrice ?? (float) ($productVariant->getPrice() ?? $productVariant->getProduct()->getEffectivePrice());
         $orderItem->setUnitPrice($finalUnitPrice);
         $orderItem->setTotalPrice($finalUnitPrice * $quantity);
 
