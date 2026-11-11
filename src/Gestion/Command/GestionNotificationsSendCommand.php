@@ -33,6 +33,8 @@ class GestionNotificationsSendCommand extends Command
         private readonly LoggerInterface $logger,
         private readonly ?GestionStockSnapshotService $snapshots = null, // lot S1 : instantané quotidien de la valeur du stock, au même passage
         private readonly ?PeriodCalendar $calendar = null,
+        private readonly ?\App\Services\FeatureAccess\ModuleAccessService $modules = null, // lot MOD : module de gestion éteint (mode live) = pas de notification
+        private readonly ?\App\Services\Platform\PlatformModeService $platform = null,
     ) {
         parent::__construct();
     }
@@ -57,6 +59,11 @@ class GestionNotificationsSendCommand extends Command
             }
             try {
                 $this->emProvider->switchTenant((string) $row['dbname'], (string) $row['code']);
+                if ($this->platform !== null && $this->modules !== null && !$this->platform->isDemo() && !$this->modules->isEnabled(\App\Services\FeatureAccess\ModuleAccessService::MANAGEMENT)) {
+                    $this->snapshot((string) $row['code']); // lot MOD : module éteint, plateforme en live : pas de notification ; l'instantané du stock reste pris (historique)
+                    $io->text(sprintf('%s : application de gestion non activée, aucune notification', $row['code']));
+                    continue;
+                }
                 $result = $this->notifications->runDaily(null, (bool) $input->getOption('force'));
                 if ($result['ran']) {
                     $this->snapshot((string) $row['code']);

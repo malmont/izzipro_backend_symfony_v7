@@ -242,13 +242,16 @@ class SimulationApiTest extends WebTestCase
         $master->prepare("DELETE FROM tenant_entitlements WHERE tenant_code = ? AND feature_key IN ('ai.full', 'ai.help')")->execute([MV_TEST_TENANT_CODE]);
         try {
             $calls = count(\App\Tests\Fake\FakeLandingAiClient::$requests);
+            $stored = (int) $conn->fetchOne('SELECT COUNT(*) FROM gestion_simulation_comment WHERE store_day = ?', [$t->format('Y-m-d')]);
             $none = $service->comment($period, ['pricePercent' => 20], 'fr', null, $t);
             $this->assertSame(['not_included', 'rules', $calls], [$none['ai']['status'], $none['comment']['textSource'], count(\App\Tests\Fake\FakeLandingAiClient::$requests)]);
+            // lot MOD (11/11/2026) : un refus faute de palier (ou de crédits) n'est ni gardé ni compté dans le plafond du jour
+            $this->assertSame($stored, (int) $conn->fetchOne('SELECT COUNT(*) FROM gestion_simulation_comment WHERE store_day = ?', [$t->format('Y-m-d')]));
         } finally {
             \App\Tests\Functional\Support\AiRightTestHelper::restoreFullAi(static::getContainer());
         }
-        // Plafond : 10 avis par jour, puis 429 COMMENT_LIMIT avec l'avis des règles
-        for ($i = 0; $i < 7; ++$i) {
+        // Plafond : 10 avis par jour, puis 429 COMMENT_LIMIT avec l'avis des règles (2 avis gardés ci-dessus, le refus sans palier ne compte pas : 8 de plus)
+        for ($i = 0; $i < 8; ++$i) {
             $conn->executeStatement("INSERT INTO gestion_simulation_comment (period_id, body_hash, store_day, response, ai_status, created_at) VALUES (?, ?, ?, '{}', 'ok', NOW())", [$pid, "x$i", $t->format('Y-m-d')]);
         }
         try {

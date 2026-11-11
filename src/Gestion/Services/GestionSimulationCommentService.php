@@ -27,6 +27,8 @@ class GestionSimulationCommentService
     public const COST = 1;
     public const TIMEOUT = 30.0;
     public const PER_DAY = 10;
+    /** Statuts qui ne consomment rien : ni gardés en cache, ni comptés dans le plafond du jour (lot MOD, 11/11/2026) */
+    public const NOT_STORED = ['credits_exhausted', 'not_included'];
     public const KEYS = ['keep', 'simulated', 'lastYearShares', 'lastYearActual', 'cashSafe'];
 
     public function __construct(
@@ -66,6 +68,9 @@ class GestionSimulationCommentService
         }
         [$comment, $status, $usageId] = $this->ai($period, $simulation, $candidates, $fallback, $locale, $user);
         $response = ['simulation' => $simulation, 'candidates' => $candidates, 'comment' => $comment, 'ai' => ['status' => $status]];
+        if (in_array($status, self::NOT_STORED, true)) {
+            return $response + ['cached' => false]; // lot MOD : refus faute de crédits ou de palier ni gardé ni compté dans le plafond du jour
+        }
         $conn->executeStatement(
             'INSERT INTO gestion_simulation_comment (period_id, body_hash, store_day, response, ai_status, ai_usage_id, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW()) ON CONFLICT DO NOTHING',
             [$period->getId(), $hash, $day, json_encode($response, JSON_UNESCAPED_UNICODE), $status, $usageId, $user]
@@ -103,6 +108,9 @@ class GestionSimulationCommentService
 
     public function store(Collections $period, string $hash, string $day, array $response, string $status, ?int $usageId, ?string $user): void
     {
+        if (in_array($status, self::NOT_STORED, true)) {
+            return; // lot MOD : refus faute de crédits ou de palier ni gardé ni compté (avis de l'année, préparation)
+        }
         $this->emProvider->getEntityManager()->getConnection()->executeStatement(
             'INSERT INTO gestion_simulation_comment (period_id, body_hash, store_day, response, ai_status, ai_usage_id, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW()) ON CONFLICT DO NOTHING',
             [$period->getId(), $hash, $day, json_encode($response, JSON_UNESCAPED_UNICODE), $status, $usageId, $user]

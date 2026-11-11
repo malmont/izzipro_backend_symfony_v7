@@ -517,7 +517,7 @@ class GestionAdviceService
         $this->conn()->executeStatement("UPDATE gestion_advice_run SET status = 'error', finished_at = NOW() WHERE status = 'pending' AND created_at < NOW() - INTERVAL '" . self::PENDING_TIMEOUT_MINUTES . " minutes'");
     }
 
-    private function manualToday(\DateTimeImmutable $today): int
+    public function manualToday(\DateTimeImmutable $today): int
     {
         return (int) $this->conn()->fetchOne("SELECT COUNT(*) FROM gestion_advice_run WHERE run_trigger = 'manual' AND store_day = ?", [$today->format('Y-m-d')]);
     }

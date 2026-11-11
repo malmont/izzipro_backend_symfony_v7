@@ -20,7 +20,8 @@ class ModuleAccessSubscriber implements EventSubscriberInterface
 {
     public const CODE = 'MODULE_INACTIVE';
 
-    public function __construct(private readonly ModuleAccessService $modules, private readonly PlatformModeService $platform, private readonly LoggerInterface $logger)
+    public function __construct(private readonly ModuleAccessService $modules, private readonly PlatformModeService $platform, private readonly LoggerInterface $logger,
+        private readonly ?\App\Services\FeatureAccess\ModuleRequestHint $hints = null)
     {
     }
 
@@ -62,6 +63,6 @@ class ModuleAccessSubscriber implements EventSubscriberInterface
             'code' => self::CODE,
             'module' => $module,
             'message' => sprintf('Le module %s n\'est pas activé sur ce site.', ModuleAccessService::LABELS[$module] ?? $module),
-        ], 403));
+        ] + ($this->hints?->for($module) ?? []), 403)); // lot MOD : feature, requestable, request, trial (l'écran ne propose pas « Demander » deux fois)
     }
 }

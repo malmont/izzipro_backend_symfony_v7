@@ -321,3 +321,36 @@ le semis : matière pour la reprise d'historique) et **dix-huit ventes de démon
 statut complétée, lignes aux prix de vente, totaux hors taxes ; une variante créée par produit vendu avec le stock du produit, la
 quantité ne change pas). Les commandes clients n'ont pas de marque `is_demo` : « Effacer le contenu d'exemple » ne les retire
 pas ; elles se reconnaissent à leur référence.
+
+## 9. Lot MOD : l'application de gestion en module payant activable (11/11/2026)
+
+Contrat validé par l'application (« new easymakemoney ») le 11/11/2026, Q1 à Q6 tranchées.
+
+- **Clé** : `app.management` (droit gouverné existant : offre « management », 3 900 cents CAD, 30 jours d'essai ; colonne
+  `entreprise.is_management_app_active` projetée par les droits ; demande d'essai `POST /api/site/features/app.management/request`).
+- **Garde** (`ModuleAccessService::MANAGEMENT`, `ModuleAccessSubscriber`) : mêmes préfixes que la règle `ROLE_ADMIN` de la gestion dans
+  `security.yaml` (`collections`, `createcollections`, `commandes`, `fournisseurs`, `transporteurs`, `notes-de-frais`, `type-fournisseurs`,
+  `type-note-de-frais`, `gestion`, `periodes`, `dashboard`, `statistiques`, `stock-evolution`, `stock-value`, `frais`, `payments/statistics`,
+  `taxes/monthly`, `carrier/statistics`), **sauf la caisse** : `/api/caisse/*`, `/api/statistiques/(chiffre-affaires|nombre-commandes|panier-moyen)/pos`,
+  `/api/payments/statistics/pos`. Vérifiée route par route sur tout le routeur (`ManagementModuleApiTest`), la règle de `security.yaml` étant
+  relue par le test. Comme les autres modules : **seulement en mode plateforme `live`** (en `demo`, rien n'est gardé), avant le pare-feu.
+- **Réponse** : 403 `{ error: "MODULE_INACTIVE", code, module: "management", message, feature: "app.management", requestable, request:
+  { status } | null, trial: { allowed, days } }` (`ModuleRequestHint`, ajout aussi pour les autres modules : `feature`, `requestable`…) ;
+  `requestable` faux si une demande est déjà en attente (l'écran ne propose pas « Demander » deux fois) ; un seul essai par site.
+- **Connexion** (`platform=admin`) et **activation de la clé** de l'application : ouvertes ; l'application affiche « Application de gestion non
+  activée » avec « Demander l'essai ».
+- **Notifications quotidiennes** (`app:gestion:notifications:envoyer`) : sautées pour un site dont le module est éteint, en mode live ;
+  l'instantané quotidien du stock reste pris (historique).
+- **Transition** : `app:gestion:module:transition` (simulation par défaut, `--apply`, `--tenant=`) accorde `app.management` (manuel, sans fin,
+  note « transition MOD ») à tout site qui s'en sert déjà (périodes, commandes fournisseurs, notes de frais, conseils, documents, ou clé de
+  l'application valide) ; rejouable sans effet. À lancer avant le passage de la plateforme en live (au 11/11/2026 : demo seulement concerné).
+  Retour arrière : annuler les droits notés « transition MOD », ou rester en mode demo.
+- **Unités IA** : la gestion consomme les crédits mensuels du site (même réserve que l'assistant et les fiches produit), 1 crédit par appel
+  (conseils, avis du guide, lecture de documents) ; l'IA reste un palier à part (`ai.help` / `ai.full`). `GET /api/gestion/ia` (`ROLE_ADMIN`,
+  gardée par le module) → `{ tier: none | help | full, credits: { monthly, used, remaining, resetAt }, costs: { advice, comment, document },
+  limits: { commentsPerDay: 10, adviceRefreshPerDay: 3 }, today: { comments, adviceRefresh } }`. Épuisé : conseils et avis rendent
+  `credits_exhausted` (les règles restent servies), documents 402 `AI_CREDITS_EXHAUSTED`. Plafonds vérifiés avant les crédits ; depuis ce lot,
+  un avis refusé faute de crédits ou de palier (`credits_exhausted`, `not_included`) **n'est ni gardé en cache ni compté** dans le plafond du jour.
+- Code : `Services/FeatureAccess/ModuleAccessService`, `ModuleRequestHint`, `EventSubscriber/ModuleAccessSubscriber`,
+  `Gestion/Services/GestionAiUsageService`, `GestionModuleTransitionService`, `Gestion/Command/GestionModuleTransitionCommand`,
+  `Gestion/Controller/GestionAiController`. Test : `tests/Functional/Gestion/ManagementModuleApiTest.php` (+ `SimulationApiTest` : refus non compté).

@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (431)
+## Boutique et commun (432)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -393,6 +393,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/gestion/documents` | ROLE_ADMIN | `Gestion\Controller\GestionDocumentController::create` |
 | GET | `/api/gestion/exports/achats.csv` | ROLE_ADMIN | `Gestion\Controller\GestionExportController::purchases` |
 | GET | `/api/gestion/frais-fixes` | ROLE_ADMIN | `Gestion\Controller\GestionFixedCostController::list` |
+| GET | `/api/gestion/ia` | ROLE_ADMIN | `Gestion\Controller\GestionAiController::usage` |
 | POST | `/api/gestion/locations/grilles/annuler` | ROLE_ADMIN | `Gestion\Controller\GestionRentalController::gridUndo` |
 | POST | `/api/gestion/locations/grilles/apercu` | ROLE_ADMIN | `Gestion\Controller\GestionRentalController::gridPreview` |
 | POST | `/api/gestion/locations/grilles/appliquer` | ROLE_ADMIN | `Gestion\Controller\GestionRentalController::gridApply` |

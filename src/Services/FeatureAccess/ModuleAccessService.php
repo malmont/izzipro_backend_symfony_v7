@@ -22,6 +22,8 @@ class ModuleAccessService
     public const POS = 'pos';
     public const MEMOIRES = 'memoires';
     public const BOUSSOLE = 'boussole';
+    /** Application de gestion (lot MOD, 11/11/2026, `docs/gestion-mise-a-niveau.md` § MOD) : module payant, droit app.management */
+    public const MANAGEMENT = 'management';
 
     /** module => colonne de la fiche Entreprise */
     public const COLUMNS = [
@@ -30,6 +32,13 @@ class ModuleAccessService
         self::POS => 'is_pos_active',
         self::MEMOIRES => 'is_memoire_vivante_active',
         self::BOUSSOLE => 'is_boussole_esg_active',
+        self::MANAGEMENT => 'is_management_app_active',
+    ];
+
+    /** module => clé du registre (droit d'usage) qu'on demande depuis « Mon site » ou l'application (403 MODULE_INACTIVE, lot MOD) */
+    public const FEATURE_KEYS = [
+        self::LANDING => 'module.landing', self::BOUTIQUE => 'module.boutique', self::POS => 'module.pos', self::MEMOIRES => 'module.memoires',
+        self::BOUSSOLE => 'module.boussole', self::MANAGEMENT => 'app.management',
     ];
 
     public const LABELS = [
@@ -38,6 +47,7 @@ class ModuleAccessService
         self::POS => 'Caisse',
         self::MEMOIRES => 'Mémoires Vivantes',
         self::BOUSSOLE => 'Boussole ESG',
+        self::MANAGEMENT => 'Application de gestion',
     ];
 
     /**
@@ -56,6 +66,11 @@ class ModuleAccessService
         '#^/api/boussole(/|$)#' => self::BOUSSOLE,
         '#^/api/(cart/quote|stripe/create-intent)(/|$)#' => self::BOUTIQUE,
         '#^/api/landingpage-ai(/|$)#' => self::LANDING,
+        // Application de gestion (lot MOD, 11/11/2026) : mêmes préfixes que sa règle ROLE_ADMIN de security.yaml (sans borne, comme elle), SAUF la
+        // caisse : /api/caisse/* (règle POS) et les statistiques /pos de la caisse ne sont jamais gardées par ce module
+        '#^/api/(collections|createcollections|commandes|fournisseurs|transporteurs|notes-de-frais|type-fournisseurs|type-note-de-frais|gestion|periodes|dashboard|stock-evolution|stock-value|frais|taxes/monthly|carrier/statistics)#' => self::MANAGEMENT,
+        '#^/api/statistiques(?!/(chiffre-affaires|nombre-commandes|panier-moyen)/pos(/|$))#' => self::MANAGEMENT,
+        '#^/api/payments/statistics(?!/pos(/|$))#' => self::MANAGEMENT,
     ];
 
     /**
