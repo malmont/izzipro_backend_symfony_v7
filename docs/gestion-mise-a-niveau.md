@@ -264,8 +264,8 @@ Décisions de contrat prises pour les lots :
   - B1 `GET /api/stock-value` : chaque élément de `stock_value_current_month` gagne `stock_value_cents` (entier, **par variante** : stock de la
     variante × son prix, sinon le prix de l'article ; article sans variante : sa quantité × son prix), `month_number` (1..12) et `year` au fuseau
     du magasin. `stock_value` (dollars, quantité et prix de l'article) et `month` (« November 2026 ») restent inchangés : les deux valeurs
-    diffèrent dès qu'une variante a son propre prix ou que la quantité de l'article ne suit pas ses variantes (demo : 1 010,17 $ contre 816,51 $
-    le 10/11/2026). L'application lit `stock_value_cents` en priorité. Test : `tests/Functional/Gestion/StatisticsFixesTest.php`.
+    diffèrent dès qu'une variante a son propre prix ou que la quantité de l'article ne suit pas ses variantes (demo le 11/11/2026 : `stock_value`
+    101 016,60 $ contre `stock_value_cents` 9 983 860, soit 99 838,60 $ = variantes 81 650,60 $ + articles sans variante 18 188,00 $). L'application lit `stock_value_cents` en priorité. Test : `tests/Functional/Gestion/StatisticsFixesTest.php`.
   - B6 `GET /api/payments/statistics/{source}` : seuls les paiements **réussis** (`status_payment` 2 « Complété ») comptent ; en cours (1) et
     échoués (3) exclus (correction, formes inchangées ; la caisse, qui lit `/pos`, en est prévenue).
   - B8 `GET /api/frais/total` : correctif du 09/11 (commit 334f41e9) en ligne.
