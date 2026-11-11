@@ -41,20 +41,32 @@ class RentalPromotionService
      */
     public static function display(Product $product): ?array
     {
+        return self::displayAll($product)[0] ?? null;
+    }
+
+    /**
+     * Fiche de l'article (`rental.promotions`, ajout du 11/11/2026 demandé par l'app mobile) : toutes les promotions en cours et à venir, même forme
+     * que `rental.promotion`, triées par début (puis création) ; plusieurs peuvent coexister sur des jours distincts ou se suivre. Liste vide s'il
+     * n'y en a aucune (la clé est alors absente de la fiche).
+     *
+     * @return list<array{percent: int, startDate: string, endDate: string, startsAt: string, endsAt: string, weekdays: list<int>}>
+     */
+    public static function displayAll(Product $product): array
+    {
         $utc = new \DateTimeZone('UTC');
         $now = new \DateTimeImmutable('now', $utc);
+        $out = [];
         foreach ($product->getRentalPromotions() as $p) {
             $from = new \DateTimeImmutable($p->getStartsAt()->format('Y-m-d H:i:s'), $utc);
             $to = new \DateTimeImmutable($p->getEndsAt()->format('Y-m-d H:i:s'), $utc);
             if ($to <= $now || $to <= $from) {
                 continue;
             }
-
-            return ['percent' => $p->getPercent(), 'startDate' => $p->getStartDate()->format('Y-m-d'), 'endDate' => $p->getEndDate()->format('Y-m-d'),
+            $out[] = ['percent' => $p->getPercent(), 'startDate' => $p->getStartDate()->format('Y-m-d'), 'endDate' => $p->getEndDate()->format('Y-m-d'),
                 'startsAt' => $from->format(\DateTimeInterface::ATOM), 'endsAt' => $to->format(\DateTimeInterface::ATOM), 'weekdays' => $p->getWeekdays()];
         }
 
-        return null;
+        return $out;
     }
 
     private function conn(): \Doctrine\DBAL\Connection

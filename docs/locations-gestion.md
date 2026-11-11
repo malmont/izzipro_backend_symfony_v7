@@ -71,7 +71,9 @@ Plan validé par l'application le 11/11/2026 ; **mis en ligne le 11/11/2026 sur 
   supplément passagers ni la caution. Sans promotion qui s'applique : ligne strictement identique (aucune clé de plus).
 - Ligne du devis : `booking.promotion { id, percent, amount, catalogUnitPrice }`. Fiche de l'article (`ProductCommerceDto`, donc boutique,
   catalogue de la caisse `/api/pos/rentals`, applications) : `rental.promotion { percent, startDate, endDate, startsAt, endsAt, weekdays }`, la
-  promotion en cours sinon la prochaine, clé absente sinon. Créer ou terminer une promotion vide le cache de l'article (`CacheTags`).
+  promotion en cours sinon la prochaine, clé absente sinon ; depuis le 11/11/2026, `rental.promotions` = toutes les promotions en cours et à
+  venir (même forme, triées par début puis création ; plusieurs coexistent sur des jours distincts ou se suivent), `rental.promotion` restant
+  la première ; clés absentes sans promotion. Créer ou terminer une promotion vide le cache de l'article (`CacheTags`).
 - Remises de caisse F1 : elles ne s'appliquent pas aux lignes de location (règle existante) ; sur un ticket mixte, la location garde son prix
   promotionnel et la remise F1 porte sur les articles vendus.
 

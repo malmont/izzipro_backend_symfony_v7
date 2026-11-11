@@ -97,7 +97,7 @@ final class ProductCommerceDto
             'included' => $config?->getIncluded() ?? [],
             'excluded' => $config?->getExcluded() ?? [],
             'notes' => $config?->getNotes(),
-        ] + (($promotion = \App\Services\Booking\RentalPromotionService::display($product)) !== null ? ['promotion' => $promotion] : []); // lot LOC3 : clé absente sans promotion
+        ] + (($promotions = \App\Services\Booking\RentalPromotionService::displayAll($product)) !== [] ? ['promotion' => $promotions[0], 'promotions' => $promotions] : []); // lot LOC3 : clés absentes sans promotion ; promotions = toutes (11/11/2026)
     }
 
     /**

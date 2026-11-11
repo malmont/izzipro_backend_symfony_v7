@@ -272,7 +272,7 @@ class Product implements TranslatableInterface, DemoContentInterface
      * @var Collection<int, RentalPromotion>
      */
     #[ORM\OneToMany(mappedBy: 'product', targetEntity: RentalPromotion::class)]
-    #[ORM\OrderBy(['startsAt' => 'ASC'])]
+    #[ORM\OrderBy(['startsAt' => 'ASC', 'id' => 'ASC'])] // départage stable de deux promotions qui commencent ensemble (rental.promotions, 11/11/2026)
     private Collection $rentalPromotions;
 
     #[ORM\ManyToOne(inversedBy: 'products')]

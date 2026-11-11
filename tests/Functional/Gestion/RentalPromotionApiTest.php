@@ -248,6 +248,46 @@ class RentalPromotionApiTest extends WebTestCase
         $this->assertSame(BookingClock::utc((new \DateTimeImmutable("$todayAkl 00:00:00", $akl))->modify('+1 day'))->format(\DateTimeInterface::ATOM), $eastRow['endsAt']);
     }
 
+    /**
+     * Ajout du 11/11/2026 (app mobile) : rental.promotions = toutes les promotions en cours et à venir, triées par début puis création, même forme
+     * que rental.promotion, qui reste la première ; clés absentes sans promotion, fiche d'un autre article identique au tableau près.
+     */
+    public function testProductSheetListsEveryCurrentAndUpcomingRentalPromotion(): void
+    {
+        $this->loginPos();
+        $sheet = function (string $code): array {
+            $this->loginPos();
+
+            return array_values(array_filter($this->json($this->request('GET', '/api/pos/rentals')), fn ($r) => $r['code'] === $code))[0];
+        };
+        $kayakBefore = $sheet('DEMO-KAYAK');
+        $this->assertArrayNotHasKey('promotion', $kayakBefore['rental']);
+        $this->assertArrayNotHasKey('promotions', $kayakBefore['rental'], 'sans promotion : aucune clé ajoutée');
+        $today = new \DateTimeImmutable('today', $this->tz);
+        $day = fn (int $n) => $today->modify("+$n days")->format('Y-m-d');
+
+        // deux promotions sur des jours distincts, même fenêtre : week-end −20 %, semaine −10 % (créée après)
+        $weekend = $this->applyPromotion([$this->pontonProduct], 20, $day(1), $day(30), [6, 7]);
+        $weekdays = $this->applyPromotion([$this->pontonProduct], 10, $day(1), $day(30), [1, 2, 3, 4, 5]);
+        $ponton = $sheet('DEMO-PONTON')['rental'];
+        $this->assertSame([[20, [6, 7]], [10, [1, 2, 3, 4, 5]]], array_map(fn ($p) => [$p['percent'], $p['weekdays']], $ponton['promotions']), 'les deux, par début puis création');
+        $this->assertSame($ponton['promotions'][0], $ponton['promotion'], 'rental.promotion inchangée : la première');
+        $this->assertSame(array_keys($ponton['promotion']), array_keys($ponton['promotions'][1]), 'même forme');
+        $this->assertSame($kayakBefore, $sheet('DEMO-KAYAK'), 'fiche d\'un article sans promotion identique au tableau près');
+
+        // deux promotions successives sur le kayak : triées par début, la première en rental.promotion ; une promotion terminée n'y est plus
+        $later = $this->applyPromotion([$this->kayakProduct], 15, $day(8), $day(12), [1, 2, 3, 4, 5, 6, 7]);
+        $sooner = $this->applyPromotion([$this->kayakProduct], 25, $day(2), $day(6), [1, 2, 3, 4, 5, 6, 7]);
+        $kayak = $sheet('DEMO-KAYAK')['rental'];
+        $this->assertSame([[25, $day(2), $day(6)], [15, $day(8), $day(12)]], array_map(fn ($p) => [$p['percent'], $p['startDate'], $p['endDate']], $kayak['promotions']));
+        $this->assertSame($kayak['promotions'][0], $kayak['promotion']);
+        $this->send('POST', '/api/gestion/locations/promotions/terminer', ['batchId' => $sooner['id']], 200);
+        $kayak = $sheet('DEMO-KAYAK')['rental'];
+        $this->assertSame([15], array_column($kayak['promotions'], 'percent'), 'annulée avant son début : retirée de la liste');
+        $this->assertSame($kayak['promotions'][0], $kayak['promotion']);
+        unset($weekend, $weekdays, $later);
+    }
+
     // ----- helpers -----
 
     private function applyPromotion(array $productIds, int $percent, string $start, string $end, array $weekdays): array
