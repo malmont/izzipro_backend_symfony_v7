@@ -4,8 +4,8 @@ namespace App\UseCase\CollectionDashboardUseCase;
 
 use App\Dto\DashboardCollectionDTO;
 use App\Entity\Collections;
-use App\Services\GestionService\GestionConflictException;
-use App\Services\GestionService\PeriodCalendar;
+use App\Gestion\Services\GestionConflictException;
+use App\Gestion\Services\PeriodCalendar;
 use App\Services\TenantEntityManagerProvider;
 
 /**

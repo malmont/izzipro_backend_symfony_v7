@@ -2,7 +2,7 @@
 
 namespace App\Tests\Functional\Gestion;
 
-use App\Entity\GestionDocument;
+use App\Gestion\Entity\GestionDocument;
 use App\Entity\Order;
 use App\Entity\OrderItems;
 use App\Entity\OrderSource;
@@ -13,7 +13,7 @@ use App\Entity\StatusCommande;
 use App\Entity\User;
 use App\EventSubscriber\CacheInvalidationSubscriber;
 use App\Services\CaisseService\StoreClock;
-use App\Services\GestionService\GestionNotificationService;
+use App\Gestion\Services\GestionNotificationService;
 use App\Services\NotificationService\PushSenderInterface;
 use App\Services\TenantEntityManagerProvider;
 use App\Tests\Fake\FakePushSender;

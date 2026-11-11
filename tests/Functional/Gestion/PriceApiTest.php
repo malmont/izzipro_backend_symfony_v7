@@ -6,7 +6,7 @@ use App\Entity\Product;
 use App\Entity\ProductVariant;
 use App\Entity\User;
 use App\EventSubscriber\CacheInvalidationSubscriber;
-use App\Services\GestionService\GestionPriceService;
+use App\Gestion\Services\GestionPriceService;
 use App\Services\TenantEntityManagerProvider;
 use App\Tests\Functional\Cache\CacheTestEntityFactory;
 use Doctrine\ORM\EntityManagerInterface;
@@ -94,7 +94,7 @@ class PriceApiTest extends WebTestCase
 
         // Application, avec un conseil du guide sur A : prix écrits par le chemin d'un article, conseil marqué fait
         $advice = (int) $conn->fetchOne("INSERT INTO gestion_advice (period_id, signature, moment, kind, subject, action, effect_cents, effect_label, confidence, sources, figures, params, rank, detected_on, created_at, updated_at)"
-            . " VALUES (?, 'P4:fast', 'selling', 'FAST_SELLER', ?, '{}', 300, 'extra_margin', 'low', '[]', '[]', '{}', 1, CURRENT_DATE, NOW(), NOW()) RETURNING id", [static::getContainer()->get(\App\Services\GestionService\PeriodCalendar::class)->current()->getId(), json_encode(['productIds' => [$a]])]);
+            . " VALUES (?, 'P4:fast', 'selling', 'FAST_SELLER', ?, '{}', 300, 'extra_margin', 'low', '[]', '[]', '{}', 1, CURRENT_DATE, NOW(), NOW()) RETURNING id", [static::getContainer()->get(\App\Gestion\Services\PeriodCalendar::class)->current()->getId(), json_encode(['productIds' => [$a]])]);
         $audit0 = (int) $conn->fetchOne("SELECT COUNT(*) FROM content_audit_log WHERE resource IN ('products', 'product-variants') AND resource_id IN (?, ?, ?)", [(string) $a, (string) $own, (string) $b]);
         $applied = $this->send('POST', '/api/gestion/prix/appliquer', $body + ['previewHash' => $p['previewHash'], 'adviceId' => null], 201);
         $this->assertSame(3, $applied['changed']);

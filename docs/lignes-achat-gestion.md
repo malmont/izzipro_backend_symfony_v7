@@ -5,7 +5,7 @@ idempotent » de la session de la caisse. Prérequis de la confirmation des fact
 stock (lot R1). Code : `Entity/CommandeLine` (table `commande_line`), `Repository/CommandeLineRepository`,
 `Services/CommandeService/CommandeLineService` (seule écriture), `Services/CommandeService/CommandeProductAttachmentService`
 (rattacher, détacher, « à classer »), `UseCase/CommandeUseCase/CommandeLineUseCase` + `Controller/CommandeController/CommandeLineController`,
-`Services/GestionService/CommandeLinesVerifier` + `Command/VerifyCommandeLinesCommand`. Tests : `tests/Functional/Gestion/CommandeLinesApiTest.php`,
+`Gestion/Services/CommandeLinesVerifier` + `Command/VerifyCommandeLinesCommand`. Tests : `tests/Functional/Gestion/CommandeLinesApiTest.php`,
 `tests/Functional/Boutique/CommandeProductAttachmentApiTest.php`.
 
 ## 1. Pourquoi

@@ -5,7 +5,7 @@ namespace App\Controller\CommandeController;
 use App\Dto\CommandeOutputDTO;
 use App\Entity\Commande;
 use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
-use App\Services\GestionService\GestionInput;
+use App\Gestion\Services\GestionInput;
 use App\UseCase\CommandeUseCase\UpdateCommandeUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -21,7 +21,7 @@ use Symfony\Component\Routing\Attribute\Route;
  */
 class CommandeUpdateController extends AbstractController
 {
-    public function __construct(private readonly UpdateCommandeUseCase $update, private readonly ?TenantCurrencyProvider $currency = null, private readonly ?\App\Services\GestionService\PeriodGuard $periodGuard = null, private readonly ?\App\UseCase\CommandeUseCase\DeleteCommandeUseCase $delete = null)
+    public function __construct(private readonly UpdateCommandeUseCase $update, private readonly ?TenantCurrencyProvider $currency = null, private readonly ?\App\Gestion\Services\PeriodGuard $periodGuard = null, private readonly ?\App\UseCase\CommandeUseCase\DeleteCommandeUseCase $delete = null)
     {
     }
 
@@ -46,7 +46,7 @@ class CommandeUpdateController extends AbstractController
         if (array_key_exists('exchangeRate', $data)) {
             $rate = $input->decimal('exchangeRate');
             if ($rate !== null && $rate <= 0) {
-                throw new \App\Services\GestionService\GestionValidationException(['exchangeRate' => 'MUST_BE_POSITIVE'], 'exchangeRate : nombre > 0 attendu');
+                throw new \App\Gestion\Services\GestionValidationException(['exchangeRate' => 'MUST_BE_POSITIVE'], 'exchangeRate : nombre > 0 attendu');
             }
             $fields['exchangeRate'] = $rate;
         }

@@ -7,9 +7,9 @@ use App\Entity\CommandeLine;
 use App\Entity\ProductVariant;
 use App\Services\CommandeService\CommandeLineService;
 use App\Services\CommandeService\CommandeProductAttachmentService;
-use App\Services\GestionService\GestionConflictException;
-use App\Services\GestionService\GestionInput;
-use App\Services\GestionService\PeriodGuard;
+use App\Gestion\Services\GestionConflictException;
+use App\Gestion\Services\GestionInput;
+use App\Gestion\Services\PeriodGuard;
 use App\Services\TenantEntityManagerProvider;
 
 /**
@@ -56,7 +56,7 @@ class CommandeLineUseCase
             if ($variantId !== null) {
                 $variant = $this->emProvider->getEntityManager()->find(ProductVariant::class, $variantId);
                 if ($variant === null || $variant->getProduct()?->getId() !== $line->getProduct()->getId()) {
-                    throw new \App\Services\GestionService\GestionValidationException(['variantId' => 'VARIANT_NOT_IN_PRODUCT'], 'Variante absente de l\'article de la ligne');
+                    throw new \App\Gestion\Services\GestionValidationException(['variantId' => 'VARIANT_NOT_IN_PRODUCT'], 'Variante absente de l\'article de la ligne');
                 }
                 $other = $this->emProvider->getEntityManager()->getRepository(CommandeLine::class)->findOne($commande, $line->getProduct(), $variant);
                 if ($other !== null && $other->getId() !== $line->getId()) {
@@ -85,7 +85,7 @@ class CommandeLineUseCase
     public function receiveAll(Commande $commande, array $data, ?string $by): array
     {
         if (array_key_exists('lines', $data) && $data['lines'] !== null && !is_array($data['lines'])) {
-            throw new \App\Services\GestionService\GestionValidationException(['lines' => 'MUST_BE_LIST'], 'lines : liste attendue');
+            throw new \App\Gestion\Services\GestionValidationException(['lines' => 'MUST_BE_LIST'], 'lines : liste attendue');
         }
         $result = $this->reception->receiveCommande($commande, $data['lines'] ?? null, $by);
         $this->emProvider->getEntityManager()->refresh($commande);

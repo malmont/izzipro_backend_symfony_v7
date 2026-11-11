@@ -32,7 +32,7 @@ class DashboardListCollectionController extends AbstractController
         CollectionStatistiquesService $collectionStatistiquesService,
         GetCollectionStatistiquesUseCase $getCollectionStatistiquesUseCase,
         TenantCacheService $cache,
-        private readonly ?\App\Services\GestionService\PeriodCalendar $calendar = null, // périodes (lot P1, 10/11/2026)
+        private readonly ?\App\Gestion\Services\PeriodCalendar $calendar = null, // périodes (lot P1, 10/11/2026)
         private readonly ?ReopenCollectionUseCase $reopenCollectionUseCase = null
     ) {
         $this->dashboardCollectionUseCase = $dashboardCollectionUseCase;
@@ -76,7 +76,7 @@ class DashboardListCollectionController extends AbstractController
         // ?kind=manual (défaut : collections manuelles) | period (périodes du calendrier), jamais les deux ensemble (lot P1, 10/11/2026)
         $kind = strtolower((string) $request->query->get('kind', 'manual'));
         if (!in_array($kind, ['manual', 'period'], true)) {
-            throw new \App\Services\GestionService\GestionValidationException(['kind' => 'INVALID_VALUE'], 'kind : manual ou period attendu');
+            throw new \App\Gestion\Services\GestionValidationException(['kind' => 'INVALID_VALUE'], 'kind : manual ou period attendu');
         }
         if ($kind === 'period') {
             $this->calendar?->ensurePeriods();

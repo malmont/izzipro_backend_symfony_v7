@@ -6,9 +6,9 @@ donne une action, son effet estimé en argent, un niveau de confiance et ses sou
 l'IA ne fait que rédiger, classer et résumer** ; rien ne s'applique sans le gérant (actions v1 : ouvrir un écran) ; aucune donnée personnelle
 vers l'IA ; salaires en total seulement. G1b (mesure après application, commentaire du simulateur) viendra ensuite.
 
-Code : `Services/GestionService/AdviceRules` (règles), `GestionAdviceService` (générations, conseils, textes de repli, vérification des
-nombres, vignette), `AdviceWriter` (rédaction par l'IA), `Message/GenerateGestionAdviceMessage` + `MessageHandler/GenerateGestionAdviceHandler`
-(transport `gestion_ai`, worker de la gestion), `UseCase/GestionUseCase/GestionAdviceUseCase`, `Controller/GestionController/GestionAdviceController`,
+Code : `Gestion/Services/AdviceRules` (règles), `GestionAdviceService` (générations, conseils, textes de repli, vérification des
+nombres, vignette), `AdviceWriter` (rédaction par l'IA), `Gestion/Message/GenerateGestionAdviceMessage` + `Gestion/MessageHandler/GenerateGestionAdviceHandler`
+(transport `gestion_ai`, worker de la gestion), `Gestion/UseCase/GestionAdviceUseCase`, `Gestion/Controller/GestionAdviceController`,
 commande `app:gestion:conseils`. Tables `gestion_advice`, `gestion_advice_run` (entités `GestionAdvice`, `GestionAdviceRun`, en SQL, jamais en
 cache applicatif). Textes `translations/gestion.{fr,en}.yaml` (`advice.*`). Migration `Version20261209100000`, script
 `scripts/migrate_all_v2_gestion_conseils.sh`. Test : `tests/Functional/Gestion/AdviceApiTest.php`.

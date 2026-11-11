@@ -5,8 +5,8 @@ part des données en cours (stock restant valorisé, ventes de la même période
 budget, un coefficient ou une promotion : ventes prévues, marge, résultat, point mort, trésorerie après achats. Rien n'est enregistré tant que
 le gérant ne valide pas. » L'IA (G1) commentera et proposera une répartition sans rien calculer elle-même.
 
-Code : `Services/GestionService/GestionSimulationService`, `UseCase/GestionUseCase/GestionSimulationUseCase`,
-`Controller/GestionController/GestionSimulationController` ; s'appuie sur `PeriodResultCalculator` (réalisé), `GestionBudgetService` (prévu
+Code : `Gestion/Services/GestionSimulationService`, `Gestion/UseCase/GestionSimulationUseCase`,
+`Gestion/Controller/GestionSimulationController` ; s'appuie sur `PeriodResultCalculator` (réalisé), `GestionBudgetService` (prévu
 et réel par poste, `docs/budgets-gestion.md`), `GestionCashService::cashUntil` (trésorerie, `docs/tresorerie-gestion.md`). Textes
 `translations/gestion.{fr,en}.yaml` (`simulation.caveats.*`). Aucune table. Test : `tests/Functional/Gestion/SimulationApiTest.php`.
 

@@ -5,7 +5,7 @@ ne connaît pas le solde bancaire. La trésorerie est donc saisie par le gérant
 Tout est additif. `ROLE_ADMIN` (`access_control` `/api/gestion`), montants en cents dans la devise du site. Code d'écran : `tresorerie`.
 Le simulateur (lot B1b-2, `docs/simulateur-gestion.md`) lit cette trésorerie pour sa « trésorerie après achats » (`GestionCashService::cashUntil`).
 
-Code : `Services/GestionService/GestionCashService`, `UseCase/GestionUseCase/GestionCashUseCase`, `Controller/GestionController/GestionCashController`,
+Code : `Gestion/Services/GestionCashService`, `Gestion/UseCase/GestionCashUseCase`, `Gestion/Controller/GestionCashController`,
 entités `GestionCashBalance` (`gestion_cash_balance`), `GestionCashMovement` (`gestion_cash_movement`), `GestionCashSetting` (`gestion_cash_setting`),
 lues et écrites en SQL, jamais en cache applicatif (`CacheTags::NO_CACHE_READ`). Vignettes dans `HomeTilesService`, notification dans
 `GestionNotificationService`. Textes `translations/gestion.{fr,en}.yaml` (`cash.*`, `tiles.cash_low`, `tiles.cash_first_balance`,

@@ -6,10 +6,10 @@ use App\Entity\Product;
 use App\Entity\ProductVariant;
 use App\Entity\User;
 use App\EventSubscriber\CacheInvalidationSubscriber;
-use App\Services\GestionService\GestionConflictException;
-use App\Services\GestionService\GestionPreparationAdviceService;
-use App\Services\GestionService\GestionPreparationService;
-use App\Services\GestionService\PeriodCalendar;
+use App\Gestion\Services\GestionConflictException;
+use App\Gestion\Services\GestionPreparationAdviceService;
+use App\Gestion\Services\GestionPreparationService;
+use App\Gestion\Services\PeriodCalendar;
 use App\Services\TenantEntityManagerProvider;
 use App\Tests\Fake\FakeLandingAiClient;
 use App\Tests\Functional\Cache\CacheTestEntityFactory;
@@ -139,7 +139,7 @@ class PreparationApiTest extends WebTestCase
             try {
                 $prep->simulate(['purchases' => [['date' => $d(-25), 'amount' => 100]]] + $body, $t);
                 $this->fail('OUT_OF_RANGE attendu');
-            } catch (\App\Services\GestionService\GestionValidationException $e) {
+            } catch (\App\Gestion\Services\GestionValidationException $e) {
                 $this->assertSame(['purchases[0].date' => 'OUT_OF_RANGE'], $e->fields);
             }
             $closed = $this->period($today->modify('-900 days'), 30, 'prep-c');

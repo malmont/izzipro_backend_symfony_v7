@@ -5,7 +5,7 @@ coefficient à un ou plusieurs articles après simulation : le prix de vente doi
 confirmation ». Suite du guide (`docs/guide-ia-gestion.md`) : un conseil FAST_SELLER (+5 %) s'applique sans retoucher chaque fiche.
 Tout est additif ; `ROLE_ADMIN` (`access_control` `/api/gestion`) ; montants en cents.
 
-Code : `Services/GestionService/GestionPriceService`, `UseCase/GestionUseCase/GestionPriceUseCase`, `Controller/GestionController/GestionPriceController`,
+Code : `Gestion/Services/GestionPriceService`, `Gestion/UseCase/GestionPriceUseCase`, `Gestion/Controller/GestionPriceController`,
 tables `gestion_price_batch`, `gestion_price_change` (entités `GestionPriceBatch`, `GestionPriceChange`, en SQL, jamais en cache applicatif).
 Migration `Version20261212100000`, script `scripts/migrate_all_v2_gestion_prix.sh`. Test : `tests/Functional/Gestion/PriceApiTest.php`.
 

@@ -298,8 +298,8 @@ dans l'application avec les **produits actuels** de demo : collections (ouvertes
 fournisseurs et types, produits rattachés aux commandes (`POST /api/commandes/{id}/products/rattacher` : coût d'achat
 `commande_cost_cents`, coefficient), frais de port avec transporteurs, notes de frais, puis **des ventes** (boutique web ou
 caisse sur demo) pour que les tableaux de bord et les statistiques de la gestion montrent des achats et des ventes réels.
-Moyen (livré le 09/11/2026) : commande `app:gestion:seed-demo --tenant=demo` (`Command/SeedGestionDemoCommand`,
-`UseCase/GestionUseCase/SeedGestionDemoUseCase` qui refuse tout site autre que `demo`, `Services/GestionService/GestionDemoSeeder`) :
+Moyen (livré le 09/11/2026) : commande `app:gestion:seed-demo --tenant=demo` (`Gestion/Command/SeedGestionDemoCommand`,
+`Gestion/UseCase/SeedGestionDemoUseCase` qui refuse tout site autre que `demo`, `Gestion/Services/GestionDemoSeeder`) :
 types de fournisseur et de note de frais, trois fournisseurs (Atelier Nord Textile, Distribution Laurentides, Logistique
 Saint-Laurent), deux transporteurs d'achat (Purolator, Nationex), **quatre collections** sur l'année (Hiver 2025-2026 et
 Printemps 2026 figées avec leurs commandes ; Été 2026 et Automne 2026 ouvertes) appartenant au premier administrateur du

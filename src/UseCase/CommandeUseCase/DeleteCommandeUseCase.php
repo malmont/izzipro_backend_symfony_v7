@@ -3,7 +3,7 @@
 namespace App\UseCase\CommandeUseCase;
 
 use App\Entity\Commande;
-use App\Services\GestionService\PeriodGuard;
+use App\Gestion\Services\PeriodGuard;
 use App\Services\TenantEntityManagerProvider;
 
 /**

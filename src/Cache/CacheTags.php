@@ -377,28 +377,28 @@ final class CacheTags
         // Invitations par e-mail des chapitres Mémoires Vivantes (08/11/2026) : lues en SQL direct, jamais mises en cache
         \App\MemoiresVivantes\Entity\ChapterInvitation::class,
         AppProfile::class, // profils d'application (thème, image de marque) : aucune lecture en cache applicatif
-        \App\Entity\GestionDocument::class, // documents lus par IA (lot L1, 10/11/2026) : lus par leur dépôt, jamais en cache
+        \App\Gestion\Entity\GestionDocument::class, // documents lus par IA (lot L1, 10/11/2026) : lus par leur dépôt, jamais en cache
         \App\Entity\PushDevice::class, // notifications sur téléphone (lot N1, 11/11/2026) : appareils, préférences, journal, en SQL par leurs dépôts
         \App\Entity\NotificationPreference::class,
         \App\Entity\NotificationLog::class,
-        \App\Entity\GestionTrip::class, // voyages d'achat et budget par poste (lot B1a, 11/11/2026) : lus par leurs services, jamais en cache applicatif
-        \App\Entity\GestionBudgetLine::class,
-        \App\Entity\GestionCashBalance::class, // trésorerie saisie (lot B1b-1, 11/11/2026) : soldes, mouvements prévus, réglages, en SQL par GestionCashService
-        \App\Entity\GestionCashMovement::class,
-        \App\Entity\GestionCashSetting::class,
-        \App\Entity\GestionStockSnapshot::class, // instantané quotidien de la valeur du stock (lot S1, 11/11/2026), en SQL par GestionStockSnapshotService
+        \App\Gestion\Entity\GestionTrip::class, // voyages d'achat et budget par poste (lot B1a, 11/11/2026) : lus par leurs services, jamais en cache applicatif
+        \App\Gestion\Entity\GestionBudgetLine::class,
+        \App\Gestion\Entity\GestionCashBalance::class, // trésorerie saisie (lot B1b-1, 11/11/2026) : soldes, mouvements prévus, réglages, en SQL par GestionCashService
+        \App\Gestion\Entity\GestionCashMovement::class,
+        \App\Gestion\Entity\GestionCashSetting::class,
+        \App\Gestion\Entity\GestionStockSnapshot::class, // instantané quotidien de la valeur du stock (lot S1, 11/11/2026), en SQL par GestionStockSnapshotService
         \App\Entity\RentalPromotionBatch::class, // journal des promotions de location (lot LOC3, 11/11/2026), en SQL par GestionRentalPromotionService
-        \App\Entity\GestionRentalGridChange::class, // journal des changements de grille de location (lot LOC4, 11/11/2026), en SQL par GestionRentalGridService
-        \App\Entity\GestionAdvice::class, // guide IA de la gestion (lot G1a, 11/11/2026) : conseils et générations, en SQL par GestionAdviceService
-        \App\Entity\GestionAdviceRun::class,
-        \App\Entity\GestionSimulationComment::class, // commentaires du simulateur (lot G1b-2, 11/11/2026), en SQL par GestionSimulationCommentService
-        \App\Entity\GestionPriceBatch::class, // journal des prix appliqués (lot P4, 11/11/2026), en SQL ; les prix passent par le chemin d'un article (étiquette PRODUCTS)
-        \App\Entity\GestionPriceChange::class,
-        \App\Entity\GestionPromotionBatch::class, // journal des promotions datées (lot P5, 11/11/2026), en SQL ; la promotion passe par le chemin d'un article (étiquette PRODUCTS)
-        \App\Entity\GestionPromotionChange::class,
-        \App\Entity\GestionPromotionTzFix::class, // journal de la remise en UTC des dates de promotion (lot P5b, 11/11/2026), en SQL
-        \App\Entity\GestionTileDismissal::class, // vignettes d'accueil écartées (11/11/2026) : écrites et lues en SQL par leur dépôt
-        \App\Entity\GestionReprise::class, // reprise d'historique (lot P3, 10/11/2026) : une ligne par site, lue par son dépôt
+        \App\Gestion\Entity\GestionRentalGridChange::class, // journal des changements de grille de location (lot LOC4, 11/11/2026), en SQL par GestionRentalGridService
+        \App\Gestion\Entity\GestionAdvice::class, // guide IA de la gestion (lot G1a, 11/11/2026) : conseils et générations, en SQL par GestionAdviceService
+        \App\Gestion\Entity\GestionAdviceRun::class,
+        \App\Gestion\Entity\GestionSimulationComment::class, // commentaires du simulateur (lot G1b-2, 11/11/2026), en SQL par GestionSimulationCommentService
+        \App\Gestion\Entity\GestionPriceBatch::class, // journal des prix appliqués (lot P4, 11/11/2026), en SQL ; les prix passent par le chemin d'un article (étiquette PRODUCTS)
+        \App\Gestion\Entity\GestionPriceChange::class,
+        \App\Gestion\Entity\GestionPromotionBatch::class, // journal des promotions datées (lot P5, 11/11/2026), en SQL ; la promotion passe par le chemin d'un article (étiquette PRODUCTS)
+        \App\Gestion\Entity\GestionPromotionChange::class,
+        \App\Gestion\Entity\GestionPromotionTzFix::class, // journal de la remise en UTC des dates de promotion (lot P5b, 11/11/2026), en SQL
+        \App\Gestion\Entity\GestionTileDismissal::class, // vignettes d'accueil écartées (11/11/2026) : écrites et lues en SQL par leur dépôt
+        \App\Gestion\Entity\GestionReprise::class, // reprise d'historique (lot P3, 10/11/2026) : une ligne par site, lue par son dépôt
         \App\Entity\PeriodResult::class, // résultat de période figé (lot P2, 10/11/2026) : lu par son dépôt, la route est cachée sous l'étiquette de la collection
         OtpCode::class,
         ResetPasswordRequest::class,

@@ -7,10 +7,10 @@ notification ouvre l'écran de la vignette. **Sans Firebase pour l'instant** : l
 remplacera quand le propriétaire aura créé le projet Firebase et ses clés, sans changer le contrat.
 
 Code : `Services/NotificationService/` (`PushSenderInterface`, `NotConfiguredPushSender`, `PushDeviceService`),
-`Services/GestionService/GestionNotificationService`, `UseCase/NotificationUseCase/PushDeviceUseCase`,
-`UseCase/GestionUseCase/GestionNotificationUseCase`, `Controller/NotificationController/PushDeviceController`,
-`Controller/GestionController/GestionNotificationController`, commande `app:gestion:notifications:envoyer`
-(`Command/GestionNotificationsSendCommand`), timer `ops/systemd/gestion-notifications.{service,timer}`. Tables `push_device`,
+`Gestion/Services/GestionNotificationService`, `UseCase/NotificationUseCase/PushDeviceUseCase`,
+`Gestion/UseCase/GestionNotificationUseCase`, `Controller/NotificationController/PushDeviceController`,
+`Gestion/Controller/GestionNotificationController`, commande `app:gestion:notifications:envoyer`
+(`Gestion/Command/GestionNotificationsSendCommand`), timer `ops/systemd/gestion-notifications.{service,timer}`. Tables `push_device`,
 `notification_preference`, `notification_log` (entités du même nom, `CacheTags::NO_CACHE_READ`). Textes `translations/gestion.{fr,en}.yaml`
 `notifications.*`. Migration `Version20261206100000`, script `scripts/migrate_all_v2_gestion_notifications.sh`. Test :
 `tests/Functional/Gestion/GestionNotificationsApiTest.php` (envoi simulé `Tests\Fake\FakePushSender`).

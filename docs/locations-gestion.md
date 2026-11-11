@@ -37,8 +37,8 @@ pas. Les statistiques des locations comptent ce revenu de la même façon, mais 
 - Remarques : `REVENUE_AT_SALE_DATE`, `CANCELLED_EXCLUDED_FROM_OCCUPANCY`, `NO_OPENING_HOURS`, `OCCUPANCY_CAPPED`.
 - Erreurs : 422 `from` / `to` `REQUIRED` | `INVALID_DATE`, `to` `BEFORE_START` | `RANGE_TOO_LONG`, `productIds` `INVALID_ID` ; 404 `PERIOD_NOT_FOUND`.
 
-Code : `Services/GestionService/GestionRentalStatisticsService`, `UseCase/GestionUseCase/GestionRentalUseCase`,
-`Controller/GestionController/GestionRentalController`. Test : `tests/Functional/Gestion/RentalStatisticsApiTest.php`.
+Code : `Gestion/Services/GestionRentalStatisticsService`, `Gestion/UseCase/GestionRentalUseCase`,
+`Gestion/Controller/GestionRentalController`. Test : `tests/Functional/Gestion/RentalStatisticsApiTest.php`.
 
 ## 2. Règles du guide (LOC2)
 
@@ -112,7 +112,7 @@ rester (inertes sans le code) ou être supprimées (`down` de la migration). Les
 
 Une grille (`rental_pack`) est rattachée à des **catégories** : la changer change le prix de tous les articles louables de ces catégories. Les
 réservations déjà faites gardent leur prix (figé dans la ligne de commande). Pour un seul article sur une grille partagée : une promotion de
-location par article (LOC3). Code `Services/GestionService/GestionRentalGridService` ; test `tests/Functional/Gestion/RentalGridApiTest.php`.
+location par article (LOC3). Code `Gestion/Services/GestionRentalGridService` ; test `tests/Functional/Gestion/RentalGridApiTest.php`.
 
 - `GET /api/gestion/locations/grilles` → `[{ id, name, rates { hour, halfDay, day, week, month } (cents, null = pas de tarif), products [{ productId,
   name }] }]` (articles louables des catégories de la grille).

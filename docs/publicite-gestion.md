@@ -2,9 +2,9 @@
 
 Contrat validé par l'application (« new easymakemoney ») avec ses réponses : devise de la régie avec un taux, justificatif dès maintenant,
 double référence. Ajouts seulement, `ROLE_ADMIN` (`access_control` `/api/gestion`), cents. Code : `Entity/MarketingCampaign` (tables
-`marketing_campaign`, `marketing_campaign_product`, `marketing_campaign_commande`), `Services/GestionService/MarketingCampaignService`,
-`Services/GestionService/CampaignProfitabilityCalculator`, `UseCase/GestionUseCase/MarketingCampaignUseCase`,
-`Controller/GestionController/MarketingCampaignController`. Migration `Version20261204100000`, script
+`marketing_campaign`, `marketing_campaign_product`, `marketing_campaign_commande`), `Gestion/Services/MarketingCampaignService`,
+`Gestion/Services/CampaignProfitabilityCalculator`, `Gestion/UseCase/MarketingCampaignUseCase`,
+`Gestion/Controller/MarketingCampaignController`. Migration `Version20261204100000`, script
 `scripts/migrate_all_v2_gestion_campagnes.sh`. Test : `tests/Functional/Gestion/MarketingCampaignApiTest.php`.
 
 ## 1. Campagne

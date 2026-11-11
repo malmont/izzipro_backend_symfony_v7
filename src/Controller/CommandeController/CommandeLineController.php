@@ -79,7 +79,7 @@ class CommandeLineController extends AbstractController
         $content = trim((string) $request->getContent());
         $data = $content === '' ? [] : json_decode($content, true);
         if (!is_array($data)) {
-            throw new \App\Services\GestionService\GestionConflictException('INVALID_JSON', 'Corps JSON invalide', 400);
+            throw new \App\Gestion\Services\GestionConflictException('INVALID_JSON', 'Corps JSON invalide', 400);
         }
 
         return $data;

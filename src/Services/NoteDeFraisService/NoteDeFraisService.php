@@ -38,7 +38,7 @@ class NoteDeFraisService
         
         $typeNoteDeFrais = $typeNoteDeFraisRepository->find($inputDTO->typeNoteDeFraisId);
         if (!$typeNoteDeFrais) {
-            throw new \App\Services\GestionService\GestionConflictException('TYPE_NOTE_DE_FRAIS_NOT_FOUND', 'Type de note de frais inconnu : ' . $inputDTO->typeNoteDeFraisId, 404); // lot G4 (09/11/2026)
+            throw new \App\Gestion\Services\GestionConflictException('TYPE_NOTE_DE_FRAIS_NOT_FOUND', 'Type de note de frais inconnu : ' . $inputDTO->typeNoteDeFraisId, 404); // lot G4 (09/11/2026)
         }
         $note->setTypeNoteDeFrais($typeNoteDeFrais);
         $note->setCollection($collection);
@@ -57,7 +57,7 @@ class NoteDeFraisService
         $note->setDate(new \DateTime($inputDTO->date));
         $typeNoteDeFrais = $typeNoteDeFraisRepository->find($inputDTO->typeNoteDeFraisId);
         if (!$typeNoteDeFrais) {
-            throw new \App\Services\GestionService\GestionConflictException('TYPE_NOTE_DE_FRAIS_NOT_FOUND', 'Type de note de frais inconnu : ' . $inputDTO->typeNoteDeFraisId, 404); // lot G4 (09/11/2026)
+            throw new \App\Gestion\Services\GestionConflictException('TYPE_NOTE_DE_FRAIS_NOT_FOUND', 'Type de note de frais inconnu : ' . $inputDTO->typeNoteDeFraisId, 404); // lot G4 (09/11/2026)
         }
         $note->setTypeNoteDeFrais($typeNoteDeFrais);
         $em->flush();

@@ -49,7 +49,7 @@ class ProductController extends AbstractController
         GetProductByIdUseCase $getProductByIdUseCase,
         GetProductBySlugUseCase $getProductBySlugUseCase,
         ?MediaUrlResolver $mediaUrlResolver = null,
-        private readonly ?\App\Services\GestionService\PeriodGuard $periodGuard = null // périodes (lot P1, 10/11/2026)
+        private readonly ?\App\Gestion\Services\PeriodGuard $periodGuard = null // périodes (lot P1, 10/11/2026)
     ) {
         $this->getProductsByCommandeUseCase = $getProductsByCommandeUseCase;
         $this->createProductByCommandeUseCase = $createProductByCommandeUseCase;
@@ -91,7 +91,7 @@ class ProductController extends AbstractController
     public function createProductByCommande(Commande $commande, Request $request): JsonResponse
     {
         // Prix d'achat en cents entiers, coefficient décimal (lot G1, 09/11/2026) ; 422 VALIDATION_FAILED, hors du try (le 500 ne le masque pas)
-        $input = new \App\Services\GestionService\GestionInput($request->request->all());
+        $input = new \App\Gestion\Services\GestionInput($request->request->all());
         $input->cents('purchasePrice', false);
         $input->decimal('coefficientMultiplier', false);
         $input->integer('quantity', false);
@@ -107,7 +107,7 @@ class ProductController extends AbstractController
             $productDTO = new ProductOutputDTO($product, $host);
 
             return $this->json($productDTO, JsonResponse::HTTP_CREATED);
-        } catch (\App\Services\GestionService\GestionConflictException $e) {
+        } catch (\App\Gestion\Services\GestionConflictException $e) {
             throw $e; // 404 / 409 à code via le gestionnaire d'exceptions
         } catch (\Exception $e) {
             return $this->json(['error' => $e->getMessage()], JsonResponse::HTTP_INTERNAL_SERVER_ERROR);

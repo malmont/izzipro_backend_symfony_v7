@@ -5,9 +5,9 @@ comparable, **une seule règle** : celle du résultat de période P2 (`docs/peri
 (`chiffre-affaires`, `nombre-commandes`, `panier-moyen`, `carrier/statistics`, `payments/statistics`, `stock-value`, `stock-evolution`) restent
 intactes : la caisse en lit certaines. `ROLE_ADMIN`, cents dans la devise du site, fuseau du magasin, lecture seule.
 
-Code : `Services/GestionService/GestionStatisticsService` (plages, indicateurs, séries, libellés), `PeriodResultCalculator::dailySales` (agrégats
+Code : `Gestion/Services/GestionStatisticsService` (plages, indicateurs, séries, libellés), `PeriodResultCalculator::dailySales` (agrégats
 par jour du magasin, même requête que P2, filtre de source), `GestionStockSnapshotService` (valeur et instantané du stock),
-`UseCase/GestionUseCase/GestionStatisticsUseCase`, `Controller/GestionController/GestionStatisticsController`. Test :
+`Gestion/UseCase/GestionStatisticsUseCase`, `Gestion/Controller/GestionStatisticsController`. Test :
 `tests/Functional/Gestion/UnifiedStatisticsApiTest.php`.
 
 ## 1. Route

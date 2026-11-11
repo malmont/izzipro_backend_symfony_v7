@@ -13,9 +13,9 @@ use App\Entity\StatusCommande;
 use App\Entity\User;
 use App\EventSubscriber\CacheInvalidationSubscriber;
 use App\Services\CaisseService\StoreClock;
-use App\Services\GestionService\GestionSimulationCommentService;
-use App\Services\GestionService\GestionStatisticsService;
-use App\Services\GestionService\GestionYearService;
+use App\Gestion\Services\GestionSimulationCommentService;
+use App\Gestion\Services\GestionStatisticsService;
+use App\Gestion\Services\GestionYearService;
 use App\Services\TenantEntityManagerProvider;
 use App\Tests\Fake\FakeLandingAiClient;
 use App\Tests\Functional\Cache\CacheTestEntityFactory;
@@ -130,7 +130,7 @@ class YearApiTest extends WebTestCase
         try {
             $years->advise(['year' => '2002'], 'fr', null, $today);
             $this->fail('YEAR_NOT_FINISHED attendu');
-        } catch (\App\Services\GestionService\GestionConflictException $e) {
+        } catch (\App\Gestion\Services\GestionConflictException $e) {
             $this->assertSame([409, 'YEAR_NOT_FINISHED'], [$e->status, $e->errorCode]);
         }
         FakeLandingAiClient::$queue[] = json_decode(json_encode(['type' => 'message', 'role' => 'assistant', 'model' => 'claude-sonnet-5-5', 'stop_reason' => 'end_turn',
@@ -171,7 +171,7 @@ class YearApiTest extends WebTestCase
         try {
             $years->overview(['year' => '2003'], 'fr', $today);
             $this->fail('INVALID_YEAR attendu');
-        } catch (\App\Services\GestionService\GestionValidationException $e) {
+        } catch (\App\Gestion\Services\GestionValidationException $e) {
             $this->assertSame(['year' => 'INVALID_YEAR'], $e->fields);
         }
         $this->assertSame('2002-04-01', $years->overview(['year' => '2002'], 'fr', $today)['fiscalYear']['from'], 'exercice 2002 au 15/06/2002 : commencé en avril');

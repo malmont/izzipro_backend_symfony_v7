@@ -43,6 +43,12 @@ doctrine:
                 dir: '%kernel.project_dir%/src/MemoiresVivantes/Entity'
                 prefix: 'App\MemoiresVivantes\Entity'
                 alias: AppMemoiresVivantes
+            # Application de gestion (lot DIR, 11/11/2026) : entités regroupées dans src/Gestion
+            AppGestion:
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Gestion/Entity'
+                prefix: 'App\Gestion\Entity'
+                alias: AppGestion
 
 when@test:
     doctrine:

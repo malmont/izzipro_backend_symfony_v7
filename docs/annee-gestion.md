@@ -4,9 +4,9 @@ Besoin du propriétaire : un onglet Statistiques › Année pour suivre l'exerci
 est rentable et ce qui lui manque. Contrats validés par l'application (« new easymakemoney ») le 11/11/2026, dont l'exercice réglable par site
 (EX, décision du propriétaire). `ROLE_ADMIN`, cents dans la devise du site, fuseau du magasin, lecture seule (sauf le cache de l'avis de l'IA).
 
-Code : `Services/GestionService/GestionYearService` (séries, projection, rentabilité, leviers, exercice terminé, avis),
-`GestionFiscalYearService` (exercice), `UseCase/GestionUseCase/GestionYearUseCase`, `GestionFiscalYearUseCase`,
-`Controller/GestionController/GestionStatisticsController` (routes `/api/gestion/statistiques/annee*`), `GestionFiscalYearController`.
+Code : `Gestion/Services/GestionYearService` (séries, projection, rentabilité, leviers, exercice terminé, avis),
+`GestionFiscalYearService` (exercice), `Gestion/UseCase/GestionYearUseCase`, `GestionFiscalYearUseCase`,
+`Gestion/Controller/GestionStatisticsController` (routes `/api/gestion/statistiques/annee*`), `GestionFiscalYearController`.
 Test : `tests/Functional/Gestion/YearApiTest.php`.
 
 ## 1. Exercice du site (EX)

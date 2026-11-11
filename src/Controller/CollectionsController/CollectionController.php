@@ -29,8 +29,8 @@ class CollectionController extends AbstractController
         DeleteCollectionUseCase $deleteCollectionUseCase,
         TenantCacheService $cache,
         private readonly ?\App\UseCase\CollectionUseCase\UpdateCollectionUseCase $updateCollectionUseCase = null, // lot P1 (10/11/2026)
-        private readonly ?\App\Services\GestionService\PeriodGuard $periodGuard = null,
-        private readonly ?\App\Services\GestionService\PeriodCalendar $calendar = null,
+        private readonly ?\App\Gestion\Services\PeriodGuard $periodGuard = null,
+        private readonly ?\App\Gestion\Services\PeriodCalendar $calendar = null,
         private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null // lot G4 (09/11/2026)
     ) {
         $this->createCollectionUseCase = $createCollectionUseCase;
@@ -48,7 +48,7 @@ class CollectionController extends AbstractController
             return new JsonResponse(['error' => 'Unauthenticated'], Response::HTTP_UNAUTHORIZED);
         }
 
-        $input = new \App\Services\GestionService\GestionInput(is_array($data) ? $data : []);
+        $input = new \App\Gestion\Services\GestionInput(is_array($data) ? $data : []);
         $budget = $input->cents('budgetCollection');
         $name = $input->text('nomCollection');
         $input->date('startDateCollection', false);
@@ -64,7 +64,7 @@ class CollectionController extends AbstractController
     public function getCollections(Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $query = \App\Services\GestionService\GestionListQuery::fromRequest($request, true); // ?status=&q=&page=&limit= (lot G5, 10/11/2026)
+        $query = \App\Gestion\Services\GestionListQuery::fromRequest($request, true); // ?status=&q=&page=&limit= (lot G5, 10/11/2026)
         $cacheKey = 'collections_all' . $query->cacheSuffix();
         // une collection est listée avec ses commandes fournisseurs : elle suit aussi leurs écritures
         $result = $this->cache->get(
@@ -91,7 +91,7 @@ class CollectionController extends AbstractController
         if (!is_array($data)) {
             return $this->json(['error' => 'INVALID_JSON', 'code' => 'INVALID_JSON', 'message' => 'Corps JSON invalide'], JsonResponse::HTTP_BAD_REQUEST);
         }
-        $input = new \App\Services\GestionService\GestionInput($data);
+        $input = new \App\Gestion\Services\GestionInput($data);
         $fields = [];
         if (array_key_exists('budget', $data)) {
             $fields['budget'] = $input->cents('budget');

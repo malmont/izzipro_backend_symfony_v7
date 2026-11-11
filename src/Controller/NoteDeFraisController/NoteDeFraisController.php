@@ -31,7 +31,7 @@ class NoteDeFraisController extends AbstractController
         DeleteNoteDeFraisUseCase $deleteNoteDeFraisUseCase,
         TenantCacheService $cache,
         private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null, // devise du site (lot G4, 09/11/2026)
-        private readonly ?\App\Services\GestionService\PeriodGuard $periodGuard = null // périodes (lot P1, 10/11/2026)
+        private readonly ?\App\Gestion\Services\PeriodGuard $periodGuard = null // périodes (lot P1, 10/11/2026)
     ) {
         $this->getNotesDeFraisByCollectionUseCase = $getNotesDeFraisByCollectionUseCase;
         $this->createNoteDeFraisUseCase = $createNoteDeFraisUseCase;
@@ -64,7 +64,7 @@ class NoteDeFraisController extends AbstractController
             return new JsonResponse(['error' => 'INVALID_JSON', 'code' => 'INVALID_JSON', 'message' => 'Corps JSON invalide'], JsonResponse::HTTP_BAD_REQUEST); // lot G4 (09/11/2026)
         }
 
-        $input = new \App\Services\GestionService\GestionInput($data);
+        $input = new \App\Gestion\Services\GestionInput($data);
         $inputDTO = new NoteDeFraisInputDTO(
             (string) $input->text('description', false, 255),
             (int) $input->cents('montant'),
@@ -92,7 +92,7 @@ class NoteDeFraisController extends AbstractController
             return new JsonResponse(['error' => 'INVALID_JSON', 'code' => 'INVALID_JSON', 'message' => 'Corps JSON invalide'], JsonResponse::HTTP_BAD_REQUEST); // lot G4 (09/11/2026)
         }
 
-        $input = new \App\Services\GestionService\GestionInput($data);
+        $input = new \App\Gestion\Services\GestionInput($data);
         $inputDTO = new NoteDeFraisInputDTO(
             (string) $input->text('description', false, 255),
             (int) $input->cents('montant'),
@@ -147,7 +147,7 @@ class NoteDeFraisController extends AbstractController
         if (!is_array($data)) {
             return new JsonResponse(['error' => 'INVALID_JSON', 'code' => 'INVALID_JSON', 'message' => 'Corps JSON invalide'], JsonResponse::HTTP_BAD_REQUEST);
         }
-        $input = new \App\Services\GestionService\GestionInput($data);
+        $input = new \App\Gestion\Services\GestionInput($data);
         $inputDTO = new NoteDeFraisInputDTO(
             (string) $input->text('description', false, 255),
             (int) $input->cents('montant'),
@@ -157,7 +157,7 @@ class NoteDeFraisController extends AbstractController
         $input->check();
         $period = $this->periodGuard->assertDateWritable(new \DateTimeImmutable($inputDTO->date));
         if ($period === null) {
-            throw new \App\Services\GestionService\GestionValidationException(['date' => 'OUT_OF_CALENDAR'], 'Aucune période du calendrier ne couvre cette date (plus de 24 mois)');
+            throw new \App\Gestion\Services\GestionValidationException(['date' => 'OUT_OF_CALENDAR'], 'Aucune période du calendrier ne couvre cette date (plus de 24 mois)');
         }
         $note = $this->createNoteDeFraisUseCase->execute($period, $inputDTO);
 

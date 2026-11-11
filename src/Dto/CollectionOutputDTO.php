@@ -23,7 +23,7 @@ class CollectionOutputDTO
     public ?string $closedAt;
     public ?string $reopenedAt;
 
-    public function __construct(Collections $collection, string $host, string $currency = \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT, ?\App\Services\GestionService\PeriodCalendar $calendar = null)
+    public function __construct(Collections $collection, string $host, string $currency = \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT, ?\App\Gestion\Services\PeriodCalendar $calendar = null)
     {
         $this->currency = $currency;
         $this->kind = $collection->getKind();
@@ -51,7 +51,7 @@ class CollectionOutputDTO
         ] : null;
     }
 
-    public static function fromEntity(Collections $collection, string $host, string $currency = \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT, ?\App\Services\GestionService\PeriodCalendar $calendar = null): self
+    public static function fromEntity(Collections $collection, string $host, string $currency = \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT, ?\App\Gestion\Services\PeriodCalendar $calendar = null): self
     {
         return new self($collection, $host, $currency, $calendar);
     }

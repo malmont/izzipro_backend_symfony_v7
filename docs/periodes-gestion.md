@@ -126,8 +126,8 @@ n'est touchée. Contrat envoyé à l'application avant le code de chaque lot (`d
 
 Contrat P3 validé par l'application le 10/11/2026 (cinq corrections intégrées), **livré le 10/11/2026**. Un site qui arrive avec
 des ventes mais sans commandes fournisseurs donne un coût aux articles déjà vendus, pour que les résultats des périodes passées
-(§ 3) aient un coût des articles vendus. Routes `ROLE_ADMIN`, devise du site, cents (`Controller/GestionController/RepriseController`,
-`UseCase/GestionUseCase/RepriseHistoriqueUseCase`, `Services/GestionService/RepriseHistoriqueService`).
+(§ 3) aient un coût des articles vendus. Routes `ROLE_ADMIN`, devise du site, cents (`Gestion/Controller/RepriseController`,
+`Gestion/UseCase/RepriseHistoriqueUseCase`, `Gestion/Services/RepriseHistoriqueService`).
 
 - **Créneau** : périodes **fermées**, du début de la période contenant (aujourd'hui − `months` mois) au début de la période
   courante ; `months` 1..24 (profondeur du calendrier), défaut 12.

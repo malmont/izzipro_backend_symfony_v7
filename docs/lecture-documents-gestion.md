@@ -2,9 +2,9 @@
 
 Contrat validé par l'application (« new easymakemoney ») avec le feu vert du propriétaire : six corrections techniques puis trois
 ajouts (brouillon, photo par ligne, type transport). Ajouts seulement, `ROLE_ADMIN` (`access_control` `/api/gestion`), cents,
-devise du site à la racine, `PERIOD_CLOSED` respecté à la confirmation, crédits IA du site. Code : `Controller/GestionController/GestionDocumentController`,
-`Services/GestionDocumentService/{GestionDocumentService, GestionDocumentReader, GestionDocumentMatcher, GestionDocumentStorage}`,
-`UseCase/GestionUseCase/ConfirmGestionDocumentUseCase`, `Message/ReadGestionDocumentMessage` + `MessageHandler/ReadGestionDocumentHandler`,
+devise du site à la racine, `PERIOD_CLOSED` respecté à la confirmation, crédits IA du site. Code : `Gestion/Controller/GestionDocumentController`,
+`Gestion/Services/Document/{GestionDocumentService, GestionDocumentReader, GestionDocumentMatcher, GestionDocumentStorage}`,
+`Gestion/UseCase/ConfirmGestionDocumentUseCase`, `Gestion/Message/ReadGestionDocumentMessage` + `Gestion/MessageHandler/ReadGestionDocumentHandler`,
 entité `GestionDocument` (table `gestion_document`). Test : `tests/Functional/Gestion/GestionDocumentsApiTest.php`.
 
 ## 1. Principe

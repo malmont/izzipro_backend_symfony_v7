@@ -3,7 +3,7 @@
 namespace App\Controller\NotificationController;
 
 use App\Entity\User;
-use App\Services\GestionService\GestionValidationException;
+use App\Gestion\Services\GestionValidationException;
 use App\UseCase\NotificationUseCase\PushDeviceUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;

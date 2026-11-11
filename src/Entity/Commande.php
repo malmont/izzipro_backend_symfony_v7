@@ -6,6 +6,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use App\Gestion\Entity\GestionDocument;
 
 #[ORM\Entity(repositoryClass: CommandeRepository::class)]
 /** Plus d'exposition API Platform depuis le lot P1 (10/11/2026) : toutes les routes sont dédiées (`/api/commandes`, `/api/collections/{id}/commandes`, `DELETE`/`PATCH /api/commandes/{id}`) */

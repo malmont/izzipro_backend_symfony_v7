@@ -5,9 +5,9 @@ namespace App\Tests\Functional\Gestion;
 use App\Entity\Collections;
 use App\Entity\Commande;
 use App\Entity\Product;
-use App\Services\GestionService\GestionDemoSeeder;
+use App\Gestion\Services\GestionDemoSeeder;
 use App\Services\TenantEntityManagerProvider;
-use App\UseCase\GestionUseCase\SeedGestionDemoUseCase;
+use App\Gestion\UseCase\SeedGestionDemoUseCase;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
@@ -45,7 +45,7 @@ class GestionDemoSeederTest extends KernelTestCase
         $this->assertNull($em->find(Collections::class, $legacyId), 'ancienne collection manuelle supprimée');
         $closed = $em->getRepository(Collections::class)->findOneBy(['nomCollection' => GestionDemoSeeder::COLLECTION_CLOSED]);
         $open = $em->getRepository(Collections::class)->findOneBy(['nomCollection' => GestionDemoSeeder::COLLECTION_OPEN]);
-        $calendar = $container->get(\App\Services\GestionService\PeriodCalendar::class);
+        $calendar = $container->get(\App\Gestion\Services\PeriodCalendar::class);
         $this->assertSame(['period', 'period', true, false], [$closed->getKind(), $open->getKind(), $calendar->isClosed($closed), $calendar->isClosed($open)], 'périodes du calendrier : état par la date (lot P1)');
         $this->assertSame(1, (int) $em->getConnection()->fetchOne('SELECT COUNT(*) FROM collection_statistiques WHERE collection_id = ?', [$closed->getId()]), 'période fermée : statistiques figées une fois');
         $this->assertSame([1200000, 2500000], [$closed->getBudgetCollection(), $open->getBudgetCollection()], 'budgets en cents');

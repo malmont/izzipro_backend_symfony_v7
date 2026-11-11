@@ -46,7 +46,7 @@ class FraisDePortController extends AbstractController
             return new JsonResponse(['error' => 'Invalid JSON'], JsonResponse::HTTP_BAD_REQUEST);
         }
 
-        $input = new \App\Services\GestionService\GestionInput($data);
+        $input = new \App\Gestion\Services\GestionInput($data);
         $inputDTO = new FraisDePortInputDTO(
             (string) $input->text('name'),
             (string) $input->text('facture', false),

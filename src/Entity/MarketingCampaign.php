@@ -6,6 +6,7 @@ use App\Repository\MarketingCampaignRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use App\Gestion\Entity\GestionDocument;
 
 /**
  * Campagne de publicité (lot A1 de la gestion, 10/11/2026, `docs/publicite-gestion.md`) : canal, dates, montant dans la devise de la régie

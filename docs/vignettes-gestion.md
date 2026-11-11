@@ -2,9 +2,9 @@
 
 Contrat validé par l'application (« new easymakemoney ») : premiers pas par règles et alerte de stock bas seulement. Les autres alertes
 (fonds de roulement, dépenses au-dessus du prévu, budget journalier du voyage) viendront avec B1, les conseils formulés par l'IA (`advice`)
-avec G1, sans changer la forme. `ROLE_ADMIN` (`access_control` `/api/gestion`). Code : `Services/GestionService/HomeTilesService`,
-`UseCase/GestionUseCase/HomeTilesUseCase`, `Controller/GestionController/HomeTilesController`, `Entity/GestionTileDismissal`
-(`gestion_tile_dismissal`, `Repository/GestionTileDismissalRepository`), textes dans `translations/gestion.{fr,en}.yaml` (`tiles.*`).
+avec G1, sans changer la forme. `ROLE_ADMIN` (`access_control` `/api/gestion`). Code : `Gestion/Services/HomeTilesService`,
+`Gestion/UseCase/HomeTilesUseCase`, `Gestion/Controller/HomeTilesController`, `Gestion/Entity/GestionTileDismissal`
+(`gestion_tile_dismissal`, `Gestion/Repository/GestionTileDismissalRepository`), textes dans `translations/gestion.{fr,en}.yaml` (`tiles.*`).
 Migration `Version20261205100000`, script `scripts/migrate_all_v2_gestion_vignettes.sh`. Test : `tests/Functional/Gestion/HomeTilesApiTest.php`.
 
 ## 1. Routes

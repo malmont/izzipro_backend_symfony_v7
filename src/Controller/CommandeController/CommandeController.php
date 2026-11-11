@@ -28,8 +28,8 @@ class CommandeController extends AbstractController
         Security $security,
         TenantCacheService $cache,
         private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null, // devise du site (lot G1, 09/11/2026)
-        private readonly ?\App\Services\GestionService\PeriodGuard $periodGuard = null, // périodes (lot P1, 10/11/2026)
-        private readonly ?\App\Services\GestionService\PeriodCalendar $calendar = null,
+        private readonly ?\App\Gestion\Services\PeriodGuard $periodGuard = null, // périodes (lot P1, 10/11/2026)
+        private readonly ?\App\Gestion\Services\PeriodCalendar $calendar = null,
     ) {
         $this->getCommandesByCollectionUseCase = $getCommandesByCollectionUseCase;
         $this->createCommandeUseCase = $createCommandeUseCase;
@@ -69,7 +69,7 @@ class CommandeController extends AbstractController
             return $this->json(['error' => 'Unauthenticated'], JsonResponse::HTTP_UNAUTHORIZED);
         }
 
-        $input = new \App\Services\GestionService\GestionInput(is_array($data) ? $data : []);
+        $input = new \App\Gestion\Services\GestionInput(is_array($data) ? $data : []);
         $data = ['budget' => $input->cents('budget'), 'name' => $input->text('name'), 'date' => $input->date('date')?->format('Y-m-d H:i:s'), 'exchangeRate' => $input->decimal('exchangeRate', false)]; // taux vers la devise du site (lot G6)
         $fournisseurId = $input->id('fournisseur');
         $input->check(); // 422 VALIDATION_FAILED (lot G1, 09/11/2026)
@@ -78,7 +78,7 @@ class CommandeController extends AbstractController
         $date = new \DateTimeImmutable($data['date']);
         $this->periodGuard->assertDateWritable($date);
         if ($collection->isPeriod() && ($date < $collection->getStartDateCollection() || $date->format('Y-m-d') > $collection->getEndDateCollection()->format('Y-m-d'))) {
-            throw new \App\Services\GestionService\GestionValidationException(['date' => 'OUTSIDE_PERIOD'], 'La date de la commande est hors de la période choisie');
+            throw new \App\Gestion\Services\GestionValidationException(['date' => 'OUTSIDE_PERIOD'], 'La date de la commande est hors de la période choisie');
         }
         $fournisseurDTO = new FournisseurInputDTO(['id' => $fournisseurId]);
         $commande = $this->createCommandeUseCase->execute($data, $collection, $fournisseurDTO);
@@ -94,13 +94,13 @@ class CommandeController extends AbstractController
         if (!is_array($data)) {
             return $this->json(['error' => 'INVALID_JSON', 'code' => 'INVALID_JSON', 'message' => 'Corps JSON invalide'], JsonResponse::HTTP_BAD_REQUEST);
         }
-        $input = new \App\Services\GestionService\GestionInput($data);
+        $input = new \App\Gestion\Services\GestionInput($data);
         $fields = ['budget' => $input->cents('budget'), 'name' => $input->text('name'), 'date' => $input->date('date')?->format('Y-m-d H:i:s'), 'exchangeRate' => $input->decimal('exchangeRate', false)];
         $fournisseurId = $input->id('fournisseur');
         $input->check();
         $period = $this->periodGuard->assertDateWritable(new \DateTimeImmutable($fields['date']));
         if ($period === null) {
-            throw new \App\Services\GestionService\GestionValidationException(['date' => 'OUT_OF_CALENDAR'], 'Aucune période du calendrier ne couvre cette date (plus de 24 mois)');
+            throw new \App\Gestion\Services\GestionValidationException(['date' => 'OUT_OF_CALENDAR'], 'Aucune période du calendrier ne couvre cette date (plus de 24 mois)');
         }
         $commande = $this->createCommandeUseCase->execute($fields, $period, new FournisseurInputDTO(['id' => $fournisseurId]));
 

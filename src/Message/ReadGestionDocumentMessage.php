@@ -2,10 +2,9 @@
 
 namespace App\Message;
 
-/** Lecture par IA d'un document de l'application de gestion (lot L1, 10/11/2026), transport `gestion_ai` (worker dédié) */
-final class ReadGestionDocumentMessage
-{
-    public function __construct(public readonly int $documentId, public readonly string $tenantCode)
-    {
-    }
-}
+/*
+ * Lot DIR (11/11/2026) : le message vit désormais dans App\Gestion\Message\ReadGestionDocumentMessage.
+ * Ce nom d'emprunt garde lisibles les messages déjà sérialisés sous l'ancien nom (file gestion_ai, file des échecs)
+ * pendant une version ; à retirer au lot suivant.
+ */
+class_alias(\App\Gestion\Message\ReadGestionDocumentMessage::class, __NAMESPACE__ . '\\ReadGestionDocumentMessage');

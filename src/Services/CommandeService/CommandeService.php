@@ -46,7 +46,7 @@ class CommandeService
         $purchaseCurrency = $fournisseur->getCurrency();
         if ($purchaseCurrency !== null && $purchaseCurrency !== $siteCurrency) {
             if (!isset($data['exchangeRate']) || (float) $data['exchangeRate'] <= 0) {
-                throw new \App\Services\GestionService\GestionValidationException(['exchangeRate' => 'EXCHANGE_RATE_REQUIRED'], sprintf('Fournisseur en %s : taux vers %s requis', $purchaseCurrency, $siteCurrency));
+                throw new \App\Gestion\Services\GestionValidationException(['exchangeRate' => 'EXCHANGE_RATE_REQUIRED'], sprintf('Fournisseur en %s : taux vers %s requis', $purchaseCurrency, $siteCurrency));
             }
             $commande->setCurrency($purchaseCurrency)->setExchangeRate((float) $data['exchangeRate']);
         }
@@ -70,7 +70,7 @@ class CommandeService
         $em = $this->emProvider->getEntityManager();
         $fournisseur = $em->getRepository(Fournisseur::class)->find($fournisseurDTO->id);
         if (!$fournisseur) {
-            throw new \App\Services\GestionService\GestionConflictException('FOURNISSEUR_NOT_FOUND', 'Fournisseur inconnu : ' . $fournisseurDTO->id, 404); // lot G4 (09/11/2026)
+            throw new \App\Gestion\Services\GestionConflictException('FOURNISSEUR_NOT_FOUND', 'Fournisseur inconnu : ' . $fournisseurDTO->id, 404); // lot G4 (09/11/2026)
         }
 
         return $fournisseur;
@@ -99,7 +99,7 @@ class CommandeService
     public function updateCommande(Commande $commande, array $data): Commande
     {
         if ($commande->getIsClosed()) {
-            throw new \App\Services\GestionService\GestionConflictException('COMMANDE_CLOSED', 'La commande est figée.');
+            throw new \App\Gestion\Services\GestionConflictException('COMMANDE_CLOSED', 'La commande est figée.');
         }
         if (array_key_exists('budget', $data)) {
             $commande->setBudget((int) $data['budget']);
@@ -112,7 +112,7 @@ class CommandeService
         }
         if (array_key_exists('exchangeRate', $data)) {
             if ($commande->getCurrency() === null) {
-                throw new \App\Services\GestionService\GestionValidationException(['exchangeRate' => 'NOT_APPLICABLE'], 'Commande dans la devise du site : aucun taux');
+                throw new \App\Gestion\Services\GestionValidationException(['exchangeRate' => 'NOT_APPLICABLE'], 'Commande dans la devise du site : aucun taux');
             }
             $commande->setExchangeRate((float) $data['exchangeRate']);
         }

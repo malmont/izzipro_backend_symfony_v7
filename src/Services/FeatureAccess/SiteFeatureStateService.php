@@ -107,8 +107,8 @@ class SiteFeatureStateService
                 break;
             case 'gestion.periods': // lot P1 périodes (10/11/2026)
                 $value = $e?->getPurchasePeriodFrequency();
-                $effective = $value ?? \App\Services\GestionService\PeriodCalendar::DEFAULT_FREQUENCY;
-                $details = ['graceDays' => \App\Services\GestionService\PeriodCalendar::GRACE_DAYS, 'appliesAfterCurrentPeriod' => true];
+                $effective = $value ?? \App\Gestion\Services\PeriodCalendar::DEFAULT_FREQUENCY;
+                $details = ['graceDays' => \App\Gestion\Services\PeriodCalendar::GRACE_DAYS, 'appliesAfterCurrentPeriod' => true];
                 $status = 'ready';
                 break;
             case 'site.timezone':

@@ -10,3 +10,7 @@ memoires_vivantes_controllers:
     resource: ../src/MemoiresVivantes/Controller/
     type: attribute
 
+# Application de gestion (lot DIR, 11/11/2026) : contrôleurs regroupés dans src/Gestion
+gestion_controllers:
+    resource: ../src/Gestion/Controller/
+    type: attribute

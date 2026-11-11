@@ -4,6 +4,7 @@ namespace App\Entity;
 
 use App\Repository\FraisDePortRepository;
 use Doctrine\ORM\Mapping as ORM;
+use App\Gestion\Entity\GestionDocument;
 
 #[ORM\Entity(repositoryClass: FraisDePortRepository::class)]
 class FraisDePort

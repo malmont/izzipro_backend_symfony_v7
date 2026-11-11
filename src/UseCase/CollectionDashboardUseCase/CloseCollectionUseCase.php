@@ -21,7 +21,7 @@ class CloseCollectionUseCase
         DashboardCommandeUseCase $dashboardCommandeUseCase,
         DashboardCollectionUseCase $dashboardCollectionUseCase, // manquait jusqu'au 09/11/2026 : la clôture d'une collection échouait toujours (propriété indéfinie)
         TenantEntityManagerProvider $emProvider,
-        private readonly ?\App\Services\GestionService\PeriodCalendar $calendar = null // périodes (lot P1, 10/11/2026)
+        private readonly ?\App\Gestion\Services\PeriodCalendar $calendar = null // périodes (lot P1, 10/11/2026)
     ) {
         $this->collectionStatistiquesService = $collectionStatistiquesService;
         $this->commandeStatistiquesService = $commandeStatistiquesService;
@@ -33,7 +33,7 @@ class CloseCollectionUseCase
     public function execute(Collections $collection): \App\Dto\DashboardCollectionDTO
     {
         if ($this->calendar ? $this->calendar->isClosed($collection) : $collection->getIsClosed()) {
-            throw new \App\Services\GestionService\GestionConflictException('ALREADY_CLOSED', 'La collection est déjà figée.'); // 409 (lot G2, 09/11/2026 ; période fermée par la date : lot P1)
+            throw new \App\Gestion\Services\GestionConflictException('ALREADY_CLOSED', 'La collection est déjà figée.'); // 409 (lot G2, 09/11/2026 ; période fermée par la date : lot P1)
         }
         
         // On récupère l'EM du tenant une seule fois au début de l'opération

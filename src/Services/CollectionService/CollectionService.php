@@ -17,7 +17,7 @@ class CollectionService
     private TenantEntityManagerProvider $emProvider;
 
     // MODIFICATION 2 : Le constructeur n'injecte plus que le provider.
-    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null, private readonly ?\App\Services\GestionService\PeriodCalendar $calendar = null) // devise du site (lot G1, 09/11/2026) ; calendrier des périodes (lot P1, 10/11/2026)
+    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null, private readonly ?\App\Gestion\Services\PeriodCalendar $calendar = null) // devise du site (lot G1, 09/11/2026) ; calendrier des périodes (lot P1, 10/11/2026)
     {
         $this->emProvider = $emProvider;
     }
@@ -59,7 +59,7 @@ class CollectionService
      *
      * @return array{items: list<CollectionOutputDTO>, total: int}
      */
-    public function getCollections(string $host, ?\App\Services\GestionService\GestionListQuery $query = null): array
+    public function getCollections(string $host, ?\App\Gestion\Services\GestionListQuery $query = null): array
     {
         $em = $this->emProvider->getEntityManager();
         $this->calendar?->ensurePeriods(); // périodes créées à la lecture, sans trou (lot P1, 10/11/2026)
@@ -73,7 +73,7 @@ class CollectionService
     public function deleteCollection(Collections $collection): void
     {
         if ($collection->isPeriod()) {
-            throw new \App\Services\GestionService\GestionConflictException('PERIOD_NOT_DELETABLE', 'Une période du calendrier ne se supprime pas (elle serait recréée à la lecture).'); // lot P1 (10/11/2026)
+            throw new \App\Gestion\Services\GestionConflictException('PERIOD_NOT_DELETABLE', 'Une période du calendrier ne se supprime pas (elle serait recréée à la lecture).'); // lot P1 (10/11/2026)
         }
         $em = $this->emProvider->getEntityManager();
         $collection->setDel(true);
@@ -105,7 +105,7 @@ class CollectionService
      *
      * @param array<string, mixed> $fields champs validés présents seulement
      */
-    public function updateCollection(Collections $collection, array $fields, \App\Services\GestionService\PeriodGuard $guard): Collections
+    public function updateCollection(Collections $collection, array $fields, \App\Gestion\Services\PeriodGuard $guard): Collections
     {
         $guard->assertCollectionWritable($collection);
         if (array_key_exists('budget', $fields)) {
@@ -113,7 +113,7 @@ class CollectionService
         }
         if (array_key_exists('nomCollection', $fields)) {
             if ($collection->isPeriod()) {
-                throw new \App\Services\GestionService\GestionValidationException(['nomCollection' => 'NOT_APPLICABLE'], 'Le nom d\'une période vient du calendrier');
+                throw new \App\Gestion\Services\GestionValidationException(['nomCollection' => 'NOT_APPLICABLE'], 'Le nom d\'une période vient du calendrier');
             }
             $collection->setNomCollection((string) $fields['nomCollection']);
         }

@@ -12,8 +12,8 @@ use App\Entity\StatusCommande;
 use App\Entity\User;
 use App\EventSubscriber\CacheInvalidationSubscriber;
 use App\Services\CaisseService\StoreClock;
-use App\Services\GestionService\AdviceMeasure;
-use App\Services\GestionService\AdviceRules;
+use App\Gestion\Services\AdviceMeasure;
+use App\Gestion\Services\AdviceRules;
 use App\Services\TenantEntityManagerProvider;
 use App\Tests\Functional\Cache\CacheTestEntityFactory;
 use Doctrine\ORM\EntityManagerInterface;
@@ -93,7 +93,7 @@ class RentalAdviceTest extends WebTestCase
         $this->assertEquals([14.8, 0.0], [$low['sources'][0]['value'], $low['sources'][1]['value']]);
         $idle = $mine["RENTAL_IDLE:p$i"];
         $this->assertSame([6000, 'rental_revenue_last_year', 'low'], [$idle['effect']['amount'], $idle['effect']['label'], $idle['confidence']], 'même fenêtre l\'an dernier');
-        $texts = static::getContainer()->get(\App\Services\GestionService\GestionAdviceService::class)->fallback('RENTAL_PEAK_DAYS', $peak['sources'], $peak['params'], $peak['effect']['amount'], 'fr');
+        $texts = static::getContainer()->get(\App\Gestion\Services\GestionAdviceService::class)->fallback('RENTAL_PEAK_DAYS', $peak['sources'], $peak['params'], $peak['effect']['amount'], 'fr');
         $this->assertStringContainsString('le samedi', $texts[1]);
 
         // detect() appelle les règles de location aux moments « selling » et « end » (période ouverte de 2030)

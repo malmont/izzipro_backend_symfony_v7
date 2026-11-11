@@ -133,7 +133,7 @@ class CommandeReceptionApiTest extends WebTestCase
 
     private function commande(string $name): int
     {
-        $period = static::getContainer()->get(\App\Services\GestionService\PeriodCalendar::class)->current()->getId(); // période courante, créée si besoin
+        $period = static::getContainer()->get(\App\Gestion\Services\PeriodCalendar::class)->current()->getId(); // période courante, créée si besoin
         $conn = $this->em()->getConnection();
         $conn->executeStatement("INSERT INTO commande (id, budget, date, name, is_closed, collections_id) VALUES (nextval('commande_id_seq'), 10000, NOW(), :n, false, :c)", ['n' => $name, 'c' => $period ?: null]);
 

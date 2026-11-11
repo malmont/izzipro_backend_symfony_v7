@@ -63,7 +63,7 @@ class ProductService
         if ($inputDTO->styleId) {
             $style = $em->getRepository(Style::class)->find($inputDTO->styleId);
             if (!$style) {
-                throw new \App\Services\GestionService\GestionConflictException('STYLE_NOT_FOUND', 'Style inconnu : ' . $inputDTO->styleId, 404);
+                throw new \App\Gestion\Services\GestionConflictException('STYLE_NOT_FOUND', 'Style inconnu : ' . $inputDTO->styleId, 404);
             }
             $product->setStyle($style);
         }
@@ -71,7 +71,7 @@ class ProductService
         foreach ($inputDTO->categoryIds as $categoryId) {
             $category = $em->getRepository(Categories::class)->find((int) $categoryId);
             if (!$category) {
-                throw new \App\Services\GestionService\GestionConflictException('CATEGORY_NOT_FOUND', 'Catégorie inconnue : ' . $categoryId, 404);
+                throw new \App\Gestion\Services\GestionConflictException('CATEGORY_NOT_FOUND', 'Catégorie inconnue : ' . $categoryId, 404);
             }
             $product->addCategory($category);
         }

@@ -5,9 +5,9 @@ période en cours ou une période à venir à partir des données réelles (esti
 guide, puis « Valider » qui crée le budget par poste et le voyage. **Aucune écriture hors de « Valider »** (sauf la création d'une période manquante,
 comme le budget). `ROLE_ADMIN`, montants en cents dans la devise du site.
 
-Code : `Services/GestionService/GestionPreparationService` (estimations, simulation, validation), `GestionPreparationAdviceService` (candidats et
-avis du guide, via `GestionSimulationCommentService::askGuide`), `UseCase/GestionUseCase/GestionPreparationUseCase`,
-`Controller/GestionController/GestionPreparationController`. Réutilise : calendrier des périodes, budgets B1a (`put`), voyages (`create`,
+Code : `Gestion/Services/GestionPreparationService` (estimations, simulation, validation), `GestionPreparationAdviceService` (candidats et
+avis du guide, via `GestionSimulationCommentService::askGuide`), `Gestion/UseCase/GestionPreparationUseCase`,
+`Gestion/Controller/GestionPreparationController`. Réutilise : calendrier des périodes, budgets B1a (`put`), voyages (`create`,
 TRIP_OVERLAP), trésorerie B1b-1 (projection), coûts L0 et stock du simulateur B1b-2, avis G1b-2 (vérification des chiffres, cache et plafond partagé
 de 10 avis par jour). Textes `translations/gestion.{fr,en}.yaml` (`preparation.*`). Test : `tests/Functional/Gestion/PreparationApiTest.php`.
 

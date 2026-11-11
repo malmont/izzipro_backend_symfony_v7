@@ -4,7 +4,7 @@ namespace App\UseCase\CollectionUseCase;
 
 use App\Entity\Collections;
 use App\Services\CollectionService\CollectionService;
-use App\Services\GestionService\PeriodGuard;
+use App\Gestion\Services\PeriodGuard;
 
 /** PATCH /api/collections/{id} et PATCH /api/periodes/{id} : budget (et nom d'une collection manuelle), lot P1 (10/11/2026) */
 class UpdateCollectionUseCase

@@ -25,7 +25,7 @@ class FournisseurService
         
         $typeFournisseur = $typeFournisseurRepository->find($inputDTO->typeFournisseur);
         if (!$typeFournisseur) {
-            throw new \App\Services\GestionService\GestionConflictException('TYPE_FOURNISSEUR_NOT_FOUND', 'Type de fournisseur inconnu : ' . $inputDTO->typeFournisseur, 404); // lot G4 (09/11/2026)
+            throw new \App\Gestion\Services\GestionConflictException('TYPE_FOURNISSEUR_NOT_FOUND', 'Type de fournisseur inconnu : ' . $inputDTO->typeFournisseur, 404); // lot G4 (09/11/2026)
         }
         $fournisseur->setTypeFournisseur($typeFournisseur);
 
@@ -52,7 +52,7 @@ class FournisseurService
      *
      * @return array{items: list<Fournisseur>, total: int}
      */
-    public function searchFournisseurs(?\App\Services\GestionService\GestionListQuery $query): array
+    public function searchFournisseurs(?\App\Gestion\Services\GestionListQuery $query): array
     {
         return $this->emProvider->getEntityManager()->getRepository(Fournisseur::class)->search($query?->q, $query?->page, $query?->limit);
     }
@@ -61,7 +61,7 @@ class FournisseurService
     {
         $em = $this->emProvider->getEntityManager();
         if (!$fournisseur->getCommandes()->isEmpty()) {
-            throw new \App\Services\GestionService\GestionConflictException('FOURNISSEUR_IN_USE', 'Ce fournisseur a des commandes : il ne peut pas être supprimé.'); // 409 (lot G4, 09/11/2026 ; avant : violation de clé étrangère)
+            throw new \App\Gestion\Services\GestionConflictException('FOURNISSEUR_IN_USE', 'Ce fournisseur a des commandes : il ne peut pas être supprimé.'); // 409 (lot G4, 09/11/2026 ; avant : violation de clé étrangère)
         }
         $em->remove($fournisseur);
         
@@ -76,7 +76,7 @@ class FournisseurService
             return null;
         }
         if (!\App\Services\BoutiqueSettingsService\SiteCurrencyService::isSupported($code)) {
-            throw new \App\Services\GestionService\GestionValidationException(['currency' => 'INVALID_CURRENCY'], 'Devise inconnue : ' . $code . ' (devises possibles : ' . implode(', ', \App\Services\BoutiqueSettingsService\SiteCurrencyService::SUPPORTED) . ')');
+            throw new \App\Gestion\Services\GestionValidationException(['currency' => 'INVALID_CURRENCY'], 'Devise inconnue : ' . $code . ' (devises possibles : ' . implode(', ', \App\Services\BoutiqueSettingsService\SiteCurrencyService::SUPPORTED) . ')');
         }
 
         return $code;

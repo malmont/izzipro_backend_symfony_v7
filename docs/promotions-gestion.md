@@ -4,8 +4,8 @@ Contrat validé par l'application (« new easymakemoney ») le 11/11/2026 ; déc
 (conseils SLOW_STOCK, END_CLEARANCE du guide), le gérant crée une promotion depuis l'application ; son prix revient tout seul à la fin, sans
 toucher au prix normal. Tout est additif ; `ROLE_ADMIN` (`access_control` `/api/gestion`) ; montants en cents.
 
-Code : `Services/GestionService/GestionPromotionService` (écriture par `GestionPriceService::writeFields`, P4), `UseCase/GestionUseCase/GestionPromotionUseCase`,
-`Controller/GestionController/GestionPromotionController`, tables `gestion_promotion_batch`, `gestion_promotion_change` (en SQL, hors cache
+Code : `Gestion/Services/GestionPromotionService` (écriture par `GestionPriceService::writeFields`, P4), `Gestion/UseCase/GestionPromotionUseCase`,
+`Gestion/Controller/GestionPromotionController`, tables `gestion_promotion_batch`, `gestion_promotion_change` (en SQL, hors cache
 applicatif). Migration `Version20261213100000`, script `scripts/migrate_all_v2_gestion_promotions.sh`. Test : `tests/Functional/Gestion/PromotionApiTest.php`.
 
 ## 1. Mécanisme existant réutilisé

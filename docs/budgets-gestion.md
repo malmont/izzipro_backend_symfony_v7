@@ -5,8 +5,8 @@ Contrat validé par l'application (« new easymakemoney »), recalé sur `docs/p
 le prévu au réel ». Tout est additif : les routes et calculs existants ne changent pas, les lectures des notes de frais et des commandes gagnent
 seulement `tripId`. `ROLE_ADMIN`. Trésorerie saisie : `docs/tresorerie-gestion.md` (lot B1b-1) ; simulateur : `docs/simulateur-gestion.md` (lot B1b-2, son `plannedToSave` se valide par le PUT de ce budget).
 
-Code : `Services/GestionService/GestionBudgetService`, `GestionTripService`, `UseCase/GestionUseCase/GestionBudgetUseCase`,
-`GestionTripUseCase`, `Controller/GestionController/GestionBudgetController`, `GestionTripController`, `EventListener/TripAutoAssignListener`,
+Code : `Gestion/Services/GestionBudgetService`, `GestionTripService`, `Gestion/UseCase/GestionBudgetUseCase`,
+`GestionTripUseCase`, `Gestion/Controller/GestionBudgetController`, `GestionTripController`, `EventListener/TripAutoAssignListener`,
 entités `GestionBudgetLine` (`gestion_budget_line`), `GestionTrip` (`gestion_trip`), colonnes `trip_id` / `trip_source` de `note_de_frais` et
 `commande`. Textes `translations/gestion.{fr,en}.yaml` (`budget.*`, `tiles.budget_over`, `tiles.trip_budget`, `notifications.trip_budget`).
 Migration `Version20261207100000`, script `scripts/migrate_all_v2_gestion_budgets.sh`. Test : `tests/Functional/Gestion/BudgetAndTripsApiTest.php`.

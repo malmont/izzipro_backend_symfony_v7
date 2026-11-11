@@ -5,8 +5,8 @@ fixes (salaires, loyer, assurances, abonnements, énergie et télécoms…) se s
 (`docs/tresorerie-gestion.md` § 2), sans deuxième table ; ils sont répartis sur les périodes au prorata de leur durée. `ROLE_ADMIN`, montants en
 cents dans la devise du site.
 
-Code : `Services/GestionService/GestionFixedCostService` (règle, équivalent mensuel, liste, prorata), `UseCase/GestionUseCase/GestionFixedCostUseCase`,
-`Controller/GestionController/GestionFixedCostController` ; saisie par `GestionCashService` (mouvements) ; résultat par `PeriodResultCalculator`.
+Code : `Gestion/Services/GestionFixedCostService` (règle, équivalent mensuel, liste, prorata), `Gestion/UseCase/GestionFixedCostUseCase`,
+`Gestion/Controller/GestionFixedCostController` ; saisie par `GestionCashService` (mouvements) ; résultat par `PeriodResultCalculator`.
 Test : `tests/Functional/Gestion/FixedCostApiTest.php`.
 
 ## 1. Qu'est-ce qu'un frais fixe

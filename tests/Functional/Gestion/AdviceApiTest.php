@@ -12,13 +12,13 @@ use App\Entity\ProductVariant;
 use App\Entity\StatusCommande;
 use App\Entity\User;
 use App\EventSubscriber\CacheInvalidationSubscriber;
-use App\Message\GenerateGestionAdviceMessage;
-use App\MessageHandler\GenerateGestionAdviceHandler;
+use App\Gestion\Message\GenerateGestionAdviceMessage;
+use App\Gestion\MessageHandler\GenerateGestionAdviceHandler;
 use App\Services\CaisseService\StoreClock;
-use App\Services\GestionService\AdviceMeasure;
-use App\Services\GestionService\AdviceRules;
-use App\Services\GestionService\GestionAdviceService;
-use App\Services\GestionService\PeriodCalendar;
+use App\Gestion\Services\AdviceMeasure;
+use App\Gestion\Services\AdviceRules;
+use App\Gestion\Services\GestionAdviceService;
+use App\Gestion\Services\PeriodCalendar;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use App\Tests\Fake\FakeLandingAiClient;
@@ -293,7 +293,7 @@ class AdviceApiTest extends WebTestCase
 
     public function testMeasureAfterApplication(): void
     {
-        $measure = static::getContainer()->get(\App\Services\GestionService\AdviceMeasure::class);
+        $measure = static::getContainer()->get(\App\Gestion\Services\AdviceMeasure::class);
         $advices = static::getContainer()->get(GestionAdviceService::class);
         $today = static::getContainer()->get(PeriodCalendar::class)->today();
         $b = $today->modify('+7200 days');

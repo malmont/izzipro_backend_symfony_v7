@@ -12,7 +12,7 @@ class FraisDePortService
     // MODIFICATION 1 : Le service ne dépend plus que du provider
     private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Services\GestionService\PeriodGuard $periodGuard = null)
+    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Gestion\Services\PeriodGuard $periodGuard = null)
     {
         $this->emProvider = $emProvider;
     }
@@ -33,10 +33,10 @@ class FraisDePortService
         // lot G4 (09/11/2026) : un seul frais de port par commande (409), commande fermée (409), transporteur inconnu (404)
         $this->periodGuard?->assertCommandeWritable($commande); // figée ou datée dans une période fermée (lot P1, 10/11/2026)
         if ($commande->getIsClosed()) {
-            throw new \App\Services\GestionService\GestionConflictException('COMMANDE_CLOSED', 'La commande est figée.');
+            throw new \App\Gestion\Services\GestionConflictException('COMMANDE_CLOSED', 'La commande est figée.');
         }
         if ($commande->getFraisDePort()) {
-            throw new \App\Services\GestionService\GestionConflictException('SHIPPING_COST_ALREADY_SET', 'La commande a déjà un frais de port : supprimez-le avant d\'en créer un autre.');
+            throw new \App\Gestion\Services\GestionConflictException('SHIPPING_COST_ALREADY_SET', 'La commande a déjà un frais de port : supprimez-le avant d\'en créer un autre.');
         }
 
         $fraisDePort = new FraisDePort();
@@ -50,7 +50,7 @@ class FraisDePortService
         $transporteurRepository = $em->getRepository(Transporteur::class);
         $transporteur = $transporteurRepository->find($inputDTO->transporteurId);
         if (!$transporteur) {
-            throw new \App\Services\GestionService\GestionConflictException('TRANSPORTEUR_NOT_FOUND', 'Transporteur inconnu : ' . $inputDTO->transporteurId, 404);
+            throw new \App\Gestion\Services\GestionConflictException('TRANSPORTEUR_NOT_FOUND', 'Transporteur inconnu : ' . $inputDTO->transporteurId, 404);
         }
         $fraisDePort->setTransporteur($transporteur);
         $em->persist($fraisDePort);

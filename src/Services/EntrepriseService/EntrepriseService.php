@@ -227,7 +227,7 @@ class EntrepriseService
         }
         if (array_key_exists('purchasePeriodFrequency', $data)) { // périodes de gestion (lot P1, 10/11/2026) : registre gestion.periods
             $f = $data['purchasePeriodFrequency'];
-            if ($f !== null && $f !== '' && (!is_string($f) || !in_array(strtolower(trim($f)), \App\Services\GestionService\PeriodCalendar::FREQUENCIES, true))) {
+            if ($f !== null && $f !== '' && (!is_string($f) || !in_array(strtolower(trim($f)), \App\Gestion\Services\PeriodCalendar::FREQUENCIES, true))) {
                 throw new EntrepriseValidationException([['path' => 'purchasePeriodFrequency', 'message' => 'quarterly, semester ou monthly attendu, ou vide (trimestres)']]);
             }
             $entreprise->setPurchasePeriodFrequency($f === '' ? null : $f);

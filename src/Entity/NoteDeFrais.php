@@ -5,6 +5,7 @@ namespace App\Entity;
 use App\Repository\NoteDeFraisRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use App\Gestion\Entity\GestionDocument;
 
 #[ORM\Entity(repositoryClass: NoteDeFraisRepository::class)]
 #[ORM\HasLifecycleCallbacks]

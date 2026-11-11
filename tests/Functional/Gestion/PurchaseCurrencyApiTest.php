@@ -36,7 +36,7 @@ class PurchaseCurrencyApiTest extends WebTestCase
     public function testSupplierCurrencyFlowsToOrdersDashboardsAndExport(): void
     {
         $tag = bin2hex(random_bytes(2));
-        $today = static::getContainer()->get(\App\Services\GestionService\PeriodCalendar::class)->today(); // dates dans la période ouverte (lot P1)
+        $today = static::getContainer()->get(\App\Gestion\Services\PeriodCalendar::class)->today(); // dates dans la période ouverte (lot P1)
         $type = $this->create(TypeFournisseur::class, ['name' => 'Type devise ' . $tag]);
         $this->endOfWrite();
 

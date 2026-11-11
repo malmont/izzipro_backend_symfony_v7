@@ -13,8 +13,8 @@ use App\Entity\TypeFournisseur;
 use App\Entity\User;
 use App\EventSubscriber\CacheInvalidationSubscriber;
 use App\Services\CommandeService\CommandeLineService;
-use App\Services\GestionService\CommandeLinesVerifier;
-use App\Services\GestionService\PeriodCalendar;
+use App\Gestion\Services\CommandeLinesVerifier;
+use App\Gestion\Services\PeriodCalendar;
 use App\Services\TenantEntityManagerProvider;
 use App\Tests\Functional\Cache\CacheTestEntityFactory;
 use Doctrine\ORM\EntityManagerInterface;
@@ -156,7 +156,7 @@ class CommandeLinesApiTest extends WebTestCase
         foreach ([['P', 2500, 'NULL', 1200, 4], ['Q', 3000, 'NULL', 3000, 2], ['R', 2000, '800', 'NULL', 5]] as [$k, $price, $purchase, $cost, $qty]) {
             $conn->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type, purchase_price, commande_id, commande_cost_cents, coefficient_multiplier) VALUES (nextval('product_id_seq'), :n, :p, false, $qty, NOW(), :s, 'standard', $purchase, :c, $cost, 2)", ['n' => "$k $tag", 'p' => $price, 's' => "bf-$k-$tag", 'c' => $commandeId]);
         }
-        $verifier = static::getContainer()->get(\App\Services\GestionService\PurchaseMetricsCalculator::class);
+        $verifier = static::getContainer()->get(\App\Gestion\Services\PurchaseMetricsCalculator::class);
         $this->em();
         $legacy = $verifier->legacy(fn () => $verifier->commandeTotals($commandeId));
         $this->assertGreaterThanOrEqual(3, static::getContainer()->get(CommandeLineService::class)->backfill());

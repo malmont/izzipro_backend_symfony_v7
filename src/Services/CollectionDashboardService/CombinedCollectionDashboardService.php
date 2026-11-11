@@ -2,7 +2,7 @@
 
 namespace App\Services\CollectionDashboardService;
 
-use App\Services\GestionService\PurchaseMetricsCalculator;
+use App\Gestion\Services\PurchaseMetricsCalculator;
 use App\Services\TenantEntityManagerProvider;
 
 /**

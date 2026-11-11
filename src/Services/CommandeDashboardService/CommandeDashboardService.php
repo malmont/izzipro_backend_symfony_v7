@@ -4,7 +4,7 @@ namespace App\Services\CommandeDashboardService;
 
 use App\Dto\DashboardCommandeDTO;
 use App\Entity\Commande;
-use App\Services\GestionService\PurchaseMetricsCalculator;
+use App\Gestion\Services\PurchaseMetricsCalculator;
 
 /**
  * Tableau de bord d'une commande fournisseur (lot G2, 09/11/2026) : chiffres calculés par `PurchaseMetricsCalculator`

@@ -18,7 +18,7 @@ class GetAllFournisseursUseCase
     }
 
     /** @return array{items: list<\App\Entity\Fournisseur>, total: int} liste filtrée et paginable (lot G5, 10/11/2026) */
-    public function search(?\App\Services\GestionService\GestionListQuery $query): array
+    public function search(?\App\Gestion\Services\GestionListQuery $query): array
     {
         return $this->fournisseurService->searchFournisseurs($query);
     }

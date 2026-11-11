@@ -21,7 +21,7 @@ class CommandeProductAttachmentService
 {
     public const MAX_LIMIT = 100;
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly ContentAuditRecorder $audit, private readonly CommandeLineService $lines, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null, private readonly ?\App\Services\GestionService\PeriodCalendar $calendar = null) // devise du site (lot G6) ; calendrier des périodes (lot P1, 10/11/2026)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly ContentAuditRecorder $audit, private readonly CommandeLineService $lines, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null, private readonly ?\App\Gestion\Services\PeriodCalendar $calendar = null) // devise du site (lot G6) ; calendrier des périodes (lot P1, 10/11/2026)
     {
     }
 

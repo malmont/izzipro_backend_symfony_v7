@@ -15,7 +15,7 @@ use App\Entity\SubscriptionPlan;
 use App\Entity\TypeFournisseur;
 use App\Entity\User;
 use App\EventSubscriber\CacheInvalidationSubscriber;
-use App\Services\GestionService\PeriodCalendar;
+use App\Gestion\Services\PeriodCalendar;
 use App\Services\TenantEntityManagerProvider;
 use App\Tests\Functional\Cache\CacheTestEntityFactory;
 use Doctrine\ORM\EntityManagerInterface;

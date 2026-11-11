@@ -4,7 +4,7 @@ namespace App\Services\CollectionDashboardService;
 
 use App\Dto\DashboardCollectionDTO;
 use App\Entity\Collections;
-use App\Services\GestionService\PurchaseMetricsCalculator;
+use App\Gestion\Services\PurchaseMetricsCalculator;
 
 /**
  * Tableau de bord d'une collection (lot G2, 09/11/2026) : chiffres calculés par `PurchaseMetricsCalculator` (agrégats

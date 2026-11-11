@@ -40,7 +40,7 @@ class TransporteurService
         $em = $this->emProvider->getEntityManager();
         // lot G4 (09/11/2026) : refusé s'il est utilisé par un frais de port ou une statistique figée (avant : violation de clé étrangère)
         if (!$transporteur->getFraisDePorts()->isEmpty() || !$transporteur->getCommandeStatistiques()->isEmpty()) {
-            throw new \App\Services\GestionService\GestionConflictException('TRANSPORTEUR_IN_USE', 'Ce transporteur est utilisé par des frais de port : il ne peut pas être supprimé.');
+            throw new \App\Gestion\Services\GestionConflictException('TRANSPORTEUR_IN_USE', 'Ce transporteur est utilisé par des frais de port : il ne peut pas être supprimé.');
         }
         $em->remove($transporteur);
         $em->flush();

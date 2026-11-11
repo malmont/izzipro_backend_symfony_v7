@@ -39,7 +39,7 @@ class FournisseurController extends AbstractController
     public function getAllFournisseurs(Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $query = \App\Services\GestionService\GestionListQuery::fromRequest($request); // ?q=&page=&limit= (lot G5, 10/11/2026)
+        $query = \App\Gestion\Services\GestionListQuery::fromRequest($request); // ?q=&page=&limit= (lot G5, 10/11/2026)
         $cacheKey = 'fournisseurs_all' . $query->cacheSuffix();
         $result = $this->cache->get(
             $cacheKey,

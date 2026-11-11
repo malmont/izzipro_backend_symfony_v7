@@ -2,7 +2,7 @@
 
 namespace App\Command;
 
-use App\Services\GestionService\CommandeLinesVerifier;
+use App\Gestion\Services\CommandeLinesVerifier;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\Console\Attribute\AsCommand;

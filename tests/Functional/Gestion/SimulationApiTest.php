@@ -13,8 +13,8 @@ use App\Entity\StatusCommande;
 use App\Entity\User;
 use App\EventSubscriber\CacheInvalidationSubscriber;
 use App\Services\CaisseService\StoreClock;
-use App\Services\GestionService\GestionSimulationService;
-use App\Services\GestionService\PeriodCalendar;
+use App\Gestion\Services\GestionSimulationService;
+use App\Gestion\Services\PeriodCalendar;
 use App\Services\TenantEntityManagerProvider;
 use App\Tests\Functional\Cache\CacheTestEntityFactory;
 use Doctrine\ORM\EntityManagerInterface;
@@ -191,7 +191,7 @@ class SimulationApiTest extends WebTestCase
     public function testGuideCommentCandidatesCacheLimitAndAi(): void
     {
         \App\Tests\Fake\FakeLandingAiClient::reset();
-        $service = static::getContainer()->get(\App\Services\GestionService\GestionSimulationCommentService::class);
+        $service = static::getContainer()->get(\App\Gestion\Services\GestionSimulationCommentService::class);
         $today = static::getContainer()->get(PeriodCalendar::class)->today();
         $b = $today->modify('+8000 days');
         $pid = $this->period(8000, 'sim-com');
@@ -254,7 +254,7 @@ class SimulationApiTest extends WebTestCase
         try {
             $service->comment($period, ['pricePercent' => 30], 'fr', null, $t);
             $this->fail('429 attendu');
-        } catch (\App\Services\GestionService\GestionConflictException $e) {
+        } catch (\App\Gestion\Services\GestionConflictException $e) {
             $this->assertSame([429, 'COMMENT_LIMIT', 'cashSafe', 'rules'], [$e->status, $e->errorCode, $e->details['comment']['recommended'], $e->details['comment']['textSource']]);
         }
     }

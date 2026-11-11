@@ -4,8 +4,8 @@ namespace App\Services\NotificationService;
 
 use App\Entity\PushDevice;
 use App\Repository\PushDeviceRepository;
-use App\Services\GestionService\GestionConflictException;
-use App\Services\GestionService\GestionValidationException;
+use App\Gestion\Services\GestionConflictException;
+use App\Gestion\Services\GestionValidationException;
 use App\Services\TenantEntityManagerProvider;
 
 /**

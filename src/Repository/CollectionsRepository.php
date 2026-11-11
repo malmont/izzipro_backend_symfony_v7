@@ -37,7 +37,7 @@ class CollectionsRepository extends EntityRepository
     {
         $qb = $this->createQueryBuilder('c')->orderBy('c.startDateCollection', 'DESC')->addOrderBy('c.id', 'DESC');
         // période fermée par la date : fin + 15 jours < aujourd'hui, sans réouverture ; ou clôture manuelle (lot P1, 10/11/2026)
-        $edge = \DateTimeImmutable::createFromInterface($today ?? new \DateTimeImmutable('today'))->setTime(0, 0)->modify('-' . \App\Services\GestionService\PeriodCalendar::GRACE_DAYS . ' days')->format('Y-m-d 00:00:00');
+        $edge = \DateTimeImmutable::createFromInterface($today ?? new \DateTimeImmutable('today'))->setTime(0, 0)->modify('-' . \App\Gestion\Services\PeriodCalendar::GRACE_DAYS . ' days')->format('Y-m-d 00:00:00');
         $periodClosed = "(c.kind = 'period' AND (c.closedAt IS NOT NULL OR (c.reopenedAt IS NULL AND c.endDateCollection < :edge)))";
         $manualClosed = "(c.kind <> 'period' AND c.isClosed = true)";
         match ($status) {

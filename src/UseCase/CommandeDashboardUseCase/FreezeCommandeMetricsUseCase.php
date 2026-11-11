@@ -25,7 +25,7 @@ class FreezeCommandeMetricsUseCase
     public function execute(Commande $commande): \App\Dto\DashboardCommandeDTO
     {
         if ($commande->getIsClosed()) {
-            throw new \App\Services\GestionService\GestionConflictException('ALREADY_CLOSED', 'La commande est déjà figée.'); // 409 (lot G2, 09/11/2026)
+            throw new \App\Gestion\Services\GestionConflictException('ALREADY_CLOSED', 'La commande est déjà figée.'); // 409 (lot G2, 09/11/2026)
         }
 
         // Ces appels sont corrects, en supposant que les services appelés
