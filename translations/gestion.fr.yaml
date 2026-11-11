@@ -318,3 +318,11 @@ year:
         lesson_months: "Préparez %best% plus tôt et surveillez %worst% de près."
         lesson_profitable: "Gardez le même cap sur les frais fixes : %fixed% sur l'année."
         lesson_loss: "Revoyez les frais fixes (%fixed% sur l'année) et le prix des articles qui vendent le mieux."
+
+# Locations de la gestion (lot LOC, 11/11/2026, docs/locations-gestion.md)
+rental:
+    caveats:
+        REVENUE_AT_SALE_DATE: "Revenu à la date de vente, comme le résultat de période : une réservation annulée dont la commande n'est ni annulée ni remboursée reste de l'argent gardé. Le revenu par date de location répartit chaque ligne sur le temps loué."
+        CANCELLED_EXCLUDED_FROM_OCCUPANCY: "Les réservations annulées ne comptent pas dans l'occupation."
+        NO_OPENING_HOURS: "Sans heures d'ouverture, le temps offert est compté sur 24 h par jour."
+        OCCUPANCY_CAPPED: "Une location déborde des heures offertes (de nuit, par exemple) : l'occupation est plafonnée à 100 %."

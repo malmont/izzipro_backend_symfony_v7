@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (414)
+## Boutique et commun (415)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -393,6 +393,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/gestion/documents` | ROLE_ADMIN | `Controller\GestionController\GestionDocumentController::create` |
 | GET | `/api/gestion/exports/achats.csv` | ROLE_ADMIN | `Controller\GestionController\GestionExportController::purchases` |
 | GET | `/api/gestion/frais-fixes` | ROLE_ADMIN | `Controller\GestionController\GestionFixedCostController::list` |
+| GET | `/api/gestion/locations/statistiques` | ROLE_ADMIN | `Controller\GestionController\GestionRentalController::statistics` |
 | GET | `/api/gestion/notifications/journal` | ROLE_ADMIN | `Controller\GestionController\GestionNotificationController::journal` |
 | GET | `/api/gestion/notifications/preferences` | ROLE_ADMIN | `Controller\GestionController\GestionNotificationController::preferences` |
 | PATCH | `/api/gestion/notifications/preferences` | ROLE_ADMIN | `Controller\GestionController\GestionNotificationController::updatePreferences` |

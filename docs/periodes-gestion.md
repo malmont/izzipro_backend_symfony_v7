@@ -80,7 +80,7 @@ n'est touchée. Contrat envoyé à l'application avant le code de chaque lot (`d
   currency, frozen, frozenAt,
   sales:        { revenue, orders, items, returns: { amount, orders, items }, unknownCostRevenue, shippingBilled,
                   bySource: { ecommerce, pos, mobile_app } },
-  otherRevenue: { rentals, subscriptions, total },
+  otherRevenue: { rentals, subscriptions, total },          // locations : l'argent gardé (réservation annulée à commande gardée comprise), docs/locations-gestion.md § 0
   cogs:         { amount, items, unknownCostItems },
   expenses:     { shipping, notes, other: [], total },
   result:       { gross, net, tauxMarge, tauxMarque, netRate, netAfterFixed, netAfterFixedRate },

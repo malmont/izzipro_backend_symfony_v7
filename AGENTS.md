@@ -32,6 +32,7 @@ Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne 
 | Préparer une période entière depuis la gestion (estimation des ventes, achats et voyage simulés, trésorerie, avis du guide, « Valider » budgets + voyage) | `docs/preparation-periode.md` |
 | Statistiques unifiées de la gestion (une route aux règles du résultat de période : ventes, marge, commandes, panier, retours, valeur du stock ; plage précédente, an dernier, séries ; instantané quotidien du stock) | `docs/statistiques-gestion.md` |
 | L'année de l'entreprise et l'exercice du site (Statistiques › Année : mois par mois, cumul, rentabilité, point mort, écart, leviers chiffrés, exercice terminé et avis IA ; réglage du mois de début d'exercice) | `docs/annee-gestion.md` |
+| Locations dans la gestion (statistiques : revenu à la date de vente et par date de location, occupation ; règle de l'argent gardé ; lots LOC1 à LOC5) | `docs/locations-gestion.md` |
 | Vignettes d'accueil de la gestion (premiers pas, alerte de stock bas, écart par utilisateur) | `docs/vignettes-gestion.md` |
 | Notifications sur téléphone de la gestion (appareils, préférences, une par jour, stock bas à 10 h, facture en double ; Firebase à brancher) | `docs/notifications-gestion.md` |
 | Lecture de documents par IA pour la gestion (factures fournisseurs, notes de frais, transport : envoi asynchrone, extraction, confirmation, justificatifs, worker `gestion_ai`) | `docs/lecture-documents-gestion.md` |

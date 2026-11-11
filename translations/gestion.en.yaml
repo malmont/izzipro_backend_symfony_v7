@@ -316,3 +316,11 @@ year:
         lesson_months: "Prepare %best% earlier and watch %worst% closely."
         lesson_profitable: "Keep the same course on fixed costs: %fixed% over the year."
         lesson_loss: "Review fixed costs (%fixed% over the year) and the price of your best-selling items."
+
+# Rentals (lot LOC, 11/11/2026, docs/locations-gestion.md)
+rental:
+    caveats:
+        REVENUE_AT_SALE_DATE: "Revenue at the sale date, like the period result: a cancelled booking whose order is neither cancelled nor refunded is money kept. Revenue by rental date spreads each line over the rented time."
+        CANCELLED_EXCLUDED_FROM_OCCUPANCY: "Cancelled bookings do not count in occupancy."
+        NO_OPENING_HOURS: "Without opening hours, the offered time is counted over 24 hours a day."
+        OCCUPANCY_CAPPED: "A rental runs beyond the offered hours (overnight, for example): occupancy is capped at 100%."

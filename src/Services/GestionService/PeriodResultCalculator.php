@@ -30,6 +30,8 @@ use App\Services\TenantEntityManagerProvider;
 class PeriodResultCalculator
 {
     public const SOURCES = [1 => 'ecommerce', 2 => 'pos', 3 => 'mobile_app'];
+    /** Part hors taxes d'un montant de ligne (prix TTC ramenés au hors taxes) ; partagée avec les statistiques des locations (LOC1) */
+    public const NET_FACTOR = 'CASE WHEN o.prices_include_tax AND COALESCE(o.sub_total, 0) <> 0 THEN (o.sub_total - COALESCE(o.total_tax, 0)) / o.sub_total ELSE 1 END';
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -154,7 +156,7 @@ class PeriodResultCalculator
                 $types['pids'] = \Doctrine\DBAL\ArrayParameterType::INTEGER;
             }
         }
-        $factor = 'CASE WHEN o.prices_include_tax AND COALESCE(o.sub_total, 0) <> 0 THEN (o.sub_total - COALESCE(o.total_tax, 0)) / o.sub_total ELSE 1 END';
+        $factor = self::NET_FACTOR;
         if ($legacy) {
             $cost = 'CASE WHEN p.id IS NULL THEN NULL'
                 . ' WHEN p.commande_cost_cents IS NOT NULL AND c.id IS NOT NULL' . $attachedBeforeCutoff . ' THEN p.commande_cost_cents * COALESCE(c.exchange_rate, 1)'
