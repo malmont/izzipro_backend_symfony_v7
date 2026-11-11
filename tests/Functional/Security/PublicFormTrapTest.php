@@ -2,15 +2,18 @@
 
 namespace App\Tests\Functional\Security;
 
+use App\Entity\User;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 /**
  * Piège à robots des formulaires de contact et de prise de rendez-vous (11/11/2026, spams reçus par esgboost) :
  * champ caché « site » rempli ou fillSeconds trop court = réponse d'un envoi réussi, rien d'enregistré ni d'envoyé.
  * Mode tolérant : un corps sans fillSeconds (front pas encore à jour, application mobile) passe comme avant.
+ * Utilisateur connecté jamais contrôlé (séance saisie par un biographe de Mémoires Vivantes).
  */
 class PublicFormTrapTest extends WebTestCase
 {
@@ -18,7 +21,10 @@ class PublicFormTrapTest extends WebTestCase
     private const BOOKING = ['service_name' => 'Accompagnement', 'reservation_date' => '2031-03-12', 'reservation_slot' => '09:00 - 12:00',
         'client_name' => 'Client Test', 'client_email' => 'client-piege@example.invalid', 'client_phone' => '514 555-0101'];
 
+    private const PASSWORD = 'Mot-de-passe-de-test-1!';
+
     private KernelBrowser $client;
+    private ?string $token = null;
 
     protected function setUp(): void
     {
@@ -90,6 +96,26 @@ class PublicFormTrapTest extends WebTestCase
         $this->assertSame(2, $this->bookings());
     }
 
+    public function testConnectedUsersAreNeverTrapped(): void
+    {
+        $email = 'piege-' . bin2hex(random_bytes(3)) . '@example.invalid';
+        $provider = static::getContainer()->get(TenantEntityManagerProvider::class);
+        $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $user = (new User())->setEmail($email)->setUsername($email)->setFirstname('Bio')->setLastname('Graphe')->setRoles(['ROLE_USER', 'ROLE_USER_INTERNET'])->setIsVerified(true);
+        $user->setPassword(static::getContainer()->get(UserPasswordHasherInterface::class)->hashPassword($user, self::PASSWORD));
+        $provider->getEntityManager()->persist($user);
+        $provider->getEntityManager()->flush();
+        $login = $this->post('/api/login', ['username' => $email, 'password' => self::PASSWORD, 'platform' => 'mobile']);
+        $this->assertSame(200, $login->getStatusCode(), $login->getContent());
+        $this->token = json_decode($login->getContent(), true)['token'];
+
+        $this->assertSame(201, $this->post('/api/reservations', self::BOOKING + ['fillSeconds' => 1])->getStatusCode(), 'séance saisie vite');
+        $this->assertSame(201, $this->post('/api/contacts/create', self::CONTACT + ['site' => 'rempli', 'fillSeconds' => 1])->getStatusCode());
+
+        $this->assertSame(1, $this->bookings());
+        $this->assertSame(1, (int) $this->db()->fetchOne('SELECT COUNT(*) FROM contact'));
+    }
+
     private function bookings(): int
     {
         return (int) $this->db()->fetchOne("SELECT COUNT(*) FROM reservation WHERE client_email = 'client-piege@example.invalid'");
@@ -101,7 +127,7 @@ class PublicFormTrapTest extends WebTestCase
             'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST,
             'CONTENT_TYPE' => 'application/json',
             'HTTP_ACCEPT' => 'application/json',
-        ], json_encode($body));
+        ] + ($this->token ? ['HTTP_AUTHORIZATION' => 'Bearer ' . $this->token] : []), json_encode($body));
 
         return $this->client->getResponse();
     }

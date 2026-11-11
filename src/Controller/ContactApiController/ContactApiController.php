@@ -59,7 +59,7 @@ class ContactApiController extends AbstractController
     {
         $body = json_decode($request->getContent(), true);
         $host = (string) ($request->headers->get('X-Tenant-Host') ?: $request->getHost());
-        if (\App\Services\PublicFormTrap::caught($body, 'POST /api/contacts sur ' . $host)) {
+        if (\App\Services\PublicFormTrap::caught($body, 'POST /api/contacts sur ' . $host, $this->getUser() !== null)) {
             return $this->json(self::decoy($body), Response::HTTP_CREATED);
         }
 

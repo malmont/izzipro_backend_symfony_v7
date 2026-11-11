@@ -106,7 +106,8 @@ le serveur et dans l'ancienne application).
 `site` rempli, ou `fillSeconds` non numérique ou inférieur à 4 : réponse d'un envoi réussi (même forme), rien
 d'enregistré ni d'envoyé, ligne `[anti-robot] envoi écarté sur <route> sur <site>` dans le journal du conteneur.
 **Mode tolérant** : un corps sans `fillSeconds` passe comme avant (fronts pas encore à jour, applications mobiles qui
-réservent) ; un mode strict (`fillSeconds` exigé) ne sera possible qu'une fois tous les clients à jour. Durée
+réservent) ; un mode strict (`fillSeconds` exigé) ne sera possible qu'une fois tous les clients à jour. Utilisateur
+connecté (jeton) jamais contrôlé : séance saisie par un biographe de Mémoires Vivantes sur la même route. Durée
 minimale plus courte que les formulaires à étapes (8 s) : une seule page, souvent préremplie. Test
 `tests/Functional/Security/PublicFormTrapTest.php`.
 

@@ -14,14 +14,20 @@ namespace App\Services;
  * Mode tolérant : un corps sans fillSeconds passe comme avant (fronts pas encore à jour, applications mobiles qui
  * réservent). Seul un corps qui annonce fillSeconds est contrôlé. Durée minimale plus courte que celle des formulaires
  * à étapes : une seule page, souvent préremplie par le navigateur ; un vrai message perdu coûte plus qu'un spam.
+ *
+ * Utilisateur connecté jamais contrôlé (11/11/2026) : un biographe de Mémoires Vivantes saisit une séance par la même
+ * route de réservation, parfois en quelques secondes ; l'écarter en silence perdrait la séance. Un robot n'a pas de session.
  */
 final class PublicFormTrap
 {
     public const MIN_FILL_SECONDS = 4;
 
     /** @param array<string, mixed>|object|null $body corps JSON décodé */
-    public static function caught(mixed $body, string $route): bool
+    public static function caught(mixed $body, string $route, bool $authenticated = false): bool
     {
+        if ($authenticated) {
+            return false;
+        }
         $body = is_object($body) ? get_object_vars($body) : $body;
         if (!is_array($body) || !array_key_exists('fillSeconds', $body)) {
             return false;

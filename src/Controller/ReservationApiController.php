@@ -93,7 +93,7 @@ class ReservationApiController extends AbstractController
                 ], Response::HTTP_BAD_REQUEST);
             }
 
-            if (\App\Services\PublicFormTrap::caught($data, 'POST /api/reservations sur ' . ($request->headers->get('X-Tenant-Host') ?: $request->getHost()))) {
+            if (\App\Services\PublicFormTrap::caught($data, 'POST /api/reservations sur ' . ($request->headers->get('X-Tenant-Host') ?: $request->getHost()), $this->getUser() !== null)) {
                 return $this->json(['success' => true, 'message' => 'Réservation enregistrée', 'data' => self::decoy($data)], Response::HTTP_CREATED);
             }
 

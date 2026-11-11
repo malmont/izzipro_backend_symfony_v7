@@ -26,7 +26,7 @@ class ContactSubmitController extends AbstractController
                 return $this->json(['message' => 'JSON invalide.'], Response::HTTP_BAD_REQUEST);
             }
 
-            if (\App\Services\PublicFormTrap::caught($data, 'POST /api/contact/submit sur ' . $request->headers->get('X-Tenant-Host'))) {
+            if (\App\Services\PublicFormTrap::caught($data, 'POST /api/contact/submit sur ' . $request->headers->get('X-Tenant-Host'), $this->getUser() !== null)) {
                 return $this->json(['message' => 'Message envoyé avec succès.'], Response::HTTP_OK);
             }
 
