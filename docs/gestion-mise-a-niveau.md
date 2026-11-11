@@ -269,6 +269,11 @@ Décisions de contrat prises pour les lots :
   - B6 `GET /api/payments/statistics/{source}` : seuls les paiements **réussis** (`status_payment` 2 « Complété ») comptent ; en cours (1) et
     échoués (3) exclus (correction, formes inchangées ; la caisse, qui lit `/pos`, en est prévenue).
   - B8 `GET /api/frais/total` : correctif du 09/11 (commit 334f41e9) en ligne.
+  - B2 `GET /api/stock-evolution` : bornes en **jours du magasin** (semaine du lundi 0 h au dimanche inclus, mois et année civils, fin exclusive,
+    `movement_date` en UTC ; avant : heure courante et fuseau du serveur) ; chaque élément `{ type, quantity, code }` : `code` stable additif
+    `in` (Entrant), `out` (Sortant), `return` (Return, écrit par aucun chemin aujourd'hui : 0), `adjustment` (Ajustement) ; **5e élément**
+    `{ type: "Réception fournisseur", code: "reception" }` (type 5, réception d'une ligne d'achat, lot R1). Les quatre premiers gardent ordre et
+    `type`. L'application lit `code`. Code `StockEvolutionService` ; test `StatisticsFixesTest`.
 - `carrier_count` (`GET /api/carrier/statistics`) est en réalité un **montant en cents** (`SUM(carrier.price)` des commandes clients du mois,
   `OrderRepository::getTotalCarrierByMonth`), malgré son nom : l'application divise par 100 à bon droit ; G3 ajoute `shippingAmount` (même
   valeur) et `currency`, `carrier_count` conservé.

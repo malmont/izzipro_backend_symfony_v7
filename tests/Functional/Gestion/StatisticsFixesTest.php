@@ -8,6 +8,8 @@ use App\Entity\OrderType;
 use App\Entity\Product;
 use App\Entity\ProductVariant;
 use App\Entity\StatusCommande;
+use App\Services\CaisseService\StoreClock;
+use App\Services\StockEvolutionService\StockEvolutionService;
 use App\Services\StockEvolutionService\StockValueService;
 use App\Services\TenantEntityManagerProvider;
 use App\Tests\Functional\Cache\CacheTestEntityFactory;
@@ -31,6 +33,7 @@ class StatisticsFixesTest extends KernelTestCase
     protected function tearDown(): void
     {
         $conn = $this->em()->getConnection();
+        $conn->executeStatement('DELETE FROM inventory_movements WHERE stock_before_movement = -424242');
         $conn->executeStatement("DELETE FROM payments WHERE order_payment_id IN (SELECT id FROM \"order\" WHERE reference = 'STAT-B6')");
         $conn->executeStatement("DELETE FROM \"order\" WHERE reference = 'STAT-B6'");
         $conn->executeStatement("DELETE FROM product_variant WHERE product_id IN (SELECT id FROM product WHERE slug LIKE 'stat-b1-%')");
@@ -72,6 +75,27 @@ class StatisticsFixesTest extends KernelTestCase
             $conn->executeStatement("INSERT INTO payments (id, order_payment_id, payment_method_id, statut_payment_id, payment_type_id, amount, payment_date) VALUES (nextval('payments_id_seq'), ?, 2, ?, 2, ?, NOW())", [$order->getId(), $status, $amount]);
         }
         $this->assertEqualsWithDelta(1000.0, $total() - $before, 0.001, 'seul le paiement réussi compte');
+    }
+
+    public function testStockEvolutionStoreDaysCodesAndReception(): void
+    {
+        $service = static::getContainer()->get(StockEvolutionService::class);
+        $tz = static::getContainer()->get(StoreClock::class)->timezone();
+        $byCode = fn (array $list) => array_column($list, 'quantity', 'code');
+        $before = $byCode($service->getStockEvolutionForCurrentWeek());
+        $monday = (new \DateTimeImmutable('now', $tz))->modify('monday this week')->setTime(0, 0);
+        $conn = $this->em()->getConnection();
+        // lundi 0 h 30 et dimanche 23 h 30 du magasin (compris), lundi suivant 0 h 30 (exclu) ; movement_date en UTC
+        foreach ([[1, 3, '+30 minutes'], [2, 5, '+6 days 23 hours 30 minutes'], [5, 7, '+6 days 23 hours 30 minutes'], [4, 11, '+7 days 30 minutes'], [1, 13, '-30 minutes']] as [$type, $qty, $shift]) {
+            $at = $monday->modify($shift)->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+            $conn->executeStatement('INSERT INTO inventory_movements (id, movement_type_id, quantity, movement_date, stock_before_movement) VALUES (nextval(\'inventory_movements_id_seq\'), ?, ?, ?, -424242)', [$type, $qty, $at]);
+        }
+        $list = $service->getStockEvolutionForCurrentWeek();
+        $this->assertSame(['in', 'out', 'return', 'adjustment', 'reception'], array_column($list, 'code'));
+        $this->assertSame(['Entrant', 'Sortant', 'Return', 'Ajustement', 'Réception fournisseur'], array_column($list, 'type'), 'libellés historiques gardés, 5e élément ajouté');
+        $after = $byCode($list);
+        $this->assertSame(['in' => 3, 'out' => 5, 'return' => 0, 'adjustment' => 0, 'reception' => 7], array_map(fn ($c) => $after[$c] - $before[$c], array_combine(array_keys($after), array_keys($after))));
+        $this->assertIsInt($after['in']);
     }
 
     private function product(int $price, int $quantity): int

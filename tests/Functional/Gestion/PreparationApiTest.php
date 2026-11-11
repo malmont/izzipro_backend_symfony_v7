@@ -96,14 +96,15 @@ class PreparationApiTest extends WebTestCase
             $this->assertTrue($advice->advise($body, 'fr', null, $t)['cached'], 'même plan, même jour : même avis');
             $conn->executeStatement('DELETE FROM gestion_cash_setting');
 
-            // Valider : période visée remplacée, période d'avant ajoutée à l'existant (300,00 $ déjà prévus en stock), voyage créé
-            $conn->executeStatement("INSERT INTO gestion_budget_line (period_id, category, planned_cents, updated_at) VALUES (?, 'purchases', 30000, NOW()), (?, 'other', 777, NOW())", [$before, $before]);
+            // Valider : période visée remplacée ; période d'avant (C1) : achats et voyage AJOUTÉS au prévu existant (300,00 $ de stock, 15,00 $ de
+            // voyage déjà prévus), ses autres postes (frais de port 3,00 $, autre 7,77 $) intacts ; voyage créé
+            $conn->executeStatement("INSERT INTO gestion_budget_line (period_id, category, planned_cents, updated_at) VALUES (?, 'purchases', 30000, NOW()), (?, 'trip', 1500, NOW()), (?, 'shipping', 300, NOW()), (?, 'other', 777, NOW())", [$before, $before, $before, $before]);
             $sim = $prep->simulate($body, $t);
             $this->expectNoWriteBeforeValidate($conn, $target);
             $v = $prep->validate($body + ['previewHash' => $sim['previewHash']], 'gerant@example.invalid', $t);
             $lines = fn (int $p) => array_column($conn->fetchAllAssociative('SELECT category, planned_cents FROM gestion_budget_line WHERE period_id = ? ORDER BY category', [$p]), 'planned_cents', 'category');
             $this->assertSame(['advertising' => 1000, 'other' => 2000, 'purchases' => 5000, 'shipping' => 500], array_map('intval', $lines($target)), 'période visée : remplacée');
-            $this->assertSame(['other' => 777, 'purchases' => 40000, 'trip' => 4000], array_map('intval', $lines($before)), 'période d\'avant : achats et voyage ajoutés, autres postes intacts');
+            $this->assertSame(['other' => 777, 'purchases' => 40000, 'shipping' => 300, 'trip' => 5500], array_map('intval', $lines($before)), 'période d\'avant : ancien prévu + achats et voyage, autres postes intacts');
             $this->assertSame(['Lyon', $d(-15), 4000], [$v['trip']['place'], $v['trip']['startDate'], $v['trip']['budgetTotal']]);
             // Tout ou rien : le même voyage chevauche → 409, aucun budget de plus
             try {

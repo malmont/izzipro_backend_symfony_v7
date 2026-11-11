@@ -61,6 +61,21 @@ class InventoryMovementsRepository extends EntityRepository
             ->getSingleScalarResult();
     }
 
+    /**
+     * Quantités par type de mouvement sur [début, fin[ (instants UTC, comme movement_date) ; statistiques B2 (11/11/2026).
+     *
+     * @return array<int, int> movement_type_id => somme des quantités
+     */
+    public function totalsByMovementTypeId(\DateTimeInterface $from, \DateTimeInterface $to): array
+    {
+        $rows = $this->getEntityManager()->getConnection()->fetchAllKeyValue(
+            'SELECT movement_type_id, COALESCE(SUM(quantity), 0) FROM inventory_movements WHERE movement_date >= :from AND movement_date < :to AND movement_type_id IS NOT NULL GROUP BY movement_type_id',
+            ['from' => $from->format('Y-m-d H:i:s'), 'to' => $to->format('Y-m-d H:i:s')]
+        );
+
+        return array_map('intval', $rows);
+    }
+
     public function getStockQuantityAtDate(Product $product, DateTime $date): int
     {
         return (int) $this->createQueryBuilder('im')
