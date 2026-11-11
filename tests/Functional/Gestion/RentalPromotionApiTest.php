@@ -67,6 +67,7 @@ class RentalPromotionApiTest extends WebTestCase
     {
         $this->db->executeStatement('DELETE FROM rental_promotion');
         $this->db->executeStatement('DELETE FROM rental_promotion_batch');
+        $this->db->executeStatement('UPDATE entreprise SET pos_timezone = NULL'); // le cas d'Auckland ne doit pas fuir dans les tests suivants
         parent::tearDown();
     }
 
@@ -203,6 +204,48 @@ class RentalPromotionApiTest extends WebTestCase
         $this->adminRequest('POST', '/api/gestion/locations/promotions/terminer', ['batchId' => $batch['id']]);
         $this->assertSame([409, 'ALREADY_ENDED'], [$this->client->getResponse()->getStatusCode(), json_decode($this->client->getResponse()->getContent(), true)['error']]);
         $this->assertSame([$batch['id']], array_column($this->send('GET', '/api/gestion/locations/promotions/lots', null, 200), 'id'));
+    }
+
+    /**
+     * Correction LOC3 (11/11/2026) : à la fin d'une promotion, endDate suit endsAt (invariant endsAt = minuit du magasin le lendemain de endDate) ;
+     * en cours : dernier jour couvert = aujourd'hui ; pas commencée : plage vide, endDate = startDate − 1 jour ; le lot garde ses dates prévues.
+     */
+    public function testEndingAPromotionAlignsEndDateWithEndsAt(): void
+    {
+        $today = new \DateTimeImmutable('today', $this->tz);
+        $day = fn (int $n) => $today->modify("+$n days")->format('Y-m-d');
+        $midnightAfter = fn (string $d) => BookingClock::utc((new \DateTimeImmutable("$d 00:00:00", $this->tz))->modify('+1 day'))->format(\DateTimeInterface::ATOM);
+
+        // terminée avant sa date de fin : endDate = aujourd'hui, endsAt = ce soir minuit ; toujours appliquée jusque-là, fiche comprise
+        $active = $this->applyPromotion([$this->pontonProduct], 15, $day(0), $day(20), [1, 2, 3, 4, 5, 6, 7]);
+        $ended = $this->send('POST', '/api/gestion/locations/promotions/terminer', ['batchId' => $active['id']], 200);
+        $row = $ended['promotions'][0];
+        $this->assertSame([$day(0), $day(0), $midnightAfter($day(0)), 'active'], [$row['startDate'], $row['endDate'], $row['endsAt'], $row['status']], 'terminée avant sa date de fin : endDate = aujourd\'hui');
+        $this->assertNotNull($row['endedAt']);
+        $this->assertSame([$day(0), $day(20)], [$ended['startDate'], $ended['endDate']], 'le lot garde ses dates prévues');
+        $this->assertSame($day(0), (string) $this->db->fetchOne('SELECT end_date FROM rental_promotion WHERE id = ?', [$row['id']]));
+        $this->loginPos();
+        $sheet = array_values(array_filter($this->json($this->request('GET', '/api/pos/rentals')), fn ($r) => $r['code'] === 'DEMO-PONTON'))[0];
+        $this->assertSame([15, $day(0), $midnightAfter($day(0))], [$sheet['rental']['promotion']['percent'], $sheet['rental']['promotion']['endDate'], $sheet['rental']['promotion']['endsAt']], 'fiche : endDate fiable');
+
+        // annulée avant son début : plage vide, endDate = startDate − 1 jour ; plus rien sur la fiche ni dans la liste
+        $upcoming = $this->applyPromotion([$this->kayakProduct], 25, $day(5), $day(12), [1, 2, 3, 4, 5, 6, 7]);
+        $cancelled = $this->send('POST', '/api/gestion/locations/promotions/terminer', ['batchId' => $upcoming['id']], 200)['promotions'][0];
+        $this->assertSame([$day(5), $day(4), 'cancelled'], [$cancelled['startDate'], $cancelled['endDate'], $cancelled['status']], 'annulée avant son début : endDate = startDate − 1');
+        $this->assertSame($cancelled['startsAt'], $cancelled['endsAt']);
+        $this->assertSame($midnightAfter($cancelled['endDate']), $cancelled['endsAt'], 'même invariant pour la plage vide');
+        $this->assertSame([$row['id']], array_column($this->send('GET', '/api/gestion/locations/promotions', null, 200), 'id'), 'seule la promotion terminée ce soir reste en cours');
+
+        // fuseau à l'est de UTC (Auckland) : minuit du magasin tombe la veille en UTC ; endDate reste le jour du magasin
+        $this->db->executeStatement("UPDATE entreprise SET pos_timezone = 'Pacific/Auckland'");
+        $akl = new \DateTimeZone('Pacific/Auckland');
+        $todayAkl = (new \DateTimeImmutable('today', $akl))->format('Y-m-d');
+        $body = ['percent' => 10, 'startDate' => $todayAkl, 'endDate' => (new \DateTimeImmutable($todayAkl))->modify('+9 days')->format('Y-m-d'), 'weekdays' => [1, 2, 3, 4, 5, 6, 7], 'productIds' => [$this->kayakProduct]];
+        $preview = $this->send('POST', '/api/gestion/locations/promotions/apercu', $body, 200);
+        $east = $this->send('POST', '/api/gestion/locations/promotions/appliquer', $body + ['previewHash' => $preview['previewHash']], 201)['batch'];
+        $eastRow = $this->send('POST', '/api/gestion/locations/promotions/terminer', ['batchId' => $east['id']], 200)['promotions'][0];
+        $this->assertSame($todayAkl, $eastRow['endDate'], 'Auckland : dernier jour couvert = aujourd\'hui au magasin');
+        $this->assertSame(BookingClock::utc((new \DateTimeImmutable("$todayAkl 00:00:00", $akl))->modify('+1 day'))->format(\DateTimeInterface::ATOM), $eastRow['endsAt']);
     }
 
     // ----- helpers -----

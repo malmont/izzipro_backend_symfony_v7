@@ -87,7 +87,10 @@ Plan validé par l'application le 11/11/2026 ; **mis en ligne le 11/11/2026 sur 
   marqué fait (date de début).
 - `POST …/terminer { batchId }` → le lot : une promotion pas encore commencée ne s'appliquera jamais (`status: cancelled`), une promotion en
   cours s'arrête à la fin de la journée du magasin (une location qui commence aujourd'hui la garde) ; 404 `BATCH_NOT_FOUND`, 409 `ALREADY_ENDED`.
-  Les commandes déjà passées ne changent jamais.
+  Les commandes déjà passées ne changent jamais. Depuis la correction du 11/11/2026, `endDate` suit `endsAt` (invariant : `endsAt` = minuit du
+  magasin le lendemain de `endDate`) : terminée en cours → `endDate` = aujourd'hui ; annulée avant son début → plage vide `startsAt = endsAt`,
+  `endDate` = `startDate` − 1 jour. Le lot garde ses dates prévues (historique) avec `endedAt`. Rattrapage des lignes déjà terminées : `end_date` =
+  jour du magasin de `ends_at` − 1 (deux lignes sur demo, aucune ailleurs).
 - `GET /api/gestion/locations/promotions` (en cours et à venir) ; `GET …/promotions/lots?limit=` ; chaque promotion `{ id, batchId, productId,
   name, percent, startDate, endDate, startsAt, endsAt, weekdays, status: upcoming | active | ended | cancelled, endedAt }`.
 - Erreurs 422 : `percent` `REQUIRED` | `MUST_BE_INTEGER` | `OUT_OF_RANGE`, `startDate` `INVALID_DATE` | `DATE_IN_PAST`, `endDate` `REQUIRED` |

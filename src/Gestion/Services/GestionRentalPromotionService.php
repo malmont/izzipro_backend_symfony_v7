@@ -122,7 +122,11 @@ class GestionRentalPromotionService
             if ($end <= $now) {
                 continue; // déjà finie par ses dates
             }
-            $p->setEndsAt($start > $now ? $start : min($end, $tomorrow))->setEndedAt($now);
+            $endsAt = $start > $now ? $start : min($end, $tomorrow);
+            // Correction LOC3 (11/11/2026) : end_date suit ends_at (invariant endsAt = minuit du magasin le lendemain de endDate) ;
+            // annulée avant son début : plage vide, endDate = startDate − 1 jour
+            $lastDay = new \DateTimeImmutable($endsAt->setTimezone($tz)->modify('-1 day')->format('Y-m-d'));
+            $p->setEndsAt($endsAt)->setEndedAt($now)->setDays($p->getStartDate(), $lastDay);
         }
         $em->flush();
         $this->conn()->executeStatement('UPDATE rental_promotion_batch SET ended_at = NOW(), ended_by = ? WHERE id = ?', [$user, $batchId]);
