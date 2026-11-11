@@ -104,6 +104,18 @@ class FixedCostApiTest extends WebTestCase
         $this->assertSame([-1000, -264068, null], [$r['result']['net'], $r['result']['netAfterFixed'], $r['result']['netAfterFixedRate']]);
         $this->assertSame(['FIXED_COSTS_PRORATED', 'FIXED_COSTS_MAY_OVERLAP_NOTES'], array_column($f['caveats'], 'code'));
         $this->assertSame(['FF Loyer de juin'], $f['caveats'][1]['notes']);
+
+        // Lot FF2 : simulateur de la période (variante après frais fixes) et contexte du guide (totaux par catégorie, jamais une ligne)
+        $sim = $this->send('POST', '/api/periodes/' . $this->period . '/simulation', [], 200);
+        $this->assertSame([263068, $sim['base']['result'] - 263068], [$sim['base']['fixedCosts'], $sim['base']['resultAfterFixed']]);
+        $this->assertContains('FIXED_COSTS_INCLUDED', array_column($sim['caveats'], 'code'));
+        $period = $this->em()->find(\App\Entity\Collections::class, $this->period);
+        [$payload, , $numbers] = static::getContainer()->get(\App\Services\GestionService\AdviceWriter::class)->payload($period, [], 'fr');
+        $this->assertSame(['total' => '2 630,68 $', 'netAfterFixed' => '-2 640,68 $'], array_intersect_key(array_map(fn ($v) => is_string($v) ? str_replace(["\u{00A0}", "\u{202F}"], ' ', $v) : $v, $payload['context']['fixedCosts']), ['total' => 1, 'netAfterFixed' => 1]));
+        $this->assertSame(['Loyer', 'Salaires', 'Assurances', 'Énergie et télécoms', 'Prêt'], array_column($payload['context']['fixedCosts']['byCategory'], 'category'));
+        $json = json_encode($payload, JSON_UNESCAPED_UNICODE);
+        $this->assertStringNotContainsString('Paie', $json, 'aucun libellé de ligne (salaires compris)');
+        $this->assertContains(2630.68, $numbers, 'total des frais fixes : nombre admis');
     }
 
     private function clean(): void

@@ -156,6 +156,9 @@ class AdviceWriter
             'moments' => $m['moments'],
             'result' => ['revenue' => $f((int) $result['sales']['revenue'], 'money'), 'grossMargin' => $f((int) $result['result']['gross'], 'money'), 'net' => $f((int) $result['result']['net'], 'money')],
             'otherRevenue' => ['rentals' => $f((int) $result['otherRevenue']['rentals'], 'money'), 'subscriptions' => $f((int) $result['otherRevenue']['subscriptions'], 'money')],
+            // lot FF2 : frais fixes de la période (FF1), totaux par catégorie seulement, jamais une ligne ni un nom (salaires compris)
+            'fixedCosts' => ['total' => $f((int) ($result['fixedCosts']['total'] ?? 0), 'money'), 'netAfterFixed' => $f((int) ($result['result']['netAfterFixed'] ?? $result['result']['net']), 'money'),
+                'byCategory' => array_map(fn ($c) => ['category' => $c['label'], 'amount' => $f((int) $c['amount'], 'money')], $result['fixedCosts']['byCategory'] ?? [])],
             'cash' => $cash['balance'] === null ? null : ['status' => $cash['status'], 'lowest14Days' => $f($cash[$cash['alertSeries']]['low14']['amount'], 'money'),
                 'lowestDate' => $f($cash[$cash['alertSeries']]['low14']['date'], 'date'), 'threshold' => $f($cash['settings']['threshold'], 'money')],
             'plannedMovements30Days' => array_values(array_map(fn ($c) => ['category' => $c['label'], 'in' => $f($c['in'], 'money'), 'out' => $f($c['out'], 'money')],
@@ -164,6 +167,8 @@ class AdviceWriter
         $contextNumbers = GestionAdviceService::allowedNumbers([
             ['value' => (int) $result['sales']['revenue'], 'unit' => 'money'], ['value' => (int) $result['result']['gross'], 'unit' => 'money'], ['value' => (int) $result['result']['net'], 'unit' => 'money'],
             ['value' => (int) $result['otherRevenue']['rentals'], 'unit' => 'money'], ['value' => (int) $result['otherRevenue']['subscriptions'], 'unit' => 'money'],
+            ['value' => (int) ($result['fixedCosts']['total'] ?? 0), 'unit' => 'money'], ['value' => (int) ($result['result']['netAfterFixed'] ?? $result['result']['net']), 'unit' => 'money'],
+            ...array_map(fn ($c) => ['value' => (int) $c['amount'], 'unit' => 'money'], $result['fixedCosts']['byCategory'] ?? []),
             ['value' => $m['daysTotal'], 'unit' => 'count'], ['value' => $m['daysRemaining'], 'unit' => 'count'],
             ['value' => $period->getStartDateCollection()->format('Y-m-d'), 'unit' => 'date'], ['value' => $period->getEndDateCollection()->format('Y-m-d'), 'unit' => 'date'],
             ...($cash['balance'] === null ? [] : [['value' => $cash[$cash['alertSeries']]['low14']['amount'], 'unit' => 'money'], ['value' => $cash[$cash['alertSeries']]['low14']['date'], 'unit' => 'date'], ['value' => $cash['settings']['threshold'], 'unit' => 'money']]),
@@ -222,7 +227,7 @@ class AdviceWriter
 
         return "Tu es le guide de gestion d'un commerçant indépendant. On te donne des conseils déjà détectés et chiffrés par le logiciel, avec le contexte de la période.\n"
             . "Ta tâche : pour chaque conseil, écrire un titre court (60 caractères au plus) et un texte de deux phrases au plus (280 caractères), en $language, au vouvoiement, concrets et sans jargon ; "
-            . "classer les conseils du plus utile au moins utile dans `order` ; écrire `headline`, une phrase qui résume la période en tenant compte de la trésorerie, des locations, des abonnements et des mouvements prévus.\n"
+            . "classer les conseils du plus utile au moins utile dans `order` ; écrire `headline`, une phrase qui résume la période en tenant compte de la trésorerie, des locations, des abonnements, des frais fixes (`fixedCosts`, déjà répartis sur la période) et des mouvements prévus.\n"
             . "Règles strictes :\n"
             . "- N'écris AUCUN nombre (montant, pourcentage, quantité, date) qui ne figure pas tel quel dans les sources ou l'effet du conseil (pour `headline` : dans le contexte). Recopie les valeurs telles qu'elles sont écrites. N'additionne, ne soustrais, ne multiplie rien.\n"
             . "- N'invente aucun conseil : réponds seulement pour les identifiants fournis.\n"

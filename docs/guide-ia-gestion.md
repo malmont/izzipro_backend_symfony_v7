@@ -84,7 +84,7 @@ Calculés pour la période demandée, à la date du jour (plusieurs peuvent coex
   par rédaction (compteur `LandingAiQuotaService`, composant `gestion_advice`), droit « Aide IA » ou « IA complète » ; sans droit ni crédits,
   le guide reste en textes de repli, sans erreur. Au plus 1 rédaction automatique par période et par jour et 3 relances : 5 crédits par jour au plus.
 - Charge envoyée (`AdviceWriter::payload`) : période, moments, résultat (ventes, marge, net), autres revenus (locations, abonnements),
-  trésorerie (statut, point bas, seuil), mouvements prévus des 30 jours en totaux par catégorie (salaires en total), conseils (genre, moment,
+  frais fixes de la période (lot FF2 : total, résultat après frais fixes, totaux par catégorie, jamais une ligne ni un libellé), trésorerie (statut, point bas, seuil), mouvements prévus des 30 jours en totaux par catégorie (salaires en total), conseils (genre, moment,
   confiance, effet, sources formatées, noms d'articles, texte de repli). Jamais de client, fournisseur, utilisateur, nom de campagne (canal
   seulement) ni nom de voyage (lieu seulement).
 - **Vérification** : tout nombre écrit dans un titre ou un texte doit être une valeur des sources ou de l'effet du conseil, sous une écriture

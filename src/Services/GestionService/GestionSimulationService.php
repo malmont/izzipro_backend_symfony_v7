@@ -37,12 +37,15 @@ class GestionSimulationService
         private readonly GestionCashService $cash,
         private readonly TranslatorInterface $translator,
         private readonly ?TenantCurrencyProvider $currency = null,
+        private readonly ?GestionFixedCostService $fixedCosts = null, // lot FF2
     ) {
     }
 
     /** @return array<string, mixed> */
     public function simulate(Collections $period, array $body, string $locale, ?\DateTimeImmutable $today = null): array
     {
+        // lot FF2 : frais fixes de la période au prorata (FF1), en variante « après frais fixes » ; le résultat principal ne change pas
+        $fixed = $this->fixedCosts?->between($period->getStartDateCollection()->format('Y-m-d'), $period->getEndDateCollection()->format('Y-m-d'), $locale)['total'] ?? 0;
         if (!$period->isPeriod()) {
             throw new GestionConflictException('NOT_A_PERIOD', 'Cette collection est manuelle : le simulateur concerne les périodes.', 404, ['collectionId' => $period->getId()]);
         }
@@ -119,7 +122,7 @@ class GestionSimulationService
             'units' => (int) $result['sales']['items'] - (int) $result['sales']['returns']['items'],
         ];
         $cashBase = $this->cash->cashUntil(max($end, $todayKey), $today);
-        $scenario = function (bool $simulated) use ($variants, $stock, $levers, $promoProducts, $realized, $saved, $plannedSim, $actual, $cashBase, $locale): array {
+        $scenario = function (bool $simulated) use ($variants, $stock, $levers, $promoProducts, $realized, $saved, $plannedSim, $actual, $cashBase, $locale, $fixed): array {
             $factor = fn (int $productId): float => !$simulated ? 1.0
                 : (1 + $levers['pricePercent'] / 100) * ($levers['promotion'] !== null && ($promoProducts === null || isset($promoProducts[$productId])) ? 1 - $levers['promotion']['percent'] / 100 : 1);
             $units = 0.0;
@@ -167,6 +170,7 @@ class GestionSimulationService
             $gross = $effective - $totalCogs;
             $rate = $effective > 0 ? $gross / $effective : null;
             $breakEven = $rate !== null && $gross > 0 ? (int) ceil($expenses * $effective / $gross) : null; // ventes au point mort = frais ÷ taux de marque
+            $breakEvenFixed = $rate !== null && $gross > 0 ? (int) ceil(($expenses + $fixed) * $effective / $gross) : null;
             $remainingPurchases = max(0, (int) ($planned['purchases'] ?? 0) - (int) ($actual['purchases'] ?? 0));
 
             return [
@@ -177,6 +181,8 @@ class GestionSimulationService
                 'expenses' => ['byCategory' => $byCategory, 'total' => $expenses],
                 'result' => $gross - $expenses,
                 'breakEven' => $breakEven === null ? null : ['revenue' => $breakEven, 'reached' => $effective >= $breakEven],
+                'fixedCosts' => $fixed, 'resultAfterFixed' => $gross - $expenses - $fixed,
+                'breakEvenAfterFixed' => $breakEvenFixed === null ? null : ['revenue' => $breakEvenFixed, 'reached' => $effective >= $breakEvenFixed],
                 'projectedSales' => ['units' => (int) round($units), 'revenue' => $projected],
                 'stockEnd' => ['units' => (int) round($stockEnd['units']), 'costValue' => (int) round($stockEnd['costValue']), 'saleValue' => (int) round($stockEnd['saleValue'])],
                 'cashAfterPurchases' => $cashBase === null ? null : $cashBase['amount'] + $projected - $remainingPurchases - $remainingSpend,
@@ -188,6 +194,9 @@ class GestionSimulationService
         $caveats = [];
         if ($levers['pricePercent'] != 0 || $levers['promotion'] !== null) {
             $caveats[] = 'SAME_QUANTITIES';
+        }
+        if ($fixed > 0) {
+            $caveats[] = 'FIXED_COSTS_INCLUDED';
         }
         if ($base['unknownCostRevenue'] > 0 || $simulated['unknownCostRevenue'] > 0) {
             $caveats[] = 'UNKNOWN_COST';

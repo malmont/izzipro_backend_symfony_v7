@@ -76,6 +76,13 @@ class PreparationApiTest extends WebTestCase
             $this->assertSame([$target, 5000, 0, 500, 1000, 2000], [$planned['replace']['period']['id'], $planned['replace']['purchases'], $planned['replace']['trip'], $planned['replace']['shipping'], $planned['replace']['advertising'], $planned['replace']['other']]);
             $this->assertSame([['date' => $d(-10), 'amount' => 86000], 'TAXES_EXCLUDED'], [$plan['cash']['low'], in_array('TAXES_EXCLUDED', array_column($s['caveats'], 'code'), true) ? 'TAXES_EXCLUDED' : null], 'point bas avant la période : voyage 40,00 $ puis achat 100,00 $');
             $this->assertContains('TRIP_IN_OTHER_PERIOD', array_column($s['caveats'], 'code'));
+            // Lot FF2 : variante après frais fixes (loyer 365,00 $ par mois = 12,00 $ par jour sur les 30 jours de la période visée), résultat principal inchangé
+            $this->assertSame([0, 23773, ['revenue' => 6417, 'reached' => true]], [$plan['fixedCosts'], $plan['resultAfterFixed'], $plan['breakEvenAfterFixed']], 'sans frais fixe : identique');
+            $conn->executeStatement("INSERT INTO gestion_cash_movement (label, category, direction, amount_cents, start_date, recurrence, created_at, updated_at) VALUES ('Loyer FF2', 'rent', 'out', 36500, ?, 'monthly', NOW(), NOW())", [$d(-100)]);
+            $ff = $prep->simulate($body, $t);
+            $this->assertSame([23773, 36000, 23773 - 36000, ['revenue' => (int) ceil((3500 + 36000) * 50000 / 27273), 'reached' => false]], [$ff['plan']['result'], $ff['plan']['fixedCosts'], $ff['plan']['resultAfterFixed'], $ff['plan']['breakEvenAfterFixed']]);
+            $this->assertContains('FIXED_COSTS_INCLUDED', array_column($ff['caveats'], 'code'));
+            $conn->executeStatement("DELETE FROM gestion_cash_movement WHERE label = 'Loyer FF2'");
             // Objectif au-delà du disponible : plafonné
             $capped = $prep->simulate(['sales' => ['method' => 'custom', 'amount' => 90000]] + $body, $t);
             $this->assertSame([55000, true, 'TARGET_EXCEEDS_STOCK'], [$capped['plan']['sales']['planned'], $capped['plan']['sales']['capped'], in_array('TARGET_EXCEEDS_STOCK', array_column($capped['caveats'], 'code'), true) ? 'TARGET_EXCEEDS_STOCK' : null]);

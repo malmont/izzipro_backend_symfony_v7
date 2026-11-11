@@ -106,6 +106,7 @@ simulation:
         keep_text: "The current plan gives the best result: %result%."
     caveats:
         PROMOTIONS_INCLUDED: "Current or upcoming promotions counted for the days they cover, at equal quantities."
+        FIXED_COSTS_INCLUDED: "Result and break-even \"after fixed costs\": the period's fixed costs (rent, salaries, insurance…) spread over its days."
         SAME_QUANTITIES: 'Same quantities sold: the effect of a price or a promotion on the number of sales is not estimated.'
         UNKNOWN_COST: 'Items without a known cost are left out of margins.'
         LAST_YEAR_USED: 'No sales in the last 30 days: remaining sales follow the same days last year.'
@@ -258,6 +259,7 @@ preparation:
     caveats:
         TARGET_EXCEEDS_STOCK: "The target exceeds available stock (current stock and planned purchases): planned sales are capped."
         UNKNOWN_COST: "Part of the stock has no known cost: left out of margin."
+        FIXED_COSTS_INCLUDED: "Result and break-even \"after fixed costs\": the period's fixed costs (rent, salaries, insurance…) spread over its days."
         SALES_SPREAD_EVENLY: "Sales are spread evenly over the days of the period in the cash projection."
         TAXES_ESTIMATED: "Receipts estimated with taxes, at the actual rate of the last 90 days."
         TAXES_EXCLUDED: "No recent taxed sale: receipts counted before taxes."

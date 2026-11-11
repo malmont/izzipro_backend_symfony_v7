@@ -46,6 +46,6 @@ Test : `tests/Functional/Gestion/FixedCostApiTest.php`.
 | Lot | Contenu |
 |---|---|
 | **FF1** | drapeau `fixedCost`, catégorie `utilities`, `GET /api/gestion/frais-fixes`, `fixedCosts` et `netAfterFixed` du résultat ; livré le 11/11/2026 |
-| FF2 | point mort et résultat après frais fixes du simulateur (B1b-2) et de la préparation (P6), en variante ; totaux par catégorie dans le contexte du guide IA (jamais une ligne de salaire) |
+| **FF2** | variante après frais fixes du simulateur (B1b-2) et de la préparation (P6) : `fixedCosts`, `resultAfterFixed`, `breakEvenAfterFixed`, remarque `FIXED_COSTS_INCLUDED`, chiffres principaux inchangés ; contexte du guide IA : `fixedCosts { total, netAfterFixed, byCategory }` en totaux par catégorie (jamais une ligne ni un libellé), nombres admis ; livré le 11/11/2026 |
 
 Schéma : `gestion_cash_movement.fixed_cost` (Version20261216100000, `scripts/migrate_all_v2_gestion_frais_fixes.sh`).

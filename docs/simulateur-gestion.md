@@ -67,6 +67,9 @@ SCÉNARIO = { sales: { realized, projected, total }, units: { realized, projecte
   (`advertising` simulé + `advertisingDelta`, jamais sous 0). `purchases` n'est pas une charge du résultat.
 - `breakEven.revenue` : ventes au coût connu nécessaires pour couvrir les frais = frais ÷ taux de marque (arrondi au cent supérieur) ;
   `reached` : déjà atteint par les ventes au coût connu du scénario ; `null` si la marge est nulle ou négative.
+- Lot FF2 (11/11/2026, `docs/frais-fixes-gestion.md`) : chaque scénario gagne, en variante, `fixedCosts` (frais fixes de la période au
+  prorata), `resultAfterFixed` = `result` − `fixedCosts` et `breakEvenAfterFixed` (même formule avec frais + frais fixes) ; remarque
+  `FIXED_COSTS_INCLUDED` quand il y en a. `result` et `breakEven` ne changent pas.
 - `stockEnd` : stock en vente (articles standard hors location, stock > 0) moins les ventes restantes ; `costValue` au coût courant
   (coût inconnu compté 0), `saleValue` au **prix affiché** (variante, sinon article ; TTC si le site affiche ses prix taxes comprises) ×
   leviers. Les achats encore prévus n'y sont pas (remarque `PLANNED_PURCHASES_NOT_IN_STOCK`).

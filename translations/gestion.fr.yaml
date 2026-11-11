@@ -108,6 +108,7 @@ simulation:
         keep_text: "Le prévu actuel donne le meilleur résultat : %result%."
     caveats:
         PROMOTIONS_INCLUDED: "Promotions en cours ou à venir comptées pour les jours qu’elles couvrent, à quantités égales."
+        FIXED_COSTS_INCLUDED: "Résultat et point mort « après frais fixes » : les frais fixes de la période (loyer, salaires, assurances…) répartis au prorata des jours."
         SAME_QUANTITIES: "À quantités vendues égales : l'effet d'un prix ou d'une promotion sur le nombre de ventes n'est pas estimé."
         UNKNOWN_COST: 'Des articles sans coût connu sont exclus des marges.'
         LAST_YEAR_USED: "Aucune vente ces 30 derniers jours : les ventes restantes reprennent celles des mêmes jours l'an dernier."
@@ -260,6 +261,7 @@ preparation:
     caveats:
         TARGET_EXCEEDS_STOCK: "L’objectif dépasse le stock disponible (stock actuel et achats prévus) : les ventes prévues sont plafonnées."
         UNKNOWN_COST: "Une partie du stock n’a pas de coût connu : exclue de la marge."
+        FIXED_COSTS_INCLUDED: "Résultat et point mort « après frais fixes » : les frais fixes de la période (loyer, salaires, assurances…) répartis au prorata des jours."
         SALES_SPREAD_EVENLY: "Les ventes sont étalées également sur les jours de la période dans la trésorerie."
         TAXES_ESTIMATED: "Encaissements estimés taxes comprises, au taux réel des 90 derniers jours."
         TAXES_EXCLUDED: "Aucune vente taxée récente : encaissements comptés hors taxes."

@@ -34,6 +34,7 @@ class GestionPreparationService
         private readonly GestionSimulationService $simulation,
         private readonly ?TenantCurrencyProvider $currency = null,
         private readonly ?\Symfony\Contracts\Translation\TranslatorInterface $translator = null,
+        private readonly ?GestionFixedCostService $fixedCosts = null, // lot FF2
     ) {
     }
 
@@ -210,6 +211,12 @@ class GestionPreparationService
         }
         $expensesTotal = array_sum(array_column($expenses, 'amount'));
         $breakEven = $gross > 0 ? (int) ceil($expensesTotal * $effective / $gross) : null;
+        // lot FF2 : frais fixes de la période visée au prorata (FF1), en variante « après frais fixes » ; le résultat principal ne change pas
+        $fixed = $this->fixedCosts?->between($period->getStartDateCollection()->format('Y-m-d'), $period->getEndDateCollection()->format('Y-m-d'))['total'] ?? 0;
+        $breakEvenFixed = $gross > 0 ? (int) ceil(($expensesTotal + $fixed) * $effective / $gross) : null;
+        if ($fixed > 0) {
+            $caveats[] = 'FIXED_COSTS_INCLUDED';
+        }
 
         // Trésorerie, d'aujourd'hui à la fin de la période visée
         [$cash, $taxCaveat] = $this->cashPath($period, $today, $in, $sales, $byPeriod[(int) $period->getId()], $actual, $tripBudget);
@@ -229,6 +236,8 @@ class GestionPreparationService
             'expenses' => ['byCategory' => $expenses, 'total' => $expensesTotal, 'tripInOtherPeriod' => $tripInOther],
             'result' => $gross - $expensesTotal,
             'breakEven' => $breakEven === null ? null : ['revenue' => $breakEven, 'reached' => $effective >= $breakEven],
+            'fixedCosts' => $fixed, 'resultAfterFixed' => $gross - $expensesTotal - $fixed,
+            'breakEvenAfterFixed' => $breakEvenFixed === null ? null : ['revenue' => $breakEvenFixed, 'reached' => $effective >= $breakEvenFixed],
             'purchases' => ['total' => $purchaseCost, 'saleValue' => (int) round($purchaseSale), 'coefficient' => $purchaseCost > 0 ? round($purchaseSale / $purchaseCost, 2) : $coefDefault, 'referenceCoefficient' => $coefDefault],
             'stockStart' => ['costValue' => (int) round($stock['cost']), 'saleValue' => (int) round($stock['sale'])],
             'stockEnd' => ['costValue' => (int) round(max(0.0, $stock['cost'] + $purchaseCost - $soldCost)), 'saleValue' => (int) round(max(0.0, $available - $sales))],

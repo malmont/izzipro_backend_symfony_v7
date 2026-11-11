@@ -37,12 +37,14 @@ advertising?, other? }, locale? }`
   plafonner les ventes et baisser le résultat.
 - Frais de la période visée : `trip` (si le voyage y tombe), `shipping`, `advertising`, `other`, chacun au moins le réel déjà engagé.
 - Réponse : `{ period, currency, estimations, plan: { sales { target, method, planned, capped }, grossMargin, tauxMarque, expenses { byCategory,
-  total, tripInOtherPeriod }, result, breakEven, purchases { total, saleValue, coefficient, referenceCoefficient }, stockStart, stockEnd, cash },
+  total, tripInOtherPeriod }, result, breakEven, fixedCosts, resultAfterFixed, breakEvenAfterFixed, purchases { total, saleValue, coefficient, referenceCoefficient }, stockStart, stockEnd, cash },
   lastYear { revenue, grossMargin, result } | null, delta, planned: [{ period { id, name, start, end }, target, purchases, trip, shipping,
   advertising, other, mode: replace | add }], trip, previewHash, caveats }`.
 - **Prévu par période** (C1, règle de classement par date du propriétaire) : chaque achat prévu dans la période de sa date, les frais du voyage dans
   la période de son début, les autres postes dans la période visée. Période visée : `mode: replace` (comme le `PUT` du budget) ; autres périodes :
   `mode: add` (achats et voyage **ajoutés** au prévu existant, autres postes intacts).
+- Lot FF2 : `fixedCosts` (frais fixes de la période visée au prorata, `docs/frais-fixes-gestion.md`), `resultAfterFixed` et
+  `breakEvenAfterFixed` en variante, remarque `FIXED_COSTS_INCLUDED` ; `result` et `breakEven` ne changent pas.
 - `tripInOtherPeriod` : le voyage tombe dans une autre période ; ses frais n'entrent pas dans le résultat de la période visée (ils comptent dans
   celle du voyage). Les achats faits avant restent dans le stock disponible des ventes visées.
 - **Trésorerie** (`cash`, null sans solde : `NO_CASH_BALANCE`) : d'aujourd'hui à la fin de la période visée, projection B1b-1 + achats à leur date
