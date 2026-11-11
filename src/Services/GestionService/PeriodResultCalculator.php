@@ -115,6 +115,29 @@ class PeriodResultCalculator
      */
     private function salesRow(string $fromUtc, string $toUtc, ?\DateTimeImmutable $costCutoff, bool $legacy, ?array $productIds = null): array
     {
+        return $this->salesRows($fromUtc, $toUtc, $costCutoff, $legacy, $productIds, null, false)[0] ?? [];
+    }
+
+    /**
+     * Agrégats des lignes vendues **par jour du magasin** sur [fromDay, toDay] (inclus, Y-m-d), mêmes règles que le résultat (statistiques
+     * unifiées S1, 11/11/2026, `docs/statistiques-gestion.md`), éventuellement pour une source (1 boutique web, 2 caisse, 3 application).
+     *
+     * @return array<string, array<string, mixed>> jour Y-m-d => agrégats (jours sans vente absents)
+     */
+    public function dailySales(string $fromDay, string $toDay, ?int $source = null): array
+    {
+        [$from, $to] = $this->clock->range($fromDay, $toDay);
+        $out = [];
+        foreach ($this->salesRows($from->format('Y-m-d H:i:s'), $to->format('Y-m-d H:i:s'), null, false, null, $source, true) as $row) {
+            $out[substr((string) $row['d'], 0, 10)] = $row;
+        }
+
+        return $out;
+    }
+
+    /** @return list<array<string, mixed>> une ligne (totaux) ou une ligne par jour du magasin (`$byDay`, colonne `d`) */
+    private function salesRows(string $fromUtc, string $toUtc, ?\DateTimeImmutable $costCutoff, bool $legacy, ?array $productIds, ?int $source, bool $byDay): array
+    {
         $conn = $this->emProvider->getEntityManager()->getConnection();
         $params = ['from' => $fromUtc, 'to' => $toUtc];
         $attachedBeforeCutoff = '';
@@ -161,8 +184,17 @@ class PeriodResultCalculator
             . $costJoin
             . ' WHERE o.order_date >= :from AND o.order_date < :to AND o.order_type_id IN (1, 2) AND o.status_id NOT IN (1, 7)'
             . $scope;
-        return $conn->fetchAssociative(
-            'SELECT COALESCE(SUM(net) FILTER (WHERE article AND t = 1), 0) AS sales_amount,'
+        if ($source !== null) {
+            $lines .= ' AND o.order_source_id = :src';
+            $params['src'] = $source;
+        }
+        if ($byDay) {
+            $params['tz'] = $this->clock->timezone()->getName();
+            $lines = str_replace('SELECT o.id AS oid,', "SELECT CAST((o.order_date AT TIME ZONE 'UTC') AT TIME ZONE :tz AS date) AS d, o.id AS oid,", $lines);
+        }
+
+        return $conn->fetchAllAssociative(
+            'SELECT ' . ($byDay ? 'd, ' : '') . 'COALESCE(SUM(net) FILTER (WHERE article AND t = 1), 0) AS sales_amount,'
             . ' COALESCE(SUM(net) FILTER (WHERE article AND t = 2), 0) AS returns_amount,'
             . ' COALESCE(SUM(qty) FILTER (WHERE article AND t = 1), 0) AS items_sold,'
             . ' COALESCE(SUM(qty) FILTER (WHERE article AND t = 2), 0) AS items_returned,'
@@ -179,10 +211,10 @@ class PeriodResultCalculator
             . ' COALESCE(SUM(signed) FILTER (WHERE article AND src = 1), 0) AS src_1,'
             . ' COALESCE(SUM(signed) FILTER (WHERE article AND src = 2), 0) AS src_2,'
             . ' COALESCE(SUM(signed) FILTER (WHERE article AND src = 3), 0) AS src_3'
-            . " FROM ($lines) l",
+            . " FROM ($lines) l" . ($byDay ? ' GROUP BY d ORDER BY d' : ''),
             $params,
             $types
-        ) ?: [];
+        );
     }
 
     /**

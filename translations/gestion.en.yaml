@@ -271,3 +271,11 @@ fixed_costs:
     caveats:
         FIXED_COSTS_MAY_OVERLAP_NOTES: 'Some expense notes of the period look like fixed costs (%names%): a fixed cost must not also be entered as an expense note, or it is counted twice.'
         FIXED_COSTS_PRORATED: 'Fixed costs are spread over the days of the period, whatever their actual payment date.'
+
+# Unified statistics (lot S1, 11/11/2026, docs/statistiques-gestion.md)
+statistics:
+    caveats:
+        UNKNOWN_COST: "%amount% of sales are for items without a known cost: they count in sales, not in the margin."
+        STOCK_VALUE_NOW_ONLY: "Today's stock value only: the comparison will come with the daily snapshots, taken since 11/11/2026."
+        PARTIAL_DAY: "Today is not over yet: its figures will still change."
+        NO_LAST_YEAR_DATA: "No sales over the same range last year: no comparison possible."

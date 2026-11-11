@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (409)
+## Boutique et commun (410)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -415,6 +415,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/gestion/reprise/appliquer` | ROLE_ADMIN | `Controller\GestionController\RepriseController::apply` |
 | POST | `/api/gestion/reprise/simulation` | ROLE_ADMIN | `Controller\GestionController\RepriseController::simulate` |
 | GET | `/api/gestion/reprise` | ROLE_ADMIN | `Controller\GestionController\RepriseController::state` |
+| GET | `/api/gestion/statistiques` | ROLE_ADMIN | `Controller\GestionController\GestionStatisticsController::overview` |
 | DELETE | `/api/gestion/tresorerie/mouvements/{id}` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::deleteMovement` |
 | PATCH | `/api/gestion/tresorerie/mouvements/{id}` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::updateMovement` |
 | GET | `/api/gestion/tresorerie/mouvements` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::movements` |

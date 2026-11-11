@@ -114,8 +114,8 @@ class StockValueService
         ];
     }
 
-    /** Valeur du stock en cents, par variante (B1) ; articles sans variante : quantité × prix de l'article */
-    private function stockValueCents(): int
+    /** Valeur du stock en cents, par variante (B1) ; articles sans variante : quantité × prix de l'article ; publique pour S1 */
+    public function stockValueCents(): int
     {
         $conn = $this->emProvider->getEntityManager()->getConnection();
 

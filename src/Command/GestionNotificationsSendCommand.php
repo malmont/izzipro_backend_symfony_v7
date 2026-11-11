@@ -3,6 +3,8 @@
 namespace App\Command;
 
 use App\Services\GestionService\GestionNotificationService;
+use App\Services\GestionService\GestionStockSnapshotService;
+use App\Services\GestionService\PeriodCalendar;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use Psr\Log\LoggerInterface;
@@ -28,7 +30,9 @@ class GestionNotificationsSendCommand extends Command
         private readonly TenantConnectionManager $tenants,
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly GestionNotificationService $notifications,
-        private readonly LoggerInterface $logger
+        private readonly LoggerInterface $logger,
+        private readonly ?GestionStockSnapshotService $snapshots = null, // lot S1 : instantané quotidien de la valeur du stock, au même passage
+        private readonly ?PeriodCalendar $calendar = null,
     ) {
         parent::__construct();
     }
@@ -55,6 +59,7 @@ class GestionNotificationsSendCommand extends Command
                 $this->emProvider->switchTenant((string) $row['dbname'], (string) $row['code']);
                 $result = $this->notifications->runDaily(null, (bool) $input->getOption('force'));
                 if ($result['ran']) {
+                    $this->snapshot((string) $row['code']);
                     ++$sites;
                     $notified += $result['notified'];
                     $io->text(sprintf('%s : %d notification(s), %d sans envoi', $row['code'], $result['notified'], $result['skipped']));
@@ -68,5 +73,18 @@ class GestionNotificationsSendCommand extends Command
         $io->success(sprintf('%d site(s) à leur heure, %d notification(s), %d site(s) en erreur.', $sites, $notified, $errors));
 
         return $errors > 0 ? Command::FAILURE : Command::SUCCESS;
+    }
+
+    /** Lot S1 : instantané de la valeur du stock du jour du magasin ; une erreur n'empêche jamais les notifications */
+    private function snapshot(string $code): void
+    {
+        if ($this->snapshots === null || $this->calendar === null) {
+            return;
+        }
+        try {
+            $this->snapshots->take($this->calendar->today());
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf('Instantané du stock : site %s non traité : %s', $code, $e->getMessage()));
+        }
     }
 }

@@ -273,3 +273,11 @@ fixed_costs:
     caveats:
         FIXED_COSTS_MAY_OVERLAP_NOTES: 'Des notes de frais de la période ressemblent à des frais fixes (%names%) : un frais fixe ne se saisit pas aussi en note de frais, sinon il compte deux fois.'
         FIXED_COSTS_PRORATED: 'Les frais fixes sont répartis sur les jours de la période, quelle que soit leur date de paiement réelle.'
+
+# Statistiques unifiées (lot S1, 11/11/2026, docs/statistiques-gestion.md)
+statistics:
+    caveats:
+        UNKNOWN_COST: "%amount% de ventes portent sur des articles sans coût connu : elles comptent dans les ventes, pas dans la marge."
+        STOCK_VALUE_NOW_ONLY: "Valeur du stock d'aujourd'hui seulement : la comparaison viendra avec les relevés quotidiens, pris depuis le 11/11/2026."
+        PARTIAL_DAY: "La journée d'aujourd'hui n'est pas terminée : ses chiffres vont encore bouger."
+        NO_LAST_YEAR_DATA: "Aucune vente sur la même plage l'an dernier : pas de comparaison possible."

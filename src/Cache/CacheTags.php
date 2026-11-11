@@ -385,6 +385,7 @@ final class CacheTags
         \App\Entity\GestionCashBalance::class, // trésorerie saisie (lot B1b-1, 11/11/2026) : soldes, mouvements prévus, réglages, en SQL par GestionCashService
         \App\Entity\GestionCashMovement::class,
         \App\Entity\GestionCashSetting::class,
+        \App\Entity\GestionStockSnapshot::class, // instantané quotidien de la valeur du stock (lot S1, 11/11/2026), en SQL par GestionStockSnapshotService
         \App\Entity\GestionAdvice::class, // guide IA de la gestion (lot G1a, 11/11/2026) : conseils et générations, en SQL par GestionAdviceService
         \App\Entity\GestionAdviceRun::class,
         \App\Entity\GestionSimulationComment::class, // commentaires du simulateur (lot G1b-2, 11/11/2026), en SQL par GestionSimulationCommentService
