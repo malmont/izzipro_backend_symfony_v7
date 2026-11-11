@@ -221,6 +221,12 @@ class VariantPromotionApiTest extends WebTestCase
             $this->assertArrayNotHasKey('promotion', $variants[$this->tshirtPlain], "$path : autre variante sans clé");
         }
 
+        // Catalogue par catégorie ou recherche (GET /api/products/by-category, public, lu par la caisse en ligne) : même variants[].promotion
+        $list = $this->json($this->request('GET', '/api/products/by-category?keyword=Horizon&pageSize=50'));
+        $rows = $list['products'] ?? $list['data'] ?? $list['items'] ?? $list;
+        $listed = array_values(array_filter(is_array($rows) ? $rows : [], fn ($p) => is_array($p) && ($p['id'] ?? null) === $tshirtId))[0] ?? $this->fail('by-category : ' . json_encode(array_keys($list)));
+        $this->assertSame($tshirtPromo, array_column($listed['variants'], null, 'id')[$this->tshirtOwn]['promotion']['id'] ?? null, 'liste : variants[].promotion');
+
         // Résultat de période (P2) : chiffre d'affaires et marge au prix réellement vendu (coût = prix d'achat de la fiche)
         $after = $this->periodResult();
         $revenue = 6240 + 3500 + 4347 + 3800 + 2000;
@@ -269,7 +275,14 @@ class VariantPromotionApiTest extends WebTestCase
         $v4 = $this->json($pack(['HTTP_X_POS_OFFLINE_RULES' => 'v4']));
         $this->assertSame(PosOfflineCalculator::RULE_V4, $v4['calculationRule']);
         $capPack = array_values(array_filter($v4['products'], fn ($p) => $p['code'] === 'DEMO-CASQUETTE'))[0]['variants'][0];
-        $this->assertSame([['id' => $promo['id'], 'price' => 2299, 'from' => $promo['startsAt'], 'to' => $promo['endsAt']]], $capPack['promotions']);
+        $this->assertSame([['id' => $promo['id'], 'price' => 2299, 'from' => $promo['startsAt'], 'to' => $promo['endsAt'], 'percent' => 20, 'basePrice' => 2900]], $capPack['promotions']);
+        // ETag selon la règle : une tablette qui passe à v4 avec l'ETag de son pack v3 reçoit 200 et la v4, jamais 304 ; même règle, même ETag : 304
+        $v4Etag = $pack(['HTTP_X_POS_OFFLINE_RULES' => 'v4'])->headers->get('ETag');
+        $this->assertNotSame($v3->headers->get('ETag'), $v4Etag, 'l\'ETag dépend de la règle');
+        $switch = $pack(['HTTP_X_POS_OFFLINE_RULES' => 'v4', 'HTTP_IF_NONE_MATCH' => $v3->headers->get('ETag')]);
+        $this->assertSame([200, PosOfflineCalculator::RULE_V4], [$switch->getStatusCode(), json_decode((string) $switch->getContent(), true)['calculationRule']]);
+        $this->assertSame(304, $pack(['HTTP_X_POS_OFFLINE_RULES' => 'v4', 'HTTP_IF_NONE_MATCH' => $v4Etag])->getStatusCode());
+        $this->assertSame(200, $pack(['HTTP_IF_NONE_MATCH' => $v4Etag])->getStatusCode(), 'tablette v3 avec un ETag v4 : 200');
         $this->assertArrayNotHasKey('promotions', array_values(array_filter($v4['products'], fn ($p) => $p['code'] === 'DEMO-CAFE'))[0]['variants'][0]);
 
         // Vente hors ligne pendant la promotion : rejeu v4 au prix promotionnel ; rejeu v3 au prix v3, sans erreur ni écart

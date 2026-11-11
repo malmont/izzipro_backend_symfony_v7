@@ -2123,8 +2123,10 @@ les applications (caisse, e-commerce) qui savent l'afficher sont publiées. Tous
 - **Hors ligne, règle `pos-offline-v4`** (lot VAR, 11/11/2026, `docs/promotions-gestion.md` § 8) : v3 + **promotions par variante**. Servie
   seulement à la tablette qui envoie `X-Pos-Offline-Rules: v4` sur `GET /api/pos/offline-pack` **et** si le super admin a allumé
   l'interrupteur du site ; sinon pack v3 identique octet pour octet (même ETag). Ajouts : `products[].variants[].promotions [{ id, price, from,
-  to }]` (en cours et à venir). Prix d'une ligne : la promotion de variante dont `[from, to[` contient l'heure de vente (la plus récente si deux
-  se recoupent ; elle remplace la promotion de l'article, sans cumul), sinon la règle v3 ; montants (remises, taxes, arrondi) comme v3.
+  to, percent, basePrice }]` (en cours et à venir ; `basePrice` = prix catalogue, à barrer ; « −percent % »). Prix d'une ligne : la promotion de
+  variante dont `[from, to[` contient l'heure de vente (si deux se recoupent, l'identifiant le plus grand ; elle remplace la promotion de
+  l'article, sans cumul), sinon la règle v3 ; montants (remises, taxes, arrondi) comme v3. L'ETag dépend de la règle : passer de v3 à v4 avec
+  l'ETag du pack v3 donne 200 et la v4. Depuis le 11/11/2026, les variantes du pack sont rangées par identifiant croissant (ETag stable).
   Le serveur rejoue avec l'instantané de la version du pack : promotion de variante seulement si ce pack était v4 ; la ligne garde
   `variant_promotion_id`.
   **Tablette encore en v3 pendant une promotion de variante (interrupteur allumé)** : elle encaisse le prix v3 (sans la promotion de variante)

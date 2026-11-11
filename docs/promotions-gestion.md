@@ -126,15 +126,26 @@ produit. Ordre sur une ligne : prix (promotion) → personnalisation → prix ma
 
 **Formes** :
 - Ligne de devis (`lines[]`, ventes) : `promotion { id, kind: "variant", percent, amount, catalogUnitPrice }` **seulement** quand une promotion de
-  variante s'applique (`amount` = remise unitaire en cents par rapport au prix catalogue ; `unitPrice` est déjà le prix promotionnel).
+  variante s'applique ; `unitPrice` est déjà le prix promotionnel. **`catalogUnitPrice` = prix catalogue au moment du devis : le prix propre de
+  la variante, sinon le prix NORMAL de l'article, jamais le prix promotionnel de l'article** (même base que `percent` et que `basePrice` ;
+  c'est le prix barré que la fiche affichait déjà à côté de la promotion de l'article). `amount` = `catalogUnitPrice − unitPrice`, par rapport
+  à ce même prix. Exemple : sweat à 6 900 en promotion d'article à 4 900, promotion de variante de 30 % à 4 830 → `unitPrice` 4 830,
+  `catalogUnitPrice` 6 900, `amount` 2 070 (et non 70 par rapport à 4 900).
 - Commande : `order_items.variant_promotion_id` (mesures de la gestion), **non exposé** par les API de commande (photo de non-régression).
-- Fiche (`ProductCommerceDto.variants[]`) : `promotion { id, percent, price, basePrice, startDate, endDate, startsAt, endsAt, active }` (en cours,
-  sinon la prochaine) ; clé absente sans promotion ou interrupteur éteint. `variants[].price` reste brut, `pricing` reste au niveau de l'article.
+- Fiche (`ProductCommerceDto.variants[]`, donc `/api/products/{id}`, `by-slug`, `productsid`, `by-category` et les listes) : `promotion { id,
+  percent, price, basePrice, startDate, endDate, startsAt, endsAt, active }` (en cours, sinon la prochaine ; `basePrice` = même prix catalogue
+  que `catalogUnitPrice`) ; clé absente sans promotion ou interrupteur éteint. `variants[].price` reste brut, `pricing` reste au niveau de l'article.
   La route `GET /api/products/{id}/variants` n'expose aucun prix : inchangée.
 - Favoris de la caisse : `price` = prix promotionnel et `promotion` (même forme que la ligne de devis) quand elle s'applique.
 - Pack hors ligne : règle **`pos-offline-v4`** seulement si la tablette envoie `X-Pos-Offline-Rules: v4` **et** si l'interrupteur est allumé ;
-  ajouts `products[].variants[].promotions [{ id, price, from, to }]` (en cours et à venir) et, dans l'instantané, `prices[vid].variantPromotions`.
-  Une tablette v3 reçoit un pack identique octet pour octet (même ETag) et son rejeu reste v3 (`docs/caisse.md`).
+  ajout `products[].variants[].promotions [{ id, price, from, to, percent, basePrice }]` (en cours et à venir ; `basePrice` = prix catalogue
+  pour le prix barré), seule liste que lit la tablette ; l'instantané conservé par le serveur (`prices[vid].variantPromotions`, même contenu) ne
+  sort pas du serveur et sert au rejeu. L'ETag dépend du contenu, donc de la règle : une tablette qui passe en v4 avec l'ETag de son pack v3
+  reçoit 200 et la v4, jamais 304. Une tablette v3 reçoit un pack identique octet pour octet (même ETag) et son rejeu reste v3 (`docs/caisse.md`).
+- **Recoupement** : la promotion appliquée est celle dont `[début, fin[` contient l'instant ; si deux se recoupent, **l'identifiant le plus grand**
+  (la plus récemment créée), au serveur comme sur la tablette. En pratique il n'y en a pas : l'écriture refuse le chevauchement sauf
+  `allowReplace`, et le remplacement arrête l'ancienne **exactement** au début de la nouvelle (`ends_at` = `starts_at` de la nouvelle, fin
+  exclue) ou la vide si elle n'a pas commencé (plage vide, absente du pack) ; la règle reste un filet (écriture directe en base).
 
 **Routes de la gestion** (`ROLE_ADMIN`, `access_control` `/api/gestion`) :
 - `POST /api/gestion/promotions/variantes/apercu { variantIds | productIds | commandeId | adviceId (une seule forme), percent (5 à 90, décimal

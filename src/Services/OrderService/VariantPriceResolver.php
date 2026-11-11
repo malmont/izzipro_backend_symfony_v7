@@ -137,9 +137,10 @@ final class VariantPriceResolver implements EventSubscriberInterface
 
     /**
      * Pack hors ligne v4 : promotions de la variante encore à venir ou en cours (la tablette applique celle dont [from, to[ contient l'heure de
-     * vente, la plus récente si deux se recoupent).
+     * vente ; si deux se recoupent, l'identifiant le plus grand, c'est-à-dire la plus récemment créée). `percent` et `basePrice` (prix catalogue
+     * actuel : prix propre, sinon prix normal de l'article) servent à l'affichage hors ligne (« −20 % », prix barré).
      *
-     * @return list<array{id: int, price: int, from: string, to: string}>
+     * @return list<array{id: int, price: int, from: string, to: string, percent: int|float, basePrice: int}>
      */
     public static function packEntries(ProductVariant $variant): array
     {
@@ -149,7 +150,8 @@ final class VariantPriceResolver implements EventSubscriberInterface
         foreach ($variant->getVariantPromotions() as $p) {
             [$from, $to] = $p->window();
             if ($to > $now && $to > $from && $p->getPrice() < $catalog) {
-                $out[] = ['id' => (int) $p->getId(), 'price' => $p->getPrice(), 'from' => $from->format(\DateTimeInterface::ATOM), 'to' => $to->format(\DateTimeInterface::ATOM)];
+                $out[] = ['id' => (int) $p->getId(), 'price' => $p->getPrice(), 'from' => $from->format(\DateTimeInterface::ATOM), 'to' => $to->format(\DateTimeInterface::ATOM),
+                    'percent' => self::number($p->getPercent()), 'basePrice' => $catalog];
             }
         }
 
