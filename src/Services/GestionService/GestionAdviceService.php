@@ -281,7 +281,7 @@ class GestionAdviceService
         $today ??= $this->calendar->today();
         $since = $today->modify('-' . (AdviceMeasure::WINDOW_DAYS + AdviceMeasure::RESULT_TILE_DAYS) . ' days')->format('Y-m-d');
         $rows = $this->conn()->fetchAllAssociative(
-            "SELECT * FROM gestion_advice WHERE status = 'done' AND kind IN ('FAST_SELLER', 'SLOW_STOCK', 'END_CLEARANCE', 'AD_RELAUNCH') AND COALESCE(applied_on, CAST(done_at AS date)) >= ?"
+            "SELECT * FROM gestion_advice WHERE status = 'done' AND kind IN ('FAST_SELLER', 'SLOW_STOCK', 'END_CLEARANCE', 'AD_RELAUNCH', 'RENTAL_PEAK_DAYS', 'RENTAL_LOW_WEEKDAYS', 'RENTAL_IDLE') AND COALESCE(applied_on, CAST(done_at AS date)) >= ?"
             . ' ORDER BY COALESCE(applied_on, CAST(done_at AS date)) DESC, id DESC LIMIT 5', [$since]
         );
         foreach ($rows as $r) {
@@ -373,7 +373,8 @@ class GestionAdviceService
             $p["%$k%"] = match ($k) {
                 'category' => $this->translator->trans("budget.categories.$v", [], 'gestion', $locale),
                 'date' => $v === null ? '' : HomeTilesService::day((string) $v, $locale),
-                default => (string) $v,
+                'weekdays' => implode(', ', array_map(fn ($w) => $this->translator->trans("advice.weekdays.$w", [], 'gestion', $locale), (array) $v)), // lot LOC2
+                default => is_array($v) ? implode(', ', $v) : (string) $v,
             };
         }
         $variant = ($params['date'] ?? 'x') === null ? '_later' : '';

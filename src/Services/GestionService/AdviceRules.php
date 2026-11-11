@@ -51,6 +51,14 @@ class AdviceRules
     public const STOCKOUT_MIN_SOLD = 5;
     public const LESSON_BUDGET_OVER = 0.1;
     public const LESSON_MAX_FIGURES = 5;
+    // RENT1 RENTAL_PEAK_DAYS, RENT2 RENTAL_LOW_WEEKDAYS, RENT3 RENTAL_IDLE (lot LOC2, 11/11/2026, docs/locations-gestion.md § 2)
+    public const RENT_PEAK_WEEKS = 8;
+    public const RENT_PEAK_MIN_RENTALS = 4;
+    public const RENT_PEAK_INCREASE = 10;
+    public const RENT_LOW_DAYS = 30;
+    public const RENT_LOW_OCCUPANCY = 25.0;
+    public const RENT_LOW_PROMOTION = 20;
+    public const RENT_IDLE_DAYS = 60;
     // Plafond et poids
     public const MAX_ADVICES = 8;
     public const WEIGHTS = ['high' => 1.0, 'medium' => 0.6, 'low' => 0.3];
@@ -68,6 +76,7 @@ class AdviceRules
         private readonly GestionSimulationService $simulation,
         private readonly CampaignProfitabilityCalculator $campaigns,
         private readonly ?\App\Services\CaisseService\StoreClock $clock = null,
+        private readonly ?GestionRentalStatisticsService $rentals = null, // lot LOC2
     ) {
     }
 
@@ -126,6 +135,7 @@ class AdviceRules
         }
         if ($has('selling', 'end')) {
             array_push($c, ...$this->slowStock($period, $today));
+            array_push($c, ...$this->rentalRules($period, $today));
         }
         if ($has('end')) {
             array_push($c, ...$this->endClearance($period, $paceFor(), $m['daysRemaining'], $todayKey));
@@ -543,6 +553,104 @@ class AdviceRules
         $sql = 'SELECT id FROM product WHERE special_price > 0 AND (special_price_to IS NULL OR special_price_to >= :start)' . ($planned ? '' : ' AND (special_price_from IS NULL OR special_price_from < :end)');
 
         return array_fill_keys(array_map('intval', $this->conn()->fetchFirstColumn($sql, ['start' => $start->format('Y-m-d H:i:s'), 'end' => $end->format('Y-m-d H:i:s')])), true);
+    }
+
+    /**
+     * Locations (lot LOC2) : RENT1 jours pleins (8 semaines : un jour occupé à 80 % ou plus avec au moins 4 locations → hausse de 10 % ces jours-là),
+     * RENT2 jours creux (30 jours : article loué mais sous 25 %, lundi à jeudi sous 15 % → promotion de 20 % en semaine, potentiel), RENT3 article qui ne se
+     * loue plus (aucune location depuis 60 jours, louable depuis plus de 60 jours → baisse ou mise en avant ; effet : revenu de la même fenêtre
+     * l'an dernier). Statistiques de LOC1 (occupation hors annulées, revenu par date de location).
+     */
+    private function rentalRules(Collections $period, \DateTimeImmutable $today): array
+    {
+        if ($this->rentals === null) {
+            return [];
+        }
+        $yesterday = $today->modify('-1 day')->format('Y-m-d');
+        $end = \DateTimeImmutable::createFromInterface($period->getEndDateCollection())->format('Y-m-d');
+        $remaining = $today->format('Y-m-d') > $end ? 0 : self::days($today->format('Y-m-d'), $end);
+        $weekdayCount = function (array $weekdays) use ($today, $end): int {
+            $n = 0;
+            for ($d = $today; $d->format('Y-m-d') <= $end; $d = $d->modify('+1 day')) {
+                $n += in_array((int) $d->format('N'), $weekdays, true) ? 1 : 0;
+            }
+
+            return $n;
+        };
+        $perUnit = fn (array $p) => $p['bookedTime'] > 0 ? $p['revenueByRentalDate'] / $p['bookedTime'] : null;
+        $out = [];
+        // RENT1
+        $peak = $this->rentals->compute($today->modify('-' . (self::RENT_PEAK_WEEKS * 7) . ' days')->format('Y-m-d'), $yesterday);
+        foreach ($peak['products'] as $p) {
+            $days = [];
+            foreach ($p['byWeekday'] as $w => $x) {
+                if ($x['offered'] > 0 && $x['booked'] / $x['offered'] * 100 >= GestionRentalStatisticsService::PEAK_OCCUPANCY && $p['rentalsByWeekday'][$w] >= self::RENT_PEAK_MIN_RENTALS) {
+                    $days[] = $w;
+                }
+            }
+            $unit = $perUnit($p);
+            if ($days === [] || $unit === null || $remaining === 0) {
+                continue;
+            }
+            $weekly = array_sum(array_map(fn ($w) => $p['byWeekday'][$w]['booked'], $days)) / self::RENT_PEAK_WEEKS;
+            $effect = (int) round($weekly * $weekdayCount($days) / count($days) * $unit * self::RENT_PEAK_INCREASE / 100);
+            $occ = max(array_map(fn ($w) => $p['byWeekday'][$w]['booked'] / $p['byWeekday'][$w]['offered'] * 100, $days));
+            $pid = $p['productId'];
+            $out[] = $this->advice('RENTAL_PEAK_DAYS', 'selling', "RENTAL_PEAK_DAYS:p$pid", ['productIds' => [$pid]],
+                ['screen' => 'locations', 'params' => ['productId' => $pid, 'weekdays' => $days, 'percent' => self::RENT_PEAK_INCREASE]],
+                $effect, 'extra_rental_revenue', 'medium', [
+                    $this->src('occupancy', round(min(100.0, $occ), 1), 'percent'), $this->src('rentals', array_sum(array_map(fn ($w) => $p['rentalsByWeekday'][$w], $days)), 'count'),
+                    $this->src('price_increase', self::RENT_PEAK_INCREASE, 'percent'),
+                ], [['productId' => $pid, 'name' => $p['name']]], ['name' => $p['name'], 'weekdays' => $days]);
+        }
+        // RENT2
+        $low = $this->rentals->compute($today->modify('-' . self::RENT_LOW_DAYS . ' days')->format('Y-m-d'), $yesterday);
+        foreach ($low['products'] as $p) {
+            $week = [1, 2, 3, 4];
+            $offered = array_sum(array_map(fn ($w) => $p['byWeekday'][$w]['offered'], $week));
+            $booked = array_sum(array_map(fn ($w) => $p['byWeekday'][$w]['booked'], $week));
+            if ($p['occupancy'] === null || $p['occupancy'] >= self::RENT_LOW_OCCUPANCY || $offered <= 0 || $booked / $offered * 100 >= GestionRentalStatisticsService::LOW_WEEKDAY_OCCUPANCY || $remaining === 0) {
+                continue;
+            }
+            $unit = $perUnit($p); // tarif obtenu : un article jamais loué sur la fenêtre relève de RENT3, pas d'un potentiel au tarif de la grille
+            if ($unit === null || $unit <= 0) {
+                continue;
+            }
+            $perDay = $p['unit'] === 'days' ? $p['capacity'] : $p['capacity'] * $p['hoursPerDay'];
+            $free = $perDay * $weekdayCount($week) * (1 - $booked / $offered);
+            $effect = (int) round($free * $unit * (100 - self::RENT_LOW_PROMOTION) / 100);
+            $pid = $p['productId'];
+            $out[] = $this->advice('RENTAL_LOW_WEEKDAYS', 'selling', "RENTAL_LOW_WEEKDAYS:p$pid", ['productIds' => [$pid]],
+                ['screen' => 'locations', 'params' => ['productId' => $pid, 'weekdays' => $week, 'percent' => self::RENT_LOW_PROMOTION]],
+                $effect, 'rental_potential', 'low', [
+                    $this->src('occupancy', $p['occupancy'], 'percent'), $this->src('weekday_occupancy', round($booked / $offered * 100, 1), 'percent'),
+                    $this->src('promotion', self::RENT_LOW_PROMOTION, 'percent'),
+                ], [['productId' => $pid, 'name' => $p['name']]], ['name' => $p['name']]);
+        }
+        // RENT3
+        $from = $today->modify('-' . self::RENT_IDLE_DAYS . ' days')->format('Y-m-d');
+        $idle = $this->rentals->compute($from, $yesterday);
+        $created = $this->conn()->fetchAllKeyValue('SELECT p.id, CAST(p.created_at AS date) FROM product p JOIN booking_configuration bc ON bc.product_id = p.id');
+        foreach ($idle['products'] as $p) {
+            $pid = $p['productId'];
+            if ($p['bookedTime'] > 0 || $p['rentals'] > 0 || !isset($created[$pid]) || substr((string) $created[$pid], 0, 10) > $from || $p['capacity'] <= 0) {
+                continue;
+            }
+            $ly = $this->rentals->compute(GestionStatisticsService::shiftYears($from, -1), GestionStatisticsService::shiftYears($yesterday, -1), [$pid]);
+            $lyRevenue = (int) ($ly['products'][0]['revenueByRentalDate'] ?? 0);
+            $out[] = $this->advice('RENTAL_IDLE', 'selling', "RENTAL_IDLE:p$pid", ['productIds' => [$pid]],
+                ['screen' => 'locations', 'params' => ['productId' => $pid]],
+                $lyRevenue, 'rental_revenue_last_year', 'low', [
+                    $this->src('days_without_rental', self::RENT_IDLE_DAYS, 'days'), $this->src('last_year_rental_revenue', $lyRevenue, 'money'),
+                ], [['productId' => $pid, 'name' => $p['name']]], ['name' => $p['name']]);
+        }
+
+        $byKind = [];
+        foreach ($out as $a) {
+            $byKind[$a['kind']][] = $a;
+        }
+
+        return array_merge(...array_map(fn ($list) => $this->top($list), array_values($byKind ?: [[]]))); // 3 au plus par règle
     }
 
     private function advice(string $kind, string $moment, string $signature, array $subject, array $action, int $effect, string $effectLabel, string $confidence, array $sources, array $figures, array $params): array

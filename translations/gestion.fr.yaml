@@ -166,7 +166,21 @@ advice:
         LESSON_BUDGET:
             title: "Leçon : poste %category% dépassé"
             text: "Prévu %planned%, dépensé %actual% : prévoyez plus large, ou surveillez ce poste plus tôt l’an prochain."
+        RENTAL_PEAK_DAYS:
+            title: "%name% : jours pleins"
+            text: "%name% est loué à %occupancy% le %weekdays% (%rentals% locations en 8 semaines). Une hausse de %price_increase% ces jours-là rapporterait environ %effect% d’ici la fin de la période."
+        RENTAL_LOW_WEEKDAYS:
+            title: "%name% : semaine creuse"
+            text: "%name% n’est occupé qu’à %occupancy% sur 30 jours, %weekday_occupancy% du lundi au jeudi. Une promotion de %promotion% en semaine pourrait remplir ces jours : potentiel d’environ %effect%."
+        RENTAL_IDLE:
+            title: "%name% ne se loue plus"
+            text: "Aucune location de %name% depuis %days_without_rental% jours (%last_year_rental_revenue% l’an dernier sur la même fenêtre). Baissez le tarif ou mettez-le en avant."
     sources:
+        occupancy: "Occupation"
+        rentals: "Locations"
+        weekday_occupancy: "Occupation du lundi au jeudi"
+        days_without_rental: "Jours sans location"
+        last_year_rental_revenue: "Revenu de location l’an dernier"
         sold_30_days: "Ventes des 30 derniers jours"
         stock: "Stock actuel"
         coverage_days: "Jours de stock au rythme actuel"
@@ -215,7 +229,18 @@ advice:
         units_sold: "Ventes"
         margin: "Marge de ces ventes"
         unsold_products: "Articles invendus"
+    weekdays:
+        1: lundi
+        2: mardi
+        3: mercredi
+        4: jeudi
+        5: vendredi
+        6: samedi
+        7: dimanche
     effects:
+        extra_rental_revenue: "Revenu de location en plus estimé"
+        rental_potential: "Potentiel des jours creux"
+        rental_revenue_last_year: "Revenu de location l’an dernier"
         extra_margin: "Marge en plus estimée"
         tied_up: "Argent immobilisé"
         net_margin_same_spend: "Marge nette estimée pour la même dépense"
@@ -236,6 +261,7 @@ measure:
         TOO_EARLY: "Seulement %days% jours sur 14 : trop tôt pour conclure."
         SEASONAL: "L’an dernier, aux mêmes dates, les ventes ont varié de la même façon : la saison explique sans doute une partie de l’écart."
     texts:
+        rental: "Appliqué le %date% : revenu de location %change% en %days% jours (par date de location)."
         price: "Hausse de %percent% appliquée le %date% : marge %change% en %days% jours (estimé : %estimated%)."
         promotion: "Promotion de %percent% appliquée le %date% : marge %change% en %days% jours."
         promotion_sales: "%units% ventes depuis la promotion du %date% (%days% jours) : %revenue% de ventes, %margin% de marge."

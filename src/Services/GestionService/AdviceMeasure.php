@@ -19,6 +19,8 @@ class AdviceMeasure
     public const WINDOW_DAYS = 14;
     public const MIN_DAYS = 7;
     public const PRODUCT_KINDS = ['FAST_SELLER', 'SLOW_STOCK', 'END_CLEARANCE'];
+    /** Lot LOC2 : conseils de location, mesurés sur le revenu de location de l'article par date de location (LOC1) */
+    public const RENTAL_KINDS = ['RENTAL_PEAK_DAYS', 'RENTAL_LOW_WEEKDAYS', 'RENTAL_IDLE'];
     public const SEASONAL_TOLERANCE = 0.5;
     public const RESULT_TILE_DAYS = 30; // vignette advice-result : mesures complètes depuis moins de 30 jours
 
@@ -30,6 +32,7 @@ class AdviceMeasure
         private readonly StoreClock $clock,
         private readonly TranslatorInterface $translator,
         private readonly ?TenantCurrencyProvider $currency = null,
+        private readonly ?GestionRentalStatisticsService $rentals = null, // lot LOC2
     ) {
     }
 
@@ -48,7 +51,8 @@ class AdviceMeasure
         $kind = (string) $row['kind'];
         $base = ['adviceId' => (int) $row['id'], 'kind' => $kind, 'appliedOn' => $appliedOn, 'applied' => $applied === [] ? null : $applied, 'estimatedEffect' => (int) $row['effect_cents']];
         $campaignId = isset($applied['campaignId']) ? (int) $applied['campaignId'] : null;
-        $measurable = in_array($kind, self::PRODUCT_KINDS, true) || ($kind === 'AD_RELAUNCH' && $campaignId !== null);
+        $rental = in_array($kind, self::RENTAL_KINDS, true) && $this->rentals !== null;
+        $measurable = in_array($kind, self::PRODUCT_KINDS, true) || $rental || ($kind === 'AD_RELAUNCH' && $campaignId !== null);
         if (!$measurable) {
             return $base + ['measurable' => false];
         }
@@ -63,7 +67,7 @@ class AdviceMeasure
         $days = $afterTo < $afterFrom ? 0 : AdviceRules::days($afterFrom, $afterTo);
         $beforeTo = (new \DateTimeImmutable($appliedOn))->modify('-1 day')->format('Y-m-d');
         $beforeFrom = (new \DateTimeImmutable($appliedOn))->modify('-' . max(1, $days) . ' days')->format('Y-m-d');
-        $metrics = fn (string $from, string $to) => $this->metrics($from, $to, $productIds);
+        $metrics = $rental ? fn (string $from, string $to) => $this->rentalMetrics($from, $to, $productIds) : fn (string $from, string $to) => $this->metrics($from, $to, $productIds);
         $before = $days > 0 ? $metrics($beforeFrom, $beforeTo) : self::zero();
         $after = $days > 0 ? $metrics($afterFrom, $afterTo) : self::zero();
         $change = self::diff($after, $before);
@@ -150,6 +154,11 @@ class AdviceMeasure
         if ($m['window']['days'] < self::MIN_DAYS) {
             return $this->translator->trans('measure.texts.too_early', $p, 'gestion', $locale);
         }
+        if (in_array($kind, self::RENTAL_KINDS, true)) {
+            $p['%change%'] = $this->signed($m['change']['revenue'], $locale);
+
+            return $this->translator->trans('measure.texts.rental', $p, 'gestion', $locale);
+        }
         if ($kind === 'FAST_SELLER') {
             $p['%percent%'] = $this->percent((float) ($applied['pricePercent'] ?? AdviceRules::FAST_PRICE_PERCENT), $locale);
 
@@ -169,6 +178,15 @@ class AdviceMeasure
         $m = $this->results->salesMetrics(new \DateTimeImmutable($from), new \DateTimeImmutable($to), $productIds);
 
         return ['revenue' => (int) $m['revenue'], 'grossMargin' => (int) $m['grossMargin'], 'units' => (int) $m['items']];
+    }
+
+    /** Lot LOC2 : revenu de location par date de location (sans coût : marge = revenu), locations commencées */
+    private function rentalMetrics(string $from, string $to, array $productIds): array
+    {
+        $s = $this->rentals->compute($from, $to, $productIds === [] ? null : $productIds);
+        $revenue = (int) array_sum(array_column($s['products'], 'revenueByRentalDate'));
+
+        return ['revenue' => $revenue, 'grossMargin' => $revenue, 'units' => (int) array_sum(array_column($s['products'], 'rentals'))];
     }
 
     private static function zero(): array

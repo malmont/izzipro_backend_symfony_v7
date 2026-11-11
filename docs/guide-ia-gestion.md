@@ -42,6 +42,9 @@ Calculés pour la période demandée, à la date du jour (plusieurs peuvent coex
 | R11 `LESSON_STOCKOUT` | closing | variantes à stock 0 vendues ≥ 5 fois dans la période | marge de leurs ventes | medium | `articles` |
 | R11 `LESSON_OVERSTOCK` | closing | articles invendus dans la période, ≥ 100 $ au coût | valeur au coût | medium | `articles` |
 | R11 `LESSON_BUDGET` | closing | poste dépassé de plus de 10 % | −dépassement | high | `periode.budget` |
+| RENT1 `RENTAL_PEAK_DAYS` | selling, end | 8 semaines : un jour de la semaine occupé à 80 % ou plus avec au moins 4 locations (lot LOC2) | temps loué ces jours × tarif obtenu × 10 % d'ici la fin de la période | medium | `locations` |
+| RENT2 `RENTAL_LOW_WEEKDAYS` | selling, end | 30 jours : article occupé sous 25 %, du lundi au jeudi sous 15 % | potentiel : capacité libre du lundi au jeudi restants × tarif obtenu × 80 % (article loué au moins une fois sur la fenêtre) | low | `locations` |
+| RENT3 `RENTAL_IDLE` | selling, end | aucune location depuis 60 jours, louable depuis plus de 60 jours | revenu de location de la même fenêtre l'an dernier, sinon 0 | low | `locations` |
 
 - Lot P5 : R2 et R9 s'abstiennent pour un article déjà en promotion (en cours ou à venir), R1 pendant une promotion (`docs/promotions-gestion.md` § 6).
 - R1, R2 : 3 conseils au plus (plus gros effets) ; R3 : 2 au plus. Plafond de 8 conseils, R7 et R8 gardés au-delà. Rang de départ =

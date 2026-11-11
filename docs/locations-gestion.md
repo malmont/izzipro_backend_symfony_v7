@@ -40,12 +40,28 @@ pas. Les statistiques des locations comptent ce revenu de la même façon, mais 
 Code : `Services/GestionService/GestionRentalStatisticsService`, `UseCase/GestionUseCase/GestionRentalUseCase`,
 `Controller/GestionController/GestionRentalController`. Test : `tests/Functional/Gestion/RentalStatisticsApiTest.php`.
 
-## 2. Lots
+## 2. Règles du guide (LOC2)
+
+Dans `AdviceRules` (constantes `RENT_*`), calculées sur les statistiques de LOC1 (occupation hors annulées, revenu par date de location), aux
+moments `selling` et `end` de la période ; `docs/guide-ia-gestion.md` § 2. Écran d'action : `locations` `{ productId, weekdays?, percent? }`.
+- RENT1 `RENTAL_PEAK_DAYS` : sur les 8 dernières semaines, un jour de la semaine occupé à **80 %** ou plus avec au moins **4** locations ce
+  jour-là → hausse ciblée de **10 %** ces jours-là. Effet = temps loué moyen par semaine ces jours × nombre de ces jours restants dans la période ×
+  tarif obtenu (revenu par date de location ÷ temps loué) × 10 % ; confiance medium. `params.weekdays` (1 lundi … 7 dimanche).
+- RENT2 `RENTAL_LOW_WEEKDAYS` : sur 30 jours, article occupé sous **25 %** et du lundi au jeudi sous **15 %** → promotion de **20 %** en semaine.
+  Seulement pour un article loué au moins une fois sur la fenêtre (un article jamais loué relève de RENT3). Effet (potentiel) = capacité libre du
+  lundi au jeudi restants × tarif obtenu × 80 % ; confiance low. Au plus 3 conseils par règle.
+- RENT3 `RENTAL_IDLE` : aucune location depuis **60** jours, article louable depuis plus de 60 jours → baisse du tarif ou mise en avant. Effet =
+  revenu de location de l'article sur la même fenêtre l'an dernier (par date de location), sinon 0 ; confiance low.
+- Mesure après application (G1b-1, `AdviceMeasure::RENTAL_KINDS`) : revenu de location de l'article **par date de location**, 14 jours avant et
+  après ; vignette « advice-result » comprise.
+- Test : `tests/Functional/Gestion/RentalAdviceTest.php`.
+
+## 3. Lots
 
 | Lot | Contenu |
 |---|---|
 | **LOC1** | statistiques : revenu à la date de vente et par date de location, occupation par article et par jour de la semaine ; livré le 11/11/2026 |
-| LOC2 | règles du guide RENT1 (jours pleins), RENT2 (jours creux en semaine), RENT3 (article qui ne se loue plus), mesure après application |
+| **LOC2** | règles du guide RENT1 (jours pleins), RENT2 (jours creux en semaine), RENT3 (article qui ne se loue plus), mesure après application ; livré le 11/11/2026 |
 | LOC3 | promotion de location par article (`rental_promotion`, lue par le calcul commun boutique et caisse) : plan détaillé avant le code, feu vert du propriétaire avant la mise en ligne |
 | LOC4 | changement de grille (aperçu, `SHARED_GRID` et `allowShared`, annulation 24 h) |
 | LOC5 | projection des locations de la période |

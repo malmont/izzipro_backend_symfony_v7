@@ -164,7 +164,21 @@ advice:
         LESSON_BUDGET:
             title: "Lesson: %category% over budget"
             text: "Planned %planned%, spent %actual%: plan more, or watch this item earlier next year."
+        RENTAL_PEAK_DAYS:
+            title: "%name%: busy days"
+            text: "%name% is rented at %occupancy% on %weekdays% (%rentals% rentals in 8 weeks). A %price_increase% increase on those days would bring about %effect% by the end of the period."
+        RENTAL_LOW_WEEKDAYS:
+            title: "%name%: quiet weekdays"
+            text: "%name% is only %occupancy% occupied over 30 days, %weekday_occupancy% Monday to Thursday. A %promotion% weekday promotion could fill those days: potential of about %effect%."
+        RENTAL_IDLE:
+            title: "%name% is no longer rented"
+            text: "No rental of %name% for %days_without_rental% days (%last_year_rental_revenue% last year over the same window). Lower the rate or feature it."
     sources:
+        occupancy: "Occupancy"
+        rentals: "Rentals"
+        weekday_occupancy: "Occupancy Monday to Thursday"
+        days_without_rental: "Days without rental"
+        last_year_rental_revenue: "Rental revenue last year"
         sold_30_days: "Sales in the last 30 days"
         stock: "Current stock"
         coverage_days: "Days of stock at the current pace"
@@ -213,7 +227,18 @@ advice:
         units_sold: "Units sold"
         margin: "Margin on these sales"
         unsold_products: "Unsold items"
+    weekdays:
+        1: Monday
+        2: Tuesday
+        3: Wednesday
+        4: Thursday
+        5: Friday
+        6: Saturday
+        7: Sunday
     effects:
+        extra_rental_revenue: "Estimated extra rental revenue"
+        rental_potential: "Potential of the quiet days"
+        rental_revenue_last_year: "Rental revenue last year"
         extra_margin: "Estimated extra margin"
         tied_up: "Money tied up"
         net_margin_same_spend: "Estimated net margin for the same spend"
@@ -234,6 +259,7 @@ measure:
         TOO_EARLY: "Only %days% days out of 14: too early to conclude."
         SEASONAL: "Last year, on the same dates, sales moved the same way: the season probably explains part of the gap."
     texts:
+        rental: "Applied on %date%: rental revenue %change% in %days% days (by rental date)."
         price: "%percent% price increase applied on %date%: margin %change% in %days% days (estimated: %estimated%)."
         promotion: "%percent% promotion applied on %date%: margin %change% in %days% days."
         promotion_sales: "%units% sales since the promotion of %date% (%days% days): %revenue% in sales, %margin% in margin."

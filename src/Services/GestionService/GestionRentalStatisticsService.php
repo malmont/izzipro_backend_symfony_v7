@@ -60,7 +60,7 @@ class GestionRentalStatisticsService
             'currency' => $this->currency?->code() ?? TenantCurrencyProvider::DEFAULT,
             'range' => ['type' => $type, 'from' => $from, 'to' => $to, 'days' => self::days($from, $to)],
             'revenue' => $s['revenue'], 'revenueByRentalDate' => $s['revenueByRentalDate'], 'rentals' => $s['rentals'], 'cancellations' => $s['cancellations'],
-            'products' => array_map(fn ($p) => array_diff_key($p, ['capped' => 1, 'byWeekday' => 1]), $s['products']),
+            'products' => array_map(fn ($p) => array_diff_key($p, ['capped' => 1, 'byWeekday' => 1, 'rentalsByWeekday' => 1]), $s['products']),
             'weekdays' => array_map(fn ($w) => $w + ['label' => $label($w['weekday'])], $s['weekdays']),
             'highDays' => array_values(array_map(fn ($w) => $w['weekday'], array_filter($s['weekdays'], fn ($w) => $w['occupancy'] !== null && $w['occupancy'] >= self::PEAK_OCCUPANCY))),
             'lowDays' => array_values(array_map(fn ($w) => $w['weekday'], array_filter($s['weekdays'], fn ($w) => $w['occupancy'] !== null && $w['occupancy'] < self::LOW_WEEKDAY_OCCUPANCY))),
@@ -93,7 +93,7 @@ class GestionRentalStatisticsService
             $products[$pid] = ['productId' => $pid, 'name' => (string) $r['name'], 'granularity' => (string) $r['granularity'], 'unit' => $unit,
                 'capacity' => max(0, (int) $r['stock_quantity']), 'openingHours' => $hours !== null, 'hoursPerDay' => $unit === 'days' ? null : ($hours ?? 24.0),
                 'booked' => 0.0, 'offered' => 0.0, 'rentals' => 0, 'cancellations' => 0, 'durations' => [], 'revenue' => 0, 'revenueByRentalDate' => 0.0,
-                'byWeekday' => array_fill(1, 7, ['booked' => 0.0, 'offered' => 0.0])];
+                'byWeekday' => array_fill(1, 7, ['booked' => 0.0, 'offered' => 0.0]), 'rentalsByWeekday' => array_fill(1, 7, 0)];
         }
         // Temps offert, jour par jour
         for ($d = $rangeStart; $d < $rangeEnd; $d = $d->modify('+1 day')) {
@@ -135,6 +135,7 @@ class GestionRentalStatisticsService
             if ($startsInRange) {
                 ++$products[$pid]['rentals'];
                 ++$rentalsByWeekday[(int) $start->format('N')];
+                ++$products[$pid]['rentalsByWeekday'][(int) $start->format('N')];
                 $products[$pid]['durations'][] = $products[$pid]['unit'] === 'days' ? max(1, (int) round($hours / 24)) : $hours;
             }
             if ($products[$pid]['unit'] === 'days') {
@@ -183,7 +184,7 @@ class GestionRentalStatisticsService
                 'occupancy' => $raw === null ? null : round(min(100.0, $raw), 1), 'bookedTime' => round($p['booked'], 1), 'offeredTime' => round($p['offered'], 1),
                 'revenue' => $p['revenue'], 'revenueByRentalDate' => (int) round($p['revenueByRentalDate']), 'rentals' => $p['rentals'],
                 'averageDuration' => $p['durations'] === [] ? null : round(array_sum($p['durations']) / count($p['durations']), 1), 'cancellations' => $p['cancellations'],
-                'capped' => $raw !== null && $raw > 100, 'byWeekday' => $p['byWeekday'],
+                'capped' => $raw !== null && $raw > 100, 'byWeekday' => $p['byWeekday'], 'rentalsByWeekday' => $p['rentalsByWeekday'],
             ];
         }
         // Par jour de la semaine : moyenne des occupations des articles (unités différentes), locations commencées ce jour-là
