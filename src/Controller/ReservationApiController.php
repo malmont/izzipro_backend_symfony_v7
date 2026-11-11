@@ -93,6 +93,10 @@ class ReservationApiController extends AbstractController
                 ], Response::HTTP_BAD_REQUEST);
             }
 
+            if (\App\Services\PublicFormTrap::caught($data, 'POST /api/reservations sur ' . ($request->headers->get('X-Tenant-Host') ?: $request->getHost()))) {
+                return $this->json(['success' => true, 'message' => 'Réservation enregistrée', 'data' => self::decoy($data)], Response::HTTP_CREATED);
+            }
+
             $dto = new ReservationInputDto();
             $dto->service_id = isset($data['service_id']) ? trim((string)$data['service_id']) : null;
             $dto->service_name = isset($data['service_name']) ? trim((string)$data['service_name']) : null;
@@ -306,5 +310,22 @@ class ReservationApiController extends AbstractController
         }, 3600, [...\App\Cache\CacheTags::listTags(\App\Cache\CacheTags::SERVICE_OFFERS), ...\App\Cache\CacheTags::listTags(\App\Cache\CacheTags::SERVICE_FAMILIES)]);
 
         return $this->json($services, Response::HTTP_OK);
+    }
+
+    /** Réponse d'une réservation réussie pour un robot pris au piège (même forme que ReservationOutputDto, rien d'enregistré) */
+    private static function decoy(array $data): array
+    {
+        $text = fn (string $key) => is_scalar($data[$key] ?? null) ? trim((string) $data[$key]) : null;
+        $int = fn (string $key) => is_numeric($data[$key] ?? null) ? (int) $data[$key] : null;
+
+        return [
+            'id' => random_int(1000, 99999), 'service_id' => $text('service_id'), 'service_name' => $text('service_name'),
+            'reservation_date' => $text('reservation_date'), 'reservation_slot' => $text('reservation_slot'),
+            'client_name' => $text('client_name'), 'client_email' => $text('client_email'), 'client_phone' => $text('client_phone'),
+            'number_of_guests' => $int('number_of_guests') ?? 1, 'notes' => $text('notes'), 'status' => 'pending',
+            'created_at' => date(\DateTimeInterface::ATOM), 'book_id' => $text('book_id'), 'chapter_id' => $text('chapter_id'),
+            'step_number' => $int('step_number'), 'total_steps' => $int('total_steps'), 'forfait_name' => $text('forfait_name'),
+            'step_label' => null, 'biographer_id' => $int('biographer_id'), 'biographer_name' => null, 'biographer_email' => null,
+        ];
     }
 }

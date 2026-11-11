@@ -100,6 +100,16 @@ le serveur et dans l'ancienne application).
 - Colonnes `industry`, `company_name`, `job_function`, `phone` facultatif : `scripts/migrate_all_v2_contact_fields.sh`,
   migration `Version20261007160000`.
 
+**Piège à robots** (11/11/2026, spams reçus par esgboost ; `Services/PublicFormTrap`) sur `POST /api/contacts`,
+`/api/contacts/create`, `/api/contact/submit` et `POST /api/reservations` (prise de rendez-vous) : le navigateur envoie
+`site` (champ caché, laissé vide par un humain) et `fillSeconds` (secondes entre l'affichage et l'envoi, nombre).
+`site` rempli, ou `fillSeconds` non numérique ou inférieur à 4 : réponse d'un envoi réussi (même forme), rien
+d'enregistré ni d'envoyé, ligne `[anti-robot] envoi écarté sur <route> sur <site>` dans le journal du conteneur.
+**Mode tolérant** : un corps sans `fillSeconds` passe comme avant (fronts pas encore à jour, applications mobiles qui
+réservent) ; un mode strict (`fillSeconds` exigé) ne sera possible qu'une fois tous les clients à jour. Durée
+minimale plus courte que les formulaires à étapes (8 s) : une seule page, souvent préremplie. Test
+`tests/Functional/Security/PublicFormTrapTest.php`.
+
 ## Formulaires à étapes (chantier du 27/10/2026)
 
 Contrat du lot 1 figé par le frontend (container `layout: "steps"`, blocs `field` et `summary`, actions de bouton

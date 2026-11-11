@@ -57,11 +57,14 @@ class ContactApiController extends AbstractController
     #[Route('/create', name: 'api_contact_create_alias', methods: ['POST'])]
     public function create(Request $request): JsonResponse
     {
+        $body = json_decode($request->getContent(), true);
+        $host = (string) ($request->headers->get('X-Tenant-Host') ?: $request->getHost());
+        if (\App\Services\PublicFormTrap::caught($body, 'POST /api/contacts sur ' . $host)) {
+            return $this->json(self::decoy($body), Response::HTTP_CREATED);
+        }
+
         try {
-            $contact = $this->createContactUseCase->execute(
-                json_decode($request->getContent(), true),
-                (string) ($request->headers->get('X-Tenant-Host') ?: $request->getHost())
-            );
+            $contact = $this->createContactUseCase->execute($body, $host);
         } catch (\App\UseCase\ContactUseCase\ContactFormException $e) {
             return $this->json(['message' => $e->getMessage(), 'errors' => $e->errors], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
@@ -90,5 +93,18 @@ class ContactApiController extends AbstractController
     {
         $this->deleteContactUseCase->execute($id);
         return $this->json(null, Response::HTTP_NO_CONTENT);
+    }
+
+    /** Réponse d'un envoi réussi pour un robot pris au piège (même forme que ContactOutputDto, rien d'enregistré) */
+    private static function decoy(array $body): array
+    {
+        $text = fn (string $key) => is_string($body[$key] ?? null) ? $body[$key] : null;
+
+        return [
+            'id' => random_int(1000, 99999), 'name' => (string) $text('name'), 'email' => (string) $text('email'),
+            'phone' => $text('phone'), 'subject' => (string) $text('subject'), 'Content' => (string) ($text('message') ?? $text('Content')),
+            'createdAt' => date('Y-m-d H:i:s'), 'isRead' => false, 'industry' => $text('industry'),
+            'companyName' => $text('companyName'), 'jobFunction' => $text('jobFunction'),
+        ];
     }
 }
