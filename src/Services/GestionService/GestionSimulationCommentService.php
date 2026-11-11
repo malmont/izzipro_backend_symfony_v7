@@ -256,7 +256,10 @@ class GestionSimulationCommentService
      *
      * @return array{0: array<string, mixed>, 1: string, 2: ?int} avis, statut de l'IA, usage
      */
-    public function askGuide(Collections $period, array $payload, array $numbers, array $keys, array $fallback, string $locale, ?string $user, ?string $system = null): array
+    /**
+     * @param bool $withLessons lot AN : la sortie gagne `lessons` (2 ou 3 phrases, nettoyées et vérifiées comme le texte) ; faux pour G1b-2 et P6
+     */
+    public function askGuide(Collections $period, array $payload, array $numbers, array $keys, array $fallback, string $locale, ?string $user, ?string $system = null, bool $withLessons = false): array
     {
         $code = (string) $this->tenants->getCurrentTenantCode();
         try {
@@ -278,8 +281,9 @@ class GestionSimulationCommentService
             $response = $this->client->createMessage([
                 'model' => self::MODEL, 'max_tokens' => 1500, 'system' => $system ?? $this->system($locale),
                 'messages' => [['role' => 'user', 'content' => [['type' => 'text', 'text' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)]]]],
-                'output_config' => ['format' => ['type' => 'json_schema', 'schema' => ['type' => 'object', 'additionalProperties' => false, 'required' => ['recommended', 'title', 'text'],
-                    'properties' => ['recommended' => ['type' => 'string', 'enum' => $keys], 'title' => ['type' => 'string'], 'text' => ['type' => 'string']]]]],
+                'output_config' => ['format' => ['type' => 'json_schema', 'schema' => ['type' => 'object', 'additionalProperties' => false, 'required' => $withLessons ? ['recommended', 'title', 'text', 'lessons'] : ['recommended', 'title', 'text'],
+                    'properties' => ['recommended' => ['type' => 'string', 'enum' => $keys], 'title' => ['type' => 'string'], 'text' => ['type' => 'string']]
+                        + ($withLessons ? ['lessons' => ['type' => 'array', 'items' => ['type' => 'string']]] : [])]]],
             ], self::TIMEOUT);
             $stats->attempts++;
             $stats->add($response->usage ?? null);
@@ -292,8 +296,17 @@ class GestionSimulationCommentService
             $this->quota->complete($this->emProvider->getEntityManager()->find(AiUsage::class, $usage->getId()), $stats, null);
             $title = mb_substr(GestionAdviceService::cleanText((string) ($out['title'] ?? '')) ?? '', 0, 80);
             $text = mb_substr(GestionAdviceService::cleanText((string) ($out['text'] ?? '')) ?? '', 0, 600);
-            $unknown = GestionAdviceService::unknownNumbers($title . ' ' . $text, $allowedNumbers);
-            if (!is_array($out) || !in_array($out['recommended'] ?? null, $keys, true) || $title === '' || $text === '' || $unknown !== []) {
+            $lessons = [];
+            if ($withLessons) {
+                foreach (is_array($out['lessons'] ?? null) ? array_slice($out['lessons'], 0, 3) : [] as $lesson) {
+                    $clean = GestionAdviceService::cleanText(is_string($lesson) ? $lesson : null);
+                    if ($clean !== null) {
+                        $lessons[] = mb_substr($clean, 0, 240);
+                    }
+                }
+            }
+            $unknown = GestionAdviceService::unknownNumbers($title . ' ' . $text . ' ' . implode(' ', $lessons), $allowedNumbers);
+            if (!is_array($out) || !in_array($out['recommended'] ?? null, $keys, true) || $title === '' || $text === '' || $unknown !== [] || ($withLessons && count($lessons) < 2)) {
                 if ($this->debug) {
                     $this->logger->info('[Guide] avis du simulateur rejeté', ['unknown' => $unknown, 'title' => $title, 'text' => $text]);
                 }
@@ -301,7 +314,7 @@ class GestionSimulationCommentService
                 return [$fallback + ['rejected' => true], 'ok', $usage->getId()];
             }
 
-            return [['recommended' => $out['recommended'], 'title' => $title, 'text' => $text, 'textSource' => 'ai'], 'ok', $usage->getId()];
+            return [['recommended' => $out['recommended'], 'title' => $title, 'text' => $text, 'textSource' => 'ai'] + ($withLessons ? ['lessons' => $lessons] : []), 'ok', $usage->getId()];
         } catch (\Throwable $e) {
             $this->logger->warning('[Guide] avis du simulateur en échec : ' . $e->getMessage());
             $fresh = $this->emProvider->getEntityManager()->find(AiUsage::class, $usage->getId());

@@ -279,3 +279,40 @@ statistics:
         STOCK_VALUE_NOW_ONLY: "Today's stock value only: the comparison will come with the daily snapshots, taken since 11/11/2026."
         PARTIAL_DAY: "Today is not over yet: its figures will still change."
         NO_LAST_YEAR_DATA: "No sales over the same range last year: no comparison possible."
+
+# The business year (lot AN, 11/11/2026, docs/annee-gestion.md)
+year:
+    projection:
+        lastYear: "Rest of the year estimated from the same months last year (the season), at this year's markup rate."
+        pace: "Rest of the year estimated at the pace of the last 30 days, at this year's markup rate."
+        none: "No estimate of the rest of the year: no sales on the same dates last year, nor in the last 30 days."
+    caveats:
+        PROJECTION_LAST_YEAR: "Projection: same months last year for sales; variable costs from the planned budget, otherwise last year, otherwise the pace of the last 90 days."
+        PROJECTION_PACE: "Projection: pace of the last 30 days for sales; variable costs from the planned budget, otherwise last year, otherwise the pace of the last 90 days."
+        NO_PROJECTION: "No sales projection: only the remaining costs are counted."
+        PARTIAL_MONTH: "The current month is not over: it is counted up to today, the rest is in the projection."
+        UNKNOWN_COST: "Some sales are for items without a known cost: they count in sales, not in the margin."
+        FIXED_COSTS_PRORATED: "Fixed costs are spread over the days of each month, whatever their payment date."
+        PERIOD_FROZEN_BEFORE_FF1: "A period closed before fixed costs keeps its frozen result, without a result after fixed costs."
+        FISCAL_YEAR_NOT_ALIGNED_WITH_PERIODS: "The financial year does not match the period split: a straddling period keeps its whole result. Aligned start months: %months%."
+    levers:
+        price:
+            label: "Prices +%percent%%"
+            detail: "+%percent%% on %sales% of estimated remaining sales, at equal quantities: it all goes to the margin."
+        dormantStock:
+            label: "Sell the dormant stock"
+            detail: "Effect of the %count% guide advice(s) on stock that does not move (no new calculation)."
+        fixedCostsWeight:
+            label: "Lighten fixed costs"
+            detail: "Fixed costs weigh %weight% of the year's margin; effect of a 10% cut over the rest of the year."
+        worstPeriod:
+            label: "Most loss-making period"
+            detail: "%name%: %result%. It shows where the gap comes from; it is not an action."
+    comment:
+        profitable_title: "%year%: a profitable year"
+        profitable_text: "Business result: %result%. Best month: %best%; weakest month: %worst%."
+        loss_title: "%year%: a loss-making year"
+        loss_text: "Business result: %result%. At equal quantities, prices %price% higher, or %sales% of sales at break-even, would have been needed."
+        lesson_months: "Prepare %best% earlier and watch %worst% closely."
+        lesson_profitable: "Keep the same course on fixed costs: %fixed% over the year."
+        lesson_loss: "Review fixed costs (%fixed% over the year) and the price of your best-selling items."

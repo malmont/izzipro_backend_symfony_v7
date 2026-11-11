@@ -347,6 +347,10 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(name: 'purchase_period_frequency', length: 16, nullable: true)]
     private ?string $purchasePeriodFrequency = null;
 
+    /** Mois de début de l'exercice du site (lot AN, partie EX, 11/11/2026) : 1 à 12, null = 1 (année civile) ; route /api/gestion/reglages/exercice */
+    #[ORM\Column(name: 'fiscal_year_start_month', type: 'smallint', nullable: true)]
+    private ?int $fiscalYearStartMonth = null;
+
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $accountingAccounts = null;
 
@@ -1051,6 +1055,8 @@ class Entreprise implements TranslatableInterface
     // Fuseau horaire et plan de comptes (F14, 29/10/2026)
     public function getPosTimezone(): ?string { return $this->posTimezone; }
     public function getPurchasePeriodFrequency(): ?string { return $this->purchasePeriodFrequency; }
+    public function getFiscalYearStartMonth(): ?int { return $this->fiscalYearStartMonth; }
+    public function setFiscalYearStartMonth(?int $m): static { $this->fiscalYearStartMonth = $m !== null && $m >= 1 && $m <= 12 ? $m : null; return $this; }
     public function setPurchasePeriodFrequency(?string $f): static { $f = $f !== null ? strtolower(trim($f)) : ''; $this->purchasePeriodFrequency = in_array($f, ['quarterly', 'semester', 'monthly'], true) ? $f : null; return $this; }
     public function setPosTimezone(?string $tz): static { $t = $tz !== null ? trim($tz) : ''; $this->posTimezone = $t !== '' && in_array($t, \DateTimeZone::listIdentifiers(), true) ? $t : null; return $this; }
     public function getAccountingAccounts(): ?string { return $this->accountingAccounts; }

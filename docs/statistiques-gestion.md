@@ -19,7 +19,7 @@ par jour du magasin, même requête que P2, filtre de source), `GestionStockSnap
 | `today` | aujourd'hui | hier | même jour |
 | `7d` | les 7 derniers jours, aujourd'hui compris | les 7 jours d'avant | mêmes dates |
 | `month` (par défaut) | du 1er à aujourd'hui | du 1er du mois précédent au même jour (borné à sa fin : 31 mars → 28 février) | mêmes dates |
-| `year` | du 1er janvier à aujourd'hui | `null` (seule la comparaison à l'an dernier) | mêmes dates |
+| `year` | l'exercice en cours : du 1er du mois de début (réglage du site, janvier par défaut, `docs/annee-gestion.md` § 1) à aujourd'hui | `null` (seule la comparaison à l'an dernier) | mêmes dates |
 | `from` & `to` (366 jours au plus), `periodId` | les dates | même durée juste avant | mêmes dates |
 
 L'an dernier : mêmes dates décalées d'un an, un 29 février devient le 28. Erreurs 422 `VALIDATION_FAILED` : `range` `INVALID_RANGE`, `source`

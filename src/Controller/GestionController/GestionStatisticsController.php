@@ -4,6 +4,7 @@ namespace App\Controller\GestionController;
 
 use App\Services\EmailConfigurationService\EmailLocale;
 use App\UseCase\GestionUseCase\GestionStatisticsUseCase;
+use App\UseCase\GestionUseCase\GestionYearUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -16,8 +17,22 @@ use Symfony\Component\Routing\Attribute\Route;
  */
 class GestionStatisticsController extends AbstractController
 {
-    public function __construct(private readonly GestionStatisticsUseCase $useCase, private readonly ?EmailLocale $siteLocale = null)
+    public function __construct(private readonly GestionStatisticsUseCase $useCase, private readonly GestionYearUseCase $years, private readonly ?EmailLocale $siteLocale = null)
     {
+    }
+
+    /** Lot AN : l'année de l'entreprise (séries mensuelles, cumul, an dernier, périodes, rentabilité, leviers, bilan d'une année terminée) */
+    #[Route('/api/gestion/statistiques/annee', name: 'gestion_statistiques_annee', methods: ['GET'])]
+    public function year(Request $request): JsonResponse
+    {
+        return $this->json($this->years->overview($request->query->all(), $this->locale($request)));
+    }
+
+    /** Lot AN : avis de l'IA sur une année terminée (409 YEAR_NOT_FINISHED sinon ; plafond partagé de 10 avis par jour) */
+    #[Route('/api/gestion/statistiques/annee/avis', name: 'gestion_statistiques_annee_avis', methods: ['POST'])]
+    public function yearAdvice(Request $request): JsonResponse
+    {
+        return $this->json($this->years->advise($request->query->all(), $this->locale($request), $this->getUser()?->getUserIdentifier()));
     }
 
     #[Route('/api/gestion/statistiques', name: 'gestion_statistiques', methods: ['GET'])]

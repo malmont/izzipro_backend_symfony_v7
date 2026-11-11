@@ -281,3 +281,40 @@ statistics:
         STOCK_VALUE_NOW_ONLY: "Valeur du stock d'aujourd'hui seulement : la comparaison viendra avec les relevés quotidiens, pris depuis le 11/11/2026."
         PARTIAL_DAY: "La journée d'aujourd'hui n'est pas terminée : ses chiffres vont encore bouger."
         NO_LAST_YEAR_DATA: "Aucune vente sur la même plage l'an dernier : pas de comparaison possible."
+
+# L'année de l'entreprise (lot AN, 11/11/2026, docs/annee-gestion.md)
+year:
+    projection:
+        lastYear: "Reste de l'année estimé sur les mêmes mois l'an dernier (la saison), au taux de marque de cette année."
+        pace: "Reste de l'année estimé au rythme des 30 derniers jours, au taux de marque de cette année."
+        none: "Pas d'estimation possible du reste de l'année : ni ventes l'an dernier aux mêmes dates, ni ventes ces 30 derniers jours."
+    caveats:
+        PROJECTION_LAST_YEAR: "Projection : les mêmes mois l'an dernier pour les ventes ; frais variables du budget prévu, sinon de l'an dernier, sinon du rythme des 90 derniers jours."
+        PROJECTION_PACE: "Projection : le rythme des 30 derniers jours pour les ventes ; frais variables du budget prévu, sinon de l'an dernier, sinon du rythme des 90 derniers jours."
+        NO_PROJECTION: "Pas de projection des ventes : seuls les frais restants sont comptés."
+        PARTIAL_MONTH: "Le mois en cours n'est pas terminé : il est compté jusqu'à aujourd'hui, le reste est dans la projection."
+        UNKNOWN_COST: "Une partie des ventes porte sur des articles sans coût connu : elle compte dans les ventes, pas dans la marge."
+        FIXED_COSTS_PRORATED: "Les frais fixes sont répartis sur les jours de chaque mois, quelle que soit leur date de paiement."
+        PERIOD_FROZEN_BEFORE_FF1: "Une période fermée avant les frais fixes garde son résultat figé, sans résultat après frais fixes."
+        FISCAL_YEAR_NOT_ALIGNED_WITH_PERIODS: "L'exercice ne tombe pas sur le découpage des périodes : une période à cheval garde son résultat entier. Mois de début alignés : %months%."
+    levers:
+        price:
+            label: "Prix +%percent% %"
+            detail: "+%percent% % sur %sales% de ventes restantes estimées, à quantités égales : tout va dans la marge."
+        dormantStock:
+            label: "Écouler le stock dormant"
+            detail: "Effet des %count% conseil(s) du guide sur le stock qui dort (sans nouveau calcul)."
+        fixedCostsWeight:
+            label: "Alléger les frais fixes"
+            detail: "Les frais fixes pèsent %weight% de la marge de l'année ; effet d'une baisse de 10 % sur le reste de l'année."
+        worstPeriod:
+            label: "Période la plus déficitaire"
+            detail: "%name% : %result%. Elle montre d'où vient l'écart ; ce n'est pas une action."
+    comment:
+        profitable_title: "%year% : une année rentable"
+        profitable_text: "Résultat de l'entreprise : %result%. Meilleur mois : %best% ; mois le plus faible : %worst%."
+        loss_title: "%year% : une année déficitaire"
+        loss_text: "Résultat de l'entreprise : %result%. À quantités égales, il aurait fallu des prix plus hauts de %price%, ou %sales% de ventes au point mort."
+        lesson_months: "Préparez %best% plus tôt et surveillez %worst% de près."
+        lesson_profitable: "Gardez le même cap sur les frais fixes : %fixed% sur l'année."
+        lesson_loss: "Revoyez les frais fixes (%fixed% sur l'année) et le prix des articles qui vendent le mieux."

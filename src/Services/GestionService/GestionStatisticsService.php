@@ -32,6 +32,7 @@ class GestionStatisticsService
         private readonly TranslatorInterface $translator,
         private readonly GestionAdviceService $advices,
         private readonly ?TenantCurrencyProvider $currency = null,
+        private readonly ?GestionFiscalYearService $fiscal = null, // lot AN partie EX : range=year suit l'exercice du site
     ) {
     }
 
@@ -176,8 +177,10 @@ class GestionStatisticsService
                 $prevEnd = $prevFirst->setDate((int) $prevFirst->format('Y'), (int) $prevFirst->format('n'), min((int) $today->format('j'), (int) $prevFirst->format('t')));
 
                 return ['month', [$first, $t], [$prevFirst->format('Y-m-d'), $prevEnd->format('Y-m-d')]];
-            case 'year':
-                return ['year', [$today->format('Y') . '-01-01', $t], null];
+            case 'year': // exercice en cours (lot AN partie EX) : du 1er du mois de début à aujourd'hui ; année civile quand il commence en janvier
+                $sm = $this->fiscal?->startMonth() ?? 1;
+
+                return ['year', [GestionFiscalYearService::bounds(GestionFiscalYearService::startYearOf($today, $sm), $sm)[0], $t], null];
         }
 
         throw new GestionValidationException(['range' => 'INVALID_RANGE']);
