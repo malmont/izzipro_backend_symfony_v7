@@ -539,6 +539,32 @@ final class CacheTags
         return null;
     }
 
+    /**
+     * Champs dont la modification vide en plus d'autres composants que ceux de l'entité (11/11/2026) : l'interrupteur des promotions par variante
+     * change le prix de toutes les fiches produit (lot VAR) ; sans cela, une fiche en cache garderait l'état précédent jusqu'à 300 s.
+     */
+    public const FIELD_TAGS = [
+        Entreprise::class => ['variantPromotionsEnabled' => [self::PRODUCTS]],
+    ];
+
+    /**
+     * @param list<string> $changedFields champs modifiés (jeu de modifications de l'unité de travail)
+     * @return list<string> composants à vider en plus (étiquette du composant entier : toutes ses listes et fiches)
+     */
+    public static function fieldTags(object $entity, array $changedFields): array
+    {
+        $tags = [];
+        foreach (self::FIELD_TAGS as $class => $fields) {
+            if ($entity instanceof $class) {
+                foreach (array_intersect_key($fields, array_flip($changedFields)) as $components) {
+                    array_push($tags, ...$components);
+                }
+            }
+        }
+
+        return array_values(array_unique($tags));
+    }
+
     /** @return list<string> champs dont la modification seule ne vide rien */
     public static function ignoredFields(object $entity): array
     {

@@ -66,6 +66,12 @@ class CacheInvalidationSubscriber implements EventSubscriber
                 $tags[] = TenantCacheService::componentTag($dbname, $tenantCode, $tag);
             }
         }
+        $uow = $em->getUnitOfWork();
+        foreach ($uow->getScheduledEntityUpdates() as $entity) { // champs qui vident d'autres composants (CacheTags::FIELD_TAGS)
+            foreach (CacheTags::fieldTags($entity, array_keys($uow->getEntityChangeSet($entity))) as $tag) {
+                $tags[] = TenantCacheService::componentTag($dbname, $tenantCode, $tag);
+            }
+        }
         if ($undeclared) {
             $tags[] = TenantCacheService::tenantTag($tenantCode);
             if ($dbname !== '') {

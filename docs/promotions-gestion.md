@@ -112,8 +112,8 @@ Entreprise d'EasyAdmin, panneau « Applications mobiles », case « Promotions p
 savent l'appliquer (pack hors ligne v4 compris). Lu dans `/api/site/features` (clé `shop.variant_promotions`, lecture seule). **Éteint** :
 devis, paiement, commande, favoris, pack et fiche **strictement identiques** à avant le lot (aucune clé ajoutée, promotions en base non lues) ;
 l'aperçu de la gestion le signale (`warnings: ["VARIANT_PROMOTIONS_OFF"]`) et l'écriture répond 409 `VARIANT_PROMOTIONS_OFF`. Éteint après usage :
-les promotions restent en base, sans effet, et reprennent si on le rallume avant leur fin. Après un changement de l'interrupteur, le cache
-des fiches produit (300 s) peut garder l'état précédent jusqu'à son expiration (vider le cache du site au besoin).
+les promotions restent en base, sans effet, et reprennent si on le rallume avant leur fin. Changer l'interrupteur vide aussitôt le cache de
+toutes les fiches et listes de produits du site (`CacheTags::FIELD_TAGS`, étiquette `products`) : jamais d'état mélangé.
 
 **Calcul, un seul endroit** : `Services/OrderService/VariantPriceResolver` (table `variant_promotion` : variante, `percent`, `price` figé à
 l'application, `base_price`, jours du magasin `start_date` … `end_date` et bornes UTC `starts_at` … `ends_at` [début, fin[ avec l'invariant de la

@@ -310,6 +310,28 @@ class VariantPromotionApiTest extends WebTestCase
         $this->assertArrayNotHasKey('promotion', $this->json($this->request('GET', "/api/productsid/$capId"))['variants'][0], 'fiche : pas de promotion périmée');
     }
 
+    /** Changer l'interrupteur (écriture Doctrine, comme la fiche Entreprise d'EasyAdmin) vide le cache des fiches produit du site */
+    public function testSwitchChangeClearsCachedProductSheets(): void
+    {
+        $em = static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager();
+        $em->find(\App\Entity\ProductVariant::class, $this->tshirtOwn)->setStockQuantity(499); // écriture Doctrine : fiche hors du cache
+        $em->flush();
+        $tshirtId = (int) $this->db->fetchOne("SELECT id FROM product WHERE code = 'DEMO-TSHIRT'");
+        $sheet = fn () => array_column($this->json($this->request('GET', "/api/productsid/$tshirtId"))['variants'], null, 'id')[$this->tshirtOwn];
+        $this->assertArrayNotHasKey('promotion', $sheet(), 'éteint');
+        $this->db->executeStatement("INSERT INTO variant_promotion (product_variant_id, percent, price, base_price, start_date, end_date, starts_at, ends_at, created_at)
+            VALUES (?, 20, 3120, 3900, CURRENT_DATE - 1, CURRENT_DATE + 10, NOW() - INTERVAL '1 day', NOW() + INTERVAL '10 days', NOW())", [$this->tshirtOwn]); // SQL : ne vide rien
+        $this->assertArrayNotHasKey('promotion', $sheet(), 'fiche en cache');
+        $em->clear();
+        $em->getRepository(\App\Entity\Entreprise::class)->findOneBy([], ['id' => 'ASC'])->setVariantPromotionsEnabled(true);
+        $em->flush();
+        $this->assertSame(3120, $sheet()['promotion']['price'] ?? null, 'interrupteur allumé : la fiche en cache est vidée, la promotion apparaît');
+        $em->clear();
+        $em->getRepository(\App\Entity\Entreprise::class)->findOneBy([], ['id' => 'ASC'])->setVariantPromotionsEnabled(false);
+        $em->flush();
+        $this->assertArrayNotHasKey('promotion', $sheet(), 'éteint de nouveau : vidée encore');
+    }
+
     // ----- helpers -----
 
     private function day(int $n): string
