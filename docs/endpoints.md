@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (402)
+## Boutique et commun (406)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -395,6 +395,10 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/notifications/journal` | ROLE_ADMIN | `Controller\GestionController\GestionNotificationController::journal` |
 | GET | `/api/gestion/notifications/preferences` | ROLE_ADMIN | `Controller\GestionController\GestionNotificationController::preferences` |
 | PATCH | `/api/gestion/notifications/preferences` | ROLE_ADMIN | `Controller\GestionController\GestionNotificationController::updatePreferences` |
+| POST | `/api/gestion/preparation/avis` | ROLE_ADMIN | `Controller\GestionController\GestionPreparationController::advise` |
+| GET | `/api/gestion/preparation/estimations` | ROLE_ADMIN | `Controller\GestionController\GestionPreparationController::estimations` |
+| POST | `/api/gestion/preparation/simulation` | ROLE_ADMIN | `Controller\GestionController\GestionPreparationController::simulate` |
+| POST | `/api/gestion/preparation/valider` | ROLE_ADMIN | `Controller\GestionController\GestionPreparationController::validate` |
 | POST | `/api/gestion/prix/annuler` | ROLE_ADMIN | `Controller\GestionController\GestionPriceController::undo` |
 | POST | `/api/gestion/prix/apercu` | ROLE_ADMIN | `Controller\GestionController\GestionPriceController::preview` |
 | POST | `/api/gestion/prix/appliquer` | ROLE_ADMIN | `Controller\GestionController\GestionPriceController::apply` |

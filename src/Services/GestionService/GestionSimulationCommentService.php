@@ -75,6 +75,27 @@ class GestionSimulationCommentService
         return $response + ['cached' => false];
     }
 
+    /** Cache et plafond partagés (P6) : réponse gardée pour cette empreinte aujourd'hui, ou null ; 429 COMMENT_LIMIT au-delà de 10 par jour */
+    public function cached(Collections $period, string $hash, string $day): ?array
+    {
+        $cached = $this->emProvider->getEntityManager()->getConnection()->fetchOne('SELECT response FROM gestion_simulation_comment WHERE period_id = ? AND body_hash = ? AND store_day = ?', [$period->getId(), $hash, $day]);
+
+        return $cached === false ? null : (json_decode((string) $cached, true) ?: []);
+    }
+
+    public function underLimit(string $day): bool
+    {
+        return (int) $this->emProvider->getEntityManager()->getConnection()->fetchOne('SELECT COUNT(*) FROM gestion_simulation_comment WHERE store_day = ?', [$day]) < self::PER_DAY;
+    }
+
+    public function store(Collections $period, string $hash, string $day, array $response, string $status, ?int $usageId, ?string $user): void
+    {
+        $this->emProvider->getEntityManager()->getConnection()->executeStatement(
+            'INSERT INTO gestion_simulation_comment (period_id, body_hash, store_day, response, ai_status, ai_usage_id, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW()) ON CONFLICT DO NOTHING',
+            [$period->getId(), $hash, $day, json_encode($response, JSON_UNESCAPED_UNICODE), $status, $usageId, $user]
+        );
+    }
+
     /**
      * Répartitions du prévu, chacune simulée avec les leviers du gérant (seul le prévu change) ; `delta` par rapport à « keep ».
      * Un changement des seuls achats ne modifie pas `result` (le stock n'est pas une charge) : seule la trésorerie après achats change.
@@ -177,21 +198,6 @@ class GestionSimulationCommentService
     /** @return array{0: array<string, mixed>, 1: string, 2: ?int} commentaire, statut de l'IA, usage */
     private function ai(Collections $period, array $simulation, array $candidates, array $fallback, string $locale, ?string $user): array
     {
-        $code = (string) $this->tenants->getCurrentTenantCode();
-        try {
-            $allowed = $this->entitlements === null || $this->entitlements->isEnabled($code, 'ai.full') || $this->entitlements->isEnabled($code, 'ai.help');
-        } catch (\Throwable) {
-            $allowed = false;
-        }
-        if (!$allowed) {
-            return [$fallback, 'not_included', null];
-        }
-        try {
-            $usage = $this->quota->reserve('assistant', 'gestion_simulation_comment', self::COST, $user, sprintf('Avis du guide (%s)', $period->getNomCollection()), 120);
-        } catch (LandingAiException $e) {
-            return [$fallback, $e->getStatusCode() === 402 ? 'credits_exhausted' : 'error', null];
-        }
-        $stats = new LandingAiUsageStats(self::MODEL);
         $f = fn ($v, string $u = 'money') => $v === null ? null : $this->advices->format($v, $u, $locale);
         $numbers = [];
         $add = function (mixed $v, string $unit) use (&$numbers): void {
@@ -219,7 +225,6 @@ class GestionSimulationCommentService
         $add($simulation['levers']['promotion']['percent'] ?? null, 'percent');
         $add($simulation['levers']['advertisingDelta'], 'money');
         $add($this->cash->settings()['threshold'], 'money');
-        $allowedNumbers = GestionAdviceService::allowedNumbers($numbers, 0);
         $payload = [
             'period' => ['name' => $period->getNomCollection(), 'daysRemaining' => $simulation['period']['daysRemaining']],
             'levers' => ['pricePercent' => $f($simulation['levers']['pricePercent'], 'percent'), 'promotionPercent' => $f($simulation['levers']['promotion']['percent'] ?? null, 'percent'), 'advertisingDelta' => $f($simulation['levers']['advertisingDelta'])],
@@ -229,10 +234,36 @@ class GestionSimulationCommentService
                 'breakEven' => $f($c['breakEven']), 'resultVsKeep' => $f($c['delta']['result']), 'cashVsKeep' => $f($c['delta']['cashAfterPurchases']), 'purchasesCut' => $f($c['purchasesCut'] ?? null)], $candidates),
             'fallback' => $fallback,
         ];
-        $keys = array_column($candidates, 'key');
+        return $this->askGuide($period, $payload, $numbers, array_column($candidates, 'key'), $fallback, $locale, $user);
+    }
+
+    /**
+     * Avis du guide sur des candidats calculés par le backend (G1b-2, P6) : droit Aide IA, 1 crédit, sortie structurée { recommended, title, text },
+     * nombres vérifiés contre `$numbers` (`[{ value, unit }]`), sinon avis des règles `$fallback` (+ rejected).
+     *
+     * @return array{0: array<string, mixed>, 1: string, 2: ?int} avis, statut de l'IA, usage
+     */
+    public function askGuide(Collections $period, array $payload, array $numbers, array $keys, array $fallback, string $locale, ?string $user, ?string $system = null): array
+    {
+        $code = (string) $this->tenants->getCurrentTenantCode();
+        try {
+            $allowed = $this->entitlements === null || $this->entitlements->isEnabled($code, 'ai.full') || $this->entitlements->isEnabled($code, 'ai.help');
+        } catch (\Throwable) {
+            $allowed = false;
+        }
+        if (!$allowed) {
+            return [$fallback, 'not_included', null];
+        }
+        try {
+            $usage = $this->quota->reserve('assistant', 'gestion_simulation_comment', self::COST, $user, sprintf('Avis du guide (%s)', $period->getNomCollection()), 120);
+        } catch (LandingAiException $e) {
+            return [$fallback, $e->getStatusCode() === 402 ? 'credits_exhausted' : 'error', null];
+        }
+        $stats = new LandingAiUsageStats(self::MODEL);
+        $allowedNumbers = GestionAdviceService::allowedNumbers($numbers, 0);
         try {
             $response = $this->client->createMessage([
-                'model' => self::MODEL, 'max_tokens' => 1500, 'system' => $this->system($locale),
+                'model' => self::MODEL, 'max_tokens' => 1500, 'system' => $system ?? $this->system($locale),
                 'messages' => [['role' => 'user', 'content' => [['type' => 'text', 'text' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)]]]],
                 'output_config' => ['format' => ['type' => 'json_schema', 'schema' => ['type' => 'object', 'additionalProperties' => false, 'required' => ['recommended', 'title', 'text'],
                     'properties' => ['recommended' => ['type' => 'string', 'enum' => $keys], 'title' => ['type' => 'string'], 'text' => ['type' => 'string']]]]],

@@ -238,3 +238,27 @@ measure:
         promotion_sales_named: "%name%: %units% sales since the promotion of %date% (%days% days), %revenue% in sales, %margin% in margin."
         too_early: "Applied on %date%: too early to measure (%days% days out of 14)."
         campaign: "Campaign run again on %date%: margin %change% over %days% campaign days."
+# Prepare a period (lot P6, 11/11/2026)
+preparation:
+    candidates:
+        myPlan: "My plan"
+        lastYearSales: "Last year’s sales"
+        cashSafe: "Purchases cut for cash"
+        enoughStock: "Purchases matched to need"
+    comment:
+        title: "Guide’s view"
+        plan_text: "Your plan forecasts %sales% of sales for a result of %result%."
+        cash_title: "Protect your cash"
+        cash_text: "With these purchases, cash would drop to %low% on %date%, below your %threshold% threshold. Cutting purchases by %cut% keeps it above."
+        stock_title: "Adjust purchases"
+        stock_short: "Available stock does not cover the target: planning %purchases% of purchases covers it with a safety margin."
+        stock_over: "Your purchases exceed the need: %purchases% of purchases cover the target with a safety margin."
+    caveats:
+        TARGET_EXCEEDS_STOCK: "The target exceeds available stock (current stock and planned purchases): planned sales are capped."
+        UNKNOWN_COST: "Part of the stock has no known cost: left out of margin."
+        SALES_SPREAD_EVENLY: "Sales are spread evenly over the days of the period in the cash projection."
+        TAXES_ESTIMATED: "Receipts estimated with taxes, at the actual rate of the last 90 days."
+        TAXES_EXCLUDED: "No recent taxed sale: receipts counted before taxes."
+        NO_CASH_BALANCE: "No cash balance entered: no cash projection."
+        TRIP_IN_OTHER_PERIOD: "The trip falls in another period: its expenses are planned there, not in the target period result."
+        NO_LAST_YEAR: "No sales in the same period last year."

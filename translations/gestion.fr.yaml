@@ -240,3 +240,27 @@ measure:
         promotion_sales_named: "%name% : %units% ventes depuis la promotion du %date% (%days% jours), %revenue% de ventes, %margin% de marge."
         too_early: "Appliqué le %date% : trop tôt pour mesurer (%days% jours sur 14)."
         campaign: "Campagne relancée le %date% : marge %change% sur %days% jours de campagne."
+# Préparer une période (lot P6, 11/11/2026, docs/preparation-periode.md)
+preparation:
+    candidates:
+        myPlan: "Mon plan"
+        lastYearSales: "Ventes de l’an dernier"
+        cashSafe: "Achats réduits pour la trésorerie"
+        enoughStock: "Achats ajustés au besoin"
+    comment:
+        title: "Avis du guide"
+        plan_text: "Votre plan prévoit %sales% de ventes pour un résultat de %result%."
+        cash_title: "Protéger la trésorerie"
+        cash_text: "Avec ces achats, la trésorerie descendrait à %low% le %date%, sous votre seuil de %threshold%. Réduire les achats de %cut% la garde au-dessus."
+        stock_title: "Ajuster les achats"
+        stock_short: "Le stock disponible ne couvre pas l’objectif : prévoir %purchases% d’achats couvre l’objectif avec une marge de sécurité."
+        stock_over: "Vos achats dépassent le besoin : %purchases% d’achats suffisent à couvrir l’objectif avec une marge de sécurité."
+    caveats:
+        TARGET_EXCEEDS_STOCK: "L’objectif dépasse le stock disponible (stock actuel et achats prévus) : les ventes prévues sont plafonnées."
+        UNKNOWN_COST: "Une partie du stock n’a pas de coût connu : exclue de la marge."
+        SALES_SPREAD_EVENLY: "Les ventes sont étalées également sur les jours de la période dans la trésorerie."
+        TAXES_ESTIMATED: "Encaissements estimés taxes comprises, au taux réel des 90 derniers jours."
+        TAXES_EXCLUDED: "Aucune vente taxée récente : encaissements comptés hors taxes."
+        NO_CASH_BALANCE: "Aucun solde de trésorerie saisi : pas de trésorerie au fil des jours."
+        TRIP_IN_OTHER_PERIOD: "Le voyage tombe dans une autre période : ses frais y sont prévus, pas dans le résultat de la période visée."
+        NO_LAST_YEAR: "Aucune vente la même période l’an dernier."
