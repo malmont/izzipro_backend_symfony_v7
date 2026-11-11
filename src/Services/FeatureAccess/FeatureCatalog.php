@@ -27,6 +27,8 @@ final class FeatureCatalog
         'site.currency' => ['label' => 'Devise', 'group' => 'localisation', 'scope' => self::SCOPE_SITE, 'type' => 'currency', 'storage' => 'entreprise.currency', 'href' => 'entreprise'],
         'site.prices_include_tax' => ['label' => 'Prix taxes comprises', 'group' => 'localisation', 'scope' => self::SCOPE_SITE, 'type' => 'boolean', 'storage' => 'entreprise.pricesIncludeTax', 'href' => 'entreprise'],
         'gestion.periods' => ['label' => 'Périodes de gestion (découpage)', 'group' => 'localisation', 'scope' => self::SCOPE_SITE, 'type' => 'enum', 'options' => ['quarterly', 'semester', 'monthly'], 'nullable' => true, 'storage' => 'entreprise.purchasePeriodFrequency', 'href' => 'entreprise'], // lot P1 périodes (10/11/2026) : trimestres saisonniers (défaut), semestres ou mois ; effet après la période en cours
+        // Promotions par variante (lot VAR, 11/11/2026) : lecture seule ; allumées par le super admin sur la fiche Entreprise, quand les trois fronts sont prêts
+        'shop.variant_promotions' => ['label' => 'Promotions par variante', 'group' => 'commerce', 'scope' => self::SCOPE_SERVICE, 'type' => 'boolean', 'storage' => 'entreprise.variantPromotionsEnabled', 'href' => 'entreprise'],
         'site.domain' => ['label' => 'Domaine propre', 'group' => 'localisation', 'scope' => self::SCOPE_SERVICE, 'type' => 'info', 'href' => 'domain'],
         // Modules (plateforme)
         'module.landing' => ['label' => 'Landing Page', 'group' => 'modules', 'scope' => self::SCOPE_PLATFORM, 'type' => 'boolean', 'storage' => 'entreprise.isLandingPageActive', 'href' => 'entreprise'],

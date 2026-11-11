@@ -35,6 +35,7 @@ class PosOfflinePackService
         private readonly PosSettingsService $settings,
         private readonly PosOfflineSettings $offline,
         private readonly \App\Services\PosFavoriteService\PosFavoriteService $favorites, // grille de favoris (F10)
+        private readonly ?\App\Services\OrderService\VariantPriceResolver $variantPrices = null, // pack v4 (lot VAR, 11/11/2026)
     ) {
     }
 
@@ -44,10 +45,14 @@ class PosOfflinePackService
         return $this->offline->settings();
     }
 
-    /** Pack courant : rendu au POS, instantané conservé sous sa version (une version par contenu : même ETag → même version) */
-    public function build(?CashRegister $register = null): array
+    /**
+     * Pack courant : rendu au POS, instantané conservé sous sa version (une version par contenu : même ETag → même version).
+     * `$v4` : la tablette annonce la règle v4 ; servie seulement si l'interrupteur des promotions par variante est allumé, sinon pack v3 inchangé.
+     */
+    public function build(?CashRegister $register = null, bool $v4 = false): array
     {
         $em = $this->emProvider->getEntityManager();
+        $v4 = $v4 && $this->variantPrices !== null && $this->variantPrices->enabled();
         $e = $em->getRepository(Entreprise::class)->findOneBy([]);
         $settings = $this->settings();
         $address = $this->storeAddress();
@@ -66,9 +71,16 @@ class PosOfflinePackService
                     'price' => $variant->getPrice(), 'barcode' => $variant->getBarcode(), 'stock' => $variant->getStockQuantity(),
                     'customizable' => !$variant->getProductCustomizationImages()->isEmpty(),
                 ];
+                $variantPromotions = $v4 ? \App\Services\OrderService\VariantPriceResolver::packEntries($variant) : [];
+                if ($variantPromotions !== []) { // v4 : promotions en cours et à venir de la variante ; clé absente sinon
+                    $variants[array_key_last($variants)]['promotions'] = $variantPromotions;
+                }
                 $prices[(int) $variant->getId()] = ['unit' => (int) round((float) ($variant->getPrice() ?? $product->getPrice())), 'special' => $product->getSpecialPrice() !== null && $product->getSpecialPrice() > 0 ? (int) round((float) $product->getSpecialPrice()) : null,
                     'from' => $product->getSpecialPriceFrom()?->format(\DateTimeInterface::ATOM), 'to' => $product->getSpecialPriceTo()?->format(\DateTimeInterface::ATOM), 'variantPrice' => $variant->getPrice() !== null,
                     'taxCategory' => \App\Services\OrderService\TaxCategory::of($product->getTaxCategory())]; // catégorie figée dans l'instantané (F18 partie 2a)
+                if ($variantPromotions !== []) {
+                    $prices[(int) $variant->getId()]['variantPromotions'] = $variantPromotions; // instantané v4 : rejouées à l'heure de vente
+                }
             }
             $products[] = [
                 'id' => (int) $product->getId(), 'code' => $product->getCode(), 'barcode' => $product->getBarcode(), 'name' => $product->getName(),
@@ -91,7 +103,7 @@ class PosOfflinePackService
             'products' => $products,
             'discounts' => $posSettings['discounts'] ?? [],
             'settings' => array_intersect_key($posSettings, array_flip(['pin', 'lockAfterMinutes', 'receipt', 'paymentMethods', 'cashFund', 'cashAlertThreshold', 'customItems', 'priceOverride', 'giftCards', 'customers', 'loyalty'])) + ['offline' => $settings],
-            'calculationRule' => PosOfflineCalculator::RULE,
+            'calculationRule' => $v4 ? PosOfflineCalculator::RULE_V4 : PosOfflineCalculator::RULE,
             'testCases' => '/api/pos/offline-cases',
         ];
         // Grille de favoris (F10) : références {productId, variantId, defaultVariantId, pinned, rank} (prix déjà dans products) ; clé ajoutée

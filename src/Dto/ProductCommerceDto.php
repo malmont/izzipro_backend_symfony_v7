@@ -164,7 +164,7 @@ final class ProductCommerceDto
                 'size' => $size ? ['id' => $size->getId(), 'name' => $size->getTranslation($locale)?->getName() ?? $size->getName()] : null,
                 'stockQuantity' => $variant->getStockQuantity(),
                 'options' => $options,
-            ];
+            ] + (($promotion = \App\Services\OrderService\VariantPriceResolver::display($variant)) !== null ? ['promotion' => $promotion] : []); // lot VAR : clé absente sans promotion ou interrupteur éteint
         }, self::orderedVariants($product)));
     }
 

@@ -340,6 +340,7 @@ final class CacheTags
         ProductShipping::class => 'getProduct',
         BookingConfiguration::class => 'getProduct',
         \App\Entity\RentalPromotion::class => 'getProduct', // promotion de location (lot LOC3, 11/11/2026) : vide le cache de son article
+        \App\Entity\VariantPromotion::class => 'getProduct', // promotion par variante (lot VAR, 11/11/2026) : vide le cache de l'article de la variante
         ProductCustomizationImage::class => 'getProductVariant',
         CategoriesTranslation::class => 'getCategory',
         ColorTranslation::class => 'getColor',

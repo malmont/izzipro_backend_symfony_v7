@@ -208,6 +208,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             $this->superAdminBooleanField('isMobileShopActive', 'E-commerce mobile'),
             $this->superAdminBooleanField('isManagementAppActive', 'Application de gestion'),
             $this->superAdminBooleanField('isLivingMemoryActive', 'LivingMemory (Mémoires Vivantes)'),
+            $this->superAdminBooleanField('variantPromotionsEnabled', 'Promotions par variante', 'Lot VAR : à allumer seulement quand la caisse, la boutique Next et l\'app mobile savent appliquer une promotion de variante (pack hors ligne v4).', true),
 
             FormField::addPanel('Assistant IA')->collapsible()
                 ->setHelp('Paliers de l\'assistant IA (console IA, lot 6) : Aide IA explique et guide ; IA complète propose des réglages et des opérations sur les commandes, confirmées par l\'administrateur. Projetés depuis les droits d\'usage de la Plateforme ; en mode démo de la plateforme, tout est ouvert.'),
@@ -495,7 +496,8 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 ->setIsManagementAppActive($defaults->isManagementAppActive())
                 ->setIsLivingMemoryActive($defaults->isLivingMemoryActive())
                 ->setIsAiHelpActive($defaults->isAiHelpActive())
-                ->setIsAiFullActive($defaults->isAiFullActive());
+                ->setIsAiFullActive($defaults->isAiFullActive())
+                ->setVariantPromotionsEnabled($defaults->isVariantPromotionsEnabled());
 
             return;
         }
@@ -504,7 +506,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             $row = $this->emProvider->getEntityManager()->getConnection()->fetchAssociative(
                 'SELECT pos_terminal_fee_card_bp, pos_terminal_fee_interac_bp,
                         is_boutique_active, is_landing_page_active, is_boussole_esg_active, is_memoire_vivante_active,
-                        is_pos_active, is_mobile_shop_active, is_management_app_active, is_living_memory_active
+                        is_pos_active, is_mobile_shop_active, is_management_app_active, is_living_memory_active, variant_promotions_enabled
                  FROM entreprise WHERE id = ?',
                 [$id]
             );
@@ -526,6 +528,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             ->setIsMobileShopActive((bool) $row['is_mobile_shop_active'])
             ->setIsManagementAppActive((bool) $row['is_management_app_active'])
             ->setIsLivingMemoryActive((bool) $row['is_living_memory_active'])
+            ->setVariantPromotionsEnabled((bool) $row['variant_promotions_enabled'])
 ;
     }
 }

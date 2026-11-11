@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (425)
+## Boutique et commun (431)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -421,6 +421,12 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/promotions/lots/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionPromotionController::batch` |
 | GET | `/api/gestion/promotions/lots` | ROLE_ADMIN | `Gestion\Controller\GestionPromotionController::batches` |
 | POST | `/api/gestion/promotions/terminer` | ROLE_ADMIN | `Gestion\Controller\GestionPromotionController::end` |
+| POST | `/api/gestion/promotions/variantes/apercu` | ROLE_ADMIN | `Gestion\Controller\GestionVariantPromotionController::preview` |
+| POST | `/api/gestion/promotions/variantes/appliquer` | ROLE_ADMIN | `Gestion\Controller\GestionVariantPromotionController::apply` |
+| GET | `/api/gestion/promotions/variantes/lots/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionVariantPromotionController::batch` |
+| GET | `/api/gestion/promotions/variantes/lots` | ROLE_ADMIN | `Gestion\Controller\GestionVariantPromotionController::batches` |
+| POST | `/api/gestion/promotions/variantes/terminer` | ROLE_ADMIN | `Gestion\Controller\GestionVariantPromotionController::end` |
+| GET | `/api/gestion/promotions/variantes` | ROLE_ADMIN | `Gestion\Controller\GestionVariantPromotionController::current` |
 | GET | `/api/gestion/promotions` | ROLE_ADMIN | `Gestion\Controller\GestionPromotionController::current` |
 | GET | `/api/gestion/reglages/exercice` | ROLE_ADMIN | `Gestion\Controller\GestionFiscalYearController::settings` |
 | PUT | `/api/gestion/reglages/exercice` | ROLE_ADMIN | `Gestion\Controller\GestionFiscalYearController::put` |

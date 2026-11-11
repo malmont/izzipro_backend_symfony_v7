@@ -34,6 +34,7 @@ class PosFavoriteService
         private readonly StoreClock $clock,
         private readonly TenantCacheService $cache,
         private readonly PosAuditService $audit,
+        private readonly ?\App\Services\OrderService\VariantPriceResolver $variantPrices = null, // promotion par variante (lot VAR, 11/11/2026)
     ) {
     }
 
@@ -255,13 +256,16 @@ class PosFavoriteService
         $variants = $product->getVariants();
         $single = $variant === null && count($variants) === 1 ? $variants->first() : null;
         $sold = $variant ?? ($single ?: null);
+        // règle du devis (CartQuoteCalculator, lot VAR : VariantPriceResolver) ; promotion de variante seulement si elle s'applique
+        $sale = $sold !== null && $this->variantPrices !== null ? $this->variantPrices->sale($sold) : ['unitPrice' => (int) round((float) ($sold?->getPrice() ?? $product->getEffectivePrice())), 'promotion' => null];
 
         return [
             'rank' => $rank, 'productId' => (int) $product->getId(), 'variantId' => $variant?->getId(),
             'defaultVariantId' => $sold?->getId(), // variante à vendre sans choix (épinglée ou unique) ; null : la caisse demande la variante
             'hasVariants' => $variant === null && count($variants) > 1,
             'name' => $product->getName(), 'variantLabel' => $variant ? self::variantLabel($variant) : null,
-            'price' => (int) round((float) ($sold?->getPrice() ?? $product->getEffectivePrice())), // règle du devis (CartQuoteCalculator)
+            'price' => $sale['unitPrice'],
+        ] + ($sale['promotion'] !== null ? ['promotion' => $sale['promotion']] : []) + [
             'image' => MediaUrlResolver::joinStored($product->getImage(), $productsBaseUrl),
             'barcode' => ($sold?->getBarcode() ?: null) ?? ($product->getBarcode() ?: null),
             'pinned' => $pinned,

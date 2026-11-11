@@ -74,6 +74,10 @@ class OrderItems
     #[ORM\Column(nullable: true)]
     private ?int $catalogUnitPrice = null;
 
+    /** Promotion de variante appliquée à la vente (lot VAR, 11/11/2026) : mesures de la gestion ; non exposée par les API de commande */
+    #[ORM\Column(name: 'variant_promotion_id', nullable: true)]
+    private ?int $variantPromotionId = null;
+
     #[ORM\Column(length: 40, nullable: true)]
     private ?string $priceReasonCode = null;
 
@@ -225,6 +229,8 @@ class OrderItems
     public function getCatalogUnitPrice(): ?int { return $this->catalogUnitPrice; }
     public function setCatalogUnitPrice(?int $cents): static { $this->catalogUnitPrice = $cents; return $this; }
     public function hasPriceOverride(): bool { return $this->catalogUnitPrice !== null; }
+    public function getVariantPromotionId(): ?int { return $this->variantPromotionId; }
+    public function setVariantPromotionId(?int $id): static { $this->variantPromotionId = $id; return $this; }
     public function getPriceReasonCode(): ?string { return $this->priceReasonCode; }
     public function setPriceReasonCode(?string $code): static { $this->priceReasonCode = $code !== null ? mb_substr($code, 0, 40) : null; return $this; }
     public function getPriceReasonText(): ?string { return $this->priceReasonText; }

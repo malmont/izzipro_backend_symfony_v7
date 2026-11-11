@@ -343,6 +343,10 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(length: 64, nullable: true)]
     private ?string $posTimezone = null;
 
+    /** Promotions par variante (lot VAR, 11/11/2026) : allumées par le super admin seulement, quand la caisse, Next et l'app mobile savent les appliquer */
+    #[ORM\Column(name: 'variant_promotions_enabled', options: ['default' => false])]
+    private bool $variantPromotionsEnabled = false;
+
     /** Fréquence des périodes de gestion (lot P1, 10/11/2026) : quarterly (défaut) | semester | monthly ; null = quarterly ; registre `gestion.periods` */
     #[ORM\Column(name: 'purchase_period_frequency', length: 16, nullable: true)]
     private ?string $purchasePeriodFrequency = null;
@@ -1054,6 +1058,8 @@ class Entreprise implements TranslatableInterface
 
     // Fuseau horaire et plan de comptes (F14, 29/10/2026)
     public function getPosTimezone(): ?string { return $this->posTimezone; }
+    public function isVariantPromotionsEnabled(): bool { return $this->variantPromotionsEnabled; }
+    public function setVariantPromotionsEnabled(bool $on): static { $this->variantPromotionsEnabled = $on; return $this; }
     public function getPurchasePeriodFrequency(): ?string { return $this->purchasePeriodFrequency; }
     public function getFiscalYearStartMonth(): ?int { return $this->fiscalYearStartMonth; }
     public function setFiscalYearStartMonth(?int $m): static { $this->fiscalYearStartMonth = $m !== null && $m >= 1 && $m <= 12 ? $m : null; return $this; }

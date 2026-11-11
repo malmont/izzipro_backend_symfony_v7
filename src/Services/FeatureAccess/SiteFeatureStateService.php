@@ -263,6 +263,10 @@ class SiteFeatureStateService
                 $prerequisites[] = $this->prereq('module.memoires', 'Module Mémoires Vivantes activé', $flags['memoires'] ?? true);
                 $status = ($flags['memoires'] ?? true) ? 'ready' : 'off';
                 break;
+            case 'shop.variant_promotions': // lot VAR : interrupteur du super admin (fiche Entreprise)
+                $value = (bool) ($e?->isVariantPromotionsEnabled() ?? false);
+                $status = $value ? 'ready' : 'off';
+                break;
             case 'reviews.enabled':
                 $setting = $this->emProvider->getEntityManager()->getRepository(ReviewSetting::class)->findOneBy([]);
                 $value = (bool) ($setting?->isEnabled() ?? false);

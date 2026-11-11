@@ -98,6 +98,37 @@ class OrderReturnsTest extends WebTestCase
         $this->assertSame('refunded', $body['paymentStatus']);
     }
 
+    /** Lot VAR (11/11/2026) : commande web passée pendant une promotion de variante (interrupteur allumé) ; le retour rend le prix payé, figé */
+    public function testWebReturnOfALineSoldUnderAVariantPromotionRefundsThePaidPrice(): void
+    {
+        $variant = (int) $this->db->fetchOne("SELECT v.id FROM product_variant v JOIN product p ON p.id = v.product_id WHERE p.code = 'DEMO-CASQUETTE' ORDER BY v.id LIMIT 1");
+        $this->db->executeStatement("UPDATE product SET price = 2900, special_price = NULL WHERE code = 'DEMO-CASQUETTE'");
+        $this->db->executeStatement('UPDATE product_variant SET price = NULL WHERE id = ?', [$variant]);
+        $this->db->executeStatement('UPDATE entreprise SET variant_promotions_enabled = true');
+        $promotion = (int) $this->db->fetchOne("INSERT INTO variant_promotion (product_variant_id, percent, price, base_price, start_date, end_date, starts_at, ends_at, created_at)
+            VALUES (?, 20, 2299, 2900, CURRENT_DATE - 1, CURRENT_DATE + 10, NOW() - INTERVAL '1 day', NOW() + INTERVAL '10 days', NOW()) RETURNING id", [$variant]);
+        try {
+            [$orderId, $pi] = $this->paidOrder(2);
+            $item = $this->db->fetchAssociative('SELECT id, unit_price, total_price, variant_promotion_id FROM order_items WHERE order_associated_id = ?', [$orderId]);
+            $this->assertSame([2299.0, 4598.0, $promotion], [(float) $item['unit_price'], (float) $item['total_price'], (int) $item['variant_promotion_id']], 'ligne figée au prix promotionnel');
+            $taxes = array_map('intval', $this->db->fetchFirstColumn('SELECT ROUND(amount) FROM order_tax WHERE order_tax_id = ?', [$orderId]));
+            $expected = PosReturnService::taxForQuantity(4598, 2, 0, 1) + array_sum(array_map(fn ($t) => PosReturnService::taxForQuantity($t, 2, 0, 1), $taxes));
+            // la promotion se termine avant le retour : le retour rend quand même le prix payé
+            $this->db->executeStatement("UPDATE variant_promotion SET ends_at = NOW() - INTERVAL '1 minute' WHERE id = ?", [$promotion]);
+            $this->loginAdmin();
+            $crawler = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . "/admin/orders/$orderId/retour");
+            $token = $crawler->filter('form[data-return-form] input[name="_token"]')->attr('value');
+            $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . "/admin/orders/$orderId/retour", ['_token' => $token, 'quantity' => [$item['id'] => '1'], 'reason' => 'Trop petit', 'restock' => '1', 'notify' => '0']);
+            $this->assertSame(302, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
+            $this->assertSame([$pi, $expected], [FakeCheckoutPaymentGateway::$refunds[0]['intent'], FakeCheckoutPaymentGateway::$refunds[0]['amount']]);
+            $this->assertGreaterThan(2299, $expected);
+            $this->assertLessThan(2900, $expected, 'jamais le prix catalogue');
+        } finally {
+            $this->db->executeStatement('DELETE FROM variant_promotion');
+            $this->db->executeStatement('UPDATE entreprise SET variant_promotions_enabled = false');
+        }
+    }
+
     public function testAddressChangesBeforeShippingOnlyAndLeavesTheCustomerBookUntouched(): void
     {
         [$orderId] = $this->paidOrder(1);

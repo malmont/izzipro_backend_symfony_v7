@@ -1,0 +1,2589 @@
+{
+    "cartQuote": {
+        "status": 200,
+        "body": {
+            "lines": [
+                {
+                    "productVariantId": 5,
+                    "productId": 2,
+                    "name": "T-shirt Horizon",
+                    "kind": "sale",
+                    "quantity": 2,
+                    "taxCategory": "standard",
+                    "unitPrice": 3900,
+                    "customizationId": null,
+                    "customizationPrice": 0,
+                    "total": 7800
+                },
+                {
+                    "productVariantId": 2,
+                    "productId": 2,
+                    "name": "T-shirt Horizon",
+                    "kind": "sale",
+                    "quantity": 1,
+                    "taxCategory": "standard",
+                    "unitPrice": 3500,
+                    "customizationId": null,
+                    "customizationPrice": 0,
+                    "total": 3500
+                },
+                {
+                    "productVariantId": 9,
+                    "productId": 3,
+                    "name": "Sweat Brise",
+                    "kind": "sale",
+                    "quantity": 1,
+                    "taxCategory": "standard",
+                    "unitPrice": 4900,
+                    "customizationId": null,
+                    "customizationPrice": 0,
+                    "total": 4900
+                },
+                {
+                    "productVariantId": 14,
+                    "productId": 6,
+                    "name": "Café en grains du Pérou",
+                    "kind": "sale",
+                    "quantity": 1,
+                    "taxCategory": "reduced",
+                    "unitPrice": 3800,
+                    "customizationId": null,
+                    "customizationPrice": 0,
+                    "total": 3800
+                },
+                {
+                    "productVariantId": 1,
+                    "productId": 1,
+                    "name": "Casquette brodée",
+                    "kind": "sale",
+                    "quantity": 1,
+                    "taxCategory": "standard",
+                    "unitPrice": 2900,
+                    "customizationId": null,
+                    "customizationPrice": 0,
+                    "total": 2900
+                },
+                {
+                    "productVariantId": 15,
+                    "productId": 7,
+                    "name": "Gourde isotherme à graver",
+                    "kind": "sale",
+                    "quantity": 1,
+                    "taxCategory": "standard",
+                    "unitPrice": 3200,
+                    "customizationId": 1,
+                    "customizationPrice": 0,
+                    "total": 3200
+                }
+            ],
+            "subtotal": 26100,
+            "shipping": 0,
+            "taxes": [
+                {
+                    "label": "TPS",
+                    "rate": 0.05,
+                    "base": 26100,
+                    "amount": 1305,
+                    "total": 27405,
+                    "category": null,
+                    "taxId": 1
+                },
+                {
+                    "label": "TVQ",
+                    "rate": 0.09975,
+                    "base": 26100,
+                    "amount": 2603,
+                    "total": 28703,
+                    "category": null,
+                    "taxId": 2
+                }
+            ],
+            "taxStatus": "calculated",
+            "taxProvider": "table",
+            "pricesIncludeTax": false,
+            "taxCalculationId": null,
+            "deposit": 0,
+            "total": 30008,
+            "currency": "CAD",
+            "shippingAddress": {
+                "country": "CA",
+                "province": "QC",
+                "city": "Montréal",
+                "postalCode": "H2X 1Y4"
+            },
+            "taxAddress": {
+                "country": "CA",
+                "province": "QC",
+                "city": "Montréal",
+                "postalCode": "H2X 1Y4"
+            },
+            "taxBasis": "shipping",
+            "carrier": null
+        },
+        "etag": "<masqué>"
+    },
+    "cartQuoteTaxIncluded": {
+        "status": 200,
+        "body": {
+            "lines": [
+                {
+                    "productVariantId": 5,
+                    "productId": 2,
+                    "name": "T-shirt Horizon",
+                    "kind": "sale",
+                    "quantity": 2,
+                    "taxCategory": "standard",
+                    "unitPrice": 3900,
+                    "customizationId": null,
+                    "customizationPrice": 0,
+                    "total": 7800
+                },
+                {
+                    "productVariantId": 2,
+                    "productId": 2,
+                    "name": "T-shirt Horizon",
+                    "kind": "sale",
+                    "quantity": 1,
+                    "taxCategory": "standard",
+                    "unitPrice": 3500,
+                    "customizationId": null,
+                    "customizationPrice": 0,
+                    "total": 3500
+                },
+                {
+                    "productVariantId": 9,
+                    "productId": 3,
+                    "name": "Sweat Brise",
+                    "kind": "sale",
+                    "quantity": 1,
+                    "taxCategory": "standard",
+                    "unitPrice": 4900,
+                    "customizationId": null,
+                    "customizationPrice": 0,
+                    "total": 4900
+                },
+                {
+                    "productVariantId": 14,
+                    "productId": 6,
+                    "name": "Café en grains du Pérou",
+                    "kind": "sale",
+                    "quantity": 1,
+                    "taxCategory": "reduced",
+                    "unitPrice": 3800,
+                    "customizationId": null,
+                    "customizationPrice": 0,
+                    "total": 3800
+                },
+                {
+                    "productVariantId": 1,
+                    "productId": 1,
+                    "name": "Casquette brodée",
+                    "kind": "sale",
+                    "quantity": 1,
+                    "taxCategory": "standard",
+                    "unitPrice": 2900,
+                    "customizationId": null,
+                    "customizationPrice": 0,
+                    "total": 2900
+                },
+                {
+                    "productVariantId": 15,
+                    "productId": 7,
+                    "name": "Gourde isotherme à graver",
+                    "kind": "sale",
+                    "quantity": 1,
+                    "taxCategory": "standard",
+                    "unitPrice": 3200,
+                    "customizationId": 1,
+                    "customizationPrice": 0,
+                    "total": 3200
+                }
+            ],
+            "subtotal": 26100,
+            "shipping": 0,
+            "taxes": [
+                {
+                    "label": "TPS",
+                    "rate": 0.05,
+                    "base": 22700,
+                    "amount": 1135,
+                    "total": 23835,
+                    "category": null,
+                    "taxId": 1
+                },
+                {
+                    "label": "TVQ",
+                    "rate": 0.09975,
+                    "base": 22700,
+                    "amount": 2265,
+                    "total": 24965,
+                    "category": null,
+                    "taxId": 2
+                }
+            ],
+            "taxStatus": "calculated",
+            "taxProvider": "table",
+            "pricesIncludeTax": true,
+            "taxCalculationId": null,
+            "deposit": 0,
+            "total": 26100,
+            "currency": "CAD",
+            "shippingAddress": {
+                "country": "CA",
+                "province": "QC",
+                "city": "Montréal",
+                "postalCode": "H2X 1Y4"
+            },
+            "taxAddress": {
+                "country": "CA",
+                "province": "QC",
+                "city": "Montréal",
+                "postalCode": "H2X 1Y4"
+            },
+            "taxBasis": "shipping",
+            "carrier": null
+        },
+        "etag": "<masqué>"
+    },
+    "stripeIntent": {
+        "status": 200,
+        "body": {
+            "success": true,
+            "clientSecret": "<masqué>",
+            "paymentIntentId": "<masqué>",
+            "calculatedAmount": 30008,
+            "quote": {
+                "lines": [
+                    {
+                        "productVariantId": 5,
+                        "productId": 2,
+                        "name": "T-shirt Horizon",
+                        "kind": "sale",
+                        "quantity": 2,
+                        "taxCategory": "standard",
+                        "unitPrice": 3900,
+                        "customizationId": null,
+                        "customizationPrice": 0,
+                        "total": 7800
+                    },
+                    {
+                        "productVariantId": 2,
+                        "productId": 2,
+                        "name": "T-shirt Horizon",
+                        "kind": "sale",
+                        "quantity": 1,
+                        "taxCategory": "standard",
+                        "unitPrice": 3500,
+                        "customizationId": null,
+                        "customizationPrice": 0,
+                        "total": 3500
+                    },
+                    {
+                        "productVariantId": 9,
+                        "productId": 3,
+                        "name": "Sweat Brise",
+                        "kind": "sale",
+                        "quantity": 1,
+                        "taxCategory": "standard",
+                        "unitPrice": 4900,
+                        "customizationId": null,
+                        "customizationPrice": 0,
+                        "total": 4900
+                    },
+                    {
+                        "productVariantId": 14,
+                        "productId": 6,
+                        "name": "Café en grains du Pérou",
+                        "kind": "sale",
+                        "quantity": 1,
+                        "taxCategory": "reduced",
+                        "unitPrice": 3800,
+                        "customizationId": null,
+                        "customizationPrice": 0,
+                        "total": 3800
+                    },
+                    {
+                        "productVariantId": 1,
+                        "productId": 1,
+                        "name": "Casquette brodée",
+                        "kind": "sale",
+                        "quantity": 1,
+                        "taxCategory": "standard",
+                        "unitPrice": 2900,
+                        "customizationId": null,
+                        "customizationPrice": 0,
+                        "total": 2900
+                    },
+                    {
+                        "productVariantId": 15,
+                        "productId": 7,
+                        "name": "Gourde isotherme à graver",
+                        "kind": "sale",
+                        "quantity": 1,
+                        "taxCategory": "standard",
+                        "unitPrice": 3200,
+                        "customizationId": 1,
+                        "customizationPrice": 0,
+                        "total": 3200
+                    }
+                ],
+                "subtotal": 26100,
+                "shipping": 0,
+                "taxes": [
+                    {
+                        "label": "TPS",
+                        "rate": 0.05,
+                        "base": 26100,
+                        "amount": 1305,
+                        "total": 27405,
+                        "category": null,
+                        "taxId": 1
+                    },
+                    {
+                        "label": "TVQ",
+                        "rate": 0.09975,
+                        "base": 26100,
+                        "amount": 2603,
+                        "total": 28703,
+                        "category": null,
+                        "taxId": 2
+                    }
+                ],
+                "taxStatus": "calculated",
+                "taxProvider": "table",
+                "pricesIncludeTax": false,
+                "taxCalculationId": null,
+                "deposit": 0,
+                "total": 30008,
+                "currency": "CAD",
+                "shippingAddress": {
+                    "country": "CA",
+                    "province": "QC",
+                    "city": "Montréal",
+                    "postalCode": "H2X 1Y4"
+                },
+                "taxAddress": {
+                    "country": "CA",
+                    "province": "QC",
+                    "city": "Montréal",
+                    "postalCode": "H2X 1Y4"
+                },
+                "taxBasis": "shipping",
+                "carrier": null
+            },
+            "reused": false
+        },
+        "etag": "<masqué>"
+    },
+    "posQuote": {
+        "status": 200,
+        "body": {
+            "discounts": {
+                "lines": 490,
+                "ticket": null,
+                "total": 490,
+                "gross": 25600
+            },
+            "grossSubtotal": 25600,
+            "priceOverrides": {
+                "count": 1,
+                "catalogTotal": 3500,
+                "total": 3000,
+                "difference": 500,
+                "reduction": 500
+            },
+            "lines": [
+                {
+                    "productVariantId": 5,
+                    "productId": 2,
+                    "name": "T-shirt Horizon",
+                    "kind": "sale",
+                    "quantity": 2,
+                    "taxCategory": "standard",
+                    "unitPrice": 3900,
+                    "customizationId": null,
+                    "customizationPrice": 0,
+                    "total": 7800,
+                    "gross": 7800,
+                    "discounts": [],
+                    "discountAmount": 0
+                },
+                {
+                    "productVariantId": 2,
+                    "productId": 2,
+                    "name": "T-shirt Horizon",
+                    "kind": "sale",
+                    "quantity": 1,
+                    "taxCategory": "standard",
+                    "unitPrice": 3000,
+                    "customizationId": null,
+                    "customizationPrice": 0,
+                    "catalogUnitPrice": 3500,
+                    "priceOverride": {
+                        "unitPrice": 3000,
+                        "reasonCode": "prix_concurrent",
+                        "reasonText": null,
+                        "difference": 500
+                    },
+                    "total": 3000,
+                    "gross": 3000,
+                    "discounts": [],
+                    "discountAmount": 0
+                },
+                {
+                    "productVariantId": 9,
+                    "productId": 3,
+                    "name": "Sweat Brise",
+                    "kind": "sale",
+                    "quantity": 1,
+                    "taxCategory": "standard",
+                    "unitPrice": 4900,
+                    "customizationId": null,
+                    "customizationPrice": 0,
+                    "total": 4410,
+                    "gross": 4900,
+                    "discounts": [
+                        {
+                            "type": "percent",
+                            "value": 10,
+                            "reasonCode": "fidelite",
+                            "reasonText": null,
+                            "amount": 490,
+                            "scope": "line"
+                        }
+                    ],
+                    "discountAmount": 490
+                },
+                {
+                    "productVariantId": 14,
+                    "productId": 6,
+                    "name": "Café en grains du Pérou",
+                    "kind": "sale",
+                    "quantity": 1,
+                    "taxCategory": "reduced",
+                    "unitPrice": 3800,
+                    "customizationId": null,
+                    "customizationPrice": 0,
+                    "total": 3800,
+                    "gross": 3800,
+                    "discounts": [],
+                    "discountAmount": 0
+                },
+                {
+                    "productVariantId": 1,
+                    "productId": 1,
+                    "name": "Casquette brodée",
+                    "kind": "sale",
+                    "quantity": 1,
+                    "taxCategory": "standard",
+                    "unitPrice": 2900,
+                    "customizationId": null,
+                    "customizationPrice": 0,
+                    "total": 2900,
+                    "gross": 2900,
+                    "discounts": [],
+                    "discountAmount": 0
+                },
+                {
+                    "productVariantId": 15,
+                    "productId": 7,
+                    "name": "Gourde isotherme à graver",
+                    "kind": "sale",
+                    "quantity": 1,
+                    "taxCategory": "standard",
+                    "unitPrice": 3200,
+                    "customizationId": 1,
+                    "customizationPrice": 0,
+                    "total": 3200,
+                    "gross": 3200,
+                    "discounts": [],
+                    "discountAmount": 0
+                }
+            ],
+            "subtotal": 25110,
+            "shipping": 0,
+            "taxes": [
+                {
+                    "label": "TPS",
+                    "rate": 0.05,
+                    "base": 25110,
+                    "amount": 1256,
+                    "total": 26366,
+                    "category": null,
+                    "taxId": 1
+                },
+                {
+                    "label": "TVQ",
+                    "rate": 0.09975,
+                    "base": 25110,
+                    "amount": 2505,
+                    "total": 27615,
+                    "category": null,
+                    "taxId": 2
+                }
+            ],
+            "taxStatus": "calculated",
+            "taxProvider": "table",
+            "pricesIncludeTax": false,
+            "taxCalculationId": null,
+            "deposit": 0,
+            "total": 28871,
+            "currency": "CAD",
+            "shippingAddress": {
+                "country": "CA",
+                "province": "QC",
+                "city": "Montréal",
+                "postalCode": "H1M 0A9"
+            },
+            "taxAddress": {
+                "country": "CA",
+                "province": "QC",
+                "city": "Montréal",
+                "postalCode": "H1M 0A9"
+            },
+            "taxBasis": "shipping",
+            "carrier": null,
+            "customItems": {
+                "count": 0,
+                "total": 0
+            },
+            "cashTotal": 28870
+        },
+        "etag": "<masqué>"
+    },
+    "posSale": {
+        "status": 201,
+        "body": {
+            "success": true,
+            "orderId": "<masqué>",
+            "message": "Commande créée.",
+            "kind": "sale",
+            "duplicate": false,
+            "reprintCount": 0,
+            "issuedAt": "<date>",
+            "receiptUrl": "https://mvtest.test/api/r/MS4xLjE4MDIyMTc1OTk.cfa6b0473b9ab349feee9d2fccbf80e6",
+            "cashier": {
+                "id": 18,
+                "name": "Photo Variante"
+            },
+            "currency": "CAD",
+            "lines": [
+                {
+                    "productVariantId": 5,
+                    "name": "T-shirt Horizon",
+                    "saleUnit": null,
+                    "quantity": 2,
+                    "unitPrice": 39,
+                    "gross": 78,
+                    "discountAmount": 0,
+                    "total": 78,
+                    "discounts": [],
+                    "custom": false,
+                    "taxable": true,
+                    "catalogUnitPrice": null,
+                    "priceReason": null
+                },
+                {
+                    "productVariantId": 2,
+                    "name": "T-shirt Horizon",
+                    "saleUnit": null,
+                    "quantity": 1,
+                    "unitPrice": 30,
+                    "gross": 30,
+                    "discountAmount": 0,
+                    "total": 30,
+                    "discounts": [],
+                    "custom": false,
+                    "taxable": true,
+                    "catalogUnitPrice": 35,
+                    "priceReason": {
+                        "code": "prix_concurrent",
+                        "text": null
+                    }
+                },
+                {
+                    "productVariantId": 9,
+                    "name": "Sweat Brise",
+                    "saleUnit": null,
+                    "quantity": 1,
+                    "unitPrice": 49,
+                    "gross": 49,
+                    "discountAmount": 4.9,
+                    "total": 44.1,
+                    "discounts": [
+                        {
+                            "type": "percent",
+                            "value": 10,
+                            "amount": 4.9,
+                            "scope": "line",
+                            "reason": {
+                                "code": "fidelite",
+                                "text": null
+                            }
+                        }
+                    ],
+                    "custom": false,
+                    "taxable": true,
+                    "catalogUnitPrice": null,
+                    "priceReason": null
+                },
+                {
+                    "productVariantId": 14,
+                    "name": "Café en grains du Pérou",
+                    "saleUnit": "kg",
+                    "quantity": 1,
+                    "unitPrice": 38,
+                    "gross": 38,
+                    "discountAmount": 0,
+                    "total": 38,
+                    "discounts": [],
+                    "custom": false,
+                    "taxable": true,
+                    "catalogUnitPrice": null,
+                    "priceReason": null
+                },
+                {
+                    "productVariantId": 1,
+                    "name": "Casquette brodée",
+                    "saleUnit": null,
+                    "quantity": 1,
+                    "unitPrice": 29,
+                    "gross": 29,
+                    "discountAmount": 0,
+                    "total": 29,
+                    "discounts": [],
+                    "custom": false,
+                    "taxable": true,
+                    "catalogUnitPrice": null,
+                    "priceReason": null
+                },
+                {
+                    "productVariantId": 15,
+                    "name": "Gourde isotherme à graver",
+                    "saleUnit": null,
+                    "quantity": 1,
+                    "unitPrice": 32,
+                    "gross": 32,
+                    "discountAmount": 0,
+                    "total": 32,
+                    "discounts": [],
+                    "custom": false,
+                    "taxable": true,
+                    "catalogUnitPrice": null,
+                    "priceReason": null
+                }
+            ],
+            "change": 0,
+            "receiptNumber": "<masqué>",
+            "receiptKind": "ticket",
+            "provisionalNumber": null,
+            "receiptReference": "1",
+            "barcode": "IZ-T-1-1",
+            "reference": "<masqué>",
+            "createdAt": "<masqué>",
+            "subTotal": 251.1,
+            "grossSubTotal": 256,
+            "discounts": {
+                "total": 4.9,
+                "ticket": null,
+                "lines": [
+                    {
+                        "productVariantId": 9,
+                        "quantity": 1,
+                        "gross": 49,
+                        "net": 44.1,
+                        "amount": 4.9,
+                        "discounts": [
+                            {
+                                "type": "percent",
+                                "value": 10,
+                                "amount": 4.9,
+                                "scope": "line",
+                                "reason": {
+                                    "code": "fidelite",
+                                    "text": null
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "totalTax": 37.61,
+            "totalAmount": 288.71,
+            "cashRounding": -0.01,
+            "amountDue": 288.7,
+            "creditApplied": 0,
+            "giftCardApplied": 0,
+            "giftCardPayments": [],
+            "giftCard": null,
+            "storeCredit": null,
+            "manufacturerCouponApplied": 0,
+            "customer": null,
+            "taxes": [
+                {
+                    "name": "TPS",
+                    "label": "TPS",
+                    "rate": 0.05,
+                    "amount": 12.56,
+                    "base": 251.1,
+                    "total": 263.66,
+                    "category": null
+                },
+                {
+                    "name": "TVQ",
+                    "label": "TVQ",
+                    "rate": 0.09975,
+                    "amount": 25.05,
+                    "base": 251.1,
+                    "total": 276.15,
+                    "category": null
+                }
+            ],
+            "pricesIncludeTax": false,
+            "payments": [
+                {
+                    "type": 2,
+                    "label": "Espèces",
+                    "amount": 288.7,
+                    "cardBrand": null,
+                    "last4": null,
+                    "paymentMethodType": null
+                }
+            ],
+            "cashRegister": {
+                "id": 1,
+                "name": "Caisse principale"
+            },
+            "store": {
+                "name": "Mémoires Vivantes",
+                "address": "4000 Av De La Pepiniere, C307, H1M 0A9 Montréal, QC, CA",
+                "phone": null,
+                "taxNumber": null,
+                "taxNumbers": {
+                    "gst": null,
+                    "qst": null
+                },
+                "showTaxNumbers": true,
+                "taxIds": [],
+                "receiptHeader": null,
+                "receiptFooter": null
+            }
+        },
+        "etag": "<masqué>"
+    },
+    "orderItems": [
+        {
+            "unit_price": "3900",
+            "total_price": "7800",
+            "catalog_unit_price": null,
+            "quantity": 2,
+            "discount_amount": 0,
+            "tax_category": "standard"
+        },
+        {
+            "unit_price": "3000",
+            "total_price": "3000",
+            "catalog_unit_price": 3500,
+            "quantity": 1,
+            "discount_amount": 0,
+            "tax_category": "standard"
+        },
+        {
+            "unit_price": "4900",
+            "total_price": "4410",
+            "catalog_unit_price": null,
+            "quantity": 1,
+            "discount_amount": 490,
+            "tax_category": "standard"
+        },
+        {
+            "unit_price": "3800",
+            "total_price": "3800",
+            "catalog_unit_price": null,
+            "quantity": 1,
+            "discount_amount": 0,
+            "tax_category": "reduced"
+        },
+        {
+            "unit_price": "2900",
+            "total_price": "2900",
+            "catalog_unit_price": null,
+            "quantity": 1,
+            "discount_amount": 0,
+            "tax_category": "standard"
+        },
+        {
+            "unit_price": "3200",
+            "total_price": "3200",
+            "catalog_unit_price": null,
+            "quantity": 1,
+            "discount_amount": 0,
+            "tax_category": "standard"
+        }
+    ],
+    "orderDetail": {
+        "status": 200,
+        "body": {
+            "id": 1,
+            "reference": "<masqué>",
+            "totalAmount": 28871,
+            "subTotal": 25110,
+            "priceTax": 3761,
+            "priceShipping": 0,
+            "currency": "CAD",
+            "statusId": 3,
+            "carrier": null,
+            "orderDate": "<masqué>",
+            "userId": "<masqué>",
+            "shippingAdress": null,
+            "orderSource": "Pos",
+            "status": "Complétée",
+            "orderItems": [
+                {
+                    "id": 1,
+                    "quantity": 2,
+                    "unitPrice": 3900,
+                    "totalPrice": 7800,
+                    "productId": 2,
+                    "productVariantId": 5,
+                    "customizationId": null,
+                    "productVariantName": "T-shirt Horizon",
+                    "productSaleUnit": null,
+                    "productVariantColor": "Noir",
+                    "productVariantSize": "XL",
+                    "productImage": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-tshirt.jpg",
+                    "booking": null,
+                    "options": {
+                        "Taille": "XL",
+                        "Couleur": "Noir"
+                    }
+                },
+                {
+                    "id": 2,
+                    "quantity": 1,
+                    "unitPrice": 3000,
+                    "totalPrice": 3000,
+                    "productId": 2,
+                    "productVariantId": 2,
+                    "customizationId": null,
+                    "productVariantName": "T-shirt Horizon",
+                    "productSaleUnit": null,
+                    "productVariantColor": "Noir",
+                    "productVariantSize": "S",
+                    "productImage": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-tshirt.jpg",
+                    "booking": null,
+                    "options": {
+                        "Taille": "S",
+                        "Couleur": "Noir"
+                    }
+                },
+                {
+                    "id": 3,
+                    "quantity": 1,
+                    "unitPrice": 4900,
+                    "totalPrice": 4410,
+                    "productId": 3,
+                    "productVariantId": 9,
+                    "customizationId": null,
+                    "productVariantName": "Sweat Brise",
+                    "productSaleUnit": null,
+                    "productVariantColor": null,
+                    "productVariantSize": "M",
+                    "productImage": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-sweat.jpg",
+                    "booking": null,
+                    "options": {
+                        "Taille": "M"
+                    }
+                },
+                {
+                    "id": 4,
+                    "quantity": 1,
+                    "unitPrice": 3800,
+                    "totalPrice": 3800,
+                    "productId": 6,
+                    "productVariantId": 14,
+                    "customizationId": null,
+                    "productVariantName": "Café en grains du Pérou",
+                    "productSaleUnit": "kg",
+                    "productVariantColor": null,
+                    "productVariantSize": null,
+                    "productImage": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-cafe.jpg",
+                    "booking": null,
+                    "options": []
+                },
+                {
+                    "id": 5,
+                    "quantity": 1,
+                    "unitPrice": 2900,
+                    "totalPrice": 2900,
+                    "productId": 1,
+                    "productVariantId": 1,
+                    "customizationId": null,
+                    "productVariantName": "Casquette brodée",
+                    "productSaleUnit": null,
+                    "productVariantColor": null,
+                    "productVariantSize": null,
+                    "productImage": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-casquette.jpg",
+                    "booking": null,
+                    "options": []
+                },
+                {
+                    "id": 6,
+                    "quantity": 1,
+                    "unitPrice": 3200,
+                    "totalPrice": 3200,
+                    "productId": 7,
+                    "productVariantId": 15,
+                    "customizationId": 1,
+                    "productVariantName": "Gourde isotherme à graver",
+                    "productSaleUnit": null,
+                    "productVariantColor": null,
+                    "productVariantSize": null,
+                    "productImage": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-gourde.jpg",
+                    "booking": null,
+                    "options": []
+                }
+            ],
+            "paymentStatus": "paid",
+            "pricesIncludeTax": false,
+            "taxes": [
+                {
+                    "label": "TPS",
+                    "rate": 0.05,
+                    "base": 25110,
+                    "amount": 1256,
+                    "total": 26366
+                },
+                {
+                    "label": "TVQ",
+                    "rate": 0.09975,
+                    "base": 25110,
+                    "amount": 2505,
+                    "total": 27615
+                }
+            ],
+            "shipment": null,
+            "returns": [],
+            "receiptNumber": "<masqué>",
+            "creditNoteNumber": null,
+            "cashRegister": {
+                "id": 1,
+                "name": "Caisse principale"
+            }
+        },
+        "etag": "<masqué>"
+    },
+    "orderInPosList": {
+        "status": 200,
+        "row": [
+            {
+                "id": 1,
+                "reference": "<masqué>",
+                "totalAmount": 28871,
+                "subTotal": 25110,
+                "priceTax": 3761,
+                "priceShipping": 0,
+                "currency": "CAD",
+                "statusId": null,
+                "carrier": null,
+                "orderDate": "<masqué>",
+                "userId": "<masqué>",
+                "shippingAdress": null,
+                "orderSource": "Pos",
+                "status": "Complétée",
+                "orderItems": [
+                    {
+                        "id": 1,
+                        "quantity": 2,
+                        "unitPrice": 3900,
+                        "totalPrice": 7800,
+                        "productId": 2,
+                        "productVariantId": 5,
+                        "customizationId": null,
+                        "productVariantName": "T-shirt Horizon",
+                        "productSaleUnit": null,
+                        "productVariantColor": "Noir",
+                        "productVariantSize": "XL",
+                        "productImage": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-tshirt.jpg",
+                        "booking": null,
+                        "options": {
+                            "Taille": "XL",
+                            "Couleur": "Noir"
+                        }
+                    },
+                    {
+                        "id": 2,
+                        "quantity": 1,
+                        "unitPrice": 3000,
+                        "totalPrice": 3000,
+                        "productId": 2,
+                        "productVariantId": 2,
+                        "customizationId": null,
+                        "productVariantName": "T-shirt Horizon",
+                        "productSaleUnit": null,
+                        "productVariantColor": "Noir",
+                        "productVariantSize": "S",
+                        "productImage": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-tshirt.jpg",
+                        "booking": null,
+                        "options": {
+                            "Taille": "S",
+                            "Couleur": "Noir"
+                        }
+                    },
+                    {
+                        "id": 3,
+                        "quantity": 1,
+                        "unitPrice": 4900,
+                        "totalPrice": 4410,
+                        "productId": 3,
+                        "productVariantId": 9,
+                        "customizationId": null,
+                        "productVariantName": "Sweat Brise",
+                        "productSaleUnit": null,
+                        "productVariantColor": null,
+                        "productVariantSize": "M",
+                        "productImage": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-sweat.jpg",
+                        "booking": null,
+                        "options": {
+                            "Taille": "M"
+                        }
+                    },
+                    {
+                        "id": 4,
+                        "quantity": 1,
+                        "unitPrice": 3800,
+                        "totalPrice": 3800,
+                        "productId": 6,
+                        "productVariantId": 14,
+                        "customizationId": null,
+                        "productVariantName": "Café en grains du Pérou",
+                        "productSaleUnit": "kg",
+                        "productVariantColor": null,
+                        "productVariantSize": null,
+                        "productImage": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-cafe.jpg",
+                        "booking": null,
+                        "options": []
+                    },
+                    {
+                        "id": 5,
+                        "quantity": 1,
+                        "unitPrice": 2900,
+                        "totalPrice": 2900,
+                        "productId": 1,
+                        "productVariantId": 1,
+                        "customizationId": null,
+                        "productVariantName": "Casquette brodée",
+                        "productSaleUnit": null,
+                        "productVariantColor": null,
+                        "productVariantSize": null,
+                        "productImage": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-casquette.jpg",
+                        "booking": null,
+                        "options": []
+                    },
+                    {
+                        "id": 6,
+                        "quantity": 1,
+                        "unitPrice": 3200,
+                        "totalPrice": 3200,
+                        "productId": 7,
+                        "productVariantId": 15,
+                        "customizationId": 1,
+                        "productVariantName": "Gourde isotherme à graver",
+                        "productSaleUnit": null,
+                        "productVariantColor": null,
+                        "productVariantSize": null,
+                        "productImage": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-gourde.jpg",
+                        "booking": null,
+                        "options": []
+                    }
+                ],
+                "paymentStatus": null,
+                "pricesIncludeTax": false,
+                "taxes": [
+                    {
+                        "label": "TPS",
+                        "rate": 0.05,
+                        "base": 25110,
+                        "amount": 1256,
+                        "total": 26366
+                    },
+                    {
+                        "label": "TVQ",
+                        "rate": 0.09975,
+                        "base": 25110,
+                        "amount": 2505,
+                        "total": 27615
+                    }
+                ],
+                "shipment": null,
+                "returns": [],
+                "receiptNumber": "<masqué>",
+                "creditNoteNumber": null,
+                "cashRegister": {
+                    "id": 1,
+                    "name": "Caisse principale"
+                }
+            }
+        ]
+    },
+    "orderInAdminList": {
+        "status": 200,
+        "row": [
+            {
+                "id": 1,
+                "reference": "<masqué>",
+                "totalAmount": 28871,
+                "subTotal": 25110,
+                "priceTax": 3761,
+                "priceShipping": 0,
+                "currency": "CAD",
+                "statusId": null,
+                "carrier": null,
+                "orderDate": "<masqué>",
+                "userId": "<masqué>",
+                "shippingAdress": null,
+                "orderSource": "Pos",
+                "status": "Complétée",
+                "orderItems": [
+                    {
+                        "id": 1,
+                        "quantity": 2,
+                        "unitPrice": 3900,
+                        "totalPrice": 7800,
+                        "productId": 2,
+                        "productVariantId": 5,
+                        "customizationId": null,
+                        "productVariantName": "T-shirt Horizon",
+                        "productSaleUnit": null,
+                        "productVariantColor": "Noir",
+                        "productVariantSize": "XL",
+                        "productImage": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-tshirt.jpg",
+                        "booking": null,
+                        "options": {
+                            "Taille": "XL",
+                            "Couleur": "Noir"
+                        }
+                    },
+                    {
+                        "id": 2,
+                        "quantity": 1,
+                        "unitPrice": 3000,
+                        "totalPrice": 3000,
+                        "productId": 2,
+                        "productVariantId": 2,
+                        "customizationId": null,
+                        "productVariantName": "T-shirt Horizon",
+                        "productSaleUnit": null,
+                        "productVariantColor": "Noir",
+                        "productVariantSize": "S",
+                        "productImage": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-tshirt.jpg",
+                        "booking": null,
+                        "options": {
+                            "Taille": "S",
+                            "Couleur": "Noir"
+                        }
+                    },
+                    {
+                        "id": 3,
+                        "quantity": 1,
+                        "unitPrice": 4900,
+                        "totalPrice": 4410,
+                        "productId": 3,
+                        "productVariantId": 9,
+                        "customizationId": null,
+                        "productVariantName": "Sweat Brise",
+                        "productSaleUnit": null,
+                        "productVariantColor": null,
+                        "productVariantSize": "M",
+                        "productImage": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-sweat.jpg",
+                        "booking": null,
+                        "options": {
+                            "Taille": "M"
+                        }
+                    },
+                    {
+                        "id": 4,
+                        "quantity": 1,
+                        "unitPrice": 3800,
+                        "totalPrice": 3800,
+                        "productId": 6,
+                        "productVariantId": 14,
+                        "customizationId": null,
+                        "productVariantName": "Café en grains du Pérou",
+                        "productSaleUnit": "kg",
+                        "productVariantColor": null,
+                        "productVariantSize": null,
+                        "productImage": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-cafe.jpg",
+                        "booking": null,
+                        "options": []
+                    },
+                    {
+                        "id": 5,
+                        "quantity": 1,
+                        "unitPrice": 2900,
+                        "totalPrice": 2900,
+                        "productId": 1,
+                        "productVariantId": 1,
+                        "customizationId": null,
+                        "productVariantName": "Casquette brodée",
+                        "productSaleUnit": null,
+                        "productVariantColor": null,
+                        "productVariantSize": null,
+                        "productImage": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-casquette.jpg",
+                        "booking": null,
+                        "options": []
+                    },
+                    {
+                        "id": 6,
+                        "quantity": 1,
+                        "unitPrice": 3200,
+                        "totalPrice": 3200,
+                        "productId": 7,
+                        "productVariantId": 15,
+                        "customizationId": 1,
+                        "productVariantName": "Gourde isotherme à graver",
+                        "productSaleUnit": null,
+                        "productVariantColor": null,
+                        "productVariantSize": null,
+                        "productImage": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-gourde.jpg",
+                        "booking": null,
+                        "options": []
+                    }
+                ],
+                "paymentStatus": null,
+                "pricesIncludeTax": false,
+                "taxes": [
+                    {
+                        "label": "TPS",
+                        "rate": 0.05,
+                        "base": 25110,
+                        "amount": 1256,
+                        "total": 26366
+                    },
+                    {
+                        "label": "TVQ",
+                        "rate": 0.09975,
+                        "base": 25110,
+                        "amount": 2505,
+                        "total": 27615
+                    }
+                ],
+                "shipment": null,
+                "returns": [],
+                "receiptNumber": "<masqué>",
+                "creditNoteNumber": null,
+                "cashRegister": {
+                    "id": 1,
+                    "name": "Caisse principale"
+                }
+            }
+        ]
+    },
+    "favorites": {
+        "status": 200,
+        "body": {
+            "enabled": true,
+            "mode": "both",
+            "days": 30,
+            "gridSize": 500,
+            "scope": "site",
+            "cashRegisterId": null,
+            "items": [
+                {
+                    "productId": 1,
+                    "variantId": null,
+                    "defaultVariantId": 1,
+                    "hasVariants": false,
+                    "name": "Casquette brodée",
+                    "variantLabel": null,
+                    "price": 2900,
+                    "image": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-casquette.jpg",
+                    "barcode": null,
+                    "pinned": false
+                },
+                {
+                    "productId": 2,
+                    "variantId": null,
+                    "defaultVariantId": null,
+                    "hasVariants": true,
+                    "name": "T-shirt Horizon",
+                    "variantLabel": null,
+                    "price": 3500,
+                    "image": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-tshirt.jpg",
+                    "barcode": null,
+                    "pinned": false
+                },
+                {
+                    "productId": 3,
+                    "variantId": null,
+                    "defaultVariantId": null,
+                    "hasVariants": true,
+                    "name": "Sweat Brise",
+                    "variantLabel": null,
+                    "price": 4900,
+                    "image": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-sweat.jpg",
+                    "barcode": null,
+                    "pinned": false
+                },
+                {
+                    "productId": 6,
+                    "variantId": null,
+                    "defaultVariantId": 14,
+                    "hasVariants": false,
+                    "name": "Café en grains du Pérou",
+                    "variantLabel": null,
+                    "price": 3800,
+                    "image": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-cafe.jpg",
+                    "barcode": null,
+                    "pinned": false
+                },
+                {
+                    "productId": 7,
+                    "variantId": null,
+                    "defaultVariantId": 15,
+                    "hasVariants": false,
+                    "name": "Gourde isotherme à graver",
+                    "variantLabel": null,
+                    "price": 3200,
+                    "image": "https://mvtest.test/bucket-simulator/assets/uploads/products/demo-boutique-gourde.jpg",
+                    "barcode": null,
+                    "pinned": false
+                }
+            ]
+        },
+        "etag": "<masqué>"
+    },
+    "offlinePack": {
+        "status": 200,
+        "body": {
+            "site": {
+                "code": "mvtest",
+                "currency": "CAD",
+                "taxProvider": "table",
+                "cashRoundingStep": 5,
+                "country": "CA",
+                "province": "QC",
+                "name": "Mémoires Vivantes",
+                "pricesIncludeTax": false
+            },
+            "cashRegisters": [
+                {
+                    "id": 1,
+                    "name": "Caisse principale",
+                    "receiptPrefix": null,
+                    "terminalEnabled": false
+                }
+            ],
+            "taxes": [
+                {
+                    "id": 1,
+                    "label": "TPS",
+                    "rate": 0.05,
+                    "category": null
+                },
+                {
+                    "id": 2,
+                    "label": "TVQ",
+                    "rate": 0.09975,
+                    "category": null
+                }
+            ],
+            "paymentMethods": [
+                {
+                    "type": 1,
+                    "label": "carte de crédit",
+                    "offline": false
+                },
+                {
+                    "type": 2,
+                    "label": "Espèces",
+                    "offline": true
+                },
+                {
+                    "type": 3,
+                    "label": "Paypal",
+                    "offline": false
+                }
+            ],
+            "denominations": [
+                {
+                    "id": 1,
+                    "label": "100 $",
+                    "valueCents": 10000,
+                    "kind": "bill",
+                    "active": true
+                },
+                {
+                    "id": 2,
+                    "label": "50 $",
+                    "valueCents": 5000,
+                    "kind": "bill",
+                    "active": true
+                },
+                {
+                    "id": 11,
+                    "label": "20 $",
+                    "valueCents": 2000,
+                    "kind": "bill",
+                    "active": true
+                },
+                {
+                    "id": 3,
+                    "label": "10 $",
+                    "valueCents": 1000,
+                    "kind": "bill",
+                    "active": true
+                },
+                {
+                    "id": 4,
+                    "label": "5 $",
+                    "valueCents": 500,
+                    "kind": "bill",
+                    "active": true
+                },
+                {
+                    "id": 5,
+                    "label": "2 $",
+                    "valueCents": 200,
+                    "kind": "coin",
+                    "active": true
+                },
+                {
+                    "id": 6,
+                    "label": "1 $",
+                    "valueCents": 100,
+                    "kind": "coin",
+                    "active": true
+                },
+                {
+                    "id": 7,
+                    "label": "25 ¢",
+                    "valueCents": 25,
+                    "kind": "coin",
+                    "active": true
+                },
+                {
+                    "id": 8,
+                    "label": "10 ¢",
+                    "valueCents": 10,
+                    "kind": "coin",
+                    "active": true
+                },
+                {
+                    "id": 9,
+                    "label": "5 ¢",
+                    "valueCents": 5,
+                    "kind": "coin",
+                    "active": true
+                },
+                {
+                    "id": 10,
+                    "label": "1 ¢",
+                    "valueCents": 1,
+                    "kind": "coin",
+                    "active": false
+                }
+            ],
+            "products": [
+                {
+                    "id": 1,
+                    "code": "DEMO-CASQUETTE",
+                    "barcode": null,
+                    "name": "Casquette brodée",
+                    "saleUnit": null,
+                    "categoryIds": [
+                        2
+                    ],
+                    "price": 2900,
+                    "specialPrice": 1900,
+                    "specialPriceFrom": "<date>",
+                    "specialPriceTo": "<date>",
+                    "taxCategory": "standard",
+                    "variants": [
+                        {
+                            "id": 1,
+                            "label": null,
+                            "price": null,
+                            "barcode": null,
+                            "stock": 499,
+                            "customizable": false
+                        }
+                    ]
+                },
+                {
+                    "id": 2,
+                    "code": "DEMO-TSHIRT",
+                    "barcode": null,
+                    "name": "T-shirt Horizon",
+                    "saleUnit": null,
+                    "categoryIds": [
+                        1
+                    ],
+                    "price": 3500,
+                    "specialPrice": null,
+                    "specialPriceFrom": null,
+                    "specialPriceTo": null,
+                    "taxCategory": "standard",
+                    "variants": [
+                        {
+                            "id": 2,
+                            "label": "Noir / S",
+                            "price": null,
+                            "barcode": null,
+                            "stock": 499,
+                            "customizable": false
+                        },
+                        {
+                            "id": 3,
+                            "label": "Noir / M",
+                            "price": null,
+                            "barcode": null,
+                            "stock": 500,
+                            "customizable": false
+                        },
+                        {
+                            "id": 4,
+                            "label": "Noir / L",
+                            "price": null,
+                            "barcode": null,
+                            "stock": 500,
+                            "customizable": false
+                        },
+                        {
+                            "id": 5,
+                            "label": "Noir / XL",
+                            "price": 3900,
+                            "barcode": null,
+                            "stock": 498,
+                            "customizable": false
+                        },
+                        {
+                            "id": 6,
+                            "label": "Blanc / M",
+                            "price": null,
+                            "barcode": null,
+                            "stock": 500,
+                            "customizable": false
+                        },
+                        {
+                            "id": 7,
+                            "label": "Blanc / L",
+                            "price": null,
+                            "barcode": null,
+                            "stock": 500,
+                            "customizable": false
+                        },
+                        {
+                            "id": 8,
+                            "label": "Bleu / M",
+                            "price": null,
+                            "barcode": null,
+                            "stock": 500,
+                            "customizable": false
+                        }
+                    ]
+                },
+                {
+                    "id": 3,
+                    "code": "DEMO-SWEAT",
+                    "barcode": null,
+                    "name": "Sweat Brise",
+                    "saleUnit": null,
+                    "categoryIds": [
+                        1
+                    ],
+                    "price": 6900,
+                    "specialPrice": 4900,
+                    "specialPriceFrom": "<date>",
+                    "specialPriceTo": "<date>",
+                    "taxCategory": "standard",
+                    "variants": [
+                        {
+                            "id": 9,
+                            "label": "M",
+                            "price": null,
+                            "barcode": null,
+                            "stock": 499,
+                            "customizable": false
+                        },
+                        {
+                            "id": 10,
+                            "label": "L",
+                            "price": null,
+                            "barcode": null,
+                            "stock": 500,
+                            "customizable": false
+                        }
+                    ]
+                },
+                {
+                    "id": 6,
+                    "code": "DEMO-CAFE",
+                    "barcode": null,
+                    "name": "Café en grains du Pérou",
+                    "saleUnit": "kg",
+                    "categoryIds": [
+                        2
+                    ],
+                    "price": 3800,
+                    "specialPrice": 2900,
+                    "specialPriceFrom": "<date>",
+                    "specialPriceTo": "<date>",
+                    "taxCategory": "reduced",
+                    "variants": [
+                        {
+                            "id": 14,
+                            "label": null,
+                            "price": null,
+                            "barcode": null,
+                            "stock": 499,
+                            "customizable": false
+                        }
+                    ]
+                },
+                {
+                    "id": 7,
+                    "code": "DEMO-GOURDE",
+                    "barcode": null,
+                    "name": "Gourde isotherme à graver",
+                    "saleUnit": null,
+                    "categoryIds": [
+                        2
+                    ],
+                    "price": 3200,
+                    "specialPrice": null,
+                    "specialPriceFrom": null,
+                    "specialPriceTo": null,
+                    "taxCategory": "standard",
+                    "variants": [
+                        {
+                            "id": 15,
+                            "label": null,
+                            "price": null,
+                            "barcode": null,
+                            "stock": 499,
+                            "customizable": true
+                        }
+                    ]
+                }
+            ],
+            "discounts": {
+                "enabled": true,
+                "ticketEnabled": true,
+                "cashier": {
+                    "maxPercent": 10,
+                    "maxAmount": 2000
+                },
+                "manager": {
+                    "maxPercent": 50,
+                    "maxAmount": 20000
+                },
+                "reasonRequired": true,
+                "reasons": [
+                    {
+                        "code": "article_abime",
+                        "label": "Article abîmé"
+                    },
+                    {
+                        "code": "fidelite",
+                        "label": "Fidélité"
+                    },
+                    {
+                        "code": "prix_affiche",
+                        "label": "Prix affiché"
+                    },
+                    {
+                        "code": "geste_commercial",
+                        "label": "Geste commercial"
+                    },
+                    {
+                        "code": "autre",
+                        "label": "Autre"
+                    }
+                ]
+            },
+            "settings": {
+                "lockAfterMinutes": 5,
+                "pin": {
+                    "minLength": 4,
+                    "maxLength": 6,
+                    "maxAttempts": 5,
+                    "lockMinutes": 15
+                },
+                "cashFund": {
+                    "openingSuggested": null,
+                    "closingKeptSuggested": null
+                },
+                "paymentMethods": {
+                    "cash": true,
+                    "declaredCard": true,
+                    "paypal": true,
+                    "multiPayment": true,
+                    "declaredCardBlockedWithTerminal": false
+                },
+                "receipt": {
+                    "header": null,
+                    "footer": null,
+                    "showTaxNumbers": true,
+                    "emailEnabled": true,
+                    "qrEnabled": true,
+                    "linkDays": 90,
+                    "qrPrintDefault": true,
+                    "printMode": "auto"
+                },
+                "cashAlertThreshold": null,
+                "customItems": {
+                    "enabled": false,
+                    "maxAmount": null,
+                    "labelRequired": true
+                },
+                "priceOverride": {
+                    "enabled": true,
+                    "maxAmount": null,
+                    "reasonRequired": true,
+                    "reasons": [
+                        {
+                            "code": "article_abime",
+                            "label": "Article abîmé"
+                        },
+                        {
+                            "code": "prix_concurrent",
+                            "label": "Prix concurrent"
+                        },
+                        {
+                            "code": "prix_negocie",
+                            "label": "Prix négocié"
+                        },
+                        {
+                            "code": "erreur_d_etiquette",
+                            "label": "Erreur d'étiquette"
+                        },
+                        {
+                            "code": "autre",
+                            "label": "Autre"
+                        }
+                    ]
+                },
+                "giftCards": {
+                    "enabled": false,
+                    "suggestedAmounts": [
+                        2500,
+                        5000,
+                        10000
+                    ],
+                    "expiryMonths": null,
+                    "storeCredits": {
+                        "enabled": false,
+                        "expiryMonths": null
+                    },
+                    "cashRefundMaxBalance": 500,
+                    "cashRefundBeyond": false,
+                    "codeAttemptsPer10Min": 10,
+                    "codeFormat": "GC-XXXX-XXXX-XXXX | AV-XXXX-XXXX-XXXX",
+                    "barcodePrefix": "IZ-G-",
+                    "offline": false
+                },
+                "customers": {
+                    "enabled": true,
+                    "linkEnabled": true,
+                    "searchPerMinute": 30,
+                    "phoneFormat": "E.164",
+                    "consentTextVersion": null,
+                    "purposes": [
+                        "loyalty",
+                        "receipts",
+                        "marketing",
+                        "account_link"
+                    ],
+                    "searchMinChars": 3,
+                    "loyaltyBarcodePrefix": "IZ-F-",
+                    "offline": "queued"
+                },
+                "loyalty": {
+                    "enabled": false,
+                    "pointsPerDollar": 1,
+                    "valuePer100Points": 100,
+                    "minRedeem": 500,
+                    "redeemStep": 100,
+                    "expiryMonths": null,
+                    "earnBase": "net des articles après remises, hors taxes, hors part carte-cadeau ou avoir"
+                },
+                "offline": {
+                    "enabled": true,
+                    "reason": null,
+                    "maxOfflineHours": 24,
+                    "maxQueuedSales": 100,
+                    "maxQueuedAmount": 500000,
+                    "priceTolerance": 5,
+                    "packValidityHours": 24,
+                    "rule": "pos-offline-v3"
+                }
+            },
+            "calculationRule": "pos-offline-v3",
+            "testCases": "/api/pos/offline-cases",
+            "favorites": [],
+            "packVersion": "<masqué>",
+            "generatedAt": "<masqué>",
+            "serverTime": "<date>",
+            "validUntil": "<masqué>"
+        },
+        "etag": "<masqué>"
+    },
+    "product:DEMO-TSHIRT": {
+        "status": 200,
+        "body": {
+            "id": 2,
+            "price": 3500,
+            "specialPrice": null,
+            "specialPriceFrom": null,
+            "specialPriceTo": null,
+            "variants": [
+                {
+                    "id": 2,
+                    "price": null,
+                    "color": {
+                        "id": 11,
+                        "name": "Noir",
+                        "codeHexa": "#111827"
+                    },
+                    "size": {
+                        "id": 5,
+                        "name": "S"
+                    },
+                    "stockQuantity": 499,
+                    "options": [
+                        {
+                            "code": "taille",
+                            "name": "Taille",
+                            "value": "S",
+                            "value_id": 1,
+                            "option_name": "Taille",
+                            "option_id": 1,
+                            "option_code": "taille",
+                            "image_preview": null,
+                            "price_delta": 0
+                        },
+                        {
+                            "code": "couleur",
+                            "name": "Couleur",
+                            "value": "Noir",
+                            "value_id": 5,
+                            "option_name": "Couleur",
+                            "option_id": 2,
+                            "option_code": "couleur",
+                            "image_preview": "#111827",
+                            "price_delta": 0
+                        }
+                    ]
+                },
+                {
+                    "id": 3,
+                    "price": null,
+                    "color": {
+                        "id": 11,
+                        "name": "Noir",
+                        "codeHexa": "#111827"
+                    },
+                    "size": {
+                        "id": 6,
+                        "name": "M"
+                    },
+                    "stockQuantity": 500,
+                    "options": [
+                        {
+                            "code": "taille",
+                            "name": "Taille",
+                            "value": "M",
+                            "value_id": 2,
+                            "option_name": "Taille",
+                            "option_id": 1,
+                            "option_code": "taille",
+                            "image_preview": null,
+                            "price_delta": 0
+                        },
+                        {
+                            "code": "couleur",
+                            "name": "Couleur",
+                            "value": "Noir",
+                            "value_id": 5,
+                            "option_name": "Couleur",
+                            "option_id": 2,
+                            "option_code": "couleur",
+                            "image_preview": "#111827",
+                            "price_delta": 0
+                        }
+                    ]
+                },
+                {
+                    "id": 4,
+                    "price": null,
+                    "color": {
+                        "id": 11,
+                        "name": "Noir",
+                        "codeHexa": "#111827"
+                    },
+                    "size": {
+                        "id": 7,
+                        "name": "L"
+                    },
+                    "stockQuantity": 500,
+                    "options": [
+                        {
+                            "code": "taille",
+                            "name": "Taille",
+                            "value": "L",
+                            "value_id": 3,
+                            "option_name": "Taille",
+                            "option_id": 1,
+                            "option_code": "taille",
+                            "image_preview": null,
+                            "price_delta": 0
+                        },
+                        {
+                            "code": "couleur",
+                            "name": "Couleur",
+                            "value": "Noir",
+                            "value_id": 5,
+                            "option_name": "Couleur",
+                            "option_id": 2,
+                            "option_code": "couleur",
+                            "image_preview": "#111827",
+                            "price_delta": 0
+                        }
+                    ]
+                },
+                {
+                    "id": 5,
+                    "price": 3900,
+                    "color": {
+                        "id": 11,
+                        "name": "Noir",
+                        "codeHexa": "#111827"
+                    },
+                    "size": {
+                        "id": 8,
+                        "name": "XL"
+                    },
+                    "stockQuantity": 498,
+                    "options": [
+                        {
+                            "code": "taille",
+                            "name": "Taille",
+                            "value": "XL",
+                            "value_id": 4,
+                            "option_name": "Taille",
+                            "option_id": 1,
+                            "option_code": "taille",
+                            "image_preview": null,
+                            "price_delta": 0
+                        },
+                        {
+                            "code": "couleur",
+                            "name": "Couleur",
+                            "value": "Noir",
+                            "value_id": 5,
+                            "option_name": "Couleur",
+                            "option_id": 2,
+                            "option_code": "couleur",
+                            "image_preview": "#111827",
+                            "price_delta": 0
+                        }
+                    ]
+                },
+                {
+                    "id": 6,
+                    "price": null,
+                    "color": {
+                        "id": 12,
+                        "name": "Blanc",
+                        "codeHexa": "#f9fafb"
+                    },
+                    "size": {
+                        "id": 6,
+                        "name": "M"
+                    },
+                    "stockQuantity": 500,
+                    "options": [
+                        {
+                            "code": "taille",
+                            "name": "Taille",
+                            "value": "M",
+                            "value_id": 2,
+                            "option_name": "Taille",
+                            "option_id": 1,
+                            "option_code": "taille",
+                            "image_preview": null,
+                            "price_delta": 0
+                        },
+                        {
+                            "code": "couleur",
+                            "name": "Couleur",
+                            "value": "Blanc",
+                            "value_id": 6,
+                            "option_name": "Couleur",
+                            "option_id": 2,
+                            "option_code": "couleur",
+                            "image_preview": "#f9fafb",
+                            "price_delta": 0
+                        }
+                    ]
+                },
+                {
+                    "id": 7,
+                    "price": null,
+                    "color": {
+                        "id": 12,
+                        "name": "Blanc",
+                        "codeHexa": "#f9fafb"
+                    },
+                    "size": {
+                        "id": 7,
+                        "name": "L"
+                    },
+                    "stockQuantity": 500,
+                    "options": [
+                        {
+                            "code": "taille",
+                            "name": "Taille",
+                            "value": "L",
+                            "value_id": 3,
+                            "option_name": "Taille",
+                            "option_id": 1,
+                            "option_code": "taille",
+                            "image_preview": null,
+                            "price_delta": 0
+                        },
+                        {
+                            "code": "couleur",
+                            "name": "Couleur",
+                            "value": "Blanc",
+                            "value_id": 6,
+                            "option_name": "Couleur",
+                            "option_id": 2,
+                            "option_code": "couleur",
+                            "image_preview": "#f9fafb",
+                            "price_delta": 0
+                        }
+                    ]
+                },
+                {
+                    "id": 8,
+                    "price": null,
+                    "color": {
+                        "id": 13,
+                        "name": "Bleu",
+                        "codeHexa": "#1d4ed8"
+                    },
+                    "size": {
+                        "id": 6,
+                        "name": "M"
+                    },
+                    "stockQuantity": 500,
+                    "options": [
+                        {
+                            "code": "taille",
+                            "name": "Taille",
+                            "value": "M",
+                            "value_id": 2,
+                            "option_name": "Taille",
+                            "option_id": 1,
+                            "option_code": "taille",
+                            "image_preview": null,
+                            "price_delta": 0
+                        },
+                        {
+                            "code": "couleur",
+                            "name": "Couleur",
+                            "value": "Bleu",
+                            "value_id": 7,
+                            "option_name": "Couleur",
+                            "option_id": 2,
+                            "option_code": "couleur",
+                            "image_preview": "#1d4ed8",
+                            "price_delta": 0
+                        }
+                    ]
+                }
+            ],
+            "kind": "standard",
+            "sale": {
+                "enabled": true
+            },
+            "rental": {
+                "enabled": false
+            },
+            "customizable": false,
+            "pricing": {
+                "currency": "CAD",
+                "regular": 3500,
+                "special": null,
+                "amount": 3500
+            }
+        },
+        "etag": "<masqué>"
+    },
+    "variants:DEMO-TSHIRT": {
+        "status": 200,
+        "body": [
+            {
+                "id": 2,
+                "stockQuantity": 499,
+                "color": {
+                    "name": "Noir",
+                    "codeHexa": "#111827"
+                },
+                "size": {
+                    "id": 5,
+                    "code": "demo-s",
+                    "name": "S"
+                },
+                "options": [
+                    {
+                        "value_id": 1,
+                        "value": "S",
+                        "option_name": "Taille",
+                        "option_id": 1,
+                        "option_code": "taille",
+                        "image_preview": null,
+                        "price_delta": 0
+                    },
+                    {
+                        "value_id": 5,
+                        "value": "Noir",
+                        "option_name": "Couleur",
+                        "option_id": 2,
+                        "option_code": "couleur",
+                        "image_preview": "#111827",
+                        "price_delta": 0
+                    }
+                ]
+            },
+            {
+                "id": 3,
+                "stockQuantity": 500,
+                "color": {
+                    "name": "Noir",
+                    "codeHexa": "#111827"
+                },
+                "size": {
+                    "id": 6,
+                    "code": "demo-m",
+                    "name": "M"
+                },
+                "options": [
+                    {
+                        "value_id": 2,
+                        "value": "M",
+                        "option_name": "Taille",
+                        "option_id": 1,
+                        "option_code": "taille",
+                        "image_preview": null,
+                        "price_delta": 0
+                    },
+                    {
+                        "value_id": 5,
+                        "value": "Noir",
+                        "option_name": "Couleur",
+                        "option_id": 2,
+                        "option_code": "couleur",
+                        "image_preview": "#111827",
+                        "price_delta": 0
+                    }
+                ]
+            },
+            {
+                "id": 4,
+                "stockQuantity": 500,
+                "color": {
+                    "name": "Noir",
+                    "codeHexa": "#111827"
+                },
+                "size": {
+                    "id": 7,
+                    "code": "demo-l",
+                    "name": "L"
+                },
+                "options": [
+                    {
+                        "value_id": 3,
+                        "value": "L",
+                        "option_name": "Taille",
+                        "option_id": 1,
+                        "option_code": "taille",
+                        "image_preview": null,
+                        "price_delta": 0
+                    },
+                    {
+                        "value_id": 5,
+                        "value": "Noir",
+                        "option_name": "Couleur",
+                        "option_id": 2,
+                        "option_code": "couleur",
+                        "image_preview": "#111827",
+                        "price_delta": 0
+                    }
+                ]
+            },
+            {
+                "id": 5,
+                "stockQuantity": 498,
+                "color": {
+                    "name": "Noir",
+                    "codeHexa": "#111827"
+                },
+                "size": {
+                    "id": 8,
+                    "code": "demo-xl",
+                    "name": "XL"
+                },
+                "options": [
+                    {
+                        "value_id": 4,
+                        "value": "XL",
+                        "option_name": "Taille",
+                        "option_id": 1,
+                        "option_code": "taille",
+                        "image_preview": null,
+                        "price_delta": 0
+                    },
+                    {
+                        "value_id": 5,
+                        "value": "Noir",
+                        "option_name": "Couleur",
+                        "option_id": 2,
+                        "option_code": "couleur",
+                        "image_preview": "#111827",
+                        "price_delta": 0
+                    }
+                ]
+            },
+            {
+                "id": 6,
+                "stockQuantity": 500,
+                "color": {
+                    "name": "Blanc",
+                    "codeHexa": "#f9fafb"
+                },
+                "size": {
+                    "id": 6,
+                    "code": "demo-m",
+                    "name": "M"
+                },
+                "options": [
+                    {
+                        "value_id": 2,
+                        "value": "M",
+                        "option_name": "Taille",
+                        "option_id": 1,
+                        "option_code": "taille",
+                        "image_preview": null,
+                        "price_delta": 0
+                    },
+                    {
+                        "value_id": 6,
+                        "value": "Blanc",
+                        "option_name": "Couleur",
+                        "option_id": 2,
+                        "option_code": "couleur",
+                        "image_preview": "#f9fafb",
+                        "price_delta": 0
+                    }
+                ]
+            },
+            {
+                "id": 7,
+                "stockQuantity": 500,
+                "color": {
+                    "name": "Blanc",
+                    "codeHexa": "#f9fafb"
+                },
+                "size": {
+                    "id": 7,
+                    "code": "demo-l",
+                    "name": "L"
+                },
+                "options": [
+                    {
+                        "value_id": 3,
+                        "value": "L",
+                        "option_name": "Taille",
+                        "option_id": 1,
+                        "option_code": "taille",
+                        "image_preview": null,
+                        "price_delta": 0
+                    },
+                    {
+                        "value_id": 6,
+                        "value": "Blanc",
+                        "option_name": "Couleur",
+                        "option_id": 2,
+                        "option_code": "couleur",
+                        "image_preview": "#f9fafb",
+                        "price_delta": 0
+                    }
+                ]
+            },
+            {
+                "id": 8,
+                "stockQuantity": 500,
+                "color": {
+                    "name": "Bleu",
+                    "codeHexa": "#1d4ed8"
+                },
+                "size": {
+                    "id": 6,
+                    "code": "demo-m",
+                    "name": "M"
+                },
+                "options": [
+                    {
+                        "value_id": 2,
+                        "value": "M",
+                        "option_name": "Taille",
+                        "option_id": 1,
+                        "option_code": "taille",
+                        "image_preview": null,
+                        "price_delta": 0
+                    },
+                    {
+                        "value_id": 7,
+                        "value": "Bleu",
+                        "option_name": "Couleur",
+                        "option_id": 2,
+                        "option_code": "couleur",
+                        "image_preview": "#1d4ed8",
+                        "price_delta": 0
+                    }
+                ]
+            }
+        ],
+        "etag": "<masqué>"
+    },
+    "product:DEMO-SWEAT": {
+        "status": 200,
+        "body": {
+            "id": 3,
+            "price": 6900,
+            "specialPrice": 4900,
+            "specialPriceFrom": "<date>",
+            "specialPriceTo": "<date>",
+            "variants": [
+                {
+                    "id": 9,
+                    "price": null,
+                    "color": null,
+                    "size": {
+                        "id": 6,
+                        "name": "M"
+                    },
+                    "stockQuantity": 499,
+                    "options": [
+                        {
+                            "code": "taille",
+                            "name": "Taille",
+                            "value": "M",
+                            "value_id": 2,
+                            "option_name": "Taille",
+                            "option_id": 1,
+                            "option_code": "taille",
+                            "image_preview": null,
+                            "price_delta": 0
+                        }
+                    ]
+                },
+                {
+                    "id": 10,
+                    "price": null,
+                    "color": null,
+                    "size": {
+                        "id": 7,
+                        "name": "L"
+                    },
+                    "stockQuantity": 500,
+                    "options": [
+                        {
+                            "code": "taille",
+                            "name": "Taille",
+                            "value": "L",
+                            "value_id": 3,
+                            "option_name": "Taille",
+                            "option_id": 1,
+                            "option_code": "taille",
+                            "image_preview": null,
+                            "price_delta": 0
+                        }
+                    ]
+                }
+            ],
+            "kind": "standard",
+            "sale": {
+                "enabled": true
+            },
+            "rental": {
+                "enabled": false
+            },
+            "customizable": false,
+            "pricing": {
+                "currency": "CAD",
+                "regular": 6900,
+                "special": {
+                    "amount": 4900,
+                    "from": "<date>",
+                    "to": "<date>",
+                    "active": true
+                },
+                "amount": 4900
+            }
+        },
+        "etag": "<masqué>"
+    },
+    "variants:DEMO-SWEAT": {
+        "status": 200,
+        "body": [
+            {
+                "id": 9,
+                "stockQuantity": 499,
+                "color": null,
+                "size": {
+                    "id": 6,
+                    "code": "demo-m",
+                    "name": "M"
+                },
+                "options": [
+                    {
+                        "value_id": 2,
+                        "value": "M",
+                        "option_name": "Taille",
+                        "option_id": 1,
+                        "option_code": "taille",
+                        "image_preview": null,
+                        "price_delta": 0
+                    }
+                ]
+            },
+            {
+                "id": 10,
+                "stockQuantity": 500,
+                "color": null,
+                "size": {
+                    "id": 7,
+                    "code": "demo-l",
+                    "name": "L"
+                },
+                "options": [
+                    {
+                        "value_id": 3,
+                        "value": "L",
+                        "option_name": "Taille",
+                        "option_id": 1,
+                        "option_code": "taille",
+                        "image_preview": null,
+                        "price_delta": 0
+                    }
+                ]
+            }
+        ],
+        "etag": "<masqué>"
+    },
+    "product:DEMO-CASQUETTE": {
+        "status": 200,
+        "body": {
+            "id": 1,
+            "price": 2900,
+            "specialPrice": 1900,
+            "specialPriceFrom": "<date>",
+            "specialPriceTo": "<date>",
+            "variants": [
+                {
+                    "id": 1,
+                    "price": null,
+                    "color": null,
+                    "size": null,
+                    "stockQuantity": 499,
+                    "options": []
+                }
+            ],
+            "kind": "standard",
+            "sale": {
+                "enabled": true
+            },
+            "rental": {
+                "enabled": false
+            },
+            "customizable": false,
+            "pricing": {
+                "currency": "CAD",
+                "regular": 2900,
+                "special": {
+                    "amount": 1900,
+                    "from": "<date>",
+                    "to": "<date>",
+                    "active": false
+                },
+                "amount": 2900
+            }
+        },
+        "etag": "<masqué>"
+    },
+    "variants:DEMO-CASQUETTE": {
+        "status": 200,
+        "body": [
+            {
+                "id": 1,
+                "stockQuantity": 499,
+                "color": null,
+                "size": null,
+                "options": []
+            }
+        ],
+        "etag": "<masqué>"
+    },
+    "product:DEMO-GOURDE": {
+        "status": 200,
+        "body": {
+            "id": 7,
+            "price": 3200,
+            "specialPrice": null,
+            "specialPriceFrom": null,
+            "specialPriceTo": null,
+            "variants": [
+                {
+                    "id": 15,
+                    "price": null,
+                    "color": null,
+                    "size": null,
+                    "stockQuantity": 499,
+                    "options": []
+                }
+            ],
+            "kind": "standard",
+            "sale": {
+                "enabled": true
+            },
+            "rental": {
+                "enabled": false
+            },
+            "customizable": true,
+            "pricing": {
+                "currency": "CAD",
+                "regular": 3200,
+                "special": null,
+                "amount": 3200
+            }
+        },
+        "etag": "<masqué>"
+    },
+    "variants:DEMO-GOURDE": {
+        "status": 200,
+        "body": [
+            {
+                "id": 15,
+                "stockQuantity": 499,
+                "color": null,
+                "size": null,
+                "options": []
+            }
+        ],
+        "etag": "<masqué>"
+    }
+}

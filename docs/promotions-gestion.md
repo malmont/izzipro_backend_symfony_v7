@@ -15,10 +15,11 @@ applicatif). Migration `Version20261213100000`, script `scripts/migrate_all_v2_g
   promotionnel si maintenant est entre les bornes, comprises), sinon le prix normal. Boutique (`ProductCommerceDto.pricing { regular, special
   { amount, from, to, active }, amount }`), panier et paiement (`CartQuoteCalculator` → `ProcessOrderItemsUseCase`, aussi pour la caisse en ligne),
   favoris de la caisse, pack hors ligne (`products[].specialPrice`, `specialPriceFrom`, `specialPriceTo` ; la tablette applique la règle
-  `pos-offline-v1` à la date de vente, `PosOfflineSyncService` la rejoue).
+  hors ligne en vigueur, `pos-offline-v3`, à la date de vente, `PosOfflineSyncService` la rejoue ; la règle du prix unitaire n'a pas changé
+  depuis v1).
 - **Fin automatique** par les dates, sans tâche planifiée ; le prix normal n'est jamais modifié. **Une seule promotion par article.**
-- **Les variantes à prix propre n'ont pas la promotion** (partout) : alerte `VARIANT_OWN_PRICE`. Étendre la règle touche la boutique, la caisse
-  (règle hors ligne partagée) et les fronts : décision du propriétaire à part.
+- **Les variantes à prix propre n'ont pas la promotion de l'article** (partout) : alerte `VARIANT_OWN_PRICE`. Pour elles (et pour toute
+  variante), la **promotion par variante** du lot VAR (§ 8), activable par site.
 - **Fuseau** : les instants sont comparés en UTC (PHP du serveur en UTC). P5 écrit **le début (00:00) et la fin (23:59:59) des jours du
   magasin convertis en UTC** (Toronto en hiver : début stocké 05:00, fin 04:59:59 le lendemain). EasyAdmin affiche donc ces bornes décalées
   (par exemple « 05:00 ») ; depuis le lot P5b (§ 7), toutes les saisies suivent la même règle.
@@ -99,5 +100,71 @@ Décision du propriétaire du 10/11/2026 : **jours du magasin stockés en UTC**,
   d'exemple le reste). À appliquer aux 3 seules promotions existantes (demo n° 3 et 6, gmasuite n° 2), accord du chef de projet du 11/11/2026 ;
   lancée par le propriétaire (`--tenant=demo --ids=3,6 --apply`, puis `--tenant=gmasuite --ids=2 --apply`).
 - Test : `tests/Functional/Gestion/PromotionTimezoneTest.php` (formats du PATCH, même instant pour le prix effectif, la boutique, le pack et la
-  règle pos-offline-v1, champ EasyAdmin, commande).
+  règle hors ligne, champ EasyAdmin, commande).
+
+## 8. Promotions par variante (lot VAR, 11/11/2026)
+
+Contrat validé par l'application le 11/11/2026 (questions Q1 à Q4 tranchées). Une promotion datée **par variante**, variantes à prix propre
+comprises ; **la plus précise gagne** : pendant ses dates, elle remplace la promotion de l'article, sans cumul.
+
+**Interrupteur du site** : `entreprise.variant_promotions_enabled` (défaut faux partout), allumé **par le super admin seulement** (fiche
+Entreprise d'EasyAdmin, panneau « Applications mobiles », case « Promotions par variante »), quand la caisse, la boutique Next et l'app mobile
+savent l'appliquer (pack hors ligne v4 compris). Lu dans `/api/site/features` (clé `shop.variant_promotions`, lecture seule). **Éteint** :
+devis, paiement, commande, favoris, pack et fiche **strictement identiques** à avant le lot (aucune clé ajoutée, promotions en base non lues) ;
+l'aperçu de la gestion le signale (`warnings: ["VARIANT_PROMOTIONS_OFF"]`) et l'écriture répond 409 `VARIANT_PROMOTIONS_OFF`. Éteint après usage :
+les promotions restent en base, sans effet, et reprennent si on le rallume avant leur fin. Après un changement de l'interrupteur, le cache
+des fiches produit (300 s) peut garder l'état précédent jusqu'à son expiration (vider le cache du site au besoin).
+
+**Calcul, un seul endroit** : `Services/OrderService/VariantPriceResolver` (table `variant_promotion` : variante, `percent`, `price` figé à
+l'application, `base_price`, jours du magasin `start_date` … `end_date` et bornes UTC `starts_at` … `ends_at` [début, fin[ avec l'invariant de la
+correction LOC3 : `ends_at` = minuit du magasin le lendemain de `end_date`). Prix d'une ligne = la promotion de variante en vigueur à l'instant,
+sinon `variant.price ?? product.getEffectivePrice()` (l'expression d'avant). Une promotion dont le prix n'est plus sous le **prix catalogue**
+(prix propre, sinon prix normal de l'article, qui a pu baisser depuis) est ignorée : jamais un prix relevé. Lecteurs : `CartQuoteCalculator`
+(devis boutique et caisse, intent Stripe, `create-multi-payment`, commande web), favoris de la caisse, pack hors ligne v4 et son rejeu, fiche
+produit. Ordre sur une ligne : prix (promotion) → personnalisation → prix manuel F7 → remises F1 → taxes ; les retours relisent la ligne figée
+(prix payé), le résultat de période (P2) et les statistiques suivent le prix réellement vendu.
+
+**Formes** :
+- Ligne de devis (`lines[]`, ventes) : `promotion { id, kind: "variant", percent, amount, catalogUnitPrice }` **seulement** quand une promotion de
+  variante s'applique (`amount` = remise unitaire en cents par rapport au prix catalogue ; `unitPrice` est déjà le prix promotionnel).
+- Commande : `order_items.variant_promotion_id` (mesures de la gestion), **non exposé** par les API de commande (photo de non-régression).
+- Fiche (`ProductCommerceDto.variants[]`) : `promotion { id, percent, price, basePrice, startDate, endDate, startsAt, endsAt, active }` (en cours,
+  sinon la prochaine) ; clé absente sans promotion ou interrupteur éteint. `variants[].price` reste brut, `pricing` reste au niveau de l'article.
+  La route `GET /api/products/{id}/variants` n'expose aucun prix : inchangée.
+- Favoris de la caisse : `price` = prix promotionnel et `promotion` (même forme que la ligne de devis) quand elle s'applique.
+- Pack hors ligne : règle **`pos-offline-v4`** seulement si la tablette envoie `X-Pos-Offline-Rules: v4` **et** si l'interrupteur est allumé ;
+  ajouts `products[].variants[].promotions [{ id, price, from, to }]` (en cours et à venir) et, dans l'instantané, `prices[vid].variantPromotions`.
+  Une tablette v3 reçoit un pack identique octet pour octet (même ETag) et son rejeu reste v3 (`docs/caisse.md`).
+
+**Routes de la gestion** (`ROLE_ADMIN`, `access_control` `/api/gestion`) :
+- `POST /api/gestion/promotions/variantes/apercu { variantIds | productIds | commandeId | adviceId (une seule forme), percent (5 à 90, décimal
+  admis), rounding? (none | ends_99 | down_50 | down_100, vers le bas comme P5), startDate? (aujourd'hui), endDate (90 jours au plus) }` →
+  `{ rows: [{ variantId, productId, name, variantLabel, ownPrice, basePrice, promoPrice, discount, cost, marginBase, marginPromo, marginRateBase,
+  marginRatePromo, stock, current: [promotions de variante qui recoupent], productPromotion: { specialPrice, from, to } | null, changed, alerts }],
+  summary { variants, changed, skipped }, period { startDate, endDate, startsAt, endsAt, days }, enabled, warnings, pricesIncludeTax, previewHash,
+  caveats }`. Prix de départ = prix propre de la variante, sinon prix normal de l'article ; coût de l'article (règle L0, coût de la commande
+  pour `commandeId`).
+- Alertes : `NOT_A_SALE_ITEM`, `PRICE_MISSING` (ligne bloquée) ; `BELOW_COST`, `BIG_CHANGE` (> 50 %), `PROMOTION_EXISTS` (promotion de variante
+  qui recoupe), `VARIANT_PRICE_ABOVE_PRODUCT_PROMOTION` (prix de variante plus haut que la promotion de l'article pendant ces dates : le gérant
+  renchérirait) : écrites seulement avec `allowBelowCost`, `allowBigChange`, `allowReplace`, `allowAboveProductPromotion` ; information :
+  `PRODUCT_PROMOTION_ACTIVE`, `COST_UNKNOWN` ; `NO_CHANGE` (prix promotionnel non inférieur après arrondi).
+- 422 : `percent` `REQUIRED` | `MUST_BE_NUMBER` | `OUT_OF_RANGE`, `rounding` `INVALID_ROUNDING`, `startDate` `INVALID_DATE` | `DATE_IN_PAST`,
+  `endDate` `REQUIRED` | `INVALID_DATE` | `BEFORE_START` | `TOO_LONG`, `variantIds` `SCOPE_REQUIRED` | `SCOPE_AMBIGUOUS` | `TOO_MANY` | `INVALID_ID`,
+  `variantIds[i]` `VARIANT_NOT_FOUND`, et ceux du périmètre de P4 (`PRODUCT_NOT_FOUND`, `COMMANDE_NOT_FOUND`, `ADVICE_NOT_FOUND`…).
+- `POST …/variantes/appliquer { …même corps…, previewHash, allow…? }` → 201 `{ batch, skipped: [{ variantId, alerts }], advice }` ; 409
+  `VARIANT_PROMOTIONS_OFF`, `PRICES_CHANGED { preview }` ; 422 `previewHash` `REQUIRED`, `NOTHING_TO_APPLY { preview, skipped }`. Remplacement
+  (`allowReplace`) : l'ancienne s'arrête au début de la nouvelle (pas encore commencée : plage vide). Conseil du guide (`adviceId`) marqué fait.
+- `POST …/variantes/terminer { batchId }` : en cours → jusqu'à ce soir minuit (`endDate` = aujourd'hui), à venir → plage vide (`endDate` =
+  `startDate` − 1) ; 404 `BATCH_NOT_FOUND`, 409 `ALREADY_ENDED`. Les commandes déjà passées ne changent jamais.
+- `GET …/variantes?status=active|planned|all` (défaut `all` : en cours et à venir), `GET …/variantes/lots?limit=`, `GET …/variantes/lots/{id}` ;
+  chaque promotion `{ id, batchId, variantId, productId, name, variantLabel, percent, price, basePrice, startDate, endDate, startsAt, endsAt,
+  status: upcoming | active | ended | cancelled, endedAt }`.
+
+**Code** : `Gestion/Services/GestionVariantPromotionService`, `Gestion/UseCase/GestionVariantPromotionUseCase`,
+`Gestion/Controller/GestionVariantPromotionController`, `Services/OrderService/VariantPriceResolver`, entité `VariantPromotion` (cache de l'article,
+`CacheTags`), lot `variant_promotion_batch` en SQL. Migration `Version20261221100000`, script `scripts/migrate_all_v2_gestion_promotions_variantes.sh`.
+**Tests** : `tests/Functional/Boutique/VariantPromotionPhotoTest.php` (photo de référence prise avec le code d'avant le lot :
+`fixtures/variant-promotion-photo.json` ; (a) éteint avec promotions en base, (b) allumé sans promotion, (c) allumé avec une promotion ailleurs :
+identiques au tableau près), `tests/Functional/Gestion/VariantPromotionApiTest.php` (routes, prix partout, retour en caisse, P2, pack v4 et rejeu
+v3, bornes et promotion périmée), `tests/Functional/Boutique/OrderReturnsTest.php` (retour web au prix payé).
 

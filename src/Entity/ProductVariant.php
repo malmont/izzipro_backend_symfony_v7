@@ -72,12 +72,22 @@ class ProductVariant
     )]
     private Collection $productCustomizationImages;
 
+    /**
+     * Promotions de la variante (lot VAR, 11/11/2026) : lues par VariantPriceResolver seulement si l'interrupteur du site est allumé
+     *
+     * @var Collection<int, VariantPromotion>
+     */
+    #[ORM\OneToMany(mappedBy: 'productVariant', targetEntity: VariantPromotion::class)]
+    #[ORM\OrderBy(['startsAt' => 'ASC', 'id' => 'ASC'])]
+    private Collection $variantPromotions;
+
     public function __construct()
     {
         $this->orderItems = new ArrayCollection();
         $this->inventoryMovements = new ArrayCollection();
         $this->optionValues = new ArrayCollection();
         $this->productCustomizationImages = new ArrayCollection();
+        $this->variantPromotions = new ArrayCollection();
         $this->stockQuantity = 0;
     }
 
@@ -293,4 +303,10 @@ class ProductVariant
     }
     public function getBarcode(): ?string { return $this->barcode; }
     public function setBarcode(?string $barcode): static { $b = $barcode !== null ? trim($barcode) : ''; $this->barcode = $b === '' ? null : mb_substr($b, 0, 32); return $this; }
+
+    /** @return Collection<int, VariantPromotion> */
+    public function getVariantPromotions(): Collection
+    {
+        return $this->variantPromotions;
+    }
 }

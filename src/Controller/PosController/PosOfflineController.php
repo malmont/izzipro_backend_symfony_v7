@@ -35,7 +35,8 @@ class PosOfflineController extends AbstractController
     {
         return $this->guard(function () use ($request) {
             $register = is_numeric($request->query->get('cashRegisterId')) ? $this->registers->resolve((int) $request->query->get('cashRegisterId')) : null;
-            $pack = $this->packs->build($register);
+            // Règle v4 (lot VAR) : seulement si la tablette l'annonce ; sinon pack v3, identique octet pour octet
+            $pack = $this->packs->build($register, str_contains(strtolower((string) $request->headers->get('X-Pos-Offline-Rules', '')), 'v4'));
             $etag = '"' . $pack['etag'] . '"';
             // Un relais peut renvoyer un ETag faible (W/"…") : comparaison sans le préfixe
             if (trim((string) preg_replace('#^W/#', '', (string) $request->headers->get('If-None-Match', ''))) === $etag) {

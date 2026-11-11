@@ -30,6 +30,13 @@ use App\Services\PosDiscountService\PosDiscountCalculator;
 final class PosOfflineCalculator
 {
     public const RULE = 'pos-offline-v3';
+    /**
+     * v4 (lot VAR, 11/11/2026) : v3 + promotions de variante. Le prix d'une ligne est celui de la promotion de variante dont [from, to[ contient
+     * l'heure de vente (la plus récente si deux se recoupent ; elle remplace la promotion de l'article), sinon la règle v3. Pack v4 servi
+     * seulement à la tablette qui l'annonce (en-tête X-Pos-Offline-Rules: v4) quand l'interrupteur du site est allumé ; le calcul des montants
+     * (remises, taxes, arrondi) est celui de v3.
+     */
+    public const RULE_V4 = 'pos-offline-v4';
 
     /**
      * @param list<array{unitPrice: int, quantity: int, discounts?: list<array>}> $lines

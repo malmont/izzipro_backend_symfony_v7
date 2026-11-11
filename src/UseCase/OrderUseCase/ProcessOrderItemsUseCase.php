@@ -81,6 +81,9 @@ class ProcessOrderItemsUseCase
 
             $orderItem = $this->orderItemService->createOrderItem($order, $productVariant, $line['quantity'], (float) $line['unitPrice']);
             $orderItem->setTaxCategory($line['taxCategory'] ?? null); // catégorie fiscale du produit figée à la vente (F18 partie 2a)
+            if (($line['promotion']['kind'] ?? null) === 'variant') { // promotion de variante appliquée (lot VAR) : mesures de la gestion, non exposée
+                $orderItem->setVariantPromotionId((int) $line['promotion']['id']);
+            }
             if (!empty($line['discountAmount'])) { // remises de caisse (F1) : unit_price brut, total_price net
                 $orderItem->setDiscounts($line['discounts'])->setDiscountAmount((int) $line['discountAmount'])->setTotalPrice((float) $line['total']);
             }

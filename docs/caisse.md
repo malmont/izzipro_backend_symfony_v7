@@ -760,7 +760,8 @@ terminalEnabled}]`, `taxes [{id, label, rate}]`, `paymentMethods [{type, label, 
 specialPrice, specialPriceFrom, specialPriceTo, variants [{id, label, price, barcode (variante, facultatif), stock,
 customizable}]}]` (produits `isPos` vendables, sans location ; `customizable` : vendu hors ligne au prix de base), `discounts`
 (réglages F1), `settings {pin, lockAfterMinutes, receipt, paymentMethods, cashFund, cashAlertThreshold, offline}`,
-`calculationRule: "pos-offline-v1"`, `testCases: "/api/pos/offline-cases"`. Chaque pack émis est conservé sous sa version
+`calculationRule` (règle en vigueur : `"pos-offline-v3"` ; `"pos-offline-v4"` sur demande, lot VAR ci-dessous ; v1 à l'origine),
+`testCases: "/api/pos/offline-cases"`. Chaque pack émis est conservé sous sa version
 (`pos_offline_pack` : prix, taxes, pas d'arrondi) pour recalculer les ventes aux conditions connues de la tablette. Scan
 hors ligne : d'abord `variants[].barcode`, puis `products[].barcode`.
 Grille de favoris (F10) : clé `favorites [{productId, variantId, defaultVariantId, pinned, rank}]` **seulement si les favoris sont
@@ -768,7 +769,7 @@ activés** ; sinon contenu et ETag du pack inchangés. Depuis le 28/10/2026, ell
 toujours `pinned: true`, rangs 1..n, prix dans `products` ; les plus vendus restent servis en ligne par `GET /api/pos/favorites` (ils
 changeaient à chaque vente et créaient une version de pack à chaque passage). Même format d'entrée : rien à changer côté caisse.
 
-### Règle de calcul « pos-offline-v1 » et jeu de cas partagé
+### Règle de calcul « pos-offline-v1 » (base des v2, v3 et v4 décrites plus bas) et jeu de cas partagé
 
 Cents entiers ; `round` = entier le plus proche, demi-cent vers le haut en valeur absolue (`round()` de PHP).
 
@@ -2119,6 +2120,18 @@ les applications (caisse, e-commerce) qui savent l'afficher sont publiées. Tous
   du cas, absent = faux) : mêmes groupes et extraction, `total = subtotal`, `taxTotal` à part ; 8 cas v3 dans `config/pos/offline-cases.json`
   (même format : égalités 0,03 € et 0,09 €, deux taux, remise de ticket, remise de ligne et de ticket, exonéré + deux taux, article libre à
   taux choisi, arrondi des espèces au pas de 5 ¢ sur un TTC) ; les cas v1 et v2 sont inchangés.
+- **Hors ligne, règle `pos-offline-v4`** (lot VAR, 11/11/2026, `docs/promotions-gestion.md` § 8) : v3 + **promotions par variante**. Servie
+  seulement à la tablette qui envoie `X-Pos-Offline-Rules: v4` sur `GET /api/pos/offline-pack` **et** si le super admin a allumé
+  l'interrupteur du site ; sinon pack v3 identique octet pour octet (même ETag). Ajouts : `products[].variants[].promotions [{ id, price, from,
+  to }]` (en cours et à venir). Prix d'une ligne : la promotion de variante dont `[from, to[` contient l'heure de vente (la plus récente si deux
+  se recoupent ; elle remplace la promotion de l'article, sans cumul), sinon la règle v3 ; montants (remises, taxes, arrondi) comme v3.
+  Le serveur rejoue avec l'instantané de la version du pack : promotion de variante seulement si ce pack était v4 ; la ligne garde
+  `variant_promotion_id`.
+  **Tablette encore en v3 pendant une promotion de variante (interrupteur allumé)** : elle encaisse le prix v3 (sans la promotion de variante)
+  et le serveur rejoue en v3, au même prix : vente acceptée, aucun écart, aucune erreur. Le client paie donc hors ligne le prix sans la
+  promotion de variante, alors qu'en ligne il aurait eu le prix promotionnel. À faire côté caisse : demander le pack v4 dès que la caisse sait
+  l'appliquer ; c'est la condition pour que le super admin allume l'interrupteur. En attendant, la caisse peut, en ligne, rembourser
+  l'écart (prix manuel ou remise F1) si le client le demande. Le serveur ne corrige jamais une vente hors ligne après coup.
 - **Langue des réponses de la caisse** (`Services/CaisseService/SiteLocaleResolver`) : `?locale=` s'il est donné, sinon la **langue du site**
   déduite de l'adresse du magasin (Québec → fr, autre province canadienne → en, France → fr, États-Unis → en) ; `Accept-Language` n'est pas lu.
   Vaut pour les libellés de `store.taxIds` (GST/QST en anglais) et les traductions des moyens de paiement du ticket et des rapports.

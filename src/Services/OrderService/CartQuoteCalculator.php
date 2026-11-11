@@ -48,7 +48,8 @@ final class CartQuoteCalculator
         private readonly ?\App\Services\Booking\BookingClock $clock = null, // fuseau de la boutique (04/11/2026)
         private readonly ?\App\Services\BoutiqueSettingsService\BoutiqueSettingsService $settings = null, // livraison offerte (lot 1, 07/11/2026)
         private readonly ?OrderTaxAddressResolver $taxAddress = null, // retrait en magasin : taxes du lieu de remise (B20, 08/11/2026)
-        private readonly ?\App\Services\Booking\RentalPromotionService $rentalPromotions = null // promotion de location (lot LOC3, 11/11/2026)
+        private readonly ?\App\Services\Booking\RentalPromotionService $rentalPromotions = null, // promotion de location (lot LOC3, 11/11/2026)
+        private readonly ?VariantPriceResolver $variantPrices = null // promotion par variante (lot VAR, 11/11/2026)
     ) {
     }
 
@@ -118,7 +119,12 @@ final class CartQuoteCalculator
                     $errors[] = CartQuoteException::error("$path.quantity", 'STOCK_INSUFFICIENT', sprintf('stock insuffisant (%d disponible(s))', $variant->getStockQuantity()), ['available' => (int) $variant->getStockQuantity()]);
                     continue;
                 }
-                $line['unitPrice'] = (int) round($variant->getPrice() ?? $product->getEffectivePrice());
+                // Prix de vente (lot VAR) : VariantPriceResolver ; interrupteur éteint ou sans promotion de variante = l'expression d'avant
+                $sale = $this->variantPrices?->sale($variant) ?? ['unitPrice' => (int) round($variant->getPrice() ?? $product->getEffectivePrice()), 'promotion' => null];
+                $line['unitPrice'] = $sale['unitPrice'];
+                if ($sale['promotion'] !== null) {
+                    $line['promotion'] = $sale['promotion']; // clé absente sans promotion de variante
+                }
                 $customizationId = is_numeric($item['customizationId'] ?? null) ? (int) $item['customizationId'] : null;
                 $combination = $customizationId !== null ? $variant->getProductCustomizationImages()->filter(fn ($c) => $c->getId() === $customizationId)->first() : null;
                 if ($customizationId !== null && !$combination) {
