@@ -234,7 +234,8 @@ d'article**.
   base, `ProductCustomizationImage::priceDeltaCents`) s'ajoute à `unitPrice`, donc au devis, à l'intent Stripe, au prix
   unitaire de la ligne de commande et aux taxes. Une ligne est une location si la location est activée et que la ligne porte
   des dates, ou si le produit ne se vend pas (`RentalLineResolver`) ; un produit vendu et loué sans dates = achat.
-- Location : `unitPrice` = tarif × unités (+ `extraPassengerFee` × `passengers`). Tarif : forfait `rateId` (doit
+- Location : `unitPrice` = tarif × unités (+ `extraPassengerFee` × `passengers`) ; `booking.passengerFee` du devis est ce **total des
+  passagers** (5 000 pour 2 × 2 500), jamais le prix par passager (précision du 11/11/2026, relevée par l'app mobile). Tarif : forfait `rateId` (doit
   appartenir aux catégories du produit) sinon le premier forfait des catégories ; `durationType` : `hour`, `halfDay`,
   `day`, `week`, `month`, par défaut `hour` (grille horaire) ou `day` ; unités = durée arrondie au-dessus en longueurs
   d'unité (heure 1 h, demi-journée 4 h, jour, semaine 7 j, mois 30 j). Règles de `booking_configuration`, 422
