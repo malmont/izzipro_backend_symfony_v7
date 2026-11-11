@@ -43,9 +43,10 @@ Test : `tests/Functional/Gestion/CashApiTest.php`.
 
 ## 3. Réglages
 
-- `GET /api/gestion/tresorerie/reglages` → `{ threshold, includeEstimatedSales }` (0 et faux par défaut).
-- `PUT /api/gestion/tresorerie/reglages { threshold?, includeEstimatedSales? }` → même forme ; un champ absent est gardé ; 422
-  `MUST_BE_INTEGER_CENTS`, `MUST_BE_BOOLEAN`. `threshold` en cents signés (négatif = découvert autorisé).
+- `GET /api/gestion/tresorerie/reglages` → `{ threshold, includeEstimatedSales, tolerance }` (0, faux et 100 par défaut).
+- `PUT /api/gestion/tresorerie/reglages { threshold?, includeEstimatedSales?, tolerance? }` → même forme ; un champ absent est gardé ; 422
+  `MUST_BE_INTEGER_CENTS`, `MUST_BE_BOOLEAN`. `threshold` en cents signés (négatif = découvert autorisé) ; `tolerance` : écart toléré au
+  rapprochement (§ 6), cents ≥ 0.
 
 ## 4. Projection
 
@@ -102,10 +103,44 @@ Test : `tests/Functional/Gestion/CashApiTest.php`.
   le stock bas), dès `warning` ; une par jour et par gérant comme les autres ; **pas de répétition** de la même alerte pendant 7 jours, sauf si
   le point bas avance ou se creuse ; `subject` `{ date, amount, status }` ; écran `tresorerie` `{}`. Coupable par gérant.
 
-## 6. Lots
+## 6. Rapprochement bancaire (lot RAP, 11/11/2026)
+
+Contrat validé par l'application. Code `GestionReconciliationService` ; test `tests/Functional/Gestion/ReconciliationApiTest.php`.
+
+- **Attendu** d'un solde S du jour D, P étant le solde précédent (date strictement antérieure) : P + entrées prévues − sorties prévues − dépenses
+  saisies datées dans **]P, D]** + encaissements réels de **[P, D − 1]**. Convention : le solde saisi le jour X est celui que la banque affiche ce
+  jour-là, il comprend les mouvements et dépenses datés jusqu'à X et les encaissements jusqu'à la veille (les ventes par carte arrivent le
+  lendemain) ; chaque jour d'encaissement est compté une fois, ni oublié ni doublé. Mêmes calculs que la projection (§ 4) : mouvements prévus
+  dépliés, dépenses saisies (`recordedExpenses`), encaissements nets (`receiptsByDay`).
+- `receipts { total, cash, card, from, to }` : `cash` = paiements réussis au moyen « Espèces » (`payment_method` 2) des commandes de la fenêtre,
+  signés (retours en espèces négatifs) ; `card` = le reste (carte, Paypal, vente sans ligne de paiement). Les espèces n'arrivent en banque
+  qu'au dépôt : un écart de ce montant s'explique souvent ainsi (décision `explained`). Plus tard, avec la caisse : sorties « dépôt banque ».
+- **Écart vivant** : `gap = actual − expected`, recalculé à chaque lecture. Une dépense oubliée saisie plus tard et datée dans `expenseWindow`
+  (]P, D]) réduit l'écart toute seule ; `expectedAtEntry` garde l'attendu au moment de la saisie (null pour les soldes saisis avant le lot).
+- **Statut** : `matched` (|gap| ≤ tolérance, réglage `tolerance`, 100 cents par défaut ; la décision éventuelle reste dans l'historique),
+  sinon la décision du gérant `unexplained` (« Écart non justifié ») ou `explained` (note obligatoire), sinon `open` (à traiter, avec
+  `suggestions` `read_receipt`, `add_expense`, `mark_unexplained` : lecture IA et notes de frais existantes). L'écart non justifié n'est ni un
+  montant figé ni un mouvement : la projection part toujours du dernier solde réel, et le résultat de période (P2) ne le compte pas.
+- Routes (`ROLE_ADMIN`) :
+  - `POST /api/gestion/tresorerie/soldes` : la réponse gagne `reconciliation` (forme d'un élément ci-dessous, ou null pour le solde
+    d'ouverture). `PATCH` / `DELETE` d'un solde : inchangés, le rapprochement du solde suivant se recalcule à la lecture.
+  - `GET /api/gestion/tresorerie/rapprochements?limit=50` → `{ currency, tolerance, items: [{ balanceId, date, previousDate, expected,
+    expectedAtEntry, actual, gap, status, decision { kind, note, by, at } | null, suggestions, expenseWindow { from, to }, composition {
+    previous { id, date, amount }, plannedIn, plannedOut, recordedExpenses { total, purchases, shipping, notes, advertising }, receipts {
+    total, cash, card, from, to }, expected, days } }], unexplained { total, count } }`, du plus récent au plus ancien, sans le solde d'ouverture.
+  - `POST /api/gestion/tresorerie/soldes/{id}/ecart { decision: unexplained | explained | open, note? }` → l'élément à jour ; 422
+    `decision` `REQUIRED` | `INVALID_DECISION`, `note` `REQUIRED` (explained) | `TOO_LONG` (500) ; 404 `BALANCE_NOT_FOUND` ; 409
+    `NO_PREVIOUS_BALANCE`, `GAP_WITHIN_TOLERANCE` (sauf `open`). Journal d'audit `gestion-tresorerie-ecarts`.
+  - `GET /api/gestion/tresorerie` gagne `reconciliation { lastStatus, lastGap, lastDate, tolerance, unexplained { total, count } }`
+    (`unexplained` : écarts vivants des soldes marqués non justifiés encore hors tolérance).
+- Schéma : `gestion_cash_balance` + `expected_at_entry`, `gap_decision`, `gap_note`, `gap_decided_by`, `gap_decided_at` ;
+  `gestion_cash_setting.tolerance_cents` (Version20261215100000, `scripts/migrate_all_v2_gestion_rapprochement.sh`).
+
+## 7. Lots
 
 | Lot | Contenu |
 |---|---|
 | **B1b-1** | soldes, mouvements prévus, réglages, projection en deux séries avec dépenses saisies et encaissements réels, vignettes `cash-low` / `cash-first-balance`, notification `cash_critical` ; livré le 11/11/2026 |
 | **B1b-2** | simulateur de période (aucune écriture), trésorerie après achats par `cashUntil` : `docs/simulateur-gestion.md` ; livré le 11/11/2026 |
+| **RAP** | rapprochement bancaire (§ 6) : attendu entre deux soldes, écart vivant, décisions, tolérance, espèces à part ; livré le 11/11/2026 |
 | Plus tard | liaison bancaire ; « marquer payé » ou « sauter une occurrence » si besoin ; frais fixes du résultat appuyés sur les mouvements prévus |

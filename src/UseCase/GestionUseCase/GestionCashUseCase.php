@@ -3,12 +3,13 @@
 namespace App\UseCase\GestionUseCase;
 
 use App\Services\GestionService\GestionCashService;
+use App\Services\GestionService\GestionReconciliationService;
 use App\Services\GestionService\GestionValidationException;
 
-/** Trésorerie saisie (lot B1b-1, `docs/tresorerie-gestion.md`) : projection, soldes, mouvements prévus, réglages. */
+/** Trésorerie saisie (lot B1b-1, `docs/tresorerie-gestion.md`) : projection, soldes, mouvements prévus, réglages ; rapprochement (lot RAP). */
 class GestionCashUseCase
 {
-    public function __construct(private readonly GestionCashService $cash)
+    public function __construct(private readonly GestionCashService $cash, private readonly GestionReconciliationService $reconciliation)
     {
     }
 
@@ -22,7 +23,7 @@ class GestionCashUseCase
             throw new GestionValidationException(['days' => 'OUT_OF_RANGE']);
         }
 
-        return $this->cash->projection($n, $locale);
+        return $this->cash->projection($n, $locale) + ['reconciliation' => $this->reconciliation->summary()];
     }
 
     public function balances(int $limit): array
@@ -32,7 +33,19 @@ class GestionCashUseCase
 
     public function saveBalance(array $body, ?string $by): array
     {
-        return $this->cash->saveBalance($body, $by);
+        $out = $this->cash->saveBalance($body, $by);
+
+        return $out + ['reconciliation' => $this->reconciliation->afterSave($out['id'])];
+    }
+
+    public function reconciliations(int $limit): array
+    {
+        return $this->reconciliation->list($limit);
+    }
+
+    public function decideGap(int $id, array $body, ?string $by): array
+    {
+        return $this->reconciliation->decide($id, $body, $by);
     }
 
     public function updateBalance(int $id, array $body): array

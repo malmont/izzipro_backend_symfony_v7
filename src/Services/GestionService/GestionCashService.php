@@ -29,6 +29,8 @@ class GestionCashService
     public const STALE_DAYS = 7;             // solde ancien au-delà
     public const GROUPED_SALARIES_DAYS = 30; // total des salaires rendu à un lecteur sans ROLE_ADMIN
     public const RECORDED = 'recorded';
+    /** Moyen de paiement « Espèces » (référentiel payment_method, mêmes identifiants sur tous les sites) */
+    public const PAYMENT_METHOD_CASH = 2;
 
     /** Part payée autrement qu'en argent : carte-cadeau, avoir, coupon du fabricant (remboursé plus tard par le fabricant) */
     private const NON_CASH = '(COALESCE(o.gift_card_applied, 0) + COALESCE(o.credit_applied, 0) + COALESCE(o.manufacturer_coupon_applied, 0))';
@@ -255,12 +257,16 @@ class GestionCashService
 
     // ----- réglages -----
 
-    /** @return array{threshold: int, includeEstimatedSales: bool} */
+    /** Écart toléré au rapprochement par défaut, en cents (lot RAP) */
+    public const DEFAULT_TOLERANCE = 100;
+
+    /** @return array{threshold: int, includeEstimatedSales: bool, tolerance: int} */
     public function settings(): array
     {
-        $row = $this->conn()->fetchAssociative('SELECT threshold_cents, include_estimated_sales FROM gestion_cash_setting WHERE id = 1');
+        $row = $this->conn()->fetchAssociative('SELECT threshold_cents, include_estimated_sales, tolerance_cents FROM gestion_cash_setting WHERE id = 1');
 
-        return ['threshold' => $row === false ? 0 : (int) $row['threshold_cents'], 'includeEstimatedSales' => $row !== false && (bool) $row['include_estimated_sales']];
+        return ['threshold' => $row === false ? 0 : (int) $row['threshold_cents'], 'includeEstimatedSales' => $row !== false && (bool) $row['include_estimated_sales'],
+            'tolerance' => $row === false ? self::DEFAULT_TOLERANCE : (int) $row['tolerance_cents']];
     }
 
     public function putSettings(array $data): array
@@ -268,6 +274,7 @@ class GestionCashService
         $before = $this->settings();
         $input = new GestionInput($data);
         $threshold = $input->signedCents('threshold', false);
+        $tolerance = $input->cents('tolerance', false); // lot RAP : écart toléré au rapprochement, cents ≥ 0
         $errors = $input->errors();
         $include = $data['includeEstimatedSales'] ?? null;
         if ($include !== null && !is_bool($include)) {
@@ -276,11 +283,11 @@ class GestionCashService
         if ($errors !== []) {
             throw new GestionValidationException($errors, 'Réglages invalides : ' . implode(', ', array_keys($errors)));
         }
-        $after = ['threshold' => $threshold ?? $before['threshold'], 'includeEstimatedSales' => $include ?? $before['includeEstimatedSales']];
+        $after = ['threshold' => $threshold ?? $before['threshold'], 'includeEstimatedSales' => $include ?? $before['includeEstimatedSales'], 'tolerance' => $tolerance ?? $before['tolerance']];
         $this->conn()->executeStatement(
-            'INSERT INTO gestion_cash_setting (id, threshold_cents, include_estimated_sales, updated_at) VALUES (1, :t, :i, NOW())'
-            . ' ON CONFLICT (id) DO UPDATE SET threshold_cents = EXCLUDED.threshold_cents, include_estimated_sales = EXCLUDED.include_estimated_sales, updated_at = NOW()',
-            ['t' => $after['threshold'], 'i' => $after['includeEstimatedSales'] ? 'true' : 'false']
+            'INSERT INTO gestion_cash_setting (id, threshold_cents, include_estimated_sales, tolerance_cents, updated_at) VALUES (1, :t, :i, :tol, NOW())'
+            . ' ON CONFLICT (id) DO UPDATE SET threshold_cents = EXCLUDED.threshold_cents, include_estimated_sales = EXCLUDED.include_estimated_sales, tolerance_cents = EXCLUDED.tolerance_cents, updated_at = NOW()',
+            ['t' => $after['threshold'], 'i' => $after['includeEstimatedSales'] ? 'true' : 'false', 'tol' => $after['tolerance']]
         );
         $this->audit->record('gestion-tresorerie-reglages', 1, 'update', $before, $after);
 
@@ -464,6 +471,48 @@ class GestionCashService
         }
 
         return ['days' => $days, 'orders' => $orders];
+    }
+
+    /**
+     * Encaissements de [from, to] (mêmes commandes et même total que `receiptsByDay`) dont la part en **espèces** (lot RAP) : paiements réussis
+     * au moyen « Espèces » (`payment_method` 2) des commandes de la fenêtre, signés (retours et remboursements en espèces négatifs) ; le reste
+     * (carte, Paypal, ventes sans ligne de paiement) en `card`. Fenêtre vide (from > to) : zéros.
+     *
+     * @return array{total: int, cash: int, card: int}
+     */
+    public function receiptsSplit(string $from, string $to): array
+    {
+        if ($from > $to) {
+            return ['total' => 0, 'cash' => 0, 'card' => 0];
+        }
+        $total = array_sum($this->receiptsByDay($from, $to)['days']);
+        [$start, $end] = $this->clock->range($from, $to);
+        $cash = (int) round((float) $this->conn()->fetchOne(
+            'SELECT COALESCE(SUM(p.amount), 0) FROM payments p JOIN "order" o ON o.id = p.order_payment_id'
+            . ' WHERE p.payment_method_id = :cash AND p.statut_payment_id = :done AND o.order_date >= :from AND o.order_date < :to AND o.order_type_id IN (1, 2, 3) AND o.status_id NOT IN (1, 7)',
+            ['cash' => self::PAYMENT_METHOD_CASH, 'done' => \App\Repository\PaymentsRepository::STATUS_COMPLETED, 'from' => $start->format('Y-m-d H:i:s'), 'to' => $end->format('Y-m-d H:i:s')]
+        ));
+
+        return ['total' => $total, 'cash' => $cash, 'card' => $total - $cash];
+    }
+
+    /**
+     * Mouvements prévus datés dans [from, to] (récurrences dépliées), en totaux (lot RAP). Fenêtre vide : zéros.
+     *
+     * @return array{in: int, out: int}
+     */
+    public function plannedBetween(string $from, string $to): array
+    {
+        $totals = ['in' => 0, 'out' => 0];
+        if ($from > $to) {
+            return $totals;
+        }
+        foreach ($this->conn()->fetchAllAssociative('SELECT direction, amount_cents, start_date, recurrence, end_date FROM gestion_cash_movement') as $r) {
+            $n = count(self::occurrences((string) $r['start_date'], (string) $r['recurrence'], $r['end_date'], $from, $to));
+            $totals[$r['direction'] === 'in' ? 'in' : 'out'] += $n * (int) $r['amount_cents'];
+        }
+
+        return $totals;
     }
 
     /** @return array{amount: int, windowDays: int, from: string, to: string, orders: int, estimated: bool} moyenne des 30 jours complets avant aujourd'hui */

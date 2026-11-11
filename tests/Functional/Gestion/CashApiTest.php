@@ -59,7 +59,7 @@ class CashApiTest extends WebTestCase
 
         // Sans solde : rien à projeter ; premier pas selon l'état du site (un mouvement prévu ou une période en cours)
         $p0 = $this->get('/api/gestion/tresorerie');
-        $this->assertSame(['no_balance', null, null, null, 'projection', ['threshold' => 0, 'includeEstimatedSales' => false], 'CAD'], [$p0['status'], $p0['balance'], $p0['projection'], $p0['projectionWithSales'], $p0['alertSeries'], $p0['settings'], $p0['currency']]);
+        $this->assertSame(['no_balance', null, null, null, 'projection', ['threshold' => 0, 'includeEstimatedSales' => false, 'tolerance' => 100], 'CAD'], [$p0['status'], $p0['balance'], $p0['projection'], $p0['projectionWithSales'], $p0['alertSeries'], $p0['settings'], $p0['currency']]);
         $this->assertSame([30, true], [$p0['estimatedDailyReceipts']['windowDays'], $p0['estimatedDailyReceipts']['estimated']]);
         $periodNow = $calendar->findByDate($today) !== null;
         $this->assertSame($periodNow, $this->tile('cash-first-balance') !== null, 'premier pas seulement avec une période en cours ou un mouvement');
@@ -124,11 +124,11 @@ class CashApiTest extends WebTestCase
         $this->assertNull($this->tile('cash-first-balance'), 'un solde saisi : plus de premier pas');
 
         // Réglages
-        $this->assertSame(['threshold' => 0, 'includeEstimatedSales' => false], $this->get('/api/gestion/tresorerie/reglages'));
+        $this->assertSame(['threshold' => 0, 'includeEstimatedSales' => false, 'tolerance' => 100], $this->get('/api/gestion/tresorerie/reglages'));
         $this->request('PUT', '/api/gestion/tresorerie/reglages', ['threshold' => 'beaucoup', 'includeEstimatedSales' => 'oui']);
         $this->assertSame([422, ['threshold' => 'MUST_BE_INTEGER_CENTS', 'includeEstimatedSales' => 'MUST_BE_BOOLEAN']], [$this->status(), $this->body()['fields']]);
-        $this->assertSame(['threshold' => 900000000, 'includeEstimatedSales' => false], $this->send('PUT', '/api/gestion/tresorerie/reglages', ['threshold' => 900000000], 200));
-        $this->assertSame(['threshold' => 900000000, 'includeEstimatedSales' => true], $this->send('PUT', '/api/gestion/tresorerie/reglages', ['includeEstimatedSales' => true], 200), 'champ absent : gardé');
+        $this->assertSame(['threshold' => 900000000, 'includeEstimatedSales' => false, 'tolerance' => 100], $this->send('PUT', '/api/gestion/tresorerie/reglages', ['threshold' => 900000000], 200));
+        $this->assertSame(['threshold' => 900000000, 'includeEstimatedSales' => true, 'tolerance' => 100], $this->send('PUT', '/api/gestion/tresorerie/reglages', ['includeEstimatedSales' => true], 200), 'champ absent : gardé');
         $this->send('PUT', '/api/gestion/tresorerie/reglages', ['includeEstimatedSales' => false], 200);
 
         // Projection réelle : forme, longueur, série d'alerte, statut cohérent avec le point bas ; vignette au-dessus du stock bas

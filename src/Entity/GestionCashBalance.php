@@ -28,6 +28,23 @@ class GestionCashBalance
     #[ORM\Column(length: 500, nullable: true)]
     private ?string $note = null;
 
+    /** Lot RAP : attendu calculé à la saisie (historique ; l'écart affiché est recalculé à chaque lecture) */
+    #[ORM\Column(name: 'expected_at_entry', type: 'bigint', nullable: true)]
+    private string|int|null $expectedAtEntry = null;
+
+    /** Lot RAP : décision du gérant sur l'écart (unexplained, explained) ; null = aucune */
+    #[ORM\Column(name: 'gap_decision', length: 12, nullable: true)]
+    private ?string $gapDecision = null;
+
+    #[ORM\Column(name: 'gap_note', length: 500, nullable: true)]
+    private ?string $gapNote = null;
+
+    #[ORM\Column(name: 'gap_decided_by', length: 255, nullable: true)]
+    private ?string $gapDecidedBy = null;
+
+    #[ORM\Column(name: 'gap_decided_at', type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $gapDecidedAt = null;
+
     #[ORM\Column(name: 'created_by', length: 255, nullable: true)]
     private ?string $createdBy = null;
 

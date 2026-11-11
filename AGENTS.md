@@ -23,7 +23,7 @@ Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne 
 | Lignes d'achat de la gestion (commande_line : réassorts, coût moyen à la date de la vente, rattacher idempotent, vérification `app:gestion:lignes:verifier`) | `docs/lignes-achat-gestion.md` |
 | Volet publicité de la gestion (campagnes, devise de la régie, dépense de période, rentabilité perçue avant / après et l'an dernier) | `docs/publicite-gestion.md` |
 | Budgets par poste et voyages d'achat de la gestion (prévu / réel par période, voyage avec budget journalier, rattachement des notes et commandes) | `docs/budgets-gestion.md` |
-| Trésorerie saisie de la gestion (soldes datés, mouvements prévus récurrents, projection avec dépenses saisies et encaissements, alerte et notification de trésorerie basse) | `docs/tresorerie-gestion.md` |
+| Trésorerie saisie de la gestion (soldes datés, mouvements prévus récurrents, projection avec dépenses saisies et encaissements, alerte et notification de trésorerie basse, rapprochement bancaire : attendu, écart vivant, décisions) | `docs/tresorerie-gestion.md` |
 | Simulateur de période de la gestion (leviers prix, promotion, publicité, prévu ; ventes restantes au rythme, marge, résultat, point mort, stock de fin, trésorerie après achats ; aucune écriture) | `docs/simulateur-gestion.md` |
 | Guide IA de la gestion (conseils calculés par règles R1–R11 avec effet, confiance et sources ; rédaction vérifiée par l'IA ; fait / écarté ; vignette « advice ») | `docs/guide-ia-gestion.md` |
 | Appliquer un prix depuis la gestion (aperçu, pourcentage ou coefficient sur le coût, arrondi, application par le chemin d'un article, annulation 24 h, lien avec le guide) | `docs/prix-gestion.md` |

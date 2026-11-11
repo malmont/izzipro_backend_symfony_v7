@@ -56,6 +56,20 @@ class GestionCashController extends AbstractController
         return new Response(null, Response::HTTP_NO_CONTENT);
     }
 
+    /** Lot RAP : historique des rapprochements (attendu, réel, écart, décision, composition), du plus récent au plus ancien */
+    #[Route('/rapprochements', name: 'gestion_tresorerie_rapprochements', methods: ['GET'])]
+    public function reconciliations(Request $request): JsonResponse
+    {
+        return $this->json($this->useCase->reconciliations(max(1, min(200, (int) $request->query->get('limit', 50)))));
+    }
+
+    /** Lot RAP : décision du gérant sur l'écart d'un solde (unexplained, explained avec note, open pour revenir) */
+    #[Route('/soldes/{id}/ecart', name: 'gestion_tresorerie_soldes_ecart', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function decideGap(int $id, Request $request): JsonResponse
+    {
+        return $this->json($this->useCase->decideGap($id, $this->body($request), $this->getUser()?->getUserIdentifier()));
+    }
+
     #[Route('/mouvements', name: 'gestion_tresorerie_mouvements', methods: ['GET'])]
     public function movements(Request $request): JsonResponse
     {

@@ -23,6 +23,10 @@ class GestionCashSetting
     #[ORM\Column(name: 'include_estimated_sales', options: ['default' => false])]
     private bool $includeEstimatedSales = false;
 
+    /** Lot RAP : écart toléré au rapprochement, en cents (100 par défaut) */
+    #[ORM\Column(name: 'tolerance_cents', type: 'bigint', options: ['default' => 100])]
+    private string|int $toleranceCents = 100;
+
     #[ORM\Column(name: 'updated_at', type: 'datetime_immutable')]
     private ?\DateTimeImmutable $updatedAt = null;
 

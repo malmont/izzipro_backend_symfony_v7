@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (406)
+## Boutique et commun (408)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -418,8 +418,10 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PATCH | `/api/gestion/tresorerie/mouvements/{id}` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::updateMovement` |
 | GET | `/api/gestion/tresorerie/mouvements` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::movements` |
 | POST | `/api/gestion/tresorerie/mouvements` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::createMovement` |
+| GET | `/api/gestion/tresorerie/rapprochements` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::reconciliations` |
 | GET | `/api/gestion/tresorerie/reglages` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::settings` |
 | PUT | `/api/gestion/tresorerie/reglages` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::putSettings` |
+| POST | `/api/gestion/tresorerie/soldes/{id}/ecart` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::decideGap` |
 | DELETE | `/api/gestion/tresorerie/soldes/{id}` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::deleteBalance` |
 | PATCH | `/api/gestion/tresorerie/soldes/{id}` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::updateBalance` |
 | GET | `/api/gestion/tresorerie/soldes` | ROLE_ADMIN | `Controller\GestionController\GestionCashController::balances` |
