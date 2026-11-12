@@ -99,7 +99,9 @@ class FraisDePortService
         if ($fraisDePort) {
             $em = $this->emProvider->getEntityManager();
             $em->remove($fraisDePort);
-            
+            // La commande en mémoire ne doit plus le porter : sinon l'écriture suivante de la même requête (le journal de la purge
+            // ci-dessous, quand un justificatif est à purger) le recréait par cascade, sous un nouvel identifiant (correctif du 12/11/2026)
+            $commande->setFraisDePort(null);
             $em->flush();
             $this->documents?->purge(); // justificatif de transport dont le frais de port vient de disparaître (DOC-ORPH, 12/11/2026)
         }

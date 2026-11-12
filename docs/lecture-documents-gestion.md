@@ -184,6 +184,12 @@ Test : `GestionDocumentsApiTest::testInvoicePreviewGivesThePricesOfTheConfirmati
   - Journal des contenus : une entrée `gestion-documents` / `purge` par document, avec le motif (`target_deleted` ou `expired`), les
     cibles disparues et, pour chaque fichier, son nom d'origine, sa taille et son empreinte SHA-256. Le fichier lui-même n'est pas gardé.
   - Après la purge : le document n'est plus dans `GET /api/gestion/documents`, et `GET /api/gestion/documents/{id}` répond 404.
+  - Correctif du 12/11/2026 : entre la mise en ligne de DOC-ORPH et ce correctif, `DELETE /api/commandes/{id}/frais-de-port` répondait
+    204 mais **le frais de port revenait sous un nouvel identifiant** quand un justificatif était à purger au même moment (lecture expirée,
+    ou document confirmé sans cible). La purge écrit une seconde fois dans la requête, et la commande encore en mémoire le recréait par
+    cascade (`Commande::fraisDePort`, `cascade: persist`). `FraisDePortService::deleteFraisDePort` retire désormais le frais de port de
+    la commande avant d'écrire. Les autres suppressions suivies d'une purge (commande, note de frais, campagne) n'ont pas ce lien en
+    cascade. Test : `GestionDocumentsApiTest::testAShippingCostDeletedWhileADocumentIsPurgedStaysDeleted`.
   - Avant le 12/11/2026, rien ne remettait ces identifiants à null : un document dont la note avait été supprimée restait dans la
     liste, et `DELETE` répondait 409 `DOCUMENT_CONFIRMED`.
 - Crédits : 1 par lecture (`LandingAiQuotaService`, composant `gestion_document`, réservation 30 min, facturée en succès, libérée en échec).

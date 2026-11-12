@@ -636,6 +636,34 @@ class GestionDocumentsApiTest extends WebTestCase
 
     // ----- fabrique -----
 
+    /**
+     * Correctif du 12/11/2026 (défaut du lot DOC-ORPH, trouvé par le test du lot EDIT) : supprimer un frais de port alors qu'un justificatif
+     * est à purger au même moment répondait 204 mais le frais de port revenait, sous un nouvel identifiant. La purge écrit une seconde fois
+     * dans la même requête, et la commande encore en mémoire le recréait par cascade.
+     */
+    public function testAShippingCostDeletedWhileADocumentIsPurgedStaysDeleted(): void
+    {
+        $tag = bin2hex(random_bytes(3));
+        $today = static::getContainer()->get(\App\Gestion\Services\PeriodCalendar::class)->today();
+        $conn = $this->em()->getConnection();
+        $carrier = $this->create(Transporteur::class, ['name' => "Transport recréé $tag"]);
+        $this->endOfWrite();
+        $supplierId = (int) $this->post('/api/fournisseurs', ['name' => "Fournisseur recréé $tag", 'typeFournisseur' => ($this->em()->find(TypeFournisseur::class, 1) ?? $this->create(TypeFournisseur::class, ['name' => 'Autre']))->getId()], 201)['id'];
+        $commandeId = (int) $this->post('/api/commandes', ['budget' => 50000, 'date' => $today->format('Y-m-d') . ' 10:00:00', 'name' => "Commande $tag", 'fournisseur' => ['id' => $supplierId]], 201)['id'];
+        $rows = fn (): int => (int) $conn->fetchOne('SELECT COUNT(*) FROM frais_de_port WHERE commande_id = ?', [$commandeId]);
+        $documents = fn (array $ids): int => (int) $conn->fetchOne('SELECT COUNT(*) FROM gestion_document WHERE id IN (?)', [$ids], [\Doctrine\DBAL\ArrayParameterType::INTEGER]);
+        foreach (['confirmé sans cible' => ['confirmed', 'NULL'], 'lecture expirée' => ['extracted', "NOW() - INTERVAL '1 day'"]] as $case => [$status, $expires]) {
+            $this->post("/api/commandes/$commandeId/frais-de-port", ['name' => 'Fret', 'price' => 1500, 'transporteur' => ['id' => $carrier->getId()]], 201);
+            $purgeable = (int) $conn->fetchOne("INSERT INTO gestion_document (id, type, status, locale, files, created_at, expires_at) VALUES (nextval('gestion_document_id_seq'), 'transport', '$status', 'fr', '{\"pages\":[]}', NOW(), $expires) RETURNING id");
+            $this->assertSame([1, 1], [$rows(), $documents([$purgeable])], $case);
+            $this->request('DELETE', "/api/commandes/$commandeId/frais-de-port");
+            $this->assertSame(204, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
+            $this->assertSame([0, 0], [$rows(), $documents([$purgeable])], "$case : le frais de port est supprimé pour de bon, le justificatif est purgé");
+            $this->request('GET', "/api/commandes/$commandeId/frais-de-port");
+            $this->assertSame([200, 'null'], [$this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent()], "$case : la lecture ne le rend plus");
+        }
+    }
+
     private function runWorker(int $documentId): void
     {
         static::getContainer()->get(ReadGestionDocumentHandler::class)(new ReadGestionDocumentMessage($documentId, MV_TEST_TENANT_CODE));
