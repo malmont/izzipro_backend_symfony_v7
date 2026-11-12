@@ -354,3 +354,12 @@ Contrat validé par l'application (« new easymakemoney ») le 11/11/2026, Q1 à
 - Code : `Services/FeatureAccess/ModuleAccessService`, `ModuleRequestHint`, `EventSubscriber/ModuleAccessSubscriber`,
   `Gestion/Services/GestionAiUsageService`, `GestionModuleTransitionService`, `Gestion/Command/GestionModuleTransitionCommand`,
   `Gestion/Controller/GestionAiController`. Test : `tests/Functional/Gestion/ManagementModuleApiTest.php` (+ `SimulationApiTest` : refus non compté).
+
+## 10. Lot CHE : cheminements de l'application de gestion (12/11/2026)
+
+Demande du propriétaire, contrat validé par l'application : un cheminement ciblé (page `/admin/gestion`) et le groupe « Application de gestion »
+du cheminement du site (`GET /api/site/readiness`, accueil EasyAdmin, Mon site), seulement si le module est accordé ; sinon « Obtenir ». Détail
+des étapes, bloquantes ou d'amélioration, et des champs additifs `appScreen` / `figures` : `docs/console-pilotage.md`, « Cheminement ciblé de
+l'application de gestion ». Les autres groupes du cheminement sont inchangés (test). La vignette « premiers pas » `cash_first_balance` recoupe
+l'étape `management.cash` : l'application la retirera de son côté ; rien n'est changé côté serveur.
+

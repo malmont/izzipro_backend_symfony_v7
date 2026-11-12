@@ -1,0 +1,34 @@
+{# Cheminement de l'application de gestion (lot CHE, 12/11/2026) : habillage EasyAdmin depuis le menu, sinon page nue #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Application de gestion{% endblock %}
+{% block content_title %}Application de gestion : réglages et cheminement{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}<div class="py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block panel %}
+<div class="container-fluid" style="max-width: 980px" data-gestion-cheminement data-level="{{ overview.level }}">
+    <h1 class="h3 mb-1">Application de gestion</h1>
+    <p class="text-muted">Ce qu'il faut pour que l'application de gestion serve, puis ce qui rend ses chiffres justes : dans l'ordre, chaque étape mène à l'écran où agir (ou à l'écran de l'application). Rouge = indispensable, orange = amélioration.</p>
+
+    {% if not overview.granted %}
+        <div class="alert alert-warning" data-gestion-not-granted>L'application de gestion n'est pas accordée à ce site : {% if overview.obtain and overview.obtain.action.type == 'trial' %}un essai gratuit de {{ overview.obtain.action.days }} jours est possible depuis{% else %}demandez-la dans{% endif %} <a href="{{ overview.obtainUrl ?? monSiteUrl }}">Mon site : pilotage</a>.</div>
+    {% else %}
+    <div class="card"><div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h2 class="h5 mb-0">Préparer la gestion</h2>
+            <span class="badge bg-{{ overview.level == 'ready' ? 'success' : 'danger' }}">{{ overview.levelLabel }}</span>
+        </div>
+        <ol class="mb-0">
+            {% for st in overview.steps %}
+                <li class="mb-2" data-step="{{ st.key }}" data-status="{{ st.status }}">
+                    {% if st.status == 'done' %}<span class="text-success">✔</span>{% elseif st.status == 'todo' and st.blocking %}<span class="text-danger">✘</span>{% else %}<span class="text-warning">○</span>{% endif %}
+                    <strong>{{ st.title }}</strong>{% if st.status == 'todo' and st.blocking %} <span class="badge bg-danger">indispensable</span>{% elseif st.status != 'done' %} <span class="badge bg-warning text-dark">amélioration</span>{% endif %}
+                    <div class="small text-muted">{{ st.description }}{% if st.url and st.status != 'done' %} <a href="{{ st.url }}">→ ouvrir</a>{% endif %}{% if st.appScreen and st.status != 'done' %} <span class="text-nowrap">(dans l'application : écran « {{ st.appScreen }} »)</span>{% endif %}</div>
+                </li>
+            {% endfor %}
+        </ol>
+    </div></div>
+    {% endif %}
+</div>
+{% endblock %}

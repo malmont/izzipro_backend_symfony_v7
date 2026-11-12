@@ -110,6 +110,61 @@ class SiteReadinessService
             'blockingTodo' => $blockingTodo, 'improvementTodo' => $improvementTodo, 'groups' => array_values($groups), 'links' => $links];
     }
 
+    /**
+     * Cheminement de l'application de gestion (lot CHE, 12/11/2026, contrat validé par l'application) : bloquantes = ce sans quoi l'application ne
+     * sert pas (clé, code court, administrateur, période en cours, exercice, devise et fuseau) ; améliorations = ce qui rend les chiffres justes
+     * (coût d'achat, fournisseurs, référentiels, trésorerie, frais fixes, IA, appareil, premier achat). Chaque étape porte en plus `appScreen` (code
+     * d'écran de l'application, même vocabulaire que les vignettes ; null = à faire sur le site) et `figures` (comptes) ; les chiffres utiles sont
+     * aussi dans `description`, que l'application affiche telle quelle.
+     *
+     * @param list<array<string, mixed>> $steps
+     * @param array<string, mixed> $e fiche Entreprise (colonnes lues par build)
+     */
+    private function managementSteps(array &$steps, \PDO $pdo, array $e, ?array $address, array $keys, ?array $host, array $effective): void
+    {
+        $add = function (string $key, string $title, string $description, bool $done, array $action, bool $blocking, ?string $appScreen, ?array $figures = null) use (&$steps) {
+            $steps[] = ['key' => $key, 'group' => 'app.management', 'title' => $title, 'description' => $description, 'status' => $done ? 'done' : 'todo', 'where' => 'backend',
+                'action' => $action, 'blocking' => $blocking, 'appScreen' => $appScreen] + ($figures !== null ? ['figures' => $figures] : []);
+        };
+        $gestion = $this->row($pdo, 'SELECT purchase_period_frequency, fiscal_year_start_month FROM entreprise ORDER BY id LIMIT 1') ?? [];
+        $screen = fn (string $s) => ['type' => 'screen', 'screen' => $s];
+        // Bloquantes
+        $add('management.key', 'Clé de l\'application de gestion', 'Générez la clé d\'activation et saisissez-la dans l\'application de gestion.', in_array('admin', $keys, true), $screen('app_keys'), true, null);
+        $add('management.short_code', 'Code court du site', 'Le code que l\'application demande à la première connexion pour trouver votre site.', !empty($host['shortCode']), $screen('short_code'), true, null);
+        $admins = $this->count($pdo, '"user"', "roles::text LIKE '%ROLE_ADMIN%'");
+        $add('management.admin', 'Un compte administrateur', $admins > 0 ? sprintf('%d compte(s) administrateur peuvent se connecter à l\'application de gestion.', $admins) : 'Créez un compte administrateur : seul ce rôle se connecte à l\'application de gestion.', $admins > 0, $screen('users'), true, null, ['admins' => $admins]);
+        $current = $this->count($pdo, 'collections', "kind = 'period' AND COALESCE(del, false) = false AND start_date_collection <= NOW() AND end_date_collection >= CURRENT_DATE");
+        $add('management.period', 'Période de gestion en cours', $current > 0 ? 'La période en cours existe : achats, notes de frais et résultat s\'y rangent.' : 'Ouvrez l\'application de gestion : la période en cours est créée automatiquement selon le calendrier du site.', $current > 0, ['type' => 'registry', 'feature' => 'gestion.periods'], true, 'periodes');
+        $month = $gestion['fiscal_year_start_month'] ?? null;
+        $add('management.fiscal_year', 'Mois de début d\'exercice', $month !== null ? sprintf('Exercice qui commence en %s : il sert au bilan de l\'année.', ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'][(int) $month] ?? $month) : 'Choisissez le mois de début de votre exercice (écran Exercice de l\'application) : il sert au bilan de l\'année.', $month !== null, $screen('gestion'), true, 'exercice');
+        $localeOk = trim((string) ($e['currency'] ?? '')) !== '' && (trim((string) ($e['pos_timezone'] ?? '')) !== '' || trim((string) ($address['country'] ?? '')) !== '');
+        $add('management.locale', 'Devise et fuseau du site', 'Montants dans la devise du site et jours comptés au fuseau du magasin (déduit de l\'adresse, sinon réglé sur la fiche).', $localeOk, ['type' => 'registry', 'feature' => 'site.locale'], true, null);
+        // Améliorations
+        $add('management.periods_calendar', 'Calendrier des périodes à confirmer', $gestion['purchase_period_frequency'] ?? null ? 'Calendrier des périodes choisi.' : 'Trimestres par défaut : confirmez-les, ou choisissez des semestres ou des mois.', ($gestion['purchase_period_frequency'] ?? null) !== null, ['type' => 'registry', 'feature' => 'gestion.periods'], false, 'periodes');
+        $articles = "product p WHERE p.product_type = 'standard' AND COALESCE(p.rental_enabled, false) = false";
+        $total = (int) $this->one($pdo, "SELECT COUNT(*) FROM $articles");
+        $missing = (int) $this->one($pdo, "SELECT COUNT(*) FROM $articles AND (p.purchase_price IS NULL OR p.purchase_price <= 0) AND NOT EXISTS (SELECT 1 FROM commande_line l WHERE l.product_id = p.id AND l.unit_cost_cents IS NOT NULL)");
+        $add('management.purchase_cost', 'Coût d\'achat des articles', $missing > 0 ? sprintf('%d article(s) sur %d sans coût d\'achat : leur marge reste inconnue.', $missing, $total) : ($total > 0 ? sprintf('Les %d articles ont un coût d\'achat : marges connues.', $total) : 'Aucun article vendu pour l\'instant.'), $missing === 0, $screen('products'), false, 'articles', ['missing' => $missing, 'total' => $total]);
+        $suppliers = $this->count($pdo, 'fournisseur');
+        $add('management.suppliers', 'Fournisseurs', $suppliers > 0 ? sprintf('%d fournisseur(s) enregistré(s).', $suppliers) : 'Ajoutez vos fournisseurs : ils servent aux commandes et à la lecture des factures.', $suppliers > 0, $screen('fournisseurs'), false, 'fournisseurs', ['suppliers' => $suppliers]);
+        $types = $this->count($pdo, 'type_fournisseur') > 0 && $this->count($pdo, 'type_note_de_frais') > 0;
+        $add('management.referentials', 'Types de fournisseur et de note de frais', 'Les listes qui classent vos fournisseurs et vos notes de frais (fournies par le modèle, modifiables).', $types, $screen('type_fournisseurs'), false, null);
+        $cash = $this->count($pdo, 'gestion_cash_balance') > 0 && $this->count($pdo, 'gestion_cash_setting', 'threshold_cents IS NOT NULL') > 0;
+        $add('management.cash', 'Trésorerie : solde de départ et seuil d\'alerte', 'Un solde bancaire daté et un seuil : la projection de trésorerie et l\'alerte de trésorerie basse s\'en servent.', $cash, $screen('gestion'), false, 'tresorerie');
+        $fixed = $this->count($pdo, 'gestion_cash_movement', 'fixed_cost = true');
+        $add('management.fixed_costs', 'Frais fixes', $fixed > 0 ? sprintf('%d frais fixe(s) saisi(s) : le résultat après frais fixes est calculé.', $fixed) : 'Saisissez vos frais fixes (loyer, salaires, abonnements) pour voir le résultat après frais fixes.', $fixed > 0, $screen('gestion'), false, 'frais-fixes', ['fixedCosts' => $fixed]);
+        $tier = ($effective['ai.full']['enabled'] ?? false) ? 'full' : (($effective['ai.help']['enabled'] ?? false) ? 'help' : 'none');
+        $monthly = (int) ($this->one($pdo, 'SELECT monthly_credits FROM ai_credit_setting ORDER BY id LIMIT 1') ?? 0) ?: $this->platform->aiDefaultCredits();
+        $monthStart = (new \DateTimeImmutable('first day of this month 00:00:00', new \DateTimeZone('America/Toronto')))->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+        $used = (int) $this->one($pdo, sprintf("SELECT COALESCE(SUM(credits), 0) FROM ai_usage WHERE created_at >= '%s' AND (status = 'success' OR (status = 'reserved' AND reserved_until >= NOW()))", $monthStart));
+        $remaining = max(0, $monthly - $used);
+        $add('management.ai', 'Assistant IA de la gestion', $tier === 'none' ? 'Sans palier IA, le guide et les avis restent calculés par les règles (sans texte rédigé).' : sprintf('%d crédit(s) IA restant(s) sur %d ce mois-ci (1 par conseil, avis ou document lu).', $remaining, $monthly), $tier !== 'none' && $remaining > 0, $screen('ai_credits'), false, null, ['tier' => $tier, 'remaining' => $remaining, 'monthly' => $monthly]);
+        $devices = $this->count($pdo, 'push_device', 'disabled_at IS NULL');
+        $add('management.device', 'Appareil pour les notifications', $devices > 0 ? sprintf('%d appareil(s) reçoivent les notifications.', $devices) : 'Autorisez les notifications dans l\'application : stock bas, trésorerie basse, facture en double.', $devices > 0, $screen('gestion'), false, 'notifications', ['devices' => $devices]);
+        $purchases = $this->count($pdo, 'commande') + $this->count($pdo, 'gestion_reprise');
+        $add('management.first_purchase', 'Premier achat ou reprise d\'historique', $purchases > 0 ? 'Des achats sont saisis : coûts, marges et stock se calculent.' : 'Saisissez une première commande fournisseur, ou reprenez l\'historique de vos ventes passées.', $purchases > 0, $screen('gestion'), false, 'commandes');
+    }
+
     /** Libellé d'un groupe d'étapes : produit (module ou application), socle du site, assistant IA */
     public static function groupLabel(string $group): string
     {
@@ -279,7 +334,7 @@ class SiteReadinessService
             $add('mobile_shop.profile', 'app.mobile_shop', 'Apparence de l\'application', 'Logo, couleurs et nom affichés dans l\'application (profil « mobile », page Apparence de l\'app mobile) ; sans profil, la fiche Entreprise sert.', $this->count($pdo, 'app_profile', "app = 'mobile'") > 0, 'backend', ['type' => 'screen', 'screen' => 'app_profiles'], false);
         }
         if ($effective['app.management']['enabled'] ?? false) {
-            $add('management.key', 'app.management', 'Clé de l\'application de gestion', 'Générez la clé d\'activation et saisissez-la dans l\'application de gestion.', in_array('admin', $keys, true), 'backend', ['type' => 'screen', 'screen' => 'app_keys']);
+            $this->managementSteps($steps, $pdo, $e, $address, $keys, $host, $effective);
         }
         if ($effective['app.living_memory']['enabled'] ?? false) {
             $add('living_memory.key', 'app.living_memory', 'Clé de l\'application Living Memory', 'Générez la clé d\'activation portée par l\'application pour votre site.', in_array('livingmemory', $keys, true), 'backend', ['type' => 'screen', 'screen' => 'app_keys']);

@@ -667,6 +667,7 @@ class DashboardController extends AbstractDashboardController
 
         yield MenuItem::section('Caisse');
         yield MenuItem::linkToRoute('Caisse : réglages et cheminement', 'fas fa-tasks', 'admin_caisse'); // cheminement d'ouverture du magasin (07/11/2026)
+        yield MenuItem::linkToRoute('Application de gestion : cheminement', 'fas fa-route', 'admin_gestion'); // lot CHE (12/11/2026)
         yield MenuItem::linkToCrud('Postes de caisse', 'fas fa-store', \App\Entity\CashRegister::class);
         yield MenuItem::linkToRoute('Clés des applications', 'fas fa-key', 'admin_app_keys');
         yield MenuItem::linkToCrud('Favoris de la caisse', 'fas fa-th', \App\Entity\PosFavorite::class)->setController(PosFavoriteCrudController::class); // F10

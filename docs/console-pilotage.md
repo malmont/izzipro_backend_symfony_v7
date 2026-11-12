@@ -219,6 +219,22 @@ Stripe, alertes, conservation, **coupures de la devise** (`type_cash` actives da
 mode réel), **première vente d'essai** (une vente au comptoir). Sans caisse accordée, la page mène à l'essai ou à la demande (Mon site).
 Écrans ajoutés : `pos` (cette page), `denominations`. Test : `tests/Functional/Admin/CaisseConsolePageTest.php`.
 
+## Cheminement ciblé de l'application de gestion : page « Application de gestion : réglages et cheminement » (lot CHE, 12/11/2026)
+
+`GET /admin/gestion` (`GestionConsoleAdminController`, `ROLE_ADMIN`, menu Caisse, écran `gestion`) : les étapes du groupe `app.management` du
+cheminement du site (`Gestion/Services/GestionSetupService::overview()`, niveau `none | todo | ready`), chacune liée à son écran ; sans module
+accordé, l'essai ou la demande (Mon site). Étapes (`SiteReadinessService::managementSteps`, seulement si `app.management` est accordé, sinon
+« Obtenir ») — **bloquantes** : `management.key` (clé), `management.short_code` (code court), `management.admin` (un compte ROLE_ADMIN),
+`management.period` (période en cours, créée par l'application à l'ouverture), `management.fiscal_year` (mois de début d'exercice),
+`management.locale` (devise et fuseau) ; **améliorations** : `management.periods_calendar` (calendrier à confirmer, trimestres par défaut),
+`management.purchase_cost` (« N article(s) sur M sans coût d'achat », coût de la fiche ou d'une ligne d'achat), `management.suppliers`,
+`management.referentials`, `management.cash` (solde de départ et seuil), `management.fixed_costs`, `management.ai` (palier et crédits restants),
+`management.device` (appareil pour les notifications), `management.first_purchase` (commande fournisseur ou reprise d'historique). Chaque étape
+porte en plus **`appScreen`** (code d'écran de l'application de gestion, vocabulaire des vignettes : `periodes`, `exercice`, `articles`,
+`fournisseurs`, `tresorerie`, `frais-fixes`, `notifications`, `commandes` ; null = à faire sur le site) et, quand c'est utile, **`figures`**
+(comptes) ; les chiffres sont aussi dans `description`, que l'application affiche telle quelle (écran « Préparer ma gestion »). Écrans ajoutés :
+`gestion`, `fournisseurs`, `type_fournisseurs`. Test : `tests/Functional/Gestion/ManagementReadinessTest.php`.
+
 ## Cheminement ciblé Location et réservation : page « Location et réservation » (07/11/2026)
 
 `GET /admin/location` (`RentalConsoleAdminController`, `ROLE_ADMIN`, menu Location / Réservation) : `Services/Booking/RentalSetupService::overview()`
