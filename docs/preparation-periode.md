@@ -51,6 +51,17 @@ advertising?, other? }, locale? }`
   + frais du voyage jour par jour + reste des autres postes et ventes restantes étalés également sur les jours de la période (`SALES_SPREAD_EVENLY`) ;
   ventes en TTC approché au taux réel des taxes des 90 derniers jours (`TAXES_ESTIMATED`), sinon hors taxes (`TAXES_EXCLUDED`). `{ start, low,
   end, belowThresholdFrom, threshold, taxRate, days }` ; le point bas tombe souvent avant la période.
+  Forme exacte (`GestionPreparationService::cashPath`), montants en cents de la devise du site, dates `AAAA-MM-JJ` au jour du magasin.
+  **Ce sont des objets, pas des nombres** :
+  - `start` : `{ date, amount }`, toujours présent : le solde projeté d'aujourd'hui.
+  - `low` : `{ date, amount }`, le solde le plus bas du parcours et son jour ; `end` : `{ date, amount }`, le solde du dernier jour.
+    Les deux sont `null` seulement quand il n'y a aucun jour à projeter (période visée déjà terminée).
+  - `days` : `[{ date, in, out, balance }]`, un élément par jour d'aujourd'hui à la fin de la période visée, toujours présent (tableau
+    vide dans le même cas) : `in` les entrées du jour, `out` les sorties du jour (les deux positives ou nulles), `balance` le solde en
+    fin de jour (peut être négatif).
+  - `belowThresholdFrom` : la première date où le solde passe sous le seuil, sinon `null` ; `threshold` : le seuil réglé (entier,
+    toujours présent) ; `taxRate` : le taux de taxes appliqué aux ventes (décimal, 0,14975 pour 14,975 %), `null` sans vente taxée
+    sur 90 jours.
 - `previewHash` : entrées, objectif, stock et coûts, solde de départ, prévus existants des périodes concernées ; jamais l'heure.
 - Erreurs 422 : `sales.method` `INVALID_METHOD`, `sales.amount` `REQUIRED` | `MUST_BE_INTEGER_CENTS`, `purchases` `MUST_BE_LIST` | `TOO_MANY` (50),
   `purchases[i].date` `INVALID_DATE` | `OUT_OF_RANGE`, `purchases[i].amount` `MUST_BE_POSITIVE`, `purchases[i].coefficient` `OUT_OF_RANGE` (1 à 20),
