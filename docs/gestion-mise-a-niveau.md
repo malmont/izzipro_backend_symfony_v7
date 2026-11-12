@@ -271,6 +271,10 @@ Décisions de contrat prises pour les lots :
     (`GeneralExpenses.totalShippingCost`). Les applications n'additionnent rien.
   - En cache 600 s ; toute écriture d'une commande, de son frais de port, d'un transporteur ou d'un fournisseur le vide. Période
     inconnue : 404.
+  - **Écart possible d'un cent avec le résultat de la période, en devise étrangère seulement** : le résultat de période
+    (`PurchaseMetricsCalculator::periodTotals`) tronque la somme non arrondie des frais convertis ; cette route additionne des prix
+    convertis arrondis au cent chacun. Sans commande en devise étrangère, les deux sont égaux. Le calcul du résultat n'est pas modifié :
+    changer un chiffre déjà affiché, périodes clôturées comprises, est une décision comptable du propriétaire (liste des décisions).
   - **Objet frais de port, sur toutes les réponses qui le portent** (`GET` et `POST /api/commandes/{id}/frais-de-port`, confirmation d'une
     facture ou d'un transport lus par IA) : `currency` est désormais **la devise de la commande** (avant : celle du site, fausse pour une
     commande en devise étrangère, dont `price` est dans la devise de la commande) ; ajout de `siteCurrency` (devise du site : l'application
