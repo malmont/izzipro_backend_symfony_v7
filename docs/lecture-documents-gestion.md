@@ -30,6 +30,7 @@ attaché comme **justificatif** de la commande, de la note ou du frais de port c
 | `POST /{id}/relire` | 202, nouvelle lecture sans renvoyer les fichiers (nouveau crédit) ; pour `failed` ou `extracted` ; 409 `DOCUMENT_IN_PROGRESS` |
 | `PATCH /{id}/brouillon` (JSON libre) | brouillon de vérification enregistré tel quel (256 Ko au plus : 422 `DRAFT_TOO_LARGE`), idempotent (même corps : `draftUpdatedAt` inchangé) ; rien n'est créé ; conservé après confirmation |
 | `POST /{id}/lignes/{n}/photo` (multipart `file`) | photo facultative d'une ligne (JPEG, PNG, WebP, 8 Mo), remplace la précédente → 200 `{ n, photo: { name, mime, size } }` ; `GET` → le fichier ; `DELETE` → 204 (404 `PHOTO_NOT_FOUND`). `n` = numéro de ligne de l'extraction, 1000 et plus pour les lignes ajoutées par le gérant |
+| `POST /{id}/apercu` (JSON, corps de la confirmation d'une facture) | 200, **aucune écriture** : coût converti, prix de vente prévu et marge par ligne, totaux recalculés, refus de la confirmation en `issues` (§ 4 bis) ; 422 `DOCUMENT_TYPE` (note, transport), `VALIDATION_FAILED { lines: REQUIRED }` ; 400 `INVALID_JSON` ; 409 `DOCUMENT_CONFIRMED`, `DOCUMENT_IN_PROGRESS` ; 410 `DOCUMENT_EXPIRED` |
 | `POST /{id}/confirmer` (JSON) | crée ce qui est envoyé, **tout ou rien** (transaction) → 201 ; 409 `DOCUMENT_CONFIRMED`, `DOCUMENT_IN_PROGRESS` (lecture en cours), 410 `DOCUMENT_EXPIRED` |
 | `DELETE /{id}` | 204 pour un document non confirmé (fichiers effacés) ; confirmé → 409 `DOCUMENT_CONFIRMED` |
 
@@ -91,14 +92,20 @@ productId }], created: [{ lineN, productId, name }], shipping: FraisDePortOutput
   budget = Σ quantité × `unitCost` + port, dans la devise de la commande ; nom par défaut « Facture <numéro> — <fournisseur> ».
 - Ligne avec `productId` (et `variantId` facultatif) : une **ligne d'achat à recevoir** de plus (réassort), **sans effet sur le stock, le prix
   de vente, le prix d'achat de la fiche ni la visibilité**. Ligne avec `create` : un article par
-  `groupKey` (nom du premier `create.name`, prix d'achat = moyenne pondérée des `unitCost`, coefficient donné sinon 2, prix de vente =
-  achat × coefficient, **stock 0** (il n'entre qu'à la réception), invisible en boutique et en caisse, sans catégorie), une variante par ligne
+  `groupKey` (nom du premier `create.name`, prix d'achat = moyenne pondérée des `unitCost` **convertie dans la devise du site**,
+  coefficient donné sinon 2, prix de vente = prix d'achat × coefficient : la règle unique du § 4 bis, **stock 0** (il n'entre qu'à la réception), invisible en boutique et en caisse, sans catégorie), une variante par ligne
   quand taille ou couleur sont données (référentiels créés s'ils manquent, stock 0) ; la photo
   de la première ligne du groupe devient l'image de l'article (médiathèque publique). Ligne sans l'un ni l'autre → 422 `lines[n]:
   LINE_UNRESOLVED` ; inconnu → `PRODUCT_NOT_FOUND` ; variante d'un autre article → `lines[n].variantId: VARIANT_NOT_IN_PRODUCT`. Tout ou rien.
   La réponse porte `lines` (lignes à recevoir, avec `remaining`).
 - `shipping` sans `transporteurId` : frais de port posé sur le transporteur « Sur facture fournisseur » (créé une fois).
 - Doublon : 409 `INVOICE_ALREADY_CONFIRMED { documentId, commandeId }`, levé par `force: true`.
+
+- **Taux de change dans le prix** (lot APERÇU-FACT, 12/11/2026) : pour une facture dans une autre devise que celle du site, le prix
+  d'achat et le prix de vente de l'article créé sont dans la devise du site (coût × `exchangeRate`). Avant, le taux n'entrait pas dans
+  le prix : un article acheté 10,00 EUR au coefficient 2 était créé à 20,00, lus comme des dollars. **Le changement ne vaut que pour les
+  nouvelles confirmations** : rien de ce qui a été confirmé avant n'est corrigé (les factures en devise étrangère déjà confirmées sont
+  comptées par base à la mise en ligne). La ligne d'achat garde son coût dans la devise de la commande (lot G6).
 
 **Note confirmée en campagne de publicité** (lot A1) : `{ as: "campaign", name, channel, startDate, endDate, amount, currency?, exchangeRate?,
 productIds?, commandeIds?, notes? }` → 201 `{ campaign, document }` (facture d'une régie ; aucune note de frais ; `docs/publicite-gestion.md`).
@@ -109,6 +116,54 @@ datée à `classificationDate ?? date`, même garde de période).
 **Transport** : `{ commandeId, transporteurId, price (HT), name?, tracknumber?, facture?, force? }` → 201 `{ fraisDePort, commande,
 document }` : LE frais de port de la commande (409 `SHIPPING_COST_ALREADY_SET`, `COMMANDE_CLOSED`, `PERIOD_CLOSED` selon la période de la
 commande ; 404 `COMMANDE_NOT_FOUND`, `TRANSPORTEUR_NOT_FOUND`) ; doublon par transporteur + numéro.
+
+## 4 bis. Aperçu d'une facture en cours de vérification (lot APERÇU-FACT, 12/11/2026)
+
+Contrat validé par l'application (« new easymakemoney ») le 12/11/2026. `POST /api/gestion/documents/{id}/apercu` rend ce que donnerait
+la confirmation de la facture **telle que le gérant l'a corrigée**, sans rien écrire (ni brouillon, ni journal, ni crédit IA). Les
+applications n'ont plus à calculer le prix de vente estimé ni le total des lignes.
+
+Code : `Gestion/UseCase/PreviewGestionDocumentUseCase` ; règles partagées avec la confirmation dans
+`Gestion/Services/Document/GestionInvoiceDraft` (lecture des lignes, groupes, taux, prix, totaux).
+Test : `GestionDocumentsApiTest::testInvoicePreviewGivesThePricesOfTheConfirmationAndWritesNothing`.
+
+- **Corps** : celui de la confirmation (§ 4). Seules les lignes sont exigées ; le fournisseur, la date et le numéro ne le sont pas ; les
+  champs en trop sont ignorés.
+- **Réponse** :
+  ```
+  { currency (du site), invoiceCurrency, exchangeRate | null, pricesIncludeTax,
+    lines: [{ n, quantity, unitCost, total, unitCostConverted | null, kind: "existing" | "create" | "unresolved",
+              coefficient | null, plannedPrice | null, currentPrice | null, plannedMargin | null, plannedMarginRate | null, groupKey | null }],
+    totals: { lines, shipping, taxRate, taxes, total, read: { subtotal, taxes, total }, difference | null },
+    issues: [{ path, code }] }
+  ```
+- **Devise de la facture** (`invoiceCurrency`) : celle du fournisseur du corps, comme à la confirmation (`supplier.id` : sa devise ;
+  `supplier.create.currency` ; un fournisseur sans devise est dans la devise du site). Sans fournisseur dans le corps : la devise lue sur
+  le document, sinon celle du site.
+- **`exchangeRate`** : le taux qui s'applique, 1 quand la facture est dans la devise du site (un taux envoyé est alors ignoré, comme sur
+  la commande), `null` quand il est requis et manque (`issues` : `exchangeRate` `EXCHANGE_RATE_REQUIRED`).
+- **Par ligne**, `unitCost` et `total` dans la devise de la facture, le reste en cents de la devise du site :
+  - `unitCostConverted` = arrondi(`unitCost` × taux) ; `null` sans taux.
+  - `kind` `create` : `plannedPrice` est le prix que la confirmation donnera à l'article, par **la même fonction**
+    (`GestionInvoiceDraft::groupPrice`) : coût moyen pondéré du groupe (`groupKey`), converti (arrondi au cent), × coefficient de la
+    première ligne du groupe (2 par défaut), arrondi au cent. Il est répété sur chaque ligne du groupe. Le coefficient se lit donc
+    « prix de vente ÷ coût, dans la devise du site ». `null` si une ligne du groupe est refusée ou si le taux manque.
+  - `kind` `existing` : `plannedPrice` `null` (la confirmation ne change pas le prix d'un article existant) ; `currentPrice` = le prix de
+    vente actuel de la variante, sinon de l'article.
+  - `kind` `unresolved` : ni article ni création (ou les deux) ; aucun prix.
+  - `plannedMargin` = `plannedPrice` − `unitCostConverted` de la ligne ; `plannedMarginRate` = marge ÷ prix de vente × 100, à une
+    décimale : le **taux de marque**, la définition de `grossMarginRate` des statistiques (`docs/statistiques-gestion.md`) et de
+    l'aperçu des prix (`docs/prix-gestion.md`). `null` quand `plannedPrice` est `null`. Comme dans l'aperçu des prix, la marge est
+    prise sur le prix affiché : quand le site vend taxes comprises (`pricesIncludeTax`), ce prix contient la taxe.
+- **`totals`**, dans la devise de la facture : `lines` = Σ quantité × `unitCost` des lignes lisibles ; `shipping` ; `taxes` au taux global
+  de la lecture (`taxRate`, celui de `extraction.computed.taxRate`, appliqué sans son arrondi ; aucune taxe quand le mode des montants est
+  inconnu) ; `total` ; `read` : les montants lus ; `difference` = total lu − total recalculé. Sur les lignes lues sans correction, ces
+  valeurs égalent `extraction.computed`.
+- **`issues`** : les refus que la confirmation opposerait à ces champs, mêmes chemins et mêmes codes (`lines[n].quantity`
+  `MUST_BE_POSITIVE`, `lines[n]` `LINE_UNRESOLVED` / `PRODUCT_OR_CREATE`, `lines[n].productId` `PRODUCT_NOT_FOUND`, `lines[n].variantId`
+  `VARIANT_NOT_IN_PRODUCT`, `lines[n].create.coefficient` `MUST_BE_POSITIVE`, `exchangeRate` `EXCHANGE_RATE_REQUIRED`, `supplier.id`
+  `FOURNISSEUR_NOT_FOUND`, `shipping.amount`…). Ils ne bloquent pas l'aperçu : le reste est calculé. Ne sont pas signalés ici : le
+  fournisseur et la date absents, la période clôturée, le doublon de numéro.
 
 ## 5. Justificatif, conservation, limites
 

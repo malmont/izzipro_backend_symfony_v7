@@ -8,6 +8,7 @@ use App\Gestion\Services\Document\GestionDocumentService;
 use App\Gestion\Services\GestionConflictException;
 use App\Services\LandingAiService\LandingAiException;
 use App\Gestion\UseCase\ConfirmGestionDocumentUseCase;
+use App\Gestion\UseCase\PreviewGestionDocumentUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -20,14 +21,18 @@ use Symfony\Component\Routing\Attribute\Route;
 /**
  * Lecture de documents par IA pour l'application de gestion (lot L1, 10/11/2026, `docs/lecture-documents-gestion.md`), `ROLE_ADMIN`
  * (`access_control` `/api/gestion`) : envoi (202, lecture asynchrone), état, liste, fichiers, relecture, brouillon, photo par ligne,
- * confirmation, suppression. Codes : 422 DOCUMENT_INVALID / VALIDATION_FAILED, 402 AI_CREDITS_EXHAUSTED, 403 AI_NOT_INCLUDED, 409 DOCUMENT_IN_PROGRESS /
+ * aperçu d'une facture (sans écriture, lot APERÇU-FACT), confirmation, suppression. Codes : 422 DOCUMENT_INVALID / VALIDATION_FAILED, 402 AI_CREDITS_EXHAUSTED, 403 AI_NOT_INCLUDED, 409 DOCUMENT_IN_PROGRESS /
  * DOCUMENT_CONFIRMED / INVOICE_ALREADY_CONFIRMED / PERIOD_CLOSED / SHIPPING_COST_ALREADY_SET, 410 DOCUMENT_EXPIRED, 404.
  */
 #[Route('/api/gestion/documents')]
 class GestionDocumentController extends AbstractController
 {
-    public function __construct(private readonly GestionDocumentService $documents, private readonly ConfirmGestionDocumentUseCase $confirm, private readonly ?EmailLocale $siteLocale = null)
-    {
+    public function __construct(
+        private readonly GestionDocumentService $documents,
+        private readonly ConfirmGestionDocumentUseCase $confirm,
+        private readonly ?EmailLocale $siteLocale = null,
+        private readonly ?PreviewGestionDocumentUseCase $preview = null, // lot APERÇU-FACT (12/11/2026)
+    ) {
     }
 
     #[Route('', name: 'gestion_documents_create', methods: ['POST'])]
@@ -133,6 +138,18 @@ class GestionDocumentController extends AbstractController
         $this->documents->removeLinePhoto($document, $n);
 
         return new Response('', Response::HTTP_NO_CONTENT);
+    }
+
+    /** Aperçu d'une facture en cours de vérification (lot APERÇU-FACT) : corps de la confirmation, aucune écriture */
+    #[Route('/{id}/apercu', name: 'gestion_documents_preview', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function preview(GestionDocument $document, Request $request): JsonResponse
+    {
+        $data = json_decode((string) $request->getContent(), true);
+        if (!is_array($data)) {
+            return $this->json(['error' => 'INVALID_JSON', 'code' => 'INVALID_JSON', 'message' => 'Corps JSON invalide'], Response::HTTP_BAD_REQUEST);
+        }
+
+        return $this->json($this->preview->execute($document, $data));
     }
 
     #[Route('/{id}/confirmer', name: 'gestion_documents_confirm', methods: ['POST'], requirements: ['id' => '\d+'])]

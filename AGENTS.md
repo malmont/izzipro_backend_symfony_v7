@@ -37,7 +37,7 @@ Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne 
 | « Ma journée » de la gestion (une route : ventes du jour par canal, comparaison au même jour de semaine à la même heure, encaissé, à expédier, assistance, trésorerie, stock bas) | `docs/journee-gestion.md` |
 | Vignettes d'accueil de la gestion (premiers pas, alerte de stock bas, écart par utilisateur) | `docs/vignettes-gestion.md` |
 | Notifications sur téléphone de la gestion (appareils, préférences, une par jour, stock bas à 10 h, facture en double ; Firebase à brancher) | `docs/notifications-gestion.md` |
-| Lecture de documents par IA pour la gestion (factures fournisseurs, notes de frais, transport : envoi asynchrone, extraction, confirmation, justificatifs, worker `gestion_ai`) | `docs/lecture-documents-gestion.md` |
+| Lecture de documents par IA pour la gestion (factures fournisseurs, notes de frais, transport : envoi asynchrone, extraction, aperçu d'une facture avant confirmation, confirmation, justificatifs, worker `gestion_ai`) | `docs/lecture-documents-gestion.md` |
 | Contenu d'exemple des sites (site de référence `gmasuite`, `isDemo`, copie, suppression) | `docs/contenu-exemple.md` |
 | Console de pilotage des fonctionnalités (inventaire des réglages par module, registre, droits d'usage, onglets admin / super admin, lots) | `docs/console-pilotage.md` |
 | Contrats partagés avec le frontend (schéma, catalogue IA, jeu d'essai, libellés de l'éditeur) | `config/landingpage/` (synchronisés, ne pas modifier à la main) |

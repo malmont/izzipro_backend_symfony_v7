@@ -285,6 +285,196 @@ class GestionDocumentsApiTest extends WebTestCase
         $this->assertSame(0, (int) $conn->fetchOne('SELECT COUNT(*) FROM product_variant v JOIN product p ON p.id = v.product_id WHERE p.id = ?', [$forced['created'][0]['productId']]), 'ligne seule sans taille : pas de variante');
     }
 
+    /**
+     * Lot APERÇU-FACT (12/11/2026) : POST /api/gestion/documents/{id}/apercu rend, sans rien écrire, ce que donnerait la confirmation
+     * de la facture telle que le gérant l'a corrigée. Facture en EUR sur un site en CAD : le taux entre dans le coût converti, le prix
+     * de vente prévu et la marge ; l'aperçu puis la confirmation du même corps donnent le même prix à chaque article créé (groupe à
+     * variantes compris) ; la ligne d'achat garde son coût en EUR. Totaux sur les lignes corrigées, refus de la confirmation en `issues`.
+     */
+    public function testInvoicePreviewGivesThePricesOfTheConfirmationAndWritesNothing(): void
+    {
+        $tag = bin2hex(random_bytes(2));
+        $today = static::getContainer()->get(PeriodCalendar::class)->today();
+        $typeOf = fn (EntityManagerInterface $em) => $em->find(TypeFournisseur::class, 1) ?? $this->create(TypeFournisseur::class, ['name' => 'Autre']);
+        $euro = $this->create(Fournisseur::class, ['name' => "Maison Lyon $tag"], fn (Fournisseur $f, EntityManagerInterface $em) => $f->setTypeFournisseur($typeOf($em))->setCurrency('eur'));
+        $local = $this->create(Fournisseur::class, ['name' => "Atelier local $tag"], fn (Fournisseur $f, EntityManagerInterface $em) => $f->setTypeFournisseur($typeOf($em)));
+        $conn = $this->em()->getConnection();
+        foreach (['tuque' => 2500, 'autre' => 900] as $slug => $price) {
+            $conn->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type) VALUES (nextval('product_id_seq'), :n, :p, false, 5, NOW(), :s, 'standard')", ['n' => ucfirst($slug) . " $tag", 'p' => $price, 's' => "$slug-$tag"]);
+        }
+        $tuque = (int) $conn->fetchOne('SELECT id FROM product WHERE slug = ?', ["tuque-$tag"]);
+        $other = (int) $conn->fetchOne('SELECT id FROM product WHERE slug = ?', ["autre-$tag"]);
+        $em = $this->em();
+        $variant = (new \App\Entity\ProductVariant())->setStockQuantity(0)->setPrice(2700);
+        $variant->setProduct($em->find(Product::class, $tuque));
+        $em->persist($variant);
+        $em->flush();
+        $variantId = (int) $variant->getId();
+        $this->endOfWrite();
+        $conn = $this->em()->getConnection();
+
+        // Facture lue : EUR, hors taxes, 5 lignes (10 899) + port 500, TVA 2 280, total 13 679 → écart 0 à la lecture
+        [, $doc] = $this->multipartBody('/api/gestion/documents', ['type' => 'facture'], ['files' => [$this->image('lyon.png')]]);
+        $id = (int) $doc['id'];
+        $this->request('POST', "/api/gestion/documents/$id/apercu", ['lines' => [['n' => 1, 'quantity' => 1, 'unitCost' => 100]]]);
+        $this->assertSame([409, 'DOCUMENT_IN_PROGRESS'], [$this->client->getResponse()->getStatusCode(), $this->body()['error']], 'lecture en cours');
+        FakeLandingAiClient::$queue[] = $this->toolResponse('lire_facture_fournisseur', [
+            'supplierName' => "Maison Lyon $tag", 'invoiceNumber' => "L-$tag", 'invoiceDate' => $today->format('Y-m-d'), 'currency' => 'EUR', 'amountsMode' => 'ht',
+            'lines' => [
+                ['baseLabel' => 'Robe en lin', 'size' => 'S', 'quantity' => 2, 'unitCost' => 2000, 'total' => 4000],
+                ['baseLabel' => 'Robe en lin', 'size' => 'M', 'quantity' => 1, 'unitCost' => 2000, 'total' => 2000],
+                ['baseLabel' => 'Tuque', 'quantity' => 3, 'unitCost' => 1000, 'total' => 3000],
+                ['baseLabel' => 'Ceinture', 'quantity' => 1, 'unitCost' => 999, 'total' => 999],
+                ['baseLabel' => 'Gants', 'quantity' => 2, 'unitCost' => 450, 'total' => 900],
+            ],
+            'taxes' => [['label' => 'TVA', 'rate' => 20, 'amount' => 2280]], 'shipping' => ['label' => 'Port', 'amount' => 500], 'subtotal' => 10899, 'taxTotal' => 2280, 'total' => 13679,
+            'confidence' => ['overall' => 0.9], 'notes' => [],
+        ]);
+        $this->runWorker($id);
+        $x = $this->get("/api/gestion/documents/$id")['extraction'];
+        $this->assertSame([10899, 13679, 0, 'EUR'], [$x['computed']['linesTotal'], $x['computed']['total'], $x['computed']['difference'], $x['invoice']['currency']]);
+
+        $audit = $this->em()->getClassMetadata(\App\Entity\ContentAuditLog::class)->getTableName();
+        $state = fn (): array => $conn->fetchAssociative(
+            "SELECT (SELECT COUNT(*) FROM product) AS products, (SELECT COUNT(*) FROM product_variant) AS variants, (SELECT COUNT(*) FROM commande) AS commandes, (SELECT COUNT(*) FROM commande_line) AS lines,"
+            . " (SELECT COUNT(*) FROM fournisseur) AS suppliers, (SELECT COUNT(*) FROM frais_de_port) AS shipping, (SELECT COUNT(*) FROM $audit) AS audit,"
+            . " (SELECT md5(CAST(row_to_json(d) AS text)) FROM gestion_document d WHERE d.id = ?) AS document,"
+            . " (SELECT md5(string_agg(CAST(price AS text) || '/' || COALESCE(CAST(purchase_price AS text), ''), ',' ORDER BY id)) FROM product) AS prices", [$id]);
+        $before = $state();
+        $preview = fn (array $body): array => $this->post("/api/gestion/documents/$id/apercu", $body, 200);
+        $issues = fn (array $r): array => array_column($r['issues'], 'code', 'path');
+        $pick = fn (array $line, array $keys): array => array_map(fn ($k) => $line[$k], $keys);
+
+        // Lignes telles que lues, sans fournisseur : devise lue (EUR), taux manquant → signalé, aucun prix ; totaux = ceux de la lecture
+        $asRead = array_map(fn ($l) => ['n' => $l['n'], 'quantity' => $l['quantity'], 'unitCost' => $l['unitCost'], 'create' => ['name' => $l['baseLabel'], 'groupKey' => $l['groupKey']]], $x['lines']);
+        $r = $preview(['lines' => $asRead, 'shipping' => ['amount' => 500]]);
+        $this->assertSame(['CAD', 'EUR', null, false], [$r['currency'], $r['invoiceCurrency'], $r['exchangeRate'], $r['pricesIncludeTax']]);
+        $this->assertSame(['exchangeRate' => 'EXCHANGE_RATE_REQUIRED'], $issues($r));
+        $this->assertSame([[null, null, null, null, 'create', 4000]], array_values(array_unique(array_map(fn ($l) => $pick($l, ['unitCostConverted', 'plannedPrice', 'plannedMargin', 'plannedMarginRate', 'kind', 'total']), array_slice($r['lines'], 0, 1)), SORT_REGULAR)), 'sans taux : ni coût converti, ni prix');
+        $this->assertSame(['lines' => 10899, 'shipping' => 500, 'taxRate' => $x['computed']['taxRate'], 'taxes' => 2280, 'total' => 13679, 'read' => ['subtotal' => 10899, 'taxes' => 2280, 'total' => 13679], 'difference' => 0], $r['totals'], 'lignes lues : exactement extraction.computed');
+
+        // Taux de taxe exact de la lecture (2280 ÷ 11399), pas son arrondi affiché (0,20002 donnerait 400 040 sur une grosse facture)
+        $this->assertSame(400035, $preview(['lines' => [['n' => 1, 'quantity' => 1000, 'unitCost' => 2000, 'create' => ['name' => 'Gros lot']]]])['totals']['taxes']);
+
+        // Lignes corrigées par le gérant, fournisseur en EUR, taux 1,48
+        $lines = [
+            ['n' => 1, 'quantity' => 2, 'unitCost' => 2000, 'size' => 'S', 'create' => ['name' => "Robe $tag", 'coefficient' => 2.5, 'groupKey' => 'robe']],
+            ['n' => 2, 'quantity' => 1, 'unitCost' => 2300, 'size' => 'M', 'create' => ['name' => "Robe $tag", 'groupKey' => 'robe']],
+            ['n' => 3, 'quantity' => 3, 'unitCost' => 1000, 'productId' => $tuque, 'variantId' => $variantId],
+            ['n' => 4, 'quantity' => 1, 'unitCost' => 999, 'create' => ['name' => "Ceinture $tag"]],
+        ];
+        $body = ['supplier' => ['id' => $euro->getId()], 'invoice' => ['number' => "L-$tag", 'date' => $today->format('Y-m-d'), 'exchangeRate' => 1.48], 'classificationDate' => $today->format('Y-m-d'), 'lines' => $lines, 'shipping' => ['amount' => 500], 'champEnTrop' => true];
+        $r = $preview(['lines' => array_merge($lines, [['n' => 5, 'quantity' => 2, 'unitCost' => 450]])] + $body);
+        $this->assertSame(['CAD', 'EUR', 1.48], [$r['currency'], $r['invoiceCurrency'], $r['exchangeRate']]);
+        $keys = ['n', 'quantity', 'unitCost', 'total', 'unitCostConverted', 'kind', 'coefficient', 'plannedPrice', 'currentPrice', 'plannedMargin', 'plannedMarginRate', 'groupKey'];
+        $this->assertSame($keys, array_keys($r['lines'][0]));
+        $this->assertSame([
+            // groupe « robe » : coût moyen (4000 + 2300) ÷ 3 = 2100 EUR → 3108 CAD, × 2,5 (coefficient de la première ligne) = 7770, sur les deux lignes
+            [1, 2, 2000, 4000, 2960, 'create', 2.5, 7770, null, 4810, 61.9, 'robe'],
+            [2, 1, 2300, 2300, 3404, 'create', 2.5, 7770, null, 4366, 56.2, 'robe'],
+            [3, 3, 1000, 3000, 1480, 'existing', null, null, 2700, null, null, null], // prix actuel de la variante ; la confirmation ne le change pas
+            [4, 1, 999, 999, 1479, 'create', 2, 2958, null, 1479, 50, null], // coefficient 2 par défaut (JSON : 2.0 s'écrit 2)
+            [5, 2, 450, 900, 666, 'unresolved', null, null, null, null, null, null],
+        ], array_map('array_values', $r['lines']), 'taux de marge à une décimale');
+        $this->assertSame(['lines[5]' => 'LINE_UNRESOLVED'], $issues($r), 'le refus de la confirmation, sans bloquer l\'aperçu');
+        $this->assertSame(['lines' => 11199, 'shipping' => 500, 'taxes' => 2340, 'total' => 14039, 'difference' => -360], array_intersect_key($r['totals'], array_flip(['lines', 'shipping', 'taxes', 'total', 'difference'])), 'totaux des lignes corrigées, en EUR, au taux de taxe du document ; écart = total lu − total recalculé');
+
+        // Devise : celle du fournisseur du corps, comme à la confirmation
+        $r = $preview(['supplier' => ['id' => $local->getId()]] + $body);
+        $this->assertSame(['CAD', 1, 5250, 2000], [$r['invoiceCurrency'], $r['exchangeRate'], $r['lines'][0]['plannedPrice'], $r['lines'][0]['unitCostConverted']], 'fournisseur sans devise : devise du site, taux envoyé ignoré');
+        $r = $preview(['supplier' => ['create' => ['name' => 'Nouveau', 'currency' => 'usd']], 'invoice' => ['exchangeRate' => 1.35]] + $body);
+        $this->assertSame(['USD', 1.35, 2700], [$r['invoiceCurrency'], $r['exchangeRate'], $r['lines'][0]['unitCostConverted']]);
+        $r = $preview(['supplier' => ['create' => ['name' => 'Nouveau', 'currency' => 'XXX']]] + $body);
+        $this->assertSame(['EUR', ['supplier.create.currency' => 'INVALID_CURRENCY']], [$r['invoiceCurrency'], $issues($r)]);
+        $r = $preview(['supplier' => ['id' => 99999999], 'invoice' => ['exchangeRate' => 'x']] + $body);
+        $this->assertSame([null, ['invoice.exchangeRate' => 'MUST_BE_NUMBER', 'supplier.id' => 'FOURNISSEUR_NOT_FOUND', 'exchangeRate' => 'EXCHANGE_RATE_REQUIRED']], [$r['exchangeRate'], $issues($r)]);
+        $r = $preview(['invoice' => ['exchangeRate' => 0]] + $body);
+        $this->assertSame([null, ['exchangeRate' => 'EXCHANGE_RATE_REQUIRED']], [$r['exchangeRate'], $issues($r)], 'taux nul : requis');
+
+        // Champs que la confirmation refuserait : signalés, le reste est calculé
+        $r = $preview(['lines' => [
+            ['n' => 1, 'quantity' => 0, 'unitCost' => 2000, 'create' => ['name' => 'Robe', 'groupKey' => 'robe']],
+            ['n' => 2, 'quantity' => 1, 'unitCost' => 2300, 'create' => ['name' => 'Robe', 'groupKey' => 'robe']],
+            ['n' => 3, 'quantity' => 1, 'unitCost' => 1000, 'productId' => 99999999],
+            ['n' => 4, 'quantity' => 1, 'unitCost' => 1000, 'productId' => $other, 'variantId' => $variantId],
+            ['n' => 5, 'quantity' => 1, 'unitCost' => 1000, 'productId' => $tuque, 'create' => ['name' => 'Les deux']],
+            ['n' => 6, 'quantity' => 1, 'unitCost' => 1000, 'create' => ['name' => 'Coefficient nul', 'coefficient' => 0]],
+            ['n' => 7, 'quantity' => 1, 'unitCost' => 12.5, 'create' => ['name' => 'Coût décimal']],
+            ['n' => 8, 'quantity' => 4, 'unitCost' => 250, 'productId' => $tuque],
+            ['n' => 9, 'quantity' => 1, 'unitCost' => 1000, 'create' => ['name' => 'Coefficient illisible', 'coefficient' => 'deux']],
+            ['n' => 10, 'quantity' => 1, 'unitCost' => 1000, 'create' => ['name' => '']],
+        ], 'shipping' => ['amount' => 'x']] + $body);
+        $this->assertSame([
+            'lines[1].quantity' => 'MUST_BE_POSITIVE', 'lines[5]' => 'PRODUCT_OR_CREATE', 'lines[6].create.coefficient' => 'MUST_BE_POSITIVE', 'lines[7].unitCost' => 'MUST_BE_INTEGER_CENTS',
+            'lines[9].create.coefficient' => 'MUST_BE_NUMBER', 'lines[10].create.name' => 'REQUIRED', 'lines[3].productId' => 'PRODUCT_NOT_FOUND', 'lines[4].variantId' => 'VARIANT_NOT_IN_PRODUCT', 'shipping.amount' => 'MUST_BE_INTEGER_CENTS',
+        ], $issues($r));
+        $this->assertSame(
+            [['create', null], ['create', null], ['existing', null], ['existing', null], ['unresolved', null], ['create', null], ['create', null], ['existing', 2500], ['create', null], ['create', null]],
+            array_map(fn ($l) => [$l['kind'], $l['plannedPrice'] ?? $l['currentPrice']], $r['lines']),
+            'article à créer dont une ligne est refusée (groupe compris) : aucun prix ; article existant sans variante : son prix'
+        );
+        $this->assertSame([0 + 2300 + 1000 + 1000 + 1000 + 1000 + 1000 + 1000 + 1000, 0], [$r['totals']['lines'], $r['totals']['shipping']], 'lignes au coût et à la quantité lisibles seulement');
+
+        // Site qui vend taxes comprises : signalé (le prix prévu contient alors la taxe)
+        $conn->executeStatement('UPDATE entreprise SET prices_include_tax = true');
+        try {
+            $this->assertTrue($preview($body)['pricesIncludeTax']);
+        } finally {
+            $conn->executeStatement('UPDATE entreprise SET prices_include_tax = false');
+        }
+
+        // Montants lus sans savoir s'ils sont hors taxes ou taxes comprises : aucune taxe recalculée, comme à la lecture
+        $stored = (string) $conn->fetchOne('SELECT extraction FROM gestion_document WHERE id = ?', [$id]);
+        $conn->executeStatement('UPDATE gestion_document SET extraction = ? WHERE id = ?', [json_encode(['amountsMode' => 'unknown'] + json_decode($stored, true)), $id]);
+        $this->em()->clear();
+        try {
+            $unknown = $preview($body)['totals'];
+            $this->assertSame([0, 10799, 13679 - 10799], [$unknown['taxes'], $unknown['total'], $unknown['difference']]);
+        } finally {
+            $conn->executeStatement('UPDATE gestion_document SET extraction = ? WHERE id = ?', [$stored, $id]);
+            $this->em()->clear();
+        }
+
+        // Refus
+        $this->request('POST', "/api/gestion/documents/$id/apercu", ['shipping' => ['amount' => 500]]);
+        $this->assertSame([422, 'VALIDATION_FAILED', ['lines' => 'REQUIRED']], [$this->client->getResponse()->getStatusCode(), $this->body()['error'], $this->body()['fields']]);
+        $this->client->request('POST', "/api/gestion/documents/$id/apercu", [], [], $this->headers(), 'pas du json');
+        $this->assertSame([400, 'INVALID_JSON'], [$this->client->getResponse()->getStatusCode(), $this->body()['error']]);
+        $this->request('POST', '/api/gestion/documents/99999999/apercu', $body);
+        $this->assertSame(404, $this->client->getResponse()->getStatusCode());
+        $this->assertSame($before, $state(), 'aucune écriture : ni article, ni commande, ni fournisseur, ni brouillon, ni journal');
+
+        // Aperçu puis confirmation du même corps : mêmes prix
+        $r = $preview($body);
+        $this->assertSame([], $r['issues']);
+        $confirmed = $this->post("/api/gestion/documents/$id/confirmer", $body, 201);
+        $this->assertSame(['EUR', 1.48, 10799], [$confirmed['commande']['currency'], $confirmed['commande']['exchangeRate'], $confirmed['commande']['budget']], 'commande en EUR : lignes + port');
+        $createdBy = array_column($confirmed['created'], 'productId', 'lineN');
+        $this->assertSame($createdBy[1], $createdBy[2], 'un article pour le groupe');
+        foreach ([1 => [3108.0, 2.5], 4 => [1479.0, 2.0]] as $n => [$purchasePrice, $coefficient]) {
+            $row = $conn->fetchAssociative('SELECT price, purchase_price, coefficient_multiplier FROM product WHERE id = ?', [$createdBy[$n]]);
+            $planned = $r['lines'][$n - 1]['plannedPrice'];
+            $this->assertSame([(float) $planned, $purchasePrice, $coefficient], [(float) $row['price'], (float) $row['purchase_price'], (float) $row['coefficient_multiplier']], "ligne $n : prix de vente de l'aperçu, prix d'achat converti dans la devise du site");
+        }
+        $this->assertSame([7770, 7770], array_map('intval', $conn->fetchFirstColumn('SELECT price FROM product_variant WHERE product_id = ? ORDER BY id', [$createdBy[1]])), 'variantes au prix du groupe');
+        $this->assertSame([7770, 2958], [$r['lines'][0]['plannedPrice'], $r['lines'][3]['plannedPrice']]);
+        $this->assertSame([1000, 2000, 2300, 999], array_map('intval', $conn->fetchFirstColumn('SELECT unit_cost_cents FROM commande_line WHERE commande_id = ? ORDER BY id', [$confirmed['commande']['id']])), 'lignes d\'achat (l\'article existant d\'abord) : coût dans la devise de la commande, sans conversion (lot G6)');
+        $this->assertSame([2500.0, 2700], [(float) $conn->fetchOne('SELECT price FROM product WHERE id = ?', [$tuque]), (int) $conn->fetchOne('SELECT price FROM product_variant WHERE id = ?', [$variantId])], 'article existant : prix inchangé');
+        $this->request('POST', "/api/gestion/documents/$id/apercu", $body);
+        $this->assertSame([409, 'DOCUMENT_CONFIRMED'], [$this->client->getResponse()->getStatusCode(), $this->body()['error']]);
+
+        // Factures seulement ; document expiré
+        [, $note] = $this->multipartBody('/api/gestion/documents', ['type' => 'note'], ['files' => [$this->image('recu.png')]]);
+        FakeLandingAiClient::$queue[] = $this->toolResponse('lire_note_de_frais', ['merchant' => 'Station', 'date' => $today->format('Y-m-d'), 'currency' => 'CAD', 'amount' => 6500, 'taxes' => [], 'kind' => 'déplacement', 'description' => 'Essence', 'confidence' => ['overall' => 0.9], 'notes' => []]);
+        $this->runWorker((int) $note['id']);
+        $this->request('POST', '/api/gestion/documents/' . $note['id'] . '/apercu', $body);
+        $this->assertSame([422, 'DOCUMENT_TYPE'], [$this->client->getResponse()->getStatusCode(), $this->body()['error']]);
+        $conn->executeStatement("UPDATE gestion_document SET expires_at = NOW() - INTERVAL '1 day' WHERE id = ?", [$note['id']]);
+        $this->endOfWrite();
+        $this->request('POST', '/api/gestion/documents/' . $note['id'] . '/apercu', $body);
+        $this->assertSame([410, 'DOCUMENT_EXPIRED'], [$this->client->getResponse()->getStatusCode(), $this->body()['error']]);
+    }
+
     public function testNoteTransportFailureRereadAndPurge(): void
     {
         $tag = bin2hex(random_bytes(2));

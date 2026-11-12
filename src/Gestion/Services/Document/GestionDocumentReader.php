@@ -278,7 +278,7 @@ class GestionDocumentReader
         $subtotalRead = $this->cents($raw['subtotal'] ?? null);
         $taxTotalRead = $this->cents($raw['taxTotal'] ?? null) ?? ($taxes !== [] ? array_sum(array_column($taxes, 'amount')) : null);
         $totalRead = $this->cents($raw['total'] ?? null);
-        $taxRate = $this->taxRate($mode, $taxes, $subtotalRead, $taxTotalRead, $totalRead);
+        $taxRate = self::taxRate($mode, $taxes, $subtotalRead, $taxTotalRead, $totalRead);
         if ($mode === 'unknown') {
             $notes[] = self::NOTE_AMOUNTS_UNKNOWN;
         }
@@ -323,7 +323,7 @@ class GestionDocumentReader
         unset($line);
         $shippingRead = is_array($raw['shipping'] ?? null) ? $this->cents($raw['shipping']['amount'] ?? null) : null;
         $shipping = $shippingRead !== null ? ['label' => $this->short($raw['shipping']['label'] ?? null, 120) ?? 'Frais de port', 'amount' => (int) round($shippingRead * (($mode === 'ttc' && $taxRate > 0) ? 1 / (1 + $taxRate) : 1)), 'amountRead' => $shippingRead] : null;
-        $computedTotal = $linesTotal + ($shipping['amount'] ?? 0) + (int) round(($linesTotal + ($shipping['amount'] ?? 0)) * ($taxRate > 0 && $mode !== 'unknown' ? $taxRate : 0));
+        $computed = GestionInvoiceDraft::totals($linesTotal, $shipping['amount'] ?? 0, $taxRate, $mode, $totalRead); // même calcul que l'aperçu (lot APERÇU-FACT)
         $supplier = $this->matcher->party('fournisseur', $this->short($raw['supplierName'] ?? null, 255));
         $number = $this->short($raw['invoiceNumber'] ?? null, 80);
         $currency = $this->currencyCode($raw['currency'] ?? null);
@@ -339,7 +339,7 @@ class GestionDocumentReader
             'amountsMode' => $mode, 'currency' => $siteCurrency,
             'lines' => $lines, 'taxes' => $taxes, 'shipping' => $shipping,
             'totals' => ['subtotal' => $subtotalRead, 'taxes' => $taxTotalRead, 'total' => $totalRead],
-            'computed' => ['linesTotal' => $linesTotal, 'shipping' => $shipping['amount'] ?? 0, 'taxRate' => round($taxRate, 5), 'total' => $computedTotal, 'difference' => $totalRead !== null ? $totalRead - $computedTotal : null],
+            'computed' => ['linesTotal' => $linesTotal, 'shipping' => $shipping['amount'] ?? 0, 'taxRate' => round($taxRate, 5), 'total' => $computed['total'], 'difference' => $computed['difference']],
             'confidence' => $confidence, 'notes' => $notes, 'duplicate' => $duplicate,
         ];
     }
@@ -353,7 +353,7 @@ class GestionDocumentReader
         $subtotalRead = $this->cents($raw['subtotal'] ?? null) ?? $this->cents($raw['amount'] ?? null);
         $taxTotalRead = $this->cents($raw['taxTotal'] ?? null) ?? ($taxes !== [] ? array_sum(array_column($taxes, 'amount')) : null);
         $totalRead = $this->cents($raw['total'] ?? null);
-        $taxRate = $this->taxRate($mode, $taxes, $subtotalRead, $taxTotalRead, $totalRead);
+        $taxRate = self::taxRate($mode, $taxes, $subtotalRead, $taxTotalRead, $totalRead);
         $amountRead = $this->cents($raw['amount'] ?? null) ?? $subtotalRead;
         $amount = $amountRead !== null ? (int) round($amountRead * (($mode === 'ttc' && $taxRate > 0) ? 1 / (1 + $taxRate) : 1)) : null;
         if ($mode === 'unknown') {
@@ -400,8 +400,11 @@ class GestionDocumentReader
         return $other === null ? null : ['documentId' => $other->getId(), 'commandeId' => $other->getCommandeId(), 'fraisDePortId' => $other->getFraisDePortId(), 'status' => $other->getStatus()];
     }
 
-    /** Taux de taxe global : montants du document, sinon taux lus, sinon taux par défaut */
-    private function taxRate(string $mode, array $taxes, ?int $subtotal, ?int $taxTotal, ?int $total): float
+    /**
+     * Taux de taxe global : montants du document, sinon taux lus, sinon taux par défaut. Fonction pure des valeurs gardées dans
+     * l'extraction (`amountsMode`, `taxes`, `totals`) : l'aperçu d'une facture la rappelle pour retrouver le taux exact (lot APERÇU-FACT).
+     */
+    public static function taxRate(string $mode, array $taxes, ?int $subtotal, ?int $taxTotal, ?int $total): float
     {
         // Base des taxes = total − taxes quand les deux sont lus : elle inclut la livraison, que le sous-total écrit omet souvent
         // (retour du 11/11/2026 : sous-total 378,00 avant 20,00 de livraison, taux 15,77 % au lieu de 14,975 %, écart faux de 3,15)

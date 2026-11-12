@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (441)
+## Boutique et commun (442)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -380,6 +380,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/gestion/conseils/{id}/fait` | ROLE_ADMIN | `Gestion\Controller\GestionAdviceController::done` |
 | GET | `/api/gestion/conseils/{id}/mesure` | ROLE_ADMIN | `Gestion\Controller\GestionAdviceController::measure` |
 | GET | `/api/gestion/conseils` | ROLE_ADMIN | `Gestion\Controller\GestionAdviceController::list` |
+| POST | `/api/gestion/documents/{id}/apercu` | ROLE_ADMIN | `Gestion\Controller\GestionDocumentController::preview` |
 | PATCH | `/api/gestion/documents/{id}/brouillon` | ROLE_ADMIN | `Gestion\Controller\GestionDocumentController::draft` |
 | POST | `/api/gestion/documents/{id}/confirmer` | ROLE_ADMIN | `Gestion\Controller\GestionDocumentController::confirm` |
 | GET | `/api/gestion/documents/{id}/fichier/{n}` | ROLE_ADMIN | `Gestion\Controller\GestionDocumentController::page` |

@@ -23,6 +23,7 @@ use App\Services\CommandeService\CommandeService;
 use App\Services\ContentAuditService\ContentAuditRecorder;
 use App\Services\FraisDePortService\FraisDePortService;
 use App\Gestion\Services\Document\GestionDocumentService;
+use App\Gestion\Services\Document\GestionInvoiceDraft;
 use App\Gestion\Services\Document\GestionDocumentStorage;
 use App\Gestion\Services\GestionConflictException;
 use App\Gestion\Services\GestionInput;
@@ -46,7 +47,7 @@ use Symfony\Component\String\Slugger\AsciiSlugger;
 class ConfirmGestionDocumentUseCase
 {
     public const SHIPPING_CARRIER = 'Sur facture fournisseur';
-    public const DEFAULT_COEFFICIENT = 2.0;
+    public const DEFAULT_COEFFICIENT = GestionInvoiceDraft::DEFAULT_COEFFICIENT;
 
 
     public function __construct(
@@ -138,48 +139,9 @@ class ConfirmGestionDocumentUseCase
         } else {
             $errors['supplier'] = 'REQUIRED';
         }
-        // Lignes
-        $lines = [];
-        foreach (array_values(is_array($body['lines'] ?? null) ? $body['lines'] : []) as $i => $line) {
-            $n = is_array($line) && isset($line['n']) && is_numeric($line['n']) ? (int) $line['n'] : 1000 + $i;
-            $lineInput = new GestionInput(is_array($line) ? $line : []);
-            $quantity = $lineInput->integer('quantity');
-            $unitCost = $lineInput->cents('unitCost');
-            $productId = $lineInput->id('productId', false);
-            $variantId = $lineInput->id('variantId', false);
-            $label = $lineInput->text('label', false);
-            $size = $lineInput->text('size', false, 40);
-            $color = $lineInput->text('color', false, 40);
-            $errors += $this->prefix("lines[$n]", $lineInput->errors());
-            if ($quantity !== null && $quantity < 1) {
-                $errors["lines[$n].quantity"] = 'MUST_BE_POSITIVE';
-            }
-            $create = is_array($line['create'] ?? null) ? $line['create'] : null;
-            if ($productId === null && $create === null) {
-                $errors["lines[$n]"] = 'LINE_UNRESOLVED';
-            }
-            if ($productId !== null && $create !== null) {
-                $errors["lines[$n]"] = 'PRODUCT_OR_CREATE';
-            }
-            $createName = null;
-            $coefficient = null;
-            $groupKey = null;
-            if ($create !== null) {
-                $createInput = new GestionInput($create);
-                $createName = $createInput->text('name');
-                $coefficient = $createInput->decimal('coefficient', false);
-                $groupKey = $createInput->text('groupKey', false, 120);
-                $errors += $this->prefix("lines[$n].create", $createInput->errors());
-                if ($coefficient !== null && $coefficient <= 0) {
-                    $errors["lines[$n].create.coefficient"] = 'MUST_BE_POSITIVE';
-                }
-            }
-            $lines[] = ['n' => $n, 'label' => $label, 'quantity' => $quantity, 'unitCost' => $unitCost, 'productId' => $productId, 'variantId' => $variantId, 'size' => $size, 'color' => $color,
-                'create' => $create !== null ? ['name' => $createName, 'coefficient' => $coefficient, 'groupKey' => $groupKey] : null];
-        }
-        if ($lines === []) {
-            $errors['lines'] = 'REQUIRED';
-        }
+        // Lignes : lecture partagée avec l'aperçu (mêmes chemins, mêmes codes ; lot APERÇU-FACT)
+        [$lines, $lineErrors] = GestionInvoiceDraft::parseLines($body);
+        $errors += $lineErrors;
         // Frais de port
         $shippingIn = is_array($body['shipping'] ?? null) ? $body['shipping'] : null;
         $shippingAmount = null;
@@ -237,6 +199,9 @@ class ConfirmGestionDocumentUseCase
         $name = $input->text('name', false) ?? ('Facture ' . ($number ?? $invoiceDate->format('Y-m-d')) . ' — ' . $supplier->getName());
         $em->flush();
         $commande = $this->commandes->createCommande(['budget' => $budget, 'name' => $name, 'date' => $date->format('Y-m-d') . ' 12:00:00', 'exchangeRate' => $exchangeRate], $period, $supplier);
+        // Taux des coûts de la facture vers la devise du site : entre dans le prix d'achat et le prix de vente des articles créés (lot
+        // APERÇU-FACT, 12/11/2026 ; avant, un article acheté 10,00 EUR au coefficient 2 était créé à 20,00 dans la devise du site)
+        $rate = GestionInvoiceDraft::effectiveRate($commande->getCurrency(), $this->currency?->code() ?? TenantCurrencyProvider::DEFAULT, $commande->getExchangeRate()) ?? 1.0;
         $now = new \DateTimeImmutable();
         $attached = [];
         $merged = []; // deux lignes de facture pour le même article (et la même variante) : une ligne d'achat, quantités additionnées, coût moyen pondéré
@@ -252,17 +217,9 @@ class ConfirmGestionDocumentUseCase
             $this->lines->upsert($commande, $m['product'], $m['variant'], $m['quantity'], $m['quantity'] > 0 ? (int) round($m['cost'] / $m['quantity']) : null, false, \App\Entity\CommandeLine::SOURCE_DOCUMENT, $now, 0, $user);
         }
         // Articles créés : un par groupKey
-        $groups = [];
-        foreach ($lines as $line) {
-            if ($line['create'] === null) {
-                continue;
-            }
-            $key = $line['create']['groupKey'] ?? ('line-' . $line['n']);
-            $groups[$key][] = $line;
-        }
         $created = [];
-        foreach ($groups as $group) {
-            $product = $this->createProduct($em, $document, $commande, $group, $host, $now, $user);
+        foreach (GestionInvoiceDraft::groups($lines) as $group) {
+            $product = $this->createProduct($em, $document, $commande, $group, $host, $now, $user, $rate);
             foreach ($group as $line) {
                 $created[] = ['lineN' => $line['n'], 'productId' => $product->getId(), 'name' => $product->getName()];
             }
@@ -291,21 +248,24 @@ class ConfirmGestionDocumentUseCase
     }
 
     /** @param list<array> $group lignes de même groupKey */
-    private function createProduct(EntityManagerInterface $em, GestionDocument $document, Commande $commande, array $group, string $host, \DateTimeImmutable $now, ?string $user = null): Product
+    private function createProduct(EntityManagerInterface $em, GestionDocument $document, Commande $commande, array $group, string $host, \DateTimeImmutable $now, ?string $user = null, float $rate = 1.0): Product
     {
         $first = $group[0];
         $quantity = array_sum(array_column($group, 'quantity'));
-        $cost = $quantity > 0 ? (int) round(array_sum(array_map(fn ($l) => $l['quantity'] * $l['unitCost'], $group)) / $quantity) : (int) $first['unitCost'];
-        $coefficient = $first['create']['coefficient'] ?? self::DEFAULT_COEFFICIENT;
+        // Prix de vente et prix d'achat de la fiche dans la devise du site : la règle de l'aperçu (GestionInvoiceDraft::groupPrice). La ligne
+        // d'achat garde le coût dans la devise de la commande (lot G6).
+        $pricing = GestionInvoiceDraft::groupPrice($group, $rate);
+        $cost = $pricing['cost'];
+        $coefficient = $pricing['coefficient'];
         $name = (string) $first['create']['name'];
-        $product = (new Product())->setName($name)->setDescription(null)->setPurchasePrice((float) $cost)->setCoefficientMultiplier($coefficient)->setPrice((float) round($cost * $coefficient))
+        $product = (new Product())->setName($name)->setDescription(null)->setPurchasePrice((float) $pricing['costConverted'])->setCoefficientMultiplier($coefficient)->setPrice((float) $pricing['price'])
             ->setQuantity(0)->setSlug($this->uniqueSlug($em, $name))->setCreatedAt($now)->setIsWeb(false)->setIsPos(false)->setIsPreOrder(false); // stock 0 : il n'entre qu'à la réception (lot R1)
         $em->persist($product);
         $withAttributes = array_filter($group, fn ($l) => ($l['size'] ?? null) !== null || ($l['color'] ?? null) !== null);
         $variants = [];
         if ($withAttributes !== [] || count($group) > 1) {
             foreach ($group as $line) {
-                $variant = (new ProductVariant())->setStockQuantity(0)->setPrice((int) round($cost * $coefficient));
+                $variant = (new ProductVariant())->setStockQuantity(0)->setPrice($pricing['price']);
                 if (($line['size'] ?? null) !== null) {
                     $variant->setSize($this->size($em, $line['size']));
                 }
