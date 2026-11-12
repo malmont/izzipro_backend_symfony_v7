@@ -353,6 +353,61 @@ class PurchasesApiTest extends WebTestCase
         }
     }
 
+    /**
+     * Lot BORNES (12/11/2026) : un montant, une quantité ou un identifiant au-delà de ce qu'une colonne entière peut ranger
+     * (2 147 483 647) est refusé à l'entrée, 422 VALIDATION_FAILED `fields.<champ> = TOO_LARGE`. Avant, il passait la validation et
+     * l'enregistrement échouait en base (500).
+     */
+    public function testNumbersBeyondTheColumnRangeAreRefusedNotCrashed(): void
+    {
+        $max = \App\Gestion\Services\GestionInput::MAX_INT;
+        $this->assertSame(2147483647, $max);
+        $refused = function (string $method, string $route, array $body): array {
+            $this->request($method, $route, $body);
+            $decoded = json_decode((string) $this->client->getResponse()->getContent(), true) ?? [];
+
+            return [$this->client->getResponse()->getStatusCode(), $decoded['error'] ?? null, $decoded['fields'] ?? null];
+        };
+
+        // Montant
+        foreach ([$max + 1, 1.0e30, '99999999999999999999'] as $tooLarge) {
+            $this->assertSame([422, 'VALIDATION_FAILED', ['budgetCollection' => 'TOO_LARGE']], $refused('POST', '/api/createcollections', ['budgetCollection' => $tooLarge, 'nomCollection' => 'Trop grande']), json_encode($tooLarge));
+        }
+        $name = 'Collection bornes ' . bin2hex(random_bytes(2));
+        $collectionId = (int) $this->post('/api/createcollections', ['budgetCollection' => 100, 'nomCollection' => $name], 201)['id'];
+
+        // Identifiant (d'une entité liée, et dans une liste)
+        $this->assertSame([422, 'VALIDATION_FAILED', ['fournisseur' => 'TOO_LARGE']], $refused('POST', "/api/collections/$collectionId/commandes", ['budget' => 100, 'date' => '2026-11-05 10:00:00', 'name' => 'Identifiant trop grand', 'fournisseur' => ['id' => $max + 1]]));
+        $this->assertSame([404, 'FOURNISSEUR_NOT_FOUND', null], $refused('POST', "/api/collections/$collectionId/commandes", ['budget' => 100, 'date' => '2026-11-05 10:00:00', 'name' => 'Identifiant inconnu', 'fournisseur' => ['id' => $max]]), 'à la borne : accepté par la validation, 404 ensuite');
+
+        // Quantité, montant et identifiants en multipart (chaînes)
+        $commande = $this->create(\App\Entity\Commande::class, [], fn (\App\Entity\Commande $c, EntityManagerInterface $em) => $c->setCollections($em->find(Collections::class, $collectionId)));
+        $this->endOfWrite();
+        $this->client->request('POST', '/api/commandes/' . $commande->getId() . '/products', ['name' => 'Trop', 'purchasePrice' => '2147483648', 'coefficientMultiplier' => '2', 'quantity' => '4000000000', 'style_id' => '99999999999', 'category_ids' => '1,99999999999999999999999'], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json', 'HTTP_AUTHORIZATION' => 'Bearer ' . $this->token]);
+        $this->assertSame(
+            [422, ['purchasePrice' => 'TOO_LARGE', 'quantity' => 'TOO_LARGE', 'style_id' => 'TOO_LARGE', 'category_ids' => 'TOO_LARGE']],
+            [$this->client->getResponse()->getStatusCode(), json_decode((string) $this->client->getResponse()->getContent(), true)['fields'] ?? null]
+        );
+        $this->assertSame(0, (int) $this->em()->getConnection()->fetchOne('SELECT COUNT(*) FROM product WHERE commande_id = ?', [$commande->getId()]), 'rien n\'est créé');
+
+        // Montant signé de la trésorerie (colonne plus large : borne à 9 × 10¹⁵)
+        $today = static::getContainer()->get(\App\Gestion\Services\PeriodCalendar::class)->today()->format('Y-m-d');
+        foreach ([1.0e16, -1.0e16] as $tooLarge) {
+            $this->assertSame([422, 'VALIDATION_FAILED', ['amount' => 'TOO_LARGE']], $refused('POST', '/api/gestion/tresorerie/soldes', ['date' => $today, 'amount' => $tooLarge]));
+        }
+
+        // La borne elle-même est acceptée ; un nombre mal formé garde son code
+        $input = new \App\Gestion\Services\GestionInput(['cents' => $max, 'text' => (string) $max, 'float' => (float) $max, 'id' => $max, 'ids' => [$max, 1], 'signed' => -8.0e15, 'decimal' => 12.5, 'negative' => -5, 'infinite' => '1e999', 'zeros' => '0000000000042']);
+        $this->assertSame(
+            [$max, $max, $max, $max, $max, [$max, 1], -8000000000000000, 42, []],
+            [$input->cents('cents'), $input->cents('text'), $input->cents('float'), $input->integer('cents'), $input->id('id'), $input->ids('ids'), $input->signedCents('signed'), $input->id('zeros'), $input->errors()]
+        );
+        $input->cents('decimal');
+        $input->cents('negative');
+        $input->cents('infinite');
+        $this->assertSame(['decimal' => 'MUST_BE_INTEGER_CENTS', 'negative' => 'MUST_BE_INTEGER_CENTS', 'infinite' => 'TOO_LARGE'], $input->errors());
+    }
+
     public function testPurchaseRoutesRequireAnAdministrator(): void
     {
         foreach (['/api/collections', '/api/transporteurs', '/api/type-fournisseurs', '/api/type-note-de-frais'] as $route) {

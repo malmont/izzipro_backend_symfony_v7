@@ -5,10 +5,18 @@ namespace App\Gestion\Services;
 /**
  * Lecture et validation des entrées des routes de gestion (lot G1, 09/11/2026). Les montants sont des cents entiers ≥ 0 :
  * un nombre JSON intégral est accepté sous toute forme (`1250` et `1250.0`), une chaîne, un décimal non entier ou un négatif
- * est refusé (`MUST_BE_INTEGER_CENTS`). Les erreurs sont accumulées puis levées en une seule `GestionValidationException`.
+ * est refusé (`MUST_BE_INTEGER_CENTS`) ; au-delà de `MAX_INT`, `TOO_LARGE`. Les erreurs sont accumulées puis levées en une seule `GestionValidationException`.
  */
 final class GestionInput
 {
+    /**
+     * Plus grand entier qu'une colonne `INT` range (lot BORNES, 12/11/2026) : au-delà, un montant, une quantité ou un identifiant est
+     * refusé ici (`TOO_LARGE`) ; avant, il passait la validation et l'enregistrement échouait en base (500).
+     */
+    public const MAX_INT = 2147483647;
+    /** Borne des montants signés de la trésorerie (colonnes `BIGINT`, nombres JSON exacts jusque-là) */
+    public const MAX_SIGNED = 9.0e15;
+
     /** @var array<string, string> */
     private array $errors = [];
 
@@ -32,6 +40,11 @@ final class GestionInput
         if (is_string($value) && is_numeric($value)) {
             $value = $value + 0;
         }
+        if ((is_int($value) || is_float($value)) && $value > self::MAX_INT) {
+            $this->errors[$field] = 'TOO_LARGE';
+
+            return null;
+        }
         if (is_int($value) && $value >= 0) {
             return $value;
         }
@@ -54,10 +67,15 @@ final class GestionInput
             return null;
         }
         $value = $this->data[$field];
+        if ((is_int($value) || is_float($value)) && !is_nan((float) $value) && abs($value) >= self::MAX_SIGNED) {
+            $this->errors[$field] = 'TOO_LARGE';
+
+            return null;
+        }
         if (is_int($value)) {
             return $value;
         }
-        if (is_float($value) && is_finite($value) && floor($value) === $value && abs($value) < 9.0e15) {
+        if (is_float($value) && floor($value) === $value) {
             return (int) $value;
         }
         $this->errors[$field] = 'MUST_BE_INTEGER_CENTS';
@@ -148,8 +166,15 @@ final class GestionInput
 
             return null;
         }
-        if ((is_int($value) || (is_string($value) && ctype_digit($value))) && (int) $value > 0) {
-            return (int) $value;
+        if (is_int($value) || (is_string($value) && ctype_digit($value))) {
+            if ((int) $value > self::MAX_INT) { // une chaîne de chiffres trop longue vaut PHP_INT_MAX une fois convertie
+                $this->errors[$field] = 'TOO_LARGE';
+
+                return null;
+            }
+            if ((int) $value > 0) {
+                return (int) $value;
+            }
         }
         $this->errors[$field] = 'INVALID_ID';
 
@@ -176,6 +201,11 @@ final class GestionInput
             }
             if (!(is_int($item) || (is_string($item) && ctype_digit($item))) || (int) $item <= 0) {
                 $this->errors[$field] = 'INVALID_ID';
+
+                return [];
+            }
+            if ((int) $item > self::MAX_INT) {
+                $this->errors[$field] = 'TOO_LARGE';
 
                 return [];
             }

@@ -248,7 +248,7 @@ conversion ÷100 / ×100 en six endroits de l'application ; devise formatée par
 Décisions de contrat prises pour les lots :
 - G1 : un nombre intégral est accepté sous toute forme (`1250`, `1250.0`, et la chaîne `"1250"` puisque le multipart n'envoie
   que des chaînes) = 1250 cents ; refusés : décimal non entier (`12.5`, `"12.50"`), texte, négatif, absent quand requis → 422
-  `VALIDATION_FAILED` avec `fields.<champ> = MUST_BE_INTEGER_CENTS` (`REQUIRED`, `INVALID_DATE`, `INVALID_ID`, `MUST_BE_NUMBER`). Les réponses
+  `VALIDATION_FAILED` avec `fields.<champ> = MUST_BE_INTEGER_CENTS` (`REQUIRED`, `INVALID_DATE`, `INVALID_ID`, `MUST_BE_NUMBER`, `TOO_LARGE`). Les réponses
   rendent des entiers JSON. `currency` dans toute réponse portant un montant, y compris `stock-value`, `stock-evolution`,
   `frais/total`, `taxes/monthly`, `payments/statistics`.
 - G2 : `close` (commande et collection) répond 200 avec le tableau de bord figé (objet, même forme que le `GET`), 409
@@ -257,6 +257,13 @@ Décisions de contrat prises pour les lots :
   aucune clé renommée (les clés accentuées de `nombre-commandes` sont gardées).
 - G4 : les champs en trop dans un corps restent ignorés (l'application sérialise ses modèles entiers) ; `quantity` (entier
   ≥ 0) accepté sur `POST /api/commandes/{id}/products`.
+- Lot BORNES (12/11/2026, `Gestion/Services/GestionInput`, test `PurchasesApiTest::testNumbersBeyondTheColumnRangeAreRefusedNotCrashed`) :
+  un montant en cents, une quantité ou un identifiant au-delà de 2 147 483 647 (`GestionInput::MAX_INT`, la limite d'une colonne entière)
+  → 422 `VALIDATION_FAILED`, `fields.<champ> = TOO_LARGE`, sur toutes les routes qui lisent leur corps par `GestionInput`. La borne
+  elle-même est acceptée. Avant, la valeur passait la validation et l'enregistrement échouait en base (500). Les montants signés de la
+  trésorerie (colonnes plus larges) sont bornés à 9 × 10¹⁵ en valeur absolue, même code (avant : `MUST_BE_INTEGER_CENTS`).
+  Non couvert : un identifiant trop grand **dans l'adresse** d'une route (`/api/commandes/99999999999/…`) sort encore en 500, sur toute
+  la plateforme et pas seulement en gestion.
 - Correctif du 12/11/2026, corps de `POST /api/commandes/{id}/products` (multipart ; lu par `Dto/ProductInputDTO`, seul lecteur du
   corps ; test `PurchasesApiTest::testCreatingAnArticleInAnOrderNeverCrashesOnMissingEmptyOrMalformedFields`) : plus aucun 500 pour un
   corps incomplet ou mal formé.
