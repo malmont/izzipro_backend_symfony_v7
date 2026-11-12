@@ -67,7 +67,8 @@ class SupportApiTest extends WebTestCase
         $this->assertSame(['new', 'high', 'phone', 'en', false], [$t['status'], $t['priority'], $t['channel'], $t['customer']['locale'], $t['overdue']]);
         $this->assertSame([['customer', 'Le carton est arrivé écrasé.', false]], array_map(fn ($m) => [$m['authorType'], $m['body'], $m['internal']], $t['messages']));
         $tz = static::getContainer()->get(\App\Services\Booking\BookingClock::class)->timezone();
-        $this->assertSame(BusinessClock::due(new \DateTimeImmutable($t['createdAt']), 48, [1, 2, 3, 4, 5], $tz)->format(\DateTimeInterface::ATOM), $t['dueAt'], 'délai : 48 h ouvrées');
+        // à 2 secondes près : l'échéance part de l'instant du traitement, la date de création de celui de l'entité (1 s d'écart vu sous charge)
+        $this->assertEqualsWithDelta(BusinessClock::due(new \DateTimeImmutable($t['createdAt']), 48, [1, 2, 3, 4, 5], $tz)->getTimestamp(), (new \DateTimeImmutable($t['dueAt']))->getTimestamp(), 2, 'délai : 48 h ouvrées');
         $this->assertNull($t['orderSummary']);
 
         // Liste et filtres
