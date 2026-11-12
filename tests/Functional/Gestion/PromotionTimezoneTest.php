@@ -2,7 +2,6 @@
 
 namespace App\Tests\Functional\Gestion;
 
-use App\Controller\Admin\ProductCrudController;
 use App\Entity\Product;
 use App\Entity\ProductVariant;
 use App\Entity\User;
@@ -93,15 +92,7 @@ class PromotionTimezoneTest extends WebTestCase
         $this->assertStringEndsWith('+00:00', $detail['specialPriceFromIso']);
         $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $detail['specialPriceFrom']);
 
-        // EasyAdmin : saisie et affichage en heure du magasin
-        $fields = iterator_to_array(static::getContainer()->get(ProductCrudController::class)->configureFields('edit'), false);
-        $tz = [];
-        foreach ($fields as $f) {
-            if (in_array($f->getAsDto()->getProperty(), ['specialPriceFrom', 'specialPriceTo'], true)) {
-                $tz[] = $f->getAsDto()->getCustomOption('timezone');
-            }
-        }
-        $this->assertSame(['America/Toronto', 'America/Toronto'], $tz);
+        // EasyAdmin : saisie et affichage en heure du magasin, vérifiés sur le vrai formulaire par `StoreTimezoneAdminTest` (lot EA-FUSEAU)
     }
 
     public function testExistingPromotionsShiftedOnceWithJournal(): void

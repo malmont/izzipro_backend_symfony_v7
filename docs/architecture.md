@@ -281,6 +281,37 @@ boutique (`templates/`), dépôts qui étendent `ServiceEntityRepository` (45, s
   `JSON_PRESERVE_ZERO_FRACTION`, sinon `{}` devient `[]` et `1.0` devient `1`.
 - **Langue** : textes et commentaires en français ; noms de classes et de méthodes en anglais.
 
+### Dates et heures dans EasyAdmin (lot EA-FUSEAU, 12/11/2026)
+
+Les dates et heures sont en base en **UTC** (PHP du serveur en UTC). Dans les écrans d'un site, l'administrateur les **lit et les saisit à
+l'heure de son magasin** : fuseau de l'horloge du magasin (`Services\CaisseService\StoreClock` : réglage du site, sinon province ou pays
+de l'entreprise, sinon UTC).
+
+- **Règle commune, sans rien écrire dans un écran** : `Services\Admin\StoreTimezoneFieldConfigurator` s'applique à tout `DateTimeField`
+  d'un écran qui étend `BaseTenantCrudController`. Il règle l'affichage (liste, fiche), la saisie (`view_timezone` = fuseau du magasin,
+  `model_timezone` = UTC) et ajoute au libellé « (heure du magasin) », sur le formulaire et la fiche, pas dans l'en-tête de liste. Site sans
+  fuseau ni pays : la mention est « (UTC) ».
+- **Pourquoi** : EasyAdmin n'applique le fuseau d'un champ (`setTimezone`) qu'à l'**affichage**. Sans réglage du formulaire, la saisie était
+  lue comme de l'UTC. C'était le cas des 5 champs modifiables (expiration d'un média partagé, date d'un mouvement de stock, date d'un
+  paiement, date de commande, « statut mis à jour le ») et, depuis P5b, des deux dates de promotion d'un article, pourtant libellées
+  « (heure du magasin) ».
+- **Dates pures et heures seules** (`DateField`, `TimeField`) : jamais touchées. Un fuseau décalerait d'un jour une date à minuit.
+- **Filtres de liste** : `Services\Admin\StoreTimezoneFilterConfigurator` donne la même règle à tout filtre sur une colonne date et heure
+  (`DateTimeFilter` déclaré ou déduit de la colonne). **Limite connue** : la requête de liste de `BaseTenantCrudController`
+  (`createIndexQueryBuilder`) ne porte aujourd'hui ni les filtres, ni la recherche, ni le tri d'EasyAdmin ; un filtre déclaré ne filtre
+  donc pas encore. La règle du fuseau est prête pour le jour où ils seront branchés.
+- **Changement d'heure**, sans refus : une heure qui n'existe pas (passage à l'heure d'été, 2 h 30) est lue une heure plus tard ; une heure
+  qui existe deux fois (retour à l'heure d'hiver, 1 h 30) est lue comme la première.
+- **Exception inscrite** : les réservations (`BookingCrudController`) gardent l'horloge des réservations (`BookingClock`), avec leur propre
+  réglage d'affichage, de saisie et de filtres.
+- **Garde-fou** : `tests/Functional/Security/AdminDateTimeZoneGuardTest.php` échoue si un champ ou un filtre date et heure de
+  l'administration échappe à la règle (écran hors de la classe de base, fuseau fixé à la main, `DateTimeType` ou `datetime-local` écrit à
+  la main). Test de la règle : `tests/Functional/Admin/StoreTimezoneAdminTest.php`.
+- **Ajouter un champ date et heure** : `DateTimeField::new('…', 'Libellé')`, rien d'autre. Ne pas écrire la mention dans le libellé, ne pas
+  appeler `setTimezone`.
+- **Données saisies avant le lot** : une heure tapée dans l'un de ces champs, pensée en heure du magasin, a été enregistrée comme de l'UTC.
+  Elle s'affiche désormais décalée (5 h plus tôt à Toronto en hiver). Aucune donnée n'est corrigée par le lot.
+
 ## Tâches de fond (Messenger)
 
 Une file et un worker par projet, dans la base Redis 1 (`config/packages/messenger.yaml`, `docker-compose.yml`) :

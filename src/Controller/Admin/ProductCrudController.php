@@ -44,8 +44,7 @@ class ProductCrudController extends BaseTenantCrudController
         TenantEntityManagerProvider $emProvider,
         AdminUrlGenerator $adminUrlGenerator,
         private readonly ?\App\Services\OrderService\TaxCategoryAudit $taxAudit = null, // alerte « catégorie sans taxe » (F18 partie 2a)
-        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null, // devise du site (libellés, 07/11/2026)
-        private readonly ?\App\Services\CaisseService\StoreClock $clock = null // dates de promotion saisies en heure du magasin (lot P5b, 11/11/2026)
+        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null // devise du site (libellés, 07/11/2026)
     ) {
         parent::__construct($emProvider);
         $this->adminUrlGenerator = $adminUrlGenerator;
@@ -82,10 +81,11 @@ class ProductCrudController extends BaseTenantCrudController
         // Catégorie fiscale (F18 partie 2a) : vide = standard ; « exonéré » = aucune taxe ; figée sur chaque ligne de commande à la vente
         yield \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField::new('taxCategory', 'Catégorie fiscale')->setChoices(array_flip(\App\Services\OrderService\TaxCategory::LABELS))->setRequired(false)->setColumns('col-md-4')->hideOnIndex()
             ->setHelp(($this->taxAudit?->warning() ?? 'Vide : taux normal. Au Québec, laisser vide (TPS et TVQ sans catégorie). France : la catégorie choisit la TVA (20, 10, 5,5 ou 2,1 %).') . ' À utiliser seulement quand les applications à jour sont publiées : une caisse antérieure à la règle hors ligne v2 calcule sans catégorie.');
-        // Instants stockés en UTC (comparés en UTC partout) ; saisie et affichage en heure du magasin (lot P5b, 11/11/2026)
-        $storeTz = $this->clock?->timezone()->getName() ?? 'UTC';
-        yield DateTimeField::new('specialPriceFrom', 'Promotion du (heure du magasin)')->setTimezone($storeTz)->setColumns('col-md-4')->hideOnIndex();
-        yield DateTimeField::new('specialPriceTo', 'Promotion au (heure du magasin)')->setTimezone($storeTz)->setColumns('col-md-4')->hideOnIndex();
+        // Instants stockés en UTC (comparés en UTC partout) ; affichage, saisie et mention « (heure du magasin) » par la règle commune des
+        // écrans de site (`StoreTimezoneFieldConfigurator`, lot EA-FUSEAU, 12/11/2026). Depuis P5b (11/11/2026), seul l'affichage était au
+        // fuseau du magasin : la saisie était lue en UTC malgré la mention.
+        yield DateTimeField::new('specialPriceFrom', 'Promotion du')->setColumns('col-md-4')->hideOnIndex();
+        yield DateTimeField::new('specialPriceTo', 'Promotion au')->setColumns('col-md-4')->hideOnIndex();
         yield IntegerField::new('quantity', 'Quantité')->onlyOnIndex();
         // Modes de la boutique réglable (08/10/2026) : un produit peut cumuler vente et location
         yield FormField::addPanel('Modes de vente')->collapsible()->setHelp('Un produit peut se vendre et se louer à la fois. La location se règle dans « Configuration de location ».');

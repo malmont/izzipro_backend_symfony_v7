@@ -84,8 +84,10 @@ juste autour d'une borne ; le panier est toujours juste.
 Décision du propriétaire du 10/11/2026 : **jours du magasin stockés en UTC**, comme P5. Avant, les saisies à la main tombaient 4 à 5 h trop tôt
 (stockées à l'heure saisie, relues en UTC). Toutes les lectures comparaient déjà des instants UTC et restaient justes entre elles.
 
-- **EasyAdmin** (`ProductCrudController`) : « Promotion du / au (heure du magasin) », `DateTimeField::setTimezone(fuseau du magasin)` ; EasyAdmin
-  convertit entre l'heure affichée (magasin) et le stockage (UTC).
+- **EasyAdmin** (`ProductCrudController`) : « Promotion du / au (heure du magasin) ». P5b ne réglait que l'**affichage**
+  (`DateTimeField::setTimezone`) : EasyAdmin n'applique pas ce fuseau au formulaire, donc la saisie était lue en UTC malgré la mention.
+  Corrigé par le lot EA-FUSEAU (12/11/2026) : affichage, saisie et mention viennent de la règle commune des écrans de site
+  (`docs/architecture.md`, « Dates et heures dans EasyAdmin »).
 - **PATCH `/api/products/{id}`** (`LandingContentEditor::dateValue`, seuls champs de type date de l'éditeur) : avec décalage (`…-05:00`, `…Z`) =
   même instant, converti en UTC ; heure sans décalage (`2026-11-12T23:30:00`) = heure du magasin ; date seule (`2026-11-12`) = jour du magasin,
   00:00 pour `specialPriceFrom`, 23:59:59 pour `specialPriceTo`.
