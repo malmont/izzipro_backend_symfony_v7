@@ -23,7 +23,7 @@ class MarketingCampaignService
         private readonly PeriodCalendar $calendar,
         private readonly ContentAuditRecorder $audit,
         private readonly ?TenantCurrencyProvider $currency = null,
-        private readonly ?\App\Gestion\Services\Document\GestionDocumentService $documents = null, // DOC-ORPH (13/11/2026)
+        private readonly ?\App\Gestion\Services\Document\GestionDocumentService $documents = null, // DOC-ORPH (12/11/2026)
     ) {
     }
 
@@ -72,7 +72,7 @@ class MarketingCampaignService
         $em->remove($campaign);
         $em->flush();
         $this->audit->record('gestion-campagnes', $id, 'delete', $before, null);
-        $this->documents?->purge(); // justificatif purgé aussitôt (DOC-ORPH, 13/11/2026) ; avant : à la liste suivante
+        $this->documents?->purge(); // justificatif purgé aussitôt (DOC-ORPH, 12/11/2026) ; avant : à la liste suivante
     }
 
     /** Forme rendue par l'API */

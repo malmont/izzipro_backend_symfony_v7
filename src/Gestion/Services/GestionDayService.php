@@ -9,7 +9,7 @@ use App\Services\OrderService\OrderDeskService;
 use App\Services\TenantEntityManagerProvider;
 
 /**
- * « Ma journée » (lot JOUR, contrat validé le 13/11/2026, `docs/journee-gestion.md`) : l'état du jour pour l'accueil de l'application de
+ * « Ma journée » (lot JOUR, contrat validé le 12/11/2026, `docs/journee-gestion.md`) : l'état du jour pour l'accueil de l'application de
  * gestion et du web. Rien n'est recalculé autrement qu'ailleurs : ventes aux règles des statistiques unifiées (S1), « à expédier » comme
  * l'écran « À traiter », trésorerie comme l'alerte, stock bas comme la vignette. Lecture seule.
  */

@@ -224,7 +224,7 @@ mode réel), **première vente d'essai** (une vente au comptoir). Sans caisse ac
 `GET /admin/gestion` (`GestionConsoleAdminController`, `ROLE_ADMIN`, menu Caisse, écran `gestion`) : les étapes du groupe `app.management` du
 cheminement du site (`Gestion/Services/GestionSetupService::overview()`, niveau `none | todo | ready`), chacune liée à son écran ; sans module
 accordé, l'essai ou la demande (Mon site). Étapes (`SiteReadinessService::managementSteps`, seulement si `app.management` est accordé, sinon
-« Obtenir ») — **bloquantes** : `management.short_code` (code court ; l'étape `management.key` a été retirée le 13/11/2026 : l'application
+« Obtenir ») — **bloquantes** : `management.short_code` (code court ; l'étape `management.key` a été retirée le 12/11/2026 : l'application
 trouve le site par son code court, la clé IZ-ADM reste facultative), `management.admin` (un compte ROLE_ADMIN),
 `management.period` (période en cours, créée par l'application à l'ouverture), `management.fiscal_year` (mois de début d'exercice),
 `management.locale` (devise et fuseau) ; **améliorations** : `management.periods_calendar` (calendrier à confirmer, trimestres par défaut),

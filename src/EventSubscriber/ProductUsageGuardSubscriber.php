@@ -10,7 +10,7 @@ use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Events;
 
 /**
- * Garde de suppression d'un article ou d'une variante (ART-SUPPR, 13/11/2026), au niveau de Doctrine : elle couvre d'un coup la route de
+ * Garde de suppression d'un article ou d'une variante (ART-SUPPR, 12/11/2026), au niveau de Doctrine : elle couvre d'un coup la route de
  * l'application (DELETE /api/products/{id}), celle d'API Platform, la suppression d'une variante et EasyAdmin. Voir ProductUsageGuard.
  */
 final class ProductUsageGuardSubscriber implements EventSubscriber

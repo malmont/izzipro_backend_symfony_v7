@@ -164,7 +164,7 @@ services:
         tags:
             - { name: doctrine.event_subscriber }
 
-    # Article ou variante avec une histoire (ART-SUPPR, 13/11/2026) : suppression refusée (PRODUCT_IN_USE), avant la garde de conservation
+    # Article ou variante avec une histoire (ART-SUPPR, 12/11/2026) : suppression refusée (PRODUCT_IN_USE), avant la garde de conservation
     App\EventSubscriber\ProductUsageGuardSubscriber:
         tags:
             - { name: doctrine.event_subscriber, priority: 10 }

@@ -38,7 +38,7 @@ final class PosOfflineCalculator
      */
     public const RULE_V4 = 'pos-offline-v4';
     /**
-     * v5 (PAYS-1c, 13/11/2026) : v4 + taux en millionièmes pour les prix TTC (`taxes[].ratePpm` dans le pack) : base = round_demi_haut(ttc × 10⁶ /
+     * v5 (PAYS-1c, 12/11/2026) : v4 + taux en millionièmes pour les prix TTC (`taxes[].ratePpm` dans le pack) : base = round_demi_haut(ttc × 10⁶ /
      * (10⁶ + Σ ratePpm)), taxe_i = round_demi_haut(base × ratePpm_i / 10⁶), la dernière taxe du groupe porte l'écart. Identique à v3 pour tout taux
      * multiple de 0,01 % ; nécessaire pour un taux comme la TVQ (9,975 %) en prix TTC. Servie seulement à la tablette qui l'annonce
      * (X-Pos-Offline-Rules: v5, qui vaut aussi v4) ; sans elle, un site TTC à taux non multiple de 0,01 % n'a pas de mode hors ligne

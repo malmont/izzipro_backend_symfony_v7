@@ -218,7 +218,7 @@ class CommandeProductAttachmentService
         if ($lines === []) {
             throw new CommandeProductException('PRODUCT_NOT_IN_COMMANDE', sprintf('Le produit %d n\'est pas dans cette commande', $productId), 404, [], ['productId' => $productId, 'commandeId' => $commande->getId()]);
         }
-        // ART-SUPPR (13/11/2026) : une ligne dont le stock est entré par une réception (lot R1 : mouvement de stock rattaché à la ligne), même
+        // ART-SUPPR (12/11/2026) : une ligne dont le stock est entré par une réception (lot R1 : mouvement de stock rattaché à la ligne), même
         // en partie, ne se détache pas : le stock garderait une entrée sans la ligne d'achat qui l'explique. Une ligne « réputée reçue » (rattacher,
         // reprise : l'article était déjà en stock, aucun mouvement) et une ligne non reçue se détachent comme avant.
         $conn = $em->getConnection();

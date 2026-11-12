@@ -1,6 +1,6 @@
-# « Ma journée » — application de gestion (lot JOUR, 13/11/2026)
+# « Ma journée » — application de gestion (lot JOUR, 12/11/2026)
 
-Contrat validé par l'application (« new easymakemoney ») le 13/11/2026. Une route de lecture donne l'état du jour pour l'accueil de
+Contrat validé par l'application (« new easymakemoney ») le 12/11/2026. Une route de lecture donne l'état du jour pour l'accueil de
 l'application mobile et du web. **Tout est calculé ici** : les applications n'additionnent rien.
 
 Code : `Gestion/Services/GestionDayService`, `Gestion/UseCase/GestionDayUseCase`, `Gestion/Controller/GestionDayController`.
@@ -48,6 +48,6 @@ cents dans la devise du site, jour et heures au fuseau du magasin. Route ajouté
 
 ## Vitesse
 
-Sans cache. Mesuré sur les données de demo le 13/11/2026 : environ 45 ms par appel (96 ms au premier), pour une cible de 300 ms.
+Sans cache. Mesuré sur les données de demo le 12/11/2026 : environ 45 ms par appel (96 ms au premier), pour une cible de 300 ms.
 `generatedAt` date la réponse. Si un cache devenait nécessaire : 60 secondes par site, avec les étiquettes des composants lus
 (commandes, trésorerie, produits, tickets), que toute écriture vide aussitôt.

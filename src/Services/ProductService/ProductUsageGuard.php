@@ -9,7 +9,7 @@ use App\Gestion\Services\GestionConflictException;
 use Doctrine\DBAL\Connection;
 
 /**
- * Article ou variante qui a une histoire (ART-SUPPR, 13/11/2026) : ventes, lignes d'achat, mouvements de stock, réservations, formules
+ * Article ou variante qui a une histoire (ART-SUPPR, 12/11/2026) : ventes, lignes d'achat, mouvements de stock, réservations, formules
  * d'abonnement, paiements en cours. La suppression est refusée, 409 `PRODUCT_IN_USE { productId, variantId?, uses }` : on retire l'article
  * de la vente au lieu de le supprimer. Avant, DELETE /api/products/{id} supprimait en silence les lignes d'achat (commande_line, ON DELETE
  * CASCADE) et l'historique de stock (cascade Doctrine), ou sortait en 500 avec l'erreur SQL.

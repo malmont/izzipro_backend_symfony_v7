@@ -64,11 +64,11 @@ période sans vente antérieure à la date de l'achat (seule cause admise : la r
   absent : celui de la ligne déjà là, sinon `purchase_price`, sinon inconnu. `commandeCostCents` rend le coût retenu par les tableaux de
   bord (repli sur le prix de vente). 422 `VALIDATION_FAILED` (dont `VARIANT_NOT_IN_PRODUCT`), 404, 409 `COMMANDE_CLOSED` / `PERIOD_CLOSED`.
 - `DELETE /api/commandes/{id}/products/{productId}` → 204, lignes de l'article dans la commande supprimées (404 `PRODUCT_NOT_IN_COMMANDE`).
-  L'article, ses autres achats et son stock ne bougent pas. Depuis le 13/11/2026 (ART-SUPPR) : 409 **`LINE_RECEIVED`**
+  L'article, ses autres achats et son stock ne bougent pas. Depuis le 12/11/2026 (ART-SUPPR) : 409 **`LINE_RECEIVED`**
   `{ context: { productId, commandeId, lines: [{ id, quantityReceived }] } }` si le stock d'une de ces lignes est entré par une
   réception (lot R1 : un mouvement de stock est rattaché à la ligne) : il faut d'abord annuler la réception. Une ligne « réputée
   reçue » (rattacher, reprise : l'article était déjà en stock, aucun mouvement) se détache comme avant.
-- **Suppression d'un article ou d'une variante** (ART-SUPPR, 13/11/2026, `Services/ProductService/ProductUsageGuard`,
+- **Suppression d'un article ou d'une variante** (ART-SUPPR, 12/11/2026, `Services/ProductService/ProductUsageGuard`,
   `EventSubscriber/ProductUsageGuardSubscriber`) : refusée quand il a une histoire, 409 **`PRODUCT_IN_USE`**
   `{ error, code, message, productId, variantId?, uses }`, rien n'est effacé.
   - `uses` compte, 0 compris : `sales` (lignes de vente), `purchaseLines` (lignes d'achat), `stockMovements` (mouvements de stock,

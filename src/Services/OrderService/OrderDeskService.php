@@ -124,7 +124,7 @@ class OrderDeskService
     public const TO_SHIP = 'o.status_id IN (3, 4) AND o.shipping_adress_id IS NOT NULL AND o.shipped_at IS NULL';
 
     /**
-     * Nombre de commandes « à expédier » et date de la plus ancienne (lot JOUR, 13/11/2026) : même définition que la liste de l'écran
+     * Nombre de commandes « à expédier » et date de la plus ancienne (lot JOUR, 12/11/2026) : même définition que la liste de l'écran
      * « À traiter », sans son plafond.
      *
      * @return array{count: int, oldestAt: ?string}

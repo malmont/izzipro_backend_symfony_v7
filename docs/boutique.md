@@ -153,7 +153,7 @@ ajouts et suppressions non. Images : clé de la médiathèque ou URL https. Lign
 |---|---|---|
 | `PATCH /api/product-variants/{id}` | `stockQuantity` (entier 0 à 1 000 000, mouvement d'inventaire enregistré), `price` (cents, `null` = prix du produit), `colorId`, `sizeId` (422 si une autre variante du produit a ce couple) | la variante comme `variants[]` |
 | `POST /api/products/{id}/variants` | `colorId`, `sizeId`, `stockQuantity` (0 par défaut), `price` ; ancienne forme `color.id` / `size.id` acceptée | 201, la variante |
-| `DELETE /api/product-variants/{id}` | suppression réelle (pas d'état « désactivé » : stock 0 pour retirer de la vente) ; depuis le 13/11/2026 (ART-SUPPR) : 409 `PRODUCT_IN_USE { productId, variantId, uses }` si elle a des ventes, des lignes d'achat, des mouvements de stock ou un paiement en cours (avant : 409 `{error: message}` pour une commande ou un paiement, et l'historique de stock était effacé) ; combinaisons supprimées avec elle ; détail : `docs/lignes-achat-gestion.md` | 204 |
+| `DELETE /api/product-variants/{id}` | suppression réelle (pas d'état « désactivé » : stock 0 pour retirer de la vente) ; depuis le 12/11/2026 (ART-SUPPR) : 409 `PRODUCT_IN_USE { productId, variantId, uses }` si elle a des ventes, des lignes d'achat, des mouvements de stock ou un paiement en cours (avant : 409 `{error: message}` pour une commande ou un paiement, et l'historique de stock était effacé) ; combinaisons supprimées avec elle ; détail : `docs/lignes-achat-gestion.md` | 204 |
 | `GET /api/colors`, `GET /api/sizes` | existants | listes |
 | `POST /api/colors`, `POST /api/sizes` | `name*` (une ligne, 255), `codeHexa` (#rrggbb, couleurs) ; nom écrit aussi dans la langue demandée | 201 |
 | `PATCH /api/customization-options/{id}` | `name*` (traduit, 255) | configuration de `?variantId=`, sinon `{ id, code, name }` |
@@ -633,7 +633,7 @@ commande ensuite). Réglage `commerce.taxProvider` des réglages de la boutique 
 - Pour un nouveau taux : une nouvelle taxe datée (`valid_from`). Les taxes archivées ou hors de leurs dates (jours du magasin) ne
   s'appliquent plus.
 - Détails, déclencheur et clés du ticket : `docs/caisse.md`, « Taxes gelées à la vente ».
-- Prix taxes comprises (PAYS-1c, 13/11/2026) : calcul au millionième, donc permis au Québec (TVQ 9,975 %) ; résultats inchangés pour les
+- Prix taxes comprises (PAYS-1c, 12/11/2026) : calcul au millionième, donc permis au Québec (TVQ 9,975 %) ; résultats inchangés pour les
   taux multiples de 0,01 %. Détails : `docs/caisse.md`, « Prix taxes comprises au Québec et règle hors ligne v5 ».
 
 ## Annulation d'une commande web (`POST /api/order/cancel/{id}`)

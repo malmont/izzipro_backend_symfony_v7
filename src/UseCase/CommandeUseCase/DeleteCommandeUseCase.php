@@ -14,7 +14,7 @@ use App\Services\TenantEntityManagerProvider;
 class DeleteCommandeUseCase
 {
     public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly PeriodGuard $guard, private readonly ?\App\Services\CommandeService\CommandeLineService $lines = null,
-        private readonly ?\App\Gestion\Services\Document\GestionDocumentService $documents = null) // DOC-ORPH (13/11/2026)
+        private readonly ?\App\Gestion\Services\Document\GestionDocumentService $documents = null) // DOC-ORPH (12/11/2026)
     {
     }
 

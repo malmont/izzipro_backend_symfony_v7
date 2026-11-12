@@ -14,7 +14,7 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
- * IMGHOST (contrat validé le 13/11/2026) : la clé du cache d'un site porte le schéma et l'hôte de la requête, normalisé parmi les noms
+ * IMGHOST (contrat validé le 12/11/2026) : la clé du cache d'un site porte le schéma et l'hôte de la requête, normalisé parmi les noms
  * connus du site. Chaque hôte connu relit ses propres adresses ; un hôte inconnu retombe sur la variante canonique, en lecture seule
  * (rien n'est enregistré sous son nom) ; une écriture et delete() effacent toutes les variantes. Renforcement des interrupteurs : un
  * cache des modules sans la clé d'un module est tenu pour périmé.

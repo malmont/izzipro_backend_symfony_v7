@@ -138,7 +138,7 @@ class PeriodResultCalculator
     }
 
     /**
-     * Agrégats des ventes entre deux instants (lot JOUR, 13/11/2026) : même requête que `dailySales`, bornée à la seconde (comparaison
+     * Agrégats des ventes entre deux instants (lot JOUR, 12/11/2026) : même requête que `dailySales`, bornée à la seconde (comparaison
      * « à la même heure »). Une ligne de totaux, à passer à GestionStatisticsService::metrics.
      *
      * @return list<array<string, mixed>>

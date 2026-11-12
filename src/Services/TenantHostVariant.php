@@ -6,7 +6,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 
 /**
- * Variante d'hôte du cache d'un site (IMGHOST, 13/11/2026). Beaucoup de lectures mises en cache fabriquent des adresses (images, médias)
+ * Variante d'hôte du cache d'un site (IMGHOST, 12/11/2026). Beaucoup de lectures mises en cache fabriquent des adresses (images, médias)
  * avec l'hôte de la requête ; la clé ne portait que le code du site : le premier appelant fixait l'hôte de toutes les adresses jusqu'à
  * l'expiration. La clé porte désormais le schéma et l'hôte de la requête, NORMALISÉ parmi les noms connus du site :
  *  - <code>.<domaine de base> (frontend ou backend, sous-domaines compris), le domaine de base lui-même (hôte partagé du backend, le site

@@ -391,7 +391,7 @@ class TenantConnectionManager
         }
     }
 
-    /** Domaine propre d'un site, en minuscules et sans « www. » (IMGHOST, 13/11/2026) ; null sans domaine. En cache 1 h (étiquette tenants). */
+    /** Domaine propre d'un site, en minuscules et sans « www. » (IMGHOST, 12/11/2026) ; null sans domaine. En cache 1 h (étiquette tenants). */
     public function customDomainOf(string $code): ?string
     {
         $domain = $this->cache->get('tenant_custom_domain_' . md5($code), function (ItemInterface $item) use ($code) {

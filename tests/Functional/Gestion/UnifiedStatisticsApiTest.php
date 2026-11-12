@@ -155,7 +155,7 @@ class UnifiedStatisticsApiTest extends WebTestCase
     }
 
     /**
-     * Lot JOUR (contrat validé le 13/11/2026, `docs/journee-gestion.md`) : GET /api/gestion/journee. Les ventes du jour sont celles des
+     * Lot JOUR (contrat validé le 12/11/2026, `docs/journee-gestion.md`) : GET /api/gestion/journee. Les ventes du jour sont celles des
      * statistiques unifiées (« aujourd'hui », tous canaux et par canal) ; la comparaison porte sur le même jour de semaine des 4 semaines
      * précédentes, chacun arrêté à la même heure ; « à expédier » est la liste de l'écran « À traiter » ; assistance null sans le module ;
      * encaissé, trésorerie et stock bas viennent des services existants.

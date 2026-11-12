@@ -347,7 +347,7 @@ retirés, envoi abandonné s'il n'en reste aucun (hors tests). Refus définitif 
   resterait en fin de requête, de commande ou de message. Une écriture en SQL direct échappe à Doctrine : appeler
   `TenantCacheService::invalidateComponents(CacheTags::…)` (ex. fusion de clients de la caisse) ou `invalidateTenant()`.
   Aucune étiquette à la main hors du registre : garde-fou `tests/Functional/Cache/CacheTagConventionTest.php`.
-  - **Variante d'hôte dans la clé** (IMGHOST, 13/11/2026, `Services/TenantHostVariant`) : beaucoup de lectures en cache fabriquent des
+  - **Variante d'hôte dans la clé** (IMGHOST, 12/11/2026, `Services/TenantHostVariant`) : beaucoup de lectures en cache fabriquent des
     adresses (images, médias) avec l'hôte de la requête. La clé de `TenantCacheService::get()` porte donc le schéma et l'hôte,
     **normalisé parmi les noms connus du site** : `<code>.<domaine de base>` (frontend ou backend, sous-domaines compris), le domaine
     de base lui-même (hôte partagé du backend), le domaine propre du site (avec ou sans `www.`), `localhost`. Le domaine propre compte dès
@@ -358,7 +358,7 @@ retirés, envoi abandonné s'il n'en reste aucun (hors tests). Refus définitif 
     reste par étiquettes (toutes les variantes) ; `delete()` passe par une étiquette propre à la clé. Un contrôle direct par l'adresse
     IP du conteneur est un hôte inconnu : il ne pollue plus le cache. Test `tests/Functional/Cache/CacheHostVariantTest.php`.
   - **Interrupteurs des modules** (`ModuleAccessService::flags()`, cache de 10 min) : un tableau en cache auquel manque la clé d'un
-    module (rempli par un code d'avant l'ajout du module) est tenu pour périmé et relu. Avant le 13/11/2026, la clé absente se lisait
+    module (rempli par un code d'avant l'ajout du module) est tenu pour périmé et relu. Avant le 12/11/2026, la clé absente se lisait
     « actif » jusqu'à l'expiration.
   - **Composants déclarés** (tous, depuis le 28/10/2026) : Landing Page (présentations, groupes, bannières, slider, atouts,
     cartes, vidéos, équipe, recherches, multiliens, marques, emplois, prestations et familles, véhicules, réglages de la

@@ -357,7 +357,7 @@ class GestionDocumentsApiTest extends WebTestCase
     }
 
     /**
-     * DOC-ORPH (contrat validé le 13/11/2026) : un document confirmé est purgé, avec ses fichiers, quand toutes ses cibles ont disparu
+     * DOC-ORPH (contrat validé le 12/11/2026) : un document confirmé est purgé, avec ses fichiers, quand toutes ses cibles ont disparu
      * (existence réelle de la ligne cible) ; aussitôt à la suppression de la cible, et par la purge paresseuse en filet. Avant, un document
      * dont la note avait été supprimée restait dans la liste, sans pouvoir être supprimé (409 DOCUMENT_CONFIRMED).
      */

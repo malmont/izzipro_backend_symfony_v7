@@ -66,7 +66,7 @@ class TaxInclusiveApiTest extends WebTestCase
 
     public function testIntegerExtractionMatchesTheWrittenFormula(): void
     {
-        // PAYS-1c (13/11/2026) : taux en millionièmes ; mêmes résultats qu'en dix-millièmes pour les multiples de 0,01 %
+        // PAYS-1c (12/11/2026) : taux en millionièmes ; mêmes résultats qu'en dix-millièmes pour les multiples de 0,01 %
         $this->assertSame([200000, 55000, 21000, 85000, 17500, 10500, 130000, 9000], array_map(fn ($r) => TaxInclusive::ratePpm($r), [0.2, 0.055, 0.021, 0.085, 0.0175, 0.0105, 0.13, 0.009]), 'France et DOM');
         $this->assertSame([99750, false], [TaxInclusive::ratePpm(0.09975), TaxInclusive::isLegacyExactRate(0.09975)], '9,975 % : exact au millionième, pas au dix-millième');
         $this->assertNull(TaxInclusive::ratePpm(0.0997512), 'taux non exact au millionième : refusé');

@@ -2325,7 +2325,7 @@ chez elle). La session de l'annulation, elle, relisait la vente comme une vente.
 Tests : `PosCancellationKeepsAmountsApiTest` (même session, autre session avec export à l'octet), `WebOrderDoubleCancelApiTest` (web,
 « Mes commandes », EasyAdmin), `PosCreditNoteGuardApiTest` (`ORDER_HAS_RETURNS`), `PosAuditApiTest` (journal).
 
-## Prix taxes comprises au Québec et règle hors ligne v5 (PAYS-1c, 13/11/2026)
+## Prix taxes comprises au Québec et règle hors ligne v5 (PAYS-1c, 12/11/2026)
 
 Avant PAYS-1c, le calcul TTC travaillait en dix-millièmes : la TVQ (9,975 %) n'y était pas exacte, et le garde refusait les prix taxes
 comprises à un site québécois.

@@ -88,7 +88,7 @@ final class BoutiqueCatalogEditor
     public function deleteVariant(ProductVariant $variant): void
     {
         $em = $this->emProvider->getEntityManager();
-        // ART-SUPPR (13/11/2026) : ventes, lignes d'achat, mouvements de stock ou paiement en cours → 409 PRODUCT_IN_USE { productId, variantId,
+        // ART-SUPPR (12/11/2026) : ventes, lignes d'achat, mouvements de stock ou paiement en cours → 409 PRODUCT_IN_USE { productId, variantId,
         // uses } ; l'historique de stock n'est plus effacé avec la variante (avant : supprimé juste avant elle)
         \App\Services\ProductService\ProductUsageGuard::assertVariantDeletable($em->getConnection(), $variant);
         $product = $variant->getProduct();

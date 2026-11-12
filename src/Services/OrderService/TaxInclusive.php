@@ -4,7 +4,7 @@ namespace App\Services\OrderService;
 
 /**
  * Prix taxes comprises (F18 partie 2b, 02/11/2026) : extraction de la taxe d'un montant TTC en cents, en arithmétique entière, sans
- * flottant. Depuis PAYS-1c (13/11/2026), le taux est exprimé en millionièmes (20 % → 200000, 5,5 % → 55000, TVQ 9,975 % → 99750) ; avant,
+ * flottant. Depuis PAYS-1c (12/11/2026), le taux est exprimé en millionièmes (20 % → 200000, 5,5 % → 55000, TVQ 9,975 % → 99750) ; avant,
  * en dix-millièmes (9,975 % → 997,5 : refusé). Pour un taux multiple de 0,01 %, les deux échelles donnent exactement le même résultat
  * (mêmes fractions). base = round_demi_haut(ttc × 10⁶ / (10⁶ + R)) ; taxe = ttc − base ; la somme des bases et des taxes redonne
  * exactement le TTC. Exemples : 0,03 € à 20 % → 2,5 → base 0,03, TVA 0,00 ; 0,09 € → 7,5 → base 0,08, TVA 0,01 ; 5,50 € à 5,5 % →

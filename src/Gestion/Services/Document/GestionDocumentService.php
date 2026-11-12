@@ -289,7 +289,7 @@ class GestionDocumentService
     public const TARGETS = ['commande_id' => 'commande', 'note_de_frais_id' => 'note_de_frais', 'frais_de_port_id' => 'frais_de_port', 'campaign_id' => 'marketing_campaign'];
 
     /**
-     * Purge : non confirmés expirés (30 jours), et confirmés dont **toutes les cibles ont disparu** (DOC-ORPH, 13/11/2026). Appelée à chaque
+     * Purge : non confirmés expirés (30 jours), et confirmés dont **toutes les cibles ont disparu** (DOC-ORPH, 12/11/2026). Appelée à chaque
      * liste et à chaque envoi (purge paresseuse), et aussitôt après la suppression d'une note de frais, d'une commande, d'un frais de port ou
      * d'une campagne. Le critère est l'existence réelle de la ligne cible : gestion_document garde de simples identifiants, sans clé étrangère,
      * que rien ne remettait à null (avant, un document dont la note avait été supprimée restait dans la liste, sans pouvoir être supprimé).

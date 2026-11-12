@@ -69,7 +69,7 @@ class FraisDePortService
             $em->remove($fraisDePort);
             
             $em->flush();
-            $this->documents?->purge(); // justificatif de transport dont le frais de port vient de disparaître (DOC-ORPH, 13/11/2026)
+            $this->documents?->purge(); // justificatif de transport dont le frais de port vient de disparaître (DOC-ORPH, 12/11/2026)
         }
     }
 }

@@ -21,7 +21,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 /**
- * PAYS-1c (contrat validé le 13/11/2026) : prix taxes comprises au Québec. Calcul TTC au millionième (TVQ 9,975 % = 99750), identique au
+ * PAYS-1c (contrat validé le 12/11/2026) : prix taxes comprises au Québec. Calcul TTC au millionième (TVQ 9,975 % = 99750), identique au
  * calcul en dix-millièmes pour tout taux multiple de 0,01 % ; règle hors ligne v5 servie à la tablette qui l'annonce (X-Pos-Offline-Rules: v5,
  * qui vaut aussi v4) ; sans elle, un site TTC à taux non multiple de 0,01 % n'a pas de mode hors ligne (RULE_V5_REQUIRED) et une vente
  * calculée avec un pack antérieur est refusée (PACK_RULE_MISMATCH, forçable) ; packs v3 et v4 inchangés.

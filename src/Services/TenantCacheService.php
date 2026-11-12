@@ -11,7 +11,7 @@ class TenantCacheService
     public function __construct(
         private TagAwareCacheInterface $cache,
         private TenantConnectionProvider $tcp,
-        private ?TenantHostVariant $hosts = null // IMGHOST (13/11/2026) : variante d'hôte dans la clé
+        private ?TenantHostVariant $hosts = null // IMGHOST (12/11/2026) : variante d'hôte dans la clé
     ) {}
 
     private function getTenantPrefix(): string

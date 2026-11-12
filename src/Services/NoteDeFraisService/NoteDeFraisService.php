@@ -12,7 +12,7 @@ class NoteDeFraisService
     // MODIFICATION 1 : Le service ne dépend plus que du provider
     private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Gestion\Services\Document\GestionDocumentService $documents = null) // $documents : DOC-ORPH (13/11/2026)
+    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Gestion\Services\Document\GestionDocumentService $documents = null) // $documents : DOC-ORPH (12/11/2026)
     {
         $this->emProvider = $emProvider;
     }
@@ -70,6 +70,6 @@ class NoteDeFraisService
         $em = $this->emProvider->getEntityManager();
         $em->remove($note);
         $em->flush();
-        $this->documents?->purge(); // justificatif lu par IA dont la note vient de disparaître (DOC-ORPH, 13/11/2026)
+        $this->documents?->purge(); // justificatif lu par IA dont la note vient de disparaître (DOC-ORPH, 12/11/2026)
     }
 }

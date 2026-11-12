@@ -208,7 +208,7 @@ class CommandeLinesApiTest extends WebTestCase
     }
 
     /**
-     * ART-SUPPR (contrat validé le 13/11/2026) : un article ou une variante qui a une histoire (ventes, lignes d'achat, mouvements de stock)
+     * ART-SUPPR (contrat validé le 12/11/2026) : un article ou une variante qui a une histoire (ventes, lignes d'achat, mouvements de stock)
      * ne se supprime plus : 409 PRODUCT_IN_USE { productId, variantId?, uses }, rien n'est effacé. Avant, DELETE /api/products/{id}
      * supprimait en silence les lignes d'achat (cascade) et l'historique de stock. Détacher un article d'une commande : refusé (409
      * LINE_RECEIVED) si une ligne est déjà reçue.

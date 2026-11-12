@@ -124,7 +124,7 @@ class ModuleAccessService
     public function flags(): ?array
     {
         $flags = $this->read();
-        // Cache rempli par un code antérieur à l'ajout d'un module (13/11/2026) : la clé du nouveau module manque. Avant, `?? true` le
+        // Cache rempli par un code antérieur à l'ajout d'un module (12/11/2026) : la clé du nouveau module manque. Avant, `?? true` le
         // lisait « actif » jusqu'à l'expiration (10 min) ; le tableau est tenu pour périmé et la base est relue.
         if (is_array($flags) && array_diff_key(self::COLUMNS, $flags) !== []) {
             $this->cache->delete(self::CACHE_KEY);

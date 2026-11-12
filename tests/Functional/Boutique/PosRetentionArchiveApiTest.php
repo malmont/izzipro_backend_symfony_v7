@@ -89,7 +89,7 @@ class PosRetentionArchiveApiTest extends WebTestCase
         $this->assertRefused(fn () => $em->remove($em->getRepository(OrderItems::class)->findOneBy(['orderAssociated' => $order])), 'RETENTION_LOCKED', 'Ligne de commande', $em);
         $this->assertStringContainsString(substr($until, 0, 4), $this->lastRefusal, 'fin de conservation : 31 décembre de l\'année + 6');
         $this->assertRefused(fn () => $em->remove($em->find(User::class, $cashier->getId())), 'RETENTION_LOCKED', 'a réalisé des ventes', $em);
-        // Variante vendue : depuis ART-SUPPR (13/11/2026), le refus vient de la garde des articles, avant la garde de conservation (409 PRODUCT_IN_USE)
+        // Variante vendue : depuis ART-SUPPR (12/11/2026), le refus vient de la garde des articles, avant la garde de conservation (409 PRODUCT_IN_USE)
         try {
             $em->remove($em->find(ProductVariant::class, $this->cap));
             $em->flush();

@@ -119,7 +119,7 @@ commande ; 404 `COMMANDE_NOT_FOUND`, `TRANSPORTEUR_NOT_FOUND`) ; doublon par tra
   - la cible porte `document_id` (clé étrangère, ON DELETE SET NULL) : supprimer le document libère la cible ;
   - le document porte `commande_id`, `note_de_frais_id`, `frais_de_port_id`, `campaign_id` : de simples identifiants, sans clé
     étrangère.
-- **Purge d'un document confirmé** (DOC-ORPH, 13/11/2026, `GestionDocumentService::purge`) : quand **toutes** ses cibles ont disparu, le
+- **Purge d'un document confirmé** (DOC-ORPH, 12/11/2026, `GestionDocumentService::purge`) : quand **toutes** ses cibles ont disparu, le
   document est supprimé avec ses fichiers. Le critère est l'existence réelle de la ligne cible.
   - Moment : aussitôt après la suppression d'une note de frais, d'une commande, d'un frais de port ou d'une campagne, et de nouveau à
     chaque liste et à chaque envoi (filet : suppression depuis EasyAdmin, cascade en base).
@@ -129,7 +129,7 @@ commande ; 404 `COMMANDE_NOT_FOUND`, `TRANSPORTEUR_NOT_FOUND`) ; doublon par tra
   - Journal des contenus : une entrée `gestion-documents` / `purge` par document, avec le motif (`target_deleted` ou `expired`), les
     cibles disparues et, pour chaque fichier, son nom d'origine, sa taille et son empreinte SHA-256. Le fichier lui-même n'est pas gardé.
   - Après la purge : le document n'est plus dans `GET /api/gestion/documents`, et `GET /api/gestion/documents/{id}` répond 404.
-  - Avant le 13/11/2026, rien ne remettait ces identifiants à null : un document dont la note avait été supprimée restait dans la
+  - Avant le 12/11/2026, rien ne remettait ces identifiants à null : un document dont la note avait été supprimée restait dans la
     liste, et `DELETE` répondait 409 `DOCUMENT_CONFIRMED`.
 - Crédits : 1 par lecture (`LandingAiQuotaService`, composant `gestion_document`, réservation 30 min, facturée en succès, libérée en échec).
 - Palier : la lecture demande « Aide IA » (`ai.help`, inclus dans `ai.full`), même en mode démonstration ; 403 `AI_NOT_INCLUDED` ; le propriétaire

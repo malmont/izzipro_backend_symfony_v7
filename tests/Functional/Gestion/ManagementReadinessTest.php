@@ -87,7 +87,7 @@ class ManagementReadinessTest extends WebTestCase
         $this->assertSame(['todo', false, 'periodes'], [$steps['management.periods_calendar']['status'], $steps['management.periods_calendar']['blocking'], $steps['management.periods_calendar']['appScreen']], 'calendrier jamais choisi : orange');
 
         // Tout le bloquant réglé : code court, administrateur (le compte du modèle), période en cours, exercice, devise et fuseau
-        // aucune clé d'application « admin » : l'étape a été retirée le 13/11/2026 (le code court et un compte administrateur suffisent)
+        // aucune clé d'application « admin » : l'étape a été retirée le 12/11/2026 (le code court et un compte administrateur suffisent)
         $this->master->prepare("DELETE FROM tenant_app_keys WHERE tenant_code = ? AND app = 'admin'")->execute([MV_TEST_TENANT_CODE]);
         $this->master->prepare('UPDATE tenants SET short_code = ? WHERE code = ?')->execute([$this->saved['shortCode'] ?: 'CHE042', MV_TEST_TENANT_CODE]);
         $this->db->executeStatement("INSERT INTO collections (id, budget_collection, start_date_collection, end_date_collection, del, nom_collection, is_closed, kind, period_key) VALUES (nextval('collections_id_seq'), 0, CURRENT_DATE - 5, CURRENT_DATE + 30, false, 'CHE', false, 'period', ?)", ['che-' . bin2hex(random_bytes(3))]);
