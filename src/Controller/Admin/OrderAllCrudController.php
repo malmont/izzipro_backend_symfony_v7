@@ -191,10 +191,36 @@ class OrderAllCrudController extends BaseTenantCrudController
     {
         $this->denyLockedCashRecord($entityInstance);
         if ($entityInstance instanceof Order && $entityInstance->getStatus()?->getId() === 7) {
-            $this->cancelOrderUseCase->execute($entityInstance->getId(), $entityInstance->getPayments()->first()->getPaymentMethod()->getId());
+            $payment = $entityInstance->getPayments()->first(); // false sans paiement (avant : erreur)
+            if (!$this->cancelFromForm($entityInstance, $payment ? $payment->getPaymentMethod()?->getId() : null)) {
+                return;
+            }
         }
 
         parent::updateEntity($entityManager, $entityInstance);
+    }
+
+    /**
+     * D2 (PAYS-1b, 12/11/2026) : annulation demandée par le formulaire (statut passé à 7). Appelée seulement si la commande n'était pas déjà
+     * annulée en base ; en cas d'échec (Stripe, caisse…), rien n'est enregistré, la fiche est rechargée et le message s'affiche.
+     *
+     * @return bool vrai si l'enregistrement peut continuer
+     */
+    private function cancelFromForm(Order $order, ?int $paymentMethodId): bool
+    {
+        $em = $this->emProvider->getEntityManager();
+        if ((int) $em->getConnection()->fetchOne('SELECT status_id FROM "order" WHERE id = ?', [$order->getId()]) === 7) {
+            return true; // déjà annulée : simple modification de la fiche
+        }
+        $response = $this->cancelOrderUseCase->execute($order->getId(), $paymentMethodId);
+        if ($response->getStatusCode() === 200) {
+            return true;
+        }
+        $body = json_decode((string) $response->getContent(), true) ?: [];
+        $em->refresh($order);
+        $this->addFlash('danger', 'Annulation impossible, rien n\'a été enregistré : ' . ($body['message'] ?? $body['error'] ?? 'erreur inconnue'));
+
+        return false;
     }
 
     protected function isCashRecordLocked(object $entity): bool

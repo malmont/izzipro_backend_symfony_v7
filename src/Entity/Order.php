@@ -29,6 +29,10 @@ class Order
     #[ORM\Column(type: Types::DATETIME_MUTABLE, nullable: true)]
     private ?\DateTimeInterface $statusUpdatedAt = null;
 
+    /** Annulée après PAYS-1b (12/11/2026) : les montants restent ceux de la vente ; l'avoir et le journal portent l'annulation. Null = jamais annulée, ou annulée avant PAYS-1b (montants remis à 0) */
+    #[ORM\Column(name: 'canceled_at', type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $canceledAt = null;
+
     #[ORM\Column]
     private ?float $totalAmount = 0;
 
@@ -637,4 +641,7 @@ class Order
 
     public function isPricesIncludeTax(): bool { return $this->pricesIncludeTax; }
     public function setPricesIncludeTax(bool $v): static { $this->pricesIncludeTax = $v; return $this; }
+
+    public function getCanceledAt(): ?\DateTimeImmutable { return $this->canceledAt; }
+    public function setCanceledAt(?\DateTimeImmutable $at): static { $this->canceledAt = $at; return $this; }
 }

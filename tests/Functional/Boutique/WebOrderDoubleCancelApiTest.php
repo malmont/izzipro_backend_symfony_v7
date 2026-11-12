@@ -91,6 +91,47 @@ class WebOrderDoubleCancelApiTest extends WebTestCase
         $this->assertSame($afterFirst, $this->state($orderId), 'rien n\'est écrit');
     }
 
+    /**
+     * PAYS-1b (12/11/2026) : une commande web annulée garde ses montants (canceled_at) ; « Mes commandes » sert le total de la commande avec le
+     * statut annulé (jamais « à payer »). D2 : une annulation qui échoue depuis EasyAdmin n'enregistre rien et l'affiche.
+     */
+    public function testWebCancellationKeepsAmountsAndAFailedEasyAdminCancellationSavesNothing(): void
+    {
+        $this->loginAs(['ROLE_USER_INTERNET']);
+        $orderId = $this->webOrder(2);
+        $amounts = fn () => [array_map('intval', $this->db->fetchAssociative('SELECT sub_total, total_tax, total_amount FROM "order" WHERE id = ?', [$orderId])),
+            array_map('intval', $this->db->fetchFirstColumn('SELECT amount FROM order_tax WHERE order_tax_id = ? ORDER BY id', [$orderId]))];
+        $before = $amounts();
+        $this->assertSame(200, $this->request('POST', "/api/order/cancel/$orderId", json_encode([]))->getStatusCode());
+        $this->assertSame($before, $amounts(), 'totaux et taxes gardés');
+        $this->assertNotNull($this->db->fetchOne('SELECT canceled_at FROM "order" WHERE id = ?', [$orderId]));
+        $mine = json_decode($this->request('GET', '/api/ordersuser')->getContent(), true);
+        $row = array_values(array_filter($mine['orders'] ?? $mine, fn ($o) => (int) ($o['id'] ?? 0) === $orderId))[0] ?? null;
+        $this->assertNotNull($row, json_encode($mine));
+        $this->assertSame([(float) $before[0]['total_amount'], 7], [(float) $row['totalAmount'], (int) ($row['status']['id'] ?? $row['statusId'] ?? $row['status'])], 'total de la commande, statut annulé');
+        $this->assertNotContains($row['paymentStatus'] ?? null, ['pending', 'paid', 'authorized'], 'jamais « à payer »');
+
+        // D2 : commande expédiée (statut 5) passée à 7 dans le formulaire d'EasyAdmin : l'annulation échoue, rien n'est enregistré
+        $other = $this->webOrder(1);
+        $this->db->executeStatement('UPDATE "order" SET status_id = 5 WHERE id = ?', [$other]);
+        $state = $this->state($other);
+        $request = new \Symfony\Component\HttpFoundation\Request();
+        $request->setSession(new \Symfony\Component\HttpFoundation\Session\Session(new \Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage()));
+        static::getContainer()->get('request_stack')->push($request);
+        $em = static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager();
+        foreach ([\App\Controller\Admin\OrderAllCrudController::class, \App\Controller\Admin\OrderCrudController::class] as $controller) {
+            $em->clear();
+            $order = $em->getRepository(Order::class)->find($other);
+            $order->setStatus($em->getRepository(StatusCommande::class)->find(7));
+            static::getContainer()->get($controller)->updateEntity($em, $order);
+            $this->assertSame($state, $this->state($other), "$controller : rien n'est enregistré");
+            $this->assertSame(5, (int) $this->db->fetchOne('SELECT status_id FROM "order" WHERE id = ?', [$other]));
+        }
+        $flashes = $request->getSession()->getFlashBag()->get('danger');
+        $this->assertCount(2, $flashes);
+        $this->assertStringStartsWith('Annulation impossible, rien n\'a été enregistré', $flashes[0]);
+    }
+
     /** Commande web payée (Stripe simulé) de $quantity casquettes */
     private function webOrder(int $quantity): int
     {

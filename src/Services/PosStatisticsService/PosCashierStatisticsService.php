@@ -51,8 +51,9 @@ class PosCashierStatisticsService
                 'approvals' => ['requested' => 0, 'granted' => 0], 'discrepancies' => ['sessions' => 0, 'total' => 0, 'absolute' => 0],
                 'offlineSales' => 0, 'giftCardsSold' => ['count' => 0, 'amount' => 0], 'salesWithCustomer' => 0, 'loyaltyPointsEarned' => 0];
         };
-        // Ventes (type 1) par vendeur : commandes de caisse de la période, rattachées à une session (poste) par leur transaction
-        $sales = $conn->fetchAllAssociative('SELECT o.user_id_id AS uid, COUNT(DISTINCT o.id) AS n, COALESCE(SUM(o.total_amount), 0) AS ttc,
+        // Ventes (type 1) par vendeur : commandes de caisse de la période, rattachées à une session (poste) par leur transaction ;
+        // PAYS-1b : une vente annulée garde ses montants (canceled_at) et compte 0 dans le TTC, comme quand elle était remise à 0
+        $sales = $conn->fetchAllAssociative('SELECT o.user_id_id AS uid, COUNT(DISTINCT o.id) AS n, COALESCE(SUM(CASE WHEN o.canceled_at IS NULL THEN o.total_amount ELSE 0 END), 0) AS ttc,
                 COALESCE(SUM(CASE WHEN o.synced_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS offline, COALESCE(SUM(CASE WHEN o.customer_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS with_customer,
                 COALESCE(SUM(CASE WHEN o.status_id = 7 THEN 1 ELSE 0 END), 0) AS canceled
             FROM "order" o JOIN transaction_caisse t ON t.order_caisse_id = o.id AND t.transaction_type_id = 1 JOIN caisse c ON c.id = t.caisse_id

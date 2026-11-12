@@ -49,8 +49,9 @@ class RetentionGuardSubscriber implements EventSubscriber
 {
     /** Champs légitimement modifiables après la vente (contre-écritures et suivi) */
     public const ALLOWED_UPDATES = [
-        Order::class => ['status', 'statusUpdatedAt', 'totalAmount', 'subTotal', 'total_tax', 'syncedAt', 'customerId', 'taxTransactionId', 'stripeInvoiceId'], // noms de champs Doctrine (total_tax est bien en snake)
-        OrderTax::class => ['amount'], // annulation : taxes ramenées à 0 (contre-écriture C1)
+        // PAYS-1b (12/11/2026) : l'annulation ne remet plus les montants à 0 (totaux et OrderTax.amount sortis de la liste) ; canceled_at la marque
+        Order::class => ['status', 'statusUpdatedAt', 'canceledAt', 'syncedAt', 'customerId', 'taxTransactionId', 'stripeInvoiceId'], // noms de champs Doctrine
+        OrderTax::class => [],
         Payments::class => ['stripePaymentId', 'stripeReceiptUrl', 'stripeStatus', 'stripeCardBrand', 'stripeLast4', 'stripeRiskLevel', 'statutPayment'],
         Caisse::class => ['amountTotal', 'fonDeCaisse', 'isOpen', 'closedAt'],
         PosReceipt::class => ['reprintCount', 'linkVersion', 'linkRevokedAt', 'provisionalNumber'],

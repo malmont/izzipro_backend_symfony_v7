@@ -62,7 +62,8 @@ class JournalEntryBuilder
         $add('cash_rounding', 0, (int) ($amounts['cashRounding'] ?? 0) > 0 ? (int) $amounts['cashRounding'] : 0, 'Arrondi des espèces perçu');
         $add('cash_rounding', (int) ($amounts['cashRounding'] ?? 0) < 0 ? -(int) $amounts['cashRounding'] : 0, 0, 'Arrondi des espèces rendu');
         // Retours : ventes et taxes au débit, remboursements au crédit du moyen (avoir émis = passif)
-        $add('returns', (int) ($amounts['refundsHt'] ?? 0), 0, 'Retours HT');
+        // PAYS-1b : mémo des ventes d'autres sessions annulées ici (contre-passées dans les retours) ; libellé seul, colonnes inchangées
+        $add('returns', (int) ($amounts['refundsHt'] ?? 0), 0, !empty($amounts['reversals']) ? 'Retours HT, dont annulation de la vente n° ' . implode(', ', $amounts['reversals']) : 'Retours HT');
         foreach ($amounts['refundsTaxes'] ?? [] as $t) {
             $add(ChartOfAccounts::taxKey((string) $t['label'], $t['province'] ?? null, isset($t['rate']) ? (float) $t['rate'] : null, $t['code'] ?? null), (int) ($t['tax'] ?? 0), 0, $t['label'] . ' sur retours');
         }

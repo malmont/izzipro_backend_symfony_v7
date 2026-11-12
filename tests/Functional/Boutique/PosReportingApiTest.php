@@ -63,6 +63,8 @@ class PosReportingApiTest extends WebTestCase
 
     public function testCashierStatisticsMatchTheZReportAndAccountingExportBalances(): void
     {
+        // journal partagé et inaltérable : seules les entrées de ce test sont comptées (d'autres tests exportent aussi aujourd'hui)
+        $auditStart = (int) $this->db->fetchOne('SELECT COALESCE(MAX(id), 0) FROM pos_audit_log');
         $manager = $this->loginAs(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
         static::getContainer()->get(PosPinService::class)->set($manager, '3579');
         $this->terminal = $this->posTerminal();
@@ -115,7 +117,7 @@ class PosReportingApiTest extends WebTestCase
         $this->assertSame([$z['sales']['count'], $z['sales']['total'], $z['discounts']['total'], $z['returns']['count'], $z['giftCards']['sold']['amount'], $z['customItems']['count'], $z['priceOverrides']['count']],
             [$row['sales']['count'], $row['sales']['ttc'], $row['discounts']['amount'], $row['returns']['count'], $row['giftCardsSold']['amount'], $row['customItems']['count'], $row['priceOverrides']['count']], 'vendeur de la session = rapport Z');
         $this->assertGreaterThanOrEqual($row['sales']['count'], $stats['total']['sales']['count']);
-        $this->assertSame(2, (int) $this->db->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE type = 'CASHIER_STATS_VIEWED' AND payload LIKE ?", ['%"from":"' . $today . '"%']));
+        $this->assertSame(2, (int) $this->db->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE id > ? AND type = 'CASHIER_STATS_VIEWED' AND payload LIKE ?", [$auditStart, '%"from":"' . $today . '"%']));
 
         // Export comptable : aperçu, synthèse, écritures (generic et qbo), équilibre, règle de la journée d'ouverture
         $this->loginAs(['ROLE_USER_POS']);
@@ -145,7 +147,7 @@ class PosReportingApiTest extends WebTestCase
         $this->assertMatchesRegularExpression('/^Z-\d+-\d+,\d{2}\/\d{2}\/\d{4},"Ventes de marchandises","[^"]*",,\d+\.\d{2}\r$/m', $qbo, 'date JJ/MM/AAAA, point décimal');
         $this->assertStringContainsString('"Retours et remboursements sur ventes"', $qbo);
         $this->assertMatchesRegularExpression('/"Retours et remboursements sur ventes","[^"]*",\d+\.\d{2},\r$/m', $qbo, 'retours HT au débit');
-        $this->assertSame(4, (int) $this->db->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE type = 'EXPORT_GENERATED' AND payload LIKE ?", ['%"from":"' . $today . '"%']), 'exports journalisés (aperçu, synthèse, 2 écritures)');
+        $this->assertSame(4, (int) $this->db->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE id > ? AND type = 'EXPORT_GENERATED' AND payload LIKE ?", [$auditStart, '%"from":"' . $today . '"%']), 'exports journalisés (aperçu, synthèse, 2 écritures)');
         // QuickBooks : au-delà de la limite de lignes par fichier, refus clair avec la période maximale conseillée (limite abaissée pour le test)
         $exports = static::getContainer()->get(\App\Services\AccountingService\PosAccountingExportService::class);
         $this->assertGreaterThan(10, count($e['entries']));

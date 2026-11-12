@@ -1347,8 +1347,8 @@ au vu du journal** ; il n'y a pas de préproduction. Exceptions (jamais journali
 
 | Entité | Champs libres (écritures normales du cycle de vie) |
 |---|---|
-| `Order` | `status`, `statusUpdatedAt`, `totalAmount`, `subTotal`, `total_tax`, `syncedAt`, `customerId`, `taxTransactionId`, `stripeInvoiceId` |
-| `OrderTax` | `amount` (annulation : taxes ramenées à 0, contre-écriture C1) |
+| `Order` | `status`, `statusUpdatedAt`, `canceledAt`, `syncedAt`, `customerId`, `taxTransactionId`, `stripeInvoiceId` (depuis PAYS-1b, les totaux ne changent plus à l'annulation) |
+| `OrderTax` | aucun (PAYS-1b : l'annulation ne ramène plus les taxes à 0) |
 | `Payments` | `stripePaymentId`, `stripeReceiptUrl`, `stripeStatus`, `stripeCardBrand`, `stripeLast4`, `stripeRiskLevel`, `statutPayment` |
 | `Caisse` (session) | `amountTotal`, `fonDeCaisse`, `isOpen`, `closedAt` |
 | `PosReceipt` | `reprintCount`, `linkVersion`, `linkRevokedAt`, `provisionalNumber` |
@@ -2202,7 +2202,7 @@ lots : `docs/pays-audit.md`.
 
 **Garantie en base** : le déclencheur `order_tax_frozen_guard` refuse tout UPDATE d'une colonne gelée d'une ligne déjà gelée
 (`ORDER_TAX_FROZEN`).
-- Le **montant** n'est pas gelé : l'annulation le ramène encore à 0 (voir PAYS-1b dans `docs/pays-audit.md`).
+- Le **montant** n'est pas gelé, mais depuis PAYS-1b l'annulation ne le modifie plus (voir « Annulation sans remise à zéro »).
 - Le **DELETE** reste permis, pour le nettoyage des tests et l'anonymisation.
 
 **Reprise** : les lignes existantes sont remplies avec le libellé et le taux actuels de la taxe liée, source `backfill`. Les lignes
@@ -2264,6 +2264,66 @@ Tests : `tests/Functional/Boutique/TaxFreezeApiTest.php`.
 - Ticket, réimpression, X, Z, export et retour inchangés quand un taux est modifié ensuite.
 - `TAX_IN_USE`, archivage et taxes datées ; déclencheur ; reprise idempotente.
 - La photo VAR (`VariantPromotionPhotoTest`, enregistrée avec le code d'avant) est identique, hors les quatre clés ajoutées.
+
+## Annulation sans remise à zéro (PAYS-1b, 12/11/2026)
+
+Avant PAYS-1b, `POST /api/order/cancel/{id}` remettait à 0 les totaux de la vente (`total_amount`, `sub_total`, `total_tax`) et les
+montants de `order_tax`. Les montants d'origine ne restaient que dans le journal (`REFUND.before`), l'avoir, les paiements et le Z.
+
+Désormais, la vente **garde ses montants** (taxes gelées comprises, PAYS-1).
+- L'annulation est un **nouveau document** : avoir numéroté, journal REFUND (`after` = montants inchangés, statut 7), paiements négatifs
+  sur la vente.
+- **`order.canceled_at`** marque ces annulations : migration `Version20261224100000`, script `scripts/migrate_all_v2_annulation.sh`.
+- Les annulations antérieures (`canceled_at` null, montants déjà à 0) gardent exactement le traitement d'avant, partout.
+
+### Chaque rapport ne parle que de sa session
+Le critère est la session de la transaction de remboursement, comparée à celle de la transaction de vente.
+- **Annulée dans la même session** :
+  - la vente sort des ventes, des taxes et des totaux du X, du Z et de l'export ;
+  - l'encaissement et le remboursement sont comptés tous deux et se compensent.
+- **Annulée dans une autre session** :
+  - la session de la vente la garde. Son export est **identique à l'octet** avant et après l'annulation, et son Z est figé ;
+  - la session de l'annulation porte la **contre-passation**, dans le bloc des retours (`refundsHt`, `refundsTaxes`, `refundsTtc`,
+    `returnsCount`), aux valeurs gelées de la vente ;
+  - cette session porte aussi le remboursement (paiements négatifs comptés là seulement) et l'arrondi des espèces rendu ;
+  - elle ne relit pas les encaissements de la vente.
+- **Export** : la ligne « Retours HT » devient « Retours HT, dont annulation de la vente n° C1-12 ». Colonnes inchangées. L'aperçu porte
+  `reversals: ["C1-12"]`, seulement s'il y en a.
+- **Rapport X** de la session de l'annulation : taxes négatives de la contre-passation.
+- **Autres lecteurs** qui comptaient une vente annulée à 0 : ils l'excluent, pour un résultat identique.
+  - Chiffre d'affaires (`revenueOverview`, `customIntervalRevenue`) ;
+  - taxes du mois (`taxesMonthly`) ;
+  - statistiques par caissier (TTC).
+- **Gestion** : inchangée. Elle exclut le statut 7, et une vente annulée plus tard sort aussi des périodes passées.
+
+Avant PAYS-1b, une annulation dans une autre session modifiait l'export de la session de la vente (totaux remis à 0, remboursement compté
+chez elle). La session de l'annulation, elle, relisait la vente comme une vente.
+
+### Ticket : `cancellation` (ajout seulement)
+- Le ticket d'une vente annulée porte `cancellation: { at, creditNoteNumber, creditNoteReference }`. Il vaut `null` sinon.
+- La réimpression garde les montants de la vente et imprime « ANNULÉE le … — avoir n° … ».
+- `at` vaut `canceled_at`, ou la date de l'avoir pour une annulation antérieure.
+- L'avoir d'annulation est émis sur la vente elle-même. Les avoirs de retour F2 sont émis sur la commande de retour.
+
+### Garde-fous
+- **`ORDER_HAS_RETURNS`** (409, `orderId`, `returns`) : une vente dont des articles ont déjà été retournés ne s'annule plus. Avant, le
+  montant plein était remboursé et tout le stock remis une seconde fois. L'unité restante se rend par un retour.
+- **EasyAdmin** (`OrderCrudController`, `OrderAllCrudController`) : le statut passé à 7 dans le formulaire déclenche l'annulation,
+  seulement si la commande n'était pas déjà annulée en base.
+  - En cas d'échec, rien n'est enregistré, la fiche est rechargée et le message s'affiche.
+  - Une commande sans paiement ne fait plus planter `OrderAllCrudController`.
+- **Commande expédiée ou livrée** : le refus se fonde sur le statut **en base**. Avant, le statut 7 posé par le formulaire le contournait.
+
+### Côté client (commande annulée après PAYS-1b)
+- **`OrderDTO`** (`GET /api/ordersuser`, `GET /api/orders/{id}`, `GET /api/orders`) :
+  - `totalAmount`, `subTotal`, `totalTax` et `taxes[]` portent les montants de la vente (avant : 0) ;
+  - `status` (7) et `paymentStatus` (« canceled ») sont inchangés ;
+  - les fronts affichent « Annulée » et le remboursement d'après `status` et `paymentStatus`, jamais d'après le total.
+- **Courriel « reçu »** renvoyé par l'opérateur : `totalCents` vaut le total de la commande.
+- **Historique client de la caisse** et **fiche Assistance** : montants de la vente, statut annulé.
+
+Tests : `PosCancellationKeepsAmountsApiTest` (même session, autre session avec export à l'octet), `WebOrderDoubleCancelApiTest` (web,
+« Mes commandes », EasyAdmin), `PosCreditNoteGuardApiTest` (`ORDER_HAS_RETURNS`), `PosAuditApiTest` (journal).
 
 ## Codes d'erreur de la caisse (02/11/2026)
 
@@ -2399,6 +2459,7 @@ même code sont séparés par « / ». Les codes à message variable sont décri
 | `NOTHING_TO_CLAIM` | Aucun coupon à réclamer pour cette période |
 | `OFFLINE_SALE_INVALID` | La somme des paiements en espèces doit égaler totals.cashTotal / Remise au-delà du plafond du vendeur (aucune validation possible hors ligne) / Vente hors ligne incomplète :  |
 | `ORDER_CANCELED` | Cette vente a été annulée et remboursée en entier |
+| `ORDER_HAS_RETURNS` | Des articles de cette vente ont déjà été retournés : faites un retour des articles restants (409, `orderId`, `returns` ; PAYS-1b) |
 | `ORDER_NOT_FOUND` | Vente introuvable |
 | `ORDER_NOT_REFUNDABLE` | Cette commande est déjà annulée / Cette vente est déjà annulée et remboursée / Un avoir (commande de retour) ne s'annule pas et ne se rembourse pas : le client a déjà été remboursé par ce retour |
 | `ORDER_NOT_RETURNABLE` | Seule une vente en caisse peut faire l'objet d'un retour |

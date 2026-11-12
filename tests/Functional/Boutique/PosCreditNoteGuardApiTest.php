@@ -79,7 +79,17 @@ class PosCreditNoteGuardApiTest extends WebTestCase
         $this->assertSame(3, (int) $this->db->fetchOne('SELECT status_id FROM "order" WHERE id = ?', [$avoir]), 'avoir toujours « complété »');
         $this->assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE type = 'REFUND' AND payload LIKE '%\"kind\":\"cancellation\"%' AND payload LIKE ?", ['%"subject":{"type":"order","id":' . $avoir . '}%']), 'aucune annulation journalisée sur l\'avoir (seul le retour lui-même l\'est)');
 
-        // Annulation de la vente d'origine (unité restante) : inchangée, puis seconde annulation refusée
+        // D1 (PAYS-1b, 12/11/2026) : annulation d'une vente déjà partiellement retournée : refusée, rien ne bouge (avant : le montant plein
+        // était remboursé et tout le stock remis une seconde fois) ; l'unité restante se rend par un retour
+        $beforeRefusal = $state();
+        $refused = $this->request('POST', "/api/order/cancel/{$sale['orderId']}", ['paymentMethod' => 2, 'cashRegisterId' => $this->register]);
+        $this->assertSame([409, 'ORDER_HAS_RETURNS'], $error($refused));
+        $this->assertSame(['orderId' => $sale['orderId'], 'returns' => 1], array_intersect_key(json_decode($refused->getContent(), true), ['orderId' => 1, 'returns' => 1]));
+        $this->assertSame($beforeRefusal, $state(), 'rien ne sort de la caisse');
+        $this->assertSame(3, (int) $this->db->fetchOne('SELECT status_id FROM "order" WHERE id = ?', [$sale['orderId']]), 'vente toujours complétée');
+
+        // Annulation d'une vente sans retour, puis seconde annulation refusée
+        $sale = $this->json($this->request('POST', '/api/order/create-multi-payment', ['items' => $items, 'paymentMethods' => [['type' => 2, 'amount' => 66.70]], 'cashRegisterId' => $this->register]), 201);
         $ok = $this->request('POST', "/api/order/cancel/{$sale['orderId']}", ['paymentMethod' => 2, 'cashRegisterId' => $this->register]);
         $this->assertSame(200, $ok->getStatusCode(), $ok->getContent());
         $this->assertSame(7, (int) $this->db->fetchOne('SELECT status_id FROM "order" WHERE id = ?', [$sale['orderId']]));

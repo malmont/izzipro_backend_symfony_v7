@@ -140,7 +140,7 @@ class PosAuditApiTest extends WebTestCase
         $this->assertSame($sale1['receiptNumber'], $byType['SALE'][0]['data']['receiptNumber']);
         $this->assertSame('return', $byType['REFUND'][0]['data']['kind']);
         $refund = $byType['REFUND'][1]['data'];
-        $this->assertSame(['cancellation', $quote['total'], 0], [$refund['kind'], $refund['before']['totalAmount'], $refund['after']['totalAmount']], 'montants d\'origine conservés');
+        $this->assertSame(['cancellation', $quote['total'], $quote['total']], [$refund['kind'], $refund['before']['totalAmount'], $refund['after']['totalAmount']], 'montants d\'origine conservés (PAYS-1b : la vente les garde)');
         $this->assertSame('Monnaie pour un client', $byType['DRAWER_OPENED'][0]['data']['reason']);
         $this->assertSame([$this->register, $closed['caisse_id']], [$byType['Z_REPORT_CREATED'][0]['cashRegisterId'], $byType['Z_REPORT_CREATED'][0]['sessionId']]);
 

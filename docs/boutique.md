@@ -642,6 +642,10 @@ remboursement enregistré, stock réintégré, réponse `{message}`. Une **secon
 **409 `ORDER_NOT_REFUNDABLE`** `{orderId, status: 7}`, rien n'est écrit (avant : 200 et stock réintégré une seconde fois).
 Détails dans `docs/caisse.md`.
 
+- PAYS-1b (12/11/2026) : la commande annulée **garde ses montants** (totaux et taxes ; `canceled_at` la marque). `OrderDTO` sert le total de
+  la commande avec `status` 7 et `paymentStatus` « canceled » : le front affiche « Annulée » et le remboursement, jamais « à payer ». Refus
+  `ORDER_HAS_RETURNS` si des articles ont déjà été retournés. Détails : `docs/caisse.md`, « Annulation sans remise à zéro ».
+
 ## Compte client (08/10/2026, § 8)
 
 - **Nouveau mot de passe** : `POST /api/password-reset/request { email }` envoie un lien vers la page du frontend du

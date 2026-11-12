@@ -33,7 +33,7 @@ class SalesStatisticsService
     public function revenueOverview(?int $source): array
     {
         $p = $this->periods();
-        $where = 'o.order_type_id IN ' . self::REVENUE_TYPES . $this->sourceWhere($source);
+        $where = 'o.order_type_id IN ' . self::REVENUE_TYPES . ' AND o.canceled_at IS NULL' . $this->sourceWhere($source); // PAYS-1b : vente annulée (montants gardés) = 0, comme avant
         $totals = $this->filtered('SUM(o.total_amount)', $where, $p, $source, ['currentWeek', 'lastWeek', 'currentMonth', 'lastMonth', 'currentYear', 'lastYear']);
 
         return [
@@ -56,7 +56,7 @@ class SalesStatisticsService
         $params = ['from' => $from->format('Y-m-d H:i:s'), 'to' => $to->format('Y-m-d H:i:s')] + $this->sourceParam($source);
 
         return self::cents($this->connection()->fetchOne(
-            'SELECT COALESCE(SUM(o.total_amount), 0) FROM "order" o WHERE o.order_date >= :from AND o.order_date < :to AND o.order_type_id IN ' . self::REVENUE_TYPES . $this->sourceWhere($source),
+            'SELECT COALESCE(SUM(o.total_amount), 0) FROM "order" o WHERE o.order_date >= :from AND o.order_date < :to AND o.order_type_id IN ' . self::REVENUE_TYPES . ' AND o.canceled_at IS NULL' . $this->sourceWhere($source), // PAYS-1b
             $params
         ));
     }
@@ -170,7 +170,7 @@ class SalesStatisticsService
     public function taxesMonthly(): array
     {
         $p = $this->periods();
-        $rows = $this->groupBy('SUM(t.amount)', '1 = 1', $p['currentYear'], null, $this->monthExpr(), 'JOIN order_tax t ON t.order_tax_id = o.id');
+        $rows = $this->groupBy('SUM(t.amount)', 'o.canceled_at IS NULL', $p['currentYear'], null, $this->monthExpr(), 'JOIN order_tax t ON t.order_tax_id = o.id'); // PAYS-1b : taxes d'une vente annulée = 0, comme avant
         $months = [];
         for ($m = 1; $m <= 12; $m++) {
             $months[] = ['month' => $m, 'total_tax' => self::cents($rows[$m] ?? 0)];

@@ -102,8 +102,15 @@ class CancelOrderUseCase
             // Commande déjà annulée, toute source (commandes web, EasyAdmin) : avant, une seconde annulation réintégrait le stock une seconde fois.
             // Statut lu en base, ligne verrouillée : EasyAdmin passe le statut à 7 dans son formulaire avant d'appeler l'annulation
             // (la première annulation doit passer) ; deux annulations simultanées se suivent au lieu de se croiser
-            if ((int) $em->getConnection()->fetchOne('SELECT status_id FROM "order" WHERE id = ? FOR UPDATE', [$order->getId()]) === 7) {
+            $storedStatus = (int) $em->getConnection()->fetchOne('SELECT status_id FROM "order" WHERE id = ? FOR UPDATE', [$order->getId()]);
+            if ($storedStatus === 7) {
                 throw new CashRegisterException('ORDER_NOT_REFUNDABLE', 'Cette commande est déjà annulée', 409, [], ['orderId' => $order->getId(), 'status' => 7]);
+            }
+            // D1 (PAYS-1b, 12/11/2026) : des articles déjà retournés (F2) ; avant, l'annulation remboursait le montant plein et remettait tout
+            // le stock une seconde fois (double remboursement)
+            $returns = (int) $em->getConnection()->fetchOne('SELECT COUNT(*) FROM "order" WHERE returned_from_id = ? AND order_type_id = 2 AND status_id <> 7', [$order->getId()]);
+            if ($returns > 0) {
+                throw new CashRegisterException('ORDER_HAS_RETURNS', 'Des articles de cette vente ont déjà été retournés : faites un retour des articles restants', 409, [], ['orderId' => $order->getId(), 'returns' => $returns]);
             }
             if ($order->getOrderType()?->getId() === 3) { // vente d'une carte-cadeau (F9) : annulation par POST /api/pos/gift-cards/{code}/cancel (carte jamais utilisée)
                 throw new CashRegisterException('GIFT_CARD_ORDER', 'Vente d\'une carte-cadeau : utilisez l\'annulation de la carte (POST /api/pos/gift-cards/{code}/cancel)', 409, [], ['orderId' => $order->getId()]);
@@ -129,7 +136,7 @@ class CancelOrderUseCase
             if ($couponApplied > 0) {
                 $refundAmount = max(0, (float) $refundAmount - $couponApplied);
             }
-            // Montants d'origine (remis à 0 plus bas) : conservés au journal de caisse et sur l'avoir (C2)
+            // Montants d'origine : depuis PAYS-1b, la vente les garde ; le journal (before / after) et l'avoir portent l'annulation (C2)
             $before = [
                 'totalAmount' => (int) round((float) $order->getTotalAmount()), 'subTotal' => (int) round((float) $order->getSubTotal()),
                 'totalTax' => (int) round((float) $order->getTotalTax()), 'status' => $order->getStatus()?->getId(),
@@ -138,8 +145,9 @@ class CancelOrderUseCase
             $creditNote = null;
 
             // Vérifier si la commande peut être annulée
-            $currentStatus = $order->getStatus();
-            if (in_array($currentStatus->getId(), [5, 6])) { // Supposons 5=Expédiée, 6=Livrée
+            // Statut lu en base (PAYS-1b, D2) : le formulaire d'EasyAdmin pose 7 sur l'entité avant l'appel, ce qui laissait annuler une commande
+            // expédiée ou livrée
+            if (in_array($storedStatus, [5, 6], true)) { // 5 = expédiée, 6 = livrée
                 throw new Exception('Order cannot be canceled after it has been shipped or delivered');
             }
 
@@ -152,9 +160,9 @@ class CancelOrderUseCase
             $order->setStatusUpdatedAt(new \DateTime());
             $this->rentals?->cancelBookings($order); // créneaux libérés (web et caisse), 09/11/2026
             $rentalDepositBlock = null;
-            $order->setTotalAmount(0);
-            $order->setSubTotal(0);
-            $order->setTotalTax(0);
+            // PAYS-1b : la vente d'origine n'est plus remise à 0 (totaux et taxes intacts, comme l'exige l'inaltérabilité) ; l'annulation est
+            // un nouveau document (avoir numéroté, journal REFUND, paiements négatifs) et canceled_at la marque
+            $order->setCanceledAt(new \DateTimeImmutable());
 
             // Remboursement en espèces d'une vente au comptoir (19/10/2026) : une vente payée entièrement en espèces rend
             // exactement les espèces encaissées (arrondies ou non) ; sinon le montant rendu est arrondi comme à
@@ -197,11 +205,7 @@ class CancelOrderUseCase
                 $this->updateStockAndInventoryUseCase->execute($orderItem->getProductVariant(), $orderItem->getQuantity(), true);
             }
 
-            // Annulation des taxes associées
-            foreach ($order->getOrderTaxes() as $orderTax) {
-                $orderTax->setAmount(0);
-                // Pas besoin de persister orderTax, car il est lié à Order qui sera flushé
-            }
+            // Taxes de la vente : gelées et gardées (PAYS-1 et PAYS-1b) ; la contre-passation se lit dans la session de l'avoir
 
             if ($paymentMethod == 2) { // Supposons que 2 = Espèces
                 $caisseAmount += $posCashRefund ? $cashRefund : $refundAmount;
@@ -235,7 +239,7 @@ class CancelOrderUseCase
                     'cashRefund' => $posCashRefund ? $cashRefund : 0,
                     'manufacturerCoupons' => $couponsVoided !== null ? ['notRefunded' => $couponApplied, 'voided' => $couponsVoided['voided'], 'returnedAfterClaim' => $couponsVoided['returnedAfterClaim']] : null, // F17
                     'terminalRefund' => isset($terminal) && $terminal !== null && $terminal->getRefundStatus() !== null ? ['paymentId' => $terminal->getId(), 'refundId' => $terminal->getRefundId(), 'amount' => $terminal->getRefundAmount(), 'paymentMethodType' => $terminal->getPaymentMethodType()] : null,
-                    'before' => $before, 'after' => ['totalAmount' => 0, 'subTotal' => 0, 'totalTax' => 0, 'status' => 7],
+                    'before' => $before, 'after' => ['totalAmount' => $before['totalAmount'], 'subTotal' => $before['subTotal'], 'totalTax' => $before['totalTax'], 'status' => 7], // PAYS-1b : montants gardés
                 ], $caisse, null, 'order', $order->getId(), $refundedBy);
                 // Clé d'idempotence validée avec le remboursement, réponse gardée dans le même ordre SQL (C5)
                 $this->idempotency->attach('cancel', $order->getId(), ['message' => 'Order canceled and refunded successfully',

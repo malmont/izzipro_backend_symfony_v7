@@ -254,6 +254,9 @@ class VariantPromotionPhotoTest extends WebTestCase
             if (isset($value['rateSource'], $value['label']) && array_key_exists('ratePpm', $value)) {
                 unset($value['code'], $value['ratePpm'], $value['jurisdiction'], $value['rateSource']);
             }
+            if (array_key_exists('cancellation', $value) && $value['cancellation'] === null && array_key_exists('receiptKind', $value)) {
+                unset($value['cancellation']); // PAYS-1b : clé ajoutée au ticket (null hors annulation)
+            }
             $out = [];
             foreach ($value as $k => $item) {
                 $out[$k] = $this->normalize($item, (string) $k);

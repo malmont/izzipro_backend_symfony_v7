@@ -137,6 +137,12 @@ class PosReceiptDto
             'payments' => $payments,
             'cashRegister' => $register ? ['id' => $register->getId(), 'name' => $register->getName()] : null,
             'store' => StoreInfoDto::fromEntreprise($entreprise, $locale), // identifiants dans la langue du site (F18 partie 2a)
+            // PAYS-1b (12/11/2026) : vente annulée (avoir d'annulation émis sur la vente elle-même ; ceux des retours F2 sont sur la commande de
+            // retour) : la réimpression garde les montants de la vente et imprime « ANNULÉE le … — avoir n° … » ; null sinon
+            'cancellation' => $order->getOrderType()?->getId() === 1 && ($cn = $receipts[\App\Entity\PosReceipt::CREDIT_NOTE] ?? null) !== null
+                ? ['at' => ($order->getCanceledAt() ?? $cn->getCreatedAt())->format(\DateTimeInterface::ATOM), 'creditNoteNumber' => $cn->getNumber(),
+                    'creditNoteReference' => $cn->getCashRegister()->receiptReference($cn->getNumber())]
+                : null,
         ];
     }
 }

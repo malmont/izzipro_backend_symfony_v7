@@ -165,13 +165,44 @@ class PosAccountingExportService
     public function amountsForSession(int $caisseId, CashRegisterReport $z): array
     {
         $conn = $this->emProvider->getEntityManager()->getConnection();
-        $orders = $conn->fetchAllAssociative('SELECT DISTINCT o.id, o.order_type_id, o.status_id, o.total_amount, o.cash_rounding, o.gift_card_applied, o.credit_applied, o.discount_amount, o.discount_reason_text FROM "order" o JOIN transaction_caisse t ON t.order_caisse_id = o.id WHERE t.caisse_id = ?', [$caisseId]);
+        $orders = $conn->fetchAllAssociative('SELECT DISTINCT o.id, o.order_type_id, o.status_id, o.canceled_at, o.total_amount, o.cash_rounding, o.gift_card_applied, o.credit_applied, o.discount_amount, o.discount_reason_text FROM "order" o JOIN transaction_caisse t ON t.order_caisse_id = o.id WHERE t.caisse_id = ?', [$caisseId]);
+        // PAYS-1b : transactions de la session par commande (vente, remboursement) : une annulation se lit dans la session de son remboursement
+        $txTypes = [];
+        foreach ($conn->fetchAllAssociative('SELECT order_caisse_id AS id, transaction_type_id AS type FROM transaction_caisse WHERE caisse_id = ? AND order_caisse_id IS NOT NULL', [$caisseId]) as $tx) {
+            $txTypes[(int) $tx['id']][(int) $tx['type']] = true;
+        }
         $saleIds = [];
         $returnIds = [];
         $giftIds = [];
+        // PAYS-1b (12/11/2026) : vente annulée après PAYS-1b (canceled_at, montants gardés). Même session (vente et remboursement ici) : hors
+        // ventes, encaissements et remboursement comptés ; vente d'ici annulée ailleurs : vente gardée, sans le remboursement de l'autre
+        // session ; annulation ici d'une vente d'une autre session : contre-passation dans le bloc des retours, avec le remboursement.
+        // Les annulations antérieures (montants remis à 0, canceled_at null) restent traitées comme avant.
+        $receiptOnlyIds = []; // annulées dans la session : encaissements seulement
+        $refundPayIds = []; // commandes de type 1 dont les paiements négatifs sont des remboursements de cette session
+        $reversalIds = []; // contre-passations (annulation ici d'une vente d'une autre session)
         foreach ($orders as $o) {
-            match ((int) $o['order_type_id']) { 1 => $saleIds[] = (int) $o['id'], 2 => $returnIds[] = (int) $o['id'], 3 => $giftIds[] = (int) $o['id'], default => null };
+            $id = (int) $o['id'];
+            if ((int) $o['order_type_id'] === 1 && $o['canceled_at'] !== null) {
+                $sale = isset($txTypes[$id][1]);
+                $refund = isset($txTypes[$id][2]);
+                if ($sale && $refund) {
+                    $receiptOnlyIds[] = $id;
+                    $refundPayIds[] = $id;
+                } elseif ($sale) {
+                    $saleIds[] = $id;
+                } elseif ($refund) {
+                    $reversalIds[] = $id;
+                    $refundPayIds[] = $id;
+                }
+                continue;
+            }
+            match ((int) $o['order_type_id']) { 1 => $saleIds[] = $id, 2 => $returnIds[] = $id, 3 => $giftIds[] = $id, default => null };
+            if ((int) $o['order_type_id'] === 1) {
+                $refundPayIds[] = $id; // comme avant
+            }
         }
+        $receiptIds = array_merge($saleIds, $receiptOnlyIds);
         $in = fn (array $ids) => $ids ? implode(',', $ids) : '0';
         // Ventes : net HT (lignes), brut HT (lignes + remises), TTC, arrondi, remises, récompenses fidélité (remise de ticket « Récompense fidélité »)
         $sales = $conn->fetchAssociative('SELECT COUNT(*) AS n, COALESCE(SUM(total_amount), 0) AS ttc, COALESCE(SUM(cash_rounding), 0) AS rounding, COALESCE(SUM(gift_card_applied), 0) AS gift, COALESCE(SUM(manufacturer_coupon_applied), 0) AS coupon, COALESCE(SUM(credit_applied), 0) AS credit FROM "order" WHERE id IN (' . $in($saleIds) . ')');
@@ -183,21 +214,48 @@ class PosAccountingExportService
             $taxes[] = ['label' => $t['label'], 'rate' => (float) $t['rate'], 'base' => (int) round((float) $t['base']), 'tax' => (int) round((float) $t['tax'])] + ($t['code'] !== null ? ['code' => $t['code']] : []);
         }
         // Encaissements des ventes par moyen (paiements positifs), terminal / Interac / déclarée pour la carte
-        $receipts = ['cash' => 0, 'declaredCard' => 0, 'card' => 0, 'interac' => 0, 'paypal' => 0, 'giftCard' => (int) $sales['gift'], 'storeCredit' => 0, 'coupon' => (int) $sales['coupon']]; // coupon : F17
-        $redeemed = $conn->fetchAllAssociative('SELECT c.kind, COALESCE(SUM(-tx.amount), 0) AS amount FROM pos_gift_card_transaction tx JOIN pos_gift_card c ON c.id = tx.gift_card_id WHERE tx.kind = \'redeem\' AND tx.order_id IN (' . $in($saleIds) . ') GROUP BY c.kind');
+        $paid = $receiptOnlyIds === [] ? $sales : $conn->fetchAssociative('SELECT COALESCE(SUM(gift_card_applied), 0) AS gift, COALESCE(SUM(manufacturer_coupon_applied), 0) AS coupon FROM "order" WHERE id IN (' . $in($receiptIds) . ')');
+        $receipts = ['cash' => 0, 'declaredCard' => 0, 'card' => 0, 'interac' => 0, 'paypal' => 0, 'giftCard' => (int) $paid['gift'], 'storeCredit' => 0, 'coupon' => (int) $paid['coupon']]; // coupon : F17
+        $redeemed = $conn->fetchAllAssociative('SELECT c.kind, COALESCE(SUM(-tx.amount), 0) AS amount FROM pos_gift_card_transaction tx JOIN pos_gift_card c ON c.id = tx.gift_card_id WHERE tx.kind = \'redeem\' AND tx.order_id IN (' . $in($receiptIds) . ') GROUP BY c.kind');
         foreach ($redeemed as $r) {
             if ($r['kind'] === 'store_credit') {
                 $receipts['storeCredit'] = (int) $r['amount'];
                 $receipts['giftCard'] -= (int) $r['amount'];
             }
         }
-        $this->splitPayments($conn, $saleIds, true, $receipts);
+        $this->splitPayments($conn, $receiptIds, true, $receipts);
         // Retours et annulations : commandes de type 2 de la session + paiements négatifs des ventes annulées
         $returns = $conn->fetchAssociative('SELECT COUNT(*) AS n, COALESCE(SUM(-total_amount), 0) AS ttc FROM "order" WHERE id IN (' . $in($returnIds) . ')');
         $refundsHt = abs((int) round((float) $conn->fetchOne('SELECT COALESCE(SUM(total_price), 0) FROM order_items WHERE order_associated_id IN (' . $in($returnIds) . ')'))); // lignes de retour au prix payé (positives)
         $refundTaxes = [];
         foreach ($conn->fetchAllAssociative('SELECT CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_label ELSE t.name END AS label, CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_rate_ppm::float8 / 1000000 ELSE t.rate END AS rate, CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_code END AS code, COALESCE(SUM(-ot.amount), 0) AS tax FROM order_tax ot JOIN tax t ON t.id = ot.tax_id WHERE ot.order_tax_id IN (' . $in($returnIds) . ') GROUP BY 1, 2, 3 ORDER BY MIN(t.id)') as $t) {
             $refundTaxes[] = ['label' => $t['label'], 'rate' => (float) $t['rate'], 'tax' => (int) round((float) $t['tax'])] + ($t['code'] !== null ? ['code' => $t['code']] : []);
+        }
+        $reversals = [];
+        $reversalRounding = 0;
+        if ($reversalIds !== []) { // PAYS-1b : contre-passation des ventes d'autres sessions annulées ici, aux valeurs gelées de la vente (PAYS-1)
+            $rv = $conn->fetchAssociative('SELECT COUNT(*) AS n, COALESCE(SUM(total_amount), 0) AS ttc FROM "order" WHERE id IN (' . $in($reversalIds) . ')');
+            $returns['n'] = (int) $returns['n'] + (int) $rv['n'];
+            $returns['ttc'] = (float) $returns['ttc'] + (float) $rv['ttc'];
+            $refundsHt += abs((int) round((float) $conn->fetchOne('SELECT COALESCE(SUM(total_price), 0) FROM order_items WHERE order_associated_id IN (' . $in($reversalIds) . ')')));
+            foreach ($conn->fetchAllAssociative('SELECT CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_label ELSE t.name END AS label, CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_rate_ppm::float8 / 1000000 ELSE t.rate END AS rate, CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_code END AS code, COALESCE(SUM(ot.amount), 0) AS tax FROM order_tax ot JOIN tax t ON t.id = ot.tax_id WHERE ot.order_tax_id IN (' . $in($reversalIds) . ') GROUP BY 1, 2, 3 ORDER BY MIN(t.id)') as $t) {
+                $merged = false;
+                foreach ($refundTaxes as &$r) {
+                    if ($r['label'] === $t['label'] && $r['rate'] === (float) $t['rate'] && ($r['code'] ?? null) === $t['code']) {
+                        $r['tax'] += (int) round((float) $t['tax']);
+                        $merged = true;
+                    }
+                }
+                unset($r);
+                if (!$merged) {
+                    $refundTaxes[] = ['label' => $t['label'], 'rate' => (float) $t['rate'], 'tax' => (int) round((float) $t['tax'])] + ($t['code'] !== null ? ['code' => $t['code']] : []);
+                }
+            }
+            // arrondi des espèces rendu par le remboursement (porté par sa transaction ; celui perçu à la vente reste dans la session de la vente)
+            $reversalRounding = (int) $conn->fetchOne('SELECT COALESCE(SUM(cash_rounding), 0) FROM transaction_caisse WHERE caisse_id = ? AND transaction_type_id = 2 AND order_caisse_id IN (' . $in($reversalIds) . ')', [$caisseId]);
+            foreach ($conn->fetchAllAssociative('SELECT r.number, cr.receipt_prefix FROM pos_receipt r JOIN cash_register cr ON cr.id = r.cash_register_id WHERE r.kind = \'ticket\' AND r.order_id IN (' . $in($reversalIds) . ') ORDER BY r.number') as $r) {
+                $reversals[] = ($r['receipt_prefix'] ?? '') . $r['number'];
+            }
         }
         $refunds = ['cash' => 0, 'card' => 0, 'interac' => 0, 'paypal' => 0, 'giftCard' => 0, 'storeCredit' => 0,
             'coupon' => (int) $conn->fetchOne("SELECT COALESCE(SUM(amount), 0) FROM pos_manufacturer_coupon WHERE voided_caisse_id = ? AND status IN ('voided', 'returned_after_claim')", [$caisseId])]; // coupons annulés par les retours de la session (F17)
@@ -208,7 +266,7 @@ class PosAccountingExportService
         $refunds['storeCredit'] = (int) $pr['credits'];
         // Annulations (ventes passées au statut 7 dans cette session : paiements négatifs sur les ventes)
         $canceled = ['cash' => 0, 'declaredCard' => 0, 'card' => 0, 'interac' => 0, 'paypal' => 0, 'giftCard' => 0, 'storeCredit' => 0];
-        $this->splitPayments($conn, $saleIds, false, $canceled);
+        $this->splitPayments($conn, $refundPayIds, false, $canceled); // PAYS-1b : remboursements des annulations de cette session seulement
         $refunds['cash'] += $canceled['cash'];
         $refunds['card'] += $canceled['card'] + $canceled['declaredCard'];
         $refunds['interac'] += $canceled['interac'];
@@ -231,13 +289,13 @@ class PosAccountingExportService
 
         return [
             'salesCount' => (int) $sales['n'], 'salesTtc' => (int) round((float) $sales['ttc']), 'salesNetHt' => $netHt, 'salesGrossHt' => $grossHt,
-            'discounts' => $discountsHt, 'loyaltyRewards' => $rewards, 'salesByTax' => $taxes, 'cashRounding' => (int) $sales['rounding'],
+            'discounts' => $discountsHt, 'loyaltyRewards' => $rewards, 'salesByTax' => $taxes, 'cashRounding' => (int) $sales['rounding'] + $reversalRounding,
             'receipts' => ['cash' => $receipts['cash'], 'card' => $receipts['card'] + $receipts['declaredCard'], 'declaredCard' => $receipts['declaredCard'], 'interac' => $receipts['interac'], 'paypal' => $receipts['paypal'], 'giftCard' => max(0, $receipts['giftCard']), 'storeCredit' => $receipts['storeCredit'], 'coupon' => $receipts['coupon']], // coupon : F17
             'returnsCount' => (int) $returns['n'], 'refundsTtc' => (int) round((float) $returns['ttc']), 'refundsHt' => $refundsHt, 'refundsTaxes' => $refundTaxes, 'refunds' => $refunds,
             'giftCardsSoldCount' => $giftSoldCount, 'giftCardsSold' => ['cash' => $giftSold['cash'], 'card' => $giftSold['card'] + $giftSold['declaredCard'], 'interac' => $giftSold['interac'], 'stripe' => 0], 'giftCardsRefunded' => ['cash' => $giftRefunded],
             'discrepancy' => (int) ($z->getDiscrepancy() ?? 0), 'bankDeposit' => (int) ($z->getBankDeposit() ?? 0),
             'deposits' => (int) $mv['deposits'], 'withdrawals' => (int) $mv['withdrawals'], 'fundDeposits' => (int) $mv['fund_in'], 'fundWithdrawals' => (int) $mv['fund_out'],
-        ];
+        ] + ($reversals !== [] ? ['reversals' => $reversals] : []); // PAYS-1b : tickets des ventes contre-passées (annulées ici, vendues ailleurs)
     }
 
     /** Paiements (positifs = encaissements, négatifs = remboursements) des commandes données, ventilés espèces / carte déclarée / terminal / Interac / PayPal */

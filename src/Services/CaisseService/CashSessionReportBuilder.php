@@ -101,6 +101,16 @@ class CashSessionReportBuilder
         $sales['giftCards'] = (int) array_sum(array_map(fn (Order $o) => $o->getGiftCardApplied(), $saleOrders)); // part réglée par carte-cadeau ou avoir (F9) : espèces + cartes + giftCards = total
         $sales['manufacturerCoupons'] = (int) array_sum(array_map(fn (Order $o) => $o->getManufacturerCouponApplied(), $saleOrders)); // part réglée par coupons de fabricant (F17) : taxes sur le prix plein
         $refunds['byPaymentMethod'] = $this->byPaymentMethod($refundOrders, fn (float $amount) => $amount < 0, $locale);
+        // PAYS-1b (12/11/2026) : une vente annulée après PAYS-1b garde ses montants (canceled_at). Le rapport ne parle que de sa session :
+        // annulée dans la même session → hors taxes et hors totaux ; annulée dans une autre session → gardée ici, contre-passée (taxes
+        // négatives) dans la session de l'annulation. Les annulations antérieures (montants déjà remis à 0) sont traitées comme avant.
+        $taxSigns = [];
+        foreach ($saleOrders + $refundOrders as $id => $o) {
+            if ($o->getOrderType()?->getId() === 1 && $o->getCanceledAt() !== null) {
+                $taxSigns[$id] = isset($saleOrders[$id]) ? (isset($refundOrders[$id]) ? 0 : 1) : -1;
+            }
+        }
+        $keptSales = array_filter($saleOrders, fn (Order $o) => ($taxSigns[$o->getId()] ?? 1) !== 0);
 
         return [
             'cashRegister' => $register ? ['id' => $register->getId(), 'name' => $register->getName()] : null,
@@ -111,7 +121,7 @@ class CashSessionReportBuilder
             'openingFund' => (int) round((float) ($session->getFonDeCaisse() ?? 0)) - $movements['fundDeposits'] + $movements['fundWithdrawals'],
             'currentFund' => (int) round((float) ($session->getFonDeCaisse() ?? 0)),
             'sales' => $sales,
-            'taxes' => $this->taxes($saleOrders + $refundOrders),
+            'taxes' => $this->taxes($saleOrders + $refundOrders, $taxSigns),
             'pricesIncludeTax' => $entreprise?->isPricesIncludeTax() ?? false, // F18 partie 2b : ventes TTC (taxes comprises dans sales.total)
             'refunds' => $refunds,
             'discounts' => $this->discounts($saleOrders), // remises de caisse (F1, 24/10/2026)
@@ -131,11 +141,11 @@ class CashSessionReportBuilder
             // Retours partiels et échanges (F2, 24/10/2026) : ajout ; les remboursements correspondants sont déjà dans refunds
             'returns' => $em->getRepository(\App\Entity\PosReturn::class)->totalsForSession((int) $session->getId()),
             // Ventes hors ligne synchronisées (C5 partie 2, 25/10/2026) : ajout
-            'offline' => $this->offline($saleOrders),
+            'offline' => $this->offline($saleOrders, $keptSales),
             'customItems' => $this->customItems($saleOrders), // articles libres (F7, 26/10/2026)
             'priceOverrides' => $this->priceOverrides($saleOrders), // prix modifiés (F7)
             // Fiche client et fidélité (F8, 28/10/2026) : ventes rattachées à un client, points gagnés, rachetés (points et valeur) et repris
-            'customers' => ['salesWithCustomer' => ['count' => count(array_filter($saleOrders, fn (Order $o) => $o->getCustomerId() !== null)), 'total' => (int) array_sum(array_map(fn (Order $o) => $o->getCustomerId() !== null ? (int) round((float) $o->getTotalAmount()) : 0, $saleOrders))],
+            'customers' => ['salesWithCustomer' => ['count' => count(array_filter($saleOrders, fn (Order $o) => $o->getCustomerId() !== null)), 'total' => (int) array_sum(array_map(fn (Order $o) => $o->getCustomerId() !== null ? (int) round((float) $o->getTotalAmount()) : 0, $keptSales))],
                 'loyalty' => $this->loyalty->reportBlock((int) $session->getId())],
             // Cartes-cadeaux et avoirs (F9, 27/10/2026) : vendu, utilisé, avoirs émis, remboursé, ajusté (session) ; solde en cours du site (passif)
             'giftCards' => $em->getRepository(\App\Entity\PosGiftCardTransaction::class)->totalsForSession((int) $session->getId()) + ['outstanding' => $em->getRepository(\App\Entity\PosGiftCard::class)->outstanding()],
@@ -147,8 +157,9 @@ class CashSessionReportBuilder
     }
 
     /** @return array{count: int, total: int, priceDrift: int, stockShortfalls: int, lateEntries: int} ventes hors ligne de la session */
-    private function offline(array $saleOrders): array
+    private function offline(array $saleOrders, ?array $keptSales = null): array
     {
+        $keptSales ??= $saleOrders; // PAYS-1b : une vente annulée dans la session reste comptée, pour un total de 0 (comme avant)
         $out = ['count' => 0, 'total' => 0, 'priceDrift' => 0, 'stockShortfalls' => 0, 'lateEntries' => 0];
         $ids = array_keys(array_filter($saleOrders, fn (Order $o) => $o->getSyncedAt() !== null));
         if ($ids === []) {
@@ -156,7 +167,7 @@ class CashSessionReportBuilder
         }
         foreach ($this->emProvider->getEntityManager()->getRepository(\App\Entity\PosOfflineSale::class)->findBy(['orderId' => $ids]) as $sale) {
             $out['count']++;
-            $out['total'] += (int) round((float) $saleOrders[$sale->getOrderId()]->getTotalAmount());
+            $out['total'] += isset($keptSales[$sale->getOrderId()]) ? (int) round((float) $saleOrders[$sale->getOrderId()]->getTotalAmount()) : 0;
             $out['priceDrift'] += abs($sale->getPriceDrift());
             $out['stockShortfalls'] += $sale->getStockShortfall();
             $out['lateEntries'] += $sale->isLateEntry() ? 1 : 0;
@@ -315,17 +326,22 @@ class CashSessionReportBuilder
      * @param array<int, Order> $orders
      * @return list<array{label: string, rate: ?float, amount: int}>
      */
-    private function taxes(array $orders): array
+    /** @param array<int, int> $signs PAYS-1b : 0 = commande écartée, -1 = contre-passation (annulation d'une vente d'une autre session) */
+    private function taxes(array $orders, array $signs = []): array
     {
         $groups = [];
         foreach ($orders as $order) {
+            $sign = $signs[$order->getId()] ?? 1;
+            if ($sign === 0) {
+                continue;
+            }
             foreach ($order->getOrderTaxes() as $orderTax) {
                 $snap = $orderTax->snapshot(); // PAYS-1 : taxe gelée à la vente (X et Z ne dépendent plus de la table tax actuelle)
                 $key = $snap['label'] . '|' . ($snap['rate'] ?? '');
                 $groups[$key] ??= ['label' => $snap['label'], 'rate' => $snap['rate'], 'amount' => 0, 'base' => 0, 'total' => 0, 'category' => $snap['category'], 'code' => $snap['code'], 'ratePpm' => $snap['ratePpm']];
-                $amount = (int) round((float) $orderTax->getAmount());
+                $amount = $sign * (int) round((float) $orderTax->getAmount());
                 // Assiette HT (F18 partie 2a) : celle de la commande ; commande antérieure sans assiette : net taxable de la commande (même signe que la taxe)
-                $base = $orderTax->getBase() ?? ($amount < 0 ? -1 : 1) * (int) array_sum(array_map(fn ($i) => $i->isTaxable() ? abs((int) round((float) $i->getTotalPrice())) : 0, $order->getOrderItems()->toArray()));
+                $base = $orderTax->getBase() !== null ? $sign * $orderTax->getBase() : ($amount < 0 ? -1 : 1) * (int) array_sum(array_map(fn ($i) => $i->isTaxable() ? abs((int) round((float) $i->getTotalPrice())) : 0, $order->getOrderItems()->toArray()));
                 $groups[$key]['amount'] += $amount;
                 $groups[$key]['base'] += $base;
                 $groups[$key]['total'] += $base + $amount;
