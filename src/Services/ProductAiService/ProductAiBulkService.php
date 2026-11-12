@@ -47,6 +47,7 @@ class ProductAiBulkService
         private readonly LoggerInterface $logger,
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
         private readonly ?EmailLocale $siteLocale = null,
+        private readonly ?\App\Services\Http\ClientSafeError $safeError = null, // lot ERREURS-1 (12/11/2026)
     ) {
     }
 
@@ -169,7 +170,8 @@ class ProductAiBulkService
                 }
             } catch (\Throwable $e) {
                 $result['failed']++;
-                $result['items'][] = ['id' => $id, 'name' => $product->getName(), 'status' => 'failed', 'note' => mb_substr($e->getMessage(), 0, 200)];
+                // lot ERREURS-1 : la note d'un article en échec est lue par l'administrateur ; une panne imprévue y devient le texte neutre
+                $result['items'][] = ['id' => $id, 'name' => $product->getName(), 'status' => 'failed', 'note' => mb_substr($this->safeError->message($e, 'lot IA de fiches produit'), 0, 200)];
                 $this->logger->error(sprintf('[Lot IA %s] produit %d : %s', $kind, $id, $e->getMessage()));
             }
         }

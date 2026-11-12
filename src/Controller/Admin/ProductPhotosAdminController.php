@@ -29,7 +29,7 @@ class ProductPhotosAdminController extends AbstractController
     public const VIEWS = ['face' => 'De face', 'back' => 'De dos', 'detail' => 'Détail (matière, étiquette)', 'worn' => 'Porté par une personne', 'packshot' => 'Packshot, produit seul'];
     public const ENVIRONMENTS = ['studio' => 'Studio, fond blanc', 'street' => 'Rue, lumière naturelle', 'indoor' => 'Intérieur chaleureux', 'nature' => 'Nature, plein air'];
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly ProductPhotoService $photos, private readonly ProductAiBulkService $ai, private readonly ProductImageGeneratorInterface $images, private readonly LandingAiQuotaService $quota, private readonly AdminUrlGenerator $urls, private readonly ?\App\Services\MediaUrlResolver $media = null)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly ProductPhotoService $photos, private readonly ProductAiBulkService $ai, private readonly ProductImageGeneratorInterface $images, private readonly LandingAiQuotaService $quota, private readonly AdminUrlGenerator $urls, private readonly ?\App\Services\MediaUrlResolver $media = null, private readonly ?\App\Services\Http\ClientSafeError $safeError = null)
     {
     }
 
@@ -81,7 +81,7 @@ class ProductPhotosAdminController extends AbstractController
                 } catch (LandingAiException $e) {
                     $this->addFlash($e->getStatusCode() === 402 ? 'warning' : 'danger', $e->getMessage());
                 } catch (\Throwable $e) {
-                    $this->addFlash('warning', $e->getMessage());
+                    $this->addFlash('warning', $this->safeError->message($e, 'EasyAdmin : image générée d\'un article')); // lot ERREURS-1 : texte neutre pour une panne imprévue
                 }
                 break;
         }

@@ -73,7 +73,9 @@ class StripePaymentService
             ];
         } catch (ApiErrorException $e) {
             $this->logger->error("Erreur API Stripe (createPayment) pour $tenantCode: " . $e->getMessage());
-            return ['success' => false, 'errors' => [$e->getMessage()]];
+            // lot ERREURS-1 (12/11/2026) : carte refusée = texte de Stripe et decline_code ; autre erreur Stripe = texte neutre
+            return ['success' => false, 'errors' => [$e instanceof \Stripe\Exception\CardException ? $e->getMessage() : \App\Services\Http\ClientSafeError::PAYMENT_NEUTRAL]]
+                + array_filter(['declineCode' => \App\Services\Http\ClientSafeError::declineCode($e)]);
         }
     }
 

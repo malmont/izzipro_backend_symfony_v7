@@ -25,7 +25,8 @@ class AdminStripeController extends AbstractController
         StripeService $stripeService,
         UrlGeneratorInterface $urlGenerator,
         AdminUrlGenerator $adminUrlGenerator,
-        TenantConnectionManager $tenantConnectionManager
+        TenantConnectionManager $tenantConnectionManager,
+        \App\Services\Http\ClientSafeError $safeError
     ): Response {
         $secretKey = $_ENV['STRIPE_SECRET_KEY'] ?? $_SERVER['STRIPE_SECRET_KEY'] ?? getenv('STRIPE_SECRET_KEY') ?: null;
         if (empty($secretKey)) {
@@ -47,7 +48,8 @@ class AdminStripeController extends AbstractController
 
             return $this->redirect($onboardingLink);
         } catch (\Throwable $e) {
-            $this->addFlash('danger', 'Erreur Stripe lors de la génération du lien d\'onboarding : ' . $e->getMessage());
+            // lot ERREURS-1 (12/11/2026) : le message d'une erreur Stripe peut citer un fragment de clé ; détail au journal seulement
+            $this->addFlash('danger', 'Erreur Stripe lors de la génération du lien d\'onboarding. ' . ($e instanceof \Stripe\Exception\ApiErrorException ? $safeError->stripe($e, 'EasyAdmin : connexion Stripe') : $safeError->message($e, 'EasyAdmin : connexion Stripe')));
             return $this->redirect($adminUrlGenerator->setController(StripeConfigCrudController::class)->generateUrl());
         }
     }
@@ -58,7 +60,8 @@ class AdminStripeController extends AbstractController
     #[Route('/success', name: 'admin_stripe_success', methods: ['GET'])]
     public function success(
         StripeService $stripeService,
-        AdminUrlGenerator $adminUrlGenerator
+        AdminUrlGenerator $adminUrlGenerator,
+        \App\Services\Http\ClientSafeError $safeError
     ): Response {
         try {
             $success = $stripeService->finalizeConnection();
@@ -69,7 +72,7 @@ class AdminStripeController extends AbstractController
                 $this->addFlash('warning', 'La procédure Stripe a été enregistrée, mais des vérifications ou informations complémentaires sont requises par Stripe avant d\'activer les paiements.');
             }
         } catch (\Throwable $e) {
-            $this->addFlash('danger', 'Erreur lors de la finalisation de la connexion Stripe : ' . $e->getMessage());
+            $this->addFlash('danger', 'Erreur lors de la finalisation de la connexion Stripe. ' . ($e instanceof \Stripe\Exception\ApiErrorException ? $safeError->stripe($e, 'EasyAdmin : finalisation Stripe') : $safeError->message($e, 'EasyAdmin : finalisation Stripe')));
         }
 
         return $this->redirect($adminUrlGenerator->setController(StripeConfigCrudController::class)->generateUrl());

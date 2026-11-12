@@ -10,7 +10,7 @@ use Stripe\StripeClient;
 /** Comptes Connect de la caisse chez Stripe, avec la clé du mode demandé (StripeAccountResolver) ; aucune clé au journal */
 class StripePosAccountGateway implements PosStripeAccountGatewayInterface
 {
-    public function __construct(private readonly StripeAccountResolver $accounts)
+    public function __construct(private readonly StripeAccountResolver $accounts, private readonly ?\App\Services\Http\ClientSafeError $safeError = null)
     {
     }
 
@@ -53,7 +53,8 @@ class StripePosAccountGateway implements PosStripeAccountGatewayInterface
         try {
             return $action(new StripeClient($key));
         } catch (ApiErrorException $e) {
-            throw new CashRegisterException('STRIPE_ERROR', 'Stripe : ' . $e->getMessage(), 502, [], ['stripeCode' => $e->getStripeCode()]);
+            // lot ERREURS-1 (12/11/2026) : le message d'une erreur Stripe peut citer un fragment de clé ; seule une carte refusée garde son texte
+            throw new CashRegisterException('STRIPE_ERROR', 'Stripe : ' . $this->safeError->stripe($e, 'compte Stripe de la caisse'), 502, [], ['stripeCode' => $e->getStripeCode()] + array_filter(['declineCode' => \App\Services\Http\ClientSafeError::declineCode($e)]));
         }
     }
 }

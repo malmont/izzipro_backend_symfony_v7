@@ -243,6 +243,77 @@ class PosReceiptApiTest extends WebTestCase
         $this->assertSame(401, $this->request('POST', '/api/pos/receipts/reprint', ['barcode' => $sale['barcode']])->getStatusCode());
     }
 
+    /**
+     * Lot ERREURS-1 (12/11/2026) : une panne imprévue pendant une vente ou une annulation ne montre plus son message au caissier. La
+     * réponse garde son statut (400) et son code ; le texte devient neutre, le détail part au journal ; rien n'est écrit.
+     */
+    public function testAnUnexpectedFailureDuringASaleOrACancellationIsNotShownToTheCashier(): void
+    {
+        $witness = 'TEMOIN-SQLSTATE[40001] could not serialize access, table order_tax';
+        $this->loginAs(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
+        $this->request('POST', '/api/caisse/open', ['cashRegisterId' => $this->register, 'cashFund' => 10000]);
+        $saleBody = ['items' => [['productVariantId' => $this->cap, 'quantity' => 2]], 'paymentMethods' => [['type' => 2, 'amount' => 66.70]], 'cashRegisterId' => $this->register];
+        $logged = [];
+        $fresh = function () use (&$logged): void { // nouveau noyau : un double ne se pose que sur un service pas encore construit
+            static::ensureKernelShutdown();
+            $this->client = static::createClient();
+            $provider = static::getContainer()->get(TenantEntityManagerProvider::class);
+            $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+            $this->db = $provider->getEntityManager()->getConnection();
+            $logged = [];
+            $spy = new class($logged) extends \Psr\Log\AbstractLogger {
+                public function __construct(private array &$records)
+                {
+                }
+
+                public function log($level, string|\Stringable $message, array $context = []): void
+                {
+                    $this->records[] = (string) $message;
+                }
+            };
+            static::getContainer()->set(\App\Services\Http\ClientSafeError::class, new \App\Services\Http\ClientSafeError($spy, (string) static::getContainer()->getParameter('kernel.project_dir')));
+        };
+
+        // Vente : le calcul des taxes tombe en panne
+        $fresh();
+        $orders = (int) $this->db->fetchOne('SELECT COUNT(*) FROM "order"');
+        $taxes = $this->createMock(\App\UseCase\OrderUseCase\CalculateTaxesUseCase::class);
+        $taxes->method('execute')->willThrowException(new \RuntimeException($witness));
+        static::getContainer()->set(\App\UseCase\OrderUseCase\CalculateTaxesUseCase::class, $taxes);
+        $this->key = self::uuid();
+        $response = $this->request('POST', '/api/order/create-multi-payment', $saleBody);
+        $body = json_decode($response->getContent(), true);
+        $neutral = \App\Services\Http\ClientSafeError::NEUTRAL;
+        $this->assertSame([400, $neutral, $neutral, 'BAD_REQUEST'], [$response->getStatusCode(), $body['error'], $body['message'], $body['code']], 'statut et code d\'aujourd\'hui, texte neutre');
+        $this->assertStringNotContainsString('TEMOIN', $response->getContent());
+        $this->assertStringContainsString($witness, implode("\n", $logged), 'le détail est au journal');
+        $this->assertSame($orders, (int) $this->db->fetchOne('SELECT COUNT(*) FROM "order"'), 'rien n\'est écrit');
+
+        // Vente réelle, puis annulation dont l'écriture du paiement tombe en panne
+        $fresh();
+        $this->key = self::uuid();
+        $sale = $this->json($this->request('POST', '/api/order/create-multi-payment', $saleBody), 201);
+        $id = (int) $sale['orderId'];
+        $fresh();
+        $payments = $this->createMock(\App\UseCase\OrderUseCase\PaymentHandlerUseCase::class);
+        $payments->method('handlePayment')->willThrowException(new \RuntimeException($witness));
+        static::getContainer()->set(\App\UseCase\OrderUseCase\PaymentHandlerUseCase::class, $payments);
+        $this->key = self::uuid();
+        $response = $this->request('POST', "/api/order/cancel/$id", ['paymentMethod' => 2, 'cashRegisterId' => $this->register]);
+        $body = json_decode($response->getContent(), true);
+        $this->assertSame([400, $neutral, 'INTERNAL_ERROR'], [$response->getStatusCode(), $body['error'], $body['code']], 'annulation : statut gardé, texte neutre, code ajouté');
+        $this->assertStringNotContainsString('TEMOIN', $response->getContent());
+        $this->assertStringContainsString($witness, implode("\n", $logged));
+        $this->assertNotSame(7, (int) $this->db->fetchOne('SELECT status_id FROM "order" WHERE id = ?', [$id]), 'la vente n\'est pas annulée');
+
+        // Refus métier inchangé : commande inconnue
+        $fresh();
+        $this->key = self::uuid();
+        $response = $this->request('POST', '/api/order/cancel/99999999', ['paymentMethod' => 2, 'cashRegisterId' => $this->register]);
+        $this->assertSame([404, ['error' => 'Order not found', 'code' => 'ORDER_NOT_FOUND', 'message' => 'Order not found']], [$response->getStatusCode(), json_decode($response->getContent(), true)], 'refus métier : statut, code et message d\'avant');
+        $this->assertSame([], $logged, 'un refus métier ne va pas au journal des pannes');
+    }
+
     public function testEmailWithoutSmtpConfigurationIsRefusedExplicitly(): void
     {
         $this->loginAs(['ROLE_USER_POS']);

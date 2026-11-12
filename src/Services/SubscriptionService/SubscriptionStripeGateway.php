@@ -29,7 +29,8 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
         private readonly CacheInterface $cache,
         private readonly StripeConnectSetupService $setup,
         #[Autowire('%env(default::STRIPE_SECRET_KEY)%')]
-        private readonly ?string $stripeSecretKey
+        private readonly ?string $stripeSecretKey,
+        private readonly ?\App\Services\Http\ClientSafeError $safeError = null, // lot ERREURS-1 (12/11/2026)
     ) {
     }
 
@@ -282,7 +283,8 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
 
             return $action(new StripeClient((string) $this->stripeSecretKey), $account ? ['stripe_account' => $account] : []);
         } catch (\Stripe\Exception\ApiErrorException $e) {
-            throw new SubscriptionException(502, 'Stripe : ' . $e->getMessage(), [], [], 'STRIPE_ERROR');
+            // lot ERREURS-1 : carte refusée = texte de Stripe et decline_code ; toute autre erreur Stripe = texte neutre, détail au journal
+            throw new SubscriptionException(502, 'Stripe : ' . $this->safeError->stripe($e, 'abonnement'), [], array_filter(['declineCode' => \App\Services\Http\ClientSafeError::declineCode($e)]), 'STRIPE_ERROR');
         }
     }
 }

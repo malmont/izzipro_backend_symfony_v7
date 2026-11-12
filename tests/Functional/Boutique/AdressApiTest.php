@@ -215,7 +215,7 @@ class AdressApiTest extends WebTestCase
 
             public function verifyOrKeep(array $address): array
             {
-                throw new \RuntimeException('Adresse invalide : Address not found');
+                throw new \App\Services\AdressService\AddressUndeliverableException('Adresse invalide : Address not found'); // le refus du service, nommé (lot ERREURS-1)
             }
         });
         $response = $this->request('POST', '/api/adresses', $this->payload());

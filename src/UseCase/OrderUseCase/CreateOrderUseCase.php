@@ -60,7 +60,8 @@ class CreateOrderUseCase
         private readonly \App\Services\PosCustomerService\PosCustomerService $customers, // fiche client (F8)
         private readonly \App\Services\PosCustomerService\PosLoyaltyService $loyalty, // fidélité (F8)
         private readonly \App\Services\PosCouponService\PosCouponService $coupons, // coupons de fabricant (F17)
-        private readonly ?\App\Services\PosRentalService\PosRentalService $rentals = null // location au comptoir : réservations confirmées, caution (09/11/2026)
+        private readonly ?\App\Services\PosRentalService\PosRentalService $rentals = null, // location au comptoir : réservations confirmées, caution (09/11/2026)
+        private readonly ?\App\Services\Http\ClientSafeError $safeError = null, // lot ERREURS-1 (12/11/2026)
     ) {
         $this->createOrderCommandUseCase = $createOrderCommandUseCase;
         $this->processOrderItemsUseCase = $processOrderItemsUseCase;
@@ -383,7 +384,10 @@ class CreateOrderUseCase
                 $em->getConnection()->rollBack();
             }
             // Statut et texte inchangés ; code stable (VARIANT_NOT_FOUND, CARRIER_NOT_FOUND, QUOTE_INVALID, sinon BAD_REQUEST), message et errors[] du devis ajoutés (02/11/2026)
-            return new JsonResponse(['error' => $e->getMessage(), 'code' => \App\EventSubscriber\ApiExceptionSubscriber::code($e, 400), 'message' => $e->getMessage()] + \App\EventSubscriber\ApiExceptionSubscriber::quoteErrors($e), Response::HTTP_BAD_REQUEST);
+            // lot ERREURS-1 (12/11/2026) : une panne imprévue (base, bibliothèque) rend le texte neutre ; le code, lui, ne change pas
+            $text = $this->safeError->message($e, 'création d\'une vente');
+
+            return new JsonResponse(['error' => $text, 'code' => \App\EventSubscriber\ApiExceptionSubscriber::code($e, 400), 'message' => $text] + \App\EventSubscriber\ApiExceptionSubscriber::quoteErrors($e), Response::HTTP_BAD_REQUEST);
         }
     }
 }

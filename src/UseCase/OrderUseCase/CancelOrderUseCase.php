@@ -41,7 +41,8 @@ class CancelOrderUseCase
         private readonly \App\Services\PosCustomerService\PosLoyaltyService $loyalty, // fidélité (F8)
         private readonly \App\Services\PosCouponService\PosCouponService $coupons, // coupons de fabricant (F17)
         private readonly ?\App\Services\PosRentalService\PosRentalService $rentals = null, // location au comptoir (09/11/2026)
-        private readonly ?\App\Services\CheckoutService\CheckoutPaymentGatewayInterface $checkout = null // remboursement Stripe d'une commande web (lot 3 Opérations, 07/11/2026)
+        private readonly ?\App\Services\CheckoutService\CheckoutPaymentGatewayInterface $checkout = null, // remboursement Stripe d'une commande web (lot 3 Opérations, 07/11/2026)
+        private readonly ?\App\Services\Http\ClientSafeError $safeError = null, // lot ERREURS-1 (12/11/2026)
     ) {
         $this->paymentHandlerUseCase = $paymentHandlerUseCase;
         $this->updateStockAndInventoryUseCase = $updateStockAndInventoryUseCase;
@@ -266,7 +267,8 @@ class CancelOrderUseCase
             // En cas d'erreur, on annule toutes les opérations
             $em->getConnection()->rollback();
 
-            return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+            // refus métier (« Order not found »…) gardé ; panne imprévue : texte neutre, détail au journal (lot ERREURS-1)
+            return new JsonResponse($this->safeError->body($e, 'annulation d\'une commande'), Response::HTTP_BAD_REQUEST);
         }
     }
 }

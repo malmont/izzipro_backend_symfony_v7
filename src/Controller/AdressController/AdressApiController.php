@@ -33,7 +33,8 @@ class AdressApiController extends AbstractController
         CreateAdressUseCase $createAdressUseCase,
         EditAdressUseCase $editAdressUseCase,
         DeleteAdressUseCase $deleteAdressUseCase,
-        AddressVerificationService $verifier
+        AddressVerificationService $verifier,
+        private readonly ?\App\Services\Http\ClientSafeError $safeError = null, // lot ERREURS-1 (12/11/2026)
     ) {
         $this->getUserAdressesUseCase = $getUserAdressesUseCase;
         $this->createAdressUseCase = $createAdressUseCase;
@@ -90,7 +91,8 @@ class AdressApiController extends AbstractController
                 'country'     => $dto->country,
             ]);
         } catch (\RuntimeException $e) {
-            return $this->json(self::undeliverableBody($e->getMessage()), Response::HTTP_BAD_REQUEST);
+            // « Adresse invalide : … » (notre refus, avec les motifs du vérificateur) est gardé ; une panne du service d'adresses est neutre
+            return $this->json(self::undeliverableBody($this->safeError->message($e, 'vérification d\'une adresse')), Response::HTTP_BAD_REQUEST);
         }
 
         // Injecter la version normalisée
@@ -142,7 +144,8 @@ class AdressApiController extends AbstractController
                 'country'     => $dto->country,
             ]);
         } catch (\RuntimeException $e) {
-            return $this->json(self::undeliverableBody($e->getMessage()), Response::HTTP_BAD_REQUEST);
+            // « Adresse invalide : … » (notre refus, avec les motifs du vérificateur) est gardé ; une panne du service d'adresses est neutre
+            return $this->json(self::undeliverableBody($this->safeError->message($e, 'vérification d\'une adresse')), Response::HTTP_BAD_REQUEST);
         }
 
         // Injecter la version normalisée

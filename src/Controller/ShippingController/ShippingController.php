@@ -24,6 +24,7 @@ class ShippingController extends AbstractController
         private GetShippingSummaryForCart  $getShippingSummaryForCart,
         private LoggerInterface            $logger,
         private \App\Services\TenantEntityManagerProvider $emProvider,
+        private \App\Services\Http\ClientSafeError $safeError,
     ) {}
 
     /**
@@ -129,12 +130,8 @@ class ShippingController extends AbstractController
                 JsonResponse::HTTP_BAD_REQUEST
             );
         } catch (\Exception $e) {
-            $this->logger->error('Erreur API Shipping/Buy: ' . $e->getMessage(), ['exception' => $e]);
-            
-            return $this->json(
-                ['error' => 'DEBUG ERROR: ' . $e->getMessage()], // trace retirée de la réponse (S2.7), conservée dans le journal
-                JsonResponse::HTTP_INTERNAL_SERVER_ERROR
-            );
+            // lot ERREURS-1 (12/11/2026) : avant, « DEBUG ERROR: » suivi du message de l'exception ; le détail reste au journal
+            return $this->json($this->safeError->body($e, 'POST /api/shipping/buy'), JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 

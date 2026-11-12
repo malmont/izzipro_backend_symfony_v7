@@ -50,6 +50,7 @@ class AdminLabelPurchaseService
         private readonly OrderShipmentService $shipments,
         private readonly TenantCurrencyProvider $currency,
         private readonly LoggerInterface $logger,
+        private readonly ?\App\Services\Http\ClientSafeError $safeError = null, // lot ERREURS-1 (12/11/2026)
     ) {
     }
 
@@ -87,7 +88,9 @@ class AdminLabelPurchaseService
             $to = $this->to($order);
             $from = $this->addresses->buildFrom();
         } catch (\Throwable $e) {
-            return $this->blocked($out, str_contains($e->getMessage(), 'livraison') ? 'NO_SHIPPING_ADDRESS' : 'NO_SENDER_ADDRESS');
+            $delivery = str_contains($e->getMessage(), 'livraison'); // le message ne sert qu'à choisir le code : il n'est pas rendu
+
+            return $this->blocked($out, $delivery ? 'NO_SHIPPING_ADDRESS' : 'NO_SENDER_ADDRESS');
         }
         if (trim((string) ($from['phone'] ?? '')) === '') {
             $out['warnings'][] = 'Aucun téléphone sur l\'adresse de l\'entreprise : certains transporteurs le refusent.';
@@ -101,7 +104,8 @@ class AdminLabelPurchaseService
         } catch (\Throwable $e) {
             $this->logger->error('[Étiquette] devis impossible : ' . $e->getMessage(), ['orderId' => $order->getId()]);
 
-            return $this->blocked($out, 'NO_RATES', $e->getMessage());
+            // lot ERREURS-1 : le détail d'une panne imprévue (transporteur, réseau) reste au journal ; seul un refus rédigé par nous est cité
+            return $this->blocked($out, 'NO_RATES', $this->safeError->isIntended($e) ? $e->getMessage() : null);
         }
         $parcels = max(1, count($out['parcels']));
         foreach ($this->shipping->aggregateRates($raw) as $r) {
@@ -158,12 +162,15 @@ class AdminLabelPurchaseService
             $labels = $this->shipping->purchase($items, $to, $from, $carrierAccountId, $service, $customs);
         } catch (\Throwable $e) {
             if ($debited) {
-                $this->balances->credit($code, $chosen['totalCents'], 'refund', $reference, 'Achat d\'étiquette échoué : ' . mb_substr($e->getMessage(), 0, 200), $by);
+                // lot ERREURS-1 : ni le relevé du solde ni la réponse ne citent le message technique du transporteur (il est au journal)
+                $detail = $this->safeError->isIntended($e) ? ' : ' . mb_substr($e->getMessage(), 0, 200) : '';
+                $this->balances->credit($code, $chosen['totalCents'], 'refund', $reference, 'Achat d\'étiquette échoué' . $detail, $by);
             }
-            $this->logger->error('[Étiquette] achat échoué : ' . $e->getMessage(), ['orderId' => $order->getId()]);
+            $this->logger->error('[Étiquette] achat échoué : ' . $e->getMessage(), ['orderId' => $order->getId(), 'exception' => $e]);
             $code2 = $e instanceof RateUnavailableException ? 'RATE_UNAVAILABLE' : 'PURCHASE_FAILED';
 
-            return ['status' => 409, 'body' => ['error' => $code2, 'message' => $code2 === 'RATE_UNAVAILABLE' ? self::MESSAGES['RATE_UNAVAILABLE'] : 'L\'achat a échoué chez EasyPost : ' . $e->getMessage()]];
+            return ['status' => 409, 'body' => ['error' => $code2, 'message' => $code2 === 'RATE_UNAVAILABLE' ? self::MESSAGES['RATE_UNAVAILABLE']
+                : ($this->safeError->isIntended($e) ? 'L\'achat a échoué chez EasyPost : ' . $e->getMessage() : 'L\'achat a échoué chez le transporteur. Rien n\'a été débité. Réessayez dans quelques instants.')]];
         }
         $em = $this->emProvider->getEntityManager();
         $shippingOrder = (new ShippingOrder())->setOdershipping($order)->setCarrierAccountId($carrierAccountId)->setService($service)->setCreatedAt(new \DateTimeImmutable())

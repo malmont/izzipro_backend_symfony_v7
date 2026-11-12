@@ -54,10 +54,9 @@ class PackagingService
             try {
                 $packedBoxesForThisBucket = $packer->pack();
             } catch (\DVDoug\BoxPacker\Exception\NoBoxesAvailableException $e) {
-                // On capture l'erreur de la librairie et on lance la tienne
-                throw new ItemTooLargeForPackagingException(
-                    "L'article est trop grand pour tous les gabarits d'emballage disponibles. (" . $e->getMessage() . ")"
-                );
+                // On capture l'erreur de la librairie et on lance la tienne. Lot ERREURS-1 (12/11/2026) : le texte de la bibliothèque n'est plus
+                // recopié dans le message rendu au client ; l'exception d'origine est gardée en cause, pour le journal.
+                throw new ItemTooLargeForPackagingException("L'article est trop grand pour tous les gabarits d'emballage disponibles.", 0, $e);
             }
 
             // 6) Vérifier les articles trop grands pour CE BUCKET

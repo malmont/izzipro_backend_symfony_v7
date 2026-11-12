@@ -71,6 +71,6 @@ class AddressVerificationService
         }
 
         $msgs = array_map(fn($e) => $e->message, $errors);
-        throw new RuntimeException('Adresse invalide : ' . implode(' ; ', $msgs));
+        throw new AddressUndeliverableException('Adresse invalide : ' . implode(' ; ', $msgs)); // refus métier nommé (lot ERREURS-1)
     }
 }

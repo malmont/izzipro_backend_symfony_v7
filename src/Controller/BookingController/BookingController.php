@@ -21,7 +21,8 @@ class BookingController extends AbstractController
         Request $request,
         ValidatorInterface $validator,
         CheckAvailabilityUseCase $useCase,
-        BookingClock $clock
+        BookingClock $clock,
+        \App\Services\Http\ClientSafeError $safeError
     ): JsonResponse {
         $dto = new AvailabilityCheckDto();
         
@@ -53,7 +54,12 @@ class BookingController extends AbstractController
             return $this->json($result, $result['available'] ? 200 : 409);
             
         } catch (\Exception $e) {
-            $code = $e->getCode() ?: 500;
+            // lot ERREURS-1 (12/11/2026) : refus métier = message et statut d'aujourd'hui ; panne imprévue = texte neutre et 500 (avant :
+            // le code de l'exception servait de statut, quel qu'il soit, et son message partait au client)
+            if (!$safeError->isIntended($e)) {
+                return $this->json($safeError->body($e, 'GET /api/booking/check/{productId}'), 500);
+            }
+            $code = is_int($e->getCode()) && $e->getCode() >= 400 && $e->getCode() < 600 ? $e->getCode() : 500;
             if ($e->getMessage() === 'Stock insuffisant' || str_contains($e->getMessage(), 'Stock')) {
                 $code = 409;
             }
@@ -66,7 +72,8 @@ class BookingController extends AbstractController
         int $productId,
         Request $request,
         GetCalendarAvailabilityUseCase $useCase,
-        BookingClock $clock
+        BookingClock $clock,
+        \App\Services\Http\ClientSafeError $safeError
     ): JsonResponse {
         $startStr = $request->query->get('start');
         $endStr = $request->query->get('end');
@@ -77,14 +84,19 @@ class BookingController extends AbstractController
 
         try {
             $timezone = $clock->timezone(); // fuseau de la boutique (04/11/2026 ; America/Toronto en dur auparavant) ; créneaux rendus en heures de la boutique, sans décalage
-            $start = (new \DateTimeImmutable($startStr, $timezone))->setTime(0, 0, 0);
-            $end = (new \DateTimeImmutable($endStr, $timezone))->setTime(23, 59, 59);
-            
+            try {
+                $start = (new \DateTimeImmutable((string) $startStr, $timezone))->setTime(0, 0, 0);
+                $end = (new \DateTimeImmutable((string) $endStr, $timezone))->setTime(23, 59, 59);
+            } catch (\Exception) {
+                // lot ERREURS-1 : avant, le message de PHP (« Failed to parse time string… ») partait au client
+                return $this->json(['error' => 'Format de date invalide (attendu : YYYY-MM-DD)'], 400);
+            }
+
             $data = $useCase->execute($productId, $start, $end);
             return $this->json($data);
 
         } catch (\Exception $e) {
-            return $this->json(['error' => $e->getMessage()], 400);
+            return $this->json($safeError->body($e, 'GET /api/booking/calendar/{productId}'), 400);
         }
     }
 }

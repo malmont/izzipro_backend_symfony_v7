@@ -27,7 +27,7 @@ class ProductAiAdminController extends AbstractController
 {
     private const CSRF = 'admin_product_ai';
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly ProductAiBulkService $ai, private readonly ProductImageGeneratorInterface $images, private readonly LandingAiQuotaService $quota, private readonly AdminUrlGenerator $urls)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly ProductAiBulkService $ai, private readonly ProductImageGeneratorInterface $images, private readonly LandingAiQuotaService $quota, private readonly AdminUrlGenerator $urls, private readonly ?\App\Services\Http\ClientSafeError $safeError = null)
     {
     }
 
@@ -73,7 +73,7 @@ class ProductAiAdminController extends AbstractController
         } catch (LandingAiException $e) {
             $this->addFlash($e->getStatusCode() === 402 ? 'warning' : 'danger', $e->getMessage());
         } catch (\Throwable $e) {
-            $this->addFlash('warning', $e->getMessage());
+            $this->addFlash('warning', $this->safeError->message($e, 'EasyAdmin : IA d\'un article')); // lot ERREURS-1 : texte neutre pour une panne imprévue
         }
 
         return $this->redirect($this->selfUrl($id));

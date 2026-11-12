@@ -210,7 +210,8 @@ class StripeTerminalGateway implements PosTerminalGatewayInterface
                 'intent_invalid_state' => ['PAYMENT_INVALID_STATE', 409, 'Ce paiement n\'est plus dans un état permettant cette opération'],
                 'resource_missing' => ['STRIPE_NOT_FOUND', 404, 'Objet Stripe introuvable'],
                 'charge_already_refunded' => ['ALREADY_REFUNDED', 409, 'Paiement déjà remboursé'],
-                default => ['STRIPE_ERROR', 502, 'Erreur Stripe : ' . $e->getMessage()],
+                // lot ERREURS-1 (12/11/2026) : avant, le message brut de Stripe ; il est déjà au journal ci-dessus, avec le code Stripe
+                default => ['STRIPE_ERROR', 502, 'Erreur Stripe : ' . \App\Services\Http\ClientSafeError::PAYMENT_NEUTRAL],
             };
             throw new PosTerminalGatewayException($errorCode, $message, $status, $code !== '' ? $code : null, $e);
         }

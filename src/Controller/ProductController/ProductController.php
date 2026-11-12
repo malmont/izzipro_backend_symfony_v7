@@ -49,7 +49,8 @@ class ProductController extends AbstractController
         GetProductByIdUseCase $getProductByIdUseCase,
         GetProductBySlugUseCase $getProductBySlugUseCase,
         ?MediaUrlResolver $mediaUrlResolver = null,
-        private readonly ?\App\Gestion\Services\PeriodGuard $periodGuard = null // périodes (lot P1, 10/11/2026)
+        private readonly ?\App\Gestion\Services\PeriodGuard $periodGuard = null, // périodes (lot P1, 10/11/2026)
+        private readonly ?\App\Services\Http\ClientSafeError $safeError = null, // lot ERREURS-1 (12/11/2026) : plus de message technique au client
     ) {
         $this->getProductsByCommandeUseCase = $getProductsByCommandeUseCase;
         $this->createProductByCommandeUseCase = $createProductByCommandeUseCase;
@@ -116,7 +117,7 @@ class ProductController extends AbstractController
         } catch (\App\Gestion\Services\GestionConflictException $e) {
             throw $e; // 404 / 409 à code via le gestionnaire d'exceptions
         } catch (\Exception $e) {
-            return $this->json(['error' => $e->getMessage()], JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
+            return $this->json($this->safeError->body($e, 'POST /api/commandes/{id}/products'), JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -131,7 +132,7 @@ class ProductController extends AbstractController
         } catch (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e) {
             throw $e; // 404 via le gestionnaire d'exceptions
         } catch (\Exception $e) {
-            return new JsonResponse(['error' => $e->getMessage()], JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
+            return new JsonResponse($this->safeError->body($e, 'DELETE /api/products/{id}'), JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -204,7 +205,8 @@ class ProductController extends AbstractController
             );
             return $this->json($product, JsonResponse::HTTP_OK);
         } catch (\Exception $e) {
-            return $this->json(['error' => $e->getMessage()], JsonResponse::HTTP_NOT_FOUND);
+            // statut gardé (404, même pour une panne : statut trompeur listé dans docs/erreurs-client.md) ; texte neutre si la panne est imprévue
+            return $this->json($this->safeError->body($e, 'GET /api/productsid/{id}'), JsonResponse::HTTP_NOT_FOUND);
         }
     }
 
@@ -237,7 +239,7 @@ class ProductController extends AbstractController
             );
             return $this->json($product, JsonResponse::HTTP_OK);
         } catch (\Exception $e) {
-            return $this->json(['error' => $e->getMessage()], JsonResponse::HTTP_NOT_FOUND);
+            return $this->json($this->safeError->body($e, 'GET /api/products/by-slug/{slug}'), JsonResponse::HTTP_NOT_FOUND);
         }
     }
 }
