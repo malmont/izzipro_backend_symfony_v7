@@ -114,6 +114,8 @@ class ProductController extends AbstractController
         }
     }
 
+    // Route masquée par l'opération Delete d'API Platform sur Product (même chemin, déclarée avant) : DELETE /api/products/{id} passe par API
+    // Platform. La garde PRODUCT_IN_USE est au niveau de Doctrine (ProductUsageGuardSubscriber, ART-SUPPR, 13/11/2026) et couvre les deux.
     #[Route('/api/products/{id}', name: 'delete_product', methods: ['DELETE'])]
     public function deleteProduct(int $id): \Symfony\Component\HttpFoundation\Response
     {

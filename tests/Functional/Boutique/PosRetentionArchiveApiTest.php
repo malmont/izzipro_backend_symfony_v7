@@ -89,7 +89,16 @@ class PosRetentionArchiveApiTest extends WebTestCase
         $this->assertRefused(fn () => $em->remove($em->getRepository(OrderItems::class)->findOneBy(['orderAssociated' => $order])), 'RETENTION_LOCKED', 'Ligne de commande', $em);
         $this->assertStringContainsString(substr($until, 0, 4), $this->lastRefusal, 'fin de conservation : 31 décembre de l\'année + 6');
         $this->assertRefused(fn () => $em->remove($em->find(User::class, $cashier->getId())), 'RETENTION_LOCKED', 'a réalisé des ventes', $em);
-        $this->assertRefused(fn () => $em->remove($em->find(ProductVariant::class, $this->cap)), 'RETENTION_LOCKED', 'figure sur des lignes de vente', $em);
+        // Variante vendue : depuis ART-SUPPR (13/11/2026), le refus vient de la garde des articles, avant la garde de conservation (409 PRODUCT_IN_USE)
+        try {
+            $em->remove($em->find(ProductVariant::class, $this->cap));
+            $em->flush();
+            $this->fail('variante vendue supprimée');
+        } catch (\App\Gestion\Services\GestionConflictException $e) {
+            $this->assertSame('PRODUCT_IN_USE', $e->errorCode);
+            $this->assertGreaterThan(0, $e->details['uses']['sales']);
+        }
+        $em->clear();
         // Commandes web : payée → refusée ; jamais payée (panier abandonné) → supprimable
         $cols = $this->db->fetchFirstColumn("SELECT column_name FROM information_schema.columns WHERE table_name = 'order' AND column_name NOT IN ('id', 'reference', 'order_source_id', 'status_id')");
         $list = implode(', ', array_map(fn ($c) => '"' . $c . '"', $cols));

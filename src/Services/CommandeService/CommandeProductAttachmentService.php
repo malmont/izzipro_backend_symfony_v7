@@ -218,6 +218,16 @@ class CommandeProductAttachmentService
         if ($lines === []) {
             throw new CommandeProductException('PRODUCT_NOT_IN_COMMANDE', sprintf('Le produit %d n\'est pas dans cette commande', $productId), 404, [], ['productId' => $productId, 'commandeId' => $commande->getId()]);
         }
+        // ART-SUPPR (13/11/2026) : une ligne dont le stock est entré par une réception (lot R1 : mouvement de stock rattaché à la ligne), même
+        // en partie, ne se détache pas : le stock garderait une entrée sans la ligne d'achat qui l'explique. Une ligne « réputée reçue » (rattacher,
+        // reprise : l'article était déjà en stock, aucun mouvement) et une ligne non reçue se détachent comme avant.
+        $conn = $em->getConnection();
+        $received = array_values(array_filter($lines, fn (CommandeLine $l) => $l->getQuantityReceived() > 0
+            && (int) $conn->fetchOne('SELECT COUNT(*) FROM inventory_movements WHERE commande_line_id = ?', [$l->getId()]) > 0));
+        if ($received !== []) {
+            throw new CommandeProductException('LINE_RECEIVED', 'Cet article a déjà été reçu en stock pour cette commande : annulez d\'abord la réception.', 409, [],
+                ['productId' => $productId, 'commandeId' => $commande->getId(), 'lines' => array_map(fn (CommandeLine $l) => ['id' => $l->getId(), 'quantityReceived' => $l->getQuantityReceived()], $received)]);
+        }
         $before = ['productId' => $productId, 'commandeId' => $commande->getId(), 'lines' => array_map(fn (CommandeLine $l) => ['id' => $l->getId(), 'quantity' => $l->getQuantityOrdered(), 'unitCost' => $l->getUnitCostCents()], $lines)];
         $this->lines->deleteProductLines($commande, $product); // lignes de cet article dans cette commande (lot L0) ; raccourcis du produit recalculés
         $this->audit->record('commande-products', $commande->getId(), 'detach', $before, ['productId' => $productId, 'commandeId' => null], ['product:' . $productId]);

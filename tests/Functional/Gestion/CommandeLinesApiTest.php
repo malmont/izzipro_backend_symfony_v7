@@ -207,6 +207,117 @@ class CommandeLinesApiTest extends WebTestCase
         $this->assertSame(6000 - 2300, $result['result']['gross']);
     }
 
+    /**
+     * ART-SUPPR (contrat validé le 13/11/2026) : un article ou une variante qui a une histoire (ventes, lignes d'achat, mouvements de stock)
+     * ne se supprime plus : 409 PRODUCT_IN_USE { productId, variantId?, uses }, rien n'est effacé. Avant, DELETE /api/products/{id}
+     * supprimait en silence les lignes d'achat (cascade) et l'historique de stock. Détacher un article d'une commande : refusé (409
+     * LINE_RECEIVED) si une ligne est déjà reçue.
+     */
+    public function testAProductOrVariantWithHistoryIsNotDeletedAndAReceivedLineIsNotDetached(): void
+    {
+        $tag = bin2hex(random_bytes(2));
+        $today = static::getContainer()->get(PeriodCalendar::class)->today();
+        $conn = $this->em()->getConnection();
+        $supplier = (int) $this->post('/api/fournisseurs', ['name' => "Fournisseur suppr $tag", 'typeFournisseur' => $this->type()], 201)['id'];
+        $commande = $this->post('/api/commandes', ['budget' => 100000, 'date' => $today->format('Y-m-d') . ' 09:00:00', 'name' => "Suppr $tag", 'fournisseur' => ['id' => $supplier]], 201);
+        $product = function (string $name) use ($conn, $tag): array {
+            $conn->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type, purchase_price, coefficient_multiplier) VALUES (nextval('product_id_seq'), :n, 4000, false, 5, NOW(), :s, 'standard', 1500, 2.5)", ['n' => "$name $tag", 's' => strtolower($name) . "-suppr-$tag"]);
+            $id = (int) $conn->fetchOne('SELECT id FROM product WHERE slug = ?', [strtolower($name) . "-suppr-$tag"]);
+
+            return [$id, (int) $this->create(ProductVariant::class, ['product' => $this->em()->find(Product::class, $id)])->getId()];
+        };
+        [$blank] = $product('Vierge');
+        [$bought, $boughtVariant] = $product('Achete');
+        [$sold, $soldVariant] = $product('Vendu');
+        [$moved, $movedVariant] = $product('Bouge');
+        [$received] = $product('Recu');
+        $spare = (int) $this->create(ProductVariant::class, ['product' => $this->em()->find(Product::class, $blank)])->getId();
+        $this->post('/api/commandes/' . $commande['id'] . '/products/rattacher', ['products' => [['productId' => $bought, 'variantId' => $boughtVariant, 'quantity' => 2, 'purchasePrice' => 1400], ['productId' => $received, 'quantity' => 1, 'purchasePrice' => 900]]], 200);
+        $order = $this->create(Order::class, ['totalAmount' => 4000.0], function (Order $o, EntityManagerInterface $em): void {
+            $o->setOrderDate(new \DateTime())->setStatus($em->find(StatusCommande::class, 3))->setOrderType($em->find(OrderType::class, 1))->setOrderSource($em->find(OrderSource::class, 1))->setUserId($em->find(User::class, $this->userId));
+        });
+        $this->create(OrderItems::class, ['quantity' => 1, 'unitPrice' => 4000.0, 'totalPrice' => 4000.0], fn (OrderItems $i, EntityManagerInterface $em) => $i->setOrderAssociated($em->find(Order::class, $order->getId()))->setProductVariant($em->find(ProductVariant::class, $soldVariant)));
+        $conn->executeStatement("INSERT INTO inventory_movements (id, product_variant_id, movement_type_id, quantity, movement_date, stock_before_movement, stock_after_movement) VALUES (nextval('inventory_movements_id_seq'), ?, 4, 1, NOW(), 0, 1)", [$movedVariant]);
+        $this->endOfWrite();
+        $none = ['sales' => 0, 'purchaseLines' => 0, 'stockMovements' => 0, 'bookings' => 0, 'subscriptionPlans' => 0, 'openCheckouts' => 0];
+        $refused = function (string $route) {
+            $this->request('DELETE', $route);
+            $this->assertSame(409, $this->client->getResponse()->getStatusCode(), $route . ' : ' . $this->client->getResponse()->getContent());
+
+            return $this->body();
+        };
+        $exists = fn (string $table, int $id) => (int) $conn->fetchOne("SELECT COUNT(*) FROM $table WHERE id = ?", [$id]);
+
+        // Articles avec une histoire : refus, rien n'est effacé
+        $b = $refused("/api/products/$bought");
+        $this->assertSame(['PRODUCT_IN_USE', 'PRODUCT_IN_USE', $bought, array_replace($none, ['purchaseLines' => 1])], [$b['error'], $b['code'], $b['productId'], $b['uses']]);
+        $this->assertStringContainsString('retirez-le de la vente', $b['message']);
+        $this->assertSame([1, 1], [$exists('product', $bought), (int) $conn->fetchOne('SELECT COUNT(*) FROM commande_line WHERE product_id = ?', [$bought])], 'la ligne d\'achat n\'est plus supprimée en silence');
+        $this->assertSame(array_replace($none, ['sales' => 1]), $refused("/api/products/$sold")['uses']);
+        $this->assertSame(array_replace($none, ['stockMovements' => 1]), $refused("/api/products/$moved")['uses'], 'un mouvement de stock seul bloque');
+        $this->assertSame([1, 1, 1], [$exists('product', $sold), $exists('product', $moved), (int) $conn->fetchOne('SELECT COUNT(*) FROM inventory_movements WHERE product_variant_id = ?', [$movedVariant])]);
+
+        // Variantes : même garde, avec variantId ; l'historique de stock n'est plus effacé
+        $v = $refused("/api/product-variants/$movedVariant");
+        $this->assertSame(['PRODUCT_IN_USE', $moved, $movedVariant, array_replace($none, ['stockMovements' => 1])], [$v['error'], $v['productId'], $v['variantId'], $v['uses']]);
+        $this->assertSame([1, 1], [$exists('product_variant', $movedVariant), (int) $conn->fetchOne('SELECT COUNT(*) FROM inventory_movements WHERE product_variant_id = ?', [$movedVariant])]);
+        $this->assertSame(array_replace($none, ['sales' => 1]), $refused("/api/product-variants/$soldVariant")['uses']);
+        $this->assertSame(array_replace($none, ['purchaseLines' => 1]), $refused("/api/product-variants/$boughtVariant")['uses']);
+        $this->request('DELETE', "/api/product-variants/$spare");
+        $this->assertSame([204, 0], [$this->client->getResponse()->getStatusCode(), $exists('product_variant', $spare)], 'variante sans histoire : supprimée');
+
+        // EasyAdmin : même refus, avec le même message
+        try {
+            static::getContainer()->get(\App\Controller\Admin\ProductCrudController::class)->deleteEntity($this->em(), $this->em()->find(Product::class, $sold));
+            $this->fail('article vendu supprimé depuis EasyAdmin');
+        } catch (\Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException $e) {
+            $this->assertStringContainsString('retirez-le de la vente', $e->getMessage());
+        }
+        $this->assertSame(1, $exists('product', $sold));
+        $this->em()->clear();
+
+        // Détacher : ligne reçue refusée, ligne non reçue détachée (seules les lignes de cet article dans cette commande)
+        $line = (int) $conn->fetchOne('SELECT id FROM commande_line WHERE product_id = ? AND commande_id = ?', [$received, $commande['id']]);
+        $conn->executeStatement('UPDATE commande_line SET quantity_received = 0 WHERE id = ?', [$line]); // ligne « à recevoir », comme une facture confirmée
+        $this->em()->clear();
+        $this->post('/api/commandes/' . $commande['id'] . "/lignes/$line/reception", [], 200);
+        $this->assertSame(1, (int) $conn->fetchOne('SELECT COUNT(*) FROM inventory_movements WHERE commande_line_id = ?', [$line]), 'réception : le stock entre par un mouvement lié à la ligne');
+        $r = $refused('/api/commandes/' . $commande['id'] . "/products/$received");
+        $this->assertSame(['LINE_RECEIVED', $received, [['id' => $line, 'quantityReceived' => 1]]], [$r['error'], $r['context']['productId'], $r['context']['lines']]);
+        $this->assertStringContainsString('annulez d\'abord la réception', $r['message']);
+        $this->assertSame(1, $exists('commande_line', $line), 'ligne reçue gardée');
+        $this->request('DELETE', '/api/commandes/' . $commande['id'] . "/products/$bought");
+        $this->assertSame(204, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
+        $this->assertSame([0, 1, 1], [(int) $conn->fetchOne('SELECT COUNT(*) FROM commande_line WHERE product_id = ?', [$bought]), $exists('product', $bought), $exists('commande_line', $line)], 'ligne réputée reçue (rattachée, sans mouvement) : lien retiré, article et autres lignes gardés');
+
+        // Article louable : avec une réservation, refus ; sans réservation, supprimé avec son réglage de location. Liens sans règle en base
+        // (avant : erreur de clé étrangère) : les articles associés partent avec lui, un contenu « véhicule » de la page est gardé et détaché.
+        [$rented] = $product('Loue');
+        [$rentable] = $product('Louable');
+        foreach ([$rented, $rentable] as $id) {
+            $conn->executeStatement("INSERT INTO booking_configuration (id, product_id, granularity, stock_quantity, min_duration, buffer_time) VALUES (nextval('booking_configuration_id_seq'), ?, 'days', 1, 1, 0)", [$id]);
+        }
+        $conn->executeStatement("INSERT INTO booking (id, product_id, start_at, end_at, quantity, status, is_finalized, created_at) VALUES (nextval('booking_id_seq'), ?, NOW(), NOW() + INTERVAL '1 day', 1, 'confirmed', false, NOW())", [$rented]);
+        $conn->executeStatement("INSERT INTO related_product (id, product_id) VALUES (nextval('related_product_id_seq'), ?)", [$rentable]);
+        $vehicle = (int) $conn->fetchOne("INSERT INTO vehicle (id, product_id, title) VALUES (nextval('vehicle_id_seq'), ?, 'Véhicule de la page') RETURNING id", [$rentable]);
+        $this->em()->clear();
+        $this->assertSame(array_replace($none, ['bookings' => 1]), $refused("/api/products/$rented")['uses'], 'une réservation est une histoire');
+        $this->assertSame(1, (int) $conn->fetchOne('SELECT COUNT(*) FROM booking_configuration WHERE product_id = ?', [$rented]));
+        $this->request('DELETE', "/api/products/$rentable");
+        $this->assertSame(204, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
+        $this->assertSame([0, 0, 0], [$exists('product', $rentable), (int) $conn->fetchOne('SELECT COUNT(*) FROM booking_configuration WHERE product_id = ?', [$rentable]), (int) $conn->fetchOne('SELECT COUNT(*) FROM related_product WHERE product_id = ?', [$rentable])], 'article louable sans réservation : supprimé avec son réglage et ses liens');
+        $this->assertSame(['id' => $vehicle, 'product_id' => null], $conn->fetchAssociative('SELECT id, product_id FROM vehicle WHERE id = ?', [$vehicle]), 'contenu « véhicule » gardé, détaché');
+        $conn->executeStatement('DELETE FROM vehicle WHERE id = ?', [$vehicle]);
+
+        // Articles sans histoire : supprimés comme avant (204 sans corps)
+        foreach ([$blank, $bought] as $id) {
+            $this->request('DELETE', "/api/products/$id");
+            $this->assertSame([204, '', 0], [$this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent(), $exists('product', $id)], "article $id sans histoire");
+        }
+        $this->request('DELETE', '/api/products/999999999');
+        $this->assertSame(404, $this->client->getResponse()->getStatusCode());
+    }
+
     // ----- helpers -----
 
     private function type(): int

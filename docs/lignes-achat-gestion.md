@@ -64,6 +64,26 @@ période sans vente antérieure à la date de l'achat (seule cause admise : la r
   absent : celui de la ligne déjà là, sinon `purchase_price`, sinon inconnu. `commandeCostCents` rend le coût retenu par les tableaux de
   bord (repli sur le prix de vente). 422 `VALIDATION_FAILED` (dont `VARIANT_NOT_IN_PRODUCT`), 404, 409 `COMMANDE_CLOSED` / `PERIOD_CLOSED`.
 - `DELETE /api/commandes/{id}/products/{productId}` → 204, lignes de l'article dans la commande supprimées (404 `PRODUCT_NOT_IN_COMMANDE`).
+  L'article, ses autres achats et son stock ne bougent pas. Depuis le 13/11/2026 (ART-SUPPR) : 409 **`LINE_RECEIVED`**
+  `{ context: { productId, commandeId, lines: [{ id, quantityReceived }] } }` si le stock d'une de ces lignes est entré par une
+  réception (lot R1 : un mouvement de stock est rattaché à la ligne) : il faut d'abord annuler la réception. Une ligne « réputée
+  reçue » (rattacher, reprise : l'article était déjà en stock, aucun mouvement) se détache comme avant.
+- **Suppression d'un article ou d'une variante** (ART-SUPPR, 13/11/2026, `Services/ProductService/ProductUsageGuard`,
+  `EventSubscriber/ProductUsageGuardSubscriber`) : refusée quand il a une histoire, 409 **`PRODUCT_IN_USE`**
+  `{ error, code, message, productId, variantId?, uses }`, rien n'est effacé.
+  - `uses` compte, 0 compris : `sales` (lignes de vente), `purchaseLines` (lignes d'achat), `stockMovements` (mouvements de stock,
+    un seul suffit), `bookings` (réservations), `subscriptionPlans` (formules d'abonnement), `openCheckouts` (paiements en cours).
+  - Message : « Cet article a des ventes, des achats ou des mouvements de stock : retirez-le de la vente au lieu de le supprimer. »
+    Pour une variante : mettre son stock à 0. Retirer un article de la vente : `isWeb`, `isPos` et `saleEnabled` à faux. Il n'y a
+    pas encore d'archivage.
+  - La garde est au niveau de Doctrine : elle couvre `DELETE /api/products/{id}` (servie par API Platform, qui masque la route du
+    contrôleur), `DELETE /api/product-variants/{id}` et EasyAdmin (même message à l'écran).
+  - Un article ou une variante sans histoire se supprime comme avant (204).
+  - Avant : la suppression d'un article effaçait en silence ses lignes d'achat (`commande_line.product_id` ON DELETE CASCADE) et
+    l'historique de stock de ses variantes ; une variante supprimée perdait son historique de stock.
+  - Ce qui part avec un article sans histoire : ses variantes, images, traductions, son réglage de location (`booking_configuration`,
+    s'il n'a aucune réservation), sa fiche véhicule et ses liens d'articles associés (`related_product`). Un contenu « véhicule » de la
+    page (`vehicle`, lien facultatif) est gardé et détaché. Une réservation est une histoire (`uses.bookings`).
 - `GET /api/commandes/products/disponibles?scope=` : défaut « à classer » = articles **sans aucune ligne d'achat** ; `scope=all` : tout le
   catalogue (réassort).
 - `GET /api/commandes/{id}/products` : articles distincts des lignes de la commande.

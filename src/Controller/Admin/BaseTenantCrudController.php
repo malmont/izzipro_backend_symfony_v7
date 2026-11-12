@@ -86,6 +86,8 @@ abstract class BaseTenantCrudController extends AbstractCrudController
             $tenantEm->flush();
         } catch (\App\Services\RetentionService\RetentionViolationException $e) { // conservation des données de vente (A1) : message clair
             throw new \Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException($e->getMessage(), $e);
+        } catch (\App\Gestion\Services\GestionConflictException $e) { // article ou variante avec une histoire (ART-SUPPR) : même message qu'à l'API
+            throw new \Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException($e->getMessage(), $e);
         }
     }
 }

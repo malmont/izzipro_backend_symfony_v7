@@ -164,6 +164,11 @@ services:
         tags:
             - { name: doctrine.event_subscriber }
 
+    # Article ou variante avec une histoire (ART-SUPPR, 13/11/2026) : suppression refusée (PRODUCT_IN_USE), avant la garde de conservation
+    App\EventSubscriber\ProductUsageGuardSubscriber:
+        tags:
+            - { name: doctrine.event_subscriber, priority: 10 }
+
     # Taxe utilisée (PAYS-1, 12/11/2026) : taux, libellé, code… figés et suppression refusée (TAX_IN_USE)
     App\EventSubscriber\TaxInUseGuardSubscriber:
         tags:

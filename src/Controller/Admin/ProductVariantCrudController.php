@@ -155,6 +155,11 @@ class ProductVariantCrudController extends BaseTenantCrudController
         if ($entityInstance instanceof ProductVariant) {
              $tenantEm = $this->emProvider->getEntityManager();
              $managedVariant = $tenantEm->merge($entityInstance); 
+            try { // ART-SUPPR (13/11/2026) : refus avant toute écriture (la sortie de stock ci-dessous laisserait un mouvement orphelin)
+                \App\Services\ProductService\ProductUsageGuard::assertVariantDeletable($tenantEm->getConnection(), $managedVariant);
+            } catch (\App\Gestion\Services\GestionConflictException $e) {
+                throw new \Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException($e->getMessage(), $e);
+            }
 
             $this->updateStockAndInventoryUseCase->executeNewProductVariant($managedVariant, $managedVariant->getStockQuantity(), 2);
         }

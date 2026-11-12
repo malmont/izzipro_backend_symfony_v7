@@ -153,7 +153,7 @@ ajouts et suppressions non. Images : clé de la médiathèque ou URL https. Lign
 |---|---|---|
 | `PATCH /api/product-variants/{id}` | `stockQuantity` (entier 0 à 1 000 000, mouvement d'inventaire enregistré), `price` (cents, `null` = prix du produit), `colorId`, `sizeId` (422 si une autre variante du produit a ce couple) | la variante comme `variants[]` |
 | `POST /api/products/{id}/variants` | `colorId`, `sizeId`, `stockQuantity` (0 par défaut), `price` ; ancienne forme `color.id` / `size.id` acceptée | 201, la variante |
-| `DELETE /api/product-variants/{id}` | suppression réelle (pas d'état « désactivé » : stock 0 pour retirer de la vente) ; 409 si une commande ou un paiement en cours la contient ; historique de stock et combinaisons supprimés avec elle | 204 |
+| `DELETE /api/product-variants/{id}` | suppression réelle (pas d'état « désactivé » : stock 0 pour retirer de la vente) ; depuis le 13/11/2026 (ART-SUPPR) : 409 `PRODUCT_IN_USE { productId, variantId, uses }` si elle a des ventes, des lignes d'achat, des mouvements de stock ou un paiement en cours (avant : 409 `{error: message}` pour une commande ou un paiement, et l'historique de stock était effacé) ; combinaisons supprimées avec elle ; détail : `docs/lignes-achat-gestion.md` | 204 |
 | `GET /api/colors`, `GET /api/sizes` | existants | listes |
 | `POST /api/colors`, `POST /api/sizes` | `name*` (une ligne, 255), `codeHexa` (#rrggbb, couleurs) ; nom écrit aussi dans la langue demandée | 201 |
 | `PATCH /api/customization-options/{id}` | `name*` (traduit, 255) | configuration de `?variantId=`, sinon `{ id, code, name }` |

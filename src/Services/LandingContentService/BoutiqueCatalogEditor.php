@@ -82,23 +82,15 @@ final class BoutiqueCatalogEditor
 
     /**
      * Suppression réelle (il n'y a pas d'état « désactivé » sur une variante ; pour la retirer de la vente sans la
-     * supprimer : stockQuantity 0). Refusée (409) si une commande la contient (historique gardé) ou si un paiement en
-     * cours la contient ; son historique de stock et ses combinaisons partent avec elle.
+     * supprimer : stockQuantity 0). Refusée (409 PRODUCT_IN_USE) si elle a des ventes, des lignes d'achat, des mouvements de
+     * stock ou un paiement en cours ; ses combinaisons partent avec elle.
      */
     public function deleteVariant(ProductVariant $variant): void
     {
         $em = $this->emProvider->getEntityManager();
-        if ($em->getRepository(OrderItems::class)->count(['productVariant' => $variant]) > 0) {
-            throw new LandingContentException(409, 'Cette variante figure dans des commandes : elle ne peut pas être supprimée. Pour la retirer de la vente, mettez son stock à 0.');
-        }
-        $inCart = (int) $em->getConnection()->fetchOne(
-            "SELECT COUNT(*) FROM checkout_session WHERE status IN (?, ?) AND cart::text ~ ?",
-            [CheckoutSession::STATUS_OPEN, CheckoutSession::STATUS_PROCESSING, '"productVariantId"\s*:\s*"?' . (int) $variant->getId() . '\y'] // \y : limite de mot de PostgreSQL
-        );
-        if ($inCart > 0) {
-            throw new LandingContentException(409, 'Cette variante est dans un paiement en cours : réessayez plus tard, ou mettez son stock à 0.');
-        }
-        $em->createQuery('DELETE FROM ' . InventoryMovements::class . ' m WHERE m.productVariant = :v')->setParameter('v', $variant)->execute();
+        // ART-SUPPR (13/11/2026) : ventes, lignes d'achat, mouvements de stock ou paiement en cours → 409 PRODUCT_IN_USE { productId, variantId,
+        // uses } ; l'historique de stock n'est plus effacé avec la variante (avant : supprimé juste avant elle)
+        \App\Services\ProductService\ProductUsageGuard::assertVariantDeletable($em->getConnection(), $variant);
         $product = $variant->getProduct();
         $product?->removeVariant($variant);
         $em->remove($variant);
