@@ -19,22 +19,15 @@ class PosReceiptController extends AbstractController
     }
 
     /**
-     * ?barcode= | ?orderId=[&kind=] | ?kind=&number=&cashRegisterId= → bloc ticket complet.
-     * Avec `purpose=display` (lot REIMP, 12/11/2026) : LECTURE PURE pour l'affichage, `duplicate: false`, aucune écriture (ni compteur, ni
-     * journal). Sans ce paramètre : réimpression comme avant (`duplicate: true`, compteur, journal RECEIPT_REPRINTED), À REMPLACER par
-     * `POST /api/pos/receipts/reprint` ; ce GET deviendra une lecture pure en phase 2, quand les caisses auront basculé.
+     * ?barcode= | ?orderId=[&kind=] | ?kind=&number=&cashRegisterId= → bloc ticket complet, LECTURE PURE : `duplicate: false`,
+     * `reprintCount` tel qu'il est, aucune écriture (ni compteur, ni journal). Lot REIMP (12/11/2026) : phase 1, lecture pure avec
+     * `purpose=display` seulement ; phase 2, lecture pure dans tous les cas (`purpose` reste accepté, sans effet). Avant ce lot, ce GET
+     * comptait une réimpression : elle se demande désormais par `POST /api/pos/receipts/reprint`.
      */
-    #[Route('/api/pos/receipts', name: 'pos_receipt_reprint', methods: ['GET'])]
-    public function reprint(Request $request): JsonResponse
+    #[Route('/api/pos/receipts', name: 'pos_receipt_view', methods: ['GET'])]
+    public function view(Request $request): JsonResponse
     {
-        return $this->guard(function () use ($request) {
-            $receipt = $this->receipts->find($request->query->all());
-            if ($request->query->get('purpose') === 'display') {
-                return $this->json($this->receipts->view($receipt, $this->locale($request)));
-            }
-
-            return $this->json($this->receipts->reprint($this->user(), $receipt, $this->locale($request)));
-        });
+        return $this->guard(fn () => $this->json($this->receipts->view($this->receipts->find($request->query->all()), $this->locale($request))));
     }
 
     /**

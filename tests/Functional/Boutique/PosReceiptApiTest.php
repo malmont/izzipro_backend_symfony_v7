@@ -71,11 +71,11 @@ class PosReceiptApiTest extends WebTestCase
         $this->assertSame(['gst' => '123456789 RT0001', 'qst' => '1234567890 TQ0001'], $sale['store']['taxNumbers']);
 
         // Réimpression par code-barres : duplicata, compteur, journal
-        $dup = $this->json($this->request('GET', '/api/pos/receipts?barcode=' . $sale['barcode']));
+        $dup = $this->json($this->request('POST', '/api/pos/receipts/reprint', ['barcode' => $sale['barcode']]));
         $this->assertSame([true, 1, 'sale', $sale['receiptNumber'], $sale['orderId']], [$dup['duplicate'], $dup['reprintCount'], $dup['kind'], $dup['receiptNumber'], $dup['orderId'] ?? $sale['orderId']]);
         $this->assertSame($sale['lines'], $dup['lines']);
         $this->assertSame($sale['payments'], $dup['payments']);
-        $this->assertSame(2, $this->json($this->request('GET', '/api/pos/receipts?orderId=' . $sale['orderId']))['reprintCount']);
+        $this->assertSame(2, $this->json($this->request('POST', '/api/pos/receipts/reprint', ['orderId' => $sale['orderId']]))['reprintCount']);
         $this->assertSame(2, (int) $this->db->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE type = 'RECEIPT_REPRINTED' AND payload LIKE ?", ['%' . $sale['barcode'] . '%']));
         $this->assertSame(404, $this->request('GET', '/api/pos/receipts?barcode=IZ-T-' . $this->register . '-999999')->getStatusCode());
         $byNumber = $this->json($this->request('GET', "/api/pos/receipts?kind=ticket&number={$sale['receiptNumber']}&cashRegisterId=$this->register"));
@@ -143,7 +143,7 @@ class PosReceiptApiTest extends WebTestCase
         // Avoir d'un retour : duplicata de nature return ; réglages désactivés
         $line = $this->json($this->request('GET', '/api/pos/returns/lookup?orderId=' . $sale['orderId']))['lines'][0]['orderItemId'];
         $ret = $this->json($this->request('POST', '/api/pos/returns', ['orderId' => $sale['orderId'], 'lines' => [['orderItemId' => $line, 'quantity' => 1]], 'reasonCode' => 'autre', 'cashRegisterId' => $this->register]), 201);
-        $credit = $this->json($this->request('GET', '/api/pos/receipts?barcode=' . $ret['barcode']));
+        $credit = $this->json($this->request('POST', '/api/pos/receipts/reprint', ['barcode' => $ret['barcode']]));
         $this->assertSame(['return', true, $ret['creditNoteNumber']], [$credit['kind'], $credit['duplicate'], $credit['receiptNumber']]);
         $this->assertSame(1, count($credit['lines']));
         $this->db->executeStatement('UPDATE entreprise SET pos_receipt_email_enabled = false, pos_receipt_qr_enabled = false');
@@ -153,8 +153,9 @@ class PosReceiptApiTest extends WebTestCase
 
     /**
      * Lot REIMP (12/11/2026) : lire un reçu pour l'afficher (`purpose=display`) n'écrit rien, ni compteur, ni journal de caisse ; seule
-     * une réimpression demandée (`POST /api/pos/receipts/reprint`) compte, une fois par clé d'idempotence. Phase 1 : le GET sans
-     * paramètre compte encore, comme avant. `cancellation` est null sur l'avoir d'annulation lui-même et reste sur le ticket de vente.
+     * une réimpression demandée (`POST /api/pos/receipts/reprint`) compte, une fois par clé d'idempotence. Phase 2 : le GET est une
+     * lecture pure dans tous les cas, avec ou sans `purpose`. `cancellation` est null sur l'avoir d'annulation lui-même et reste sur le
+     * ticket de vente.
      */
     public function testDisplayReadWritesNothingAndOnlyAnExplicitReprintCounts(): void
     {
@@ -199,15 +200,17 @@ class PosReceiptApiTest extends WebTestCase
         $this->assertSame([false, 2], array_values(array_intersect_key($this->json($this->request('GET', '/api/pos/receipts?purpose=display&orderId=' . $id)), ['duplicate' => 1, 'reprintCount' => 1])), 'la lecture rend le compteur courant (« Duplicata n° N »)');
         $this->assertSame(2, $state()['compteur']);
 
-        // Phase 1 : le GET sans paramètre reste une réimpression (à remplacer par POST /reprint)
-        $this->assertSame([true, 3], array_values(array_intersect_key($this->json($this->request('GET', '/api/pos/receipts?barcode=' . $sale['barcode'])), ['duplicate' => 1, 'reprintCount' => 1])));
-        $this->assertSame([true, 4], array_values(array_intersect_key($this->json($this->request('GET', '/api/pos/receipts?purpose=print&barcode=' . $sale['barcode'])), ['duplicate' => 1, 'reprintCount' => 1])), 'seule la valeur « display » fait une lecture pure');
-        $this->assertSame([4, 4], array_slice(array_values($state()), 0, 2));
+        // Phase 2 : le GET est une lecture pure avec ou sans purpose, quelle que soit sa valeur ; plus aucune réimpression par GET
+        $journal = $state()['journal'];
+        foreach (['', 'purpose=print&', 'purpose=display&', 'purpose=&'] as $purpose) {
+            $this->assertSame([false, 2], array_values(array_intersect_key($this->json($this->request('GET', "/api/pos/receipts?{$purpose}barcode=" . $sale['barcode'])), ['duplicate' => 1, 'reprintCount' => 1])), "« $purpose »");
+        }
+        $this->assertSame([2, 2, $journal], array_slice(array_values($state()), 0, 3), 'rien de compté, rien au journal');
 
         // Refus de la réimpression explicite : rien n'est compté
         $this->assertSame([422, 'VALIDATION_FAILED'], [$this->request('POST', '/api/pos/receipts/reprint', [])->getStatusCode(), json_decode($this->client->getResponse()->getContent(), true)['error']]);
         $this->assertSame([404, 'RECEIPT_NOT_FOUND'], [$this->request('POST', '/api/pos/receipts/reprint', ['barcode' => 'IZ-T-' . $this->register . '-999999'])->getStatusCode(), json_decode($this->client->getResponse()->getContent(), true)['error']]);
-        $this->assertSame(4, $state()['compteur']);
+        $this->assertSame(2, $state()['compteur']);
 
         // Vente annulée : la mention reste sur le ticket de vente, elle est null sur l'avoir lui-même
         $this->key = self::uuid();
@@ -223,7 +226,7 @@ class PosReceiptApiTest extends WebTestCase
         $this->key = self::uuid();
         $noteDup = $this->json($this->request('POST', '/api/pos/receipts/reprint', ['orderId' => $id, 'kind' => 'credit_note']));
         $this->assertSame(['cancellation', true, 1, null], [$noteDup['kind'], $noteDup['duplicate'], $noteDup['reprintCount'], $noteDup['cancellation']], 'duplicata de l\'avoir : son propre compteur');
-        $this->assertSame(4, $state()['compteur'], 'le compteur du ticket ne bouge pas');
+        $this->assertSame(2, $state()['compteur'], 'le compteur du ticket ne bouge pas');
 
         // Droits : la caisse seulement ; sans jeton, 401
         $this->key = null;

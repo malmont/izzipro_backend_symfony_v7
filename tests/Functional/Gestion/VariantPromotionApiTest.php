@@ -266,7 +266,7 @@ class VariantPromotionApiTest extends WebTestCase
         $this->db->executeStatement("UPDATE variant_promotion SET ends_at = NOW() - INTERVAL '1 minute'");
         $this->db->executeStatement('UPDATE product_variant SET price = 4500 WHERE id = ?', [$this->tshirtOwn]);
         $this->loginPos(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
-        $reprint = $this->json($this->request('GET', '/api/pos/receipts?orderId=' . $sale['orderId']));
+        $reprint = $this->json($this->request('POST', '/api/pos/receipts/reprint', ['orderId' => $sale['orderId']])); // réimpression explicite (lot REIMP)
         $this->assertTrue($reprint['duplicate']);
         $this->assertSame(array_map($promotionOf, $sale['lines']), array_map($promotionOf, $reprint['lines']), 'duplicata : promotion figée');
     }

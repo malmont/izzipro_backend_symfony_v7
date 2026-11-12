@@ -554,7 +554,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/pos/receipts/email` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReceiptController::email` |
 | POST | `/api/pos/receipts/reprint` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReceiptController::reprintExplicit` |
 | POST | `/api/pos/receipts/revoke-link` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReceiptController::revokeLink` |
-| GET | `/api/pos/receipts` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReceiptController::reprint` |
+| GET | `/api/pos/receipts` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReceiptController::view` |
 | POST | `/api/pos/rentals/bookings/{id}/return` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosRentalController::returnBooking` |
 | POST | `/api/pos/rentals/deposits/{id}/return` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosRentalController::returnDeposit` |
 | GET | `/api/pos/rentals/deposits/{id}` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosRentalController::deposit` |
