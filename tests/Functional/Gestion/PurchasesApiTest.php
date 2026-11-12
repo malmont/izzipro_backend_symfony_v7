@@ -6,6 +6,7 @@ use App\Entity\Collections;
 use App\Entity\Product;
 use App\Entity\Transporteur;
 use App\Entity\TypeFournisseur;
+use App\Entity\NoteDeFrais;
 use App\Entity\TypeNoteDeFrais;
 use App\Entity\User;
 use App\EventSubscriber\CacheInvalidationSubscriber;
@@ -129,11 +130,22 @@ class PurchasesApiTest extends WebTestCase
         $noteId = (int) $notes[0]['id'];
         $this->assertSame([8000, 'Essence', '2026-11-06', 'CAD'], [$notes[0]['montant'], $notes[0]['description'], $notes[0]['date'], $notes[0]['currency']]);
         $this->assertSame($notes[0], $createdNote, 'la réponse 201 a la forme de la liste (lot G4)');
+        $this->assertSame($typeNote->getId(), $notes[0]['typeNoteDeFraisId'], 'type de la note renvoyé, pour préremplir le PUT (12/11/2026)');
 
         $this->request('PUT', "/api/notes-de-frais/$noteId", ['description' => 'Essence', 'montant' => 9000, 'date' => '2026-11-06', 'typeNoteDeFraisId' => $typeNote->getId()]);
         $this->assertSame(200, $this->client->getResponse()->getStatusCode());
         $this->assertSame(9000, json_decode((string) $this->client->getResponse()->getContent(), true)['montant'], 'PUT : 200 avec l\'objet (lot G4)');
+        $this->assertSame($typeNote->getId(), json_decode((string) $this->client->getResponse()->getContent(), true)['typeNoteDeFraisId']);
         $this->assertSame(9000, $this->get("/api/collections/$collectionId/notes-de-frais")[0]['montant']);
+        // Note sans type (colonne nullable) : null
+        $em = $this->em();
+        $em->find(NoteDeFrais::class, $noteId)->setTypeNoteDeFrais(null);
+        $em->flush();
+        $this->assertArrayHasKey('typeNoteDeFraisId', $listed = $this->get("/api/collections/$collectionId/notes-de-frais")[0]);
+        $this->assertNull($listed['typeNoteDeFraisId'], 'sans type : null');
+        $em = $this->em();
+        $em->find(NoteDeFrais::class, $noteId)->setTypeNoteDeFrais($em->find(TypeNoteDeFrais::class, $typeNote->getId()));
+        $em->flush();
 
         // Tableau de bord de la collection : produits + frais de port + notes de frais, durée
         $dashboard = $this->get("/api/dashboard/collection/$collectionId");

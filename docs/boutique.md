@@ -137,6 +137,9 @@ véhicule se saisissait en dollars (`NumberField`) alors que `create-intent` le 
 n'existait).
 Schéma : migration `Version20261008120000`, script `scripts/migrate_all_v2_product_modes.sh` (reprise de l'ancien
 mode une seule fois). Tests : `tests/Functional/Boutique/ProductContractApiTest.php`.
+Drapeaux `isnewarrival`, `isfeatured`, `isspecialoffer` : colonnes nullables sans défaut (`isbestseller` est NOT NULL) ; NULL se lit
+`false` dans `ProductOutputCategoryDto` et `ProductDetailedOutputDTO` (12/11/2026 : un NULL faisait répondre 500 à la liste d'une
+catégorie et aux fiches). Aucune base de site n'en avait ; les bases ne sont pas corrigées, le code tolère NULL. Test `ProductNullFlagsTest`.
 
 ## Données de la boutique éditées depuis la page (09/10/2026, suite du § 9)
 

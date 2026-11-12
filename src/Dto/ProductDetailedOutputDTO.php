@@ -83,9 +83,9 @@ class ProductDetailedOutputDTO
         $this->moreinformations = $productTranslation?->getMoreinformations() ?? $product->getMoreinformations();
         $this->price = $product->getPrice();
         $this->isbestseller = $product->isIsbestseller();
-        $this->isnewarrival = $product->isIsnewarrival();
-        $this->isfeatured = $product->isIsfeatured();
-        $this->isspecialoffer = $product->isIsspecialoffer();
+        $this->isnewarrival = $product->isIsnewarrival() ?? false;
+        $this->isfeatured = $product->isIsfeatured() ?? false;
+        $this->isspecialoffer = $product->isIsspecialoffer() ?? false;
         $this->specialPrice = $product->getSpecialPrice();
         $this->specialPriceFrom = $product->getSpecialPriceFrom()?->format('Y-m-d H:i:s');
         $this->specialPriceTo = $product->getSpecialPriceTo()?->format('Y-m-d H:i:s');

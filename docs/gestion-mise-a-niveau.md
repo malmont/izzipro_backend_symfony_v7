@@ -290,6 +290,9 @@ Décisions de contrat prises pour les lots :
 - `carrier_count` (`GET /api/carrier/statistics`) est en réalité un **montant en cents** (`SUM(carrier.price)` des commandes clients du mois,
   `OrderRepository::getTotalCarrierByMonth`), malgré son nom : l'application divise par 100 à bon droit ; G3 ajoute `shippingAmount` (même
   valeur) et `currency`, `carrier_count` conservé.
+- Notes de frais (12/11/2026, demande du web) : `NoteDeFraisOutputDTO` gagne `typeNoteDeFraisId` (entier, `null` sans type), rendu par la
+  liste `GET /api/collections/{id}/notes-de-frais` et par les réponses de `POST` et `PUT` ; il préremplit le type exigé par
+  `PUT /api/notes-de-frais/{id}`. Ajout seulement. Test `PurchasesApiTest`.
 
 ## 8. Jeu de données de démonstration (demande du propriétaire, 09/11/2026)
 
