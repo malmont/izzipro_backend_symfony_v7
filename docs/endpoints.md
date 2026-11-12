@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (443)
+## Boutique et commun (444)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -552,6 +552,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/pos/pin` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosPinController::setPin` |
 | POST | `/api/pos/quote` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosQuoteController::quote` |
 | POST | `/api/pos/receipts/email` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReceiptController::email` |
+| POST | `/api/pos/receipts/reprint` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReceiptController::reprintExplicit` |
 | POST | `/api/pos/receipts/revoke-link` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReceiptController::revokeLink` |
 | GET | `/api/pos/receipts` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReceiptController::reprint` |
 | POST | `/api/pos/rentals/bookings/{id}/return` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosRentalController::returnBooking` |

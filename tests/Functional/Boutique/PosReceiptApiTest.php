@@ -151,6 +151,95 @@ class PosReceiptApiTest extends WebTestCase
         $this->assertNull($this->json($this->request('GET', '/api/pos/receipts?barcode=' . $sale['barcode']))['receiptUrl'], 'QR désactivé : pas de lien');
     }
 
+    /**
+     * Lot REIMP (12/11/2026) : lire un reçu pour l'afficher (`purpose=display`) n'écrit rien, ni compteur, ni journal de caisse ; seule
+     * une réimpression demandée (`POST /api/pos/receipts/reprint`) compte, une fois par clé d'idempotence. Phase 1 : le GET sans
+     * paramètre compte encore, comme avant. `cancellation` est null sur l'avoir d'annulation lui-même et reste sur le ticket de vente.
+     */
+    public function testDisplayReadWritesNothingAndOnlyAnExplicitReprintCounts(): void
+    {
+        $this->loginAs(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
+        $this->request('POST', '/api/caisse/open', ['cashRegisterId' => $this->register, 'cashFund' => 10000]);
+        $this->key = self::uuid();
+        $sale = $this->json($this->request('POST', '/api/order/create-multi-payment', ['items' => [['productVariantId' => $this->cap, 'quantity' => 2]], 'paymentMethods' => [['type' => 2, 'amount' => 66.70]], 'cashRegisterId' => $this->register]), 201);
+        $this->key = null;
+        $id = (int) $sale['orderId'];
+        $state = fn (): array => [
+            'compteur' => (int) $this->db->fetchOne("SELECT reprint_count FROM pos_receipt WHERE order_id = ? AND kind = 'ticket'", [$id]),
+            'réimpressions au journal' => (int) $this->db->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE type = 'RECEIPT_REPRINTED' AND payload LIKE ?", ['%' . $sale['barcode'] . '%']),
+            'journal' => (int) $this->db->fetchOne('SELECT COUNT(*) FROM pos_audit_log'),
+            'reçu' => $this->db->fetchOne("SELECT md5(CAST(row_to_json(r) AS text)) FROM pos_receipt r WHERE order_id = ? AND kind = 'ticket'", [$id]),
+        ];
+        $start = $state();
+        $this->assertSame([0, 0], [$start['compteur'], $start['réimpressions au journal']]);
+
+        // Lecture pour l'affichage, par les trois recherches : le bloc de la vente, pas un duplicata, rien d'écrit
+        $views = [
+            $this->json($this->request('GET', '/api/pos/receipts?purpose=display&barcode=' . $sale['barcode'])),
+            $this->json($this->request('GET', '/api/pos/receipts?purpose=display&orderId=' . $id)),
+            $this->json($this->request('GET', "/api/pos/receipts?purpose=display&kind=ticket&number={$sale['receiptNumber']}&cashRegisterId=$this->register")),
+        ];
+        foreach ($views as $view) {
+            $this->assertSame([false, 0, 'sale', $sale['barcode']], [$view['duplicate'], $view['reprintCount'], $view['kind'], $view['barcode']]);
+            $this->assertSame(array_intersect_key($sale, $view), $view, 'le bloc de la vente, à l\'identique');
+        }
+        $this->assertSame($start, $state(), 'aucune écriture : ni compteur, ni journal, ni reçu');
+
+        // Réimpression demandée : duplicata, compteur, une entrée au journal ; le rejeu de la même clé ne compte pas
+        $this->key = self::uuid();
+        $dup = $this->json($this->request('POST', '/api/pos/receipts/reprint', ['barcode' => $sale['barcode']]));
+        $this->assertSame([true, 1, 'sale', $sale['lines'], $sale['payments']], [$dup['duplicate'], $dup['reprintCount'], $dup['kind'], $dup['lines'], $dup['payments']]);
+        $this->assertSame([1, 1, $start['journal'] + 1], array_slice(array_values($state()), 0, 3));
+        $replay = $this->request('POST', '/api/pos/receipts/reprint', ['barcode' => $sale['barcode']]);
+        $this->assertSame([200, 'true', 1], [$replay->getStatusCode(), $replay->headers->get('Idempotent-Replayed'), json_decode($replay->getContent(), true)['reprintCount']], 'double appui : même réponse');
+        $this->assertSame([1, 1, $start['journal'] + 1], array_slice(array_values($state()), 0, 3), 'rejeu : rien de plus');
+        $this->key = self::uuid();
+        $this->assertSame([true, 2], array_values(array_intersect_key($this->json($this->request('POST', '/api/pos/receipts/reprint', ['orderId' => $id])), ['duplicate' => 1, 'reprintCount' => 1])), 'autre clé, par commande : seconde réimpression');
+        $this->key = null;
+        $this->assertSame([false, 2], array_values(array_intersect_key($this->json($this->request('GET', '/api/pos/receipts?purpose=display&orderId=' . $id)), ['duplicate' => 1, 'reprintCount' => 1])), 'la lecture rend le compteur courant (« Duplicata n° N »)');
+        $this->assertSame(2, $state()['compteur']);
+
+        // Phase 1 : le GET sans paramètre reste une réimpression (à remplacer par POST /reprint)
+        $this->assertSame([true, 3], array_values(array_intersect_key($this->json($this->request('GET', '/api/pos/receipts?barcode=' . $sale['barcode'])), ['duplicate' => 1, 'reprintCount' => 1])));
+        $this->assertSame([true, 4], array_values(array_intersect_key($this->json($this->request('GET', '/api/pos/receipts?purpose=print&barcode=' . $sale['barcode'])), ['duplicate' => 1, 'reprintCount' => 1])), 'seule la valeur « display » fait une lecture pure');
+        $this->assertSame([4, 4], array_slice(array_values($state()), 0, 2));
+
+        // Refus de la réimpression explicite : rien n'est compté
+        $this->assertSame([422, 'VALIDATION_FAILED'], [$this->request('POST', '/api/pos/receipts/reprint', [])->getStatusCode(), json_decode($this->client->getResponse()->getContent(), true)['error']]);
+        $this->assertSame([404, 'RECEIPT_NOT_FOUND'], [$this->request('POST', '/api/pos/receipts/reprint', ['barcode' => 'IZ-T-' . $this->register . '-999999'])->getStatusCode(), json_decode($this->client->getResponse()->getContent(), true)['error']]);
+        $this->assertSame(4, $state()['compteur']);
+
+        // Vente annulée : la mention reste sur le ticket de vente, elle est null sur l'avoir lui-même
+        $this->key = self::uuid();
+        $cancel = $this->json($this->request('POST', "/api/order/cancel/$id", ['paymentMethod' => 2, 'cashRegisterId' => $this->register]));
+        $this->key = null;
+        $ticket = $this->json($this->request('GET', '/api/pos/receipts?purpose=display&orderId=' . $id));
+        $this->assertSame(['sale', $cancel['creditNoteNumber']], [$ticket['kind'], $ticket['cancellation']['creditNoteNumber']]);
+        $this->assertNotNull($ticket['cancellation']['at']);
+        foreach (['orderId=' . $id . '&kind=credit_note', 'barcode=' . $cancel['barcode']] as $search) {
+            $note = $this->json($this->request('GET', '/api/pos/receipts?purpose=display&' . $search));
+            $this->assertSame(['cancellation', false, $cancel['creditNoteNumber'], true, null], [$note['kind'], $note['duplicate'], $note['receiptNumber'], array_key_exists('cancellation', $note), $note['cancellation']], $search);
+        }
+        $this->key = self::uuid();
+        $noteDup = $this->json($this->request('POST', '/api/pos/receipts/reprint', ['orderId' => $id, 'kind' => 'credit_note']));
+        $this->assertSame(['cancellation', true, 1, null], [$noteDup['kind'], $noteDup['duplicate'], $noteDup['reprintCount'], $noteDup['cancellation']], 'duplicata de l\'avoir : son propre compteur');
+        $this->assertSame(4, $state()['compteur'], 'le compteur du ticket ne bouge pas');
+
+        // Droits : la caisse seulement ; sans jeton, 401
+        $this->key = null;
+        $provider = static::getContainer()->get(TenantEntityManagerProvider::class);
+        $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $customer = (new User())->setEmail('client-' . bin2hex(random_bytes(3)) . '@example.invalid')->setFirstname('Client')->setLastname('Web')->setRoles(['ROLE_USER_INTERNET'])->setIsVerified(true)->setPassword('inutilisable');
+        $customer->setUsername($customer->getEmail());
+        $provider->getEntityManager()->persist($customer);
+        $provider->getEntityManager()->flush();
+        $this->token = static::getContainer()->get('lexik_jwt_authentication.jwt_manager')->create($customer); // un client du site ne peut pas se connecter à la caisse : jeton web
+        $this->assertSame(403, $this->request('POST', '/api/pos/receipts/reprint', ['barcode' => $sale['barcode']])->getStatusCode());
+        $this->assertSame(403, $this->request('GET', '/api/pos/receipts?purpose=display&barcode=' . $sale['barcode'])->getStatusCode());
+        $this->token = null;
+        $this->assertSame(401, $this->request('POST', '/api/pos/receipts/reprint', ['barcode' => $sale['barcode']])->getStatusCode());
+    }
+
     public function testEmailWithoutSmtpConfigurationIsRefusedExplicitly(): void
     {
         $this->loginAs(['ROLE_USER_POS']);

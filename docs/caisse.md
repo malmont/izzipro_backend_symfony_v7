@@ -713,10 +713,20 @@ ou Vonage par le Notifier, un réglage « reçu par SMS », coût par message.
 
 | Méthode, route | Corps | Réponse |
 |---|---|---|
-| `GET /api/pos/receipts?barcode=IZ-T-1-123` ou `?orderId=[&kind=ticket\|credit_note]` ou `?kind=&number=&cashRegisterId=` (caisse) | — | 200 bloc ticket complet avec **`duplicate: true`** (mention « DUPLICATA » à imprimer), `reprintCount` incrémenté ; pour un échange, `exchange {returnId, returnOrderId, saleOrderId, other}` (l'autre document) ; journal `RECEIPT_REPRINTED`. 404 `RECEIPT_NOT_FOUND`, 422 `BARCODE_INVALID` |
+| `GET /api/pos/receipts?barcode=IZ-T-1-123` ou `?orderId=[&kind=ticket\|credit_note]` ou `?kind=&number=&cashRegisterId=` (caisse) **avec `&purpose=display`** (lot REIMP, 12/11/2026) | — | **Lecture pure, pour l'affichage** : 200 bloc ticket complet, `duplicate: false`, `reprintCount` tel qu'il est (« Duplicata n° N » sans calcul) ; **aucune écriture**, ni compteur, ni journal. Mêmes recherches et mêmes refus que la réimpression. Seule la valeur `display` fait une lecture pure |
+| `POST /api/pos/receipts/reprint {barcode \| orderId[, kind] \| kind, number, cashRegisterId}` (caisse, `Idempotency-Key` acceptée ; lot REIMP) | — | **Réimpression demandée explicitement** : 200 bloc ticket complet avec **`duplicate: true`** (mention « DUPLICATA » à imprimer), `reprintCount` incrémenté, journal `RECEIPT_REPRINTED` ; pour un échange, `exchange {returnId, returnOrderId, saleOrderId, other}` (l'autre document). Le rejeu de la même clé rend la même réponse sans compter une seconde fois. 404 `RECEIPT_NOT_FOUND`, 422 `BARCODE_INVALID` / `VALIDATION_FAILED` |
+| `GET /api/pos/receipts?…` **sans `purpose`** (caisse) — **à remplacer** | — | Phase 1 du lot REIMP : se comporte encore comme la réimpression (`duplicate: true`, compteur, journal), pour ne pas cesser de compter les réimpressions d'une caisse non mise à jour. Les caisses passent à `POST /api/pos/receipts/reprint` pour réimprimer et à `purpose=display` pour afficher ; en phase 2, sur décision, ce GET devient une lecture pure |
 | `POST /api/pos/receipts/email {barcode \| orderId, email}` (caisse, `Idempotency-Key` acceptée) | — | 200 `{sent: true, barcode, to}` (`to` masqué `j***@domaine`) : courriel HTML aux couleurs du profil `pos` (nom, logo, couleur) avec le reçu complet et **le PDF joint** (rouleau 80 mm), envoyé par le SMTP du site via la file `email`. Refus : 409 `RECEIPT_EMAIL_DISABLED`, 422 `EMAIL_INVALID`, 503 `EMAIL_NOT_CONFIGURED` (site sans configuration d'envoi), 502 `EMAIL_SEND_FAILED`. Rejeu : même réponse, aucun second courriel |
 | `POST /api/pos/receipts/revoke-link {barcode \| orderId}` (responsable, administrateur) | — | 200 `{revoked: true, barcode, receiptUrl}` : les liens déjà imprimés du ticket cessent de fonctionner (version du lien), un nouveau lien est émis ; journal `RECEIPT_LINK_REVOKED` |
 | `GET /api/r/{jeton}` (**public**, `?format=pdf`) | — | page HTML simple du reçu (ou PDF), `X-Robots-Tag: noindex, nofollow, noarchive`, `Cache-Control: private, no-store` ; 404 jeton invalide, 410 lien expiré ou révoqué (message clair). Aucune donnée au-delà du ticket |
+
+**Lecture et réimpression (lot REIMP, 12/11/2026).** Une lecture n'est pas une réimpression : le compteur `reprintCount` et l'entrée `RECEIPT_REPRINTED`
+du journal de caisse (inaltérable) ne doivent bouger que lorsqu'un duplicata est réellement demandé. Avant ce lot, la seule route de lecture d'un
+reçu par la caisse était la réimpression : afficher un ticket comptait un duplicata. La page publique `GET /api/r/{jeton}`, le reçu par courriel et
+les réponses d'écriture (vente, retour, annulation) n'ont jamais compté de réimpression. `cancellation` (vente annulée, lot PAYS-1b) est porté par le
+ticket de vente seulement : il est `null` sur l'avoir d'annulation lui-même (et sur tout avoir), que le document soit lu ou réimprimé.
+*Demo : compteurs et journal de réimpression de demo du 12/11/2026 gonflés par les contrôles de mise en ligne, non réels (609 entrées
+`RECEIPT_REPRINTED` écrites ce jour-là par des lectures de contrôle ; rien n'a été corrigé en base, le journal étant inaltérable).*
 
 **Lien public et QR.** `receiptUrl` = `https://<hôte public du site>/api/r/<jeton>` : servi **sous `/api/`** parce que l'hôte public
 d'un site (ex. `demo.arkanoa-media.com`) sert le site Next.js et ne route vers le backend que `/api/` ; rien ne change donc
@@ -1510,7 +1520,8 @@ prouve (`tests/Functional/...`, « — » = aucun test dédié).
 | POST | `/api/pos/quote` | caisse | lecture (devis) ; remises plafonnées par rôle (information) | PosDiscountApiTest |
 | POST | `/api/pos/receipts/email` | caisse | toute vente du site (par conception) ; adresse non conservée ; limite d'envois | PosReceiptApiTest |
 | POST | `/api/pos/receipts/revoke-link` | caisse | **responsable** (route et service, **corrigé S2.7**) | PosReceiptApiTest, PosRoleMatrixTest |
-| GET | `/api/pos/receipts` | caisse | toute vente du site (réimpression, par conception) ; journal `RECEIPT_REPRINTED` | PosReceiptApiTest, PosRoleMatrixTest |
+| GET | `/api/pos/receipts` | caisse | toute vente du site ; `purpose=display` : lecture pure, sans écriture ; sans paramètre : réimpression (phase 1 du lot REIMP), journal `RECEIPT_REPRINTED` | PosReceiptApiTest, PosRoleMatrixTest |
+| POST | `/api/pos/receipts/reprint` | caisse | toute vente du site (réimpression explicite, par conception) ; journal `RECEIPT_REPRINTED` ; idempotente | PosReceiptApiTest |
 | GET | `/api/pos/returns/lookup` | caisse | toute vente du site (lecture) | PosReturnApiTest, PosRoleMatrixTest |
 | POST | `/api/pos/returns` | caisse | toute vente du site ; session du poste du caissier ; C3 `return` selon seuil ; sans ticket selon réglage | PosReturnApiTest, PosRoleMatrixTest |
 | GET | `/api/pos/settings` | caisse | lecture des réglages du site (sans secret) | PosSettingsApiTest |

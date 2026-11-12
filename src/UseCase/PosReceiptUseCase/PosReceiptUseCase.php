@@ -69,6 +69,12 @@ class PosReceiptUseCase
         return $block;
     }
 
+    /** Lecture pure d'un reçu pour l'affichage (lot REIMP, 12/11/2026) : ni compteur, ni journal ; `reprintCount` tel qu'il est */
+    public function view(PosReceipt $receipt, string $locale): array
+    {
+        return $this->block($receipt, $locale, false);
+    }
+
     public function reprint(User $user, PosReceipt $receipt, string $locale): array
     {
         $receipt->addReprint();
