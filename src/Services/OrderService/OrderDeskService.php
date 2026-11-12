@@ -120,6 +120,22 @@ class OrderDeskService
      *
      * @return array{toShip: list<array<string, mixed>>, toCapture: list<array<string, mixed>>, incomplete: list<array<string, mixed>>, inTransit: list<array<string, mixed>>, counts: array<string, int>}
      */
+    /** « À expédier » : commande payée ou en préparation, avec une adresse de livraison, pas encore expédiée (après le filtre « hors caisse ») */
+    public const TO_SHIP = 'o.status_id IN (3, 4) AND o.shipping_adress_id IS NOT NULL AND o.shipped_at IS NULL';
+
+    /**
+     * Nombre de commandes « à expédier » et date de la plus ancienne (lot JOUR, 13/11/2026) : même définition que la liste de l'écran
+     * « À traiter », sans son plafond.
+     *
+     * @return array{count: int, oldestAt: ?string}
+     */
+    public function toShipSummary(): array
+    {
+        $row = $this->emProvider->getEntityManager()->getConnection()->fetchAssociative('SELECT COUNT(*) AS n, MIN(o.order_date) AS oldest FROM "order" o WHERE COALESCE(o.order_source_id, 1) <> 2 AND ' . self::TO_SHIP);
+
+        return ['count' => (int) ($row['n'] ?? 0), 'oldestAt' => !empty($row['oldest']) ? (new \DateTimeImmutable((string) $row['oldest'], new \DateTimeZone('UTC')))->format(\DateTimeInterface::ATOM) : null];
+    }
+
     public function todo(int $limit = 100): array
     {
         $c = $this->emProvider->getEntityManager()->getConnection();
@@ -127,7 +143,7 @@ class OrderDeskService
         $map = fn (array $r) => ['id' => (int) $r['id'], 'reference' => $r['reference'], 'date' => substr((string) $r['order_date'], 0, 16), 'statusId' => (int) $r['status_id'], 'status' => self::STATUS_LABELS[(int) $r['status_id']] ?? '', 'totalCents' => (int) round((float) $r['total_amount']), 'customer' => trim((string) $r['firstname'] . ' ' . (string) $r['lastname']) ?: (string) $r['email'], 'email' => $r['email'], 'shippedAt' => $r['shipped_at'] ? substr((string) $r['shipped_at'], 0, 10) : null];
         $limit = max(1, min(500, $limit));
         $lists = [
-            'toShip' => $select . "o.status_id IN (3, 4) AND o.shipping_adress_id IS NOT NULL AND o.shipped_at IS NULL ORDER BY o.order_date ASC LIMIT $limit",
+            'toShip' => $select . self::TO_SHIP . " ORDER BY o.order_date ASC LIMIT $limit",
             'toCapture' => $select . "EXISTS (SELECT 1 FROM payments p WHERE p.order_payment_id = o.id AND p.amount > 0 AND p.stripe_status = 'requires_capture') AND o.status_id <> 7 ORDER BY o.order_date ASC LIMIT $limit",
             'incomplete' => $select . "o.status_id = 1 AND o.order_date < NOW() - INTERVAL '1 hour' ORDER BY o.order_date DESC LIMIT $limit",
             'inTransit' => $select . "o.status_id = 5 AND COALESCE(o.shipped_at, o.status_updated_at, o.order_date) < NOW() - INTERVAL '10 days' ORDER BY o.order_date ASC LIMIT $limit",

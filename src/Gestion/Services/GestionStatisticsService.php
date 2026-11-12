@@ -187,7 +187,7 @@ class GestionStatisticsService
     }
 
     /** Totaux d'une liste de jours (agrégats de `dailySales`) et indicateurs dérivés */
-    private static function metrics(array $days): array
+    public static function metrics(array $days): array
     {
         $c = static fn (mixed $v): float => (float) $v;
         $sum = static fn (string $k) => array_sum(array_map(fn ($r) => $c($r[$k] ?? 0), $days));

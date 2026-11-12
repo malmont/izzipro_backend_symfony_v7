@@ -137,6 +137,17 @@ class PeriodResultCalculator
         return $out;
     }
 
+    /**
+     * Agrégats des ventes entre deux instants (lot JOUR, 13/11/2026) : même requête que `dailySales`, bornée à la seconde (comparaison
+     * « à la même heure »). Une ligne de totaux, à passer à GestionStatisticsService::metrics.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function salesBetween(\DateTimeInterface $fromUtc, \DateTimeInterface $toUtc, ?int $source = null): array
+    {
+        return $this->salesRows($fromUtc->format('Y-m-d H:i:s'), $toUtc->format('Y-m-d H:i:s'), null, false, null, $source, false);
+    }
+
     /** @return list<array<string, mixed>> une ligne (totaux) ou une ligne par jour du magasin (`$byDay`, colonne `d`) */
     private function salesRows(string $fromUtc, string $toUtc, ?\DateTimeImmutable $costCutoff, bool $legacy, ?array $productIds, ?int $source, bool $byDay): array
     {

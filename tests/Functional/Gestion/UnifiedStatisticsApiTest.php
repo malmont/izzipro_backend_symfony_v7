@@ -154,6 +154,110 @@ class UnifiedStatisticsApiTest extends WebTestCase
         $this->assertNull($snapshots->at('2007-06-16'));
     }
 
+    /**
+     * Lot JOUR (contrat validé le 13/11/2026, `docs/journee-gestion.md`) : GET /api/gestion/journee. Les ventes du jour sont celles des
+     * statistiques unifiées (« aujourd'hui », tous canaux et par canal) ; la comparaison porte sur le même jour de semaine des 4 semaines
+     * précédentes, chacun arrêté à la même heure ; « à expédier » est la liste de l'écran « À traiter » ; assistance null sans le module ;
+     * encaissé, trésorerie et stock bas viennent des services existants.
+     */
+    public function testDayOverviewMatchesStatisticsDeskAndSameHourAverage(): void
+    {
+        $tag = bin2hex(random_bytes(2));
+        $conn = $this->em()->getConnection();
+        $conn->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type, purchase_price) VALUES (nextval('product_id_seq'), :n, 2500, false, 0, NOW(), :s, 'standard', 1000)", ['n' => "Jour $tag", 's' => "s1-test-jour-$tag"]);
+        $v = (int) $this->create(ProductVariant::class, ['product' => $this->em()->find(Product::class, (int) $conn->fetchOne('SELECT id FROM product WHERE slug = ?', ["s1-test-jour-$tag"]))])->getId();
+        $tz = static::getContainer()->get(StoreClock::class)->timezone();
+        $noon = (new \DateTimeImmutable('now', $tz))->setTime(12, 0);
+        $day = $noon->format('Y-m-d');
+        $service = static::getContainer()->get(\App\Gestion\Services\GestionDayService::class);
+        $before = $service->overview($noon);
+
+        // Aujourd'hui : caisse 2 × 2500, web 1 × 4000, application mobile 1 × 1000, retour caisse 1 × 2500, vente annulée (exclue)
+        $this->sale($day, 1, 3, 2, [[$v, 2, 2500]], '09:00');
+        $this->sale($day, 1, 3, 1, [[$v, 1, 4000]], '10:00');
+        $this->sale($day, 1, 3, 3, [[$v, 1, 1000]], '10:30');
+        $this->sale($day, 2, 3, 2, [[$v, 1, 2500]], '11:00');
+        $this->sale($day, 1, 7, 2, [[$v, 4, 2500]], '11:30');
+        $this->sale($noon->modify('-1 day')->format('Y-m-d'), 1, 3, 2, [[$v, 1, 7000]], '15:00'); // hier : hors de la journée
+        // Les 4 mêmes jours de semaine précédents : 1000 avant midi (compté), 9000 après midi (hors de la comparaison « à la même heure »)
+        foreach ([7, 14, 21, 28] as $d) {
+            $past = $noon->modify("-$d days")->format('Y-m-d');
+            $this->sale($past, 1, 3, 2, [[$v, 1, 1000]], '11:00');
+            $this->sale($past, 1, 3, 2, [[$v, 1, 9000]], '13:00');
+        }
+        $this->endOfWrite();
+        $this->em()->clear();
+        $after = $service->overview($noon);
+        $this->assertSame([$before['sales']['total'] + 5000 + 4000 + 1000 - 2500, $before['sales']['orders'] + 3], [$after['sales']['total'], $after['sales']['orders']], 'retour en négatif, annulée exclue');
+        $channel = fn (array $o, string $c) => array_column($o['sales']['byChannel'], null, 'channel')[$c];
+        $this->assertSame(['ecommerce', 'pos', 'mobile_app'], array_column($after['sales']['byChannel'], 'channel'), 'toujours les trois canaux');
+        $this->assertSame([$channel($before, 'pos')['total'] + 2500, $channel($before, 'ecommerce')['total'] + 4000, $channel($before, 'mobile_app')['total'] + 1000],
+            [$channel($after, 'pos')['total'], $channel($after, 'ecommerce')['total'], $channel($after, 'mobile_app')['total']]);
+        $cmp = $after['sales']['vsSameWeekdayAverage'];
+        $this->assertSame([$before['sales']['vsSameWeekdayAverage']['average'] + 1000, 4, '12:00'], [$cmp['average'], $cmp['weeks'], $cmp['asOf']], 'moyenne arrêtée à la même heure : les ventes de 13 h ne comptent pas');
+        $this->assertSame(round(($after['sales']['total'] - $cmp['average']) / abs($cmp['average']) * 100, 1), $cmp['percent']);
+
+        // Par la route : mêmes chiffres que les statistiques unifiées d'aujourd'hui, tous canaux et par canal
+        $day = $this->get('/api/gestion/journee');
+        $this->assertSame(['date', 'timezone', 'currency', 'generatedAt', 'sales', 'receipts', 'toShip', 'support', 'cash', 'stock', 'screens'], array_keys($day));
+        $stats = fn (string $source) => $this->get("/api/gestion/statistiques?range=today&source=$source")['indicators'];
+        $all = $stats('all');
+        $this->assertSame([$all['revenue']['value'], $all['orders']['value']], [$day['sales']['total'], $day['sales']['orders']], '« aujourd\'hui » de S1 = Ma journée');
+        foreach (['ecommerce', 'pos', 'mobile_app'] as $source) {
+            $i = $stats($source);
+            $this->assertSame([$i['revenue']['value'], $i['orders']['value']], [$channel($day, $source)['total'], $channel($day, $source)['orders']], $source);
+        }
+        $this->assertSame([$tz->getName(), $noon->format('Y-m-d')], [$day['timezone'], $day['date']]);
+        $this->assertSame(['sales' => 'statistiques', 'toShip' => 'commandes.a_expedier', 'support' => 'assistance', 'cash' => 'tresorerie', 'stock' => 'stock.low'], $day['screens']);
+
+        // Encaissé (taxes comprises), trésorerie et stock bas : les services existants
+        $cash = static::getContainer()->get(\App\Gestion\Services\GestionCashService::class);
+        $split = $cash->receiptsSplit($day['date'], $day['date']);
+        $this->assertSame(['total' => $split['total'], 'byMethod' => [['method' => 'cash', 'total' => $split['cash']], ['method' => 'card', 'total' => $split['card']]]], $day['receipts']);
+        $alert = $cash->alert();
+        $this->assertSame($alert === null ? null : [(int) $alert['balance']['amount'], $alert['balance']['date'], (int) $alert['low14']['amount'], $alert['low14']['date'], $alert['status']],
+            $day['cash'] === null ? null : [$day['cash']['balance'], $day['cash']['balanceDate'], $day['cash']['lowestIn14Days']['amount'], $day['cash']['lowestIn14Days']['date'], $day['cash']['state']]);
+        $this->assertSame(count(static::getContainer()->get(\App\Gestion\Services\HomeTilesService::class)->lowStock()['all']), $day['stock']['lowCount']);
+
+        // À expédier : la liste de l'écran « À traiter » ; une commande web payée avec adresse, non expédiée, s'y ajoute
+        $desk = static::getContainer()->get(\App\Services\OrderService\OrderDeskService::class);
+        $this->assertSame($desk->todo(500)['counts']['toShip'], $day['toShip']['count']);
+        $address = (int) $conn->fetchOne("INSERT INTO adress (id, firstname, lastname, fullname, address, phone, city, codepostal, country) VALUES (nextval('adress_id_seq'), 'J', 'Our', 'J Our', '1 rue', '0', 'Ville', 'H1A', 'CA') RETURNING id");
+        $old = (new \DateTimeImmutable('2001-01-01 10:00:00', new \DateTimeZone('UTC')));
+        $conn->executeStatement("UPDATE \"order\" SET shipping_adress_id = ?, order_date = ? WHERE id = (SELECT MAX(id) FROM \"order\" WHERE reference = 'S1-TEST' AND order_source_id = 1 AND status_id = 3)", [$address, $old->format('Y-m-d H:i:s')]);
+        // une vente de caisse payée avec une adresse n'est pas « à expédier » (hors caisse seulement)
+        $conn->executeStatement("UPDATE \"order\" SET shipping_adress_id = ? WHERE id = (SELECT MAX(id) FROM \"order\" WHERE reference = 'S1-TEST' AND order_source_id = 2 AND status_id = 3)", [$address]);
+        $ship = $this->get('/api/gestion/journee')['toShip'];
+        $this->assertSame([$day['toShip']['count'] + 1, $old->format(\DateTimeInterface::ATOM), $desk->todo(500)['counts']['toShip']], [$ship['count'], $ship['oldestAt'], $ship['count']], 'compte et plus ancienne commande');
+        $conn->executeStatement("UPDATE \"order\" SET shipping_adress_id = NULL WHERE shipping_adress_id = ?", [$address]);
+        $conn->executeStatement('DELETE FROM adress WHERE id = ?', [$address]);
+
+        // Assistance : null sans le module ; avec lui, demandes ouvertes et en retard
+        $flags = static::getContainer()->get(\App\Services\TenantCacheService::class);
+        $conn->executeStatement('UPDATE entreprise SET is_support_active = false');
+        $flags->delete('module_flags');
+        $this->assertNull($this->get('/api/gestion/journee')['support'], 'module Assistance non accordé');
+        $conn->executeStatement('UPDATE entreprise SET is_support_active = true');
+        $flags->delete('module_flags');
+        try {
+            $support = $this->get('/api/gestion/journee')['support'];
+            $this->assertSame(['open', 'overdue'], array_keys($support));
+            foreach ([['open', "NOW() - INTERVAL '1 day'"], ['new', "NOW() + INTERVAL '1 day'"], ['closed', "NOW() - INTERVAL '1 day'"]] as $n => [$status, $due]) {
+                $conn->executeStatement("INSERT INTO support_ticket (id, reference, subject, status, channel, due_at, created_at, updated_at) VALUES (nextval('support_ticket_id_seq'), ?, 'Jour', ?, 'agent', $due, NOW(), NOW())", ["JOUR-$tag-$n", $status]);
+            }
+            $this->assertSame(['open' => $support['open'] + 2, 'overdue' => $support['overdue'] + 1], $this->get('/api/gestion/journee')['support'], 'ouvertes : ni fermées ; en retard : échéance passée');
+        } finally {
+            $conn->executeStatement('DELETE FROM support_ticket WHERE reference LIKE ?', ["JOUR-$tag-%"]);
+            $conn->executeStatement('UPDATE entreprise SET is_support_active = false');
+            $flags->delete('module_flags');
+        }
+
+        // Garde : administrateur, module de gestion
+        $this->client->request('GET', '/api/gestion/journee', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json']);
+        $this->assertSame(401, $this->status());
+        $this->assertSame(\App\Services\FeatureAccess\ModuleAccessService::MANAGEMENT, \App\Services\FeatureAccess\ModuleAccessService::moduleForPath('/api/gestion/journee'));
+    }
+
     // ----- helpers -----
 
     /** Commande datée à midi (magasin) : type, statut, source, lignes [[variante, quantité, prix unitaire net]] */
