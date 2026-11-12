@@ -123,6 +123,9 @@ class PromotionApiTest extends WebTestCase
         $this->assertSame([2700, 'new'], [(int) $conn->fetchOne('SELECT special_price FROM product WHERE id = ?', [$b]), $conn->fetchOne('SELECT status FROM gestion_advice WHERE id = ?', [$advice])], 'pas commencée : l\'ancienne promotion revient, le conseil repasse new');
 
         // Retouchée depuis : tout ou rien, puis onlyUntouched
+        // (seconde suivante d'abord : l'aperçu lit « promotion en cours » à la seconde près, et la promotion terminée à l'instant change
+        // d'état quand la seconde tourne ; entre l'aperçu et l'application, l'empreinte différait alors une fois sur quarante)
+        usleep((int) ((1 - fmod(microtime(true), 1)) * 1_000_000) + 50_000);
         $nc = ['productIds' => [$c, $a], 'percent' => 10, 'endDate' => $d(3)];
         $pc = $this->send('POST', '/api/gestion/promotions/apercu', $nc, 200);
         $two = $this->send('POST', '/api/gestion/promotions/appliquer', $nc + ['previewHash' => $pc['previewHash'], 'allowReplace' => true, 'allowBelowCost' => true], 201); // C : 18,00 $ sous son coût de 19,00 $
