@@ -12,7 +12,7 @@ class FraisDePortService
     // MODIFICATION 1 : Le service ne dépend plus que du provider
     private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Gestion\Services\PeriodGuard $periodGuard = null)
+    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Gestion\Services\PeriodGuard $periodGuard = null, private readonly ?\App\Gestion\Services\Document\GestionDocumentService $documents = null)
     {
         $this->emProvider = $emProvider;
     }
@@ -69,6 +69,7 @@ class FraisDePortService
             $em->remove($fraisDePort);
             
             $em->flush();
+            $this->documents?->purge(); // justificatif de transport dont le frais de port vient de disparaître (DOC-ORPH, 13/11/2026)
         }
     }
 }

@@ -350,7 +350,9 @@ retirés, envoi abandonné s'il n'en reste aucun (hors tests). Refus définitif 
   - **Variante d'hôte dans la clé** (IMGHOST, 13/11/2026, `Services/TenantHostVariant`) : beaucoup de lectures en cache fabriquent des
     adresses (images, médias) avec l'hôte de la requête. La clé de `TenantCacheService::get()` porte donc le schéma et l'hôte,
     **normalisé parmi les noms connus du site** : `<code>.<domaine de base>` (frontend ou backend, sous-domaines compris), le domaine
-    de base lui-même (hôte partagé du backend), le domaine propre du site (avec ou sans `www.`), `localhost`. Tout autre hôte lit la
+    de base lui-même (hôte partagé du backend), le domaine propre du site (avec ou sans `www.`), `localhost`. Le domaine propre compte dès
+    qu'il est inscrit sur la ligne du site, sans contrôle « live » : seul l'administrateur l'inscrit, et une requête qui arrive dessus
+    prouve qu'il répond. Tout autre hôte lit la
     variante canonique (`https://<code>.<domaine du backend>`) **sans rien enregistrer** : un Host inattendu ne multiplie pas les
     entrées et ne fait servir ses adresses à personne d'autre. Hors requête (workers, commandes) : pas de variante. L'invalidation
     reste par étiquettes (toutes les variantes) ; `delete()` passe par une étiquette propre à la clé. Un contrôle direct par l'adresse

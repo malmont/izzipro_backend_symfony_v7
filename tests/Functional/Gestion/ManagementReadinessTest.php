@@ -17,7 +17,7 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
  */
 class ManagementReadinessTest extends WebTestCase
 {
-    private const KEYS = ['management.key', 'management.short_code', 'management.admin', 'management.period', 'management.fiscal_year', 'management.locale',
+    private const KEYS = ['management.short_code', 'management.admin', 'management.period', 'management.fiscal_year', 'management.locale',
         'management.periods_calendar', 'management.purchase_cost', 'management.suppliers', 'management.referentials', 'management.cash', 'management.fixed_costs',
         'management.ai', 'management.device', 'management.first_purchase'];
 
@@ -86,19 +86,21 @@ class ManagementReadinessTest extends WebTestCase
         }
         $this->assertSame(['todo', false, 'periodes'], [$steps['management.periods_calendar']['status'], $steps['management.periods_calendar']['blocking'], $steps['management.periods_calendar']['appScreen']], 'calendrier jamais choisi : orange');
 
-        // Tout le bloquant réglé : clé, code court, administrateur (le compte du modèle), période en cours, exercice, devise et fuseau
-        $this->master->prepare("INSERT INTO tenant_app_keys (tenant_code, app, key_hash, key_hint, label, created_by, created_at) VALUES (?, 'admin', ?, 'CHE', 'CHE', 'test', NOW())")->execute([MV_TEST_TENANT_CODE, hash('sha256', 'che-' . bin2hex(random_bytes(4)))]);
+        // Tout le bloquant réglé : code court, administrateur (le compte du modèle), période en cours, exercice, devise et fuseau
+        // aucune clé d'application « admin » : l'étape a été retirée le 13/11/2026 (le code court et un compte administrateur suffisent)
+        $this->master->prepare("DELETE FROM tenant_app_keys WHERE tenant_code = ? AND app = 'admin'")->execute([MV_TEST_TENANT_CODE]);
         $this->master->prepare('UPDATE tenants SET short_code = ? WHERE code = ?')->execute([$this->saved['shortCode'] ?: 'CHE042', MV_TEST_TENANT_CODE]);
         $this->db->executeStatement("INSERT INTO collections (id, budget_collection, start_date_collection, end_date_collection, del, nom_collection, is_closed, kind, period_key) VALUES (nextval('collections_id_seq'), 0, CURRENT_DATE - 5, CURRENT_DATE + 30, false, 'CHE', false, 'period', ?)", ['che-' . bin2hex(random_bytes(3))]);
         $this->db->executeStatement("UPDATE entreprise SET fiscal_year_start_month = 4, purchase_period_frequency = 'quarterly'");
         $body = $this->readiness();
         $steps = array_column($this->managementSteps($body), null, 'key');
-        foreach (['management.key', 'management.short_code', 'management.admin', 'management.period', 'management.fiscal_year', 'management.locale', 'management.periods_calendar'] as $key) {
+        foreach (['management.short_code', 'management.admin', 'management.period', 'management.fiscal_year', 'management.locale', 'management.periods_calendar'] as $key) {
             $this->assertSame('done', $steps[$key]['status'], $key);
         }
         $this->assertStringContainsString('avril', $steps['management.fiscal_year']['description']);
         $group = array_values(array_filter($body['groups'], fn ($g) => $g['key'] === 'app.management'))[0];
         $this->assertSame([0, true], [$group['blockingTodo'], $group['ready']], 'groupe vert : plus rien d\'indispensable');
+        $this->assertArrayNotHasKey('management.key', $steps, 'pas d\'étape « clé d\'activation » : le groupe est vert sans clé');
     }
 
     public function testPurchaseCostIsCountedAndEveryStepCarriesItsAppScreen(): void
@@ -133,7 +135,7 @@ class ManagementReadinessTest extends WebTestCase
             }
             $this->db->executeStatement('UPDATE product SET purchase_price = ? WHERE id = ?', [$price, $id]);
         }
-        $this->assertSame(['management.key' => null, 'management.short_code' => null, 'management.admin' => null, 'management.period' => 'periodes', 'management.fiscal_year' => 'exercice',
+        $this->assertSame(['management.short_code' => null, 'management.admin' => null, 'management.period' => 'periodes', 'management.fiscal_year' => 'exercice',
             'management.locale' => null, 'management.periods_calendar' => 'periodes', 'management.purchase_cost' => 'articles', 'management.suppliers' => 'fournisseurs', 'management.referentials' => null,
             'management.cash' => 'tresorerie', 'management.fixed_costs' => 'frais-fixes', 'management.ai' => null, 'management.device' => 'notifications', 'management.first_purchase' => 'commandes'],
             array_map(fn ($s) => $s['appScreen'], $steps), 'codes d\'écran de l\'application (vocabulaire des vignettes)');

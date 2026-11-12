@@ -285,24 +285,65 @@ class GestionDocumentService
         $em->flush();
     }
 
-    /** Purge paresseuse : non confirmés expirés (statut, puis suppression), confirmés sans cible ; nombre supprimé */
+    /** Cibles d'un document confirmé : colonne de gestion_document => table de la cible */
+    public const TARGETS = ['commande_id' => 'commande', 'note_de_frais_id' => 'note_de_frais', 'frais_de_port_id' => 'frais_de_port', 'campaign_id' => 'marketing_campaign'];
+
+    /**
+     * Purge : non confirmés expirés (30 jours), et confirmés dont **toutes les cibles ont disparu** (DOC-ORPH, 13/11/2026). Appelée à chaque
+     * liste et à chaque envoi (purge paresseuse), et aussitôt après la suppression d'une note de frais, d'une commande, d'un frais de port ou
+     * d'une campagne. Le critère est l'existence réelle de la ligne cible : gestion_document garde de simples identifiants, sans clé étrangère,
+     * que rien ne remettait à null (avant, un document dont la note avait été supprimée restait dans la liste, sans pouvoir être supprimé).
+     * Un document à plusieurs cibles reste tant qu'une cible existe ; l'identifiant de la cible disparue est remis à null. Chaque purge est
+     * journalisée (nom, taille et empreinte des fichiers) ; les fichiers ne sont supprimés qu'après l'enregistrement en base.
+     *
+     * @return int nombre de documents supprimés
+     */
     public function purge(): int
     {
         $this->releaseStaleReadings();
         $em = $this->emProvider->getEntityManager();
+        $conn = $em->getConnection();
+        $lost = []; // document => cibles disparues
+        foreach (self::TARGETS as $column => $table) {
+            foreach ($conn->fetchAllAssociative("SELECT d.id, d.$column AS target FROM gestion_document d WHERE d.status = ? AND d.$column IS NOT NULL AND NOT EXISTS (SELECT 1 FROM $table t WHERE t.id = d.$column)", [GestionDocument::STATUS_CONFIRMED]) as $row) {
+                $lost[(int) $row['id']][] = ['type' => $table, 'id' => (int) $row['target']];
+                $conn->executeStatement("UPDATE gestion_document SET $column = NULL WHERE id = ?", [(int) $row['id']]);
+            }
+        }
+        foreach (array_keys($lost) as $id) { // entités déjà chargées : relues après la mise à jour directe
+            $managed = $em->getUnitOfWork()->tryGetById($id, GestionDocument::class);
+            if ($managed) {
+                $em->refresh($managed);
+            }
+        }
         /** @var GestionDocumentRepository $repo */
         $repo = $em->getRepository(GestionDocument::class);
         $count = 0;
         foreach ($repo->findPurgeable(new \DateTimeImmutable()) as $document) {
-            $this->storage->removeAll($document);
+            $id = (int) $document->getId();
+            $directory = $this->storage->directory($document);
+            $before = ['type' => $document->getType(), 'status' => $document->getStatus(), 'reason' => $document->isConfirmed() ? 'target_deleted' : 'expired',
+                'targets' => $lost[$id] ?? [], 'confirmedAt' => $document->getConfirmedAt()?->format(\DateTimeInterface::ATOM), 'files' => $this->fileTraces($document)];
             $em->remove($document);
+            $this->audit->record('gestion-documents', $id, 'purge', $before, null); // enregistre aussi la suppression (même flush)
+            (new \Symfony\Component\Filesystem\Filesystem())->remove($directory); // après l'enregistrement en base, jamais avant
             $count++;
-        }
-        if ($count > 0) {
-            $em->flush();
         }
 
         return $count;
+    }
+
+    /** Trace des fichiers d'un document (journal de la purge) : nom d'origine, taille, empreinte SHA-256 ; le fichier lui-même n'est pas gardé */
+    private function fileTraces(GestionDocument $document): array
+    {
+        $files = $document->getFiles();
+        $traces = [];
+        foreach ([...array_values($files['pages'] ?? []), ...array_values($files['linePhotos'] ?? [])] as $entry) {
+            $path = isset($entry['file']) ? $this->storage->path($document, (string) $entry['file']) : null;
+            $traces[] = ['name' => $entry['name'] ?? null, 'size' => $entry['size'] ?? null, 'sha256' => $path !== null && is_file($path) ? hash_file('sha256', $path) : null];
+        }
+
+        return $traces;
     }
 
     /** @return array{0: list<GestionDocument>, 1: int} */

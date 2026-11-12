@@ -13,7 +13,8 @@ use App\Services\TenantEntityManagerProvider;
  */
 class DeleteCommandeUseCase
 {
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly PeriodGuard $guard, private readonly ?\App\Services\CommandeService\CommandeLineService $lines = null)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly PeriodGuard $guard, private readonly ?\App\Services\CommandeService\CommandeLineService $lines = null,
+        private readonly ?\App\Gestion\Services\Document\GestionDocumentService $documents = null) // DOC-ORPH (13/11/2026)
     {
     }
 
@@ -29,5 +30,6 @@ class DeleteCommandeUseCase
             $em->refresh($product);
             $this->lines?->refreshShortcuts($product);
         }
+        $this->documents?->purge(); // facture lue par IA dont la commande vient de disparaître (DOC-ORPH)
     }
 }

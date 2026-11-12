@@ -3,7 +3,7 @@ key: applications
 title: Applications : clés d'activation, code court, apparence
 summary: Activer vos applications mobiles (caisse, e-commerce, gestion, Living Memory).
 screen: app_keys
-steps: [mobile_shop.key, mobile_shop.short_code, mobile_shop.profile, management.key, living_memory.key, living_memory.profile]
+steps: [mobile_shop.key, mobile_shop.short_code, mobile_shop.profile, living_memory.key, living_memory.profile]
 settings: [app.mobile_shop, app.management, app.living_memory]
 ---
 # Applications

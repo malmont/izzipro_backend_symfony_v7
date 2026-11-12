@@ -356,6 +356,94 @@ class GestionDocumentsApiTest extends WebTestCase
         $this->assertSame(204, $this->client->getResponse()->getStatusCode());
     }
 
+    /**
+     * DOC-ORPH (contrat validé le 13/11/2026) : un document confirmé est purgé, avec ses fichiers, quand toutes ses cibles ont disparu
+     * (existence réelle de la ligne cible) ; aussitôt à la suppression de la cible, et par la purge paresseuse en filet. Avant, un document
+     * dont la note avait été supprimée restait dans la liste, sans pouvoir être supprimé (409 DOCUMENT_CONFIRMED).
+     */
+    public function testAConfirmedDocumentIsPurgedWithItsFilesOnceAllItsTargetsAreGone(): void
+    {
+        $tag = bin2hex(random_bytes(2));
+        $calendar = static::getContainer()->get(PeriodCalendar::class);
+        $today = $calendar->today();
+        $conn = $this->em()->getConnection();
+        $storage = static::getContainer()->get(\App\Gestion\Services\Document\GestionDocumentStorage::class);
+        $type = $this->em()->getRepository(TypeNoteDeFrais::class)->findOneBy(['name' => 'Déplacement']) ?? $this->create(TypeNoteDeFrais::class, ['name' => 'Déplacement']);
+        $carrier = $this->create(Transporteur::class, ['name' => "Transport orphelin $tag"]);
+        $this->endOfWrite();
+        $listed = fn () => array_column($this->get('/api/gestion/documents?limit=100'), 'id');
+        $dirOf = fn (int $id) => $storage->directory($this->em()->find(GestionDocument::class, $id));
+        $purges = fn (int $id) => array_map(fn ($b) => json_decode((string) $b, true), $conn->fetchFirstColumn("SELECT before_state FROM content_audit_log WHERE resource = 'gestion-documents' AND action = 'purge' AND resource_id = ?", [(string) $id]));
+
+        // Note de frais lue par l'IA puis confirmée
+        [, $note] = $this->multipartBody('/api/gestion/documents', ['type' => 'note'], ['files' => [$this->image('recu-orphelin.png')]]);
+        FakeLandingAiClient::$queue[] = $this->toolResponse('lire_note_de_frais', ['merchant' => 'Station', 'date' => $today->format('Y-m-d'), 'currency' => 'CAD', 'amount' => 6500, 'kind' => 'déplacement', 'description' => 'Essence', 'confidence' => ['overall' => 0.9]]);
+        $this->runWorker((int) $note['id']);
+        $noteId = (int) $this->post('/api/gestion/documents/' . $note['id'] . '/confirmer', ['montant' => 6500, 'date' => $today->format('Y-m-d'), 'description' => 'Essence', 'typeNoteDeFraisId' => $type->getId()], 201)['noteDeFrais']['id'];
+        $docId = (int) $note['id'];
+        $dir = $dirOf($docId);
+        $file = glob($dir . '/page-*')[0];
+        $trace = ['name' => 'recu-orphelin.png', 'size' => filesize($file), 'sha256' => hash_file('sha256', $file)];
+        $this->request('DELETE', "/api/gestion/documents/$docId");
+        $this->assertSame([409, 'DOCUMENT_CONFIRMED'], [$this->client->getResponse()->getStatusCode(), $this->body()['error']], 'tant que la note existe, le justificatif la suit');
+
+        // Suppression refusée (période fermée) : rien n'est purgé
+        $this->get('/api/periodes?status=all');
+        $conn->executeStatement('UPDATE note_de_frais SET date = ? WHERE id = ?', [$today->modify('-200 days')->format('Y-m-d'), $noteId]);
+        $this->em()->clear();
+        $this->request('DELETE', "/api/notes-de-frais/$noteId");
+        $this->assertSame([409, 'PERIOD_CLOSED'], [$this->client->getResponse()->getStatusCode(), $this->body()['error']]);
+        $this->assertContains($docId, $listed(), 'refus : le document reste');
+        $this->assertFileExists($file);
+        $this->assertSame([], $purges($docId));
+        $conn->executeStatement('UPDATE note_de_frais SET date = ? WHERE id = ?', [$today->format('Y-m-d'), $noteId]);
+        $this->em()->clear();
+
+        // Suppression de la note : le document part aussitôt, de la base, de la liste et du stockage ; la purge est journalisée
+        $this->request('DELETE', "/api/notes-de-frais/$noteId");
+        $this->assertSame(204, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
+        $this->assertSame(0, (int) $conn->fetchOne('SELECT COUNT(*) FROM gestion_document WHERE id = ?', [$docId]), 'purgé dès la suppression de la note');
+        $this->assertDirectoryDoesNotExist($dir);
+        $this->assertNotContains($docId, $listed());
+        $this->request('GET', "/api/gestion/documents/$docId");
+        $this->assertSame(404, $this->client->getResponse()->getStatusCode());
+        $log = $purges($docId);
+        $this->assertCount(1, $log);
+        $this->assertSame(['note', 'confirmed', 'target_deleted', [['type' => 'note_de_frais', 'id' => $noteId]], [$trace]], [$log[0]['type'], $log[0]['status'], $log[0]['reason'], $log[0]['targets'], $log[0]['files']], 'trace : motif, cible, nom, taille et empreinte du fichier');
+
+        // Facture de transport : deux cibles (frais de port et commande) ; le document reste tant qu'une cible existe
+        $supplierId = (int) $this->post('/api/fournisseurs', ['name' => "Fournisseur orphelin $tag", 'typeFournisseur' => ($this->em()->find(TypeFournisseur::class, 1) ?? $this->create(TypeFournisseur::class, ['name' => 'Autre']))->getId()], 201)['id'];
+        $commande = $this->post('/api/commandes', ['budget' => 50000, 'date' => $today->format('Y-m-d') . ' 10:00:00', 'name' => "Commande orpheline $tag", 'fournisseur' => ['id' => $supplierId]], 201);
+        [, $transport] = $this->multipartBody('/api/gestion/documents', ['type' => 'transport'], ['files' => [$this->image('transport-orphelin.png')]]);
+        FakeLandingAiClient::$queue[] = $this->toolResponse('lire_facture_transport', ['carrierName' => "Transport orphelin $tag", 'invoiceNumber' => "TO-$tag", 'invoiceDate' => $today->format('Y-m-d'), 'currency' => 'CAD', 'amountsMode' => 'ht', 'amount' => 1500, 'confidence' => ['overall' => 0.9]]);
+        $this->runWorker((int) $transport['id']);
+        $this->post('/api/gestion/documents/' . $transport['id'] . '/confirmer', ['commandeId' => $commande['id'], 'transporteurId' => $carrier->getId(), 'price' => 1500], 201);
+        $tId = (int) $transport['id'];
+        $tDir = $dirOf($tId);
+        $targets = fn () => $conn->fetchAssociative('SELECT commande_id, frais_de_port_id FROM gestion_document WHERE id = ?', [$tId]);
+        $this->assertNotNull($targets()['frais_de_port_id']);
+        $this->request('DELETE', '/api/commandes/' . $commande['id'] . '/frais-de-port');
+        $this->assertSame(204, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
+        $this->assertSame(['commande_id' => $commande['id'], 'frais_de_port_id' => null], $targets(), 'frais de port supprimé : le document reste (la commande existe), identifiant remis à null');
+        $this->assertDirectoryExists($tDir);
+        $this->assertSame([], $purges($tId));
+        $this->request('DELETE', '/api/commandes/' . $commande['id']);
+        $this->assertSame(204, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
+        $this->assertFalse($targets(), 'commande supprimée : plus aucune cible, document purgé');
+        $this->assertDirectoryDoesNotExist($tDir);
+        $this->assertSame([['type' => 'commande', 'id' => $commande['id']]], $purges($tId)[0]['targets']);
+
+        // Filet : cible disparue hors de ces chemins (cascade, EasyAdmin) ; purgé à la liste suivante. Campagne : même règle.
+        $orphan = fn (string $column) => (int) $conn->fetchOne("INSERT INTO gestion_document (id, type, status, locale, files, $column, created_at, confirmed_at) VALUES (nextval('gestion_document_id_seq'), 'facture', 'confirmed', 'fr', '{\"pages\":[]}', 999999999, NOW(), NOW()) RETURNING id");
+        $viaCommande = $orphan('commande_id');
+        $viaCampaign = $orphan('campaign_id');
+        $ids = $listed();
+        $this->assertNotContains($viaCommande, $ids);
+        $this->assertNotContains($viaCampaign, $ids);
+        $this->assertSame(0, (int) $conn->fetchOne('SELECT COUNT(*) FROM gestion_document WHERE id IN (?, ?)', [$viaCommande, $viaCampaign]));
+        $this->assertSame('marketing_campaign', $purges($viaCampaign)[0]['targets'][0]['type']);
+    }
+
     // ----- fabrique -----
 
     private function runWorker(int $documentId): void

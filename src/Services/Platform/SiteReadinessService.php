@@ -129,7 +129,8 @@ class SiteReadinessService
         $gestion = $this->row($pdo, 'SELECT purchase_period_frequency, fiscal_year_start_month FROM entreprise ORDER BY id LIMIT 1') ?? [];
         $screen = fn (string $s) => ['type' => 'screen', 'screen' => $s];
         // Bloquantes
-        $add('management.key', 'Clé de l\'application de gestion', 'Générez la clé d\'activation et saisissez-la dans l\'application de gestion.', in_array('admin', $keys, true), $screen('app_keys'), true, null);
+        // Pas d'étape « clé d'activation » (retirée le 13/11/2026) : l'application trouve le site par son code court puis se connecte avec un
+        // compte administrateur ; la clé IZ-ADM reste facultative (elle permet de couper l'accès d'un appareil).
         $add('management.short_code', 'Code court du site', 'Le code que l\'application demande à la première connexion pour trouver votre site.', !empty($host['shortCode']), $screen('short_code'), true, null);
         $admins = $this->count($pdo, '"user"', "roles::text LIKE '%ROLE_ADMIN%'");
         $add('management.admin', 'Un compte administrateur', $admins > 0 ? sprintf('%d compte(s) administrateur peuvent se connecter à l\'application de gestion.', $admins) : 'Créez un compte administrateur : seul ce rôle se connecte à l\'application de gestion.', $admins > 0, $screen('users'), true, null, ['admins' => $admins]);
