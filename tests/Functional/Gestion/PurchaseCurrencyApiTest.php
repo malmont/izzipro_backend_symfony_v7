@@ -33,6 +33,78 @@ class PurchaseCurrencyApiTest extends WebTestCase
         $this->login();
     }
 
+    /**
+     * Lot B3 bis (12/11/2026) : GET /api/collections/{id}/frais-de-port rend en une lecture les commandes de la période avec leur frais
+     * de port (null sans frais) et les totaux. Le frais de port porte désormais la devise de sa commande (`currency`), la devise du
+     * site (`siteCurrency`) et son prix converti (`priceConverted`) : avant, `currency` était la devise du site même pour une commande
+     * en devise étrangère.
+     */
+    public function testShippingCostsOfAPeriodInOneRead(): void
+    {
+        $tag = bin2hex(random_bytes(2));
+        $today = static::getContainer()->get(\App\Gestion\Services\PeriodCalendar::class)->today();
+        $type = $this->create(TypeFournisseur::class, ['name' => 'Type port ' . $tag]);
+        $carrierId = $this->create(Transporteur::class, ['name' => 'Fret ' . $tag])->getId();
+        $this->endOfWrite();
+        $usd = $this->post('/api/fournisseurs', ['name' => "Importateur $tag", 'typeFournisseur' => $type->getId(), 'currency' => 'USD'], 201);
+        $local = $this->post('/api/fournisseurs', ['name' => "Local $tag", 'typeFournisseur' => $type->getId()], 201);
+        $collectionId = (int) $this->post('/api/createcollections', ['budgetCollection' => 1000000, 'nomCollection' => "Port $tag"], 201)['id'];
+        $order = fn (string $name, array $supplier, array $more = []): int => (int) $this->post("/api/collections/$collectionId/commandes", ['budget' => 100000, 'date' => $today->format('Y-m-d') . ' 10:00:00', 'name' => $name, 'fournisseur' => ['id' => $supplier['id']]] + $more, 201)['id'];
+        $import = $order("Import $tag", $usd, ['exchangeRate' => 1.35]);
+        $bought = $order("Achat local $tag", $local);
+        $bare = $order("Sans port $tag", $local);
+        $route = "/api/collections/$collectionId/frais-de-port";
+
+        // Aucun frais de port : les trois commandes, dans l'ordre de la liste des commandes, sans frais ; totaux à zéro
+        $empty = $this->get($route);
+        $this->assertSame(['currency', 'siteCurrency', 'commandes', 'totals'], array_keys($empty));
+        $this->assertSame(['CAD', 'CAD', ['commandes' => 3, 'withShipping' => 0, 'amount' => 0]], [$empty['currency'], $empty['siteCurrency'], $empty['totals']]);
+        $this->assertSame(array_column($this->get("/api/collections/$collectionId/commandes"), 'id'), array_column($empty['commandes'], 'commandeId'));
+        $this->assertSame([null, null, null], array_column($empty['commandes'], 'fraisDePort'));
+
+        // Frais de port d'une commande en USD : devise de la commande, devise du site, prix converti (10000 × 1,35)
+        $created = $this->post("/api/commandes/$import/frais-de-port", ['name' => 'Fret maritime', 'facture' => "FR-$tag", 'tracknumber' => "TR-$tag", 'price' => 10000, 'transporteur' => ['id' => $carrierId]], 201);
+        $this->assertSame(['USD', 'CAD', 10000, 13500], [$created['currency'], $created['siteCurrency'], $created['price'], $created['priceConverted']]);
+        $single = $this->get("/api/commandes/$import/frais-de-port");
+        $this->assertSame($created, $single, 'la lecture d\'une commande rend le même objet');
+        $localShipping = $this->post("/api/commandes/$bought/frais-de-port", ['name' => 'Livraison', 'price' => 2550, 'transporteur' => ['id' => $carrierId]], 201);
+        $this->assertSame(['CAD', 'CAD', 2550, 2550], [$localShipping['currency'], $localShipping['siteCurrency'], $localShipping['price'], $localShipping['priceConverted']], 'commande dans la devise du site');
+
+        // La période, en une lecture (le cache a été vidé par les écritures)
+        $read = $this->get($route);
+        $byId = array_column($read['commandes'], null, 'commandeId');
+        $this->assertSame(['commandeId', 'name', 'date', 'kind', 'currency', 'siteCurrency', 'exchangeRate', 'fournisseur', 'fraisDePort'], array_keys($byId[$import]));
+        $this->assertSame(
+            ["Import $tag", $today->format('Y-m-d') . ' 10:00:00', 'standard', 'USD', 'CAD', 1.35, ['id' => $usd['id'], 'name' => "Importateur $tag"]],
+            array_values(array_diff_key($byId[$import], ['commandeId' => 0, 'fraisDePort' => 0]))
+        );
+        $this->assertSame($single, $byId[$import]['fraisDePort'], 'même forme que la lecture d\'une commande');
+        $this->assertSame(['Fret maritime', "FR-$tag", "TR-$tag", $carrierId, 'Fret ' . $tag], [$single['name'], $single['facture'], $single['tracknumber'], $single['transporteur']['id'], $single['transporteur']['name']]);
+        $this->assertSame(['CAD', 'CAD', null, ['id' => $local['id'], 'name' => "Local $tag"], 2550], [$byId[$bought]['currency'], $byId[$bought]['siteCurrency'], $byId[$bought]['exchangeRate'], $byId[$bought]['fournisseur'], $byId[$bought]['fraisDePort']['priceConverted']]);
+        $this->assertNull($byId[$bare]['fraisDePort'], 'commande sans frais de port : présente, frais null');
+        $this->assertSame(['commandes' => 3, 'withShipping' => 2, 'amount' => 16050], $read['totals'], '13500 + 2550, dans la devise du site');
+        $this->assertSame($read['totals']['amount'], $this->get("/api/dashboard/collection/$collectionId")['GeneralExpenses']['totalShippingCost'], 'le total du tableau de bord de la période');
+
+        // Les écritures vident la lecture : nouveau taux, puis suppression d'un frais de port
+        $this->request('PATCH', "/api/commandes/$import", ['exchangeRate' => 1.4]);
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
+        $read = $this->get($route);
+        $this->assertSame([14000, 16550], [array_column($read['commandes'], null, 'commandeId')[$import]['fraisDePort']['priceConverted'], $read['totals']['amount']]);
+        $this->request('DELETE', "/api/commandes/$bought/frais-de-port");
+        $this->assertSame(204, $this->client->getResponse()->getStatusCode());
+        $this->assertSame(['commandes' => 3, 'withShipping' => 1, 'amount' => 14000], $this->get($route)['totals']);
+
+        // Une autre période a sa propre lecture
+        $otherId = (int) $this->post('/api/createcollections', ['budgetCollection' => 100, 'nomCollection' => "Port vide $tag"], 201)['id'];
+        $this->assertSame([[], ['commandes' => 0, 'withShipping' => 0, 'amount' => 0]], [$this->get("/api/collections/$otherId/frais-de-port")['commandes'], $this->get("/api/collections/$otherId/frais-de-port")['totals']]);
+
+        // Refus : période inconnue, appel sans connexion
+        $this->request('GET', '/api/collections/999999/frais-de-port');
+        $this->assertSame(404, $this->client->getResponse()->getStatusCode());
+        $this->client->request('GET', $route, [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json']);
+        $this->assertSame(401, $this->client->getResponse()->getStatusCode());
+    }
+
     public function testSupplierCurrencyFlowsToOrdersDashboardsAndExport(): void
     {
         $tag = bin2hex(random_bytes(2));

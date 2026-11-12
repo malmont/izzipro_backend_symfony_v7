@@ -27,6 +27,38 @@ class FraisDePortService
         return $commande->getFraisDePort();
     }
 
+    /**
+     * Frais de port des commandes d'une période (lot B3 bis, 12/11/2026, `docs/gestion-mise-a-niveau.md` § 7) : une ligne par commande,
+     * `fraisDePort` null quand elle n'en a pas, et les totaux (les applications n'additionnent rien).
+     *
+     * @param iterable<Commande> $commandes dans l'ordre de la liste des commandes de la période
+     *
+     * @return array<string, mixed>
+     */
+    public function overview(iterable $commandes, string $host, string $siteCurrency): array
+    {
+        $rows = [];
+        $withShipping = 0;
+        $amount = 0;
+        foreach ($commandes as $commande) {
+            $frais = $commande->getFraisDePort();
+            $dto = $frais !== null ? new \App\Dto\FraisDePortOutputDTO($frais, $host, $siteCurrency) : null;
+            if ($dto !== null) {
+                ++$withShipping;
+                $amount += $dto->priceConverted;
+            }
+            $fournisseur = $commande->getFournisseur();
+            $rows[] = [
+                'commandeId' => $commande->getId(), 'name' => $commande->getName(), 'date' => $commande->getDate()->format('Y-m-d H:i:s'), 'kind' => $commande->getKind(),
+                'currency' => $commande->getCurrency() ?? $siteCurrency, 'siteCurrency' => $siteCurrency, 'exchangeRate' => $commande->getCurrency() === null ? null : $commande->getExchangeRate(),
+                'fournisseur' => $fournisseur !== null ? ['id' => $fournisseur->getId(), 'name' => $fournisseur->getName()] : null,
+                'fraisDePort' => $dto,
+            ];
+        }
+
+        return ['currency' => $siteCurrency, 'siteCurrency' => $siteCurrency, 'commandes' => $rows, 'totals' => ['commandes' => count($rows), 'withShipping' => $withShipping, 'amount' => $amount]];
+    }
+
     public function createFraisDePort(Commande $commande, FraisDePortInputDTO $inputDTO): FraisDePort
     {
         $em = $this->emProvider->getEntityManager();

@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (442)
+## Boutique et commun (443)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -310,6 +310,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/category` | PUBLIC_ACCESS | `Controller\CategoriesControlleur\CategoryController::getCategories` |
 | GET | `/api/collections/{id}/commandes` | ROLE_ADMIN | `Controller\CommandeController\CommandeController::getCommandesByCollection` |
 | POST | `/api/collections/{id}/commandes` | ROLE_ADMIN | `Controller\CommandeController\CommandeController::createCommande` |
+| GET | `/api/collections/{id}/frais-de-port` | ROLE_ADMIN | `Controller\FraisDePortController\FraisDePortController::getFraisDePortByCollection` |
 | GET | `/api/collections/{id}/notes-de-frais` | ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::getNotesDeFraisByCollection` |
 | POST | `/api/collections/{id}/notes-de-frais` | ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::createNoteDeFrais` |
 | GET | `/api/collections/{id}/resultat` | ROLE_ADMIN | `Gestion\Controller\PeriodeController::result` |

@@ -28,7 +28,8 @@ class FraisDePortController extends AbstractController
         DeleteFraisDePortUseCase $deleteFraisDePortUseCase,
         TenantCacheService $cache,
         ?\App\Services\MediaUrlResolver $mediaUrlResolver = null,
-        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null // lot G4 (09/11/2026)
+        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null, // lot G4 (09/11/2026)
+        private readonly ?\App\UseCase\FraisDePortUseCase\GetFraisDePortByCollectionUseCase $getFraisDePortByCollectionUseCase = null, // lot B3 bis (12/11/2026)
     ) {
         $this->getFraisDePortByCommandeUseCase = $getFraisDePortByCommandeUseCase;
         $this->createFraisDePortUseCase = $createFraisDePortUseCase;
@@ -79,6 +80,21 @@ class FraisDePortController extends AbstractController
         );
         // commande sans frais de port : 200 null (lot G4, 09/11/2026 ; avant : 404)
         return $this->json($fraisDePort ?: null, JsonResponse::HTTP_OK);
+    }
+
+    /** Frais de port de toutes les commandes d'une période, en une lecture (lot B3 bis, 12/11/2026) */
+    #[Route('/api/collections/{id}/frais-de-port', name: 'get_frais_de_port_by_collection', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function getFraisDePortByCollection(\App\Entity\Collections $collection, Request $request): JsonResponse
+    {
+        $host = $this->mediaUrlResolver ? $this->mediaUrlResolver->getPublicHost($request->getSchemeAndHttpHost()) : $request->getSchemeAndHttpHost();
+
+        return $this->json($this->cache->get(
+            'frais_de_port_collection_' . $collection->getId(),
+            fn () => $this->getFraisDePortByCollectionUseCase->execute($collection, $host),
+            600,
+            // toute écriture d'une commande ou de son frais de port (enfant de la commande), d'un transporteur ou d'un fournisseur vide la lecture
+            [...CacheTags::itemTags(CacheTags::COLLECTIONS, $collection->getId()), ...CacheTags::listTags(CacheTags::COMMANDES), ...CacheTags::listTags(CacheTags::TRANSPORTEURS), ...CacheTags::listTags(CacheTags::FOURNISSEURS)]
+        ));
     }
 
     #[Route('/api/commandes/{id}/frais-de-port', name: 'delete_frais_de_port', methods: ['DELETE'])]

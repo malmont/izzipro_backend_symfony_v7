@@ -257,6 +257,25 @@ Décisions de contrat prises pour les lots :
   aucune clé renommée (les clés accentuées de `nombre-commandes` sont gardées).
 - G4 : les champs en trop dans un corps restent ignorés (l'application sérialise ses modèles entiers) ; `quantity` (entier
   ≥ 0) accepté sur `POST /api/commandes/{id}/products`.
+- Lot B3 bis (12/11/2026, contrat validé par l'application ; `FraisDePortService::overview`, `GetFraisDePortByCollectionUseCase`, test
+  `PurchaseCurrencyApiTest::testShippingCostsOfAPeriodInOneRead`) : **`GET /api/collections/{id}/frais-de-port`**, `ROLE_ADMIN`, lecture
+  seule : les commandes de la période avec leur frais de port, en une lecture (avant : une lecture par commande).
+  ```
+  { currency, siteCurrency (devise du site, les deux),
+    commandes: [{ commandeId, name, date, kind, currency (de la commande), siteCurrency, exchangeRate | null, fournisseur: { id, name } | null,
+                  fraisDePort: <objet de GET /api/commandes/{id}/frais-de-port> | null }],
+    totals: { commandes, withShipping, amount } }
+  ```
+  - Toutes les commandes de la période, dans l'ordre de `GET /api/collections/{id}/commandes` ; `fraisDePort` `null` sans frais de port.
+  - `totals.amount` = Σ `priceConverted`, en cents de la devise du site : le total « frais de port » du tableau de bord de la période
+    (`GeneralExpenses.totalShippingCost`). Les applications n'additionnent rien.
+  - En cache 600 s ; toute écriture d'une commande, de son frais de port, d'un transporteur ou d'un fournisseur le vide. Période
+    inconnue : 404.
+  - **Objet frais de port, sur toutes les réponses qui le portent** (`GET` et `POST /api/commandes/{id}/frais-de-port`, confirmation d'une
+    facture ou d'un transport lus par IA) : `currency` est désormais **la devise de la commande** (avant : celle du site, fausse pour une
+    commande en devise étrangère, dont `price` est dans la devise de la commande) ; ajout de `siteCurrency` (devise du site : l'application
+    mobile y lit la devise du site avant `currency`) et de `priceConverted` (`price` × taux de la commande, arrondi au cent, en cents de
+    la devise du site ; égal à `price` sans devise étrangère). Rien ne change pour une commande dans la devise du site.
 - Lot BORNES (12/11/2026, `Gestion/Services/GestionInput`, test `PurchasesApiTest::testNumbersBeyondTheColumnRangeAreRefusedNotCrashed`) :
   un montant en cents, une quantité ou un identifiant au-delà de 2 147 483 647 (`GestionInput::MAX_INT`, la limite d'une colonne entière)
   → 422 `VALIDATION_FAILED`, `fields.<champ> = TOO_LARGE`, sur toutes les routes qui lisent leur corps par `GestionInput`. La borne
