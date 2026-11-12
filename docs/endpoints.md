@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (444)
+## Boutique et commun (447)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -323,6 +323,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/commandes/products/disponibles` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\CommandeController\CommandeProductAttachmentController::available` |
 | DELETE | `/api/commandes/{id}/frais-de-port` | ROLE_ADMIN | `Controller\FraisDePortController\FraisDePortController::deleteFraisDePort` |
 | GET | `/api/commandes/{id}/frais-de-port` | ROLE_ADMIN | `Controller\FraisDePortController\FraisDePortController::getFraisDePort` |
+| PATCH | `/api/commandes/{id}/frais-de-port` | ROLE_ADMIN | `Controller\FraisDePortController\FraisDePortController::patchFraisDePort` |
 | POST | `/api/commandes/{id}/frais-de-port` | ROLE_ADMIN | `Controller\FraisDePortController\FraisDePortController::createFraisDePort` |
 | POST | `/api/commandes/{id}/lignes/{lineId}/reception/annuler` | ROLE_ADMIN | `Controller\CommandeController\CommandeLineController::cancelReception` |
 | POST | `/api/commandes/{id}/lignes/{lineId}/reception` | ROLE_ADMIN | `Controller\CommandeController\CommandeLineController::receive` |
@@ -365,6 +366,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/form-submissions` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\FormSubmissionController\FormSubmissionAdminController::index` |
 | POST | `/api/form-submissions` | PUBLIC_ACCESS | `Controller\FormSubmissionController\FormSubmissionPublicController::submit` |
 | DELETE | `/api/fournisseurs/{id}` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::deleteFournisseur` |
+| PATCH | `/api/fournisseurs/{id}` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::patchFournisseur` |
 | GET | `/api/fournisseurs` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::getAllFournisseurs` |
 | POST | `/api/fournisseurs` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::createFournisseur` |
 | GET | `/api/frais/total` | ROLE_ADMIN | `Controller\StatistiqueDashboard\FraisController::getTotalFrais` |
@@ -663,6 +665,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/support/tickets` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::create` |
 | GET | `/api/taxes/monthly` | ROLE_ADMIN | `Controller\StatistiqueDashboard\TaxController::getMonthlyTaxes` |
 | DELETE | `/api/transporteurs/{id}` | ROLE_ADMIN | `Controller\TransporteurController\TransporteurController::deleteTransporteur` |
+| PATCH | `/api/transporteurs/{id}` | ROLE_ADMIN | `Controller\TransporteurController\TransporteurController::patchTransporteur` |
 | GET | `/api/transporteurs` | ROLE_ADMIN | `Controller\TransporteurController\TransporteurController::getTransporteurs` |
 | POST | `/api/transporteurs` | ROLE_ADMIN | `Controller\TransporteurController\TransporteurController::createTransporteur` |
 | GET | `/api/type-fournisseurs` | ROLE_ADMIN | `Controller\TypeFournisseurController\TypeFournisseurController::list` |

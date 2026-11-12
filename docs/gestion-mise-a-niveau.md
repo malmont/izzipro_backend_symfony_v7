@@ -339,6 +339,32 @@ Décisions de contrat prises pour les lots :
 - Notes de frais (12/11/2026, demande du web) : `NoteDeFraisOutputDTO` gagne `typeNoteDeFraisId` (entier, `null` sans type), rendu par la
   liste `GET /api/collections/{id}/notes-de-frais` et par les réponses de `POST` et `PUT` ; il préremplit le type exigé par
   `PUT /api/notes-de-frais/{id}`. Ajout seulement. Test `PurchasesApiTest`.
+- **Lot EDIT (12/11/2026) : modifier un fournisseur, un transporteur d'achat, un frais de port.** Trois `PATCH` **partiels**, réservés à
+  `ROLE_ADMIN` : seules les clés envoyées sont lues, les autres valeurs ne bougent pas ; une clé inconnue est ignorée ; corps illisible →
+  400 `INVALID_JSON` ; toutes les erreurs de champ reviennent en une réponse 422 `VALIDATION_FAILED { fields }` et **un refus n'écrit rien**
+  (même les clés valides du même envoi). La réponse 200 a la forme de la création. Un envoi qui ne change aucune valeur répond 200 sans rien
+  inscrire au journal.
+  - `PATCH /api/fournisseurs/{id}` : `name` (obligatoire s'il est envoyé), `typeFournisseur` (identifiant ; inconnu → 404
+    `TYPE_FOURNISSEUR_NOT_FOUND`), `adresse`, `ville`, `pays`, `tel` (vide ou `null` : effacé), `currency` (code ISO, `null` ou vide = devise
+    du site). **Devise figée dès la première commande** : la changer (y compris vers `null`, qui est un retour à la devise du site, donc un
+    changement) → 409 `FOURNISSEUR_CURRENCY_LOCKED { commandes }` ; renvoyer la même devise n'est pas un changement. Fournisseur inconnu →
+    404 `FOURNISSEUR_NOT_FOUND`. Réponse : `FournisseurOutputDTO`, comme la liste.
+  - `PATCH /api/transporteurs/{id}` : `name`, `logo` (texte), `contact` (vide ou `null` : effacé). Le transporteur réservé
+    « Sur facture fournisseur » (`TransporteurService::RESERVED_NAME`, celui de la confirmation d'une facture lue par IA) ne se renomme
+    pas : 409 `TRANSPORTEUR_RESERVED` ; son logo et son contact se modifient. Inconnu → 404 `TRANSPORTEUR_NOT_FOUND`.
+  - `PATCH /api/commandes/{id}/frais-de-port` : `name`, `price` (cents entiers, dans la devise de la commande ; envoyé vide → 422
+    `REQUIRED`), `transporteur` (`{ id }` ; inconnu → 404 `TRANSPORTEUR_NOT_FOUND`), `facture`, `tracknumber`. Mêmes gardes que la création
+    et la suppression : 409 `COMMANDE_CLOSED` (commande figée), 409 `PERIOD_CLOSED { periodId }` (commande datée dans une période fermée).
+    Commande inconnue → 404 `COMMANDE_NOT_FOUND` ; commande sans frais de port → 404 `FRAIS_DE_PORT_NOT_FOUND`. Le prix d'un frais de port
+    venu d'un document lu par IA reste modifiable. Réponse : `FraisDePortOutputDTO`, comme la lecture (`priceConverted` recalculé).
+  - **Journal des contenus** (`content_audit_log`, action `update`, ressources `fournisseurs`, `transporteurs`, `frais-de-port`) : une
+    entrée par modification effective, avec l'état avant, l'état après et les champs changés ; pour un frais de port, `commandeId` et
+    `documentId` (l'identifiant du document lu par IA, pour retrouver un écart entre le document et le prix corrigé).
+  - **À savoir pour le comptable** : une commande garde un lien vers son fournisseur et un frais de port vers son transporteur, pas une
+    copie du nom. Le **nouveau nom** d'un fournisseur ou d'un transporteur apparaît donc partout, **y compris dans les listes et dans l'export
+    `achats.csv` des périodes déjà fermées** (l'export lit les deux noms au moment de l'export) ; les montants figés, eux, ne changent pas. L'ancien nom se retrouve au journal des contenus pendant sa durée de conservation (180 jours).
+  - Code : `FournisseurService::update`, `TransporteurService::update`, `FraisDePortService::update` et leurs cas d'usage `Update…UseCase` ;
+    test `PurchaseCurrencyApiTest::testSupplierCarrierAndShippingCostCanBeEdited`.
 
 ## 8. Jeu de données de démonstration (demande du propriétaire, 09/11/2026)
 

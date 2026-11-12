@@ -30,6 +30,7 @@ class FraisDePortController extends AbstractController
         ?\App\Services\MediaUrlResolver $mediaUrlResolver = null,
         private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null, // lot G4 (09/11/2026)
         private readonly ?\App\UseCase\FraisDePortUseCase\GetFraisDePortByCollectionUseCase $getFraisDePortByCollectionUseCase = null, // lot B3 bis (12/11/2026)
+        private readonly ?\App\UseCase\FraisDePortUseCase\UpdateFraisDePortUseCase $updateFraisDePortUseCase = null, // lot EDIT (12/11/2026)
     ) {
         $this->getFraisDePortByCommandeUseCase = $getFraisDePortByCommandeUseCase;
         $this->createFraisDePortUseCase = $createFraisDePortUseCase;
@@ -95,6 +96,20 @@ class FraisDePortController extends AbstractController
             // toute écriture d'une commande ou de son frais de port (enfant de la commande), d'un transporteur ou d'un fournisseur vide la lecture
             [...CacheTags::itemTags(CacheTags::COLLECTIONS, $collection->getId()), ...CacheTags::listTags(CacheTags::COMMANDES), ...CacheTags::listTags(CacheTags::TRANSPORTEURS), ...CacheTags::listTags(CacheTags::FOURNISSEURS)]
         ));
+    }
+
+    /** Modification partielle (lot EDIT, 12/11/2026) : 200 avec l'objet de la lecture ; commande figée ou période fermée : 409 */
+    #[Route('/api/commandes/{id}/frais-de-port', name: 'patch_frais_de_port', methods: ['PATCH'], requirements: ['id' => '\d+'])]
+    public function patchFraisDePort(int $id, Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        if (!is_array($data)) {
+            return $this->json(['error' => 'INVALID_JSON', 'code' => 'INVALID_JSON', 'message' => 'Corps JSON invalide'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+        $fraisDePort = $this->updateFraisDePortUseCase->execute($id, $data);
+        $host = $this->mediaUrlResolver ? $this->mediaUrlResolver->getPublicHost($request->getSchemeAndHttpHost()) : $request->getSchemeAndHttpHost();
+
+        return $this->json(new \App\Dto\FraisDePortOutputDTO($fraisDePort, $host, $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT));
     }
 
     #[Route('/api/commandes/{id}/frais-de-port', name: 'delete_frais_de_port', methods: ['DELETE'])]

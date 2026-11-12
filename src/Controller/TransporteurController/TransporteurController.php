@@ -24,7 +24,8 @@ class TransporteurController extends AbstractController
         GetTransporteursUseCase $getTransporteursUseCase,
         CreateTransporteurUseCase $createTransporteurUseCase,
         DeleteTransporteurUseCase $deleteTransporteurUseCase,
-        TenantCacheService $cache
+        TenantCacheService $cache,
+        private readonly ?\App\UseCase\TransporteurUseCase\UpdateTransporteurUseCase $updateTransporteurUseCase = null, // lot EDIT (12/11/2026)
     ) {
         $this->getTransporteursUseCase = $getTransporteursUseCase;
         $this->createTransporteurUseCase = $createTransporteurUseCase;
@@ -56,6 +57,19 @@ class TransporteurController extends AbstractController
 
         // 201 avec l'objet créé (lot G4, 09/11/2026 ; avant : {"success", "transporteur_id"})
         return $this->json(['id' => $transporteur->getId(), 'name' => $transporteur->getName(), 'logo' => $transporteur->getLogo(), 'contact' => $transporteur->getContact()], JsonResponse::HTTP_CREATED);
+    }
+
+    /** Modification partielle (lot EDIT, 12/11/2026) : 200 avec la forme de la création */
+    #[Route('/api/transporteurs/{id}', name: 'patch_transporteur', methods: ['PATCH'], requirements: ['id' => '\d+'])]
+    public function patchTransporteur(int $id, Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        if (!is_array($data)) {
+            return $this->json(['error' => 'INVALID_JSON', 'code' => 'INVALID_JSON', 'message' => 'Corps JSON invalide'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+        $transporteur = $this->updateTransporteurUseCase->execute($id, $data);
+
+        return $this->json(['id' => $transporteur->getId(), 'name' => $transporteur->getName(), 'logo' => $transporteur->getLogo(), 'contact' => $transporteur->getContact()]);
     }
 
     #[Route('/api/transporteurs/{id}', name: 'delete_transporteur', methods: ['DELETE'])]

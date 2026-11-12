@@ -12,9 +12,70 @@ class FraisDePortService
     // MODIFICATION 1 : Le service ne dépend plus que du provider
     private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Gestion\Services\PeriodGuard $periodGuard = null, private readonly ?\App\Gestion\Services\Document\GestionDocumentService $documents = null)
+    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Gestion\Services\PeriodGuard $periodGuard = null, private readonly ?\App\Gestion\Services\Document\GestionDocumentService $documents = null,
+        private readonly ?\App\Services\ContentAuditService\ContentAuditRecorder $audit = null)
     {
         $this->emProvider = $emProvider;
+    }
+
+    /**
+     * Modification partielle du frais de port d'une commande (lot EDIT, 12/11/2026, `docs/gestion-mise-a-niveau.md` § 7) : seules les
+     * clés envoyées changent. Mêmes gardes que la création et la suppression : commande figée ou période fermée → 409. Le prix reste
+     * modifiable quand le frais de port vient d'un document lu par IA (correction du gérant) : le journal des contenus garde l'avant,
+     * l'après et l'identifiant du document, pour retrouver l'écart.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function update(Commande $commande, array $data): FraisDePort
+    {
+        $this->periodGuard?->assertCommandeWritable($commande); // 409 PERIOD_CLOSED / COMMANDE_CLOSED
+        if ($commande->getIsClosed()) {
+            throw new \App\Gestion\Services\GestionConflictException('COMMANDE_CLOSED', 'La commande est figée.');
+        }
+        $fraisDePort = $commande->getFraisDePort();
+        if ($fraisDePort === null) {
+            throw new \App\Gestion\Services\GestionConflictException('FRAIS_DE_PORT_NOT_FOUND', 'Cette commande n\'a pas de frais de port.', 404);
+        }
+        $em = $this->emProvider->getEntityManager();
+        $input = new \App\Gestion\Services\GestionInput($data);
+        $before = self::snapshot($fraisDePort);
+        $name = array_key_exists('name', $data) ? $input->text('name') : null;
+        $price = array_key_exists('price', $data) ? $input->cents('price') : null;
+        $transporteurId = array_key_exists('transporteur', $data) ? $input->id('transporteur') : null;
+        $input->check();
+        $transporteur = null;
+        if ($transporteurId !== null && ($transporteur = $em->getRepository(Transporteur::class)->find($transporteurId)) === null) {
+            throw new \App\Gestion\Services\GestionConflictException('TRANSPORTEUR_NOT_FOUND', 'Transporteur inconnu : ' . $transporteurId, 404);
+        }
+        if ($name !== null) {
+            $fraisDePort->setName($name);
+        }
+        if ($price !== null) {
+            $fraisDePort->setPrice($price);
+        }
+        if ($transporteur !== null) {
+            $fraisDePort->setTransporteur($transporteur);
+        }
+        if (array_key_exists('facture', $data)) {
+            $fraisDePort->setFacture((string) $input->text('facture', false));
+        }
+        if (array_key_exists('tracknumber', $data)) {
+            $fraisDePort->setTracknumber((string) $input->text('tracknumber', false));
+        }
+        $em->flush();
+        $after = self::snapshot($fraisDePort);
+        if ($after !== $before) {
+            $document = $fraisDePort->getDocument()?->getId();
+            $this->audit?->record('frais-de-port', $fraisDePort->getId(), 'update', $before + ['commandeId' => $commande->getId(), 'documentId' => $document], $after + ['commandeId' => $commande->getId(), 'documentId' => $document], array_keys(array_diff_assoc($after, $before)));
+        }
+
+        return $fraisDePort;
+    }
+
+    /** @return array<string, mixed> */
+    private static function snapshot(FraisDePort $f): array
+    {
+        return ['name' => $f->getName(), 'facture' => $f->getFacture(), 'tracknumber' => $f->getTracknumber(), 'price' => $f->getPrice(), 'transporteurId' => $f->getTransporteur()?->getId()];
     }
 
     /**

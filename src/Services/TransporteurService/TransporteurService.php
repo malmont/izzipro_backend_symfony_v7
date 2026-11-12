@@ -8,9 +8,45 @@ class TransporteurService
 {
     private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(TenantEntityManagerProvider $emProvider)
+    /** Transporteur créé par la lecture des factures fournisseurs, retrouvé par son nom : il ne se renomme pas */
+    public const RESERVED_NAME = \App\Gestion\UseCase\ConfirmGestionDocumentUseCase::SHIPPING_CARRIER;
+
+    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Services\ContentAuditService\ContentAuditRecorder $audit = null)
     {
         $this->emProvider = $emProvider;
+    }
+
+    /**
+     * Modification partielle d'un transporteur (lot EDIT, 12/11/2026) : seules les clés envoyées changent ; `contact` et `logo` vides ou
+     * null sont effacés. Écrit une entrée au journal des contenus.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function update(Transporteur $transporteur, array $data): Transporteur
+    {
+        $input = new \App\Gestion\Services\GestionInput($data);
+        $before = ['name' => $transporteur->getName(), 'logo' => $transporteur->getLogo(), 'contact' => $transporteur->getContact()];
+        $name = array_key_exists('name', $data) ? $input->text('name') : null;
+        $input->check();
+        if ($name !== null && $name !== $transporteur->getName() && $transporteur->getName() === self::RESERVED_NAME) {
+            throw new \App\Gestion\Services\GestionConflictException('TRANSPORTEUR_RESERVED', 'Ce transporteur sert aux frais de port lus sur les factures : il ne peut pas être renommé.');
+        }
+        if ($name !== null) {
+            $transporteur->setName($name);
+        }
+        if (array_key_exists('contact', $data)) {
+            $transporteur->setContact($input->text('contact', false));
+        }
+        if (array_key_exists('logo', $data)) {
+            $transporteur->setLogo($input->text('logo', false));
+        }
+        $this->emProvider->getEntityManager()->flush();
+        $after = ['name' => $transporteur->getName(), 'logo' => $transporteur->getLogo(), 'contact' => $transporteur->getContact()];
+        if ($after !== $before) {
+            $this->audit?->record('transporteurs', $transporteur->getId(), 'update', $before, $after, array_keys(array_diff_assoc($after, $before)));
+        }
+
+        return $transporteur;
     }
 
     public function getAllTransporteurs(): array

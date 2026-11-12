@@ -34,6 +34,152 @@ class PurchaseCurrencyApiTest extends WebTestCase
     }
 
     /**
+     * Lot EDIT (12/11/2026) : modification partielle d'un fournisseur, d'un transporteur et d'un frais de port (seules les clés
+     * envoyées changent). Devise d'un fournisseur figée dès sa première commande ; transporteur des factures non renommable ; frais de
+     * port d'une commande figée ou d'une période fermée non modifiable ; les chiffres de la période ouverte suivent le nouveau prix ;
+     * chaque modification est inscrite au journal des contenus.
+     */
+    public function testSupplierCarrierAndShippingCostCanBeEdited(): void
+    {
+        $tag = bin2hex(random_bytes(2));
+        $today = static::getContainer()->get(\App\Gestion\Services\PeriodCalendar::class)->today();
+        $typeA = $this->create(TypeFournisseur::class, ['name' => 'Type A ' . $tag])->getId();
+        $typeB = $this->create(TypeFournisseur::class, ['name' => 'Type B ' . $tag])->getId();
+        $carrier1 = $this->create(Transporteur::class, ['name' => 'Transport un ' . $tag])->getId();
+        $carrier2 = $this->create(Transporteur::class, ['name' => 'Transport deux ' . $tag])->getId();
+        $this->endOfWrite();
+        $error = function (string $method, string $route, ?array $body): array {
+            $this->request($method, $route, $body);
+
+            return [$this->client->getResponse()->getStatusCode(), $this->body()['error'] ?? null, $this->body()['fields'] ?? null];
+        };
+        $patch = function (string $route, array $body): array {
+            $this->request('PATCH', $route, $body);
+            $this->assertSame(200, $this->client->getResponse()->getStatusCode(), $route . ' : ' . substr((string) $this->client->getResponse()->getContent(), 0, 300));
+
+            return $this->body();
+        };
+        $audit = fn (string $resource, int $id): array => array_map(fn (array $r) => ['fields' => $r['fields'], 'before' => json_decode((string) $r['before_state'], true), 'after' => json_decode((string) $r['after_state'], true)],
+            $this->em()->getConnection()->fetchAllAssociative("SELECT fields, before_state, after_state FROM content_audit_log WHERE resource = ? AND resource_id = ? AND action = 'update' ORDER BY id", [$resource, (string) $id]));
+
+        // ----- Fournisseur
+        $supplier = $this->post('/api/fournisseurs', ['name' => "Maison $tag", 'typeFournisseur' => $typeA, 'ville' => 'Montréal', 'tel' => '514 555 0100', 'currency' => 'USD'], 201);
+        $s = "/api/fournisseurs/{$supplier['id']}";
+        $edited = $patch($s, ['ville' => 'Québec']);
+        $this->assertSame(array_merge($supplier, ['ville' => 'Québec']), $edited, 'une seule clé envoyée : le reste ne change pas, forme de la liste');
+        $edited = $patch($s, ['tel' => '', 'pays' => null, 'adresse' => ' 12 rue des Érables ', 'champEnTrop' => 1]);
+        $this->assertSame([null, null, '12 rue des Érables', 'Québec', "Maison $tag"], [$edited['tel'], $edited['pays'], $edited['adresse'], $edited['ville'], $edited['name']], 'vide ou null : effacé ; texte rogné');
+        $edited = $patch($s, ['name' => "Maison renommée $tag", 'typeFournisseur' => $typeB]);
+        $this->assertSame(["Maison renommée $tag", $typeB], [$edited['name'], (int) $this->em()->getConnection()->fetchOne('SELECT type_fournisseur_id FROM fournisseur WHERE id = ?', [$supplier['id']])]);
+        $listed = array_column($this->get('/api/fournisseurs?limit=100&q=' . urlencode("renommée $tag")), null, 'id');
+        $this->assertSame($edited, $listed[$supplier['id']] ?? null, 'la liste rend le fournisseur modifié');
+        // Devise : libre tant qu'il n'a aucune commande
+        $this->assertSame(['EUR', 'EUR'], [$patch($s, ['currency' => 'eur'])['purchaseCurrency'], $this->body()['currency']]);
+        $this->assertSame([null, 'CAD'], [$patch($s, ['currency' => null])['purchaseCurrency'], $this->body()['currency']], 'null : retour à la devise du site');
+        $this->assertSame('USD', $patch($s, ['currency' => 'USD'])['purchaseCurrency']);
+        // Refus : rien n'est écrit
+        $state = fn (): string => (string) $this->em()->getConnection()->fetchOne('SELECT md5(CAST(row_to_json(f) AS text)) FROM fournisseur f WHERE id = ?', [$supplier['id']]);
+        $before = $state();
+        $this->assertSame([422, 'VALIDATION_FAILED', ['name' => 'REQUIRED']], $error('PATCH', $s, ['name' => '  ']));
+        $this->assertSame([422, 'VALIDATION_FAILED', ['name' => 'REQUIRED', 'typeFournisseur' => 'INVALID_ID', 'currency' => 'INVALID_CURRENCY']], $error('PATCH', $s, ['name' => ['x'], 'typeFournisseur' => 'abc', 'currency' => 'XXX', 'ville' => 'Ignorée']), 'toutes les erreurs en une réponse');
+        $this->assertSame([404, 'TYPE_FOURNISSEUR_NOT_FOUND', null], $error('PATCH', $s, ['typeFournisseur' => 99999999, 'ville' => 'Ignorée']));
+        $this->assertSame([404, 'FOURNISSEUR_NOT_FOUND', null], $error('PATCH', '/api/fournisseurs/99999999', ['ville' => 'X']));
+        $this->client->request('PATCH', $s, [], [], $this->headers(), 'pas du json');
+        $this->assertSame([400, 'INVALID_JSON'], [$this->client->getResponse()->getStatusCode(), $this->body()['error']]);
+        $this->assertSame($before, $state(), 'aucun refus n\'écrit');
+        // Devise figée dès la première commande ; le reste se modifie toujours
+        $collectionId = (int) $this->post('/api/createcollections', ['budgetCollection' => 1000000, 'nomCollection' => "Edit $tag"], 201)['id'];
+        $commande = $this->post("/api/collections/$collectionId/commandes", ['budget' => 100000, 'date' => $today->format('Y-m-d') . ' 10:00:00', 'name' => "Import $tag", 'fournisseur' => ['id' => $supplier['id']], 'exchangeRate' => 1.35], 201);
+        $commandeId = (int) $commande['id'];
+        foreach (['EUR', null, ''] as $other) {
+            $this->request('PATCH', $s, ['currency' => $other, 'ville' => 'Ignorée']);
+            $this->assertSame([409, 'FOURNISSEUR_CURRENCY_LOCKED', 1], [$this->client->getResponse()->getStatusCode(), $this->body()['error'], $this->body()['commandes'] ?? null], 'devise figée : ' . json_encode($other) . ' (null = retour à la devise du site, donc un changement)');
+        }
+        $this->assertSame($before, $state(), 'refus : la ville envoyée avec la devise n\'est pas écrite non plus');
+        $final = $patch($s, ['currency' => 'usd', 'name' => "Maison finale $tag"]);
+        $this->assertSame(['USD', "Maison finale $tag"], [$final['purchaseCurrency'], $final['name']], 'la même devise n\'est pas un changement');
+        $this->assertSame("Maison finale $tag", array_column($this->get("/api/collections/$collectionId/commandes"), null, 'id')[$commandeId]['fournisseur']['name'], 'la liste des commandes montre le nouveau nom aussitôt');
+        $this->assertSame("Maison finale $tag", array_column($this->get("/api/collections/$collectionId/frais-de-port")['commandes'], null, 'commandeId')[$commandeId]['fournisseur']['name']);
+        $this->assertSame($final, $patch($s, ['ville' => 'Québec', 'currency' => 'USD', 'name' => "Maison finale $tag"]), 'valeurs identiques : même réponse');
+        $entries = $audit('fournisseurs', (int) $supplier['id']);
+        $this->assertSame('ville', $entries[0]['fields']);
+        $this->assertSame(['Montréal', 'Québec'], [$entries[0]['before']['ville'], $entries[0]['after']['ville']], 'journal : avant, après');
+        $this->assertCount(7, $entries, 'une entrée par modification effective, aucune pour un refus ni pour un envoi qui ne change rien');
+
+        // ----- Transporteur
+        $t = "/api/transporteurs/$carrier1";
+        $this->assertSame(['id' => $carrier1, 'name' => 'Transport un ' . $tag, 'logo' => null, 'contact' => '1 800 555 0199'], $patch($t, ['contact' => '1 800 555 0199']), 'forme de la création');
+        $this->assertSame(['Transport renommé ' . $tag, 'logo.png', '1 800 555 0199'], array_values(array_diff_key($patch($t, ['name' => 'Transport renommé ' . $tag, 'logo' => 'logo.png']), ['id' => 1])));
+        $this->assertSame([null, null], [$patch($t, ['logo' => '', 'contact' => null])['logo'], $this->body()['contact']]);
+        $this->assertContains('Transport renommé ' . $tag, array_column($this->get('/api/transporteurs'), 'name'), 'la liste rend le transporteur modifié');
+        $this->assertSame([422, 'VALIDATION_FAILED', ['name' => 'REQUIRED']], $error('PATCH', $t, ['name' => '']));
+        $this->assertSame([404, 'TRANSPORTEUR_NOT_FOUND', null], $error('PATCH', '/api/transporteurs/99999999', ['contact' => 'x']));
+        $reserved = $this->em()->getRepository(Transporteur::class)->findOneBy(['name' => \App\Services\TransporteurService\TransporteurService::RESERVED_NAME]) ?? $this->create(Transporteur::class, ['name' => \App\Services\TransporteurService\TransporteurService::RESERVED_NAME]);
+        $this->endOfWrite();
+        $r = '/api/transporteurs/' . $reserved->getId();
+        $this->assertSame('Sur facture fournisseur', \App\Services\TransporteurService\TransporteurService::RESERVED_NAME);
+        $this->assertSame([409, 'TRANSPORTEUR_RESERVED', null], $error('PATCH', $r, ['name' => 'Autre nom', 'contact' => 'ignoré']));
+        $this->assertSame(['Sur facture fournisseur', 'Service des achats'], [$patch($r, ['name' => 'Sur facture fournisseur', 'contact' => 'Service des achats'])['name'], $this->body()['contact']], 'même nom : pas un renommage ; contact modifiable');
+        $patch($r, ['contact' => null]);
+        $patch($t, ['name' => 'Transport renommé ' . $tag, 'logo' => null, 'contact' => '']);
+        $this->assertCount(3, $audit('transporteurs', $carrier1), 'aucune entrée pour un envoi qui ne change rien');
+
+        // ----- Frais de port
+        $f = "/api/commandes/$commandeId/frais-de-port";
+        $this->assertSame([404, 'FRAIS_DE_PORT_NOT_FOUND', null], $error('PATCH', $f, ['price' => 1]), 'commande sans frais de port');
+        $this->assertSame([404, 'COMMANDE_NOT_FOUND', null], $error('PATCH', '/api/commandes/99999999/frais-de-port', ['price' => 1]));
+        $shipping = $this->post($f, ['name' => 'Fret maritime', 'facture' => "FR-$tag", 'tracknumber' => "TR-$tag", 'price' => 10000, 'transporteur' => ['id' => $carrier1]], 201);
+        $edited = $patch($f, ['price' => 12000]);
+        $this->assertSame(array_merge($shipping, ['price' => 12000, 'priceConverted' => 16200]), $edited, 'prix seul : le reste ne change pas, forme de la lecture (devise de la commande, prix converti à 1,35)');
+        $this->assertSame($edited, $this->get($f), 'la lecture rend le frais de port modifié');
+        $this->assertSame([16200, 16200], [$this->get("/api/dashboard/collection/$collectionId")['GeneralExpenses']['totalShippingCost'], $this->get("/api/collections/$collectionId/frais-de-port")['totals']['amount']], 'les chiffres de la période ouverte suivent le nouveau prix');
+        $edited = $patch($f, ['transporteur' => ['id' => $carrier2], 'tracknumber' => 'TR-2', 'facture' => '', 'name' => 'Fret aérien']);
+        $this->assertSame([$carrier2, 'Transport deux ' . $tag, 'TR-2', '', 'Fret aérien', 12000], [$edited['transporteur']['id'], $edited['transporteur']['name'], $edited['tracknumber'], $edited['facture'], $edited['name'], $edited['price']]);
+        $this->assertSame($edited, $patch($f, ['price' => 12000, 'name' => 'Fret aérien', 'transporteur' => ['id' => $carrier2]]), 'valeurs identiques : même réponse, rien au journal');
+        $stateF = fn (): string => (string) $this->em()->getConnection()->fetchOne('SELECT md5(CAST(row_to_json(f) AS text)) FROM frais_de_port f WHERE commande_id = ?', [$commandeId]);
+        $before = $stateF();
+        $this->assertSame([422, 'VALIDATION_FAILED', ['name' => 'REQUIRED', 'price' => 'MUST_BE_INTEGER_CENTS', 'transporteur' => 'INVALID_ID']], $error('PATCH', $f, ['name' => '', 'price' => 12.5, 'transporteur' => ['id' => 'x']]));
+        $this->assertSame([422, 'VALIDATION_FAILED', ['price' => 'TOO_LARGE']], $error('PATCH', $f, ['price' => 2147483648]));
+        $this->assertSame([422, 'VALIDATION_FAILED', ['price' => 'REQUIRED']], $error('PATCH', $f, ['price' => null]), 'un prix envoyé vide n\'efface pas le prix');
+        $this->assertSame([404, 'TRANSPORTEUR_NOT_FOUND', null], $error('PATCH', $f, ['transporteur' => ['id' => 99999999], 'price' => 1]));
+        // Commande figée, puis période fermée : non modifiable (gardes de la création et de la suppression)
+        $conn = $this->em()->getConnection();
+        $conn->executeStatement('UPDATE commande SET is_closed = true WHERE id = ?', [$commandeId]);
+        $this->em()->clear();
+        $this->assertSame([409, 'COMMANDE_CLOSED', null], $error('PATCH', $f, ['price' => 1]));
+        $conn = $this->em()->getConnection();
+        $conn->executeStatement("UPDATE commande SET is_closed = false, date = NOW() - INTERVAL '400 days' WHERE id = ?", [$commandeId]);
+        $this->em()->clear();
+        $this->request('PATCH', $f, ['price' => 1]);
+        $this->assertSame([409, 'PERIOD_CLOSED', true], [$this->client->getResponse()->getStatusCode(), $this->body()['error'], isset($this->body()['periodId'])], 'commande datée dans une période fermée');
+        $conn = $this->em()->getConnection();
+        $conn->executeStatement('UPDATE commande SET date = ? WHERE id = ?', [$today->format('Y-m-d') . ' 10:00:00', $commandeId]);
+        $this->em()->clear();
+        $this->assertSame($before, $stateF(), 'aucun refus n\'écrit');
+        // Frais de port venu d'un document lu par IA : le prix reste modifiable ; le journal garde l'identifiant du document
+        $document = $this->create(\App\Gestion\Entity\GestionDocument::class, ['type' => 'transport', 'status' => 'confirmed']);
+        $this->em()->getConnection()->executeStatement('UPDATE frais_de_port SET document_id = ? WHERE commande_id = ?', [$document->getId(), $commandeId]);
+        $this->em()->clear();
+        $this->endOfWrite();
+        $this->assertSame([9900, $document->getId()], [$patch($f, ['price' => 9900])['price'], $this->body()['document']['id'] ?? null]);
+        $entries = $audit('frais-de-port', (int) $shipping['id']);
+        $this->assertCount(3, $entries);
+        $this->assertSame(['price', 10000, 12000, $commandeId, null], [$entries[0]['fields'], $entries[0]['before']['price'], $entries[0]['after']['price'], $entries[0]['after']['commandeId'], $entries[0]['after']['documentId']]);
+        $this->assertSame([12000, 9900, $document->getId()], [$entries[2]['before']['price'], $entries[2]['after']['price'], $entries[2]['after']['documentId']], 'l\'écart avec le document se retrouve au journal');
+
+        // ----- Rôles : administrateur seulement ; sans jeton, 401
+        $admin = $this->token;
+        $this->token = static::getContainer()->get('lexik_jwt_authentication.jwt_manager')->create($this->create(User::class, ['email' => "client-$tag@example.invalid", 'username' => "client-$tag@example.invalid", 'roles' => ['ROLE_USER_INTERNET'], 'password' => 'inutilisable', 'isVerified' => true]));
+        foreach ([$s, $t, $f] as $route) {
+            $this->request('PATCH', $route, ['name' => 'Refusé']);
+            $this->assertSame(403, $this->client->getResponse()->getStatusCode(), $route);
+            $this->client->request('PATCH', $route, [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json', 'CONTENT_TYPE' => 'application/json'], '{"name":"Refusé"}');
+            $this->assertSame(401, $this->client->getResponse()->getStatusCode(), $route);
+        }
+        $this->token = $admin;
+    }
+
+    /**
      * Lot B3 bis (12/11/2026) : GET /api/collections/{id}/frais-de-port rend en une lecture les commandes de la période avec leur frais
      * de port (null sans frais) et les totaux. Le frais de port porte désormais la devise de sa commande (`currency`), la devise du
      * site (`siteCurrency`) et son prix converti (`priceConverted`) : avant, `currency` était la devise du site même pour une commande

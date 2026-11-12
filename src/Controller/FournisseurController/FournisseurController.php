@@ -27,7 +27,8 @@ class FournisseurController extends AbstractController
         CreateFournisseurUseCase $createFournisseurUseCase,
         DeleteFournisseurUseCase $deleteFournisseurUseCase,
         TenantCacheService $cache,
-        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null // devise du site (lot G6, 10/11/2026)
+        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null, // devise du site (lot G6, 10/11/2026)
+        private readonly ?\App\UseCase\FournisseurUseCase\UpdateFournisseurUseCase $updateFournisseurUseCase = null, // lot EDIT (12/11/2026)
     ) {
         $this->getAllFournisseursUseCase = $getAllFournisseursUseCase;
         $this->createFournisseurUseCase = $createFournisseurUseCase;
@@ -62,6 +63,19 @@ class FournisseurController extends AbstractController
         // Invalidation gérée ailleurs si nécessaire
         // 201 avec l'objet créé (lot G4, 09/11/2026 ; avant : {"success", "fournisseur_id"})
         return $this->json(new FournisseurOutputDTO($fournisseur, $request->getSchemeAndHttpHost(), $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT), JsonResponse::HTTP_CREATED);
+    }
+
+    /** Modification partielle (lot EDIT, 12/11/2026) : 200 avec l'objet de la liste ; devise figée dès la première commande */
+    #[Route('/api/fournisseurs/{id}', name: 'patch_fournisseur', methods: ['PATCH'], requirements: ['id' => '\d+'])]
+    public function patchFournisseur(int $id, Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        if (!is_array($data)) {
+            return $this->json(['error' => 'INVALID_JSON', 'code' => 'INVALID_JSON', 'message' => 'Corps JSON invalide'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+        $fournisseur = $this->updateFournisseurUseCase->execute($id, $data);
+
+        return $this->json(new FournisseurOutputDTO($fournisseur, $request->getSchemeAndHttpHost(), $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT));
     }
 
     #[Route('/api/fournisseurs/{id}', name: 'delete_fournisseur', methods: ['DELETE'])]
