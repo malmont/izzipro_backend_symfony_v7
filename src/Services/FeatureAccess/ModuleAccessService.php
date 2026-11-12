@@ -116,11 +116,25 @@ class ModuleAccessService
     {
         $flags = $this->flags();
 
+        // flags() porte toujours tous les modules connus (voir plus bas) ; `?? true` ne sert qu'à un nom de module hors du registre
         return $flags === null || ($flags[$module] ?? true);
     }
 
     /** @return array<string, bool>|null null sans fiche Entreprise */
     public function flags(): ?array
+    {
+        $flags = $this->read();
+        // Cache rempli par un code antérieur à l'ajout d'un module (13/11/2026) : la clé du nouveau module manque. Avant, `?? true` le
+        // lisait « actif » jusqu'à l'expiration (10 min) ; le tableau est tenu pour périmé et la base est relue.
+        if (is_array($flags) && array_diff_key(self::COLUMNS, $flags) !== []) {
+            $this->cache->delete(self::CACHE_KEY);
+            $flags = $this->read();
+        }
+
+        return $flags;
+    }
+
+    private function read(): ?array
     {
         return $this->cache->get(self::CACHE_KEY, function (): ?array {
             $row = $this->emProvider->getEntityManager()->getConnection()->fetchAssociative('SELECT ' . implode(', ', self::COLUMNS) . ' FROM entreprise ORDER BY id LIMIT 1');
@@ -129,7 +143,7 @@ class ModuleAccessService
             }
             $flags = [];
             foreach (self::COLUMNS as $module => $column) {
-                $flags[$module] = $row[$column] === null ? true : (bool) $row[$column];
+                $flags[$module] = $row[$column] === null ? true : (bool) $row[$column]; // NULL (ancienne colonne sans valeur) : actif, comme avant
             }
 
             return $flags;

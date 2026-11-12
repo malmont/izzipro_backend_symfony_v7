@@ -10,7 +10,8 @@ class TenantCacheService
 {
     public function __construct(
         private TagAwareCacheInterface $cache,
-        private TenantConnectionProvider $tcp
+        private TenantConnectionProvider $tcp,
+        private ?TenantHostVariant $hosts = null // IMGHOST (13/11/2026) : variante d'hôte dans la clé
     ) {}
 
     private function getTenantPrefix(): string
@@ -68,7 +69,11 @@ class TenantCacheService
         ?array $extraTags = null
     ): mixed {
         $rawKey = $this->getTenantPrefix() . $keySuffix;
-        $key = preg_replace('/[{}()\/\\\\@:]/', '_', $rawKey);
+        // IMGHOST : une entrée par hôte connu du site (les lectures fabriquent des adresses avec l'hôte de la requête) ; hôte inconnu :
+        // variante canonique, en lecture seule (TenantHostVariant)
+        $variant = $this->hosts?->current();
+        $storable = $variant === null || $variant[1];
+        $key = self::storedKey($rawKey, $variant[0] ?? null);
 
         $tenantCode = $this->getTenantCode();
         $dbname = $this->getDatabaseName();
@@ -80,8 +85,12 @@ class TenantCacheService
         if ($dbname !== null) {
             $tags[] = self::databaseTag($dbname);
         }
+        $tags[] = self::keyTag($rawKey); // delete() efface toutes les variantes d'hôte de la clé
 
-        return $this->cache->get($key, function (ItemInterface $item) use ($compute, $ttl, $tags) {
+        return $this->cache->get($key, function (ItemInterface $item, bool &$save) use ($compute, $ttl, $tags, $storable) {
+            if (!$storable) {
+                $save = false; // hôte inconnu : calculé pour cette requête, jamais enregistré
+            }
             if ($ttl !== null) {
                 $item->expiresAfter($ttl);
             }
@@ -94,7 +103,21 @@ class TenantCacheService
     {
         $rawKey = $this->getTenantPrefix() . $keySuffix;
         $key = preg_replace('/[{}()\/\\\\@:]/', '_', $rawKey);
-        return $this->cache->delete($key);
+        $this->cache->delete($key); // entrée d'avant IMGHOST (sans variante d'hôte)
+
+        return $this->cache->invalidateTags([self::keyTag($rawKey)]); // toutes les variantes d'hôte
+    }
+
+    /** Clé réellement enregistrée : clé du site (« <code>.<clé> »), plus la variante d'hôte (« https://hôte », null hors requête) */
+    public static function storedKey(string $rawKey, ?string $variant = null): string
+    {
+        return preg_replace('/[{}()\/\\\\@:]/', '_', $rawKey) . ($variant !== null ? '.h' . substr(md5($variant), 0, 12) : '');
+    }
+
+    /** Étiquette propre à une clé (toutes ses variantes d'hôte) */
+    public static function keyTag(string $rawKey): string
+    {
+        return 'key.' . md5($rawKey);
     }
 
     /**

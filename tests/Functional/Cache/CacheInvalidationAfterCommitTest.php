@@ -47,7 +47,7 @@ class CacheInvalidationAfterCommitTest extends WebTestCase
 
     private function cachedListExists(): bool
     {
-        return static::getContainer()->get('cache.app')->hasItem(MV_TEST_TENANT_CODE . '.presentations_all_fr');
+        return static::getContainer()->get('cache.app')->hasItem(\App\Services\TenantCacheService::storedKey(MV_TEST_TENANT_CODE . '.presentations_all_fr', 'http://localhost')); // variante d'hôte des requêtes de ce test (IMGHOST)
     }
 
     /** @return int identifiant de la traduction */

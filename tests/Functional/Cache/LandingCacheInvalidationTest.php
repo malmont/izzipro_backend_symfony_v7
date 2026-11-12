@@ -153,7 +153,7 @@ class LandingCacheInvalidationTest extends WebTestCase
 
     private function cached(string $key): bool
     {
-        return static::getContainer()->get('cache.app')->hasItem(MV_TEST_TENANT_CODE . '.' . $key);
+        return static::getContainer()->get('cache.app')->hasItem(\App\Services\TenantCacheService::storedKey(MV_TEST_TENANT_CODE . '.' . $key, 'http://localhost')); // variante d'hôte des requêtes de ce test (IMGHOST)
     }
 
     protected function em(): EntityManagerInterface

@@ -391,6 +391,26 @@ class TenantConnectionManager
         }
     }
 
+    /** Domaine propre d'un site, en minuscules et sans « www. » (IMGHOST, 13/11/2026) ; null sans domaine. En cache 1 h (étiquette tenants). */
+    public function customDomainOf(string $code): ?string
+    {
+        $domain = $this->cache->get('tenant_custom_domain_' . md5($code), function (ItemInterface $item) use ($code) {
+            $item->expiresAfter(3600);
+            $item->tag(['tenants']);
+            try {
+                $stmt = $this->pdoMaster->prepare('SELECT custom_domain FROM tenants WHERE code = :code');
+                $stmt->execute(['code' => $code]);
+
+                return strtolower(trim((string) $stmt->fetchColumn()));
+            } catch (\Throwable $e) {
+                return '';
+            }
+        });
+        $domain = str_starts_with((string) $domain, 'www.') ? substr((string) $domain, 4) : (string) $domain;
+
+        return $domain !== '' ? $domain : null;
+    }
+
     /** @return string|null code du site qui possède déjà ce domaine propre (avec ou sans www.), null si libre */
     public function tenantCodeByCustomDomain(string $domain): ?string
     {

@@ -134,7 +134,12 @@ class OrdersAchatsCacheInvalidationTest extends WebTestCase
 
     private function cached(string $key): bool
     {
-        return static::getContainer()->get('cache.app')->hasItem(MV_TEST_TENANT_CODE . '.' . $key);
+        // Variante d'hôte des requêtes de ce test (IMGHOST) : http://localhost, ou l'hôte du site après la connexion (adresse relative
+        // résolue sur la requête précédente)
+        $pool = static::getContainer()->get('cache.app');
+
+        return $pool->hasItem(\App\Services\TenantCacheService::storedKey(MV_TEST_TENANT_CODE . '.' . $key, 'http://localhost'))
+            || $pool->hasItem(\App\Services\TenantCacheService::storedKey(MV_TEST_TENANT_CODE . '.' . $key, 'https://' . MV_TEST_TENANT_HOST));
     }
 
     protected function em(): EntityManagerInterface
