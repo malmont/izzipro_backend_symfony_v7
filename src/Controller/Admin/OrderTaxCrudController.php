@@ -56,7 +56,13 @@ class OrderTaxCrudController extends BaseTenantCrudController
                     'choice_label' => 'name',
                 ]),
 
-            MoneyField::new('amount', 'Amount')->setCurrency('USD')
+            MoneyField::new('amount', 'Amount')->setCurrency('USD'),
+            // Taxe gelée à la vente (PAYS-1, 12/11/2026), en lecture seule
+            \EasyCorp\Bundle\EasyAdminBundle\Field\TextField::new('taxLabel', 'Libellé gelé')->hideOnForm(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('taxRatePpm', 'Taux gelé (millionièmes)')->hideOnForm(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\TextField::new('taxCode', 'Code')->hideOnForm(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\TextField::new('taxJurisdiction', 'Juridiction')->hideOnForm()->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\TextField::new('taxSource', 'Source')->hideOnForm(),
         ];
     }
 

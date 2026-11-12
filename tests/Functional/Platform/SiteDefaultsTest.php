@@ -48,11 +48,12 @@ class SiteDefaultsTest extends KernelTestCase
     protected function tearDown(): void
     {
         $this->db->executeStatement('DELETE FROM tax');
+        $sql = fn (array $row) => array_map(fn ($v) => is_bool($v) ? ($v ? 't' : 'f') : $v, $row); // booléens (order_tax.prices_include_tax, PAYS-1) : texte PostgreSQL
         foreach ($this->taxes as $t) {
-            $this->db->insert('tax', $t);
+            $this->db->insert('tax', $sql($t));
         }
         foreach ($this->orderTaxes as $row) {
-            $this->db->insert('order_tax', $row);
+            $this->db->insert('order_tax', $sql($row));
         }
         $this->db->executeStatement('DELETE FROM email_configuration WHERE id NOT IN (' . (implode(',', array_map('intval', array_column($this->sender, 'id'))) ?: '0') . ')');
         foreach ($this->sender as $s) {

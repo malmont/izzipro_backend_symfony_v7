@@ -362,7 +362,7 @@ le profil.
 
 | Lot | Contenu | Risque traité | Dépend de |
 |---|---|---|---|
-| **PAYS-1** | Figer taux, libellé et code de la taxe sur `order_tax`. Interdire de modifier ou de supprimer une taxe déjà utilisée : un nouveau taux se crée avec une date. Réimpression fidèle. | Ticket réimprimé faux, inaltérabilité | rien (petit, à faire en premier) |
+| **PAYS-1** (livré le 12/11/2026, `docs/caisse.md` « Taxes gelées à la vente ») | Figer taux, libellé et code de la taxe sur `order_tax`. Interdire de modifier ou de supprimer une taxe déjà utilisée : un nouveau taux se crée avec une date. Réimpression fidèle. | Ticket réimprimé faux, inaltérabilité | rien (petit, à faire en premier) |
 | **PAYS-2** | Profil pays unique : pays et subdivision ISO obligatoires, un seul résolveur, défauts alignés, étape bloquante dans le cheminement du site. Correction des données des 4 sites (TVQ 10 %, provinces) et du pays d'esgboost, **sur décision du propriétaire**, sur demo d'abord. | Défauts divergents, taxes fausses | PAYS-1 |
 | **PAYS-3** | Paquets de règles datés : Canada d'abord (validé par un comptable), puis France, puis États-Unis. Taux en millionièmes ; mode TTC ouvert au Québec. | Taux non datés, TTC au Québec | PAYS-2 et un comptable par pays |
 | **PAYS-4** | Documents : identité et identifiants du vendeur selon le pays sur le ticket serveur, le courriel et une **facture web PDF à numérotation continue** ; avoir web numéroté ; détail par taux ; annulation en caisse par écriture inverse au lieu de la remise à 0. | Mentions obligatoires, facture web | PAYS-2 et PAYS-3 |

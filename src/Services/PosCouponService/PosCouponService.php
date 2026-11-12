@@ -458,7 +458,7 @@ class PosCouponService
             return [];
         }
         $out = [];
-        foreach ($this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative('SELECT ot.order_tax_id AS order_id, t.name, t.rate FROM order_tax ot JOIN tax t ON t.id = ot.tax_id WHERE ot.order_tax_id IN (' . implode(',', array_map('intval', $orderIds)) . ') AND t.rate > 0 ORDER BY ot.id') as $t) {
+        foreach ($this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative('SELECT * FROM (SELECT ot.id, ot.order_tax_id AS order_id, CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_label ELSE t.name END AS name, CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_rate_ppm::float8 / 1000000 ELSE t.rate END AS rate FROM order_tax ot JOIN tax t ON t.id = ot.tax_id WHERE ot.order_tax_id IN (' . implode(',', array_map('intval', $orderIds)) . ')) x WHERE x.rate > 0 ORDER BY x.id') as $t) {
             $rate = (float) $t['rate'];
             $out[(int) $t['order_id']][(string) $t['name']] = $rate < 1 ? $rate * 100 : $rate; // la table stocke des fractions (0,05 ; 0,09975) : en pour cent
         }

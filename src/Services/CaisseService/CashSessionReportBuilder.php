@@ -320,9 +320,9 @@ class CashSessionReportBuilder
         $groups = [];
         foreach ($orders as $order) {
             foreach ($order->getOrderTaxes() as $orderTax) {
-                $tax = $orderTax->getTax();
-                $key = ($tax?->getName() ?? 'Taxe') . '|' . ($tax?->getRate() ?? '');
-                $groups[$key] ??= ['label' => $tax?->getName() ?? 'Taxe', 'rate' => $tax ? (float) $tax->getRate() : null, 'amount' => 0, 'base' => 0, 'total' => 0, 'category' => $tax?->getCategory()];
+                $snap = $orderTax->snapshot(); // PAYS-1 : taxe gelée à la vente (X et Z ne dépendent plus de la table tax actuelle)
+                $key = $snap['label'] . '|' . ($snap['rate'] ?? '');
+                $groups[$key] ??= ['label' => $snap['label'], 'rate' => $snap['rate'], 'amount' => 0, 'base' => 0, 'total' => 0, 'category' => $snap['category'], 'code' => $snap['code'], 'ratePpm' => $snap['ratePpm']];
                 $amount = (int) round((float) $orderTax->getAmount());
                 // Assiette HT (F18 partie 2a) : celle de la commande ; commande antérieure sans assiette : net taxable de la commande (même signe que la taxe)
                 $base = $orderTax->getBase() ?? ($amount < 0 ? -1 : 1) * (int) array_sum(array_map(fn ($i) => $i->isTaxable() ? abs((int) round((float) $i->getTotalPrice())) : 0, $order->getOrderItems()->toArray()));

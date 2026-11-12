@@ -51,7 +51,7 @@ class JournalEntryBuilder
         }
         $add('shipping_revenue', 0, (int) ($amounts['shipping'] ?? 0), 'Livraison facturée');
         foreach ($amounts['salesByTax'] ?? [] as $t) {
-            $add(ChartOfAccounts::taxKey((string) $t['label'], $t['province'] ?? null, isset($t['rate']) ? (float) $t['rate'] : null), 0, (int) ($t['tax'] ?? 0), $t['label'] . ' collectée');
+            $add(ChartOfAccounts::taxKey((string) $t['label'], $t['province'] ?? null, isset($t['rate']) ? (float) $t['rate'] : null, $t['code'] ?? null), 0, (int) ($t['tax'] ?? 0), $t['label'] . ' collectée');
         }
         // Encaissements TTC des ventes
         $receiptKeys = ['cash' => 'cash', 'card' => 'card_clearing', 'interac' => 'interac_clearing', 'stripe' => 'stripe_clearing', 'paypal' => 'paypal_clearing', 'giftCard' => 'gift_card_liability', 'storeCredit' => 'store_credit_liability', 'coupon' => 'coupon_receivable'];
@@ -64,7 +64,7 @@ class JournalEntryBuilder
         // Retours : ventes et taxes au débit, remboursements au crédit du moyen (avoir émis = passif)
         $add('returns', (int) ($amounts['refundsHt'] ?? 0), 0, 'Retours HT');
         foreach ($amounts['refundsTaxes'] ?? [] as $t) {
-            $add(ChartOfAccounts::taxKey((string) $t['label'], $t['province'] ?? null, isset($t['rate']) ? (float) $t['rate'] : null), (int) ($t['tax'] ?? 0), 0, $t['label'] . ' sur retours');
+            $add(ChartOfAccounts::taxKey((string) $t['label'], $t['province'] ?? null, isset($t['rate']) ? (float) $t['rate'] : null, $t['code'] ?? null), (int) ($t['tax'] ?? 0), 0, $t['label'] . ' sur retours');
         }
         $refundLabels = ['cash' => 'Remboursements espèces', 'card' => 'Remboursements carte', 'interac' => 'Remboursements Interac', 'stripe' => 'Remboursements Stripe', 'giftCard' => 'Recrédits de cartes-cadeaux', 'storeCredit' => 'Avoirs émis', 'coupon' => 'Coupons de fabricant annulés (retours)'];
         foreach ($refundLabels as $k => $label) {

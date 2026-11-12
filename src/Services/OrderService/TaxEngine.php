@@ -78,7 +78,8 @@ final class TaxEngine
         private readonly CacheInterface $cache,
         private readonly LoggerInterface $logger,
         #[Autowire('%env(default::STRIPE_SECRET_KEY)%')]
-        private readonly ?string $stripeSecretKey
+        private readonly ?string $stripeSecretKey,
+        private readonly ?\App\Services\CaisseService\StoreClock $clock = null // PAYS-1 : jour du magasin pour les taxes datées
     ) {
     }
 
@@ -155,12 +156,16 @@ final class TaxEngine
         ];
     }
 
-    /** @return list<Tax> taxes de la table qui s'appliquent à l'adresse */
-    public function applicableTaxes(array $address): array
+    /**
+     * @return list<Tax> taxes de la table qui s'appliquent à l'adresse le jour $at (défaut : maintenant), en jours du magasin :
+     *                   les taxes archivées ou hors de leurs dates de validité sont écartées (PAYS-1 ; sans dates ni archivage, rien ne change)
+     */
+    public function applicableTaxes(array $address, ?\DateTimeInterface $at = null): array
     {
+        $day = $this->clock !== null ? $this->clock->day($at ?? new \DateTimeImmutable()) : ($at ?? new \DateTimeImmutable())->format('Y-m-d');
         $applicable = [];
         foreach ($this->emProvider->getEntityManager()->getRepository(Tax::class)->findBy([], ['id' => 'ASC']) as $tax) {
-            if (self::matchesAddress($tax->getCountry(), $tax->getProvince(), $address)) {
+            if ($tax->isActiveOn($day) && self::matchesAddress($tax->getCountry(), $tax->getProvince(), $address)) {
                 $applicable[] = $tax;
             }
         }

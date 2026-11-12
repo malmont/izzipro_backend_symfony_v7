@@ -142,9 +142,10 @@ class ChartOfAccounts
     }
 
     /** Clé de compte d'une taxe d'après son libellé (TPS, TVQ, TVH, TVP, TVA…), avec province ou taux dynamiques */
-    public static function taxKey(string $label, ?string $province = null, ?float $rate = null): string
+    public static function taxKey(string $label, ?string $province = null, ?float $rate = null, ?string $code = null): string
     {
-        $code = self::TAX_LABELS[strtoupper(trim(preg_replace('/[^A-Za-z]/', '', $label) ?? ''))] ?? 'other';
+        // PAYS-1 : code gelé sur la commande s'il existe, sinon déduit du libellé (même règle que TaxCode::fromLabel)
+        $code = $code !== null && in_array($code, \App\Services\OrderService\TaxCode::CODES, true) ? $code : (self::TAX_LABELS[strtoupper(trim(preg_replace('/[^A-Za-z]/', '', $label) ?? ''))] ?? 'other');
         if ($code === 'hst' && $province) {
             return 'tax_hst_' . strtoupper($province);
         }

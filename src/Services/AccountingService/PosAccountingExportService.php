@@ -179,8 +179,8 @@ class PosAccountingExportService
         $rewards = (int) $conn->fetchOne('SELECT COALESCE(SUM(amount), 0) FROM pos_loyalty_transaction WHERE kind = \'redeem\' AND order_id IN (' . $in($saleIds) . ')');
         $taxes = [];
         // Assiette par taxe (F18 partie 2a) : order_tax.base (HT de la taxe sur la commande) ; commande antérieure sans assiette : net HT taxable de la commande
-        foreach ($conn->fetchAllAssociative('SELECT t.name AS label, t.rate, COALESCE(SUM(ot.amount), 0) AS tax, COALESCE(SUM(COALESCE(ot.base, (SELECT SUM(oi.total_price) FROM order_items oi WHERE oi.taxable AND oi.order_associated_id = ot.order_tax_id))), 0) AS base FROM order_tax ot JOIN tax t ON t.id = ot.tax_id WHERE ot.order_tax_id IN (' . $in($saleIds) . ') GROUP BY t.name, t.rate ORDER BY MIN(t.id)') as $t) {
-            $taxes[] = ['label' => $t['label'], 'rate' => (float) $t['rate'], 'base' => (int) round((float) $t['base']), 'tax' => (int) round((float) $t['tax'])];
+        foreach ($conn->fetchAllAssociative('SELECT CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_label ELSE t.name END AS label, CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_rate_ppm::float8 / 1000000 ELSE t.rate END AS rate, CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_code END AS code, COALESCE(SUM(ot.amount), 0) AS tax, COALESCE(SUM(COALESCE(ot.base, (SELECT SUM(oi.total_price) FROM order_items oi WHERE oi.taxable AND oi.order_associated_id = ot.order_tax_id))), 0) AS base FROM order_tax ot JOIN tax t ON t.id = ot.tax_id WHERE ot.order_tax_id IN (' . $in($saleIds) . ') GROUP BY 1, 2, 3 ORDER BY MIN(t.id)') as $t) { // PAYS-1 : libellé, taux et code gelés à la vente
+            $taxes[] = ['label' => $t['label'], 'rate' => (float) $t['rate'], 'base' => (int) round((float) $t['base']), 'tax' => (int) round((float) $t['tax'])] + ($t['code'] !== null ? ['code' => $t['code']] : []);
         }
         // Encaissements des ventes par moyen (paiements positifs), terminal / Interac / déclarée pour la carte
         $receipts = ['cash' => 0, 'declaredCard' => 0, 'card' => 0, 'interac' => 0, 'paypal' => 0, 'giftCard' => (int) $sales['gift'], 'storeCredit' => 0, 'coupon' => (int) $sales['coupon']]; // coupon : F17
@@ -196,8 +196,8 @@ class PosAccountingExportService
         $returns = $conn->fetchAssociative('SELECT COUNT(*) AS n, COALESCE(SUM(-total_amount), 0) AS ttc FROM "order" WHERE id IN (' . $in($returnIds) . ')');
         $refundsHt = abs((int) round((float) $conn->fetchOne('SELECT COALESCE(SUM(total_price), 0) FROM order_items WHERE order_associated_id IN (' . $in($returnIds) . ')'))); // lignes de retour au prix payé (positives)
         $refundTaxes = [];
-        foreach ($conn->fetchAllAssociative('SELECT t.name AS label, t.rate, COALESCE(SUM(-ot.amount), 0) AS tax FROM order_tax ot JOIN tax t ON t.id = ot.tax_id WHERE ot.order_tax_id IN (' . $in($returnIds) . ') GROUP BY t.name, t.rate ORDER BY MIN(t.id)') as $t) {
-            $refundTaxes[] = ['label' => $t['label'], 'rate' => (float) $t['rate'], 'tax' => (int) round((float) $t['tax'])];
+        foreach ($conn->fetchAllAssociative('SELECT CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_label ELSE t.name END AS label, CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_rate_ppm::float8 / 1000000 ELSE t.rate END AS rate, CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_code END AS code, COALESCE(SUM(-ot.amount), 0) AS tax FROM order_tax ot JOIN tax t ON t.id = ot.tax_id WHERE ot.order_tax_id IN (' . $in($returnIds) . ') GROUP BY 1, 2, 3 ORDER BY MIN(t.id)') as $t) {
+            $refundTaxes[] = ['label' => $t['label'], 'rate' => (float) $t['rate'], 'tax' => (int) round((float) $t['tax'])] + ($t['code'] !== null ? ['code' => $t['code']] : []);
         }
         $refunds = ['cash' => 0, 'card' => 0, 'interac' => 0, 'paypal' => 0, 'giftCard' => 0, 'storeCredit' => 0,
             'coupon' => (int) $conn->fetchOne("SELECT COALESCE(SUM(amount), 0) FROM pos_manufacturer_coupon WHERE voided_caisse_id = ? AND status IN ('voided', 'returned_after_claim')", [$caisseId])]; // coupons annulés par les retours de la session (F17)
@@ -320,7 +320,7 @@ class PosAccountingExportService
         $other = $otherIds !== [] ? $conn->fetchAssociative('SELECT COALESCE(SUM(total_price), 0) AS net, COALESCE(SUM(total_price + discount_amount), 0) AS gross FROM order_items WHERE order_associated_id IN (' . implode(',', $otherIds) . ')') : ['net' => 0, 'gross' => 0];
         $net = (int) $conn->fetchOne('SELECT COALESCE(SUM(base), 0) FROM order_tax WHERE order_tax_id IN (' . $ttcIn . ')');
         $taxesByOrder = [];
-        foreach ($conn->fetchAllAssociative('SELECT ot.order_tax_id AS order_id, t.rate, t.category FROM order_tax ot JOIN tax t ON t.id = ot.tax_id WHERE ot.order_tax_id IN (' . $ttcIn . ')') as $t) {
+        foreach ($conn->fetchAllAssociative('SELECT ot.order_tax_id AS order_id, CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_rate_ppm::float8 / 1000000 ELSE t.rate END AS rate, CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_category ELSE t.category END AS category FROM order_tax ot JOIN tax t ON t.id = ot.tax_id WHERE ot.order_tax_id IN (' . $ttcIn . ')') as $t) {
             $taxesByOrder[(int) $t['order_id']][] = $t;
         }
         $gross = 0;

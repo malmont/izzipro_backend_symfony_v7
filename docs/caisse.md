@@ -2177,6 +2177,94 @@ les applications (caisse, e-commerce) qui savent l'afficher sont publiées. Tous
    recomposait `total = subTotal + priceTax` en supposant la livraison dans `subTotal`, lire `totalAmount` tel quel. 5. Rien d'autre pour les
    sites hors taxes.
 
+## Taxes gelées à la vente (PAYS-1, 12/11/2026)
+
+Avant PAYS-1, une ligne `order_tax` ne gardait que le montant et l'assiette. Le ticket, sa réimpression, le rapport X et les exports
+relisaient le nom et le taux **actuels** de la table `tax` : modifier un taux changeait un ancien ticket. Désormais, chaque ligne gèle la
+taxe telle qu'appliquée (migration `Version20261223100000`, script `scripts/migrate_all_v2_taxes_gel.sh`, additif). Audit et ordre des
+lots : `docs/pays-audit.md`.
+
+### Colonnes gelées (`order_tax`, écrites une fois par `OrderTax::freeze()`)
+- **`tax_label`** : libellé au moment de la vente.
+- **`tax_rate_ppm`** : taux en **millionièmes** (TPS 5 % = 50 000, TVQ 9,975 % = 99 750 ; null si inconnu).
+- **`tax_code`** : `gst` | `qst` | `hst` | `pst` | `vat` | `other`.
+  - Il vient de `tax.code`, sinon il est déduit du libellé (même règle que le plan de comptes).
+  - `sales` (taxe de vente américaine) viendra avec PAYS-3, sans renommer les codes existants.
+- **`tax_jurisdiction`** : subdivision de l'adresse de calcul (`CA-QC`, `US-NY`). Avec Stripe Tax, c'est la juridiction de Stripe.
+- **`tax_category`**, **`prices_include_tax`** : catégorie et mode TTC de la vente.
+- **`tax_source`** : origine des valeurs gelées.
+  - `table` (moteur, table des taxes) ;
+  - `stripe` (Stripe Tax ; avant PAYS-1, le ticket affichait « Taxe » sans taux) ;
+  - `offline` (vente hors ligne) ;
+  - `return` (retour, aux valeurs de la vente d'origine) ;
+  - `subscription` (facture Stripe d'abonnement : « Taxe », taux inconnu) ;
+  - `backfill` (reprise des lignes existantes).
+
+**Garantie en base** : le déclencheur `order_tax_frozen_guard` refuse tout UPDATE d'une colonne gelée d'une ligne déjà gelée
+(`ORDER_TAX_FROZEN`).
+- Le **montant** n'est pas gelé : l'annulation le ramène encore à 0 (voir PAYS-1b dans `docs/pays-audit.md`).
+- Le **DELETE** reste permis, pour le nettoyage des tests et l'anonymisation.
+
+**Reprise** : les lignes existantes sont remplies avec le libellé et le taux actuels de la taxe liée, source `backfill`. Les lignes
+sans taxe liée (abonnements) reçoivent « Taxe », avec un taux null.
+
+### Ce que lisent le ticket, les rapports, les exports et les retours
+- Les valeurs gelées : `OrderTax::snapshot()` en PHP, `CASE WHEN ot.tax_source IS NOT NULL …` en SQL.
+- Lecteurs concernés : ticket (`PosReceiptDto`, page publique, PDF, courriel), détail de commande (`OrderDTO`), rapports X et Z, export
+  comptable (synthèse, écritures generic et qbo), archive annuelle, coupons de fabricant, retours (aperçu, retour, résumé) et journal de
+  l'annulation.
+- Le repli sur la table `tax` ne joue que pour une ligne jamais gelée (`rateSource` « live »).
+- Dans l'export, le compte de taxe est choisi d'après le **code gelé** (TPS → 2310, TVQ → 2320…), et non plus d'après le libellé
+  actuel. Colonnes inchangées.
+
+### Ticket JSON : quatre clés ajoutées (ajout seulement)
+Chaque entrée de `taxes[]` du ticket, de la commande (`OrderDTO.taxes`) et de la vente (`create-multi-payment`) garde ses clés et ses
+valeurs, et gagne :
+- `code` ;
+- `ratePpm` ;
+- `jurisdiction` ;
+- `rateSource` : `sale` (gelée à la vente), `backfill` (reprise) ou `live` (repli sur la table, signalé).
+
+Les rapports X et Z gagnent `code` et `ratePpm` par taxe.
+
+```json
+{"name": "TVQ", "label": "TVQ", "rate": 0.09975, "amount": 5.79, "base": 58.0, "total": 63.79, "category": null,
+ "code": "qst", "ratePpm": 99750, "jurisdiction": "CA-QC", "rateSource": "sale"}
+```
+
+**Application de caisse** : afficher le taux à partir de `ratePpm` (99 750 → « 9,975 % »), sans arrondir. `rate` reste servi, avec la même
+valeur.
+
+### Hors ligne : taux de la tablette, écart consigné
+- Une vente synchronisée gèle le taux de **l'instantané du pack**, c'est-à-dire celui que la tablette a appliqué (source `offline`).
+- Si ce taux diffère du taux valide en base le jour de la vente (même taxe si elle est encore valide, sinon une taxe valide de même code
+  et de même catégorie) :
+  - la vente est **acceptée** ;
+  - l'écart est consigné dans la réponse de la synchronisation et dans `pos_offline_sale.result` :
+    `taxRateDrift [{label, code, appliedRatePpm, expectedRatePpm}]` (`[]` sans écart) ;
+  - il est aussi consigné dans le journal C2 : `SALE.offline.taxRateDrift`, présent seulement s'il y a un écart.
+- Le comptable peut ainsi le voir.
+
+### Taxes utilisées, datées, archivées (`tax.code`, `tax.valid_from`, `tax.valid_to`, `tax.archived_at`)
+- **Une taxe utilisée est figée** : dès qu'une ligne `order_tax` la référence, son taux, son nom, son code, sa catégorie, son pays, sa
+  région et son début de validité ne changent plus. Elle ne peut plus être supprimée non plus.
+  - Le refus `TAX_IN_USE` vient de `TaxInUseGuardSubscriber`. EasyAdmin affiche un message au lieu d'une erreur.
+  - Restent permis : l'archivage, la fin de validité et le type.
+- **Pour un nouveau taux** : créer une nouvelle taxe avec « Valide à partir du », et indiquer « Valide jusqu'au (exclu) » sur
+  l'ancienne.
+- **Dates** : en jours du magasin, début inclus et fin exclue.
+- **Taxes écartées** : une taxe archivée, ou hors de ses dates, n'est plus appliquée (`TaxEngine::applicableTaxes`).
+  - Cela vaut pour le devis, la vente, le pack hors ligne et le garde TTC.
+  - Sans dates ni archivage, rien ne change.
+- **Pack hors ligne** : il contient les taxes valides le jour où il est construit. Si un taux change pendant la validité d'un pack, la
+  tablette garde l'ancien taux jusqu'au pack suivant, et l'écart est consigné (voir plus haut).
+
+Tests : `tests/Functional/Boutique/TaxFreezeApiTest.php`.
+- Gel sur chaque chemin : vente, retour, hors ligne, Stripe Tax, plus `SubscriptionApiTest` pour les abonnements.
+- Ticket, réimpression, X, Z, export et retour inchangés quand un taux est modifié ensuite.
+- `TAX_IN_USE`, archivage et taxes datées ; déclencheur ; reprise idempotente.
+- La photo VAR (`VariantPromotionPhotoTest`, enregistrée avec le code d'avant) est identique, hors les quatre clés ajoutées.
+
 ## Codes d'erreur de la caisse (02/11/2026)
 
 Toute réponse JSON 4xx porte une clé **`code`** stable (MAJUSCULES_SOULIGNÉES). En production (`APP_DEBUG=0`), les erreurs génériques des

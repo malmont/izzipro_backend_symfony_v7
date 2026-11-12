@@ -36,6 +36,21 @@ class Tax
     #[ORM\Column(length: 16, nullable: true)]
     private ?string $category = null;
 
+    /** Code stable de la taxe (PAYS-1, 12/11/2026) : gst | qst | hst | pst | vat | other ; null = déduit du libellé (TaxCode::fromLabel) */
+    #[ORM\Column(length: 20, nullable: true)]
+    private ?string $code = null;
+
+    /** Archivée (PAYS-1) : n'est plus appliquée ; reste lisible sur les commandes passées */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $archivedAt = null;
+
+    /** Validité (PAYS-1), en jours du magasin : du (inclus) au (exclu) ; null = sans borne. Un nouveau taux = une nouvelle taxe datée */
+    #[ORM\Column(type: 'date_immutable', nullable: true)]
+    private ?\DateTimeImmutable $validFrom = null;
+
+    #[ORM\Column(type: 'date_immutable', nullable: true)]
+    private ?\DateTimeImmutable $validTo = null;
+
     /**
      * @var Collection<int, OrderTax>
      */
@@ -144,4 +159,23 @@ class Tax
 
     public function getCategory(): ?string { return $this->category; }
     public function setCategory(?string $category): static { $this->category = \App\Services\OrderService\TaxCategory::isValid($category) ? $category : null; return $this; }
+
+    public function getCode(): ?string { return $this->code; }
+    public function setCode(?string $code): static { $this->code = $code !== null && trim($code) !== '' ? strtolower(trim($code)) : null; return $this; }
+    public function getArchivedAt(): ?\DateTimeImmutable { return $this->archivedAt; }
+    public function setArchivedAt(?\DateTimeImmutable $at): static { $this->archivedAt = $at; return $this; }
+    public function isArchived(): bool { return $this->archivedAt !== null; }
+    public function setArchived(bool $archived): static { $this->archivedAt = $archived ? ($this->archivedAt ?? new \DateTimeImmutable()) : null; return $this; }
+    public function getValidFrom(): ?\DateTimeImmutable { return $this->validFrom; }
+    public function setValidFrom(?\DateTimeImmutable $d): static { $this->validFrom = $d; return $this; }
+    public function getValidTo(): ?\DateTimeImmutable { return $this->validTo; }
+    public function setValidTo(?\DateTimeImmutable $d): static { $this->validTo = $d; return $this; }
+
+    /** Appliquée le jour $day (Y-m-d, jour du magasin) : non archivée, validFrom ≤ jour < validTo */
+    public function isActiveOn(string $day): bool
+    {
+        return $this->archivedAt === null
+            && ($this->validFrom === null || $this->validFrom->format('Y-m-d') <= $day)
+            && ($this->validTo === null || $day < $this->validTo->format('Y-m-d'));
+    }
 }

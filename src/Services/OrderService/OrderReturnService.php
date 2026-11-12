@@ -181,7 +181,7 @@ class OrderReturnService
             return $amount; // TTC : la taxe est dans le net payé
         }
         foreach ($order->getOrderTaxes() as $orderTax) {
-            $category = $orderTax->getTax()?->getCategory();
+            $category = $orderTax->snapshot()['category']; // PAYS-1 : catégorie gelée à la vente
             if (!$item->isTaxable() || !TaxCategory::applies($category, $item->getTaxCategory())) {
                 continue;
             }

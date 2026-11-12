@@ -97,7 +97,8 @@ final class SubscriptionOrderFactory
         $item = $this->items->createOrderItem($order, $variant, $quantity, (float) (($subtotal - $shipping) / $quantity));
         $em->persist($item);
         if ($tax > 0) {
-            $orderTax = (new OrderTax())->setOrderTax($order)->setAmount((float) $tax);
+            $orderTax = (new OrderTax())->setOrderTax($order)->setAmount((float) $tax)
+                ->freeze(['label' => 'Taxe', 'ratePpm' => null, 'code' => null, 'jurisdiction' => null, 'category' => null, 'pricesIncludeTax' => $order->isPricesIncludeTax(), 'source' => 'subscription']); // PAYS-1 : total de la facture Stripe, taux inconnu
             $order->addOrderTax($orderTax);
             $em->persist($orderTax);
         }

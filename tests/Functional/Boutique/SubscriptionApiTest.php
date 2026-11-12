@@ -111,6 +111,8 @@ class SubscriptionApiTest extends WebTestCase
         $order = $this->db->fetchAssociative('SELECT sub_total, total_tax, total_amount, shipping_cost, stripe_invoice_id, subscription_id FROM "order" WHERE id = ?', [$detail['orders'][0]['id']]);
         $this->assertSame([7000.0 + $shipping, 1048.0, 8048.0 + $shipping, (float) $shipping, 'in_test_1', $id], [(float) $order['sub_total'], (float) $order['total_tax'], (float) $order['total_amount'], (float) $order['shipping_cost'], $order['stripe_invoice_id'], (int) $order['subscription_id']]);
         $this->assertSame(3500.0, (float) $this->db->fetchOne('SELECT unit_price FROM order_items WHERE order_associated_id = ?', [$detail['orders'][0]['id']]), 'prix unitaire sans la livraison');
+        $this->assertSame(['tax_label' => 'Taxe', 'tax_rate_ppm' => null, 'tax_code' => null, 'tax_source' => 'subscription'],
+            $this->db->fetchAssociative('SELECT tax_label, tax_rate_ppm, tax_code, tax_source FROM order_tax WHERE order_tax_id = ?', [$detail['orders'][0]['id']]), 'PAYS-1 : taxe de la facture gelée, taux inconnu');
         $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM payments WHERE stripe_payment_id = ?', ['pi_test_invoice_1']));
         $this->assertContains(['ensureDefaultPaymentMethod', $stripeId, 'in_test_1'], FakeSubscriptionStripeGateway::$calls, 'la carte qui a payé devient celle de l\'abonnement');
         $this->assertSame('pm_test_card', FakeSubscriptionStripeGateway::$subscriptions[$stripeId]['defaultPaymentMethod']);

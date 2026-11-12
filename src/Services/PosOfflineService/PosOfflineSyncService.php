@@ -60,6 +60,7 @@ class PosOfflineSyncService
         private readonly PosLineService $posLines, // article libre et prix manuel (F7)
         private readonly \App\Services\PosCustomerService\PosCustomerService $customers, // fiche client (F8)
         private readonly \App\Services\PosCustomerService\PosLoyaltyService $loyalty, // fidélité (F8)
+        private readonly ?\App\Services\OrderService\TaxEngine $taxEngine = null, // PAYS-1 : taux valide en base le jour de la vente
     ) {
     }
 
@@ -430,14 +431,37 @@ class PosOfflineSyncService
         }
         $declaredSubtotal = (int) $declared['subtotal'];
         $declaredTaxTotal = 0;
+        // PAYS-1 : taux gelé = celui de l'instantané du pack (appliqué par la tablette) ; écart avec le taux valide en base le jour de la vente
+        // consigné (rapport de synchronisation et journal), jamais refusé
+        $storeAddress = \App\Services\OrderService\TaxEngine::normalizeAddress($this->taxAddress->forStore());
+        $jurisdiction = \App\Services\OrderService\TaxCode::jurisdiction($storeAddress);
+        $validTaxes = $this->taxEngine !== null && $storeAddress !== null ? $this->taxEngine->applicableTaxes($storeAddress, $soldAtCorrected) : null;
+        $taxRateDrift = [];
         foreach ($expected['taxes'] as $k => $t) {
             $amount = (int) ($declaredTaxes[$k]['amount'] ?? $t['amount']);
             $declaredTaxTotal += $amount;
             $tax = isset($snapshot['taxes'][$k]['id']) ? $em->find(Tax::class, (int) $snapshot['taxes'][$k]['id']) : null;
             if ($tax) {
-                $orderTax = (new OrderTax())->setOrderTax($order)->setTax($tax)->setAmount($amount)->setBase(isset($t['base']) ? (int) $t['base'] : null); // assiette (F18 partie 2a)
+                $packTax = $snapshot['taxes'][$k];
+                $applied = \App\Services\OrderService\TaxCode::ppm(isset($packTax['rate']) ? (float) $packTax['rate'] : (float) $tax->getRate());
+                $code = \App\Services\OrderService\TaxCode::of($tax);
+                $category = array_key_exists('category', $packTax) ? $packTax['category'] : $tax->getCategory();
+                $orderTax = (new OrderTax())->setOrderTax($order)->setTax($tax)->setAmount($amount)->setBase(isset($t['base']) ? (int) $t['base'] : null) // assiette (F18 partie 2a)
+                    ->freeze(['label' => (string) ($packTax['label'] ?? $tax->getName()), 'ratePpm' => $applied, 'code' => $code, 'jurisdiction' => $jurisdiction,
+                        'category' => $category, 'pricesIncludeTax' => (bool) ($snapshot['pricesIncludeTax'] ?? false), 'source' => 'offline']);
                 $order->addOrderTax($orderTax);
                 $em->persist($orderTax);
+                if ($validTaxes !== null) {
+                    $match = null;
+                    foreach ($validTaxes as $v) { // même ligne de taxe si elle est encore valide ce jour-là, sinon une taxe valide de même code et de même catégorie
+                        if ($v->getId() === $tax->getId()) { $match = $v; break; }
+                        if ($match === null && \App\Services\OrderService\TaxCode::of($v) === $code && $v->getCategory() === $category) { $match = $v; }
+                    }
+                    $expectedPpm = $match !== null ? \App\Services\OrderService\TaxCode::ppm((float) $match->getRate()) : null;
+                    if ($expectedPpm !== $applied) {
+                        $taxRateDrift[] = ['label' => (string) ($packTax['label'] ?? $tax->getName()), 'code' => $code, 'appliedRatePpm' => $applied, 'expectedRatePpm' => $expectedPpm];
+                    }
+                }
             }
         }
         $cashRounding = $declaredCash - $declaredTotal;
@@ -453,7 +477,8 @@ class PosOfflineSyncService
         $offline = ['provisionalNumber' => $sale['provisionalNumber'], 'soldAt' => $soldAtCorrected->format(\DateTimeInterface::ATOM), 'deviceSoldAt' => $soldAt->format(\DateTimeInterface::ATOM), 'clockOffsetSeconds' => $offset,
             'packVersion' => $packVersion, 'chain' => $sale['chain'] ?? null, 'chainBroken' => $chainBroken, 'priceDrift' => ['amount' => $driftAmount, 'taxes' => $taxDrift, 'within' => $within], 'currentPriceDrift' => $currentDrift,
             'stockShortfall' => $stockShortfall, 'lateEntry' => $lateEntry, 'forced' => $forced, 'cashReceived' => is_numeric($sale['cashReceived'] ?? null) ? (int) $sale['cashReceived'] : null,
-            'customerId' => $customer?->getId(), 'customerUnknown' => $customerUnknown, 'loyaltyEarned' => $loyaltyEarned];
+            'customerId' => $customer?->getId(), 'customerUnknown' => $customerUnknown, 'loyaltyEarned' => $loyaltyEarned]
+            + ($taxRateDrift !== [] ? ['taxRateDrift' => $taxRateDrift] : []); // PAYS-1 : taux appliqué par la tablette ≠ taux valide en base ce jour-là
         $this->audit->record(PosAuditService::SALE, [
             'kind' => 'sale', 'reference' => $order->getReference(), 'receiptKind' => $receipt->getKind(), 'receiptNumber' => $receipt->getNumber(),
             'subTotal' => $declaredSubtotal, 'totalTax' => $declaredTaxTotal, 'totalAmount' => $declaredTotal, 'cashRounding' => $cashRounding, 'discountTotal' => $expected['discountTotal'],
@@ -475,7 +500,8 @@ class PosOfflineSyncService
             'receiptNumber' => $receipt->getNumber(), 'receiptReference' => $register->receiptReference($receipt->getNumber()), 'barcode' => sprintf('IZ-T-%d-%d', $register->getId(), $receipt->getNumber()),
             'soldAt' => $soldAtCorrected->format(\DateTimeInterface::ATOM), 'priceDrift' => $offline['priceDrift'], 'currentPriceDrift' => $currentDrift, 'stockShortfall' => $stockShortfall,
             'lateEntry' => $lateEntry, 'chainBroken' => $chainBroken, 'forced' => $forced !== null, 'totals' => ['expected' => $expected['total'], 'declared' => $declaredTotal, 'cashTotal' => $declaredCash],
-            'customer' => $customer !== null ? ['id' => $customer->getId(), 'loyaltyEarned' => $loyaltyEarned] : null, 'customerUnknown' => $customerUnknown];
+            'customer' => $customer !== null ? ['id' => $customer->getId(), 'loyaltyEarned' => $loyaltyEarned] : null, 'customerUnknown' => $customerUnknown,
+            'taxRateDrift' => $taxRateDrift]; // PAYS-1 : [] sans écart ; sinon [{label, code, appliedRatePpm, expectedRatePpm}]
     }
 
     /** Vente en ligne (create-multi-payment, C5 partie 1) déjà enregistrée sous cette clé sur ce site : {id, total_amount} ou null */

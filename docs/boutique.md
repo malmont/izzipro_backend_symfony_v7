@@ -625,6 +625,15 @@ commande ensuite). Réglage `commerce.taxProvider` des réglages de la boutique 
   `Version20261009110000`, script `scripts/migrate_all_v2_tax_regions.sh`).
 - Tests : `CartQuoteApiTest::testTaxesFollowTheShippingAddressRegion` (QC, ON, NB, FR, sans adresse, repli Stripe → table).
 
+### Taxes gelées, utilisées, datées (PAYS-1, 12/11/2026)
+- Chaque ligne `order_tax` gèle la taxe appliquée : libellé, taux en millionièmes, code, juridiction, catégorie, mode TTC et source. Le
+  détail de la commande (`OrderDTO.taxes`) gagne `code`, `ratePpm`, `jurisdiction` et `rateSource` (ajout seulement).
+- Une taxe déjà utilisée ne change plus de taux, de nom, de code, de catégorie, de pays, de région ni de début de validité, et ne se
+  supprime plus (`TAX_IN_USE`). Elle reste archivable et bornable (`valid_to`).
+- Pour un nouveau taux : une nouvelle taxe datée (`valid_from`). Les taxes archivées ou hors de leurs dates (jours du magasin) ne
+  s'appliquent plus.
+- Détails, déclencheur et clés du ticket : `docs/caisse.md`, « Taxes gelées à la vente ».
+
 ## Annulation d'une commande web (`POST /api/order/cancel/{id}`)
 
 Réservée à l'auteur de la commande (client du site Next.js ou de l'application e-commerce) ; un administrateur annule

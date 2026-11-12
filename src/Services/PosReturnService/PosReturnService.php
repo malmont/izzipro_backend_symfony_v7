@@ -203,7 +203,7 @@ class PosReturnService
             // Net payé de la prochaine unité (F1 : total_price est le net des remises ; cumul exact comme pour les taxes)
             $unit = self::taxForQuantity((int) round((float) $item->getTotalPrice()), $qty, $before, 1);
             // Taxes de la prochaine unité retournée (méthode cumulative : la somme des retours égale la part de la ligne)
-            $taxes = array_values(array_map(fn ($t) => ['label' => $t['label'], 'tax' => $t['tax'], 'applies' => $t['applies'], 'amount' => self::taxForQuantity($t['amount'], $qty, $before, 1)], array_filter($this->lineTaxShare($order, $item, $itemsTotal), fn ($t) => $t['applies']))); // seules les taxes qui frappent la ligne
+            $taxes = array_values(array_map(fn ($t) => ['label' => $t['label'], 'tax' => $t['tax'], 'snap' => $t['snap'], 'applies' => $t['applies'], 'amount' => self::taxForQuantity($t['amount'], $qty, $before, 1)], array_filter($this->lineTaxShare($order, $item, $itemsTotal), fn ($t) => $t['applies']))); // seules les taxes qui frappent la ligne
             $variant = $item->getProductVariant();
             $lines[] = [
                 'orderItemId' => $item->getId(), 'productVariantId' => $variant?->getId(), 'name' => $item->displayName(),
@@ -213,7 +213,7 @@ class PosReturnService
                 // unitPrice = NET payé de la prochaine unité (remises déduites, F1) ; unitGross = prix unitaire brut ; discountAmount = remises de la ligne
                 'unitPrice' => $unit, 'unitGross' => (int) round((float) $item->getUnitPrice()), 'discountAmount' => $item->getDiscountAmount(),
                 'unitTaxes' => array_sum(array_column($taxes, 'amount')), 'unitRefundable' => $order->isPricesIncludeTax() ? $unit : $unit + array_sum(array_column($taxes, 'amount')), // TTC : le net remboursé contient la taxe (2b)
-                'taxes' => array_map(fn ($t) => ['label' => $t['label'], 'rate' => $t['tax'] ? (float) $t['tax']->getRate() : null, 'amount' => $t['amount'],
+                'taxes' => array_map(fn ($t) => ['label' => $t['label'], 'rate' => isset($t['snap']['ratePpm']) ? $t['snap']['ratePpm'] / 1000000 : null, 'amount' => $t['amount'],
                     'base' => $t['applies'] ? ($order->isPricesIncludeTax() ? $unit - array_sum(array_column($taxes, 'amount')) : $unit) : 0, 'total' => ($t['applies'] ? ($order->isPricesIncludeTax() ? $unit - array_sum(array_column($taxes, 'amount')) : $unit) : 0) + $t['amount']], $taxes), // jamais l'entité (sérialisation) ; base/total : F18 partie 2
             ];
         }
@@ -327,7 +327,9 @@ class PosReturnService
         }
         foreach ($taxes as $tax) {
             if ($tax['tax'] !== null) {
-                $orderTax = (new OrderTax())->setOrderTax($returnOrder)->setTax($tax['tax'])->setAmount(-$tax['amount'])->setBase(isset($tax['base']) ? -(int) $tax['base'] : null);
+                $orderTax = (new OrderTax())->setOrderTax($returnOrder)->setTax($tax['tax'])->setAmount(-$tax['amount'])->setBase(isset($tax['base']) ? -(int) $tax['base'] : null)
+                    ->freeze(['label' => $tax['snap']['label'], 'ratePpm' => $tax['snap']['ratePpm'], 'code' => $tax['snap']['code'], 'jurisdiction' => $tax['snap']['jurisdiction'] ?? null,
+                        'category' => $tax['snap']['category'], 'pricesIncludeTax' => $inclusive, 'source' => 'return']); // PAYS-1
                 $returnOrder->addOrderTax($orderTax);
                 $em->persist($orderTax);
             }
@@ -422,7 +424,7 @@ class PosReturnService
             'manufacturerCoupons' => $this->couponSummary($return),
             'lines' => $lines,
             'pricesIncludeTax' => $return->getOrder()?->isPricesIncludeTax() ?? false, // lignes TTC (F18 partie 2b) ; taxes avec base et total
-            'taxes' => array_values(array_map(fn (OrderTax $t) => ['label' => $t->getTax()?->getName(), 'amount' => -(int) round((float) $t->getAmount()), 'base' => $t->getBase() !== null ? -(int) $t->getBase() : null, 'total' => $t->getBase() !== null ? -(int) $t->getBase() - (int) round((float) $t->getAmount()) : null], array_filter($returnOrder->getOrderTaxes()->toArray(), fn (OrderTax $t) => (int) round((float) $t->getAmount()) !== 0 || ($t->getBase() ?? 0) !== 0))),
+            'taxes' => array_values(array_map(fn (OrderTax $t) => ['label' => $t->isFrozen() ? $t->getTaxLabel() : $t->getTax()?->getName(), 'amount' => -(int) round((float) $t->getAmount()), 'base' => $t->getBase() !== null ? -(int) $t->getBase() : null, 'total' => $t->getBase() !== null ? -(int) $t->getBase() - (int) round((float) $t->getAmount()) : null], array_filter($returnOrder->getOrderTaxes()->toArray(), fn (OrderTax $t) => (int) round((float) $t->getAmount()) !== 0 || ($t->getBase() ?? 0) !== 0))),
             'createdAt' => $return->getCreatedAt()->format(\DateTimeInterface::ATOM),
             'store' => \App\Dto\StoreInfoDto::fromEntreprise($this->emProvider->getEntityManager()->getRepository(Entreprise::class)->findOneBy([]), $locale),
         ];
@@ -452,7 +454,7 @@ class PosReturnService
         $inclusive = $this->inclusive($original);
 
         return ['amount' => $inclusive ? $subtotal : $subtotal + $taxTotal, 'subtotal' => $subtotal, 'totalTax' => $taxTotal, 'pricesIncludeTax' => $inclusive,
-            'taxes' => array_values(array_map(fn ($t) => ['label' => $t['label'], 'rate' => $t['tax'] ? (float) $t['tax']->getRate() : null, 'base' => (int) ($t['base'] ?? 0), 'amount' => (int) $t['amount'], 'total' => (int) ($t['base'] ?? 0) + (int) $t['amount']], array_filter($taxes, fn ($t) => (int) $t['amount'] !== 0 || (int) ($t['base'] ?? 0) !== 0)))];
+            'taxes' => array_values(array_map(fn ($t) => ['label' => $t['label'], 'rate' => isset($t['snap']['ratePpm']) ? $t['snap']['ratePpm'] / 1000000 : null, 'base' => (int) ($t['base'] ?? 0), 'amount' => (int) $t['amount'], 'total' => (int) ($t['base'] ?? 0) + (int) $t['amount']], array_filter($taxes, fn ($t) => (int) $t['amount'] !== 0 || (int) ($t['base'] ?? 0) !== 0)))];
     }
 
     /** Lignes TTC (2b) : celles de la vente d'origine, sinon le réglage du site (retour sans ticket) */
@@ -528,7 +530,7 @@ class PosReturnService
             $shares = $this->lineTaxShare($original, $item, $itemsTotal);
             $lineTax = (int) array_sum(array_map(fn ($t) => self::taxForQuantity($t['amount'], (int) $item->getQuantity(), $returned[$itemId] ?? 0, $qty), $shares));
             foreach ($shares as $tax) {
-                $taxSums[$tax['label']] ??= ['label' => $tax['label'], 'amount' => 0, 'tax' => $tax['tax'], 'base' => 0];
+                $taxSums[$tax['label']] ??= ['label' => $tax['label'], 'amount' => 0, 'tax' => $tax['tax'], 'snap' => $tax['snap'], 'base' => 0];
                 $taxSums[$tax['label']]['amount'] += self::taxForQuantity($tax['amount'], (int) $item->getQuantity(), $returned[$itemId] ?? 0, $qty);
                 // assiette HT du retour pour cette taxe (F18 partie 2a) ; lignes TTC (2b) : net remboursé moins les taxes de la ligne
                 $taxSums[$tax['label']]['base'] += $tax['applies'] ? ($original->isPricesIncludeTax() ? $net - $lineTax : $net) : 0;
@@ -557,7 +559,15 @@ class PosReturnService
             }
             $lines[] = ['item' => null, 'variant' => $em->find(ProductVariant::class, (int) $line['productVariantId']), 'quantity' => (int) $line['quantity'], 'unitPrice' => (int) $line['unitPrice'], 'net' => (int) $line['total']];
         }
-        $taxes = array_map(fn ($t) => ['label' => (string) ($t['label'] ?? 'Taxe'), 'amount' => (int) $t['amount'], 'base' => isset($t['base']) ? (int) $t['base'] : null, 'tax' => isset($t['taxId']) ? $em->find(Tax::class, (int) $t['taxId']) : null], $quote['taxes'] ?? []);
+        $jurisdiction = \App\Services\OrderService\TaxCode::jurisdiction(\App\Services\OrderService\TaxEngine::normalizeAddress($this->taxAddress->forStore()));
+        $taxes = array_map(function ($t) use ($em, $jurisdiction) {
+            $tax = isset($t['taxId']) ? $em->find(Tax::class, (int) $t['taxId']) : null;
+            $label = (string) ($t['label'] ?? 'Taxe');
+
+            return ['label' => $label, 'amount' => (int) $t['amount'], 'base' => isset($t['base']) ? (int) $t['base'] : null, 'tax' => $tax,
+                'snap' => ['label' => $label, 'ratePpm' => \App\Services\OrderService\TaxCode::ppm(isset($t['rate']) ? (float) $t['rate'] : null), 'code' => $tax ? \App\Services\OrderService\TaxCode::of($tax) : \App\Services\OrderService\TaxCode::fromLabel($label),
+                    'jurisdiction' => $jurisdiction, 'category' => $t['category'] ?? $tax?->getCategory()]]; // PAYS-1 : taxes actuelles du magasin, gelées sur le retour
+        }, $quote['taxes'] ?? []);
 
         return [$lines, (int) $quote['subtotal'], $taxes];
     }
@@ -572,10 +582,11 @@ class PosReturnService
         $out = [];
         foreach ($order->getOrderTaxes() as $orderTax) {
             $amount = (int) round((float) $orderTax->getAmount());
-            $category = $orderTax->getTax()?->getCategory();
+            $snap = $orderTax->snapshot(); // PAYS-1 : taxe de la vente d'origine, gelée (le retour reprend son taux)
+            $category = $snap['category'];
             $applies = $item->isTaxable() && \App\Services\OrderService\TaxCategory::applies($category, $item->getTaxCategory());
             $pool = (int) array_sum(array_map(fn (OrderItems $i) => $i->isTaxable() && \App\Services\OrderService\TaxCategory::applies($category, $i->getTaxCategory()) ? (int) round((float) $i->getTotalPrice()) : 0, $order->getOrderItems()->toArray()));
-            $out[] = ['label' => (string) ($orderTax->getTax()?->getName() ?? 'Taxe'), 'tax' => $orderTax->getTax(), 'amount' => $applies && $pool > 0 ? (int) round($amount * $lineTotal / $pool) : 0, 'applies' => $applies];
+            $out[] = ['label' => $snap['label'], 'tax' => $orderTax->getTax(), 'snap' => $snap + ['jurisdiction' => $orderTax->getTaxJurisdiction()], 'amount' => $applies && $pool > 0 ? (int) round($amount * $lineTotal / $pool) : 0, 'applies' => $applies];
         }
 
         return $out;

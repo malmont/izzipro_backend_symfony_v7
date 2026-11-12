@@ -133,7 +133,7 @@ class CancelOrderUseCase
             $before = [
                 'totalAmount' => (int) round((float) $order->getTotalAmount()), 'subTotal' => (int) round((float) $order->getSubTotal()),
                 'totalTax' => (int) round((float) $order->getTotalTax()), 'status' => $order->getStatus()?->getId(),
-                'taxes' => array_values(array_map(fn ($t) => ['label' => $t->getTax()?->getName(), 'amount' => (int) round((float) $t->getAmount())], $order->getOrderTaxes()->toArray())),
+                'taxes' => array_values(array_map(fn ($t) => ['label' => $t->isFrozen() ? $t->getTaxLabel() : $t->getTax()?->getName(), 'amount' => (int) round((float) $t->getAmount())], $order->getOrderTaxes()->toArray())),
             ];
             $creditNote = null;
 

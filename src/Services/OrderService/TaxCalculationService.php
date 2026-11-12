@@ -25,9 +25,10 @@ class TaxCalculationService
     {
         $em = $this->emProvider->getEntityManager();
         $taxes = $order->getPendingTaxes();
+        $normalized = TaxEngine::normalizeAddress($this->taxAddress->forOrder($order)); // livraison, sinon adresse du site (comptoir)
+        $jurisdiction = TaxCode::jurisdiction($normalized); // PAYS-1 : adresse de calcul gelée sur chaque taxe
         if ($taxes === null) {
             // Sans devis préalable (caisse, retour) : calcul sur le sous-total, livraison comprise
-            $normalized = TaxEngine::normalizeAddress($this->taxAddress->forOrder($order)); // livraison, sinon adresse du site (comptoir)
             $result = $this->engine->compute($normalized, [['amount' => (int) round(abs($subtotal)), 'quantity' => 1, 'kind' => 'sale', 'reference' => 'order']], 0, $this->currency->code());
             $order->setPendingTaxCalculationId($result['calculationId']);
             $taxes = $result['taxes'];
@@ -39,9 +40,15 @@ class TaxCalculationService
             $tax['amount'] = $sign * (int) $tax['amount'];
             $totalTax += $tax['amount'];
             $orderTax = (new OrderTax())->setOrderTax($order)->setAmount((float) $tax['amount'])->setBase(isset($tax['base']) ? $sign * (int) $tax['base'] : null); // assiette HT (F18 partie 2a)
-            if (isset($tax['taxId'])) {
-                $orderTax->setTax($em->getRepository(Tax::class)->find($tax['taxId']));
+            $row = isset($tax['taxId']) ? $em->getRepository(Tax::class)->find($tax['taxId']) : null;
+            if ($row !== null) {
+                $orderTax->setTax($row);
             }
+            // PAYS-1 : taxe gelée telle qu'appliquée (table : taxId ; Stripe Tax : libellé, taux et juridiction de Stripe, sans ligne tax)
+            $label = (string) ($tax['label'] ?? $row?->getName() ?? 'Taxe');
+            $orderTax->freeze(['label' => $label, 'ratePpm' => TaxCode::ppm(isset($tax['rate']) ? (float) $tax['rate'] : ($row ? (float) $row->getRate() : null)),
+                'code' => $row ? TaxCode::of($row) : TaxCode::fromLabel($label), 'jurisdiction' => isset($tax['taxId']) ? $jurisdiction : (TaxCode::stripeJurisdiction($tax['jurisdiction'] ?? null) ?? $jurisdiction),
+                'category' => array_key_exists('category', $tax) ? $tax['category'] : $row?->getCategory(), 'pricesIncludeTax' => $order->isPricesIncludeTax(), 'source' => isset($tax['taxId']) ? 'table' : 'stripe']);
             $order->addOrderTax($orderTax);
             if ($persist) {
                 $em->persist($orderTax);

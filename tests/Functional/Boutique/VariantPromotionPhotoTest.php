@@ -80,7 +80,7 @@ class VariantPromotionPhotoTest extends WebTestCase
         }
         $this->assertFileExists(self::REFERENCE);
         $this->skipUnlessFreshCatalog();
-        $this->assertSame(json_decode((string) file_get_contents(self::REFERENCE), true), json_decode(json_encode($this->normalize($photo)), true), 'photo des prix de vente identique au tableau près');
+        $this->assertSame($this->normalize(json_decode((string) file_get_contents(self::REFERENCE), true)), json_decode(json_encode($this->normalize($photo)), true), 'photo des prix de vente identique au tableau près'); // référence renormalisée : masques ajoutés depuis
     }
 
     /**
@@ -243,11 +243,17 @@ class VariantPromotionPhotoTest extends WebTestCase
     private function normalize(mixed $value, string $key = ''): mixed
     {
         $volatile = ['orderId', 'orderNumber', 'number', 'receiptNumber', 'reference', 'clientSecret', 'paymentIntentId', 'intentId', 'createdAt', 'updatedAt', 'soldAt',
-            'generatedAt', 'etag', 'ETag', 'packVersion', 'expiresAt', 'validUntil', 'token', 'date', 'orderDate', 'caisseId', 'sessionId', 'userId', 'customerId', 'cashierId', 'transactionId'];
+            'generatedAt', 'etag', 'ETag', 'packVersion', 'expiresAt', 'validUntil', 'token', 'date', 'orderDate', 'caisseId', 'sessionId', 'userId', 'customerId', 'cashierId', 'transactionId',
+            'receiptUrl']; // receiptUrl : lien signé dont l'expiration dépend du jour (12/11/2026)
         if (in_array($key, $volatile, true)) {
             return '<masqué>';
         }
         if (is_array($value)) {
+            // PAYS-1 (12/11/2026) : clés ajoutées aux taxes des commandes et des tickets après l'enregistrement de la référence ;
+            // seules ces quatre clés sont écartées, et seulement dans une entrée de taxe (libellé, taux et montants restent comparés)
+            if (isset($value['rateSource'], $value['label']) && array_key_exists('ratePpm', $value)) {
+                unset($value['code'], $value['ratePpm'], $value['jurisdiction'], $value['rateSource']);
+            }
             $out = [];
             foreach ($value as $k => $item) {
                 $out[$k] = $this->normalize($item, (string) $k);

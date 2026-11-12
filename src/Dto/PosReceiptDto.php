@@ -39,14 +39,16 @@ class PosReceiptDto
         $cashier = $order->getUserId();
         $taxes = [];
         foreach ($order->getOrderTaxes() as $orderTax) {
-            $tax = $orderTax->getTax();
             if ((int) round((float) $orderTax->getAmount()) === 0 && ($orderTax->getBase() ?? 0) === 0) {
                 continue; // taxe à 0 d'une commande antérieure : non imprimée
             }
             // F18 partie 2a : label (= name), base HT et total TTC du taux en dollars (null sur une commande antérieure sans assiette), catégorie
+            // PAYS-1 : valeurs gelées à la vente (une réimpression ne change plus) ; code, ratePpm, jurisdiction, rateSource ajoutés
+            $snap = $orderTax->snapshot();
             $base = $orderTax->getBase();
-            $taxes[] = ['name' => $tax?->getName() ?? 'Taxe', 'label' => $tax?->getName() ?? 'Taxe', 'rate' => $tax ? (float) $tax->getRate() : null, 'amount' => $dollars($orderTax->getAmount()),
-                'base' => $base !== null ? $dollars($base) : null, 'total' => $base !== null ? $dollars($base + (int) round((float) $orderTax->getAmount())) : null, 'category' => $tax?->getCategory()];
+            $taxes[] = ['name' => $snap['label'], 'label' => $snap['label'], 'rate' => $snap['rate'], 'amount' => $dollars($orderTax->getAmount()),
+                'base' => $base !== null ? $dollars($base) : null, 'total' => $base !== null ? $dollars($base + (int) round((float) $orderTax->getAmount())) : null, 'category' => $snap['category'],
+                'code' => $snap['code'], 'ratePpm' => $snap['ratePpm'], 'jurisdiction' => $snap['jurisdiction'], 'rateSource' => $snap['rateSource']];
         }
         $payments = [];
         $paid = 0;

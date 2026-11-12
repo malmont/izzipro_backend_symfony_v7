@@ -147,7 +147,7 @@ class SiteDefaultsService
             $applied[] = sprintf('%d taxe(s) du modèle retirée(s)', count($foreign));
         }
         foreach ($set as $row) {
-            $tax = (new Tax())->setName($row[0])->setRate($row[1])->setCountry($country);
+            $tax = (new Tax())->setName($row[0])->setRate($row[1])->setCountry($country)->setCode(\App\Services\OrderService\TaxCode::fromLabel($row[0])); // code stable (PAYS-1)
             if ($country === 'CA') {
                 $tax->setType($row[2])->setProvince($row[3]);
             } else {

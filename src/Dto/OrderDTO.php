@@ -27,7 +27,7 @@ class OrderDTO
     public ?string $paymentStatus = null;
     /** Lignes TTC (F18 partie 2b) : subTotal TTC, priceTax = taxe incluse (information), totalAmount = payé ; faux : totalAmount = subTotal + priceTax */
     public bool $pricesIncludeTax = false;
-    /** @var list<array{label: string, rate: ?float, base: ?int, amount: int, total: ?int}> taxes de la commande par taux (cents ; base null sur une commande antérieure sans assiette) */
+    /** @var list<array{label: string, rate: ?float, base: ?int, amount: int, total: ?int, code: ?string, ratePpm: ?int, jurisdiction: ?string, rateSource: string}> taxes de la commande par taux (gelées à la vente, PAYS-1) (cents ; base null sur une commande antérieure sans assiette) */
     public array $taxes = [];
 
     /** Détail des taxes et drapeau TTC depuis l'entité (F18 partie 2b) */
@@ -36,13 +36,14 @@ class OrderDTO
         $this->pricesIncludeTax = $order->isPricesIncludeTax();
         $this->taxes = [];
         foreach ($order->getOrderTaxes() as $orderTax) {
-            $tax = $orderTax->getTax();
+            $snap = $orderTax->snapshot(); // PAYS-1 : taxe gelée à la vente
             $amount = (int) round((float) $orderTax->getAmount());
             $base = $orderTax->getBase();
             if ($amount === 0 && ($base ?? 0) === 0) {
                 continue; // taxe à 0 : non servie
             }
-            $this->taxes[] = ['label' => $tax?->getName() ?? 'Taxe', 'rate' => $tax ? (float) $tax->getRate() : null, 'base' => $base, 'amount' => $amount, 'total' => $base !== null ? $base + $amount : null];
+            $this->taxes[] = ['label' => $snap['label'], 'rate' => $snap['rate'], 'base' => $base, 'amount' => $amount, 'total' => $base !== null ? $base + $amount : null,
+                'code' => $snap['code'], 'ratePpm' => $snap['ratePpm'], 'jurisdiction' => $snap['jurisdiction'], 'rateSource' => $snap['rateSource']];
         }
 
         return $this;
