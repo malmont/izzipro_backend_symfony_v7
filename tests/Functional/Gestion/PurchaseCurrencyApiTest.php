@@ -65,12 +65,14 @@ class PurchaseCurrencyApiTest extends WebTestCase
         // ----- Fournisseur
         $supplier = $this->post('/api/fournisseurs', ['name' => "Maison $tag", 'typeFournisseur' => $typeA, 'ville' => 'Montréal', 'tel' => '514 555 0100', 'currency' => 'USD'], 201);
         $s = "/api/fournisseurs/{$supplier['id']}";
+        $this->assertSame(['id', 'name', 'photo', 'adresse', 'ville', 'pays', 'tel', 'purchaseCurrency', 'currency', 'typeFournisseurId'], array_keys($supplier), 'typeFournisseurId : ajout en fin d\'objet, aucune autre clé ne change');
+        $this->assertSame($typeA, $supplier['typeFournisseurId'], 'la création rend le type, pour préremplir la modification');
         $edited = $patch($s, ['ville' => 'Québec']);
         $this->assertSame(array_merge($supplier, ['ville' => 'Québec']), $edited, 'une seule clé envoyée : le reste ne change pas, forme de la liste');
         $edited = $patch($s, ['tel' => '', 'pays' => null, 'adresse' => ' 12 rue des Érables ', 'champEnTrop' => 1]);
         $this->assertSame([null, null, '12 rue des Érables', 'Québec', "Maison $tag"], [$edited['tel'], $edited['pays'], $edited['adresse'], $edited['ville'], $edited['name']], 'vide ou null : effacé ; texte rogné');
         $edited = $patch($s, ['name' => "Maison renommée $tag", 'typeFournisseur' => $typeB]);
-        $this->assertSame(["Maison renommée $tag", $typeB], [$edited['name'], (int) $this->em()->getConnection()->fetchOne('SELECT type_fournisseur_id FROM fournisseur WHERE id = ?', [$supplier['id']])]);
+        $this->assertSame(["Maison renommée $tag", $typeB, $typeB], [$edited['name'], $edited['typeFournisseurId'], (int) $this->em()->getConnection()->fetchOne('SELECT type_fournisseur_id FROM fournisseur WHERE id = ?', [$supplier['id']])]);
         $listed = array_column($this->get('/api/fournisseurs?limit=100&q=' . urlencode("renommée $tag")), null, 'id');
         $this->assertSame($edited, $listed[$supplier['id']] ?? null, 'la liste rend le fournisseur modifié');
         // Devise : libre tant qu'il n'a aucune commande
@@ -99,6 +101,7 @@ class PurchaseCurrencyApiTest extends WebTestCase
         $final = $patch($s, ['currency' => 'usd', 'name' => "Maison finale $tag"]);
         $this->assertSame(['USD', "Maison finale $tag"], [$final['purchaseCurrency'], $final['name']], 'la même devise n\'est pas un changement');
         $this->assertSame("Maison finale $tag", array_column($this->get("/api/collections/$collectionId/commandes"), null, 'id')[$commandeId]['fournisseur']['name'], 'la liste des commandes montre le nouveau nom aussitôt');
+        $this->assertSame($typeB, array_column($this->get("/api/collections/$collectionId/commandes"), null, 'id')[$commandeId]['fournisseur']['typeFournisseurId'], 'le fournisseur d\'une commande porte le même objet, donc aussi son type');
         $this->assertSame("Maison finale $tag", array_column($this->get("/api/collections/$collectionId/frais-de-port")['commandes'], null, 'commandeId')[$commandeId]['fournisseur']['name']);
         $this->assertSame($final, $patch($s, ['ville' => 'Québec', 'currency' => 'USD', 'name' => "Maison finale $tag"]), 'valeurs identiques : même réponse');
         $entries = $audit('fournisseurs', (int) $supplier['id']);

@@ -348,7 +348,9 @@ Décisions de contrat prises pour les lots :
     `TYPE_FOURNISSEUR_NOT_FOUND`), `adresse`, `ville`, `pays`, `tel` (vide ou `null` : effacé), `currency` (code ISO, `null` ou vide = devise
     du site). **Devise figée dès la première commande** : la changer (y compris vers `null`, qui est un retour à la devise du site, donc un
     changement) → 409 `FOURNISSEUR_CURRENCY_LOCKED { commandes }` ; renvoyer la même devise n'est pas un changement. Fournisseur inconnu →
-    404 `FOURNISSEUR_NOT_FOUND`. Réponse : `FournisseurOutputDTO`, comme la liste.
+    404 `FOURNISSEUR_NOT_FOUND`. Réponse : `FournisseurOutputDTO`, comme la liste. Depuis le 12/11/2026 (demande du web), cet objet
+    porte `typeFournisseurId` (entier, `null` sans type), en fin d'objet : rendu par `GET /api/fournisseurs`, par les réponses de `POST`
+    et de `PATCH`, et dans le `fournisseur` d'une commande (même objet) ; il préremplit `typeFournisseur` de la modification.
   - `PATCH /api/transporteurs/{id}` : `name`, `logo` (texte), `contact` (vide ou `null` : effacé). Le transporteur réservé
     « Sur facture fournisseur » (`TransporteurService::RESERVED_NAME`, celui de la confirmation d'une facture lue par IA) ne se renomme
     pas : 409 `TRANSPORTEUR_RESERVED` ; son logo et son contact se modifient. Inconnu → 404 `TRANSPORTEUR_NOT_FOUND`.

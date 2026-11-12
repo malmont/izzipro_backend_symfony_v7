@@ -16,6 +16,8 @@ class FournisseurOutputDTO
     public ?string $purchaseCurrency;
     /** Devise des montants de ses commandes : la sienne, sinon celle du site */
     public string $currency;
+    /** Type du fournisseur (ajout du 12/11/2026, demande du web) : préremplit `typeFournisseur` de `PATCH /api/fournisseurs/{id}` ; null sans type */
+    public ?int $typeFournisseurId;
 
     public function __construct(Fournisseur $fournisseur, string $host, string $siteCurrency = \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT)
     {
@@ -29,5 +31,6 @@ class FournisseurOutputDTO
         $this->ville = $fournisseur->getVille();
         $this->pays = $fournisseur->getPays();
         $this->tel = $fournisseur->getTel();
+        $this->typeFournisseurId = $image?->getId();
     }
 }
