@@ -170,6 +170,10 @@ class TaxInclusiveApiTest extends WebTestCase
         $this->loginAs(['ROLE_USER_POS']);
         $this->request('POST', '/api/caisse/open', ['cashRegisterId' => $second, 'cashFund' => 10000]);
         $this->json($this->request('POST', '/api/order/create-multi-payment', ['items' => $items, 'paymentMethods' => [['type' => 2, 'amount' => 15.75]], 'cashRegisterId' => $second, 'ticketDiscount' => ['type' => 'percent', 'value' => 10, 'reasonCode' => 'fidelite']]), 201);
+        // Retour TTC dans la session exportée (12/11/2026) : « Retours HT » = HT (521), TVA sur retours 29, remboursement 550, sans écart d'arrondi
+        $sale2 = $this->json($this->request('POST', '/api/order/create-multi-payment', ['items' => [['productVariantId' => $this->b, 'quantity' => 1]], 'paymentMethods' => [['type' => 2, 'amount' => 5.5]], 'cashRegisterId' => $second]), 201);
+        $line2 = $this->json($this->request('GET', '/api/pos/returns/lookup?orderId=' . $sale2['orderId']))['lines'][0];
+        $this->json($this->request('POST', '/api/pos/returns', ['orderId' => $sale2['orderId'], 'lines' => [['orderItemId' => $line2['orderItemId'], 'quantity' => 1]], 'reasonCode' => 'defectueux', 'cashRegisterId' => $second]), 201);
         $x2 = $this->json($this->request('GET', '/api/caisse/report/x?cashRegisterId=' . $second));
         $this->json($this->request('POST', '/api/caisse/close', ['cashRegisterId' => $second, 'countedCash' => $x2['expectedCash'], 'keptFund' => 0]));
         $this->loginAs(['ROLE_ADMIN', 'ROLE_USER_POS']);
@@ -179,8 +183,14 @@ class TaxInclusiveApiTest extends WebTestCase
         $days = array_values(array_filter($e['days'], fn ($day) => $day['salesCount'] > 0));
         $this->assertCount(1, $days, 'un seul jour de ventes sur le poste dédié');
         $d = $days[0];
-        $this->assertSame([1575, 1369, 1521, 152], [$d['salesTtc'], $d['salesNetHt'], $d['salesGrossHt'], $d['discounts']], 'TTC dans salesTtc ; salesNetHt = Σ order_tax.base ; salesGrossHt = HT avant remises par la même extraction');
-        $this->assertSame([['TVA 20 %', 900, 180], ['TVA 5,5 %', 469, 26]], array_map(fn ($l, $t) => [$l, $t['base'], $t['tax']], array_keys($d['taxes']), array_values($d['taxes'])));
+        $by = [];
+        foreach ($e['entries'] as $l) {
+            $by[trim(preg_replace('/^Caisse .*?, session \d+ /', '', $l['label']))] = [$l['debit'], $l['credit']];
+        }
+        $this->assertSame([[521, 0], [29, 0], [0, 550]], [$by['Retours HT'] ?? null, $by['TVA 5,5 % sur retours'] ?? null, $by['Remboursements espèces'] ?? null], json_encode($by, JSON_UNESCAPED_UNICODE));
+        $this->assertArrayNotHasKey('Écart d\'arrondi', $by);
+        $this->assertSame([1575 + 550, 1369 + 521, 1521 + 521, 152], [$d['salesTtc'], $d['salesNetHt'], $d['salesGrossHt'], $d['discounts']], 'TTC dans salesTtc ; salesNetHt = Σ order_tax.base ; salesGrossHt = HT avant remises par la même extraction');
+        $this->assertSame([['TVA 20 %', 900, 180], ['TVA 5,5 %', 469 + 521, 26 + 29]], array_map(fn ($l, $t) => [$l, $t['base'], $t['tax']], array_keys($d['taxes']), array_values($d['taxes'])));
         $this->assertTrue($e['totals']['balanced']);
         $this->loginAs(['ROLE_USER_POS']);
         // Paquet hors ligne v3

@@ -226,7 +226,11 @@ class PosAccountingExportService
         $this->splitPayments($conn, $receiptIds, true, $receipts);
         // Retours et annulations : commandes de type 2 de la session + paiements négatifs des ventes annulées
         $returns = $conn->fetchAssociative('SELECT COUNT(*) AS n, COALESCE(SUM(-total_amount), 0) AS ttc FROM "order" WHERE id IN (' . $in($returnIds) . ')');
-        $refundsHt = abs((int) round((float) $conn->fetchOne('SELECT COALESCE(SUM(total_price), 0) FROM order_items WHERE order_associated_id IN (' . $in($returnIds) . ')'))); // lignes de retour au prix payé (positives)
+        // Lignes au prix payé (positives) ; commande à prix TTC : la taxe incluse est retirée (avant le 12/11/2026, un retour TTC était
+        // compté TTC en « Retours HT » et l'écart partait en « Écart d'arrondi »)
+        $htOf = fn (array $ids) => abs((int) round((float) $conn->fetchOne('SELECT COALESCE(SUM(total_price), 0) FROM order_items WHERE order_associated_id IN (' . $in($ids) . ')')))
+            - (int) round((float) $conn->fetchOne('SELECT COALESCE(SUM(ABS(ot.amount)), 0) FROM order_tax ot JOIN "order" o ON o.id = ot.order_tax_id WHERE o.prices_include_tax AND o.id IN (' . $in($ids) . ')'));
+        $refundsHt = $htOf($returnIds);
         $refundTaxes = [];
         foreach ($conn->fetchAllAssociative('SELECT CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_label ELSE t.name END AS label, CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_rate_ppm::float8 / 1000000 ELSE t.rate END AS rate, CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_code END AS code, COALESCE(SUM(-ot.amount), 0) AS tax FROM order_tax ot JOIN tax t ON t.id = ot.tax_id WHERE ot.order_tax_id IN (' . $in($returnIds) . ') GROUP BY 1, 2, 3 ORDER BY MIN(t.id)') as $t) {
             $refundTaxes[] = ['label' => $t['label'], 'rate' => (float) $t['rate'], 'tax' => (int) round((float) $t['tax'])] + ($t['code'] !== null ? ['code' => $t['code']] : []);
@@ -237,7 +241,7 @@ class PosAccountingExportService
             $rv = $conn->fetchAssociative('SELECT COUNT(*) AS n, COALESCE(SUM(total_amount), 0) AS ttc FROM "order" WHERE id IN (' . $in($reversalIds) . ')');
             $returns['n'] = (int) $returns['n'] + (int) $rv['n'];
             $returns['ttc'] = (float) $returns['ttc'] + (float) $rv['ttc'];
-            $refundsHt += abs((int) round((float) $conn->fetchOne('SELECT COALESCE(SUM(total_price), 0) FROM order_items WHERE order_associated_id IN (' . $in($reversalIds) . ')')));
+            $refundsHt += $htOf($reversalIds);
             foreach ($conn->fetchAllAssociative('SELECT CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_label ELSE t.name END AS label, CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_rate_ppm::float8 / 1000000 ELSE t.rate END AS rate, CASE WHEN ot.tax_source IS NOT NULL THEN ot.tax_code END AS code, COALESCE(SUM(ot.amount), 0) AS tax FROM order_tax ot JOIN tax t ON t.id = ot.tax_id WHERE ot.order_tax_id IN (' . $in($reversalIds) . ') GROUP BY 1, 2, 3 ORDER BY MIN(t.id)') as $t) {
                 $merged = false;
                 foreach ($refundTaxes as &$r) {
