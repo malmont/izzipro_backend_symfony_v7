@@ -85,7 +85,7 @@ class PurchasesApiTest extends WebTestCase
         $this->assertSame([500000, 'Commande G0', $collectionId, $fournisseurId, 'CAD'], [$commande['budget'], $commande['name'], $commande['collectionId'], $commande['fournisseur']['id'], $commande['currency']]);
 
         // Produit de la commande (multipart) : prix d'achat en CENTS, prix de vente dérivé = achat × coefficient
-        $this->client->request('POST', "/api/commandes/$commandeId/products", ['name' => 'Sans style', 'description' => 'd', 'purchasePrice' => '1', 'style_id' => '999999'], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json', 'HTTP_AUTHORIZATION' => 'Bearer ' . $this->token]);
+        $this->client->request('POST', "/api/commandes/$commandeId/products", ['name' => 'Sans style', 'description' => 'd', 'purchasePrice' => '1', 'coefficientMultiplier' => '2', 'style_id' => '999999'], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json', 'HTTP_AUTHORIZATION' => 'Bearer ' . $this->token]);
         $this->assertSame([404, 'STYLE_NOT_FOUND'], [$this->client->getResponse()->getStatusCode(), json_decode((string) $this->client->getResponse()->getContent(), true)['error']], 'style inconnu → 404 à code (lot G4, avant : 500)');
         // quantité facultative à la création (lot G4) ; sinon elle vient des variantes (rappels Doctrine de ProductVariant)
         $product = $this->postMultipart("/api/commandes/$commandeId/products", ['name' => 'Produit G0', 'description' => 'Description', 'purchasePrice' => '1000', 'coefficientMultiplier' => '2', 'quantity' => '3'], 201);
@@ -250,6 +250,107 @@ class PurchasesApiTest extends WebTestCase
         $this->request('POST', "/api/collections/$collectionId/notes-de-frais", ['montant' => 1.5, 'date' => '2026-11-06']);
         $body = json_decode((string) $this->client->getResponse()->getContent(), true);
         $this->assertSame([422, ['montant' => 'MUST_BE_INTEGER_CENTS', 'typeNoteDeFraisId' => 'REQUIRED']], [$this->client->getResponse()->getStatusCode(), $body['fields']]);
+    }
+
+    /**
+     * Correctif du 12/11/2026 : la création d'un article dans une commande ne sort jamais en 500 pour un corps incomplet ou mal formé.
+     * Obligatoires : `name`, `purchasePrice` et `coefficientMultiplier` (le prix de vente est leur produit) ; `description` est
+     * facultative (avant : 500 sans elle) ; un champ de formulaire laissé vide vaut « absent » ; un champ mal formé donne 422
+     * VALIDATION_FAILED avec son code ; l'image doit être une image (type lu dans le fichier).
+     */
+    public function testCreatingAnArticleInAnOrderNeverCrashesOnMissingEmptyOrMalformedFields(): void
+    {
+        $collection = $this->post('/api/createcollections', ['budgetCollection' => 100, 'nomCollection' => 'Collection DTO ' . bin2hex(random_bytes(2))], 201);
+        $commande = $this->create(\App\Entity\Commande::class, [], fn (\App\Entity\Commande $c, EntityManagerInterface $em) => $c->setCollections($em->find(Collections::class, (int) $collection['id'])));
+        $categoryA = $this->create(\App\Entity\Categories::class, ['name' => 'Catégorie DTO A ' . bin2hex(random_bytes(2))]);
+        $categoryB = $this->create(\App\Entity\Categories::class, ['name' => 'Catégorie DTO B ' . bin2hex(random_bytes(2))]);
+        $this->endOfWrite();
+        $route = '/api/commandes/' . $commande->getId() . '/products';
+        $count = fn (): int => (int) $this->em()->getConnection()->fetchOne('SELECT COUNT(*) FROM product WHERE commande_id = ?', [$commande->getId()]);
+        $stored = fn (int $id): array => $this->em()->getConnection()->fetchAssociative('SELECT name, description, slug, image, style_id, purchase_price, price, (SELECT COUNT(*) FROM product_categories pc WHERE pc.product_id = p.id) AS categories FROM product p WHERE id = ?', [$id]);
+        $refused = function (array $fields, array $files = []) use ($route, $count): array {
+            $before = $count();
+            $this->client->request('POST', $route, $fields, $files, ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json', 'HTTP_AUTHORIZATION' => 'Bearer ' . $this->token]);
+            $body = json_decode((string) $this->client->getResponse()->getContent(), true) ?? [];
+            $this->assertSame($before, $count(), 'un refus ne crée rien');
+
+            return [$this->client->getResponse()->getStatusCode(), $body['error'] ?? null, $body['fields'] ?? null];
+        };
+
+        // Sans description : 201, description null (le défaut signalé : 500)
+        $price = ['purchasePrice' => '1000', 'coefficientMultiplier' => '2.5'];
+        $bare = $this->postMultipart($route, ['name' => 'Article sans description'] + $price, 201);
+        $row = $stored((int) $bare['id']);
+        $this->assertSame(['Article sans description', null, 'article-sans-description', null, 1000.0, 2500.0, 0], [$row['name'], $row['description'], $row['slug'], $row['style_id'], (float) $row['purchase_price'], (float) $row['price'], (int) $row['categories']]);
+        $this->assertNull($bare['description']);
+
+        // Prix d'achat et coefficient : obligatoires, absents comme vides (avant : 500, le prix de vente restait nul)
+        $this->assertSame([422, 'VALIDATION_FAILED', ['purchasePrice' => 'REQUIRED', 'coefficientMultiplier' => 'REQUIRED']], $refused(['name' => 'Sans prix']));
+        $this->assertSame([422, 'VALIDATION_FAILED', ['purchasePrice' => 'REQUIRED', 'coefficientMultiplier' => 'REQUIRED']], $refused(['name' => 'Prix vides', 'purchasePrice' => '', 'coefficientMultiplier' => '']));
+        $this->assertSame([422, 'VALIDATION_FAILED', ['coefficientMultiplier' => 'REQUIRED']], $refused(['name' => 'Sans coefficient', 'purchasePrice' => '1000']));
+        $free = $stored((int) $this->postMultipart($route, ['name' => 'Gratuit', 'purchasePrice' => '0', 'coefficientMultiplier' => '0'], 201)['id']);
+        $this->assertSame([0.0, 0.0], [(float) $free['purchase_price'], (float) $free['price']], 'zéro est une valeur, pas une absence');
+
+        // Champs facultatifs laissés vides = absents (avant : 500 sur un style vide, 404 sur une catégorie vide) ; 0 = aucun style
+        $empty = $this->postMultipart($route, ['name' => '  Article aux champs vides  ', 'description' => '', 'quantity' => '', 'style_id' => '', 'category_ids' => '', 'image' => ''] + $price, 201);
+        $row = $stored((int) $empty['id']);
+        $this->assertSame(['Article aux champs vides', '', null, 0], [$row['name'], $row['description'], $row['style_id'], (int) $row['categories']], 'nom rogné, description vide gardée');
+        $this->assertSame(null, $stored((int) $this->postMultipart($route, ['name' => 'Style zéro', 'style_id' => '0'] + $price, 201)['id'])['style_id']);
+
+        // Un champ d'une autre forme que prévu est ignoré s'il est facultatif (description, image en texte), refusé sinon
+        $odd = $this->postMultipart($route, ['name' => 'Description en tableau', 'description' => ['a', 'b'], 'image' => ['x']] + $price, 201);
+        $this->assertNull($stored((int) $odd['id'])['description']);
+        $this->assertSame([422, 'VALIDATION_FAILED', ['name' => 'REQUIRED']], $refused(['description' => 'Sans nom'] + $price));
+        $this->assertSame([422, 'VALIDATION_FAILED', ['name' => 'REQUIRED']], $refused(['name' => ['tableau']] + $price));
+        $this->assertSame([422, 'VALIDATION_FAILED', ['name' => 'REQUIRED']], $refused(['name' => '   '] + $price));
+        $this->assertSame(
+            [422, 'VALIDATION_FAILED', ['purchasePrice' => 'MUST_BE_INTEGER_CENTS', 'coefficientMultiplier' => 'MUST_BE_NUMBER', 'quantity' => 'MUST_BE_INTEGER', 'style_id' => 'INVALID_ID', 'category_ids' => 'INVALID_ID']],
+            $refused(['name' => 'Mal formé', 'purchasePrice' => '12.5', 'coefficientMultiplier' => 'deux', 'quantity' => '-1', 'style_id' => 'abc', 'category_ids' => $categoryA->getId() . ',abc']),
+            'toutes les erreurs en une réponse'
+        );
+        $this->assertSame([422, 'VALIDATION_FAILED', ['category_ids' => 'INVALID_ID']], $refused(['name' => 'Catégories imbriquées', 'category_ids' => [[$categoryA->getId()]]] + $price));
+        $this->assertSame([422, 'VALIDATION_FAILED', ['category_ids' => 'INVALID_ID']], $refused(['name' => 'Catégorie zéro', 'category_ids' => '0'] + $price));
+        $this->assertSame([404, 'CATEGORY_NOT_FOUND', null], $refused(['name' => 'Catégorie inconnue', 'category_ids' => '99999999'] + $price), 'référence inconnue : 404 à code, inchangé');
+
+        // Catégories : chaîne « 1, 2 » ou tableau ; vides ignorés, doublons retirés
+        $asString = $this->postMultipart($route, ['name' => 'Catégories en chaîne', 'category_ids' => $categoryA->getId() . ', ' . $categoryB->getId() . ','] + $price, 201);
+        $this->assertSame(2, (int) $stored((int) $asString['id'])['categories']);
+        $asArray = $this->postMultipart($route, ['name' => 'Catégories en tableau', 'category_ids' => ['', (string) $categoryA->getId(), (string) $categoryA->getId()]] + $price, 201);
+        $this->assertSame(1, (int) $stored((int) $asArray['id'])['categories']);
+
+        $ids = new \App\Gestion\Services\GestionInput(['a' => ['3', 3, ' 4 ', ''], 'b' => '7,7, 8', 'c' => 5, 'd' => null, 'e' => '1,x']);
+        $this->assertSame([[3, 4], [7, 8], [5], [], [], [], ['e' => 'INVALID_ID']], [$ids->ids('a'), $ids->ids('b'), $ids->ids('c'), $ids->ids('d'), $ids->ids('absent'), $ids->ids('e'), $ids->errors()], 'liste d\'identifiants : doublons retirés');
+
+        // Nom trop long : borné à la colonne (avant : 500 avec le message SQL)
+        $long = $this->postMultipart($route, ['name' => str_repeat('Œ', 300)] + $price, 201);
+        $row = $stored((int) $long['id']);
+        $this->assertSame([255, true], [mb_strlen($row['name']), mb_strlen($row['slug']) <= 255 && $row['slug'] !== '']);
+
+        // Image : une image, type lu dans le fichier ; le reste est refusé avant toute écriture
+        $dir = sys_get_temp_dir() . '/dto-' . bin2hex(random_bytes(4));
+        mkdir($dir);
+        file_put_contents("$dir/page.png", '<html><body><script>alert(1)</script></body></html>');
+        file_put_contents("$dir/dessin.svg", '<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+        file_put_contents("$dir/photo.png", base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='));
+        $this->assertSame([422, 'VALIDATION_FAILED', ['image' => 'INVALID_IMAGE']], $refused(['name' => 'Page déguisée'] + $price, ['image' => new UploadedFile("$dir/page.png", 'photo.png', 'image/png', null, true)]), 'le nom et le type annoncés ne comptent pas');
+        $this->assertSame([422, 'VALIDATION_FAILED', ['image' => 'INVALID_IMAGE']], $refused(['name' => 'Dessin SVG'] + $price, ['image' => new UploadedFile("$dir/dessin.svg", 'dessin.svg', 'image/svg+xml', null, true)]));
+        $this->assertSame([422, 'VALIDATION_FAILED', ['image' => 'UPLOAD_FAILED']], $refused(['name' => 'Envoi coupé'] + $price, ['image' => new UploadedFile("$dir/photo.png", 'photo.png', 'image/png', \UPLOAD_ERR_PARTIAL, true)]));
+        $this->assertSame([422, 'VALIDATION_FAILED', ['name' => 'REQUIRED', 'image' => 'INVALID_IMAGE']], $refused($price, ['image' => new UploadedFile("$dir/page.png", 'photo.png', 'image/png', null, true)]), 'erreurs du corps et de l\'image ensemble');
+
+        // Rangée dans le dossier que nginx sert sous /assets/uploads/products (avant : public/assets/uploads/products, impossible à créer → 500)
+        $uploads = static::getContainer()->getParameter('kernel.project_dir') . '/var/storage/public_bucket/assets/uploads';
+        $this->client->request('POST', $route, ['name' => 'Avec photo'] + $price, ['image' => new UploadedFile("$dir/photo.png", 'photo.jpg', 'image/jpeg', null, true)], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json', 'HTTP_AUTHORIZATION' => 'Bearer ' . $this->token]);
+        $this->assertSame(201, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
+        $image = (string) $stored((int) json_decode((string) $this->client->getResponse()->getContent(), true)['id'])['image'];
+        try {
+            $this->assertMatchesRegularExpression('/^[0-9a-f]+\.png$/', $image, 'extension du type réel, pas du nom envoyé');
+            $this->assertFileExists($uploads . '/products/' . $image);
+            $this->assertStringEndsWith('/assets/uploads/products/' . $image, (string) json_decode((string) $this->client->getResponse()->getContent(), true)['image'], 'adresse rendue = adresse servie');
+        } finally {
+            @unlink($uploads . '/products/' . $image);
+            array_map('unlink', glob("$dir/*") ?: []);
+            rmdir($dir);
+        }
     }
 
     public function testPurchaseRoutesRequireAnAdministrator(): void

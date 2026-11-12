@@ -257,6 +257,22 @@ Décisions de contrat prises pour les lots :
   aucune clé renommée (les clés accentuées de `nombre-commandes` sont gardées).
 - G4 : les champs en trop dans un corps restent ignorés (l'application sérialise ses modèles entiers) ; `quantity` (entier
   ≥ 0) accepté sur `POST /api/commandes/{id}/products`.
+- Correctif du 12/11/2026, corps de `POST /api/commandes/{id}/products` (multipart ; lu par `Dto/ProductInputDTO`, seul lecteur du
+  corps ; test `PurchasesApiTest::testCreatingAnArticleInAnOrderNeverCrashesOnMissingEmptyOrMalformedFields`) : plus aucun 500 pour un
+  corps incomplet ou mal formé.
+  - **Obligatoires** : `name` (rogné, 255 caractères au plus), `purchasePrice` (cents) et `coefficientMultiplier` : le prix de vente,
+    colonne non nulle, est leur produit ; sans l'un des deux, l'enregistrement échouait en 500. Absent ou vide → 422
+    `fields.<champ> = REQUIRED`. Zéro est une valeur.
+  - **Facultatifs** : `description` (absente → `null` ; avant : 500), `quantity`, `style_id` (vide ou `0` = aucun style), `category_ids`
+    (tableau ou chaîne « 1,2 » ; éléments vides ignorés, doublons retirés), fichier `image`. Un champ de formulaire laissé vide vaut
+    « absent ».
+  - **Mal formés** → 422 `VALIDATION_FAILED`, toutes les erreurs en une réponse : `style_id` et `category_ids` `INVALID_ID` (avant : 500
+    pour le style, 404 `CATEGORY_NOT_FOUND` pour une catégorie non numérique). Une référence bien formée mais inconnue reste en 404
+    `STYLE_NOT_FOUND` / `CATEGORY_NOT_FOUND`.
+  - **Image** : JPEG, PNG, WebP, GIF, AVIF, HEIC ou HEIF, type lu dans le fichier (ni son nom ni le type annoncé) ; autre chose → 422
+    `fields.image = INVALID_IMAGE` ; envoi coupé ou trop lourd → `UPLOAD_FAILED`. Elle est rangée dans
+    `var/storage/public_bucket/assets/uploads/products/`, le dossier servi sous `/assets/uploads/products/`. Avant, la route visait
+    `public/assets/uploads/products/`, qui n'existe pas et que le serveur ne peut pas créer : **tout envoi d'image sortait en 500**.
 - Autres lecteurs des statistiques (G3) : le front Next n'en lit aucune ; l'application mobile e-commerce non plus ; la **caisse Flutter**
   lit `chiffre-affaires/pos` et `nombre-commandes/pos` et a adapté son modèle au mois en entier (commit 71a1d87, « posflutter front »,
   10/11/2026) ; aucune caisse en production.

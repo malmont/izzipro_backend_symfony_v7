@@ -11,6 +11,7 @@ use App\Dto\ProductDetailedOutputDTO;
 use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
 use App\Services\EntityRetrieverService;
 use App\Services\TenantEntityManagerProvider;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Cocur\Slugify\Slugify;
@@ -18,6 +19,9 @@ use App\Repository\ProductRepository;
 
 class ProductService
 {
+    /** Types acceptés pour l'image d'un article créé dans une commande (type lu dans le fichier, pas dans son nom) → extension */
+    public const IMAGE_TYPES = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif', 'image/avif' => 'avif', 'image/heic' => 'heic', 'image/heif' => 'heif'];
+
     private ProductRepository $repository;
     private TenantEntityManagerProvider $emProvider;
     private EntityRetrieverService $entityRetrieverService;
@@ -77,11 +81,11 @@ class ProductService
         }
 
         $slugify = new Slugify();
-        $product->setSlug($slugify->slugify($inputDTO->name));
+        $product->setSlug(mb_substr($slugify->slugify($inputDTO->name), 0, 255)); // la translittération peut allonger le nom
 
         $imageFile = $request->files->get('image');
-        if ($imageFile) {
-            $newFilename = uniqid() . '.' . $imageFile->guessExtension();
+        if ($imageFile instanceof UploadedFile && self::imageError($imageFile) === null) { // refus rendu en 422 par le contrôleur, avant
+            $newFilename = uniqid() . '.' . self::IMAGE_TYPES[(string) $imageFile->getMimeType()];
             $imageFile->move($uploadDir, $newFilename);
             $product->setImage($newFilename);
         }
@@ -92,6 +96,23 @@ class ProductService
         $this->lines?->upsert($commande, $product, null, (int) ($product->getQuantity() ?? 0), $inputDTO->purchasePrice !== null ? (int) round((float) $inputDTO->purchasePrice) : null, false, \App\Entity\CommandeLine::SOURCE_MANUAL);
 
         return $product;
+    }
+
+    /**
+     * Refus de l'image d'un article (correctif du 12/11/2026), null si elle est absente ou acceptée : `UPLOAD_FAILED` (envoi incomplet ou
+     * trop lourd, plusieurs fichiers), `INVALID_IMAGE` (autre chose qu'une image de IMAGE_TYPES : le dossier est servi en public, un
+     * fichier HTML ou SVG s'y ouvrirait sur le domaine du backend).
+     */
+    public static function imageError(mixed $file): ?string
+    {
+        if ($file === null) {
+            return null;
+        }
+        if (!$file instanceof UploadedFile || !$file->isValid()) {
+            return 'UPLOAD_FAILED';
+        }
+
+        return isset(self::IMAGE_TYPES[(string) $file->getMimeType()]) ? null : 'INVALID_IMAGE';
     }
 
     public function deleteProduct(int $id): void

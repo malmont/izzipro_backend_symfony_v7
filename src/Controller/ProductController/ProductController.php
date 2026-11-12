@@ -90,17 +90,23 @@ class ProductController extends AbstractController
     #[Route('/api/commandes/{id}/products', name: 'create_product_by_commande', methods: ['POST'])]
     public function createProductByCommande(Commande $commande, Request $request): JsonResponse
     {
-        // Prix d'achat en cents entiers, coefficient décimal (lot G1, 09/11/2026) ; 422 VALIDATION_FAILED, hors du try (le 500 ne le masque pas)
-        $input = new \App\Gestion\Services\GestionInput($request->request->all());
-        $input->cents('purchasePrice', false);
-        $input->decimal('coefficientMultiplier', false);
-        $input->integer('quantity', false);
-        $input->text('name');
-        $input->check();
+        // Prix d'achat en cents entiers, coefficient décimal (lot G1, 09/11/2026) ; 422 VALIDATION_FAILED, hors du try (le 500 ne le masque pas).
+        // Les règles sont celles du DTO, seul lecteur du corps (correctif du 12/11/2026 : `description` facultative, champs vides ou mal
+        // formés et image refusée en 422, jamais en 500).
+        $errors = (new \App\Dto\ProductInputDTO($request->request->all()))->errors;
+        $imageError = \App\Services\ProductService\ProductService::imageError($request->files->get('image'));
+        if ($imageError !== null) {
+            $errors['image'] = $imageError;
+        }
+        if ($errors !== []) {
+            throw new \App\Gestion\Services\GestionValidationException($errors);
+        }
         $this->periodGuard->assertCommandeWritable($commande); // 409 COMMANDE_CLOSED / PERIOD_CLOSED (lots G4 et P1)
         try {
 
-            $uploadDir = $this->getParameter('kernel.project_dir') . '/public/assets/uploads/products/';
+            // Dossier servi sous /assets/uploads/products (nginx, comme EasyAdmin et la fiche produit IA). Avant le 12/11/2026 :
+            // public/assets/uploads/products, qui n'existe pas et ne peut pas être créé → l'envoi d'une image sortait en 500.
+            $uploadDir = $this->getParameter('kernel.project_dir') . '/var/storage/public_bucket/assets/uploads/products/';
             $product = $this->createProductByCommandeUseCase->execute($commande, $request, $uploadDir);
 
             $host = $this->resolveHost($request);
@@ -115,7 +121,7 @@ class ProductController extends AbstractController
     }
 
     // Route masquée par l'opération Delete d'API Platform sur Product (même chemin, déclarée avant) : DELETE /api/products/{id} passe par API
-    // Platform. La garde PRODUCT_IN_USE est au niveau de Doctrine (ProductUsageGuardSubscriber, ART-SUPPR, 13/11/2026) et couvre les deux.
+    // Platform. La garde PRODUCT_IN_USE est au niveau de Doctrine (ProductUsageGuardSubscriber, ART-SUPPR, 12/11/2026) et couvre les deux.
     #[Route('/api/products/{id}', name: 'delete_product', methods: ['DELETE'])]
     public function deleteProduct(int $id): \Symfony\Component\HttpFoundation\Response
     {

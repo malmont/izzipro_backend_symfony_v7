@@ -156,6 +156,35 @@ final class GestionInput
         return null;
     }
 
+    /**
+     * Liste d'identifiants : tableau, ou chaîne « 1,2 » (multipart). Les éléments vides sont ignorés (champ de formulaire laissé vide),
+     * les doublons retirés ; un élément qui n'est pas un entier > 0 refuse le champ (`INVALID_ID`). Absente : liste vide.
+     *
+     * @return int[]
+     */
+    public function ids(string $field): array
+    {
+        $value = $this->data[$field] ?? [];
+        if (is_string($value) || is_int($value)) {
+            $value = explode(',', (string) $value);
+        }
+        $ids = [];
+        foreach (is_array($value) ? $value : [$value] as $item) {
+            $item = is_string($item) ? trim($item) : $item;
+            if ($item === null || $item === '') {
+                continue;
+            }
+            if (!(is_int($item) || (is_string($item) && ctype_digit($item))) || (int) $item <= 0) {
+                $this->errors[$field] = 'INVALID_ID';
+
+                return [];
+            }
+            $ids[(int) $item] = (int) $item;
+        }
+
+        return array_values($ids);
+    }
+
     /** Lève l'exception si une erreur a été accumulée */
     public function check(): void
     {
