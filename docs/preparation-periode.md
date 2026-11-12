@@ -40,6 +40,10 @@ advertising?, other? }, locale? }`
   total, tripInOtherPeriod }, result, breakEven, fixedCosts, resultAfterFixed, breakEvenAfterFixed, purchases { total, saleValue, coefficient, referenceCoefficient }, stockStart, stockEnd, cash },
   lastYear { revenue, grossMargin, result } | null, delta, planned: [{ period { id, name, start, end }, target, purchases, trip, shipping,
   advertising, other, mode: replace | add }], trip, previewHash, caveats }`.
+- **Forme exacte de `planned`** (`GestionPreparationService::simulate`) : une **liste**, un élément par période concernée, la période visée
+  comprise. Chaque élément : `period { id, name, start, end }` ; `target` : un **booléen**, `true` pour la période visée et `false` pour
+  les autres (ce n'est pas un montant ; l'objectif de ventes est `plan.sales.target`) ; `purchases`, `trip`, `shipping`, `advertising`,
+  `other` : des montants en cents, toujours présents (0 s'il n'y a rien) ; `mode` : `"replace"` quand `target` est vrai, `"add"` sinon.
 - **Prévu par période** (C1, règle de classement par date du propriétaire) : chaque achat prévu dans la période de sa date, les frais du voyage dans
   la période de son début, les autres postes dans la période visée. Période visée : `mode: replace` (comme le `PUT` du budget) ; autres périodes :
   `mode: add` (achats et voyage **ajoutés** au prévu existant, autres postes intacts).
@@ -83,6 +87,17 @@ ai { status }, cached }`.
   jusqu'au point bas réduits, les derniers d'abord, juste assez pour remonter au seuil) ; `enoughStock` (achats mis à l'échelle pour que le disponible
   couvre l'objectif **+ 20 %**). Chacun : `{ key, label, purchases, sales, grossMargin, result, cashLow, stockEndSaleValue, planned, delta { result,
   purchases, cashLow } }` (écarts avec mon plan).
+  Forme exacte d'un candidat (`GestionPreparationAdviceService::candidates`), montants en cents de la devise du site :
+  - `key` : `myPlan` | `lastYearSales` | `cashSafe` | `enoughStock` ; `label` : son libellé dans la langue demandée.
+  - `purchases` : un **montant**, le total des achats du candidat (`plan.purchases.total`), pas la liste des achats ; `sales` : un
+    **montant**, les ventes prévues (`plan.sales.planned`), pas l'objet `plan.sales` ; `grossMargin`, `result`, `stockEndSaleValue` : des
+    montants.
+  - `cashLow` : un **objet** `{ date, amount }`, le point bas de la trésorerie du candidat (`plan.cash.low`), ou `null` sans solde saisi ou
+    sans jour à projeter. Ce n'est pas un nombre.
+  - `planned` : la **liste** par période de la simulation du candidat, de la même forme que `planned` du § 2 (dont `target` booléen).
+  - `delta` : `{ result, purchases }` en montants (candidat − mon plan, 0 pour `myPlan`) et `cashLow` : un **montant** (écart des deux
+    points bas) ou `null` si l'un des deux manque.
+  `myPlan` est toujours présent et en premier ; les autres n'apparaissent que si leur condition est remplie.
 - Avis des règles : `cashSafe` si la trésorerie passe sous le seuil ; sinon `enoughStock` si l'objectif dépasse le stock ou si l'on achète plus que
   le besoin (stock actuel suffisant : « aucun achat n'est nécessaire », `preparation.comment.stock_none`) ; sinon `myPlan`.
 - IA, vérification des chiffres, cache (même plan, même jour) et plafond **partagé avec G1b-2** (10 avis par jour, 429 `COMMENT_LIMIT` avec l'avis
