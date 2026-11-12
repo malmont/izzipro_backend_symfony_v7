@@ -49,6 +49,12 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Gestion/Entity'
                 prefix: 'App\Gestion\Entity'
                 alias: AppGestion
+            # Module Assistance (lot 1, 12/11/2026) : entités dans src/Support
+            AppSupport:
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Support/Entity'
+                prefix: 'App\Support\Entity'
+                alias: AppSupport
 
 when@test:
     doctrine:

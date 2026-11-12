@@ -187,3 +187,9 @@ chapter_invitation:
     unsubscribed_body: 'No more links will be sent to %email% for the books of this site.'
     unsubscribe_invalid_title: 'Invalid link'
     unsubscribe_invalid_body: 'This unsubscribe link is not valid or has already been used.'
+
+# Support, batch 1 (2026-11-12): agent reply to the customer
+support_reply:
+    subject: 'Your request %reference%: %subject%'
+    greeting: 'Hello %name%,'
+    footer: 'Your request reference: %reference%. Reply to this email to add to it.'

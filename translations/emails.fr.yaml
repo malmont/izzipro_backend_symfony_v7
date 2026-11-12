@@ -191,3 +191,9 @@ chapter_invitation:
     unsubscribed_body: 'Plus aucun lien ne sera envoyé à %email% pour les livres de ce site.'
     unsubscribe_invalid_title: 'Lien non valide'
     unsubscribe_invalid_body: 'Ce lien de désinscription n''est pas valide ou a déjà été utilisé.'
+
+# Assistance, lot 1 (12/11/2026) : réponse de l'agent au client
+support_reply:
+    subject: 'Votre demande %reference% : %subject%'
+    greeting: 'Bonjour %name%,'
+    footer: 'Référence de votre demande : %reference%. Répondez à ce courriel pour la compléter.'

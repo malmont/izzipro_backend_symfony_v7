@@ -336,6 +336,18 @@ class SiteReadinessService
         if ($effective['app.management']['enabled'] ?? false) {
             $this->managementSteps($steps, $pdo, $e, $address, $keys, $host, $effective);
         }
+        if ($effective['module.support']['enabled'] ?? false) { // module Assistance, lot 1 (12/11/2026) : appScreen comme le groupe de la gestion
+            $support = function (string $key, string $title, string $description, string $status, bool $blocking, ?string $appScreen) use (&$steps) {
+                $steps[] = ['key' => $key, 'group' => 'module.support', 'title' => $title, 'description' => $description, 'status' => $status, 'where' => 'backend',
+                    'action' => ['type' => 'screen', 'screen' => 'mon_site'], 'blocking' => $blocking, 'appScreen' => $appScreen];
+            };
+            $agents = $this->count($pdo, '"user"', "roles::text LIKE '%ROLE_SUPPORT%' OR roles::text LIKE '%ROLE_ADMIN%'");
+            $setting = $this->row($pdo, 'SELECT saved_at, outbound_mode FROM support_setting ORDER BY id LIMIT 1') ?? [];
+            $support('support.agent', 'Un compte qui répond aux demandes', $agents > 0 ? sprintf('%d compte(s) administrateur ou Assistance répondent aux demandes.', $agents) : 'Un administrateur (ou un compte Assistance) répond aux demandes.', $agents > 0 ? 'done' : 'todo', true, null);
+            $support('support.settings', 'Délai de réponse', ($setting['saved_at'] ?? null) !== null ? 'Délai de réponse réglé (heures ouvrées, jours ouvrés).' : 'Vérifiez le délai de réponse (48 h ouvrées par défaut, du lundi au vendredi) et enregistrez-le.', ($setting['saved_at'] ?? null) !== null ? 'done' : 'todo', true, 'assistance-reglages');
+            $support('support.outbound', 'Envoi des réponses par courriel', ($setting['outbound_mode'] ?? 'log') === 'send' ? 'Les réponses partent par courriel au client.' : 'Les réponses restent dans la demande (mode journal) : passez à l\'envoi par courriel quand l\'équipe est prête.', ($setting['outbound_mode'] ?? 'log') === 'send' ? 'done' : 'todo', false, 'assistance-reglages');
+            $support('support.inbound', 'Adresse de réception des courriels', 'Les courriels des clients arriveront dans les demandes (adresse fournie par la plateforme, à venir avec le lot 2).', 'optional', false, null);
+        }
         if ($effective['app.living_memory']['enabled'] ?? false) {
             $add('living_memory.key', 'app.living_memory', 'Clé de l\'application Living Memory', 'Générez la clé d\'activation portée par l\'application pour votre site.', in_array('livingmemory', $keys, true), 'backend', ['type' => 'screen', 'screen' => 'app_keys']);
             $add('living_memory.profile', 'app.living_memory', 'Apparence de l\'application Living Memory', 'Logo, couleurs et textes de l\'application (profil « livingmemory »).', $this->count($pdo, 'app_profile', "app = 'livingmemory'") > 0, 'backend', ['type' => 'screen', 'screen' => 'app_profiles'], false);

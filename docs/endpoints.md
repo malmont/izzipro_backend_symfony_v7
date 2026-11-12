@@ -253,7 +253,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (432)
+## Boutique et commun (440)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -649,6 +649,14 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/subscriptions/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::get` |
 | GET | `/api/subscriptions` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::list` |
 | POST | `/api/subscriptions` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::subscribe` |
+| GET | `/api/support/settings` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::settings` |
+| PUT | `/api/support/settings` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::saveSettings` |
+| GET | `/api/support/tickets/{id}/attachments/{attachmentId}` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::attachment` |
+| POST | `/api/support/tickets/{id}/messages` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::message` |
+| GET | `/api/support/tickets/{id}` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::detail` |
+| PATCH | `/api/support/tickets/{id}` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::patch` |
+| GET | `/api/support/tickets` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::list` |
+| POST | `/api/support/tickets` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::create` |
 | GET | `/api/taxes/monthly` | ROLE_ADMIN | `Controller\StatistiqueDashboard\TaxController::getMonthlyTaxes` |
 | DELETE | `/api/transporteurs/{id}` | ROLE_ADMIN | `Controller\TransporteurController\TransporteurController::deleteTransporteur` |
 | GET | `/api/transporteurs` | ROLE_ADMIN | `Controller\TransporteurController\TransporteurController::getTransporteurs` |

@@ -24,6 +24,8 @@ class ModuleAccessService
     public const BOUSSOLE = 'boussole';
     /** Application de gestion (lot MOD, 11/11/2026, `docs/gestion-mise-a-niveau.md` § MOD) : module payant, droit app.management */
     public const MANAGEMENT = 'management';
+    /** Module Assistance (lot 1, 12/11/2026) : droit module.support */
+    public const SUPPORT = 'support';
 
     /** module => colonne de la fiche Entreprise */
     public const COLUMNS = [
@@ -33,12 +35,13 @@ class ModuleAccessService
         self::MEMOIRES => 'is_memoire_vivante_active',
         self::BOUSSOLE => 'is_boussole_esg_active',
         self::MANAGEMENT => 'is_management_app_active',
+        self::SUPPORT => 'is_support_active',
     ];
 
     /** module => clé du registre (droit d'usage) qu'on demande depuis « Mon site » ou l'application (403 MODULE_INACTIVE, lot MOD) */
     public const FEATURE_KEYS = [
         self::LANDING => 'module.landing', self::BOUTIQUE => 'module.boutique', self::POS => 'module.pos', self::MEMOIRES => 'module.memoires',
-        self::BOUSSOLE => 'module.boussole', self::MANAGEMENT => 'app.management',
+        self::BOUSSOLE => 'module.boussole', self::MANAGEMENT => 'app.management', self::SUPPORT => 'module.support',
     ];
 
     public const LABELS = [
@@ -48,6 +51,7 @@ class ModuleAccessService
         self::MEMOIRES => 'Mémoires Vivantes',
         self::BOUSSOLE => 'Boussole ESG',
         self::MANAGEMENT => 'Application de gestion',
+        self::SUPPORT => 'Assistance',
     ];
 
     /**
@@ -71,6 +75,7 @@ class ModuleAccessService
         '#^/api/(collections|createcollections|commandes|fournisseurs|transporteurs|notes-de-frais|type-fournisseurs|type-note-de-frais|gestion|periodes|dashboard|stock-evolution|stock-value|frais|taxes/monthly|carrier/statistics)#' => self::MANAGEMENT,
         '#^/api/statistiques(?!/(chiffre-affaires|nombre-commandes|panier-moyen)/pos(/|$))#' => self::MANAGEMENT,
         '#^/api/payments/statistics(?!/pos(/|$))#' => self::MANAGEMENT,
+        '#^/api/support(/|$)#' => self::SUPPORT, // module Assistance (lot 1, 12/11/2026)
     ];
 
     /**

@@ -94,6 +94,10 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(type: 'boolean', options: ['default' => false])]
     private ?bool $isBoussoleEsgActive = false;
 
+    /** Module Assistance (lot 1, 12/11/2026) : droit module.support projeté ; faux partout */
+    #[ORM\Column(name: 'is_support_active', options: ['default' => false])]
+    private bool $isSupportActive = false;
+
     #[ORM\Column(type: 'boolean', options: ['default' => false])]
     private ?bool $isMemoireVivanteActive = false;
 
@@ -801,6 +805,9 @@ class Entreprise implements TranslatableInterface
 
         return $this;
     }
+
+    public function isSupportActive(): bool { return $this->isSupportActive; }
+    public function setIsSupportActive(bool $on): static { $this->isSupportActive = $on; return $this; }
 
     public function isBoussoleEsgActive(): ?bool
     {

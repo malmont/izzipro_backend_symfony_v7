@@ -372,6 +372,8 @@ final class CacheTags
      * @var list<class-string>
      */
     public const NO_CACHE_READ = [
+        // Module Assistance (lot 1, 12/11/2026) : boîte de demandes lue en direct, jamais mise en cache
+        \App\Support\Entity\SupportTicket::class, \App\Support\Entity\SupportMessage::class, \App\Support\Entity\SupportAttachment::class, \App\Support\Entity\SupportSetting::class,
         // Jeton de rafraîchissement JWT : le bundle Gesdinet persiste sa propre classe, pas App\Entity\RefreshToken
         // (journal du 28/10/2026 : chaque connexion vidait tout le cache du site), d'où l'interface du bundle
         RefreshTokenInterface::class,

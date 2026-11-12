@@ -1,0 +1,18 @@
+{% extends 'base.email.html.twig' %}
+
+{# Assistance, lot 1 (12/11/2026) : réponse de l'agent au client, dans la langue du client (domaine `emails`) #}
+{% block title %}{{ 'support_reply.subject'|trans({'%reference%': ticket.reference, '%subject%': ticket.subject}, 'emails', locale)|raw }}{% endblock %}
+
+{% block body %}
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <tr><td align="center">
+        <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden;">
+            <tr><td style="padding: 28px 32px; color: #1e293b; font-size: 15px; line-height: 1.6;">
+                <p>{{ 'support_reply.greeting'|trans({'%name%': customerName ?: ''}, 'emails', locale) }}</p>
+                <p style="white-space: pre-line;">{{ body }}</p>
+                <p style="color: #64748b; font-size: 13px;">{{ 'support_reply.footer'|trans({'%reference%': ticket.reference}, 'emails', locale) }}</p>
+            </td></tr>
+        </table>
+    </td></tr>
+</table>
+{% endblock %}

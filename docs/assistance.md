@@ -40,7 +40,46 @@ d'action (routes backend), prise en charge, historique, fermeture ; notification
 `translations/emails.{fr,en}.yaml`, `content_audit_log` (journal), `PosHealthService` et `pos_health_alert` (contexte caisse),
 `AdminStepUrlResolver` (écrans), `SiteReadinessService` (étapes).
 
-## Décisions à prendre avant le lot 1
+## Lot 1 livré : la boîte de demandes (12/11/2026)
 
-Adresse de réception des courriels (sous-domaine de la plateforme ou boîte du site), prix et palier du module, règles de délai de réponse
-(SLA affiché au client), conservation des tickets, et si le chat (lot 4) consomme des crédits IA du site.
+Contrat validé par l'application de gestion (« new easymakemoney ») ; décisions du propriétaire du 11/11/2026. Code : `src/Support/`
+(mapping Doctrine `AppSupport`), migration `Version20261222100000`, script `scripts/migrate_all_v2_support.sh`.
+
+- **Tables** (par site) : `support_ticket` (référence `AS-000123`, sujet, état `new | open | waiting_customer | closed`, priorité, canal, client,
+  commande ou vente liée, poste de caisse, agent, `due_at`, première réponse, fermeture, anonymisation), `support_message` (client | agent |
+  système, note interne, état du courriel `sent | failed | logged`), `support_attachment` (stockage privé), `support_setting`.
+- **Routes** (`/api/support`, `ROLE_SUPPORT` ou `ROLE_ADMIN`) : `GET|POST /tickets` (liste : `status`, `priority`, `channel`, `assigned=me|none|{id}`,
+  `q`, `page`, `pageSize` ; création par l'agent : `subject`, `body`, `channel` agent | phone | counter | email, `priority`, `customer { userId } |
+  { name, email }`, `orderId`, `locale`), `GET|PATCH /tickets/{id}` (fiche avec messages, pièces jointes et `orderSummary` ; transitions new → open
+  | closed, open ↔ waiting_customer, tout → closed, closed → open, sinon 409 `INVALID_STATUS_TRANSITION`), `POST /tickets/{id}/messages` (JSON
+  ou multipart `attachments[]` ; `internal` = note jamais envoyée ; `fromCustomer` = message du client consigné par l'agent, nouveau délai ;
+  réponse de l'agent → courriel dans la langue du client et le ticket attend le client ; 409 `TICKET_CLOSED`), `GET /tickets/{id}/attachments/{id}`
+  (fichier, `private, no-store`), `GET|PUT /settings` (écriture : `ROLE_ADMIN`). Erreurs : 404 `TICKET_NOT_FOUND`, `ATTACHMENT_NOT_FOUND`, 422
+  `VALIDATION_FAILED { fields }`, 413 `ATTACHMENT_TOO_LARGE`, 403 `MODULE_INACTIVE` (module `support`, `feature: module.support`).
+- **Délai de réponse** : `responseHours` (48 par défaut) comptées sur les jours ouvrés `businessDays` (lundi à vendredi), journées entières, fuseau
+  du site, sans jours fériés (`Support/Services/BusinessClock`) ; 48 h ouvrées = 2 jours ouvrés ; seuls réglages du délai (les heures
+  d'ouverture pourront s'ajouter sans changer la forme).
+- **Courriels au client** : `outboundMode` `log` (défaut partout : rien n'est envoyé, une ligne de journal sans adresse ni texte) ou `send`
+  (gabarit `emails/support_reply.html.twig`, fr / en) ; aucun envoi réel en test ; sur demo, rester en `log` ou n'écrire qu'à une adresse de test.
+- **Pièces jointes** : images (JPEG, PNG, WebP, GIF) et PDF, vérifiés par le **contenu** (fileinfo), 10 Mo et 5 par message, stockage privé
+  `var/storage/private_media/support/<site>/<ticket>`, nom aléatoire, jamais d'URL publique.
+- **Résumé de commande en lecture** (`Support/Services/SupportOrderSummary`, liste blanche) : lignes, prix de vente, totaux, paiements, retours,
+  livraison et suivi. Ni coût d'achat, ni marge, ni prix catalogue d'un prix manuel, ni prix fournisseur, ni note interne (test d'absence).
+- **ROLE_SUPPORT** : `access_control` `^/api/support` ; connexion `platform=admin` acceptée (rôles dans le jeton) ; `Support/SupportScopeSubscriber`
+  (après le pare-feu) : un compte Assistance **seul** reçoit 403 `SUPPORT_SCOPE_ONLY` sur toute route non publique hors du module, et les routes
+  publiques lui sont servies comme à un anonyme (plusieurs routes ne demandent qu'un utilisateur connecté, et `User::getRoles` ajoute `ROLE_USER`).
+  Preuve : `SupportRoleMatrixTest` balaie toutes les routes de l'API. EasyAdmin reste réservé à `ROLE_ADMIN`. **Aucun compte ROLE_SUPPORT ne doit
+  être créé en production avant que l'application et le web le gèrent** (le rôle n'est pas proposé dans l'écran Utilisateurs).
+- **Module payant** : droit gouverné `module.support` (`entreprise.is_support_active`, faux partout), garde « support » en mode plateforme live ;
+  offre à créer quand le propriétaire en aura fixé le prix.
+- **Conservation** : `app:support:retention` (simulation par défaut, `--apply`, `--tenant=`, timer à installer) anonymise tout ticket fermé depuis
+  plus de 3 ans (nom, courriel, sujet, corps des messages, pièces jointes supprimées ; référence, dates, état, canal, priorité, délais gardés) ;
+  un ticket rouvert repart de zéro à sa nouvelle fermeture.
+- **Cheminement** : groupe `module.support` du cheminement du site (si le module est accordé) : `support.agent` et `support.settings`
+  (bloquantes), `support.outbound`, `support.inbound` (améliorations ; adresse de réception au lot 2) ; `appScreen` `assistance-reglages`.
+- Tests : `tests/Functional/Support/SupportApiTest.php`, `tests/Functional/Support/SupportRoleMatrixTest.php`.
+
+## Décisions restantes (lot 2 et suivants)
+
+Prix et essai de l'offre « support » ; adresse de réception des courriels (domaine, MX, fournisseur : Mailgun, SES ou IMAP) ; le chat (lot 4)
+consommera les crédits IA du site (décision du 11/11/2026).

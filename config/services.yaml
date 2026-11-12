@@ -45,6 +45,7 @@ services:
             - '../src/ESG/Entity/'
             - '../src/MemoiresVivantes/Entity/'
             - '../src/Gestion/Entity/'
+            - '../src/Support/Entity/'
             - '../src/Kernel.php'
             - '../src/ESG/Repository/'
             - '../src/MemoiresVivantes/Repository/'

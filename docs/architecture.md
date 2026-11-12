@@ -589,6 +589,7 @@ docker exec -w /var/www -e SYMFONY_DEPRECATIONS_HELPER=disabled symfony_app_v2 p
 | Mémoires Vivantes | `src/MemoiresVivantes/` | `docs/memoires-vivantes.md` |
 | Boussole ESG | `src/ESG/` | `docs/boussole-esg.md` |
 | Application de gestion (périodes, résultat, trésorerie, simulateur, guide IA, prix, promotions, statistiques, locations, lecture de documents) | `src/Gestion/` (+ entités d'achat de `src/Entity/`) | `docs/gestion-mise-a-niveau.md` et fiches `docs/*-gestion.md` |
+| Assistance (boîte de demandes, ROLE_SUPPORT, délai ouvré, conservation) | `src/Support/` | `docs/assistance.md` |
 | Boutique (produits, commandes, paiement, livraison ; aucune en production) | `Controller/*`, `Services/*` hors modules ci-dessus | `docs/boutique.md` ; routes dans `docs/endpoints.md` |
 | Caisse (postes, sessions, ventes et remboursements du POS) | `Entity/CashRegister`, `Entity/Caisse`, `Services/CaisseService/`, `UseCase/CaisseUseCase/`, `Controller/CaisseController/`, `Controller/CashRegisterController/` | `docs/caisse.md` |
 

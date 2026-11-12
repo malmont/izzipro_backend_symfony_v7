@@ -14,3 +14,8 @@ memoires_vivantes_controllers:
 gestion_controllers:
     resource: ../src/Gestion/Controller/
     type: attribute
+
+# Module Assistance (lot 1, 12/11/2026) : contrôleurs regroupés dans src/Support
+support_controllers:
+    resource: ../src/Support/Controller/
+    type: attribute

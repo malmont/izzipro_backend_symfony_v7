@@ -60,7 +60,8 @@ class AuthenticationService
                 return new JsonResponse(['error' => 'This account is not allowed to access the POS platform.', 'code' => 'PLATFORM_NOT_ALLOWED', 'message' => 'This account is not allowed to access the POS platform.'], Response::HTTP_FORBIDDEN);
             }
         } elseif ($platform === 'admin') {
-            if (!in_array('ROLE_ADMIN', $user->getRoles(), true)) {
+            // Assistance, lot 1 (12/11/2026) : un compte ROLE_SUPPORT se connecte à l'application de gestion ; le serveur ne lui ouvre que /api/support
+            if (!array_intersect(['ROLE_ADMIN', 'ROLE_SUPPORT'], $user->getRoles())) {
                 return new JsonResponse(['error' => 'This account is not allowed to access the admin platform.', 'code' => 'PLATFORM_NOT_ALLOWED', 'message' => 'This account is not allowed to access the admin platform.'], Response::HTTP_FORBIDDEN);
             }
         }
