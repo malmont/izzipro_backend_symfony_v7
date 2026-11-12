@@ -40,23 +40,26 @@ class PosOfflinePackService
     }
 
     /** Réglages du mode hors ligne (PosOfflineSettings) */
-    public function settings(): array
+    public function settings(?bool $v5 = null): array
     {
-        return $this->offline->settings();
+        return $this->offline->settings($v5);
     }
 
     /**
      * Pack courant : rendu au POS, instantané conservé sous sa version (une version par contenu : même ETag → même version).
      * `$v4` : la tablette annonce la règle v4 ; servie seulement si l'interrupteur des promotions par variante est allumé, sinon pack v3 inchangé.
      */
-    public function build(?CashRegister $register = null, bool $v4 = false): array
+    public function build(?CashRegister $register = null, bool $v4 = false, bool $v5 = false): array
     {
         $em = $this->emProvider->getEntityManager();
-        $v4 = $v4 && $this->variantPrices !== null && $this->variantPrices->enabled();
+        $v4 = ($v4 || $v5) && $this->variantPrices !== null && $this->variantPrices->enabled(); // v5 vaut aussi v4
         $e = $em->getRepository(Entreprise::class)->findOneBy([]);
-        $settings = $this->settings();
+        $settings = $this->settings($v5);
         $address = $this->storeAddress();
-        $taxes = $address ? array_map(fn ($t) => ['id' => (int) $t->getId(), 'label' => (string) $t->getName(), 'rate' => (float) $t->getRate(), 'category' => $t->getCategory()], $this->taxes->applicableTaxes($address)) : []; // category : F18 partie 2a
+        // category : F18 partie 2a ; ratePpm : règle v5 seulement (PAYS-1c), les packs v3 et v4 restent identiques à l'octet
+        $taxes = $address ? array_map(fn ($t) => ['id' => (int) $t->getId(), 'label' => (string) $t->getName(), 'rate' => (float) $t->getRate(), 'category' => $t->getCategory()]
+            + ($v5 ? ['ratePpm' => \App\Services\OrderService\TaxCode::ppm((float) $t->getRate())] : []), $this->taxes->applicableTaxes($address)) : [];
+        $rule = $v5 ? PosOfflineCalculator::RULE_V5 : ($v4 ? PosOfflineCalculator::RULE_V4 : PosOfflineCalculator::RULE);
         $step = $this->rounding->step();
         $products = [];
         $prices = [];
@@ -103,7 +106,7 @@ class PosOfflinePackService
             'products' => $products,
             'discounts' => $posSettings['discounts'] ?? [],
             'settings' => array_intersect_key($posSettings, array_flip(['pin', 'lockAfterMinutes', 'receipt', 'paymentMethods', 'cashFund', 'cashAlertThreshold', 'customItems', 'priceOverride', 'giftCards', 'customers', 'loyalty'])) + ['offline' => $settings],
-            'calculationRule' => $v4 ? PosOfflineCalculator::RULE_V4 : PosOfflineCalculator::RULE,
+            'calculationRule' => $rule,
             'testCases' => '/api/pos/offline-cases',
         ];
         // Grille de favoris (F10) : références {productId, variantId, defaultVariantId, pinned, rank} (prix déjà dans products) ; clé ajoutée
@@ -114,7 +117,7 @@ class PosOfflinePackService
         $etag = hash('sha256', json_encode($content, JSON_UNESCAPED_UNICODE));
         $now = new \DateTimeImmutable();
         $validUntil = $now->modify('+' . $settings['packValidityHours'] . ' hours');
-        $snapshot = ['step' => $step, 'taxes' => $taxes, 'prices' => $prices, 'pricesIncludeTax' => $e?->isPricesIncludeTax() ?? false]; // TTC figé dans l'instantané (v3)
+        $snapshot = ['step' => $step, 'taxes' => $taxes, 'prices' => $prices, 'pricesIncludeTax' => $e?->isPricesIncludeTax() ?? false, 'rule' => $rule]; // TTC figé dans l'instantané (v3) ; règle servie (PAYS-1c)
         $repo = $em->getRepository(PosOfflinePack::class);
         /** @var ?PosOfflinePack $pack */
         $pack = $repo->findOneBy(['etag' => $etag], ['id' => 'DESC']);

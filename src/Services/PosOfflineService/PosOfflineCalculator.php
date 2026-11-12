@@ -37,6 +37,29 @@ final class PosOfflineCalculator
      * (remises, taxes, arrondi) est celui de v3.
      */
     public const RULE_V4 = 'pos-offline-v4';
+    /**
+     * v5 (PAYS-1c, 13/11/2026) : v4 + taux en millionièmes pour les prix TTC (`taxes[].ratePpm` dans le pack) : base = round_demi_haut(ttc × 10⁶ /
+     * (10⁶ + Σ ratePpm)), taxe_i = round_demi_haut(base × ratePpm_i / 10⁶), la dernière taxe du groupe porte l'écart. Identique à v3 pour tout taux
+     * multiple de 0,01 % ; nécessaire pour un taux comme la TVQ (9,975 %) en prix TTC. Servie seulement à la tablette qui l'annonce
+     * (X-Pos-Offline-Rules: v5, qui vaut aussi v4) ; sans elle, un site TTC à taux non multiple de 0,01 % n'a pas de mode hors ligne
+     * (settings.offline.reason = RULE_V5_REQUIRED).
+     */
+    public const RULE_V5 = 'pos-offline-v5';
+
+    /** Instantané (ou pack) qui exige la règle v5 : prix TTC et au moins un taux non multiple de 0,01 % */
+    public static function requiresV5(bool $pricesIncludeTax, array $taxes): bool
+    {
+        if (!$pricesIncludeTax) {
+            return false;
+        }
+        foreach ($taxes as $t) {
+            if (!\App\Services\OrderService\TaxInclusive::isLegacyExactRate((float) ($t['rate'] ?? 0))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /**
      * @param list<array{unitPrice: int, quantity: int, discounts?: list<array>}> $lines
@@ -87,7 +110,7 @@ final class PosOfflineCalculator
                     continue;
                 }
                 $ids = array_map('intval', explode(',', (string) $key));
-                $rates = array_map(fn ($k) => \App\Services\OrderService\TaxInclusive::rateTenThousandths((float) $taxes[$k]['rate']) ?? (int) round((float) $taxes[$k]['rate'] * \App\Services\OrderService\TaxInclusive::SCALE), $ids);
+                $rates = array_map(fn ($k) => (int) \App\Services\OrderService\TaxCode::ppm((float) $taxes[$k]['rate']), $ids);
                 $base = \App\Services\OrderService\TaxInclusive::base($ttc, (int) array_sum($rates));
                 $spread = 0;
                 foreach ($ids as $n => $k) {

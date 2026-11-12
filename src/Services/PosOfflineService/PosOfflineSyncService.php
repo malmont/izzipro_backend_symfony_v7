@@ -40,7 +40,7 @@ use App\Dto\CartQuoteInputDto;
  */
 class PosOfflineSyncService
 {
-    public const FORCEABLE = ['PRICE_DRIFT_EXCEEDED', 'PACK_EXPIRED', 'OFFLINE_TOO_OLD', 'CUSTOM_ITEM_LIMIT_EXCEEDED', 'PRICE_OVERRIDE_LIMIT_EXCEEDED'];
+    public const FORCEABLE = ['PRICE_DRIFT_EXCEEDED', 'PACK_EXPIRED', 'OFFLINE_TOO_OLD', 'CUSTOM_ITEM_LIMIT_EXCEEDED', 'PRICE_OVERRIDE_LIMIT_EXCEEDED', 'PACK_RULE_MISMATCH'];
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -71,7 +71,7 @@ class PosOfflineSyncService
     public function process(User $syncedBy, int $terminalId, array $batch): array
     {
         $em = $this->emProvider->getEntityManager();
-        $settings = $this->packs->settings();
+        $settings = $this->packs->settings(true); // la règle se juge vente par vente, d'après son pack (PACK_RULE_MISMATCH, PAYS-1c)
         $sales = is_array($batch['sales'] ?? null) ? array_values($batch['sales']) : [];
         if ($sales === [] || count($sales) > 200) {
             throw new CashRegisterException('VALIDATION_FAILED', 'sales : de 1 à 200 ventes par lot', 422, [['path' => 'sales', 'message' => '1 à 200 ventes']]);
@@ -350,12 +350,16 @@ class PosOfflineSyncService
             $reduction > 0 && !PosApprovalService::isManager($seller) && PosLineService::beyond($reduction, $lineSettings['priceOverride']['maxAmount']) => 'PRICE_OVERRIDE_LIMIT_EXCEEDED',
             default => null,
         };
-        if (!$within || $packExpired || $tooOld || $capCode !== null) {
-            $code = !$within ? 'PRICE_DRIFT_EXCEEDED' : ($packExpired ? 'PACK_EXPIRED' : ($tooOld ? 'OFFLINE_TOO_OLD' : $capCode));
+        // PAYS-1c : vente faite avec un pack v3 ou v4 sur un site qui exige la règle v5 (prix TTC, taux non multiple de 0,01 %) : la tablette n'a pas
+        // pu calculer comme le serveur ; refus forçable par un responsable (le pack servi à une telle tablette n'a pas de mode hors ligne)
+        $ruleMismatch = PosOfflineCalculator::requiresV5((bool) ($snapshot['pricesIncludeTax'] ?? false), $snapshot['taxes'] ?? []) && ($snapshot['rule'] ?? null) !== PosOfflineCalculator::RULE_V5;
+        if ($ruleMismatch || !$within || $packExpired || $tooOld || $capCode !== null) {
+            $code = $ruleMismatch ? 'PACK_RULE_MISMATCH' : (!$within ? 'PRICE_DRIFT_EXCEEDED' : ($packExpired ? 'PACK_EXPIRED' : ($tooOld ? 'OFFLINE_TOO_OLD' : $capCode)));
             if ($forceToken === null) {
                 throw new CashRegisterException($code, match ($code) {
                     'PRICE_DRIFT_EXCEEDED' => 'Écart entre le total perçu et le recalcul au pack déclaré au-delà de la tolérance',
                     'PACK_EXPIRED' => 'Vente datée après la fin de validité du pack déclaré',
+                    'PACK_RULE_MISMATCH' => 'Vente calculée avec une règle hors ligne antérieure à la v5, exigée par ce site (prix taxes comprises)',
                     'CUSTOM_ITEM_LIMIT_EXCEEDED' => 'Articles libres au-delà du montant maximal sans validation',
                     'PRICE_OVERRIDE_LIMIT_EXCEEDED' => 'Baisse de prix manuelle au-delà du maximum sans validation',
                     default => 'Vente trop ancienne pour la durée hors ligne autorisée',

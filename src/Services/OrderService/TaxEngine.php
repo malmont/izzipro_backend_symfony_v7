@@ -263,7 +263,7 @@ final class TaxEngine
                 continue;
             }
             $ids = array_map('intval', explode(',', (string) $key));
-            $rates = array_map(fn ($id) => TaxInclusive::rateTenThousandths((float) $byId[$id]->getRate()) ?? (int) round((float) $byId[$id]->getRate() * TaxInclusive::SCALE), $ids);
+            $rates = array_map(fn ($id) => (int) TaxCode::ppm((float) $byId[$id]->getRate()), $ids);
             $base = TaxInclusive::base($ttc, (int) array_sum($rates));
             $groupTax = $ttc - $base;
             $spread = 0;

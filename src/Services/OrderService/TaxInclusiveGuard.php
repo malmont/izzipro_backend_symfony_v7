@@ -25,7 +25,7 @@ class TaxInclusiveGuard
         $address = TaxEngine::normalizeAddress($this->storeAddress->forStore());
         foreach ($address ? $this->taxes->applicableTaxes($address) : [] as $tax) {
             if (!TaxInclusive::isExactRate((float) $tax->getRate())) {
-                throw new \DomainException(sprintf('Prix taxes comprises impossibles : le taux de « %s » (%s %%) n\'est pas un multiple exact de 0,01 %%.', $tax->getName(), rtrim(rtrim(number_format((float) $tax->getRate() * 100, 4, ',', ''), '0'), ',')));
+                throw new \DomainException(sprintf('Prix taxes comprises impossibles : le taux de « %s » (%s %%) n\'est pas exact au millionième.', $tax->getName(), rtrim(rtrim(number_format((float) $tax->getRate() * 100, 4, ',', ''), '0'), ',')));
             }
         }
         if (($message = $this->lock->lockMessage()) !== null) {

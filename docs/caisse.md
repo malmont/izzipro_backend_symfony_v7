@@ -2325,6 +2325,48 @@ chez elle). La session de l'annulation, elle, relisait la vente comme une vente.
 Tests : `PosCancellationKeepsAmountsApiTest` (même session, autre session avec export à l'octet), `WebOrderDoubleCancelApiTest` (web,
 « Mes commandes », EasyAdmin), `PosCreditNoteGuardApiTest` (`ORDER_HAS_RETURNS`), `PosAuditApiTest` (journal).
 
+## Prix taxes comprises au Québec et règle hors ligne v5 (PAYS-1c, 13/11/2026)
+
+Avant PAYS-1c, le calcul TTC travaillait en dix-millièmes : la TVQ (9,975 %) n'y était pas exacte, et le garde refusait les prix taxes
+comprises à un site québécois.
+
+### Calcul au millionième (`TaxInclusive`, `SCALE` = 1 000 000)
+- Le taux est en millionièmes (`ratePpm` : TPS 50 000, TVQ 99 750, TVA 20 % 200 000).
+- `base = round_demi_haut(ttc × 10⁶ / (10⁶ + Σ ratePpm))`, en entiers ; `taxe_i = round_demi_haut(base × ratePpm_i / 10⁶)` ; la dernière taxe
+  du groupe porte l'écart (`Σ taxes = ttc − base`).
+- Exemple : 29,00 $ TTC au Québec → base 25,22, TPS 1,26, TVQ 2,52. 100,00 $ → base 86,98, TPS 4,35, TVQ 8,67.
+- **Aucun changement pour les taux multiples de 0,01 %** (France, TVH, TPS seule) : les deux échelles donnent les mêmes fractions. Un
+  balayage le prouve dans `PosOfflineV5ApiTest` (taux en usage, de 0,01 à 10 000,00, quantités).
+- Même calcul pour le devis, la vente, la caisse hors ligne et l'export comptable.
+- Le garde (`TaxInclusiveGuard`) accepte tout taux exact au millionième. Restent refusés : Stripe Tax, et tout changement de mode HT / TTC
+  après la première vente.
+
+### Règle `pos-offline-v5`, négociée comme la v4
+- v5 = v4 + taux au millionième : chaque taxe du pack porte `ratePpm` (`rate` reste servi), `calculationRule` et `settings.offline.rule`
+  valent `pos-offline-v5`.
+- Elle n'est servie qu'à la tablette qui l'annonce : en-tête **`X-Pos-Offline-Rules: v5`** (« v5 » vaut aussi v4 ; « v4,v5 » est accepté).
+- Sans cette annonce, le pack est **identique à l'octet** à celui d'avant (v3, ou v4 si annoncée), ETag compris.
+- **Site qui exige la v5** : prix TTC et au moins un taux applicable non multiple de 0,01 % (le Québec en TTC).
+  - Une tablette qui n'annonce pas la v5 y reçoit `settings.offline = { enabled: false, reason: "RULE_V5_REQUIRED" }`, dans le pack et
+    dans `GET /api/pos/settings`. La caisse traduit ce code (« mettez la caisse à jour pour vendre hors ligne »), comme `DISABLED` et
+    `TAX_PROVIDER_STRIPE`. La vente en ligne reste possible.
+  - Il n'y a jamais de calcul v3 sur un tel site.
+- **Synchronisation** : la règle servie est gardée dans l'instantané du pack. Une vente faite avec un pack antérieur à la v5 sur un site
+  qui l'exige est refusée : **`PACK_RULE_MISMATCH`** (409), forçable par un responsable comme les autres refus.
+
+### Cas partagés (`config/pos/offline-cases.json`, `GET /api/pos/offline-cases`)
+- Nouvelle clé **`casesV5`** (et `ruleV5`), à part : une caisse v3 ou v4 ne les joue pas, et `rule` / `cases` ne changent pas.
+- Cas « v5-ttc-qc-… » : TPS + TVQ en TTC (1,00 $, 29,00 $, 3 × 9,99 $, 100,00 $, remise de ligne, remise de ticket, article libre non
+  taxable, sans arrondi des espèces). `expected.taxes` donne `{label, base, amount}`.
+- Cas « v5-ttc-fr-identique-v3 » : taux français, même résultat que la v3.
+- La tablette doit reproduire ces cas au cent.
+
+### À faire valider par un comptable (Québec)
+L'affichage des prix taxes comprises au Québec : mention « taxes incluses », détail de la TPS et de la TVQ (montants et numéros) sur le
+ticket et la facture, règle d'arrondi attendue. Le code calcule ; il n'impose aucune mention.
+
+Tests : `tests/Functional/Boutique/PosOfflineV5ApiTest.php`.
+
 ## Codes d'erreur de la caisse (02/11/2026)
 
 Toute réponse JSON 4xx porte une clé **`code`** stable (MAJUSCULES_SOULIGNÉES). En production (`APP_DEBUG=0`), les erreurs génériques des
@@ -2463,6 +2505,7 @@ même code sont séparés par « / ». Les codes à message variable sont décri
 | `ORDER_NOT_FOUND` | Vente introuvable |
 | `ORDER_NOT_REFUNDABLE` | Cette commande est déjà annulée / Cette vente est déjà annulée et remboursée / Un avoir (commande de retour) ne s'annule pas et ne se rembourse pas : le client a déjà été remboursé par ce retour |
 | `ORDER_NOT_RETURNABLE` | Seule une vente en caisse peut faire l'objet d'un retour |
+| `PACK_RULE_MISMATCH` | Vente calculée avec une règle hors ligne antérieure à la v5, exigée par ce site (prix taxes comprises) ; 409, forçable (PAYS-1c) |
 | `PACK_UNKNOWN` | Version de pack inconnue : la vente ne peut pas être recalculée aux conditions de la tablette |
 | `PASSWORD_INVALID` | Mot de passe incorrect |
 | `PAYMENT_ALREADY_CAPTURED` | Paiement déjà débité : passez par un remboursement |

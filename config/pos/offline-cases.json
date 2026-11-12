@@ -1,6 +1,6 @@
 {
   "rule": "pos-offline-v3",
-  "description": "Jeu de cas partagé backend / POS : le total hors ligne calculé par la tablette doit être identique, au cent, au résultat attendu. Montants en cents ; rate = taux décimal ; step = pas d'arrondi des espèces (1 = aucun). Lignes facultatives (F7) : custom {label, unitPrice, taxable} = article libre (unitPrice de la ligne ignoré), priceOverride {unitPrice} = prix manuel ; taxes sur taxableSubtotal. Règle v2 (F18 partie 2a, 01/11/2026) : une ligne peut porter taxCategory (standard, intermediate, reduced, super_reduced, exempt ; vide = standard ; custom.taxCategory pour un article libre, custom.taxable=false ≡ exempt) et une taxe category (vide = tous les produits non exonérés) ; base_i = Σ nets des lignes frappées par la taxe i, amount_i = round(base_i × rate_i), total = subtotal + Σ amount_i ; expected.taxes donne label, rate, category, base, amount, total. Les cas v1 donnent le même résultat sous v2. chainVectors : vecteurs de test du chaînage (clé à part, F14). Règle v3 (F18 partie 2b, 02/11/2026) : un cas peut porter pricesIncludeTax: true (prix TTC) : les nets de ligne sont TTC, les lignes sont groupées par ensemble de taxes applicables, base = round_demi_haut(ttc × 10000 / (10000 + Σ taux en dix-millièmes)) en entiers, taxe = ttc − base (ventilée entre les taxes du groupe, la dernière porte l'écart), total = subtotal (taxes comprises), cashTotal = round(total / step) × step ; expected.taxes garde {label, amount} (base = TTC du groupe − amount). Sans le drapeau, v3 = v2.",
+  "description": "Jeu de cas partagé backend / POS : le total hors ligne calculé par la tablette doit être identique, au cent, au résultat attendu. Montants en cents ; rate = taux décimal ; step = pas d'arrondi des espèces (1 = aucun). Lignes facultatives (F7) : custom {label, unitPrice, taxable} = article libre (unitPrice de la ligne ignoré), priceOverride {unitPrice} = prix manuel ; taxes sur taxableSubtotal. Règle v2 (F18 partie 2a, 01/11/2026) : une ligne peut porter taxCategory (standard, intermediate, reduced, super_reduced, exempt ; vide = standard ; custom.taxCategory pour un article libre, custom.taxable=false ≡ exempt) et une taxe category (vide = tous les produits non exonérés) ; base_i = Σ nets des lignes frappées par la taxe i, amount_i = round(base_i × rate_i), total = subtotal + Σ amount_i ; expected.taxes donne label, rate, category, base, amount, total. Les cas v1 donnent le même résultat sous v2. chainVectors : vecteurs de test du chaînage (clé à part, F14). Règle v3 (F18 partie 2b, 02/11/2026) : un cas peut porter pricesIncludeTax: true (prix TTC) : les nets de ligne sont TTC, les lignes sont groupées par ensemble de taxes applicables, base = round_demi_haut(ttc × 10000 / (10000 + Σ taux en dix-millièmes)) en entiers, taxe = ttc − base (ventilée entre les taxes du groupe, la dernière porte l'écart), total = subtotal (taxes comprises), cashTotal = round(total / step) × step ; expected.taxes garde {label, amount} (base = TTC du groupe − amount). Sans le drapeau, v3 = v2. Règle v5 (PAYS-1c, 13/11/2026), clé casesV5 (à part : une caisse v3 ou v4 ne les joue pas) : prix TTC avec des taux en millionièmes (taxes[].ratePpm, TVQ 9,975 % = 99750) : base = round_demi_haut(ttc × 1000000 / (1000000 + Σ ratePpm)) en entiers, taxe_i = round_demi_haut(base × ratePpm_i / 1000000), la dernière taxe du groupe porte l'écart (taxe = ttc − base) ; expected.taxes donne {label, base, amount}. Pour des taux multiples de 0,01 %, v5 = v3 (cas v5-ttc-fr-identique-v3).",
   "cases": [
     {
       "id": "simple-une-ligne-qc",
@@ -1978,6 +1978,542 @@
       },
       "canonical": "{\"cashReceived\":10000,\"cashRegisterId\":1,\"customerId\":12,\"idempotencyKey\":\"3f6b2c1e-9d4a-4b7e-8c21-5a0e7d9f1b23\",\"items\":[{\"discounts\":[{\"reasonCode\":\"fidelite\",\"type\":\"percent\",\"value\":10}],\"productVariantId\":1,\"quantity\":2},{\"custom\":{\"label\":\"Retouche d’ourlet – café crème à côté\",\"taxable\":true,\"unitPrice\":1500},\"quantity\":1},{\"priceOverride\":{\"reasonCode\":\"prix_concurrent\",\"unitPrice\":1700},\"productVariantId\":2,\"quantity\":1}],\"loyaltyCode\":\"FD-G8MJ-V2CJ\",\"payments\":[{\"amount\":9800,\"type\":2}],\"provisionalNumber\":\"P-7-42\",\"sellerId\":38,\"soldAt\":\"2026-10-28T14:05:09-04:00\",\"ticketDiscount\":{\"reasonText\":\"Geste commercial — Noël\",\"type\":\"amount\",\"value\":300},\"totals\":{\"cashRounding\":-1,\"cashTotal\":9450,\"subtotal\":8220,\"taxes\":[{\"amount\":411,\"label\":\"TPS\"},{\"amount\":820,\"label\":\"TVQ\"}],\"total\":9451}}",
       "hash": "a60c9cc829b39c27339b14fc3e6cc552061954fa6f5ad3749f77c9224cff0c19"
+    }
+  ],
+  "ruleV5": "pos-offline-v5",
+  "casesV5": [
+    {
+      "id": "v5-ttc-qc-1-dollar",
+      "pricesIncludeTax": true,
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05,
+          "ratePpm": 50000
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975,
+          "ratePpm": 99750
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 100,
+          "quantity": 1
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 100,
+      "expected": {
+        "lines": [
+          {
+            "gross": 100,
+            "discountAmount": 0,
+            "net": 100
+          }
+        ],
+        "subtotal": 100,
+        "discountTotal": 0,
+        "taxableSubtotal": 100,
+        "taxes": [
+          {
+            "label": "TPS",
+            "base": 87,
+            "amount": 4
+          },
+          {
+            "label": "TVQ",
+            "base": 87,
+            "amount": 9
+          }
+        ],
+        "total": 100,
+        "cashTotal": 100,
+        "cashRounding": 0,
+        "change": 0
+      }
+    },
+    {
+      "id": "v5-ttc-qc-29-dollars",
+      "pricesIncludeTax": true,
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05,
+          "ratePpm": 50000
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975,
+          "ratePpm": 99750
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 2900,
+          "quantity": 1
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 4000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 2900,
+            "discountAmount": 0,
+            "net": 2900
+          }
+        ],
+        "subtotal": 2900,
+        "discountTotal": 0,
+        "taxableSubtotal": 2900,
+        "taxes": [
+          {
+            "label": "TPS",
+            "base": 2522,
+            "amount": 126
+          },
+          {
+            "label": "TVQ",
+            "base": 2522,
+            "amount": 252
+          }
+        ],
+        "total": 2900,
+        "cashTotal": 2900,
+        "cashRounding": 0,
+        "change": 1100
+      }
+    },
+    {
+      "id": "v5-ttc-qc-9-99-x3",
+      "pricesIncludeTax": true,
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05,
+          "ratePpm": 50000
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975,
+          "ratePpm": 99750
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 999,
+          "quantity": 3
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 3000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 2997,
+            "discountAmount": 0,
+            "net": 2997
+          }
+        ],
+        "subtotal": 2997,
+        "discountTotal": 0,
+        "taxableSubtotal": 2997,
+        "taxes": [
+          {
+            "label": "TPS",
+            "base": 2607,
+            "amount": 130
+          },
+          {
+            "label": "TVQ",
+            "base": 2607,
+            "amount": 260
+          }
+        ],
+        "total": 2997,
+        "cashTotal": 2995,
+        "cashRounding": -2,
+        "change": 5
+      }
+    },
+    {
+      "id": "v5-ttc-qc-100-dollars",
+      "pricesIncludeTax": true,
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05,
+          "ratePpm": 50000
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975,
+          "ratePpm": 99750
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 10000,
+          "quantity": 1
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": null,
+      "expected": {
+        "lines": [
+          {
+            "gross": 10000,
+            "discountAmount": 0,
+            "net": 10000
+          }
+        ],
+        "subtotal": 10000,
+        "discountTotal": 0,
+        "taxableSubtotal": 10000,
+        "taxes": [
+          {
+            "label": "TPS",
+            "base": 8698,
+            "amount": 435
+          },
+          {
+            "label": "TVQ",
+            "base": 8698,
+            "amount": 867
+          }
+        ],
+        "total": 10000,
+        "cashTotal": 10000,
+        "cashRounding": 0,
+        "change": null
+      }
+    },
+    {
+      "id": "v5-ttc-qc-remise-ligne",
+      "pricesIncludeTax": true,
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05,
+          "ratePpm": 50000
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975,
+          "ratePpm": 99750
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 2900,
+          "quantity": 2,
+          "discounts": [
+            {
+              "type": "percent",
+              "value": 10
+            }
+          ]
+        },
+        {
+          "unitPrice": 999,
+          "quantity": 1
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 7000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 5800,
+            "discountAmount": 580,
+            "net": 5220
+          },
+          {
+            "gross": 999,
+            "discountAmount": 0,
+            "net": 999
+          }
+        ],
+        "subtotal": 6219,
+        "discountTotal": 580,
+        "taxableSubtotal": 6219,
+        "taxes": [
+          {
+            "label": "TPS",
+            "base": 5409,
+            "amount": 270
+          },
+          {
+            "label": "TVQ",
+            "base": 5409,
+            "amount": 540
+          }
+        ],
+        "total": 6219,
+        "cashTotal": 6220,
+        "cashRounding": 1,
+        "change": 780
+      }
+    },
+    {
+      "id": "v5-ttc-qc-remise-ticket",
+      "pricesIncludeTax": true,
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05,
+          "ratePpm": 50000
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975,
+          "ratePpm": 99750
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 2900,
+          "quantity": 1
+        },
+        {
+          "unitPrice": 100,
+          "quantity": 7
+        }
+      ],
+      "ticketDiscount": {
+        "type": "amount",
+        "value": 300
+      },
+      "cashReceived": 4000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 2900,
+            "discountAmount": 242,
+            "net": 2658
+          },
+          {
+            "gross": 700,
+            "discountAmount": 58,
+            "net": 642
+          }
+        ],
+        "subtotal": 3300,
+        "discountTotal": 300,
+        "taxableSubtotal": 3300,
+        "taxes": [
+          {
+            "label": "TPS",
+            "base": 2870,
+            "amount": 144
+          },
+          {
+            "label": "TVQ",
+            "base": 2870,
+            "amount": 286
+          }
+        ],
+        "total": 3300,
+        "cashTotal": 3300,
+        "cashRounding": 0,
+        "change": 700
+      }
+    },
+    {
+      "id": "v5-ttc-qc-article-non-taxable",
+      "pricesIncludeTax": true,
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05,
+          "ratePpm": 50000
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975,
+          "ratePpm": 99750
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 2900,
+          "quantity": 1
+        },
+        {
+          "unitPrice": 0,
+          "quantity": 1,
+          "custom": {
+            "label": "Consigne",
+            "unitPrice": 500,
+            "taxable": false
+          }
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 3500,
+      "expected": {
+        "lines": [
+          {
+            "gross": 2900,
+            "discountAmount": 0,
+            "net": 2900
+          },
+          {
+            "gross": 500,
+            "discountAmount": 0,
+            "net": 500,
+            "taxable": false
+          }
+        ],
+        "subtotal": 3400,
+        "discountTotal": 0,
+        "taxableSubtotal": 2900,
+        "taxes": [
+          {
+            "label": "TPS",
+            "base": 2522,
+            "amount": 126
+          },
+          {
+            "label": "TVQ",
+            "base": 2522,
+            "amount": 252
+          }
+        ],
+        "total": 3400,
+        "cashTotal": 3400,
+        "cashRounding": 0,
+        "change": 100
+      }
+    },
+    {
+      "id": "v5-ttc-qc-sans-arrondi",
+      "pricesIncludeTax": true,
+      "step": 1,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05,
+          "ratePpm": 50000
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975,
+          "ratePpm": 99750
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 1234,
+          "quantity": 1
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 2000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 1234,
+            "discountAmount": 0,
+            "net": 1234
+          }
+        ],
+        "subtotal": 1234,
+        "discountTotal": 0,
+        "taxableSubtotal": 1234,
+        "taxes": [
+          {
+            "label": "TPS",
+            "base": 1073,
+            "amount": 54
+          },
+          {
+            "label": "TVQ",
+            "base": 1073,
+            "amount": 107
+          }
+        ],
+        "total": 1234,
+        "cashTotal": 1234,
+        "cashRounding": 0,
+        "change": 766
+      }
+    },
+    {
+      "id": "v5-ttc-fr-identique-v3",
+      "pricesIncludeTax": true,
+      "step": 1,
+      "taxes": [
+        {
+          "label": "TVA 20 %",
+          "rate": 0.2,
+          "ratePpm": 200000,
+          "category": "standard"
+        },
+        {
+          "label": "TVA 5,5 %",
+          "rate": 0.055,
+          "ratePpm": 55000,
+          "category": "reduced"
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 1200,
+          "quantity": 1,
+          "taxCategory": "standard"
+        },
+        {
+          "unitPrice": 550,
+          "quantity": 1,
+          "taxCategory": "reduced"
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 2000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 1200,
+            "discountAmount": 0,
+            "net": 1200
+          },
+          {
+            "gross": 550,
+            "discountAmount": 0,
+            "net": 550,
+            "taxCategory": "reduced"
+          }
+        ],
+        "subtotal": 1750,
+        "discountTotal": 0,
+        "taxableSubtotal": 1750,
+        "taxes": [
+          {
+            "label": "TVA 20 %",
+            "base": 1000,
+            "amount": 200
+          },
+          {
+            "label": "TVA 5,5 %",
+            "base": 521,
+            "amount": 29
+          }
+        ],
+        "total": 1750,
+        "cashTotal": 1750,
+        "cashRounding": 0,
+        "change": 250
+      }
     }
   ]
 }

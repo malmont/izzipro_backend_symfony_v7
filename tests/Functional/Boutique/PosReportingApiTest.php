@@ -52,7 +52,7 @@ class PosReportingApiTest extends WebTestCase
     {
         $this->loginAs(['ROLE_USER_POS']);
         $cases = $this->json($this->request('GET', '/api/pos/offline-cases'));
-        $this->assertSame(['rule', 'description', 'cases', 'chainVectors'], array_keys($cases), 'format actuel conservé, clé à part');
+        $this->assertSame(['rule', 'description', 'cases', 'chainVectors', 'ruleV5', 'casesV5'], array_keys($cases), 'format actuel conservé, clés à part (v5 : PAYS-1c)');
         $v = $cases['chainVectors'][0];
         $this->assertSame($v['canonical'], PosOfflineSyncService::canonical($v['sale']), 'JSON canonique identique à l\'octet');
         $this->assertSame($v['hash'], PosOfflineSyncService::hashOf($v['sale'], $v['prevHash']), 'hash reproduit');

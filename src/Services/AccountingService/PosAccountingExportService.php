@@ -392,7 +392,7 @@ class PosAccountingExportService
             $rate = 0;
             foreach ($taxesByOrder[(int) $item['order_id']] ?? [] as $t) {
                 if (\App\Services\OrderService\TaxCategory::applies($t['category'], $category)) {
-                    $rate += \App\Services\OrderService\TaxInclusive::rateTenThousandths((float) $t['rate']) ?? (int) round((float) $t['rate'] * \App\Services\OrderService\TaxInclusive::SCALE);
+                    $rate += (int) \App\Services\OrderService\TaxCode::ppm((float) $t['rate']);
                 }
             }
             $gross += \App\Services\OrderService\TaxInclusive::base($ttcGross, $rate);

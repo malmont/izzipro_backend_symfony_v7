@@ -66,9 +66,11 @@ class TaxInclusiveApiTest extends WebTestCase
 
     public function testIntegerExtractionMatchesTheWrittenFormula(): void
     {
-        $this->assertSame([2000, 550, 210, 850, 175, 105, 1300, 90], array_map(fn ($r) => TaxInclusive::rateTenThousandths($r), [0.2, 0.055, 0.021, 0.085, 0.0175, 0.0105, 0.13, 0.009]), 'France et DOM : multiples exacts de 0,01 %');
-        $this->assertNull(TaxInclusive::rateTenThousandths(0.09975), '9,975 % : refusé');
-        $this->assertSame([3, 8, 1000, 521, 469, 900], [TaxInclusive::base(3, 2000), TaxInclusive::base(9, 2000), TaxInclusive::base(1200, 2000), TaxInclusive::base(550, 550), TaxInclusive::base(495, 550), TaxInclusive::base(1080, 2000)], '0,03 → 0,03 ; 0,09 → 0,08 ; 12,00 → 10,00 ; 5,50 → 5,21 ; 4,95 → 4,69 ; 10,80 → 9,00');
+        // PAYS-1c (13/11/2026) : taux en millionièmes ; mêmes résultats qu'en dix-millièmes pour les multiples de 0,01 %
+        $this->assertSame([200000, 55000, 21000, 85000, 17500, 10500, 130000, 9000], array_map(fn ($r) => TaxInclusive::ratePpm($r), [0.2, 0.055, 0.021, 0.085, 0.0175, 0.0105, 0.13, 0.009]), 'France et DOM');
+        $this->assertSame([99750, false], [TaxInclusive::ratePpm(0.09975), TaxInclusive::isLegacyExactRate(0.09975)], '9,975 % : exact au millionième, pas au dix-millième');
+        $this->assertNull(TaxInclusive::ratePpm(0.0997512), 'taux non exact au millionième : refusé');
+        $this->assertSame([3, 8, 1000, 521, 469, 900], [TaxInclusive::base(3, 200000), TaxInclusive::base(9, 200000), TaxInclusive::base(1200, 200000), TaxInclusive::base(550, 55000), TaxInclusive::base(495, 55000), TaxInclusive::base(1080, 200000)], '0,03 → 0,03 ; 0,09 → 0,08 ; 12,00 → 10,00 ; 5,50 → 5,21 ; 4,95 → 4,69 ; 10,80 → 9,00');
         $this->assertSame(['a' => 343, 'b' => 157], TaxInclusive::prorate(500, ['a' => 1200, 'b' => 550]), 'livraison 5,00 € répartie 3,43 / 1,57');
     }
 
@@ -204,14 +206,15 @@ class TaxInclusiveApiTest extends WebTestCase
     public function testEasyAdminSettingIsGuardedAndSiteLanguageDrivesTheLabels(): void
     {
         $guard = static::getContainer()->get(TaxInclusiveGuard::class);
-        // Taux non multiple de 0,01 % sur le magasin : refus
-        $this->db->executeStatement("INSERT INTO tax (id, name, rate, type, province, country, category) VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM tax), 'Taxe bizarre', 0.09975, 'vat', NULL, 'FR', 'intermediate')");
+        // Taux non exact au millionième sur le magasin : refus (PAYS-1c : 9,975 % est désormais accepté)
+        $this->db->executeStatement("INSERT INTO tax (id, name, rate, type, province, country, category) VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM tax), 'Taxe bizarre', 0.0997512, 'vat', NULL, 'FR', 'intermediate')");
         try {
             $guard->assertCanEnable();
             $this->fail('taux inexact');
         } catch (\DomainException $e) {
             $this->assertStringContainsString('Taxe bizarre', $e->getMessage());
-            $this->assertStringContainsString('9,975', $e->getMessage());
+            $this->assertStringContainsString('9,9751', $e->getMessage());
+            $this->assertStringContainsString('millionième', $e->getMessage());
         }
         $this->db->executeStatement("DELETE FROM tax WHERE name = 'Taxe bizarre'");
         // Stripe Tax : refus, dans les deux sens

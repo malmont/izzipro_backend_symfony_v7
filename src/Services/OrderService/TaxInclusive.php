@@ -4,34 +4,44 @@ namespace App\Services\OrderService;
 
 /**
  * Prix taxes comprises (F18 partie 2b, 02/11/2026) : extraction de la taxe d'un montant TTC en cents, en arithmétique entière, sans
- * flottant. Le taux est exprimé en dix-millièmes (20 % → 2000, 5,5 % → 550, 9,975 % → 997,5 : refusé, un taux doit être un multiple
- * exact de 0,01 %). base = round_demi_haut(ttc × 10000 / (10000 + R)) ; taxe = ttc − base ; la somme des bases et des taxes redonne
+ * flottant. Depuis PAYS-1c (13/11/2026), le taux est exprimé en millionièmes (20 % → 200000, 5,5 % → 55000, TVQ 9,975 % → 99750) ; avant,
+ * en dix-millièmes (9,975 % → 997,5 : refusé). Pour un taux multiple de 0,01 %, les deux échelles donnent exactement le même résultat
+ * (mêmes fractions). base = round_demi_haut(ttc × 10⁶ / (10⁶ + R)) ; taxe = ttc − base ; la somme des bases et des taxes redonne
  * exactement le TTC. Exemples : 0,03 € à 20 % → 2,5 → base 0,03, TVA 0,00 ; 0,09 € → 7,5 → base 0,08, TVA 0,01 ; 5,50 € à 5,5 % →
  * 521,3 → base 5,21, TVA 0,29.
  */
 final class TaxInclusive
 {
-    public const SCALE = 10000;
+    public const SCALE = 1000000;
 
-    /** Taux en dix-millièmes ; null si le taux n'est pas un multiple exact de 0,01 % */
-    public static function rateTenThousandths(float $rate): ?int
+    /** Taux en millionièmes ; null si le taux n'est pas exact au millionième */
+    public static function ratePpm(float $rate): ?int
     {
         $scaled = $rate * self::SCALE;
         $rounded = (int) round($scaled);
 
-        return abs($scaled - $rounded) < 1e-6 ? $rounded : null;
+        return abs($scaled - $rounded) < 1e-4 ? $rounded : null;
     }
 
+    /** Taux utilisable en prix TTC : exact au millionième (TVQ 9,975 % comprise) */
     public static function isExactRate(float $rate): bool
     {
-        return self::rateTenThousandths($rate) !== null;
+        return self::ratePpm($rate) !== null;
     }
 
-    /** Assiette HT (cents) d'un TTC frappé d'un taux combiné R (dix-millièmes), arrondi demi vers le haut en valeur absolue */
-    public static function base(int $ttc, int $rateTenThousandths): int
+    /** Taux multiple exact de 0,01 % : calculable par les règles hors ligne v3 et v4 (dix-millièmes) ; sinon la règle v5 est exigée */
+    public static function isLegacyExactRate(float $rate): bool
     {
-        $divisor = self::SCALE + $rateTenThousandths;
-        if ($divisor <= 0 || $rateTenThousandths <= 0) {
+        $ppm = self::ratePpm($rate);
+
+        return $ppm !== null && $ppm % 100 === 0;
+    }
+
+    /** Assiette HT (cents) d'un TTC frappé d'un taux combiné R (millionièmes), arrondi demi vers le haut en valeur absolue */
+    public static function base(int $ttc, int $ratePpm): int
+    {
+        $divisor = self::SCALE + $ratePpm;
+        if ($divisor <= 0 || $ratePpm <= 0) {
             return $ttc;
         }
         $sign = $ttc < 0 ? -1 : 1;
@@ -39,12 +49,12 @@ final class TaxInclusive
         return $sign * intdiv(2 * abs($ttc) * self::SCALE + $divisor, 2 * $divisor);
     }
 
-    /** Part d'une taxe (dix-millièmes) sur une assiette, arrondi demi vers le haut en valeur absolue */
-    public static function taxOn(int $base, int $rateTenThousandths): int
+    /** Part d'une taxe (millionièmes) sur une assiette, arrondi demi vers le haut en valeur absolue */
+    public static function taxOn(int $base, int $ratePpm): int
     {
         $sign = $base < 0 ? -1 : 1;
 
-        return $sign * intdiv(2 * abs($base) * $rateTenThousandths + self::SCALE, 2 * self::SCALE);
+        return $sign * intdiv(2 * abs($base) * $ratePpm + self::SCALE, 2 * self::SCALE);
     }
 
     /**

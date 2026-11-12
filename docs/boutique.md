@@ -633,6 +633,8 @@ commande ensuite). Réglage `commerce.taxProvider` des réglages de la boutique 
 - Pour un nouveau taux : une nouvelle taxe datée (`valid_from`). Les taxes archivées ou hors de leurs dates (jours du magasin) ne
   s'appliquent plus.
 - Détails, déclencheur et clés du ticket : `docs/caisse.md`, « Taxes gelées à la vente ».
+- Prix taxes comprises (PAYS-1c, 13/11/2026) : calcul au millionième, donc permis au Québec (TVQ 9,975 %) ; résultats inchangés pour les
+  taux multiples de 0,01 %. Détails : `docs/caisse.md`, « Prix taxes comprises au Québec et règle hors ligne v5 ».
 
 ## Annulation d'une commande web (`POST /api/order/cancel/{id}`)
 
