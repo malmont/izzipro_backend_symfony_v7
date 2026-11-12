@@ -726,7 +726,10 @@ reçu par la caisse était la réimpression : afficher un ticket comptait un dup
 les réponses d'écriture (vente, retour, annulation) n'ont jamais compté de réimpression. `cancellation` (vente annulée, lot PAYS-1b) est porté par le
 ticket de vente seulement : il est `null` sur l'avoir d'annulation lui-même (et sur tout avoir), que le document soit lu ou réimprimé.
 *Demo : compteurs et journal de réimpression de demo du 12/11/2026 gonflés par les contrôles de mise en ligne, non réels (609 entrées
-`RECEIPT_REPRINTED` écrites ce jour-là par des lectures de contrôle ; rien n'a été corrigé en base, le journal étant inaltérable).*
+`RECEIPT_REPRINTED` écrites ce jour-là par des lectures de contrôle ; rien n'a été corrigé en base, le journal étant inaltérable).
+Même jour, mêmes contrôles : 260 entrées de consultation non réelles dans le journal de caisse de demo (208 `EXPORT_GENERATED`, 26
+`X_REPORT_VIEWED`, 26 `CASHIER_STATS_VIEWED`). Les exports comptables, le rapport X et les statistiques par caissier inscrivent chacun
+une consultation, par conception : un contrôle de mise en ligne ne les lit que pour un lot qui touche la caisse ou la comptabilité.*
 
 **Lien public et QR.** `receiptUrl` = `https://<hôte public du site>/api/r/<jeton>` : servi **sous `/api/`** parce que l'hôte public
 d'un site (ex. `demo.arkanoa-media.com`) sert le site Next.js et ne route vers le backend que `/api/` ; rien ne change donc
