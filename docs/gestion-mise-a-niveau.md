@@ -285,8 +285,8 @@ Décisions de contrat prises pour les lots :
   → 422 `VALIDATION_FAILED`, `fields.<champ> = TOO_LARGE`, sur toutes les routes qui lisent leur corps par `GestionInput`. La borne
   elle-même est acceptée. Avant, la valeur passait la validation et l'enregistrement échouait en base (500). Les montants signés de la
   trésorerie (colonnes plus larges) sont bornés à 9 × 10¹⁵ en valeur absolue, même code (avant : `MUST_BE_INTEGER_CENTS`).
-  Non couvert : un identifiant trop grand **dans l'adresse** d'une route (`/api/commandes/99999999999/…`) sort encore en 500, sur toute
-  la plateforme et pas seulement en gestion.
+  Un identifiant trop grand **dans l'adresse** d'une route (`/api/commandes/99999999999/…`) est traité par le lot ROUTEID, pour toute
+  la plateforme : 404 (`docs/architecture.md`, « Authentification et sécurité »).
 - Correctif du 12/11/2026, corps de `POST /api/commandes/{id}/products` (multipart ; lu par `Dto/ProductInputDTO`, seul lecteur du
   corps ; test `PurchasesApiTest::testCreatingAnArticleInAnOrderNeverCrashesOnMissingEmptyOrMalformedFields`) : plus aucun 500 pour un
   corps incomplet ou mal formé.
