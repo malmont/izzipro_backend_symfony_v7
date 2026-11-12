@@ -138,6 +138,7 @@ class PurchaseCurrencyApiTest extends WebTestCase
         $this->assertSame([16200, 16200], [$this->get("/api/dashboard/collection/$collectionId")['GeneralExpenses']['totalShippingCost'], $this->get("/api/collections/$collectionId/frais-de-port")['totals']['amount']], 'les chiffres de la période ouverte suivent le nouveau prix');
         $edited = $patch($f, ['transporteur' => ['id' => $carrier2], 'tracknumber' => 'TR-2', 'facture' => '', 'name' => 'Fret aérien']);
         $this->assertSame([$carrier2, 'Transport deux ' . $tag, 'TR-2', '', 'Fret aérien', 12000], [$edited['transporteur']['id'], $edited['transporteur']['name'], $edited['tracknumber'], $edited['facture'], $edited['name'], $edited['price']]);
+        $this->assertNull($this->em()->getConnection()->fetchOne('SELECT facture FROM frais_de_port WHERE commande_id = ?', [$commandeId]), 'facture effacée : null en base (EDIT-JOURNAL), chaîne vide en sortie');
         $this->assertSame($edited, $patch($f, ['price' => 12000, 'name' => 'Fret aérien', 'transporteur' => ['id' => $carrier2]]), 'valeurs identiques : même réponse, rien au journal');
         $stateF = fn (): string => (string) $this->em()->getConnection()->fetchOne('SELECT md5(CAST(row_to_json(f) AS text)) FROM frais_de_port f WHERE commande_id = ?', [$commandeId]);
         $before = $stateF();
@@ -188,6 +189,125 @@ class PurchaseCurrencyApiTest extends WebTestCase
      * site (`siteCurrency`) et son prix converti (`priceConverted`) : avant, `currency` était la devise du site même pour une commande
      * en devise étrangère.
      */
+    /**
+     * Lot EDIT-JOURNAL (12/11/2026, `docs/gestion-mise-a-niveau.md` § 7) : suppressions inscrites au journal des contenus, transporteur
+     * réservé protégé (création, renommage, suppression), nom obligatoire à la création d'un transporteur, champ facultatif vide
+     * enregistré null, ordre stable des listes.
+     */
+    public function testDeletionsAreJournaledReservedNameIsGuardedAndListsKeepTheirOrder(): void
+    {
+        $tag = bin2hex(random_bytes(2));
+        $conn = $this->em()->getConnection();
+        $today = static::getContainer()->get(\App\Gestion\Services\PeriodCalendar::class)->today();
+        $type = $this->create(TypeFournisseur::class, ['name' => 'Type ' . $tag])->getId();
+        $this->endOfWrite();
+        $error = function (string $method, string $route, ?array $body): array {
+            $this->request($method, $route, $body);
+
+            return [$this->client->getResponse()->getStatusCode(), $this->body()['error'] ?? null, $this->body()['fields'] ?? null];
+        };
+        $deletions = fn (string $resource, int $id): array => array_map(fn (array $r) => ['user' => $r['user_identifier'], 'before' => json_decode((string) $r['before_state'], true), 'after' => $r['after_state'], 'at' => $r['created_at']],
+            $conn->fetchAllAssociative("SELECT * FROM content_audit_log WHERE resource = ? AND resource_id = ? AND action = 'delete' ORDER BY id", [$resource, (string) $id]));
+
+        // ----- Transporteur : nom obligatoire, nom réservé, champs vides
+        $count = fn (): int => (int) $conn->fetchOne('SELECT COUNT(*) FROM transporteur');
+        $before = $count();
+        $this->assertSame([422, 'VALIDATION_FAILED', ['name' => 'REQUIRED']], $error('POST', '/api/transporteurs', ['name' => '', 'contact' => 'x']), 'avant : un nom vide était enregistré');
+        $this->assertSame([422, 'VALIDATION_FAILED', ['name' => 'REQUIRED']], $error('POST', '/api/transporteurs', ['name' => '   ']));
+        $this->assertSame([422, 'VALIDATION_FAILED', ['name' => 'REQUIRED']], $error('POST', '/api/transporteurs', ['contact' => 'x']));
+        foreach (['Sur facture fournisseur', '  sur FACTURE fournisseur ', 'SUR FACTURE FOURNISSEUR'] as $reservedName) {
+            $this->assertSame([409, 'TRANSPORTEUR_RESERVED', null], $error('POST', '/api/transporteurs', ['name' => $reservedName]), "création sous le nom réservé : « $reservedName »");
+        }
+        $this->assertSame($before, $count(), 'aucun refus ne crée');
+        $carrier = $this->post('/api/transporteurs', ['name' => "  Nationex $tag ", 'logo' => '', 'contact' => '   '], 201);
+        $this->assertSame(["Nationex $tag", null, null], [$carrier['name'], $carrier['logo'], $carrier['contact']], 'nom rogné ; logo et contact vides : null');
+        $this->assertSame(['logo' => null, 'contact' => null], $conn->fetchAssociative('SELECT logo, contact FROM transporteur WHERE id = ?', [$carrier['id']]), 'null en base, pas une chaîne vide');
+        foreach (['Sur facture fournisseur', ' sur facture FOURNISSEUR'] as $reservedName) {
+            $this->assertSame([409, 'TRANSPORTEUR_RESERVED', null], $error('PATCH', "/api/transporteurs/{$carrier['id']}", ['name' => $reservedName, 'contact' => 'ignoré']), "renommage vers le nom réservé : « $reservedName »");
+        }
+        $this->assertSame(["Nationex $tag", null], array_values($conn->fetchAssociative('SELECT name, contact FROM transporteur WHERE id = ?', [$carrier['id']])), 'refus : rien écrit');
+        $reserved = $this->em()->getRepository(Transporteur::class)->findOneBy(['name' => \App\Services\TransporteurService\TransporteurService::RESERVED_NAME]) ?? $this->create(Transporteur::class, ['name' => \App\Services\TransporteurService\TransporteurService::RESERVED_NAME]);
+        $this->endOfWrite();
+        $reservedId = $reserved->getId();
+        $conn = $this->em()->getConnection();
+        $this->assertSame([409, 'TRANSPORTEUR_RESERVED', null], $error('DELETE', "/api/transporteurs/$reservedId", null), 'le transporteur des factures lues par IA ne se supprime pas, utilisé ou non');
+        $this->assertSame(1, (int) $conn->fetchOne('SELECT COUNT(*) FROM transporteur WHERE id = ?', [$reservedId]));
+        $this->assertSame([], $deletions('transporteurs', $reservedId), 'un refus n\'écrit pas au journal');
+
+        // ----- Ordre stable des listes : nom sans tenir compte de la casse, puis identifiant ; une modification ne déplace rien
+        $names = ["beta $tag", "Alpha $tag", "alpha $tag", "Gamma $tag"];
+        $carriers = [];
+        foreach ($names as $name) {
+            $carriers[$name] = (int) $this->post('/api/transporteurs', ['name' => $name], 201)['id'];
+        }
+        $mine = fn (array $list, array $ids): array => array_values(array_map(fn ($x) => $x['name'], array_filter($list, fn ($x) => in_array($x['id'], $ids, true))));
+        $expected = ["Alpha $tag", "alpha $tag", "beta $tag", "Gamma $tag"];
+        $this->assertSame($expected, $mine($this->get('/api/transporteurs'), array_values($carriers)), 'transporteurs : nom sans casse, puis identifiant (Alpha créé avant alpha)');
+        $this->request('PATCH', "/api/transporteurs/{$carriers["Alpha $tag"]}", ['contact' => '1 800 555 0100']);
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+        $this->assertSame($expected, $mine($this->get('/api/transporteurs'), array_values($carriers)), 'avant : le transporteur modifié passait en fin de liste');
+        $suppliers = [];
+        foreach ($names as $name) {
+            $suppliers[$name] = (int) $this->post('/api/fournisseurs', ['name' => $name, 'typeFournisseur' => $type, 'ville' => '  ', 'tel' => '', 'adresse' => '', 'pays' => ''], 201)['id'];
+        }
+        $this->assertSame($expected, $mine($this->get('/api/fournisseurs?limit=100&q=' . $tag), array_values($suppliers)), 'fournisseurs : même règle');
+        $this->request('PATCH', "/api/fournisseurs/{$suppliers["Alpha $tag"]}", ['ville' => 'Laval']);
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+        $this->assertSame($expected, $mine($this->get('/api/fournisseurs?limit=100&q=' . $tag), array_values($suppliers)));
+        $this->assertSame($expected, $mine($this->get('/api/fournisseurs?q=' . $tag), array_values($suppliers)), 'sans pagination : même ordre');
+        $all = array_map(fn ($f) => ['id' => $f->getId(), 'name' => $f->getName()], static::getContainer()->get(\App\Services\FournisseurService\FournisseurService::class)->getAllFournisseurs());
+        $this->assertSame($expected, $mine($all, array_values($suppliers)), 'liste complète du service (plus appelée par une route) : même ordre');
+        $this->assertSame([true, true, false, false], array_map([\App\Services\TransporteurService\TransporteurService::class, 'isReserved'], ['  sur FACTURE fournisseur ', 'Sur facture fournisseur', 'Sur facture', '']), 'nom réservé : sans casse ni espaces autour');
+
+        // ----- Fournisseur : champs vides à la création, suppression au journal
+        $supplierId = $suppliers["beta $tag"];
+        $this->assertSame(['adresse' => null, 'ville' => null, 'pays' => null, 'tel' => null], $conn->fetchAssociative('SELECT adresse, ville, pays, tel FROM fournisseur WHERE id = ?', [$supplierId]), 'création : vide ou espaces = null, comme un champ jamais rempli');
+        $listed = array_column($this->get('/api/fournisseurs?limit=100&q=' . $tag), null, 'id')[$supplierId];
+        $this->assertSame([null, null, null, null], [$listed['adresse'], $listed['ville'], $listed['pays'], $listed['tel']]);
+        $this->request('DELETE', "/api/fournisseurs/$supplierId");
+        $this->assertSame(204, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
+        $this->assertSame(0, (int) $conn->fetchOne('SELECT COUNT(*) FROM fournisseur WHERE id = ?', [$supplierId]), 'supprimé pour de bon');
+        $log = $deletions('fournisseurs', $supplierId);
+        $this->assertCount(1, $log);
+        $this->assertSame(["beta $tag", $type, null], [$log[0]['before']['name'], $log[0]['before']['typeFournisseurId'], $log[0]['after']], 'journal : l\'objet avant suppression, rien après');
+        $this->assertNotEmpty($log[0]['user'], 'qui');
+        $this->assertNotEmpty($log[0]['at'], 'quand');
+
+        // ----- Transporteur : suppression au journal
+        $carrierId = $carriers["Gamma $tag"];
+        $this->request('DELETE', "/api/transporteurs/$carrierId");
+        $this->assertSame(204, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
+        $this->assertSame(0, (int) $conn->fetchOne('SELECT COUNT(*) FROM transporteur WHERE id = ?', [$carrierId]));
+        $log = $deletions('transporteurs', $carrierId);
+        $this->assertSame([['name' => "Gamma $tag", 'logo' => null, 'contact' => null]], array_column($log, 'before'));
+        $this->assertNotEmpty($log[0]['user']);
+
+        // ----- Frais de port : champs vides, suppression au journal avec la commande
+        $collectionId = (int) $this->post('/api/createcollections', ['budgetCollection' => 1000000, 'nomCollection' => "Journal $tag"], 201)['id'];
+        $commandeId = (int) $this->post("/api/collections/$collectionId/commandes", ['budget' => 100000, 'date' => $today->format('Y-m-d') . ' 10:00:00', 'name' => "Achat $tag", 'fournisseur' => ['id' => $suppliers["Alpha $tag"]]], 201)['id'];
+        $f = "/api/commandes/$commandeId/frais-de-port";
+        $row = fn () => $conn->fetchAssociative('SELECT facture, tracknumber FROM frais_de_port WHERE commande_id = ?', [$commandeId]);
+        $shipping = $this->post($f, ['name' => 'Fret', 'facture' => '', 'tracknumber' => '  ', 'price' => 4500, 'transporteur' => ['id' => $carriers["Alpha $tag"]]], 201);
+        $this->assertSame(['facture' => null, 'tracknumber' => null], $row(), 'création : null en base');
+        $this->assertSame(['', ''], [$shipping['facture'], $shipping['tracknumber']], 'la sortie du frais de port garde ses chaînes vides (contrat inchangé)');
+        $this->request('PATCH', $f, ['facture' => 'FA-1', 'tracknumber' => 'TR-1']);
+        $this->assertSame(['facture' => 'FA-1', 'tracknumber' => 'TR-1'], $row());
+        $this->request('PATCH', $f, ['facture' => '', 'tracknumber' => null]);
+        $this->assertSame([200, '', ''], [$this->client->getResponse()->getStatusCode(), $this->body()['facture'], $this->body()['tracknumber']]);
+        $this->assertSame(['facture' => null, 'tracknumber' => null], $row(), 'effacé par modification : null en base, comme à la création');
+        $shippingId = (int) $shipping['id'];
+        $this->request('DELETE', $f);
+        $this->assertSame(204, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
+        $this->assertSame(0, (int) $conn->fetchOne('SELECT COUNT(*) FROM frais_de_port WHERE commande_id = ?', [$commandeId]), 'supprimé pour de bon, malgré la seconde écriture du journal');
+        $log = $deletions('frais-de-port', $shippingId);
+        $this->assertCount(1, $log);
+        $this->assertSame(['name' => 'Fret', 'facture' => null, 'tracknumber' => null, 'price' => 4500, 'transporteurId' => $carriers["Alpha $tag"], 'commandeId' => $commandeId, 'documentId' => null], $log[0]['before'], 'journal : l\'objet avant suppression, avec la commande');
+        $this->assertNotEmpty($log[0]['user']);
+        $this->request('DELETE', $f);
+        $this->assertSame(204, $this->client->getResponse()->getStatusCode(), 'commande sans frais de port : rien à supprimer');
+        $this->assertCount(1, $deletions('frais-de-port', $shippingId), 'et rien de plus au journal');
+    }
+
     public function testShippingCostsOfAPeriodInOneRead(): void
     {
         $tag = bin2hex(random_bytes(2));

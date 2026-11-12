@@ -93,10 +93,11 @@ class FournisseurService
         }
         $fournisseur->setTypeFournisseur($typeFournisseur);
 
-        $fournisseur->setAdresse($inputDTO->adresse);
-        $fournisseur->setVille($inputDTO->ville);
-        $fournisseur->setPays($inputDTO->pays);
-        $fournisseur->setTel($inputDTO->tel);
+        // champ facultatif vide : null, comme un champ jamais rempli (lot EDIT-JOURNAL, 12/11/2026)
+        $fournisseur->setAdresse(\App\Gestion\Services\GestionInput::blank($inputDTO->adresse));
+        $fournisseur->setVille(\App\Gestion\Services\GestionInput::blank($inputDTO->ville));
+        $fournisseur->setPays(\App\Gestion\Services\GestionInput::blank($inputDTO->pays));
+        $fournisseur->setTel(\App\Gestion\Services\GestionInput::blank($inputDTO->tel));
         $fournisseur->setCurrency(self::currency($inputDTO->currency)); // devise d'achat (lot G6, 10/11/2026)
         
         $em->persist($fournisseur);
@@ -105,10 +106,10 @@ class FournisseurService
         return $fournisseur;
     }
 
+    /** @return list<Fournisseur> même ordre que la liste filtrée : nom sans casse, puis identifiant (lot EDIT-JOURNAL, 12/11/2026) */
     public function getAllFournisseurs(): array
     {
-        $em = $this->emProvider->getEntityManager();
-        return $em->getRepository(Fournisseur::class)->findAll();
+        return $this->searchFournisseurs(null)['items'];
     }
 
     /**
@@ -127,9 +128,11 @@ class FournisseurService
         if (!$fournisseur->getCommandes()->isEmpty()) {
             throw new \App\Gestion\Services\GestionConflictException('FOURNISSEUR_IN_USE', 'Ce fournisseur a des commandes : il ne peut pas être supprimé.'); // 409 (lot G4, 09/11/2026 ; avant : violation de clé étrangère)
         }
+        $id = $fournisseur->getId();
+        $before = self::snapshot($fournisseur);
         $em->remove($fournisseur);
-        
         $em->flush();
+        $this->audit?->record('fournisseurs', $id, 'delete', $before, null); // lot EDIT-JOURNAL (12/11/2026)
     }
 
     /** Devise d'achat validée (CAD, EUR, USD : mêmes devises que le site) ; vide → null (devise du site) ; 422 INVALID_CURRENCY sinon */

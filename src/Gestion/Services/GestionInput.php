@@ -116,6 +116,17 @@ final class GestionInput
         return $value;
     }
 
+    /**
+     * Champ texte facultatif à l'écriture : rogné, et null quand il est vide (lot EDIT-JOURNAL, 12/11/2026). Un champ effacé a ainsi la
+     * même forme en base qu'un champ jamais rempli.
+     */
+    public static function blank(mixed $value, int $max = 255): ?string
+    {
+        $value = is_scalar($value) ? trim((string) $value) : '';
+
+        return $value === '' ? null : mb_substr($value, 0, $max);
+    }
+
     /** Chaîne non vide (bornée) ; null si absente et facultative */
     public function text(string $field, bool $required = true, int $max = 255): ?string
     {

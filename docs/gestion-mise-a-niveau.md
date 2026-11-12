@@ -367,6 +367,26 @@ Décisions de contrat prises pour les lots :
     `achats.csv` des périodes déjà fermées** (l'export lit les deux noms au moment de l'export) ; les montants figés, eux, ne changent pas. L'ancien nom se retrouve au journal des contenus pendant sa durée de conservation (180 jours).
   - Code : `FournisseurService::update`, `TransporteurService::update`, `FraisDePortService::update` et leurs cas d'usage `Update…UseCase` ;
     test `PurchaseCurrencyApiTest::testSupplierCarrierAndShippingCostCanBeEdited`.
+- **Lot EDIT-JOURNAL (12/11/2026) : suppressions au journal, nom réservé, champs vides, ordre des listes.** Sans changement de route.
+  - **Suppressions au journal des contenus** (`content_audit_log`, action `delete`) : `DELETE /api/fournisseurs/{id}` (ressource
+    `fournisseurs`), `DELETE /api/transporteurs/{id}` (`transporteurs`), `DELETE /api/commandes/{id}/frais-de-port` (`frais-de-port`).
+    L'entrée porte qui, quand, et l'objet **avant** suppression ; pour un frais de port, `commandeId` et `documentId`. Un refus (409) ou
+    une commande sans frais de port n'écrit rien.
+  - **« Sur facture fournisseur »** (transporteur des factures lues par IA) : 409 `TRANSPORTEUR_RESERVED` pour le **supprimer** (utilisé
+    ou non), pour **créer** un transporteur sous ce nom, et pour **renommer** un autre transporteur ainsi. Le nom est comparé sans tenir
+    compte de la casse ni des espaces autour. Sans cette garde, la lecture de factures retrouverait le mauvais transporteur.
+  - **`POST /api/transporteurs`** : nom obligatoire, 422 `VALIDATION_FAILED { fields.name = REQUIRED }` (avant : un nom vide était
+    enregistré) ; le nom est rogné.
+  - **Champ facultatif vide = `null` en base**, à la création comme à la modification : fournisseur (`adresse`, `ville`, `pays`, `tel`),
+    transporteur (`logo`, `contact`), frais de port (`facture`, `tracknumber`). Un champ effacé a la même forme qu'un champ jamais rempli.
+    **La sortie du frais de port ne change pas** : `facture` et `tracknumber` y restent des chaînes vides quand ils sont absents (forme
+    d'origine de cet objet) ; le fournisseur et le transporteur rendent `null`. Les chaînes vides déjà en base ne sont pas corrigées.
+  - **Ordre stable des listes** : `GET /api/transporteurs` et `GET /api/fournisseurs` sont triés par nom sans tenir compte de la casse,
+    puis par identifiant. Avant, les transporteurs n'avaient aucun ordre (un transporteur modifié passait en fin de liste) et les
+    fournisseurs suivaient la casse de la base.
+  - Code : `TransporteurService` (`isReserved`, `createTransporteur`, `deleteTransporteur`, `getAllTransporteurs`), `FournisseurService`,
+    `FournisseurRepository::search`, `FraisDePortService`, `GestionInput::blank` ; test
+    `PurchaseCurrencyApiTest::testDeletionsAreJournaledReservedNameIsGuardedAndListsKeepTheirOrder`.
 
 ## 8. Jeu de données de démonstration (demande du propriétaire, 09/11/2026)
 

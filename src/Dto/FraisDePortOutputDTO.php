@@ -31,7 +31,7 @@ class FraisDePortOutputDTO
         $this->facture = $fraisDePort->getFacture() ?? ''; 
         $photo = $fraisDePort->getTransporteur();
         $this->image = $photo ? $host . '/assets/uploads/Carrier/' . $photo->getLogo() : null;
-        $this->tracknumber = $fraisDePort->getTracknumber();
+        $this->tracknumber = $fraisDePort->getTracknumber() ?? ''; // null en base depuis EDIT-JOURNAL (12/11/2026) ; la sortie garde '' comme `facture`
         $this->price = (int) $fraisDePort->getPrice();
         $this->priceConverted = (int) round($this->price * ($foreign ? (float) ($commande->getExchangeRate() ?? 1) : 1.0));
         $this->transporteur = [

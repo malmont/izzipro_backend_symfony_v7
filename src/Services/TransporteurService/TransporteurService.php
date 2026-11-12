@@ -31,6 +31,9 @@ class TransporteurService
         if ($name !== null && $name !== $transporteur->getName() && $transporteur->getName() === self::RESERVED_NAME) {
             throw new \App\Gestion\Services\GestionConflictException('TRANSPORTEUR_RESERVED', 'Ce transporteur sert aux frais de port lus sur les factures : il ne peut pas être renommé.');
         }
+        if ($name !== null && self::isReserved($name) && !self::isReserved((string) $transporteur->getName())) {
+            throw new \App\Gestion\Services\GestionConflictException('TRANSPORTEUR_RESERVED', 'Ce nom est réservé aux frais de port lus sur les factures.');
+        }
         if ($name !== null) {
             $transporteur->setName($name);
         }
@@ -49,21 +52,41 @@ class TransporteurService
         return $transporteur;
     }
 
+    /**
+     * Ordre stable (lot EDIT-JOURNAL, 12/11/2026) : par nom sans tenir compte de la casse, puis par identifiant. Avant : aucun ordre
+     * (`findAll`), et un transporteur modifié passait en fin de liste.
+     *
+     * @return list<Transporteur>
+     */
     public function getAllTransporteurs(): array
     {
-        // MODIFICATION 2 : On récupère l'EM du tenant ici
-        $em = $this->emProvider->getEntityManager();
-        return $em->getRepository(Transporteur::class)->findAll();
+        return $this->emProvider->getEntityManager()->getRepository(Transporteur::class)->createQueryBuilder('t')
+            ->addSelect('LOWER(t.name) AS HIDDEN sortName')->orderBy('sortName', 'ASC')->addOrderBy('t.id', 'ASC')->getQuery()->getResult();
+    }
+
+    /** Vrai pour le nom réservé, sans tenir compte de la casse ni des espaces autour */
+    public static function isReserved(string $name): bool
+    {
+        return mb_strtolower(trim($name)) === mb_strtolower(self::RESERVED_NAME);
     }
 
     public function createTransporteur(string $name, ?string $logo, ?string $contact): Transporteur
     {
         $em = $this->emProvider->getEntityManager();
+        // lot EDIT-JOURNAL (12/11/2026) : nom obligatoire (avant : un nom vide était enregistré), nom réservé refusé (la lecture de
+        // factures retrouverait le mauvais transporteur), logo et contact vides enregistrés null
+        $name = trim($name);
+        if ($name === '') {
+            throw new \App\Gestion\Services\GestionValidationException(['name' => 'REQUIRED']);
+        }
+        if (self::isReserved($name)) {
+            throw new \App\Gestion\Services\GestionConflictException('TRANSPORTEUR_RESERVED', 'Ce nom est réservé aux frais de port lus sur les factures.');
+        }
 
         $transporteur = new Transporteur();
-        $transporteur->setName($name);
-        $transporteur->setLogo($logo);
-        $transporteur->setContact($contact);
+        $transporteur->setName(mb_substr($name, 0, 255));
+        $transporteur->setLogo(\App\Gestion\Services\GestionInput::blank($logo));
+        $transporteur->setContact(\App\Gestion\Services\GestionInput::blank($contact));
 
         $em->persist($transporteur);
         $em->flush();
@@ -74,11 +97,18 @@ class TransporteurService
     public function deleteTransporteur(Transporteur $transporteur): void
     {
         $em = $this->emProvider->getEntityManager();
+        // lot EDIT-JOURNAL (12/11/2026) : le transporteur des factures lues par IA ne se supprime pas ; suppression inscrite au journal
+        if (self::isReserved((string) $transporteur->getName())) {
+            throw new \App\Gestion\Services\GestionConflictException('TRANSPORTEUR_RESERVED', 'Ce transporteur sert aux frais de port lus sur les factures : il ne peut pas être supprimé.');
+        }
         // lot G4 (09/11/2026) : refusé s'il est utilisé par un frais de port ou une statistique figée (avant : violation de clé étrangère)
         if (!$transporteur->getFraisDePorts()->isEmpty() || !$transporteur->getCommandeStatistiques()->isEmpty()) {
             throw new \App\Gestion\Services\GestionConflictException('TRANSPORTEUR_IN_USE', 'Ce transporteur est utilisé par des frais de port : il ne peut pas être supprimé.');
         }
+        $id = $transporteur->getId();
+        $before = ['name' => $transporteur->getName(), 'logo' => $transporteur->getLogo(), 'contact' => $transporteur->getContact()];
         $em->remove($transporteur);
         $em->flush();
+        $this->audit?->record('transporteurs', $id, 'delete', $before, null);
     }
 }

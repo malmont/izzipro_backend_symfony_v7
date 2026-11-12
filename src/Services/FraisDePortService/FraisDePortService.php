@@ -57,10 +57,10 @@ class FraisDePortService
             $fraisDePort->setTransporteur($transporteur);
         }
         if (array_key_exists('facture', $data)) {
-            $fraisDePort->setFacture((string) $input->text('facture', false));
+            $fraisDePort->setFacture($input->text('facture', false)); // vide : null (lot EDIT-JOURNAL)
         }
         if (array_key_exists('tracknumber', $data)) {
-            $fraisDePort->setTracknumber((string) $input->text('tracknumber', false));
+            $fraisDePort->setTracknumber($input->text('tracknumber', false));
         }
         $em->flush();
         $after = self::snapshot($fraisDePort);
@@ -134,8 +134,9 @@ class FraisDePortService
 
         $fraisDePort = new FraisDePort();
         $fraisDePort->setName($inputDTO->name);
-        $fraisDePort->setFacture($inputDTO->facture);
-        $fraisDePort->setTracknumber($inputDTO->tracknumber);
+        // champ facultatif vide : null, comme un champ jamais rempli (lot EDIT-JOURNAL, 12/11/2026)
+        $fraisDePort->setFacture(\App\Gestion\Services\GestionInput::blank($inputDTO->facture));
+        $fraisDePort->setTracknumber(\App\Gestion\Services\GestionInput::blank($inputDTO->tracknumber));
         $fraisDePort->setPrice($inputDTO->price);
         $fraisDePort->setCommande($commande);
 
@@ -159,11 +160,14 @@ class FraisDePortService
 
         if ($fraisDePort) {
             $em = $this->emProvider->getEntityManager();
+            $id = $fraisDePort->getId();
+            $before = self::snapshot($fraisDePort) + ['commandeId' => $commande->getId(), 'documentId' => $fraisDePort->getDocument()?->getId()];
             $em->remove($fraisDePort);
             // La commande en mémoire ne doit plus le porter : sinon l'écriture suivante de la même requête (le journal de la purge
             // ci-dessous, quand un justificatif est à purger) le recréait par cascade, sous un nouvel identifiant (correctif du 12/11/2026)
             $commande->setFraisDePort(null);
             $em->flush();
+            $this->audit?->record('frais-de-port', $id, 'delete', $before, null); // lot EDIT-JOURNAL (12/11/2026)
             $this->documents?->purge(); // justificatif de transport dont le frais de port vient de disparaître (DOC-ORPH, 12/11/2026)
         }
     }

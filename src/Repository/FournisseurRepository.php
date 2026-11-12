@@ -23,7 +23,8 @@ class FournisseurRepository extends EntityRepository
      */
     public function search(?string $q, ?int $page, ?int $limit): array
     {
-        $qb = $this->createQueryBuilder('f')->orderBy('f.name', 'ASC')->addOrderBy('f.id', 'ASC');
+        // ordre stable : nom sans tenir compte de la casse, puis identifiant (lot EDIT-JOURNAL, 12/11/2026 ; avant : casse de la base)
+        $qb = $this->createQueryBuilder('f')->addSelect('LOWER(f.name) AS HIDDEN sortName')->orderBy('sortName', 'ASC')->addOrderBy('f.id', 'ASC');
         if ($q !== null && $q !== '') {
             $qb->andWhere('LOWER(f.name) LIKE :q OR LOWER(f.ville) LIKE :q')->setParameter('q', '%' . mb_strtolower($q) . '%');
         }
