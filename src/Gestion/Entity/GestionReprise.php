@@ -40,6 +40,16 @@ class GestionReprise
     #[ORM\Column(type: 'json')]
     private array $summary = [];
 
+    /**
+     * Résultats figés que l'application de la reprise a effacés (lot REPRISE-FIGE, 12/11/2026) : lignes entières de period_result, chaque
+     * colonne telle qu'enregistrée (le résultat lui-même reste le texte JSON d'origine), remises à l'identique à l'annulation. Null pour
+     * une reprise appliquée avant ce lot : son annulation laisse les résultats se recalculer, comme avant.
+     *
+     * @var list<array<string, mixed>>|null
+     */
+    #[ORM\Column(name: 'frozen_results', type: 'json', nullable: true)]
+    private ?array $frozenResults = null;
+
     public function getId(): ?int { return $this->id; }
     public function getAppliedAt(): ?\DateTimeImmutable { return $this->appliedAt; }
     public function setAppliedAt(\DateTimeImmutable $at): static { $this->appliedAt = $at; return $this; }
@@ -57,4 +67,7 @@ class GestionReprise
     public function setCreatedPeriodIds(array $ids): static { $this->createdPeriodIds = array_values($ids); return $this; }
     public function getSummary(): array { return $this->summary; }
     public function setSummary(array $summary): static { $this->summary = $summary; return $this; }
+    /** @return list<array<string, mixed>>|null */
+    public function getFrozenResults(): ?array { return $this->frozenResults; }
+    public function setFrozenResults(?array $rows): static { $this->frozenResults = $rows; return $this; }
 }

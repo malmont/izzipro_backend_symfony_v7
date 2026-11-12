@@ -160,6 +160,82 @@ class RepriseHistoriqueApiTest extends WebTestCase
 
     // ----- fabrique -----
 
+    /**
+     * Lot REPRISE-FIGE (12/11/2026) : l'application d'une reprise efface les résultats figés du créneau (ils se recalculent avec les
+     * coûts de reprise) et en garde la copie ; son annulation remet ces lignes à l'identique, colonne par colonne, date de gel et JSON
+     * compris. Avant : l'annulation les effaçait aussi, et le résultat d'origine était perdu, recalculé sur les données du moment.
+     */
+    public function testCancellingARecoveryRestoresTheFrozenResultsItErased(): void
+    {
+        $tag = bin2hex(random_bytes(2));
+        $calendar = static::getContainer()->get(PeriodCalendar::class);
+        $today = $calendar->today();
+        $calendar->ensurePeriods($today->modify('-420 days'));
+        $figee = $calendar->periodFor($today->modify('-400 days'));
+        $sansFige = $calendar->periodFor($today->modify('-290 days'));
+        $this->assertNotNull($figee);
+        $this->assertNotNull($sansFige);
+        $this->assertTrue($calendar->isClosed($figee) && $calendar->isClosed($sansFige), 'deux périodes fermées du créneau');
+        [$a, $b] = [(int) $figee->getId(), (int) $sansFige->getId()];
+        $this->assertNotSame($a, $b);
+
+        // Un article sans coût, vendu dans la première période : son coût sera estimé par la reprise, donc le résultat changera pendant
+        $conn = $this->em()->getConnection();
+        $conn->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type) VALUES (nextval('product_id_seq'), :n, 3000, false, 5, NOW(), :s, 'standard')", ['n' => "Figé $tag", 's' => "fige-$tag"]);
+        $productId = (int) $conn->fetchOne('SELECT id FROM product WHERE slug = ?', ["fige-$tag"]);
+        $variantId = (int) $this->create(ProductVariant::class, ['product' => $this->em()->find(Product::class, $productId)])->getId();
+        $at = \DateTimeImmutable::createFromInterface($figee->getStartDateCollection())->modify('+5 days')->setTime(12, 0);
+        $this->item($this->order(1, 3, 2, $at), $variantId, 2, 3000);
+        $conn = $this->em()->getConnection();
+        $conn->executeStatement('DELETE FROM period_result WHERE collection_id IN (?, ?)', [$a, $b]); // état de départ : la première se fige ci-dessous, la seconde n'a pas de résultat figé
+        $this->endOfWrite();
+        $rows = fn (int $periodId): array => $this->em()->getConnection()->fetchFirstColumn('SELECT CAST(row_to_json(r) AS text) FROM period_result r WHERE collection_id = ? ORDER BY id', [$periodId]);
+        $audit = fn (): array => json_decode((string) $this->em()->getConnection()->fetchOne("SELECT after_state FROM content_audit_log WHERE resource = 'gestion-reprise' AND action = 'cancel' ORDER BY id DESC LIMIT 1"), true);
+
+        $original = $this->get("/api/periodes/$a/resultat");
+        $this->assertSame([true, true], [$original['frozen'], $original['frozenAt'] !== null], 'figé à la première lecture');
+        $before = $rows($a);
+        $this->assertCount(1, $before);
+        $this->assertSame([], $rows($b));
+
+        // Application : le résultat figé est effacé et sa copie gardée dans la reprise, ligne entière
+        sleep(1); // la date de gel est à la seconde : le résultat recalculé pendant la reprise en portera une autre
+        $this->post('/api/gestion/reprise/appliquer', ['months' => 20, 'estimateCoefficient' => 2], 201);
+        $this->assertSame([], $rows($a), 'effacé : il se recalcule avec les coûts de reprise');
+        $kept = json_decode((string) $this->em()->getConnection()->fetchOne('SELECT frozen_results FROM gestion_reprise ORDER BY id DESC LIMIT 1'), true);
+        $mine = array_values(array_filter($kept, fn (array $r) => (int) $r['collection_id'] === $a));
+        $this->assertCount(1, $mine);
+        $columns = $this->em()->getConnection()->fetchFirstColumn("SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'period_result' ORDER BY ordinal_position");
+        $this->assertSame($columns, array_keys($mine[0]), 'toutes les colonnes de la ligne, pas seulement le résultat');
+        $this->assertIsString($mine[0]['payload'], 'le JSON est gardé en texte, tel qu\'enregistré');
+        $during = $this->get("/api/periodes/$a/resultat");
+        $this->assertNotSame($original['frozenAt'], $during['frozenAt'], 'recalculé pendant la reprise : autre date de gel');
+        $this->assertNotSame($original['cogs'], $during['cogs'], 'et autres coûts (l\'article sans coût est estimé)');
+        $this->get("/api/periodes/$b/resultat");
+        $this->assertCount(1, $rows($b), 'la seconde période se fige pendant la reprise');
+
+        // Annulation : la ligne d'origine revient à l'identique ; ce qui a été calculé pendant la reprise disparaît
+        $this->post('/api/gestion/reprise/annuler', [], 200);
+        $this->assertSame($before, $rows($a), 'même ligne, colonne par colonne : identifiant, période, date de gel, JSON octet pour octet');
+        $this->assertSame($original, $this->get("/api/periodes/$a/resultat"), 'le résultat rendu est celui d\'avant la reprise, frozenAt compris');
+        $this->assertSame($before, $rows($a), 'la lecture ne refige rien');
+        $this->assertSame([], $rows($b), 'une période sans résultat figé avant la reprise reste sans résultat figé');
+        $this->assertGreaterThanOrEqual(1, $audit()['frozenResultsRestored'], 'le journal dit combien de résultats ont été remis');
+        $restoredHere = $audit()['frozenResultsRestored'];
+
+        // Reprise appliquée avant ce lot (sans copie) : son annulation se comporte comme avant, rien n'est remis
+        $this->post('/api/gestion/reprise/appliquer', ['months' => 20, 'estimateCoefficient' => 2], 201);
+        $this->em()->getConnection()->executeStatement('UPDATE gestion_reprise SET frozen_results = NULL');
+        $this->em()->clear();
+        $this->post('/api/gestion/reprise/annuler', [], 200);
+        $this->assertSame([], $rows($a), 'sans copie : pas de restauration');
+        $this->assertSame(0, $audit()['frozenResultsRestored']);
+        $this->assertGreaterThanOrEqual(1, $restoredHere);
+        $recomputed = $this->get("/api/periodes/$a/resultat");
+        $this->assertNotSame($original['frozenAt'], $recomputed['frozenAt'], 'recalculé à la lecture suivante, comme avant le lot');
+        $this->assertFalse($this->get('/api/gestion/reprise')['active']);
+    }
+
     /** État « vente » des produits : prix, prix d'achat, stock, variantes */
     private function snapshot(array $ids): array
     {

@@ -184,6 +184,9 @@ class RepriseHistoriqueService
             $commandes[] = ['id' => $commande->getId(), 'periodKey' => $periodKey, 'periodName' => $period->getNomCollection(), 'productCount' => count($lines),
                 'estimatedCount' => count(array_filter($lines, fn (array $l) => $l['estimated'])), 'investment' => $budget];
         }
+        // Les résultats figés du créneau sont effacés (ils se recalculent avec les coûts de la reprise) ; leur copie est gardée dans la
+        // reprise pour que l'annulation les remette à l'identique (lot REPRISE-FIGE, 12/11/2026)
+        $frozen = $this->frozenRows($from, $to);
         $this->forgetFrozenResults($from, $to);
 
         $periods = [];
@@ -191,7 +194,8 @@ class RepriseHistoriqueService
             $periods[] = ['id' => $period->getId(), 'periodKey' => $period->getPeriodKey(), 'name' => $period->getNomCollection(), 'created' => in_array($period->getId(), $created, true)];
         }
         $reprise = (new GestionReprise())->setAppliedAt(new \DateTimeImmutable())->setMonths($months)->setStartDate($from)->setEndDate($to->modify('-1 day'))
-            ->setEstimateCoefficient($coefficient)->setCreatedPeriodIds($created)->setSummary(['periods' => $periods, 'commandes' => $commandes, 'skipped' => $skipped]);
+            ->setEstimateCoefficient($coefficient)->setCreatedPeriodIds($created)->setSummary(['periods' => $periods, 'commandes' => $commandes, 'skipped' => $skipped])
+            ->setFrozenResults($frozen);
         $em->persist($reprise);
         $em->flush();
         $this->audit->record('gestion-reprise', $reprise->getId(), 'apply', null, $reprise->getSummary() + ['months' => $months, 'estimateCoefficient' => $coefficient]);
@@ -239,9 +243,11 @@ class RepriseHistoriqueService
             }
         }
         $em->flush();
+        // Résultats calculés pendant la reprise effacés, puis ceux d'avant remis à l'identique : même ligne, même date de gel, même JSON
         $this->forgetFrozenResults($reprise->getStartDate(), $reprise->getEndDate()->modify('+1 day'));
+        $restored = $this->restoreFrozenResults($reprise);
         $summary = ['commandesRemoved' => count($commandes), 'productsDetached' => $detached, 'periodsRemoved' => $removedPeriods];
-        $this->audit->record('gestion-reprise', $reprise->getId(), 'cancel', $reprise->getSummary(), $summary);
+        $this->audit->record('gestion-reprise', $reprise->getId(), 'cancel', $reprise->getSummary(), $summary + ['frozenResultsRestored' => $restored]);
         $em->remove($reprise);
         $em->flush();
 
@@ -346,6 +352,41 @@ class RepriseHistoriqueService
         $em->flush();
 
         return $supplier;
+    }
+
+    /**
+     * Lignes entières de period_result des périodes du créneau, chaque colonne telle qu'enregistrée (le pilote rend le JSON en texte : il
+     * n'est ni relu ni réécrit). Toutes les colonnes sont prises : une colonne ajoutée plus tard à la table sera gardée elle aussi.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function frozenRows(\DateTimeImmutable $from, \DateTimeImmutable $to): array
+    {
+        return $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
+            "SELECT r.* FROM period_result r JOIN collections c ON c.id = r.collection_id WHERE c.kind = 'period' AND c.start_date_collection >= :from AND c.start_date_collection < :to ORDER BY r.id",
+            ['from' => $from->format('Y-m-d'), 'to' => $to->format('Y-m-d')]
+        );
+    }
+
+    /** Remet les résultats figés gardés par la reprise, pour les périodes qui existent encore ; rend le nombre de lignes remises */
+    private function restoreFrozenResults(GestionReprise $reprise): int
+    {
+        $rows = $reprise->getFrozenResults() ?? [];
+        if ($rows === []) {
+            return 0;
+        }
+        $conn = $this->emProvider->getEntityManager()->getConnection();
+        $columns = array_flip($conn->fetchFirstColumn("SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'period_result'"));
+        $restored = 0;
+        foreach ($rows as $row) {
+            if (!is_array($row) || !isset($row['collection_id']) || $conn->fetchOne('SELECT 1 FROM collections WHERE id = ?', [$row['collection_id']]) === false) {
+                continue; // période retirée depuis (créée par la reprise, ou supprimée) : rien à remettre
+            }
+            $conn->insert('period_result', array_intersect_key($row, $columns)); // colonnes d'aujourd'hui seulement, au cas où l'une aurait disparu
+            ++$restored;
+        }
+
+        return $restored;
     }
 
     /** Résultats figés des périodes du créneau effacés : recalculés à la lecture suivante */

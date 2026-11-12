@@ -151,7 +151,7 @@ des ventes mais sans commandes fournisseurs donne un coût aux articles déjà v
   figée) ; article rattaché avec sa **quantité vendue sur la ligne** (`product.commande_quantity`, lue par les calculs d'achat
   et l'export à la place du stock quand elle est posée), coût, rattachement horodaté au début de la période (donc compté par
   toutes les périodes suivantes) ; résultats figés (`period_result`) des périodes du créneau effacés, recalculés à la lecture
-  suivante ; `gestion_reprise` (une seule reprise active par site : 409 `REPRISE_ACTIVE`) ; journal `content_audit_log`
+  suivante, **et leur copie gardée dans la reprise** (`gestion_reprise.frozen_results`, lot REPRISE-FIGE ci-dessous) ; `gestion_reprise` (une seule reprise active par site : 409 `REPRISE_ACTIVE`) ; journal `content_audit_log`
   (`gestion-reprise`, `apply`). 422 `VALIDATION_FAILED` (`months` `OUT_OF_RANGE`, `estimateCoefficient` `MUST_BE_POSITIVE`,
   `costs[i].productId` `INVALID_ID` / `PRODUCT_NOT_FOUND`, `costs[i].purchasePrice` `MUST_BE_INTEGER_CENTS`) : rien n'est écrit.
 - **Aucun effet sur la vente** (priorité absolue du propriétaire, testé) : appliquer et annuler ne modifient jamais le prix de
@@ -159,7 +159,28 @@ des ventes mais sans commandes fournisseurs donne un coût aux articles déjà v
 - `POST /api/gestion/reprise/annuler` → 200 `{ cancelled, commandesRemoved, productsDetached, periodsRemoved }` : commandes de
   reprise supprimées (produits détachés : commande, coût, quantité de ligne, horodatage et marque estimée effacés ; statistiques
   figées de la commande effacées), périodes créées par la reprise restées sans commande, sans note et sans budget supprimées,
-  résultats figés du créneau effacés ; 404 `REPRISE_NOT_FOUND`. N'efface que ce que la reprise a posé.
+  résultats figés calculés pendant la reprise effacés **et résultats figés d'avant la reprise remis à l'identique** ; 404
+  `REPRISE_NOT_FOUND`. N'efface que ce que la reprise a posé.
+- **Lot REPRISE-FIGE (12/11/2026)**, contrat validé par l'application. Avant : appliquer **et** annuler effaçaient les résultats
+  figés du créneau ; après une annulation, le résultat d'une période fermée était donc recalculé sur les données du moment (coûts
+  modifiés depuis la fermeture…), et le résultat d'origine perdu. Maintenant :
+  - à l'application, chaque ligne `period_result` du créneau est copiée **entière** dans `gestion_reprise.frozen_results` avant
+    l'effacement : toutes ses colonnes telles qu'enregistrées, le résultat restant le texte JSON d'origine, ni relu ni réécrit (une
+    colonne ajoutée plus tard à `period_result` serait copiée elle aussi) ;
+  - à l'annulation, les résultats calculés pendant la reprise sont effacés, puis les lignes copiées sont remises : même identifiant,
+    même période, même date de gel, même JSON octet pour octet, donc même `frozenAt`. Le journal (`gestion-reprise`, `cancel`) porte
+    `frozenResultsRestored`, le nombre de lignes remises ;
+  - une période du créneau qui n'avait pas de résultat figé avant la reprise reste sans résultat figé après l'annulation (il se
+    calcule à sa prochaine lecture, comme toujours) ; une période créée par la reprise et retirée à l'annulation n'a rien à remettre ;
+  - une reprise appliquée avant ce lot n'a pas de copie (`frozen_results` null) : son annulation se comporte comme avant. Aucune
+    reprise n'était active sur les sites à la mise en ligne ;
+  - contrat HTTP inchangé ; migration `Version20261225100000` (une colonne) et `scripts/migrate_all_v2_reprise_fige.sh`.
+  Test : `RepriseHistoriqueApiTest::testCancellingARecoveryRestoresTheFrozenResultsItErased`.
+- **Constat, hors de ce lot** : le tableau de bord figé d'une période fermée (`collection_statistiques`, rendu par
+  `GET /api/dashboard/collection/{id}`) n'est effacé ni par l'application ni par l'annulation. Pendant une reprise, une période fermée
+  a donc un **résultat** (`GET /api/periodes/{id}/resultat`) recalculé avec les coûts de reprise, et un **tableau de bord** figé avant,
+  qui ne les voit pas : coût d'achat, marge et taux peuvent différer entre les deux lectures de la même période. Après l'annulation,
+  les deux redeviennent ceux d'avant. À traiter dans un lot à part si les deux chiffres se lisent sur un même écran.
 - `GET /api/gestion/reprise` → `{ active, appliedAt, months, from, to, estimateCoefficient, periods: [{ id, periodKey, name,
   created }], commandes: [{ id, periodKey, periodName, productCount, estimatedCount, investment }], skipped }` ; `active: false`
   et le reste `null` sans reprise.
