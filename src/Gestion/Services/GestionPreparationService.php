@@ -66,8 +66,42 @@ class GestionPreparationService
         return $period;
     }
 
+    /** Raisons de la méthode conseillée, par langue (lot du 12/11/2026 : `?locale=fr|en` sur les estimations ; avant, toujours en français) */
+    private const REASONS = [
+        'fr' => [
+            'lastYear' => 'La même période l\'an dernier porte la saison.',
+            'trend' => ' Attention : les 30 derniers jours sont %s de %d %% par rapport aux mêmes jours l\'an dernier.', 'above' => 'au-dessus', 'below' => 'en dessous',
+            'average' => 'Pas de même période l\'an dernier : moyenne des dernières périodes, ramenée au nombre de jours.',
+            'pace' => 'Pas assez d\'historique : rythme des 30 derniers jours, ramené au nombre de jours.',
+        ],
+        'en' => [
+            'lastYear' => 'The same period last year carries the season.',
+            'trend' => ' Note: the last 30 days are %s the same days last year by %d%%.', 'above' => 'above', 'below' => 'below',
+            'average' => 'No same period last year: average of the latest periods, scaled to the number of days.',
+            'pace' => 'Not enough history: pace of the last 30 days, scaled to the number of days.',
+        ],
+    ];
+
+    /** Méthode conseillée : la même période l'an dernier si elle a des ventes ; sinon la moyenne d'au moins deux périodes passées ; sinon le rythme */
+    public static function recommendedMethod(bool $hasLastYear, int $averagePeriods): string
+    {
+        return $hasLastYear ? 'lastYear' : ($averagePeriods >= 2 ? 'average' : 'pace');
+    }
+
+    /** Raison rédigée de la méthode conseillée ; l'écart de tendance n'est cité que pour `lastYear`, au-delà de TREND_GAP */
+    public static function reason(string $method, ?float $trendGap, string $locale = 'fr'): string
+    {
+        $texts = self::REASONS[$locale] ?? self::REASONS['fr'];
+        $reason = $texts[$method] ?? $texts['pace'];
+        if ($method === 'lastYear' && $trendGap !== null && abs($trendGap) > self::TREND_GAP) {
+            $reason .= sprintf($texts['trend'], $trendGap > 0 ? $texts['above'] : $texts['below'], (int) round(abs($trendGap) * 100));
+        }
+
+        return $reason;
+    }
+
     /** @return array<string, mixed> estimations des ventes de la période et méthode conseillée */
-    public function estimations(Collections $period, ?\DateTimeImmutable $today = null): array
+    public function estimations(Collections $period, ?\DateTimeImmutable $today = null, string $locale = 'fr'): array
     {
         $today ??= $this->calendar->today();
         $start = \DateTimeImmutable::createFromInterface($period->getStartDateCollection());
@@ -103,17 +137,8 @@ class GestionPreparationService
             $lyPace = $this->results->salesMetrics($today->modify('-' . self::PACE_DAYS . ' days')->modify('-1 year'), $today->modify('-1 day')->modify('-1 year'))['revenue'];
             $trendGap = $lyPace > 0 ? round($paceRevenue / $lyPace - 1, 4) : null;
         }
-        if ($lastYear !== null) {
-            $method = 'lastYear';
-            $reason = 'La même période l\'an dernier porte la saison.';
-            if ($trendGap !== null && abs($trendGap) > self::TREND_GAP) {
-                $reason .= sprintf(' Attention : les 30 derniers jours sont %s de %d %% par rapport aux mêmes jours l\'an dernier.', $trendGap > 0 ? 'au-dessus' : 'en dessous', (int) round(abs($trendGap) * 100));
-            }
-        } elseif ($average !== null && count($average['periods']) >= 2) {
-            [$method, $reason] = ['average', 'Pas de même période l\'an dernier : moyenne des dernières périodes, ramenée au nombre de jours.'];
-        } else {
-            [$method, $reason] = ['pace', 'Pas assez d\'historique : rythme des 30 derniers jours, ramené au nombre de jours.'];
-        }
+        $method = self::recommendedMethod($lastYear !== null, $average !== null ? count($average['periods']) : 0);
+        $reason = self::reason($method, $trendGap, $locale);
 
         return ['period' => self::periodRow($period), 'days' => $days, 'lastYear' => $lastYear, 'average' => $average, 'pace' => $pace, 'trendGap' => $trendGap,
             'recommended' => ['method' => $method, 'reason' => $reason]];

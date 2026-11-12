@@ -25,7 +25,8 @@ class GestionPreparationController extends AbstractController
     #[Route('/estimations', name: 'gestion_preparation_estimations', methods: ['GET'])]
     public function estimations(Request $request): JsonResponse
     {
-        return $this->json($this->useCase->estimations($request->query->get('periodId'), $request->query->get('date')));
+        // ?locale=fr|en (12/11/2026), comme les autres lectures : sinon la langue du site (français par défaut, donc inchangé)
+        return $this->json($this->useCase->estimations($request->query->get('periodId'), $request->query->get('date'), $this->locale($request)));
     }
 
     #[Route('/simulation', name: 'gestion_preparation_simulation', methods: ['POST'])]
@@ -37,16 +38,20 @@ class GestionPreparationController extends AbstractController
     #[Route('/avis', name: 'gestion_preparation_avis', methods: ['POST'])]
     public function advise(Request $request): JsonResponse
     {
-        $asked = $request->query->get('locale');
-        $locale = is_string($asked) && in_array(strtolower($asked), ['fr', 'en'], true) ? strtolower($asked) : ($this->siteLocale?->language(null) ?? 'fr');
-
-        return $this->json($this->useCase->advise($this->body($request), $locale, $this->getUser()?->getUserIdentifier()));
+        return $this->json($this->useCase->advise($this->body($request), $this->locale($request), $this->getUser()?->getUserIdentifier()));
     }
 
     #[Route('/valider', name: 'gestion_preparation_valider', methods: ['POST'])]
     public function validate(Request $request): JsonResponse
     {
         return $this->json($this->useCase->validate($this->body($request), $this->getUser()?->getUserIdentifier()), Response::HTTP_CREATED);
+    }
+
+    private function locale(Request $request): string
+    {
+        $asked = $request->query->get('locale');
+
+        return is_string($asked) && in_array(strtolower($asked), ['fr', 'en'], true) ? strtolower($asked) : ($this->siteLocale?->language(null) ?? 'fr');
     }
 
     private function body(Request $request): array

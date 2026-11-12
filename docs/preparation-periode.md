@@ -15,12 +15,13 @@ Période visée : `periodId`, ou `date` (période qui la contient, créée au be
 
 ## 1. Estimer les ventes
 
-`GET /api/gestion/preparation/estimations?periodId=|date=` → `{ period, days, lastYear { revenue, grossMargin, units, from, to } | null,
+`GET /api/gestion/preparation/estimations?periodId=|date=[&locale=fr|en]` → `{ period, days, lastYear { revenue, grossMargin, units, from, to } | null,
 average { revenue, periods [{ id, name, revenue, days }] } | null, pace { revenue, last30Days }, trendGap, recommended { method, reason } }`.
 - `lastYear` : ventes de la même période l'an dernier (mêmes règles que le résultat) ; `average` : moyenne par jour des **4 dernières périodes
   terminées** × jours ; `pace` : 30 derniers jours ÷ 30 × jours.
 - Méthode conseillée : `lastYear` s'il existe (la saison), sinon `average` dès 2 périodes, sinon `pace` ; si le rythme des 30 derniers jours
   s'écarte de plus de **25 %** des mêmes jours l'an dernier, la raison le dit (`trendGap`). Le gérant choisit ou saisit son objectif (`custom`).
+`recommended.reason` est rédigé dans la langue demandée (`?locale=fr|en`, depuis le 12/11/2026 ; sinon la langue du site, français par défaut ; une langue inconnue vaut la langue du site) ; `recommended.method` et tous les chiffres sont les mêmes dans toutes les langues. `method` : `lastYear` si la même période l'an dernier a des ventes, sinon `average` avec au moins deux périodes passées, sinon `pace`.
 
 ## 2. Plan simulé (aucune écriture)
 

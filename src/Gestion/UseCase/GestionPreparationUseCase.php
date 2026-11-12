@@ -12,9 +12,9 @@ class GestionPreparationUseCase
     {
     }
 
-    public function estimations(mixed $periodId, mixed $date): array
+    public function estimations(mixed $periodId, mixed $date, string $locale = 'fr'): array
     {
-        return $this->preparation->estimations($this->preparation->period($periodId, $date));
+        return $this->preparation->estimations($this->preparation->period($periodId, $date), null, $locale);
     }
 
     public function simulate(array $body): array

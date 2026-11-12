@@ -166,6 +166,25 @@ class PreparationApiTest extends WebTestCase
         $e = $this->body();
         $this->assertSame([$current->getId(), true], [$e['period']['id'], in_array($e['recommended']['method'], ['lastYear', 'average', 'pace'], true)]);
         $this->assertArrayHasKey('reason', $e['recommended']);
+        // Langue de la raison (12/11/2026) : français par défaut (langue du site), anglais avec ?locale=en ; les chiffres ne changent pas
+        $fr = ['lastYear' => 'La même période l\'an dernier porte la saison.', 'average' => 'Pas de même période l\'an dernier : moyenne des dernières périodes, ramenée au nombre de jours.', 'pace' => 'Pas assez d\'historique : rythme des 30 derniers jours, ramené au nombre de jours.'];
+        $en = ['lastYear' => 'The same period last year carries the season.', 'average' => 'No same period last year: average of the latest periods, scaled to the number of days.', 'pace' => 'Not enough history: pace of the last 30 days, scaled to the number of days.'];
+        $method = $e['recommended']['method'];
+        $this->assertStringStartsWith($fr[$method], $e['recommended']['reason'], 'sans ?locale : français, comme avant');
+        foreach (['fr' => $fr, 'en' => $en, 'EN' => $en, 'de' => $fr] as $asked => $texts) {
+            $this->request('GET', '/api/gestion/preparation/estimations?periodId=' . $current->getId() . '&locale=' . $asked);
+            $localized = $this->body();
+            $this->assertSame(200, $this->status());
+            $this->assertStringStartsWith($texts[$method], $localized['recommended']['reason'], "locale=$asked");
+            $this->assertSame(array_diff_key($e, ['recommended' => 1]), array_diff_key($localized, ['recommended' => 1]), 'mêmes chiffres dans toutes les langues');
+            $this->assertSame($method, $localized['recommended']['method']);
+        }
+        $pick = fn (bool $ly, int $n): string => \App\Gestion\Services\GestionPreparationService::recommendedMethod($ly, $n);
+        $this->assertSame(['lastYear', 'lastYear', 'average', 'pace', 'pace'], [$pick(true, 4), $pick(true, 0), $pick(false, 2), $pick(false, 1), $pick(false, 0)], 'l\'an dernier d\'abord, puis la moyenne d\'au moins deux périodes, sinon le rythme');
+        $reason = fn (string $m, ?float $gap, string $l): string => \App\Gestion\Services\GestionPreparationService::reason($m, $gap, $l);
+        $this->assertSame($fr['lastYear'] . ' Attention : les 30 derniers jours sont au-dessus de 40 % par rapport aux mêmes jours l\'an dernier.', $reason('lastYear', 0.4, 'fr'));
+        $this->assertSame($en['lastYear'] . ' Note: the last 30 days are below the same days last year by 31%.', $reason('lastYear', -0.305, 'en'));
+        $this->assertSame([$en['lastYear'], $fr['lastYear'], $en['average'], $en['pace'], $fr['pace']], [$reason('lastYear', 0.25, 'en'), $reason('lastYear', null, 'fr'), $reason('average', 0.9, 'en'), $reason('pace', -0.9, 'en'), $reason('pace', null, 'xx')], 'écart cité au-delà de 25 % seulement, et pour la même période de l\'an dernier seulement');
         $this->request('POST', '/api/gestion/preparation/simulation', ['periodId' => $current->getId(), 'sales' => ['method' => 'pigeon'], 'purchases' => [['date' => 'x', 'amount' => 0, 'coefficient' => 50]], 'planned' => ['other' => -1]]);
         $this->assertSame([422, ['sales.method' => 'INVALID_METHOD', 'purchases[0].date' => 'INVALID_DATE', 'purchases[0].amount' => 'MUST_BE_POSITIVE', 'purchases[0].coefficient' => 'OUT_OF_RANGE', 'planned.other' => 'MUST_BE_INTEGER_CENTS']],
             [$this->status(), $this->body()['fields']]);
