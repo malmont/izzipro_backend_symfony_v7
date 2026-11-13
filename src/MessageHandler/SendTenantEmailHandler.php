@@ -24,8 +24,13 @@ final class SendTenantEmailHandler
     public function __invoke(SendTenantEmailMessage $message): void
     {
         try {
-            $this->delivery->deliver($message);
-            $this->logger->info('[Email] Envoyé : ' . $message->describe());
+            // « Envoyé » seulement si le message est réellement parti (lot EMAIL-JOURNAL, 13/11/2026) : des destinataires d'un domaine réservé
+            // (comptes de démonstration et d'essai) sont écartés par la remise, qui l'a déjà écrit (« Non envoyé ») quand il n'en reste aucun
+            $total = count($message->envelope->getRecipients());
+            $sent = $this->delivery->deliver($message);
+            if ($sent > 0) {
+                $this->logger->info('[Email] Envoyé : ' . $message->describe() . ($sent < $total ? sprintf(' — %d remis, %d écarté(s) (domaine réservé)', $sent, $total - $sent) : ''));
+            }
         } catch (TransportExceptionInterface $e) {
             // Refus définitif du serveur (5xx : adresse inconnue, domaine refusé…) : aucune relance, file « failed »
             if ($e->getCode() >= 500 && $e->getCode() < 600) {

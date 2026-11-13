@@ -381,7 +381,12 @@ boutique (04/11/2026, `SiteLocaleResolver`), pour que le site Next.js n'ait pas 
 (lot 2, 04/11/2026) l'administrateur peut la choisir explicitement (`entreprise.locale`, clé `siteLocale` du `PUT /api/entreprise/{id}`
 ou `site.locale` du registre) ; null = déduite de l'adresse.
 Destinataires d'un domaine réservé (`example.com`, `*.invalid`, `*.test`… : comptes de démonstration et d'essai) :
-retirés, envoi abandonné s'il n'en reste aucun (hors tests). Refus définitif du serveur (5xx) : pas de relance, file
+retirés, envoi abandonné s'il n'en reste aucun (hors tests). **Lire le journal `[Email]`** (lot EMAIL-JOURNAL, 13/11/2026) :
+« Envoyé » n'est écrit que si le message a réellement été remis au serveur d'envoi (`TenantEmailDelivery::deliver` rend le nombre de
+destinataires servis) ; un envoi abandonné laisse la seule ligne « Non envoyé », un envoi partiel dit « N remis, M écarté(s) ».
+« Envoyé » veut dire accepté par le serveur d'envoi, pas arrivé dans la boîte : la suite se passe chez le relais. La file `failed`
+est sur Redis, `messenger:failed:show` ne sait pas la lister (la commande échoue) : lire le flux `messages_failed` de la base Redis
+des files. Refus définitif du serveur (5xx) : pas de relance, file
 `failed` aussitôt. Logo intégré aux courriels : copie allégée générée à 400 px de large
 (`EmailLogoHelper`, `email-400-<logo>.png` à côté de l'original ; 732 Ko → 42 Ko pour demo) ; les gabarits utilisent
 `logoUrl` tel quel (`cid:` ou adresse absolue), sans y coller le domaine.

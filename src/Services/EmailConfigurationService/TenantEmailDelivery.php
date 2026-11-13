@@ -30,13 +30,19 @@ final class TenantEmailDelivery
     ) {
     }
 
-    public function deliver(SendTenantEmailMessage $message): void
+    /** @return int nombre de destinataires réellement remis au serveur d'envoi ; 0 = rien n'est parti (voir `deliverRaw`) */
+    public function deliver(SendTenantEmailMessage $message): int
     {
-        $this->deliverRaw($message->email, $message->envelope, $message->tenantCode, $message->tenantDb, $message->configId);
+        return $this->deliverRaw($message->email, $message->envelope, $message->tenantCode, $message->tenantDb, $message->configId);
     }
 
-    /** Envoi par le serveur du site (configId relu dans sa base) ou de la plateforme (configId null) */
-    public function deliverRaw(RawMessage $email, ?Envelope $envelope, ?string $tenantCode, ?string $tenantDb, ?int $configId): void
+    /**
+     * Envoi par le serveur du site (configId relu dans sa base) ou de la plateforme (configId null).
+     *
+     * @return int nombre de destinataires réellement remis au serveur d'envoi (lot EMAIL-JOURNAL, 13/11/2026) : 0 quand tous sont d'un
+     *             domaine réservé et que rien n'est parti. Celui qui appelle n'écrit « Envoyé » au journal que si ce nombre est positif.
+     */
+    public function deliverRaw(RawMessage $email, ?Envelope $envelope, ?string $tenantCode, ?string $tenantDb, ?int $configId): int
     {
         // Domaines réservés (RFC 2606 / 6761 : example.com, *.invalid, *.test…) : jamais livrables, le serveur les refuse
         // (554) ; ils servent aux comptes de démonstration et d'essai. Destinataires retirés, envoi abandonné s'il n'en
@@ -46,7 +52,7 @@ final class TenantEmailDelivery
             if ($deliverable === []) {
                 $this->logger->info('[Email] Non envoyé : destinataire(s) d\'un domaine réservé (démonstration, essai)', ['site' => $tenantCode]);
 
-                return;
+                return 0;
             }
             if (count($deliverable) !== count($envelope->getRecipients())) {
                 $envelope = new Envelope($envelope->getSender(), $deliverable);
@@ -65,6 +71,8 @@ final class TenantEmailDelivery
             }
         }
         $this->send($transport ?? $this->defaultTransport, $email, $envelope);
+
+        return $envelope !== null ? count($envelope->getRecipients()) : 1; // sans enveloppe : les destinataires du message, au moins un
     }
 
     /** Transport du site, sinon celui de la plateforme : envoi immédiat (commande de test SMTP) */
