@@ -149,6 +149,10 @@ class SharedMediaEasyAdminTest extends WebTestCase
     private function privateVideo(string $filename): array
     {
         $dir = static::getContainer()->getParameter('kernel.project_dir') . '/var/storage/private_media';
+        // le test crée lui-même son dossier : dans un dossier de travail neuf, il n'existe pas tant qu'un autre test ne l'a pas créé
+        if (!is_dir($dir)) {
+            mkdir($dir, 0777, true);
+        }
         file_put_contents("$dir/$filename", 'video-d-origine');
         $this->db()->executeStatement(sprintf("INSERT INTO shared_media (titre, filename, original_filename, media_type, mime_type, file_size, visibility, access_key, created_at)
             VALUES ('Vidéo de test', '%s', 'film.mp4', 'video', 'video/mp4', 15, 'private', '%s', NOW())", $filename, self::KEY));
