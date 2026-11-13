@@ -192,7 +192,8 @@ class PeriodCloseAction extends AbstractGestionAction
             $conn->rollBack();
             throw $e;
         }
-        $em->clear(); // les articles et commandes en mémoire portent encore l'état figé
+        // Ne pas vider l'unité de travail ici : le fil doit encore y enregistrer son message « annulé » (un vidage détachait la conversation
+        // et l'écriture échouait, les données étant déjà remises). Les quantités figées sont écrites en SQL : aucun article n'est chargé ici.
         $this->audit->record(self::AUDIT, $periodId, 'undo', $undo['after'], $undo['before'] + ['commandes' => $ids]);
 
         return ['restored' => ['periodId' => $periodId, 'commandesReopened' => count($ids)]];

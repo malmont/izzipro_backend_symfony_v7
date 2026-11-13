@@ -933,7 +933,12 @@ class ActionConversationApiTest extends WebTestCase
             // L'empreinte est recalculée sans le cache du résultat : une vente faite après l'aperçu, résultat encore en cache → PREVIEW_CHANGED
             $cached = $this->get("/api/periodes/$pid/resultat")['sales']['revenue'];
             $this->assertSame($live['sales']['revenue'], $cached);
-            $sell($venduVariant, 1, $day->setTime(16, 0)); // écrite sans vider le cache du site
+            // une vente de plus, écrite en SQL : rien ne vide le cache du site (une écriture Doctrine le viderait, et le cas ne se produirait pas)
+            $item = $conn()->fetchAssociative('SELECT * FROM order_items WHERE order_associated_id = ? ORDER BY id LIMIT 1', [$created['orders'][0]]);
+            $item['id'] = (int) $conn()->fetchOne("SELECT nextval('order_items_id_seq')");
+            $item['quantity'] = 1;
+            $item['total_price'] = 4000;
+            $conn()->insert('order_items', array_map(fn ($v) => is_bool($v) ? ($v ? 't' : 'f') : $v, $item));
             $this->assertSame($cached, $this->get("/api/periodes/$pid/resultat")['sales']['revenue'], 'la route du résultat sert encore sa réponse en cache');
             $stale = $this->post("/api/gestion/conversations/$id/confirm", ['previewHash' => $ready['previewHash']], 409);
             $this->assertSame(['PREVIEW_CHANGED', $cached + 4000], [$stale['error'], $stale['preview']['result']['revenue']], 'la vente de la dernière minute est vue malgré le cache');
@@ -945,7 +950,8 @@ class ActionConversationApiTest extends WebTestCase
             $after = $state();
             $this->assertSame([true, null, $done['result']['closedAt']], [(bool) $after['period']['is_closed'], $after['period']['reopened_at'], substr((string) $after['period']['closed_at'], 0, 19)]);
             $this->assertSame([[$open, true], [$alreadyClosed, true]], array_map(fn (array $c) => [(int) $c['id'], (bool) $c['is_closed']], $after['commandes']));
-            $this->assertSame([6, 6, null], array_column($after['products'], 'freeze_quantity'), 'la clôture note la quantité figée des articles de la commande qu\'elle ferme');
+            $this->assertSame([[null, 7, null], [$before['products'][0]['quantity'], $before['products'][1]['quantity'], null]], [array_column($before['products'], 'freeze_quantity'), array_column($after['products'], 'freeze_quantity')],
+                'la clôture note la quantité du moment comme quantité figée des articles de la commande qu\'elle ferme (avant : vide et 7) ; l\'article vendu, sans commande, n\'est pas touché');
             $this->assertSame([$before['collectionStats'] + 1, $before['commandeStats'] + 1, $logged + 1], [$after['collectionStats'], $after['commandeStats'], $journal()]);
             $this->assertTrue($calendar->isClosed($this->em()->find(\App\Entity\Collections::class, $pid)));
             $this->request('POST', "/api/collections/$pid/commandes", ['budget' => 1, 'date' => $day->format('Y-m-d') . ' 11:00:00', 'name' => 'Refusée', 'fournisseur' => ['id' => $created['supplier']]]);
@@ -985,7 +991,7 @@ class ActionConversationApiTest extends WebTestCase
 
             // Annulation exacte : l'état d'avant, table par table (période, commandes, quantités figées, chiffres figés), et rien d'autre
             $undone = $this->post("/api/gestion/conversations/$id/undo", [], 200);
-            $this->assertSame(['restored' => ['periodId' => $pid, 'commandesReopened' => $done['result']['commandesClosed']]], array_diff_key($undone, ['thread' => 1]) === [] ? [] : ['restored' => $undone['undone']['restored']]);
+            $this->assertSame(['periodId' => $pid, 'commandesReopened' => $done['result']['commandesClosed']], $undone['undone']['restored']);
             $restored = $state();
             $this->assertSame($before['period'], $restored['period'], 'la période retrouve ses dates de clôture et de réouverture');
             $this->assertSame($before['commandes'], $restored['commandes'], 'seule la commande fermée par la clôture est rouverte ; celle fermée avant le reste');
@@ -1173,7 +1179,8 @@ class ActionConversationApiTest extends WebTestCase
             $named('par purolator express', ['Purolator', 'Purolator Express']), $named('purolator', ['Purolator', 'Purolator Express']), $named('', ['Autre']), $named('un autre', ['Autre']), $named('la tv du salon', ['TV 4K', 'Radio'])]);
         $this->assertFalse($catalog->has('document.invoice.confirm'));
         $this->assertTrue(SequenceCatalog::preparable('document.invoice.confirm'));
-        $this->assertFalse(SequenceCatalog::preparable('period.close'));
+        $this->assertTrue(SequenceCatalog::preparable('period.close'), 'lot IA-ACT-4');
+        $this->assertFalse(SequenceCatalog::preparable('purchase.create'));
 
         // Le guide des séquences rend `action: { key, preparable, params }` (vérifié par SequencesApiTest) : la clé et les paramètres ouvrent le fil
         $opened = $this->post('/api/gestion/conversations', ['action' => 'supplier.create', 'params' => []], 201);
