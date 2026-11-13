@@ -19,7 +19,7 @@ class LexiqueIllustration
 
     /**
      * @param list<array<string, mixed>> $figures chiffres de l'analyse liée (`id` sans préfixe, `value`, `unit`)
-     * @param array{label?: string}|null $period plage de l'analyse liée
+     * @param array{label?: string, phrase?: string}|null $period plage de l'analyse liée ; `phrase` la dit comme elle se lit dans une phrase
      */
     public function of(string $key, array $figures, ?array $period, string $locale): ?string
     {
@@ -61,6 +61,7 @@ class LexiqueIllustration
             return $this->texts->text("$key.illustration_none", $locale);
         }
 
-        return $this->texts->text("$key.$id", $locale, $params + ['%period%' => (string) ($period['label'] ?? '')]);
+        // la plage, dite comme elle se lit dans une phrase (« ce mois-ci », « sur la période Automne 2026 »), sinon son libellé
+        return $this->texts->text("$key.$id", $locale, $params + ['%period%' => (string) ($period['phrase'] ?? $period['label'] ?? '')]);
     }
 }

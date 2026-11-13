@@ -43,6 +43,12 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * assemble la réponse lui-même, sans appel 2 : aucune unité, ligne « [Console] leçon » au journal. En mode « apprendre » (`mode:
  * "learn"`, envoyé avec la question), toute réponse reçoit en plus les leçons des notions de ses chiffres, 3 au plus, sans appel de plus.
  *
+ * Lot W2-d (13/11/2026, après un échange réel où « 2 juin » faisait garder la carte d'un compte de 2, et « 0 % » celle d'un budget de
+ * 0,00 $) : un nombre du texte est reconnu selon sa NATURE (montant, pourcentage, nombre nu ; jamais le jour d'une date) et un nombre nu
+ * ne désigne un chiffre qu'avec un mot de son libellé dans la même phrase ; les cartes sont placées en deux passes, chaque chiffre sous
+ * le premier texte qui l'évoque ; un tableau rend ses colonnes libellées et ses cellules rédigées ; un état est donné au modèle en
+ * minuscule, pour s'écrire au milieu d'une phrase.
+ *
  * Unités : 1 par réponse rédigée par le modèle (demande de précision rédigée par lui comprise) ; aucune si le serveur répond lui-même
  * (question hors périmètre, précision demandée par le serveur) ou si l'IA échoue.
  */
@@ -61,7 +67,6 @@ class ConsoleResponder
     private const MONEY_KEYS = ['price', 'cost', 'sales', 'grossMargin', 'result', 'planned', 'actual', 'remaining', 'effect', 'revenue'];
     private const PERCENT_KEYS = ['similarSoldShare'];
     /** Champs d'une ligne dont la valeur est un code : le modèle en reçoit le libellé rédigé (jeu de libellés `console.values.*`) */
-    private const CODED_ROWS = ['verdict' => 'verdict', 'status' => 'budget'];
     /** Unités d'un chiffre qu'un nombre écrit dans un texte peut désigner (ni une date ni un texte) */
     private const NUMERIC_UNITS = ['money', 'percent', 'count', 'days', 'ratio'];
 
@@ -228,7 +233,9 @@ class ConsoleResponder
         foreach ($results as $r) {
             $figures = [];
             foreach ($r['figures'] as $f) {
-                $figure = ['id' => $f['id'], 'label' => $note((string) $f['label']), 'display' => $note($this->display($f['value'], (string) $f['unit'], $locale))];
+                // un état (chiffre à code) est donné en minuscule : il s'écrit au milieu d'une phrase (« la trésorerie est correcte ») ; la carte garde sa majuscule
+                $written = $this->display($f['value'], (string) $f['unit'], $locale);
+                $figure = ['id' => $f['id'], 'label' => $note((string) $f['label']), 'display' => $note(isset($f['code']) ? mb_strtolower($written) : $written)];
                 foreach (['previous', 'lastYear', 'delta', 'deltaLastYear'] as $k) {
                     if (isset($f[$k])) {
                         $figure[$k] = $note($this->display($f[$k], (string) $f['unit'], $locale));
@@ -253,7 +260,7 @@ class ConsoleResponder
                     }
                     $line[$k] = match (true) {
                         in_array($k, ['productId', 'adviceId'], true) => $v, // un identifiant : jamais un nombre à écrire
-                        isset(self::CODED_ROWS[$k]) && is_string($v) => $note(AnalysisCatalog::valueLabel($this->translator, self::CODED_ROWS[$k], $v, $locale)), // « À monter », jamais « raise »
+                        isset(AnalysisCatalog::CODED[$k]) && is_string($v) => $note(mb_strtolower(AnalysisCatalog::valueLabel($this->translator, AnalysisCatalog::CODED[$k], $v, $locale))), // « à monter », jamais « raise » ; en minuscule : il s'écrit au milieu d'une phrase
                         in_array($k, self::MONEY_KEYS, true) && is_numeric($v) => $note($this->display($v, 'money', $locale)),
                         in_array($k, self::PERCENT_KEYS, true) && is_numeric($v) => $note($this->display($v, 'percent', $locale)),
                         is_float($v) || is_int($v) => $note($this->display($v, 'ratio', $locale)),
@@ -328,7 +335,8 @@ class ConsoleResponder
                 $blocks[] = $this->figuresBlock($ids($b['figureIds']), $results);
             } elseif ($type === 'table' && isset($byRef[$b['analysis'] ?? '']) && $byRef[$b['analysis']]['rows'] !== []) {
                 $r = $byRef[$b['analysis']];
-                $blocks[] = ['type' => 'table', 'title' => $r['title'], 'columns' => array_keys($r['rows'][0]), 'rows' => $r['rows'], 'more' => $r['more'], 'source' => $r['source']];
+                // colonnes libellées avec leur unité ; cellules rédigées (un état, un verdict, un mois), le code gardé à part (`statusCode`)
+                $blocks[] = ['type' => 'table', 'title' => $r['title'], 'columns' => $this->analyses->columns($r['key'], $locale), 'rows' => array_map(fn (array $row) => $this->writtenRow($row, $locale), $r['rows']), 'more' => $r['more'], 'source' => $r['source']];
             } elseif ($type === 'verdicts' && isset($byRef[$b['analysis'] ?? ''])) {
                 $rows = array_column(array_filter($byRef[$b['analysis']]['rows'], fn (array $row) => isset($row['productId'], $row['verdict'])), null, 'productId');
                 $items = [];
@@ -350,21 +358,29 @@ class ConsoleResponder
             }
         }
 
-        // Tout chiffre dont un texte parle a sa carte : le serveur ajoute, à la suite du texte, un bloc `figures` pour ceux qu'aucun
-        // bloc `figures` de la réponse ne montre (une carte par chiffre dans la réponse, jamais deux)
-        $shown = [];
-        foreach ($blocks as $b) {
-            if ($b['type'] === 'figures') {
-                $shown = array_merge($shown, array_column($b['items'], 'id'));
+        // Placement des cartes, en deux passes (lot W2-d). 1. Chaque chiffre appartient au PREMIER texte qui l'évoque. 2. Sa carte suit
+        // ce texte ; un bloc `figures` du modèle ne garde que les chiffres qu'aucun texte n'évoque, et disparaît s'il est vide. Une
+        // carte par chiffre dans la réponse, jamais deux, et jamais loin du texte qui en parle.
+        $owner = [];
+        foreach ($blocks as $i => $b) {
+            foreach ($b['type'] === 'text' ? $b['figureIds'] : [] as $id) {
+                $owner[$id] ??= $i;
             }
         }
         $out = [];
-        foreach ($blocks as $b) {
+        foreach ($blocks as $i => $b) {
+            if ($b['type'] === 'figures') {
+                $free = array_values(array_filter(array_column($b['items'], 'id'), fn (string $id) => !isset($owner[$id])));
+                if ($free !== []) {
+                    $out[] = $this->figuresBlock($free, $results);
+                    $owner += array_fill_keys($free, $i); // montré ici : un bloc suivant du modèle ne le répète pas
+                }
+                continue;
+            }
             $out[] = $b;
-            $missing = $b['type'] === 'text' ? array_values(array_diff($b['figureIds'], $shown)) : [];
-            if ($missing !== []) {
-                $out[] = $this->figuresBlock($missing, $results);
-                $shown = array_merge($shown, $missing);
+            $own = $b['type'] === 'text' ? array_values(array_filter($b['figureIds'], fn (string $id) => $owner[$id] === $i)) : [];
+            if ($own !== []) {
+                $out[] = $this->figuresBlock($own, $results);
             }
         }
 
@@ -383,14 +399,13 @@ class ConsoleResponder
      */
     private function citedByValue(string $text, array $results, array $cited, string $locale): array
     {
-        $lower = mb_strtolower($text);
         $canon = self::canonical($results);
         $found = [];
-        foreach (self::numbers($text) as $n) {
+        foreach (self::tokens($text) as $token) {
             $candidates = [];
             foreach ($results as $r) {
                 foreach ($r['figures'] as $f) {
-                    if ($canon[$f['id']] === $f['id'] && in_array($f['unit'], self::NUMERIC_UNITS, true) && is_numeric($f['value']) && self::unknown($this->display($f['value'], (string) $f['unit'], $locale), [$n]) === []) {
+                    if ($canon[$f['id']] === $f['id'] && $this->written($token, $f, $locale)) {
                         $candidates[] = $f;
                     }
                 }
@@ -398,16 +413,13 @@ class ConsoleResponder
             if ($candidates === [] || array_intersect(array_column($candidates, 'id'), array_merge($cited, $found)) !== []) {
                 continue;
             }
-            if (count($candidates) > 1) {
-                $candidates = array_values(array_filter($candidates, function (array $f) use ($lower): bool {
-                    foreach (preg_split('/[^\p{L}]+/u', mb_strtolower((string) $f['label'])) ?: [] as $word) {
-                        if (mb_strlen($word) >= 5 && str_contains($lower, mb_substr($word, 0, 5))) {
-                            return true;
-                        }
-                    }
-
-                    return false;
-                }));
+            // Un nombre nu ne désigne un chiffre que si un mot de son libellé est dans la même phrase (« 33 » avec « commandes »). Un
+            // montant ou un taux désigne son chiffre ; porté par deux chiffres différents, le libellé dans la phrase tranche, sinon rien.
+            if ($token['kind'] === 'plain' || count($candidates) > 1) {
+                // le chiffre dont le libellé est le mieux écrit dans la phrase ; à égalité (ou sans aucun mot), on ne devine pas
+                $scores = array_map(fn (array $f) => self::named($token['sentence'], (string) $f['label']), $candidates);
+                $best = max($scores);
+                $candidates = $best <= 0.0 || count(array_keys($scores, $best, true)) !== 1 ? [] : [$candidates[(int) array_search($best, $scores, true)]];
             }
             if ($candidates !== []) {
                 $found[] = $candidates[0]['id'];
@@ -415,6 +427,65 @@ class ConsoleResponder
         }
 
         return $found;
+    }
+
+    /**
+     * Les nombres d'un texte avec leur NATURE (lot W2-d) : `money` (accolé à un signe ou à un code de devise : « 957,00 $ », « $957.00 »,
+     * « 25,00 CAD »), `percent` (suivi de %), `plain` (ni l'un ni l'autre). Le jour et l'année d'une date (« du 2 juin au 31 août
+     * 2026 », « November 11, 2026 », « 2026-11-11 ») ne sont pas des nombres cités. Chaque nombre garde la phrase où il est écrit.
+     *
+     * @return list<array{value: float, kind: string, sentence: string}>
+     */
+    public static function tokens(string $text): array
+    {
+        $months = 'janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre|january|february|march|april|may|june|july|august|september|october|november|december';
+        $out = [];
+        foreach (preg_split('/(?<=[.!?…])\s+(?=\p{Lu}|\d)/u', $text) ?: [] as $sentence) {
+            $t = preg_replace('/(?<=\d)[\x{0020}\x{00A0}\x{202F}](?=\d{3}(?!\d))/u', '', $sentence) ?? $sentence; // 1 234 → 1234
+            $t = preg_replace_callback('/(?<![\d.,])\d{1,3}(?:,\d{3})+(?![\d,])/', fn (array $m) => str_replace(',', '', $m[0]), $t) ?? $t; // 1,234 → 1234
+            // les dates sortent du texte avant de lire les nombres
+            $t = preg_replace(['/\b\d{4}-\d{2}-\d{2}\b/', "/\b(?:1er|\d{1,2})\s+(?:$months)(?:\s+\d{4})?\b/iu", "/\b(?:$months)\s+\d{1,2}(?:,?\s+\d{4})?\b/iu", "/\b(?:$months)\s+\d{4}\b/iu"], ' ', $t) ?? $t;
+            preg_match_all('/(?P<pre>[$€£]\s?)?(?P<num>\d+(?:[.,]\d+)?)(?P<post>[\x{0020}\x{00A0}\x{202F}]?(?:%|[$€£]|[A-Z]{3}\b))?/u', $t, $found, PREG_SET_ORDER);
+            foreach ($found as $m) {
+                $post = trim((string) ($m['post'] ?? ''), " \u{00A0}\u{202F}");
+                $kind = $post === '%' ? 'percent' : (($m['pre'] ?? '') !== '' || $post !== '' ? 'money' : 'plain');
+                $out[] = ['value' => round((float) str_replace(',', '.', $m['num']), 4), 'kind' => $kind, 'sentence' => $sentence];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Ce nombre du texte est-il la valeur de ce chiffre, écrite selon sa nature ? Un montant pour un chiffre en argent, un pourcentage
+     * pour un taux, un nombre nu pour un compte, des jours ou un rapport.
+     *
+     * @param array{value: float, kind: string, sentence: string} $token @param array<string, mixed> $figure
+     */
+    private function written(array $token, array $figure, string $locale): bool
+    {
+        $kind = match ($figure['unit']) { 'money' => 'money', 'percent' => 'percent', 'count', 'days', 'ratio' => 'plain', default => null };
+        if ($kind === null || $kind !== $token['kind'] || !is_numeric($figure['value'])) {
+            return false;
+        }
+
+        return self::unknown($this->display($figure['value'], (string) $figure['unit'], $locale), [$token['value']]) === [];
+    }
+
+    /**
+     * Le libellé est-il écrit dans cette phrase ? La PART de ses mots (4 lettres ou plus, reconnus par leur début) qu'on y lit, de 0 à
+     * 1 : « Commandes » dans « 33 commandes » : 1 ; « Notes de frais » dans « vos frais » : 0,5. Seul compte le début du libellé, avant
+     * une précision entre parenthèses ou après une virgule (« Panier moyen », pas les mots de sa formule).
+     */
+    private static function named(string $sentence, string $label): float
+    {
+        $lower = mb_strtolower($sentence);
+        $words = array_values(array_filter(array_unique(preg_split('/[^\p{L}]+/u', mb_strtolower((string) (preg_split('/[,(:]/u', $label)[0] ?? ''))) ?: []), fn (string $w) => mb_strlen($w) >= 4));
+        if ($words === []) {
+            return 0.0;
+        }
+
+        return round(count(array_filter($words, fn (string $w) => str_contains($lower, mb_substr($w, 0, 5)))) / count($words), 4);
     }
 
     /**
@@ -427,13 +498,19 @@ class ConsoleResponder
     private function speaksOf(string $text, array $figure, string $locale): bool
     {
         $lower = mb_strtolower($text);
-        $display = $this->display($figure['value'], (string) $figure['unit'], $locale);
         if (in_array($figure['unit'], self::NUMERIC_UNITS, true) && is_numeric($figure['value'])) {
-            if (self::unknown($display, self::numbers($text)) === []) {
+            // la valeur, écrite selon sa nature (lot W2-d) : le « 2 » de « 2 juin » n'est pas un compte, le « 0 » de « 0 % » pas un montant ;
+            // un nombre nu ne compte qu'avec un mot du libellé dans la même phrase
+            foreach (self::tokens($text) as $token) {
+                if ($this->written($token, $figure, $locale) && ($token['kind'] !== 'plain' || self::named($token['sentence'], (string) $figure['label']) > 0)) {
+                    return true;
+                }
+            }
+        } else {
+            $display = $this->display($figure['value'], (string) $figure['unit'], $locale);
+            if ($display !== '' && str_contains($lower, mb_strtolower($display))) {
                 return true;
             }
-        } elseif ($display !== '' && str_contains($lower, mb_strtolower($display))) {
-            return true;
         }
         $head = mb_strtolower(trim((string) (preg_split('/[,(:]/u', (string) $figure['label'])[0] ?? '')));
 
@@ -585,6 +662,30 @@ class ConsoleResponder
         }
 
         return $out;
+    }
+
+    /**
+     * Ligne d'un tableau telle que l'application l'affiche : un champ à code (état du budget, verdict, confiance) rend son libellé
+     * rédigé, le code restant à côté (`statusCode`, `verdictCode`) ; un mois « 2026-11 » rend « novembre 2026 » (`monthKey` garde la clé).
+     *
+     * @param array<string, mixed> $row
+     *
+     * @return array<string, mixed>
+     */
+    private function writtenRow(array $row, string $locale): array
+    {
+        foreach (AnalysisCatalog::CODED as $field => $set) {
+            if (is_string($row[$field] ?? null)) {
+                $row[$field . 'Code'] = $row[$field];
+                $row[$field] = AnalysisCatalog::valueLabel($this->translator, $set, $row[$field], $locale);
+            }
+        }
+        if (is_string($row['month'] ?? null) && preg_match('/^\d{4}-\d{2}$/', $row['month']) === 1) {
+            $row['monthKey'] = $row['month'];
+            $row['month'] = RangeLabel::month($row['month'], $locale);
+        }
+
+        return $row;
     }
 
     /**

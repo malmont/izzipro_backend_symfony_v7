@@ -40,6 +40,8 @@ class AnalysisCatalog
     public const MAX_ROWS = 50;
     /** Noms d'articles cités par groupe d'un bilan (le groupe porte tous leurs identifiants) */
     public const GROUP_NAMES = 5;
+    /** Périodes terminées remontées pour trouver un exemple de ventes à une notion du lexique */
+    public const EXAMPLE_PAST_PERIODS = 4;
 
     /** Clé => paramètres admis (les obligatoires dans `required`), écran et route d'où viennent les chiffres */
     public const DEFINITIONS = [
@@ -55,6 +57,22 @@ class AnalysisCatalog
         'advice.current' => ['params' => [], 'required' => [], 'screen' => 'conseils', 'route' => 'GET /api/gestion/conseils'],
         'lexique.term' => ['params' => ['term'], 'required' => ['term'], 'screen' => 'lexique', 'route' => 'GET /api/gestion/lexique/{term}'],
     ];
+
+    /**
+     * Colonnes du tableau d'une analyse (lot W2-d), dans l'ordre d'affichage : clé de la ligne => unité (`money` en cents, `percent`,
+     * `count`, `days`, `ratio`, `text`, `month`). Les autres champs d'une ligne (identifiants, codes) ne sont pas des colonnes.
+     */
+    public const COLUMNS = [
+        'year.overview' => ['month' => 'month', 'sales' => 'money', 'grossMargin' => 'money', 'result' => 'money', 'rank' => 'count'],
+        'budget.status' => ['label' => 'text', 'planned' => 'money', 'actual' => 'money', 'remaining' => 'money', 'status' => 'text'],
+        'stock.overview' => ['name' => 'text', 'stock' => 'count', 'soldLast30Days' => 'count', 'daysLeft' => 'days'],
+        'articles.missing_cost' => ['name' => 'text', 'price' => 'money', 'stock' => 'count'],
+        'articles.vs_similar' => ['name' => 'text', 'cost' => 'money', 'price' => 'money', 'purchased' => 'count', 'sold' => 'count', 'displayedCoefficient' => 'ratio', 'obtainedCoefficient' => 'ratio'],
+        'articles.new' => ['name' => 'text', 'cost' => 'money', 'price' => 'money', 'coefficient' => 'ratio', 'proposedCoefficient' => 'ratio', 'verdict' => 'text', 'similarCount' => 'count', 'similarSoldShare' => 'percent'],
+        'advice.current' => ['title' => 'text', 'effect' => 'money', 'confidence' => 'text'],
+    ];
+    /** Champs d'une ligne dont la valeur est un CODE : jeu de libellés (`console.values.*`) qui le rédige */
+    public const CODED = ['verdict' => 'verdict', 'status' => 'budget', 'confidence' => 'confidence'];
 
     /** Type de chaque paramètre : le seul vocabulaire que le modèle peut employer */
     public const PARAM_TYPES = ['periodId' => 'id', 'productId' => 'id', 'year' => 'year', 'days' => 'days', 'range' => 'range', 'term' => 'term'];
@@ -101,6 +119,21 @@ class AnalysisCatalog
     public function title(string $key, string $locale): string
     {
         return $this->tr('console.analyses.' . str_replace('.', '_', $key), $locale);
+    }
+
+    /**
+     * Colonnes du tableau d'une analyse, libellées : `[{ key, label, unit }]` (vide pour une analyse sans tableau).
+     *
+     * @return list<array{key: string, label: string, unit: string}>
+     */
+    public function columns(string $key, string $locale): array
+    {
+        $out = [];
+        foreach (self::COLUMNS[$key] ?? [] as $column => $unit) {
+            $out[] = ['key' => $column, 'label' => $this->tr("console.columns.$column", $locale), 'unit' => $unit];
+        }
+
+        return $out;
     }
 
     /**
@@ -420,11 +453,54 @@ class AnalysisCatalog
         $linked = $entry['analysis'];
         $out = ['params' => ['term' => $entry['key']], 'figures' => [], 'lesson' => $entry];
         if ($linked !== null && ($accepted = $this->accept($linked['key'], $linked['params'])) !== null) {
-            $r = $this->run($linked['key'], $accepted, $locale);
+            // une notion de ventes s'illustre sur le mois ; s'il est vide, sur la période en cours, puis sur la dernière période terminée qui a des ventes
+            $r = $linked['key'] === 'sales.overview' ? $this->salesExample($locale) : $this->run($linked['key'], $accepted, $locale);
             $byId = array_column($r['figures'], null, 'id');
             $out['figures'] = array_values(array_filter(array_map(fn (string $id) => $byId[$id] ?? null, $linked['figures'])));
             $out['period'] = $r['period'];
             $out['source'] = $r['source'];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Les ventes qui servent d'EXEMPLE à une notion (lot W2-d) : « un prof a toujours un exemple quand des données existent ». La
+     * première de ces lectures qui a des ventes : le mois en cours, la période en cours, puis les dernières périodes terminées, de la
+     * plus récente à la plus ancienne ; à défaut la première (le mois, vide). `period.phrase` dit la plage comme elle se lit dans une
+     * phrase : « ce mois-ci », « sur la période Automne 2026 ».
+     *
+     * @param list<array<string, mixed>>|null $candidates paramètres de `sales.overview` à essayer dans l'ordre (par défaut `salesCandidates()`)
+     *
+     * @return array<string, mixed>
+     */
+    public function salesExample(string $locale, ?array $candidates = null): array
+    {
+        $chosen = null;
+        foreach ($candidates ?? $this->salesCandidates() as $params) {
+            $r = $this->run('sales.overview', $params, $locale);
+            $chosen ??= $r;
+            $revenue = array_column($r['figures'], 'value', 'id')['revenue'] ?? 0;
+            if (is_numeric($revenue) && $revenue > 0) {
+                $chosen = $r;
+                break;
+            }
+        }
+        $period = isset(((array) $chosen['source']['params'])['periodId']);
+        $chosen['period']['phrase'] = $this->translator->trans($period ? 'console.lesson.period' : 'console.lesson.month', ['%name%' => (string) $chosen['period']['label']], 'gestion', $locale === 'en' ? 'en' : 'fr');
+
+        return $chosen;
+    }
+
+    /** @return list<array<string, mixed>> le mois en cours, la période en cours, puis les `EXAMPLE_PAST_PERIODS` dernières périodes terminées */
+    public function salesCandidates(): array
+    {
+        $current = $this->calendar->current();
+        $out = [['range' => 'month'], ['periodId' => (int) $current->getId()]];
+        foreach ($this->emProvider->getEntityManager()->getRepository(Collections::class)->findBy(['kind' => Collections::KIND_PERIOD], ['startDateCollection' => 'DESC'], 24) as $p) {
+            if (!$p->isDel() && $p->getEndDateCollection() < $current->getStartDateCollection() && count($out) < 2 + self::EXAMPLE_PAST_PERIODS) {
+                $out[] = ['periodId' => (int) $p->getId()];
+            }
         }
 
         return $out;

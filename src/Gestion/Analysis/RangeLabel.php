@@ -16,6 +16,14 @@ final class RangeLabel
     private const MONTHS_FR = [1 => 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
     private const MONTHS_EN = [1 => 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
+    /** Un mois rédigé à partir de sa clé « AAAA-MM » : « novembre 2026 », « November 2026 » (cellule d'un tableau, lot W2-d) */
+    public static function month(string $key, string $locale): string
+    {
+        [$year, $month] = array_map('intval', explode('-', $key));
+
+        return (($locale === 'en' ? self::MONTHS_EN : self::MONTHS_FR)[$month] ?? $key) . ' ' . $year;
+    }
+
     /** Un jour rédigé, sans article : « 11 novembre 2026 », « November 11, 2026 » (lot W2-c : les dates données au modèle et rendues dans un texte) */
     public static function day(string $date, string $locale): string
     {
