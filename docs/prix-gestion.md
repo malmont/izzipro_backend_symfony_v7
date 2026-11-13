@@ -89,8 +89,24 @@ migration `Version20261228100000`, script `scripts/migrate_all_v2_gestion_prix_r
 | `minCoefficient` | 1,6 | plancher : le serveur ne **propose** jamais un coefficient plus bas |
 | `rounding` | `psy_99` | arrondi d'un prix **calculé** |
 
-`GET /api/gestion/reglages/prix` → `{ defaultCoefficient, minCoefficient, rounding, roundings: [...], stored: { … } }` (`stored` : ce que le
-gérant a réglé, `null` = valeur par défaut). `PUT` du même chemin : seules les clés envoyées changent, `null` remet la valeur par défaut.
+`GET /api/gestion/reglages/prix` → `{ defaultCoefficient, minCoefficient, rounding, roundings: [...], roundingOptions: [...], stored: { … } }`
+(`stored` : ce que le gérant a réglé, `null` = valeur par défaut). `PUT` du même chemin : seules les clés envoyées changent, `null` remet
+la valeur par défaut ; il rend la même forme.
+
+`roundingOptions` (13/11/2026, ajout : `roundings` reste) décrit chaque arrondi pour l'écran de réglage, dans l'ordre de `roundings` :
+`{ code, label, example }`. `label` est dans la langue demandée (`?locale=en`, français sinon) ; `example` est **calculé par le serveur**
+avec la règle appliquée aux prix, sur le prix type 54,78, sans devise (séparateur décimal de la langue). L'écran n'a donc ni règle ni
+texte à recopier :
+
+```json
+"roundingOptions": [
+  { "code": "psy_99",  "label": "Terminaison ,99, arrondi vers le haut (à partir de 100 : entier finissant par 9)", "example": "54,78 → 54,99" },
+  { "code": "ends_95", "label": "Terminaison ,95, arrondi vers le haut", "example": "54,78 → 54,95" },
+  { "code": "integer", "label": "Entier supérieur", "example": "54,78 → 55,00" },
+  { "code": "none",    "label": "Sans arrondi (au cent près)", "example": "54,78 → 54,78" }
+]
+```
+
 422 `OUT_OF_RANGE` (coefficient hors de 1 à 20), `MUST_BE_NUMBER`, `INVALID_ROUNDING`, `MIN_ABOVE_DEFAULT` (le minimum dépasse le
 coefficient par défaut). Journal `gestion-reglages-prix`. Code : `GestionPriceSettingsService`.
 

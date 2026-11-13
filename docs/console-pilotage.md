@@ -246,7 +246,7 @@ accordé, l'essai ou la demande (Mon site). Étapes (`SiteReadinessService::mana
 trouve le site par son code court, la clé IZ-ADM reste facultative), `management.admin` (un compte ROLE_ADMIN),
 `management.period` (période en cours, créée par l'application à l'ouverture), `management.fiscal_year` (mois de début d'exercice),
 `management.locale` (devise et fuseau) ; **améliorations** : `management.periods_calendar` (calendrier à confirmer, trimestres par défaut),
-`management.purchase_cost` (« N article(s) sur M sans coût d'achat », coût de la fiche ou d'une ligne d'achat), `management.suppliers`,
+`management.purchase_cost` (« 1 article sur M sans coût d'achat », « N articles sur M… » : textes accordés avec leur nombre depuis le 13/11/2026, coût de la fiche ou d'une ligne d'achat), `management.suppliers`,
 `management.referentials`, `management.cash` (solde de départ et seuil), `management.fixed_costs`, `management.ai` (palier et crédits restants),
 `management.device` (appareil pour les notifications), `management.first_purchase` (commande fournisseur ou reprise d'historique). Chaque étape
 porte en plus **`appScreen`** (code d'écran de l'application de gestion, vocabulaire des vignettes : `periodes`, `exercice`, `articles`,
