@@ -46,12 +46,15 @@ rien n'est restreint (essais du propriétaire comme avant la console). Le passag
 administrateur (`PUT /api/platform/settings`, onglet « Plateforme »). `Services/Platform/PlatformModeService`, cache 60 s.
 
 **Droits d'usage plutôt qu'interrupteurs.** Table de plateforme `tenant_entitlements` (base maître) : `tenant_code`,
-`feature_key`, `source` (`manual`, `trial`, `free`, `subscription`, `purchase`), `starts_at`, `ends_at` (nul = sans fin),
+`feature_key`, `source` (`manual`, `trial`, `free`, `subscription`, `purchase`), `starts_at`, `ends_at` (nul = sans fin ; stockés en
+UTC sans décalage horaire dans PostgreSQL `TIMESTAMP WITHOUT TIME ZONE`, le serveur PHP tournant en UTC),
 `status` (`active`, `grace`, `suspended`, `expired`, `cancelled`), `reference` (commande ou abonnement de la boutique
 plateforme, plus tard), `granted_by`, `note`. Politique par fonctionnalité : essai autorisé et durée, gratuité permanente
 autorisée, délai de grâce après impayé. Droit effectif = un droit `active` ou `grace` non expiré
 (`EntitlementService::isEnabled`, cache Redis court) ; les colonnes `is_*_active` deviennent une projection synchronisée
-pour ne pas casser les frontaux.
+pour ne pas casser les frontaux. Les champs `endsAt` rendus par l'API (`EntitlementService::effective()`,
+`GET /api/platform/sites`, `GET /api/platform/entitlements`, `GET`/`PUT /api/site/features`) restent la chaîne UTC `Y-m-d H:i:s`
+sans fuseau et sont doublés par `endsAtIso` en ISO 8601 avec décalage (`+00:00`, ou `null` quand `endsAt` est nul ; lot DROITS-ISO, 13/11/2026).
 
 **Offres et prix (décision du 04/11/2026).** Table de plateforme `platform_offers` (base maître) : `code`, libellé fr/en,
 `features` (une ou plusieurs clés du registre : une offre est une fonctionnalité seule ou un lot), `monthly_price_cents`,

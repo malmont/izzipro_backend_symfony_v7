@@ -51,7 +51,7 @@ class EntitlementService
     }
 
     /**
-     * @return array<string, array{enabled: bool, id: ?int, source: ?string, status: ?string, endsAt: ?string, graceUntil: ?string, offerCode: ?string}>
+     * @return array<string, array{enabled: bool, id: ?int, source: ?string, status: ?string, endsAt: ?string, endsAtIso: ?string, graceUntil: ?string, offerCode: ?string}>
      *   une entrée par fonctionnalité gouvernée
      */
     public function effective(string $tenantCode): array
@@ -59,7 +59,7 @@ class EntitlementService
         $now = new \DateTimeImmutable();
         $out = [];
         foreach (array_keys(FeatureCatalog::GOVERNED) as $key) {
-            $out[$key] = ['enabled' => false, 'id' => null, 'source' => null, 'status' => null, 'endsAt' => null, 'graceUntil' => null, 'offerCode' => null];
+            $out[$key] = ['enabled' => false, 'id' => null, 'source' => null, 'status' => null, 'endsAt' => null, 'endsAtIso' => null, 'graceUntil' => null, 'offerCode' => null];
         }
         foreach ($this->repository->listForTenant($tenantCode, true) as $row) {
             $key = $row['feature_key'];
@@ -70,7 +70,7 @@ class EntitlementService
                 $this->expireNow($row, $now);
                 continue;
             }
-            $out[$key] = ['enabled' => true, 'id' => (int) $row['id'], 'source' => $row['source'], 'status' => $row['status'], 'endsAt' => $row['ends_at'], 'graceUntil' => $row['grace_until'], 'offerCode' => $row['offer_code']];
+            $out[$key] = ['enabled' => true, 'id' => (int) $row['id'], 'source' => $row['source'], 'status' => $row['status'], 'endsAt' => $row['ends_at'], 'endsAtIso' => self::toIso($row['ends_at']), 'graceUntil' => $row['grace_until'], 'offerCode' => $row['offer_code']];
         }
 
         return $out;
@@ -345,5 +345,15 @@ class EntitlementService
         $previous = trim((string) ($row['note'] ?? ''));
 
         return $previous === '' ? trim($note) : $previous . ' | ' . trim($note);
+    }
+
+    /** Convertit une date SQL `Y-m-d H:i:s` (UTC dans `tenant_entitlements`) en ISO 8601 avec décalage, ou null si absente. */
+    private static function toIso(mixed $sqlDatetime): ?string
+    {
+        if (!is_string($sqlDatetime) || trim($sqlDatetime) === '') {
+            return null;
+        }
+
+        return (new \DateTimeImmutable($sqlDatetime, new \DateTimeZone('UTC')))->format(\DateTimeInterface::ATOM);
     }
 }

@@ -63,7 +63,7 @@ class SiteFeatureStateService
             $entry['helpKey'] = $this->help?->forSetting($key) ?? $this->help?->forScreen($def['href'] ?? null); // page d'aide (07/11/2026)
             if ($def['scope'] === FeatureCatalog::SCOPE_PLATFORM) {
                 $ent = $entitlements[$key] ?? null;
-                $entry['entitlement'] = $ent && $ent['enabled'] ? ['id' => $ent['id'], 'source' => $ent['source'], 'status' => $ent['status'], 'endsAt' => $ent['endsAt'], 'graceUntil' => $ent['graceUntil'], 'offerCode' => $ent['offerCode']] : null;
+                $entry['entitlement'] = $ent && $ent['enabled'] ? ['id' => $ent['id'], 'source' => $ent['source'], 'status' => $ent['status'], 'endsAt' => $ent['endsAt'], 'endsAtIso' => $ent['endsAtIso'] ?? null, 'graceUntil' => $ent['graceUntil'], 'offerCode' => $ent['offerCode']] : null;
                 $entry['request'] = $pending[$key] ?? null;
             }
             $out[] = $entry;
