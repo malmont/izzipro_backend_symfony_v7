@@ -481,7 +481,7 @@ Contrat validé par l'application (« new easymakemoney ») le 11/11/2026, Q1 à
   Retour arrière : annuler les droits notés « transition MOD », ou rester en mode demo.
 - **Unités IA** : la gestion consomme les crédits mensuels du site (même réserve que l'assistant et les fiches produit), 1 crédit par appel
   (conseils, avis du guide, lecture de documents) ; l'IA reste un palier à part (`ai.help` / `ai.full`). `GET /api/gestion/ia` (`ROLE_ADMIN`,
-  gardée par le module) → `{ tier: none | help | full, credits: { monthly, used, remaining, resetAt }, costs: { advice, comment, document },
+  gardée par le module) → `{ tier: none | help | full, credits: { monthly, used, remaining, resetAt }, costs: { advice, comment, document, console } (`console` : par réponse rédigée de la console IA, lot W2-c),
   limits: { commentsPerDay: 10, adviceRefreshPerDay: 3 }, today: { comments, adviceRefresh } }`. Épuisé : conseils et avis rendent
   `credits_exhausted` (les règles restent servies), documents 402 `AI_CREDITS_EXHAUSTED`. Plafonds vérifiés avant les crédits ; depuis ce lot,
   un avis refusé faute de crédits ou de palier (`credits_exhausted`, `not_included`) **n'est ni gardé en cache ni compté** dans le plafond du jour.

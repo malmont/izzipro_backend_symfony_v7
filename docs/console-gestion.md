@@ -13,6 +13,11 @@ Test : `tests/Functional/Gestion/ConsoleApiTest.php` (modèle simulé).
 rédigés et ceux des chiffres disent ce qu'ils comptent (§ 2) ; tout chiffre dont un texte parle a sa carte à la suite ; un bilan
 d'articles porte ses groupes (§ 3). Code ajouté : `Services/Console/ConsoleScreens.php` (la table des écrans), `Analysis/RangeLabel.php`.
 
+**Lot W2-c (13/11/2026), retouches après l'essai de comparaison** : une carte ne suit que le texte qui parle vraiment du chiffre, et
+une même grandeur n'a qu'une carte (§ 3) ; les états et les dates sont rédigés, l'intertitre d'un groupe est une phrase complète, le
+panier moyen dit ce qu'il divise (§ 2) ; l'écran Trésorerie donne son horizon de 90 jours (§ 4.1) ; un contexte sans paramètre rend
+`params: {}` ; `GET /api/gestion/ia` rend `costs.console: 1` (par réponse rédigée).
+
 ## 1. Ce que fait la console
 
 Le gérant pose une question libre sur l'activité de gestion de son site. La console répond comme un spécialiste : elle voit toute la
@@ -54,9 +59,21 @@ une sortie chiffrée. Le fil d'une facture, le guide quotidien et la console app
   publicité), hors achats de marchandise » (résultat de période) et « Dépenses réelles, achats de marchandise compris » (budget) ne
   sont pas le même montant.
 - **`groups`** (bilan d'articles, `articles.new`) : les articles réunis par verdict et par raison (d'où vient le coefficient proposé :
-  `similar`, `supplier`, `site`, ou `null` sans verdict), avec leur nombre, un libellé accordé (« coefficient constaté chez leur
-  fournisseur »), tous leurs identifiants et 5 noms au plus. Rangés : à monter, à baisser, à garder, sans verdict ; le plus nombreux
+  `similar`, `supplier`, `site`, ou `null` sans verdict), avec leur nombre, un `label` qui est la phrase complète du groupe, prête à
+  servir d'intertitre (lot W2-c : « 5 articles au coefficient constaté chez leur fournisseur : à garder », « 1 article sous le
+  coefficient de son fournisseur : à monter »), tous leurs identifiants et 5 noms au plus. Rangés : à monter, à baisser, à garder, sans verdict ; le plus nombreux
   d'abord. **Le modèle ne compte rien.**
+- **Une valeur de type `text` est rédigée** (lot W2-c) : l'état de la trésorerie, l'état du budget et le verdict d'un article rendent
+  dans `value` le libellé que l'écran affiche (« Correct », « Sous le seuil », « Découvert prévu », « Aucun solde saisi » ; « Sans
+  prévu », « Dans le budget », « Attention », « Dépassé » ; « À garder », « À monter », « À baisser ») et dans **`code`** le code
+  (`ok`, `warning`, `critical`, `no_balance` ; `none`, `ok`, `warning`, `over` ; `keep`, `raise`, `lower`). Les lignes d'un tableau
+  (`rows`) gardent leurs codes ; le modèle, lui, en reçoit les libellés. **Une date est donnée au modèle rédigée** (« 11 novembre
+  2026 ») ; sa `value` reste au format AAAA-MM-JJ.
+- **Trésorerie** (`cash.projection`, `days` de 7 à 180, 30 par défaut) : l'horizon est dit dans le libellé (« Point bas sur 90 jours »,
+  « Solde prévu dans 90 jours ») ; au-delà de 14 jours, le point bas sur 14 jours de l'écran est rendu aussi (`lowest14Amount`,
+  `lowest14Date`).
+- **Panier moyen** : « Panier moyen (ventes avant retours ÷ commandes, hors taxes) ». Il ne se retrouve donc pas en divisant les
+  ventes nettes par les commandes : un retour ne fait pas baisser le panier.
 - `sales.overview` lit une plage (`range` : `today`, `7d`, `month`, `year`) ou une période (`periodId`, qui l'emporte). Sans l'un ni
   l'autre : le mois, comme l'écran des statistiques.
 
@@ -128,6 +145,12 @@ même chiffre). Si le modèle parle d'un chiffre sans le citer, le serveur le re
 valeur d'un seul chiffre des analyses le désigne ; de plusieurs, celui dont le libellé est dans le texte (« 11 commandes » : le chiffre
 « Commandes ») ; sinon aucun, on ne devine pas. Une date ou un texte ne sont pas des nombres cités.
 
+**Le bon texte, une seule carte (lot W2-c).** Un chiffre que le modèle cite dans `figureIds` ne compte que si le texte **en parle
+vraiment** : sa valeur y est écrite (un nombre reconnu par sa valeur, une date ou un état sous leur forme rédigée), ou son libellé y
+est écrit (le début du libellé : « budget prévu »). Sinon il est ignoré pour ce texte ; le texte qui en parle, lui, le retrouve par sa
+valeur. Et quand deux analyses rendent **la même grandeur, de même valeur, sur la même plage** (les ventes de la période, dans le
+résultat et dans les statistiques), c'est un seul chiffre : celui de la première analyse, sa source gardée ; une seule carte.
+
 **Consignes de rédaction ajoutées (lot W2-b)** : ne jamais rapprocher deux mesures différentes sans dire ce que chacune compte ; nommer
 une plage par son libellé recopié tel quel ; pour un bilan d'articles, une phrase par groupe (« 5 articles au coefficient de leur
 fournisseur : à garder »), jamais la même raison répétée article par article, le détail restant dans le bloc `verdicts`.
@@ -162,6 +185,9 @@ code a un thème, des paramètres admis et des analyses par défaut ; un écran 
 | `resultats` | `period.result`, `year.overview` | `periodes` (`page`) ; `periode` (`periodId`) → `period.result`, `sales.overview` ; `periode.budget` (`periodId`) → `budget.status` ; `periode.simulation` (`periodId`) → `period.result`, `budget.status` ; `preparation` → `period.result`, `cash.projection`, `budget.status` ; `statistiques` (`range`, `source`, `periodId`) → `sales.overview` ; `statistiques.annee` (`year`, `pricePercent`) → `year.overview` |
 | `reglages` | `year.overview`, `articles.missing_cost` | `reglages` ; `reprise` |
 
+- Un écran peut **fixer un paramètre** à une de ses analyses (lot W2-c) : `tresorerie` donne `days: 90` à `cash.projection` (l'écran
+  montre le point bas sur 14 et 90 jours et le solde dans 90 jours), `gestion.home` donne `range: today` à `sales.overview`. Ce
+  paramètre complète aussi l'analyse que le modèle choisit lui-même depuis cet écran, quand il le laisse vide ; ce qu'il nomme l'emporte.
 - `theme` (`theme` : `achats`, `ventes`, `argent`, `resultats`, `reglages`) est la page d'un thème : elle reçoit les analyses du thème
   qu'elle montre.
 - Une analyse par défaut reprend, parmi les paramètres de l'écran, ceux qu'elle déclare au catalogue (`periodId`, `productId`, `year`,
@@ -245,7 +271,8 @@ est créé ; son titre est la première question, coupée à 80 caractères.
 - Un message `user` est toujours suivi de sa réponse `assistant` (`replyTo` = le `messageId` de la question). Les champs `blocks`,
   `analyses` et `proposals` sont ceux du § 4 ; ils sont vides tant que `state` vaut `pending`.
 - `pending` (au niveau de l'échange) dit qu'une réponse est encore attendue : le web relit toutes les 3 secondes tant qu'il est vrai.
-- `context` est celui que la question a envoyé, ou `null` s'il était absent ou a été ignoré (§ 4).
+- `context` est celui que la question a envoyé, ou `null` s'il était absent ou a été ignoré (§ 4). Sans paramètre, il rend
+  `params: {}` (un objet, lot W2-c).
 - `error` n'est rempli que pour `state: "failed"` (codes plus bas).
 
 **`GET /api/gestion/console/conversations?page=1&limit=20`** → un tableau, du plus récemment modifié au plus ancien, paginé comme la
