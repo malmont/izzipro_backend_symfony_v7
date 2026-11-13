@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (460)
+## Boutique et commun (462)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -455,6 +455,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/promotions` | ROLE_ADMIN | `Gestion\Controller\GestionPromotionController::current` |
 | GET | `/api/gestion/reglages/exercice` | ROLE_ADMIN | `Gestion\Controller\GestionFiscalYearController::settings` |
 | PUT | `/api/gestion/reglages/exercice` | ROLE_ADMIN | `Gestion\Controller\GestionFiscalYearController::put` |
+| GET | `/api/gestion/reglages/prix` | ROLE_ADMIN | `Gestion\Controller\GestionPriceSettingsController::settings` |
+| PUT | `/api/gestion/reglages/prix` | ROLE_ADMIN | `Gestion\Controller\GestionPriceSettingsController::put` |
 | POST | `/api/gestion/reprise/annuler` | ROLE_ADMIN | `Gestion\Controller\RepriseController::cancel` |
 | POST | `/api/gestion/reprise/appliquer` | ROLE_ADMIN | `Gestion\Controller\RepriseController::apply` |
 | POST | `/api/gestion/reprise/simulation` | ROLE_ADMIN | `Gestion\Controller\RepriseController::simulate` |

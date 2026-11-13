@@ -92,9 +92,10 @@ productId }], created: [{ lineN, productId, name }], shipping: FraisDePortOutput
 - Devise de la commande = devise du fournisseur ; `exchangeRate` obligatoire si elle diffère du site (422 `EXCHANGE_RATE_REQUIRED`) ;
   budget = Σ quantité × `unitCost` + port, dans la devise de la commande ; nom par défaut « Facture <numéro> — <fournisseur> ».
 - Ligne avec `productId` (et `variantId` facultatif) : une **ligne d'achat à recevoir** de plus (réassort), **sans effet sur le stock, le prix
-  de vente, le prix d'achat de la fiche ni la visibilité**. Ligne avec `create` : un article par
+  de vente, le prix d'achat de la fiche ni la visibilité** (le prix de vente ne change que sur décision portée par la ligne,
+  `lines[].price { mode: coefficient | fixed }`, lot IA-ACT-5). Ligne avec `create` : un article par
   `groupKey` (nom du premier `create.name`, prix d'achat = moyenne pondérée des `unitCost` **convertie dans la devise du site**,
-  coefficient donné sinon 2, prix de vente = prix d'achat × coefficient : la règle unique du § 4 bis, **stock 0** (il n'entre qu'à la réception), invisible en boutique et en caisse, sans catégorie), une variante par ligne
+  coefficient donné sinon le coefficient par défaut du site (2 si rien n'est réglé), prix de vente = prix d'achat × coefficient, arrondi selon le réglage du site (lot IA-ACT-5, `docs/prix-gestion.md` § 5) : la règle unique du § 4 bis, **stock 0** (il n'entre qu'à la réception), invisible en boutique et en caisse sauf décision portée par la ligne (`create.publishPos`, `create.publishWeb` : `now` ou `reception`, `docs/conversation-gestion.md` § 13), sans catégorie), une variante par ligne
   quand taille ou couleur sont données (référentiels créés s'ils manquent, stock 0) ; la photo
   de la première ligne du groupe devient l'image de l'article (médiathèque publique). Ligne sans l'un ni l'autre → 422 `lines[n]:
   LINE_UNRESOLVED` ; inconnu → `PRODUCT_NOT_FOUND` ; variante d'un autre article → `lines[n].variantId: VARIANT_NOT_IN_PRODUCT`. Tout ou rien.
@@ -151,7 +152,8 @@ Test : `GestionDocumentsApiTest::testInvoicePreviewGivesThePricesOfTheConfirmati
   - `unitCostConverted` = arrondi(`unitCost` × taux) ; `null` sans taux.
   - `kind` `create` : `plannedPrice` est le prix que la confirmation donnera à l'article, par **la même fonction**
     (`GestionInvoiceDraft::groupPrice`) : coût moyen pondéré du groupe (`groupKey`), converti (arrondi au cent), × coefficient de la
-    première ligne du groupe (2 par défaut), arrondi au cent. Il est répété sur chaque ligne du groupe. Le coefficient se lit donc
+    première ligne du groupe (sinon le coefficient par défaut du site, 2 si rien n'est réglé), puis **arrondi selon le réglage du site**
+    (prix psychologique par défaut : 20,00 → 20,99 ; lot IA-ACT-5, `docs/prix-gestion.md` § 5). Il est répété sur chaque ligne du groupe. Le coefficient se lit donc
     « prix de vente ÷ coût, dans la devise du site ». `null` si une ligne du groupe est refusée ou si le taux manque.
   - `kind` `existing` : `plannedPrice` `null` (la confirmation ne change pas le prix d'un article existant) ; `currentPrice` = le prix de
     vente actuel de la variante, sinon de l'article.

@@ -145,7 +145,11 @@ Règles :
 - Limite connue, hors R1 (chemin de la vente, signalée par la session de la caisse) : la vente écrit le stock depuis la valeur en mémoire,
   sans verrou ; une vente et une réception simultanées sur la même variante peuvent perdre l'une des deux mises à jour, comme deux ventes.
 - Mouvement type 5 relié à la ligne (`commande_line_id`), stock avant et après ; `product.quantity` se recalcule depuis les variantes.
-  Aucun autre effet : prix, prix d'achat, coefficient, visibilité, vente et pack hors ligne de la caisse intacts.
+  Aucun autre effet : prix, prix d'achat, coefficient, vente et pack hors ligne de la caisse intacts.
+- **Mise en ligne à la réception** (lot IA-ACT-5, 13/11/2026) : la visibilité reste intacte, sauf pour un article que la confirmation
+  d'une facture a marqué « à mettre en ligne à la réception » (`product.publish_pos_on_reception`, `publish_web_on_reception`,
+  `docs/conversation-gestion.md` § 13). Sa **première** réception le met en vente sur le ou les canaux marqués et efface la marque, dans
+  la transaction de la réception ; journal `gestion-mise-en-ligne`, action `reception`. Annuler la réception ne le retire pas de la vente.
 - Réception **permise sur une commande figée ou une période fermée** (c'est du stock) ; les chiffres figés ne changent pas.
 - Journal `content_audit_log` (`commande-reception` : receive, cancel).
 

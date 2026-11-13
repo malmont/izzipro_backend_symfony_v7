@@ -1,4 +1,4 @@
-# Facture et actions par conversation — application de gestion (lots IA-FACT-1, IA-FACT-2-A, IA-FACT-2-B, IA-ACT-1 à IA-ACT-4, 13/11/2026)
+# Facture et actions par conversation — application de gestion (lots IA-FACT-1, IA-FACT-2-A, IA-FACT-2-B, IA-ACT-1 à IA-ACT-5, 13/11/2026)
 
 > **Périmètre, décision du propriétaire (13/11/2026) : le fil de conversation et son catalogue d'actions servent EXCLUSIVEMENT
 > l'application de gestion.** Ils ne font rien sur les autres modules (Mémoires Vivantes, Boussole, boutique, contenu du site) :
@@ -437,3 +437,168 @@ comparaison table par table à l'état d'avant.
 
 Code : `Action/PeriodCloseAction`. Tests : `ActionConversationApiTest::testAFinishedPeriodIsClosedThroughTheThreadAndUndoneExactly`,
 `ActionCatalogScopeTest` (périmètre du catalogue, dont les écritures directes admises de cette annulation).
+
+## 13. Prix de vente et mise en ligne (lot IA-ACT-5, 13/11/2026)
+
+Décision de périmètre du propriétaire (en tête de fiche) : le prix de vente et la mise en ligne d'un article font partie de la
+gestion. Ce lot les met dans le fil d'une facture et ajoute l'action `price.set`. Réglages de prix du site, arrondi et calcul du
+coefficient proposé : `docs/prix-gestion.md` § 5 et § 6.
+
+### 13.1 Dans le fil d'une facture
+
+Des questions de plus, **en fin de liste**. Elles sont toutes **proposées** (`proposed: true`, `answer` déjà rempli) : elles ne
+comptent pas parmi les questions ouvertes, et le fil est prêt sans qu'on y touche. Sans réponse du gérant, rien ne change par rapport à
+avant ce lot, sauf le coefficient d'un article créé (proposé au lieu de 2) et l'arrondi de son prix.
+
+| Question | Quand | Réponses |
+|---|---|---|
+| `coefficient` | une ligne au moins crée un article | `"suggested"` (proposée) ou un nombre |
+| `publish.pos`, `publish.web` | une ligne au moins crée un article | `no` (proposée), `now`, `reception` |
+| `price.mode` | un article au moins est déjà au catalogue | `keep` (proposée), `suggested`, `each` |
+| `price:<productId>` | seulement si `price.mode` vaut `each` | `{ mode: "keep" }` (proposée), `{ mode: "coefficient", coefficient? }`, `{ mode: "fixed", price }` |
+
+**Saisie d'un nombre, pour le web et le mobile.** `input.type` reste `"choice"` : la question a des boutons. Quand un nombre peut
+aussi être saisi, `input` porte en plus `number: { min, max }` ; quand un montant peut être saisi, `money: { currency }`. Il n'y a pas
+de question à part de type `number`. La valeur saisie s'envoie par la même route que les boutons :
+- `coefficient` : le nombre lui-même, `{ "questionId": "coefficient", "value": 2.4 }` ;
+- `price:<productId>` : un coefficient, `{ "value": { "mode": "coefficient", "coefficient": 2.4 } }` ; un prix saisi, en cents,
+  `{ "value": { "mode": "fixed", "price": 3150 } }`.
+
+**`coefficient`.** `"suggested"` : chaque article créé prend le coefficient que le serveur lui propose (`docs/prix-gestion.md` § 6). Un
+nombre vaut pour toute la facture (plus de 0, 20 au plus ; `MUST_BE_POSITIVE`, `OUT_OF_RANGE`).
+- `options` : `"suggested"` d'abord ; puis, quand ils existent et ne sont pas déjà la proposition, le coefficient constaté chez le
+  fournisseur et le coefficient par défaut du site, chacun avec `source`. Avec un seul article créé, le libellé de `"suggested"` est
+  celui de sa proposition, chiffres compris ; avec plusieurs : « Le coefficient proposé pour chaque article, de 2,3 à 2,7 (détail par article) ».
+- `articles` : le détail par article créé. `source` dit d'où vient le coefficient retenu : `similar`, `supplier`, `site`, `invoice`
+  (le nombre répondu) ou `line` ; `proposed` et `label` sont la proposition du serveur, avec ses chiffres ; `similar` porte ces
+  chiffres (`null` sans semblables) ; `price` est le prix de vente arrondi.
+- **Une seule ligne** peut avoir son coefficient : `create.coefficient` dans la réponse à la question de la ligne (`line:<clé>`), comme
+  avant ; il passe avant celui de la facture. L'option « Créer l'article » ne porte plus de coefficient : **l'application n'envoie
+  `create.coefficient` que si le gérant l'a saisi pour cette ligne**, sinon elle écrase la proposition.
+
+```json
+{
+  "id": "coefficient", "kind": "coefficient", "path": "lines",
+  "title": "Coefficient des nouveaux articles",
+  "text": "Le prix de vente d'un nouvel article est son coût d'achat multiplié par un coefficient, puis arrondi. Quel coefficient voulez-vous ?",
+  "required": true, "proposed": true, "answer": "suggested",
+  "input": { "type": "choice", "number": { "min": 1, "max": 20 } },
+  "options": [
+    { "value": "suggested", "label": "2,7 : 5 semblables de ce fournisseur affichés à 2,5, vendus à 90 % en 2 semaines pour les unités vendues, sans rabais (+0,2)" },
+    { "value": 2.5, "label": "2,5 : constaté chez ce fournisseur, sur 5 articles", "source": "supplier" },
+    { "value": 2, "label": "2 : le coefficient par défaut du site", "source": "site" }
+  ],
+  "articles": [
+    { "lines": [2], "groupKey": null, "name": "Écharpe neuve", "cost": 1100,
+      "coefficient": 2.7, "source": "similar", "proposed": 2.7, "proposedSource": "similar",
+      "label": "2,7 : 5 semblables de ce fournisseur affichés à 2,5, vendus à 90 % en 2 semaines pour les unités vendues, sans rabais (+0,2)",
+      "similar": { "count": 5, "sameCategory": false, "season": { "key": "2025-Q4", "label": "Automne 2025", "from": "2025-09-01", "to": "2025-11-30" },
+                   "displayedCoefficient": 2.5, "obtainedCoefficient": 2.5, "soldShare": 0.9, "weeksToSell": 2, "discountRate": 0,
+                   "adjustment": "up", "floored": false },
+      "price": 2999 }
+  ]
+}
+```
+
+Un nombre entier est rendu sans décimale (`2`, pas `2.0`). `adjustment` : `up` (+0,2), `obtained` (coefficient obtenu), `keep`
+(inchangé), `down` (−0,2).
+
+**`publish.pos`** et **`publish.web`** : « En caisse » et « Sur la boutique en ligne », deux choix séparés. `no` (proposée), `now` (en
+vente tout de suite) ou `reception` (à la réception du stock). Une seule ligne peut être réglée à part : `create.publishPos` et
+`create.publishWeb` dans la réponse à la question de la ligne.
+
+**`price.mode`** : UNE question pour toute la facture, quel que soit le nombre d'articles déjà au catalogue. `keep` (proposée) : tous
+les prix sont gardés. `suggested` : chaque article prend le coefficient que le serveur lui propose, sur son coût de cette facture.
+`each` : régler article par article ; alors seulement, une question `price:<productId>` apparaît pour chaque article, proposée à
+« garder ». `articles` dit, pour chaque article, ce que `suggested` donnerait. Revenir à `keep` ou à `suggested` fait disparaître les
+questions par article : leurs réponses ne comptent plus.
+
+```json
+{
+  "id": "price.mode", "kind": "price.mode", "path": "lines",
+  "title": "Prix des articles déjà au catalogue",
+  "text": "Cette facture comprend un article déjà en vente. Voulez-vous toucher à son prix de vente ?",
+  "required": true, "proposed": true, "answer": "keep",
+  "input": { "type": "choice" },
+  "options": [
+    { "value": "keep", "label": "Garder les prix actuels" },
+    { "value": "suggested", "label": "Appliquer à chacun le coefficient proposé" },
+    { "value": "each", "label": "Régler article par article" }
+  ],
+  "articles": [
+    { "productId": 812, "name": "Tuque", "lines": [1], "currentPrice": 2500, "cost": 1000, "currentCoefficient": 2.5,
+      "proposed": 2.7, "proposedSource": "similar",
+      "label": "2,7 : 5 semblables de ce fournisseur affichés à 2,5, vendus à 90 % en 2 semaines pour les unités vendues, sans rabais (+0,2)",
+      "price": 2799 }
+  ]
+}
+```
+
+**`price:<productId>`** (kind `line.price`, seulement sur `each`). Refus : `INVALID_VALUE`, `INVALID_AMOUNT`, `MUST_BE_POSITIVE`,
+`OUT_OF_RANGE` ; répondre à cette question quand `price.mode` ne vaut pas `each` → `UNKNOWN_QUESTION`.
+`input: { type: "choice", money: { currency }, number: { min, max } }`.
+- `options` : « Garder 25,00 CAD (coefficient actuel 2,5) », puis chaque coefficient proposé avec ses chiffres et le prix qu'il donne
+  (« 2,7 : 5 semblables… → 27,99 CAD », `price` en cents, `source`).
+- La question porte `product { id, name }`, `lines`, `currentPrice`, `cost` (coût de l'article sur cette facture, dans la devise du
+  site) et `currentCoefficient`.
+- Mode coefficient, sans `coefficient` : celui que le serveur propose pour cet article. Le prix est le coût moyen pondéré de l'article
+  **sur cette facture**, converti dans la devise du site, × coefficient, arrondi du site. Les variantes à prix propre suivent, comme au lot P4.
+
+**Aperçu**, par ligne, en plus : `publishPos`, `publishWeb`, `mentions` (article créé : `STOCK_ZERO` = « stock 0 : affiché en rupture
+jusqu'à la réception », quand il est mis en vente tout de suite ; `NO_PHOTO` = « sans photo », quand il va sur la boutique sans photo
+de ligne) ; pour **chaque** article existant, son prix avant et après, dans tous les cas : `price { mode, coefficient, newPrice,
+currentPrice, changed, belowCost }` (`mode: "keep"` et `newPrice` = `currentPrice` quand le prix est gardé). Quand un nouveau prix est
+décidé, `plannedPrice`, `plannedMargin` et `plannedMarginRate` sont ceux de ce prix.
+
+**Confirmation.** L'article créé reçoit son prix arrondi, `is_pos` / `is_web` pour `now`, et pour `reception` une marque sur sa fiche
+(`product.publish_pos_on_reception`, `publish_web_on_reception`). Le prix d'un article existant est écrit par le chemin d'écriture d'un
+article (validation, cache, journal `products`). La réponse rend `prices: [{ level, productId, variantId, name, old, new, mode,
+coefficient }]`. Le même corps vaut pour `POST /api/gestion/documents/{id}/confirmer` et `…/apercu` : `lines[].create.publishPos`,
+`lines[].create.publishWeb`, `lines[].price { mode, coefficient?, price? }`.
+
+**À la réception du stock** (`CommandeReceptionService`) : la première réception d'un article marqué le met en vente sur le ou les
+canaux marqués et efface la marque, dans la même transaction ; journal `gestion-mise-en-ligne`, action `reception`. Annuler la
+réception ne le retire pas de la vente.
+
+**Annulation d'un bloc.** Elle remet les prix changés (par le même chemin) et retire les articles créés, visibles ou non. Refus de plus :
+`PRICE_CHANGED` (un prix écrit par la confirmation a été retouché depuis, avec `productId`), `PUBLISHED_ON_RECEPTION` (l'article marqué a
+été mis en ligne par une réception ; `LINE_RECEIVED` l'accompagne). Un article créé que la confirmation a rendu visible n'est pas « modifié ».
+
+### 13.2 L'action `price.set`
+
+La douzième action du catalogue : changer le prix de vente d'un ensemble d'articles. Elle n'écrit rien elle-même : aperçu, application,
+lot et annulation sont ceux de `GestionPriceService` (lot P4, `docs/prix-gestion.md`).
+
+| Question | Réponse | Refus |
+|---|---|---|
+| `scope` | un objet à une seule clé : `{ productIds: [...] }`, `{ commandeId }`, `{ periodId }`, `{ collectionId }`, `{ categoryId }`. Les options proposent les périodes commencées récentes, les collections d'achats et les catégories (`group` : `period`, `collection`, `category`) ; une liste d'articles ou une commande se donnent à l'ouverture (`params.scope`). | `INVALID_VALUE`, `REQUIRED`, `INVALID_ID`, `PRODUCT_NOT_FOUND`, `COMMANDE_NOT_FOUND`, `PERIOD_NOT_FOUND`, `COLLECTION_NOT_FOUND`, `CATEGORY_NOT_FOUND`, `TOO_MANY`, `SCOPE_EMPTY` |
+| `mode` | `coefficient` (sur le coût d'achat), `percent` (sur le prix actuel), `fixed` (un prix saisi : proposé pour une liste d'articles seulement) | `INVALID_MODE`, `FIXED_NEEDS_LIST` |
+| `value` | coefficient de 0,5 à 20 ; pourcentage de −90 à 300 ; prix en cents. `input` suit le mode (`number` avec `min` / `max`, ou `money`). | `MUST_BE_NUMBER`, `OUT_OF_RANGE`, `INVALID_AMOUNT` |
+| `rounding` | proposée : l'arrondi du site (`psy_99`, `ends_95`, `integer`, `none`). Absente en mode `fixed`. | `INVALID_ROUNDING` |
+| `force` | posée seulement si des prix sont à risque : `exclude` (proposée) ou `apply`. La question porte `count` et `rows` (50 au plus). | `INVALID_VALUE` |
+
+**Prix à risque** (garde-fous du lot P4) : une ligne qui passerait **sous son coût** ou bougerait de **plus de 50 %** est tenue à
+l'écart tant que le gérant n'a pas répondu « appliquer quand même ». **Exclus et nommés** : un article sans coût (mode coefficient),
+sans prix (mode pourcentage) ou en location. S'il ne reste aucun prix à écrire, le fil n'est pas prêt : `issues: [{ path: "scope",
+code: "NOTHING_TO_APPLY" }]`. Une valeur donnée avant le mode est recontrôlée quand le mode arrive (`issues` `value` `OUT_OF_RANGE`).
+
+**Aperçu** `{ scope { type, id, count, label }, mode, value, rounding, currency, pricesIncludeTax, summary { products, rows, written,
+unchanged, excluded, heldBack, promotions }, stockMargin { units, before { amount, rate }, after { amount, rate } }, lines, more,
+excluded, heldBack, notice, pricesHash }`.
+- `lines` : les prix qui seront écrits, 200 au plus (`more { count, total }` au-delà) : `{ productId, variantId, name, oldPrice,
+  newPrice, cost, marginBefore, marginAfter, marginRateBefore, marginRateAfter, stock, alerts }`. Une variante à prix propre a sa ligne.
+- `excluded` : `[{ productId, variantId, name, reason }]` (`COST_UNKNOWN`, `PRICE_MISSING`, `NOT_A_SALE_ITEM`) ; `heldBack` : les prix
+  à risque laissés tels quels. 50 au plus chacun ; les comptes de `summary` portent sur tous.
+- `stockMargin` : la **marge potentielle du stock** des articles concernés, stock × (prix − coût), sur les lignes au coût connu ;
+  « après » ne change que pour les lignes écrites. `rate` : marge ÷ valeur du stock au prix de vente.
+- `notice` : « Les nouveaux prix seront visibles tout de suite en caisse et sur la boutique en ligne… », plus le nombre d'articles en
+  promotion (leur prix promotionnel ne change pas) et la mention des prix taxes comprises.
+- `pricesHash` : l'empreinte de **toutes** les lignes ; un prix qui bouge entre l'aperçu et la confirmation rend `PREVIEW_CHANGED`.
+
+**Confirmer** → `result: { batchId, changed, undoUntil }` : un lot du service des prix, visible dans `GET /api/gestion/prix/lots`.
+**Annuler**, sous 24 heures, tout ou rien : les anciens prix reviennent par le même chemin. Refus : `PRICE_CHANGED` (un prix du lot a
+été retouché depuis, avec les articles nommés), `ALREADY_UNDONE` (le lot a déjà été annulé depuis l'écran des prix).
+
+**Guide des séquences** : `price.set` est préparable et se refait (`again`).
+
+Tests : `InvoicePricingConversationTest`, `PriceSetActionApiTest`, `SimilarArticlesAnalysisTest`, `ActionCatalogScopeTest`.
