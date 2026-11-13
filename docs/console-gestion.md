@@ -60,8 +60,8 @@ Les dix analyses entrent au premier lot quand leur calcul existe déjà ; sinon 
 ## 3. Comment une réponse se fabrique
 
 Deux appels au modèle par réponse, pour **1 unité**.
-1. **Choisir.** Le modèle reçoit la question, les 6 derniers messages de l'échange (texte seul, sans les données) et le catalogue
-   (clés, titres, paramètres). Il rend, en sortie structurée : les analyses à lancer avec leurs paramètres (4 au plus), ou « hors
+1. **Choisir.** Le modèle reçoit la question, l'écran d'où elle vient s'il est donné (`context`, § 4), les 6 derniers messages de
+   l'échange (texte seul, sans les données) et le catalogue (clés, titres, paramètres). Il rend, en sortie structurée : les analyses à lancer avec leurs paramètres (4 au plus), ou « hors
    périmètre », ou une demande de précision. Le serveur contrôle chaque clé et chaque paramètre contre le catalogue, puis exécute.
 2. **Rédiger.** Le modèle reçoit les résultats des analyses et rend la réponse en blocs.
 
@@ -78,7 +78,14 @@ calcule**, avec la règle du coefficient validée par le propriétaire (lot IA-A
 
 ## 4. Forme d'un échange
 
-Question : `{ text, conversationId? }`, 1 000 caractères au plus.
+Question : `{ text, conversationId?, context? }`, `text` de 1 000 caractères au plus.
+
+**`context: { module, screen, params }`** (facultatif) : l'écran de la gestion d'où la question est posée, que le panneau du web reçoit
+déjà de chaque écran (par exemple l'écran d'une période, avec son `periodId`).
+- Il est donné à l'appel 1 : « Explique-moi ce tableau » choisit alors les analyses de l'écran affiché, avec ses paramètres.
+- Il est contrôlé comme le reste : écran connu de la gestion, paramètres qui sont des identifiants existants du site. **Un contexte
+  inconnu ou invalide est ignoré, sans erreur** : la question est traitée sans lui.
+- Il est gardé dans le message, avec la question.
 
 La réponse arrive **en attente**, sur le modèle de la lecture de documents : la question rend tout de suite un message `pending`, un
 worker répond, le web relit toutes les 3 secondes.
@@ -108,7 +115,7 @@ worker répond, le web relit toutes les 3 secondes.
 
 | Route | Rôle |
 |---|---|
-| `POST /api/gestion/console/messages { text, conversationId? }` | pose une question ; rend le message `pending` |
+| `POST /api/gestion/console/messages { text, conversationId?, context? }` | pose une question, avec l'écran d'où elle vient ; rend le message `pending` |
 | `GET /api/gestion/console/conversations/{id}` | l'échange : questions et réponses, à relire toutes les 3 secondes tant qu'un message est `pending` |
 | `GET /api/gestion/console/conversations` | l'historique du site, du plus récent au plus ancien |
 | `DELETE /api/gestion/console/conversations/{id}` | le gérant efface un échange ; l'effacement est inscrit au journal |
@@ -135,6 +142,7 @@ worker répond, le web relit toutes les 3 secondes.
 
 ## 8. Ce que le web peut préparer dès maintenant
 
+- Le contexte de l'écran (`{ module, screen, params }`, déjà fourni par chaque écran depuis W0), à joindre à chaque question.
 - Un panneau d'échange : zone de saisie, état « en cours » relu toutes les 3 secondes, état « échec » avec son motif.
 - Le rendu des quatre types de blocs, avec pour chaque chiffre un lien vers sa source (`screen`, `params`).
 - Les propositions : un bouton par proposition, qui ouvre le fil d'action déjà codé côté web.
