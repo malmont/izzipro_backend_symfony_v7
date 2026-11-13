@@ -2,6 +2,13 @@
 
 namespace App\Tests\Functional\Gestion;
 
+use App\Entity\Order;
+use App\Entity\OrderItems;
+use App\Entity\OrderSource;
+use App\Entity\OrderType;
+use App\Entity\Product;
+use App\Entity\ProductVariant;
+use App\Entity\StatusCommande;
 use App\Entity\Transporteur;
 use App\Entity\TypeFournisseur;
 use App\Entity\TypeNoteDeFrais;
@@ -11,7 +18,9 @@ use App\Gestion\Message\ReadGestionDocumentMessage;
 use App\Gestion\MessageHandler\ReadGestionDocumentHandler;
 use App\Gestion\Sequences\SequenceCatalog;
 use App\Gestion\Services\Conversation\Action\ActionCatalog;
+use App\Gestion\Services\GestionFiscalYearService;
 use App\Gestion\Services\PeriodCalendar;
+use App\Gestion\Services\PeriodResultCalculator;
 use App\Services\TenantEntityManagerProvider;
 use App\Tests\Fake\FakeLandingAiClient;
 use App\Tests\Functional\Cache\CacheTestEntityFactory;
@@ -577,6 +586,205 @@ class ActionConversationApiTest extends WebTestCase
         $conn()->executeStatement('DELETE FROM fournisseur WHERE id = ?', [$supplierId]);
     }
 
+    public function testAFiscalYearAPeriodSplitAndAPurchaseCostAreEachPreparedAndUndone(): void
+    {
+        $tag = $this->tag;
+        $calendar = static::getContainer()->get(PeriodCalendar::class);
+        $period = $calendar->current();
+        $today = $calendar->today();
+        $conn = fn () => $this->em()->getConnection();
+        $saved = $conn()->fetchAssociative('SELECT id, fiscal_year_start_month, purchase_period_frequency, prices_include_tax FROM entreprise ORDER BY id LIMIT 1');
+        $setting = function (string $column, mixed $value) use ($conn, $saved): void {
+            $conn()->executeStatement("UPDATE entreprise SET $column = ? WHERE id = ?", [$value, $saved['id']]);
+            $this->endOfWrite();
+        };
+        $stored = fn (string $column) => $conn()->fetchOne("SELECT $column FROM entreprise WHERE id = ?", [$saved['id']]);
+        $journal = fn (string $resource): int => (int) $conn()->fetchOne('SELECT COUNT(*) FROM content_audit_log WHERE resource = ?', [$resource]);
+        $months = [1 => 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+        $long = fn (string $day): string => (($d = new \DateTimeImmutable($day))->format('j') === '1' ? '1er' : $d->format('j')) . ' ' . $months[(int) $d->format('n')] . ' ' . $d->format('Y');
+        try {
+            $setting('fiscal_year_start_month', null);
+            $setting('purchase_period_frequency', null);
+
+            // ---- fiscal_year.set : exercice civil (janvier) et trimestres saisonniers au départ --------------------------------------------
+            $fiscal = $this->post('/api/gestion/conversations', ['action' => 'fiscal_year.set'], 201);
+            $fid = (int) $fiscal['id'];
+            $options = $fiscal['questions'][0]['options'];
+            $this->assertSame([12, ['value' => 1, 'label' => 'Janvier', 'aligned' => false, 'current' => true], ['value' => 3, 'label' => 'Mars', 'aligned' => true, 'current' => false], [3, 6, 9, 12]],
+                [count($options), $options[0], $options[2], array_column(array_filter($options, fn (array $o) => $o['aligned']), 'value')]);
+            $this->assertSame([null, false, 1], [$fiscal['questions'][0]['answer'], $fiscal['questions'][0]['proposed'], $fiscal['openQuestions']], 'le gérant choisit : rien n\'est proposé');
+            foreach ([[13, 'OUT_OF_RANGE'], [0, 'OUT_OF_RANGE'], ['3', 'MUST_BE_INTEGER']] as [$value, $code]) {
+                $this->assertSame(['answers[0].value' => $code], $this->post("/api/gestion/conversations/$fid/answers", ['answers' => [['questionId' => 'startMonth', 'value' => $value]]], 422)['fields']);
+            }
+            $same = $this->post("/api/gestion/conversations/$fid/answers", ['answers' => [['questionId' => 'startMonth', 'value' => 1]]], 200);
+            $this->assertSame(['questions', [['path' => 'startMonth', 'code' => 'UNCHANGED']], null], [$same['state'], $same['issues'], $same['preview']], 'le mois déjà en place : rien à confirmer');
+            // mars : aligné sur les trimestres saisonniers, aucun avertissement
+            $march = $this->post("/api/gestion/conversations/$fid/answers", ['answers' => [['questionId' => 'startMonth', 'value' => 3]]], 200);
+            $year = GestionFiscalYearService::startYearOf($today, 3);
+            $this->assertSame(['ready', ['startMonth' => 1, 'label' => 'Janvier'], ['startMonth' => 3, 'label' => 'Mars'], true, null], [$march['state'], $march['preview']['before'], $march['preview']['after'], $march['preview']['aligned'], $march['preview']['warning']]);
+            $exercise = sprintf('Exercice %d-%d : du 1er mars %d au %s.', $year, $year + 1, $year, $long(sprintf('%d-03-01', $year + 1) . ' -1 day'));
+            $this->assertSame(['label' => sprintf('%d-%d', $year, $year + 1), 'from' => "$year-03-01", 'to' => (new \DateTimeImmutable(($year + 1) . '-03-01 -1 day'))->format('Y-m-d'), 'text' => $exercise], $march['preview']['exercise']);
+            $this->assertSame([['label' => 'Mois de début d\'exercice', 'value' => 'Mars', 'unit' => 'text', 'before' => 'Janvier'], ['label' => 'Exercice', 'value' => $exercise, 'unit' => 'text']], $march['preview']['rows']);
+            // février : au milieu de l'hiver, l'aperçu dit quelle période serait coupée et à quelle date
+            $february = $this->post("/api/gestion/conversations/$fid/answers", ['answers' => [['questionId' => 'startMonth', 'value' => 2]]], 200);
+            $y2 = GestionFiscalYearService::startYearOf($today, 2);
+            $winter = PeriodCalendar::definition(new \DateTimeImmutable("$y2-02-01"), 'quarterly');
+            $warning = $february['preview']['warning'];
+            $this->assertSame([false, 'NOT_ALIGNED', "$y2-02-01", ['key' => $winter['key'], 'name' => $winter['name'], 'from' => ($y2 - 1) . '-12-01', 'to' => $winter['end']->format('Y-m-d')]], [$february['preview']['aligned'], $warning['code'], $warning['cutDate'], $warning['period']]);
+            $this->assertSame(sprintf('L\'exercice commencerait le 1er février %d, au milieu de la période « %s » (du 1er décembre %d au %s) : cette période serait coupée en deux, une partie sur chaque exercice.', $y2, $winter['name'], $y2 - 1, $long($winter['end']->format('Y-m-d'))), $warning['text']);
+            $this->assertStringStartsWith('Hiver ', $winter['name']);
+            $this->assertSame([['Attention', $warning['text']], 3], [[$february['preview']['rows'][2]['label'], $february['preview']['rows'][2]['value']], count($february['preview']['rows'])]);
+            $english = $this->get("/api/gestion/conversations/$fid?locale=en");
+            $this->assertSame([$february['previewHash'], 'February', 'Warning', true], [$english['previewHash'], $english['preview']['after']['label'], $english['preview']['rows'][2]['label'], str_contains($english['preview']['warning']['text'], 'would be split in two')]);
+            $this->assertStringContainsString("February 1, $y2", $english['preview']['warning']['text']);
+            // confirmation de mars, par le service du réglage ; annulation par le même service, les deux au journal
+            $march = $this->post("/api/gestion/conversations/$fid/answers", ['answers' => [['questionId' => 'startMonth', 'value' => 3]]], 200);
+            $logged = $journal('gestion-reglages-exercice');
+            $this->assertSame(['startMonth' => 3], $this->post("/api/gestion/conversations/$fid/confirm", ['previewHash' => $march['previewHash']], 201)['result']);
+            $this->assertSame([3, 3, $logged + 1], [(int) $stored('fiscal_year_start_month'), $this->get('/api/gestion/reglages/exercice')['startMonth'], $journal('gestion-reglages-exercice')]);
+            $setting('fiscal_year_start_month', 6);
+            $this->assertSame(['FISCAL_YEAR_CHANGED'], array_column($this->post("/api/gestion/conversations/$fid/undo", [], 409)['reasons'], 'code'));
+            $setting('fiscal_year_start_month', 3);
+            $this->assertSame(['restored' => ['startMonth' => 1]], $this->post("/api/gestion/conversations/$fid/undo", [], 200)['undone']);
+            $this->assertSame([1, $logged + 2], [$this->get('/api/gestion/reglages/exercice')['startMonth'], $journal('gestion-reglages-exercice')], 'l\'annulation est au journal aussi');
+            $this->post("/api/gestion/conversations/$fid/abandon", [], 200);
+
+            // ---- periods.calendar.set : rien d'enregistré au départ (trimestres par défaut) -------------------------------------------------
+            $split = $this->post('/api/gestion/conversations', ['action' => 'periods.calendar.set'], 201);
+            $pid = (int) $split['id'];
+            $this->assertSame([['value' => 'quarterly', 'label' => 'Trimestres saisonniers', 'current' => true], ['value' => 'semester', 'label' => 'Semestres', 'current' => false], ['value' => 'monthly', 'label' => 'Mois', 'current' => false]], $split['questions'][0]['options']);
+            $this->assertSame(['answers[0].value' => 'INVALID_FREQUENCY'], $this->post("/api/gestion/conversations/$pid/answers", ['answers' => [['questionId' => 'frequency', 'value' => 'weekly']]], 422)['fields']);
+            // confirmer le découpage par défaut est une vraie écriture ; l'aperçu dit que rien ne change
+            $default = $this->post("/api/gestion/conversations/$pid/answers", ['answers' => [['questionId' => 'frequency', 'value' => 'quarterly']]], 200);
+            $this->assertSame(['ready', ['frequency' => 'quarterly', 'label' => 'Trimestres saisonniers', 'confirmed' => false], null, 'Le découpage ne change pas : il est maintenant confirmé.'],
+                [$default['state'], $default['preview']['before'], $default['preview']['appliesFrom'], $default['preview']['text']]);
+            // passer aux mois : les périodes créées ne bougent pas, le nouveau découpage commence le lendemain de la fin de la dernière
+            $monthly = $this->post("/api/gestion/conversations/$pid/answers", ['answers' => [['questionId' => 'frequency', 'value' => 'monthly']]], 200);
+            $appliesFrom = (new \DateTimeImmutable(substr((string) $conn()->fetchOne("SELECT MAX(end_date_collection) FROM collections WHERE kind = 'period'"), 0, 10)))->modify('+1 day')->format('Y-m-d');
+            $text = 'Les périodes déjà créées ne changent pas. Le nouveau découpage s\'applique à partir du ' . $long($appliesFrom) . '.';
+            $this->assertSame(['frequency' => 'monthly', 'label' => 'Mois'], $monthly['preview']['after']);
+            $this->assertSame([$appliesFrom, $text], [$monthly['preview']['appliesFrom'], $monthly['preview']['text']]);
+            $this->assertSame([['label' => 'Découpage des périodes', 'value' => 'Mois', 'unit' => 'text', 'before' => 'Trimestres saisonniers'], ['label' => 'Application', 'value' => $text, 'unit' => 'text']], $monthly['preview']['rows']);
+            $logged = $journal('entreprise');
+            $periods = (int) $conn()->fetchOne("SELECT COUNT(*) FROM collections WHERE kind = 'period'");
+            $this->assertSame(['frequency' => 'monthly'], $this->post("/api/gestion/conversations/$pid/confirm", ['previewHash' => $monthly['previewHash']], 201)['result']);
+            $this->assertSame(['monthly', $logged + 1, $periods], [$stored('purchase_period_frequency'), $journal('entreprise'), (int) $conn()->fetchOne("SELECT COUNT(*) FROM collections WHERE kind = 'period'")], 'écrit par le chemin de la fiche, au journal ; aucune période créée ni modifiée');
+            // refus d'annulation : réglage changé depuis ; une période déjà créée avec le nouveau découpage
+            $setting('purchase_period_frequency', 'semester');
+            $this->assertSame(['CALENDAR_CHANGED'], array_column($this->post("/api/gestion/conversations/$pid/undo", [], 409)['reasons'], 'code'));
+            $setting('purchase_period_frequency', 'monthly');
+            $conn()->executeStatement("INSERT INTO collections (id, budget_collection, start_date_collection, end_date_collection, del, nom_collection, is_closed, kind, period_key) VALUES (nextval('collections_id_seq'), 0, '2999-01-01', '2999-01-31', false, ?, false, 'period', ?)", ["Essai $tag", "T-$tag"]);
+            $this->assertSame(['PERIODS_CREATED'], array_column($this->post("/api/gestion/conversations/$pid/undo", [], 409)['reasons'], 'code'));
+            $conn()->executeStatement('DELETE FROM collections WHERE period_key = ?', ["T-$tag"]);
+            $this->assertSame(['restored' => ['frequency' => null]], $this->post("/api/gestion/conversations/$pid/undo", [], 200)['undone']);
+            $this->assertSame([null, $logged + 2, 'quarterly'], [$stored('purchase_period_frequency'), $journal('entreprise'), $calendar->frequency()]);
+            // confirmer le découpage par défaut puis l'annuler : une période créée entre-temps a le même format, elle ne bloque pas
+            $default = $this->get("/api/gestion/conversations/$pid");
+            $this->post("/api/gestion/conversations/$pid/answers", ['answers' => [['questionId' => 'frequency', 'value' => 'quarterly']]], 200);
+            $this->post("/api/gestion/conversations/$pid/confirm", ['previewHash' => $this->get("/api/gestion/conversations/$pid")['previewHash']], 201);
+            $this->assertSame('quarterly', $stored('purchase_period_frequency'));
+            $rechosen = $this->post('/api/gestion/conversations', ['action' => 'periods.calendar.set', 'params' => ['frequency' => 'quarterly']], 201);
+            $this->assertSame(['questions', [['path' => 'frequency', 'code' => 'UNCHANGED']]], [$rechosen['state'], $rechosen['issues']], 'la valeur déjà enregistrée : rien à confirmer');
+            $this->post('/api/gestion/conversations/' . $rechosen['id'] . '/abandon', [], 200);
+            $conn()->executeStatement("INSERT INTO collections (id, budget_collection, start_date_collection, end_date_collection, del, nom_collection, is_closed, kind, period_key) VALUES (nextval('collections_id_seq'), 0, '2999-01-01', '2999-03-31', false, ?, false, 'period', ?)", ["Essai $tag", "T-$tag"]);
+            $this->assertSame([], $this->get("/api/gestion/conversations/$pid")['undo']['blockers']);
+            $conn()->executeStatement('DELETE FROM collections WHERE period_key = ?', ["T-$tag"]);
+            $this->assertSame(['restored' => ['frequency' => null]], $this->post("/api/gestion/conversations/$pid/undo", [], 200)['undone']);
+            $this->post("/api/gestion/conversations/$pid/abandon", [], 200);
+
+            // ---- product.cost.set : le coût seul, le prix de vente n'est pas touché ; l'aperçu dit l'effet sur les chiffres --------------------
+            $slug = "vase-$tag";
+            $conn()->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type, purchase_price, coefficient_multiplier, code) VALUES (nextval('product_id_seq'), ?, 5000, false, 5, NOW(), ?, 'standard', NULL, 2, ?)", ["Vase $tag", $slug, "C-$slug"]);
+            $productId = (int) $conn()->fetchOne('SELECT id FROM product WHERE slug = ?', [$slug]);
+            $variantId = (int) $this->create(ProductVariant::class, ['product' => $this->em()->find(Product::class, $productId)])->getId();
+            $userId = (int) $conn()->fetchOne('SELECT id FROM "user" ORDER BY id LIMIT 1');
+            $sell = function (\DateTimeImmutable $at, int $quantity) use ($variantId, $userId): int {
+                $order = $this->create(Order::class, ['totalAmount' => 1.0], function (Order $o, EntityManagerInterface $em) use ($at, $userId): void {
+                    $o->setOrderDate(\DateTime::createFromInterface($at))->setStatus($em->find(StatusCommande::class, 2))->setOrderType($em->find(OrderType::class, 1))->setOrderSource($em->find(OrderSource::class, 2))->setUserId($em->find(User::class, $userId));
+                });
+                $this->create(OrderItems::class, ['quantity' => $quantity, 'unitPrice' => 5000.0, 'totalPrice' => (float) (5000 * $quantity)], function (OrderItems $i, EntityManagerInterface $em) use ($order, $variantId): void {
+                    $i->setOrderAssociated($em->find(Order::class, $order->getId()))->setProductVariant($em->find(ProductVariant::class, $variantId));
+                });
+
+                return (int) $order->getId();
+            };
+            $closedDay = \DateTimeImmutable::createFromInterface($period->getStartDateCollection())->modify('-1 year');
+            $calendar->ensurePeriods($closedDay);
+            $orders = [$sell(new \DateTimeImmutable('-1 hour'), 3), $sell($closedDay->modify('+2 days'), 2)]; // 3 unités dans la période en cours, 2 dans une période fermée
+            $this->endOfWrite();
+            $calculator = static::getContainer()->get(PeriodResultCalculator::class);
+            [$from, $to] = [\DateTimeImmutable::createFromInterface($period->getStartDateCollection()), \DateTimeImmutable::createFromInterface($period->getEndDateCollection())];
+            $this->em();
+            $cogsAll = $calculator->costFigures($from, $to)['cogs'];
+            $this->assertSame(['cogs' => 0, 'unknownItems' => 3], $calculator->costFigures($from, $to, [$productId]), 'avant : 3 unités vendues sans coût connu');
+            $includesTax = in_array($saved['prices_include_tax'], [true, 't', 1, '1'], true);
+            $cost = $this->post('/api/gestion/conversations', ['action' => 'product.cost.set'], 201);
+            $kid = (int) $cost['id'];
+            $this->assertSame([['productId', 'choice'], ['cost', 'money']], array_map(fn (array $q) => [$q['id'], $q['input']['type']], $cost['questions']));
+            $this->assertContains(['value' => $productId, 'label' => "Vase $tag", 'code' => "C-$slug", 'price' => 5000], $cost['questions'][0]['options'], 'les articles sans coût sont proposés');
+            foreach ([[['questionId' => 'productId', 'value' => 999999999], 'PRODUCT_NOT_FOUND'], [['questionId' => 'productId', 'value' => 'x'], 'PRODUCT_NOT_FOUND'], [['questionId' => 'cost', 'value' => 0], 'MUST_BE_POSITIVE'], [['questionId' => 'cost', 'value' => 12.5], 'INVALID_AMOUNT']] as [$answer, $code]) {
+                $this->assertSame(['answers[0].value' => $code], $this->post("/api/gestion/conversations/$kid/answers", ['answers' => [$answer]], 422)['fields'], json_encode($answer));
+            }
+            $ready = $this->post("/api/gestion/conversations/$kid/answers", ['answers' => [['questionId' => 'productId', 'value' => $productId], ['questionId' => 'cost', 'value' => 2000]]], 200);
+            $periodName = PeriodCalendar::displayName($period, 'fr');
+            $money = fn (int $cents): string => number_format($cents / 100, 2, ',', ' ') . ' CAD';
+            $effect = '3 unité(s) vendue(s) dans les périodes ouvertes passeront de « vente sans coût connu » à une vente valorisée. Coût des articles vendus de la période « ' . $periodName . ' » : ' . $money($cogsAll) . ' avant, ' . $money($cogsAll + 6000)
+                . ' après. Les périodes fermées sont figées : leurs chiffres ne changent pas.';
+            $this->assertSame(['ready', ['id' => $productId, 'name' => "Vase $tag", 'code' => "C-$slug"], 'CAD', ['before' => null, 'after' => 2000], 5000, ['amount' => 3000, 'rate' => 60, 'pricesIncludeTax' => $includesTax]],
+                [$ready['state'], $ready['preview']['product'], $ready['preview']['currency'], $ready['preview']['cost'], $ready['preview']['price'], $ready['preview']['margin']]);
+            $this->assertSame([3, ['id' => (int) $period->getId(), 'name' => $periodName, 'cogsBefore' => $cogsAll, 'cogsAfter' => $cogsAll + 6000], true, $effect],
+                [$ready['preview']['effect']['salesValued'], $ready['preview']['effect']['currentPeriod'], $ready['preview']['effect']['closedPeriodsFrozen'], $ready['preview']['effect']['text']], 'la vente de la période fermée ne compte pas');
+            $this->assertGreaterThanOrEqual(1, $ready['preview']['effect']['openPeriods']);
+            $this->assertSame([['label' => 'Article', 'value' => "Vase $tag", 'unit' => 'text'], ['label' => 'Coût d\'achat', 'value' => 2000, 'unit' => 'money', 'currency' => 'CAD'], ['label' => 'Prix de vente (inchangé)', 'value' => 5000, 'unit' => 'money', 'currency' => 'CAD'],
+                ['label' => 'Marge par unité', 'value' => 3000, 'unit' => 'money', 'currency' => 'CAD'], ['label' => 'Taux de marge sur le prix de vente', 'value' => '60,00 %' . ($includesTax ? ' (prix taxes comprises : la marge comprend la taxe)' : ''), 'unit' => 'text'],
+                ['label' => 'Effet sur vos chiffres', 'value' => $effect, 'unit' => 'text']], $ready['preview']['rows']);
+            // confirmation : le coût est posé, le prix de vente reste 50,00 (et non coût × coefficient = 40,00), le journal le note
+            $logged = $journal('products');
+            $this->assertSame(['productId' => $productId, 'cost' => 2000], $this->post("/api/gestion/conversations/$kid/confirm", ['previewHash' => $ready['previewHash']], 201)['result']);
+            $row = $conn()->fetchAssociative('SELECT purchase_price, price, coefficient_multiplier FROM product WHERE id = ?', [$productId]);
+            $this->assertSame([2000, 5000, 2, $logged + 1], [(int) $row['purchase_price'], (int) $row['price'], (int) $row['coefficient_multiplier'], $journal('products')], 'prix de vente intact');
+            $this->em();
+            $this->assertSame(['cogs' => 6000, 'unknownItems' => 0], $calculator->costFigures($from, $to, [$productId]), 'ce que l\'aperçu annonçait est ce que le résultat calcule');
+            $this->assertNotContains($productId, array_column($this->post('/api/gestion/conversations', ['action' => 'product.cost.set'], 201)['questions'][0]['options'], 'value'), 'l\'article a un coût : il n\'est plus proposé');
+            // annulation : refusée si le coût a changé depuis ; sinon le coût d'avant revient (vide), prix intact, au journal
+            $conn()->executeStatement('UPDATE product SET purchase_price = 2500 WHERE id = ?', [$productId]);
+            $this->assertSame(['COST_CHANGED'], array_column($this->post("/api/gestion/conversations/$kid/undo", [], 409)['reasons'], 'code'));
+            $conn()->executeStatement('UPDATE product SET purchase_price = 2000 WHERE id = ?', [$productId]);
+            $this->assertSame(['restored' => ['productId' => $productId, 'cost' => null]], $this->post("/api/gestion/conversations/$kid/undo", [], 200)['undone']);
+            $row = $conn()->fetchAssociative('SELECT purchase_price, price FROM product WHERE id = ?', [$productId]);
+            $this->assertSame([null, 5000, $logged + 2], [$row['purchase_price'], (int) $row['price'], $journal('products')]);
+            $this->post("/api/gestion/conversations/$kid/abandon", [], 200);
+            // un article qui a déjà un coût de fiche : l'aperçu montre l'ancien, aucune vente ne change de statut, le coût des ventes bouge de l'écart
+            $conn()->executeStatement('UPDATE product SET purchase_price = 1000 WHERE id = ?', [$productId]);
+            $this->endOfWrite();
+            $replace = $this->post('/api/gestion/conversations', ['action' => 'product.cost.set', 'params' => ['productId' => $productId, 'cost' => 1500]], 201);
+            $this->assertSame(['ready', ['before' => 1000, 'after' => 1500], 0, $cogsAll + 3000, $cogsAll + 4500, ['label' => 'Coût d\'achat', 'value' => 1500, 'unit' => 'money', 'currency' => 'CAD', 'before' => 1000]],
+                [$replace['state'], $replace['preview']['cost'], $replace['preview']['effect']['salesValued'], $replace['preview']['effect']['currentPeriod']['cogsBefore'], $replace['preview']['effect']['currentPeriod']['cogsAfter'], $replace['preview']['rows'][1]]);
+            $this->assertStringStartsWith('Aucune vente des périodes ouvertes ne change de valeur.', $replace['preview']['effect']['text']);
+            $this->post('/api/gestion/conversations/' . $replace['id'] . '/confirm', ['previewHash' => $replace['previewHash']], 201);
+            $this->assertSame(['restored' => ['productId' => $productId, 'cost' => 1000]], $this->post('/api/gestion/conversations/' . $replace['id'] . '/undo', [], 200)['undone']);
+            $this->assertSame([1000, 5000], array_map('intval', array_values($conn()->fetchAssociative('SELECT purchase_price, price FROM product WHERE id = ?', [$productId]))));
+            // l'article supprimé entre-temps : un fil en cours le voit, et une confirmation ne peut plus être annulée
+            $this->post('/api/gestion/conversations/' . $replace['id'] . '/confirm', ['previewHash' => $this->get('/api/gestion/conversations/' . $replace['id'])['previewHash']], 201);
+            $gone = $this->post('/api/gestion/conversations', ['action' => 'product.cost.set', 'params' => ['productId' => $productId, 'cost' => 1800]], 201);
+            $this->assertSame('ready', $gone['state']);
+            $conn()->executeStatement('DELETE FROM order_items WHERE product_variant_id = ?', [$variantId]);
+            $conn()->executeStatement('DELETE FROM "order" WHERE id IN (?, ?)', $orders);
+            $conn()->executeStatement('DELETE FROM product_variant WHERE id = ?', [$variantId]);
+            $conn()->executeStatement('DELETE FROM product WHERE id = ?', [$productId]);
+            $this->endOfWrite();
+            $seen = $this->get('/api/gestion/conversations/' . $gone['id']);
+            $this->assertSame(['questions', [['path' => 'productId', 'code' => 'PRODUCT_NOT_FOUND']], null], [$seen['state'], $seen['issues'], $seen['preview']]);
+            $this->assertSame([['code' => 'COST_CHANGED', 'message' => 'L\'article n\'existe plus.']], $this->get('/api/gestion/conversations/' . $replace['id'])['undo']['blockers']);
+            $this->assertSame('UNDO_BLOCKED', $this->post('/api/gestion/conversations/' . $replace['id'] . '/undo', [], 409)['error']);
+            $this->post('/api/gestion/conversations/' . $gone['id'] . '/abandon', [], 200);
+        } finally {
+            $conn()->executeStatement('UPDATE entreprise SET fiscal_year_start_month = ?, purchase_period_frequency = ? WHERE id = ?', [$saved['fiscal_year_start_month'], $saved['purchase_period_frequency'], $saved['id']]);
+            $conn()->executeStatement('DELETE FROM collections WHERE period_key = ?', ["T-$tag"]);
+            $this->endOfWrite();
+        }
+    }
+
     public function testANegativeBalanceIsOnlyReadFromAnExplicitSign(): void
     {
         $say = fn (string $value) => FakeLandingAiClient::$queue[] = $this->reading(['reply' => 'Noté.', 'answers' => [['questionId' => 'amount', 'optionIndex' => -1, 'value' => $value, 'name' => '']]]);
@@ -701,7 +909,7 @@ class ActionConversationApiTest extends WebTestCase
         // Catalogue : la constante et le service disent la même liste ; chaque clé tient dans la colonne `kind` et a ses textes fr et en
         $this->em();
         $catalog = static::getContainer()->get(ActionCatalog::class);
-        $this->assertSame(['expense.create', 'supplier.create', 'shipping.create', 'budget.put', 'cash.balance.create', 'cash.movement.create', 'trip.create'], ActionCatalog::KEYS);
+        $this->assertSame(['expense.create', 'supplier.create', 'shipping.create', 'budget.put', 'cash.balance.create', 'cash.movement.create', 'trip.create', 'fiscal_year.set', 'periods.calendar.set', 'product.cost.set'], ActionCatalog::KEYS);
         $this->assertSame(ActionCatalog::KEYS, $catalog->keys());
         $translator = static::getContainer()->get('translator');
         foreach (ActionCatalog::KEYS as $key) {

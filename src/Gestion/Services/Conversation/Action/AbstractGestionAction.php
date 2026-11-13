@@ -89,6 +89,32 @@ abstract class AbstractGestionAction implements GestionAction
         return $value;
     }
 
+    private const MONTHS = [
+        'fr' => [1 => 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'],
+        'en' => [1 => 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+    ];
+
+    /** Nom d'un mois : « avril », « April » */
+    protected static function month(int $month, string $locale): string
+    {
+        return self::MONTHS[$locale === 'en' ? 'en' : 'fr'][$month] ?? (string) $month;
+    }
+
+    /** Date en clair : « 1er avril 2027 », « April 1, 2027 » */
+    protected static function longDate(string $day, string $locale): string
+    {
+        $d = new \DateTimeImmutable(substr($day, 0, 10));
+        $m = self::month((int) $d->format('n'), $locale);
+
+        return $locale === 'en' ? sprintf('%s %d, %s', $m, (int) $d->format('j'), $d->format('Y')) : sprintf('%s %s %s', $d->format('j') === '1' ? '1er' : $d->format('j'), $m, $d->format('Y'));
+    }
+
+    /** Montant en clair : « 12,50 CAD », « 12.50 CAD » */
+    protected static function amount(int $cents, string $currency, string $locale): string
+    {
+        return number_format($cents / 100, 2, $locale === 'en' ? '.' : ',', $locale === 'en' ? ',' : ' ') . ' ' . $currency;
+    }
+
     protected function em(): EntityManagerInterface
     {
         return $this->emProvider->getEntityManager();

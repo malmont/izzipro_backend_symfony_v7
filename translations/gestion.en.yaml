@@ -608,6 +608,51 @@ conversation:
                 title: 'Attachments'
                 some: 'On creation, %notes% expense(s) and %commandes% purchase order(s) dated within the trip and not attached elsewhere will be attached to it. Undoing the trip will free them.'
                 none: 'No free expense or purchase order is dated within this trip: nothing will be attached.'
+        fiscal_year_set:
+            title: 'Choose the first month of the fiscal year'
+            startMonth:
+                title: 'First month of the fiscal year'
+                text: 'Which month does your fiscal year start?'
+            exercise:
+                title: 'Fiscal year'
+                text: 'Fiscal year %label%: from %from% to %to%.'
+            warning:
+                title: 'Warning'
+                not_aligned: 'The fiscal year would start on %cut%, in the middle of the period "%period%" (from %from% to %to%): this period would be split in two, one part in each fiscal year.'
+        periods_calendar_set:
+            title: 'Choose how periods are split'
+            frequency:
+                title: 'Period split'
+                text: 'How do you want to split your year into management periods?'
+            applies:
+                title: 'Application'
+                text: 'Periods already created do not change. The new split applies from %date%.'
+                same: 'The split does not change: it is now confirmed.'
+            options:
+                quarterly: 'Seasonal quarters'
+                semester: 'Half-years'
+                monthly: 'Months'
+        product_cost_set:
+            title: 'Set the purchase cost of an item'
+            productId:
+                title: 'Item'
+                text: 'Which item do you want to set the purchase cost for?'
+            cost:
+                title: 'Purchase cost'
+                text: 'How much does one unit of this item cost you?'
+            price:
+                title: 'Selling price (unchanged)'
+            margin:
+                title: 'Margin per unit'
+            marginRate:
+                title: 'Margin rate on the selling price'
+                tax: '(prices include tax: the margin includes the tax)'
+            effect:
+                title: 'Effect on your figures'
+                some: '%count% unit(s) sold in open periods will go from "sale without known cost" to a valued sale.'
+                none: 'No sale in open periods changes value.'
+                current: 'Cost of goods sold for the period "%period%": %before% before, %after% after.'
+                closed: 'Closed periods are frozen: their figures do not change.'
         budget_put:
             title: 'Set the budget of a period'
             periodId:

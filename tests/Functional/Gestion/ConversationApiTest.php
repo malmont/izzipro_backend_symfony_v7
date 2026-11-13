@@ -161,8 +161,13 @@ class ConversationApiTest extends WebTestCase
         $this->request('POST', "/api/gestion/conversations/$id/confirm", []);
         $this->assertSame([422, 'REQUIRED'], [$this->client->getResponse()->getStatusCode(), $this->body()['fields']['previewHash']]);
 
+        // L'empreinte ne dépend pas de la langue demandée : lu en anglais, le fil a d'autres libellés et la même empreinte, que la confirmation accepte
+        $english = $this->get("/api/gestion/conversations/$id?locale=en");
+        $french = $this->get("/api/gestion/conversations/$id?locale=fr");
+        $this->assertSame([$changed['previewHash'], $changed['previewHash'], 'ready'], [$english['previewHash'], $french['previewHash'], $english['state']]);
+        $this->assertNotSame(array_column($french['questions'], 'title'), array_column($english['questions'], 'title'), 'les libellés, eux, suivent la langue');
         // Confirmation : celle d'une facture, vers une NOUVELLE commande, annulable
-        $result = $this->post("/api/gestion/conversations/$id/confirm", ['previewHash' => $changed['previewHash']], 201);
+        $result = $this->post("/api/gestion/conversations/$id/confirm?locale=en", ['previewHash' => $english['previewHash']], 201);
         $commandeId = (int) $result['commande']['id'];
         $createdProduct = (int) $result['created'][0]['productId'];
         $this->assertSame([[1, $tuque]], array_map(fn (array $a) => [$a['lineN'], $a['productId']], $result['attached']));

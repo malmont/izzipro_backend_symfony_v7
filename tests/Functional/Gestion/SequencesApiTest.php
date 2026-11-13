@@ -205,7 +205,9 @@ class SequencesApiTest extends WebTestCase
         // lot IA-ACT-2 : solde et mouvement prévu se préparent par le fil ; l'étape « frais fixes » ouvre un frais fixe mensuel
         $this->assertSame(['key' => 'cash.balance.create', 'preparable' => true, 'params' => []], $steps['management.cash']['action']);
         $this->assertSame(['key' => 'cash.movement.create', 'preparable' => true, 'params' => ['fixedCost' => true, 'recurrence' => 'monthly']], $steps['management.fixed_costs']['action']);
-        $this->assertFalse($steps['management.fiscal_year']['action']['preparable']);
+        // lot IA-ACT-3 : exercice, découpage des périodes et coût d'achat se préparent par le fil ; une étape sans action de la gestion, non
+        $this->assertSame([['fiscal_year.set', true], ['periods.calendar.set', true], ['product.cost.set', true], ['readiness.management.short_code', false]],
+            array_map(fn (string $k) => [$steps[$k]['action']['key'], $steps[$k]['action']['preparable']], ['management.fiscal_year', 'management.periods_calendar', 'management.purchase_cost', 'management.short_code']));
         $this->assertSame(['filter' => 'missing-cost'], $steps['management.purchase_cost']['screen']['params']);
         $figures = array_column($steps['management.purchase_cost']['figures'], null, 'key');
         $this->assertSame(['Items without a cost', 'count'], [$figures['missing']['label'], $figures['missing']['unit']]);

@@ -115,9 +115,27 @@ class PeriodResultCalculator
      * @param list<int>|null $productIds null = tous les articles
      * @return array<string, mixed>
      */
-    private function salesRow(string $fromUtc, string $toUtc, ?\DateTimeImmutable $costCutoff, bool $legacy, ?array $productIds = null): array
+    private function salesRow(string $fromUtc, string $toUtc, ?\DateTimeImmutable $costCutoff, bool $legacy, ?array $productIds = null, array $ficheCost = []): array
     {
-        return $this->salesRows($fromUtc, $toUtc, $costCutoff, $legacy, $productIds, null, false)[0] ?? [];
+        return $this->salesRows($fromUtc, $toUtc, $costCutoff, $legacy, $productIds, null, false, $ficheCost)[0] ?? [];
+    }
+
+    /**
+     * Coût des articles vendus et unités vendues sans coût connu entre deux jours du magasin, pour tous les articles ou un périmètre, aux
+     * règles du résultat d'une période ouverte. `$ficheCost` (article => cents) remplace le coût de la fiche de ces articles le temps du
+     * calcul : c'est l'aperçu de « poser un coût d'achat » (lot IA-ACT-3), en lecture seule.
+     *
+     * @param list<int>|null $productIds null = tous les articles
+     * @param array<int, int> $ficheCost
+     *
+     * @return array{cogs: int, unknownItems: int}
+     */
+    public function costFigures(\DateTimeImmutable $fromDay, \DateTimeImmutable $toDay, ?array $productIds = null, array $ficheCost = []): array
+    {
+        [$from, $to] = $this->clock->range($fromDay->format('Y-m-d'), $toDay->format('Y-m-d'));
+        $row = $this->salesRow($from->format('Y-m-d H:i:s'), $to->format('Y-m-d H:i:s'), null, false, $productIds, $ficheCost);
+
+        return ['cogs' => (int) round((float) ($row['cogs'] ?? 0)), 'unknownItems' => (int) ($row['unknown_items'] ?? 0)];
     }
 
     /**
@@ -149,7 +167,7 @@ class PeriodResultCalculator
     }
 
     /** @return list<array<string, mixed>> une ligne (totaux) ou une ligne par jour du magasin (`$byDay`, colonne `d`) */
-    private function salesRows(string $fromUtc, string $toUtc, ?\DateTimeImmutable $costCutoff, bool $legacy, ?array $productIds, ?int $source, bool $byDay): array
+    private function salesRows(string $fromUtc, string $toUtc, ?\DateTimeImmutable $costCutoff, bool $legacy, ?array $productIds, ?int $source, bool $byDay, array $ficheCost = []): array
     {
         $conn = $this->emProvider->getEntityManager()->getConnection();
         $params = ['from' => $fromUtc, 'to' => $toUtc];
@@ -181,7 +199,9 @@ class PeriodResultCalculator
             $costJoin = ' LEFT JOIN LATERAL (SELECT COALESCE(SUM(l.quantity_ordered * l.unit_cost_cents * COALESCE(lc.exchange_rate, 1)) / NULLIF(SUM(l.quantity_ordered), 0), AVG(l.unit_cost_cents * COALESCE(lc.exchange_rate, 1))) AS avg_cost, BOOL_OR(l.estimated) AS est'
                 . ' FROM commande_line l JOIN commande lc ON lc.id = l.commande_id WHERE l.product_id = p.id AND l.unit_cost_cents IS NOT NULL'
                 . " AND CAST(lc.date AS date) <= CAST((o.order_date AT TIME ZONE 'UTC') AT TIME ZONE :tz AS date)" . $attachedBeforeCutoff . ') lw ON TRUE';
-            $cost = 'CASE WHEN p.id IS NULL THEN NULL WHEN lw.avg_cost IS NOT NULL THEN lw.avg_cost WHEN p.purchase_price IS NOT NULL THEN p.purchase_price ELSE NULL END';
+            // coût de fiche simulé d'un article (aperçu, lecture seule) : à la place de `purchase_price`, donc après le coût des lignes d'achat
+            $simulated = implode('', array_map(fn (int $id, int $cents) => sprintf(' WHEN p.id = %d THEN %d', $id, $cents), array_map('intval', array_keys($ficheCost)), array_map('intval', $ficheCost)));
+            $cost = 'CASE WHEN p.id IS NULL THEN NULL WHEN lw.avg_cost IS NOT NULL THEN lw.avg_cost' . $simulated . ' WHEN p.purchase_price IS NOT NULL THEN p.purchase_price ELSE NULL END';
             $estimated = '(lw.avg_cost IS NOT NULL AND COALESCE(lw.est, false))';
         }
         $lines = 'SELECT o.id AS oid, o.order_type_id AS t, o.order_source_id AS src, oi.quantity AS qty,'

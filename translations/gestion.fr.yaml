@@ -610,6 +610,51 @@ conversation:
                 title: 'Rattachements'
                 some: 'À la création, %notes% note(s) de frais et %commandes% commande(s) libres datées dans le voyage y seront rattachées. Annuler le voyage rendra ces éléments libres.'
                 none: 'Aucune note de frais ni commande libre n''est datée dans ce voyage : rien ne sera rattaché.'
+        fiscal_year_set:
+            title: 'Choisir le mois de début d''exercice'
+            startMonth:
+                title: 'Mois de début d''exercice'
+                text: 'Quel mois commence votre exercice ?'
+            exercise:
+                title: 'Exercice'
+                text: 'Exercice %label% : du %from% au %to%.'
+            warning:
+                title: 'Attention'
+                not_aligned: 'L''exercice commencerait le %cut%, au milieu de la période « %period% » (du %from% au %to%) : cette période serait coupée en deux, une partie sur chaque exercice.'
+        periods_calendar_set:
+            title: 'Choisir le découpage des périodes'
+            frequency:
+                title: 'Découpage des périodes'
+                text: 'Comment voulez-vous découper votre année en périodes de gestion ?'
+            applies:
+                title: 'Application'
+                text: 'Les périodes déjà créées ne changent pas. Le nouveau découpage s''applique à partir du %date%.'
+                same: 'Le découpage ne change pas : il est maintenant confirmé.'
+            options:
+                quarterly: 'Trimestres saisonniers'
+                semester: 'Semestres'
+                monthly: 'Mois'
+        product_cost_set:
+            title: 'Poser le coût d''achat d''un article'
+            productId:
+                title: 'Article'
+                text: 'Pour quel article voulez-vous poser le coût d''achat ?'
+            cost:
+                title: 'Coût d''achat'
+                text: 'Combien vous coûte une unité de cet article ?'
+            price:
+                title: 'Prix de vente (inchangé)'
+            margin:
+                title: 'Marge par unité'
+            marginRate:
+                title: 'Taux de marge sur le prix de vente'
+                tax: '(prix taxes comprises : la marge comprend la taxe)'
+            effect:
+                title: 'Effet sur vos chiffres'
+                some: '%count% unité(s) vendue(s) dans les périodes ouvertes passeront de « vente sans coût connu » à une vente valorisée.'
+                none: 'Aucune vente des périodes ouvertes ne change de valeur.'
+                current: 'Coût des articles vendus de la période « %period% » : %before% avant, %after% après.'
+                closed: 'Les périodes fermées sont figées : leurs chiffres ne changent pas.'
         budget_put:
             title: 'Fixer le budget d''une période'
             periodId:
