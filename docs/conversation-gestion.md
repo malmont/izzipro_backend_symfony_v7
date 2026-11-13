@@ -1,4 +1,4 @@
-# Facture et actions par conversation — application de gestion (lots IA-FACT-1, IA-FACT-2-A, IA-FACT-2-B et IA-ACT-1, 13/11/2026)
+# Facture et actions par conversation — application de gestion (lots IA-FACT-1, IA-FACT-2-A, IA-FACT-2-B, IA-ACT-1 et IA-ACT-2, 13/11/2026)
 
 Un **fil de conversation gardé par le serveur** mène une facture fournisseur de la pièce jointe à la commande : attente de la lecture dans
 le fil, résumé, questions sur ce qui manque, aperçu, confirmation, **annulation d'un bloc**. Règle du propriétaire : *aucune écriture
@@ -269,5 +269,47 @@ L'IA ne confirme, n'annule et n'abandonne pas.
 
 Code : `Services/Conversation/ActionThreadService` (ouverture, fil, confirmation, annulation, abandon), `Services/Conversation/Action/`
 (catalogue et actions) ; `GestionConversationService` garde les réponses par bouton et la phrase libre, communes aux deux sortes de fil.
-Tests : `tests/Functional/Gestion/ActionConversationApiTest.php`. Suite prévue : IA-ACT-2 (solde de trésorerie, mouvement prévu ou frais
-fixe, voyage), IA-ACT-3 (coût d'achat d'un article, mois de début d'exercice, calendrier des périodes, clôture d'une période).
+Tests : `tests/Functional/Gestion/ActionConversationApiTest.php`. Suite : IA-ACT-2 (§ 10), puis IA-ACT-3 (coût d'achat d'un article,
+mois de début d'exercice, calendrier des périodes, clôture d'une période).
+
+## 10. Trésorerie et voyage (lot IA-ACT-2, 13/11/2026)
+
+Trois actions de plus au catalogue, même fil, mêmes routes, sans migration. Clés du guide des séquences.
+
+| Clé | Paramètres (questions) | Écrit par | Annulation, et ses refus |
+|---|---|---|---|
+| `cash.balance.create` | `date` (proposée : aujourd'hui, jour du magasin ; `input.max` ; refus `DATE_IN_FUTURE`), `amount` (cents, **peut être négatif** : `input.signed: true`), `note` (facultative) | `GestionCashService::saveBalance` : un solde déjà saisi à cette date est **remplacé** | retire le solde créé, ou remet le montant et la note d'avant s'il en a remplacé un ; `BALANCE_CHANGED` (modifié ou supprimé depuis) |
+| `cash.movement.create` | `label`, `direction` (`out` proposé, `in`), `category` (`rent`, `salaries`, `insurance`, `subscription`, `utilities`, `loan`, `tax`, `other`), `amount` (cents, > 0), `startDate`, `recurrence` (`none` proposé, `weekly`, `monthly`, `quarterly`, `yearly`), `endDate` (facultative ; refus `BEFORE_START`), `fixedCost` (facultatif : `true` / `false`), `notes` (facultatives) | `GestionCashService::createMovement` | retire le mouvement ; `MOVEMENT_CHANGED` |
+| `trip.create` | `name`, `place` (facultatif), `startDate`, `endDate` (refus `BEFORE_START`), `budgetTotal` (cents, 0 admis), `budgetDaily` (facultatif), `currency` (proposée : la devise du site), `exchangeRate` (question posée **seulement** si la devise diffère de celle du site ; `input.type: number`, > 0), `notes` (facultatives) ; `budgetScope` garde sa valeur par défaut | `GestionTripService::create` : rattache seul les notes de frais et commandes libres datées dans le voyage | supprime le voyage, les éléments rattachés redeviennent libres ; `TRIP_CHANGED`, `TRIP_USED` (un élément y a été rattaché à la main depuis), `PERIOD_CLOSED` (un élément rattaché est dans une période fermée : il garderait son rattachement) |
+
+**Aperçus.**
+- `cash.balance.create` : `{ date, amount, currency, note, replaces }` ; `replaces` = `null`, ou `{ id, amount, note }` du solde déjà saisi à
+  cette date, qui sera remplacé. L'empreinte le couvre : un solde saisi ou modifié à cette date entre-temps → `PREVIEW_CHANGED`.
+  `result` : `{ balanceId, replaced }`.
+- `cash.movement.create` : `{ label, direction, category, categoryLabel, amount, currency, startDate, recurrence, endDate, notes,
+  monthlyEquivalent, fixedCost: { value, source, text } }`. **Le gérant voit la décision « frais fixe » avant de confirmer** : `source` =
+  `choice` (sa réponse), `rule` (sans réponse : la règle de la catégorie, `GestionFixedCostService::defaultFixed`) ou `never` (une entrée
+  ou un mouvement ponctuel n'est jamais un frais fixe, quelle que soit la réponse) ; `text` le dit en clair : « Compté comme frais fixe :
+  oui (règle de la catégorie Loyer). ». `endDate` vaut `null` pour un mouvement ponctuel. `result` : `{ movementId, fixedCost }`.
+- `trip.create` : `{ name, place, startDate, endDate, days, budgetTotal, budgetDaily, currency, exchangeRate, notes, attaches: { notes,
+  commandes, text } }`. `attaches` compte ce que la création rattachera (même règle que le service, hors périodes fermées et commandes de
+  reprise) et `text` dit ce qui bouge dans les deux sens : « À la création, 2 note(s) de frais et 1 commande(s) libres datées dans le
+  voyage y seront rattachées. Annuler le voyage rendra ces éléments libres. ». `result` : `{ tripId }` ; l'annulation rend `undone:
+  { removed: { trip }, freed: { notes, commandes } }`.
+
+**Refus vus par le fil (`issues`).** `endDate: BEFORE_START` (le début a été déplacé après la fin) ; `startDate: TRIP_OVERLAP { tripId }`
+(les dates chevauchent un autre voyage : deux voyages ne se chevauchent pas).
+
+**Depuis le guide.** Les étapes « frais fixes » rendent `action: { key: "cash.movement.create", preparable: true, params: { fixedCost:
+true, recurrence: "monthly" } }` : le fil s'ouvre sur un frais fixe mensuel, deux réponses que le gérant peut changer
+(`SequenceCatalog::FIXED_COST_PARAMS`). Un `params` vide est rendu `[]`, comme `screen.params`.
+
+**Montant négatif par phrase libre** (question `input.signed`, le solde). Le signe n'est lu que s'il est **explicite et juste devant le
+nombre** : « -250 », « −250 » (signe moins typographique) ou « moins 250 » (`ConversationInterpreter::signedNumbers`). Aucun mot n'est
+interprété : « découvert de 250 » ne donne jamais -250 (le modèle qui rendrait -250 est écarté, `VALUE_NOT_IN_SENTENCE` ; s'il rend 250,
+c'est 250). Le signe ne se perd pas non plus (« -250 » ne devient pas 250), le tiret d'une date n'est pas un signe, « moins de 250 » non
+plus. Une question de montant sans `signed` ne lit jamais un négatif. L'aperçu affiche le solde négatif tel quel ; confirmer reste un
+geste du gérant.
+
+Code : `Action/CashBalanceCreateAction`, `CashMovementCreateAction`, `TripCreateAction`. Tests : `ActionConversationApiTest`
+(`testACashBalanceAPlannedMovementAndATripAreEachPreparedAndUndone`, `testANegativeBalanceIsOnlyReadFromAnExplicitSign`).

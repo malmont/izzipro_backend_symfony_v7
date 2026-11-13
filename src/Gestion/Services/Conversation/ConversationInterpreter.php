@@ -124,8 +124,11 @@ class ConversationInterpreter
         if ($type === 'date') {
             return self::dateMentioned($text, $given, $today) ? [$given, null] : [null, 'VALUE_NOT_IN_SENTENCE'];
         }
-        $number = is_numeric(str_replace(',', '.', $given)) ? (float) str_replace(',', '.', $given) : null;
-        if ($number === null || !in_array(round($number, 4), self::numbers($text), true)) {
+        $given = str_replace(['−', ','], ['-', '.'], $given);
+        $number = is_numeric($given) ? (float) $given : null;
+        // montant qui peut être négatif (un solde, `input.signed`) : le signe aussi doit être dans la phrase, juste devant le nombre
+        $said = ($question['input']['signed'] ?? false) === true ? self::signedNumbers($text) : self::numbers($text);
+        if ($number === null || !in_array(round($number, 4), $said, true)) {
             return [null, 'VALUE_NOT_IN_SENTENCE'];
         }
 
@@ -138,6 +141,24 @@ class ConversationInterpreter
         preg_match_all('/\d[\d\x{0020}\x{00A0}\x{202F}]*(?:[.,]\d+)?/u', $text, $m);
 
         return array_values(array_unique(array_map(fn (string $n) => round((float) str_replace(['.', ','], ['.', '.'], preg_replace('/[\x{0020}\x{00A0}\x{202F}]/u', '', $n)), 4), $m[0])));
+    }
+
+    /**
+     * Les nombres de la phrase avec leur signe. Négatif seulement par un signe explicite juste devant le nombre : « -250 », « −250 » (le
+     * signe moins typographique) ou « moins 250 ». Aucun mot n'est interprété (« découvert de 250 » reste 250), et le tiret d'une date ou
+     * d'un mot composé n'est pas un signe.
+     *
+     * @return list<float>
+     */
+    public static function signedNumbers(string $text): array
+    {
+        preg_match_all('/(?:(?<![\p{L}\p{N}])([-−])|\b(moins|minus)\s+)?(\d[\d\x{0020}\x{00A0}\x{202F}]*(?:[.,]\d+)?)/iu', $text, $m, PREG_SET_ORDER);
+
+        return array_values(array_unique(array_map(function (array $x): float {
+            $value = round((float) str_replace(',', '.', preg_replace('/[\x{0020}\x{00A0}\x{202F}]/u', '', $x[3])), 4);
+
+            return $x[1] !== '' || $x[2] !== '' ? -$value : $value;
+        }, $m)));
     }
 
     /** La phrase contient-elle ce nom (sans casse) */
@@ -208,6 +229,7 @@ class ConversationInterpreter
             . "- Question à choix (inputType choice) : donne optionIndex, le rang d'une option proposée. Si le commerçant veut créer un fournisseur ou un article sous un autre nom, mets ce nom dans name, tel qu'il l'a écrit ; sinon name reste vide.\n"
             . "- Question de date : value au format AAAA-MM-JJ, seulement si le commerçant donne la date. Nous sommes le " . $today->format('Y-m-d') . ".\n"
             . "- Question de montant ou de nombre : value est le nombre écrit par le commerçant, avec un point décimal. Tu n'inventes et ne calcules jamais un montant, un taux ou une quantité.\n"
+            . "- Un montant n'est négatif que si le commerçant a écrit un signe moins ou le mot « moins » juste devant le nombre ; ne déduis jamais un signe d'un mot (découvert, dette, rouge).\n"
             . "- Question de texte (inputType text) : value est le texte écrit par le commerçant, recopié mot pour mot, sans rien ajouter.\n"
             . "- Pour une question sans option, optionIndex vaut -1 ; pour une question à choix, value reste vide.\n"
             . "- Tu ne confirmes rien et tu n'annules rien : la confirmation est un geste du commerçant. Si la phrase ne répond à aucune question, rends answers vide et dis-le simplement.\n"

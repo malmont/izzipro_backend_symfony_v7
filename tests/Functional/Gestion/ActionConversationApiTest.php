@@ -350,6 +350,235 @@ class ActionConversationApiTest extends WebTestCase
         $this->assertSame([422, ['kind' => 'UNKNOWN_KIND']], [$this->client->getResponse()->getStatusCode(), $this->body()['fields']]);
     }
 
+    public function testACashBalanceAPlannedMovementAndATripAreEachPreparedAndUndone(): void
+    {
+        $tag = $this->tag;
+        $calendar = static::getContainer()->get(PeriodCalendar::class);
+        $period = $calendar->current();
+        $today = $calendar->today();
+        $conn = fn () => $this->em()->getConnection();
+
+        // ---- cash.balance.create : la date d'aujourd'hui est proposée, le montant peut être négatif ---------------------------------------
+        $day = $today->modify('-' . random_int(1200, 2400) . ' days')->format('Y-m-d');
+        $conn()->executeStatement('DELETE FROM gestion_cash_balance WHERE balance_date IN (?, ?)', [$day, $today->modify('-1100 days')->format('Y-m-d')]);
+        $balance = $this->post('/api/gestion/conversations', ['action' => 'cash.balance.create'], 201);
+        $cid = (int) $balance['id'];
+        $this->assertSame([['date', $today->format('Y-m-d'), true, 'date'], ['amount', null, false, 'money'], ['note', null, false, 'text']], array_map(fn (array $q) => [$q['id'], $q['answer'], $q['proposed'], $q['input']['type']], $balance['questions']));
+        $this->assertSame([$today->format('Y-m-d'), true, 'CAD', 1, 'Saisir un solde de trésorerie'], [$balance['questions'][0]['input']['max'], $balance['questions'][1]['input']['signed'], $balance['questions'][1]['input']['currency'], $balance['openQuestions'], $balance['action']['title']]);
+        foreach ([[['questionId' => 'date', 'value' => $today->modify('+1 day')->format('Y-m-d')], 'DATE_IN_FUTURE'], [['questionId' => 'date', 'value' => 'hier'], 'INVALID_DATE'],
+            [['questionId' => 'amount', 'value' => '12'], 'INVALID_AMOUNT'], [['questionId' => 'amount', 'value' => 1.5], 'INVALID_AMOUNT'], [['questionId' => 'note', 'value' => ' '], 'REQUIRED']] as [$answer, $code]) {
+            $this->assertSame(['answers[0].value' => $code], $this->post("/api/gestion/conversations/$cid/answers", ['answers' => [$answer]], 422)['fields'], json_encode($answer));
+        }
+        // sans réponse à la date, c'est aujourd'hui qui serait écrit : l'aperçu le dit
+        $this->assertSame($today->format('Y-m-d'), $this->post("/api/gestion/conversations/$cid/answers", ['answers' => [['questionId' => 'amount', 'value' => 100]]], 200)['preview']['date']);
+        $ready = $this->post("/api/gestion/conversations/$cid/answers", ['answers' => [['questionId' => 'date', 'value' => $day], ['questionId' => 'amount', 'value' => -25000], ['questionId' => 'note', 'value' => 'Compte courant']]], 200);
+        $this->assertSame(['ready', ['date' => $day, 'amount' => -25000, 'currency' => 'CAD', 'note' => 'Compte courant', 'replaces' => null]], [$ready['state'], $ready['preview']]);
+        $saved = $this->post("/api/gestion/conversations/$cid/confirm", ['previewHash' => $ready['previewHash']], 201);
+        $balanceId = (int) $saved['result']['balanceId'];
+        $this->assertSame(['balanceId' => $balanceId, 'replaced' => false], $saved['result']);
+        $row = $conn()->fetchAssociative('SELECT balance_date, amount_cents, note FROM gestion_cash_balance WHERE id = ?', [$balanceId]);
+        $this->assertSame([$day, -25000, 'Compte courant'], [substr((string) $row['balance_date'], 0, 10), (int) $row['amount_cents'], $row['note']]);
+        foreach (['amount_cents = 1' => 'amount_cents = -25000', "note = 'Autre'" => "note = 'Compte courant'", "balance_date = balance_date - 1" => "balance_date = balance_date + 1"] as $change => $restore) {
+            $conn()->executeStatement("UPDATE gestion_cash_balance SET $change WHERE id = ?", [$balanceId]);
+            $this->assertSame(['BALANCE_CHANGED'], array_column($this->post("/api/gestion/conversations/$cid/undo", [], 409)['reasons'], 'code'), $change);
+            $conn()->executeStatement("UPDATE gestion_cash_balance SET $restore WHERE id = ?", [$balanceId]);
+        }
+        $this->assertSame(['removed' => ['balance' => $balanceId]], $this->post("/api/gestion/conversations/$cid/undo", [], 200)['undone']);
+        $this->assertFalse($conn()->fetchOne('SELECT id FROM gestion_cash_balance WHERE id = ?', [$balanceId]));
+        // Supprimé hors du fil après une nouvelle confirmation : l'annulation le constate
+        $again = $this->post("/api/gestion/conversations/$cid/confirm", ['previewHash' => $ready['previewHash']], 201);
+        $conn()->executeStatement('DELETE FROM gestion_cash_balance WHERE id = ?', [$again['result']['balanceId']]);
+        $this->assertSame([['code' => 'BALANCE_CHANGED', 'message' => 'Le solde saisi par cette action n\'existe plus.']], $this->post("/api/gestion/conversations/$cid/undo", [], 409)['reasons']);
+        // Un solde déjà saisi à cette date est remplacé : l'aperçu le dit, l'empreinte le couvre, l'annulation remet l'ancien
+        $day2 = $today->modify('-1100 days')->format('Y-m-d');
+        $existingId = (int) $conn()->fetchOne("INSERT INTO gestion_cash_balance (balance_date, amount_cents, note, created_by, created_at, updated_at) VALUES (?, 1000, 'avant', 'test', NOW(), NOW()) RETURNING id", [$day2]);
+        $replace = $this->post('/api/gestion/conversations', ['action' => 'cash.balance.create', 'params' => ['date' => $day2, 'amount' => 5000]], 201);
+        $rid = (int) $replace['id'];
+        $this->assertSame(['ready', ['id' => $existingId, 'amount' => 1000, 'note' => 'avant'], [false, false]], [$replace['state'], $replace['preview']['replaces'], [$replace['questions'][0]['proposed'], $replace['questions'][1]['proposed']]]);
+        $conn()->executeStatement('UPDATE gestion_cash_balance SET amount_cents = 2000 WHERE id = ?', [$existingId]);
+        $moved = $this->post("/api/gestion/conversations/$rid/confirm", ['previewHash' => $replace['previewHash']], 409);
+        $this->assertSame(['PREVIEW_CHANGED', 2000], [$moved['error'], $moved['preview']['replaces']['amount']]);
+        $this->assertSame(['balanceId' => $existingId, 'replaced' => true], $this->post("/api/gestion/conversations/$rid/confirm", ['previewHash' => $moved['previewHash']], 201)['result']);
+        $this->assertSame([5000, null], array_values($conn()->fetchAssociative('SELECT amount_cents, note FROM gestion_cash_balance WHERE id = ?', [$existingId])));
+        $this->assertSame(['restored' => ['balance' => $existingId]], $this->post("/api/gestion/conversations/$rid/undo", [], 200)['undone']);
+        $this->assertSame([2000, 'avant'], array_values($conn()->fetchAssociative('SELECT amount_cents, note FROM gestion_cash_balance WHERE id = ?', [$existingId])));
+        $conn()->executeStatement('DELETE FROM gestion_cash_balance WHERE id = ?', [$existingId]);
+        $this->assertSame('confirmed', $this->get("/api/gestion/conversations/$cid")['state'], 'un fil dont l\'objet a disparu hors du fil reste confirmé, annulation bloquée');
+        $this->post("/api/gestion/conversations/$rid/abandon", [], 200);
+
+        // ---- cash.movement.create : ouvert comme depuis le guide (frais fixe mensuel) ; l'aperçu dit la règle du frais fixe -------------
+        $movement = $this->post('/api/gestion/conversations', ['action' => 'cash.movement.create', 'params' => ['fixedCost' => true, 'recurrence' => 'monthly']], 201);
+        $mid = (int) $movement['id'];
+        $this->assertSame(['label', 'direction', 'category', 'amount', 'startDate', 'recurrence', 'endDate', 'fixedCost', 'notes'], array_column($movement['questions'], 'id'));
+        $q = array_column($movement['questions'], null, 'id');
+        $this->assertSame([['out', true], ['monthly', false], [true, false], 4], [[$q['direction']['answer'], $q['direction']['proposed']], [$q['recurrence']['answer'], $q['recurrence']['proposed']], [$q['fixedCost']['answer'], $q['fixedCost']['proposed']], $movement['openQuestions']]);
+        $this->assertSame([[['value' => 'out', 'label' => 'Sortie'], ['value' => 'in', 'label' => 'Entrée']], ['Une seule fois', 'Chaque semaine', 'Chaque mois', 'Chaque trimestre', 'Chaque année'], [['value' => true, 'label' => 'Oui'], ['value' => false, 'label' => 'Non']],
+            ['value' => 'rent', 'label' => 'Loyer']], [$q['direction']['options'], array_column($q['recurrence']['options'], 'label'), $q['fixedCost']['options'], $q['category']['options'][0]]);
+        $start = $today->format('Y-m-d');
+        foreach ([[['questionId' => 'direction', 'value' => 'x'], 'INVALID_DIRECTION'], [['questionId' => 'category', 'value' => 'pigeon'], 'INVALID_CATEGORY'], [['questionId' => 'amount', 'value' => 0], 'MUST_BE_POSITIVE'],
+            [['questionId' => 'recurrence', 'value' => 'daily'], 'INVALID_RECURRENCE'], [['questionId' => 'fixedCost', 'value' => 'oui'], 'MUST_BE_BOOLEAN'], [['questionId' => 'startDate', 'value' => '13/11/2026'], 'INVALID_DATE'],
+            [['questionId' => 'endDate', 'value' => 'x'], 'INVALID_DATE']] as [$answer, $code]) {
+            $this->assertSame(['answers[0].value' => $code], $this->post("/api/gestion/conversations/$mid/answers", ['answers' => [$answer]], 422)['fields'], json_encode($answer));
+        }
+        $fixed = fn (array $answers): array => $this->post("/api/gestion/conversations/$mid/answers", ['answers' => array_map(fn ($id, $v) => ['questionId' => $id, 'value' => $v], array_keys($answers), $answers)], 200)['preview']['fixedCost'];
+        $this->assertSame(['value' => true, 'source' => 'choice', 'text' => 'Compté comme frais fixe : oui (votre choix).'], $fixed(['label' => "Loyer $tag", 'category' => 'rent', 'amount' => 120000, 'startDate' => $start]));
+        $this->assertSame(['value' => false, 'source' => 'choice', 'text' => 'Compté comme frais fixe : non (votre choix).'], $fixed(['fixedCost' => false]));
+        $this->assertSame(['value' => true, 'source' => 'rule', 'text' => 'Compté comme frais fixe : oui (règle de la catégorie Loyer).'], $fixed(['fixedCost' => null]));
+        $this->assertSame(['value' => false, 'source' => 'rule', 'text' => 'Compté comme frais fixe : non (règle de la catégorie Prêt).'], $fixed(['category' => 'loan']));
+        $this->assertSame(['value' => true, 'source' => 'choice', 'text' => 'Compté comme frais fixe : oui (votre choix).'], $fixed(['fixedCost' => true]), 'un prêt compté comme frais fixe par choix');
+        $this->assertSame(['value' => false, 'source' => 'never', 'text' => 'Compté comme frais fixe : non (une entrée ou un mouvement ponctuel n\'est jamais un frais fixe).'], $fixed(['recurrence' => 'none']));
+        $this->assertSame(['value' => false, 'source' => 'never'], array_slice($fixed(['recurrence' => 'monthly', 'direction' => 'in']), 0, 2));
+        $this->assertSame('Counted as a fixed cost: yes (rule of the Rent category).', $this->post("/api/gestion/conversations/$mid/answers?locale=en", ['answers' => [['questionId' => 'direction', 'value' => 'out'], ['questionId' => 'category', 'value' => 'rent'], ['questionId' => 'fixedCost', 'value' => null]]], 200)['preview']['fixedCost']['text']);
+        // date de fin avant le début : refusée à la réponse ; si c'est le début qui passe après la fin, le fil le signale
+        $end = $today->modify('+1 year')->format('Y-m-d');
+        $this->assertSame(['answers[0].value' => 'BEFORE_START'], $this->post("/api/gestion/conversations/$mid/answers", ['answers' => [['questionId' => 'endDate', 'value' => $today->modify('-1 day')->format('Y-m-d')]]], 422)['fields']);
+        $this->post("/api/gestion/conversations/$mid/answers", ['answers' => [['questionId' => 'endDate', 'value' => $end]]], 200);
+        $late = $this->post("/api/gestion/conversations/$mid/answers", ['answers' => [['questionId' => 'startDate', 'value' => $today->modify('+2 years')->format('Y-m-d')]]], 200);
+        $this->assertSame(['questions', [['path' => 'endDate', 'code' => 'BEFORE_START']], null], [$late['state'], $late['issues'], $late['preview']]);
+        $planned = $this->post("/api/gestion/conversations/$mid/answers", ['answers' => [['questionId' => 'startDate', 'value' => $start], ['questionId' => 'notes', 'value' => 'Bail de 3 ans']]], 200);
+        $this->assertSame(['label' => "Loyer $tag", 'direction' => 'out', 'category' => 'rent', 'categoryLabel' => 'Loyer', 'amount' => 120000, 'currency' => 'CAD', 'startDate' => $start, 'recurrence' => 'monthly', 'endDate' => $end,
+            'notes' => 'Bail de 3 ans', 'monthlyEquivalent' => 120000], array_diff_key($planned['preview'], ['fixedCost' => 1]));
+        $created = $this->post("/api/gestion/conversations/$mid/confirm", ['previewHash' => $planned['previewHash']], 201);
+        $movementId = (int) $created['result']['movementId'];
+        $this->assertSame(['movementId' => $movementId, 'fixedCost' => true], $created['result']);
+        $row = $conn()->fetchAssociative('SELECT label, category, direction, amount_cents, recurrence, notes, fixed_cost FROM gestion_cash_movement WHERE id = ?', [$movementId]);
+        $this->assertSame(["Loyer $tag", 'rent', 'out', 120000, 'monthly', 'Bail de 3 ans', null], [$row['label'], $row['category'], $row['direction'], (int) $row['amount_cents'], $row['recurrence'], $row['notes'], $row['fixed_cost']], 'sans réponse : la règle, rien d\'écrit dans fixed_cost');
+        $this->assertContains($movementId, array_column($this->get('/api/gestion/tresorerie/mouvements'), 'id'));
+        foreach (["label = 'Autre'" => "label = 'Loyer $tag'", 'amount_cents = 1' => 'amount_cents = 120000', 'fixed_cost = false' => 'fixed_cost = NULL', 'end_date = NULL' => "end_date = '$end'"] as $change => $restore) {
+            $conn()->executeStatement("UPDATE gestion_cash_movement SET $change WHERE id = ?", [$movementId]);
+            $this->assertSame(['MOVEMENT_CHANGED'], array_column($this->post("/api/gestion/conversations/$mid/undo", [], 409)['reasons'], 'code'), $change);
+            $conn()->executeStatement("UPDATE gestion_cash_movement SET $restore WHERE id = ?", [$movementId]);
+        }
+        $this->assertSame(['removed' => ['movement' => $movementId]], $this->post("/api/gestion/conversations/$mid/undo", [], 200)['undone']);
+        $this->assertFalse($conn()->fetchOne('SELECT id FROM gestion_cash_movement WHERE id = ?', [$movementId]));
+        // un mouvement ponctuel n'a pas de date de fin : l'aperçu ne la montre pas, le service ne l'écrit pas
+        $once = $this->post("/api/gestion/conversations/$mid/answers", ['answers' => [['questionId' => 'recurrence', 'value' => 'none']]], 200);
+        $this->assertSame([null, 0], [$once['preview']['endDate'], $once['preview']['monthlyEquivalent']]);
+        $this->post("/api/gestion/conversations/$mid/abandon", [], 200);
+
+        // ---- trip.create : l'aperçu compte ce qui sera rattaché, et dit que l'annulation le rendra libre ---------------------------------
+        $conn()->executeStatement('UPDATE note_de_frais SET trip_id = NULL, trip_source = NULL WHERE trip_id IS NOT NULL OR trip_source IS NOT NULL');
+        $conn()->executeStatement('UPDATE commande SET trip_id = NULL, trip_source = NULL WHERE trip_id IS NOT NULL OR trip_source IS NOT NULL');
+        $conn()->executeStatement('DELETE FROM gestion_trip'); // table propre à ces tests, comme dans BudgetAndTripsApiTest
+        [$from, $to] = [$today->format('Y-m-d'), $today->modify('+2 days')->format('Y-m-d')];
+        $noteId = (int) $this->post('/api/notes-de-frais', ['description' => "Taxi $tag", 'montant' => 4000, 'date' => $from, 'typeNoteDeFraisId' => $this->noteType()], 201)['id'];
+        $free = fn (): array => ['notes' => (int) $conn()->fetchOne('SELECT COUNT(*) FROM note_de_frais WHERE trip_id IS NULL AND trip_source IS NULL AND date BETWEEN ? AND ?', [$from, $to]),
+            'commandes' => (int) $conn()->fetchOne("SELECT COUNT(*) FROM commande WHERE kind <> 'reprise' AND trip_id IS NULL AND trip_source IS NULL AND CAST(date AS date) BETWEEN ? AND ?", [$from, $to])];
+        // deux commandes datées dans le voyage : une ordinaire, qui sera rattachée, et une commande de reprise, qui reste hors voyage
+        $typeId = (int) ($this->em()->getRepository(TypeFournisseur::class)->findOneBy(['name' => 'Autre']) ?? $this->create(TypeFournisseur::class, ['name' => 'Autre']))->getId();
+        $supplierId = (int) $this->post('/api/fournisseurs', ['name' => "Voyage $tag", 'typeFournisseur' => $typeId], 201)['id'];
+        $orderId = (int) $this->post('/api/collections/' . $period->getId() . '/commandes', ['budget' => 1000, 'date' => "$from 10:00:00", 'name' => "Achat $tag", 'fournisseur' => ['id' => $supplierId]], 201)['id'];
+        $recoveryId = (int) $this->post('/api/collections/' . $period->getId() . '/commandes', ['budget' => 1000, 'date' => "$from 11:00:00", 'name' => "Reprise $tag", 'fournisseur' => ['id' => $supplierId]], 201)['id'];
+        $conn()->executeStatement("UPDATE commande SET kind = 'reprise', trip_id = NULL, trip_source = NULL WHERE id = ?", [$recoveryId]);
+        $expected = $free();
+        $this->assertGreaterThanOrEqual(1, $expected['notes']);
+        $this->assertGreaterThanOrEqual(1, $expected['commandes']);
+        $trip = $this->post('/api/gestion/conversations', ['action' => 'trip.create'], 201);
+        $tid = (int) $trip['id'];
+        $this->assertSame(['name', 'place', 'startDate', 'endDate', 'budgetTotal', 'budgetDaily', 'currency', 'notes'], array_column($trip['questions'], 'id'), 'devise du site : pas de question de taux');
+        $this->assertSame([['CAD', true], 4], [[$trip['questions'][6]['answer'], $trip['questions'][6]['proposed']], $trip['openQuestions']]);
+        $foreign = $this->post("/api/gestion/conversations/$tid/answers", ['answers' => [['questionId' => 'currency', 'value' => 'eur']]], 200);
+        $this->assertSame([['name', 'place', 'startDate', 'endDate', 'budgetTotal', 'budgetDaily', 'currency', 'exchangeRate', 'notes'], 5, 'EUR', 'Le voyage est en EUR et votre site en CAD. Combien vaut 1 EUR en CAD ?', 'number'],
+            [array_column($foreign['questions'], 'id'), $foreign['openQuestions'], $foreign['questions'][4]['input']['currency'], $foreign['questions'][7]['text'], $foreign['questions'][7]['input']['type']]);
+        foreach ([[['questionId' => 'exchangeRate', 'value' => 0], 'MUST_BE_POSITIVE'], [['questionId' => 'exchangeRate', 'value' => '1.5'], 'MUST_BE_POSITIVE'], [['questionId' => 'budgetTotal', 'value' => -1], 'INVALID_AMOUNT'],
+            [['questionId' => 'currency', 'value' => 'XXX'], 'INVALID_CURRENCY'], [['questionId' => 'startDate', 'value' => 'x'], 'INVALID_DATE'], [['questionId' => 'name', 'value' => ''], 'REQUIRED']] as [$answer, $code]) {
+            $this->assertSame(['answers[0].value' => $code], $this->post("/api/gestion/conversations/$tid/answers", ['answers' => [$answer]], 422)['fields'], json_encode($answer));
+        }
+        $this->assertSame(['answers[1].value' => 'BEFORE_START'], $this->post("/api/gestion/conversations/$tid/answers", ['answers' => [['questionId' => 'startDate', 'value' => $to], ['questionId' => 'endDate', 'value' => $from]]], 422)['fields']);
+        $tripReady = $this->post("/api/gestion/conversations/$tid/answers", ['answers' => [['questionId' => 'name', 'value' => "Salon $tag"], ['questionId' => 'place', 'value' => 'Paris'], ['questionId' => 'startDate', 'value' => $from],
+            ['questionId' => 'endDate', 'value' => $to], ['questionId' => 'budgetTotal', 'value' => 300000], ['questionId' => 'exchangeRate', 'value' => 1.5]]], 200);
+        $some = sprintf('À la création, %d note(s) de frais et %d commande(s) libres datées dans le voyage y seront rattachées. Annuler le voyage rendra ces éléments libres.', $expected['notes'], $expected['commandes']);
+        $this->assertSame(['ready', ['name' => "Salon $tag", 'place' => 'Paris', 'startDate' => $from, 'endDate' => $to, 'days' => 3, 'budgetTotal' => 300000, 'budgetDaily' => null, 'currency' => 'EUR', 'exchangeRate' => 1.5, 'notes' => null,
+            'attaches' => $expected + ['text' => $some]]], [$tripReady['state'], $tripReady['preview']]);
+        // retour à la devise du site : plus de question de taux, plus de taux dans l'aperçu
+        $home = $this->post("/api/gestion/conversations/$tid/answers", ['answers' => [['questionId' => 'currency', 'value' => 'CAD'], ['questionId' => 'budgetDaily', 'value' => 90000]]], 200);
+        $this->assertSame(['ready', false, 'CAD', null, 90000], [$home['state'], in_array('exchangeRate', array_column($home['questions'], 'id'), true), $home['preview']['currency'], $home['preview']['exchangeRate'], $home['preview']['budgetDaily']]);
+        // un voyage sans rien à rattacher le dit
+        $empty = $this->post('/api/gestion/conversations', ['action' => 'trip.create', 'params' => ['name' => 'Loin', 'startDate' => $today->modify('+400 days')->format('Y-m-d'), 'endDate' => $today->modify('+401 days')->format('Y-m-d'), 'budgetTotal' => 0]], 201);
+        $this->assertSame(['ready', ['notes' => 0, 'commandes' => 0, 'text' => 'Aucune note de frais ni commande libre n\'est datée dans ce voyage : rien ne sera rattaché.']], [$empty['state'], $empty['preview']['attaches']]);
+        // en devise étrangère, avec un taux entier : créé avec sa devise et son taux, puis annulé sans faux « modifié depuis »
+        $abroad = $this->post('/api/gestion/conversations/' . $empty['id'] . '/answers', ['answers' => [['questionId' => 'currency', 'value' => 'USD'], ['questionId' => 'exchangeRate', 'value' => 2]]], 200);
+        $abroadId = (int) $this->post('/api/gestion/conversations/' . $empty['id'] . '/confirm', ['previewHash' => $abroad['previewHash']], 201)['result']['tripId'];
+        $row = $conn()->fetchAssociative('SELECT currency, exchange_rate FROM gestion_trip WHERE id = ?', [$abroadId]);
+        $this->assertSame(['USD', 2.0, []], [$row['currency'], (float) $row['exchange_rate'], $this->get('/api/gestion/conversations/' . $empty['id'])['undo']['blockers']]);
+        // un budget journalier passé de « non saisi » à 0 est une modification
+        $conn()->executeStatement('UPDATE gestion_trip SET budget_daily_cents = 0 WHERE id = ?', [$abroadId]);
+        $this->assertSame(['TRIP_CHANGED'], array_column($this->post('/api/gestion/conversations/' . $empty['id'] . '/undo', [], 409)['reasons'], 'code'));
+        $conn()->executeStatement('UPDATE gestion_trip SET budget_daily_cents = NULL WHERE id = ?', [$abroadId]);
+        $this->assertSame(['removed' => ['trip' => $abroadId], 'freed' => ['notes' => 0, 'commandes' => 0]], $this->post('/api/gestion/conversations/' . $empty['id'] . '/undo', [], 200)['undone']);
+        $this->post('/api/gestion/conversations/' . $empty['id'] . '/abandon', [], 200);
+        // Un autre voyage posé sur ces dates entre-temps : le fil le voit, ne confirme pas
+        $otherTrip = (int) $this->post('/api/gestion/voyages', ['name' => 'Autre', 'startDate' => $to, 'endDate' => $today->modify('+5 days')->format('Y-m-d'), 'budgetTotal' => 1], 201)['id'];
+        $overlap = $this->get("/api/gestion/conversations/$tid");
+        $this->assertSame(['questions', [['path' => 'startDate', 'code' => 'TRIP_OVERLAP', 'tripId' => $otherTrip]], null], [$overlap['state'], $overlap['issues'], $overlap['preview']]);
+        $this->assertSame('CONVERSATION_NOT_READY', $this->post("/api/gestion/conversations/$tid/confirm", ['previewHash' => $home['previewHash']], 409)['error']);
+        $this->request('DELETE', "/api/gestion/voyages/$otherTrip");
+        $this->assertContains($this->client->getResponse()->getStatusCode(), [200, 204]);
+        $expected = $free();
+        $now = $this->get("/api/gestion/conversations/$tid");
+        $this->assertSame(['ready', $expected], [$now['state'], array_diff_key($now['preview']['attaches'], ['text' => 1])]);
+        $made = $this->post("/api/gestion/conversations/$tid/confirm", ['previewHash' => $now['previewHash']], 201);
+        $tripId = (int) $made['result']['tripId'];
+        $this->assertSame(['tripId' => $tripId], $made['result']);
+        $this->assertSame(["Salon $tag", 300000, 90000, null], array_values($conn()->fetchAssociative('SELECT name, budget_total_cents, budget_daily_cents, currency FROM gestion_trip WHERE id = ?', [$tripId])));
+        $this->assertSame([$tripId, 'auto'], array_values($conn()->fetchAssociative('SELECT trip_id, trip_source FROM note_de_frais WHERE id = ?', [$noteId])), 'la note libre datée dans le voyage y est rattachée');
+        $this->assertSame([$tripId, null], [$conn()->fetchOne('SELECT trip_id FROM commande WHERE id = ?', [$orderId]), $conn()->fetchOne('SELECT trip_id FROM commande WHERE id = ?', [$recoveryId])], 'la commande ordinaire est rattachée, la commande de reprise reste hors voyage');
+        // Annulation : bloquée si le voyage a changé, si un élément y a été rattaché à la main, ou si un élément rattaché est en période fermée
+        $conn()->executeStatement("UPDATE gestion_trip SET name = 'Autre nom' WHERE id = ?", [$tripId]);
+        $this->assertSame(['TRIP_CHANGED'], array_column($this->post("/api/gestion/conversations/$tid/undo", [], 409)['reasons'], 'code'));
+        $conn()->executeStatement('UPDATE gestion_trip SET name = ?, budget_total_cents = 1 WHERE id = ?', ["Salon $tag", $tripId]);
+        $this->assertSame(['TRIP_CHANGED'], array_column($this->post("/api/gestion/conversations/$tid/undo", [], 409)['reasons'], 'code'));
+        $conn()->executeStatement('UPDATE gestion_trip SET budget_total_cents = 300000 WHERE id = ?', [$tripId]);
+        $conn()->executeStatement("UPDATE note_de_frais SET trip_source = 'manual' WHERE id = ?", [$noteId]);
+        $this->assertSame(['TRIP_USED'], array_column($this->post("/api/gestion/conversations/$tid/undo", [], 409)['reasons'], 'code'));
+        $closedDay = \DateTimeImmutable::createFromInterface($period->getStartDateCollection())->modify('-1 year');
+        $calendar->ensurePeriods($closedDay);
+        $conn()->executeStatement("UPDATE note_de_frais SET trip_source = 'auto', date = ? WHERE id = ?", [$closedDay->format('Y-m-d'), $noteId]);
+        $this->assertSame(['PERIOD_CLOSED'], array_column($this->post("/api/gestion/conversations/$tid/undo", [], 409)['reasons'], 'code'));
+        $conn()->executeStatement('UPDATE note_de_frais SET date = ? WHERE id = ?', [$from, $noteId]);
+        $attached = ['notes' => (int) $conn()->fetchOne('SELECT COUNT(*) FROM note_de_frais WHERE trip_id = ?', [$tripId]), 'commandes' => (int) $conn()->fetchOne('SELECT COUNT(*) FROM commande WHERE trip_id = ?', [$tripId])];
+        $this->assertSame($expected, $attached, 'ce que l\'aperçu annonçait est ce qui a été rattaché');
+        $this->assertSame(['removed' => ['trip' => $tripId], 'freed' => $attached], $this->post("/api/gestion/conversations/$tid/undo", [], 200)['undone']);
+        $this->assertSame([false, [null, null]], [$conn()->fetchOne('SELECT id FROM gestion_trip WHERE id = ?', [$tripId]), array_values($conn()->fetchAssociative('SELECT trip_id, trip_source FROM note_de_frais WHERE id = ?', [$noteId]))], 'la note redevient libre');
+        $this->assertSame([[$orderId, null], [$recoveryId, null]], array_map(fn (array $r) => [(int) $r['id'], $r['trip_id']], $conn()->fetchAllAssociative('SELECT id, trip_id FROM commande WHERE id IN (?, ?) ORDER BY id', [$orderId, $recoveryId])));
+        $this->post("/api/gestion/conversations/$tid/abandon", [], 200);
+        $conn()->executeStatement('DELETE FROM note_de_frais WHERE id = ?', [$noteId]);
+        $conn()->executeStatement('DELETE FROM commande WHERE id IN (?, ?)', [$orderId, $recoveryId]);
+        $conn()->executeStatement('DELETE FROM fournisseur WHERE id = ?', [$supplierId]);
+    }
+
+    public function testANegativeBalanceIsOnlyReadFromAnExplicitSign(): void
+    {
+        $say = fn (string $value) => FakeLandingAiClient::$queue[] = $this->reading(['reply' => 'Noté.', 'answers' => [['questionId' => 'amount', 'optionIndex' => -1, 'value' => $value, 'name' => '']]]);
+        $thread = $this->post('/api/gestion/conversations', ['action' => 'cash.balance.create'], 201);
+        $id = (int) $thread['id'];
+        $send = function (string $sentence, string $modelValue) use ($id, $say): array {
+            $say($modelValue);
+            $out = $this->post("/api/gestion/conversations/$id/messages", ['text' => $sentence], 200);
+
+            return [array_column($out['applied'], 'value', 'questionId'), array_column($out['ignored'], 'reason', 'questionId'), $out['thread']['questions'][1]['answer']];
+        };
+        // Les trois formes d'un signe explicite, juste devant le nombre
+        $this->assertSame([['amount' => -25000], [], -25000], $send('Le solde est de -250 ce matin', '-250'));
+        $this->assertSame([['amount' => -25050], [], -25050], $send('Le solde est de −250,50', '−250.50'), 'signe moins typographique');
+        $this->assertSame([['amount' => -30000], [], -30000], $send('Je suis à moins 300 sur le compte', '-300'));
+        // Aucun mot n'est interprété : « découvert de 250 » ne donne pas -250
+        $this->assertSame([[], ['amount' => 'VALUE_NOT_IN_SENTENCE'], -30000], $send('J\'ai un découvert de 250', '-250'));
+        $this->assertSame([['amount' => 25000], [], 25000], $send('J\'ai un découvert de 250', '250'), 'sans signe explicite, le montant lu est positif');
+        // Le signe ne se perd pas non plus : « -250 » ne devient pas 250 ; le tiret d'une date n'est pas un signe ; « moins de » non plus
+        $this->assertSame([[], ['amount' => 'VALUE_NOT_IN_SENTENCE'], 25000], $send('Le solde est de -250', '250'));
+        $this->assertSame([[], ['amount' => 'VALUE_NOT_IN_SENTENCE'], 25000], $send('Au 2026-11-13 il reste 40', '-11'));
+        $this->assertSame([[], ['amount' => 'VALUE_NOT_IN_SENTENCE'], 25000], $send('Il reste moins de 250', '-250'));
+        $this->assertStringContainsString('juste devant le nombre', FakeLandingAiClient::$requests[0]['system']);
+        // Une question de montant sans signe (note de frais) ne lit jamais un négatif
+        $expense = $this->post('/api/gestion/conversations', ['action' => 'expense.create'], 201);
+        FakeLandingAiClient::$queue[] = $this->reading(['reply' => '', 'answers' => [['questionId' => 'amount', 'optionIndex' => -1, 'value' => '-250', 'name' => '']]]);
+        $out = $this->post('/api/gestion/conversations/' . $expense['id'] . '/messages', ['text' => 'Une note de -250'], 200);
+        $this->assertSame([[], [['questionId' => 'amount', 'reason' => 'VALUE_NOT_IN_SENTENCE']]], [$out['applied'], $out['ignored']]);
+        $this->post("/api/gestion/conversations/$id/abandon", [], 200);
+        $this->post('/api/gestion/conversations/' . $expense['id'] . '/abandon', [], 200);
+    }
+
     public function testAFreeSentenceOnlyKeepsWhatTheManagerWrote(): void
     {
         $tag = $this->tag;
@@ -442,7 +671,7 @@ class ActionConversationApiTest extends WebTestCase
         // Catalogue : la constante et le service disent la même liste ; chaque clé tient dans la colonne `kind` et a ses textes fr et en
         $this->em();
         $catalog = static::getContainer()->get(ActionCatalog::class);
-        $this->assertSame(['expense.create', 'supplier.create', 'shipping.create', 'budget.put'], ActionCatalog::KEYS);
+        $this->assertSame(['expense.create', 'supplier.create', 'shipping.create', 'budget.put', 'cash.balance.create', 'cash.movement.create', 'trip.create'], ActionCatalog::KEYS);
         $this->assertSame(ActionCatalog::KEYS, $catalog->keys());
         $translator = static::getContainer()->get('translator');
         foreach (ActionCatalog::KEYS as $key) {
@@ -456,6 +685,9 @@ class ActionConversationApiTest extends WebTestCase
                 foreach ($catalog->get($key)->build([], $locale)['questions'] as $question) {
                     $this->assertStringNotContainsString('conversation.actions.', $question['title'] . $question['text'], "$key, {$question['id']} ($locale)");
                     $this->assertSame($key . '.' . explode(':', $question['id'])[0], $question['kind']);
+                    foreach ($question['options'] as $option) {
+                        $this->assertDoesNotMatchRegularExpression('/^(conversation|cash|budget)\./', (string) $option['label'], "$key, {$question['id']} ($locale) : libellé d'option");
+                    }
                 }
             }
         }

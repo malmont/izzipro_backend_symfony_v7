@@ -10,14 +10,15 @@ namespace App\Gestion\Services\Conversation\Action;
 class ActionCatalog
 {
     /** Clés du catalogue, dans l'ordre (lecture sans instancier les actions) */
-    public const KEYS = ['expense.create', 'supplier.create', 'shipping.create', 'budget.put'];
+    public const KEYS = ['expense.create', 'supplier.create', 'shipping.create', 'budget.put', 'cash.balance.create', 'cash.movement.create', 'trip.create']; // les trois dernières : lot IA-ACT-2
 
     /** @var array<string, GestionAction> */
     private array $actions = [];
 
-    public function __construct(ExpenseCreateAction $expense, SupplierCreateAction $supplier, ShippingCreateAction $shipping, BudgetPutAction $budget)
+    public function __construct(ExpenseCreateAction $expense, SupplierCreateAction $supplier, ShippingCreateAction $shipping, BudgetPutAction $budget,
+        CashBalanceCreateAction $cashBalance, CashMovementCreateAction $cashMovement, TripCreateAction $trip)
     {
-        foreach ([$expense, $supplier, $shipping, $budget] as $action) {
+        foreach ([$expense, $supplier, $shipping, $budget, $cashBalance, $cashMovement, $trip] as $action) {
             $this->actions[$action::key()] = $action;
         }
     }

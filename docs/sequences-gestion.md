@@ -89,9 +89,10 @@ séquence à faire une fois. `label` traduit avec `?locale` (« Fall 2026 ») ; 
   `recovery.apply`, `supplier.create`, `fiscal_year.set`, `periods.calendar.set`, `document.invoice.confirm` ; une étape du cheminement
   sans action de la gestion : `readiness.<clé de l'étape>`). `preparable` : la conversation de la gestion sait préparer l'action (aperçu,
   empreinte, confirmation, annulation). Vrai pour `document.invoice.confirm` depuis le lot IA-FACT-1 et, depuis le lot IA-ACT-1, pour
-  toute action du catalogue du fil (`ActionCatalog::KEYS` : `supplier.create` aujourd'hui dans le guide ; `docs/conversation-gestion.md`
-  § 9) ; faux pour les autres. `params` (objet, lot IA-ACT-1) : les paramètres à passer à l'ouverture du fil,
-  `POST /api/gestion/conversations { action: key, params }` (vide pour l'instant).
+  toute action du catalogue du fil (`ActionCatalog::KEYS` ; dans le guide : `supplier.create`, et depuis le lot IA-ACT-2
+  `cash.balance.create`, `cash.movement.create`, `trip.create` ; `docs/conversation-gestion.md` § 9 et 10) ; faux pour les autres.
+  `params` (lot IA-ACT-1) : les paramètres à passer à l'ouverture du fil, `POST /api/gestion/conversations { action: key, params }` ;
+  vide, il est rendu `[]` comme `screen.params` ; les étapes « frais fixes » rendent `{ fixedCost: true, recurrence: "monthly" }`.
 - `figures` : `[{ key, label, value, unit }]`, calculés par le serveur ; `unit` : `money` (cents de la devise du site), `percent`,
   `count`, `days`, `date`, `ratio` comme les sources des conseils, plus `text`. Les comptes que le cheminement rend sous forme d'objet
   (`{ missing: 7, total: 52 }`) sont convertis dans cette forme.

@@ -202,7 +202,10 @@ class SequencesApiTest extends WebTestCase
         // Depuis le lot IA-FACT-1, la conversation sait préparer la confirmation d'une facture ; les autres actions pas encore
         $this->assertSame(['key' => 'document.invoice.confirm', 'preparable' => true, 'params' => []], $steps['management.first_purchase']['action']);
         $this->assertSame(['key' => 'supplier.create', 'preparable' => true, 'params' => []], $steps['management.suppliers']['action'], 'lot IA-ACT-1 : le fil sait créer un fournisseur');
-        $this->assertFalse($steps['management.cash']['action']['preparable']);
+        // lot IA-ACT-2 : solde et mouvement prévu se préparent par le fil ; l'étape « frais fixes » ouvre un frais fixe mensuel
+        $this->assertSame(['key' => 'cash.balance.create', 'preparable' => true, 'params' => []], $steps['management.cash']['action']);
+        $this->assertSame(['key' => 'cash.movement.create', 'preparable' => true, 'params' => ['fixedCost' => true, 'recurrence' => 'monthly']], $steps['management.fixed_costs']['action']);
+        $this->assertFalse($steps['management.fiscal_year']['action']['preparable']);
         $this->assertSame(['filter' => 'missing-cost'], $steps['management.purchase_cost']['screen']['params']);
         $figures = array_column($steps['management.purchase_cost']['figures'], null, 'key');
         $this->assertSame(['Items without a cost', 'count'], [$figures['missing']['label'], $figures['missing']['unit']]);
@@ -252,6 +255,8 @@ class SequencesApiTest extends WebTestCase
         $trips = (int) array_column($steps()['trip']['figures'], 'value', 'key')['trips'];
         $before = $this->get($url);
         $this->assertSame(['budget', 'trip', 'cash_balance', 'fixed_costs', 'purchase_order'], array_column($before['steps'], 'key'));
+        $this->assertSame([['preparation.validate', false, []], ['trip.create', true, []], ['cash.balance.create', true, []], ['cash.movement.create', true, ['fixedCost' => true, 'recurrence' => 'monthly']], ['purchase.create', false, []]],
+            array_map(fn (array $s) => [$s['action']['key'], $s['action']['preparable'], $s['action']['params']], $before['steps']), 'lot IA-ACT-2 : actions préparables et paramètres d\'ouverture du fil');
         $this->assertSame(['todo', $trips > 0 ? 'done' : 'optional', 'todo', 'todo', $orders > 0 ? 'done' : 'todo'], array_column($before['steps'], 'status'));
         $this->assertSame([true, false, false, false, false], array_column($before['steps'], 'blocking'));
         $this->assertSame(['in_progress', 'budget', true], [$before['status'], $before['next']['stepKey'], $before['next']['blocking']]);

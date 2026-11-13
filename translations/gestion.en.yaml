@@ -514,6 +514,97 @@ conversation:
             tracknumber:
                 title: 'Tracking number'
                 text: 'The tracking number, if you have it.'
+        cash_balance_create:
+            title: 'Enter a cash balance'
+            date:
+                title: 'Balance date'
+                text: 'On which date did you read this balance?'
+            amount:
+                title: 'Balance'
+                text: 'What is your account balance on that date? (negative for an overdraft)'
+            note:
+                title: 'Note'
+                text: 'A note, if you wish (bank, account…).'
+        cash_movement_create:
+            title: 'Plan a cash movement'
+            label:
+                title: 'Label'
+                text: 'What is this movement? (shop rent, salary, loan…)'
+            direction:
+                title: 'Outflow or inflow'
+                text: 'Is money going out or coming in?'
+            category:
+                title: 'Category'
+                text: 'Which category does it belong to?'
+            amount:
+                title: 'Amount'
+                text: 'What is the amount of each instalment?'
+            startDate:
+                title: 'Start date'
+                text: 'When does the movement, or its first instalment, take place?'
+            recurrence:
+                title: 'Recurrence'
+                text: 'Does it come back regularly?'
+            endDate:
+                title: 'End date'
+                text: 'If it stops on a known date, which one?'
+            fixedCost:
+                title: 'Fixed cost'
+                text: 'Should it count in your fixed costs? Without an answer, the rule of the category applies.'
+            notes:
+                title: 'Notes'
+                text: 'Notes, if you wish.'
+            options:
+                direction:
+                    out: 'Outflow'
+                    in: 'Inflow'
+                recurrence:
+                    none: 'Once'
+                    weekly: 'Every week'
+                    monthly: 'Every month'
+                    quarterly: 'Every quarter'
+                    yearly: 'Every year'
+                fixed:
+                    yes: 'Yes'
+                    no: 'No'
+            fixed:
+                yes_choice: 'Counted as a fixed cost: yes (your choice).'
+                no_choice: 'Counted as a fixed cost: no (your choice).'
+                yes_rule: 'Counted as a fixed cost: yes (rule of the %category% category).'
+                no_rule: 'Counted as a fixed cost: no (rule of the %category% category).'
+                no_never: 'Counted as a fixed cost: no (an inflow or a one-off movement is never a fixed cost).'
+        trip_create:
+            title: 'Create a buying trip'
+            name:
+                title: 'Trip name'
+                text: 'What is this trip called?'
+            place:
+                title: 'Place'
+                text: 'Where are you going?'
+            startDate:
+                title: 'Departure'
+                text: 'Which day do you leave?'
+            endDate:
+                title: 'Return'
+                text: 'Which day do you come back?'
+            budgetTotal:
+                title: 'Trip budget'
+                text: 'What is the total budget of the trip?'
+            budgetDaily:
+                title: 'Daily budget'
+                text: 'A daily budget, if you wish (otherwise the total spread over the days).'
+            currency:
+                title: 'Currency'
+                text: 'In which currency do you keep the budget of this trip?'
+            exchangeRate:
+                title: 'Exchange rate'
+                text: 'The trip is in %from% and your site in %to%. How much is 1 %from% in %to%?'
+            notes:
+                title: 'Notes'
+                text: 'Notes, if you wish.'
+            attaches:
+                some: 'On creation, %notes% expense(s) and %commandes% purchase order(s) dated within the trip and not attached elsewhere will be attached to it. Undoing the trip will free them.'
+                none: 'No free expense or purchase order is dated within this trip: nothing will be attached.'
         budget_put:
             title: 'Set the budget of a period'
             periodId:

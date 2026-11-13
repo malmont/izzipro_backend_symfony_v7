@@ -41,21 +41,23 @@ final class SequenceCatalog
      * Séquences qui reviennent. Par étape : `fact` (méthode de `SequenceFacts`), `blocking` (indispensable), `optional` (facultative :
      * jamais « à faire »), `screen` (code d'écran de l'application) et `action` (référence de l'action qui la fait avancer).
      *
-     * @var array<string, array{steps: array<string, array{fact: string, blocking: bool, optional?: bool, screen: string, action: string}>}>
+     * `actionParams` : les paramètres à donner à l'ouverture du fil de l'action (lot IA-ACT-2).
+     *
+     * @var array<string, array{steps: array<string, array{fact: string, blocking: bool, optional?: bool, screen: string, action: string, actionParams?: array<string, mixed>}>}>
      */
     public const RECURRING = [
         self::PERIOD_PREPARE => ['steps' => [
             'budget' => ['fact' => 'periodBudget', 'blocking' => true, 'screen' => 'periode.preparation', 'action' => 'preparation.validate'],
             'trip' => ['fact' => 'periodTrip', 'blocking' => false, 'optional' => true, 'screen' => 'voyages', 'action' => 'trip.create'],
             'cash_balance' => ['fact' => 'recentCashBalance', 'blocking' => false, 'screen' => 'tresorerie', 'action' => 'cash.balance.create'],
-            'fixed_costs' => ['fact' => 'fixedCostsEntered', 'blocking' => false, 'screen' => 'frais-fixes', 'action' => 'cash.movement.create'],
+            'fixed_costs' => ['fact' => 'fixedCostsEntered', 'blocking' => false, 'screen' => 'frais-fixes', 'action' => 'cash.movement.create', 'actionParams' => self::FIXED_COST_PARAMS],
             'purchase_order' => ['fact' => 'periodPurchaseOrder', 'blocking' => false, 'screen' => 'commandes', 'action' => 'purchase.create'],
         ]],
         self::FISCAL_YEAR_CLOSE => ['steps' => [
             'periods_closed' => ['fact' => 'yearPeriodsClosed', 'blocking' => true, 'screen' => 'periodes', 'action' => 'period.close'],
             'purchase_costs' => ['fact' => 'yearPurchaseCosts', 'blocking' => true, 'screen' => 'articles', 'action' => 'product.cost.set'],
             'reconciliation' => ['fact' => 'yearReconciliation', 'blocking' => false, 'screen' => 'tresorerie.rapprochements', 'action' => 'cash.balance.create'],
-            'fixed_costs' => ['fact' => 'yearFixedCosts', 'blocking' => false, 'screen' => 'frais-fixes', 'action' => 'cash.movement.create'],
+            'fixed_costs' => ['fact' => 'yearFixedCosts', 'blocking' => false, 'screen' => 'frais-fixes', 'action' => 'cash.movement.create', 'actionParams' => self::FIXED_COST_PARAMS],
         ]],
         self::HISTORY_RECOVERY => ['steps' => [
             'needed' => ['fact' => 'recoveryNeeded', 'blocking' => true, 'screen' => 'reprise', 'action' => 'recovery.simulate'],
@@ -76,6 +78,14 @@ final class SequenceCatalog
         'management.cash' => 'cash.balance.create',
         'management.fixed_costs' => 'cash.movement.create',
         'management.first_purchase' => 'document.invoice.confirm',
+    ];
+
+    /** Une étape « frais fixes » ouvre le mouvement prévu comme un frais fixe mensuel (lot IA-ACT-2) ; le gérant peut changer les deux réponses */
+    public const FIXED_COST_PARAMS = ['fixedCost' => true, 'recurrence' => 'monthly'];
+
+    /** Paramètres d'ouverture du fil de l'action d'une étape du cheminement */
+    public const ONCE_ACTION_PARAMS = [
+        'management.fixed_costs' => self::FIXED_COST_PARAMS,
     ];
 
     /** Paramètres de l'écran de l'application pour une étape du cheminement : la liste des articles sans coût */

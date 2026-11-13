@@ -151,7 +151,7 @@ class GestionSequenceService
         return [
             'key' => (string) $step['key'], 'title' => (string) $step['title'], 'description' => (string) $step['description'], 'status' => (string) $step['status'],
             'blocking' => (bool) ($step['blocking'] ?? true), 'screen' => $screen,
-            'action' => self::action(SequenceCatalog::actionOf((string) $step['key'])),
+            'action' => self::action(SequenceCatalog::actionOf((string) $step['key']), SequenceCatalog::ONCE_ACTION_PARAMS[$step['key']] ?? []),
             'figures' => $this->figures($figures, $locale),
         ];
     }
@@ -218,7 +218,7 @@ class GestionSequenceService
                 'description' => $this->tr("sequences.$key.steps.$stepKey." . ($status === 'done' ? 'done' : 'todo'), $locale, $params),
                 'status' => $status, 'blocking' => $definition['blocking'],
                 'screen' => self::screen(SequenceCatalog::WHERE_APP, $definition['screen'], self::instanceParams($key, $instance) + $fact['params'], null),
-                'action' => self::action($definition['action']),
+                'action' => self::action($definition['action'], $definition['actionParams'] ?? []),
                 'figures' => $this->figures($fact['figures'], $locale),
             ];
         }
@@ -281,9 +281,9 @@ class GestionSequenceService
      * @return array{key: string, preparable: bool, params: object} référence de l'action, si la conversation sait la préparer, et les
      *                                                                paramètres à donner à l'ouverture de son fil (`POST /api/gestion/conversations { action, params }`)
      */
-    private static function action(string $key): array
+    private static function action(string $key, array $params = []): array
     {
-        return ['key' => $key, 'preparable' => SequenceCatalog::preparable($key), 'params' => new \stdClass()];
+        return ['key' => $key, 'preparable' => SequenceCatalog::preparable($key), 'params' => (object) $params];
     }
 
     /** @param array<string, mixed> $params */

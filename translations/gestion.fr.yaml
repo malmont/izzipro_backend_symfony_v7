@@ -516,6 +516,97 @@ conversation:
             tracknumber:
                 title: 'Numéro de suivi'
                 text: 'Le numéro de suivi, si vous l''avez.'
+        cash_balance_create:
+            title: 'Saisir un solde de trésorerie'
+            date:
+                title: 'Date du solde'
+                text: 'À quelle date avez-vous relevé ce solde ?'
+            amount:
+                title: 'Solde'
+                text: 'Quel est le solde de votre compte à cette date ? (négatif pour un découvert)'
+            note:
+                title: 'Note'
+                text: 'Une note, si vous voulez (banque, compte…).'
+        cash_movement_create:
+            title: 'Prévoir un mouvement de trésorerie'
+            label:
+                title: 'Libellé'
+                text: 'Quel est ce mouvement ? (loyer du local, salaire, prêt…)'
+            direction:
+                title: 'Sortie ou entrée'
+                text: 'Est-ce une sortie d''argent ou une entrée ?'
+            category:
+                title: 'Catégorie'
+                text: 'Dans quelle catégorie le ranger ?'
+            amount:
+                title: 'Montant'
+                text: 'Quel est le montant de chaque échéance ?'
+            startDate:
+                title: 'Date de début'
+                text: 'À quelle date a lieu le mouvement, ou sa première échéance ?'
+            recurrence:
+                title: 'Récurrence'
+                text: 'Revient-il régulièrement ?'
+            endDate:
+                title: 'Date de fin'
+                text: 'S''il s''arrête à une date connue, laquelle ?'
+            fixedCost:
+                title: 'Frais fixe'
+                text: 'Faut-il le compter dans vos frais fixes ? Sans réponse, la règle de la catégorie s''applique.'
+            notes:
+                title: 'Notes'
+                text: 'Des notes, si vous voulez.'
+            options:
+                direction:
+                    out: 'Sortie'
+                    in: 'Entrée'
+                recurrence:
+                    none: 'Une seule fois'
+                    weekly: 'Chaque semaine'
+                    monthly: 'Chaque mois'
+                    quarterly: 'Chaque trimestre'
+                    yearly: 'Chaque année'
+                fixed:
+                    yes: 'Oui'
+                    no: 'Non'
+            fixed:
+                yes_choice: 'Compté comme frais fixe : oui (votre choix).'
+                no_choice: 'Compté comme frais fixe : non (votre choix).'
+                yes_rule: 'Compté comme frais fixe : oui (règle de la catégorie %category%).'
+                no_rule: 'Compté comme frais fixe : non (règle de la catégorie %category%).'
+                no_never: 'Compté comme frais fixe : non (une entrée ou un mouvement ponctuel n''est jamais un frais fixe).'
+        trip_create:
+            title: 'Créer un voyage d''achat'
+            name:
+                title: 'Nom du voyage'
+                text: 'Comment s''appelle ce voyage ?'
+            place:
+                title: 'Lieu'
+                text: 'Où allez-vous ?'
+            startDate:
+                title: 'Départ'
+                text: 'Quel jour partez-vous ?'
+            endDate:
+                title: 'Retour'
+                text: 'Quel jour revenez-vous ?'
+            budgetTotal:
+                title: 'Budget du voyage'
+                text: 'Quel est le budget total du voyage ?'
+            budgetDaily:
+                title: 'Budget par jour'
+                text: 'Un budget par jour, si vous voulez (sinon le total réparti sur les jours).'
+            currency:
+                title: 'Devise'
+                text: 'Dans quelle devise tenez-vous le budget de ce voyage ?'
+            exchangeRate:
+                title: 'Taux de change'
+                text: 'Le voyage est en %from% et votre site en %to%. Combien vaut 1 %from% en %to% ?'
+            notes:
+                title: 'Notes'
+                text: 'Des notes, si vous voulez.'
+            attaches:
+                some: 'À la création, %notes% note(s) de frais et %commandes% commande(s) libres datées dans le voyage y seront rattachées. Annuler le voyage rendra ces éléments libres.'
+                none: 'Aucune note de frais ni commande libre n''est datée dans ce voyage : rien ne sera rattaché.'
         budget_put:
             title: 'Fixer le budget d''une période'
             periodId:
