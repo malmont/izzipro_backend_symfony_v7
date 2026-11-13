@@ -72,6 +72,27 @@ class GestionConversationController extends AbstractController
         return $body === null ? $this->invalidJson() : $this->json($this->useCase->answer($id, $body, self::locale($request->query->get('locale')), $this->getUser()?->getUserIdentifier()));
     }
 
+    /**
+     * Phrase libre (lot IA-FACT-2-B) : `{ text }` → 200 `{ reply, applied: [{ questionId, value }], ignored: [{ questionId, reason }], thread }`.
+     * L'IA traduit la phrase en réponses aux questions du fil, contrôlées comme un bouton. 1 unité par réponse de l'IA, aucune si elle échoue.
+     * 402 `AI_CREDITS_EXHAUSTED`, 403 `AI_NOT_INCLUDED`, 429 `AI_DAILY_LIMIT { limit, resetAt }`, 503 `AI_UNAVAILABLE`.
+     */
+    #[Route('/{id}/messages', name: 'gestion_conversations_message', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function message(int $id, Request $request): JsonResponse
+    {
+        $body = $this->body($request);
+        if ($body === null) {
+            return $this->invalidJson();
+        }
+        try {
+            return $this->json($this->useCase->message($id, $body, self::locale($request->query->get('locale')), $this->getUser()?->getUserIdentifier(), $this->isGranted('ROLE_SUPER_ADMIN')));
+        } catch (LandingAiException $e) {
+            $code = match ($e->getStatusCode()) { 402 => 'AI_CREDITS_EXHAUSTED', 403 => 'AI_NOT_INCLUDED', 429 => 'AI_TOO_MANY_FAILURES', default => 'AI_UNAVAILABLE' };
+
+            return $this->json(['error' => $code, 'code' => $code, 'message' => $e->getMessage()], $e->getStatusCode());
+        }
+    }
+
     /** `{ previewHash }` → 201, le résultat de la confirmation d'une facture, `undo` et le fil ; 409 `PREVIEW_CHANGED { preview, previewHash }`. */
     #[Route('/{id}/confirm', name: 'gestion_conversations_confirm', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function confirm(int $id, Request $request): JsonResponse

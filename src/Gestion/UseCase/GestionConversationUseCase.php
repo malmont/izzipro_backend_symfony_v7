@@ -65,6 +65,15 @@ class GestionConversationUseCase
         return $this->conversations->thread($conversation, $locale);
     }
 
+    /** @param array<string, mixed> $body @return array<string, mixed> phrase libre interprétée par l'IA (lot IA-FACT-2-B) */
+    public function message(int $id, array $body, ?string $locale, ?string $user, bool $platformOwner): array
+    {
+        $conversation = $this->conversations->find($id);
+        $out = $this->conversations->message($conversation, $body['text'] ?? null, $user, $platformOwner);
+
+        return $out + ['thread' => $this->conversations->thread($conversation, $locale)];
+    }
+
     /** @param array<string, mixed> $body @return array<string, mixed> */
     public function confirm(int $id, array $body, string $host, ?string $locale, ?string $user): array
     {

@@ -470,6 +470,9 @@ sequences:
 
 # Invoice by conversation (lot IA-FACT-1, 13/11/2026): docs/conversation-gestion.md
 conversation:
+    reply:
+        nothing: "I found no answer to the open questions in your sentence. Use the buttons, or rephrase."
+        applied: "Noted: %count% answer(s) saved."
     summary:
         read: 'Invoice %number% dated %date%, supplier %supplier%: %lines% line(s), total %total% %currency%.'
         questions: 'I need %count% more answer(s) before showing you what will be created.'

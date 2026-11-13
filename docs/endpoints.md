@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (458)
+## Boutique et commun (459)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -395,6 +395,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/conseils` | ROLE_ADMIN | `Gestion\Controller\GestionAdviceController::list` |
 | POST | `/api/gestion/conversations/{id}/answers` | ROLE_ADMIN | `Gestion\Controller\GestionConversationController::answers` |
 | POST | `/api/gestion/conversations/{id}/confirm` | ROLE_ADMIN | `Gestion\Controller\GestionConversationController::confirm` |
+| POST | `/api/gestion/conversations/{id}/messages` | ROLE_ADMIN | `Gestion\Controller\GestionConversationController::message` |
 | POST | `/api/gestion/conversations/{id}/undo` | ROLE_ADMIN | `Gestion\Controller\GestionConversationController::undo` |
 | GET | `/api/gestion/conversations/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionConversationController::get` |
 | GET | `/api/gestion/conversations` | ROLE_ADMIN | `Gestion\Controller\GestionConversationController::list` |

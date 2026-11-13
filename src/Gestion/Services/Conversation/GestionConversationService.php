@@ -11,7 +11,9 @@ use App\Gestion\Services\GestionConflictException;
 use App\Gestion\Services\GestionValidationException;
 use App\Gestion\UseCase\ConfirmGestionDocumentUseCase;
 use App\Gestion\UseCase\PreviewGestionDocumentUseCase;
+use App\Services\LandingAiService\LandingAiException;
 use App\Services\LandingAiService\LandingAiQuotaService;
+use App\Services\LandingAiService\LandingAiUsageStats;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
@@ -42,8 +44,14 @@ class GestionConversationService
         private readonly GestionDocumentUndoService $undoService,
         private readonly LandingAiQuotaService $quota,
         private readonly TranslatorInterface $translator,
+        private readonly ?ConversationInterpreter $interpreter = null, // lot IA-FACT-2-B : la phrase libre
+        private readonly ?\App\Services\CaisseService\StoreClock $clock = null,
+        private readonly ?\Psr\Log\LoggerInterface $logger = null,
     ) {
     }
+
+    /** Messages envoyés à l'IA par jour (jour du magasin) et par site : garde-fou contre une boucle ; réglable ici */
+    public const AI_MESSAGES_PER_DAY = 100;
 
     /**
      * Fil d'un document : le fil ouvert s'il existe (un seul fil actif par document), sinon un nouveau.
@@ -164,6 +172,84 @@ class GestionConversationService
             $em->persist(GestionConversationMessage::of($conversation, GestionConversationMessage::ROLE_ASSISTANT, 'abandoned', []));
         }
         $em->flush();
+    }
+
+    /**
+     * Phrase libre du gérant (lot IA-FACT-2-B) : l'IA la traduit en réponses aux questions du fil, chacune contrôlée comme un bouton ;
+     * 1 unité par réponse de l'IA, aucune si elle échoue. L'IA ne confirme et n'annule jamais.
+     *
+     * @return array{reply: string, applied: list<array{questionId: string, value: mixed}>, ignored: list<array{questionId: string, reason: string}>}
+     *
+     * @throws LandingAiException 402 crédits, 403 palier, 503 IA indisponible
+     */
+    public function message(GestionConversation $conversation, mixed $text, ?string $user, bool $platformOwner): array
+    {
+        $document = $this->workable($conversation);
+        $text = is_string($text) ? trim($text) : '';
+        if ($text === '' || mb_strlen($text) > ConversationInterpreter::MAX_TEXT) {
+            throw new GestionValidationException(['text' => $text === '' ? 'REQUIRED' : 'TOO_LONG'], sprintf('text : une phrase de %d caractères au plus', ConversationInterpreter::MAX_TEXT));
+        }
+        $this->documents->assertAiIncluded($platformOwner);
+        $em = $this->emProvider->getEntityManager();
+        // Plafond du jour (jour du magasin), par site
+        [$dayStart, $dayEnd] = $this->clock->range(null, null);
+        $sent = (int) $em->getConnection()->fetchOne("SELECT COUNT(*) FROM gestion_conversation_message WHERE role = 'assistant' AND kind = 'text' AND created_at >= ? AND created_at < ?", [$dayStart->format('Y-m-d H:i:s'), $dayEnd->format('Y-m-d H:i:s')]);
+        if ($sent >= self::AI_MESSAGES_PER_DAY) {
+            throw new GestionConflictException('AI_DAILY_LIMIT', sprintf('%d messages à l\'assistant par jour au plus : répondez par les boutons, ou reprenez demain.', self::AI_MESSAGES_PER_DAY), 429,
+                ['limit' => self::AI_MESSAGES_PER_DAY, 'resetAt' => $dayEnd->format(\DateTimeInterface::ATOM)]);
+        }
+        $locale = $conversation->getLocale();
+        $built = $this->questions->build($document, $conversation->getAnswers(), $locale);
+        $x = $document->getExtraction() ?? [];
+        $names = array_values(array_filter(array_merge([(string) ($x['supplier']['name'] ?? '')], array_map(fn ($l) => (string) ($l['label'] ?? ''), is_array($x['lines'] ?? null) ? $x['lines'] : []),
+            array_map(fn ($l) => (string) ($l['baseLabel'] ?? ''), is_array($x['lines'] ?? null) ? $x['lines'] : [])), fn (string $n) => $n !== ''));
+        $stats = new LandingAiUsageStats(ConversationInterpreter::MODEL);
+        $usage = $platformOwner ? null : $this->quota->reserve('assistant', 'gestion_conversation', ConversationInterpreter::COST, $user, mb_substr($text, 0, 200));
+        try {
+            $read = $this->interpreter->interpret($text, $built['questions'], $names, (new \DateTimeImmutable('now', $this->clock->timezone()))->setTime(0, 0), $locale, $stats);
+            if ($usage !== null) {
+                $this->quota->complete($usage, $stats, mb_substr($read['reply'], 0, 200));
+            }
+        } catch (\Throwable $e) {
+            if ($usage !== null) {
+                $this->quota->release($usage, $stats);
+            }
+            $this->logger?->error('[Gestion] phrase libre du fil ' . $conversation->getId() . ' : ' . $e->getMessage());
+            throw $e instanceof LandingAiException ? $e : new LandingAiException(503, 'Assistant indisponible', 'L\'assistant ne répond pas pour le moment : répondez par les boutons, ou réessayez dans un instant.');
+        }
+        // Chaque réponse proposée repasse par le contrôle d'un bouton, dans l'ordre ; une réponse refusée est ignorée et dite
+        $current = $conversation->getAnswers();
+        $applied = [];
+        $ignored = $read['ignored'];
+        foreach ($read['answers'] as $i => $answer) {
+            $known = array_column($this->questions->build($document, $current, $locale)['questions'], null, 'id');
+            if (!isset($known[$answer['questionId']])) {
+                $ignored[] = ['questionId' => $answer['questionId'], 'reason' => 'UNKNOWN_QUESTION'];
+                continue;
+            }
+            try {
+                $value = $this->questions->accept($known[$answer['questionId']], $answer['value'], $i);
+            } catch (GestionValidationException $e) {
+                $ignored[] = ['questionId' => $answer['questionId'], 'reason' => (string) (array_values($e->fields)[0] ?? 'INVALID_VALUE')];
+                continue;
+            }
+            if ($value === InvoiceQuestions::ABANDON) {
+                $ignored[] = ['questionId' => $answer['questionId'], 'reason' => 'ABANDON_BY_BUTTON_ONLY']; // abandonner reste un geste du gérant
+                continue;
+            }
+            $current[$answer['questionId']] = $value;
+            $applied[] = ['questionId' => $answer['questionId'], 'value' => $value];
+        }
+        $reply = $read['reply'] !== '' ? $read['reply'] : $this->translator->trans($applied === [] ? 'conversation.reply.nothing' : 'conversation.reply.applied', ['%count%' => (string) count($applied)], 'gestion', $locale === 'en' ? 'en' : 'fr');
+        $conversation->setAnswers($current)->setUpdatedAt(new \DateTimeImmutable());
+        $em->persist(GestionConversationMessage::of($conversation, GestionConversationMessage::ROLE_USER, 'text', ['text' => $text], $user));
+        if ($applied !== []) {
+            $em->persist(GestionConversationMessage::of($conversation, GestionConversationMessage::ROLE_ASSISTANT, 'answers', ['answers' => array_column($applied, 'value', 'questionId'), 'source' => 'ai']));
+        }
+        $em->persist(GestionConversationMessage::of($conversation, GestionConversationMessage::ROLE_ASSISTANT, 'text', ['text' => $reply, 'applied' => array_column($applied, 'questionId'), 'ignored' => $ignored]));
+        $em->flush();
+
+        return ['reply' => $reply, 'applied' => $applied, 'ignored' => $ignored];
     }
 
     /**

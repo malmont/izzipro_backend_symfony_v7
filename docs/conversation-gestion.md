@@ -1,4 +1,4 @@
-# Facture par conversation — application de gestion (lots IA-FACT-1 et IA-FACT-2-A, 13/11/2026)
+# Facture par conversation — application de gestion (lots IA-FACT-1, IA-FACT-2-A et IA-FACT-2-B, 13/11/2026)
 
 Un **fil de conversation gardé par le serveur** mène une facture fournisseur de la pièce jointe à la commande : attente de la lecture dans
 le fil, résumé, questions sur ce qui manque, aperçu, confirmation, **annulation d'un bloc**. Règle du propriétaire : *aucune écriture
@@ -7,7 +7,7 @@ préparée sans annulation possible*.
 **Qui fait quoi.** Le serveur calcule tout : le résumé, les questions (à partir des trous qu'il connaît), l'aperçu, les montants,
 l'empreinte. Répondre par un bouton est gratuit et n'appelle aucune IA. Dans ce lot, le seul appel d'IA du parcours est la lecture du
 document (1 unité, inchangée). L'ajout à une commande ouverte est livré par IA-FACT-2-A (§ 7) ; la phrase libre interprétée par l'IA
-(1 unité par réponse) viendra avec IA-FACT-2-B. L'IA ne fournit jamais un montant, un article ou un fournisseur qui ne vient pas du
+(1 unité par réponse) par IA-FACT-2-B (§ 8). L'IA ne fournit jamais un montant, un article ou un fournisseur qui ne vient pas du
 document ou du catalogue.
 
 Code : `src/Gestion/Services/Conversation/` (`GestionConversationService`, `InvoiceQuestions`), `src/Gestion/Services/Document/GestionDocumentUndoService`,
@@ -25,6 +25,7 @@ Code : `src/Gestion/Services/Conversation/` (`GestionConversationService`, `Invo
 | `POST /api/gestion/conversations` | Ouvre le fil d'une facture. Multipart `files[]` (ou `file`), `text?`, `locale?` : le document est créé par le même chemin que `POST /api/gestion/documents` (mêmes formats, mêmes refus 422 `DOCUMENT_INVALID`, 402 `AI_CREDITS_EXHAUSTED`, 403 `AI_NOT_INCLUDED`, 429, 409 `DOCUMENT_IN_PROGRESS`, même crédit). Ou JSON `{ documentId, text? }` pour un document déjà envoyé. **201** le fil créé ; **200** le fil déjà ouvert pour ce document (**un seul fil actif par document**). 422 `VALIDATION_FAILED { fields: { files: REQUIRED } }` sans fichier ni document ; 404 `DOCUMENT_NOT_FOUND` ; 422 `DOCUMENT_TYPE` pour une note ou un transport. |
 | `GET /api/gestion/conversations/{id}` | Le fil (§ 2). À interroger toutes les 3 à 5 s pendant la lecture. Ne crée rien. 404 `CONVERSATION_NOT_FOUND`. |
 | `POST …/{id}/answers` | `{ answers: [{ questionId, value }] }` → le fil à jour. Gratuit, aucune IA. `value: null` retire une réponse. 422 `VALIDATION_FAILED { fields: { "answers[i].questionId": UNKNOWN_QUESTION, "answers[i].value": <code> } }` ; 409 `CONVERSATION_NOT_OPEN { state }` (lecture en cours ou en échec, facture confirmée, fil abandonné). |
+| `POST …/{id}/messages` | `{ text }` : une phrase libre, traduite par l'IA en réponses aux questions (§ 8) → 200 `{ reply, applied, ignored, thread }`. **1 unité** par réponse de l'IA. |
 | `POST …/{id}/confirm` | `{ previewHash }` → **201**, le résultat de la confirmation d'une facture (`docs/lecture-documents-gestion.md` § 4), plus `undo` et `thread`. 409 `CONVERSATION_NOT_READY { state, openQuestions, issues }` ; **409 `PREVIEW_CHANGED { preview, previewHash }`** si l'aperçu a changé depuis son affichage ; les autres refus sont ceux de la confirmation (`PERIOD_CLOSED`, `INVOICE_ALREADY_CONFIRMED`…). |
 | `POST …/{id}/undo` | Annulation d'un bloc (§ 5) → 200 `{ undone, thread }` : le fil revient à l'aperçu, avec ses réponses. |
 | `GET /api/gestion/conversations?page=&limit=` | Liste légère, du plus récent au plus ancien : `[{ id, kind, state, document: { id, status, commandeId }, createdAt, updatedAt }]` (`state` sans le calcul des questions : `questions` vaut aussi pour un fil prêt) ; `X-Total-Count`, `X-Page`, `X-Limit`. |
@@ -48,7 +49,8 @@ Code : `src/Gestion/Services/Conversation/` (`GestionConversationService`, `Invo
   rendu) · `confirmed` · `abandoned`.
 - `summary` : le résumé de la lecture, **écrit par le serveur** à partir des chiffres lus (gratuit) ; `text` dans la langue demandée.
 - `messages` : ce que le gérant a envoyé ou décidé, et ce que le serveur a constaté, dans l'ordre. `kind` : `document` (pièce jointe),
-  `text`, `answers`, `confirmed`, `undone`, `abandoned`. Le résumé, les questions et l'aperçu ne sont pas des messages : ils sont
+  `text` (`role: user` : la phrase du gérant, `{ text }` ; `role: assistant` : la réponse de l'IA, `{ text, applied, ignored }`, § 8),
+  `answers` (`{ answers }`, avec `source: "ai"` quand elles viennent d'une phrase libre), `confirmed`, `undone`, `abandoned`. Le résumé, les questions et l'aperçu ne sont pas des messages : ils sont
   recalculés à chaque lecture.
 - `preview` : exactement la réponse de `POST /api/gestion/documents/{id}/apercu` (`docs/lecture-documents-gestion.md` § 4 bis) pour le
   corps bâti depuis la lecture et les réponses. `previewHash` : empreinte de ce corps et de ce que l'aperçu en a calculé (lignes, totaux,
@@ -166,4 +168,35 @@ frais de port d'avant. L'annulation remet exactement cela (`undone: { commandeId
 supplier }, restored: { lines, shipping, budget }, kept }`) : lignes créées retirées, lignes grossies ramenées à leur quantité et à leur
 coût d'avant, budget et port remis, articles créés retirés ; la commande reste. Mêmes règles que le § 5 (24 heures, une fois, tout ou
 rien) ; refusée si une ligne touchée a changé ou a été reçue depuis, ou si une facture a été ajoutée après (`LATER_DOCUMENT`).
+
+## 8. La phrase libre, par l'IA (lot IA-FACT-2-B, 13/11/2026)
+
+`POST /api/gestion/conversations/{id}/messages { text }` (1000 caractères au plus) → 200
+`{ reply, applied: [{ questionId, value }], ignored: [{ questionId, reason }], thread }`.
+
+**Ce que fait l'IA** (`Services/Conversation/ConversationInterpreter`, `claude-sonnet-5-5`, sortie structurée) : elle reçoit la phrase du
+gérant et les questions du fil (titre, texte, options numérotées), et rend des réponses à ces questions, plus une courte phrase (`reply`).
+Rien d'autre : elle ne confirme, n'annule et n'abandonne jamais ; confirmer reste un geste du gérant, avec l'empreinte.
+
+**Garde-fous, appliqués par le serveur après la réponse du modèle** (une réponse écartée est rendue dans `ignored`, avec sa raison) :
+- question à choix : seulement une option proposée, désignée par son rang (`NOT_AN_OPTION`) ;
+- création d'un fournisseur ou d'un article sous un autre nom que celui proposé : seulement un nom **écrit dans la phrase du gérant** ou
+  **lu sur le document** (`NAME_NOT_IN_SENTENCE`) ;
+- montant, taux, date : seulement une valeur **présente dans la phrase du gérant** (`VALUE_NOT_IN_SENTENCE`) ; une date est dite par
+  « aujourd'hui », « hier », `AAAA-MM-JJ`, ou son jour avec son mois, en chiffres ou en lettres ;
+- question inconnue (`UNKNOWN_QUESTION`) ; « abandon » proposé par l'IA (`ABANDON_BY_BUTTON_ONLY`) ;
+- chaque réponse gardée repasse ensuite par **le contrôle d'un bouton** (§ 3) : son code de refus est alors la raison (`PRODUCT_NOT_FOUND`…).
+Les réponses s'appliquent dans l'ordre, comme celles d'un envoi par boutons.
+
+**Unités et limites.**
+- **1 unité par réponse de l'IA**, même si la phrase ne répond à aucune question ; **aucune** si l'IA échoue (503 `AI_UNAVAILABLE`, rien
+  n'est gardé dans le fil). Le propriétaire de la plateforme n'est pas décompté. Les réponses par bouton restent gratuites.
+- Palier d'IA du site, comme la lecture d'un document : 403 `AI_NOT_INCLUDED` ; crédits épuisés : 402 `AI_CREDITS_EXHAUSTED`.
+- Plafond : `GestionConversationService::AI_MESSAGES_PER_DAY` = **100 réponses de l'IA par jour (jour du magasin) et par site**. Atteint :
+  **429 `AI_DAILY_LIMIT { limit, resetAt }`**, `resetAt` = la fin du jour du magasin (ISO 8601) ; code distinct du 429 générique
+  (`AI_TOO_MANY_FAILURES`). Aucun appel, aucune unité.
+- 422 `VALIDATION_FAILED { fields: { text: REQUIRED | TOO_LONG } }` ; 409 `CONVERSATION_NOT_OPEN` sur un fil qui n'attend pas de réponse.
+
+**Dans le fil** : la phrase (`user`, `text`), les réponses appliquées (`assistant`, `answers`, `source: "ai"`) et la réponse de l'IA
+(`assistant`, `text`, avec `applied` et `ignored`). `reply` est la phrase du modèle ; s'il n'en rend pas, un texte du serveur.
 

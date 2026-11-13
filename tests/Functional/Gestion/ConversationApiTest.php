@@ -502,6 +502,150 @@ class ConversationApiTest extends WebTestCase
         $this->endOfWrite();
     }
 
+    /**
+     * Lot IA-FACT-2-B : la phrase libre. L'IA traduit la phrase du gérant en réponses aux questions du fil ; le serveur écarte tout ce
+     * qui ne vient ni des options, ni de la phrase, ni du document, et recontrôle chaque réponse comme un bouton. 1 unité par réponse de
+     * l'IA, aucune si elle échoue ; plafond par jour ; l'IA ne confirme, n'annule et n'abandonne jamais.
+     */
+    public function testAFreeSentenceIsTurnedIntoCheckedAnswersForOneUnit(): void
+    {
+        $tag = $this->tag;
+        $today = static::getContainer()->get(PeriodCalendar::class)->today();
+        $supplier = $this->create(Fournisseur::class, ['name' => "Atelier Phrase $tag", 'currency' => 'EUR'], fn (Fournisseur $f, EntityManagerInterface $em) => $f->setTypeFournisseur($em->find(TypeFournisseur::class, 1) ?? $this->create(TypeFournisseur::class, ['name' => 'Autre'])));
+        [$id, $documentId] = $this->startThread(['supplierName' => "Atelier Phrase $tag", 'invoiceNumber' => "PH-$tag", 'invoiceDate' => '', 'currency' => 'EUR', 'amountsMode' => 'ht',
+            'lines' => [['baseLabel' => 'Lampe torsadée inconnue', 'quantity' => 2, 'unitCost' => 1500, 'total' => 3000], ['baseLabel' => 'Abat-jour inconnu', 'quantity' => 1]],
+            'taxes' => [], 'shipping' => null, 'subtotal' => null, 'taxTotal' => null, 'total' => null, 'confidence' => ['overall' => 0.7, 'number' => 0.9, 'date' => 0.1, 'lines' => 0.7, 'totals' => 0.5], 'notes' => []]);
+        $conn = $this->em()->getConnection();
+        $units = fn (): int => (int) $this->em()->getConnection()->fetchOne("SELECT COUNT(*) FROM ai_usage WHERE status = 'success'");
+        $unitsBefore = $units();
+        $requestsBefore = count(FakeLandingAiClient::$requests);
+        $questions = array_column($this->get("/api/gestion/conversations/$id")['questions'], null, 'id');
+        $this->assertSame(['supplier', 'invoice.date', 'line:n1', 'line:n2', 'unitCost:2', 'exchangeRate'], array_keys($questions));
+        $createIndex = count($questions['line:n1']['options']) - 1;
+        $say = fn (array $answers, string $reply = 'C\'est noté.') => FakeLandingAiClient::$queue[] = $this->reading(['reply' => $reply, 'answers' => $answers]);
+
+        // Une phrase, plusieurs réponses : la date, le taux, le coût, et un article à créer sous un nom donné par le gérant
+        $day = $today->modify('-3 days');
+        $sentence = sprintf('La facture est du %d/%d, le taux est de 1,52. L\'abat-jour coûte 12,50 et la première ligne est un nouvel article, appelle-le Lampe Brise.', (int) $day->format('j'), (int) $day->format('n'));
+        $say([
+            ['questionId' => 'invoice.date', 'optionIndex' => -1, 'value' => $day->format('Y-m-d'), 'name' => ''],
+            ['questionId' => 'exchangeRate', 'optionIndex' => -1, 'value' => '1.52', 'name' => ''],
+            ['questionId' => 'unitCost:2', 'optionIndex' => -1, 'value' => '12.50', 'name' => ''],
+            ['questionId' => 'line:n1', 'optionIndex' => $createIndex, 'value' => '', 'name' => 'Lampe Brise'],
+        ], 'J\'ai noté la date, le taux, le coût de l\'abat-jour et le nouvel article.');
+        $out = $this->post("/api/gestion/conversations/$id/messages", ['text' => $sentence], 200);
+        $this->assertSame(['reply', 'applied', 'ignored', 'thread'], array_keys($out));
+        $this->assertSame('J\'ai noté la date, le taux, le coût de l\'abat-jour et le nouvel article.', $out['reply']);
+        $this->assertSame([['questionId' => 'invoice.date', 'value' => $day->format('Y-m-d')], ['questionId' => 'exchangeRate', 'value' => 1.52], ['questionId' => 'unitCost:2', 'value' => 1250],
+            ['questionId' => 'line:n1', 'value' => ['create' => ['name' => 'Lampe Brise', 'coefficient' => 2]]]], $out['applied']);
+        $this->assertSame([], $out['ignored']);
+        $answers = array_column($out['thread']['questions'], 'answer', 'id');
+        $this->assertSame([$day->format('Y-m-d'), 1.52, 1250], [$answers['invoice.date'], $answers['exchangeRate'], $answers['unitCost:2']]);
+        $this->assertSame(['questions', 1], [$out['thread']['state'], $out['thread']['openQuestions']], 'il reste l\'article de la seconde ligne');
+        $this->assertSame([['user', 'text'], ['assistant', 'answers'], ['assistant', 'text']], array_map(fn (array $m) => [$m['role'], $m['kind']], array_slice($out['thread']['messages'], -3)));
+        $last = array_slice($out['thread']['messages'], -3);
+        $this->assertSame([$sentence, 'ai', ['invoice.date', 'exchangeRate', 'unitCost:2', 'line:n1']], [$last[0]['content']['text'], $last[1]['content']['source'], $last[2]['content']['applied']]);
+        $this->assertSame([$unitsBefore + 1, $requestsBefore + 1], [$units(), count(FakeLandingAiClient::$requests)], '1 unité pour la réponse de l\'IA');
+        // Ce que le modèle reçoit : la phrase, les questions avec leurs options numérotées, une sortie structurée, aucun outil imposé
+        $request = FakeLandingAiClient::$requests[count(FakeLandingAiClient::$requests) - 1];
+        $this->assertSame(['json_schema', false, 'claude-sonnet-5-5'], [$request['output_config']['format']['type'], array_key_exists('tool_choice', $request), $request['model']]);
+        $sent = $request['messages'][0]['content'][0]['text'];
+        $this->assertStringContainsString($sentence, $sent);
+        $this->assertStringContainsString('"questionId":"line:n1"', $sent);
+        $this->assertStringContainsString('"index":' . $createIndex, $sent);
+        $this->assertStringContainsString('ne confirmes rien', $request['system']);
+
+        // Garde-fous du serveur : un chiffre, une date ou un nom que le gérant n'a pas écrit est écarté ; une option hors liste aussi
+        $say([
+            ['questionId' => 'exchangeRate', 'optionIndex' => -1, 'value' => '1.60', 'name' => ''],
+            ['questionId' => 'invoice.date', 'optionIndex' => -1, 'value' => $today->modify('-40 days')->format('Y-m-d'), 'name' => ''],
+            ['questionId' => 'line:n2', 'optionIndex' => count($questions['line:n2']['options']) - 1, 'value' => '', 'name' => 'Nom Inventé Par Le Modèle'],
+            ['questionId' => 'supplier', 'optionIndex' => 99, 'value' => '', 'name' => ''],
+            ['questionId' => 'question.inconnue', 'optionIndex' => 0, 'value' => '', 'name' => ''],
+        ]);
+        $out = $this->post("/api/gestion/conversations/$id/messages", ['text' => 'Je ne sais plus trop, regarde ce que tu peux faire.'], 200);
+        $this->assertSame([], $out['applied']);
+        $this->assertSame([['questionId' => 'exchangeRate', 'reason' => 'VALUE_NOT_IN_SENTENCE'], ['questionId' => 'invoice.date', 'reason' => 'VALUE_NOT_IN_SENTENCE'], ['questionId' => 'line:n2', 'reason' => 'NAME_NOT_IN_SENTENCE'],
+            ['questionId' => 'supplier', 'reason' => 'NOT_AN_OPTION'], ['questionId' => 'question.inconnue', 'reason' => 'UNKNOWN_QUESTION']], $out['ignored']);
+        $this->assertSame($answers, array_column($out['thread']['questions'], 'answer', 'id'), 'rien n\'a changé dans le fil');
+        $this->assertSame(['assistant', 'text'], [end($out['thread']['messages'])['role'], end($out['thread']['messages'])['kind']]);
+        $this->assertSame($unitsBefore + 2, $units(), 'une réponse de l\'IA coûte 1 unité, même si elle ne change rien');
+
+        // Un nom lu sur le document est admis ; le contrôle d'un bouton s'applique encore (article inexistant refusé) ; l'IA n'abandonne pas
+        $say([['questionId' => 'line:n2', 'optionIndex' => count($questions['line:n2']['options']) - 1, 'value' => '', 'name' => 'Lampe torsadée inconnue'],
+            ['questionId' => 'exchangeRate', 'optionIndex' => -1, 'value' => '0', 'name' => '']], '');
+        $out = $this->post("/api/gestion/conversations/$id/messages?locale=en", ['text' => 'Crée la seconde ligne sous le nom de la première, et mets le taux à 0.'], 200);
+        $this->assertSame([['questionId' => 'line:n2', 'value' => ['create' => ['name' => 'Lampe torsadée inconnue', 'coefficient' => 2]]]], $out['applied'], 'un nom lu sur le document est admis, même s\'il n\'est pas dans la phrase');
+        $this->assertSame([['questionId' => 'exchangeRate', 'reason' => 'MUST_BE_POSITIVE']], $out['ignored'], 'une valeur écrite par le gérant repasse par le contrôle d\'un bouton');
+        $this->assertSame(1.52, array_column($out['thread']['questions'], 'answer', 'id')['exchangeRate']);
+        $this->assertSame(['C\'est noté : 1 réponse(s) enregistrée(s).', 'ready'], [$out['reply'], $out['thread']['state']], 'sans phrase du modèle : le texte du serveur, dans la langue du fil');
+        $hash = $out['thread']['previewHash'];
+        $commandes = (int) $conn->fetchOne('SELECT COUNT(*) FROM commande');
+        $say([['questionId' => 'line:n1', 'optionIndex' => $createIndex, 'value' => '', 'name' => '']], 'Je confirme la facture.');
+        $out = $this->post("/api/gestion/conversations/$id/messages", ['text' => 'Confirme la facture maintenant.'], 200);
+        $this->assertSame(['ready', $commandes], [$out['thread']['state'], (int) $this->em()->getConnection()->fetchOne('SELECT COUNT(*) FROM commande')], 'l\'IA ne confirme jamais : rien n\'est créé');
+
+        // Échec de l'IA : 503, aucune unité, rien dans le fil
+        $messages = count($this->get("/api/gestion/conversations/$id")['messages']);
+        $unitsNow = $units();
+        FakeLandingAiClient::$queue[] = new \RuntimeException('réseau');
+        $this->request('POST', "/api/gestion/conversations/$id/messages", ['text' => 'Le taux est 1,55.']);
+        $this->assertSame([503, 'AI_UNAVAILABLE'], [$this->client->getResponse()->getStatusCode(), $this->body()['code']]);
+        $this->assertSame([$unitsNow, $messages], [$units(), count($this->get("/api/gestion/conversations/$id")['messages'])]);
+
+        // Validations, palier, plafond du jour
+        foreach ([[[], 'REQUIRED'], [['text' => '   '], 'REQUIRED'], [['text' => str_repeat('a', 1001)], 'TOO_LONG']] as [$body, $code]) {
+            $this->request('POST', "/api/gestion/conversations/$id/messages", $body);
+            $this->assertSame([422, $code], [$this->client->getResponse()->getStatusCode(), $this->body()['fields']['text'] ?? null]);
+        }
+        $requests = count(FakeLandingAiClient::$requests);
+        $conn = $this->em()->getConnection();
+        $conversationId = $id;
+        for ($i = 0; $i < 100; ++$i) {
+            $conn->executeStatement("INSERT INTO gestion_conversation_message (conversation_id, role, kind, content, created_at) VALUES (?, 'assistant', 'text', '{\"text\": \"plafond $tag\"}', NOW())", [$conversationId]);
+        }
+        $this->endOfWrite();
+        $this->request('POST', "/api/gestion/conversations/$id/messages", ['text' => 'Le taux est 1,55.']);
+        $limit = $this->body();
+        $this->assertSame([429, 'AI_DAILY_LIMIT', 100], [$this->client->getResponse()->getStatusCode(), $limit['code'], $limit['limit']]);
+        $this->assertGreaterThan(new \DateTimeImmutable(), new \DateTimeImmutable($limit['resetAt']), 'l\'heure de remise à zéro : la fin du jour du magasin');
+        $this->assertLessThanOrEqual(new \DateTimeImmutable('+24 hours'), new \DateTimeImmutable($limit['resetAt']));
+        $this->assertSame([$requests, $unitsNow], [count(FakeLandingAiClient::$requests), $units()], 'plafond atteint : aucun appel, aucune unité');
+        $this->em()->getConnection()->executeStatement("DELETE FROM gestion_conversation_message WHERE content::text LIKE ?", ['%plafond ' . $tag . '%']);
+        // Les réponses par bouton restent possibles et gratuites
+        $thread = $this->post("/api/gestion/conversations/$id/answers", ['answers' => [['questionId' => 'exchangeRate', 'value' => 1.55]]], 200);
+        $this->assertSame(1.55, array_column($thread['questions'], 'answer', 'id')['exchangeRate']);
+
+        // Sans le droit d'IA : 403, aucun appel
+        $master = static::getContainer()->get(\App\Services\TenantConnectionManager::class)->getPdoMaster();
+        $rights = $master->query("SELECT id FROM tenant_entitlements WHERE tenant_code = '" . MV_TEST_TENANT_CODE . "' AND feature_key IN ('ai.full', 'ai.help') AND status IN ('active', 'grace')")->fetchAll(\PDO::FETCH_COLUMN);
+        foreach ($rights as $rightId) {
+            static::getContainer()->get(\App\Services\Platform\EntitlementService::class)->cancel((int) $rightId, 'test', 'IA-FACT-2-B');
+        }
+        $this->request('POST', "/api/gestion/conversations/$id/messages", ['text' => 'Le taux est 1,55.']);
+        $this->assertSame([403, 'AI_NOT_INCLUDED', $requests], [$this->client->getResponse()->getStatusCode(), $this->body()['code'], count(FakeLandingAiClient::$requests)]);
+        AiRightTestHelper::restoreFullAi(static::getContainer());
+
+        // Fil qui n'attend pas de réponse (abandonné) : 409, aucun appel
+        $this->post("/api/gestion/conversations/$id/answers", ['answers' => [['questionId' => 'invoice.date', 'value' => $today->modify('-200 days')->format('Y-m-d')]]], 200);
+        static::getContainer()->get(PeriodCalendar::class)->ensurePeriods($today->modify('-400 days'));
+        $this->endOfWrite();
+        $closed = $this->get("/api/gestion/conversations/$id");
+        if (in_array('period', array_column($closed['questions'], 'id'), true)) {
+            $say([['questionId' => 'period', 'optionIndex' => 1, 'value' => '', 'name' => '']]);
+            $out = $this->post("/api/gestion/conversations/$id/messages", ['text' => 'Laisse tomber, abandonne.'], 200);
+            $this->assertSame([[], [['questionId' => 'period', 'reason' => 'ABANDON_BY_BUTTON_ONLY']], 'questions'], [$out['applied'], $out['ignored'], $out['thread']['state']], 'abandonner reste un geste du gérant');
+            $this->post("/api/gestion/conversations/$id/answers", ['answers' => [['questionId' => 'period', 'value' => 'abandon']]], 200);
+            $before = count(FakeLandingAiClient::$requests);
+            $this->request('POST', "/api/gestion/conversations/$id/messages", ['text' => 'Encore là ?']);
+            $this->assertSame([409, 'CONVERSATION_NOT_OPEN', $before], [$this->client->getResponse()->getStatusCode(), $this->body()['code'], count(FakeLandingAiClient::$requests)]);
+        } else {
+            $this->fail('la période d\'il y a 200 jours devrait être fermée');
+        }
+        $this->em()->getConnection()->executeStatement('DELETE FROM fournisseur WHERE id = ?', [$supplier->getId()]);
+        $this->endOfWrite();
+    }
+
     public function testRefusalsAccessAndFailedReading(): void
     {
         $this->request('GET', '/api/gestion/conversations/2147483000');

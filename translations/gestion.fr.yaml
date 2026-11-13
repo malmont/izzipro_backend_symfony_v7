@@ -472,6 +472,9 @@ sequences:
 
 # Facture par conversation (lot IA-FACT-1, 13/11/2026) : docs/conversation-gestion.md
 conversation:
+    reply:
+        nothing: "Je n'ai trouvé dans votre phrase aucune réponse aux questions ouvertes. Répondez par les boutons, ou reformulez."
+        applied: "C'est noté : %count% réponse(s) enregistrée(s)."
     summary:
         read: 'Facture %number% du %date%, fournisseur %supplier% : %lines% ligne(s), total %total% %currency%.'
         questions: 'Il me manque %count% réponse(s) avant de vous montrer ce qui sera créé.'
