@@ -90,7 +90,9 @@ séquence à faire une fois. `label` traduit avec `?locale` (« Fall 2026 ») ; 
   sans action de la gestion : `readiness.<clé de l'étape>`). `preparable` : la conversation de la gestion sait préparer l'action (aperçu,
   empreinte, confirmation, annulation). Vrai pour `document.invoice.confirm` depuis le lot IA-FACT-1 et, depuis le lot IA-ACT-1, pour
   toute action du catalogue du fil (`ActionCatalog::KEYS` ; dans le guide : `supplier.create`, et depuis le lot IA-ACT-2
-  `cash.balance.create`, `cash.movement.create`, `trip.create` ; `docs/conversation-gestion.md` § 9 et 10) ; faux pour les autres.
+  `cash.balance.create`, `cash.movement.create`, `trip.create`, et depuis le lot IA-ACT-3 `fiscal_year.set`, `periods.calendar.set`,
+  `product.cost.set` ; `docs/conversation-gestion.md` § 9 à 11) ; faux pour les autres (`period.close`, `purchase.create`,
+  `preparation.validate`, `recovery.*`, et les étapes sans action de la gestion).
   `params` (lot IA-ACT-1) : les paramètres à passer à l'ouverture du fil, `POST /api/gestion/conversations { action: key, params }` ;
   vide, il est rendu `[]` comme `screen.params` ; les étapes « frais fixes » rendent `{ fixedCost: true, recurrence: "monthly" }`.
 - `figures` : `[{ key, label, value, unit }]`, calculés par le serveur ; `unit` : `money` (cents de la devise du site), `percent`,

@@ -1,4 +1,4 @@
-# Facture et actions par conversation — application de gestion (lots IA-FACT-1, IA-FACT-2-A, IA-FACT-2-B, IA-ACT-1 et IA-ACT-2, 13/11/2026)
+# Facture et actions par conversation — application de gestion (lots IA-FACT-1, IA-FACT-2-A, IA-FACT-2-B, IA-ACT-1, IA-ACT-2 et IA-ACT-3, 13/11/2026)
 
 Un **fil de conversation gardé par le serveur** mène une facture fournisseur de la pièce jointe à la commande : attente de la lecture dans
 le fil, résumé, questions sur ce qui manque, aperçu, confirmation, **annulation d'un bloc**. Règle du propriétaire : *aucune écriture
@@ -280,8 +280,9 @@ L'IA ne confirme, n'annule et n'abandonne pas.
 
 Code : `Services/Conversation/ActionThreadService` (ouverture, fil, confirmation, annulation, abandon), `Services/Conversation/Action/`
 (catalogue et actions) ; `GestionConversationService` garde les réponses par bouton et la phrase libre, communes aux deux sortes de fil.
-Tests : `tests/Functional/Gestion/ActionConversationApiTest.php`. Suite : IA-ACT-2 (§ 10), puis IA-ACT-3 (coût d'achat d'un article,
-mois de début d'exercice, calendrier des périodes, clôture d'une période).
+Tests : `tests/Functional/Gestion/ActionConversationApiTest.php`. Suite : IA-ACT-2 (§ 10), IA-ACT-3 (§ 11). La clôture d'une période
+(`period.close`) aura son lot à part : la réouverture existante n'en est pas l'inverse exact, et l'action ne sera préparable qu'avec une
+annulation exacte.
 
 ## 10. Trésorerie et voyage (lot IA-ACT-2, 13/11/2026)
 
@@ -324,3 +325,53 @@ geste du gérant.
 
 Code : `Action/CashBalanceCreateAction`, `CashMovementCreateAction`, `TripCreateAction`. Tests : `ActionConversationApiTest`
 (`testACashBalanceAPlannedMovementAndATripAreEachPreparedAndUndone`, `testANegativeBalanceIsOnlyReadFromAnExplicitSign`).
+
+## 11. Exercice, découpage des périodes, coût d'achat (lot IA-ACT-3, 13/11/2026)
+
+Trois actions de plus au catalogue (dix en tout), même fil, mêmes routes, sans migration. Clés du guide des séquences. Ce sont des
+réglages et une correction : aucune valeur n'est proposée d'office pour le mois et le découpage, le gérant choisit ; choisir la valeur
+déjà en place rend `issues: [{ path, code: UNCHANGED }]` (rien à confirmer).
+
+| Clé | Paramètres (questions) | Écrit par | Annulation, et ses refus |
+|---|---|---|---|
+| `fiscal_year.set` | `startMonth` (1 à 12 ; options `{ value, label, aligned, current }` : `aligned` = le mois tombe au début d'une période du site, `current` = le mois en place). Refus `MUST_BE_INTEGER`, `OUT_OF_RANGE` | `GestionFiscalYearService::put` (celui de `PUT /api/gestion/reglages/exercice`, journal `gestion-reglages-exercice`) | remet le mois d'avant, par le même service ; `FISCAL_YEAR_CHANGED` |
+| `periods.calendar.set` | `frequency` (`quarterly`, `semester`, `monthly` ; options `{ value, label, current }`). Refus `INVALID_FREQUENCY` | le chemin de la fiche Entreprise (`UpdateEntrepriseUseCase`, registre `gestion.periods`, journal `entreprise`) | remet la valeur d'avant (y compris « rien d'enregistré ») ; `CALENDAR_CHANGED`, `PERIODS_CREATED` (une période a déjà été créée avec le nouveau découpage : le remettre laisserait une période au mauvais format) |
+| `product.cost.set` | `productId` (les articles sans coût, 50 premiers par nom, options `{ value, label, code, price }` ; un autre identifiant valide est accepté ; refus `PRODUCT_NOT_FOUND`), `cost` (cents, > 0). **Un article par fil** | `GestionProductCostService::set` : le coût de la fiche **seul**, journal `products` (champ `purchasePrice`) | remet le coût d'avant (vide compris), par le même service, au journal aussi ; `COST_CHANGED` (modifié depuis, ou article disparu) |
+
+**Aperçus.**
+- `fiscal_year.set` : `{ before: { startMonth, label }, after: { startMonth, label }, exercise: { label, from, to, text }, aligned,
+  warning }`. `exercise` est l'exercice qui contient aujourd'hui avec le nouveau mois. **Mois non aligné** : `warning: { code:
+  NOT_ALIGNED, period: { key, name, from, to }, cutDate, text }` dit quelle période serait coupée et à quelle date : « L'exercice
+  commencerait le 1er février 2026, au milieu de la période « Hiver 2025-2026 » (du 1er décembre 2025 au 28 février 2026) : cette
+  période serait coupée en deux, une partie sur chaque exercice. » L'action reste confirmable : c'est un avertissement, pas un refus.
+- `periods.calendar.set` : `{ before: { frequency, label, confirmed }, after: { frequency, label }, appliesFrom, text }`.
+  **Ce que fait vraiment le réglage** : les périodes déjà créées ne bougent pas, et la période qui suit celle en cours est déjà créée ;
+  le nouveau découpage commence donc le lendemain de la fin de la dernière période existante (`appliesFrom`), ce que `text` dit en
+  clair : « Les périodes déjà créées ne changent pas. Le nouveau découpage s'applique à partir du 1er juin 2027. » Confirmer le
+  découpage par défaut quand rien n'est enregistré (`before.confirmed: false`) est une vraie écriture, qui fait avancer l'étape du
+  cheminement ; `appliesFrom` vaut alors `null` et `text` dit que le découpage ne change pas.
+- `product.cost.set` : `{ product: { id, name, code }, currency, cost: { before, after }, price, margin: { amount, rate,
+  pricesIncludeTax } | null, effect: { openPeriods, salesValued, currentPeriod: { id, name, cogsBefore, cogsAfter } | null,
+  closedPeriodsFrozen: true, text } }`.
+  - **Le prix de vente n'est pas touché** (`price`, rendu pour mémoire). `Product::setPurchasePrice()` recalcule le prix (coût ×
+    coefficient) : c'est la règle de la création d'un article, pas celle d'une correction de coût. Ici le prix reste une décision du
+    gérant, jamais un effet de bord ; un test le garde (article à coefficient 2 : le prix reste 50,00, pas 40,00).
+  - `margin` : marge par unité et taux **sur le prix de vente**, même convention que l'écran des prix (`docs/prix-gestion.md`) ;
+    `pricesIncludeTax` rappelle que la marge comprend la taxe quand les prix du site sont taxes comprises. `null` sans prix de vente.
+  - `effect` : calculé **aux règles du résultat de période** (`PeriodResultCalculator::costFigures`, le coût de la fiche étant simulé
+    le temps du calcul, en lecture seule ; un coût de ligne d'achat garde la priorité). `salesValued` = unités vendues dans les périodes
+    **ouvertes** déjà commencées qui passent de « vente sans coût connu » à valorisées ; `currentPeriod` = le coût des articles vendus
+    de la période en cours, avant et après. **Les périodes fermées sont figées** : `text` le dit, et leurs ventes ne sont pas comptées.
+
+**`preview.rows`** (§ 9) : `before` sur le mois, sur le découpage et sur le coût quand l'article en avait déjà un.
+
+**Depuis le guide.** Les étapes `management.fiscal_year`, `management.periods_calendar`, `management.purchase_cost` et les étapes
+`purchase_costs` des séquences qui reviennent rendent `preparable: true`. Limite connue de l'étape « mois de début d'exercice » du
+cheminement : janvier est enregistré comme « rien » ; choisir janvier sur un site déjà en janvier est donc `UNCHANGED`, et l'étape ne
+passe pas à « fait » par ce fil.
+
+**Aides de mise en clair** (`AbstractGestionAction`) : `longDate` (« 1er avril 2027 », « April 1, 2027 »), `month`, `amount`.
+
+Code : `Action/FiscalYearSetAction`, `PeriodsCalendarSetAction`, `ProductCostSetAction`, `Services/GestionProductCostService`,
+`PeriodResultCalculator::costFigures`. Tests : `ActionConversationApiTest::testAFiscalYearAPeriodSplitAndAPurchaseCostAreEachPreparedAndUndone` ;
+`ConversationApiTest` garde que l'empreinte du fil d'une facture ne dépend pas de la langue.

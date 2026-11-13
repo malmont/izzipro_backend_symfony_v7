@@ -734,7 +734,9 @@ class ActionConversationApiTest extends WebTestCase
                 [$ready['state'], $ready['preview']['product'], $ready['preview']['currency'], $ready['preview']['cost'], $ready['preview']['price'], $ready['preview']['margin']]);
             $this->assertSame([3, ['id' => (int) $period->getId(), 'name' => $periodName, 'cogsBefore' => $cogsAll, 'cogsAfter' => $cogsAll + 6000], true, $effect],
                 [$ready['preview']['effect']['salesValued'], $ready['preview']['effect']['currentPeriod'], $ready['preview']['effect']['closedPeriodsFrozen'], $ready['preview']['effect']['text']], 'la vente de la période fermée ne compte pas');
-            $this->assertGreaterThanOrEqual(1, $ready['preview']['effect']['openPeriods']);
+            $openStarted = count(array_filter($this->em()->getRepository(\App\Entity\Collections::class)->findBy(['kind' => 'period']),
+                fn ($p) => !$p->isDel() && !$calendar->isClosed($p) && $p->getStartDateCollection()->format('Y-m-d') <= $today->format('Y-m-d')));
+            $this->assertSame([$openStarted, true], [$ready['preview']['effect']['openPeriods'], $openStarted >= 1], 'périodes ouvertes déjà commencées : ni fermées, ni à venir');
             $this->assertSame([['label' => 'Article', 'value' => "Vase $tag", 'unit' => 'text'], ['label' => 'Coût d\'achat', 'value' => 2000, 'unit' => 'money', 'currency' => 'CAD'], ['label' => 'Prix de vente (inchangé)', 'value' => 5000, 'unit' => 'money', 'currency' => 'CAD'],
                 ['label' => 'Marge par unité', 'value' => 3000, 'unit' => 'money', 'currency' => 'CAD'], ['label' => 'Taux de marge sur le prix de vente', 'value' => '60,00 %' . ($includesTax ? ' (prix taxes comprises : la marge comprend la taxe)' : ''), 'unit' => 'text'],
                 ['label' => 'Effet sur vos chiffres', 'value' => $effect, 'unit' => 'text']], $ready['preview']['rows']);
@@ -764,10 +766,25 @@ class ActionConversationApiTest extends WebTestCase
             $this->post('/api/gestion/conversations/' . $replace['id'] . '/confirm', ['previewHash' => $replace['previewHash']], 201);
             $this->assertSame(['restored' => ['productId' => $productId, 'cost' => 1000]], $this->post('/api/gestion/conversations/' . $replace['id'] . '/undo', [], 200)['undone']);
             $this->assertSame([1000, 5000], array_map('intval', array_values($conn()->fetchAssociative('SELECT purchase_price, price FROM product WHERE id = ?', [$productId]))));
+            // un coût de ligne d'achat garde la priorité sur le coût de la fiche : poser un coût de fiche ne change alors aucun chiffre
+            $typeId = (int) ($this->em()->getRepository(TypeFournisseur::class)->findOneBy(['name' => 'Autre']) ?? $this->create(TypeFournisseur::class, ['name' => 'Autre']))->getId();
+            $supplierId = (int) $this->post('/api/fournisseurs', ['name' => "Potier $tag", 'typeFournisseur' => $typeId], 201)['id'];
+            $commandeId = (int) $this->post('/api/collections/' . $period->getId() . '/commandes', ['budget' => 1000, 'date' => $today->format('Y-m-d') . ' 00:10:00', 'name' => "Achat $tag", 'fournisseur' => ['id' => $supplierId]], 201)['id'];
+            $this->request('POST', "/api/commandes/$commandeId/products/rattacher", ['products' => [['productId' => $productId, 'purchasePrice' => 900, 'quantity' => 5]]]);
+            $this->assertContains($this->client->getResponse()->getStatusCode(), [200, 201], substr((string) $this->client->getResponse()->getContent(), 0, 300));
+            $this->em();
+            $this->assertSame(['cogs' => 2700, 'unknownItems' => 0], $calculator->costFigures($from, $to, [$productId]), '3 unités au coût de la ligne d\'achat (9,00)');
+            $lined = $this->post('/api/gestion/conversations', ['action' => 'product.cost.set', 'params' => ['productId' => $productId, 'cost' => 1700]], 201);
+            $this->assertSame([0, true], [$lined['preview']['effect']['salesValued'], $lined['preview']['effect']['currentPeriod']['cogsBefore'] === $lined['preview']['effect']['currentPeriod']['cogsAfter']], 'le coût de la ligne d\'achat l\'emporte : aucun chiffre ne bouge');
+            $this->post('/api/gestion/conversations/' . $lined['id'] . '/abandon', [], 200);
             // l'article supprimé entre-temps : un fil en cours le voit, et une confirmation ne peut plus être annulée
             $this->post('/api/gestion/conversations/' . $replace['id'] . '/confirm', ['previewHash' => $this->get('/api/gestion/conversations/' . $replace['id'])['previewHash']], 201);
             $gone = $this->post('/api/gestion/conversations', ['action' => 'product.cost.set', 'params' => ['productId' => $productId, 'cost' => 1800]], 201);
             $this->assertSame('ready', $gone['state']);
+            $conn()->executeStatement('DELETE FROM commande_line WHERE product_id = ?', [$productId]);
+            $conn()->executeStatement('UPDATE product SET commande_id = NULL WHERE id = ?', [$productId]);
+            $conn()->executeStatement('DELETE FROM commande WHERE id = ?', [$commandeId]);
+            $conn()->executeStatement('DELETE FROM fournisseur WHERE id = ?', [$supplierId]);
             $conn()->executeStatement('DELETE FROM order_items WHERE product_variant_id = ?', [$variantId]);
             $conn()->executeStatement('DELETE FROM "order" WHERE id IN (?, ?)', $orders);
             $conn()->executeStatement('DELETE FROM product_variant WHERE id = ?', [$variantId]);
