@@ -8,9 +8,11 @@ use App\Gestion\Analysis\AnalysisCatalog;
 use App\Gestion\Lexique\LexiqueCatalog;
 use App\Gestion\Lexique\LexiqueIllustration;
 use App\Gestion\Lexique\LexiqueTexts;
+use App\Gestion\Lexique\ScreenGuides;
 use App\Gestion\Message\AnswerConsoleQuestionMessage;
 use App\Gestion\MessageHandler\AnswerConsoleQuestionHandler;
 use App\Gestion\Services\Console\ConsoleResponder;
+use App\Gestion\Services\Console\ConsoleScreens;
 use App\Gestion\Services\PeriodCalendar;
 use App\Services\TenantEntityManagerProvider;
 use App\Tests\Fake\FakeLandingAiClient;
@@ -152,6 +154,27 @@ class LexiqueApiTest extends WebTestCase
         foreach (LexiqueCatalog::FIGURE_TERMS as $figure => $term) {
             $this->assertTrue(LexiqueCatalog::has($term), "chiffre $figure : notion « $term » inconnue");
         }
+        // RÈGLE (lot A-4) : le libellé d'une carte reprend le terme du lexique de sa notion (« Taux de marque », jamais « Taux de marge »
+        // sous une leçon « Taux de marque »), dans les deux langues. Vérifié sur toute la table, puis sur les chiffres rendus.
+        foreach (LexiqueCatalog::FIGURE_TERMS as $figure => $term) {
+            $name = $figure === 'year.overview.netResult' ? 'businessResult' : (str_contains($figure, '.') ? substr($figure, (int) strrpos($figure, '.') + 1) : $figure);
+            foreach (['fr' => $byKey, 'en' => $byKeyEn] as $locale => $entries) {
+                $label = $translator->trans("console.figures.$name", ['%days%' => '30'], 'gestion', $locale);
+                $this->assertNotSame("console.figures.$name", $label, "$figure ($locale) : libellé du chiffre");
+                $this->assertNotFalse(mb_stripos($label, $entries[$term]['term']), "$figure ($locale) : le libellé « $label » doit reprendre le terme « {$entries[$term]['term']} » de sa notion");
+            }
+        }
+        foreach (array_keys(AnalysisCatalog::DEFINITIONS) as $analysis) {
+            foreach (['fr' => $byKey, 'en' => $byKeyEn] as $locale => $entries) {
+                $params = $catalog->accept($analysis, ['term' => 'marge', 'screen' => 'tresorerie']);
+                foreach ($params === null ? [] : $catalog->run($analysis, $params, $locale)['figures'] as $f) {
+                    if (isset($f['term'])) {
+                        $this->assertNotFalse(mb_stripos((string) $f['label'], $entries[$f['term']]['term']), "$analysis.{$f['id']} ($locale) : « {$f['label']} » / « {$entries[$f['term']]['term']} »");
+                    }
+                }
+            }
+        }
+        $this->em();
         // Chaque chiffre des analyses porte la notion qui l'explique ; le résultat de l'exercice n'est pas celui d'une période
         $terms = fn (string $analysis): array => array_column($catalog->run($analysis, $catalog->accept($analysis, []), 'fr')['figures'], 'term', 'id');
         $sales = $terms('sales.overview');
@@ -283,6 +306,10 @@ class LexiqueApiTest extends WebTestCase
         $illustration = static::getContainer()->get(LexiqueIllustration::class);
         $of = fn (string $key, array $values, string $locale = 'fr', string $label = 'du 1er au 13 novembre 2026'): ?string => $plain($illustration->of($key, array_map(fn (string $id, mixed $v) => ['id' => "a1.$id", 'value' => $v, 'unit' => 'x'], array_keys($values), $values), ['label' => $label], $locale));
         $this->assertSame("Votre taux de marque, du 1er au 13 novembre 2026 : 44,2 %. Sur 100,00 $ vendus, il vous reste 44,20 $ après le coût d'achat.", $of('taux-de-marque', ['grossMarginRate' => 44.2, 'revenue' => 100000]));
+        // un nombre dérivé se calcule sur le nombre AFFICHÉ juste avant : la part gardée sur le taux à une décimale (vu sur demo : « 43,9 % … 43,92 $ »)
+        $this->assertSame(["Votre taux de marque, sur la période Automne 2026 : 43,9 %. Sur 100,00 $ vendus, il vous reste 43,90 $ après le coût d'achat.", "Votre taux de marque, sur la période Automne 2026 : 44 %. Sur 100,00 $ vendus, il vous reste 44,00 $ après le coût d'achat."],
+            [$plain($illustration->of('taux-de-marque', [['id' => 'grossMarginRate', 'value' => 43.92], ['id' => 'revenue', 'value' => 117070]], ['label' => 'Automne 2026', 'phrase' => 'sur la période Automne 2026'], 'fr')),
+                $plain($illustration->of('taux-de-marque', [['id' => 'grossMarginRate', 'value' => 43.96], ['id' => 'revenue', 'value' => 117070]], ['label' => 'Automne 2026', 'phrase' => 'sur la période Automne 2026'], 'fr'))]);
         $this->assertSame([null, null, null], [$of('taux-de-marque', ['grossMarginRate' => 44.2, 'revenue' => 0]), $of('taux-de-marque', ['revenue' => 100000]), $of('promotion', ['revenue' => 100000])], 'aucune vente, chiffre absent, notion sans illustration : rien');
         $this->assertSame(['Chez vous, du 1er au 13 novembre 2026 : 50,00 $ de ventes en 1 commande, soit un panier moyen de 50,00 $.', 'Chez vous, du 1er au 13 novembre 2026 : 3 000,00 $ de ventes en 60 commandes, soit un panier moyen de 50,00 $.', null],
             [$of('panier-moyen', ['averageBasket' => 5000, 'revenue' => 5000, 'orders' => 1]), $of('panier-moyen', ['averageBasket' => 5000, 'revenue' => 300000, 'orders' => 60]), $of('panier-moyen', ['averageBasket' => 0, 'revenue' => 0, 'orders' => 0])]);
@@ -397,7 +424,7 @@ class LexiqueApiTest extends WebTestCase
         $this->assertArrayNotHasKey('lesson', $answer, 'la marque reste au serveur');
         // Ce que le modèle a lu à l'appel 1 : le lexique (clé, terme, synonymes) et l'analyse lexique.term, 11e du catalogue
         $first = $payload(0);
-        $this->assertSame([62, ['key' => 'taux-de-marque', 'term' => 'Taux de marque', 'synonymes' => ['taux de marge']], 11], [count($first['lexique']), array_column($first['lexique'], null, 'key')['taux-de-marque'], count($first['analyses'])]);
+        $this->assertSame([62, ['key' => 'taux-de-marque', 'term' => 'Taux de marque', 'synonymes' => ['taux de marge']], 12], [count($first['lexique']), array_column($first['lexique'], null, 'key')['taux-de-marque'], count($first['analyses'])]);
         $this->assertContains('lexique.term', array_column($first['analyses'], 'key'));
         $this->assertStringContainsString('une question de DÉFINITION', (string) FakeLandingAiClient::$requests[0]['system']);
         $schema = FakeLandingAiClient::$requests[0]['output_config']['format']['schema']['properties']['analyses']['items'];
@@ -471,6 +498,145 @@ class LexiqueApiTest extends WebTestCase
         // L'ordre des leçons est celui du lexique, pas celui des cartes : le panier moyen passe avant les commandes
         $figures['figureIds'] = ['a1.orders', 'a1.averageBasket'];
         $this->assertSame(['panier-moyen', 'commandes'], array_column(array_values(array_filter($ask(['mode' => 'learn'])[0]['blocks'], fn (array $b) => $b['type'] === 'lesson')), 'key'));
+    }
+
+    /**
+     * Lot W2-APPRENDRE A-4 (13/11/2026) : le guide de chaque écran (à quoi il sert, ce que veulent dire ses chiffres, quoi faire
+     * ensuite), écrit par le serveur dans les deux langues, servi sans IA ; dans la console, « explique-moi cet écran » seul est
+     * assemblé par le serveur (0 unité), l'écran venant toujours du contexte ; un état qui n'est pas un jugement se dit par une phrase.
+     */
+    public function testScreenGuidesAreServedForFreeAndTheConsoleExplainsTheScreen(): void
+    {
+        $conn = fn () => $this->em()->getConnection();
+        $usage = fn (): array => array_column($conn()->fetchAllAssociative('SELECT status, COUNT(*) AS n FROM ai_usage WHERE id > ? GROUP BY status ORDER BY status', [$this->usageMark]), 'n', 'status');
+        $none = ['periodId' => null, 'productId' => null, 'year' => null, 'days' => null, 'range' => null, 'term' => null];
+        $last = fn (int $id): array => array_slice($this->get("/api/gestion/console/conversations/$id")['messages'], -1)[0];
+        $payload = fn (int $i): array => json_decode(FakeLandingAiClient::$requests[$i]['messages'][0]['content'][0]['text'], true);
+
+        // 1. La route : le guide d'un écran, sans IA
+        $guide = $this->get('/api/gestion/ecrans/tresorerie/guide');
+        $this->assertSame(['screen', 'title', 'theme', 'purpose', 'points', 'next'], array_keys($guide));
+        $this->assertSame(['tresorerie', 'Trésorerie', ['key' => 'argent', 'label' => 'Argent']], [$guide['screen'], $guide['title'], $guide['theme']]);
+        $this->assertStringStartsWith("Votre trésorerie : l'argent sur votre compte", $guide['purpose']);
+        $this->assertSame([['label', 'text', 'term'], ['solde', 'point-bas', 'seuil', 'rapprochement'], 'Solde saisi'], [array_keys($guide['points'][0]), array_column($guide['points'], 'term'), $guide['points'][0]['label']]);
+        $this->assertStringStartsWith('« Saisir un solde »', $guide['next']);
+        $english = $this->get('/api/gestion/ecrans/tresorerie/guide?locale=en');
+        $this->assertSame(['Entered balance', ['solde', 'point-bas', 'seuil', 'rapprochement'], 'Money'], [$english['points'][0]['label'], array_column($english['points'], 'term'), $english['theme']['label']]);
+        $this->assertStringStartsWith('Your cash position: the money in your account', $english['purpose']);
+        // un code du premier contrat reprend le guide de l'écran du web qui lui correspond ; un point sans notion du lexique rend term: null
+        $alias = $this->get('/api/gestion/ecrans/periode.resultat/guide');
+        $this->assertSame(['periode.resultat', $this->get('/api/gestion/ecrans/periode/guide')['purpose']], [$alias['screen'], $alias['purpose']]);
+        $this->assertContains(null, array_column($this->get('/api/gestion/ecrans/a-recevoir/guide')['points'], 'term'), '« Reste à recevoir » n\'est pas le « reste » d\'un budget');
+        $this->request('GET', '/api/gestion/ecrans/ecran.inconnu/guide');
+        $this->assertSame([404, 'SCREEN_GUIDE_NOT_FOUND'], [$this->client->getResponse()->getStatusCode(), $this->body()['code']]);
+        $admin = $this->token;
+        $this->token = '';
+        $this->request('GET', '/api/gestion/ecrans/tresorerie/guide');
+        $this->assertSame(401, $this->client->getResponse()->getStatusCode());
+        $this->login(['ROLE_USER']);
+        $this->request('GET', '/api/gestion/ecrans/tresorerie/guide');
+        $this->assertSame(403, $this->client->getResponse()->getStatusCode());
+        $this->token = $admin;
+
+        // 2. GARDE-FOU des textes : les 36 écrans de l'application web ont leur guide, dans les deux langues, et chaque point relié renvoie à une notion du lexique
+        $this->em();
+        $guides = static::getContainer()->get(ScreenGuides::class);
+        $dir = static::getContainer()->getParameter('kernel.project_dir') . '/translations';
+        $files = ['fr' => Yaml::parseFile("$dir/ecrans.fr.yaml"), 'en' => Yaml::parseFile("$dir/ecrans.en.yaml")];
+        $this->assertSame(array_keys($files['fr']), array_keys($files['en']));
+        $this->assertCount(36, $guides->codes(), 'les 36 écrans relevés dans l\'application web');
+        $linked = 0;
+        foreach (array_keys(ConsoleScreens::SCREENS) as $code) {
+            $this->assertTrue($guides->has($code), "$code : un guide (le sien, ou celui de l'écran du web qu'il reprend)");
+            $fr = $guides->guide($code, 'fr');
+            $en = $guides->guide($code, 'en');
+            $this->assertSame([$code, array_column($fr['points'], 'term')], [$fr['screen'], array_column($en['points'], 'term')], "$code : mêmes points dans les deux langues");
+            $this->assertGreaterThanOrEqual(1, count($fr['points']), $code);
+            $this->assertNotSame($fr['purpose'], $en['purpose'], "$code : le guide anglais n'est pas le texte français");
+            foreach (['fr' => $fr, 'en' => $en] as $locale => $g) {
+                foreach ([$g['purpose'], (string) $g['next'], ...array_column($g['points'], 'label'), ...array_column($g['points'], 'text')] as $text) {
+                    $this->assertGreaterThan(1, mb_strlen($text), "$code ($locale) : un texte");
+                    $this->assertDoesNotMatchRegularExpression('/\p{L}\((?:s|es|e|x|nt|ent)\)|\.points\.|\.purpose$|%\w+%/u', $text, "$code ($locale)");
+                }
+                $this->assertGreaterThan(40, mb_strlen($g['purpose']), "$code ($locale) : à quoi sert l'écran");
+            }
+            foreach (['fr' => $fr, 'en' => $en] as $locale => $g) {
+                foreach ($g['points'] as $point) {
+                    if ($point['term'] === null) {
+                        continue;
+                    }
+                    $linked += $locale === 'fr' ? 1 : 0;
+                    $this->assertTrue(LexiqueCatalog::has($point['term']), "$code : notion « {$point['term']} » inconnue du lexique");
+                    // quand le libellé de l'écran diffère du terme du lexique, le texte fait le lien (relecture du chef de projet)
+                    $term = static::getContainer()->get(LexiqueTexts::class)->term($point['term'], $locale);
+                    $this->assertNotFalse(mb_stripos($point['label'] . ' ' . $point['text'], $term), "$code ($locale), point « {$point['label']} » : le libellé ou le texte doit dire « $term »");
+                }
+            }
+        }
+        $this->assertGreaterThanOrEqual(70, $linked, 'la plupart des points renvoient à une notion du lexique');
+        foreach ($files['fr'] as $key => $texts) {
+            $this->assertSame(array_keys($texts['points']), array_keys($files['en'][$key]['points']), "$key : mêmes points dans les deux fichiers");
+        }
+
+        // 3. Console : « Qu'est-ce que je dois regarder ici ? » depuis la Trésorerie. Le guide seul : assemblé par le serveur, 0 unité
+        $balance = (int) $conn()->fetchOne('INSERT INTO gestion_cash_balance (balance_date, amount_cents, created_at, updated_at) VALUES (CURRENT_DATE - 2, 500000, NOW(), NOW()) RETURNING id');
+        $this->endOfWrite();
+        try {
+            $treasury = ['module' => 'gestion', 'screen' => 'tresorerie', 'params' => []];
+            $a = $this->post('/api/gestion/console/messages', ['text' => "Qu'est-ce que je dois regarder ici ?", 'context' => $treasury], 202);
+            // le modèle nomme un autre écran : le serveur ne l'écoute pas, l'écran est celui du contexte
+            FakeLandingAiClient::$queue = [$this->reply(['kind' => 'analyses', 'clarification' => '', 'analyses' => [['key' => 'screen.guide', 'screen' => 'reglages'] + $none]])];
+            $this->runWorker((int) $a['messageId']);
+            $answer = $last((int) $a['conversationId']);
+            $this->assertSame([1, ['failed' => 1], 'done'], [count(FakeLandingAiClient::$requests), $usage(), $answer['state']], 'un seul appel au modèle, aucune unité');
+            $this->assertSame(['guide', 'figures'], array_column($answer['blocks'], 'type'), 'le guide, puis les chiffres du moment de l\'écran');
+            $block = $answer['blocks'][0];
+            $this->assertSame(['type', 'screen', 'title', 'theme', 'purpose', 'points', 'next', 'source'], array_keys($block));
+            $this->assertSame(['tresorerie', 'Trésorerie', $guide['purpose'], $guide['points'], ['screen' => 'ecran', 'route' => 'GET /api/gestion/ecrans/{screen}/guide', 'params' => ['screen' => 'tresorerie']]],
+                [$block['screen'], $block['title'], $block['purpose'], $block['points'], $block['source']], 'le même guide que la route');
+            $this->assertSame([['screen.guide', ['screen' => 'tresorerie']], ['cash.projection', ['days' => 90]]], array_map(fn (array $x) => [$x['key'], $x['params']], $answer['analyses']), 'les chiffres viennent de l\'analyse de l\'écran, avec son horizon');
+            $ids = array_column($answer['blocks'][1]['items'], 'id');
+            $this->assertLessThanOrEqual(6, count($ids));
+            $this->assertContains('a2.balance', $ids);
+            $this->assertSame(1, (int) $conn()->fetchOne("SELECT COUNT(*) FROM gestion_conversation_message WHERE conversation_id = ? AND content::jsonb ->> 'lesson' = 'true'", [$a['conversationId']]));
+            $this->assertStringContainsString('« screen.guide » explique l\'écran', (string) FakeLandingAiClient::$requests[0]['system']);
+            $this->assertSame([12, true], [count($payload(0)['analyses']), in_array('screen.guide', array_column($payload(0)['analyses'], 'key'), true)]);
+            // sans écran : pas de guide ; le serveur demande une précision
+            $b = $this->post('/api/gestion/console/messages', ['text' => "C'est quoi cet écran ?"], 202);
+            FakeLandingAiClient::$queue = [$this->reply(['kind' => 'analyses', 'clarification' => '', 'analyses' => [['key' => 'screen.guide'] + $none]])];
+            $this->runWorker((int) $b['messageId']);
+            $this->assertStringStartsWith('Pouvez-vous préciser votre question ?', $last((int) $b['conversationId'])['blocks'][0]['text']);
+            // le guide ET une analyse : le guide passe devant, le modèle rédige le reste (1 unité) et lit le guide
+            $c = $this->post('/api/gestion/console/messages', ['text' => 'Explique-moi cet écran : ma trésorerie va-t-elle tenir ?', 'context' => $treasury], 202);
+            $requests = count(FakeLandingAiClient::$requests);
+            FakeLandingAiClient::$queue = [$this->reply(['kind' => 'analyses', 'clarification' => '', 'analyses' => [['key' => 'screen.guide'] + $none, ['key' => 'cash.projection'] + $none]]),
+                $this->reply(['blocks' => [['type' => 'text', 'text' => 'Votre trésorerie tient sur la durée regardée.', 'figureIds' => [], 'analysis' => '', 'items' => []]], 'proposals' => []])];
+            $this->runWorker((int) $c['messageId']);
+            $mixed = $last((int) $c['conversationId']);
+            $this->assertSame([['guide', 'text'], 'tresorerie', ['failed' => 2, 'success' => 1]], [array_column($mixed['blocks'], 'type'), $mixed['blocks'][0]['screen'], $usage()]);
+            $sent = $payload($requests + 1)['resultats'][0]['guide'];
+            $this->assertSame([['ecran', 'role', 'points'], 'Trésorerie', ['libelle', 'texte']], [array_keys($sent), $sent['ecran'], array_keys($sent['points'][0])]);
+            $this->assertStringContainsString('« guide » décrit l\'écran', (string) FakeLandingAiClient::$requests[$requests + 1]['system']);
+            // la question suivante lit le guide dans l'échange
+            $d = $this->post('/api/gestion/console/messages', ['text' => 'Et le seuil ?', 'conversationId' => $a['conversationId'], 'context' => $treasury], 202);
+            FakeLandingAiClient::$queue = [$this->reply(['kind' => 'analyses', 'clarification' => '', 'analyses' => [['key' => 'lexique.term', 'term' => 'seuil'] + $none]])];
+            $this->runWorker((int) $d['messageId']);
+            $this->assertStringStartsWith("Trésorerie : Votre trésorerie : l'argent sur votre compte", $payload(count(FakeLandingAiClient::$requests) - 1)['echange'][1]['text']);
+        } finally {
+            $conn()->executeStatement('DELETE FROM gestion_cash_balance WHERE id = ?', [$balance]);
+        }
+
+        // 4. Un état qui n'est pas un jugement est donné au modèle par une PHRASE entière ; un jugement, par son libellé en minuscule
+        $responder = static::getContainer()->get(ConsoleResponder::class);
+        $state = new \ReflectionMethod(ConsoleResponder::class, 'state');
+        $state->setAccessible(true);
+        $of = fn (string $id, string $code, string $lower, string $locale = 'fr'): string => $state->invoke($responder, ['id' => $id, 'code' => $code], $lower, $locale);
+        $this->assertSame(["Aucun budget n'est prévu pour cette période", "Aucun solde n'a encore été saisi", 'correct', 'dépassé', 'à monter', 'No budget is planned for this period', 'No balance has been entered yet', 'fine'],
+            [$of('a3.budgetStatus', 'none', 'sans prévu'), $of('a1.cashStatus', 'no_balance', 'aucun solde saisi'), $of('a1.cashStatus', 'ok', 'correct'), $of('a3.budgetStatus', 'over', 'dépassé'), $of('a1.verdict', 'raise', 'à monter'),
+                $of('a3.budgetStatus', 'none', 'no plan', 'en'), $of('a1.cashStatus', 'no_balance', 'no balance entered', 'en'), $of('a1.cashStatus', 'ok', 'fine', 'en')]);
+        $rules = new \ReflectionMethod(\App\Gestion\Services\Console\ConsoleModel::class, 'systemWrite');
+        $rules->setAccessible(true);
+        $this->assertStringContainsString('reprends cette phrase telle quelle', $rules->invoke(static::getContainer()->get(\App\Gestion\Services\Console\ConsoleModel::class), 'français'));
     }
 
     // ---- outils --------------------------------------------------------------------------------------------------------------------

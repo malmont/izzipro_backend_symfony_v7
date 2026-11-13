@@ -183,7 +183,7 @@ class ConsoleApiTest extends WebTestCase
         $first = json_decode(FakeLandingAiClient::$requests[0]['messages'][0]['content'][0]['text'], true);
         // Lot W2-b : l'écran est traduit par le serveur (titre, thème, analyses par défaut avec les paramètres de l'écran)
         $this->assertSame(['Fais le bilan de mes nouveaux articles', ['code' => 'articles', 'titre' => 'Articles', 'theme' => 'Achats et stock', 'params' => ['periodId' => $period],
-            'analysesParDefaut' => [['key' => 'articles.missing_cost'], ['key' => 'articles.new', 'periodId' => $period]]], [], 11], [$first['question'], $first['ecran'], $first['echange'], count($first['analyses'])]);
+            'analysesParDefaut' => [['key' => 'articles.missing_cost'], ['key' => 'articles.new', 'periodId' => $period]]], [], 12], [$first['question'], $first['ecran'], $first['echange'], count($first['analyses'])]);
         $this->assertSame(['titre' => 'Articles', 'theme' => 'Achats et stock'], $second['ecran'], 'l\'appel 2 peut nommer l\'écran');
         $this->assertContains($period, array_column($first['periodes'], 'id'));
         $this->assertSame(['claude-sonnet-5-5', 'claude-sonnet-5-5'], array_column(FakeLandingAiClient::$requests, 'model'));
@@ -404,14 +404,15 @@ class ConsoleApiTest extends WebTestCase
         $unknown = fn (string $t, array $allowed): array => \App\Gestion\Services\Console\ConsoleResponder::unknown($t, $allowed);
         $this->assertSame([[], [], [], [26.0], [25.5]], [$unknown('Le prix est de 25 $.', [25.0]), $unknown('Le prix est de 25,00.', [25.0]), $unknown('Soit 1 234,56 $ de ventes', [1234.56]), $unknown('Le prix est de 26 $.', [25.0]), $unknown('Le prix est de 25,50 $.', [25.0])]);
 
-        $given = fn (string $key): array => match ($key) { 'articles.vs_similar' => ['productId' => $product], 'lexique.term' => ['term' => 'marge'], default => [] };
+        $given = fn (string $key): array => match ($key) { 'articles.vs_similar' => ['productId' => $product], 'lexique.term' => ['term' => 'marge'], 'screen.guide' => ['screen' => 'tresorerie'], default => [] };
         foreach (array_keys(AnalysisCatalog::DEFINITIONS) as $key) {
             foreach (['fr', 'en'] as $locale) {
                 $r = $catalog->run($key, $catalog->accept($key, $given($key)), $locale);
-                $this->assertSame(['key', 'title', 'period', 'figures', 'rows', 'groups', 'lesson', 'more', 'source'], array_keys($r), $key);
+                $this->assertSame(['key', 'title', 'period', 'figures', 'rows', 'groups', 'lesson', 'guide', 'more', 'source'], array_keys($r), $key);
                 // la leçon d'une notion garde la source de l'analyse qui calcule ses chiffres (ici la marge : les statistiques)
                 $from = $key === 'lexique.term' ? 'sales.overview' : $key;
                 $this->assertSame([$key, AnalysisCatalog::DEFINITIONS[$from]['screen'], AnalysisCatalog::DEFINITIONS[$from]['route'], $key === 'lexique.term'], [$r['key'], $r['source']['screen'], $r['source']['route'], $r['lesson'] !== null]);
+                $this->assertSame($key === 'screen.guide', $r['guide'] !== null, $key);
                 $this->assertNotSame('console.analyses.' . str_replace('.', '_', $key), $r['title'], "$key : titre traduit en $locale");
                 $this->assertLessThanOrEqual(AnalysisCatalog::MAX_FIGURES, count($r['figures']));
                 $this->assertLessThanOrEqual(AnalysisCatalog::MAX_ROWS, count($r['rows']));
@@ -574,11 +575,11 @@ class ConsoleApiTest extends WebTestCase
         $this->assertGreaterThan(0, $budget['actual']['value']);
         $this->assertNotSame($result['revenue']['value'], $budget['actual']['value']);
         // Les libellés des chiffres disent ce qu'ils comptent : frais hors achats d'un côté, dépenses réelles achats compris de l'autre
-        $this->assertSame(['Frais de la période (port, notes de frais, publicité), hors achats de marchandise', 'Budget prévu, achats de marchandise compris', 'Dépenses réelles, achats de marchandise compris', 'Reste du budget'],
+        $this->assertSame(['Frais de la période (port, notes de frais, publicité), hors achats de marchandise', 'Budget prévu, achats de marchandise compris', 'Dépensé (réel), achats de marchandise compris', 'Reste du budget'],
             [$result['expenses']['label'], $budget['planned']['label'], $budget['actual']['label'], $budget['remaining']['label']]);
         $english = array_column($catalog->run('budget.status', ['periodId' => $period], 'en')['figures'], 'label', 'id') + array_column($catalog->run('period.result', ['periodId' => $period], 'en')['figures'], 'label', 'id');
         $this->em();
-        $this->assertSame(['Period expenses (shipping, expense reports, advertising), excluding merchandise purchases', 'Actual spending, merchandise purchases included'], [$english['expenses'], $english['actual']]);
+        $this->assertSame(['Period expenses (shipping, expense reports, advertising), excluding merchandise purchases', 'Spent (actual), merchandise purchases included'], [$english['expenses'], $english['actual']]);
 
         $screen = ['module' => 'gestion', 'screen' => 'periode', 'params' => ['periodId' => $period, 'autre' => 1]];
         $a = $this->post('/api/gestion/console/messages', ['text' => 'Comment se passe la période en cours ?', 'context' => $screen], 202);
@@ -605,14 +606,14 @@ class ConsoleApiTest extends WebTestCase
         $this->assertSame(['text', 'figures', 'text', 'figures'], array_column($answer['blocks'], 'type'));
         $this->assertSame([['a1.revenue'], ['a1.revenue'], ['a3.actual'], ['a3.actual']],
             [$answer['blocks'][0]['figureIds'], array_column($answer['blocks'][1]['items'], 'id'), $answer['blocks'][2]['figureIds'], array_column($answer['blocks'][3]['items'], 'id')]);
-        $this->assertSame([$result['revenue']['value'], 'Dépenses réelles, achats de marchandise compris'], [$answer['blocks'][1]['items'][0]['value'], $answer['blocks'][3]['items'][0]['label']]);
+        $this->assertSame([$result['revenue']['value'], 'Dépensé (réel), achats de marchandise compris'], [$answer['blocks'][1]['items'][0]['value'], $answer['blocks'][3]['items'][0]['label']]);
         // Ce que le modèle a lu : l'écran traduit par le serveur à l'appel 1 ; à l'appel 2 son titre, la période nommée, les plages comparées rédigées
         $first = $payload(0);
         $second = $payload(1);
         $this->assertSame(['code' => 'periode', 'titre' => 'Détail d\'une période', 'theme' => 'Périodes et résultats', 'params' => ['periodId' => $period],
             'analysesParDefaut' => [['key' => 'period.result', 'periodId' => $period], ['key' => 'sales.overview', 'periodId' => $period]]], $first['ecran']);
         $this->assertSame(['titre' => 'Détail d\'une période', 'theme' => 'Périodes et résultats'], $second['ecran']);
-        $this->assertSame([$periodName, 'Dépenses réelles, achats de marchandise compris'], [$second['resultats'][1]['period'], array_column($second['resultats'][2]['figures'], 'label', 'id')['a3.actual']]);
+        $this->assertSame([$periodName, 'Dépensé (réel), achats de marchandise compris'], [$second['resultats'][1]['period'], array_column($second['resultats'][2]['figures'], 'label', 'id')['a3.actual']]);
         $this->assertMatchesRegularExpression('/^du .+ au .+ \d{4}$/u', $second['resultats'][1]['previousLabel']);
         foreach (['qui dit « période »', '« analysesParDefaut »', '« range » ne sert que si la question nomme une durée'] as $rule) {
             $this->assertStringContainsString($rule, $system(0), 'consigne de l\'appel 1');
@@ -911,7 +912,7 @@ class ConsoleApiTest extends WebTestCase
                 $f('a1.grossMargin', 'Marge brute', 51225, 'money'), $f('a1.netResult', 'Résultat', -44475, 'money'), $f('a1.unknownCostRevenue', 'Ventes sans coût connu', 450, 'money'), $f('a1.unknownCostItems', 'Unités vendues sans coût connu', 2, 'count')]),
             $result('a2', 'sales.overview', [$f('a2.revenue', 'Ventes', 117070, 'money'), $f('a2.grossMargin', 'Marge brute', 51225, 'money'), $f('a2.grossMarginRate', 'Taux de marge', 43.92, 'percent'), $f('a2.orders', 'Commandes', 33, 'count'),
                 $f('a2.averageBasket', 'Panier moyen (ventes avant retours ÷ commandes, hors taxes)', 4032, 'money'), $f('a2.returnRate', 'Taux de retour', 12.02, 'percent')]),
-            $result('a3', 'budget.status', [$f('a3.planned', 'Budget prévu, achats de marchandise compris', 0, 'money'), $f('a3.actual', 'Dépenses réelles, achats de marchandise compris', 2683825, 'money'), $f('a3.remaining', 'Reste du budget', -2683825, 'money')]),
+            $result('a3', 'budget.status', [$f('a3.planned', 'Budget prévu, achats de marchandise compris', 0, 'money'), $f('a3.actual', 'Dépensé (réel), achats de marchandise compris', 2683825, 'money'), $f('a3.remaining', 'Reste du budget', -2683825, 'money')]),
         ];
         // Les quatre textes de la réponse, mot pour mot, avec les chiffres que le modèle citait ; puis son bloc de cartes final
         $texts = [
