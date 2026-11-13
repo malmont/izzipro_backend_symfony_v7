@@ -100,7 +100,11 @@ worker répond, le web relit toutes les 3 secondes.
   - `{ type: "text", text, figureIds }` ;
   - `{ type: "figures", items: [{ label, value, unit, source }] }` ;
   - `{ type: "table", columns, rows, source }` ;
-  - `{ type: "verdicts", items: [{ subject, verdict, why, figureIds }] }`, pour un bilan.
+  - `{ type: "verdicts", items: [{ subject, verdict, why, figureIds }] }`, pour un bilan. Valeurs de `verdict` (précision du
+    13/11/2026) : **`keep`** (garder), **`raise`** (monter), **`lower`** (baisser) : les trois valeurs de `CoefficientRule::verdict`,
+    les seules du premier lot. `subject` est `{ type: "product", id, name }`. Une autre analyse pourra plus tard avoir ses propres
+    verdicts : chaque clé nouvelle sera écrite ici avant d'être rendue, et l'application affiche une clé inconnue telle quelle, d'un
+    ton neutre.
 - `analyses` : `[{ key, params, source: { screen, route, params }, computedAt }]`, pour afficher « d'où vient ce chiffre ».
 - `proposals` : `[{ action, params, label }]`, 3 au plus. `action` est une clé du catalogue des actions ; `params` ne contient que des
   identifiants présents dans les résultats des analyses et passe le contrôle d'ouverture d'un fil ; une proposition invalide est
@@ -204,7 +208,9 @@ Après un échec, le gérant peut reposer sa question : c'est une nouvelle quest
 
 1. Appel 1 : le modèle demande `articles.new` sur la période en cours.
 2. Le serveur rend, par article : coût, prix, coefficient affiché, part vendue, délai, rabais, les mêmes chiffres pour ses semblables,
-   et le verdict (garder, monter, baisser) calculé par la règle du coefficient.
+   et le verdict calculé par la règle du coefficient : `keep` (garder : moins d'un demi-cran, 0,1, entre son coefficient et celui
+   que le serveur proposerait), `raise` (monter) ou `lower` (baisser). Un article sans coût ou sans prix n'a pas de verdict (`null`) :
+   il est listé, sans entrer dans le bloc `verdicts`.
 3. Appel 2 : un bloc `verdicts` (pour chacun : le verdict et le pourquoi chiffré), un texte de synthèse, une proposition `price.set` sur
    les articles « monter » et une autre sur les articles « baisser », avec les identifiants venus de l'analyse.
 4. Le gérant ouvre une proposition : fil `price.set`, aperçu, empreinte, confirmation, annulation sous 24 heures.
