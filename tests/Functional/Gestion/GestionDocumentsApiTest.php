@@ -73,6 +73,7 @@ class GestionDocumentsApiTest extends WebTestCase
         // Lecture perdue (worker arrêté) : réservation échue → échec, crédit libéré, le site n'est plus bloqué
         $conn = $this->em()->getConnection();
         $usageId = (int) $conn->fetchOne('SELECT ai_usage_id FROM gestion_document WHERE id = ?', [$doc['id']]);
+        $this->assertSame('Lecture de document (note, 1 fichier)', $conn->fetchOne('SELECT prompt_excerpt FROM ai_usage WHERE id = ?', [$usageId]), 'libellé du journal d\'IA, accordé avec le nombre de fichiers (13/11/2026)');
         $this->assertSame([409, 'DOCUMENT_IN_PROGRESS'], $this->multipart('/api/gestion/documents', ['type' => 'note'], ['files' => [$this->image('c.png')]], 'error'));
         $conn->executeStatement("UPDATE ai_usage SET reserved_until = NOW() - INTERVAL '1 minute' WHERE id = ?", [$usageId]);
         $this->em()->clear();
@@ -169,6 +170,7 @@ class GestionDocumentsApiTest extends WebTestCase
 
         // Envoi : 202 en lecture, un seul à la fois, puis lecture par le worker (faux modèle)
         [$status, $doc] = $this->multipartBody('/api/gestion/documents', ['type' => 'facture', 'locale' => 'fr'], ['files' => [$this->image('page1.png'), $this->image('page2.png')]]);
+        $this->assertSame('Lecture de document (facture, 2 fichiers)', $conn->fetchOne('SELECT u.prompt_excerpt FROM ai_usage u JOIN gestion_document d ON d.ai_usage_id = u.id WHERE d.id = ?', [$doc['id']]), 'deux pages : pluriel');
         $this->assertSame([202, 'reading', 'facture', 'CAD', 2], [$status, $doc['status'], $doc['type'], $doc['currency'], count($doc['files'])], json_encode($doc));
         $id = (int) $doc['id'];
         $this->assertNotNull($doc['expiresAt']);

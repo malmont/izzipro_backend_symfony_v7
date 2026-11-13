@@ -113,7 +113,7 @@ class ManagementReadinessTest extends WebTestCase
         $cost = $steps['management.purchase_cost'];
         $this->assertSame(['missing' => $missing, 'total' => $total], $cost['figures']);
         if ($missing > 0) {
-            $this->assertStringContainsString(sprintf('%d article(s) sur %d sans coût d\'achat', $missing, $total), $cost['description'], 'le chiffre est dans le texte');
+            $this->assertStringContainsString(sprintf($missing > 1 ? '%d articles sur %d sans coût d\'achat : leur marge' : '%d article sur %d sans coût d\'achat : sa marge', $missing, $total), $cost['description'], 'le chiffre est dans le texte, accordé avec lui');
         }
         // un article sans coût (fiche et lignes) puis avec une ligne d'achat chiffrée : le compte suit, la ligne d'achat suffit
         $id = $this->db->fetchOne("SELECT p.id FROM $articles AND NOT EXISTS (SELECT 1 FROM commande_line l WHERE l.product_id = p.id AND l.unit_cost_cents IS NOT NULL) ORDER BY p.id LIMIT 1");
@@ -204,9 +204,11 @@ class ManagementReadinessTest extends WebTestCase
             $this->assertContains($after['used'] - $before['used'], [5, 16], 'réussie 3 + réservée en cours 2 ; + 11 seulement dans les premières heures UTC du mois');
             $all = $steps();
             $this->assertSame(['monthly' => $after['monthly'], 'remaining' => $after['remaining']], $figures($all), 'management.ai : les chiffres du quota');
-            // la formulation dépend du reste (« Il reste N crédit(s) sur 40 » quand il est bas), et le reste de ce que les tests d'avant ont consommé ce mois-ci : seuls les chiffres comptent ici
-            $this->assertMatchesRegularExpression(sprintf('/(^|\D)%d crédit\(s\)( restant\(s\))? sur 40\b/u', $after['remaining']), $all['ai.credits']['description'], 'ai.credits : les mêmes chiffres');
-            $this->assertStringContainsString(sprintf('%d crédit(s) IA restant(s) sur 40', $after['remaining']), $all['management.ai']['description']);
+            // la formulation dépend du reste (« Il reste N crédits sur 40 » quand il est bas), et le reste de ce que les tests d'avant ont consommé ce mois-ci : seuls les chiffres
+            // comptent ici, accordés avec leur nombre (13/11/2026 : « 1 crédit restant », « 2 crédits restants »)
+            $s = $after['remaining'] > 1 ? 's' : '';
+            $this->assertMatchesRegularExpression(sprintf('/(^|\D)%d crédit%s( restant%s)? sur 40\b/u', $after['remaining'], $s, $s), $all['ai.credits']['description'], 'ai.credits : les mêmes chiffres');
+            $this->assertStringContainsString(sprintf('%d crédit%s IA restant%s sur 40', $after['remaining'], $s, $s), $all['management.ai']['description']);
 
             // Consommation au-dessus du forfait : il reste 0, jamais un nombre négatif
             $this->db->executeStatement('UPDATE ai_credit_setting SET monthly_credits = 1');

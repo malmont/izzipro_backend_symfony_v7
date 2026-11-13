@@ -76,7 +76,7 @@ class PlatformAiCreditsTest extends WebTestCase
         static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateTenant();
         $step = $this->readinessStep('ai.credits');
         $this->assertSame(['todo', false], [$step['status'], $step['blocking']]);
-        $this->assertStringContainsString('Il reste 1 crédit(s) sur 7', $step['description']);
+        $this->assertStringStartsWith('Il reste 1 crédit sur 7 :', $step['description'], 'accordé avec le nombre (13/11/2026)');
         $this->assertContains($step['action']['type'], ['shop', 'screen'], 'mène à l\'achat ou au changement de forfait');
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/admin/plateforme/ia-credits', ['_token' => $token, 'tenant' => MV_TEST_TENANT_CODE, 'monthly' => 0], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
         static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateTenant();

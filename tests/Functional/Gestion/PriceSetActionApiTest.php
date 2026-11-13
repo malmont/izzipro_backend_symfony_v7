@@ -279,13 +279,39 @@ class PriceSetActionApiTest extends WebTestCase
     {
         $conn = fn () => $this->em()->getConnection();
         // un nombre entier est rendu sans décimale (2, pas 2.0)
-        $defaults = ['defaultCoefficient' => 2, 'minCoefficient' => 1.6, 'rounding' => 'psy_99', 'roundings' => ['psy_99', 'ends_95', 'integer', 'none'], 'stored' => ['defaultCoefficient' => null, 'minCoefficient' => null, 'rounding' => null]];
+        // `roundingOptions` (13/11/2026) : chaque arrondi avec son libellé dans la langue demandée et son exemple calculé par le serveur sur 54,78 ; `roundings` reste
+        $options = [
+            ['code' => 'psy_99', 'label' => 'Terminaison ,99, arrondi vers le haut (à partir de 100 : entier finissant par 9)', 'example' => '54,78 → 54,99'],
+            ['code' => 'ends_95', 'label' => 'Terminaison ,95, arrondi vers le haut', 'example' => '54,78 → 54,95'],
+            ['code' => 'integer', 'label' => 'Entier supérieur', 'example' => '54,78 → 55,00'],
+            ['code' => 'none', 'label' => 'Sans arrondi (au cent près)', 'example' => '54,78 → 54,78'],
+        ];
+        $defaults = ['defaultCoefficient' => 2, 'minCoefficient' => 1.6, 'rounding' => 'psy_99', 'roundings' => ['psy_99', 'ends_95', 'integer', 'none'], 'roundingOptions' => $options,
+            'stored' => ['defaultCoefficient' => null, 'minCoefficient' => null, 'rounding' => null]];
         $this->assertSame($defaults, $this->get('/api/gestion/reglages/prix'));
+        $this->assertSame($defaults, $this->get('/api/gestion/reglages/prix?locale=fr'));
+        $this->assertSame($defaults, $this->get('/api/gestion/reglages/prix?locale=de'), 'langue inconnue : français');
+        $english = $this->get('/api/gestion/reglages/prix?locale=en');
+        $this->assertSame([
+            ['code' => 'psy_99', 'label' => 'Ending in .99, rounded up (from 100: whole number ending in 9)', 'example' => '54.78 → 54.99'],
+            ['code' => 'ends_95', 'label' => 'Ending in .95, rounded up', 'example' => '54.78 → 54.95'],
+            ['code' => 'integer', 'label' => 'Next whole number', 'example' => '54.78 → 55.00'],
+            ['code' => 'none', 'label' => 'No rounding (to the cent)', 'example' => '54.78 → 54.78'],
+        ], $english['roundingOptions']);
+        $this->assertSame(array_diff_key($defaults, ['roundingOptions' => 1]), array_diff_key($english, ['roundingOptions' => 1]), 'la langue ne change que les libellés et le séparateur décimal');
+        // l'exemple est celui de la règle appliquée aux prix, pas un texte recopié : mêmes codes, même ordre, même résultat que `PriceRounding`
+        $this->assertSame($defaults['roundings'], array_column($options, 'code'));
+        foreach ($options as $option) {
+            $this->assertSame('54,78 → ' . number_format(\App\Gestion\Pricing\PriceRounding::apply(5478, $option['code']) / 100, 2, ',', ' '), $option['example'], $option['code']);
+        }
         $audits = fn (): int => (int) $conn()->fetchOne("SELECT COUNT(*) FROM content_audit_log WHERE resource = 'gestion-reglages-prix'");
         $auditsBefore = $audits();
         // seules les clés envoyées changent
         $set = $this->put('/api/gestion/reglages/prix', ['defaultCoefficient' => 2.4, 'rounding' => 'ends_95']);
         $this->assertSame([2.4, 1.6, 'ends_95', ['defaultCoefficient' => 2.4, 'minCoefficient' => null, 'rounding' => 'ends_95']], [$set['defaultCoefficient'], $set['minCoefficient'], $set['rounding'], $set['stored']]);
+        $this->assertSame($options, $set['roundingOptions'], 'la réponse d\'un enregistrement décrit aussi les arrondis');
+        $this->request('PUT', '/api/gestion/reglages/prix?locale=en', ['rounding' => 'ends_95']);
+        $this->assertSame([200, $english['roundingOptions']], [$this->client->getResponse()->getStatusCode(), $this->body()['roundingOptions']], 'et dans la langue demandée');
         $this->assertSame($auditsBefore + 1, $audits());
         $set = $this->put('/api/gestion/reglages/prix', ['minCoefficient' => 2]);
         $this->assertSame([2.4, 2, 'ends_95'], [$set['defaultCoefficient'], $set['minCoefficient'], $set['rounding']]);
