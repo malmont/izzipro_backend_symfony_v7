@@ -6,12 +6,12 @@ use App\ESG\DTO\Input\RegisterInputDTO;
 use App\ESG\DTO\Output\AuthOutputDTO;
 use App\ESG\Entity\EsgCompany;
 use App\ESG\Entity\EsgUser;
+use App\ESG\Exception\EmailUnavailableException;
 use App\ESG\Enum\SectorEnum;
 use App\ESG\Enum\SizeEnum;
 use App\ESG\Enum\TerritoryEnum;
 use App\Services\TenantEntityManagerProvider;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
-use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 class RegisterUseCase
@@ -32,7 +32,7 @@ class RegisterUseCase
         $existingUser = $em->getRepository(EsgUser::class)->findOneBy(['email' => $dto->email])
             ?? $em->getRepository(\App\Entity\User::class)->findOneBy(['email' => $dto->email]);
         if ($existingUser) {
-            throw new ConflictHttpException('Un utilisateur avec cette adresse email existe déjà.');
+            throw new EmailUnavailableException(); // 409 EMAIL_UNAVAILABLE, même réponse pour les deux cas
         }
 
         // 2. Create Company

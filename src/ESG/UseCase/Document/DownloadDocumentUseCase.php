@@ -45,6 +45,15 @@ class DownloadDocumentUseCase
             throw new AccessDeniedHttpException('Vous n\'avez pas accès à ce document.');
         }
 
+        return $this->fileResponse($document);
+    }
+
+    /**
+     * Le fichier d'un document, une fois le droit de le lire établi par l'appelant : l'entreprise propriétaire (ci-dessus) ou l'équipe
+     * de la Boussole (`DownloadTeamDocumentUseCase`, lot BOUSSOLE-CONSEILLER).
+     */
+    public function fileResponse(EsgDocument $document): BinaryFileResponse
+    {
         $filePath = $document->getFilePath();
         if (str_starts_with($filePath, 'esg/')) {
             $filePath = substr($filePath, 4);

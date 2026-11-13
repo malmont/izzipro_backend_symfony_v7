@@ -23,6 +23,11 @@ class DiagnosticSessionVoter extends Voter
     protected function voteOnAttribute(string $attribute, mixed $subject, TokenInterface $token): bool
     {
         $user = $token->getUser();
+        // Équipe de la Boussole (lot BOUSSOLE-CONSEILLER, 13/11/2026) : conseiller, administrateur du site ou super administrateur,
+        // sur un compte de la base commune ; lecture de tous les diagnostics du site, jamais la modification ni la soumission
+        if (BoussoleTeamVoter::isTeam($user)) {
+            return $attribute === self::VIEW;
+        }
         if (!$user instanceof EsgUser) {
             return false;
         }
@@ -43,13 +48,7 @@ class DiagnosticSessionVoter extends Voter
             return true;
         }
 
-        // ROLE_CONSULTANT access check
-        if (in_array('ROLE_CONSULTANT', $user->getRoles(), true)) {
-            if (method_exists($user, 'getAssignedCompanies')) {
-                return $user->getAssignedCompanies()->contains($session->getCompany());
-            }
-            return false; // Pas de relation consultant ↔ entreprises : refus par défaut (était un accès à toutes les entreprises)
-        }
+        // ROLE_CONSULTANT retiré (lot BOUSSOLE-CONSEILLER) : jamais posé sur aucun site ; l'équipe passe par ROLE_BOUSSOLE_CONSEILLER
 
         return false;
     }

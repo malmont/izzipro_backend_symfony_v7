@@ -2,6 +2,7 @@
 
 namespace App\ESG\Controller;
 
+use App\ESG\Service\TeamViewJournal;
 use App\ESG\Entity\DiagnosticSession;
 use App\ESG\UseCase\Report\GetReportStatusUseCase;
 use App\Services\TenantEntityManagerProvider;
@@ -18,7 +19,8 @@ class ReportController extends AbstractController
 {
     public function __construct(
         private readonly string $projectDir,
-        private readonly AuthorizationCheckerInterface $authorizationChecker
+        private readonly AuthorizationCheckerInterface $authorizationChecker,
+        private readonly TeamViewJournal $journal
     ) {
     }
 
@@ -77,6 +79,8 @@ class ReportController extends AbstractController
         // Increment download count
         $report->incrementDownloadCount();
         $em->flush();
+        // Téléchargement par l'équipe de la Boussole : inscrit au journal des consultations
+        $this->journal->viewed($session->getCompany(), TeamViewJournal::REPORT, ['sessionUuid' => $uuid]);
 
         return new BinaryFileResponse($pdfPath, Response::HTTP_OK, [
             'Content-Type' => 'application/pdf',

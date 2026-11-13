@@ -7,29 +7,85 @@ Côté frontend : `src/components/BoussoleESG/README.md` (dépôt `Izzipro_next`
 
 ## Endpoints
 
-Tous sous `/api/boussole/` : liste complète et accès dans `docs/endpoints.md`, section « Boussole ESG » (20 routes).
+Tous sous `/api/boussole/` : liste complète et accès dans `docs/endpoints.md`, section « Boussole ESG » (26 routes).
 
 - `access_control` (`config/packages/security.yaml`), dans cet ordre : `auth/(register|login)` et `referentials`
-  **publics** ; `documents` : `ROLE_COMPANY` ; tout le reste : `ROLE_COMPANY`, `ROLE_CONSULTANT`, `ROLE_USER` ou
-  `ROLE_ADMIN` (donc **tout utilisateur connecté**).
+  **publics** ; `team` : `ROLE_BOUSSOLE_CONSEILLER`, `ROLE_ADMIN` ou `ROLE_SUPER_ADMIN` (voir « Équipe ») ; `documents` :
+  `ROLE_COMPANY` ; tout le reste : `ROLE_COMPANY`, `ROLE_USER` ou `ROLE_ADMIN` (donc **tout utilisateur connecté**).
+  `ROLE_CONSULTANT` a été retiré le 13/11/2026 : aucun compte d'aucun site ne le portait.
 - **Le vrai contrôle est dans le code** :
   - les contrôleurs refusent tout utilisateur qui n'est pas un `EsgUser` (401), sauf `QuestionController`,
-    `ReferentialController`, `ReportController` et les routes `sessions/{uuid}…` (le voter refuse tout autre
-    utilisateur) ;
-  - voter `Security/Voter/DiagnosticSessionVoter.php` (`VIEW`, `EDIT`, `SUBMIT`, même règle) : session de
-    l'entreprise de l'utilisateur, quel que soit son rôle ; `ROLE_ADMIN` : toutes ; `ROLE_CONSULTANT` : refusé
-    (aucune relation consultant ↔ entreprises n'existe) ;
+    `ReferentialController`, `ReportController`, `MeController`, `TeamController` et les routes `sessions/{uuid}…`
+    (le voter refuse tout autre utilisateur que l'entreprise et l'équipe) ;
+  - voter `Security/Voter/DiagnosticSessionVoter.php` (`VIEW`, `EDIT`, `SUBMIT`) : session de l'entreprise de
+    l'utilisateur, quel que soit son rôle ; équipe de la Boussole (voir « Équipe ») : `VIEW` sur toutes les sessions du
+    site, jamais `EDIT` ni `SUBMIT` ;
   - liste, création et documents : limités à `$user->getCompany()` dans le cas d'usage ; documents : vérification
     du propriétaire (`getCompany()->getId()`) avant téléchargement et suppression.
 
 | Groupe | Routes | Contrôleur | Contrôle dans le code |
 |---|---|---|---|
-| Compte | `POST auth/register`, `POST auth/login` | `AuthController` | public ; limite de débit (`EventSubscriber/PublicEndpointRateLimitSubscriber`) ; pose les cookies `auth_token_<tenant>` et `XSRF-TOKEN_<tenant>` (1 h) |
+| Compte | `POST auth/register`, `POST auth/login` | `AuthController` | public ; limite de débit (`EventSubscriber/PublicEndpointRateLimitSubscriber`) ; pose les cookies `auth_token_<tenant>` et `XSRF-TOKEN_<tenant>` (1 h) ; inscription avec une adresse déjà connue : **409 `EMAIL_UNAVAILABLE`** (voir « Équipe ») |
+| Qui suis-je | `GET me` | `MeController` | tout compte connecté ; `kind` : `company`, `team` ou `none` |
+| Équipe | `GET team/members`, `PUT team/members/{userId}`, `GET team/companies`, `GET team/companies/{id}`, `GET team/documents/{id}/download` | `TeamController` | voter `BOUSSOLE_TEAM` ; l'attribution : `ROLE_ADMIN` |
 | Entreprise | `GET`, `PUT company` | `CompanyController` | `EsgUser`, sa propre entreprise |
 | Catalogue | `GET referentials`, `GET questions` | `ReferentialController`, `QuestionController` | aucun ; `referentials` calcule `alreadyHeld` si un `EsgUser` est connecté |
 | Diagnostics | `GET`, `POST sessions` ; `GET sessions/historique` ; `GET sessions/{uuid}` ; `PUT …/answers` ; `POST …/submit` ; `GET …/recommendations` | `SessionController` | liste et création : entreprise de l'utilisateur ; `historique` : `denyAccessUnlessGranted('ROLE_COMPANY')` ; le reste : voter |
 | Rapport PDF | `GET sessions/{uuid}/report` (statut), `GET …/report/download` | `ReportController` | voter `VIEW` |
 | Documents | `GET`, `POST documents` ; `DELETE documents/{id}` ; `GET documents/download/{id}` ; `GET documents/download?path=` | `DocumentController` | `ROLE_COMPANY` + propriétaire |
+
+## Équipe : le conseiller de la Boussole (lot BOUSSOLE-CONSEILLER, 13/11/2026)
+
+**Qui.** L'équipe de la Boussole d'un site, ce sont des comptes de la **base commune** (table `user`), jamais des comptes
+d'entreprise (`esg_user`) : le conseiller (`ROLE_BOUSSOLE_CONSEILLER`), l'administrateur du site (`ROLE_ADMIN`) et le super
+administrateur (`TeamRoles::BOUSSOLE_ACCESS`). Le rôle suit la convention commune des rôles d'équipe
+(`docs/memoires-vivantes.md`, « Convention commune des rôles d'équipe ») : déclaré dans `App\Security\TeamRoles::ALL`
+(« Conseiller (Boussole ESG) »), posé et retiré par `TeamRoleService`, journalisé dans `content_audit_log` (ressource
+`user_team`, action `grant` ou `revoke`), `ROLE_USER_INTERNET` ajouté d'office, champ `teamRoles` dans les réponses.
+Aucune attribution automatique. L'équipe se connecte par la **connexion commune du site** (`POST /api/login`), pas par
+`/api/boussole/auth/login`, qui reste celle des entreprises.
+
+**Attribuer le rôle**, trois chemins, tous journalisés :
+- l'écran Utilisateurs d'EasyAdmin (le rôle y est attribuable par la convention) ;
+- `PUT /api/boussole/team/members/{userId}`, corps `{"member": true | false}`, réservé à `ROLE_ADMIN`, idempotent →
+  `{id, isAdvisor, teamRoles, roles, changed}` ; 400 `INVALID_BODY`, 403 `OWNER_PROTECTED` (la cible est un super
+  administrateur et l'appelant ne l'est pas), 404 `USER_NOT_FOUND` ;
+- la commande `php bin/console app:boussole:team:grant <code du site> <courriel> [--revoke]` (repère `console` au journal).
+
+**Ce que l'équipe lit** (voter `Security/Voter/BoussoleTeamVoter.php`, attribut `BOUSSOLE_TEAM`), toutes les entreprises
+du site, sans assignation :
+- `GET /api/boussole/team/members` → `[{id, fullName, email, teamRoles}]`, les conseillers, par nom ;
+- `GET /api/boussole/team/companies?q=&page=&limit=` (recherche sans casse sur le nom, la ville et le courriel de contact ;
+  50 par page, 200 au plus) → `{total, page, limit, companies: [fiche de `GET company` + isActive, createdAt, usersCount,
+  sessionsCount, documentsCount, lastSession: {uuid, status, scoreGlobal, maturityLevel, completedAt} | null]}`, par nom ;
+- `GET /api/boussole/team/companies/{id}` → `{company, users: [{id, email, firstName, lastName, isActive}], sessions:
+  [forme de `GET sessions`], documents: [forme de `GET documents`, `downloadUrl` = la route d'équipe]}` ; 404
+  `COMPANY_NOT_FOUND` ;
+- le diagnostic et le rapport par les **routes existantes** `GET sessions/{uuid}`, `…/recommendations`, `…/report` et
+  `…/report/download`, avec leurs formes d'aujourd'hui (la règle des sessions donne `VIEW` à l'équipe) ;
+- `GET /api/boussole/team/documents/{id}/download` : le fichier d'un document ; 404 `DOCUMENT_NOT_FOUND`.
+
+**Ce que l'équipe n'écrit pas.** Rien dans ce lot : créer un diagnostic, modifier une fiche (401, réservés aux comptes
+d'entreprise), répondre, soumettre, déposer ou supprimer un document (403).
+
+**Journal des consultations (Loi 25).** L'équipe lit des données d'entreprises clientes : `Service/TeamViewJournal`
+inscrit dans `content_audit_log` (ressource `boussole_company`, identifiant = l'entreprise, action `view`, compte et
+date par le journal, `after` = `{what, company, …}`) chaque lecture par un compte d'équipe du détail d'une entreprise
+(`what: company`), d'un diagnostic ou de ses recommandations (`session`, avec `sessionUuid`), le téléchargement d'un
+rapport (`report`) et celui d'un document (`document`, avec `documentId` et `name`). Les listes et l'état d'un rapport
+(prêt ou non) ne sont pas journalisés ; une entreprise qui lit ses propres données n'écrit rien. Lecture du journal :
+`GET /api/landingpage-audit?resource=boussole_company&resourceId=<id de l'entreprise>` (administrateur du site ; une consultation ne se « restaure » pas).
+
+**Qui suis-je.** `GET /api/boussole/me`, pour tout compte connecté → `{kind, id, email, firstName, lastName, roles,
+teamRoles, isAdvisor, company}`. `kind` : `company` (compte d'entreprise, `company` = sa fiche), `team` (conseiller,
+administrateur du site, super administrateur ; `company` = null) ou `none` (un autre compte du site, un client de la
+boutique par exemple : aucun droit dans la Boussole). 401 sans connexion.
+
+**Inscription avec une adresse déjà connue.** `POST auth/register` répond toujours 409, avec `{error, code:
+"EMAIL_UNAVAILABLE"}` et un seul message, que l'adresse soit celle d'un compte de la Boussole ou d'un compte du site : on
+ne dit pas à un inconnu de quel côté le compte existe. La Boussole garde ses comptes d'entreprise séparés (`esg_user`).
+
+Test : `tests/Functional/Boussole/BoussoleTeamTest.php`.
 
 ## Données
 
@@ -64,7 +120,8 @@ les comptes.
 | Cas d'usage | `UseCase/Auth/` (`Login`, `Register`), `Company/`, `Diagnostic/` (`CreateSession`, `ListSessions`, `GetSession`, `SaveAnswers`, `SubmitSession`, `GetHistorique`, `GetQuestions`), `Document/`, `Referential/`, `Report/` |
 | Services | `Service/ScoringService` (scores, maturité), `RecommendationEngine` (éligibilité, priorité, subventions, récit), `SubsidyCalculator`, `DocumentStorageService` |
 | DTO | `DTO/Input/…InputDTO`, `DTO/Output/…OutputDTO` |
-| Sécurité | `Security/Voter/DiagnosticSessionVoter.php` |
+| Sécurité | `Security/Voter/DiagnosticSessionVoter.php`, `Security/Voter/BoussoleTeamVoter.php` |
+| Équipe | `Controller/TeamController`, `Controller/MeController`, `UseCase/Team/`, `Service/TeamViewJournal`, `Command/BoussoleTeamGrantCommand` (dans `src/Command/`) |
 | Autres | `EventListener/DiagnosticSessionImmutabilityListener` (une session `completed` ne repasse jamais `in_progress`), `Command/RegenerateImpactNarrativesCommand` |
 | Administration | `src/Controller/Admin/ESG/` (5 CRUD) |
 
@@ -120,9 +177,11 @@ Mode `demo` (défaut) : rien n'est gardé. C'est le premier réglage de module d
 
 ## Tester
 
-- **Aucun test fonctionnel ESG** ; seul `tests/Functional/Security/AnonymousWriteAccessTest.php` mentionne le module
-  (exception justifiée pour `/api/boussole/auth/`). Modèle à suivre : `tests/Functional/MemoiresVivantes/`
-  (`BookTypeApiTestCase` : JWT, `X-Tenant-Host`, `X-XSRF-TOKEN`).
+- Premier test fonctionnel : `tests/Functional/Boussole/BoussoleTeamTest.php` (équipe, journal des consultations,
+  cloisonnement des entreprises, inscription, « qui suis-je ») ; il crée lui-même ses entreprises, ses fichiers et leurs
+  dossiers (le modèle des tests n'a aucune donnée de la Boussole). Le questionnaire, le calcul des scores et le rapport
+  n'ont pas encore de test. `tests/Functional/Security/AnonymousWriteAccessTest.php` garde son exception pour
+  `/api/boussole/auth/`.
 - `src/ESG/DataFixtures/EsgFixtures.php` (4 subventions, 4 référentiels, questions) : **inutilisable en l'état**,
   `doctrine/doctrine-fixtures-bundle` n'est pas installé. À vérifier : comment le catalogue actuel a été chargé.
 - Pour un essai manuel : ne jamais soumettre de diagnostic réel sans nécessité (message envoyé au worker, rapport
@@ -134,7 +193,8 @@ Corrigé :
 - 23/09/2026 : `GET sessions/{uuid}` renvoyait 404 pour toute session (EntityManager supprimé par erreur,
   erreur masquée en 404) ; modifier un diagnostic renvoyait 422 (nouvelle session vide).
 - 26/09/2026 : un compte ESG pouvait prendre la place d'un administrateur de même e-mail (`c326d0b`).
-- Un `ROLE_CONSULTANT` avait accès à toutes les sessions du tenant (le voter refuse désormais).
+- Un `ROLE_CONSULTANT` avait accès à toutes les sessions du tenant (le voter refuse désormais) ; rôle retiré le
+  13/11/2026, remplacé par `ROLE_BOUSSOLE_CONSEILLER` (« Équipe »).
 
 Corrections proposées, par ordre de gravité :
 1. **Tenant de repli codé en dur** : `SubmitSessionUseCase` envoie `'boussoleesg'` si le code du tenant est inconnu ;

@@ -2,6 +2,7 @@
 
 namespace App\ESG\Controller;
 
+use App\ESG\Exception\EmailUnavailableException;
 use App\ESG\DTO\Input\LoginInputDTO;
 use App\ESG\DTO\Input\RegisterInputDTO;
 use App\ESG\UseCase\Auth\LoginUseCase;
@@ -55,6 +56,9 @@ class AuthController extends AbstractController
             $response = $this->json($output, Response::HTTP_CREATED);
             $this->setAuthCookie($response, $request, $output->token);
             return $response;
+        } catch (EmailUnavailableException $e) {
+            // adresse déjà connue (compte de la Boussole ou compte du site) : clé `error` gardée, `code` ajouté (lot BOUSSOLE-CONSEILLER)
+            return $this->json(['error' => $e->getMessage(), 'code' => EmailUnavailableException::CODE], Response::HTTP_CONFLICT);
         } catch (\Exception $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_CONFLICT);
         }

@@ -21,9 +21,13 @@ final class TeamRoles
     /** Mémoires Vivantes : biographe de l'équipe (livres de l'entreprise, rendez-vous, console Équipe) */
     public const MEMOIRES_BIOGRAPHE = 'ROLE_MEMOIRES_BIOGRAPHE';
 
+    /** Boussole ESG : conseiller de l'équipe (lecture des entreprises du site, de leurs diagnostics, rapports et documents) */
+    public const BOUSSOLE_CONSEILLER = 'ROLE_BOUSSOLE_CONSEILLER';
+
     /** Libellé (EasyAdmin) => rôle, pour toutes les applications */
     public const ALL = [
         'Biographe (Mémoires Vivantes)' => self::MEMOIRES_BIOGRAPHE,
+        'Conseiller (Boussole ESG)' => self::BOUSSOLE_CONSEILLER,
     ];
 
     /** Rôle d'accès à l'API garanti à tout membre d'une équipe */
@@ -34,6 +38,9 @@ final class TeamRoles
 
     /** Rôles qui ouvrent les droits d'équipe de Mémoires Vivantes : l'administrateur du site garde tout */
     public const MEMOIRES_ACCESS = ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN', self::MEMOIRES_BIOGRAPHE];
+
+    /** Rôles qui ouvrent les droits d'équipe de la Boussole ESG : l'administrateur du site garde tout */
+    public const BOUSSOLE_ACCESS = ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN', self::BOUSSOLE_CONSEILLER];
 
     public static function isTeamRole(string $role): bool
     {
@@ -50,6 +57,12 @@ final class TeamRoles
     public static function opensMemoires(array|UserInterface $roles): bool
     {
         return self::hasAny($roles instanceof UserInterface ? $roles->getRoles() : $roles, self::MEMOIRES_ACCESS);
+    }
+
+    /** @param list<string>|UserInterface $roles */
+    public static function opensBoussole(array|UserInterface $roles): bool
+    {
+        return self::hasAny($roles instanceof UserInterface ? $roles->getRoles() : $roles, self::BOUSSOLE_ACCESS);
     }
 
     /** @param list<string> $roles @param list<string> $wanted */

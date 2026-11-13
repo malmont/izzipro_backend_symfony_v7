@@ -106,8 +106,12 @@ security:
         - { path: ^/(account|adress|checkout), roles: [ROLE_USER_INTERNET, ROLE_USER_POS,ROLE_ADMIN] }
         - { path: ^/api/boussole/auth/(register|login), roles: PUBLIC_ACCESS }
         - { path: ^/api/boussole/referentials, roles: PUBLIC_ACCESS }
+        # Équipe de la Boussole (lot BOUSSOLE-CONSEILLER, 13/11/2026) : conseiller, administrateur du site, super administrateur, sur un
+        # compte de la base commune ; le voter BOUSSOLE_TEAM refuse en plus tout compte d'entreprise (esg_user)
+        - { path: ^/api/boussole/team(/|$), roles: [ROLE_BOUSSOLE_CONSEILLER, ROLE_ADMIN, ROLE_SUPER_ADMIN] }
         - { path: ^/api/boussole/documents, roles: ROLE_COMPANY }
-        - { path: ^/api/boussole, roles: [ROLE_COMPANY, ROLE_CONSULTANT, ROLE_USER, ROLE_ADMIN] }
+        # ROLE_CONSULTANT retiré le 13/11/2026 : posé sur aucun compte d'aucun site, remplacé par ROLE_BOUSSOLE_CONSEILLER
+        - { path: ^/api/boussole, roles: [ROLE_COMPANY, ROLE_USER, ROLE_ADMIN] }
         # 🔹 Assistant IA des landing pages : administrateurs du tenant uniquement.
         #    Placé avant la règle publique ci-dessous, dont le motif « landingpage » couvrirait aussi /api/landingpage-ai.
         - { path: ^/api/landingpage-ai(/|$), roles: ROLE_ADMIN }

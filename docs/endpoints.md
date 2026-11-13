@@ -214,30 +214,36 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/webhooks/lulu` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\LuluWebhookController::handleLuluWebhook` |
 | POST | `/api/webhooks/revenuecat` | PUBLIC_ACCESS | `App\MemoiresVivantes\Controller\RevenueCatWebhookController` |
 
-## Boussole ESG (20)
+## Boussole ESG (26)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
 | POST | `/api/boussole/auth/login` | PUBLIC_ACCESS | `ESG\Controller\AuthController::login` |
 | POST | `/api/boussole/auth/register` | PUBLIC_ACCESS | `ESG\Controller\AuthController::register` |
-| GET | `/api/boussole/company` | ROLE_COMPANY ou ROLE_CONSULTANT ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\CompanyController::getProfile` |
-| PUT | `/api/boussole/company` | ROLE_COMPANY ou ROLE_CONSULTANT ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\CompanyController::updateProfile` |
+| GET | `/api/boussole/company` | ROLE_COMPANY ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\CompanyController::getProfile` |
+| PUT | `/api/boussole/company` | ROLE_COMPANY ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\CompanyController::updateProfile` |
 | GET | `/api/boussole/documents/download/{id}` | ROLE_COMPANY | `ESG\Controller\DocumentController::downloadById` |
 | GET | `/api/boussole/documents/download` | ROLE_COMPANY | `ESG\Controller\DocumentController::downloadByPath` |
 | DELETE | `/api/boussole/documents/{id}` | ROLE_COMPANY | `ESG\Controller\DocumentController::delete` |
 | GET | `/api/boussole/documents` | ROLE_COMPANY | `ESG\Controller\DocumentController::list` |
 | POST | `/api/boussole/documents` | ROLE_COMPANY | `ESG\Controller\DocumentController::upload` |
-| GET | `/api/boussole/questions` | ROLE_COMPANY ou ROLE_CONSULTANT ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\QuestionController::listQuestions` |
+| GET | `/api/boussole/me` | ROLE_COMPANY ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\MeController::me` |
+| GET | `/api/boussole/questions` | ROLE_COMPANY ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\QuestionController::listQuestions` |
 | GET | `/api/boussole/referentials` | PUBLIC_ACCESS | `ESG\Controller\ReferentialController::listReferentials` |
-| GET | `/api/boussole/sessions/historique` | ROLE_COMPANY ou ROLE_CONSULTANT ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\SessionController::historique` |
-| PUT | `/api/boussole/sessions/{uuid}/answers` | ROLE_COMPANY ou ROLE_CONSULTANT ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\SessionController::saveAnswers` |
-| GET | `/api/boussole/sessions/{uuid}/recommendations` | ROLE_COMPANY ou ROLE_CONSULTANT ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\SessionController::getRecommendations` |
-| GET | `/api/boussole/sessions/{uuid}/report/download` | ROLE_COMPANY ou ROLE_CONSULTANT ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\ReportController::download` |
-| GET | `/api/boussole/sessions/{uuid}/report` | ROLE_COMPANY ou ROLE_CONSULTANT ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\ReportController::getStatus` |
-| POST | `/api/boussole/sessions/{uuid}/submit` | ROLE_COMPANY ou ROLE_CONSULTANT ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\SessionController::submit` |
-| GET | `/api/boussole/sessions/{uuid}` | ROLE_COMPANY ou ROLE_CONSULTANT ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\SessionController::getSession` |
-| GET | `/api/boussole/sessions` | ROLE_COMPANY ou ROLE_CONSULTANT ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\SessionController::list` |
-| POST | `/api/boussole/sessions` | ROLE_COMPANY ou ROLE_CONSULTANT ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\SessionController::create` |
+| GET | `/api/boussole/sessions/historique` | ROLE_COMPANY ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\SessionController::historique` |
+| PUT | `/api/boussole/sessions/{uuid}/answers` | ROLE_COMPANY ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\SessionController::saveAnswers` |
+| GET | `/api/boussole/sessions/{uuid}/recommendations` | ROLE_COMPANY ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\SessionController::getRecommendations` |
+| GET | `/api/boussole/sessions/{uuid}/report/download` | ROLE_COMPANY ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\ReportController::download` |
+| GET | `/api/boussole/sessions/{uuid}/report` | ROLE_COMPANY ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\ReportController::getStatus` |
+| POST | `/api/boussole/sessions/{uuid}/submit` | ROLE_COMPANY ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\SessionController::submit` |
+| GET | `/api/boussole/sessions/{uuid}` | ROLE_COMPANY ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\SessionController::getSession` |
+| GET | `/api/boussole/sessions` | ROLE_COMPANY ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\SessionController::list` |
+| POST | `/api/boussole/sessions` | ROLE_COMPANY ou ROLE_USER ou ROLE_ADMIN | `ESG\Controller\SessionController::create` |
+| GET | `/api/boussole/team/companies/{id}` | ROLE_BOUSSOLE_CONSEILLER ou ROLE_ADMIN ou ROLE_SUPER_ADMIN + `#[IsGranted(BOUSSOLE_TEAM)]` | `ESG\Controller\TeamController::company` |
+| GET | `/api/boussole/team/companies` | ROLE_BOUSSOLE_CONSEILLER ou ROLE_ADMIN ou ROLE_SUPER_ADMIN + `#[IsGranted(BOUSSOLE_TEAM)]` | `ESG\Controller\TeamController::companies` |
+| GET | `/api/boussole/team/documents/{id}/download` | ROLE_BOUSSOLE_CONSEILLER ou ROLE_ADMIN ou ROLE_SUPER_ADMIN + `#[IsGranted(BOUSSOLE_TEAM)]` | `ESG\Controller\TeamController::downloadDocument` |
+| PUT | `/api/boussole/team/members/{userId}` | ROLE_BOUSSOLE_CONSEILLER ou ROLE_ADMIN ou ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_ADMIN, BOUSSOLE_TEAM)]` | `ESG\Controller\TeamController::setMember` |
+| GET | `/api/boussole/team/members` | ROLE_BOUSSOLE_CONSEILLER ou ROLE_ADMIN ou ROLE_SUPER_ADMIN + `#[IsGranted(BOUSSOLE_TEAM)]` | `ESG\Controller\TeamController::members` |
 
 ## Réservations (11)
 
