@@ -6,11 +6,14 @@ use App\Entity\Entreprise;
 use App\Gestion\Pricing\PriceRounding;
 use App\Services\ContentAuditService\ContentAuditRecorder;
 use App\Services\TenantEntityManagerProvider;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
  * Réglages de prix du site (lot IA-ACT-5, 13/11/2026, `docs/prix-gestion.md` § 5) : le coefficient par défaut d'un article acheté (prix de
  * vente = coût × coefficient), le coefficient minimum sous lequel le serveur ne propose jamais, et l'arrondi d'un prix calculé. Trois
  * colonnes de la fiche Entreprise ; une colonne vide vaut la valeur par défaut ci-dessous, et `stored` dit ce que le gérant a réglé.
+ * `roundingOptions` (13/11/2026) décrit chaque arrondi pour l'écran de réglage : libellé dans la langue demandée et exemple CALCULÉ par
+ * `PriceRounding` sur un prix type, pour que l'écran ne recopie ni la règle ni ses mots.
  */
 class GestionPriceSettingsService
 {
@@ -19,8 +22,10 @@ class GestionPriceSettingsService
     /** Bornes d'un coefficient réglable : sous 1, on vend à perte ; au-dessus de 20, c'est une faute de saisie */
     public const COEFFICIENT_FROM = 1.0;
     public const COEFFICIENT_TO = 20.0;
+    /** Prix type (en cents) sur lequel l'exemple de chaque arrondi est calculé : 54,78 */
+    public const EXAMPLE_CENTS = 5478;
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly ContentAuditRecorder $audit)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly ContentAuditRecorder $audit, private readonly TranslatorInterface $translator)
     {
     }
 
@@ -50,14 +55,33 @@ class GestionPriceSettingsService
     /**
      * GET /api/gestion/reglages/prix
      *
-     * @return array{defaultCoefficient: float, minCoefficient: float, rounding: string, roundings: list<string>, stored: array{defaultCoefficient: ?float, minCoefficient: ?float, rounding: ?string}}
+     * @return array{defaultCoefficient: float, minCoefficient: float, rounding: string, roundings: list<string>, roundingOptions: list<array{code: string, label: string, example: string}>, stored: array{defaultCoefficient: ?float, minCoefficient: ?float, rounding: ?string}}
      */
-    public function settings(): array
+    public function settings(string $locale = 'fr'): array
     {
         $e = $this->entreprise();
 
         return ['defaultCoefficient' => $this->defaultCoefficient(), 'minCoefficient' => $this->minCoefficient(), 'rounding' => $this->rounding(), 'roundings' => PriceRounding::MODES,
+            'roundingOptions' => $this->roundingOptions($locale),
             'stored' => ['defaultCoefficient' => $e?->getGestionDefaultCoefficient(), 'minCoefficient' => $e?->getGestionMinCoefficient(), 'rounding' => $e?->getGestionPriceRounding()]];
+    }
+
+    /**
+     * Les arrondis réglables, dans l'ordre de `PriceRounding::MODES` : `code`, `label` dans la langue demandée, `example` calculé sur le
+     * prix type (« 54,78 → 54,99 », « 54.78 → 54.99 » en anglais ; sans devise : l'arrondi ne dépend pas d'elle).
+     *
+     * @return list<array{code: string, label: string, example: string}>
+     */
+    public function roundingOptions(string $locale = 'fr'): array
+    {
+        $locale = $locale === 'en' ? 'en' : 'fr';
+        $amount = fn (int $cents): string => number_format($cents / 100, 2, $locale === 'en' ? '.' : ',', ' ');
+
+        return array_map(fn (string $mode): array => [
+            'code' => $mode,
+            'label' => $this->translator->trans("prices.rounding.$mode", [], 'gestion', $locale),
+            'example' => $amount(self::EXAMPLE_CENTS) . ' → ' . $amount(PriceRounding::apply(self::EXAMPLE_CENTS, $mode)),
+        ], PriceRounding::MODES);
     }
 
     /**
@@ -66,7 +90,7 @@ class GestionPriceSettingsService
      *
      * @param array<string, mixed> $data
      */
-    public function put(array $data): array
+    public function put(array $data, string $locale = 'fr'): array
     {
         $e = $this->entreprise();
         if ($e === null) {
@@ -103,7 +127,7 @@ class GestionPriceSettingsService
         $before = $this->settings()['stored'];
         $e->setGestionDefaultCoefficient($next['defaultCoefficient'])->setGestionMinCoefficient($next['minCoefficient'])->setGestionPriceRounding($next['rounding']);
         $this->emProvider->getEntityManager()->flush();
-        $after = $this->settings();
+        $after = $this->settings($locale);
         if ($after['stored'] !== $before) {
             $this->audit->record('gestion-reglages-prix', (int) $e->getId(), 'update', $before, $after['stored']);
         }

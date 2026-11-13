@@ -12,14 +12,14 @@ class GestionPriceSettingsUseCase
     }
 
     /** @return array<string, mixed> */
-    public function settings(): array
+    public function settings(string $locale = 'fr'): array
     {
-        return $this->settings->settings();
+        return $this->settings->settings($locale);
     }
 
     /** @param array<string, mixed> $body @return array<string, mixed> */
-    public function put(array $body): array
+    public function put(array $body, string $locale = 'fr'): array
     {
-        return $this->settings->put($body);
+        return $this->settings->put($body, $locale);
     }
 }

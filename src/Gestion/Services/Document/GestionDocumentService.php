@@ -153,7 +153,7 @@ class GestionDocumentService
         if ($repo->findReading() !== null) {
             throw new GestionConflictException('DOCUMENT_IN_PROGRESS', 'Une lecture est déjà en cours sur ce site : attendez sa fin.');
         }
-        $usage = $this->quota->reserve('assistant', 'gestion_document', self::COST, $user, sprintf('Lecture de document (%s, %d fichier(s))', $type, count($files)), 1800);
+        $usage = $this->quota->reserve('assistant', 'gestion_document', self::COST, $user, sprintf(count($files) > 1 ? 'Lecture de document (%s, %d fichiers)' : 'Lecture de document (%s, %d fichier)', $type, count($files)), 1800);
         $now = new \DateTimeImmutable();
         $document = (new GestionDocument())->setType($type)->setStatus(GestionDocument::STATUS_READING)->setLocale($locale)->setAiUsageId($usage->getId())
             ->setCreatedBy($user)->setCreatedAt($now)->setExpiresAt($now->modify('+' . self::RETENTION_DAYS . ' days'));

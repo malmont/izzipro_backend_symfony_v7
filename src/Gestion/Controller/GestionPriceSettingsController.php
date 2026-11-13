@@ -11,8 +11,9 @@ use Symfony\Component\Routing\Attribute\Route;
 
 /**
  * Réglages de prix du site (lot IA-ACT-5, 13/11/2026, `docs/prix-gestion.md` § 5), `ROLE_ADMIN` (`access_control` `/api/gestion`) :
- * `{ defaultCoefficient, minCoefficient, rounding, roundings, stored }`. Une valeur jamais réglée rend sa valeur par défaut, et `stored`
- * dit ce qui est réellement enregistré.
+ * `{ defaultCoefficient, minCoefficient, rounding, roundings, roundingOptions, stored }`. Une valeur jamais réglée rend sa valeur par
+ * défaut, et `stored` dit ce qui est réellement enregistré. `roundingOptions` : `{ code, label, example }` par arrondi, libellé dans la
+ * langue de `?locale=` (en, français sinon), exemple calculé par le serveur.
  */
 #[Route('/api/gestion/reglages/prix')]
 class GestionPriceSettingsController extends AbstractController
@@ -22,9 +23,9 @@ class GestionPriceSettingsController extends AbstractController
     }
 
     #[Route('', name: 'gestion_reglages_prix', methods: ['GET'])]
-    public function settings(): JsonResponse
+    public function settings(Request $request): JsonResponse
     {
-        return $this->json($this->useCase->settings());
+        return $this->json($this->useCase->settings(self::locale($request)));
     }
 
     /** `{ defaultCoefficient?, minCoefficient?, rounding? }` ; `null` remet la valeur par défaut. 422 `VALIDATION_FAILED { fields }`. */
@@ -36,6 +37,13 @@ class GestionPriceSettingsController extends AbstractController
             throw new GestionValidationException(['body' => 'INVALID_JSON']);
         }
 
-        return $this->json($this->useCase->put($body));
+        return $this->json($this->useCase->put($body, self::locale($request)));
+    }
+
+    private static function locale(Request $request): string
+    {
+        $asked = $request->query->get('locale');
+
+        return is_string($asked) && strtolower($asked) === 'en' ? 'en' : 'fr';
     }
 }

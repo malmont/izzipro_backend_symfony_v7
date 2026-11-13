@@ -855,6 +855,12 @@ prices:
         floored: '(raised to the site minimum coefficient, %min%)'
         supplier: '%coefficient%: observed with this supplier, over %count% items'
         site: '%coefficient%: the default coefficient of the site'
+    # Price settings screen: one label per rounding (`roundingOptions` of GET /api/gestion/reglages/prix); the example is computed by the server
+    rounding:
+        psy_99: 'Ending in .99, rounded up (from 100: whole number ending in 9)'
+        ends_95: 'Ending in .95, rounded up'
+        integer: 'Next whole number'
+        none: 'No rounding (to the cent)'
 
 # Management AI console (lot W2, 13/11/2026): analysis titles, figure labels, server texts; docs/console-gestion.md
 console:

@@ -145,7 +145,7 @@ class SiteReadinessService
         $add('management.admin',
             $this->tr($locale, 'steps.management.admin.title', [], 'Un compte administrateur'),
             $admins > 0
-                ? $this->tr($locale, 'steps.management.admin.description.done', ['%count%' => $admins], sprintf('%d compte(s) administrateur peuvent se connecter à l\'application de gestion.', $admins))
+                ? $this->tr($locale, 'steps.management.admin.description.done', ['%count%' => $admins], self::n($admins, '%d compte administrateur peut se connecter à l\'application de gestion.', '%d comptes administrateur peuvent se connecter à l\'application de gestion.'))
                 : $this->tr($locale, 'steps.management.admin.description.todo', [], 'Créez un compte administrateur : seul ce rôle se connecte à l\'application de gestion.'),
             $admins > 0, $screen('users'), true, null, ['admins' => $admins]);
         $current = $this->count($pdo, 'collections', "kind = 'period' AND COALESCE(del, false) = false AND start_date_collection <= NOW() AND end_date_collection >= CURRENT_DATE");
@@ -181,7 +181,7 @@ class SiteReadinessService
         $total = (int) $this->one($pdo, "SELECT COUNT(*) FROM $articles");
         $missing = (int) $this->one($pdo, "SELECT COUNT(*) FROM $articles AND " . \App\Gestion\Services\MissingCostQuery::MISSING);
         $costDesc = $missing > 0
-            ? $this->tr($locale, 'steps.management.purchase_cost.description.missing', ['%count%' => $missing, '%total%' => $total], sprintf('%d article(s) sur %d sans coût d\'achat : leur marge reste inconnue.', $missing, $total))
+            ? $this->tr($locale, 'steps.management.purchase_cost.description.missing', ['%count%' => $missing, '%total%' => $total], self::n($missing, '%d article sur %d sans coût d\'achat : sa marge reste inconnue.', '%d articles sur %d sans coût d\'achat : leur marge reste inconnue.', $total))
             : ($total > 0
                 ? $this->tr($locale, 'steps.management.purchase_cost.description.complete', ['%count%' => $total], sprintf('Les %d articles ont un coût d\'achat : marges connues.', $total))
                 : $this->tr($locale, 'steps.management.purchase_cost.description.empty', [], 'Aucun article vendu pour l\'instant.'));
@@ -190,7 +190,7 @@ class SiteReadinessService
         $add('management.suppliers',
             $this->tr($locale, 'steps.management.suppliers.title', [], 'Fournisseurs'),
             $suppliers > 0
-                ? $this->tr($locale, 'steps.management.suppliers.description.done', ['%count%' => $suppliers], sprintf('%d fournisseur(s) enregistré(s).', $suppliers))
+                ? $this->tr($locale, 'steps.management.suppliers.description.done', ['%count%' => $suppliers], self::n($suppliers, '%d fournisseur enregistré.', '%d fournisseurs enregistrés.'))
                 : $this->tr($locale, 'steps.management.suppliers.description.todo', [], 'Ajoutez vos fournisseurs : ils servent aux commandes et à la lecture des factures.'),
             $suppliers > 0, $screen('fournisseurs'), false, 'fournisseurs', ['suppliers' => $suppliers]);
         $types = $this->count($pdo, 'type_fournisseur') > 0 && $this->count($pdo, 'type_note_de_frais') > 0;
@@ -207,7 +207,7 @@ class SiteReadinessService
         $add('management.fixed_costs',
             $this->tr($locale, 'steps.management.fixed_costs.title', [], 'Frais fixes'),
             $fixed > 0
-                ? $this->tr($locale, 'steps.management.fixed_costs.description.done', ['%count%' => $fixed], sprintf('%d frais fixe(s) saisi(s) : le résultat après frais fixes est calculé.', $fixed))
+                ? $this->tr($locale, 'steps.management.fixed_costs.description.done', ['%count%' => $fixed], self::n($fixed, '%d frais fixe saisi : le résultat après frais fixes est calculé.', '%d frais fixes saisis : le résultat après frais fixes est calculé.'))
                 : $this->tr($locale, 'steps.management.fixed_costs.description.todo', [], 'Saisissez vos frais fixes (loyer, salaires, abonnements) pour voir le résultat après frais fixes.'),
             $fixed > 0, $screen('gestion'), false, 'frais-fixes', ['fixedCosts' => $fixed]);
         $tier = ($effective['ai.full']['enabled'] ?? false) ? 'full' : (($effective['ai.help']['enabled'] ?? false) ? 'help' : 'none');
@@ -216,13 +216,13 @@ class SiteReadinessService
             $this->tr($locale, 'steps.management.ai.title', [], 'Assistant IA de la gestion'),
             $tier === 'none'
                 ? $this->tr($locale, 'steps.management.ai.description.none', [], 'Sans palier IA, le guide et les avis restent calculés par les règles (sans texte rédigé).')
-                : $this->tr($locale, 'steps.management.ai.description.active', ['%count%' => $remaining, '%monthly%' => $monthly], sprintf('%d crédit(s) IA restant(s) sur %d ce mois-ci (1 par conseil, avis ou document lu).', $remaining, $monthly)),
+                : $this->tr($locale, 'steps.management.ai.description.active', ['%count%' => $remaining, '%monthly%' => $monthly], self::n($remaining, '%d crédit IA restant sur %d ce mois-ci (1 par conseil, avis ou document lu).', '%d crédits IA restants sur %d ce mois-ci (1 par conseil, avis ou document lu).', $monthly)),
             $tier !== 'none' && $remaining > 0, $screen('ai_credits'), false, null, ['tier' => $tier, 'remaining' => $remaining, 'monthly' => $monthly]);
         $devices = $this->count($pdo, 'push_device', 'disabled_at IS NULL');
         $add('management.device',
             $this->tr($locale, 'steps.management.device.title', [], 'Appareil pour les notifications'),
             $devices > 0
-                ? $this->tr($locale, 'steps.management.device.description.done', ['%count%' => $devices], sprintf('%d appareil(s) reçoivent les notifications.', $devices))
+                ? $this->tr($locale, 'steps.management.device.description.done', ['%count%' => $devices], self::n($devices, '%d appareil reçoit les notifications.', '%d appareils reçoivent les notifications.'))
                 : $this->tr($locale, 'steps.management.device.description.todo', [], 'Autorisez les notifications dans l\'application : stock bas, trésorerie basse, facture en double.'),
             $devices > 0, $screen('gestion'), false, 'notifications', ['devices' => $devices]);
         $purchases = $this->count($pdo, 'commande') + $this->count($pdo, 'gestion_reprise');
@@ -250,6 +250,16 @@ class SiteReadinessService
     }
 
     /** @param array<string, int|string> $params */
+    /**
+     * Texte accordé avec son nombre (13/11/2026) : « 1 article », « 3 articles », jamais une terminaison entre parenthèses. En français,
+     * zéro et un prennent le singulier. Le nombre est le premier `%d` ; les autres valeurs suivent. L'anglais (groupes traduits) s'accorde
+     * dans `translations/readiness.en.yaml`. Garde-fou : `tests/Functional/Platform/SiteReadinessPluralsTest.php`.
+     */
+    private static function n(int $count, string $one, string $many, int|string ...$more): string
+    {
+        return sprintf($count <= 1 ? $one : $many, $count, ...$more);
+    }
+
     private function tr(string $locale, string $id, array $params, string $fr): string
     {
         return $locale === 'en' && $this->translator !== null ? $this->translator->trans($id, $params, 'readiness', 'en') : $fr;
@@ -348,21 +358,21 @@ class SiteReadinessService
             $add('boutique.taxes', 'module.boutique', 'Taxes', 'Au moins une taxe dans la table du site (TPS, TVQ…), ou Stripe Tax.', $taxOk, 'backend', ['type' => 'screen', 'screen' => 'configuration']); // cheminement Taxes (lot 5)
             $add('boutique.stripe', 'module.boutique', 'Paiements en ligne (Stripe)', 'Compte Stripe connecté du site pour encaisser les commandes.', $stripeOk, 'backend', ['type' => 'screen', 'screen' => 'configuration']); // cheminement Stripe (lot 5)
             $sellable = $this->count($pdo, 'product p', 'EXISTS (SELECT 1 FROM product_variant v WHERE v.product_id = p.id AND v.price > 0)');
-            $add('boutique.product', 'module.boutique', 'Premier produit vendable', $sellable > 0 ? sprintf('%d produit(s) avec un prix.', $sellable) : 'Créez au moins un produit avec une variante et un prix supérieur à zéro (vente, location ou abonnement).', $sellable > 0, 'backend', ['type' => 'screen', 'screen' => 'products']);
+            $add('boutique.product', 'module.boutique', 'Premier produit vendable', $sellable > 0 ? self::n($sellable, '%d produit avec un prix.', '%d produits avec un prix.') : 'Créez au moins un produit avec une variante et un prix supérieur à zéro (vente, location ou abonnement).', $sellable > 0, 'backend', ['type' => 'screen', 'screen' => 'products']);
             $products = $this->count($pdo, 'product');
             $noPicture = $this->count($pdo, 'product p', 'NOT EXISTS (SELECT 1 FROM product_picture pp WHERE pp.product_id = p.id)');
-            $add('boutique.pictures', 'module.boutique', 'Photos des produits', $products > 0 && $noPicture === 0 ? 'Tous vos produits ont au moins une photo.' : sprintf('%d produit(s) sans photo : un produit sans image se vend mal.', $noPicture), $products > 0 && $noPicture === 0, 'backend', ['type' => 'screen', 'screen' => 'products'], false);
+            $add('boutique.pictures', 'module.boutique', 'Photos des produits', $products > 0 && $noPicture === 0 ? 'Tous vos produits ont au moins une photo.' : self::n($noPicture, '%d produit sans photo : un produit sans image se vend mal.', '%d produits sans photo : un produit sans image se vend mal.'), $products > 0 && $noPicture === 0, 'backend', ['type' => 'screen', 'screen' => 'products'], false);
             $add('boutique.categories', 'module.boutique', 'Catégories du catalogue', 'Au moins une catégorie visible : vos clients naviguent par catégorie.', $this->count($pdo, 'categories', 'COALESCE(is_visible, TRUE) = TRUE') > 0, 'backend', ['type' => 'screen', 'screen' => 'categories'], false);
             // Produits en ligne incomplets (lots IA, 07/11/2026) : fiche, traduction, image mannequin
             $online = $this->count($pdo, 'product', 'is_web = TRUE');
             if ($online > 0) {
                 $noSheet = $this->count($pdo, 'product', "is_web = TRUE AND LENGTH(TRIM(COALESCE(regexp_replace(description, '<[^>]*>', '', 'g'), ''))) < 40");
-                $add('boutique.sheets', 'module.boutique', 'Fiches produit complètes', $noSheet === 0 ? 'Tous les produits en ligne ont une description.' : sprintf('%d produit(s) en ligne sans description (ou trop courte) : « IA en lot » les rédige en un clic depuis leurs photos.', $noSheet), $noSheet === 0, 'backend', ['type' => 'screen', 'screen' => 'product_ai_bulk'], false);
+                $add('boutique.sheets', 'module.boutique', 'Fiches produit complètes', $noSheet === 0 ? 'Tous les produits en ligne ont une description.' : self::n($noSheet, '%d produit en ligne sans description (ou trop courte) : « IA en lot » la rédige en un clic depuis ses photos.', '%d produits en ligne sans description (ou trop courte) : « IA en lot » les rédige en un clic depuis leurs photos.'), $noSheet === 0, 'backend', ['type' => 'screen', 'screen' => 'product_ai_bulk'], false);
                 $other = ($e['locale'] ?? 'fr') === 'en' ? 'fr' : 'en';
                 $noTranslation = $this->count($pdo, 'product p', sprintf("p.is_web = TRUE AND NOT EXISTS (SELECT 1 FROM product_translation t WHERE t.product_id = p.id AND t.locale = '%s' AND COALESCE(t.name, '') <> '' AND LENGTH(TRIM(COALESCE(regexp_replace(t.description, '<[^>]*>', '', 'g'), ''))) > 0)", $other));
-                $add('boutique.translations', 'module.boutique', 'Fiches traduites', $noTranslation === 0 ? sprintf('Tous les produits en ligne sont traduits en %s.', $other) : sprintf('%d produit(s) en ligne sans traduction en %s : « IA en lot » les traduit en un clic.', $noTranslation, $other), $noTranslation === 0, 'backend', ['type' => 'screen', 'screen' => 'product_ai_bulk'], false);
+                $add('boutique.translations', 'module.boutique', 'Fiches traduites', $noTranslation === 0 ? sprintf('Tous les produits en ligne sont traduits en %s.', $other) : self::n($noTranslation, '%d produit en ligne sans traduction en %s : « IA en lot » le traduit en un clic.', '%d produits en ligne sans traduction en %s : « IA en lot » les traduit en un clic.', $other), $noTranslation === 0, 'backend', ['type' => 'screen', 'screen' => 'product_ai_bulk'], false);
                 $noAiImage = $this->count($pdo, 'product p', "p.is_web = TRUE AND NOT EXISTS (SELECT 1 FROM product_picture pp WHERE pp.product_id = p.id AND pp.source = 'ai')");
-                $add('boutique.ai_images', 'module.boutique', 'Images mannequin', $noAiImage === 0 ? 'Tous les produits en ligne ont une image générée.' : sprintf('%d produit(s) en ligne sans image mannequin générée par l\'IA (vêtements : une personne portant l\'article). Disponible dès que la plateforme branche son fournisseur d\'images.', $noAiImage), $noAiImage === 0, 'backend', ['type' => 'screen', 'screen' => 'product_ai_bulk'], false);
+                $add('boutique.ai_images', 'module.boutique', 'Images mannequin', $noAiImage === 0 ? 'Tous les produits en ligne ont une image générée.' : self::n($noAiImage, '%d produit en ligne sans image mannequin générée par l\'IA (vêtements : une personne portant l\'article). Disponible dès que la plateforme branche son fournisseur d\'images.', '%d produits en ligne sans image mannequin générée par l\'IA (vêtements : une personne portant l\'article). Disponible dès que la plateforme branche son fournisseur d\'images.'), $noAiImage === 0, 'backend', ['type' => 'screen', 'screen' => 'product_ai_bulk'], false);
             }
             $add('boutique.reviews', 'module.boutique', 'Avis clients', 'Réglages des avis et politique affichée (page Configuration, Avis clients).', $this->count($pdo, 'review_setting', "policy IS NOT NULL AND policy::text <> 'null' AND policy::text <> '{}'") > 0, 'backend', ['type' => 'screen', 'screen' => 'configuration'], false);
             if (in_array('rental', (array) ($commerce['salesModes'] ?? ['sale', 'rental', 'subscription']), true)) {
@@ -370,16 +380,16 @@ class SiteReadinessService
                 $rentable = $this->count($pdo, 'product', 'rental_enabled = TRUE');
                 $configured = $this->count($pdo, 'product p', 'p.rental_enabled = TRUE AND EXISTS (SELECT 1 FROM booking_configuration bc WHERE bc.product_id = p.id AND bc.granularity IS NOT NULL)');
                 $priced = $this->count($pdo, 'product p', 'p.rental_enabled = TRUE AND EXISTS (SELECT 1 FROM product_categories pc JOIN rental_pack_categories rpc ON rpc.categories_id = pc.categories_id JOIN rental_pack rp ON rp.id = rpc.rental_pack_id WHERE pc.product_id = p.id AND COALESCE(rp.day_rate, rp.hour_rate, rp.half_day_rate, rp.week_rate, rp.month_rate, 0) > 0)');
-                $add('boutique.rental_product', 'module.boutique', 'Location : un produit louable', $rentable > 0 ? sprintf('%d produit(s) proposé(s) à la location.', $rentable) : 'Le mode location est activé mais aucun produit n\'est louable : cochez « Location » sur la fiche d\'un produit, ou retirez ce mode de vente (Mon site, Commerce).', $rentable > 0, 'backend', ['type' => 'screen', 'screen' => 'rental']);
-                $add('boutique.rental_booking', 'module.boutique', 'Location : configuration de réservation', $rentable > 0 && $configured === $rentable ? 'Chaque produit louable a sa granularité (heure, jour…), son stock et ses durées.' : sprintf('%d produit(s) louable(s) sans configuration de réservation (granularité, stock, durée minimale, horaires) : sans elle, aucun créneau ne peut être réservé.', max(0, $rentable - $configured)), $rentable > 0 && $configured === $rentable, 'backend', ['type' => 'screen', 'screen' => 'rental']);
-                $add('boutique.rental_rates', 'module.boutique', 'Location : tarifs', $rentable > 0 && $priced === $rentable ? 'Chaque produit louable a un tarif (pack de location lié à sa catégorie).' : sprintf('%d produit(s) louable(s) sans tarif : créez un pack de location (tarif à l\'heure, à la journée…) et rattachez-le à la catégorie du produit.', max(0, $rentable - $priced)), $rentable > 0 && $priced === $rentable, 'backend', ['type' => 'screen', 'screen' => 'rental']);
+                $add('boutique.rental_product', 'module.boutique', 'Location : un produit louable', $rentable > 0 ? self::n($rentable, '%d produit proposé à la location.', '%d produits proposés à la location.') : 'Le mode location est activé mais aucun produit n\'est louable : cochez « Location » sur la fiche d\'un produit, ou retirez ce mode de vente (Mon site, Commerce).', $rentable > 0, 'backend', ['type' => 'screen', 'screen' => 'rental']);
+                $add('boutique.rental_booking', 'module.boutique', 'Location : configuration de réservation', $rentable > 0 && $configured === $rentable ? 'Chaque produit louable a sa granularité (heure, jour…), son stock et ses durées.' : self::n(max(0, $rentable - $configured), '%d produit louable sans configuration de réservation (granularité, stock, durée minimale, horaires) : sans elle, aucun créneau ne peut être réservé.', '%d produits louables sans configuration de réservation (granularité, stock, durée minimale, horaires) : sans elle, aucun créneau ne peut être réservé.'), $rentable > 0 && $configured === $rentable, 'backend', ['type' => 'screen', 'screen' => 'rental']);
+                $add('boutique.rental_rates', 'module.boutique', 'Location : tarifs', $rentable > 0 && $priced === $rentable ? 'Chaque produit louable a un tarif (pack de location lié à sa catégorie).' : self::n(max(0, $rentable - $priced), '%d produit louable sans tarif : créez un pack de location (tarif à l\'heure, à la journée…) et rattachez-le à la catégorie du produit.', '%d produits louables sans tarif : créez un pack de location (tarif à l\'heure, à la journée…) et rattachez-le à la catégorie de chaque produit.'), $rentable > 0 && $priced === $rentable, 'backend', ['type' => 'screen', 'screen' => 'rental']);
                 $add('boutique.rental_deposit', 'module.boutique', 'Location : caution et conditions d\'annulation', 'Caution et politique d\'annulation sur la configuration de réservation : recommandé pour les biens de valeur.', $rentable > 0 && $this->count($pdo, 'booking_configuration', 'deposit > 0 OR COALESCE(cancellation_policy, \'\') <> \'\'') > 0, 'backend', ['type' => 'screen', 'screen' => 'rental'], false);
             }
             $add('boutique.carrier', 'module.boutique', 'Livraison', 'Au moins un mode de remise (transporteur à prix fixe, retrait en magasin ou EasyPost) ; vous expédiez vous-même en saisissant le suivi sur la commande. Réglages et cheminement : page Livraison.', $this->count($pdo, 'carrier') > 0, 'backend', ['type' => 'screen', 'screen' => 'shipping']);
             // Livraison, lot 1 (07/11/2026) : poids des produits exigé seulement quand le site estime ou achète des étiquettes (mode own_key ou platform)
             if (in_array($commerce['shippingMode'] ?? 'none', ['own_key', 'platform'], true)) {
                 $withoutWeight = $this->count($pdo, 'product p', 'p.requires_shipping = TRUE AND NOT EXISTS (SELECT 1 FROM product_shipping ps WHERE ps.product_id = p.id AND ps.weight > 0)');
-                $add('boutique.shipping_weights', 'module.boutique', 'Poids et dimensions des produits', sprintf('%d produit(s) à expédier sans poids : indispensable pour estimer un tarif ou acheter une étiquette.', $withoutWeight), $withoutWeight === 0, 'backend', ['type' => 'screen', 'screen' => 'product_weights']);
+                $add('boutique.shipping_weights', 'module.boutique', 'Poids et dimensions des produits', self::n($withoutWeight, '%d produit à expédier sans poids : indispensable pour estimer un tarif ou acheter une étiquette.', '%d produits à expédier sans poids : indispensable pour estimer un tarif ou acheter une étiquette.'), $withoutWeight === 0, 'backend', ['type' => 'screen', 'screen' => 'product_weights']);
             }
             if (($commerce['subscriptionsEnabled'] ?? false) === true) {
                 $add('boutique.subscriptions', 'module.boutique', 'Abonnements', 'Au moins une formule d\'abonnement active et un transporteur à prix fixe ou gratuit.', $this->count($pdo, 'subscription_plan', 'active = TRUE') > 0 && $this->count($pdo, 'carrier', 'carrier_account_id IS NULL') > 0, 'backend', ['type' => 'screen', 'screen' => 'subscription_plans']);
@@ -391,7 +401,7 @@ class SiteReadinessService
             $add('pos.register', 'module.pos', 'Poste de caisse', 'Créez au moins un poste de caisse (fond de caisse, terminal).', $this->count($pdo, 'cash_register', 'is_active = TRUE') > 0, 'backend', ['type' => 'screen', 'screen' => 'cash_registers']);
             // Cheminement complet (07/11/2026) : ce qu'il faut pour ouvrir le magasin (liste de contrôle de docs/mise-en-production-caisse.md)
             $cashiers = $this->count($pdo, '"user"', "roles::text LIKE '%ROLE_USER_POS%' OR roles::text LIKE '%ROLE_POS_MANAGER%'");
-            $add('pos.cashiers', 'module.pos', 'Au moins un caissier', $cashiers > 0 ? sprintf('%d compte(s) de caisse (caissier ou responsable).', $cashiers) : 'Créez un compte utilisateur avec le rôle caissier (ou responsable de caisse) : c\'est lui qui ouvre la session dans l\'application.', $cashiers > 0, 'backend', ['type' => 'screen', 'screen' => 'users']);
+            $add('pos.cashiers', 'module.pos', 'Au moins un caissier', $cashiers > 0 ? self::n($cashiers, '%d compte de caisse (caissier ou responsable).', '%d comptes de caisse (caissier ou responsable).') : 'Créez un compte utilisateur avec le rôle caissier (ou responsable de caisse) : c\'est lui qui ouvre la session dans l\'application.', $cashiers > 0, 'backend', ['type' => 'screen', 'screen' => 'users']);
             $add('pos.receipt', 'module.pos', 'En-tête et pied du ticket', 'Raison sociale, adresse et mentions (politique de retour) imprimées sur chaque ticket, numéros de taxe affichés (fiche Entreprise, panneau Ticket).', $filled($e['pos_receipt_header'] ?? null), 'backend', ['type' => 'screen', 'screen' => 'entreprise'], false);
             $posLive = ($e['pos_stripe_mode'] ?? 'test') === StripeAccountResolver::LIVE;
             $posAccount = trim((string) ($stripeRow[$posLive ? 'live_account_id' : 'account_id'] ?? '')) !== '' || $this->tenants->isTenantInternal($code);
@@ -430,7 +440,7 @@ class SiteReadinessService
             $support('support.agent',
                 $this->tr($locale, 'steps.support.agent.title', [], 'Un compte qui répond aux demandes'),
                 $agents > 0
-                    ? $this->tr($locale, 'steps.support.agent.description.done', ['%count%' => $agents], sprintf('%d compte(s) administrateur ou Assistance répondent aux demandes.', $agents))
+                    ? $this->tr($locale, 'steps.support.agent.description.done', ['%count%' => $agents], self::n($agents, '%d compte administrateur ou Assistance répond aux demandes.', '%d comptes administrateur ou Assistance répondent aux demandes.'))
                     : $this->tr($locale, 'steps.support.agent.description.todo', [], 'Un administrateur (ou un compte Assistance) répond aux demandes.'),
                 $agents > 0 ? 'done' : 'todo', true, null);
             $support('support.settings',
@@ -471,8 +481,8 @@ class SiteReadinessService
         $creditsFr = match ($creditsVariant) {
             'none' => 'Aucun crédit IA ce mois-ci : l\'assistant et la rédaction par l\'IA refuseront. Achetez des crédits ou changez de forfait.',
             'exhausted' => sprintf('Crédits épuisés (%d utilisés sur %d) : l\'IA refusera jusqu\'au mois prochain. Achetez des crédits ou changez de forfait.', $usedCredits, $credits),
-            'low' => sprintf('Il reste %d crédit(s) sur %d : pensez à acheter des crédits ou à changer de forfait avant la panne.', $remainingCredits, $credits),
-            'available' => sprintf('%d crédit(s) restant(s) sur %d ce mois-ci pour l\'assistant, les pages et les fiches produit.', $remainingCredits, $credits),
+            'low' => self::n($remainingCredits, 'Il reste %d crédit sur %d : pensez à acheter des crédits ou à changer de forfait avant la panne.', 'Il reste %d crédits sur %d : pensez à acheter des crédits ou à changer de forfait avant la panne.', $credits),
+            'available' => self::n($remainingCredits, '%d crédit restant sur %d ce mois-ci pour l\'assistant, les pages et les fiches produit.', '%d crédits restants sur %d ce mois-ci pour l\'assistant, les pages et les fiches produit.', $credits),
         };
         $creditsParams = match ($creditsVariant) {
             'none' => [],

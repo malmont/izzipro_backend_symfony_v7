@@ -857,6 +857,12 @@ prices:
         floored: '(relevé au coefficient minimum du site, %min%)'
         supplier: '%coefficient% : constaté chez ce fournisseur, sur %count% articles'
         site: '%coefficient% : le coefficient par défaut du site'
+    # Écran de réglage des prix : un libellé par arrondi (`roundingOptions` de GET /api/gestion/reglages/prix) ; l'exemple est calculé par le serveur
+    rounding:
+        psy_99: 'Terminaison ,99, arrondi vers le haut (à partir de 100 : entier finissant par 9)'
+        ends_95: 'Terminaison ,95, arrondi vers le haut'
+        integer: 'Entier supérieur'
+        none: 'Sans arrondi (au cent près)'
 
 # Console IA de la gestion (lot W2, 13/11/2026) : titres des analyses, libellés des chiffres, textes du serveur ; docs/console-gestion.md
 console:
