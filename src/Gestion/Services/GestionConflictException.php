@@ -10,9 +10,9 @@ namespace App\Gestion\Services;
 class GestionConflictException extends \RuntimeException
 {
     /** @param array<string, mixed> $details champs ajoutés au corps (ex. periodId, periodKey) */
-    public function __construct(public readonly string $errorCode, string $message, public readonly int $status = 409, public readonly array $details = [])
+    public function __construct(public readonly string $errorCode, string $message, public readonly int $status = 409, public readonly array $details = [], ?\Throwable $previous = null)
     {
-        parent::__construct($message);
+        parent::__construct($message, 0, $previous); // la cause est gardée quand le refus reprend le message d'une autre exception (garde-fou ClientErrorGuardTest)
     }
 
     /** @return array<string, mixed> corps JSON de la réponse */

@@ -211,6 +211,7 @@ class ActionThreadService
         }
         $done = $action->execute($conversation->getAnswers(), $user); // les refus du service existant remontent tels quels (409, 422)
         $em = $this->emProvider->getEntityManager();
+        $conversation = $this->attached($conversation);
         $conversation->setUpdatedAt(new \DateTimeImmutable());
         $message = GestionConversationMessage::of($conversation, GestionConversationMessage::ROLE_ASSISTANT, 'confirmed', ['action' => $conversation->getKind(), 'result' => $done['result'], 'undo' => $done['undo'], 'previewHash' => $previewHash], $user);
         $em->persist($message);
@@ -242,10 +243,12 @@ class ActionThreadService
         if ($reasons !== []) {
             throw new GestionConflictException('UNDO_BLOCKED', 'Annulation impossible : ' . implode(' ', array_column($reasons, 'message')), 409, ['reasons' => $reasons]);
         }
+        $confirmedId = $confirmed->getId();
         $result = $action->undo($confirmed->getContent()['undo']);
         $em = $this->emProvider->getEntityManager();
+        $conversation = $this->attached($conversation);
         $conversation->setUpdatedAt(new \DateTimeImmutable());
-        $em->persist(GestionConversationMessage::of($conversation, GestionConversationMessage::ROLE_ASSISTANT, 'undone', $result + ['confirmedMessageId' => $confirmed->getId()], $user));
+        $em->persist(GestionConversationMessage::of($conversation, GestionConversationMessage::ROLE_ASSISTANT, 'undone', $result + ['confirmedMessageId' => $confirmedId], $user));
         $em->flush();
 
         return $result;
@@ -262,6 +265,17 @@ class ActionThreadService
     }
 
     // ---- outils --------------------------------------------------------------------------------------------------------------------
+
+    /**
+     * Le fil rattaché à l'unité de travail : une action qui écrit par le chemin d'un article (`price.set`) la vide après chaque écriture,
+     * et le fil chargé avant n'y est plus. Sans cela, le message `confirmed` ou `undone` serait relié à un fil inconnu de Doctrine.
+     */
+    private function attached(GestionConversation $conversation): GestionConversation
+    {
+        $em = $this->emProvider->getEntityManager();
+
+        return $em->contains($conversation) ? $conversation : ($em->find(GestionConversation::class, $conversation->getId()) ?? $conversation);
+    }
 
     /** Le message `confirmed` en vigueur : le dernier, s'il n'a pas été suivi d'une annulation */
     private function confirmation(GestionConversation $conversation): ?GestionConversationMessage

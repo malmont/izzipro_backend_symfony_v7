@@ -22,6 +22,10 @@ use App\Services\TenantEntityManagerProvider;
  * coût converti dans la devise du site, le prix de vente prévu d'un article créé (la règle de la confirmation :
  * `GestionInvoiceDraft::groupPrice`) et sa marge ; les totaux recalculés et l'écart avec le total lu ; les refus que la confirmation
  * opposerait à ces champs (`issues`, mêmes chemins et mêmes codes), sans bloquer l'aperçu.
+ *
+ * Lot IA-ACT-5 (13/11/2026) : le prix d'un article créé suit le coefficient par défaut et l'arrondi du site ; sa mise en ligne par canal
+ * (`publishPos`, `publishWeb` : `no`, `now`, `reception`) et ses mentions (`STOCK_ZERO`, `NO_PHOTO`) ; pour un article déjà au catalogue,
+ * le nouveau prix décidé sur la facture (`price: { mode, coefficient, newPrice }`), sinon son prix est gardé.
  */
 class PreviewGestionDocumentUseCase
 {
@@ -30,6 +34,7 @@ class PreviewGestionDocumentUseCase
         private readonly GestionDocumentService $documents,
         private readonly TenantCurrencyProvider $currency,
         private readonly ?\App\Gestion\Services\Document\InvoiceTargetPolicy $targets = null, // lot IA-FACT-2-A : ajout à une commande ouverte
+        private readonly ?\App\Gestion\Services\GestionPriceSettingsService $settings = null, // lot IA-ACT-5 : coefficient par défaut et arrondi du site
     ) {
     }
 
@@ -97,8 +102,10 @@ class PreviewGestionDocumentUseCase
             $issues['exchangeRate'] = 'EXCHANGE_RATE_REQUIRED';
         }
 
-        // Articles existants : prix de vente actuel (la confirmation ne le change pas)
+        // Articles existants : prix de vente actuel (gardé, sauf décision portée par la ligne : lot IA-ACT-5)
         $currentPrices = [];
+        $byProduct = [];
+        $names = [];
         foreach ($lines as $line) {
             if ($line['productId'] === null || $line['create'] !== null) {
                 continue;
@@ -115,6 +122,8 @@ class PreviewGestionDocumentUseCase
             }
             $price = $variant?->getPrice() ?? $product->getPrice();
             $currentPrices[$line['n']] = $price !== null ? (int) round((float) $price) : null;
+            $byProduct[(int) $product->getId()][] = $line;
+            $names[(int) $product->getId()] = ['price' => $product->getPrice() !== null ? (int) round((float) $product->getPrice()) : null];
             if ($target !== null && $line['quantity'] !== null) {
                 // la ligne de l'article dans la commande cible, avant et après l'ajout (un article n'a qu'une ligne par commande)
                 $key = $product->getId() . '/' . ($variant?->getId() ?? '-');
@@ -142,7 +151,10 @@ class PreviewGestionDocumentUseCase
         }
 
         // Articles à créer : un prix par groupe, répété sur chaque ligne du groupe ; aucun si une ligne du groupe est refusée
+        $defaultCoefficient = $this->settings?->defaultCoefficient() ?? GestionInvoiceDraft::DEFAULT_COEFFICIENT;
+        $rounding = $this->settings?->rounding() ?? \App\Gestion\Pricing\PriceRounding::NONE;
         $planned = [];
+        $publishing = [];
         foreach (GestionInvoiceDraft::groups($lines) as $group) {
             $valid = $rate !== null;
             foreach ($group as $line) {
@@ -150,9 +162,28 @@ class PreviewGestionDocumentUseCase
                     $valid = $valid && $path !== "lines[{$line['n']}]" && !str_starts_with($path, "lines[{$line['n']}].");
                 }
             }
-            $pricing = $valid ? GestionInvoiceDraft::groupPrice($group, $rate) : null;
+            $pricing = $valid ? GestionInvoiceDraft::groupPrice($group, $rate, $defaultCoefficient, $rounding) : null;
+            $publish = GestionInvoiceDraft::groupPublish($group);
+            // Mentions de la mise en ligne : stock 0 jusqu'à la réception (article visible tout de suite), sans photo sur la boutique
+            $photo = array_filter($group, fn ($l) => isset($document->getFiles()['linePhotos'][(string) $l['n']])) !== [];
+            $mentions = array_values(array_filter([in_array('now', $publish, true) ? 'STOCK_ZERO' : null, $publish['web'] !== 'no' && !$photo ? 'NO_PHOTO' : null]));
             foreach ($group as $line) {
                 $planned[$line['n']] = $pricing;
+                $publishing[$line['n']] = ['publishPos' => $publish['pos'], 'publishWeb' => $publish['web'], 'mentions' => $mentions];
+            }
+        }
+        // Articles existants dont le prix change : une décision par article, la même sur toutes ses lignes
+        $newPrices = [];
+        foreach ($byProduct as $productId => $productLines) {
+            $decided = $rate !== null ? GestionInvoiceDraft::productPrice($productLines, $rate, $rounding) : null;
+            foreach ($productLines as $line) {
+                // prix avant et après de CHAQUE article, dans tous les cas ; gardé : le même, `changed` faux
+                // le prix d'avant est celui de la LIGNE : celui de sa variante quand elle a un prix propre, sinon celui de l'article
+                $current = $currentPrices[$line['n']] ?? $names[$productId]['price'];
+                $newPrices[$line['n']] = $decided === null
+                    ? ['mode' => 'keep', 'coefficient' => null, 'newPrice' => $current, 'currentPrice' => $current, 'changed' => false, 'belowCost' => false]
+                    : ['mode' => $decided['mode'], 'coefficient' => $decided['coefficient'], 'newPrice' => $decided['price'], 'currentPrice' => $current,
+                        'changed' => $decided['price'] !== $current, 'belowCost' => $decided['costConverted'] !== null && $decided['price'] < $decided['costConverted']];
             }
         }
 
@@ -165,13 +196,16 @@ class PreviewGestionDocumentUseCase
             $kind = $line['productId'] !== null && $line['create'] === null ? 'existing' : ($line['create'] !== null && $line['productId'] === null ? 'create' : 'unresolved');
             $converted = $rate !== null && $line['unitCost'] !== null ? GestionInvoiceDraft::convert($line['unitCost'], $rate) : null;
             $pricing = $kind === 'create' ? ($planned[$n] ?? null) : null;
-            $plannedPrice = $pricing['price'] ?? null;
+            $newPrice = $kind === 'existing' ? ($newPrices[$n] ?? null) : null;
+            $plannedPrice = $pricing['price'] ?? (($newPrice['mode'] ?? 'keep') !== 'keep' ? $newPrice['newPrice'] : null); // article créé : son prix ; article existant : son nouveau prix s'il est décidé
             $margin = $plannedPrice !== null && $converted !== null ? $plannedPrice - $converted : null;
             $out[] = [
                 'n' => $n, 'quantity' => $line['quantity'], 'unitCost' => $line['unitCost'], 'total' => $total, 'unitCostConverted' => $converted, 'kind' => $kind,
-                'coefficient' => $pricing['coefficient'] ?? null, 'plannedPrice' => $plannedPrice, 'currentPrice' => $kind === 'existing' ? ($currentPrices[$n] ?? null) : null,
+                'coefficient' => $pricing['coefficient'] ?? ($newPrice['coefficient'] ?? null), 'plannedPrice' => $plannedPrice, 'currentPrice' => $kind === 'existing' ? ($currentPrices[$n] ?? null) : null,
                 'plannedMargin' => $margin, 'plannedMarginRate' => $margin !== null && $plannedPrice > 0 ? round($margin / $plannedPrice * 100, 1) : null,
                 'groupKey' => $kind === 'create' ? $line['create']['groupKey'] : null,
+                'publishPos' => $publishing[$n]['publishPos'] ?? null, 'publishWeb' => $publishing[$n]['publishWeb'] ?? null, 'mentions' => $publishing[$n]['mentions'] ?? [],
+                'price' => $newPrice,
             ] + ($target !== null ? ['lineBefore' => $lineAfter[$mergeKeys[$n] ?? '']['before'] ?? null, 'lineAfter' => $lineAfter[$mergeKeys[$n] ?? '']['after'] ?? null] : []);
         }
 

@@ -327,7 +327,7 @@ year:
             detail: "+%percent%% on %sales% of estimated remaining sales, at equal quantities: it all goes to the margin."
         dormantStock:
             label: "Sell the dormant stock"
-            detail: "Effect of the %count% guide advice(s) on stock that does not move (no new calculation)."
+            detail: "Effect of the guide tip on stock that does not move (no new calculation).|Effect of the %count% guide tips on stock that does not move (no new calculation)."
         fixedCostsWeight:
             label: "Lighten fixed costs"
             detail: "Fixed costs weigh %weight% of the year's margin; effect of a 10% cut over the rest of the year."
@@ -394,6 +394,7 @@ sequences:
         fiscal_year_set: 'Change the fiscal year month'
         periods_calendar_set: 'Change the period split'
         product_cost_set: 'Set another purchase cost'
+        price_set: 'Change other prices'
     figure_values:
         tier:
             full: 'Full AI'
@@ -433,11 +434,11 @@ sequences:
                 todo: 'Prepare the period: estimate your sales, simulate your purchases, then validate. Budgets are saved at that point.'
             trip:
                 title: 'Buying trip'
-                done: '%trips% buying trip(s) overlap this period.'
+                done: '%trips% buying trip overlaps this period.|%trips% buying trips overlap this period.'
                 todo: 'No buying trip in this period. Optional: create one if you travel to buy.'
             cash_balance:
                 title: 'Up-to-date cash balance'
-                done: 'Last balance entered %ageDays% day(s) ago: the cash projection is reliable.'
+                done: 'Last balance entered %ageDays% day ago: the cash projection is reliable.|Last balance entered %ageDays% days ago: the cash projection is reliable.'
                 todo: 'Enter your account balance: without a balance less than 30 days old, cash after purchases is uncertain.'
             fixed_costs:
                 title: 'Fixed costs'
@@ -445,7 +446,7 @@ sequences:
                 todo: 'Enter your fixed costs (rent, salaries, subscriptions): without them, the result of the period is too optimistic.'
             purchase_order:
                 title: 'First purchase order of the period'
-                done: '%orders% purchase order(s) dated in this period.'
+                done: '%orders% purchase order dated in this period.|%orders% purchase orders dated in this period.'
                 todo: 'No purchase order dated in this period yet.'
     fiscal_year.close:
         title: 'Close the fiscal year'
@@ -454,15 +455,15 @@ sequences:
             periods_closed:
                 title: 'Periods of the fiscal year closed'
                 done: 'The %periods% periods of the fiscal year are closed.'
-                todo: '%closedPeriods% of %periods% period(s) closed: a period still open can change the review.'
+                todo: '%closedPeriods% of %periods% periods closed: a period still open can change the review.'
             purchase_costs:
                 title: 'Purchase cost of the items sold'
                 done: 'Every item sold during the fiscal year has a purchase cost: the margin is known.'
-                todo: '%missing% item(s) sold during the fiscal year without a purchase cost: the margin of the year is wrong.'
+                todo: '%missing% item sold during the fiscal year without a purchase cost: the margin of the year is wrong.|%missing% items sold during the fiscal year without a purchase cost: the margin of the year is wrong.'
             reconciliation:
                 title: 'Bank reconciliation of each month'
                 done: 'A balance entered in each month of the fiscal year, with no gap left open.'
-                todo: '%monthsWithBalance% of %months% months have a balance entered, %openGaps% gap(s) left open.'
+                todo: '%monthsWithBalance% of %months% months have a balance entered, %openGaps% gap left open.|%monthsWithBalance% of %months% months have a balance entered, %openGaps% gaps left open.'
             fixed_costs:
                 title: 'Fixed costs of the fiscal year'
                 done: 'Your fixed costs are entered for the fiscal year.'
@@ -483,7 +484,7 @@ sequences:
             purchase_costs:
                 title: 'Items sold without a cost in the window'
                 done: 'Every item sold in the window has a purchase cost.'
-                todo: '%missing% item(s) sold in the window without a purchase cost.'
+                todo: '%missing% item sold in the window without a purchase cost.|%missing% items sold in the window without a purchase cost.'
 
 # Invoice by conversation (lot IA-FACT-1, 13/11/2026): docs/conversation-gestion.md
 conversation:
@@ -623,7 +624,7 @@ conversation:
                 text: 'Notes, if you wish.'
             attaches:
                 title: 'Attachments'
-                some: 'On creation, %notes% expense(s) and %commandes% purchase order(s) dated within the trip and not attached elsewhere will be attached to it. Undoing the trip will free them.'
+                some: 'On creation, the expenses and purchase orders dated within the trip and not attached elsewhere will be attached to it (expenses: %notes%; purchase orders: %commandes%). Undoing the trip will free them.'
                 none: 'No free expense or purchase order is dated within this trip: nothing will be attached.'
         fiscal_year_set:
             title: 'Choose the first month of the fiscal year'
@@ -666,7 +667,7 @@ conversation:
                 tax: '(prices include tax: the margin includes the tax)'
             effect:
                 title: 'Effect on your figures'
-                some: '%count% unit(s) sold in open periods will go from "sale without known cost" to a valued sale.'
+                some: '%count% unit sold in open periods will go from "sale without known cost" to a valued sale.|%count% units sold in open periods will go from "sale without known cost" to a valued sale.'
                 none: 'No sale in open periods changes value.'
                 current: 'Cost of goods sold for the period "%period%": %before% before, %after% after.'
                 closed: 'Closed periods are frozen: their figures do not change.'
@@ -687,8 +688,8 @@ conversation:
                 title: 'Purchase orders that will be closed'
             alerts:
                 title: 'Before you close'
-                unknown_cost: '%count% unit(s) sold without a known cost: after closing, they will stay without cost in the frozen figures. Set the purchase costs before closing.'
-                without_shipping: '%count% purchase order(s) of the period without a shipping cost: after closing, it can no longer be added.'
+                unknown_cost: '%count% unit sold without a known cost: after closing, it will stay without cost in the frozen figures. Set the purchase costs before closing.|%count% units sold without a known cost: after closing, they will stay without cost in the frozen figures. Set the purchase costs before closing.'
+                without_shipping: '%count% purchase order of the period without a shipping cost: after closing, it can no longer be added.|%count% purchase orders of the period without a shipping cost: after closing, it can no longer be added.'
             consequence:
                 title: 'After closing'
                 text: 'After closing, no entry dated in this period will be accepted (purchase orders, shipping costs, expenses), and its figures will be frozen.'
@@ -700,14 +701,82 @@ conversation:
             planned:
                 title: '%category%'
                 text: 'Planned amount for "%category%" (leave empty to keep it, 0 to clear it).'
+        price_set:
+            title: 'Change the selling price of items'
+            scope:
+                title: 'Items concerned'
+                text: 'Which items get a new price?'
+                period: 'Items purchased during "%name%"'
+                collection: 'Items of the collection "%name%"'
+                category: 'The category "%name%"'
+                commande: 'Items of the purchase order "%name%"'
+                products: '%count% selected item|%count% selected items'
+            mode:
+                title: 'How to set the price'
+                text: 'How do you want to set the new price?'
+                options:
+                    coefficient: 'Coefficient on the purchase cost'
+                    percent: 'Percentage on the current price'
+                    fixed: 'A typed price'
+            value:
+                title: 'Value'
+                text: 'Which value?'
+                text_any: 'Which value? (first choose how to set the price)'
+                text_coefficient: 'Which coefficient? The selling price will be the purchase cost multiplied by this coefficient.'
+                text_percent: 'Which percentage? For example 10 to raise by 10%, −15 to lower by 15%.'
+                text_fixed: 'Which selling price? It will be written as typed, without rounding.'
+            rounding:
+                title: 'Rounding'
+                text: 'How should computed prices be rounded?'
+                options:
+                    psy_99: 'Psychological price (9.99; 54.99; 159)'
+                    ends_95: 'Ending in .95'
+                    integer: 'Next whole number'
+                    none: 'No rounding'
+            force:
+                title: 'Risky prices'
+                text: '%count% price would go below its purchase cost or move by more than 50%. It is held back: do you want to apply it anyway?|%count% prices would go below their purchase cost or move by more than 50%. They are held back: do you want to apply them anyway?'
+                options:
+                    exclude: 'Leave them at their current price'
+                    apply: 'Apply anyway'
+            written:
+                title: 'Prices that will change'
+            stockMargin:
+                title: 'Potential margin of the stock'
+            stockMarginRate:
+                title: 'Margin rate of the stock'
+            heldBack:
+                title: 'Risky prices left as they are'
+            excluded:
+                title: 'Excluded items (no cost, no price or rental)'
+            notice:
+                title: 'Good to know'
+                visible: 'The new prices will be visible right away at the checkout and in the online shop. You can undo for 24 hours.'
+                promotions: '%count% item has a running promotion: its promotional price does not change.|%count% items have a running promotion: their promotional price does not change.'
+                tax: 'The site prices include tax: the margin shown includes the tax.'
+            rows:
+                coefficient: 'Coefficient %value% on the purchase cost'
+                percent: '%value%% on the current price'
+                fixed: 'Typed price: %value%'
     reply:
         nothing: "I found no answer to the open questions in your sentence. Use the buttons, or rephrase."
-        applied: "Noted: %count% answer(s) saved."
+        applied: "Got it: %count% answer saved.|Got it: %count% answers saved."
     summary:
-        read: 'Invoice %number% dated %date%, supplier %supplier%: %lines% line(s), total %total% %currency%.'
-        questions: 'I need %count% more answer(s) before showing you what will be created.'
+        read: 'Invoice %number% dated %date%, supplier %supplier%: %lines% line, total %total% %currency%.|Invoice %number% dated %date%, supplier %supplier%: %lines% lines, total %total% %currency%.'
+        questions: 'I need %count% more answer before showing you what will be created.|I need %count% more answers before showing you what will be created.'
         ready: 'Everything is filled in: check the preview, then confirm.'
     options:
+        price_mode_keep: 'Keep the current prices'
+        price_mode_suggested: 'Apply the suggested coefficient to each'
+        price_mode_each: 'Set item by item'
+        coefficient_each: 'The coefficient suggested for each item, from %min% to %max% (detail per item)'
+        coefficient_each_same: '%min% for each item, from its similar items (detail per item)'
+        publish_no: 'No, not now'
+        publish_now: 'Yes, right away'
+        publish_reception: 'When the stock is received'
+        price_keep: 'Keep %price%'
+        price_keep_coefficient: 'Keep %price% (current coefficient %coefficient%)'
+        price_keep_none: 'Leave the price untouched'
         supplier_create: 'Create the supplier "%name%"'
         product_create: 'Create the item "%name%"'
         amounts_ht: 'Before tax'
@@ -720,6 +789,21 @@ conversation:
         shipping_add: 'Add %amount% to the current shipping cost (%current%) → %total%'
         shipping_skip: 'Do not count the %amount% shipping of this invoice'
     questions:
+        price_mode:
+            title: 'Prices of the items already in the catalogue'
+            text: 'This invoice includes an item already on sale. Do you want to change its selling price?|This invoice includes %count% items already on sale. Do you want to change their selling prices?'
+        coefficient:
+            title: 'Coefficient of the new items'
+            text: 'The selling price of a new item is its purchase cost multiplied by a coefficient, then rounded. Which coefficient do you want?'
+        publish_pos:
+            title: 'At the checkout'
+            text: 'Do you want to put the new items on sale at the checkout?'
+        publish_web:
+            title: 'In the online shop'
+            text: 'Do you want to put the new items on sale in the online shop?'
+        line_price:
+            title: 'Selling price'
+            text: '"%label%" is already in your catalogue. Do you want to keep its selling price, or change it?'
         target:
             title: 'New order or open order'
             text: 'You already have an open order with %supplier%. Is this invoice part of it, or is it a new order?'
@@ -753,3 +837,21 @@ conversation:
         difference:
             title: 'Gap on the total'
             text: 'The total read on the document differs by %difference% from the total recalculated from the lines.'
+
+# Management pricing (lot IA-ACT-5, 13/11/2026): labels of the suggested coefficient, docs/prix-gestion.md § 6
+prices:
+    coefficient:
+        similar: '%coefficient%: %count% similar items%scope% listed at %displayed%, %sold%% sold%weeks%, %discount% (%adjustment%)'
+        scope_supplier: 'from this supplier'
+        weeks: 'in %count% week for the units sold|in %count% weeks for the units sold'
+        discount:
+            without: 'no discount'
+            with: 'with %rate%% discount'
+        adjust:
+            up: '+%step%'
+            down: '−%step%'
+            obtained: 'obtained coefficient'
+            keep: 'unchanged'
+        floored: '(raised to the site minimum coefficient, %min%)'
+        supplier: '%coefficient%: observed with this supplier, over %count% items'
+        site: '%coefficient%: the default coefficient of the site'

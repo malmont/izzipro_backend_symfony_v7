@@ -431,6 +431,7 @@ class GestionConversationService
         $tr = fn (string $id, array $params = []) => $this->translator->trans($id, $params, 'gestion', $locale === 'en' ? 'en' : 'fr');
         $text = $tr('conversation.summary.read', [
             '%supplier%' => (string) ($figures['supplier'] ?? '?'), '%number%' => (string) ($figures['number'] ?? '?'), '%date%' => (string) ($figures['date'] ?? '?'), '%lines%' => (string) $figures['lines'],
+            '%count%' => (string) $figures['lines'], // accord du libellé : « 1 ligne », « 2 lignes »
             '%total%' => $total !== null ? number_format(((int) $total) / 100, 2, $locale === 'en' ? '.' : ',', ' ') : '?', '%currency%' => (string) $figures['currency'],
         ]) . ' ' . ($open > 0 ? $tr('conversation.summary.questions', ['%count%' => (string) $open]) : $tr('conversation.summary.ready'));
 

@@ -2,6 +2,7 @@
 
 namespace App\Gestion\Services;
 
+use App\Gestion\Pricing\PriceRounding;
 use App\Services\ContentAuditService\ContentAuditRecorder;
 use App\Services\LandingContentService\LandingContentEditor;
 use App\Services\LandingContentService\LandingContentException;
@@ -12,11 +13,18 @@ use App\Services\TenantEntityManagerProvider;
  * application en une transaction par le **chemin d'écriture d'un article** (`LandingContentEditor` validate → hooks → flush → invalidation du cache
  * PRODUCTS → `DemoContentMarker` ; `ContentAuditRecorder` par article ou variante), journal et annulation dans les 24 h, lien avec le guide
  * (conseil marqué fait). Mode coefficient : même règle que `Product::updatePrice()` (prix affiché = coût × coefficient, sans traitement des taxes).
+ *
+ * Lot IA-ACT-5 (13/11/2026, action `price.set` du fil) : portées `periodId` (articles achetés dans une période), `collectionId` (dans une
+ * collection d'achats), `categoryId` (catégorie de la boutique) ; mode `fixed` (un prix saisi, pour une liste d'articles, jamais arrondi) ;
+ * arrondis du site (`PriceRounding` : `psy_99`, `ends_95`, `integer`).
  */
 class GestionPriceService
 {
-    public const MODES = ['percent', 'coefficient'];
-    public const ROUNDINGS = ['none', 'ends_99', 'up_50', 'up_100'];
+    public const MODES = ['percent', 'coefficient', 'fixed'];
+    public const ROUNDINGS = ['none', 'ends_99', 'up_50', 'up_100', PriceRounding::PSY_99, PriceRounding::ENDS_95, PriceRounding::INTEGER];
+    /** Portées : une seule par demande */
+    public const SCOPES = ['productIds', 'commandeId', 'adviceId', 'periodId', 'collectionId', 'categoryId'];
+    public const FIXED_MAX = 100000000;
     public const MAX_PRODUCTS = 500;
     public const MAX_ROWS = 2000;
     public const PERCENT_RANGE = [-90, 300];
@@ -209,6 +217,9 @@ class GestionPriceService
     public static function round(float $cents, string $rounding): int
     {
         $c = (int) round($cents);
+        if (in_array($rounding, [PriceRounding::PSY_99, PriceRounding::ENDS_95, PriceRounding::INTEGER], true)) {
+            return PriceRounding::apply($c, $rounding); // arrondis du site (lot IA-ACT-5)
+        }
 
         return match ($rounding) {
             'ends_99' => intdiv($c, 100) * 100 + 99 >= $c ? intdiv($c, 100) * 100 + 99 : intdiv($c, 100) * 100 + 199,
@@ -231,8 +242,9 @@ class GestionPriceService
      * cache, marque d'exemple, journal d'audit ; unité de travail vidée ensuite.
      *
      * @param array<string, mixed> $fields
+     * @param bool $clear faux quand l'appelant tient des entités chargées dans une transaction en cours (confirmation d'une facture, lot IA-ACT-5)
      */
-    public function writeFields(string $resource, int $id, array $fields): void
+    public function writeFields(string $resource, int $id, array $fields, bool $clear = true): void
     {
         $entity = $this->editor->find($resource, $id);
         if ($entity === null) {
@@ -248,7 +260,33 @@ class GestionPriceService
         $this->audit->record($resource, $id, 'update', $before, $after, array_keys($values), 'fr');
         // Chaque écriture est déjà enregistrée (flush) : on libère l'unité de travail, sinon chaque flush suivant repasse sur tous les articles
         // déjà chargés (500 lignes : 19 s au lieu de quelques secondes) ; l'invalidation du cache, collectée par le souscripteur, n'en dépend pas
-        $this->emProvider->getEntityManager()->clear();
+        if ($clear) {
+            $this->emProvider->getEntityManager()->clear();
+        }
+    }
+
+    /**
+     * État d'un lot pour son annulation, en lecture seule (action `price.set`, lot IA-ACT-5) : annulé ou non, et les lignes dont le prix
+     * a été retouché depuis.
+     *
+     * @return array{found: bool, undone: bool, touched: list<array{productId: int, variantId: ?int, name: ?string, newPrice: int, currentPrice: ?int}>}
+     */
+    public function undoState(int $batchId): array
+    {
+        $conn = $this->conn();
+        $batch = $conn->fetchAssociative('SELECT undone_at FROM gestion_price_batch WHERE id = ?', [$batchId]);
+        if ($batch === false) {
+            return ['found' => false, 'undone' => false, 'touched' => []];
+        }
+        $touched = [];
+        foreach ($conn->fetchAllAssociative('SELECT c.*, p.name FROM gestion_price_change c LEFT JOIN product p ON p.id = c.product_id WHERE c.batch_id = ? ORDER BY c.id', [$batchId]) as $c) {
+            $current = $this->currentPrice((string) $c['level'], (int) $c['product_id'], $c['variant_id'] === null ? null : (int) $c['variant_id']);
+            if ($current !== (int) $c['new_price']) {
+                $touched[] = ['productId' => (int) $c['product_id'], 'variantId' => $c['variant_id'] === null ? null : (int) $c['variant_id'], 'name' => $c['name'], 'newPrice' => (int) $c['new_price'], 'currentPrice' => $current];
+            }
+        }
+
+        return ['found' => true, 'undone' => $batch['undone_at'] !== null, 'touched' => $touched];
     }
 
     private function currentPrice(string $level, int $productId, ?int $variantId): ?int
@@ -260,7 +298,7 @@ class GestionPriceService
         return $v === false || $v === null ? null : (int) round((float) $v);
     }
 
-    /** @return array{mode: string, value: float, rounding: string, includeVariants: bool, productIds: ?list<int>, commandeId: ?int, adviceId: ?int} */
+    /** @return array{mode: string, value: float, rounding: string, includeVariants: bool, productIds: ?list<int>, commandeId: ?int, adviceId: ?int, periodId?: int, collectionId?: int, categoryId?: int} */
     private function input(array $body): array
     {
         $errors = [];
@@ -271,6 +309,8 @@ class GestionPriceService
         $value = $body['value'] ?? null;
         if (!is_int($value) && !(is_float($value) && is_finite($value))) {
             $errors['value'] = 'MUST_BE_NUMBER';
+        } elseif ($mode === 'fixed' && (!is_int($value) || $value <= 0 || $value > self::FIXED_MAX)) {
+            $errors['value'] = !is_int($value) ? 'INVALID_AMOUNT' : ($value <= 0 ? 'MUST_BE_POSITIVE' : 'OUT_OF_RANGE'); // un prix saisi : cents entiers
         } elseif ($mode === 'percent' && ($value < self::PERCENT_RANGE[0] || $value > self::PERCENT_RANGE[1])) {
             $errors['value'] = 'OUT_OF_RANGE';
         } elseif ($mode === 'coefficient' && ($value < self::COEFFICIENT_RANGE[0] || $value > self::COEFFICIENT_RANGE[1])) {
@@ -280,7 +320,13 @@ class GestionPriceService
         if (!in_array($rounding, self::ROUNDINGS, true)) {
             $errors['rounding'] = 'INVALID_ROUNDING';
         }
-        $scopes = array_filter(['productIds', 'commandeId', 'adviceId'], fn ($k) => ($body[$k] ?? null) !== null);
+        if ($mode === 'fixed') {
+            $rounding = 'none'; // un prix saisi n'est jamais arrondi
+        }
+        $scopes = array_filter(self::SCOPES, fn ($k) => ($body[$k] ?? null) !== null);
+        if ($mode === 'fixed' && $scopes !== [] && array_values($scopes) !== ['productIds']) {
+            $errors['mode'] = 'FIXED_NEEDS_LIST'; // un même prix pour toute une période ou une catégorie serait une erreur de geste
+        }
         if ($scopes === []) {
             $errors['productIds'] = 'SCOPE_REQUIRED';
         } elseif (count($scopes) > 1) {
@@ -302,7 +348,7 @@ class GestionPriceService
                 $productIds = array_values(array_unique(array_filter($list, 'is_int')));
             }
         }
-        foreach (['commandeId', 'adviceId'] as $k) {
+        foreach (['commandeId', 'adviceId', 'periodId', 'collectionId', 'categoryId'] as $k) {
             if (isset($body[$k]) && (!is_int($body[$k]) || $body[$k] <= 0)) {
                 $errors[$k] = 'INVALID_ID';
             }
@@ -312,7 +358,9 @@ class GestionPriceService
         }
 
         return ['mode' => $mode, 'value' => (float) $value, 'rounding' => $rounding, 'includeVariants' => ($body['includeVariants'] ?? true) !== false,
-            'productIds' => $productIds, 'commandeId' => $body['commandeId'] ?? null, 'adviceId' => $body['adviceId'] ?? null];
+            'productIds' => $productIds, 'commandeId' => $body['commandeId'] ?? null, 'adviceId' => $body['adviceId'] ?? null]
+            // clés ajoutées seulement quand elles servent : l'empreinte d'une demande d'avant le lot IA-ACT-5 ne change pas
+            + array_filter(['periodId' => $body['periodId'] ?? null, 'collectionId' => $body['collectionId'] ?? null, 'categoryId' => $body['categoryId'] ?? null], fn ($v) => $v !== null);
     }
 
     /** @return array{0: list<array<string, mixed>>, 1: array<int, float>} articles du périmètre, coûts de la commande par article */
@@ -338,6 +386,20 @@ class GestionPriceService
             if ($ids === []) {
                 throw new GestionValidationException(['adviceId' => 'ADVICE_WITHOUT_PRODUCTS']);
             }
+        } elseif (isset($in['periodId']) || isset($in['collectionId'])) {
+            // Articles achetés dans une période ou dans une collection d'achats : ceux des lignes de ses commandes. Le coût est le coût
+            // courant de l'article (règle L0), pas celui de ces seules commandes : c'est lui que la marge du site retient.
+            $key = isset($in['periodId']) ? 'periodId' : 'collectionId';
+            $kind = $conn->fetchOne('SELECT kind FROM collections WHERE id = ? AND del = false', [$in[$key]]);
+            if ($kind === false || ($key === 'periodId' && $kind !== \App\Entity\Collections::KIND_PERIOD)) {
+                throw new GestionValidationException([$key => $key === 'periodId' ? 'PERIOD_NOT_FOUND' : 'COLLECTION_NOT_FOUND']);
+            }
+            $ids = array_map('intval', $conn->fetchFirstColumn('SELECT DISTINCT l.product_id FROM commande_line l JOIN commande c ON c.id = l.commande_id WHERE c.collections_id = ? ORDER BY 1', [$in[$key]]));
+        } elseif (isset($in['categoryId'])) {
+            if ($conn->fetchOne('SELECT 1 FROM categories WHERE id = ?', [$in['categoryId']]) === false) {
+                throw new GestionValidationException(['categoryId' => 'CATEGORY_NOT_FOUND']);
+            }
+            $ids = array_map('intval', $conn->fetchFirstColumn('SELECT DISTINCT product_id FROM product_categories WHERE categories_id = ? ORDER BY 1', [$in['categoryId']]));
         } else {
             $ids = $in['productIds'];
         }
@@ -409,6 +471,8 @@ class GestionPriceService
         $new = $old;
         if (!$saleItem) {
             $alerts[] = 'NOT_A_SALE_ITEM';
+        } elseif ($in['mode'] === 'fixed') {
+            $new = (int) $in['value']; // prix saisi : tel quel, sans arrondi
         } elseif ($in['mode'] === 'percent') {
             if ($old <= 0) {
                 $alerts[] = 'PRICE_MISSING';

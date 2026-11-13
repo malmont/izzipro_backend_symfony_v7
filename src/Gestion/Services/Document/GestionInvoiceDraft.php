@@ -2,6 +2,7 @@
 
 namespace App\Gestion\Services\Document;
 
+use App\Gestion\Pricing\PriceRounding;
 use App\Gestion\Services\GestionInput;
 
 /**
@@ -13,6 +14,11 @@ use App\Gestion\Services\GestionInput;
 final class GestionInvoiceDraft
 {
     public const DEFAULT_COEFFICIENT = 2.0;
+    /** Mise en ligne d'un article créé, par canal (lot IA-ACT-5) : non, tout de suite, ou à la réception de son stock */
+    public const PUBLISH = ['no', 'now', 'reception'];
+    /** Prix d'un article déjà au catalogue (lot IA-ACT-5) : le garder, coût × coefficient, ou un prix saisi */
+    public const PRICE_MODES = ['keep', 'coefficient', 'fixed'];
+    public const COEFFICIENT_MAX = 20.0;
 
     /**
      * Lignes du corps, validées champ par champ (mêmes chemins et mêmes codes pour l'aperçu et la confirmation).
@@ -49,6 +55,7 @@ final class GestionInvoiceDraft
             $createName = null;
             $coefficient = null;
             $groupKey = null;
+            $publish = ['publishPos' => 'no', 'publishWeb' => 'no'];
             if ($create !== null) {
                 $createInput = new GestionInput($create);
                 $createName = $createInput->text('name');
@@ -58,9 +65,33 @@ final class GestionInvoiceDraft
                 if ($coefficient !== null && $coefficient <= 0) {
                     $errors["lines[$n].create.coefficient"] = 'MUST_BE_POSITIVE';
                 }
+                foreach (array_keys($publish) as $channel) { // lot IA-ACT-5 : mise en ligne par canal, « no » par défaut
+                    if (isset($create[$channel]) && !in_array($create[$channel], self::PUBLISH, true)) {
+                        $errors["lines[$n].create.$channel"] = 'INVALID_VALUE';
+                    } else {
+                        $publish[$channel] = $create[$channel] ?? 'no';
+                    }
+                }
+            }
+            // Prix d'un article déjà au catalogue (lot IA-ACT-5) : absent = le garder
+            $price = null;
+            $priceIn = is_array($line) && is_array($line['price'] ?? null) ? $line['price'] : null;
+            if ($priceIn !== null && $create === null) {
+                $mode = $priceIn['mode'] ?? null;
+                $priceCoefficient = $priceIn['coefficient'] ?? null;
+                $fixed = $priceIn['price'] ?? null;
+                if (!in_array($mode, self::PRICE_MODES, true)) {
+                    $errors["lines[$n].price.mode"] = 'INVALID_MODE';
+                } elseif ($mode === 'coefficient' && (!is_int($priceCoefficient) && !is_float($priceCoefficient) || $priceCoefficient <= 0 || $priceCoefficient > self::COEFFICIENT_MAX)) {
+                    $errors["lines[$n].price.coefficient"] = !is_int($priceCoefficient) && !is_float($priceCoefficient) ? 'REQUIRED' : ($priceCoefficient <= 0 ? 'MUST_BE_POSITIVE' : 'OUT_OF_RANGE');
+                } elseif ($mode === 'fixed' && (!is_int($fixed) || $fixed <= 0)) {
+                    $errors["lines[$n].price.price"] = 'INVALID_AMOUNT';
+                } elseif ($mode !== 'keep') {
+                    $price = $mode === 'coefficient' ? ['mode' => 'coefficient', 'coefficient' => (float) $priceCoefficient] : ['mode' => 'fixed', 'price' => $fixed];
+                }
             }
             $lines[] = ['n' => $n, 'label' => $label, 'quantity' => $quantity, 'unitCost' => $unitCost, 'productId' => $productId, 'variantId' => $variantId, 'size' => $size, 'color' => $color,
-                'create' => $create !== null ? ['name' => $createName, 'coefficient' => $coefficient, 'groupKey' => $groupKey] : null];
+                'create' => $create !== null ? ['name' => $createName, 'coefficient' => $coefficient, 'groupKey' => $groupKey] + $publish : null, 'price' => $price];
         }
         if ($lines === []) {
             $errors['lines'] = 'REQUIRED';
@@ -111,21 +142,79 @@ final class GestionInvoiceDraft
 
     /**
      * Prix d'un article créé par un groupe de lignes, LA règle (aperçu et confirmation) : coût moyen pondéré du groupe, converti dans la
-     * devise du site, × coefficient de la première ligne (2 par défaut). Le coefficient se lit donc « prix de vente ÷ coût, dans la devise
-     * du site ». `cost` reste dans la devise de la facture (ligne d'achat, lot G6) ; `costConverted` est le prix d'achat de la fiche.
+     * devise du site, × coefficient de la première ligne (sinon le coefficient par défaut du SITE, lot IA-ACT-5), puis arrondi selon le
+     * réglage du site (`PriceRounding`). Le coefficient se lit donc « prix de vente ÷ coût, dans la devise du site », avant l'arrondi.
+     * `cost` reste dans la devise de la facture (ligne d'achat, lot G6) ; `costConverted` est le prix d'achat de la fiche.
      *
      * @param list<array<string, mixed>> $group lignes de même groupKey, quantités et coûts valides
      *
      * @return array{cost: int, costConverted: int, coefficient: float, price: int}
      */
-    public static function groupPrice(array $group, float $rate): array
+    public static function groupPrice(array $group, float $rate, float $defaultCoefficient = self::DEFAULT_COEFFICIENT, string $rounding = PriceRounding::NONE): array
     {
         $quantity = array_sum(array_column($group, 'quantity'));
         $cost = $quantity > 0 ? (int) round(array_sum(array_map(fn ($l) => $l['quantity'] * $l['unitCost'], $group)) / $quantity) : (int) $group[0]['unitCost'];
-        $coefficient = (float) ($group[0]['create']['coefficient'] ?? self::DEFAULT_COEFFICIENT);
+        $coefficient = (float) ($group[0]['create']['coefficient'] ?? $defaultCoefficient);
         $converted = self::convert($cost, $rate);
 
-        return ['cost' => $cost, 'costConverted' => $converted, 'coefficient' => $coefficient, 'price' => (int) round($converted * $coefficient)];
+        return ['cost' => $cost, 'costConverted' => $converted, 'coefficient' => $coefficient, 'price' => PriceRounding::apply((int) round($converted * $coefficient), $rounding)];
+    }
+
+    /**
+     * Mise en ligne d'un article créé par un groupe de lignes : celle de la première ligne qui la demande, par canal.
+     *
+     * @param list<array<string, mixed>> $group
+     *
+     * @return array{pos: string, web: string}
+     */
+    public static function groupPublish(array $group): array
+    {
+        $out = ['pos' => 'no', 'web' => 'no'];
+        foreach ($group as $line) {
+            foreach (['pos' => 'publishPos', 'web' => 'publishWeb'] as $channel => $key) {
+                if ($out[$channel] === 'no' && ($line['create'][$key] ?? 'no') !== 'no') {
+                    $out[$channel] = $line['create'][$key];
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Nouveau prix d'un article DÉJÀ AU CATALOGUE décidé sur la facture (lot IA-ACT-5), LA règle (aperçu et confirmation) : la décision
+     * est celle de la première ligne de l'article qui en porte une. Mode coefficient : coût moyen pondéré de l'article sur CETTE facture,
+     * converti dans la devise du site, × coefficient, arrondi selon le réglage du site. Prix saisi : tel quel, jamais arrondi.
+     *
+     * @param list<array<string, mixed>> $lines lignes de la facture pour cet article
+     *
+     * @return array{mode: string, coefficient: ?float, costConverted: ?int, price: int}|null null : le prix est gardé
+     */
+    public static function productPrice(array $lines, float $rate, string $rounding = PriceRounding::NONE): ?array
+    {
+        $decision = null;
+        $quantity = 0;
+        $total = 0;
+        foreach ($lines as $line) {
+            $decision ??= $line['price'] ?? null;
+            if (($line['quantity'] ?? null) !== null && ($line['unitCost'] ?? null) !== null) {
+                $quantity += $line['quantity'];
+                $total += $line['quantity'] * $line['unitCost'];
+            }
+        }
+        if ($decision === null) {
+            return null;
+        }
+        $converted = $quantity > 0 ? self::convert((int) round($total / $quantity), $rate) : null;
+        if ($decision['mode'] === 'fixed') {
+            return ['mode' => 'fixed', 'coefficient' => null, 'costConverted' => $converted, 'price' => (int) $decision['price']];
+        }
+        if ($converted === null) {
+            return null; // sans coût sur la facture, pas de prix calculé : le prix est gardé
+        }
+
+        return ['mode' => 'coefficient', 'coefficient' => (float) $decision['coefficient'], 'costConverted' => $converted,
+            'price' => PriceRounding::apply((int) round($converted * (float) $decision['coefficient']), $rounding)];
     }
 
     /**

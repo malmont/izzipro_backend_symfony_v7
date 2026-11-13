@@ -24,10 +24,19 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * Une question : `{ id, kind, path, title, text, required, input, options, answer }`. `id` est stable (`supplier`, `invoice.date`,
  * `amountsMode`, `exchangeRate`, `period`, `duplicate`, `difference`, `line:<clé>`, `unitCost:<n>`) ; `path` est le chemin du champ de la
  * confirmation qu'elle renseigne ; `answer` est la réponse donnée, null tant qu'il n'y en a pas. Lecture seule.
+ *
+ * Lot IA-ACT-5 (13/11/2026, § 13 de la fiche), en fin de liste, toutes PROPOSÉES (`proposed: true`, elles ne comptent pas parmi les
+ * questions ouvertes) : `coefficient` (le coefficient des articles créés : celui proposé pour chacun d'après ses semblables, le
+ * fournisseur ou le réglage du site, ou un nombre pour toute la facture), `publish.pos` et `publish.web` (mise en ligne des articles
+ * créés, par canal : non, tout de suite, à la réception), `price.mode` (prix des articles déjà au catalogue : les garder, appliquer à
+ * chacun le coefficient proposé, ou régler article par article) et, sur « article par article » seulement, `price:<productId>` (le
+ * garder, un coefficient, un prix saisi).
  */
 class InvoiceQuestions
 {
     public const ABANDON = 'abandon';
+    /** Prix des articles déjà au catalogue, pour toute la facture (lot IA-ACT-5) : les garder, le coefficient proposé à chacun, ou article par article */
+    public const PRICE_MODES = ['keep', 'suggested', 'each'];
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -35,6 +44,8 @@ class InvoiceQuestions
         private readonly TenantCurrencyProvider $currency,
         private readonly TranslatorInterface $translator,
         private readonly \App\Gestion\Services\Document\InvoiceTargetPolicy $targets, // lot IA-FACT-2-A : ajout à une commande ouverte
+        private readonly \App\Gestion\Analysis\CoefficientSuggestion $suggestions, // lot IA-ACT-5 : coefficient proposé
+        private readonly \App\Gestion\Services\GestionPriceSettingsService $settings,
     ) {
     }
 
@@ -138,7 +149,8 @@ class InvoiceQuestions
             if ($answer !== null && isset($answer['productId'])) {
                 $out += ['productId' => (int) $answer['productId']] + (isset($answer['variantId']) ? ['variantId' => (int) $answer['variantId']] : []);
             } elseif ($answer !== null && is_array($answer['create'] ?? null)) {
-                $out['create'] = array_filter(['name' => (string) ($answer['create']['name'] ?? ''), 'coefficient' => $answer['create']['coefficient'] ?? null, 'groupKey' => $grouped ? (string) $line['groupKey'] : null], fn ($v) => $v !== null);
+                $out['create'] = array_filter(['name' => (string) ($answer['create']['name'] ?? ''), 'coefficient' => $answer['create']['coefficient'] ?? null, 'groupKey' => $grouped ? (string) $line['groupKey'] : null,
+                    'publishPos' => $answer['create']['publishPos'] ?? null, 'publishWeb' => $answer['create']['publishWeb'] ?? null], fn ($v) => $v !== null);
             } elseif ($recognized !== null) {
                 $out += ['productId' => (int) $recognized['id']] + (isset($recognized['variantId']) ? ['variantId' => (int) $recognized['variantId']] : []);
             }
@@ -149,7 +161,8 @@ class InvoiceQuestions
                 foreach (is_array($line['candidates'] ?? null) ? $line['candidates'] : [] as $candidate) {
                     $options[] = ['value' => ['productId' => (int) $candidate['id']], 'label' => trim((string) $candidate['name'] . (($candidate['code'] ?? '') !== '' ? ' (' . $candidate['code'] . ')' : '')), 'score' => $candidate['score'] ?? null];
                 }
-                $options[] = ['value' => ['create' => ['name' => $label, 'coefficient' => GestionInvoiceDraft::DEFAULT_COEFFICIENT]], 'label' => $this->tr('conversation.options.product_create', $locale, ['%name%' => $label !== '' ? $label : '…'])];
+                // sans coefficient : celui de la question `coefficient` s'applique ; `create.coefficient` reste accepté pour régler une seule ligne (lot IA-ACT-5)
+                $options[] = ['value' => ['create' => ['name' => $label]], 'label' => $this->tr('conversation.options.product_create', $locale, ['%name%' => $label !== '' ? $label : '…'])];
                 $questions[] = $this->question($key, 'line.product', "lines[$n]", true, ['type' => 'choice'], $options, $answer, $locale, ['%label%' => $label !== '' ? $label : '?']) + ['lines' => $grouped ? null : [$n], 'groupKey' => $grouped ? (string) $line['groupKey'] : null];
             }
             if (($line['unitCost'] ?? null) === null || isset($answers["unitCost:$n"])) {
@@ -227,6 +240,145 @@ class InvoiceQuestions
                 $answers['difference'] ?? null, $locale, ['%difference%' => number_format(abs($difference) / 100, 2, $locale === 'en' ? '.' : ',', ' ')]) + ['difference' => $difference];
         }
 
+        // ---- Prix de vente et mise en ligne (lot IA-ACT-5), après tout ce qui fixe les coûts ----
+        $pricingCurrency = $targetCommande !== null ? strtoupper($targetCommande->getCurrency() ?? $site) : $purchaseCurrency;
+        $rate = GestionInvoiceDraft::effectiveRate($pricingCurrency, $site, $targetCommande !== null ? $targetCommande->getExchangeRate() : $rateAnswer);
+        $day = $date !== null ? new \DateTimeImmutable($date) : $this->calendar->today();
+        $amount = fn (int $cents) => number_format($cents / 100, 2, $locale === 'en' ? '.' : ',', ' ') . ' ' . $site;
+        $number = fn (float $v) => \App\Gestion\Analysis\CoefficientSuggestion::number($v, $locale);
+        $groups = [];
+        $existing = [];
+        foreach ($body['lines'] as $i => $l) {
+            if (isset($l['create'])) {
+                $groups[$l['create']['groupKey'] ?? 'line-' . $l['n']][] = $i;
+            } elseif (isset($l['productId'])) {
+                $existing[(int) $l['productId']][] = $i;
+            }
+        }
+        // Coût unitaire moyen pondéré d'un groupe de lignes, dans la devise du site ; null tant qu'un coût ou le taux manque
+        $cost = function (array $idx) use (&$body, $rate): ?int {
+            $quantity = $total = 0;
+            foreach ($idx as $i) {
+                $l = $body['lines'][$i];
+                if (is_int($l['quantity'] ?? null) && is_int($l['unitCost'] ?? null) && $l['quantity'] > 0) {
+                    $quantity += $l['quantity'];
+                    $total += $l['quantity'] * $l['unitCost'];
+                }
+            }
+
+            return $quantity > 0 && $rate !== null ? GestionInvoiceDraft::convert((int) round($total / $quantity), $rate) : null;
+        };
+        if ($groups !== []) {
+            // Coefficient des articles créés : pour chacun, d'après ses semblables, sinon le fournisseur, sinon le réglage du site (aucune
+            // IA) ; un nombre répondu vaut pour toute la facture ; `create.coefficient` d'une ligne passe avant tout
+            $coefficientAnswer = $answers['coefficient'] ?? null;
+            $articles = [];
+            $proposals = [];
+            $shared = [];
+            foreach ($groups as $key => $idx) {
+                $unitCost = $cost($idx);
+                $suggestion = $this->suggestions->suggest($supplier?->getId(), $unitCost, [], $day, $locale);
+                $explicit = $body['lines'][$idx[0]]['create']['coefficient'] ?? null;
+                $coefficient = (float) ($explicit ?? (is_int($coefficientAnswer) || is_float($coefficientAnswer) ? $coefficientAnswer : $suggestion['proposed']));
+                foreach ($idx as $i) {
+                    $body['lines'][$i]['create']['coefficient'] = $coefficient;
+                }
+                $articles[] = ['lines' => array_map(fn (int $i) => $body['lines'][$i]['n'], $idx), 'groupKey' => $body['lines'][$idx[0]]['create']['groupKey'] ?? null, 'name' => $body['lines'][$idx[0]]['create']['name'] ?? null,
+                    'cost' => $unitCost, 'coefficient' => $coefficient, 'source' => $explicit !== null ? 'line' : (is_int($coefficientAnswer) || is_float($coefficientAnswer) ? 'invoice' : $suggestion['source']),
+                    'proposed' => $suggestion['proposed'], 'proposedSource' => $suggestion['source'], 'label' => $suggestion['options'][0]['label'], 'similar' => $suggestion['options'][0]['source'] === 'similar' ? $suggestion['options'][0]['figures'] : null,
+                    'price' => $unitCost === null ? null : $this->settings->price($unitCost, $coefficient)];
+                $proposals[] = $suggestion['proposed'];
+                foreach ($suggestion['options'] as $option) {
+                    if ($option['source'] !== 'similar') {
+                        $shared[$option['source']] = $option; // les mêmes pour toute la facture : le fournisseur, le site
+                    }
+                }
+            }
+            $sources = array_values(array_unique(array_column($articles, 'proposedSource')));
+            $suggestedLabel = count($articles) === 1 || (count(array_unique($proposals)) === 1 && $sources !== ['similar']) ? $articles[0]['label']
+                : $this->tr(min($proposals) === max($proposals) ? 'conversation.options.coefficient_each_same' : 'conversation.options.coefficient_each', $locale, ['%min%' => $number(min($proposals)), '%max%' => $number(max($proposals))]);
+            $options = [['value' => 'suggested', 'label' => $suggestedLabel]];
+            foreach ($shared as $source => $option) {
+                if ($sources !== [$source]) { // déjà dit par « proposé » quand tous les articles en viennent
+                    $options[] = ['value' => $option['value'], 'label' => $option['label'], 'source' => $source];
+                }
+            }
+            $questions[] = $this->question('coefficient', 'coefficient', 'lines', true, ['type' => 'choice', 'number' => ['min' => \App\Gestion\Services\GestionPriceSettingsService::COEFFICIENT_FROM, 'max' => GestionInvoiceDraft::COEFFICIENT_MAX]],
+                $options, $coefficientAnswer ?? 'suggested', $locale) + ['proposed' => $coefficientAnswer === null, 'articles' => $articles];
+
+            // Mise en ligne des articles créés, par canal : non (proposé), tout de suite, à la réception du stock ; une ligne peut en décider autrement
+            foreach (['pos' => 'publishPos', 'web' => 'publishWeb'] as $channel => $field) {
+                $id = "publish.$channel";
+                $publishAnswer = in_array($answers[$id] ?? null, GestionInvoiceDraft::PUBLISH, true) ? $answers[$id] : null;
+                $questions[] = $this->question($id, $id, 'lines', true, ['type' => 'choice'], array_map(fn (string $v) => ['value' => $v, 'label' => $this->tr("conversation.options.publish_$v", $locale)], GestionInvoiceDraft::PUBLISH),
+                    $publishAnswer ?? 'no', $locale) + ['proposed' => $publishAnswer === null];
+                foreach ($groups as $idx) {
+                    foreach ($idx as $i) {
+                        $value = $body['lines'][$i]['create'][$field] ?? $publishAnswer ?? 'no';
+                        unset($body['lines'][$i]['create'][$field]);
+                        if ($value !== 'no') {
+                            $body['lines'][$i]['create'][$field] = $value;
+                        }
+                    }
+                }
+            }
+        }
+        // Prix des articles déjà au catalogue. UNE question pour la facture, `price.mode`, proposée à « keep » : garder tous les prix,
+        // appliquer à chacun le coefficient proposé (« suggested »), ou régler article par article (« each »). Les questions
+        // `price:<productId>` n'existent que sur « each » : une facture de 30 articles reste lisible.
+        $priced = [];
+        foreach ($existing as $productId => $idx) {
+            $product = $em->find(Product::class, $productId);
+            if ($product === null) {
+                continue;
+            }
+            $unitCost = $cost($idx);
+            $current = $product->getPrice() !== null ? (int) round((float) $product->getPrice()) : null;
+            $categories = array_map('intval', $em->getConnection()->fetchFirstColumn('SELECT categories_id FROM product_categories WHERE product_id = ?', [$productId]));
+            $priced[$productId] = ['idx' => $idx, 'name' => (string) $product->getName(), 'cost' => $unitCost, 'current' => $current,
+                'currentCoefficient' => $unitCost !== null && $unitCost > 0 && $current !== null && $current > 0 ? round($current / $unitCost, 2) : null,
+                'suggestion' => $this->suggestions->suggest($supplier?->getId(), $unitCost, $categories, $day, $locale, $productId)];
+        }
+        if ($priced !== []) {
+            $modeAnswer = in_array($answers['price.mode'] ?? null, self::PRICE_MODES, true) ? $answers['price.mode'] : null;
+            $priceMode = $modeAnswer ?? 'keep';
+            $questions[] = $this->question('price.mode', 'price.mode', 'lines', true, ['type' => 'choice'], array_map(fn (string $m) => ['value' => $m, 'label' => $this->tr("conversation.options.price_mode_$m", $locale)], self::PRICE_MODES),
+                $priceMode, $locale, ['%count%' => (string) count($priced)])
+                + ['proposed' => $modeAnswer === null, 'articles' => array_values(array_map(fn (int $productId, array $a) => ['productId' => $productId, 'name' => $a['name'], 'lines' => array_map(fn (int $i) => $body['lines'][$i]['n'], $a['idx']),
+                    'currentPrice' => $a['current'], 'cost' => $a['cost'], 'currentCoefficient' => $a['currentCoefficient'], 'proposed' => $a['suggestion']['proposed'], 'proposedSource' => $a['suggestion']['source'],
+                    'label' => $a['suggestion']['options'][0]['label'], 'price' => $a['cost'] === null ? null : $this->settings->price($a['cost'], $a['suggestion']['proposed'])], array_keys($priced), $priced))];
+            foreach ($priced as $productId => $a) {
+                $decision = null;
+                if ($priceMode === 'suggested') {
+                    $decision = $a['cost'] === null ? null : ['mode' => 'coefficient', 'coefficient' => (float) $a['suggestion']['proposed']];
+                } elseif ($priceMode === 'each') {
+                    // Article par article : le garder (proposé), un coefficient sur le coût de cette facture, ou un prix saisi
+                    $id = "price:$productId";
+                    $priceAnswer = is_array($answers[$id] ?? null) && in_array($answers[$id]['mode'] ?? null, GestionInvoiceDraft::PRICE_MODES, true) ? $answers[$id] : null;
+                    $options = [['value' => ['mode' => 'keep'], 'label' => $a['current'] === null ? $this->tr('conversation.options.price_keep_none', $locale)
+                        : $this->tr($a['currentCoefficient'] === null ? 'conversation.options.price_keep' : 'conversation.options.price_keep_coefficient', $locale, ['%price%' => $amount($a['current']), '%coefficient%' => $a['currentCoefficient'] === null ? '' : $number($a['currentCoefficient'])])]];
+                    if ($a['cost'] !== null) {
+                        foreach ($a['suggestion']['options'] as $option) {
+                            $price = $this->settings->price($a['cost'], $option['value']);
+                            $options[] = ['value' => ['mode' => 'coefficient', 'coefficient' => $option['value']], 'label' => $option['label'] . ' → ' . $amount($price), 'price' => $price, 'source' => $option['source']];
+                        }
+                    }
+                    $questions[] = $this->question($id, 'line.price', 'lines[' . $body['lines'][$a['idx'][0]]['n'] . '].price', true, ['type' => 'choice', 'money' => ['currency' => $site], 'number' => ['min' => \App\Gestion\Services\GestionPriceSettingsService::COEFFICIENT_FROM, 'max' => GestionInvoiceDraft::COEFFICIENT_MAX]],
+                        $options, $priceAnswer ?? ['mode' => 'keep'], $locale, ['%label%' => $a['name']])
+                        + ['proposed' => $priceAnswer === null, 'product' => ['id' => $productId, 'name' => $a['name']], 'lines' => array_map(fn (int $i) => $body['lines'][$i]['n'], $a['idx']),
+                            'currentPrice' => $a['current'], 'cost' => $a['cost'], 'currentCoefficient' => $a['currentCoefficient']];
+                    if ($priceAnswer !== null && $priceAnswer['mode'] !== 'keep') {
+                        $decision = $priceAnswer['mode'] === 'fixed' ? ['mode' => 'fixed', 'price' => (int) $priceAnswer['price']] : ['mode' => 'coefficient', 'coefficient' => (float) ($priceAnswer['coefficient'] ?? $a['suggestion']['proposed'])];
+                    }
+                }
+                if ($decision !== null) {
+                    foreach ($a['idx'] as $i) {
+                        $body['lines'][$i]['price'] = $decision;
+                    }
+                }
+            }
+        }
+
         return ['body' => $body, 'questions' => $questions];
     }
 
@@ -280,7 +432,14 @@ class InvoiceQuestions
                         $fail('MUST_BE_POSITIVE');
                     }
 
-                    return ['create' => array_filter(['name' => mb_substr(trim((string) $value['create']['name']), 0, 255), 'coefficient' => $coefficient !== null ? (float) $coefficient : null], fn ($v) => $v !== null)];
+                    foreach (['publishPos', 'publishWeb'] as $channel) { // lot IA-ACT-5 : mise en ligne réglée pour cette seule ligne
+                        if (isset($value['create'][$channel]) && !in_array($value['create'][$channel], GestionInvoiceDraft::PUBLISH, true)) {
+                            $fail('INVALID_VALUE');
+                        }
+                    }
+
+                    return ['create' => array_filter(['name' => mb_substr(trim((string) $value['create']['name']), 0, 255), 'coefficient' => $coefficient !== null ? (float) $coefficient : null,
+                        'publishPos' => $value['create']['publishPos'] ?? null, 'publishWeb' => $value['create']['publishWeb'] ?? null], fn ($v) => $v !== null)];
                 }
                 $fail('INVALID_VALUE');
                 // no break
@@ -292,6 +451,36 @@ class InvoiceQuestions
                 return is_numeric($value) && (float) $value > 0 ? (float) $value : $fail('MUST_BE_POSITIVE');
             case 'line.unitCost':
                 return is_int($value) && $value >= 0 ? $value : $fail('INVALID_AMOUNT');
+            case 'coefficient': // lot IA-ACT-5 : « proposé pour chaque article », ou un nombre pour toute la facture
+                if ($value === 'suggested') {
+                    return $value;
+                }
+                if (!is_int($value) && !is_float($value) || $value <= 0) {
+                    $fail('MUST_BE_POSITIVE');
+                }
+
+                return $value <= GestionInvoiceDraft::COEFFICIENT_MAX ? round((float) $value, 2) : $fail('OUT_OF_RANGE');
+            case 'line.price': // lot IA-ACT-5 : prix d'un article déjà au catalogue
+                $mode = is_array($value) ? ($value['mode'] ?? null) : null;
+                if ($mode === 'keep') {
+                    return ['mode' => 'keep'];
+                }
+                if ($mode === 'fixed') {
+                    return is_int($value['price'] ?? null) && $value['price'] > 0 ? ['mode' => 'fixed', 'price' => $value['price']] : $fail('INVALID_AMOUNT');
+                }
+                if ($mode === 'coefficient') {
+                    $coefficient = $value['coefficient'] ?? null;
+                    if ($coefficient !== null && (!is_int($coefficient) && !is_float($coefficient) || $coefficient <= 0)) {
+                        $fail('MUST_BE_POSITIVE');
+                    }
+                    if ($coefficient !== null && $coefficient > GestionInvoiceDraft::COEFFICIENT_MAX) {
+                        $fail('OUT_OF_RANGE');
+                    }
+
+                    return ['mode' => 'coefficient'] + ($coefficient !== null ? ['coefficient' => round((float) $coefficient, 2)] : []);
+                }
+                $fail('INVALID_VALUE');
+                // no break
             default: // period, duplicate, difference : une des valeurs proposées
                 return in_array($value, array_column($question['options'], 'value'), true) ? $value : $fail('INVALID_VALUE');
         }

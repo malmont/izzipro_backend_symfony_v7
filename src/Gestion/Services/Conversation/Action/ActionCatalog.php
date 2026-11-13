@@ -12,16 +12,17 @@ class ActionCatalog
     /** Clés du catalogue, dans l'ordre (lecture sans instancier les actions) */
     public const KEYS = ['expense.create', 'supplier.create', 'shipping.create', 'budget.put', 'cash.balance.create', 'cash.movement.create', 'trip.create', // lot IA-ACT-2
         'fiscal_year.set', 'periods.calendar.set', 'product.cost.set', // lot IA-ACT-3
-        'period.close']; // lot IA-ACT-4
+        'period.close', // lot IA-ACT-4
+        'price.set']; // lot IA-ACT-5
 
     /** @var array<string, GestionAction> */
     private array $actions = [];
 
     public function __construct(ExpenseCreateAction $expense, SupplierCreateAction $supplier, ShippingCreateAction $shipping, BudgetPutAction $budget,
         CashBalanceCreateAction $cashBalance, CashMovementCreateAction $cashMovement, TripCreateAction $trip,
-        FiscalYearSetAction $fiscalYear, PeriodsCalendarSetAction $periodsCalendar, ProductCostSetAction $productCost, PeriodCloseAction $periodClose)
+        FiscalYearSetAction $fiscalYear, PeriodsCalendarSetAction $periodsCalendar, ProductCostSetAction $productCost, PeriodCloseAction $periodClose, PriceSetAction $priceSet)
     {
-        foreach ([$expense, $supplier, $shipping, $budget, $cashBalance, $cashMovement, $trip, $fiscalYear, $periodsCalendar, $productCost, $periodClose] as $action) {
+        foreach ([$expense, $supplier, $shipping, $budget, $cashBalance, $cashMovement, $trip, $fiscalYear, $periodsCalendar, $productCost, $periodClose, $priceSet] as $action) {
             $this->actions[$action::key()] = $action;
         }
     }

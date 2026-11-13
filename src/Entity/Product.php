@@ -235,6 +235,14 @@ class Product implements TranslatableInterface, DemoContentInterface
     #[Groups(['product:list'])]
     private bool $rentalEnabled = false;
 
+    // Mise en ligne à la réception du stock (lot IA-ACT-5, 13/11/2026) : marque posée par une facture confirmée, une par canal ; la première
+    // réception de stock met l'article en ligne sur le canal marqué et efface la marque (`CommandeReceptionService`). Jamais exposée par l'API publique.
+    #[ORM\Column(name: 'publish_web_on_reception', options: ['default' => false])]
+    private bool $publishWebOnReception = false;
+
+    #[ORM\Column(name: 'publish_pos_on_reception', options: ['default' => false])]
+    private bool $publishPosOnReception = false;
+
     #[ORM\Column(name: 'subscription_enabled', options: ['default' => false])]
     #[Groups(['product:list'])]
     private bool $subscriptionEnabled = false;
@@ -999,6 +1007,30 @@ class Product implements TranslatableInterface, DemoContentInterface
         $this->saleEnabled = $mode === ProductMode::RETAIL;
         $this->rentalEnabled = $mode === ProductMode::BOOKING;
         $this->syncMode();
+
+        return $this;
+    }
+
+    public function isPublishWebOnReception(): bool
+    {
+        return $this->publishWebOnReception;
+    }
+
+    public function setPublishWebOnReception(bool $on): static
+    {
+        $this->publishWebOnReception = $on;
+
+        return $this;
+    }
+
+    public function isPublishPosOnReception(): bool
+    {
+        return $this->publishPosOnReception;
+    }
+
+    public function setPublishPosOnReception(bool $on): static
+    {
+        $this->publishPosOnReception = $on;
 
         return $this;
     }

@@ -329,7 +329,7 @@ year:
             detail: "+%percent% % sur %sales% de ventes restantes estimées, à quantités égales : tout va dans la marge."
         dormantStock:
             label: "Écouler le stock dormant"
-            detail: "Effet des %count% conseil(s) du guide sur le stock qui dort (sans nouveau calcul)."
+            detail: "Effet du conseil du guide sur le stock qui dort (sans nouveau calcul).|Effet des %count% conseils du guide sur le stock qui dort (sans nouveau calcul)."
         fixedCostsWeight:
             label: "Alléger les frais fixes"
             detail: "Les frais fixes pèsent %weight% de la marge de l'année ; effet d'une baisse de 10 % sur le reste de l'année."
@@ -396,6 +396,7 @@ sequences:
         fiscal_year_set: 'Changer le mois d''exercice'
         periods_calendar_set: 'Changer le découpage'
         product_cost_set: 'Poser un autre coût d''achat'
+        price_set: 'Changer d''autres prix'
     figure_values:
         tier:
             full: 'IA complète'
@@ -435,11 +436,11 @@ sequences:
                 todo: 'Préparez la période : estimez vos ventes, simulez vos achats, puis validez. Les budgets s''enregistrent à ce moment-là.'
             trip:
                 title: "Voyage d'achat"
-                done: '%trips% voyage(s) d''achat touche(nt) cette période.'
+                done: '%trips% voyage d''achat touche cette période.|%trips% voyages d''achat touchent cette période.'
                 todo: "Aucun voyage d'achat sur cette période. Facultatif : créez-le si vous partez acheter."
             cash_balance:
                 title: 'Solde de trésorerie à jour'
-                done: 'Dernier solde saisi il y a %ageDays% jour(s) : la projection de trésorerie est fiable.'
+                done: 'Dernier solde saisi il y a %ageDays% jour : la projection de trésorerie est fiable.|Dernier solde saisi il y a %ageDays% jours : la projection de trésorerie est fiable.'
                 todo: 'Saisissez le solde de votre compte : sans solde de moins de 30 jours, la trésorerie après achats est incertaine.'
             fixed_costs:
                 title: 'Frais fixes'
@@ -447,7 +448,7 @@ sequences:
                 todo: 'Renseignez vos frais fixes (loyer, salaires, abonnements) : sans eux, le résultat de la période est trop optimiste.'
             purchase_order:
                 title: 'Première commande fournisseur de la période'
-                done: '%orders% commande(s) fournisseur datée(s) dans cette période.'
+                done: '%orders% commande fournisseur datée dans cette période.|%orders% commandes fournisseurs datées dans cette période.'
                 todo: 'Aucune commande fournisseur datée dans cette période pour l''instant.'
     fiscal_year.close:
         title: "Clôturer l'exercice"
@@ -456,15 +457,15 @@ sequences:
             periods_closed:
                 title: "Périodes de l'exercice fermées"
                 done: 'Les %periods% périodes de l''exercice sont fermées.'
-                todo: '%closedPeriods% période(s) fermée(s) sur %periods% : une période encore ouverte peut changer le bilan.'
+                todo: '%closedPeriods% période fermée sur %periods% : une période encore ouverte peut changer le bilan.|%closedPeriods% périodes fermées sur %periods% : une période encore ouverte peut changer le bilan.'
             purchase_costs:
                 title: "Coût d'achat des articles vendus"
                 done: 'Tous les articles vendus pendant l''exercice ont un coût d''achat : la marge est connue.'
-                todo: '%missing% article(s) vendu(s) pendant l''exercice sans coût d''achat : la marge de l''exercice est fausse.'
+                todo: '%missing% article vendu pendant l''exercice sans coût d''achat : la marge de l''exercice est fausse.|%missing% articles vendus pendant l''exercice sans coût d''achat : la marge de l''exercice est fausse.'
             reconciliation:
                 title: 'Rapprochement bancaire de chaque mois'
                 done: 'Un solde saisi dans chaque mois de l''exercice, sans écart resté ouvert.'
-                todo: '%monthsWithBalance% mois sur %months% ont un solde saisi, %openGaps% écart(s) resté(s) ouvert(s).'
+                todo: '%monthsWithBalance% mois sur %months% ont un solde saisi, %openGaps% écart resté ouvert.|%monthsWithBalance% mois sur %months% ont un solde saisi, %openGaps% écarts restés ouverts.'
             fixed_costs:
                 title: "Frais fixes de l'exercice"
                 done: 'Vos frais fixes sont renseignés sur l''exercice.'
@@ -485,7 +486,7 @@ sequences:
             purchase_costs:
                 title: 'Articles vendus sans coût sur le créneau'
                 done: 'Tous les articles vendus sur le créneau ont un coût d''achat.'
-                todo: '%missing% article(s) vendu(s) sur le créneau sans coût d''achat.'
+                todo: '%missing% article vendu sur le créneau sans coût d''achat.|%missing% articles vendus sur le créneau sans coût d''achat.'
 
 # Facture par conversation (lot IA-FACT-1, 13/11/2026) : docs/conversation-gestion.md
 conversation:
@@ -625,7 +626,7 @@ conversation:
                 text: 'Des notes, si vous voulez.'
             attaches:
                 title: 'Rattachements'
-                some: 'À la création, %notes% note(s) de frais et %commandes% commande(s) libres datées dans le voyage y seront rattachées. Annuler le voyage rendra ces éléments libres.'
+                some: 'À la création, les notes de frais et les commandes libres datées dans le voyage y seront rattachées (notes de frais : %notes% ; commandes : %commandes%). Annuler le voyage rendra ces éléments libres.'
                 none: 'Aucune note de frais ni commande libre n''est datée dans ce voyage : rien ne sera rattaché.'
         fiscal_year_set:
             title: 'Choisir le mois de début d''exercice'
@@ -668,7 +669,7 @@ conversation:
                 tax: '(prix taxes comprises : la marge comprend la taxe)'
             effect:
                 title: 'Effet sur vos chiffres'
-                some: '%count% unité(s) vendue(s) dans les périodes ouvertes passeront de « vente sans coût connu » à une vente valorisée.'
+                some: '%count% unité vendue dans les périodes ouvertes passera de « vente sans coût connu » à une vente valorisée.|%count% unités vendues dans les périodes ouvertes passeront de « vente sans coût connu » à une vente valorisée.'
                 none: 'Aucune vente des périodes ouvertes ne change de valeur.'
                 current: 'Coût des articles vendus de la période « %period% » : %before% avant, %after% après.'
                 closed: 'Les périodes fermées sont figées : leurs chiffres ne changent pas.'
@@ -689,8 +690,8 @@ conversation:
                 title: 'Commandes fournisseurs qui seront fermées'
             alerts:
                 title: 'À savoir avant de clôturer'
-                unknown_cost: '%count% unité(s) vendue(s) sans coût connu : après la clôture, elles resteront sans coût dans les chiffres figés. Posez les coûts d''achat avant de clôturer.'
-                without_shipping: '%count% commande(s) fournisseur(s) de la période sans frais de port : après la clôture, on ne pourra plus l''ajouter.'
+                unknown_cost: '%count% unité vendue sans coût connu : après la clôture, elle restera sans coût dans les chiffres figés. Posez les coûts d''achat avant de clôturer.|%count% unités vendues sans coût connu : après la clôture, elles resteront sans coût dans les chiffres figés. Posez les coûts d''achat avant de clôturer.'
+                without_shipping: '%count% commande fournisseur de la période sans frais de port : après la clôture, on ne pourra plus l''ajouter.|%count% commandes fournisseurs de la période sans frais de port : après la clôture, on ne pourra plus les ajouter.'
             consequence:
                 title: 'Après la clôture'
                 text: 'Après la clôture, aucune écriture datée dans cette période ne sera acceptée (commandes, frais de port, notes de frais), et ses chiffres seront figés.'
@@ -702,14 +703,82 @@ conversation:
             planned:
                 title: '%category%'
                 text: 'Montant prévu pour le poste « %category% » (laisser vide pour ne pas le changer, 0 pour l''effacer).'
+        price_set:
+            title: 'Changer le prix de vente d''articles'
+            scope:
+                title: 'Articles concernés'
+                text: 'Quels articles changent de prix ?'
+                period: 'Les articles achetés pendant « %name% »'
+                collection: 'Les articles de la collection « %name% »'
+                category: 'La catégorie « %name% »'
+                commande: 'Les articles de la commande « %name% »'
+                products: '%count% article choisi|%count% articles choisis'
+            mode:
+                title: 'Façon de fixer le prix'
+                text: 'Comment voulez-vous fixer le nouveau prix ?'
+                options:
+                    coefficient: 'Coefficient sur le coût d''achat'
+                    percent: 'Pourcentage sur le prix actuel'
+                    fixed: 'Un prix saisi'
+            value:
+                title: 'Valeur'
+                text: 'Quelle valeur ?'
+                text_any: 'Quelle valeur ? (choisissez d''abord la façon de fixer le prix)'
+                text_coefficient: 'Quel coefficient ? Le prix de vente sera le coût d''achat multiplié par ce coefficient.'
+                text_percent: 'Quel pourcentage ? Par exemple 10 pour augmenter de 10 %, −15 pour baisser de 15 %.'
+                text_fixed: 'Quel prix de vente ? Il sera écrit tel quel, sans arrondi.'
+            rounding:
+                title: 'Arrondi'
+                text: 'Comment arrondir les prix calculés ?'
+                options:
+                    psy_99: 'Prix psychologique (9,99 ; 54,99 ; 159)'
+                    ends_95: 'Terminaison ,95'
+                    integer: 'Entier supérieur'
+                    none: 'Sans arrondi'
+            force:
+                title: 'Prix à risque'
+                text: '%count% prix passerait sous son coût d''achat ou bougerait de plus de 50 %. Il est tenu à l''écart : voulez-vous l''appliquer quand même ?|%count% prix passeraient sous leur coût d''achat ou bougeraient de plus de 50 %. Ils sont tenus à l''écart : voulez-vous les appliquer quand même ?'
+                options:
+                    exclude: 'Les laisser à leur prix actuel'
+                    apply: 'Appliquer quand même'
+            written:
+                title: 'Prix qui changeront'
+            stockMargin:
+                title: 'Marge potentielle du stock'
+            stockMarginRate:
+                title: 'Taux de marge du stock'
+            heldBack:
+                title: 'Prix à risque laissés tels quels'
+            excluded:
+                title: 'Articles exclus (sans coût, sans prix ou en location)'
+            notice:
+                title: 'À savoir'
+                visible: 'Les nouveaux prix seront visibles tout de suite en caisse et sur la boutique en ligne. Vous pourrez annuler pendant 24 heures.'
+                promotions: '%count% article a une promotion en cours : son prix promotionnel ne change pas.|%count% articles ont une promotion en cours : leur prix promotionnel ne change pas.'
+                tax: 'Les prix du site sont taxes comprises : la marge affichée comprend la taxe.'
+            rows:
+                coefficient: 'Coefficient %value% sur le coût d''achat'
+                percent: '%value% % sur le prix actuel'
+                fixed: 'Prix saisi : %value%'
     reply:
         nothing: "Je n'ai trouvé dans votre phrase aucune réponse aux questions ouvertes. Répondez par les boutons, ou reformulez."
-        applied: "C'est noté : %count% réponse(s) enregistrée(s)."
+        applied: "C'est noté : %count% réponse enregistrée.|C'est noté : %count% réponses enregistrées."
     summary:
-        read: 'Facture %number% du %date%, fournisseur %supplier% : %lines% ligne(s), total %total% %currency%.'
-        questions: 'Il me manque %count% réponse(s) avant de vous montrer ce qui sera créé.'
+        read: 'Facture %number% du %date%, fournisseur %supplier% : %lines% ligne, total %total% %currency%.|Facture %number% du %date%, fournisseur %supplier% : %lines% lignes, total %total% %currency%.'
+        questions: 'Il me manque %count% réponse avant de vous montrer ce qui sera créé.|Il me manque %count% réponses avant de vous montrer ce qui sera créé.'
         ready: 'Tout est renseigné : vérifiez l''aperçu, puis confirmez.'
     options:
+        price_mode_keep: 'Garder les prix actuels'
+        price_mode_suggested: 'Appliquer à chacun le coefficient proposé'
+        price_mode_each: 'Régler article par article'
+        coefficient_each: 'Le coefficient proposé pour chaque article, de %min% à %max% (détail par article)'
+        coefficient_each_same: '%min% pour chaque article, d''après ses semblables (détail par article)'
+        publish_no: 'Non, pas maintenant'
+        publish_now: 'Oui, tout de suite'
+        publish_reception: 'À la réception du stock'
+        price_keep: 'Garder %price%'
+        price_keep_coefficient: 'Garder %price% (coefficient actuel %coefficient%)'
+        price_keep_none: 'Ne pas toucher au prix'
         supplier_create: 'Créer le fournisseur « %name% »'
         product_create: 'Créer l''article « %name% »'
         amounts_ht: 'Hors taxes'
@@ -722,6 +791,21 @@ conversation:
         shipping_add: 'Ajouter %amount% au frais de port actuel (%current%) → %total%'
         shipping_skip: 'Ne pas compter les %amount% de port de cette facture'
     questions:
+        price_mode:
+            title: 'Prix des articles déjà au catalogue'
+            text: 'Cette facture comprend un article déjà en vente. Voulez-vous toucher à son prix de vente ?|Cette facture comprend %count% articles déjà en vente. Voulez-vous toucher à leurs prix de vente ?'
+        coefficient:
+            title: 'Coefficient des nouveaux articles'
+            text: 'Le prix de vente d''un nouvel article est son coût d''achat multiplié par un coefficient, puis arrondi. Quel coefficient voulez-vous ?'
+        publish_pos:
+            title: 'En caisse'
+            text: 'Voulez-vous mettre les nouveaux articles en vente en caisse ?'
+        publish_web:
+            title: 'Sur la boutique en ligne'
+            text: 'Voulez-vous mettre les nouveaux articles en vente sur la boutique en ligne ?'
+        line_price:
+            title: 'Prix de vente'
+            text: '« %label% » est déjà dans votre catalogue. Voulez-vous garder son prix de vente, ou le changer ?'
         target:
             title: 'Nouvelle commande ou commande ouverte'
             text: 'Vous avez déjà une commande ouverte chez %supplier%. Cette facture en fait-elle partie, ou est-ce une nouvelle commande ?'
@@ -755,3 +839,21 @@ conversation:
         difference:
             title: 'Écart sur le total'
             text: 'Le total lu sur le document diffère de %difference% du total recalculé à partir des lignes.'
+
+# Prix de la gestion (lot IA-ACT-5, 13/11/2026) : libellés du coefficient proposé, docs/prix-gestion.md § 6
+prices:
+    coefficient:
+        similar: '%coefficient% : %count% semblables%scope% affichés à %displayed%, vendus à %sold% %%weeks%, %discount% (%adjustment%)'
+        scope_supplier: 'de ce fournisseur'
+        weeks: 'en %count% semaine pour les unités vendues|en %count% semaines pour les unités vendues'
+        discount:
+            without: 'sans rabais'
+            with: 'avec %rate% % de rabais'
+        adjust:
+            up: '+%step%'
+            down: '−%step%'
+            obtained: 'coefficient obtenu'
+            keep: 'inchangé'
+        floored: '(relevé au coefficient minimum du site, %min%)'
+        supplier: '%coefficient% : constaté chez ce fournisseur, sur %count% articles'
+        site: '%coefficient% : le coefficient par défaut du site'

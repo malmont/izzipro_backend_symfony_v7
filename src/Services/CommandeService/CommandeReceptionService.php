@@ -21,10 +21,18 @@ use Doctrine\ORM\EntityManagerInterface;
  * sous verrou (sans taille, couleur ni options, prix NULL, stock initial = stock actuel de l'article, pour que son recalcul ne l'efface pas) ;
  * un article à plusieurs variantes sans variante sur la ligne demande un choix (VARIANT_REQUIRED). Mouvement type 5 relié à la ligne
  * (`UpdateStockAndInventoryUseCase::executeReception`), annulation par mouvement inverse type 4. Permise sur une commande figée ou une période
- * fermée : c'est du stock, les chiffres figés ne changent pas. Prix, prix d'achat, coefficient, visibilité : intacts.
+ * fermée : c'est du stock, les chiffres figés ne changent pas. Prix, prix d'achat, coefficient : intacts.
+ *
+ * Visibilité (lot IA-ACT-5, 13/11/2026) : intacte, SAUF pour un article marqué « à mettre en ligne à la réception » par la confirmation
+ * d'une facture (`product.publish_web_on_reception`, `publish_pos_on_reception`) : sa première réception le met en vente sur le ou les
+ * canaux marqués et efface la marque, dans la même transaction ; c'est écrit au journal (`gestion-mise-en-ligne`, action `reception`).
+ * Annuler la réception ne le retire pas de la vente : c'est au gérant de le décider.
  */
 class CommandeReceptionService
 {
+    /** Ressource du journal d'audit des mises en ligne faites par une réception (lot IA-ACT-5) */
+    public const PUBLISH_AUDIT = 'gestion-mise-en-ligne';
+
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly UpdateStockAndInventoryUseCase $stock,
@@ -41,6 +49,7 @@ class CommandeReceptionService
      */
     public function receiveLine(CommandeLine $line, ?int $quantity, ?int $variantId, ?string $by): array
     {
+        $this->published = []; // rien d'une réception précédente restée sans suite (transaction annulée)
         $em = $this->emProvider->getEntityManager();
         $result = $em->wrapInTransaction(function (EntityManagerInterface $em) use ($line, $quantity, $variantId): array {
             $this->lock($em, $line);
@@ -60,6 +69,7 @@ class CommandeReceptionService
             return ['line' => $line, 'movement' => $this->receive($em, $line, $variant, $quantity)];
         });
         $this->audit->record('commande-reception', $line->getCommande()->getId(), 'receive', null, ['lineId' => $line->getId(), 'quantity' => $result['movement']->getQuantity(), 'variantId' => $result['movement']->getProductVariant()?->getId()]);
+        $this->recordPublished();
 
         return $result;
     }
@@ -73,6 +83,7 @@ class CommandeReceptionService
      */
     public function receiveCommande(Commande $commande, ?array $only, ?string $by): array
     {
+        $this->published = []; // rien d'une réception précédente restée sans suite (transaction annulée)
         $em = $this->emProvider->getEntityManager();
         $wanted = null;
         if ($only !== null) {
@@ -127,6 +138,7 @@ class CommandeReceptionService
         if ($out !== []) {
             $this->audit->record('commande-reception', $commande->getId(), 'receive', null, ['lines' => $out]);
         }
+        $this->recordPublished();
 
         return ['received' => $out, 'needsVariant' => $result['needsVariant']];
     }
@@ -237,8 +249,28 @@ class CommandeReceptionService
         $em->refresh($variant);
         $movement = $this->stock->executeReception($variant, $quantity, $line);
         $line->setQuantityReceived($line->getQuantityReceived() + $quantity)->setUpdatedAt(new \DateTimeImmutable());
+        // Mise en ligne à la réception (lot IA-ACT-5) : la marque posée par la facture est levée par la première réception
+        $product = $line->getProduct();
+        if ($product !== null && ($product->isPublishWebOnReception() || $product->isPublishPosOnReception())) {
+            $before = ['isWeb' => (bool) $product->isWeb(), 'isPos' => (bool) $product->isPos(), 'publishWebOnReception' => $product->isPublishWebOnReception(), 'publishPosOnReception' => $product->isPublishPosOnReception()];
+            $product->setIsWeb($product->isWeb() || $product->isPublishWebOnReception())->setIsPos($product->isPos() || $product->isPublishPosOnReception())
+                ->setPublishWebOnReception(false)->setPublishPosOnReception(false);
+            $this->published[] = ['productId' => (int) $product->getId(), 'before' => $before, 'after' => ['isWeb' => (bool) $product->isWeb(), 'isPos' => (bool) $product->isPos(), 'publishWebOnReception' => false, 'publishPosOnReception' => false],
+                'lineId' => (int) $line->getId(), 'commandeId' => (int) $line->getCommande()->getId()];
+        }
         $em->flush();
 
         return $movement;
+    }
+
+    /** Mises en ligne faites par la réception en cours, à écrire au journal une fois la transaction validée */
+    private array $published = [];
+
+    private function recordPublished(): void
+    {
+        foreach ($this->published as $p) {
+            $this->audit->record(self::PUBLISH_AUDIT, $p['productId'], 'reception', $p['before'], $p['after'] + ['lineId' => $p['lineId'], 'commandeId' => $p['commandeId']]);
+        }
+        $this->published = [];
     }
 }

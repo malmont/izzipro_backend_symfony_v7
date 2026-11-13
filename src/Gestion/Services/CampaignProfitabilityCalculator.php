@@ -55,7 +55,7 @@ class CampaignProfitabilityCalculator
             $caveats[] = 'Campagne en cours : chiffres provisoires.';
         }
         if (count($group) > 1) {
-            $caveats[] = sprintf('Mesurée avec %d autre(s) campagne(s) aux dates communes : le gain est partagé.', count($group) - 1);
+            $caveats[] = sprintf(count($group) - 1 === 1 ? 'Mesurée avec %d autre campagne aux dates communes : le gain est partagé.' : 'Mesurée avec %d autres campagnes aux dates communes : le gain est partagé.', count($group) - 1);
         }
         if ($started && $before['orders'] < 5) {
             $caveats[] = 'Peu de ventes avant la campagne : la comparaison est fragile.';

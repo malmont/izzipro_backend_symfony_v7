@@ -22,6 +22,10 @@ use App\Services\TenantEntityManagerProvider;
  * Elle est refusée, avec la liste des raisons, dès que quelque chose a bougé depuis : période fermée, commande figée ou modifiée, ligne
  * reçue en stock, article créé vendu ou modifié, frais de port modifié. Un fournisseur créé par la confirmation n'est retiré que s'il ne
  * sert à rien d'autre ; sinon il est gardé, sans bloquer.
+ *
+ * Lot IA-ACT-5 (13/11/2026) : un prix changé par la confirmation sur un article déjà au catalogue est remis (refus `PRICE_CHANGED` s'il
+ * a été retouché depuis) ; un article créé mis en ligne par la confirmation est comparé à l'état qu'elle a noté ; un article créé « à
+ * mettre en ligne à la réception » dont le stock a été reçu depuis bloque l'annulation (`PUBLISHED_ON_RECEPTION`, avec `LINE_RECEIVED`).
  */
 class GestionDocumentUndoService
 {
@@ -33,6 +37,7 @@ class GestionDocumentUndoService
         private readonly PeriodCalendar $calendar,
         private readonly CommandeLineService $lines,
         private readonly ContentAuditRecorder $audit,
+        private readonly ?\App\Gestion\Services\GestionPriceService $prices = null, // lot IA-ACT-5 : prix remis par le chemin d'un article
     ) {
     }
 
@@ -144,14 +149,50 @@ class GestionDocumentUndoService
             sort($recordedVariants);
             $moved = (int) $conn->fetchOne('SELECT COUNT(*) FROM inventory_movements im JOIN product_variant pv ON pv.id = im.product_variant_id WHERE pv.product_id = ?', [$id]) > 0;
             $otherPurchases = (int) $conn->fetchOne('SELECT COUNT(*) FROM commande_line WHERE product_id = ? AND commande_id <> ?', [$id, $commande->getId()]) > 0;
+            // Mise en ligne : l'état noté par la confirmation (lot IA-ACT-5 ; avant lui, un article créé était toujours invisible)
+            $webOnReception = (bool) ($recordedProduct['publishWebOnReception'] ?? false);
+            $posOnReception = (bool) ($recordedProduct['publishPosOnReception'] ?? false);
+            if (($webOnReception && !$product->isPublishWebOnReception()) || ($posOnReception && !$product->isPublishPosOnReception())) {
+                $add('PUBLISHED_ON_RECEPTION', sprintf('L\'article « %s » a été mis en ligne à la réception de son stock.', (string) $product->getName()));
+            }
             $edited = $product->getName() !== $recordedProduct['name'] || abs((float) $product->getPrice() - (float) $recordedProduct['price']) > 0.001
-                || abs((float) $product->getPurchasePrice() - (float) $recordedProduct['purchasePrice']) > 0.001 || $product->isWeb() || $product->isPos() || (int) $product->getQuantity() !== 0;
+                || abs((float) $product->getPurchasePrice() - (float) $recordedProduct['purchasePrice']) > 0.001 || (int) $product->getQuantity() !== 0
+                || (bool) $product->isWeb() !== (bool) ($recordedProduct['isWeb'] ?? false) || (bool) $product->isPos() !== (bool) ($recordedProduct['isPos'] ?? false)
+                || $product->isPublishWebOnReception() !== $webOnReception || $product->isPublishPosOnReception() !== $posOnReception;
             if ($moved || $otherPurchases || $edited || $variantIds !== $recordedVariants) {
                 $add('PRODUCT_CHANGED', sprintf('L\'article « %s », créé par cette confirmation, a été modifié, mis en vente, reçu ou racheté depuis.', (string) $product->getName()));
             }
         }
 
+        // Prix changés sur des articles déjà au catalogue (lot IA-ACT-5) : toujours ceux que la confirmation a écrits
+        foreach ($undo['prices'] ?? [] as $change) {
+            $current = $change['level'] === 'product' ? $conn->fetchOne('SELECT price FROM product WHERE id = ?', [(int) $change['productId']]) : $conn->fetchOne('SELECT price FROM product_variant WHERE id = ?', [(int) $change['variantId']]);
+            if ($current === false || $current === null || (int) round((float) $current) !== (int) $change['new']) {
+                $reasons['PRICE_CHANGED'] ??= ['code' => 'PRICE_CHANGED', 'message' => sprintf('Le prix de « %s » a été modifié depuis la confirmation.', (string) ($change['name'] ?? '#' . $change['productId'])), 'productId' => (int) $change['productId']];
+            }
+        }
+
         return array_values($reasons);
+    }
+
+    /**
+     * Remet les prix changés par la confirmation sur des articles déjà au catalogue, par le chemin d'écriture d'un article (cache,
+     * journal) ; dans la transaction de l'annulation, sans vider l'unité de travail.
+     *
+     * @param array<string, mixed> $undo
+     */
+    private function restorePrices(array $undo): int
+    {
+        $restored = 0;
+        foreach ($undo['prices'] ?? [] as $change) {
+            if ($change['old'] === null || $this->prices === null) {
+                continue; // un article sans prix avant : rien à remettre par l'éditeur (le prix y est obligatoire)
+            }
+            $this->prices->writeFields($change['level'] === 'product' ? 'products' : 'product-variants', $change['level'] === 'product' ? (int) $change['productId'] : (int) $change['variantId'], ['price' => (int) $change['old']], false);
+            ++$restored;
+        }
+
+        return $restored;
     }
 
     /**
@@ -192,6 +233,7 @@ class GestionDocumentUndoService
         $kept = [];
         $conn->beginTransaction();
         try {
+            $restoredPrices = $this->restorePrices($undo);
             // Le document redevient « lu » avant que sa commande disparaisse : il n'est pas un justificatif orphelin, il garde ses fichiers et son brouillon
             $document->setStatus(GestionDocument::STATUS_EXTRACTED)->setConfirmedAt(null)->setConfirmed(null)->setCommandeId(null)
                 ->setExpiresAt((new \DateTimeImmutable())->modify('+' . GestionDocumentService::RETENTION_DAYS . ' days'));
@@ -247,7 +289,7 @@ class GestionDocumentUndoService
             $conn->rollBack();
             throw $e;
         }
-        $result = ['commandeId' => $commandeId, 'removed' => $removed, 'kept' => $kept];
+        $result = ['commandeId' => $commandeId, 'removed' => $removed, 'kept' => $kept] + ($restoredPrices > 0 ? ['restored' => ['prices' => $restoredPrices]] : []);
         $this->audit->record(self::AUDIT_RESOURCE, $document->getId(), 'undo', array_diff_key($confirmed, ['undo' => true]) + ['created' => $undo], $result);
 
         return $result;
@@ -272,6 +314,10 @@ class GestionDocumentUndoService
         $restored = ['lines' => 0, 'shipping' => false, 'budget' => (int) ($undo['budget']['added'] ?? 0)];
         $conn->beginTransaction();
         try {
+            $restoredPrices = $this->restorePrices($undo);
+            if ($restoredPrices > 0) {
+                $restored['prices'] = $restoredPrices; // la clé n'existe que si la confirmation avait changé des prix : réponse inchangée sinon
+            }
             $commande = $em->find(Commande::class, $commandeId);
             $document->setStatus(GestionDocument::STATUS_EXTRACTED)->setConfirmedAt(null)->setConfirmed(null)->setCommandeId(null)
                 ->setExpiresAt((new \DateTimeImmutable())->modify('+' . GestionDocumentService::RETENTION_DAYS . ' days'));

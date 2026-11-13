@@ -359,6 +359,17 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(name: 'fiscal_year_start_month', type: 'smallint', nullable: true)]
     private ?int $fiscalYearStartMonth = null;
 
+    // Réglages de prix de la gestion (lot IA-ACT-5, 13/11/2026 ; route /api/gestion/reglages/prix, `GestionPriceSettingsService`) : null = la
+    // valeur par défaut du service (coefficient 2, minimum 1,6, arrondi psychologique)
+    #[ORM\Column(name: 'gestion_default_coefficient', type: 'decimal', precision: 6, scale: 2, nullable: true)]
+    private ?string $gestionDefaultCoefficient = null;
+
+    #[ORM\Column(name: 'gestion_min_coefficient', type: 'decimal', precision: 6, scale: 2, nullable: true)]
+    private ?string $gestionMinCoefficient = null;
+
+    #[ORM\Column(name: 'gestion_price_rounding', length: 12, nullable: true)]
+    private ?string $gestionPriceRounding = null;
+
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $accountingAccounts = null;
 
@@ -1069,6 +1080,12 @@ class Entreprise implements TranslatableInterface
     public function setVariantPromotionsEnabled(bool $on): static { $this->variantPromotionsEnabled = $on; return $this; }
     public function getPurchasePeriodFrequency(): ?string { return $this->purchasePeriodFrequency; }
     public function getFiscalYearStartMonth(): ?int { return $this->fiscalYearStartMonth; }
+    public function getGestionDefaultCoefficient(): ?float { return $this->gestionDefaultCoefficient === null ? null : (float) $this->gestionDefaultCoefficient; }
+    public function setGestionDefaultCoefficient(?float $c): static { $this->gestionDefaultCoefficient = $c === null ? null : number_format($c, 2, '.', ''); return $this; }
+    public function getGestionMinCoefficient(): ?float { return $this->gestionMinCoefficient === null ? null : (float) $this->gestionMinCoefficient; }
+    public function setGestionMinCoefficient(?float $c): static { $this->gestionMinCoefficient = $c === null ? null : number_format($c, 2, '.', ''); return $this; }
+    public function getGestionPriceRounding(): ?string { return $this->gestionPriceRounding; }
+    public function setGestionPriceRounding(?string $mode): static { $this->gestionPriceRounding = $mode; return $this; }
     public function setFiscalYearStartMonth(?int $m): static { $this->fiscalYearStartMonth = $m !== null && $m >= 1 && $m <= 12 ? $m : null; return $this; }
     public function setPurchasePeriodFrequency(?string $f): static { $f = $f !== null ? strtolower(trim($f)) : ''; $this->purchasePeriodFrequency = in_array($f, ['quarterly', 'semester', 'monthly'], true) ? $f : null; return $this; }
     public function setPosTimezone(?string $tz): static { $t = $tz !== null ? trim($tz) : ''; $this->posTimezone = $t !== '' && in_array($t, \DateTimeZone::listIdentifiers(), true) ? $t : null; return $this; }

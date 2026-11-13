@@ -213,6 +213,11 @@ class GestionSequenceService
             foreach ($fact['figures'] as [$name, $value]) {
                 $params["%$name%"] = (string) $value;
             }
+            // Accord des libellés (« 1 voyage », « 2 voyages ») : le chiffre qui commande le pluriel de l'étape, 0 s'il est absent
+            if (isset(self::PLURAL_FIGURE[$stepKey])) {
+                $count = $params['%' . self::PLURAL_FIGURE[$stepKey] . '%'] ?? '0';
+                $params['%count%'] = is_numeric($count) ? (string) (int) $count : '0';
+            }
             $steps[] = [
                 'key' => $stepKey, 'title' => $this->tr("sequences.$key.steps.$stepKey.title", $locale),
                 'description' => $this->tr("sequences.$key.steps.$stepKey." . ($status === 'done' ? 'done' : 'todo'), $locale, $params),
@@ -321,6 +326,9 @@ class GestionSequenceService
             return $figure;
         }, $figures);
     }
+
+    /** Étape d'une séquence qui revient => chiffre du constat qui commande le pluriel de son libellé (`translations/gestion.*.yaml`, formes « un|plusieurs ») */
+    private const PLURAL_FIGURE = ['trip' => 'trips', 'cash_balance' => 'ageDays', 'purchase_order' => 'orders', 'periods_closed' => 'closedPeriods', 'purchase_costs' => 'missing', 'reconciliation' => 'openGaps'];
 
     /** @param array<string, string> $params */
     private function tr(string $id, string $locale, array $params = [], ?string $fallback = null): string

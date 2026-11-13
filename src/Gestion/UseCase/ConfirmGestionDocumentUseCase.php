@@ -43,6 +43,11 @@ use Symfony\Component\String\Slugger\AsciiSlugger;
  * article existant = une ligne de plus (réassort), sans effet sur le stock, le prix ni la visibilité ; nouvel article (un par `groupKey`,
  * variantes taille / couleur) créé invisible en boutique et en caisse avec un STOCK DE 0 (le stock n'entre qu'à la réception, lot R1),
  * photo de ligne comme image ; frais de port facultatif. Note → note de frais. Transport → frais de port d'une commande. Le document devient le justificatif (`document_id`).
+ *
+ * Lot IA-ACT-5 (13/11/2026), sur DÉCISION PORTÉE PAR LE CORPS seulement (rien ne change sans elle) : le prix d'un article créé suit le
+ * coefficient par défaut et l'arrondi du site ; un article créé peut être mis en ligne, par canal (`create.publishPos`,
+ * `create.publishWeb` : `now` tout de suite, `reception` à la première réception de son stock, marque posée sur la fiche) ; le prix d'un
+ * article déjà au catalogue peut changer (`lines[].price`), par le chemin d'écriture d'un article. Tout est noté pour l'annulation.
  */
 class ConfirmGestionDocumentUseCase
 {
@@ -64,6 +69,8 @@ class ConfirmGestionDocumentUseCase
         private readonly ?TenantCurrencyProvider $currency = null,
         private readonly ?\App\Gestion\Services\MarketingCampaignService $campaigns = null, // lot A1 : facture de régie confirmée en campagne
         private readonly ?\App\Gestion\Services\Document\InvoiceTargetPolicy $targets = null, // lot IA-FACT-2-A : ajout à une commande ouverte
+        private readonly ?\App\Gestion\Services\GestionPriceSettingsService $settings = null, // lot IA-ACT-5 : coefficient par défaut et arrondi du site
+        private readonly ?\App\Gestion\Services\GestionPriceService $prices = null, // lot IA-ACT-5 : prix d'un article existant, par le chemin d'un article
     ) {
     }
 
@@ -253,6 +260,38 @@ class ConfirmGestionDocumentUseCase
                 $this->lines->upsert($commande, $m['product'], $m['variant'], $m['quantity'], $unitCost, false, \App\Entity\CommandeLine::SOURCE_DOCUMENT, $now, 0, $user);
             }
         }
+        // Prix des articles déjà au catalogue (lot IA-ACT-5) : seulement sur décision portée par la ligne, par le chemin d'écriture d'un
+        // article (validation, cache, journal) ; les variantes à prix propre suivent, comme au lot P4. L'état d'avant est noté pour l'annulation.
+        $priceChanges = [];
+        $byProduct = [];
+        foreach ($products as $n => [$product]) {
+            $byProduct[(int) $product->getId()][] = $this->line($lines, $n);
+        }
+        $rounding = $this->settings?->rounding() ?? \App\Gestion\Pricing\PriceRounding::NONE;
+        foreach ($byProduct as $productId => $productLines) {
+            $decided = GestionInvoiceDraft::productPrice($productLines, $rate, $rounding);
+            if ($decided === null || $this->prices === null) {
+                continue;
+            }
+            $product = $em->find(Product::class, $productId);
+            $writes = [['product', $productId, null, $product->getPrice() !== null ? (int) round((float) $product->getPrice()) : null]];
+            foreach ($product->getVariants() as $variant) {
+                if ($variant->getPrice() !== null) {
+                    $writes[] = ['variant', $productId, (int) $variant->getId(), (int) round((float) $variant->getPrice())];
+                }
+            }
+            foreach ($writes as [$level, , $variantId, $old]) {
+                if ($old === $decided['price']) {
+                    continue;
+                }
+                try {
+                    $this->prices->writeFields($level === 'product' ? 'products' : 'product-variants', $level === 'product' ? $productId : (int) $variantId, ['price' => $decided['price']], false);
+                } catch (\App\Services\LandingContentService\LandingContentException $e) {
+                    throw new GestionConflictException('PRICE_REFUSED', $e->getMessage(), 422, ['productId' => $productId], $e);
+                }
+                $priceChanges[] = ['level' => $level, 'productId' => $productId, 'variantId' => $variantId, 'name' => (string) $product->getName(), 'old' => $old, 'new' => $decided['price'], 'mode' => $decided['mode'], 'coefficient' => $decided['coefficient']];
+            }
+        }
         // Articles créés : un par groupKey
         $created = [];
         $createdProducts = [];
@@ -301,6 +340,7 @@ class ConfirmGestionDocumentUseCase
             'commande' => new CommandeOutputDTO($commande, $host, $currency), 'attached' => $attached, 'created' => $created,
             'lines' => array_map(fn ($l) => \App\Services\CommandeService\CommandeProductAttachmentService::lineArray($l), $em->getRepository(\App\Entity\CommandeLine::class)->forCommande($commande)), // à recevoir (lot R1)
             'shipping' => $fraisDePort !== null ? new FraisDePortOutputDTO($fraisDePort, $host, $currency) : null,
+            'prices' => $priceChanges, // prix changés d'articles déjà au catalogue (lot IA-ACT-5)
             'confirmed' => ['supplier' => ['id' => $supplier->getId(), 'name' => $supplier->getName()], 'invoice' => ['number' => $number, 'date' => $invoiceDate->format('Y-m-d'), 'exchangeRate' => $exchangeRate],
                 'classificationDate' => $date->format('Y-m-d'), 'lines' => $lines, 'shipping' => $shippingAmount !== null ? ['amount' => $shippingAmount, 'transporteurId' => $fraisDePort?->getTransporteur()?->getId()] : null, 'force' => $force,
                 // Ce que cette confirmation a créé, pour l'annuler d'un bloc et constater ce qui a bougé depuis (lot IA-FACT-1, GestionDocumentUndoService)
@@ -313,7 +353,10 @@ class ConfirmGestionDocumentUseCase
                     'documentSet' => $commande->getDocument()?->getId() === $document->getId(),
                     'lines' => $undoLines,
                     'products' => array_map(fn (Product $p) => ['id' => $p->getId(), 'name' => $p->getName(), 'price' => (float) $p->getPrice(), 'purchasePrice' => (float) $p->getPurchasePrice(),
-                        'variantIds' => array_values(array_map(fn (ProductVariant $v) => $v->getId(), $p->getVariants()->toArray()))], $createdProducts),
+                        'variantIds' => array_values(array_map(fn (ProductVariant $v) => $v->getId(), $p->getVariants()->toArray())),
+                        // mise en ligne décidée sur la facture (lot IA-ACT-5) : l'annulation compare la fiche à cet état
+                        'isWeb' => (bool) $p->isWeb(), 'isPos' => (bool) $p->isPos(), 'publishWebOnReception' => $p->isPublishWebOnReception(), 'publishPosOnReception' => $p->isPublishPosOnReception()], $createdProducts),
+                    'prices' => $priceChanges,
                 ]],
         ];
     }
@@ -325,12 +368,16 @@ class ConfirmGestionDocumentUseCase
         $quantity = array_sum(array_column($group, 'quantity'));
         // Prix de vente et prix d'achat de la fiche dans la devise du site : la règle de l'aperçu (GestionInvoiceDraft::groupPrice). La ligne
         // d'achat garde le coût dans la devise de la commande (lot G6).
-        $pricing = GestionInvoiceDraft::groupPrice($group, $rate);
+        $pricing = GestionInvoiceDraft::groupPrice($group, $rate, $this->settings?->defaultCoefficient() ?? GestionInvoiceDraft::DEFAULT_COEFFICIENT, $this->settings?->rounding() ?? \App\Gestion\Pricing\PriceRounding::NONE);
         $cost = $pricing['cost'];
         $coefficient = $pricing['coefficient'];
         $name = (string) $first['create']['name'];
+        // Mise en ligne (lot IA-ACT-5), par canal : invisible par défaut ; « now » = visible tout de suite (stock 0 : en rupture jusqu'à la
+        // réception) ; « reception » = marque sur la fiche, levée par la première réception de stock (CommandeReceptionService)
+        $publish = GestionInvoiceDraft::groupPublish($group);
         $product = (new Product())->setName($name)->setDescription(null)->setPurchasePrice((float) $pricing['costConverted'])->setCoefficientMultiplier($coefficient)->setPrice((float) $pricing['price'])
-            ->setQuantity(0)->setSlug($this->uniqueSlug($em, $name))->setCreatedAt($now)->setIsWeb(false)->setIsPos(false)->setIsPreOrder(false); // stock 0 : il n'entre qu'à la réception (lot R1)
+            ->setQuantity(0)->setSlug($this->uniqueSlug($em, $name))->setCreatedAt($now)->setIsWeb($publish['web'] === 'now')->setIsPos($publish['pos'] === 'now')->setIsPreOrder(false) // stock 0 : il n'entre qu'à la réception (lot R1)
+            ->setPublishWebOnReception($publish['web'] === 'reception')->setPublishPosOnReception($publish['pos'] === 'reception');
         $em->persist($product);
         $withAttributes = array_filter($group, fn ($l) => ($l['size'] ?? null) !== null || ($l['color'] ?? null) !== null);
         $variants = [];

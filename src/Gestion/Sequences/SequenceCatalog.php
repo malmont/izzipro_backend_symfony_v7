@@ -118,7 +118,7 @@ final class SequenceCatalog
     public const AGAIN = [
         'document.invoice.confirm' => true, 'expense.create' => true, 'supplier.create' => true, 'shipping.create' => true, 'budget.put' => true,
         'cash.balance.create' => true, 'cash.movement.create' => true, 'trip.create' => true, 'fiscal_year.set' => true, 'periods.calendar.set' => true,
-        'product.cost.set' => true,
+        'product.cost.set' => true, 'price.set' => true,
         'period.close' => false, // étape faite = toutes les périodes sont fermées : rien à clôturer de plus
     ];
 
