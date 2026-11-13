@@ -204,7 +204,8 @@ class ManagementReadinessTest extends WebTestCase
             $this->assertContains($after['used'] - $before['used'], [5, 16], 'réussie 3 + réservée en cours 2 ; + 11 seulement dans les premières heures UTC du mois');
             $all = $steps();
             $this->assertSame(['monthly' => $after['monthly'], 'remaining' => $after['remaining']], $figures($all), 'management.ai : les chiffres du quota');
-            $this->assertStringContainsString(sprintf('%d crédit(s) restant(s) sur 40', $after['remaining']), $all['ai.credits']['description'], 'ai.credits : les mêmes chiffres');
+            // la formulation dépend du reste (« Il reste N crédit(s) sur 40 » quand il est bas), et le reste de ce que les tests d'avant ont consommé ce mois-ci : seuls les chiffres comptent ici
+            $this->assertMatchesRegularExpression(sprintf('/(^|\D)%d crédit\(s\)( restant\(s\))? sur 40\b/u', $after['remaining']), $all['ai.credits']['description'], 'ai.credits : les mêmes chiffres');
             $this->assertStringContainsString(sprintf('%d crédit(s) IA restant(s) sur 40', $after['remaining']), $all['management.ai']['description']);
 
             // Consommation au-dessus du forfait : il reste 0, jamais un nombre négatif

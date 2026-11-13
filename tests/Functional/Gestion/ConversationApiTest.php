@@ -32,6 +32,7 @@ class ConversationApiTest extends WebTestCase
     private string $token = '';
     private string $email = '';
     private string $tag = '';
+    private int $usageMark = 0;
 
     protected function setUp(): void
     {
@@ -40,7 +41,15 @@ class ConversationApiTest extends WebTestCase
         AiRightTestHelper::restoreFullAi(static::getContainer());
         $this->tag = bin2hex(random_bytes(3));
         $this->login(['ROLE_ADMIN']);
+        $this->usageMark = (int) $this->em()->getConnection()->fetchOne('SELECT COALESCE(MAX(id), 0) FROM ai_usage');
         $this->em()->getConnection()->executeStatement("UPDATE gestion_document SET status = 'failed' WHERE status = 'reading'"); // base partagée : une lecture à la fois par site
+    }
+
+    /** Base de test partagée : les unités d'IA consommées ici sont rendues, pour ne pas vider le forfait du mois sous les tests suivants */
+    protected function tearDown(): void
+    {
+        $this->em()->getConnection()->executeStatement('DELETE FROM ai_usage WHERE id > ?', [$this->usageMark]);
+        parent::tearDown();
     }
 
     public function testAnInvoiceGoesFromTheAttachmentToTheOrderThenIsUndoneAsAWhole(): void
