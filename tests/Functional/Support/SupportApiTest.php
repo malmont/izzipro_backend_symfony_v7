@@ -194,9 +194,12 @@ class SupportApiTest extends WebTestCase
         $this->assertSame([2, 2500, 5000], [$s['lines'][0]['quantity'], $s['lines'][0]['unitPrice'], $s['lines'][0]['total']]);
         $this->assertSame($register, $t['cashRegisterId']);
         $json = json_encode($t);
-        foreach (['purchase', 'cost', 'margin', 'catalog', 'supplier', 'fournisseur', 'priceReason', 'note', 'guestToken', 'variantPromotion', '1100'] as $forbidden) {
+        foreach (['purchase', 'cost', 'margin', 'catalog', 'supplier', 'fournisseur', 'priceReason', 'note', 'guestToken', 'variantPromotion'] as $forbidden) {
             $this->assertStringNotContainsStringIgnoringCase($forbidden, $json, "aucun prix ni note de la gestion : $forbidden");
         }
+        // Le prix d'achat (1100) n'apparaît dans aucun montant du résumé de commande. Cherché dans le résumé, pas dans tout le ticket :
+        // un identifiant (le compte du client, par exemple) peut valoir 1100 par hasard (13/11/2026, faux échec de la suite complète)
+        $this->assertStringNotContainsString('1100', json_encode($s), 'le prix d\'achat n\'est pas rendu dans le résumé de la commande');
     }
 
     public function testRetentionAnonymizesTicketsClosedMoreThanThreeYearsAgo(): void
