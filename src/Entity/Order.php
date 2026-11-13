@@ -46,6 +46,7 @@ class Order
      * @var Collection<int, OrderItems>
      */
     #[ORM\OneToMany(mappedBy: 'orderAssociated', targetEntity: OrderItems::class)]
+    #[ORM\OrderBy(['id' => 'ASC'])] // ordre de saisie garanti (lot REÇU-ORDRE, 13/11/2026) : sans lui, la base rendait les lignes dans un ordre non garanti (reçu, fiche, exports)
     private Collection $orderItems;
 
     /**

@@ -719,6 +719,12 @@ ou Vonage par le Notifier, un réglage « reçu par SMS », coût par message.
 | `POST /api/pos/receipts/revoke-link {barcode \| orderId}` (responsable, administrateur) | — | 200 `{revoked: true, barcode, receiptUrl}` : les liens déjà imprimés du ticket cessent de fonctionner (version du lien), un nouveau lien est émis ; journal `RECEIPT_LINK_REVOKED` |
 | `GET /api/r/{jeton}` (**public**, `?format=pdf`) | — | page HTML simple du reçu (ou PDF), `X-Robots-Tag: noindex, nofollow, noarchive`, `Cache-Control: private, no-store` ; 404 jeton invalide, 410 lien expiré ou révoqué (message clair). Aucune donnée au-delà du ticket |
 
+**Ordre des lignes (lot REÇU-ORDRE, 13/11/2026).** Les lignes d'une commande se lisent toujours dans l'**ordre de saisie**, c'est-à-dire
+l'identifiant croissant de la ligne (`Order::$orderItems`, `OrderBy id ASC`) : sur le reçu (réponse de la vente, lecture, réimpression, page
+publique, courriel), la fiche de commande et tout ce qui parcourt les lignes d'une commande. Avant ce lot, aucun ordre n'était demandé à la
+base : elle rendait presque toujours l'ordre de saisie, mais après la mise à jour d'une ligne un reçu pouvait lister ses lignes dans un
+autre ordre. Les montants n'ont jamais été concernés. Test : `tests/Functional/Boutique/OrderLinesOrderTest.php`.
+
 **Lecture et réimpression (lot REIMP, 12/11/2026).** Une lecture n'est pas une réimpression : le compteur `reprintCount` et l'entrée `RECEIPT_REPRINTED`
 du journal de caisse (inaltérable) ne doivent bouger que lorsqu'un duplicata est réellement demandé. Avant ce lot, la seule route de lecture d'un
 reçu par la caisse était la réimpression : afficher un ticket comptait un duplicata. Phase 1 : lecture pure avec `purpose=display`, le GET sans
