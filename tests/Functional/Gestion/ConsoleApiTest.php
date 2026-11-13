@@ -159,7 +159,8 @@ class ConsoleApiTest extends WebTestCase
         $this->assertStringStartsWith('2,7 : 5 semblables de ce fournisseur affichés à 2,5, vendus à 90 %', $verdicts['lower']['why'], '« 17 % » n\'est dans aucun résultat : l\'explication chiffrée du serveur prend sa place');
         // Chiffres et tableau : assemblés par le serveur, avec leur source
         $this->assertSame(['a1.verdictRaise', 'a1.verdictLower'], array_column($answer['blocks'][3]['items'], 'id'));
-        $this->assertSame(['id', 'label', 'value', 'unit', 'source'], array_keys($answer['blocks'][3]['items'][0]));
+        $this->assertSame(['id', 'label', 'value', 'unit', 'term', 'source'], array_keys($answer['blocks'][3]['items'][0]));
+        $this->assertSame('verdict', $answer['blocks'][3]['items'][0]['term'], 'chaque chiffre porte la notion du lexique qui l\'explique (lot W2-APPRENDRE)');
         $this->assertSame(['screen' => 'articles', 'route' => null, 'params' => ['periodId' => $period]], $answer['blocks'][3]['items'][0]['source']);
         $rows = array_column($answer['blocks'][4]['rows'], null, 'productId');
         $this->assertArrayNotHasKey($history[0][0], $rows, 'un article acheté la saison passée n\'est pas un article nouveau de la période');
@@ -180,7 +181,7 @@ class ConsoleApiTest extends WebTestCase
         $first = json_decode(FakeLandingAiClient::$requests[0]['messages'][0]['content'][0]['text'], true);
         // Lot W2-b : l'écran est traduit par le serveur (titre, thème, analyses par défaut avec les paramètres de l'écran)
         $this->assertSame(['Fais le bilan de mes nouveaux articles', ['code' => 'articles', 'titre' => 'Articles', 'theme' => 'Achats et stock', 'params' => ['periodId' => $period],
-            'analysesParDefaut' => [['key' => 'articles.missing_cost'], ['key' => 'articles.new', 'periodId' => $period]]], [], 10], [$first['question'], $first['ecran'], $first['echange'], count($first['analyses'])]);
+            'analysesParDefaut' => [['key' => 'articles.missing_cost'], ['key' => 'articles.new', 'periodId' => $period]]], [], 11], [$first['question'], $first['ecran'], $first['echange'], count($first['analyses'])]);
         $this->assertSame(['titre' => 'Articles', 'theme' => 'Achats et stock'], $second['ecran'], 'l\'appel 2 peut nommer l\'écran');
         $this->assertContains($period, array_column($first['periodes'], 'id'));
         $this->assertSame(['claude-sonnet-5-5', 'claude-sonnet-5-5'], array_column(FakeLandingAiClient::$requests, 'model'));
@@ -401,11 +402,14 @@ class ConsoleApiTest extends WebTestCase
         $unknown = fn (string $t, array $allowed): array => \App\Gestion\Services\Console\ConsoleResponder::unknown($t, $allowed);
         $this->assertSame([[], [], [], [26.0], [25.5]], [$unknown('Le prix est de 25 $.', [25.0]), $unknown('Le prix est de 25,00.', [25.0]), $unknown('Soit 1 234,56 $ de ventes', [1234.56]), $unknown('Le prix est de 26 $.', [25.0]), $unknown('Le prix est de 25,50 $.', [25.0])]);
 
+        $given = fn (string $key): array => match ($key) { 'articles.vs_similar' => ['productId' => $product], 'lexique.term' => ['term' => 'marge'], default => [] };
         foreach (array_keys(AnalysisCatalog::DEFINITIONS) as $key) {
             foreach (['fr', 'en'] as $locale) {
-                $r = $catalog->run($key, $catalog->accept($key, $key === 'articles.vs_similar' ? ['productId' => $product] : []), $locale);
-                $this->assertSame(['key', 'title', 'period', 'figures', 'rows', 'groups', 'more', 'source'], array_keys($r), $key);
-                $this->assertSame([$key, AnalysisCatalog::DEFINITIONS[$key]['screen'], AnalysisCatalog::DEFINITIONS[$key]['route']], [$r['key'], $r['source']['screen'], $r['source']['route']]);
+                $r = $catalog->run($key, $catalog->accept($key, $given($key)), $locale);
+                $this->assertSame(['key', 'title', 'period', 'figures', 'rows', 'groups', 'lesson', 'more', 'source'], array_keys($r), $key);
+                // la leçon d'une notion garde la source de l'analyse qui calcule ses chiffres (ici la marge : les statistiques)
+                $from = $key === 'lexique.term' ? 'sales.overview' : $key;
+                $this->assertSame([$key, AnalysisCatalog::DEFINITIONS[$from]['screen'], AnalysisCatalog::DEFINITIONS[$from]['route'], $key === 'lexique.term'], [$r['key'], $r['source']['screen'], $r['source']['route'], $r['lesson'] !== null]);
                 $this->assertNotSame('console.analyses.' . str_replace('.', '_', $key), $r['title'], "$key : titre traduit en $locale");
                 $this->assertLessThanOrEqual(AnalysisCatalog::MAX_FIGURES, count($r['figures']));
                 $this->assertLessThanOrEqual(AnalysisCatalog::MAX_ROWS, count($r['rows']));
@@ -422,9 +426,9 @@ class ConsoleApiTest extends WebTestCase
         $expected = ['period.result' => ['revenue', 'orders', 'cogs', 'expenses', 'grossMargin', 'netResult'], 'sales.overview' => ['revenue', 'grossMargin', 'orders', 'stockValue'],
             'year.overview' => ['sales', 'grossMargin', 'netResult'], 'cash.projection' => ['cashStatus'], 'budget.status' => ['planned', 'actual', 'remaining', 'budgetStatus'],
             'stock.overview' => ['stockSaleValue', 'stockCostValue', 'lowStockItems'], 'articles.missing_cost' => ['missingCostItems'], 'articles.vs_similar' => ['articleName', 'cost', 'price', 'coefficient', 'proposedCoefficient', 'verdict'],
-            'articles.new' => ['newItems', 'verdictKeep', 'verdictRaise', 'verdictLower', 'keepUnder'], 'advice.current' => ['adviceCount']];
+            'articles.new' => ['newItems', 'verdictKeep', 'verdictRaise', 'verdictLower', 'keepUnder'], 'advice.current' => ['adviceCount'], 'lexique.term' => ['grossMargin', 'revenue']];
         foreach ($expected as $key => $ids) {
-            $got = array_column($catalog->run($key, $catalog->accept($key, $key === 'articles.vs_similar' ? ['productId' => $product] : []), 'fr')['figures'], 'id');
+            $got = array_column($catalog->run($key, $catalog->accept($key, $given($key)), 'fr')['figures'], 'id');
             $this->assertSame([], array_values(array_diff($ids, $got)), "$key : chiffres manquants (rendus : " . implode(', ', $got) . ')');
         }
         // GARDE-FOU : les analyses, les appels au modèle et l'assemblage de la réponse n'écrivent RIEN dans les données du site. Seul

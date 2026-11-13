@@ -123,7 +123,7 @@ class ManagementModuleApiTest extends WebTestCase
         $this->assertSame(['tier', 'credits', 'costs', 'limits', 'today'], array_keys($u));
         $this->assertContains($u['tier'], ['none', 'help', 'full']);
         $this->assertSame(['monthly', 'used', 'remaining', 'resetAt'], array_keys(array_intersect_key($u['credits'], array_flip(['monthly', 'used', 'remaining', 'resetAt']))));
-        $this->assertSame([['advice' => 1, 'comment' => 1, 'document' => 1, 'console' => 1], ['commentsPerDay' => 10, 'adviceRefreshPerDay' => 3]], [$u['costs'], $u['limits']]);
+        $this->assertSame([['advice' => 1, 'comment' => 1, 'document' => 1, 'console' => 1, 'lesson' => 0], ['commentsPerDay' => 10, 'adviceRefreshPerDay' => 3]], [$u['costs'], $u['limits']]);
         $this->assertSame(['comments', 'adviceRefresh'], array_keys($u['today']));
         $site = json_decode((string) $this->call('GET', '/api/site/assistant/credits', null, true)->getContent(), true);
         $this->assertSame($site['credits']['remaining'] ?? null, $u['credits']['remaining'], 'même réserve que l\'assistant du site');
