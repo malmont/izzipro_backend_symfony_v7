@@ -28,8 +28,9 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * Garde-fou du périmètre du fil de la gestion (décision du propriétaire, 13/11/2026, en tête de `docs/conversation-gestion.md`) : le
  * catalogue d'actions sert EXCLUSIVEMENT l'application de gestion. Chaque action n'écrit que par le service de gestion déclaré ici pour
  * elle. Une action nouvelle, une dépendance nouvelle ou une écriture directe hors de ces listes fait échouer ce test : on n'allonge une
- * liste qu'après en avoir décidé avec le propriétaire (rien sur le catalogue de vente, les comptes, les rôles, les réservations, les
- * livres, les biographes, la Boussole, le contenu du site).
+ * liste qu'après en avoir décidé avec le propriétaire (rien sur la description ou les photos d'un article, les comptes, les rôles,
+ * les réservations, les livres, les biographes, la Boussole, le contenu du site ; le prix de vente et la mise en ligne d'un article,
+ * eux, font partie de la gestion).
  */
 class ActionCatalogScopeTest extends KernelTestCase
 {
@@ -58,9 +59,13 @@ class ActionCatalogScopeTest extends KernelTestCase
      */
     private const DIRECT_WRITES = ['PeriodCloseAction.php' => ['product', 'commande_statistiques', 'collection_statistiques']];
 
-    /** Ce qu'aucune action du fil ne doit appeler ni nommer : catalogue de vente, contenu du site, autres modules, comptes et rôles */
-    private const FORBIDDEN = ['setPrice(', 'setSpecialPrice', 'GestionPriceService', 'GestionRentalPromotionService', 'LandingContent', 'MemoiresVivantes', 'App\\ESG', 'setRoles(', 'TeamRoleService', 'Booking', 'BiographerService',
-        'setDescription(', 'setIsVisible', 'UserPasswordHasher'];
+    /**
+     * Ce qu'aucune action du fil ne doit appeler ni nommer : description et photos d'un article, contenu du site, autres modules, comptes
+     * et rôles. Le prix de vente et la mise en ligne d'un article SONT de la gestion (précision du propriétaire, 13/11/2026) : ils ne
+     * sont pas ici, et une action qui les pose se déclare dans `WRITERS` comme les autres.
+     */
+    private const FORBIDDEN = ['LandingContent', 'MemoiresVivantes', 'App\\ESG', 'setRoles(', 'TeamRoleService', 'Booking', 'BiographerService', 'UserPasswordHasher',
+        'setDescription(', 'setImage(', 'ProductImage', 'ProductPhoto', 'MediaLibrary'];
 
     public function testEveryActionOnlyWritesThroughItsManagementService(): void
     {

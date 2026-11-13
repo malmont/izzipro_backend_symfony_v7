@@ -5,8 +5,11 @@
 > EasyAdmin couvre déjà ces modules.
 > - Le catalogue ne contient que des actions de gestion : factures, notes de frais, fournisseurs, frais de port, budget, trésorerie,
 >   voyages, exercice, périodes, coût d'achat, clôture.
-> - Aucune action ne touche le catalogue de vente (prix, visibilité, description), les comptes, les rôles, les réservations, les
->   livres ou les biographes. `product.cost.set` reste dans le cadre : il ne pose que le coût d'achat, jamais le prix.
+> - **Le prix de vente et la mise en ligne d'un article font partie de la gestion** (précision du propriétaire, 13/11/2026) : une
+>   action peut les poser, avec aperçu, empreinte et annulation comme les autres (lot IA-ACT-5 à venir).
+> - Restent hors périmètre : la description et les photos d'un article, les comptes, les rôles, les réservations, les livres, les
+>   biographes et les autres modules. `product.cost.set` ne pose que le coût d'achat, jamais le prix : c'est son contrat, pas une
+>   limite du périmètre.
 > - Garde-fou : `tests/Functional/Gestion/ActionCatalogScopeTest.php`. Chaque action n'écrit que par un service de gestion de sa
 >   liste ; une action nouvelle, une dépendance nouvelle ou une écriture directe hors de la liste fait échouer le test, et se décide
 >   avec le propriétaire.
