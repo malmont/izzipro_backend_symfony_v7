@@ -8,6 +8,11 @@ Cette fiche est le contrat validé par le propriétaire le 13/11/2026, et la des
 échanges sont dans les tables du fil (`gestion_conversation`, type `console`) et ne sont jamais rendus par les routes du fil.
 Test : `tests/Functional/Gestion/ConsoleApiTest.php` (modèle simulé).
 
+**Lot W2-b (13/11/2026), retouches après le premier essai réel sur demo** : l'écran d'où vient la question est traduit par le serveur
+(codes de l'application web, § 4.1) ; une question qui dit « période » lit les ventes sur la période ; les libellés de plage sont
+rédigés et ceux des chiffres disent ce qu'ils comptent (§ 2) ; tout chiffre dont un texte parle a sa carte à la suite ; un bilan
+d'articles porte ses groupes (§ 3). Code ajouté : `Services/Console/ConsoleScreens.php` (la table des écrans), `Analysis/RangeLabel.php`.
+
 ## 1. Ce que fait la console
 
 Le gérant pose une question libre sur l'activité de gestion de son site. La console répond comme un spécialiste : elle voit toute la
@@ -27,9 +32,10 @@ Le socle, commencé dans le lot IA-ACT-5. Une analyse est un service du serveur,
 une sortie chiffrée. Le fil d'une facture, le guide quotidien et la console appellent la même.
 
 ```
-{ key, title, period: { from, to, label } | null,
+{ key, title, period: { from, to, label, previousLabel?, lastYearLabel? } | null,
   figures: [{ id, label, value, unit, previous?, lastYear?, delta?, deltaPercent?, rank? }],
   rows: [{ ... }],            // lignes d'un classement ou d'une liste, bornées
+  groups: [{ verdict, source, count, label, productIds, names }],   // bilan d'articles seulement, sinon []
   more: { count, total } | null,
   source: { screen, route, params } }
 ```
@@ -41,6 +47,18 @@ une sortie chiffrée. Le fil d'une facture, le guide quotidien et la console app
 - Taille bornée : 30 chiffres et 50 lignes au plus par analyse. Au-delà : des totaux, et `more: { count, total }` ; le détail complet
   reste lisible par la route `source`.
 - Catalogue en **liste blanche**, comme celui des actions : une analyse absente ne peut pas être appelée.
+- **Un libellé de plage est rédigé par le serveur** (lot W2-b, `RangeLabel`) : « du 1er au 13 novembre 2026 », « le 13 novembre 2026 »,
+  « du 28 octobre au 13 novembre 2026 » ; en anglais « November 1 to 13, 2026 ». Jamais la forme brute « 1-13 nov. ». Une période se
+  nomme par son nom. `previousLabel` et `lastYearLabel` nomment de la même façon les plages comparées (`sales.overview`).
+- **Le libellé d'un chiffre dit ce qu'il compte** quand deux mesures se ressemblent : « Frais de la période (port, notes de frais,
+  publicité), hors achats de marchandise » (résultat de période) et « Dépenses réelles, achats de marchandise compris » (budget) ne
+  sont pas le même montant.
+- **`groups`** (bilan d'articles, `articles.new`) : les articles réunis par verdict et par raison (d'où vient le coefficient proposé :
+  `similar`, `supplier`, `site`, ou `null` sans verdict), avec leur nombre, un libellé accordé (« coefficient constaté chez leur
+  fournisseur »), tous leurs identifiants et 5 noms au plus. Rangés : à monter, à baisser, à garder, sans verdict ; le plus nombreux
+  d'abord. **Le modèle ne compte rien.**
+- `sales.overview` lit une plage (`range` : `today`, `7d`, `month`, `year`) ou une période (`periodId`, qui l'emporte). Sans l'un ni
+  l'autre : le mois, comme l'écran des statistiques.
 
 ### Catalogue du premier lot
 
@@ -92,6 +110,28 @@ Comment c'est tenu, dans le code :
   de replis par jour dit si le modèle de rédaction doit monter ;
 - dans un bloc `verdicts`, l'explication (`why`) du modèle qui porte un nombre inconnu est remplacée par celle, chiffrée, du serveur.
 
+**L'écran d'où vient la question (lot W2-b).** Le serveur traduit lui-même le `context` (§ 4.1) : l'appel 1 reçoit
+`ecran: { code, titre, theme, params, analysesParDefaut }`, où `analysesParDefaut` sont les analyses de cet écran avec ses paramètres,
+déjà contrôlées par le catalogue. Si la question parle de ce que le gérant regarde (« cet écran », « ici », « explique-moi »), le modèle
+les prend telles quelles. L'appel 2 reçoit le titre et le thème de l'écran, pour le nommer. De plus, **ce que le modèle laisse vide est
+pris à l'écran** : une analyse choisie sans période reçoit celle de l'écran (de même pour l'article et l'année) ; une période ou une
+plage que le modèle nomme l'emporte.
+
+**« Période » dans la question (lot W2-b).** Une question qui dit « période » lit les ventes sur la période, pas sur le mois :
+`sales.overview` choisie sans `periodId` prend la période des autres analyses de la réponse, à défaut celle de l'écran, à défaut la
+période en cours. Une durée nommée dans la question (aujourd'hui, jours, semaine, mois, année) garde la plage choisie. La consigne de
+l'appel 1 le dit, et le serveur le garantit (`ConsoleResponder::salesOnThePeriod`).
+
+**Une carte pour tout chiffre cité (lot W2-b).** Tout chiffre dont un texte parle a sa carte : le serveur ajoute, à la suite du bloc
+`text`, un bloc `figures` pour les chiffres de ses `figureIds` qu'aucun bloc `figures` de la réponse ne montre (jamais deux cartes du
+même chiffre). Si le modèle parle d'un chiffre sans le citer, le serveur le retrouve **par sa valeur** : un nombre du texte qui est la
+valeur d'un seul chiffre des analyses le désigne ; de plusieurs, celui dont le libellé est dans le texte (« 11 commandes » : le chiffre
+« Commandes ») ; sinon aucun, on ne devine pas. Une date ou un texte ne sont pas des nombres cités.
+
+**Consignes de rédaction ajoutées (lot W2-b)** : ne jamais rapprocher deux mesures différentes sans dire ce que chacune compte ; nommer
+une plage par son libellé recopié tel quel ; pour un bilan d'articles, une phrase par groupe (« 5 articles au coefficient de leur
+fournisseur : à garder »), jamais la même raison répétée article par article, le détail restant dans le bloc `verdicts`.
+
 **Verdicts** : quand une analyse rend un verdict (garder, monter ou baisser le coefficient d'un article), **c'est le serveur qui le
 calcule**, avec la règle du coefficient validée par le propriétaire (lot IA-ACT-5). L'IA l'explique ; elle ne décide pas.
 
@@ -101,10 +141,38 @@ Question : `{ text, conversationId?, context? }`, `text` de 1 000 caractères au
 
 **`context: { module, screen, params }`** (facultatif) : l'écran de la gestion d'où la question est posée, que le panneau du web reçoit
 déjà de chaque écran (par exemple l'écran d'une période, avec son `periodId`).
-- Il est donné à l'appel 1 : « Explique-moi ce tableau » choisit alors les analyses de l'écran affiché, avec ses paramètres.
-- Il est contrôlé comme le reste : écran connu de la gestion, paramètres qui sont des identifiants existants du site. **Un contexte
-  inconnu ou invalide est ignoré, sans erreur** : la question est traitée sans lui.
-- Il est gardé dans le message, avec la question.
+- Il est donné à l'appel 1, traduit par le serveur (§ 3) : « Explique-moi ce tableau » choisit alors les analyses de l'écran affiché,
+  avec ses paramètres.
+- Il est contrôlé comme le reste : code d'écran connu (§ 4.1), paramètres déclarés pour cet écran et bien formés ; `periodId`,
+  `productId` et `commandeId` doivent exister sur le site. **Un code inconnu est ignoré, sans erreur** (`context: null`, la question
+  est traitée sans lui) ; un paramètre inconnu ou mal formé est écarté, l'écran restant gardé.
+- Il est gardé dans le message, avec la question, sous la forme contrôlée `{ module, screen, params }`.
+
+### 4.1 Les écrans connus (lot W2-b, `ConsoleScreens`)
+
+Les codes sont ceux que l'application web envoie (36 codes relevés dans son code le 13/11/2026) ; **le web n'a rien à changer**. Chaque
+code a un thème, des paramètres admis et des analyses par défaut ; un écran sans analyse propre reçoit celles de son thème.
+
+| Thème | Analyses du thème | Écrans (paramètres) → analyses propres |
+|---|---|---|
+| `accueil` | `period.result`, `advice.current` | `gestion.home` → `sales.overview` (aujourd'hui), `advice.current`, `period.result` ; `sequences` ; `sequences.detail` (`key`, `instance`) ; `conseils` (`adviceId`) → `advice.current` ; `conversations` (`kind`) ; `conversation` (`conversationId`) |
+| `achats` | `budget.status`, `articles.new`, `articles.missing_cost` | `commandes` (`periodId`, `commandeId`) → `budget.status`, `articles.new` ; `a-recevoir` → `stock.overview`, `articles.new` ; `a-classer` → `articles.missing_cost`, `articles.new` ; `fournisseurs` ; `frais-de-port` (`periodId`) → `budget.status`, `period.result` ; `transporteurs` ; `voyages` (`page`), `voyages.suivi` (`tripId`) → `budget.status` ; `articles` (`filter`, `from`, `to`) → `articles.missing_cost`, `articles.new` ; `documents.scan` (`type`, `documentId`) → `articles.new`, `budget.status` |
+| `ventes` | `sales.overview`, `stock.overview` | `prix` (`adviceId`) → `articles.new`, `articles.missing_cost` ; `promotions` (`adviceId`) ; `locations.prix` (`adviceId`), `locations` (`range`) → `sales.overview` ; `publicite` (`page`, `channel`), `publicite.campagne` (`campaignId`), `campagnes.new` (`fromCampaignId`) → `sales.overview`, `budget.status` |
+| `argent` | `cash.projection`, `budget.status` | `tresorerie` → `cash.projection` ; `frais-fixes` → `cash.projection`, `year.overview` ; `notes-de-frais` (`periodId`) → `budget.status`, `period.result` |
+| `resultats` | `period.result`, `year.overview` | `periodes` (`page`) ; `periode` (`periodId`) → `period.result`, `sales.overview` ; `periode.budget` (`periodId`) → `budget.status` ; `periode.simulation` (`periodId`) → `period.result`, `budget.status` ; `preparation` → `period.result`, `cash.projection`, `budget.status` ; `statistiques` (`range`, `source`, `periodId`) → `sales.overview` ; `statistiques.annee` (`year`, `pricePercent`) → `year.overview` |
+| `reglages` | `year.overview`, `articles.missing_cost` | `reglages` ; `reprise` |
+
+- `theme` (`theme` : `achats`, `ventes`, `argent`, `resultats`, `reglages`) est la page d'un thème : elle reçoit les analyses du thème
+  qu'elle montre.
+- Une analyse par défaut reprend, parmi les paramètres de l'écran, ceux qu'elle déclare au catalogue (`periodId`, `productId`, `year`,
+  `range`). Une période l'emporte sur une plage ; une plage que l'analyse ne connaît pas (`period`, `dates`, `30d`, `current`) est
+  écartée. Une analyse dont un paramètre obligatoire manque n'est pas proposée.
+- Types des paramètres : identifiant ou page (entier > 0), année (2000 à 2100), date (AAAA-MM-JJ), nombre, texte court sans espace
+  (`key`, `instance`, `channel`), ou une liste de valeurs. `periodId`, `productId`, `commandeId` et `year` sont admis sur tout écran.
+- Les codes du premier contrat restent acceptés (`accueil`, `journee`, `periode.resultat`, `periode.preparation`, `commande`,
+  `article`, `stock`, `tresorerie.rapprochements`, `documents`, `simulateur`, `console`).
+- Chaque écran et chaque thème a un titre écrit par le serveur dans les deux langues (`console.screens.*`, `console.themes.*`).
+- Le guide rédigé de chaque écran (« à quoi sert cet écran ») viendra avec le lot W2-APPRENDRE.
 
 La réponse arrive **en attente**, sur le modèle de la lecture de documents : la question rend tout de suite un message `pending`, un
 worker répond, le web relit toutes les 3 secondes.
@@ -117,14 +185,18 @@ worker répond, le web relit toutes les 3 secondes.
 - `state` : `pending` (en cours), `done`, `failed` (délai maximal dépassé ou IA en échec : **aucune unité décomptée**, `error` dit pourquoi).
 - `blocks`, dans l'ordre d'affichage :
   - `{ type: "text", text, figureIds }` ;
-  - `{ type: "figures", items: [{ label, value, unit, source }] }` ;
+  - `{ type: "figures", items: [{ label, value, unit, source }] }` ; depuis le lot W2-b, le serveur en ajoute un à la suite de tout
+    bloc `text` dont un chiffre cité n'a pas encore sa carte (§ 3) : même forme, rien à distinguer côté application ;
   - `{ type: "table", columns, rows, source }` ;
-  - `{ type: "verdicts", items: [{ subject, verdict, why, figureIds }] }`, pour un bilan. Valeurs de `verdict` (précision du
+  - `{ type: "verdicts", items: [{ subject, verdict, why, figureIds }], groups: [{ verdict, source, count, label, productIds }] }`,
+    pour un bilan. `groups` (lot W2-b) : les articles du bilan réunis par verdict et par raison, comptés par le serveur ; l'application
+    peut en faire les titres de ses sections. Valeurs de `verdict` (précision du
     13/11/2026) : **`keep`** (garder), **`raise`** (monter), **`lower`** (baisser) : les trois valeurs de `CoefficientRule::verdict`,
     les seules du premier lot. `subject` est `{ type: "product", id, name }`. Une autre analyse pourra plus tard avoir ses propres
     verdicts : chaque clé nouvelle sera écrite ici avant d'être rendue, et l'application affiche une clé inconnue telle quelle, d'un
     ton neutre.
-- `analyses` : `[{ key, params, source: { screen, route, params }, computedAt }]`, pour afficher « d'où vient ce chiffre ».
+- `analyses` : `[{ key, ref, title, params, source: { screen, route, params }, period: { from, to, label, previousLabel?,
+  lastYearLabel? } | null, computedAt }]`, pour afficher « d'où vient ce chiffre » et sur quelle plage (libellé rédigé, § 2).
 - `proposals` : `[{ action, params, label }]`, 3 au plus. `action` est une clé du catalogue des actions ; `params` ne contient que des
   identifiants présents dans les résultats des analyses et passe le contrôle d'ouverture d'un fil ; une proposition invalide est
   retirée par le serveur. Le web ouvre le fil par `POST /api/gestion/conversations { action, params }`.
