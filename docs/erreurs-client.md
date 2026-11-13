@@ -68,10 +68,13 @@ service appelé est remplacé par un double qui lève une panne portant un texte
 | Lot IA de fiches produit (`ProductAiBulkService`) | note d'un article en échec = message de l'exception | refus rédigé gardé ; panne : texte neutre |
 | Écrans EasyAdmin : image et IA d'un article, connexion Stripe (2) | message de l'exception dans le bandeau | texte neutre pour une panne ; jamais le message d'une erreur Stripe |
 | Passerelles Stripe : compte de la caisse, abonnements, terminal (code non reconnu), paiement web | « Stripe : » suivi du message brut | carte refusée : texte de Stripe et `declineCode` ; sinon texte neutre |
+| **ERREURS-3, Mémoires Vivantes (13/11/2026)** : lien de paiement (`POST /api/memoires/books/{id}/payment-link`, 500), devis et commande d'impression (`POST …/print/estimate`, `POST …/print/order`, 400), lecture d'une commande (`GET /api/memoires/print/orders/{id}`, 404), transcription (`POST /api/memoires/chapters/{id}/audio`, 500), amélioration de texte (`POST …/improve-answer`, 500) | message brut de l'exception (Lulu, Stripe, PHP, IA…), parfois préfixé « An error occurred during… » | statuts et clés inchangés ; refus rédigé gardé ; panne : texte neutre et `INTERNAL_ERROR` ; Stripe : « Stripe : » + texte de Stripe et `declineCode` pour une carte refusée, sinon texte neutre du paiement, `code STRIPE_ERROR` |
+| Création de la commande Lulu (`LuluPrintService::createPrintJob`) | `error` = message + corps de la réponse Lulu | `error` neutre ; message et corps au journal et dans `error_message` de la commande (EasyAdmin seulement : la commande rendue au client ne porte pas ce champ) |
 
 Hors lot, car le message part dans un journal ou une console et pas au client : webhook d'abonnement, suppression de compte (2),
 changement de courriel, réconciliation des terminaux, notification push de la gestion (colonne `error` non rendue par l'API), transition
-du module de gestion (commande de console), file d'invalidation du cache.
+du module de gestion (commande de console), file d'invalidation du cache ; Mémoires Vivantes (ERREURS-3) : synchronisation des réponses
+d'une question (journal), paiement d'impression confirmé par webhook (`detail` = notre `ApiErrorException` rédigée, rendue à Stripe et au journal).
 
 Non testés de bout en bout, couverts par le garde-fou et la relecture : les quatre écrans EasyAdmin, le devis et l'achat d'étiquette de
 l'administration, le paiement web (`StripePaymentService`), le lot IA, l'emballage.
@@ -101,7 +104,9 @@ code SQL en chaîne faisait échouer la réponse elle-même) ; une panne répond
 - **ERREURS-2** (site, landing, plateforme, EasyAdmin, divers) : les entrées « ERREURS-2 » des listes du garde-fou, et les « catch » de
   `InvalidArgumentException` / `DomainException` de ces dossiers (21 blocs : plateforme, « Mon site », assistant, réservations), à relire
   pour celles qu'une bibliothèque peut lever. Dans les dossiers d'ERREURS-1, aucun bloc n'attrape ces deux classes seules.
-- **ERREURS-3** (Boussole ESG, Mémoires Vivantes) : dossiers exclus du garde-fou, en attente d'attribution.
+- **ERREURS-3** : Mémoires Vivantes **fait** (13/11/2026 : 7 blocs neutralisés, 2 inscrits comme sorties hors client, dossier balayé par le
+  garde-fou, cas par route dans `ClientErrorMessagesTest::testMemoiresVivantesRoutesHideTheFailure`) ; Boussole ESG (`src/ESG/`) encore
+  exclue du garde-fou, à la session de la gestion.
 - **LEX (lot du 12/11/2026, volet 4)** :
   - **Traités dans la gestion** (en français fixe ; statut HTTP et clé `error` conservés, `code` et `message` ajoutés aux trois
     réponses JSON) : `CommandeController` (`401` `UNAUTHENTICATED` « Authentification requise »), `CollectionController` (`401`

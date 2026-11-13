@@ -121,6 +121,66 @@ class ClientErrorMessagesTest extends WebTestCase
 
     // ----- outils -----
 
+    /**
+     * ERREURS-3, part Mémoires Vivantes (13/11/2026) : lien de paiement, devis et commande d'impression, transcription et amélioration
+     * de texte. Une panne du service appelé rend le texte neutre avec INTERNAL_ERROR, statut inchangé ; une erreur Stripe autre qu'une
+     * carte refusée rend le texte neutre du paiement, sans le message de Stripe.
+     */
+    public function testMemoiresVivantesRoutesHideTheFailure(): void
+    {
+        [$token, $bookId, $chapterId] = $this->memoiresFixtures();
+
+        $this->replace(\App\MemoiresVivantes\UseCase\Payment\GenerateBookPaymentLinkUseCase::class);
+        $this->assertNeutral($this->call('POST', "/api/memoires/books/$bookId/payment-link", ['recipient_email' => 'client@example.invalid'], $token), 500, 'POST /api/memoires/books/{id}/payment-link');
+
+        $this->fresh();
+        $this->replace(\App\MemoiresVivantes\UseCase\Payment\GenerateBookPaymentLinkUseCase::class, new \Stripe\Exception\InvalidRequestException('TEMOIN : No such account: acct_1TEMOIN (clé sk_test_TEMOIN)'));
+        [$status, $body] = $this->call('POST', "/api/memoires/books/$bookId/payment-link", ['recipient_email' => 'client@example.invalid'], $token);
+        $this->assertSame([500, 'Stripe : ' . ClientSafeError::PAYMENT_NEUTRAL, 'STRIPE_ERROR'], [$status, $body['error'] ?? null, $body['code'] ?? null], json_encode($body));
+        $this->assertStringNotContainsString('TEMOIN', json_encode($body), 'le message de Stripe ne sort pas');
+        $this->assertStringContainsString('TEMOIN', implode("\n", $this->logged), 'mais il est au journal');
+
+        $this->fresh();
+        $this->replace(\App\MemoiresVivantes\UseCase\Print\EstimateBookPrintUseCase::class);
+        $this->assertNeutral($this->call('POST', "/api/memoires/books/$bookId/print/estimate", ['shipping_address' => ['country_code' => 'FR'], 'quantity' => 1], $token), 400, 'POST /api/memoires/books/{id}/print/estimate');
+
+        $this->fresh();
+        $this->replace(\App\MemoiresVivantes\UseCase\Print\CreateBookPrintOrderUseCase::class);
+        [$status, $body] = $this->call('POST', "/api/memoires/books/$bookId/print/order", ['shipping_address' => ['country_code' => 'FR'], 'quantity' => 1], $token);
+        $this->assertNeutral([$status, $body], 400, 'POST /api/memoires/books/{id}/print/order');
+        $this->assertFalse($body['success'], 'la clé success de la réponse est gardée');
+
+        $this->fresh();
+        $this->replace(\App\MemoiresVivantes\UseCase\ImproveAnswerUseCase::class);
+        $this->assertNeutral($this->call('POST', "/api/memoires/chapters/$chapterId/improve-answer", ['question' => 'Où êtes-vous né ?', 'answer' => 'Mon enfance à la campagne.', 'index' => 0], $token), 500, 'POST /api/memoires/chapters/{id}/improve-answer');
+
+        $this->fresh();
+        $this->replace(\App\MemoiresVivantes\UseCase\TranscribeAudioUseCase::class);
+        $audio = tempnam(sys_get_temp_dir(), 'erreurs') . '.webm';
+        file_put_contents($audio, str_repeat('0', 2048));
+        $this->client->request('POST', "/api/memoires/chapters/$chapterId/audio", ['questionIndex' => 'q1'], ['file' => new \Symfony\Component\HttpFoundation\File\UploadedFile($audio, 'reponse.webm', 'audio/webm', null, true)],
+            ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json', 'HTTP_AUTHORIZATION' => 'Bearer ' . $token]);
+        $this->assertNeutral([$this->client->getResponse()->getStatusCode(), json_decode((string) $this->client->getResponse()->getContent(), true) ?? []], 500, 'POST /api/memoires/chapters/{id}/audio');
+        @unlink($audio);
+    }
+
+    /** @return array{0: string, 1: string, 2: string} jeton d'un administrateur, livre et chapitre à lui */
+    private function memoiresFixtures(): array
+    {
+        $em = $this->em();
+        $email = 'erreurs-mv-' . bin2hex(random_bytes(3)) . '@example.invalid';
+        $user = (new User())->setEmail($email)->setUsername($email)->setFirstname('Erreurs')->setLastname('Mémoires')->setRoles(['ROLE_ADMIN'])->setIsVerified(true)->setPassword('inutilisable');
+        $em->persist($user);
+        $book = (new \App\MemoiresVivantes\Entity\Book())->setTitle('Livre ERREURS-3')->setType('individuel')->setPerson1FirstName('Jeanne')->setUser($user);
+        $em->persist($book);
+        $chapter = (new \App\MemoiresVivantes\Entity\Chapter())->setBook($book)->setTheme('enfance')->setTitle('Enfance')->setPosition(1)->setAnswers([]);
+        $em->persist($chapter);
+        $em->flush();
+        $this->endOfWrite();
+
+        return [static::getContainer()->get('lexik_jwt_authentication.jwt_manager')->create($user), (string) $book->getId(), (string) $chapter->getId()];
+    }
+
     /** Nouveau noyau (un double ne se pose que sur un service pas encore construit) et journal espion */
     private function fresh(): void
     {

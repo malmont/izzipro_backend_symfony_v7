@@ -571,6 +571,10 @@ Détail : `docs/architecture.md`, « Modules et mode de la plateforme » ; `docs
 
 ## Pièges connus et points à vérifier
 
+- Corrigé le 13/11/2026 (ERREURS-3, `docs/erreurs-client.md`) : lien de paiement, devis, commande et lecture d'impression, transcription et
+  amélioration de texte renvoyaient au client le message brut d'une exception (Lulu, Stripe, PHP, IA). Texte neutre + `INTERNAL_ERROR`
+  pour une panne, refus rédigés et statuts inchangés, Stripe : carte refusée seule gardée ; `LuluPrintService` ne rend plus le corps de la
+  réponse Lulu (journal et `error_message` d'administration seulement). Règle : toute nouvelle réponse d'erreur passe par `ClientSafeError`.
 - Corrigé le 13/11/2026 (test `tests/Functional/Admin/MemoiresQuestionCrudTest.php`) : la liste EasyAdmin des questions levait
   un avertissement PHP (« Can only flip string and integer values ») dès qu'une question avait un rôle : le libellé
   « Tous / Transversal » du champ « Rôle » était un choix de valeur `null`, et EasyAdmin retourne la liste des choix pour

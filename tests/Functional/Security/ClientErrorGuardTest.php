@@ -18,7 +18,7 @@ class ClientErrorGuardTest extends TestCase
     private const LARGE = ['Exception', 'Throwable', 'RuntimeException', 'LogicException', 'Error', 'ApiErrorException']; // ApiErrorException : toute erreur de l'API Stripe
 
     /** Dossiers des lots à venir : ERREURS-3 (Boussole ESG, Mémoires Vivantes), confié à leurs sessions */
-    private const PENDING_FOLDERS = ['src/ESG/', 'src/MemoiresVivantes/'];
+    private const PENDING_FOLDERS = ['src/ESG/']; // Mémoires Vivantes balayé depuis ERREURS-3 (13/11/2026)
 
     /** « fichier::méthode » => raison. JOURNAL : le message part dans un journal ou une console, pas au client. ERREURS-2 : à traiter. */
     private const ALLOWED_CATCHES = [
@@ -38,6 +38,9 @@ class ClientErrorGuardTest extends TestCase
         'src/UseCase/LandingAiUseCase/RunLandingAiJobUseCase.php::execute' => 'ERREURS-2',
         'src/UseCase/LandingConfigUseCase/SyncLandingConfigUseCase.php::checkContents' => 'ERREURS-2',
         'src/UseCase/SiteAssistantUseCase/ConfirmSiteAssistantActionUseCase.php::batch' => 'ERREURS-2',
+        'src/MemoiresVivantes/Controller/BookController.php::update' => 'ERREURS-3 : App\\MemoiresVivantes\\Exception\\ApiErrorException (la nôtre, homonyme de celle de Stripe), refus rédigés BIOGRAPHER_INVALID et FORBIDDEN du biographe affecté',
+        'src/MemoiresVivantes/EventListener/MemoireQuestionAnswerSyncListener.php::postFlush' => 'JOURNAL : échec de synchronisation des réponses',
+        'src/MemoiresVivantes/Services/PrintPaymentService.php::completeFromWebhook' => 'ERREURS-3 : notre ApiErrorException rédigée, rendue au webhook Stripe et au journal, jamais au client',
     ];
 
     /** « fichier::méthode » => raison : exception construite avec le message d'une autre, sans « previous » */

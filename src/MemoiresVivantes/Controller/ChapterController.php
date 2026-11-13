@@ -54,6 +54,7 @@ class ChapterController extends AbstractController
         private readonly \App\MemoiresVivantes\Services\AiQuotaService $aiQuota,
         private readonly \App\MemoiresVivantes\Services\ChapterPaymentService $chapterPayments,
         private readonly \App\MemoiresVivantes\Services\PricingService $pricing,
+        private readonly \App\Services\Http\ClientSafeError $safeError,
         private readonly ?MediaUrlResolver $mediaUrlResolver = null
     ) {}
 
@@ -688,8 +689,8 @@ class ChapterController extends AbstractController
 
             return $this->json($responseData);
         } catch (\Exception $e) {
-            $this->logger->error("ChapterController audio upload exception: " . $e->getMessage());
-            return $this->json(['error' => 'An error occurred during transcription: ' . $e->getMessage()], 500);
+            // ERREURS-3 (13/11/2026) : texte neutre pour une panne imprévue (détail au journal), refus rédigé gardé ; statut inchangé
+            return $this->json($this->safeError->body($e, 'POST /api/memoires/chapters/{id}/audio'), 500);
         }
     }
 
@@ -900,8 +901,8 @@ class ChapterController extends AbstractController
                 'canImprove' => false,
             ]);
         } catch (\Exception $e) {
-            $this->logger->error("ChapterController improveAnswer exception: " . $e->getMessage());
-            return $this->json(['error' => 'An error occurred during text improvement: ' . $e->getMessage()], 500);
+            // ERREURS-3 (13/11/2026) : texte neutre pour une panne imprévue (détail au journal), refus rédigé gardé ; statut inchangé
+            return $this->json($this->safeError->body($e, 'POST /api/memoires/chapters/{id}/improve-answer'), 500);
         }
     }
 

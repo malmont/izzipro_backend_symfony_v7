@@ -27,7 +27,8 @@ class BookPrintApiController extends AbstractController
         private readonly GetBookPrintOrderUseCase $getOrderUseCase,
         private readonly \App\MemoiresVivantes\Services\PricingService $pricing,
         private readonly \App\MemoiresVivantes\Services\PrintPaymentService $printPayments,
-        private readonly BookAccessGuard $accessGuard
+        private readonly BookAccessGuard $accessGuard,
+        private readonly \App\Services\Http\ClientSafeError $safeError
     ) {}
 
     /**
@@ -88,7 +89,8 @@ class BookPrintApiController extends AbstractController
             }
             return $this->json($estimate);
         } catch (\Throwable $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+            // ERREURS-3 (13/11/2026) : un refus rédigé de notre code garde son texte ; une panne (Lulu, réseau) rend le texte neutre, détail au journal
+            return $this->json($this->safeError->body($e, 'POST /api/memoires/books/{id}/print/estimate'), Response::HTTP_BAD_REQUEST);
         }
     }
 
@@ -236,8 +238,12 @@ class BookPrintApiController extends AbstractController
             ], $serialized);
 
             return $this->json($response, Response::HTTP_OK);
+        } catch (\Stripe\Exception\ApiErrorException $e) {
+            // ERREURS-3 (13/11/2026) : carte refusée = texte de Stripe et declineCode ; toute autre erreur Stripe = texte neutre
+            return $this->json(['success' => false, 'error' => 'Stripe : ' . $this->safeError->stripe($e, 'POST /api/memoires/books/{id}/print/order'), 'code' => 'STRIPE_ERROR']
+                + array_filter(['declineCode' => \App\Services\Http\ClientSafeError::declineCode($e)]), Response::HTTP_BAD_REQUEST);
         } catch (\Throwable $e) {
-            return $this->json(['success' => false, 'error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+            return $this->json($this->safeError->body($e, 'POST /api/memoires/books/{id}/print/order', 'error', ['success' => false]), Response::HTTP_BAD_REQUEST);
         }
     }
 
@@ -292,7 +298,8 @@ class BookPrintApiController extends AbstractController
             $host = $request->getSchemeAndHttpHost();
             return $this->json($this->serializeOrder($order, $host));
         } catch (\Throwable $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_NOT_FOUND);
+            // ERREURS-3 (13/11/2026) : « introuvable » (notre texte) gardé, panne de la synchronisation Lulu neutralisée ; statut inchangé
+            return $this->json($this->safeError->body($e, 'GET /api/memoires/print/orders/{id}'), Response::HTTP_NOT_FOUND);
         }
     }
 

@@ -17,6 +17,7 @@ class LuluPrintService
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly HttpClientInterface $httpClient,
         private readonly LoggerInterface $logger,
+        private readonly \App\Services\Http\ClientSafeError $safeError,
         private readonly ?string $luluClientKey = null,
         private readonly ?string $luluClientSecret = null,
         private readonly ?string $luluApiUrl = 'https://api.sandbox.lulu.com',
@@ -492,9 +493,11 @@ class LuluPrintService
             $em = $this->emProvider->getEntityManager();
             $em->flush();
 
+            // ERREURS-3 (13/11/2026) : le message et le corps de la réponse Lulu restent au journal et dans error_message (administration) ;
+            // la valeur rendue porte un texte neutre, jamais celui d'un service externe
             return [
                 'success' => false,
-                'error' => $e->getMessage() . ($responseBody ? ' - ' . $responseBody : ''),
+                'error' => $this->safeError->message($e, 'Lulu : création de la commande d\'impression'),
             ];
         }
     }

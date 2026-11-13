@@ -25,7 +25,8 @@ class BookPaymentApiController extends AbstractController
         private readonly GetBookPaymentStatusUseCase $getBookPaymentStatusUseCase,
         private readonly LoggerInterface $logger,
         private readonly BookAccessGuard $accessGuard,
-        private readonly FrontendUrlResolver $frontendUrl
+        private readonly FrontendUrlResolver $frontendUrl,
+        private readonly \App\Services\Http\ClientSafeError $safeError
     ) {}
 
     /**
@@ -105,20 +106,13 @@ class BookPaymentApiController extends AbstractController
                 'email_sent' => $result['email_sent'],
             ]);
 
+        } catch (\Stripe\Exception\ApiErrorException $e) {
+            // ERREURS-3 (13/11/2026) : une carte refusée garde le texte de Stripe (et son declineCode), toute autre erreur Stripe un texte neutre
+            return $this->json(['success' => false, 'error' => 'Stripe : ' . $this->safeError->stripe($e, 'POST /api/memoires/books/{id}/payment-link'), 'code' => 'STRIPE_ERROR']
+                + array_filter(['declineCode' => \App\Services\Http\ClientSafeError::declineCode($e)]), Response::HTTP_INTERNAL_SERVER_ERROR);
         } catch (\Throwable $e) {
-            $this->logger->error(sprintf(
-                '[BookPaymentApiController] Erreur pour le livre %s : %s in %s:%d' . "\n" . '%s',
-                $id,
-                $e->getMessage(),
-                $e->getFile(),
-                $e->getLine(),
-                $e->getTraceAsString()
-            ));
-
-            return $this->json([
-                'success' => false,
-                'error' => $e->getMessage()
-            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+            // ERREURS-3 : texte neutre et INTERNAL_ERROR pour une panne imprévue, détail au journal ; statut inchangé
+            return $this->json($this->safeError->body($e, 'POST /api/memoires/books/{id}/payment-link', 'error', ['success' => false]), Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
