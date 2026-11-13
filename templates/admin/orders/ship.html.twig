@@ -24,7 +24,7 @@
     {% if deliverable %}
         <div class="card mb-3" data-deliver-form>
             <div class="card-body">
-                <h2 class="h6">Commande expédiée{% if order.shippedAt %} le {{ order.shippedAt|date('d/m/Y') }}{% endif %}{% if order.trackingCarrier %} par {{ order.trackingCarrier }}{% endif %}</h2>
+                <h2 class="h6">Commande expédiée{% if order.shippedAt %} le {{ order.shippedAt|store_time('d/m/Y') }}{% endif %}{% if order.trackingCarrier %} par {{ order.trackingCarrier }}{% endif %}</h2>
                 {% if order.trackingNumber %}<p class="mb-2">Suivi : {% if order.trackingUrl %}<a href="{{ order.trackingUrl }}" target="_blank" rel="noopener">{{ order.trackingNumber }}</a>{% else %}{{ order.trackingNumber }}{% endif %}</p>{% endif %}
                 <form method="post" action="{{ path('admin_order_deliver', {id: order.id}) }}" class="d-inline">
                     <input type="hidden" name="_token" value="{{ csrf_token(deliverCsrfToken) }}">

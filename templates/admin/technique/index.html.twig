@@ -103,7 +103,7 @@
                         {{ ui.statut(ind.status) }}
                     </div>
                     <div class="tech-indicateur-valeur">{{ ind.display }}</div>
-                    <div class="text-muted small">{{ ind.hint }}{% if ind.at %} · relevé {{ ind.at|date('d/m H:i') }}{% endif %}</div>
+                    <div class="text-muted small">{{ ind.hint }}{% if ind.at %} · relevé {{ ind.at|date('d/m H:i') }} UTC{% endif %}</div>
                 </div></div>
             </div>
         {% endfor %}

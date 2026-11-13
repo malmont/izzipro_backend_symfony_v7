@@ -16,7 +16,7 @@
 {% block workers_panel %}
     <div class="d-flex justify-content-between align-items-center mb-3">
         <p class="text-muted mb-0">
-            État à {{ refreshed_at|date('H:i:s') }}. Actualisation automatique toutes les 10 secondes.
+            État à {{ refreshed_at|date('H:i:s') }} UTC. Actualisation automatique toutes les 10 secondes.
         </p>
         <div>
             <a href="{{ app.request.uri }}" class="btn btn-secondary">Actualiser</a>
@@ -44,10 +44,10 @@
                             {% endif %}
                             {% if worker.heartbeat %}
                                 {% if worker.heartbeat.startedAt is defined and worker.heartbeat.startedAt %}
-                                    <li>Démarré à {{ worker.heartbeat.startedAt|date('H:i:s') }} (redémarrage automatique toutes les 15 min), {{ worker.heartbeat.handled|default(0) }} message(s) traité(s) depuis.</li>
+                                    <li>Démarré à {{ worker.heartbeat.startedAt|date('H:i:s') }} UTC (redémarrage automatique toutes les 15 min), {{ worker.heartbeat.handled|default(0) }} message(s) traité(s) depuis.</li>
                                 {% endif %}
                                 {% if worker.heartbeat.lastMessage is defined %}
-                                    <li>Dernier message : {{ worker.heartbeat.lastMessage }}, {{ worker.heartbeat.lastResult|default('') }} à {{ worker.heartbeat.lastMessageAt|date('H:i:s') }}.</li>
+                                    <li>Dernier message : {{ worker.heartbeat.lastMessage }}, {{ worker.heartbeat.lastResult|default('') }} à {{ worker.heartbeat.lastMessageAt|date('H:i:s') }} UTC.</li>
                                 {% endif %}
                             {% endif %}
                         </ul>

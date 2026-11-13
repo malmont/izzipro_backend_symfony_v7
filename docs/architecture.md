@@ -297,9 +297,7 @@ de l'entreprise, sinon UTC).
   « (heure du magasin) ».
 - **Dates pures et heures seules** (`DateField`, `TimeField`) : jamais touchées. Un fuseau décalerait d'un jour une date à minuit.
 - **Filtres de liste** : `Services\Admin\StoreTimezoneFilterConfigurator` donne la même règle à tout filtre sur une colonne date et heure
-  (`DateTimeFilter` déclaré ou déduit de la colonne). **Limite connue** : la requête de liste de `BaseTenantCrudController`
-  (`createIndexQueryBuilder`) ne porte aujourd'hui ni les filtres, ni la recherche, ni le tri d'EasyAdmin ; un filtre déclaré ne filtre
-  donc pas encore. La règle du fuseau est prête pour le jour où ils seront branchés.
+  (`DateTimeFilter` déclaré ou déduit de la colonne). Effectif depuis le lot EA-LISTES (ci-dessous), qui a branché les filtres.
 - **Changement d'heure**, sans refus : une heure qui n'existe pas (passage à l'heure d'été, 2 h 30) est lue une heure plus tard ; une heure
   qui existe deux fois (retour à l'heure d'hiver, 1 h 30) est lue comme la première.
 - **Exception inscrite** : les réservations (`BookingCrudController`) gardent l'horloge des réservations (`BookingClock`), avec leur propre
@@ -311,6 +309,41 @@ de l'entreprise, sinon UTC).
   appeler `setTimezone`.
 - **Données saisies avant le lot** : une heure tapée dans l'un de ces champs, pensée en heure du magasin, a été enregistrée comme de l'UTC.
   Elle s'affiche désormais décalée (5 h plus tôt à Toronto en hiver). Aucune donnée n'est corrigée par le lot.
+
+### Listes d'EasyAdmin : recherche, filtres et tri (lot EA-LISTES, 13/11/2026)
+
+La liste d'un écran de site applique la recherche, les filtres et le tri d'EasyAdmin, **sur la base du site**.
+
+- **Avant ce lot**, `BaseTenantCrudController::createIndexQueryBuilder` rendait une requête nue triée par identifiant croissant. Sur
+  les écrans de la classe de base, la zone de recherche ne cherchait rien, un clic sur un en-tête ne triait pas, un filtre déclaré
+  ne filtrait pas, et le tri par défaut d'un écran (`setDefaultSort(['createdAt' => 'DESC'])`) n'était pas appliqué.
+- **Cause** : la classe de base remplaçait la requête d'EasyAdmin par la sienne, sans la recherche, les filtres ni le tri. Rien ne
+  l'imposait : le gestionnaire par défaut de Doctrine est celui du site (`TenantEntityManagerProvider` le rend tel quel, sa connexion
+  est basculée sur la base du site à chaque requête), donc la requête d'EasyAdmin lit la bonne base.
+- **Mise en œuvre** : `BaseTenantCrudController::createIndexQueryBuilder` appelle la requête d'EasyAdmin. Aucun écran n'est retouché.
+- **Écrans qui gardent leur propre requête de liste** (ils surchargent `createIndexQueryBuilder`) : lignes de commande, variantes,
+  valeurs d'option, détails et transactions de caisse, avis, usage IA. Leur requête ne change pas.
+- **Colonnes non triables d'office** (`Services\Admin\UnsortableFieldConfigurator`) : une colonne JSON ou tableau (rôles, configuration
+  d'une page) et une association vue du côté inverse (l'adresse depuis l'entreprise). La base ou Doctrine ne savent pas les trier :
+  leur en-tête n'est pas cliquable. Rien à écrire dans l'écran.
+- **Recherche** : champs déclarés par l'écran (`setSearchFields`), sinon toutes ses colonnes de texte (défaut d'EasyAdmin). Restreindre
+  un écran seulement s'il est en erreur ou lent (repère : plus d'une seconde sur demo).
+- **Garde-fou** : `tests/Functional/Admin/AdminListsTest.php` ouvre la liste de CHAQUE écran de site, y lance deux recherches et un
+  tri sur chaque colonne triable. Une erreur nomme l'écran et la requête. Un nouvel écran est sondé d'office.
+
+**Dates sans heure affichées par un `DateField` : pourquoi une seule est convertie.** Cinq champs « date » reposent sur une colonne
+date et heure. Ne pas les « corriger » d'un bloc :
+
+| Champ | Ce que la colonne contient | Affichage |
+|---|---|---|
+| `transaction_caisse.transaction_date` (2 écrans) | Un instant, écrit à l'heure courante en UTC | Converti : liste et fiche à l'heure du magasin (une vente à 21 h à Toronto reste le jour même). Formulaire inchangé |
+| `collections.start_date_collection`, `end_date_collection` | Une date civile, toujours à 00:00:00 | Non converti : le fuseau afficherait la veille |
+| `commande.date` | Une date civile avec l'heure saisie par le gérant, jamais un instant UTC | Non converti : même raison |
+
+**Pages sur mesure** (gabarits de `templates/admin`) : la fiche de commande, la page d'expédition et les commandes récentes du tableau
+de bord affichent leurs dates à l'heure du magasin (`|store_time('…')` et `store_time_mention()`, `Twig\StoreTimeExtension`). Les pages
+techniques (clés d'application, workers, tableau technique, quotas IA, composition du site, coupons de caisse, Stripe de la caisse)
+restent en UTC et l'écrivent.
 
 ## Tâches de fond (Messenger)
 

@@ -565,7 +565,7 @@
                                 <tr>
                                     <th class="border-0">Réf. Commande</th>
                                     <th class="border-0">Client</th>
-                                    <th class="border-0">Date</th>
+                                    <th class="border-0">Date {{ store_time_mention() }}</th>
                                     <th class="border-0">Montant</th>
                                     <th class="border-0 text-center">Action</th>
                                 </tr>
@@ -585,7 +585,7 @@
                                                     <span class="text-muted">Client invité</span>
                                                 {% endif %}
                                             </td>
-                                            <td>{{ order.orderDate ? order.orderDate|date('d/m/Y H:i') : '-' }}</td>
+                                            <td>{{ order.orderDate ? order.orderDate|store_time('d/m/Y H:i') : '-' }}</td>
                                             <td class="font-weight-bold">{{ (order.totalAmount / 100)|number_format(2, ',', ' ') }} $</td>
                                             <td class="text-center">
                                                 <a href="{{ ea_url().setController('App\\Controller\\Admin\\OrderAllCrudController').setAction('detail').setEntityId(order.id) }}" class="btn btn-sm btn-circle btn-light" title="Voir détails">

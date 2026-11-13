@@ -172,9 +172,8 @@ class StoreTimezoneAdminTest extends WebTestCase
     }
 
     /**
-     * Filtres de liste : la règle est vérifiée sur le formulaire du filtre (options posées, puis valeur lue). Elle ne peut pas l'être sur
-     * la liste elle-même : la requête de liste de `BaseTenantCrudController` n'applique aujourd'hui aucun filtre d'EasyAdmin (constat du
-     * lot, signalé ; hors de ce lot).
+     * Filtres de liste : la règle est vérifiée ici sur le formulaire du filtre (options posées, puis valeur lue). Son effet sur la liste
+     * elle-même est vérifié par `AdminListsTest` depuis que le lot EA-LISTES a branché les filtres.
      */
     public function testDateAndTimeFiltersReadStoreTime(): void
     {

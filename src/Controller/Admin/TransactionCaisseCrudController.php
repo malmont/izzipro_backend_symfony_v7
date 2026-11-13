@@ -94,7 +94,10 @@ class TransactionCaisseCrudController extends BaseTenantCrudController
                     },
                     'choice_label' => 'name',
                 ]),
-            DateField::new('transactionDate', 'Date de transaction'),
+            // Instant de la transaction (en base en UTC) : liste et fiche à l'heure du magasin, par la règle commune des champs date et
+            // heure (lot EA-LISTES, 13/11/2026 ; avant : le jour UTC, donc le lendemain pour une vente du soir). Formulaire inchangé.
+            \EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField::new('transactionDate', 'Date de transaction')->setFormat('dd/MM/yyyy HH:mm')->hideOnForm(),
+            DateField::new('transactionDate', 'Date de transaction')->onlyOnForms(),
             MoneyField::new('amount', 'Montant')->setCurrency('USD')->setStoredAsCents(false),
             AssociationField::new('cashdetails', 'Détails de cash')
                 ->formatValue(function ($value, $entity) {

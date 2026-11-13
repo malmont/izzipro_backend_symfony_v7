@@ -32,7 +32,7 @@
 
     {% if status.status == 'done' %}
         {% if applied %}
-            <div class="alert alert-success" data-applied>Cette composition est appliquée{% if status.app != 'boutique' and composedAt %} (le {{ composedAt|date('d/m/Y à H:i') }}){% endif %}. Ouvrez le tableau de bord : le bandeau « Voir mon site en ligne » vous y mène. Pour retoucher : l'éditeur, sur le site.</div>
+            <div class="alert alert-success" data-applied>Cette composition est appliquée{% if status.app != 'boutique' and composedAt %} (le {{ composedAt|date('d/m/Y à H:i') }} UTC){% endif %}. Ouvrez le tableau de bord : le bandeau « Voir mon site en ligne » vous y mène. Pour retoucher : l'éditeur, sur le site.</div>
         {% else %}
             <form method="post" action="{{ applyUrl }}" data-apply-form>
                 <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">

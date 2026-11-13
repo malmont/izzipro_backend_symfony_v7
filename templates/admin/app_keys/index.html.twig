@@ -62,7 +62,7 @@
     </form>
 
     <table class="table table-sm">
-        <thead><tr><th>Application</th><th>Clé</th><th>Libellé</th><th>Poste</th><th>Créée</th><th>Expire</th><th>Dernier usage</th><th>État</th><th></th></tr></thead>
+        <thead><tr><th>Application</th><th>Clé</th><th>Libellé</th><th>Poste</th><th>Créée (UTC)</th><th>Expire (UTC)</th><th>Dernier usage (UTC)</th><th>État</th><th></th></tr></thead>
         <tbody>
         {% for key in keys %}
             <tr class="{{ key.isActive ? '' : 'text-muted' }}">

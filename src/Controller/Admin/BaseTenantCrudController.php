@@ -38,14 +38,22 @@ abstract class BaseTenantCrudController extends AbstractCrudController
     }
 
     /**
-     * Gère la LISTE en utilisant l'EM du tenant.
+     * Gère la LISTE avec la recherche, les filtres et le tri de l'écran : la requête d'EasyAdmin elle-même (lot EA-LISTES, 13/11/2026).
+     * Avant, cette méthode rendait une requête nue triée par identifiant, qui ignorait les trois ; le tri par défaut d'un écran
+     * (`setDefaultSort`) n'était donc pas appliqué non plus. La requête d'EasyAdmin lit bien la base du site : le gestionnaire par
+     * défaut de Doctrine EST celui du site (sa connexion est basculée à chaque requête, `TenantConnectionProvider`).
+     *
+     * Un tri demandé dans l'adresse sur une colonne sans ordre possible (JSON, association vue du côté inverse) est écarté : la liste
+     * s'affiche avec ses autres tris, au lieu d'une erreur de la base (`UnsortableFieldConfigurator`).
      */
     public function createIndexQueryBuilder(SearchDto $searchDto, EntityDto $entityDto, FieldCollection $fields, FilterCollection $filters): QueryBuilder
     {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $qb = $tenantEm->getRepository($entityDto->getFqcn())->createQueryBuilder('entity');
-        $qb->addOrderBy('entity.id', 'ASC');
-        return $qb;
+        $sort = array_filter($searchDto->getSort(), fn (string $property) => !\App\Services\Admin\UnsortableFieldConfigurator::isUnsortable($entityDto, $property), ARRAY_FILTER_USE_KEY);
+        if ($sort !== $searchDto->getSort()) {
+            $searchDto = new SearchDto($searchDto->getRequest(), $searchDto->getSearchableProperties(), $searchDto->getQuery(), $sort, [], $searchDto->getAppliedFilters(), $searchDto->getSearchMode());
+        }
+
+        return parent::createIndexQueryBuilder($searchDto, $entityDto, $fields, $filters);
     }
 
     /**

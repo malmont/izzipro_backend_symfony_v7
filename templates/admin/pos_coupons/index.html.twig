@@ -30,7 +30,7 @@
         </table>
         <h5>Détail</h5>
         <table class="table table-sm">
-            <thead><tr><th>Accepté le</th><th>Fabricant</th><th>Préfixe GS1</th><th>Offre</th><th>Série</th><th>Vente</th><th class="text-end">Montant</th><th>Statut</th><th>Lot</th></tr></thead>
+            <thead><tr><th>Accepté le (UTC)</th><th>Fabricant</th><th>Préfixe GS1</th><th>Offre</th><th>Série</th><th>Vente</th><th class="text-end">Montant</th><th>Statut</th><th>Lot</th></tr></thead>
             <tbody>{% for c in report.coupons %}<tr><td>{{ c.redeemedAt|date('d/m/Y H:i') }}</td><td>{{ c.manufacturer }}</td><td>{{ c.companyPrefix }}</td><td>{{ c.offerCode }}</td><td>{{ c.serial }}</td><td>#{{ c.orderId }}</td><td class="text-end">{{ (c.amount / 100)|number_format(2, ',', ' ') }}</td><td>{{ c.status }}</td><td>{{ c.claimBatch }}</td></tr>{% endfor %}</tbody>
         </table>
     {% endif %}

@@ -19,7 +19,7 @@
         <div>
             <h1 class="h3 mb-1">{{ title }} <span class="badge bg-{{ {1: 'secondary', 2: 'info', 3: 'primary', 4: 'warning text-dark', 5: 'info', 6: 'success', 7: 'danger'}[sheet.statusId] ?? 'secondary' }}" data-order-status>{{ sheet.statusLabel }}</span>
                 <span class="badge bg-light text-dark">paiement : {{ {pending: 'en attente', authorized: 'autorisé, non capturé', paid: 'payé', failed: 'échoué', refunded: 'remboursé', canceled: 'annulé'}[o.paymentStatus] ?? o.paymentStatus }}</span></h1>
-            <div class="text-muted">Passée le {{ o.orderDate|date('d/m/Y à H:i') }} · {{ o.orderSource ?? 'web' }}{% if a.counterSale %} · <strong>vente au comptoir : opérations depuis la caisse</strong>{% endif %}</div>
+            <div class="text-muted">Passée le {{ o.orderDate|store_time('d/m/Y à H:i') }} {{ store_time_mention() }} · {{ o.orderSource ?? 'web' }}{% if a.counterSale %} · <strong>vente au comptoir : opérations depuis la caisse</strong>{% endif %}</div>
         </div>
         <div class="d-flex flex-wrap gap-2" data-order-actions>
             {% if a.capture %}<a class="btn btn-sm btn-primary" href="{{ links.refund }}">Capturer le paiement</a>{% endif %}
@@ -54,9 +54,9 @@
                 {% if sheet.payments is empty %}<p class="text-muted mb-0">Aucun paiement enregistré.</p>{% else %}
                 <table class="table table-sm mb-2" data-order-payments>
                     <thead><tr><th>Date</th><th>Type</th><th>Moyen</th><th class="text-end">Montant</th><th>État</th><th></th></tr></thead>
-                    <tbody>{% for p in sheet.payments %}<tr class="{{ p.amountCents < 0 ? 'table-light' : '' }}"><td>{{ p.date }}</td><td>{{ p.type == 'RemboursementClient' ? 'Remboursement' : 'Encaissement' }}</td><td>{{ p.method }}{% if p.card %} <span class="text-muted small">{{ p.card }}</span>{% endif %}</td><td class="text-end">{{ m.money(p.amountCents, cur) }}</td><td><span class="small">{{ p.status }}{% if p.stripeStatus %} · Stripe {{ p.stripeStatus }}{% endif %}</span></td><td>{% if p.receiptUrl %}<a href="{{ p.receiptUrl }}" target="_blank" rel="noopener" class="small">reçu</a>{% endif %}</td></tr>{% endfor %}</tbody>
+                    <tbody>{% for p in sheet.payments %}<tr class="{{ p.amountCents < 0 ? 'table-light' : '' }}"><td>{{ p.date|store_time('Y-m-d H:i') }}</td><td>{{ p.type == 'RemboursementClient' ? 'Remboursement' : 'Encaissement' }}</td><td>{{ p.method }}{% if p.card %} <span class="text-muted small">{{ p.card }}</span>{% endif %}</td><td class="text-end">{{ m.money(p.amountCents, cur) }}</td><td><span class="small">{{ p.status }}{% if p.stripeStatus %} · Stripe {{ p.stripeStatus }}{% endif %}</span></td><td>{% if p.receiptUrl %}<a href="{{ p.receiptUrl }}" target="_blank" rel="noopener" class="small">reçu</a>{% endif %}</td></tr>{% endfor %}</tbody>
                 </table>{% endif %}
-                {% if sheet.returns is not empty %}<div class="small mb-2" data-order-returns><strong>Retours :</strong> {% for r in sheet.returns %}{{ r.createdAt }} : {% for l in r.lines %}{{ l.quantity }} × {{ l.name }}{% if not loop.last %}, {% endif %}{% endfor %} ({{ m.money(r.amountCents, cur) }}{% if r.restock %}, remis en stock{% endif %}){% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}
+                {% if sheet.returns is not empty %}<div class="small mb-2" data-order-returns><strong>Retours :</strong> {% for r in sheet.returns %}{{ r.createdAt|store_time('Y-m-d H:i') }} : {% for l in r.lines %}{{ l.quantity }} × {{ l.name }}{% if not loop.last %}, {% endif %}{% endfor %} ({{ m.money(r.amountCents, cur) }}{% if r.restock %}, remis en stock{% endif %}){% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}
                 <p class="small text-muted mb-0">Payé par carte {{ m.money(sheet.money.capturedCents, cur) }} · remboursé {{ m.money(sheet.money.refundedCents, cur) }} · remboursable {{ m.money(sheet.money.refundableCents, cur) }}{% if sheet.money.authorizedCents > 0 %} · <strong class="text-warning">autorisé non capturé {{ m.money(sheet.money.authorizedCents, cur) }}</strong>{% endif %}</p>
             </div></div>
 
@@ -78,12 +78,12 @@
             </div></div>
             <div class="card mb-3"><div class="card-body" data-order-timeline>
                 <h2 class="h6">Chronologie</h2>
-                <ul class="list-unstyled mb-0">{% for e in sheet.timeline %}<li class="mb-1"><span class="text-muted small">{{ e.at }}</span><br>{{ e.label }}</li>{% endfor %}</ul>
+                <ul class="list-unstyled mb-0">{% for e in sheet.timeline %}<li class="mb-1"><span class="text-muted small">{{ e.at|store_time('Y-m-d H:i') }}</span><br>{{ e.label }}</li>{% endfor %}</ul>
             </div></div>
             <div class="card mb-3"><div class="card-body">
                 <h2 class="h6">Journal des opérations</h2>
                 {% if sheet.journal is empty %}<p class="text-muted small mb-0">Aucune opération depuis le back-office.</p>{% else %}
-                <ul class="list-unstyled small mb-0">{% for j in sheet.journal %}<li class="mb-1"><span class="text-muted">{{ j.at }}</span> · {{ j.action }}{% if j.by %} · {{ j.by }}{% endif %}{% if j.after.reason is defined and j.after.reason %} · « {{ j.after.reason }} »{% endif %}</li>{% endfor %}</ul>{% endif %}
+                <ul class="list-unstyled small mb-0">{% for j in sheet.journal %}<li class="mb-1"><span class="text-muted">{{ j.at|store_time('Y-m-d H:i') }}</span> · {{ j.action }}{% if j.by %} · {{ j.by }}{% endif %}{% if j.after.reason is defined and j.after.reason %} · « {{ j.after.reason }} »{% endif %}</li>{% endfor %}</ul>{% endif %}
             </div></div>
             <a class="btn btn-link btn-sm" href="{{ links.todo }}">Commandes à traiter</a> · <a class="btn btn-link btn-sm" href="{{ links.list }}">Toutes les commandes</a>
         </div>
