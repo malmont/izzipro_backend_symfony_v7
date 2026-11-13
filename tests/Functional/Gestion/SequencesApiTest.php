@@ -200,8 +200,9 @@ class SequencesApiTest extends WebTestCase
         $this->assertSame('readiness.management.short_code', $steps['management.short_code']['action']['key']);
         $this->assertSame(['supplier.create', 'fournisseurs'], [$steps['management.suppliers']['action']['key'], $steps['management.suppliers']['screen']['key']]);
         // Depuis le lot IA-FACT-1, la conversation sait préparer la confirmation d'une facture ; les autres actions pas encore
-        $this->assertSame(['key' => 'document.invoice.confirm', 'preparable' => true], $steps['management.first_purchase']['action']);
-        $this->assertFalse($steps['management.suppliers']['action']['preparable']);
+        $this->assertSame(['key' => 'document.invoice.confirm', 'preparable' => true, 'params' => []], $steps['management.first_purchase']['action']);
+        $this->assertSame(['key' => 'supplier.create', 'preparable' => true, 'params' => []], $steps['management.suppliers']['action'], 'lot IA-ACT-1 : le fil sait créer un fournisseur');
+        $this->assertFalse($steps['management.cash']['action']['preparable']);
         $this->assertSame(['filter' => 'missing-cost'], $steps['management.purchase_cost']['screen']['params']);
         $figures = array_column($steps['management.purchase_cost']['figures'], null, 'key');
         $this->assertSame(['Items without a cost', 'count'], [$figures['missing']['label'], $figures['missing']['unit']]);
@@ -255,7 +256,7 @@ class SequencesApiTest extends WebTestCase
         $this->assertSame([true, false, false, false, false], array_column($before['steps'], 'blocking'));
         $this->assertSame(['in_progress', 'budget', true], [$before['status'], $before['next']['stepKey'], $before['next']['blocking']]);
         $this->assertSame(['where' => 'app', 'key' => 'periode.preparation', 'params' => ['periodId' => null, 'periodKey' => $next['key']], 'url' => null], $before['steps'][0]['screen']);
-        $this->assertSame(['key' => 'preparation.validate', 'preparable' => false], $before['steps'][0]['action']);
+        $this->assertSame(['key' => 'preparation.validate', 'preparable' => false, 'params' => []], $before['steps'][0]['action']);
         $this->assertSame([['key' => 'planned', 'label' => 'Budget prévu', 'value' => 0, 'unit' => 'money']], $before['steps'][0]['figures']);
         $this->assertSame([$next['key'], false, null], [$before['instance']['id'], $before['instance']['current'], $before['instance']['periodId']]);
 

@@ -25,6 +25,9 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  *
  * États : `reading` (lecture en cours), `failed` (lecture en échec), `questions` (il manque une réponse, ou l'aperçu signale un refus),
  * `ready` (aperçu prêt à confirmer), `confirmed`, `abandoned`.
+ *
+ * Lot IA-ACT-1 : un fil peut aussi mener une action préparable, sans document (`kind` = la clé de l'action). Ce qui lui est propre
+ * (ouverture, fil, confirmation, annulation) est dans `ActionThreadService` ; les réponses par bouton et la phrase libre sont communes.
  */
 class GestionConversationService
 {
@@ -44,6 +47,7 @@ class GestionConversationService
         private readonly GestionDocumentUndoService $undoService,
         private readonly LandingAiQuotaService $quota,
         private readonly TranslatorInterface $translator,
+        private readonly ActionThreadService $actions, // lot IA-ACT-1 : les fils d'action
         private readonly ?ConversationInterpreter $interpreter = null, // lot IA-FACT-2-B : la phrase libre
         private readonly ?\App\Services\CaisseService\StoreClock $clock = null,
         private readonly ?\Psr\Log\LoggerInterface $logger = null,
@@ -97,6 +101,9 @@ class GestionConversationService
      */
     public function thread(GestionConversation $conversation, ?string $locale = null): array
     {
+        if ($this->actions->handles($conversation)) {
+            return $this->actions->thread($conversation, $locale);
+        }
         $locale ??= $conversation->getLocale();
         $document = $conversation->getDocument();
         $this->documents->releaseStaleReadings(); // une lecture perdue doit apparaître en échec dans le fil, comme sur l'écran du document
@@ -141,20 +148,20 @@ class GestionConversationService
      */
     public function answer(GestionConversation $conversation, array $answers, ?string $user): void
     {
-        $document = $this->workable($conversation);
+        [$build, $accept] = $this->driver($conversation);
         $current = $conversation->getAnswers();
         $fields = [];
         $accepted = [];
         // Les réponses s'appliquent dans l'ordre : chacune est contrôlée sur les questions telles que les précédentes les ont laissées
         // (répondre la cible fait naître la question du frais de port, que la réponse suivante du même envoi peut renseigner)
         foreach (array_values($answers) as $i => $answer) {
-            $known = array_column($this->questions->build($document, $current, $conversation->getLocale())['questions'], null, 'id');
+            $known = array_column($build($current), null, 'id');
             $id = is_array($answer) && is_string($answer['questionId'] ?? null) ? $answer['questionId'] : null;
             if ($id === null || !isset($known[$id])) {
                 $fields["answers[$i].questionId"] = 'UNKNOWN_QUESTION';
                 continue;
             }
-            $accepted[$id] = $this->questions->accept($known[$id], $answer['value'] ?? null, $i);
+            $accepted[$id] = $accept($known[$id], $answer['value'] ?? null, $i, $current);
             if ($accepted[$id] === null) {
                 unset($current[$id]);
             } else {
@@ -167,7 +174,7 @@ class GestionConversationService
         $em = $this->emProvider->getEntityManager();
         $conversation->setAnswers($current)->setUpdatedAt(new \DateTimeImmutable());
         $em->persist(GestionConversationMessage::of($conversation, GestionConversationMessage::ROLE_USER, 'answers', ['answers' => $accepted], $user));
-        if (in_array(InvoiceQuestions::ABANDON, $accepted, true)) {
+        if (!$this->actions->handles($conversation) && in_array(InvoiceQuestions::ABANDON, $accepted, true)) { // un fil d'action s'abandonne par sa route
             $conversation->setStatus(GestionConversation::STATUS_ABANDONED);
             $em->persist(GestionConversationMessage::of($conversation, GestionConversationMessage::ROLE_ASSISTANT, 'abandoned', []));
         }
@@ -184,7 +191,7 @@ class GestionConversationService
      */
     public function message(GestionConversation $conversation, mixed $text, ?string $user, bool $platformOwner): array
     {
-        $document = $this->workable($conversation);
+        [$build, $accept, $document, $action] = $this->driver($conversation);
         $text = is_string($text) ? trim($text) : '';
         if ($text === '' || mb_strlen($text) > ConversationInterpreter::MAX_TEXT) {
             throw new GestionValidationException(['text' => $text === '' ? 'REQUIRED' : 'TOO_LONG'], sprintf('text : une phrase de %d caractères au plus', ConversationInterpreter::MAX_TEXT));
@@ -199,14 +206,15 @@ class GestionConversationService
                 ['limit' => self::AI_MESSAGES_PER_DAY, 'resetAt' => $dayEnd->format(\DateTimeInterface::ATOM)]);
         }
         $locale = $conversation->getLocale();
-        $built = $this->questions->build($document, $conversation->getAnswers(), $locale);
-        $x = $document->getExtraction() ?? [];
+        $x = $document?->getExtraction() ?? [];
         $names = array_values(array_filter(array_merge([(string) ($x['supplier']['name'] ?? '')], array_map(fn ($l) => (string) ($l['label'] ?? ''), is_array($x['lines'] ?? null) ? $x['lines'] : []),
             array_map(fn ($l) => (string) ($l['baseLabel'] ?? ''), is_array($x['lines'] ?? null) ? $x['lines'] : [])), fn (string $n) => $n !== ''));
         $stats = new LandingAiUsageStats(ConversationInterpreter::MODEL);
         $usage = $platformOwner ? null : $this->quota->reserve('assistant', 'gestion_conversation', ConversationInterpreter::COST, $user, mb_substr($text, 0, 200));
         try {
-            $read = $this->interpreter->interpret($text, $built['questions'], $names, (new \DateTimeImmutable('now', $this->clock->timezone()))->setTime(0, 0), $locale, $stats);
+            // fil d'action : un choix n'est gardé que si la phrase nomme l'option (aucune valeur qui ne soit dans la phrase)
+            $read = $this->interpreter->interpret($text, $build($conversation->getAnswers()), $names, (new \DateTimeImmutable('now', $this->clock->timezone()))->setTime(0, 0), $locale, $stats,
+                $action === null ? null : $this->translator->trans('conversation.actions.' . str_replace('.', '_', $action::key()) . '.title', [], 'gestion', 'fr'), $action !== null);
             if ($usage !== null) {
                 $this->quota->complete($usage, $stats, mb_substr($read['reply'], 0, 200));
             }
@@ -222,18 +230,18 @@ class GestionConversationService
         $applied = [];
         $ignored = $read['ignored'];
         foreach ($read['answers'] as $i => $answer) {
-            $known = array_column($this->questions->build($document, $current, $locale)['questions'], null, 'id');
+            $known = array_column($build($current), null, 'id');
             if (!isset($known[$answer['questionId']])) {
                 $ignored[] = ['questionId' => $answer['questionId'], 'reason' => 'UNKNOWN_QUESTION'];
                 continue;
             }
             try {
-                $value = $this->questions->accept($known[$answer['questionId']], $answer['value'], $i);
+                $value = $accept($known[$answer['questionId']], $answer['value'], $i, $current);
             } catch (GestionValidationException $e) {
                 $ignored[] = ['questionId' => $answer['questionId'], 'reason' => (string) (array_values($e->fields)[0] ?? 'INVALID_VALUE')];
                 continue;
             }
-            if ($value === InvoiceQuestions::ABANDON) {
+            if ($action === null && $value === InvoiceQuestions::ABANDON) {
                 $ignored[] = ['questionId' => $answer['questionId'], 'reason' => 'ABANDON_BY_BUTTON_ONLY']; // abandonner reste un geste du gérant
                 continue;
             }
@@ -259,6 +267,9 @@ class GestionConversationService
      */
     public function confirm(GestionConversation $conversation, mixed $previewHash, string $host, ?string $user): array
     {
+        if ($this->actions->handles($conversation)) {
+            return $this->actions->confirm($conversation, $previewHash, $user);
+        }
         $document = $this->workable($conversation);
         if (!is_string($previewHash) || $previewHash === '') {
             throw new GestionValidationException(['previewHash' => 'REQUIRED']);
@@ -284,6 +295,9 @@ class GestionConversationService
     /** Annulation d'un bloc de la confirmation du fil ; le fil revient à l'aperçu */
     public function undo(GestionConversation $conversation, ?string $user): array
     {
+        if ($this->actions->handles($conversation)) {
+            return $this->actions->undo($conversation, $user);
+        }
         $document = $conversation->getDocument();
         if ($document === null) {
             throw new GestionConflictException('DOCUMENT_NOT_CONFIRMED', 'Ce fil n\'a rien confirmé : rien à annuler.');
@@ -298,23 +312,64 @@ class GestionConversationService
     }
 
     /**
-     * Liste légère des fils, du plus récent au plus ancien.
+     * Abandon d'un fil par le gérant (lot IA-ACT-1) : rien n'est créé, rien n'est à défaire. 409 `CONVERSATION_NOT_OPEN` si le fil est
+     * déjà confirmé ou abandonné.
+     */
+    public function abandon(GestionConversation $conversation, ?string $user): void
+    {
+        if ($this->actions->handles($conversation)) {
+            $this->actions->abandon($conversation, $user);
+
+            return;
+        }
+        $state = $this->state($conversation);
+        if (in_array($state, [self::STATE_CONFIRMED, self::STATE_ABANDONED], true)) {
+            throw new GestionConflictException('CONVERSATION_NOT_OPEN', 'Ce fil est déjà confirmé ou abandonné.', 409, ['state' => $state]);
+        }
+        $em = $this->emProvider->getEntityManager();
+        $conversation->setStatus(GestionConversation::STATUS_ABANDONED)->setUpdatedAt(new \DateTimeImmutable());
+        $em->persist(GestionConversationMessage::of($conversation, GestionConversationMessage::ROLE_ASSISTANT, 'abandoned', [], $user));
+        $em->flush();
+    }
+
+    /**
+     * Liste légère des fils, du plus récent au plus ancien ; `kind` : `invoice` ou la clé d'une action.
      *
      * @return array{0: list<array<string, mixed>>, 1: int}
      */
-    public function search(int $page, int $limit): array
+    public function search(int $page, int $limit, ?string $kind = null): array
     {
         $repo = $this->emProvider->getEntityManager()->getRepository(GestionConversation::class);
-        $rows = $repo->findBy([], ['id' => 'DESC'], $limit, ($page - 1) * $limit);
+        $criteria = $kind === null ? [] : ['kind' => $kind];
+        $rows = $repo->findBy($criteria, ['id' => 'DESC'], $limit, ($page - 1) * $limit);
 
         return [array_map(fn (GestionConversation $c) => [
-            'id' => $c->getId(), 'kind' => $c->getKind(), 'state' => $this->state($c),
+            'id' => $c->getId(), 'kind' => $c->getKind(), 'state' => $this->actions->handles($c) ? $this->actions->state($c) : $this->state($c),
             'document' => $c->getDocument() === null ? null : ['id' => $c->getDocument()->getId(), 'status' => $c->getDocument()->getStatus(), 'commandeId' => $c->getDocument()->getCommandeId()],
             'createdAt' => $c->getCreatedAt()?->format(\DateTimeInterface::ATOM), 'updatedAt' => $c->getUpdatedAt()?->format(\DateTimeInterface::ATOM),
-        ], $rows), $repo->count([])];
+        ], $rows), $repo->count($criteria)];
     }
 
     // ---- outils --------------------------------------------------------------------------------------------------------------------
+
+    /**
+     * Ce qui diffère entre un fil de facture et un fil d'action pour répondre : les questions d'après des réponses, et le contrôle d'une
+     * réponse. Refuse (409 `CONVERSATION_NOT_OPEN`) un fil qui n'attend plus de réponse.
+     *
+     * @return array{0: \Closure(array<string, mixed>): list<array<string, mixed>>, 1: \Closure(array<string, mixed>, mixed, int, array<string, mixed>): mixed, 2: ?GestionDocument, 3: ?Action\GestionAction}
+     */
+    private function driver(GestionConversation $conversation): array
+    {
+        $locale = $conversation->getLocale();
+        if ($this->actions->handles($conversation)) {
+            $action = $this->actions->workable($conversation);
+
+            return [fn (array $answers) => $action->build($answers, $locale)['questions'], fn (array $question, mixed $value, int $i, array $answers) => $action->accept($question, $value, $i, $answers), null, $action];
+        }
+        $document = $this->workable($conversation);
+
+        return [fn (array $answers) => $this->questions->build($document, $answers, $locale)['questions'], fn (array $question, mixed $value, int $i, array $answers) => $this->questions->accept($question, $value, $i), $document, null];
+    }
 
     /** État d'après le fil et son document, sans regarder les questions (`questions` devient `ready` dans `thread()`) */
     private function state(GestionConversation $conversation): string

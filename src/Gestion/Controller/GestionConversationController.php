@@ -15,6 +15,7 @@ use Symfony\Component\Routing\Attribute\Route;
  * Fil de conversation de la gestion (lot IA-FACT-1, 13/11/2026, `docs/conversation-gestion.md`), `ROLE_ADMIN` (`access_control`
  * `/api/gestion`), module de gestion actif : une facture fournisseur menée de la pièce jointe à la commande, puis annulable d'un bloc.
  * Le serveur calcule les questions, l'aperçu et son empreinte ; aucune IA dans ce lot hors la lecture du document.
+ * Lot IA-ACT-1 : le même fil mène aussi une action préparable du catalogue (`ActionCatalog`), sans document.
  * Codes : 404 `CONVERSATION_NOT_FOUND`, `DOCUMENT_NOT_FOUND` ; 409 `CONVERSATION_NOT_OPEN`, `CONVERSATION_NOT_READY`, `PREVIEW_CHANGED`,
  * `UNDO_BLOCKED`, `UNDO_EXPIRED`, `ALREADY_UNDONE` ; 422 `VALIDATION_FAILED`, `DOCUMENT_INVALID`, `DOCUMENT_TYPE` ; ceux de l'envoi et de
  * la confirmation d'un document (`GestionDocumentController`).
@@ -26,7 +27,11 @@ class GestionConversationController extends AbstractController
     {
     }
 
-    /** Multipart `files[]` (ou `file`), `text?`, `locale?` ; ou JSON `{ documentId, text? }`. 201 nouveau fil, 200 fil déjà ouvert pour ce document. */
+    /**
+     * Multipart `files[]` (ou `file`), `text?`, `locale?` ; ou JSON `{ documentId, text? }`. 201 nouveau fil, 200 fil déjà ouvert pour ce document.
+     * Lot IA-ACT-1 : JSON `{ action, params?, text?, locale? }` ouvre le fil d'une action du catalogue (201) ; 422 `action: UNKNOWN_ACTION`,
+     * `params.<paramètre>: <code>`.
+     */
     #[Route('', name: 'gestion_conversations_start', methods: ['POST'])]
     public function start(Request $request): JsonResponse
     {
@@ -36,7 +41,8 @@ class GestionConversationController extends AbstractController
         $text = $request->request->get('text') ?? ($json['text'] ?? null);
         try {
             $out = $this->useCase->start($files, $request->request->get('documentId') ?? ($json['documentId'] ?? null), is_string($text) ? $text : null,
-                self::locale($request->request->get('locale') ?? ($json['locale'] ?? null)) ?? 'fr', $this->getUser()?->getUserIdentifier(), $this->isGranted('ROLE_SUPER_ADMIN'));
+                self::locale($request->request->get('locale') ?? ($json['locale'] ?? null)) ?? 'fr', $this->getUser()?->getUserIdentifier(), $this->isGranted('ROLE_SUPER_ADMIN'),
+                $json['action'] ?? null, $json['params'] ?? null);
         } catch (LandingAiException $e) {
             $code = match ($e->getStatusCode()) { 402 => 'AI_CREDITS_EXHAUSTED', 403 => 'AI_NOT_INCLUDED', 429 => 'AI_TOO_MANY_FAILURES', default => 'AI_UNAVAILABLE' };
 
@@ -51,7 +57,7 @@ class GestionConversationController extends AbstractController
     {
         $page = max(1, $request->query->getInt('page', 1));
         $limit = max(1, min(100, $request->query->getInt('limit', 50)));
-        [$rows, $total] = $this->useCase->list($page, $limit);
+        [$rows, $total] = $this->useCase->list($page, $limit, $request->query->get('kind')); // ?kind=invoice ou la clé d'une action
 
         return $this->json($rows, Response::HTTP_OK, ['X-Total-Count' => (string) $total, 'X-Page' => (string) $page, 'X-Limit' => (string) $limit]);
     }
@@ -107,6 +113,13 @@ class GestionConversationController extends AbstractController
     public function undo(int $id, Request $request): JsonResponse
     {
         return $this->json($this->useCase->undo($id, self::locale($request->query->get('locale')), $this->getUser()?->getUserIdentifier()));
+    }
+
+    /** Abandon d'un fil par le gérant (lot IA-ACT-1) → le fil ; rien n'est créé. 409 `CONVERSATION_NOT_OPEN` s'il est déjà confirmé ou abandonné. */
+    #[Route('/{id}/abandon', name: 'gestion_conversations_abandon', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function abandon(int $id, Request $request): JsonResponse
+    {
+        return $this->json($this->useCase->abandon($id, self::locale($request->query->get('locale')), $this->getUser()?->getUserIdentifier()));
     }
 
     /** Corps JSON (objet) ; corps vide = {} ; null si invalide */

@@ -472,6 +472,58 @@ sequences:
 
 # Facture par conversation (lot IA-FACT-1, 13/11/2026) : docs/conversation-gestion.md
 conversation:
+    actions:
+        summary:
+            confirmed: 'C''est fait. Vous pouvez l''annuler pendant 24 heures.'
+            abandoned: 'Abandonné : rien n''a été créé.'
+            issues: 'Un point empêche de préparer l''aperçu : voyez les questions.'
+        expense_create:
+            title: 'Saisir une note de frais'
+            amount:
+                title: 'Montant'
+                text: 'Quel est le montant de la note de frais ?'
+            date:
+                title: 'Date'
+                text: 'À quelle date a eu lieu la dépense ?'
+            typeNoteDeFraisId:
+                title: 'Type de frais'
+                text: 'De quel type de frais s''agit-il ?'
+            description:
+                title: 'Description'
+                text: 'Décrivez la dépense en quelques mots.'
+        supplier_create:
+            title: 'Créer un fournisseur'
+            name:
+                title: 'Nom'
+                text: 'Quel est le nom du fournisseur ?'
+            typeFournisseurId:
+                title: 'Type de fournisseur'
+                text: 'Quel est son type ?'
+            currency:
+                title: 'Devise d''achat'
+                text: 'Dans quelle devise achetez-vous chez lui ?'
+        shipping_create:
+            title: 'Ajouter un frais de port à une commande'
+            commandeId:
+                title: 'Commande'
+                text: 'Sur quelle commande porte ce frais de port ?'
+            transporteurId:
+                title: 'Transporteur'
+                text: 'Quel transporteur l''a livrée ?'
+            amount:
+                title: 'Montant'
+                text: 'Quel est le montant du frais de port ?'
+            tracknumber:
+                title: 'Numéro de suivi'
+                text: 'Le numéro de suivi, si vous l''avez.'
+        budget_put:
+            title: 'Fixer le budget d''une période'
+            periodId:
+                title: 'Période'
+                text: 'Pour quelle période fixez-vous le budget ?'
+            planned:
+                title: '%category%'
+                text: 'Montant prévu pour le poste « %category% » (laisser vide pour ne pas le changer, 0 pour l''effacer).'
     reply:
         nothing: "Je n'ai trouvé dans votre phrase aucune réponse aux questions ouvertes. Répondez par les boutons, ou reformulez."
         applied: "C'est noté : %count% réponse(s) enregistrée(s)."

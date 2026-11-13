@@ -277,10 +277,13 @@ class GestionSequenceService
         return $sequences[0];
     }
 
-    /** @return array{key: string, preparable: bool} référence de l'action, et si la conversation sait la préparer */
+    /**
+     * @return array{key: string, preparable: bool, params: object} référence de l'action, si la conversation sait la préparer, et les
+     *                                                                paramètres à donner à l'ouverture de son fil (`POST /api/gestion/conversations { action, params }`)
+     */
     private static function action(string $key): array
     {
-        return ['key' => $key, 'preparable' => SequenceCatalog::preparable($key)];
+        return ['key' => $key, 'preparable' => SequenceCatalog::preparable($key), 'params' => new \stdClass()];
     }
 
     /** @param array<string, mixed> $params */

@@ -2,6 +2,8 @@
 
 namespace App\Gestion\Sequences;
 
+use App\Gestion\Services\Conversation\Action\ActionCatalog;
+
 /**
  * Catalogue déclaratif du guide des séquences (lot IA-SEQ, 13/11/2026, `docs/sequences-gestion.md`) : les suites d'étapes que le gérant
  * mène, dont le serveur calcule l'avancement à partir des données, jamais d'une case cochée.
@@ -15,7 +17,7 @@ namespace App\Gestion\Sequences;
  *
  * Ajouter une étape = une entrée ici, sa méthode de constat et ses textes (`translations/gestion.{fr,en}.yaml`, `sequences.*`). Le
  * garde-fou de `SequencesApiTest` vérifie que chaque étape a les trois. `preparable` (la conversation sait-elle préparer l'action) vaut
- * vrai pour les actions de `PREPARABLE_ACTIONS` : la facture depuis le lot IA-FACT-1 ; IA-ACT en ajoutera, sans changer les clés.
+ * vrai pour la facture (`PREPARABLE_ACTIONS`, lot IA-FACT-1) et pour toute action du catalogue du fil (`ActionCatalog::KEYS`, lot IA-ACT).
  */
 final class SequenceCatalog
 {
@@ -98,7 +100,7 @@ final class SequenceCatalog
 
     public static function preparable(string $action): bool
     {
-        return in_array($action, self::PREPARABLE_ACTIONS, true);
+        return in_array($action, self::PREPARABLE_ACTIONS, true) || in_array($action, ActionCatalog::KEYS, true); // une seule liste de clés : le catalogue des actions du fil
     }
 
     public static function actionOf(string $readinessStepKey): string

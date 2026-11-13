@@ -36,7 +36,7 @@ class ConversationInterpreter
      *
      * @throws LandingAiException 503 si le modèle ne rend rien d'exploitable
      */
-    public function interpret(string $text, array $questions, array $documentNames, \DateTimeImmutable $today, string $locale, LandingAiUsageStats $stats): array
+    public function interpret(string $text, array $questions, array $documentNames, \DateTimeImmutable $today, string $locale, LandingAiUsageStats $stats, ?string $actionTitle = null, bool $strictChoices = false): array
     {
         $byId = array_column($questions, null, 'id');
         $listed = array_map(fn (array $q) => [
@@ -44,7 +44,7 @@ class ConversationInterpreter
             'options' => array_map(fn (int $i, array $o) => ['index' => $i, 'label' => $o['label']], array_keys($q['options']), $q['options']),
         ], $questions);
         $response = $this->client->createMessage([
-            'model' => self::MODEL, 'max_tokens' => 1500, 'system' => $this->system($locale === 'en' ? 'anglais' : 'français', $today),
+            'model' => self::MODEL, 'max_tokens' => 1500, 'system' => $this->system($locale === 'en' ? 'anglais' : 'français', $today, $actionTitle),
             'messages' => [['role' => 'user', 'content' => [['type' => 'text', 'text' => "Questions du fil :\n" . json_encode($listed, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\nPhrase du gérant :\n" . $text]]]],
             'output_config' => ['format' => ['type' => 'json_schema', 'schema' => self::schema()]],
         ], self::TIMEOUT);
@@ -69,7 +69,7 @@ class ConversationInterpreter
                 $ignored[] = ['questionId' => $id, 'reason' => 'UNKNOWN_QUESTION'];
                 continue;
             }
-            [$value, $reason] = $this->value($byId[$id], $raw, $text, $documentNames, $today);
+            [$value, $reason] = $this->value($byId[$id], $raw, $text, $documentNames, $today, $strictChoices);
             if ($reason !== null) {
                 $ignored[] = ['questionId' => $id, 'reason' => $reason];
             } else {
@@ -85,7 +85,7 @@ class ConversationInterpreter
      *
      * @return array{0: mixed, 1: ?string} valeur, ou raison du refus
      */
-    private function value(array $question, array $raw, string $text, array $documentNames, \DateTimeImmutable $today): array
+    private function value(array $question, array $raw, string $text, array $documentNames, \DateTimeImmutable $today, bool $strictChoices = false): array
     {
         $type = (string) $question['input']['type'];
         if ($type === 'choice') {
@@ -93,6 +93,16 @@ class ConversationInterpreter
             $option = $question['options'][$index] ?? null;
             if ($option === null) {
                 return [null, 'NOT_AN_OPTION'];
+            }
+            if ($strictChoices) {
+                // fil d'action : le gérant doit avoir nommé l'option, et une seule
+                $named = self::named($text, array_map(fn (array $o) => (string) ($o['label'] ?? ''), $question['options']));
+                if (count($named) > 1) {
+                    return [null, 'AMBIGUOUS_OPTION'];
+                }
+                if (!in_array($index, $named, true)) {
+                    return [null, 'OPTION_NOT_IN_SENTENCE'];
+                }
             }
             $value = $option['value'];
             $name = trim((string) ($raw['name'] ?? ''));
@@ -107,6 +117,10 @@ class ConversationInterpreter
             return [$value, null];
         }
         $given = trim((string) ($raw['value'] ?? ''));
+        if ($type === 'text') {
+            // texte libre (description, nom, numéro de suivi) : seulement des mots écrits par le gérant
+            return $given !== '' && self::mentions($text, $given) ? [$given, null] : [null, 'VALUE_NOT_IN_SENTENCE'];
+        }
         if ($type === 'date') {
             return self::dateMentioned($text, $given, $today) ? [$given, null] : [null, 'VALUE_NOT_IN_SENTENCE'];
         }
@@ -130,6 +144,32 @@ class ConversationInterpreter
     public static function mentions(string $text, string $name): bool
     {
         return $name !== '' && mb_stripos($text, $name) !== false;
+    }
+
+    /** Mots qui ne désignent rien : articles, prépositions, et « frais », présent dans trop de libellés */
+    private const STOP_WORDS = ['les', 'des', 'une', 'aux', 'pour', 'par', 'sur', 'avec', 'dans', 'sans', 'que', 'qui', 'est', 'sont', 'pas', 'mon', 'mes', 'son', 'ses', 'nos', 'vos', 'ces', 'cet', 'cette',
+        'frais', 'the', 'and', 'for', 'with', 'from', 'this', 'that'];
+
+    /**
+     * Options que la phrase désigne, par leur libellé. Un mot compte s'il est significatif : 3 caractères au moins, hors mots vides, hors
+     * mots présents dans le libellé de toutes les options ; sans casse ni accents. Sont rendues les options qui ont le plus de mots dans
+     * la phrase (« novembre 2026 » désigne Novembre 2026, pas Décembre 2026) : plusieurs rangs rendus = phrase ambiguë, aucun = option non nommée.
+     *
+     * @param list<string> $labels
+     *
+     * @return list<int> rangs des options désignées
+     */
+    public static function named(string $text, array $labels): array
+    {
+        $fold = fn (string $v) => strtr(mb_strtolower($v), ['à' => 'a', 'â' => 'a', 'ä' => 'a', 'ç' => 'c', 'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e', 'î' => 'i', 'ï' => 'i', 'ô' => 'o', 'ö' => 'o', 'ù' => 'u', 'û' => 'u', 'ü' => 'u']);
+        $words = fn (string $v) => array_values(array_unique(array_filter(preg_split('/[^\p{L}\p{N}]+/u', $fold($v)) ?: [], fn (string $w) => mb_strlen($w) >= 3 && !in_array($w, self::STOP_WORDS, true))));
+        $perLabel = array_map($words, array_values($labels));
+        $common = count($perLabel) > 1 ? array_intersect(...$perLabel) : [];
+        $said = $words($text);
+        $scores = array_map(fn (array $w) => count(array_intersect(array_diff($w, $common), $said)), $perLabel);
+        $best = $scores === [] ? 0 : max($scores);
+
+        return $best === 0 ? [] : array_keys($scores, $best, true);
     }
 
     /** La date est-elle dite dans la phrase : « aujourd'hui », « hier », ou son jour avec son mois (en chiffres ou en lettres) */
@@ -159,15 +199,16 @@ class ConversationInterpreter
         return $day && ($monthNamed || $monthNumbered);
     }
 
-    private function system(string $language, \DateTimeImmutable $today): string
+    private function system(string $language, \DateTimeImmutable $today, ?string $actionTitle = null): string
     {
-        return "Tu aides un commerçant à enregistrer une facture fournisseur. Le serveur a calculé une liste de questions ; le commerçant répond par une phrase libre.\n"
+        return 'Tu aides un commerçant à ' . ($actionTitle === null ? 'enregistrer une facture fournisseur' : 'préparer une action de gestion (« ' . $actionTitle . ' »)') . ". Le serveur a calculé une liste de questions ; le commerçant répond par une phrase libre.\n"
             . "Ta seule tâche : traduire sa phrase en réponses à ces questions, puis lui répondre en une ou deux phrases, en $language.\n"
             . "Règles strictes :\n"
             . "- Ne réponds qu'aux questions de la liste, par leur questionId. Ne réponds pas à une question dont la phrase ne parle pas.\n"
             . "- Question à choix (inputType choice) : donne optionIndex, le rang d'une option proposée. Si le commerçant veut créer un fournisseur ou un article sous un autre nom, mets ce nom dans name, tel qu'il l'a écrit ; sinon name reste vide.\n"
             . "- Question de date : value au format AAAA-MM-JJ, seulement si le commerçant donne la date. Nous sommes le " . $today->format('Y-m-d') . ".\n"
             . "- Question de montant ou de nombre : value est le nombre écrit par le commerçant, avec un point décimal. Tu n'inventes et ne calcules jamais un montant, un taux ou une quantité.\n"
+            . "- Question de texte (inputType text) : value est le texte écrit par le commerçant, recopié mot pour mot, sans rien ajouter.\n"
             . "- Pour une question sans option, optionIndex vaut -1 ; pour une question à choix, value reste vide.\n"
             . "- Tu ne confirmes rien et tu n'annules rien : la confirmation est un geste du commerçant. Si la phrase ne répond à aucune question, rends answers vide et dis-le simplement.\n"
             . "- reply : court, sans chiffres que le commerçant n'a pas donnés.";

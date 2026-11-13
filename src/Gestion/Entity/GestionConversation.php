@@ -53,6 +53,8 @@ class GestionConversation
     public function getDocument(): ?GestionDocument { return $this->document; }
     public function setDocument(?GestionDocument $document): static { $this->document = $document; return $this; }
     public function getKind(): string { return $this->kind; }
+    /** `invoice`, ou la clé d'une action du catalogue (20 caractères au plus) */
+    public function setKind(string $kind): static { $this->kind = $kind; return $this; }
     public function getStatus(): string { return $this->status; }
     public function setStatus(string $status): static { $this->status = $status; return $this; }
     /** @return array<string, mixed> */

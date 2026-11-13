@@ -3,6 +3,9 @@
 namespace App\Gestion\UseCase;
 
 use App\Gestion\Entity\GestionDocument;
+use App\Gestion\Entity\GestionConversation;
+use App\Gestion\Services\Conversation\Action\ActionCatalog;
+use App\Gestion\Services\Conversation\ActionThreadService;
 use App\Gestion\Services\Conversation\GestionConversationService;
 use App\Gestion\Services\Document\GestionDocumentService;
 use App\Gestion\Services\GestionConflictException;
@@ -21,6 +24,8 @@ class GestionConversationUseCase
         private readonly GestionConversationService $conversations,
         private readonly GestionDocumentService $documents,
         private readonly TenantEntityManagerProvider $emProvider,
+        private readonly ActionThreadService $actions,
+        private readonly ActionCatalog $catalog,
     ) {
     }
 
@@ -29,8 +34,16 @@ class GestionConversationUseCase
      *
      * @return array{thread: array<string, mixed>, created: bool}
      */
-    public function start(array $files, mixed $documentId, ?string $text, string $locale, ?string $user, bool $platformOwner): array
+    public function start(array $files, mixed $documentId, ?string $text, string $locale, ?string $user, bool $platformOwner, mixed $action = null, mixed $params = null): array
     {
+        if ($action !== null) {
+            // lot IA-ACT-1 : fil d'une action du catalogue, sans document ; toujours un nouveau fil
+            if ($files !== [] || $documentId !== null) {
+                throw new GestionValidationException(['action' => 'NOT_WITH_DOCUMENT'], 'Une action se prépare sans document : envoyez soit action, soit une facture');
+            }
+
+            return ['thread' => $this->conversations->thread($this->actions->open($action, $params, $text, $locale, $user), $locale), 'created' => true];
+        }
         if ($files !== []) {
             $this->documents->assertAiIncluded($platformOwner);
             $document = $this->documents->create(GestionDocument::TYPE_FACTURE, $files, $locale, $user);
@@ -92,9 +105,22 @@ class GestionConversationUseCase
         return ['undone' => $undone, 'thread' => $this->conversations->thread($conversation, $locale)];
     }
 
-    /** @return array{0: list<array<string, mixed>>, 1: int} */
-    public function list(int $page, int $limit): array
+    /** @return array<string, mixed> le fil abandonné */
+    public function abandon(int $id, ?string $locale, ?string $user): array
     {
-        return $this->conversations->search($page, $limit);
+        $conversation = $this->conversations->find($id);
+        $this->conversations->abandon($conversation, $user);
+
+        return $this->conversations->thread($conversation, $locale);
+    }
+
+    /** @return array{0: list<array<string, mixed>>, 1: int} `kind` : `invoice` ou la clé d'une action du catalogue */
+    public function list(int $page, int $limit, mixed $kind = null): array
+    {
+        if ($kind !== null && $kind !== '' && $kind !== GestionConversation::KIND_INVOICE && !(is_string($kind) && $this->catalog->has($kind))) {
+            throw new GestionValidationException(['kind' => 'UNKNOWN_KIND'], 'kind : invoice, ' . implode(', ', $this->catalog->keys()));
+        }
+
+        return $this->conversations->search($page, $limit, $kind === '' ? null : $kind);
     }
 }

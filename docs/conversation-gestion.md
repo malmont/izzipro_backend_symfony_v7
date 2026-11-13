@@ -1,4 +1,4 @@
-# Facture par conversation — application de gestion (lots IA-FACT-1, IA-FACT-2-A et IA-FACT-2-B, 13/11/2026)
+# Facture et actions par conversation — application de gestion (lots IA-FACT-1, IA-FACT-2-A, IA-FACT-2-B et IA-ACT-1, 13/11/2026)
 
 Un **fil de conversation gardé par le serveur** mène une facture fournisseur de la pièce jointe à la commande : attente de la lecture dans
 le fil, résumé, questions sur ce qui manque, aperçu, confirmation, **annulation d'un bloc**. Règle du propriétaire : *aucune écriture
@@ -8,7 +8,8 @@ préparée sans annulation possible*.
 l'empreinte. Répondre par un bouton est gratuit et n'appelle aucune IA. Dans ce lot, le seul appel d'IA du parcours est la lecture du
 document (1 unité, inchangée). L'ajout à une commande ouverte est livré par IA-FACT-2-A (§ 7) ; la phrase libre interprétée par l'IA
 (1 unité par réponse) par IA-FACT-2-B (§ 8). L'IA ne fournit jamais un montant, un article ou un fournisseur qui ne vient pas du
-document ou du catalogue.
+document ou du catalogue. Depuis IA-ACT-1 (§ 9), le même fil mène aussi une **action préparable** (note de frais, fournisseur, frais
+de port, budget), sans document.
 
 Code : `src/Gestion/Services/Conversation/` (`GestionConversationService`, `InvoiceQuestions`), `src/Gestion/Services/Document/GestionDocumentUndoService`,
 `src/Gestion/UseCase/GestionConversationUseCase`, `src/Gestion/Controller/GestionConversationController`, entités `GestionConversation` et
@@ -28,7 +29,8 @@ Code : `src/Gestion/Services/Conversation/` (`GestionConversationService`, `Invo
 | `POST …/{id}/messages` | `{ text }` : une phrase libre, traduite par l'IA en réponses aux questions (§ 8) → 200 `{ reply, applied, ignored, thread }`. **1 unité** par réponse de l'IA. |
 | `POST …/{id}/confirm` | `{ previewHash }` → **201**, le résultat de la confirmation d'une facture (`docs/lecture-documents-gestion.md` § 4), plus `undo` et `thread`. 409 `CONVERSATION_NOT_READY { state, openQuestions, issues }` ; **409 `PREVIEW_CHANGED { preview, previewHash }`** si l'aperçu a changé depuis son affichage ; les autres refus sont ceux de la confirmation (`PERIOD_CLOSED`, `INVOICE_ALREADY_CONFIRMED`…). |
 | `POST …/{id}/undo` | Annulation d'un bloc (§ 5) → 200 `{ undone, thread }` : le fil revient à l'aperçu, avec ses réponses. |
-| `GET /api/gestion/conversations?page=&limit=` | Liste légère, du plus récent au plus ancien : `[{ id, kind, state, document: { id, status, commandeId }, createdAt, updatedAt }]` (`state` sans le calcul des questions : `questions` vaut aussi pour un fil prêt) ; `X-Total-Count`, `X-Page`, `X-Limit`. |
+| `POST …/{id}/abandon` | Abandon du fil par le gérant (lot IA-ACT-1, facture ou action) → 200 le fil, `state: abandoned` ; rien n'est créé, le document d'une facture reste et un autre fil peut le reprendre. 409 `CONVERSATION_NOT_OPEN { state }` si le fil est déjà confirmé ou abandonné. |
+| `GET /api/gestion/conversations?page=&limit=&kind=` | `kind` (lot IA-ACT-1) : `invoice` ou la clé d'une action ; autre valeur → 422 `{ fields: { kind: UNKNOWN_KIND } }`. Liste légère, du plus récent au plus ancien : `[{ id, kind, state, document: { id, status, commandeId }, createdAt, updatedAt }]` (`state` sans le calcul des questions : `questions` vaut aussi pour un fil prêt) ; `X-Total-Count`, `X-Page`, `X-Limit`. |
 | `POST /api/gestion/documents/{id}/annuler-confirmation` | La même annulation, hors conversation, pour l'écran de vérification → 200 `{ undone, document }`. |
 
 ## 2. Le fil
@@ -200,3 +202,72 @@ Les réponses s'appliquent dans l'ordre, comme celles d'un envoi par boutons.
 **Dans le fil** : la phrase (`user`, `text`), les réponses appliquées (`assistant`, `answers`, `source: "ai"`) et la réponse de l'IA
 (`assistant`, `text`, avec `applied` et `ignored`). `reply` est la phrase du modèle ; s'il n'en rend pas, un texte du serveur.
 
+## 9. Les actions préparables (lot IA-ACT-1, 13/11/2026)
+
+Le même fil prépare une **action de gestion**, sans document : le serveur pose une question par paramètre, calcule l'aperçu et son
+empreinte, n'écrit **qu'à la confirmation**, par le service de la route existante (mêmes contrôles, mêmes refus, même journal), et sait
+défaire d'un bloc ce qu'il a créé. Règle du propriétaire inchangée : aucune écriture préparée sans annulation possible.
+
+**Catalogue : une liste blanche** (`Services/Conversation/Action/ActionCatalog`, `KEYS`). Une action absente ne s'ouvre pas (422), et la
+phrase libre ne peut jamais en ouvrir une : l'action est toujours donnée par sa clé, à l'ouverture. Les clés sont celles du guide des
+séquences (`docs/sequences-gestion.md`) : une seule liste. Une action = une classe (`GestionAction` : `build`, `accept`, `preview`,
+`execute`, `blockers`, `undo`), ses textes (`conversation.actions.<clé avec _>.*`) et son entrée au catalogue ; sa clé tient en 20
+caractères (colonne `gestion_conversation.kind`). Aucune table de plus : ce que la confirmation a créé est noté dans son message
+`confirmed`, d'où part l'annulation.
+
+| Clé | Paramètres (questions) | Écrit par | Annulation, et ses refus |
+|---|---|---|---|
+| `expense.create` | `amount` (cents, > 0), `date`, `typeNoteDeFraisId`, `description` | `NoteDeFraisService::createNoteDeFrais`, dans la période de la date (date dans une période fermée : refus `PERIOD_CLOSED` dès la réponse) | retire la note ; `EXPENSE_CHANGED` (modifiée ou disparue), `PERIOD_CLOSED` |
+| `supplier.create` | `name`, `typeFournisseurId` (proposé : « Autre »), `currency` (proposée : la devise du site) | `FournisseurService::createFournisseur` | retire le fournisseur ; `SUPPLIER_USED` (une commande l'utilise), `SUPPLIER_CHANGED` |
+| `shipping.create` | `commandeId` (commandes ouvertes sans frais de port, 50 plus récentes), `transporteurId`, `amount`, `tracknumber` (facultatif) | `FraisDePortService::createFraisDePort` : LE frais de port de la commande | retire le frais de port ; `SHIPPING_CHANGED`, `COMMANDE_CLOSED`, `PERIOD_CLOSED` |
+| `budget.put` | `periodId` (proposée : la période en cours ; périodes ouvertes), `planned:<poste>` pour `purchases`, `trip`, `shipping`, `advertising`, `other` (cents ; facultatifs, au moins un) | `GestionBudgetService::put` : les postes non donnés gardent leur prévu, 0 efface | remet le prévu d'avant des postes posés ; `BUDGET_CHANGED` (un poste posé a changé depuis), `PERIOD_CLOSED` |
+
+**Ouvrir.** `POST /api/gestion/conversations { action, params?, text?, locale? }` → **201**, toujours un nouveau fil. `params`
+(`{ paramètre: valeur }`) : chaque valeur est contrôlée comme une réponse par bouton et la question est rendue **déjà répondue**
+(`proposed: false`). 422 `VALIDATION_FAILED { fields }` : `action: UNKNOWN_ACTION` (hors catalogue), `action: NOT_WITH_DOCUMENT` (avec un
+fichier ou un `documentId`), `params: MUST_BE_OBJECT`, `params.<paramètre>: UNKNOWN_PARAM | <code de refus>` ; aucun fil n'est ouvert sur
+un refus. `text` est gardé dans le fil sans être lu par l'IA (pour la faire lire : `POST …/messages`). Depuis le guide des séquences, une
+étape rend `action: { key, preparable, params }` : `preparable` dit que le fil sait la préparer, `params` ce qu'il faut passer ici.
+
+**Le fil d'une action** a la forme du § 2, avec : `kind` = la clé de l'action ; `document: null` ; `action: { key, title, available,
+result }` (`result` : ce que la confirmation a créé, sinon `null` ; `available: false` si l'action a quitté le catalogue) ; `summary:
+{ text, openQuestions }` ; **`issues: [{ path, code }]`** (un refus qui empêche l'aperçu sans qu'une question soit ouverte : la commande a
+reçu un frais de port entre-temps, aucun poste de budget donné…) ; `preview` et `previewHash` **seulement à l'état `ready`**. États :
+`questions`, `ready`, `confirmed`, `abandoned`. Messages : `action` (ouverture, avec `params`), `text`, `answers`, `confirmed`
+(`{ action, result, previewHash }`), `undone`, `abandoned`.
+
+**Questions.** `{ id, kind, path, title, text, required, input, options, answer, proposed }` : `id` = le paramètre, `kind` =
+`<action>.<paramètre>`, `input.type` = `money` (cents, avec `currency`), `date` (`AAAA-MM-JJ`), `choice` (une `value` des `options`) ou
+`text`. Une valeur proposée par le serveur (`proposed: true`) vaut réponse tant que le gérant ne la change pas. Refus d'une réponse :
+422 `{ fields: { "answers[i].value": <code> } }` : `INVALID_AMOUNT`, `MUST_BE_POSITIVE`, `MUST_BE_INTEGER_CENTS`, `INVALID_DATE`,
+`PERIOD_CLOSED`, `PERIOD_NOT_FOUND`, `REQUIRED`, `TYPE_NOTE_DE_FRAIS_NOT_FOUND`, `TYPE_FOURNISSEUR_NOT_FOUND`, `INVALID_CURRENCY`,
+`COMMANDE_NOT_FOUND`, `COMMANDE_CLOSED`, `TRANSPORTEUR_NOT_FOUND`, et **`SHIPPING_COST_ALREADY_SET`** sur la question de la commande
+(pas de cumul ici : ce n'est pas une facture).
+
+**Aperçu et empreinte.** L'aperçu dit ce qui sera écrit (`expense.create` : montant, date, type, période ; `budget.put` : par poste
+`{ category, label, before, after }`, `totalBefore`, `totalAfter`). L'empreinte couvre l'action, les réponses et l'aperçu, donc le
+**prévu actuel de chaque poste** d'un budget : modifié entre l'affichage et la confirmation → 409 `PREVIEW_CHANGED { preview, previewHash }`.
+
+**Confirmer.** `POST …/{id}/confirm { previewHash }` → **201** `{ result, undo: { available, until }, thread }` ; `result` :
+`{ noteDeFraisId, periodId }`, `{ fournisseurId }`, `{ fraisDePortId, commandeId }`, `{ periodId }`. 409 `CONVERSATION_NOT_READY { state,
+openQuestions, issues }`, `PREVIEW_CHANGED`, et les refus du service de la route existante.
+
+**Annuler.** `POST …/{id}/undo` → 200 `{ undone, thread }`, **une fois par confirmation, dans les 24 heures**
+(`ActionThreadService::UNDO_HOURS`), tout ou rien. Le fil revient à son aperçu, avec ses réponses, et peut confirmer de nouveau.
+409 `NOTHING_TO_UNDO`, `ALREADY_UNDONE`, `UNDO_EXPIRED { until }`, `UNDO_BLOCKED { reasons: [{ code, message }] }` (codes du tableau).
+`thread.undo` = `{ available, until, blockers }` : les blocages sont constatés à chaque lecture.
+
+**Phrase libre** (`POST …/messages`, § 8 : même unité, mêmes limites). Garde-fous de plus pour une action : un **texte**
+(description, nom, numéro de suivi) n'est gardé que s'il est écrit dans la phrase (`VALUE_NOT_IN_SENTENCE`) ; un **choix** (type,
+commande, transporteur, période, devise) n'est gardé que si la phrase **désigne cette option, et elle seule**
+(`ConversationInterpreter::named`). Un mot du libellé compte s'il est significatif : 3 caractères au moins, hors mots vides (les, des,
+pour, frais…), hors mots présents dans le libellé de toutes les options ; sans casse ni accents. L'option désignée est celle qui a le
+plus de mots dans la phrase (« novembre 2026 » désigne Novembre 2026, pas Décembre 2026). Aucune option désignée, ou une autre que
+celle rendue par le modèle : `OPTION_NOT_IN_SENTENCE` ; plusieurs à égalité (« novembre » avec deux mois de novembre, deux types
+cités) : **`AMBIGUOUS_OPTION`**, aucun choix n'est fait, la question reste ouverte. Montants et dates : seulement ceux de la phrase.
+L'IA ne confirme, n'annule et n'abandonne pas.
+
+Code : `Services/Conversation/ActionThreadService` (ouverture, fil, confirmation, annulation, abandon), `Services/Conversation/Action/`
+(catalogue et actions) ; `GestionConversationService` garde les réponses par bouton et la phrase libre, communes aux deux sortes de fil.
+Tests : `tests/Functional/Gestion/ActionConversationApiTest.php`. Suite prévue : IA-ACT-2 (solde de trésorerie, mouvement prévu ou frais
+fixe, voyage), IA-ACT-3 (coût d'achat d'un article, mois de début d'exercice, calendrier des périodes, clôture d'une période).

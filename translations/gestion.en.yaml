@@ -470,6 +470,58 @@ sequences:
 
 # Invoice by conversation (lot IA-FACT-1, 13/11/2026): docs/conversation-gestion.md
 conversation:
+    actions:
+        summary:
+            confirmed: 'Done. You can undo it for 24 hours.'
+            abandoned: 'Abandoned: nothing was created.'
+            issues: 'Something prevents the preview: see the questions.'
+        expense_create:
+            title: 'Enter an expense'
+            amount:
+                title: 'Amount'
+                text: 'What is the amount of the expense?'
+            date:
+                title: 'Date'
+                text: 'When did the expense take place?'
+            typeNoteDeFraisId:
+                title: 'Expense type'
+                text: 'What type of expense is it?'
+            description:
+                title: 'Description'
+                text: 'Describe the expense in a few words.'
+        supplier_create:
+            title: 'Create a supplier'
+            name:
+                title: 'Name'
+                text: 'What is the supplier''s name?'
+            typeFournisseurId:
+                title: 'Supplier type'
+                text: 'What is its type?'
+            currency:
+                title: 'Purchase currency'
+                text: 'In which currency do you buy from this supplier?'
+        shipping_create:
+            title: 'Add a shipping cost to a purchase order'
+            commandeId:
+                title: 'Purchase order'
+                text: 'Which purchase order is this shipping cost for?'
+            transporteurId:
+                title: 'Carrier'
+                text: 'Which carrier delivered it?'
+            amount:
+                title: 'Amount'
+                text: 'What is the amount of the shipping cost?'
+            tracknumber:
+                title: 'Tracking number'
+                text: 'The tracking number, if you have it.'
+        budget_put:
+            title: 'Set the budget of a period'
+            periodId:
+                title: 'Period'
+                text: 'Which period is this budget for?'
+            planned:
+                title: '%category%'
+                text: 'Planned amount for "%category%" (leave empty to keep it, 0 to clear it).'
     reply:
         nothing: "I found no answer to the open questions in your sentence. Use the buttons, or rephrase."
         applied: "Noted: %count% answer(s) saved."
