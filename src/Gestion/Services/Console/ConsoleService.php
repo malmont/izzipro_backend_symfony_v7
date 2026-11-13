@@ -45,10 +45,7 @@ class ConsoleService
     /** Messages de l'échange donnés au modèle pour choisir (texte seul) */
     public const HISTORY_MESSAGES = 6;
 
-    /** Écrans de la gestion d'où une question peut venir ; un écran inconnu est ignoré, sans erreur */
-    public const SCREENS = ['accueil', 'journee', 'statistiques', 'statistiques.annee', 'periodes', 'periode', 'periode.resultat', 'periode.budget', 'periode.preparation', 'commandes', 'commande',
-        'articles', 'article', 'stock', 'tresorerie', 'tresorerie.rapprochements', 'frais-fixes', 'conseils', 'documents', 'prix', 'promotions', 'publicite', 'voyages', 'simulateur', 'console'];
-    /** Paramètres d'écran gardés : des identifiants existants du site, ou une année */
+    /** Identifiants d'écran dont l'existence sur le site est vérifiée (les écrans connus et leurs paramètres : `ConsoleScreens`) */
     private const CONTEXT_PARAMS = ['periodId' => "SELECT 1 FROM collections WHERE id = ? AND del = false", 'productId' => 'SELECT 1 FROM product WHERE id = ?', 'commandeId' => 'SELECT 1 FROM commande WHERE id = ?'];
 
     public function __construct(
@@ -188,22 +185,22 @@ class ConsoleService
     }
 
     /**
-     * Écran d'où vient la question, contrôlé : module `gestion`, écran connu, paramètres qui sont des identifiants existants du site
-     * (ou une année). Tout le reste est écarté ; un contexte inconnu ou invalide vaut null, sans erreur.
+     * Écran d'où vient la question, contrôlé : module `gestion`, code d'écran connu de `ConsoleScreens` (ceux de l'application web et
+     * ceux du premier contrat), paramètres déclarés pour cet écran et bien formés ; `periodId`, `productId` et `commandeId` doivent
+     * exister sur le site. Tout le reste est écarté ; un contexte inconnu ou invalide vaut null, sans erreur. Le serveur traduit ensuite
+     * lui-même l'écran en thème et en analyses par défaut (`ConsoleResponder`, lot W2-b).
      *
-     * @return array{module: string, screen: string, params: array<string, int>}|null
+     * @return array{module: string, screen: string, params: array<string, int|float|string>}|null
      */
     public function context(mixed $context): ?array
     {
-        if (!is_array($context) || ($context['module'] ?? null) !== 'gestion' || !is_string($context['screen'] ?? null) || !in_array($context['screen'], self::SCREENS, true)) {
+        if (!is_array($context) || ($context['module'] ?? null) !== 'gestion' || !ConsoleScreens::known($context['screen'] ?? null)) {
             return null;
         }
         $conn = $this->emProvider->getEntityManager()->getConnection();
         $params = [];
-        foreach (is_array($context['params'] ?? null) ? $context['params'] : [] as $name => $value) {
-            if (isset(self::CONTEXT_PARAMS[$name]) && is_int($value) && $conn->fetchOne(self::CONTEXT_PARAMS[$name], [$value]) !== false) {
-                $params[$name] = $value;
-            } elseif ($name === 'year' && is_int($value) && $value >= 2000 && $value <= 2100) {
+        foreach (ConsoleScreens::params($context['screen'], $context['params'] ?? null) as $name => $value) {
+            if (!isset(self::CONTEXT_PARAMS[$name]) || $conn->fetchOne(self::CONTEXT_PARAMS[$name], [$value]) !== false) {
                 $params[$name] = $value;
             }
         }

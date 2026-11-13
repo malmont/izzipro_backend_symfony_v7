@@ -23,14 +23,18 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * La console IA choisit dans ce catalogue ; une clé absente d'ici ne peut pas être appelée. Chaque analyse enveloppe un calcul existant :
  * aucun chiffre n'est recalculé autrement que par le service de l'écran qu'elle cite.
  *
- * Sortie : `{ key, title, period { from, to, label } | null, figures [{ id, label, value, unit, previous?, lastYear?, delta?,
- * deltaPercent?, rank? }], rows, more { count, total } | null, source { screen, route, params } }`. Unités : `money` (cents de la
- * devise du site), `percent`, `count`, `days`, `date`, `ratio`, `text`. 30 chiffres et 50 lignes au plus.
+ * Sortie : `{ key, title, period { from, to, label, previousLabel?, lastYearLabel? } | null, figures [{ id, label, value, unit,
+ * previous?, lastYear?, delta?, deltaPercent?, rank? }], rows, groups, more { count, total } | null, source { screen, route, params } }`.
+ * Unités : `money` (cents de la devise du site), `percent`, `count`, `days`, `date`, `ratio`, `text`. 30 chiffres et 50 lignes au plus.
+ * Lot W2-b (13/11/2026) : un libellé de plage est RÉDIGÉ par le serveur (« du 1er au 13 novembre 2026 », `RangeLabel`), jamais brut ;
+ * le libellé d'un chiffre dit ce qu'il compte ; `groups` réunit les articles d'un bilan par verdict et par raison, avec leur nombre.
  */
 class AnalysisCatalog
 {
     public const MAX_FIGURES = 30;
     public const MAX_ROWS = 50;
+    /** Noms d'articles cités par groupe d'un bilan (le groupe porte tous leurs identifiants) */
+    public const GROUP_NAMES = 5;
 
     /** Clé => paramètres admis (les obligatoires dans `required`), écran et route d'où viennent les chiffres */
     public const DEFINITIONS = [
@@ -156,6 +160,7 @@ class AnalysisCatalog
             'key' => $key, 'title' => $this->title($key, $locale), 'period' => $result['period'] ?? null,
             'figures' => array_slice(array_values(array_filter($result['figures'], fn (array $f) => $f['value'] !== null)), 0, self::MAX_FIGURES),
             'rows' => array_slice($rows, 0, self::MAX_ROWS),
+            'groups' => $result['groups'] ?? [],
             'more' => $total > self::MAX_ROWS ? ['count' => $total - min(count($rows), self::MAX_ROWS), 'total' => $total] : null,
             'source' => ['screen' => $d['screen'], 'route' => $d['route'], 'params' => ($result['params'] ?? $params) ?: new \stdClass()],
         ];
@@ -185,6 +190,10 @@ class AnalysisCatalog
     {
         $query = isset($params['periodId']) ? ['periodId' => $params['periodId']] : ['range' => $params['range'] ?? 'month'];
         $o = $this->statistics->overview($query, $locale);
+        // une période se nomme, une plage se rédige (« du 1er au 13 novembre 2026 ») ; les plages comparées aussi, pour que le texte les cite
+        $label = isset($params['periodId']) ? PeriodCalendar::displayName($this->period($params), $locale) : RangeLabel::of($o['range']['from'], $o['range']['to'], $locale);
+        $compared = array_filter(['previousLabel' => is_array($o['previous'] ?? null) ? RangeLabel::of($o['previous']['from'], $o['previous']['to'], $locale) : null,
+            'lastYearLabel' => is_array($o['lastYear'] ?? null) ? RangeLabel::of($o['lastYear']['from'], $o['lastYear']['to'], $locale) : null]);
         $figures = [];
         foreach (['revenue', 'grossMargin', 'grossMarginRate', 'orders', 'averageBasket', 'returnRate', 'stockValue'] as $name) {
             $i = $o['indicators'][$name] ?? null;
@@ -201,7 +210,7 @@ class AnalysisCatalog
             ]);
         }
 
-        return ['period' => ['from' => $o['range']['from'], 'to' => $o['range']['to'], 'label' => $o['comparison']['currentLabel'] ?? null], 'params' => $query, 'figures' => $figures];
+        return ['period' => ['from' => $o['range']['from'], 'to' => $o['range']['to'], 'label' => $label] + $compared, 'params' => $query, 'figures' => $figures];
     }
 
     private function yearOverview(array $params, string $locale): array
@@ -331,6 +340,7 @@ class AnalysisCatalog
         ));
         $rows = [];
         $verdicts = ['keep' => 0, 'raise' => 0, 'lower' => 0];
+        $grouped = [];
         $day = \DateTimeImmutable::createFromInterface($period->getStartDateCollection());
         foreach ($ids as $id) {
             $review = $this->suggestions->review($id, $day, $locale);
@@ -340,6 +350,8 @@ class AnalysisCatalog
             if ($review['verdict'] !== null) {
                 ++$verdicts[$review['verdict']];
             }
+            // regroupement par verdict et par raison (d'où vient le coefficient proposé) : compté ici, jamais par le modèle
+            $grouped[($review['verdict'] ?? 'none') . '|' . ($review['verdict'] === null ? 'none' : $review['proposal']['source'])][] = ['id' => $id, 'name' => (string) $review['product']['name']];
             if (count($rows) < self::MAX_ROWS) {
                 $rows[] = ['productId' => $id, 'name' => $review['product']['name'], 'cost' => $review['cost'], 'price' => $review['price'], 'coefficient' => $review['coefficient'],
                     'proposedCoefficient' => $review['proposal']['value'], 'proposalSource' => $review['proposal']['source'], 'why' => $review['proposal']['label'], 'verdict' => $review['verdict'],
@@ -347,7 +359,18 @@ class AnalysisCatalog
             }
         }
 
-        return ['period' => $this->periodOf($period, $locale), 'params' => ['periodId' => (int) $period->getId()], 'rows' => $rows, 'total' => count($ids), 'figures' => [
+        $groups = [];
+        foreach ($grouped as $key => $members) {
+            [$verdict, $source] = explode('|', $key);
+            $groups[] = ['verdict' => $verdict === 'none' ? null : $verdict, 'source' => $source === 'none' ? null : $source, 'count' => count($members),
+                'label' => $this->translator->trans("console.groups.$source", ['%count%' => count($members)], 'gestion', $locale === 'en' ? 'en' : 'fr'),
+                'productIds' => array_column($members, 'id'), 'names' => array_slice(array_column($members, 'name'), 0, self::GROUP_NAMES)];
+        }
+        // à monter, à baisser, à garder, sans verdict ; dans un même verdict, le groupe le plus nombreux d'abord
+        $order = ['raise' => 0, 'lower' => 1, 'keep' => 2, '' => 3];
+        usort($groups, fn (array $a, array $b) => [$order[(string) $a['verdict']], -$a['count'], (string) $a['source']] <=> [$order[(string) $b['verdict']], -$b['count'], (string) $b['source']]);
+
+        return ['period' => $this->periodOf($period, $locale), 'params' => ['periodId' => (int) $period->getId()], 'rows' => $rows, 'groups' => $groups, 'total' => count($ids), 'figures' => [
             $this->figure('newItems', count($ids), 'count', $locale),
             $this->figure('verdictKeep', $verdicts['keep'], 'count', $locale),
             $this->figure('verdictRaise', $verdicts['raise'], 'count', $locale),

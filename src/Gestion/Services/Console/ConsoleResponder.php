@@ -24,6 +24,11 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * Les verdicts viennent de la règle du coefficient, jamais du modèle. Une proposition ne garde que des identifiants présents dans les
  * résultats et doit passer le contrôle d'ouverture d'un fil d'action. L'IA n'écrit rien dans les données.
  *
+ * Lot W2-b (13/11/2026) : l'écran d'où vient la question est traduit par le serveur en thème et en analyses par défaut
+ * (`ConsoleScreens`), et ses paramètres complètent ceux que le modèle laisse vides ; une question qui dit « période » lit les ventes sur
+ * la période, pas sur le mois ; tout chiffre dont un texte parle reçoit sa carte (bloc `figures`) à la suite de ce texte ; un bilan
+ * d'articles porte ses groupes (même verdict, même raison), comptés par le serveur.
+ *
  * Unités : 1 par réponse rédigée par le modèle (demande de précision rédigée par lui comprise) ; aucune si le serveur répond lui-même
  * (question hors périmètre, précision demandée par le serveur) ou si l'IA échoue.
  */
@@ -39,6 +44,8 @@ class ConsoleResponder
     /** Champs d'une ligne qui sont des montants en cents */
     private const MONEY_KEYS = ['price', 'cost', 'sales', 'grossMargin', 'result', 'planned', 'actual', 'remaining', 'effect', 'revenue'];
     private const PERCENT_KEYS = ['similarSoldShare'];
+    /** Unités d'un chiffre qu'un nombre écrit dans un texte peut désigner (ni une date ni un texte) */
+    private const NUMERIC_UNITS = ['money', 'percent', 'count', 'days', 'ratio'];
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -66,6 +73,8 @@ class ConsoleResponder
         $question = $em->find(GestionConversationMessage::class, (int) ($content['replyTo'] ?? 0));
         $text = (string) ($question?->getContent()['text'] ?? '');
         $context = $question?->getContent()['context'] ?? null;
+        $screen = $this->screen(is_array($context) ? $context : null, $locale); // l'écran, traduit par le serveur
+        $screenParams = $screen === null ? [] : (array) ($context['params'] ?? []);
         $stats = new LandingAiUsageStats(ConsoleModel::MODEL_WRITE);
         try {
             $history = [];
@@ -75,7 +84,7 @@ class ConsoleResponder
                 }
                 $history[] = $m->getKind() === ConsoleService::QUESTION ? ['role' => 'gérant', 'text' => (string) ($m->getContent()['text'] ?? '')] : ['role' => 'console', 'text' => self::plain($m->getContent()['blocks'] ?? [])];
             }
-            $choice = $this->model->choose($text, $context, array_reverse(array_slice($history, 0, ConsoleService::HISTORY_MESSAGES)), $this->analyses->listed($locale), $this->periods($locale), $this->calendar->today(), $locale, $stats);
+            $choice = $this->model->choose($text, $screen, array_reverse(array_slice($history, 0, ConsoleService::HISTORY_MESSAGES)), $this->analyses->listed($locale), $this->periods($locale), $this->calendar->today(), $locale, $stats);
 
             if ($choice['kind'] === 'out_of_scope') {
                 // Hors périmètre : le serveur répond lui-même, gratuitement
@@ -85,11 +94,14 @@ class ConsoleResponder
             }
             $selected = [];
             foreach ($choice['kind'] === 'analyses' ? $choice['analyses'] : [] as $a) {
-                $params = $this->analyses->accept($a['key'], $a['params']);
-                if ($params !== null && !isset($selected[$a['key'] . json_encode($params)])) {
-                    $selected[$a['key'] . json_encode($params)] = [$a['key'], $params];
+                // ce que le modèle laisse vide est pris à l'écran (sa période, son article, son année) ; ce qu'il nomme l'emporte
+                $params = $this->analyses->accept($a['key'], self::withScreen($a['key'], $a['params'], $screenParams));
+                if ($params !== null) {
+                    $selected[] = [$a['key'], $params];
                 }
             }
+            $selected = $this->salesOnThePeriod($selected, $text, $screenParams);
+            $selected = array_column(array_map(fn (array $s) => [$s[0] . json_encode($s[1]), $s], $selected), 1, 0); // une analyse et ses paramètres : une seule fois
             if ($selected === []) {
                 // Demande de précision : rédigée par le modèle (1 unité) si elle est propre et sans nombre de son cru ; sinon par le serveur (gratuit)
                 $asked = GestionAdviceService::cleanText($choice['clarification']) ?? '';
@@ -112,11 +124,12 @@ class ConsoleResponder
             [$forModel, $allowed] = $this->forModel($results, $text, $locale);
             $actions = array_map(fn (string $k) => ['key' => $k, 'title' => $this->tr('conversation.actions.' . str_replace('.', '_', $k) . '.title', $locale)], ActionCatalog::KEYS);
 
-            $written = $this->model->write($text, $forModel, $actions, $locale, $stats);
+            $named = $screen === null ? null : ['titre' => $screen['titre'], 'theme' => $screen['theme']];
+            $written = $this->model->write($text, $forModel, $actions, $locale, $stats, null, $named);
             [$blocks, $rejected] = $this->blocks($written['blocks'], $results, $allowed, $locale);
             if ($rejected > 0) {
                 // un nombre inconnu : un nouvel essai, en le disant au modèle
-                $written = $this->model->write($text, $forModel, $actions, $locale, $stats, 'Ta réponse précédente contenait un nombre absent des champs « display ». Recopie les nombres tels quels, sans rien calculer.');
+                $written = $this->model->write($text, $forModel, $actions, $locale, $stats, 'Ta réponse précédente contenait un nombre absent des champs « display ». Recopie les nombres tels quels, sans rien calculer.', $named);
                 [$blocks, $rejected] = $this->blocks($written['blocks'], $results, $allowed, $locale);
             }
             $fallback = $rejected > 0 || array_filter($blocks, fn (array $b) => $b['type'] === 'text') === [];
@@ -195,7 +208,18 @@ class ConsoleResponder
                 }
                 $rows[] = $line;
             }
-            $out[] = ['ref' => $r['ref'], 'key' => $r['key'], 'title' => $note((string) $r['title']), 'period' => $r['period'] === null ? null : $note((string) $r['period']['label']), 'figures' => $figures, 'rows' => $rows,
+            $groups = [];
+            foreach ($r['groups'] as $g) {
+                // le nombre d'articles de chaque groupe est fourni : le modèle ne compte rien
+                $groups[] = ['verdict' => $g['verdict'], 'raison' => $note((string) $g['label']), 'nombre' => $note((string) $g['count']), 'articles' => array_map(fn (string $name) => $note($name), $g['names'])];
+            }
+            $period = $r['period'] === null ? [] : ['period' => $note((string) $r['period']['label'])];
+            foreach (['previousLabel', 'lastYearLabel'] as $k) {
+                if (isset($r['period'][$k])) {
+                    $period[$k] = $note((string) $r['period'][$k]);
+                }
+            }
+            $out[] = ['ref' => $r['ref'], 'key' => $r['key'], 'title' => $note((string) $r['title'])] + ($period ?: ['period' => null]) + ['figures' => $figures, 'rows' => $rows] + ($groups === [] ? [] : ['groupes' => $groups]) + [
                 'more' => $r['more'] === null ? null : $note($this->tr('console.more', $locale, ['%count%' => (string) $r['more']['count'], '%total%' => (string) $r['more']['total']]))];
         }
 
@@ -234,7 +258,8 @@ class ConsoleResponder
                     ++$rejected;
                     continue;
                 }
-                $blocks[] = self::text($text, $ids($b['figureIds'] ?? []));
+                $cited = $ids($b['figureIds'] ?? []);
+                $blocks[] = self::text($text, array_values(array_unique(array_merge($cited, $this->citedByValue($text, $results, $cited, $locale)))));
             } elseif ($type === 'figures' && $ids($b['figureIds'] ?? []) !== []) {
                 $blocks[] = $this->figuresBlock($ids($b['figureIds']), $results);
             } elseif ($type === 'table' && isset($byRef[$b['analysis'] ?? '']) && $byRef[$b['analysis']]['rows'] !== []) {
@@ -255,12 +280,148 @@ class ConsoleResponder
                     $items[$row['productId']] = ['subject' => ['type' => 'product', 'id' => (int) $row['productId'], 'name' => $row['name'] ?? null], 'verdict' => $row['verdict'], 'why' => mb_substr($why, 0, 400), 'figureIds' => $ids($item['figureIds'] ?? [])];
                 }
                 if ($items !== []) {
-                    $blocks[] = ['type' => 'verdicts', 'items' => array_values($items), 'source' => $byRef[$b['analysis']]['source']];
+                    $groups = array_map(fn (array $g) => array_diff_key($g, ['names' => 1]), $byRef[$b['analysis']]['groups']);
+                    $blocks[] = ['type' => 'verdicts', 'items' => array_values($items), 'groups' => $groups, 'source' => $byRef[$b['analysis']]['source']];
                 }
             }
         }
 
-        return [$blocks, $rejected];
+        // Tout chiffre dont un texte parle a sa carte : le serveur ajoute, à la suite du texte, un bloc `figures` pour ceux qu'aucun
+        // bloc `figures` de la réponse ne montre (une carte par chiffre dans la réponse, jamais deux)
+        $shown = [];
+        foreach ($blocks as $b) {
+            if ($b['type'] === 'figures') {
+                $shown = array_merge($shown, array_column($b['items'], 'id'));
+            }
+        }
+        $out = [];
+        foreach ($blocks as $b) {
+            $out[] = $b;
+            $missing = $b['type'] === 'text' ? array_values(array_diff($b['figureIds'], $shown)) : [];
+            if ($missing !== []) {
+                $out[] = $this->figuresBlock($missing, $results);
+                $shown = array_merge($shown, $missing);
+            }
+        }
+
+        return [$out, $rejected];
+    }
+
+    /**
+     * Chiffres dont un texte parle SANS les citer dans `figureIds` : un nombre du texte qui est la valeur d'un chiffre des analyses le
+     * désigne. S'il est la valeur d'un seul chiffre, c'est lui ; de plusieurs, celui dont le libellé partage un mot avec le texte
+     * (« 11 commandes » : le chiffre « Commandes ») ; sinon aucun (on ne devine pas). Un nombre déjà couvert par un chiffre cité n'ajoute rien.
+     *
+     * @param list<array<string, mixed>> $results
+     * @param list<string> $cited identifiants déjà cités par le modèle
+     *
+     * @return list<string>
+     */
+    private function citedByValue(string $text, array $results, array $cited, string $locale): array
+    {
+        $lower = mb_strtolower($text);
+        $found = [];
+        foreach (self::numbers($text) as $n) {
+            $candidates = [];
+            foreach ($results as $r) {
+                foreach ($r['figures'] as $f) {
+                    if (in_array($f['unit'], self::NUMERIC_UNITS, true) && is_numeric($f['value']) && self::unknown($this->display($f['value'], (string) $f['unit'], $locale), [$n]) === []) {
+                        $candidates[] = $f;
+                    }
+                }
+            }
+            if ($candidates === [] || array_intersect(array_column($candidates, 'id'), array_merge($cited, $found)) !== []) {
+                continue;
+            }
+            if (count($candidates) > 1) {
+                $candidates = array_values(array_filter($candidates, function (array $f) use ($lower): bool {
+                    foreach (preg_split('/[^\p{L}]+/u', mb_strtolower((string) $f['label'])) ?: [] as $word) {
+                        if (mb_strlen($word) >= 5 && str_contains($lower, mb_substr($word, 0, 5))) {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }));
+            }
+            if ($candidates !== []) {
+                $found[] = $candidates[0]['id'];
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * L'écran d'où vient la question, tel que le modèle le lit : son code, son titre et son thème écrits par le serveur, ses paramètres,
+     * et ses analyses par défaut, chacune déjà contrôlée par le catalogue (`ConsoleScreens`). Null sans écran connu.
+     *
+     * @param array<string, mixed>|null $context contexte gardé avec la question
+     *
+     * @return array{code: string, titre: string, theme: string, params: mixed, analysesParDefaut: list<array<string, mixed>>}|null
+     */
+    private function screen(?array $context, string $locale): ?array
+    {
+        $code = $context['screen'] ?? null;
+        if (!ConsoleScreens::known($code)) {
+            return null;
+        }
+        $params = is_array($context['params'] ?? null) ? $context['params'] : [];
+        $defaults = [];
+        foreach (ConsoleScreens::defaults($code, $params) as $d) {
+            $accepted = $this->analyses->accept($d['key'], $d['params']);
+            if ($accepted !== null) {
+                $defaults[] = ['key' => $d['key']] + $accepted;
+            }
+        }
+
+        return ['code' => $code, 'titre' => $this->tr('console.screens.' . str_replace(['.', '-'], '_', $code), $locale), 'theme' => $this->tr('console.themes.' . ConsoleScreens::theme($code, $params), $locale),
+            'params' => $params ?: new \stdClass(), 'analysesParDefaut' => $defaults];
+    }
+
+    /**
+     * Paramètres d'une analyse choisie, complétés par ceux de l'écran : ce que le modèle laisse vide est pris à l'écran. Une période ou
+     * une plage nommée par le modèle l'emporte sur celles de l'écran.
+     *
+     * @param array<string, mixed> $params @param array<string, mixed> $screenParams
+     *
+     * @return array<string, mixed>
+     */
+    private static function withScreen(string $key, array $params, array $screenParams): array
+    {
+        $own = ConsoleScreens::own($key, $screenParams);
+        if (isset($params['periodId']) || isset($params['range'])) {
+            unset($own['periodId'], $own['range']);
+        }
+
+        return $params + $own;
+    }
+
+    /**
+     * Une question qui dit « période » lit les ventes sur la PÉRIODE, pas sur le mois : `sales.overview` choisie sans période prend
+     * celle des autres analyses de la réponse, sinon celle de l'écran, sinon la période en cours. Une durée nommée dans la question
+     * (aujourd'hui, semaine, mois, année) garde la plage choisie.
+     *
+     * @param list<array{0: string, 1: array<string, mixed>}> $selected @param array<string, mixed> $screenParams
+     *
+     * @return list<array{0: string, 1: array<string, mixed>}>
+     */
+    private function salesOnThePeriod(array $selected, string $question, array $screenParams): array
+    {
+        if (preg_match('/\bp[ée]riodes?\b/iu', $question) !== 1 || preg_match('/aujourd|today|\bjours?\b|\bdays?\b|semaine|week|\bmois\b|month|\bann[ée]e|\byear/iu', $question) === 1) {
+            return $selected;
+        }
+        $period = null;
+        foreach ($selected as [$key, $params]) {
+            $period ??= $key !== 'sales.overview' && isset($params['periodId']) ? (int) $params['periodId'] : null;
+        }
+        foreach ($selected as $i => [$key, $params]) {
+            if ($key === 'sales.overview' && !isset($params['periodId'])) {
+                $selected[$i][1] = ['periodId' => $period ?? (isset($screenParams['periodId']) ? (int) $screenParams['periodId'] : (int) $this->calendar->current()->getId())];
+            }
+        }
+
+        return $selected;
     }
 
     /**

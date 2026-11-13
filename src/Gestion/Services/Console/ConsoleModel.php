@@ -28,7 +28,7 @@ class ConsoleModel
     }
 
     /**
-     * @param array<string, mixed>|null $context écran d'où vient la question, déjà contrôlé
+     * @param array<string, mixed>|null $context écran d'où vient la question, traduit par le serveur : `{ code, titre, theme, params, analysesParDefaut }`
      * @param list<array{role: string, text: string}> $history les derniers messages de l'échange, texte seul
      * @param list<array<string, mixed>> $catalog analyses du catalogue (clé, titre, paramètres)
      * @param list<array{id: int, label: string, from: string, to: string, current: bool}> $periods périodes que le modèle peut désigner
@@ -60,12 +60,13 @@ class ConsoleModel
     /**
      * @param list<array<string, mixed>> $results résultats des analyses, chiffres déjà écrits comme ils doivent être lus (`display`)
      * @param list<array{key: string, title: string}> $actions actions du catalogue que la console peut proposer
+     * @param array{titre: string, theme: string}|null $screen écran d'où vient la question : son titre et son thème, pour le nommer
      *
      * @return array{blocks: list<array<string, mixed>>, proposals: list<array<string, mixed>>}
      */
-    public function write(string $question, array $results, array $actions, string $locale, LandingAiUsageStats $stats, ?string $retryNote = null): array
+    public function write(string $question, array $results, array $actions, string $locale, LandingAiUsageStats $stats, ?string $retryNote = null, ?array $screen = null): array
     {
-        $payload = ['question' => $question, 'resultats' => $results, 'actions' => $actions] + ($retryNote === null ? [] : ['correction' => $retryNote]);
+        $payload = ['question' => $question] + ($screen === null ? [] : ['ecran' => $screen]) + ['resultats' => $results, 'actions' => $actions] + ($retryNote === null ? [] : ['correction' => $retryNote]);
         $out = $this->call(self::MODEL_WRITE, 3000, $this->systemWrite($locale === 'en' ? 'anglais' : 'français'), $payload, self::schemaWrite(), $stats);
 
         return ['blocks' => array_values(array_filter(is_array($out['blocks'] ?? null) ? $out['blocks'] : [], 'is_array')),
@@ -146,9 +147,11 @@ class ConsoleModel
             Tu NE RÉPONDS PAS à la question. Tu choisis, dans « analyses », celles qu'il faut lancer pour y répondre : 4 au plus, par leur « key », avec leurs paramètres.
             Règles :
             - n'emploie que les clés et les paramètres listés ; un paramètre que tu ne connais pas vaut null ;
-            - « periodId » : seulement un identifiant de la liste « periodes » ; sans période nommée, laisse null (la période en cours est prise) ;
+            - « periodId » : seulement un identifiant de la liste « periodes » ; sans période nommée, laisse null (celle de l'écran, sinon la période en cours, est prise) ;
+            - une question qui dit « période » (« la période en cours », « cette période ») : donne « periodId » à TOUTES les analyses qui l'acceptent (pour la période en cours, l'identifiant marqué « current »), et laisse « range » à null ;
+            - « range » ne sert que si la question nomme une durée : aujourd'hui (today), les 7 derniers jours (7d), ce mois (month), cette année (year) ;
             - « productId » : seulement s'il figure dans « ecran » ; sinon null, et choisis une analyse qui n'en demande pas ;
-            - si « ecran » est donné et que la question parle de ce que le gérant regarde, choisis les analyses de cet écran avec ses paramètres ;
+            - « ecran » dit d'où le gérant pose sa question : son titre, son thème et « analysesParDefaut », les analyses de cet écran avec leurs paramètres. Si la question parle de ce qu'il regarde (« cet écran », « ici », « ça », « explique-moi »), ou ne nomme aucun sujet, prends « analysesParDefaut » telles quelles ;
             - question sans rapport avec la gestion du commerce (description d'articles, photos, comptes, réservations, autre sujet) : kind = "out_of_scope", analyses vide ;
             - question trop vague pour choisir : kind = "clarification" et, dans « clarification », UNE question courte au gérant, en $language, sans aucun chiffre ;
             - sinon kind = "analyses" et « clarification » vide.
@@ -166,6 +169,11 @@ class ConsoleModel
             - "table" : le tableau d'une analyse, désignée par « analysis » (son « ref ») ;
             - "verdicts" : pour un bilan d'articles, « analysis » = le ref de l'analyse et, par article, « id » (son productId), « why » (une phrase qui explique le verdict du serveur avec ses chiffres) ; le verdict lui-même est fourni, tu ne le changes pas.
             Laisse vides les champs qui ne servent pas au bloc ("" ou []).
+            « figureIds » d'un bloc "text" : l'identifiant de CHAQUE chiffre dont le texte parle, sans en oublier ; le serveur affiche leur carte sous le texte.
+            Deux chiffres dont les libellés diffèrent mesurent des choses différentes (par exemple les frais d'une période, hors achats de marchandise, et les dépenses réelles d'un budget, achats compris) : ne les rapproche jamais sans dire ce que chacun compte.
+            Une plage ou une période se nomme par son libellé « period » recopié tel quel (et « previousLabel », « lastYearLabel » pour ce à quoi on compare).
+            Bilan d'articles : « groupes » réunit les articles de même verdict pour la même raison, avec leur nombre. Dans les blocs "text", écris une phrase par groupe (par exemple « 5 articles au coefficient de leur fournisseur : à garder »), jamais la même raison répétée article par article ; le détail par article va dans le bloc "verdicts".
+            Si « ecran » est donné et que la question porte sur lui, nomme-le par son « titre ».
             « proposals » : 3 au plus, seulement si une action de « actions » aide vraiment le gérant ; « productIds » et « periodId » ne contiennent que des identifiants présents dans les résultats ; « label » : un libellé court, sans chiffre. Sinon, liste vide.
             Dis ce qui compte d'abord. N'explique pas ta méthode. Aucune mise en forme (ni astérisques, ni titres).
             TXT;
