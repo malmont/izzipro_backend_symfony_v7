@@ -408,6 +408,22 @@ Décisions de contrat prises pour les lots :
     `app.management`, `module.support` et `ai` (`translations/readiness.en.yaml`) ; sans paramètre, avec `?locale=fr` ou valeur inconnue,
     la réponse reste strictement en français quelle que soit la langue du site (détail dans `docs/console-pilotage.md`). Test :
     `ManagementReadinessTest`.
+- **Lot STOCK-VERROU (13/11/2026) : verrouillage des mouvements de stock dans EasyAdmin** (`InventoryMovementsCrudController`) :
+  - **Mouvements en lecture seule** (administrateur et super administrateur) : tout mouvement dont `movement_type_id` vaut `1` (Entrant),
+    `2` (Sortant), `3` (Return) ou `5` (Réception fournisseur), ou dont `commande_line_id` est non nul. Deux collisions assumées en
+    l'absence de colonne d'origine dédiée : le type `1` couvre les retours/annulations web comme le stock initial d'une variante, et le
+    type `2` couvre les ventes (caisse/web) comme les baisses faites depuis l'éditeur.
+  - **Restent modifiables et supprimables** : les ajustements libres (type `4` avec `commande_line_id` nul) et les lignes héritées sans
+    type (`movement_type_id` nul), sans pouvoir basculer vers un type verrouillé. `BATCH_DELETE` désactivé ; `DETAIL` ajouté ;
+    `commandeLine` affiché en lecture seule sur liste et détail ; actions `EDIT` / `DELETE` masquées lorsque verrouillé ; `edit()`,
+    `delete()`, `updateEntity()` et `deleteEntity()` relisent `movement_type_id` et `commande_line_id` par SQL direct et renvoient 403.
+  - **Création d'un ajustement et intégrité de `stockBeforeMovement` / `stockAfterMovement`** : seul le type `4` (Ajustement) est
+    proposé à la création (`persistEntity()` refuse tout autre type en 403). Sur le formulaire de création, `stockBeforeMovement` et
+    `stockAfterMovement` sont masqués et calculés côté serveur à l'enregistrement (`stock_quantity` de `product_variant` par SQL direct,
+    `stockAfter = stockBefore + quantity`, y compris négatif ; `null` si variante absente ou sans stock), sans jamais modifier
+    `product_variant.stock_quantity` (le stock réel se corrige sur la fiche de la variante). En modification d'un ajustement libre, ces
+    deux champs sont affichés désactivés et réimposés depuis la base dans `updateEntity()`.
+  - Test : `tests/Functional/Admin/InventoryMovementsLockTest.php`.
 
 ## 8. Jeu de données de démonstration (demande du propriétaire, 09/11/2026)
 
