@@ -159,8 +159,8 @@ class ConsoleApiTest extends WebTestCase
         $this->assertStringStartsWith('2,7 : 5 semblables de ce fournisseur affichés à 2,5, vendus à 90 %', $verdicts['lower']['why'], '« 17 % » n\'est dans aucun résultat : l\'explication chiffrée du serveur prend sa place');
         // Chiffres et tableau : assemblés par le serveur, avec leur source
         $this->assertSame(['a1.verdictRaise', 'a1.verdictLower'], array_column($answer['blocks'][3]['items'], 'id'));
-        $this->assertSame(['id', 'label', 'value', 'unit', 'term', 'source'], array_keys($answer['blocks'][3]['items'][0]));
-        $this->assertSame('verdict', $answer['blocks'][3]['items'][0]['term'], 'chaque chiffre porte la notion du lexique qui l\'explique (lot W2-APPRENDRE)');
+        $this->assertSame(['id', 'label', 'value', 'unit', 'source'], array_keys($answer['blocks'][3]['items'][0]), 'un compte du bilan dit ce qu\'il compte : il ne porte pas de notion du lexique');
+        $this->assertSame(['Articles à monter', 'Articles à baisser'], array_column($answer['blocks'][3]['items'], 'label'));
         $this->assertSame(['screen' => 'articles', 'route' => null, 'params' => ['periodId' => $period]], $answer['blocks'][3]['items'][0]['source']);
         $rows = array_column($answer['blocks'][4]['rows'], null, 'productId');
         $this->assertArrayNotHasKey($history[0][0], $rows, 'un article acheté la saison passée n\'est pas un article nouveau de la période');

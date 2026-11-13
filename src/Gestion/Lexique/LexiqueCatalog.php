@@ -98,7 +98,7 @@ final class LexiqueCatalog
         'lowest14Amount' => 'point-bas', 'lowest14Date' => 'point-bas', 'cashStatus' => 'tresorerie',
         'planned' => 'prevu', 'actual' => 'reel', 'remaining' => 'reste', 'budgetStatus' => 'budget',
         'missingCostItems' => 'cout-d-achat', 'cost' => 'cout-d-achat', 'coefficient' => 'coefficient', 'proposedCoefficient' => 'coefficient',
-        'verdict' => 'verdict', 'verdictKeep' => 'verdict', 'verdictRaise' => 'verdict', 'verdictLower' => 'verdict', 'similarCount' => 'semblables',
+        'verdict' => 'verdict', 'similarCount' => 'semblables',
     ];
 
     public static function has(mixed $key): bool

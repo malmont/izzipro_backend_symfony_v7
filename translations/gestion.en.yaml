@@ -929,9 +929,9 @@ console:
         similarObtainedCoefficient: 'Obtained coefficient of similar items'
         similarDiscountRate: 'Discount on similar items'
         newItems: 'New items'
-        verdictKeep: 'To keep (verdict)'
-        verdictRaise: 'To raise (verdict)'
-        verdictLower: 'To lower (verdict)'
+        verdictKeep: 'Items to keep'
+        verdictRaise: 'Items to raise'
+        verdictLower: 'Items to lower'
         keepUnder: 'Gap under which the price is kept'
         adviceCount: 'Today''s advice'
     # Review of items: shared reason of a group of items with the same verdict (the number picks the form)

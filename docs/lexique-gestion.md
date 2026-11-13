@@ -86,8 +86,9 @@ celui d'une période à `resultat`.
 
 **Règle (lot A-4) : le libellé d'une carte reprend le terme du lexique de sa notion**, avec ce qu'elle compte si besoin : « Taux de
 marque » (jamais « Taux de marge » sous une leçon « Taux de marque »), « Ventes sans coût connu (unités) », « Dépensé (réel), achats de
-marchandise compris », « À garder (verdict) », « Résultat de l'entreprise ». Même règle en anglais (« Profit », « Average order
-value », « Current markup multiplier »). Un chiffre qui mesure autre chose que la notion ne porte pas de `term`. Le test compare
+marchandise compris », « Résultat de l'entreprise ». Même règle en anglais (« Profit », « Average order
+value », « Current markup multiplier »). Un chiffre qui mesure autre chose que la notion ne porte pas de `term` : les trois comptes
+d'un bilan (« Articles à garder », « Articles à monter », « Articles à baisser ») disent ce qu'ils comptent et n'en portent pas. Le test compare
 chaque libellé au terme, dans les deux langues.
 
 ## 4. Dans la console

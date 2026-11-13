@@ -931,9 +931,9 @@ console:
         similarObtainedCoefficient: 'Coefficient obtenu des semblables'
         similarDiscountRate: 'Rabais des semblables'
         newItems: 'Nouveaux articles'
-        verdictKeep: 'À garder (verdict)'
-        verdictRaise: 'À monter (verdict)'
-        verdictLower: 'À baisser (verdict)'
+        verdictKeep: 'Articles à garder'
+        verdictRaise: 'Articles à monter'
+        verdictLower: 'Articles à baisser'
         keepUnder: 'Écart sous lequel on garde le prix'
         adviceCount: 'Conseils du jour'
     # Bilan d'articles : raison commune d'un groupe d'articles de même verdict (le nombre commande la forme)
