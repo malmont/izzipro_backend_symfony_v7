@@ -164,8 +164,10 @@ class ConsoleApiTest extends WebTestCase
         $this->assertSame(['screen' => 'articles', 'route' => null, 'params' => ['periodId' => $period]], $answer['blocks'][3]['items'][0]['source']);
         $rows = array_column($answer['blocks'][4]['rows'], null, 'productId');
         $this->assertArrayNotHasKey($history[0][0], $rows, 'un article acheté la saison passée n\'est pas un article nouveau de la période');
-        $this->assertSame([[1000, 2500, 2.5, 2.7, 'similar', 'raise', 5], [1000, 2700, 2.7, 2.7, 'similar', 'keep', 5], [1000, 3200, 3.2, 2.7, 'similar', 'lower', 5]],
-            array_map(fn (int $p) => [$rows[$p]['cost'], $rows[$p]['price'], $rows[$p]['coefficient'], $rows[$p]['proposedCoefficient'], $rows[$p]['proposalSource'], $rows[$p]['verdict'], $rows[$p]['similarCount']], [$raise, $keep, $lower]));
+        // Lot W2-d : le tableau rend ses colonnes libellées et ses cellules rédigées (« À monter »), le code à part (`verdictCode`)
+        $this->assertSame([[1000, 2500, 2.5, 2.7, 'similar', 'À monter', 'raise', 5], [1000, 2700, 2.7, 2.7, 'similar', 'À garder', 'keep', 5], [1000, 3200, 3.2, 2.7, 'similar', 'À baisser', 'lower', 5]],
+            array_map(fn (int $p) => [$rows[$p]['cost'], $rows[$p]['price'], $rows[$p]['coefficient'], $rows[$p]['proposedCoefficient'], $rows[$p]['proposalSource'], $rows[$p]['verdict'], $rows[$p]['verdictCode'], $rows[$p]['similarCount']], [$raise, $keep, $lower]));
+        $this->assertSame([['key' => 'name', 'label' => 'Article', 'unit' => 'text'], ['key' => 'cost', 'label' => 'Coût d\'achat', 'unit' => 'money']], array_slice($answer['blocks'][4]['columns'], 0, 2));
         $this->assertSame([['key' => 'articles.new', 'ref' => 'a1', 'title' => 'Bilan des nouveaux articles', 'params' => ['periodId' => $period]]], array_map(fn (array $a) => array_intersect_key($a, array_flip(['key', 'ref', 'title', 'params'])), $answer['analyses']),
             'une seule analyse lancée : la clé inconnue et l\'article inexistant sont écartés');
         // Propositions : action du catalogue, identifiants présents dans les résultats, contrôle d'ouverture du fil ; un libellé chiffré est remplacé
@@ -177,7 +179,7 @@ class ConsoleApiTest extends WebTestCase
         $second = json_decode(FakeLandingAiClient::$requests[1]['messages'][0]['content'][0]['text'], true);
         $sent = array_column($second['resultats'][0]['rows'], null, 'productId')[$raise];
         $plain = fn (string $v) => preg_replace('/[\x{00A0}\x{202F}]/u', ' ', $v); // l'espace devant le symbole de la devise est insécable
-        $this->assertSame(['10,00 $', '25,00 $', 'À monter'], [$plain($sent['cost']), $plain($sent['price']), $sent['verdict']], 'le modèle lit le verdict rédigé, jamais son code (lot W2-c)');
+        $this->assertSame(['10,00 $', '25,00 $', 'à monter'], [$plain($sent['cost']), $plain($sent['price']), $sent['verdict']], 'le modèle lit le verdict rédigé, jamais son code (lot W2-c), en minuscule pour l\'écrire dans une phrase (lot W2-d)');
         $first = json_decode(FakeLandingAiClient::$requests[0]['messages'][0]['content'][0]['text'], true);
         // Lot W2-b : l'écran est traduit par le serveur (titre, thème, analyses par défaut avec les paramètres de l'écran)
         $this->assertSame(['Fais le bilan de mes nouveaux articles', ['code' => 'articles', 'titre' => 'Articles', 'theme' => 'Achats et stock', 'params' => ['periodId' => $period],
@@ -778,11 +780,12 @@ class ConsoleApiTest extends WebTestCase
             $this->runWorker((int) $a['messageId']);
             $answer = $last((int) $a['conversationId']);
             $this->assertSame('done', $answer['state'], json_encode($answer, JSON_UNESCAPED_UNICODE));
-            $this->assertSame(['text', 'text', 'text', 'figures', 'figures'], array_column($answer['blocks'], 'type'));
-            $this->assertSame([['a1.revenue'], ['a1.orders'], ['a3.planned']], array_column(array_slice($answer['blocks'], 0, 3), 'figureIds'),
+            // Lot W2-d : chaque carte suit le texte qui évoque son chiffre ; le bloc de cartes du modèle, tout placé, disparaît
+            $this->assertSame(['text', 'figures', 'text', 'figures', 'text', 'figures'], array_column($answer['blocks'], 'type'));
+            $this->assertSame([['a1.revenue'], ['a1.orders'], ['a3.planned']], [$answer['blocks'][0]['figureIds'], $answer['blocks'][2]['figureIds'], $answer['blocks'][4]['figureIds']],
                 'B : chaque texte ne garde que les chiffres dont il parle (valeur ou libellé) ; C : les ventes des deux analyses sont un seul chiffre, celui de la première');
-            $this->assertSame([['a3.planned'], ['a1.revenue', 'a1.orders']], [array_column($answer['blocks'][3]['items'], 'id'), array_column($answer['blocks'][4]['items'], 'id')],
-                'la carte du budget prévu suit le texte qui en parle ; les ventes et les commandes ont une seule carte chacune');
+            $this->assertSame([['a1.revenue'], ['a1.orders'], ['a3.planned']], [array_column($answer['blocks'][1]['items'], 'id'), array_column($answer['blocks'][3]['items'], 'id'), array_column($answer['blocks'][5]['items'], 'id')],
+                'la carte de chaque chiffre suit le texte qui en parle ; les ventes et les commandes ont une seule carte chacune');
             $cards = array_merge(...array_map(fn (array $b) => $b['type'] === 'figures' ? array_column($b['items'], 'id') : [], $answer['blocks']));
             $this->assertSame($cards, array_values(array_unique($cards)), 'jamais deux cartes du même chiffre');
             $this->assertNotContains('a1.unknownCostItems', $cards, 'un chiffre cité sans que le texte en parle n\'a pas de carte');
@@ -858,7 +861,7 @@ class ConsoleApiTest extends WebTestCase
             $this->assertSame([['cash.projection', ['days' => 30]]], $ran(['module' => 'gestion', 'screen' => 'frais-fixes', 'params' => []], ['key' => 'cash.projection'] + $none)[0], 'un autre écran : 30 jours');
             // Le modèle reçoit l'état et les dates rédigés
             $sent = array_column(json_decode(FakeLandingAiClient::$requests[count(FakeLandingAiClient::$requests) - 1]['messages'][0]['content'][0]['text'], true)['resultats'][0]['figures'], 'display', 'id');
-            $this->assertSame([$cash['cashStatus']['value'], 1], [$sent['a1.cashStatus'], preg_match('/^(1er|\d{1,2}) \p{L}+ \d{4}$/u', $sent['a1.balanceDate'])], 'jamais « ok » ni « 2026-11-11 »');
+            $this->assertSame([mb_strtolower($cash['cashStatus']['value']), 1], [$sent['a1.cashStatus'], preg_match('/^(1er|\d{1,2}) \p{L}+ \d{4}$/u', $sent['a1.balanceDate'])], 'jamais « ok » ni « 2026-11-11 » ; l\'état en minuscule pour le modèle (lot W2-d), la carte garde sa majuscule');
 
             // ---- A : l'intertitre d'un groupe est une phrase complète, accordée (les deux exemples du chef de projet) -------------------------
             $group = fn (string $id, int $count, string $locale = 'fr'): string => $translator->trans("console.groups.$id", ['%count%' => $count], 'gestion', $locale);
@@ -875,7 +878,8 @@ class ConsoleApiTest extends WebTestCase
             $cited->setAccessible(true);
             $twice = [['period' => ['from' => '2026-10-01', 'to' => '2026-12-31'], 'figures' => [['id' => 'a1.orders', 'label' => 'Commandes', 'value' => 33, 'unit' => 'count']]],
                 ['period' => ['from' => '2026-10-01', 'to' => '2026-12-31'], 'figures' => [['id' => 'a2.orders', 'label' => 'Commandes', 'value' => 33, 'unit' => 'count']]]];
-            $this->assertSame(['a1.orders'], $cited->invoke($responder, 'Cela fait 33 en tout.', $twice, [], 'fr'));
+            $this->assertSame([['a1.orders'], []], [$cited->invoke($responder, 'Cela fait 33 commandes en tout.', $twice, [], 'fr'), $cited->invoke($responder, 'Cela fait 33 en tout.', $twice, [], 'fr')],
+                'les deux analyses ne font qu\'un candidat ; un nombre nu ne le désigne qu\'avec un mot de son libellé dans la phrase (lot W2-d)');
             foreach (['keep', 'raise', 'lower'] as $verdict) {
                 foreach (['similar', 'supplier', 'site'] as $source) {
                     foreach (['fr', 'en'] as $locale) {
@@ -885,6 +889,145 @@ class ConsoleApiTest extends WebTestCase
             }
         } finally {
             $conn()->executeStatement('DELETE FROM gestion_cash_balance WHERE id = ?', [$balance]);
+        }
+    }
+
+    /**
+     * Lot W2-d (13/11/2026) : l'échange RÉEL de demo où les cartes étaient mal placées, rejoué avec ses textes et ses chiffres. « du 2
+     * juin » faisait garder la carte d'un compte de 2, « 0 % » celle d'un budget de 0,00 $, et les vrais chiffres du premier texte
+     * partaient en fin de réponse. Aussi : tableau à colonnes libellées et cellules rédigées, état en minuscule pour le modèle, consignes.
+     */
+    public function testARealExchangePlacesEachCardUnderTheTextThatSpeaksOfIt(): void
+    {
+        $this->em();
+        $responder = static::getContainer()->get(ConsoleResponder::class);
+        $catalog = static::getContainer()->get(AnalysisCatalog::class);
+        $translator = static::getContainer()->get(TranslatorInterface::class);
+        $f = fn (string $id, string $label, mixed $value, string $unit): array => ['id' => $id, 'label' => $label, 'value' => $value, 'unit' => $unit];
+        $range = ['from' => '2026-09-01', 'to' => '2026-11-30', 'label' => 'Automne 2026'];
+        $result = fn (string $ref, string $key, array $figures): array => ['ref' => $ref, 'key' => $key, 'title' => $key, 'period' => $range, 'figures' => $figures, 'rows' => [], 'groups' => [], 'lesson' => null, 'more' => null, 'source' => ['screen' => 'x', 'route' => null, 'params' => []]];
+        $results = [
+            $result('a1', 'period.result', [$f('a1.revenue', 'Ventes', 117070, 'money'), $f('a1.orders', 'Commandes', 33, 'count'), $f('a1.expenses', 'Frais de la période (port, notes de frais, publicité), hors achats de marchandise', 95700, 'money'),
+                $f('a1.grossMargin', 'Marge brute', 51225, 'money'), $f('a1.netResult', 'Résultat', -44475, 'money'), $f('a1.unknownCostRevenue', 'Ventes sans coût connu', 450, 'money'), $f('a1.unknownCostItems', 'Unités vendues sans coût connu', 2, 'count')]),
+            $result('a2', 'sales.overview', [$f('a2.revenue', 'Ventes', 117070, 'money'), $f('a2.grossMargin', 'Marge brute', 51225, 'money'), $f('a2.grossMarginRate', 'Taux de marge', 43.92, 'percent'), $f('a2.orders', 'Commandes', 33, 'count'),
+                $f('a2.averageBasket', 'Panier moyen (ventes avant retours ÷ commandes, hors taxes)', 4032, 'money'), $f('a2.returnRate', 'Taux de retour', 12.02, 'percent')]),
+            $result('a3', 'budget.status', [$f('a3.planned', 'Budget prévu, achats de marchandise compris', 0, 'money'), $f('a3.actual', 'Dépenses réelles, achats de marchandise compris', 2683825, 'money'), $f('a3.remaining', 'Reste du budget', -2683825, 'money')]),
+        ];
+        // Les quatre textes de la réponse, mot pour mot, avec les chiffres que le modèle citait ; puis son bloc de cartes final
+        $texts = [
+            ["Sur Automne 2026, les ventes progressent (1 170,70 $ contre 977,00 $ du 2 juin au 31 août 2026) et la marge brute aussi (512,25 $), mais la période reste en perte : le résultat est de -444,75 $. Les frais de la période (port, notes de frais, publicité, hors achats de marchandise) s'élèvent à 957,00 $, ce qui dépasse la marge brute.",
+                ['a1.revenue', 'a1.grossMargin', 'a1.netResult', 'a1.expenses', 'a1.unknownCostItems']],
+            ['Les commandes passent à 33 contre 6, mais le panier moyen tombe à 40,32 $ contre 162,83 $. Le taux de retour est de 12 %, contre 0 % sur la période précédente. Le taux de marge est de 43,9 % contre 45 %.',
+                ['a1.orders', 'a2.averageBasket', 'a2.returnRate', 'a2.grossMarginRate', 'a3.planned']],
+            ["Côté budget, rien n'est prévu pour cette période (0,00 $, achats de marchandise compris), alors que les dépenses réelles, achats de marchandise compris, atteignent 26 838,25 $. Le poste Stock en représente 25 881,25 $. Ce chiffre n'est pas comparable aux frais de 957,00 $ ci-dessus, qui excluent les achats de marchandise.",
+                ['a3.planned', 'a3.actual', 'a1.expenses']],
+            ["Pour 2 unités vendues, le coût n'est pas connu (4,50 $ de ventes) : la marge est donc légèrement imprécise.", ['a1.unknownCostItems', 'a1.unknownCostRevenue']],
+        ];
+        $written = array_map(fn (array $t) => ['type' => 'text', 'text' => $t[0], 'figureIds' => $t[1], 'analysis' => '', 'items' => []], $texts);
+        $written[] = ['type' => 'figures', 'text' => '', 'figureIds' => ['a1.revenue', 'a1.expenses', 'a1.grossMargin', 'a1.netResult'], 'analysis' => '', 'items' => []];
+        $assemble = new \ReflectionMethod(ConsoleResponder::class, 'blocks');
+        $assemble->setAccessible(true);
+        $run = fn (array $blocks): array => $assemble->invoke($responder, $blocks, $results, ConsoleResponder::numbers(implode(' ', array_column($blocks, 'text'))), 'fr');
+        [$blocks, $rejected] = $run($written);
+        $this->assertSame(0, $rejected);
+        $this->assertSame(['text', 'figures', 'text', 'figures', 'text', 'figures', 'text', 'figures'], array_column($blocks, 'type'), 'chaque texte est suivi de ses cartes ; le bloc final du modèle, tout placé, disparaît');
+        $cards = fn (int $i): array => array_column($blocks[$i]['items'], 'id');
+        $this->assertSame([['a1.revenue', 'a1.grossMargin', 'a1.netResult', 'a1.expenses'], ['a1.revenue', 'a1.expenses', 'a1.grossMargin', 'a1.netResult']], [$blocks[0]['figureIds'], $cards(1)],
+            'texte 1 : ses quatre chiffres sont sous lui ; le compte de 2 unités, cité à tort (« du 2 juin »), est retiré');
+        $this->assertSame([['a1.orders', 'a2.averageBasket', 'a2.returnRate', 'a2.grossMarginRate'], ['a1.orders', 'a2.grossMarginRate', 'a2.averageBasket', 'a2.returnRate']], [$blocks[2]['figureIds'], $cards(3)],
+            'texte 2 : le budget prévu de 0,00 $, cité à tort (« contre 0 % »), est retiré');
+        $this->assertSame([['a3.planned', 'a3.actual', 'a1.expenses'], ['a3.planned', 'a3.actual']], [$blocks[4]['figureIds'], $cards(5)], 'texte 3 : budget prévu et dépenses réelles ; les frais, déjà sous le texte 1, ne sont pas répétés');
+        $this->assertSame([['a1.unknownCostItems', 'a1.unknownCostRevenue'], ['a1.unknownCostRevenue', 'a1.unknownCostItems']], [$blocks[6]['figureIds'], $cards(7)], 'texte 4 : « 2 unités vendues » désigne bien le compte, ici');
+        $all = array_merge($cards(1), $cards(3), $cards(5), $cards(7));
+        $this->assertSame($all, array_values(array_unique($all)), 'une carte par chiffre');
+
+        // Sans citation du modèle : chaque chiffre est retrouvé par sa valeur, selon sa nature, et rattaché au texte qui l'écrit
+        $uncited = array_map(fn (array $b) => ['figureIds' => []] + $b, array_slice($written, 0, 4));
+        [$found] = $run($uncited);
+        $sorted = function (array $ids): array {
+            sort($ids);
+
+            return $ids;
+        };
+        $this->assertSame([$sorted(['a1.revenue', 'a1.grossMargin', 'a1.netResult', 'a1.expenses']), $sorted(['a1.orders', 'a2.averageBasket', 'a2.returnRate', 'a2.grossMarginRate']), $sorted(['a3.planned', 'a3.actual', 'a1.expenses']), $sorted(['a1.unknownCostItems', 'a1.unknownCostRevenue'])],
+            [$sorted($found[0]['figureIds']), $sorted($found[2]['figureIds']), $sorted($found[4]['figureIds']), $sorted($found[6]['figureIds'])], 'les frais de 957,00 $ sont écrits dans les textes 1 et 3 : leur carte reste sous le premier');
+        $this->assertSame([['a1.revenue', 'a1.expenses', 'a1.grossMargin', 'a1.netResult'], ['a3.planned', 'a3.actual']], [array_column($found[1]['items'], 'id'), array_column($found[5]['items'], 'id')]);
+        // Un chiffre qu'aucun texte n'évoque reste dans le bloc du modèle, à sa place ; un chiffre évoqué plus bas quitte ce bloc pour son texte
+        [$mixed] = $run([['type' => 'figures', 'text' => '', 'figureIds' => ['a3.remaining', 'a1.revenue'], 'analysis' => '', 'items' => []], $written[0]]);
+        $this->assertSame([['figures', ['a3.remaining']], ['text', null], ['figures', ['a1.revenue', 'a1.expenses', 'a1.grossMargin', 'a1.netResult']]],
+            array_map(fn (array $b) => [$b['type'], $b['type'] === 'figures' ? array_column($b['items'], 'id') : null], $mixed));
+
+        // La nature des nombres d'un texte
+        $kinds = fn (string $t): array => array_map(fn (array $x) => $x['value'] . ' ' . $x['kind'], ConsoleResponder::tokens($t));
+        $this->assertSame([['1170.7 money', '977 money', '512.25 money'], ['33 plain', '6 plain', '12 percent', '0 percent'], ['1170.7 money', '25 money', '3 plain'], ['7 plain'], []], [
+            $kinds('Les ventes progressent (1 170,70 $ contre 977,00 $ du 2 juin au 31 août 2026) et la marge aussi (512,25 $).'), $kinds('Les commandes passent à 33 contre 6. Le taux de retour est de 12 %, contre 0 %.'),
+            $kinds('Sales of $1,170.70 on November 11, 2026, 25.00 CAD and 3 items.'), $kinds('Le 1er novembre 2026, puis 7 articles le 2026-11-11.'), $kinds('En novembre 2026.')],
+            'un montant, un pourcentage, un nombre nu ; le jour et l\'année d\'une date ne sont pas des nombres cités');
+        // Un même montant porté par deux chiffres différents : le libellé dans la phrase tranche, sinon aucun rattachement
+        $cited = new \ReflectionMethod(ConsoleResponder::class, 'citedByValue');
+        $cited->setAccessible(true);
+        $twins = [$result('a1', 'x', [$f('a1.shipping', 'Frais de port', 95700, 'money'), $f('a1.notes', 'Notes de frais', 95700, 'money'), $f('a1.share', 'Part vendue', 95700, 'percent'), $f('a1.units', 'Unités vendues', 957, 'count')])];
+        $by = fn (string $t): array => $cited->invoke($responder, $t, $twins, [], 'fr');
+        $this->assertSame([['a1.notes'], ['a1.shipping'], [], [], ['a1.units'], [], []], [$by('Les notes de frais atteignent 957,00 $.'), $by('Le port vous a coûté 957,00 $ de frais.'), $by('Vous avez dépensé 957,00 $.'), $by('Vos frais atteignent 957,00 $.'),
+            $by('Vous avez vendu 957 unités.'), $by('Cela fait 957.'), $by('Vos frais sont de 957 %.')],
+            'le libellé le mieux écrit dans la phrase tranche ; à égalité ou sans libellé, rien ; un montant n\'est ni un compte ni un taux');
+        // « le mieux écrit » = la PART des mots du libellé lus dans la phrase (« Frais » en entier bat « Frais de port » à moitié), et seul le
+        // début du libellé compte, pas les mots de sa formule entre parenthèses
+        $shares = [$result('a1', 'x', [$f('a1.fees', 'Frais', 12300, 'money'), $f('a1.port', 'Frais de port', 12300, 'money'),
+            $f('a1.basket', 'Panier moyen (ventes avant retours ÷ commandes, hors taxes)', 4032, 'money'), $f('a1.day', 'Ventes nettes du jour après remises', 4032, 'money')])];
+        $this->assertSame([['a1.fees'], ['a1.day']], [$cited->invoke($responder, 'Vos frais sont de 123,00 $.', $shares, [], 'fr'), $cited->invoke($responder, 'Vos ventes avant retours : 40,32 $.', $shares, [], 'fr')]);
+        // Un chiffre cité par le modèle : un nombre nu ne suffit pas sans un mot du libellé dans la phrase
+        $speaks = new \ReflectionMethod(ConsoleResponder::class, 'speaksOf');
+        $speaks->setAccessible(true);
+        $units = $f('a1.unknownCostItems', 'Unités vendues sans coût connu', 2, 'count');
+        $this->assertSame([false, true, false, false], [$speaks->invoke($responder, 'Vous avez 2 nouveautés ce mois-ci.', $units, 'fr'), $speaks->invoke($responder, 'Pour 2 unités, le coût manque.', $units, 'fr'),
+            $speaks->invoke($responder, 'Du 2 juin au 31 août 2026, tout va bien.', $units, 'fr'), $speaks->invoke($responder, 'Les unités comptent. Il y en a 2.', $units, 'fr')],
+            'le mot du libellé doit être dans la MÊME phrase que le nombre');
+        // Deux blocs de cartes du modèle : un chiffre déjà montré par le premier n'est pas répété par le second
+        [$repeated] = $run([['type' => 'figures', 'text' => '', 'figureIds' => ['a3.remaining'], 'analysis' => '', 'items' => []], ['type' => 'figures', 'text' => '', 'figureIds' => ['a3.remaining', 'a2.grossMarginRate'], 'analysis' => '', 'items' => []]]);
+        $this->assertSame([['a3.remaining'], ['a2.grossMarginRate']], array_map(fn (array $b) => array_column($b['items'], 'id'), $repeated));
+
+        // H. Tableau : colonnes libellées avec leur unité, cellules rédigées, code à part
+        $period = (int) static::getContainer()->get(PeriodCalendar::class)->current()->getId();
+        $budget = $catalog->run('budget.status', ['periodId' => $period], 'fr');
+        $this->em();
+        $budget['ref'] = 'a1';
+        [$table] = $assemble->invoke($responder, [['type' => 'table', 'text' => '', 'figureIds' => [], 'analysis' => 'a1', 'items' => []]], [$budget], [], 'fr');
+        $this->assertSame([['key' => 'label', 'label' => 'Poste', 'unit' => 'text'], ['key' => 'planned', 'label' => 'Prévu', 'unit' => 'money'], ['key' => 'actual', 'label' => 'Réel', 'unit' => 'money'],
+            ['key' => 'remaining', 'label' => 'Reste', 'unit' => 'money'], ['key' => 'status', 'label' => 'État', 'unit' => 'text']], $table[0]['columns']);
+        $stock = array_column($table[0]['rows'], null, 'category')['purchases'];
+        $this->assertSame('Stock', $stock['label'], 'le poste se lit rédigé ; son code reste dans category');
+        $this->assertContains($stock['status'], ['Sans prévu', 'Dans le budget', 'Attention', 'Dépassé']);
+        $this->assertSame($translator->trans('console.values.budget.' . $stock['statusCode'], [], 'gestion', 'fr'), $stock['status']);
+        $this->assertIsInt($stock['actual']);
+        $written = new \ReflectionMethod(ConsoleResponder::class, 'writtenRow');
+        $written->setAccessible(true);
+        $this->assertSame([['month' => 'novembre 2026', 'sales' => 100, 'monthKey' => '2026-11'], ['month' => 'November 2026', 'sales' => 100, 'monthKey' => '2026-11'], ['verdict' => 'À monter', 'confidence' => 'Prudente', 'name' => 'x', 'verdictCode' => 'raise', 'confidenceCode' => 'low']],
+            [$written->invoke($responder, ['month' => '2026-11', 'sales' => 100], 'fr'), $written->invoke($responder, ['month' => '2026-11', 'sales' => 100], 'en'), $written->invoke($responder, ['verdict' => 'raise', 'confidence' => 'low', 'name' => 'x'], 'fr')]);
+        // chaque tableau du catalogue a ses colonnes, libellées dans les deux langues, et chaque colonne existe dans les lignes
+        foreach (AnalysisCatalog::COLUMNS as $key => $columns) {
+            $this->assertTrue($catalog->has($key));
+            foreach (['fr', 'en'] as $locale) {
+                foreach ($catalog->columns($key, $locale) as $column) {
+                    $this->assertSame(['key', 'label', 'unit'], array_keys($column));
+                    $this->assertStringStartsNotWith('console.columns.', $column['label'], "$key.{$column['key']} ($locale)");
+                    $this->assertContains($column['unit'], ['money', 'percent', 'count', 'days', 'ratio', 'text', 'month']);
+                }
+            }
+        }
+        $this->assertSame([], $catalog->columns('period.result', 'fr'), 'une analyse sans tableau');
+        $rows = $catalog->run('articles.missing_cost', [], 'fr')['rows'];
+        $this->em();
+        if ($rows !== []) {
+            $this->assertSame([], array_diff(array_keys(AnalysisCatalog::COLUMNS['articles.missing_cost']), array_keys($rows[0])));
+        }
+
+        // I et J. Consignes de rédaction
+        $system = (new \ReflectionMethod(\App\Gestion\Services\Console\ConsoleModel::class, 'systemWrite'));
+        $system->setAccessible(true);
+        $rules = $system->invoke(static::getContainer()->get(\App\Gestion\Services\Console\ConsoleModel::class), 'français');
+        foreach (['ne recopie pas leurs phrases', 'donne seulement le bilan', 'jamais de majuscule en cours de phrase'] as $rule) {
+            $this->assertStringContainsString($rule, $rules);
         }
     }
 

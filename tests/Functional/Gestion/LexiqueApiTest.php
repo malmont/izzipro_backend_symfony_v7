@@ -221,14 +221,62 @@ class LexiqueApiTest extends WebTestCase
         $this->assertGreaterThan(0, $figures['revenue']['value']);
         $this->assertSame(substr($today, 0, 8) . '01', $site['period']['from']);
         // L'illustration : écrite par le serveur ; ses nombres sont le taux, 100, et la part gardée sur 100 (= le taux)
-        $this->assertMatchesRegularExpression('/^Votre taux de marque, (le|du) .+ \d{4} : [\d,]+ %\. Sur 100,00 \$ vendus, il vous reste [\d,]+ \$ après le coût d\'achat\.$/u', $plain($site['illustration']));
+        $this->assertMatchesRegularExpression('/^Votre taux de marque, ce mois-ci : [\d,]+ %\. Sur 100,00 \$ vendus, il vous reste [\d,]+ \$ après le coût d\'achat\.$/u', $plain($site['illustration']), 'le mois a des ventes : l\'illustration le dit (« ce mois-ci »)');
+        $this->assertSame('ce mois-ci', $site['period']['phrase']);
         preg_match('/: ([\d,]+) %\. Sur 100,00 \$ vendus, il vous reste ([\d,]+) \$/u', $plain($site['illustration']), $m);
         $this->assertEqualsWithDelta((float) str_replace(',', '.', $m[1]), (float) str_replace(',', '.', $m[2]), 0.051, 'la part gardée sur 100 $ est le taux');
         $this->assertEqualsWithDelta($figures['grossMarginRate']['value'], (float) str_replace(',', '.', $m[1]), 0.051);
         $english = $this->get('/api/gestion/lexique/taux-de-marque?locale=en')['site'];
-        $this->assertMatchesRegularExpression('/^Your margin rate, [A-Z][a-z]+ \d.* \d{4}: [\d.]+%\. Out of \$100\.00 sold, you keep \$[\d.]+ after the purchase cost\.$/u', $plain($english['illustration']));
+        $this->assertMatchesRegularExpression('/^Your margin rate, this month: [\d.]+%\. Out of \$100\.00 sold, you keep \$[\d.]+ after the purchase cost\.$/u', $plain($english['illustration']));
         // Une notion sans analyse liée : la définition seule
         $this->assertNull($this->get('/api/gestion/lexique/promotion')['site']);
+
+        // Lot W2-d : « un prof a toujours un exemple quand des données existent ». Le mois, puis la période en cours, puis la dernière
+        // période terminée qui a des ventes ; l'illustration dit toujours sa plage.
+        $catalog = static::getContainer()->get(AnalysisCatalog::class);
+        $conn = $this->em()->getConnection();
+        $current = $calendar->current();
+        $name = PeriodCalendar::displayName($current, 'fr');
+        $this->assertSame([['range' => 'month'], ['periodId' => (int) $current->getId()]], array_slice($catalog->salesCandidates(), 0, 2), 'ordre des essais : le mois, la période en cours…');
+        $this->em();
+        $past = array_slice($catalog->salesCandidates(), 2);
+        $this->em();
+        $this->assertLessThanOrEqual(AnalysisCatalog::EXAMPLE_PAST_PERIODS, count($past));
+        foreach ($past as $candidate) {
+            $this->assertLessThan($current->getStartDateCollection()->format('Y-m-d'), (string) $conn->fetchOne('SELECT end_date_collection::date FROM collections WHERE id = ?', [$candidate['periodId']]), '… puis des périodes TERMINÉES');
+        }
+        // deux périodes à venir, vides, et une période passée qui a des ventes (la saison de l'an dernier, où un article s'est vendu)
+        $season = PeriodCalendar::definition(\DateTimeImmutable::createFromInterface($current->getStartDateCollection())->modify('-1 year'), $calendar->frequency());
+        [, $old] = $this->article($supplier, "Article ancien $tag", 1000, 2500, $season['start']->modify('+2 days')->format('Y-m-d'));
+        $this->sale($old, 3, 2500, 2500, $season['start']->modify('+16 days')->format('Y-m-d'));
+        $insert = "INSERT INTO collections (id, budget_collection, start_date_collection, end_date_collection, del, nom_collection, is_closed, kind, period_key) VALUES (nextval('collections_id_seq'), 0, ?, ?, false, ?, false, 'period', ?) RETURNING id";
+        $emptyA = (int) $conn->fetchOne($insert, [(new \DateTimeImmutable('+800 days'))->format('Y-m-d'), (new \DateTimeImmutable('+830 days'))->format('Y-m-d'), "Vide A $tag", "LX-$tag-a"]);
+        $emptyB = (int) $conn->fetchOne($insert, [(new \DateTimeImmutable('+900 days'))->format('Y-m-d'), (new \DateTimeImmutable('+930 days'))->format('Y-m-d'), "Vide B $tag", "LX-$tag-b"]);
+        $finished = (int) $conn->fetchOne($insert, [$season['start']->format('Y-m-d'), $season['end']->format('Y-m-d'), "Passée $tag", "LX-$tag-p"]);
+        $this->endOfWrite();
+        try {
+            $example = function (array $candidates, string $locale = 'fr') use ($catalog): array {
+                $r = $catalog->salesExample($locale, $candidates);
+                $this->em();
+
+                return [(array) $r['source']['params'], $r['period']['phrase'], array_column($r['figures'], 'value', 'id')['revenue'] > 0];
+            };
+            $this->assertSame([['range' => 'month'], 'ce mois-ci', true], $example([['range' => 'month'], ['periodId' => (int) $current->getId()]]), 'le mois a des ventes : le mois');
+            $this->assertSame([['periodId' => (int) $current->getId()], "sur la période $name", true], $example([['periodId' => $emptyA], ['periodId' => (int) $current->getId()], ['periodId' => $finished]]), 'premier essai vide : la période en cours');
+            $this->assertSame([['periodId' => $finished], "sur la période Passée $tag", true], $example([['periodId' => $emptyA], ['periodId' => $emptyB], ['periodId' => $finished]]), 'les deux premiers vides : la dernière période terminée qui a des ventes');
+            $this->assertSame([['periodId' => $emptyA], "sur la période Vide A $tag", false], $example([['periodId' => $emptyA], ['periodId' => $emptyB]]), 'aucune vente nulle part : le premier essai, sans exemple');
+            $this->assertSame("over the period Passée $tag", $example([['periodId' => $emptyA], ['periodId' => $finished]], 'en')[1]);
+            // et l'illustration le dit
+            $fallback = $catalog->salesExample('fr', [['periodId' => $emptyA], ['periodId' => $finished]]);
+            $this->em();
+            $this->assertSame("Chez vous, sur la période Passée $tag : 75,00 $ de ventes hors taxes.", $plain(static::getContainer()->get(LexiqueIllustration::class)->of('ventes', $fallback['figures'], $fallback['period'], 'fr')));
+            $empty = $catalog->salesExample('fr', [['periodId' => $emptyA]]);
+            $this->em();
+            $this->assertNull(static::getContainer()->get(LexiqueIllustration::class)->of('ventes', $empty['figures'], $empty['period'], 'fr'), 'sans aucune vente : pas d\'exemple, la définition suffit');
+        } finally {
+            $this->em()->getConnection()->executeStatement('DELETE FROM collections WHERE id IN (?, ?, ?)', [$emptyA, $emptyB, $finished]);
+            $this->endOfWrite();
+        }
 
         // L'illustration, sur des chiffres choisis : formes, accords, et silence quand la donnée manque
         $this->em();
@@ -340,7 +388,7 @@ class LexiqueApiTest extends WebTestCase
         $this->assertSame(['taux-de-marque', 'Taux de marque', "La part de marge dans le prix de vente. À 40 %, sur 100 $ vendus, il vous reste 40 $ après le coût d'achat.", 2,
             ['screen' => 'lexique', 'route' => 'GET /api/gestion/lexique/{term}', 'params' => ['term' => 'taux-de-marque']], [['key' => 'marge', 'term' => 'Marge brute'], ['key' => 'coefficient', 'term' => 'Coefficient'], ['key' => 'point-mort', 'term' => 'Point mort']]],
             [$lesson['key'], $lesson['term'], $lesson['definition'], $lesson['quiz'], $lesson['source'], $lesson['related']]);
-        $this->assertMatchesRegularExpression('/^Votre taux de marque, (le|du) .+ : [\d,]+ %\. Sur 100,00 \$ vendus, il vous reste [\d,]+ \$ après le coût d\'achat\.$/u', $plain($lesson['illustration']));
+        $this->assertMatchesRegularExpression('/^Votre taux de marque, ce mois-ci : [\d,]+ %\. Sur 100,00 \$ vendus, il vous reste [\d,]+ \$ après le coût d\'achat\.$/u', $plain($lesson['illustration']));
         $this->assertSame($plain($this->get('/api/gestion/lexique/taux-de-marque')['site']['illustration']), $plain($lesson['illustration']), 'la même leçon que la route du lexique');
         $this->assertSame([['a1.grossMarginRate', 'a1.revenue', 'a1.grossMargin'], 'taux-de-marque', 'statistiques'],
             [array_column($answer['blocks'][1]['items'], 'id'), $answer['blocks'][1]['items'][0]['term'], $answer['blocks'][1]['items'][0]['source']['screen']]);
