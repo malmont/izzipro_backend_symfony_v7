@@ -160,6 +160,66 @@ class ManagementReadinessTest extends WebTestCase
 
     // ----- helpers -----
 
+    /**
+     * Les étapes `management.ai` et `ai.credits` comptent les crédits IA comme le quota qui les applique (12/11/2026) : avant,
+     * `management.ai` remplaçait un forfait réglé à 0 par le forfait par défaut et annonçait des crédits que le quota refusait.
+     */
+    public function testBothAiStepsCountTheCreditsLikeTheQuotaDoes(): void
+    {
+        $this->grant();
+        $savedSetting = $this->db->fetchAllAssociative('SELECT * FROM ai_credit_setting ORDER BY id');
+        $savedUsage = (int) $this->db->fetchOne('SELECT COALESCE(MAX(id), 0) FROM ai_usage');
+        $quota = fn (): array => array_intersect_key(static::getContainer()->get(\App\Services\LandingAiService\LandingAiQuotaService::class)->credits(), ['monthly' => 1, 'used' => 1, 'remaining' => 1]);
+        $steps = fn (): array => array_column($this->readiness()['steps'], null, 'key');
+        $figures = fn (array $all): array => ['monthly' => $all['management.ai']['figures']['monthly'], 'remaining' => $all['management.ai']['figures']['remaining']];
+        $usage = fn (string $status, int $credits, string $createdAt, ?string $reservedUntil = null) => $this->db->executeStatement(
+            "INSERT INTO ai_usage (id, tenant, created_at, mode, component_key, status, credits, attempts, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, prompt_excerpt, reserved_until)
+             VALUES (nextval('ai_usage_id_seq'), ?, $createdAt, 'edit', 'test_che', ?, ?, 1, 0, 0, 0, 0, 'test', " . ($reservedUntil ?? 'NULL') . ')', [MV_TEST_TENANT_CODE, $status, $credits]);
+        try {
+            // Forfait réglé à 0 : aucun crédit, pour les deux étapes comme pour le quota
+            $this->db->executeStatement('DELETE FROM ai_credit_setting');
+            $this->db->executeStatement("INSERT INTO ai_credit_setting (id, monthly_credits) VALUES (nextval('ai_credit_setting_id_seq'), 0)");
+            $all = $steps();
+            $this->assertSame(['monthly' => 0, 'remaining' => 0], $figures($all), 'avant : le forfait par défaut, alors que le quota refuse');
+            $this->assertSame('todo', $all['management.ai']['status']);
+            $this->assertStringContainsString('Aucun crédit IA ce mois-ci', $all['ai.credits']['description']);
+            $this->assertSame(0, $quota()['monthly']);
+
+            // Aucun réglage : le forfait par défaut de la plateforme, des deux côtés
+            $this->db->executeStatement('DELETE FROM ai_credit_setting');
+            $default = static::getContainer()->get(\App\Services\Platform\PlatformModeService::class)->aiDefaultCredits();
+            $this->assertSame($default, $figures($steps())['monthly']);
+            $this->assertSame($default, $quota()['monthly']);
+
+            // Consommation : réussies et réservations en cours comptent ; échec, réservation échue et mois de facturation précédent non
+            $this->db->executeStatement("INSERT INTO ai_credit_setting (id, monthly_credits) VALUES (nextval('ai_credit_setting_id_seq'), 40)");
+            $before = $quota();
+            $usage('success', 3, 'NOW()');
+            $usage('reserved', 2, 'NOW()', "NOW() + INTERVAL '10 minutes'");
+            $usage('reserved', 5, 'NOW()', "NOW() - INTERVAL '10 minutes'");
+            $usage('failed', 7, 'NOW()');
+            $usage('success', 11, "date_trunc('month', NOW() AT TIME ZONE 'UTC') + INTERVAL '2 hours'"); // 2 h UTC le 1er : avant le début du mois de facturation (heure de Toronto)
+            $after = $quota();
+            $this->assertSame(40, $after['monthly']);
+            $this->assertContains($after['used'] - $before['used'], [5, 16], 'réussie 3 + réservée en cours 2 ; + 11 seulement dans les premières heures UTC du mois');
+            $all = $steps();
+            $this->assertSame(['monthly' => $after['monthly'], 'remaining' => $after['remaining']], $figures($all), 'management.ai : les chiffres du quota');
+            $this->assertStringContainsString(sprintf('%d crédit(s) restant(s) sur 40', $after['remaining']), $all['ai.credits']['description'], 'ai.credits : les mêmes chiffres');
+            $this->assertStringContainsString(sprintf('%d crédit(s) IA restant(s) sur 40', $after['remaining']), $all['management.ai']['description']);
+
+            // Consommation au-dessus du forfait : il reste 0, jamais un nombre négatif
+            $this->db->executeStatement('UPDATE ai_credit_setting SET monthly_credits = 1');
+            $this->assertSame(['monthly' => 1, 'remaining' => 0], $figures($steps()));
+            $this->assertSame(0, $quota()['remaining']);
+        } finally {
+            $this->db->executeStatement('DELETE FROM ai_usage WHERE id > ?', [$savedUsage]);
+            $this->db->executeStatement('DELETE FROM ai_credit_setting');
+            foreach ($savedSetting as $row) {
+                $this->db->insert('ai_credit_setting', $row);
+            }
+        }
+    }
+
     private function grant(): void
     {
         static::getContainer()->get(EntitlementService::class)->grant(MV_TEST_TENANT_CODE, 'app.management', 'manual', null, 'test', 'CHE', null, null, false);

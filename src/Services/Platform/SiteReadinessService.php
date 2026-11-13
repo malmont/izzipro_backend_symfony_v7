@@ -155,10 +155,7 @@ class SiteReadinessService
         $fixed = $this->count($pdo, 'gestion_cash_movement', 'fixed_cost = true');
         $add('management.fixed_costs', 'Frais fixes', $fixed > 0 ? sprintf('%d frais fixe(s) saisi(s) : le résultat après frais fixes est calculé.', $fixed) : 'Saisissez vos frais fixes (loyer, salaires, abonnements) pour voir le résultat après frais fixes.', $fixed > 0, $screen('gestion'), false, 'frais-fixes', ['fixedCosts' => $fixed]);
         $tier = ($effective['ai.full']['enabled'] ?? false) ? 'full' : (($effective['ai.help']['enabled'] ?? false) ? 'help' : 'none');
-        $monthly = (int) ($this->one($pdo, 'SELECT monthly_credits FROM ai_credit_setting ORDER BY id LIMIT 1') ?? 0) ?: $this->platform->aiDefaultCredits();
-        $monthStart = (new \DateTimeImmutable('first day of this month 00:00:00', new \DateTimeZone('America/Toronto')))->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
-        $used = (int) $this->one($pdo, sprintf("SELECT COALESCE(SUM(credits), 0) FROM ai_usage WHERE created_at >= '%s' AND (status = 'success' OR (status = 'reserved' AND reserved_until >= NOW()))", $monthStart));
-        $remaining = max(0, $monthly - $used);
+        ['monthly' => $monthly, 'remaining' => $remaining] = $this->aiCredits($pdo); // même décompte que l'étape ai.credits et que le quota (12/11/2026)
         $add('management.ai', 'Assistant IA de la gestion', $tier === 'none' ? 'Sans palier IA, le guide et les avis restent calculés par les règles (sans texte rédigé).' : sprintf('%d crédit(s) IA restant(s) sur %d ce mois-ci (1 par conseil, avis ou document lu).', $remaining, $monthly), $tier !== 'none' && $remaining > 0, $screen('ai_credits'), false, null, ['tier' => $tier, 'remaining' => $remaining, 'monthly' => $monthly]);
         $devices = $this->count($pdo, 'push_device', 'disabled_at IS NULL');
         $add('management.device', 'Appareil pour les notifications', $devices > 0 ? sprintf('%d appareil(s) reçoivent les notifications.', $devices) : 'Autorisez les notifications dans l\'application : stock bas, trésorerie basse, facture en double.', $devices > 0, $screen('gestion'), false, 'notifications', ['devices' => $devices]);
@@ -362,11 +359,7 @@ class SiteReadinessService
                 'help' => 'Le service « Aide IA » est accordé : l\'assistant explique vos réglages, votre cheminement et vos commandes, sans rien modifier. « IA complète » s\'obtient par forfait ou sur demande.',
                 'none' => 'Aucun service d\'assistant n\'est accordé au site : demandez ou essayez « Aide IA » ou « IA complète » dans Services et quotas, ou prenez un forfait.'][$tier],
             $tier !== 'none', 'backend', ['type' => 'screen', 'screen' => 'mon_site'], false);
-        $creditsRaw = $this->one($pdo, 'SELECT monthly_credits FROM ai_credit_setting ORDER BY id LIMIT 1');
-        $credits = $creditsRaw === null ? $this->platform->aiDefaultCredits() : (int) $creditsRaw; // défaut réglé par la plateforme (08/11/2026)
-        $monthStart = (new \DateTimeImmutable('first day of this month 00:00:00', new \DateTimeZone(\App\Services\LandingAiService\LandingAiQuotaService::TIMEZONE)))->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
-        $usedCredits = (int) ($this->one($pdo, sprintf("SELECT COALESCE(SUM(credits), 0) FROM ai_usage WHERE created_at >= '%s' AND (status = 'success' OR (status = 'reserved' AND reserved_until >= NOW()))", $monthStart)) ?? 0);
-        $remainingCredits = max(0, $credits - $usedCredits);
+        ['monthly' => $credits, 'used' => $usedCredits, 'remaining' => $remainingCredits] = $this->aiCredits($pdo); // défaut réglé par la plateforme (08/11/2026)
         $creditsAction = $shopUrl !== null ? ['type' => 'shop', 'feature' => 'ai.credits', 'url' => $shopUrl] : ['type' => 'screen', 'screen' => 'mon_site'];
         // Crédits réglés par la plateforme (07/11/2026) : l'étape ne mène plus au réglage mais à l'achat ou au changement de forfait
         $add('ai.credits', 'ai', 'Crédits IA du mois', $credits === 0 ? 'Aucun crédit IA ce mois-ci : l\'assistant et la rédaction par l\'IA refuseront. Achetez des crédits ou changez de forfait.' : ($remainingCredits === 0 ? sprintf('Crédits épuisés (%d utilisés sur %d) : l\'IA refusera jusqu\'au mois prochain. Achetez des crédits ou changez de forfait.', $usedCredits, $credits) : ($remainingCredits * 5 <= $credits ? sprintf('Il reste %d crédit(s) sur %d : pensez à acheter des crédits ou à changer de forfait avant la panne.', $remainingCredits, $credits) : sprintf('%d crédit(s) restant(s) sur %d ce mois-ci pour l\'assistant, les pages et les fiches produit.', $remainingCredits, $credits))), $credits > 0 && $remainingCredits * 5 > $credits, 'backend', $creditsAction, $credits === 0 || $remainingCredits === 0); // bloquant sans crédit (08/11/2026) : la carte passe « à faire »
@@ -479,6 +472,27 @@ class SiteReadinessService
         }
 
         return array_values(array_unique($apps));
+    }
+
+    /**
+     * Crédits IA du mois d'un site, comptés comme le quota qui les applique (`LandingAiQuotaService::credits`) : une seule fonction pour
+     * les étapes `management.ai` et `ai.credits` (12/11/2026 ; avant, `management.ai` remplaçait un forfait réglé à 0 par le forfait par
+     * défaut, et annonçait donc des crédits que le quota refusait).
+     * - forfait : la valeur réglée, 0 compris ; le défaut de la plateforme seulement s'il n'y a aucun réglage ;
+     * - mois : celui de la facturation de la plateforme (`LandingAiQuotaService::TIMEZONE`), le même pour tous les sites, pas le fuseau
+     *   du site : c'est la borne que le quota applique ;
+     * - consommé : demandes réussies et réservations en cours.
+     *
+     * @return array{monthly: int, used: int, remaining: int}
+     */
+    private function aiCredits(\PDO $pdo): array
+    {
+        $raw = $this->one($pdo, 'SELECT monthly_credits FROM ai_credit_setting ORDER BY id LIMIT 1');
+        $monthly = $raw === null ? (int) $this->platform->aiDefaultCredits() : (int) $raw;
+        $monthStart = (new \DateTimeImmutable('first day of this month 00:00:00', new \DateTimeZone(\App\Services\LandingAiService\LandingAiQuotaService::TIMEZONE)))->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+        $used = (int) ($this->one($pdo, sprintf("SELECT COALESCE(SUM(credits), 0) FROM ai_usage WHERE created_at >= '%s' AND (status = 'success' OR (status = 'reserved' AND reserved_until >= NOW()))", $monthStart)) ?? 0);
+
+        return ['monthly' => $monthly, 'used' => $used, 'remaining' => max(0, $monthly - $used)];
     }
 
     private function count(\PDO $pdo, string $table, string $where = 'TRUE'): int

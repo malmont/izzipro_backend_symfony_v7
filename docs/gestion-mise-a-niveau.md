@@ -460,3 +460,15 @@ des étapes, bloquantes ou d'amélioration, et des champs additifs `appScreen` /
 l'application de gestion ». Les autres groupes du cheminement sont inchangés (test). La vignette « premiers pas » `cash_first_balance` recoupe
 l'étape `management.cash` : l'application la retirera de son côté ; rien n'est changé côté serveur.
 
+Correctif du 12/11/2026 : en ajoutant l'écran `gestion` à la table des écrans (`AdminStepUrlResolver::SCREENS`), le lot CHE avait laissé
+l'entrée `short_code` derrière un commentaire de fin de ligne. Les étapes `management.short_code` et `mobile_shop.short_code` n'avaient
+plus de lien vers leur écran dans EasyAdmin, sans erreur visible. Entrée rétablie ; garde-fou
+`tests/Functional/Platform/AdminStepScreensTest.php` : tout écran cité par une étape doit exister dans la table.
+
+Même correctif, crédits IA : les étapes `management.ai` et `ai.credits` comptent désormais les crédits du mois par une seule fonction
+(`SiteReadinessService::aiCredits`), avec la règle du quota qui les applique (`LandingAiQuotaService::credits`) : forfait réglé tel quel,
+0 compris ; forfait par défaut de la plateforme seulement sans réglage ; mois de facturation de la plateforme (`TIMEZONE`, le même pour
+tous les sites) ; demandes réussies et réservations en cours. Avant, `management.ai` remplaçait un forfait réglé à 0 par le forfait par
+défaut et annonçait des crédits que le quota refusait. Le mois reste celui du quota, pas celui du fuseau du site : changer cette borne
+serait un changement du quota lui-même. Test : `ManagementReadinessTest::testBothAiStepsCountTheCreditsLikeTheQuotaDoes`.
+
