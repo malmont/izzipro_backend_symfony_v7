@@ -1,0 +1,488 @@
+# Guides des écrans de la gestion (lot W2-APPRENDRE A-4, 13/11/2026) : « à quoi sert cet écran, que veulent dire ses chiffres, quoi faire ensuite »,
+# écrits pour un débutant à partir du relevé de l'application web. Servis par GET /api/gestion/ecrans/{code}/guide et par la console
+# (analyse screen.guide). Clé = code de l'écran, « . » et « - » remplacés par « _ ». Un point dont l'identifiant est une clé du lexique
+# renvoie à cette notion. Garde-fou : tests/Functional/Gestion/LexiqueApiTest.php.
+
+gestion_home:
+    purpose: 'L''accueil de la gestion. Il montre d''abord ce qui demande votre attention aujourd''hui, puis ouvre tous les autres écrans.'
+    points:
+        ou-j-en-suis:
+            label: 'Où j''en suis'
+            text: 'Le nombre de choses indispensables qu''il vous reste à faire pour que vos chiffres soient justes.'
+        ventes:
+            label: 'Ma journée'
+            text: 'Vos ventes du jour, hors taxes, et le nombre de commandes, comparés à un jour habituel à la même heure.'
+        solde:
+            label: 'Solde'
+            text: 'Votre solde saisi : le dernier solde de votre compte en banque, tel que vous l''avez entré.'
+        point-bas:
+            label: 'Point bas sur 14 jours'
+            text: 'Le niveau le plus bas que votre compte devrait atteindre dans les 14 prochains jours.'
+        stock-bas:
+            label: 'Articles en stock bas'
+            text: 'Les articles qui seront bientôt en rupture au rythme où ils se vendent.'
+    next: 'Ouvrez la prochaine étape proposée, regardez une vignette « À regarder », ou entrez dans un thème par sa carte.'
+sequences:
+    purpose: '« Où j''en suis » : la liste de ce qu''il reste à faire, séquence par séquence. Tout est calculé d''après vos données : rien ne se coche à la main.'
+    points:
+        indispensables:
+            label: 'Indispensables à faire'
+            text: 'Ce qu''il faut faire pour que l''application calcule juste. À traiter en premier.'
+        conseillees:
+            label: 'Améliorations conseillées'
+            text: 'Ce qui rend vos chiffres plus précis ou vous fait gagner du temps. Sans urgence.'
+        avancement:
+            label: 'Faites sur total'
+            text: 'Pour chaque séquence, le nombre d''étapes déjà faites sur le nombre d''étapes à faire.'
+    next: 'Ouvrez la prochaine chose à faire, ou regardez le détail d''une séquence.'
+sequences_detail:
+    purpose: 'Une séquence et ses étapes, dans l''ordre. Chaque étape dit si elle est indispensable, conseillée, faite ou sans objet pour vous.'
+    points:
+        avancement:
+            label: 'Faites sur total'
+            text: 'Le nombre d''étapes faites sur le nombre d''étapes de la séquence.'
+        badges:
+            label: 'Indispensable, Conseillé, Fait'
+            text: 'L''importance de l''étape : indispensable pour des chiffres justes, conseillée pour aller plus loin, ou déjà faite.'
+        prochaine:
+            label: 'Prochaine chose à faire'
+            text: 'L''étape que l''application vous propose maintenant, avec le bouton qui y mène.'
+    next: 'Ouvrez l''écran d''une étape, ou lancez « Préparer » quand l''étape le propose.'
+conseils:
+    purpose: 'Le guide de la période : des conseils chiffrés, calculés par l''application à partir de vos ventes, de votre stock et de votre trésorerie.'
+    points:
+        effet:
+            label: 'Effet estimé'
+            text: 'L''argent que le conseil peut rapporter ou libérer. Il est calculé par l''application ; l''IA ne fait que le rédiger.'
+        confiance:
+            label: 'Confiance'
+            text: 'Le niveau de confiance du chiffre. Élevée : il est constaté. Moyenne : il est estimé sur des données solides. Prudente : à vérifier.'
+        mesure:
+            label: 'Mesure sur 14 jours'
+            text: 'Après un conseil appliqué, ce qu''il a vraiment rapporté : les 14 jours suivants comparés aux 14 jours précédents.'
+        unites:
+            label: 'Unités IA'
+            text: 'Ce qu''il vous reste d''unités d''IA ce mois-ci. « Actualiser » le guide en utilise une.'
+    next: 'Suivez un conseil avec « Y aller », marquez-le « C''est fait », ou écartez-le s''il ne vous concerne pas.'
+conversations:
+    purpose: '« En cours » : les factures et les actions que vous préparez par conversation, avec l''état de chacune.'
+    points:
+        etat:
+            label: 'État du fil'
+            text: 'Où en est chaque fil : lecture en cours, à compléter, prêt à confirmer, confirmé.'
+        document:
+            label: 'Document'
+            text: 'Le numéro du document lu, quand le fil vient d''une facture.'
+    next: 'Ouvrez un fil pour le terminer ; filtrez sur « Factures » pour ne voir qu''elles.'
+conversation:
+    purpose: 'Le fil d''une facture ou d''une action. Vous répondez aux questions, vous vérifiez l''aperçu, puis vous confirmez. Rien n''est enregistré avant la confirmation, et une confirmation s''annule pendant 24 heures.'
+    points:
+        apercu:
+            label: 'Aperçu'
+            text: 'Ce qui sera créé ou changé si vous confirmez : lignes, quantités, coûts, prix de vente, avant et après.'
+        totaux:
+            label: 'Totaux de la facture'
+            text: 'Le total des lignes, les frais de port, les taxes et le total : à comparer à votre facture papier.'
+        unites:
+            label: 'Unités IA'
+            text: 'Une phrase libre ou une relecture du document utilise 1 unité d''IA ; une réponse par bouton n''en utilise pas.'
+    next: 'Répondez aux questions, vérifiez l''aperçu, puis « Confirmer » ; « Annuler » reste possible pendant 24 heures.'
+theme:
+    purpose: 'La page d''un thème : elle regroupe les écrans d''un même sujet (achats, ventes, argent, résultats, réglages) et montre un chiffre par écran.'
+    points:
+        cartes:
+            label: 'Une carte par écran'
+            text: 'Chaque carte ouvre un écran et affiche son chiffre du moment : lignes à recevoir, promotions en cours, solde, période en cours…'
+    next: 'Ouvrez l''écran qui vous intéresse depuis sa carte.'
+commandes:
+    purpose: 'Vos commandes fournisseurs d''une période. C''est ici que la marchandise achetée entre dans vos comptes : son coût sert ensuite à calculer vos marges.'
+    points:
+        budget-commande:
+            label: 'Budget'
+            text: 'Ce que vous aviez prévu de dépenser pour la commande, ce qui est utilisé et ce qu''il reste.'
+        cout-d-achat:
+            label: 'Coût des articles'
+            text: 'Le coût d''achat des articles de la commande. « Coût inconnu » : la marge de l''article ne peut pas être calculée.'
+        taux-de-marque:
+            label: 'Taux de marge'
+            text: 'Le taux de marque des articles de la commande : la part de marge dans leur prix de vente.'
+        coefficient:
+            label: 'Coefficient moyen'
+            text: 'En moyenne, par combien vous multipliez le coût d''achat pour fixer le prix de vente.'
+        reception:
+            label: 'Réception'
+            text: 'Rien de reçu, reçue en partie ou reçue : ce qui est arrivé en magasin.'
+    next: 'Créez une commande, recevez la marchandise, rattachez des articles, ou changez les prix des articles de la commande.'
+a_recevoir:
+    purpose: 'La marchandise commandée qui n''est pas encore arrivée. Une fois reçue, elle entre dans votre stock.'
+    points:
+        commande:
+            label: 'Commandé'
+            text: 'La quantité commandée au fournisseur.'
+        recu:
+            label: 'Reçu'
+            text: 'La quantité déjà arrivée en magasin.'
+        reste-a-recevoir:
+            label: 'Reste'
+            text: 'Ce qu''il reste à recevoir : commandé moins reçu.'
+    next: '« Tout recevoir » pour une commande arrivée entière, ou « Recevoir » ligne par ligne.'
+a_classer:
+    purpose: 'Les articles qui ne sont dans aucune commande fournisseur. Tant qu''ils n''y sont pas, leur coût d''achat est inconnu et leur marge aussi.'
+    points:
+        cout-d-achat:
+            label: 'Coût d''achat'
+            text: 'Ce que l''article vous a coûté. « Coût inconnu » tant qu''il n''est rattaché à aucune commande.'
+        stock:
+            label: 'Stock'
+            text: 'La quantité en magasin.'
+        prix:
+            label: 'Prix de vente'
+            text: 'Le prix affiché au client.'
+    next: 'Cochez des articles puis « Rattacher à une commande », ou supprimez ceux qui n''existent plus.'
+fournisseurs:
+    purpose: 'La liste de vos fournisseurs. Ils servent à créer vos commandes et à reconnaître vos factures quand l''IA les lit.'
+    points:
+        devise:
+            label: 'Devise d''achat'
+            text: 'La devise dans laquelle ce fournisseur vous facture. Les montants sont convertis dans la devise de votre site.'
+    next: 'Ajoutez un fournisseur, ou corrigez sa fiche.'
+frais_de_port:
+    purpose: 'Les frais de port de toutes les commandes d''une période, dans un seul tableau. Ils comptent dans les frais de la période.'
+    points:
+        frais:
+            label: 'Montant'
+            text: 'Ce que le transport d''une commande vous a coûté. Il s''ajoute aux frais de la période et réduit le résultat.'
+    next: 'Choisissez la période, puis ouvrez une commande pour corriger son frais de port.'
+transporteurs:
+    purpose: 'La liste des transporteurs de vos achats. Ils servent aux frais de port des commandes et à la lecture des factures de transport.'
+    points:
+        reserve:
+            label: 'Réservé'
+            text: 'Un transporteur fourni avec l''application : il ne se supprime pas.'
+    next: 'Ajoutez ou corrigez un transporteur.'
+voyages:
+    purpose: 'Vos voyages d''achat. Un voyage a des dates et un budget : les notes de frais et les commandes datées pendant le voyage s''y rattachent toutes seules.'
+    points:
+        budget-voyage:
+            label: 'Budget'
+            text: 'Le budget du voyage : ce que vous prévoyez de dépenser en frais pendant le voyage (déplacement, hôtel, repas).'
+        par-jour:
+            label: 'Par jour'
+            text: 'Le budget du voyage divisé par son nombre de jours.'
+        duree:
+            label: 'Durée'
+            text: 'Le nombre de jours du voyage.'
+    next: 'Créez un voyage, ou ouvrez le suivi d''un voyage pour voir ses dépenses jour par jour.'
+voyages_suivi:
+    purpose: 'Le suivi d''un voyage d''achat : ce que vous avez dépensé par rapport au budget, au total et jour par jour.'
+    points:
+        etat:
+            label: 'État du budget'
+            text: 'Dans le budget, bientôt atteint, ou dépassé : où vous en êtes par rapport à ce que vous aviez prévu.'
+        reste:
+            label: 'Reste'
+            text: 'Budget moins dépensé : ce que vous pouvez encore dépenser.'
+        budget-a-ce-jour:
+            label: 'Budget prévu à ce jour'
+            text: 'Ce que vous auriez dû dépenser au plus jusqu''à aujourd''hui pour tenir le budget.'
+        achats:
+            label: 'Achats de marchandises'
+            text: 'Les commandes passées pendant le voyage. Elles ne comptent pas dans le budget du voyage, mais dans le budget « Stock ».'
+    next: 'Corrigez le voyage, ou revenez à la liste des voyages.'
+articles:
+    purpose: 'Une liste d''articles, ouverte depuis une alerte, un conseil ou la liste des articles sans coût d''achat.'
+    points:
+        stock:
+            label: 'Stock'
+            text: 'La quantité en magasin.'
+        vendus:
+            label: 'Vendus en 30 jours'
+            text: 'Ce que vous avez vendu de cet article sur les 30 derniers jours.'
+        stock-bas:
+            label: 'Jours de vente restants'
+            text: 'Au rythme actuel, le nombre de jours avant la rupture. Quand il en reste peu, l''article est en stock bas.'
+        cout-d-achat:
+            label: 'Sans coût d''achat'
+            text: 'Un article sans coût : sa marge reste inconnue tant qu''aucun coût n''est saisi, sur sa fiche ou sur une ligne d''achat.'
+    next: 'Pour un article sans coût : « Ouvrir sa commande » ou « Rattacher à une commande ».'
+documents_scan:
+    purpose: 'Lire un document avec l''IA : facture fournisseur, reçu ou facture de transport. Vous vérifiez et vous corrigez ; rien n''est enregistré avant votre validation.'
+    points:
+        unites:
+            label: 'Unités IA'
+            text: 'Une lecture utilise 1 unité d''IA.'
+        total-lu:
+            label: 'Total lu, total recalculé'
+            text: 'Le total écrit sur la facture, et celui que l''application retrouve en additionnant les lignes.'
+        ecart:
+            label: 'Écart'
+            text: 'La différence entre les deux totaux. Un écart signale une ligne mal lue : vérifiez-la.'
+        a-verifier:
+            label: 'À vérifier'
+            text: 'Les documents lus qui attendent votre validation, avec leur date d''expiration.'
+    next: '« Lire le document », puis vérifiez et validez ; pour une facture, « Ouvrir le fil ».'
+prix:
+    purpose: 'Changer les prix de vente d''articles choisis, d''une commande ou d''un conseil. Vous voyez l''effet ligne par ligne avant d''appliquer, et vous pouvez annuler pendant 24 heures.'
+    points:
+        coefficient:
+            label: 'Coefficient sur le coût'
+            text: 'Le nouveau prix est le coût d''achat multiplié par le coefficient choisi.'
+        taux-de-marque:
+            label: 'Taux de marque avant → après'
+            text: 'La part de marge dans le prix, avant et après le changement.'
+        arrondi:
+            label: 'Arrondi'
+            text: 'Ajuste le nouveau prix pour qu''il sonne bien : finir en ,99, par exemple.'
+        sous-le-cout:
+            label: 'Sous le coût'
+            text: 'Un prix inférieur au coût d''achat ferait perdre de l''argent à chaque vente : il est tenu à l''écart, sauf si vous choisissez de l''appliquer quand même.'
+    next: 'Choisissez le mode et la valeur, regardez l''« Aperçu », puis « Appliquer les prix ».'
+promotions:
+    purpose: 'Des promotions datées, par article ou par variante. Le prix normal n''est jamais modifié : il revient tout seul à la fin.'
+    points:
+        promotion:
+            label: 'Prix promo'
+            text: 'Le prix réduit d''une promotion datée : il ne vaut qu''entre le début et la fin choisis.'
+        taux-de-marque:
+            label: 'Taux de marque avant → après'
+            text: 'Ce que la promotion fait à votre marge sur l''article.'
+        promotion-variante:
+            label: 'Par variante'
+            text: 'Une promotion par variante : une remise sur une taille ou une couleur précise ; pendant ses dates, elle remplace celle de l''article.'
+    next: '« Nouvelle promotion », regardez l''aperçu, appliquez ; « Terminer » arrête une promotion avant sa fin.'
+locations_prix:
+    purpose: 'Les prix de location : promotions par jours de la semaine, et changements de grilles de tarifs.'
+    points:
+        promotion-location:
+            label: 'Promotion de location'
+            text: 'Une remise sur le tarif de location, pendant des dates et des jours choisis.'
+        grille-location:
+            label: 'Grille de tarifs'
+            text: 'Les tarifs à l''heure, à la journée, à la semaine… d''une catégorie. La changer change le prix de tous ses articles louables.'
+    next: 'Créez une promotion de location ou changez une grille ; un changement peut être annulé.'
+locations:
+    purpose: 'Ce que vos locations rapportent, et à quel point vos articles sont loués.'
+    points:
+        revenu-location:
+            label: 'Revenu des locations'
+            text: 'Ce que les locations ont rapporté, compté à la date de la vente.'
+        revenu-date-location:
+            label: 'Revenu à la date de location'
+            text: 'Le même revenu, réparti sur les jours où l''article est réellement loué.'
+        occupation:
+            label: 'Occupation'
+            text: 'Le taux d''occupation : le temps où un article est loué, rapporté au temps où il pourrait l''être.'
+    next: 'Changez la plage pour comparer ; l''écran est en lecture seule.'
+publicite:
+    purpose: 'Vos campagnes de publicité : ce qu''elles ont coûté, et ce qu''elles ont rapporté d''après les ventes avant et pendant.'
+    points:
+        montant:
+            label: 'Montant'
+            text: 'Ce que la campagne a coûté, dans la devise de la régie.'
+        gain-marge:
+            label: 'Rentabilité'
+            text: 'Le gain en marge : la marge gagnée pendant la campagne par rapport à avant, pour chaque dollar dépensé.'
+    next: 'Créez une campagne, ou ouvrez-en une pour voir sa rentabilité.'
+publicite_campagne:
+    purpose: 'Une campagne et sa rentabilité : vos ventes et votre marge pendant la campagne, comparées à avant.'
+    points:
+        gain-marge:
+            label: 'Gain en marge'
+            text: 'La marge gagnée pour chaque dollar investi. Au-dessus de 1 $, la campagne rapporte plus qu''elle ne coûte.'
+        ventes:
+            label: 'Hausse des ventes'
+            text: 'Ce que vos ventes ont gagné pendant la campagne, par rapport à la même durée juste avant.'
+        marge:
+            label: 'Hausse de marge'
+            text: 'Ce que votre marge brute a gagné sur la même comparaison.'
+    next: 'Corrigez la campagne, relancez-la, ou supprimez-la.'
+campagnes_new:
+    purpose: 'Créer une campagne de publicité. Son coût compte dans la période de sa date de début.'
+    points:
+        periode:
+            label: 'Date de début'
+            text: 'Elle décide de la période où la dépense est comptée.'
+    next: 'Remplissez puis « Enregistrer », ou faites lire la facture de la régie par l''IA.'
+tresorerie:
+    purpose: 'Votre trésorerie : l''argent sur votre compte, et ce qu''il devrait devenir avec ce qui est prévu. L''application n''est pas reliée à votre banque : vous saisissez le solde.'
+    points:
+        solde:
+            label: 'Solde saisi'
+            text: 'Le solde de votre compte en banque, que vous saisissez, avec sa date.'
+        point-bas:
+            label: 'Point bas sur 14 et 90 jours'
+            text: 'Le niveau le plus bas que le compte devrait atteindre sur la durée indiquée.'
+        seuil:
+            label: 'Seuil d''alerte'
+            text: 'Le montant sous lequel vous voulez être prévenu.'
+        rapprochement:
+            label: 'Rapprochement'
+            text: 'Le rapprochement bancaire : le solde que l''application attendait, comparé au solde réel. Un écart révèle souvent une dépense oubliée.'
+    next: '« Saisir un solde » régulièrement, ajoutez vos mouvements prévus, et expliquez un écart quand il y en a un.'
+frais_fixes:
+    purpose: 'Vos frais fixes : les dépenses qui reviennent chaque mois, que vous vendiez beaucoup ou peu. Loyer, salaires, assurances, abonnements.'
+    points:
+        frais-fixes:
+            label: 'Total par mois'
+            text: 'Ce que vos frais fixes vous coûtent chaque mois, toutes catégories réunies.'
+        resultat-apres-frais-fixes:
+            label: 'Après le résultat'
+            text: 'Ils sont retirés du résultat de chaque période, au prorata de ses jours, pour donner le résultat après frais fixes.'
+    next: 'Ajoutez chaque frais fixe une seule fois ; ne le saisissez pas aussi en note de frais.'
+notes_de_frais:
+    purpose: 'Vos notes de frais. Chaque note compte dans la période de sa date, pas dans celle du jour où vous la saisissez.'
+    points:
+        frais:
+            label: 'Montant'
+            text: 'Ce que la dépense vous a coûté. Il s''ajoute aux frais de la période.'
+        periode:
+            label: 'Période'
+            text: 'La période où la note compte : celle de sa date.'
+        budget-voyage:
+            label: 'Voyage'
+            text: 'Une note datée pendant un voyage d''achat s''y rattache et compte dans le budget du voyage.'
+    next: '« Ajouter une ligne », puis « Enregistrer les notes ».'
+periodes:
+    purpose: 'La liste de vos périodes de vente. Elles sont créées toutes seules, à leur début.'
+    points:
+        periode:
+            label: 'Période'
+            text: 'Un trimestre par défaut, ou un semestre ou un mois selon le réglage du site.'
+        budget-global:
+            label: 'Budget global'
+            text: 'Le montant total que vous vous autorisez à dépenser sur la période.'
+    next: 'Ouvrez une période pour voir son résultat et son budget.'
+periode:
+    purpose: 'Le résultat d''une période : ce que vous avez vendu, ce que cela vous a coûté, et ce qu''il vous reste.'
+    points:
+        ventes:
+            label: 'Ventes'
+            text: 'Ce que vous avez vendu, hors taxes, retours retirés.'
+        marge:
+            label: 'Marge brute'
+            text: 'Ventes moins le coût d''achat des articles vendus.'
+        frais:
+            label: 'Frais'
+            text: 'Les frais de la période : ce qu''elle vous coûte en plus des articles (port, voyage, notes de frais, publicité).'
+        resultat:
+            label: 'Résultat'
+            text: 'Marge brute moins frais : ce que la période vous rapporte. Négatif, c''est une perte.'
+        resultat-apres-frais-fixes:
+            label: 'Résultat après frais fixes'
+            text: 'Le résultat de la période moins sa part de frais fixes (loyer, salaires…), comptée au prorata des jours.'
+        ventes-sans-cout:
+            label: 'Ventes sans coût connu'
+            text: 'Des ventes d''articles sans coût d''achat : elles sont tenues à l''écart de la marge.'
+    next: 'Ouvrez « Budget par poste » ou « Simuler » ; clôturez la période quand elle est terminée.'
+periode_budget:
+    purpose: 'Le budget d''une période, poste par poste : stock, voyage, frais de port, publicité, autres frais.'
+    points:
+        prevu:
+            label: 'Prévu'
+            text: 'Ce que vous prévoyez de dépenser sur le poste.'
+        reel:
+            label: 'Réel'
+            text: 'Le dépensé (réel) : ce qui est déjà dépensé, d''après vos commandes, notes de frais, frais de port et campagnes.'
+        reste:
+            label: 'Reste'
+            text: 'Prévu moins réel : ce qu''il vous reste à dépenser sans dépasser.'
+        budget-global:
+            label: 'Budget global'
+            text: 'Un plafond d''ensemble, réglé à part, indépendant des postes.'
+    next: 'Saisissez vos prévus puis « Enregistrer » ; « Reprendre le budget de l''an dernier » fait gagner du temps.'
+periode_simulation:
+    purpose: 'Le simulateur : bougez un levier (prix, promotion, publicité, prévus) et voyez l''effet sur la période. Rien n''est enregistré avant validation.'
+    points:
+        resultat:
+            label: 'Résultat simulé'
+            text: 'Le résultat de la période si vous appliquiez ce levier, à côté du résultat d''aujourd''hui.'
+        point-mort:
+            label: 'Point mort'
+            text: 'Les ventes à atteindre pour ne pas perdre d''argent.'
+        tresorerie:
+            label: 'Trésorerie après achats'
+            text: 'Ce qu''il resterait sur votre compte une fois les achats prévus payés.'
+        valeur-stock:
+            label: 'Stock de fin'
+            text: 'La valeur du stock qu''il vous resterait à la fin de la période.'
+    next: '« Simuler », demandez l''« Avis du guide » si vous voulez, puis « Valider ce prévu ».'
+preparation:
+    purpose: 'Préparer une période entière : objectif de ventes, achats, voyage, frais. Rien n''est enregistré avant « Valider ».'
+    points:
+        ventes:
+            label: 'Ventes prévues'
+            text: 'L''estimation de vos ventes : comme l''an dernier, la moyenne des dernières périodes, ou le rythme des 30 derniers jours.'
+        resultat:
+            label: 'Résultat du plan'
+            text: 'Ce que la période rapporterait si le plan se réalise.'
+        point-mort:
+            label: 'Point mort'
+            text: 'Les ventes à atteindre pour couvrir les frais prévus.'
+        tresorerie:
+            label: 'Trésorerie'
+            text: 'Le solde de départ, le point le plus bas et le solde de fin si vous suivez le plan.'
+    next: 'Remplissez, « Simuler le plan », puis « Valider » : les prévus sont écrits et le voyage est créé.'
+statistiques:
+    purpose: 'Vos chiffres sur la plage choisie, comparés à la plage précédente et à l''an dernier.'
+    points:
+        ventes:
+            label: 'Ventes'
+            text: 'Ce que vous avez vendu, hors taxes, retours retirés.'
+        taux-de-marque:
+            label: 'Taux de marque'
+            text: 'La part de marge dans vos ventes.'
+        panier-moyen:
+            label: 'Panier moyen'
+            text: 'Le montant moyen d''une commande : ventes avant retours ÷ nombre de commandes.'
+        taux-retour:
+            label: 'Taux de retour'
+            text: 'La part de vos ventes qui a été retournée.'
+        evolution:
+            label: 'Évolution'
+            text: 'La variation par rapport à la plage précédente et à la même plage l''an dernier.'
+    next: 'Changez la plage (aujourd''hui, 7 jours, ce mois-ci, exercice, une période) et le canal de vente.'
+statistiques_annee:
+    purpose: 'L''année de l''entreprise : ce qu''elle gagne ou perd sur l''exercice, mois par mois, et ce qu''il manque pour l''équilibre.'
+    points:
+        resultat-entreprise:
+            label: 'Résultat de l''entreprise'
+            text: 'Ce que l''entreprise gagne ou perd vraiment sur l''exercice, frais fixes compris.'
+        point-mort:
+            label: 'Point mort'
+            text: 'Les ventes à atteindre sur l''exercice pour ne pas perdre d''argent.'
+        projection:
+            label: 'Fin d''exercice estimée'
+            text: 'Le réalisé, plus une estimation des mois qui restent.'
+        leviers:
+            label: 'Leviers chiffrés'
+            text: 'Des actions chiffrées sur vos propres chiffres : ce qu''elles rapporteraient d''ici la fin de l''exercice.'
+    next: 'Comparez avec l''exercice précédent, ou demandez l''avis du guide.'
+reglages:
+    purpose: 'Les réglages de la gestion, valables pour tout le site, sur le web comme sur le mobile.'
+    points:
+        exercice:
+            label: 'Début de l''exercice'
+            text: 'Le mois où commence votre exercice comptable.'
+        coefficient:
+            label: 'Coefficient par défaut'
+            text: 'Le coefficient proposé pour fixer le prix d''un nouvel article, et le minimum sous lequel l''application ne propose jamais.'
+        arrondi:
+            label: 'Arrondi'
+            text: 'La façon d''arrondir un prix calculé : terminaison ,99, ,95, entier, ou aucun arrondi.'
+        unites:
+            label: 'Unités IA'
+            text: 'Ce qu''il vous reste d''unités d''IA ce mois-ci, et ce que coûte chaque action.'
+    next: 'Réglez le mois de début d''exercice et vos prix une fois pour toutes ; vous pouvez y revenir.'
+reprise:
+    purpose: 'La reprise d''historique : pour un site qui a déjà des ventes mais pas de commandes fournisseurs, donner un coût aux articles déjà vendus. Vos prix, votre stock et vos ventes ne changent pas, et la reprise s''annule.'
+    points:
+        cout-articles-vendus:
+            label: 'Coût repris'
+            text: 'Le coût donné aux articles déjà vendus : les périodes passées ont alors un coût des articles vendus, donc une marge.'
+        cout-d-achat:
+            label: 'Coût connu, coût estimé'
+            text: 'Le coût d''achat que vous saisissez, ou une estimation à partir du prix de vente et d''un coefficient.'
+        ventes-sans-cout:
+            label: 'Articles vendus sans coût'
+            text: 'Les articles dont les ventes passées n''ont pas encore de coût : ce sont des ventes sans coût connu.'
+    next: 'Choisissez la profondeur (6, 12 ou 24 mois), « Calculer », corrigez les coûts, puis « Reprendre l''historique ».'

@@ -82,7 +82,9 @@ final class LexiqueCatalog
     ];
 
     /**
-     * Chiffre d'une analyse => notion du lexique : toute carte de chiffre peut ouvrir sa définition (`term`). La forme « analyse.chiffre »
+     * Chiffre d'une analyse => notion du lexique : toute carte de chiffre peut ouvrir sa définition (`term`). RÈGLE (lot A-4) : le
+     * libellé de la carte reprend le terme du lexique (« Taux de marque », jamais « Taux de marge » sous une leçon « Taux de marque »),
+     * avec ce qu'elle compte si besoin ; un chiffre qui mesure autre chose que la notion ne porte pas de `term`. La forme « analyse.chiffre »
      * l'emporte sur le nom du chiffre seul (le résultat de l'exercice n'est pas celui d'une période).
      */
     public const FIGURE_TERMS = [
@@ -93,12 +95,10 @@ final class LexiqueCatalog
         'stockValue' => 'valeur-stock', 'stockSaleValue' => 'valeur-stock', 'stockCostValue' => 'valeur-stock', 'lowStockItems' => 'stock-bas',
         'fixedCosts' => 'frais-fixes', 'breakEvenSales' => 'point-mort', 'gap' => 'point-mort',
         'balance' => 'solde', 'balanceDate' => 'solde', 'threshold' => 'seuil', 'belowThresholdFrom' => 'seuil', 'lowestAmount' => 'point-bas', 'lowestDate' => 'point-bas',
-        'endAmount' => 'tresorerie', 'cashStatus' => 'tresorerie',
+        'lowest14Amount' => 'point-bas', 'lowest14Date' => 'point-bas', 'cashStatus' => 'tresorerie',
         'planned' => 'prevu', 'actual' => 'reel', 'remaining' => 'reste', 'budgetStatus' => 'budget',
         'missingCostItems' => 'cout-d-achat', 'cost' => 'cout-d-achat', 'coefficient' => 'coefficient', 'proposedCoefficient' => 'coefficient',
-        'verdict' => 'verdict', 'verdictKeep' => 'verdict', 'verdictRaise' => 'verdict', 'verdictLower' => 'verdict', 'keepUnder' => 'verdict',
-        'similarCount' => 'semblables', 'similarSoldShare' => 'semblables', 'similarWeeksToSell' => 'semblables', 'similarDisplayedCoefficient' => 'semblables',
-        'similarObtainedCoefficient' => 'semblables', 'similarDiscountRate' => 'semblables',
+        'verdict' => 'verdict', 'verdictKeep' => 'verdict', 'verdictRaise' => 'verdict', 'verdictLower' => 'verdict', 'similarCount' => 'semblables',
     ];
 
     public static function has(mixed $key): bool

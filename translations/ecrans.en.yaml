@@ -1,0 +1,488 @@
+# Screen guides of the management app (lot W2-APPRENDRE A-4, 13/11/2026): “what this screen is for, what its figures mean, what to do next”,
+# written for a beginner from the survey of the web app. Served by GET /api/gestion/ecrans/{code}/guide and by the console
+# (analysis screen.guide). Key = screen code, “.” and “-” replaced by “_”. A point whose id is a glossary key links to that notion.
+# Guard: tests/Functional/Gestion/LexiqueApiTest.php.
+
+gestion_home:
+    purpose: 'The management home. It first shows what needs your attention today, then opens every other screen.'
+    points:
+        ou-j-en-suis:
+            label: 'Where I stand'
+            text: 'The number of essential things left to do so that your figures are right.'
+        ventes:
+            label: 'My day'
+            text: 'Your sales of the day, before taxes, and the number of orders, compared with a usual day at the same time.'
+        solde:
+            label: 'Balance'
+            text: 'Your entered balance: the last balance of your bank account, as you typed it in.'
+        point-bas:
+            label: 'Low point over 14 days'
+            text: 'The lowest level your account should reach in the next 14 days.'
+        stock-bas:
+            label: 'Low-stock items'
+            text: 'Items in low stock: they will soon be out of stock at the pace they sell.'
+    next: 'Open the next suggested step, look at a “To look at” tile, or enter a theme through its card.'
+sequences:
+    purpose: '“Where I stand”: the list of what is left to do, sequence by sequence. Everything is computed from your data: nothing is ticked by hand.'
+    points:
+        indispensables:
+            label: 'Essential to do'
+            text: 'What must be done for the app to compute correctly. Deal with these first.'
+        conseillees:
+            label: 'Recommended improvements'
+            text: 'What makes your figures more precise or saves you time. No rush.'
+        avancement:
+            label: 'Done out of total'
+            text: 'For each sequence, the number of steps already done out of the number of steps to do.'
+    next: 'Open the next thing to do, or look at the details of a sequence.'
+sequences_detail:
+    purpose: 'A sequence and its steps, in order. Each step says whether it is essential, recommended, done or not applicable to you.'
+    points:
+        avancement:
+            label: 'Done out of total'
+            text: 'The number of steps done out of the number of steps of the sequence.'
+        badges:
+            label: 'Essential, Recommended, Done'
+            text: 'The importance of the step: essential for correct figures, recommended to go further, or already done.'
+        prochaine:
+            label: 'Next thing to do'
+            text: 'The step the app suggests now, with the button that leads to it.'
+    next: 'Open the screen of a step, or start “Prepare” when the step offers it.'
+conseils:
+    purpose: 'The guide of the period: costed advice, computed by the app from your sales, your stock and your cash position.'
+    points:
+        effet:
+            label: 'Estimated effect'
+            text: 'The money the advice can bring in or free up. It is computed by the app; the AI only writes it up.'
+        confiance:
+            label: 'Confidence'
+            text: 'The confidence level of the figure. High: it is observed. Medium: it is estimated from solid data. Cautious: to be checked.'
+        mesure:
+            label: 'Measurement over 14 days'
+            text: 'After an advice is applied, what it really brought in: the following 14 days compared with the previous 14 days.'
+        unites:
+            label: 'AI units'
+            text: 'What you have left of AI units this month. “Refresh” the guide uses one.'
+    next: 'Follow an advice with “Go”, mark it “Done”, or dismiss it if it does not concern you.'
+conversations:
+    purpose: '“In progress”: the invoices and actions you are preparing by conversation, with the state of each.'
+    points:
+        etat:
+            label: 'State of the thread'
+            text: 'Where each thread stands: reading in progress, to complete, ready to confirm, confirmed.'
+        document:
+            label: 'Document'
+            text: 'The number of the document read, when the thread comes from an invoice.'
+    next: 'Open a thread to finish it; filter on “Invoices” to see only those.'
+conversation:
+    purpose: 'The thread of an invoice or an action. You answer the questions, check the preview, then confirm. Nothing is saved before confirmation, and a confirmation can be undone for 24 hours.'
+    points:
+        apercu:
+            label: 'Preview'
+            text: 'What will be created or changed if you confirm: lines, quantities, costs, selling prices, before and after.'
+        totaux:
+            label: 'Invoice totals'
+            text: 'The total of the lines, the shipping costs, the taxes and the total: to compare with your paper invoice.'
+        unites:
+            label: 'AI units'
+            text: 'A free sentence or a new reading of the document uses 1 AI unit; an answer by button uses none.'
+    next: 'Answer the questions, check the preview, then “Confirm”; “Undo” stays possible for 24 hours.'
+theme:
+    purpose: 'The page of a theme: it groups the screens of one subject (purchases, sales, money, results, settings) and shows one figure per screen.'
+    points:
+        cartes:
+            label: 'One card per screen'
+            text: 'Each card opens a screen and shows its current figure: lines to receive, promotions in progress, balance, current period…'
+    next: 'Open the screen you are interested in from its card.'
+commandes:
+    purpose: 'Your supplier orders for a period. This is where purchased merchandise enters your accounts: its cost is then used to compute your margins.'
+    points:
+        budget-commande:
+            label: 'Budget'
+            text: 'What you had planned to spend on the order, what is used and what is left.'
+        cout-d-achat:
+            label: 'Cost of the items'
+            text: 'The purchase cost of the items of the order. “Unknown cost”: the margin of the item cannot be computed.'
+        taux-de-marque:
+            label: 'Margin rate'
+            text: 'The margin rate of the items of the order: the share of margin in their selling price.'
+        coefficient:
+            label: 'Average markup multiplier'
+            text: 'On average, by how much you multiply the purchase cost to set the selling price.'
+        reception:
+            label: 'Receipt'
+            text: 'Nothing received, partly received or received: what has arrived in store.'
+    next: 'Create an order, receive the merchandise, attach items, or change the prices of the items of the order.'
+a_recevoir:
+    purpose: 'The merchandise ordered that has not arrived yet. Once received, it enters your stock.'
+    points:
+        commande:
+            label: 'Ordered'
+            text: 'The quantity ordered from the supplier.'
+        recu:
+            label: 'Received'
+            text: 'The quantity already arrived in store.'
+        reste-a-recevoir:
+            label: 'Remaining'
+            text: 'What is left to receive: ordered minus received.'
+    next: '“Receive all” for an order that arrived complete, or “Receive” line by line.'
+a_classer:
+    purpose: 'The items that are in no supplier order. As long as they are not, their purchase cost is unknown and so is their margin.'
+    points:
+        cout-d-achat:
+            label: 'Purchase cost'
+            text: 'What the item cost you. “Unknown cost” as long as it is attached to no order.'
+        stock:
+            label: 'Stock'
+            text: 'The quantity in store.'
+        prix:
+            label: 'Selling price'
+            text: 'The price shown to the customer.'
+    next: 'Tick items then “Attach to an order”, or delete those that no longer exist.'
+fournisseurs:
+    purpose: 'The list of your suppliers. They are used to create your orders and to recognise your invoices when the AI reads them.'
+    points:
+        devise:
+            label: 'Purchase currency'
+            text: 'The currency in which this supplier invoices you. Amounts are converted into the currency of your site.'
+    next: 'Add a supplier, or correct its record.'
+frais_de_port:
+    purpose: 'The shipping costs of all the orders of a period, in a single table. They count in the expenses of the period.'
+    points:
+        frais:
+            label: 'Amount'
+            text: 'What the transport of an order cost you. It is added to the period expenses and reduces the profit.'
+    next: 'Choose the period, then open an order to correct its shipping cost.'
+transporteurs:
+    purpose: 'The list of the carriers of your purchases. They are used for the shipping costs of orders and for reading transport invoices.'
+    points:
+        reserve:
+            label: 'Reserved'
+            text: 'A carrier provided with the app: it cannot be deleted.'
+    next: 'Add or correct a carrier.'
+voyages:
+    purpose: 'Your buying trips. A trip has dates and a budget: the expense reports and the orders dated during the trip attach to it by themselves.'
+    points:
+        budget-voyage:
+            label: 'Budget'
+            text: 'The trip budget: what you plan to spend on expenses during the trip (travel, hotel, meals).'
+        par-jour:
+            label: 'Per day'
+            text: 'The trip budget divided by its number of days.'
+        duree:
+            label: 'Duration'
+            text: 'The number of days of the trip.'
+    next: 'Create a trip, or open the follow-up of a trip to see its spending day by day.'
+voyages_suivi:
+    purpose: 'The follow-up of a buying trip: what you spent compared with the budget, in total and day by day.'
+    points:
+        etat:
+            label: 'Budget status'
+            text: 'Within budget, nearly reached, or exceeded: where you stand compared with what you had planned.'
+        reste:
+            label: 'Remaining'
+            text: 'Budget minus spent: what you can still spend.'
+        budget-a-ce-jour:
+            label: 'Budget planned to date'
+            text: 'The most you should have spent up to today to stay within the budget.'
+        achats:
+            label: 'Merchandise purchases'
+            text: 'The orders placed during the trip. They do not count in the trip budget, but in the “Stock” budget.'
+    next: 'Correct the trip, or go back to the list of trips.'
+articles:
+    purpose: 'A list of items, opened from an alert, an advice or the list of items without a purchase cost.'
+    points:
+        stock:
+            label: 'Stock'
+            text: 'The quantity in store.'
+        vendus:
+            label: 'Sold in 30 days'
+            text: 'What you sold of this item over the last 30 days.'
+        stock-bas:
+            label: 'Days of sales left'
+            text: 'At the current pace, the number of days before running out. When few are left, the item is in low stock.'
+        cout-d-achat:
+            label: 'Without purchase cost'
+            text: 'An item without a cost: its margin stays unknown as long as no cost is entered, on its record or on a purchase line.'
+    next: 'For an item without a cost: “Open its order” or “Attach to an order”.'
+documents_scan:
+    purpose: 'Reading a document with the AI: supplier invoice, receipt or transport invoice. You check and correct; nothing is saved before you validate.'
+    points:
+        unites:
+            label: 'AI units'
+            text: 'A reading uses 1 AI unit.'
+        total-lu:
+            label: 'Total read, total recomputed'
+            text: 'The total written on the invoice, and the one the app finds by adding up the lines.'
+        ecart:
+            label: 'Gap'
+            text: 'The difference between the two totals. A gap points to a misread line: check it.'
+        a-verifier:
+            label: 'To check'
+            text: 'The documents read that are waiting for your validation, with their expiry date.'
+    next: '“Read the document”, then check and validate; for an invoice, “Open the thread”.'
+prix:
+    purpose: 'Changing the selling prices of chosen items, of an order or of an advice. You see the effect line by line before applying, and you can undo for 24 hours.'
+    points:
+        coefficient:
+            label: 'Markup multiplier on the cost'
+            text: 'The new price is the purchase cost multiplied by the chosen markup multiplier.'
+        taux-de-marque:
+            label: 'Margin rate before → after'
+            text: 'The share of margin in the price, before and after the change.'
+        arrondi:
+            label: 'Rounding'
+            text: 'Adjusts the new price so that it sounds right: ending in .99, for example.'
+        sous-le-cout:
+            label: 'Below cost'
+            text: 'A price lower than the purchase cost would lose money on each sale: it is held back, unless you choose to apply it anyway.'
+    next: 'Choose the mode and the value, look at the “Preview”, then “Apply the prices”.'
+promotions:
+    purpose: 'Dated promotions, by item or by variant. The regular price is never changed: it comes back by itself at the end.'
+    points:
+        promotion:
+            label: 'Promotional price'
+            text: 'The reduced price of a dated promotion: it only applies between the chosen start and end.'
+        taux-de-marque:
+            label: 'Margin rate before → after'
+            text: 'What the promotion does to your margin on the item.'
+        promotion-variante:
+            label: 'By variant'
+            text: 'A promotion by variant: a discount on a specific size or colour; during its dates, it replaces that of the item.'
+    next: '“New promotion”, look at the preview, apply; “End” stops a promotion before its end.'
+locations_prix:
+    purpose: 'Rental prices: promotions by days of the week, and changes of rate grids.'
+    points:
+        promotion-location:
+            label: 'Rental promotion'
+            text: 'A discount on the rental rate, during chosen dates and days.'
+        grille-location:
+            label: 'Rate grid'
+            text: 'The rates per hour, per day, per week… of a category. Changing it changes the price of all its rentable items.'
+    next: 'Create a rental promotion or change a grid; a change can be undone.'
+locations:
+    purpose: 'What your rentals bring in, and how much your items are rented.'
+    points:
+        revenu-location:
+            label: 'Rental income'
+            text: 'What rentals brought in, counted at the date of the sale.'
+        revenu-date-location:
+            label: 'Income at the rental date'
+            text: 'The same income, spread over the days the item is actually rented.'
+        occupation:
+            label: 'Occupancy'
+            text: 'The occupancy rate: the time an item is rented, compared with the time it could be.'
+    next: 'Change the range to compare; the screen is read-only.'
+publicite:
+    purpose: 'Your advertising campaigns: what they cost, and what they brought in according to sales before and during.'
+    points:
+        montant:
+            label: 'Amount'
+            text: 'What the campaign cost, in the currency of the advertising platform.'
+        gain-marge:
+            label: 'Profitability'
+            text: 'The margin gained during the campaign compared with before, for each dollar spent.'
+    next: 'Create a campaign, or open one to see its profitability.'
+publicite_campagne:
+    purpose: 'A campaign and its profitability: your sales and your margin during the campaign, compared with before.'
+    points:
+        gain-marge:
+            label: 'Margin gain'
+            text: 'The margin gained for each dollar invested. Above $1, the campaign brings in more than it costs.'
+        ventes:
+            label: 'Sales increase'
+            text: 'What your sales gained during the campaign, compared with the same duration just before.'
+        marge:
+            label: 'Margin increase'
+            text: 'What your gross margin gained on the same comparison.'
+    next: 'Correct the campaign, run it again, or delete it.'
+campagnes_new:
+    purpose: 'Creating an advertising campaign. Its cost counts in the period of its start date.'
+    points:
+        periode:
+            label: 'Start date'
+            text: 'It decides the period in which the expense is counted.'
+    next: 'Fill in then “Save”, or have the invoice of the advertising platform read by the AI.'
+tresorerie:
+    purpose: 'Your cash position: the money in your account, and what it should become with what is planned. The app is not connected to your bank: you enter the balance.'
+    points:
+        solde:
+            label: 'Entered balance'
+            text: 'The balance of your bank account, which you enter, with its date.'
+        point-bas:
+            label: 'Low point over 14 and 90 days'
+            text: 'The lowest level the account should reach over the stated duration.'
+        seuil:
+            label: 'Alert threshold'
+            text: 'The amount below which you want to be warned.'
+        rapprochement:
+            label: 'Reconciliation'
+            text: 'The bank reconciliation: the balance the app expected, compared with the real balance. A gap often reveals a forgotten expense.'
+    next: '“Enter a balance” regularly, add your planned movements, and explain a gap when there is one.'
+frais_fixes:
+    purpose: 'Your fixed costs: the expenses that come back every month, whether you sell a lot or a little. Rent, salaries, insurance, subscriptions.'
+    points:
+        frais-fixes:
+            label: 'Total per month'
+            text: 'What your fixed costs cost you each month, all categories together.'
+        resultat-apres-frais-fixes:
+            label: 'After the profit'
+            text: 'They are taken out of the profit of each period, in proportion to its days, to give the profit after fixed costs.'
+    next: 'Add each fixed cost only once; do not also enter it as an expense report.'
+notes_de_frais:
+    purpose: 'Your expense reports. Each one counts in the period of its date, not in that of the day you enter it.'
+    points:
+        frais:
+            label: 'Amount'
+            text: 'What the expense cost you. It is added to the period expenses.'
+        periode:
+            label: 'Period'
+            text: 'The period in which the expense counts: that of its date.'
+        budget-voyage:
+            label: 'Trip'
+            text: 'An expense dated during a buying trip attaches to it and counts in the trip budget.'
+    next: '“Add a line”, then “Save the expense reports”.'
+periodes:
+    purpose: 'The list of your sales periods. They are created by themselves, at their start.'
+    points:
+        periode:
+            label: 'Period'
+            text: 'A quarter by default, or a half-year or a month depending on the site setting.'
+        budget-global:
+            label: 'Overall budget'
+            text: 'The total amount you allow yourself to spend over the period.'
+    next: 'Open a period to see its profit and its budget.'
+periode:
+    purpose: 'The profit of a period: what you sold, what it cost you, and what you have left.'
+    points:
+        ventes:
+            label: 'Sales'
+            text: 'What you sold, before taxes, returns removed.'
+        marge:
+            label: 'Gross margin'
+            text: 'Sales minus the purchase cost of the items sold.'
+        frais:
+            label: 'Expenses'
+            text: 'The period expenses: what it costs you on top of the items (shipping, trips, expense reports, advertising).'
+        resultat:
+            label: 'Profit'
+            text: 'Gross margin minus expenses: what the period earns you. Negative, it is a loss.'
+        resultat-apres-frais-fixes:
+            label: 'Profit after fixed costs'
+            text: 'The profit of the period minus its share of fixed costs (rent, salaries…), counted in proportion to the days.'
+        ventes-sans-cout:
+            label: 'Sales without known cost'
+            text: 'Sales of items without a purchase cost: they are kept out of the margin.'
+    next: 'Open “Budget by category” or “Simulate”; close the period when it is over.'
+periode_budget:
+    purpose: 'The budget of a period, category by category: stock, trip, shipping costs, advertising, other expenses.'
+    points:
+        prevu:
+            label: 'Planned'
+            text: 'What you plan to spend on the category.'
+        reel:
+            label: 'Actual'
+            text: 'Spent (actual): what has already been spent, from your orders, expense reports, shipping costs and campaigns.'
+        reste:
+            label: 'Remaining'
+            text: 'Planned minus actual: what you can still spend without going over.'
+        budget-global:
+            label: 'Overall budget'
+            text: 'An overall ceiling, set separately, independent of the categories.'
+    next: 'Enter your planned amounts then “Save”; “Take last year''s budget” saves time.'
+periode_simulation:
+    purpose: 'The simulator: move a lever (price, promotion, advertising, planned amounts) and see the effect on the period. Nothing is saved before validation.'
+    points:
+        resultat:
+            label: 'Simulated profit'
+            text: 'The profit of the period if you applied this lever, next to today''s profit.'
+        point-mort:
+            label: 'Break-even point'
+            text: 'The sales to reach so as not to lose money.'
+        tresorerie:
+            label: 'Cash after purchases'
+            text: 'Your cash position after purchases: what would be left in your account once the planned purchases are paid.'
+        valeur-stock:
+            label: 'Closing stock'
+            text: 'The stock value you would have left at the end of the period.'
+    next: '“Simulate”, ask for the “Guide''s opinion” if you wish, then “Validate this plan”.'
+preparation:
+    purpose: 'Preparing a whole period: sales target, purchases, trip, expenses. Nothing is saved before “Validate”.'
+    points:
+        ventes:
+            label: 'Planned sales'
+            text: 'The estimate of your sales: like last year, the average of the last periods, or the pace of the last 30 days.'
+        resultat:
+            label: 'Profit of the plan'
+            text: 'What the period would earn if the plan comes true.'
+        point-mort:
+            label: 'Break-even point'
+            text: 'The sales to reach to cover the planned expenses.'
+        tresorerie:
+            label: 'Cash position'
+            text: 'The opening balance, the lowest point and the closing balance if you follow the plan.'
+    next: 'Fill in, “Simulate the plan”, then “Validate”: the planned amounts are written and the trip is created.'
+statistiques:
+    purpose: 'Your figures over the chosen range, compared with the previous range and with last year.'
+    points:
+        ventes:
+            label: 'Sales'
+            text: 'What you sold, before taxes, returns removed.'
+        taux-de-marque:
+            label: 'Margin rate'
+            text: 'The share of margin in your sales.'
+        panier-moyen:
+            label: 'Average order value'
+            text: 'The average amount of an order: sales before returns ÷ number of orders.'
+        taux-retour:
+            label: 'Return rate'
+            text: 'The share of your sales that was returned.'
+        evolution:
+            label: 'Change'
+            text: 'The variation compared with the previous range and with the same range last year.'
+    next: 'Change the range (today, 7 days, this month, fiscal year, a period) and the sales channel.'
+statistiques_annee:
+    purpose: 'The business year: what it earns or loses over the fiscal year, month by month, and what is missing to break even.'
+    points:
+        resultat-entreprise:
+            label: 'Business profit'
+            text: 'What the business really earns or loses over the fiscal year, fixed costs included.'
+        point-mort:
+            label: 'Break-even point'
+            text: 'The sales to reach over the fiscal year so as not to lose money.'
+        projection:
+            label: 'Estimated year end'
+            text: 'What is done, plus an estimate of the remaining months.'
+        leviers:
+            label: 'Costed levers'
+            text: 'Actions costed on your own figures: what they would bring in by the end of the fiscal year.'
+    next: 'Compare with the previous fiscal year, or ask for the guide''s opinion.'
+reglages:
+    purpose: 'The management settings, valid for the whole site, on the web as on mobile.'
+    points:
+        exercice:
+            label: 'Start of the fiscal year'
+            text: 'The month in which your accounting year starts.'
+        coefficient:
+            label: 'Default markup multiplier'
+            text: 'The markup multiplier suggested to set the price of a new item, and the minimum below which the app never suggests.'
+        arrondi:
+            label: 'Rounding'
+            text: 'How a computed price is rounded: ending in .99, .95, whole number, or no rounding.'
+        unites:
+            label: 'AI units'
+            text: 'What you have left of AI units this month, and what each action costs.'
+    next: 'Set the start month of the fiscal year and your prices once and for all; you can come back to them.'
+reprise:
+    purpose: 'History import: for a site that already has sales but no supplier orders, giving a cost to the items already sold. Your prices, your stock and your sales do not change, and the import can be undone.'
+    points:
+        cout-articles-vendus:
+            label: 'Imported cost'
+            text: 'The cost given to the items already sold: past periods then have a cost of goods sold, hence a margin.'
+        cout-d-achat:
+            label: 'Known cost, estimated cost'
+            text: 'The purchase cost you enter, or an estimate from the selling price and a markup multiplier.'
+        ventes-sans-cout:
+            label: 'Items sold without a cost'
+            text: 'The items whose past sales do not have a cost yet: these are sales without known cost.'
+    next: 'Choose the depth (6, 12 or 24 months), “Compute”, correct the costs, then “Import the history”.'

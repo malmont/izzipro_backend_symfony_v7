@@ -49,6 +49,10 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * le premier texte qui l'évoque ; un tableau rend ses colonnes libellées et ses cellules rédigées ; un état est donné au modèle en
  * minuscule, pour s'écrire au milieu d'une phrase.
  *
+ * Lot W2-APPRENDRE A-4 (13/11/2026) : le GUIDE de l'écran d'où vient la question (analyse `screen.guide`) est un bloc `guide` écrit
+ * par le serveur. Demandé seul (« explique-moi cet écran »), il est assemblé sans appel 2, avec les chiffres des analyses de l'écran :
+ * aucune unité. Un état qui n'est pas un jugement (« sans prévu », « aucun solde saisi ») est donné au modèle par une phrase entière.
+ *
  * Unités : 1 par réponse rédigée par le modèle (demande de précision rédigée par lui comprise) ; aucune si le serveur répond lui-même
  * (question hors périmètre, précision demandée par le serveur) ou si l'IA échoue.
  */
@@ -66,6 +70,10 @@ class ConsoleResponder
     /** Champs d'une ligne qui sont des montants en cents */
     private const MONEY_KEYS = ['price', 'cost', 'sales', 'grossMargin', 'result', 'planned', 'actual', 'remaining', 'effect', 'revenue'];
     private const PERCENT_KEYS = ['similarSoldShare'];
+    /** Chiffre d'état => jeu de libellés de son code (`console.values.*`, `console.sentences.*`) */
+    private const STATE_SETS = ['cashStatus' => 'cash', 'budgetStatus' => 'budget', 'verdict' => 'verdict'];
+    /** Chiffres montrés par analyse de l'écran sous un guide demandé seul */
+    private const GUIDE_FIGURES = 6;
     /** Champs d'une ligne dont la valeur est un code : le modèle en reçoit le libellé rédigé (jeu de libellés `console.values.*`) */
     /** Unités d'un chiffre qu'un nombre écrit dans un texte peut désigner (ni une date ni un texte) */
     private const NUMERIC_UNITS = ['money', 'percent', 'count', 'days', 'ratio'];
@@ -121,6 +129,9 @@ class ConsoleResponder
             }
             $selected = [];
             foreach ($choice['kind'] === 'analyses' ? $choice['analyses'] : [] as $a) {
+                if ($a['key'] === 'screen.guide') {
+                    $a['params'] = ['screen' => $screen['code'] ?? null]; // l'écran du guide est celui du contexte, jamais celui que dirait le modèle
+                }
                 // ce que le modèle laisse vide est pris à l'écran (sa période, son article, son année) ; ce qu'il nomme l'emporte
                 $params = $this->analyses->accept($a['key'], self::withScreen($a['key'], $a['params'], $screenParams, $screen['code'] ?? null));
                 if ($params !== null) {
@@ -152,20 +163,43 @@ class ConsoleResponder
             foreach ($results as $r) {
                 if ($r['lesson'] !== null) {
                     $lessons[] = $this->lessonBlock($r['lesson'], $this->illustration->of($r['lesson']['key'], $r['figures'], $r['period'], $locale));
+                } elseif ($r['guide'] !== null) {
+                    $lessons[] = ['type' => 'guide'] + $r['guide'] + ['source' => $r['source']];
                 }
             }
-            $listed = fn (): array => array_map(fn (array $r) => ['key' => $r['key'], 'ref' => $r['ref'], 'title' => $r['title'], 'params' => $r['lesson'] === null ? $r['source']['params'] : ['term' => $r['lesson']['key']], 'source' => $r['source'], 'period' => $r['period'], 'computedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM)], $results);
+            // les analyses de la réponse, lues au moment de la rendre : un guide demandé seul y ajoute celles de l'écran
+            $listed = function () use (&$results): array {
+                return array_map(fn (array $r) => ['key' => $r['key'], 'ref' => $r['ref'], 'title' => $r['title'], 'params' => $r['lesson'] === null ? $r['source']['params'] : ['term' => $r['lesson']['key']], 'source' => $r['source'], 'period' => $r['period'], 'computedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM)], $results);
+            };
             if (count($lessons) === count($results)) {
                 // La question ne demande QUE des notions : la réponse est assemblée par le serveur (la leçon, puis ses chiffres), sans appel 2.
                 // Aucune unité : rien n'est rédigé par le modèle. Comptée au journal, pour savoir combien de questions sont des définitions.
                 $blocks = [];
+                $taught = [];
                 foreach ($results as $i => $r) {
                     $blocks[] = $lessons[$i];
+                    $taught[] = $r['lesson']['key'] ?? ('écran ' . $r['guide']['screen']);
                     if ($r['figures'] !== []) {
                         $blocks[] = $this->figuresBlock(array_column($r['figures'], 'id'), $results);
                     }
                 }
-                $this->logger->notice(sprintf('[Console] leçon : réponse %d assemblée par le serveur, sans rédaction (%s)', $messageId, implode(', ', array_map(fn (array $r) => $r['lesson']['key'], $results))));
+                if (array_filter($results, fn (array $r) => $r['guide'] !== null) !== []) {
+                    // « explique-moi cet écran » : après le guide, les chiffres du moment de l'écran, par ses analyses par défaut
+                    foreach ($screen['analysesParDefaut'] ?? [] as $default) {
+                        $r = $this->analyses->run($default['key'], array_diff_key($default, ['key' => 1]), $locale);
+                        $r['ref'] = 'a' . (count($results) + 1);
+                        foreach ($r['figures'] as $i => $f) {
+                            $r['figures'][$i]['id'] = $r['ref'] . '.' . $f['id'];
+                        }
+                        $results[] = $r;
+                        $canon = self::canonical($results);
+                        $own = array_slice(array_values(array_filter(array_column($r['figures'], 'id'), fn (string $id) => $canon[$id] === $id)), 0, self::GUIDE_FIGURES);
+                        if ($own !== []) {
+                            $blocks[] = $this->figuresBlock($own, $results);
+                        }
+                    }
+                }
+                $this->logger->notice(sprintf('[Console] leçon : réponse %d assemblée par le serveur, sans rédaction (%s)', $messageId, implode(', ', $taught)));
                 $this->console->finish($messageId, $content, ConsoleService::STATE_DONE, ['blocks' => $blocks, 'analyses' => $listed(), 'proposals' => [], 'lesson' => true], false, $stats);
 
                 return;
@@ -235,7 +269,7 @@ class ConsoleResponder
             foreach ($r['figures'] as $f) {
                 // un état (chiffre à code) est donné en minuscule : il s'écrit au milieu d'une phrase (« la trésorerie est correcte ») ; la carte garde sa majuscule
                 $written = $this->display($f['value'], (string) $f['unit'], $locale);
-                $figure = ['id' => $f['id'], 'label' => $note((string) $f['label']), 'display' => $note(isset($f['code']) ? mb_strtolower($written) : $written)];
+                $figure = ['id' => $f['id'], 'label' => $note((string) $f['label']), 'display' => $note(isset($f['code']) ? $this->state($f, mb_strtolower($written), $locale) : $written)];
                 foreach (['previous', 'lastYear', 'delta', 'deltaLastYear'] as $k) {
                     if (isset($f[$k])) {
                         $figure[$k] = $note($this->display($f[$k], (string) $f['unit'], $locale));
@@ -276,6 +310,10 @@ class ConsoleResponder
             }
             $lesson = $r['lesson'] === null ? [] : ['lecon' => ['terme' => $note((string) $r['lesson']['term']), 'definition' => $note((string) $r['lesson']['definition']),
                 'illustration' => ($ill = $this->illustration->of($r['lesson']['key'], $r['figures'], $r['period'], $locale)) === null ? null : $note($ill)]];
+            if ($r['guide'] !== null) {
+                $lesson = ['guide' => ['ecran' => $note((string) $r['guide']['title']), 'role' => $note((string) $r['guide']['purpose']),
+                    'points' => array_map(fn (array $p) => ['libelle' => $note((string) $p['label']), 'texte' => $note((string) $p['text'])], $r['guide']['points'])]];
+            }
             $period = $r['period'] === null ? [] : ['period' => $note((string) $r['period']['label'])];
             foreach (['previousLabel', 'lastYearLabel'] as $k) {
                 if (isset($r['period'][$k])) {
@@ -665,6 +703,22 @@ class ConsoleResponder
     }
 
     /**
+     * L'état d'un chiffre à code, tel que le modèle le lit : une PHRASE entière du serveur quand l'état n'est pas un jugement (« Aucun
+     * budget n'est prévu pour cette période », « Aucun solde n'a encore été saisi » : rien à glisser dans « est … »), sinon son libellé
+     * en minuscule (« correct », « à monter »).
+     *
+     * @param array<string, mixed> $figure
+     */
+    private function state(array $figure, string $lowercase, string $locale): string
+    {
+        $name = str_contains((string) $figure['id'], '.') ? substr((string) $figure['id'], (int) strrpos((string) $figure['id'], '.') + 1) : (string) $figure['id'];
+        $id = 'console.sentences.' . (self::STATE_SETS[$name] ?? 'x') . '.' . $figure['code'];
+        $sentence = $this->translator->trans($id, [], 'gestion', $locale === 'en' ? 'en' : 'fr');
+
+        return $sentence === $id ? $lowercase : $sentence;
+    }
+
+    /**
      * Ligne d'un tableau telle que l'application l'affiche : un champ à code (état du budget, verdict, confiance) rend son libellé
      * rédigé, le code restant à côté (`statusCode`, `verdictCode`) ; un mois « 2026-11 » rend « novembre 2026 » (`monthKey` garde la clé).
      *
@@ -829,6 +883,7 @@ class ConsoleResponder
         return trim(implode(' ', array_map(fn (array $b) => match ($b['type'] ?? null) {
             'text' => (string) $b['text'],
             'lesson' => $b['term'] . ' : ' . $b['definition'], // une leçon compte dans l'échange : la question suivante peut s'y référer
+            'guide' => $b['title'] . ' : ' . $b['purpose'],
             default => '',
         }, array_filter($blocks, 'is_array'))));
     }

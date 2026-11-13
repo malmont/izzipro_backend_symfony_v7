@@ -5,6 +5,7 @@ namespace App\Gestion\Analysis;
 use App\Entity\Collections;
 use App\Gestion\Lexique\LexiqueCatalog;
 use App\Gestion\Lexique\LexiqueTexts;
+use App\Gestion\Lexique\ScreenGuides;
 use App\Gestion\Pricing\CoefficientRule;
 use App\Gestion\Services\GestionAdviceService;
 use App\Gestion\Services\GestionBudgetService;
@@ -56,6 +57,8 @@ class AnalysisCatalog
         'articles.new' => ['params' => ['periodId'], 'required' => [], 'screen' => 'articles', 'route' => null],
         'advice.current' => ['params' => [], 'required' => [], 'screen' => 'conseils', 'route' => 'GET /api/gestion/conseils'],
         'lexique.term' => ['params' => ['term'], 'required' => ['term'], 'screen' => 'lexique', 'route' => 'GET /api/gestion/lexique/{term}'],
+        // le guide de l'écran d'où vient la question : `screen` est donné par le serveur (le contexte), jamais par le modèle (lot A-4)
+        'screen.guide' => ['params' => ['screen'], 'required' => ['screen'], 'screen' => 'ecran', 'route' => 'GET /api/gestion/ecrans/{screen}/guide'],
     ];
 
     /**
@@ -75,7 +78,7 @@ class AnalysisCatalog
     public const CODED = ['verdict' => 'verdict', 'status' => 'budget', 'confidence' => 'confidence'];
 
     /** Type de chaque paramètre : le seul vocabulaire que le modèle peut employer */
-    public const PARAM_TYPES = ['periodId' => 'id', 'productId' => 'id', 'year' => 'year', 'days' => 'days', 'range' => 'range', 'term' => 'term'];
+    public const PARAM_TYPES = ['periodId' => 'id', 'productId' => 'id', 'year' => 'year', 'days' => 'days', 'range' => 'range', 'term' => 'term', 'screen' => 'screen'];
     public const RANGES = ['today', '7d', 'month', 'year'];
     public const DAYS = [7, 180];
 
@@ -95,6 +98,7 @@ class AnalysisCatalog
         private readonly CoefficientSuggestion $suggestions,
         private readonly GestionAdviceService $advices,
         private readonly LexiqueTexts $lexique,
+        private readonly ScreenGuides $guides,
     ) {
     }
 
@@ -161,6 +165,7 @@ class AnalysisCatalog
                 'days' => is_int($value) && $value >= self::DAYS[0] && $value <= self::DAYS[1],
                 'range' => is_string($value) && in_array($value, self::RANGES, true),
                 'term' => LexiqueCatalog::has($value),
+                'screen' => $this->guides->has($value),
             };
             if ($ok) {
                 $out[$name] = $value;
@@ -193,6 +198,7 @@ class AnalysisCatalog
             'articles.new' => $this->newArticles($params, $locale),
             'advice.current' => $this->currentAdvice($locale),
             'lexique.term' => $this->lexiqueTerm($params, $locale),
+            'screen.guide' => ['figures' => [], 'guide' => $this->guides->guide((string) $params['screen'], $locale)],
         };
         $rows = $result['rows'] ?? [];
         $total = $result['total'] ?? count($rows);
@@ -206,6 +212,7 @@ class AnalysisCatalog
             'rows' => array_slice($rows, 0, self::MAX_ROWS),
             'groups' => $result['groups'] ?? [],
             'lesson' => $result['lesson'] ?? null,
+            'guide' => $result['guide'] ?? null,
             'more' => $total > self::MAX_ROWS ? ['count' => $total - min(count($rows), self::MAX_ROWS), 'total' => $total] : null,
             'source' => $result['source'] ?? ['screen' => $d['screen'], 'route' => $d['route'], 'params' => ($result['params'] ?? $params) ?: new \stdClass()],
         ];
@@ -269,7 +276,8 @@ class AnalysisCatalog
             $this->figure('grossMargin', $t['grossMargin'] ?? null, 'money', $locale, ['lastYear' => $lastYear('grossMargin')]),
             $this->figure('marginRate', $t['grossMarginRate'] ?? null, 'percent', $locale),
             $this->figure('fixedCosts', $t['fixedCosts'] ?? null, 'money', $locale),
-            $this->figure('netResult', $t['result'] ?? null, 'money', $locale, ['lastYear' => $lastYear('result')]),
+            // le résultat de l'exercice est celui de l'ENTREPRISE (frais fixes compris) : son libellé le dit, comme sa notion du lexique
+            array_replace($this->figure('netResult', $t['result'] ?? null, 'money', $locale, ['lastYear' => $lastYear('result')]), ['label' => $this->tr('console.figures.businessResult', $locale)]),
             $this->figure('breakEvenSales', $o['profitability']['breakEven']['sales'] ?? null, 'money', $locale),
             $this->figure('gap', is_array($o['profitability']['gap'] ?? null) ? ($o['profitability']['gap']['amount'] ?? null) : null, 'money', $locale),
         ];

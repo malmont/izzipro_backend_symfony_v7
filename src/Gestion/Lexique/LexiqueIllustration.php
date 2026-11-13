@@ -34,8 +34,9 @@ class LexiqueIllustration
         $known = fn (string ...$ids): bool => array_filter(array_map($n, $ids), fn ($v) => $v === null) === [];
         $id = 'illustration';
         $params = match ($key) {
+            // un nombre dérivé se calcule sur le nombre AFFICHÉ juste avant : la part gardée sur le taux à une décimale (« 43,9 % … 43,90 $ »)
             'taux-de-marque' => $known('grossMarginRate', 'revenue') && $n('revenue') > 0
-                ? ['%rate%' => $this->format->format($n('grossMarginRate'), 'percent', $locale), '%hundred%' => $money(10000), '%kept%' => $money($n('grossMarginRate') * 100)] : null,
+                ? ['%rate%' => $this->format->format($n('grossMarginRate'), 'percent', $locale), '%hundred%' => $money(10000), '%kept%' => $money(round($n('grossMarginRate'), 1) * 100)] : null,
             'marge' => $known('grossMargin', 'revenue') && $n('revenue') > 0 ? ['%revenue%' => $money($n('revenue')), '%margin%' => $money($n('grossMargin'))] : null,
             'ventes' => $known('revenue') && $n('revenue') > 0 ? ['%revenue%' => $money($n('revenue'))] : null,
             'panier-moyen' => $known('averageBasket', 'revenue', 'orders') && $n('orders') > 0
