@@ -18,6 +18,10 @@ une même grandeur n'a qu'une carte (§ 3) ; les états et les dates sont rédig
 panier moyen dit ce qu'il divise (§ 2) ; l'écran Trésorerie donne son horizon de 90 jours (§ 4.1) ; un contexte sans paramètre rend
 `params: {}` ; `GET /api/gestion/ia` rend `costs.console: 1` (par réponse rédigée).
 
+**Lot W2-APPRENDRE, A-1 à A-3 (13/11/2026)** : la console explique. Onzième analyse `lexique.term`, bloc `lesson` écrit par le
+serveur, réponse « définition seule » sans rédaction (0 unité), mode « apprendre » (`mode: "learn"`), `term` sur chaque chiffre.
+Tout est décrit dans **`docs/lexique-gestion.md`**.
+
 ## 1. Ce que fait la console
 
 Le gérant pose une question libre sur l'activité de gestion de son site. La console répond comme un spécialiste : elle voit toute la
@@ -160,7 +164,8 @@ calcule**, avec la règle du coefficient validée par le propriétaire (lot IA-A
 
 ## 4. Forme d'un échange
 
-Question : `{ text, conversationId?, context? }`, `text` de 1 000 caractères au plus.
+Question : `{ text, conversationId?, context?, mode? }`, `text` de 1 000 caractères au plus. `mode: "learn"` (lot W2-APPRENDRE) ajoute à
+la réponse les leçons des notions de ses chiffres ; il est envoyé à chaque question, jamais retenu.
 
 **`context: { module, screen, params }`** (facultatif) : l'écran de la gestion d'où la question est posée, que le panneau du web reçoit
 déjà de chaque écran (par exemple l'écran d'une période, avec son `periodId`).
@@ -214,6 +219,8 @@ worker répond, le web relit toutes les 3 secondes.
   - `{ type: "figures", items: [{ label, value, unit, source }] }` ; depuis le lot W2-b, le serveur en ajoute un à la suite de tout
     bloc `text` dont un chiffre cité n'a pas encore sa carte (§ 3) : même forme, rien à distinguer côté application ;
   - `{ type: "table", columns, rows, source }` ;
+  - `{ type: "lesson", key, term, definition, illustration, related, quiz, source }` (lot W2-APPRENDRE) : la leçon d'une notion du
+    lexique, écrite par le serveur (`docs/lexique-gestion.md` § 4) ;
   - `{ type: "verdicts", items: [{ subject, verdict, why, figureIds }], groups: [{ verdict, source, count, label, productIds }] }`,
     pour un bilan. `groups` (lot W2-b) : les articles du bilan réunis par verdict et par raison, comptés par le serveur ; l'application
     peut en faire les titres de ses sections. Valeurs de `verdict` (précision du

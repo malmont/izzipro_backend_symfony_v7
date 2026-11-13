@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (467)
+## Boutique et commun (471)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -423,6 +423,10 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/frais-fixes` | ROLE_ADMIN | `Gestion\Controller\GestionFixedCostController::list` |
 | GET | `/api/gestion/ia` | ROLE_ADMIN | `Gestion\Controller\GestionAiController::usage` |
 | GET | `/api/gestion/journee` | ROLE_ADMIN | `Gestion\Controller\GestionDayController::overview` |
+| POST | `/api/gestion/lexique/{key}/quiz/{question}` | ROLE_ADMIN | `Gestion\Controller\GestionLexiqueController::answer` |
+| GET | `/api/gestion/lexique/{key}/quiz` | ROLE_ADMIN | `Gestion\Controller\GestionLexiqueController::quiz` |
+| GET | `/api/gestion/lexique/{key}` | ROLE_ADMIN | `Gestion\Controller\GestionLexiqueController::entry` |
+| GET | `/api/gestion/lexique` | ROLE_ADMIN | `Gestion\Controller\GestionLexiqueController::list` |
 | POST | `/api/gestion/locations/grilles/annuler` | ROLE_ADMIN | `Gestion\Controller\GestionRentalController::gridUndo` |
 | POST | `/api/gestion/locations/grilles/apercu` | ROLE_ADMIN | `Gestion\Controller\GestionRentalController::gridPreview` |
 | POST | `/api/gestion/locations/grilles/appliquer` | ROLE_ADMIN | `Gestion\Controller\GestionRentalController::gridApply` |
