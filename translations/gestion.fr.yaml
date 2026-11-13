@@ -877,6 +877,7 @@ console:
         articles_vs_similar: 'Un article face à ses semblables'
         articles_new: 'Bilan des nouveaux articles'
         advice_current: 'Conseils du guide du jour'
+        lexique_term: 'Une notion expliquée'
     figures:
         revenue: 'Ventes'
         orders: 'Commandes'

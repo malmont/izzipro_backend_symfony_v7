@@ -3,6 +3,8 @@
 namespace App\Gestion\Analysis;
 
 use App\Entity\Collections;
+use App\Gestion\Lexique\LexiqueCatalog;
+use App\Gestion\Lexique\LexiqueTexts;
 use App\Gestion\Pricing\CoefficientRule;
 use App\Gestion\Services\GestionAdviceService;
 use App\Gestion\Services\GestionBudgetService;
@@ -28,6 +30,9 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * Unités : `money` (cents de la devise du site), `percent`, `count`, `days`, `date`, `ratio`, `text`. 30 chiffres et 50 lignes au plus.
  * Lot W2-b (13/11/2026) : un libellé de plage est RÉDIGÉ par le serveur (« du 1er au 13 novembre 2026 », `RangeLabel`), jamais brut ;
  * le libellé d'un chiffre dit ce qu'il compte ; `groups` réunit les articles d'un bilan par verdict et par raison, avec leur nombre.
+ * Lot W2-APPRENDRE (13/11/2026) : chaque chiffre porte `term`, la notion du lexique qui l'explique (`LexiqueCatalog::FIGURE_TERMS`) ;
+ * l'analyse `lexique.term` rend la leçon d'une notion (`lesson`) et les chiffres du site qui l'illustrent, calculés par l'analyse
+ * liée à la notion, dont elle garde la source.
  */
 class AnalysisCatalog
 {
@@ -48,10 +53,11 @@ class AnalysisCatalog
         'articles.vs_similar' => ['params' => ['productId'], 'required' => ['productId'], 'screen' => 'article', 'route' => null],
         'articles.new' => ['params' => ['periodId'], 'required' => [], 'screen' => 'articles', 'route' => null],
         'advice.current' => ['params' => [], 'required' => [], 'screen' => 'conseils', 'route' => 'GET /api/gestion/conseils'],
+        'lexique.term' => ['params' => ['term'], 'required' => ['term'], 'screen' => 'lexique', 'route' => 'GET /api/gestion/lexique/{term}'],
     ];
 
     /** Type de chaque paramètre : le seul vocabulaire que le modèle peut employer */
-    public const PARAM_TYPES = ['periodId' => 'id', 'productId' => 'id', 'year' => 'year', 'days' => 'days', 'range' => 'range'];
+    public const PARAM_TYPES = ['periodId' => 'id', 'productId' => 'id', 'year' => 'year', 'days' => 'days', 'range' => 'range', 'term' => 'term'];
     public const RANGES = ['today', '7d', 'month', 'year'];
     public const DAYS = [7, 180];
 
@@ -70,6 +76,7 @@ class AnalysisCatalog
         private readonly SimilarArticlesAnalysis $similar,
         private readonly CoefficientSuggestion $suggestions,
         private readonly GestionAdviceService $advices,
+        private readonly LexiqueTexts $lexique,
     ) {
     }
 
@@ -120,6 +127,7 @@ class AnalysisCatalog
                 'year' => is_int($value) && $value >= 2000 && $value <= (int) $this->calendar->today()->format('Y') + 1,
                 'days' => is_int($value) && $value >= self::DAYS[0] && $value <= self::DAYS[1],
                 'range' => is_string($value) && in_array($value, self::RANGES, true),
+                'term' => LexiqueCatalog::has($value),
             };
             if ($ok) {
                 $out[$name] = $value;
@@ -151,6 +159,7 @@ class AnalysisCatalog
             'articles.vs_similar' => $this->versusSimilar($params, $locale),
             'articles.new' => $this->newArticles($params, $locale),
             'advice.current' => $this->currentAdvice($locale),
+            'lexique.term' => $this->lexiqueTerm($params, $locale),
         };
         $rows = $result['rows'] ?? [];
         $total = $result['total'] ?? count($rows);
@@ -158,11 +167,14 @@ class AnalysisCatalog
 
         return [
             'key' => $key, 'title' => $this->title($key, $locale), 'period' => $result['period'] ?? null,
-            'figures' => array_slice(array_values(array_filter($result['figures'], fn (array $f) => $f['value'] !== null)), 0, self::MAX_FIGURES),
+            // chaque chiffre porte la notion du lexique qui l'explique (`term`), quand il en a une
+            'figures' => array_map(fn (array $f) => isset($f['term']) || ($term = LexiqueCatalog::termOf($key, (string) $f['id'])) === null ? $f : $f + ['term' => $term],
+                array_slice(array_values(array_filter($result['figures'], fn (array $f) => $f['value'] !== null)), 0, self::MAX_FIGURES)),
             'rows' => array_slice($rows, 0, self::MAX_ROWS),
             'groups' => $result['groups'] ?? [],
+            'lesson' => $result['lesson'] ?? null,
             'more' => $total > self::MAX_ROWS ? ['count' => $total - min(count($rows), self::MAX_ROWS), 'total' => $total] : null,
-            'source' => ['screen' => $d['screen'], 'route' => $d['route'], 'params' => ($result['params'] ?? $params) ?: new \stdClass()],
+            'source' => $result['source'] ?? ['screen' => $d['screen'], 'route' => $d['route'], 'params' => ($result['params'] ?? $params) ?: new \stdClass()],
         ];
     }
 
@@ -395,6 +407,27 @@ class AnalysisCatalog
         return ['period' => $this->periodOf($period, $locale), 'figures' => [$this->figure('adviceCount', count($items), 'count', $locale)],
             'rows' => array_map(fn (array $a) => ['adviceId' => $a['id'], 'kind' => $a['kind'], 'title' => $a['title'], 'text' => $a['text'], 'effect' => $a['effect']['amount'] ?? null, 'confidence' => $a['confidence'] ?? null], $items),
             'total' => count($items)];
+    }
+
+    /**
+     * La leçon d'une notion du lexique : son entrée (`lesson`), et les chiffres du site qui l'illustrent, calculés par l'analyse liée à
+     * la notion (avec ses paramètres par défaut) et limités aux chiffres que le lexique désigne. La source rendue est celle de
+     * l'analyse liée : « d'où vient ce chiffre » mène à son écran. Une notion sans analyse liée rend sa leçon seule.
+     */
+    private function lexiqueTerm(array $params, string $locale): array
+    {
+        $entry = $this->lexique->entry((string) $params['term'], $locale);
+        $linked = $entry['analysis'];
+        $out = ['params' => ['term' => $entry['key']], 'figures' => [], 'lesson' => $entry];
+        if ($linked !== null && ($accepted = $this->accept($linked['key'], $linked['params'])) !== null) {
+            $r = $this->run($linked['key'], $accepted, $locale);
+            $byId = array_column($r['figures'], null, 'id');
+            $out['figures'] = array_values(array_filter(array_map(fn (string $id) => $byId[$id] ?? null, $linked['figures'])));
+            $out['period'] = $r['period'];
+            $out['source'] = $r['source'];
+        }
+
+        return $out;
     }
 
     // ---- outils --------------------------------------------------------------------------------------------------------------------

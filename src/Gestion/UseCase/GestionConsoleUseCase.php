@@ -14,7 +14,7 @@ class GestionConsoleUseCase
     /** @param array<string, mixed> $body @return array<string, mixed> */
     public function ask(array $body, string $locale, ?string $user, bool $platformOwner): array
     {
-        return $this->console->ask($body['text'] ?? null, $body['conversationId'] ?? null, $body['context'] ?? null, $locale, $user, $platformOwner);
+        return $this->console->ask($body['text'] ?? null, $body['conversationId'] ?? null, $body['context'] ?? null, $locale, $user, $platformOwner, $body['mode'] ?? null);
     }
 
     /** @return array<string, mixed> */

@@ -3,6 +3,7 @@
 namespace App\Gestion\Services\Console;
 
 use App\Gestion\Analysis\AnalysisCatalog;
+use App\Gestion\Lexique\LexiqueCatalog;
 use App\Services\LandingAiService\LandingAiClientInterface;
 use App\Services\LandingAiService\LandingAiException;
 use App\Services\LandingAiService\LandingAiUsageStats;
@@ -32,12 +33,13 @@ class ConsoleModel
      * @param list<array{role: string, text: string}> $history les derniers messages de l'échange, texte seul
      * @param list<array<string, mixed>> $catalog analyses du catalogue (clé, titre, paramètres)
      * @param list<array{id: int, label: string, from: string, to: string, current: bool}> $periods périodes que le modèle peut désigner
+     * @param list<array{key: string, term: string, synonymes: list<string>}> $lexique notions du lexique que le modèle peut désigner (`lexique.term`)
      *
      * @return array{kind: string, analyses: list<array{key: string, params: array<string, mixed>}>, clarification: string}
      */
-    public function choose(string $question, ?array $context, array $history, array $catalog, array $periods, \DateTimeImmutable $today, string $locale, LandingAiUsageStats $stats): array
+    public function choose(string $question, ?array $context, array $history, array $catalog, array $periods, \DateTimeImmutable $today, string $locale, LandingAiUsageStats $stats, array $lexique = []): array
     {
-        $payload = ['question' => $question, 'ecran' => $context, 'echange' => $history, 'analyses' => $catalog, 'periodes' => $periods, 'aujourdhui' => $today->format('Y-m-d')];
+        $payload = ['question' => $question, 'ecran' => $context, 'echange' => $history, 'analyses' => $catalog, 'periodes' => $periods, 'lexique' => $lexique, 'aujourdhui' => $today->format('Y-m-d')];
         $out = $this->call(self::MODEL_CHOOSE, 1200, $this->systemChoose($locale === 'en' ? 'anglais' : 'français'), $payload, self::schemaChoose(), $stats);
         $kind = in_array($out['kind'] ?? null, ['analyses', 'out_of_scope', 'clarification'], true) ? $out['kind'] : 'out_of_scope';
         $analyses = [];
@@ -109,10 +111,11 @@ class ConsoleModel
 
         return ['type' => 'object', 'additionalProperties' => false, 'required' => ['kind', 'analyses', 'clarification'], 'properties' => [
             'kind' => ['type' => 'string', 'enum' => ['analyses', 'out_of_scope', 'clarification']],
-            'analyses' => ['type' => 'array', 'items' => ['type' => 'object', 'additionalProperties' => false, 'required' => ['key', 'periodId', 'productId', 'year', 'days', 'range'], 'properties' => [
+            'analyses' => ['type' => 'array', 'items' => ['type' => 'object', 'additionalProperties' => false, 'required' => ['key', 'periodId', 'productId', 'year', 'days', 'range', 'term'], 'properties' => [
                 'key' => ['type' => 'string', 'enum' => array_keys(AnalysisCatalog::DEFINITIONS)],
                 'periodId' => $nullable('integer'), 'productId' => $nullable('integer'), 'year' => $nullable('integer'), 'days' => $nullable('integer'),
                 'range' => ['anyOf' => [['type' => 'string', 'enum' => AnalysisCatalog::RANGES], ['type' => 'null']]],
+                'term' => ['anyOf' => [['type' => 'string', 'enum' => LexiqueCatalog::keys()], ['type' => 'null']]],
             ]]],
             'clarification' => ['type' => 'string'],
         ]];
@@ -152,6 +155,7 @@ class ConsoleModel
             - « range » ne sert que si la question nomme une durée : aujourd'hui (today), les 7 derniers jours (7d), ce mois (month), cette année (year) ;
             - « productId » : seulement s'il figure dans « ecran » ; sinon null, et choisis une analyse qui n'en demande pas ;
             - « ecran » dit d'où le gérant pose sa question : son titre, son thème et « analysesParDefaut », les analyses de cet écran avec leurs paramètres. Si la question parle de ce qu'il regarde (« cet écran », « ici », « ça », « explique-moi »), ou ne nomme aucun sujet, prends « analysesParDefaut » telles quelles ;
+            - une question de DÉFINITION (« c'est quoi X », « explique-moi X », « que veut dire X », « comment se calcule X ») : choisis « lexique.term » avec « term » = la clé de la notion dans « lexique » (cherche aussi dans ses synonymes). Si la question demande en plus où en est le gérant (« … et la mienne est-elle bonne ? »), ajoute l'analyse qui le dit. Une notion absente de « lexique » : kind = "clarification" ;
             - question sans rapport avec la gestion du commerce (description d'articles, photos, comptes, réservations, autre sujet) : kind = "out_of_scope", analyses vide ;
             - question trop vague pour choisir : kind = "clarification" et, dans « clarification », UNE question courte au gérant, en $language, sans aucun chiffre ;
             - sinon kind = "analyses" et « clarification » vide.
@@ -174,6 +178,7 @@ class ConsoleModel
             Une plage ou une période se nomme par son libellé « period » recopié tel quel (et « previousLabel », « lastYearLabel » pour ce à quoi on compare).
             Bilan d'articles : « groupes » réunit les articles de même verdict pour la même raison, avec leur nombre. Dans les blocs "text", écris une phrase par groupe (par exemple « 5 articles au coefficient de leur fournisseur : à garder »), jamais la même raison répétée article par article ; le détail par article va dans le bloc "verdicts".
             Si « ecran » est donné et que la question porte sur lui, nomme-le par son « titre ».
+            Un résultat qui porte « lecon » explique une notion : sa définition et son illustration sont DÉJÀ affichées par le serveur au-dessus de ta réponse. Ne les recopie pas ; appuie-toi dessus, avec des mots simples, pour répondre au reste de la question.
             « proposals » : 3 au plus, seulement si une action de « actions » aide vraiment le gérant ; « productIds » et « periodId » ne contiennent que des identifiants présents dans les résultats ; « label » : un libellé court, sans chiffre. Sinon, liste vide.
             Dis ce qui compte d'abord. N'explique pas ta méthode. Aucune mise en forme (ni astérisques, ni titres).
             TXT;

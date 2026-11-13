@@ -1,0 +1,380 @@
+# Lexique de la gestion (lot W2-APPRENDRE, A-1, 13/11/2026) : les notions expliquées au gérant, servies par GET /api/gestion/lexique et par la
+# console IA. Les CLÉS sont celles du glossaire du mobile : elles ne changent jamais. Une notion = une seule définition partout.
+# Structure (notions liées, analyse liée, bonnes réponses) : src/Gestion/Lexique/LexiqueCatalog.php. Garde-fou : tests/Functional/Gestion/LexiqueApiTest.php.
+# « illustration » : phrase écrite par le serveur avec les chiffres du site ; les %…% sont des écritures qu'il fournit.
+
+ventes:
+    term: 'Ventes'
+    definition: 'Ce que vous avez vendu, hors taxes, remises déduites et retours retirés. Les locations et les abonnements sont comptés à part.'
+    synonyms: 'chiffre d''affaires, CA'
+    illustration: 'Chez vous, %period% : %revenue% de ventes hors taxes.'
+ventes-sans-cout:
+    term: 'Ventes sans coût connu'
+    definition: 'Des ventes d''articles dont on ne connaît pas le prix d''achat. Elles restent dans les ventes mais sont exclues de la marge, faute de pouvoir la calculer. Rattachez ces articles à une commande pour les compter.'
+cout-articles-vendus:
+    term: 'Coût des articles vendus'
+    definition: 'Ce que vous avaient coûté à l''achat les articles vendus pendant la période : prix d''achat moyen de chaque article × quantité vendue.'
+    synonyms: 'coût des ventes'
+marge:
+    term: 'Marge brute'
+    definition: 'Ventes moins le coût d''achat des articles vendus. Exemple : un article acheté 20 $ et vendu 50 $ donne 30 $ de marge.'
+    synonyms: 'marge, marge brute'
+    illustration: 'Chez vous, %period% : %revenue% de ventes, dont %margin% de marge brute.'
+    quiz:
+        q1:
+            question: 'Vous achetez un article 20 $ et vous le vendez 50 $. Quelle est votre marge brute ?'
+            a: '50 $'
+            b: '30 $'
+            c: '20 $'
+            explanation: 'La marge brute est le prix de vente moins le coût d''achat : 50 $ − 20 $ = 30 $.'
+        q2:
+            question: 'Les frais de port et la publicité sont-ils déjà retirés de la marge brute ?'
+            a: 'Oui, tous les frais sont retirés'
+            b: 'Seulement la publicité'
+            c: 'Non : seul le coût d''achat des articles est retiré'
+            explanation: 'La marge brute ne retire que le coût d''achat des articles vendus. Les frais viennent ensuite, pour donner le résultat.'
+taux-de-marque:
+    term: 'Taux de marque'
+    definition: 'La part de marge dans le prix de vente. À 40 %, sur 100 $ vendus, il vous reste 40 $ après le coût d''achat.'
+    synonyms: 'taux de marge'
+    illustration: 'Votre taux de marque, %period% : %rate%. Sur %hundred% vendus, il vous reste %kept% après le coût d''achat.'
+    quiz:
+        q1:
+            question: 'Votre taux de marque est de 40 %. Sur 100 $ de ventes, combien vous reste-t-il après le coût d''achat ?'
+            a: '40 $'
+            b: '60 $'
+            c: '140 $'
+            explanation: 'À 40 %, sur 100 $ vendus, 40 $ sont de la marge et 60 $ payaient le coût d''achat.'
+        q2:
+            question: 'Un article acheté 20 $ est vendu 50 $. Quel est son taux de marque ?'
+            a: '40 %'
+            b: '60 %'
+            c: '150 %'
+            explanation: 'La marge est de 30 $. Rapportée au prix de vente : 30 ÷ 50 = 60 %.'
+coefficient:
+    term: 'Coefficient'
+    definition: 'Prix de vente ÷ prix d''achat. Un article acheté 20 $ avec un coefficient de 2,5 se vend 50 $. Plus le coefficient est haut, plus la marge est grande.'
+    synonyms: 'coef, multiplicateur'
+    quiz:
+        q1:
+            question: 'Un article vous coûte 20 $. Avec un coefficient de 2,5, à quel prix le vendez-vous ?'
+            a: '22,50 $'
+            b: '45 $'
+            c: '50 $'
+            explanation: 'Prix de vente = coût d''achat × coefficient : 20 $ × 2,5 = 50 $.'
+        q2:
+            question: 'Vous passez d''un coefficient de 2 à un coefficient de 2,5 sur le même article. Que devient votre marge par article ?'
+            a: 'Elle augmente'
+            b: 'Elle ne change pas'
+            c: 'Elle baisse'
+            explanation: 'Le coût ne change pas et le prix monte : la marge par article augmente. Reste à vérifier que l''article se vend toujours aussi bien.'
+frais:
+    term: 'Frais de la période'
+    definition: 'Ce que la période vous coûte en plus des articles : voyage, frais de port, publicité et autres notes de frais.'
+    synonyms: 'dépenses de la période'
+    illustration: 'Sur la période %period% : %expenses% de frais (port, notes de frais, publicité), hors achats de marchandise.'
+resultat:
+    term: 'Résultat'
+    definition: 'Marge brute moins frais : ce que la période vous rapporte réellement. Un résultat négatif est une perte. Les achats de stock n''en font pas partie : ils deviennent du stock.'
+    synonyms: 'bénéfice, profit, perte'
+    illustration: 'Sur la période %period% : %margin% de marge brute, moins %expenses% de frais, soit un résultat de %result%.'
+    quiz:
+        q1:
+            question: 'Votre marge brute est de 6 000 $ et vos frais de 4 500 $. Quel est votre résultat ?'
+            a: '1 500 $'
+            b: '10 500 $'
+            c: '−1 500 $'
+            explanation: 'Résultat = marge brute − frais : 6 000 − 4 500 = 1 500 $. C''est un gain.'
+        q2:
+            question: 'Vous achetez pour 8 000 $ de marchandise ce trimestre. Est-ce retiré du résultat de la période ?'
+            a: 'Oui, en entier'
+            b: 'Oui, pour moitié'
+            c: 'Non : c''est du stock, compté quand il se vend'
+            explanation: 'Un achat de stock n''est pas une dépense du résultat. Son coût entre dans le résultat au fur et à mesure que les articles se vendent.'
+point-mort:
+    term: 'Point mort'
+    definition: 'Le montant de ventes à atteindre pour ne pas perdre d''argent : frais ÷ taux de marque. Au-dessus vous gagnez, en dessous vous perdez.'
+    synonyms: 'seuil de rentabilité'
+    illustration: '%period% : votre point mort est de %breakEven% de ventes ; vous en êtes à %sales%.'
+    quiz:
+        q1:
+            question: 'Vos frais sont de 4 000 $ et votre taux de marque de 40 %. Combien devez-vous vendre pour ne pas perdre d''argent ?'
+            a: '4 000 $'
+            b: '10 000 $'
+            c: '1 600 $'
+            explanation: 'Point mort = frais ÷ taux de marque : 4 000 ÷ 0,40 = 10 000 $. À ce niveau de ventes, la marge couvre exactement les frais.'
+investi-stock:
+    term: 'Investi en stock'
+    definition: 'Le total des achats de marchandises de la période (commandes fournisseurs). Ce n''est pas une dépense du résultat : c''est du stock qui sera vendu.'
+    synonyms: 'achats de stock'
+autres-revenus:
+    term: 'Locations et abonnements'
+    definition: 'Revenus des locations et des abonnements, comptés à part du résultat de la période d''articles.'
+periode:
+    term: 'Période'
+    definition: 'Une période de vente, créée automatiquement : un trimestre par défaut (4 par an), ou un semestre ou un mois selon le réglage du site. Chaque dépense compte dans la période de sa date. Une période fermée est en lecture seule.'
+    synonyms: 'trimestre, saison'
+    quiz:
+        q1:
+            question: 'Une note de frais datée du 3 avril, saisie le 10 juillet : dans quelle période compte-t-elle ?'
+            a: 'Celle de juillet, où elle est saisie'
+            b: 'Les deux'
+            c: 'Celle d''avril, sa date'
+            explanation: 'Chaque dépense compte dans la période de sa date, pas dans celle du jour où vous la saisissez.'
+budget-global:
+    term: 'Budget global'
+    definition: 'Le montant total que vous vous autorisez à dépenser sur la période, tous postes confondus.'
+prevu:
+    term: 'Prévu'
+    definition: 'Le montant que vous prévoyez de dépenser sur un poste (stock, voyage, port, publicité, autres) pendant la période.'
+reel:
+    term: 'Dépensé (réel)'
+    definition: 'Ce qui est déjà dépensé sur le poste, d''après vos commandes, notes de frais, frais de port et campagnes.'
+    synonyms: 'dépensé'
+reste:
+    term: 'Reste'
+    definition: 'Prévu moins dépensé : ce qu''il vous reste à dépenser sur le poste sans dépasser le prévu.'
+    illustration: 'Sur la période %period% : %planned% prévus, %actual% dépensés, il reste %remaining%.'
+solde:
+    term: 'Solde saisi'
+    definition: 'Le solde de votre compte en banque à la fin de la journée, que vous saisissez vous-même. L''application n''est pas reliée à la banque.'
+    synonyms: 'solde bancaire'
+    illustration: 'Votre dernier solde saisi : %balance%, le %date%.'
+point-bas:
+    term: 'Point bas'
+    definition: 'Le solde le plus bas que votre compte devrait atteindre sur la durée indiquée, d''après vos mouvements prévus et vos dépenses saisies.'
+    illustration: 'D''après ce qui est prévu, votre compte descendra au plus bas à %low%, le %date%.'
+seuil:
+    term: 'Seuil d''alerte'
+    definition: 'Le montant sous lequel vous voulez être prévenu. À 0, vous êtes prévenu seulement si le compte risque de passer à découvert.'
+    quiz:
+        q1:
+            question: 'Votre seuil d''alerte est de 2 000 $. Le point bas prévu est de 1 500 $. Que se passe-t-il ?'
+            a: 'Rien'
+            b: 'Vous êtes prévenu : le compte devrait passer sous votre seuil'
+            c: 'Le compte est bloqué'
+            explanation: 'Le seuil est le montant sous lequel vous voulez être prévenu. Ici le solde prévu passe dessous : vous avez le temps d''agir avant.'
+ventes-a-venir:
+    term: 'Ventes à venir'
+    definition: 'Si c''est activé, la projection ajoute vos encaissements : les ventes réelles depuis votre dernier solde, puis la moyenne encaissée par jour sur les 30 derniers jours. Éteint, la projection ne compte que ce qui est sûr.'
+rapprochement:
+    term: 'Rapprochement bancaire'
+    definition: 'Comparer le solde réel de votre compte à celui que l''application attendait (dernier solde, dépenses saisies, mouvements prévus, encaissements). Un écart révèle souvent une dépense oubliée : retrouvez-la, ou enregistrez l''écart comme non justifié ou expliqué.'
+    synonyms: 'rapprochement bancaire'
+    quiz:
+        q1:
+            question: 'L''application attendait 5 000 $ sur votre compte, et il y a 4 700 $. Que faire ?'
+            a: 'Rien, la différence est normale'
+            b: 'Corriger le solde pour afficher 5 000 $'
+            c: 'Chercher la dépense de 300 $ oubliée, ou enregistrer l''écart'
+            explanation: 'Un écart révèle souvent une dépense non saisie. Retrouvez-la ; sinon, enregistrez l''écart comme expliqué ou non justifié.'
+frais-fixes:
+    term: 'Frais fixes'
+    definition: 'Les dépenses qui reviennent chaque mois quel que soit le niveau des ventes : loyer, salaires, assurances, abonnements, électricité. Ils comptent dans le résultat au prorata des jours de la période. Un remboursement de prêt n''en fait pas partie par défaut : c''est du capital, pas une charge. Ne les saisissez pas aussi en note de frais, sinon ils comptent deux fois.'
+    synonyms: 'charges fixes'
+    quiz:
+        q1:
+            question: 'Lequel de ces frais est un frais fixe ?'
+            a: 'Les frais de port d''une commande'
+            b: 'Une campagne de publicité'
+            c: 'Le loyer du magasin'
+            explanation: 'Le loyer revient chaque mois, que vous vendiez beaucoup ou peu. Le port et la publicité suivent l''activité : ce sont des frais variables.'
+resultat-apres-frais-fixes:
+    term: 'Résultat après frais fixes'
+    definition: 'Le résultat de la période moins sa part de frais fixes (loyer, salaires, assurances…), comptée au prorata des jours. C''est ce que l''activité vous rapporte une fois l''entreprise payée.'
+point-mort-apres-frais-fixes:
+    term: 'Point mort après frais fixes'
+    definition: 'Les ventes à atteindre pour couvrir les frais de la période et sa part de frais fixes : (frais + frais fixes) ÷ taux de marque.'
+exercice:
+    term: 'Exercice comptable'
+    definition: 'Les 12 mois sur lesquels vous faites vos comptes : de janvier à décembre, ou par exemple d''avril à mars. Il se règle dans Gestion › Exercice comptable.'
+    synonyms: 'année comptable, année fiscale'
+    quiz:
+        q1:
+            question: 'Un exercice comptable commence-t-il forcément en janvier ?'
+            a: 'Oui, toujours'
+            b: 'Non : il dure 12 mois, mais peut commencer un autre mois, par exemple en avril'
+            c: 'Non, il dure 6 mois'
+            explanation: 'L''exercice couvre 12 mois, de janvier à décembre ou à partir d''un autre mois. Vous réglez son mois de début dans les réglages de la gestion.'
+resultat-entreprise:
+    term: 'Résultat de l''entreprise'
+    definition: 'Marge + locations et abonnements − frais variables (port, publicité, notes de frais, voyages) − frais fixes (loyer, salaires…). C''est ce que l''entreprise gagne ou perd vraiment sur l''exercice.'
+frais-variables:
+    term: 'Frais variables'
+    definition: 'Les frais qui suivent l''activité : frais de port des achats, publicité, notes de frais et voyages, chacun à sa date. Les achats de stock n''en font pas partie : ils comptent dans le coût des articles vendus.'
+    synonyms: 'charges variables'
+    quiz:
+        q1:
+            question: 'Vos ventes doublent ce mois-ci. Quels frais ont le plus de chances d''augmenter ?'
+            a: 'Les frais variables (port, publicité)'
+            b: 'Les frais fixes (loyer, assurances)'
+            c: 'Aucun'
+            explanation: 'Les frais variables suivent l''activité. Les frais fixes restent les mêmes, quel que soit le niveau des ventes.'
+projection:
+    term: 'Fin d''exercice estimée'
+    definition: 'Le réalisé, plus une estimation du reste : les mêmes mois de l''exercice précédent s''ils existent, sinon le rythme de vente des 30 derniers jours. Les frais viennent de vos budgets de période, les frais fixes sont connus d''avance.'
+leviers:
+    term: 'Leviers'
+    definition: 'Des actions chiffrées par l''application sur vos propres chiffres : ce qu''elles rapporteraient d''ici la fin de l''exercice. « Comble l''écart » : à elle seule, l''action suffirait à atteindre le point mort.'
+mouvement-prevu:
+    term: 'Mouvement prévu'
+    definition: 'Une entrée ou une sortie d''argent connue à l''avance : loyer, salaires, prêt, taxes… Vos commandes et notes de frais sont déjà comptées : ne les ajoutez pas ici.'
+decouvert:
+    term: 'Découvert'
+    definition: 'Un solde négatif : le compte est passé sous zéro.'
+budget-voyage:
+    term: 'Budget du voyage'
+    definition: 'Ce que vous prévoyez de dépenser en frais pendant le voyage : déplacement, hôtel, repas. Les achats de marchandises restent dans le budget « Stock ».'
+budget-a-ce-jour:
+    term: 'Budget prévu à ce jour'
+    definition: 'Budget par jour × jours déjà écoulés : ce que vous auriez dû dépenser au plus jusqu''à aujourd''hui pour tenir le budget.'
+arrondi:
+    term: 'Arrondi'
+    definition: 'Ajuste le nouveau prix pour qu''il « sonne » bien : finir en ,99, aux 0,50 ou à l''unité. Pour une promotion, l''arrondi se fait vers le bas, pour ne jamais annoncer moins de remise.'
+    synonyms: 'prix psychologique'
+sous-le-cout:
+    term: 'Sous le coût'
+    definition: 'Le nouveau prix serait inférieur au prix d''achat : chaque vente ferait perdre de l''argent. Il faut l''autoriser explicitement.'
+    synonyms: 'vente à perte'
+promotion:
+    term: 'Promotion datée'
+    definition: 'Un prix réduit pendant des dates choisies, en boutique et en caisse. Le prix normal n''est jamais modifié et revient tout seul à la fin.'
+    synonyms: 'solde, rabais, remise'
+promotion-variante:
+    term: 'Promotion par variante'
+    definition: 'Une remise datée sur une taille ou une couleur précise d''un article (par exemple le XL noir à −20 %), même si la variante a son propre prix. Pendant ses dates, elle remplace la promotion de l''article, sans cumul. Le prix barré reste le prix normal ; le prix normal revient tout seul à la fin.'
+variante-prix-propre:
+    term: 'Variante à prix propre'
+    definition: 'Une taille ou une couleur qui a son propre prix (par exemple un XL plus cher). Les promotions ne s''y appliquent pas pour l''instant.'
+confiance:
+    term: 'Niveau de confiance'
+    definition: 'Élevée : le chiffre est constaté. Moyenne : il est estimé sur des données solides. Prudente : c''est une estimation à vérifier.'
+effet:
+    term: 'Effet estimé'
+    definition: 'L''argent que le conseil peut rapporter ou libérer, calculé par l''application à partir de vos chiffres. L''IA ne fait que le rédiger.'
+mesure:
+    term: 'Mesure'
+    definition: 'Après un conseil appliqué, le guide compare les 14 jours suivants aux 14 jours précédents pour voir ce qu''il a vraiment rapporté.'
+panier-moyen:
+    term: 'Panier moyen'
+    definition: 'Le montant moyen d''une commande, hors taxes : ventes avant retours ÷ nombre de commandes. Un retour ne fait pas baisser le panier du jour où il arrive.'
+    synonyms: 'ticket moyen'
+    illustration: 'Chez vous, %period% : %revenue% de ventes en %count% commande, soit un panier moyen de %basket%.|Chez vous, %period% : %revenue% de ventes en %count% commandes, soit un panier moyen de %basket%.'
+    quiz:
+        q1:
+            question: 'Vous avez fait 3 000 $ de ventes, sans aucun retour, en 60 commandes. Quel est votre panier moyen ?'
+            a: '50 $'
+            b: '180 $'
+            c: '5 $'
+            explanation: 'Panier moyen = ventes ÷ nombre de commandes : 3 000 ÷ 60 = 50 $.'
+valeur-stock:
+    term: 'Valeur du stock'
+    definition: 'Le stock en magasin valorisé au prix de vente affiché : quantité × prix de chaque variante. La comparaison dans le temps vient d''une photo du stock prise chaque jour à 10 h.'
+    illustration: 'Votre stock vaut %sale% au prix de vente, pour %cost% au coût d''achat.'
+commandes:
+    term: 'Commandes'
+    definition: 'Le nombre de ventes contenant au moins un article, en boutique en ligne, en caisse et dans l''application. Les commandes annulées ou incomplètes ne comptent pas.'
+taux-retour:
+    term: 'Taux de retour'
+    definition: 'Le montant des articles retournés ÷ les ventes avant retours. À 5 %, sur 100 $ vendus, 5 $ ont été rendus.'
+    synonyms: 'retours'
+evolution:
+    term: 'Évolution'
+    definition: 'La variation par rapport à la plage précédente (par exemple le mois dernier, aux mêmes jours) et à la même plage l''an dernier. Pour un taux, l''écart est en points.'
+    synonyms: 'variation'
+gain-marge:
+    term: 'Gain en marge'
+    definition: 'La marge gagnée pendant la campagne par rapport à avant, pour chaque dollar dépensé en publicité. Au-dessus de 1 $, la campagne rapporte plus qu''elle ne coûte.'
+grille-location:
+    term: 'Grille de tarifs'
+    definition: 'Les tarifs de location (à l''heure, à la demi-journée, à la journée, à la semaine, au mois) rattachés à des catégories : la changer change le prix de tous les articles louables de ces catégories. Les réservations déjà faites gardent leur prix. Pour un seul article, une promotion de location est plus adaptée.'
+promotion-location:
+    term: 'Promotion de location'
+    definition: 'Une remise sur le tarif de location, pendant des dates et des jours de la semaine choisis. Elle compte selon le jour où la location commence, en boutique et en caisse. La caution et le supplément passagers ne sont jamais remisés, et une réservation déjà faite garde son prix.'
+revenu-location:
+    term: 'Revenu des locations'
+    definition: 'Ce que les locations ont rapporté, compté à la date de la vente, comme dans le résultat de période. Une réservation annulée mais non remboursée reste comptée : l''argent est gardé.'
+revenu-date-location:
+    term: 'Revenu à la date de location'
+    definition: 'Le même revenu, réparti sur les jours où l''article est réellement loué : une location du 30 au 2 compte pour moitié dans chaque mois.'
+occupation:
+    term: 'Taux d''occupation'
+    definition: 'Le temps où un article est loué, rapporté au temps où il pourrait l''être. À 80 %, l''article est loué 8 heures sur 10 d''ouverture.'
+recurrent:
+    term: 'Revenu mensuel récurrent'
+    definition: 'Ce que vos abonnements actifs rapportent chaque mois, ramené au mois quelle que soit leur fréquence.'
+    synonyms: 'MRR'
+taux-depart:
+    term: 'Taux de départ'
+    definition: 'La part des abonnés qui arrêtent leur abonnement chaque mois.'
+    synonyms: 'attrition'
+tresorerie:
+    term: 'Trésorerie'
+    definition: 'L''argent disponible sur votre compte en banque, et ce qu''il va devenir. L''application part du solde que vous saisissez, puis ajoute et retire ce qui est prévu : mouvements prévus, dépenses saisies, encaissements.'
+    synonyms: 'liquidités, cash'
+    illustration: 'Votre dernier solde saisi : %balance%. D''après ce qui est prévu, le point le plus bas sera de %low%.'
+    quiz:
+        q1:
+            question: 'Votre résultat est positif. Votre compte en banque peut-il quand même passer à découvert ?'
+            a: 'Non, jamais'
+            b: 'Oui : un gros achat de stock sort de l''argent avant que les ventes ne rentrent'
+            c: 'Seulement en fin d''année'
+            explanation: 'Le résultat mesure ce que vous gagnez ; la trésorerie, l''argent réellement disponible. Un achat de stock ou un loyer peuvent vider le compte avant que les ventes ne le remplissent.'
+taxes:
+    term: 'Taxes'
+    definition: 'Les taxes de vente (TPS, TVQ, TVA…) que vous facturez au client et reversez à l''État. Ce n''est pas un revenu : les ventes, la marge et le résultat sont comptés hors taxes.'
+    synonyms: 'TPS, TVQ, TVA'
+    quiz:
+        q1:
+            question: 'Un client paie 115 $ taxes comprises pour un article à 100 $. Combien comptez-vous dans vos ventes ?'
+            a: '115 $'
+            b: '100 $'
+            c: '15 $'
+            explanation: 'Les ventes sont comptées hors taxes : 100 $. Les 15 $ de taxes ne vous appartiennent pas, vous les reversez à l''État.'
+stock-dormant:
+    term: 'Stock dormant'
+    definition: 'Des articles en stock qui ne se vendent pas, ou très peu, depuis longtemps. C''est de l''argent immobilisé : une promotion peut le libérer.'
+    synonyms: 'invendus'
+    quiz:
+        q1:
+            question: 'Pourquoi un stock qui ne se vend pas est-il un problème ?'
+            a: 'C''est de l''argent immobilisé, qui ne peut pas servir ailleurs'
+            b: 'Il fait baisser le prix des autres articles'
+            c: 'Ce n''est pas un problème'
+            explanation: 'Tant qu''un article reste en rayon, l''argent de son achat est bloqué. Une promotion peut le transformer en trésorerie.'
+budget:
+    term: 'Budget'
+    definition: 'Ce que vous prévoyez de dépenser pendant une période, poste par poste (stock, voyage, port, publicité, autres), comparé à ce qui est réellement dépensé.'
+    illustration: 'Sur la période %period% : %planned% prévus, %actual% dépensés, il reste %remaining%.'
+    quiz:
+        q1:
+            question: 'Vous avez prévu 2 000 $ de publicité et déjà dépensé 1 400 $. Combien vous reste-t-il ?'
+            a: '600 $'
+            b: '3 400 $'
+            c: '1 400 $'
+            explanation: 'Reste = prévu − dépensé : 2 000 − 1 400 = 600 $.'
+cout-d-achat:
+    term: 'Coût d''achat'
+    definition: 'Ce qu''un article vous a coûté chez le fournisseur, à l''unité. Avec plusieurs achats à des prix différents, l''application retient le coût moyen. Sans coût d''achat, la marge de l''article reste inconnue.'
+    synonyms: 'prix d''achat, coût'
+    illustration: '%count% article sur %total% n''a pas de coût d''achat : sa marge reste inconnue.|%count% articles sur %total% n''ont pas de coût d''achat : leur marge reste inconnue.'
+    illustration_none: 'Tous vos articles ont un coût d''achat : leur marge est connue.'
+    quiz:
+        q1:
+            question: 'Un article n''a pas de coût d''achat dans l''application. Quelle est la conséquence ?'
+            a: 'Il ne peut plus être vendu'
+            b: 'Sa marge reste inconnue, et ses ventes sortent du calcul de la marge'
+            c: 'Son coût est compté à zéro'
+            explanation: 'Sans coût, l''application ne peut pas calculer la marge de l''article : ses ventes sont comptées, mais tenues à l''écart de la marge.'
+stock-bas:
+    term: 'Stock bas'
+    definition: 'Un article qui sera bientôt en rupture au rythme où il se vend : il lui reste peu de jours de vente.'
+    synonyms: 'rupture'
+    illustration: '%count% article est en stock bas en ce moment.|%count% articles sont en stock bas en ce moment.'
+    illustration_none: 'Aucun article n''est en stock bas en ce moment.'
+semblables:
+    term: 'Articles semblables'
+    definition: 'Des articles comparables à celui que vous regardez : même fournisseur, même catégorie quand elle est connue, et un coût d''achat proche (à 30 % près), vendus lors de la même saison de l''année passée. Leur histoire sert à proposer un coefficient.'
+verdict:
+    term: 'Verdict'
+    definition: 'L''avis de l''application sur le prix d''un article, d''après ses semblables : garder, monter ou baisser. Il est calculé par une règle, pas par l''IA.'

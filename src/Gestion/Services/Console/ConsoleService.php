@@ -42,6 +42,10 @@ class ConsoleService
     public const TIMEOUT_SECONDS = 120;
     public const HISTORY_MONTHS = 12;
     public const COST = 1;
+    /** Une leçon assemblée par le serveur (définition seule, sans rédaction du modèle) ne coûte rien (lot W2-APPRENDRE) */
+    public const LESSON_COST = 0;
+    /** Mode « apprendre » (lot W2-APPRENDRE) : envoyé par l'application à CHAQUE question (`mode: "learn"`), jamais retenu par le serveur ; toute autre valeur est ignorée */
+    public const MODE_LEARN = 'learn';
     /** Messages de l'échange donnés au modèle pour choisir (texte seul) */
     public const HISTORY_MESSAGES = 6;
 
@@ -61,12 +65,12 @@ class ConsoleService
     }
 
     /**
-     * POST /api/gestion/console/messages : pose une question. 422 `text` (`REQUIRED`, `TOO_LONG`), `conversationId` (`INVALID_ID`) ;
+     * POST /api/gestion/console/messages : pose une question (`mode: "learn"` : la réponse ajoute les leçons des notions de ses chiffres). 422 `text` (`REQUIRED`, `TOO_LONG`), `conversationId` (`INVALID_ID`) ;
      * 404 `CONSOLE_CONVERSATION_NOT_FOUND` ; 409 `CONSOLE_ANSWER_PENDING` ; 429 `AI_DAILY_LIMIT` ; palier et crédits : `LandingAiException`.
      *
      * @return array<string, mixed>
      */
-    public function ask(mixed $text, mixed $conversationId, mixed $context, string $locale, ?string $user, bool $platformOwner): array
+    public function ask(mixed $text, mixed $conversationId, mixed $context, string $locale, ?string $user, bool $platformOwner, mixed $mode = null): array
     {
         $text = is_string($text) ? trim($text) : '';
         $fields = [];
@@ -105,7 +109,7 @@ class ConsoleService
             $em->persist($conversation);
         }
         $conversation->setUpdatedAt($now);
-        $question = GestionConversationMessage::of($conversation, GestionConversationMessage::ROLE_USER, self::QUESTION, ['text' => $text, 'context' => $this->context($context)], $user);
+        $question = GestionConversationMessage::of($conversation, GestionConversationMessage::ROLE_USER, self::QUESTION, ['text' => $text, 'context' => $this->context($context)] + ($mode === self::MODE_LEARN ? ['mode' => self::MODE_LEARN] : []), $user);
         $em->persist($question);
         $em->flush();
         $answer = GestionConversationMessage::of($conversation, GestionConversationMessage::ROLE_ASSISTANT, self::ANSWER,

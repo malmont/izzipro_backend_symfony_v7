@@ -36,7 +36,8 @@ class GestionAiUsageService
             'tier' => $this->assistant->tier((string) $this->tenants->getCurrentTenantCode(), $superAdmin),
             'credits' => $this->quota->credits(),
             'costs' => ['advice' => AdviceWriter::COST, 'comment' => GestionSimulationCommentService::COST, 'document' => GestionDocumentService::COST,
-                'console' => \App\Gestion\Services\Console\ConsoleService::COST], // console : par réponse rédigée (lot W2-c)
+                'console' => \App\Gestion\Services\Console\ConsoleService::COST, // console : par réponse rédigée (lot W2-c)
+                'lesson' => \App\Gestion\Services\Console\ConsoleService::LESSON_COST], // leçon du lexique assemblée par le serveur : gratuite (lot W2-APPRENDRE)
             'limits' => ['commentsPerDay' => GestionSimulationCommentService::PER_DAY, 'adviceRefreshPerDay' => GestionAdviceService::MANUAL_PER_DAY],
             'today' => ['comments' => $comments, 'adviceRefresh' => $this->advices->manualToday($today)],
         ];

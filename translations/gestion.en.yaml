@@ -875,6 +875,7 @@ console:
         articles_vs_similar: 'An item against its similar items'
         articles_new: 'Review of the new items'
         advice_current: 'Today''s guide advice'
+        lexique_term: 'A notion explained'
     figures:
         revenue: 'Sales'
         orders: 'Orders'

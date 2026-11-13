@@ -1,0 +1,377 @@
+# Management glossary (lot W2-APPRENDRE, A-1, 13/11/2026): the notions explained to the manager, served by GET /api/gestion/lexique and by the
+# AI console. The KEYS are those of the mobile glossary: they never change. One notion = a single definition everywhere.
+# Structure (related notions, linked analysis, right answers): src/Gestion/Lexique/LexiqueCatalog.php. Guard: tests/Functional/Gestion/LexiqueApiTest.php.
+# “illustration”: sentence written by the server with the figures of the site; the %…% are writings it provides.
+
+ventes:
+    term: 'Sales'
+    definition: 'What you sold, before taxes, with discounts deducted and returns removed. Rentals and subscriptions are counted separately.'
+    synonyms: 'revenue, turnover'
+    illustration: 'For you, %period%: %revenue% of sales before taxes.'
+ventes-sans-cout:
+    term: 'Sales without known cost'
+    definition: 'Sales of items whose purchase price is unknown. They stay in sales but are left out of the margin, which cannot be computed for them. Attach these items to a purchase order to count them.'
+cout-articles-vendus:
+    term: 'Cost of goods sold'
+    definition: 'What the items sold during the period had cost you to buy: average purchase price of each item × quantity sold.'
+    synonyms: 'COGS'
+marge:
+    term: 'Gross margin'
+    definition: 'Sales minus the purchase cost of the items sold. Example: an item bought for $20 and sold for $50 gives a $30 margin.'
+    synonyms: 'margin'
+    illustration: 'For you, %period%: %revenue% of sales, of which %margin% is gross margin.'
+    quiz:
+        q1:
+            question: 'You buy an item for $20 and sell it for $50. What is your gross margin?'
+            a: '$50'
+            b: '$30'
+            c: '$20'
+            explanation: 'Gross margin is the selling price minus the purchase cost: $50 − $20 = $30.'
+        q2:
+            question: 'Are shipping costs and advertising already removed from the gross margin?'
+            a: 'Yes, all expenses are removed'
+            b: 'Only advertising'
+            c: 'No: only the purchase cost of the items is removed'
+            explanation: 'Gross margin only removes the purchase cost of the items sold. Expenses come next, to give the profit.'
+taux-de-marque:
+    term: 'Margin rate'
+    definition: 'The share of margin in the selling price. At 40%, out of $100 sold, you keep $40 after the purchase cost.'
+    synonyms: 'gross margin percentage, markup rate'
+    illustration: 'Your margin rate, %period%: %rate%. Out of %hundred% sold, you keep %kept% after the purchase cost.'
+    quiz:
+        q1:
+            question: 'Your margin rate is 40%. Out of $100 of sales, how much do you keep after the purchase cost?'
+            a: '$40'
+            b: '$60'
+            c: '$140'
+            explanation: 'At 40%, out of $100 sold, $40 is margin and $60 paid for the purchase cost.'
+        q2:
+            question: 'An item bought for $20 is sold for $50. What is its margin rate?'
+            a: '40%'
+            b: '60%'
+            c: '150%'
+            explanation: 'The margin is $30. Compared with the selling price: 30 ÷ 50 = 60%.'
+coefficient:
+    term: 'Markup multiplier'
+    definition: 'Selling price ÷ purchase cost. An item bought for $20 with a markup multiplier of 2.5 sells for $50. The higher the markup multiplier, the larger the margin.'
+    synonyms: 'coefficient, markup factor, markup, multiplier'
+    quiz:
+        q1:
+            question: 'An item costs you $20. With a markup multiplier of 2.5, at what price do you sell it?'
+            a: '$22.50'
+            b: '$45'
+            c: '$50'
+            explanation: 'Selling price = purchase cost × markup multiplier: $20 × 2.5 = $50.'
+        q2:
+            question: 'You go from a markup multiplier of 2 to a markup multiplier of 2.5 on the same item. What happens to your margin per item?'
+            a: 'It goes up'
+            b: 'It does not change'
+            c: 'It goes down'
+            explanation: 'The cost does not change and the price goes up: the margin per item increases. It remains to check that the item still sells as well.'
+frais:
+    term: 'Period expenses'
+    definition: 'What the period costs you on top of the items: trips, shipping costs, advertising and other expense reports.'
+    synonyms: 'expenses'
+    illustration: 'Over the period %period%: %expenses% of expenses (shipping, expense reports, advertising), excluding merchandise purchases.'
+resultat:
+    term: 'Profit'
+    definition: 'Gross margin minus expenses: what the period really earns you. A negative profit is a loss. Stock purchases are not part of it: they become stock.'
+    synonyms: 'result, net result, loss'
+    illustration: 'Over the period %period%: %margin% of gross margin, minus %expenses% of expenses, a profit of %result%.'
+    quiz:
+        q1:
+            question: 'Your gross margin is $6,000 and your expenses are $4,500. What is your profit?'
+            a: '$1,500'
+            b: '$10,500'
+            c: '−$1,500'
+            explanation: 'Profit = gross margin − expenses: 6,000 − 4,500 = $1,500. It is a gain.'
+        q2:
+            question: 'You buy $8,000 of merchandise this quarter. Is it removed from the profit of the period?'
+            a: 'Yes, in full'
+            b: 'Yes, half of it'
+            c: 'No: it is stock, counted when it sells'
+            explanation: 'A stock purchase is not an expense of the profit. Its cost enters the profit as the items are sold.'
+point-mort:
+    term: 'Break-even point'
+    definition: 'The amount of sales to reach so as not to lose money: expenses ÷ margin rate. Above it you earn, below it you lose.'
+    synonyms: 'break-even'
+    illustration: '%period%: your break-even point is %breakEven% of sales; you are at %sales%.'
+    quiz:
+        q1:
+            question: 'Your expenses are $4,000 and your margin rate is 40%. How much must you sell so as not to lose money?'
+            a: '$4,000'
+            b: '$10,000'
+            c: '$1,600'
+            explanation: 'Break-even = expenses ÷ margin rate: 4,000 ÷ 0.40 = $10,000. At that level of sales, the margin exactly covers the expenses.'
+investi-stock:
+    term: 'Invested in stock'
+    definition: 'The total of merchandise purchases for the period (supplier orders). It is not an expense of the profit: it is stock that will be sold.'
+    synonyms: 'stock purchases'
+autres-revenus:
+    term: 'Rentals and subscriptions'
+    definition: 'Income from rentals and subscriptions, counted apart from the profit of the period for items.'
+periode:
+    term: 'Period'
+    definition: 'A sales period, created automatically: a quarter by default (4 per year), or a half-year or a month depending on the site setting. Each expense counts in the period of its date. A closed period is read-only.'
+    synonyms: 'quarter, season'
+    quiz:
+        q1:
+            question: 'An expense report dated April 3, entered on July 10: in which period does it count?'
+            a: 'The July one, when it is entered'
+            b: 'Both'
+            c: 'The April one, its date'
+            explanation: 'Each expense counts in the period of its date, not in that of the day you enter it.'
+budget-global:
+    term: 'Overall budget'
+    definition: 'The total amount you allow yourself to spend over the period, all categories together.'
+prevu:
+    term: 'Planned'
+    definition: 'The amount you plan to spend on a category (stock, trip, shipping, advertising, other) during the period.'
+reel:
+    term: 'Spent (actual)'
+    definition: 'What has already been spent on the category, from your orders, expense reports, shipping costs and campaigns.'
+    synonyms: 'spent'
+reste:
+    term: 'Remaining'
+    definition: 'Planned minus spent: what you can still spend on the category without going over the plan.'
+    illustration: 'Over the period %period%: %planned% planned, %actual% spent, %remaining% remaining.'
+solde:
+    term: 'Entered balance'
+    definition: 'The balance of your bank account at the end of the day, which you enter yourself. The app is not connected to the bank.'
+    synonyms: 'balance'
+    illustration: 'Your last entered balance: %balance%, on %date%.'
+point-bas:
+    term: 'Low point'
+    definition: 'The lowest balance your account should reach over the stated duration, from your planned movements and entered expenses.'
+    illustration: 'From what is planned, your account will go down to %low% at its lowest, on %date%.'
+seuil:
+    term: 'Alert threshold'
+    definition: 'The amount below which you want to be warned. At 0, you are warned only if the account may go into overdraft.'
+    quiz:
+        q1:
+            question: 'Your alert threshold is $2,000. The expected low point is $1,500. What happens?'
+            a: 'Nothing'
+            b: 'You are warned: the account should go below your threshold'
+            c: 'The account is blocked'
+            explanation: 'The threshold is the amount below which you want to be warned. Here the expected balance goes below it: you have time to act first.'
+ventes-a-venir:
+    term: 'Upcoming sales'
+    definition: 'When enabled, the projection adds your receipts: actual sales since your last balance, then the average collected per day over the last 30 days. When off, the projection only counts what is certain.'
+rapprochement:
+    term: 'Bank reconciliation'
+    definition: 'Comparing the real balance of your account with the one the app expected (last balance, entered expenses, planned movements, receipts). A gap often reveals a forgotten expense: find it, or record the gap as unexplained or explained.'
+    synonyms: 'reconciliation'
+    quiz:
+        q1:
+            question: 'The app expected $5,000 in your account, and there is $4,700. What should you do?'
+            a: 'Nothing, the difference is normal'
+            b: 'Correct the balance to show $5,000'
+            c: 'Look for the forgotten $300 expense, or record the gap'
+            explanation: 'A gap often reveals an expense that was not entered. Find it; otherwise, record the gap as explained or unexplained.'
+frais-fixes:
+    term: 'Fixed costs'
+    definition: 'Expenses that come back every month whatever the level of sales: rent, salaries, insurance, subscriptions, electricity. They count in the profit in proportion to the days of the period. A loan repayment is not part of them by default: it is capital, not an expense. Do not also enter them as expense reports, or they count twice.'
+    synonyms: 'overheads'
+    quiz:
+        q1:
+            question: 'Which of these is a fixed cost?'
+            a: 'The shipping cost of an order'
+            b: 'An advertising campaign'
+            c: 'The shop rent'
+            explanation: 'Rent comes back every month, whether you sell a lot or a little. Shipping and advertising follow the activity: they are variable costs.'
+resultat-apres-frais-fixes:
+    term: 'Profit after fixed costs'
+    definition: 'The profit of the period minus its share of fixed costs (rent, salaries, insurance…), counted in proportion to the days. It is what the activity earns you once the business is paid for.'
+point-mort-apres-frais-fixes:
+    term: 'Break-even point after fixed costs'
+    definition: 'The sales to reach to cover the expenses of the period and its share of fixed costs: (expenses + fixed costs) ÷ margin rate.'
+exercice:
+    term: 'Fiscal year'
+    definition: 'The 12 months over which you do your accounts: January to December, or for example April to March. It is set in Management › Fiscal year.'
+    synonyms: 'financial year'
+    quiz:
+        q1:
+            question: 'Does a fiscal year necessarily start in January?'
+            a: 'Yes, always'
+            b: 'No: it lasts 12 months, but can start in another month, for example April'
+            c: 'No, it lasts 6 months'
+            explanation: 'The fiscal year covers 12 months, from January to December or starting in another month. You set its start month in the management settings.'
+resultat-entreprise:
+    term: 'Business profit'
+    definition: 'Margin + rentals and subscriptions − variable costs (shipping, advertising, expense reports, trips) − fixed costs (rent, salaries…). It is what the business really earns or loses over the fiscal year.'
+frais-variables:
+    term: 'Variable costs'
+    definition: 'Costs that follow the activity: shipping costs on purchases, advertising, expense reports and trips, each at its date. Stock purchases are not part of them: they count in the cost of goods sold.'
+    quiz:
+        q1:
+            question: 'Your sales double this month. Which costs are most likely to increase?'
+            a: 'Variable costs (shipping, advertising)'
+            b: 'Fixed costs (rent, insurance)'
+            c: 'None'
+            explanation: 'Variable costs follow the activity. Fixed costs stay the same, whatever the level of sales.'
+projection:
+    term: 'Estimated year end'
+    definition: 'What is done, plus an estimate of the rest: the same months of the previous fiscal year if they exist, otherwise the sales pace of the last 30 days. Expenses come from your period budgets; fixed costs are known in advance.'
+leviers:
+    term: 'Levers'
+    definition: 'Actions costed by the app on your own figures: what they would bring in by the end of the fiscal year. “Closes the gap”: on its own, the action would be enough to reach the break-even point.'
+mouvement-prevu:
+    term: 'Planned movement'
+    definition: 'Money coming in or going out that is known in advance: rent, salaries, loan, taxes… Your orders and expense reports are already counted: do not add them here.'
+decouvert:
+    term: 'Overdraft'
+    definition: 'A negative balance: the account has gone below zero.'
+budget-voyage:
+    term: 'Trip budget'
+    definition: 'What you plan to spend on expenses during the trip: travel, hotel, meals. Merchandise purchases stay in the “Stock” budget.'
+budget-a-ce-jour:
+    term: 'Budget planned to date'
+    definition: 'Budget per day × days already elapsed: the most you should have spent up to today to stay within the budget.'
+arrondi:
+    term: 'Rounding'
+    definition: 'Adjusts the new price so that it “sounds” right: ending in .99, to the nearest 0.50 or to the unit. For a promotion, rounding goes down, so as never to announce a smaller discount.'
+    synonyms: 'psychological price'
+sous-le-cout:
+    term: 'Below cost'
+    definition: 'The new price would be lower than the purchase price: each sale would lose money. It must be allowed explicitly.'
+promotion:
+    term: 'Dated promotion'
+    definition: 'A reduced price during chosen dates, in the shop and at the till. The regular price is never changed and comes back by itself at the end.'
+    synonyms: 'sale, discount'
+promotion-variante:
+    term: 'Promotion by variant'
+    definition: 'A dated discount on a specific size or colour of an item (for example the black XL at −20%), even if the variant has its own price. During its dates, it replaces the item promotion, without stacking. The crossed-out price stays the regular price; the regular price comes back by itself at the end.'
+variante-prix-propre:
+    term: 'Variant with its own price'
+    definition: 'A size or colour that has its own price (for example a more expensive XL). Promotions do not apply to it for now.'
+confiance:
+    term: 'Confidence level'
+    definition: 'High: the figure is observed. Medium: it is estimated from solid data. Cautious: it is an estimate to check.'
+effet:
+    term: 'Estimated effect'
+    definition: 'The money the advice can bring in or free up, computed by the app from your figures. The AI only writes it up.'
+mesure:
+    term: 'Measurement'
+    definition: 'After an advice is applied, the guide compares the following 14 days with the previous 14 days to see what it really brought in.'
+panier-moyen:
+    term: 'Average order value'
+    definition: 'The average amount of an order, before taxes: sales before returns ÷ number of orders. A return does not lower the average order value of the day it arrives.'
+    synonyms: 'average basket'
+    illustration: 'For you, %period%: %revenue% of sales in %count% order, an average order value of %basket%.|For you, %period%: %revenue% of sales in %count% orders, an average order value of %basket%.'
+    quiz:
+        q1:
+            question: 'You made $3,000 of sales, with no returns, in 60 orders. What is your average order value?'
+            a: '$50'
+            b: '$180'
+            c: '$5'
+            explanation: 'Average order value = sales ÷ number of orders: 3,000 ÷ 60 = $50.'
+valeur-stock:
+    term: 'Stock value'
+    definition: 'The stock in store valued at the displayed selling price: quantity × price of each variant. The comparison over time comes from a snapshot of the stock taken every day at 10 a.m.'
+    illustration: 'Your stock is worth %sale% at selling price, for %cost% at purchase cost.'
+commandes:
+    term: 'Orders'
+    definition: 'The number of sales containing at least one item, in the online shop, at the till and in the app. Cancelled or incomplete orders do not count.'
+taux-retour:
+    term: 'Return rate'
+    definition: 'The amount of returned items ÷ sales before returns. At 5%, out of $100 sold, $5 were given back.'
+    synonyms: 'returns'
+evolution:
+    term: 'Change'
+    definition: 'The variation compared with the previous range (for example last month, on the same days) and with the same range last year. For a rate, the gap is in points.'
+gain-marge:
+    term: 'Margin gain'
+    definition: 'The margin gained during the campaign compared with before, for each dollar spent on advertising. Above $1, the campaign brings in more than it costs.'
+grille-location:
+    term: 'Rate grid'
+    definition: 'The rental rates (per hour, half-day, day, week, month) attached to categories: changing it changes the price of all rentable items in those categories. Bookings already made keep their price. For a single item, a rental promotion fits better.'
+promotion-location:
+    term: 'Rental promotion'
+    definition: 'A discount on the rental rate, during chosen dates and days of the week. It counts according to the day the rental starts, in the shop and at the till. The deposit and the passenger supplement are never discounted, and a booking already made keeps its price.'
+revenu-location:
+    term: 'Rental income'
+    definition: 'What rentals brought in, counted at the date of the sale, as in the period profit. A booking cancelled but not refunded stays counted: the money is kept.'
+revenu-date-location:
+    term: 'Income at the rental date'
+    definition: 'The same income, spread over the days the item is actually rented: a rental from the 30th to the 2nd counts half in each month.'
+occupation:
+    term: 'Occupancy rate'
+    definition: 'The time an item is rented, compared with the time it could be. At 80%, the item is rented 8 hours out of 10 of opening.'
+recurrent:
+    term: 'Monthly recurring revenue'
+    definition: 'What your active subscriptions bring in each month, brought back to a month whatever their frequency.'
+    synonyms: 'MRR'
+taux-depart:
+    term: 'Churn rate'
+    definition: 'The share of subscribers who stop their subscription each month.'
+    synonyms: 'attrition'
+tresorerie:
+    term: 'Cash position'
+    definition: 'The money available in your bank account, and what it will become. The app starts from the balance you enter, then adds and removes what is planned: planned movements, entered expenses, receipts.'
+    synonyms: 'cash flow, cash, treasury'
+    illustration: 'Your last entered balance: %balance%. From what is planned, the lowest point will be %low%.'
+    quiz:
+        q1:
+            question: 'Your profit is positive. Can your bank account still go into overdraft?'
+            a: 'No, never'
+            b: 'Yes: a large stock purchase takes money out before sales come in'
+            c: 'Only at year end'
+            explanation: 'Profit measures what you earn; the cash position, the money actually available. A stock purchase or rent can empty the account before sales fill it up.'
+taxes:
+    term: 'Taxes'
+    definition: 'The sales taxes (GST, QST, VAT…) you charge the customer and pay back to the government. They are not income: sales, margin and profit are counted before taxes.'
+    synonyms: 'GST, QST, VAT'
+    quiz:
+        q1:
+            question: 'A customer pays $115 including taxes for a $100 item. How much do you count in your sales?'
+            a: '$115'
+            b: '$100'
+            c: '$15'
+            explanation: 'Sales are counted before taxes: $100. The $15 of taxes is not yours; you pay it back to the government.'
+stock-dormant:
+    term: 'Dormant stock'
+    definition: 'Items in stock that do not sell, or very little, for a long time. It is money tied up: a promotion can free it.'
+    synonyms: 'dead stock'
+    quiz:
+        q1:
+            question: 'Why is stock that does not sell a problem?'
+            a: 'It is money tied up, which cannot be used elsewhere'
+            b: 'It lowers the price of other items'
+            c: 'It is not a problem'
+            explanation: 'As long as an item stays on the shelf, the money spent buying it is stuck. A promotion can turn it into cash.'
+budget:
+    term: 'Budget'
+    definition: 'What you plan to spend during a period, category by category (stock, trip, shipping, advertising, other), compared with what is actually spent.'
+    illustration: 'Over the period %period%: %planned% planned, %actual% spent, %remaining% remaining.'
+    quiz:
+        q1:
+            question: 'You planned $2,000 of advertising and have already spent $1,400. How much is left?'
+            a: '$600'
+            b: '$3,400'
+            c: '$1,400'
+            explanation: 'Remaining = planned − spent: 2,000 − 1,400 = $600.'
+cout-d-achat:
+    term: 'Purchase cost'
+    definition: 'What an item cost you from the supplier, per unit. With several purchases at different prices, the app keeps the average cost. Without a purchase cost, the margin of the item stays unknown.'
+    synonyms: 'purchase price, cost'
+    illustration: '%count% item out of %total% has no purchase cost: its margin stays unknown.|%count% items out of %total% have no purchase cost: their margin stays unknown.'
+    illustration_none: 'All your items have a purchase cost: their margin is known.'
+    quiz:
+        q1:
+            question: 'An item has no purchase cost in the app. What is the consequence?'
+            a: 'It can no longer be sold'
+            b: 'Its margin stays unknown, and its sales are left out of the margin'
+            c: 'Its cost is counted as zero'
+            explanation: 'Without a cost, the app cannot compute the margin of the item: its sales are counted, but kept out of the margin.'
+stock-bas:
+    term: 'Low stock'
+    definition: 'An item that will soon be out of stock at the pace it sells: it has few days of sales left.'
+    synonyms: 'out of stock'
+    illustration: '%count% item is low on stock right now.|%count% items are low on stock right now.'
+    illustration_none: 'No item is low on stock right now.'
+semblables:
+    term: 'Similar items'
+    definition: 'Items comparable to the one you are looking at: same supplier, same category when it is known, and a close purchase cost (within 30%), sold during the same season of the previous year. Their history is used to suggest a markup multiplier.'
+verdict:
+    term: 'Verdict'
+    definition: 'The app''s opinion on the price of an item, from its similar items: keep, raise or lower. It is computed by a rule, not by the AI.'

@@ -6,6 +6,9 @@ use App\Entity\Collections;
 use App\Gestion\Analysis\AnalysisCatalog;
 use App\Gestion\Analysis\RangeLabel;
 use App\Gestion\Entity\GestionConversationMessage;
+use App\Gestion\Lexique\LexiqueCatalog;
+use App\Gestion\Lexique\LexiqueIllustration;
+use App\Gestion\Lexique\LexiqueTexts;
 use App\Gestion\Services\Conversation\Action\ActionCatalog;
 use App\Gestion\Services\Conversation\ActionThreadService;
 use App\Gestion\Services\GestionAdviceService;
@@ -35,12 +38,19 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * analyses, n'a qu'une carte (la première source) ; les dates et les états sont donnés au modèle rédigés (« 11 novembre 2026 »,
  * « Correct »), jamais bruts ; l'écran donne aussi ses paramètres fixes (l'horizon de 90 jours de la Trésorerie).
  *
+ * Lot W2-APPRENDRE (13/11/2026) : la LEÇON d'une notion (analyse `lexique.term`) est un bloc `lesson` écrit par le serveur (définition
+ * du lexique, illustration avec les chiffres du site), suivi de ses chiffres. Quand l'appel 1 ne choisit QUE des notions, le serveur
+ * assemble la réponse lui-même, sans appel 2 : aucune unité, ligne « [Console] leçon » au journal. En mode « apprendre » (`mode:
+ * "learn"`, envoyé avec la question), toute réponse reçoit en plus les leçons des notions de ses chiffres, 3 au plus, sans appel de plus.
+ *
  * Unités : 1 par réponse rédigée par le modèle (demande de précision rédigée par lui comprise) ; aucune si le serveur répond lui-même
  * (question hors périmètre, précision demandée par le serveur) ou si l'IA échoue.
  */
 class ConsoleResponder
 {
     public const MAX_PROPOSALS = 3;
+    /** Leçons d'une réponse en mode « apprendre », celles demandées par la question comprises : pour ne pas noyer le gérant */
+    public const MAX_LESSONS = 3;
     /**
      * Une réponse de REPLI (les deux essais de rédaction portaient un nombre inconnu : texte du serveur et chiffres des analyses)
      * est-elle décomptée ? Non par défaut : le gérant ne paie pas une réponse que l'IA n'a pas su écrire. Chaque repli est compté
@@ -65,6 +75,8 @@ class ConsoleResponder
         private readonly GestionAdviceService $format,
         private readonly TranslatorInterface $translator,
         private readonly LoggerInterface $logger,
+        private readonly LexiqueTexts $lexique,
+        private readonly LexiqueIllustration $illustration,
     ) {
     }
 
@@ -83,6 +95,7 @@ class ConsoleResponder
         $context = $question?->getContent()['context'] ?? null;
         $screen = $this->screen(is_array($context) ? $context : null, $locale); // l'écran, traduit par le serveur
         $screenParams = $screen === null ? [] : (array) ($context['params'] ?? []);
+        $learn = ($question?->getContent()['mode'] ?? null) === ConsoleService::MODE_LEARN;
         $stats = new LandingAiUsageStats(ConsoleModel::MODEL_WRITE);
         try {
             $history = [];
@@ -92,7 +105,8 @@ class ConsoleResponder
                 }
                 $history[] = $m->getKind() === ConsoleService::QUESTION ? ['role' => 'gérant', 'text' => (string) ($m->getContent()['text'] ?? '')] : ['role' => 'console', 'text' => self::plain($m->getContent()['blocks'] ?? [])];
             }
-            $choice = $this->model->choose($text, $screen, array_reverse(array_slice($history, 0, ConsoleService::HISTORY_MESSAGES)), $this->analyses->listed($locale), $this->periods($locale), $this->calendar->today(), $locale, $stats);
+            $choice = $this->model->choose($text, $screen, array_reverse(array_slice($history, 0, ConsoleService::HISTORY_MESSAGES)), $this->analyses->listed($locale), $this->periods($locale), $this->calendar->today(), $locale, $stats,
+                array_map(fn (array $e) => ['key' => $e['key'], 'term' => $e['term'], 'synonymes' => $e['synonyms']], $this->lexique->all($locale)));
 
             if ($choice['kind'] === 'out_of_scope') {
                 // Hors périmètre : le serveur répond lui-même, gratuitement
@@ -129,6 +143,28 @@ class ConsoleResponder
                 }
                 $results[] = $r;
             }
+            $lessons = [];
+            foreach ($results as $r) {
+                if ($r['lesson'] !== null) {
+                    $lessons[] = $this->lessonBlock($r['lesson'], $this->illustration->of($r['lesson']['key'], $r['figures'], $r['period'], $locale));
+                }
+            }
+            $listed = fn (): array => array_map(fn (array $r) => ['key' => $r['key'], 'ref' => $r['ref'], 'title' => $r['title'], 'params' => $r['lesson'] === null ? $r['source']['params'] : ['term' => $r['lesson']['key']], 'source' => $r['source'], 'period' => $r['period'], 'computedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM)], $results);
+            if (count($lessons) === count($results)) {
+                // La question ne demande QUE des notions : la réponse est assemblée par le serveur (la leçon, puis ses chiffres), sans appel 2.
+                // Aucune unité : rien n'est rédigé par le modèle. Comptée au journal, pour savoir combien de questions sont des définitions.
+                $blocks = [];
+                foreach ($results as $i => $r) {
+                    $blocks[] = $lessons[$i];
+                    if ($r['figures'] !== []) {
+                        $blocks[] = $this->figuresBlock(array_column($r['figures'], 'id'), $results);
+                    }
+                }
+                $this->logger->notice(sprintf('[Console] leçon : réponse %d assemblée par le serveur, sans rédaction (%s)', $messageId, implode(', ', array_map(fn (array $r) => $r['lesson']['key'], $results))));
+                $this->console->finish($messageId, $content, ConsoleService::STATE_DONE, ['blocks' => $blocks, 'analyses' => $listed(), 'proposals' => [], 'lesson' => true], false, $stats);
+
+                return;
+            }
             [$forModel, $allowed] = $this->forModel($results, $text, $locale);
             $actions = array_map(fn (string $k) => ['key' => $k, 'title' => $this->tr('conversation.actions.' . str_replace('.', '_', $k) . '.title', $locale)], ActionCatalog::KEYS);
 
@@ -156,9 +192,14 @@ class ConsoleResponder
                 }
             }
             $proposals = $this->proposals($written['proposals'], $results, $locale);
+            // les leçons demandées par la question passent devant ; en mode « apprendre », celles des notions des chiffres montrés s'ajoutent
+            $blocks = array_merge($lessons, array_values(array_filter($blocks)));
+            if ($learn) {
+                $blocks = $this->withLessons($blocks, $results, $locale);
+            }
             $this->console->finish($messageId, $content, ConsoleService::STATE_DONE, [
-                'blocks' => array_values(array_filter($blocks)),
-                'analyses' => array_map(fn (array $r) => ['key' => $r['key'], 'ref' => $r['ref'], 'title' => $r['title'], 'params' => $r['source']['params'], 'source' => $r['source'], 'period' => $r['period'], 'computedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM)], $results),
+                'blocks' => $blocks,
+                'analyses' => $listed(),
                 'proposals' => $proposals,
             ] + ($fallback ? ['fallback' => true] : []), !$fallback || self::CONSOLE_FALLBACK_CHARGED, $stats, mb_substr(self::plain($blocks), 0, 200));
         } catch (\Throwable $e) {
@@ -226,13 +267,15 @@ class ConsoleResponder
                 // le nombre d'articles de chaque groupe est fourni : le modèle ne compte rien
                 $groups[] = ['verdict' => $g['verdict'], 'raison' => $note((string) $g['label']), 'nombre' => $note((string) $g['count']), 'articles' => array_map(fn (string $name) => $note($name), $g['names'])];
             }
+            $lesson = $r['lesson'] === null ? [] : ['lecon' => ['terme' => $note((string) $r['lesson']['term']), 'definition' => $note((string) $r['lesson']['definition']),
+                'illustration' => ($ill = $this->illustration->of($r['lesson']['key'], $r['figures'], $r['period'], $locale)) === null ? null : $note($ill)]];
             $period = $r['period'] === null ? [] : ['period' => $note((string) $r['period']['label'])];
             foreach (['previousLabel', 'lastYearLabel'] as $k) {
                 if (isset($r['period'][$k])) {
                     $period[$k] = $note((string) $r['period'][$k]);
                 }
             }
-            $out[] = ['ref' => $r['ref'], 'key' => $r['key'], 'title' => $note((string) $r['title'])] + ($period ?: ['period' => null]) + ['figures' => $figures, 'rows' => $rows] + ($groups === [] ? [] : ['groupes' => $groups]) + [
+            $out[] = ['ref' => $r['ref'], 'key' => $r['key'], 'title' => $note((string) $r['title'])] + ($period ?: ['period' => null]) + ['figures' => $figures, 'rows' => $rows] + ($groups === [] ? [] : ['groupes' => $groups]) + $lesson + [
                 'more' => $r['more'] === null ? null : $note($this->tr('console.more', $locale, ['%count%' => (string) $r['more']['count'], '%total%' => (string) $r['more']['total']]))];
         }
 
@@ -544,6 +587,60 @@ class ConsoleResponder
         return $out;
     }
 
+    /**
+     * Bloc `lesson` : la notion telle que le lexique l'écrit, et son illustration avec les chiffres du site (null sans donnée utile).
+     *
+     * @param array<string, mixed> $entry entrée du lexique
+     *
+     * @return array<string, mixed>
+     */
+    private function lessonBlock(array $entry, ?string $illustration): array
+    {
+        return ['type' => 'lesson', 'key' => $entry['key'], 'term' => $entry['term'], 'definition' => $entry['definition'], 'illustration' => $illustration,
+            'related' => $entry['related'], 'quiz' => $entry['quiz'],
+            'source' => ['screen' => 'lexique', 'route' => 'GET /api/gestion/lexique/{term}', 'params' => ['term' => $entry['key']]]];
+    }
+
+    /**
+     * Mode « apprendre » : à la fin de la réponse, les leçons des notions des chiffres montrés (`term` de chaque carte), dans l'ordre
+     * d'importance du lexique, sans répéter une leçon déjà là, `MAX_LESSONS` au plus en tout. Aucun appel au modèle : l'illustration
+     * est écrite avec les chiffres de l'analyse qui porte la notion, quand ils suffisent.
+     *
+     * @param list<array<string, mixed>> $blocks @param list<array<string, mixed>> $results
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function withLessons(array $blocks, array $results, string $locale): array
+    {
+        $present = array_column(array_filter($blocks, fn (array $b) => $b['type'] === 'lesson'), 'key');
+        $terms = [];
+        foreach ($blocks as $b) {
+            foreach ($b['type'] === 'figures' ? $b['items'] : [] as $item) {
+                if (isset($item['term'])) {
+                    $terms[$item['term']] = true;
+                }
+            }
+        }
+        foreach (LexiqueCatalog::keys() as $key) {
+            if (count($present) >= self::MAX_LESSONS) {
+                break;
+            }
+            if (!isset($terms[$key]) || in_array($key, $present, true)) {
+                continue;
+            }
+            $illustration = null;
+            foreach ($results as $r) {
+                if (in_array($key, array_column($r['figures'], 'term'), true)) {
+                    $illustration ??= $this->illustration->of($key, $r['figures'], $r['period'], $locale);
+                }
+            }
+            $blocks[] = $this->lessonBlock($this->lexique->entry($key, $locale), $illustration);
+            $present[] = $key;
+        }
+
+        return $blocks;
+    }
+
     /** @param list<string> $ids @param list<array<string, mixed>> $results */
     private function figuresBlock(array $ids, array $results): array
     {
@@ -628,7 +725,11 @@ class ConsoleResponder
     /** @param list<array<string, mixed>> $blocks texte seul d'une réponse */
     private static function plain(array $blocks): string
     {
-        return trim(implode(' ', array_map(fn (array $b) => ($b['type'] ?? null) === 'text' ? (string) $b['text'] : '', array_filter($blocks, 'is_array'))));
+        return trim(implode(' ', array_map(fn (array $b) => match ($b['type'] ?? null) {
+            'text' => (string) $b['text'],
+            'lesson' => $b['term'] . ' : ' . $b['definition'], // une leçon compte dans l'échange : la question suivante peut s'y référer
+            default => '',
+        }, array_filter($blocks, 'is_array'))));
     }
 
     /** @param array<string, string> $params */
