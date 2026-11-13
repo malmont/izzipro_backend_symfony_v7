@@ -151,6 +151,10 @@ class StoreTimezoneAdminTest extends WebTestCase
         $this->assertSame(['special_price_from' => '2026-11-20 14:00:00', 'special_price_to' => '2026-11-28 02:00:00'],
             $this->db()->fetchAssociative('SELECT special_price_from, special_price_to FROM product WHERE id = ?', [$productId]), '9 h et 21 h à Toronto en hiver = 14 h et 2 h UTC');
 
+        // L'article du test est supprimé : la base de test est partagée, et d'autres tests comptent les articles
+        $this->db()->executeStatement('DELETE FROM product_translation WHERE product_id = ?', [$productId]); // créée par l'enregistrement de la fiche
+        $this->db()->executeStatement('DELETE FROM product WHERE id = ?', [$productId]);
+
         // Création : même règle (mouvement de stock)
         $this->admin(InventoryMovementsCrudController::class, 'new');
         $this->assertStringContainsString(AdminStoreTimezone::STORE_MENTION, $this->client->getCrawler()->filter('label[for="InventoryMovements_movementDate"]')->text());

@@ -39,6 +39,10 @@ class InventoryMovementsLockTest extends WebTestCase
 
     /** @var list<int> */
     private array $createdCommandeLineIds = [];
+    /** @var list<int> articles créés par le test : supprimés ensuite, pour ne pas peser sur les tests qui comptent les articles */
+    private array $createdProductIds = [];
+    /** @var list<int> */
+    private array $createdCommandeIds = [];
 
     protected function setUp(): void
     {
@@ -56,7 +60,9 @@ class InventoryMovementsLockTest extends WebTestCase
     public function testLockedMovementsCannotBeModifiedOrDeletedByAdminOrSuperAdmin(): void
     {
         $commande = $this->create(Commande::class, ['name' => 'Achat verrou STOCK']);
+        $this->createdCommandeIds[] = (int) $commande->getId();
         $product = $this->create(Product::class);
+        $this->createdProductIds[] = (int) $product->getId();
         $variant = $this->create(ProductVariant::class, ['product' => $product, 'stockQuantity' => 25]);
         $line = $this->create(CommandeLine::class, [
             'commande' => $commande,
@@ -147,6 +153,7 @@ class InventoryMovementsLockTest extends WebTestCase
     public function testNewAdjustmentComputesStockFromDatabaseWithoutModifyingVariantAndRejectsForgedInputs(): void
     {
         $product = $this->create(Product::class);
+        $this->createdProductIds[] = (int) $product->getId();
         $variant = $this->create(ProductVariant::class, ['product' => $product, 'stockQuantity' => 25]);
         $variantId = (int) $variant->getId();
 
@@ -281,6 +288,7 @@ class InventoryMovementsLockTest extends WebTestCase
     public function testFreeAndUntypedMovementsRemainEditableAndDeletableWithLockedStockBeforeAndAfter(): void
     {
         $product = $this->create(Product::class);
+        $this->createdProductIds[] = (int) $product->getId();
         $variant = $this->create(ProductVariant::class, ['product' => $product, 'stockQuantity' => 10]);
         $variantId = (int) $variant->getId();
 
@@ -477,7 +485,7 @@ class InventoryMovementsLockTest extends WebTestCase
 
     private function cleanupCreatedRows(): void
     {
-        if ($this->createdMovementIds === [] && $this->createdCommandeLineIds === []) {
+        if ($this->createdMovementIds === [] && $this->createdCommandeLineIds === [] && $this->createdProductIds === [] && $this->createdCommandeIds === []) {
             return;
         }
         $db = $this->db();
@@ -487,8 +495,20 @@ class InventoryMovementsLockTest extends WebTestCase
         foreach (array_reverse($this->createdCommandeLineIds) as $id) {
             $db->delete('commande_line', ['id' => $id]);
         }
+        // Articles et variantes du test, avec les mouvements créés par les formulaires : la base de test est partagée par toute la suite
+        foreach ($this->createdProductIds as $productId) {
+            $db->executeStatement('DELETE FROM inventory_movements WHERE product_variant_id IN (SELECT id FROM product_variant WHERE product_id = ?)', [$productId]);
+            $db->executeStatement('DELETE FROM commande_line WHERE product_id = ?', [$productId]);
+            $db->executeStatement('DELETE FROM product_variant WHERE product_id = ?', [$productId]);
+            $db->executeStatement('DELETE FROM product_translation WHERE product_id = ?', [$productId]);
+            $db->executeStatement('DELETE FROM product WHERE id = ?', [$productId]);
+        }
+        foreach ($this->createdCommandeIds as $commandeId) {
+            $db->executeStatement('DELETE FROM commande WHERE id = ?', [$commandeId]);
+        }
         $this->createdMovementIds = [];
         $this->createdCommandeLineIds = [];
+        $this->createdProductIds = [];
+        $this->createdCommandeIds = [];
     }
 }
-
