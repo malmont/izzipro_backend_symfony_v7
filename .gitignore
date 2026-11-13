@@ -49,3 +49,7 @@ interieur_lulu.pdf
 
 # Tableau de bord technique : SQL des tables maître, suivi (relu par tests/bootstrap.php)
 !/ops/sql/*.sql
+
+# Lien local vers les clés des jetons (worktrees de développement) : jamais dans un commit. En production, config/jwt est un point de
+# montage du conteneur ; un fichier de ce nom apporté par git le remplace et rend les clés invisibles (incident du 13/11/2026).
+/config/jwt

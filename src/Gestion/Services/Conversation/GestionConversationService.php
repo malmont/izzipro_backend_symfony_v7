@@ -37,6 +37,8 @@ class GestionConversationService
     public const STATE_READY = 'ready';
     public const STATE_CONFIRMED = 'confirmed';
     public const STATE_ABANDONED = 'abandoned';
+    /** Type des échanges de la console IA (lot W2), rangés dans les mêmes tables mais hors des routes du fil */
+    public const KIND_CONSOLE = 'console';
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -87,7 +89,7 @@ class GestionConversationService
     public function find(int $id): GestionConversation
     {
         $conversation = $this->emProvider->getEntityManager()->find(GestionConversation::class, $id);
-        if ($conversation === null) {
+        if ($conversation === null || $conversation->getKind() === self::KIND_CONSOLE) { // un échange de la console IA (lot W2) n'est pas un fil
             throw new GestionConflictException('CONVERSATION_NOT_FOUND', 'Conversation introuvable.', 404, ['conversationId' => $id]);
         }
 
@@ -201,7 +203,7 @@ class GestionConversationService
         $em = $this->emProvider->getEntityManager();
         // Plafond du jour (jour du magasin), par site
         [$dayStart, $dayEnd] = $this->clock->range(null, null);
-        $sent = (int) $em->getConnection()->fetchOne("SELECT COUNT(*) FROM gestion_conversation_message WHERE role = 'assistant' AND kind = 'text' AND created_at >= ? AND created_at < ?", [$dayStart->format('Y-m-d H:i:s'), $dayEnd->format('Y-m-d H:i:s')]);
+        $sent = (int) $em->getConnection()->fetchOne("SELECT COUNT(*) FROM gestion_conversation_message WHERE role = 'assistant' AND kind IN ('text', 'answer') AND created_at >= ? AND created_at < ?", [$dayStart->format('Y-m-d H:i:s'), $dayEnd->format('Y-m-d H:i:s')]);
         if ($sent >= self::AI_MESSAGES_PER_DAY) {
             throw new GestionConflictException('AI_DAILY_LIMIT', sprintf('%d messages à l\'assistant par jour au plus : répondez par les boutons, ou reprenez demain.', self::AI_MESSAGES_PER_DAY), 429,
                 ['limit' => self::AI_MESSAGES_PER_DAY, 'resetAt' => $dayEnd->format(\DateTimeInterface::ATOM)]);
@@ -341,8 +343,15 @@ class GestionConversationService
     public function search(int $page, int $limit, ?string $kind = null): array
     {
         $repo = $this->emProvider->getEntityManager()->getRepository(GestionConversation::class);
-        $criteria = $kind === null ? [] : ['kind' => $kind];
-        $rows = $repo->findBy($criteria, ['id' => 'DESC'], $limit, ($page - 1) * $limit);
+        if ($kind === self::KIND_CONSOLE) {
+            return [[], 0]; // les échanges de la console IA (lot W2) se lisent par leurs routes, jamais ici
+        }
+        $query = $repo->createQueryBuilder('c')->where('c.kind <> :console')->setParameter('console', self::KIND_CONSOLE);
+        if ($kind !== null) {
+            $query->andWhere('c.kind = :kind')->setParameter('kind', $kind);
+        }
+        $total = (int) (clone $query)->select('COUNT(c.id)')->getQuery()->getSingleScalarResult();
+        $rows = $query->orderBy('c.id', 'DESC')->setMaxResults($limit)->setFirstResult(($page - 1) * $limit)->getQuery()->getResult();
 
         return [array_map(function (GestionConversation $c): array {
             // `undo` (demande du web, 13/11/2026) : la fenêtre d'annulation d'une confirmation encore en vigueur, sans ses blocages (au détail du fil)
@@ -355,7 +364,7 @@ class GestionConversationService
                 'createdAt' => $c->getCreatedAt()?->format(\DateTimeInterface::ATOM), 'updatedAt' => $c->getUpdatedAt()?->format(\DateTimeInterface::ATOM),
                 'undo' => $undo,
             ];
-        }, $rows), $repo->count($criteria)];
+        }, $rows), $total];
     }
 
     // ---- outils --------------------------------------------------------------------------------------------------------------------

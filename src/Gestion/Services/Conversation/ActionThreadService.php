@@ -86,6 +86,37 @@ class ActionThreadService
         return $conversation->getKind() !== GestionConversation::KIND_INVOICE;
     }
 
+    /**
+     * Ces paramètres passeraient-ils le contrôle d'ouverture du fil de cette action ? Rien n'est créé. Sert à la console IA (lot W2) :
+     * une proposition n'est rendue que si l'application pourra ouvrir le fil tel quel.
+     *
+     * @param array<string, mixed> $params
+     */
+    public function accepts(string $key, array $params, string $locale): bool
+    {
+        if (!$this->catalog->has($key)) {
+            return false;
+        }
+        $action = $this->catalog->get($key);
+        $answers = [];
+        try {
+            foreach ($params as $id => $value) {
+                $known = array_column($action->build($answers, $locale)['questions'], null, 'id');
+                if (!isset($known[$id])) {
+                    return false;
+                }
+                $accepted = $action->accept($known[$id], $value, 0, $answers);
+                if ($accepted !== null) {
+                    $answers[(string) $id] = $accepted;
+                }
+            }
+        } catch (GestionValidationException) {
+            return false;
+        }
+
+        return true;
+    }
+
     /** L'action d'un fil ; 409 si elle n'est plus au catalogue (un fil ancien dont l'action a été retirée) */
     public function action(GestionConversation $conversation): GestionAction
     {
