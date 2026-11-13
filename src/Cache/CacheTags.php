@@ -401,6 +401,8 @@ final class CacheTags
         \App\Gestion\Entity\GestionPromotionChange::class,
         \App\Gestion\Entity\GestionPromotionTzFix::class, // journal de la remise en UTC des dates de promotion (lot P5b, 11/11/2026), en SQL
         \App\Gestion\Entity\GestionTileDismissal::class, // vignettes d'accueil écartées (11/11/2026) : écrites et lues en SQL par leur dépôt
+        \App\Gestion\Entity\GestionConversation::class, // fil de conversation de la gestion (lot IA-FACT-1, 13/11/2026) : état recalculé à chaque lecture
+        \App\Gestion\Entity\GestionConversationMessage::class,
         \App\Gestion\Entity\GestionReprise::class, // reprise d'historique (lot P3, 10/11/2026) : une ligne par site, lue par son dépôt
         \App\Entity\PeriodResult::class, // résultat de période figé (lot P2, 10/11/2026) : lu par son dépôt, la route est cachée sous l'étiquette de la collection
         OtpCode::class,

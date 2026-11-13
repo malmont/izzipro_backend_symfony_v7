@@ -14,8 +14,8 @@ namespace App\Gestion\Sequences;
  *   lecture de constat), si elle est indispensable, son écran et la référence de l'action qui la fait avancer.
  *
  * Ajouter une étape = une entrée ici, sa méthode de constat et ses textes (`translations/gestion.{fr,en}.yaml`, `sequences.*`). Le
- * garde-fou `SequenceCatalogGuardTest` vérifie que chaque étape a les trois. `preparable` (l'IA sait-elle préparer l'action) vaut faux
- * partout dans ce lot ; les lots IA-FACT et IA-ACT le passeront à vrai action par action, sans changer les clés.
+ * garde-fou de `SequencesApiTest` vérifie que chaque étape a les trois. `preparable` (la conversation sait-elle préparer l'action) vaut
+ * vrai pour les actions de `PREPARABLE_ACTIONS` : la facture depuis le lot IA-FACT-1 ; IA-ACT en ajoutera, sans changer les clés.
  */
 final class SequenceCatalog
 {
@@ -91,6 +91,14 @@ final class SequenceCatalog
     public static function onceKey(string $group): string
     {
         return self::ONCE_PREFIX . preg_replace('/^(app|module)\./', '', $group);
+    }
+
+    /** Actions que la conversation de la gestion sait préparer (aperçu, empreinte, confirmation, annulation) : la facture depuis le lot IA-FACT-1 */
+    public const PREPARABLE_ACTIONS = ['document.invoice.confirm'];
+
+    public static function preparable(string $action): bool
+    {
+        return in_array($action, self::PREPARABLE_ACTIONS, true);
     }
 
     public static function actionOf(string $readinessStepKey): string

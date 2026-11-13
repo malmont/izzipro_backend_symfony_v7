@@ -52,7 +52,7 @@ class MissingCostQuery
     /**
      * Page de la liste des articles sans coût, par nom.
      *
-     * @return array{total: int, items: list<array{id: int, name: ?string, code: ?string, image: ?string, price: ?int, stock: int, commandeId: ?int, costSource: ?string}>}
+     * @return array{total: int, items: list<array{id: int, name: ?string, code: ?string, image: ?string, price: ?int, stock: int, commandeId: ?int, periodId: ?int, costSource: ?string}>}
      */
     public function page(?string $q, ?string $from, ?string $to, ?int $limit, int $offset): array
     {
@@ -65,7 +65,8 @@ class MissingCostQuery
         $conn = $this->emProvider->getEntityManager()->getConnection();
         $total = (int) $conn->fetchOne('SELECT COUNT(*) FROM product p WHERE ' . $where, $params);
         $rows = $conn->fetchAllAssociative(
-            'SELECT p.id, p.name, p.code, p.image, p.price, p.quantity, p.commande_id FROM product p WHERE ' . $where . ' ORDER BY LOWER(p.name), p.id'
+            // période de la commande de l'article : pour ouvrir la commande depuis la ligne sans lire un tableau de bord (ajout du 13/11/2026)
+            'SELECT p.id, p.name, p.code, p.image, p.price, p.quantity, p.commande_id, (SELECT c.collections_id FROM commande c WHERE c.id = p.commande_id) AS period_id FROM product p WHERE ' . $where . ' ORDER BY LOWER(p.name), p.id'
             . ($limit !== null ? ' LIMIT ' . $limit . ' OFFSET ' . $offset : ''),
             $params
         );
@@ -73,7 +74,7 @@ class MissingCostQuery
         return ['total' => $total, 'items' => array_map(fn (array $r) => [
             'id' => (int) $r['id'], 'name' => $r['name'], 'code' => $r['code'], 'image' => $r['image'],
             'price' => $r['price'] !== null ? (int) round((float) $r['price']) : null, 'stock' => (int) ($r['quantity'] ?? 0),
-            'commandeId' => $r['commande_id'] !== null ? (int) $r['commande_id'] : null,
+            'commandeId' => $r['commande_id'] !== null ? (int) $r['commande_id'] : null, 'periodId' => $r['period_id'] !== null ? (int) $r['period_id'] : null,
             'costSource' => null, // sans coût par définition de ce filtre ; le champ sert aux filtres à venir
         ], $rows)];
     }

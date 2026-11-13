@@ -87,7 +87,9 @@ séquence à faire une fois. `label` traduit avec `?locale` (« Fall 2026 ») ; 
 - `action` : `{ key, preparable }`, la référence de l'action qui fait avancer l'étape (`preparation.validate`, `trip.create`,
   `cash.balance.create`, `cash.movement.create`, `purchase.create`, `period.close`, `product.cost.set`, `recovery.simulate`,
   `recovery.apply`, `supplier.create`, `fiscal_year.set`, `periods.calendar.set`, `document.invoice.confirm` ; une étape du cheminement
-  sans action de la gestion : `readiness.<clé de l'étape>`). `preparable` (l'IA sait préparer l'action) vaut **faux partout** dans ce lot.
+  sans action de la gestion : `readiness.<clé de l'étape>`). `preparable` : la conversation de la gestion sait préparer l'action (aperçu,
+  empreinte, confirmation, annulation). Vrai pour `document.invoice.confirm` depuis le lot IA-FACT-1 (`docs/conversation-gestion.md`),
+  faux pour les autres (`SequenceCatalog::PREPARABLE_ACTIONS`).
 - `figures` : `[{ key, label, value, unit }]`, calculés par le serveur ; `unit` : `money` (cents de la devise du site), `percent`,
   `count`, `days`, `date`, `ratio` comme les sources des conseils, plus `text`. Les comptes que le cheminement rend sous forme d'objet
   (`{ missing: 7, total: 52 }`) sont convertis dans cette forme.
@@ -108,12 +110,14 @@ répond « sans objet », toutes les étapes le sont.
 et la liste qu'elle ouvre disent toujours la même chose (tests : catalogue, exercice, créneau de reprise).
 
 **`GET /api/gestion/articles?filter=missing-cost[&from=&to=][&q=][&page=&limit=]`**, lecture seule →
-`[{ id, name, code, image, price, stock, commandeId, costSource }]`, par nom.
+`[{ id, name, code, image, price, stock, commandeId, periodId, costSource }]`, par nom.
 - Sans `from` ni `to` : tout le catalogue suivi. Avec les deux (jours du magasin, `AAAA-MM-JJ`) : seulement les articles **vendus dans ce
   créneau**, quantité nette positive, mêmes règles de vente que la reprise d'historique (ventes et retours, hors commandes annulées ou en
   attente, hors location et abonnement).
 - `q` : nom ou code, sans casse. `page`, `limit` (100 au plus) : convention des listes de la gestion ; en-tête `X-Total-Count` toujours,
   `X-Page` et `X-Limit` avec la pagination.
-- `price` en cents, `stock` = quantité de la fiche, `commandeId` = commande à laquelle l'article est rattaché (ou null), `costSource` =
+- `price` en cents, `stock` = quantité de la fiche, `commandeId` = commande à laquelle l'article est rattaché (ou null), `periodId` = la période de cette commande (null sans commande ou si
+  la commande n'est dans aucune période ; ajouté le 13/11/2026 pour ouvrir la commande depuis la ligne sans lire un tableau de bord, qui
+  figerait une période fermée), `costSource` =
   null (inconnu, par définition de ce filtre ; le champ servira aux filtres à venir).
 - 422 `VALIDATION_FAILED` (`fields`) : `filter` absent ou inconnu, un seul de `from` / `to`, date mal formée, `to` avant `from`.

@@ -373,7 +373,10 @@ class GestionDocumentService
         if ($withDetails) {
             $out['extraction'] = $document->getExtraction();
             $out['draft'] = $document->getDraft();
-            $out['confirmed'] = $document->getConfirmed();
+            // `confirmed.undo` (ce que la confirmation a créé) reste interne ; l'application lit `undo` (lot IA-FACT-1)
+            $confirmed = $document->getConfirmed();
+            $out['confirmed'] = $confirmed === null ? null : array_diff_key($confirmed, ['undo' => true]);
+            $out['undo'] = GestionDocumentUndoService::window($document);
             $out['linePhotos'] = array_map(fn ($p) => ['name' => $p['name'], 'mime' => $p['mime'], 'size' => $p['size']], $files['linePhotos'] ?? []) ?: new \stdClass();
         }
 

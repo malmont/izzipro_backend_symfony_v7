@@ -113,6 +113,7 @@ class ConfirmGestionDocumentUseCase
         // Fournisseur : existant ou créé
         $supplierIn = is_array($body['supplier'] ?? null) ? $body['supplier'] : [];
         $supplier = null;
+        $supplierCreated = false;
         if (isset($supplierIn['id']) && is_numeric($supplierIn['id'])) {
             $supplier = $em->find(Fournisseur::class, (int) $supplierIn['id']);
             if ($supplier === null) {
@@ -134,6 +135,7 @@ class ConfirmGestionDocumentUseCase
                 } else {
                     $supplier = (new Fournisseur())->setName((string) $name)->setTypeFournisseur($type)->setCurrency($currency !== null ? strtoupper($currency) : null);
                     $em->persist($supplier);
+                    $supplierCreated = true;
                 }
             }
         } else {
@@ -218,8 +220,10 @@ class ConfirmGestionDocumentUseCase
         }
         // Articles créés : un par groupKey
         $created = [];
+        $createdProducts = [];
         foreach (GestionInvoiceDraft::groups($lines) as $group) {
             $product = $this->createProduct($em, $document, $commande, $group, $host, $now, $user, $rate);
+            $createdProducts[] = $product;
             foreach ($group as $line) {
                 $created[] = ['lineN' => $line['n'], 'productId' => $product->getId(), 'name' => $product->getName()];
             }
@@ -243,7 +247,16 @@ class ConfirmGestionDocumentUseCase
             'lines' => array_map(fn ($l) => \App\Services\CommandeService\CommandeProductAttachmentService::lineArray($l), $em->getRepository(\App\Entity\CommandeLine::class)->forCommande($commande)), // à recevoir (lot R1)
             'shipping' => $fraisDePort !== null ? new FraisDePortOutputDTO($fraisDePort, $host, $currency) : null,
             'confirmed' => ['supplier' => ['id' => $supplier->getId(), 'name' => $supplier->getName()], 'invoice' => ['number' => $number, 'date' => $invoiceDate->format('Y-m-d'), 'exchangeRate' => $exchangeRate],
-                'classificationDate' => $date->format('Y-m-d'), 'lines' => $lines, 'shipping' => $shippingAmount !== null ? ['amount' => $shippingAmount, 'transporteurId' => $fraisDePort?->getTransporteur()?->getId()] : null, 'force' => $force],
+                'classificationDate' => $date->format('Y-m-d'), 'lines' => $lines, 'shipping' => $shippingAmount !== null ? ['amount' => $shippingAmount, 'transporteurId' => $fraisDePort?->getTransporteur()?->getId()] : null, 'force' => $force,
+                // Ce que cette confirmation a créé, pour l'annuler d'un bloc et constater ce qui a bougé depuis (lot IA-FACT-1, GestionDocumentUndoService)
+                'undo' => [
+                    'commandeId' => $commande->getId(), 'supplierId' => $supplierCreated ? $supplier->getId() : null,
+                    'fraisDePort' => $fraisDePort !== null ? ['id' => $fraisDePort->getId(), 'price' => $fraisDePort->getPrice()] : null,
+                    'lines' => array_map(fn (\App\Entity\CommandeLine $l) => ['id' => $l->getId(), 'productId' => $l->getProduct()?->getId(), 'variantId' => $l->getVariant()?->getId(), 'quantity' => $l->getQuantityOrdered(), 'unitCost' => $l->getUnitCostCents()],
+                        $em->getRepository(\App\Entity\CommandeLine::class)->forCommande($commande)),
+                    'products' => array_map(fn (Product $p) => ['id' => $p->getId(), 'name' => $p->getName(), 'price' => (float) $p->getPrice(), 'purchasePrice' => (float) $p->getPurchasePrice(),
+                        'variantIds' => array_values(array_map(fn (ProductVariant $v) => $v->getId(), $p->getVariants()->toArray()))], $createdProducts),
+                ]],
         ];
     }
 

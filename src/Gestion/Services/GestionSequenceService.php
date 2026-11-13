@@ -151,7 +151,7 @@ class GestionSequenceService
         return [
             'key' => (string) $step['key'], 'title' => (string) $step['title'], 'description' => (string) $step['description'], 'status' => (string) $step['status'],
             'blocking' => (bool) ($step['blocking'] ?? true), 'screen' => $screen,
-            'action' => ['key' => SequenceCatalog::actionOf((string) $step['key']), 'preparable' => false],
+            'action' => self::action(SequenceCatalog::actionOf((string) $step['key'])),
             'figures' => $this->figures($figures, $locale),
         ];
     }
@@ -218,7 +218,7 @@ class GestionSequenceService
                 'description' => $this->tr("sequences.$key.steps.$stepKey." . ($status === 'done' ? 'done' : 'todo'), $locale, $params),
                 'status' => $status, 'blocking' => $definition['blocking'],
                 'screen' => self::screen(SequenceCatalog::WHERE_APP, $definition['screen'], self::instanceParams($key, $instance) + $fact['params'], null),
-                'action' => ['key' => $definition['action'], 'preparable' => false],
+                'action' => self::action($definition['action']),
                 'figures' => $this->figures($fact['figures'], $locale),
             ];
         }
@@ -275,6 +275,12 @@ class GestionSequenceService
         }
 
         return $sequences[0];
+    }
+
+    /** @return array{key: string, preparable: bool} référence de l'action, et si la conversation sait la préparer */
+    private static function action(string $key): array
+    {
+        return ['key' => $key, 'preparable' => SequenceCatalog::preparable($key)];
     }
 
     /** @param array<string, mixed> $params */

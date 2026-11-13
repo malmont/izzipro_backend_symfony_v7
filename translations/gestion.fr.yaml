@@ -469,3 +469,47 @@ sequences:
                 title: 'Articles vendus sans coût sur le créneau'
                 done: 'Tous les articles vendus sur le créneau ont un coût d''achat.'
                 todo: '%missing% article(s) vendu(s) sur le créneau sans coût d''achat.'
+
+# Facture par conversation (lot IA-FACT-1, 13/11/2026) : docs/conversation-gestion.md
+conversation:
+    summary:
+        read: 'Facture %number% du %date%, fournisseur %supplier% : %lines% ligne(s), total %total% %currency%.'
+        questions: 'Il me manque %count% réponse(s) avant de vous montrer ce qui sera créé.'
+        ready: 'Tout est renseigné : vérifiez l''aperçu, puis confirmez.'
+    options:
+        supplier_create: 'Créer le fournisseur « %name% »'
+        product_create: 'Créer l''article « %name% »'
+        amounts_ht: 'Hors taxes'
+        amounts_ttc: 'Taxes incluses'
+        period_today: 'Classer à aujourd''hui'
+        duplicate_force: 'Confirmer quand même'
+        difference_accept: 'J''ai vu l''écart, continuer'
+        abandon: 'Abandonner'
+    questions:
+        supplier:
+            title: 'Fournisseur'
+            text: 'Je ne reconnais pas le fournisseur « %name% ». Lequel est-ce ?'
+        invoice_date:
+            title: 'Date de la facture'
+            text: 'Je n''ai pas pu lire la date de la facture. Quelle est-elle ?'
+        amountsMode:
+            title: 'Prix hors taxes ou taxes incluses'
+            text: 'Le document ne dit pas si les prix des lignes sont hors taxes ou taxes incluses.'
+        line_product:
+            title: 'Article'
+            text: 'Je ne reconnais pas « %label% » dans votre catalogue. Est-ce un article existant, ou faut-il le créer ?'
+        line_unitCost:
+            title: 'Coût unitaire'
+            text: 'Je n''ai pas pu lire le coût unitaire de « %label% ».'
+        exchangeRate:
+            title: 'Taux de change'
+            text: 'La facture est en %from% et votre site en %to%. Combien vaut 1 %from% en %to% ?'
+        period:
+            title: 'Période fermée'
+            text: 'La date de la facture (%date%) tombe dans une période fermée (%period%).'
+        duplicate:
+            title: 'Facture déjà enregistrée'
+            text: 'La facture %number% de ce fournisseur est déjà enregistrée.'
+        difference:
+            title: 'Écart sur le total'
+            text: 'Le total lu sur le document diffère de %difference% du total recalculé à partir des lignes.'

@@ -32,6 +32,7 @@ class GestionDocumentController extends AbstractController
         private readonly ConfirmGestionDocumentUseCase $confirm,
         private readonly ?EmailLocale $siteLocale = null,
         private readonly ?PreviewGestionDocumentUseCase $preview = null, // lot APERÇU-FACT (12/11/2026)
+        private readonly ?\App\Gestion\Services\Document\GestionDocumentUndoService $undo = null, // lot IA-FACT-1 (13/11/2026)
     ) {
     }
 
@@ -161,6 +162,19 @@ class GestionDocumentController extends AbstractController
         }
 
         return $this->json($this->confirm->execute($document, $data, $request->getSchemeAndHttpHost(), $this->getUser()?->getUserIdentifier()), Response::HTTP_CREATED);
+    }
+
+    /**
+     * Annulation d'un bloc de la confirmation d'une facture fournisseur (lot IA-FACT-1, 13/11/2026, `docs/conversation-gestion.md` § 6) :
+     * retire exactement ce que la confirmation a créé, tout ou rien, dans les 24 heures, une seule fois, et remet le document à « lu ».
+     * → 200 `{ undone, document }` ; 409 `DOCUMENT_NOT_CONFIRMED`, `ALREADY_UNDONE`, `UNDO_UNAVAILABLE`, `UNDO_EXPIRED`, `UNDO_BLOCKED { reasons }`.
+     */
+    #[Route('/{id}/annuler-confirmation', name: 'gestion_documents_undo', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function undoConfirmation(GestionDocument $document): JsonResponse
+    {
+        $undone = $this->undo->undo($document);
+
+        return $this->json(['undone' => $undone, 'document' => $this->documents->toArray($document)]);
     }
 
     private function binary(?array $file, string $name): Response

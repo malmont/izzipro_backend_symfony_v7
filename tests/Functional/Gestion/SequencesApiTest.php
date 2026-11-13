@@ -173,7 +173,7 @@ class SequencesApiTest extends WebTestCase
                 foreach ($detail['steps'] as $i => $step) {
                     $this->assertSame(['key', 'title', 'description', 'status', 'blocking', 'screen', 'action', 'figures'], array_keys($step));
                     $this->assertSame(['where', 'key', 'params', 'url'], array_keys($step['screen']));
-                    $this->assertFalse($step['action']['preparable']);
+                    $this->assertSame(SequenceCatalog::preparable($step['action']['key']), $step['action']['preparable']);
                     $this->assertNotSame('', $step['action']['key']);
                     if (($expected[$i]['appScreen'] ?? null) !== null) {
                         $this->assertSame(['app', $expected[$i]['appScreen'], null], [$step['screen']['where'], $step['screen']['key'], $step['screen']['url']], $step['key']);
@@ -199,6 +199,9 @@ class SequencesApiTest extends WebTestCase
         $this->assertStringContainsString('/admin', (string) $steps['management.short_code']['screen']['url']);
         $this->assertSame('readiness.management.short_code', $steps['management.short_code']['action']['key']);
         $this->assertSame(['supplier.create', 'fournisseurs'], [$steps['management.suppliers']['action']['key'], $steps['management.suppliers']['screen']['key']]);
+        // Depuis le lot IA-FACT-1, la conversation sait préparer la confirmation d'une facture ; les autres actions pas encore
+        $this->assertSame(['key' => 'document.invoice.confirm', 'preparable' => true], $steps['management.first_purchase']['action']);
+        $this->assertFalse($steps['management.suppliers']['action']['preparable']);
         $this->assertSame(['filter' => 'missing-cost'], $steps['management.purchase_cost']['screen']['params']);
         $figures = array_column($steps['management.purchase_cost']['figures'], null, 'key');
         $this->assertSame(['Items without a cost', 'count'], [$figures['missing']['label'], $figures['missing']['unit']]);
@@ -392,7 +395,7 @@ class SequencesApiTest extends WebTestCase
         $this->assertNotContains($neverSold[0], array_column($listed['items'], 'id'), 'jamais vendu : hors du créneau');
         $mine = array_values(array_filter($listed['items'], fn (array $i) => $i['id'] === $withoutCost[0]))[0];
         $this->assertSame(['id' => $withoutCost[0], 'name' => "sans-cout $this->tag", 'code' => "C-sans-cout-$this->tag", 'image' => null, 'price' => 3000,
-            'stock' => (int) $conn->fetchOne('SELECT quantity FROM product WHERE id = ?', [$withoutCost[0]]), 'commandeId' => null, 'costSource' => null], $mine);
+            'stock' => (int) $conn->fetchOne('SELECT quantity FROM product WHERE id = ?', [$withoutCost[0]]), 'commandeId' => null, 'periodId' => null, 'costSource' => null], $mine);
         // Le coût arrive, sur la fiche ou par une ligne d'achat chiffrée : l'article sort du compte et de la liste
         $conn->executeStatement('UPDATE product SET purchase_price = 900 WHERE id = ?', [$withoutCost[0]]);
         $this->endOfWrite();
@@ -546,6 +549,24 @@ class SequencesApiTest extends WebTestCase
         $this->assertSame(['2', '2', '1', [$b]], [$headers->get('X-Total-Count'), $headers->get('X-Page'), $headers->get('X-Limit'), array_column($this->body(), 'id')]);
         $byCode = $this->articles(['filter' => 'missing-cost', 'q' => "C-beta-$this->tag"]);
         $this->assertSame([$b], array_column($byCode['items'], 'id'));
+        // Article rattaché à une commande (sans coût chiffré) : la ligne rend la commande et sa période, pour l'ouvrir sans lire un tableau de bord
+        $conn = $this->em()->getConnection();
+        $periodId = (int) static::getContainer()->get(PeriodCalendar::class)->current()->getId();
+        $attachedTo = (int) $conn->fetchOne("INSERT INTO commande (id, date, name, kind, budget, collections_id) VALUES (nextval('commande_id_seq'), NOW(), ?, 'standard', 0, ?) RETURNING id", ["Rattachée $this->tag", $periodId]);
+        $this->cleanup[] = ['DELETE FROM commande WHERE id = ?', [$attachedTo]];
+        $loose = (int) $conn->fetchOne("INSERT INTO commande (id, date, name, kind, budget) VALUES (nextval('commande_id_seq'), NOW(), ?, 'standard', 0) RETURNING id", ["Sans période $this->tag"]);
+        $this->cleanup[] = ['DELETE FROM commande WHERE id = ?', [$loose]];
+        $conn->executeStatement('UPDATE product SET commande_id = ? WHERE id = ?', [$attachedTo, $a]);
+        $this->endOfWrite();
+        $rows = array_column($this->articles(['filter' => 'missing-cost', 'q' => $this->tag])['items'], null, 'id');
+        $this->assertSame([[$attachedTo, $periodId], [null, null]], [[$rows[$a]['commandeId'], $rows[$a]['periodId']], [$rows[$b]['commandeId'], $rows[$b]['periodId']]]);
+        $conn->executeStatement('UPDATE product SET commande_id = ? WHERE id = ?', [$loose, $a]);
+        $this->endOfWrite();
+        $row = array_column($this->articles(['filter' => 'missing-cost', 'q' => $this->tag])['items'], null, 'id')[$a];
+        $this->assertSame([$loose, null], [$row['commandeId'], $row['periodId']], 'commande sans période : periodId null');
+        $conn->executeStatement('UPDATE product SET commande_id = NULL WHERE id = ?', [$a]);
+        $this->endOfWrite();
+
         // Une ligne d'achat chiffrée vaut un coût
         $conn = $this->em()->getConnection();
         $commandeId = (int) $conn->fetchOne("INSERT INTO commande (id, date, name, kind, budget) VALUES (nextval('commande_id_seq'), NOW(), ?, 'standard', 0) RETURNING id", ["Achat $this->tag"]);

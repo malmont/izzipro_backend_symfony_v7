@@ -40,7 +40,7 @@ class GestionSequenceController extends AbstractController
     /**
      * Articles qu'une étape du guide ouvre : `?filter=missing-cost` (sans coût d'achat, règle de `MissingCostQuery`), `&from=&to=` (jours
      * du magasin : seulement ceux vendus dans le créneau), `&q=`, `&page=&limit=` (limit ≤ 100). → [{id, name, code, image, price, stock,
-     * commandeId, costSource}] ; en-tête `X-Total-Count` toujours, `X-Page` et `X-Limit` avec la pagination.
+     * commandeId, periodId, costSource}] ; en-tête `X-Total-Count` toujours, `X-Page` et `X-Limit` avec la pagination.
      */
     #[Route('/api/gestion/articles', name: 'gestion_articles', methods: ['GET'])]
     public function articles(Request $request): JsonResponse

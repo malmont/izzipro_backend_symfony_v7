@@ -467,3 +467,47 @@ sequences:
                 title: 'Items sold without a cost in the window'
                 done: 'Every item sold in the window has a purchase cost.'
                 todo: '%missing% item(s) sold in the window without a purchase cost.'
+
+# Invoice by conversation (lot IA-FACT-1, 13/11/2026): docs/conversation-gestion.md
+conversation:
+    summary:
+        read: 'Invoice %number% dated %date%, supplier %supplier%: %lines% line(s), total %total% %currency%.'
+        questions: 'I need %count% more answer(s) before showing you what will be created.'
+        ready: 'Everything is filled in: check the preview, then confirm.'
+    options:
+        supplier_create: 'Create the supplier "%name%"'
+        product_create: 'Create the item "%name%"'
+        amounts_ht: 'Before tax'
+        amounts_ttc: 'Tax included'
+        period_today: 'File it under today'
+        duplicate_force: 'Confirm anyway'
+        difference_accept: 'I have seen the gap, continue'
+        abandon: 'Abandon'
+    questions:
+        supplier:
+            title: 'Supplier'
+            text: 'I do not recognise the supplier "%name%". Which one is it?'
+        invoice_date:
+            title: 'Invoice date'
+            text: 'I could not read the date of the invoice. What is it?'
+        amountsMode:
+            title: 'Prices before tax or tax included'
+            text: 'The document does not say whether the line prices are before tax or tax included.'
+        line_product:
+            title: 'Item'
+            text: 'I do not recognise "%label%" in your catalogue. Is it an existing item, or should it be created?'
+        line_unitCost:
+            title: 'Unit cost'
+            text: 'I could not read the unit cost of "%label%".'
+        exchangeRate:
+            title: 'Exchange rate'
+            text: 'The invoice is in %from% and your site in %to%. How much is 1 %from% in %to%?'
+        period:
+            title: 'Closed period'
+            text: 'The invoice date (%date%) falls in a closed period (%period%).'
+        duplicate:
+            title: 'Invoice already recorded'
+            text: 'Invoice %number% from this supplier is already recorded.'
+        difference:
+            title: 'Gap on the total'
+            text: 'The total read on the document differs by %difference% from the total recalculated from the lines.'
