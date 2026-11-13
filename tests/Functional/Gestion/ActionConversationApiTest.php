@@ -930,6 +930,15 @@ class ActionConversationApiTest extends WebTestCase
             $this->assertSame([['value' => $live['sales']['revenue'], 'unit' => 'money', 'currency' => 'CAD'], ['value' => count($ready['preview']['commandes']), 'unit' => 'number']], [array_diff_key($rows[1], ['label' => 1]), array_diff_key($rows[5], ['label' => 1])]);
             $this->assertSame($ready['previewHash'], $this->get("/api/gestion/conversations/$id?locale=en")['previewHash']);
 
+            // La période clôturée par ailleurs entre l'aperçu et la confirmation : le fil le voit, ne confirme pas
+            $conn()->executeStatement('UPDATE collections SET is_closed = true, closed_at = NOW() WHERE id = ?', [$pid]);
+            $this->endOfWrite();
+            $closedElsewhere = $this->get("/api/gestion/conversations/$id");
+            $this->assertSame(['questions', [['path' => 'periodId', 'code' => 'ALREADY_CLOSED']], null, null], [$closedElsewhere['state'], $closedElsewhere['issues'], $closedElsewhere['preview'], $closedElsewhere['previewHash']]);
+            $this->assertSame('CONVERSATION_NOT_READY', $this->post("/api/gestion/conversations/$id/confirm", ['previewHash' => $ready['previewHash']], 409)['error']);
+            $conn()->executeStatement('UPDATE collections SET is_closed = false, closed_at = NULL WHERE id = ?', [$pid]);
+            $this->endOfWrite();
+            $this->assertSame(['ready', $ready['previewHash']], array_values(array_intersect_key($this->get("/api/gestion/conversations/$id"), ['state' => 1, 'previewHash' => 1])));
             // L'empreinte est recalculée sans le cache du résultat : une vente faite après l'aperçu, résultat encore en cache → PREVIEW_CHANGED
             $cached = $this->get("/api/periodes/$pid/resultat")['sales']['revenue'];
             $this->assertSame($live['sales']['revenue'], $cached);

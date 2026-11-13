@@ -390,6 +390,8 @@ class SequencesApiTest extends WebTestCase
         $this->assertGreaterThan(0, count($periods));
         $this->assertSame([count($periods), $closedCount, $closedCount === count($periods) ? 'done' : 'todo'], [$figure($first['periods_closed'], 'periods'), $figure($first['periods_closed'], 'closedPeriods'), $first['periods_closed']['status']]);
 
+        // retouche du 13/11/2026 : une clôture faite ne propose rien à refaire (`again: null`) ; rouverte, l'étape n'a plus de `again`
+        $this->assertSame(['done', ['key' => 'period.close', 'preparable' => true, 'params' => [], 'again' => null]], [$first['periods_closed']['status'], $first['periods_closed']['action']], 'exercice terminé : toutes ses périodes sont fermées');
         // Une période rouverte : l'étape repasse à « à faire », avec le compte
         $autoClosed = array_values(array_filter($periods, fn (Collections $c) => $c->getClosedAt() === null && static::getContainer()->get(PeriodCalendar::class)->isClosed($c)));
         $this->assertNotEmpty($autoClosed, 'une période de l\'exercice fermée par sa date');
@@ -399,6 +401,7 @@ class SequencesApiTest extends WebTestCase
         $this->endOfWrite();
         $reopened = $steps()['periods_closed'];
         $this->assertSame(['todo', $closedCount - 1, count($periods)], [$reopened['status'], $figure($reopened, 'closedPeriods'), $figure($reopened, 'periods')]);
+        $this->assertSame(['key' => 'period.close', 'preparable' => true, 'params' => []], $reopened['action'], 'étape à faire : pas de again ; le fil sait clôturer la période rouverte');
         $this->assertSame(['in_progress', 'periods_closed'], [$this->get('/api/gestion/sequences/fiscal_year.close')['status'], $this->get('/api/gestion/sequences/fiscal_year.close')['next']['stepKey']]);
         $conn->executeStatement('UPDATE collections SET reopened_at = NULL WHERE id = ?', [$reopenedId]);
         $this->endOfWrite();

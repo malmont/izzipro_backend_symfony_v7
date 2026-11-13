@@ -149,7 +149,8 @@ class PeriodCloseAction extends AbstractGestionAction
         }
         foreach ($undo['commandes'] as $c) {
             $closed = $this->conn()->fetchOne('SELECT is_closed FROM commande WHERE id = ?', [(int) $c['id']]);
-            if ($closed === false || !in_array($closed, [true, 't', 1, '1'], true) || $this->received((int) $c['id']) !== (int) $c['received']) {
+            // commande disparue (aucune ligne) ou rouverte : dans les deux cas elle n'est plus « fermée » ; une réception de stock change la quantité reçue
+            if (!in_array($closed, [true, 't', 1, '1'], true) || $this->received((int) $c['id']) !== (int) $c['received']) {
                 $reasons[] = ['code' => 'ORDER_CHANGED', 'message' => 'Une commande fermée par cette clôture a changé depuis (rouverte, supprimée, ou réception de stock).', 'commandeId' => (int) $c['id']];
                 break;
             }
