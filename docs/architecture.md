@@ -647,6 +647,23 @@ value FROM tech_metric_sample ORDER BY measured_at DESC LIMIT 20` dans `app_v2_d
 tech-metrics.timer`, puis `DROP TABLE tech_metric_sample, tech_threshold`. Tests : `tests/Functional/Tech/`.
 
 
+### Points de montage du conteneur : jamais dans une livraison (règle du 13/11/2026)
+
+Le conteneur de l'application reçoit par des montages ce que le dépôt ne doit pas lui apporter : `config/jwt` (les clés des jetons,
+montées depuis `jwt/`), `docker/php/*.ini`, `.env`. Incident du 13/11/2026 : un commit contenait `config/jwt`, le lien local des
+worktrees de développement, pris par un `git add` d'un dossier entier. À la bascule, git l'a écrit à la place du point de montage : le
+conteneur ne voyait plus aucune clé, toutes les routes authentifiées rendaient 401 (« Invalid JWT Token ») sur tous les sites, pendant
+2 minutes. Le retour arrière du code et du cache n'a pas suffi : un point de montage remplacé ne revient qu'au redémarrage du
+conteneur (`docker restart symfony_app_v2`).
+
+Règles :
+- `git add` par chemins précis, jamais un dossier entier ; `config/jwt` est ignoré par git (`.gitignore`) ;
+- une livraison ne touche ni `config/jwt`, ni `jwt/`, ni `docker/`, ni un fichier `.env`, et ne contient aucun lien symbolique :
+  l'outil de bascule la refuse ;
+- juste après une bascule, lire une route **authentifiée** (une route publique à 200 ne dit rien des clés) et compter les clés visibles
+  dans le conteneur (`docker exec symfony_app_v2 ls /var/www/config/jwt` : 2 fichiers) ;
+- si un retour arrière ne rétablit pas le service : regarder les montages, puis redémarrer le conteneur.
+
 ### Répéter une mise en ligne sur une copie (règles du 13/11/2026)
 
 Une répétition sert du code contre une copie d'une base de site. Elle ne doit jamais pouvoir écrire dans la production, ni dans ses
