@@ -68,7 +68,7 @@ final class ConsoleScreens
         'publicite.campagne' => ['theme' => 'ventes', 'params' => ['campaignId' => 'id'], 'analyses' => ['sales.overview', 'budget.status']],
         'campagnes.new' => ['theme' => 'ventes', 'params' => ['fromCampaignId' => 'id'], 'analyses' => ['sales.overview', 'budget.status']],
         // Argent
-        'tresorerie' => ['theme' => 'argent', 'analyses' => ['cash.projection']],
+        'tresorerie' => ['theme' => 'argent', 'analyses' => [['cash.projection', ['days' => 90]]]], // l'écran montre le point bas sur 14 et 90 jours et le solde dans 90 jours
         'frais-fixes' => ['theme' => 'argent', 'analyses' => ['cash.projection', 'year.overview']],
         'notes-de-frais' => ['theme' => 'argent', 'params' => ['periodId' => 'id'], 'analyses' => ['budget.status', 'period.result']],
         // Périodes et résultats
@@ -91,7 +91,7 @@ final class ConsoleScreens
         'commande' => ['theme' => 'achats', 'params' => ['periodId' => 'id', 'commandeId' => 'id'], 'analyses' => ['budget.status', 'articles.new']],
         'article' => ['theme' => 'ventes', 'params' => ['productId' => 'id'], 'analyses' => ['articles.vs_similar']],
         'stock' => ['theme' => 'achats', 'analyses' => ['stock.overview']],
-        'tresorerie.rapprochements' => ['theme' => 'argent', 'analyses' => ['cash.projection']],
+        'tresorerie.rapprochements' => ['theme' => 'argent', 'analyses' => [['cash.projection', ['days' => 90]]]],
         'documents' => ['theme' => 'achats', 'analyses' => ['articles.new', 'budget.status']],
         'simulateur' => ['theme' => 'resultats', 'params' => ['periodId' => 'id'], 'analyses' => ['period.result', 'budget.status']],
         'console' => ['theme' => 'accueil'],
@@ -153,6 +153,23 @@ final class ConsoleScreens
         }
 
         return $out;
+    }
+
+    /**
+     * Paramètres FIXES qu'un écran donne à une de ses analyses (l'horizon de 90 jours de la Trésorerie, « aujourd'hui » pour l'accueil) :
+     * ils complètent aussi une analyse que le modèle choisit lui-même depuis cet écran, quand il laisse ce paramètre vide.
+     *
+     * @return array<string, mixed>
+     */
+    public static function fixed(string $code, string $key): array
+    {
+        foreach (self::SCREENS[$code]['analyses'] ?? [] as $entry) {
+            if (is_array($entry) && $entry[0] === $key) {
+                return $entry[1];
+            }
+        }
+
+        return [];
     }
 
     /**

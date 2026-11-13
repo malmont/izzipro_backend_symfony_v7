@@ -888,7 +888,7 @@ console:
         unknownCostRevenue: 'Ventes sans coût connu'
         unknownCostItems: 'Unités vendues sans coût connu'
         grossMarginRate: 'Taux de marge'
-        averageBasket: 'Panier moyen'
+        averageBasket: 'Panier moyen (ventes avant retours ÷ commandes, hors taxes)'
         returnRate: 'Taux de retour'
         stockValue: 'Valeur du stock'
         sales: 'Ventes'
@@ -898,11 +898,13 @@ console:
         balance: 'Dernier solde saisi'
         balanceDate: 'Date du solde'
         threshold: 'Seuil d''alerte'
-        lowestAmount: 'Solde le plus bas prévu'
-        lowestDate: 'Date du solde le plus bas'
+        lowestAmount: 'Point bas sur %days% jours'
+        lowestDate: 'Date du point bas sur %days% jours'
+        lowest14Amount: 'Point bas sur 14 jours'
+        lowest14Date: 'Date du point bas sur 14 jours'
         belowThresholdFrom: 'Sous le seuil à partir du'
-        endAmount: 'Solde prévu en fin de projection'
-        endDate: 'Fin de la projection'
+        endAmount: 'Solde prévu dans %days% jours'
+        endDate: 'Fin de la projection sur %days% jours'
         cashStatus: 'État de la trésorerie'
         planned: 'Budget prévu, achats de marchandise compris'
         actual: 'Dépenses réelles, achats de marchandise compris'
@@ -933,10 +935,35 @@ console:
         adviceCount: 'Conseils du jour'
     # Bilan d'articles : raison commune d'un groupe d'articles de même verdict (le nombre commande la forme)
     groups:
-        similar: 'coefficient proposé d''après ses semblables|coefficient proposé d''après leurs semblables'
-        supplier: 'coefficient constaté chez son fournisseur|coefficient constaté chez leur fournisseur'
-        site: 'coefficient par défaut du site'
-        none: 'sans coût d''achat ou sans prix de vente : pas de verdict'
+        keep:
+            similar: '%count% article au coefficient de ses semblables : à garder|%count% articles au coefficient de leurs semblables : à garder'
+            supplier: '%count% article au coefficient constaté chez son fournisseur : à garder|%count% articles au coefficient constaté chez leur fournisseur : à garder'
+            site: '%count% article au coefficient par défaut du site : à garder|%count% articles au coefficient par défaut du site : à garder'
+        raise:
+            similar: '%count% article sous le coefficient de ses semblables : à monter|%count% articles sous le coefficient de leurs semblables : à monter'
+            supplier: '%count% article sous le coefficient de son fournisseur : à monter|%count% articles sous le coefficient de leur fournisseur : à monter'
+            site: '%count% article sous le coefficient par défaut du site : à monter|%count% articles sous le coefficient par défaut du site : à monter'
+        lower:
+            similar: '%count% article au-dessus du coefficient de ses semblables : à baisser|%count% articles au-dessus du coefficient de leurs semblables : à baisser'
+            supplier: '%count% article au-dessus du coefficient de son fournisseur : à baisser|%count% articles au-dessus du coefficient de leur fournisseur : à baisser'
+            site: '%count% article au-dessus du coefficient par défaut du site : à baisser|%count% articles au-dessus du coefficient par défaut du site : à baisser'
+        none: '%count% article sans coût d''achat ou sans prix de vente : pas de verdict|%count% articles sans coût d''achat ou sans prix de vente : pas de verdict'
+    # Valeurs de type texte rédigées (lot W2-c) : le chiffre rend le libellé dans `value` et son code dans `code`
+    values:
+        cash:
+            ok: 'Correct'
+            warning: 'Sous le seuil'
+            critical: 'Découvert prévu'
+            no_balance: 'Aucun solde saisi'
+        budget:
+            none: 'Sans prévu'
+            ok: 'Dans le budget'
+            warning: 'Attention'
+            over: 'Dépassé'
+        verdict:
+            keep: 'À garder'
+            raise: 'À monter'
+            lower: 'À baisser'
     # Écrans de l'application d'où une question peut venir (`ConsoleScreens`) : thèmes et titres, écrits par le serveur
     themes:
         accueil: 'Tableau de bord'

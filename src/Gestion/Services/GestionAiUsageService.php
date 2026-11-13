@@ -35,7 +35,8 @@ class GestionAiUsageService
         return [
             'tier' => $this->assistant->tier((string) $this->tenants->getCurrentTenantCode(), $superAdmin),
             'credits' => $this->quota->credits(),
-            'costs' => ['advice' => AdviceWriter::COST, 'comment' => GestionSimulationCommentService::COST, 'document' => GestionDocumentService::COST],
+            'costs' => ['advice' => AdviceWriter::COST, 'comment' => GestionSimulationCommentService::COST, 'document' => GestionDocumentService::COST,
+                'console' => \App\Gestion\Services\Console\ConsoleService::COST], // console : par réponse rédigée (lot W2-c)
             'limits' => ['commentsPerDay' => GestionSimulationCommentService::PER_DAY, 'adviceRefreshPerDay' => GestionAdviceService::MANUAL_PER_DAY],
             'today' => ['comments' => $comments, 'adviceRefresh' => $this->advices->manualToday($today)],
         ];

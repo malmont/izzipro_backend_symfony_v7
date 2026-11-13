@@ -53,7 +53,8 @@ class GestionConsoleController extends AbstractController
     #[Route('/conversations/{id}', name: 'gestion_console_get', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function get(int $id): JsonResponse
     {
-        return $this->json($this->useCase->conversation($id));
+        // un objet vide reste un objet (`params: {}`), jamais un tableau vide (lot W2-c)
+        return $this->json($this->useCase->conversation($id), Response::HTTP_OK, [], ['preserve_empty_objects' => true]);
     }
 
     /** Le gérant efface un échange (204) ; inscrit au journal. */

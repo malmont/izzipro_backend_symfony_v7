@@ -249,16 +249,22 @@ class AnalysisCatalog
         $p = $this->cash->projection($days, $locale);
         $series = $p[$p['alertSeries']] ?? null;
 
+        // l'horizon est dit dans le libellé (« Point bas sur 30 jours ») ; au-delà de 14 jours, le point bas sur 14 jours de l'écran est rendu aussi
+        $horizon = ['%days%' => (string) $days];
+        $near = $days > 14 ? ($series['low14'] ?? null) : null;
+
         return ['params' => ['days' => $days], 'figures' => [
             $this->figure('balance', $p['balance']['amount'] ?? null, 'money', $locale),
             $this->figure('balanceDate', $p['balance']['date'] ?? null, 'date', $locale),
             $this->figure('threshold', $p['settings']['threshold'] ?? null, 'money', $locale),
-            $this->figure('lowestAmount', $series['low']['amount'] ?? null, 'money', $locale),
-            $this->figure('lowestDate', $series['low']['date'] ?? null, 'date', $locale),
+            $this->figure('lowest14Amount', $near['amount'] ?? null, 'money', $locale),
+            $this->figure('lowest14Date', $near['date'] ?? null, 'date', $locale),
+            $this->figure('lowestAmount', $series['low']['amount'] ?? null, 'money', $locale, [], $horizon),
+            $this->figure('lowestDate', $series['low']['date'] ?? null, 'date', $locale, [], $horizon),
             $this->figure('belowThresholdFrom', $series['belowThresholdFrom'] ?? null, 'date', $locale),
-            $this->figure('endAmount', $series['end']['amount'] ?? null, 'money', $locale),
-            $this->figure('endDate', $series['end']['date'] ?? null, 'date', $locale),
-            $this->figure('cashStatus', $p['status'] ?? null, 'text', $locale),
+            $this->figure('endAmount', $series['end']['amount'] ?? null, 'money', $locale, [], $horizon),
+            $this->figure('endDate', $series['end']['date'] ?? null, 'date', $locale, [], $horizon),
+            $this->coded('cashStatus', $p['status'] ?? null, 'cash', $locale),
         ]];
     }
 
@@ -273,7 +279,7 @@ class AnalysisCatalog
             $this->figure('planned', $b['total']['planned'] ?? null, 'money', $locale),
             $this->figure('actual', $b['total']['actual'] ?? null, 'money', $locale),
             $this->figure('remaining', $b['total']['remaining'] ?? null, 'money', $locale),
-            $this->figure('budgetStatus', $b['total']['status'] ?? null, 'text', $locale),
+            $this->coded('budgetStatus', $b['total']['status'] ?? null, 'budget', $locale),
         ]];
     }
 
@@ -312,7 +318,7 @@ class AnalysisCatalog
             $this->figure('price', $review['price'] ?? null, 'money', $locale),
             $this->figure('coefficient', $review['coefficient'] ?? null, 'ratio', $locale),
             $this->figure('proposedCoefficient', $review['proposal']['value'] ?? null, 'ratio', $locale),
-            $this->figure('verdict', $review['verdict'] ?? null, 'text', $locale),
+            $this->coded('verdict', $review['verdict'] ?? null, 'verdict', $locale),
             $this->figure('similarCount', $s['count'] ?? null, 'count', $locale),
             $this->figure('similarSoldShare', isset($s['soldShare']) ? round($s['soldShare'] * 100, 1) : null, 'percent', $locale),
             $this->figure('similarWeeksToSell', $s['weeksToSell'] ?? null, 'count', $locale),
@@ -363,7 +369,8 @@ class AnalysisCatalog
         foreach ($grouped as $key => $members) {
             [$verdict, $source] = explode('|', $key);
             $groups[] = ['verdict' => $verdict === 'none' ? null : $verdict, 'source' => $source === 'none' ? null : $source, 'count' => count($members),
-                'label' => $this->translator->trans("console.groups.$source", ['%count%' => count($members)], 'gestion', $locale === 'en' ? 'en' : 'fr'),
+                // la phrase complète du groupe, prête à servir d'intertitre : « 5 articles au coefficient constaté chez leur fournisseur : à garder »
+                'label' => $this->translator->trans('console.groups.' . ($verdict === 'none' ? 'none' : "$verdict.$source"), ['%count%' => count($members)], 'gestion', $locale === 'en' ? 'en' : 'fr'),
                 'productIds' => array_column($members, 'id'), 'names' => array_slice(array_column($members, 'name'), 0, self::GROUP_NAMES)];
         }
         // à monter, à baisser, à garder, sans verdict ; dans un même verdict, le groupe le plus nombreux d'abord
@@ -408,9 +415,28 @@ class AnalysisCatalog
      *
      * @return array<string, mixed>
      */
-    private function figure(string $name, mixed $value, string $unit, string $locale, array $comparisons = []): array
+    private function figure(string $name, mixed $value, string $unit, string $locale, array $comparisons = [], array $labelParams = []): array
     {
-        return ['id' => $name, 'label' => $this->tr("console.figures.$name", $locale), 'value' => $value, 'unit' => $unit] + array_filter($comparisons, fn ($v) => $v !== null);
+        return ['id' => $name, 'label' => $this->translator->trans("console.figures.$name", $labelParams, 'gestion', $locale === 'en' ? 'en' : 'fr'), 'value' => $value, 'unit' => $unit] + array_filter($comparisons, fn ($v) => $v !== null);
+    }
+
+    /**
+     * Un chiffre de type texte dont la valeur est un CODE (état de la trésorerie, état du budget, verdict) : `value` rend le libellé
+     * rédigé, celui que l'écran affiche (« Correct », « Sous le seuil »), et `code` garde le code (lot W2-c). Un code sans libellé est rendu tel quel.
+     *
+     * @return array<string, mixed>
+     */
+    private function coded(string $name, ?string $code, string $set, string $locale): array
+    {
+        return $this->figure($name, $code === null ? null : self::valueLabel($this->translator, $set, $code, $locale), 'text', $locale) + ['code' => $code];
+    }
+
+    /** Libellé rédigé d'un code (`cash`, `budget`, `verdict`), ou le code lui-même s'il n'en a pas */
+    public static function valueLabel(TranslatorInterface $translator, string $set, string $code, string $locale): string
+    {
+        $label = $translator->trans("console.values.$set.$code", [], 'gestion', $locale === 'en' ? 'en' : 'fr');
+
+        return $label === "console.values.$set.$code" ? $code : $label;
     }
 
     private function tr(string $id, string $locale): string

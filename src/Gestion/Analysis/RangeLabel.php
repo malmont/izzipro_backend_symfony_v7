@@ -16,6 +16,15 @@ final class RangeLabel
     private const MONTHS_FR = [1 => 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
     private const MONTHS_EN = [1 => 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
+    /** Un jour rédigé, sans article : « 11 novembre 2026 », « November 11, 2026 » (lot W2-c : les dates données au modèle et rendues dans un texte) */
+    public static function day(string $date, string $locale): string
+    {
+        $d = new \DateTimeImmutable($date);
+
+        return $locale === 'en' ? self::MONTHS_EN[(int) $d->format('n')] . ' ' . $d->format('j') . ', ' . $d->format('Y')
+            : ($d->format('j') === '1' ? '1er' : $d->format('j')) . ' ' . self::MONTHS_FR[(int) $d->format('n')] . ' ' . $d->format('Y');
+    }
+
     /** @param string $from premier jour, AAAA-MM-JJ @param string $to dernier jour compris, AAAA-MM-JJ */
     public static function of(string $from, string $to, string $locale): string
     {

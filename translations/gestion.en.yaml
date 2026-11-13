@@ -886,7 +886,7 @@ console:
         unknownCostRevenue: 'Sales without known cost'
         unknownCostItems: 'Units sold without known cost'
         grossMarginRate: 'Margin rate'
-        averageBasket: 'Average basket'
+        averageBasket: 'Average basket (sales before returns ÷ orders, before taxes)'
         returnRate: 'Return rate'
         stockValue: 'Stock value'
         sales: 'Sales'
@@ -896,11 +896,13 @@ console:
         balance: 'Last balance entered'
         balanceDate: 'Balance date'
         threshold: 'Alert threshold'
-        lowestAmount: 'Lowest projected balance'
-        lowestDate: 'Date of the lowest balance'
+        lowestAmount: 'Low point over %days% days'
+        lowestDate: 'Date of the low point over %days% days'
+        lowest14Amount: 'Low point over 14 days'
+        lowest14Date: 'Date of the low point over 14 days'
         belowThresholdFrom: 'Below the threshold from'
-        endAmount: 'Projected balance at the end'
-        endDate: 'End of the projection'
+        endAmount: 'Projected balance in %days% days'
+        endDate: 'End of the projection over %days% days'
         cashStatus: 'Cash status'
         planned: 'Planned budget, merchandise purchases included'
         actual: 'Actual spending, merchandise purchases included'
@@ -931,10 +933,35 @@ console:
         adviceCount: 'Today''s advice'
     # Review of items: shared reason of a group of items with the same verdict (the number picks the form)
     groups:
-        similar: 'coefficient suggested from its similar items|coefficient suggested from their similar items'
-        supplier: 'coefficient observed with its supplier|coefficient observed with their supplier'
-        site: 'default coefficient of the site'
-        none: 'no purchase cost or no selling price: no verdict'
+        keep:
+            similar: '%count% item at the coefficient of its similar items: keep|%count% items at the coefficient of their similar items: keep'
+            supplier: '%count% item at the coefficient observed with its supplier: keep|%count% items at the coefficient observed with their supplier: keep'
+            site: '%count% item at the default coefficient of the site: keep|%count% items at the default coefficient of the site: keep'
+        raise:
+            similar: '%count% item below the coefficient of its similar items: raise|%count% items below the coefficient of their similar items: raise'
+            supplier: '%count% item below the coefficient of its supplier: raise|%count% items below the coefficient of their supplier: raise'
+            site: '%count% item below the default coefficient of the site: raise|%count% items below the default coefficient of the site: raise'
+        lower:
+            similar: '%count% item above the coefficient of its similar items: lower|%count% items above the coefficient of their similar items: lower'
+            supplier: '%count% item above the coefficient of its supplier: lower|%count% items above the coefficient of their supplier: lower'
+            site: '%count% item above the default coefficient of the site: lower|%count% items above the default coefficient of the site: lower'
+        none: '%count% item without purchase cost or selling price: no verdict|%count% items without purchase cost or selling price: no verdict'
+    # Written text values (lot W2-c): the figure gives the label in `value` and its code in `code`
+    values:
+        cash:
+            ok: 'Fine'
+            warning: 'Below the threshold'
+            critical: 'Overdraft expected'
+            no_balance: 'No balance entered'
+        budget:
+            none: 'No plan'
+            ok: 'Within budget'
+            warning: 'Warning'
+            over: 'Exceeded'
+        verdict:
+            keep: 'Keep'
+            raise: 'Raise'
+            lower: 'Lower'
     # Screens of the app a question can come from (`ConsoleScreens`): themes and titles, written by the server
     themes:
         accueil: 'Dashboard'

@@ -4,6 +4,7 @@ namespace App\Gestion\Services\Console;
 
 use App\Entity\Collections;
 use App\Gestion\Analysis\AnalysisCatalog;
+use App\Gestion\Analysis\RangeLabel;
 use App\Gestion\Entity\GestionConversationMessage;
 use App\Gestion\Services\Conversation\Action\ActionCatalog;
 use App\Gestion\Services\Conversation\ActionThreadService;
@@ -29,6 +30,11 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * la période, pas sur le mois ; tout chiffre dont un texte parle reçoit sa carte (bloc `figures`) à la suite de ce texte ; un bilan
  * d'articles porte ses groupes (même verdict, même raison), comptés par le serveur.
  *
+ * Lot W2-c (13/11/2026) : une carte ne suit que le texte qui parle VRAIMENT du chiffre (sa valeur ou son libellé y sont écrits) : un
+ * chiffre cité par le modèle mais absent du texte est ignoré ; une même grandeur de même valeur sur la même plage, rendue par deux
+ * analyses, n'a qu'une carte (la première source) ; les dates et les états sont donnés au modèle rédigés (« 11 novembre 2026 »,
+ * « Correct »), jamais bruts ; l'écran donne aussi ses paramètres fixes (l'horizon de 90 jours de la Trésorerie).
+ *
  * Unités : 1 par réponse rédigée par le modèle (demande de précision rédigée par lui comprise) ; aucune si le serveur répond lui-même
  * (question hors périmètre, précision demandée par le serveur) ou si l'IA échoue.
  */
@@ -44,6 +50,8 @@ class ConsoleResponder
     /** Champs d'une ligne qui sont des montants en cents */
     private const MONEY_KEYS = ['price', 'cost', 'sales', 'grossMargin', 'result', 'planned', 'actual', 'remaining', 'effect', 'revenue'];
     private const PERCENT_KEYS = ['similarSoldShare'];
+    /** Champs d'une ligne dont la valeur est un code : le modèle en reçoit le libellé rédigé (jeu de libellés `console.values.*`) */
+    private const CODED_ROWS = ['verdict' => 'verdict', 'status' => 'budget'];
     /** Unités d'un chiffre qu'un nombre écrit dans un texte peut désigner (ni une date ni un texte) */
     private const NUMERIC_UNITS = ['money', 'percent', 'count', 'days', 'ratio'];
 
@@ -95,7 +103,7 @@ class ConsoleResponder
             $selected = [];
             foreach ($choice['kind'] === 'analyses' ? $choice['analyses'] : [] as $a) {
                 // ce que le modèle laisse vide est pris à l'écran (sa période, son article, son année) ; ce qu'il nomme l'emporte
-                $params = $this->analyses->accept($a['key'], self::withScreen($a['key'], $a['params'], $screenParams));
+                $params = $this->analyses->accept($a['key'], self::withScreen($a['key'], $a['params'], $screenParams, $screen['code'] ?? null));
                 if ($params !== null) {
                     $selected[] = [$a['key'], $params];
                 }
@@ -138,8 +146,12 @@ class ConsoleResponder
                 $this->logger->notice(sprintf('[Console] repli : réponse %d rédigée par le serveur après %d texte(s) rejeté(s)', $messageId, $rejected));
                 array_unshift($blocks, self::text($this->tr('console.fallback', $locale)));
                 if (array_filter($blocks, fn (array $b) => $b['type'] === 'figures') === []) {
+                    $canon = self::canonical($results);
                     foreach ($results as $r) {
-                        $blocks[] = $this->figuresBlock(array_column($r['figures'], 'id'), $results);
+                        $own = array_values(array_filter(array_column($r['figures'], 'id'), fn (string $id) => $canon[$id] === $id)); // sans les doublons d'une analyse précédente
+                        if ($own !== []) {
+                            $blocks[] = $this->figuresBlock($own, $results);
+                        }
                     }
                 }
             }
@@ -200,6 +212,7 @@ class ConsoleResponder
                     }
                     $line[$k] = match (true) {
                         in_array($k, ['productId', 'adviceId'], true) => $v, // un identifiant : jamais un nombre à écrire
+                        isset(self::CODED_ROWS[$k]) && is_string($v) => $note(AnalysisCatalog::valueLabel($this->translator, self::CODED_ROWS[$k], $v, $locale)), // « À monter », jamais « raise »
                         in_array($k, self::MONEY_KEYS, true) && is_numeric($v) => $note($this->display($v, 'money', $locale)),
                         in_array($k, self::PERCENT_KEYS, true) && is_numeric($v) => $note($this->display($v, 'percent', $locale)),
                         is_float($v) || is_int($v) => $note($this->display($v, 'ratio', $locale)),
@@ -244,7 +257,14 @@ class ConsoleResponder
                 $known[$f['id']] = true;
             }
         }
-        $ids = fn (mixed $list): array => array_values(array_filter(is_array($list) ? $list : [], fn ($id) => is_string($id) && isset($known[$id])));
+        $canon = self::canonical($results); // une même grandeur de même valeur sur la même plage : un seul chiffre, celui de la première analyse
+        $byId = [];
+        foreach ($results as $r) {
+            foreach ($r['figures'] as $f) {
+                $byId[$f['id']] = $f;
+            }
+        }
+        $ids = fn (mixed $list): array => array_values(array_unique(array_map(fn (string $id) => $canon[$id], array_filter(is_array($list) ? $list : [], fn ($id) => is_string($id) && isset($known[$id])))));
         $blocks = [];
         $rejected = 0;
         foreach ($written as $b) {
@@ -258,7 +278,8 @@ class ConsoleResponder
                     ++$rejected;
                     continue;
                 }
-                $cited = $ids($b['figureIds'] ?? []);
+                // un chiffre cité par le modèle ne compte que si le texte en parle vraiment : sa valeur ou son libellé y sont écrits
+                $cited = array_values(array_filter($ids($b['figureIds'] ?? []), fn (string $id) => $this->speaksOf($text, $byId[$id], $locale)));
                 $blocks[] = self::text($text, array_values(array_unique(array_merge($cited, $this->citedByValue($text, $results, $cited, $locale)))));
             } elseif ($type === 'figures' && $ids($b['figureIds'] ?? []) !== []) {
                 $blocks[] = $this->figuresBlock($ids($b['figureIds']), $results);
@@ -320,12 +341,13 @@ class ConsoleResponder
     private function citedByValue(string $text, array $results, array $cited, string $locale): array
     {
         $lower = mb_strtolower($text);
+        $canon = self::canonical($results);
         $found = [];
         foreach (self::numbers($text) as $n) {
             $candidates = [];
             foreach ($results as $r) {
                 foreach ($r['figures'] as $f) {
-                    if (in_array($f['unit'], self::NUMERIC_UNITS, true) && is_numeric($f['value']) && self::unknown($this->display($f['value'], (string) $f['unit'], $locale), [$n]) === []) {
+                    if ($canon[$f['id']] === $f['id'] && in_array($f['unit'], self::NUMERIC_UNITS, true) && is_numeric($f['value']) && self::unknown($this->display($f['value'], (string) $f['unit'], $locale), [$n]) === []) {
                         $candidates[] = $f;
                     }
                 }
@@ -350,6 +372,52 @@ class ConsoleResponder
         }
 
         return $found;
+    }
+
+    /**
+     * Le texte parle-t-il vraiment de ce chiffre ? Oui si sa valeur y est écrite (un nombre reconnu par sa valeur, une date ou un état
+     * sous leur forme rédigée), ou si son libellé y est écrit (le début du libellé, avant une précision entre parenthèses ou après une
+     * virgule : « Budget prévu »). Sinon la carte n'a rien à faire sous ce texte.
+     *
+     * @param array<string, mixed> $figure
+     */
+    private function speaksOf(string $text, array $figure, string $locale): bool
+    {
+        $lower = mb_strtolower($text);
+        $display = $this->display($figure['value'], (string) $figure['unit'], $locale);
+        if (in_array($figure['unit'], self::NUMERIC_UNITS, true) && is_numeric($figure['value'])) {
+            if (self::unknown($display, self::numbers($text)) === []) {
+                return true;
+            }
+        } elseif ($display !== '' && str_contains($lower, mb_strtolower($display))) {
+            return true;
+        }
+        $head = mb_strtolower(trim((string) (preg_split('/[,(:]/u', (string) $figure['label'])[0] ?? '')));
+
+        return $head !== '' && str_contains($lower, $head);
+    }
+
+    /**
+     * Chiffres identiques rendus par deux analyses (les ventes de la période dans le résultat ET dans les statistiques) : même grandeur,
+     * même unité, même valeur, même plage. Chaque identifiant est ramené à celui de la PREMIÈRE analyse qui le rend : une seule carte.
+     *
+     * @param list<array<string, mixed>> $results
+     *
+     * @return array<string, string> identifiant => identifiant gardé
+     */
+    private static function canonical(array $results): array
+    {
+        $first = $canon = [];
+        foreach ($results as $r) {
+            $range = ($r['period']['from'] ?? '') . '|' . ($r['period']['to'] ?? '');
+            foreach ($r['figures'] as $f) {
+                $name = str_contains((string) $f['id'], '.') ? substr((string) $f['id'], (int) strpos((string) $f['id'], '.') + 1) : (string) $f['id'];
+                $same = $name . '|' . $f['unit'] . '|' . json_encode($f['value']) . '|' . $range;
+                $canon[$f['id']] = $first[$same] ??= $f['id'];
+            }
+        }
+
+        return $canon;
     }
 
     /**
@@ -387,9 +455,10 @@ class ConsoleResponder
      *
      * @return array<string, mixed>
      */
-    private static function withScreen(string $key, array $params, array $screenParams): array
+    private static function withScreen(string $key, array $params, array $screenParams, ?string $screen = null): array
     {
-        $own = ConsoleScreens::own($key, $screenParams);
+        // les paramètres que l'écran montre, puis ceux qu'il fixe à cette analyse (l'horizon de 90 jours de la Trésorerie)
+        $own = ConsoleScreens::own($key, $screenParams) + ($screen === null ? [] : ConsoleScreens::fixed($screen, $key));
         if (isset($params['periodId']) || isset($params['range'])) {
             unset($own['periodId'], $own['range']);
         }
@@ -509,6 +578,9 @@ class ConsoleResponder
     {
         if (in_array($unit, ['money', 'percent'], true) && is_numeric($value)) {
             return $this->format->format($value + 0, $unit, $locale);
+        }
+        if ($unit === 'date' && is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) === 1) {
+            return RangeLabel::day($value, $locale); // « 11 novembre 2026 », jamais « 2026-11-11 »
         }
         if (is_float($value)) {
             return str_replace('.', $locale === 'en' ? '.' : ',', rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.'));

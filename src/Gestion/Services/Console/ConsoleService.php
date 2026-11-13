@@ -268,7 +268,10 @@ class ConsoleService
         $c = $m->getContent();
         $at = $m->getCreatedAt()?->format(\DateTimeInterface::ATOM);
         if ($m->getKind() === self::QUESTION) {
-            return ['messageId' => (int) $m->getId(), 'role' => 'user', 'text' => (string) ($c['text'] ?? ''), 'context' => $c['context'] ?? null, 'createdAt' => $at];
+            // un contexte sans paramètre rend `params: {}` (un objet, jamais un tableau vide : lot W2-c)
+            $context = is_array($c['context'] ?? null) ? ['params' => ($c['context']['params'] ?? []) ?: new \stdClass()] + $c['context'] : null;
+
+            return ['messageId' => (int) $m->getId(), 'role' => 'user', 'text' => (string) ($c['text'] ?? ''), 'context' => $context === null ? null : ['module' => $context['module'] ?? 'gestion', 'screen' => $context['screen'] ?? null, 'params' => $context['params']], 'createdAt' => $at];
         }
 
         return ['messageId' => (int) $m->getId(), 'role' => 'assistant', 'replyTo' => $c['replyTo'] ?? null, 'state' => $c['state'] ?? self::STATE_FAILED, 'error' => $c['error'] ?? null,
