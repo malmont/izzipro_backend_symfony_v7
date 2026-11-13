@@ -379,3 +379,93 @@ export:
             shipping: 'Total frais de port'
             expenses: 'Total notes de frais'
             all: 'Total achats'
+
+# Guide des séquences (lot IA-SEQ, 13/11/2026) : docs/sequences-gestion.md
+sequences:
+    once:
+        description: 'Les étapes pour mettre en route « %label% ».'
+    figures:
+        admins: 'Comptes administrateur'
+        missing: 'Articles sans coût'
+        total: 'Articles'
+        suppliers: 'Fournisseurs'
+        fixedCosts: 'Frais fixes'
+        tier: "Palier d'IA"
+        remaining: 'Unités restantes'
+        monthly: 'Unités par mois'
+        devices: 'Appareils'
+        planned: 'Budget prévu'
+        trips: 'Voyages'
+        lastBalanceDate: 'Dernier solde saisi'
+        ageDays: 'Âge du dernier solde'
+        orders: 'Commandes fournisseurs'
+        closedPeriods: 'Périodes fermées'
+        periods: 'Périodes'
+        monthsWithBalance: 'Mois avec un solde'
+        months: 'Mois'
+        openGaps: 'Écarts ouverts'
+        firstSaleDate: 'Première vente'
+        firstPurchaseDate: 'Premier achat saisi'
+        from: 'Début du créneau'
+        to: 'Fin du créneau'
+    period.prepare:
+        title: 'Préparer une période'
+        description: 'Ce qu''il faut avoir posé avant et pendant une période : budgets, voyage, trésorerie, frais fixes, achats.'
+        steps:
+            budget:
+                title: 'Objectif et budgets de la période'
+                done: 'Les budgets de la période sont validés.'
+                todo: 'Préparez la période : estimez vos ventes, simulez vos achats, puis validez. Les budgets s''enregistrent à ce moment-là.'
+            trip:
+                title: "Voyage d'achat"
+                done: '%trips% voyage(s) d''achat touche(nt) cette période.'
+                todo: "Aucun voyage d'achat sur cette période. Facultatif : créez-le si vous partez acheter."
+            cash_balance:
+                title: 'Solde de trésorerie à jour'
+                done: 'Dernier solde saisi il y a %ageDays% jour(s) : la projection de trésorerie est fiable.'
+                todo: 'Saisissez le solde de votre compte : sans solde de moins de 30 jours, la trésorerie après achats est incertaine.'
+            fixed_costs:
+                title: 'Frais fixes'
+                done: 'Vos frais fixes sont renseignés sur cette période : ils entrent dans le résultat.'
+                todo: 'Renseignez vos frais fixes (loyer, salaires, abonnements) : sans eux, le résultat de la période est trop optimiste.'
+            purchase_order:
+                title: 'Première commande fournisseur de la période'
+                done: '%orders% commande(s) fournisseur datée(s) dans cette période.'
+                todo: 'Aucune commande fournisseur datée dans cette période pour l''instant.'
+    fiscal_year.close:
+        title: "Clôturer l'exercice"
+        description: 'Les vérifications à faire sur le dernier exercice terminé avant de lire son bilan.'
+        steps:
+            periods_closed:
+                title: "Périodes de l'exercice fermées"
+                done: 'Les %periods% périodes de l''exercice sont fermées.'
+                todo: '%closedPeriods% période(s) fermée(s) sur %periods% : une période encore ouverte peut changer le bilan.'
+            purchase_costs:
+                title: "Coût d'achat des articles vendus"
+                done: 'Tous les articles vendus pendant l''exercice ont un coût d''achat : la marge est connue.'
+                todo: '%missing% article(s) vendu(s) pendant l''exercice sans coût d''achat : la marge de l''exercice est fausse.'
+            reconciliation:
+                title: 'Rapprochement bancaire de chaque mois'
+                done: 'Un solde saisi dans chaque mois de l''exercice, sans écart resté ouvert.'
+                todo: '%monthsWithBalance% mois sur %months% ont un solde saisi, %openGaps% écart(s) resté(s) ouvert(s).'
+            fixed_costs:
+                title: "Frais fixes de l'exercice"
+                done: 'Vos frais fixes sont renseignés sur l''exercice.'
+                todo: 'Aucun frais fixe sur l''exercice : le résultat après frais fixes est égal au résultat brut.'
+    history.recovery:
+        title: "Reprise d'historique"
+        description: 'Donner un coût d''achat aux articles vendus avant vos premiers achats saisis, pour que les marges passées soient justes.'
+        instance: 'Historique du site'
+        steps:
+            needed:
+                title: 'Ventes antérieures à vos achats saisis'
+                done: 'Des ventes existent avant votre premier achat saisi : une reprise leur donne un coût.'
+                todo: 'Aucune vente avant votre premier achat saisi : rien à reprendre.'
+            applied:
+                title: 'Reprise appliquée'
+                done: 'Reprise appliquée sur %months% mois, du %from% au %to%.'
+                todo: 'Simulez la reprise, vérifiez les coûts proposés, puis appliquez-la. Elle s''annule d''un bloc.'
+            purchase_costs:
+                title: 'Articles vendus sans coût sur le créneau'
+                done: 'Tous les articles vendus sur le créneau ont un coût d''achat.'
+                todo: '%missing% article(s) vendu(s) sur le créneau sans coût d''achat.'

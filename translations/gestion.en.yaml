@@ -377,3 +377,93 @@ export:
             shipping: 'Shipping total'
             expenses: 'Expenses total'
             all: 'Purchases total'
+
+# Sequence guide (lot IA-SEQ, 13/11/2026): docs/sequences-gestion.md
+sequences:
+    once:
+        description: 'The steps to get "%label%" up and running.'
+    figures:
+        admins: 'Administrator accounts'
+        missing: 'Items without a cost'
+        total: 'Items'
+        suppliers: 'Suppliers'
+        fixedCosts: 'Fixed costs'
+        tier: 'AI tier'
+        remaining: 'Units left'
+        monthly: 'Units per month'
+        devices: 'Devices'
+        planned: 'Planned budget'
+        trips: 'Trips'
+        lastBalanceDate: 'Last balance entered'
+        ageDays: 'Age of the last balance'
+        orders: 'Purchase orders'
+        closedPeriods: 'Closed periods'
+        periods: 'Periods'
+        monthsWithBalance: 'Months with a balance'
+        months: 'Months'
+        openGaps: 'Open gaps'
+        firstSaleDate: 'First sale'
+        firstPurchaseDate: 'First purchase entered'
+        from: 'Start of the window'
+        to: 'End of the window'
+    period.prepare:
+        title: 'Prepare a period'
+        description: 'What should be in place before and during a period: budgets, trip, cash, fixed costs, purchases.'
+        steps:
+            budget:
+                title: 'Target and budgets of the period'
+                done: 'The budgets of the period are validated.'
+                todo: 'Prepare the period: estimate your sales, simulate your purchases, then validate. Budgets are saved at that point.'
+            trip:
+                title: 'Buying trip'
+                done: '%trips% buying trip(s) overlap this period.'
+                todo: 'No buying trip in this period. Optional: create one if you travel to buy.'
+            cash_balance:
+                title: 'Up-to-date cash balance'
+                done: 'Last balance entered %ageDays% day(s) ago: the cash projection is reliable.'
+                todo: 'Enter your account balance: without a balance less than 30 days old, cash after purchases is uncertain.'
+            fixed_costs:
+                title: 'Fixed costs'
+                done: 'Your fixed costs are entered for this period: they count in the result.'
+                todo: 'Enter your fixed costs (rent, salaries, subscriptions): without them, the result of the period is too optimistic.'
+            purchase_order:
+                title: 'First purchase order of the period'
+                done: '%orders% purchase order(s) dated in this period.'
+                todo: 'No purchase order dated in this period yet.'
+    fiscal_year.close:
+        title: 'Close the fiscal year'
+        description: 'The checks to make on the last finished fiscal year before reading its review.'
+        steps:
+            periods_closed:
+                title: 'Periods of the fiscal year closed'
+                done: 'The %periods% periods of the fiscal year are closed.'
+                todo: '%closedPeriods% of %periods% period(s) closed: a period still open can change the review.'
+            purchase_costs:
+                title: 'Purchase cost of the items sold'
+                done: 'Every item sold during the fiscal year has a purchase cost: the margin is known.'
+                todo: '%missing% item(s) sold during the fiscal year without a purchase cost: the margin of the year is wrong.'
+            reconciliation:
+                title: 'Bank reconciliation of each month'
+                done: 'A balance entered in each month of the fiscal year, with no gap left open.'
+                todo: '%monthsWithBalance% of %months% months have a balance entered, %openGaps% gap(s) left open.'
+            fixed_costs:
+                title: 'Fixed costs of the fiscal year'
+                done: 'Your fixed costs are entered for the fiscal year.'
+                todo: 'No fixed cost in the fiscal year: the result after fixed costs equals the gross result.'
+    history.recovery:
+        title: 'History recovery'
+        description: 'Give a purchase cost to the items sold before your first entered purchases, so that past margins are right.'
+        instance: 'History of the site'
+        steps:
+            needed:
+                title: 'Sales earlier than your entered purchases'
+                done: 'Sales exist before your first entered purchase: a recovery gives them a cost.'
+                todo: 'No sale before your first entered purchase: nothing to recover.'
+            applied:
+                title: 'Recovery applied'
+                done: 'Recovery applied over %months% months, from %from% to %to%.'
+                todo: 'Simulate the recovery, check the proposed costs, then apply it. It can be cancelled as a whole.'
+            purchase_costs:
+                title: 'Items sold without a cost in the window'
+                done: 'Every item sold in the window has a purchase cost.'
+                todo: '%missing% item(s) sold in the window without a purchase cost.'

@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (447)
+## Boutique et commun (450)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -380,6 +380,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/frais/total` | ROLE_ADMIN | `Controller\StatistiqueDashboard\FraisController::getTotalFrais` |
 | POST | `/api/gestion/accueil/vignettes/{id}/ecarter` | ROLE_ADMIN | `Gestion\Controller\HomeTilesController::dismiss` |
 | GET | `/api/gestion/accueil/vignettes` | ROLE_ADMIN | `Gestion\Controller\HomeTilesController::list` |
+| GET | `/api/gestion/articles` | ROLE_ADMIN | `Gestion\Controller\GestionSequenceController::articles` |
 | GET | `/api/gestion/campagnes/{id}/rentabilite` | ROLE_ADMIN | `Gestion\Controller\MarketingCampaignController::profitability` |
 | DELETE | `/api/gestion/campagnes/{id}` | ROLE_ADMIN | `Gestion\Controller\MarketingCampaignController::delete` |
 | GET | `/api/gestion/campagnes/{id}` | ROLE_ADMIN | `Gestion\Controller\MarketingCampaignController::get` |
@@ -448,6 +449,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/gestion/reprise/appliquer` | ROLE_ADMIN | `Gestion\Controller\RepriseController::apply` |
 | POST | `/api/gestion/reprise/simulation` | ROLE_ADMIN | `Gestion\Controller\RepriseController::simulate` |
 | GET | `/api/gestion/reprise` | ROLE_ADMIN | `Gestion\Controller\RepriseController::state` |
+| GET | `/api/gestion/sequences/{key}` | ROLE_ADMIN | `Gestion\Controller\GestionSequenceController::detail` |
+| GET | `/api/gestion/sequences` | ROLE_ADMIN | `Gestion\Controller\GestionSequenceController::list` |
 | POST | `/api/gestion/statistiques/annee/avis` | ROLE_ADMIN | `Gestion\Controller\GestionStatisticsController::yearAdvice` |
 | GET | `/api/gestion/statistiques/annee` | ROLE_ADMIN | `Gestion\Controller\GestionStatisticsController::year` |
 | GET | `/api/gestion/statistiques` | ROLE_ADMIN | `Gestion\Controller\GestionStatisticsController::overview` |

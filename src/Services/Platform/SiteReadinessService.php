@@ -176,9 +176,10 @@ class SiteReadinessService
                 ? $this->tr($locale, 'steps.management.periods_calendar.description.done', [], 'Calendrier des périodes choisi.')
                 : $this->tr($locale, 'steps.management.periods_calendar.description.todo', [], 'Trimestres par défaut : confirmez-les, ou choisissez des semestres ou des mois.'),
             ($gestion['purchase_period_frequency'] ?? null) !== null, ['type' => 'registry', 'feature' => 'gestion.periods'], false, 'periodes');
-        $articles = "product p WHERE p.product_type = 'standard' AND COALESCE(p.rental_enabled, false) = false";
+        // Règle « article sans coût » partagée avec le guide des séquences et la liste des articles concernés (lot IA-SEQ) : MissingCostQuery
+        $articles = 'product p WHERE ' . \App\Gestion\Services\MissingCostQuery::ARTICLES;
         $total = (int) $this->one($pdo, "SELECT COUNT(*) FROM $articles");
-        $missing = (int) $this->one($pdo, "SELECT COUNT(*) FROM $articles AND (p.purchase_price IS NULL OR p.purchase_price <= 0) AND NOT EXISTS (SELECT 1 FROM commande_line l WHERE l.product_id = p.id AND l.unit_cost_cents IS NOT NULL)");
+        $missing = (int) $this->one($pdo, "SELECT COUNT(*) FROM $articles AND " . \App\Gestion\Services\MissingCostQuery::MISSING);
         $costDesc = $missing > 0
             ? $this->tr($locale, 'steps.management.purchase_cost.description.missing', ['%count%' => $missing, '%total%' => $total], sprintf('%d article(s) sur %d sans coût d\'achat : leur marge reste inconnue.', $missing, $total))
             : ($total > 0
