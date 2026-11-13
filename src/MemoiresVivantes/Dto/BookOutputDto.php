@@ -84,6 +84,8 @@ class BookOutputDto
     /** Itinéraire Google Maps vers le client (propriétaire et administrateurs seulement) */
     public ?string $clientAddressMapsUrl = null;
     public ?string $client_address_maps_url = null;
+    /** Biographe affecté au livre (MV-AFFECTATION, 13/11/2026) : {id, fullName} ou null ; rendu à tous, prénom et nom seulement */
+    public ?array $biographer = null;
 
     public function __construct(
         Book $book,
@@ -110,6 +112,7 @@ class BookOutputDto
                 'email' => $withPrivateDetails ? $book->getUser()->getEmail() : null,
             ];
         }
+        $this->biographer = \App\MemoiresVivantes\Services\BookBiographerService::describe($book->getBiographer());
         $this->title = $book->getTitle();
         $this->subtitle = $book->getSubtitle();
         $this->birthplace = $book->getBirthplace();

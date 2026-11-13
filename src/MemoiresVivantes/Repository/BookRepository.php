@@ -32,7 +32,7 @@ class BookRepository extends EntityRepository
     /**
      * @return Book[]
      */
-    public function findAllWithChaptersAndPhotos(?int $userId = null): array
+    public function findAllWithChaptersAndPhotos(?int $userId = null, ?int $biographerId = null, bool $unassigned = false): array
     {
         $qb = $this->createQueryBuilder('b')
             ->leftJoin('b.user', 'u')
@@ -49,6 +49,12 @@ class BookRepository extends EntityRepository
 
         if ($userId !== null) {
             $qb->andWhere('b.user = :userId')->setParameter('userId', $userId);
+        }
+        // Biographe affecté (MV-AFFECTATION, 13/11/2026) : un compte, ou les livres sans biographe
+        if ($unassigned) {
+            $qb->andWhere('b.biographer IS NULL');
+        } elseif ($biographerId !== null) {
+            $qb->andWhere('b.biographer = :biographerId')->setParameter('biographerId', $biographerId);
         }
 
         return $qb->getQuery()->getResult();

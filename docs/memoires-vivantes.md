@@ -60,7 +60,7 @@ plus qu'un dernier repli : chaque site a son frontend.
 
 | Table | Entité | Contenu |
 |---|---|---|
-| `mv_book` | `Book` | livre (propriétaire, type, origine `channel` : `web` par défaut, `mobile` pour un livre créé par l'application Living Memory, fixée à la création ; choix de couverture enregistrés `cover_style`, `bg_color`, `author_name` (17/10/2026, voir « Mise en page du livre ») ; statut de paiement, nombre de séances d'entretien `session_count` / `sessionCount` de 1 à 12, adresse du client `client_address` : itinéraire Google Maps pour le biographe, `clientAddressMapsUrl` dans l'API, jamais montrée aux invités) ; identifiant UUID |
+| `mv_book` | `Book` | livre (propriétaire ; biographe affecté `biographer_id` depuis le 13/11/2026, voir « Équipe » ; type, origine `channel` : `web` par défaut, `mobile` pour un livre créé par l'application Living Memory, fixée à la création ; choix de couverture enregistrés `cover_style`, `bg_color`, `author_name` (17/10/2026, voir « Mise en page du livre ») ; statut de paiement, nombre de séances d'entretien `session_count` / `sessionCount` de 1 à 12, adresse du client `client_address` : itinéraire Google Maps pour le biographe, `clientAddressMapsUrl` dans l'API, jamais montrée aux invités) ; identifiant UUID |
 | `mv_chapter` | `Chapter` | réponses, texte généré, `generation_status` |
 | `mv_chapter_photo` | `ChapterPhoto` | photos d'un chapitre |
 | `mv_contributor` | `Contributor` | contributeurs (livres collectifs) |
@@ -259,8 +259,8 @@ simulation).
   [{currency, paid, refunded}], prints: {orders, copies, revenue: [{currency, paid, pending, refunded}]}, net:
   [{currency, amount}]}]}`. Montants bruts encaissés dans `book`, `chapters`, `prints` (remboursés compris),
   `refunded` à part, `net = book + chapters + prints − refunded`, par devise. Une commande d'impression web sans
-  paiement compte dans `orders` et `copies`, pas dans `revenue`. `biographer` est toujours null : aucun lien
-  biographe-livre n'existe en base (le propriétaire est le client). Tri : net décroissant (devise par défaut du
+  paiement compte dans `orders` et `copies`, pas dans `revenue`. `biographer` : biographe affecté au livre
+  (`{id, fullName}`), null si aucun (toujours null avant le 13/11/2026, lot MV-AFFECTATION). Tri : net décroissant (devise par défaut du
   site) puis création décroissante. 422 `VALIDATION_FAILED` sur un paramètre invalide.
 
 ## Suppression du compte (application mobile)
@@ -337,6 +337,29 @@ boutique, la caisse et la gestion : la console Équipe listait tous les administ
   avec un compte biographe et un compte client : hors `/api/memoires/` et `/api/reservations`, même réponse ;
   `tests/Functional/MemoiresVivantes/MemoiresTeamTest.php` (attribution, journal, populations, filtre, `/team`, livres de
   l'entreprise, écrans réservés, commande).
+
+### Biographe affecté au livre (lot MV-AFFECTATION, 13/11/2026)
+
+- **Donnée** : `mv_book.biographer_id` (compte de la base commune, `ON DELETE SET NULL` ; migration
+  `Version20261226110000`, script `scripts/migrate_all_v2_book_biographer.sh`). **Aucune affectation automatique** : les
+  livres existants restent sans biographe jusqu'à un choix explicite dans la fiche ; rien n'est déduit d'un rendez-vous.
+  Les livres de l'application mobile ont le même champ, jamais rempli par l'application.
+- **Écriture** : `PUT /books/{id}` avec `biographerId` (entier, ou `null` pour retirer ; `biographer_id` accepté),
+  réservé à l'équipe (administrateur ou biographe, `Services/BookBiographerService`). Cible inconnue ou sans
+  `ROLE_MEMOIRES_BIOGRAPHE` (un `ROLE_ADMIN` sans ce rôle n'est pas affectable) → **400 `BIOGRAPHER_INVALID`**. Le
+  propriétaire du livre : s'il renvoie la valeur actuelle (un front qui renvoie la fiche entière), le champ est ignoré
+  et le reste appliqué ; s'il la change → **403 `FORBIDDEN`** et rien d'autre n'est appliqué. Idempotent.
+- **Lecture** : `biographer` = `{id, fullName}` ou `null` dans `GET /books`, `GET /books/{id}` (rendu à tous, invités
+  compris : prénom et nom, jamais le courriel) et dans `/admin/revenue`.
+- **Filtre** : `GET /books?scope=all&biographerId=<id>` (équipe) ; `biographerId=none` = livres sans biographe ;
+  combinable avec `userId` ; autre valeur → 400 `BIOGRAPHER_INVALID`.
+- **Journal** : `content_audit_log`, `resource = book_biographer`, `resource_id` = id du livre, `action = assign |
+  unassign`, `before_state` / `after_state` = `{id, fullName}` du biographe, `user_identifier` = l'éditeur.
+- **Rendez-vous** : un rendez-vous créé avec `book_id` (sans `biographer_id`) prend le **biographe affecté au livre**,
+  sinon aucun ; jusqu'au 13/11/2026 il prenait le **propriétaire** du livre (le client) pour biographe. Les rendez-vous
+  existants ne sont pas corrigés (demo : 4, memoiresvivantes : 4, tous passés) ; **possibilité, à décider plus tard** :
+  une commande de reprise qui recopie le biographe du livre sur ses rendez-vous passés, une fois les livres affectés.
+- Test : `tests/Functional/MemoiresVivantes/MemoiresBookBiographerTest.php`.
 
 ### Convention commune des rôles d'équipe (à reprendre pour la Boussole et les suivantes)
 

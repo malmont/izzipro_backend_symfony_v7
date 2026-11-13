@@ -113,10 +113,11 @@ SQL;
         }
         $sql = 'SELECT b.id, b.title, b.type, b.channel, b.created_at, b.payment_status, b.payment_amount, b.payment_currency, b.paid_at,'
             . ' u.id AS user_id, u.email, u.firstname, u.lastname,'
+            . ' b.biographer_id, bg.firstname AS biographer_firstname, bg.lastname AS biographer_lastname,'
             . ' (SELECT COUNT(*) FROM mv_chapter c WHERE c.book_id = b.id) AS chapters_total,'
             . ' (SELECT COUNT(*) FROM mv_chapter c WHERE c.book_id = b.id AND c.generation_status = \'completed\' AND COALESCE(NULLIF(c.content_final, \'\'), NULLIF(c.content_generated, \'\')) IS NOT NULL) AS chapters_written,'
             . ' (SELECT COUNT(*) FROM mv_chapter c WHERE c.book_id = b.id AND c.paid_at IS NOT NULL) AS chapters_paid'
-            . ' FROM mv_book b JOIN "user" u ON u.id = b.user_id'
+            . ' FROM mv_book b JOIN "user" u ON u.id = b.user_id LEFT JOIN "user" bg ON bg.id = b.biographer_id'
             . ($where ? ' WHERE ' . implode(' AND ', $where) : '')
             . ' ORDER BY b.created_at DESC';
 

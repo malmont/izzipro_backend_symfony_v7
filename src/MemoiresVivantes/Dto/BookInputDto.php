@@ -30,6 +30,10 @@ class BookInputDto
     public ?string $coverStyle = null;
     public ?string $bgColor = null;
     public ?string $authorName = null;
+    /** Biographe affecté (MV-AFFECTATION, 13/11/2026) : `biographerId` présent dans le corps (null ou vide = retirer) ; `biographerIdValid` faux si mal formé */
+    public bool $biographerIdProvided = false;
+    public ?int $biographerId = null;
+    public bool $biographerIdValid = true;
 
     public function __construct(array $data)
     {
@@ -59,6 +63,17 @@ class BookInputDto
         }
         $this->bgColor = $color === null ? null : ($color === '' || preg_match('/^#[0-9a-fA-F]{6}$/', trim($color)) ? strtolower(trim($color)) : null);
         $this->authorName = self::text($data['authorName'] ?? $data['author_name'] ?? null);
+        if (array_key_exists('biographerId', $data) || array_key_exists('biographer_id', $data)) {
+            $this->biographerIdProvided = true;
+            $value = $data['biographerId'] ?? $data['biographer_id'] ?? null;
+            if ($value === null || $value === '') {
+                $this->biographerId = null;
+            } elseif (is_int($value) || (is_string($value) && ctype_digit($value))) {
+                $this->biographerId = (int) $value;
+            } else {
+                $this->biographerIdValid = false;
+            }
+        }
 
         $deceased = $data['parentsDeceased'] ?? $data['parents_deceased'] ?? $data['parentsNotParticipating'] ?? $data['parents_not_participating'] ?? null;
         $this->parentsDeceased = $deceased !== null ? (bool)$deceased : null;

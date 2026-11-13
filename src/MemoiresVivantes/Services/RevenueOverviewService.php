@@ -9,7 +9,7 @@ use App\MemoiresVivantes\Repository\PaymentLedgerRepository;
  * livre payé par lien Stripe, les achats de chapitre, les impressions, les remboursements et le net, par devise
  * (jamais additionnées). La période s'applique aux dates de paiement ; sans période : tout. Tri : net décroissant
  * (devise par défaut du site d'abord) puis création décroissante. Aucun lien « biographe » n'existe en base :
- * `biographer` est toujours null.
+ * `biographer` : biographe affecté au livre ({id, fullName}), null si aucun (toujours null avant le 13/11/2026).
  */
 class RevenueOverviewService
 {
@@ -108,7 +108,7 @@ class RevenueOverviewService
             $books[] = [
                 'id' => $id, 'title' => $b['title'], 'type' => $b['type'], 'channel' => $channel, 'createdAt' => $this->iso($b['created_at'], $tz),
                 'owner' => ['userId' => (int) $b['user_id'], 'email' => (string) $b['email'], 'name' => trim((string) $b['firstname'] . ' ' . (string) $b['lastname'])],
-                'biographer' => null,
+                'biographer' => $b['biographer_id'] === null ? null : ['id' => (int) $b['biographer_id'], 'fullName' => trim((string) $b['biographer_firstname'] . ' ' . (string) $b['biographer_lastname'])], // affecté au livre (13/11/2026)
                 'chapters' => ['total' => (int) $b['chapters_total'], 'written' => (int) $b['chapters_written'], 'paid' => (int) $b['chapters_paid']],
                 'bookPayment' => $bookPayment,
                 'chaptersRevenue' => $chaptersRevenue,

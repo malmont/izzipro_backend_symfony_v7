@@ -44,6 +44,7 @@ class BookController extends AbstractController
         private readonly BookAccessGuard $accessGuard,
         private readonly BookTypeNormalizer $bookTypeNormalizer,
         private readonly \App\MemoiresVivantes\Services\AiQuotaService $aiQuota,
+        private readonly \App\MemoiresVivantes\Services\BookBiographerService $bookBiographer,
         private readonly ?MediaUrlResolver $mediaUrlResolver = null
     ) {}
 
@@ -79,7 +80,14 @@ class BookController extends AbstractController
         $targetUserId = $request->query->get('userId') ? (int) $request->query->get('userId') : null;
 
         if ($isAdmin && $scope === 'all') {
-            $books = $bookRepo->findAllWithChaptersAndPhotos($targetUserId);
+            // Filtre par biographe affecté (MV-AFFECTATION, 13/11/2026) : ?biographerId=<id> ou none (sans biographe)
+            $biographerParam = $request->query->get('biographerId') ?? $request->query->get('biographer_id');
+            $unassigned = $biographerParam === 'none';
+            $biographerId = $biographerParam !== null && !$unassigned ? (ctype_digit((string) $biographerParam) ? (int) $biographerParam : -1) : null;
+            if ($biographerId === -1) {
+                return $this->json(['error' => 'biographerId : identifiant ou none.', 'code' => 'BIOGRAPHER_INVALID'], 400);
+            }
+            $books = $bookRepo->findAllWithChaptersAndPhotos($targetUserId, $biographerId, $unassigned);
         } else {
             $books = $this->getBooksByUserUseCase->execute($user);
         }
@@ -233,7 +241,19 @@ class BookController extends AbstractController
         $this->denyAccessUnlessGranted('BOOK_EDIT', $book);
 
         $data = json_decode($request->getContent(), true);
-        $book = $this->updateBookUseCase->execute($book, new BookInputDto(is_array($data) ? $data : []));
+        $dto = new BookInputDto(is_array($data) ? $data : []);
+        // Biographe affecté (MV-AFFECTATION, 13/11/2026) : équipe seulement ; un refus n'applique rien du reste
+        if ($dto->biographerIdProvided) {
+            if (!$dto->biographerIdValid) {
+                return $this->json(['error' => 'biographerId : identifiant entier ou null.', 'code' => 'BIOGRAPHER_INVALID'], 400);
+            }
+            try {
+                $this->bookBiographer->assign($book, $dto->biographerId, $this->getUser());
+            } catch (\App\MemoiresVivantes\Exception\ApiErrorException $e) {
+                return $this->json(['error' => $e->getMessage(), 'code' => $e->errorCode], $e->status);
+            }
+        }
+        $book = $this->updateBookUseCase->execute($book, $dto);
         
         $host = $this->resolveHost($request);
         return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book), typeInfo: $this->typeInfo($book), aiQuotaLimited: $this->aiQuota->isLimited($book, $this->getUser())));

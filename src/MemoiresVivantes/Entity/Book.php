@@ -33,6 +33,11 @@ class Book
     #[ORM\ManyToOne(targetEntity: \App\Entity\User::class)]
     #[ORM\JoinColumn(nullable: false)]
     private ?User $user = null;
+
+    /** Biographe de l'équipe affecté au livre (MV-AFFECTATION, 13/11/2026) ; null = non affecté ; effacé si le compte disparaît */
+    #[ORM\ManyToOne(targetEntity: \App\Entity\User::class)]
+    #[ORM\JoinColumn(name: 'biographer_id', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
+    private ?User $biographer = null;
  
     #[ORM\Column(length: 255)]
     #[Groups(['book:read', 'book:write', 'chapter:read'])]
@@ -217,6 +222,17 @@ class Book
     public function setUser(?User $user): static
     {
         $this->user = $user;
+        return $this;
+    }
+
+    public function getBiographer(): ?User
+    {
+        return $this->biographer;
+    }
+
+    public function setBiographer(?User $biographer): static
+    {
+        $this->biographer = $biographer;
         return $this;
     }
  

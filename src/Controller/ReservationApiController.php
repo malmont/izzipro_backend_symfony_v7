@@ -179,9 +179,7 @@ class ReservationApiController extends AbstractController
                 $book = $tenantEm->getRepository(\App\MemoiresVivantes\Entity\Book::class)->find(
                     \Symfony\Component\Uid\Uuid::fromString($request->query->get('book_id'))
                 );
-                if ($book && $book->getUser()) {
-                    $biographerId = $book->getUser()->getId();
-                }
+                $biographerId = $book?->getBiographer()?->getId(); // biographe affecté au livre (13/11/2026), plus le propriétaire
             } catch (\Throwable $e) {
                 // Ignore format error and proceed
             }

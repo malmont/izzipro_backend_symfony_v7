@@ -39,10 +39,9 @@ class ReservationService
             }
         } elseif ($dto->book_id) {
             try {
+                // MV-AFFECTATION (13/11/2026) : le biographe affecté au livre ; avant, le propriétaire du livre (le client) était pris pour biographe
                 $book = $tenantEm->getRepository(Book::class)->find(Uuid::fromString($dto->book_id));
-                if ($book && $book->getUser()) {
-                    $biographer = $book->getUser();
-                }
+                $biographer = $book?->getBiographer();
             } catch (\Throwable $e) {
                 // Si l'UUID n'est pas valide ou livre introuvable, on continue sans biographe lié
             }
