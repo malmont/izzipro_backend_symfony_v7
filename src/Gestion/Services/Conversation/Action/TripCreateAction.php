@@ -100,6 +100,24 @@ class TripCreateAction extends AbstractGestionAction
                 ['%notes%' => (string) $attaches['notes'], '%commandes%' => (string) $attaches['commandes']])]];
     }
 
+    public function rows(array $preview, string $locale): array
+    {
+        $money = ['currency' => $preview['currency']];
+
+        return array_values(array_filter([
+            $this->row('name', $locale, $preview['name'], 'text'),
+            $preview['place'] === null ? null : $this->row('place', $locale, $preview['place'], 'text'),
+            $this->row('startDate', $locale, $preview['startDate'], 'date'),
+            $this->row('endDate', $locale, $preview['endDate'], 'date'),
+            $this->row('budgetTotal', $locale, $preview['budgetTotal'], 'money', $money),
+            $preview['budgetDaily'] === null ? null : $this->row('budgetDaily', $locale, $preview['budgetDaily'], 'money', $money),
+            $this->row('currency', $locale, $preview['currency'], 'text'),
+            $preview['exchangeRate'] === null ? null : $this->row('exchangeRate', $locale, $preview['exchangeRate'], 'number'),
+            $preview['notes'] === null ? null : $this->row('notes', $locale, $preview['notes'], 'text'),
+            $this->row('attaches', $locale, $preview['attaches']['text'], 'text'),
+        ]));
+    }
+
     public function execute(array $answers, ?string $user): array
     {
         $trip = $this->trips->create($this->values($answers), $user); // 409 TRIP_OVERLAP, 422 du service ; rattachement automatique ; journal gestion-voyages

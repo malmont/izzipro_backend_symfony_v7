@@ -63,6 +63,11 @@ class SupplierCreateAction extends AbstractGestionAction
         return ['name' => $values['name'], 'type' => ['id' => $type?->getId(), 'name' => $type?->getName()], 'currency' => $values['currency']];
     }
 
+    public function rows(array $preview, string $locale): array
+    {
+        return [$this->row('name', $locale, $preview['name'], 'text'), $this->row('typeFournisseurId', $locale, $preview['type']['name'], 'text'), $this->row('currency', $locale, $preview['currency'], 'text')];
+    }
+
     public function execute(array $answers, ?string $user): array
     {
         $values = $this->values($answers);

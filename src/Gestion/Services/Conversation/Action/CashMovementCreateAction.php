@@ -96,17 +96,34 @@ class CashMovementCreateAction extends AbstractGestionAction
                 'text' => $this->tr('conversation.actions.cash_movement_create.fixed.' . ($fixed ? 'yes' : 'no') . '_' . $source, $locale, ['%category%' => $category])]];
     }
 
+    public function rows(array $preview, string $locale): array
+    {
+        $option = fn (string $group, string $value) => $this->tr("conversation.actions.cash_movement_create.options.$group.$value", $locale);
+
+        return array_values(array_filter([
+            $this->row('label', $locale, $preview['label'], 'text'),
+            $this->row('direction', $locale, $option('direction', $preview['direction']), 'text'),
+            $this->row('category', $locale, $preview['categoryLabel'], 'text'),
+            $this->row('amount', $locale, $preview['amount'], 'money', ['currency' => $preview['currency']]),
+            $this->row('startDate', $locale, $preview['startDate'], 'date'),
+            $this->row('recurrence', $locale, $option('recurrence', $preview['recurrence']), 'text'),
+            $preview['endDate'] === null ? null : $this->row('endDate', $locale, $preview['endDate'], 'date'),
+            $this->row('fixedCost', $locale, $preview['fixedCost']['text'], 'text'),
+            $preview['notes'] === null ? null : $this->row('notes', $locale, $preview['notes'], 'text'),
+        ]));
+    }
+
     public function execute(array $answers, ?string $user): array
     {
         $v = $this->values($answers);
         $created = $this->cash->createMovement($v, $user, 'fr'); // mêmes contrôles que la route ; journal gestion-tresorerie-mouvements
 
-        return ['result' => ['movementId' => $created['id'], 'fixedCost' => $created['fixedCost']], 'undo' => ['id' => $created['id']] + $this->row((int) $created['id'])];
+        return ['result' => ['movementId' => $created['id'], 'fixedCost' => $created['fixedCost']], 'undo' => ['id' => $created['id']] + $this->stored((int) $created['id'])];
     }
 
     public function blockers(array $undo): array
     {
-        $row = $this->row((int) $undo['id']);
+        $row = $this->stored((int) $undo['id']);
         if ($row === null) {
             return [['code' => 'MOVEMENT_CHANGED', 'message' => 'Le mouvement créé par cette action n\'existe plus.']];
         }
@@ -117,7 +134,7 @@ class CashMovementCreateAction extends AbstractGestionAction
 
     public function undo(array $undo): array
     {
-        if ($this->row((int) $undo['id']) === null) {
+        if ($this->stored((int) $undo['id']) === null) {
             throw new GestionConflictException('UNDO_BLOCKED', 'Le mouvement n\'existe plus.');
         }
         $this->cash->deleteMovement((int) $undo['id'], 'fr');
@@ -134,7 +151,7 @@ class CashMovementCreateAction extends AbstractGestionAction
     }
 
     /** @return array<string, mixed>|null ce que le mouvement porte en base, pour constater un changement */
-    private function row(int $id): ?array
+    private function stored(int $id): ?array
     {
         $r = $this->conn()->fetchAssociative('SELECT label, category, direction, amount_cents, start_date, recurrence, end_date, notes, fixed_cost FROM gestion_cash_movement WHERE id = ?', [$id]);
 

@@ -39,6 +39,17 @@ interface GestionAction
     public function preview(array $answers, string $locale): array;
 
     /**
+     * Forme commune de l'aperçu (demande du web, 13/11/2026), en plus de la forme propre à l'action : une ligne par chose écrite, que
+     * l'application affiche sans connaître l'action. `unit` : `money` (cents, avec `currency`), `date`, `number`, `text` ; `before` est
+     * présent quand l'action remplace une valeur.
+     *
+     * @param array<string, mixed> $preview l'aperçu rendu par `preview()`
+     *
+     * @return list<array{label: string, value: mixed, unit: string, currency?: string, before?: mixed}>
+     */
+    public function rows(array $preview, string $locale): array;
+
+    /**
      * Confirmation : écrit par le service existant. `result` est rendu à l'application ; `undo` est ce qu'il faut pour annuler et pour
      * constater ce qui a bougé depuis.
      *

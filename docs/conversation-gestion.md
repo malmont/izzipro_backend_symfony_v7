@@ -24,20 +24,21 @@ Code : `src/Gestion/Services/Conversation/` (`GestionConversationService`, `Invo
 | Route | Rôle |
 |---|---|
 | `POST /api/gestion/conversations` | Ouvre le fil d'une facture. Multipart `files[]` (ou `file`), `text?`, `locale?` : le document est créé par le même chemin que `POST /api/gestion/documents` (mêmes formats, mêmes refus 422 `DOCUMENT_INVALID`, 402 `AI_CREDITS_EXHAUSTED`, 403 `AI_NOT_INCLUDED`, 429, 409 `DOCUMENT_IN_PROGRESS`, même crédit). Ou JSON `{ documentId, text? }` pour un document déjà envoyé. **201** le fil créé ; **200** le fil déjà ouvert pour ce document (**un seul fil actif par document**). 422 `VALIDATION_FAILED { fields: { files: REQUIRED } }` sans fichier ni document ; 404 `DOCUMENT_NOT_FOUND` ; 422 `DOCUMENT_TYPE` pour une note ou un transport. |
+| | **Unités** : ouvrir un fil par `{ documentId }` **ne coûte aucune unité**, que le document soit déjà lu ou encore en cours de lecture (le fil attend alors la lecture déjà payée). **Seul l'envoi d'un fichier en coûte une** : celle de la lecture du document, aux mêmes règles que `POST /api/gestion/documents`. Ouvrir le fil d'une action (§ 9) est gratuit. |
 | `GET /api/gestion/conversations/{id}` | Le fil (§ 2). À interroger toutes les 3 à 5 s pendant la lecture. Ne crée rien. 404 `CONVERSATION_NOT_FOUND`. |
 | `POST …/{id}/answers` | `{ answers: [{ questionId, value }] }` → le fil à jour. Gratuit, aucune IA. `value: null` retire une réponse. 422 `VALIDATION_FAILED { fields: { "answers[i].questionId": UNKNOWN_QUESTION, "answers[i].value": <code> } }` ; 409 `CONVERSATION_NOT_OPEN { state }` (lecture en cours ou en échec, facture confirmée, fil abandonné). |
 | `POST …/{id}/messages` | `{ text }` : une phrase libre, traduite par l'IA en réponses aux questions (§ 8) → 200 `{ reply, applied, ignored, thread }`. **1 unité** par réponse de l'IA. |
 | `POST …/{id}/confirm` | `{ previewHash }` → **201**, le résultat de la confirmation d'une facture (`docs/lecture-documents-gestion.md` § 4), plus `undo` et `thread`. 409 `CONVERSATION_NOT_READY { state, openQuestions, issues }` ; **409 `PREVIEW_CHANGED { preview, previewHash }`** si l'aperçu a changé depuis son affichage ; les autres refus sont ceux de la confirmation (`PERIOD_CLOSED`, `INVOICE_ALREADY_CONFIRMED`…). |
 | `POST …/{id}/undo` | Annulation d'un bloc (§ 5) → 200 `{ undone, thread }` : le fil revient à l'aperçu, avec ses réponses. |
 | `POST …/{id}/abandon` | Abandon du fil par le gérant (lot IA-ACT-1, facture ou action) → 200 le fil, `state: abandoned` ; rien n'est créé, le document d'une facture reste et un autre fil peut le reprendre. 409 `CONVERSATION_NOT_OPEN { state }` si le fil est déjà confirmé ou abandonné. |
-| `GET /api/gestion/conversations?page=&limit=&kind=` | `kind` (lot IA-ACT-1) : `invoice` ou la clé d'une action ; autre valeur → 422 `{ fields: { kind: UNKNOWN_KIND } }`. Liste légère, du plus récent au plus ancien : `[{ id, kind, state, document: { id, status, commandeId }, createdAt, updatedAt }]` (`state` sans le calcul des questions : `questions` vaut aussi pour un fil prêt) ; `X-Total-Count`, `X-Page`, `X-Limit`. |
+| `GET /api/gestion/conversations?page=&limit=&kind=` | `kind` (lot IA-ACT-1) : `invoice` ou la clé d'une action ; autre valeur → 422 `{ fields: { kind: UNKNOWN_KIND } }`. Liste légère, du plus récent au plus ancien : `[{ id, kind, state, document: { id, status, commandeId }, createdAt, updatedAt, undo }]` (`state` sans le calcul des questions : `questions` vaut aussi pour un fil prêt ; `undo` : `{ available, until }` d'une confirmation en vigueur, facture ou action, sinon `null` ; sans les blocages, qui se lisent au détail du fil) ; `X-Total-Count`, `X-Page`, `X-Limit`. |
 | `POST /api/gestion/documents/{id}/annuler-confirmation` | La même annulation, hors conversation, pour l'écran de vérification → 200 `{ undone, document }`. |
 
 ## 2. Le fil
 
 ```
 { id, kind: "invoice", state, locale, createdAt, updatedAt,
-  document: { id, status, error, commandeId } | null,
+  document: { id, status, error, commandeId, periodId } | null,
   summary: { text, supplier, number, date, lines, total, currency, openQuestions } | null,
   messages: [{ id, role: user | assistant, kind, content, createdAt }],
   questions: [...], openQuestions,
@@ -49,6 +50,8 @@ Code : `src/Gestion/Services/Conversation/` (`GestionConversationService`, `Invo
 - `state` : `reading` (lecture en cours) · `failed` (lecture en échec, `document.error` : relire par `POST /api/gestion/documents/{id}/relire`) ·
   `questions` (il manque une réponse obligatoire, ou l'aperçu signale un refus dans `preview.issues`) · `ready` (aperçu prêt, `previewHash`
   rendu) · `confirmed` · `abandoned`.
+- `document.periodId` (demande du web, 13/11/2026) : la période de la commande du document (`commande.collections_id`, la même valeur
+  que `periodId` de la liste des articles sans coût), ou `null` tant qu'il n'y a pas de commande ; lecture seule.
 - `summary` : le résumé de la lecture, **écrit par le serveur** à partir des chiffres lus (gratuit) ; `text` dans la langue demandée.
 - `messages` : ce que le gérant a envoyé ou décidé, et ce que le serveur a constaté, dans l'ordre. `kind` : `document` (pièce jointe),
   `text` (`role: user` : la phrase du gérant, `{ text }` ; `role: assistant` : la réponse de l'IA, `{ text, applied, ignored }`, § 8),
@@ -243,6 +246,14 @@ reçu un frais de port entre-temps, aucun poste de budget donné…) ; `preview`
 `PERIOD_CLOSED`, `PERIOD_NOT_FOUND`, `REQUIRED`, `TYPE_NOTE_DE_FRAIS_NOT_FOUND`, `TYPE_FOURNISSEUR_NOT_FOUND`, `INVALID_CURRENCY`,
 `COMMANDE_NOT_FOUND`, `COMMANDE_CLOSED`, `TRANSPORTEUR_NOT_FOUND`, et **`SHIPPING_COST_ALREADY_SET`** sur la question de la commande
 (pas de cumul ici : ce n'est pas une facture).
+
+**Forme commune de l'aperçu : `preview.rows`** (demande du web, 13/11/2026), en plus de la forme propre à chaque action :
+`[{ label, value, unit, currency?, before? }]`, une ligne par chose écrite, dans l'ordre d'affichage. `label` est dans la langue
+demandée ; `unit` : `money` (`value` en cents, avec `currency`), `date` (`AAAA-MM-JJ`), `number`, `text` ; **`before` est présent quand
+l'action remplace une valeur** (chaque poste d'un budget ; le montant et la note d'un solde remplacé) : la clé absente veut dire « rien
+n'est remplacé », la clé présente à `null` « une valeur vide est remplacée ». Une ligne facultative sans valeur n'est pas rendue.
+L'application peut ainsi afficher une action nouvelle sans connaître sa forme. Le fil d'une facture n'a pas de `rows`.
+L'empreinte ne dépend pas de `?locale=` : elle est toujours celle de l'aperçu dans la langue du fil.
 
 **Aperçu et empreinte.** L'aperçu dit ce qui sera écrit (`expense.create` : montant, date, type, période ; `budget.put` : par poste
 `{ category, label, before, after }`, `totalBefore`, `totalAfter`). L'empreinte couvre l'action, les réponses et l'aperçu, donc le

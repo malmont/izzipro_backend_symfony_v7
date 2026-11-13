@@ -37,6 +37,18 @@ abstract class AbstractGestionAction implements GestionAction
             'required' => $required, 'input' => $input, 'options' => $options, 'answer' => $answer, 'proposed' => $proposed];
     }
 
+    /**
+     * Ligne de la forme commune de l'aperçu ; son libellé est le titre de la question du paramètre.
+     *
+     * @param array<string, mixed> $more `currency` d'un montant, `before` d'une valeur remplacée
+     *
+     * @return array<string, mixed>
+     */
+    protected function row(string $param, string $locale, mixed $value, string $unit, array $more = []): array
+    {
+        return ['label' => $this->tr('conversation.actions.' . str_replace('.', '_', static::key()) . ".$param.title", $locale), 'value' => $value, 'unit' => $unit] + $more;
+    }
+
     /** @param array<string, string> $params */
     protected function tr(string $id, string $locale, array $params = []): string
     {

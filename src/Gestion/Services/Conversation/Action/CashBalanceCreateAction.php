@@ -64,6 +64,20 @@ class CashBalanceCreateAction extends AbstractGestionAction
             'replaces' => $existing === null ? null : ['id' => (int) $existing['id'], 'amount' => (int) $existing['amount_cents'], 'note' => $existing['note']]];
     }
 
+    public function rows(array $preview, string $locale): array
+    {
+        $replaces = $preview['replaces'];
+        $rows = [$this->row('date', $locale, $preview['date'], 'date'),
+            $this->row('amount', $locale, $preview['amount'], 'money', ['currency' => $preview['currency']] + ($replaces === null ? [] : ['before' => $replaces['amount']]))];
+        if ($replaces !== null) {
+            $rows[] = $this->row('note', $locale, $preview['note'], 'text', ['before' => $replaces['note']]); // la note du solde remplacé l'est aussi, même par rien
+        } elseif ($preview['note'] !== null) {
+            $rows[] = $this->row('note', $locale, $preview['note'], 'text');
+        }
+
+        return $rows;
+    }
+
     public function execute(array $answers, ?string $user): array
     {
         $date = $this->date($answers);

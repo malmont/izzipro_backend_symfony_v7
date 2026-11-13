@@ -128,7 +128,8 @@ class GestionConversationService
         return [
             'id' => $conversation->getId(), 'kind' => $conversation->getKind(), 'state' => $state, 'locale' => $conversation->getLocale(),
             'createdAt' => $conversation->getCreatedAt()?->format(\DateTimeInterface::ATOM), 'updatedAt' => $conversation->getUpdatedAt()?->format(\DateTimeInterface::ATOM),
-            'document' => $document === null ? null : ['id' => $document->getId(), 'status' => $document->getStatus(), 'error' => $document->getErrorCode(), 'commandeId' => $document->getCommandeId()],
+            // `periodId` (demande du web, 13/11/2026) : la période de la commande, pour ouvrir la commande depuis un fil rouvert plus tard ; même valeur que la liste des articles sans coût
+            'document' => $document === null ? null : ['id' => $document->getId(), 'status' => $document->getStatus(), 'error' => $document->getErrorCode(), 'commandeId' => $document->getCommandeId(), 'periodId' => $this->periodOf($document->getCommandeId())],
             'summary' => $document !== null && $document->getExtraction() !== null ? $this->summary($document, $open, $locale) : null,
             'messages' => array_map(fn (GestionConversationMessage $m) => ['id' => $m->getId(), 'role' => $m->getRole(), 'kind' => $m->getKind(), 'content' => $m->getContent() ?: new \stdClass(), 'createdAt' => $m->getCreatedAt()?->format(\DateTimeInterface::ATOM)], $messages),
             'questions' => $state === self::STATE_CONFIRMED || $built === null ? [] : $built['questions'],
@@ -343,11 +344,18 @@ class GestionConversationService
         $criteria = $kind === null ? [] : ['kind' => $kind];
         $rows = $repo->findBy($criteria, ['id' => 'DESC'], $limit, ($page - 1) * $limit);
 
-        return [array_map(fn (GestionConversation $c) => [
-            'id' => $c->getId(), 'kind' => $c->getKind(), 'state' => $this->actions->handles($c) ? $this->actions->state($c) : $this->state($c),
-            'document' => $c->getDocument() === null ? null : ['id' => $c->getDocument()->getId(), 'status' => $c->getDocument()->getStatus(), 'commandeId' => $c->getDocument()->getCommandeId()],
-            'createdAt' => $c->getCreatedAt()?->format(\DateTimeInterface::ATOM), 'updatedAt' => $c->getUpdatedAt()?->format(\DateTimeInterface::ATOM),
-        ], $rows), $repo->count($criteria)];
+        return [array_map(function (GestionConversation $c): array {
+            // `undo` (demande du web, 13/11/2026) : la fenêtre d'annulation d'une confirmation encore en vigueur, sans ses blocages (au détail du fil)
+            [$state, $undo] = $this->actions->handles($c) ? $this->actions->listed($c)
+                : [$state = $this->state($c), $state === self::STATE_CONFIRMED && $c->getDocument() !== null ? GestionDocumentUndoService::window($c->getDocument()) : null];
+
+            return [
+                'id' => $c->getId(), 'kind' => $c->getKind(), 'state' => $state,
+                'document' => $c->getDocument() === null ? null : ['id' => $c->getDocument()->getId(), 'status' => $c->getDocument()->getStatus(), 'commandeId' => $c->getDocument()->getCommandeId()],
+                'createdAt' => $c->getCreatedAt()?->format(\DateTimeInterface::ATOM), 'updatedAt' => $c->getUpdatedAt()?->format(\DateTimeInterface::ATOM),
+                'undo' => $undo,
+            ];
+        }, $rows), $repo->count($criteria)];
     }
 
     // ---- outils --------------------------------------------------------------------------------------------------------------------
@@ -369,6 +377,14 @@ class GestionConversationService
         $document = $this->workable($conversation);
 
         return [fn (array $answers) => $this->questions->build($document, $answers, $locale)['questions'], fn (array $question, mixed $value, int $i, array $answers) => $this->questions->accept($question, $value, $i), $document, null];
+    }
+
+    /** Période (collection) d'une commande, ou null : lecture seule */
+    private function periodOf(?int $commandeId): ?int
+    {
+        $id = $commandeId === null ? null : $this->emProvider->getEntityManager()->getConnection()->fetchOne('SELECT collections_id FROM commande WHERE id = ?', [$commandeId]);
+
+        return $id === null || $id === false ? null : (int) $id;
     }
 
     /** État d'après le fil et son document, sans regarder les questions (`questions` devient `ready` dans `thread()`) */

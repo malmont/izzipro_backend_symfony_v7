@@ -91,6 +91,16 @@ class BudgetPutAction extends AbstractGestionAction
             'totalBefore' => $totalBefore, 'totalAfter' => $totalBefore + array_sum(array_map(fn (array $r) => $r['after'] - $r['before'], $rows))];
     }
 
+    public function rows(array $preview, string $locale): array
+    {
+        $rows = [$this->row('periodId', $locale, $preview['period']['name'], 'text')];
+        foreach ($preview['lines'] as $line) { // chaque poste remplace son prévu : `before` toujours présent
+            $rows[] = ['label' => $line['label'], 'value' => $line['after'], 'unit' => 'money', 'currency' => $preview['currency'], 'before' => $line['before']];
+        }
+
+        return $rows;
+    }
+
     public function execute(array $answers, ?string $user): array
     {
         [$period, $lines] = $this->lines($answers);

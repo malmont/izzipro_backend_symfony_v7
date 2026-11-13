@@ -91,6 +91,16 @@ class ShippingCreateAction extends AbstractGestionAction
             'currency' => strtoupper($commande?->getCurrency() ?? $this->site()), 'tracknumber' => $answers['tracknumber'] ?? null];
     }
 
+    public function rows(array $preview, string $locale): array
+    {
+        return array_values(array_filter([
+            $this->row('commandeId', $locale, trim((string) $preview['commande']['name']) !== '' ? $preview['commande']['name'] : '#' . $preview['commande']['id'], 'text'),
+            $this->row('transporteurId', $locale, $preview['transporteur']['name'], 'text'),
+            $this->row('amount', $locale, $preview['amount'], 'money', ['currency' => $preview['currency']]),
+            $preview['tracknumber'] === null ? null : $this->row('tracknumber', $locale, $preview['tracknumber'], 'text'),
+        ]));
+    }
+
     public function execute(array $answers, ?string $user): array
     {
         $commande = $this->em()->find(Commande::class, (int) $answers['commandeId']);

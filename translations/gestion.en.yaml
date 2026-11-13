@@ -476,6 +476,8 @@ conversation:
             abandoned: 'Abandoned: nothing was created.'
             issues: 'Something prevents the preview: see the questions.'
         expense_create:
+            period:
+                title: 'Period'
             title: 'Enter an expense'
             amount:
                 title: 'Amount'
@@ -603,6 +605,7 @@ conversation:
                 title: 'Notes'
                 text: 'Notes, if you wish.'
             attaches:
+                title: 'Attachments'
                 some: 'On creation, %notes% expense(s) and %commandes% purchase order(s) dated within the trip and not attached elsewhere will be attached to it. Undoing the trip will free them.'
                 none: 'No free expense or purchase order is dated within this trip: nothing will be attached.'
         budget_put:

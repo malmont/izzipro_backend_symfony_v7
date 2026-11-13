@@ -118,6 +118,22 @@ class ActionThreadService
     }
 
     /**
+     * Pour la liste des fils : l'état sans regarder les questions, et la fenêtre d'annulation de la confirmation en vigueur (sans les
+     * blocages, constatés au détail du fil).
+     *
+     * @return array{0: string, 1: ?array{available: bool, until: string}}
+     */
+    public function listed(GestionConversation $conversation): array
+    {
+        if ($conversation->getStatus() === GestionConversation::STATUS_ABANDONED) {
+            return [GestionConversationService::STATE_ABANDONED, null];
+        }
+        $confirmed = $this->confirmation($conversation);
+
+        return $confirmed === null ? [GestionConversationService::STATE_QUESTIONS, null] : [GestionConversationService::STATE_CONFIRMED, self::window($confirmed)];
+    }
+
+    /**
      * Le fil tel que l'application l'affiche ; tout est recalculé, rien n'est écrit.
      *
      * @return array<string, mixed>
@@ -137,7 +153,9 @@ class ActionThreadService
             $open = count(array_filter($built['questions'], fn (array $q) => $q['required'] && $q['answer'] === null));
             if ($open === 0 && $built['issues'] === []) {
                 $preview = $action->preview($conversation->getAnswers(), $locale);
-                $hash = self::hash($conversation, $preview);
+                // l'empreinte ne dépend pas de la langue demandée : elle est celle de l'aperçu dans la langue du fil (celle que la confirmation recalcule)
+                $hash = self::hash($conversation, $locale === $conversation->getLocale() ? $preview : $action->preview($conversation->getAnswers(), $conversation->getLocale()));
+                $preview['rows'] = $action->rows($preview, $locale); // forme commune, en plus de la forme propre à l'action
                 $state = GestionConversationService::STATE_READY;
             }
         }

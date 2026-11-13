@@ -80,6 +80,17 @@ class ExpenseCreateAction extends AbstractGestionAction
             'period' => $period === null ? null : ['id' => $period->getId(), 'name' => PeriodCalendar::displayName($period, $locale)]];
     }
 
+    public function rows(array $preview, string $locale): array
+    {
+        return array_values(array_filter([
+            $this->row('amount', $locale, $preview['amount'], 'money', ['currency' => $preview['currency']]),
+            $this->row('date', $locale, $preview['date'], 'date'),
+            $this->row('typeNoteDeFraisId', $locale, $preview['type']['name'], 'text'),
+            $this->row('description', $locale, $preview['description'], 'text'),
+            $preview['period'] === null ? null : $this->row('period', $locale, $preview['period']['name'], 'text'),
+        ]));
+    }
+
     public function execute(array $answers, ?string $user): array
     {
         $date = new \DateTimeImmutable((string) $answers['date']);

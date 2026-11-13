@@ -71,8 +71,10 @@ class ConversationApiTest extends WebTestCase
         $this->assertSame('Voici la facture du jour', $thread['messages'][1]['content']['text']);
         $this->assertArrayHasKey('remaining', $thread['credits']);
         // Un seul fil actif par document : le même document rend le même fil
+        $usageRows = (int) $conn->fetchOne('SELECT COUNT(*) FROM ai_usage');
         $this->request('POST', '/api/gestion/conversations', ['documentId' => $documentId]);
         $this->assertSame([200, $id], [$this->client->getResponse()->getStatusCode(), $this->body()['id']]);
+        $this->assertSame($usageRows, (int) $this->em()->getConnection()->fetchOne('SELECT COUNT(*) FROM ai_usage'), 'ouvrir un fil par documentId ne réserve ni ne consomme aucune unité, même pendant la lecture');
         $this->assertSame(1, (int) $conn->fetchOne('SELECT COUNT(*) FROM gestion_conversation WHERE document_id = ?', [$documentId]));
         // Pendant la lecture, on ne répond pas et on ne confirme pas
         $this->request('POST', "/api/gestion/conversations/$id/answers", ['answers' => [['questionId' => 'supplier', 'value' => ['create' => ['name' => 'X']]]]]);
@@ -165,6 +167,9 @@ class ConversationApiTest extends WebTestCase
         $createdProduct = (int) $result['created'][0]['productId'];
         $this->assertSame([[1, $tuque]], array_map(fn (array $a) => [$a['lineN'], $a['productId']], $result['attached']));
         $this->assertSame([true, 'confirmed', $commandeId, null, null, 0], [$result['undo']['available'], $result['thread']['state'], $result['thread']['document']['commandeId'], $result['thread']['preview'], $result['thread']['previewHash'], $result['thread']['openQuestions']]);
+        // le fil d'une facture confirmée porte la période de sa commande (celle que rend aussi la liste des articles sans coût)
+        $periodOfOrder = (int) $this->em()->getConnection()->fetchOne('SELECT collections_id FROM commande WHERE id = ?', [$commandeId]);
+        $this->assertSame([['id', 'status', 'error', 'commandeId', 'periodId'], $periodOfOrder, true], [array_keys($result['thread']['document']), $result['thread']['document']['periodId'], $periodOfOrder > 0]);
         $this->assertSame([true, []], [$result['thread']['undo']['available'], $result['thread']['undo']['blockers']]);
         $this->assertSame('confirmed', end($result['thread']['messages'])['kind']);
         $supplierId = (int) $conn->fetchOne('SELECT fournisseur_id FROM commande WHERE id = ?', [$commandeId]);
@@ -215,6 +220,7 @@ class ConversationApiTest extends WebTestCase
             (int) $conn->fetchOne('SELECT COUNT(*) FROM product WHERE id = ?', [$createdProduct]), (int) $conn->fetchOne('SELECT COUNT(*) FROM fournisseur WHERE id = ?', [$supplierId]), (int) $conn->fetchOne('SELECT COUNT(*) FROM frais_de_port WHERE commande_id = ?', [$commandeId])]);
         $this->assertSame($tuqueBefore, $conn->fetchAssociative('SELECT name, price, purchase_price, quantity, code FROM product WHERE id = ?', [$tuque]), 'l\'article déjà au catalogue n\'a pas bougé');
         $this->assertSame(['ready', 'extracted', null, null, 'undone'], [$undone['thread']['state'], $undone['thread']['document']['status'], $undone['thread']['document']['commandeId'], $undone['thread']['undo'], end($undone['thread']['messages'])['kind']]);
+        $this->assertNull($undone['thread']['document']['periodId'], 'plus de commande : plus de période');
         $this->assertNotNull($undone['thread']['previewHash'], 'le fil revient à l\'aperçu, avec les mêmes réponses');
         $document = $this->get("/api/gestion/documents/$documentId");
         $this->assertSame(['extracted', null, null, false], [$document['status'], $document['confirmed'], $document['commandeId'], $document['undo']['available']]);
@@ -338,6 +344,10 @@ class ConversationApiTest extends WebTestCase
         $list = $this->body();
         $headers = $this->client->getResponse()->headers;
         $this->assertSame(['1', '2', (int) $new['id'], 'confirmed', $id2, 'abandoned'], [$headers->get('X-Page'), $headers->get('X-Limit'), $list[0]['id'], $list[0]['state'], $list[1]['id'], $list[1]['state']]);
+        // chaque élément dit si sa confirmation est encore annulable (sans les blocages, qui se lisent au détail du fil)
+        $this->assertSame(['id', 'kind', 'state', 'document', 'createdAt', 'updatedAt', 'undo'], array_keys($list[0]));
+        $this->assertSame([$forced['undo'], null], [$list[0]['undo'], $list[1]['undo']]);
+        $this->assertSame(['available' => true, 'until' => $forced['undo']['until']], $list[0]['undo']);
         $this->assertGreaterThanOrEqual(3, (int) $headers->get('X-Total-Count'));
 
         // Nettoyage : les deux confirmations sont annulées par la route hors conversation, puis les objets du test retirés

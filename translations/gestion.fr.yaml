@@ -478,6 +478,8 @@ conversation:
             abandoned: 'Abandonné : rien n''a été créé.'
             issues: 'Un point empêche de préparer l''aperçu : voyez les questions.'
         expense_create:
+            period:
+                title: 'Période'
             title: 'Saisir une note de frais'
             amount:
                 title: 'Montant'
@@ -605,6 +607,7 @@ conversation:
                 title: 'Notes'
                 text: 'Des notes, si vous voulez.'
             attaches:
+                title: 'Rattachements'
                 some: 'À la création, %notes% note(s) de frais et %commandes% commande(s) libres datées dans le voyage y seront rattachées. Annuler le voyage rendra ces éléments libres.'
                 none: 'Aucune note de frais ni commande libre n''est datée dans ce voyage : rien ne sera rattaché.'
         budget_put:
