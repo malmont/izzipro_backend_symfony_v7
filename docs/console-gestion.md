@@ -121,6 +121,75 @@ worker répond, le web relit toutes les 3 secondes.
 | `DELETE /api/gestion/console/conversations/{id}` | le gérant efface un échange ; l'effacement est inscrit au journal |
 | `GET /api/gestion/console/analyses` | le catalogue : clé, titre, paramètres, source |
 
+### 5.1 Formes des réponses (précisions du 13/11/2026, demande du web)
+
+**`POST /api/gestion/console/messages`** → 202, la réponse en préparation :
+
+```
+{ conversationId, questionMessageId, messageId, state: "pending",
+  blocks: [], analyses: [], proposals: [], credits }
+```
+
+`questionMessageId` est le message de la question, `messageId` celui de la réponse à relire. Sans `conversationId`, un nouvel échange
+est créé ; son titre est la première question, coupée à 80 caractères.
+
+**`GET /api/gestion/console/conversations/{id}`** → l'échange entier, dans l'ordre :
+
+```
+{ id, title, createdAt, updatedAt, pending: true | false,
+  messages: [
+    { messageId, role: "user", text, context: { module, screen, params } | null, createdAt },
+    { messageId, role: "assistant", replyTo, state: "pending" | "done" | "failed",
+      error: { code, message } | null,
+      blocks: [...], analyses: [...], proposals: [...],
+      createdAt, answeredAt | null }
+  ],
+  credits }
+```
+
+- Un message `user` est toujours suivi de sa réponse `assistant` (`replyTo` = le `messageId` de la question). Les champs `blocks`,
+  `analyses` et `proposals` sont ceux du § 4 ; ils sont vides tant que `state` vaut `pending`.
+- `pending` (au niveau de l'échange) dit qu'une réponse est encore attendue : le web relit toutes les 3 secondes tant qu'il est vrai.
+- `context` est celui que la question a envoyé, ou `null` s'il était absent ou a été ignoré (§ 4).
+- `error` n'est rempli que pour `state: "failed"` (codes plus bas).
+
+**`GET /api/gestion/console/conversations?page=1&limit=20`** → un tableau, du plus récemment modifié au plus ancien, paginé comme la
+liste des fils (`GET /api/gestion/conversations`) : en-têtes `X-Total-Count`, `X-Page`, `X-Limit` ; `limit` de 1 à 100, 20 par défaut.
+
+```
+[ { id, title, createdAt, updatedAt, questions, pending, lastState } ]
+```
+
+`title` : la première question, coupée à 80 caractères ; `questions` : le nombre de questions posées ; `lastState` : l'état de la
+dernière réponse (`pending`, `done`, `failed`). La liste ne rend aucun bloc : le détail se lit par l'échange.
+
+**`DELETE /api/gestion/console/conversations/{id}`** → 204. L'échange ne se lit plus (404) ; l'effacement est inscrit au journal.
+
+**`GET /api/gestion/console/analyses`** → `[ { key, title, params: [{ name, type, required }], source: { screen, route } } ]`.
+
+### 5.2 Codes d'erreur propres à la console
+
+Forme habituelle des refus de la gestion : `{ error, code, message, … }`.
+
+| Statut | Code | Quand |
+|---|---|---|
+| 404 | `CONSOLE_CONVERSATION_NOT_FOUND` | l'échange n'existe pas ou a été effacé (lecture, effacement, ou `conversationId` d'une question) |
+| 409 | `CONSOLE_ANSWER_PENDING` | une question est posée, ou un effacement demandé, alors que la réponse précédente de cet échange est encore en préparation : une réponse à la fois par échange ; le corps porte `messageId` de la réponse attendue |
+| 422 | `VALIDATION_FAILED` | `fields.text` : `REQUIRED`, `TOO_LONG` (plus de 1 000 caractères) ; `fields.conversationId` : `INVALID_ID` |
+| 403 | `AI_NOT_INCLUDED` | le palier d'IA du site ne comprend pas la console |
+| 402 | `AI_CREDITS_EXHAUSTED` | plus d'unités |
+| 429 | `AI_DAILY_LIMIT` | plafond quotidien commun avec la phrase libre du fil ; le corps porte `limit` et `resetAt` |
+
+Un **délai dépassé n'est pas un statut HTTP** : la question a été acceptée (202), et c'est la réponse qui passe à
+`state: "failed"`, sans unité décomptée. `error.code` d'une réponse en échec :
+
+| `error.code` | Quand |
+|---|---|
+| `CONSOLE_TIMEOUT` | aucune réponse au bout du délai maximal (120 secondes, une constante du serveur) |
+| `AI_UNAVAILABLE` | le modèle n'a pas répondu ou sa réponse est inutilisable |
+
+Après un échec, le gérant peut reposer sa question : c'est une nouvelle question, dans le même échange.
+
 ## 6. Unités, limites, conservation
 
 - **1 unité par réponse rédigée par le modèle** ; aucune si l'IA échoue. Le propriétaire de la plateforme n'est pas décompté.
