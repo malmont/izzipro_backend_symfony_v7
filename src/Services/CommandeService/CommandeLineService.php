@@ -49,6 +49,37 @@ class CommandeLineService
         return ['line' => $line, 'created' => $created];
     }
 
+    /**
+     * Ajoute des unités à la ligne de l'article dans la commande (lot IA-FACT-2-A, 13/11/2026 : une facture ajoutée à une commande
+     * ouverte). Un article n'a qu'une ligne par commande (une par variante) : ligne absente → créée, à recevoir ; ligne présente →
+     * quantités additionnées, coût moyen pondéré, quantité déjà reçue inchangée. `before` rend l'état d'avant d'une ligne grossie, pour
+     * l'annulation.
+     *
+     * @return array{line: CommandeLine, created: bool, before: ?array{quantity: int, unitCost: ?int, estimated: bool}}
+     */
+    public function add(Commande $commande, Product $product, ?ProductVariant $variant, int $quantity, ?int $unitCostCents, string $source, ?string $by = null): array
+    {
+        $em = $this->emProvider->getEntityManager();
+        /** @var CommandeLineRepository $repo */
+        $repo = $em->getRepository(CommandeLine::class);
+        $line = $repo->findOne($commande, $product, $variant);
+        if ($line === null) {
+            return $this->upsert($commande, $product, $variant, $quantity, $unitCostCents, false, $source, new \DateTimeImmutable(), 0, $by) + ['before' => null];
+        }
+        $before = ['quantity' => $line->getQuantityOrdered(), 'unitCost' => $line->getUnitCostCents(), 'estimated' => $line->isEstimated()];
+        $total = $before['quantity'] + $quantity;
+        $cost = match (true) {
+            $unitCostCents === null => $before['unitCost'],
+            $before['unitCost'] === null || $total <= 0 => $unitCostCents,
+            default => (int) round(($before['quantity'] * $before['unitCost'] + $quantity * $unitCostCents) / $total),
+        };
+        $line->setQuantityOrdered($total)->setUnitCostCents($cost)->setEstimated($unitCostCents === null ? $before['estimated'] : false)->setUpdatedAt(new \DateTimeImmutable());
+        $em->flush();
+        $this->refreshShortcuts($product);
+
+        return ['line' => $line, 'created' => false, 'before' => $before];
+    }
+
     /** @param array{quantity?: int, unitCost?: ?int, variant?: ?ProductVariant} $fields */
     public function update(CommandeLine $line, array $fields): CommandeLine
     {

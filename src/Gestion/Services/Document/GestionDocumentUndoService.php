@@ -80,32 +80,51 @@ class GestionDocumentUndoService
         if ($period !== null && $this->calendar->isClosed($period)) {
             $add('PERIOD_CLOSED', 'La période de la commande est fermée.');
         }
-        // Lignes d'achat : celles de la confirmation, ni plus ni moins, aux mêmes quantités et coûts, aucune reçue
+        // Une facture ajoutée à la même commande après celle-ci : on annule dans l'ordre inverse des ajouts (lot IA-FACT-2-A). Le blocage
+        // nomme la facture à annuler d'abord, avec son document, pour que l'application ouvre son fil.
+        $at = $document->getConfirmedAt()?->format('Y-m-d H:i:s');
+        $later = $conn->fetchAssociative('SELECT id, confirmed, confirmed_at FROM gestion_document WHERE commande_id = :c AND id <> :id AND status = :s AND (confirmed_at > :at OR (confirmed_at = :at AND id > :id)) ORDER BY confirmed_at DESC, id DESC LIMIT 1',
+            ['c' => $commande->getId(), 'id' => $document->getId(), 's' => GestionDocument::STATUS_CONFIRMED, 'at' => $at]); // même seconde : départagée par l'identifiant
+        if ($later !== false) {
+            $number = (string) (json_decode((string) $later['confirmed'], true)['invoice']['number'] ?? '');
+            $at = (new \DateTimeImmutable((string) $later['confirmed_at']))->format(\DateTimeInterface::ATOM);
+            $reasons['LATER_DOCUMENT'] = ['code' => 'LATER_DOCUMENT', 'message' => sprintf('Annulez d\'abord la facture %sajoutée à cette commande le %s.', $number !== '' ? 'n° ' . $number . ' ' : '', substr($at, 0, 10)),
+                'documentId' => (int) $later['id'], 'invoiceNumber' => $number !== '' ? $number : null, 'confirmedAt' => $at];
+        }
+        // Lignes d'achat notées par la confirmation : au même état qu'après elle, aucune reçue depuis. Nouvelle commande : toutes ses
+        // lignes, ni plus ni moins. Ajout à une commande : seulement les lignes que la facture a créées ou grossies.
+        $addMode = ($undo['mode'] ?? 'new') === 'add';
         $expected = [];
+        $receivedBefore = [];
         foreach ($undo['lines'] ?? [] as $line) {
             $expected[(int) $line['id']] = [(int) $line['quantity'], $line['unitCost'] === null ? null : (int) $line['unitCost']];
+            $receivedBefore[(int) $line['id']] = (int) ($line['received'] ?? 0);
         }
         $current = [];
         foreach ($em->getRepository(CommandeLine::class)->forCommande($commande) as $line) {
-            $current[(int) $line->getId()] = [$line->getQuantityOrdered(), $line->getUnitCostCents()];
-            if ($line->getQuantityReceived() > 0) {
+            $id = (int) $line->getId();
+            if ($addMode && !isset($expected[$id])) {
+                continue; // ligne que cette facture n'a pas touchée
+            }
+            $current[$id] = [$line->getQuantityOrdered(), $line->getUnitCostCents()];
+            if ($line->getQuantityReceived() > ($receivedBefore[$id] ?? 0)) {
                 $add('LINE_RECEIVED', 'Une ligne de cette commande a été reçue en stock.');
             }
         }
         ksort($expected);
         ksort($current);
-        if ($expected !== $current) {
+        if ($expected !== $current && $later === false) {
             $add('COMMANDE_CHANGED', 'Les lignes de la commande ont été modifiées depuis la confirmation.');
-        }
-        if ((int) $conn->fetchOne('SELECT COUNT(*) FROM gestion_document WHERE commande_id = ? AND id <> ?', [$commande->getId(), $document->getId()]) > 0) {
-            $add('COMMANDE_CHANGED', 'Un autre document est rattaché à cette commande.');
         }
         // Frais de port : celui de la confirmation, au même montant (ou aucun). Lu en base : dans la requête de la confirmation, la
         // commande en mémoire ne porte pas encore son frais de port (côté inverse de l'association)
         $shipping = $conn->fetchAssociative('SELECT id, price FROM frais_de_port WHERE commande_id = ? ORDER BY id LIMIT 1', [$commande->getId()]);
         $recorded = $undo['fraisDePort'] ?? null;
         $same = $shipping === false ? $recorded === null : ($recorded !== null && (int) $shipping['id'] === (int) $recorded['id'] && (int) $shipping['price'] === (int) $recorded['price']);
-        if (!$same) {
+        if ($addMode && $recorded === null) {
+            $same = true; // la facture ajoutée n'a pas touché au frais de port de la commande
+        }
+        if (!$same && $later === false) {
             $add('SHIPPING_CHANGED', 'Le frais de port de la commande a été modifié depuis la confirmation.');
         }
         // Articles créés : jamais vendus, sans mouvement de stock, sans autre achat, fiche inchangée
@@ -166,6 +185,9 @@ class GestionDocumentUndoService
         }
 
         $commandeId = (int) $undo['commandeId'];
+        if (($undo['mode'] ?? 'new') === 'add') {
+            return $this->undoAddition($document, $confirmed, $undo);
+        }
         $removed = ['lines' => count($undo['lines'] ?? []), 'products' => count($undo['products'] ?? []), 'shipping' => ($undo['fraisDePort'] ?? null) !== null, 'supplier' => false];
         $kept = [];
         $conn->beginTransaction();
@@ -226,6 +248,86 @@ class GestionDocumentUndoService
             throw $e;
         }
         $result = ['commandeId' => $commandeId, 'removed' => $removed, 'kept' => $kept];
+        $this->audit->record(self::AUDIT_RESOURCE, $document->getId(), 'undo', array_diff_key($confirmed, ['undo' => true]) + ['created' => $undo], $result);
+
+        return $result;
+    }
+
+    /**
+     * Annulation d'une facture AJOUTÉE à une commande ouverte (lot IA-FACT-2-A) : la commande reste ; les lignes que la facture a créées
+     * sont retirées, celles qu'elle a grossies reviennent à leur état d'avant (quantité, coût), le budget et le frais de port aussi,
+     * les articles créés sont retirés.
+     *
+     * @param array<string, mixed> $confirmed
+     * @param array<string, mixed> $undo
+     *
+     * @return array<string, mixed>
+     */
+    private function undoAddition(GestionDocument $document, array $confirmed, array $undo): array
+    {
+        $em = $this->emProvider->getEntityManager();
+        $conn = $em->getConnection();
+        $commandeId = (int) $undo['commandeId'];
+        $removed = ['lines' => 0, 'products' => count($undo['products'] ?? []), 'shipping' => false, 'supplier' => false];
+        $restored = ['lines' => 0, 'shipping' => false, 'budget' => (int) ($undo['budget']['added'] ?? 0)];
+        $conn->beginTransaction();
+        try {
+            $commande = $em->find(Commande::class, $commandeId);
+            $document->setStatus(GestionDocument::STATUS_EXTRACTED)->setConfirmedAt(null)->setConfirmed(null)->setCommandeId(null)
+                ->setExpiresAt((new \DateTimeImmutable())->modify('+' . GestionDocumentService::RETENTION_DAYS . ' days'));
+            if (($undo['documentSet'] ?? false) && $commande->getDocument()?->getId() === $document->getId()) {
+                $commande->setDocument(null);
+            }
+            $createdIds = array_map(fn (array $p) => (int) $p['id'], $undo['products'] ?? []);
+            $products = [];
+            foreach ($undo['lines'] ?? [] as $recorded) {
+                $line = $em->find(CommandeLine::class, (int) $recorded['id']);
+                if ($line === null) {
+                    continue;
+                }
+                $products[(int) $line->getProduct()->getId()] = $line->getProduct();
+                if (($recorded['created'] ?? true) || ($recorded['before'] ?? null) === null) {
+                    $em->remove($line);
+                    ++$removed['lines'];
+                } else {
+                    $line->setQuantityOrdered((int) $recorded['before']['quantity'])->setUnitCostCents($recorded['before']['unitCost'] === null ? null : (int) $recorded['before']['unitCost'])
+                        ->setEstimated((bool) ($recorded['before']['estimated'] ?? false))->setUpdatedAt(new \DateTimeImmutable());
+                    ++$restored['lines'];
+                }
+            }
+            $commande->setBudget(max(0, ($commande->getBudget() ?? 0) - $restored['budget']));
+            $shipping = $undo['fraisDePort'] ?? null;
+            if ($shipping !== null) {
+                $entity = $em->find(\App\Entity\FraisDePort::class, (int) $shipping['id']);
+                if ($entity !== null && ($shipping['added'] ?? false)) {
+                    $entity->setPrice($shipping['priceBefore'] === null ? null : (int) $shipping['priceBefore']);
+                    $restored['shipping'] = true;
+                } elseif ($entity !== null) {
+                    $commande->setFraisDePort(null);
+                    $em->remove($entity);
+                    $removed['shipping'] = true;
+                }
+            }
+            $em->flush();
+            foreach ($createdIds as $id) {
+                $product = $em->find(Product::class, $id);
+                if ($product !== null) {
+                    $em->remove($product);
+                }
+            }
+            $em->flush();
+            foreach ($products as $id => $product) {
+                if (!in_array($id, $createdIds, true)) {
+                    $em->refresh($product);
+                    $this->lines->refreshShortcuts($product);
+                }
+            }
+            $conn->commit();
+        } catch (\Throwable $e) {
+            $conn->rollBack();
+            throw $e;
+        }
+        $result = ['commandeId' => $commandeId, 'mode' => 'add', 'removed' => $removed, 'restored' => $restored, 'kept' => []];
         $this->audit->record(self::AUDIT_RESOURCE, $document->getId(), 'undo', array_diff_key($confirmed, ['undo' => true]) + ['created' => $undo], $result);
 
         return $result;

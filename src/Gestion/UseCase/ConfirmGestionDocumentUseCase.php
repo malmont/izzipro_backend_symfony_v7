@@ -63,6 +63,7 @@ class ConfirmGestionDocumentUseCase
         private readonly ?UploadMediaUseCase $upload = null,
         private readonly ?TenantCurrencyProvider $currency = null,
         private readonly ?\App\Gestion\Services\MarketingCampaignService $campaigns = null, // lot A1 : facture de régie confirmée en campagne
+        private readonly ?\App\Gestion\Services\Document\InvoiceTargetPolicy $targets = null, // lot IA-FACT-2-A : ajout à une commande ouverte
     ) {
     }
 
@@ -158,10 +159,23 @@ class ConfirmGestionDocumentUseCase
             throw new GestionValidationException($errors, 'Confirmation invalide : ' . implode(', ', array_keys($errors)));
         }
         /** @var Fournisseur $supplier */
-        // Date de classement et période
-        $date = $classification ?? $invoiceDate;
-        $period = $this->guard->assertDateWritable($date);
-        if ($period === null) {
+        // Cible (lot IA-FACT-2-A) : une commande ouverte du même fournisseur, à laquelle la facture s'ajoute ; sinon une nouvelle commande
+        $target = null;
+        $targetIn = is_array($body['target'] ?? null) ? $body['target'] : null;
+        if ($targetIn !== null && isset($targetIn['commandeId'])) {
+            $target = is_numeric($targetIn['commandeId']) ? $em->find(Commande::class, (int) $targetIn['commandeId']) : null;
+            if ($target === null) {
+                throw new GestionConflictException('COMMANDE_NOT_FOUND', 'Commande introuvable.', 404, ['commandeId' => $targetIn['commandeId']]);
+            }
+            $reason = $this->targets?->reason($target, $supplierCreated ? null : $supplier) ?? ($this->targets === null ? 'SUPPLIER_MISMATCH' : null);
+            if ($reason !== null) {
+                throw new GestionConflictException('TARGET_NOT_ALLOWED', 'La facture ne peut pas s\'ajouter à cette commande.', 409, ['reason' => $reason, 'commandeId' => $target->getId()]);
+            }
+        }
+        // Date de classement et période : celles de la commande cible quand il y en a une
+        $date = $target !== null ? \DateTimeImmutable::createFromInterface($target->getDate()) : ($classification ?? $invoiceDate);
+        $period = $target !== null ? $target->getCollections() : $this->guard->assertDateWritable($date);
+        if ($period === null && $target === null) {
             throw new GestionValidationException([$classification !== null ? 'classificationDate' : 'invoice.date' => 'OUT_OF_CALENDAR'], 'Aucune période du calendrier ne couvre cette date');
         }
         // Doublon de numéro chez ce fournisseur
@@ -199,8 +213,22 @@ class ConfirmGestionDocumentUseCase
         }
         $budget = array_sum(array_map(fn ($l) => $l['quantity'] * $l['unitCost'], $lines)) + ($shippingAmount ?? 0);
         $name = $input->text('name', false) ?? ('Facture ' . ($number ?? $invoiceDate->format('Y-m-d')) . ' — ' . $supplier->getName());
+        // Frais de port d'une facture ajoutée à une commande qui en a déjà un : `shipping.mode = add` l'ajoute au montant existant
+        $shippingBefore = $target !== null ? $em->getRepository(\App\Entity\FraisDePort::class)->findOneBy(['commande' => $target]) : null;
+        $shippingMode = $shippingIn !== null && ($shippingIn['mode'] ?? null) === 'add' ? 'add' : null;
+        if ($shippingAmount !== null && $shippingBefore !== null && $shippingMode !== 'add') {
+            throw new GestionConflictException('SHIPPING_COST_ALREADY_SET', 'La commande a déjà un frais de port : ajoutez-y celui de la facture (shipping.mode = add), ou retirez-le de la confirmation.', 409, ['commandeId' => $target->getId(), 'fraisDePortId' => $shippingBefore->getId()]);
+        }
         $em->flush();
-        $commande = $this->commandes->createCommande(['budget' => $budget, 'name' => $name, 'date' => $date->format('Y-m-d') . ' 12:00:00', 'exchangeRate' => $exchangeRate], $period, $supplier);
+        $budgetBefore = $target?->getBudget();
+        $touched = []; // lignes d'achat touchées par un ajout : état d'avant, pour l'annulation
+        if ($target !== null) {
+            $commande = $target;
+            $exchangeRate = $commande->getExchangeRate(); // le taux de la commande s'applique, un taux envoyé est ignoré
+            $commande->setBudget(($commande->getBudget() ?? 0) + $budget);
+        } else {
+            $commande = $this->commandes->createCommande(['budget' => $budget, 'name' => $name, 'date' => $date->format('Y-m-d') . ' 12:00:00', 'exchangeRate' => $exchangeRate], $period, $supplier);
+        }
         // Taux des coûts de la facture vers la devise du site : entre dans le prix d'achat et le prix de vente des articles créés (lot
         // APERÇU-FACT, 12/11/2026 ; avant, un article acheté 10,00 EUR au coefficient 2 était créé à 20,00 dans la devise du site)
         $rate = GestionInvoiceDraft::effectiveRate($commande->getCurrency(), $this->currency?->code() ?? TenantCurrencyProvider::DEFAULT, $commande->getExchangeRate()) ?? 1.0;
@@ -216,7 +244,14 @@ class ConfirmGestionDocumentUseCase
             $attached[] = ['lineN' => $n, 'productId' => $product->getId()];
         }
         foreach ($merged as $m) {
-            $this->lines->upsert($commande, $m['product'], $m['variant'], $m['quantity'], $m['quantity'] > 0 ? (int) round($m['cost'] / $m['quantity']) : null, false, \App\Entity\CommandeLine::SOURCE_DOCUMENT, $now, 0, $user);
+            $unitCost = $m['quantity'] > 0 ? (int) round($m['cost'] / $m['quantity']) : null;
+            if ($target !== null) {
+                // un article n'a qu'une ligne par commande : la ligne existante grossit (quantités additionnées, coût moyen pondéré)
+                $added = $this->lines->add($commande, $m['product'], $m['variant'], $m['quantity'], $unitCost, \App\Entity\CommandeLine::SOURCE_DOCUMENT, $user);
+                $touched[(int) $added['line']->getId()] = ['created' => $added['created'], 'before' => $added['before'], 'received' => $added['line']->getQuantityReceived()];
+            } else {
+                $this->lines->upsert($commande, $m['product'], $m['variant'], $m['quantity'], $unitCost, false, \App\Entity\CommandeLine::SOURCE_DOCUMENT, $now, 0, $user);
+            }
         }
         // Articles créés : un par groupKey
         $created = [];
@@ -230,17 +265,37 @@ class ConfirmGestionDocumentUseCase
         }
         $em->flush();
         $fraisDePort = null;
-        if ($shippingAmount !== null) {
+        if ($shippingAmount !== null && $shippingBefore !== null) {
+            $fraisDePort = $shippingBefore;
+            $shippingPriceBefore = $shippingBefore->getPrice();
+            $shippingBefore->setPrice(($shippingPriceBefore ?? 0) + $shippingAmount);
+        } elseif ($shippingAmount !== null) {
             $transporteur = $transporteurId !== null ? $em->find(Transporteur::class, $transporteurId) : $this->invoiceCarrier($em);
             if ($transporteur === null) {
                 throw new GestionConflictException('TRANSPORTEUR_NOT_FOUND', 'Transporteur inconnu : ' . $transporteurId, 404);
             }
             $fraisDePort = $this->shipping->createFraisDePort($commande, new FraisDePortInputDTO('Frais de port — ' . $name, (string) ($number ?? ''), '', $shippingAmount, (int) $transporteur->getId()));
         }
-        $commande->setDocument($document);
+        if ($target === null || $commande->getDocument() === null) {
+            $commande->setDocument($document); // une commande garde son justificatif d'origine ; les factures ajoutées se lisent par GET /api/commandes/{id}/documents
+        }
         $document->setCommandeId($commande->getId());
         $em->flush();
         $currency = $this->currency?->code() ?? TenantCurrencyProvider::DEFAULT;
+        $allLines = $em->getRepository(\App\Entity\CommandeLine::class)->forCommande($commande);
+        $createdIds = array_map(fn (Product $p) => (int) $p->getId(), $createdProducts);
+        $lineState = fn (\App\Entity\CommandeLine $l) => ['id' => $l->getId(), 'productId' => $l->getProduct()?->getId(), 'variantId' => $l->getVariant()?->getId(), 'quantity' => $l->getQuantityOrdered(), 'unitCost' => $l->getUnitCostCents()];
+        // Lignes notées pour l'annulation : toutes celles d'une nouvelle commande ; pour un ajout, seulement celles que la facture a créées ou grossies
+        $undoLines = [];
+        foreach ($allLines as $l) {
+            $id = (int) $l->getId();
+            $ofCreated = in_array((int) $l->getProduct()?->getId(), $createdIds, true);
+            if ($target === null) {
+                $undoLines[] = $lineState($l);
+            } elseif (isset($touched[$id]) || $ofCreated) {
+                $undoLines[] = $lineState($l) + ['created' => $touched[$id]['created'] ?? true, 'before' => $touched[$id]['before'] ?? null, 'received' => $l->getQuantityReceived()];
+            }
+        }
 
         return [
             'commande' => new CommandeOutputDTO($commande, $host, $currency), 'attached' => $attached, 'created' => $created,
@@ -249,11 +304,14 @@ class ConfirmGestionDocumentUseCase
             'confirmed' => ['supplier' => ['id' => $supplier->getId(), 'name' => $supplier->getName()], 'invoice' => ['number' => $number, 'date' => $invoiceDate->format('Y-m-d'), 'exchangeRate' => $exchangeRate],
                 'classificationDate' => $date->format('Y-m-d'), 'lines' => $lines, 'shipping' => $shippingAmount !== null ? ['amount' => $shippingAmount, 'transporteurId' => $fraisDePort?->getTransporteur()?->getId()] : null, 'force' => $force,
                 // Ce que cette confirmation a créé, pour l'annuler d'un bloc et constater ce qui a bougé depuis (lot IA-FACT-1, GestionDocumentUndoService)
+                'target' => $target !== null ? ['commandeId' => $commande->getId()] : null,
                 'undo' => [
+                    'mode' => $target !== null ? 'add' : 'new',
                     'commandeId' => $commande->getId(), 'supplierId' => $supplierCreated ? $supplier->getId() : null,
-                    'fraisDePort' => $fraisDePort !== null ? ['id' => $fraisDePort->getId(), 'price' => $fraisDePort->getPrice()] : null,
-                    'lines' => array_map(fn (\App\Entity\CommandeLine $l) => ['id' => $l->getId(), 'productId' => $l->getProduct()?->getId(), 'variantId' => $l->getVariant()?->getId(), 'quantity' => $l->getQuantityOrdered(), 'unitCost' => $l->getUnitCostCents()],
-                        $em->getRepository(\App\Entity\CommandeLine::class)->forCommande($commande)),
+                    'fraisDePort' => $fraisDePort !== null ? ['id' => $fraisDePort->getId(), 'price' => $fraisDePort->getPrice()] + ($shippingBefore !== null ? ['priceBefore' => $shippingPriceBefore ?? null, 'added' => true] : []) : null,
+                    'budget' => $target !== null ? ['before' => $budgetBefore, 'added' => $budget] : null,
+                    'documentSet' => $commande->getDocument()?->getId() === $document->getId(),
+                    'lines' => $undoLines,
                     'products' => array_map(fn (Product $p) => ['id' => $p->getId(), 'name' => $p->getName(), 'price' => (float) $p->getPrice(), 'purchasePrice' => (float) $p->getPurchasePrice(),
                         'variantIds' => array_values(array_map(fn (ProductVariant $v) => $v->getId(), $p->getVariants()->toArray()))], $createdProducts),
                 ]],

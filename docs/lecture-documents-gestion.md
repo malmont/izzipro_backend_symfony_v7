@@ -101,6 +101,10 @@ productId }], created: [{ lineN, productId, name }], shipping: FraisDePortOutput
   La réponse porte `lines` (lignes à recevoir, avec `remaining`).
 - `shipping` sans `transporteurId` : frais de port posé sur le transporteur « Sur facture fournisseur » (créé une fois).
 - Doublon : 409 `INVOICE_ALREADY_CONFIRMED { documentId, commandeId }`, levé par `force: true`.
+- **Ajout à une commande ouverte** (lot IA-FACT-2-A, 13/11/2026) : `target: { commandeId }` ajoute la facture à une commande ouverte du
+  même fournisseur au lieu d'en créer une (ligne existante grossie, coût moyen pondéré ; `shipping: { amount, mode: "add" }` pour ajouter au
+  frais de port existant ; 404 `COMMANDE_NOT_FOUND`, 409 `TARGET_NOT_ALLOWED { reason }`) ; les factures d'une commande :
+  `GET /api/commandes/{id}/documents`. Détail : `docs/conversation-gestion.md` § 7.
 
 - **Taux de change dans le prix** (lot APERÇU-FACT, 12/11/2026) : pour une facture dans une autre devise que celle du site, le prix
   d'achat et le prix de vente de l'article créé sont dans la devise du site (coût × `exchangeRate`). Avant, le taux n'entrait pas dans

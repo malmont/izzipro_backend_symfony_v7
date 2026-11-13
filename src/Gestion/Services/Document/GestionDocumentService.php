@@ -383,6 +383,46 @@ class GestionDocumentService
         return $out;
     }
 
+    /**
+     * Factures confirmées d'une commande, de la première à la dernière ajoutée (lot IA-FACT-2-A) : la facture d'origine et celles ajoutées
+     * ensuite, avec ce que chacune a apporté ligne par ligne. Un article n'a qu'une ligne par commande : l'apport d'une facture à une
+     * ligne partagée est la quantité qu'elle y a ajoutée, à son propre coût.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function forCommande(int $commandeId): array
+    {
+        /** @var GestionDocumentRepository $repo */
+        $repo = $this->emProvider->getEntityManager()->getRepository(GestionDocument::class);
+        $out = [];
+        foreach ($repo->findBy(['commandeId' => $commandeId], ['confirmedAt' => 'ASC', 'id' => 'ASC']) as $document) { // seul un document confirmé porte une commande
+            $confirmed = $document->getConfirmed() ?? [];
+            $undo = is_array($confirmed['undo'] ?? null) ? $confirmed['undo'] : null;
+            // coût propre de la facture par article et variante, d'après ses lignes confirmées
+            $own = [];
+            foreach (is_array($confirmed['lines'] ?? null) ? $confirmed['lines'] : [] as $line) {
+                if (($line['productId'] ?? null) !== null && ($line['quantity'] ?? null) !== null) {
+                    $key = $line['productId'] . '/' . ($line['variantId'] ?? '-');
+                    $own[$key] ??= ['quantity' => 0, 'cost' => 0];
+                    $own[$key]['quantity'] += (int) $line['quantity'];
+                    $own[$key]['cost'] += (int) $line['quantity'] * (int) ($line['unitCost'] ?? 0);
+                }
+            }
+            $lines = [];
+            foreach ($undo['lines'] ?? [] as $line) {
+                $key = ($line['productId'] ?? '') . '/' . ($line['variantId'] ?? '-');
+                $before = is_array($line['before'] ?? null) ? $line['before'] : null;
+                $quantity = (int) $line['quantity'] - (int) ($before['quantity'] ?? 0);
+                $lines[] = ['lineId' => (int) $line['id'], 'productId' => $line['productId'] ?? null, 'variantId' => $line['variantId'] ?? null, 'quantity' => $quantity,
+                    'unitCost' => $before !== null && isset($own[$key]) && $own[$key]['quantity'] > 0 ? (int) round($own[$key]['cost'] / $own[$key]['quantity']) : ($line['unitCost'] ?? null)];
+            }
+            $out[] = $document->invoiceSummary() + ['confirmedAt' => $document->getConfirmedAt()?->format(\DateTimeInterface::ATOM), 'added' => ($undo['mode'] ?? 'new') === 'add',
+                'lines' => $lines, 'undo' => GestionDocumentUndoService::window($document)];
+        }
+
+        return $out;
+    }
+
     /** 409 DOCUMENT_CONFIRMED / 410 DOCUMENT_EXPIRED */
     public function assertOpen(GestionDocument $document): void
     {

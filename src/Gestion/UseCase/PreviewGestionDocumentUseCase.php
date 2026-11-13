@@ -29,6 +29,7 @@ class PreviewGestionDocumentUseCase
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly GestionDocumentService $documents,
         private readonly TenantCurrencyProvider $currency,
+        private readonly ?\App\Gestion\Services\Document\InvoiceTargetPolicy $targets = null, // lot IA-FACT-2-A : ajout à une commande ouverte
     ) {
     }
 
@@ -76,6 +77,21 @@ class PreviewGestionDocumentUseCase
             }
         }
         $invoiceCurrency = $purchaseCurrency !== null ? strtoupper($purchaseCurrency) : $site;
+        // Cible (lot IA-FACT-2-A) : la facture s'ajoute à une commande ouverte du même fournisseur ; sa devise et son taux s'appliquent
+        $target = null;
+        $targetIn = is_array($body['target'] ?? null) ? $body['target'] : null;
+        if ($targetIn !== null && isset($targetIn['commandeId'])) {
+            $target = is_numeric($targetIn['commandeId']) ? $em->find(\App\Entity\Commande::class, (int) $targetIn['commandeId']) : null;
+            $reason = $target === null ? 'COMMANDE_NOT_FOUND' : ($this->targets?->reason($target, $supplier ?? null) ?? ($this->targets === null ? 'SUPPLIER_MISMATCH' : null));
+            if ($reason !== null) {
+                $issues['target'] = $reason === 'COMMANDE_NOT_FOUND' ? $reason : 'TARGET_NOT_ALLOWED';
+                $targetReason = $reason;
+                $target = null;
+            } else {
+                $invoiceCurrency = strtoupper($target->getCurrency() ?? $site);
+                $exchangeRate = $target->getExchangeRate();
+            }
+        }
         $rate = GestionInvoiceDraft::effectiveRate($invoiceCurrency, $site, $exchangeRate);
         if ($rate === null) {
             $issues['exchangeRate'] = 'EXCHANGE_RATE_REQUIRED';
@@ -99,6 +115,30 @@ class PreviewGestionDocumentUseCase
             }
             $price = $variant?->getPrice() ?? $product->getPrice();
             $currentPrices[$line['n']] = $price !== null ? (int) round((float) $price) : null;
+            if ($target !== null && $line['quantity'] !== null) {
+                // la ligne de l'article dans la commande cible, avant et après l'ajout (un article n'a qu'une ligne par commande)
+                $key = $product->getId() . '/' . ($variant?->getId() ?? '-');
+                $existing = $em->getRepository(\App\Entity\CommandeLine::class)->findOne($target, $product, $variant);
+                $merge[$key] ??= ['before' => $existing === null ? null : ['quantity' => $existing->getQuantityOrdered(), 'unitCost' => $existing->getUnitCostCents()], 'quantity' => 0, 'cost' => 0, 'priced' => 0];
+                $merge[$key]['quantity'] += $line['quantity'];
+                if ($line['unitCost'] !== null) {
+                    $merge[$key]['cost'] += $line['quantity'] * $line['unitCost'];
+                    $merge[$key]['priced'] += $line['quantity'];
+                }
+                $mergeKeys[$line['n']] = $key;
+            }
+        }
+        $lineAfter = [];
+        foreach ($merge ?? [] as $key => $m) {
+            $added = $m['priced'] > 0 ? (int) round($m['cost'] / $m['priced']) : null;
+            $before = $m['before'];
+            $quantity = ($before['quantity'] ?? 0) + $m['quantity'];
+            $unitCost = match (true) {
+                $added === null => $before['unitCost'] ?? null,
+                $before === null || $before['unitCost'] === null || $quantity <= 0 => $added,
+                default => (int) round(($before['quantity'] * $before['unitCost'] + $m['quantity'] * $added) / $quantity),
+            };
+            $lineAfter[$key] = ['before' => $before, 'after' => ['quantity' => $quantity, 'unitCost' => $unitCost]];
         }
 
         // Articles à créer : un prix par groupe, répété sur chaque ligne du groupe ; aucun si une ligne du groupe est refusée
@@ -132,7 +172,7 @@ class PreviewGestionDocumentUseCase
                 'coefficient' => $pricing['coefficient'] ?? null, 'plannedPrice' => $plannedPrice, 'currentPrice' => $kind === 'existing' ? ($currentPrices[$n] ?? null) : null,
                 'plannedMargin' => $margin, 'plannedMarginRate' => $margin !== null && $plannedPrice > 0 ? round($margin / $plannedPrice * 100, 1) : null,
                 'groupKey' => $kind === 'create' ? $line['create']['groupKey'] : null,
-            ];
+            ] + ($target !== null ? ['lineBefore' => $lineAfter[$mergeKeys[$n] ?? '']['before'] ?? null, 'lineAfter' => $lineAfter[$mergeKeys[$n] ?? '']['after'] ?? null] : []);
         }
 
         // Totaux sur les lignes corrigées, dans la devise de la facture, au taux de taxe global lu sur le document (comme extraction.computed)
@@ -141,6 +181,21 @@ class PreviewGestionDocumentUseCase
             $shippingIn = new GestionInput($body['shipping']);
             $shippingAmount = $shippingIn->cents('amount') ?? 0;
             $issues += GestionInvoiceDraft::prefix('shipping', $shippingIn->errors());
+        }
+        $targetOut = null;
+        if ($target !== null) {
+            $current = $em->getRepository(\App\Entity\FraisDePort::class)->findOneBy(['commande' => $target]);
+            $adds = is_array($body['shipping'] ?? null);
+            if ($adds && $current !== null && ($body['shipping']['mode'] ?? null) !== 'add') {
+                $issues['shipping'] = 'SHIPPING_COST_ALREADY_SET';
+            }
+            $targetOut = [
+                'commandeId' => $target->getId(), 'name' => $target->getName(), 'date' => $target->getDate()?->format('Y-m-d'), 'currency' => $invoiceCurrency, 'exchangeRate' => $rate,
+                'budgetBefore' => $target->getBudget(), 'budgetAfter' => ($target->getBudget() ?? 0) + $linesTotal + $shippingAmount,
+                'shipping' => ['current' => $current?->getPrice(), 'added' => $adds ? $shippingAmount : 0, 'total' => ($current?->getPrice() ?? 0) + ($adds ? $shippingAmount : 0)],
+            ];
+        } elseif (isset($targetReason)) {
+            $targetOut = ['commandeId' => is_numeric($targetIn['commandeId']) ? (int) $targetIn['commandeId'] : null, 'refused' => $targetReason];
         }
         $read = ['subtotal' => $extraction['totals']['subtotal'] ?? null, 'taxes' => $extraction['totals']['taxes'] ?? null, 'total' => $extraction['totals']['total'] ?? null];
         $mode = (string) ($extraction['amountsMode'] ?? 'unknown');
@@ -153,6 +208,7 @@ class PreviewGestionDocumentUseCase
             'currency' => $site, 'invoiceCurrency' => $invoiceCurrency, 'exchangeRate' => $rate,
             'pricesIncludeTax' => (bool) $em->getConnection()->fetchOne('SELECT prices_include_tax FROM entreprise ORDER BY id LIMIT 1'),
             'lines' => $out,
+            'target' => $targetOut, // null : nouvelle commande ; sinon la commande à laquelle la facture s'ajoute (lot IA-FACT-2-A)
             'totals' => ['lines' => $linesTotal, 'shipping' => $shippingAmount, 'taxRate' => round($taxRate, 5), 'taxes' => $totals['taxes'], 'total' => $totals['total'], 'read' => $read, 'difference' => $totals['difference']],
             'issues' => array_map(fn (string $path, string $code) => ['path' => $path, 'code' => $code], array_keys($issues), array_values($issues)),
         ];

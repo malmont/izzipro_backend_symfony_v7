@@ -34,6 +34,7 @@ class InvoiceQuestions
         private readonly PeriodCalendar $calendar,
         private readonly TenantCurrencyProvider $currency,
         private readonly TranslatorInterface $translator,
+        private readonly \App\Gestion\Services\Document\InvoiceTargetPolicy $targets, // lot IA-FACT-2-A : ajout à une commande ouverte
     ) {
     }
 
@@ -54,19 +55,52 @@ class InvoiceQuestions
         $read = is_array($x['supplier'] ?? null) ? $x['supplier'] : [];
         $supplierAnswer = $answers['supplier'] ?? null;
         $supplierValue = is_array($supplierAnswer) ? $supplierAnswer : (isset($read['id']) ? ['id' => (int) $read['id']] : null);
-        if (!isset($read['id']) || $supplierAnswer !== null) {
-            $options = [];
-            foreach (is_array($read['candidates'] ?? null) ? $read['candidates'] : [] as $candidate) {
-                $options[] = ['value' => ['id' => (int) $candidate['id']], 'label' => (string) $candidate['name'], 'score' => $candidate['score'] ?? null];
-            }
-            $name = trim((string) ($read['name'] ?? ''));
-            $options[] = ['value' => ['create' => ['name' => $name]], 'label' => $this->tr('conversation.options.supplier_create', $locale, ['%name%' => $name !== '' ? $name : '…'])];
-            $questions[] = $this->question('supplier', 'supplier', 'supplier', true, ['type' => 'choice'], $options, $supplierAnswer, $locale, ['%name%' => $name !== '' ? $name : '?']);
+        // La question est toujours rendue (lot IA-FACT-2-A) : un fournisseur reconnu par la lecture y figure comme réponse PROPOSÉE
+        // (`proposed: true`, elle ne compte pas parmi les questions ouvertes), pour que le gérant puisse en choisir un autre
+        $options = [];
+        $seen = [];
+        foreach (is_array($read['candidates'] ?? null) ? $read['candidates'] : [] as $candidate) {
+            $options[] = ['value' => ['id' => (int) $candidate['id']], 'label' => (string) $candidate['name'], 'score' => $candidate['score'] ?? null];
+            $seen[(int) $candidate['id']] = true;
         }
+        $name = trim((string) ($read['name'] ?? ''));
+        foreach ([$read['id'] ?? null, is_array($supplierAnswer) ? ($supplierAnswer['id'] ?? null) : null] as $id) {
+            $known = $id !== null && !isset($seen[(int) $id]) ? $em->find(Fournisseur::class, (int) $id) : null;
+            if ($known !== null) {
+                array_unshift($options, ['value' => ['id' => (int) $id], 'label' => (string) $known->getName(), 'score' => null]);
+                $seen[(int) $id] = true;
+            }
+        }
+        $options[] = ['value' => ['create' => ['name' => $name]], 'label' => $this->tr('conversation.options.supplier_create', $locale, ['%name%' => $name !== '' ? $name : '…'])];
+        $questions[] = $this->question('supplier', 'supplier', 'supplier', true, ['type' => 'choice'], $options, $supplierValue, $locale, ['%name%' => $name !== '' ? $name : '?'])
+            + ['proposed' => $supplierAnswer === null && $supplierValue !== null];
         if ($supplierValue !== null) {
             $body['supplier'] = $supplierValue;
         }
         $supplier = isset($supplierValue['id']) ? $em->find(Fournisseur::class, (int) $supplierValue['id']) : null;
+
+        // Cible (lot IA-FACT-2-A), juste après le fournisseur : une nouvelle commande, ou une commande ouverte du même fournisseur.
+        // Posée seulement s'il en existe une. Recalculée à chaque lecture : une réponse donnée pour un autre fournisseur, ou pour une
+        // commande qui n'est plus admise, est oubliée et la question se repose.
+        $targetCommande = null;
+        $eligible = $supplier !== null ? $this->targets->eligible($supplier) : [];
+        if ($eligible !== []) {
+            $targetAnswer = $answers['target'] ?? null;
+            $options = [['value' => 'new', 'label' => $this->tr('conversation.options.target_new', $locale)]];
+            foreach ($eligible as $commande) {
+                $options[] = ['value' => ['commandeId' => (int) $commande->getId()], 'label' => trim((string) $commande->getName()) !== '' ? (string) $commande->getName() : '#' . $commande->getId(),
+                    'date' => $commande->getDate()?->format('Y-m-d'), 'budget' => $commande->getBudget(), 'currency' => strtoupper($commande->getCurrency() ?? $site),
+                    'linesCount' => (int) $em->getConnection()->fetchOne('SELECT COUNT(*) FROM commande_line WHERE commande_id = ?', [$commande->getId()])];
+                if (is_array($targetAnswer) && (int) ($targetAnswer['commandeId'] ?? 0) === (int) $commande->getId()) {
+                    $targetCommande = $commande;
+                }
+            }
+            $targetAnswer = $targetAnswer === 'new' ? 'new' : ($targetCommande !== null ? ['commandeId' => (int) $targetCommande->getId()] : null);
+            $questions[] = $this->question('target', 'target', 'target', true, ['type' => 'choice'], $options, $targetAnswer, $locale, ['%supplier%' => (string) $supplier->getName()]);
+            if ($targetCommande !== null) {
+                $body['target'] = ['commandeId' => (int) $targetCommande->getId()];
+            }
+        }
 
         // Facture : numéro lu, date lue ou demandée
         $invoice = is_array($x['invoice'] ?? null) ? $x['invoice'] : [];
@@ -124,9 +158,24 @@ class InvoiceQuestions
             $body['lines'][] = array_filter($out, fn ($v) => $v !== null);
         }
 
-        // Frais de port lus sur la facture
+        // Frais de port lus sur la facture. Ajoutée à une commande qui en a déjà un : ajouter au montant existant, ou ne pas le compter
         if (is_array($x['shipping'] ?? null) && isset($x['shipping']['amount'])) {
-            $body['shipping'] = ['amount' => (int) $x['shipping']['amount']];
+            $amount = (int) $x['shipping']['amount'];
+            $body['shipping'] = ['amount' => $amount];
+            $current = $targetCommande !== null ? $em->getRepository(\App\Entity\FraisDePort::class)->findOneBy(['commande' => $targetCommande]) : null;
+            if ($current !== null) {
+                $shippingAnswer = in_array($answers['shipping'] ?? null, ['add', 'skip'], true) ? $answers['shipping'] : null;
+                $money = fn (int $cents) => number_format($cents / 100, 2, $locale === 'en' ? '.' : ',', ' ') . ' ' . strtoupper($targetCommande->getCurrency() ?? $site);
+                $params = ['%amount%' => $money($amount), '%current%' => $money((int) $current->getPrice()), '%total%' => $money((int) $current->getPrice() + $amount)];
+                $questions[] = $this->question('shipping', 'shipping', 'shipping', true, ['type' => 'choice'], [
+                    ['value' => 'add', 'label' => $this->tr('conversation.options.shipping_add', $locale, $params)], ['value' => 'skip', 'label' => $this->tr('conversation.options.shipping_skip', $locale, $params)],
+                ], $shippingAnswer, $locale, $params) + ['shipping' => ['current' => (int) $current->getPrice(), 'added' => $amount, 'total' => (int) $current->getPrice() + $amount]];
+                if ($shippingAnswer === 'add') {
+                    $body['shipping']['mode'] = 'add';
+                } elseif ($shippingAnswer === 'skip') {
+                    unset($body['shipping']);
+                }
+            }
         }
 
         // Taux de change : la devise de la facture est celle du fournisseur (règle de la confirmation), sinon celle lue sur le document
@@ -134,7 +183,7 @@ class InvoiceQuestions
             ?? ($supplier === null ? ($invoice['currency'] ?? null) : null);
         $purchaseCurrency = is_string($purchaseCurrency) && $purchaseCurrency !== '' ? strtoupper($purchaseCurrency) : $site;
         $rateAnswer = isset($answers['exchangeRate']) && is_numeric($answers['exchangeRate']) ? (float) $answers['exchangeRate'] : null;
-        if ($purchaseCurrency !== $site) {
+        if ($purchaseCurrency !== $site && $targetCommande === null) { // ajoutée à une commande : son taux s'applique, pas de question
             $questions[] = $this->question('exchangeRate', 'exchangeRate', 'invoice.exchangeRate', true, ['type' => 'number', 'min' => 0], [], $rateAnswer, $locale, ['%from%' => $purchaseCurrency, '%to%' => $site]);
             if ($rateAnswer !== null) {
                 $body['invoice']['exchangeRate'] = $rateAnswer;
@@ -144,7 +193,7 @@ class InvoiceQuestions
         // Période de la date de la facture fermée : classer à aujourd'hui, ou abandonner (lecture seule : aucune période n'est créée ici)
         $periodAnswer = $answers['period'] ?? null;
         $period = $date !== null ? $this->calendar->findByDate(new \DateTimeImmutable($date)) : null;
-        if (($period !== null && $this->calendar->isClosed($period)) || $periodAnswer !== null) {
+        if ($targetCommande === null && (($period !== null && $this->calendar->isClosed($period)) || $periodAnswer !== null)) { // ajoutée à une commande : sa date et sa période s'appliquent
             $questions[] = $this->question('period', 'period', 'classificationDate', true, ['type' => 'choice'], [
                 ['value' => 'today', 'label' => $this->tr('conversation.options.period_today', $locale)], ['value' => self::ABANDON, 'label' => $this->tr('conversation.options.abandon', $locale)],
             ], $periodAnswer, $locale, ['%period%' => $period !== null ? PeriodCalendar::displayName($period, $locale) : '', '%date%' => (string) $date]);

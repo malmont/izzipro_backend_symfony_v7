@@ -135,26 +135,26 @@ class GestionConversationService
     {
         $document = $this->workable($conversation);
         $current = $conversation->getAnswers();
-        $known = array_column($this->questions->build($document, $current, $conversation->getLocale())['questions'], null, 'id');
         $fields = [];
         $accepted = [];
+        // Les réponses s'appliquent dans l'ordre : chacune est contrôlée sur les questions telles que les précédentes les ont laissées
+        // (répondre la cible fait naître la question du frais de port, que la réponse suivante du même envoi peut renseigner)
         foreach (array_values($answers) as $i => $answer) {
+            $known = array_column($this->questions->build($document, $current, $conversation->getLocale())['questions'], null, 'id');
             $id = is_array($answer) && is_string($answer['questionId'] ?? null) ? $answer['questionId'] : null;
             if ($id === null || !isset($known[$id])) {
                 $fields["answers[$i].questionId"] = 'UNKNOWN_QUESTION';
                 continue;
             }
             $accepted[$id] = $this->questions->accept($known[$id], $answer['value'] ?? null, $i);
+            if ($accepted[$id] === null) {
+                unset($current[$id]);
+            } else {
+                $current[$id] = $accepted[$id];
+            }
         }
         if ($answers === [] || $fields !== []) {
             throw new GestionValidationException($fields ?: ['answers' => 'REQUIRED'], 'Réponses invalides');
-        }
-        foreach ($accepted as $id => $value) {
-            if ($value === null) {
-                unset($current[$id]);
-            } else {
-                $current[$id] = $value;
-            }
         }
         $em = $this->emProvider->getEntityManager();
         $conversation->setAnswers($current)->setUpdatedAt(new \DateTimeImmutable());
@@ -283,6 +283,6 @@ class GestionConversationService
     /** Empreinte de l'aperçu : le corps de la confirmation et ce que l'aperçu en a calculé */
     private static function hash(array $body, array $preview): string
     {
-        return hash('sha256', (string) json_encode([$body, $preview['lines'], $preview['totals'], $preview['exchangeRate'], $preview['invoiceCurrency']]));
+        return hash('sha256', (string) json_encode([$body, $preview['lines'], $preview['totals'], $preview['exchangeRate'], $preview['invoiceCurrency'], $preview['target'] ?? null]));
     }
 }

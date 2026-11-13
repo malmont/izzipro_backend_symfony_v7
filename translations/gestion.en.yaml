@@ -483,10 +483,19 @@ conversation:
         duplicate_force: 'Confirm anyway'
         difference_accept: 'I have seen the gap, continue'
         abandon: 'Abandon'
+        target_new: 'Create a new order'
+        shipping_add: 'Add %amount% to the current shipping cost (%current%) → %total%'
+        shipping_skip: 'Do not count the %amount% shipping of this invoice'
     questions:
+        target:
+            title: 'New order or open order'
+            text: 'You already have an open order with %supplier%. Is this invoice part of it, or is it a new order?'
+        shipping:
+            title: 'Shipping cost'
+            text: 'This order already has a shipping cost of %current%. The invoice carries %amount%.'
         supplier:
             title: 'Supplier'
-            text: 'I do not recognise the supplier "%name%". Which one is it?'
+            text: 'Supplier read on the document: "%name%". Which one is it in your list?'
         invoice_date:
             title: 'Invoice date'
             text: 'I could not read the date of the invoice. What is it?'

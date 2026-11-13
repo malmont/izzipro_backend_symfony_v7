@@ -485,10 +485,19 @@ conversation:
         duplicate_force: 'Confirmer quand même'
         difference_accept: 'J''ai vu l''écart, continuer'
         abandon: 'Abandonner'
+        target_new: 'Créer une nouvelle commande'
+        shipping_add: 'Ajouter %amount% au frais de port actuel (%current%) → %total%'
+        shipping_skip: 'Ne pas compter les %amount% de port de cette facture'
     questions:
+        target:
+            title: 'Nouvelle commande ou commande ouverte'
+            text: 'Vous avez déjà une commande ouverte chez %supplier%. Cette facture en fait-elle partie, ou est-ce une nouvelle commande ?'
+        shipping:
+            title: 'Frais de port'
+            text: 'Cette commande a déjà un frais de port de %current%. La facture en porte %amount%.'
         supplier:
             title: 'Fournisseur'
-            text: 'Je ne reconnais pas le fournisseur « %name% ». Lequel est-ce ?'
+            text: 'Fournisseur lu sur le document : « %name% ». Lequel est-ce dans votre liste ?'
         invoice_date:
             title: 'Date de la facture'
             text: 'Je n''ai pas pu lire la date de la facture. Quelle est-elle ?'

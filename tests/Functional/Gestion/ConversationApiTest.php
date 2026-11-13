@@ -262,7 +262,8 @@ class ConversationApiTest extends WebTestCase
             $this->assertArrayHasKey($questionId, $questions, json_encode(array_keys($questions)));
             $this->assertSame([$kind, $input, true, null], [$questions[$questionId]['kind'], $questions[$questionId]['input']['type'], $questions[$questionId]['required'], $questions[$questionId]['answer']], $questionId);
         }
-        $this->assertArrayNotHasKey('supplier', $questions, 'fournisseur reconnu : pas de question');
+        $this->assertSame([['id' => $supplier->getId()], true, ['id' => $supplier->getId()]], [$questions['supplier']['answer'], $questions['supplier']['proposed'], $questions['supplier']['options'][0]['value']], 'fournisseur reconnu : proposé comme réponse, il ne compte pas parmi les questions ouvertes et peut être changé');
+        $this->assertSame(count(array_filter($thread['questions'], fn (array $q) => $q['answer'] === null)), $thread['openQuestions']);
         $this->assertSame(['Invoice date', 'EUR'], [$questions['invoice.date']['title'], $questions['unitCost:2']['input']['currency']]);
         $this->assertStringContainsString('1 EUR', $questions['exchangeRate']['text']);
         $this->assertSame(['ht', 'ttc'], array_column($questions['amountsMode']['options'], 'value'));
@@ -301,7 +302,8 @@ class ConversationApiTest extends WebTestCase
         $reading['lines'] = [['baseLabel' => 'Sac questions', 'supplierCode' => "SQ-$tag", 'quantity' => 1, 'unitCost' => 2000, 'total' => 2000]];
         $reading = ['subtotal' => 2000, 'taxTotal' => 300, 'total' => 2300] + $reading;
         [$id2, $documentId2] = $start($reading);
-        $thread = $this->post("/api/gestion/conversations/$id2/answers", ['answers' => [['questionId' => 'exchangeRate', 'value' => 1.4]]], 200);
+        // ce fournisseur a maintenant une commande ouverte (celle de la première facture) : la cible est demandée ; ici, une nouvelle commande
+        $thread = $this->post("/api/gestion/conversations/$id2/answers", ['answers' => [['questionId' => 'target', 'value' => 'new'], ['questionId' => 'exchangeRate', 'value' => 1.4]]], 200);
         $questions = array_column($thread['questions'], null, 'id');
         $this->assertSame(['questions', 'duplicate', 'force', $documentId, ['force', 'abandon']], [$thread['state'], $questions['duplicate']['kind'], $questions['duplicate']['path'], $questions['duplicate']['duplicate']['documentId'], array_column($questions['duplicate']['options'], 'value')]);
         $commandes = (int) $this->em()->getConnection()->fetchOne('SELECT COUNT(*) FROM commande');
@@ -317,7 +319,7 @@ class ConversationApiTest extends WebTestCase
         $new = $this->body();
         $this->assertSame(201, $this->client->getResponse()->getStatusCode());
         $this->assertNotSame($id2, $new['id']);
-        $thread = $this->post("/api/gestion/conversations/{$new['id']}/answers", ['answers' => [['questionId' => 'exchangeRate', 'value' => 1.4], ['questionId' => 'duplicate', 'value' => 'force']]], 200);
+        $thread = $this->post("/api/gestion/conversations/{$new['id']}/answers", ['answers' => [['questionId' => 'target', 'value' => 'new'], ['questionId' => 'exchangeRate', 'value' => 1.4], ['questionId' => 'duplicate', 'value' => 'force']]], 200);
         $this->assertSame('ready', $thread['state']);
         $forced = $this->post("/api/gestion/conversations/{$new['id']}/confirm", ['previewHash' => $thread['previewHash']], 201);
         $this->assertNotSame($result['commande']['id'], $forced['commande']['id']);
@@ -338,6 +340,165 @@ class ConversationApiTest extends WebTestCase
         $this->assertSame(1, (int) $conn->fetchOne('SELECT COUNT(*) FROM fournisseur WHERE id = ?', [$supplier->getId()]), 'le fournisseur existant est toujours là après les deux annulations');
         $conn->executeStatement('DELETE FROM product WHERE id = ?', [$bag]);
         $conn->executeStatement('DELETE FROM fournisseur WHERE id = ?', [$supplier->getId()]);
+        $this->endOfWrite();
+    }
+
+    /**
+     * Lot IA-FACT-2-A : la facture s'ajoute à une commande ouverte du même fournisseur. Un article n'a qu'une ligne par commande : la ligne
+     * existante grossit (quantités additionnées, coût moyen pondéré). L'ajout s'annule d'un bloc, dans l'ordre inverse des ajouts.
+     */
+    public function testAnInvoiceIsAddedToAnOpenOrderOfTheSameSupplierAndUndoneInReverseOrder(): void
+    {
+        $tag = $this->tag;
+        $calendar = static::getContainer()->get(PeriodCalendar::class);
+        $today = $calendar->today();
+        $calendar->ensurePeriods($today->modify('-400 days'));
+        $supplier = $this->create(Fournisseur::class, ['name' => "Atelier Ajout $tag", 'currency' => 'EUR'], fn (Fournisseur $f, EntityManagerInterface $em) => $f->setTypeFournisseur($em->find(TypeFournisseur::class, 1) ?? $this->create(TypeFournisseur::class, ['name' => 'Autre'])));
+        $other = $this->create(Fournisseur::class, ['name' => "Autre maison $tag"], fn (Fournisseur $f, EntityManagerInterface $em) => $f->setTypeFournisseur($em->find(TypeFournisseur::class, 1)));
+        $conn = $this->em()->getConnection();
+        $conn->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type, code) VALUES (nextval('product_id_seq'), :n, 5000, false, 5, NOW(), :s, 'standard', :c)", ['n' => "Veste ajout $tag", 's' => "veste-a-$tag", 'c' => "VA-$tag"]);
+        $jacket = (int) $conn->fetchOne('SELECT id FROM product WHERE slug = ?', ["veste-a-$tag"]);
+        $otherCommande = (int) $conn->fetchOne("INSERT INTO commande (id, date, name, kind, budget, fournisseur_id) VALUES (nextval('commande_id_seq'), NOW(), ?, 'standard', 0, ?) RETURNING id", ["Commande d'un autre $tag", $other->getId()]);
+        $this->endOfWrite();
+        $reading = fn (string $number, string $date, array $lines, int $shipping) => ['supplierName' => "Atelier Ajout $tag", 'invoiceNumber' => $number, 'invoiceDate' => $date, 'currency' => 'EUR', 'amountsMode' => 'ht',
+            'lines' => $lines, 'taxes' => [], 'shipping' => ['label' => 'Port', 'amount' => $shipping], 'subtotal' => null, 'taxTotal' => null, 'total' => null,
+            'confidence' => ['overall' => 0.9, 'number' => 0.9, 'date' => 0.9, 'lines' => 0.9, 'totals' => 0.9], 'notes' => []];
+
+        // Première facture : aucune commande ouverte chez ce fournisseur, donc aucune question de cible ; nouvelle commande, comme avant
+        [$id1, $doc1] = $this->startThread($reading("A1-$tag", $today->format('Y-m-d'), [['baseLabel' => 'Veste ajout', 'supplierCode' => "VA-$tag", 'quantity' => 3, 'unitCost' => 1000, 'total' => 3000]], 800));
+        $thread = $this->post("/api/gestion/conversations/$id1/answers", ['answers' => [['questionId' => 'exchangeRate', 'value' => 1.5]]], 200);
+        $this->assertSame(['ready', ['supplier', 'exchangeRate'], null], [$thread['state'], array_column($thread['questions'], 'id'), $thread['preview']['target']], 'pas de commande ouverte : pas de question de cible');
+        $first = $this->post("/api/gestion/conversations/$id1/confirm", ['previewHash' => $thread['previewHash']], 201);
+        $commandeId = (int) $first['commande']['id'];
+        $lineId = (int) $this->em()->getConnection()->fetchOne('SELECT id FROM commande_line WHERE commande_id = ? AND product_id = ?', [$commandeId, $jacket]);
+        $this->em()->getConnection()->executeStatement("UPDATE gestion_document SET confirmed_at = confirmed_at - INTERVAL '1 minute' WHERE id = ?", [$doc1]);
+        $this->endOfWrite();
+        $state = fn (): array => [
+            $this->em()->getConnection()->fetchAllAssociative('SELECT product_id, quantity_ordered, quantity_received, unit_cost_cents FROM commande_line WHERE commande_id = ? ORDER BY id', [$commandeId]),
+            (int) $this->em()->getConnection()->fetchOne('SELECT budget FROM commande WHERE id = ?', [$commandeId]), (int) $this->em()->getConnection()->fetchOne('SELECT price FROM frais_de_port WHERE commande_id = ?', [$commandeId]),
+            (int) $this->em()->getConnection()->fetchOne('SELECT document_id FROM commande WHERE id = ?', [$commandeId]),
+        ];
+        $afterFirst = $state();
+        $this->assertSame([[['product_id' => $jacket, 'quantity_ordered' => 3, 'quantity_received' => 0, 'unit_cost_cents' => 1000]], 3800, 800, $doc1], $afterFirst);
+
+        // Seconde facture, datée dans une période fermée : la cible est demandée juste après le fournisseur
+        $old = $today->modify('-200 days')->format('Y-m-d');
+        [$id2, $doc2] = $this->startThread($reading("A2-$tag", $old, [['baseLabel' => 'Veste ajout', 'supplierCode' => "VA-$tag", 'quantity' => 2, 'unitCost' => 1500, 'total' => 3000], ['baseLabel' => 'Poncho zébré réversible', 'quantity' => 1, 'unitCost' => 2000, 'total' => 2000]], 1200));
+        $thread = $this->get("/api/gestion/conversations/$id2");
+        $this->assertSame(['supplier', 'target', 'line:n2', 'exchangeRate', 'period'], array_column($thread['questions'], 'id'), 'la cible juste après le fournisseur ; sans réponse, les questions d\'une nouvelle commande sont là');
+        $target = $thread['questions'][1];
+        $this->assertSame(['target', 'target', true, ['type' => 'choice'], null], [$target['kind'], $target['path'], $target['required'], $target['input'], $target['answer']]);
+        $this->assertSame(['new', ['commandeId' => $commandeId]], array_column($target['options'], 'value'), 'la commande d\'un autre fournisseur n\'est pas proposée');
+        $this->assertSame([$today->format('Y-m-d'), 3800, 'EUR', 1], [$target['options'][1]['date'], $target['options'][1]['budget'], $target['options'][1]['currency'], $target['options'][1]['linesCount']]);
+        $this->assertStringContainsString("Atelier Ajout $tag", $target['text']);
+        foreach ([['commandeId' => $otherCommande], ['commandeId' => 2147483000], 'ailleurs'] as $bad) {
+            $this->request('POST', "/api/gestion/conversations/$id2/answers", ['answers' => [['questionId' => 'target', 'value' => $bad]]]);
+            $this->assertSame([422, 'INVALID_VALUE'], [$this->client->getResponse()->getStatusCode(), $this->body()['fields']['answers[0].value'] ?? null], json_encode($bad));
+        }
+
+        // Cible = la commande ouverte : plus de question de période ni de taux (ceux de la commande s'appliquent), le port est demandé
+        $thread = $this->post("/api/gestion/conversations/$id2/answers", ['answers' => [['questionId' => 'target', 'value' => ['commandeId' => $commandeId]]]], 200);
+        $this->assertSame(['supplier', 'target', 'line:n2', 'shipping'], array_column($thread['questions'], 'id'));
+        $shipping = $thread['questions'][3];
+        $this->assertSame(['shipping', ['add', 'skip'], ['current' => 800, 'added' => 1200, 'total' => 2000]], [$shipping['kind'], array_column($shipping['options'], 'value'), $shipping['shipping']]);
+        $this->assertSame('Ajouter 12,00 EUR au frais de port actuel (8,00 EUR) → 20,00 EUR', $shipping['options'][0]['label']);
+        $this->assertSame('Ne pas compter les 12,00 EUR de port de cette facture', $shipping['options'][1]['label']);
+        $this->assertSame([1.5, 'EUR', $commandeId, 3800, 3800 + 3000 + 2000 + 1200], [$thread['preview']['exchangeRate'], $thread['preview']['invoiceCurrency'], $thread['preview']['target']['commandeId'], $thread['preview']['target']['budgetBefore'], $thread['preview']['target']['budgetAfter']]);
+        $this->assertSame([['quantity' => 3, 'unitCost' => 1000], ['quantity' => 5, 'unitCost' => 1200]], [$thread['preview']['lines'][0]['lineBefore'], $thread['preview']['lines'][0]['lineAfter']], 'la ligne existante grossit : 3 à 10,00 + 2 à 15,00 = 5 à 12,00');
+        $this->assertContains(['path' => 'shipping', 'code' => 'SHIPPING_COST_ALREADY_SET'], $thread['preview']['issues']);
+        // Revenir à une nouvelle commande fait réapparaître ses questions ; changer de fournisseur retire la cible
+        $back = $this->post("/api/gestion/conversations/$id2/answers", ['answers' => [['questionId' => 'target', 'value' => 'new']]], 200);
+        $this->assertSame([['supplier', 'target', 'line:n2', 'exchangeRate', 'period'], null], [array_column($back['questions'], 'id'), $back['preview']['target']]);
+        $changed = $this->post("/api/gestion/conversations/$id2/answers", ['answers' => [['questionId' => 'target', 'value' => ['commandeId' => $commandeId]], ['questionId' => 'supplier', 'value' => ['id' => $other->getId()]]]], 200);
+        $ids = array_column($changed['questions'], 'id');
+        $this->assertSame(['target', ['commandeId' => $otherCommande], null, false, false], [$changed['questions'][1]['id'], $changed['questions'][1]['options'][1]['value'], $changed['questions'][1]['answer'], in_array('shipping', $ids, true), $changed['questions'][0]['proposed']], 'autre fournisseur : la cible est recalculée, la réponse donnée pour l\'ancien est oubliée');
+        $this->assertNull($changed['preview']['target']);
+        // « Ne pas compter » : le port de la facture sort de l'aperçu et du budget ; « ajouter » l'y remet
+        $skipped = $this->post("/api/gestion/conversations/$id2/answers", ['answers' => [['questionId' => 'supplier', 'value' => null], ['questionId' => 'shipping', 'value' => 'skip']]], 200);
+        $this->assertSame([['current' => 800, 'added' => 0, 'total' => 800], 3800 + 3000 + 2000, 0, false], [$skipped['preview']['target']['shipping'], $skipped['preview']['target']['budgetAfter'], $skipped['preview']['totals']['shipping'],
+            in_array(['path' => 'shipping', 'code' => 'SHIPPING_COST_ALREADY_SET'], $skipped['preview']['issues'], true)]);
+        $thread = $this->post("/api/gestion/conversations/$id2/answers", ['answers' => [['questionId' => 'line:n2', 'value' => ['create' => ['name' => "Poncho $tag"]]], ['questionId' => 'shipping', 'value' => 'add']]], 200);
+        $this->assertSame(['ready', ['commandeId' => $commandeId], 'add', []], [$thread['state'], array_column($thread['questions'], 'answer', 'id')['target'], array_column($thread['questions'], 'answer', 'id')['shipping'], $thread['preview']['issues']], 'le fournisseur d\'origine revient : la réponse de cible vaut de nouveau');
+        $this->assertSame(['current' => 800, 'added' => 1200, 'total' => 2000], $thread['preview']['target']['shipping']);
+
+        // Confirmation : la même commande ; la ligne grossit, une ligne naît pour l'article créé, budget et port augmentent
+        // L'empreinte suit la commande cible : si elle a bougé depuis l'affichage (ici son budget), la confirmation est refusée
+        $this->em()->getConnection()->executeStatement('UPDATE commande SET budget = budget + 100 WHERE id = ?', [$commandeId]);
+        $this->endOfWrite();
+        $this->request('POST', "/api/gestion/conversations/$id2/confirm", ['previewHash' => $thread['previewHash']]);
+        $this->assertSame([409, 'PREVIEW_CHANGED', 3900], [$this->client->getResponse()->getStatusCode(), $this->body()['code'], $this->body()['preview']['target']['budgetBefore']]);
+        $this->em()->getConnection()->executeStatement('UPDATE commande SET budget = budget - 100 WHERE id = ?', [$commandeId]);
+        $this->endOfWrite();
+        $commandes = (int) $this->em()->getConnection()->fetchOne('SELECT COUNT(*) FROM commande');
+        $second = $this->post("/api/gestion/conversations/$id2/confirm", ['previewHash' => $thread['previewHash']], 201);
+        $this->assertSame(1.5, json_decode((string) $this->em()->getConnection()->fetchOne('SELECT confirmed FROM gestion_document WHERE id = ?', [$doc2]), true)['invoice']['exchangeRate'], 'le taux noté est celui de la commande');
+        $created = (int) $second['created'][0]['productId'];
+        $this->assertSame([$commandeId, $commandes, $commandeId], [(int) $second['commande']['id'], (int) $this->em()->getConnection()->fetchOne('SELECT COUNT(*) FROM commande'), (int) $this->em()->getConnection()->fetchOne('SELECT commande_id FROM gestion_document WHERE id = ?', [$doc2])], 'aucune commande créée');
+        $this->assertSame([[['product_id' => $jacket, 'quantity_ordered' => 5, 'quantity_received' => 0, 'unit_cost_cents' => 1200], ['product_id' => $created, 'quantity_ordered' => 1, 'quantity_received' => 0, 'unit_cost_cents' => 2000]], 10000, 2000, $doc1], $state(), 'le justificatif d\'origine de la commande reste le premier');
+        $this->assertSame(substr((string) $this->em()->getConnection()->fetchOne('SELECT date FROM commande WHERE id = ?', [$commandeId]), 0, 10), $today->format('Y-m-d'), 'la date de la commande ne change pas');
+
+        // Les factures de la commande, avec l'apport de chacune
+        $documents = $this->get("/api/commandes/$commandeId/documents");
+        $this->assertSame([[$doc1, "A1-$tag", false], [$doc2, "A2-$tag", true]], array_map(fn (array $d) => [$d['id'], $d['invoiceNumber'], $d['added']], $documents));
+        $this->assertSame([['lineId' => $lineId, 'productId' => $jacket, 'variantId' => null, 'quantity' => 3, 'unitCost' => 1000]], $documents[0]['lines']);
+        $this->assertSame([['lineId' => $lineId, 'productId' => $jacket, 'variantId' => null, 'quantity' => 2, 'unitCost' => 1500], [$created, 1, 2000]], [$documents[1]['lines'][0], [$documents[1]['lines'][1]['productId'], $documents[1]['lines'][1]['quantity'], $documents[1]['lines'][1]['unitCost']]]);
+        $this->assertTrue($documents[1]['undo']['available']);
+
+        // Ordre inverse : la première facture ne s'annule plus tant que la seconde est là ; le blocage la nomme et donne son document
+        $this->request('POST', "/api/gestion/documents/$doc1/annuler-confirmation");
+        $blocked = $this->body();
+        $this->assertSame([409, 'UNDO_BLOCKED', ['LATER_DOCUMENT']], [$this->client->getResponse()->getStatusCode(), $blocked['code'], array_column($blocked['reasons'], 'code')], json_encode($blocked));
+        $this->assertSame([$doc2, "A2-$tag"], [$blocked['reasons'][0]['documentId'], $blocked['reasons'][0]['invoiceNumber']]);
+        $this->assertStringContainsString("n° A2-$tag", $blocked['reasons'][0]['message']);
+        $this->assertSame('LATER_DOCUMENT', $this->get("/api/gestion/conversations/$id1")['undo']['blockers'][0]['code']);
+        // L'ajout lui-même est bloqué si une ligne qu'il a touchée a été reçue ou modifiée depuis
+        foreach ([['UPDATE commande_line SET quantity_received = 1 WHERE id = ?', 'UPDATE commande_line SET quantity_received = 0 WHERE id = ?', 'LINE_RECEIVED'],
+            ['UPDATE commande_line SET unit_cost_cents = 1300 WHERE id = ?', 'UPDATE commande_line SET unit_cost_cents = 1200 WHERE id = ?', 'COMMANDE_CHANGED']] as [$sql, $restore, $reason]) {
+            $this->em()->getConnection()->executeStatement($sql, [$lineId]);
+            $this->endOfWrite();
+            $this->request('POST', "/api/gestion/conversations/$id2/undo");
+            $this->assertSame([409, [$reason]], [$this->client->getResponse()->getStatusCode(), array_column($this->body()['reasons'] ?? [], 'code')], $reason);
+            $this->em()->getConnection()->executeStatement($restore, [$lineId]);
+            $this->endOfWrite();
+        }
+
+        // Annulation de l'ajout : la commande revient exactement à son état d'après la première facture
+        $undone = $this->post("/api/gestion/conversations/$id2/undo", [], 200);
+        $this->assertSame(['commandeId' => $commandeId, 'mode' => 'add', 'removed' => ['lines' => 1, 'products' => 1, 'shipping' => false, 'supplier' => false], 'restored' => ['lines' => 1, 'shipping' => true, 'budget' => 6200], 'kept' => []], $undone['undone']);
+        $this->assertSame($afterFirst, $state(), 'ligne ramenée à 3 à 10,00, ligne créée retirée, budget et port remis');
+        $this->assertSame([0, 'extracted', 'ready'], [(int) $this->em()->getConnection()->fetchOne('SELECT COUNT(*) FROM product WHERE id = ?', [$created]), $undone['thread']['document']['status'], $undone['thread']['state']]);
+        $this->assertSame([[$doc1]], [array_column($this->get("/api/commandes/$commandeId/documents"), 'id')]);
+        // Puis la première facture s'annule à son tour : la commande disparaît
+        $this->post("/api/gestion/documents/$doc1/annuler-confirmation", [], 200);
+        $this->assertSame(0, (int) $this->em()->getConnection()->fetchOne('SELECT COUNT(*) FROM commande WHERE id = ?', [$commandeId]));
+
+        // La même cible par l'écran de vérification : refus nommés, sans rien créer
+        $again = $this->post("/api/gestion/conversations/$id1/confirm", ['previewHash' => $this->get("/api/gestion/conversations/$id1")['previewHash']], 201);
+        $commandeId = (int) $again['commande']['id'];
+        $body = ['supplier' => ['id' => $supplier->getId()], 'invoice' => ['number' => "A2-$tag", 'date' => $today->format('Y-m-d')], 'lines' => [['n' => 1, 'quantity' => 2, 'unitCost' => 1500, 'productId' => $jacket]], 'shipping' => ['amount' => 1200]];
+        $linesBefore = (int) $this->em()->getConnection()->fetchOne('SELECT SUM(quantity_ordered) FROM commande_line WHERE commande_id = ?', [$commandeId]);
+        foreach ([[['commandeId' => 2147483000], 404, 'COMMANDE_NOT_FOUND', null], [['commandeId' => $otherCommande], 409, 'TARGET_NOT_ALLOWED', 'SUPPLIER_MISMATCH'], [['commandeId' => $commandeId], 409, 'SHIPPING_COST_ALREADY_SET', null]] as [$targetValue, $status, $code, $why]) {
+            $this->request('POST', "/api/gestion/documents/$doc2/confirmer", $body + ['target' => $targetValue]);
+            $this->assertSame([$status, $code, $why], [$this->client->getResponse()->getStatusCode(), $this->body()['code'] ?? null, $this->body()['reason'] ?? null], json_encode($targetValue));
+        }
+        $this->em()->getConnection()->executeStatement('UPDATE commande SET is_closed = true WHERE id = ?', [$commandeId]);
+        $this->endOfWrite();
+        $this->request('POST', "/api/gestion/documents/$doc2/confirmer", ['shipping' => ['amount' => 1200, 'mode' => 'add']] + $body + ['target' => ['commandeId' => $commandeId]]);
+        $this->assertSame([409, 'TARGET_NOT_ALLOWED', 'COMMANDE_CLOSED'], [$this->client->getResponse()->getStatusCode(), $this->body()['code'], $this->body()['reason']]);
+        $preview = $this->post("/api/gestion/documents/$doc2/apercu", $body + ['target' => ['commandeId' => $commandeId]], 200);
+        $this->assertSame([['path' => 'target', 'code' => 'TARGET_NOT_ALLOWED'], 'COMMANDE_CLOSED'], [array_values(array_filter($preview['issues'], fn (array $i) => $i['path'] === 'target'))[0] ?? null, $preview['target']['refused'] ?? null]);
+        $this->assertSame($linesBefore, (int) $this->em()->getConnection()->fetchOne('SELECT SUM(quantity_ordered) FROM commande_line WHERE commande_id = ?', [$commandeId]), 'aucun de ces refus n\'a rien écrit');
+        $this->assertNotContains('target', array_column($this->get("/api/gestion/conversations/$id2")['questions'], 'id'), 'commande figée : elle n\'est plus proposée');
+
+        // Nettoyage
+        $conn = $this->em()->getConnection();
+        $conn->executeStatement('UPDATE commande SET is_closed = false WHERE id = ?', [$commandeId]);
+        $this->endOfWrite();
+        $this->post("/api/gestion/documents/$doc1/annuler-confirmation", [], 200);
+        $conn = $this->em()->getConnection();
+        $conn->executeStatement('DELETE FROM commande WHERE id = ?', [$otherCommande]);
+        $conn->executeStatement('DELETE FROM product WHERE id = ?', [$jacket]);
+        $conn->executeStatement('DELETE FROM fournisseur WHERE id IN (?, ?)', [$supplier->getId(), $other->getId()]);
         $this->endOfWrite();
     }
 
@@ -397,6 +558,17 @@ class ConversationApiTest extends WebTestCase
     }
 
     // ----- utilitaires -----
+
+    /** @return array{0: int, 1: int} fil et document d'une facture envoyée puis lue par le faux modèle */
+    private function startThread(array $reading): array
+    {
+        [$status, $thread] = $this->multipart('/api/gestion/conversations', [], ['files' => [$this->image('f.png')]]);
+        $this->assertSame(201, $status, json_encode($thread));
+        FakeLandingAiClient::$queue[] = $this->reading($reading);
+        $this->runWorker((int) $thread['document']['id']);
+
+        return [(int) $thread['id'], (int) $thread['document']['id']];
+    }
 
     private function runWorker(int $documentId): void
     {
