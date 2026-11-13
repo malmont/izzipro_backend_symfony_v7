@@ -175,6 +175,12 @@ class EntitlementsTest extends WebTestCase
         $r = $this->api('POST', '/api/site/features/module.boussole/request', [], 'admin');
         $this->assertSame(201, $r->getStatusCode(), $r->getContent());
         $this->assertSame(['trial', 'trial'], [json_decode((string) $r->getContent(), true)['kind'], json_decode((string) $r->getContent(), true)['entitlement']['source']], 'essai ouvert aussitôt');
+        // fin de l'essai : ligne brute `ends_at` (UTC sans fuseau) doublée de `endsAtIso`, le même instant avec son décalage
+        $trial = json_decode((string) $r->getContent(), true)['entitlement'];
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', (string) $trial['ends_at']);
+        $this->assertSame(str_replace(' ', 'T', (string) $trial['ends_at']) . '+00:00', $trial['endsAtIso']);
+        $days = (int) static::getContainer()->get(FeaturePolicyRepository::class)->get('module.boussole')['trial_days'];
+        $this->assertEqualsWithDelta((new \DateTimeImmutable("+$days days"))->getTimestamp(), (new \DateTimeImmutable($trial['endsAtIso']))->getTimestamp(), 120, 'la fin de l\'essai, lue avec son décalage');
         $this->assertSame(1, $this->countEmails(), 'un courriel : essai ouvert (les courriels d\'une requête sont visibles jusqu\'à la requête suivante)');
         $this->assertTrue($s->isEnabled(MV_TEST_TENANT_CODE, 'module.boussole'));
         $this->assertSame(409, $this->api('POST', '/api/site/features/module.boussole/request', [], 'admin')->getStatusCode(), 'déjà active');

@@ -64,7 +64,8 @@ class RequestSiteFeatureUseCase
         if ($offer['allowed']) {
             $entitlement = $this->entitlements->trial($code, $key, null, $by, 'essai demandé depuis Mon site' . ($message !== '' ? ' : ' . $message : ''));
 
-            return ['kind' => 'trial', 'entitlement' => $entitlement];
+            // ligne brute du droit (`ends_at` en UTC sans fuseau), doublée de `endsAtIso` comme les autres sorties (lot DROITS-ISO)
+            return ['kind' => 'trial', 'entitlement' => $entitlement + ['endsAtIso' => EntitlementService::toIso($entitlement['ends_at'] ?? null)]];
         }
         $row = $this->requests->insert($code, $key, $by, $message !== '' ? $message : null);
         // courriels (05/11/2026) : accusé au contact du site, avis au super administrateur de la plateforme

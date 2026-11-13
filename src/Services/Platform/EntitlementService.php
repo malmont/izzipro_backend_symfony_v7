@@ -348,7 +348,7 @@ class EntitlementService
     }
 
     /** Convertit une date SQL `Y-m-d H:i:s` (UTC dans `tenant_entitlements`) en ISO 8601 avec décalage, ou null si absente. */
-    private static function toIso(mixed $sqlDatetime): ?string
+    public static function toIso(mixed $sqlDatetime): ?string
     {
         if (!is_string($sqlDatetime) || trim($sqlDatetime) === '') {
             return null;
