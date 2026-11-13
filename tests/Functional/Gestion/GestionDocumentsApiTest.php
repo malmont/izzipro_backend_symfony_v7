@@ -46,6 +46,13 @@ class GestionDocumentsApiTest extends WebTestCase
         AiRightTestHelper::restoreFullAi(static::getContainer()); // droits partagés : un test précédent peut les avoir vidés
         $this->login();
         $this->em()->getConnection()->executeStatement("UPDATE gestion_document SET status = 'failed' WHERE status = 'reading'"); // base partagée : une lecture à la fois par site
+        $this->em()->getConnection()->executeStatement('UPDATE entreprise SET gestion_price_rounding = NULL, gestion_default_coefficient = NULL, gestion_min_coefficient = NULL'); // réglages de prix par défaut du site
+    }
+
+    protected function tearDown(): void
+    {
+        $this->em()->getConnection()->executeStatement('UPDATE entreprise SET gestion_price_rounding = NULL');
+        parent::tearDown();
     }
 
     public function testReadingRequiresAiRightAndLostReadingsDoNotBlockTheSite(): void
@@ -238,7 +245,7 @@ class GestionDocumentsApiTest extends WebTestCase
         $this->assertSame($confirmed['created'][0]['productId'], $confirmed['created'][1]['productId'], 'un seul article pour les deux tailles');
         $robeId = (int) $confirmed['created'][0]['productId'];
         $robe = $conn->fetchAssociative('SELECT name, price, purchase_price, coefficient_multiplier, quantity, is_web, is_pos, commande_id, image FROM product WHERE id = ?', [$robeId]);
-        $this->assertSame(["Robe en lin $tag", 5000.0, 2000.0, 2.5, 0, false, false, $commande['id']], [$robe['name'], (float) $robe['price'], (float) $robe['purchase_price'], (float) $robe['coefficient_multiplier'], (int) $robe['quantity'], (bool) $robe['is_web'], (bool) $robe['is_pos'], (int) $robe['commande_id']], 'article créé : prix = achat × coefficient, STOCK 0 (il n\'entre qu\'à la réception), invisible');
+        $this->assertSame(["Robe en lin $tag", 5099.0, 2000.0, 2.5, 0, false, false, $commande['id']], [$robe['name'], (float) $robe['price'], (float) $robe['purchase_price'], (float) $robe['coefficient_multiplier'], (int) $robe['quantity'], (bool) $robe['is_web'], (bool) $robe['is_pos'], (int) $robe['commande_id']], 'article créé : prix = achat × coefficient (50,00), arrondi par défaut du site (lot IA-ACT-5) : 50,99 ; STOCK 0 (il n\'entre qu\'à la réception), invisible');
         $this->assertSame([0, 0], array_map('intval', $conn->fetchFirstColumn('SELECT stock_quantity FROM product_variant WHERE product_id = ? ORDER BY id', [$robeId])), 'variantes à stock 0');
         $byProduct = [];
         foreach ($confirmed['lines'] as $l) {
@@ -366,22 +373,52 @@ class GestionDocumentsApiTest extends WebTestCase
         $body = ['supplier' => ['id' => $euro->getId()], 'invoice' => ['number' => "L-$tag", 'date' => $today->format('Y-m-d'), 'exchangeRate' => 1.48], 'classificationDate' => $today->format('Y-m-d'), 'lines' => $lines, 'shipping' => ['amount' => 500], 'champEnTrop' => true];
         $r = $preview(['lines' => array_merge($lines, [['n' => 5, 'quantity' => 2, 'unitCost' => 450]])] + $body);
         $this->assertSame(['CAD', 'EUR', 1.48], [$r['currency'], $r['invoiceCurrency'], $r['exchangeRate']]);
-        $keys = ['n', 'quantity', 'unitCost', 'total', 'unitCostConverted', 'kind', 'coefficient', 'plannedPrice', 'currentPrice', 'plannedMargin', 'plannedMarginRate', 'groupKey'];
+        $keys = ['n', 'quantity', 'unitCost', 'total', 'unitCostConverted', 'kind', 'coefficient', 'plannedPrice', 'currentPrice', 'plannedMargin', 'plannedMarginRate', 'groupKey', 'publishPos', 'publishWeb', 'mentions', 'price']; // quatre clés de plus au lot IA-ACT-5
         $this->assertSame($keys, array_keys($r['lines'][0]));
         $this->assertSame([
-            // groupe « robe » : coût moyen (4000 + 2300) ÷ 3 = 2100 EUR → 3108 CAD, × 2,5 (coefficient de la première ligne) = 7770, sur les deux lignes
-            [1, 2, 2000, 4000, 2960, 'create', 2.5, 7770, null, 4810, 61.9, 'robe'],
-            [2, 1, 2300, 2300, 3404, 'create', 2.5, 7770, null, 4366, 56.2, 'robe'],
-            [3, 3, 1000, 3000, 1480, 'existing', null, null, 2700, null, null, null], // prix actuel de la variante ; la confirmation ne le change pas
-            [4, 1, 999, 999, 1479, 'create', 2, 2958, null, 1479, 50, null], // coefficient 2 par défaut (JSON : 2.0 s'écrit 2)
-            [5, 2, 450, 900, 666, 'unresolved', null, null, null, null, null, null],
+            // groupe « robe » : coût moyen (4000 + 2300) ÷ 3 = 2100 EUR → 3108 CAD, × 2,5 (coefficient de la première ligne) = 7770, arrondi par
+            // défaut du site (lot IA-ACT-5, prix psychologique) : 7799, sur les deux lignes ; la marge et son taux suivent le prix arrondi
+            // lot IA-ACT-5, quatre valeurs de plus par ligne : mise en ligne en caisse, sur la boutique, mentions, prix avant / après d'un article existant
+            [1, 2, 2000, 4000, 2960, 'create', 2.5, 7799, null, 4839, 62, 'robe', 'no', 'no', [], null],
+            [2, 1, 2300, 2300, 3404, 'create', 2.5, 7799, null, 4395, 56.4, 'robe', 'no', 'no', [], null],
+            [3, 3, 1000, 3000, 1480, 'existing', null, null, 2700, null, null, null, null, null, [], // prix actuel de la variante ; sans décision, la confirmation ne le change pas
+                ['mode' => 'keep', 'coefficient' => null, 'newPrice' => 2700, 'currentPrice' => 2700, 'changed' => false, 'belowCost' => false]],
+            [4, 1, 999, 999, 1479, 'create', 2, 2999, null, 1520, 50.7, null, 'no', 'no', [], null], // coefficient par défaut du site, 2 (JSON : 2.0 s'écrit 2) : 29,58 → 29,99
+            [5, 2, 450, 900, 666, 'unresolved', null, null, null, null, null, null, null, null, [], null],
         ], array_map('array_values', $r['lines']), 'taux de marge à une décimale');
+        // Lot IA-ACT-5 : une décision de prix portée par la ligne d'un article existant (coût 14,80 × 2 = 29,60 → 29,99) et une mise en ligne
+        // se lisent dans l'aperçu ; sans arrondi (réglage « none » du site), les prix sont au cent : 77,70 et 29,58
+        $decided = $lines;
+        $decided[0]['create'] += ['publishPos' => 'now', 'publishWeb' => 'reception'];
+        $decided[2]['price'] = ['mode' => 'coefficient', 'coefficient' => 2];
+        $rounded = $preview(['lines' => $decided] + $body);
+        $this->assertSame([[7799, 4839], [7799, 4395], [2999, 1519], [2999, 1520]], array_map(fn (array $l) => [$l['plannedPrice'], $l['plannedMargin']], $rounded['lines']));
+        $this->assertSame([['now', 'reception', ['STOCK_ZERO', 'NO_PHOTO']], ['now', 'reception', ['STOCK_ZERO', 'NO_PHOTO']], [null, null, []], ['no', 'no', []]], array_map(fn (array $l) => [$l['publishPos'], $l['publishWeb'], $l['mentions']], $rounded['lines']), 'la mise en ligne d\'un groupe est celle de sa première ligne qui la demande');
+        $this->assertSame(['mode' => 'coefficient', 'coefficient' => 2, 'newPrice' => 2999, 'currentPrice' => 2700, 'changed' => true, 'belowCost' => false], $rounded['lines'][2]['price']);
+        $this->assertSame([], $issues($rounded));
+        $bad = $lines;
+        $bad[0]['create']['publishWeb'] = 'un jour';
+        $bad[2]['price'] = ['mode' => 'gratuit'];
+        $bad[3]['create']['publishPos'] = 1;
+        $this->assertSame(['lines[1].create.publishWeb' => 'INVALID_VALUE', 'lines[3].price.mode' => 'INVALID_MODE', 'lines[4].create.publishPos' => 'INVALID_VALUE'], array_intersect_key($issues($preview(['lines' => $bad] + $body)), array_flip(['lines[1].create.publishWeb', 'lines[3].price.mode', 'lines[4].create.publishPos'])));
+        $this->assertSame(['lines[3].price.coefficient' => 'REQUIRED'], array_intersect_key($issues($preview(['lines' => array_replace($lines, [2 => $lines[2] + ['price' => ['mode' => 'coefficient']]])] + $body)), ['lines[3].price.coefficient' => 1]));
+        $this->assertSame(['lines[3].price.price' => 'INVALID_AMOUNT'], array_intersect_key($issues($preview(['lines' => array_replace($lines, [2 => $lines[2] + ['price' => ['mode' => 'fixed', 'price' => 0]]])] + $body)), ['lines[3].price.price' => 1]));
+        $this->em()->getConnection()->executeStatement("UPDATE entreprise SET gestion_price_rounding = 'none'");
+        $this->endOfWrite();
+        $this->assertSame([7770, 7770, null, 2958], array_column($preview(['lines' => $lines] + $body)['lines'], 'plannedPrice'), 'réglage « sans arrondi » : le prix est coût × coefficient, au cent');
+        // Le coefficient par défaut du SITE vaut pour une ligne créée sans coefficient (14,79 × 3 = 44,37), jamais pour une ligne qui a le sien
+        $this->em()->getConnection()->executeStatement('UPDATE entreprise SET gestion_default_coefficient = 3');
+        $this->endOfWrite();
+        $siteDefault = $preview(['lines' => $lines] + $body)['lines'];
+        $this->assertSame([[2.5, 7770], [3, 4437]], [[$siteDefault[0]['coefficient'], $siteDefault[0]['plannedPrice']], [$siteDefault[3]['coefficient'], $siteDefault[3]['plannedPrice']]]);
+        $this->em()->getConnection()->executeStatement('UPDATE entreprise SET gestion_price_rounding = NULL, gestion_default_coefficient = NULL');
+        $this->endOfWrite();
         $this->assertSame(['lines[5]' => 'LINE_UNRESOLVED'], $issues($r), 'le refus de la confirmation, sans bloquer l\'aperçu');
         $this->assertSame(['lines' => 11199, 'shipping' => 500, 'taxes' => 2340, 'total' => 14039, 'difference' => -360], array_intersect_key($r['totals'], array_flip(['lines', 'shipping', 'taxes', 'total', 'difference'])), 'totaux des lignes corrigées, en EUR, au taux de taxe du document ; écart = total lu − total recalculé');
 
         // Devise : celle du fournisseur du corps, comme à la confirmation
         $r = $preview(['supplier' => ['id' => $local->getId()]] + $body);
-        $this->assertSame(['CAD', 1, 5250, 2000], [$r['invoiceCurrency'], $r['exchangeRate'], $r['lines'][0]['plannedPrice'], $r['lines'][0]['unitCostConverted']], 'fournisseur sans devise : devise du site, taux envoyé ignoré');
+        $this->assertSame(['CAD', 1, 5299, 2000], [$r['invoiceCurrency'], $r['exchangeRate'], $r['lines'][0]['plannedPrice'], $r['lines'][0]['unitCostConverted']], 'fournisseur sans devise : devise du site, taux envoyé ignoré ; 21,00 × 2,5 = 52,50, arrondi par défaut du site : 52,99');
         $r = $preview(['supplier' => ['create' => ['name' => 'Nouveau', 'currency' => 'usd']], 'invoice' => ['exchangeRate' => 1.35]] + $body);
         $this->assertSame(['USD', 1.35, 2700], [$r['invoiceCurrency'], $r['exchangeRate'], $r['lines'][0]['unitCostConverted']]);
         $r = $preview(['supplier' => ['create' => ['name' => 'Nouveau', 'currency' => 'XXX']]] + $body);
@@ -456,8 +493,8 @@ class GestionDocumentsApiTest extends WebTestCase
             $planned = $r['lines'][$n - 1]['plannedPrice'];
             $this->assertSame([(float) $planned, $purchasePrice, $coefficient], [(float) $row['price'], (float) $row['purchase_price'], (float) $row['coefficient_multiplier']], "ligne $n : prix de vente de l'aperçu, prix d'achat converti dans la devise du site");
         }
-        $this->assertSame([7770, 7770], array_map('intval', $conn->fetchFirstColumn('SELECT price FROM product_variant WHERE product_id = ? ORDER BY id', [$createdBy[1]])), 'variantes au prix du groupe');
-        $this->assertSame([7770, 2958], [$r['lines'][0]['plannedPrice'], $r['lines'][3]['plannedPrice']]);
+        $this->assertSame([7799, 7799], array_map('intval', $conn->fetchFirstColumn('SELECT price FROM product_variant WHERE product_id = ? ORDER BY id', [$createdBy[1]])), 'variantes au prix du groupe, arrondi par défaut du site (lot IA-ACT-5)');
+        $this->assertSame([7799, 2999], [$r['lines'][0]['plannedPrice'], $r['lines'][3]['plannedPrice']], '77,70 → 77,99 ; 29,58 → 29,99 : l\'aperçu et la confirmation rendent le même prix arrondi');
         $this->assertSame([1000, 2000, 2300, 999], array_map('intval', $conn->fetchFirstColumn('SELECT unit_cost_cents FROM commande_line WHERE commande_id = ? ORDER BY id', [$confirmed['commande']['id']])), 'lignes d\'achat (l\'article existant d\'abord) : coût dans la devise de la commande, sans conversion (lot G6)');
         $this->assertSame([2500.0, 2700], [(float) $conn->fetchOne('SELECT price FROM product WHERE id = ?', [$tuque]), (int) $conn->fetchOne('SELECT price FROM product_variant WHERE id = ?', [$variantId])], 'article existant : prix inchangé');
         $this->request('POST', "/api/gestion/documents/$id/apercu", $body);

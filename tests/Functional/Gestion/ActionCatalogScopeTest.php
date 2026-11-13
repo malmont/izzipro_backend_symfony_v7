@@ -6,6 +6,8 @@ use App\Gestion\Services\Conversation\Action\ActionCatalog;
 use App\Gestion\Services\GestionBudgetService;
 use App\Gestion\Services\GestionCashService;
 use App\Gestion\Services\GestionFiscalYearService;
+use App\Gestion\Services\GestionPriceService;
+use App\Gestion\Services\GestionPriceSettingsService;
 use App\Gestion\Services\GestionProductCostService;
 use App\Gestion\Services\GestionTripService;
 use App\Gestion\Services\MissingCostQuery;
@@ -47,11 +49,12 @@ class ActionCatalogScopeTest extends KernelTestCase
         'periods.calendar.set' => [UpdateEntrepriseUseCase::class], // la fiche Entreprise, pour le seul découpage des périodes (vérifié plus bas)
         'product.cost.set' => [GestionProductCostService::class], // le coût d'achat seul, jamais le prix de vente
         'period.close' => [CloseCollectionUseCase::class],
+        'price.set' => [GestionPriceService::class], // le prix de vente, par le service des prix du lot P4 (aperçu, lot, annulation) : lot IA-ACT-5
     ];
 
     /** Ce qu'une action peut utiliser sans écrire de donnée d'un autre module : lectures de la gestion, textes, devise, requête, journal */
     private const HELPERS = [TenantEntityManagerProvider::class, TranslatorInterface::class, TenantCurrencyProvider::class, PeriodCalendar::class, PeriodGuard::class,
-        PeriodResultCalculator::class, MissingCostQuery::class, RequestStack::class, ContentAuditRecorder::class];
+        PeriodResultCalculator::class, MissingCostQuery::class, RequestStack::class, ContentAuditRecorder::class, GestionPriceSettingsService::class];
 
     /**
      * Écritures faites dans le code même d'une action, hors de son service : seulement l'annulation exacte d'une clôture, qu'aucun service
@@ -114,5 +117,11 @@ class ActionCatalogScopeTest extends KernelTestCase
         $this->assertStringNotContainsString('setPrice(', $cost);
         $this->assertStringContainsString("setFieldValue(\$product, 'price', \$price)", $cost);
         $this->assertSame(1, substr_count($cost, '->setPurchasePrice('));
+        // Le prix de vente d'un ensemble d'articles : seulement par le service des prix, jamais la visibilité ni la fiche
+        $price = (string) file_get_contents("$dir/PriceSetAction.php");
+        foreach (['setIsWeb(', 'setIsPos(', 'setPrice(', 'writeFields('] as $needle) {
+            $this->assertStringNotContainsString($needle, $price, "PriceSetAction.php : « $needle » : l'action passe par l'aperçu, l'application et l'annulation du service des prix");
+        }
+        $this->assertSame([1, 1], [substr_count($price, '$this->prices->apply('), substr_count($price, '$this->prices->undo(')]);
     }
 }

@@ -81,7 +81,7 @@ class ActionConversationApiTest extends WebTestCase
         $this->assertSame(['id', 'kind', 'state', 'locale', 'createdAt', 'updatedAt', 'document', 'action', 'summary', 'messages', 'questions', 'openQuestions', 'issues', 'preview', 'previewHash', 'undo', 'credits'], array_keys($thread));
         $this->assertSame(['expense.create', 'questions', null, 4, [], null, null, null], [$thread['kind'], $thread['state'], $thread['document'], $thread['openQuestions'], $thread['issues'], $thread['preview'], $thread['previewHash'], $thread['undo']]);
         $this->assertSame(['key' => 'expense.create', 'title' => 'Saisir une note de frais', 'available' => true, 'result' => null], $thread['action']);
-        $this->assertSame(['text' => 'Saisir une note de frais : Il me manque 4 réponse(s) avant de vous montrer ce qui sera créé.', 'openQuestions' => 4], $thread['summary']);
+        $this->assertSame(['text' => 'Saisir une note de frais : Il me manque 4 réponses avant de vous montrer ce qui sera créé.', 'openQuestions' => 4], $thread['summary']);
         $this->assertSame(['amount', 'date', 'typeNoteDeFraisId', 'description'], array_column($thread['questions'], 'id'));
         $this->assertSame(['expense.create.amount', 'expense.create.date', 'expense.create.typeNoteDeFraisId', 'expense.create.description'], array_column($thread['questions'], 'kind'));
         $this->assertSame(['money', 'date', 'choice', 'text'], array_map(fn (array $q) => $q['input']['type'], $thread['questions']));
@@ -522,7 +522,7 @@ class ActionConversationApiTest extends WebTestCase
         $this->assertSame(['answers[1].value' => 'BEFORE_START'], $this->post("/api/gestion/conversations/$tid/answers", ['answers' => [['questionId' => 'startDate', 'value' => $to], ['questionId' => 'endDate', 'value' => $from]]], 422)['fields']);
         $tripReady = $this->post("/api/gestion/conversations/$tid/answers", ['answers' => [['questionId' => 'name', 'value' => "Salon $tag"], ['questionId' => 'place', 'value' => 'Paris'], ['questionId' => 'startDate', 'value' => $from],
             ['questionId' => 'endDate', 'value' => $to], ['questionId' => 'budgetTotal', 'value' => 300000], ['questionId' => 'exchangeRate', 'value' => 1.5]]], 200);
-        $some = sprintf('À la création, %d note(s) de frais et %d commande(s) libres datées dans le voyage y seront rattachées. Annuler le voyage rendra ces éléments libres.', $expected['notes'], $expected['commandes']);
+        $some = sprintf('À la création, les notes de frais et les commandes libres datées dans le voyage y seront rattachées (notes de frais : %d ; commandes : %d). Annuler le voyage rendra ces éléments libres.', $expected['notes'], $expected['commandes']);
         $this->assertSame(['ready', ['name' => "Salon $tag", 'place' => 'Paris', 'startDate' => $from, 'endDate' => $to, 'days' => 3, 'budgetTotal' => 300000, 'budgetDaily' => null, 'currency' => 'EUR', 'exchangeRate' => 1.5, 'notes' => null,
             'attaches' => $expected + ['text' => $some]]], [$tripReady['state'], array_diff_key($tripReady['preview'], ['rows' => 1])]);
         $this->assertSame([['label' => 'Nom du voyage', 'value' => "Salon $tag", 'unit' => 'text'], ['label' => 'Lieu', 'value' => 'Paris', 'unit' => 'text'], ['label' => 'Départ', 'value' => $from, 'unit' => 'date'], ['label' => 'Retour', 'value' => $to, 'unit' => 'date'],
@@ -754,7 +754,7 @@ class ActionConversationApiTest extends WebTestCase
             $ready = $this->post("/api/gestion/conversations/$kid/answers", ['answers' => [['questionId' => 'productId', 'value' => $productId], ['questionId' => 'cost', 'value' => 2000]]], 200);
             $periodName = PeriodCalendar::displayName($period, 'fr');
             $money = fn (int $cents): string => number_format($cents / 100, 2, ',', ' ') . ' CAD';
-            $effect = '3 unité(s) vendue(s) dans les périodes ouvertes passeront de « vente sans coût connu » à une vente valorisée. Coût des articles vendus de la période « ' . $periodName . ' » : ' . $money($cogsAll) . ' avant, ' . $money($cogsAll + 6000)
+            $effect = '3 unités vendues dans les périodes ouvertes passeront de « vente sans coût connu » à une vente valorisée. Coût des articles vendus de la période « ' . $periodName . ' » : ' . $money($cogsAll) . ' avant, ' . $money($cogsAll + 6000)
                 . ' après. Les périodes fermées sont figées : leurs chiffres ne changent pas.';
             $this->assertSame(['ready', ['id' => $productId, 'name' => "Vase $tag", 'code' => "C-$slug"], 'CAD', ['before' => null, 'after' => 2000], 5000, ['amount' => 3000, 'rate' => 60, 'pricesIncludeTax' => $includesTax]],
                 [$ready['state'], $ready['preview']['product'], $ready['preview']['currency'], $ready['preview']['cost'], $ready['preview']['price'], $ready['preview']['margin']]);
@@ -1157,7 +1157,7 @@ class ActionConversationApiTest extends WebTestCase
         // Catalogue : la constante et le service disent la même liste ; chaque clé tient dans la colonne `kind` et a ses textes fr et en
         $this->em();
         $catalog = static::getContainer()->get(ActionCatalog::class);
-        $this->assertSame(['expense.create', 'supplier.create', 'shipping.create', 'budget.put', 'cash.balance.create', 'cash.movement.create', 'trip.create', 'fiscal_year.set', 'periods.calendar.set', 'product.cost.set', 'period.close'], ActionCatalog::KEYS);
+        $this->assertSame(['expense.create', 'supplier.create', 'shipping.create', 'budget.put', 'cash.balance.create', 'cash.movement.create', 'trip.create', 'fiscal_year.set', 'periods.calendar.set', 'product.cost.set', 'period.close', 'price.set'], ActionCatalog::KEYS);
         $this->assertSame(ActionCatalog::KEYS, $catalog->keys());
         $translator = static::getContainer()->get('translator');
         foreach (ActionCatalog::KEYS as $key) {

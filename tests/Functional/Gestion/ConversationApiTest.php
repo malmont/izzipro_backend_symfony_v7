@@ -43,12 +43,14 @@ class ConversationApiTest extends WebTestCase
         $this->login(['ROLE_ADMIN']);
         $this->usageMark = (int) $this->em()->getConnection()->fetchOne('SELECT COALESCE(MAX(id), 0) FROM ai_usage');
         $this->em()->getConnection()->executeStatement("UPDATE gestion_document SET status = 'failed' WHERE status = 'reading'"); // base partagée : une lecture à la fois par site
+        $this->em()->getConnection()->executeStatement('UPDATE entreprise SET gestion_price_rounding = NULL, gestion_default_coefficient = NULL, gestion_min_coefficient = NULL'); // réglages de prix par défaut du site
     }
 
     /** Base de test partagée : les unités d'IA consommées ici sont rendues, pour ne pas vider le forfait du mois sous les tests suivants */
     protected function tearDown(): void
     {
         $this->em()->getConnection()->executeStatement('DELETE FROM ai_usage WHERE id > ?', [$this->usageMark]);
+        $this->em()->getConnection()->executeStatement('UPDATE entreprise SET gestion_price_rounding = NULL');
         parent::tearDown();
     }
 
@@ -97,9 +99,10 @@ class ConversationApiTest extends WebTestCase
         $this->assertSame(['questions', 'extracted', 2], [$thread['state'], $thread['document']['status'], $thread['openQuestions']], json_encode($thread['questions']));
         $this->assertSame(["Maison Inconnue $tag", "FI-$tag", $today, 2, 2], [$thread['summary']['supplier'], $thread['summary']['number'], $thread['summary']['date'], $thread['summary']['lines'], $thread['summary']['openQuestions']]);
         $this->assertStringContainsString("Maison Inconnue $tag", $thread['summary']['text']);
-        $this->assertStringContainsString('2 réponse(s)', $thread['summary']['text']);
+        $this->assertSame("Facture FI-$tag du $today, fournisseur Maison Inconnue $tag : 2 lignes, total 84,00 CAD. Il me manque 2 réponses avant de vous montrer ce qui sera créé.", $thread['summary']['text'], 'résumé accordé avec ses nombres (lot IA-ACT-5)');
+        $this->assertStringContainsString('2 réponses', $thread['summary']['text']);
         $questions = array_column($thread['questions'], null, 'id');
-        $this->assertSame(['supplier', 'line:n2'], array_keys($questions), 'le fournisseur inconnu et la ligne sans article reconnu ; la tuque, reconnue par son code, ne pose pas de question');
+        $this->assertSame(['supplier', 'line:n2', 'price.mode'], array_keys($questions), 'le fournisseur inconnu et la ligne sans article reconnu ; la tuque, reconnue par son code, ne pose pas de question d\'article : seul son prix est proposé « gardé » (lot IA-ACT-5, question proposée, pas ouverte)');
         $this->assertSame(['id', 'kind', 'path', 'title', 'text', 'required', 'input', 'options', 'answer'], array_slice(array_keys($questions['supplier']), 0, 9));
         $this->assertSame(['supplier', 'supplier', true, ['type' => 'choice'], null], [$questions['supplier']['kind'], $questions['supplier']['path'], $questions['supplier']['required'], $questions['supplier']['input'], $questions['supplier']['answer']]);
         $this->assertSame(['create' => ['name' => "Maison Inconnue $tag"]], end($questions['supplier']['options'])['value']);
@@ -140,7 +143,7 @@ class ConversationApiTest extends WebTestCase
         $thread = $this->post("/api/gestion/conversations/$id/answers", ['answers' => [['questionId' => 'line:n2', 'value' => ['create' => ['name' => "Écharpe $tag", 'coefficient' => 3]]]]], 200);
         $this->assertSame(['ready', 0, []], [$thread['state'], $thread['openQuestions'], $thread['preview']['issues']]);
         $this->assertSame(['existing', 'create'], array_column($thread['preview']['lines'], 'kind'));
-        $this->assertSame([4500, 2500], [$thread['preview']['lines'][1]['plannedPrice'], $thread['preview']['lines'][0]['currentPrice']], 'coût 15,00 au coefficient 3 ; prix actuel de la tuque');
+        $this->assertSame([4599, 2500], [$thread['preview']['lines'][1]['plannedPrice'], $thread['preview']['lines'][0]['currentPrice']], 'coût 15,00 au coefficient 3 = 45,00, arrondi par défaut du site (lot IA-ACT-5) : 45,99 ; prix actuel de la tuque');
         $this->assertSame([6000, 2000], [$thread['preview']['totals']['lines'], $thread['preview']['totals']['shipping']]);
         $this->assertStringContainsString('vérifiez l\'aperçu', $thread['summary']['text']);
         $hash = $thread['previewHash'];
@@ -287,7 +290,7 @@ class ConversationApiTest extends WebTestCase
         $this->assertSame(['Invoice date', 'EUR'], [$questions['invoice.date']['title'], $questions['unitCost:2']['input']['currency']]);
         $this->assertStringContainsString('1 EUR', $questions['exchangeRate']['text']);
         $this->assertSame(['ht', 'ttc'], array_column($questions['amountsMode']['options'], 'value'));
-        $this->assertStringContainsString('more answer(s)', $thread['summary']['text']);
+        $this->assertStringContainsString('more answers', $thread['summary']['text']);
 
         // Les réponses changent ce que la confirmation recevra : taxes incluses → coûts ramenés hors taxes ; taux ; coût saisi ; date
         foreach ([['invoice.date', '2026-13-45', 'INVALID_DATE'], ['amountsMode', 'peut-être', 'INVALID_VALUE'], ['exchangeRate', 0, 'MUST_BE_POSITIVE'], ['unitCost:2', -5, 'INVALID_AMOUNT'], ['unitCost:2', '12', 'INVALID_AMOUNT']] as [$questionId, $value, $code]) {
@@ -391,7 +394,7 @@ class ConversationApiTest extends WebTestCase
         // Première facture : aucune commande ouverte chez ce fournisseur, donc aucune question de cible ; nouvelle commande, comme avant
         [$id1, $doc1] = $this->startThread($reading("A1-$tag", $today->format('Y-m-d'), [['baseLabel' => 'Veste ajout', 'supplierCode' => "VA-$tag", 'quantity' => 3, 'unitCost' => 1000, 'total' => 3000]], 800));
         $thread = $this->post("/api/gestion/conversations/$id1/answers", ['answers' => [['questionId' => 'exchangeRate', 'value' => 1.5]]], 200);
-        $this->assertSame(['ready', ['supplier', 'exchangeRate'], null], [$thread['state'], array_column($thread['questions'], 'id'), $thread['preview']['target']], 'pas de commande ouverte : pas de question de cible');
+        $this->assertSame(['ready', ['supplier', 'exchangeRate', 'price.mode'], null], [$thread['state'], array_column($thread['questions'], 'id'), $thread['preview']['target']], 'pas de commande ouverte : pas de question de cible ; le prix de l\'article déjà au catalogue est une question proposée (lot IA-ACT-5)');
         $first = $this->post("/api/gestion/conversations/$id1/confirm", ['previewHash' => $thread['previewHash']], 201);
         $commandeId = (int) $first['commande']['id'];
         $lineId = (int) $this->em()->getConnection()->fetchOne('SELECT id FROM commande_line WHERE commande_id = ? AND product_id = ?', [$commandeId, $jacket]);
@@ -409,7 +412,7 @@ class ConversationApiTest extends WebTestCase
         $old = $today->modify('-200 days')->format('Y-m-d');
         [$id2, $doc2] = $this->startThread($reading("A2-$tag", $old, [['baseLabel' => 'Veste ajout', 'supplierCode' => "VA-$tag", 'quantity' => 2, 'unitCost' => 1500, 'total' => 3000], ['baseLabel' => 'Poncho zébré réversible', 'quantity' => 1, 'unitCost' => 2000, 'total' => 2000]], 1200));
         $thread = $this->get("/api/gestion/conversations/$id2");
-        $this->assertSame(['supplier', 'target', 'line:n2', 'exchangeRate', 'period'], array_column($thread['questions'], 'id'), 'la cible juste après le fournisseur ; sans réponse, les questions d\'une nouvelle commande sont là');
+        $this->assertSame(['supplier', 'target', 'line:n2', 'exchangeRate', 'period', 'price.mode'], array_column($thread['questions'], 'id'), 'la cible juste après le fournisseur ; sans réponse, les questions d\'une nouvelle commande sont là ; en fin de liste, le prix de l\'article déjà au catalogue, proposé « gardé » (lot IA-ACT-5)');
         $target = $thread['questions'][1];
         $this->assertSame(['target', 'target', true, ['type' => 'choice'], null], [$target['kind'], $target['path'], $target['required'], $target['input'], $target['answer']]);
         $this->assertSame(['new', ['commandeId' => $commandeId]], array_column($target['options'], 'value'), 'la commande d\'un autre fournisseur n\'est pas proposée');
@@ -422,7 +425,7 @@ class ConversationApiTest extends WebTestCase
 
         // Cible = la commande ouverte : plus de question de période ni de taux (ceux de la commande s'appliquent), le port est demandé
         $thread = $this->post("/api/gestion/conversations/$id2/answers", ['answers' => [['questionId' => 'target', 'value' => ['commandeId' => $commandeId]]]], 200);
-        $this->assertSame(['supplier', 'target', 'line:n2', 'shipping'], array_column($thread['questions'], 'id'));
+        $this->assertSame(['supplier', 'target', 'line:n2', 'shipping', 'price.mode'], array_column($thread['questions'], 'id'), 'en fin de liste, la question proposée du prix de l\'article déjà au catalogue (lot IA-ACT-5)');
         $shipping = $thread['questions'][3];
         $this->assertSame(['shipping', ['add', 'skip'], ['current' => 800, 'added' => 1200, 'total' => 2000]], [$shipping['kind'], array_column($shipping['options'], 'value'), $shipping['shipping']]);
         $this->assertSame('Ajouter 12,00 EUR au frais de port actuel (8,00 EUR) → 20,00 EUR', $shipping['options'][0]['label']);
@@ -432,7 +435,7 @@ class ConversationApiTest extends WebTestCase
         $this->assertContains(['path' => 'shipping', 'code' => 'SHIPPING_COST_ALREADY_SET'], $thread['preview']['issues']);
         // Revenir à une nouvelle commande fait réapparaître ses questions ; changer de fournisseur retire la cible
         $back = $this->post("/api/gestion/conversations/$id2/answers", ['answers' => [['questionId' => 'target', 'value' => 'new']]], 200);
-        $this->assertSame([['supplier', 'target', 'line:n2', 'exchangeRate', 'period'], null], [array_column($back['questions'], 'id'), $back['preview']['target']]);
+        $this->assertSame([['supplier', 'target', 'line:n2', 'exchangeRate', 'period', 'price.mode'], null], [array_column($back['questions'], 'id'), $back['preview']['target']]);
         $changed = $this->post("/api/gestion/conversations/$id2/answers", ['answers' => [['questionId' => 'target', 'value' => ['commandeId' => $commandeId]], ['questionId' => 'supplier', 'value' => ['id' => $other->getId()]]]], 200);
         $ids = array_column($changed['questions'], 'id');
         $this->assertSame(['target', ['commandeId' => $otherCommande], null, false, false], [$changed['questions'][1]['id'], $changed['questions'][1]['options'][1]['value'], $changed['questions'][1]['answer'], in_array('shipping', $ids, true), $changed['questions'][0]['proposed']], 'autre fournisseur : la cible est recalculée, la réponse donnée pour l\'ancien est oubliée');
@@ -561,8 +564,13 @@ class ConversationApiTest extends WebTestCase
         $this->assertSame(['reply', 'applied', 'ignored', 'thread'], array_keys($out));
         $this->assertSame('J\'ai noté la date, le taux, le coût de l\'abat-jour et le nouvel article.', $out['reply']);
         $this->assertSame([['questionId' => 'invoice.date', 'value' => $day->format('Y-m-d')], ['questionId' => 'exchangeRate', 'value' => 1.52], ['questionId' => 'unitCost:2', 'value' => 1250],
-            ['questionId' => 'line:n1', 'value' => ['create' => ['name' => 'Lampe Brise', 'coefficient' => 2]]]], $out['applied']);
+            ['questionId' => 'line:n1', 'value' => ['create' => ['name' => 'Lampe Brise']]]], $out['applied']); // l'option « créer » ne porte plus de coefficient (lot IA-ACT-5)
         $this->assertSame([], $out['ignored']);
+        // … son équivalent dans le nouveau contrat : le coefficient de l'article créé vient de la question « coefficient » de la facture,
+        // proposée ; sans historique chez ce fournisseur, c'est le coefficient par défaut du site, 2, comme avant
+        $proposedCoefficient = array_column($out['thread']['questions'], null, 'id')['coefficient'];
+        $this->assertSame(['suggested', true, 2, 'site', 2], [$proposedCoefficient['answer'], $proposedCoefficient['proposed'], array_column($proposedCoefficient['articles'], 'coefficient', 'name')['Lampe Brise'],
+            array_column($proposedCoefficient['articles'], 'source', 'name')['Lampe Brise'], array_column($out['thread']['preview']['lines'], 'coefficient', 'n')[1]]);
         $answers = array_column($out['thread']['questions'], 'answer', 'id');
         $this->assertSame([$day->format('Y-m-d'), 1.52, 1250], [$answers['invoice.date'], $answers['exchangeRate'], $answers['unitCost:2']]);
         $this->assertSame(['questions', 1], [$out['thread']['state'], $out['thread']['openQuestions']], 'il reste l\'article de la seconde ligne');
@@ -599,10 +607,10 @@ class ConversationApiTest extends WebTestCase
         $say([['questionId' => 'line:n2', 'optionIndex' => count($questions['line:n2']['options']) - 1, 'value' => '', 'name' => 'Lampe torsadée inconnue'],
             ['questionId' => 'exchangeRate', 'optionIndex' => -1, 'value' => '0', 'name' => '']], '');
         $out = $this->post("/api/gestion/conversations/$id/messages?locale=en", ['text' => 'Crée la seconde ligne sous le nom de la première, et mets le taux à 0.'], 200);
-        $this->assertSame([['questionId' => 'line:n2', 'value' => ['create' => ['name' => 'Lampe torsadée inconnue', 'coefficient' => 2]]]], $out['applied'], 'un nom lu sur le document est admis, même s\'il n\'est pas dans la phrase');
+        $this->assertSame([['questionId' => 'line:n2', 'value' => ['create' => ['name' => 'Lampe torsadée inconnue']]]], $out['applied'], 'un nom lu sur le document est admis, même s\'il n\'est pas dans la phrase');
         $this->assertSame([['questionId' => 'exchangeRate', 'reason' => 'MUST_BE_POSITIVE']], $out['ignored'], 'une valeur écrite par le gérant repasse par le contrôle d\'un bouton');
         $this->assertSame(1.52, array_column($out['thread']['questions'], 'answer', 'id')['exchangeRate']);
-        $this->assertSame(['C\'est noté : 1 réponse(s) enregistrée(s).', 'ready'], [$out['reply'], $out['thread']['state']], 'sans phrase du modèle : le texte du serveur, dans la langue du fil');
+        $this->assertSame(['C\'est noté : 1 réponse enregistrée.', 'ready'], [$out['reply'], $out['thread']['state']], 'sans phrase du modèle : le texte du serveur, dans la langue du fil');
         $hash = $out['thread']['previewHash'];
         $commandes = (int) $conn->fetchOne('SELECT COUNT(*) FROM commande');
         $say([['questionId' => 'line:n1', 'optionIndex' => $createIndex, 'value' => '', 'name' => '']], 'Je confirme la facture.');

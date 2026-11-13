@@ -324,7 +324,7 @@ class SequencesApiTest extends WebTestCase
         $this->endOfWrite();
         $recent = $steps()['cash_balance'];
         $this->assertSame(['done', 30, $today->modify('-30 days')->format('Y-m-d')], [$recent['status'], array_column($recent['figures'], 'value', 'key')['ageDays'], array_column($recent['figures'], 'value', 'key')['lastBalanceDate']]);
-        $this->assertStringContainsString('30', $recent['description']);
+        $this->assertSame('Dernier solde saisi il y a 30 jours : la projection de trésorerie est fiable.', $recent['description'], 'libellé accordé avec le chiffre du constat (lot IA-ACT-5), sans terminaison entre parenthèses');
 
         $this->assertSame('todo', $steps()['fixed_costs']['status']);
         $conn->executeStatement("INSERT INTO gestion_cash_movement (label, category, direction, amount_cents, start_date, recurrence, fixed_cost, created_at, updated_at) VALUES ('Loyer', 'rent', 'out', 120000, ?, 'monthly', true, NOW(), NOW())", [$today->modify('-60 days')->format('Y-m-d')]);
@@ -421,6 +421,7 @@ class SequencesApiTest extends WebTestCase
         $this->assertSame(['todo', $missing + 1, $total + 2], [$costs['status'], $figure($costs, 'missing'), $figure($costs, 'total')], 'seuls les articles vendus dans l\'exercice comptent');
         $this->assertSame(['where' => 'app', 'key' => 'articles', 'params' => ['year' => $year, 'filter' => 'missing-cost', 'from' => $from, 'to' => $to], 'url' => null], $costs['screen']);
         $this->assertStringContainsString((string) ($missing + 1), $costs['description']);
+        $this->assertSame(sprintf($missing + 1 === 1 ? '%d article vendu pendant l\'exercice sans coût d\'achat : la marge de l\'exercice est fausse.' : '%d articles vendus pendant l\'exercice sans coût d\'achat : la marge de l\'exercice est fausse.', $missing + 1), $costs['description'], 'libellé accordé avec le nombre d\'articles (lot IA-ACT-5)');
         $listed = $this->articles($costs['screen']['params']);
         $this->assertSame($missing + 1, $listed['total'], 'le nombre de l\'étape et la liste disent la même chose');
         $this->assertCount($missing + 1, $listed['items']);

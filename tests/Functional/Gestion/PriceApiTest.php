@@ -165,7 +165,7 @@ class PriceApiTest extends WebTestCase
         $d = $this->product('D', 1500, null);
         $this->assertSame(['COST_UNKNOWN'], $this->send('POST', '/api/gestion/prix/apercu', ['productIds' => [$d], 'mode' => 'coefficient', 'value' => 2], 200)['rows'][0]['alerts']);
 
-        $this->request('POST', '/api/gestion/prix/apercu', ['mode' => 'pigeon', 'value' => 'x', 'rounding' => 'ends_95']);
+        $this->request('POST', '/api/gestion/prix/apercu', ['mode' => 'pigeon', 'value' => 'x', 'rounding' => 'au_hasard']);
         $this->assertSame([422, ['mode' => 'INVALID_MODE', 'value' => 'MUST_BE_NUMBER', 'rounding' => 'INVALID_ROUNDING', 'productIds' => 'SCOPE_REQUIRED']], [$this->status(), $this->body()['fields']]);
         $this->request('POST', '/api/gestion/prix/apercu', ['productIds' => [$c], 'commandeId' => $cid, 'mode' => 'percent', 'value' => 301]);
         $this->assertSame(['value' => 'OUT_OF_RANGE', 'productIds' => 'SCOPE_AMBIGUOUS'], $this->body()['fields']);
