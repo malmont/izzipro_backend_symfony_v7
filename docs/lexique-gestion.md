@@ -1,4 +1,4 @@
-# Lexique de la gestion et console « prof » — lot W2-APPRENDRE (A-1 à A-3, codé le 13/11/2026)
+# Lexique de la gestion et console « prof » — lot W2-APPRENDRE (A-1 à A-4, codé le 13/11/2026)
 
 Décision du propriétaire après le premier essai réel de la console : elle doit être un **prof**, pour qu'un gérant qui n'y connaît
 rien puisse s'appuyer sur elle. Contrat validé par le chef de projet et le propriétaire le 13/11/2026.
@@ -12,8 +12,9 @@ chiffrée ; `LexiqueService` : les routes), `Gestion/Controller/GestionLexiqueCo
 `translations/lexique.{fr,en}.yaml`. Dans la console : analyse `lexique.term` (`AnalysisCatalog`), bloc `lesson`
 (`ConsoleResponder`). Test : `tests/Functional/Gestion/LexiqueApiTest.php`.
 
-À venir : A-4, le guide rédigé de chaque écran (analyse `screen.guide`). Hors lot : le suivi « vue, comprise, utilisée » par
-utilisateur, les mini-leçons, le bilan du mois : **rien n'est enregistré par utilisateur ici.**
+A-4 (13/11/2026) : le guide rédigé de chaque écran (§ 6 : `ScreenGuides`, `translations/ecrans.{fr,en}.yaml`, analyse
+`screen.guide`). Hors lot : le suivi « vue, comprise, utilisée » par utilisateur, les mini-leçons, le bilan du mois : **rien n'est
+enregistré par utilisateur ici.**
 
 ## 1. Les notions
 
@@ -83,6 +84,12 @@ Chaque chiffre d'une analyse porte **`term`**, la clé de la notion qui l'expliq
 donc ouvrir sa définition, dans la console ou ailleurs. Le résultat de l'exercice (`year.overview`) renvoie à `resultat-entreprise`,
 celui d'une période à `resultat`.
 
+**Règle (lot A-4) : le libellé d'une carte reprend le terme du lexique de sa notion**, avec ce qu'elle compte si besoin : « Taux de
+marque » (jamais « Taux de marge » sous une leçon « Taux de marque »), « Ventes sans coût connu (unités) », « Dépensé (réel), achats de
+marchandise compris », « À garder (verdict) », « Résultat de l'entreprise ». Même règle en anglais (« Profit », « Average order
+value », « Current markup multiplier »). Un chiffre qui mesure autre chose que la notion ne porte pas de `term`. Le test compare
+chaque libellé au terme, dans les deux langues.
+
 ## 4. Dans la console
 
 - **11e analyse du catalogue : `lexique.term`**, paramètre `term` (une clé du lexique : le modèle reçoit la liste clé, terme,
@@ -103,6 +110,16 @@ celui d'une période à `resultat`.
   est ignorée.
 - `GET /api/gestion/ia` : `costs.lesson: 0`.
 
+- **`screen.guide`** (12e analyse, lot A-4) : le guide de l'écran d'où vient la question (§ 6). L'écran est celui du **contexte** :
+  le modèle ne donne aucun paramètre, et s'il nomme un autre écran le serveur ne l'écoute pas ; sans contexte connu, pas de guide.
+  Bloc `{ type: "guide", screen, title, theme, purpose, points, next, source }`. Demandé **seul** (« explique-moi cet écran »,
+  « qu'est-ce que je dois regarder ici ? »), il est assemblé par le serveur : le guide, puis les chiffres du moment de l'écran (ses
+  analyses par défaut, 6 chiffres au plus par analyse), **sans appel 2, 0 unité**. Avec une autre analyse : le guide passe devant, le
+  modèle rédige le reste (1 unité).
+- **Un état qui n'est pas un jugement se dit par une phrase** (lot A-4) : pour un budget « sans prévu » ou une trésorerie « sans
+  solde », le modèle reçoit « Aucun budget n'est prévu pour cette période », « Aucun solde n'a encore été saisi », à reprendre telles
+  quelles, et non un état à glisser dans « est … ».
+
 ## 5. Unités
 
 | Quoi | Unités |
@@ -111,3 +128,28 @@ celui d'une période à `resultat`.
 | Console, définition seule | 0 (un appel au modèle pour choisir, aucune rédaction) |
 | Console, définition et autre analyse | 1 (réponse rédigée) |
 | Leçons ajoutées par le mode « apprendre » | 0 de plus |
+| Route du guide d'un écran ; console, guide seul | 0 |
+| Console, guide et autre analyse | 1 (réponse rédigée) |
+
+## 6. Les guides des écrans (lot A-4)
+
+Pour chaque écran de l'application : **à quoi il sert, ce que veulent dire ses chiffres principaux, quoi faire ensuite**. Écrits par
+le serveur pour un débutant, à partir du relevé de l'application web (36 écrans), dans les deux langues :
+`translations/ecrans.{fr,en}.yaml`, une entrée par code d'écran (« . » et « - » remplacés par « _ »).
+
+`GET /api/gestion/ecrans/{code}/guide?locale=fr|en` (sans IA, gratuit, `ROLE_ADMIN`) ; 404 `SCREEN_GUIDE_NOT_FOUND` :
+
+```
+{ screen, title, theme: { key, label }, purpose,
+  points: [{ label, text, term }],
+  next }
+```
+
+- `points` : de 1 à 6 par écran. **`term`** est la clé du lexique quand le point renvoie à une notion (l'identifiant du point dans le
+  fichier est alors cette clé), sinon `null` : 78 points sur 113 sont reliés.
+- **Quand le libellé de l'écran diffère du terme du lexique, le texte du point fait le lien** (« Taux de marge = Le taux de marque
+  des articles de la commande… ») : le débutant relie les deux mots. Le test l'exige pour chaque point relié, dans les deux langues.
+- Les codes du premier contrat de la console (`accueil`, `periode.resultat`, `article`…) rendent le guide de l'écran du web qui leur
+  correspond (`ScreenGuides::ALIASES`).
+- Ajouter ou corriger un guide : son bloc dans les **deux** fichiers (`purpose`, `points.<id>.label` et `.text`, `next`), mêmes
+  identifiants de points des deux côtés.

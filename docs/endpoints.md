@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (471)
+## Boutique et commun (472)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -419,6 +419,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/documents/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionDocumentController::get` |
 | GET | `/api/gestion/documents` | ROLE_ADMIN | `Gestion\Controller\GestionDocumentController::list` |
 | POST | `/api/gestion/documents` | ROLE_ADMIN | `Gestion\Controller\GestionDocumentController::create` |
+| GET | `/api/gestion/ecrans/{code}/guide` | ROLE_ADMIN | `Gestion\Controller\GestionScreenGuideController::guide` |
 | GET | `/api/gestion/exports/achats.csv` | ROLE_ADMIN | `Gestion\Controller\GestionExportController::purchases` |
 | GET | `/api/gestion/frais-fixes` | ROLE_ADMIN | `Gestion\Controller\GestionFixedCostController::list` |
 | GET | `/api/gestion/ia` | ROLE_ADMIN | `Gestion\Controller\GestionAiController::usage` |
