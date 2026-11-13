@@ -224,7 +224,15 @@ class Book
     {
         return $this->title;
     }
- 
+
+    /** Libellé des listes déroulantes d'EasyAdmin (association vers le livre) ; sans lui, le formulaire d'un chapitre échouait (12/11/2026) */
+    public function __toString(): string
+    {
+        $names = trim(($this->person1FirstName ?? '') . ' & ' . ($this->person2FirstName ?? ''), ' &');
+
+        return trim(($this->title ?? '') . ($names !== '' ? " ({$names})" : '')) ?: (string) $this->id;
+    }
+
     public function setTitle(string $title): static
     {
         $this->title = $title;

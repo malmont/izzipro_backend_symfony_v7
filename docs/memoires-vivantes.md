@@ -482,6 +482,9 @@ Détail : `docs/architecture.md`, « Modules et mode de la plateforme » ; `docs
 
 ## Pièges connus et points à vérifier
 
+- Corrigé le 12/11/2026 (test `tests/Functional/Admin/MemoiresChapterCrudTest.php`) : le formulaire EasyAdmin d'un chapitre
+  échouait dès qu'un livre existait (« Book could not be converted to string ») : `Book`, `Chapter` et `Contributor` ont
+  maintenant un `__toString` (titre, prénoms), libellé de toute association EasyAdmin vers ces entités.
 - Corrigé le 29/09/2026 (tests : `tests/Functional/MemoiresVivantes/BookAccessTest.php`) :
   - impression, PDF et paiement ne vérifiaient que l'existence du livre (l'UUID servait de clé) ;
   - la commande d'impression acceptait une requête anonyme ;

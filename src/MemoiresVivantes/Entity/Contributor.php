@@ -63,6 +63,12 @@ class Contributor
         return $this->firstName;
     }
 
+    /** Libellé des listes déroulantes d'EasyAdmin (12/11/2026) */
+    public function __toString(): string
+    {
+        return trim(($this->firstName ?? '') . ' (' . ($this->role ?? '') . ')', ' ()') ?: (string) $this->id;
+    }
+
     public function setFirstName(string $firstName): self
     {
         $this->firstName = $firstName;

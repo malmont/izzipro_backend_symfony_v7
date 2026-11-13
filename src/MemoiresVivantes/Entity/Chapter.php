@@ -135,6 +135,12 @@ class Chapter
         return $this->title;
     }
 
+    /** Libellé des listes déroulantes d'EasyAdmin (12/11/2026) */
+    public function __toString(): string
+    {
+        return ($this->title ?? '') !== '' ? (string) $this->title : (string) $this->id;
+    }
+
     public function setTitle(string $title): self
     {
         $this->title = $title;
