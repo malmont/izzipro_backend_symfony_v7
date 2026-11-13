@@ -50,6 +50,16 @@ class GestionReprise
     #[ORM\Column(name: 'frozen_results', type: 'json', nullable: true)]
     private ?array $frozenResults = null;
 
+    /**
+     * Tableaux de bord figés des périodes du créneau (lignes entières de `collection_statistiques`), copiés à l'application puis
+     * effacés pour qu'ils se refigent avec les coûts de la reprise ; remis à l'identique à l'annulation (lot REPRISE-TDB,
+     * 13/11/2026). Null pour une reprise appliquée avant ce lot : son annulation efface seulement ceux qui se sont figés pendant.
+     *
+     * @var list<array<string, mixed>>|null
+     */
+    #[ORM\Column(name: 'frozen_dashboards', type: 'json', nullable: true)]
+    private ?array $frozenDashboards = null;
+
     public function getId(): ?int { return $this->id; }
     public function getAppliedAt(): ?\DateTimeImmutable { return $this->appliedAt; }
     public function setAppliedAt(\DateTimeImmutable $at): static { $this->appliedAt = $at; return $this; }
@@ -70,4 +80,6 @@ class GestionReprise
     /** @return list<array<string, mixed>>|null */
     public function getFrozenResults(): ?array { return $this->frozenResults; }
     public function setFrozenResults(?array $rows): static { $this->frozenResults = $rows; return $this; }
+    public function getFrozenDashboards(): ?array { return $this->frozenDashboards; }
+    public function setFrozenDashboards(?array $rows): static { $this->frozenDashboards = $rows; return $this; }
 }

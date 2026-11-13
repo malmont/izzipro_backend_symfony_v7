@@ -184,11 +184,24 @@ des ventes mais sans commandes fournisseurs donne un coût aux articles déjà v
     reprise n'était active sur les sites à la mise en ligne ;
   - contrat HTTP inchangé ; migration `Version20261225100000` (une colonne) et `scripts/migrate_all_v2_reprise_fige.sh`.
   Test : `RepriseHistoriqueApiTest::testCancellingARecoveryRestoresTheFrozenResultsItErased`.
-- **Constat, hors de ce lot** : le tableau de bord figé d'une période fermée (`collection_statistiques`, rendu par
-  `GET /api/dashboard/collection/{id}`) n'est effacé ni par l'application ni par l'annulation. Pendant une reprise, une période fermée
-  a donc un **résultat** (`GET /api/periodes/{id}/resultat`) recalculé avec les coûts de reprise, et un **tableau de bord** figé avant,
-  qui ne les voit pas : coût d'achat, marge et taux peuvent différer entre les deux lectures de la même période. Après l'annulation,
-  les deux redeviennent ceux d'avant. À traiter dans un lot à part si les deux chiffres se lisent sur un même écran.
+- **Lot REPRISE-TDB (13/11/2026)**, même mécanisme pour le tableau de bord figé d'une période fermée (`collection_statistiques`,
+  rendu par `GET /api/dashboard/collection/{id}`). Avant : ni l'application ni l'annulation ne l'effaçaient ; pendant une reprise,
+  une période fermée avait un **résultat** recalculé avec les coûts de reprise et un **tableau de bord** figé avant, qui ne les voyait
+  pas. Maintenant :
+  - à l'application, chaque ligne `collection_statistiques` des périodes du créneau est copiée **entière** dans
+    `gestion_reprise.frozen_dashboards`, puis effacée : le tableau de bord se refige à sa lecture suivante, avec les achats de la
+    reprise ;
+  - à l'annulation, ceux qui se sont figés pendant la reprise sont effacés, puis les lignes copiées sont remises à l'identique,
+    identifiant compris ;
+  - une période hors du créneau n'est jamais touchée ; une période du créneau sans tableau de bord figé avant la reprise reste sans
+    tableau de bord figé après l'annulation ; une période créée par la reprise disparaît avec le sien ;
+  - le journal (`gestion-reprise`) porte `frozenResultsErased` et `frozenDashboardsErased` à l'application,
+    `frozenDashboardsRestored` à l'annulation ;
+  - une reprise appliquée avant ce lot n'a pas de copie (`frozen_dashboards` null) : son annulation efface les tableaux de bord
+    figés pendant la reprise et ne remet rien. Aucune reprise n'existait sur les sites à la mise en ligne ;
+  - les statistiques figées par commande (`commande_statistiques`) ne sont pas concernées : elles suivent leur commande ;
+  - contrat HTTP inchangé ; migration `Version20261226100000` (une colonne) et `scripts/migrate_all_v2_reprise_tdb.sh`.
+  Test : `RepriseHistoriqueApiTest::testARecoveryErasesTheFrozenDashboardsOfItsWindowAndItsCancellationRestoresThem`.
 - `GET /api/gestion/reprise` → `{ active, appliedAt, months, from, to, estimateCoefficient, periods: [{ id, periodKey, name,
   created }], commandes: [{ id, periodKey, periodName, productCount, estimatedCount, investment }], skipped }` ; `active: false`
   et le reste `null` sans reprise.

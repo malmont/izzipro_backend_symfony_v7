@@ -188,6 +188,10 @@ class RepriseHistoriqueService
         // reprise pour que l'annulation les remette à l'identique (lot REPRISE-FIGE, 12/11/2026)
         $frozen = $this->frozenRows($from, $to);
         $this->forgetFrozenResults($from, $to);
+        // Même règle pour les tableaux de bord figés des périodes du créneau (lot REPRISE-TDB, 13/11/2026) : sans cela, ils gardaient
+        // les chiffres d'avant la reprise, en désaccord avec le résultat recalculé
+        $dashboards = $this->frozenRows($from, $to, 'collection_statistiques');
+        $this->forgetFrozenDashboards($from, $to);
 
         $periods = [];
         foreach ($em->getRepository(Collections::class)->findBy(['id' => $periodIds], ['startDateCollection' => 'ASC']) as $period) {
@@ -195,10 +199,11 @@ class RepriseHistoriqueService
         }
         $reprise = (new GestionReprise())->setAppliedAt(new \DateTimeImmutable())->setMonths($months)->setStartDate($from)->setEndDate($to->modify('-1 day'))
             ->setEstimateCoefficient($coefficient)->setCreatedPeriodIds($created)->setSummary(['periods' => $periods, 'commandes' => $commandes, 'skipped' => $skipped])
-            ->setFrozenResults($frozen);
+            ->setFrozenResults($frozen)->setFrozenDashboards($dashboards);
         $em->persist($reprise);
         $em->flush();
-        $this->audit->record('gestion-reprise', $reprise->getId(), 'apply', null, $reprise->getSummary() + ['months' => $months, 'estimateCoefficient' => $coefficient]);
+        $this->audit->record('gestion-reprise', $reprise->getId(), 'apply', null, $reprise->getSummary() + ['months' => $months, 'estimateCoefficient' => $coefficient,
+            'frozenResultsErased' => count($frozen), 'frozenDashboardsErased' => count($dashboards)]);
 
         return $this->state();
     }
@@ -246,8 +251,11 @@ class RepriseHistoriqueService
         // Résultats calculés pendant la reprise effacés, puis ceux d'avant remis à l'identique : même ligne, même date de gel, même JSON
         $this->forgetFrozenResults($reprise->getStartDate(), $reprise->getEndDate()->modify('+1 day'));
         $restored = $this->restoreFrozenResults($reprise);
+        // Tableaux de bord : ceux qui se sont figés pendant la reprise sont effacés, ceux d'avant remis à l'identique (lot REPRISE-TDB)
+        $this->forgetFrozenDashboards($reprise->getStartDate(), $reprise->getEndDate()->modify('+1 day'));
+        $restoredDashboards = $this->restoreRows('collection_statistiques', $reprise->getFrozenDashboards() ?? []);
         $summary = ['commandesRemoved' => count($commandes), 'productsDetached' => $detached, 'periodsRemoved' => $removedPeriods];
-        $this->audit->record('gestion-reprise', $reprise->getId(), 'cancel', $reprise->getSummary(), $summary + ['frozenResultsRestored' => $restored]);
+        $this->audit->record('gestion-reprise', $reprise->getId(), 'cancel', $reprise->getSummary(), $summary + ['frozenResultsRestored' => $restored, 'frozenDashboardsRestored' => $restoredDashboards]);
         $em->remove($reprise);
         $em->flush();
 
@@ -360,10 +368,14 @@ class RepriseHistoriqueService
      *
      * @return list<array<string, mixed>>
      */
-    private function frozenRows(\DateTimeImmutable $from, \DateTimeImmutable $to): array
+    private function frozenRows(\DateTimeImmutable $from, \DateTimeImmutable $to, string $table = 'period_result'): array
     {
+        if (!in_array($table, ['period_result', 'collection_statistiques'], true)) {
+            throw new \LogicException('table figée inconnue : ' . $table);
+        }
+
         return $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
-            "SELECT r.* FROM period_result r JOIN collections c ON c.id = r.collection_id WHERE c.kind = 'period' AND c.start_date_collection >= :from AND c.start_date_collection < :to ORDER BY r.id",
+            "SELECT r.* FROM $table r JOIN collections c ON c.id = r.collection_id WHERE c.kind = 'period' AND c.start_date_collection >= :from AND c.start_date_collection < :to ORDER BY r.id",
             ['from' => $from->format('Y-m-d'), 'to' => $to->format('Y-m-d')]
         );
     }
@@ -371,18 +383,28 @@ class RepriseHistoriqueService
     /** Remet les résultats figés gardés par la reprise, pour les périodes qui existent encore ; rend le nombre de lignes remises */
     private function restoreFrozenResults(GestionReprise $reprise): int
     {
-        $rows = $reprise->getFrozenResults() ?? [];
-        if ($rows === []) {
+        return $this->restoreRows('period_result', $reprise->getFrozenResults() ?? []);
+    }
+
+    /**
+     * Remet dans une table figée (`period_result`, `collection_statistiques`) les lignes gardées par la reprise, pour les périodes
+     * qui existent encore ; rend le nombre de lignes remises.
+     *
+     * @param list<mixed> $rows
+     */
+    private function restoreRows(string $table, array $rows): int
+    {
+        if ($rows === [] || !in_array($table, ['period_result', 'collection_statistiques'], true)) {
             return 0;
         }
         $conn = $this->emProvider->getEntityManager()->getConnection();
-        $columns = array_flip($conn->fetchFirstColumn("SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'period_result'"));
+        $columns = array_flip($conn->fetchFirstColumn('SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ?', [$table]));
         $restored = 0;
         foreach ($rows as $row) {
             if (!is_array($row) || !isset($row['collection_id']) || $conn->fetchOne('SELECT 1 FROM collections WHERE id = ?', [$row['collection_id']]) === false) {
                 continue; // période retirée depuis (créée par la reprise, ou supprimée) : rien à remettre
             }
-            $conn->insert('period_result', array_intersect_key($row, $columns)); // colonnes d'aujourd'hui seulement, au cas où l'une aurait disparu
+            $conn->insert($table, array_intersect_key($row, $columns)); // colonnes d'aujourd'hui seulement, au cas où l'une aurait disparu
             ++$restored;
         }
 
@@ -395,5 +417,14 @@ class RepriseHistoriqueService
         $em = $this->emProvider->getEntityManager();
         $em->createQuery('DELETE FROM App\Entity\PeriodResult r WHERE r.collection IN (SELECT c.id FROM App\Entity\Collections c WHERE c.kind = :k AND c.startDateCollection >= :from AND c.startDateCollection < :to)')
             ->setParameter('k', Collections::KIND_PERIOD)->setParameter('from', $from->format('Y-m-d'))->setParameter('to', $to->format('Y-m-d'))->execute();
+    }
+
+    /** Tableaux de bord figés des périodes du créneau effacés : refigés à la lecture suivante */
+    private function forgetFrozenDashboards(\DateTimeImmutable $from, \DateTimeImmutable $to): void
+    {
+        $this->emProvider->getEntityManager()->getConnection()->executeStatement(
+            "DELETE FROM collection_statistiques WHERE collection_id IN (SELECT id FROM collections WHERE kind = 'period' AND start_date_collection >= :from AND start_date_collection < :to)",
+            ['from' => $from->format('Y-m-d'), 'to' => $to->format('Y-m-d')]
+        );
     }
 }

@@ -236,6 +236,92 @@ class RepriseHistoriqueApiTest extends WebTestCase
         $this->assertFalse($this->get('/api/gestion/reprise')['active']);
     }
 
+    /**
+     * Lot REPRISE-TDB (13/11/2026) : le tableau de bord figé d'une période fermée du créneau suit la reprise. Appliquée, elle l'efface
+     * (il se refige avec les achats de la reprise) et en garde la copie ; annulée, elle remet la ligne d'origine à l'identique. Avant,
+     * il gardait les chiffres d'avant la reprise, en désaccord avec le résultat recalculé.
+     */
+    public function testARecoveryErasesTheFrozenDashboardsOfItsWindowAndItsCancellationRestoresThem(): void
+    {
+        $tag = bin2hex(random_bytes(2));
+        $calendar = static::getContainer()->get(PeriodCalendar::class);
+        $today = $calendar->today();
+        $calendar->ensurePeriods($today->modify('-830 days'));
+        $dedans = $calendar->periodFor($today->modify('-400 days'));
+        $dedansSansFige = $calendar->periodFor($today->modify('-290 days'));
+        $dehors = $calendar->periodFor($today->modify('-800 days'));
+        $this->assertNotNull($dedans);
+        $this->assertNotNull($dedansSansFige);
+        $this->assertNotNull($dehors);
+        [$a, $b, $c] = [(int) $dedans->getId(), (int) $dedansSansFige->getId(), (int) $dehors->getId()];
+        $this->assertCount(3, array_unique([$a, $b, $c]));
+        $this->assertTrue($calendar->isClosed($dedans) && $calendar->isClosed($dedansSansFige) && $calendar->isClosed($dehors), 'trois périodes fermées');
+
+        // Un article sans coût, vendu dans la première période : la reprise lui crée un achat, donc le tableau de bord change pendant
+        $conn = $this->em()->getConnection();
+        $conn->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type) VALUES (nextval('product_id_seq'), :n, 3000, false, 5, NOW(), :s, 'standard')", ['n' => "Tableau $tag", 's' => "tableau-$tag"]);
+        $productId = (int) $conn->fetchOne('SELECT id FROM product WHERE slug = ?', ["tableau-$tag"]);
+        $variantId = (int) $this->create(ProductVariant::class, ['product' => $this->em()->find(Product::class, $productId)])->getId();
+        $at = \DateTimeImmutable::createFromInterface($dedans->getStartDateCollection())->modify('+5 days')->setTime(12, 0);
+        $this->item($this->order(1, 3, 2, $at), $variantId, 2, 3000);
+        $conn = $this->em()->getConnection();
+        $conn->executeStatement('DELETE FROM collection_statistiques WHERE collection_id IN (?, ?, ?)', [$a, $b, $c]); // état de départ : aucun tableau de bord figé
+        $this->endOfWrite();
+        $rows = fn (int $periodId): array => $this->em()->getConnection()->fetchFirstColumn('SELECT CAST(row_to_json(r) AS text) FROM collection_statistiques r WHERE collection_id = ? ORDER BY id', [$periodId]);
+        $audit = fn (string $action): array => json_decode((string) $this->em()->getConnection()->fetchOne("SELECT after_state FROM content_audit_log WHERE resource = 'gestion-reprise' AND action = ? ORDER BY id DESC LIMIT 1", [$action]), true);
+
+        // Première lecture d'une période fermée : le tableau de bord se fige
+        $original = $this->get("/api/dashboard/collection/$a");
+        $outside = $this->get("/api/dashboard/collection/$c");
+        $before = $rows($a);
+        $beforeOutside = $rows($c);
+        $this->assertCount(1, $before, 'figé à la première lecture');
+        $this->assertCount(1, $beforeOutside);
+        $this->assertSame([], $rows($b));
+        $this->assertSame($original, $this->get("/api/dashboard/collection/$a"), 'relu tel quel');
+
+        // Application : les tableaux de bord figés du créneau sont effacés et leur copie gardée, ligne entière ; hors créneau, rien ne bouge
+        $this->post('/api/gestion/reprise/appliquer', ['months' => 20, 'estimateCoefficient' => 2], 201);
+        $this->assertSame([], $rows($a), 'effacé : il se refige avec les achats de la reprise');
+        $this->assertSame($beforeOutside, $rows($c), 'période hors du créneau : intacte');
+        $kept = json_decode((string) $this->em()->getConnection()->fetchOne('SELECT frozen_dashboards FROM gestion_reprise ORDER BY id DESC LIMIT 1'), true);
+        $mine = array_values(array_filter($kept, fn (array $r) => (int) $r['collection_id'] === $a));
+        $this->assertCount(1, $mine);
+        $this->assertSame([], array_filter($kept, fn (array $r) => (int) $r['collection_id'] === $c), 'la copie ne prend que le créneau');
+        $columns = $this->em()->getConnection()->fetchFirstColumn("SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'collection_statistiques' ORDER BY ordinal_position");
+        $this->assertSame($columns, array_keys($mine[0]), 'toutes les colonnes de la ligne');
+        $this->assertGreaterThanOrEqual(1, $audit('apply')['frozenDashboardsErased'], 'le journal dit combien de tableaux de bord ont été effacés');
+        $during = $this->get("/api/dashboard/collection/$a");
+        $this->assertNotSame($original, $during, 'refigé pendant la reprise, avec l\'achat qu\'elle a créé');
+        $duringRows = $rows($a);
+        $this->assertCount(1, $duringRows);
+        $this->assertNotSame($before, $duringRows);
+        $this->get("/api/dashboard/collection/$b");
+        $this->assertCount(1, $rows($b), 'la seconde période se fige pendant la reprise');
+        $this->assertSame($outside, $this->get("/api/dashboard/collection/$c"));
+
+        // Annulation : la ligne d'origine revient à l'identique ; ce qui s'est figé pendant la reprise disparaît
+        $this->post('/api/gestion/reprise/annuler', [], 200);
+        $this->assertSame($before, $rows($a), 'même ligne, colonne par colonne, identifiant compris');
+        $this->assertSame($original, $this->get("/api/dashboard/collection/$a"), 'le tableau de bord rendu est celui d\'avant la reprise');
+        $this->assertSame($before, $rows($a), 'la lecture ne refige rien');
+        $this->assertSame([], $rows($b), 'une période sans tableau de bord figé avant la reprise reste sans tableau de bord figé');
+        $this->assertSame($beforeOutside, $rows($c), 'hors créneau : toujours intacte');
+        $this->assertGreaterThanOrEqual(1, $audit('cancel')['frozenDashboardsRestored'], 'le journal dit combien de tableaux de bord ont été remis');
+
+        // Reprise appliquée avant ce lot (sans copie) : son annulation efface ce qui s'est figé pendant, et ne remet rien
+        $this->post('/api/gestion/reprise/appliquer', ['months' => 20, 'estimateCoefficient' => 2], 201);
+        $this->em()->getConnection()->executeStatement('UPDATE gestion_reprise SET frozen_dashboards = NULL');
+        $this->em()->clear();
+        $this->get("/api/dashboard/collection/$a");
+        $this->assertCount(1, $rows($a), 'figé pendant la reprise');
+        $this->post('/api/gestion/reprise/annuler', [], 200);
+        $this->assertSame([], $rows($a), 'sans copie : effacé, il se refigera à la lecture suivante sans les achats de la reprise');
+        $this->assertSame(0, $audit('cancel')['frozenDashboardsRestored']);
+        $this->assertSame($beforeOutside, $rows($c));
+        $this->assertFalse($this->get('/api/gestion/reprise')['active']);
+    }
+
     /** État « vente » des produits : prix, prix d'achat, stock, variantes */
     private function snapshot(array $ids): array
     {
