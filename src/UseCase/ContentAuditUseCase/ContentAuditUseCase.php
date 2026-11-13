@@ -26,7 +26,7 @@ class ContentAuditUseCase
     /** @throws ContentAuditException 400 */
     public function list(?string $resource, ?string $resourceId, ?string $page, ?string $limit): array
     {
-        if ($resource !== null && !preg_match('/^[a-z-]{1,40}$/', $resource)) {
+        if ($resource !== null && !preg_match('/^[a-z_-]{1,40}$/', $resource)) {
             throw new ContentAuditException(400, 'resource invalide.');
         }
         if ($resourceId !== null && !preg_match('/^\d{1,20}$/', $resourceId)) {

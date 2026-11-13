@@ -66,7 +66,7 @@ class AiQuotaService implements ResetInterface
         if (!$user instanceof User || $book === null) {
             return false;
         }
-        if (in_array('ROLE_ADMIN', $user->getRoles(), true) || in_array('ROLE_SUPER_ADMIN', $user->getRoles(), true)) {
+        if (\App\Security\TeamRoles::opensMemoires($user)) { // équipe : administrateur ou biographe (13/11/2026)
             return false;
         }
 

@@ -20,7 +20,7 @@ final class RoleAssignmentPolicy
         'Caisse (point de vente)' => 'ROLE_USER_POS',
         'Responsable de caisse (postes, remboursements ; sans back-office)' => 'ROLE_POS_MANAGER',
         'Utilisateur' => 'ROLE_USER',
-    ];
+    ] + TeamRoles::ALL; // rôles d'équipe par application (13/11/2026), journalisés par TeamRoleService
 
     /** @return array<string, string> choix du formulaire */
     public function choices(bool $editorIsSuperAdmin): array
@@ -51,6 +51,6 @@ final class RoleAssignmentPolicy
 
         $unknownPrevious = array_diff($previous, $known, [self::SUPER_ADMIN]);
 
-        return array_values(array_unique([...$roles, ...$unknownPrevious]));
+        return TeamRoles::normalize(array_values(array_unique([...$roles, ...$unknownPrevious])));
     }
 }

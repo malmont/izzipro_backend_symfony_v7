@@ -3,6 +3,7 @@
 namespace App\MemoiresVivantes\Security;
 
 use App\MemoiresVivantes\Entity\Chapter;
+use App\Security\TeamRoles;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Authorization\Voter\Voter;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -26,7 +27,7 @@ class ChapterVoter extends Voter
             return false;
         }
 
-        if (in_array('ROLE_ADMIN', $user->getRoles(), true) || in_array('ROLE_SUPER_ADMIN', $user->getRoles(), true)) {
+        if (TeamRoles::opensMemoires($user)) { // administrateur du site ou biographe de l'équipe (13/11/2026)
             return true;
         }
 

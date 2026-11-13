@@ -37,7 +37,7 @@ class ReservationApiController extends AbstractController
         }
 
         $roles = method_exists($user, 'getRoles') ? $user->getRoles() : [];
-        $isAdmin = in_array('ROLE_ADMIN', $roles, true) || in_array('ROLE_SUPER_ADMIN', $roles, true);
+        $isAdmin = \App\Security\TeamRoles::opensMemoires($roles); // administrateur du site ou biographe de l'équipe (13/11/2026)
 
         $filters = [];
 
@@ -142,6 +142,8 @@ class ReservationApiController extends AbstractController
                 'data' => (array) new ReservationOutputDto($reservation)
             ], Response::HTTP_CREATED);
 
+        } catch (\App\Exception\InvalidBiographerException $e) {
+            return $this->json(['success' => false, 'error' => $e->getMessage(), 'message' => $e->getMessage(), 'code' => \App\Exception\InvalidBiographerException::CODE], Response::HTTP_BAD_REQUEST);
         } catch (\DomainException $e) {
             return $this->json([
                 'success' => false,
@@ -255,7 +257,7 @@ class ReservationApiController extends AbstractController
                     'message' => 'Réservation introuvable pour l\'identifiant fourni.'
                 ], Response::HTTP_NOT_FOUND);
             }
-            $isAdmin = in_array('ROLE_ADMIN', $user->getRoles(), true) || in_array('ROLE_SUPER_ADMIN', $user->getRoles(), true);
+            $isAdmin = \App\Security\TeamRoles::opensMemoires($user); // administrateur du site ou biographe de l'équipe (13/11/2026)
             if (!$isAdmin && $existing->getBiographer()?->getId() !== $user->getId()) {
                 return $this->json([
                     'success' => false,

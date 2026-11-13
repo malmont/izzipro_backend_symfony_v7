@@ -33,6 +33,10 @@ class ReservationService
         $biographer = null;
         if ($dto->biographer_id) {
             $biographer = $tenantEm->getRepository(User::class)->find($dto->biographer_id);
+            // Équipe (13/11/2026) : administrateur du site ou biographe ROLE_MEMOIRES_BIOGRAPHE, sinon 400 BIOGRAPHER_INVALID
+            if (!$biographer instanceof User || !\App\Security\TeamRoles::opensMemoires($biographer)) {
+                throw new \App\Exception\InvalidBiographerException((int) $dto->biographer_id);
+            }
         } elseif ($dto->book_id) {
             try {
                 $book = $tenantEm->getRepository(Book::class)->find(Uuid::fromString($dto->book_id));
@@ -42,8 +46,8 @@ class ReservationService
             } catch (\Throwable $e) {
                 // Si l'UUID n'est pas valide ou livre introuvable, on continue sans biographe lié
             }
-        } elseif ($currentUser) {
-            $biographer = $currentUser;
+        } elseif ($currentUser && \App\Security\TeamRoles::opensMemoires($currentUser)) {
+            $biographer = $currentUser; // un client connecté qui réserve n'est pas son propre biographe
         }
 
         $connection = $tenantEm->getConnection();

@@ -30,7 +30,7 @@ class ChapterViewerContextSubscriber implements EventSubscriberInterface
             return;
         }
         try {
-            ChapterOutputDto::$viewerIsAdmin = $this->security->getUser() !== null && $this->security->isGranted('ROLE_ADMIN');
+            ChapterOutputDto::$viewerIsAdmin = $this->security->getUser() !== null && $this->security->isGranted(\App\Security\MemoiresTeamVoter::ATTRIBUTE);
         } catch (\Throwable) {
             ChapterOutputDto::$viewerIsAdmin = false;
         }

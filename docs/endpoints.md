@@ -106,43 +106,44 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/videos` | PUBLIC_ACCESS | `Controller\VideoApiController\VideoApiController::list` |
 | POST | `/api/videos` | ROLE_ADMIN | `Controller\VideoApiController\VideoApiController::create` |
 
-## Mémoires Vivantes (101)
+## Mémoires Vivantes (103)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
-| GET | `/api/memoires/admin/ai-quotas/usage` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\AiQuotaAdminController::usage` |
-| GET | `/api/memoires/admin/ai-quotas` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\AiQuotaAdminController::show` |
-| PUT | `/api/memoires/admin/ai-quotas` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\AiQuotaAdminController::update` |
-| POST | `/api/memoires/admin/book-type-chapters/{id}/prompt/optimize` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::optimizeChapterPrompt` |
-| PUT | `/api/memoires/admin/book-type-chapters/{id}/questions/order` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::reorderQuestions` |
-| POST | `/api/memoires/admin/book-type-chapters/{id}/questions` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::addQuestion` |
-| DELETE | `/api/memoires/admin/book-type-chapters/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::deleteChapter` |
-| PUT, PATCH | `/api/memoires/admin/book-type-chapters/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::updateChapter` |
-| DELETE | `/api/memoires/admin/book-type-roles/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::deleteRole` |
-| PUT, PATCH | `/api/memoires/admin/book-type-roles/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::updateRole` |
-| GET | `/api/memoires/admin/book-types/prompt-variables` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::promptVariables` |
-| PUT | `/api/memoires/admin/book-types/{id}/chapters/order` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::reorderChapters` |
-| POST | `/api/memoires/admin/book-types/{id}/chapters` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::addChapter` |
-| POST | `/api/memoires/admin/book-types/{id}/prompt/optimize` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::optimizeTypePrompt` |
-| POST | `/api/memoires/admin/book-types/{id}/roles` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::addRole` |
-| POST | `/api/memoires/admin/book-types/{id}/test` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::testType` |
-| DELETE | `/api/memoires/admin/book-types/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::deleteType` |
-| GET | `/api/memoires/admin/book-types/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::getType` |
-| PUT, PATCH | `/api/memoires/admin/book-types/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::updateType` |
-| GET | `/api/memoires/admin/book-types` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::listTypes` |
-| POST | `/api/memoires/admin/book-types` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::createType` |
-| GET | `/api/memoires/admin/mobile-users/{userId}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\MobileUserAdminController::show` |
-| GET | `/api/memoires/admin/mobile-users` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\MobileUserAdminController::list` |
-| GET | `/api/memoires/admin/payments` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\PaymentsAdminController::list` |
-| GET | `/api/memoires/admin/pricing` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\PricingAdminController::show` |
-| PUT | `/api/memoires/admin/pricing` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\PricingAdminController::update` |
-| DELETE | `/api/memoires/admin/questions/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::deleteQuestion` |
-| PUT, PATCH | `/api/memoires/admin/questions/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::updateQuestion` |
-| GET | `/api/memoires/admin/revenue` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\RevenueAdminController::overview` |
-| DELETE | `/api/memoires/admin/users/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\UserManagementController::delete` |
-| PUT, PATCH | `/api/memoires/admin/users/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\UserManagementController::update` |
-| GET | `/api/memoires/admin/users` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\UserManagementController::list` |
-| POST | `/api/memoires/admin/users` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\UserManagementController::create` |
+| GET | `/api/memoires/admin/ai-quotas/usage` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\AiQuotaAdminController::usage` |
+| GET | `/api/memoires/admin/ai-quotas` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\AiQuotaAdminController::show` |
+| PUT | `/api/memoires/admin/ai-quotas` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\AiQuotaAdminController::update` |
+| POST | `/api/memoires/admin/book-type-chapters/{id}/prompt/optimize` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::optimizeChapterPrompt` |
+| PUT | `/api/memoires/admin/book-type-chapters/{id}/questions/order` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::reorderQuestions` |
+| POST | `/api/memoires/admin/book-type-chapters/{id}/questions` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::addQuestion` |
+| DELETE | `/api/memoires/admin/book-type-chapters/{id}` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::deleteChapter` |
+| PUT, PATCH | `/api/memoires/admin/book-type-chapters/{id}` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::updateChapter` |
+| DELETE | `/api/memoires/admin/book-type-roles/{id}` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::deleteRole` |
+| PUT, PATCH | `/api/memoires/admin/book-type-roles/{id}` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::updateRole` |
+| GET | `/api/memoires/admin/book-types/prompt-variables` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::promptVariables` |
+| PUT | `/api/memoires/admin/book-types/{id}/chapters/order` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::reorderChapters` |
+| POST | `/api/memoires/admin/book-types/{id}/chapters` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::addChapter` |
+| POST | `/api/memoires/admin/book-types/{id}/prompt/optimize` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::optimizeTypePrompt` |
+| POST | `/api/memoires/admin/book-types/{id}/roles` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::addRole` |
+| POST | `/api/memoires/admin/book-types/{id}/test` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::testType` |
+| DELETE | `/api/memoires/admin/book-types/{id}` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::deleteType` |
+| GET | `/api/memoires/admin/book-types/{id}` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::getType` |
+| PUT, PATCH | `/api/memoires/admin/book-types/{id}` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::updateType` |
+| GET | `/api/memoires/admin/book-types` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::listTypes` |
+| POST | `/api/memoires/admin/book-types` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::createType` |
+| GET | `/api/memoires/admin/mobile-users/{userId}` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\MobileUserAdminController::show` |
+| GET | `/api/memoires/admin/mobile-users` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\MobileUserAdminController::list` |
+| GET | `/api/memoires/admin/payments` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\PaymentsAdminController::list` |
+| GET | `/api/memoires/admin/pricing` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\PricingAdminController::show` |
+| PUT | `/api/memoires/admin/pricing` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\PricingAdminController::update` |
+| DELETE | `/api/memoires/admin/questions/{id}` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::deleteQuestion` |
+| PUT, PATCH | `/api/memoires/admin/questions/{id}` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::updateQuestion` |
+| GET | `/api/memoires/admin/revenue` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\RevenueAdminController::overview` |
+| PUT | `/api/memoires/admin/users/{id}/team` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN, MEMOIRES_TEAM)]` | `MemoiresVivantes\Controller\Admin\UserManagementController::team` |
+| DELETE | `/api/memoires/admin/users/{id}` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN, MEMOIRES_TEAM)]` | `MemoiresVivantes\Controller\Admin\UserManagementController::delete` |
+| PUT, PATCH | `/api/memoires/admin/users/{id}` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(ROLE_ADMIN, MEMOIRES_TEAM)]` | `MemoiresVivantes\Controller\Admin\UserManagementController::update` |
+| GET | `/api/memoires/admin/users` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(MEMOIRES_TEAM)]` | `MemoiresVivantes\Controller\Admin\UserManagementController::list` |
+| POST | `/api/memoires/admin/users` | ROLE_ADMIN ou ROLE_MEMOIRES_BIOGRAPHE + `#[IsGranted(MEMOIRES_TEAM)]` | `MemoiresVivantes\Controller\Admin\UserManagementController::create` |
 | GET | `/api/memoires/ai-models` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ChapterController::getAiModels` |
 | POST | `/api/memoires/auth/activate` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\AccountActivationController::activate` |
 | GET | `/api/memoires/book-fonts` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\BookFontController::list` |
@@ -209,6 +210,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/memoires/print/orders/{orderId}` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPrintApiController::getOrder` |
 | POST | `/api/memoires/print/payment-intent` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPrintApiController::createPaymentIntent` |
 | GET | `/api/memoires/questions` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\QuestionController::list` |
+| GET | `/api/memoires/team` | IS_AUTHENTICATED_FULLY + `#[IsGranted(MEMOIRES_TEAM)]` | `MemoiresVivantes\Controller\TeamController::list` |
 | POST | `/api/webhooks/lulu` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\LuluWebhookController::handleLuluWebhook` |
 | POST | `/api/webhooks/revenuecat` | PUBLIC_ACCESS | `App\MemoiresVivantes\Controller\RevenueCatWebhookController` |
 

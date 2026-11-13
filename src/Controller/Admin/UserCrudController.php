@@ -29,6 +29,7 @@ class UserCrudController extends BaseTenantCrudController
         UserPasswordHasherInterface $userPasswordHasher,
         TenantEntityManagerProvider $emProvider,
         private readonly RoleAssignmentPolicy $rolePolicy,
+        private readonly \App\Services\TeamRoleService\TeamRoleService $teamRoles,
         private readonly ?\App\Services\PosAuditService\PosPinService $posPins = null,
         private readonly ?\App\Services\PosAuditService\PosAuditService $posAudit = null,
         private readonly ?\App\Services\AccountService\SessionIdentityService $sessions = null // jetons après un changement de courriel
@@ -96,6 +97,7 @@ class UserCrudController extends BaseTenantCrudController
         $this->hashPassword($entityInstance);
         $this->applyRolePolicy($entityInstance, []);
         parent::persistEntity($entityManager, $entityInstance);
+        $this->recordTeamDiff();
     }
 
     public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
@@ -116,6 +118,7 @@ class UserCrudController extends BaseTenantCrudController
             }
         }
         parent::updateEntity($entityManager, $entityInstance);
+        $this->recordTeamDiff();
         // Courriel changé dans EasyAdmin : les jetons de renouvellement suivent la nouvelle adresse (suite de S7)
         if ($entityInstance instanceof User && isset($original['email']) && $original['email'] !== $entityInstance->getEmail()) {
             $this->sessions?->transferRefreshTokens((string) $original['email'], (string) $entityInstance->getEmail());
@@ -196,6 +199,21 @@ class UserCrudController extends BaseTenantCrudController
                 $previousRoles,
                 $this->isGranted(RoleAssignmentPolicy::SUPER_ADMIN)
             ));
+            // Rôles d'équipe par application (13/11/2026) : chaque gain ou perte est journalisé (content_audit_log, user_team)
+            $this->pendingTeamDiff = [$entityInstance, array_values(array_diff($previousRoles, ['ROLE_USER'])), array_values(array_diff($entityInstance->getRoles(), ['ROLE_USER']))];
+        }
+    }
+
+    /** @var array{0: User, 1: list<string>, 2: list<string>}|null */
+    private ?array $pendingTeamDiff = null;
+
+    /** Journal des rôles d'équipe, après l'enregistrement (l'identifiant d'un compte créé n'existe qu'ensuite) */
+    private function recordTeamDiff(): void
+    {
+        if ($this->pendingTeamDiff !== null) {
+            [$user, $before, $after] = $this->pendingTeamDiff;
+            $this->pendingTeamDiff = null;
+            $this->teamRoles->recordDiff($user, $before, $after);
         }
     }
     

@@ -20,6 +20,28 @@ class UserRepository extends EntityRepository implements PasswordUpgraderInterfa
     // public function __construct(ManagerRegistry $registry) { ... }
 
 
+    /**
+     * Comptes portant un rôle (colonne JSON lue en texte), par nom puis prénom ; rôles d'équipe (13/11/2026).
+     *
+     * @return list<User>
+     */
+    public function findByRole(string $role): array
+    {
+        $ids = $this->getEntityManager()->getConnection()->fetchFirstColumn(
+            'SELECT id FROM "user" WHERE roles::text LIKE :like ORDER BY lower(lastname), lower(firstname), id',
+            ['like' => '%"' . $role . '"%']
+        );
+        if ($ids === []) {
+            return [];
+        }
+        $byId = [];
+        foreach ($this->findBy(['id' => $ids]) as $user) {
+            $byId[$user->getId()] = $user;
+        }
+
+        return array_values(array_filter(array_map(fn ($id) => $byId[(int) $id] ?? null, $ids)));
+    }
+
     public function save(User $entity, bool $flush = false): void
     {
         $this->getEntityManager()->persist($entity);

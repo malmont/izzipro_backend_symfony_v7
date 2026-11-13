@@ -75,7 +75,7 @@ class PricingService implements ResetInterface
             return false;
         }
 
-        return !in_array('ROLE_ADMIN', $user->getRoles(), true) && !in_array('ROLE_SUPER_ADMIN', $user->getRoles(), true);
+        return !\App\Security\TeamRoles::opensMemoires($user); // l'équipe (administrateur ou biographe) commande sans payer
     }
 
     /** Devise fixée par le premier exemplaire facturé (payé ou en attente de paiement) ; null si aucun */

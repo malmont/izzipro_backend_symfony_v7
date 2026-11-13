@@ -107,7 +107,7 @@ class MobileUserAdminTest extends BookTypeApiTestCase
         $this->assertSame(['mobile', 'mobile', 1], [$byId[$mobile['id']]['population'], $byId[$mobile['id']]['signupChannel'], $byId[$mobile['id']]['mobileBooksCount']]);
         $this->assertSame(['web_client', 'web_invite', 0], [$byId[$webUser['id']]['population'], $byId[$webUser['id']]['signupChannel'], $byId[$webUser['id']]['mobileBooksCount']]);
         $this->assertNotNull($byId[$webUser['id']]['lastActivityAt'], 'dérivée du livre web');
-        $this->assertSame('team', $byId[$adminIds[0]]['population']);
+        $this->assertSame('admin', $byId[$adminIds[0]]['population'], 'administrateur sans rôle de biographe (13/11/2026) ; team = ROLE_MEMOIRES_BIOGRAPHE');
         foreach (['id', 'email', 'fullName', 'roles', 'role', 'booksCount', 'createdAt', 'lastActivityAt'] as $key) {
             $this->assertArrayHasKey($key, $byId[$mobile['id']]);
         }

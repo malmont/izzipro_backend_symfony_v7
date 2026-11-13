@@ -74,7 +74,7 @@ class BookController extends AbstractController
         /** @var \App\MemoiresVivantes\Repository\BookRepository $bookRepo */
         $bookRepo = $em->getRepository(Book::class);
 
-        $isAdmin = in_array('ROLE_ADMIN', $user->getRoles(), true) || in_array('ROLE_SUPER_ADMIN', $user->getRoles(), true);
+        $isAdmin = \App\Security\TeamRoles::opensMemoires($user); // administrateur du site ou biographe (13/11/2026) : livres de l'entreprise
         $scope = $request->query->get('scope', $isAdmin ? 'all' : 'my');
         $targetUserId = $request->query->get('userId') ? (int) $request->query->get('userId') : null;
 

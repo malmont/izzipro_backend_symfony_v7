@@ -19,7 +19,7 @@ class DeleteMobileAccountUseCase
      */
     public function execute(User $user, string $password): array
     {
-        if (in_array('ROLE_ADMIN', $user->getRoles(), true) || in_array('ROLE_SUPER_ADMIN', $user->getRoles(), true)) {
+        if (\App\Security\TeamRoles::opensMemoires($user)) { // administrateur ou biographe de l'équipe (13/11/2026)
             throw new ApiErrorException('ADMIN_ACCOUNT', 'Un compte administrateur ne peut pas être supprimé depuis l\'application.', 403);
         }
         if ($password === '' || !$this->hasher->isPasswordValid($user, $password)) {

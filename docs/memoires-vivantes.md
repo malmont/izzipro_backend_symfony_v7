@@ -49,6 +49,7 @@ Tous sous `/api/memoires/` : liste complète et accès dans `docs/endpoints.md`,
 | Types de livre (lecture) | `GET /book-types`, `/book-types/{code}`, `GET /questions`, `GET /ai-models` | `BookTypeController`, `QuestionController` |
 | Polices des livres | `GET /book-fonts` | `BookFontController` |
 | Administration | `/admin/book-types…`, `/admin/book-type-chapters…`, `/admin/book-type-roles…`, `/admin/questions…`, `/admin/users…`, `/admin/ai-quotas` (+ `/usage`), `/admin/mobile-users` (+ `/{userId}`), `/admin/pricing`, `/admin/payments`, `/admin/revenue` | `Controller/Admin/` (`#[IsGranted('ROLE_ADMIN')]`) |
+| Équipe (13/11/2026) | `GET /team` (biographes, liste légère) ; `PUT /admin/users/{id}/team` (poser ou retirer le rôle, ROLE_ADMIN) ; `GET /admin/users?population=` | `TeamController`, `Admin/UserManagementController` ; voter `MEMOIRES_TEAM` (administrateur ou biographe) |
 | Activation de compte | `POST /auth/activate` | `AccountActivationController` ; l'invitation (`POST /admin/users` sans mot de passe) envoie un e-mail avec le lien (`emails/memoires_account_invitation.html.twig`) |
 
 Liens envoyés aux utilisateurs (activation, partage de chapitre, retour de paiement) : `Services/FrontendUrlResolver`
@@ -287,10 +288,74 @@ console, pas depuis l'application).
   l'identité anonymisée. Tests : `MobileAccountAndCoverTest`. La page web publique « Supprimer mon compte »
   demandée par Google est du ressort du frontend (texte + renvoi vers l'application ou l'adresse de contact du site).
 
+## Équipe de Mémoires Vivantes : rôle de biographe (lot MV-BIOGRAPHE, 13/11/2026)
+
+Décision du propriétaire : **des rôles d'équipe propres à chaque application, sur la base de comptes commune, sans
+comptes séparés.** Jusque-là, Mémoires Vivantes reconnaissait son équipe au seul `ROLE_ADMIN`, partagé avec la
+boutique, la caisse et la gestion : la console Équipe listait tous les administrateurs du site.
+
+- **Rôle** : `ROLE_MEMOIRES_BIOGRAPHE` (`App\Security\TeamRoles::MEMOIRES_BIOGRAPHE`), rôle d'accès pur, hors
+  `role_hierarchy`, posé **en plus** des rôles existants d'un compte de la base commune ; aucune migration (colonne JSON
+  `roles`). Un compte qui le reçoit garde au moins `ROLE_USER_INTERNET` (`TeamRoles::COMPANION`, règle `^/api`). Il ne
+  donne ni EasyAdmin, ni boutique, ni caisse, ni gestion. **`ROLE_ADMIN` garde tout ce qu'il avait** : partout où le code
+  testait « admin ou super admin », il teste maintenant `TeamRoles::opensMemoires()` (= `ROLE_ADMIN`, `ROLE_SUPER_ADMIN`
+  ou biographe) ; attribut de sécurité `MEMOIRES_TEAM` (`Security/MemoiresTeamVoter`) pour `#[IsGranted]`.
+- **Ce que le rôle ouvre** : livres de l'entreprise (`GET /books` en portée `all` et `?userId=`, `BookVoter`,
+  `ChapterVoter`, donc chapitres, contributeurs, invitations, PDF, impression ; commande d'impression sans paiement et
+  sans quota IA comme l'administrateur) ; rendez-vous (`/api/reservations` : liste de l'entreprise, confirmation ;
+  `biographer_id` d'une réservation doit désigner un administrateur ou un biographe, sinon **400 `BIOGRAPHER_INVALID`** ;
+  le biographe par défaut n'est l'utilisateur connecté que s'il est de l'équipe) ; console Équipe : `GET /admin/users`
+  et `POST /admin/users` (inviter un client ; `role: ROLE_ADMIN` → 403 `FORBIDDEN`). Un compte biographe ne peut pas se
+  supprimer depuis l'application mobile (403 `ADMIN_ACCOUNT`, comme un administrateur).
+- **Restent à `ROLE_ADMIN`** (méthode par méthode dans `UserManagementController`, classe dans les autres contrôleurs
+  d'administration) : attribution des rôles, modification et suppression des comptes, types de livre, questions, quotas
+  IA, tarifs, paiements, revenus, utilisateurs mobile, montant imposé d'un lien de paiement.
+- **Population** (`UserPopulationResolver`) : `team` = porteur du rôle de biographe, et lui seul ; **`admin`** (nouvelle
+  valeur) = `ROLE_ADMIN` ou `ROLE_SUPER_ADMIN` sans ce rôle ; puis `mobile`, `web_client`. La population mobile exclut
+  les biographes comme les administrateurs. Le front doit accepter `admin`.
+- **`GET /admin/users`** : filtre serveur **`?population=team|admin|mobile|web_client`** (autre valeur : 400
+  `POPULATION_INVALID`), pagination `page`/`limit` et `X-Total-Count` inchangés (avec le filtre, la population est
+  calculée sur tous les comptes puis paginée) ; champs ajoutés à chaque utilisateur : `isBiographer` (bool) et
+  `teamRoles` (liste des rôles d'équipe portés, toutes applications). `role` (`ROLE_ADMIN` | `ROLE_USER`) ne change pas,
+  et `PUT /admin/users/{id}` avec `role` **conserve** les rôles d'équipe.
+- **`GET /team`** (administrateur ou biographe) → `[{id, fullName, email, teamRoles}]`, par nom : liste légère pour le
+  choix du biographe d'un rendez-vous. 401 anonyme, 403 client.
+- **`PUT /admin/users/{id}/team`** (`ROLE_ADMIN`), corps `{"biographer": true|false}` → 200 `{id, isBiographer,
+  teamRoles, roles, changed}` ; idempotent (`changed: false`, rien d'écrit ni de journalisé) ; 400 `INVALID_BODY`, 403
+  `OWNER_PROTECTED` (compte super admin, éditeur non super admin), 404 `USER_NOT_FOUND`. Pas de garde « dernier
+  biographe » (une équipe peut être vide) ; se retirer soi-même est permis.
+- **Journal** : chaque attribution ou retrait écrit dans `content_audit_log` (table commune du site, écran d'audit
+  existant, `GET /api/content-audit?resource=user_team`) : `resource = user_team`, `resource_id` = id du compte,
+  `action = grant | revoke`, `before_state` / `after_state` = rôles, `fields` = le rôle + un repère (`easyadmin`,
+  `console`), `user_identifier` = l'éditeur (vide depuis la commande).
+- **EasyAdmin** : « Biographe (Mémoires Vivantes) » est proposé dans les rôles attribuables (`RoleAssignmentPolicy`,
+  liste `TeamRoles::ALL`) ; `UserCrudController` journalise les rôles d'équipe gagnés ou perdus via
+  `TeamRoleService::recordDiff()`.
+- **Reprise des équipes existantes** : aucune attribution automatique. Commande, site par site, sur la liste du
+  propriétaire : `app:memoires:team:grant <code du site> <courriel> [--revoke]` (journalisée, repère `console`).
+- **Sans régression** : `tests/Functional/Security/MemoiresBiographeRoleMatrixTest.php` appelle toutes les routes de l'API
+  avec un compte biographe et un compte client : hors `/api/memoires/` et `/api/reservations`, même réponse ;
+  `tests/Functional/MemoiresVivantes/MemoiresTeamTest.php` (attribution, journal, populations, filtre, `/team`, livres de
+  l'entreprise, écrans réservés, commande).
+
+### Convention commune des rôles d'équipe (à reprendre pour la Boussole et les suivantes)
+
+Une application qui veut son équipe réutilise **exactement** ce mécanisme, sans en créer un second :
+1. déclarer le rôle dans `App\Security\TeamRoles::ALL` (libellé EasyAdmin => rôle) : il devient attribuable dans
+   l'écran EasyAdmin des utilisateurs et son attribution y est journalisée sans autre code ;
+2. attribuer et retirer par `App\Services\TeamRoleService\TeamRoleService::set($user, $role, $member, $marks)` (idempotent,
+   rôle compagnon garanti, journal `user_team` avec `grant` / `revoke`) ; lister par `members($role)` ;
+3. renvoyer `teamRoles` (`TeamRoles::of($roles)`) sur les utilisateurs de ses API ; un champ booléen propre
+   (`isBiographer`) est facultatif ;
+4. garder ses propres règles d'accès (voter ou `#[IsGranted]`) : `TeamRoles` ne décide de rien, il nomme les rôles ;
+   `ROLE_ADMIN` garde ses droits dans chaque application ;
+5. une commande de reprise par application (`app:<application>:team:grant`) ; jamais d'attribution automatique.
+
 ## Console d'administration : populations et utilisateurs mobile
 
 Rien en base ne rattache un compte à une population : elle est **calculée** (`Services/UserPopulationResolver`),
-avec une priorité : `team` (ROLE_ADMIN : biographes) ; `mobile` (inscrit depuis l'application, `signup_channel =
+avec une priorité : `team` (biographe `ROLE_MEMOIRES_BIOGRAPHE`, voir « Équipe » ; jusqu'au 13/11/2026 : tout
+ROLE_ADMIN) ; `admin` (administrateur du site sans ce rôle, depuis le 13/11/2026) ; `mobile` (inscrit depuis l'application, `signup_channel =
 mobile`, **ou** propriétaire d'au moins un livre `channel = mobile`) ; `web_client` (tous les autres : clients dont
 un biographe fait le livre, collaborateurs invités, comptes de la boutique : mêmes rôles, indiscernables). Un client
 web qui crée un livre dans l'application devient donc « mobile ». L'application Living Memory envoie
@@ -301,7 +366,8 @@ mobile fait son propre livre, avec des quotas et, à venir, des chapitres payant
 
 - `GET /admin/users` : champs **ajoutés** à chaque utilisateur : `population`, `signupChannel`, `createdAt`,
   `lastActivityAt` (dernier des : dernière connexion, modification d'un livre ou d'un chapitre, appel IA),
-  `mobileBooksCount`. Cette liste contient tous les comptes du site, clients de la boutique compris.
+  `mobileBooksCount` ; depuis le 13/11/2026 `isBiographer`, `teamRoles` et le filtre `?population=` (voir « Équipe »).
+  Sans filtre, cette liste contient tous les comptes du site, clients de la boutique compris.
 - **Pagination de `GET /admin/users` (S8, 26/10/2026)** : `?page=` (défaut 1) et `?limit=` (défaut **et plafond 200**), ordre des
   identifiants ; total dans l'en-tête **`X-Total-Count`** (exposé au navigateur par `Access-Control-Expose-Headers`) ; le corps reste
   un **tableau** d'utilisateurs, page au-delà de la fin : `[]`. Sans paramètre : les 200 premiers comptes (aujourd'hui, tous les comptes
