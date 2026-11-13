@@ -31,7 +31,7 @@ class CollectionService
         $userRepository = $em->getRepository(User::class);
         $user = $userRepository->find($inputDTO->userId);
         if (!$user) {
-            throw new \Exception('User not found');
+            throw new \Exception('Utilisateur introuvable');
         }
 
         $collection = new Collections();

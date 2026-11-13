@@ -5,6 +5,7 @@ namespace App\Gestion\Services;
 use App\Services\AccountingService\AccountingCsv;
 use App\Services\CaisseService\StoreClock;
 use App\Services\TenantEntityManagerProvider;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
  * Export comptable des achats (lot G5, 10/11/2026, `docs/gestion-mise-a-niveau.md` § 3) : une ligne par produit de commande
@@ -19,8 +20,12 @@ class PurchaseExportService
     public const TYPE_SHIPPING = 'Frais de port';
     public const TYPE_EXPENSE = 'Note de frais';
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly StoreClock $clock, private readonly \App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency)
-    {
+    public function __construct(
+        private readonly TenantEntityManagerProvider $emProvider,
+        private readonly StoreClock $clock,
+        private readonly \App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency,
+        private readonly ?TranslatorInterface $translator = null,
+    ) {
     }
 
     /**
@@ -80,19 +85,39 @@ class PurchaseExportService
     }
 
     /** @param array<string, mixed> $export */
-    public function csv(array $export): string
+    public function csv(array $export, string $locale = 'fr'): string
     {
         $cur = $export['currency'];
-        $header = ['Type', 'Collection', 'Commande', 'Date', 'Fournisseur', 'Libellé', 'Quantité', "Coût unitaire ($cur)", "Total ($cur)", 'Coefficient', 'Transporteur / Type de note', 'Devise d\'achat', 'Taux'];
+        $tr = fn (string $key, array $params, string $fallback): string => $this->translator?->trans($key, $params, 'gestion', $locale) ?? $fallback;
+        $header = [
+            $tr('export.purchases.headers.type', [], 'Type'),
+            $tr('export.purchases.headers.collection', [], 'Collection'),
+            $tr('export.purchases.headers.order', [], 'Commande'),
+            $tr('export.purchases.headers.date', [], 'Date'),
+            $tr('export.purchases.headers.supplier', [], 'Fournisseur'),
+            $tr('export.purchases.headers.label', [], 'Libellé'),
+            $tr('export.purchases.headers.quantity', [], 'Quantité'),
+            $tr('export.purchases.headers.unit_cost', ['%cur%' => $cur], "Coût unitaire ($cur)"),
+            $tr('export.purchases.headers.total', ['%cur%' => $cur], "Total ($cur)"),
+            $tr('export.purchases.headers.coefficient', [], 'Coefficient'),
+            $tr('export.purchases.headers.detail', [], 'Transporteur / Type de note'),
+            $tr('export.purchases.headers.purchase_currency', [], "Devise d'achat"),
+            $tr('export.purchases.headers.rate', [], 'Taux'),
+        ];
+        $types = [
+            self::TYPE_PRODUCT => $tr('export.purchases.types.product', [], self::TYPE_PRODUCT),
+            self::TYPE_SHIPPING => $tr('export.purchases.types.shipping', [], self::TYPE_SHIPPING),
+            self::TYPE_EXPENSE => $tr('export.purchases.types.expense', [], self::TYPE_EXPENSE),
+        ];
         $lines = [];
         foreach ($export['rows'] as $r) {
-            $lines[] = [$r['type'], $r['collection'], $r['commande'], $r['date'], $r['fournisseur'], $r['label'], $r['quantity'], self::money($r['unitCost']), self::money($r['total']), $r['coefficient'] === null ? '' : str_replace('.', ',', (string) $r['coefficient']), $r['detail'], $r['purchaseCurrency'] ?? '', isset($r['exchangeRate']) ? str_replace('.', ',', (string) $r['exchangeRate']) : ''];
+            $lines[] = [$types[$r['type']] ?? $r['type'], $r['collection'], $r['commande'], $r['date'], $r['fournisseur'], $r['label'], $r['quantity'], self::money($r['unitCost']), self::money($r['total']), $r['coefficient'] === null ? '' : str_replace('.', ',', (string) $r['coefficient']), $r['detail'], $r['purchaseCurrency'] ?? '', isset($r['exchangeRate']) ? str_replace('.', ',', (string) $r['exchangeRate']) : ''];
         }
         $t = $export['totals'];
-        $lines[] = ['Total produits', '', '', '', '', '', '', '', self::money($t['products']), '', '', '', ''];
-        $lines[] = ['Total frais de port', '', '', '', '', '', '', '', self::money($t['shipping']), '', '', '', ''];
-        $lines[] = ['Total notes de frais', '', '', '', '', '', '', '', self::money($t['expenses']), '', '', '', ''];
-        $lines[] = ['Total achats', '', '', '', '', '', '', '', self::money($t['total']), '', '', '', ''];
+        $lines[] = [$tr('export.purchases.totals.products', [], 'Total produits'), '', '', '', '', '', '', '', self::money($t['products']), '', '', '', ''];
+        $lines[] = [$tr('export.purchases.totals.shipping', [], 'Total frais de port'), '', '', '', '', '', '', '', self::money($t['shipping']), '', '', '', ''];
+        $lines[] = [$tr('export.purchases.totals.expenses', [], 'Total notes de frais'), '', '', '', '', '', '', '', self::money($t['expenses']), '', '', '', ''];
+        $lines[] = [$tr('export.purchases.totals.all', [], 'Total achats'), '', '', '', '', '', '', '', self::money($t['total']), '', '', '', ''];
 
         return AccountingCsv::write($header, $lines);
     }

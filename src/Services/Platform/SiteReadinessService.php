@@ -9,6 +9,7 @@ use App\Services\TenantConnectionManager;
 use App\Services\TenantPublicHostResolver;
 use App\Services\Platform\CustomDomainService;
 use Psr\Log\LoggerInterface;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
  * Cheminement de préparation d'un site (console de pilotage, 05/11/2026) : une liste ordonnée d'étapes, calculée en SQL direct sur la
@@ -40,20 +41,22 @@ class SiteReadinessService
         private readonly CustomDomainService $domains,
         private readonly LoggerInterface $logger,
         private readonly ?\App\Services\Help\HelpCatalogService $help = null, // aide intégrée (07/11/2026)
+        private readonly ?TranslatorInterface $translator = null,
     ) {
     }
 
     /** @return array<string, mixed> cheminement du site courant */
-    public function forCurrentSite(): array
+    public function forCurrentSite(string $locale = 'fr'): array
     {
         $code = (string) $this->tenants->getCurrentTenantCode();
 
-        return $this->forSite($code);
+        return $this->forSite($code, $locale);
     }
 
     /** @return array{code: string, percent: int, done: int, total: int, next: ?array<string, mixed>, steps: list<array<string, mixed>>} */
-    public function forSite(string $code): array
+    public function forSite(string $code, string $locale = 'fr'): array
     {
+        $locale = $locale === 'en' ? 'en' : 'fr';
         $tenant = $this->connector->tenant($code);
         $empty = ['code' => $code, 'percent' => 0, 'done' => 0, 'total' => 0, 'next' => null, 'steps' => [], 'links' => null];
         if ($tenant === null) {
@@ -61,7 +64,7 @@ class SiteReadinessService
         }
         try {
             $pdo = $this->connector->pdo($tenant['dbname']);
-            ['steps' => $steps, 'links' => $links] = $this->build($code, $pdo);
+            ['steps' => $steps, 'links' => $links] = $this->build($code, $pdo, $locale);
         } catch (\Throwable $e) {
             $this->logger->warning(sprintf('[Readiness] %s : cheminement illisible : %s', $code, $e->getMessage()));
 
@@ -90,7 +93,10 @@ class SiteReadinessService
                 continue;
             }
             $g = $s['group'];
-            $groups[$g] ??= ['key' => $g, 'label' => self::groupLabel($g), 'blockingTodo' => 0, 'improvementTodo' => 0, 'done' => 0, 'pending' => 0, 'total' => 0];
+            $groupName = $locale === 'en' && $g === 'ai' && $this->translator !== null
+                ? $this->translator->trans('groups.ai', [], 'readiness', 'en')
+                : self::groupLabel($g, $locale);
+            $groups[$g] ??= ['key' => $g, 'label' => $groupName, 'blockingTodo' => 0, 'improvementTodo' => 0, 'done' => 0, 'pending' => 0, 'total' => 0];
             $groups[$g]['total']++;
             if ($s['status'] === 'done') {
                 $groups[$g]['done']++;
@@ -120,7 +126,7 @@ class SiteReadinessService
      * @param list<array<string, mixed>> $steps
      * @param array<string, mixed> $e fiche Entreprise (colonnes lues par build)
      */
-    private function managementSteps(array &$steps, \PDO $pdo, array $e, ?array $address, array $keys, ?array $host, array $effective): void
+    private function managementSteps(array &$steps, \PDO $pdo, array $e, ?array $address, array $keys, ?array $host, array $effective, string $locale = 'fr'): void
     {
         $add = function (string $key, string $title, string $description, bool $done, array $action, bool $blocking, ?string $appScreen, ?array $figures = null) use (&$steps) {
             $steps[] = ['key' => $key, 'group' => 'app.management', 'title' => $title, 'description' => $description, 'status' => $done ? 'done' : 'todo', 'where' => 'backend',
@@ -131,46 +137,125 @@ class SiteReadinessService
         // Bloquantes
         // Pas d'étape « clé d'activation » (retirée le 12/11/2026) : l'application trouve le site par son code court puis se connecte avec un
         // compte administrateur ; la clé IZ-ADM reste facultative (elle permet de couper l'accès d'un appareil).
-        $add('management.short_code', 'Code court du site', 'Le code que l\'application demande à la première connexion pour trouver votre site.', !empty($host['shortCode']), $screen('short_code'), true, null);
+        $add('management.short_code',
+            $this->tr($locale, 'steps.management.short_code.title', [], 'Code court du site'),
+            $this->tr($locale, 'steps.management.short_code.description', [], 'Le code que l\'application demande à la première connexion pour trouver votre site.'),
+            !empty($host['shortCode']), $screen('short_code'), true, null);
         $admins = $this->count($pdo, '"user"', "roles::text LIKE '%ROLE_ADMIN%'");
-        $add('management.admin', 'Un compte administrateur', $admins > 0 ? sprintf('%d compte(s) administrateur peuvent se connecter à l\'application de gestion.', $admins) : 'Créez un compte administrateur : seul ce rôle se connecte à l\'application de gestion.', $admins > 0, $screen('users'), true, null, ['admins' => $admins]);
+        $add('management.admin',
+            $this->tr($locale, 'steps.management.admin.title', [], 'Un compte administrateur'),
+            $admins > 0
+                ? $this->tr($locale, 'steps.management.admin.description.done', ['%count%' => $admins], sprintf('%d compte(s) administrateur peuvent se connecter à l\'application de gestion.', $admins))
+                : $this->tr($locale, 'steps.management.admin.description.todo', [], 'Créez un compte administrateur : seul ce rôle se connecte à l\'application de gestion.'),
+            $admins > 0, $screen('users'), true, null, ['admins' => $admins]);
         $current = $this->count($pdo, 'collections', "kind = 'period' AND COALESCE(del, false) = false AND start_date_collection <= NOW() AND end_date_collection >= CURRENT_DATE");
-        $add('management.period', 'Période de gestion en cours', $current > 0 ? 'La période en cours existe : achats, notes de frais et résultat s\'y rangent.' : 'Ouvrez l\'application de gestion : la période en cours est créée automatiquement selon le calendrier du site.', $current > 0, ['type' => 'registry', 'feature' => 'gestion.periods'], true, 'periodes');
+        $add('management.period',
+            $this->tr($locale, 'steps.management.period.title', [], 'Période de gestion en cours'),
+            $current > 0
+                ? $this->tr($locale, 'steps.management.period.description.done', [], 'La période en cours existe : achats, notes de frais et résultat s\'y rangent.')
+                : $this->tr($locale, 'steps.management.period.description.todo', [], 'Ouvrez l\'application de gestion : la période en cours est créée automatiquement selon le calendrier du site.'),
+            $current > 0, ['type' => 'registry', 'feature' => 'gestion.periods'], true, 'periodes');
         $month = $gestion['fiscal_year_start_month'] ?? null;
-        $add('management.fiscal_year', 'Mois de début d\'exercice', $month !== null ? sprintf('Exercice qui commence en %s : il sert au bilan de l\'année.', ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'][(int) $month] ?? $month) : 'Choisissez le mois de début de votre exercice (écran Exercice de l\'application) : il sert au bilan de l\'année.', $month !== null, $screen('gestion'), true, 'exercice');
+        $monthFr = $month !== null ? (['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'][(int) $month] ?? $month) : '';
+        $monthEn = $month !== null ? (['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][(int) $month] ?? (string) $month) : '';
+        $add('management.fiscal_year',
+            $this->tr($locale, 'steps.management.fiscal_year.title', [], 'Mois de début d\'exercice'),
+            $month !== null
+                ? $this->tr($locale, 'steps.management.fiscal_year.description.done', ['%month%' => $monthEn], sprintf('Exercice qui commence en %s : il sert au bilan de l\'année.', $monthFr))
+                : $this->tr($locale, 'steps.management.fiscal_year.description.todo', [], 'Choisissez le mois de début de votre exercice (écran Exercice de l\'application) : il sert au bilan de l\'année.'),
+            $month !== null, $screen('gestion'), true, 'exercice');
         $localeOk = trim((string) ($e['currency'] ?? '')) !== '' && (trim((string) ($e['pos_timezone'] ?? '')) !== '' || trim((string) ($address['country'] ?? '')) !== '');
-        $add('management.locale', 'Devise et fuseau du site', 'Montants dans la devise du site et jours comptés au fuseau du magasin (déduit de l\'adresse, sinon réglé sur la fiche).', $localeOk, ['type' => 'registry', 'feature' => 'site.locale'], true, null);
+        $add('management.locale',
+            $this->tr($locale, 'steps.management.locale.title', [], 'Devise et fuseau du site'),
+            $this->tr($locale, 'steps.management.locale.description', [], 'Montants dans la devise du site et jours comptés au fuseau du magasin (déduit de l\'adresse, sinon réglé sur la fiche).'),
+            $localeOk, ['type' => 'registry', 'feature' => 'site.locale'], true, null);
         // Améliorations
-        $add('management.periods_calendar', 'Calendrier des périodes à confirmer', $gestion['purchase_period_frequency'] ?? null ? 'Calendrier des périodes choisi.' : 'Trimestres par défaut : confirmez-les, ou choisissez des semestres ou des mois.', ($gestion['purchase_period_frequency'] ?? null) !== null, ['type' => 'registry', 'feature' => 'gestion.periods'], false, 'periodes');
+        $add('management.periods_calendar',
+            $this->tr($locale, 'steps.management.periods_calendar.title', [], 'Calendrier des périodes à confirmer'),
+            ($gestion['purchase_period_frequency'] ?? null)
+                ? $this->tr($locale, 'steps.management.periods_calendar.description.done', [], 'Calendrier des périodes choisi.')
+                : $this->tr($locale, 'steps.management.periods_calendar.description.todo', [], 'Trimestres par défaut : confirmez-les, ou choisissez des semestres ou des mois.'),
+            ($gestion['purchase_period_frequency'] ?? null) !== null, ['type' => 'registry', 'feature' => 'gestion.periods'], false, 'periodes');
         $articles = "product p WHERE p.product_type = 'standard' AND COALESCE(p.rental_enabled, false) = false";
         $total = (int) $this->one($pdo, "SELECT COUNT(*) FROM $articles");
         $missing = (int) $this->one($pdo, "SELECT COUNT(*) FROM $articles AND (p.purchase_price IS NULL OR p.purchase_price <= 0) AND NOT EXISTS (SELECT 1 FROM commande_line l WHERE l.product_id = p.id AND l.unit_cost_cents IS NOT NULL)");
-        $add('management.purchase_cost', 'Coût d\'achat des articles', $missing > 0 ? sprintf('%d article(s) sur %d sans coût d\'achat : leur marge reste inconnue.', $missing, $total) : ($total > 0 ? sprintf('Les %d articles ont un coût d\'achat : marges connues.', $total) : 'Aucun article vendu pour l\'instant.'), $missing === 0, $screen('products'), false, 'articles', ['missing' => $missing, 'total' => $total]);
+        $costDesc = $missing > 0
+            ? $this->tr($locale, 'steps.management.purchase_cost.description.missing', ['%count%' => $missing, '%total%' => $total], sprintf('%d article(s) sur %d sans coût d\'achat : leur marge reste inconnue.', $missing, $total))
+            : ($total > 0
+                ? $this->tr($locale, 'steps.management.purchase_cost.description.complete', ['%count%' => $total], sprintf('Les %d articles ont un coût d\'achat : marges connues.', $total))
+                : $this->tr($locale, 'steps.management.purchase_cost.description.empty', [], 'Aucun article vendu pour l\'instant.'));
+        $add('management.purchase_cost', $this->tr($locale, 'steps.management.purchase_cost.title', [], 'Coût d\'achat des articles'), $costDesc, $missing === 0, $screen('products'), false, 'articles', ['missing' => $missing, 'total' => $total]);
         $suppliers = $this->count($pdo, 'fournisseur');
-        $add('management.suppliers', 'Fournisseurs', $suppliers > 0 ? sprintf('%d fournisseur(s) enregistré(s).', $suppliers) : 'Ajoutez vos fournisseurs : ils servent aux commandes et à la lecture des factures.', $suppliers > 0, $screen('fournisseurs'), false, 'fournisseurs', ['suppliers' => $suppliers]);
+        $add('management.suppliers',
+            $this->tr($locale, 'steps.management.suppliers.title', [], 'Fournisseurs'),
+            $suppliers > 0
+                ? $this->tr($locale, 'steps.management.suppliers.description.done', ['%count%' => $suppliers], sprintf('%d fournisseur(s) enregistré(s).', $suppliers))
+                : $this->tr($locale, 'steps.management.suppliers.description.todo', [], 'Ajoutez vos fournisseurs : ils servent aux commandes et à la lecture des factures.'),
+            $suppliers > 0, $screen('fournisseurs'), false, 'fournisseurs', ['suppliers' => $suppliers]);
         $types = $this->count($pdo, 'type_fournisseur') > 0 && $this->count($pdo, 'type_note_de_frais') > 0;
-        $add('management.referentials', 'Types de fournisseur et de note de frais', 'Les listes qui classent vos fournisseurs et vos notes de frais (fournies par le modèle, modifiables).', $types, $screen('type_fournisseurs'), false, null);
+        $add('management.referentials',
+            $this->tr($locale, 'steps.management.referentials.title', [], 'Types de fournisseur et de note de frais'),
+            $this->tr($locale, 'steps.management.referentials.description', [], 'Les listes qui classent vos fournisseurs et vos notes de frais (fournies par le modèle, modifiables).'),
+            $types, $screen('type_fournisseurs'), false, null);
         $cash = $this->count($pdo, 'gestion_cash_balance') > 0 && $this->count($pdo, 'gestion_cash_setting', 'threshold_cents IS NOT NULL') > 0;
-        $add('management.cash', 'Trésorerie : solde de départ et seuil d\'alerte', 'Un solde bancaire daté et un seuil : la projection de trésorerie et l\'alerte de trésorerie basse s\'en servent.', $cash, $screen('gestion'), false, 'tresorerie');
+        $add('management.cash',
+            $this->tr($locale, 'steps.management.cash.title', [], 'Trésorerie : solde de départ et seuil d\'alerte'),
+            $this->tr($locale, 'steps.management.cash.description', [], 'Un solde bancaire daté et un seuil : la projection de trésorerie et l\'alerte de trésorerie basse s\'en servent.'),
+            $cash, $screen('gestion'), false, 'tresorerie');
         $fixed = $this->count($pdo, 'gestion_cash_movement', 'fixed_cost = true');
-        $add('management.fixed_costs', 'Frais fixes', $fixed > 0 ? sprintf('%d frais fixe(s) saisi(s) : le résultat après frais fixes est calculé.', $fixed) : 'Saisissez vos frais fixes (loyer, salaires, abonnements) pour voir le résultat après frais fixes.', $fixed > 0, $screen('gestion'), false, 'frais-fixes', ['fixedCosts' => $fixed]);
+        $add('management.fixed_costs',
+            $this->tr($locale, 'steps.management.fixed_costs.title', [], 'Frais fixes'),
+            $fixed > 0
+                ? $this->tr($locale, 'steps.management.fixed_costs.description.done', ['%count%' => $fixed], sprintf('%d frais fixe(s) saisi(s) : le résultat après frais fixes est calculé.', $fixed))
+                : $this->tr($locale, 'steps.management.fixed_costs.description.todo', [], 'Saisissez vos frais fixes (loyer, salaires, abonnements) pour voir le résultat après frais fixes.'),
+            $fixed > 0, $screen('gestion'), false, 'frais-fixes', ['fixedCosts' => $fixed]);
         $tier = ($effective['ai.full']['enabled'] ?? false) ? 'full' : (($effective['ai.help']['enabled'] ?? false) ? 'help' : 'none');
         ['monthly' => $monthly, 'remaining' => $remaining] = $this->aiCredits($pdo); // même décompte que l'étape ai.credits et que le quota (12/11/2026)
-        $add('management.ai', 'Assistant IA de la gestion', $tier === 'none' ? 'Sans palier IA, le guide et les avis restent calculés par les règles (sans texte rédigé).' : sprintf('%d crédit(s) IA restant(s) sur %d ce mois-ci (1 par conseil, avis ou document lu).', $remaining, $monthly), $tier !== 'none' && $remaining > 0, $screen('ai_credits'), false, null, ['tier' => $tier, 'remaining' => $remaining, 'monthly' => $monthly]);
+        $add('management.ai',
+            $this->tr($locale, 'steps.management.ai.title', [], 'Assistant IA de la gestion'),
+            $tier === 'none'
+                ? $this->tr($locale, 'steps.management.ai.description.none', [], 'Sans palier IA, le guide et les avis restent calculés par les règles (sans texte rédigé).')
+                : $this->tr($locale, 'steps.management.ai.description.active', ['%count%' => $remaining, '%monthly%' => $monthly], sprintf('%d crédit(s) IA restant(s) sur %d ce mois-ci (1 par conseil, avis ou document lu).', $remaining, $monthly)),
+            $tier !== 'none' && $remaining > 0, $screen('ai_credits'), false, null, ['tier' => $tier, 'remaining' => $remaining, 'monthly' => $monthly]);
         $devices = $this->count($pdo, 'push_device', 'disabled_at IS NULL');
-        $add('management.device', 'Appareil pour les notifications', $devices > 0 ? sprintf('%d appareil(s) reçoivent les notifications.', $devices) : 'Autorisez les notifications dans l\'application : stock bas, trésorerie basse, facture en double.', $devices > 0, $screen('gestion'), false, 'notifications', ['devices' => $devices]);
+        $add('management.device',
+            $this->tr($locale, 'steps.management.device.title', [], 'Appareil pour les notifications'),
+            $devices > 0
+                ? $this->tr($locale, 'steps.management.device.description.done', ['%count%' => $devices], sprintf('%d appareil(s) reçoivent les notifications.', $devices))
+                : $this->tr($locale, 'steps.management.device.description.todo', [], 'Autorisez les notifications dans l\'application : stock bas, trésorerie basse, facture en double.'),
+            $devices > 0, $screen('gestion'), false, 'notifications', ['devices' => $devices]);
         $purchases = $this->count($pdo, 'commande') + $this->count($pdo, 'gestion_reprise');
-        $add('management.first_purchase', 'Premier achat ou reprise d\'historique', $purchases > 0 ? 'Des achats sont saisis : coûts, marges et stock se calculent.' : 'Saisissez une première commande fournisseur, ou reprenez l\'historique de vos ventes passées.', $purchases > 0, $screen('gestion'), false, 'commandes');
+        $add('management.first_purchase',
+            $this->tr($locale, 'steps.management.first_purchase.title', [], 'Premier achat ou reprise d\'historique'),
+            $purchases > 0
+                ? $this->tr($locale, 'steps.management.first_purchase.description.done', [], 'Des achats sont saisis : coûts, marges et stock se calculent.')
+                : $this->tr($locale, 'steps.management.first_purchase.description.todo', [], 'Saisissez une première commande fournisseur, ou reprenez l\'historique de vos ventes passées.'),
+            $purchases > 0, $screen('gestion'), false, 'commandes');
     }
 
     /** Libellé d'un groupe d'étapes : produit (module ou application), socle du site, assistant IA */
-    public static function groupLabel(string $group): string
+    public static function groupLabel(string $group, string $locale = 'fr'): string
     {
+        if ($locale === 'en') {
+            if ($group === 'ai') {
+                return 'AI assistant';
+            }
+            if (in_array($group, ['app.management', 'module.support'], true) && FeatureCatalog::exists($group)) {
+                return FeatureCatalog::label($group, 'en');
+            }
+        }
+
         return ['site' => 'Site : identité et socle', 'ai' => 'Assistant IA'][$group] ?? (FeatureCatalog::exists($group) ? FeatureCatalog::label($group) : $group);
     }
 
+    /** @param array<string, int|string> $params */
+    private function tr(string $locale, string $id, array $params, string $fr): string
+    {
+        return $locale === 'en' && $this->translator !== null ? $this->translator->trans($id, $params, 'readiness', 'en') : $fr;
+    }
+
     /** @return array{steps: list<array<string, mixed>>, links: array<string, mixed>} */
-    private function build(string $code, \PDO $pdo): array
+    private function build(string $code, \PDO $pdo, string $locale = 'fr'): array
     {
         $e = $this->row($pdo, 'SELECT name, email, logo, locale, currency, pos_timezone, tel, favicon_filename, meta_title, meta_description, gst_number, qst_number, siret, tva_intracommunautaire, pos_receipt_header, pos_alerts_email, pos_stripe_mode, data_retention_years FROM entreprise ORDER BY id LIMIT 1') ?? [];
         $address = $this->row($pdo, 'SELECT country, city, state FROM address_entreprise ORDER BY id LIMIT 1');
@@ -332,7 +417,7 @@ class SiteReadinessService
             $add('mobile_shop.profile', 'app.mobile_shop', 'Apparence de l\'application', 'Logo, couleurs et nom affichés dans l\'application (profil « mobile », page Apparence de l\'app mobile) ; sans profil, la fiche Entreprise sert.', $this->count($pdo, 'app_profile', "app = 'mobile'") > 0, 'backend', ['type' => 'screen', 'screen' => 'app_profiles'], false);
         }
         if ($effective['app.management']['enabled'] ?? false) {
-            $this->managementSteps($steps, $pdo, $e, $address, $keys, $host, $effective);
+            $this->managementSteps($steps, $pdo, $e, $address, $keys, $host, $effective, $locale);
         }
         if ($effective['module.support']['enabled'] ?? false) { // module Assistance, lot 1 (12/11/2026) : appScreen comme le groupe de la gestion
             $support = function (string $key, string $title, string $description, string $status, bool $blocking, ?string $appScreen) use (&$steps) {
@@ -341,10 +426,28 @@ class SiteReadinessService
             };
             $agents = $this->count($pdo, '"user"', "roles::text LIKE '%ROLE_SUPPORT%' OR roles::text LIKE '%ROLE_ADMIN%'");
             $setting = $this->row($pdo, 'SELECT saved_at, outbound_mode FROM support_setting ORDER BY id LIMIT 1') ?? [];
-            $support('support.agent', 'Un compte qui répond aux demandes', $agents > 0 ? sprintf('%d compte(s) administrateur ou Assistance répondent aux demandes.', $agents) : 'Un administrateur (ou un compte Assistance) répond aux demandes.', $agents > 0 ? 'done' : 'todo', true, null);
-            $support('support.settings', 'Délai de réponse', ($setting['saved_at'] ?? null) !== null ? 'Délai de réponse réglé (heures ouvrées, jours ouvrés).' : 'Vérifiez le délai de réponse (48 h ouvrées par défaut, du lundi au vendredi) et enregistrez-le.', ($setting['saved_at'] ?? null) !== null ? 'done' : 'todo', true, 'assistance-reglages');
-            $support('support.outbound', 'Envoi des réponses par courriel', ($setting['outbound_mode'] ?? 'log') === 'send' ? 'Les réponses partent par courriel au client.' : 'Les réponses restent dans la demande (mode journal) : passez à l\'envoi par courriel quand l\'équipe est prête.', ($setting['outbound_mode'] ?? 'log') === 'send' ? 'done' : 'todo', false, 'assistance-reglages');
-            $support('support.inbound', 'Adresse de réception des courriels', 'Les courriels des clients arriveront dans les demandes (adresse fournie par la plateforme, à venir avec le lot 2).', 'optional', false, null);
+            $support('support.agent',
+                $this->tr($locale, 'steps.support.agent.title', [], 'Un compte qui répond aux demandes'),
+                $agents > 0
+                    ? $this->tr($locale, 'steps.support.agent.description.done', ['%count%' => $agents], sprintf('%d compte(s) administrateur ou Assistance répondent aux demandes.', $agents))
+                    : $this->tr($locale, 'steps.support.agent.description.todo', [], 'Un administrateur (ou un compte Assistance) répond aux demandes.'),
+                $agents > 0 ? 'done' : 'todo', true, null);
+            $support('support.settings',
+                $this->tr($locale, 'steps.support.settings.title', [], 'Délai de réponse'),
+                ($setting['saved_at'] ?? null) !== null
+                    ? $this->tr($locale, 'steps.support.settings.description.done', [], 'Délai de réponse réglé (heures ouvrées, jours ouvrés).')
+                    : $this->tr($locale, 'steps.support.settings.description.todo', [], 'Vérifiez le délai de réponse (48 h ouvrées par défaut, du lundi au vendredi) et enregistrez-le.'),
+                ($setting['saved_at'] ?? null) !== null ? 'done' : 'todo', true, 'assistance-reglages');
+            $support('support.outbound',
+                $this->tr($locale, 'steps.support.outbound.title', [], 'Envoi des réponses par courriel'),
+                ($setting['outbound_mode'] ?? 'log') === 'send'
+                    ? $this->tr($locale, 'steps.support.outbound.description.done', [], 'Les réponses partent par courriel au client.')
+                    : $this->tr($locale, 'steps.support.outbound.description.todo', [], 'Les réponses restent dans la demande (mode journal) : passez à l\'envoi par courriel quand l\'équipe est prête.'),
+                ($setting['outbound_mode'] ?? 'log') === 'send' ? 'done' : 'todo', false, 'assistance-reglages');
+            $support('support.inbound',
+                $this->tr($locale, 'steps.support.inbound.title', [], 'Adresse de réception des courriels'),
+                $this->tr($locale, 'steps.support.inbound.description', [], 'Les courriels des clients arriveront dans les demandes (adresse fournie par la plateforme, à venir avec le lot 2).'),
+                'optional', false, null);
         }
         if ($effective['app.living_memory']['enabled'] ?? false) {
             $add('living_memory.key', 'app.living_memory', 'Clé de l\'application Living Memory', 'Générez la clé d\'activation portée par l\'application pour votre site.', in_array('livingmemory', $keys, true), 'backend', ['type' => 'screen', 'screen' => 'app_keys']);
@@ -354,15 +457,28 @@ class SiteReadinessService
         // Assistant IA (cheminement complet, 07/11/2026). Accès réel (08/11/2026) : même règle que SiteAssistantService::tier, pour que la carte
         // « Assistant IA » dise le palier du site au lieu de « prêt » en toute circonstance
         $tier = $this->entitlements->isEnabled($code, 'ai.full') ? 'full' : ($this->entitlements->isEnabled($code, 'ai.help') ? 'help' : 'none'); // même en mode démo : l'IA suit les droits (IA bornée, 08/11/2026)
-        $add('ai.access', 'ai', ['full' => 'Assistant IA : IA complète', 'help' => 'Assistant IA : aide IA', 'none' => 'Assistant IA : non activé'][$tier],
-            ['full' => 'Le service « IA complète » est accordé : l\'assistant explique, propose des réglages et des opérations, toujours après votre confirmation.',
+        $add('ai.access', 'ai',
+            $this->tr($locale, "steps.ai.access.title.$tier", [], ['full' => 'Assistant IA : IA complète', 'help' => 'Assistant IA : aide IA', 'none' => 'Assistant IA : non activé'][$tier]),
+            $this->tr($locale, "steps.ai.access.description.$tier", [], ['full' => 'Le service « IA complète » est accordé : l\'assistant explique, propose des réglages et des opérations, toujours après votre confirmation.',
                 'help' => 'Le service « Aide IA » est accordé : l\'assistant explique vos réglages, votre cheminement et vos commandes, sans rien modifier. « IA complète » s\'obtient par forfait ou sur demande.',
-                'none' => 'Aucun service d\'assistant n\'est accordé au site : demandez ou essayez « Aide IA » ou « IA complète » dans Services et quotas, ou prenez un forfait.'][$tier],
+                'none' => 'Aucun service d\'assistant n\'est accordé au site : demandez ou essayez « Aide IA » ou « IA complète » dans Services et quotas, ou prenez un forfait.'][$tier]),
             $tier !== 'none', 'backend', ['type' => 'screen', 'screen' => 'mon_site'], false);
         ['monthly' => $credits, 'used' => $usedCredits, 'remaining' => $remainingCredits] = $this->aiCredits($pdo); // défaut réglé par la plateforme (08/11/2026)
         $creditsAction = $shopUrl !== null ? ['type' => 'shop', 'feature' => 'ai.credits', 'url' => $shopUrl] : ['type' => 'screen', 'screen' => 'mon_site'];
         // Crédits réglés par la plateforme (07/11/2026) : l'étape ne mène plus au réglage mais à l'achat ou au changement de forfait
-        $add('ai.credits', 'ai', 'Crédits IA du mois', $credits === 0 ? 'Aucun crédit IA ce mois-ci : l\'assistant et la rédaction par l\'IA refuseront. Achetez des crédits ou changez de forfait.' : ($remainingCredits === 0 ? sprintf('Crédits épuisés (%d utilisés sur %d) : l\'IA refusera jusqu\'au mois prochain. Achetez des crédits ou changez de forfait.', $usedCredits, $credits) : ($remainingCredits * 5 <= $credits ? sprintf('Il reste %d crédit(s) sur %d : pensez à acheter des crédits ou à changer de forfait avant la panne.', $remainingCredits, $credits) : sprintf('%d crédit(s) restant(s) sur %d ce mois-ci pour l\'assistant, les pages et les fiches produit.', $remainingCredits, $credits))), $credits > 0 && $remainingCredits * 5 > $credits, 'backend', $creditsAction, $credits === 0 || $remainingCredits === 0); // bloquant sans crédit (08/11/2026) : la carte passe « à faire »
+        $creditsVariant = $credits === 0 ? 'none' : ($remainingCredits === 0 ? 'exhausted' : ($remainingCredits * 5 <= $credits ? 'low' : 'available'));
+        $creditsFr = match ($creditsVariant) {
+            'none' => 'Aucun crédit IA ce mois-ci : l\'assistant et la rédaction par l\'IA refuseront. Achetez des crédits ou changez de forfait.',
+            'exhausted' => sprintf('Crédits épuisés (%d utilisés sur %d) : l\'IA refusera jusqu\'au mois prochain. Achetez des crédits ou changez de forfait.', $usedCredits, $credits),
+            'low' => sprintf('Il reste %d crédit(s) sur %d : pensez à acheter des crédits ou à changer de forfait avant la panne.', $remainingCredits, $credits),
+            'available' => sprintf('%d crédit(s) restant(s) sur %d ce mois-ci pour l\'assistant, les pages et les fiches produit.', $remainingCredits, $credits),
+        };
+        $creditsParams = match ($creditsVariant) {
+            'none' => [],
+            'exhausted' => ['%used%' => $usedCredits, '%monthly%' => $credits],
+            'low', 'available' => ['%count%' => $remainingCredits, '%monthly%' => $credits],
+        };
+        $add('ai.credits', 'ai', $this->tr($locale, 'steps.ai.credits.title', [], 'Crédits IA du mois'), $this->tr($locale, "steps.ai.credits.description.$creditsVariant", $creditsParams, $creditsFr), $credits > 0 && $remainingCredits * 5 > $credits, 'backend', $creditsAction, $credits === 0 || $remainingCredits === 0); // bloquant sans crédit (08/11/2026) : la carte passe « à faire »
 
         // Fonctionnalités non accordées : à obtenir (hors avancement)
         foreach (array_keys(FeatureCatalog::GOVERNED) as $feature) {

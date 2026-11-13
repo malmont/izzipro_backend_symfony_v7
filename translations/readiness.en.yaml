@@ -1,0 +1,105 @@
+groups:
+    ai: 'AI assistant'
+
+steps:
+    management:
+        short_code:
+            title: 'Site short code'
+            description: 'The code the app asks for on first sign-in to find your site.'
+        admin:
+            title: 'An administrator account'
+            description:
+                done: '{1}1 administrator account can sign in to the management app.|]1,Inf[%count% administrator accounts can sign in to the management app.'
+                todo: 'Create an administrator account: only this role can sign in to the management app.'
+        period:
+            title: 'Current management period'
+            description:
+                done: 'The current period exists: purchases, expense reports and result are recorded there.'
+                todo: 'Open the management app: the current period is created automatically from the site calendar.'
+        fiscal_year:
+            title: 'Fiscal year start month'
+            description:
+                done: 'Fiscal year starting in %month%: used for the annual review.'
+                todo: 'Choose your fiscal year start month (Fiscal year screen in the app): it is used for the annual review.'
+        locale:
+            title: 'Site currency and time zone'
+            description: 'Amounts in the site currency and days counted in the store time zone (derived from the address, or set on the company profile).'
+        periods_calendar:
+            title: 'Period calendar to confirm'
+            description:
+                done: 'Period calendar chosen.'
+                todo: 'Quarters by default: confirm them, or choose half-years or months.'
+        purchase_cost:
+            title: 'Item purchase cost'
+            description:
+                missing: '{1}1 item out of %total% has no purchase cost: its margin remains unknown.|]1,Inf[%count% items out of %total% have no purchase cost: their margin remains unknown.'
+                complete: '{1}1 item has a purchase cost: margins are known.|]1,Inf[All %count% items have a purchase cost: margins are known.'
+                empty: 'No items for sale yet.'
+        suppliers:
+            title: 'Suppliers'
+            description:
+                done: '{1}1 supplier recorded.|]1,Inf[%count% suppliers recorded.'
+                todo: 'Add your suppliers: they are used for purchase orders and reading invoices.'
+        referentials:
+            title: 'Supplier and expense report types'
+            description: 'The lists that categorize your suppliers and expense reports (provided from the template, editable).'
+        cash:
+            title: 'Cash flow: opening balance and alert threshold'
+            description: 'A dated bank balance and a threshold: the cash flow projection and low-cash alert rely on them.'
+        fixed_costs:
+            title: 'Fixed costs'
+            description:
+                done: '{1}1 fixed cost entered: result after fixed costs is calculated.|]1,Inf[%count% fixed costs entered: result after fixed costs is calculated.'
+                todo: 'Enter your fixed costs (rent, payroll, subscriptions) to see the result after fixed costs.'
+        ai:
+            title: 'Management AI assistant'
+            description:
+                none: 'Without an AI tier, the guide and advice are still computed from rules (without written commentary).'
+                active: '{0}0 AI credits remaining out of %monthly% this month (1 per advice, review or scanned document).|{1}1 AI credit remaining out of %monthly% this month (1 per advice, review or scanned document).|]1,Inf[%count% AI credits remaining out of %monthly% this month (1 per advice, review or scanned document).'
+        device:
+            title: 'Notification device'
+            description:
+                done: '{1}1 device receives notifications.|]1,Inf[%count% devices receive notifications.'
+                todo: 'Allow notifications in the app: low stock, low cash, duplicate invoice.'
+        first_purchase:
+            title: 'First purchase or history import'
+            description:
+                done: 'Purchases are recorded: costs, margins and stock are calculated.'
+                todo: 'Enter a first supplier order, or import the history of your past sales.'
+    support:
+        agent:
+            title: 'An account to answer requests'
+            description:
+                done: '{1}1 administrator or Support account answers requests.|]1,Inf[%count% administrator or Support accounts answer requests.'
+                todo: 'An administrator (or a Support account) answers requests.'
+        settings:
+            title: 'Response time'
+            description:
+                done: 'Response time configured (business hours, business days).'
+                todo: 'Review the response time (48 business hours by default, Monday to Friday) and save it.'
+        outbound:
+            title: 'Sending replies by email'
+            description:
+                done: 'Replies are sent by email to the customer.'
+                todo: 'Replies stay in the request (log mode): switch to email sending when the team is ready.'
+        inbound:
+            title: 'Inbound email address'
+            description: 'Customer emails will arrive in the requests inbox (platform-provided address, coming in batch 2).'
+    ai:
+        access:
+            title:
+                full: 'AI assistant: Full AI'
+                help: 'AI assistant: AI help'
+                none: 'AI assistant: disabled'
+            description:
+                full: 'The "Full AI" service is enabled: the assistant explains, suggests settings and performs operations, always after your confirmation.'
+                help: 'The "AI help" service is enabled: the assistant explains your settings, checklist and orders without changing anything. "Full AI" is available by plan or on request.'
+                none: 'No assistant service is enabled for the site: request or try "AI help" or "Full AI" in Services and quotas, or choose a plan.'
+        credits:
+            title: 'Monthly AI credits'
+            description:
+                none: 'No AI credits this month: the assistant and AI writing will refuse requests. Buy credits or change plan.'
+                exhausted: 'Credits exhausted (%used% used out of %monthly%): AI will refuse requests until next month. Buy credits or change plan.'
+                low: '{1}1 credit remaining out of %monthly%: consider buying credits or changing plan before running out.|]1,Inf[%count% credits remaining out of %monthly%: consider buying credits or changing plan before running out.'
+                available: '{1}1 credit remaining out of %monthly% this month for the assistant, pages and product listings.|]1,Inf[%count% credits remaining out of %monthly% this month for the assistant, pages and product listings.'
+

@@ -149,6 +149,14 @@ EasyAdmin ou le forfait pour les autres), carte « Préparer mon site » en têt
 carte sur le tableau de bord EasyAdmin tant que tout n'est pas prêt, colonne « Préparation » de la grille de la page Plateforme.
 L'assistant IA de configuration (à venir) proposera d'exécuter l'étape suivante. Test : `tests/Functional/Platform/SiteReadinessTest.php`.
 
+**Paramètre `?locale` sur `GET /api/site/readiness` (lot LEX, 12/11/2026).** Sans `?locale`, avec `?locale=fr`, une valeur vide ou
+inconnue, la route rend toujours la réponse exacte en français, **quelle que soit la langue du site** (`entreprise.locale` ignorée). Seul
+`?locale=en` traduit les titres, descriptions et libellés de groupe des **trois groupes** `app.management`, `module.support` et `ai`
+(`translations/readiness.en.yaml`, `FeatureCatalog::label(..., 'en')`). Tous les autres groupes (`site`, boutique, caisse, landing,
+mémoires, boussole, applications mobiles), les étapes `obtain.*` (même pour ces trois fonctionnalités), `links`, les clés, statuts,
+`figures`, `appScreen` et `helpKey` restent inchangés et en français. Signature compatible : `forCurrentSite(string $locale = 'fr')`,
+`forSite(string $code, string $locale = 'fr')`. Test : `tests/Functional/Gestion/ManagementReadinessTest.php`.
+
 ## Cheminement complet par produit (07/11/2026)
 
 Demandé par le propriétaire : chaque produit actif a toutes ses étapes, indispensables ou d'amélioration, et la page d'accueil du back-office les

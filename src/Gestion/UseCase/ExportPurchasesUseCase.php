@@ -12,10 +12,10 @@ class ExportPurchasesUseCase
     }
 
     /** @return array{filename: string, csv: string, export: array<string, mixed>} */
-    public function execute(?string $from, ?string $to, ?int $collectionId): array
+    public function execute(?string $from, ?string $to, ?int $collectionId, string $locale = 'fr'): array
     {
         $export = $this->export->build($from, $to, $collectionId);
 
-        return ['filename' => sprintf('achats_%s_%s.csv', $export['from'], $export['to']), 'csv' => $this->export->csv($export), 'export' => $export];
+        return ['filename' => sprintf('achats_%s_%s.csv', $export['from'], $export['to']), 'csv' => $this->export->csv($export, $locale), 'export' => $export];
     }
 }

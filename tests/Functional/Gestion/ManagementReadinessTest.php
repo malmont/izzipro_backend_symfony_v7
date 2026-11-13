@@ -220,6 +220,103 @@ class ManagementReadinessTest extends WebTestCase
         }
     }
 
+    public function testReadinessLocaleTranslatesOnlyManagementSupportAndAiAndDefaultsToFrenchEvenOnEnglishSite(): void
+    {
+        $savedLocale = $this->db->fetchOne('SELECT locale FROM entreprise ORDER BY id LIMIT 1');
+        $savedSupportFlag = (bool) $this->db->fetchOne('SELECT is_support_active FROM entreprise ORDER BY id LIMIT 1');
+        $entitlements = static::getContainer()->get(EntitlementService::class);
+        $grantedSupportId = null;
+        $grantedShopId = null;
+        $savedShopFlag = (bool) $this->db->fetchOne('SELECT is_boutique_active FROM entreprise ORDER BY id LIMIT 1');
+
+        try {
+            $this->db->executeStatement("UPDATE entreprise SET locale = 'en', fiscal_year_start_month = 4");
+            $beforeFr = array_column(json_decode($this->readinessRaw(), true)['steps'], null, 'key');
+            $beforeEn = array_column(json_decode($this->readinessRaw('?locale=en'), true)['steps'], null, 'key');
+            $this->assertSame($beforeFr['obtain.app.management'], $beforeEn['obtain.app.management'], 'obtain.app.management reste en français');
+
+            $this->grant();
+            if (!$entitlements->isEnabled(MV_TEST_TENANT_CODE, 'module.support')) {
+                $grantedSupportId = (int) $entitlements->grant(MV_TEST_TENANT_CODE, 'module.support', 'manual', null, 'test', 'CHE-LEX', null, null, false)['id'];
+            }
+
+            // Un groupe hors des trois, qui possède un libellé anglais au catalogue : il doit rester en français (ajout de la relecture)
+            if (!$entitlements->isEnabled(MV_TEST_TENANT_CODE, 'module.boutique')) {
+                $grantedShopId = (int) $entitlements->grant(MV_TEST_TENANT_CODE, 'module.boutique', 'manual', null, 'test', 'CHE-LEX', null, null, false)['id'];
+            }
+            $rawDefault = $this->readinessRaw();
+            $this->assertSame($rawDefault, $this->readinessRaw('?locale=fr'));
+            $this->assertSame($rawDefault, $this->readinessRaw('?locale=de'));
+            $this->assertSame($rawDefault, $this->readinessRaw('?locale='));
+
+            $fr = json_decode($rawDefault, true);
+            $frGroups = array_column($fr['groups'], null, 'key');
+            $this->assertSame('Application de gestion', $frGroups['app.management']['label']);
+            $this->assertSame('Assistance (demandes des clients)', $frGroups['module.support']['label']); // libellé français de FeatureCatalog (attente corrigée à la relecture)
+            $this->assertSame('Assistant IA', $frGroups['ai']['label']);
+            $this->assertSame('Site : identité et socle', $frGroups['site']['label']);
+
+            $rawEn = $this->readinessRaw('?locale=en');
+            $this->assertSame($rawEn, $this->readinessRaw('?locale=EN'));
+            $en = json_decode($rawEn, true);
+            $enGroups = array_column($en['groups'], null, 'key');
+
+            $this->assertSame(array_keys($frGroups), array_keys($enGroups));
+            $this->assertSame('Management app', $enGroups['app.management']['label']);
+            $this->assertSame('Customer support', $enGroups['module.support']['label']);
+            $this->assertSame('AI assistant', $enGroups['ai']['label']);
+            $this->assertArrayHasKey('module.boutique', $frGroups, 'un groupe hors des trois est bien présent');
+            $this->assertNotSame(\App\Services\FeatureAccess\FeatureCatalog::label('module.boutique', 'en'), $frGroups['module.boutique']['label'], 'et il a un libellé anglais différent au catalogue');
+            foreach ($frGroups as $key => $group) {
+                if (!in_array($key, ['app.management', 'module.support', 'ai'], true)) {
+                    $this->assertSame($group['label'], $enGroups[$key]['label'], "$key group label reste en français");
+                }
+            }
+
+            $this->assertCount(count($fr['steps']), $en['steps']);
+            $stripText = static fn (array $s): array => array_diff_key($s, ['title' => 1, 'description' => 1]);
+            foreach ($fr['steps'] as $i => $frStep) {
+                $enStep = $en['steps'][$i];
+                $this->assertSame($stripText($frStep), $stripText($enStep), $frStep['key']);
+                $inScope = in_array($frStep['group'], ['app.management', 'module.support', 'ai'], true) && !str_starts_with($frStep['key'], 'obtain.');
+                if ($inScope) {
+                    $this->assertNotSame($frStep['title'], $enStep['title'], $frStep['key'] . ' title traduit');
+                    $this->assertNotSame($frStep['description'], $enStep['description'], $frStep['key'] . ' description traduite');
+                } else {
+                    $this->assertSame($frStep['title'], $enStep['title'], $frStep['key'] . ' title reste FR');
+                    $this->assertSame($frStep['description'], $enStep['description'], $frStep['key'] . ' description reste FR');
+                }
+            }
+
+            $enByKey = array_column($en['steps'], null, 'key');
+            $this->assertSame('Site short code', $enByKey['management.short_code']['title']);
+            $this->assertSame('Fiscal year starting in April: used for the annual review.', $enByKey['management.fiscal_year']['description']);
+            $this->assertSame('An account to answer requests', $enByKey['support.agent']['title']);
+            $this->assertSame('Monthly AI credits', $enByKey['ai.credits']['title']);
+            $this->assertSame($fr['links'], $en['links']);
+
+            $this->assertSame('Site : identité et socle', \App\Services\Platform\SiteReadinessService::groupLabel('site', 'en'));
+            $this->assertSame('Management app', \App\Services\Platform\SiteReadinessService::groupLabel('app.management', 'en'));
+            $this->assertSame('Customer support', \App\Services\Platform\SiteReadinessService::groupLabel('module.support', 'en'));
+            $this->assertSame('AI assistant', \App\Services\Platform\SiteReadinessService::groupLabel('ai', 'en'));
+            $this->assertSame('Application de gestion', \App\Services\Platform\SiteReadinessService::groupLabel('app.management', 'de'));
+        } finally {
+            $this->db->executeStatement('UPDATE entreprise SET locale = ?', [$savedLocale]);
+            if ($grantedShopId !== null) {
+                $entitlements->cancel($grantedShopId, 'test', 'CHE-LEX');
+                $this->master->prepare("DELETE FROM tenant_entitlement_events WHERE entitlement_id IN (SELECT id FROM tenant_entitlements WHERE tenant_code = ? AND feature_key = 'module.boutique' AND note LIKE '%CHE-LEX%')")->execute([MV_TEST_TENANT_CODE]);
+                $this->master->prepare("DELETE FROM tenant_entitlements WHERE tenant_code = ? AND feature_key = 'module.boutique' AND note LIKE '%CHE-LEX%'")->execute([MV_TEST_TENANT_CODE]);
+                $this->db->executeStatement('UPDATE entreprise SET is_boutique_active = ?', [$savedShopFlag], [\Doctrine\DBAL\ParameterType::BOOLEAN]);
+            }
+            if ($grantedSupportId !== null) {
+                $entitlements->cancel($grantedSupportId, 'test', 'CHE-LEX');
+                $this->master->prepare("DELETE FROM tenant_entitlement_events WHERE entitlement_id IN (SELECT id FROM tenant_entitlements WHERE tenant_code = ? AND feature_key = 'module.support' AND note LIKE '%CHE-LEX%')")->execute([MV_TEST_TENANT_CODE]);
+                $this->master->prepare("DELETE FROM tenant_entitlements WHERE tenant_code = ? AND feature_key = 'module.support' AND note LIKE '%CHE-LEX%'")->execute([MV_TEST_TENANT_CODE]);
+                $this->db->executeStatement('UPDATE entreprise SET is_support_active = ?', [$savedSupportFlag], [\Doctrine\DBAL\ParameterType::BOOLEAN]);
+            }
+        }
+    }
+
     private function grant(): void
     {
         static::getContainer()->get(EntitlementService::class)->grant(MV_TEST_TENANT_CODE, 'app.management', 'manual', null, 'test', 'CHE', null, null, false);
@@ -240,14 +337,19 @@ class ManagementReadinessTest extends WebTestCase
 
     private function readiness(): array
     {
+        return json_decode($this->readinessRaw(), true);
+    }
+
+    private function readinessRaw(string $query = ''): string
+    {
         $container = static::getContainer();
         $user = $container->get(TenantEntityManagerProvider::class)->getEntityManager()->getRepository(User::class)->findOneBy(['email' => 'admin@arkanoa-media.com']);
         $this->assertNotNull($user);
         $this->client->getCookieJar()->clear();
-        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/api/site/readiness', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json', 'HTTP_AUTHORIZATION' => 'Bearer ' . $container->get('lexik_jwt_authentication.jwt_manager')->create($user)]);
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/api/site/readiness' . $query, [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json', 'HTTP_AUTHORIZATION' => 'Bearer ' . $container->get('lexik_jwt_authentication.jwt_manager')->create($user)]);
         $this->assertSame(200, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
 
-        return json_decode((string) $this->client->getResponse()->getContent(), true);
+        return (string) $this->client->getResponse()->getContent();
     }
 
     private function loginAdmin(): void

@@ -352,3 +352,30 @@ rental:
         CANCELLED_EXCLUDED_FROM_OCCUPANCY: "Les réservations annulées ne comptent pas dans l'occupation."
         NO_OPENING_HOURS: "Sans heures d'ouverture, le temps offert est compté sur 24 h par jour."
         OCCUPANCY_CAPPED: "Une location déborde des heures offertes (de nuit, par exemple) : l'occupation est plafonnée à 100 %."
+
+# Export comptable des achats (lot LEX, 12/11/2026)
+export:
+    purchases:
+        headers:
+            type: 'Type'
+            collection: 'Collection'
+            order: 'Commande'
+            date: 'Date'
+            supplier: 'Fournisseur'
+            label: 'Libellé'
+            quantity: 'Quantité'
+            unit_cost: 'Coût unitaire (%cur%)'
+            total: 'Total (%cur%)'
+            coefficient: 'Coefficient'
+            detail: 'Transporteur / Type de note'
+            purchase_currency: "Devise d'achat"
+            rate: 'Taux'
+        types:
+            product: 'Produit'
+            shipping: 'Frais de port'
+            expense: 'Note de frais'
+        totals:
+            products: 'Total produits'
+            shipping: 'Total frais de port'
+            expenses: 'Total notes de frais'
+            all: 'Total achats'

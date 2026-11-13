@@ -387,6 +387,27 @@ Décisions de contrat prises pour les lots :
   - Code : `TransporteurService` (`isReserved`, `createTransporteur`, `deleteTransporteur`, `getAllTransporteurs`), `FournisseurService`,
     `FournisseurRepository::search`, `FraisDePortService`, `GestionInput::blank` ; test
     `PurchaseCurrencyApiTest::testDeletionsAreJournaledReservedNameIsGuardedAndListsKeepTheirOrder`.
+- **Lot LEX (13/11/2026) : langue de l'application de gestion (fr/en).** Sans migration ni changement de route.
+  - **Refus encore en anglais dans la gestion** : les quatre qui restaient passent en français fixe. `CommandeController` et
+    `CollectionController` : 401 « Authentification requise » ; `FraisDePortController` : 400 « Corps JSON invalide » ;
+    `CollectionService` : « Utilisateur introuvable ». Le statut et la clé `error` ne changent pas ; `code` (`UNAUTHENTICATED`,
+    `INVALID_JSON`) et `message` sont ajoutés aux trois réponses JSON. Les refus en anglais de la vente, de la caisse et de la fiche
+    produit ne sont pas dans ce lot (`docs/erreurs-client.md`). Test : `LexErrorMessagesTest`.
+  - **Export des achats** (`GET /api/gestion/exports/achats.csv`) : `?locale=fr|en`, sinon la langue du site, comme les autres routes
+    de la gestion. Sont traduits : la première ligne, les valeurs de la colonne Type (« Produit », « Frais de port », « Note de frais »)
+    et les quatre libellés de total (`translations/gestion.{fr,en}.yaml`, clés `export.purchases.*`). Ne changent pas : les noms de
+    collection, de commande et de fournisseur, les libellés, les montants, le séparateur, le format des nombres et le nom du fichier.
+    En français, le fichier est identique à avant. Test : `PurchasesCsvLocaleTest`.
+  - **Noms de périodes en anglais** (`PeriodCalendar::displayName`) : les services qui acceptent `?locale` (`GestionBudgetService`,
+    `GestionPreparationService`, `GestionPreparationAdviceService` — simulation et plans candidats —, `GestionSimulationService`,
+    `GestionYearService`, `GestionAdviceService`) rendent les libellés de période traduits (`Spring 2026`, `Winter 2025-2026`,
+    `First half 2026`, mois en anglais) sans espace insécable ni écriture en base ; un nom modifié manuellement et les collections
+    manuelles restent inchangés ; les caches d'avis et de commentaires sont isolés par langue. Test : `PeriodsLocaleTest` (détail dans
+    `docs/periodes-gestion.md`).
+  - **Cheminement du site** (`GET /api/site/readiness`) : `?locale=en` traduit uniquement les étapes et libellés des trois groupes
+    `app.management`, `module.support` et `ai` (`translations/readiness.en.yaml`) ; sans paramètre, avec `?locale=fr` ou valeur inconnue,
+    la réponse reste strictement en français quelle que soit la langue du site (détail dans `docs/console-pilotage.md`). Test :
+    `ManagementReadinessTest`.
 
 ## 8. Jeu de données de démonstration (demande du propriétaire, 09/11/2026)
 

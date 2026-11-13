@@ -45,7 +45,7 @@ class FraisDePortController extends AbstractController
         $data = json_decode($request->getContent(), true);
 
         if (!$data) {
-            return new JsonResponse(['error' => 'Invalid JSON'], JsonResponse::HTTP_BAD_REQUEST);
+            return new JsonResponse(['error' => 'Corps JSON invalide', 'code' => 'INVALID_JSON', 'message' => 'Corps JSON invalide'], JsonResponse::HTTP_BAD_REQUEST);
         }
 
         $input = new \App\Gestion\Services\GestionInput($data);

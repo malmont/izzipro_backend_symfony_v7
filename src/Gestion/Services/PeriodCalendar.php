@@ -25,6 +25,12 @@ class PeriodCalendar
     public const MAX_BACKFILL_MONTHS = 24;
 
     private const MONTHS_FR = [1 => 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+    /** Libellés anglais des périodes, alignés sur l'application web (lot LEX, 12/11/2026) */
+    private const NAMES_EN = [
+        'months' => [1 => 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+        'semesters' => [1 => 'First half', 2 => 'Second half'],
+        'seasons' => ['Q2' => 'Spring', 'Q3' => 'Summer', 'Q4' => 'Fall', 'Q1' => 'Winter'],
+    ];
 
     public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly StoreClock $clock)
     {
@@ -79,6 +85,67 @@ class PeriodCalendar
 
                 return ['key' => "$winterYear-Q1", 'name' => sprintf('Hiver %d-%d', $winterYear - 1, $winterYear), 'start' => $d->setDate($winterYear - 1, 12, 1), 'end' => $d->setDate($winterYear, 2, 1)->modify('last day of this month')];
         }
+    }
+
+    /**
+     * Nom affichable d'une collection/période selon `$locale` (lot LEX, 12/11/2026, fonction pure, aucune écriture en base) :
+     * rend le nom anglais uniquement pour une période (`kind = 'period'`) dont le nom enregistré correspond encore au nom français
+     * généré par `definition()`. Un nom saisi/modifié par le gérant ou une collection manuelle est toujours rendu tel quel.
+     */
+    public static function displayNameFor(?string $storedName, ?string $kind, ?string $periodKey, ?\DateTimeInterface $startDate, string $locale = 'fr'): string
+    {
+        $name = (string) $storedName;
+        if (strtolower($locale) !== 'en' || $kind !== Collections::KIND_PERIOD || $periodKey === null || $startDate === null) {
+            return $name;
+        }
+        $frequency = self::frequencyFromKey($periodKey);
+        if ($frequency === null || self::definition($startDate, $frequency)['name'] !== $name) {
+            return $name;
+        }
+        $d = \DateTimeImmutable::createFromInterface($startDate)->setTime(0, 0);
+        $y = (int) $d->format('Y');
+        $m = (int) $d->format('n');
+
+        return match ($frequency) {
+            'monthly' => self::NAMES_EN['months'][$m] . ' ' . $y,
+            'semester' => self::NAMES_EN['semesters'][$m <= 6 ? 1 : 2] . ' ' . $y,
+            default => match (true) {
+                $m >= 3 && $m <= 5 => self::NAMES_EN['seasons']['Q2'] . ' ' . $y,
+                $m >= 6 && $m <= 8 => self::NAMES_EN['seasons']['Q3'] . ' ' . $y,
+                $m >= 9 && $m <= 11 => self::NAMES_EN['seasons']['Q4'] . ' ' . $y,
+                default => sprintf('%s %d-%d', self::NAMES_EN['seasons']['Q1'], ($m === 12 ? $y + 1 : $y) - 1, $m === 12 ? $y + 1 : $y),
+            },
+        };
+    }
+
+    public static function displayName(Collections $collection, string $locale = 'fr'): string
+    {
+        return self::displayNameFor($collection->getNomCollection(), $collection->getKind(), $collection->getPeriodKey(), $collection->getStartDateCollection(), $locale);
+    }
+
+    /** @param array<string, mixed> $row */
+    public static function displayNameFromRow(array $row, string $locale = 'fr'): string
+    {
+        $rawStart = $row['start_date_collection'] ?? null;
+        $start = is_string($rawStart) && $rawStart !== '' ? new \DateTimeImmutable(substr($rawStart, 0, 10)) : ($rawStart instanceof \DateTimeInterface ? $rawStart : null);
+
+        return self::displayNameFor(
+            isset($row['nom_collection']) ? (string) $row['nom_collection'] : null,
+            isset($row['kind']) ? (string) $row['kind'] : null,
+            isset($row['period_key']) ? (string) $row['period_key'] : null,
+            $start,
+            $locale
+        );
+    }
+
+    private static function frequencyFromKey(string $periodKey): ?string
+    {
+        return match (true) {
+            (bool) preg_match('/^\d{4}-M(?:0[1-9]|1[0-2])$/', $periodKey) => 'monthly',
+            (bool) preg_match('/^\d{4}-S[12]$/', $periodKey) => 'semester',
+            (bool) preg_match('/^\d{4}-Q[1-4]$/', $periodKey) => 'quarterly',
+            default => null,
+        };
     }
 
     /**

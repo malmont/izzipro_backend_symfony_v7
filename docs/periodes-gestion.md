@@ -42,6 +42,14 @@ n'est touchée. Contrat envoyé à l'application avant le code de chaque lot (`d
   `end_date_collection` (jours civils du magasin, `StoreClock`), budget facultatif (0 par défaut, modifiable), propriétaire : premier
   administrateur du site. Noms : « Printemps 2026 », « Été 2026 », « Automne 2026 », « Hiver 2026-2027 » ; « Semestre 1 2026 » ;
   « Juillet 2026 ».
+  - **Noms affichés selon la langue (lot LEX, 12/11/2026)** : `PeriodCalendar::definition()` garde ses libellés français intacts,
+    mais `PeriodCalendar::displayName()` / `displayNameFor()` / `displayNameFromRow()` rend les équivalents anglais (`January 2026`,
+    `First half 2026`, `Second half 2026`, `Spring 2026`, `Summer 2026`, `Fall 2026`, `Winter 2025-2026`) lorsque `?locale=en` est
+    demandé **et** que le nom enregistré en base correspond encore au nom français généré par le calendrier (sans aucune écriture en
+    base). Un nom modifié manuellement par le gérant ou une collection manuelle (`kind = 'manual'`) sont toujours rendus tels quels.
+    Périmètre limité dans LEX aux cinq services qui acceptent déjà `?locale` (`GestionBudgetService`, `GestionPreparationService`,
+    `GestionSimulationService`, `GestionYearService`, `GestionAdviceService`) ; hors lot : `PeriodeController`, `CollectionController`,
+    `MarketingCampaignController`, `RepriseController`, `period_result.payload`, prompts IA et messages `PERIOD_CLOSED`.
 - **Calendrier par site** : réglage `gestion.periods` du registre du site (`FeatureCatalog`, stockage
   `entreprise.purchasePeriodFrequency`, `quarterly` (défaut) | `semester` | `monthly`), modifiable par `PUT /api/site/features`
   et la fiche Entreprise d'EasyAdmin. Un changement de fréquence vaut pour les périodes **à venir** ; les périodes existantes

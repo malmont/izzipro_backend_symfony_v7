@@ -102,7 +102,12 @@ code SQL en chaîne faisait échouer la réponse elle-même) ; une panne répond
   `InvalidArgumentException` / `DomainException` de ces dossiers (21 blocs : plateforme, « Mon site », assistant, réservations), à relire
   pour celles qu'une bibliothèque peut lever. Dans les dossiers d'ERREURS-1, aucun bloc n'attrape ces deux classes seules.
 - **ERREURS-3** (Boussole ESG, Mémoires Vivantes) : dossiers exclus du garde-fou, en attente d'attribution.
-- **LEX** : refus métier écrits en anglais dans les dossiers d'ERREURS-1, laissés tels quels : « Order not found », « Order cannot be
-  canceled after it has been shipped or delivered », « Cancel status not found in database », « Insufficient stock for product variant »,
-  « Tax calculation failed », « Payment method not found », « Payment type not found », « Status payment not found », « Transaction type
-  not found », « Unknown transaction type », « Product not found for ID: … », « Product not found for slug: … », « User not found ».
+- **LEX (lot du 12/11/2026, volet 4)** :
+  - **Traités dans la gestion** (en français fixe ; statut HTTP et clé `error` conservés, `code` et `message` ajoutés aux trois
+    réponses JSON) : `CommandeController` (`401` `UNAUTHENTICATED` « Authentification requise »), `CollectionController` (`401`
+    `UNAUTHENTICATED` « Authentification requise »), `FraisDePortController` (`400` `INVALID_JSON` « Corps JSON invalide ») et
+    `CollectionService` (« Utilisateur introuvable »). Test : `tests/Functional/Gestion/LexErrorMessagesTest.php`.
+  - **Restent listés (hors gestion, inchangés)** : « Order not found », « Order cannot be canceled after it has been shipped or
+    delivered », « Cancel status not found in database », « Insufficient stock for product variant », « Tax calculation failed »,
+    « Payment method not found », « Payment type not found », « Status payment not found », « Transaction type not found »,
+    « Unknown transaction type », « Product not found for ID: … », « Product not found for slug: … ».

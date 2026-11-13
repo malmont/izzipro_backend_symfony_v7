@@ -66,7 +66,7 @@ class CommandeController extends AbstractController
         $currentUser = $this->security->getUser();
 
         if (!$currentUser) {
-            return $this->json(['error' => 'Unauthenticated'], JsonResponse::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'Authentification requise', 'code' => 'UNAUTHENTICATED', 'message' => 'Authentification requise'], JsonResponse::HTTP_UNAUTHORIZED);
         }
 
         $input = new \App\Gestion\Services\GestionInput(is_array($data) ? $data : []);

@@ -227,7 +227,7 @@ class GestionSimulationService
         );
 
         return [
-            'period' => ['id' => $period->getId(), 'name' => $period->getNomCollection(), 'start' => $start, 'end' => $end, 'daysTotal' => $daysTotal, 'daysElapsed' => $daysElapsed, 'daysRemaining' => $daysRemaining],
+            'period' => ['id' => $period->getId(), 'name' => PeriodCalendar::displayName($period, $locale), 'start' => $start, 'end' => $end, 'daysTotal' => $daysTotal, 'daysElapsed' => $daysElapsed, 'daysRemaining' => $daysRemaining],
             'currency' => $this->currency?->code() ?? TenantCurrencyProvider::DEFAULT,
             'levers' => ['planned' => (object) $levers['planned']] + $levers,
             'method' => $method,

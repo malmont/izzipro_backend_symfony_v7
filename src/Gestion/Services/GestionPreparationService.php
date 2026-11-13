@@ -111,7 +111,7 @@ class GestionPreparationService
         $lastYear = $ly['orders'] === 0 && $ly['revenue'] === 0 ? null : ['revenue' => $ly['revenue'], 'grossMargin' => $ly['grossMargin'], 'units' => $ly['items'],
             'from' => $start->modify('-1 year')->format('Y-m-d'), 'to' => $end->modify('-1 year')->format('Y-m-d')];
         $previous = $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
-            "SELECT id, nom_collection, start_date_collection, end_date_collection FROM collections WHERE kind = 'period' AND end_date_collection < ? ORDER BY end_date_collection DESC LIMIT " . self::AVERAGE_PERIODS,
+            "SELECT id, kind, period_key, nom_collection, start_date_collection, end_date_collection FROM collections WHERE kind = 'period' AND end_date_collection < ? ORDER BY end_date_collection DESC LIMIT " . self::AVERAGE_PERIODS,
             [$today->format('Y-m-d')]
         );
         $average = null;
@@ -124,7 +124,7 @@ class GestionPreparationService
                 $t = substr((string) $p['end_date_collection'], 0, 10);
                 $r = $this->results->salesMetrics(new \DateTimeImmutable($f), new \DateTimeImmutable($t))['revenue'];
                 $d = AdviceRules::days($f, $t);
-                $list[] = ['id' => (int) $p['id'], 'name' => (string) $p['nom_collection'], 'revenue' => $r, 'days' => $d];
+                $list[] = ['id' => (int) $p['id'], 'name' => PeriodCalendar::displayNameFromRow($p, $locale), 'revenue' => $r, 'days' => $d];
                 $sumRevenue += $r;
                 $sumDays += $d;
             }
@@ -140,7 +140,7 @@ class GestionPreparationService
         $method = self::recommendedMethod($lastYear !== null, $average !== null ? count($average['periods']) : 0);
         $reason = self::reason($method, $trendGap, $locale);
 
-        return ['period' => self::periodRow($period), 'days' => $days, 'lastYear' => $lastYear, 'average' => $average, 'pace' => $pace, 'trendGap' => $trendGap,
+        return ['period' => self::periodRow($period, $locale), 'days' => $days, 'lastYear' => $lastYear, 'average' => $average, 'pace' => $pace, 'trendGap' => $trendGap,
             'recommended' => ['method' => $method, 'reason' => $reason]];
     }
 
@@ -149,12 +149,12 @@ class GestionPreparationService
      *
      * @return array<string, mixed>
      */
-    public function simulate(array $body, ?\DateTimeImmutable $today = null): array
+    public function simulate(array $body, ?\DateTimeImmutable $today = null, string $locale = 'fr'): array
     {
         $today ??= $this->calendar->today();
         $period = $this->period($body['periodId'] ?? null, $body['date'] ?? null);
         $in = $this->input($body, $period, $today);
-        $est = $this->estimations($period, $today);
+        $est = $this->estimations($period, $today, $locale);
         $target = match ($in['method']) {
             'custom' => $in['amount'],
             'lastYear' => (int) ($est['lastYear']['revenue'] ?? 0),
@@ -207,9 +207,9 @@ class GestionPreparationService
         $tripBudget = $trip === null ? 0 : $this->tripBudgetSite($trip);
         $tripPeriod = $trip === null ? null : $this->periodOf($trip['startDate']);
         $byPeriod = [];
-        $add = function (Collections $p, string $category, int $amount) use (&$byPeriod, $period): void {
+        $add = function (Collections $p, string $category, int $amount) use (&$byPeriod, $period, $locale): void {
             $id = (int) $p->getId();
-            $byPeriod[$id] ??= ['period' => self::periodRow($p), 'target' => $id === (int) $period->getId(), 'purchases' => 0, 'trip' => 0, 'shipping' => 0, 'advertising' => 0, 'other' => 0];
+            $byPeriod[$id] ??= ['period' => self::periodRow($p, $locale), 'target' => $id === (int) $period->getId(), 'purchases' => 0, 'trip' => 0, 'shipping' => 0, 'advertising' => 0, 'other' => 0];
             $byPeriod[$id][$category] += $amount;
         };
         $add($period, 'purchases', 0);
@@ -228,7 +228,7 @@ class GestionPreparationService
         }
 
         // Frais de la période visée : prévu, au moins le réel déjà engagé (comme le simulateur)
-        $budget = $this->budgets->get($period, 'fr');
+        $budget = $this->budgets->get($period, $locale);
         $actual = array_column($budget['lines'], 'actual', 'category');
         $expenses = [];
         foreach (['trip', 'shipping', 'advertising', 'other'] as $c) {
@@ -272,7 +272,7 @@ class GestionPreparationService
             array_map(fn ($p) => [$p['period']['id'], $this->savedPlanned($p['period']['id'])], array_values($byPeriod))]));
 
         return [
-            'period' => self::periodRow($period), 'currency' => $this->currency?->code() ?? TenantCurrencyProvider::DEFAULT,
+            'period' => self::periodRow($period, $locale), 'currency' => $this->currency?->code() ?? TenantCurrencyProvider::DEFAULT,
             'estimations' => $est,
             'plan' => $scenario,
             'lastYear' => $lastYear,
@@ -280,7 +280,7 @@ class GestionPreparationService
             'planned' => array_values(array_map(fn ($p) => $p + ['mode' => $p['target'] ? 'replace' : 'add'], $byPeriod)),
             'trip' => $trip === null ? null : $trip + ['budgetSite' => $tripBudget, 'periodId' => (int) $tripPeriod->getId()],
             'previewHash' => $hash,
-            'caveats' => array_map(fn (string $c) => ['code' => $c, 'text' => $this->translator?->trans("preparation.caveats.$c", [], 'gestion', is_string($body['locale'] ?? null) ? $body['locale'] : 'fr') ?? $c],
+            'caveats' => array_map(fn (string $c) => ['code' => $c, 'text' => $this->translator?->trans("preparation.caveats.$c", [], 'gestion', is_string($body['locale'] ?? null) ? $body['locale'] : $locale) ?? $c],
                 array_values(array_unique($caveats))),
         ];
     }
@@ -562,8 +562,8 @@ class GestionPreparationService
         return $out;
     }
 
-    private static function periodRow(Collections $p): array
+    private static function periodRow(Collections $p, string $locale = 'fr'): array
     {
-        return ['id' => (int) $p->getId(), 'name' => $p->getNomCollection(), 'start' => $p->getStartDateCollection()->format('Y-m-d'), 'end' => $p->getEndDateCollection()->format('Y-m-d')];
+        return ['id' => (int) $p->getId(), 'name' => PeriodCalendar::displayName($p, $locale), 'start' => $p->getStartDateCollection()->format('Y-m-d'), 'end' => $p->getEndDateCollection()->format('Y-m-d')];
     }
 }

@@ -45,7 +45,7 @@ class CollectionController extends AbstractController
         $data = json_decode($request->getContent(), true);
 
         if (!$this->getUser()) {
-            return new JsonResponse(['error' => 'Unauthenticated'], Response::HTTP_UNAUTHORIZED);
+            return new JsonResponse(['error' => 'Authentification requise', 'code' => 'UNAUTHENTICATED', 'message' => 'Authentification requise'], Response::HTTP_UNAUTHORIZED);
         }
 
         $input = new \App\Gestion\Services\GestionInput(is_array($data) ? $data : []);

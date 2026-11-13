@@ -65,7 +65,7 @@ class GestionBudgetService
         }
 
         return [
-            'period' => ['id' => $period->getId(), 'name' => $period->getNomCollection(), 'periodKey' => $period->getPeriodKey()],
+            'period' => ['id' => $period->getId(), 'name' => PeriodCalendar::displayName($period, $locale), 'periodKey' => $period->getPeriodKey()],
             'currency' => $this->currency?->code() ?? TenantCurrencyProvider::DEFAULT,
             'globalBudget' => $period->getBudgetCollection(),
             'lines' => $lines,

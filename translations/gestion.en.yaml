@@ -350,3 +350,30 @@ rental:
         CANCELLED_EXCLUDED_FROM_OCCUPANCY: "Cancelled bookings do not count in occupancy."
         NO_OPENING_HOURS: "Without opening hours, the offered time is counted over 24 hours a day."
         OCCUPANCY_CAPPED: "A rental runs beyond the offered hours (overnight, for example): occupancy is capped at 100%."
+
+# Purchases accounting export (lot LEX, 12/11/2026)
+export:
+    purchases:
+        headers:
+            type: 'Type'
+            collection: 'Collection'
+            order: 'Order'
+            date: 'Date'
+            supplier: 'Supplier'
+            label: 'Label'
+            quantity: 'Quantity'
+            unit_cost: 'Unit cost (%cur%)'
+            total: 'Total (%cur%)'
+            coefficient: 'Coefficient'
+            detail: 'Carrier / Expense type'
+            purchase_currency: 'Purchase currency'
+            rate: 'Rate'
+        types:
+            product: 'Product'
+            shipping: 'Shipping cost'
+            expense: 'Expense'
+        totals:
+            products: 'Products total'
+            shipping: 'Shipping total'
+            expenses: 'Expenses total'
+            all: 'Purchases total'

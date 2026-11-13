@@ -154,7 +154,7 @@ class GestionAdviceService
         $headline = $this->conn()->fetchAssociative("SELECT headline, headline_locale FROM gestion_advice_run WHERE period_id = ? AND headline IS NOT NULL ORDER BY id DESC LIMIT 1", [$pid]);
 
         return [
-            'period' => ['id' => $pid, 'name' => $period->getNomCollection(), 'start' => $period->getStartDateCollection()->format('Y-m-d'), 'end' => $period->getEndDateCollection()->format('Y-m-d')],
+            'period' => ['id' => $pid, 'name' => PeriodCalendar::displayName($period, $locale), 'start' => $period->getStartDateCollection()->format('Y-m-d'), 'end' => $period->getEndDateCollection()->format('Y-m-d')],
             'moments' => $this->rules->moments($period, $today)['moments'],
             'currency' => $this->siteCurrency(),
             'headline' => $headline !== false && $headline['headline_locale'] === $locale ? self::cleanText((string) $headline['headline']) : null,

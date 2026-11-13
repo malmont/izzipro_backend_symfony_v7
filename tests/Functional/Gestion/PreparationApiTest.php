@@ -176,7 +176,18 @@ class PreparationApiTest extends WebTestCase
             $localized = $this->body();
             $this->assertSame(200, $this->status());
             $this->assertStringStartsWith($texts[$method], $localized['recommended']['reason'], "locale=$asked");
-            $this->assertSame(array_diff_key($e, ['recommended' => 1]), array_diff_key($localized, ['recommended' => 1]), 'mêmes chiffres dans toutes les langues');
+            // Depuis le lot LEX, le nom d'une période au nom généré suit la langue demandée : en anglais, mêmes chiffres, noms traduits
+            $numbers = function (array $x) use (&$numbers): array {
+                unset($x['name']);
+
+                return array_map(fn ($v) => is_array($v) ? $numbers($v) : $v, $x);
+            };
+            $this->assertSame($numbers(array_diff_key($e, ['recommended' => 1])), $numbers(array_diff_key($localized, ['recommended' => 1])), 'mêmes chiffres dans toutes les langues');
+            if (strtolower($asked) !== 'en') {
+                $this->assertSame(array_diff_key($e, ['recommended' => 1]), array_diff_key($localized, ['recommended' => 1]), "locale=$asked : noms de période inchangés");
+            } else {
+                $this->assertSame(PeriodCalendar::displayName($current, 'en'), $localized['period']['name'], 'période en cours : nom anglais (les périodes passées sont vérifiées par PeriodsLocaleTest)');
+            }
             $this->assertSame($method, $localized['recommended']['method']);
         }
         $pick = fn (bool $ly, int $n): string => \App\Gestion\Services\GestionPreparationService::recommendedMethod($ly, $n);

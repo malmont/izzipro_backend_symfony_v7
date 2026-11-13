@@ -24,7 +24,7 @@ class GestionPreparationAdviceService
     public function advise(array $body, string $locale, ?string $user, ?\DateTimeImmutable $today = null): array
     {
         $today ??= $this->calendar->today();
-        $sim = $this->preparation->simulate($body, $today);
+        $sim = $this->preparation->simulate($body, $today, $locale);
         $period = $this->preparation->period($sim['period']['id'], null);
         $clean = array_diff_key($body, ['previewHash' => 1]);
         $hash = hash('sha256', 'prep:' . json_encode([$clean, $locale, $sim['previewHash']]));
@@ -85,7 +85,7 @@ class GestionPreparationAdviceService
         $plans = ['myPlan' => $sim];
         $method = $sim['plan']['sales']['method'];
         if ($sim['estimations']['lastYear'] !== null && $method !== 'lastYear') {
-            $plans['lastYearSales'] = $this->preparation->simulate(['sales' => ['method' => 'lastYear']] + $body, $today);
+            $plans['lastYearSales'] = $this->preparation->simulate(['sales' => ['method' => 'lastYear']] + $body, $today, $locale);
         }
         $purchases = is_array($body['purchases'] ?? null) ? array_values($body['purchases']) : [];
         $cash = $sim['plan']['cash'];
@@ -107,7 +107,7 @@ class GestionPreparationAdviceService
             }
             $cut = array_values(array_filter($cut, fn ($p) => (int) $p['amount'] > 0));
             if ($cut != $purchases) {
-                $plans['cashSafe'] = $this->preparation->simulate(['purchases' => $cut] + $body, $today);
+                $plans['cashSafe'] = $this->preparation->simulate(['purchases' => $cut] + $body, $today, $locale);
             }
         }
         if ($purchases !== [] && $sim['plan']['purchases']['saleValue'] > 0) {
@@ -115,7 +115,7 @@ class GestionPreparationAdviceService
             $factor = $needed / $sim['plan']['purchases']['saleValue'];
             if (abs($factor - 1) > 0.02) {
                 $scaled = array_values(array_filter(array_map(fn ($p) => ['amount' => (int) round((int) $p['amount'] * $factor)] + $p, $purchases), fn ($p) => $p['amount'] > 0));
-                $plans['enoughStock'] = $this->preparation->simulate(['purchases' => $scaled] + $body, $today);
+                $plans['enoughStock'] = $this->preparation->simulate(['purchases' => $scaled] + $body, $today, $locale);
             }
         }
         $my = $sim['plan'];

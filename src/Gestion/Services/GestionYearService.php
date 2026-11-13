@@ -78,7 +78,7 @@ class GestionYearService
         }
         $hasLy = array_sum(array_map(fn ($b) => abs($b['sales']) + $b['variableCosts']['total'] + abs($b['otherRevenue']['total']), $ly)) > 0;
         $totals = $this->block($sales, $costs, $jan, $end);
-        $periods = $this->periods($jan, $dec, $t);
+        $periods = $this->periods($jan, $dec, $t, $locale);
         $unit = $totals['tauxMarque'];
 
         // Projection de l'année entière (année en cours) : réalisé + reste estimé, jour par jour
@@ -456,7 +456,7 @@ class GestionYearService
     }
 
     /** Périodes de gestion qui recoupent l'année, avec leur résultat P2 (instantané pour une période fermée, sans rien écrire) */
-    private function periods(string $jan, string $dec, string $today): array
+    private function periods(string $jan, string $dec, string $today, string $locale = 'fr'): array
     {
         $em = $this->emProvider->getEntityManager();
         $out = [];
@@ -479,7 +479,7 @@ class GestionYearService
             $pe = $p->getEndDateCollection()->format('Y-m-d');
             $len = fn (string $a, string $b) => (int) (new \DateTimeImmutable($a))->diff(new \DateTimeImmutable($b))->format('%a') + 1;
             $out[] = [
-                'id' => (int) $p->getId(), 'name' => $p->getNomCollection(), 'start' => $p->getStartDateCollection()->format('Y-m-d'), 'end' => $p->getEndDateCollection()->format('Y-m-d'),
+                'id' => (int) $p->getId(), 'name' => PeriodCalendar::displayName($p, $locale), 'start' => $p->getStartDateCollection()->format('Y-m-d'), 'end' => $p->getEndDateCollection()->format('Y-m-d'),
                 'status' => $this->calendar->status($p), 'started' => $p->getStartDateCollection()->format('Y-m-d') <= $today,
                 'revenue' => (int) ($payload['sales']['revenue'] ?? 0), 'grossMargin' => (int) ($payload['result']['gross'] ?? 0),
                 'net' => (int) ($payload['result']['net'] ?? 0), 'netAfterFixed' => isset($payload['result']['netAfterFixed']) ? (int) $payload['result']['netAfterFixed'] : null,
