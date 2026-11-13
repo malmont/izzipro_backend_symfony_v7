@@ -55,6 +55,11 @@ autorisée, délai de grâce après impayé. Droit effectif = un droit `active` 
 pour ne pas casser les frontaux. Les champs `endsAt` rendus par l'API (`EntitlementService::effective()`,
 `GET /api/platform/sites`, `GET /api/platform/entitlements`, `GET`/`PUT /api/site/features`) restent la chaîne UTC `Y-m-d H:i:s`
 sans fuseau et sont doublés par `endsAtIso` en ISO 8601 avec décalage (`+00:00`, ou `null` quand `endsAt` est nul ; lot DROITS-ISO, 13/11/2026).
+Une date de fin envoyée avec un décalage (`2026-12-01T00:00:00-05:00`, routes `POST` et `PATCH /api/platform/entitlements`) est convertie
+en UTC à l'écriture (`EntitlementRepository::utc`, seul endroit qui écrit ou compare une date de cette table ; lot DROITS-UTC,
+13/11/2026). Avant, elle était écrite telle qu'affichée : le droit s'éteignait trop tôt (décalage négatif) ou trop tard (positif).
+Une date seule (`AAAA-MM-JJ`, fin de journée UTC) et une date sans décalage ne changent pas. Aucun droit n'avait de date de fin au
+moment du correctif : aucune donnée à reprendre.
 
 **Offres et prix (décision du 04/11/2026).** Table de plateforme `platform_offers` (base maître) : `code`, libellé fr/en,
 `features` (une ou plusieurs clés du registre : une offre est une fonctionnalité seule ou un lot), `monthly_price_cents`,

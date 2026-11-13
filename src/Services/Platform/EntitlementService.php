@@ -197,7 +197,7 @@ class EntitlementService
         }
         $this->repository->update($id, ['ends_at' => $endsAt, 'status' => 'active', 'grace_until' => null, 'note' => self::appendNote($row, $note)]);
         $this->project($row['tenant_code']);
-        $this->repository->recordEvent($id, $row['tenant_code'], $row['feature_key'], self::EVENT_EXTENDED, ['by' => $by, 'endsAt' => $endsAt?->format('Y-m-d H:i:s')]);
+        $this->repository->recordEvent($id, $row['tenant_code'], $row['feature_key'], self::EVENT_EXTENDED, ['by' => $by, 'endsAt' => $endsAt !== null ? \DateTimeImmutable::createFromInterface($endsAt)->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s') : null]);
 
         return $this->mustFind($id);
     }

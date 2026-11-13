@@ -81,6 +81,41 @@ class EntitlementsTest extends WebTestCase
         $this->assertSame(['granted', 'granted', 'suspended', 'resumed', 'cancelled'], array_reverse(array_column(array_filter($this->events(), fn ($e) => $e['event'] !== 'cancelled' || (int) $e['entitlement_id'] === (int) $second['id']), 'event')), 'journal des événements');
     }
 
+    /**
+     * Lot DROITS-UTC (13/11/2026) : une date de fin envoyée avec un décalage à la route d'administration est enregistrée en UTC.
+     * Avant, elle était écrite telle qu'affichée et le droit s'éteignait trop tôt (décalage négatif) ou trop tard (positif).
+     */
+    public function testAnEndDateSentWithAnOffsetIsStoredInUtc(): void
+    {
+        $this->setFlag('is_boussole_esg_active', false);
+        $stored = fn (int $id): ?string => ($v = $this->master->query('SELECT ends_at FROM tenant_entitlements WHERE id = ' . $id)->fetchColumn()) === false ? null : $v;
+        $r = $this->api('POST', '/api/platform/entitlements', ['tenant' => MV_TEST_TENANT_CODE, 'feature' => 'module.boussole', 'source' => 'manual', 'endsAt' => '2030-01-01T00:00:00-05:00', 'note' => 'DROITS-UTC'], 'super');
+        $this->assertSame(201, $r->getStatusCode(), (string) $r->getContent());
+        $id = (int) json_decode((string) $r->getContent(), true)['entitlement']['id'];
+        $this->assertSame('2030-01-01 05:00:00', $stored($id), 'minuit à Toronto = 5 h UTC (avant : 00:00:00, cinq heures trop tôt)');
+        $effective = $this->service()->effective(MV_TEST_TENANT_CODE)['module.boussole'];
+        $this->assertSame(['2030-01-01 05:00:00', '2030-01-01T05:00:00+00:00'], [$effective['endsAt'], $effective['endsAtIso']]);
+        $this->assertEquals(new \DateTimeImmutable('2030-01-01T00:00:00-05:00'), new \DateTimeImmutable($effective['endsAtIso']), 'le même instant que celui envoyé');
+
+        foreach ([
+            '2030-06-01T00:00:00+02:00' => '2030-05-31 22:00:00', // décalage positif : la veille à 22 h UTC (avant : 00:00:00, deux heures trop tard)
+            '2030-06-01T12:30:00Z' => '2030-06-01 12:30:00',
+            '2030-06-01T12:30:00+00:00' => '2030-06-01 12:30:00',
+            '2030-06-01 12:30:00' => '2030-06-01 12:30:00', // sans décalage : déjà lue comme de l'UTC, inchangé
+            '2030-06-01' => '2030-06-01 23:59:59', // date seule : fin de journée UTC, inchangé
+        ] as $sent => $expected) {
+            $r = $this->api('PATCH', "/api/platform/entitlements/$id", ['action' => 'extend', 'endsAt' => $sent], 'super');
+            $this->assertSame(200, $r->getStatusCode(), $sent . ' : ' . $r->getContent());
+            $this->assertSame($expected, $stored($id), "prolongation envoyée « $sent »");
+        }
+        $event = json_decode((string) $this->master->query("SELECT payload FROM tenant_entitlement_events WHERE entitlement_id = $id ORDER BY id DESC LIMIT 1")->fetchColumn(), true);
+        $this->assertSame('2030-06-01 23:59:59', $event['endsAt'] ?? null, 'le journal des droits porte la même date UTC');
+        $r = $this->api('PATCH', "/api/platform/entitlements/$id", ['action' => 'extend', 'endsAt' => '2030-09-01T00:00:00-04:00'], 'super');
+        $this->assertSame(200, $r->getStatusCode());
+        $event = json_decode((string) $this->master->query("SELECT payload FROM tenant_entitlement_events WHERE entitlement_id = $id ORDER BY id DESC LIMIT 1")->fetchColumn(), true);
+        $this->assertSame(['2030-09-01 04:00:00', '2030-09-01 04:00:00'], [$stored($id), $event['endsAt'] ?? null]);
+    }
+
     public function testTrialsExpireRemindAndFollowThePolicy(): void
     {
         $s = $this->service();
