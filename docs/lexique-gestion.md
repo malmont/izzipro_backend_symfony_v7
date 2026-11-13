@@ -66,6 +66,12 @@ Une entrée :
 à partir d'eux (la part gardée sur 100) : aucun nombre inventé. Elle est accordée par le serveur (« 1 commande », « 2 commandes »).
 Sans donnée utile (aucune vente, aucun budget, aucun solde), elle vaut `null` et la définition suffit. Quinze notions en ont une.
 
+**Un prof a toujours un exemple quand des données existent (lot W2-d).** Les notions de ventes (ventes, marge, taux de marque,
+panier moyen, commandes, taux de retour…) s'illustrent sur **le mois en cours** ; s'il n'a aucune vente, sur **la période en cours** ;
+si elle n'en a pas non plus, sur **la dernière période terminée qui a des ventes** (4 périodes remontées au plus) ; à défaut, pas
+d'exemple. L'illustration dit toujours sa plage : `period.phrase` vaut « ce mois-ci » ou « sur la période Automne 2026 », et la
+phrase la reprend (« Chez vous, sur la période Été 2026 : … »). Code : `AnalysisCatalog::salesExample`.
+
 **Questions de vérification** : écrites dans le lexique (21 questions pour 17 notions), jamais générées. Choix `a`, `b`, `c`. La
 réponse est corrigée par le serveur ; rien n'est enregistré. 422 `choice` (`REQUIRED`, `INVALID_CHOICE`) ; 404
 `LEXIQUE_TERM_NOT_FOUND`, `LEXIQUE_QUESTION_NOT_FOUND`.

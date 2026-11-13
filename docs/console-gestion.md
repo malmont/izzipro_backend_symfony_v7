@@ -18,6 +18,11 @@ une même grandeur n'a qu'une carte (§ 3) ; les états et les dates sont rédig
 panier moyen dit ce qu'il divise (§ 2) ; l'écran Trésorerie donne son horizon de 90 jours (§ 4.1) ; un contexte sans paramètre rend
 `params: {}` ; `GET /api/gestion/ia` rend `costs.console: 1` (par réponse rédigée).
 
+**Lot W2-d (13/11/2026), après un échange réel où les cartes étaient mal placées** : un nombre du texte est reconnu selon sa nature
+et les cartes sont placées en deux passes (§ 3) ; un tableau rend ses colonnes libellées et ses cellules rédigées (§ 4) ; un état
+est donné au modèle en minuscule ; le texte d'un bilan ne recopie plus les intertitres des groupes ; l'exemple chiffré d'une notion
+du lexique a un repli (`docs/lexique-gestion.md` § 2).
+
 **Lot W2-APPRENDRE, A-1 à A-3 (13/11/2026)** : la console explique. Onzième analyse `lexique.term`, bloc `lesson` écrit par le
 serveur, réponse « définition seule » sans rédaction (0 unité), mode « apprendre » (`mode: "learn"`), `term` sur chaque chiffre.
 Tout est décrit dans **`docs/lexique-gestion.md`**.
@@ -155,6 +160,24 @@ est écrit (le début du libellé : « budget prévu »). Sinon il est ignoré p
 valeur. Et quand deux analyses rendent **la même grandeur, de même valeur, sur la même plage** (les ventes de la période, dans le
 résultat et dans les statistiques), c'est un seul chiffre : celui de la première analyse, sa source gardée ; une seule carte.
 
+**La nature d'un nombre, et le placement en deux passes (lot W2-d).** Dans un échange réel, « du 2 juin au 31 août » faisait garder
+la carte d'un compte de 2 unités, et « contre 0 % » celle d'un budget de 0,00 $. Depuis :
+- un nombre du texte a une **nature** (`ConsoleResponder::tokens`) : montant (accolé à un signe ou à un code de devise),
+  pourcentage (suivi de %), nombre nu. Le jour et l'année d'une date ne sont pas des nombres cités. Un montant ne désigne qu'un
+  chiffre en argent, un pourcentage qu'un taux, un nombre nu qu'un compte, des jours ou un rapport ;
+- **un nombre nu ne désigne un chiffre que si un mot de son libellé est dans la même phrase** (« 33 » avec « commandes ») ;
+- quand un même montant est la valeur de **deux chiffres différents**, celui dont le libellé est le mieux écrit dans la phrase
+  l'emporte (la part des mots du libellé qu'on y lit) ; à égalité, ou sans aucun mot, aucun rattachement : on ne devine pas ;
+- **placement en deux passes** : chaque chiffre appartient au **premier texte qui l'évoque** (cité par le modèle et vérifié, ou
+  retrouvé par sa valeur) et sa carte suit ce texte ; un bloc `figures` du modèle ne garde que les chiffres **qu'aucun texte
+  n'évoque**, et disparaît s'il est vide. Les chiffres d'un texte ne partent donc plus en fin de réponse.
+Test : l'échange réel, rejoué avec ses textes et ses chiffres (`testARealExchangePlacesEachCardUnderTheTextThatSpeaksOfIt`).
+
+**Un état dans une phrase (lot W2-d).** Le modèle reçoit un état (trésorerie, budget, verdict) **en minuscule** (« correct »,
+« à monter ») et la consigne de l'écrire tel quel au milieu d'une phrase ; la carte, elle, garde sa majuscule (« Correct »).
+**Bilan d'articles** : les groupes sont affichés en intertitres dans le bloc `verdicts` ; le texte donne seulement le bilan (« Sur 6
+nouveaux articles, 5 sont à garder et 1 est à monter ») et ne recopie pas leurs phrases.
+
 **Consignes de rédaction ajoutées (lot W2-b)** : ne jamais rapprocher deux mesures différentes sans dire ce que chacune compte ; nommer
 une plage par son libellé recopié tel quel ; pour un bilan d'articles, une phrase par groupe (« 5 articles au coefficient de leur
 fournisseur : à garder »), jamais la même raison répétée article par article, le détail restant dans le bloc `verdicts`.
@@ -218,7 +241,12 @@ worker répond, le web relit toutes les 3 secondes.
   - `{ type: "text", text, figureIds }` ;
   - `{ type: "figures", items: [{ label, value, unit, source }] }` ; depuis le lot W2-b, le serveur en ajoute un à la suite de tout
     bloc `text` dont un chiffre cité n'a pas encore sa carte (§ 3) : même forme, rien à distinguer côté application ;
-  - `{ type: "table", columns, rows, source }` ;
+  - `{ type: "table", title, columns: [{ key, label, unit }], rows, more, source }` (lot W2-d) : `columns` donne, dans l'ordre
+    d'affichage, la clé de la cellule dans chaque ligne, son libellé rédigé et son unité (`money` en cents, `percent`, `count`,
+    `days`, `ratio`, `text`, `month`). Les cellules à code sont **rédigées** (« Sans prévu », « À monter », « Prudente »,
+    « novembre 2026 ») et le code reste à côté dans la ligne (`statusCode`, `verdictCode`, `confidenceCode`, `monthKey`). Une ligne
+    peut porter d'autres champs (identifiants, codes comme `category`) : seules les `columns` s'affichent
+    (`AnalysisCatalog::COLUMNS`) ;
   - `{ type: "lesson", key, term, definition, illustration, related, quiz, source }` (lot W2-APPRENDRE) : la leçon d'une notion du
     lexique, écrite par le serveur (`docs/lexique-gestion.md` § 4) ;
   - `{ type: "verdicts", items: [{ subject, verdict, why, figureIds }], groups: [{ verdict, source, count, label, productIds }] }`,
