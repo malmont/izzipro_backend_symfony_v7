@@ -19,6 +19,8 @@ class ShippingWeightsTest extends WebTestCase
 {
     private KernelBrowser $client;
     private \Doctrine\DBAL\Connection $db;
+    /** @var list<int> articles créés par d'autres tests, mis de côté le temps de celui-ci (voir setUp) */
+    private array $setAside = [];
 
     protected function setUp(): void
     {
@@ -27,6 +29,14 @@ class ShippingWeightsTest extends WebTestCase
         $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
         $this->db = $provider->getEntityManager()->getConnection();
         static::getContainer()->get(BoutiqueDemoSeeder::class)->seed('client-poids@example.invalid', false, false);
+        // Contexte isolé (13/11/2026) : l'estimation ne prend que les premiers articles sans dimensions, classés par nom. La base de test
+        // est partagée par toute la suite : un article laissé par un autre test pouvait passer devant ceux de démonstration, et le test
+        // échouait dans la suite complète sans jamais échouer seul. Les articles qui ne sont pas de démonstration sortent donc du
+        // périmètre (« ne s'expédie pas ») le temps du test, puis y reviennent.
+        $this->setAside = array_map('intval', $this->db->fetchFirstColumn("SELECT id FROM product WHERE requires_shipping = true AND (code IS NULL OR code NOT LIKE 'DEMO-%')"));
+        if ($this->setAside !== []) {
+            $this->db->executeStatement('UPDATE product SET requires_shipping = false WHERE id IN (?)', [$this->setAside], [\Doctrine\DBAL\ArrayParameterType::INTEGER]);
+        }
         $this->db->executeStatement('DELETE FROM product_shipping');
         $this->db->executeStatement('DELETE FROM boutique_setting');
         FakeLandingAiClient::reset();
@@ -35,6 +45,15 @@ class ShippingWeightsTest extends WebTestCase
         } else {
             $this->db->executeStatement('UPDATE ai_credit_setting SET monthly_credits = 50');
         }
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->setAside !== []) {
+            $this->db->executeStatement('UPDATE product SET requires_shipping = true WHERE id IN (?)', [$this->setAside], [\Doctrine\DBAL\ArrayParameterType::INTEGER]);
+            $this->setAside = [];
+        }
+        parent::tearDown();
     }
 
     public function testAProductWithoutASheetFallsBackToItsClassThenToTheSiteDefault(): void
