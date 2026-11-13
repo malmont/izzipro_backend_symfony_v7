@@ -5,8 +5,12 @@ namespace App\Tests\Functional\Gestion;
 use App\Entity\User;
 use App\EventSubscriber\CacheInvalidationSubscriber;
 use App\Gestion\Analysis\AnalysisCatalog;
+use App\Gestion\Analysis\RangeLabel;
 use App\Gestion\Message\AnswerConsoleQuestionMessage;
 use App\Gestion\MessageHandler\AnswerConsoleQuestionHandler;
+use App\Gestion\Services\Console\ConsoleResponder;
+use App\Gestion\Services\Console\ConsoleScreens;
+use App\Gestion\Services\Console\ConsoleService;
 use App\Gestion\Services\Conversation\GestionConversationService;
 use App\Gestion\Services\PeriodCalendar;
 use App\Services\TenantConnectionManager;
@@ -17,6 +21,7 @@ use App\Tests\Functional\Support\AiRightTestHelper;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
  * Console IA générale de la gestion (lot W2, 13/11/2026, `docs/console-gestion.md`) : une question reçoit tout de suite une réponse
@@ -140,19 +145,23 @@ class ConsoleApiTest extends WebTestCase
         $answer = $exchange['messages'][1];
         $this->assertSame([false, 'done', null], [$exchange['pending'], $answer['state'], $answer['error']]);
         $this->assertNotNull($answer['answeredAt']);
-        $this->assertSame(['text', 'verdicts', 'figures', 'table'], array_column($answer['blocks'], 'type'), 'le tableau d\'une analyse qui n\'a pas été lancée est écarté');
+        // Lot W2-b : le chiffre dont le texte parle (« a1.newItems ») reçoit sa carte à la suite du texte, ajoutée par le serveur
+        $this->assertSame(['text', 'figures', 'verdicts', 'figures', 'table'], array_column($answer['blocks'], 'type'), 'le tableau d\'une analyse qui n\'a pas été lancée est écarté');
+        $this->assertSame(['a1.newItems'], array_column($answer['blocks'][1]['items'], 'id'), 'la carte du chiffre cité par le texte');
+        $this->assertSame($newItems, $answer['blocks'][1]['items'][0]['value']);
         $this->assertSame(['type' => 'text', 'text' => "Vous avez $newItems nouveaux articles sur la période. Voici leur bilan.", 'figureIds' => ['a1.newItems']], $answer['blocks'][0], 'un identifiant de chiffre inconnu est retiré');
         // Verdicts : ceux du serveur (règle du coefficient), jamais ceux du modèle ; une explication qui porte un nombre inconnu est remplacée par celle du serveur
-        $verdicts = array_column($answer['blocks'][1]['items'], null, 'verdict');
-        $this->assertSame(['raise', 'keep', 'lower'], array_column($answer['blocks'][1]['items'], 'verdict'));
+        $verdicts = array_column($answer['blocks'][2]['items'], null, 'verdict');
+        $this->assertSame(['raise', 'keep', 'lower'], array_column($answer['blocks'][2]['items'], 'verdict'));
+        $this->assertSame(['type', 'items', 'groups', 'source'], array_keys($answer['blocks'][2]), 'le bloc des verdicts porte ses groupes (lot W2-b)');
         $this->assertSame([['type' => 'product', 'id' => $raise, 'name' => "000 Console monter $tag"], 'Ses semblables se sont vendus à 90 % sans rabais.', ['a1.verdictRaise']], [$verdicts['raise']['subject'], $verdicts['raise']['why'], $verdicts['raise']['figureIds']]);
         $this->assertSame('Son prix est déjà au bon niveau.', $verdicts['keep']['why']);
         $this->assertStringStartsWith('2,7 : 5 semblables de ce fournisseur affichés à 2,5, vendus à 90 %', $verdicts['lower']['why'], '« 17 % » n\'est dans aucun résultat : l\'explication chiffrée du serveur prend sa place');
         // Chiffres et tableau : assemblés par le serveur, avec leur source
-        $this->assertSame(['a1.verdictRaise', 'a1.verdictLower'], array_column($answer['blocks'][2]['items'], 'id'));
-        $this->assertSame(['id', 'label', 'value', 'unit', 'source'], array_keys($answer['blocks'][2]['items'][0]));
-        $this->assertSame(['screen' => 'articles', 'route' => null, 'params' => ['periodId' => $period]], $answer['blocks'][2]['items'][0]['source']);
-        $rows = array_column($answer['blocks'][3]['rows'], null, 'productId');
+        $this->assertSame(['a1.verdictRaise', 'a1.verdictLower'], array_column($answer['blocks'][3]['items'], 'id'));
+        $this->assertSame(['id', 'label', 'value', 'unit', 'source'], array_keys($answer['blocks'][3]['items'][0]));
+        $this->assertSame(['screen' => 'articles', 'route' => null, 'params' => ['periodId' => $period]], $answer['blocks'][3]['items'][0]['source']);
+        $rows = array_column($answer['blocks'][4]['rows'], null, 'productId');
         $this->assertArrayNotHasKey($history[0][0], $rows, 'un article acheté la saison passée n\'est pas un article nouveau de la période');
         $this->assertSame([[1000, 2500, 2.5, 2.7, 'similar', 'raise', 5], [1000, 2700, 2.7, 2.7, 'similar', 'keep', 5], [1000, 3200, 3.2, 2.7, 'similar', 'lower', 5]],
             array_map(fn (int $p) => [$rows[$p]['cost'], $rows[$p]['price'], $rows[$p]['coefficient'], $rows[$p]['proposedCoefficient'], $rows[$p]['proposalSource'], $rows[$p]['verdict'], $rows[$p]['similarCount']], [$raise, $keep, $lower]));
@@ -169,7 +178,10 @@ class ConsoleApiTest extends WebTestCase
         $plain = fn (string $v) => preg_replace('/[\x{00A0}\x{202F}]/u', ' ', $v); // l'espace devant le symbole de la devise est insécable
         $this->assertSame(['10,00 $', '25,00 $', 'raise'], [$plain($sent['cost']), $plain($sent['price']), $sent['verdict']]);
         $first = json_decode(FakeLandingAiClient::$requests[0]['messages'][0]['content'][0]['text'], true);
-        $this->assertSame(['Fais le bilan de mes nouveaux articles', ['module' => 'gestion', 'screen' => 'articles', 'params' => ['periodId' => $period]], [], 10], [$first['question'], $first['ecran'], $first['echange'], count($first['analyses'])]);
+        // Lot W2-b : l'écran est traduit par le serveur (titre, thème, analyses par défaut avec les paramètres de l'écran)
+        $this->assertSame(['Fais le bilan de mes nouveaux articles', ['code' => 'articles', 'titre' => 'Articles', 'theme' => 'Achats et stock', 'params' => ['periodId' => $period],
+            'analysesParDefaut' => [['key' => 'articles.missing_cost'], ['key' => 'articles.new', 'periodId' => $period]]], [], 10], [$first['question'], $first['ecran'], $first['echange'], count($first['analyses'])]);
+        $this->assertSame(['titre' => 'Articles', 'theme' => 'Achats et stock'], $second['ecran'], 'l\'appel 2 peut nommer l\'écran');
         $this->assertContains($period, array_column($first['periodes'], 'id'));
         $this->assertSame(['claude-sonnet-5-5', 'claude-sonnet-5-5'], array_column(FakeLandingAiClient::$requests, 'model'));
         foreach (FakeLandingAiClient::$requests as $request) {
@@ -392,7 +404,7 @@ class ConsoleApiTest extends WebTestCase
         foreach (array_keys(AnalysisCatalog::DEFINITIONS) as $key) {
             foreach (['fr', 'en'] as $locale) {
                 $r = $catalog->run($key, $catalog->accept($key, $key === 'articles.vs_similar' ? ['productId' => $product] : []), $locale);
-                $this->assertSame(['key', 'title', 'period', 'figures', 'rows', 'more', 'source'], array_keys($r), $key);
+                $this->assertSame(['key', 'title', 'period', 'figures', 'rows', 'groups', 'more', 'source'], array_keys($r), $key);
                 $this->assertSame([$key, AnalysisCatalog::DEFINITIONS[$key]['screen'], AnalysisCatalog::DEFINITIONS[$key]['route']], [$r['key'], $r['source']['screen'], $r['source']['route']]);
                 $this->assertNotSame('console.analyses.' . str_replace('.', '_', $key), $r['title'], "$key : titre traduit en $locale");
                 $this->assertLessThanOrEqual(AnalysisCatalog::MAX_FIGURES, count($r['figures']));
@@ -439,6 +451,279 @@ class ConsoleApiTest extends WebTestCase
         $sales = array_column($catalog->run('sales.overview', ['range' => 'month'], 'fr')['figures'], null, 'id');
         $this->assertArrayHasKey('revenue', $sales);
         $this->assertSame('money', $sales['revenue']['unit']);
+    }
+
+    /**
+     * Lot W2-b (13/11/2026, retouches après le premier essai réel de la console) : l'écran d'où vient la question est traduit par le
+     * serveur (codes de l'application web, thème, analyses par défaut, paramètres) ; une question qui dit « période » lit les ventes sur
+     * la période ; les libellés de plage sont rédigés et ceux des chiffres disent ce qu'ils comptent ; tout chiffre dont un texte parle
+     * a sa carte à la suite ; un bilan d'articles porte ses groupes comptés par le serveur ; unités : 1 pour un administrateur du site,
+     * 0 pour le propriétaire de la plateforme.
+     */
+    public function testScreensPeriodLabelsCitedFiguresGroupsAndUnits(): void
+    {
+        $tag = $this->tag;
+        $conn = fn () => $this->em()->getConnection();
+        $calendar = static::getContainer()->get(PeriodCalendar::class);
+        $current = $calendar->current();
+        $period = (int) $current->getId();
+        $periodName = PeriodCalendar::displayName($current, 'fr');
+        $today = $calendar->today()->format('Y-m-d');
+        $usage = fn (): array => array_column($conn()->fetchAllAssociative('SELECT status, COUNT(*) AS n FROM ai_usage WHERE id > ? GROUP BY status ORDER BY status', [$this->usageMark]), 'n', 'status');
+        $none = ['periodId' => null, 'productId' => null, 'year' => null, 'days' => null, 'range' => null];
+        $text = fn (string $t, array $ids = []): array => ['type' => 'text', 'text' => $t, 'figureIds' => $ids, 'analysis' => '', 'items' => []];
+        $payload = fn (int $i): array => json_decode(FakeLandingAiClient::$requests[$i]['messages'][0]['content'][0]['text'], true);
+        $system = fn (int $i): string => (string) FakeLandingAiClient::$requests[$i]['system'];
+        $money = fn (int $cents): string => number_format($cents / 100, 2, ',', ' ') . ' $';
+        $last = fn (int $id): array => array_slice($this->get("/api/gestion/console/conversations/$id")['messages'], -1)[0];
+        $ran = fn (array $answer): array => array_map(fn (array $x) => [$x['key'], $x['params']], $answer['analyses']);
+
+        // Cinq articles semblables vendus à 90 % la saison comparable (le serveur propose 2,7) ; trois articles nouveaux : deux à garder, un à monter, vendu aujourd'hui
+        $season = PeriodCalendar::definition(\DateTimeImmutable::createFromInterface($current->getStartDateCollection())->modify('-1 year'), $calendar->frequency());
+        $supplier = $this->supplier("Grossiste écrans $tag");
+        foreach (range(1, 5) as $i) {
+            [, $variant] = $this->article($supplier, "Historique écrans $i $tag", 1000, 2500, $season['start']->modify('+2 days')->format('Y-m-d'));
+            $this->sale($variant, 9, 2500, 2500, $season['start']->modify('+16 days')->format('Y-m-d'));
+        }
+        [$keep1] = $this->article($supplier, "000 Écrans garder un $tag", 1000, 2700, $today);
+        [$keep2] = $this->article($supplier, "000 Écrans garder deux $tag", 1000, 2700, $today);
+        [$raise, $raiseVariant] = $this->article($supplier, "000 Écrans monter $tag", 1000, 2500, $today);
+        $this->sale($raiseVariant, 2, 2500, 2500, $today);
+        $commande = (int) $this->fixtureCommandeIds[0];
+        $this->endOfWrite();
+
+        // ---- 1. La table des écrans ---------------------------------------------------------------------------------------------------
+        // Les codes de l'application web (relevés dans son code le 13/11/2026), un de chaque thème et tous les autres
+        $web = ['gestion.home', 'sequences', 'sequences.detail', 'conseils', 'conversations', 'conversation', 'theme',
+            'commandes', 'a-recevoir', 'a-classer', 'fournisseurs', 'frais-de-port', 'transporteurs', 'voyages', 'voyages.suivi', 'articles', 'documents.scan',
+            'prix', 'promotions', 'locations.prix', 'locations', 'publicite', 'publicite.campagne', 'campagnes.new',
+            'tresorerie', 'frais-fixes', 'notes-de-frais',
+            'periodes', 'periode', 'periode.budget', 'periode.simulation', 'preparation', 'statistiques', 'statistiques.annee',
+            'reglages', 'reprise'];
+        $catalog = static::getContainer()->get(AnalysisCatalog::class);
+        $translator = static::getContainer()->get(TranslatorInterface::class);
+        $this->assertSame([], array_values(array_diff($web, array_keys(ConsoleScreens::SCREENS))), 'chaque code de l\'application web est connu');
+        foreach (array_keys(ConsoleScreens::SCREENS) as $code) {
+            $this->assertTrue(ConsoleScreens::known($code));
+            $this->assertContains(ConsoleScreens::theme($code, []), ConsoleScreens::THEMES, $code);
+            $defaults = ConsoleScreens::defaults($code, []);
+            $this->assertNotSame([], $defaults, "$code : au moins les analyses de son thème");
+            foreach ($defaults as $d) {
+                $this->assertTrue($catalog->has($d['key']), "$code : {$d['key']} est une analyse du catalogue");
+            }
+            foreach (['fr', 'en'] as $locale) {
+                $id = 'console.screens.' . str_replace(['.', '-'], '_', $code);
+                $this->assertNotSame($id, $translator->trans($id, [], 'gestion', $locale), "$code : titre de l'écran en $locale");
+            }
+        }
+        foreach (ConsoleScreens::THEMES as $theme) {
+            $this->assertNotSame("console.themes.$theme", $translator->trans("console.themes.$theme", [], 'gestion', 'en'));
+            $this->assertNotSame([], ConsoleScreens::THEME_ANALYSES[$theme]);
+        }
+        $this->assertSame(['accueil', 'achats', 'ventes', 'argent', 'resultats', 'reglages'], array_map(fn (string $c) => ConsoleScreens::theme($c, []), ['gestion.home', 'fournisseurs', 'promotions', 'tresorerie', 'periode', 'reprise']), 'un code de chaque thème');
+        $this->assertFalse(ConsoleScreens::known('ecran.inconnu'));
+        $this->assertFalse(ConsoleScreens::known(12));
+        // Un écran sans analyse propre reçoit celles de son thème ; la page d'un thème, celles du thème qu'elle montre
+        $keys = fn (string $code, array $params = []): array => array_column(ConsoleScreens::defaults($code, $params), 'key');
+        $this->assertSame([['budget.status', 'articles.new', 'articles.missing_cost'], ['budget.status', 'articles.new', 'articles.missing_cost'], ['cash.projection', 'budget.status'], ['period.result', 'advice.current'], ['cash.projection']],
+            [$keys('fournisseurs'), $keys('transporteurs'), $keys('theme', ['theme' => 'argent']), $keys('theme'), $keys('tresorerie')]);
+        $this->assertSame(['argent', 'accueil'], [ConsoleScreens::theme('theme', ['theme' => 'argent']), ConsoleScreens::theme('theme', [])]);
+        // Les paramètres de l'écran passent aux analyses qui les déclarent ; une période l'emporte sur une plage ; une plage que l'analyse ne connaît pas est écartée
+        $this->assertSame([[['key' => 'sales.overview', 'params' => ['range' => '7d']]], [['key' => 'sales.overview', 'params' => ['periodId' => 5]]], [['key' => 'sales.overview', 'params' => []]], [['key' => 'year.overview', 'params' => ['year' => 2025]]]],
+            [ConsoleScreens::defaults('statistiques', ['range' => '7d', 'source' => 'pos']), ConsoleScreens::defaults('statistiques', ['range' => 'period', 'periodId' => 5]), ConsoleScreens::defaults('statistiques', ['range' => 'dates']),
+                ConsoleScreens::defaults('statistiques.annee', ['year' => 2025, 'pricePercent' => 5])]);
+        $this->assertSame([['range' => 'today'], [['key' => 'period.result', 'params' => ['periodId' => 7]], ['key' => 'sales.overview', 'params' => ['periodId' => 7]]]], [ConsoleScreens::defaults('gestion.home', [])[0]['params'], ConsoleScreens::defaults('periode', ['periodId' => 7])]);
+        $this->assertSame([['key' => 'sales.overview', 'params' => ['periodId' => 5]]], ConsoleScreens::defaults('statistiques', ['range' => '7d', 'periodId' => 5]), 'une plage ET une période : la période seule');
+
+        // Le contexte gardé avec la question : paramètres déclarés pour l'écran et bien formés ; identifiants du site vérifiés ; le reste est écarté
+        $this->em();
+        $console = static::getContainer()->get(ConsoleService::class);
+        $ctx = fn (string $screen, mixed $params = []): ?array => $console->context(['module' => 'gestion', 'screen' => $screen, 'params' => $params]);
+        $kept = fn (string $screen, mixed $params = []): ?array => $ctx($screen, $params)['params'] ?? null;
+        $this->assertSame(['module' => 'gestion', 'screen' => 'gestion.home', 'params' => []], $ctx('gestion.home', ['periodId' => 2147483000, 'theme' => 'ventes', 'autre' => 'x']), 'période inexistante, paramètre d\'un autre écran, paramètre inconnu : écartés');
+        $this->assertSame([['theme' => 'ventes'], []], [$kept('theme', ['theme' => 'ventes']), $kept('theme', ['theme' => 'comptes'])]);
+        $this->assertSame([['periodId' => $period, 'commandeId' => $commande], ['periodId' => $period]], [$kept('commandes', ['commandeId' => $commande, 'periodId' => $period]), $kept('commandes', ['periodId' => $period, 'commandeId' => 2147483000])]);
+        $this->assertSame([['range' => 'period', 'source' => 'pos', 'periodId' => $period], []], [$kept('statistiques', ['periodId' => $period, 'source' => 'pos', 'range' => 'period']), $kept('statistiques', ['range' => 'siecle', 'source' => 'caisse', 'periodId' => '12'])]);
+        $this->assertSame([['filter' => 'missing-cost', 'from' => '2026-01-01'], ['type' => 'facture'], ['year' => 2026, 'pricePercent' => 5.5], ['key' => 'period.prepare', 'instance' => '2026-Q4']], [
+            $kept('articles', ['filter' => 'missing-cost', 'from' => '2026-01-01', 'to' => '2026-13-45']), $kept('documents.scan', ['type' => 'facture', 'documentId' => 'abc']),
+            $kept('statistiques.annee', ['year' => 2026, 'pricePercent' => 5.5]), $kept('sequences.detail', ['key' => 'period.prepare', 'instance' => '2026-Q4', 'page' => 2])]);
+        $this->assertSame([[], [], [], [], []], [$kept('tresorerie'), $kept('reglages', 'pas un tableau'), $kept('documents.scan', ['documentId' => 0, 'type' => 'devis']), $kept('sequences.detail', ['key' => 'a b', 'instance' => str_repeat('x', 61)]),
+            $kept('statistiques.annee', ['year' => 1999, 'pricePercent' => '5'])]);
+        $this->assertSame([null, null, null], [$console->context(['module' => 'boutique', 'screen' => 'tresorerie']), $ctx('ecran.inconnu'), $console->context('gestion.home')], 'autre module, code inconnu, contexte mal formé : ignorés, sans erreur');
+        // Les codes du premier contrat restent acceptés
+        $this->assertSame([['productId' => $raise], [['key' => 'articles.vs_similar', 'params' => ['productId' => $raise]]]], [$kept('article', ['productId' => $raise]), ConsoleScreens::defaults('article', ['productId' => $raise])]);
+
+        // ---- 2. Libellés de plage rédigés par le serveur --------------------------------------------------------------------------------
+        $this->assertSame(['le 13 novembre 2026', 'du 1er au 13 novembre 2026', 'du 28 octobre au 13 novembre 2026', 'du 15 décembre 2025 au 13 janvier 2026'],
+            [RangeLabel::of('2026-11-13', '2026-11-13', 'fr'), RangeLabel::of('2026-11-01', '2026-11-13', 'fr'), RangeLabel::of('2026-10-28', '2026-11-13', 'fr'), RangeLabel::of('2025-12-15', '2026-01-13', 'fr')]);
+        $this->assertSame(['November 13, 2026', 'November 1 to 13, 2026', 'October 28 to November 13, 2026', 'December 15, 2025 to January 13, 2026'],
+            [RangeLabel::of('2026-11-13', '2026-11-13', 'en'), RangeLabel::of('2026-11-01', '2026-11-13', 'en'), RangeLabel::of('2026-10-28', '2026-11-13', 'en'), RangeLabel::of('2025-12-15', '2026-01-13', 'en')]);
+
+        // ---- 3. « Comment se passe la période en cours ? » depuis l'écran d'une période ---------------------------------------------------
+        $result = array_column($catalog->run('period.result', ['periodId' => $period], 'fr')['figures'], null, 'id');
+        $budget = array_column($catalog->run('budget.status', ['periodId' => $period], 'fr')['figures'], null, 'id');
+        $this->em();
+        $this->assertGreaterThan(0, $result['revenue']['value']);
+        $this->assertGreaterThan(0, $budget['actual']['value']);
+        $this->assertNotSame($result['revenue']['value'], $budget['actual']['value']);
+        // Les libellés des chiffres disent ce qu'ils comptent : frais hors achats d'un côté, dépenses réelles achats compris de l'autre
+        $this->assertSame(['Frais de la période (port, notes de frais, publicité), hors achats de marchandise', 'Budget prévu, achats de marchandise compris', 'Dépenses réelles, achats de marchandise compris', 'Reste du budget'],
+            [$result['expenses']['label'], $budget['planned']['label'], $budget['actual']['label'], $budget['remaining']['label']]);
+        $english = array_column($catalog->run('budget.status', ['periodId' => $period], 'en')['figures'], 'label', 'id') + array_column($catalog->run('period.result', ['periodId' => $period], 'en')['figures'], 'label', 'id');
+        $this->em();
+        $this->assertSame(['Period expenses (shipping, expense reports, advertising), excluding merchandise purchases', 'Actual spending, merchandise purchases included'], [$english['expenses'], $english['actual']]);
+
+        $screen = ['module' => 'gestion', 'screen' => 'periode', 'params' => ['periodId' => $period, 'autre' => 1]];
+        $a = $this->post('/api/gestion/console/messages', ['text' => 'Comment se passe la période en cours ?', 'context' => $screen], 202);
+        $id = (int) $a['conversationId'];
+        $this->assertSame(['reserved' => 1], $usage(), 'administrateur du site : 1 unité réservée');
+        $this->assertSame(['module' => 'gestion', 'screen' => 'periode', 'params' => ['periodId' => $period]], $this->get("/api/gestion/console/conversations/$id")['messages'][0]['context'], 'le contexte apparaît dans le message');
+        // Le modèle choisit les ventes sur le MOIS et laisse les périodes vides ; il parle d'un chiffre sans le citer, et d'un autre qu'il montre lui-même
+        FakeLandingAiClient::$queue = [
+            $this->reply(['kind' => 'analyses', 'clarification' => '', 'analyses' => [['key' => 'period.result'] + $none, ['key' => 'sales.overview', 'range' => 'month'] + $none, ['key' => 'budget.status'] + $none]]),
+            $this->reply(['blocks' => [
+                $text('Les ventes de la période sont de ' . $money($result['revenue']['value']) . '.'),
+                $text('Les dépenses réelles du budget sont de ' . $money($budget['actual']['value']) . ', achats de marchandise compris.', ['a3.actual']),
+                ['type' => 'figures', 'text' => '', 'figureIds' => ['a3.actual'], 'analysis' => '', 'items' => []],
+            ], 'proposals' => []]),
+        ];
+        $this->runWorker((int) $a['messageId']);
+        $answer = $last($id);
+        $this->assertSame('done', $answer['state'], json_encode($answer, JSON_UNESCAPED_UNICODE));
+        $this->assertSame([['period.result', ['periodId' => $period]], ['sales.overview', ['periodId' => $period]], ['budget.status', ['periodId' => $period]]], $ran($answer),
+            'la période de l\'écran complète ce que le modèle laisse vide ; la question dit « période » : les ventes sont lues sur la période, pas sur le mois');
+        $this->assertSame($periodName, $answer['analyses'][1]['period']['label'], 'une période se nomme');
+        $this->assertMatchesRegularExpression('/^du .+ au .+ \d{4}$/u', $answer['analyses'][1]['period']['previousLabel'], 'la plage comparée est rédigée');
+        // Tout chiffre dont un texte parle a sa carte à la suite : celui que le modèle n'a pas cité est retrouvé par sa valeur ; celui qu'un bloc `figures` montre déjà n'est pas doublé
+        $this->assertSame(['text', 'figures', 'text', 'figures'], array_column($answer['blocks'], 'type'));
+        $this->assertSame([['a1.revenue'], ['a1.revenue'], ['a3.actual'], ['a3.actual']],
+            [$answer['blocks'][0]['figureIds'], array_column($answer['blocks'][1]['items'], 'id'), $answer['blocks'][2]['figureIds'], array_column($answer['blocks'][3]['items'], 'id')]);
+        $this->assertSame([$result['revenue']['value'], 'Dépenses réelles, achats de marchandise compris'], [$answer['blocks'][1]['items'][0]['value'], $answer['blocks'][3]['items'][0]['label']]);
+        // Ce que le modèle a lu : l'écran traduit par le serveur à l'appel 1 ; à l'appel 2 son titre, la période nommée, les plages comparées rédigées
+        $first = $payload(0);
+        $second = $payload(1);
+        $this->assertSame(['code' => 'periode', 'titre' => 'Détail d\'une période', 'theme' => 'Périodes et résultats', 'params' => ['periodId' => $period],
+            'analysesParDefaut' => [['key' => 'period.result', 'periodId' => $period], ['key' => 'sales.overview', 'periodId' => $period]]], $first['ecran']);
+        $this->assertSame(['titre' => 'Détail d\'une période', 'theme' => 'Périodes et résultats'], $second['ecran']);
+        $this->assertSame([$periodName, 'Dépenses réelles, achats de marchandise compris'], [$second['resultats'][1]['period'], array_column($second['resultats'][2]['figures'], 'label', 'id')['a3.actual']]);
+        $this->assertMatchesRegularExpression('/^du .+ au .+ \d{4}$/u', $second['resultats'][1]['previousLabel']);
+        foreach (['qui dit « période »', '« analysesParDefaut »', '« range » ne sert que si la question nomme une durée'] as $rule) {
+            $this->assertStringContainsString($rule, $system(0), 'consigne de l\'appel 1');
+        }
+        foreach (['ne les rapproche jamais sans dire ce que chacun compte', '« groupes » réunit les articles de même verdict', 'CHAQUE chiffre dont le texte parle', 'recopié tel quel'] as $rule) {
+            $this->assertStringContainsString($rule, $system(1), 'consigne de l\'appel 2');
+        }
+        $this->assertSame(['success' => 1], $usage(), 'administrateur du site : une réponse rédigée = 1 unité');
+        $this->assertSame(1, (int) $conn()->fetchOne("SELECT COALESCE(SUM(credits), 0) FROM ai_usage WHERE id > ? AND status = 'success'", [$this->usageMark]));
+
+        // Une durée nommée (« ce mois ») garde la plage choisie, même depuis l'écran d'une période et même si la question dit aussi « période » ; son libellé est rédigé, jamais « 1-13 nov. »
+        $b = $this->post('/api/gestion/console/messages', ['text' => 'Et les ventes de ce mois, dans la période ?', 'conversationId' => $id, 'context' => $screen], 202);
+        FakeLandingAiClient::$queue = [$this->reply(['kind' => 'analyses', 'clarification' => '', 'analyses' => [['key' => 'sales.overview', 'range' => 'month'] + $none]]), $this->reply(['blocks' => [$text('Voici les ventes du mois.')], 'proposals' => []])];
+        $this->runWorker((int) $b['messageId']);
+        $month = $last($id);
+        $this->assertSame([['sales.overview', ['range' => 'month']]], $ran($month));
+        $range = $month['analyses'][0]['period'];
+        $this->assertSame([substr($today, 0, 8) . '01', $today, RangeLabel::of($range['from'], $range['to'], 'fr')], [$range['from'], $range['to'], $range['label']]);
+        $this->assertMatchesRegularExpression('/^(le|du) .+ \d{4}$/u', $range['label']);
+        $this->assertDoesNotMatchRegularExpression('/\d-\d|\./', $range['label'], 'jamais la forme brute « 1-13 nov. »');
+        $this->assertSame($range['label'], $payload(3)['resultats'][0]['period'], 'le modèle reçoit le libellé rédigé');
+
+        // Sans écran : « période » dans la question, aucune période choisie par le modèle : la période en cours
+        $c = $this->post('/api/gestion/console/messages', ['text' => 'Où en sont les ventes de la période ?'], 202);
+        FakeLandingAiClient::$queue = [$this->reply(['kind' => 'analyses', 'clarification' => '', 'analyses' => [['key' => 'sales.overview'] + $none]]), $this->reply(['blocks' => [$text('Voici les ventes de la période.')], 'proposals' => []])];
+        $this->runWorker((int) $c['messageId']);
+        $this->assertSame([[['sales.overview', ['periodId' => $period]]], null], [$ran($last((int) $c['conversationId'])), $payload(4)['ecran']]);
+        $this->assertArrayNotHasKey('ecran', $payload(5), 'sans écran connu, l\'appel 2 n\'en reçoit pas');
+
+        // ---- 4. Bilan d'articles : les groupes (même verdict, même raison), comptés par le serveur ---------------------------------------
+        $d = $this->post('/api/gestion/console/messages', ['text' => 'Fais le bilan des nouveaux articles', 'context' => ['module' => 'gestion', 'screen' => 'prix', 'params' => ['adviceId' => 3]]], 202);
+        FakeLandingAiClient::$queue = [$this->reply(['kind' => 'analyses', 'clarification' => '', 'analyses' => [['key' => 'articles.new'] + $none]]), $this->reply(['blocks' => [
+            $text('Voici le bilan, groupe par groupe.'),
+            ['type' => 'verdicts', 'text' => '', 'figureIds' => [], 'analysis' => 'a1', 'items' => array_map(fn (int $p) => ['id' => $p, 'why' => 'Vu avec ses semblables.', 'figureIds' => []], [$keep1, $keep2, $raise])],
+        ], 'proposals' => []])];
+        $this->runWorker((int) $d['messageId']);
+        $review = $last((int) $d['conversationId']);
+        $this->assertSame(['text', 'verdicts'], array_column($review['blocks'], 'type'));
+        $groups = $review['blocks'][1]['groups'];
+        $newItems = array_column($catalog->run('articles.new', ['periodId' => $period], 'fr')['figures'], 'value', 'id')['newItems'];
+        $this->em();
+        foreach ($groups as $g) {
+            $this->assertSame(['verdict', 'source', 'count', 'label', 'productIds'], array_keys($g));
+            $this->assertSame($g['count'], count($g['productIds']), 'le nombre du groupe est celui de ses articles');
+        }
+        $this->assertSame($newItems, array_sum(array_column($groups, 'count')), 'chaque article nouveau est dans un groupe, un seul');
+        $of = fn (int $product): array => array_values(array_filter($groups, fn (array $g) => in_array($product, $g['productIds'], true)))[0];
+        $keepGroup = $of($keep1);
+        $raiseGroup = $of($raise);
+        $this->assertSame(['keep', 'similar', 'coefficient proposé d\'après leurs semblables'], [$keepGroup['verdict'], $keepGroup['source'], $keepGroup['label']]);
+        $this->assertContains($keep2, $keepGroup['productIds'], 'les deux articles à garder pour la même raison sont réunis');
+        $this->assertGreaterThanOrEqual(2, $keepGroup['count']);
+        $this->assertSame(['raise', 'similar', $raiseGroup['count'] > 1 ? 'coefficient proposé d\'après leurs semblables' : 'coefficient proposé d\'après ses semblables'], [$raiseGroup['verdict'], $raiseGroup['source'], $raiseGroup['label']]);
+        $rank = array_map(fn (array $g) => ['raise' => 0, 'lower' => 1, 'keep' => 2, '' => 3][(string) $g['verdict']], $groups);
+        $sorted = $rank;
+        sort($sorted);
+        $this->assertSame($sorted, $rank, 'à monter, à baisser, à garder, sans verdict');
+        // Le modèle reçoit les groupes avec leur nombre : il n'a rien à compter
+        $sent = $payload(7)['resultats'][0]['groupes'];
+        $this->assertSame(count($groups), count($sent));
+        $sentKeep = array_values(array_filter($sent, fn (array $g) => in_array("000 Écrans garder un $tag", $g['articles'], true)))[0];
+        $this->assertSame(['verdict', 'raison', 'nombre', 'articles'], array_keys($sentKeep));
+        $this->assertSame(['keep', 'coefficient proposé d\'après leurs semblables', (string) $keepGroup['count']], [$sentKeep['verdict'], $sentKeep['raison'], $sentKeep['nombre']]);
+        $this->assertLessThanOrEqual(AnalysisCatalog::GROUP_NAMES, count($sentKeep['articles']));
+        $this->assertSame(['module' => 'gestion', 'screen' => 'prix', 'params' => ['adviceId' => 3]], $this->get("/api/gestion/console/conversations/{$d['conversationId']}")['messages'][0]['context']);
+        $englishGroups = $catalog->run('articles.new', ['periodId' => $period], 'en')['groups'];
+        $this->em();
+        $this->assertContains('coefficient suggested from their similar items', array_column($englishGroups, 'label'));
+        $this->assertSame(['success' => 4], $usage(), 'quatre réponses rédigées pour l\'administrateur du site : 4 unités');
+
+        // Une AUTRE période que la période en cours : celle de l'écran complète un choix laissé vide ; pour une question qui dit « période »,
+        // les ventes prennent la période des autres analyses de la réponse, à défaut celle de l'écran
+        $other = (int) $conn()->fetchOne("INSERT INTO collections (id, budget_collection, start_date_collection, end_date_collection, del, nom_collection, is_closed, kind, period_key) VALUES (nextval('collections_id_seq'), 0, NOW() + INTERVAL '800 days', NOW() + INTERVAL '830 days', false, ?, false, 'period', ?) RETURNING id", ["Période à venir $tag", "C-$tag"]);
+        $this->endOfWrite();
+        $otherScreen = ['module' => 'gestion', 'screen' => 'periode', 'params' => ['periodId' => $other]];
+        $run = function (string $question, ?array $context, array $analyses) use ($text, $last, $ran): array {
+            $asked = $this->post('/api/gestion/console/messages', ['text' => $question] + ($context === null ? [] : ['context' => $context]), 202);
+            FakeLandingAiClient::$queue = [$this->reply(['kind' => 'analyses', 'clarification' => '', 'analyses' => $analyses]), $this->reply(['blocks' => [$text('Voici.')], 'proposals' => []])];
+            $this->runWorker((int) $asked['messageId']);
+
+            return $ran($last((int) $asked['conversationId']));
+        };
+        $this->assertSame([['period.result', ['periodId' => $other]]], $run('Explique-moi ce résultat', $otherScreen, [['key' => 'period.result'] + $none]), 'la période de l\'écran, pas la période en cours');
+        $this->assertSame([['period.result', ['periodId' => $other]], ['sales.overview', ['periodId' => $other]]],
+            $run('Compare les ventes de cette période', null, [['key' => 'period.result', 'periodId' => $other] + $none, ['key' => 'sales.overview', 'range' => 'month'] + $none]), 'la période des autres analyses de la réponse');
+        $this->assertSame([['sales.overview', ['periodId' => $other]]], $run('Et les ventes de la période ?', $otherScreen, [['key' => 'sales.overview', 'range' => 'month'] + $none]), 'à défaut, la période de l\'écran');
+        $conn()->executeStatement('DELETE FROM collections WHERE id = ?', [$other]);
+        $this->endOfWrite();
+
+        // ---- 5. Un chiffre retrouvé par sa valeur : seul candidat, ou celui dont le libellé est dans le texte ; sinon aucun -----------------
+        $responder = static::getContainer()->get(ConsoleResponder::class);
+        $method = new \ReflectionMethod(ConsoleResponder::class, 'citedByValue');
+        $method->setAccessible(true);
+        $figures = [['figures' => [['id' => 'a1.sales', 'label' => 'Ventes', 'value' => 1100, 'unit' => 'count'], ['id' => 'a1.orders', 'label' => 'Commandes', 'value' => 1100, 'unit' => 'count'],
+            ['id' => 'a1.day', 'label' => 'Date du solde', 'value' => '2026-11-13', 'unit' => 'date'], ['id' => 'a1.margin', 'label' => 'Marge brute', 'value' => 43600, 'unit' => 'money'],
+            ['id' => 'a1.note', 'label' => 'Note du mois', 'value' => '13', 'unit' => 'text']]]];
+        $by = fn (string $t, array $already = []): array => $method->invoke($responder, $t, $figures, $already, 'fr');
+        $this->assertSame([['a1.orders'], [], ['a1.margin'], [], [], ['a1.orders', 'a1.margin']],
+            [$by('Il y a 1100 commandes.'), $by('Cela fait 1100.'), $by('La marge est de 436,00 $.'), $by('Le 13 du mois.'), $by('Il y a 1100 commandes.', ['a1.sales']), $by('1 100 commandes pour 436 $ de marge.')],
+            'deux chiffres de même valeur : celui dont le libellé est dans le texte, sinon aucun ; une date ou un texte ne sont pas des nombres cités ; un nombre déjà couvert par un chiffre cité n\'ajoute rien');
+        // Une analyse par défaut dont le paramètre obligatoire manque n'est pas proposée au modèle ; un écran inconnu n'est pas traduit
+        $screenOf = new \ReflectionMethod(ConsoleResponder::class, 'screen');
+        $screenOf->setAccessible(true);
+        $this->assertSame([[], [['key' => 'articles.vs_similar', 'productId' => $raise]], null], [
+            $screenOf->invoke($responder, ['module' => 'gestion', 'screen' => 'article', 'params' => []], 'fr')['analysesParDefaut'],
+            $screenOf->invoke($responder, ['module' => 'gestion', 'screen' => 'article', 'params' => ['productId' => $raise]], 'fr')['analysesParDefaut'],
+            $screenOf->invoke($responder, ['module' => 'gestion', 'screen' => 'ecran.inconnu', 'params' => []], 'fr')]);
+
+        // ---- 6. Unités : le propriétaire de la plateforme n'est pas décompté --------------------------------------------------------------
+        $before = $usage();
+        $this->login(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']);
+        $e = $this->post('/api/gestion/console/messages', ['text' => 'Où en sont les ventes ?'], 202);
+        $this->assertSame($before, $usage(), 'propriétaire de la plateforme : aucune unité réservée');
+        FakeLandingAiClient::$queue = [$this->reply(['kind' => 'analyses', 'clarification' => '', 'analyses' => [['key' => 'sales.overview'] + $none]]), $this->reply(['blocks' => [$text('Voici les ventes.')], 'proposals' => []])];
+        $this->runWorker((int) $e['messageId']);
+        $owner = $last((int) $e['conversationId']);
+        $this->assertSame(['done', [['sales.overview', ['range' => 'month']]]], [$owner['state'], $ran($owner)], 'sans « période » ni plage : le mois, comme l\'écran des statistiques');
+        $this->assertSame($before, $usage(), '… ni décomptée');
     }
 
     // ---- outils --------------------------------------------------------------------------------------------------------------------

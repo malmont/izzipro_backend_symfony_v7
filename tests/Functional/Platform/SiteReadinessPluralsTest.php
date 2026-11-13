@@ -152,6 +152,20 @@ class SiteReadinessPluralsTest extends WebTestCase
                 }
             }
         }
+
+        // 5. Fiches traduites : l'autre langue du site est NOMMÉE (« en anglais », « en français »), jamais écrite par son code (« en en »)
+        $this->db->executeStatement('UPDATE product SET is_web = TRUE WHERE id IN (?)', [$this->products], [\Doctrine\DBAL\ArrayParameterType::INTEGER]);
+        $siteLocale = $this->db->fetchOne('SELECT locale FROM entreprise ORDER BY id LIMIT 1');
+        try {
+            foreach (['fr' => 'anglais', 'en' => 'français'] as $site => $name) {
+                $this->db->executeStatement('UPDATE entreprise SET locale = ?', [$site]);
+                $description = $this->steps()['boutique.translations']['description'];
+                $this->assertMatchesRegularExpression("/^\d+ produits en ligne sans traduction en $name : « IA en lot » les traduit en un clic\.$/u", $description, "site en $site : les deux produits du test, sans traduction");
+                $this->assertDoesNotMatchRegularExpression('/ en (en|fr)\b/u', $description);
+            }
+        } finally {
+            $this->db->executeStatement('UPDATE entreprise SET locale = ?', [$siteLocale === false ? null : $siteLocale]);
+        }
     }
 
     /** L'aide commune du cheminement : zéro et un au singulier, les autres valeurs à leur place ; plus aucune terminaison entre parenthèses dans le service. */
