@@ -151,7 +151,7 @@ class GestionSequenceService
         return [
             'key' => (string) $step['key'], 'title' => (string) $step['title'], 'description' => (string) $step['description'], 'status' => (string) $step['status'],
             'blocking' => (bool) ($step['blocking'] ?? true), 'screen' => $screen,
-            'action' => self::action(SequenceCatalog::actionOf((string) $step['key']), SequenceCatalog::ONCE_ACTION_PARAMS[$step['key']] ?? []),
+            'action' => $this->action(SequenceCatalog::actionOf((string) $step['key']), SequenceCatalog::ONCE_ACTION_PARAMS[$step['key']] ?? [], (string) $step['status'], $locale),
             'figures' => $this->figures($figures, $locale),
         ];
     }
@@ -218,7 +218,8 @@ class GestionSequenceService
                 'description' => $this->tr("sequences.$key.steps.$stepKey." . ($status === 'done' ? 'done' : 'todo'), $locale, $params),
                 'status' => $status, 'blocking' => $definition['blocking'],
                 'screen' => self::screen(SequenceCatalog::WHERE_APP, $definition['screen'], self::instanceParams($key, $instance) + $fact['params'], null),
-                'action' => self::action($definition['action'], $definition['actionParams'] ?? []),
+                'action' => $this->action($definition['action'], ($definition['actionParams'] ?? [])
+                    + array_filter(array_intersect_key($instance, array_flip($definition['actionInstanceParams'] ?? [])), fn ($v) => $v !== null), $status, $locale),
                 'figures' => $this->figures($fact['figures'], $locale),
             ];
         }
@@ -278,12 +279,22 @@ class GestionSequenceService
     }
 
     /**
-     * @return array{key: string, preparable: bool, params: object} référence de l'action, si la conversation sait la préparer, et les
-     *                                                                paramètres à donner à l'ouverture de son fil (`POST /api/gestion/conversations { action, params }`)
+     * Référence de l'action d'une étape : si la conversation sait la préparer, et les paramètres à donner à l'ouverture de son fil
+     * (`POST /api/gestion/conversations { action, params }`). Sur une étape FAITE dont l'action est préparable, `again` dit si le geste
+     * peut se refaire : `{ label }` dans la langue demandée (« Mettre à jour le solde »), ou `null`. Sur une étape à faire, `again` est absent.
+     *
+     * @param array<string, mixed> $params
+     *
+     * @return array{key: string, preparable: bool, params: object, again?: ?array{label: string}}
      */
-    private static function action(string $key, array $params = []): array
+    private function action(string $key, array $params, string $status, string $locale): array
     {
-        return ['key' => $key, 'preparable' => SequenceCatalog::preparable($key), 'params' => (object) $params];
+        $action = ['key' => $key, 'preparable' => SequenceCatalog::preparable($key), 'params' => (object) $params];
+        if ($status === 'done' && $action['preparable']) {
+            $action['again'] = (SequenceCatalog::AGAIN[$key] ?? false) ? ['label' => $this->tr('sequences.again.' . str_replace('.', '_', $key), $locale)] : null;
+        }
+
+        return $action;
     }
 
     /** @param array<string, mixed> $params */
@@ -295,11 +306,20 @@ class GestionSequenceService
     /**
      * @param list<array{0: string, 1: mixed, 2: string}> $figures
      *
-     * @return list<array{key: string, label: string, value: mixed, unit: string}>
+     * @return list<array{key: string, label: string, value: mixed, unit: string, code?: string}>
      */
     private function figures(array $figures, string $locale): array
     {
-        return array_map(fn (array $f) => ['key' => $f[0], 'label' => $this->tr('sequences.figures.' . $f[0], $locale, [], $f[0]), 'value' => $f[1], 'unit' => $f[2]], $figures);
+        return array_map(function (array $f) use ($locale): array {
+            $figure = ['key' => $f[0], 'label' => $this->tr('sequences.figures.' . $f[0], $locale, [], $f[0]), 'value' => $f[1], 'unit' => $f[2]];
+            if ($f[2] === 'text' && is_string($f[1])) {
+                // un chiffre de type texte se lit : « IA complète », pas « full » (retouche du 13/11/2026) ; le code reste dans `code`
+                $figure['value'] = $this->tr('sequences.figure_values.' . $f[0] . '.' . $f[1], $locale, [], $f[1]);
+                $figure['code'] = $f[1];
+            }
+
+            return $figure;
+        }, $figures);
     }
 
     /** @param array<string, string> $params */

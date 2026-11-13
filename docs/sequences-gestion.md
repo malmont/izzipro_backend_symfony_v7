@@ -84,20 +84,27 @@ séquence à faire une fois. `label` traduit avec `?locale` (« Fall 2026 ») ; 
     Écrans du back-office : la clé du cheminement (`AdminStepUrlResolver::SCREENS`) ; inutile de les mapper, l'adresse est fournie.
   - `params` (objet, vide sinon) : `{ periodId, periodKey }` pour une période, `{ year }` pour un exercice, `{ filter: "missing-cost",
     from?, to? }` pour la liste des articles sans coût : à repasser tels quels à `GET /api/gestion/articles`.
-- `action` : `{ key, preparable }`, la référence de l'action qui fait avancer l'étape (`preparation.validate`, `trip.create`,
+- `action` : `{ key, preparable, params, again? }`, la référence de l'action qui fait avancer l'étape (`budget.put`, `trip.create`,
   `cash.balance.create`, `cash.movement.create`, `purchase.create`, `period.close`, `product.cost.set`, `recovery.simulate`,
   `recovery.apply`, `supplier.create`, `fiscal_year.set`, `periods.calendar.set`, `document.invoice.confirm` ; une étape du cheminement
-  sans action de la gestion : `readiness.<clé de l'étape>`). `preparable` : la conversation de la gestion sait préparer l'action (aperçu,
-  empreinte, confirmation, annulation). Vrai pour `document.invoice.confirm` depuis le lot IA-FACT-1 et, depuis le lot IA-ACT-1, pour
-  toute action du catalogue du fil (`ActionCatalog::KEYS` ; dans le guide : `supplier.create`, et depuis le lot IA-ACT-2
-  `cash.balance.create`, `cash.movement.create`, `trip.create`, et depuis le lot IA-ACT-3 `fiscal_year.set`, `periods.calendar.set`,
-  `product.cost.set` ; `docs/conversation-gestion.md` § 9 à 11) ; faux pour les autres (`period.close`, `purchase.create`,
-  `preparation.validate`, `recovery.*`, et les étapes sans action de la gestion).
-  `params` (lot IA-ACT-1) : les paramètres à passer à l'ouverture du fil, `POST /api/gestion/conversations { action: key, params }` ;
-  vide, il est rendu `[]` comme `screen.params` ; les étapes « frais fixes » rendent `{ fixedCost: true, recurrence: "monthly" }`.
+  sans action de la gestion : `readiness.<clé de l'étape>`).
+  - `preparable` : la conversation de la gestion sait préparer l'action (aperçu, empreinte, confirmation, annulation). Vrai pour
+    `document.invoice.confirm` (lot IA-FACT-1) et pour toute action du catalogue du fil (`ActionCatalog::KEYS`, lots IA-ACT-1 à
+    IA-ACT-4 ; `docs/conversation-gestion.md` § 9 à 12) ; faux pour les autres (`purchase.create`, `recovery.*`, et les étapes sans
+    action de la gestion).
+  - `params` : les paramètres à passer à l'ouverture du fil, `POST /api/gestion/conversations { action: key, params }` ; vide, il est
+    rendu `[]` comme `screen.params`. Les étapes « frais fixes » rendent `{ fixedCost: true, recurrence: "monthly" }` ; l'étape du budget
+    de « Préparer une période » rend `budget.put` avec `{ periodId }` de l'instance (retouche du 13/11/2026 : « Préparer » ouvre le
+    budget de CETTE période ; sans `periodId` tant que la période n'existe pas en base).
+  - `again` (13/11/2026) : **seulement sur une étape faite dont l'action est préparable**. `{ label }` si le geste peut se refaire,
+    dans la langue demandée (« Mettre à jour le solde », « Changer le mois d'exercice », « Ajouter un fournisseur », « Lire une autre
+    facture »…), sinon `null` (`period.close` : étape faite = tout est fermé). Sur une étape à faire, la clé est absente. Toute action
+    préparable a une réponse explicite (`SequenceCatalog::AGAIN`, textes `sequences.again.*`) : un garde-fou de test le vérifie.
 - `figures` : `[{ key, label, value, unit }]`, calculés par le serveur ; `unit` : `money` (cents de la devise du site), `percent`,
   `count`, `days`, `date`, `ratio` comme les sources des conseils, plus `text`. Les comptes que le cheminement rend sous forme d'objet
-  (`{ missing: 7, total: 52 }`) sont convertis dans cette forme.
+  (`{ missing: 7, total: 52 }`) sont convertis dans cette forme. **Un chiffre de type `text` se lit** (retouche du 13/11/2026) :
+  `value` est un texte dans la langue demandée (« IA complète », « Full AI ») et le code brut passe dans `code` (`full`), présent
+  seulement sur ces chiffres ; textes `sequences.figure_values.<clé>.<code>`, exigés dans les deux langues par un garde-fou de test.
 
 ## 4. Ajouter une séquence ou une étape
 

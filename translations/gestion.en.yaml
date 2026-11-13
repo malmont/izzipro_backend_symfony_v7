@@ -382,6 +382,23 @@ export:
 sequences:
     once:
         description: 'The steps to get "%label%" up and running.'
+    again:
+        document_invoice_confirm: 'Read another invoice'
+        expense_create: 'Enter another expense'
+        supplier_create: 'Add a supplier'
+        shipping_create: 'Add a shipping cost'
+        budget_put: 'Change the budget'
+        cash_balance_create: 'Update the balance'
+        cash_movement_create: 'Add a planned movement'
+        trip_create: 'Add a trip'
+        fiscal_year_set: 'Change the fiscal year month'
+        periods_calendar_set: 'Change the period split'
+        product_cost_set: 'Set another purchase cost'
+    figure_values:
+        tier:
+            full: 'Full AI'
+            help: 'AI help'
+            none: 'Not enabled'
     figures:
         admins: 'Administrator accounts'
         missing: 'Items without a cost'
@@ -653,6 +670,28 @@ conversation:
                 none: 'No sale in open periods changes value.'
                 current: 'Cost of goods sold for the period "%period%": %before% before, %after% after.'
                 closed: 'Closed periods are frozen: their figures do not change.'
+        period_close:
+            title: 'Close a period'
+            periodId:
+                title: 'Period'
+                text: 'Which finished period do you want to close?'
+            revenue:
+                title: 'Sales of the period'
+            cogs:
+                title: 'Cost of goods sold'
+            expenses:
+                title: 'Expenses'
+            net:
+                title: 'Result that will be frozen'
+            commandes:
+                title: 'Purchase orders that will be closed'
+            alerts:
+                title: 'Before you close'
+                unknown_cost: '%count% unit(s) sold without a known cost: after closing, they will stay without cost in the frozen figures. Set the purchase costs before closing.'
+                without_shipping: '%count% purchase order(s) of the period without a shipping cost: after closing, it can no longer be added.'
+            consequence:
+                title: 'After closing'
+                text: 'After closing, no entry dated in this period will be accepted (purchase orders, shipping costs, expenses), and its figures will be frozen.'
         budget_put:
             title: 'Set the budget of a period'
             periodId:

@@ -384,6 +384,23 @@ export:
 sequences:
     once:
         description: 'Les étapes pour mettre en route « %label% ».'
+    again:
+        document_invoice_confirm: 'Lire une autre facture'
+        expense_create: 'Saisir une autre note de frais'
+        supplier_create: 'Ajouter un fournisseur'
+        shipping_create: 'Ajouter un frais de port'
+        budget_put: 'Modifier le budget'
+        cash_balance_create: 'Mettre à jour le solde'
+        cash_movement_create: 'Ajouter un mouvement prévu'
+        trip_create: 'Ajouter un voyage'
+        fiscal_year_set: 'Changer le mois d''exercice'
+        periods_calendar_set: 'Changer le découpage'
+        product_cost_set: 'Poser un autre coût d''achat'
+    figure_values:
+        tier:
+            full: 'IA complète'
+            help: 'Aide IA'
+            none: 'Non activé'
     figures:
         admins: 'Comptes administrateur'
         missing: 'Articles sans coût'
@@ -655,6 +672,28 @@ conversation:
                 none: 'Aucune vente des périodes ouvertes ne change de valeur.'
                 current: 'Coût des articles vendus de la période « %period% » : %before% avant, %after% après.'
                 closed: 'Les périodes fermées sont figées : leurs chiffres ne changent pas.'
+        period_close:
+            title: 'Clôturer une période'
+            periodId:
+                title: 'Période'
+                text: 'Quelle période terminée voulez-vous clôturer ?'
+            revenue:
+                title: 'Ventes de la période'
+            cogs:
+                title: 'Coût des articles vendus'
+            expenses:
+                title: 'Frais'
+            net:
+                title: 'Résultat qui sera figé'
+            commandes:
+                title: 'Commandes fournisseurs qui seront fermées'
+            alerts:
+                title: 'À savoir avant de clôturer'
+                unknown_cost: '%count% unité(s) vendue(s) sans coût connu : après la clôture, elles resteront sans coût dans les chiffres figés. Posez les coûts d''achat avant de clôturer.'
+                without_shipping: '%count% commande(s) fournisseur(s) de la période sans frais de port : après la clôture, on ne pourra plus l''ajouter.'
+            consequence:
+                title: 'Après la clôture'
+                text: 'Après la clôture, aucune écriture datée dans cette période ne sera acceptée (commandes, frais de port, notes de frais), et ses chiffres seront figés.'
         budget_put:
             title: 'Fixer le budget d''une période'
             periodId:

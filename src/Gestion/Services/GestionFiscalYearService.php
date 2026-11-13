@@ -8,7 +8,9 @@ use App\Services\TenantEntityManagerProvider;
 
 /**
  * Exercice du site (lot AN, partie EX, 11/11/2026, `docs/annee-gestion.md` § 1) : 12 mois à partir du 1er du mois choisi
- * (`entreprise.fiscal_year_start_month`, 1 à 12, null = 1, année civile), au fuseau du magasin. Un exercice est désigné par son année de
+ * (`entreprise.fiscal_year_start_month`, 1 à 12 ; null = jamais réglé, lu comme 1, année civile), au fuseau du magasin. Depuis le lot
+ * IA-ACT-4 (13/11/2026), janvier CONFIRMÉ est enregistré 1 : un choix fait se distingue d'un réglage jamais fait, et l'étape du cheminement
+ * passe à « fait ». Un exercice est désigné par son année de
  * DÉBUT. Changer le réglage ne réécrit rien : tout est recalculé à la lecture (instantanés de stock et périodes fermées inchangés).
  */
 class GestionFiscalYearService
@@ -23,6 +25,28 @@ class GestionFiscalYearService
     public function startMonth(): int
     {
         return $this->entreprise()?->getFiscalYearStartMonth() ?? 1;
+    }
+
+    /** Valeur enregistrée, telle quelle : null tant que le gérant n'a rien confirmé (lu comme janvier par `startMonth()`) */
+    public function storedStartMonth(): ?int
+    {
+        return $this->entreprise()?->getFiscalYearStartMonth();
+    }
+
+    /**
+     * Remet la valeur enregistrée d'avant, « jamais réglé » compris : l'annulation d'un choix fait par le fil de la gestion. Au journal,
+     * comme le choix.
+     */
+    public function restore(?int $stored): void
+    {
+        $e = $this->entreprise();
+        if ($e === null) {
+            throw new GestionConflictException('ENTREPRISE_NOT_FOUND', 'Fiche entreprise du site introuvable.', 404);
+        }
+        $before = $e->getFiscalYearStartMonth();
+        $e->setFiscalYearStartMonth($stored);
+        $this->emProvider->getEntityManager()->flush();
+        $this->audit->record('gestion-reglages-exercice', (int) $e->getId(), 'update', ['startMonth' => $before], ['startMonth' => $stored]);
     }
 
     /** @return array{0: string, 1: string} premier et dernier jour (Y-m-d) de l'exercice qui commence l'année `$startYear` */
@@ -76,7 +100,7 @@ class GestionFiscalYearService
             throw new GestionConflictException('ENTREPRISE_NOT_FOUND', 'Fiche entreprise du site introuvable.', 404);
         }
         $before = $this->startMonth();
-        $e->setFiscalYearStartMonth($v === 1 ? null : $v);
+        $e->setFiscalYearStartMonth($v); // janvier confirmé s'enregistre 1 (avant le 13/11/2026 : null, indiscernable d'un réglage jamais fait)
         $this->emProvider->getEntityManager()->flush();
         $this->audit->record('gestion-reglages-exercice', (int) $e->getId(), 'update', ['startMonth' => $before], ['startMonth' => $v]);
 

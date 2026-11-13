@@ -41,13 +41,15 @@ final class SequenceCatalog
      * Séquences qui reviennent. Par étape : `fact` (méthode de `SequenceFacts`), `blocking` (indispensable), `optional` (facultative :
      * jamais « à faire »), `screen` (code d'écran de l'application) et `action` (référence de l'action qui la fait avancer).
      *
-     * `actionParams` : les paramètres à donner à l'ouverture du fil de l'action (lot IA-ACT-2).
+     * `actionParams` : les paramètres à donner à l'ouverture du fil de l'action (lot IA-ACT-2) ; `actionInstanceParams` : ceux qui
+     * viennent de l'instance (la période), passés seulement quand ils ont une valeur.
      *
-     * @var array<string, array{steps: array<string, array{fact: string, blocking: bool, optional?: bool, screen: string, action: string, actionParams?: array<string, mixed>}>}>
+     * @var array<string, array{steps: array<string, array{fact: string, blocking: bool, optional?: bool, screen: string, action: string, actionParams?: array<string, mixed>, actionInstanceParams?: list<string>}>}>
      */
     public const RECURRING = [
         self::PERIOD_PREPARE => ['steps' => [
-            'budget' => ['fact' => 'periodBudget', 'blocking' => true, 'screen' => 'periode.preparation', 'action' => 'preparation.validate'],
+            // retouche du 13/11/2026 (web) : « Préparer » ouvre le budget de CETTE période par le fil (`budget.put`, avec `periodId` de l'instance)
+            'budget' => ['fact' => 'periodBudget', 'blocking' => true, 'screen' => 'periode.preparation', 'action' => 'budget.put', 'actionInstanceParams' => ['periodId']],
             'trip' => ['fact' => 'periodTrip', 'blocking' => false, 'optional' => true, 'screen' => 'voyages', 'action' => 'trip.create'],
             'cash_balance' => ['fact' => 'recentCashBalance', 'blocking' => false, 'screen' => 'tresorerie', 'action' => 'cash.balance.create'],
             'fixed_costs' => ['fact' => 'fixedCostsEntered', 'blocking' => false, 'screen' => 'frais-fixes', 'action' => 'cash.movement.create', 'actionParams' => self::FIXED_COST_PARAMS],
@@ -107,6 +109,18 @@ final class SequenceCatalog
 
     /** Actions que la conversation de la gestion sait préparer (aperçu, empreinte, confirmation, annulation) : la facture depuis le lot IA-FACT-1 */
     public const PREPARABLE_ACTIONS = ['document.invoice.confirm'];
+
+    /**
+     * Une étape FAITE dont l'action est préparable : peut-on refaire le geste ? (demande du web, 13/11/2026). `true` : le guide rend
+     * `action.again: { label }` (texte `sequences.again.<clé avec _>`) ; `false` : `again: null`, il n'y a rien à refaire. Toute action
+     * préparable a ici une réponse explicite : un garde-fou de `SequencesApiTest` le vérifie.
+     */
+    public const AGAIN = [
+        'document.invoice.confirm' => true, 'expense.create' => true, 'supplier.create' => true, 'shipping.create' => true, 'budget.put' => true,
+        'cash.balance.create' => true, 'cash.movement.create' => true, 'trip.create' => true, 'fiscal_year.set' => true, 'periods.calendar.set' => true,
+        'product.cost.set' => true,
+        'period.close' => false, // étape faite = toutes les périodes sont fermées : rien à clôturer de plus
+    ];
 
     public static function preparable(string $action): bool
     {

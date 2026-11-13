@@ -33,7 +33,9 @@ class FiscalYearSetAction extends AbstractGestionAction
         $aligned = $this->fiscal->alignedMonths();
         $options = array_map(fn (int $m) => ['value' => $m, 'label' => ucfirst(self::month($m, $locale)), 'aligned' => in_array($m, $aligned, true), 'current' => $m === $current], range(1, 12));
         $answer = $answers['startMonth'] ?? null;
-        $issues = $answer !== null && (int) $answer === $current ? [['path' => 'startMonth', 'code' => 'UNCHANGED']] : []; // rien à confirmer : c'est déjà le mois de l'exercice
+        // Rien à confirmer seulement si ce mois est déjà ENREGISTRÉ : confirmer janvier sur un site jamais réglé est une vraie écriture, qui
+        // fait passer l'étape du cheminement à « fait »
+        $issues = $answer !== null && (int) $answer === $this->fiscal->storedStartMonth() ? [['path' => 'startMonth', 'code' => 'UNCHANGED']] : [];
 
         return ['questions' => [$this->question('startMonth', true, ['type' => 'choice'], $options, $answer, $locale)], 'issues' => $issues];
     }
@@ -68,7 +70,7 @@ class FiscalYearSetAction extends AbstractGestionAction
                     '%to%' => self::longDate($period['end']->format('Y-m-d'), $locale), '%cut%' => self::longDate($from, $locale)])];
         }
 
-        return ['before' => ['startMonth' => $before, 'label' => ucfirst(self::month($before, $locale))], 'after' => ['startMonth' => $after, 'label' => ucfirst(self::month($after, $locale))],
+        return ['before' => ['startMonth' => $before, 'label' => ucfirst(self::month($before, $locale)), 'confirmed' => $this->fiscal->storedStartMonth() !== null], 'after' => ['startMonth' => $after, 'label' => ucfirst(self::month($after, $locale))],
             'exercise' => ['label' => GestionFiscalYearService::label($year, $after), 'from' => $from, 'to' => $to,
                 'text' => $this->tr('conversation.actions.fiscal_year_set.exercise.text', $locale, ['%label%' => GestionFiscalYearService::label($year, $after), '%from%' => self::longDate($from, $locale), '%to%' => self::longDate($to, $locale)])],
             'aligned' => $aligned, 'warning' => $warning];
@@ -85,7 +87,7 @@ class FiscalYearSetAction extends AbstractGestionAction
 
     public function execute(array $answers, ?string $user): array
     {
-        $before = $this->fiscal->startMonth();
+        $before = $this->fiscal->storedStartMonth(); // la valeur enregistrée, « jamais réglé » compris : c'est elle que l'annulation remet
         $this->fiscal->put(['startMonth' => (int) $answers['startMonth']]); // 422 du service ; journal gestion-reglages-exercice
 
         return ['result' => ['startMonth' => (int) $answers['startMonth']], 'undo' => ['before' => $before, 'after' => (int) $answers['startMonth']]];
@@ -93,13 +95,13 @@ class FiscalYearSetAction extends AbstractGestionAction
 
     public function blockers(array $undo): array
     {
-        return $this->fiscal->startMonth() === (int) $undo['after'] ? [] : [['code' => 'FISCAL_YEAR_CHANGED', 'message' => 'Le mois de début d\'exercice a été modifié depuis.']];
+        return $this->fiscal->storedStartMonth() === (int) $undo['after'] ? [] : [['code' => 'FISCAL_YEAR_CHANGED', 'message' => 'Le mois de début d\'exercice a été modifié depuis.']];
     }
 
     public function undo(array $undo): array
     {
-        $this->fiscal->put(['startMonth' => (int) $undo['before']]); // l'annulation passe par le même service : elle est au journal aussi
+        $this->fiscal->restore($undo['before'] === null ? null : (int) $undo['before']); // même service, au journal aussi ; null = « jamais réglé »
 
-        return ['restored' => ['startMonth' => (int) $undo['before']]];
+        return ['restored' => ['startMonth' => $undo['before'] === null ? null : (int) $undo['before']]];
     }
 }

@@ -1,4 +1,15 @@
-# Facture et actions par conversation — application de gestion (lots IA-FACT-1, IA-FACT-2-A, IA-FACT-2-B, IA-ACT-1, IA-ACT-2 et IA-ACT-3, 13/11/2026)
+# Facture et actions par conversation — application de gestion (lots IA-FACT-1, IA-FACT-2-A, IA-FACT-2-B, IA-ACT-1 à IA-ACT-4, 13/11/2026)
+
+> **Périmètre, décision du propriétaire (13/11/2026) : le fil de conversation et son catalogue d'actions servent EXCLUSIVEMENT
+> l'application de gestion.** Ils ne font rien sur les autres modules (Mémoires Vivantes, Boussole, boutique, contenu du site) :
+> EasyAdmin couvre déjà ces modules.
+> - Le catalogue ne contient que des actions de gestion : factures, notes de frais, fournisseurs, frais de port, budget, trésorerie,
+>   voyages, exercice, périodes, coût d'achat, clôture.
+> - Aucune action ne touche le catalogue de vente (prix, visibilité, description), les comptes, les rôles, les réservations, les
+>   livres ou les biographes. `product.cost.set` reste dans le cadre : il ne pose que le coût d'achat, jamais le prix.
+> - Garde-fou : `tests/Functional/Gestion/ActionCatalogScopeTest.php`. Chaque action n'écrit que par un service de gestion de sa
+>   liste ; une action nouvelle, une dépendance nouvelle ou une écriture directe hors de la liste fait échouer le test, et se décide
+>   avec le propriétaire.
 
 Un **fil de conversation gardé par le serveur** mène une facture fournisseur de la pièce jointe à la commande : attente de la lecture dans
 le fil, résumé, questions sur ce qui manque, aperçu, confirmation, **annulation d'un bloc**. Règle du propriétaire : *aucune écriture
@@ -280,9 +291,8 @@ L'IA ne confirme, n'annule et n'abandonne pas.
 
 Code : `Services/Conversation/ActionThreadService` (ouverture, fil, confirmation, annulation, abandon), `Services/Conversation/Action/`
 (catalogue et actions) ; `GestionConversationService` garde les réponses par bouton et la phrase libre, communes aux deux sortes de fil.
-Tests : `tests/Functional/Gestion/ActionConversationApiTest.php`. Suite : IA-ACT-2 (§ 10), IA-ACT-3 (§ 11). La clôture d'une période
-(`period.close`) aura son lot à part : la réouverture existante n'en est pas l'inverse exact, et l'action ne sera préparable qu'avec une
-annulation exacte.
+Tests : `tests/Functional/Gestion/ActionConversationApiTest.php`. Suite : IA-ACT-2 (§ 10), IA-ACT-3 (§ 11), IA-ACT-4 (§ 12 : la clôture
+d'une période, avec une annulation exacte).
 
 ## 10. Trésorerie et voyage (lot IA-ACT-2, 13/11/2026)
 
@@ -367,11 +377,60 @@ déjà en place rend `issues: [{ path, code: UNCHANGED }]` (rien à confirmer).
 
 **Depuis le guide.** Les étapes `management.fiscal_year`, `management.periods_calendar`, `management.purchase_cost` et les étapes
 `purchase_costs` des séquences qui reviennent rendent `preparable: true`. Limite connue de l'étape « mois de début d'exercice » du
-cheminement : janvier est enregistré comme « rien » ; choisir janvier sur un site déjà en janvier est donc `UNCHANGED`, et l'étape ne
-passe pas à « fait » par ce fil.
+cheminement, levée par le lot IA-ACT-4 : janvier était enregistré comme « rien », indiscernable d'un réglage jamais fait. Depuis, janvier
+confirmé est enregistré 1 (`GestionFiscalYearService::put`, sans migration) : sur un site jamais réglé, choisir janvier est une vraie
+écriture qui fait passer l'étape à « fait » ; `UNCHANGED` ne vaut que pour la valeur réellement enregistrée ; l'annulation remet
+« jamais réglé » (`restore`), et l'étape redevient « à faire ». L'aperçu porte `before.confirmed`.
 
 **Aides de mise en clair** (`AbstractGestionAction`) : `longDate` (« 1er avril 2027 », « April 1, 2027 »), `month`, `amount`.
 
 Code : `Action/FiscalYearSetAction`, `PeriodsCalendarSetAction`, `ProductCostSetAction`, `Services/GestionProductCostService`,
 `PeriodResultCalculator::costFigures`. Tests : `ActionConversationApiTest::testAFiscalYearAPeriodSplitAndAPurchaseCostAreEachPreparedAndUndone` ;
 `ConversationApiTest` garde que l'empreinte du fil d'une facture ne dépend pas de la langue.
+
+## 12. Clôturer une période (lot IA-ACT-4, 13/11/2026)
+
+`period.close` : la onzième action du catalogue, et la seule dont l'annulation ne passe pas par un service existant.
+
+**Ce que fait la clôture** : celle de la route existante (`POST /api/dashboard/collection/{id}/close`, `CloseCollectionUseCase`). Elle fige
+le tableau de bord de la période, fige et ferme chaque commande fournisseur datée dans la période qui était encore ouverte, note la
+quantité figée de leurs articles et date la clôture. Ensuite, toute écriture datée dans la période est refusée (`PERIOD_CLOSED`) et le
+résultat de la période est figé à sa première lecture. Rappel : une période se ferme seule 15 jours après sa fin ; la clôture à la
+main concerne donc la période précédente pendant ses jours de grâce, ou une période rouverte.
+
+**Paramètre.** `periodId`, parmi les périodes **terminées et encore ouvertes** (options `{ value, label, from, to }`, de la plus
+récente à la plus ancienne ; proposée d'office quand il n'y en a qu'une). Refus : `PERIOD_NOT_ENDED` (la période en cours : ses ventes à
+venir resteraient hors des chiffres figés, et toutes les saisies du jour seraient refusées ; la route existante le permet toujours),
+`ALREADY_CLOSED`, `PERIOD_NOT_FOUND`.
+
+**Aperçu** `{ period: { id, name, from, to }, currency, result: { revenue, unknownCostRevenue, cogs, unknownCostItems, expenses, gross,
+net }, commandes: [{ id, name, date }], alerts: [{ code, count, text }], consequence }`.
+- `result` est le résultat qui sera figé, **calculé sans le cache de 60 secondes** de `GET /api/periodes/{id}/resultat` : une vente faite
+  dans la minute change l'empreinte, et la confirmation rend `PREVIEW_CHANGED` (test : vente après l'aperçu, résultat encore en cache).
+- `commandes` : celles que la clôture fermera (datées dans la période, encore ouvertes). Une commande déjà fermée n'y est pas.
+- `alerts` : `UNKNOWN_COST` (unités vendues sans coût connu : elles resteront sans coût dans les chiffres figés, poser les coûts avant),
+  `ORDERS_WITHOUT_SHIPPING` (commandes de la période sans frais de port : on ne pourra plus l'ajouter). Ce sont des avertissements.
+- `consequence` : « Après la clôture, aucune écriture datée dans cette période ne sera acceptée… ».
+
+**Confirmer** → `result: { periodId, closedAt, commandesClosed }`. La confirmation note l'état d'avant : dates de clôture et de
+réouverture de la période, commandes qu'elle a fermées, quantité figée d'avant de leurs articles, repères des chiffres figés.
+
+**Annulation exacte**, sous 24 heures, tout ou rien, en une transaction. Elle **ne passe pas par la réouverture existante**
+(`POST …/reopen`), qui rouvre toutes les commandes rattachées, marque la période « rouverte » (la clôture par la date ne la referme
+plus) et garde les chiffres figés. Ici, l'état d'avant revient tel quel : la période retrouve ses dates de clôture et de réouverture,
+« jamais rouverte » comprise ; **seules les commandes fermées par cette clôture sont rouvertes** ; la quantité figée de leurs articles
+revient (vide comprise) ; les chiffres figés créés par la clôture (`collection_statistiques`, `commande_statistiques`) et le résultat
+figé depuis (`period_result`) sont retirés. `undone: { restored: { periodId, commandesReopened } }`. Un test compare l'état avant la
+clôture et après l'annulation, table par table.
+- Refus : `PERIOD_CHANGED` (la période a été rouverte ou clôturée autrement depuis), `ORDER_CHANGED { commandeId }` (une commande fermée
+  par la clôture a été rouverte, supprimée, ou a reçu du stock : la quantité reçue de ses lignes a changé).
+- Journal d'audit `gestion-periodes-cloture` : la clôture (`close`) et son annulation (`undo`).
+
+**Dans le guide** : l'étape « périodes fermées » de « Clôturer l'exercice » rend `period.close`, `preparable: true` ; `again: null` quand
+elle est faite.
+
+**Avant la mise en ligne**, ce lot a été répété sur une copie jetable de la base de demo : clôture, vérification, annulation, puis
+comparaison table par table à l'état d'avant.
+
+Code : `Action/PeriodCloseAction`. Tests : `ActionConversationApiTest::testAFinishedPeriodIsClosedThroughTheThreadAndUndoneExactly`,
+`ActionCatalogScopeTest` (périmètre du catalogue, dont les écritures directes admises de cette annulation).

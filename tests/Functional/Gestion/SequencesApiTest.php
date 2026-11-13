@@ -181,7 +181,7 @@ class SequencesApiTest extends WebTestCase
                         $this->assertSame($expected[$i]['where'], $step['screen']['where'], $step['key']);
                     }
                     foreach ($step['figures'] as $figure) {
-                        $this->assertSame(['key', 'label', 'value', 'unit'], array_keys($figure));
+                        $this->assertSame($figure['unit'] === 'text' ? ['key', 'label', 'value', 'unit', 'code'] : ['key', 'label', 'value', 'unit'], array_keys($figure), 'un chiffre de type texte porte aussi son code');
                     }
                 }
                 // Étape suivante : la première indispensable à faire, sinon la première amélioration à faire
@@ -200,17 +200,32 @@ class SequencesApiTest extends WebTestCase
         $this->assertSame('readiness.management.short_code', $steps['management.short_code']['action']['key']);
         $this->assertSame(['supplier.create', 'fournisseurs'], [$steps['management.suppliers']['action']['key'], $steps['management.suppliers']['screen']['key']]);
         // Depuis le lot IA-FACT-1, la conversation sait préparer la confirmation d'une facture ; les autres actions pas encore
-        $this->assertSame(['key' => 'document.invoice.confirm', 'preparable' => true, 'params' => []], $steps['management.first_purchase']['action']);
-        $this->assertSame(['key' => 'supplier.create', 'preparable' => true, 'params' => []], $steps['management.suppliers']['action'], 'lot IA-ACT-1 : le fil sait créer un fournisseur');
+        $this->assertSame(['key' => 'document.invoice.confirm', 'preparable' => true, 'params' => []], array_diff_key($steps['management.first_purchase']['action'], ['again' => 1]));
+        $this->assertSame(['key' => 'supplier.create', 'preparable' => true, 'params' => []], array_diff_key($steps['management.suppliers']['action'], ['again' => 1]), 'lot IA-ACT-1 : le fil sait créer un fournisseur');
         // lot IA-ACT-2 : solde et mouvement prévu se préparent par le fil ; l'étape « frais fixes » ouvre un frais fixe mensuel
-        $this->assertSame(['key' => 'cash.balance.create', 'preparable' => true, 'params' => []], $steps['management.cash']['action']);
-        $this->assertSame(['key' => 'cash.movement.create', 'preparable' => true, 'params' => ['fixedCost' => true, 'recurrence' => 'monthly']], $steps['management.fixed_costs']['action']);
+        $this->assertSame(['key' => 'cash.balance.create', 'preparable' => true, 'params' => []], array_diff_key($steps['management.cash']['action'], ['again' => 1]));
+        $this->assertSame(['key' => 'cash.movement.create', 'preparable' => true, 'params' => ['fixedCost' => true, 'recurrence' => 'monthly']], array_diff_key($steps['management.fixed_costs']['action'], ['again' => 1]));
+        // retouche du 13/11/2026 : sur une étape FAITE dont l'action est préparable, `again` dit si le geste peut se refaire ; absent sinon
+        foreach ($management['steps'] as $step) {
+            $expected = $step['status'] === 'done' && $step['action']['preparable'];
+            $this->assertSame($expected, array_key_exists('again', $step['action']), $step['key'] . ' : again présent seulement sur une étape faite dont l\'action est préparable');
+            if ($expected) {
+                $this->assertSame(['label' => static::getContainer()->get(TranslatorInterface::class)->trans('sequences.again.' . str_replace('.', '_', $step['action']['key']), [], 'gestion', 'en')], $step['action']['again'], $step['key']);
+            }
+        }
         // lot IA-ACT-3 : exercice, découpage des périodes et coût d'achat se préparent par le fil ; une étape sans action de la gestion, non
         $this->assertSame([['fiscal_year.set', true], ['periods.calendar.set', true], ['product.cost.set', true], ['readiness.management.short_code', false]],
             array_map(fn (string $k) => [$steps[$k]['action']['key'], $steps[$k]['action']['preparable']], ['management.fiscal_year', 'management.periods_calendar', 'management.purchase_cost', 'management.short_code']));
         $this->assertSame(['filter' => 'missing-cost'], $steps['management.purchase_cost']['screen']['params']);
         $figures = array_column($steps['management.purchase_cost']['figures'], null, 'key');
         $this->assertSame(['Items without a cost', 'count'], [$figures['missing']['label'], $figures['missing']['unit']]);
+        // retouche du 13/11/2026 : un chiffre de type texte se lit dans la langue demandée (« Full AI », pas « full ») ; le code reste dans `code`
+        $tier = array_column($steps['management.ai']['figures'], null, 'key')['tier'];
+        $tierFr = array_column(array_column($this->get('/api/gestion/sequences/setup.management')['steps'], null, 'key')['management.ai']['figures'], null, 'key')['tier'];
+        $this->assertSame(['text', 'AI tier'], [$tier['unit'], $tier['label']]);
+        $this->assertContains($tier['code'], ['full', 'help', 'none']);
+        $this->assertSame([['full' => 'Full AI', 'help' => 'AI help', 'none' => 'Not enabled'][$tier['code']], ['full' => 'IA complète', 'help' => 'Aide IA', 'none' => 'Non activé'][$tier['code']], $tier['code']],
+            [$tier['value'], $tierFr['value'], $tierFr['code']]);
         $site = $this->get('/api/gestion/sequences/setup.site?locale=en');
         $this->assertFalse($site['translated'], 'groupe non traduit : il reste en français et le dit');
 
@@ -257,13 +272,13 @@ class SequencesApiTest extends WebTestCase
         $trips = (int) array_column($steps()['trip']['figures'], 'value', 'key')['trips'];
         $before = $this->get($url);
         $this->assertSame(['budget', 'trip', 'cash_balance', 'fixed_costs', 'purchase_order'], array_column($before['steps'], 'key'));
-        $this->assertSame([['preparation.validate', false, []], ['trip.create', true, []], ['cash.balance.create', true, []], ['cash.movement.create', true, ['fixedCost' => true, 'recurrence' => 'monthly']], ['purchase.create', false, []]],
+        $this->assertSame([['budget.put', true, []], ['trip.create', true, []], ['cash.balance.create', true, []], ['cash.movement.create', true, ['fixedCost' => true, 'recurrence' => 'monthly']], ['purchase.create', false, []]],
             array_map(fn (array $s) => [$s['action']['key'], $s['action']['preparable'], $s['action']['params']], $before['steps']), 'lot IA-ACT-2 : actions préparables et paramètres d\'ouverture du fil');
         $this->assertSame(['todo', $trips > 0 ? 'done' : 'optional', 'todo', 'todo', $orders > 0 ? 'done' : 'todo'], array_column($before['steps'], 'status'));
         $this->assertSame([true, false, false, false, false], array_column($before['steps'], 'blocking'));
         $this->assertSame(['in_progress', 'budget', true], [$before['status'], $before['next']['stepKey'], $before['next']['blocking']]);
         $this->assertSame(['where' => 'app', 'key' => 'periode.preparation', 'params' => ['periodId' => null, 'periodKey' => $next['key']], 'url' => null], $before['steps'][0]['screen']);
-        $this->assertSame(['key' => 'preparation.validate', 'preparable' => false, 'params' => []], $before['steps'][0]['action']);
+        $this->assertSame(['key' => 'budget.put', 'preparable' => true, 'params' => []], $before['steps'][0]['action'], 'la période n\'existe pas encore : aucun periodId à passer');
         $this->assertSame([['key' => 'planned', 'label' => 'Budget prévu', 'value' => 0, 'unit' => 'money']], $before['steps'][0]['figures']);
         $this->assertSame([$next['key'], false, null], [$before['instance']['id'], $before['instance']['current'], $before['instance']['periodId']]);
 
@@ -277,6 +292,14 @@ class SequencesApiTest extends WebTestCase
         $after = $steps();
         $this->assertSame(['done', 250000], [$after['budget']['status'], $after['budget']['figures'][0]['value']]);
         $this->assertSame($periodId, $after['budget']['screen']['params']['periodId']);
+        // retouche du 13/11/2026 : « Préparer » ouvre le budget de CETTE période par le fil ; la clé et les paramètres du guide suffisent
+        $this->assertSame(['key' => 'budget.put', 'preparable' => true, 'params' => ['periodId' => $periodId], 'again' => ['label' => 'Modifier le budget']], $after['budget']['action'], 'étape faite : le geste peut se refaire, et le guide dit comment il s\'appelle');
+        $this->assertSame('Change the budget', array_column($this->get($url . '&locale=en')['steps'], null, 'key')['budget']['action']['again']['label']);
+        $this->assertArrayNotHasKey('again', $after['cash_balance']['action'], 'étape à faire : pas de again');
+        $this->request('POST', '/api/gestion/conversations', ['action' => $after['budget']['action']['key'], 'params' => $after['budget']['action']['params']]);
+        $opened = $this->body();
+        $this->assertSame([201, 'budget.put', $periodId, false], [$this->client->getResponse()->getStatusCode(), $opened['kind'], $opened['questions'][0]['answer'], $opened['questions'][0]['proposed']]);
+        $this->cleanup[] = ['DELETE FROM gestion_conversation WHERE id = ?', [$opened['id']]];
         $this->assertSame('ready', $this->get($url)['status'], 'plus aucune étape indispensable à faire');
         $this->assertSame('cash_balance', $this->get($url)['next']['stepKey'], 'ensuite : la première amélioration à faire');
 
@@ -605,6 +628,17 @@ class SequencesApiTest extends WebTestCase
                 }
             }
         }
+        // Garde-fou « refaire » (13/11/2026) : toute action préparable a une réponse explicite, un libellé dans les deux langues ou « rien à refaire »
+        $preparable = array_merge(SequenceCatalog::PREPARABLE_ACTIONS, \App\Gestion\Services\Conversation\Action\ActionCatalog::KEYS);
+        sort($preparable);
+        $declared = array_keys(SequenceCatalog::AGAIN);
+        sort($declared);
+        $this->assertSame($preparable, $declared, 'chaque action préparable dit si elle peut se refaire (SequenceCatalog::AGAIN), et aucune autre');
+        foreach (SequenceCatalog::AGAIN as $action => $again) {
+            $this->assertIsBool($again);
+            $label = 'sequences.again.' . str_replace('.', '_', $action);
+            $this->assertSame($again, $has($label, 'fr') && $has($label, 'en'), "$action : libellé « refaire » dans les deux langues si et seulement si le geste peut se refaire");
+        }
         // Les étapes du cheminement citées par le catalogue existent, et chaque groupe a une clé de séquence distincte
         $readiness = $this->get('/api/site/readiness');
         $known = array_column($readiness['steps'], 'key');
@@ -619,6 +653,9 @@ class SequencesApiTest extends WebTestCase
                 foreach ($step['figures'] as $figure) {
                     $this->assertTrue($has('sequences.figures.' . $figure['key'], 'fr') && $has('sequences.figures.' . $figure['key'], 'en'), "{$sequence['key']} {$step['key']} : libellé du chiffre « {$figure['key']} »");
                     $this->assertContains($figure['unit'], ['money', 'percent', 'count', 'days', 'date', 'ratio', 'text']);
+                    if ($figure['unit'] === 'text') { // un texte se lit : sa valeur a un libellé dans les deux langues
+                        $this->assertTrue($has('sequences.figure_values.' . $figure['key'] . '.' . $figure['code'], 'fr') && $has('sequences.figure_values.' . $figure['key'] . '.' . $figure['code'], 'en'), "{$sequence['key']} {$step['key']} : valeur lisible du chiffre « {$figure['key']} »");
+                    }
                 }
             }
         }

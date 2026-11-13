@@ -11,7 +11,8 @@ Test : `tests/Functional/Gestion/YearApiTest.php`.
 
 ## 1. Exercice du site (EX)
 
-- Réglage `entreprise.fiscal_year_start_month` (1 à 12, null = 1, année civile) : `GET /api/gestion/reglages/exercice` → `{ startMonth, label,
+- Réglage `entreprise.fiscal_year_start_month` (1 à 12 ; null = jamais réglé, lu comme 1, année civile ; depuis le lot IA-ACT-4 du
+  13/11/2026, janvier confirmé est enregistré 1, pour que l'étape du cheminement passe à « fait ») : `GET /api/gestion/reglages/exercice` → `{ startMonth, label,
   current { startYear, from, to, label } }` ; `PUT { startMonth }` → même forme ; 422 `startMonth` `REQUIRED` | `MUST_BE_INTEGER` |
   `OUT_OF_RANGE` ; journal d'audit `gestion-reglages-exercice`. Pas dans le registre de la console de pilotage (décision du 11/11/2026).
 - Exercice = 12 mois à partir du 1er du mois choisi, désigné par son **année de début** ; libellé « 2026 » s'il commence en janvier,
