@@ -354,7 +354,7 @@ Une file et un worker par projet, dans la base Redis 1 (`config/packages/messeng
 | `async` (`messages`) | `symfony_messenger_worker_v2` | chapitres Mémoires Vivantes |
 | `esg` (`messages_esg`) | `symfony_messenger_worker_esg_v2` | rapports Boussole ESG |
 | `landing_ai` (`messages_landing_ai`, sans relance) | `symfony_messenger_worker_landing_v2` | tâches de l'assistant IA |
-| `gestion_ai` (`messages_gestion_ai`, sans relance ; 10/11/2026) | `symfony_messenger_worker_gestion_v2` | lecture de documents par IA de l'application de gestion (`ReadGestionDocumentMessage`, lot L1), worker dédié à la gestion à la demande du propriétaire |
+| `gestion_ai` (`messages_gestion_ai`, sans relance ; 10/11/2026) | `symfony_messenger_worker_gestion_v2` | lecture de documents par IA de l'application de gestion (`ReadGestionDocumentMessage`, lot L1), worker dédié à la gestion à la demande du propriétaire ; réponses de la console IA de la gestion (`AnswerConsoleQuestionMessage`, lot W2, 13/11/2026 : deux appels au modèle par réponse, un échec est noté sur la réponse) |
 | `media` (`messages_media`, sans relance) | `symfony_messenger_worker_media_v2` | vidéos de la médiathèque préparées pour le défilement |
 | `email` (`messages_email`, relances 30 s / 2 min / 8 min) | `symfony_messenger_worker_email_v2` | courriels de tous les sites (09/10/2026) |
 | `pdf` (`messages_pdf`, sans relance) | `symfony_messenger_worker_pdf_v2` | mise en page PDF complète des livres de Mémoires Vivantes demandée avec `async=1` (lot 3, 03/11/2026) : image de l'application, `--memory-limit=384M` (pic observé ~200 Mo), état dans `mv_book.pdf_status` |

@@ -1,9 +1,12 @@
-# Console IA générale de la gestion — contrat du lot W2 (validé le 13/11/2026, **pas encore codé**)
+# Console IA générale de la gestion — lot W2 (contrat validé et codé le 13/11/2026)
 
-Cette fiche est le contrat validé par le propriétaire le 13/11/2026. Le backend le codera après le lot IA-ACT-5 ; le web peut déjà
-planifier son panneau dessus. Tant que la ligne « État » ci-dessous dit « à coder », **aucune des routes de cette fiche n'existe**.
+Cette fiche est le contrat validé par le propriétaire le 13/11/2026, et la description de ce qui est codé.
 
-**État : à coder (après IA-ACT-5).**
+**État : codé (lot W2, 13/11/2026).** Code : `src/Gestion/Analysis/AnalysisCatalog.php` (les analyses), `src/Gestion/Services/Console/`
+(`ConsoleService` : les routes ; `ConsoleModel` : les deux appels au modèle ; `ConsoleResponder` : la réponse, dans le worker
+`gestion_ai`), `Gestion/Controller/GestionConsoleController`, message `AnswerConsoleQuestionMessage`. Aucune table de plus : les
+échanges sont dans les tables du fil (`gestion_conversation`, type `console`) et ne sont jamais rendus par les routes du fil.
+Test : `tests/Functional/Gestion/ConsoleApiTest.php` (modèle simulé).
 
 ## 1. Ce que fait la console
 
@@ -41,8 +44,10 @@ une sortie chiffrée. Le fil d'une facture, le guide quotidien et la console app
 
 ### Catalogue du premier lot
 
-Les dix analyses entrent au premier lot quand leur calcul existe déjà ; sinon les six premières avec `articles.new` et
-`articles.vs_similar`, les deux dernières au lot suivant.
+Les dix analyses sont au catalogue (`AnalysisCatalog::DEFINITIONS`). Paramètres admis, tous facultatifs sauf mention : `periodId`
+(une période du site ; sans lui, la période en cours), `range` (`today`, `7d`, `month`, `year`), `year`, `days` (7 à 180),
+`productId` (obligatoire pour `articles.vs_similar`). Un paramètre facultatif faux est écarté ; un obligatoire manquant ou faux écarte
+l'analyse. Chaque chiffre a un identifiant unique dans une réponse : `a1.revenue` = le chiffre `revenue` de la première analyse lancée.
 
 | Clé | Ce qu'elle dit | Source (écran, route) |
 |---|---|---|
@@ -72,6 +77,20 @@ gérant dans tous les cas.
 **Vérification des nombres** (celle du guide quotidien, `docs/guide-ia-gestion.md`) : tout nombre écrit dans un bloc doit être la valeur
 d'un chiffre fourni, sous une écriture admise. Un bloc qui porte un nombre inconnu est rejeté ; un nouvel essai, puis un texte de repli
 écrit par le serveur à partir des chiffres.
+
+Comment c'est tenu, dans le code :
+- le modèle ne reçoit pas des cents mais des **écritures** (`display` : « 25,00 $ », « 90 % », « 2,7 ») ; les nombres admis dans un
+  texte sont ceux de ces écritures, des libellés et des noms rendus, et ceux de la question du gérant ;
+- le modèle **n'écrit que du texte**. Les blocs `figures`, `table` et `verdicts` sont assemblés par le serveur à partir des résultats,
+  par référence (`figureIds`, `analysis`) : un identifiant inconnu est retiré, un tableau d'une analyse non lancée est écarté ;
+- un nombre est reconnu **par sa valeur**, dans toutes ses écritures : « 25,00 $ », « 25 $ » et « 25,00 » valent 25 ; « 1 234,56 » et
+  « 1,234.56 » valent 1234,56 (`ConsoleResponder::numbers`) ;
+- un texte au nombre inconnu vaut **un** nouvel essai de rédaction (trois appels au modèle au plus par réponse). S'il reste un nombre
+  inconnu, la réponse est une **réponse de repli** : le texte du serveur et les chiffres des analyses. Elle est **gratuite**
+  (`ConsoleResponder::CONSOLE_FALLBACK_CHARGED`, `false` par défaut : le gérant ne paie pas une réponse que l'IA n'a pas su écrire).
+  Chaque repli est **compté** : la réponse garde la marque `fallback`, et le journal reçoit une ligne « [Console] repli » ; le nombre
+  de replis par jour dit si le modèle de rédaction doit monter ;
+- dans un bloc `verdicts`, l'explication (`why`) du modèle qui porte un nombre inconnu est remplacée par celle, chiffrée, du serveur.
 
 **Verdicts** : quand une analyse rend un verdict (garder, monter ou baisser le coefficient d'un article), **c'est le serveur qui le
 calcule**, avec la règle du coefficient validée par le propriétaire (lot IA-ACT-5). L'IA l'explique ; elle ne décide pas.
@@ -197,12 +216,17 @@ Après un échec, le gérant peut reposer sa question : c'est une nouvelle quest
 ## 6. Unités, limites, conservation
 
 - **1 unité par réponse rédigée par le modèle** ; aucune si l'IA échoue. Le propriétaire de la plateforme n'est pas décompté.
-- **Gratuit** : une question hors périmètre, à laquelle le serveur répond lui-même par un court texte qui dit ce que la console sait
-  faire ; une demande de précision posée par le serveur.
+- **Gratuit** : une réponse de repli (§ 3) ; une question hors périmètre, à laquelle le serveur répond lui-même par un court texte qui dit ce que la console sait
+  faire ; une demande de précision posée par le serveur (le modèle n'a désigné aucune analyse valable, ou sa demande de précision
+  portait un nombre de son cru).
+- L'unité est **réservée à la question** (402 s'il n'en reste plus) puis décomptée ou rendue par le worker. Délai dépassé : rendue.
 - **Une demande de précision rédigée par le modèle coûte 1 unité**, comme toute réponse rédigée par lui.
 - Palier d'IA du site (403 `AI_NOT_INCLUDED`), crédits (402 `AI_CREDITS_EXHAUSTED`), plafond quotidien commun avec la phrase libre du
   fil (429 `AI_DAILY_LIMIT`).
 - Historique **par site**, gardé **12 mois**, dans les tables du fil déjà en place (un fil de type « console ») : pas de migration.
+  Les échanges de plus de 12 mois sont retirés quand une question arrive. Le modèle reçoit les 6 derniers messages de l'échange, texte seul.
+- **Lecture seule** : la console et ses analyses n'écrivent rien dans les données du site (garde-fou dans `ConsoleApiTest`). Le service
+  n'écrit que ses propres échanges, et l'effacement d'un échange au journal (`gestion-console`).
 
 ## 7. Premier cas d'usage : « Fais le bilan de mes nouveaux articles »
 
