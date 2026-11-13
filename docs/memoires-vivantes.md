@@ -482,6 +482,10 @@ Détail : `docs/architecture.md`, « Modules et mode de la plateforme » ; `docs
 
 ## Pièges connus et points à vérifier
 
+- Corrigé le 13/11/2026 (test `tests/Functional/Admin/MemoiresQuestionCrudTest.php`) : la liste EasyAdmin des questions levait
+  un avertissement PHP (« Can only flip string and integer values ») dès qu'une question avait un rôle : le libellé
+  « Tous / Transversal » du champ « Rôle » était un choix de valeur `null`, et EasyAdmin retourne la liste des choix pour
+  afficher la liste. C'est maintenant le vide du champ (`placeholder`). Règle : jamais de valeur non scalaire dans un `ChoiceField`.
 - Corrigé le 12/11/2026 (test `tests/Functional/Admin/MemoiresChapterCrudTest.php`) : le formulaire EasyAdmin d'un chapitre
   échouait dès qu'un livre existait (« Book could not be converted to string ») : `Book`, `Chapter` et `Contributor` ont
   maintenant un `__toString` (titre, prénoms), libellé de toute association EasyAdmin vers ces entités.

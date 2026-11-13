@@ -25,7 +25,7 @@ class AdminListsTest extends WebTestCase
      * le signale).
      */
     private const KNOWN_FAILURES = [
-        \App\Controller\Admin\Memoires\MemoireQuestionCrudController::class => 'avertissement PHP array_flip dans une liste de choix à valeur non scalaire, que le mode débogage des tests lève en exception dès qu\'une ligne concernée est affichée (pages 2 à 5 de la liste, avant comme après ce lot) ; écran de Mémoires Vivantes, signalé',
+        // MemoireQuestionCrudController retiré le 13/11/2026 : le choix « Tous / Transversal » à valeur null est devenu le placeholder du champ
     ];
 
     private KernelBrowser $client;

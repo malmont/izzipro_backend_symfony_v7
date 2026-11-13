@@ -97,8 +97,11 @@ class MemoireQuestionCrudController extends BaseTenantCrudController
         yield ChoiceField::new('theme', 'Thème / Chapitre')
             ->setChoices($this->themeChoices());
 
+        // « Tous / Transversal » est le vide du champ (placeholder), pas un choix de valeur null : EasyAdmin retourne la
+        // liste des choix (array_flip) pour afficher la liste, et une valeur null y levait un avertissement PHP (13/11/2026).
         yield ChoiceField::new('role', 'Rôle du contributeur (Famille / Hommage)')
-            ->setChoices(['Tous / Transversal' => null] + $this->roleChoices())
+            ->setChoices($this->roleChoices())
+            ->setFormTypeOption('placeholder', 'Tous / Transversal')
             ->setHelp('Applicable particulièrement aux questions spécifiques (Édition Hommage ou Famille). Laisser vide si la question est commune.')
             ->setRequired(false);
 
