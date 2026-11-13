@@ -26,6 +26,9 @@ trait PricingFixtures
     protected array $fixtureOrderIds = [];
     /** @var list<int> commandes d'achat créées par `article()`, retirées de même */
     protected array $fixtureCommandeIds = [];
+    /** @var list<int> articles créés par `article()` et fournisseurs créés par `supplier()` : retirés quand plus rien ne les référence */
+    protected array $fixtureProductIds = [];
+    protected array $fixtureSupplierIds = [];
 
     /**
      * À appeler dans `tearDown()` : les ventes de ces tests sont datées dans la saison de l'an dernier, que d'autres tests de la base
@@ -44,12 +47,30 @@ trait PricingFixtures
             $conn->executeStatement('DELETE FROM commande_line WHERE commande_id IN (?)', [$this->fixtureCommandeIds], [$ids]);
             $conn->executeStatement('DELETE FROM commande WHERE id IN (?)', [$this->fixtureCommandeIds], [$ids]);
         }
-        $this->fixtureOrderIds = $this->fixtureCommandeIds = [];
+        // Articles et fournisseurs de ces tests : retirés aussi, pour ne pas laisser d'articles « libres » ni de fournisseurs au nom proche
+        // de ceux d'autres tests de la base partagée. Celui qu'une autre donnée référence encore (une commande créée par un fil) reste.
+        foreach ($this->fixtureProductIds as $id) {
+            try {
+                $conn->executeStatement('DELETE FROM product_categories WHERE product_id = ?', [$id]);
+                $conn->executeStatement('DELETE FROM product_variant WHERE product_id = ?', [$id]);
+                $conn->executeStatement('DELETE FROM product WHERE id = ?', [$id]);
+            } catch (\Doctrine\DBAL\Exception) {
+                // encore référencé : il reste
+            }
+        }
+        foreach ($this->fixtureSupplierIds as $id) {
+            try {
+                $conn->executeStatement('DELETE FROM fournisseur WHERE id = ?', [$id]);
+            } catch (\Doctrine\DBAL\Exception) {
+                // encore référencé par une commande : il reste
+            }
+        }
+        $this->fixtureOrderIds = $this->fixtureCommandeIds = $this->fixtureProductIds = $this->fixtureSupplierIds = [];
     }
 
     protected function supplier(string $name): int
     {
-        return (int) $this->create(Fournisseur::class, ['name' => $name], fn (Fournisseur $f, EntityManagerInterface $em) => $f->setTypeFournisseur($em->find(TypeFournisseur::class, 1) ?? $this->create(TypeFournisseur::class, ['name' => 'Autre'])))->getId();
+        return $this->fixtureSupplierIds[] = (int) $this->create(Fournisseur::class, ['name' => $name], fn (Fournisseur $f, EntityManagerInterface $em) => $f->setTypeFournisseur($em->find(TypeFournisseur::class, 1) ?? $this->create(TypeFournisseur::class, ['name' => 'Autre'])))->getId();
     }
 
     /**
@@ -64,7 +85,7 @@ trait PricingFixtures
         $conn = $this->em()->getConnection();
         $slug = 'sem-' . bin2hex(random_bytes(5));
         $conn->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type) VALUES (nextval('product_id_seq'), ?, ?, false, 0, NOW(), ?, 'standard')", [$name, $price, $slug]);
-        $id = (int) $conn->fetchOne('SELECT id FROM product WHERE slug = ?', [$slug]);
+        $id = $this->fixtureProductIds[] = (int) $conn->fetchOne('SELECT id FROM product WHERE slug = ?', [$slug]);
         $variant = (int) $this->create(ProductVariant::class, ['product' => $this->em()->find(Product::class, $id)])->getId();
         $conn = $this->em()->getConnection();
         $conn->executeStatement('UPDATE product_variant SET stock_quantity = 0, price = NULL WHERE id = ?', [$variant]);
