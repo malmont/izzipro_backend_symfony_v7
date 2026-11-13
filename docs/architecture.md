@@ -646,6 +646,27 @@ Contrôle : `systemctl list-timers tech-metrics.timer`, `tail /var/log/tech-metr
 value FROM tech_metric_sample ORDER BY measured_at DESC LIMIT 20` dans `app_v2_db`. Retour arrière : `systemctl disable --now
 tech-metrics.timer`, puis `DROP TABLE tech_metric_sample, tech_threshold`. Tests : `tests/Functional/Tech/`.
 
+
+### Répéter une mise en ligne sur une copie (règles du 13/11/2026)
+
+Une répétition sert du code contre une copie d'une base de site. Elle ne doit jamais pouvoir écrire dans la production, ni dans ses
+bases, ni dans son cache. Incident du 13/11/2026 : un conteneur provisoire de répétition, dont l'adresse de Redis n'avait pas été
+détournée (la configuration utilise l'alias `redis`, pas le nom du conteneur), a écrit dans le cache de production la fiche du site
+`demo` lue dans une copie de la base maître. La production a servi `demo` depuis la copie pendant 9 minutes, puis a rendu 500 pendant
+30 minutes après la suppression de la copie. Correction : la suppression de cette seule clé (`tenant_conf_host_<md5 de l'hôte>`).
+
+Règles :
+- **Un site de répétition à part** : jamais le code ni le nom d'hôte d'un vrai site. Une fiche de site égarée dans un cache ne peut
+  alors remplacer celle d'aucun site réel.
+- **Un réseau isolé** : le conteneur provisoire tourne sur un réseau où le Redis de production n'est pas joignable. Réécrire une adresse
+  ne suffit pas. Redis à part pour le cache ET pour les files ; aucun worker Messenger dans un conteneur provisoire.
+- **Un contrôle bloquant avant tout démarrage** : base maître détournée (1 sur 1), adresses Redis détournées (2 sur 2), aucune adresse
+  de production ; sinon, arrêt, sans exception.
+- **Un balayage avant suppression** : après un écart, chercher le nom de la copie dans tout le cache de production ; ne supprimer la
+  copie que lorsque le balayage rend zéro.
+- **Rien d'annoncé « sans effet » sans vérification**, clé par clé. Une comparaison « production contre copie » ne prouve rien si la
+  production a pu lire la copie : le dire.
+
 ## Tests
 
 ```
