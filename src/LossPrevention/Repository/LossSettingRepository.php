@@ -15,7 +15,7 @@ class LossSettingRepository extends EntityRepository
     /** Valeurs d'un site qui n'a pas encore sa ligne : une LECTURE ne la crée pas (rien n'est écrit sur un site qui ne se sert pas du module) */
     private const DEFAULTS = ['id' => null, 'staff_notice_confirmed_at' => null, 'staff_notice_confirmed_by' => null, 'person_patterns_enabled' => null,
         'retention_findings_months' => 24, 'retention_confirmed_months' => 60, 'cursor_sequence' => null, 'backfill_until_sequence' => null, 'analysis_floor_sequence' => null,
-        'last_analysis_at' => null, 'last_digest_day' => null, 'updated_at' => null, 'updated_by' => null];
+        'last_analysis_at' => null, 'last_digest_day' => null, 'last_digest_finding_id' => null, 'updated_at' => null, 'updated_by' => null];
 
     /**
      * La ligne du site. Lecture simple : les valeurs par défaut si elle n'existe pas encore, sans rien écrire. `$forUpdate` (l'analyse, un
@@ -50,20 +50,27 @@ class LossSettingRepository extends EntityRepository
      * Réserve la journée du courriel de résumé : une écriture conditionnelle, que seul le premier de deux lancements simultanés obtient
      * (le second attend le verrou de la ligne, puis relit la condition : la journée est déjà posée, rien n'est touché).
      *
-     * @return array{previous: ?string}|null null : la journée était déjà prise ; sinon la valeur d'avant, à rendre si aucun envoi n'aboutit
+     * Avec la journée, la même écriture pose `last_digest_finding_id` : le dernier constat existant au moment de l'envoi. Le courriel
+     * suivant n'annonce que les constats nés après lui (décision du propriétaire du 14/11/2026).
+     *
+     * @return array{previous: ?string, previousFindingId: ?int}|null null : la journée était déjà prise ; sinon les valeurs d'avant, à rendre
+     *                                                                 si aucun envoi n'aboutit
      */
-    public function reserveDigestDay(string $day): ?array
+    public function reserveDigestDay(string $day, ?int $lastFindingId = null): ?array
     {
         $row = $this->row(true); // crée la ligne au besoin
         $touched = $this->getEntityManager()->getConnection()->executeStatement(
-            'UPDATE loss_setting SET last_digest_day = ? WHERE id = ? AND last_digest_day IS DISTINCT FROM ?', [$day, $row['id'], $day]);
+            'UPDATE loss_setting SET last_digest_day = ?, last_digest_finding_id = COALESCE(?, last_digest_finding_id) WHERE id = ? AND last_digest_day IS DISTINCT FROM ?',
+            [$day, $lastFindingId, $row['id'], $day], [\Doctrine\DBAL\ParameterType::STRING, $lastFindingId === null ? \Doctrine\DBAL\ParameterType::NULL : \Doctrine\DBAL\ParameterType::INTEGER]);
 
-        return $touched === 1 ? ['previous' => $row['last_digest_day'] !== null ? (string) $row['last_digest_day'] : null] : null;
+        return $touched === 1 ? ['previous' => $row['last_digest_day'] !== null ? (string) $row['last_digest_day'] : null,
+            'previousFindingId' => $row['last_digest_finding_id'] !== null ? (int) $row['last_digest_finding_id'] : null] : null;
     }
 
-    /** Rend la journée réservée (aucun envoi n'a abouti) : la valeur d'avant revient, seulement si la réservation est encore la nôtre */
-    public function releaseDigestDay(string $day, ?string $previous): void
+    /** Rend la journée réservée (aucun envoi n'a abouti) : les valeurs d'avant reviennent, seulement si la réservation est encore la nôtre */
+    public function releaseDigestDay(string $day, ?string $previous, ?int $previousFindingId = null): void
     {
-        $this->getEntityManager()->getConnection()->executeStatement('UPDATE loss_setting SET last_digest_day = ? WHERE last_digest_day = ?', [$previous, $day]);
+        $this->getEntityManager()->getConnection()->executeStatement('UPDATE loss_setting SET last_digest_day = ?, last_digest_finding_id = ? WHERE last_digest_day = ?',
+            [$previous, $previousFindingId, $day], [1 => $previousFindingId === null ? \Doctrine\DBAL\ParameterType::NULL : \Doctrine\DBAL\ParameterType::INTEGER]);
     }
 }

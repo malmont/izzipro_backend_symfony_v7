@@ -72,7 +72,7 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
 
         $run = function (): string {
             $tester = new \Symfony\Component\Console\Tester\CommandTester((new \Symfony\Bundle\FrameworkBundle\Console\Application(static::$kernel))->find('app:pertes:analyser'));
-            $tester->execute(['--tenant' => MV_TEST_TENANT_CODE]);
+            $tester->execute(['--tenant' => MV_TEST_TENANT_CODE, '--courriel-maintenant' => true]);
             $this->provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
 
             return $tester->getDisplay();
@@ -139,6 +139,9 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
         $this->flags(true, true);
         $adminEmail = (string) $this->db->fetchOne('SELECT email FROM "user" WHERE id = ?', [$this->adminId]);
         $day = fn (): ?string => ($v = $this->db->fetchOne('SELECT last_digest_day FROM loss_setting')) === null || $v === false ? null : (string) $v;
+        $mark = fn (): ?int => ($v = $this->db->fetchOne('SELECT last_digest_finding_id FROM loss_setting')) === null || $v === false ? null : (int) $v;
+        $tz = static::getContainer()->get(\App\Services\CaisseService\StoreClock::class)->timezone();
+        $at = fn (string $time): \DateTimeImmutable => new \DateTimeImmutable($this->today() . ' ' . $time, $tz); // une heure du MAGASIN, aujourd'hui
         $tile = fn (): ?array => array_values(array_filter($this->json($this->call('GET', '/api/gestion/accueil/vignettes?locale=fr', null, $this->adminToken)), fn (array $t) => $t['id'] === 'loss-findings'))[0] ?? null;
 
         // Un envoi commun simulé : il note ce qu'il reçoit, et aboutit ou non selon $deliver
@@ -156,7 +159,7 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
             $c->get(\App\Services\TenantEntityManagerProvider::class)->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
 
             return new \App\LossPrevention\Services\LossDigestService($c->get(\App\Services\TenantEntityManagerProvider::class), $c->get(\App\LossPrevention\Services\LossSettingsService::class),
-                $c->get(\App\LossPrevention\Services\LossHomeTile::class), $c->get(\App\LossPrevention\Services\LossSite::class), $c->get(\App\Gestion\Services\GestionNotificationService::class), $mailer,
+                $c->get(\App\LossPrevention\Services\LossSite::class), $c->get(\App\Gestion\Services\GestionNotificationService::class), $mailer,
                 $c->get(\App\Services\EmailConfigurationService\EmailLocale::class), $c->get('translator'), new \Psr\Log\NullLogger(),
                 $c->get(\App\Services\TenantConnectionManager::class), $c->get(\App\Services\TenantPublicHostResolver::class));
         };
@@ -174,13 +177,13 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
 
         // B1. Notice RETIRÉE : l'analyse est arrêtée ; ni courriel, ni vignette, et le jour n'est pas marqué
         $this->json($this->admin('PUT', self::BASE . '/reglages', ['staffNoticeConfirmed' => false]));
-        $this->db->executeStatement('UPDATE loss_setting SET last_digest_day = NULL');
-        $this->assertSame(['status' => 'not_allowed', 'sent' => 0], $digest()->sendIfDue());
+        $this->db->executeStatement('UPDATE loss_setting SET last_digest_day = NULL, last_digest_finding_id = NULL');
+        $this->assertSame(['status' => 'not_allowed', 'sent' => 0], $digest()->sendIfDue($at('09:00')));
         $this->assertSame([[], null], [$calls, $day()], 'notice retirée : aucun envoi, jour non marqué');
         $this->assertNull($tile(), 'notice retirée : pas de « N nouveaux constats » sur l\'accueil');
         $run = function (): string { // la commande du minuteur, prise dans le noyau EN COURS (il redémarre à chaque requête)
             $tester = new \Symfony\Component\Console\Tester\CommandTester((new \Symfony\Bundle\FrameworkBundle\Console\Application(static::$kernel))->find('app:pertes:analyser'));
-            $tester->execute(['--tenant' => MV_TEST_TENANT_CODE]);
+            $tester->execute(['--tenant' => MV_TEST_TENANT_CODE, '--courriel-maintenant' => true]);
             $this->provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
 
             return $tester->getDisplay();
@@ -190,30 +193,52 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
         $this->json($this->admin('PUT', self::BASE . '/reglages', ['staffNoticeConfirmed' => true]));
         $this->assertNotNull($tile(), 'notice reconfirmée : la vignette revient');
 
-        // B4. Aucun envoi n'aboutit : le jour réservé est RENDU (la valeur d'avant revient), on réessaiera
-        $deliver = false;
-        $this->assertSame(['status' => 'not_delivered', 'sent' => 0], $digest()->sendIfDue());
-        $this->assertCount(1, $mine());
-        $this->assertNull($day(), 'envoi impossible : jour non marqué');
-        $this->db->executeStatement("UPDATE loss_setting SET last_digest_day = '2020-01-01'");
-        $this->assertSame('not_delivered', $digest()->sendIfDue()['status']);
-        $this->assertSame('2020-01-01', $day(), 'la valeur d\'avant la réservation revient');
+        // Heure d'envoi (décision du propriétaire) : à partir de 8 h, heure du MAGASIN ; avant, rien ne part et le jour n'est pas réservé
+        $this->assertSame(['status' => 'too_early', 'sent' => 0], $digest()->sendIfDue($at('07:59')));
+        $this->assertSame([[], null, null], [$calls, $day(), $mark()], '7 h 59 : aucun envoi, ni jour ni borne');
 
-        // Envoi qui aboutit : jour marqué ; un second appel n'envoie rien (deux lancements de suite : un seul courriel)
+        // B4. Aucun envoi n'aboutit : le jour ET la borne réservés sont RENDUS (les valeurs d'avant reviennent), on réessaiera
+        $deliver = false;
+        $this->assertSame(['status' => 'not_delivered', 'sent' => 0], $digest()->sendIfDue($at('08:00')));
+        $this->assertCount(1, $mine(), '8 h 00 : l\'envoi est tenté');
+        $this->assertSame([null, null], [$day(), $mark()], 'envoi impossible : jour non marqué, borne non avancée');
+        $this->db->executeStatement("UPDATE loss_setting SET last_digest_day = '2020-01-01', last_digest_finding_id = 0");
+        $this->assertSame('not_delivered', $digest()->sendIfDue($at('08:00'))['status']);
+        $this->assertSame(['2020-01-01', 0], [$day(), $mark()], 'les deux valeurs d\'avant la réservation reviennent');
+
+        // Envoi qui aboutit : jour marqué, borne posée sur le dernier constat ; un second appel n'envoie rien (un seul courriel)
         $deliver = true;
         $calls = [];
-        $first = $digest()->sendIfDue();
-        $this->assertSame(['sent', $this->today()], [$first['status'], $day()]);
+        $lastFinding = (int) $this->db->fetchOne('SELECT MAX(id) FROM loss_finding');
+        $first = $digest()->sendIfDue($at('08:00'));
+        $this->assertSame(['sent', $this->today(), $lastFinding], [$first['status'], $day(), $mark()]);
         $this->assertCount(1, $mine());
-        $this->assertSame(['status' => 'already_sent', 'sent' => 0], $digest()->sendIfDue());
+        $this->assertSame(['status' => 'already_sent', 'sent' => 0], $digest()->sendIfDue($at('08:15')));
         $this->assertCount(1, $mine(), 'deux appels de suite : un seul envoi');
-        // La réservation elle-même : une écriture conditionnelle, que le second n'obtient pas
+
+        // Rappel (décision du propriétaire) : seuls les constats NÉS depuis le courriel précédent sont annoncés. Le lendemain, le constat
+        // d'hier n'est toujours pas ouvert : aucun courriel, et la vignette de l'accueil continue de le rappeler
+        $this->db->executeStatement("UPDATE loss_setting SET last_digest_day = '2020-01-01'");
+        $this->assertSame(['status' => 'nothing_new', 'sent' => 0], $digest()->sendIfDue($at('08:00')));
+        $this->assertSame(['2020-01-01', $lastFinding], [$day(), $mark()], 'rien de né : ni envoi, ni réservation');
+        $this->assertCount(1, $mine());
+        $this->assertNotNull($tile(), 'la vignette rappelle toujours le constat non ouvert');
+        // Un constat naît : le courriel suivant n'annonce que lui
+        $this->openSession();
+        $this->closeWith(-1500, 'Né depuis le dernier courriel');
+        $this->assertSame(1, $this->json($this->admin('POST', self::BASE . '/analyse'))['opened']);
+        $calls = [];
+        $this->assertSame('sent', $digest()->sendIfDue($at('08:00'))['status']);
+        $this->assertSame(['1', (int) $this->db->fetchOne('SELECT MAX(id) FROM loss_finding')], [array_values($mine()[0]['context']['rows'])[0], $mark()], 'un seul constat annoncé : celui qui est né depuis');
+
+        // La réservation elle-même : une écriture conditionnelle, que le second lancement n'obtient pas ; lui seul n'avance pas la borne
         $settings = $this->provider->getEntityManager()->getRepository(\App\LossPrevention\Entity\LossSetting::class);
-        $this->assertNull($settings->reserveDigestDay($this->today()), 'jour déjà pris');
-        $this->db->executeStatement('UPDATE loss_setting SET last_digest_day = NULL');
-        $this->assertSame([['previous' => null], null], [$settings->reserveDigestDay($this->today()), $settings->reserveDigestDay($this->today())], 'de deux réservations, une seule passe');
-        $settings->releaseDigestDay($this->today(), null);
-        $this->assertNull($day());
+        $this->assertNull($settings->reserveDigestDay($this->today(), 999), 'jour déjà pris');
+        $this->db->executeStatement('UPDATE loss_setting SET last_digest_day = NULL, last_digest_finding_id = 7');
+        $this->assertSame([['previous' => null, 'previousFindingId' => 7], null], [$settings->reserveDigestDay($this->today(), 10), $settings->reserveDigestDay($this->today(), 20)], 'de deux réservations, une seule passe');
+        $this->assertSame(10, $mark(), 'la borne est celle du lancement qui a réservé');
+        $settings->releaseDigestDay($this->today(), null, 7);
+        $this->assertSame([null, 7], [$day(), $mark()]);
 
         // B3. Le domaine passé à l'envoi commun est l'hôte public du site (adresse du logo), jamais un domaine de traduction
         // B2. La dernière ligne du courriel voyage sous `siteLine` : `signature` est écrasée par l'envoi commun
@@ -235,7 +260,7 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
             } else {
                 $this->db->executeStatement('UPDATE email_configuration_translation SET signature = ?', [$signature]);
             }
-            $this->db->executeStatement('UPDATE loss_setting SET last_digest_day = NULL');
+            $this->db->executeStatement('UPDATE loss_setting SET last_digest_day = NULL, last_digest_finding_id = NULL');
             $this->provider->getEntityManager()->clear();
             $this->assertStringContainsString('courriel de résumé envoyé', $run());
             $mails = array_values(array_filter($this->getMailerMessages(), fn ($m) => $m->getTo()[0]->getAddress() === $adminEmail));
@@ -255,6 +280,35 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
             foreach ($before as $row) {
                 $this->db->executeStatement('UPDATE email_configuration_translation SET signature = ? WHERE id = ?', [$row['signature'], $row['id']]);
             }
+        }
+    }
+
+    /** Le cheminement du site ne montre les étapes du module qu'avec le droit du module (une mutation de la condition passait sans échec) */
+    public function testReadinessShowsTheModuleStepsOnlyWithTheModuleRight(): void
+    {
+        $readiness = fn (): array => $this->json($this->call('GET', '/api/site/readiness?locale=fr', null, $this->adminToken));
+        $lossSteps = fn (array $r): array => array_values(array_filter(array_column($r['steps'], 'key'), fn (string $k) => str_starts_with($k, 'loss.')));
+        static::getContainer()->get(\App\Services\Platform\PlatformModeService::class)->setMode('live', 'test'); // en mode « demo », tout est ouvert
+
+        $this->flags(true, false);
+        $without = $readiness();
+        $this->assertSame([], $lossSteps($without), 'sans le droit du module : aucune étape de la prévention des pertes');
+        // Son groupe ne porte alors que l'offre « Obtenir » de la plateforme, jamais une étape du module
+        $this->assertSame(['obtain.module.loss_prevention'], array_column(array_values(array_filter($without['steps'], fn (array $s) => ($s['group'] ?? null) === 'module.loss_prevention')), 'key'));
+
+        // Le droit accordé comme le fait la plateforme (un droit d'usage, que le cheminement lit en mode « live »), puis retiré
+        $entitlements = static::getContainer()->get(\App\Services\Platform\EntitlementService::class);
+        $granted = (int) $entitlements->grant(MV_TEST_TENANT_CODE, 'module.loss_prevention', 'manual', null, 'test', 'PERTES-CHEMINEMENT', null, null, false)['id'];
+        try {
+            $this->provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+            $with = $readiness();
+            $this->assertSame(['loss.management', 'loss.place', 'loss.staff_notice', 'loss.rules', 'loss.first_analysis'], $lossSteps($with), 'avec le droit : les cinq étapes');
+            $this->assertSame(['loss.management', 'loss.place', 'loss.staff_notice', 'loss.rules', 'loss.first_analysis'],
+                array_column(array_values(array_filter($with['steps'], fn (array $s) => ($s['group'] ?? null) === 'module.loss_prevention')), 'key'), 'le groupe du module : ses cinq étapes, plus d\'offre « Obtenir »');
+            $this->assertSame(5, array_column($with['groups'], 'total', 'key')['module.loss_prevention']);
+        } finally {
+            static::getContainer()->get(\App\Services\Platform\EntitlementService::class)->cancel($granted, 'test', 'PERTES-CHEMINEMENT');
+            $this->provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
         }
     }
 

@@ -50,7 +50,8 @@ class DiscountSeriesRule implements LossRuleInterface
             $discount = (int) round((float) $o['discount']);
             $gross = (int) round((float) $o['gross']);
             $bp = $gross > 0 ? intdiv($discount * 10000, $gross) : 0;
-            if ($bp * 100 >= $capBp * $params['share'] || $discount * 100 >= $capAmount * $params['share']) {
+            // Un plafond à 0 n'est pas un plafond : son critère est ignoré (sinon toute vente remisée serait « proche du plafond »)
+            if (($capBp > 0 && $bp * 100 >= $capBp * $params['share']) || ($capAmount > 0 && $discount * 100 >= $capAmount * $params['share'])) {
                 $near[] = $o + ['_discount' => $discount, '_gross' => $gross];
             }
         }

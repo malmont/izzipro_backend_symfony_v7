@@ -111,6 +111,21 @@ class LossFindingRepository extends EntityRepository
     }
 
     /**
+     * Constats NÉS après un constat donné et encore nouveaux (jamais ouverts, hors reprise, non décidés), pour le courriel de résumé : leur
+     * nombre, leur montant en jeu, et le dernier constat existant (la borne que le courriel posera). Deux nombres : aucun nom.
+     *
+     * @return array{count: int, amount: int, lastId: int}
+     */
+    public function bornAfter(int $findingId): array
+    {
+        $conn = $this->getEntityManager()->getConnection();
+        $row = $conn->fetchAssociative(
+            "SELECT COUNT(*) AS n, COALESCE(SUM(amount_at_stake), 0) AS amount FROM loss_finding WHERE id > ? AND seen_at IS NULL AND backfill = false AND status = 'open'", [$findingId]) ?: [];
+
+        return ['count' => (int) ($row['n'] ?? 0), 'amount' => (int) ($row['amount'] ?? 0), 'lastId' => (int) $conn->fetchOne('SELECT COALESCE(MAX(id), 0) FROM loss_finding')];
+    }
+
+    /**
      * Comptes de la synthèse sur des journées du magasin.
      *
      * @return array{byStatus: array<string, int>, new: int, amountAtStake: int, byRule: list<array<string, mixed>>, byRegister: list<array<string, mixed>>}

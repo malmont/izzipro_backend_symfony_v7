@@ -137,6 +137,7 @@ class LossFindingReader
         }
         $names = $this->userNames($userIds, $locale);
         $reasons = $this->liveReasons($evidenceRows);
+        $fromJournal = $this->liveFromJournal($evidenceRows);
         $tz = $this->site->clock()->timezone();
         $intact = true;
         $evidence = [];
@@ -146,7 +147,7 @@ class LossFindingReader
             $evidence[] = [
                 'id' => (int) $e['id'], 'kind' => (string) $e['kind'], 'at' => LossAuditEntry::iso($at), 'atLabel' => LossTexts::dateTime($at, $tz, $locale),
                 'title' => $this->texts->t('evidence.' . $e['kind'] . '.title', $locale),
-                'lines' => $this->lines((string) $e['kind'], $snapshots[$e['id']] + ['liveReason' => $reasons[$e['id']] ?? null], (string) $row['currency'], $names, $tz, $locale),
+                'lines' => $this->lines((string) $e['kind'], $snapshots[$e['id']] + ['liveReason' => $reasons[$e['id']] ?? $fromJournal['discountTexts'][$e['id']] ?? null, 'liveArticle' => $fromJournal['articles'][$e['id']] ?? null], (string) $row['currency'], $names, $tz, $locale),
                 'ref' => ['type' => (string) $e['ref_type'], 'id' => (int) $e['ref_id'], 'sequence' => $e['audit_sequence'] !== null ? (int) $e['audit_sequence'] : null, 'hash' => $e['audit_hash']],
                 'screen' => null, // aucun écran de la gestion pour une vente au comptoir, une session ou une clôture (lot L1)
                 'fingerprint' => (string) $e['fingerprint'],
@@ -316,9 +317,10 @@ class LossFindingReader
                 'cardRefund' => $money('cardRefund'), 'withReceipt' => $this->texts->t(isset($s['originalOrderId']) ? 'evidence.yes' : 'evidence.no', $locale),
                 'returnReason' => $text('liveReason') ?? $text('reasonCode') ?? $this->texts->t('evidence.noReason', $locale), 'returnedBy' => $user('userId'), 'approvedBy' => $user('approvedById')],
             LossEvidence::DISCOUNT => ['reference' => $text('reference'), 'gross' => $money('gross'), 'discount' => $money('discount'),
-                'discountReasons' => isset($s['reasonCodes']) ? (implode(', ', array_filter($s['reasonCodes'], fn ($c) => $c !== '')) ?: $this->texts->t('evidence.noReason', $locale)) : null,
+                // codes choisis à la caisse, puis les motifs écrits, relus dans la caisse ; « aucun motif » seulement s'il n'y a ni l'un ni l'autre
+                'discountReasons' => isset($s['reasonCodes']) ? (implode(', ', array_filter(array_merge($s['reasonCodes'], [$text('liveReason')]), fn ($c) => $c !== null && $c !== '')) ?: $this->texts->t('evidence.noReason', $locale)) : null,
                 'discountBy' => $user('userId'), 'approvedBy' => $user('approvedById')],
-            LossEvidence::PRICE_CHANGE => ['reference' => $text('reference'), 'article' => $text('article'), 'quantity' => $text('quantity'), 'catalogPrice' => $money('catalogPrice'),
+            LossEvidence::PRICE_CHANGE => ['reference' => $text('reference'), 'article' => $text('liveArticle') ?? $text('article'), 'quantity' => $text('quantity'), 'catalogPrice' => $money('catalogPrice'),
                 'manualPrice' => $money('manualPrice'), 'difference' => $money('difference'), 'priceReason' => $text('liveReason') ?? $text('reasonCode') ?? $this->texts->t('evidence.noReason', $locale),
                 'changedBy' => $user('userId'), 'approvedBy' => $user('approvedById')],
             LossEvidence::APPROVAL => ['action' => isset($s['action']) ? ($this->texts->has('approval.action.' . $s['action'], $locale) ? $this->texts->t('approval.action.' . $s['action'], $locale) : (string) $s['action']) : null,
@@ -334,6 +336,55 @@ class LossFindingReader
         }
 
         return $lines;
+    }
+
+    /**
+     * Ce que la fiche relit dans l'entrée du journal de caisse d'une preuve, par son renvoi, au moment de l'affichage : le NOM de l'article
+     * d'un prix baissé à la main (un libellé du site, ou le texte d'un article libre) et les MOTIFS ÉCRITS des remises d'une vente. Ni l'un
+     * ni l'autre n'est copié dans la preuve (relecture du lot, 14/11/2026 : la copie ne garde que des identifiants, des montants, des dates,
+     * des numéros et des codes de motif).
+     *
+     * @param list<array<string, mixed>> $evidenceRows
+     * @return array{articles: array<int|string, string>, discountTexts: array<int|string, string>} par identifiant de preuve
+     */
+    private function liveFromJournal(array $evidenceRows): array
+    {
+        $ids = [];
+        foreach ($evidenceRows as $e) {
+            if (in_array($e['kind'], [LossEvidence::DISCOUNT, LossEvidence::PRICE_CHANGE], true) && $e['ref_type'] === 'pos_audit') {
+                $ids[(int) $e['ref_id']][] = ['evidence' => $e['id'], 'kind' => $e['kind']];
+            }
+        }
+        $out = ['articles' => [], 'discountTexts' => []];
+        if ($ids === []) {
+            return $out;
+        }
+        $conn = $this->emProvider->getEntityManager()->getConnection();
+        foreach ($conn->fetchAllKeyValue('SELECT id, payload FROM pos_audit_log WHERE id IN (' . implode(',', array_keys($ids)) . ')') as $id => $payload) {
+            $data = (json_decode((string) $payload, true) ?: [])['data'] ?? [];
+            foreach ($ids[(int) $id] as $target) {
+                if ($target['kind'] === LossEvidence::PRICE_CHANGE) {
+                    $name = $data['name'] ?? null;
+                    if (is_string($name) && trim($name) !== '') {
+                        $out['articles'][$target['evidence']] = $name;
+                    }
+                    continue;
+                }
+                $texts = [];
+                foreach (array_merge([is_array($data['ticket'] ?? null) ? $data['ticket'] : []], ...array_map(
+                    fn ($line) => is_array($line['discounts'] ?? null) ? array_filter($line['discounts'], fn ($d) => is_array($d) && ($d['scope'] ?? 'line') !== 'ticket') : [],
+                    is_array($data['lines'] ?? null) ? $data['lines'] : [])) as $discount) {
+                    if (is_string($discount['reasonText'] ?? null) && trim($discount['reasonText']) !== '') {
+                        $texts[] = trim($discount['reasonText']);
+                    }
+                }
+                if ($texts !== []) {
+                    $out['discountTexts'][$target['evidence']] = implode(' ; ', array_values(array_unique($texts)));
+                }
+            }
+        }
+
+        return $out;
     }
 
     /**

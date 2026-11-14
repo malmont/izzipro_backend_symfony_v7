@@ -175,6 +175,13 @@ approval:
         discount: Remise
         custom_item: Article libre
         price_override: Prix à la main
+        offline_force: Vente hors ligne acceptée de force
+        gift_card_cancel: Annulation d'une carte-cadeau
+        gift_card_adjust: Ajustement d'une carte-cadeau
+        gift_card_replace: Remplacement d'une carte-cadeau
+        loyalty_adjust: Ajustement de points de fidélité
+        customer_erase: Effacement d'une fiche client
+        manufacturer_coupon: Coupons de fabricant
     refusal:
         PIN_INVALID: Code du responsable faux
         PIN_LOCKED: Code du responsable bloqué

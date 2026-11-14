@@ -175,6 +175,13 @@ approval:
         discount: Discount
         custom_item: Custom item
         price_override: Manual price
+        offline_force: Offline sale accepted by force
+        gift_card_cancel: Gift card cancellation
+        gift_card_adjust: Gift card adjustment
+        gift_card_replace: Gift card replacement
+        loyalty_adjust: Loyalty points adjustment
+        customer_erase: Customer record erasure
+        manufacturer_coupon: Manufacturer coupons
     refusal:
         PIN_INVALID: Wrong manager code
         PIN_LOCKED: Manager code locked

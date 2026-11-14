@@ -349,6 +349,10 @@ class LossPreventionAnalysisTest extends LossPreventionTestCase
         $this->openSession();
         $this->pos('POST', '/api/caisse/drawer-open', ['cashRegisterId' => $this->register, 'reason' => 'Règle en échec, commande']);
         $failing = $this->analysisWith([self::failingDrawerRule()]);
+        // L'aperçu d'un seuil n'écrit rien : une règle en échec saute ses entrées, l'aperçu aboutit quand même et le dit
+        $preview = $failing->preview('DRAWER_NO_SALE', static::getContainer()->get(\App\LossPrevention\Services\LossRuleService::class)->proposed('DRAWER_NO_SALE', ['params' => ['maxPerSession' => 0]]));
+        $this->assertSame(['done', 0], [$preview['status'], $preview['wouldOpen']]);
+        $this->assertGreaterThanOrEqual(1, $preview['skipped'], 'les entrées sautées par l\'aperçu sont comptées');
         $provider = $this->tenant();
         $tester = new CommandTester(new LossAnalyseCommand($c->get(TenantConnectionManager::class), $provider, $failing, new NullLogger()));
         $this->assertSame(Command::FAILURE, $tester->execute(['--tenant' => MV_TEST_TENANT_CODE]));

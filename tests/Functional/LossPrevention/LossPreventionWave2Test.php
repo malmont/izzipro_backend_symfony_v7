@@ -115,6 +115,11 @@ class LossPreventionWave2Test extends LossPreventionTestCase
         $this->loginPos(['ROLE_USER_POS']);
         $session = $this->openSession();
         $opened = fn () => $this->json($this->admin('POST', self::BASE . '/analyse'))['opened'];
+        // Un motif ÉCRIT sans code est un motif : trois ventes remisées ainsi n'ouvrent rien
+        foreach (range(1, 3) as $n) {
+            $this->sell([], ['type' => 'percent', 'value' => 5, 'reasonText' => 'Cliente fidèle depuis dix ans']);
+        }
+        $this->assertSame(0, $opened(), 'trois remises au motif écrit, sans code : rien');
         // Remises : un motif précis ne compte pas ; trois ventes au motif « Autre » ouvrent le constat
         $this->sell([], ['type' => 'percent', 'value' => 5, 'reasonCode' => 'geste_commercial']);
         $this->sell([], ['type' => 'percent', 'value' => 5, 'reasonCode' => 'autre']);
@@ -127,6 +132,15 @@ class LossPreventionWave2Test extends LossPreventionTestCase
         $this->assertMatchesRegularExpression('/^3 ventes remisées au motif « Autre » ou sans motif pendant une même session/u', $discount['summary']);
         $this->assertSame('autre', array_column($discount['evidence'][0]['lines'], 'value', 'label')['Motifs de la remise']);
         $this->assertSame(array_sum(array_map(fn ($e) => (int) json_decode((string) $e, true)['discount'], $this->db->fetchFirstColumn('SELECT snapshot FROM loss_evidence WHERE finding_id = ?', [$discount['id']]))), $discount['amountAtStake']);
+        // Le code « Autre » avec un motif écrit : la vente compte ; la fiche relit le texte dans la caisse, la preuve n'en garde qu'un nombre
+        $this->sell([], ['type' => 'percent', 'value' => 5, 'reasonCode' => 'autre', 'reasonText' => 'Bouton manquant sur la veste']);
+        $this->json($this->admin('POST', self::BASE . '/analyse'));
+        $again = $this->json($this->admin('GET', self::BASE . '/constats/' . $discount['id']));
+        $this->assertCount(4, $again['evidence']);
+        $this->assertSame('autre, Bouton manquant sur la veste', array_column(end($again['evidence'])['lines'], 'value', 'label')['Motifs de la remise'], 'le motif écrit est lu dans la caisse, à l\'affichage');
+        $snapshots = $this->db->fetchFirstColumn('SELECT snapshot FROM loss_evidence WHERE finding_id = ? ORDER BY id', [$discount['id']]);
+        $this->assertStringNotContainsString('Bouton manquant', implode(' ', $snapshots), 'jamais recopié dans la preuve');
+        $this->assertSame([0, 1], [json_decode((string) $snapshots[0], true)['writtenReasons'], json_decode((string) end($snapshots), true)['writtenReasons']]);
 
         // Prix à la main : une hausse ne compte pas ; trois baisses ouvrent le constat, le montant en jeu est la somme des baisses
         $this->sell(['priceOverride' => ['unitPrice' => 3500, 'reasonText' => 'Erreur d\'étiquette']]);
@@ -143,6 +157,31 @@ class LossPreventionWave2Test extends LossPreventionTestCase
         $this->assertMatchesRegularExpression('/^29,00/u', $first['Prix du catalogue']);
         $this->assertMatchesRegularExpression('/^24,00/u', $first['Prix saisi']);
         $this->assertStringNotContainsString('négocié', implode(' ', $this->db->fetchFirstColumn('SELECT snapshot FROM loss_evidence WHERE finding_id = ?', [$price['id']])));
+        // Le nom de l'article : lu dans l'entrée du journal de caisse à l'affichage, jamais copié dans la preuve
+        $this->assertGreaterThan(2, mb_strlen((string) $first['Article']));
+        foreach ($this->db->fetchFirstColumn('SELECT snapshot FROM loss_evidence WHERE finding_id = ?', [$price['id']]) as $snapshot) {
+            $this->assertArrayNotHasKey('article', json_decode((string) $snapshot, true));
+            $this->assertStringNotContainsString((string) $first['Article'], (string) $snapshot);
+        }
+        $this->closeWith(0);
+    }
+
+    /** Un plafond du caissier à 0 n'est pas un plafond : sans cela, toute vente remisée compterait « proche du plafond » */
+    public function testACashierCeilingOfZeroIsNeverReached(): void
+    {
+        $this->drain();
+        $this->place('US', 'FL');
+        $this->db->executeStatement('UPDATE entreprise SET pos_discount_cashier_max_percent_bp = 0, pos_discount_cashier_max_amount = 0');
+        $this->provider->getEntityManager()->clear();
+        $manager = $this->loginPos(['ROLE_USER_POS', 'ROLE_POS_MANAGER']); // un responsable : ses remises passent sans validation
+        $this->openSession();
+        foreach (range(1, 6) as $n) {
+            $this->sell([], ['type' => 'percent', 'value' => 5, 'reasonCode' => 'fidelite']);
+        }
+        $run = $this->json($this->admin('POST', self::BASE . '/analyse'));
+        $this->assertSame(0, $run['skipped'], json_encode($run));
+        $this->assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) FROM loss_finding WHERE rule_code = 'DISCOUNT_PATTERN' AND variant = 'person' AND subject_id = ?", [$manager->getId()]),
+            'six remises de 5 %, plafonds du caissier à 0 : aucune n\'est « proche du plafond »');
         $this->closeWith(0);
     }
 
@@ -233,7 +272,7 @@ class LossPreventionWave2Test extends LossPreventionTestCase
         $high = $preview(['code' => 'cash_discrepancy', 'params' => ['minAmount' => 1000]]);
         // Réglage actuel (500) : deux des trois clôtures ; à 100 : les trois ; à 1 000 : une seule
         $this->assertSame([2, 3, 1], [$low['current'] - $before['current'], $low['wouldOpen'] - $before['wouldOpen'], $high['wouldOpen'] - $beforeHigh['wouldOpen']]);
-        $this->assertSame(['CASH_DISCREPANCY', 30, false], [$low['code'], $low['days'], $low['truncated']]);
+        $this->assertSame(['CASH_DISCREPANCY', 30, false, 0], [$low['code'], $low['days'], $low['truncated'], $low['skipped']]);
         $this->assertLessThanOrEqual(3, count($low['sample']));
         $this->assertNotEmpty($low['sample']);
         $this->assertMatchesRegularExpression('/^Clôture n° /u', $low['sample'][0]['summary']);

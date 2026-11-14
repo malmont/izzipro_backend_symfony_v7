@@ -40,7 +40,8 @@ class LossAnalyseCommand extends Command
     protected function configure(): void
     {
         $this->addOption('tenant', null, InputOption::VALUE_REQUIRED, 'Code d\'un seul site')
-            ->addOption('passes', null, InputOption::VALUE_REQUIRED, 'Nombre maximal de passages bornés par site (rattrapage)', '1');
+            ->addOption('passes', null, InputOption::VALUE_REQUIRED, 'Nombre maximal de passages bornés par site (rattrapage)', '1')
+            ->addOption('courriel-maintenant', null, InputOption::VALUE_NONE, 'Courriel de résumé du jour sans attendre 8 h à l\'heure du magasin (lancement à la main ; toujours un seul par jour)');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -82,7 +83,7 @@ class LossAnalyseCommand extends Command
                 $io->text(sprintf('%s : %s, %d entrée(s) lue(s), %d constat(s) ouvert(s), %d entrée(s) sautée(s)', $row['code'], $status, $read, $siteOpened, $siteSkipped));
                 // Courriel de résumé du jour (lot L1-b) : au plus un par journée du magasin ; un échec d'envoi n'est pas une erreur de l'analyse
                 try {
-                    $digest = $this->digest?->sendIfDue();
+                    $digest = $this->digest?->sendIfDue(null, (bool) $input->getOption('courriel-maintenant'));
                     if ($digest !== null && $digest['status'] === 'sent') {
                         $io->text(sprintf('%s : courriel de résumé envoyé à %d destinataire(s)', $row['code'], $digest['sent']));
                     }

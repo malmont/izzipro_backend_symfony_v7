@@ -61,6 +61,10 @@ class LossSetting
     #[ORM\Column(name: 'last_digest_day', type: 'date_immutable', nullable: true)]
     private ?\DateTimeImmutable $lastDigestDay = null;
 
+    /** Dernier constat existant au moment du dernier courriel de résumé : le suivant n'annonce que les constats nés après lui */
+    #[ORM\Column(name: 'last_digest_finding_id', nullable: true)]
+    private ?int $lastDigestFindingId = null;
+
     #[ORM\Column(name: 'updated_at', type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $updatedAt = null;
 
@@ -78,6 +82,7 @@ class LossSetting
     public function getAnalysisFloorSequence(): ?int { return $this->analysisFloorSequence; }
     public function getLastAnalysisAt(): ?\DateTimeImmutable { return $this->lastAnalysisAt; }
     public function getLastDigestDay(): ?\DateTimeImmutable { return $this->lastDigestDay; }
+    public function getLastDigestFindingId(): ?int { return $this->lastDigestFindingId; }
     public function getUpdatedAt(): ?\DateTimeImmutable { return $this->updatedAt; }
     public function getUpdatedBy(): ?int { return $this->updatedBy; }
 }

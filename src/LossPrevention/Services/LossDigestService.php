@@ -3,6 +3,7 @@
 namespace App\LossPrevention\Services;
 
 use App\Gestion\Services\GestionNotificationService;
+use App\LossPrevention\Entity\LossFinding;
 use App\LossPrevention\Entity\LossJournalEntry;
 use App\LossPrevention\Entity\LossSetting;
 use App\Services\EmailConfigurationService\EmailLocale;
@@ -15,7 +16,9 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
  * Courriel de résumé du jour (lot L1-b, décision du propriétaire du 14/11/2026) : « N nouveaux constats, X en jeu ». Au plus un par journée du
- * magasin et par site ; envoyé aux administrateurs du site qui ont gardé le type « loss_digest » actif dans leurs préférences de la gestion
+ * magasin et par site, à partir de 8 h à l'heure du magasin (le premier passage du minuteur après 8 h envoie), et seulement pour les
+ * constats NÉS depuis le courriel précédent : aucun courriel les jours où rien n'est né, même s'il reste des constats ouverts (la vignette
+ * de l'accueil continue de les rappeler) ; un constat né après l'envoi part le lendemain ; envoyé aux administrateurs du site qui ont gardé le type « loss_digest » actif dans leurs préférences de la gestion
  * (`GestionNotificationService`, canal `email`) ; par le mailer du site, donc par la file et le worker des courriels existants.
  *
  * Le courriel ne porte AUCUN nom, aucun montant par personne, aucun motif saisi à la caisse : le nombre de constats nouveaux, le montant en
@@ -34,11 +37,12 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 class LossDigestService
 {
     public const TEMPLATE = 'emails/loss_digest.html.twig';
+    /** Heure du magasin à partir de laquelle le courriel part (comme les autres courriels de la gestion) */
+    public const SEND_HOUR = 8;
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly LossSettingsService $settings,
-        private readonly LossHomeTile $newFindings,
         private readonly LossSite $site,
         private readonly GestionNotificationService $preferences,
         private readonly EmailSenderService $mailer,
@@ -53,10 +57,12 @@ class LossDigestService
     /**
      * Envoie le résumé du jour s'il est dû.
      *
-     * @return array{status: string, sent: int} status : sent | nothing_new | already_sent | no_recipient | not_delivered | not_granted | not_allowed
+     * @param \DateTimeImmutable|null $now l'instant du passage (les tests le fixent) ; `$anyHour` : sans attendre 8 h (lancement à la main)
+     * @return array{status: string, sent: int} status : sent | nothing_new | already_sent | too_early | no_recipient | not_delivered | not_granted | not_allowed
      */
-    public function sendIfDue(): array
+    public function sendIfDue(?\DateTimeImmutable $now = null, bool $anyHour = false): array
     {
+        $now ??= new \DateTimeImmutable();
         if (!$this->settings->moduleGranted()) {
             return ['status' => 'not_granted', 'sent' => 0];
         }
@@ -65,12 +71,18 @@ class LossDigestService
         }
         $em = $this->emProvider->getEntityManager();
         $settings = $em->getRepository(LossSetting::class);
-        $day = $this->site->clock()->day(new \DateTimeImmutable());
-        if ((string) ($settings->row()['last_digest_day'] ?? '') === $day) {
+        $clock = $this->site->clock();
+        if (!$anyHour && (int) $now->setTimezone($clock->timezone())->format('G') < self::SEND_HOUR) { // l'heure du MAGASIN, pas celle du serveur
+            return ['status' => 'too_early', 'sent' => 0];
+        }
+        $day = $clock->day($now);
+        $row = $settings->row();
+        if ((string) ($row['last_digest_day'] ?? '') === $day) {
             return ['status' => 'already_sent', 'sent' => 0];
         }
-        $new = $this->newFindings->newFindings();
-        if ($new === null) {
+        // Seulement ce qui est NÉ depuis le courriel précédent ; `lastId` : la borne que ce courriel posera
+        $new = $em->getRepository(LossFinding::class)->bornAfter((int) ($row['last_digest_finding_id'] ?? 0));
+        if ($new['count'] === 0) {
             return ['status' => 'nothing_new', 'sent' => 0];
         }
         // Administrateurs du site (le rôle exact : ni un super administrateur seul, ni un compte Assistance) qui ont gardé le courriel actif
@@ -85,7 +97,7 @@ class LossDigestService
             return ['status' => 'no_recipient', 'sent' => 0];
         }
         // Réserver le jour AVANT d'envoyer : de deux lancements qui se chevauchent (le minuteur et un lancement à la main), un seul passe
-        $reserved = $settings->reserveDigestDay($day);
+        $reserved = $settings->reserveDigestDay($day, $new['lastId']);
         if ($reserved === null) {
             return ['status' => 'already_sent', 'sent' => 0];
         }
@@ -105,12 +117,13 @@ class LossDigestService
         foreach ($recipients as $to) {
             try {
                 $sent += $this->mailer->sendTemplatedEmail($to, $subject, self::TEMPLATE, $context, $language, $host) ? 1 : 0;
-            } catch (\Throwable $e) { // un destinataire en échec n'arrête pas les autres ; jamais d'adresse au journal
-                $this->logger->error('Prévention des pertes : courriel de résumé, un envoi en échec : ' . $e->getMessage(), ['exception' => $e]);
+            } catch (\Throwable $e) { // un destinataire en échec n'arrête pas les autres
+                // Jamais le MESSAGE de l'exception au journal du serveur : il peut porter l'adresse du destinataire. Sa classe suffit.
+                $this->logger->error('Prévention des pertes : courriel de résumé, un envoi en échec (' . $e::class . ').');
             }
         }
         if ($sent === 0) { // pas de configuration d'envoi sur ce site : le jour est rendu, on réessaiera au passage suivant
-            $settings->releaseDigestDay($day, $reserved['previous']);
+            $settings->releaseDigestDay($day, $reserved['previous'], $reserved['previousFindingId']);
             $this->logger->warning('Prévention des pertes : courriel de résumé non envoyé (aucun envoi n\'a abouti : configuration d\'envoi du site à vérifier).');
 
             return ['status' => 'not_delivered', 'sent' => 0];

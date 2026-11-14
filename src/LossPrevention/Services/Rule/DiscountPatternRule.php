@@ -61,34 +61,53 @@ class DiscountPatternRule implements LossRuleInterface
     }
 
     /**
-     * Codes de motif des remises d'une vente (remise de ticket et remises de ligne) ; une remise sans code compte pour `null`.
+     * Motifs des remises d'une vente (remise de ticket et remises de ligne) : le code choisi (`null` sans code) et « un motif a été écrit »
+     * (le texte lui-même n'est jamais gardé ici : la fiche le relit dans la caisse).
      *
      * @param array<string, mixed> $data données d'une entrée DISCOUNT_APPLIED
+     * @return list<array{code: ?string, written: bool}>
+     */
+    public static function reasons(array $data): array
+    {
+        $of = fn (array $d): array => [
+            'code' => isset($d['reasonCode']) && is_string($d['reasonCode']) && trim($d['reasonCode']) !== '' ? strtolower(trim($d['reasonCode'])) : null,
+            'written' => isset($d['reasonText']) && is_string($d['reasonText']) && trim($d['reasonText']) !== '',
+        ];
+        $out = [];
+        if (is_array($data['ticket'] ?? null)) {
+            $out[] = $of($data['ticket']);
+        }
+        foreach (is_array($data['lines'] ?? null) ? $data['lines'] : [] as $line) {
+            foreach (is_array($line['discounts'] ?? null) ? $line['discounts'] : [] as $d) {
+                if (!is_array($d) || ($d['scope'] ?? 'line') === 'ticket') {
+                    continue; // part de la remise de ticket répartie sur la ligne : déjà comptée
+                }
+                $out[] = $of($d);
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Codes de motif des remises d'une vente ; une remise sans code compte pour `null`.
+     *
+     * @param array<string, mixed> $data
      * @return list<?string>
      */
     public static function reasonCodes(array $data): array
     {
-        $codes = [];
-        if (is_array($data['ticket'] ?? null)) {
-            $codes[] = isset($data['ticket']['reasonCode']) && $data['ticket']['reasonCode'] !== '' ? strtolower((string) $data['ticket']['reasonCode']) : null;
-        }
-        foreach (is_array($data['lines'] ?? null) ? $data['lines'] : [] as $line) {
-            foreach (is_array($line['discounts'] ?? null) ? $line['discounts'] : [] as $d) {
-                if (($d['scope'] ?? 'line') === 'ticket') {
-                    continue; // part de la remise de ticket répartie sur la ligne : déjà comptée
-                }
-                $codes[] = isset($d['reasonCode']) && $d['reasonCode'] !== '' ? strtolower((string) $d['reasonCode']) : null;
-            }
-        }
-
-        return $codes;
+        return array_column(self::reasons($data), 'code');
     }
 
-    /** Une vente est « vague » si une de ses remises est au motif fourre-tout, ou sans motif */
+    /**
+     * Une vente est « vague » si une de ses remises est au motif fourre-tout (« Autre »), ou n'a NI code NI motif écrit. Un motif écrit sans
+     * code est un motif : il ne compte pas (relecture du lot, 14/11/2026 ; la fiche l'affiche, relu dans la caisse).
+     */
     public static function isVague(array $data): bool
     {
-        foreach (self::reasonCodes($data) as $code) {
-            if ($code === null || in_array($code, self::VAGUE, true)) {
+        foreach (self::reasons($data) as $reason) {
+            if ($reason['code'] === null ? !$reason['written'] : in_array($reason['code'], self::VAGUE, true)) {
                 return true;
             }
         }
@@ -108,6 +127,7 @@ class DiscountPatternRule implements LossRuleInterface
                 'orderId' => $e['subject']['id'] ?? null, 'reference' => isset($e['data']['reference']) ? (string) $e['data']['reference'] : null,
                 'gross' => LossAuditEntry::intOrNull($e['data']['gross'] ?? null), 'discount' => LossAuditEntry::intOrNull($e['data']['total'] ?? null),
                 'reasonCodes' => array_values(array_unique(array_map(fn (?string $c) => $c ?? '', self::reasonCodes($e['data'])))),
+                'writtenReasons' => count(array_filter(self::reasons($e['data']), fn (array $r) => $r['written'])), // un nombre : le texte reste dans la caisse
                 'userId' => $e['userId'], 'approvedById' => $approver,
             ],
         ];

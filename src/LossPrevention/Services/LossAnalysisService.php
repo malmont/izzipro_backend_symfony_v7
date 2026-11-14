@@ -35,7 +35,7 @@ class LossAnalysisService
     public const STALE_SECONDS = 600;
     /** Aperçu d'un réglage : période relue, nombre maximal d'entrées du journal de caisse, taille de l'échantillon */
     public const PREVIEW_DAYS = 30;
-    public const PREVIEW_MAX = 20000;
+    public const PREVIEW_MAX = 5000;
     public const PREVIEW_SAMPLE = 3;
     /** Nombre de lignes récentes du journal du module relues pour y chercher des entrées sautées */
     private const SKIPPED_SCAN = 5000;
@@ -159,11 +159,11 @@ class LossAnalysisService
      * sous le plancher de l'analyse.
      *
      * @param array{enabled: bool, params: array<string, int>, personEnabled: bool, personParams: array<string, int>} $proposed
-     * @return array{status: string, reason?: string, current: int, wouldOpen: int, days: int, truncated: bool, sample: list<array<string, mixed>>}
+     * @return array{status: string, reason?: string, current: int, wouldOpen: int, days: int, truncated: bool, skipped: int, sample: list<array<string, mixed>>}
      */
     public function preview(string $code, array $proposed): array
     {
-        $none = ['current' => 0, 'wouldOpen' => 0, 'days' => self::PREVIEW_DAYS, 'truncated' => false, 'sample' => []];
+        $none = ['current' => 0, 'wouldOpen' => 0, 'days' => self::PREVIEW_DAYS, 'truncated' => false, 'skipped' => 0, 'sample' => []];
         $blocked = $this->settings->blockedReason();
         if ($blocked !== null) {
             return ['status' => 'blocked', 'reason' => $blocked] + $none;
@@ -179,11 +179,13 @@ class LossAnalysisService
         $since = (new \DateTimeImmutable('-' . self::PREVIEW_DAYS . ' days'))->format('Y-m-d H:i:s');
         $from = max($floor, (int) $conn->fetchOne('SELECT COALESCE(MAX(sequence), 0) FROM pos_audit_log WHERE occurred_at < ?', [$since]));
         $rows = $conn->fetchAllAssociative(
-            'SELECT ' . LossAuditEntry::COLUMNS . ' FROM pos_audit_log WHERE sequence > :from AND type IN (:types) ORDER BY sequence LIMIT ' . (self::PREVIEW_MAX + 1),
+            'SELECT ' . LossAuditEntry::COLUMNS . ' FROM pos_audit_log WHERE sequence > :from AND type IN (:types) ORDER BY sequence DESC LIMIT ' . (self::PREVIEW_MAX + 1),
             ['from' => $from, 'types' => $types], ['types' => ArrayParameterType::STRING]);
         $truncated = count($rows) > self::PREVIEW_MAX;
-        $entries = array_map([LossAuditEntry::class, 'fromRow'], array_slice($rows, 0, self::PREVIEW_MAX));
-        $play = function (array $config) use ($conn, $entries, $rules, $code, $floor): array {
+        // Au-delà de la borne, ce sont les entrées les plus RÉCENTES qui sont jouées, dans l'ordre du journal
+        $entries = array_map([LossAuditEntry::class, 'fromRow'], array_reverse(array_slice($rows, 0, self::PREVIEW_MAX)));
+        $skipped = [];
+        $play = function (array $config) use ($conn, $entries, $rules, $code, $floor, &$skipped): array {
             $sink = new LossPreviewSink();
             if (!$config['enabled']) {
                 return [];
@@ -191,8 +193,14 @@ class LossAnalysisService
             $ctx = new LossAnalysisContext($conn, $this->site->clock(), $this->site->currency(), $this->site->discrepancyThreshold(), [$code => $config], $sink, null, $floor);
             foreach ($entries as $entry) {
                 foreach ($rules as $rule) {
-                    if (in_array($entry['type'], $rule->types(), true)) {
+                    if (!in_array($entry['type'], $rule->types(), true)) {
+                        continue;
+                    }
+                    try { // rien n'est écrit (puits en mémoire) : une règle en échec saute l'entrée, l'aperçu continue et le dit (`skipped`)
                         $rule->handle($entry, $ctx);
+                    } catch (\Throwable $e) {
+                        $skipped[$entry['sequence']] = true;
+                        $this->logger->error(sprintf('Prévention des pertes : aperçu, règle %s en échec sur l\'entrée %d du journal de caisse, entrée sautée : %s', $rule::class, $entry['sequence'], $e->getMessage()), ['exception' => $e]);
                     }
                 }
             }
@@ -202,7 +210,7 @@ class LossAnalysisService
         $would = $play($proposed);
 
         return ['status' => 'done', 'current' => count($play($this->ruleSettings->effective($code))), 'wouldOpen' => count($would), 'days' => self::PREVIEW_DAYS,
-            'truncated' => $truncated, 'sample' => array_slice($would, 0, self::PREVIEW_SAMPLE)];
+            'truncated' => $truncated, 'skipped' => count($skipped), 'sample' => array_slice($would, 0, self::PREVIEW_SAMPLE)];
     }
 
     /**

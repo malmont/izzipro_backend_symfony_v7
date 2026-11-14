@@ -45,13 +45,14 @@ class PriceOverrideRule implements LossRuleInterface
                     $onDuty[] = ['id' => $id, 'role' => $role];
                 }
             }
-            // le motif écrit (texte libre) n'est pas recopié : la fiche le lit dans la ligne de vente, par `orderItemId`
+            // le motif écrit (texte libre) n'est pas recopié : la fiche le lit dans la ligne de vente, par `orderItemId` ; le nom de l'article
+            // non plus (un libellé du site, ou le texte d'un article libre) : la fiche le lit dans l'entrée du journal de caisse, par le renvoi
             $evidence[] = [
                 'kind' => LossEvidence::PRICE_CHANGE, 'at' => $e['occurredAt'], 'refType' => 'pos_audit', 'refId' => $e['id'], 'sequence' => $e['sequence'], 'hash' => $e['hash'],
                 'snapshot' => [
                     'orderId' => $e['subject']['id'] ?? null, 'orderItemId' => LossAuditEntry::intOrNull($e['data']['orderItemId'] ?? null),
                     'productVariantId' => LossAuditEntry::intOrNull($e['data']['productVariantId'] ?? null), 'reference' => isset($e['data']['reference']) ? (string) $e['data']['reference'] : null,
-                    'article' => isset($e['data']['name']) ? (string) $e['data']['name'] : null, 'quantity' => LossAuditEntry::intOrNull($e['data']['quantity'] ?? null),
+                    'quantity' => LossAuditEntry::intOrNull($e['data']['quantity'] ?? null),
                     'catalogPrice' => LossAuditEntry::intOrNull($e['data']['before'] ?? null), 'manualPrice' => LossAuditEntry::intOrNull($e['data']['after'] ?? null),
                     'difference' => (int) $e['data']['difference'], 'reasonCode' => isset($e['data']['reason']['code']) ? (string) $e['data']['reason']['code'] : null,
                     'userId' => $e['userId'], 'approvedById' => $approver,

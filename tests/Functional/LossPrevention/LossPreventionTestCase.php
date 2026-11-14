@@ -49,6 +49,10 @@ abstract class LossPreventionTestCase extends WebTestCase
     private array $siteSettings = [];
     /** @var array{management: bool, loss: bool} droits de la gestion et du module sur le site de test avant le test, remis à la fin */
     private array $moduleFlags = ['management' => false, 'loss' => false];
+    /** Mode de la plateforme avant le test (« demo » ou « live »), remis à la fin */
+    private string $platformMode = 'demo';
+    /** @var list<int> clés d'activation créées par activateTerminal() (l'identifiant de la tablette est celui de sa clé), révoquées à la fin */
+    private array $createdTerminals = [];
 
     protected function setUp(): void
     {
@@ -60,6 +64,8 @@ abstract class LossPreventionTestCase extends WebTestCase
         $this->db->executeStatement('DELETE FROM boutique_setting');
         $this->addresses = $this->db->fetchAllAssociative('SELECT id, country, state FROM address_entreprise ORDER BY id');
         $this->siteSettings = $this->db->fetchAssociative('SELECT ' . implode(', ', self::SITE_SETTINGS) . ' FROM entreprise ORDER BY id LIMIT 1') ?: [];
+        $this->platformMode = static::getContainer()->get(PlatformModeService::class)->mode();
+        $this->createdTerminals = [];
         $this->moduleFlags = array_map('boolval', $this->db->fetchAssociative('SELECT is_management_app_active AS management, is_loss_prevention_active AS loss FROM entreprise ORDER BY id LIMIT 1') ?: ['management' => false, 'loss' => false]);
         $this->place('CA', 'ON');
         $this->db->executeStatement("UPDATE entreprise SET currency = 'CAD', prices_include_tax = false, pos_discrepancy_threshold = 0, pos_cash_rounding_step = NULL, pos_approval_refund = NULL, pos_approval_withdrawal = NULL, pos_approval_fund_withdrawal = NULL, pos_approval_drawer_open = false, pos_approval_close_without_count = false, pos_terminal_header_required = false, pos_pay_cash = true, is_loss_prevention_active = true");
@@ -72,7 +78,7 @@ abstract class LossPreventionTestCase extends WebTestCase
         // Réglages du module remis à leurs valeurs de départ (tables de réglages : modifiables ; preuves et journal : jamais touchés)
         $this->db->executeStatement('DELETE FROM loss_rule');
         $this->db->executeStatement('INSERT INTO loss_setting (retention_findings_months, retention_confirmed_months) VALUES (24, 60) ON CONFLICT DO NOTHING');
-        $this->db->executeStatement('UPDATE loss_setting SET staff_notice_confirmed_at = NULL, staff_notice_confirmed_by = NULL, person_patterns_enabled = NULL, analysis_floor_sequence = NULL');
+        $this->db->executeStatement('UPDATE loss_setting SET staff_notice_confirmed_at = NULL, staff_notice_confirmed_by = NULL, person_patterns_enabled = NULL, analysis_floor_sequence = NULL, last_digest_day = NULL, last_digest_finding_id = NULL');
         $this->provider->getEntityManager()->clear();
         $this->mark = static::FIXED_MARK ?? 'Zq' . bin2hex(random_bytes(4));
         $admin = $this->user(['ROLE_ADMIN'], 'Gerant');
@@ -92,7 +98,11 @@ abstract class LossPreventionTestCase extends WebTestCase
                 array_map(fn ($v) => is_bool($v) ? \Doctrine\DBAL\ParameterType::BOOLEAN : ($v === null ? \Doctrine\DBAL\ParameterType::NULL : \Doctrine\DBAL\ParameterType::STRING), $this->siteSettings));
         }
         $this->flags($this->moduleFlags['management'], $this->moduleFlags['loss']); // écriture Doctrine : le cache des indicateurs de modules suit
-        static::getContainer()->get(PlatformModeService::class)->setMode('demo', 'test');
+        static::getContainer()->get(PlatformModeService::class)->setMode($this->platformMode, 'test'); // le mode trouvé, pas « demo » en dur
+        // Clés d'activation (donc tablettes) créées par activateTerminal() : révoquées, elles s'accumulaient d'un test à l'autre
+        foreach ($this->createdTerminals as $keyId) {
+            $this->call('DELETE', '/api/app-keys/' . $keyId, null, $this->adminToken);
+        }
         parent::tearDown();
         // PHPUnit garde chaque instance de test jusqu'à la fin de la suite : une connexion tenue par une propriété resterait ouverte, et la
         // suite complète épuise alors les connexions du serveur de base de données (« too many clients »)
@@ -167,6 +177,7 @@ abstract class LossPreventionTestCase extends WebTestCase
         $key = $this->json($this->call('POST', '/api/app-keys', ['app' => 'pos', 'label' => $label, 'sendEmail' => false], $this->adminToken), 201)['key'];
         $terminal = $this->json($this->call('POST', '/api/app/activate', ['key' => $key, 'app' => 'pos'], null))['terminal'];
         $this->terminal = (string) $terminal['token'];
+        $this->createdTerminals[] = (int) $terminal['id'];
 
         return (int) $terminal['id'];
     }

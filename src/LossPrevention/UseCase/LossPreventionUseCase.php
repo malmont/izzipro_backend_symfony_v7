@@ -163,7 +163,7 @@ class LossPreventionUseCase
         }
         $currency = $this->site->currency();
 
-        return ['code' => $code, 'current' => $out['current'], 'wouldOpen' => $out['wouldOpen'], 'days' => $out['days'], 'truncated' => $out['truncated'],
+        return ['code' => $code, 'current' => $out['current'], 'wouldOpen' => $out['wouldOpen'], 'days' => $out['days'], 'truncated' => $out['truncated'], 'skipped' => $out['skipped'],
             'sample' => array_map(fn (array $f) => ['summary' => $this->reader->summarize($code, (string) $f['variant'], $f['facts'], $currency, $locale), 'storeDay' => (string) $f['store_day'],
                 'amountAtStake' => $f['amount_at_stake'], 'personPattern' => $f['variant'] === LossFinding::VARIANT_PERSON], $out['sample']),
             'notice' => $this->texts->t('rules.previewNotice', $locale)];
