@@ -13,13 +13,17 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * Lecture seule.
  *
  * Lot S2-a (14/11/2026) : `payments` (l'encaissé, par moyen de paiement, et les clôtures de caisse) et `expenses` (notes de frais, frais
- * de port d'achat, publicité ; les frais fixes à côté, hors du total). Lot S2-b à venir : `stock`, `shipping`, `taxes`.
+ * de port d'achat, publicité ; les frais fixes à côté, hors du total). Lot S2-b (14/11/2026) : `stock` (mouvements, valeur et sa courbe
+ * depuis les instantanés quotidiens), `shipping` (port facturé aux clients, par transporteur) et `taxes` (taxes collectées, par taxe).
  */
 class GestionStatisticsSections
 {
     public const PAYMENTS = 'payments';
     public const EXPENSES = 'expenses';
-    public const AVAILABLE = [self::PAYMENTS, self::EXPENSES];
+    public const STOCK = 'stock';
+    public const SHIPPING = 'shipping';
+    public const TAXES = 'taxes';
+    public const AVAILABLE = [self::PAYMENTS, self::EXPENSES, self::STOCK, self::SHIPPING, self::TAXES];
 
     /** `payment_method.id` => code stable rendu aux applications ; un moyen ajouté plus tard sort en `method_<id>` avec son nom */
     private const METHODS = [1 => 'card', 2 => 'cash', 3 => 'paypal'];
@@ -37,6 +41,8 @@ class GestionStatisticsSections
         private readonly TranslatorInterface $translator,
         private readonly GestionAdviceService $advices,
         private readonly ?GestionFixedCostService $fixedCosts = null,
+        private readonly ?GestionStockSnapshotService $stock = null,
+        private readonly ?HomeTilesService $tiles = null,
     ) {
     }
 
@@ -65,7 +71,7 @@ class GestionStatisticsSections
     /**
      * @param list<string> $names
      * @param array{cur: array{0: string, 1: string}, prev: array{0: string, 1: string}|null, ly: array{0: string, 1: string}, buckets: list<array{0: string, 1: string, 2: string}>,
-     *              granularity: string, source: ?int, sourceKey: string, locale: string} $ctx plages (jours du magasin inclus), tranches du graphique jusqu'à aujourd'hui
+     *              granularity: string, source: ?int, sourceKey: string, locale: string, today: \DateTimeImmutable} $ctx plages (jours du magasin inclus), tranches du graphique jusqu'à aujourd'hui
      *
      * @return array<string, array<string, mixed>> nom de la section => section
      */
@@ -76,6 +82,9 @@ class GestionStatisticsSections
             $out[$name] = match ($name) {
                 self::PAYMENTS => $this->payments($ctx),
                 self::EXPENSES => $this->expenses($ctx),
+                self::STOCK => $this->stockSection($ctx),
+                self::SHIPPING => $this->shipping($ctx),
+                self::TAXES => $this->taxes($ctx),
             };
         }
 
@@ -305,6 +314,237 @@ class GestionStatisticsSections
 
         return array_map(fn (array $r) => ['typeId' => $r['id'] === null ? null : (int) $r['id'], 'name' => $r['name'] === null ? $this->label('expenses.untyped', $locale) : $this->referential((string) $r['name'], $locale),
             'amount' => (int) $r['amount']], $rows);
+    }
+
+    // ------------------------------------------------------------------ stock
+
+    /**
+     * Le stock : les mouvements de la plage par type (entrées, sorties, retours, ajustements, réceptions fournisseur : les totaux de
+     * l'ancienne route `stock-evolution`, sur la plage choisie), la valeur du stock aujourd'hui et sa courbe, lue dans les instantanés
+     * quotidiens (`gestion_stock_snapshot`, pris depuis le 11/11/2026 : avant le premier instantané il n'y a rien à tracer).
+     */
+    private function stockSection(array $ctx): array
+    {
+        [$cur, $prev, $ly, $locale] = [$ctx['cur'], $ctx['prev'], $ctx['ly'], $ctx['locale']];
+        $days = $this->movementDays($cur[0], $cur[1]);
+        $daysPrev = $prev === null ? null : $this->movementDays($prev[0], $prev[1]);
+        $daysLy = $this->movementDays($ly[0], $ly[1]);
+        $hasLy = $daysLy !== [];
+        $codes = array_column(\App\Services\StockEvolutionService\StockEvolutionService::TYPES, 1);
+        $sum = static fn (?array $rows, string $code): ?int => $rows === null ? null : array_sum(array_column($rows, $code));
+
+        $conn = $this->emProvider->getEntityManager()->getConnection();
+        $snapshots = [];
+        foreach ($conn->fetchAllAssociative('SELECT snapshot_date, sale_value_cents, cost_value_cents FROM gestion_stock_snapshot WHERE snapshot_date >= ? AND snapshot_date <= ? ORDER BY snapshot_date', [$cur[0], $cur[1]]) as $r) {
+            $snapshots[substr((string) $r['snapshot_date'], 0, 10)] = ['saleValue' => (int) $r['sale_value_cents'], 'costValue' => (int) $r['cost_value_cents']];
+        }
+        $first = $conn->fetchOne('SELECT MIN(snapshot_date) FROM gestion_stock_snapshot');
+        $first = $first === null || $first === false ? null : substr((string) $first, 0, 10);
+
+        $points = [];
+        $series = [];
+        foreach ($ctx['buckets'] as [$key, $from, $to]) {
+            $p = self::slice($days, $from, $to);
+            $l = self::slice($daysLy, GestionStatisticsService::shiftYears($from, -1), GestionStatisticsService::shiftYears($to, -1));
+            $point = [];
+            $last = [];
+            foreach ($codes as $code) {
+                $point[$code] = $sum($p, $code);
+                $last[$code] = $sum($l, $code);
+            }
+            // valeur du stock à la fin de la tranche : le dernier instantané pris dans la tranche, null s'il n'y en a pas
+            $inBucket = self::slice($snapshots, $from, $to);
+            $value = $inBucket === [] ? ['saleValue' => null, 'costValue' => null] : $inBucket[max(array_keys($inBucket))];
+            $points[] = ['key' => $key, 'from' => $from, 'to' => $to] + $point + $value + ['lastYear' => $last];
+            $series[] = $point;
+        }
+        $indicator = fn (string $code) => GestionStatisticsService::indicator($sum($days, $code), $sum($daysPrev, $code), $hasLy ? $sum($daysLy, $code) : null, 'count', array_column($series, $code), $prev !== null);
+
+        $caveats = [];
+        if ($ctx['sourceKey'] !== 'all') {
+            $caveats[] = $this->caveat('SOURCE_NOT_APPLICABLE', $locale);
+        }
+        if ($first === null) {
+            $caveats[] = $this->caveat('STOCK_HISTORY_EMPTY', $locale);
+        } elseif ($cur[0] < $first) {
+            $caveats[] = $this->caveat('STOCK_HISTORY_STARTS', $locale, ['%date%' => (new \DateTimeImmutable($first))->format($locale === 'en' ? 'Y-m-d' : 'd/m/Y')]) + ['date' => $first];
+        }
+        $now = $this->stock?->current($ctx['today']);
+
+        return [
+            'indicators' => ['unitsIn' => $indicator('in'), 'unitsOut' => $indicator('out'), 'receptions' => $indicator('reception'), 'adjustments' => $indicator('adjustment'), 'returns' => $indicator('return')],
+            'breakdown' => array_map(fn (string $code) => ['code' => $code, 'label' => $this->label('stock.' . $code, $locale), 'quantity' => $sum($days, $code), 'previous' => $sum($daysPrev, $code),
+                'lastYear' => $hasLy ? $sum($daysLy, $code) : null], $codes),
+            'value' => ['saleValue' => $now['saleValue'] ?? null, 'costValue' => $now['costValue'] ?? null, 'historyStartsAt' => $first],
+            'lowCount' => $this->tiles === null ? null : count($this->tiles->lowStock()['all']),
+            'chart' => ['granularity' => $ctx['granularity'], 'points' => $points],
+            'caveats' => $caveats,
+            'appliesSource' => false,
+        ];
+    }
+
+    /** @return array<string, array<string, int>> jour du magasin => quantités par code de mouvement (les cinq codes, à 0 si rien) */
+    private function movementDays(string $from, string $to): array
+    {
+        [$start, $end] = $this->clock->range($from, $to);
+        $types = \App\Services\StockEvolutionService\StockEvolutionService::TYPES;
+        $empty = array_fill_keys(array_column($types, 1), 0);
+        $days = [];
+        foreach ($this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
+            "SELECT CAST((movement_date AT TIME ZONE 'UTC') AT TIME ZONE :tz AS date) AS d, movement_type_id AS t, COALESCE(SUM(quantity), 0) AS q FROM inventory_movements"
+            . ' WHERE movement_date >= :from AND movement_date < :to AND movement_type_id IS NOT NULL GROUP BY 1, 2',
+            ['tz' => $this->clock->timezone()->getName(), 'from' => $start->format('Y-m-d H:i:s'), 'to' => $end->format('Y-m-d H:i:s')]
+        ) as $r) {
+            if (isset($types[(int) $r['t']])) {
+                $day = substr((string) $r['d'], 0, 10);
+                $days[$day] ??= $empty;
+                $days[$day][$types[(int) $r['t']][1]] += (int) $r['q'];
+            }
+        }
+
+        return $days;
+    }
+
+    // ------------------------------------------------------------------ livraison
+
+    /**
+     * La livraison facturée aux clients (`order.shipping_cost`), la règle de `sales.shippingBilled` du résultat de période : ventes et
+     * retours (un port rendu se déduit), commandes incomplètes et annulées exclues, datée par la commande. `orders` : les ventes avec
+     * un transporteur. Par transporteur, cette fois réel (l'ancienne route `carrier/statistics` ne détaillait pas). Le coût réel des
+     * étiquettes n'est pas enregistré par étiquette : la marge sur le port n'est pas calculable ici.
+     */
+    private function shipping(array $ctx): array
+    {
+        [$cur, $prev, $ly, $source, $locale] = [$ctx['cur'], $ctx['prev'], $ctx['ly'], $ctx['source'], $ctx['locale']];
+        $days = $this->shippingDays($cur[0], $cur[1], $source);
+        $daysPrev = $prev === null ? null : $this->shippingDays($prev[0], $prev[1], $source);
+        $daysLy = $this->shippingDays($ly[0], $ly[1], $source);
+        $hasLy = $daysLy !== [];
+        $billed = static fn (?array $rows): ?int => $rows === null ? null : (int) round(array_sum(array_column($rows, 'billed')));
+        $orders = static fn (?array $rows): ?int => $rows === null ? null : array_sum(array_column($rows, 'orders'));
+        $average = static fn (?int $amount, ?int $count): ?int => $amount === null || !$count ? null : (int) round($amount / $count);
+
+        $points = [];
+        $series = [];
+        foreach ($ctx['buckets'] as [$key, $from, $to]) {
+            $p = self::slice($days, $from, $to);
+            $l = self::slice($daysLy, GestionStatisticsService::shiftYears($from, -1), GestionStatisticsService::shiftYears($to, -1));
+            $point = ['billed' => $billed($p), 'orders' => $orders($p)];
+            $points[] = ['key' => $key, 'from' => $from, 'to' => $to] + $point + ['lastYear' => ['billed' => $billed($l), 'orders' => $orders($l)]];
+            $series[] = $point + ['averagePerOrder' => $average($point['billed'], $point['orders'])];
+        }
+        $total = $billed($days);
+        $indicators = [
+            'billed' => GestionStatisticsService::indicator($total, $billed($daysPrev), $hasLy ? $billed($daysLy) : null, 'money', array_column($series, 'billed'), $prev !== null),
+            'orders' => GestionStatisticsService::indicator($orders($days), $orders($daysPrev), $hasLy ? $orders($daysLy) : null, 'count', array_column($series, 'orders'), $prev !== null),
+            'averagePerOrder' => GestionStatisticsService::indicator($average($total, $orders($days)), $average($billed($daysPrev), $orders($daysPrev)), $hasLy ? $average($billed($daysLy), $orders($daysLy)) : null, 'money',
+                array_column($series, 'averagePerOrder'), $prev !== null),
+        ];
+
+        [$start, $end] = $this->clock->range($cur[0], $cur[1]);
+        $breakdown = [];
+        foreach ($this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
+            'SELECT o.carrier_id AS id, c.name, c.kind, SUM(' . self::SHIPPING_BILLED . ') AS billed, COUNT(*) FILTER (WHERE o.order_type_id = 1 AND o.carrier_id IS NOT NULL) AS orders'
+            . ' FROM "order" o LEFT JOIN carrier c ON c.id = o.carrier_id WHERE ' . self::SHIPPING_WHERE . ($source === null ? '' : ' AND o.order_source_id = :src')
+            . ' GROUP BY o.carrier_id, c.name, c.kind HAVING SUM(' . self::SHIPPING_BILLED . ') <> 0 OR COUNT(*) FILTER (WHERE o.order_type_id = 1 AND o.carrier_id IS NOT NULL) > 0'
+            . ' ORDER BY SUM(' . self::SHIPPING_BILLED . ') DESC, o.carrier_id',
+            ['from' => $start->format('Y-m-d H:i:s'), 'to' => $end->format('Y-m-d H:i:s')] + ($source === null ? [] : ['src' => $source])
+        ) as $r) {
+            $amount = (int) round((float) $r['billed']);
+            $breakdown[] = ['carrierId' => $r['id'] === null ? null : (int) $r['id'], 'name' => $r['id'] === null ? $this->label('shipping.none', $locale) : (string) $r['name'], 'kind' => $r['kind'],
+                'billed' => $amount, 'orders' => (int) $r['orders'], 'share' => $total > 0 ? round($amount / $total * 100, 1) : null];
+        }
+
+        return ['indicators' => $indicators, 'breakdown' => $breakdown, 'chart' => ['granularity' => $ctx['granularity'], 'points' => $points],
+            'caveats' => [$this->caveat('SHIPPING_BILLED_NOT_COST', $locale)], 'appliesSource' => true];
+    }
+
+    /** Port facturé d'une commande : un retour le déduit (expression de `PeriodResultCalculator::compute`) */
+    private const SHIPPING_BILLED = 'CASE WHEN o.order_type_id = 2 THEN -ABS(COALESCE(o.shipping_cost, 0)) ELSE COALESCE(o.shipping_cost, 0) END';
+    private const SHIPPING_WHERE = 'o.order_date >= :from AND o.order_date < :to AND o.order_type_id IN (1, 2) AND o.status_id NOT IN (1, 7)';
+
+    /** @return array<string, array{billed: float, orders: int}> jour du magasin => port facturé (non arrondi) et ventes avec transporteur */
+    private function shippingDays(string $from, string $to, ?int $source): array
+    {
+        [$start, $end] = $this->clock->range($from, $to);
+        $days = [];
+        foreach ($this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
+            "SELECT CAST((o.order_date AT TIME ZONE 'UTC') AT TIME ZONE :tz AS date) AS d, SUM(" . self::SHIPPING_BILLED . ') AS billed, COUNT(*) FILTER (WHERE o.order_type_id = 1 AND o.carrier_id IS NOT NULL) AS orders'
+            . ' FROM "order" o WHERE ' . self::SHIPPING_WHERE . ($source === null ? '' : ' AND o.order_source_id = :src') . ' GROUP BY 1'
+            . ' HAVING SUM(' . self::SHIPPING_BILLED . ') <> 0 OR COUNT(*) FILTER (WHERE o.order_type_id = 1 AND o.carrier_id IS NOT NULL) > 0',
+            ['tz' => $this->clock->timezone()->getName(), 'from' => $start->format('Y-m-d H:i:s'), 'to' => $end->format('Y-m-d H:i:s')] + ($source === null ? [] : ['src' => $source])
+        ) as $r) {
+            $days[substr((string) $r['d'], 0, 10)] = ['billed' => (float) $r['billed'], 'orders' => (int) $r['orders']];
+        }
+
+        return $days;
+    }
+
+    // ------------------------------------------------------------------ taxes
+
+    /**
+     * Les taxes collectées : les lignes de taxe des commandes (`order_tax`) de la plage, telles qu'enregistrées (celles d'un retour sont
+     * négatives), avec la règle des statistiques : ventes et retours, commandes incomplètes et annulées exclues, datées par la commande.
+     * Par taxe (code, libellé, juridiction, taux), ce que l'ancienne route `taxes/monthly` ne donnait pas. Aide à préparer une
+     * déclaration ; ce n'en est pas une.
+     */
+    private function taxes(array $ctx): array
+    {
+        [$cur, $prev, $ly, $source, $locale] = [$ctx['cur'], $ctx['prev'], $ctx['ly'], $ctx['source'], $ctx['locale']];
+        $days = $this->taxDays($cur[0], $cur[1], $source);
+        $daysPrev = $prev === null ? null : $this->taxDays($prev[0], $prev[1], $source);
+        $daysLy = $this->taxDays($ly[0], $ly[1], $source);
+        $hasLy = $daysLy !== [];
+        $sum = static fn (?array $rows): ?int => $rows === null ? null : (int) round(array_sum($rows));
+
+        $points = [];
+        $series = [];
+        foreach ($ctx['buckets'] as [$key, $from, $to]) {
+            $collected = $sum(self::slice($days, $from, $to));
+            $points[] = ['key' => $key, 'from' => $from, 'to' => $to, 'collected' => $collected,
+                'lastYear' => ['collected' => $sum(self::slice($daysLy, GestionStatisticsService::shiftYears($from, -1), GestionStatisticsService::shiftYears($to, -1)))]];
+            $series[] = $collected;
+        }
+        $total = $sum($days);
+
+        [$start, $end] = $this->clock->range($cur[0], $cur[1]);
+        $breakdown = [];
+        foreach ($this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
+            'SELECT COALESCE(t.tax_code, x.code) AS code, COALESCE(t.tax_label, x.name) AS label, t.tax_jurisdiction AS jurisdiction, t.tax_rate_ppm AS rate, SUM(t.amount) AS collected, SUM(t.base) AS base'
+            . ' FROM order_tax t JOIN "order" o ON o.id = t.order_tax_id LEFT JOIN tax x ON x.id = t.tax_id WHERE ' . self::TAX_WHERE . ($source === null ? '' : ' AND o.order_source_id = :src')
+            . ' GROUP BY 1, 2, 3, 4 ORDER BY SUM(t.amount) DESC, 1, 2',
+            ['from' => $start->format('Y-m-d H:i:s'), 'to' => $end->format('Y-m-d H:i:s')] + ($source === null ? [] : ['src' => $source])
+        ) as $r) {
+            $amount = (int) round((float) $r['collected']);
+            $breakdown[] = ['code' => $r['code'], 'label' => $r['label'] ?? $this->label('taxes.unnamed', $locale), 'jurisdiction' => $r['jurisdiction'], 'ratePpm' => $r['rate'] === null ? null : (int) $r['rate'],
+                'base' => $r['base'] === null ? null : (int) $r['base'], 'collected' => $amount, 'share' => $total > 0 ? round($amount / $total * 100, 1) : null];
+        }
+
+        return [
+            'indicators' => ['collected' => GestionStatisticsService::indicator($total, $sum($daysPrev), $hasLy ? $sum($daysLy) : null, 'money', $series, $prev !== null)],
+            'breakdown' => $breakdown,
+            'chart' => ['granularity' => $ctx['granularity'], 'points' => $points],
+            'caveats' => [$this->caveat('TAXES_NOT_A_RETURN', $locale)],
+            'appliesSource' => true,
+        ];
+    }
+
+    private const TAX_WHERE = 'o.order_date >= :from AND o.order_date < :to AND o.order_type_id IN (1, 2) AND o.status_id NOT IN (1, 7)';
+
+    /** @return array<string, float> jour du magasin => taxes collectées (non arrondies) */
+    private function taxDays(string $from, string $to, ?int $source): array
+    {
+        [$start, $end] = $this->clock->range($from, $to);
+        $days = [];
+        foreach ($this->emProvider->getEntityManager()->getConnection()->fetchAllKeyValue(
+            "SELECT CAST((o.order_date AT TIME ZONE 'UTC') AT TIME ZONE :tz AS date) AS d, SUM(t.amount) FROM order_tax t JOIN \"order\" o ON o.id = t.order_tax_id"
+            . ' WHERE ' . self::TAX_WHERE . ($source === null ? '' : ' AND o.order_source_id = :src') . ' GROUP BY 1',
+            ['tz' => $this->clock->timezone()->getName(), 'from' => $start->format('Y-m-d H:i:s'), 'to' => $end->format('Y-m-d H:i:s')] + ($source === null ? [] : ['src' => $source])
+        ) as $day => $amount) {
+            $days[substr((string) $day, 0, 10)] = (float) $amount;
+        }
+
+        return $days;
     }
 
     // ------------------------------------------------------------------ aides

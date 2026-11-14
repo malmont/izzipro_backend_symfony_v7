@@ -110,7 +110,7 @@ class GestionStatisticsService
         }
 
         $sections = $asked === [] || $this->sections === null ? [] : ['sections' => $this->sections->build($asked, [
-            'cur' => $cur, 'prev' => $prev, 'ly' => $ly, 'buckets' => $buckets, 'granularity' => $granularity, 'source' => $source, 'sourceKey' => $sourceKey, 'locale' => $locale,
+            'cur' => $cur, 'prev' => $prev, 'ly' => $ly, 'buckets' => $buckets, 'granularity' => $granularity, 'source' => $source, 'sourceKey' => $sourceKey, 'locale' => $locale, 'today' => $today,
         ])];
 
         return [

@@ -310,6 +310,10 @@ statistics:
         REFUNDS_UNMATCHED: "%amount% of refunds match no payment line (a return refunded as store credit, for example): they are shown under “Other”, as a negative amount."
         SOURCE_NOT_APPLICABLE: "The sales channel does not apply to this section: its figures are for the whole site."
         FIXED_COSTS_OUTSIDE_TOTAL: "Fixed costs are not included in the expenses total: they are spread over the days and are only deducted in the result after fixed costs."
+        STOCK_HISTORY_STARTS: "The stock value has been recorded every day since %date%: the curve starts on that date."
+        STOCK_HISTORY_EMPTY: "No record of the stock value yet: the first one will be taken at the next daily run."
+        SHIPPING_BILLED_NOT_COST: "Shipping billed to your customers. The real cost of your labels is not tracked: this figure is not a margin."
+        TAXES_NOT_A_RETURN: "These collected taxes help prepare a tax return: they are not one."
     sections:
         methods:
             card: "Card"
@@ -321,6 +325,16 @@ statistics:
             purchaseShipping: "Purchase shipping"
             advertising: "Advertising"
             untyped: "No type"
+        stock:
+            in: "In"
+            out: "Out"
+            return: "Returns"
+            adjustment: "Adjustments"
+            reception: "Supplier receptions"
+        shipping:
+            none: "No carrier"
+        taxes:
+            unnamed: "Tax"
 
 # The business year (lot AN, 11/11/2026, docs/annee-gestion.md)
 year:
