@@ -61,7 +61,16 @@ gardent leur forme, sans point, pour ne rien casser. Une demande seule prend la 
 **Qui s'en sert aujourd'hui.** Le courriel de résumé de la prévention des pertes : `pertes.constats` avec `isNew=1`. Le courriel
 d'exercice (lot EX-1) : `pertes.exercices`. Les autres codes sont prêts pour l'Assistance et les rapports.
 
-## 4. Ajouter un écran à la liste
+## 4. Une seule exception : le choix du mot de passe d'un compte invité
+
+`<adresse de l'espace d'administration>/admin/activer#token=<jeton>` (lot SUPPORT-WEB, 14/11/2026 : invitation d'un agent
+d'assistance). Ce n'est **pas** un code d'écran de la liste, et le lien ne passe **pas** par `/admin/ouvrir` : le jeton à usage unique
+(64 caractères hexadécimaux, 48 heures) voyage dans le **fragment** de l'adresse, jamais dans ses paramètres. Un fragment n'est envoyé
+à aucun serveur : il n'entre ni dans le journal du web, ni dans celui d'un proxy, ni dans l'en-tête Referer. Le web lit le fragment,
+le retire de l'adresse, puis envoie le jeton dans le corps d'un POST (`/api/password-reset/verify`, `/api/password-reset/confirm` ;
+`docs/assistance.md`). Code : `AdminSpaceUrl::activation()`, `AdminSpaceLinks::ACTIVATION_PATH`.
+
+## 5. Ajouter un écran à la liste
 
 Ajouter le code à `AdminSpaceLinks::LINKS` avec ses paramètres et leur forme, l'écrire dans le tableau ci-dessus, et prévenir le web
 **avant** qu'un courriel ne l'envoie. Si le code existe aussi dans le registre des écrans de la console (`ConsoleScreens`), ses

@@ -79,6 +79,59 @@ Contrat validé par l'application de gestion (« new easymakemoney ») ; décisi
   (bloquantes), `support.outbound`, `support.inbound` (améliorations ; adresse de réception au lot 2) ; `appScreen` `assistance-reglages`.
 - Tests : `tests/Functional/Support/SupportApiTest.php`, `tests/Functional/Support/SupportRoleMatrixTest.php`.
 
+## Lot SUPPORT-WEB livré : l'Assistance pour un compte qui n'ouvre qu'elle (14/11/2026)
+
+Contrat validé par le propriétaire le 14/11/2026. Ce qu'il faut au web pour afficher l'Assistance à un compte `ROLE_SUPPORT` seul, et à
+l'administrateur du site. Tests : `tests/Functional/Support/SupportWebApiTest.php`, `SupportRoleMatrixTest` (14 routes).
+
+- **Connexion : plateforme `webadmin`** (`POST /api/login`, `POST /api/otp-verify`). Les rôles de `admin` (`ROLE_ADMIN` ou `ROLE_SUPPORT` ;
+  `webadmin` accepte aussi `ROLE_SUPER_ADMIN`), **la session du navigateur de `web`** : mêmes cookies (`auth_token_<site>`,
+  `refresh_token_<site>`, `XSRF-TOKEN_<site>`), jeton anti-CSRF rendu dans le corps, renouvellement et déconnexion par cookies, écriture
+  refusée sans l'en-tête `X-XSRF-TOKEN`. `ROLE_USER_INTERNET` n'est pas demandé : un agent reste « Assistance seul ». Un compte client y
+  reçoit 403 `PLATFORM_NOT_ALLOWED`, sans cookie. `web`, `admin` (application mobile de gestion : jetons dans le corps), `mobile` et `pos`
+  ne changent pas. Code : `TokenService::COOKIE_PLATFORMS`, `AuthenticationService::ADMIN_PLATFORMS`.
+- **`GET /api/support/me`** (agent ou administrateur) : `{ id, name, email, roles, supportOnly, site { code, name, locale, timezone },
+  module { key, state: active | trial | inactive, endsAt, platformMode: demo | live }, screens, canEditSettings }`. Remplace `/api/profile`,
+  `/api/validate-token` et `/api/site/features`, fermés à un compte Assistance seul ; ne porte rien d'autre du site. `platformMode` : en
+  mode « demo » de la plateforme les routes répondent même quand `state` vaut `inactive`.
+- **Liste** `GET /api/support/tickets` : filtres `overdue=1` (non fermée, délai dépassé) et `awaiting=1` (non fermée, le dernier mot est
+  au client), cumulables avec les autres ; toute autre valeur : 422 `fields.overdue | awaiting = INVALID_VALUE`. La réponse porte
+  `counts { overdue, awaiting, unassigned }`, sur toute la boîte, quels que soient les filtres et la page.
+- **`GET /api/support/agents`** : `{ agents: [{ id, name, role: support | admin, me }] }`, les comptes vérifiés à qui attribuer une demande
+  (jamais un courriel ; le propriétaire de la plateforme n'y figure pas). Pour l'administrateur, en plus : `pending [{ id, name,
+  expiresAt, expired }]`, les invitations en attente.
+- **Commande par sa référence**, pour les deux rôles : `orderReference` dans `POST /api/support/tickets` (avec `orderId` : 422
+  `NOT_WITH_ORDER_ID` ; inconnue : 404 `ORDER_REFERENCE_NOT_FOUND` ; portée par plusieurs commandes : 409 `ORDER_REFERENCE_AMBIGUOUS`
+  avec `count` ; rien n'est créé) ; le client de la commande remplit la demande, sauf si `customer` est donné.
+  `GET /api/support/orders/lookup?reference=` rend `{ order, orderSummary }` (la liste blanche de la fiche d'une demande) pour une
+  référence exacte : ni recherche, ni liste.
+- **Agents d'assistance** (`Support/Services/SupportAgentService`, administrateur du site seulement) :
+  - `POST /api/support/agents { email, firstName, lastName, locale? }` → 201 `{ agent { id, name, email, role, pending }, invitation
+    { emailSent, expiresAt, validHours } }`. Exige le **droit** du module (403 `SUPPORT_MODULE_REQUIRED` ; le mode « demo » ne suffit
+    pas). Le compte créé a `ROLE_SUPPORT` et **aucun autre rôle** ; un compte existant n'est jamais transformé (409 `ACCOUNT_EXISTS`).
+    Le jeton n'est rendu nulle part à l'administrateur.
+  - `POST /api/support/agents/{id}/invitation` : un lien neuf, l'ancien ne vaut plus (409 `AGENT_ALREADY_ACTIVE`, 404 `AGENT_NOT_FOUND`).
+  - `DELETE /api/support/agents/{id}` → `{ id, unassigned }` : l'agent perd l'accès ; son compte et ses messages restent, ses sessions
+    sont closes, ses demandes en cours redeviennent sans agent. Seulement pour un compte Assistance seul (sinon 404).
+  - Journal du site : `user_team`, `grant` (repère `invite`) et `revoke`.
+- **Invitation** : le courriel (`emails/support_agent_invitation.html.twig`, fr / en) ne porte qu'un lien,
+  `<adresse de l'espace d'administration>/admin/activer#token=<jeton>` : le jeton est dans le **fragment** de l'adresse (jamais envoyé
+  à un serveur, donc dans aucun journal ; `docs/liens-espace-administration.md`). Il est à usage unique et vaut **48 heures**. Le web
+  le lit, le retire de l'adresse, puis : `POST /api/password-reset/verify { token }` (facultatif, ne consomme rien) → `{ valid, kind:
+  invitation | reset, expiresAt, siteName, emailMasked, passwordMinLength }` ; `POST /api/password-reset/confirm { token, password }` :
+  le compte devient utilisable, le jeton ne vaut plus. Refus neutres : 400 `RESET_LINK_INVALID` (inconnu, expiré ou déjà utilisé, sans
+  rien dire du compte), `FIELDS_REQUIRED`, `PASSWORD_TOO_SHORT` (8 caractères au moins) ; limite de débit du mot de passe oublié. Aucune
+  session n'est rendue : l'agent se connecte ensuite par `webadmin`. C'est le mécanisme du mot de passe oublié (`resetToken`).
+- **À renforcer (remarque du chef de projet, 14/11/2026 ; rien de changé dans ce lot)** : 8 caractères sans autre règle, c'est faible
+  pour un compte qui lit les données des clients. Proposition à préparer pour la campagne de tests : longueur minimale plus grande pour
+  les comptes de l'espace d'administration, refus des mots de passe les plus courants, code OTP pour les agents. À savoir aussi : le
+  lien d'un mot de passe oublié ouvre aujourd'hui la page du site avec le jeton dans les paramètres, pour tous les comptes ; un passage
+  par `/admin/activer#token=` pour les comptes de l'espace d'administration est proposé, pas codé.
+- **La règle gardée** : un compte Assistance seul ne voit jamais la gestion, les prix d'achat, la marge, la trésorerie ni les réglages du
+  site ; `SupportScopeSubscriber` n'est pas assoupli, le lot n'ouvre que des routes sous `/api/support`.
+- **Piège rencontré** : une arobase dans un bloc de documentation d'un contrôleur (un exemple d'adresse masquée) est lue comme une
+  annotation et rend 500 sur toutes les routes ; écrire l'exemple dans un commentaire `//`.
+
 ## Décisions restantes (lot 2 et suivants)
 
 Prix et essai de l'offre « support » ; adresse de réception des courriels (domaine, MX, fournisseur : Mailgun, SES ou IMAP) ; le chat (lot 4)

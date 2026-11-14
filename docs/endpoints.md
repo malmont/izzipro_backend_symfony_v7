@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (486)
+## Boutique et commun (492)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -702,6 +702,12 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/subscriptions/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::get` |
 | GET | `/api/subscriptions` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::list` |
 | POST | `/api/subscriptions` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::subscribe` |
+| POST | `/api/support/agents/{id}/invitation` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::resendInvitation` |
+| DELETE | `/api/support/agents/{id}` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::revokeAgent` |
+| GET | `/api/support/agents` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::agents` |
+| POST | `/api/support/agents` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::inviteAgent` |
+| GET | `/api/support/me` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::me` |
+| GET | `/api/support/orders/lookup` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::orderLookup` |
 | GET | `/api/support/settings` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::settings` |
 | PUT | `/api/support/settings` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::saveSettings` |
 | GET | `/api/support/tickets/{id}/attachments/{attachmentId}` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::attachment` |
@@ -752,7 +758,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/videos` | aucune règle | `Controller\VideoApiController\VideoApiController::list` |
 | POST | `/videos` | ROLE_ADMIN | `Controller\VideoApiController\VideoApiController::create` |
 
-## Authentification et comptes (10)
+## Authentification et comptes (11)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -761,6 +767,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/otp-verify` | PUBLIC_ACCESS | `Controller\Account\OtpApiController::otpVerifyApi` |
 | POST | `/api/password-reset/confirm` | PUBLIC_ACCESS | `Controller\Account\ResetPasswordController::confirmPasswordResetApi` |
 | POST | `/api/password-reset/request` | PUBLIC_ACCESS | `Controller\Account\ResetPasswordController::requestPasswordReset` |
+| POST | `/api/password-reset/verify` | PUBLIC_ACCESS | `Controller\Account\ResetPasswordController::verifyPasswordResetApi` |
 | POST | `/api/register` | PUBLIC_ACCESS | `Controller\Account\RegistrationController::registerApi` |
 | POST | `/api/resend-verification` | PUBLIC_ACCESS | `Controller\Account\RegistrationController::resendVerificationEmail` |
 | POST | `/api/token/refresh` | PUBLIC_ACCESS | `Controller\Account\SecurityController::refreshToken` |
