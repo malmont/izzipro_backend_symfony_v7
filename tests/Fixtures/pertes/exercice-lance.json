@@ -28,9 +28,9 @@
             "newEvidenceSinceDecision": false,
             "backfill": false,
             "exercise": true,
-            "updatedAt": "2026-11-14T22:17:24+00:00",
-            "from": "2026-11-14T14:17:24+00:00",
-            "to": "2026-11-14T22:16:24+00:00",
+            "updatedAt": "2026-11-14T23:25:28+00:00",
+            "from": "2026-11-14T15:25:28+00:00",
+            "to": "2026-11-14T23:24:28+00:00",
             "sessionId": null,
             "subject": {
                 "type": "z_report",
@@ -54,10 +54,10 @@
             "amountNotice": "Le montant en jeu est le montant concerné par le constat, pas une perte prouvée.",
             "evidence": [
                 {
-                    "id": 24,
+                    "id": 30,
                     "kind": "z_report",
-                    "at": "2026-11-14T22:16:24+00:00",
-                    "atLabel": "14/11/2026 17 h 16",
+                    "at": "2026-11-14T23:24:28+00:00",
+                    "atLabel": "14/11/2026 18 h 24",
                     "title": "Rapport de clôture",
                     "lines": [
                         {
@@ -66,7 +66,7 @@
                         },
                         {
                             "label": "Caisse fermée le",
-                            "value": "14/11/2026 17 h 16"
+                            "value": "14/11/2026 18 h 24"
                         },
                         {
                             "label": "Fermée par",
@@ -104,16 +104,16 @@
                         "hash": null
                     },
                     "screen": null,
-                    "fingerprint": "8ab15a8f2fd0b930d72b5d2cb0f2f913ecd9a2e4a98f93184ac6d5eefa271691"
+                    "fingerprint": "34d5d69f55f9225a660ef605183776bba83cfb01321d40900327028050eff152"
                 }
             ],
             "evidenceIntact": true,
             "opinion": null,
             "decision": null,
             "history": [],
-            "lastEvidenceAt": "2026-11-14T22:17:24+00:00",
-            "createdAt": "2026-11-14T22:17:24+00:00",
-            "screen": "pertes.constat"
+            "lastEvidenceAt": "2026-11-14T23:25:28+00:00",
+            "createdAt": "2026-11-14T23:25:28+00:00",
+            "screen": "pertes.exercices"
         },
         "alertPreview": {
             "tile": {
