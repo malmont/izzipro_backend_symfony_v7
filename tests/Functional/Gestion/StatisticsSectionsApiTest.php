@@ -148,6 +148,16 @@ class StatisticsSectionsApiTest extends WebTestCase
         $year = $this->get('/api/gestion/statistiques?range=year&sections=payments')['sections']['payments'];
         $this->assertSame([null, null], [$year['indicators']['net']['previous'], $year['indicators']['net']['changeVsPrevious']]);
         $this->assertNull($year['cashDesk']['closings']['previous']);
+
+        // Un retour sans ligne de paiement (rendu en avoir, par exemple) : « autre » devient négatif, et la remarque parle de remboursements
+        $this->order('2007-04-07', 2, 6, 2, 9000, []);
+        $after = $this->get('/api/gestion/statistiques?' . self::RANGE . '&sections=payments')['sections']['payments'];
+        $other = array_column($after['breakdown'], null, 'method')['other'];
+        $this->assertSame([[41950, 11300, 30650], -3250, -10.6, $after['indicators']['net']['value']], [array_column($after['indicators'], 'value'), $other['net'], $other['share'], array_sum(array_column($after['breakdown'], 'net'))]);
+        $this->assertSame(['REFUNDS_UNMATCHED', -3250], [$after['caveats'][1]['code'], $after['caveats'][1]['amount']]);
+        $this->assertStringContainsString('32,50', $after['caveats'][1]['text']);
+        $this->assertStringNotContainsString('-32,50', $after['caveats'][1]['text'], 'le texte dit le montant sans signe ; le signe est dans amount');
+        $this->assertStringContainsString('remboursements', $after['caveats'][1]['text']);
     }
 
     public function testTheCashDeskBlockCountsTheClosingsOfTheRangeAndIsForTheTillOnly(): void

@@ -307,6 +307,7 @@ statistics:
         NO_LAST_YEAR_DATA: "No sales over the same range last year: no comparison possible."
         PAYMENTS_BY_ORDER_DATE: "Receipts are dated by the order date, taxes included. The part paid by gift card, store credit or manufacturer coupon is not included."
         PAYMENTS_UNMATCHED: "%amount% of receipts match no payment line (sale without a recorded payment): they are shown under “Other”."
+        REFUNDS_UNMATCHED: "%amount% of refunds match no payment line (a return refunded as store credit, for example): they are shown under “Other”, as a negative amount."
         SOURCE_NOT_APPLICABLE: "The sales channel does not apply to this section: its figures are for the whole site."
         FIXED_COSTS_OUTSIDE_TOTAL: "Fixed costs are not included in the expenses total: they are spread over the days and are only deducted in the result after fixed costs."
     sections:

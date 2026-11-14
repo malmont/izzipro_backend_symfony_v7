@@ -125,7 +125,9 @@ class GestionStatisticsSections
         if ($unmatched !== 0) {
             $breakdown[] = ['method' => 'other', 'label' => $this->label('methods.other', $locale), 'received' => null, 'refunded' => null, 'net' => $unmatched, 'share' => $share($unmatched),
                 'previousNet' => null, 'lastYearNet' => null];
-            $caveats[] = $this->caveat('PAYMENTS_UNMATCHED', $locale, ['%amount%' => $this->advices->format($unmatched, 'money', $locale)]) + ['amount' => $unmatched];
+            // positif : de l'encaissé sans ligne de paiement (vente sans paiement enregistré) ; négatif : des remboursements sans ligne de
+            // paiement (un retour rendu en avoir, par exemple). `amount` garde son signe, le texte dit le montant sans signe
+            $caveats[] = $this->caveat($unmatched > 0 ? 'PAYMENTS_UNMATCHED' : 'REFUNDS_UNMATCHED', $locale, ['%amount%' => $this->advices->format(abs($unmatched), 'money', $locale)]) + ['amount' => $unmatched];
         }
 
         return [

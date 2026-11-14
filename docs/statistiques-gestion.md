@@ -120,14 +120,16 @@ Un nombre rond sort en entier dans le JSON (`100`, pas `100.0`), comme dans S1.
   3 `paypal` ; un moyen ajouté plus tard sort en `method_<id>` avec son nom). `share` = part du net, en % ; `previousNet` et
   `lastYearNet` pour comparer. Ce que les lignes de paiement n'expliquent pas (une vente sans paiement enregistré) sort dans une
   ligne **`other`** (`received` et `refunded` à `null`), avec la remarque `PAYMENTS_UNMATCHED` et son montant : **les moyens additionnés
-  font toujours le net**. « Ma journée » range en « carte » tout ce qui n'est pas en espèces : `card + paypal + other` ici.
+  font toujours le net**. `other` peut être **négatif** : des remboursements sans ligne de paiement (un retour rendu en avoir, par
+  exemple ; constaté sur demo en octobre 2026 : −45,34 $) ; la remarque est alors `REFUNDS_UNMATCHED`, `amount` garde son signe et le
+  texte dit le montant sans signe. « Ma journée » range en « carte » tout ce qui n'est pas en espèces : `card + paypal + other` ici.
 - **`cashDesk`** : les clôtures de caisse de la plage (rapports de fermeture, `cash_register_report`, datés par leur heure de
   fermeture) : `closings` (nombre), `discrepancy` (somme des écarts compté − attendu, signée), `discrepancyCount` (clôtures avec un
   écart), `bankDeposits` (dépôts en banque), chacun avec ses comparaisons ; `movements` : mouvements de fond hors ventes de la plage
   (dépôts, retraits, ajouts et retraits de fond, le vocabulaire du rapport de caisse). Rendu pour `source=all` et `source=pos` ;
   `null` pour les autres canaux. **La liste des transactions de la caisse ouverte n'est pas reprise** : c'est un outil de caisse (rapport
   X), pas une statistique.
-- Remarques : `PAYMENTS_BY_ORDER_DATE` (toujours), `PAYMENTS_UNMATCHED` (`amount`).
+- Remarques : `PAYMENTS_BY_ORDER_DATE` (toujours), `PAYMENTS_UNMATCHED` ou `REFUNDS_UNMATCHED` (`amount`, signé).
 
 ### `expenses` : les frais de l'entreprise (remplace l'écran Frais)
 
