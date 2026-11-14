@@ -401,8 +401,10 @@ class LexiqueApiTest extends WebTestCase
         $this->sale($variant, 2, 2500, 2500, $today);
         $this->endOfWrite();
 
-        // 1. « C'est quoi le taux de marque ? » : le modèle ne fait que désigner la notion ; le serveur assemble la leçon et ses chiffres, sans appel 2 : 0 unité
-        $a = $this->post('/api/gestion/console/messages', ['text' => "C'est quoi le taux de marque ?"], 202);
+        // 1. Une question de définition que le serveur ne reconnaît pas seul (pas de tournure « c'est quoi », point 6) : le modèle ne fait que
+        // désigner la notion ; le serveur assemble la leçon et ses chiffres, sans appel 2 : 0 unité
+        $a = $this->post('/api/gestion/console/messages', ['text' => 'Le taux de marque, tu peux me dire ce que c\'est ?'], 202);
+        $this->assertSame('pending', $a['state']);
         $this->assertSame(['reserved' => 1], $usage());
         FakeLandingAiClient::$queue = [$this->reply(['kind' => 'analyses', 'clarification' => '', 'analyses' => [['key' => 'lexique.term', 'term' => 'taux-de-marque'] + $none]])];
         $this->runWorker((int) $a['messageId']);
@@ -498,6 +500,39 @@ class LexiqueApiTest extends WebTestCase
         // L'ordre des leçons est celui du lexique, pas celui des cartes : le panier moyen passe avant les commandes
         $figures['figureIds'] = ['a1.orders', 'a1.averageBasket'];
         $this->assertSame(['panier-moyen', 'commandes'], array_column(array_values(array_filter($ask(['mode' => 'learn'])[0]['blocks'], fn (array $b) => $b['type'] === 'lesson')), 'key'));
+
+        // 6. Réponse directe (14/11/2026) : une question de définition SANS AMBIGUÏTÉ est reconnue par le serveur. Aucun appel au modèle,
+        // aucune unité, rien au worker : le POST rend déjà la leçon et ses chiffres, la même leçon que par le modèle.
+        $sentToWorker = fn (): int => count($this->client->getContainer()->get('messenger.transport.gestion_ai')->getSent());
+        $before = [count(FakeLandingAiClient::$requests), $usage()];
+        FakeLandingAiClient::$queue = [new \RuntimeException('le modèle ne doit pas être appelé')];
+        $direct = $this->post('/api/gestion/console/messages', ['text' => "C'est quoi le taux de marque ?"], 202);
+        $this->assertSame(['done', null, ['lesson', 'figures'], [], 0], [$direct['state'], $direct['error'], array_column($direct['blocks'], 'type'), $direct['proposals'], $sentToWorker()]);
+        $this->assertSame($lesson, $direct['blocks'][0], 'la même leçon que celle que le modèle fait assembler');
+        $this->assertSame([['lexique.term', ['term' => 'taux-de-marque']]], array_map(fn (array $x) => [$x['key'], $x['params']], $direct['analyses']));
+        $this->assertSame([$before[0], ($before[1]['failed'] ?? 0) + 1, $before[1]['success'] ?? 0, $before[1]['reserved'] ?? 0], [count(FakeLandingAiClient::$requests), $usage()['failed'] ?? 0, $usage()['success'] ?? 0, $usage()['reserved'] ?? 0],
+            'aucun appel au modèle ; l\'unité réservée est rendue');
+        $this->em()->clear();
+        $this->assertSame([$direct['blocks'], $direct['answeredAt']], [$last((int) $direct['conversationId'])['blocks'], $last((int) $direct['conversationId'])['answeredAt']]);
+        FakeLandingAiClient::$queue = [];
+        // « C'est quoi ma marge ? » demande un chiffre, pas une définition : le modèle choisit, la réponse reste en attente
+        $mine = $this->post('/api/gestion/console/messages', ['text' => "C'est quoi ma marge ?"], 202);
+        $this->assertSame(['pending', [], 1, $before[0]], [$mine['state'], $mine['blocks'], $sentToWorker(), count(FakeLandingAiClient::$requests)]);
+        // Ce que le serveur reconnaît seul : une tournure de définition, une notion du lexique et une seule, rien d'autre que des articles
+        $texts = static::getContainer()->get(LexiqueTexts::class);
+        $entries = [...$texts->all('fr'), ...$texts->all('en')];
+        $term = fn (string $q): ?string => ConsoleResponder::asksOnlyForATerm($q, $entries);
+        $this->assertSame(['taux-de-marque', 'point-mort', 'coefficient', 'taux-de-marque', 'point-mort', 'marge', 'marge', 'tresorerie', 'coefficient', 'taux-de-marque', 'coefficient', 'resultat'],
+            array_map($term, ["C'est quoi le taux de marque ?", "Qu'est-ce que le point mort ?", "Qu’est-ce qu'un coefficient ?", 'que veut dire taux de marge', 'Définition du point mort', "c'est quoi la marge",
+                "C'est quoi la marge brute exactement ?", "Qu'est-ce que c'est que la trésorerie ?", "C'est quoi les coefficients ?", 'What is the margin rate?', 'What does markup multiplier mean?', 'define profit']));
+        $this->assertSame(array_fill(0, 15, null), array_map($term, [
+            "C'est quoi le point mort, le coefficient ?", // deux notions, sans autre mot
+            "C'est quoi ma marge ?", 'What is my margin rate?', "C'est quoi notre point mort ?", // un possessif : c'est un chiffre qui est demandé
+            "C'est quoi le taux de marque de ce mois ?", "C'est quoi un bon taux de marque ?", "C'est quoi le taux de marque, est-il bon ?", 'Combien est le taux de marque ?', // une date, un jugement, un chiffre
+            "C'est quoi le taux de marque et le point mort ?", "C'est quoi le taux de marque et comment l'améliorer ?", // deux notions, une seconde demande
+            "C'est quoi la trésorerie ici ?", "C'est quoi cet écran ?", // l'écran : c'est le guide
+            "C'est quoi le goodwill ?", 'Le taux de marque', 'Explique-moi le taux de marque', // notion inconnue ; pas de tournure de définition
+        ]), 'dans le doute, le modèle');
     }
 
     /**
