@@ -583,12 +583,40 @@ class LexiqueApiTest extends WebTestCase
         $this->endOfWrite();
         try {
             $treasury = ['module' => 'gestion', 'screen' => 'tresorerie', 'params' => []];
-            $a = $this->post('/api/gestion/console/messages', ['text' => "Qu'est-ce que je dois regarder ici ?", 'context' => $treasury], 202);
+            // Lot A-4b : « explique-moi cet écran », sans autre demande, est reconnu par le SERVEUR. Aucun appel au modèle, aucune unité.
+            // Les deux questions de l'essai réel du 13/11 (Trésorerie, puis l'écran d'une période), où le modèle ajoutait des analyses et rédigeait.
+            $real = $this->post('/api/gestion/console/messages', ['text' => 'Explique-moi cet écran', 'context' => $treasury], 202);
+            FakeLandingAiClient::$queue = [new \RuntimeException('le modèle ne doit pas être appelé')];
+            $this->runWorker((int) $real['messageId']);
+            $explained = $last((int) $real['conversationId']);
+            $this->assertSame([0, ['failed' => 1], 'done', ['guide', 'figures']], [count(FakeLandingAiClient::$requests), $usage(), $explained['state'], array_column($explained['blocks'], 'type')], 'ni appel au modèle, ni unité, ni texte');
+            $this->assertSame([['screen.guide', ['screen' => 'tresorerie']], ['cash.projection', ['days' => 90]]], array_map(fn (array $x) => [$x['key'], $x['params']], $explained['analyses']));
+            $periodId = (int) static::getContainer()->get(PeriodCalendar::class)->current()->getId();
+            $this->em();
+            $onPeriod = $this->post('/api/gestion/console/messages', ['text' => 'Explique-moi cet écran', 'context' => ['module' => 'gestion', 'screen' => 'periode', 'params' => ['periodId' => $periodId]]], 202);
+            $this->runWorker((int) $onPeriod['messageId']);
+            $period = $last((int) $onPeriod['conversationId']);
+            $this->assertSame([0, 'done', 'guide', 'periode'], [count(FakeLandingAiClient::$requests), $period['state'], $period['blocks'][0]['type'], $period['blocks'][0]['screen']]);
+            $this->assertSame([], array_values(array_filter(array_column($period['blocks'], 'type'), fn (string $t) => !in_array($t, ['guide', 'figures'], true))), 'le guide et des cartes, rien de rédigé');
+            $this->assertSame([['screen.guide', ['screen' => 'periode']], ['period.result', ['periodId' => $periodId]], ['sales.overview', ['periodId' => $periodId]]], array_map(fn (array $x) => [$x['key'], $x['params']], $period['analyses']),
+                'les chiffres du moment viennent des analyses de l\'écran, sur SA période');
+            $this->assertSame(['failed' => 2], $usage());
+            FakeLandingAiClient::$queue = [];
+            // Ce que le serveur reconnaît comme « seulement expliquer l'écran », et ce qu'il laisse au modèle
+            $only = fn (string $q): bool => ConsoleResponder::asksOnlyForTheScreen($q);
+            $this->assertSame([true, true, true, true, true, true], array_map($only, ['Explique-moi cet écran', "Qu'est-ce que je dois regarder ici ?", 'À quoi sert cette page ?', 'Je ne comprends pas cette page', "C’est quoi cet écran ?", 'What should I look at here?']));
+            $this->assertSame([false, false, false, false, false, false], array_map($only, ['Explique-moi cet écran : ma trésorerie va-t-elle tenir ?', 'Explique-moi cet écran et est-ce que ça va ?', "Montre-moi les ventes d'ici la fin du mois",
+                'Combien ai-je vendu ici ?', 'Explique-moi le taux de marque', 'Explain this screen and tell me why sales are down']), 'une autre demande, une question d\'état, ou pas d\'écran désigné : le modèle choisit');
+            // chaque raison de refus, seule : une question d'état sans seconde demande, une seconde demande sans question d'état
+            $this->assertSame([false, false, false, false, false, false], array_map($only, ['Explique-moi pourquoi cet écran est vide', "Explique-moi combien j'ai vendu ici", 'Explique-moi cet écran : les achats du mois',
+                'Explique-moi cet écran et est-il à jour', 'Explain this screen and tell me what to order', 'Explique-moi cet écran ; puis les budgets']));
+            // Une question que le serveur ne reconnaît pas, mais où le modèle choisit le guide seul : assemblée par le serveur aussi (un appel, 0 unité)
+            $a = $this->post('/api/gestion/console/messages', ['text' => 'Dis-m\'en plus sur ce que je vois', 'context' => $treasury], 202);
             // le modèle nomme un autre écran : le serveur ne l'écoute pas, l'écran est celui du contexte
             FakeLandingAiClient::$queue = [$this->reply(['kind' => 'analyses', 'clarification' => '', 'analyses' => [['key' => 'screen.guide', 'screen' => 'reglages'] + $none]])];
             $this->runWorker((int) $a['messageId']);
             $answer = $last((int) $a['conversationId']);
-            $this->assertSame([1, ['failed' => 1], 'done'], [count(FakeLandingAiClient::$requests), $usage(), $answer['state']], 'un seul appel au modèle, aucune unité');
+            $this->assertSame([1, ['failed' => 3], 'done'], [count(FakeLandingAiClient::$requests), $usage(), $answer['state']], 'un seul appel au modèle, aucune unité');
             $this->assertSame(['guide', 'figures'], array_column($answer['blocks'], 'type'), 'le guide, puis les chiffres du moment de l\'écran');
             $block = $answer['blocks'][0];
             $this->assertSame(['type', 'screen', 'title', 'theme', 'purpose', 'points', 'next', 'source'], array_keys($block));
@@ -600,6 +628,7 @@ class LexiqueApiTest extends WebTestCase
             $this->assertContains('a2.balance', $ids);
             $this->assertSame(1, (int) $conn()->fetchOne("SELECT COUNT(*) FROM gestion_conversation_message WHERE conversation_id = ? AND content::jsonb ->> 'lesson' = 'true'", [$a['conversationId']]));
             $this->assertStringContainsString('« screen.guide » explique l\'écran', (string) FakeLandingAiClient::$requests[0]['system']);
+            $this->assertStringContainsString('choisis « screen.guide » SEUL', (string) FakeLandingAiClient::$requests[0]['system']);
             $this->assertSame([12, true], [count($payload(0)['analyses']), in_array('screen.guide', array_column($payload(0)['analyses'], 'key'), true)]);
             // sans écran : pas de guide ; le serveur demande une précision
             $b = $this->post('/api/gestion/console/messages', ['text' => "C'est quoi cet écran ?"], 202);
@@ -613,7 +642,9 @@ class LexiqueApiTest extends WebTestCase
                 $this->reply(['blocks' => [['type' => 'text', 'text' => 'Votre trésorerie tient sur la durée regardée.', 'figureIds' => [], 'analysis' => '', 'items' => []]], 'proposals' => []])];
             $this->runWorker((int) $c['messageId']);
             $mixed = $last((int) $c['conversationId']);
-            $this->assertSame([['guide', 'text'], 'tresorerie', ['failed' => 2, 'success' => 1]], [array_column($mixed['blocks'], 'type'), $mixed['blocks'][0]['screen'], $usage()]);
+            $this->assertSame([['guide', 'text'], 'tresorerie', ['failed' => 4, 'success' => 1]], [array_column($mixed['blocks'], 'type'), $mixed['blocks'][0]['screen'], $usage()], 'une question d\'état en plus : le modèle rédige (1 unité), le guide passe devant');
+            $this->assertStringContainsString('Ne redis pas à quoi sert l\'écran', (string) FakeLandingAiClient::$requests[$requests + 1]['system']);
+            $this->assertStringContainsString('n\'écris jamais « par rapport à du … »', (string) FakeLandingAiClient::$requests[$requests + 1]['system']);
             $sent = $payload($requests + 1)['resultats'][0]['guide'];
             $this->assertSame([['ecran', 'role', 'points'], 'Trésorerie', ['libelle', 'texte']], [array_keys($sent), $sent['ecran'], array_keys($sent['points'][0])]);
             $this->assertStringContainsString('« guide » décrit l\'écran', (string) FakeLandingAiClient::$requests[$requests + 1]['system']);
