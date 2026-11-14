@@ -53,10 +53,11 @@ final class AppMembershipService
      * @param ?string $termsVersion version des conditions acceptées ; null : aucune acceptation n'est enregistrée
      * @param ?\DateTimeImmutable $joinedAt date d'entrée (maintenant par défaut)
      * @param ?\DateTimeImmutable $acceptedAt date de l'acceptation (celle de l'entrée par défaut) ; ignorée sans version
+     * @param list<string> $traces traces d'usage qui fondent une appartenance reprise de l'historique, gardées au journal
      *
      * @return bool vrai si l'appartenance vient d'être créée
      */
-    public function grant(User $user, string $family, string $source, ?string $termsVersion = null, ?\DateTimeImmutable $joinedAt = null, ?\DateTimeImmutable $acceptedAt = null): bool
+    public function grant(User $user, string $family, string $source, ?string $termsVersion = null, ?\DateTimeImmutable $joinedAt = null, ?\DateTimeImmutable $acceptedAt = null, array $traces = []): bool
     {
         if (!in_array($family, AppFamilies::ALL, true)) {
             throw new \InvalidArgumentException(sprintf('« %s » n\'est pas une famille d\'applications.', $family));
@@ -76,7 +77,7 @@ final class AppMembershipService
             [(int) $user->getId(), $family, $source, $row['joinedAt'], $termsVersion, $row['termsAcceptedAt']]
         ) === 1;
         if ($created) {
-            $this->audit->record(AppFamilies::AUDIT_RESOURCE, $user->getId(), self::ACTION_GRANT, null, $row, [$family, $source]);
+            $this->audit->record(AppFamilies::AUDIT_RESOURCE, $user->getId(), self::ACTION_GRANT, null, $row + ($traces === [] ? [] : ['traces' => array_values($traces)]), [$family, $source]);
         }
 
         return $created;
@@ -99,6 +100,30 @@ final class AppMembershipService
         $this->audit->record(AppFamilies::AUDIT_RESOURCE, $userId, self::ACTION_REVOKE, $before, null, [$family, $reason]);
 
         return true;
+    }
+
+    /**
+     * La reprise de l'historique du site est-elle faite (lot M2) ? Tant qu'elle ne l'est pas, les vrais clients d'avant ce chantier
+     * n'ont pas encore leur appartenance : aucune règle ne doit les écarter. Ne lève jamais (faux en cas d'erreur).
+     */
+    public function backfillDone(): bool
+    {
+        try {
+            /** @var UserAppMembershipRepository $repository */
+            $repository = $this->emProvider->getEntityManager()->getRepository(UserAppMembership::class);
+
+            return $repository->backfilledAt() !== null;
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf('[APPS-MEMBRES] état de la reprise illisible (%s)', $e->getMessage()));
+
+            return false;
+        }
+    }
+
+    /** Le compte est-il membre de la boutique ou de la caisse ? Seuls ces comptes sont visibles de la caisse une fois la reprise faite */
+    public function visibleFromPos(int $userId): bool
+    {
+        return $this->emProvider->getEntityManager()->getConnection()->fetchOne('SELECT 1 FROM user_app_membership WHERE user_id = ? AND app IN (?, ?)', [$userId, AppFamilies::BOUTIQUE, AppFamilies::POS]) !== false;
     }
 
     /** @return list<UserAppMembership> appartenances du compte, de la plus ancienne à la plus récente */

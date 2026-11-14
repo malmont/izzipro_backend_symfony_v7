@@ -266,6 +266,10 @@ class PosCustomerService
                 throw new CashRegisterException('CUSTOMER_SEARCH_RATE_LIMITED', 'Trop de recherches de clients : réessayez dans une minute', 429, [], ['limit' => $settings['searchPerMinute'], 'retryAfterSeconds' => 60]);
             }
         }
+        // APPS-MEMBRES M2 (décision du propriétaire, vie privée) : une fois la reprise de l'historique faite sur le site, la caisse ne trouve
+        // que les comptes membres de la boutique ou de la caisse ; un compte membre de Mémoires Vivantes seulement n'apparaît pas, avec
+        // la réponse « aucun compte ». Avant la reprise, les clients d'avant n'ont pas encore leur appartenance : recherche inchangée.
+        $onlyMembers = $this->memberships?->backfillDone() ? ' AND EXISTS (SELECT 1 FROM user_app_membership m WHERE m.user_id = u.id AND m.app IN (\'boutique\', \'pos\'))' : '';
         $pos = [];
         $web = [];
         $kind = 'name';
@@ -280,7 +284,7 @@ class PosCustomerService
             if ($email !== null) {
                 $pos = $conn->fetchFirstColumn('SELECT id FROM pos_customer WHERE email = ? AND erased_at IS NULL AND merged_into_id IS NULL ORDER BY id', [$email]);
                 if ($settings['linkEnabled']) {
-                    $web = $conn->fetchAllAssociative('SELECT u.id, u.firstname, u.lastname, u.email FROM "user" u WHERE LOWER(u.email) = ? AND u.deleted_at IS NULL AND u.roles::text LIKE \'%ROLE_USER_INTERNET%\' AND NOT EXISTS (SELECT 1 FROM pos_customer c WHERE c.user_id = u.id AND c.erased_at IS NULL AND c.merged_into_id IS NULL) LIMIT 5', [$email]);
+                    $web = $conn->fetchAllAssociative('SELECT u.id, u.firstname, u.lastname, u.email FROM "user" u WHERE LOWER(u.email) = ? AND u.deleted_at IS NULL AND u.roles::text LIKE \'%ROLE_USER_INTERNET%\' AND NOT EXISTS (SELECT 1 FROM pos_customer c WHERE c.user_id = u.id AND c.erased_at IS NULL AND c.merged_into_id IS NULL)' . $onlyMembers . ' LIMIT 5', [$email]);
                 }
             }
         } elseif (preg_match('/^[\d\s().+\-]+$/', $q) && ($phone = $this->phone($q)) !== null) {
@@ -289,7 +293,7 @@ class PosCustomerService
             $last10 = substr(preg_replace('/\D+/', '', $phone), -10);
             $pos = $conn->fetchFirstColumn('SELECT id FROM pos_customer WHERE (phone = ? OR RIGHT(phone, 10) = ?) AND erased_at IS NULL AND merged_into_id IS NULL ORDER BY id LIMIT ?', [$phone, $last10, self::SEARCH_LIMIT]);
             if ($settings['linkEnabled']) {
-                $web = $conn->fetchAllAssociative('SELECT DISTINCT u.id, u.firstname, u.lastname, u.email FROM "user" u JOIN adress a ON a.user_adress_id = u.id WHERE RIGHT(regexp_replace(COALESCE(a.phone, \'\'), \'\D\', \'\', \'g\'), 10) = ? AND u.deleted_at IS NULL AND u.roles::text LIKE \'%ROLE_USER_INTERNET%\' AND NOT EXISTS (SELECT 1 FROM pos_customer c WHERE c.user_id = u.id AND c.erased_at IS NULL AND c.merged_into_id IS NULL) LIMIT 5', [$last10]);
+                $web = $conn->fetchAllAssociative('SELECT DISTINCT u.id, u.firstname, u.lastname, u.email FROM "user" u JOIN adress a ON a.user_adress_id = u.id WHERE RIGHT(regexp_replace(COALESCE(a.phone, \'\'), \'\D\', \'\', \'g\'), 10) = ? AND u.deleted_at IS NULL AND u.roles::text LIKE \'%ROLE_USER_INTERNET%\' AND NOT EXISTS (SELECT 1 FROM pos_customer c WHERE c.user_id = u.id AND c.erased_at IS NULL AND c.merged_into_id IS NULL)' . $onlyMembers . ' LIMIT 5', [$last10]);
             }
         } else {
             if (mb_strlen($q) < $settings['searchMinChars']) {
@@ -397,7 +401,10 @@ class PosCustomerService
         }
         $em = $this->emProvider->getEntityManager();
         $user = is_numeric($userId) ? $em->find(User::class, (int) $userId) : null;
-        if (!$user instanceof User || $user->isDeleted() || !in_array('ROLE_USER_INTERNET', $user->getRoles(), true)) {
+        // (M2) une fois la reprise faite, un compte qui n'est membre ni de la boutique ni de la caisse répond comme un compte inexistant :
+        // on ne peut pas deviner un compte en essayant des identifiants
+        if (!$user instanceof User || $user->isDeleted() || !in_array('ROLE_USER_INTERNET', $user->getRoles(), true)
+            || ($this->memberships?->backfillDone() && !$this->memberships->visibleFromPos((int) $user->getId()))) {
             throw new CashRegisterException('USER_NOT_FOUND', 'Compte client de la boutique introuvable', 404, [], ['userId' => is_numeric($userId) ? (int) $userId : null]);
         }
         $other = $em->getRepository(PosCustomer::class)->findOneBy(['userId' => $user->getId(), 'erasedAt' => null, 'mergedIntoId' => null]);
