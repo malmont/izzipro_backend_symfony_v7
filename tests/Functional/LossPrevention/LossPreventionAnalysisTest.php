@@ -330,7 +330,7 @@ class LossPreventionAnalysisTest extends LossPreventionTestCase
             }
         };
         $c = static::getContainer();
-        $analysis = $this->analysisWith(['drawer' => self::failingDrawerRule(), 'series' => $series]);
+        $analysis = $this->analysisWith([self::failingDrawerRule(), $series]);
         $journal = fn () => (int) $this->db->fetchOne("SELECT COUNT(*) FROM loss_journal WHERE type = 'ENTRIES_SKIPPED'");
         $before = $journal();
         $run = $analysis->run();
@@ -348,7 +348,7 @@ class LossPreventionAnalysisTest extends LossPreventionTestCase
         $this->flags(true, true);
         $this->openSession();
         $this->pos('POST', '/api/caisse/drawer-open', ['cashRegisterId' => $this->register, 'reason' => 'Règle en échec, commande']);
-        $failing = $this->analysisWith(['drawer' => self::failingDrawerRule()]);
+        $failing = $this->analysisWith([self::failingDrawerRule()]);
         $provider = $this->tenant();
         $tester = new CommandTester(new LossAnalyseCommand($c->get(TenantConnectionManager::class), $provider, $failing, new NullLogger()));
         $this->assertSame(Command::FAILURE, $tester->execute(['--tenant' => MV_TEST_TENANT_CODE]));

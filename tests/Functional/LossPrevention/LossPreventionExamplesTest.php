@@ -100,7 +100,7 @@ class LossPreventionExamplesTest extends LossPreventionTestCase
         $this->openSession();
         $this->pos('POST', '/api/caisse/drawer-open', ['cashRegisterId' => $this->register, 'reason' => 'Ouverture que la règle ne sait pas lire']);
         $this->closeWith(0);
-        $this->assertSame(1, $this->analysisWith(['drawer' => self::failingDrawerRule()])->run()['skipped']);
+        $this->assertSame(1, $this->analysisWith([self::failingDrawerRule()])->run()['skipped']);
         $this->keep('synthese-entrees-sautees', 'GET', "?from=$today&to=$today&analyse=0");
 
         // Mode live de la plateforme : les deux gardes de module, chacune avec sa clé dans `feature`

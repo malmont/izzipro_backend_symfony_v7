@@ -107,20 +107,27 @@ abstract class LossPreventionTestCase extends WebTestCase
     }
 
     /**
-     * Une analyse montée à la main, avec les règles données à la place des vraies : pour jouer une règle en échec.
+     * Une analyse montée à la main, avec des règles données à la place des vraies (la règle remplacée est celle dont la classe est la mère de
+     * la règle donnée) : pour jouer une règle en échec.
      *
-     * @param array{drawer?: \App\LossPrevention\Services\Rule\DrawerNoSaleRule, series?: \App\LossPrevention\Services\Rule\CashShortageSeriesRule} $rules
+     * @param list<\App\LossPrevention\Services\Rule\LossRuleInterface> $replacements
      */
-    protected function analysisWith(array $rules): \App\LossPrevention\Services\LossAnalysisService
+    protected function analysisWith(array $replacements): \App\LossPrevention\Services\LossAnalysisService
     {
         $provider = $this->tenant();
         $c = static::getContainer();
+        $rules = [];
+        foreach (['CashDiscrepancyRule', 'CashShortageSeriesRule', 'DrawerNoSaleRule', 'VoidAfterSaleRule'] as $name) {
+            $class = '\\App\\LossPrevention\\Services\\Rule\\' . $name;
+            $rules[$class] = new $class();
+        }
+        foreach ($replacements as $rule) {
+            $rules['\\' . get_parent_class($rule)] = $rule;
+        }
 
         return new \App\LossPrevention\Services\LossAnalysisService($provider, $c->get(\App\LossPrevention\Services\LossSettingsService::class),
             $c->get(\App\LossPrevention\Services\LossRuleService::class), $c->get(\App\LossPrevention\Services\LossSite::class),
-            new \App\LossPrevention\Services\LossFindingWriter($provider), new \Psr\Log\NullLogger(), new \App\LossPrevention\Services\Rule\CashDiscrepancyRule(),
-            $rules['series'] ?? new \App\LossPrevention\Services\Rule\CashShortageSeriesRule(), $rules['drawer'] ?? new \App\LossPrevention\Services\Rule\DrawerNoSaleRule(),
-            new \App\LossPrevention\Services\Rule\VoidAfterSaleRule());
+            new \App\LossPrevention\Services\LossFindingWriter($provider), new \Psr\Log\NullLogger(), ...array_values($rules));
     }
 
     /** Une règle « tiroir » qui échoue sur une erreur SQL (la transaction serait perdue sans point de reprise) */
