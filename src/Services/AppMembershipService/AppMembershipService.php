@@ -24,7 +24,7 @@ use Psr\Log\LoggerInterface;
  * client à une famille dont il n'est pas membre, ce que le mode « exiger » refusera au lot M3.
  *
  * Les points d'entrée appelés depuis une route existante (`registered`, `invited`, `passwordChosen`, `posLinked`,
- * `posCustomerErased`, `sessionFamily`) ne lèvent jamais : une appartenance qui ne s'écrit pas est journalisée en erreur et la route
+ * `posUnlinked`, `sessionFamily`) ne lèvent jamais : une appartenance qui ne s'écrit pas est journalisée en erreur et la route
  * continue comme avant ce lot.
  */
 final class AppMembershipService
@@ -166,11 +166,15 @@ final class AppMembershipService
         });
     }
 
-    /** Fiche de caisse effacée à la demande du client : l'appartenance du compte qui lui était rattaché part avec elle */
-    public function posCustomerErased(?int $userId): void
+    /**
+     * Un compte perd son rattachement à une fiche de caisse : son appartenance à la famille de la caisse part avec lui. Raisons :
+     * `pos_customer_erased` (fiche effacée à la demande du client), `merge` (fusion de deux fiches rattachées à deux comptes différents).
+     * Le retrait du consentement `account_link` passe par `revoke()` (raison `consent_withdrawn`), dans la transaction de la fiche.
+     */
+    public function posUnlinked(?int $userId, string $reason): void
     {
         if ($userId !== null) {
-            $this->safely('fiche de caisse effacée', fn () => $this->revoke($userId, AppFamilies::POS, 'pos_customer_erased'));
+            $this->safely('rattachement de caisse défait', fn () => $this->revoke($userId, AppFamilies::POS, $reason));
         }
     }
 

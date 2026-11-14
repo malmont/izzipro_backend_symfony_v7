@@ -62,6 +62,18 @@ class PosCustomerConsent
     public function getCustomer(): PosCustomer { return $this->customer; }
     public function getPurpose(): string { return $this->purpose; }
     public function isGranted(): bool { return $this->granted; }
+    /**
+     * Consentement accordé repris d'une autre fiche à la fusion (14/11/2026) : la version du texte et la date sont celles du
+     * consentement d'origine. Une fusion n'est pas un nouveau consentement.
+     */
+    public static function carriedOver(self $origin, PosCustomer $target, ?int $byUserId): self
+    {
+        $consent = new self($target, $origin->purpose, true, $byUserId, $origin->textVersion);
+        $consent->at = $origin->at;
+
+        return $consent;
+    }
+
     public function getAt(): \DateTimeImmutable { return $this->at; }
     public function getByUserId(): ?int { return $this->byUserId; }
     public function getTextVersion(): ?string { return $this->textVersion; }

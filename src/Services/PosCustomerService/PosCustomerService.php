@@ -357,13 +357,31 @@ class PosCustomerService
         }
         $this->assertNoDuplicate($customer, $customer->getId());
         $changed = array_keys(array_filter(['firstName' => $before[0] !== $customer->getFirstName(), 'lastName' => $before[1] !== $customer->getLastName(), 'phone' => $before[2] !== $customer->getPhone(), 'email' => $before[3] !== $customer->getEmail()]));
-        $consents = $this->applyConsents($customer, $body['consents'] ?? null, $actor);
-        if ($this->consentGranted($customer, PosCustomerConsent::LOYALTY)) {
-            $this->ensureLoyaltyCode($customer);
+        // Une seule transaction (APPS-MEMBRES M1, 14/11/2026) : le retrait du consentement `account_link` DÉFAIT le rattachement au compte
+        // web et retire l'appartenance du compte à la famille de la caisse, qui n'a plus le consentement qui la fonde ; tout ou rien.
+        $em = $this->emProvider->getEntityManager();
+        $unlinked = null;
+        $em->getConnection()->beginTransaction();
+        try {
+            $consents = $this->applyConsents($customer, $body['consents'] ?? null, $actor);
+            if (($consents[PosCustomerConsent::ACCOUNT_LINK] ?? null) === false && $customer->getUserId() !== null) {
+                $unlinked = $customer->getUserId();
+                $customer->setUserId(null);
+            }
+            if ($this->consentGranted($customer, PosCustomerConsent::LOYALTY)) {
+                $this->ensureLoyaltyCode($customer);
+            }
+            $customer->touch();
+            $em->flush();
+            if ($unlinked !== null) {
+                $this->memberships?->revoke($unlinked, \App\Security\AppFamilies::POS, 'consent_withdrawn');
+            }
+            $em->getConnection()->commit();
+        } catch (\Throwable $e) {
+            $em->getConnection()->rollBack();
+            throw $e;
         }
-        $customer->touch();
-        $this->emProvider->getEntityManager()->flush();
-        $this->audit->record(PosAuditService::CUSTOMER_UPDATED, ['customerId' => $customer->getId(), 'changed' => $changed, 'consents' => $consents], subjectType: 'customer', subjectId: $customer->getId(), user: $actor);
+        $this->audit->record(PosAuditService::CUSTOMER_UPDATED, ['customerId' => $customer->getId(), 'changed' => $changed, 'consents' => $consents] + ($unlinked !== null ? ['unlinked' => true] : []), subjectType: 'customer', subjectId: $customer->getId(), user: $actor);
 
         return $customer;
     }
@@ -410,9 +428,13 @@ class PosCustomerService
         $this->cache->invalidateComponents(\App\Cache\CacheTags::ORDERS);
         foreach (PosCustomerConsent::PURPOSES as $p) {
             if ($this->consentGranted($source, $p) && !$this->consentGranted($target, $p)) {
-                $em->persist(new PosCustomerConsent($target, $p, true, $actor->getId(), $this->settings()['consentTextVersion']));
+                // repris tel qu'il a été donné (version du texte et date d'origine) : une fusion n'est pas un nouveau consentement (14/11/2026)
+                $em->persist(PosCustomerConsent::carriedOver($em->getRepository(PosCustomerConsent::class)->findOneBy(['customer' => $source, 'purpose' => $p], ['id' => 'DESC']), $target, $actor->getId()));
             }
         }
+        // Deux fiches rattachées à deux comptes différents : le compte de la fiche fusionnée perd son rattachement, donc son appartenance
+        // à la famille de la caisse (APPS-MEMBRES M1). Fiche conservée sans compte : elle reprend celui de la fiche fusionnée, rien à retirer.
+        $orphaned = $source->getUserId() !== null && $target->getUserId() !== null && $target->getUserId() !== $source->getUserId() ? $source->getUserId() : null;
         if ($target->getUserId() === null && $source->getUserId() !== null) {
             $target->setUserId($source->getUserId());
         }
@@ -439,6 +461,7 @@ class PosCustomerService
         $target->touch();
         $em->flush();
         $this->audit->record(PosAuditService::CUSTOMER_MERGED, ['customerId' => $source->getId(), 'intoId' => $target->getId(), 'points' => $points], subjectType: 'customer', subjectId: $target->getId(), user: $actor);
+        $this->memberships?->posUnlinked($orphaned, 'merge');
 
         return $target;
     }
@@ -462,7 +485,7 @@ class PosCustomerService
         $linkedUserId = $customer->getUserId();
         $customer->setFirstName(null)->setLastName(null)->setPhone(null)->setEmail(null)->setUserId(null)->setLoyaltyCode(null)->setLoyaltyLastActivityAt(null)->setErasedAt(new \DateTimeImmutable())->touch();
         $em->flush();
-        $this->memberships?->posCustomerErased($linkedUserId); // APPS-MEMBRES M1 : l'appartenance du compte rattaché part avec la fiche
+        $this->memberships?->posUnlinked($linkedUserId, 'pos_customer_erased'); // APPS-MEMBRES M1 : l'appartenance du compte rattaché part avec la fiche
         $this->audit->record(PosAuditService::CUSTOMER_ERASED, ['customerId' => $customer->getId(), 'pointsCanceled' => $points], subjectType: 'customer', subjectId: $customer->getId(), user: $actor);
 
         return $customer;
