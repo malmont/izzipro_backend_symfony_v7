@@ -1,4 +1,4 @@
-# Lexique de la gestion et console « prof » — lot W2-APPRENDRE (A-1 à A-4, codé le 13/11/2026)
+# Lexique de la gestion et console « prof » — lot W2-APPRENDRE (A-1 à A-4, codé le 13/11/2026 ; correctif A-4b le 14/11)
 
 Décision du propriétaire après le premier essai réel de la console : elle doit être un **prof**, pour qu'un gérant qui n'y connaît
 rien puisse s'appuyer sur elle. Contrat validé par le chef de projet et le propriétaire le 13/11/2026.
@@ -117,6 +117,15 @@ chaque libellé au terme, dans les deux langues.
   « qu'est-ce que je dois regarder ici ? »), il est assemblé par le serveur : le guide, puis les chiffres du moment de l'écran (ses
   analyses par défaut, 6 chiffres au plus par analyse), **sans appel 2, 0 unité**. Avec une autre analyse : le guide passe devant, le
   modèle rédige le reste (1 unité).
+- **« Explique-moi cet écran » est reconnu par le serveur** (correctif A-4b, 14/11/2026). À l'essai réel, le modèle ajoutait les
+  analyses de l'écran au guide, d'où une rédaction et 1 unité. Le comportement ne dépend plus de lui :
+  `ConsoleResponder::asksOnlyForTheScreen()` reconnaît la question qui demande d'expliquer (« explique », « à quoi sert », « c'est
+  quoi », « je ne comprends pas », « qu'est-ce que je dois regarder », `explain`, `what should I look at`…) **et** désigne l'écran
+  (« cet écran », « cette page », « ici », `this screen`, `here`), sans question d'état (« est-ce que », « combien », « pourquoi »,
+  « va-t-elle tenir »…) ni seconde demande (« … : … », « … et est-ce que … »). Le serveur choisit alors `screen.guide` lui-même :
+  **aucun appel au modèle, 0 unité**, blocs `guide` puis `figures`. Toute autre tournure va au modèle, dont la consigne dit de
+  choisir `screen.guide` **seul** pour une demande d'explication de l'écran (un appel, 0 unité) ; avec une vraie question en plus, il
+  rédige (1 unité) sans redire à quoi sert l'écran, que le guide dit déjà.
 - **Un état qui n'est pas un jugement se dit par une phrase** (lot A-4) : pour un budget « sans prévu » ou une trésorerie « sans
   solde », le modèle reçoit « Aucun budget n'est prévu pour cette période », « Aucun solde n'a encore été saisi », à reprendre telles
   quelles, et non un état à glisser dans « est … ».

@@ -26,7 +26,8 @@ du lexique a un repli (`docs/lexique-gestion.md` § 2).
 **Lot W2-APPRENDRE, A-1 à A-4 (13/11/2026)** : la console explique. Analyses `lexique.term` (une notion) et `screen.guide` (l'écran
 d'où vient la question), blocs `lesson` et `guide` écrits par le serveur, réponse « définition seule » ou « guide seul » sans
 rédaction (0 unité), mode « apprendre » (`mode: "learn"`), `term` sur chaque chiffre et libellé de carte égal au terme du lexique.
-Tout est décrit dans **`docs/lexique-gestion.md`**.
+Tout est décrit dans **`docs/lexique-gestion.md`**. Correctif A-4b (14/11/2026) : « Explique-moi cet écran » est reconnu par le
+serveur, qui répond sans aucun appel au modèle (§ 4 de la même fiche).
 
 ## 1. Ce que fait la console
 
