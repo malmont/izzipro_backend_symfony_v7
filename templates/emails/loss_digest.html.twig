@@ -1,6 +1,7 @@
 {% extends 'base.email.html.twig' %}
 
-{# Prévention des pertes, lot L1-b : résumé du jour. Deux nombres et une journée : aucun nom, aucun détail d'un constat, aucun lien. #}
+{# Prévention des pertes, lot L1-b : résumé du jour. Deux nombres et une journée : aucun nom, aucun détail d'un constat, aucun lien.
+   `siteLine`, jamais `signature` : l'envoi commun remplace `signature` par celle de la configuration d'envoi du site (nom, lien, HTML). #}
 {% block title %}{{ title }}{% endblock %}
 
 {% block body %}
@@ -22,7 +23,7 @@
                         </table>
                         <p>{{ nextStep }}</p>
                         <p style="color: #64748b; font-size: 13px;">{{ notice }}</p>
-                        <p style="color: #64748b; font-size: 13px; margin-bottom: 0;">{{ signature }}</p>
+                        <p style="color: #64748b; font-size: 13px; margin-bottom: 0;">{{ siteLine }}</p>
                     </td>
                 </tr>
             </table>

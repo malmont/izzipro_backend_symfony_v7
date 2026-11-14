@@ -7,7 +7,9 @@ use App\LossPrevention\Entity\LossJournalEntry;
 use App\LossPrevention\Entity\LossSetting;
 use App\Services\EmailConfigurationService\EmailLocale;
 use App\Services\EmailConfigurationService\EmailSenderService;
+use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
+use App\Services\TenantPublicHostResolver;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
@@ -18,7 +20,16 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  *
  * Le courriel ne porte AUCUN nom, aucun montant par personne, aucun motif saisi à la caisse : le nombre de constats nouveaux, le montant en
  * jeu total, la journée du magasin. Pas de lien : il n'existe pas de façon établie de fabriquer une adresse du web de gestion depuis le
- * serveur ; le texte dit où regarder. Sans configuration d'envoi sur le site, rien ne part et le jour n'est pas marqué : on réessaiera.
+ * serveur ; le texte dit où regarder.
+ *
+ * Quatre règles, posées à la relecture du lot (14/11/2026) :
+ * - RIEN ne part quand l'analyse est arrêtée (droit du module retiré, notice aux salariés exigée et non confirmée, ou retirée) : annoncer
+ *   « N nouveaux constats » sur un site dont l'analyse est bloquée par la notice serait continuer le traitement sans elle ;
+ * - le jour est RÉSERVÉ avant l'envoi (une écriture conditionnelle : un seul de deux lancements qui se chevauchent l'obtient), puis rendu si
+ *   aucun envoi n'aboutit (pas de configuration d'envoi sur le site : on réessaiera au passage suivant) ;
+ * - la dernière ligne du courriel est `siteLine`, pas `signature` : l'envoi commun écrase `signature` par celle de la configuration d'envoi
+ *   du site, qui peut porter un nom de personne et un lien ;
+ * - le domaine passé à l'envoi commun est l'hôte public du site (il sert à l'adresse du logo), jamais un domaine de traduction.
  */
 class LossDigestService
 {
@@ -34,22 +45,28 @@ class LossDigestService
         private readonly EmailLocale $locale,
         private readonly TranslatorInterface $translator,
         private readonly LoggerInterface $logger,
+        private readonly TenantConnectionManager $tenants,
+        private readonly TenantPublicHostResolver $hosts,
     ) {
     }
 
     /**
      * Envoie le résumé du jour s'il est dû.
      *
-     * @return array{status: string, sent: int} status : sent | nothing_new | already_sent | no_recipient | not_delivered | not_granted
+     * @return array{status: string, sent: int} status : sent | nothing_new | already_sent | no_recipient | not_delivered | not_granted | not_allowed
      */
     public function sendIfDue(): array
     {
         if (!$this->settings->moduleGranted()) {
             return ['status' => 'not_granted', 'sent' => 0];
         }
+        if ($this->settings->blockedReason() !== null) { // notice exigée et non confirmée (ou retirée) : l'analyse est arrêtée, le courriel aussi
+            return ['status' => 'not_allowed', 'sent' => 0];
+        }
         $em = $this->emProvider->getEntityManager();
+        $settings = $em->getRepository(LossSetting::class);
         $day = $this->site->clock()->day(new \DateTimeImmutable());
-        if ((string) ($em->getRepository(LossSetting::class)->row()['last_digest_day'] ?? '') === $day) {
+        if ((string) ($settings->row()['last_digest_day'] ?? '') === $day) {
             return ['status' => 'already_sent', 'sent' => 0];
         }
         $new = $this->newFindings->newFindings();
@@ -67,6 +84,11 @@ class LossDigestService
         if ($recipients === []) {
             return ['status' => 'no_recipient', 'sent' => 0];
         }
+        // Réserver le jour AVANT d'envoyer : de deux lancements qui se chevauchent (le minuteur et un lancement à la main), un seul passe
+        $reserved = $settings->reserveDigestDay($day);
+        if ($reserved === null) {
+            return ['status' => 'already_sent', 'sent' => 0];
+        }
         $language = $this->locale->language(null);
         $t = fn (string $key, array $params = []) => $this->translator->trans('loss_digest.' . $key, $params, 'emails', $language);
         $siteName = (string) ($em->getConnection()->fetchOne('SELECT name FROM entreprise ORDER BY id LIMIT 1') ?: '');
@@ -74,22 +96,35 @@ class LossDigestService
         $context = [
             'title' => $t('title'), 'greeting' => $t('greeting', $params), 'message' => $t('message', $params),
             'rows' => [$t('row_count') => (string) $new['count'], $t('row_amount') => $params['%amount%'], $t('row_day') => LossTexts::day(new \DateTimeImmutable($day), $language)],
-            'nextStep' => $t('next'), 'notice' => $t('notice'), 'signature' => $t('signature', $params),
+            'nextStep' => $t('next'), 'notice' => $t('notice'), 'siteLine' => $t('signature', $params),
             'locale' => $language, 'intlLocale' => $language === 'en' ? 'en_CA' : 'fr_CA',
         ];
         $subject = $this->mailer->subject('loss_digest.subject', $params, $language);
+        $host = $this->host();
         $sent = 0;
         foreach ($recipients as $to) {
-            $sent += $this->mailer->sendTemplatedEmail($to, $subject, self::TEMPLATE, $context, $language, 'emails') ? 1 : 0;
+            try {
+                $sent += $this->mailer->sendTemplatedEmail($to, $subject, self::TEMPLATE, $context, $language, $host) ? 1 : 0;
+            } catch (\Throwable $e) { // un destinataire en échec n'arrête pas les autres ; jamais d'adresse au journal
+                $this->logger->error('Prévention des pertes : courriel de résumé, un envoi en échec : ' . $e->getMessage(), ['exception' => $e]);
+            }
         }
-        if ($sent === 0) { // pas de configuration d'envoi sur ce site : le jour n'est pas marqué, on réessaiera au passage suivant
+        if ($sent === 0) { // pas de configuration d'envoi sur ce site : le jour est rendu, on réessaiera au passage suivant
+            $settings->releaseDigestDay($day, $reserved['previous']);
             $this->logger->warning('Prévention des pertes : courriel de résumé non envoyé (aucun envoi n\'a abouti : configuration d\'envoi du site à vérifier).');
 
             return ['status' => 'not_delivered', 'sent' => 0];
         }
-        $em->getRepository(LossSetting::class)->update(['last_digest_day' => $day]);
         $em->getRepository(LossJournalEntry::class)->append(LossJournalEntry::DIGEST_SENT, null, null, ['day' => $day, 'count' => $new['count'], 'amount' => $new['amount'], 'recipients' => $sent]);
 
         return ['status' => 'sent', 'sent' => $sent];
+    }
+
+    /** Hôte public du site (son domaine propre, sinon <code>.<domaine du frontend>) : l'envoi commun en fait l'adresse du logo */
+    private function host(): string
+    {
+        $code = (string) $this->tenants->getCurrentTenantCode();
+
+        return $code !== '' ? (string) ($this->hosts->describe($code)['host'] ?? $code) : 'localhost';
     }
 }

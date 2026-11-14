@@ -18,7 +18,7 @@ use App\LossPrevention\Services\LossRuleCatalog;
 class RefundPatternRule implements LossRuleInterface
 {
     public const RETURN = 'SELECT r.id, r.order_id, r.return_order_id, r.cash_register_id, r.caisse_id, r.user_id, r.reason_code, r.restock, r.refund_method, r.amount, r.cash_refund, r.card_refund, r.created_at,'
-        . ' o.reference AS return_reference, s.user_id_id AS seller_id FROM pos_return r LEFT JOIN "order" o ON o.id = r.return_order_id LEFT JOIN "order" s ON s.id = r.order_id';
+        . ' o.reference AS return_reference, s.user_id_id AS seller_id, s.order_date AS sale_date FROM pos_return r LEFT JOIN "order" o ON o.id = r.return_order_id LEFT JOIN "order" s ON s.id = r.order_id';
 
     public function code(): string
     {
@@ -45,6 +45,9 @@ class RefundPatternRule implements LossRuleInterface
         }
         if ($case === null) {
             return;
+        }
+        if ($ctx->beforeFloor($r['sale_date'] !== null ? (string) $r['sale_date'] : null)) {
+            $r['seller_id'] = null; // la vente d'origine précède la notice aux salariés : son vendeur n'est pas nommé
         }
         $at = LossAuditEntry::utc((string) $r['created_at']);
         $ctx->writer->record([

@@ -66,6 +66,49 @@ class LossPreventionWave2Test extends LossPreventionTestCase
         $this->closeWith(0);
     }
 
+    /**
+     * Choix C (relecture du lot, 14/11/2026) : un retour ou une annulation d'APRÈS la notice aux salariés relit une vente d'origine qui peut
+     * la précéder ; le vendeur de cette vente n'est alors pas nommé. Une vente d'après la notice garde son vendeur.
+     */
+    public function testTheSellerOfASaleMadeBeforeTheStaffNoticeIsNeverNamed(): void
+    {
+        $this->drain();
+        $this->loginPos(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
+        $this->place('CA', 'QC');
+        $this->openSession();
+        $line = fn (int $orderId) => $this->json($this->pos('GET', '/api/pos/returns/lookup?orderId=' . $orderId))['lines'][0]['orderItemId'];
+        $cashForCard = fn (array $sale): int => (int) $this->json($this->pos('POST', '/api/pos/returns', ['orderId' => $sale['orderId'], 'lines' => [['orderItemId' => $line((int) $sale['orderId']), 'quantity' => 1]],
+            'reasonCode' => 'ne_convient_pas', 'refund' => ['method' => 'cash'], 'cashRegisterId' => $this->register]), 201)['returnId'];
+        $roles = fn (string $key): array => array_column(json_decode((string) $this->db->fetchOne('SELECT on_duty FROM loss_finding WHERE dedup_key = ?', [$key]), true) ?: [], 'role');
+
+        // AVANT la notice : une vente par carte, une vente en espèces
+        $cardBefore = $this->sell([], null, 1);
+        $cashBefore = $this->sellCash();
+        $this->json($this->admin('PUT', self::BASE . '/reglages', ['staffNoticeConfirmed' => true]));
+        usleep(1100000); // le plancher est daté à la seconde : la suite se passe la seconde d'après
+        // APRÈS la notice : une vente par carte, une vente en espèces
+        $cardAfter = $this->sell([], null, 1);
+        $cashAfter = $this->sellCash();
+        // Après la notice : espèces rendues pour les deux ventes par carte, annulation rapide des deux ventes en espèces
+        $returnBefore = $cashForCard($cardBefore);
+        $returnAfter = $cashForCard($cardAfter);
+        foreach ([$cashBefore, $cashAfter] as $sale) {
+            $this->json($this->pos('POST', '/api/order/cancel/' . $sale['orderId'], ['paymentMethod' => 2, 'cashRegisterId' => $this->register]));
+        }
+        $run = $this->json($this->admin('POST', self::BASE . '/analyse'));
+        $this->assertSame([4, 0], [$run['opened'], $run['skipped']], json_encode($run));
+
+        $this->assertSame(['operator'], $roles('REFUND_PATTERN:return:' . $returnBefore), 'vente d\'avant la notice : son vendeur n\'est pas nommé');
+        $this->assertSame(['operator', 'seller'], $roles('REFUND_PATTERN:return:' . $returnAfter), 'vente d\'après la notice : son vendeur est en poste');
+        $this->assertNotContains('seller', $roles('VOID_AFTER_SALE:order:' . $cashBefore['orderId']), 'annulation d\'une vente d\'avant la notice : vendeur non nommé');
+        $this->assertContains('seller', $roles('VOID_AFTER_SALE:order:' . $cashAfter['orderId']));
+        $sellerOf = fn (array $sale) => json_decode((string) $this->db->fetchOne("SELECT e.snapshot FROM loss_evidence e JOIN loss_finding f ON f.id = e.finding_id WHERE f.dedup_key = ? AND e.ref_type = 'order'",
+            ['VOID_AFTER_SALE:order:' . $sale['orderId']]), true)['sellerId'] ?? null;
+        $this->assertNull($sellerOf($cashBefore), 'ni dans la copie de la preuve');
+        $this->assertNotNull($sellerOf($cashAfter));
+        $this->closeWith(0);
+    }
+
     public function testVagueDiscountsAndManualPriceDropsInASession(): void
     {
         $this->drain();

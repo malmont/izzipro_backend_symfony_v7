@@ -96,7 +96,8 @@ class VoidAfterSaleRule implements LossRuleInterface
         $cashPart = (int) round((float) $ctx->conn->fetchOne('SELECT COALESCE(SUM(amount), 0) FROM payments WHERE order_payment_id = ? AND payment_method_id = 2 AND amount > 0', [$orderId]));
         $soldAt = LossAuditEntry::utc((string) $order['order_date']);
         $canceledAt = $order['canceled_at'] !== null ? LossAuditEntry::utc((string) $order['canceled_at']) : $entry['occurredAt'];
-        $seller = $order['user_id_id'] !== null ? (int) $order['user_id_id'] : null;
+        // Vente d'avant la notice aux salariés, annulée après : son vendeur n'est pas nommé (ni en poste, ni dans la copie de la preuve)
+        $seller = $order['user_id_id'] !== null && !$ctx->beforeFloor((string) $order['order_date']) ? (int) $order['user_id_id'] : null;
         $approver = LossAuditEntry::approvedById($entry['data']);
         $onDuty = [];
         foreach (['seller' => $seller, 'operator' => $entry['userId'], 'approver' => $approver] as $role => $id) {

@@ -45,4 +45,25 @@ class LossSettingRepository extends EntityRepository
             array_filter($fields, fn ($v) => $v !== null)
         ));
     }
+
+    /**
+     * Réserve la journée du courriel de résumé : une écriture conditionnelle, que seul le premier de deux lancements simultanés obtient
+     * (le second attend le verrou de la ligne, puis relit la condition : la journée est déjà posée, rien n'est touché).
+     *
+     * @return array{previous: ?string}|null null : la journée était déjà prise ; sinon la valeur d'avant, à rendre si aucun envoi n'aboutit
+     */
+    public function reserveDigestDay(string $day): ?array
+    {
+        $row = $this->row(true); // crée la ligne au besoin
+        $touched = $this->getEntityManager()->getConnection()->executeStatement(
+            'UPDATE loss_setting SET last_digest_day = ? WHERE id = ? AND last_digest_day IS DISTINCT FROM ?', [$day, $row['id'], $day]);
+
+        return $touched === 1 ? ['previous' => $row['last_digest_day'] !== null ? (string) $row['last_digest_day'] : null] : null;
+    }
+
+    /** Rend la journée réservée (aucun envoi n'a abouti) : la valeur d'avant revient, seulement si la réservation est encore la nôtre */
+    public function releaseDigestDay(string $day, ?string $previous): void
+    {
+        $this->getEntityManager()->getConnection()->executeStatement('UPDATE loss_setting SET last_digest_day = ? WHERE last_digest_day = ?', [$previous, $day]);
+    }
 }

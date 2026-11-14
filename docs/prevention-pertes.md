@@ -70,6 +70,12 @@ le chef de projet, sur les mêmes routes. Caisse : `docs/caisse.md`. Bloc cashDe
   `loss_setting.analysis_floor_sequence` et le curseur sont posés sur la dernière entrée du journal de caisse. Pas de reprise des 30 jours ;
   une période sans notice (notice retirée puis reconfirmée) n'est jamais relue ; une règle qui relit une session ne remonte pas sous le
   plancher. La reprise de 30 jours ne vaut que là où la notice est un simple rappel.
+- **Personne n'est nommé pour un acte d'avant la notice** : un retour ou une annulation d'après la notice relit une vente d'origine qui peut
+  la précéder ; son vendeur n'est alors ni mis « en poste », ni gardé dans la copie de la preuve (`LossAnalysisContext::beforeFloor`, utilisé
+  par `RefundPatternRule` et `VoidAfterSaleRule`). La date du plancher est celle de sa dernière entrée du journal de caisse, à la seconde :
+  une vente faite dans la même seconde est tenue pour antérieure (côté prudent).
+- **Analyse arrêtée = rien d'annoncé** : quand `blocked` n'est pas nul (droit retiré, notice non confirmée ou retirée), ni la vignette de
+  l'accueil ni le courriel de résumé ne parlent des constats déjà ouverts ; les écrans de la section, eux, restent lisibles.
 - **Limite** : le serveur ne voit que les ventes enregistrées. Une ligne retirée du panier avant paiement et un panier abandonné ne laissent
   aucune trace (le panier vit dans la tablette). Deux faits réservés pour la reprise de la caisse : `CART_LINE_REMOVED`, `SALE_ABANDONED`.
 
@@ -225,14 +231,21 @@ défait pas).
   `DiscountSeriesRule`, qui relisent les retours et les ventes d'une fenêtre.
 - **Dans la gestion (lot L1-b)** : les cinq codes d'écran sont déclarés dans `ConsoleScreens` (thèmes `accueil` et `reglages` ; ils proposent
   les analyses générales de leur thème, aucune analyse propre aux constats : la console ne chiffre rien sur les constats) et ont leur guide (`translations/ecrans.*`, `GET /api/gestion/ecrans/{code}/guide`) ; la vignette d'accueil
-  `loss-findings` (`Services/LossHomeTile`, `docs/vignettes-gestion.md`) dit « N nouveaux constats à vérifier, X en jeu », sans aucun nom.
+  `loss-findings` (`Services/LossHomeTile`, `docs/vignettes-gestion.md`) dit « N nouveaux constats à vérifier, X en jeu », sans aucun nom ;
+  absente quand l'analyse est arrêtée. Le droit du module y est d'abord lu dans les indicateurs de modules en cache
+  (`ModuleAccessService::flags()`) : un site sans le module ne coûte aucune requête de plus à l'accueil.
 - **Courriel de résumé du jour (lot L1-b, `Services/LossDigestService`)** : après le passage de l'analyse planifiée sur un site, s'il y a des
   constats nouveaux et qu'aucun courriel n'est parti ce jour du magasin (`loss_setting.last_digest_day`, migration `Version20270102100000`),
   un courriel part aux administrateurs du site (rôle `ROLE_ADMIN` exact, compte vérifié) qui ont gardé le type `loss_digest` actif dans leurs
   préférences de notification de la gestion (canal `email`, `docs/notifications-gestion.md`). Par le mailer du site (file et worker des
   courriels existants, aucun handler nouveau). Contenu : nombre de constats nouveaux, montant en jeu, journée du magasin ; **aucun nom, aucun
-  motif saisi à la caisse, aucun lien** (il n'existe pas de façon établie de fabriquer une adresse du web de gestion depuis le serveur). Sans
-  configuration d'envoi sur le site, rien ne part et le jour n'est pas marqué. Rien n'est écrit dans `notification_log` (journal du
+  motif saisi à la caisse, aucun lien** (il n'existe pas de façon établie de fabriquer une adresse du web de gestion depuis le serveur).
+  **Rien ne part quand l'analyse est arrêtée** (statut `not_allowed` : droit retiré, notice exigée non confirmée ou retirée). **Le jour est
+  réservé AVANT l'envoi** par une écriture conditionnelle (`LossSettingRepository::reserveDigestDay` : de deux lancements qui se chevauchent,
+  un seul l'obtient), puis rendu si aucun envoi n'aboutit (pas de configuration d'envoi sur le site : on réessaiera). La dernière ligne du
+  courriel est le nom du site, sous la clé `siteLine` : **jamais `signature`**, que l'envoi commun (`EmailSenderService::sendTemplatedEmail`)
+  remplace par la signature de la configuration d'envoi du site (elle peut porter un nom de personne et un lien). Le domaine passé à
+  l'envoi commun est l'hôte public du site (il sert à l'adresse du logo). Rien n'est écrit dans `notification_log` (journal du
   téléphone) ; le journal du module garde `DIGEST_SENT` (jour, nombres, nombre de destinataires). Textes `translations/emails.*`
   (`loss_digest.*`), gabarit `templates/emails/loss_digest.html.twig`.
 - **Cheminement du site (lot L1-b)** : quand le droit est accordé, le groupe `module.loss_prevention` de `SiteReadinessService` porte cinq

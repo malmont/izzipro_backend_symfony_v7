@@ -27,6 +27,29 @@ final class LossAnalysisContext
     ) {
     }
 
+    private ?string $floorAt = null;
+    private bool $floorRead = false;
+
+    /**
+     * Un acte daté (UTC, « Y-m-d H:i:s ») précède-t-il le plancher de la notice aux salariés ? Sert aux règles qui relisent, pour un acte
+     * d'après la notice, une vente d'ORIGINE qui peut la précéder (retour, annulation) : le vendeur de cette vente n'est alors pas nommé
+     * (choix C : personne n'est désigné pour un acte d'avant l'information des salariés). Sans plancher : jamais. Plancher posé mais entrée
+     * introuvable : dans le doute, oui.
+     */
+    public function beforeFloor(?string $utc): bool
+    {
+        if ($this->floorSequence <= 0 || $utc === null) {
+            return false;
+        }
+        if (!$this->floorRead) {
+            $at = $this->conn->fetchOne('SELECT occurred_at FROM pos_audit_log WHERE sequence = ?', [$this->floorSequence]);
+            $this->floorAt = $at === false || $at === null ? null : substr((string) $at, 0, 19);
+            $this->floorRead = true;
+        }
+
+        return $this->floorAt === null || substr($utc, 0, 19) <= $this->floorAt;
+    }
+
     /** Une entrée du journal antérieure à la première analyse : son constat est une « reprise » */
     public function isBackfill(int $sequence): bool
     {
