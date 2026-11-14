@@ -795,7 +795,8 @@ class ActionConversationApiTest extends WebTestCase
             // un coût de ligne d'achat garde la priorité sur le coût de la fiche : poser un coût de fiche ne change alors aucun chiffre
             $typeId = (int) ($this->em()->getRepository(TypeFournisseur::class)->findOneBy(['name' => 'Autre']) ?? $this->create(TypeFournisseur::class, ['name' => 'Autre']))->getId();
             $supplierId = (int) $this->post('/api/fournisseurs', ['name' => "Potier $tag", 'typeFournisseur' => $typeId], 201)['id'];
-            $commandeId = (int) $this->post('/api/collections/' . $period->getId() . '/commandes', ['budget' => 1000, 'date' => $today->format('Y-m-d') . ' 00:10:00', 'name' => "Achat $tag", 'fournisseur' => ['id' => $supplierId]], 201)['id'];
+            // l'achat est daté du premier jour de la période : il précède la vente (il y a une heure) à toute heure du jour, minuit passé compris
+            $commandeId = (int) $this->post('/api/collections/' . $period->getId() . '/commandes', ['budget' => 1000, 'date' => $from->format('Y-m-d') . ' 00:00:00', 'name' => "Achat $tag", 'fournisseur' => ['id' => $supplierId]], 201)['id'];
             $this->request('POST', "/api/commandes/$commandeId/products/rattacher", ['products' => [['productId' => $productId, 'purchasePrice' => 900, 'quantity' => 5]]]);
             $this->assertContains($this->client->getResponse()->getStatusCode(), [200, 201], substr((string) $this->client->getResponse()->getContent(), 0, 300));
             $this->em();
