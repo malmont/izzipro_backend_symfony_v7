@@ -1,0 +1,19 @@
+{
+    "request": {
+        "method": "PUT",
+        "path": "/api/gestion/pertes/constats/1/decision?locale=fr",
+        "body": {
+            "status": "confirmed"
+        }
+    },
+    "status": 422,
+    "headers": {},
+    "body": {
+        "error": "VALIDATION_FAILED",
+        "code": "VALIDATION_FAILED",
+        "message": "Entrée invalide : note (REQUIRED)",
+        "fields": {
+            "note": "REQUIRED"
+        }
+    }
+}

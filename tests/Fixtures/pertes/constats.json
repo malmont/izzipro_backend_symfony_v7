@@ -1,0 +1,152 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/constats?from=2026-11-14&to=2026-11-14&status=open,watch&sort=date&page=1&limit=20&locale=fr"
+    },
+    "status": 200,
+    "headers": {
+        "X-Total-Count": "6",
+        "X-Page": "1",
+        "X-Limit": "20"
+    },
+    "body": [
+        {
+            "id": 6,
+            "number": 6,
+            "rule": {
+                "code": "CASH_DISCREPANCY",
+                "label": "Écart de caisse à la clôture"
+            },
+            "personPattern": false,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "Clôture n° 1 : il manque 12,00 $ dans la caisse (attendu 132,75 $, compté 120,75 $).",
+            "storeDay": "2026-11-14",
+            "cashRegister": {
+                "id": 1,
+                "name": "Caisse principale"
+            },
+            "amountAtStake": 1200,
+            "currency": "CAD",
+            "isNew": true,
+            "newEvidenceSinceDecision": false,
+            "backfill": false,
+            "updatedAt": "2026-11-14T18:29:10+00:00"
+        },
+        {
+            "id": 5,
+            "number": 5,
+            "rule": {
+                "code": "VOID_AFTER_SALE",
+                "label": "Vente annulée après l'encaissement"
+            },
+            "personPattern": false,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "3 ventes annulées pendant une même session, 98,31 $ au total.",
+            "storeDay": "2026-11-14",
+            "cashRegister": {
+                "id": 1,
+                "name": "Caisse principale"
+            },
+            "amountAtStake": 9831,
+            "currency": "CAD",
+            "isNew": true,
+            "newEvidenceSinceDecision": false,
+            "backfill": false,
+            "updatedAt": "2026-11-14T18:29:10+00:00"
+        },
+        {
+            "id": 4,
+            "number": 4,
+            "rule": {
+                "code": "VOID_AFTER_SALE",
+                "label": "Vente annulée après l'encaissement"
+            },
+            "personPattern": false,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "Vente de 32,77 $ avec une part en espèces, annulée 0 min après l'encaissement.",
+            "storeDay": "2026-11-14",
+            "cashRegister": {
+                "id": 1,
+                "name": "Caisse principale"
+            },
+            "amountAtStake": 3277,
+            "currency": "CAD",
+            "isNew": true,
+            "newEvidenceSinceDecision": false,
+            "backfill": false,
+            "updatedAt": "2026-11-14T18:29:10+00:00"
+        },
+        {
+            "id": 3,
+            "number": 3,
+            "rule": {
+                "code": "VOID_AFTER_SALE",
+                "label": "Vente annulée après l'encaissement"
+            },
+            "personPattern": false,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "Vente de 32,77 $ avec une part en espèces, annulée 0 min après l'encaissement.",
+            "storeDay": "2026-11-14",
+            "cashRegister": {
+                "id": 1,
+                "name": "Caisse principale"
+            },
+            "amountAtStake": 3277,
+            "currency": "CAD",
+            "isNew": true,
+            "newEvidenceSinceDecision": false,
+            "backfill": false,
+            "updatedAt": "2026-11-14T18:29:10+00:00"
+        },
+        {
+            "id": 2,
+            "number": 2,
+            "rule": {
+                "code": "VOID_AFTER_SALE",
+                "label": "Vente annulée après l'encaissement"
+            },
+            "personPattern": false,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "Vente de 32,77 $ avec une part en espèces, annulée 0 min après l'encaissement.",
+            "storeDay": "2026-11-14",
+            "cashRegister": {
+                "id": 1,
+                "name": "Caisse principale"
+            },
+            "amountAtStake": 3277,
+            "currency": "CAD",
+            "isNew": true,
+            "newEvidenceSinceDecision": false,
+            "backfill": false,
+            "updatedAt": "2026-11-14T18:29:10+00:00"
+        },
+        {
+            "id": 1,
+            "number": 1,
+            "rule": {
+                "code": "DRAWER_NO_SALE",
+                "label": "Tiroir ouvert sans vente"
+            },
+            "personPattern": false,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "4 ouvertures du tiroir sans vente pendant une même session (toléré : 3).",
+            "storeDay": "2026-11-14",
+            "cashRegister": {
+                "id": 1,
+                "name": "Caisse principale"
+            },
+            "amountAtStake": null,
+            "currency": "CAD",
+            "isNew": true,
+            "newEvidenceSinceDecision": false,
+            "backfill": false,
+            "updatedAt": "2026-11-14T18:29:10+00:00"
+        }
+    ]
+}

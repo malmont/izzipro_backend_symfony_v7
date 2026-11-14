@@ -1,0 +1,110 @@
+# Prévention des pertes (lot L1-a, 14/11/2026, `docs/prevention-pertes.md`) : textes rédigés par le serveur, servis selon ?locale=.
+# Règle : un résumé (`summary.*`) ne nomme jamais personne ; il n'emploie que des nombres et des montants.
+status:
+    open: Nouveau
+    watch: À suivre
+    explained: Expliqué
+    dismissed: Classé sans suite
+    confirmed: Confirmé
+role:
+    seller: Vente
+    closer: Fermeture de la caisse
+    approver: Validation
+    operator: Auteur de l'acte
+user:
+    unnamed: 'Compte n° %id%'
+subject:
+    user_window: Série d'actes d'un même compte
+onDutyNotice: 'Ces personnes étaient en poste au moment des faits. Ce n''est pas une accusation : la décision vous revient, après vérification.'
+amountNotice: 'Le montant en jeu est le montant concerné par le constat, pas une perte prouvée.'
+caveats:
+    MODULE_NOT_GRANTED: 'Le module Prévention des pertes n''est pas accordé à ce site : rien n''est analysé. Demandez-le depuis « Mon site ».'
+    ENTRIES_SKIPPED: '%count% opération(s) de caisse n''ont pas pu être analysées. Signalez-le à l''assistance : elles ne seront pas relues.'
+    RECORDED_SALES_ONLY: 'L''analyse ne voit que ce que la caisse a enregistré : une ligne retirée du panier avant le paiement ne laisse aucune trace.'
+    STAFF_NOTICE_REQUIRED: 'L''analyse ne démarre qu''après votre confirmation d''avoir informé vos salariés (Réglages).'
+rules:
+    notice: 'Changer un seuil ne ferme ni ne supprime aucun constat : le nouveau réglage ne vaut que pour les analyses suivantes.'
+    CASH_DISCREPANCY:
+        label: Écart de caisse à la clôture
+        description: 'À la fermeture d''une caisse, les espèces comptées ne correspondent pas aux espèces attendues, au-delà de l''écart toléré.'
+        params:
+            minAmount: 'Écart minimal pour ouvrir un constat (en plus de l''écart toléré du site)'
+        person:
+            label: Manques de caisse répétés par un même compte
+            description: 'Plusieurs clôtures avec un manque, fermées par le même compte, sur une période courte.'
+            params:
+                count: Nombre de manques
+                days: Sur combien de jours
+    DRAWER_NO_SALE:
+        label: Tiroir ouvert sans vente
+        description: 'Le tiroir de la caisse a été ouvert plusieurs fois sans vente pendant une même session.'
+        params:
+            maxPerSession: Ouvertures sans vente tolérées par session
+    VOID_AFTER_SALE:
+        label: Vente annulée après l'encaissement
+        description: 'Une vente payée en espèces est annulée peu après, ou plusieurs ventes sont annulées pendant une même session.'
+        params:
+            minutes: 'Délai après la vente pendant lequel une annulation ouvre un constat'
+            perSession: Nombre d'annulations dans une session qui ouvre un constat
+summary:
+    default: Constat relevé dans l'activité de la caisse.
+    CASH_DISCREPANCY:
+        short: 'Clôture n° %number% : il manque %amount% dans la caisse (attendu %expected%, compté %counted%).'
+        over: 'Clôture n° %number% : il y a %amount% de trop dans la caisse (attendu %expected%, compté %counted%).'
+        person: '%count% clôtures avec un manque en %days% jours pour un même compte, %amount% au total.'
+    DRAWER_NO_SALE:
+        rule: '%count% ouvertures du tiroir sans vente pendant une même session (toléré : %max%).'
+    VOID_AFTER_SALE:
+        quick: 'Vente de %amount% avec une part en espèces, annulée %delay% min après l''encaissement.'
+        series: '%count% ventes annulées pendant une même session, %amount% au total.'
+evidence:
+    noReason: Aucun motif saisi
+    z_report:
+        title: Rapport de clôture
+    drawer:
+        title: Ouverture du tiroir sans vente
+    order:
+        title: Vente
+    credit_note:
+        title: Annulation de la vente
+    lines:
+        reportNumber: Rapport de clôture n°
+        closedAt: Caisse fermée le
+        closedBy: Fermée par
+        expectedCash: Espèces attendues
+        countedCash: Espèces comptées
+        discrepancy: Écart (compté − attendu)
+        discrepancyReason: Motif saisi à la fermeture
+        keptFund: Fond laissé dans le tiroir
+        bankDeposit: Dépôt en banque
+        openedBy: Tiroir ouvert par
+        reason: Motif saisi
+        approvedBy: Validé par
+        reference: Vente
+        soldAt: Encaissée le
+        total: Total de la vente
+        cashPart: Dont payé en espèces
+        seller: Vendue par
+        canceledAt: Annulée le
+        creditNoteNumber: Avoir n°
+        refundAmount: Montant remboursé
+        cashRefund: Dont rendu en espèces
+        canceledBy: Annulée par
+settings:
+    legalNotice: 'Ces réglages suivent le pays et la région de votre boutique. Faites-les relire par un avocat avant de vous en servir pour une décision concernant un salarié.'
+    personPatterns:
+        allowed: 'Les règles qui comptent les actes d''un même compte dans le temps sont permises dans votre région. Vous pouvez les éteindre.'
+        notAllowed: 'Les règles qui comptent les actes d''un même compte dans le temps ne sont pas proposées dans votre région.'
+never:
+    faces: Reconnaissance des visages
+    audio: Enregistrement du son
+    fitting_room_camera: Caméra en cabine d'essayage
+    gesture_analysis: Analyse des gestes par vidéo
+notice:
+    title: Information des salariés sur la prévention des pertes
+    text: |
+        La boutique utilise un outil de prévention des pertes. Il compare ce que la caisse enregistre (ventes, annulations, remboursements, remises, ouvertures du tiroir, clôtures de caisse) à des règles connues, et signale à l'administrateur de la boutique les écarts à vérifier.
+        Ce que fait l'outil : il relève des constats, avec leurs preuves datées, tirés des opérations de caisse que vous effectuez avec votre compte.
+        Ce qu'il ne fait pas : il ne prend aucune décision, n'applique aucune sanction, n'utilise ni la reconnaissance des visages, ni le son, ni aucune caméra en cabine, et n'analyse pas vos gestes.
+        Qui voit les constats : l'administrateur de la boutique seulement. L'ouverture de la fiche d'un constat est enregistrée, avec le compte qui l'ouvre et le jour.
+        Vos droits : vous pouvez demander à l'administrateur de la boutique quelles données vous concernent, les faire corriger et donner votre explication avant toute décision.

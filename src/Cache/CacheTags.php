@@ -372,6 +372,9 @@ final class CacheTags
      * @var list<class-string>
      */
     public const NO_CACHE_READ = [
+        // Prévention des pertes (lot L1-a, 14/11/2026) : constats, preuves, règles, réglages et journal lus et écrits en SQL par leurs dépôts, jamais en cache
+        \App\LossPrevention\Entity\LossFinding::class, \App\LossPrevention\Entity\LossEvidence::class, \App\LossPrevention\Entity\LossRule::class,
+        \App\LossPrevention\Entity\LossSetting::class, \App\LossPrevention\Entity\LossJournalEntry::class,
         // Module Assistance (lot 1, 12/11/2026) : boîte de demandes lue en direct, jamais mise en cache
         \App\Support\Entity\SupportTicket::class, \App\Support\Entity\SupportMessage::class, \App\Support\Entity\SupportAttachment::class, \App\Support\Entity\SupportSetting::class,
         // Jeton de rafraîchissement JWT : le bundle Gesdinet persiste sa propre classe, pas App\Entity\RefreshToken

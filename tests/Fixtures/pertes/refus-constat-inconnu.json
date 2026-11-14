@@ -1,0 +1,13 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/constats/999999999?locale=fr"
+    },
+    "status": 404,
+    "headers": {},
+    "body": {
+        "error": "FINDING_NOT_FOUND",
+        "code": "FINDING_NOT_FOUND",
+        "message": "Constat inconnu."
+    }
+}

@@ -1,0 +1,10 @@
+[Unit]
+Description=Arkanoa : analyse de la caisse pour la prévention des pertes, toutes les 15 minutes (minutes 8, 23, 38 et 53)
+
+[Timer]
+OnCalendar=*-*-* *:08,23,38,53:00 UTC
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

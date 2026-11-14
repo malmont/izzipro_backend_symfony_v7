@@ -1,0 +1,21 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes?locale=fr"
+    },
+    "status": 403,
+    "headers": {},
+    "body": {
+        "error": "MODULE_INACTIVE",
+        "code": "MODULE_INACTIVE",
+        "module": "loss_prevention",
+        "message": "Le module Prévention des pertes n'est pas activé sur ce site.",
+        "feature": "module.loss_prevention",
+        "requestable": true,
+        "request": null,
+        "trial": {
+            "allowed": true,
+            "days": 30
+        }
+    }
+}

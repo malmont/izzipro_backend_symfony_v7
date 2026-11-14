@@ -1,0 +1,105 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes?from=2026-11-14&to=2026-11-14&analyse=0&locale=fr"
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "period": {
+            "from": "2026-11-14",
+            "to": "2026-11-14"
+        },
+        "lastAnalysis": {
+            "at": "2026-11-14T18:29:10+00:00",
+            "pending": false,
+            "blocked": null,
+            "skipped": null,
+            "ran": null,
+            "failed": false
+        },
+        "counts": {
+            "open": 6,
+            "watch": 0,
+            "new": 6,
+            "active": 6,
+            "byStatus": [
+                {
+                    "status": "open",
+                    "label": "Nouveau",
+                    "count": 6
+                },
+                {
+                    "status": "watch",
+                    "label": "À suivre",
+                    "count": 0
+                },
+                {
+                    "status": "explained",
+                    "label": "Expliqué",
+                    "count": 0
+                },
+                {
+                    "status": "dismissed",
+                    "label": "Classé sans suite",
+                    "count": 0
+                },
+                {
+                    "status": "confirmed",
+                    "label": "Confirmé",
+                    "count": 0
+                }
+            ],
+            "byRule": [
+                {
+                    "code": "CASH_DISCREPANCY",
+                    "label": "Écart de caisse à la clôture",
+                    "open": 1,
+                    "total": 1
+                },
+                {
+                    "code": "DRAWER_NO_SALE",
+                    "label": "Tiroir ouvert sans vente",
+                    "open": 1,
+                    "total": 1
+                },
+                {
+                    "code": "VOID_AFTER_SALE",
+                    "label": "Vente annulée après l'encaissement",
+                    "open": 4,
+                    "total": 4
+                }
+            ],
+            "byRegister": [
+                {
+                    "id": 1,
+                    "name": "Caisse principale",
+                    "open": 6,
+                    "total": 6
+                }
+            ]
+        },
+        "amountAtStake": 20862,
+        "currency": "CAD",
+        "cashDesk": {
+            "closings": 1,
+            "discrepancy": -1200,
+            "discrepancyCount": 1
+        },
+        "staffNotice": {
+            "required": false,
+            "confirmedAt": null
+        },
+        "caveats": [
+            {
+                "code": "AMOUNT_NOT_A_LOSS",
+                "text": "Le montant en jeu est le montant concerné par le constat, pas une perte prouvée."
+            },
+            {
+                "code": "RECORDED_SALES_ONLY",
+                "text": "L'analyse ne voit que ce que la caisse a enregistré : une ligne retirée du panier avant le paiement ne laisse aucune trace."
+            }
+        ],
+        "screen": "pertes.home"
+    }
+}

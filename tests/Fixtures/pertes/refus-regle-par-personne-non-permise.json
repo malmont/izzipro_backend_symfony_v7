@@ -1,0 +1,21 @@
+{
+    "request": {
+        "method": "PUT",
+        "path": "/api/gestion/pertes/reglages?locale=fr",
+        "body": {
+            "personPatterns": {
+                "enabled": true
+            }
+        }
+    },
+    "status": 422,
+    "headers": {},
+    "body": {
+        "error": "VALIDATION_FAILED",
+        "code": "VALIDATION_FAILED",
+        "message": "Entrée invalide : personPatterns.enabled (NOT_ALLOWED_IN_COUNTRY)",
+        "fields": {
+            "personPatterns.enabled": "NOT_ALLOWED_IN_COUNTRY"
+        }
+    }
+}

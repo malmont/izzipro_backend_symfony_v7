@@ -1,0 +1,77 @@
+{
+    "request": {
+        "method": "PUT",
+        "path": "/api/gestion/pertes/reglages?locale=fr",
+        "body": {
+            "retention": {
+                "findingsMonths": 18
+            }
+        }
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "country": "CA",
+        "region": "ON",
+        "staffNotice": {
+            "required": false,
+            "confirmedAt": null,
+            "confirmedBy": null,
+            "template": {
+                "title": "Information des salariés sur la prévention des pertes",
+                "text": "La boutique utilise un outil de prévention des pertes. Il compare ce que la caisse enregistre (ventes, annulations, remboursements, remises, ouvertures du tiroir, clôtures de caisse) à des règles connues, et signale à l'administrateur de la boutique les écarts à vérifier.\nCe que fait l'outil : il relève des constats, avec leurs preuves datées, tirés des opérations de caisse que vous effectuez avec votre compte.\nCe qu'il ne fait pas : il ne prend aucune décision, n'applique aucune sanction, n'utilise ni la reconnaissance des visages, ni le son, ni aucune caméra en cabine, et n'analyse pas vos gestes.\nQui voit les constats : l'administrateur de la boutique seulement. L'ouverture de la fiche d'un constat est enregistrée, avec le compte qui l'ouvre et le jour.\nVos droits : vous pouvez demander à l'administrateur de la boutique quelles données vous concernent, les faire corriger et donner votre explication avant toute décision.\n"
+            }
+        },
+        "personPatterns": {
+            "allowed": false,
+            "enabled": false,
+            "default": false,
+            "note": "Les règles qui comptent les actes d'un même compte dans le temps ne sont pas proposées dans votre région."
+        },
+        "cashierAlerts": {
+            "allowed": false,
+            "enabled": false,
+            "availableFrom": "L5"
+        },
+        "video": {
+            "allowed": false,
+            "enabled": false,
+            "clipDays": 30,
+            "clipDaysMax": 30,
+            "availableFrom": "L3"
+        },
+        "retention": {
+            "findingsMonths": 18,
+            "confirmedMonths": 60,
+            "purge": "none",
+            "bounds": {
+                "min": 1,
+                "max": 120
+            },
+            "defaults": {
+                "findingsMonths": 24,
+                "confirmedMonths": 60
+            }
+        },
+        "never": [
+            {
+                "code": "faces",
+                "label": "Reconnaissance des visages"
+            },
+            {
+                "code": "audio",
+                "label": "Enregistrement du son"
+            },
+            {
+                "code": "fitting_room_camera",
+                "label": "Caméra en cabine d'essayage"
+            },
+            {
+                "code": "gesture_analysis",
+                "label": "Analyse des gestes par vidéo"
+            }
+        ],
+        "legalNotice": "Ces réglages suivent le pays et la région de votre boutique. Faites-les relire par un avocat avant de vous en servir pour une décision concernant un salarié.",
+        "screen": "pertes.reglages"
+    }
+}

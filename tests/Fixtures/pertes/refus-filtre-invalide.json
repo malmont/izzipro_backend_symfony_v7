@@ -1,0 +1,16 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/constats?status=coupable&locale=fr"
+    },
+    "status": 422,
+    "headers": {},
+    "body": {
+        "error": "VALIDATION_FAILED",
+        "code": "VALIDATION_FAILED",
+        "message": "Entrée invalide : status (INVALID_VALUE)",
+        "fields": {
+            "status": "INVALID_VALUE"
+        }
+    }
+}

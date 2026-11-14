@@ -1,0 +1,110 @@
+# Loss prevention (lot L1-a, 2026-11-14, `docs/prevention-pertes.md`): texts written by the server, served according to ?locale=.
+# Rule: a summary (`summary.*`) never names anyone; it only uses counts and amounts.
+status:
+    open: New
+    watch: To watch
+    explained: Explained
+    dismissed: Dismissed
+    confirmed: Confirmed
+role:
+    seller: Sale
+    closer: Cash register closing
+    approver: Approval
+    operator: Performed the action
+user:
+    unnamed: 'Account no. %id%'
+subject:
+    user_window: Series of actions by the same account
+onDutyNotice: 'These people were on duty when the events took place. This is not an accusation: the decision is yours, after checking.'
+amountNotice: 'The amount at stake is the amount the finding is about, not a proven loss.'
+caveats:
+    MODULE_NOT_GRANTED: 'The Loss prevention module is not granted to this site: nothing is analysed. Request it from “My site”.'
+    ENTRIES_SKIPPED: '%count% cash register operation(s) could not be analysed. Report it to support: they will not be read again.'
+    RECORDED_SALES_ONLY: 'The analysis only sees what the cash register recorded: a line removed from the cart before payment leaves no trace.'
+    STAFF_NOTICE_REQUIRED: 'The analysis only starts once you have confirmed that you informed your staff (Settings).'
+rules:
+    notice: 'Changing a threshold neither closes nor deletes any finding: the new setting only applies to later analyses.'
+    CASH_DISCREPANCY:
+        label: Cash discrepancy at closing
+        description: 'When a cash register is closed, the cash counted does not match the cash expected, beyond the tolerated discrepancy.'
+        params:
+            minAmount: 'Minimum discrepancy that opens a finding (on top of the tolerated discrepancy of the site)'
+        person:
+            label: Repeated cash shortages by the same account
+            description: 'Several closings with a shortage, closed by the same account, over a short period.'
+            params:
+                count: Number of shortages
+                days: Over how many days
+    DRAWER_NO_SALE:
+        label: Drawer opened without a sale
+        description: 'The cash drawer was opened several times without a sale during the same session.'
+        params:
+            maxPerSession: No-sale drawer openings tolerated per session
+    VOID_AFTER_SALE:
+        label: Sale cancelled after payment
+        description: 'A sale paid in cash is cancelled shortly afterwards, or several sales are cancelled during the same session.'
+        params:
+            minutes: 'Delay after the sale during which a cancellation opens a finding'
+            perSession: Number of cancellations in a session that opens a finding
+summary:
+    default: Finding raised from cash register activity.
+    CASH_DISCREPANCY:
+        short: 'Closing no. %number%: %amount% is missing from the cash register (expected %expected%, counted %counted%).'
+        over: 'Closing no. %number%: there is %amount% too much in the cash register (expected %expected%, counted %counted%).'
+        person: '%count% closings with a shortage in %days% days for the same account, %amount% in total.'
+    DRAWER_NO_SALE:
+        rule: '%count% drawer openings without a sale during the same session (tolerated: %max%).'
+    VOID_AFTER_SALE:
+        quick: 'Sale of %amount% partly paid in cash, cancelled %delay% min after payment.'
+        series: '%count% sales cancelled during the same session, %amount% in total.'
+evidence:
+    noReason: No reason entered
+    z_report:
+        title: Closing report
+    drawer:
+        title: Drawer opened without a sale
+    order:
+        title: Sale
+    credit_note:
+        title: Sale cancellation
+    lines:
+        reportNumber: Closing report no.
+        closedAt: Register closed on
+        closedBy: Closed by
+        expectedCash: Cash expected
+        countedCash: Cash counted
+        discrepancy: Discrepancy (counted − expected)
+        discrepancyReason: Reason entered at closing
+        keptFund: Float left in the drawer
+        bankDeposit: Bank deposit
+        openedBy: Drawer opened by
+        reason: Reason entered
+        approvedBy: Approved by
+        reference: Sale
+        soldAt: Paid on
+        total: Sale total
+        cashPart: Of which paid in cash
+        seller: Sold by
+        canceledAt: Cancelled on
+        creditNoteNumber: Credit note no.
+        refundAmount: Amount refunded
+        cashRefund: Of which returned in cash
+        canceledBy: Cancelled by
+settings:
+    legalNotice: 'These settings follow the country and region of your shop. Have them reviewed by a lawyer before using them for a decision about an employee.'
+    personPatterns:
+        allowed: 'Rules that count the actions of the same account over time are allowed in your region. You can turn them off.'
+        notAllowed: 'Rules that count the actions of the same account over time are not offered in your region.'
+never:
+    faces: Facial recognition
+    audio: Audio recording
+    fitting_room_camera: Camera in fitting rooms
+    gesture_analysis: Video gesture analysis
+notice:
+    title: Staff notice about loss prevention
+    text: |
+        The shop uses a loss prevention tool. It compares what the cash register records (sales, cancellations, refunds, discounts, drawer openings, register closings) with known rules, and reports discrepancies to the shop administrator for checking.
+        What the tool does: it raises findings, with dated evidence, from the cash register operations you perform with your account.
+        What it does not do: it makes no decision, applies no sanction, uses neither facial recognition, nor audio, nor any camera in fitting rooms, and does not analyse your gestures.
+        Who sees the findings: the shop administrator only. Opening the record of a finding is logged, with the account that opens it and the day.
+        Your rights: you can ask the shop administrator which data concerns you, have it corrected, and give your explanation before any decision.

@@ -1,0 +1,21 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes?locale=fr"
+    },
+    "status": 403,
+    "headers": {},
+    "body": {
+        "error": "MODULE_INACTIVE",
+        "code": "MODULE_INACTIVE",
+        "module": "management",
+        "message": "Le module Application de gestion n'est pas activé sur ce site.",
+        "feature": "app.management",
+        "requestable": true,
+        "request": null,
+        "trial": {
+            "allowed": true,
+            "days": 30
+        }
+    }
+}

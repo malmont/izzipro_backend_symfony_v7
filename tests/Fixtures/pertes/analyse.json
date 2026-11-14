@@ -1,0 +1,16 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/analyse?locale=fr"
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "status": "done",
+        "read": 8,
+        "skipped": 0,
+        "pending": false,
+        "opened": 6,
+        "completed": 0
+    }
+}

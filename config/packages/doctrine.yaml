@@ -55,6 +55,12 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Support/Entity'
                 prefix: 'App\Support\Entity'
                 alias: AppSupport
+            # Prévention des pertes (lot L1-a, 14/11/2026) : entités dans src/LossPrevention
+            AppLossPrevention:
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/LossPrevention/Entity'
+                prefix: 'App\LossPrevention\Entity'
+                alias: AppLossPrevention
 
 when@test:
     doctrine:

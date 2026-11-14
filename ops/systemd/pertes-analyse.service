@@ -1,0 +1,10 @@
+# Prévention des pertes, lot L1-a (14/11/2026) : analyse de la caisse sur les sites où le module est accordé, un passage borné par site.
+# Installation : sudo cp ops/systemd/pertes-analyse.{service,timer} /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now pertes-analyse.timer
+[Unit]
+Description=Arkanoa : analyse de la caisse pour la prévention des pertes
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker exec -w /var/www symfony_app_v2 php bin/console app:pertes:analyser --passes=3 --no-interaction

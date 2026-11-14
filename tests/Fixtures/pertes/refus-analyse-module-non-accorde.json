@@ -1,0 +1,13 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/analyse?locale=fr"
+    },
+    "status": 409,
+    "headers": {},
+    "body": {
+        "error": "MODULE_NOT_GRANTED",
+        "code": "MODULE_NOT_GRANTED",
+        "message": "Le module Prévention des pertes n'est pas accordé à ce site : aucune analyse."
+    }
+}

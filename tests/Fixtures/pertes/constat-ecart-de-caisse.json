@@ -1,0 +1,116 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/constats/6?locale=fr"
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "id": 6,
+        "number": 6,
+        "rule": {
+            "code": "CASH_DISCREPANCY",
+            "label": "Écart de caisse à la clôture"
+        },
+        "personPattern": false,
+        "status": "open",
+        "statusLabel": "Nouveau",
+        "summary": "Clôture n° 1 : il manque 12,00 $ dans la caisse (attendu 132,75 $, compté 120,75 $).",
+        "storeDay": "2026-11-14",
+        "cashRegister": {
+            "id": 1,
+            "name": "Caisse principale"
+        },
+        "amountAtStake": 1200,
+        "currency": "CAD",
+        "isNew": false,
+        "newEvidenceSinceDecision": false,
+        "backfill": false,
+        "updatedAt": "2026-11-14T18:29:10+00:00",
+        "from": "2026-11-14T18:29:09+00:00",
+        "to": "2026-11-14T18:29:10+00:00",
+        "sessionId": 1,
+        "subject": {
+            "type": "z_report",
+            "id": 1
+        },
+        "onDuty": [
+            {
+                "id": 19,
+                "name": "Caisse Nom",
+                "role": "closer",
+                "roleLabel": "Fermeture de la caisse"
+            },
+            {
+                "id": 19,
+                "name": "Caisse Nom",
+                "role": "seller",
+                "roleLabel": "Vente"
+            }
+        ],
+        "onDutyNotice": "Ces personnes étaient en poste au moment des faits. Ce n'est pas une accusation : la décision vous revient, après vérification.",
+        "amountNotice": "Le montant en jeu est le montant concerné par le constat, pas une perte prouvée.",
+        "evidence": [
+            {
+                "id": 14,
+                "kind": "z_report",
+                "at": "2026-11-14T18:29:10+00:00",
+                "atLabel": "14/11/2026 13 h 29",
+                "title": "Rapport de clôture",
+                "lines": [
+                    {
+                        "label": "Rapport de clôture n°",
+                        "value": "1"
+                    },
+                    {
+                        "label": "Caisse fermée le",
+                        "value": "14/11/2026 13 h 29"
+                    },
+                    {
+                        "label": "Fermée par",
+                        "value": "Caisse Nom"
+                    },
+                    {
+                        "label": "Espèces attendues",
+                        "value": "132,75 $"
+                    },
+                    {
+                        "label": "Espèces comptées",
+                        "value": "120,75 $"
+                    },
+                    {
+                        "label": "Écart (compté − attendu)",
+                        "value": "-12,00 $"
+                    },
+                    {
+                        "label": "Motif saisi à la fermeture",
+                        "value": "Erreur de rendu de monnaie"
+                    },
+                    {
+                        "label": "Fond laissé dans le tiroir",
+                        "value": "0,00 $"
+                    },
+                    {
+                        "label": "Dépôt en banque",
+                        "value": "120,75 $"
+                    }
+                ],
+                "ref": {
+                    "type": "z_report",
+                    "id": 1,
+                    "sequence": 16,
+                    "hash": "aa0a99a1ec5cd741d970d99ecbac168530156c0cdcf96136f9bda4110debb2ef"
+                },
+                "screen": null,
+                "fingerprint": "084f0eb2a22ba3c882396230b34d0622db2072d4a957d9449aa4123499b42049"
+            }
+        ],
+        "evidenceIntact": true,
+        "opinion": null,
+        "decision": null,
+        "history": [],
+        "lastEvidenceAt": "2026-11-14T18:29:10+00:00",
+        "createdAt": "2026-11-14T18:29:10+00:00",
+        "screen": "pertes.constat"
+    }
+}

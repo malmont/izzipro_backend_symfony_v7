@@ -1,0 +1,16 @@
+{
+    "request": {
+        "method": "PUT",
+        "path": "/api/gestion/pertes/regles/INCONNUE?locale=fr",
+        "body": {
+            "enabled": false
+        }
+    },
+    "status": 404,
+    "headers": {},
+    "body": {
+        "error": "RULE_NOT_FOUND",
+        "code": "RULE_NOT_FOUND",
+        "message": "Règle inconnue."
+    }
+}

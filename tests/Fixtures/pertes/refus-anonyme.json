@@ -1,0 +1,13 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes?locale=fr"
+    },
+    "status": 401,
+    "headers": {},
+    "body": {
+        "code": 401,
+        "message": "JWT Token not found",
+        "error": "JWT_NOT_FOUND"
+    }
+}

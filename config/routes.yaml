@@ -19,3 +19,8 @@ gestion_controllers:
 support_controllers:
     resource: ../src/Support/Controller/
     type: attribute
+
+# Prévention des pertes (lot L1-a, 14/11/2026) : section de la gestion, contrôleurs regroupés dans src/LossPrevention
+loss_prevention_controllers:
+    resource: ../src/LossPrevention/Controller/
+    type: attribute

@@ -1,0 +1,105 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/regles?locale=fr"
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "rules": [
+            {
+                "code": "CASH_DISCREPANCY",
+                "label": "Écart de caisse à la clôture",
+                "description": "À la fermeture d'une caisse, les espèces comptées ne correspondent pas aux espèces attendues, au-delà de l'écart toléré.",
+                "wave": 1,
+                "enabled": true,
+                "params": [
+                    {
+                        "key": "minAmount",
+                        "label": "Écart minimal pour ouvrir un constat (en plus de l'écart toléré du site)",
+                        "type": "cents",
+                        "value": 500,
+                        "default": 500,
+                        "min": 0,
+                        "max": 1000000
+                    }
+                ],
+                "personVariant": {
+                    "allowed": true,
+                    "enabled": true,
+                    "label": "Manques de caisse répétés par un même compte",
+                    "description": "Plusieurs clôtures avec un manque, fermées par le même compte, sur une période courte.",
+                    "params": [
+                        {
+                            "key": "count",
+                            "label": "Nombre de manques",
+                            "type": "count",
+                            "value": 3,
+                            "default": 3,
+                            "min": 2,
+                            "max": 20
+                        },
+                        {
+                            "key": "days",
+                            "label": "Sur combien de jours",
+                            "type": "days",
+                            "value": 30,
+                            "default": 30,
+                            "min": 7,
+                            "max": 90
+                        }
+                    ]
+                }
+            },
+            {
+                "code": "DRAWER_NO_SALE",
+                "label": "Tiroir ouvert sans vente",
+                "description": "Le tiroir de la caisse a été ouvert plusieurs fois sans vente pendant une même session.",
+                "wave": 1,
+                "enabled": true,
+                "params": [
+                    {
+                        "key": "maxPerSession",
+                        "label": "Ouvertures sans vente tolérées par session",
+                        "type": "count",
+                        "value": 5,
+                        "default": 3,
+                        "min": 0,
+                        "max": 50
+                    }
+                ],
+                "personVariant": null
+            },
+            {
+                "code": "VOID_AFTER_SALE",
+                "label": "Vente annulée après l'encaissement",
+                "description": "Une vente payée en espèces est annulée peu après, ou plusieurs ventes sont annulées pendant une même session.",
+                "wave": 1,
+                "enabled": true,
+                "params": [
+                    {
+                        "key": "minutes",
+                        "label": "Délai après la vente pendant lequel une annulation ouvre un constat",
+                        "type": "minutes",
+                        "value": 10,
+                        "default": 10,
+                        "min": 1,
+                        "max": 240
+                    },
+                    {
+                        "key": "perSession",
+                        "label": "Nombre d'annulations dans une session qui ouvre un constat",
+                        "type": "count",
+                        "value": 3,
+                        "default": 3,
+                        "min": 2,
+                        "max": 50
+                    }
+                ],
+                "personVariant": null
+            }
+        ],
+        "notice": "Changer un seuil ne ferme ni ne supprime aucun constat : le nouveau réglage ne vaut que pour les analyses suivantes.",
+        "screen": "pertes.regles"
+    }
+}

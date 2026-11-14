@@ -1,0 +1,13 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/analyse?locale=fr"
+    },
+    "status": 409,
+    "headers": {},
+    "body": {
+        "error": "STAFF_NOTICE_REQUIRED",
+        "code": "STAFF_NOTICE_REQUIRED",
+        "message": "L'analyse ne démarre qu'après la confirmation de l'information des salariés (réglages de la prévention des pertes)."
+    }
+}

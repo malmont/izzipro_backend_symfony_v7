@@ -1,0 +1,32 @@
+{
+    "request": {
+        "method": "PUT",
+        "path": "/api/gestion/pertes/regles/DRAWER_NO_SALE?locale=fr",
+        "body": {
+            "params": {
+                "maxPerSession": 5
+            }
+        }
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "code": "DRAWER_NO_SALE",
+        "label": "Tiroir ouvert sans vente",
+        "description": "Le tiroir de la caisse a été ouvert plusieurs fois sans vente pendant une même session.",
+        "wave": 1,
+        "enabled": true,
+        "params": [
+            {
+                "key": "maxPerSession",
+                "label": "Ouvertures sans vente tolérées par session",
+                "type": "count",
+                "value": 5,
+                "default": 3,
+                "min": 0,
+                "max": 50
+            }
+        ],
+        "personVariant": null
+    }
+}

@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (476)
+## Boutique et commun (485)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -446,6 +446,15 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/notifications/journal` | ROLE_ADMIN | `Gestion\Controller\GestionNotificationController::journal` |
 | GET | `/api/gestion/notifications/preferences` | ROLE_ADMIN | `Gestion\Controller\GestionNotificationController::preferences` |
 | PATCH | `/api/gestion/notifications/preferences` | ROLE_ADMIN | `Gestion\Controller\GestionNotificationController::updatePreferences` |
+| POST | `/api/gestion/pertes/analyse` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::analyse` |
+| PUT | `/api/gestion/pertes/constats/{id}/decision` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::decide` |
+| GET | `/api/gestion/pertes/constats/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::finding` |
+| GET | `/api/gestion/pertes/constats` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::findings` |
+| GET | `/api/gestion/pertes/reglages` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::settings` |
+| PUT | `/api/gestion/pertes/reglages` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::putSettings` |
+| PUT | `/api/gestion/pertes/regles/{code}` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::putRule` |
+| GET | `/api/gestion/pertes/regles` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::rules` |
+| GET | `/api/gestion/pertes` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::summary` |
 | POST | `/api/gestion/preparation/avis` | ROLE_ADMIN | `Gestion\Controller\GestionPreparationController::advise` |
 | GET | `/api/gestion/preparation/estimations` | ROLE_ADMIN | `Gestion\Controller\GestionPreparationController::estimations` |
 | POST | `/api/gestion/preparation/simulation` | ROLE_ADMIN | `Gestion\Controller\GestionPreparationController::simulate` |

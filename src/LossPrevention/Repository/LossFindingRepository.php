@@ -1,0 +1,177 @@
+<?php
+
+namespace App\LossPrevention\Repository;
+
+use App\LossPrevention\Entity\LossFinding;
+use Doctrine\DBAL\ArrayParameterType;
+use Doctrine\ORM\EntityRepository;
+
+/**
+ * Constats : créés et complétés par l'analyse, décidés par le gérant. SQL direct ; jamais de cache ; rien ne se supprime.
+ *
+ * @extends EntityRepository<LossFinding>
+ */
+class LossFindingRepository extends EntityRepository
+{
+    public const SORTS = ['date' => 'store_day DESC, id DESC', 'amount' => 'amount_at_stake DESC NULLS LAST, id DESC'];
+
+    /** @return array<string, mixed>|null */
+    public function row(int $id): ?array
+    {
+        return $this->getEntityManager()->getConnection()->fetchAssociative('SELECT * FROM loss_finding WHERE id = ?', [$id]) ?: null;
+    }
+
+    /** @return array<string, mixed>|null */
+    public function byKey(string $dedupKey): ?array
+    {
+        return $this->getEntityManager()->getConnection()->fetchAssociative('SELECT * FROM loss_finding WHERE dedup_key = ?', [$dedupKey]) ?: null;
+    }
+
+    /**
+     * Constat « par personne » d'une règle pour un compte dont la fenêtre recoupe [`$since`, `$until`]. Bornée des deux côtés : en rejouant une
+     * entrée ancienne, on ne doit jamais retrouver (et compléter à tort) un constat né d'une fenêtre postérieure.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function latestForPerson(string $ruleCode, int $userId, \DateTimeImmutable $since, \DateTimeImmutable $until): ?array
+    {
+        return $this->getEntityManager()->getConnection()->fetchAssociative(
+            "SELECT * FROM loss_finding WHERE rule_code = ? AND variant = 'person' AND subject_type = 'user_window' AND subject_id = ? AND occurred_to >= ? AND occurred_from <= ? ORDER BY id DESC LIMIT 1",
+            [$ruleCode, $userId, $since->format('Y-m-d H:i:s'), $until->format('Y-m-d H:i:s')]) ?: null;
+    }
+
+    /**
+     * Crée un constat (numéro suivant du site). L'appelant tient le verrou de l'analyse : un seul écrivain à la fois.
+     *
+     * @param array<string, mixed> $f colonnes du constat (facts et on_duty en tableaux)
+     * @return int identifiant
+     */
+    public function create(array $f): int
+    {
+        $conn = $this->getEntityManager()->getConnection();
+        $now = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+        $conn->insert('loss_finding', [
+            'number' => (int) $conn->fetchOne('SELECT COALESCE(MAX(number), 0) + 1 FROM loss_finding'),
+            'rule_code' => $f['rule_code'], 'variant' => $f['variant'], 'dedup_key' => $f['dedup_key'], 'status' => LossFinding::OPEN,
+            'store_day' => $f['store_day'], 'occurred_from' => $f['occurred_from'], 'occurred_to' => $f['occurred_to'],
+            'cash_register_id' => $f['cash_register_id'], 'session_id' => $f['session_id'], 'amount_at_stake' => $f['amount_at_stake'], 'currency' => $f['currency'],
+            'subject_type' => $f['subject_type'], 'subject_id' => $f['subject_id'], 'facts' => json_encode((object) $f['facts']), 'on_duty' => json_encode(array_values($f['on_duty'])),
+            'backfill' => $f['backfill'] ? 'true' : 'false', 'last_evidence_at' => $now, 'created_at' => $now, 'updated_at' => $now,
+        ]);
+
+        return (int) $conn->lastInsertId();
+    }
+
+    /**
+     * Complète un constat existant : chiffres, fenêtre, personnes en poste, montant. L'état et la décision ne changent jamais ici.
+     *
+     * @param array<string, mixed> $facts
+     * @param list<array{id: int, role: string}> $onDuty
+     */
+    public function complete(int $id, array $facts, array $onDuty, ?int $amountAtStake, \DateTimeImmutable $occurredTo, bool $newEvidence, bool $recent = false): void
+    {
+        $now = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+        // `$recent` : la preuve ajoutée vient d'un fait postérieur à la première analyse ; un constat né de la reprise cesse alors d'en être une
+        // (il redevient « nouveau » s'il n'a jamais été consulté)
+        $this->getEntityManager()->getConnection()->executeStatement(
+            'UPDATE loss_finding SET facts = :facts, on_duty = :duty, amount_at_stake = :amount, occurred_to = GREATEST(occurred_to, :to), updated_at = :now'
+            . ($newEvidence ? ', last_evidence_at = :now' : '') . ($newEvidence && $recent ? ', backfill = false' : '') . ' WHERE id = :id',
+            ['facts' => json_encode((object) $facts), 'duty' => json_encode(array_values($onDuty)), 'amount' => $amountAtStake, 'to' => $occurredTo->format('Y-m-d H:i:s'), 'now' => $now, 'id' => $id]
+        );
+    }
+
+    /** Première consultation par un administrateur : éteint « nouveau » */
+    public function markSeen(int $id, int $userId): void
+    {
+        $this->getEntityManager()->getConnection()->executeStatement('UPDATE loss_finding SET seen_at = ?, seen_by = ? WHERE id = ? AND seen_at IS NULL',
+            [(new \DateTimeImmutable())->format('Y-m-d H:i:s'), $userId, $id]);
+    }
+
+    public function decide(int $id, string $status, ?string $note, int $userId): void
+    {
+        $now = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+        $open = $status === LossFinding::OPEN;
+        $this->getEntityManager()->getConnection()->executeStatement(
+            'UPDATE loss_finding SET status = ?, decision_note = ?, decided_by = ?, decided_at = ?, updated_at = ? WHERE id = ?',
+            [$status, $note, $open ? null : $userId, $open ? null : $now, $now, $id]);
+    }
+
+    /**
+     * @param array{statuses?: list<string>, rule?: ?string, from?: ?string, to?: ?string, cashRegisterId?: ?int, isNew?: ?bool} $filters journées du magasin (Y-m-d)
+     * @return array{0: list<array<string, mixed>>, 1: int} lignes de la page et total
+     */
+    public function search(array $filters, string $sort, int $page, int $limit): array
+    {
+        [$where, $params, $types] = self::where($filters);
+        $conn = $this->getEntityManager()->getConnection();
+        $total = (int) $conn->fetchOne("SELECT COUNT(*) FROM loss_finding $where", $params, $types);
+        $rows = $conn->fetchAllAssociative("SELECT * FROM loss_finding $where ORDER BY " . (self::SORTS[$sort] ?? self::SORTS['date']) . ' LIMIT ' . $limit . ' OFFSET ' . (($page - 1) * $limit), $params, $types);
+
+        return [$rows, $total];
+    }
+
+    /**
+     * Comptes de la synthèse sur des journées du magasin.
+     *
+     * @return array{byStatus: array<string, int>, new: int, amountAtStake: int, byRule: list<array<string, mixed>>, byRegister: list<array<string, mixed>>}
+     */
+    public function counts(string $from, string $to): array
+    {
+        $conn = $this->getEntityManager()->getConnection();
+        $p = ['from' => $from, 'to' => $to];
+        $active = "status IN ('open', 'watch')";
+        $byStatus = array_fill_keys(LossFinding::STATUSES, 0);
+        foreach ($conn->fetchAllKeyValue('SELECT status, COUNT(*) FROM loss_finding WHERE store_day BETWEEN :from AND :to GROUP BY status', $p) as $s => $n) {
+            $byStatus[(string) $s] = (int) $n;
+        }
+
+        return [
+            'byStatus' => $byStatus,
+            'new' => (int) $conn->fetchOne('SELECT COUNT(*) FROM loss_finding WHERE store_day BETWEEN :from AND :to AND seen_at IS NULL AND backfill = false', $p),
+            'amountAtStake' => (int) $conn->fetchOne("SELECT COALESCE(SUM(amount_at_stake), 0) FROM loss_finding WHERE store_day BETWEEN :from AND :to AND $active", $p),
+            'byRule' => $conn->fetchAllAssociative("SELECT rule_code AS code, COUNT(*) FILTER (WHERE $active) AS open, COUNT(*) AS total FROM loss_finding WHERE store_day BETWEEN :from AND :to GROUP BY rule_code ORDER BY rule_code", $p),
+            'byRegister' => $conn->fetchAllAssociative("SELECT f.cash_register_id AS id, r.name, COUNT(*) FILTER (WHERE f.$active) AS open, COUNT(*) AS total FROM loss_finding f LEFT JOIN cash_register r ON r.id = f.cash_register_id"
+                . ' WHERE f.store_day BETWEEN :from AND :to AND f.cash_register_id IS NOT NULL GROUP BY f.cash_register_id, r.name ORDER BY f.cash_register_id', $p),
+        ];
+    }
+
+    /** Constats encore à traiter (nouveaux ou à suivre), toutes dates confondues */
+    public function activeCount(): int
+    {
+        return (int) $this->getEntityManager()->getConnection()->fetchOne("SELECT COUNT(*) FROM loss_finding WHERE status IN ('open', 'watch')");
+    }
+
+    /** @return array{0: string, 1: array<string, mixed>, 2: array<string, mixed>} */
+    private static function where(array $filters): array
+    {
+        $sql = [];
+        $params = [];
+        $types = [];
+        if (($filters['statuses'] ?? []) !== []) {
+            $sql[] = 'status IN (:statuses)';
+            $params['statuses'] = $filters['statuses'];
+            $types['statuses'] = ArrayParameterType::STRING;
+        }
+        if (($filters['rule'] ?? null) !== null) {
+            $sql[] = 'rule_code = :rule';
+            $params['rule'] = $filters['rule'];
+        }
+        if (($filters['from'] ?? null) !== null) {
+            $sql[] = 'store_day >= :from';
+            $params['from'] = $filters['from'];
+        }
+        if (($filters['to'] ?? null) !== null) {
+            $sql[] = 'store_day <= :to';
+            $params['to'] = $filters['to'];
+        }
+        if (($filters['cashRegisterId'] ?? null) !== null) {
+            $sql[] = 'cash_register_id = :register';
+            $params['register'] = $filters['cashRegisterId'];
+        }
+        if (($filters['isNew'] ?? null) !== null) {
+            $sql[] = $filters['isNew'] ? '(seen_at IS NULL AND backfill = false)' : '(seen_at IS NOT NULL OR backfill = true)';
+        }
+
+        return [$sql === [] ? '' : 'WHERE ' . implode(' AND ', $sql), $params, $types];
+    }
+}

@@ -1,0 +1,21 @@
+{
+    "request": {
+        "method": "PUT",
+        "path": "/api/gestion/pertes/regles/CASH_DISCREPANCY?locale=fr",
+        "body": {
+            "params": {
+                "minAmount": 99999999
+            }
+        }
+    },
+    "status": 422,
+    "headers": {},
+    "body": {
+        "error": "VALIDATION_FAILED",
+        "code": "VALIDATION_FAILED",
+        "message": "Entrée invalide : params.minAmount (PARAM_OUT_OF_RANGE)",
+        "fields": {
+            "params.minAmount": "PARAM_OUT_OF_RANGE"
+        }
+    }
+}

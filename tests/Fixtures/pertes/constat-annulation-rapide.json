@@ -1,0 +1,145 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/constats/2?locale=fr"
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "id": 2,
+        "number": 2,
+        "rule": {
+            "code": "VOID_AFTER_SALE",
+            "label": "Vente annulée après l'encaissement"
+        },
+        "personPattern": false,
+        "status": "open",
+        "statusLabel": "Nouveau",
+        "summary": "Vente de 32,77 $ avec une part en espèces, annulée 0 min après l'encaissement.",
+        "storeDay": "2026-11-14",
+        "cashRegister": {
+            "id": 1,
+            "name": "Caisse principale"
+        },
+        "amountAtStake": 3277,
+        "currency": "CAD",
+        "isNew": false,
+        "newEvidenceSinceDecision": false,
+        "backfill": false,
+        "updatedAt": "2026-11-14T18:29:10+00:00",
+        "from": "2026-11-14T18:29:09+00:00",
+        "to": "2026-11-14T18:29:09+00:00",
+        "sessionId": 1,
+        "subject": {
+            "type": "order",
+            "id": 1
+        },
+        "onDuty": [
+            {
+                "id": 19,
+                "name": "Caisse Nom",
+                "role": "seller",
+                "roleLabel": "Vente"
+            },
+            {
+                "id": 19,
+                "name": "Caisse Nom",
+                "role": "operator",
+                "roleLabel": "Auteur de l'acte"
+            }
+        ],
+        "onDutyNotice": "Ces personnes étaient en poste au moment des faits. Ce n'est pas une accusation : la décision vous revient, après vérification.",
+        "amountNotice": "Le montant en jeu est le montant concerné par le constat, pas une perte prouvée.",
+        "evidence": [
+            {
+                "id": 5,
+                "kind": "order",
+                "at": "2026-11-14T18:29:09+00:00",
+                "atLabel": "14/11/2026 13 h 29",
+                "title": "Vente",
+                "lines": [
+                    {
+                        "label": "Vente",
+                        "value": "REF#6af8a87587653"
+                    },
+                    {
+                        "label": "Encaissée le",
+                        "value": "14/11/2026 13 h 29"
+                    },
+                    {
+                        "label": "Total de la vente",
+                        "value": "32,77 $"
+                    },
+                    {
+                        "label": "Dont payé en espèces",
+                        "value": "32,75 $"
+                    },
+                    {
+                        "label": "Vendue par",
+                        "value": "Caisse Nom"
+                    }
+                ],
+                "ref": {
+                    "type": "order",
+                    "id": 1,
+                    "sequence": null,
+                    "hash": null
+                },
+                "screen": null,
+                "fingerprint": "778c5a3c81825ef7a8a3ea66ed209b4831b421b2b368515bb69cb955ad6e5721"
+            },
+            {
+                "id": 6,
+                "kind": "credit_note",
+                "at": "2026-11-14T18:29:09+00:00",
+                "atLabel": "14/11/2026 13 h 29",
+                "title": "Annulation de la vente",
+                "lines": [
+                    {
+                        "label": "Vente",
+                        "value": "REF#6af8a87587653"
+                    },
+                    {
+                        "label": "Encaissée le",
+                        "value": "14/11/2026 13 h 29"
+                    },
+                    {
+                        "label": "Annulée le",
+                        "value": "14/11/2026 13 h 29"
+                    },
+                    {
+                        "label": "Avoir n°",
+                        "value": "1"
+                    },
+                    {
+                        "label": "Montant remboursé",
+                        "value": "32,77 $"
+                    },
+                    {
+                        "label": "Dont rendu en espèces",
+                        "value": "32,75 $"
+                    },
+                    {
+                        "label": "Annulée par",
+                        "value": "Caisse Nom"
+                    }
+                ],
+                "ref": {
+                    "type": "pos_audit",
+                    "id": 8,
+                    "sequence": 8,
+                    "hash": "5a5570734248a11cd5836c8886961243bc8b816ae84cc0039cb8200c780b7f5a"
+                },
+                "screen": null,
+                "fingerprint": "ee9e339fb128ddabce415caaee224304475517ae6c215cbceed24ac0b5ac1f30"
+            }
+        ],
+        "evidenceIntact": true,
+        "opinion": null,
+        "decision": null,
+        "history": [],
+        "lastEvidenceAt": "2026-11-14T18:29:10+00:00",
+        "createdAt": "2026-11-14T18:29:10+00:00",
+        "screen": "pertes.constat"
+    }
+}
