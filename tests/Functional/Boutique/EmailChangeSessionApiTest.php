@@ -47,11 +47,11 @@ class EmailChangeSessionApiTest extends WebTestCase
         $this->assertSame(['message', 'user'], array_keys($this->json($same)));
         $this->assertSame([], $same->headers->getCookies(), 'aucun nouveau jeton');
 
-        // Changement réel : nouveaux cookies (auth_token, refresh_token, XSRF-TOKEN) et jetons dans le corps
+        // Changement réel : nouveaux cookies (auth_token, refresh_token, XSRF-TOKEN) ; le corps ne rend que le jeton anti-CSRF
         $new = 'nouvelle-' . bin2hex(random_bytes(3)) . '@example.invalid';
         $changed = $this->request('PATCH', '/api/profile', json_encode(['email' => $new, 'currentPassword' => self::PASSWORD]));
         $body = $this->json($changed);
-        $this->assertSame(['message', 'user', 'token', 'refresh_token', 'csrf_token'], array_keys($body));
+        $this->assertSame(['message', 'user', 'csrf_token'], array_keys($body), 'session par cookies : aucun jeton dans le corps');
         $cookies = [];
         foreach ($changed->headers->getCookies() as $c) {
             $cookies[$c->getName()] = $c->getValue();

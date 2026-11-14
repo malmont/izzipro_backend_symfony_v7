@@ -110,7 +110,10 @@ class PosPinApiTest extends WebTestCase
         $this->assertSame(401, $this->status('POST', '/api/pos/pin-login', ['userId' => $cashier->getId(), 'pin' => '9999'], 'PIN_INVALID'));
         $login = $this->request('POST', '/api/pos/pin-login', ['userId' => $cashier->getId(), 'pin' => '1357']);
         $this->assertSame(200, $login->getStatusCode(), $login->getContent());
+        // La connexion par NIP ouvre toujours une session « pos » d'application installée, quoi qu'envoie la demande : les deux jetons
+        // dans le corps, aucun cookie (elle n'est pas concernée par la règle des sessions par cookies)
         $tokens = $this->json($login);
+        $this->assertSame([['token', 'refresh_token'], []], [array_keys($tokens), $login->headers->getCookies()]);
         $this->assertNotEmpty($tokens['refresh_token']);
         $this->token = $tokens['token'];
         $this->assertSame(200, $this->request('GET', '/api/pos/settings')->getStatusCode(), 'jeton utilisable');
@@ -125,6 +128,8 @@ class PosPinApiTest extends WebTestCase
         $this->assertSame(['pin', 'pin'], [$logins[0]['data']['method'], $logins[1]['data']['method']]);
         $this->assertSame('Tablette PIN', $logins[1]['terminal']['label']);
         $this->assertSame('admin', $logins[2]['data']['reason']);
+        $asWeb = $this->request('POST', '/api/pos/pin-login', ['userId' => $cashier->getId(), 'pin' => '1357', 'platform' => 'web']);
+        $this->assertSame([200, ['token', 'refresh_token'], []], [$asWeb->getStatusCode(), array_keys($this->json($asWeb)), $asWeb->headers->getCookies()], 'un champ platform « web » dans la demande ne change rien : toujours « pos »');
     }
 
     public function testSensitiveActionsNeedAManagerApproval(): void

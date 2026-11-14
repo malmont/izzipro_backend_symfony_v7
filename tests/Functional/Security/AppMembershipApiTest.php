@@ -214,9 +214,9 @@ class AppMembershipApiTest extends WebTestCase
         $claims = self::claims($other['token']);
         $this->assertSame([(int) $member->getId(), $member->getEmail()], [$claims['id'], $claims['email']], 'les autres champs du jeton sont ceux d\'avant');
 
-        // Session web : la famille est dans le jeton des cookies et du corps
+        // Session web : la famille est dans le jeton du cookie ; le corps ne rend aucun jeton, seulement le jeton anti-CSRF
         $webLogin = $this->json('POST', '/api/login', ['username' => $member->getEmail(), 'password' => self::PASSWORD, 'platform' => 'web', 'app' => 'web']);
-        $this->assertSame('boutique', self::claims($webLogin['token'])['app']);
+        $this->assertSame(['csrf_token'], array_keys($webLogin));
 
         // Rafraîchissement d'une session web (cookies) : la famille est lue dans le corps, le jeton du cookie la porte
         $code = MV_TEST_TENANT_CODE;

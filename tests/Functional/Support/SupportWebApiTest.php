@@ -95,9 +95,9 @@ class SupportWebApiTest extends WebTestCase
         $customer = $this->user(['ROLE_USER_INTERNET']);
         $refused = $this->send('POST', '/api/login', ['username' => $customer->getEmail(), 'password' => self::PASSWORD, 'platform' => 'webadmin']);
         $this->assertSame([403, 'PLATFORM_NOT_ALLOWED', []], [$refused->getStatusCode(), json_decode((string) $refused->getContent(), true)['code'] ?? null, $this->cookies($refused)]);
-        // « web » ne change pas pour l'instant : ses clients lisent encore le corps (jetons et jeton anti-CSRF), en plus des cookies
+        // « web » : même règle, les jetons ne sont que dans les cookies ; le corps ne rend que le jeton anti-CSRF
         $shop = $this->send('POST', '/api/login', ['username' => $customer->getEmail(), 'password' => self::PASSWORD, 'platform' => 'web']);
-        $this->assertSame([200, ['token', 'refresh_token', 'csrf_token'], 3], [$shop->getStatusCode(), array_keys(json_decode((string) $shop->getContent(), true)), count($this->cookies($shop))]);
+        $this->assertSame([200, ['csrf_token'], 3], [$shop->getStatusCode(), array_keys(json_decode((string) $shop->getContent(), true)), count($this->cookies($shop))]);
         // L'application mobile de gestion (« admin ») ne change pas : jetons dans le corps, aucun cookie, aucun jeton anti-CSRF
         $mobile = $this->send('POST', '/api/login', ['username' => $agent->getEmail(), 'password' => self::PASSWORD, 'platform' => 'admin']);
         $this->assertSame([200, [], ['token', 'refresh_token']], [$mobile->getStatusCode(), $this->cookies($mobile), array_keys(json_decode((string) $mobile->getContent(), true))]);

@@ -208,8 +208,10 @@ class AppMembershipJoinApiTest extends WebTestCase
         // Il accepte (la famille n'a aucun texte : aucune version) : appartenance créée, au journal, et la session est rendue comme une connexion
         $joined = $join(['joinToken' => $token, 'accepted' => true]);
         $this->assertSame(200, $joined->getStatusCode(), (string) $joined->getContent());
+        // « Rejoindre » ne lit aucune plateforme dans sa demande : il reprend celle du jeton de passage, ici « mobile » (la connexion
+        // refusée) : jetons dans le corps, aucun cookie, jamais la session du web par défaut
         $tokens = $this->body($joined);
-        $this->assertSame(['token', 'refresh_token'], array_keys($tokens));
+        $this->assertSame([['token', 'refresh_token'], []], [array_keys($tokens), $joined->headers->getCookies()]);
         $claims = self::claims($tokens['token']);
         $this->assertSame([(int) $stranger->getId(), $stranger->getEmail(), 'boutique'], [$claims['id'], $claims['email'], $claims['app']]);
         $this->assertSame([['app' => 'boutique', 'source' => 'join', 'terms_version' => null, 'terms_accepted_at' => null]], $this->rows((int) $stranger->getId()));
@@ -233,6 +235,9 @@ class AppMembershipJoinApiTest extends WebTestCase
         // la plateforme de la connexion est gardée : ici le web, donc ses cookies, avec la famille dans le jeton
         $cookies = array_column(array_map(fn ($c) => [$c->getName(), $c->getValue()], $joined->headers->getCookies()), 1, 0);
         $this->assertSame(['livingmemory', true, true], [self::claims($cookies['auth_token_' . MV_TEST_TENANT_CODE])['app'], isset($cookies['refresh_token_' . MV_TEST_TENANT_CODE]), isset($this->body($joined)['csrf_token'])]);
+        // et, comme toute session par cookies, aucun jeton dans le corps : seulement le jeton anti-CSRF
+        $this->assertSame(['csrf_token' => $cookies['XSRF-TOKEN_' . MV_TEST_TENANT_CODE]], $this->body($joined));
+        $this->assertStringNotContainsString($cookies['refresh_token_' . MV_TEST_TENANT_CODE], (string) $joined->getContent());
         $row = $this->db->fetchAssociative("SELECT source, terms_version, terms_accepted_at IS NOT NULL AS accepted FROM user_app_membership WHERE user_id = ? AND app = 'livingmemory'", [$stranger->getId()]);
         $this->assertSame(['source' => 'join', 'terms_version' => $version, 'accepted' => true], $row);
 

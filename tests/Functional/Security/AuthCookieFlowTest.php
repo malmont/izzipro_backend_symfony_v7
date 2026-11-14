@@ -26,12 +26,20 @@ class AuthCookieFlowTest extends WebTestCase
         $tenant = MV_TEST_TENANT_CODE;
         $server = ['HTTP_HOST' => MV_TEST_TENANT_HOST, 'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTPS' => 'on', 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'];
 
-        // 1. Connexion web : jetons dans le corps + cookies sans domaine (host-only)
+        // 1. Connexion web : cookies sans domaine (host-only) ; le corps ne rend que le jeton anti-CSRF, aucun jeton de session
         $login = $this->send($client, 'POST', '/api/login', [], [], ['username' => $email, 'password' => self::PASSWORD, 'platform' => 'web']);
         $this->assertSame(200, $login->getStatusCode(), $login->getContent());
         $body = json_decode($login->getContent(), true);
-        $this->assertNotEmpty($body['refresh_token']);
+        $this->assertSame(['csrf_token'], array_keys($body));
         $cookies = $this->cookies($login);
+        foreach (["auth_token_$tenant", "refresh_token_$tenant"] as $name) {
+            $this->assertTrue($cookies[$name]->isHttpOnly() && $cookies[$name]->isSecure(), "cookie $name protégé");
+            $this->assertStringNotContainsString($cookies[$name]->getValue(), (string) $login->getContent(), "la valeur du cookie $name n'est pas dans le corps");
+        }
+        $this->assertSame($cookies["XSRF-TOKEN_$tenant"]->getValue(), $body['csrf_token']);
+        // Sans champ platform, la connexion est celle du web : même corps
+        $default = $this->send($client, 'POST', '/api/login', [], [], ['username' => $email, 'password' => self::PASSWORD]);
+        $this->assertSame([200, ['csrf_token'], 3], [$default->getStatusCode(), array_keys(json_decode($default->getContent(), true)), count($this->cookies($default))]);
         foreach (["auth_token_$tenant", "refresh_token_$tenant", "XSRF-TOKEN_$tenant"] as $name) {
             $this->assertArrayHasKey($name, $cookies, "cookie $name posé");
             $this->assertNull($cookies[$name]->getDomain(), "cookie $name sans domaine (host-only)");

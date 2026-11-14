@@ -153,8 +153,21 @@ class BoussoleClientErrorsTest extends WebTestCase
         $employee = $this->esgUser($inactive, 'inactive', true);
         $this->assertSame($refusal(401, 'Identifiants incorrects.'), $login($employee->getEmail(), 'mauvais-mot-de-passe'));
         $this->assertSame($refusal(401, 'Votre entreprise est désactivée.'), $login($employee->getEmail(), self::PASSWORD));
+        // Connexion réussie : le jeton n'est rendu que par le cookie protégé, jamais dans le corps ; le front reconnaît la réussite à userId
         [$status, $session] = $login($owner->getEmail(), self::PASSWORD);
-        $this->assertSame([200, true], [$status, isset($session['token'])], 'la connexion réussie n\'est pas touchée');
+        $this->assertSame([200, ['userId' => (int) $owner->getId(), 'email' => $owner->getEmail(), 'firstName' => 'Alice', 'lastName' => 'Alpha']], [$status, $session]);
+        $set = [];
+        foreach ($this->client->getResponse()->headers->getCookies() as $c) {
+            $set[$c->getName()] = $c;
+        }
+        $this->assertSame(['auth_token_' . MV_TEST_TENANT_CODE, 'XSRF-TOKEN_' . MV_TEST_TENANT_CODE], array_keys($set));
+        $cookie = $set['auth_token_' . MV_TEST_TENANT_CODE];
+        $this->assertSame([true, true], [$cookie->isHttpOnly(), $cookie->isSecure()], 'cookie du jeton protégé');
+        $this->assertStringNotContainsString((string) $cookie->getValue(), (string) $this->client->getResponse()->getContent());
+        $this->client->getCookieJar()->clear();
+        $this->client->getCookieJar()->set(new \Symfony\Component\BrowserKit\Cookie($cookie->getName(), (string) $cookie->getValue(), null, '/', MV_TEST_TENANT_HOST, true));
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/api/boussole/company', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json']);
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode(), 'le cookie seul ouvre la session');
 
         // Entreprise
         $this->assertSame($refusal(404, self::NO_COMPANY), $this->call('GET', '/api/boussole/company', null, $orphan));
