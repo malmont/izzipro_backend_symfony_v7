@@ -100,7 +100,7 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
         $this->assertSame($this->today(), (string) $this->db->fetchOne('SELECT last_digest_day FROM loss_setting'));
         $this->assertSame($pushLog, (int) $this->db->fetchOne('SELECT COUNT(*) FROM notification_log'), 'rien dans le journal des notifications du téléphone');
         $sent = json_decode((string) $this->db->fetchOne("SELECT data FROM loss_journal WHERE type = 'DIGEST_SENT' ORDER BY id DESC LIMIT 1"), true);
-        $this->assertSame(['day', 'count', 'amount', 'recipients'], array_keys($sent), 'au journal du module : des nombres, aucune adresse');
+        $this->assertSame(['day', 'count', 'amount', 'recipients', 'renewed', 'renewedUpTo'], array_keys($sent), 'au journal du module : des nombres, aucune adresse');
 
         // Les textes anglais existent (un site anglophone reçoit le courriel en anglais : la langue du site est lue par EmailLocale)
         $translator = static::getContainer()->get('translator');
@@ -280,6 +280,43 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
         $calls = [];
         $this->assertSame('sent', $digest()->sendIfDue($at('08:00'))['status']);
         $this->assertSame(['1', $announced], [array_values($mine()[0]['context']['rows'])[0], $mark()], 'un constat annoncé ; la borne s\'arrête à lui');
+
+        // Décision du propriétaire : un constat de REPRISE redevenu « nouveau » parce qu'une preuve récente le complète est annoncé dans le
+        // courriel du jour suivant, à part (« complété par une nouvelle preuve »), une seule fois par retour à « nouveau »
+        $session = $this->openSession();
+        foreach (range(1, 4) as $i) {
+            $this->pos('POST', '/api/caisse/drawer-open', ['cashRegisterId' => $this->register, 'reason' => 'Reprise ' . $i]);
+        }
+        $this->assertSame(1, $this->json($this->admin('POST', self::BASE . '/analyse'))['opened']);
+        $old = (int) $this->db->fetchOne('SELECT id FROM loss_finding WHERE dedup_key = ?', ['DRAWER_NO_SALE:session:' . $session]);
+        $this->db->executeStatement('UPDATE loss_finding SET backfill = true WHERE id = ?', [$old]); // comme s'il venait de la reprise des 30 jours
+        $this->db->executeStatement("UPDATE loss_setting SET last_digest_day = '2020-01-03'");
+        $this->assertSame('nothing_new', $digest()->sendIfDue($at('08:00'))['status'], 'un constat de reprise n\'est pas annoncé');
+        // Une ouverture de plus, postérieure à la première analyse : le constat cesse d'être une reprise, il redevient « nouveau »
+        $this->pos('POST', '/api/caisse/drawer-open', ['cashRegisterId' => $this->register, 'reason' => 'Preuve récente']);
+        $this->assertSame([0, 1], array_values(array_intersect_key($this->json($this->admin('POST', self::BASE . '/analyse')), ['opened' => 1, 'completed' => 1])));
+        $this->assertSame([false, 1], [(bool) $this->db->fetchOne('SELECT backfill FROM loss_finding WHERE id = ?', [$old]),
+            (int) $this->db->fetchOne("SELECT COUNT(*) FROM loss_journal WHERE type = 'FINDING_RENEWED' AND finding_id = ?", [$old])]);
+        $markBefore = $mark();
+        $calls = [];
+        $this->assertSame('sent', $digest()->sendIfDue($at('08:00'))['status']);
+        $context = $mine()[0]['context'];
+        $this->assertSame(['Nouveaux constats' => '1', 'Dont complétés par une nouvelle preuve' => '1'], array_slice($context['rows'], 0, 2, true));
+        $this->assertStringContainsString('Parmi eux, 1 constat plus ancien, complété par une nouvelle preuve.', $context['message']);
+        $this->assertSame($markBefore >= $old ? $markBefore : $old, $mark(), 'la borne des constats nés couvre le constat annoncé');
+        $line = json_decode((string) $this->db->fetchOne("SELECT data FROM loss_journal WHERE type = 'DIGEST_SENT' ORDER BY id DESC LIMIT 1"), true);
+        $this->assertSame([1, 1], [$line['count'], $line['renewed']]);
+        $this->assertGreaterThan(0, $line['renewedUpTo']);
+        // Une seule annonce par retour à « nouveau » : le lendemain, toujours pas ouvert, il n'est plus annoncé
+        $this->db->executeStatement("UPDATE loss_setting SET last_digest_day = '2020-01-04'");
+        $this->assertSame('nothing_new', $digest()->sendIfDue($at('08:00'))['status']);
+        // Une ouverture de plus le complète encore : il n'était plus une reprise, ce n'est pas un nouveau retour à « nouveau »
+        $this->pos('POST', '/api/caisse/drawer-open', ['cashRegisterId' => $this->register, 'reason' => 'Encore une']);
+        $this->json($this->admin('POST', self::BASE . '/analyse'));
+        $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM loss_journal WHERE type = 'FINDING_RENEWED' AND finding_id = ?", [$old]));
+        $this->assertSame('nothing_new', $digest()->sendIfDue($at('08:00'))['status']);
+        $this->closeWith(0);
+        $this->db->executeStatement("UPDATE loss_setting SET last_digest_day = ?", [$this->today()]); // l'état attendu par la suite du test
 
         // La réservation elle-même : une écriture conditionnelle, que le second lancement n'obtient pas ; lui seul n'avance pas la borne
         $settings = $this->provider->getEntityManager()->getRepository(\App\LossPrevention\Entity\LossSetting::class);

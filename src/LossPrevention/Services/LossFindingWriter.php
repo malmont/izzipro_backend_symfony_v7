@@ -61,6 +61,10 @@ class LossFindingWriter implements LossFindingSink
         $merged = self::mergeOnDuty(json_decode((string) $existing['on_duty'], true) ?: [], $onDuty);
         $this->findings()->complete((int) $existing['id'], $facts, $merged, $amountAtStake, $occurredTo, true, $recent);
         $this->journal()->append(LossJournalEntry::FINDING_COMPLETED, null, (int) $existing['id'], ['evidence' => $added, 'afterDecision' => $existing['decided_at'] !== null]);
+        if ($recent && $existing['backfill']) {
+            // un constat de reprise vient de redevenir « nouveau » : noté une fois, pour que le courriel du jour suivant l'annonce
+            $this->journal()->append(LossJournalEntry::FINDING_RENEWED, null, (int) $existing['id']);
+        }
         ++$this->completed;
     }
 

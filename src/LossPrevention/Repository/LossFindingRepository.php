@@ -126,14 +126,39 @@ class LossFindingRepository extends EntityRepository
      * dépasser un constat né entre les deux lectures (une analyse lancée par la synthèse pendant le passage du minuteur), jamais annoncé.
      * Un constat d'exercice n'est jamais annoncé et ne fait pas avancer la borne.
      *
-     * @return array{count: int, amount: int, lastId: int} `lastId` vaut 0 quand il n'y a rien à annoncer
+     * `$renewedIds` : constats redevenus « nouveaux » que le même courriel annonce à part (`renewedAmong`) ; ils ne sont pas comptés ici,
+     * mais la borne les couvre (sinon le courriel suivant les annoncerait une seconde fois, comme des constats nés depuis).
+     *
+     * @param list<int> $renewedIds
+     * @return array{count: int, amount: int, lastId: int} `lastId` vaut 0 quand aucun constat n'est au-dessus de la borne
      */
-    public function bornAfter(int $findingId): array
+    public function bornAfter(int $findingId, array $renewedIds = []): array
     {
+        $apart = $renewedIds === [] ? 'true' : 'id NOT IN (' . implode(',', array_map('intval', $renewedIds)) . ')';
         $row = $this->getEntityManager()->getConnection()->fetchAssociative(
-            "SELECT COUNT(*) AS n, COALESCE(SUM(amount_at_stake), 0) AS amount, COALESCE(MAX(id), 0) AS last FROM loss_finding WHERE id > ? AND exercise = false AND seen_at IS NULL AND backfill = false AND status = 'open'", [$findingId]) ?: [];
+            "SELECT COUNT(*) FILTER (WHERE $apart) AS n, COALESCE(SUM(amount_at_stake) FILTER (WHERE $apart), 0) AS amount, COALESCE(MAX(id), 0) AS last"
+            . " FROM loss_finding WHERE id > ? AND exercise = false AND seen_at IS NULL AND backfill = false AND status = 'open'", [$findingId]) ?: [];
 
         return ['count' => (int) ($row['n'] ?? 0), 'amount' => (int) ($row['amount'] ?? 0), 'lastId' => (int) ($row['last'] ?? 0)];
+    }
+
+    /**
+     * Parmi des constats redevenus « nouveaux » (une preuve récente a complété un constat de reprise), ceux qui le sont encore : jamais
+     * ouverts, non décidés, hors exercice. Leur nombre et leur montant en jeu, pour le courriel de résumé.
+     *
+     * @param list<int> $ids
+     * @return array{count: int, amount: int}
+     */
+    public function renewedAmong(array $ids): array
+    {
+        if ($ids === []) {
+            return ['count' => 0, 'amount' => 0];
+        }
+        $row = $this->getEntityManager()->getConnection()->fetchAssociative(
+            'SELECT COUNT(*) AS n, COALESCE(SUM(amount_at_stake), 0) AS amount FROM loss_finding WHERE id IN (' . implode(',', array_map('intval', $ids)) . ")"
+            . " AND exercise = false AND seen_at IS NULL AND backfill = false AND status = 'open'") ?: [];
+
+        return ['count' => (int) ($row['n'] ?? 0), 'amount' => (int) ($row['amount'] ?? 0)];
     }
 
     /**

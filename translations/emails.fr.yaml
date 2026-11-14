@@ -205,7 +205,9 @@ loss_digest:
     greeting: 'Bonjour,'
     message: "{1}1 nouveau constat attend votre vérification, pour un montant en jeu de %amount%.|]1,Inf[%count% nouveaux constats attendent votre vérification, pour un montant en jeu de %amount%."
     row_count: 'Nouveaux constats'
+    row_renewed: 'Dont complétés par une nouvelle preuve'
     row_amount: 'Montant en jeu'
+    message_renewed: "{1}Parmi eux, 1 constat plus ancien, complété par une nouvelle preuve.|]1,Inf[Parmi eux, %count% constats plus anciens, complétés par une nouvelle preuve."
     row_day: 'Journée du magasin'
     next: 'Ouvrez la section « Prévention des pertes » de votre application de gestion pour lire leurs preuves et décider.'
     notice: 'Le montant en jeu est le montant concerné par les constats, pas une perte prouvée. Vous recevez ce courriel au plus une fois par jour ; vous pouvez l''arrêter dans les préférences de notification de la gestion.'

@@ -28,6 +28,11 @@ class LossJournalEntry
     public const ENTRIES_SKIPPED = 'ENTRIES_SKIPPED';
     /** Courriel de résumé du jour envoyé (lot L1-b) : nombre de constats nouveaux, montant en jeu, nombre de destinataires ; aucun nom, aucune adresse */
     public const DIGEST_SENT = 'DIGEST_SENT';
+    /**
+     * Constat de reprise redevenu « nouveau » : une preuve postérieure à la première analyse l'a complété. Le courriel du jour suivant
+     * l'annonce une fois, avec la mention « complété par une nouvelle preuve » (décision du propriétaire du 14/11/2026)
+     */
+    public const FINDING_RENEWED = 'FINDING_RENEWED';
     /** Exercice lancé (lot EX-1) : son numéro (qui ne redescend jamais) et son scénario ; sans constat rattaché, donc jamais supprimé */
     public const EXERCISE_STARTED = 'EXERCISE_STARTED';
     /** Exercices effacés par le gérant (lot EX-1) : leur nombre ; sans constat rattaché */

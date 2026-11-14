@@ -201,7 +201,9 @@ loss_digest:
     greeting: 'Hello,'
     message: "{1}1 new finding is waiting for you to check, for an amount at stake of %amount%.|]1,Inf[%count% new findings are waiting for you to check, for an amount at stake of %amount%."
     row_count: 'New findings'
+    row_renewed: 'Of which completed by new evidence'
     row_amount: 'Amount at stake'
+    message_renewed: "{1}Among them, 1 older finding, completed by new evidence.|]1,Inf[Among them, %count% older findings, completed by new evidence."
     row_day: 'Shop day'
     next: 'Open the “Loss prevention” section of your management app to read their evidence and decide.'
     notice: 'The amount at stake is the amount the findings are about, not a proven loss. You receive this email at most once a day; you can stop it in the notification preferences of the management app.'

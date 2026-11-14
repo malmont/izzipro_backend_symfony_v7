@@ -19,7 +19,8 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * Courriel de résumé du jour (lot L1-b, décision du propriétaire du 14/11/2026) : « N nouveaux constats, X en jeu ». Au plus un par journée du
  * magasin et par site, à partir de 8 h à l'heure du magasin (le premier passage du minuteur après 8 h envoie), et seulement pour les
  * constats NÉS depuis le courriel précédent : aucun courriel les jours où rien n'est né, même s'il reste des constats ouverts (la vignette
- * de l'accueil continue de les rappeler) ; un constat né après l'envoi part le lendemain ; envoyé aux administrateurs du site qui ont gardé le type « loss_digest » actif dans leurs préférences de la gestion
+ * de l'accueil continue de les rappeler) ; un constat né après l'envoi part le lendemain. Un constat de reprise redevenu « nouveau » parce
+ * qu'une preuve récente l'a complété est annoncé lui aussi, une seule fois, avec la mention « complété par une nouvelle preuve » ; envoyé aux administrateurs du site qui ont gardé le type « loss_digest » actif dans leurs préférences de la gestion
  * (`GestionNotificationService`, canal `email`) ; par le mailer du site, donc par la file et le worker des courriels existants.
  *
  * Le courriel ne porte AUCUN nom, aucun montant par personne, aucun motif saisi à la caisse : le nombre de constats nouveaux, le montant en
@@ -83,9 +84,17 @@ class LossDigestService
         if ((string) ($row['last_digest_day'] ?? '') === $day) {
             return ['status' => 'already_sent', 'sent' => 0];
         }
-        // Seulement ce qui est NÉ depuis le courriel précédent ; `lastId` : la borne que ce courriel posera
-        $new = $em->getRepository(LossFinding::class)->bornAfter((int) ($row['last_digest_finding_id'] ?? 0));
-        if ($new['count'] === 0) {
+        // Ce qui est NÉ depuis le courriel précédent (`lastId` : la borne que ce courriel posera), et les constats de reprise REDEVENUS
+        // « nouveaux » depuis (une preuve récente les a complétés) : annoncés à part, une seule fois par retour à « nouveau » (décision du
+        // propriétaire). Leur rang est lu au journal du module ; le courriel le note dans sa ligne « courriel envoyé » (`renewedUpTo`)
+        $journal = $em->getRepository(LossJournalEntry::class);
+        $renewedMark = $journal->digestRenewedMark();
+        $renewed = $journal->renewedAfter($renewedMark);
+        $findings = $em->getRepository(LossFinding::class);
+        $again = $findings->renewedAmong($renewed['findingIds']);
+        $new = $findings->bornAfter((int) ($row['last_digest_finding_id'] ?? 0), $renewed['findingIds']);
+        $total = ['count' => $new['count'] + $again['count'], 'amount' => $new['amount'] + $again['amount']];
+        if ($total['count'] === 0) {
             return ['status' => 'nothing_new', 'sent' => 0];
         }
         // Administrateurs du site (le rôle exact : ni un super administrateur seul, ni un compte Assistance) qui ont gardé le courriel actif
@@ -104,10 +113,13 @@ class LossDigestService
         $language = $this->locale->language(null);
         $t = fn (string $key, array $params = []) => $this->translator->trans('loss_digest.' . $key, $params, 'emails', $language);
         $siteName = (string) ($em->getConnection()->fetchOne('SELECT name FROM entreprise ORDER BY id LIMIT 1') ?: '');
-        $params = ['%count%' => $new['count'], '%amount%' => LossTexts::money($new['amount'], $language, $this->site->currency()), '%site%' => $siteName];
+        $params = ['%count%' => $total['count'], '%amount%' => LossTexts::money($total['amount'], $language, $this->site->currency()), '%site%' => $siteName];
         $context = [
-            'title' => $t('title'), 'greeting' => $t('greeting', $params), 'message' => $t('message', $params),
-            'rows' => [$t('row_count') => (string) $new['count'], $t('row_amount') => $params['%amount%'], $t('row_day') => LossTexts::day(new \DateTimeImmutable($day), $language)],
+            'title' => $t('title'), 'greeting' => $t('greeting', $params),
+            // la mention « complété par une nouvelle preuve » distingue un constat plus ancien qui revient d'un constat né depuis
+            'message' => $t('message', $params) . ($again['count'] > 0 ? ' ' . $t('message_renewed', ['%count%' => $again['count']]) : ''),
+            'rows' => [$t('row_count') => (string) $total['count']] + ($again['count'] > 0 ? [$t('row_renewed') => (string) $again['count']] : [])
+                + [$t('row_amount') => $params['%amount%'], $t('row_day') => LossTexts::day(new \DateTimeImmutable($day), $language)],
             'nextStep' => $t('next'), 'notice' => $t('notice'), 'siteLine' => $t('signature', $params),
             // Lien direct vers la liste des constats nouveaux (lot LIEN) : la seule adresse du courriel ; null (site sans adresse connue) : pas de lien
             'linkUrl' => $this->links->to('pertes.constats', ['isNew' => true]), 'linkLabel' => $t('link'),
@@ -116,7 +128,7 @@ class LossDigestService
         $subject = $this->mailer->subject('loss_digest.subject', $params, $language);
         $host = $this->host();
         // Réserver le jour AVANT d'envoyer : de deux lancements qui se chevauchent (le minuteur et un lancement à la main), un seul passe
-        $reserved = $settings->reserveDigestDay($day, $new['lastId']);
+        $reserved = $settings->reserveDigestDay($day, $new['lastId'] > 0 ? $new['lastId'] : null); // rien de né : la borne des constats nés ne bouge pas
         if ($reserved === null) {
             return ['status' => 'already_sent', 'sent' => 0];
         }
@@ -140,7 +152,9 @@ class LossDigestService
 
             return ['status' => 'not_delivered', 'sent' => 0];
         }
-        $em->getRepository(LossJournalEntry::class)->append(LossJournalEntry::DIGEST_SENT, null, null, ['day' => $day, 'count' => $new['count'], 'amount' => $new['amount'], 'recipients' => $sent]);
+        // `renewedUpTo` : rang du journal jusqu'où les constats redevenus « nouveaux » sont annoncés ; le courriel suivant repart de là
+        $journal->append(LossJournalEntry::DIGEST_SENT, null, null, ['day' => $day, 'count' => $total['count'], 'amount' => $total['amount'], 'recipients' => $sent,
+            'renewed' => $again['count'], 'renewedUpTo' => $renewed['lastId']]);
 
         return ['status' => 'sent', 'sent' => $sent];
     }
