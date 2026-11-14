@@ -237,7 +237,7 @@ class PosCustomerApiTest extends WebTestCase
         $membership->grant($mvMember, 'memoires', 'register');
         $membership->grant($posMember, 'pos', 'pos_link');
         // la recherche par téléphone passe par l'adresse du compte : même règle
-        $this->db->executeStatement("INSERT INTO adress (id, user_adress_id, firstname, lastname, fullname, address, phone, city, codepostal, country) SELECT COALESCE(MAX(id), 0) + 1, ?, 'A', 'B', 'A B', '1 rue', '438 555 0177', 'Ville', 'H1A 1A1', 'CA' FROM adress", [$mvMember->getId()]);
+        $this->db->executeStatement("INSERT INTO adress (id, user_adress_id, firstname, lastname, fullname, address, phone, city, codepostal, country) VALUES (nextval('adress_id_seq'), ?, 'A', 'B', 'A B', '1 rue', '438 555 0177', 'Ville', 'H1A 1A1', 'CA')", [$mvMember->getId()]);
         $byPhone = fn (): array => array_column($this->json($this->request('GET', '/api/pos/customers?q=4385550177'))['results'], 'userId');
         $this->assertSame([$mvMember->getId()], $byPhone());
         $found = fn (User $u): array => array_map(fn (array $x) => [$x['source'], $x['userId']], $this->json($this->request('GET', '/api/pos/customers?q=' . $u->getEmail()))['results']);

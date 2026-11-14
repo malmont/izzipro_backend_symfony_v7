@@ -55,7 +55,7 @@ class AppMembershipBackfillTest extends KernelTestCase
         $buyer = $this->account('acheteur');
         $this->order($buyer, 'Ecommerce', '2023-01-02 03:04:05');
         $this->order($buyer, 'Mobile_app', '2023-05-05 00:00:00');
-        $this->db->executeStatement("INSERT INTO reviews_product (id, user_review_id, product_reviews_id, note, created_at) SELECT COALESCE((SELECT MAX(id) FROM reviews_product), 0) + 1, ?, MIN(id), 5, '2022-12-31 00:00:00' FROM product", [$buyer]);
+        $this->db->executeStatement("INSERT INTO reviews_product (id, user_review_id, product_reviews_id, note, created_at) SELECT nextval('reviews_product_id_seq'), ?, MIN(id), 5, '2022-12-31 00:00:00' FROM product", [$buyer]);
         $shopApp = $this->account('appli', ['signup_channel' => 'mobile_shop', 'created_at' => '2025-01-01 00:00:00']);
         $checkout = $this->account('paiement');
         $this->db->executeStatement("INSERT INTO checkout_session (user_id, cart, amount, created_at, updated_at, payment_intent_id, currency) VALUES (?, '[]', 100, '2025-02-02 00:00:00', NOW(), ?, 'cad')", [$checkout, 'pi_reprise_' . $checkout]);
@@ -77,7 +77,7 @@ class AppMembershipBackfillTest extends KernelTestCase
         $this->order($posSale, null, '2023-01-01 00:00:00');
         $address = $this->account('adresse');
         foreach ([$address, $buyer] as $withAddress) { // l'acheteur a une adresse ET des traces : elle ne change rien pour lui
-            $this->db->executeStatement("INSERT INTO adress (id, user_adress_id, firstname, lastname, fullname, address, phone, city, codepostal, country) SELECT COALESCE(MAX(id), 0) + 1, ?, 'A', 'B', 'A B', '1 rue', '-', 'Ville', 'H1A 1A1', 'CA' FROM adress", [$withAddress]);
+            $this->db->executeStatement("INSERT INTO adress (id, user_adress_id, firstname, lastname, fullname, address, phone, city, codepostal, country) VALUES (nextval('adress_id_seq'), ?, 'A', 'B', 'A B', '1 rue', '-', 'Ville', 'H1A 1A1', 'CA')", [$withAddress]);
         }
         $emptyCart = $this->account('panier-vide');
         $this->cart($emptyCart, false);
@@ -216,10 +216,10 @@ class AppMembershipBackfillTest extends KernelTestCase
     private function account(string $name, array $columns = []): int
     {
         $columns += ['roles' => '["ROLE_USER","ROLE_USER_INTERNET"]', 'password_set' => 'true', 'signup_channel' => null, 'created_at' => '2025-06-01 00:00:00', 'deleted_at' => null];
-        $email = 'reprise-' . $name . '-' . bin2hex(random_bytes(3)) . '@example.invalid';
+        $email = 'reprise-m2-' . $name . '-' . bin2hex(random_bytes(3)) . '@example.invalid';
 
         return (int) $this->db->fetchOne('INSERT INTO "user" (id, email, username, firstname, lastname, password, roles, is_verified, otp_enabled, password_set, signup_channel, created_at, deleted_at)
-            VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM "user"), ?, ?, \'Reprise\', \'Essai\', \'inutilisable\', ?, true, false, ?, ?, ?, ?) RETURNING id',
+            VALUES (nextval(\'user_id_seq\'), ?, ?, \'Reprise\', \'Essai\', \'inutilisable\', ?, true, false, ?, ?, ?, ?) RETURNING id',
             [$email, $email, $columns['roles'], $columns['password_set'], $columns['signup_channel'], $columns['created_at'], $columns['deleted_at']]);
     }
 
@@ -231,15 +231,15 @@ class AppMembershipBackfillTest extends KernelTestCase
     private function order(int $userId, ?string $source, string $date): void
     {
         $this->db->executeStatement('INSERT INTO "order" (id, status_id, order_date, total_amount, reference, user_id_id, order_source_id)
-            VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM "order"), (SELECT MIN(id) FROM status_commande), ?, 10, ?, ?, (SELECT id FROM order_source WHERE name = ?))', [$date, 'REPRISE-' . bin2hex(random_bytes(4)), $userId, $source]);
+            VALUES (nextval(\'order_id_seq\'), (SELECT MIN(id) FROM status_commande), ?, 10, ?, ?, (SELECT id FROM order_source WHERE name = ?))', [$date, 'REPRISE-' . bin2hex(random_bytes(4)), $userId, $source]);
     }
 
     private function cart(int $userId, bool $withItem): void
     {
         $id = (int) $this->db->fetchOne('INSERT INTO "Cart" (id, user_cart_id, quantity, sub_total_ht, taxe, sub_total_ttc, carrierprice, ispaid, created_at, reference, fullname, carriername, deleveryaddress)
-            VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM "Cart"), ?, 1, 10, 1, 11, 0, false, \'2025-03-03 00:00:00\', ?, \'R\', \'-\', \'-\') RETURNING id', [$userId, 'REPRISE-' . bin2hex(random_bytes(4))]);
+            VALUES (nextval(\'"Cart_id_seq"\'), ?, 1, 10, 1, 11, 0, false, \'2025-03-03 00:00:00\', ?, \'R\', \'-\', \'-\') RETURNING id', [$userId, 'REPRISE-' . bin2hex(random_bytes(4))]);
         if ($withItem) {
-            $this->db->executeStatement('INSERT INTO cart_details (id, carts_id, sub_total_ttc, producprice, quantity, sub_total_ht, taxe, productname) VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM cart_details), ?, 11, 10, 1, 10, 1, \'Article\')', [$id]);
+            $this->db->executeStatement('INSERT INTO cart_details (id, carts_id, sub_total_ttc, producprice, quantity, sub_total_ht, taxe, productname) VALUES (nextval(\'cart_details_id_seq\'), ?, 11, 10, 1, 10, 1, \'Article\')', [$id]);
         }
     }
 
@@ -256,7 +256,7 @@ class AppMembershipBackfillTest extends KernelTestCase
     /** Retire les comptes d'essai et tout ce qui s'y rattache ; remet le site dans l'état « reprise pas faite » */
     private function clean(): void
     {
-        $users = 'SELECT id FROM "user" WHERE email LIKE \'reprise-%@example.invalid\'';
+        $users = 'SELECT id FROM "user" WHERE email LIKE \'reprise-m2-%@example.invalid\''; // préfixe propre à ce test : jamais les comptes d'un autre
         foreach ([
             "DELETE FROM pos_customer_consent WHERE customer_id IN (SELECT id FROM pos_customer WHERE user_id IN ($users))", "DELETE FROM pos_customer WHERE user_id IN ($users)",
             "DELETE FROM cart_details WHERE carts_id IN (SELECT id FROM \"Cart\" WHERE user_cart_id IN ($users))", "DELETE FROM \"Cart\" WHERE user_cart_id IN ($users)",
