@@ -288,7 +288,90 @@ console, pas depuis l'application).
   l'identité anonymisée. Tests : `MobileAccountAndCoverTest`. La page web publique « Supprimer mon compte »
   demandée par Google est du ressort du frontend (texte + renvoi vers l'application ou l'adresse de contact du site).
 
+## Équipe : Mémoires Vivantes web est l'outil de l'équipe (modèle du 14/11/2026)
+
+Décision du propriétaire du 14/11/2026 : **Mémoires Vivantes web est « un outil de gestion de biographie », réservé à l'équipe.**
+Les clients sont servis par les **liens signés** (questionnaires, contributeurs, invitations de chapitre) et par l'application
+**Living Memory**. Ce modèle remplace, là où ils diffèrent, les paragraphes du 13/11/2026 qui suivent (un biographe y voyait tous
+les livres et invitait des clients).
+
+### Les rôles
+
+| Rôle | Ce qu'il fait | EasyAdmin |
+|---|---|---|
+| Super administrateur | tout, tous les sites | oui |
+| Administrateur du site (`ROLE_ADMIN`) | tout le site, Mémoires Vivantes compris ; lui seul nomme un responsable et tient les réglages (quotas, tarifs, paiements, revenus, comptes mobiles, types de livre, modifier ou supprimer un compte) | oui |
+| **Responsable des biographes** (`ROLE_MEMOIRES_RESPONSABLE`) | **tous les livres** du site, avec les filtres par client et par biographe ; l'équipe : inviter un biographe, donner ou retirer le rôle de biographe, affecter un biographe à un livre ; tous les rendez-vous. Rien d'autre du site | non |
+| **Biographe** (`ROLE_MEMOIRES_BIOGRAPHE`) | **seulement SES livres** : ceux qu'il possède et ceux dont il est le biographe affecté ; leurs chapitres, séances, questionnaires, contributeurs, PDF, impression. Il n'affecte pas, n'invite personne (il envoie des liens signés à ses clients), ne voit ni l'équipe ni la console | non |
+
+- `App\Security\TeamRoles` est le seul endroit : `MEMOIRES_ACCESS` (travaille pour Mémoires Vivantes : administrateur, super
+  administrateur, responsable, biographe ; `opensMemoires()`, attribut `MEMOIRES_TEAM`) et `MEMOIRES_MANAGE` (voit tout :
+  administrateur, super administrateur, responsable ; `managesMemoires()`, attribut `MEMOIRES_MANAGE`).
+- **La règle d'accès à un livre** est unique, `BookVoter::canAccess()`, reprise par `ChapterVoter` et par tout ce qui passe par
+  eux (chapitres, photos, contributeurs, liens signés, invitations de chapitre, PDF, impression) : `MEMOIRES_MANAGE` a tous les
+  livres ; un biographe a ceux qu'il possède et ceux où `mv_book.biographer_id` le désigne ; tout autre compte a ceux qu'il possède.
+- **Liste des livres** (`GET /books`) : administrateur et responsable, tous les livres avec `scope`, `userId`, `biographerId` ;
+  biographe, ses livres (possédés et affectés), les filtres n'ont aucun effet pour lui ; client, les siens.
+- **Affecter un biographe** (`biographerId` de `PUT /books/{id}`) : administrateur ou responsable ; un biographe reçoit 403
+  `FORBIDDEN` s'il change la valeur. **Un biographe qui crée un livre en devient le biographe affecté** (journal
+  `book_biographer`, repère `creator`) ; retiré d'un livre par le responsable, il ne le voit plus.
+- **Rendez-vous** : la liste entière et le filtre par biographe sont au responsable et à l'administrateur ; un biographe voit les
+  siens et confirme ceux dont il est le biographe **et ceux de ses livres** ; le responsable et l'administrateur confirment tout.
+- **Équipe et console** : `GET /team`, `GET /admin/users`, `POST /admin/users` et le champ `biographer` de
+  `PUT /admin/users/{id}/team` sont au responsable et à l'administrateur (`config/packages/security.yaml` : `^/api/memoires/admin/`
+  exige `ROLE_ADMIN` ou `ROLE_MEMOIRES_RESPONSABLE`). Un biographe n'entre plus dans la console.
+- **Nommer un responsable** : `PUT /admin/users/{id}/team` avec `{"responsable": true|false}`, **administrateur du site
+  seulement** (403 `FORBIDDEN` pour un responsable ; rien n'est appliqué si un champ est refusé) ; ou
+  `app:memoires:team:grant <site> <courriel> --role=responsable` ; ou l'écran Utilisateurs d'EasyAdmin. Toujours par
+  `TeamRoleService`, au journal `user_team`. La réponse et les lectures de comptes portent `isResponsable` à côté de
+  `isBiographer` ; `teamRoles` porte le rôle. La population `team` compte les biographes et les responsables.
+- **IA et paiement** : toute l'équipe, responsable compris, reste sans quota d'IA et sans paiement (`AiQuotaService::isLimited`,
+  `PricingService::paymentRequired`), sur les livres auxquels elle a accès.
+- **L'administrateur ne perd rien** : `tests/Functional/MemoiresVivantes/MemoiresAdminNonRegressionTest.php`, écrit avant le
+  changement et joué avant et après.
+
+### Le web est fermé aux comptes clients
+
+- **Connexion** : le front de Mémoires Vivantes web envoie **`app: "memoires"`** à `POST /api/login`, `POST /api/otp-verify` et
+  `POST /api/token/refresh`. Un compte qui n'est ni administrateur, ni responsable, ni biographe reçoit
+  **403 `{ code: "MEMOIRES_TEAM_ONLY", error, message }`** (« Cet espace est réservé à l'équipe. Vos récits se poursuivent dans
+  l'application Living Memory ou par le lien que vous avez reçu. »), avant tout envoi de code, et aussi au rafraîchissement : une
+  session ouverte d'un compte client s'éteint à son prochain rafraîchissement. Un membre de l'équipe reçoit sa session, dont le
+  jeton porte `app: "memoires"` (le nom de l'outil ; ce n'est pas une famille d'applications à membres, `docs/apps-membres.md` § 2).
+  Sans `app: "memoires"`, rien ne change (`AuthenticationService::memoiresWebRefusal`).
+- **Seule l'équipe crée un livre web** : `POST /api/memoires/books` répond 403 `MEMOIRES_TEAM_ONLY` à un compte client. C'est le
+  verrou côté serveur : le serveur ne sait pas distinguer un navigateur de l'application sur les autres routes `/api/memoires/*`,
+  c'est donc le **canal du livre** qui porte la règle. Un compte client n'a que des livres de canal mobile, avec leurs quotas et
+  leurs chapitres payants : depuis un navigateur, il n'obtient que ce que Living Memory lui donne.
+- **Living Memory n'est pas touché** : `POST /api/memoires/mobile/books`, les routes `/mobile/*`, les livres, chapitres, quotas,
+  achats et liens signés sont inchangés. Elle n'envoie jamais `app: "memoires"` et ne crée jamais de livre par la route du web.
+- **La console n'invite plus de client** : `POST /api/memoires/admin/users` invite un **biographe** (défaut, ou
+  `role: "ROLE_MEMOIRES_BIOGRAPHE"`) ou crée un administrateur (`role: "ROLE_ADMIN"`, administrateur du site seulement). Le rôle
+  de biographe est posé par `TeamRoleService` (journal `user_team`, repère `invite`) ; le lien d'activation ne change pas.
+  `role: "ROLE_USER"` ou tout autre rôle : 403 `MEMOIRES_TEAM_ONLY`. La réponse porte `role`, `isBiographer`, `teamRoles`.
+- **Les livres web d'avant** qui appartenaient à un compte client : leur propriétaire est devenu biographe, affecté à ses propres
+  livres, par l'opération `app:members:family-split` (`docs/apps-membres.md` § 2). Un livre web qui appartiendrait encore à un
+  compte client reste servi à son propriétaire par les routes des livres (règle du propriétaire), sans connexion au web.
+
+### Ce que le front Mémoires Vivantes web a à faire
+
+1. Envoyer `app: "memoires"` à la connexion, à la vérification du code et au rafraîchissement.
+2. Sur 403 `MEMOIRES_TEAM_ONLY` : afficher le message, sans étape « Rejoindre » ; proposer Living Memory.
+3. Menus selon le rôle (lu dans `roles` du jeton, et `isResponsable` / `isBiographer` / `teamRoles` des lectures de comptes) :
+   - biographe : « Mes livres » (possédés et affectés), leurs chapitres, séances, questionnaires, contributeurs, PDF, impression ;
+     ni menu Équipe, ni liste de tous les livres, ni filtre par biographe, ni affectation ;
+   - responsable : tous les livres avec les filtres par client et par biographe, affectation, tous les rendez-vous, menu Équipe
+     (inviter un biographe, donner ou retirer le rôle de biographe, liste des comptes) ; pas les réglages ;
+   - administrateur : tout, comme avant, plus « nommer un responsable ».
+4. Console Équipe : « inviter un biographe » à la place de « inviter un client » (ne plus envoyer `role: "ROLE_USER"`).
+5. Un 403 sur un livre, un chapitre ou un rendez-vous qui n'est pas celui du biographe est normal : ne pas proposer ces écrans.
+
 ## Équipe de Mémoires Vivantes : rôle de biographe (lot MV-BIOGRAPHE, 13/11/2026)
+
+> **Mis à jour par le modèle du 14/11/2026 ci-dessus** : un biographe ne voit plus tous les livres (seulement les siens), n'entre
+> plus dans la console et n'invite plus de client ; « l'équipe » qui voit tout est l'administrateur ou le responsable des biographes.
+> Le reste (rôle d'accès pur, journal, populations, commande) vaut toujours.
+
 
 Décision du propriétaire : **des rôles d'équipe propres à chaque application, sur la base de comptes commune, sans
 comptes séparés.** Jusque-là, Mémoires Vivantes reconnaissait son équipe au seul `ROLE_ADMIN`, partagé avec la
