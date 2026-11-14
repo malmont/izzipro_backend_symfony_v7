@@ -1,4 +1,4 @@
-# Statistiques unifiées — application de gestion (lot S1, 11/11/2026 ; sections : lot S2-a, 14/11/2026)
+# Statistiques unifiées — application de gestion (lot S1, 11/11/2026 ; sections : lots S2-a et S2-b, 14/11/2026)
 
 Refonte des Statistiques décidée avec le propriétaire, contrat validé par l'application (« new easymakemoney ») le 11/11/2026. Une route, fiable et
 comparable, **une seule règle** : celle du résultat de période P2 (`docs/periodes-gestion.md`). Les anciennes routes de statistiques
@@ -82,7 +82,7 @@ par les mouvements. Schéma : Version20261217100000, `scripts/migrate_all_v2_ges
 |---|---|
 | **S1** | route unifiée, plages et comparaisons, séries, valeur du stock et instantané quotidien ; livré le 11/11/2026 |
 | **S2-a** | sections `payments` (encaissé, moyens de paiement, clôtures de caisse) et `expenses` (notes de frais, port d'achat, publicité ; frais fixes à côté) ; codé le 14/11/2026 |
-| S2-b | sections `stock` (mouvements, courbe de valeur depuis le 11/11/2026), `shipping` (port facturé, par transporteur) et `taxes` (par taxe) |
+| **S2-b** | sections `stock` (mouvements, valeur et sa courbe depuis le 11/11/2026, stock bas), `shipping` (port facturé, par transporteur) et `taxes` (par taxe) ; codé le 14/11/2026 |
 | S3 | « Pourquoi ? » par l'IA, export CSV et PDF |
 | S4 | analyses : articles, catégories, heures fortes, rotation du stock, remises, clients en nombres (nommé « S2 » avant le 14/11/2026) |
 | à part | marge sur le port : port facturé moins coût réel des étiquettes. Le coût n'est pas enregistré par étiquette (`shipping_label` n'a pas de montant) : il faut d'abord le garder |
@@ -93,11 +93,12 @@ par les mouvements. Schéma : Version20261217100000, `scripts/migrate_all_v2_ges
 Décision du propriétaire du 14/11/2026 : les 5 anciens écrans de statistiques de l'application (Caisse, Paiements, Stock, Frais, Total
 frais) sont remplacés par des volets de l'écran unifié. Un ancien écran n'est retiré que quand toute son information utile a une place ici.
 
-`sections=payments,expenses` (une ou plusieurs, séparées par des virgules ; casse et espaces tolérés ; ordre de la réponse fixe). La
+`sections=payments,expenses,stock,shipping,taxes` (une ou plusieurs, séparées par des virgules ; casse et espaces tolérés ; ordre de la
+réponse fixe, celui de cette liste). La
 réponse gagne `sections { <nom>: section }`. Chaque section suit la plage, la plage précédente, l'an dernier et la langue de la demande ;
 ses indicateurs ont la forme de ceux de S1 (`value`, `unit`, `previous`, `lastYear`, `changeVsPrevious`, `changeVsLastYear`,
-`changeUnit`, `spark`) ; son graphique a les mêmes tranches que celui de S1. Tout est calculé par le serveur. Une valeur inconnue, ou une
-section pas encore livrée (`stock`, `shipping`, `taxes` : S2-b) : 422 `VALIDATION_FAILED`, `fields.sections` = `INVALID_SECTION`.
+`changeUnit`, `spark`) ; son graphique a les mêmes tranches que celui de S1. Tout est calculé par le serveur. Une valeur inconnue :
+422 `VALIDATION_FAILED`, `fields.sections` = `INVALID_SECTION`.
 `appliesSource` dit si le filtre `source` a un sens pour la section : l'application grise son sélecteur de canal quand il est faux.
 Un nombre rond sort en entier dans le JSON (`100`, pas `100.0`), comme dans S1.
 
@@ -153,6 +154,62 @@ Un nombre rond sort en entier dans le JSON (`100`, pas `100.0`), comme dans S1.
 - Le canal ne s'applique pas (ce sont des dépenses) : avec un `source`, mêmes chiffres et remarque `SOURCE_NOT_APPLICABLE`.
 - Graphique : chaque frais à son jour ; pour un port d'achat en devise, le point est arrondi (l'indicateur fait foi).
 - L'ancienne route (`frais/total`) n'applique pas le taux de change au port d'achat et ne compte pas la publicité.
+
+### `stock` : mouvements et valeur du stock (remplace l'écran Stock)
+
+```
+{ indicators { unitsIn, unitsOut, receptions, adjustments, returns },                 // unit "count"
+  breakdown [{ code: "in" | "out" | "return" | "adjustment" | "reception", label, quantity, previous, lastYear }],   // toujours les 5 codes
+  value { saleValue, costValue, historyStartsAt | null }, lowCount,
+  chart { granularity, points [{ key, from, to, in, out, return, adjustment, reception, saleValue | null, costValue | null,
+                                  lastYear { in, out, return, adjustment, reception } }] },
+  caveats [{ code, text, date? }], appliesSource: false }
+```
+
+- **Mouvements** : les quantités de `inventory_movements` de la plage par type (les codes et l'ordre de `stock-evolution`), datées par
+  l'heure du mouvement, en jours du magasin. Sur la semaine en cours, mêmes totaux que l'ancienne route (test).
+- **`value`** : la valeur du stock **aujourd'hui** (`saleValue` par variante, `costValue` au coût connu : l'indicateur `stockValue` de
+  S1) ; `historyStartsAt` : la date du premier instantané quotidien.
+- **Courbe de la valeur** : `saleValue` et `costValue` d'un point = le **dernier instantané pris dans la tranche**
+  (`gestion_stock_snapshot`, § 4), `null` s'il n'y en a pas. Les instantanés existent depuis le 11/11/2026 : avant, rien à tracer ;
+  remarque `STOCK_HISTORY_STARTS` (avec `date`) quand la plage commence avant le premier instantané, `STOCK_HISTORY_EMPTY` s'il n'y en
+  a aucun.
+- `lowCount` : le nombre d'articles en stock bas, celui de « Ma journée » (`HomeTilesService::lowStock`).
+- Le canal ne s'applique pas (`SOURCE_NOT_APPLICABLE`). Non repris de l'ancien écran : `stock_value` en dollars selon l'ancienne règle
+  et le libellé de mois en anglais.
+
+### `shipping` : la livraison facturée aux clients (remplace « Total frais », partie transporteurs)
+
+```
+{ indicators { billed, orders, averagePerOrder },
+  breakdown [{ carrierId | null, name, kind, billed, orders, share }],
+  chart { granularity, points [{ key, from, to, billed, orders, lastYear { billed, orders } }] },
+  caveats [{ code, text }], appliesSource: true }
+```
+
+- **Règle : `sales.shippingBilled` du résultat de période** (`order.shipping_cost`) : ventes et retours (un port rendu se déduit),
+  commandes incomplètes et annulées exclues, datée par la commande. **Sur un `periodId`, `billed` égale ce chiffre au cent près** (test).
+- `orders` : les ventes avec un transporteur ; `averagePerOrder` = `billed ÷ orders`, `null` sans vente.
+- `breakdown` : par transporteur, du plus gros au plus petit ; `kind` du transporteur (`fixed`, `pickup`…) ; port facturé sans
+  transporteur : ligne `carrierId: null` (« Sans transporteur »). L'ancienne route (`carrier/statistics`) ne détaillait pas par
+  transporteur, et ses `carrier_count` / `shippingAmount` (prix catalogue) ne sont pas repris.
+- Remarque fixe `SHIPPING_BILLED_NOT_COST` : le coût réel des étiquettes n'est pas suivi, ce chiffre n'est pas une marge (lot à part).
+
+### `taxes` : les taxes collectées (remplace « Total frais », partie taxes)
+
+```
+{ indicators { collected },
+  breakdown [{ code, label, jurisdiction, ratePpm, base, collected, share }],
+  chart { granularity, points [{ key, from, to, collected, lastYear { collected } }] },
+  caveats [{ code, text }], appliesSource: true }
+```
+
+- **Règle** : les lignes de taxe des commandes (`order_tax`), telles qu'enregistrées (celles d'un retour sont négatives) ; ventes et
+  retours, **commandes incomplètes et annulées exclues**, datées par la commande. L'ancienne route (`taxes/monthly`) compte toutes les
+  commandes non annulées, incomplètes comprises : les deux totaux peuvent différer d'une commande incomplète.
+- `breakdown` : par taxe (code, libellé, juridiction, taux en millionièmes), du plus gros au plus petit ; `base` = base taxable
+  enregistrée, `null` si elle ne l'a pas été ; une ligne d'avant les codes (PAYS-1) prend le code et le nom de sa taxe.
+- Remarque fixe `TAXES_NOT_A_RETURN` : ces chiffres aident à préparer une déclaration, ils n'en sont pas une.
 
 ### Routes anciennes : gardées telles quelles
 
