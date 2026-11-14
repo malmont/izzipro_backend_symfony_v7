@@ -128,6 +128,14 @@ chaque libellé au terme, dans les deux langues.
   rédige (1 unité) sans redire à quoi sert l'écran, que le guide dit déjà.
   Depuis le 14/11/2026, cette réponse sans modèle est rendue **par le POST lui-même** (`state: "done"`, blocs, analyses, unités) :
   l'application n'attend plus le worker (`docs/console-gestion.md` § 5.1).
+- **Une question de définition sans ambiguïté est reconnue par le serveur** (14/11/2026, `ConsoleResponder::asksOnlyForATerm`) :
+  aucun appel au modèle, 0 unité, la leçon et ses chiffres rendus par le POST. Règle stricte, **dans le doute, le modèle** : il faut
+  une tournure de définition (« c'est quoi », « qu'est-ce que », « que veut dire », « que signifie », « définition de », `what is`,
+  `what does … mean`, `define`), **un terme ou un synonyme du lexique et un seul** (dans l'une des deux langues), et **rien d'autre
+  que des articles**. Tout autre mot rend la main au modèle : un possessif (« c'est quoi **ma** marge ? » demande un chiffre), une
+  date ou un jugement (« de ce mois », « un bon taux »), « combien », une seconde notion ou une seconde demande, l'écran désigné
+  (« ici », « cet écran » : c'est le guide). Une question de définition tournée autrement (« le taux de marque, tu peux me dire ce
+  que c'est ? ») passe par le modèle, qui désigne la notion : même leçon, un appel, 0 unité, réponse en attente.
 - **Un état qui n'est pas un jugement se dit par une phrase** (lot A-4) : pour un budget « sans prévu » ou une trésorerie « sans
   solde », le modèle reçoit « Aucun budget n'est prévu pour cette période », « Aucun solde n'a encore été saisi », à reprendre telles
   quelles, et non un état à glisser dans « est … ».
