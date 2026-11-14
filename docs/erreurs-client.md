@@ -69,12 +69,20 @@ service appelé est remplacé par un double qui lève une panne portant un texte
 | Écrans EasyAdmin : image et IA d'un article, connexion Stripe (2) | message de l'exception dans le bandeau | texte neutre pour une panne ; jamais le message d'une erreur Stripe |
 | Passerelles Stripe : compte de la caisse, abonnements, terminal (code non reconnu), paiement web | « Stripe : » suivi du message brut | carte refusée : texte de Stripe et `declineCode` ; sinon texte neutre |
 | **ERREURS-3, Mémoires Vivantes (13/11/2026)** : lien de paiement (`POST /api/memoires/books/{id}/payment-link`, 500), devis et commande d'impression (`POST …/print/estimate`, `POST …/print/order`, 400), lecture d'une commande (`GET /api/memoires/print/orders/{id}`, 404), transcription (`POST /api/memoires/chapters/{id}/audio`, 500), amélioration de texte (`POST …/improve-answer`, 500) | message brut de l'exception (Lulu, Stripe, PHP, IA…), parfois préfixé « An error occurred during… » | statuts et clés inchangés ; refus rédigé gardé ; panne : texte neutre et `INTERNAL_ERROR` ; Stripe : « Stripe : » + texte de Stripe et `declineCode` pour une carte refusée, sinon texte neutre du paiement, `code STRIPE_ERROR` |
+| **ERREURS-3, Boussole ESG (14/11/2026)**, 14 routes sous `/api/boussole` : `POST auth/register` (409), `POST auth/login` (401), `GET sessions/{uuid}/report` (404), `POST documents` (500), `GET documents` (500), `DELETE documents/{id}` (500), `GET documents/download/{id}` (500), `GET documents/download` (500), `GET company` (404), `PUT company` (400), `POST sessions` (409), `GET sessions` (404), `GET sessions/historique` (404), `PUT sessions/{uuid}/answers` (403) | message brut de toute exception, une erreur SQL comprise, dans `error` | refus voulus inchangés au caractère près (« Identifiants incorrects. », compte ou entreprise désactivés, « Aucune entreprise associée à cet utilisateur. », session en cours, session introuvable ou non modifiable, question introuvable, rapport introuvable ou sans accès) ; panne : `error` neutre et `code: "INTERNAL_ERROR"`, statut gardé |
+| Envoi d'un document de la Boussole (`POST /api/boussole/documents`, 400) | texte de toute `InvalidArgumentException` | nos deux refus gardés (« Type de fichier non autorisé. », « Fichier trop volumineux (max 10 Mo). ») ; la même classe levée par une bibliothèque : texte neutre |
+| Statut d'un rapport de la Boussole (`GET /api/boussole/sessions/{uuid}/report`, champ `error` d'un rapport en échec) | texte brut de l'exception du worker, gardé en base | phrase fixe « La génération du rapport a échoué. Veuillez réessayer dans quelques instants. » ; le texte brut reste en base (`esg_diag_report.error_message`) et au journal du worker |
 | Création de la commande Lulu (`LuluPrintService::createPrintJob`) | `error` = message + corps de la réponse Lulu | `error` neutre ; message et corps au journal et dans `error_message` de la commande (EasyAdmin seulement : la commande rendue au client ne porte pas ce champ) |
 
 Hors lot, car le message part dans un journal ou une console et pas au client : webhook d'abonnement, suppression de compte (2),
 changement de courriel, réconciliation des terminaux, notification push de la gestion (colonne `error` non rendue par l'API), transition
 du module de gestion (commande de console), file d'invalidation du cache ; Mémoires Vivantes (ERREURS-3) : synchronisation des réponses
-d'une question (journal), paiement d'impression confirmé par webhook (`detail` = notre `ApiErrorException` rédigée, rendue à Stripe et au journal).
+d'une question (journal), paiement d'impression confirmé par webhook (`detail` = notre `ApiErrorException` rédigée, rendue à Stripe et au journal) ;
+Boussole (ERREURS-3) : commande de régénération des récits d'impact (console), worker du rapport PDF (journal et colonne `error_message`).
+
+**Connexion de la Boussole.** Le mauvais mot de passe est levé avec une classe de Symfony (`BadCredentialsException`), que la règle par
+origine prendrait pour une panne : `AuthController::login` l'attrape à part et rend « Identifiants incorrects. », comme pour un compte
+inconnu. À retenir pour tout refus voulu levé avec une classe qui n'est ni de l'application, ni HTTP, ni générique.
 
 Non testés de bout en bout, couverts par le garde-fou et la relecture : les quatre écrans EasyAdmin, le devis et l'achat d'étiquette de
 l'administration, le paiement web (`StripePaymentService`), le lot IA, l'emballage.
@@ -96,6 +104,12 @@ Le statut n'a pas été touché, comme convenu. Ces réponses disent autre chose
 - `POST` et `PUT /api/adresses` : **400 `ADDRESS_UNDELIVERABLE`** quand le service d'adresses est en panne (l'adresse semble refusée) ;
 - achat d'étiquette de l'administration : **409 `PURCHASE_FAILED`** sur une panne du transporteur.
 
+Boussole ESG (ERREURS-3), statuts gardés pour que son front n'ait rien à changer : `POST auth/register` **409** sur une panne ;
+`POST auth/login` **401** pour un compte ou une entreprise désactivés ; `GET sessions/{uuid}/report` **404** pour « pas accès » ;
+`POST documents` et `GET documents` **500** pour « Aucune entreprise associée à cet utilisateur. » ; `GET company` **404** et
+`PUT company` **400** sur une panne ; `POST sessions` **409** pour « aucune entreprise » ; `GET sessions` et `historique` **404** sur
+une panne ; `PUT sessions/{uuid}/answers` **403** pour « session introuvable » et « question introuvable ».
+
 Seul changement de statut du lot : `GET /api/booking/check/{productId}` prenait pour statut le code de l'exception, quel qu'il soit (un
 code SQL en chaîne faisait échouer la réponse elle-même) ; une panne répond maintenant 500.
 
@@ -105,8 +119,11 @@ code SQL en chaîne faisait échouer la réponse elle-même) ; une panne répond
   `InvalidArgumentException` / `DomainException` de ces dossiers (21 blocs : plateforme, « Mon site », assistant, réservations), à relire
   pour celles qu'une bibliothèque peut lever. Dans les dossiers d'ERREURS-1, aucun bloc n'attrape ces deux classes seules.
 - **ERREURS-3** : Mémoires Vivantes **fait** (13/11/2026 : 7 blocs neutralisés, 2 inscrits comme sorties hors client, dossier balayé par le
-  garde-fou, cas par route dans `ClientErrorMessagesTest::testMemoiresVivantesRoutesHideTheFailure`) ; Boussole ESG (`src/ESG/`) encore
-  exclue du garde-fou, à la session de la gestion.
+  garde-fou, cas par route dans `ClientErrorMessagesTest::testMemoiresVivantesRoutesHideTheFailure`) ; Boussole ESG **fait**
+  (14/11/2026 : 14 blocs neutralisés, le bloc voisin de l'envoi d'un document et le message d'échec d'un rapport avec eux ;
+  `src/ESG/` balayé par le garde-fou, qui n'a plus aucun dossier en attente ; cas par route et refus rejoués dans
+  `tests/Functional/Boussole/BoussoleClientErrorsTest.php`). Reste pour la Boussole, avec son front : les statuts trompeurs
+  ci-dessus et les points de sécurité de la connexion (`docs/boussole-esg.md`, « Sécurité de la connexion »).
 - **LEX (lot du 12/11/2026, volet 4)** :
   - **Traités dans la gestion** (en français fixe ; statut HTTP et clé `error` conservés, `code` et `message` ajoutés aux trois
     réponses JSON) : `CommandeController` (`401` `UNAUTHENTICATED` « Authentification requise »), `CollectionController` (`401`

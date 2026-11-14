@@ -161,6 +161,9 @@ les comptes.
   worker `symfony_messenger_worker_esg_v2` → `MessageHandler/GenerateEsgReportHandler.php` : cherche le tenant par
   son code dans la base maître, `switchTenant`, rend `templates/esg/report.html.twig` avec Dompdf (ressources
   distantes désactivées), statut `generating` → `ready` | `failed` (message d'erreur enregistré, pas de relance).
+  Le texte brut de l'exception reste dans `esg_diag_report.error_message` et au journal du worker, pour le diagnostic ;
+  `GET sessions/{uuid}/report` rend dans `error` une phrase fixe (`ReportStatusOutputDTO::FAILURE_MESSAGE`, ERREURS-3,
+  14/11/2026), jamais ce texte.
 - Stockage privé (jamais servi directement par nginx) :
 
 | Fichiers | Chemin | Téléchargement |
@@ -202,8 +205,12 @@ Corrections proposées, par ordre de gravité :
 2. **Compte désactivé encore actif jusqu'à 1 h** : `is_active` (compte et entreprise) n'est vérifié qu'à la
    connexion ; un jeton déjà émis reste valable. À vérifier : `UserChecker` ne semble pas s'appliquer au pare-feu `api`.
 3. **Erreurs masquées** : `saveAnswers` renvoie 403, `ReportController::getStatus` et `GET company` 404, `PUT company` 400,
-   `register` 409 pour **toute** exception, avec le message brut (y compris une erreur SQL). C'est ce qui a caché le
-   bug du 23/09. Ne capturer que les exceptions HTTP, comme `submit`.
+   `register` 409 pour **toute** exception. **Le message brut ne sort plus (ERREURS-3, 14/11/2026)** : sur les 14 routes
+   qui attrapaient largement, une panne rend le texte neutre et `code: "INTERNAL_ERROR"`, détail au journal sous
+   « [erreur imprévue] » ; les refus voulus gardent leur texte (`docs/erreurs-client.md`, test
+   `tests/Functional/Boussole/BoussoleClientErrorsTest.php`). **Les statuts, eux, restent trompeurs**, pour que le front
+   n'ait rien à changer : ils sont listés dans `docs/erreurs-client.md`. Les corriger (ne capturer que les exceptions
+   HTTP, comme `submit`) est un lot à faire avec le front.
 4. **Fichiers de tous les tenants dans les mêmes dossiers** : `documents/<id entreprise>/` mélange des entreprises de
    bases différentes qui ont le même identifiant. Pas de fuite (l'accès passe par la base du tenant), mais risque au
    nettoyage ou à la suppression. Ajouter le code du tenant au chemin.
@@ -228,6 +235,22 @@ Points métier à trancher (hors code) :
   sans le frontend.
 - `is_verified` est `false` à l'inscription et n'est jamais exigé : voulu ?
 - Tenant `esgboost` sans questions ni référentiels : aucun diagnostic possible.
+
+### Sécurité de la connexion : ce que les refus révèlent (constat du 14/11/2026, rien de changé)
+
+Question posée : « Votre compte utilisateur est désactivé. » et « Votre entreprise est désactivée. » révèlent-ils qu'un compte
+existe à qui ne connaît que le courriel ? **Constat, dans `LoginUseCase::execute` : non.** L'ordre est : compte inconnu →
+« Identifiants incorrects. » ; mot de passe faux → « Identifiants incorrects. » ; **ensuite seulement** compte désactivé, puis
+entreprise désactivée. Les deux textes ne sont donc rendus qu'à qui a donné le bon mot de passe ; sans lui, un compte désactivé
+répond comme un compte inconnu (vérifié par `BoussoleClientErrorsTest`). Trois points restent, à traiter dans un lot à part
+avec le front :
+
+- **Durée de réponse** : pour un courriel inconnu, la réponse part avant tout calcul de mot de passe ; pour un courriel connu,
+  après. La différence de durée peut dire qu'un compte existe. Parade habituelle : calculer une empreinte factice.
+- **Inscription** : `POST auth/register` répond 409 `EMAIL_UNAVAILABLE` pour une adresse connue (compte de la Boussole ou du
+  site). C'est voulu et dit plus haut, mais c'est le chemin qui révèle une adresse ; il est borné par la limite de débit.
+- **Statut 401 pour un compte désactivé** : le texte dit « désactivé », le statut dit « non authentifié » ; un 403 serait plus
+  juste, à changer avec le front.
 
 ## Tenir cette fiche à jour
 
