@@ -34,6 +34,19 @@ class GestionCashService
 
     /** Part payée autrement qu'en argent : carte-cadeau, avoir, coupon du fabricant (remboursé plus tard par le fabricant) */
     private const NON_CASH = '(COALESCE(o.gift_card_applied, 0) + COALESCE(o.credit_applied, 0) + COALESCE(o.manufacturer_coupon_applied, 0))';
+    /**
+     * Argent réellement rendu par un retour, en négatif (lot AVOIRS, 14/11/2026). Un retour fait en caisse a sa fiche (`pos_return`) : ce
+     * que la caisse a rendu, c'est `cash_refund + card_refund`. Le reste du retour n'est pas de l'argent sorti : avoir client émis, part
+     * revenue sur la carte-cadeau de la vente, coupon du fabricant non rendu, part reportée sur un échange. Un retour sans fiche de
+     * caisse garde la règle d'avant : son total, moins la part non payée en argent que porte la commande.
+     */
+    private const RETURN_PAID_OUT = 'COALESCE(-(SELECT SUM(r.cash_refund + r.card_refund) FROM pos_return r WHERE r.return_order_id = o.id),'
+        . ' -ABS(COALESCE(o.total_amount, 0)) + COALESCE(o.cash_rounding, 0) + ' . self::NON_CASH . ')';
+    /** Mouvements des cartes-cadeaux et des avoirs clients de la caisse (`pos_gift_card_transaction.kind`) lus par `nonCashFlows` */
+    private const CARD_FLOWS = [
+        'store_credit' => ['issue' => 'storeCreditIssued', 'refund' => 'storeCreditIssued', 'redeem' => 'paidByStoreCredit'],
+        'gift_card' => ['refund' => 'giftCardRecredited', 'redeem' => 'paidByGiftCard'],
+    ];
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -449,8 +462,9 @@ class GestionCashService
 
     /**
      * Encaissements nets par jour du magasin sur [from, to] (inclus) : ventes, locations, abonnements et cartes-cadeaux vendues, total TTC
-     * (taxes comprises, livraison comprise, arrondi des espèces compris), moins la part payée par carte-cadeau, avoir ou coupon du fabricant ;
-     * moins les retours (remboursés hors avoir et carte-cadeau). Commandes incomplètes (1) et annulées (7) exclues.
+     * (taxes comprises, livraison comprise, arrondi des espèces compris), moins la part payée par carte-cadeau, avoir client ou coupon du
+     * fabricant ; moins l'argent réellement rendu par les retours (`RETURN_PAID_OUT` : ni l'avoir client émis, ni la part revenue sur une
+     * carte-cadeau, ni le coupon non rendu). Commandes incomplètes (1) et annulées (7) exclues.
      *
      * @return array{days: array<string, int>, orders: int}
      */
@@ -459,7 +473,7 @@ class GestionCashService
         [$start, $end] = $this->clock->range($from, $to);
         $rows = $this->conn()->fetchAllAssociative(
             "SELECT CAST((o.order_date AT TIME ZONE 'UTC') AT TIME ZONE :tz AS date) AS d, COUNT(*) AS n,"
-            . ' SUM(CASE WHEN o.order_type_id = 2 THEN -ABS(COALESCE(o.total_amount, 0)) + COALESCE(o.cash_rounding, 0) + ' . self::NON_CASH
+            . ' SUM(CASE WHEN o.order_type_id = 2 THEN ' . self::RETURN_PAID_OUT
             . ' ELSE COALESCE(o.total_amount, 0) + COALESCE(o.cash_rounding, 0) - ' . self::NON_CASH . ' END) AS amount'
             . ' FROM "order" o WHERE o.order_date >= :from AND o.order_date < :to AND o.order_type_id IN (1, 2, 3) AND o.status_id NOT IN (1, 7) GROUP BY 1',
             ['tz' => $this->clock->timezone()->getName(), 'from' => $start->format('Y-m-d H:i:s'), 'to' => $end->format('Y-m-d H:i:s')]
@@ -487,7 +501,7 @@ class GestionCashService
         $rows = $this->conn()->fetchAllAssociative(
             "SELECT CAST((o.order_date AT TIME ZONE 'UTC') AT TIME ZONE :tz AS date) AS d,"
             . ' SUM(CASE WHEN o.order_type_id = 2 THEN 0 ELSE COALESCE(o.total_amount, 0) + COALESCE(o.cash_rounding, 0) - ' . self::NON_CASH . ' END) AS received,'
-            . ' SUM(CASE WHEN o.order_type_id = 2 THEN -ABS(COALESCE(o.total_amount, 0)) + COALESCE(o.cash_rounding, 0) + ' . self::NON_CASH
+            . ' SUM(CASE WHEN o.order_type_id = 2 THEN ' . self::RETURN_PAID_OUT
             . ' ELSE COALESCE(o.total_amount, 0) + COALESCE(o.cash_rounding, 0) - ' . self::NON_CASH . ' END) AS amount'
             . ' FROM "order" o WHERE o.order_date >= :from AND o.order_date < :to AND o.order_type_id IN (1, 2, 3) AND o.status_id NOT IN (1, 7)'
             . ($source === null ? '' : ' AND o.order_source_id = :src') . ' GROUP BY 1',
@@ -551,6 +565,61 @@ class GestionCashService
         ));
 
         return ['total' => $total, 'cash' => $cash, 'card' => $total - $cash];
+    }
+
+    /**
+     * Ce qui a été payé ou rendu autrement qu'en argent sur [from, to] (jours du magasin), lu dans les mouvements des cartes-cadeaux et
+     * des avoirs clients de la caisse (lot AVOIRS) : avoirs clients émis par un retour (ou recrédités), montants revenus sur une
+     * carte-cadeau, ventes payées par avoir client, ventes payées par carte-cadeau. Rien de cela n'est dans l'encaissé : ces lignes sont
+     * rendues à part. Daté par le mouvement (l'instant de la vente ou du retour). Fenêtre vide : zéros.
+     *
+     * @return array{storeCreditIssued: array{amount: int, count: int}, giftCardRecredited: array{amount: int, count: int}, paidByStoreCredit: array{amount: int, count: int}, paidByGiftCard: array{amount: int, count: int}}
+     */
+    public function nonCashFlows(string $from, string $to): array
+    {
+        $out = array_fill_keys(['storeCreditIssued', 'giftCardRecredited', 'paidByStoreCredit', 'paidByGiftCard'], ['amount' => 0, 'count' => 0]);
+        if ($from > $to) {
+            return $out;
+        }
+        [$start, $end] = $this->clock->range($from, $to);
+        $rows = $this->conn()->fetchAllAssociative(
+            'SELECT g.kind AS card, t.kind AS op, COALESCE(SUM(ABS(t.amount)), 0) AS amount, COUNT(*) AS n FROM pos_gift_card_transaction t JOIN pos_gift_card g ON g.id = t.gift_card_id'
+            . " WHERE t.created_at >= :from AND t.created_at < :to AND t.kind IN ('issue', 'refund', 'redeem') GROUP BY 1, 2",
+            ['from' => $start->format('Y-m-d H:i:s'), 'to' => $end->format('Y-m-d H:i:s')]
+        );
+        foreach ($rows as $r) {
+            $key = self::CARD_FLOWS[(string) $r['card']][(string) $r['op']] ?? null;
+            if ($key !== null) { // l'émission d'une carte-cadeau est une vente (elle est dans l'encaissé) : pas une ligne ici
+                $out[$key]['amount'] += (int) $r['amount'];
+                $out[$key]['count'] += (int) $r['n'];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Ce que le magasin doit encore en marchandise, À CE JOUR (un état du moment, pas un chiffre de plage) : le solde des avoirs clients
+     * actifs et celui des cartes-cadeaux vendues et non dépensées (lot AVOIRS). Une carte annulée, remplacée, épuisée ou expirée ne
+     * compte pas.
+     *
+     * @return array{asOf: string, storeCredit: array{amount: int, count: int}, giftCards: array{amount: int, count: int}}
+     */
+    public function outstandingCredit(?\DateTimeImmutable $now = null): array
+    {
+        $now = ($now ?? new \DateTimeImmutable())->setTimezone(new \DateTimeZone('UTC'));
+        $out = ['store_credit' => ['amount' => 0, 'count' => 0], 'gift_card' => ['amount' => 0, 'count' => 0]];
+        $rows = $this->conn()->fetchAllAssociative(
+            "SELECT kind, COALESCE(SUM(balance), 0) AS amount, COUNT(*) AS n FROM pos_gift_card WHERE status = 'active' AND balance > 0 AND (expires_at IS NULL OR expires_at > :now) GROUP BY 1",
+            ['now' => $now->format('Y-m-d H:i:s')]
+        );
+        foreach ($rows as $r) {
+            if (isset($out[(string) $r['kind']])) {
+                $out[(string) $r['kind']] = ['amount' => (int) $r['amount'], 'count' => (int) $r['n']];
+            }
+        }
+
+        return ['asOf' => $now->format(\DateTimeInterface::ATOM), 'storeCredit' => $out['store_credit'], 'giftCards' => $out['gift_card']];
     }
 
     /**

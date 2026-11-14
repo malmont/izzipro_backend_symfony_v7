@@ -57,6 +57,7 @@ class GestionDayService
 
         $alert = $this->cash->alert($today);
         $receipts = $this->cash->receiptsSplit($day, $day);
+        $outstanding = $this->cash->outstandingCredit(); // un état de l'instant réel (les soldes sont ceux de maintenant), quel que soit le jour lu
 
         return [
             'date' => $day, 'timezone' => $tz->getName(), 'currency' => $this->currency?->code() ?? TenantCurrencyProvider::DEFAULT, 'generatedAt' => $now->format(\DateTimeInterface::ATOM),
@@ -64,7 +65,11 @@ class GestionDayService
                 'vsSameWeekdayAverage' => ['percent' => $average !== 0 ? round(($all['revenue'] - $average) / abs($average) * 100, 1) : null, 'average' => $average,
                     'weeks' => self::COMPARISON_WEEKS, 'asOf' => $now->format('H:i')]],
             // Encaissé du jour, taxes comprises (ce qui entre en caisse) : à ne pas confondre avec sales.total, hors taxes
-            'receipts' => ['total' => $receipts['total'], 'byMethod' => [['method' => 'cash', 'total' => $receipts['cash']], ['method' => 'card', 'total' => $receipts['card']]]],
+            // (lot AVOIRS) hors de l'encaissé, à part : avoirs clients émis, montants revenus sur des cartes-cadeaux, ventes payées par avoir
+            // client ou par carte-cadeau ; et, à ce jour, ce que le magasin doit encore en marchandise
+            'receipts' => ['total' => $receipts['total'], 'byMethod' => [['method' => 'cash', 'total' => $receipts['cash']], ['method' => 'card', 'total' => $receipts['card']]]]
+                + $this->cash->nonCashFlows($day, $day) + ['outstandingStoreCredit' => $outstanding['storeCredit'] + ['asOf' => $outstanding['asOf']],
+                    'outstandingGiftCards' => $outstanding['giftCards'] + ['asOf' => $outstanding['asOf']]],
             'toShip' => $this->desk->toShipSummary(),
             'support' => $this->support($now),
             'cash' => $alert === null ? null : ['balance' => (int) $alert['balance']['amount'], 'balanceDate' => $alert['balance']['date'],

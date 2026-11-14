@@ -135,7 +135,8 @@ class GestionStatisticsSections
             $breakdown[] = ['method' => 'other', 'label' => $this->label('methods.other', $locale), 'received' => null, 'refunded' => null, 'net' => $unmatched, 'share' => $share($unmatched),
                 'previousNet' => null, 'lastYearNet' => null];
             // positif : de l'encaissé sans ligne de paiement (vente sans paiement enregistré) ; négatif : des remboursements sans ligne de
-            // paiement (un retour rendu en avoir, par exemple). `amount` garde son signe, le texte dit le montant sans signe
+            // paiement (un retour sans fiche de caisse, par exemple ; depuis le lot AVOIRS un retour rendu en avoir client ne sort plus de
+            // l'encaissé). `amount` garde son signe, le texte dit le montant sans signe
             $caveats[] = $this->caveat($unmatched > 0 ? 'PAYMENTS_UNMATCHED' : 'REFUNDS_UNMATCHED', $locale, ['%amount%' => $this->advices->format(abs($unmatched), 'money', $locale)]) + ['amount' => $unmatched];
         }
 
@@ -147,7 +148,34 @@ class GestionStatisticsSections
             'chart' => ['granularity' => $ctx['granularity'], 'points' => $points],
             'caveats' => $caveats,
             'appliesSource' => true,
-        ];
+        ] + $this->nonCash($cur, $source, $locale);
+    }
+
+    /**
+     * Ce qui s'est payé ou rendu autrement qu'en argent (lot AVOIRS, 14/11/2026) : des lignes à part, hors de « reçu », « remboursé » et
+     * « net ». Avoirs clients émis, montants revenus sur des cartes-cadeaux, ventes payées par avoir client ou par carte-cadeau ; et deux
+     * états du moment, « à ce jour » : avoirs clients en cours et cartes-cadeaux non dépensées (ce que le magasin doit encore en
+     * marchandise). La caisse seule en produit : null pour la boutique en ligne et l'application, comme `cashDesk`.
+     *
+     * @return array<string, array<string, mixed>|null>
+     */
+    private function nonCash(array $cur, ?int $source, string $locale): array
+    {
+        $keys = ['storeCreditIssued', 'giftCardRecredited', 'paidByStoreCredit', 'paidByGiftCard', 'outstandingStoreCredit', 'outstandingGiftCards'];
+        if ($source !== null && $source !== self::SOURCE_POS) {
+            return array_fill_keys($keys, null);
+        }
+        $flows = $this->cash->nonCashFlows($cur[0], $cur[1]);
+        $now = $this->cash->outstandingCredit();
+        $out = [];
+        foreach ($flows as $key => $flow) {
+            $out[$key] = $flow + ['label' => $this->label('payments.' . $key, $locale)];
+        }
+        foreach (['outstandingStoreCredit' => 'storeCredit', 'outstandingGiftCards' => 'giftCards'] as $key => $from) {
+            $out[$key] = $now[$from] + ['asOf' => $now['asOf'], 'label' => $this->label('payments.' . $key, $locale)];
+        }
+
+        return $out;
     }
 
     /**

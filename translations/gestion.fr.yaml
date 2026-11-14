@@ -308,9 +308,9 @@ statistics:
         PARTIAL_DAY: "La journée d'aujourd'hui n'est pas terminée : ses chiffres vont encore bouger."
         NO_LAST_YEAR_DATA: "Aucune vente sur la même plage l'an dernier : pas de comparaison possible."
         # Sections (lot S2-a, 14/11/2026, docs/statistiques-gestion.md § 6)
-        PAYMENTS_BY_ORDER_DATE: "L'encaissé est daté par la date de la commande, taxes comprises. La part payée par carte-cadeau, avoir ou coupon du fabricant n'en fait pas partie."
+        PAYMENTS_BY_ORDER_DATE: "L'encaissé est daté par la date de la commande, taxes comprises. La part payée par carte-cadeau, avoir client ou coupon du fabricant n'en fait pas partie ; un retour n'en retire que l'argent réellement rendu."
         PAYMENTS_UNMATCHED: "%amount% d'encaissé ne correspondent à aucune ligne de paiement (vente sans paiement enregistré) : ils sont rendus dans « Autre »."
-        REFUNDS_UNMATCHED: "%amount% de remboursements ne correspondent à aucune ligne de paiement (un retour rendu en avoir, par exemple) : ils sont rendus dans « Autre », en négatif."
+        REFUNDS_UNMATCHED: "%amount% de remboursements ne correspondent à aucune ligne de paiement (un retour sans fiche de caisse, par exemple) : ils sont rendus dans « Autre », en négatif."
         SOURCE_NOT_APPLICABLE: "Le canal de vente ne s'applique pas à cette section : ses chiffres valent pour tout le site."
         FIXED_COSTS_OUTSIDE_TOTAL: "Les frais fixes ne sont pas compris dans le total des frais : ils sont répartis au prorata des jours et ne sont déduits que dans le résultat après frais fixes."
         STOCK_HISTORY_STARTS: "La valeur du stock est relevée chaque jour depuis le %date% : la courbe commence à cette date."
@@ -323,6 +323,13 @@ statistics:
             cash: "Espèces"
             paypal: "PayPal"
             other: "Autre"
+        payments:
+            storeCreditIssued: "Avoirs clients émis"
+            giftCardRecredited: "Revenu sur des cartes-cadeaux"
+            paidByStoreCredit: "Payé par avoir client"
+            paidByGiftCard: "Payé par carte-cadeau"
+            outstandingStoreCredit: "Avoirs clients en cours, à ce jour"
+            outstandingGiftCards: "Cartes-cadeaux non dépensées, à ce jour"
         expenses:
             notes: "Notes de frais"
             purchaseShipping: "Frais de port d'achat"
