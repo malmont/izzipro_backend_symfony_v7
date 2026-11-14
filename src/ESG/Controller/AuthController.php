@@ -55,7 +55,7 @@ class AuthController extends AbstractController
 
         try {
             $output = $useCase->execute($dto);
-            $response = $this->json($output, Response::HTTP_CREATED);
+            $response = $this->json(self::body($output), Response::HTTP_CREATED);
             $this->setAuthCookie($response, $request, $output->token);
             return $response;
         } catch (EmailUnavailableException $e) {
@@ -90,7 +90,7 @@ class AuthController extends AbstractController
 
         try {
             $output = $useCase->execute($dto);
-            $response = $this->json($output, Response::HTTP_OK);
+            $response = $this->json(self::body($output), Response::HTTP_OK);
             $this->setAuthCookie($response, $request, $output->token);
             return $response;
         } catch (BadCredentialsException) {
@@ -101,6 +101,17 @@ class AuthController extends AbstractController
             // refus voulus (compte inconnu, compte ou entreprise désactivés) : texte gardé ; une panne : texte neutre ; statut 401 gardé
             return $this->json($this->safeError->body($e, 'POST /api/boussole/auth/login'), Response::HTTP_UNAUTHORIZED);
         }
+    }
+
+    /**
+     * Corps de la connexion et de l'inscription (14/11/2026) : le jeton n'est rendu que par le cookie protégé `auth_token_<site>`, jamais
+     * dans le corps (un script de la page ne peut pas le lire) ; le front reconnaît la réussite à `userId`.
+     *
+     * @return array{userId: int, email: string, firstName: string, lastName: string}
+     */
+    private static function body(\App\ESG\DTO\Output\AuthOutputDTO $output): array
+    {
+        return ['userId' => $output->userId, 'email' => $output->email, 'firstName' => $output->firstName, 'lastName' => $output->lastName];
     }
 
     private function setAuthCookie(Response $response, Request $request, string $token): void

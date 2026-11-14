@@ -38,7 +38,8 @@ class SessionIdentityService
 
     /**
      * Nouveaux jetons pour la requête en cours, ajoutés à la réponse : session du site (cookie auth_token_<site> présent) → cookies
-     * (auth_token, refresh_token, XSRF-TOKEN) et {token, refresh_token, csrf_token} ; sinon (Bearer : applications, MAUI) → {token, refresh_token}.
+     * (auth_token, refresh_token, XSRF-TOKEN) et {csrf_token} seul dans le corps (14/11/2026 : aucun jeton dans le corps d'une session
+     * par cookies, `TokenService::webSessionBody`) ; sinon (Bearer : applications, MAUI) → {token, refresh_token}.
      *
      * @return array<string, string> clés à ajouter au corps de la réponse
      */
@@ -46,10 +47,7 @@ class SessionIdentityService
     {
         $web = $request->cookies->has('auth_token_' . ($this->tenantConnection->getTenantCode() ?? 'default'));
         $tokens = $this->tokens->generateTokens($user, $web ? 'web' : null);
-        if ($web) {
-            $tokens['csrf_token'] = $this->tokens->attachWebSessionCookies($response, $tokens['token'], $tokens['refresh_token']);
-        }
 
-        return $tokens;
+        return $web ? $this->tokens->webSessionBody($response, $tokens['token'], $tokens['refresh_token']) : $tokens;
     }
 }

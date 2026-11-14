@@ -41,11 +41,16 @@ class TokenService
      */
     public const COOKIE_PLATFORMS = ['web', 'webadmin'];
     /**
-     * Plateformes dont la réponse de connexion ne rend AUCUN jeton dans son corps (14/11/2026) : le jeton d'accès et le jeton de
-     * renouvellement n'existent que dans les cookies protégés, hors de portée d'un script de la page ; le corps ne porte que le jeton
-     * anti-CSRF. « web » y viendra quand ses clients auront confirmé qu'ils ne lisent que les cookies.
+     * Une session par cookies ne rend AUCUN jeton dans le corps d'une réponse (14/11/2026) : le jeton d'accès et le jeton de
+     * renouvellement ne vivent que dans les cookies protégés (HttpOnly, Secure), hors de portée d'un script de la page ; le corps ne
+     * porte que le jeton anti-CSRF. Vaut pour la connexion, la vérification du code, « Rejoindre » (plateforme du joinToken) et le
+     * changement d'adresse d'une session du site. Les applications installées (`mobile`, `admin`, `pos`) n'ont pas de cookie : elles
+     * gardent leurs jetons dans le corps.
      */
-    public const COOKIE_ONLY_PLATFORMS = ['webadmin'];
+    public function webSessionBody(Response $response, string $jwt, string $refreshToken, string $cookiePath = '/'): array
+    {
+        return ['csrf_token' => $this->attachWebSessionCookies($response, $jwt, $refreshToken, $cookiePath)];
+    }
 
     public static function usesCookies(?string $platform): bool
     {
@@ -133,8 +138,8 @@ class TokenService
     }
 
     /**
-     * Crée une réponse HTTP contenant les tokens en JSON et, si la plateforme est web, ajoute les cookies ; pour une plateforme de
-     * `COOKIE_ONLY_PLATFORMS`, les jetons ne sont que dans les cookies et le corps ne rend que `csrf_token`.
+     * Crée la réponse d'une session ouverte : application installée → les jetons en JSON ; session par cookies (`COOKIE_PLATFORMS`) →
+     * les cookies, et dans le corps `csrf_token` seul (`webSessionBody`).
      *
      * @param array $tokens Tableau contenant 'token' et 'refresh_token'
      * @param string $platform (par exemple "web" ou "mobile")
@@ -150,10 +155,7 @@ class TokenService
         $response = new Response();
 
         if (self::usesCookies($platform)) {
-            $tokens['csrf_token'] = $this->attachWebSessionCookies($response, $tokens['token'], $tokens['refresh_token'], $cookiePath);
-            if (in_array($platform, self::COOKIE_ONLY_PLATFORMS, true)) {
-                unset($tokens['token'], $tokens['refresh_token']);
-            }
+            $tokens = $this->webSessionBody($response, $tokens['token'], $tokens['refresh_token'], $cookiePath);
         }
 
         $response->setContent(json_encode($tokens));
