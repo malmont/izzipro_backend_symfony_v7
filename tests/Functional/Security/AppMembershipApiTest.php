@@ -254,7 +254,7 @@ class AppMembershipApiTest extends WebTestCase
         };
         $c = static::getContainer();
         $c->get(TenantEntityManagerProvider::class)->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
-        $service = new AppMembershipService($c->get(TenantEntityManagerProvider::class), $c->get(ContentAuditRecorder::class), $c->get(AppTermsService::class), $logger, $c->get(TenantConnectionProvider::class));
+        $service = new AppMembershipService($c->get(TenantEntityManagerProvider::class), $c->get(ContentAuditRecorder::class), $c->get(AppTermsService::class), $logger, $c->get(TenantConnectionProvider::class), $c->get(\App\Services\AppMembershipService\AppJoinTokens::class));
         $this->assertSame('boutique', $service->sessionFamily($member, 'web', 'login'));
         $this->assertSame([], $logger->lines, 'membre : rien à noter');
         $this->assertNull($service->sessionFamily($member, null, 'login'));
