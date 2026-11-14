@@ -20,6 +20,8 @@ use App\Services\TenantEntityManagerProvider;
 class LossFindingReader
 {
     public const SCREEN = 'pertes.constat';
+    /** Écran d'un constat d'exercice : celui du mode exercice (la fiche ordinaire ne sert jamais un exercice) */
+    public const EXERCISE_SCREEN = 'pertes.exercices';
     /** Comptes FICTIFS des constats d'exercice (lot EX-1) : identifiants négatifs, jamais un compte du site */
     public const EXERCISE_CASHIER = -1;
     public const EXERCISE_MANAGER = -2;
@@ -207,7 +209,7 @@ class LossFindingReader
             'history' => $history,
             'lastEvidenceAt' => LossAuditEntry::iso(LossAuditEntry::utc((string) $row['last_evidence_at'])),
             'createdAt' => LossAuditEntry::iso(LossAuditEntry::utc((string) $row['created_at'])),
-            'screen' => self::SCREEN,
+            'screen' => $row['exercise'] ? self::EXERCISE_SCREEN : self::SCREEN,
         ];
     }
 
