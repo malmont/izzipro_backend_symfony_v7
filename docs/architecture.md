@@ -723,6 +723,22 @@ docker exec -w /var/www -e SYMFONY_DEPRECATIONS_HELPER=disabled symfony_app_v2 p
 - Les variables du conteneur (`env_file`) priment sur `.env.test` : `phpunit.xml.dist` force `ADMIN_OTP_REQUIRED=0` et
   `LANDING_AI_MODEL_IMAGES` vide, sinon le réglage de production fait échouer les connexions et les modèles attendus.
   Y ajouter toute nouvelle variable de production qui change un comportement testé.
+- **Une seule suite complète à la fois sur la machine** : chaque lancement recrée les bases de test.
+- **Connexions à la base (règle du 14/11/2026).** Le serveur PostgreSQL des tests est celui de la production (100 connexions, même
+  compte) : une suite qui les épuise fait tomber les sites. PHPUnit garde chaque objet de test jusqu'à la fin de la suite, donc tout
+  ce qu'un test range dans une propriété (navigateur, connexion, fournisseur de site, gestionnaire d'entités, service) garde ses
+  connexions ouvertes. `tests/ReleaseTestResourcesListener.php` (déclaré dans `phpunit.xml.dist`) fait deux choses à la fin de
+  chaque test :
+  - il vide les propriétés des classes de test (`App\Tests\…`) qui tiennent un objet ou un tableau (une connexion est d'abord
+    fermée), puis collecte les cycles : pic de la suite complète mesuré de 84 à 11 connexions ;
+  - **coupe-circuit** : au-delà de 60 connexions ouvertes sur le serveur après ce ménage, la suite s'arrête **en échec** avec un
+    message clair. Le pic et le test qui l'atteint sont affichés à la fin de chaque suite. `TEST_DB_CONNECTION_LIMIT` change le seuil
+    (pour essayer le coupe-circuit lui-même).
+
+  Ce que cela impose à un test : ne jamais relire une propriété après la fin d'un test (`tearDownAfterClass`, test dépendant) ; ne
+  garder ni connexion ni service dans une propriété **statique** (elle n'est pas relâchée : c'est le coupe-circuit qui la rattrape) ;
+  rendre le site de test comme on l'a trouvé (adresse, langue, mode de la plateforme : les tests des autres modules les lisent
+  ensuite dans la même suite). Un défaut de ce genre ne se voit pas fichier par fichier : seulement en suite complète.
 
 ## Modules (fiches)
 
