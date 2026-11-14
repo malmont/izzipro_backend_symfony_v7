@@ -9,11 +9,11 @@ namespace App\LossPrevention\Services;
  */
 final class LossAuditEntry
 {
-    public const COLUMNS = 'id, sequence, type, occurred_at, user_id, cash_register_id, session_id, hash, payload';
+    public const COLUMNS = 'id, sequence, type, occurred_at, user_id, cash_register_id, session_id, terminal_id, hash, payload';
 
     /**
      * @param array<string, mixed> $row ligne de `pos_audit_log` (colonnes `COLUMNS`)
-     * @return array{id: int, sequence: int, type: string, occurredAt: \DateTimeImmutable, userId: ?int, cashRegisterId: ?int, sessionId: ?int, hash: string, subject: ?array{type: string, id: ?int}, data: array<string, mixed>}
+     * @return array{id: int, sequence: int, type: string, occurredAt: \DateTimeImmutable, userId: ?int, cashRegisterId: ?int, sessionId: ?int, terminalId: ?int, hash: string, subject: ?array{type: string, id: ?int}, data: array<string, mixed>}
      */
     public static function fromRow(array $row): array
     {
@@ -26,6 +26,7 @@ final class LossAuditEntry
             'userId' => $row['user_id'] !== null ? (int) $row['user_id'] : null,
             'cashRegisterId' => $row['cash_register_id'] !== null ? (int) $row['cash_register_id'] : null,
             'sessionId' => $row['session_id'] !== null ? (int) $row['session_id'] : null,
+            'terminalId' => ($row['terminal_id'] ?? null) !== null ? (int) $row['terminal_id'] : null,
             'hash' => (string) $row['hash'], 'subject' => $subject,
             'data' => is_array($payload) && is_array($payload['data'] ?? null) ? $payload['data'] : [],
         ];

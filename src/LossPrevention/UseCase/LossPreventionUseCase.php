@@ -7,6 +7,7 @@ use App\Gestion\Services\GestionValidationException;
 use App\LossPrevention\Entity\LossFinding;
 use App\LossPrevention\Services\LossAnalysisService;
 use App\LossPrevention\Services\LossFindingReader;
+use App\LossPrevention\Services\LossRuleCatalog;
 use App\LossPrevention\Services\LossRuleService;
 use App\LossPrevention\Services\LossSettingsService;
 use App\LossPrevention\Services\LossSite;
@@ -138,6 +139,34 @@ class LossPreventionUseCase
     public function putRule(string $code, array $body, string $locale, int $userId): array
     {
         return $this->rules->put(strtoupper($code), $body, $userId, $locale);
+    }
+
+    /**
+     * Aperçu d'un réglage avant de l'appliquer : `{ code, enabled?, params?, personVariant? }` (même forme que l'enregistrement d'une règle).
+     * Rend le nombre de constats que la règle ouvrirait sur 30 jours avec ses réglages actuels (`current`) et avec ceux proposés
+     * (`wouldOpen`), et jusqu'à trois résumés. AUCUNE écriture. Mêmes blocages que l'analyse (409).
+     *
+     * @param array<string, mixed> $body
+     * @return array<string, mixed>
+     */
+    public function previewRule(array $body, string $locale): array
+    {
+        $code = is_string($body['code'] ?? null) ? strtoupper($body['code']) : '';
+        if (!LossRuleCatalog::exists($code)) {
+            throw new GestionConflictException('RULE_NOT_FOUND', 'Règle inconnue.', 404);
+        }
+        $out = $this->analysis->preview($code, $this->rules->proposed($code, array_diff_key($body, ['code' => 1])));
+        if ($out['status'] === 'blocked') {
+            throw new GestionConflictException($out['reason'], $out['reason'] === LossSettingsService::MODULE_NOT_GRANTED
+                ? 'Le module Prévention des pertes n\'est pas accordé à ce site : aucune analyse.'
+                : 'L\'analyse ne démarre qu\'après la confirmation de l\'information des salariés (réglages de la prévention des pertes).', 409);
+        }
+        $currency = $this->site->currency();
+
+        return ['code' => $code, 'current' => $out['current'], 'wouldOpen' => $out['wouldOpen'], 'days' => $out['days'], 'truncated' => $out['truncated'],
+            'sample' => array_map(fn (array $f) => ['summary' => $this->reader->summarize($code, (string) $f['variant'], $f['facts'], $currency, $locale), 'storeDay' => (string) $f['store_day'],
+                'amountAtStake' => $f['amount_at_stake'], 'personPattern' => $f['variant'] === LossFinding::VARIANT_PERSON], $out['sample']),
+            'notice' => $this->texts->t('rules.previewNotice', $locale)];
     }
 
     /** @return array<string, mixed> */

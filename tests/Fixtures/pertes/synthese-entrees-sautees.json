@@ -11,26 +11,26 @@
             "to": "2026-11-14"
         },
         "lastAnalysis": {
-            "at": "2026-11-14T18:29:14+00:00",
+            "at": "2026-11-14T20:28:51+00:00",
             "pending": false,
             "blocked": null,
             "skipped": {
                 "total": 1,
-                "lastAt": "2026-11-14T18:29:14+00:00"
+                "lastAt": "2026-11-14T20:28:51+00:00"
             },
             "ran": null,
             "failed": false
         },
         "counts": {
-            "open": 10,
+            "open": 11,
             "watch": 0,
             "new": 6,
-            "active": 10,
+            "active": 11,
             "byStatus": [
                 {
                     "status": "open",
                     "label": "Nouveau",
-                    "count": 10
+                    "count": 11
                 },
                 {
                     "status": "watch",
@@ -67,6 +67,12 @@
                     "total": 1
                 },
                 {
+                    "code": "PRICE_OVERRIDE",
+                    "label": "Prix baissés à la main",
+                    "open": 1,
+                    "total": 1
+                },
+                {
                     "code": "VOID_AFTER_SALE",
                     "label": "Vente annulée après l'encaissement",
                     "open": 4,
@@ -77,15 +83,15 @@
                 {
                     "id": 1,
                     "name": "Caisse principale",
-                    "open": 9,
-                    "total": 10
+                    "open": 10,
+                    "total": 11
                 }
             ]
         },
-        "amountAtStake": 27762,
+        "amountAtStake": 30162,
         "currency": "CAD",
         "cashDesk": {
-            "closings": 6,
+            "closings": 7,
             "discrepancy": -5400,
             "discrepancyCount": 5
         },

@@ -1,0 +1,204 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/constats/11?locale=fr"
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "id": 11,
+        "number": 11,
+        "rule": {
+            "code": "PRICE_OVERRIDE",
+            "label": "Prix baissés à la main"
+        },
+        "personPattern": false,
+        "status": "open",
+        "statusLabel": "Nouveau",
+        "summary": "3 prix baissés à la main pendant une même session, 24,00 $ de baisse au total.",
+        "storeDay": "2026-11-14",
+        "cashRegister": {
+            "id": 1,
+            "name": "Caisse principale"
+        },
+        "amountAtStake": 2400,
+        "currency": "CAD",
+        "isNew": false,
+        "newEvidenceSinceDecision": false,
+        "backfill": false,
+        "updatedAt": "2026-11-14T20:28:51+00:00",
+        "from": "2026-11-14T20:28:50+00:00",
+        "to": "2026-11-14T20:28:50+00:00",
+        "sessionId": 5,
+        "subject": {
+            "type": "session",
+            "id": 5
+        },
+        "onDuty": [
+            {
+                "id": 21,
+                "name": "Caisse Nom",
+                "role": "operator",
+                "roleLabel": "Auteur de l'acte"
+            }
+        ],
+        "onDutyNotice": "Ces personnes étaient en poste au moment des faits. Ce n'est pas une accusation : la décision vous revient, après vérification.",
+        "amountNotice": "Le montant en jeu est le montant concerné par le constat, pas une perte prouvée.",
+        "evidence": [
+            {
+                "id": 27,
+                "kind": "price_change",
+                "at": "2026-11-14T20:28:50+00:00",
+                "atLabel": "14/11/2026 15 h 28",
+                "title": "Prix saisi à la main",
+                "lines": [
+                    {
+                        "label": "Vente",
+                        "value": "REF#6af8c48235f9b"
+                    },
+                    {
+                        "label": "Article",
+                        "value": "Casquette brodée"
+                    },
+                    {
+                        "label": "Quantité",
+                        "value": "1"
+                    },
+                    {
+                        "label": "Prix du catalogue",
+                        "value": "29,00 $"
+                    },
+                    {
+                        "label": "Prix saisi",
+                        "value": "24,00 $"
+                    },
+                    {
+                        "label": "Baisse",
+                        "value": "5,00 $"
+                    },
+                    {
+                        "label": "Motif du prix",
+                        "value": "Prix négocié"
+                    },
+                    {
+                        "label": "Prix saisi par",
+                        "value": "Caisse Nom"
+                    }
+                ],
+                "ref": {
+                    "type": "pos_audit",
+                    "id": 33,
+                    "sequence": 33,
+                    "hash": "9af56f90a0db3c7095d8c0c42d51b60a8c31bd4f403f8ffced8fa06f03750251"
+                },
+                "screen": null,
+                "fingerprint": "76d44f641c0aaa279470d035717789cac9abb877da44fd45fb4a75899df0185d"
+            },
+            {
+                "id": 28,
+                "kind": "price_change",
+                "at": "2026-11-14T20:28:50+00:00",
+                "atLabel": "14/11/2026 15 h 28",
+                "title": "Prix saisi à la main",
+                "lines": [
+                    {
+                        "label": "Vente",
+                        "value": "REF#6af8c482724ed"
+                    },
+                    {
+                        "label": "Article",
+                        "value": "Casquette brodée"
+                    },
+                    {
+                        "label": "Quantité",
+                        "value": "1"
+                    },
+                    {
+                        "label": "Prix du catalogue",
+                        "value": "29,00 $"
+                    },
+                    {
+                        "label": "Prix saisi",
+                        "value": "20,00 $"
+                    },
+                    {
+                        "label": "Baisse",
+                        "value": "9,00 $"
+                    },
+                    {
+                        "label": "Motif du prix",
+                        "value": "Prix négocié"
+                    },
+                    {
+                        "label": "Prix saisi par",
+                        "value": "Caisse Nom"
+                    }
+                ],
+                "ref": {
+                    "type": "pos_audit",
+                    "id": 35,
+                    "sequence": 35,
+                    "hash": "7b5e73c7c06e1accc6013805db62b40ebd89bc70cd64d91f7e0509792955d70f"
+                },
+                "screen": null,
+                "fingerprint": "ace5ec859d1c4940ed1750e0c5317d6e45fee15bbb45b86cb14ba10f32494eb7"
+            },
+            {
+                "id": 29,
+                "kind": "price_change",
+                "at": "2026-11-14T20:28:50+00:00",
+                "atLabel": "14/11/2026 15 h 28",
+                "title": "Prix saisi à la main",
+                "lines": [
+                    {
+                        "label": "Vente",
+                        "value": "REF#6af8c482aa156"
+                    },
+                    {
+                        "label": "Article",
+                        "value": "Casquette brodée"
+                    },
+                    {
+                        "label": "Quantité",
+                        "value": "1"
+                    },
+                    {
+                        "label": "Prix du catalogue",
+                        "value": "29,00 $"
+                    },
+                    {
+                        "label": "Prix saisi",
+                        "value": "19,00 $"
+                    },
+                    {
+                        "label": "Baisse",
+                        "value": "10,00 $"
+                    },
+                    {
+                        "label": "Motif du prix",
+                        "value": "Prix négocié"
+                    },
+                    {
+                        "label": "Prix saisi par",
+                        "value": "Caisse Nom"
+                    }
+                ],
+                "ref": {
+                    "type": "pos_audit",
+                    "id": 37,
+                    "sequence": 37,
+                    "hash": "d2404fafe9f72cc1011b117d2621e03d8db71794f0a2f93d30b79c4fa5d1077c"
+                },
+                "screen": null,
+                "fingerprint": "620ad5143bad655dcfb9eb242efb889da16e896edd87f53b2a3106f349bb23ba"
+            }
+        ],
+        "evidenceIntact": true,
+        "opinion": null,
+        "decision": null,
+        "history": [],
+        "lastEvidenceAt": "2026-11-14T20:28:51+00:00",
+        "createdAt": "2026-11-14T20:28:51+00:00",
+        "screen": "pertes.constat"
+    }
+}

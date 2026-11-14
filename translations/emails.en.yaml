@@ -193,3 +193,16 @@ support_reply:
     subject: 'Your request %reference%: %subject%'
     greeting: 'Hello %name%,'
     footer: 'Your request reference: %reference%. Reply to this email to add to it.'
+
+# Loss prevention (lot L1-b): daily summary sent to the site administrators. No name, no detail of a finding, no link.
+loss_digest:
+    subject: "{1}Loss prevention: 1 new finding to check|]1,Inf[Loss prevention: %count% new findings to check"
+    title: 'Loss prevention'
+    greeting: 'Hello,'
+    message: "{1}1 new finding is waiting for you to check, for an amount at stake of %amount%.|]1,Inf[%count% new findings are waiting for you to check, for an amount at stake of %amount%."
+    row_count: 'New findings'
+    row_amount: 'Amount at stake'
+    row_day: 'Shop day'
+    next: 'Open the “Loss prevention” section of your management app to read their evidence and decide.'
+    notice: 'The amount at stake is the amount the findings are about, not a proven loss. You receive this email at most once a day; you can stop it in the notification preferences of the management app.'
+    signature: '%site%'

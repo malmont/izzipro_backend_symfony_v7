@@ -197,3 +197,16 @@ support_reply:
     subject: 'Votre demande %reference% : %subject%'
     greeting: 'Bonjour %name%,'
     footer: 'Référence de votre demande : %reference%. Répondez à ce courriel pour la compléter.'
+
+# Prévention des pertes (lot L1-b) : résumé du jour, envoyé aux administrateurs du site. Aucun nom, aucun détail d'un constat, aucun lien.
+loss_digest:
+    subject: "{1}Prévention des pertes : 1 nouveau constat à vérifier|]1,Inf[Prévention des pertes : %count% nouveaux constats à vérifier"
+    title: 'Prévention des pertes'
+    greeting: 'Bonjour,'
+    message: "{1}1 nouveau constat attend votre vérification, pour un montant en jeu de %amount%.|]1,Inf[%count% nouveaux constats attendent votre vérification, pour un montant en jeu de %amount%."
+    row_count: 'Nouveaux constats'
+    row_amount: 'Montant en jeu'
+    row_day: 'Journée du magasin'
+    next: 'Ouvrez la section « Prévention des pertes » de votre application de gestion pour lire leurs preuves et décider.'
+    notice: 'Le montant en jeu est le montant concerné par les constats, pas une perte prouvée. Vous recevez ce courriel au plus une fois par jour ; vous pouvez l''arrêter dans les préférences de notification de la gestion.'
+    signature: '%site%'

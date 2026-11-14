@@ -3,22 +3,26 @@
 namespace App\LossPrevention\Services;
 
 /**
- * Catalogue des règles (lot L1-a : vague 1, `docs/prevention-pertes.md` § 4) : codes stables, paramètres typés avec leurs bornes et leurs
+ * Catalogue des règles (lots L1-a : vague 1, et L1-b : vague 2 ; `docs/prevention-pertes.md` § 4) : codes stables, paramètres typés avec leurs bornes et leurs
  * valeurs par défaut (validées par le propriétaire le 14/11/2026, réglables par site). Libellés et descriptions : `translations/pertes.*.yaml`.
  * `person` : la variante « par personne » d'une règle (actes d'un même compte dans le temps), qui a son propre interrupteur.
- * Vague 2 (lot L1-b) : REFUND_PATTERN, DISCOUNT_PATTERN, PRICE_OVERRIDE, APPROVAL_PATTERN.
  */
 final class LossRuleCatalog
 {
     public const CASH_DISCREPANCY = 'CASH_DISCREPANCY';
     public const DRAWER_NO_SALE = 'DRAWER_NO_SALE';
     public const VOID_AFTER_SALE = 'VOID_AFTER_SALE';
+    public const REFUND_PATTERN = 'REFUND_PATTERN';
+    public const DISCOUNT_PATTERN = 'DISCOUNT_PATTERN';
+    public const PRICE_OVERRIDE = 'PRICE_OVERRIDE';
+    public const APPROVAL_PATTERN = 'APPROVAL_PATTERN';
 
     /** Types de paramètre : l'écran sait comment saisir et afficher */
     public const COUNT = 'count';
     public const CENTS = 'cents';
     public const MINUTES = 'minutes';
     public const DAYS = 'days';
+    public const PERCENT = 'percent';
 
     /** @var array<string, array{wave: int, params: array<string, array{type: string, default: int, min: int, max: int}>, person: ?array<string, array{type: string, default: int, min: int, max: int}>}> */
     public const RULES = [
@@ -40,6 +44,33 @@ final class LossRuleCatalog
                 'minutes' => ['type' => self::MINUTES, 'default' => 10, 'min' => 1, 'max' => 240], // annulation rapide d'une vente qui a une part en espèces
                 'perSession' => ['type' => self::COUNT, 'default' => 3, 'min' => 2, 'max' => 50], // constat à partir de ce nombre d'annulations dans une session
             ],
+            'person' => null,
+        ],
+        // Vague 2 (lot L1-b)
+        self::REFUND_PATTERN => [
+            'wave' => 2,
+            // sans paramètre : un retour sans ticket, ou un remboursement en espèces d'une vente payée sans espèces, ouvre toujours un constat
+            'params' => [],
+            'person' => ['count' => ['type' => self::COUNT, 'default' => 3, 'min' => 2, 'max' => 50]], // retours du même compte dans une journée du magasin
+        ],
+        self::DISCOUNT_PATTERN => [
+            'wave' => 2,
+            'params' => ['perSession' => ['type' => self::COUNT, 'default' => 3, 'min' => 2, 'max' => 50]], // ventes remisées au motif « Autre » ou sans motif, dans une session
+            'person' => [
+                'count' => ['type' => self::COUNT, 'default' => 5, 'min' => 2, 'max' => 50],
+                'days' => ['type' => self::DAYS, 'default' => 7, 'min' => 1, 'max' => 30],
+                'share' => ['type' => self::PERCENT, 'default' => 90, 'min' => 50, 'max' => 100], // part du plafond du caissier à partir de laquelle une remise compte
+            ],
+        ],
+        self::PRICE_OVERRIDE => [
+            'wave' => 2,
+            'params' => ['perSession' => ['type' => self::COUNT, 'default' => 3, 'min' => 2, 'max' => 50]], // baisses de prix à la main dans une session
+            'person' => null,
+        ],
+        self::APPROVAL_PATTERN => [
+            'wave' => 2,
+            // les validations refusées n'ont pas de session au journal de caisse : elles sont comptées par tablette et par journée du magasin
+            'params' => ['perDay' => ['type' => self::COUNT, 'default' => 3, 'min' => 2, 'max' => 50]],
             'person' => null,
         ],
     ];

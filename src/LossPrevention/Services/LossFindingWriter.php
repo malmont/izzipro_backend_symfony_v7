@@ -12,7 +12,7 @@ use App\Services\TenantEntityManagerProvider;
  * fenêtre), une preuve par (constat, source). Un constat déjà là est complété ; son état et sa décision ne changent jamais ici : un constat
  * décidé n'est pas rouvert, la date de sa dernière preuve dit qu'il y a du nouveau depuis la décision.
  */
-class LossFindingWriter
+class LossFindingWriter implements LossFindingSink
 {
     private int $opened = 0;
     private int $completed = 0;

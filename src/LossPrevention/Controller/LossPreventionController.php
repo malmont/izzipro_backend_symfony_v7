@@ -56,6 +56,13 @@ class LossPreventionController extends AbstractController
         return $this->json($this->useCase->rules($this->locale($request)));
     }
 
+    /** Aperçu d'un réglage avant de l'appliquer : lecture seule, rien n'est écrit (POST parce que la demande porte un corps) */
+    #[Route('/regles/apercu', name: 'gestion_pertes_regles_apercu', methods: ['POST'], priority: 1)]
+    public function previewRule(Request $request): JsonResponse
+    {
+        return $this->json($this->useCase->previewRule($this->body($request), $this->locale($request)));
+    }
+
     #[Route('/regles/{code}', name: 'gestion_pertes_regle_put', methods: ['PUT'], requirements: ['code' => '[A-Za-z_]+'])]
     public function putRule(string $code, Request $request): JsonResponse
     {

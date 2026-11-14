@@ -7,7 +7,7 @@ use Doctrine\DBAL\Connection;
 
 /**
  * Ce qu'une règle reçoit pendant un passage de l'analyse : la connexion du site (lecture de la caisse), l'horloge du magasin, la devise,
- * l'écart de caisse toléré, ses réglages en vigueur et l'écrivain des constats.
+ * l'écart de caisse toléré, ses réglages en vigueur et le puits des constats (l'écrivain en base, ou la mémoire pour un aperçu).
  */
 final class LossAnalysisContext
 {
@@ -20,7 +20,7 @@ final class LossAnalysisContext
         public readonly string $currency,
         public readonly int $discrepancyThreshold,
         public readonly array $rules,
-        public readonly LossFindingWriter $writer,
+        public readonly LossFindingSink $writer,
         private readonly ?int $backfillUntil,
         /** Aucune entrée du journal de caisse de séquence inférieure ou égale n'est lue (notice aux salariés, choix A) ; 0 = pas de plancher */
         public readonly int $floorSequence = 0,

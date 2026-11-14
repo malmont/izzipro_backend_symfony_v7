@@ -23,9 +23,9 @@
         "isNew": false,
         "newEvidenceSinceDecision": false,
         "backfill": false,
-        "updatedAt": "2026-11-14T18:29:13+00:00",
-        "from": "2026-11-14T18:29:12+00:00",
-        "to": "2026-11-14T18:29:12+00:00",
+        "updatedAt": "2026-11-14T20:28:49+00:00",
+        "from": "2026-11-14T20:28:49+00:00",
+        "to": "2026-11-14T20:28:49+00:00",
         "sessionId": null,
         "subject": {
             "type": "user_window",
@@ -47,8 +47,8 @@
             {
                 "id": 16,
                 "kind": "z_report",
-                "at": "2026-11-14T18:29:12+00:00",
-                "atLabel": "14/11/2026 13 h 29",
+                "at": "2026-11-14T20:28:49+00:00",
+                "atLabel": "14/11/2026 15 h 28",
                 "title": "Rapport de clôture",
                 "lines": [
                     {
@@ -57,7 +57,7 @@
                     },
                     {
                         "label": "Caisse fermée le",
-                        "value": "14/11/2026 13 h 29"
+                        "value": "14/11/2026 15 h 28"
                     },
                     {
                         "label": "Fermée par",
@@ -92,16 +92,16 @@
                     "type": "z_report",
                     "id": 2,
                     "sequence": 21,
-                    "hash": "7314b3d633d00f173951cd1f2f076c5cd4faada83779506969757a91e1b26fb1"
+                    "hash": "5c4d0fb8e2fd2825d2f26889632fa03a047772c77ab8584083df0919b2ba980b"
                 },
                 "screen": null,
-                "fingerprint": "9f567e404f0bbd0b2052f96f6d2519ff304bf3d769bef2d344a9a2bcf8740712"
+                "fingerprint": "d2c9b0864fa67a78af3aa69ae7891b5912ced77cbc8e9331a8e90e129a1e9a2c"
             },
             {
                 "id": 17,
                 "kind": "z_report",
-                "at": "2026-11-14T18:29:12+00:00",
-                "atLabel": "14/11/2026 13 h 29",
+                "at": "2026-11-14T20:28:49+00:00",
+                "atLabel": "14/11/2026 15 h 28",
                 "title": "Rapport de clôture",
                 "lines": [
                     {
@@ -110,7 +110,7 @@
                     },
                     {
                         "label": "Caisse fermée le",
-                        "value": "14/11/2026 13 h 29"
+                        "value": "14/11/2026 15 h 28"
                     },
                     {
                         "label": "Fermée par",
@@ -148,13 +148,13 @@
                     "hash": null
                 },
                 "screen": null,
-                "fingerprint": "62cad84a8cb72e4ee725d3fe35759427d3df990c24b1fad60f338195c58967b4"
+                "fingerprint": "c56d8bb898a06862124419d7cdc88406b9ccbad342a62e0b7f7503f9ac17daf5"
             },
             {
                 "id": 18,
                 "kind": "z_report",
-                "at": "2026-11-14T18:29:12+00:00",
-                "atLabel": "14/11/2026 13 h 29",
+                "at": "2026-11-14T20:28:49+00:00",
+                "atLabel": "14/11/2026 15 h 28",
                 "title": "Rapport de clôture",
                 "lines": [
                     {
@@ -163,7 +163,7 @@
                     },
                     {
                         "label": "Caisse fermée le",
-                        "value": "14/11/2026 13 h 29"
+                        "value": "14/11/2026 15 h 28"
                     },
                     {
                         "label": "Fermée par",
@@ -201,15 +201,15 @@
                     "hash": null
                 },
                 "screen": null,
-                "fingerprint": "eb6f2350290b7bdea96c2a3a3b825749a4b19463ea68c241d8169d2d9a4906c0"
+                "fingerprint": "f6c8f1c3b6309ba24d47dd2ac71591e4b507bc11cce0d402fe6ae152bf4f2685"
             }
         ],
         "evidenceIntact": true,
         "opinion": null,
         "decision": null,
         "history": [],
-        "lastEvidenceAt": "2026-11-14T18:29:13+00:00",
-        "createdAt": "2026-11-14T18:29:13+00:00",
+        "lastEvidenceAt": "2026-11-14T20:28:49+00:00",
+        "createdAt": "2026-11-14T20:28:49+00:00",
         "screen": "pertes.constat"
     }
 }

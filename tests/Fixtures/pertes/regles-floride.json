@@ -97,6 +97,122 @@
                     }
                 ],
                 "personVariant": null
+            },
+            {
+                "code": "REFUND_PATTERN",
+                "label": "Retour inhabituel",
+                "description": "Un retour sans ticket, ou de l'argent rendu en espèces pour une vente qui n'avait pas été payée en espèces.",
+                "wave": 2,
+                "enabled": true,
+                "params": [],
+                "personVariant": {
+                    "allowed": true,
+                    "enabled": true,
+                    "label": "Retours répétés par un même compte",
+                    "description": "Plusieurs retours faits par le même compte dans une même journée.",
+                    "params": [
+                        {
+                            "key": "count",
+                            "label": "Nombre de retours dans la journée",
+                            "type": "count",
+                            "value": 3,
+                            "default": 3,
+                            "min": 2,
+                            "max": 50
+                        }
+                    ]
+                }
+            },
+            {
+                "code": "DISCOUNT_PATTERN",
+                "label": "Remises au motif vague",
+                "description": "Plusieurs ventes remisées au motif « Autre », ou sans motif, pendant une même session.",
+                "wave": 2,
+                "enabled": true,
+                "params": [
+                    {
+                        "key": "perSession",
+                        "label": "Nombre de ventes remisées dans une session qui ouvre un constat",
+                        "type": "count",
+                        "value": 3,
+                        "default": 3,
+                        "min": 2,
+                        "max": 50
+                    }
+                ],
+                "personVariant": {
+                    "allowed": true,
+                    "enabled": true,
+                    "label": "Remises répétées près du plafond par un même compte",
+                    "description": "Plusieurs ventes encaissées par le même compte avec une remise proche du plafond autorisé au caissier.",
+                    "params": [
+                        {
+                            "key": "count",
+                            "label": "Nombre de ventes remisées",
+                            "type": "count",
+                            "value": 5,
+                            "default": 5,
+                            "min": 2,
+                            "max": 50
+                        },
+                        {
+                            "key": "days",
+                            "label": "Sur combien de jours",
+                            "type": "days",
+                            "value": 7,
+                            "default": 7,
+                            "min": 1,
+                            "max": 30
+                        },
+                        {
+                            "key": "share",
+                            "label": "Part du plafond du caissier à partir de laquelle une remise compte (en %)",
+                            "type": "percent",
+                            "value": 90,
+                            "default": 90,
+                            "min": 50,
+                            "max": 100
+                        }
+                    ]
+                }
+            },
+            {
+                "code": "PRICE_OVERRIDE",
+                "label": "Prix baissés à la main",
+                "description": "Plusieurs articles vendus à un prix saisi à la main, inférieur au prix du catalogue, pendant une même session.",
+                "wave": 2,
+                "enabled": true,
+                "params": [
+                    {
+                        "key": "perSession",
+                        "label": "Nombre de baisses de prix dans une session qui ouvre un constat",
+                        "type": "count",
+                        "value": 3,
+                        "default": 3,
+                        "min": 2,
+                        "max": 50
+                    }
+                ],
+                "personVariant": null
+            },
+            {
+                "code": "APPROVAL_PATTERN",
+                "label": "Validations refusées",
+                "description": "Plusieurs validations d'un responsable refusées sur une même tablette dans une même journée (code faux, code bloqué, compte sans le droit de valider).",
+                "wave": 2,
+                "enabled": true,
+                "params": [
+                    {
+                        "key": "perDay",
+                        "label": "Nombre de validations refusées dans la journée qui ouvre un constat",
+                        "type": "count",
+                        "value": 3,
+                        "default": 3,
+                        "min": 2,
+                        "max": 50
+                    }
+                ],
+                "personVariant": null
             }
         ],
         "notice": "Changer un seuil ne ferme ni ne supprime aucun constat : le nouveau réglage ne vaut que pour les analyses suivantes.",

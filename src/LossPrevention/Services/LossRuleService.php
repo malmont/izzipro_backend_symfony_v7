@@ -79,6 +79,35 @@ class LossRuleService
      */
     public function put(string $code, array $body, int $userId, string $locale): array
     {
+        [$stored, $params, $personParams, $personEnabled] = $this->validated($code, $body);
+        $em = $this->emProvider->getEntityManager();
+        $em->getRepository(LossRule::class)->save(
+            $code,
+            array_key_exists('enabled', $body) ? $body['enabled'] : $stored['enabled'],
+            $params + $stored['params'],
+            $personEnabled,
+            $personParams + $stored['personParams'],
+            $userId
+        );
+        // Au journal (inaltérable) : seulement ce qui a été validé, jamais le corps reçu
+        $em->getRepository(LossJournalEntry::class)->append(LossJournalEntry::RULE_CHANGED, $userId, null, ['code' => $code] + array_filter([
+            'enabled' => array_key_exists('enabled', $body) ? $body['enabled'] : null,
+            'params' => $params !== [] ? $params : null,
+            'personEnabled' => is_array($body['personVariant'] ?? null) && array_key_exists('enabled', $body['personVariant']) ? $personEnabled : null,
+            'personParams' => $personParams !== [] ? $personParams : null,
+        ], fn ($v) => $v !== null));
+
+        return $this->view($code, $locale);
+    }
+
+    /**
+     * Lit et valide le corps d'un réglage de règle (enregistrement ou aperçu) ; lève 422 avec le champ en cause.
+     *
+     * @param array<string, mixed> $body
+     * @return array{0: array<string, mixed>, 1: array<string, int>, 2: array<string, int>, 3: ?bool} réglage gardé, paramètres validés, paramètres validés de la variante, interrupteur de la variante
+     */
+    private function validated(string $code, array $body): array
+    {
         $this->mustExist($code);
         $def = LossRuleCatalog::RULES[$code];
         $stored = $this->stored()[$code] ?? ['enabled' => true, 'params' => [], 'personEnabled' => null, 'personParams' => []];
@@ -137,24 +166,29 @@ class LossRuleService
         if ($errors !== []) {
             throw new GestionValidationException($errors);
         }
-        $em = $this->emProvider->getEntityManager();
-        $em->getRepository(LossRule::class)->save(
-            $code,
-            array_key_exists('enabled', $body) ? $body['enabled'] : $stored['enabled'],
-            $params + $stored['params'],
-            $personEnabled,
-            $personParams + $stored['personParams'],
-            $userId
-        );
-        // Au journal (inaltérable) : seulement ce qui a été validé, jamais le corps reçu
-        $em->getRepository(LossJournalEntry::class)->append(LossJournalEntry::RULE_CHANGED, $userId, null, ['code' => $code] + array_filter([
-            'enabled' => array_key_exists('enabled', $body) ? $body['enabled'] : null,
-            'params' => $params !== [] ? $params : null,
-            'personEnabled' => is_array($body['personVariant'] ?? null) && array_key_exists('enabled', $body['personVariant']) ? $personEnabled : null,
-            'personParams' => $personParams !== [] ? $personParams : null,
-        ], fn ($v) => $v !== null));
 
-        return $this->view($code, $locale);
+        return [$stored, $params, $personParams, $personEnabled];
+    }
+
+    /**
+     * Réglage PROPOSÉ d'une règle, pour l'aperçu : le corps validé posé sur le réglage en vigueur, sans rien enregistrer. La règle est
+     * supposée allumée, sauf `enabled: false` dans le corps.
+     *
+     * @param array<string, mixed> $body même forme que l'enregistrement d'une règle
+     * @return array{enabled: bool, params: array<string, int>, personEnabled: bool, personParams: array<string, int>}
+     */
+    public function proposed(string $code, array $body): array
+    {
+        [, $params, $personParams, $personEnabled] = $this->validated($code, $body);
+        $current = $this->effective($code);
+        $hasPerson = LossRuleCatalog::RULES[$code]['person'] !== null;
+
+        return [
+            'enabled' => array_key_exists('enabled', $body) ? $body['enabled'] : true,
+            'params' => $params + $current['params'],
+            'personEnabled' => $hasPerson && $this->settings->personPatternsOn() && ($personEnabled ?? true),
+            'personParams' => $personParams + $current['personParams'],
+        ];
     }
 
     private function mustExist(string $code): void

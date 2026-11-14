@@ -57,6 +57,10 @@ class LossSetting
     #[ORM\Column(name: 'last_analysis_at', type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $lastAnalysisAt = null;
 
+    /** Journée du magasin du dernier courriel de résumé envoyé (lot L1-b) : un par jour au plus */
+    #[ORM\Column(name: 'last_digest_day', type: 'date_immutable', nullable: true)]
+    private ?\DateTimeImmutable $lastDigestDay = null;
+
     #[ORM\Column(name: 'updated_at', type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $updatedAt = null;
 
@@ -73,6 +77,7 @@ class LossSetting
     public function getBackfillUntilSequence(): ?int { return $this->backfillUntilSequence; }
     public function getAnalysisFloorSequence(): ?int { return $this->analysisFloorSequence; }
     public function getLastAnalysisAt(): ?\DateTimeImmutable { return $this->lastAnalysisAt; }
+    public function getLastDigestDay(): ?\DateTimeImmutable { return $this->lastDigestDay; }
     public function getUpdatedAt(): ?\DateTimeImmutable { return $this->updatedAt; }
     public function getUpdatedBy(): ?int { return $this->updatedBy; }
 }

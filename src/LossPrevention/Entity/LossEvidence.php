@@ -21,6 +21,10 @@ class LossEvidence
     public const CREDIT_NOTE = 'credit_note';
     public const Z_REPORT = 'z_report';
     public const DRAWER = 'drawer';
+    public const RETURN = 'return';
+    public const DISCOUNT = 'discount';
+    public const PRICE_CHANGE = 'price_change';
+    public const APPROVAL = 'approval';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

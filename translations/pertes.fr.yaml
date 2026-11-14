@@ -15,6 +15,7 @@ user:
     unnamed: 'Compte n° %id%'
 subject:
     user_window: Série d'actes d'un même compte
+    terminal: Tablette de caisse
 onDutyNotice: 'Ces personnes étaient en poste au moment des faits. Ce n''est pas une accusation : la décision vous revient, après vérification.'
 amountNotice: 'Le montant en jeu est le montant concerné par le constat, pas une perte prouvée.'
 caveats:
@@ -23,6 +24,7 @@ caveats:
     RECORDED_SALES_ONLY: 'L''analyse ne voit que ce que la caisse a enregistré : une ligne retirée du panier avant le paiement ne laisse aucune trace.'
     STAFF_NOTICE_REQUIRED: 'L''analyse ne démarre qu''après votre confirmation d''avoir informé vos salariés (Réglages).'
 rules:
+    previewNotice: 'Aperçu sur les 30 derniers jours : rien n''est enregistré, aucun constat n''est créé ni fermé.'
     notice: 'Changer un seuil ne ferme ni ne supprime aucun constat : le nouveau réglage ne vaut que pour les analyses suivantes.'
     CASH_DISCREPANCY:
         label: Écart de caisse à la clôture
@@ -46,6 +48,36 @@ rules:
         params:
             minutes: 'Délai après la vente pendant lequel une annulation ouvre un constat'
             perSession: Nombre d'annulations dans une session qui ouvre un constat
+    REFUND_PATTERN:
+        label: Retour inhabituel
+        description: 'Un retour sans ticket, ou de l''argent rendu en espèces pour une vente qui n''avait pas été payée en espèces.'
+        person:
+            label: Retours répétés par un même compte
+            description: 'Plusieurs retours faits par le même compte dans une même journée.'
+            params:
+                count: Nombre de retours dans la journée
+    DISCOUNT_PATTERN:
+        label: Remises au motif vague
+        description: 'Plusieurs ventes remisées au motif « Autre », ou sans motif, pendant une même session.'
+        params:
+            perSession: Nombre de ventes remisées dans une session qui ouvre un constat
+        person:
+            label: Remises répétées près du plafond par un même compte
+            description: 'Plusieurs ventes encaissées par le même compte avec une remise proche du plafond autorisé au caissier.'
+            params:
+                count: Nombre de ventes remisées
+                days: Sur combien de jours
+                share: 'Part du plafond du caissier à partir de laquelle une remise compte (en %)'
+    PRICE_OVERRIDE:
+        label: Prix baissés à la main
+        description: 'Plusieurs articles vendus à un prix saisi à la main, inférieur au prix du catalogue, pendant une même session.'
+        params:
+            perSession: Nombre de baisses de prix dans une session qui ouvre un constat
+    APPROVAL_PATTERN:
+        label: Validations refusées
+        description: 'Plusieurs validations d''un responsable refusées sur une même tablette dans une même journée (code faux, code bloqué, compte sans le droit de valider).'
+        params:
+            perDay: Nombre de validations refusées dans la journée qui ouvre un constat
 summary:
     default: Constat relevé dans l'activité de la caisse.
     CASH_DISCREPANCY:
@@ -57,6 +89,17 @@ summary:
     VOID_AFTER_SALE:
         quick: 'Vente de %amount% avec une part en espèces, annulée %delay% min après l''encaissement.'
         series: '%count% ventes annulées pendant une même session, %amount% au total.'
+    REFUND_PATTERN:
+        no_receipt: 'Retour sans ticket de %amount%.'
+        cash_for_card: 'Retour de %amount% : %cash% rendus en espèces pour une vente qui n''avait pas été payée en espèces.'
+        person: '%count% retours dans une même journée par un même compte, %amount% au total.'
+    DISCOUNT_PATTERN:
+        rule: '%count% ventes remisées au motif « Autre » ou sans motif pendant une même session, %amount% de remises au total.'
+        person: '%count% ventes en %days% jours avec une remise proche du plafond pour un même compte, %amount% de remises au total.'
+    PRICE_OVERRIDE:
+        rule: '%count% prix baissés à la main pendant une même session, %amount% de baisse au total.'
+    APPROVAL_PATTERN:
+        rule: '%count% validations d''un responsable refusées sur une même tablette dans la journée.'
 evidence:
     noReason: Aucun motif saisi
     z_report:
@@ -67,6 +110,16 @@ evidence:
         title: Vente
     credit_note:
         title: Annulation de la vente
+    return:
+        title: Retour
+    discount:
+        title: Vente remisée
+    price_change:
+        title: Prix saisi à la main
+    approval:
+        title: Validation refusée
+    'yes': Oui
+    'no': Non
     lines:
         reportNumber: Rapport de clôture n°
         closedAt: Caisse fermée le
@@ -90,6 +143,43 @@ evidence:
         refundAmount: Montant remboursé
         cashRefund: Dont rendu en espèces
         canceledBy: Annulée par
+        returnedAt: Retour fait le
+        returnAmount: Montant du retour
+        cardRefund: Dont remboursé par carte
+        withReceipt: Rattaché à une vente
+        returnReason: Motif du retour
+        returnedBy: Retour fait par
+        gross: Prix avant remise
+        discount: Remise
+        discountReasons: Motifs de la remise
+        discountBy: Vendue par
+        article: Article
+        quantity: Quantité
+        catalogPrice: Prix du catalogue
+        manualPrice: Prix saisi
+        difference: Baisse
+        priceReason: Motif du prix
+        changedBy: Prix saisi par
+        action: Action à valider
+        refusal: Raison du refus
+        requestedBy: Demandée par
+        manager: Responsable sollicité
+approval:
+    action:
+        refund: Remboursement
+        return: Retour
+        withdrawal: Retrait d'espèces
+        fund_withdrawal: Retrait du fond de caisse
+        drawer_open: Ouverture du tiroir
+        close_without_count: Fermeture sans comptage
+        discount: Remise
+        custom_item: Article libre
+        price_override: Prix à la main
+    refusal:
+        PIN_INVALID: Code du responsable faux
+        PIN_LOCKED: Code du responsable bloqué
+        APPROVER_NOT_ALLOWED: Ce compte n'a pas le droit de valider
+        APPROVAL_RATE_LIMITED: Trop d'essais
 settings:
     legalNotice: 'Ces réglages suivent le pays et la région de votre boutique. Faites-les relire par un avocat avant de vous en servir pour une décision concernant un salarié.'
     personPatterns:

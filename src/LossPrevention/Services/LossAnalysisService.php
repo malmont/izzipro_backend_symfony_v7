@@ -4,14 +4,11 @@ namespace App\LossPrevention\Services;
 
 use App\LossPrevention\Entity\LossJournalEntry;
 use App\LossPrevention\Entity\LossSetting;
-use App\LossPrevention\Services\Rule\CashDiscrepancyRule;
-use App\LossPrevention\Services\Rule\CashShortageSeriesRule;
-use App\LossPrevention\Services\Rule\DrawerNoSaleRule;
 use App\LossPrevention\Services\Rule\LossRuleInterface;
-use App\LossPrevention\Services\Rule\VoidAfterSaleRule;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\DBAL\ArrayParameterType;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
 
 /**
  * Analyse de l'activité de caisse (lot L1-a, `docs/prevention-pertes.md`, plan § C). Elle LIT le journal de caisse et les tables de caisse et
@@ -36,6 +33,10 @@ class LossAnalysisService
     public const BACKFILL_DAYS = 30;
     /** Âge au-delà duquel la synthèse relance un passage */
     public const STALE_SECONDS = 600;
+    /** Aperçu d'un réglage : période relue, nombre maximal d'entrées du journal de caisse, taille de l'échantillon */
+    public const PREVIEW_DAYS = 30;
+    public const PREVIEW_MAX = 20000;
+    public const PREVIEW_SAMPLE = 3;
     /** Nombre de lignes récentes du journal du module relues pour y chercher des entrées sautées */
     private const SKIPPED_SCAN = 5000;
     /** La remarque sur les entrées sautées ne porte que sur ces derniers jours */
@@ -46,6 +47,7 @@ class LossAnalysisService
     /** @var list<LossRuleInterface> */
     private readonly array $rules;
 
+    /** @param iterable<LossRuleInterface> $rules toutes les règles du module (étiquette `loss_prevention.rule`), rangées par classe pour un ordre stable */
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly LossSettingsService $settings,
@@ -53,12 +55,11 @@ class LossAnalysisService
         private readonly LossSite $site,
         private readonly LossFindingWriter $writer,
         private readonly LoggerInterface $logger,
-        CashDiscrepancyRule $cashDiscrepancy,
-        CashShortageSeriesRule $cashShortageSeries,
-        DrawerNoSaleRule $drawerNoSale,
-        VoidAfterSaleRule $voidAfterSale,
+        #[AutowireIterator('loss_prevention.rule')] iterable $rules,
     ) {
-        $this->rules = [$cashDiscrepancy, $cashShortageSeries, $drawerNoSale, $voidAfterSale];
+        $list = [...$rules];
+        usort($list, fn (LossRuleInterface $a, LossRuleInterface $b) => strcmp($a::class, $b::class));
+        $this->rules = $list;
     }
 
     /**
@@ -76,7 +77,6 @@ class LossAnalysisService
         $em = $this->emProvider->getEntityManager();
         $conn = $em->getConnection();
         $settings = $em->getRepository(LossSetting::class);
-        $settings->row(); // la ligne existe avant la transaction
         $conn->beginTransaction();
         try {
             if (!$conn->fetchOne('SELECT pg_try_advisory_xact_lock(?)', [self::LOCK_KEY])) {
@@ -149,6 +149,60 @@ class LossAnalysisService
         }
 
         return ['status' => 'done', 'read' => count($rows), 'skipped' => $skipped, 'pending' => $full] + $this->writer->flushCounters();
+    }
+
+    /**
+     * Aperçu d'un réglage (lot L1-b) : combien de constats une règle ouvrirait sur les `PREVIEW_DAYS` derniers jours avec ses réglages actuels,
+     * et combien avec les réglages proposés. Les VRAIES règles sont jouées sur le journal de caisse, mais leurs constats vont dans un puits en
+     * mémoire : RIEN n'est écrit (ni constat, ni preuve, ni journal, ni curseur). Les deux nombres sont calculés de la même façon, sans tenir
+     * compte des constats déjà là ni des décisions : ils se comparent. Lecture bornée (`PREVIEW_MAX` entrées, `truncated` au-delà), et jamais
+     * sous le plancher de l'analyse.
+     *
+     * @param array{enabled: bool, params: array<string, int>, personEnabled: bool, personParams: array<string, int>} $proposed
+     * @return array{status: string, reason?: string, current: int, wouldOpen: int, days: int, truncated: bool, sample: list<array<string, mixed>>}
+     */
+    public function preview(string $code, array $proposed): array
+    {
+        $none = ['current' => 0, 'wouldOpen' => 0, 'days' => self::PREVIEW_DAYS, 'truncated' => false, 'sample' => []];
+        $blocked = $this->settings->blockedReason();
+        if ($blocked !== null) {
+            return ['status' => 'blocked', 'reason' => $blocked] + $none;
+        }
+        $em = $this->emProvider->getEntityManager();
+        $conn = $em->getConnection();
+        $rules = array_values(array_filter($this->rules, fn (LossRuleInterface $r) => $r->code() === $code));
+        $types = array_values(array_unique(array_merge([], ...array_map(fn (LossRuleInterface $r) => $r->types(), $rules))));
+        if ($types === []) {
+            return ['status' => 'done'] + $none;
+        }
+        $floor = (int) ($em->getRepository(LossSetting::class)->row()['analysis_floor_sequence'] ?? 0);
+        $since = (new \DateTimeImmutable('-' . self::PREVIEW_DAYS . ' days'))->format('Y-m-d H:i:s');
+        $from = max($floor, (int) $conn->fetchOne('SELECT COALESCE(MAX(sequence), 0) FROM pos_audit_log WHERE occurred_at < ?', [$since]));
+        $rows = $conn->fetchAllAssociative(
+            'SELECT ' . LossAuditEntry::COLUMNS . ' FROM pos_audit_log WHERE sequence > :from AND type IN (:types) ORDER BY sequence LIMIT ' . (self::PREVIEW_MAX + 1),
+            ['from' => $from, 'types' => $types], ['types' => ArrayParameterType::STRING]);
+        $truncated = count($rows) > self::PREVIEW_MAX;
+        $entries = array_map([LossAuditEntry::class, 'fromRow'], array_slice($rows, 0, self::PREVIEW_MAX));
+        $play = function (array $config) use ($conn, $entries, $rules, $code, $floor): array {
+            $sink = new LossPreviewSink();
+            if (!$config['enabled']) {
+                return [];
+            }
+            $ctx = new LossAnalysisContext($conn, $this->site->clock(), $this->site->currency(), $this->site->discrepancyThreshold(), [$code => $config], $sink, null, $floor);
+            foreach ($entries as $entry) {
+                foreach ($rules as $rule) {
+                    if (in_array($entry['type'], $rule->types(), true)) {
+                        $rule->handle($entry, $ctx);
+                    }
+                }
+            }
+
+            return $sink->findings();
+        };
+        $would = $play($proposed);
+
+        return ['status' => 'done', 'current' => count($play($this->ruleSettings->effective($code))), 'wouldOpen' => count($would), 'days' => self::PREVIEW_DAYS,
+            'truncated' => $truncated, 'sample' => array_slice($would, 0, self::PREVIEW_SAMPLE)];
     }
 
     /**

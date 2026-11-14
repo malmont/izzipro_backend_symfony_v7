@@ -52,6 +52,9 @@ class LossPreventionExamplesTest extends LossPreventionTestCase
         $this->keep('decision-expliquee', 'PUT', $decision, ['status' => 'explained', 'note' => 'Rouleaux de monnaie remis en caisse, vérifié avec le responsable.']);
         $this->keep('regles', 'GET', '/regles');
         $this->keep('regle-modifiee', 'PUT', '/regles/DRAWER_NO_SALE', ['params' => ['maxPerSession' => 5]]);
+        // Aperçu d'un seuil avant de l'appliquer (lot L1-b) : rien n'est écrit
+        $this->keep('apercu-regle', 'POST', '/regles/apercu', ['code' => 'CASH_DISCREPANCY', 'params' => ['minAmount' => 100]]);
+        $this->keep('refus-apercu-regle-inconnue', 'POST', '/regles/apercu', ['code' => 'INCONNUE'], 404);
         $this->keep('reglages', 'GET', '/reglages');
         $this->keep('reglages-modifies', 'PUT', '/reglages', ['retention' => ['findingsMonths' => 18]]);
         $this->db->executeStatement('UPDATE loss_setting SET retention_findings_months = 24');
@@ -84,6 +87,18 @@ class LossPreventionExamplesTest extends LossPreventionTestCase
         $this->keep('regles-floride', 'GET', '/regles');
         $this->keep('constat-manques-repetes-par-personne', 'GET', '/constats/' . $this->db->fetchOne("SELECT id FROM loss_finding WHERE variant = 'person' AND subject_id = ? ORDER BY id DESC LIMIT 1", [$closer->getId()]));
         $this->place('CA', 'ON');
+
+        // Vague 2 (lot L1-b) : trois prix baissés à la main dans une session
+        $this->db->executeStatement('UPDATE entreprise SET pos_price_override_enabled = true, pos_price_override_max_amount = NULL, pos_price_override_reason_required = false');
+        $this->provider->getEntityManager()->clear();
+        $this->loginPos(['ROLE_USER_POS']);
+        $priceSession = $this->openSession();
+        foreach ([2400, 2000, 1900] as $price) {
+            $this->sell(['priceOverride' => ['unitPrice' => $price, 'reasonText' => 'Prix négocié']]);
+        }
+        $this->closeWith(0);
+        $this->json($this->admin('POST', self::BASE . '/analyse'));
+        $this->keep('constat-prix-baisses-a-la-main', 'GET', '/constats/' . $id('PRICE_OVERRIDE:session:' . $priceSession));
 
         // Analyse lancée par la lecture de la synthèse (la dernière a plus de dix minutes)
         $this->loginPos(['ROLE_USER_POS']);

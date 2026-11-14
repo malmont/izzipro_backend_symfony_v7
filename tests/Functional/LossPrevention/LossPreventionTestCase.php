@@ -23,6 +23,12 @@ abstract class LossPreventionTestCase extends WebTestCase
 {
     protected const PASSWORD = 'Mot-de-passe-de-test-1!';
     protected const BASE = '/api/gestion/pertes';
+    /** Colonnes de la fiche du site que ces tests règlent pour jouer une journée de caisse : gardées avant, remises après */
+    private const SITE_SETTINGS = ['locale', 'currency', 'prices_include_tax', 'pos_discrepancy_threshold', 'pos_cash_rounding_step', 'pos_approval_refund', 'pos_approval_withdrawal',
+        'pos_approval_fund_withdrawal', 'pos_approval_drawer_open', 'pos_approval_close_without_count', 'pos_terminal_header_required', 'pos_pay_cash', 'pos_return_without_receipt',
+        'pos_return_cash_for_card_sale', 'pos_return_max_days', 'pos_approval_return', 'pos_discount_enabled', 'pos_discount_ticket_enabled', 'pos_discount_reason_required',
+        'pos_discount_cashier_max_percent_bp', 'pos_discount_cashier_max_amount', 'pos_price_override_enabled', 'pos_price_override_max_amount', 'pos_price_override_reason_required',
+        'pos_offline_enabled', 'pos_offline_max_hours', 'pos_offline_max_queued_sales', 'pos_offline_max_queued_amount', 'pos_offline_price_tolerance', 'pos_offline_pack_validity_hours'];
     /** Marque des noms des comptes ; null = au hasard à chaque test (pour vérifier qu'aucun nom ne sort là où il ne doit pas) */
     protected const FIXED_MARK = null;
     protected KernelBrowser $client;
@@ -31,12 +37,18 @@ abstract class LossPreventionTestCase extends WebTestCase
     protected ?string $posToken = null;
     protected string $adminToken = '';
     protected int $adminId = 0;
+    /** Jeton de la tablette de caisse (en-tête X-Pos-Terminal), quand un test en active une */
+    protected ?string $terminal = null;
     protected int $register;
     protected int $cap;
     /** Marque propre à chaque test, portée par le prénom et le nom des comptes : aucun texte sans nom ne doit la contenir */
     protected string $mark;
     /** @var list<array<string, mixed>> adresse du site avant le test (pays, province), remise à la fin : la langue du site en dépend */
     private array $addresses = [];
+    /** @var array<string, mixed> réglages de caisse du site de test avant le test (ceux que ces tests changent), remis à la fin */
+    private array $siteSettings = [];
+    /** @var array{management: bool, loss: bool} droits de la gestion et du module sur le site de test avant le test, remis à la fin */
+    private array $moduleFlags = ['management' => false, 'loss' => false];
 
     protected function setUp(): void
     {
@@ -47,6 +59,8 @@ abstract class LossPreventionTestCase extends WebTestCase
         static::getContainer()->get(BoutiqueDemoSeeder::class)->seed('client-pertes@example.invalid', false, false);
         $this->db->executeStatement('DELETE FROM boutique_setting');
         $this->addresses = $this->db->fetchAllAssociative('SELECT id, country, state FROM address_entreprise ORDER BY id');
+        $this->siteSettings = $this->db->fetchAssociative('SELECT ' . implode(', ', self::SITE_SETTINGS) . ' FROM entreprise ORDER BY id LIMIT 1') ?: [];
+        $this->moduleFlags = array_map('boolval', $this->db->fetchAssociative('SELECT is_management_app_active AS management, is_loss_prevention_active AS loss FROM entreprise ORDER BY id LIMIT 1') ?: ['management' => false, 'loss' => false]);
         $this->place('CA', 'ON');
         $this->db->executeStatement("UPDATE entreprise SET currency = 'CAD', prices_include_tax = false, pos_discrepancy_threshold = 0, pos_cash_rounding_step = NULL, pos_approval_refund = NULL, pos_approval_withdrawal = NULL, pos_approval_fund_withdrawal = NULL, pos_approval_drawer_open = false, pos_approval_close_without_count = false, pos_terminal_header_required = false, pos_pay_cash = true, is_loss_prevention_active = true");
         $this->db->executeStatement('UPDATE caisse SET is_open = false, closed_at = NOW() WHERE is_open = true');
@@ -73,6 +87,11 @@ abstract class LossPreventionTestCase extends WebTestCase
         foreach ($this->addresses as $row) {
             $this->db->executeStatement('UPDATE address_entreprise SET country = ?, state = ? WHERE id = ?', [$row['country'], $row['state'], $row['id']]);
         }
+        if ($this->siteSettings !== []) { // réglages de caisse du site : comme avant le test
+            $this->db->executeStatement('UPDATE entreprise SET ' . implode(', ', array_map(fn (string $c) => "$c = :$c", array_keys($this->siteSettings))), $this->siteSettings,
+                array_map(fn ($v) => is_bool($v) ? \Doctrine\DBAL\ParameterType::BOOLEAN : ($v === null ? \Doctrine\DBAL\ParameterType::NULL : \Doctrine\DBAL\ParameterType::STRING), $this->siteSettings));
+        }
+        $this->flags($this->moduleFlags['management'], $this->moduleFlags['loss']); // écriture Doctrine : le cache des indicateurs de modules suit
         static::getContainer()->get(PlatformModeService::class)->setMode('demo', 'test');
         parent::tearDown();
         // PHPUnit garde chaque instance de test jusqu'à la fin de la suite : une connexion tenue par une propriété resterait ouverte, et la
@@ -117,7 +136,8 @@ abstract class LossPreventionTestCase extends WebTestCase
         $provider = $this->tenant();
         $c = static::getContainer();
         $rules = [];
-        foreach (['CashDiscrepancyRule', 'CashShortageSeriesRule', 'DrawerNoSaleRule', 'VoidAfterSaleRule'] as $name) {
+        foreach (['CashDiscrepancyRule', 'CashShortageSeriesRule', 'DrawerNoSaleRule', 'VoidAfterSaleRule', 'RefundPatternRule', 'RefundSeriesRule', 'DiscountPatternRule', 'DiscountSeriesRule',
+            'PriceOverrideRule', 'ApprovalPatternRule'] as $name) {
             $class = '\\App\\LossPrevention\\Services\\Rule\\' . $name;
             $rules[$class] = new $class();
         }
@@ -127,7 +147,7 @@ abstract class LossPreventionTestCase extends WebTestCase
 
         return new \App\LossPrevention\Services\LossAnalysisService($provider, $c->get(\App\LossPrevention\Services\LossSettingsService::class),
             $c->get(\App\LossPrevention\Services\LossRuleService::class), $c->get(\App\LossPrevention\Services\LossSite::class),
-            new \App\LossPrevention\Services\LossFindingWriter($provider), new \Psr\Log\NullLogger(), ...array_values($rules));
+            new \App\LossPrevention\Services\LossFindingWriter($provider), new \Psr\Log\NullLogger(), array_values($rules));
     }
 
     /** Une règle « tiroir » qui échoue sur une erreur SQL (la transaction serait perdue sans point de reprise) */
@@ -139,6 +159,16 @@ abstract class LossPreventionTestCase extends WebTestCase
                 $ctx->conn->executeStatement('SELECT colonne_qui_n_existe_pas FROM pos_audit_log');
             }
         };
+    }
+
+    /** Active une tablette de caisse (clé d'activation « pos ») et garde son jeton pour les appels suivants ; rend son identifiant */
+    protected function activateTerminal(string $label): int
+    {
+        $key = $this->json($this->call('POST', '/api/app-keys', ['app' => 'pos', 'label' => $label, 'sendEmail' => false], $this->adminToken), 201)['key'];
+        $terminal = $this->json($this->call('POST', '/api/app/activate', ['key' => $key, 'app' => 'pos'], null))['terminal'];
+        $this->terminal = (string) $terminal['token'];
+
+        return (int) $terminal['id'];
     }
 
     protected function place(string $country, string $state): void
@@ -168,6 +198,22 @@ abstract class LossPreventionTestCase extends WebTestCase
 
         return $this->json($this->pos('POST', '/api/order/create-multi-payment', ['items' => [['productVariantId' => $this->cap, 'quantity' => 1]],
             'paymentMethods' => [['type' => 2, 'amount' => $quote['cashTotal'] / 100]], 'cashRegisterId' => $this->register]), 201);
+    }
+
+    /**
+     * Une vente au comptoir d'une casquette, payée en entier par un moyen (2 espèces par défaut, 1 carte), avec un prix manuel ou une remise de
+     * ticket facultatifs ; le total vient du devis de caisse.
+     *
+     * @param array<string, mixed> $lineExtras clés ajoutées à la ligne (`priceOverride`)
+     * @param array<string, mixed>|null $ticketDiscount
+     * @return array<string, mixed> réponse de la vente
+     */
+    protected function sell(array $lineExtras = [], ?array $ticketDiscount = null, int $method = 2): array
+    {
+        $body = ['items' => [['productVariantId' => $this->cap, 'quantity' => 1] + $lineExtras], 'cashRegisterId' => $this->register] + ($ticketDiscount !== null ? ['ticketDiscount' => $ticketDiscount] : []);
+        $quote = $this->json($this->pos('POST', '/api/pos/quote', $body));
+
+        return $this->json($this->pos('POST', '/api/order/create-multi-payment', $body + ['paymentMethods' => [['type' => $method, 'amount' => ($method === 2 ? $quote['cashTotal'] : $quote['total']) / 100]]]), 201);
     }
 
     /** Ferme la session ouverte avec un écart donné (compté − attendu, cents) @return array<string, mixed> rapport de clôture */
@@ -235,6 +281,7 @@ abstract class LossPreventionTestCase extends WebTestCase
         $this->client->request($method, 'https://' . MV_TEST_TENANT_HOST . $path, [], [], array_filter([
             'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json',
             'HTTP_AUTHORIZATION' => $token ? 'Bearer ' . $token : null,
+            'HTTP_X_POS_TERMINAL' => $this->terminal,
             'HTTP_IDEMPOTENCY_KEY' => $method === 'POST' && (str_contains($path, 'create-multi-payment') || str_contains($path, '/cancel/')) ? self::uuid() : null,
         ]), $body !== null ? json_encode($body) : null);
 

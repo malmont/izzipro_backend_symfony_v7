@@ -15,6 +15,7 @@ user:
     unnamed: 'Account no. %id%'
 subject:
     user_window: Series of actions by the same account
+    terminal: Cash register tablet
 onDutyNotice: 'These people were on duty when the events took place. This is not an accusation: the decision is yours, after checking.'
 amountNotice: 'The amount at stake is the amount the finding is about, not a proven loss.'
 caveats:
@@ -23,6 +24,7 @@ caveats:
     RECORDED_SALES_ONLY: 'The analysis only sees what the cash register recorded: a line removed from the cart before payment leaves no trace.'
     STAFF_NOTICE_REQUIRED: 'The analysis only starts once you have confirmed that you informed your staff (Settings).'
 rules:
+    previewNotice: 'Preview over the last 30 days: nothing is saved, no finding is created or closed.'
     notice: 'Changing a threshold neither closes nor deletes any finding: the new setting only applies to later analyses.'
     CASH_DISCREPANCY:
         label: Cash discrepancy at closing
@@ -46,6 +48,36 @@ rules:
         params:
             minutes: 'Delay after the sale during which a cancellation opens a finding'
             perSession: Number of cancellations in a session that opens a finding
+    REFUND_PATTERN:
+        label: Unusual return
+        description: 'A return without a receipt, or cash given back for a sale that had not been paid in cash.'
+        person:
+            label: Repeated returns by the same account
+            description: 'Several returns made by the same account during the same day.'
+            params:
+                count: Number of returns during the day
+    DISCOUNT_PATTERN:
+        label: Discounts with a vague reason
+        description: 'Several sales discounted with the reason “Other”, or with no reason, during the same session.'
+        params:
+            perSession: Number of discounted sales in a session that opens a finding
+        person:
+            label: Repeated discounts near the limit by the same account
+            description: 'Several sales rung up by the same account with a discount close to the limit allowed to the cashier.'
+            params:
+                count: Number of discounted sales
+                days: Over how many days
+                share: 'Share of the cashier limit from which a discount counts (in %)'
+    PRICE_OVERRIDE:
+        label: Prices lowered by hand
+        description: 'Several items sold at a price entered by hand, below the catalogue price, during the same session.'
+        params:
+            perSession: Number of price reductions in a session that opens a finding
+    APPROVAL_PATTERN:
+        label: Refused approvals
+        description: 'Several manager approvals refused on the same tablet during the same day (wrong code, locked code, account not allowed to approve).'
+        params:
+            perDay: Number of refused approvals during the day that opens a finding
 summary:
     default: Finding raised from cash register activity.
     CASH_DISCREPANCY:
@@ -57,6 +89,17 @@ summary:
     VOID_AFTER_SALE:
         quick: 'Sale of %amount% partly paid in cash, cancelled %delay% min after payment.'
         series: '%count% sales cancelled during the same session, %amount% in total.'
+    REFUND_PATTERN:
+        no_receipt: 'Return without a receipt of %amount%.'
+        cash_for_card: 'Return of %amount%: %cash% given back in cash for a sale that had not been paid in cash.'
+        person: '%count% returns during the same day by the same account, %amount% in total.'
+    DISCOUNT_PATTERN:
+        rule: '%count% sales discounted with the reason “Other” or with no reason during the same session, %amount% of discounts in total.'
+        person: '%count% sales in %days% days with a discount near the limit for the same account, %amount% of discounts in total.'
+    PRICE_OVERRIDE:
+        rule: '%count% prices lowered by hand during the same session, %amount% of reduction in total.'
+    APPROVAL_PATTERN:
+        rule: '%count% manager approvals refused on the same tablet during the day.'
 evidence:
     noReason: No reason entered
     z_report:
@@ -67,6 +110,16 @@ evidence:
         title: Sale
     credit_note:
         title: Sale cancellation
+    return:
+        title: Return
+    discount:
+        title: Discounted sale
+    price_change:
+        title: Price entered by hand
+    approval:
+        title: Refused approval
+    'yes': 'Yes'
+    'no': 'No'
     lines:
         reportNumber: Closing report no.
         closedAt: Register closed on
@@ -90,6 +143,43 @@ evidence:
         refundAmount: Amount refunded
         cashRefund: Of which returned in cash
         canceledBy: Cancelled by
+        returnedAt: Return made on
+        returnAmount: Return amount
+        cardRefund: Of which refunded by card
+        withReceipt: Linked to a sale
+        returnReason: Reason for the return
+        returnedBy: Return made by
+        gross: Price before discount
+        discount: Discount
+        discountReasons: Discount reasons
+        discountBy: Sold by
+        article: Item
+        quantity: Quantity
+        catalogPrice: Catalogue price
+        manualPrice: Price entered
+        difference: Reduction
+        priceReason: Reason for the price
+        changedBy: Price entered by
+        action: Action to approve
+        refusal: Reason for the refusal
+        requestedBy: Requested by
+        manager: Manager asked
+approval:
+    action:
+        refund: Refund
+        return: Return
+        withdrawal: Cash withdrawal
+        fund_withdrawal: Float withdrawal
+        drawer_open: Drawer opening
+        close_without_count: Closing without counting
+        discount: Discount
+        custom_item: Custom item
+        price_override: Manual price
+    refusal:
+        PIN_INVALID: Wrong manager code
+        PIN_LOCKED: Manager code locked
+        APPROVER_NOT_ALLOWED: This account is not allowed to approve
+        APPROVAL_RATE_LIMITED: Too many attempts
 settings:
     legalNotice: 'These settings follow the country and region of your shop. Have them reviewed by a lawyer before using them for a decision about an employee.'
     personPatterns:

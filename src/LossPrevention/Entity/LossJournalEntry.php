@@ -25,6 +25,8 @@ class LossJournalEntry
     public const ANALYSIS_STARTED = 'ANALYSIS_STARTED';
     /** Entrées du journal de caisse qu'une règle n'a pas pu lire pendant un passage (sautées) : anomalie à faire remonter */
     public const ENTRIES_SKIPPED = 'ENTRIES_SKIPPED';
+    /** Courriel de résumé du jour envoyé (lot L1-b) : nombre de constats nouveaux, montant en jeu, nombre de destinataires ; aucun nom, aucune adresse */
+    public const DIGEST_SENT = 'DIGEST_SENT';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

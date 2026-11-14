@@ -215,7 +215,8 @@ class LossPreventionApiTest extends LossPreventionTestCase
     {
         $this->drain();
         $rules = $this->json($this->admin('GET', self::BASE . '/regles'));
-        $this->assertSame(['CASH_DISCREPANCY', 'DRAWER_NO_SALE', 'VOID_AFTER_SALE'], array_column($rules['rules'], 'code'));
+        $this->assertSame(['CASH_DISCREPANCY', 'DRAWER_NO_SALE', 'VOID_AFTER_SALE', 'REFUND_PATTERN', 'DISCOUNT_PATTERN', 'PRICE_OVERRIDE', 'APPROVAL_PATTERN'], array_column($rules['rules'], 'code'));
+        $this->assertSame([1, 1, 1, 2, 2, 2, 2], array_column($rules['rules'], 'wave'));
         $cash = $rules['rules'][0];
         $this->assertSame(['key' => 'minAmount', 'type' => 'cents', 'value' => 500, 'default' => 500, 'min' => 0, 'max' => 1000000], array_diff_key($cash['params'][0], ['label' => 1]));
         $this->assertSame([false, false, [3, 30]], [$cash['personVariant']['allowed'], $cash['personVariant']['enabled'], array_column($cash['personVariant']['params'], 'value')]);
@@ -401,6 +402,28 @@ class LossPreventionApiTest extends LossPreventionTestCase
         $this->assertSame('app.management', $this->json($this->admin('GET', self::BASE . '?analyse=0'), 403)['feature'], 'sans la gestion, c\'est la gestion qui refuse');
         $this->flags(true, true);
         $this->assertSame(200, $this->admin('GET', self::BASE . '?analyse=0')->getStatusCode());
+        // Un refus n'écrit RIEN : ni ligne de réglages, ni journal du module, ni constat (le web lit ce refus en fond pour connaître l'essai offert)
+        $this->flags(true, false);
+        $settingsRow = $this->db->fetchAssociative('SELECT * FROM loss_setting ORDER BY id LIMIT 1');
+        $this->db->executeStatement('DELETE FROM loss_setting');
+        $written = fn () => [(int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_setting'), (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_journal'), (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_finding'),
+            (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_evidence'), (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_rule')];
+        $before = $written();
+        foreach ([['GET', '?analyse=0'], ['GET', ''], ['GET', '/constats'], ['GET', '/reglages'], ['POST', '/analyse'], ['PUT', '/reglages']] as [$method, $path]) {
+            $this->assertSame(403, $this->admin($method, self::BASE . $path, $method === 'GET' ? null : ['staffNoticeConfirmed' => true])->getStatusCode(), "$method $path");
+        }
+        $this->assertSame($before, $written(), 'un 403 MODULE_INACTIVE ne crée ni ligne de réglages, ni entrée du journal, ni constat');
+        // En mode demo sans le droit, les écrans répondent : une LECTURE n'écrit rien non plus (pas même la ligne de réglages par défaut)
+        static::getContainer()->get(PlatformModeService::class)->setMode('demo', 'test');
+        foreach (['?analyse=0', '', '/constats', '/regles', '/reglages'] as $path) {
+            $this->assertSame(200, $this->admin('GET', self::BASE . $path)->getStatusCode(), "GET $path");
+        }
+        $this->assertSame($before, $written(), 'une lecture sans le droit du module n\'écrit rien');
+        static::getContainer()->get(PlatformModeService::class)->setMode('live', 'test');
+        if ($settingsRow !== false) { // la ligne de réglages du site de test est remise telle quelle
+            $this->db->insert('loss_setting', $settingsRow, array_map(fn ($v) => is_bool($v) ? \Doctrine\DBAL\ParameterType::BOOLEAN : ($v === null ? \Doctrine\DBAL\ParameterType::NULL : \Doctrine\DBAL\ParameterType::STRING), $settingsRow));
+        }
+        $this->flags(true, true);
         // Le registre du site porte la clé
         $features = $this->json($this->admin('GET', '/api/site/features'));
         $this->assertStringContainsString('module.loss_prevention', json_encode($features));

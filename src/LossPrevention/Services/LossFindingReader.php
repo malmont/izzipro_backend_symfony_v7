@@ -124,7 +124,7 @@ class LossFindingReader
         $snapshots = [];
         foreach ($evidenceRows as $e) {
             $snapshots[$e['id']] = json_decode((string) $e['snapshot'], true) ?: [];
-            foreach (['closedById', 'userId', 'approvedById', 'sellerId', 'canceledById'] as $key) {
+            foreach (['closedById', 'userId', 'approvedById', 'sellerId', 'canceledById', 'managerId'] as $key) {
                 $userIds[] = $snapshots[$e['id']][$key] ?? null;
             }
         }
@@ -256,13 +256,21 @@ class LossFindingReader
         ];
     }
 
-    /** Phrase de résumé, écrite à partir des nombres du constat : aucun nom, aucun courriel @param array<string, mixed> $row */
+    /** Phrase de résumé d'un constat gardé en base @param array<string, mixed> $row */
     private function summary(array $row, string $locale): string
     {
-        $facts = json_decode((string) $row['facts'], true) ?: [];
-        $money = fn (mixed $cents) => LossTexts::money((int) $cents, $locale, (string) $row['currency']);
-        $code = (string) $row['rule_code'];
-        if ($row['variant'] === LossFinding::VARIANT_PERSON) {
+        return $this->summarize((string) $row['rule_code'], (string) $row['variant'], json_decode((string) $row['facts'], true) ?: [], (string) $row['currency'], $locale);
+    }
+
+    /**
+     * Phrase de résumé, écrite à partir des nombres d'un constat (gardé en base, ou simulé par l'aperçu) : aucun nom, aucun courriel.
+     *
+     * @param array<string, mixed> $facts
+     */
+    public function summarize(string $code, string $variant, array $facts, string $currency, string $locale): string
+    {
+        $money = fn (mixed $cents) => LossTexts::money((int) $cents, $locale, $currency);
+        if ($variant === LossFinding::VARIANT_PERSON) {
             return $this->texts->t("summary.$code.person", $locale, ['count' => (int) ($facts['count'] ?? 0), 'days' => (int) ($facts['days'] ?? 0), 'amount' => $money($facts['total'] ?? 0)]);
         }
 
@@ -274,6 +282,11 @@ class LossFindingReader
             LossRuleCatalog::VOID_AFTER_SALE => ($facts['case'] ?? '') === 'series'
                 ? $this->texts->t("summary.$code.series", $locale, ['count' => (int) ($facts['count'] ?? 0), 'amount' => $money($facts['total'] ?? 0)])
                 : $this->texts->t("summary.$code.quick", $locale, ['amount' => $money($facts['total'] ?? 0), 'delay' => (int) ($facts['delayMinutes'] ?? 0)]),
+            LossRuleCatalog::REFUND_PATTERN => $this->texts->t("summary.$code." . (($facts['case'] ?? '') === 'no_receipt' ? 'no_receipt' : 'cash_for_card'), $locale,
+                ['amount' => $money($facts['amount'] ?? 0), 'cash' => $money($facts['cashRefund'] ?? 0)]),
+            LossRuleCatalog::DISCOUNT_PATTERN => $this->texts->t("summary.$code.rule", $locale, ['count' => (int) ($facts['count'] ?? 0), 'amount' => $money($facts['total'] ?? 0)]),
+            LossRuleCatalog::PRICE_OVERRIDE => $this->texts->t("summary.$code.rule", $locale, ['count' => (int) ($facts['count'] ?? 0), 'amount' => $money($facts['total'] ?? 0)]),
+            LossRuleCatalog::APPROVAL_PATTERN => $this->texts->t("summary.$code.rule", $locale, ['count' => (int) ($facts['count'] ?? 0)]),
             default => $this->texts->t('summary.default', $locale),
         };
     }
@@ -299,6 +312,18 @@ class LossFindingReader
             LossEvidence::ORDER => ['reference' => $text('reference'), 'soldAt' => $when('soldAt'), 'total' => $money('total'), 'cashPart' => $money('cashPart'), 'seller' => $user('sellerId')],
             LossEvidence::CREDIT_NOTE => ['reference' => $text('reference'), 'soldAt' => $when('soldAt'), 'canceledAt' => $when('canceledAt'), 'creditNoteNumber' => $text('creditNoteNumber'),
                 'refundAmount' => $money('refundAmount'), 'cashRefund' => $money('cashRefund'), 'canceledBy' => $user('canceledById'), 'approvedBy' => $user('approvedById')],
+            LossEvidence::RETURN => ['reference' => $text('reference'), 'returnedAt' => $when('returnedAt'), 'returnAmount' => $money('amount'), 'cashRefund' => $money('cashRefund'),
+                'cardRefund' => $money('cardRefund'), 'withReceipt' => $this->texts->t(isset($s['originalOrderId']) ? 'evidence.yes' : 'evidence.no', $locale),
+                'returnReason' => $text('liveReason') ?? $text('reasonCode') ?? $this->texts->t('evidence.noReason', $locale), 'returnedBy' => $user('userId'), 'approvedBy' => $user('approvedById')],
+            LossEvidence::DISCOUNT => ['reference' => $text('reference'), 'gross' => $money('gross'), 'discount' => $money('discount'),
+                'discountReasons' => isset($s['reasonCodes']) ? (implode(', ', array_filter($s['reasonCodes'], fn ($c) => $c !== '')) ?: $this->texts->t('evidence.noReason', $locale)) : null,
+                'discountBy' => $user('userId'), 'approvedBy' => $user('approvedById')],
+            LossEvidence::PRICE_CHANGE => ['reference' => $text('reference'), 'article' => $text('article'), 'quantity' => $text('quantity'), 'catalogPrice' => $money('catalogPrice'),
+                'manualPrice' => $money('manualPrice'), 'difference' => $money('difference'), 'priceReason' => $text('liveReason') ?? $text('reasonCode') ?? $this->texts->t('evidence.noReason', $locale),
+                'changedBy' => $user('userId'), 'approvedBy' => $user('approvedById')],
+            LossEvidence::APPROVAL => ['action' => isset($s['action']) ? ($this->texts->has('approval.action.' . $s['action'], $locale) ? $this->texts->t('approval.action.' . $s['action'], $locale) : (string) $s['action']) : null,
+                'refusal' => isset($s['refusal']) ? ($this->texts->has('approval.refusal.' . $s['refusal'], $locale) ? $this->texts->t('approval.refusal.' . $s['refusal'], $locale) : (string) $s['refusal']) : null,
+                'requestedBy' => $user('userId'), 'manager' => $user('managerId')],
             default => [],
         };
         $lines = [];
@@ -313,7 +338,8 @@ class LossFindingReader
 
     /**
      * Motifs saisis à la caisse (texte libre du caissier), lus À LA SOURCE au moment de l'affichage : le motif d'écart dans le rapport de
-     * clôture, le motif d'ouverture du tiroir dans l'entrée du journal de caisse. Ils ne sont jamais recopiés dans les preuves, qui sont
+     * clôture, le motif d'ouverture du tiroir dans l'entrée du journal de caisse, le motif écrit d'un retour dans `pos_return`, celui d'un prix
+     * manuel dans la ligne de vente. Ils ne sont jamais recopiés dans les preuves, qui sont
      * inaltérables (choix C du 14/11/2026) : la caisse reste le seul endroit qui les garde.
      *
      * @param list<array<string, mixed>> $evidenceRows
@@ -322,9 +348,14 @@ class LossFindingReader
     private function liveReasons(array $evidenceRows): array
     {
         $conn = $this->emProvider->getEntityManager()->getConnection();
-        $byKind = [LossEvidence::Z_REPORT => [], LossEvidence::DRAWER => []];
+        $byKind = [LossEvidence::Z_REPORT => [], LossEvidence::DRAWER => [], LossEvidence::RETURN => [], LossEvidence::PRICE_CHANGE => []];
         foreach ($evidenceRows as $e) {
-            if (isset($byKind[$e['kind']])) {
+            if ($e['kind'] === LossEvidence::PRICE_CHANGE) { // la ligne de vente est dans la copie figée (identifiant), pas dans le renvoi
+                $item = (json_decode((string) $e['snapshot'], true) ?: [])['orderItemId'] ?? null;
+                if ($item !== null) {
+                    $byKind[LossEvidence::PRICE_CHANGE][(int) $item][] = $e['id'];
+                }
+            } elseif (isset($byKind[$e['kind']])) {
                 $byKind[$e['kind']][(int) $e['ref_id']] = $e['id'];
             }
         }
@@ -338,6 +369,18 @@ class LossFindingReader
             foreach ($conn->fetchAllKeyValue('SELECT id, payload FROM pos_audit_log WHERE id IN (' . implode(',', array_keys($byKind[LossEvidence::DRAWER])) . ')') as $id => $payload) {
                 $reason = (json_decode((string) $payload, true) ?: [])['data']['reason'] ?? null;
                 $out[$byKind[LossEvidence::DRAWER][(int) $id]] = is_string($reason) && trim($reason) !== '' ? $reason : null;
+            }
+        }
+        if ($byKind[LossEvidence::RETURN] !== []) {
+            foreach ($conn->fetchAllKeyValue('SELECT id, reason_text FROM pos_return WHERE id IN (' . implode(',', array_keys($byKind[LossEvidence::RETURN])) . ')') as $id => $reason) {
+                $out[$byKind[LossEvidence::RETURN][(int) $id]] = trim((string) $reason) !== '' ? (string) $reason : null;
+            }
+        }
+        if ($byKind[LossEvidence::PRICE_CHANGE] !== []) {
+            foreach ($conn->fetchAllKeyValue('SELECT id, price_reason_text FROM order_items WHERE id IN (' . implode(',', array_keys($byKind[LossEvidence::PRICE_CHANGE])) . ')') as $id => $reason) {
+                foreach ($byKind[LossEvidence::PRICE_CHANGE][(int) $id] as $evidenceId) {
+                    $out[$evidenceId] = trim((string) $reason) !== '' ? (string) $reason : null;
+                }
             }
         }
 
