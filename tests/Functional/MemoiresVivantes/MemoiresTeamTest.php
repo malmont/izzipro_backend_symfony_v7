@@ -40,13 +40,13 @@ class MemoiresTeamTest extends BookTypeApiTestCase
         $this->assertStringContainsString(TeamRoles::MEMOIRES_BIOGRAPHE, (string) $journal[0]['after_state']);
         $this->assertStringNotContainsString(TeamRoles::MEMOIRES_BIOGRAPHE, (string) $journal[0]['before_state']);
 
-        // Population team : les biographes, et eux seuls ; admin : l'administrateur du site sans ce rôle
+        // Population team : les biographes et les responsables des biographes, et eux seuls ; admin : l'administrateur du site sans ces rôles
         [$status, $team, $headers] = $this->callWithHeaders('GET', '/api/memoires/admin/users?population=team', null, $admin);
         $this->assertSame(200, $status);
         $this->assertSame(count($team), (int) $headers['x-total-count']);
         $this->assertContains($member->getId(), array_column($team, 'id'));
         foreach ($team as $row) {
-            $this->assertTrue($row['isBiographer'], $row['email']);
+            $this->assertTrue($row['isBiographer'] || $row['isResponsable'], $row['email']); // biographes et responsables des biographes (14/11/2026)
             $this->assertSame('team', $row['population']);
         }
         [$status, $admins] = $this->call('GET', '/api/memoires/admin/users?population=admin', null, $admin);
