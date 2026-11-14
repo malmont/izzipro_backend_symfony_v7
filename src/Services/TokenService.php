@@ -40,6 +40,12 @@ class TokenService
      * web, pour les comptes d'administration et d'assistance ; même session, autre règle de rôle (`AuthenticationService`).
      */
     public const COOKIE_PLATFORMS = ['web', 'webadmin'];
+    /**
+     * Plateformes dont la réponse de connexion ne rend AUCUN jeton dans son corps (14/11/2026) : le jeton d'accès et le jeton de
+     * renouvellement n'existent que dans les cookies protégés, hors de portée d'un script de la page ; le corps ne porte que le jeton
+     * anti-CSRF. « web » y viendra quand ses clients auront confirmé qu'ils ne lisent que les cookies.
+     */
+    public const COOKIE_ONLY_PLATFORMS = ['webadmin'];
 
     public static function usesCookies(?string $platform): bool
     {
@@ -127,7 +133,8 @@ class TokenService
     }
 
     /**
-     * Crée une réponse HTTP contenant les tokens en JSON et, si la plateforme est web, ajoute les cookies.
+     * Crée une réponse HTTP contenant les tokens en JSON et, si la plateforme est web, ajoute les cookies ; pour une plateforme de
+     * `COOKIE_ONLY_PLATFORMS`, les jetons ne sont que dans les cookies et le corps ne rend que `csrf_token`.
      *
      * @param array $tokens Tableau contenant 'token' et 'refresh_token'
      * @param string $platform (par exemple "web" ou "mobile")
@@ -144,6 +151,9 @@ class TokenService
 
         if (self::usesCookies($platform)) {
             $tokens['csrf_token'] = $this->attachWebSessionCookies($response, $tokens['token'], $tokens['refresh_token'], $cookiePath);
+            if (in_array($platform, self::COOKIE_ONLY_PLATFORMS, true)) {
+                unset($tokens['token'], $tokens['refresh_token']);
+            }
         }
 
         $response->setContent(json_encode($tokens));
