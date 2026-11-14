@@ -13,6 +13,8 @@
     "body": {
         "country": "CA",
         "region": "ON",
+        "countryLabel": "Canada",
+        "regionLabel": "Ontario",
         "staffNotice": {
             "required": false,
             "confirmedAt": null,

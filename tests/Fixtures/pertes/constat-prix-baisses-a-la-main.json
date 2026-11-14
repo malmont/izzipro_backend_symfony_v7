@@ -26,9 +26,9 @@
         "isNew": false,
         "newEvidenceSinceDecision": false,
         "backfill": false,
-        "updatedAt": "2026-11-14T20:28:51+00:00",
-        "from": "2026-11-14T20:28:50+00:00",
-        "to": "2026-11-14T20:28:50+00:00",
+        "updatedAt": "2026-11-14T22:07:51+00:00",
+        "from": "2026-11-14T22:07:50+00:00",
+        "to": "2026-11-14T22:07:50+00:00",
         "sessionId": 5,
         "subject": {
             "type": "session",
@@ -48,13 +48,13 @@
             {
                 "id": 27,
                 "kind": "price_change",
-                "at": "2026-11-14T20:28:50+00:00",
-                "atLabel": "14/11/2026 15 h 28",
+                "at": "2026-11-14T22:07:50+00:00",
+                "atLabel": "14/11/2026 17 h 07",
                 "title": "Prix saisi à la main",
                 "lines": [
                     {
                         "label": "Vente",
-                        "value": "REF#6af8c48235f9b"
+                        "value": "REF#6af8dbb638c57"
                     },
                     {
                         "label": "Article",
@@ -89,21 +89,21 @@
                     "type": "pos_audit",
                     "id": 33,
                     "sequence": 33,
-                    "hash": "9af56f90a0db3c7095d8c0c42d51b60a8c31bd4f403f8ffced8fa06f03750251"
+                    "hash": "4c0eae317f569470719a78b3ee798ddbee341116490d23ac1d92768b3a26a1a5"
                 },
                 "screen": null,
-                "fingerprint": "76d44f641c0aaa279470d035717789cac9abb877da44fd45fb4a75899df0185d"
+                "fingerprint": "13714110e9f44c38d9592899c9ebdb28b2ce9650e58e95c18c55a94e1733cded"
             },
             {
                 "id": 28,
                 "kind": "price_change",
-                "at": "2026-11-14T20:28:50+00:00",
-                "atLabel": "14/11/2026 15 h 28",
+                "at": "2026-11-14T22:07:50+00:00",
+                "atLabel": "14/11/2026 17 h 07",
                 "title": "Prix saisi à la main",
                 "lines": [
                     {
                         "label": "Vente",
-                        "value": "REF#6af8c482724ed"
+                        "value": "REF#6af8dbb66dee7"
                     },
                     {
                         "label": "Article",
@@ -138,21 +138,21 @@
                     "type": "pos_audit",
                     "id": 35,
                     "sequence": 35,
-                    "hash": "7b5e73c7c06e1accc6013805db62b40ebd89bc70cd64d91f7e0509792955d70f"
+                    "hash": "07d03f95c331164b814f8217e1403e959e2417f04e89b4e63418e7c8ae7494fd"
                 },
                 "screen": null,
-                "fingerprint": "ace5ec859d1c4940ed1750e0c5317d6e45fee15bbb45b86cb14ba10f32494eb7"
+                "fingerprint": "46479fa366806dc9c68ddefe1e4bfecf85d5b8cb6c9545f80703f996bea8981d"
             },
             {
                 "id": 29,
                 "kind": "price_change",
-                "at": "2026-11-14T20:28:50+00:00",
-                "atLabel": "14/11/2026 15 h 28",
+                "at": "2026-11-14T22:07:50+00:00",
+                "atLabel": "14/11/2026 17 h 07",
                 "title": "Prix saisi à la main",
                 "lines": [
                     {
                         "label": "Vente",
-                        "value": "REF#6af8c482aa156"
+                        "value": "REF#6af8dbb6a2ad6"
                     },
                     {
                         "label": "Article",
@@ -187,18 +187,18 @@
                     "type": "pos_audit",
                     "id": 37,
                     "sequence": 37,
-                    "hash": "d2404fafe9f72cc1011b117d2621e03d8db71794f0a2f93d30b79c4fa5d1077c"
+                    "hash": "65a76257c5ef7128cbea1f55600a6ed9fa661b7b7fc4b74c4fa5a8bebdd48b20"
                 },
                 "screen": null,
-                "fingerprint": "620ad5143bad655dcfb9eb242efb889da16e896edd87f53b2a3106f349bb23ba"
+                "fingerprint": "45beaf523fd5712d6e9d4fac6f2f3a246f86d7d1c0857ba02c9a1e7520a0aa12"
             }
         ],
         "evidenceIntact": true,
         "opinion": null,
         "decision": null,
         "history": [],
-        "lastEvidenceAt": "2026-11-14T20:28:51+00:00",
-        "createdAt": "2026-11-14T20:28:51+00:00",
+        "lastEvidenceAt": "2026-11-14T22:07:51+00:00",
+        "createdAt": "2026-11-14T22:07:51+00:00",
         "screen": "pertes.constat"
     }
 }

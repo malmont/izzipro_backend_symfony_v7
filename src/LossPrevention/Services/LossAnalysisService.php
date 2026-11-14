@@ -35,7 +35,12 @@ class LossAnalysisService
     public const STALE_SECONDS = 600;
     /** Aperçu d'un réglage : période relue, nombre maximal d'entrées du journal de caisse, taille de l'échantillon */
     public const PREVIEW_DAYS = 30;
-    public const PREVIEW_MAX = 5000;
+    /**
+     * Entrées jouées au plus par un aperçu, les plus récentes. Mesuré sur la base de test (14/11/2026) : 180 ouvertures de tiroir en trois
+     * sessions de 60, 840 ms pour les deux jeux, soit environ 2,3 ms par entrée et par jeu pour une règle qui relit sa session ; à 1 000
+     * entrées, de l'ordre de 5 s au pire. Au-delà, `truncated` le dit.
+     */
+    public const PREVIEW_MAX = 1000;
     public const PREVIEW_SAMPLE = 3;
     /** Nombre de lignes récentes du journal du module relues pour y chercher des entrées sautées */
     private const SKIPPED_SCAN = 5000;

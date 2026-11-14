@@ -8,6 +8,8 @@
     "body": {
         "country": "CA",
         "region": "QC",
+        "countryLabel": "Canada",
+        "regionLabel": "Québec",
         "staffNotice": {
             "required": true,
             "confirmedAt": null,

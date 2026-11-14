@@ -8,6 +8,8 @@
     "body": {
         "country": "US",
         "region": "FL",
+        "countryLabel": "États-Unis",
+        "regionLabel": "Floride",
         "staffNotice": {
             "required": false,
             "confirmedAt": null,
