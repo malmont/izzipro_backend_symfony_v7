@@ -17,8 +17,8 @@ class ClientErrorGuardTest extends TestCase
 {
     private const LARGE = ['Exception', 'Throwable', 'RuntimeException', 'LogicException', 'Error', 'ApiErrorException']; // ApiErrorException : toute erreur de l'API Stripe
 
-    /** Dossiers des lots à venir : ERREURS-3 (Boussole ESG, Mémoires Vivantes), confié à leurs sessions */
-    private const PENDING_FOLDERS = ['src/ESG/']; // Mémoires Vivantes balayé depuis ERREURS-3 (13/11/2026)
+    /** Dossiers des lots à venir : aucun. Mémoires Vivantes est balayé depuis le 13/11/2026, la Boussole ESG depuis le 14/11/2026 (ERREURS-3) */
+    private const PENDING_FOLDERS = [];
 
     /** « fichier::méthode » => raison. JOURNAL : le message part dans un journal ou une console, pas au client. ERREURS-2 : à traiter. */
     private const ALLOWED_CATCHES = [
