@@ -26,8 +26,9 @@ class HomeTilesService
     public const CASH_FIRST_BALANCE = 'cash-first-balance'; // lot B1b-1 : aucun solde saisi, mais un mouvement prévu ou une période en cours
     public const ADVICE = 'advice';             // lot G1a : premier conseil du guide de la période en cours (hors trésorerie et voyage, déjà en alerte)
     public const ADVICE_RESULT = 'advice-result'; // lot G1b-1 : mesure complète d'un conseil appliqué ; écartée pour toujours (par conseil)
-    public const KNOWN = [self::FIRST_INVOICE, self::FIRST_NOTE, self::FIRST_CAMPAIGN, self::LOW_STOCK, self::BUDGET_OVER, self::TRIP_BUDGET, self::CASH_LOW, self::CASH_FIRST_BALANCE, self::ADVICE, self::ADVICE_RESULT];
-    public const ALERTS = [self::LOW_STOCK, self::BUDGET_OVER, self::TRIP_BUDGET, self::CASH_LOW, self::ADVICE];
+    public const LOSS_FINDINGS = 'loss-findings'; // prévention des pertes, lot L1-b : nouveaux constats à vérifier (`docs/prevention-pertes.md`)
+    public const KNOWN = [self::FIRST_INVOICE, self::FIRST_NOTE, self::FIRST_CAMPAIGN, self::LOW_STOCK, self::BUDGET_OVER, self::TRIP_BUDGET, self::CASH_LOW, self::CASH_FIRST_BALANCE, self::ADVICE, self::ADVICE_RESULT, self::LOSS_FINDINGS];
+    public const ALERTS = [self::LOW_STOCK, self::BUDGET_OVER, self::TRIP_BUDGET, self::CASH_LOW, self::ADVICE, self::LOSS_FINDINGS];
     public const MAX_TILES = 3;
     public const LOW_STOCK_WINDOW_DAYS = 30;  // ventes prises en compte
     public const LOW_STOCK_MIN_SOLD = 2;      // une variante vendue au moins 2 fois sur la fenêtre « se vend »
@@ -44,6 +45,7 @@ class HomeTilesService
         private readonly ?GestionCashService $cash = null,
         private readonly ?PeriodCalendar $calendar = null,
         private readonly ?GestionAdviceService $advice = null,
+        private readonly ?\App\LossPrevention\Services\LossHomeTile $lossPrevention = null, // lot L1-b : nouveaux constats (seulement si le module est accordé)
     ) {
     }
 
@@ -110,6 +112,15 @@ class HomeTilesService
                 [['label' => $this->t('tiles.sources.cash_balance', $locale, ['%date%' => self::day($cash['balance']['date'], $locale)]), 'value' => $cash['balance']['amount'], 'unit' => 'money'], ['label' => $this->t('tiles.sources.cash_threshold', $locale), 'value' => $cash['threshold'], 'unit' => 'money']],
                 [['date' => $cash['low14']['date'], 'amount' => $cash['low14']['amount'], 'threshold' => $cash['threshold'], 'status' => $cash['status'], 'series' => $cash['series']]],
                 $cash['low14']['date'] . ':' . $cash['status']);
+        }
+        // Prévention des pertes (lot L1-b) : « N nouveaux constats, X en jeu ». Deux nombres, aucun nom ; écartée, elle revient quand la liste change
+        $loss = $this->lossPrevention?->newFindings();
+        if ($loss !== null) {
+            $tiles[] = $this->tile(self::LOSS_FINDINGS, 'alert', 78, 'loss_findings', $locale,
+                ['%count%' => $loss['count'], '%amount%' => self::money($loss['amount'], $locale, $this->siteCurrency())],
+                ['screen' => 'pertes.constats', 'params' => ['isNew' => true]],
+                [['label' => $this->t('tiles.sources.loss_new_findings', $locale), 'value' => $loss['count'], 'unit' => 'count'], ['label' => $this->t('tiles.sources.loss_amount_at_stake', $locale), 'value' => $loss['amount'], 'unit' => 'money']],
+                [], $loss['signature']);
         }
         if ($this->cash !== null && !$this->cash->hasBalance() && ($this->cash->hasMovement() || $this->calendar?->findByDate($this->calendar->today()) !== null)) {
             $tiles[] = $this->tile(self::CASH_FIRST_BALANCE, 'first_steps', 20, 'cash_first_balance', $locale, [], ['screen' => 'tresorerie', 'params' => new \stdClass()]);
