@@ -1,4 +1,4 @@
-# Applications à membres — APPS-MEMBRES (contrat validé le 14/11/2026 ; lots M1 et M2 codés le 14/11/2026)
+# Applications à membres — APPS-MEMBRES (contrat validé le 14/11/2026 ; lots M1, M2 et M3 codés le 14/11/2026)
 
 Un compte du site peut servir à plusieurs applications : la boutique, Mémoires Vivantes, la caisse. Jusqu'ici rien ne disait dans
 laquelle un client était entré, ni quelles conditions il avait acceptées. Ce chantier le dit, **sans jamais ajouter un client à une
@@ -6,13 +6,15 @@ application à son insu** : une appartenance naît d'un geste du client (ou d'un
 d'applications à une autre demandera une étape « Rejoindre » où il accepte les conditions de cette famille.
 
 État : **M1 codé** (table, appartenances créées aux entrées, conditions et version, routes de lecture, famille dans le jeton, mode
-« observer » : aucune connexion refusée) ; **M2 codé** (reprise de l'historique par commande, § 8 ; elle s'applique site par site,
-sur accord). M3 (« Rejoindre », mode « exiger », quitter une famille) et M4 (listes filtrées) restent à faire. **M1 ne change rien pour un client ni pour un front qui n'a pas bougé.**
+« observer ») ; **M2 codé** (reprise de l'historique par commande, § 8 ; faite sur les sites existants) ; **M3 codé** (mode
+« exiger » par site, refus `APP_MEMBERSHIP_REQUIRED`, « Rejoindre », quitter une famille, § 6). **Tous les sites sont en mode
+« observer » : rien n'est refusé à personne.** Passer un site en « exiger » est une décision à part, site par site. M4 (listes
+filtrées) reste à faire.
 
 Code : `src/Security/AppFamilies.php`, `src/Services/AppMembershipService/`, `src/Entity/UserAppMembership.php`,
-`src/Controller/AppMembershipController/`, `src/Command/BackfillAppMembershipsCommand.php`. Tests :
-`tests/Functional/Security/AppMembershipApiTest.php`, `AppMembershipBackfillTest.php` (la reprise), et la caisse dans
-`tests/Functional/Boutique/PosCustomerApiTest.php`.
+`src/Controller/AppMembershipController/`, `src/Command/BackfillAppMembershipsCommand.php`, `AppMembershipModeCommand.php`. Tests :
+`tests/Functional/Security/AppMembershipApiTest.php`, `AppMembershipBackfillTest.php` (la reprise), `AppMembershipJoinApiTest.php`
+(mode, refus, rejoindre, quitter), et la caisse dans `tests/Functional/Boutique/PosCustomerApiTest.php`.
 
 ## 1. Ce qui existait
 
@@ -111,8 +113,9 @@ permettra plus tard.
 | **Ce client choisit son mot de passe** (« mot de passe oublié ») | C'est la création de son compte : il entre dans `boutique` (`guest_checkout`) **à la date et à la version de sa première commande en invité**. Un mot de passe posé par l'équipe n'est pas ce geste : aucune appartenance. | M1 |
 | **Fiche de caisse rattachée à un compte** (consentement `account_link`) | Le compte entre dans `pos` (`pos_link`), à la version du texte consenti et à la date du consentement. | M1 |
 | **Le rattachement de caisse se défait** | L'appartenance `pos` du compte part avec lui, au journal (`revoke`). Trois cas : **retrait du consentement `account_link`** (`PATCH /api/pos/customers/{id}` avec `consents.account_link: false`) : le rattachement est défait (`user_id` vidé) et l'appartenance retirée **dans la même transaction**, raison `consent_withdrawn` ; la réponse montre la fiche sans compte rattaché. **Fiche effacée** à la demande du client : raison `pos_customer_erased`. **Fusion de deux fiches rattachées à deux comptes différents** : le compte de la fiche fusionnée perd son rattachement, raison `merge` ; si la fiche conservée n'avait pas de compte, elle reprend celui de la fiche fusionnée et l'appartenance survit. À la fusion, un consentement repris garde **sa version et sa date d'origine** : une fusion n'est pas un nouveau consentement. | M1 |
-| **Connexion à une famille dont le compte n'est pas membre** | M1 : la session est rendue, la connexion est seulement **notée** (mode « observer », § 6). M3 : refus `APP_MEMBERSHIP_REQUIRED` avec les conditions et un jeton de passage de 10 minutes ; `POST /api/apps/join { joinToken, termsVersion, accepted: true }` crée l'appartenance (`join`) et rend la session ; `TERMS_VERSION_CHANGED` si les conditions ont changé entre-temps. | M3 |
-| **Quitter une famille** sans supprimer son compte (retrait du consentement, Loi 25) | `DELETE /api/account/memberships/{app}`, journalisé ; il faudra « rejoindre » de nouveau. | M3 |
+| **Connexion à une famille dont le compte n'est pas membre** | Mode « observer » : la session est rendue, la connexion est seulement **notée**. Mode « exiger » : refus `APP_MEMBERSHIP_REQUIRED` avec les conditions et un jeton de passage ; `POST /api/apps/join` crée l'appartenance (`join`) et rend la session (§ 6). | M1, M3 |
+| **Première connexion d'un compte invité par l'équipe** | Mode « exiger », si la famille a des conditions : même refus, raison `terms` ; « rejoindre » enregistre son acceptation sur l'appartenance qu'il a déjà (journal `accept`), sans changer sa source ni sa date d'entrée. | M3 |
+| **Quitter une famille** sans supprimer son compte (retrait du consentement, Loi 25) | `DELETE /api/account/memberships/{app}` : l'appartenance est retirée, au journal (`revoke`, raison `left`) ; aucune donnée n'est supprimée ; pour revenir il faudra « rejoindre ». Famille `pos` : la fiche de caisse est détachée du compte et le retrait du consentement `account_link` y est enregistré (source `account`), dans la même transaction. | M3 |
 | **Compte de l'historique** | Reprise par commande, à part (§ 8). Une appartenance reprise est acquise pour l'accès ; l'acceptation sera demandée plus tard, sur décision. | M2 |
 
 ## 6. Comment le serveur sait la famille : le champ `app`
@@ -136,13 +139,22 @@ Avec `app` :
   famille, la session est rendue quand même et une ligne est écrite au journal de l'application :
   `[APPS-MEMBRES] observer : le compte N n'est pas membre de « famille » (login | otp-verify | refresh, site code) ; session rendue`.
   C'est ce que le mode « exiger » refusera. Compter ces lignes par site dit si un site est prêt.
-- **Mode « exiger »** (M3) : par site, colonne `entreprise.app_membership_mode` (`observe` par défaut, déjà créée). On y passe un
-  site seulement quand ses fronts sont prêts et sa reprise faite ; aucune session ouverte n'est coupée, le contrôle se fait à la
+- **Mode « exiger »** (lot M3) : par site, `entreprise.app_membership_mode` (`observe` par défaut, `require`). Réglé par le super
+  administrateur seulement : la fiche Entreprise d'EasyAdmin (« Applications à membres : mode ») ou
+  `php bin/console app:members:mode <site> [observe|require]` (sans mode : lecture). Chaque changement est au journal du site
+  (ressource `user_app`, action `mode`). **Passer en « require » est refusé tant que la reprise du site n'est pas faite**
+  (`BACKFILL_REQUIRED`) ; revenir en « observe » est toujours possible, tout de suite. On y passe un site seulement quand ses
+  fronts envoient `app` et savent afficher « Rejoindre » ; aucune session ouverte n'est coupée, le contrôle se fait à la
   connexion suivante.
 
-### Le refus du lot M3 (forme prévue, pour que les fronts se préparent ; rien de cela n'existe en M1)
+### Le refus et « Rejoindre » (lot M3, mode « exiger » seulement)
 
-En mode « exiger », `POST /api/login` et `POST /api/otp-verify` (au moment où ils rendraient la session) répondent **403** :
+`POST /api/login` et `POST /api/otp-verify`, au moment où ils rendraient la session (mot de passe juste, rôle juste, code juste),
+répondent **403** à un compte **client** dont le front a dit l'application, quand :
+
+- le compte n'est pas membre de la famille : `reason: "membership"` ;
+- il en est membre par invitation de l'équipe (source `invite`), n'a encore rien accepté, et la famille a des conditions :
+  `reason: "terms"`.
 
 ```
 { code: "APP_MEMBERSHIP_REQUIRED", error: "APP_MEMBERSHIP_REQUIRED", message,
@@ -152,16 +164,35 @@ En mode « exiger », `POST /api/login` et `POST /api/otp-verify` (au moment où
   joinToken, expiresAt }
 ```
 
-- `reason: "membership"` : le compte n'est pas membre de la famille ; `"terms"` : il en est membre (invité par l'équipe) mais n'a
-  pas encore accepté ses conditions. Dans les deux cas l'écran est le même : les conditions, un bouton.
-- `terms` a la forme de `GET /api/apps/{app}/terms` ; `terms.version` est `null` quand la famille n'a aucun texte (rien à afficher,
-  seulement le bouton).
-- `joinToken` prouve que le mot de passe (et le code, s'il y en a un) vient d'être vérifié ; `expiresAt` (ISO 8601) : 10 minutes.
-  `POST /api/apps/join { joinToken, termsVersion, accepted: true }` rend la session exactement comme une connexion ; 409
-  `TERMS_VERSION_CHANGED` (avec les nouvelles `terms`) si la version a changé entre-temps.
-- **`POST /api/token/refresh` ne rend jamais ce refus** : aucune session ouverte n'est coupée (décision du propriétaire) ; le
-  contrôle se fait à la connexion suivante. Le rafraîchissement continue de noter, comme en mode « observer ».
-- Ce code est distinct de `PLATFORM_NOT_ALLOWED` (rôle) et des refus de site. Le contrat de M3 confirmera cette forme avant le code.
+- Ce refus ne rend **ni session, ni cookie, ni jeton de rafraîchissement**, et ne compte pas comme une connexion. Dans les deux cas
+  l'écran est le même : les conditions, un bouton. `terms` a la forme de `GET /api/apps/{app}/terms` (`?locale=` de la connexion) ;
+  `terms.version` est `null` quand la famille n'a aucun texte (rien à afficher, seulement le bouton).
+- **Ne sont jamais refusés** : un compte d'équipe ; une connexion sans `app` ou au code inconnu (elle passe comme avant et elle
+  est notée au journal de l'application, « require : connexion sans application ») ; une appartenance reprise de l'historique ou
+  née d'une inscription sans version (acquise : aucune acceptation n'est demandée dans ce chantier) ;
+  **`POST /api/token/refresh`** (aucune session ouverte n'est coupée ; il continue de noter, comme en mode « observer »).
+- **Le jeton de passage** (`AppJoinTokens`) : une valeur aléatoire, valable 10 minutes (`expiresAt`, ISO 8601), à **usage unique**,
+  liée au site, au compte, à la famille et à la plateforme de la connexion. Il est gardé côté serveur (cache du limiteur de débit,
+  jamais en base, sous son empreinte) ; il ne sert qu'à « rejoindre » et ne donne aucun accès à l'API.
+- **`POST /api/apps/join { joinToken, termsVersion, accepted: true }`** (public, limité en débit comme la connexion) : crée
+  l'appartenance (source `join`, version, date) ou, pour la raison `terms`, enregistre l'acceptation sur l'appartenance existante ;
+  puis **rend la session exactement comme une connexion réussie sur la même plateforme** (jetons, cookies du web, famille dans le
+  jeton), et la connexion est marquée. Jamais d'ajout silencieux : sans cet appel, rien n'est créé. Refus :
+
+| Statut et code | Quand | Ensuite |
+|---|---|---|
+| 400 `FIELDS_REQUIRED` | `joinToken` absent | |
+| 401 `JOIN_TOKEN_INVALID` | jeton inconnu, déjà utilisé, expiré, d'un autre site, ou d'un compte effacé depuis | retour à la connexion |
+| 422 `TERMS_NOT_ACCEPTED` | `accepted` n'est pas `true` | le jeton reste valable |
+| 409 `TERMS_VERSION_CHANGED` (avec `app` et les nouvelles `terms`) | `termsVersion` n'est pas la version en vigueur (`null` ou absent quand la famille n'a aucun texte) | afficher les nouvelles conditions, renvoyer ; le jeton reste valable |
+
+- Ce code est distinct de `PLATFORM_NOT_ALLOWED` (rôle) et des refus de site.
+- **Une panne de ce contrôle ne ferme jamais la porte** : elle est journalisée en erreur et la session est rendue.
+- Après « quitter une famille », le serveur ne refuse pas le rafraîchissement de la session en cours : c'est le front qui
+  déconnecte ; sinon, la prochaine connexion à cette famille passera par « Rejoindre ».
+- **Prévu, non codé : un mode « strict »**, à activer site par site quand toutes les versions installées des applications envoient
+  `app` : une connexion **sans** `app` y serait refusée. Aujourd'hui, en « require », elle passe et elle est notée, ce qui dit
+  quand un site est prêt.
 
 ## 7. Routes
 
@@ -177,12 +208,20 @@ Nouvelles (M1) :
 
   `team: true` pour un compte d'équipe, qui n'a aucune appartenance et n'en a pas besoin. De la plus ancienne à la plus récente.
 
+Nouvelles (M3) :
+
+- `POST /api/apps/join` — public ; « rejoindre » une famille après un refus (§ 6).
+- `DELETE /api/account/memberships/{app}` — le compte connecté quitte une famille → 200 `{ team, memberships }` (ce qu'il reste) ;
+  404 `APP_UNKNOWN` ; 404 `MEMBERSHIP_NOT_FOUND` s'il n'en est pas membre (un compte d'équipe n'a pas d'appartenance).
+
 Existantes, en ajout seulement (M1) : `app` à la connexion, à la vérification du code et au rafraîchissement ; `app` (toutes les
 familles) et `termsVersion` à l'inscription ; `termsVersion` à la commande en invité. Aucune réponse existante ne change.
 
-À venir : `POST /api/apps/join` et `DELETE /api/account/memberships/{app}` (M3) ; `GET /api/site/members?app=`, colonne et filtre
-« Applications » d'EasyAdmin, `memberships` et `teamRoles` dans les lectures de profil, filtre `?app=` de
-`GET /api/memoires/admin/users` (M4).
+Existantes, en mode « exiger » seulement (M3) : `POST /api/login` et `POST /api/otp-verify` peuvent répondre 403
+`APP_MEMBERSHIP_REQUIRED` (§ 6). En mode « observer », aucune réponse existante ne change.
+
+À venir (M4) : `GET /api/site/members?app=`, colonne et filtre « Applications » d'EasyAdmin, `memberships` et `teamRoles` dans les
+lectures de profil, filtre `?app=` de `GET /api/memoires/admin/users`.
 
 ## 8. Migration et reprise
 
@@ -259,13 +298,20 @@ jetables sur un réseau à part, selon les règles de répétition de `docs/arch
 seule**, avec son rapport lu par le chef de projet ; application **site par site sur son accord, `demo` en premier**, photo avant
 et après, tout au journal. Aucune application hors `demo` sans cet accord.
 
-## 9. Ce que chaque front aura à faire (rien pour M1)
+## 9. Ce que chaque front a à faire
 
-- Boutique web, application mobile de la boutique, Mémoires Vivantes web, Living Memory : envoyer `app` à la connexion, à la
-  vérification du code, au rafraîchissement et à l'inscription ; afficher les conditions (`GET /api/apps/{app}/terms`) à
-  l'inscription et au paiement en invité et envoyer leur `version` dans `termsVersion` ; au lot M3, traiter
-  `APP_MEMBERSHIP_REQUIRED` par un écran « Rejoindre ».
-- Caisse : rien (le rattachement d'une fiche crée l'appartenance ; sa connexion est une connexion d'équipe).
+- Boutique web, application mobile de la boutique, Mémoires Vivantes web, Living Memory : envoyer `app` (le code de
+  l'application) à la connexion, à la vérification du code, au rafraîchissement et à l'inscription ; afficher les conditions
+  (`GET /api/apps/{app}/terms`) à l'inscription et au paiement en invité et envoyer leur `version` dans `termsVersion`.
+- Sur **403 `APP_MEMBERSHIP_REQUIRED`** (connexion ou vérification du code) : écran « Rejoindre » avec les `terms` de la réponse
+  et un bouton ; puis `POST /api/apps/join { joinToken, termsVersion: terms.version, accepted: true }` ; la réponse est la session,
+  de la même forme que celle de la connexion. Sur 409 `TERMS_VERSION_CHANGED` : afficher les nouvelles `terms`, renvoyer avec le
+  même jeton. Sur 401 `JOIN_TOKEN_INVALID` : retour à la connexion.
+- « Quitter cette application » dans le compte : `DELETE /api/account/memberships/{app}`, puis déconnexion locale.
+- Un mot de passe posé par l'équipe sur un compte né d'une commande en invité ne vaut pas geste du client : ce compte passera
+  par « Rejoindre ».
+- Caisse : sa connexion est une connexion d'équipe, jamais refusée. Le rattachement d'une fiche crée l'appartenance ; le retrait
+  du consentement, la fusion et l'effacement la retirent (`docs/caisse.md`).
 - Application de gestion, Boussole : rien.
 
 ## 10. Lots
@@ -274,5 +320,5 @@ et après, tout au journal. Aucune application hors `demo` sans cet accord.
 |---|---|---|
 | M1 | Familles, table, appartenances créées aux entrées, conditions et version, routes de lecture, famille dans le jeton, mode « observer » | codé le 14/11/2026 |
 | M2 | Reprise : commande `app:members:backfill` (simulation, rapport, `--apply`), état « reprise faite » du site, caisse limitée aux membres de la boutique ou de la caisse après la reprise | codé le 14/11/2026 ; application site par site sur accord |
-| M3 | « Rejoindre » (refus, jeton de passage, `POST /api/apps/join`), acceptation à la première connexion d'un compte invité, quitter une famille, mode « exiger » par site | à faire |
+| M3 | Mode « exiger » par site (EasyAdmin, commande), refus `APP_MEMBERSHIP_REQUIRED`, jeton de passage, `POST /api/apps/join`, acceptation à la première connexion d'un compte invité, quitter une famille | codé le 14/11/2026 ; tous les sites en « observer » |
 | M4 | Listes d'administration et statistiques filtrées par appartenance | à faire |

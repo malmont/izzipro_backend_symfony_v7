@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (474)
+## Boutique et commun (476)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -275,6 +275,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET, POST | `/adress/{id}/edit` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\Account\AdressController::edit` |
 | POST | `/adress/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\Account\AdressController::delete` |
 | GET | `/api/Carrier` | PUBLIC_ACCESS | `Controller\CarrierControleur\CarrierControleur::getCarrier` |
+| DELETE | `/api/account/memberships/{app}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AppMembershipController\AppMembershipController::leave` |
 | GET | `/api/account/memberships` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AppMembershipController\AppMembershipController::memberships` |
 | DELETE | `/api/account` | ROLE_USER_INTERNET | `Controller\Account\AccountApiController::delete` |
 | DELETE | `/api/admin-settings/presets/{id}` | ROLE_ADMIN | `Controller\AdminSettingsController\AdminSettingsController::deletePreset` |
@@ -296,6 +297,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/app-keys` | ROLE_ADMIN | `Controller\AppKeyController\AppKeyController::create` |
 | GET | `/api/app-profile/{app}` | PUBLIC_ACCESS | `Controller\AppProfileController\AppProfileController::show` |
 | POST | `/api/app/activate` | PUBLIC_ACCESS | `Controller\AppKeyController\AppActivationController::activate` |
+| POST | `/api/apps/join` | PUBLIC_ACCESS | `Controller\AppMembershipController\AppMembershipController::join` |
 | GET | `/api/apps/{app}/terms` | PUBLIC_ACCESS | `Controller\AppMembershipController\AppMembershipController::terms` |
 | GET | `/api/boutique-settings` | PUBLIC_ACCESS | `Controller\BoutiqueSettingsController\BoutiqueSettingsController::getSettings` |
 | PUT | `/api/boutique-settings` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\BoutiqueSettingsController\BoutiqueSettingsController::updateSettings` |
