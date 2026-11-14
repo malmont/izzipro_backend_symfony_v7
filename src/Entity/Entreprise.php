@@ -98,6 +98,13 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(name: 'is_support_active', options: ['default' => false])]
     private bool $isSupportActive = false;
 
+    /**
+     * Adresse de l'espace d'administration du web (lot LIEN, 14/11/2026, `docs/liens-espace-administration.md`) : base des liens que les
+     * courriels du serveur mettent vers un écran. null = le domaine principal du site.
+     */
+    #[ORM\Column(name: 'admin_space_url', length: 255, nullable: true)]
+    private ?string $adminSpaceUrl = null;
+
     /** Module Prévention des pertes (lot L1-a, 14/11/2026, `docs/prevention-pertes.md`) : droit module.loss_prevention projeté ; faux partout */
     #[ORM\Column(name: 'is_loss_prevention_active', options: ['default' => false])]
     private bool $isLossPreventionActive = false;
@@ -831,6 +838,16 @@ class Entreprise implements TranslatableInterface
 
     public function isSupportActive(): bool { return $this->isSupportActive; }
     public function setIsSupportActive(bool $on): static { $this->isSupportActive = $on; return $this; }
+
+    public function getAdminSpaceUrl(): ?string { return $this->adminSpaceUrl; }
+
+    /** Vide, ou une adresse refusée (autre que https://hôte[/chemin], identifiants, paramètres) → null : le domaine principal du site sert alors */
+    public function setAdminSpaceUrl(?string $url): static
+    {
+        $this->adminSpaceUrl = \App\Services\Site\AdminSpaceUrl::normalize($url);
+
+        return $this;
+    }
 
     public function isLossPreventionActive(): bool { return $this->isLossPreventionActive; }
     public function setIsLossPreventionActive(bool $on): static { $this->isLossPreventionActive = $on; return $this; }

@@ -30,6 +30,8 @@ final class FeatureCatalog
         // Promotions par variante (lot VAR, 11/11/2026) : lecture seule ; allumées par le super admin sur la fiche Entreprise, quand les trois fronts sont prêts
         'shop.variant_promotions' => ['label' => 'Promotions par variante', 'group' => 'commerce', 'scope' => self::SCOPE_SERVICE, 'type' => 'boolean', 'storage' => 'entreprise.variantPromotionsEnabled', 'href' => 'entreprise'],
         'site.domain' => ['label' => 'Domaine propre', 'group' => 'localisation', 'scope' => self::SCOPE_SERVICE, 'type' => 'info', 'href' => 'domain'],
+        // Lot LIEN (14/11/2026, docs/liens-espace-administration.md) : base des liens des courriels du serveur vers un écran du web ; vide = le domaine principal du site
+        'site.admin_space_url' => ['label' => 'Adresse de l\'espace d\'administration', 'group' => 'localisation', 'scope' => self::SCOPE_SITE, 'type' => 'url', 'nullable' => true, 'storage' => 'entreprise.adminSpaceUrl', 'href' => 'entreprise'],
         // Modules (plateforme)
         'module.landing' => ['label' => 'Landing Page', 'group' => 'modules', 'scope' => self::SCOPE_PLATFORM, 'type' => 'boolean', 'storage' => 'entreprise.isLandingPageActive', 'href' => 'entreprise'],
         'module.boutique' => ['label' => 'Boutique', 'group' => 'modules', 'scope' => self::SCOPE_PLATFORM, 'type' => 'boolean', 'storage' => 'entreprise.isBoutiqueActive', 'href' => 'entreprise'],

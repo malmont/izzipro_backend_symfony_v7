@@ -195,6 +195,9 @@ class EntrepriseCrudController extends BaseTenantCrudController
             EmailField::new('email', 'E-mail'),
             TextField::new('tel', 'Téléphone'),
             UrlField::new('website', 'Site web'),
+            // Lot LIEN (14/11/2026) : base des liens que les courriels du serveur mettent vers un écran de l'espace d'administration du web
+            TextField::new('adminSpaceUrl', 'Adresse de l\'espace d\'administration')->setRequired(false)->hideOnIndex()
+                ->setHelp('Adresse du web où vous administrez votre site, par exemple https://www.votre-site.com. Elle sert aux liens des courriels que le serveur vous envoie (résumés, alertes). Vide : le domaine principal du site. Une adresse qui ne commence pas par https:// est ignorée.'),
             TextField::new('ein', 'EIN (États-Unis)')->setRequired(false)->setHelp('Numéro d\'employeur américain. Un SIRET saisi ici avant le 01/11/2026 reste imprimé sur les tickets d\'un magasin français tant que le champ SIRET est vide.'),
             TextField::new('siret', 'SIRET (France)')->setRequired(false)->hideOnIndex()->setHelp('Imprimé sur les tickets de caisse d\'un magasin en France (store.taxIds), avec le n° de TVA intracommunautaire.'),
             TextField::new('tvaIntracommunautaire', 'TVA intracommunautaire'),

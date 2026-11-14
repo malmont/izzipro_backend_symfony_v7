@@ -45,6 +45,7 @@ class SiteFeatureStateService
         private readonly CustomDomainService $domains,
         private readonly ?\App\Services\ShippingService\ShippingSetupService $shippingSetup = null, // étiquettes par la plateforme (lot 2 Livraison, 07/11/2026)
         private readonly ?\App\Services\Help\HelpCatalogService $help = null, // aide intégrée (07/11/2026)
+        private readonly ?\App\Services\Site\AdminSpaceUrl $adminSpace = null, // lot LIEN (14/11/2026)
     ) {
     }
 
@@ -132,6 +133,11 @@ class SiteFeatureStateService
                 if ($d['state'] !== 'none') {
                     $prerequisites[] = $this->prereq('domain.dns', 'DNS pointé vers le serveur de la plateforme', $d['checks']['dns']['ok'] ?? false);
                 }
+                break;
+            case 'site.admin_space_url': // lot LIEN : le réglage, et l'adresse qui sert vraiment aux liens (le domaine principal du site sans réglage)
+                $value = $e?->getAdminSpaceUrl();
+                $effective = $this->adminSpace?->base();
+                $status = $effective !== null ? 'ready' : 'incomplete';
                 break;
             case 'site.currency':
                 $value = $e?->getCurrency() ?? 'CAD';
