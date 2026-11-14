@@ -335,8 +335,11 @@ les livres et invitait des clients).
 - **Connexion** : le front de Mémoires Vivantes web envoie **`app: "memoires"`** à `POST /api/login`, `POST /api/otp-verify` et
   `POST /api/token/refresh`. Un compte qui n'est ni administrateur, ni responsable, ni biographe reçoit
   **403 `{ code: "MEMOIRES_TEAM_ONLY", error, message }`** (« Cet espace est réservé à l'équipe. Vos récits se poursuivent dans
-  l'application Living Memory ou par le lien que vous avez reçu. »), avant tout envoi de code, et aussi au rafraîchissement : une
-  session ouverte d'un compte client s'éteint à son prochain rafraîchissement. Un membre de l'équipe reçoit sa session, dont le
+  l'application Living Memory ou par le lien que vous avez reçu. »), avant tout envoi de code, et aussi au rafraîchissement :
+  l'outil n'obtient pas de nouveau jeton. **Le refus est sans effet sur la session du site** : le serveur ne révoque aucun jeton de
+  rafraîchissement, ne pose ni n'efface aucun cookie, ne marque aucune activité (un client de la boutique qui ouvre l'outil par
+  erreur garde sa session boutique ; le même rafraîchissement, sans `app`, passe). Le front de l'outil affiche le message et **ne
+  déconnecte jamais tout seul**, n'efface ni cookie ni stockage partagé avec la boutique. Un membre de l'équipe reçoit sa session, dont le
   jeton porte `app: "memoires"` (le nom de l'outil ; ce n'est pas une famille d'applications à membres, `docs/apps-membres.md` § 2).
   Sans `app: "memoires"`, rien ne change (`AuthenticationService::memoiresWebRefusal`).
 - **Seule l'équipe crée un livre web** : `POST /api/memoires/books` répond 403 `MEMOIRES_TEAM_ONLY` à un compte client. C'est le
@@ -473,6 +476,11 @@ mobile fait son propre livre, avec des quotas et, à venir, des chapitres payant
 - `GET /admin/users` : champs **ajoutés** à chaque utilisateur : `population`, `signupChannel`, `createdAt`,
   `lastActivityAt` (dernier des : dernière connexion, modification d'un livre ou d'un chapitre, appel IA),
   `mobileBooksCount` ; depuis le 13/11/2026 `isBiographer`, `teamRoles` et le filtre `?population=` (voir « Équipe »).
+  Depuis le 14/11/2026 (APPS-MEMBRES, lot M4) : `memberships` (familles d'applications dont le compte est membre : `boutique`,
+  `livingmemory`, `pos`) et le filtre **`?app=livingmemory`** (les membres de la famille de l'application ; toute autre valeur :
+  400 `APP_UNKNOWN`, `params.apps`). `population` est calculée d'après les traces, `app` dit l'appartenance réelle (un compte peut
+  être dans la population mobile sans être membre, et l'inverse) ; les deux filtres se combinent, la pagination et `X-Total-Count`
+  suivent le filtre.
   Sans filtre, cette liste contient tous les comptes du site, clients de la boutique compris.
 - **Pagination de `GET /admin/users` (S8, 26/10/2026)** : `?page=` (défaut 1) et `?limit=` (défaut **et plafond 200**), ordre des
   identifiants ; total dans l'en-tête **`X-Total-Count`** (exposé au navigateur par `Access-Control-Expose-Headers`) ; le corps reste
@@ -487,7 +495,8 @@ mobile fait son propre livre, avec des quotas et, à venir, des chapitres payant
   chaptersWritten, chaptersPaid}, payments: {count, totalAmount, currency, lastPaidAt}, credits: null, ai:
   {transcriptionsToday, improvementsToday, transcriptionsTotal, improvementsTotal, generationsTotal, lastCallAt,
   remaining: {transcriptions, improvements}}}]}`. Montants en unités avec la devise, dates ISO 8601 dans le fuseau
-  du site. `perPage` ≤ 100.
+  du site. `perPage` ≤ 100. Depuis le 14/11/2026 (lot M4), chaque compte porte aussi **`member`** : `{joinedAt, source,
+  termsVersion}` s'il est membre de la famille `livingmemory`, sinon `null` ; même champ dans `user` de la fiche.
 - `GET /admin/mobile-users/{userId}` → `{user: {…, population, roles}, books: [{id, title, type, channel, createdAt,
   paymentStatus, chapters: [{id, title, position, generationStatus, hasText, updatedAt, paid: null}]}], payments:
   [{id, amount, currency, status, paidAt, object: {kind: "book" | "print", id, title}}], credits: null, ai: {…,

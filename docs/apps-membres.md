@@ -1,4 +1,4 @@
-# Applications à membres — APPS-MEMBRES (contrat validé le 14/11/2026 ; lots M1, M2 et M3 codés le 14/11/2026)
+# Applications à membres — APPS-MEMBRES (contrat validé le 14/11/2026 ; lots M1 à M4 codés le 14/11/2026)
 
 Un compte du site peut servir à plusieurs applications : la boutique, Living Memory, la caisse. Jusqu'ici rien ne disait dans
 laquelle un client était entré, ni quelles conditions il avait acceptées. Ce chantier le dit, **sans jamais ajouter un client à une
@@ -8,13 +8,17 @@ d'applications à une autre demandera une étape « Rejoindre » où il accepte 
 État : **M1 codé** (table, appartenances créées aux entrées, conditions et version, routes de lecture, famille dans le jeton, mode
 « observer ») ; **M2 codé** (reprise de l'historique par commande, § 8 ; faite sur les sites existants) ; **M3 codé** (mode
 « exiger » par site, refus `APP_MEMBERSHIP_REQUIRED`, « Rejoindre », quitter une famille, § 6). **Tous les sites sont en mode
-« observer » : rien n'est refusé à personne.** Passer un site en « exiger » est une décision à part, site par site. M4 (listes
-filtrées) reste à faire.
+« observer » : rien n'est refusé à personne.** Passer un site en « exiger » est une décision à part, site par site. **M4 codé**,
+en périmètre réduit (§ 7) : les appartenances **lues** par l'administration (écran Utilisateurs d'EasyAdmin, lecture de profil,
+console Mémoires Vivantes). Les routes de liste et de chiffres des membres sont décrites mais **reportées** : aucun front ne les
+affiche.
 
 Code : `src/Security/AppFamilies.php`, `src/Services/AppMembershipService/`, `src/Entity/UserAppMembership.php`,
 `src/Controller/AppMembershipController/`, `src/Command/BackfillAppMembershipsCommand.php`, `AppMembershipModeCommand.php`. Tests :
 `tests/Functional/Security/AppMembershipApiTest.php`, `AppMembershipBackfillTest.php` (la reprise), `AppMembershipJoinApiTest.php`
-(mode, refus, rejoindre, quitter), et la caisse dans `tests/Functional/Boutique/PosCustomerApiTest.php`.
+(mode, refus, rejoindre, quitter), `AppMembershipListsTest.php` (M4 : profil, console MV, écran Utilisateurs), et la caisse dans
+`tests/Functional/Boutique/PosCustomerApiTest.php`. Lecture pour les listes : `AppMembershipDirectory` (même dossier de services) ;
+filtre d'EasyAdmin : `src/Services/Admin/ApplicationFilter.php`.
 
 ## 1. Ce qui existait
 
@@ -226,8 +230,41 @@ familles) et `termsVersion` à l'inscription ; `termsVersion` à la commande en 
 Existantes, en mode « exiger » seulement (M3) : `POST /api/login` et `POST /api/otp-verify` peuvent répondre 403
 `APP_MEMBERSHIP_REQUIRED` (§ 6). En mode « observer », aucune réponse existante ne change.
 
-À venir (M4) : `GET /api/site/members?app=`, colonne et filtre « Applications » d'EasyAdmin, `memberships` et `teamRoles` dans les
-lectures de profil, filtre `?app=` de `GET /api/memoires/admin/users`.
+### Les appartenances lues par l'administration (lot M4, 14/11/2026)
+
+**Lecture seule.** Rien dans ce lot n'ajoute ni ne retire un client d'une famille : une appartenance naît d'un geste du client, de
+la caisse au rattachement d'une fiche, ou d'une commande de reprise. Un administrateur ne retire pas un client d'une famille (le
+client la quitte lui-même ; l'effacement du compte existe). Tout passe par `AppMembershipDirectory`, qui lit les appartenances du
+site une fois par requête.
+
+- **`GET /api/profile`** (ajouts) : `memberships: [{ app, joinedAt, termsVersion }]` (de la plus ancienne à la plus récente, dates
+  ISO 8601 en UTC ; tableau vide pour un compte d'équipe, jamais membre) et `teamRoles: [...]` (rôles d'équipe de `TeamRoles` que
+  porte le compte ; tableau vide pour un client). Le détail complet reste dans `GET /api/account/memberships`. Les réponses de
+  session (connexion, vérification du code, « rejoindre ») ne changent pas.
+- **Console Mémoires Vivantes** (ajouts, `docs/memoires-vivantes.md`) : `GET /api/memoires/admin/users` accepte
+  **`?app=livingmemory`** (les membres de la famille ; toute autre valeur : 400 `APP_UNKNOWN` avec `params.apps`) et chaque ligne
+  porte `memberships: [codes de famille]`. `?population=` est calculé d'après les traces, `app` dit l'appartenance réelle ; les
+  deux se combinent. `GET /api/memoires/admin/mobile-users` et sa fiche : `member: { joinedAt, source, termsVersion } | null`.
+- **EasyAdmin, écran Utilisateurs** : colonne « Applications » (pastilles Boutique, Living Memory, Caisse ; « Équipe » pour un
+  compte d'équipe ; « Aucune » sinon), non triable ; filtre « Application » (les mêmes valeurs, avec « est » / « n'est pas »), qui
+  rend exactement les comptes dont la colonne porte la valeur ; sur la fiche d'un compte, tableau de ses appartenances (famille,
+  depuis le, source, version acceptée, date d'acceptation), à l'heure du magasin. Aucun champ ni bouton d'écriture.
+
+### Plus tard, quand un front en aura besoin (décrit, non codé)
+
+Décision du 14/11/2026 : on n'expose pas par l'API une liste de données personnelles qu'aucun écran n'affiche. Le jour où un front
+la demande, la forme retenue est celle-ci.
+
+- `GET /api/site/members` (`ROLE_ADMIN`) : les comptes **clients** du site avec leurs appartenances ; jamais un compte d'équipe,
+  jamais un compte effacé. Paramètres : `app` = `boutique` | `livingmemory` | `pos` | `none` (clients sans aucune appartenance :
+  ceux qui passeraient par « Rejoindre ») ; `q` (courriel, prénom, nom, 2 caractères au moins) ; `page` ; `limit` (défaut 50,
+  plafond 200). 400 `APP_UNKNOWN`, 422 `QUERY_TOO_SHORT`. Réponse : `{ total, page, limit, counts: { boutique, livingmemory, pos,
+  none }, items: [{ id, email, firstName, lastName, createdAt, lastLoginAt, isVerified, passwordSet, memberships: [{ app,
+  joinedAt, source, termsVersion, termsAcceptedAt }] }] }` ; `counts` porte sur tout le site (pour des onglets).
+- `GET /api/site/members/summary` (`ROLE_ADMIN`) : `{ mode, backfilledAt, clients, withoutMembership, families: { <famille>: {
+  members, bySource, joinedByMonth (12 mois du magasin), left: { last30Days, total } } } }` ; les départs viennent du journal
+  `user_app` (action `revoke`). Aucun nom ni courriel.
+- Non retenus : retrait d'un client d'une famille par l'administrateur, chiffres de vente par famille dans la gestion, export CSV.
 
 ## 8. Migration et reprise
 
@@ -326,6 +363,9 @@ et après, tout au journal. Aucune application hors `demo` sans cet accord.
 - **Mémoires Vivantes web** : envoyer `app: "memoires"` à la connexion, à la vérification du code et au rafraîchissement ;
   afficher le message de 403 `MEMOIRES_TEAM_ONLY` ; menus selon le rôle ; « inviter un biographe » à la place de « inviter un
   client » (`docs/memoires-vivantes.md`, « Équipe »). Il n'a pas d'étape « Rejoindre ».
+- **Depuis M4, facultatif pour tous** : `GET /api/profile` porte `memberships` et `teamRoles` ; un front peut s'en servir pour ses
+  menus sans décoder le jeton. La console de Mémoires Vivantes web peut afficher l'appartenance (`memberships`, `member`) et
+  filtrer les membres de Living Memory (`?app=livingmemory`). Rien n'est obligatoire : ce sont des ajouts.
 - Application de gestion, Boussole : rien.
 
 ## 10. Lots
@@ -335,4 +375,4 @@ et après, tout au journal. Aucune application hors `demo` sans cet accord.
 | M1 | Familles, table, appartenances créées aux entrées, conditions et version, routes de lecture, famille dans le jeton, mode « observer » | codé le 14/11/2026 |
 | M2 | Reprise : commande `app:members:backfill` (simulation, rapport, `--apply`), état « reprise faite » du site, caisse limitée aux membres de la boutique ou de la caisse après la reprise | codé le 14/11/2026 ; application site par site sur accord |
 | M3 | Mode « exiger » par site (EasyAdmin, commande), refus `APP_MEMBERSHIP_REQUIRED`, jeton de passage, `POST /api/apps/join`, acceptation à la première connexion d'un compte invité, quitter une famille | codé le 14/11/2026 ; tous les sites en « observer » |
-| M4 | Listes d'administration et statistiques filtrées par appartenance | à faire |
+| M4 | Appartenances lues par l'administration : colonne, filtre et tableau de la fiche dans l'écran Utilisateurs d'EasyAdmin ; `memberships` et `teamRoles` dans `GET /api/profile` ; console MV (`?app=livingmemory`, `memberships`, `member`) | codé le 14/11/2026 ; `GET /api/site/members` et `/summary` reportés (aucun front) |
