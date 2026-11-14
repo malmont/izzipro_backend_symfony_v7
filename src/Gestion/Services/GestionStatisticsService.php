@@ -33,12 +33,19 @@ class GestionStatisticsService
         private readonly GestionAdviceService $advices,
         private readonly ?TenantCurrencyProvider $currency = null,
         private readonly ?GestionFiscalYearService $fiscal = null, // lot AN partie EX : range=year suit l'exercice du site
+        private readonly ?GestionStatisticsSections $sections = null, // lot S2 : sections demandées par `sections=`
     ) {
     }
 
-    /** GET /api/gestion/statistiques?from=&to=|periodId=|range=&source=&locale= */
+    /**
+     * GET /api/gestion/statistiques?from=&to=|periodId=|range=&source=&locale=&sections=
+     *
+     * `sections` (lot S2) : sections en plus, sous la clé `sections` (`GestionStatisticsSections`). Sans ce paramètre, la réponse est
+     * celle de S1, clé pour clé : aucun appel existant ne change ni ne ralentit.
+     */
     public function overview(array $query, string $locale, ?\DateTimeImmutable $today = null): array
     {
+        $asked = GestionStatisticsSections::parse($query['sections'] ?? null);
         $today ??= $this->calendar->today();
         $todayKey = $today->format('Y-m-d');
         $sourceKey = is_string($query['source'] ?? null) && $query['source'] !== '' ? strtolower($query['source']) : 'all';
@@ -62,7 +69,8 @@ class GestionStatisticsService
         // Points du graphique (jusqu'à aujourd'hui) et l'an dernier aligné (mêmes dates décalées d'un an)
         $points = [];
         $series = [];
-        foreach (self::buckets($cur[0], min($cur[1], $todayKey), $granularity) as [$key, $from, $to]) {
+        $buckets = self::buckets($cur[0], min($cur[1], $todayKey), $granularity);
+        foreach ($buckets as [$key, $from, $to]) {
             $pm = self::metrics(self::slice($daily, $from, $to));
             $pl = self::metrics(self::slice($dailyLy, self::shiftYears($from, -1), self::shiftYears($to, -1)));
             $points[] = ['key' => $key, 'from' => $from, 'to' => $to, 'revenue' => $pm['revenue'], 'grossMargin' => $pm['grossMargin'], 'orders' => $pm['orders'],
@@ -101,6 +109,10 @@ class GestionStatisticsService
             $caveats[] = $this->caveat('NO_LAST_YEAR_DATA', $locale);
         }
 
+        $sections = $asked === [] || $this->sections === null ? [] : ['sections' => $this->sections->build($asked, [
+            'cur' => $cur, 'prev' => $prev, 'ly' => $ly, 'buckets' => $buckets, 'granularity' => $granularity, 'source' => $source, 'sourceKey' => $sourceKey, 'locale' => $locale,
+        ])];
+
         return [
             'currency' => $this->currency?->code() ?? TenantCurrencyProvider::DEFAULT,
             'source' => $sourceKey,
@@ -116,7 +128,7 @@ class GestionStatisticsService
             'otherRevenue' => ['rentals' => $other('rentals'), 'subscriptions' => $other('subscriptions')],
             'chart' => ['granularity' => $granularity, 'points' => $points],
             'caveats' => $caveats,
-        ];
+        ] + $sections;
     }
 
     /**
@@ -210,7 +222,7 @@ class GestionStatisticsService
     }
 
     /** Indicateur : valeur, comparaisons, écarts (en % ; en points pour un pourcentage) et courte série */
-    private static function indicator(int|float|null $value, int|float|null $previous, int|float|null $lastYear, string $unit, ?array $spark, bool $hasPrevious): array
+    public static function indicator(int|float|null $value, int|float|null $previous, int|float|null $lastYear, string $unit, ?array $spark, bool $hasPrevious): array
     {
         $change = static function ($v, $c) use ($unit): ?float {
             if ($v === null || $c === null) {

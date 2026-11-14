@@ -83,14 +83,32 @@ class PurchaseMetricsCalculator
         $params = ['from' => $start->format('Y-m-d 00:00:00'), 'to' => \DateTimeImmutable::createFromInterface($end)->modify('+1 day')->format('Y-m-d 00:00:00')];
         $connection = $this->connection();
         $row = $connection->fetchAssociative('SELECT ' . $this->sums() . ' ' . $this->from() . ' WHERE c.date >= :from AND c.date < :to', $params) ?: [];
-        $costs = $connection->fetchAssociative(
+
+        return self::totals($row) + $this->datedCosts($params);
+    }
+
+    /**
+     * Frais de port d'achat et notes de frais datés dans [from, to] (jours inclus), sans les totaux d'achats : la requête même du
+     * résultat de période, pour que la section « Frais » des statistiques (lot S2-a) rende ses chiffres au cent près.
+     *
+     * @return array{shippingCost: int, expenseCost: int, orderCount: int}
+     */
+    public function expensesBetween(string $from, string $to): array
+    {
+        return $this->datedCosts(['from' => $from . ' 00:00:00', 'to' => (new \DateTimeImmutable($to))->modify('+1 day')->format('Y-m-d 00:00:00')]);
+    }
+
+    /** @param array{from: string, to: string} $params bornes des dates d'achat, fin exclue */
+    private function datedCosts(array $params): array
+    {
+        $costs = $this->connection()->fetchAssociative(
             'SELECT (SELECT COALESCE(SUM(f.price * COALESCE(c.exchange_rate, 1)), 0) FROM frais_de_port f JOIN commande c ON c.id = f.commande_id WHERE c.date >= :from AND c.date < :to) AS shipping_cost,' .
             ' (SELECT COUNT(*) FROM commande c WHERE c.date >= :from AND c.date < :to) AS order_count,' .
             ' (SELECT COALESCE(SUM(n.montant), 0) FROM note_de_frais n WHERE n.date >= :from AND n.date < :to) AS expense_cost',
             $params
         ) ?: [];
 
-        return self::totals($row) + ['shippingCost' => (int) ($costs['shipping_cost'] ?? 0), 'expenseCost' => (int) ($costs['expense_cost'] ?? 0), 'orderCount' => (int) ($costs['order_count'] ?? 0)];
+        return ['shippingCost' => (int) ($costs['shipping_cost'] ?? 0), 'expenseCost' => (int) ($costs['expense_cost'] ?? 0), 'orderCount' => (int) ($costs['order_count'] ?? 0)];
     }
 
     /** Toutes les périodes du calendrier (tableau combiné `kind=period`) : union de leurs plages de dates = commandes et notes datées dans une période existante */

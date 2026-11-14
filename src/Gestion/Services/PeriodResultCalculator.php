@@ -275,11 +275,25 @@ class PeriodResultCalculator
      */
     public function advertising(Collections $period): array
     {
+        $between = $this->advertisingBetween($period->getStartDateCollection()->format('Y-m-d'), $period->getEndDateCollection()->format('Y-m-d'));
+
+        // forme inchangée du résultat de période (et de ses résultats figés) : identifiant, nom, montant ; la date ne sert qu'aux statistiques
+        return ['amount' => $between['amount'], 'campaigns' => array_map(fn (array $c) => ['id' => $c['id'], 'name' => $c['name'], 'amount' => $c['amount']], $between['campaigns'])];
+    }
+
+    /**
+     * Publicité de [from, to] (jours inclus) : les campagnes classées à leur date de début, en devise du site. La règle du résultat de
+     * période, ouverte aux plages libres pour la section « Frais » des statistiques (lot S2-a). Chaque campagne porte sa date de début.
+     *
+     * @return array{amount: int, campaigns: list<array{id: int, name: string, amount: int, startDate: string}>}
+     */
+    public function advertisingBetween(string $from, string $to): array
+    {
         $rows = $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
-            'SELECT id, name, ROUND(amount_cents * COALESCE(exchange_rate, 1)) AS amount FROM marketing_campaign WHERE start_date >= :from AND start_date <= :to ORDER BY start_date, id',
-            ['from' => $period->getStartDateCollection()->format('Y-m-d'), 'to' => $period->getEndDateCollection()->format('Y-m-d')]
+            'SELECT id, name, ROUND(amount_cents * COALESCE(exchange_rate, 1)) AS amount, start_date FROM marketing_campaign WHERE start_date >= :from AND start_date <= :to ORDER BY start_date, id',
+            ['from' => $from, 'to' => $to]
         );
-        $campaigns = array_map(fn ($r) => ['id' => (int) $r['id'], 'name' => (string) $r['name'], 'amount' => (int) $r['amount']], $rows);
+        $campaigns = array_map(fn ($r) => ['id' => (int) $r['id'], 'name' => (string) $r['name'], 'amount' => (int) $r['amount'], 'startDate' => substr((string) $r['start_date'], 0, 10)], $rows);
 
         return ['amount' => array_sum(array_column($campaigns, 'amount')), 'campaigns' => $campaigns];
     }

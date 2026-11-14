@@ -307,6 +307,22 @@ statistics:
         STOCK_VALUE_NOW_ONLY: "Valeur du stock d'aujourd'hui seulement : la comparaison viendra avec les relevés quotidiens, pris depuis le 11/11/2026."
         PARTIAL_DAY: "La journée d'aujourd'hui n'est pas terminée : ses chiffres vont encore bouger."
         NO_LAST_YEAR_DATA: "Aucune vente sur la même plage l'an dernier : pas de comparaison possible."
+        # Sections (lot S2-a, 14/11/2026, docs/statistiques-gestion.md § 6)
+        PAYMENTS_BY_ORDER_DATE: "L'encaissé est daté par la date de la commande, taxes comprises. La part payée par carte-cadeau, avoir ou coupon du fabricant n'en fait pas partie."
+        PAYMENTS_UNMATCHED: "%amount% d'encaissé ne correspondent à aucune ligne de paiement (vente sans paiement enregistré) : ils sont rendus dans « Autre »."
+        SOURCE_NOT_APPLICABLE: "Le canal de vente ne s'applique pas à cette section : ses chiffres valent pour tout le site."
+        FIXED_COSTS_OUTSIDE_TOTAL: "Les frais fixes ne sont pas compris dans le total des frais : ils sont répartis au prorata des jours et ne sont déduits que dans le résultat après frais fixes."
+    sections:
+        methods:
+            card: "Carte"
+            cash: "Espèces"
+            paypal: "PayPal"
+            other: "Autre"
+        expenses:
+            notes: "Notes de frais"
+            purchaseShipping: "Frais de port d'achat"
+            advertising: "Publicité"
+            untyped: "Sans type"
 
 # L'année de l'entreprise (lot AN, 11/11/2026, docs/annee-gestion.md)
 year:

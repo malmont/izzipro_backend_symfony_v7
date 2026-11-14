@@ -475,6 +475,62 @@ class GestionCashService
     }
 
     /**
+     * L'encaissé de `receiptsByDay`, détaillé par jour en reçu et remboursé, éventuellement pour un canal (section « Paiements » des
+     * statistiques, lot S2-a). Mêmes commandes, même date (celle de la commande), mêmes montants : par jour, `net` est exactement la
+     * valeur de `receiptsByDay` quand aucun canal n'est demandé ; `received` = les ventes, `refunded` = `received − net` (les retours).
+     *
+     * @return array<string, array{received: int, refunded: int, net: int}> jour du magasin => montants en cents
+     */
+    public function receiptsDetailByDay(string $from, string $to, ?int $source = null): array
+    {
+        [$start, $end] = $this->clock->range($from, $to);
+        $rows = $this->conn()->fetchAllAssociative(
+            "SELECT CAST((o.order_date AT TIME ZONE 'UTC') AT TIME ZONE :tz AS date) AS d,"
+            . ' SUM(CASE WHEN o.order_type_id = 2 THEN 0 ELSE COALESCE(o.total_amount, 0) + COALESCE(o.cash_rounding, 0) - ' . self::NON_CASH . ' END) AS received,'
+            . ' SUM(CASE WHEN o.order_type_id = 2 THEN -ABS(COALESCE(o.total_amount, 0)) + COALESCE(o.cash_rounding, 0) + ' . self::NON_CASH
+            . ' ELSE COALESCE(o.total_amount, 0) + COALESCE(o.cash_rounding, 0) - ' . self::NON_CASH . ' END) AS amount'
+            . ' FROM "order" o WHERE o.order_date >= :from AND o.order_date < :to AND o.order_type_id IN (1, 2, 3) AND o.status_id NOT IN (1, 7)'
+            . ($source === null ? '' : ' AND o.order_source_id = :src') . ' GROUP BY 1',
+            ['tz' => $this->clock->timezone()->getName(), 'from' => $start->format('Y-m-d H:i:s'), 'to' => $end->format('Y-m-d H:i:s')] + ($source === null ? [] : ['src' => $source])
+        );
+        $days = [];
+        foreach ($rows as $r) {
+            $received = (int) round((float) $r['received']);
+            $net = (int) round((float) $r['amount']);
+            $days[substr((string) $r['d'], 0, 10)] = ['received' => $received, 'refunded' => $received - $net, 'net' => $net];
+        }
+
+        return $days;
+    }
+
+    /**
+     * Paiements réussis des commandes de [from, to] (les commandes de `receiptsByDay`), par moyen de paiement : reçu (montants positifs),
+     * remboursé (montants négatifs, rendus en positif) et net. Lot S2-a. Une vente sans ligne de paiement n'apparaît pas ici : la section
+     * la rend dans une ligne « autre », pour que les moyens additionnés retrouvent l'encaissé.
+     *
+     * @return array<int, array{received: int, refunded: int, net: int}> identifiant du moyen (`payment_method`) => montants en cents
+     */
+    public function receiptsByMethod(string $from, string $to, ?int $source = null): array
+    {
+        [$start, $end] = $this->clock->range($from, $to);
+        $rows = $this->conn()->fetchAllAssociative(
+            'SELECT p.payment_method_id AS m, SUM(CASE WHEN p.amount > 0 THEN p.amount ELSE 0 END) AS received, SUM(CASE WHEN p.amount < 0 THEN -p.amount ELSE 0 END) AS refunded'
+            . ' FROM payments p JOIN "order" o ON o.id = p.order_payment_id'
+            . ' WHERE p.statut_payment_id = :done AND p.payment_method_id IS NOT NULL AND o.order_date >= :from AND o.order_date < :to AND o.order_type_id IN (1, 2, 3) AND o.status_id NOT IN (1, 7)'
+            . ($source === null ? '' : ' AND o.order_source_id = :src') . ' GROUP BY 1 ORDER BY 1',
+            ['done' => \App\Repository\PaymentsRepository::STATUS_COMPLETED, 'from' => $start->format('Y-m-d H:i:s'), 'to' => $end->format('Y-m-d H:i:s')] + ($source === null ? [] : ['src' => $source])
+        );
+        $methods = [];
+        foreach ($rows as $r) {
+            $received = (int) round((float) $r['received']);
+            $refunded = (int) round((float) $r['refunded']);
+            $methods[(int) $r['m']] = ['received' => $received, 'refunded' => $refunded, 'net' => $received - $refunded];
+        }
+
+        return $methods;
+    }
+
+    /**
      * Encaissements de [from, to] (mêmes commandes et même total que `receiptsByDay`) dont la part en **espèces** (lot RAP) : paiements réussis
      * au moyen « Espèces » (`payment_method` 2) des commandes de la fenêtre, signés (retours et remboursements en espèces négatifs) ; le reste
      * (carte, Paypal, ventes sans ligne de paiement) en `card`. Fenêtre vide (from > to) : zéros.
