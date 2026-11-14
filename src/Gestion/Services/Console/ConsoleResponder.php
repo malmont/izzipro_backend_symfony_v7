@@ -97,9 +97,10 @@ class ConsoleResponder
     }
 
     /**
-     * Vrai si le serveur répondra à cette question en attente SANS AUCUN appel au modèle (aujourd'hui : « explique-moi cet écran »,
-     * lot A-4b). Le POST y répond alors dans la requête même (`GestionConsoleUseCase::ask`) au lieu de confier la réponse au worker.
-     * Une définition seule ou un guide choisi par le modèle demandent l'appel 1 : ils restent en attente.
+     * Vrai si le serveur répondra à cette question en attente SANS AUCUN appel au modèle : « explique-moi cet écran » (lot A-4b) ou la
+     * définition d'une notion du lexique demandée sans ambiguïté (« c'est quoi le taux de marque ? », 14/11/2026). Le POST y répond
+     * alors dans la requête même (`GestionConsoleUseCase::ask`) au lieu de confier la réponse au worker. Toute autre question, dont
+     * une définition ou un guide que seul le modèle reconnaît, demande l'appel 1 : elle reste en attente.
      */
     public function answersAlone(int $messageId): bool
     {
@@ -108,13 +109,29 @@ class ConsoleResponder
         $question = $message === null ? null : $em->find(GestionConversationMessage::class, (int) ($message->getContent()['replyTo'] ?? 0));
         $context = $question?->getContent()['context'] ?? null;
 
-        return $question !== null && $this->guideOnly($this->screen(is_array($context) ? $context : null, $message->getConversation()->getLocale()), (string) ($question->getContent()['text'] ?? ''));
+        return $question !== null && $this->serverChoice($this->screen(is_array($context) ? $context : null, $message->getConversation()->getLocale()), (string) ($question->getContent()['text'] ?? '')) !== null;
     }
 
-    /** @param array<string, mixed>|null $screen l'écran connu d'où vient la question */
-    private function guideOnly(?array $screen, string $text): bool
+    /**
+     * Le choix que le SERVEUR fait seul, sans le modèle, ou null (le modèle choisit) : le guide de l'écran pour « explique-moi cet
+     * écran », la leçon d'une notion pour une question de définition sans ambiguïté. Dans le doute, null.
+     *
+     * @param array<string, mixed>|null $screen l'écran connu d'où vient la question
+     *
+     * @return array{kind: string, analyses: list<array{key: string, params: array<string, mixed>}>, clarification: string}|null
+     */
+    private function serverChoice(?array $screen, string $text): ?array
     {
-        return $screen !== null && self::asksOnlyForTheScreen($text) && $this->analyses->accept('screen.guide', ['screen' => $screen['code']]) !== null;
+        if ($screen !== null && self::asksOnlyForTheScreen($text) && $this->analyses->accept('screen.guide', ['screen' => $screen['code']]) !== null) {
+            return ['kind' => 'analyses', 'analyses' => [['key' => 'screen.guide', 'params' => []]], 'clarification' => ''];
+        }
+        // les termes et synonymes des deux langues : un gérant francophone écrit parfois le mot anglais, et l'inverse
+        $term = self::asksOnlyForATerm($text, [...$this->lexique->all('fr'), ...$this->lexique->all('en')]);
+        if ($term !== null && $this->analyses->accept('lexique.term', ['term' => $term]) !== null) {
+            return ['kind' => 'analyses', 'analyses' => [['key' => 'lexique.term', 'params' => ['term' => $term]]], 'clarification' => ''];
+        }
+
+        return null;
     }
 
     public function answer(int $messageId): void
@@ -142,11 +159,11 @@ class ConsoleResponder
                 }
                 $history[] = $m->getKind() === ConsoleService::QUESTION ? ['role' => 'gérant', 'text' => (string) ($m->getContent()['text'] ?? '')] : ['role' => 'console', 'text' => self::plain($m->getContent()['blocks'] ?? [])];
             }
-            // « Explique-moi cet écran », sans autre demande (lot A-4b) : c'est le SERVEUR qui répond, par le guide de l'écran et ses chiffres
-            // du moment. Aucun appel au modèle, aucune unité : le comportement ne dépend pas de ce que le modèle aurait choisi.
-            if ($this->guideOnly($screen, $text)) {
-                $choice = ['kind' => 'analyses', 'analyses' => [['key' => 'screen.guide', 'params' => []]], 'clarification' => ''];
-            } else {
+            // « Explique-moi cet écran », sans autre demande (lot A-4b), ou la définition d'une notion demandée sans ambiguïté (14/11/2026) :
+            // c'est le SERVEUR qui répond, par le guide de l'écran et ses chiffres du moment, ou par la leçon de la notion. Aucun appel au
+            // modèle, aucune unité : le comportement ne dépend pas de ce que le modèle aurait choisi.
+            $choice = $this->serverChoice($screen, $text);
+            if ($choice === null) {
                 $choice = $this->model->choose($text, $screen, array_reverse(array_slice($history, 0, ConsoleService::HISTORY_MESSAGES)), $this->analyses->listed($locale), $this->periods($locale), $this->calendar->today(), $locale, $stats,
                     array_map(fn (array $e) => ['key' => $e['key'], 'term' => $e['term'], 'synonymes' => $e['synonyms']], $this->lexique->all($locale)));
             }
@@ -614,6 +631,52 @@ class ConsoleResponder
      * page », « ici »), sans autre demande : ni seconde proposition (après « : », « ; », « ? », ou « et … »), ni question d'état
      * (« est-ce que ça va », « va-t-elle tenir », « combien », « pourquoi »). Alors le guide seul répond, sans le modèle.
      */
+    /**
+     * La question demande-t-elle SEULEMENT la définition d'UNE notion du lexique ? Rend la clé de la notion, sinon null (le modèle
+     * choisit). Règle stricte, « dans le doute, le modèle » : il faut une tournure de définition (« c'est quoi », « qu'est-ce que »,
+     * « que veut dire », « que signifie », « définition de », `what is`, `what does … mean`, `define`), un terme ou un synonyme du
+     * lexique et un seul, et RIEN D'AUTRE que des articles : ni possessif (« ma marge » demande un chiffre, pas une définition), ni
+     * écran désigné (c'est le guide), ni mot d'état ou de chiffre (« combien », « est-elle bonne »), ni date, ni seconde demande.
+     *
+     * @param list<array{key: string, term: string, synonyms: list<string>}> $lexique les notions, dans les langues à reconnaître
+     */
+    public static function asksOnlyForATerm(string $question, array $lexique): ?string
+    {
+        $q = ' ' . mb_strtolower(trim(str_replace(['’', '  '], ["'", ' '], $question))) . ' ';
+        // 1. la tournure de définition, retirée de la phrase (« what does … mean » : ses deux bouts)
+        $asking = "/qu'est-ce que c'est (?:que |qu')|qu'est-ce qu(?:e |')|c'est quoi|ça veut dire quoi|que (?:veut|veulent) dire|que signifi(?:e|ent)|(?:(?:la|une|donne-moi la|quelle est la) )?définition (?:de |du |des |d')|\\bwhat(?:'s| is| are) |\\bwhat (?:does|do) |(?:the )?(?:meaning|definition) of |\\bdefine /u";
+        $rest = preg_replace($asking, ' ', $q, -1, $asked);
+        if ($asked === 0) {
+            return null;
+        }
+        $rest = (string) preg_replace('/\\bmeans?\\b/u', ' ', (string) $rest);
+        // 2. un terme ou un synonyme du lexique, en mots entiers ; les expressions les plus longues d'abord (« taux de marque » avant « marque »)
+        $expressions = [];
+        foreach ($lexique as $entry) {
+            foreach ([$entry['term'], ...$entry['synonyms']] as $expression) {
+                $expressions[mb_strtolower(trim($expression))] = $entry['key'];
+            }
+        }
+        uksort($expressions, fn (string $a, string $b) => mb_strlen($b) <=> mb_strlen($a));
+        $found = [];
+        foreach ($expressions as $expression => $key) {
+            if ($expression === '') {
+                continue;
+            }
+            $rest = preg_replace('/(?<![\\p{L}\\p{N}])' . preg_quote($expression, '/') . 's?(?![\\p{L}\\p{N}])/u', ' ', (string) $rest, -1, $n);
+            if ($n > 0) {
+                $found[$key] = true;
+            }
+        }
+        if (count($found) !== 1) {
+            return null; // aucune notion, ou plusieurs : le modèle
+        }
+        // 3. rien d'autre que des articles et de la ponctuation : tout autre mot (possessif, état, date, autre demande) rend la main au modèle
+        $rest = preg_replace("/(?<![\\p{L}\\p{N}])(?:le|la|les|l'|un|une|des|du|de|d'|en gestion|exactement|au juste|donc|svp|s'il (?:vous|te) pla[iî]t|the|a|an|exactly|please)(?![\\p{L}\\p{N}])/u", ' ', (string) $rest);
+
+        return trim((string) preg_replace('/[\\s?!.,«»"\']+/u', ' ', (string) $rest)) === '' ? array_key_first($found) : null;
+    }
+
     public static function asksOnlyForTheScreen(string $question): bool
     {
         $q = mb_strtolower(trim(str_replace(['’', '  '], ["'", ' '], $question)));
