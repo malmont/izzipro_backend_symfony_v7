@@ -66,6 +66,33 @@ steps:
             description:
                 done: 'Purchases are recorded: costs, margins and stock are calculated.'
                 todo: 'Enter a first supplier order, or import the history of your past sales.'
+    loss:
+        management:
+            title: 'Management app'
+            description:
+                done: 'Loss prevention is a section of the management app, which is enabled.'
+                todo: 'Loss prevention is a section of the management app: enable it first.'
+        place:
+            title: 'Country and region of the shop'
+            description:
+                done: 'The country of the shop is known: it decides what loss prevention allows.'
+                todo: 'Fill in the country (and the province or state) in the business address: it decides what is allowed. Without it, informing the staff is required.'
+        staff_notice:
+            title: 'Staff information'
+            description:
+                done: 'You confirmed that you informed your staff.'
+                required: 'Hand the notice to your staff, then confirm it: in your country nothing is analysed before this confirmation.'
+                todo: 'Hand the notice to your staff, then confirm it in the loss prevention settings.'
+        rules:
+            title: 'Rules and thresholds'
+            description:
+                done: 'You adjusted at least one rule.'
+                todo: 'Review the rules and their thresholds: the preview shows what a setting would have found over 30 days.'
+        first_analysis:
+            title: 'First analysis of the cash register'
+            description:
+                done: 'The cash register has already been analysed: the findings are in the “Loss prevention” section.'
+                todo: 'Open the “Loss prevention” section of the management app: the first analysis starts when it opens.'
     support:
         agent:
             title: 'An account to answer requests'

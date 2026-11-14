@@ -162,7 +162,8 @@ L'assistant IA de configuration (à venir) proposera d'exécuter l'étape suivan
 **Paramètre `?locale` sur `GET /api/site/readiness` (lot LEX, 12/11/2026).** Sans `?locale`, avec `?locale=fr`, une valeur vide ou
 inconnue, la route rend toujours la réponse exacte en français, **quelle que soit la langue du site** (`entreprise.locale` ignorée). Seul
 `?locale=en` traduit les titres, descriptions et libellés de groupe des **trois groupes** `app.management`, `module.support` et `ai`
-(`translations/readiness.en.yaml`, `FeatureCatalog::label(..., 'en')`). Tous les autres groupes (`site`, boutique, caisse, landing,
+(`translations/readiness.en.yaml`, `FeatureCatalog::label(..., 'en')`), et du groupe `module.loss_prevention` quand le droit de la
+prévention des pertes est accordé (lot L1-b, 14/11/2026 : cinq étapes, `docs/prevention-pertes.md`). Tous les autres groupes (`site`, boutique, caisse, landing,
 mémoires, boussole, applications mobiles), les étapes `obtain.*` (même pour ces trois fonctionnalités), `links`, les clés, statuts,
 `figures`, `appScreen` et `helpKey` restent inchangés et en français. Signature compatible : `forCurrentSite(string $locale = 'fr')`,
 `forSite(string $code, string $locale = 'fr')`. Test : `tests/Functional/Gestion/ManagementReadinessTest.php`.

@@ -241,7 +241,7 @@ class SiteReadinessService
             if ($group === 'ai') {
                 return 'AI assistant';
             }
-            if (in_array($group, ['app.management', 'module.support'], true) && FeatureCatalog::exists($group)) {
+            if (in_array($group, ['app.management', 'module.support', 'module.loss_prevention'], true) && FeatureCatalog::exists($group)) {
                 return FeatureCatalog::label($group, 'en');
             }
         }
@@ -460,6 +460,49 @@ class SiteReadinessService
                 $this->tr($locale, 'steps.support.inbound.title', [], 'Adresse de réception des courriels'),
                 $this->tr($locale, 'steps.support.inbound.description', [], 'Les courriels des clients arriveront dans les demandes (adresse fournie par la plateforme, à venir avec le lot 2).'),
                 'optional', false, null);
+        }
+        if ($effective['module.loss_prevention']['enabled'] ?? false) { // Prévention des pertes, lot L1-b (`docs/prevention-pertes.md`) : étapes propres au module
+            $loss = function (string $key, string $title, string $description, bool $done, bool $blocking, ?string $appScreen) use (&$steps) {
+                $steps[] = ['key' => $key, 'group' => 'module.loss_prevention', 'title' => $title, 'description' => $description, 'status' => $done ? 'done' : 'todo', 'where' => 'backend',
+                    'action' => ['type' => 'screen', 'screen' => 'mon_site'], 'blocking' => $blocking, 'appScreen' => $appScreen];
+            };
+            $place = \App\Services\OrderService\TaxEngine::normalizeAddress(['country' => $address['country'] ?? null, 'province' => $address['state'] ?? null]);
+            $noticeRequired = \App\LossPrevention\Services\LossCountryPolicy::staffNoticeRequired($place['country'] ?? null, $place['province'] ?? null);
+            $state = $this->row($pdo, 'SELECT staff_notice_confirmed_at, last_analysis_at FROM loss_setting ORDER BY id LIMIT 1') ?? [];
+            $management = (bool) ($effective['app.management']['enabled'] ?? false);
+            $loss('loss.management',
+                $this->tr($locale, 'steps.loss.management.title', [], 'Application de gestion'),
+                $management
+                    ? $this->tr($locale, 'steps.loss.management.description.done', [], 'La prévention des pertes est une section de l\'application de gestion, qui est activée.')
+                    : $this->tr($locale, 'steps.loss.management.description.todo', [], 'La prévention des pertes est une section de l\'application de gestion : activez-la d\'abord.'),
+                $management, true, null);
+            $loss('loss.place',
+                $this->tr($locale, 'steps.loss.place.title', [], 'Pays et région de la boutique'),
+                ($place['country'] ?? null) !== null
+                    ? $this->tr($locale, 'steps.loss.place.description.done', [], 'Le pays de la boutique est connu : il décide de ce que la prévention des pertes permet.')
+                    : $this->tr($locale, 'steps.loss.place.description.todo', [], 'Renseignez le pays (et la province ou l\'État) dans l\'adresse de l\'entreprise : il décide de ce qui est permis. Sans lui, l\'information des salariés est exigée.'),
+                ($place['country'] ?? null) !== null, true, null);
+            $loss('loss.staff_notice',
+                $this->tr($locale, 'steps.loss.staff_notice.title', [], 'Information des salariés'),
+                ($state['staff_notice_confirmed_at'] ?? null) !== null
+                    ? $this->tr($locale, 'steps.loss.staff_notice.description.done', [], 'Vous avez confirmé avoir informé vos salariés.')
+                    : ($noticeRequired
+                        ? $this->tr($locale, 'steps.loss.staff_notice.description.required', [], 'Remettez la notice à vos salariés puis confirmez-le : dans votre pays, rien n\'est analysé avant cette confirmation.')
+                        : $this->tr($locale, 'steps.loss.staff_notice.description.todo', [], 'Remettez la notice à vos salariés puis confirmez-le dans les réglages de la prévention des pertes.')),
+                ($state['staff_notice_confirmed_at'] ?? null) !== null, $noticeRequired, 'pertes.reglages');
+            $rulesReviewed = $this->count($pdo, 'loss_rule') > 0;
+            $loss('loss.rules',
+                $this->tr($locale, 'steps.loss.rules.title', [], 'Règles et seuils'),
+                $rulesReviewed
+                    ? $this->tr($locale, 'steps.loss.rules.description.done', [], 'Vous avez réglé au moins une règle.')
+                    : $this->tr($locale, 'steps.loss.rules.description.todo', [], 'Relisez les règles et leurs seuils : l\'aperçu montre ce qu\'un réglage aurait relevé sur 30 jours.'),
+                $rulesReviewed, false, 'pertes.regles');
+            $loss('loss.first_analysis',
+                $this->tr($locale, 'steps.loss.first_analysis.title', [], 'Première analyse de la caisse'),
+                ($state['last_analysis_at'] ?? null) !== null
+                    ? $this->tr($locale, 'steps.loss.first_analysis.description.done', [], 'La caisse a déjà été analysée : les constats sont dans la section « Prévention des pertes ».')
+                    : $this->tr($locale, 'steps.loss.first_analysis.description.todo', [], 'Ouvrez la section « Prévention des pertes » de la gestion : la première analyse part à l\'ouverture.'),
+                ($state['last_analysis_at'] ?? null) !== null, false, 'pertes.home');
         }
         if ($effective['app.living_memory']['enabled'] ?? false) {
             $add('living_memory.key', 'app.living_memory', 'Clé de l\'application Living Memory', 'Générez la clé d\'activation portée par l\'application pour votre site.', in_array('livingmemory', $keys, true), 'backend', ['type' => 'screen', 'screen' => 'app_keys']);

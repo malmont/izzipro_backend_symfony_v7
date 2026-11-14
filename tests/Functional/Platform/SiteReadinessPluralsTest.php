@@ -22,7 +22,7 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
  */
 class SiteReadinessPluralsTest extends WebTestCase
 {
-    private const FEATURES = ['module.boutique', 'module.pos', 'module.support', 'app.management'];
+    private const FEATURES = ['module.boutique', 'module.pos', 'module.support', 'app.management', 'module.loss_prevention'];
     private const ENDING = '/\p{L}\((?:s|es|e|x|nt|en|ent|ies)\)/u';
 
     private KernelBrowser $client;
@@ -73,7 +73,7 @@ class SiteReadinessPluralsTest extends WebTestCase
 
         // 1. Chaque module lit toujours ses textes : des étapes pour chaque groupe, un titre et une description, aucun gabarit resté tel quel
         $perGroup = array_count_values(array_column(array_filter($fr, fn (array $s) => !str_starts_with($s['key'], 'obtain.')), 'group'));
-        foreach (['site' => 5, 'module.boutique' => 5, 'module.pos' => 5, 'module.support' => 3, 'app.management' => 10, 'ai' => 2] as $group => $atLeast) {
+        foreach (['site' => 5, 'module.boutique' => 5, 'module.pos' => 5, 'module.support' => 3, 'app.management' => 10, 'module.loss_prevention' => 5, 'ai' => 2] as $group => $atLeast) {
             $this->assertGreaterThanOrEqual($atLeast, $perGroup[$group] ?? 0, "groupe $group : ses étapes sont rendues");
         }
         foreach (['fr' => $fr, 'en' => $en] as $locale => $steps) {
