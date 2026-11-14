@@ -273,7 +273,7 @@ worker répond, le web relit toutes les 3 secondes.
 
 | Route | Rôle |
 |---|---|
-| `POST /api/gestion/console/messages { text, conversationId?, context? }` | pose une question, avec l'écran d'où elle vient ; rend le message `pending` |
+| `POST /api/gestion/console/messages { text, conversationId?, context? }` | pose une question, avec l'écran d'où elle vient ; rend le message `pending`, ou déjà `done` quand le serveur répond sans le modèle (§ 5.1) |
 | `GET /api/gestion/console/conversations/{id}` | l'échange : questions et réponses, à relire toutes les 3 secondes tant qu'un message est `pending` |
 | `GET /api/gestion/console/conversations` | l'historique du site, du plus récent au plus ancien |
 | `DELETE /api/gestion/console/conversations/{id}` | le gérant efface un échange ; l'effacement est inscrit au journal |
@@ -290,6 +290,20 @@ worker répond, le web relit toutes les 3 secondes.
 
 `questionMessageId` est le message de la question, `messageId` celui de la réponse à relire. Sans `conversationId`, un nouvel échange
 est créé ; son titre est la première question, coupée à 80 caractères.
+
+**Réponse directe (14/11/2026).** Quand le serveur répond **sans aucun appel au modèle** (aujourd'hui : « explique-moi cet écran »
+reconnu par le serveur, correctif A-4b), il le fait dans la requête même : le POST rend déjà la réponse, toujours en 202, et rien
+n'est confié au worker.
+
+```
+{ conversationId, questionMessageId, messageId, state: "done", error: null,
+  blocks: [...], analyses: [...], proposals: [], answeredAt, credits }
+```
+
+L'application lit `state` dans le POST : `done` (ou `failed`), elle affiche les blocs sans relire l'échange ; `pending`, elle relit
+comme avant. Une application qui ne lit pas `state` et relit l'échange trouve la même réponse, déjà close. Une définition seule, ou
+un guide choisi par le modèle, demandent le premier appel au modèle : ces réponses restent en attente (`GestionConsoleUseCase::ask`,
+`ConsoleResponder::answersAlone`).
 
 **`GET /api/gestion/console/conversations/{id}`** → l'échange entier, dans l'ordre :
 

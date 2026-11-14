@@ -126,6 +126,8 @@ chaque libellé au terme, dans les deux langues.
   **aucun appel au modèle, 0 unité**, blocs `guide` puis `figures`. Toute autre tournure va au modèle, dont la consigne dit de
   choisir `screen.guide` **seul** pour une demande d'explication de l'écran (un appel, 0 unité) ; avec une vraie question en plus, il
   rédige (1 unité) sans redire à quoi sert l'écran, que le guide dit déjà.
+  Depuis le 14/11/2026, cette réponse sans modèle est rendue **par le POST lui-même** (`state: "done"`, blocs, analyses, unités) :
+  l'application n'attend plus le worker (`docs/console-gestion.md` § 5.1).
 - **Un état qui n'est pas un jugement se dit par une phrase** (lot A-4) : pour un budget « sans prévu » ou une trésorerie « sans
   solde », le modèle reçoit « Aucun budget n'est prévu pour cette période », « Aucun solde n'a encore été saisi », à reprendre telles
   quelles, et non un état à glisser dans « est … ».
