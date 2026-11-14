@@ -16,6 +16,8 @@ final class LossCountryPolicy
 {
     public const NEVER = ['faces', 'audio', 'fitting_room_camera', 'gesture_analysis'];
     private const FRANCE = ['FR', 'MQ', 'GP', 'GF', 'RE', 'YT'];
+    /** Pays où les règles par personne sont permises (décision du propriétaire du 14/11/2026 : les États-Unis seulement) */
+    public const PERSON_PATTERNS_COUNTRIES = ['US'];
     /** Provinces et territoires du Canada autres que le Québec : simple rappel */
     private const CANADA_OTHER = ['ON', 'BC', 'AB', 'SK', 'MB', 'NB', 'NS', 'NL', 'PE', 'YT', 'NT', 'NU'];
 
@@ -32,9 +34,20 @@ final class LossCountryPolicy
         return in_array($country, self::FRANCE, true) || ($country === 'CA' && ($region === 'QC' || !in_array($region, self::CANADA_OTHER, true)));
     }
 
+    /**
+     * GARDE BLOQUANTE (chef de projet, 14/11/2026) : les règles par personne ne sont JAMAIS permises là où la notice aux salariés est exigée
+     * (France, Québec, pays ou province illisible). Elles relisent une fenêtre de clôtures, de retours ou de ventes SANS tenir compte du
+     * plancher de la notice (`analysis_floor_sequence`) : elles compteraient des actes d'avant l'information des salariés. Tant que
+     * `CashShortageSeriesRule`, `RefundSeriesRule` et `DiscountSeriesRule` ne bornent pas leur fenêtre à ce plancher, cette garde reste, quelle
+     * que soit la liste des pays permis. Test : `LossCountryPolicyTest`.
+     */
     public static function personPatternsAllowed(?string $country, ?string $region): bool
     {
-        return $country === 'US';
+        if (self::staffNoticeRequired($country, $region)) {
+            return false;
+        }
+
+        return in_array($country, self::PERSON_PATTERNS_COUNTRIES, true);
     }
 
     /** Valeur quand le site n'a rien choisi */
