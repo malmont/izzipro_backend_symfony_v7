@@ -36,6 +36,11 @@ tiles:
         trip_allowance: Budget prévu à ce jour
         cash_balance: 'Solde saisi le %date%'
         cash_threshold: Seuil d'alerte
+        loss_new_findings: Nouveaux constats
+        loss_amount_at_stake: Montant en jeu
+    loss_findings:
+        title: Prévention des pertes
+        text: "{1}1 nouveau constat à vérifier, %amount% en jeu.|]1,Inf[%count% nouveaux constats à vérifier, %amount% en jeu."
     budget_over:
         title: Budget dépassé
         text: "{1}1 poste dépasse le prévu.|]1,Inf[%count% postes dépassent le prévu."
@@ -55,6 +60,7 @@ notifications:
         duplicate_invoice: Facture déjà saisie
         cash_critical: Trésorerie critique
         trip_budget: Budget du voyage dépassé
+        loss_digest: 'Prévention des pertes : résumé du jour par courriel'
     low_stock:
         title: Stock bas
         body: "{1}1 article qui se vend bien va manquer d'ici une semaine.|]1,Inf[%count% articles qui se vendent bien vont manquer d'ici une semaine."
@@ -1084,6 +1090,11 @@ console:
         statistiques_annee: 'L''année de l''entreprise'
         reglages: 'Réglages de la gestion'
         reprise: 'Reprise d''historique'
+        pertes_home: 'Prévention des pertes'
+        pertes_constats: 'Constats'
+        pertes_constat: 'Un constat et ses preuves'
+        pertes_regles: 'Règles et seuils de la prévention des pertes'
+        pertes_reglages: 'Réglages de la prévention des pertes'
         accueil: 'Accueil de la gestion'
         journee: 'Ma journée'
         periode_resultat: 'Résultat d''une période'

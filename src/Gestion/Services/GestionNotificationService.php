@@ -29,7 +29,12 @@ class GestionNotificationService
     /** type → disponible (cash_critical et trip_budget arrivent avec B1 ; coupables dès maintenant) */
     public const TRIP_BUDGET = 'trip_budget';
     public const CASH_CRITICAL = 'cash_critical';
-    public const KINDS = [self::LOW_STOCK => true, self::DUPLICATE_INVOICE => true, self::CASH_CRITICAL => true, self::TRIP_BUDGET => true]; // trip_budget : lot B1a ; cash_critical : lot B1b-1
+    /** Prévention des pertes (lot L1-b) : courriel de résumé du jour, « N nouveaux constats, X en jeu ». Envoyé par le module, par COURRIEL :
+     *  il n'entre pas dans la règle « une notification par jour » du téléphone, ni dans le journal des notifications. */
+    public const LOSS_DIGEST = 'loss_digest';
+    public const KINDS = [self::LOW_STOCK => true, self::DUPLICATE_INVOICE => true, self::CASH_CRITICAL => true, self::TRIP_BUDGET => true, self::LOSS_DIGEST => true]; // trip_budget : lot B1a ; cash_critical : lot B1b-1
+    /** Canal d'un type : `push` (téléphone) par défaut ; `email` pour ceux listés ici */
+    public const EMAIL_KINDS = [self::LOSS_DIGEST];
     public const CASH_REPEAT_DAYS = 7;
     public const DAILY_HOUR = 10;
     public const DAY_FROM_HOUR = 8;
@@ -48,19 +53,36 @@ class GestionNotificationService
         private readonly ?GestionTripService $trips = null,
         private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null,
         private readonly ?GestionCashService $cash = null,
+        private readonly ?\App\Services\FeatureAccess\ModuleAccessService $modules = null, // lot L1-b : le type loss_digest n'est disponible que si le module est accordé
     ) {
     }
 
-    /** @return array{kinds: list<array{kind: string, label: string, enabled: bool, available: bool}>} */
+    /** @return array{kinds: list<array{kind: string, label: string, enabled: bool, available: bool, channel: string}>} */
     public function preferences(int $userId, string $locale): array
     {
         $prefs = $this->log()->preferences($userId);
         $kinds = [];
         foreach (self::KINDS as $kind => $available) {
-            $kinds[] = ['kind' => $kind, 'label' => $this->translator->trans("notifications.kinds.$kind", [], 'gestion', $locale), 'enabled' => $prefs[$kind] ?? true, 'available' => $available];
+            if ($kind === self::LOSS_DIGEST) { // disponible seulement si le droit du module Prévention des pertes est accordé au site
+                $available = $this->modules !== null && $this->lossPreventionGranted();
+            }
+            $kinds[] = ['kind' => $kind, 'label' => $this->translator->trans("notifications.kinds.$kind", [], 'gestion', $locale), 'enabled' => $prefs[$kind] ?? true, 'available' => $available,
+                'channel' => in_array($kind, self::EMAIL_KINDS, true) ? 'email' : 'push'];
         }
 
         return ['kinds' => $kinds];
+    }
+
+    /** Ce gérant a-t-il gardé ce type actif ? (actif par défaut) */
+    public function isKindEnabled(int $userId, string $kind): bool
+    {
+        return $this->log()->preferences($userId)[$kind] ?? true;
+    }
+
+    /** Droit du module accordé au site, lu dans les indicateurs de modules (pas le mode « demo » de la plateforme : le droit lui-même) */
+    private function lossPreventionGranted(): bool
+    {
+        return (bool) ($this->modules?->flags()[\App\Services\FeatureAccess\ModuleAccessService::LOSS_PREVENTION] ?? false);
     }
 
     public function updatePreferences(int $userId, array $body): void

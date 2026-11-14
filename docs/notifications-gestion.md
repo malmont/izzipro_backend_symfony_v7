@@ -31,10 +31,14 @@ Code : `Services/NotificationService/` (`PushSenderInterface`, `NotConfiguredPus
 
 ## 2. Préférences et journal (`ROLE_ADMIN`)
 
-- `GET /api/gestion/notifications/preferences?locale=` → `{ kinds: [{ kind, label, enabled, available }] }` ; tout est actif par défaut.
+- `GET /api/gestion/notifications/preferences?locale=` → `{ kinds: [{ kind, label, enabled, available, channel }] }` ; tout est actif par défaut.
+  `channel` (ajout du 14/11/2026) : `push` (téléphone) ou `email`.
 - `PATCH /api/gestion/notifications/preferences { kinds: { low_stock: false, … } }` → même forme ; 422 `kinds` `MUST_BE_OBJECT`,
   `kinds.<x>` `UNKNOWN_KIND` / `MUST_BE_BOOLEAN` (rien n'est écrit).
-- Types : `low_stock`, `duplicate_invoice`, `trip_budget`, `cash_critical` (tous disponibles depuis le lot B1b-1).
+- Types : `low_stock`, `duplicate_invoice`, `trip_budget`, `cash_critical` (tous disponibles depuis le lot B1b-1), sur téléphone ; et
+  `loss_digest` (14/11/2026, prévention des pertes, lot L1-b), par COURRIEL : le résumé du jour « N nouveaux constats, X en jeu », envoyé par
+  le module (`docs/prevention-pertes.md`). `available` seulement si le droit `module.loss_prevention` est accordé au site. Il n'entre ni dans
+  la règle « une notification par jour » du téléphone, ni dans `notification_log`.
 - `GET /api/gestion/notifications/journal?limit=20` (100 au plus) → `[{ id, kind, title, body, action: { screen, params }, status, sentAt }]`
   du gérant connecté ; `status` `sent` | `not_configured` | `failed` | `no_device`.
 
