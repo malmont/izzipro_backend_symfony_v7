@@ -345,6 +345,9 @@ intent Stripe) et la commande naît **une seule fois par paiement**, du navigate
   sans `paymentIntentId` ; gardé pour le webhook (renvoyé une fois suffit : un panier modifié garde le corps du premier
   appel). Sans `shippingAddress`, les taxes viennent de l'adresse de `order`. Le client connecté est reconnu par son jeton
   du site (`OptionalCustomerResolver` : la route reste hors du pare-feu JWT, un jeton expiré ne bloque pas un invité).
+- `POST /api/order/create-guest` : `termsVersion` facultatif (14/11/2026, APPS-MEMBRES M1, `docs/apps-membres.md`) : la version des conditions de
+  la boutique acceptées au paiement (`GET /api/apps/web/terms`), gardée sur la commande si elle est celle en vigueur. La commande en
+  invité ne crée aucune appartenance ; elle naît le jour où ce client choisit son mot de passe.
 - `POST /api/order/create` (client) et `/api/order/create-guest` (invité) : **idempotents**. Depuis le 30/10/2026 (audit S2.7), un
   caissier ou responsable de caisse sans `ROLE_ADMIN` n'y crée qu'une vente web (403 `POS_ROUTE_REQUIRED` pour `orderSource` 2 ou
   `typeOrder` ≠ 1 : les opérations de caisse passent par `create-multi-payment` et `/api/pos/returns`) ; `POST /api/shipping/buy`
