@@ -1,0 +1,26 @@
+# Réglages de l'outil de bascule : copier ce fichier vers var/bascule.conf (dossier hors dépôt) et le remplir.
+# Aucune valeur réelle dans ce modèle : ni adresse, ni nom de site, ni identifiant de compte. Aucun secret ici non plus : le jeton de
+# contrôle est fabriqué par la commande « jeton » et supprimé par « fin ».
+
+# Adresse interne du serveur web (celle du conteneur nginx sur le réseau Docker) et en-tête Host qu'il attend
+BASE_URL=http://ADRESSE-INTERNE-DU-SERVEUR-WEB
+FRONT_HOST=hote-du-backend.example
+
+# Site de contrôle : celui dont les réponses sont photographiées avant et après (le site de test, jamais un site client)
+CONTROL_HOST=site-de-controle.example
+CONTROL_DB=base_du_site_de_controle
+CONTROL_CODE=code_du_site_de_controle
+# Identifiant d'un compte administrateur de ce site, au nom duquel le jeton de contrôle est fabriqué
+CONTROL_USER_ID=0
+
+# Nom d'hôte d'un site d'après son code (%s), pour le contrôle des pages publiques de tous les sites
+SITE_HOST_PATTERN=%s.example
+
+# Worktree réservé à la construction des caches (git worktree add …), jamais celui où l'on développe
+BUILD_WORKTREE=/chemin/vers/le/worktree-de-construction
+# Dossier des photos, hors du dépôt
+PHOTO_DIR=/chemin/vers/les/photos
+
+# Facultatif (valeurs par défaut entre parenthèses) :
+# READS_FILE (var/bascule.lectures), KEEP_STAGES (3), AUTH_CHECK_PATH (/api/gestion/statistiques), MASTER_DB (app_v2_db),
+# APP_CONTAINER, DB_CONTAINER, REDIS_CONTAINER, NGINX_CONTAINER, EMAIL_WORKER_CONTAINER, DOCKER_NETWORK, APP_IMAGE

@@ -1,0 +1,17 @@
+# Lectures de la photo du site de contrôle : copier vers var/bascule.lectures (hors dépôt) et l'adapter au lot.
+# Une lecture par ligne : « nom chemin [sans-jeton] ». GET seulement. Le nom sert de nom de fichier (lettres, chiffres, tirets).
+# N'y mettre AUCUNE route qui écrit quand on la lit : réimpression d'un reçu de caisse, export comptable, rapport X et statistiques des
+# caissiers (inscrits au journal de caisse), première lecture qui crée une ligne de réglages, question à une IA (coûte une unité).
+landing-settings /api/landingpage-settings sans-jeton
+landing-products /api/landingpage sans-jeton
+products /api/products sans-jeton
+site-features /api/site/features
+site-readiness /api/site/readiness
+readiness-sans-jeton /api/site/readiness sans-jeton
+g-stats /api/gestion/statistiques
+g-stats-sans-jeton /api/gestion/statistiques sans-jeton
+g-annee /api/gestion/statistiques/annee
+g-tresorerie /api/gestion/tresorerie
+g-vignettes /api/gestion/accueil/vignettes
+periode-courante /api/periodes/courante
+# … puis les lectures propres au lot : les routes qu'il change (différence attendue) et leurs voisines (identiques attendues)

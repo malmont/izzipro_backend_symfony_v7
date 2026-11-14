@@ -681,7 +681,7 @@ conteneur (`docker restart symfony_app_v2`).
 Règles :
 - `git add` par chemins précis, jamais un dossier entier ; `config/jwt` est ignoré par git (`.gitignore`) ;
 - une livraison ne touche ni `config/jwt`, ni `jwt/`, ni `docker/`, ni un fichier `.env`, et ne contient aucun lien symbolique :
-  l'outil de bascule la refuse ;
+  l'outil de bascule (`ops/bascule/bascule.sh`, procédure dans `docs/mise-en-ligne.md`) la refuse ;
 - juste après une bascule, lire une route **authentifiée** (une route publique à 200 ne dit rien des clés) et compter les clés visibles
   dans le conteneur (`docker exec symfony_app_v2 ls /var/www/config/jwt` : 2 fichiers) ;
 - si un retour arrière ne rétablit pas le service : regarder les montages, puis redémarrer le conteneur.

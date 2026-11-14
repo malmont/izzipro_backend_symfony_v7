@@ -8,6 +8,7 @@ Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne 
 | Question | Document |
 |---|---|
 | Tenants, sécurité, couches du code, Messenger, stockage, variables, déploiement, tests | `docs/architecture.md` |
+| Mettre en ligne (la bascule : procédure pas à pas, migration avant l'échange du code, photo avant / après, retour arrière, gardes ; outil `ops/bascule/bascule.sh`, réglages hors dépôt) | `docs/mise-en-ligne.md` |
 | Une route : méthode, rôle exigé, contrôleur | `docs/endpoints.md` (généré, voir son en-tête) |
 | Landing Page : réglages, validation, assistant IA, synchronisation | `docs/landingpage.md`, puis `config/landingpage/README.md` |
 | Mémoires Vivantes (web : l'outil de l'équipe depuis le 14/11/2026, fermé aux comptes clients ; rôles responsable des biographes et biographe limité à ses livres ; Living Memory pour les clients) | `docs/memoires-vivantes.md` |
