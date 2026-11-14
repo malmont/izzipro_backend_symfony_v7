@@ -35,6 +35,8 @@ abstract class LossPreventionTestCase extends WebTestCase
     protected int $cap;
     /** Marque propre à chaque test, portée par le prénom et le nom des comptes : aucun texte sans nom ne doit la contenir */
     protected string $mark;
+    /** @var list<array<string, mixed>> adresse du site avant le test (pays, province), remise à la fin : la langue du site en dépend */
+    private array $addresses = [];
 
     protected function setUp(): void
     {
@@ -44,6 +46,7 @@ abstract class LossPreventionTestCase extends WebTestCase
         $this->db = $this->provider->getEntityManager()->getConnection();
         static::getContainer()->get(BoutiqueDemoSeeder::class)->seed('client-pertes@example.invalid', false, false);
         $this->db->executeStatement('DELETE FROM boutique_setting');
+        $this->addresses = $this->db->fetchAllAssociative('SELECT id, country, state FROM address_entreprise ORDER BY id');
         $this->place('CA', 'ON');
         $this->db->executeStatement("UPDATE entreprise SET currency = 'CAD', prices_include_tax = false, pos_discrepancy_threshold = 0, pos_cash_rounding_step = NULL, pos_approval_refund = NULL, pos_approval_withdrawal = NULL, pos_approval_fund_withdrawal = NULL, pos_approval_drawer_open = false, pos_approval_close_without_count = false, pos_terminal_header_required = false, pos_pay_cash = true, is_loss_prevention_active = true");
         $this->db->executeStatement('UPDATE caisse SET is_open = false, closed_at = NOW() WHERE is_open = true');
@@ -65,8 +68,19 @@ abstract class LossPreventionTestCase extends WebTestCase
 
     protected function tearDown(): void
     {
+        // Le site de test retrouve son adresse : la langue du site en est déduite, et les tests des autres modules (courriels, notifications)
+        // la lisent après ceux-ci dans la suite complète
+        foreach ($this->addresses as $row) {
+            $this->db->executeStatement('UPDATE address_entreprise SET country = ?, state = ? WHERE id = ?', [$row['country'], $row['state'], $row['id']]);
+        }
         static::getContainer()->get(PlatformModeService::class)->setMode('demo', 'test');
         parent::tearDown();
+        // PHPUnit garde chaque instance de test jusqu'à la fin de la suite : une connexion tenue par une propriété resterait ouverte, et la
+        // suite complète épuise alors les connexions du serveur de base de données (« too many clients »)
+        if (isset($this->db)) {
+            $this->db->close();
+        }
+        unset($this->db, $this->provider, $this->client);
     }
 
     // ----- helpers -----
