@@ -128,6 +128,9 @@ class SupportWebApiTest extends WebTestCase
         $boss = $this->json('GET', '/api/support/me', null, $admin);
         $this->assertSame([false, true, 'Gabriel Gérant'], [$boss['supportOnly'], $boss['canEditSettings'], $boss['name']]);
         $this->assertContains('ROLE_ADMIN', $boss['roles']);
+        // Un agent qui porte AUSSI un autre rôle d'accès n'est pas « Assistance seul » (le reste du site ne lui est pas fermé par la garde)
+        $mixed = $this->json('GET', '/api/support/me', null, $this->user(['ROLE_SUPPORT', 'ROLE_USER_INTERNET']));
+        $this->assertSame([false, false], [$mixed['supportOnly'], $mixed['canEditSettings']]);
         // Sans jeton ; compte client
         $this->assertSame(401, $this->call('GET', '/api/support/me', null, null)->getStatusCode());
         $this->assertSame(403, $this->call('GET', '/api/support/me', null, $this->user(['ROLE_USER_INTERNET']))->getStatusCode());
