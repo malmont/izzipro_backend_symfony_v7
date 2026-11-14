@@ -295,7 +295,9 @@ class StatisticsSectionsApiTest extends WebTestCase
     public function testStockGivesTheMovementsOfTheRangeTheValueCurveAndMatchesTheOldRouteOnTheWeek(): void
     {
         $product = (int) $this->db->fetchOne("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type) VALUES (nextval('product_id_seq'), 'Article S2-TEST', 2500, false, 0, NOW(), ?, 'standard') RETURNING id", ['s2-test-' . bin2hex(random_bytes(3))]);
-        $variant = (int) $this->db->fetchOne("INSERT INTO product_variant (id, product_id, stock_quantity) VALUES (nextval('product_variant_id_seq'), ?, 0) RETURNING id", [$product]);
+        // 4 pièces en stock, vendues 25,00 et achetées 10,00 : la valeur de vente du stock et sa valeur au coût diffèrent
+        $this->db->executeStatement('UPDATE product SET purchase_price = 1000 WHERE id = ?', [$product]);
+        $variant = (int) $this->db->fetchOne("INSERT INTO product_variant (id, product_id, stock_quantity) VALUES (nextval('product_variant_id_seq'), ?, 4) RETURNING id", [$product]);
         $move = fn (string $day, int $type, int $quantity, string $time = '12:00') => $this->db->executeStatement(
             "INSERT INTO inventory_movements (id, product_variant_id, movement_type_id, quantity, movement_date) VALUES (nextval('inventory_movements_id_seq'), ?, ?, ?, ?)", [$variant, $type, $quantity, $this->utc($day, $time)]);
         // Plage : 10 entrées, 3 + 1 sorties, 20 reçues d'un fournisseur, 2 ajustées ; précédente : 4 sorties ; an dernier : 5 entrées
@@ -343,12 +345,16 @@ class StatisticsSectionsApiTest extends WebTestCase
         $now = static::getContainer()->get(\App\Gestion\Services\GestionStockSnapshotService::class)->current($today);
         $this->assertSame([$now['saleValue'], $now['costValue'], count(static::getContainer()->get(\App\Gestion\Services\HomeTilesService::class)->lowStock()['all'])],
             [$st['value']['saleValue'], $st['value']['costValue'], $st['lowCount']]);
+        $this->assertGreaterThan($st['value']['costValue'], $st['value']['saleValue'], 'valeur de vente et valeur au coût ne sont pas la même chose');
+        $this->assertGreaterThanOrEqual(4000, $st['value']['costValue']);
 
         // Par semaine : la valeur d'une tranche est son DERNIER instantané ; une plage qui commence au premier instantané : plus de remarque
         $weeks = array_column($this->get('/api/gestion/statistiques?from=2007-01-01&to=2007-04-10&sections=stock')['sections']['stock']['chart']['points'], null, 'key');
         $this->assertSame([[110000, 10, 3, 20, 2], [90000, 0, 1, 0, 0]], [[$weeks['2007-W14']['saleValue'], $weeks['2007-W14']['in'], $weeks['2007-W14']['out'], $weeks['2007-W14']['reception'], $weeks['2007-W14']['adjustment']],
             [$weeks['2007-W15']['saleValue'], $weeks['2007-W15']['in'], $weeks['2007-W15']['out'], $weeks['2007-W15']['reception'], $weeks['2007-W15']['adjustment']]]);
-        $this->assertSame([], $this->get("/api/gestion/statistiques?from=$first&to=2007-04-10&sections=stock")['sections']['stock']['caveats']);
+        $fromFirst = $this->get("/api/gestion/statistiques?from=$first&to=2007-04-10&sections=stock")['sections']['stock'];
+        $this->assertSame([[], $this->db->fetchOne('SELECT sale_value_cents FROM gestion_stock_snapshot WHERE snapshot_date = ?', [$first])], [$fromFirst['caveats'], $fromFirst['chart']['points'][0]['saleValue']],
+            'le premier jour de la plage porte son instantané');
         // Le canal ne s'applique pas : mêmes chiffres, et c'est dit ; libellés en anglais
         $pos = $this->get('/api/gestion/statistiques?' . self::RANGE . '&sections=stock&source=pos&locale=en')['sections']['stock'];
         $this->assertSame([array_column($st['indicators'], 'value'), 'SOURCE_NOT_APPLICABLE', ['In', 'Out', 'Returns', 'Adjustments', 'Supplier receptions']],
