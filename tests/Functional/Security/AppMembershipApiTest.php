@@ -232,6 +232,8 @@ class AppMembershipApiTest extends WebTestCase
         $refreshed = $this->json('POST', '/api/token/refresh', ['refresh_token' => $other['refresh_token'], 'platform' => 'mobile', 'app' => 'livingmemory']);
         $this->assertSame('memoires', self::claims($refreshed['token'])['app']);
         $this->assertArrayNotHasKey('app', self::claims($this->json('POST', '/api/token/refresh', ['refresh_token' => $other['refresh_token']])['token']));
+        // Session ouverte sans `app` (avant M1) : `app` au rafraîchissement suffit, le serveur ne compare avec rien
+        $this->assertSame('boutique', self::claims($this->json('POST', '/api/token/refresh', ['refresh_token' => $plain['refresh_token'], 'app' => 'mobile'])['token'])['app']);
 
         // Vérification du code (double vérification) : même règle
         $otp = $this->user(['ROLE_USER', 'ROLE_USER_INTERNET'], true, true);

@@ -179,6 +179,52 @@ class PosCustomerApiTest extends WebTestCase
         $this->loginAs(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
         $full = $this->json($this->request('GET', "/api/pos/customers/$id"));
         $this->assertSame(['+15145551234', 'marie.t@example.invalid', $web->getId()], [$full['phone'], $full['email'], $full['userId']], 'responsable : en clair, E.164');
+
+        // APPS-MEMBRES M1 (14/11/2026). Retrait du consentement de rattachement : il DÉFAIT le rattachement et retire l'appartenance du compte
+        // à la famille de la caisse, qui n'a plus le consentement qui la fonde ; retirer un autre consentement ne défait rien.
+        $members = fn (User $u): int => (int) $this->db->fetchOne("SELECT COUNT(*) FROM user_app_membership WHERE user_id = ? AND app = 'pos'", [$u->getId()]);
+        $revoked = fn (User $u, string $reason): int => (int) $this->db->fetchOne("SELECT COUNT(*) FROM content_audit_log WHERE resource = 'user_app' AND resource_id = ? AND action = 'revoke' AND fields = ?", [(string) $u->getId(), 'pos,' . $reason]);
+        $linkedFile = function (string $phone, bool $consent = true): array {
+            $account = $this->user(['ROLE_USER', 'ROLE_USER_INTERNET']);
+            $file = $this->json($this->request('POST', '/api/pos/customers', ['firstName' => 'Fiche', 'lastName' => 'Membre ' . $phone, 'phone' => $phone] + ($consent ? ['consents' => ['account_link' => true]] : [])), 201);
+            if ($consent) {
+                $this->json($this->request('POST', "/api/pos/customers/{$file['id']}/link", ['userId' => $account->getId()]));
+            }
+
+            return [$account, (int) $file['id']];
+        };
+        [$w1, $f1] = $linkedFile('4385550101');
+        $this->assertSame(1, $members($w1));
+        $kept = $this->json($this->request('PATCH', "/api/pos/customers/$f1", ['consents' => ['marketing' => false, 'receipts' => true]]));
+        $this->assertSame([true, 1], [$kept['linkedAccount'], $members($w1)], 'un autre consentement : le rattachement reste');
+        $withdrawn = $this->json($this->request('PATCH', "/api/pos/customers/$f1", ['consents' => ['account_link' => false]]));
+        $this->assertSame([false, null, false], [$withdrawn['linkedAccount'], $withdrawn['userId'], $withdrawn['consents']['account_link']['granted']], 'la réponse montre la fiche sans compte rattaché');
+        $this->assertSame([null, 0, 1], [$this->db->fetchOne('SELECT user_id FROM pos_customer WHERE id = ?', [$f1]), $members($w1), $revoked($w1, 'consent_withdrawn')]);
+        $this->assertStringContainsString('"unlinked":true', (string) $this->db->fetchOne("SELECT payload FROM pos_audit_log WHERE type = 'CUSTOMER_UPDATED' ORDER BY id DESC LIMIT 1"));
+        $this->json($this->request('PATCH', "/api/pos/customers/$f1", ['consents' => ['account_link' => false]]));
+        $this->assertSame(1, $revoked($w1, 'consent_withdrawn'), 'retrait déjà enregistré : rien de plus');
+        $this->assertStringNotContainsString('unlinked', (string) $this->db->fetchOne("SELECT payload FROM pos_audit_log WHERE type = 'CUSTOMER_UPDATED' ORDER BY id DESC LIMIT 1"));
+        // État d'avant ce lot : une fiche restée rattachée après le retrait de son consentement ; le redonner ne défait rien
+        $this->db->executeStatement('UPDATE pos_customer SET user_id = ? WHERE id = ?', [$w1->getId(), $f1]);
+        $again = $this->json($this->request('PATCH', "/api/pos/customers/$f1", ['consents' => ['account_link' => true]]));
+        $this->assertSame([true, $w1->getId(), true], [$again['linkedAccount'], $again['userId'], $again['consents']['account_link']['granted']]);
+
+        // Fusion de deux fiches rattachées à deux comptes différents : le compte de la fiche fusionnée perd son rattachement, donc son appartenance
+        [$wa, $fa] = $linkedFile('4385550102');
+        [$wb, $fb] = $linkedFile('4385550103');
+        $into = $this->json($this->request('POST', "/api/pos/customers/$fb/merge", ['intoId' => $fa]));
+        $this->assertSame([$fa, $wa->getId()], [$into['id'], $into['userId']]);
+        $this->assertSame([1, 0, 1, 0], [$members($wa), $members($wb), $revoked($wb, 'merge'), $revoked($wa, 'merge')]);
+
+        // Fusion vers une fiche sans compte : elle reprend le compte, l'appartenance survit ; le consentement repris garde SA version et SA date
+        [, $fc] = $linkedFile('4385550104', false);
+        [$wd, $fd] = $linkedFile('4385550105');
+        $this->db->executeStatement("UPDATE pos_customer_consent SET text_version = '2025-01', at = '2025-01-02 03:04:05' WHERE customer_id = ? AND purpose = 'account_link'", [$fd]);
+        $taken = $this->json($this->request('POST', "/api/pos/customers/$fd/merge", ['intoId' => $fc]));
+        $this->assertSame([$fc, $wd->getId(), true, '2025-01'], [$taken['id'], $taken['userId'], $taken['consents']['account_link']['granted'], $taken['consents']['account_link']['textVersion']]);
+        $this->assertSame(['text_version' => '2025-01', 'at' => '2025-01-02 03:04:05', 'granted' => true], $this->db->fetchAssociative("SELECT text_version, at, granted FROM pos_customer_consent WHERE customer_id = ? AND purpose = 'account_link' ORDER BY id DESC LIMIT 1", [$fc]),
+            'une fusion n\'est pas un nouveau consentement');
+        $this->assertSame([1, 0], [$members($wd), $revoked($wd, 'merge')]);
         // Points déjà dépensés : solde ramené à 0, manque indiqué, retour jamais bloqué (solde 95 → 0, puis retour de la vente à 19 points)
         $this->json($this->request('POST', "/api/pos/customers/$id/loyalty/adjust", ['points' => -95, 'reason' => 'test du manque', 'cashRegisterId' => $this->register]));
         $line2 = $this->json($this->request('GET', '/api/pos/returns/lookup?orderId=' . $sale2['orderId']))['lines'][0]['orderItemId'];
