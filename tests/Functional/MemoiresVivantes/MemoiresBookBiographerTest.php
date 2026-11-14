@@ -8,8 +8,8 @@ use App\Security\TeamRoles;
 use App\Services\TenantEntityManagerProvider;
 
 /**
- * Biographe affecté au livre, lot MV-AFFECTATION (13/11/2026) : biographerId posé par l'équipe (administrateur ou biographe), jamais
- * automatiquement ; cible = porteur de ROLE_MEMOIRES_BIOGRAPHE (400 BIOGRAPHER_INVALID sinon) ; le propriétaire ne change pas la
+ * Biographe affecté au livre, lot MV-AFFECTATION (13/11/2026) : biographerId posé par l'administrateur ou le responsable des biographes
+ * (14/11/2026 : plus par un biographe), ou automatiquement pour le biographe qui crée un livre ; cible = porteur de ROLE_MEMOIRES_BIOGRAPHE (400 BIOGRAPHER_INVALID sinon) ; le propriétaire ne change pas la
  * valeur (403 FORBIDDEN, rien d'appliqué) mais peut la renvoyer telle quelle ; rendu `biographer {id, fullName}` dans les lectures et la
  * vue des revenus ; filtre ?biographerId=<id>|none ; journal book_biographer ; le rendez-vous créé depuis un livre prend son biographe
  * affecté (plus le propriétaire). Contrat : docs/memoires-vivantes.md, « Équipe ».
@@ -51,17 +51,21 @@ class MemoiresBookBiographerTest extends BookTypeApiTestCase
         $this->assertSame('Titre changé par le client', $read['title'], 'rien d\'appliqué après le refus');
         $this->assertSame($biographer->getId(), $read['biographer']['id']);
 
-        // Un biographe peut affecter et retirer ; idempotent ; journal
-        [$status, $cleared] = $this->call('PUT', "/api/memoires/books/$id", ['biographerId' => null], $biographer);
+        // Le biographe affecté travaille sur le livre mais n'affecte pas (14/11/2026) : c'est le responsable des biographes ou l'administrateur
+        [$status, $body] = $this->call('PUT', "/api/memoires/books/$id", ['biographerId' => null], $biographer);
+        $this->assertSame([403, 'FORBIDDEN'], [$status, $body['code']], json_encode($body));
+        $manager = $this->user([TeamRoles::MEMOIRES_RESPONSABLE, 'ROLE_USER_INTERNET'], 'Responsable', 'Équipe');
+        // Le responsable des biographes affecte et retire ; idempotent ; journal
+        [$status, $cleared] = $this->call('PUT', "/api/memoires/books/$id", ['biographerId' => null], $manager);
         $this->assertSame(200, $status, json_encode($cleared));
         $this->assertNull($cleared['biographer']);
-        [$status] = $this->call('PUT', "/api/memoires/books/$id", ['biographerId' => null], $biographer);
+        [$status] = $this->call('PUT', "/api/memoires/books/$id", ['biographerId' => null], $manager);
         $this->assertSame(200, $status);
         $journal = $this->journal($id);
         $this->assertSame(['assign', 'unassign'], array_column($journal, 'action'), 'une ligne par changement, rien pour l\'idempotent');
         $this->assertSame(self::ADMIN_EMAIL, $journal[0]['user_identifier']);
         $this->assertStringContainsString('Biographe Affecté', (string) $journal[0]['after_state']);
-        $this->assertSame($biographer->getEmail(), $journal[1]['user_identifier']);
+        $this->assertSame($manager->getEmail(), $journal[1]['user_identifier']);
     }
 
     public function testTheListFiltersByBiographerAndTheRevenueOverviewAndReservationsFollowTheBook(): void

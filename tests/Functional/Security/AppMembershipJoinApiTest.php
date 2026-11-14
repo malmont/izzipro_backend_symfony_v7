@@ -20,7 +20,7 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  * APPS-MEMBRES, lot M3 (14/11/2026, docs/apps-membres.md § 6) : mode du site (« observe » ou « require », réglé par la commande ou la
  * fiche Entreprise, « require » refusé sans reprise faite), refus APP_MEMBERSHIP_REQUIRED à la connexion et à la vérification du code
  * (jamais au rafraîchissement, jamais pour l'équipe, jamais sans `app`), jeton de passage à usage unique, « rejoindre » qui rend la
- * session comme une connexion, acceptation des conditions d'un invité de l'équipe, quitter une famille (caisse : fiche détachée).
+ * session comme une connexion, quitter une famille (caisse : fiche détachée) ; Mémoires Vivantes web réservé à l'équipe.
  */
 class AppMembershipJoinApiTest extends WebTestCase
 {
@@ -223,17 +223,17 @@ class AppMembershipJoinApiTest extends WebTestCase
 
         // Avec des conditions : la version en vigueur est exigée et enregistrée ; le jeton reste valable après « version changée »
         $this->db->executeStatement("UPDATE entreprise SET privacy_policy = 'Politique du site'");
-        $version = $this->json('GET', '/api/apps/memoires/terms')['version'];
+        $version = $this->json('GET', '/api/apps/livingmemory/terms')['version'];
         $refused = $this->body($this->login($stranger, ['app' => 'livingmemory'], 'web'));
-        $this->assertSame(['memoires', 'membership', $version, 'Politique du site'], [$refused['app'], $refused['reason'], $refused['terms']['version'], $refused['terms']['privacyPolicy']]);
+        $this->assertSame(['livingmemory', 'membership', $version, 'Politique du site'], [$refused['app'], $refused['reason'], $refused['terms']['version'], $refused['terms']['privacyPolicy']]);
         $stale = $join(['joinToken' => $refused['joinToken'], 'accepted' => true]);
         $this->assertSame([409, 'TERMS_VERSION_CHANGED', $version], [$stale->getStatusCode(), $this->body($stale)['code'], $this->body($stale)['terms']['version']], 'sans version alors que la famille en a une');
         $joined = $join(['joinToken' => $refused['joinToken'], 'termsVersion' => $version, 'accepted' => true]);
         $this->assertSame(200, $joined->getStatusCode(), (string) $joined->getContent());
         // la plateforme de la connexion est gardée : ici le web, donc ses cookies, avec la famille dans le jeton
         $cookies = array_column(array_map(fn ($c) => [$c->getName(), $c->getValue()], $joined->headers->getCookies()), 1, 0);
-        $this->assertSame(['memoires', true, true], [self::claims($cookies['auth_token_' . MV_TEST_TENANT_CODE])['app'], isset($cookies['refresh_token_' . MV_TEST_TENANT_CODE]), isset($this->body($joined)['csrf_token'])]);
-        $row = $this->db->fetchAssociative("SELECT source, terms_version, terms_accepted_at IS NOT NULL AS accepted FROM user_app_membership WHERE user_id = ? AND app = 'memoires'", [$stranger->getId()]);
+        $this->assertSame(['livingmemory', true, true], [self::claims($cookies['auth_token_' . MV_TEST_TENANT_CODE])['app'], isset($cookies['refresh_token_' . MV_TEST_TENANT_CODE]), isset($this->body($joined)['csrf_token'])]);
+        $row = $this->db->fetchAssociative("SELECT source, terms_version, terms_accepted_at IS NOT NULL AS accepted FROM user_app_membership WHERE user_id = ? AND app = 'livingmemory'", [$stranger->getId()]);
         $this->assertSame(['source' => 'join', 'terms_version' => $version, 'accepted' => true], $row);
 
         // Le rafraîchissement ne refuse jamais : aucune session ouverte n'est coupée
@@ -270,41 +270,59 @@ class AppMembershipJoinApiTest extends WebTestCase
         $this->assertSame([[401, 'JOIN_TOKEN_INVALID'], []], [$error($join(['joinToken' => $good, 'termsVersion' => $boutique, 'accepted' => true])), $this->rows((int) $outsider->getId())]);
     }
 
-    public function testAnAccountInvitedByTheTeamAcceptsTheTermsAtItsFirstLogin(): void
+    /**
+     * Mémoires Vivantes web est l'outil de l'équipe (14/11/2026) : avec `app: "memoires"`, seuls un administrateur, un responsable des
+     * biographes ou un biographe reçoivent une session ; un compte client est refusé à la connexion, à la vérification du code et au
+     * rafraîchissement. Seule l'équipe crée un livre web. Living Memory (livres mobile) n'est pas touché.
+     */
+    public function testMemoiresVivantesWebIsTheToolOfTheTeam(): void
     {
-        $service = static::getContainer()->get(AppMembershipService::class);
-        $invited = $this->user(['ROLE_USER', 'ROLE_USER_INTERNET']);
-        $service->grant($invited, AppFamilies::MEMOIRES, AppFamilies::SOURCE_INVITE, null, new \DateTimeImmutable('2026-02-03 04:05:06'));
-        $registered = $this->user(['ROLE_USER', 'ROLE_USER_INTERNET']);
-        $service->grant($registered, AppFamilies::MEMOIRES, AppFamilies::SOURCE_REGISTER); // inscrit sans version envoyée : rien ne lui est demandé
-        $this->db->executeStatement("UPDATE entreprise SET app_membership_backfilled_at = NOW(), app_membership_mode = 'require'");
+        $client = $this->user(['ROLE_USER', 'ROLE_USER_INTERNET']);
+        $refusal = ['error' => 'MEMOIRES_TEAM_ONLY', 'code' => 'MEMOIRES_TEAM_ONLY', 'message' => 'Cet espace est réservé à l\'équipe. Vos récits se poursuivent dans l\'application Living Memory ou par le lien que vous avez reçu.'];
 
-        // La famille n'a aucun texte : il n'y a rien à accepter, l'invité entre
-        $this->assertSame(200, $this->login($invited, ['app' => 'memoires'])->getStatusCode());
-        // La famille a des conditions : l'invité les accepte à sa première connexion (reason « terms ») ; l'inscrit n'est pas concerné
-        $this->profile('memoires', 'Politique de Mémoires Vivantes');
-        $version = $this->json('GET', '/api/apps/memoires/terms')['version'];
-        $this->assertSame(200, $this->login($registered, ['app' => 'livingmemory'])->getStatusCode());
-        $refused = $this->login($invited, ['app' => 'livingmemory']);
-        $body = $this->body($refused);
-        $this->assertSame([403, 'APP_MEMBERSHIP_REQUIRED', 'memoires', 'terms', $version, 'Politique de Mémoires Vivantes', 'Acceptez les conditions de cette application pour continuer.'],
-            [$refused->getStatusCode(), $body['code'], $body['app'], $body['reason'], $body['terms']['version'], $body['terms']['privacyPolicy'], $body['message']]);
-        $joined = $this->request('POST', '/api/apps/join', ['joinToken' => $body['joinToken'], 'termsVersion' => $version, 'accepted' => true]);
-        $this->assertSame([200, 'memoires'], [$joined->getStatusCode(), self::claims($this->body($joined)['token'])['app']]);
-        // l'acceptation est enregistrée sur l'appartenance qu'il avait : sa source et sa date d'entrée ne changent pas ; au journal
-        $row = $this->db->fetchAssociative("SELECT source, joined_at, terms_version, terms_accepted_at IS NOT NULL AS accepted FROM user_app_membership WHERE user_id = ?", [$invited->getId()]);
-        $this->assertSame(['source' => 'invite', 'joined_at' => '2026-02-03 04:05:06', 'terms_version' => $version, 'accepted' => true], $row);
-        $journal = $this->db->fetchAssociative("SELECT action, fields, after_state FROM content_audit_log WHERE resource = 'user_app' AND resource_id = ? ORDER BY id DESC LIMIT 1", [(string) $invited->getId()]);
-        $this->assertSame(['accept', 'memoires,accept', ['app' => 'memoires', 'termsVersion' => $version]], [$journal['action'], $journal['fields'], json_decode($journal['after_state'], true)]);
-        $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM user_app_membership WHERE user_id = ?', [$invited->getId()]));
-        $this->assertSame(200, $this->login($invited, ['app' => 'memoires'])->getStatusCode(), 'ensuite il entre sans étape');
+        // Un compte client : refusé avec app « memoires », en mode « observe » comme en « require » ; sans ce champ, comme avant
+        $refused = $this->login($client, ['app' => 'memoires'], 'web');
+        $this->assertSame([403, $refusal, []], [$refused->getStatusCode(), $this->body($refused), $refused->headers->getCookies()]);
+        $this->assertSame([403, 403], [$this->login($client, ['app' => 'Memoires'])->getStatusCode(), $this->login($client, ['app' => ' memoires '])->getStatusCode()]);
+        $open = $this->body($this->login($client, []));
+        $this->assertArrayHasKey('token', $open, 'sans app : rien ne change');
+        // sa session ouverte s'éteint au rafraîchissement dès que le front dit « memoires »
+        $refresh = $this->request('POST', '/api/token/refresh', ['refresh_token' => $open['refresh_token'], 'app' => 'memoires']);
+        $this->assertSame([403, $refusal], [$refresh->getStatusCode(), $this->body($refresh)]);
+        $this->assertArrayHasKey('token', $this->json('POST', '/api/token/refresh', ['refresh_token' => $open['refresh_token']]));
+        // avec la double vérification : refusé AVANT l'envoi d'un code, et à la vérification du code aussi
+        $otp = $this->user(['ROLE_USER', 'ROLE_USER_INTERNET'], true, true);
+        $codes = fn (): int => (int) $this->db->fetchOne('SELECT COUNT(*) FROM otp_code WHERE user_otp_id = ?', [$otp->getId()]);
+        $this->assertSame([403, 0], [$this->login($otp, ['app' => 'memoires'])->getStatusCode(), $codes()]);
+        $this->assertTrue($this->body($this->login($otp, []))['otp_required']);
+        $code = $this->db->fetchOne('SELECT code FROM otp_code WHERE user_otp_id = ? ORDER BY id DESC LIMIT 1', [$otp->getId()]);
+        $verify = $this->request('POST', '/api/otp-verify', ['username' => $otp->getEmail(), 'otp' => $code, 'platform' => 'web', 'app' => 'memoires']);
+        $this->assertSame([403, 'MEMOIRES_TEAM_ONLY', []], [$verify->getStatusCode(), $this->body($verify)['code'], $verify->headers->getCookies()]);
+
+        // L'équipe entre, en « require » aussi ; le jeton dit l'outil (ce n'est pas une famille : aucune appartenance n'est créée ni exigée)
+        $this->db->executeStatement("UPDATE entreprise SET app_membership_backfilled_at = NOW(), app_membership_mode = 'require'");
+        foreach ([['ROLE_ADMIN', 'ROLE_USER_INTERNET'], ['ROLE_MEMOIRES_RESPONSABLE', 'ROLE_USER_INTERNET'], ['ROLE_MEMOIRES_BIOGRAPHE', 'ROLE_USER_INTERNET']] as $roles) {
+            $member = $this->user($roles);
+            $session = $this->login($member, ['app' => 'memoires']);
+            $this->assertSame([200, 'memoires', []], [$session->getStatusCode(), self::claims($this->body($session)['token'])['app'], $this->rows((int) $member->getId())], implode(',', $roles));
+            $this->assertSame('memoires', self::claims($this->json('POST', '/api/token/refresh', ['refresh_token' => $this->body($session)['refresh_token'], 'app' => 'memoires'])['token'])['app']);
+        }
+        $this->assertSame(403, $this->login($client, ['app' => 'memoires'])->getStatusCode(), 'en « require » : le même refus, pas l\'étape « Rejoindre »');
+        $this->assertSame('MEMOIRES_TEAM_ONLY', $this->body($this->login($client, ['app' => 'memoires']))['code']);
+
+        // Seule l'équipe crée un livre WEB ; un compte client garde les livres de l'application, avec leurs quotas
+        $create = $this->request('POST', '/api/memoires/books', ['title' => 'Livre web d\'un client', 'type' => 'individuel'], $open['token']);
+        $this->assertSame([403, $refusal], [$create->getStatusCode(), $this->body($create)]);
+        $mobile = $this->request('POST', '/api/memoires/mobile/books', ['title' => 'Livre de l\'application', 'type' => 'famille'], $open['token']);
+        $this->assertSame([201, 'mobile', true], [$mobile->getStatusCode(), $this->body($mobile)['channel'], $this->body($mobile)['aiQuotaLimited']], (string) $mobile->getContent());
+        $this->assertSame([$this->body($mobile)['id']], array_column($this->json('GET', '/api/memoires/books', null, $open['token']), 'id'), 'depuis un navigateur, un client n\'obtient que ce que l\'application lui donne');
     }
 
     public function testAClientLeavesAFamilyWithoutDeletingTheAccount(): void
     {
         $service = static::getContainer()->get(AppMembershipService::class);
         $client = $this->user(['ROLE_USER', 'ROLE_USER_INTERNET']);
-        foreach ([AppFamilies::BOUTIQUE, AppFamilies::MEMOIRES, AppFamilies::POS] as $family) {
+        foreach ([AppFamilies::BOUTIQUE, AppFamilies::LIVINGMEMORY, AppFamilies::POS] as $family) {
             $service->grant($client, $family, AppFamilies::SOURCE_REGISTER);
         }
         $file = (int) $this->db->fetchOne("INSERT INTO pos_customer (user_id, first_name, last_name, created_at, updated_at) VALUES (?, 'Quitte', 'La caisse', NOW(), NOW()) RETURNING id", [$client->getId()]);
@@ -317,26 +335,26 @@ class AppMembershipJoinApiTest extends WebTestCase
         $this->assertSame([401, [404, 'APP_UNKNOWN']], [$this->request('DELETE', '/api/account/memberships/web')->getStatusCode(), $error($this->request('DELETE', '/api/account/memberships/gestion', null, $token))]);
         // Il quitte la boutique (par le code de son application) : l'appartenance part, au journal ; rien d'autre ne change
         $left = $this->json('DELETE', '/api/account/memberships/web', null, $token);
-        $this->assertSame([false, ['memoires', 'pos'], 1], [$left['team'], $families($left), $revoked('boutique')]);
+        $this->assertSame([false, ['livingmemory', 'pos'], 1], [$left['team'], $families($left), $revoked('boutique')]);
         $this->assertSame([404, 'MEMBERSHIP_NOT_FOUND'], $error($this->request('DELETE', '/api/account/memberships/boutique', null, $token)), 'déjà parti');
         $this->assertSame(1, $revoked('boutique'));
         // Il quitte la caisse : c'est le retrait de son consentement de rattachement ; la fiche est détachée et le retrait y est enregistré
         $left = $this->json('DELETE', '/api/account/memberships/pos', null, $token);
-        $this->assertSame([['memoires'], 1, null], [$families($left), $revoked('pos'), $this->db->fetchOne('SELECT user_id FROM pos_customer WHERE id = ?', [$file])]);
+        $this->assertSame([['livingmemory'], 1, null], [$families($left), $revoked('pos'), $this->db->fetchOne('SELECT user_id FROM pos_customer WHERE id = ?', [$file])]);
         $this->assertSame(['granted' => false, 'source' => 'account', 'by_user_id' => $client->getId()], $this->db->fetchAssociative("SELECT granted, source, by_user_id FROM pos_customer_consent WHERE customer_id = ? AND purpose = 'account_link' ORDER BY id DESC LIMIT 1", [$file]));
         $audit = (string) $this->db->fetchOne("SELECT payload FROM pos_audit_log WHERE type = 'CUSTOMER_UPDATED' ORDER BY id DESC LIMIT 1");
         $this->assertStringContainsString('"by":"account"', $audit);
         $this->assertStringContainsString('"unlinked":true', $audit);
         // Un membre de la caisse sans fiche rattachée (fiche fusionnée entre-temps) part aussi, sans erreur
         $service->grant($client, AppFamilies::POS, AppFamilies::SOURCE_POS_LINK);
-        $this->assertSame(['memoires'], $families($this->json('DELETE', '/api/account/memberships/pos', null, $token)));
+        $this->assertSame(['livingmemory'], $families($this->json('DELETE', '/api/account/memberships/pos', null, $token)));
         // Un compte d'équipe n'a pas d'appartenance
         $team = $this->user(['ROLE_ADMIN', 'ROLE_USER_INTERNET']);
         $this->assertSame([404, 'MEMBERSHIP_NOT_FOUND'], $error($this->request('DELETE', '/api/account/memberships/web', null, $this->body($this->login($team, []))['token'])));
 
         // Pour revenir, il faudra « rejoindre » : en mode « require », la connexion à la boutique lui est refusée
         $this->db->executeStatement("UPDATE entreprise SET app_membership_backfilled_at = NOW(), app_membership_mode = 'require'");
-        $this->assertSame([[403, 'APP_MEMBERSHIP_REQUIRED'], 200], [$error($this->login($client, ['app' => 'web'])), $this->login($client, ['app' => 'memoires'])->getStatusCode()]);
+        $this->assertSame([[403, 'APP_MEMBERSHIP_REQUIRED'], 200], [$error($this->login($client, ['app' => 'web'])), $this->login($client, ['app' => 'livingmemory'])->getStatusCode()]);
     }
 
     // ---------------------------------------------------------------- aides

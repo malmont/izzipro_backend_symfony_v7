@@ -20,7 +20,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 /**
- * APPS-MEMBRES, lot M1 (14/11/2026, docs/apps-membres.md) : trois familles d'applications (boutique, memoires, pos), conditions
+ * APPS-MEMBRES, lot M1 (14/11/2026, docs/apps-membres.md) : trois familles d'applications (boutique, livingmemory, pos ; Mémoires Vivantes web n'en est pas une : c'est l'outil de l'équipe), conditions
  * d'une famille et leur version, appartenances créées aux entrées (inscription dans une application, invitation par l'équipe,
  * commande en invité suivie du choix d'un mot de passe ; le rattachement de caisse est dans PosCustomerApiTest), routes de lecture,
  * mode « observer » : aucune connexion n'est refusée, la famille est portée par le jeton.
@@ -71,13 +71,15 @@ class AppMembershipApiTest extends WebTestCase
         $v1 = $web['version'];
 
         // Mémoires Vivantes sans texte propre : ceux du site, donc la même version ; avec son texte : sa version, celle de la boutique ne bouge pas
-        foreach (['memoires', 'livingmemory'] as $code) {
-            $mv = $this->json('GET', "/api/apps/$code/terms");
-            $this->assertSame(['memoires', $v1, 'Politique du site'], [$mv['app'], $mv['version'], $mv['privacyPolicy']], $code);
-        }
-        $this->profile('memoires', 'Politique de Mémoires Vivantes');
         $mv = $this->json('GET', '/api/apps/livingmemory/terms');
-        $this->assertSame(['memoires', 'Politique de Mémoires Vivantes', 'Conditions du site'], [$mv['app'], $mv['privacyPolicy'], $mv['termsOfUse']], 'un champ vide du profil prend celui du site');
+        $this->assertSame(['livingmemory', $v1, 'Politique du site'], [$mv['app'], $mv['version'], $mv['privacyPolicy']]);
+        // Mémoires Vivantes web est l'outil de l'équipe, pas une famille à membres : son code n'a pas de conditions de famille
+        $this->assertSame([404, 'APP_UNKNOWN'], [$this->request('GET', '/api/apps/memoires/terms')->getStatusCode(), $this->body($this->request('GET', '/api/apps/memoires/terms'))['code']]);
+        $this->profile('memoires', 'Texte du profil de l\'outil web, qui ne compte pour aucune famille');
+        $this->assertSame($v1, $this->json('GET', '/api/apps/livingmemory/terms')['version']);
+        $this->profile('livingmemory', 'Politique de Living Memory');
+        $mv = $this->json('GET', '/api/apps/livingmemory/terms');
+        $this->assertSame(['livingmemory', 'Politique de Living Memory', 'Conditions du site'], [$mv['app'], $mv['privacyPolicy'], $mv['termsOfUse']], 'un champ vide du profil prend celui du site');
         $this->assertNotSame($v1, $mv['version']);
         $this->assertSame($v1, $this->json('GET', '/api/apps/web/terms')['version']);
         $this->assertSame('pos', $this->json('GET', '/api/apps/pos/terms')['app']);
@@ -95,9 +97,9 @@ class AppMembershipApiTest extends WebTestCase
         // Le profil de l'application mobile de la boutique porte son image de marque, pas les conditions de la famille : celles du site
         $this->profile('mobile', 'Politique propre au profil mobile');
         $this->assertSame($fr, $this->json('GET', '/api/apps/mobile/terms?locale=fr'));
-        $this->assertSame($mv['version'], $this->json('GET', '/api/apps/memoires/terms')['version'], 'la politique du site ne compte plus pour Mémoires Vivantes, qui a la sienne');
+        $this->assertSame($mv['version'], $this->json('GET', '/api/apps/livingmemory/terms')['version'], 'la politique du site ne compte plus pour Living Memory, qui a la sienne');
         $this->db->executeStatement("UPDATE entreprise SET condition_of_use = 'Conditions du site, revues'");
-        $this->assertNotSame($mv['version'], $this->json('GET', '/api/apps/memoires/terms')['version'], 'les conditions du site s\'affichent encore pour Mémoires Vivantes : sa version change');
+        $this->assertNotSame($mv['version'], $this->json('GET', '/api/apps/livingmemory/terms')['version'], 'les conditions du site s\'affichent encore pour Living Memory : sa version change');
 
         $service = static::getContainer()->get(AppTermsService::class);
         $this->assertSame($this->json('GET', '/api/apps/web/terms')['version'], $service->version(AppFamilies::BOUTIQUE));
@@ -109,13 +111,13 @@ class AppMembershipApiTest extends WebTestCase
         $version = $this->json('GET', '/api/apps/web/terms')['version'];
         $audit = fn (int $id): array => $this->db->fetchAllAssociative("SELECT action, fields, after_state FROM content_audit_log WHERE resource = 'user_app' AND resource_id = ? ORDER BY id", [(string) $id]);
 
-        // Living Memory, sans version envoyée : membre de la famille memoires, aucune acceptation inventée
+        // Living Memory, sans version envoyée : membre de la famille livingmemory, aucune acceptation inventée
         $living = $this->register(['app' => 'livingmemory']);
-        $this->assertSame([['app' => 'memoires', 'source' => 'register', 'terms_version' => null, 'terms_accepted_at' => null]], $this->rows($living));
+        $this->assertSame([['app' => 'livingmemory', 'source' => 'register', 'terms_version' => null, 'terms_accepted_at' => null]], $this->rows($living));
         $this->assertSame('mobile', $this->db->fetchOne('SELECT signup_channel FROM "user" WHERE id = ?', [$living]), 'origine du compte inchangée');
         $journal = $audit($living);
-        $this->assertSame([1, 'grant', 'memoires,register'], [count($journal), $journal[0]['action'], $journal[0]['fields']]);
-        $this->assertSame(['app' => 'memoires', 'source' => 'register', 'termsVersion' => null, 'termsAcceptedAt' => null], array_diff_key(json_decode($journal[0]['after_state'], true), ['joinedAt' => 1]));
+        $this->assertSame([1, 'grant', 'livingmemory,register'], [count($journal), $journal[0]['action'], $journal[0]['fields']]);
+        $this->assertSame(['app' => 'livingmemory', 'source' => 'register', 'termsVersion' => null, 'termsAcceptedAt' => null], array_diff_key(json_decode($journal[0]['after_state'], true), ['joinedAt' => 1]));
 
         // Boutique web avec la version en vigueur : acceptation enregistrée ; avec une version périmée : appartenance sans acceptation
         $web = $this->register(['app' => 'web', 'termsVersion' => $version]);
@@ -125,10 +127,11 @@ class AppMembershipApiTest extends WebTestCase
         $stale = $this->register(['app' => 'mobile', 'termsVersion' => 'version-perimee']);
         $this->assertSame([['app' => 'boutique', 'source' => 'register', 'terms_version' => null, 'terms_accepted_at' => null]], $this->rows($stale), 'on n\'enregistre pas l\'acceptation d\'un autre texte');
         // Chaque famille a SA version : celle de la boutique ne vaut pas acceptation des conditions de Mémoires Vivantes
-        $this->profile('memoires', 'Politique de Mémoires Vivantes');
-        $own = $this->json('GET', '/api/apps/memoires/terms')['version'];
+        $this->profile('livingmemory', 'Politique de Living Memory');
+        $own = $this->json('GET', '/api/apps/livingmemory/terms')['version'];
         $this->assertNotSame($version, $own);
-        $this->assertSame([['app' => 'memoires', 'source' => 'register', 'terms_version' => null, 'terms_accepted_at' => null]], $this->rows($this->register(['app' => 'memoires', 'termsVersion' => $version])));
+        $this->assertSame([['app' => 'livingmemory', 'source' => 'register', 'terms_version' => null, 'terms_accepted_at' => null]], $this->rows($this->register(['app' => 'livingmemory', 'termsVersion' => $version])));
+        $this->assertSame([], $this->rows($this->register(['app' => 'memoires', 'termsVersion' => $own])), 'le code de Mémoires Vivantes web n\'est pas celui d\'une famille : aucune appartenance');
         $this->assertSame([$own], array_column($this->rows($this->register(['app' => 'livingmemory', 'termsVersion' => $own])), 'terms_version'));
 
         // Sans `app`, ou avec un code inconnu : rien ne change, aucune appartenance
@@ -151,7 +154,7 @@ class AppMembershipApiTest extends WebTestCase
         $this->assertSame(1, $count($client), 'une seule entrée au journal');
         $this->assertTrue($service->grant($client, AppFamilies::POS, AppFamilies::SOURCE_POS_LINK, '2026-10', null, new \DateTimeImmutable('2026-10-02 09:00:00')));
         $this->assertSame(['2026-10', '2026-10-02 09:00:00'], array_values($this->db->fetchAssociative("SELECT terms_version, terms_accepted_at FROM user_app_membership WHERE user_id = ? AND app = 'pos'", [$client->getId()])));
-        $this->assertSame([true, true, false], [$service->has($client, 'boutique'), $service->has($client, 'pos'), $service->has($client, 'memoires')]);
+        $this->assertSame([true, true, false], [$service->has($client, 'boutique'), $service->has($client, 'pos'), $service->has($client, 'livingmemory')]);
         $this->assertSame(['boutique', 'pos'], array_map(fn ($m) => $m->getApp(), $service->of($client)), 'de la plus ancienne à la plus récente');
 
         // Jamais membre : un compte d'équipe, quel que soit son rôle d'équipe ; un compte né d'une commande en invité sans mot de passe choisi
@@ -206,7 +209,7 @@ class AppMembershipApiTest extends WebTestCase
         $this->assertSame('boutique', self::claims($login(['app' => 'web'], $member->getEmail())['token'])['app']);
         $this->assertSame('boutique', self::claims($login(['app' => 'mobile'], $member->getEmail())['token'])['app']);
         $other = $login(['app' => 'livingmemory'], $member->getEmail());
-        $this->assertSame('memoires', self::claims($other['token'])['app'], 'pas membre de Mémoires Vivantes : session rendue, rien n\'est refusé');
+        $this->assertSame('livingmemory', self::claims($other['token'])['app'], 'pas membre de Living Memory : session rendue, rien n\'est refusé');
         $this->assertSame(['boutique'], array_column($this->rows((int) $member->getId()), 'app'), 'jamais d\'ajout silencieux : se connecter ne crée aucune appartenance');
         $claims = self::claims($other['token']);
         $this->assertSame([(int) $member->getId(), $member->getEmail()], [$claims['id'], $claims['email']], 'les autres champs du jeton sont ceux d\'avant');
@@ -230,17 +233,17 @@ class AppMembershipApiTest extends WebTestCase
 
         // Rafraîchissement : la famille est redite par l'application, sinon le nouveau jeton n'en porte pas
         $refreshed = $this->json('POST', '/api/token/refresh', ['refresh_token' => $other['refresh_token'], 'platform' => 'mobile', 'app' => 'livingmemory']);
-        $this->assertSame('memoires', self::claims($refreshed['token'])['app']);
+        $this->assertSame('livingmemory', self::claims($refreshed['token'])['app']);
         $this->assertArrayNotHasKey('app', self::claims($this->json('POST', '/api/token/refresh', ['refresh_token' => $other['refresh_token']])['token']));
         // Session ouverte sans `app` (avant M1) : `app` au rafraîchissement suffit, le serveur ne compare avec rien
         $this->assertSame('boutique', self::claims($this->json('POST', '/api/token/refresh', ['refresh_token' => $plain['refresh_token'], 'app' => 'mobile'])['token'])['app']);
 
         // Vérification du code (double vérification) : même règle
         $otp = $this->user(['ROLE_USER', 'ROLE_USER_INTERNET'], true, true);
-        $this->assertTrue($login(['app' => 'memoires'], $otp->getEmail())['otp_required']);
+        $this->assertTrue($login(['app' => 'livingmemory'], $otp->getEmail())['otp_required']);
         $code = $this->db->fetchOne('SELECT code FROM otp_code WHERE user_otp_id = ? ORDER BY id DESC LIMIT 1', [$otp->getId()]);
-        $verified = $this->json('POST', '/api/otp-verify', ['username' => $otp->getEmail(), 'otp' => $code, 'platform' => 'mobile', 'app' => 'memoires']);
-        $this->assertSame('memoires', self::claims($verified['token'])['app']);
+        $verified = $this->json('POST', '/api/otp-verify', ['username' => $otp->getEmail(), 'otp' => $code, 'platform' => 'mobile', 'app' => 'livingmemory']);
+        $this->assertSame('livingmemory', self::claims($verified['token'])['app']);
 
         // Ce que le mode « observer » note : la connexion d'un compte CLIENT à une famille dont il n'est pas membre, et rien d'autre
         $logger = new class() extends AbstractLogger {
@@ -259,12 +262,13 @@ class AppMembershipApiTest extends WebTestCase
         $this->assertSame([], $logger->lines, 'membre : rien à noter');
         $this->assertNull($service->sessionFamily($member, null, 'login'));
         $this->assertNull($service->sessionFamily($member, 'gestion', 'login'));
-        $this->assertSame('memoires', $service->sessionFamily($this->user(['ROLE_ADMIN', 'ROLE_USER_INTERNET']), 'memoires', 'login'));
+        $this->assertSame('livingmemory', $service->sessionFamily($this->user(['ROLE_ADMIN', 'ROLE_USER_INTERNET']), 'livingmemory', 'login'));
+        $this->assertNull($service->sessionFamily($member, 'memoires', 'login'), 'Mémoires Vivantes web n\'est pas une famille');
         $this->assertSame([], $logger->lines, 'compte d\'équipe : jamais membre, jamais noté');
-        $this->assertSame('memoires', $service->sessionFamily($member, 'livingmemory', 'refresh'));
+        $this->assertSame('livingmemory', $service->sessionFamily($member, 'livingmemory', 'refresh'));
         $this->assertCount(1, $logger->lines);
         $this->assertStringStartsWith('info ' . AppMembershipService::OBSERVE_MARK, $logger->lines[0]);
-        $this->assertStringContainsString(sprintf('le compte %d n\'est pas membre de « memoires » (refresh, site %s)', $member->getId(), MV_TEST_TENANT_CODE), $logger->lines[0]);
+        $this->assertStringContainsString(sprintf('le compte %d n\'est pas membre de « livingmemory » (refresh, site %s)', $member->getId(), MV_TEST_TENANT_CODE), $logger->lines[0]);
     }
 
     public function testInvitedAccountsGuestOrdersAndMyMemberships(): void
@@ -274,9 +278,11 @@ class AppMembershipApiTest extends WebTestCase
         $admin = $this->user(['ROLE_ADMIN', 'ROLE_USER', 'ROLE_USER_INTERNET']);
         $adminToken = $this->json('POST', '/api/login', ['username' => $admin->getEmail(), 'password' => self::PASSWORD, 'platform' => 'mobile'])['token'];
 
-        // Compte client créé par l'équipe de Mémoires Vivantes : membre, sans conditions acceptées ; compte d'équipe créé de même : jamais membre
-        $invited = $this->json('POST', '/api/memoires/admin/users', ['email' => 'invite-' . bin2hex(random_bytes(3)) . '@example.invalid', 'firstName' => 'Inv', 'lastName' => 'Ité', 'role' => 'ROLE_USER'], $adminToken, [200, 201]);
-        $this->assertSame([['app' => 'memoires', 'source' => 'invite', 'terms_version' => null, 'terms_accepted_at' => null]], $this->rows((int) $invited['user']['id']));
+        // La console de Mémoires Vivantes n'invite plus de client : elle invite un biographe (compte d'équipe, jamais membre) ou crée un administrateur
+        $refused = $this->request('POST', '/api/memoires/admin/users', ['email' => 'invite-' . bin2hex(random_bytes(3)) . '@example.invalid', 'firstName' => 'Inv', 'lastName' => 'Ité', 'role' => 'ROLE_USER'], $adminToken);
+        $this->assertSame([403, 'MEMOIRES_TEAM_ONLY'], [$refused->getStatusCode(), $this->body($refused)['code']]);
+        $invited = $this->json('POST', '/api/memoires/admin/users', ['email' => 'invite-' . bin2hex(random_bytes(3)) . '@example.invalid', 'firstName' => 'Inv', 'lastName' => 'Ité'], $adminToken, [200, 201]);
+        $this->assertSame([true, 'ROLE_MEMOIRES_BIOGRAPHE', []], [$invited['user']['isBiographer'], $invited['user']['role'], $this->rows((int) $invited['user']['id'])]);
         $colleague = $this->json('POST', '/api/memoires/admin/users', ['email' => 'collegue-' . bin2hex(random_bytes(3)) . '@example.invalid', 'firstName' => 'Col', 'lastName' => 'Lègue', 'role' => 'ROLE_ADMIN'], $adminToken, [200, 201]);
         $this->assertSame([], $this->rows((int) $colleague['user']['id']));
 

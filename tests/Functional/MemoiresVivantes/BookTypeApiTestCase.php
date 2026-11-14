@@ -38,6 +38,12 @@ abstract class BookTypeApiTestCase extends WebTestCase
      */
     protected function api(string $method, string $path, ?array $body = null, ?string $as = 'admin', string $prefix = '/api/memoires'): array
     {
+        // Depuis le 14/11/2026, seule l'équipe crée un livre WEB (Mémoires Vivantes web est son outil). Les tests écrits avant, où le
+        // client de test crée « son » livre web, gardent leur sens pour les livres d'AVANT, que le code sert toujours à leur propriétaire :
+        // le livre est créé par l'administrateur puis rendu au client en base, et la réponse est la lecture du client.
+        if ($method === 'POST' && $path === '/books' && $as === 'client' && $prefix === '/api/memoires') {
+            return $this->legacyClientWebBook($body ?? []);
+        }
         $uri = $prefix . $path . (str_contains($path, '?') ? '&' : '?') . 'locale=fr';
         $server = [
             'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST,
@@ -55,6 +61,26 @@ abstract class BookTypeApiTestCase extends WebTestCase
         $response = $this->client->getResponse();
 
         return [$response->getStatusCode(), json_decode((string) $response->getContent(), true)];
+    }
+
+    /**
+     * Livre web appartenant au client de test, comme un livre créé avant le 14/11/2026 (voir api()).
+     *
+     * @return array{0: int, 1: mixed} la réponse de la création si elle est refusée, sinon [201, le livre lu par le client]
+     */
+    protected function legacyClientWebBook(array $body): array
+    {
+        [$status, $created] = $this->api('POST', '/books', $body, 'admin');
+        if ($status !== 201) {
+            return [$status, $created];
+        }
+        $this->tokenFor('client'); // le compte existe
+        $st = self::db()->prepare('UPDATE mv_book SET user_id = (SELECT id FROM "user" WHERE email = ?), biographer_id = NULL WHERE id = ?');
+        $st->execute([self::CLIENT_EMAIL, $created['id']]);
+        static::getContainer()->get(\App\Services\TenantEntityManagerProvider::class)->getEntityManager()->clear();
+        [$read, $book] = $this->api('GET', '/books/' . $created['id'], null, 'client');
+
+        return [$read === 200 ? 201 : $read, $book];
     }
 
     /**

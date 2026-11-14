@@ -16,9 +16,10 @@ class AccountInvitationTest extends BookTypeApiTestCase
         self::db()->exec("DELETE FROM \"user\" WHERE email = 'invite@example.invalid'");
         $this->client->setServerParameter('HTTP_ORIGIN', 'https://demo.localhost:3000');
 
-        [$status, $body] = $this->api('POST', '/admin/users', ['email' => 'invite@example.invalid', 'firstName' => 'Nouvelle', 'lastName' => 'Invitée', 'role' => 'ROLE_USER'], 'admin');
+        [$status, $body] = $this->api('POST', '/admin/users', ['email' => 'invite@example.invalid', 'firstName' => 'Nouvelle', 'lastName' => 'Invitée'], 'admin');
 
         $this->assertSame(201, $status, json_encode($body));
+        $this->assertSame([true, 'ROLE_MEMOIRES_BIOGRAPHE'], [$body['user']['isBiographer'], $body['user']['role']], 'depuis le 14/11/2026 la console invite un biographe, plus un client');
         $this->assertStringStartsWith('https://demo.localhost:3000/activer-compte?token=', $body['user']['activationUrl']);
         $this->assertTrue($body['user']['emailSent']);
         $this->assertStringContainsString('envoyée par e-mail', $body['message']);

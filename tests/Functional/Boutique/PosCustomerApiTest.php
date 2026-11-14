@@ -228,13 +228,13 @@ class PosCustomerApiTest extends WebTestCase
         $this->assertSame([1, 0], [$members($wd), $revoked($wd, 'merge')]);
 
         // APPS-MEMBRES M2 (décision du propriétaire, vie privée) : une fois la reprise de l'historique faite sur le site, la caisse ne trouve que
-        // les comptes membres de la boutique ou de la caisse. Un compte membre de Mémoires Vivantes seulement, ou sans appartenance, n'apparaît
+        // les comptes membres de la boutique ou de la caisse. Un compte membre de Living Memory seulement, ou sans appartenance, n'apparaît
         // pas, avec exactement la réponse « aucun compte » ; le rattacher par son identifiant répond comme un compte inexistant.
         $membership = static::getContainer()->get(\App\Services\AppMembershipService\AppMembershipService::class);
         [$shopMember, $mvMember, $stranger] = [$this->user(['ROLE_USER', 'ROLE_USER_INTERNET']), $this->user(['ROLE_USER', 'ROLE_USER_INTERNET']), $this->user(['ROLE_USER', 'ROLE_USER_INTERNET'])];
         $posMember = $this->user(['ROLE_USER', 'ROLE_USER_INTERNET']);
         $membership->grant($shopMember, 'boutique', 'register');
-        $membership->grant($mvMember, 'memoires', 'register');
+        $membership->grant($mvMember, 'livingmemory', 'register');
         $membership->grant($posMember, 'pos', 'pos_link');
         // la recherche par téléphone passe par l'adresse du compte : même règle
         $this->db->executeStatement("INSERT INTO adress (id, user_adress_id, firstname, lastname, fullname, address, phone, city, codepostal, country) VALUES (nextval('adress_id_seq'), ?, 'A', 'B', 'A B', '1 rue', '438 555 0177', 'Ville', 'H1A 1A1', 'CA')", [$mvMember->getId()]);

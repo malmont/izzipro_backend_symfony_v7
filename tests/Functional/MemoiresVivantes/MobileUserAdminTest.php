@@ -33,9 +33,9 @@ class MobileUserAdminTest extends BookTypeApiTestCase
         $this->assertSame('web_register', self::db()->query("SELECT signup_channel FROM \"user\" WHERE email = '$web'")->fetchColumn(), 'sans app : inscription web');
 
         $invitedEmail = 'invite-' . bin2hex(random_bytes(3)) . '@example.com';
-        [$status, $invited] = $this->api('POST', '/admin/users', ['email' => $invitedEmail, 'firstName' => 'Inv', 'lastName' => 'Ité', 'role' => 'ROLE_USER']);
+        [$status, $invited] = $this->api('POST', '/admin/users', ['email' => $invitedEmail, 'firstName' => 'Inv', 'lastName' => 'Ité']);
         $this->assertContains($status, [200, 201], json_encode($invited));
-        $this->assertSame('web_invite', self::db()->query("SELECT signup_channel FROM \"user\" WHERE email = '$invitedEmail'")->fetchColumn(), 'invitation par un biographe');
+        $this->assertSame('web_invite', self::db()->query("SELECT signup_channel FROM \"user\" WHERE email = '$invitedEmail'")->fetchColumn(), 'invitation d\'un biographe par la console');
 
         // Connexion : dernière connexion posée
         self::db()->exec("UPDATE \"user\" SET is_verified = true WHERE email = '$email'");
@@ -53,7 +53,8 @@ class MobileUserAdminTest extends BookTypeApiTestCase
         $chapter = $this->json('POST', "/api/memoires/books/{$book['id']}/chapters", ['title' => 'Paroles', 'theme' => 'regards_croises', 'position' => 2, 'answers' => [['index' => 0, 'question' => 'Un souvenir ?', 'answer' => 'Oui']]], $mobile['token']);
         $this->json('POST', "/api/memoires/chapters/{$chapter['id']}/improve-answer", ['question' => 'Un souvenir ?', 'answer' => 'Oui, un très beau.', 'index' => 0], $mobile['token']);
         self::db()->exec("UPDATE mv_book SET payment_status = 'paid', payment_amount = 49.9, payment_currency = 'eur', paid_at = NOW() WHERE id = '{$book['id']}'");
-        $this->json('POST', '/api/memoires/books', ['title' => 'Livre web', 'type' => 'individuel'], $webUser['token']);
+        // un livre web d'avant le 14/11/2026 pour ce compte (depuis, seule l'équipe en crée) : posé en base
+        self::db()->prepare("INSERT INTO mv_book (id, user_id, created_at, updated_at, type, title, format, status) VALUES (gen_random_uuid(), ?, NOW(), NOW(), 'individuel', 'Livre web', 'livre_s', 'draft')")->execute([$webUser['id']]);
 
         [$status, $list] = $this->api('GET', '/admin/mobile-users?search=' . urlencode($mobile['email']));
         $this->assertSame(200, $status, json_encode($list));

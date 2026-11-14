@@ -43,11 +43,17 @@ class AppMembershipBackfillTest extends KernelTestCase
         $this->assertNull($before['backfilledAt']);
         $memberships = (int) $this->db->fetchOne('SELECT COUNT(*) FROM user_app_membership');
 
-        // Mémoires Vivantes : inscription par Living Memory ; invitation et livre (deux traces, la plus ancienne date) ; paiement de chapitre et commande d'impression
+        // Living Memory : inscription par l'application ; livres mobile et leur impression ; paiement de chapitre. Mémoires Vivantes WEB n'est pas une
+        // famille : un compte invité par la console, ses livres web et l'impression d'un livre web ne sont pas des traces
         $living = $this->account('living', ['signup_channel' => 'mobile', 'created_at' => '2024-02-03 04:05:06']);
         $invited = $this->account('invite', ['signup_channel' => 'web_invite', 'created_at' => '2024-06-01 00:00:00']);
         $book = $this->db->fetchOne("INSERT INTO mv_book (id, user_id, created_at, updated_at, type, title, format, status) VALUES (gen_random_uuid(), ?, '2024-03-01 10:00:00', NOW(), 'individuel', 'Reprise', 'livre_s', 'draft') RETURNING id", [$invited]);
         $this->db->executeStatement("INSERT INTO mv_book (id, user_id, created_at, updated_at, type, title, format, status) VALUES (gen_random_uuid(), ?, '2025-08-08 00:00:00', NOW(), 'individuel', 'Reprise, second livre', 'livre_s', 'draft')", [$invited]);
+        // un compte de l'application : deux livres mobile (la date du plus ancien) et l'impression de l'un d'eux
+        $mobileOwner = $this->account('livres-mobile');
+        $mobileBook = $this->db->fetchOne("INSERT INTO mv_book (id, user_id, created_at, updated_at, type, title, format, status, channel) VALUES (gen_random_uuid(), ?, '2024-03-01 10:00:00', NOW(), 'famille', 'Reprise mobile', 'livre_s', 'draft', 'mobile') RETURNING id", [$mobileOwner]);
+        $this->db->executeStatement("INSERT INTO mv_book (id, user_id, created_at, updated_at, type, title, format, status, channel) VALUES (gen_random_uuid(), ?, '2025-08-08 00:00:00', NOW(), 'famille', 'Reprise mobile, second livre', 'livre_s', 'draft', 'mobile')", [$mobileOwner]);
+        $this->db->executeStatement("INSERT INTO mv_book_print_order (id, book_id, user_id, recipient_name, street1, city, postal_code, created_at, updated_at) VALUES (gen_random_uuid(), ?, ?, 'R', '1 rue', 'Ville', 'H1A 1A1', '2024-10-10 00:00:00', NOW())", [$mobileBook, $mobileOwner]);
         $payer = $this->account('payeur');
         $this->db->executeStatement("INSERT INTO mv_chapter_payment (user_id, store, product_id, transaction_id, purchased_at, created_at) VALUES (?, 'app_store', 'chapitre', ?, '2024-07-08 09:00:00', '2024-07-09 00:00:00')", [$payer, 'reprise-' . $payer]);
         $this->db->executeStatement("INSERT INTO mv_book_print_order (id, book_id, user_id, recipient_name, street1, city, postal_code, created_at, updated_at) VALUES (gen_random_uuid(), ?, ?, 'R', '1 rue', 'Ville', 'H1A 1A1', '2024-09-01 00:00:00', NOW())", [$book, $payer]);
@@ -66,10 +72,11 @@ class AppMembershipBackfillTest extends KernelTestCase
         // Caisse : fiche rattachée avec son consentement, à SA version et SA date
         $posLinked = $this->account('caisse');
         $this->posFile($posLinked, true);
-        // Deux familles pour un même compte : une commande en ligne et un livre
+        // Deux familles pour un même compte : une commande en ligne et un livre de l'application
         $both = $this->account('deux');
         $this->order($both, 'Ecommerce', '2023-03-03 00:00:00');
         $this->db->executeStatement("INSERT INTO mv_book (id, user_id, created_at, updated_at, type, title, format, status) VALUES (gen_random_uuid(), ?, '2024-04-04 00:00:00', NOW(), 'individuel', 'Reprise 2', 'livre_s', 'draft')", [$both]);
+        $this->db->executeStatement("UPDATE mv_book SET channel = 'mobile' WHERE user_id = ?", [$both]);
 
         // JAMAIS repris. Une vente de caisse (elle porte le compte du caissier) ; une adresse seule ; un panier vide ; une fiche de caisse au consentement retiré
         $posSale = $this->account('ex-caissier');
@@ -103,12 +110,12 @@ class AppMembershipBackfillTest extends KernelTestCase
         $this->assertSame('simulation', $simulation['mode']);
         $this->assertSame([$memberships + 1, null], [(int) $this->db->fetchOne('SELECT COUNT(*) FROM user_app_membership'), $this->db->fetchOne('SELECT app_membership_backfilled_at FROM entreprise ORDER BY id LIMIT 1')], 'la simulation n\'écrit rien');
         $delta = fn (array $path): int => self::num($report, $path) - self::num($before, $path);
-        $this->assertSame(['total' => 19, 'erased' => 1, 'team' => 1, 'withoutPassword' => 1, 'eligible' => 16], $this->minus($report['accounts'], $before['accounts']));
-        $this->assertSame([4, 6, 1, 1], [$delta(['families', 'memoires', 'proposed']), $delta(['families', 'boutique', 'proposed']), $delta(['families', 'pos', 'proposed']), $delta(['families', 'boutique', 'members'])]);
-        $this->assertSame(['signup_living_memory' => 1, 'team_invite' => 1, 'book_owner' => 2, 'chapter_payment' => 1, 'print_order' => 1], $this->minus($report['families']['memoires']['byTrace'], $before['families']['memoires']['byTrace']));
+        $this->assertSame(['total' => 20, 'erased' => 1, 'team' => 1, 'withoutPassword' => 1, 'eligible' => 17], $this->minus($report['accounts'], $before['accounts']));
+        $this->assertSame([4, 6, 1, 1], [$delta(['families', 'livingmemory', 'proposed']), $delta(['families', 'boutique', 'proposed']), $delta(['families', 'pos', 'proposed']), $delta(['families', 'boutique', 'members'])]);
+        $this->assertSame(['signup_living_memory' => 1, 'mobile_book' => 2, 'chapter_payment' => 1, 'print_order' => 1], $this->minus($report['families']['livingmemory']['byTrace'], $before['families']['livingmemory']['byTrace']));
         $this->assertSame(['signup_mobile_shop' => 1, 'order' => 3, 'review' => 1, 'subscription' => 0, 'checkout_session' => 1, 'cart' => 1], $this->minus($report['families']['boutique']['byTrace'], $before['families']['boutique']['byTrace']), 'la commande du compte déjà membre, de l\'équipe, du compte effacé ou sans mot de passe ne compte pas');
         $this->assertSame(['pos_link' => 1], $this->minus($report['families']['pos']['byTrace'], $before['families']['pos']['byTrace']));
-        $this->assertSame([5, 1], [$delta(['withoutTrace']), $delta(['addressOnly'])], 'vente de caisse, adresse seule, panier vide, consentement retiré, rien : cinq comptes sans trace, dont un avec une adresse');
+        $this->assertSame([6, 1], [$delta(['withoutTrace']), $delta(['addressOnly'])], 'vente de caisse, adresse seule, panier vide, consentement retiré, rien, invité du web : six comptes sans trace, dont un avec une adresse');
         $this->assertSame(['posLinkedWithoutConsent' => 2, 'withoutPasswordWithOrders' => 1, 'ordersWithoutSource' => 1], $this->minus($report['anomalies'], $before['anomalies']));
         $this->assertLessThanOrEqual('2022-12-31 00:00:00', $report['families']['boutique']['oldest'], 'la plus ancienne entrée proposée : au plus tard l\'avis de 2022');
         // le détail par compte : des identifiants, jamais un nom ni un courriel
@@ -119,14 +126,14 @@ class AppMembershipBackfillTest extends KernelTestCase
         foreach (json_decode($detail, true)['proposals'] as $p) {
             $proposals[$p['userId']][$p['app']] = [$p['joinedAt'], $p['traces'], $p['termsVersion'], $p['termsAcceptedAt']];
         }
-        $this->assertSame(['memoires' => ['2024-02-03 04:05:06', ['signup_living_memory'], null, null]], $proposals[$living]);
-        $this->assertSame(['memoires' => ['2024-03-01 10:00:00', ['team_invite', 'book_owner'], null, null]], $proposals[$invited], 'deux traces : la date de la plus ancienne');
-        $this->assertSame(['memoires' => ['2024-07-08 09:00:00', ['chapter_payment', 'print_order'], null, null]], $proposals[$payer]);
+        $this->assertSame(['livingmemory' => ['2024-02-03 04:05:06', ['signup_living_memory'], null, null]], $proposals[$living]);
+        $this->assertSame(['livingmemory' => ['2024-03-01 10:00:00', ['mobile_book', 'print_order'], null, null]], $proposals[$mobileOwner], 'deux traces, deux livres : la date de la plus ancienne');
+        $this->assertSame(['livingmemory' => ['2024-07-08 09:00:00', ['chapter_payment'], null, null]], $proposals[$payer], 'la date de l\'achat ; l\'impression d\'un livre WEB n\'est pas une trace');
         $this->assertSame(['boutique' => ['2022-12-31 00:00:00', ['order', 'review'], null, null]], $proposals[$buyer]);
         $this->assertSame(['pos' => ['2025-01-02 03:04:05', ['pos_link'], '2025-01', '2025-01-02 03:04:05']], $proposals[$posLinked], 'le vrai consentement : sa version et sa date');
-        $this->assertSame(['boutique', 'memoires'], array_keys($proposals[$both]), 'deux familles pour un même compte');
+        $this->assertSame(['boutique', 'livingmemory'], array_keys($proposals[$both]), 'deux familles pour un même compte');
         $this->assertSame(['boutique' => ['2023-06-06 00:00:00', ['order'], null, null]], $proposals[$appBuyer], 'une commande par l\'application mobile de la boutique');
-        foreach ([$posSale, $address, $emptyCart, $withdrawn, $nothing, $team, $erased, $guest, $member] as $id) {
+        foreach ([$posSale, $address, $emptyCart, $withdrawn, $nothing, $team, $erased, $guest, $member, $invited] as $id) {
             $this->assertArrayNotHasKey($id, $proposals, "compte $id : rien à reprendre");
         }
 
@@ -146,10 +153,10 @@ class AppMembershipBackfillTest extends KernelTestCase
         $this->assertNotNull($applied['report']['backfilledAt']);
         $row = fn (int $id, string $app) => $this->db->fetchAssociative('SELECT source, joined_at, terms_version, terms_accepted_at FROM user_app_membership WHERE user_id = ? AND app = ?', [$id, $app]);
         $this->assertSame(['source' => 'backfill', 'joined_at' => '2022-12-31 00:00:00', 'terms_version' => null, 'terms_accepted_at' => null], $row($buyer, 'boutique'));
-        $this->assertSame(['source' => 'backfill', 'joined_at' => '2024-03-01 10:00:00', 'terms_version' => null, 'terms_accepted_at' => null], $row($invited, 'memoires'));
+        $this->assertSame(['source' => 'backfill', 'joined_at' => '2024-03-01 10:00:00', 'terms_version' => null, 'terms_accepted_at' => null], $row($mobileOwner, 'livingmemory'));
         $this->assertSame(['source' => 'backfill', 'joined_at' => '2025-01-02 03:04:05', 'terms_version' => '2025-01', 'terms_accepted_at' => '2025-01-02 03:04:05'], $row($posLinked, 'pos'));
         $this->assertSame(['source' => 'register', 'joined_at' => '2026-01-01 00:00:00', 'terms_version' => 'v-inscription', 'terms_accepted_at' => '2026-01-01 00:00:00'], $row($member, 'boutique'), 'déjà membre : rien n\'est modifié');
-        $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM user_app_membership WHERE user_id IN (?, ?, ?, ?, ?, ?, ?, ?)', [$posSale, $address, $emptyCart, $withdrawn, $nothing, $team, $erased, $guest]));
+        $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM user_app_membership WHERE user_id IN (?, ?, ?, ?, ?, ?, ?, ?, ?)', [$posSale, $address, $emptyCart, $withdrawn, $nothing, $team, $erased, $guest, $invited]));
         $journal = $this->db->fetchAssociative("SELECT action, fields, after_state FROM content_audit_log WHERE resource = 'user_app' AND resource_id = ? ORDER BY id DESC LIMIT 1", [(string) $buyer]);
         $this->assertSame(['grant', 'boutique,backfill', ['order', 'review']], [$journal['action'], $journal['fields'], json_decode($journal['after_state'], true)['traces']]);
         $total = (int) $this->db->fetchOne('SELECT COUNT(*) FROM user_app_membership');
@@ -158,7 +165,7 @@ class AppMembershipBackfillTest extends KernelTestCase
         // 4. REJOUÉE : zéro ligne de plus, la date de la PREMIÈRE reprise ne bouge pas ; la simulation suivante ne propose plus rien
         $this->db->executeStatement("UPDATE entreprise SET app_membership_backfilled_at = '2026-01-01 00:00:00'");
         $again = $this->run_(['--apply' => true, '--confirm' => MV_TEST_TENANT_CODE, '--json' => true]);
-        $this->assertSame([['boutique' => 0, 'memoires' => 0, 'pos' => 0], '2026-01-01 00:00:00', $total], [$again['created'], $again['report']['backfilledAt'], (int) $this->db->fetchOne('SELECT COUNT(*) FROM user_app_membership')]);
+        $this->assertSame([['boutique' => 0, 'livingmemory' => 0, 'pos' => 0], '2026-01-01 00:00:00', $total], [$again['created'], $again['report']['backfilledAt'], (int) $this->db->fetchOne('SELECT COUNT(*) FROM user_app_membership')]);
         $after = $this->run_(['--json' => true])['report'];
         $this->assertSame([0, 0, 0], array_values(array_map(fn (array $f) => $f['proposed'], $after['families'])));
         $this->assertSame($report['withoutTrace'], $after['withoutTrace'], 'les comptes sans trace le restent : ils passeront par « Rejoindre »');
