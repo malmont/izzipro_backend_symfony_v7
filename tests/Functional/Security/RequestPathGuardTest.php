@@ -45,7 +45,8 @@ class RequestPathGuardTest extends TestCase
     public function testThePathIsDecodedOnceLikeTheRouterDoes(): void
     {
         $path = fn (string $uri): string => \App\Services\Http\RequestPath::of(\Symfony\Component\HttpFoundation\Request::create($uri));
-        $this->assertSame(['/api/login', '/api/login', '/api/login', '/api/products/by-slug/café', '/%61pi/profile', '/api/gestion'],
-            [$path('/api/login'), $path('/api/%6cogin'), $path('/%61%70%69/%6C%6F%67%69%6E'), $path('/api/products/by-slug/caf%C3%A9'), $path('/%2561pi/profile'), $path('/api%2Fgestion?x=%2F')]);
+        $this->assertSame(['/api/login', '/api/login', '/api/login', '/api/products/by-slug/café', '/%61pi/profile', '/api/gestion', '/api/a+b'],
+            [$path('/api/login'), $path('/api/%6cogin'), $path('/%61%70%69/%6C%6F%67%69%6E'), $path('/api/products/by-slug/caf%C3%A9'), $path('/%2561pi/profile'), $path('/api%2Fgestion?x=%2F'),
+                $path('/api/a+b')], 'décodé une seule fois ; un « + » reste un « + », comme pour le routeur');
     }
 }
