@@ -1,5 +1,8 @@
 # Lectures de la photo du site de contrôle : copier vers var/bascule.lectures (hors dépôt) et l'adapter au lot.
-# Une lecture par ligne : « nom chemin [sans-jeton] ». GET seulement. Le nom sert de nom de fichier (lettres, chiffres, tirets).
+# Une lecture par ligne : « nom chemin [sans-jeton] » (un GET). Le nom sert de nom de fichier (lettres, chiffres, tirets).
+# Vérification d'un refus : « nom chemin [sans-jeton] POST <corps JSON> » : une écriture dont on attend le REFUS (401, 400, 403…), pour
+# garder une protection sous contrôle à chaque bascule. Jamais une écriture qui réussit. Une route soumise à la limite de débit
+# (connexion, code OTP, « rejoindre », mot de passe oublié, inscription) consomme un compteur temporaire à chaque refus : le savoir.
 # N'y mettre AUCUNE route qui écrit quand on la lit : réimpression d'un reçu de caisse, export comptable, rapport X et statistiques des
 # caissiers (inscrits au journal de caisse), première lecture qui crée une ligne de réglages, question à une IA (coûte une unité).
 landing-settings /api/landingpage-settings sans-jeton
@@ -14,4 +17,6 @@ g-annee /api/gestion/statistiques/annee
 g-tresorerie /api/gestion/tresorerie
 g-vignettes /api/gestion/accueil/vignettes
 periode-courante /api/periodes/courante
+refresh-sans-jeton /api/token/refresh sans-jeton POST {"app":"mobile"}
+promotion-apercu-sans-jeton /api/gestion/promotions/apercu sans-jeton POST {}
 # … puis les lectures propres au lot : les routes qu'il change (différence attendue) et leurs voisines (identiques attendues)

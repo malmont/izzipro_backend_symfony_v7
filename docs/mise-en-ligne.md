@@ -55,8 +55,15 @@ dans chaque photo) : un site vitrine qui ne répond plus est l'incident le plus 
 
 ## 4. Photo avant / après
 
-- La photo lit le **site de contrôle** (le site de test), avec et sans jeton, et les pages publiques de **tous** les sites. Elle ne
-  fait que des GET.
+- La photo lit le **site de contrôle** (le site de test), avec et sans jeton, et les pages publiques de **tous** les sites. Elle fait
+  des GET, et des **vérifications de refus** : une requête d'écriture dont on attend le refus (connexion refusée, écriture sans jeton),
+  pour garder une protection sous contrôle à chaque bascule. Jamais une écriture qui réussit. Mesuré le 14/11/2026 : ces refus
+  n'écrivent rien dans la base ; ceux d'une route soumise à la limite de débit consomment un compteur temporaire dans Redis. Chaque
+  refus de ce genre vise donc **un faux compte à lui** (`…@example.invalid`), et la photo part de l'adresse interne de la machine, que
+  n'emprunte aucun trafic réel (à revérifier dans le journal du serveur web si l'hébergement change) : aucun compteur ne peut gêner
+  un vrai utilisateur. Plus de dix photos en un quart d'heure feraient répondre 429 à ces refus : une fausse différence, pas une panne.
+- Toute requête, même une lecture, compte une visite dans la fréquentation du site de contrôle : c'est une raison de plus de ne
+  photographier que le site de test.
 - **Aucune lecture qui écrit** dans `var/bascule.lectures` : la réimpression d'un reçu de caisse, un export comptable, un rapport X ou
   les statistiques des caissiers s'inscrivent au journal de caisse, qui est inaltérable ; la première lecture de certains réglages crée
   leur ligne ; une question à une IA coûte une unité.
@@ -70,6 +77,15 @@ dans chaque photo) : un site vitrine qui ne répond plus est l'incident le plus 
 
 `ops/bascule/bascule.sh retour <commit d'avant> <n>` : le code revient au commit d'avant et le cache d'avant, resté dans
 `var/swap_stage<n>/dev`, est échangé de nouveau. La commande exacte est affichée par `switch`. Rien n'a été poussé à ce stade.
+Pour revenir en avant ensuite : `switch <commit> <n>` avec le même numéro (le cache remis en avant est resté dans `var/swap_stage<n>`).
+
+Répété sur la production le 14/11/2026, de l'étape 60 à l'étape 59 puis retour à 60 (aucun fichier servi ne changeait) : retour en
+0,31 s, remise en 0,11 s, photos identiques aux trois temps, les pages publiques de tous les sites en 200 du début à la fin.
+Deux choses apprises :
+- si le lot avait déjà été poussé, l'arbre en ligne se retrouve en retrait d'`origin/dev` après le retour : c'est permis. L'outil
+  exige seulement que le commit à mettre en ligne contienne ce qui est en ligne **et** ce qui est poussé, et il signale le retrait ;
+- un retour à un commit d'avant l'entrée de l'outil au dépôt le retire de l'arbre en ligne : le lancer alors depuis un worktree, avec
+  `BASCULE_TREE=<arbre en ligne>`.
 Si l'authentification reste en échec après le retour (401 partout) : un point de montage a été remplacé, il ne revient qu'au
 redémarrage du conteneur (`docs/architecture.md`, « Points de montage du conteneur »).
 
@@ -77,7 +93,7 @@ redémarrage du conteneur (`docs/architecture.md`, « Points de montage du conte
 
 | Garde | Raison |
 |---|---|
-| Arbre en ligne propre et égal à `origin/dev` ; avance rapide seulement | une autre session a pu pousser ou mettre en ligne entre-temps |
+| Arbre en ligne propre ; le commit contient ce qui est en ligne et ce qui est poussé (`origin/dev`) ; avance rapide seulement | une autre session a pu pousser ou mettre en ligne entre-temps |
 | Livraison qui touche `config/jwt`, `jwt/`, `docker/`, `.env`, ou qui contient un lien symbolique : refusée | incident du 13/11/2026 : un lien `config/jwt` a remplacé le point de montage des clés, authentification coupée 2 minutes sur tous les sites |
 | Numéro de cache neuf, nom de photo neuf : l'outil ne supprime rien en chemin | on ne perd ni un retour arrière ni une photo « avant » |
 | Cache construit par un conteneur provisoire, code monté en lecture seule | le cache en ligne n'est pas touché avant l'échange |

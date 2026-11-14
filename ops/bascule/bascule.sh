@@ -39,11 +39,15 @@ number() { case "$1" in ''|*[!0-9]*) echo "NUMÉRO DE CACHE ATTENDU"; exit 1;; e
 # Une seule mise en ligne à la fois sur la machine : verrou tenu le temps de la commande (build, switch, retour, menage)
 lock() { exec 9> "$L/var/bascule.lock"; flock -n 9 || { echo "UNE AUTRE BASCULE EST EN COURS (var/bascule.lock)"; exit 1; }; }
 
-# L'arbre en ligne est-il propre et égal à origin/dev ? (une autre session a pu pousser ou mettre en ligne)
+# L'arbre en ligne est-il propre, et le commit à mettre en ligne ($1) contient-il tout ce qui est en ligne et tout ce qui est poussé ?
+# Une autre session a pu pousser entre-temps : le commit doit alors repartir d'origin/dev. Après un retour arrière, l'arbre en ligne est
+# en retrait d'origin/dev : c'est permis, on le dit.
 clean_tree() {
   [ -z "$(git status --short -uno)" ] || { echo "ARBRE EN LIGNE MODIFIÉ"; exit 1; }
   git fetch -q origin || { echo "FETCH IMPOSSIBLE"; exit 1; }
-  [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/dev)" ] || { echo "ARBRE EN LIGNE ($(git rev-parse --short HEAD)) DIFFÉRENT D'ORIGIN/DEV ($(git rev-parse --short origin/dev)) : repartir d'origin/dev"; exit 1; }
+  git merge-base --is-ancestor origin/dev "$1" || { echo "CE COMMIT NE CONTIENT PAS ORIGIN/DEV ($(git rev-parse --short origin/dev)) : une autre session a poussé, repartir d'origin/dev"; exit 1; }
+  git merge-base --is-ancestor HEAD "$1" || { echo "PAS UNE AVANCE RAPIDE depuis l'arbre en ligne ($(git rev-parse --short HEAD))"; exit 1; }
+  [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/dev)" ] || echo "note : l'arbre en ligne ($(git rev-parse --short HEAD)) est en retrait d'origin/dev ($(git rev-parse --short origin/dev)), comme après un retour arrière"
 }
 
 # Worker des courriels vivant ? Conteneur démarré et dernier battement de moins de 30 s. Le battement est une clé de 24 h réécrite
@@ -139,8 +143,7 @@ fin)
   ;;
 workers) worker_email maintenant ;;
 build)
-  number "${3:-}"; lock; clean_tree
-  git merge-base --is-ancestor HEAD "$2" || { echo "PAS UNE AVANCE RAPIDE depuis l'arbre en ligne"; exit 1; }
+  number "${3:-}"; lock; clean_tree "$2"
   # Garde des montages (incident du 13/11/2026) : la livraison ne touche aucun point de montage du conteneur ni aucun fichier
   # d'environnement, et n'apporte aucun lien symbolique
   SENS=$(git diff --name-only HEAD "$2" | grep -E '^(config/jwt|jwt/|docker/|\.env)' | tr '\n' ' ')
@@ -163,17 +166,21 @@ build)
   echo "cache construit : $(ls "$L/var/swap_stage$3/dev" | grep -c Container) conteneur(s) de services ; $(stat -c '%U:%G' "$L/var/swap_stage$3/dev")"
   ;;
 photo)
-  # Aucune suppression : un nom neuf à chaque photo. Lectures : une par ligne de var/bascule.lectures, « nom chemin [sans-jeton] » ;
-  # des GET seulement, sur le site de contrôle. Une route qui écrit à la lecture (compteur, journal) n'a rien à faire dans ce fichier.
+  # Aucune suppression : un nom neuf à chaque photo. Lectures : une par ligne de var/bascule.lectures, sur le site de contrôle :
+  # « nom chemin [sans-jeton] » (un GET) ou « nom chemin [sans-jeton] POST <corps JSON> » (une écriture dont on attend le refus).
+  # Une route qui écrit à la lecture (compteur, journal) n'a rien à faire dans ce fichier.
   case "${2:-}" in ''|*[!a-z0-9-]*) echo "NOM DE PHOTO ATTENDU (minuscules, chiffres, tirets)"; exit 1;; esac
   OUT=$PHOTO_DIR/$2; [ -e "$OUT" ] && { echo "PHOTO $2 DÉJÀ LÀ : prendre un nom neuf"; exit 1; }
   [ -r "$READS" ] || { echo "LECTURES ABSENTES : $READS (modèle : ops/bascule/bascule.lectures.exemple)"; exit 1; }
   [ -s "$TOKEN" ] || { echo "PAS DE JETON DE CONTRÔLE : lancer d'abord « jeton »"; exit 1; }
   mkdir -p "$OUT"; TOK=$(docker exec "$APP" cat /var/www/var/swap_token.txt)
-  while read -r name path mode; do
+  while read -r name path rest; do
     case "$name" in ''|\#*) continue;; esac
-    if [ "${mode:-}" = sans-jeton ]; then curl -s -o "$OUT/$name.json" -w '%{http_code}\n' "${H[@]}" "$BASE_URL$path" > "$OUT/$name.code"
-    else curl -s -o "$OUT/$name.json" -w '%{http_code}\n' "${H[@]}" -H "Authorization: Bearer $TOK" "$BASE_URL$path" > "$OUT/$name.code"; fi
+    AUTH=(-H "Authorization: Bearer $TOK"); BODY=()
+    case "$rest" in sans-jeton*) AUTH=(); rest=${rest#sans-jeton}; rest=${rest# };; esac
+    # « POST <corps JSON> » : une requête d'écriture dont on attend le REFUS (401, 400, 403…), jamais une écriture réussie
+    case "$rest" in POST\ *) BODY=(-X POST -H 'Content-Type: application/json' -d "${rest#POST }");; esac
+    curl -s -o "$OUT/$name.json" -w '%{http_code}\n' "${H[@]}" "${AUTH[@]}" "${BODY[@]}" "$BASE_URL$path" > "$OUT/$name.code"
   done < "$READS"
   echo "photo $2 : $(ls "$OUT" | grep -c '\.code$') lecture(s), codes : $(cat "$OUT"/*.code | sort | uniq -c | tr -s ' ' | tr '\n' ';') 5xx : $(cat "$OUT"/*.code | grep -c '^5')"
   sites
@@ -182,9 +189,8 @@ comparer)
   python3 "$HERE/comparer.py" "$PHOTO_DIR/$2" "$PHOTO_DIR/$3" ${4:+"$4"}
   ;;
 switch)
-  number "${3:-}"; lock; clean_tree
+  number "${3:-}"; lock; clean_tree "$2"
   [ -d "$L/var/swap_stage$3/dev" ] || { echo "CACHE ABSENT : lancer d'abord « build »"; exit 1; }
-  git merge-base --is-ancestor HEAD "$2" || { echo "PAS UNE AVANCE RAPIDE depuis l'arbre en ligne"; exit 1; }
   worker_email "avant"
   echo "avant : $(git log -1 --format=%h), page publique $(curl -s -o /dev/null -w '%{http_code}' "${H[@]}" "$BASE_URL/api/landingpage-settings")"
   # Laisser finir la requête de contrôle ci-dessus AVANT l'échange : sa fin de traitement charge encore des fichiers du cache sortant
@@ -204,8 +210,9 @@ retour)
   [ -d "$L/var/swap_stage$3/dev" ] || { echo "CACHE D'AVANT ABSENT : var/swap_stage$3/dev"; exit 1; }
   git merge-base --is-ancestor "$2" HEAD || { echo "CE COMMIT N'EST PAS UN ANCÊTRE DE L'ARBRE EN LIGNE : $2"; exit 1; }
   link_old_container "$3"
+  date -u +%FT%T > "$L/var/bascule.heure"; T0=$(date +%s.%N)
   git reset -q --hard "$2" && exchange "$3" || { echo "ÉCHEC DU RETOUR ARRIÈRE : vérifier l'état (git log -1, var/cache/dev)"; exit 1; }
-  echo "retour arrière fait à $(date -u +%FT%T) UTC : $(git log -1 --format=%h)"
+  echo "retour arrière en $(awk -v a="$T0" -v b="$(date +%s.%N)" 'BEGIN{printf "%.2f", b-a}') s à $(cat "$L/var/bascule.heure") UTC : $(git log -1 --format=%h) ; le cache remis en avant reste dans var/swap_stage$3 (pour revenir : « switch <commit> $3 »)"
   restart_workers
   after_checks
   echo "si l'authentification reste en échec : regarder les montages du conteneur, puis docker restart $APP (docs/architecture.md, « Points de montage »)"
