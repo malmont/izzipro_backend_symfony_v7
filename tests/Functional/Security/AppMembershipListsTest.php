@@ -102,6 +102,9 @@ class AppMembershipListsTest extends WebTestCase
             $this->membership($cashCustomer, 'pos', 'pos_link', '2026-11-11 10:00:00');
             $nobody = $this->user(['ROLE_USER_INTERNET']);
             $biographer = $this->user([TeamRoles::MEMOIRES_BIOGRAPHE, 'ROLE_USER_INTERNET']);
+            $elsewhere = $this->user(['ROLE_USER_INTERNET']); // un compte d'un autre test, membre de la caisse ET de la boutique : hors des comptes suivis
+            $this->membership($elsewhere, 'pos', 'pos_link', '2026-11-03 10:00:00');
+            $this->membership($elsewhere, 'boutique', 'register', '2026-11-03 10:00:00');
             $mine = array_map(fn (User $u) => (int) $u->getId(), [$admin, $member, $cashCustomer, $nobody, $biographer]);
             $rows = $this->db->fetchOne('SELECT COUNT(*) FROM user_app_membership');
             $this->client->loginUser($admin, 'main');
@@ -119,7 +122,8 @@ class AppMembershipListsTest extends WebTestCase
                 [$is('boutique'), $is('livingmemory'), $is('pos'), $is('none'), $is('team')]);
             $this->assertSame([[$admin->getId(), $cashCustomer->getId(), $nobody->getId(), $biographer->getId()], [$member->getId(), $cashCustomer->getId(), $nobody->getId()]], [$is('boutique', '!='), $is('team', '!=')]);
             // une famille sans aucun membre : liste vide, sans erreur ; son contraire : tout le monde
-            $this->db->executeStatement("UPDATE user_app_membership SET app = 'boutique' WHERE app = 'pos' AND user_id <> ?", [$cashCustomer->getId()]);
+            // (les membres de la caisse laissés par d'autres tests, dont certains sont aussi de la boutique, sont mis de côté puis rendus)
+            $this->db->executeStatement("UPDATE user_app_membership SET app = 'pos-m4-test' WHERE app = 'pos' AND user_id <> ?", [$cashCustomer->getId()]);
             $this->db->executeStatement('DELETE FROM user_app_membership WHERE user_id = ?', [$cashCustomer->getId()]);
             $this->assertSame([[], $mine], [$is('pos'), $is('pos', '!=')]);
             $this->assertSame([$cashCustomer->getId(), $nobody->getId()], $is('none'), 'le compte qui n\'a plus de famille passe à « Aucune »');
@@ -147,6 +151,7 @@ class AppMembershipListsTest extends WebTestCase
             $this->assertSame(0, $crawler->filter('[name*="applications"], [name*="appMemberships"]')->count());
             $this->assertSame((int) $rows - 1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM user_app_membership'), 'seule la ligne retirée par le test manque : l\'écran n\'a rien écrit');
         } finally {
+            $this->db->executeStatement("UPDATE user_app_membership SET app = 'pos' WHERE app = 'pos-m4-test'");
             $this->db->executeStatement('UPDATE entreprise SET pos_timezone = ?', [$before ?: null]);
         }
     }
