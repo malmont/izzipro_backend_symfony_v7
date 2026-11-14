@@ -105,6 +105,16 @@ class AdminSpaceUrlTest extends WebTestCase
         foreach (AdminSpaceLinks::LINKS as $screen => $link) {
             $this->assertSame($base . $screen . (($link['required'] ?? []) === [] ? '' : '&id=1'), $url->to($screen, array_fill_keys($link['required'] ?? [], 1)), $screen);
         }
+        // Seule exception à l'entrée unique (lot SUPPORT-WEB) : le choix du mot de passe d'un compte invité. Le jeton à usage unique est
+        // dans le FRAGMENT de l'adresse, jamais dans ses paramètres ; 64 caractères hexadécimaux, rien d'autre ; ce n'est pas un code d'écran
+        $token = str_repeat('ab', 32);
+        $this->assertSame('https://' . MV_TEST_TENANT_HOST . '/admin/activer#token=' . $token, $url->activation($token));
+        $this->assertStringNotContainsString('?', (string) $url->activation($token));
+        foreach (['court', str_repeat('g', 64), $token . 'a', strtoupper($token), ''] as $bad) {
+            $this->assertNull($url->activation($bad), "« $bad »");
+        }
+        $this->assertNull($url->to('compte.activer', ['token' => $token]));
+        $this->assertArrayNotHasKey('compte.activer', AdminSpaceLinks::LINKS);
     }
 
     public function testAScreenAlsoKnownToTheConsoleKeepsTheSameParameterShape(): void

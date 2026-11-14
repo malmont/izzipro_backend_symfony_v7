@@ -52,8 +52,13 @@ class SupportRoleMatrixTest extends WebTestCase
         foreach ($routes as [$method, $path, $name]) {
             $support = $this->status($method, $path, $token);
             if (str_starts_with($path, '/api/support')) {
-                if (in_array($support, [401, 403], true) && !($method === 'PUT' && $path === '/api/support/settings')) {
+                // Réservé à l'administrateur du site : les réglages en écriture, et les agents (inviter, relancer, retirer : lot SUPPORT-WEB)
+                $adminOnly = ($method === 'PUT' && $path === '/api/support/settings') || in_array($name, ['support_agent_invite', 'support_agent_invitation', 'support_agent_revoke'], true);
+                if (in_array($support, [401, 403], true) && !$adminOnly) {
                     $violations[] = "$method $path ($name) : module refusé ($support)";
+                }
+                if ($adminOnly && $support !== 403) {
+                    $violations[] = "$method $path ($name) : réservé à l'administrateur, servi au compte Assistance ($support)";
                 }
                 ++$served;
                 continue;
@@ -67,7 +72,7 @@ class SupportRoleMatrixTest extends WebTestCase
             }
         }
         $this->assertSame([], $violations, 'ROLE_SUPPORT n\'obtient rien de plus qu\'un anonyme hors du module');
-        $this->assertSame(8, $served, 'les 8 routes du module');
+        $this->assertSame(14, $served, 'les 14 routes du module (8 du lot 1 ; lot SUPPORT-WEB : moi, agents, commande par référence, inviter, relancer, retirer)');
     }
 
     private function status(string $method, string $path, ?string $token): int
