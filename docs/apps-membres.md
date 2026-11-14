@@ -242,6 +242,18 @@ n'écarte un compte faute d'appartenance : les clients d'avant ce chantier n'ont
   reprise : comme aujourd'hui ;
 - au lot M3, un site ne pourra passer en mode « exiger » que si sa reprise est faite.
 
+**Un site neuf naît « reprise faite »** (lot M2-b, 14/11/2026, migration `Version20261231100000`,
+`scripts/migrate_all_v2_apps_membres_reprise_defaut.sh`). Un nouveau site est une copie de la base `gmasuite`, qui n'a ni fiche
+Entreprise ni client : il n'a aucun historique à reprendre. La colonne a donc une valeur par défaut, la date du jour : la fiche
+Entreprise créée à la mise en place du site porte aussitôt sa date de reprise, sans passer la commande. Les fiches qui existaient
+gardent leur valeur. Tant qu'un site n'a pas de fiche Entreprise, sa reprise n'est « pas faite » et la caisse cherche comme avant
+(il n'a pas de client non plus).
+
+**À retenir pour un import de clients** (lot IMPORT à venir : Shopify, WooCommerce, PrestaShop) : puisqu'un site neuf naît
+« reprise faite », des clients et des commandes importés **après** sa création ne recevront aucune appartenance par la reprise.
+L'import devra créer lui-même l'appartenance `boutique` de chaque client importé, avec une source `import` à ajouter alors
+(`AppFamilies::SOURCES`), et sans version de conditions. Sinon tous ces clients passeraient par « Rejoindre ».
+
 **Circuit de la reprise** (décision du propriétaire) : répétition sur une copie jetable de `db_demo`, avec un Postgres et un Redis
 jetables sur un réseau à part, selon les règles de répétition de `docs/architecture.md` ; puis, sur chaque site, **la simulation
 seule**, avec son rapport lu par le chef de projet ; application **site par site sur son accord, `demo` en premier**, photo avant
