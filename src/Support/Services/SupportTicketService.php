@@ -21,6 +21,11 @@ class SupportTicketService
     public const AGENT_CHANNELS = ['agent', 'phone', 'counter', 'email'];
     public const MAX_BODY = 20000;
     public const PAGE_MAX = 100;
+    /** En retard : non fermée, délai de réponse dépassé (un paramètre : l'instant présent, UTC) ; la règle du champ `overdue` */
+    private const OVERDUE = "(t.status <> 'closed' AND t.due_at IS NOT NULL AND t.due_at < ?)";
+    /** Attend une réponse de l'équipe : non fermée, le dernier mot est au client ; la règle du champ `awaitingReply` */
+    private const AWAITING = "(t.status <> 'closed' AND t.last_customer_message_at IS NOT NULL AND t.due_at IS NOT NULL"
+        . ' AND (t.first_response_at IS NULL OR t.last_customer_message_at > t.first_response_at))';
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -60,6 +65,19 @@ class SupportTicketService
             $where[] = 't.assigned_user_id = ?';
             $params[] = (int) $assigned;
         }
+        // Lot SUPPORT-WEB (14/11/2026) : « en retard » et « attend une réponse de l'équipe », les règles des champs `overdue` et
+        // `awaitingReply` de chaque demande ; seule la valeur 1 est admise
+        foreach (['overdue' => self::OVERDUE, 'awaiting' => self::AWAITING] as $flag => $condition) {
+            $given = (string) ($q[$flag] ?? '');
+            if ($given === '1') {
+                $where[] = $condition;
+                if ($flag === 'overdue') {
+                    $params[] = $this->now()->format('Y-m-d H:i:s');
+                }
+            } elseif ($given !== '') {
+                throw SupportException::validation([$flag => 'INVALID_VALUE']);
+            }
+        }
         if (($search = trim((string) ($q['q'] ?? ''))) !== '') {
             $where[] = '(t.reference ILIKE ? OR t.subject ILIKE ? OR t.customer_name ILIKE ? OR t.customer_email ILIKE ?)';
             array_push($params, ...array_fill(0, 4, '%' . addcslashes($search, '%_\\') . '%'));
@@ -72,7 +90,24 @@ class SupportTicketService
         $ids = $conn->fetchFirstColumn("SELECT t.id FROM support_ticket t WHERE $sqlWhere ORDER BY (t.status = 'closed'), t.due_at ASC NULLS LAST, t.id DESC LIMIT $size OFFSET " . (($page - 1) * $size), $params);
         $repo = $this->emProvider->getEntityManager()->getRepository(SupportTicket::class);
 
-        return ['items' => array_map(fn ($id) => $this->row($repo->find((int) $id)), $ids), 'total' => $total, 'page' => $page, 'pageSize' => $size];
+        return ['items' => array_map(fn ($id) => $this->row($repo->find((int) $id)), $ids), 'total' => $total, 'page' => $page, 'pageSize' => $size, 'counts' => $this->counts()];
+    }
+
+    /**
+     * Compteurs de la boîte, sur toutes les demandes non fermées du site (pas seulement la page ni les filtres) : en retard, en attente
+     * d'une réponse de l'équipe, sans agent. Pour les pastilles des onglets (lot SUPPORT-WEB).
+     *
+     * @return array{overdue: int, awaiting: int, unassigned: int}
+     */
+    public function counts(): array
+    {
+        $row = $this->emProvider->getEntityManager()->getConnection()->fetchAssociative(
+            'SELECT COUNT(*) FILTER (WHERE ' . self::OVERDUE . ') AS overdue, COUNT(*) FILTER (WHERE ' . self::AWAITING . ") AS awaiting,"
+            . " COUNT(*) FILTER (WHERE t.status <> 'closed' AND t.assigned_user_id IS NULL) AS unassigned FROM support_ticket t",
+            [$this->now()->format('Y-m-d H:i:s')]
+        ) ?: [];
+
+        return ['overdue' => (int) ($row['overdue'] ?? 0), 'awaiting' => (int) ($row['awaiting'] ?? 0), 'unassigned' => (int) ($row['unassigned'] ?? 0)];
     }
 
     /** POST /api/support/tickets */
@@ -102,6 +137,16 @@ class SupportTicketService
         $orderId = $body['orderId'] ?? null;
         if ($orderId !== null && (!is_int($orderId) || !$this->orders->exists($orderId))) {
             $errors['orderId'] = is_int($orderId) ? 'ORDER_NOT_FOUND' : 'INVALID_ID';
+        }
+        // Lot SUPPORT-WEB : la commande par sa RÉFÉRENCE, celle que le client et le gérant connaissent (pour les deux rôles)
+        if (array_key_exists('orderReference', $body) && $body['orderReference'] !== null) {
+            if ($orderId !== null) {
+                $errors['orderReference'] = 'NOT_WITH_ORDER_ID';
+            } elseif (!is_string($body['orderReference']) || trim($body['orderReference']) === '') {
+                $errors['orderReference'] = 'INVALID_VALUE';
+            } elseif ($errors === []) {
+                $orderId = $this->orders->idByReference($body['orderReference']); // 404 ou 409 : rien n'est créé
+            }
         }
         $em = $this->emProvider->getEntityManager();
         $customer = is_array($body['customer'] ?? null) ? $body['customer'] : [];

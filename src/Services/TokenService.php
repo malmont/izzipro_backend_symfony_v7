@@ -35,6 +35,18 @@ class TokenService
     }
 
     /**
+     * Plateformes dont la session est celle du navigateur : cookies du jeton et du renouvellement, jeton anti-CSRF, durées de la session
+     * web. « web » : le site et la boutique (comptes clients). « webadmin » (lot SUPPORT-WEB, 14/11/2026) : l'espace d'administration du
+     * web, pour les comptes d'administration et d'assistance ; même session, autre règle de rôle (`AuthenticationService`).
+     */
+    public const COOKIE_PLATFORMS = ['web', 'webadmin'];
+
+    public static function usesCookies(?string $platform): bool
+    {
+        return in_array($platform, self::COOKIE_PLATFORMS, true);
+    }
+
+    /**
      * Génère un token JWT et crée un refresh token associé.
      *
      * @param UserInterface $user
@@ -44,7 +56,7 @@ class TokenService
      */
     public function generateTokens(UserInterface $user, ?string $platform = null, ?string $app = null): array
     {
-        $isWeb = $platform === 'web';
+        $isWeb = self::usesCookies($platform);
 
         $jwt = $isWeb ? $this->createWebAccessToken($user, $app) : $this->createAccessToken($user, $app);
 
@@ -130,7 +142,7 @@ class TokenService
     ): Response {
         $response = new Response();
 
-        if ($platform === 'web') {
+        if (self::usesCookies($platform)) {
             $tokens['csrf_token'] = $this->attachWebSessionCookies($response, $tokens['token'], $tokens['refresh_token'], $cookiePath);
         }
 

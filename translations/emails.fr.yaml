@@ -210,3 +210,13 @@ loss_digest:
     next: 'Ouvrez la section « Prévention des pertes » de votre application de gestion pour lire leurs preuves et décider.'
     notice: 'Le montant en jeu est le montant concerné par les constats, pas une perte prouvée. Vous recevez ce courriel au plus une fois par jour ; vous pouvez l''arrêter dans les préférences de notification de la gestion.'
     signature: '%site%'
+
+# Assistance, lot SUPPORT-WEB : invitation d'un agent par l'administrateur du site (un lien à usage unique, valable %hours% heures)
+support_agent_invitation:
+    subject: '%site% : votre accès à l''assistance'
+    title: 'Votre accès à l''assistance'
+    greeting: 'Bonjour %name%,'
+    message: '%inviter% vous invite à répondre aux demandes des clients de %site%. Choisissez votre mot de passe pour ouvrir votre accès.'
+    button: 'Choisir mon mot de passe'
+    validity: 'Ce lien ne sert qu''une fois et reste valable %hours% heures. Passé ce délai, demandez une nouvelle invitation.'
+    ignore: 'Si vous n''attendiez pas cette invitation, ignorez ce courriel : aucun accès n''est ouvert tant que le mot de passe n''est pas choisi.'

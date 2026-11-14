@@ -519,6 +519,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     /** Origine de l'inscription (16/10/2026) : invitation par un biographe, inscription sur le web, application mobile Living Memory ; null pour les comptes antérieurs ou créés autrement (EasyAdmin, caisse) */
     public const SIGNUP_WEB_INVITE = 'web_invite';
+    /** Agent d'assistance invité par l'administrateur du site (lot SUPPORT-WEB, 14/11/2026) : vérifié quand il choisit son mot de passe */
+    public const SIGNUP_SUPPORT_INVITE = 'support_invite';
     public const SIGNUP_WEB_REGISTER = 'web_register';
     public const SIGNUP_MOBILE = 'mobile';
     /** Application e-commerce mobile (01/11/2026) */

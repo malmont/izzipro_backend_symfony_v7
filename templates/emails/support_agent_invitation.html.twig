@@ -1,0 +1,23 @@
+{% extends 'base.email.html.twig' %}
+
+{# Assistance, lot SUPPORT-WEB (14/11/2026) : invitation d'un agent par l'administrateur du site. Un seul lien, vers l'écran du web où l'agent
+   choisit son mot de passe (entrée unique /admin/ouvrir, code « compte.activer ») ; valable une fois, pour une durée courte. La dernière
+   ligne est `siteLine` : l'envoi commun écrase `signature` par celle de la configuration d'envoi du site. #}
+{% block title %}{{ title }}{% endblock %}
+
+{% block body %}
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <tr><td align="center">
+        <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden;">
+            <tr><td style="padding: 28px 32px; color: #1e293b; font-size: 15px; line-height: 1.6;">
+                <p>{{ greeting }}</p>
+                <p>{{ message }}</p>
+                <p style="text-align: center; margin: 28px 0;"><a href="{{ link }}" style="display: inline-block; background: #1e293b; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px;">{{ button }}</a></p>
+                <p style="color: #64748b; font-size: 13px;">{{ validity }}</p>
+                <p style="color: #64748b; font-size: 13px;">{{ ignore }}</p>
+                <p style="color: #64748b; font-size: 13px; margin-bottom: 0;">{{ siteLine }}</p>
+            </td></tr>
+        </table>
+    </td></tr>
+</table>
+{% endblock %}

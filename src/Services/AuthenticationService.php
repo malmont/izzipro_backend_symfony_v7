@@ -19,8 +19,13 @@ class AuthenticationService
     // MODIFICATION 1 : Simplification du constructeur
     // On enlève ManagerRegistry et TenantStateService
     // On ajoute TenantEntityManagerProvider
-    /** Plateformes de connexion connues : web (cookies), mobile, pos (caisse) et admin (application de gestion, 15/10/2026) */
-    public const PLATFORMS = ['web', 'mobile', 'pos', 'admin'];
+    /**
+     * Plateformes de connexion connues : web (cookies), mobile, pos (caisse), admin (application de gestion, 15/10/2026) et webadmin
+     * (lot SUPPORT-WEB, 14/11/2026 : l'espace d'administration du web ; les rôles de « admin », la session par cookies de « web »)
+     */
+    public const PLATFORMS = ['web', 'mobile', 'pos', 'admin', 'webadmin'];
+    /** Plateformes d'administration : ROLE_ADMIN ou ROLE_SUPPORT, jamais un compte client seul */
+    public const ADMIN_PLATFORMS = ['admin', 'webadmin'];
 
     public function __construct(
         private TenantEntityManagerProvider $emProvider,
@@ -97,7 +102,7 @@ class AuthenticationService
         return $normalized;
     }
 
-    /** Rôle exigé par la plateforme : web et mobile → ROLE_USER_INTERNET, pos → ROLE_USER_POS, admin → ROLE_ADMIN ; null si tout va bien */
+    /** Rôle exigé par la plateforme : web et mobile → ROLE_USER_INTERNET, pos → ROLE_USER_POS, admin et webadmin → ROLE_ADMIN ou ROLE_SUPPORT ; null si tout va bien */
     public function platformRoleViolation(User $user, string $platform): ?JsonResponse
     {
         if (in_array($platform, ['web', 'mobile'], true)) {
@@ -108,9 +113,10 @@ class AuthenticationService
             if (!array_intersect(['ROLE_USER_POS', 'ROLE_POS_MANAGER'], $user->getRoles())) {
                 return new JsonResponse(['error' => 'This account is not allowed to access the POS platform.', 'code' => 'PLATFORM_NOT_ALLOWED', 'message' => 'This account is not allowed to access the POS platform.'], Response::HTTP_FORBIDDEN);
             }
-        } elseif ($platform === 'admin') {
+        } elseif (in_array($platform, self::ADMIN_PLATFORMS, true)) {
             // Assistance, lot 1 (12/11/2026) : un compte ROLE_SUPPORT se connecte à l'application de gestion ; le serveur ne lui ouvre que /api/support
-            if (!array_intersect(['ROLE_ADMIN', 'ROLE_SUPPORT'], $user->getRoles())) {
+            // « webadmin » (lot SUPPORT-WEB) : l'espace d'administration du web, ouvert aussi au propriétaire de la plateforme
+            if (!array_intersect($platform === 'webadmin' ? ['ROLE_ADMIN', 'ROLE_SUPPORT', 'ROLE_SUPER_ADMIN'] : ['ROLE_ADMIN', 'ROLE_SUPPORT'], $user->getRoles())) {
                 return new JsonResponse(['error' => 'This account is not allowed to access the admin platform.', 'code' => 'PLATFORM_NOT_ALLOWED', 'message' => 'This account is not allowed to access the admin platform.'], Response::HTTP_FORBIDDEN);
             }
         }

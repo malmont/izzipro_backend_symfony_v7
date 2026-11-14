@@ -145,6 +145,11 @@ class ResetPasswordController extends AbstractController
         $user->setPassword($passwordHasher->hashPassword($user, $newPassword))->setPasswordSet(true); // mot de passe choisi par le client
         $user->setResetToken(null);
         $user->setResetTokenExpiresAt(null);
+        // Agent d'assistance invité (lot SUPPORT-WEB) : le lien reçu par courriel prouve son adresse ; son compte devient utilisable
+        // au moment où il choisit son mot de passe. Les autres comptes non vérifiés gardent leur parcours de vérification.
+        if (!$user->isVerified() && $user->getSignupChannel() === User::SIGNUP_SUPPORT_INVITE) {
+            $user->setIsVerified(true);
+        }
         $em->flush();
         $this->memberships?->passwordChosen($user, $hadPassword); // APPS-MEMBRES M1 : un compte né d'une commande en invité entre dans la famille boutique
         // Nouveau mot de passe = toutes les sessions ouvertes sont closes (01/11/2026) : jetons de rafraîchissement révoqués
@@ -155,6 +160,50 @@ class ResetPasswordController extends AbstractController
         }
 
         return $this->json(['message' => 'Mot de passe modifié. Vous pouvez vous connecter.']);
+    }
+
+    /**
+     * Le lien est-il encore bon ? (lot SUPPORT-WEB, 14/11/2026) Pour l'écran « compte.activer » du web, avant d'afficher le formulaire :
+     * `{ token }` → 200 `{ valid: true, kind: "invitation" | "reset", expiresAt }`, ou le même refus neutre que la confirmation
+     * (400 `RESET_LINK_INVALID`) pour un jeton inconnu, déjà utilisé ou expiré, sans rien dire du compte. Ne consomme pas le jeton.
+     */
+    #[Route('/api/password-reset/verify', name: 'api_password_reset_verify', methods: ['POST'])]
+    public function verifyPasswordResetApi(Request $request): JsonResponse
+    {
+        $content = json_decode($request->getContent(), true);
+        $token = is_array($content) ? ($content['token'] ?? null) : null;
+        if (!is_string($token) || $token === '') {
+            return $this->json(['error' => 'token attendu.', 'code' => 'FIELDS_REQUIRED', 'message' => 'token attendu.', 'params' => ['fields' => ['token']]], 400);
+        }
+        $user = $this->tenantEmProvider->getEntityManager()->getRepository(User::class)->findOneBy(['resetToken' => $token]);
+        if (!$user || $user->getResetTokenExpiresAt() < new \DateTime()) {
+            return $this->json(['error' => 'Lien invalide ou expiré : demandez un nouveau lien.', 'code' => 'RESET_LINK_INVALID', 'message' => 'Lien invalide ou expiré : demandez un nouveau lien.'], 400);
+        }
+
+        // Ce que l'écran peut montrer à qui tient un jeton valide : le site, l'adresse du compte MASQUÉE, la fin de validité. Rien d'autre.
+        $siteName = '';
+        try {
+            $siteName = (string) ($this->tenantEmProvider->getEntityManager()->getConnection()->fetchOne('SELECT name FROM entreprise ORDER BY id LIMIT 1') ?: '');
+        } catch (\Throwable) {
+        }
+
+        return $this->json(['valid' => true, 'kind' => !$user->isVerified() && $user->getSignupChannel() === User::SIGNUP_SUPPORT_INVITE ? 'invitation' : 'reset',
+            'expiresAt' => $user->getResetTokenExpiresAt()?->format(\DateTimeInterface::ATOM), 'siteName' => $siteName, 'emailMasked' => self::maskEmail((string) $user->getEmail()),
+            'passwordMinLength' => 8]);
+    }
+
+    // Adresse masquée : la première lettre du nom, celle du domaine, puis l'extension ; jamais l'adresse entière.
+    // (Pas d'exemple avec une arobase dans un bloc de documentation d'un contrôleur : il serait lu comme une annotation.)
+    private static function maskEmail(string $email): string
+    {
+        if (!str_contains($email, '@')) {
+            return '***';
+        }
+        [$local, $domain] = explode('@', $email, 2);
+        $dot = strrpos($domain, '.');
+        $host = $dot === false ? $domain : substr($domain, 0, $dot);
+
+        return mb_substr($local, 0, 1) . '***@' . mb_substr($host, 0, 1) . '***' . ($dot === false ? '' : substr($domain, $dot));
     }
 
     // --- ÉTAPE 2 : FORMULAIRE D'AFFICHAGE (GET) ---

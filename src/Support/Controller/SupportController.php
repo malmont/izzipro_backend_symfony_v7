@@ -75,6 +75,63 @@ class SupportController extends AbstractController
         });
     }
 
+    /** Lot SUPPORT-WEB : qui est connecté, et l'état du module ; un compte Assistance seul ne lit ni /api/profile ni /api/site/features */
+    #[Route('/me', name: 'support_me', methods: ['GET'])]
+    public function me(): JsonResponse
+    {
+        return $this->guard(fn () => $this->json($this->useCase->me($this->agent())));
+    }
+
+    /** Lot SUPPORT-WEB : les comptes à qui attribuer une demande (un nom, jamais un courriel) */
+    #[Route('/agents', name: 'support_agents', methods: ['GET'])]
+    public function agents(): JsonResponse
+    {
+        // l'administrateur du site voit aussi les invitations en attente (`pending`)
+        return $this->guard(fn () => $this->json($this->isGranted('ROLE_ADMIN') ? $this->useCase->agentsForAdmin($this->agent()) : $this->useCase->agents($this->agent())));
+    }
+
+    /** Lot SUPPORT-WEB : l'administrateur du site invite un agent d'assistance (compte ROLE_SUPPORT seul) ; droit du module exigé */
+    #[Route('/agents', name: 'support_agent_invite', methods: ['POST'])]
+    public function inviteAgent(Request $request): JsonResponse
+    {
+        return $this->adminOnly() ?? $this->guard(fn () => $this->json($this->useCase->inviteAgent($this->body($request), $this->agent()), 201));
+    }
+
+    /** Lot SUPPORT-WEB : un nouveau lien d'invitation (l'ancien ne vaut plus) */
+    #[Route('/agents/{id}/invitation', name: 'support_agent_invitation', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function resendInvitation(int $id, Request $request): JsonResponse
+    {
+        $locale = $request->query->get('locale');
+
+        return $this->adminOnly() ?? $this->guard(fn () => $this->json($this->useCase->resendInvitation($id, $this->agent(), is_string($locale) ? $locale : null)));
+    }
+
+    /** Lot SUPPORT-WEB : l'agent perd l'accès (son compte et ses messages restent) */
+    #[Route('/agents/{id}', name: 'support_agent_revoke', methods: ['DELETE'], requirements: ['id' => '\d+'])]
+    public function revokeAgent(int $id): JsonResponse
+    {
+        return $this->adminOnly() ?? $this->guard(fn () => $this->json($this->useCase->revokeAgent($id)));
+    }
+
+    private function adminOnly(): ?JsonResponse
+    {
+        return $this->isGranted('ROLE_ADMIN') ? null : $this->json(['error' => 'FORBIDDEN', 'code' => 'FORBIDDEN', 'message' => 'Réservé à l\'administrateur du site.'], 403);
+    }
+
+    /** Lot SUPPORT-WEB : une commande par sa référence exacte, pour remplir le formulaire d'une demande ; jamais une recherche ni une liste */
+    #[Route('/orders/lookup', name: 'support_order_lookup', methods: ['GET'])]
+    public function orderLookup(Request $request): JsonResponse
+    {
+        return $this->guard(function () use ($request) {
+            $reference = $request->query->get('reference');
+            if (!is_string($reference) || trim($reference) === '') {
+                throw SupportException::validation(['reference' => 'REQUIRED']);
+            }
+
+            return $this->json($this->useCase->orderByReference($reference));
+        });
+    }
+
     #[Route('/settings', name: 'support_settings', methods: ['GET'])]
     public function settings(): JsonResponse
     {

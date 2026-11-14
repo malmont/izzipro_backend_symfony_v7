@@ -38,6 +38,18 @@ class AdminSpaceUrl
         return $base . AdminSpaceLinks::PATH . '?' . http_build_query(['screen' => $screen] + $query, '', '&', PHP_QUERY_RFC3986);
     }
 
+    /**
+     * Le lien où un compte invité choisit son mot de passe : `<adresse>/admin/activer#token=<jeton>`. Le jeton (64 caractères
+     * hexadécimaux, à usage unique) est dans le fragment, jamais dans les paramètres : voir `AdminSpaceLinks::ACTIVATION_PATH`.
+     * null sans adresse connue, ou pour un jeton mal formé.
+     */
+    public function activation(string $token): ?string
+    {
+        $base = preg_match('/^[0-9a-f]{64}$/', $token) ? $this->base() : null;
+
+        return $base === null ? null : $base . AdminSpaceLinks::ACTIVATION_PATH . '#token=' . $token;
+    }
+
     /** L'adresse de l'espace d'administration du site courant, sans barre finale ; null si le site n'a ni réglage ni domaine connu */
     public function base(): ?string
     {

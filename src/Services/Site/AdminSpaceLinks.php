@@ -15,6 +15,12 @@ namespace App\Services\Site;
 final class AdminSpaceLinks
 {
     public const PATH = '/admin/ouvrir';
+    /**
+     * SEULE exception à l'entrée unique (lot SUPPORT-WEB, décision du 14/11/2026) : l'écran où un compte invité choisit son mot de passe.
+     * Le jeton à usage unique voyage dans le FRAGMENT de l'adresse (`/admin/activer#token=<jeton>`), jamais dans ses paramètres : un
+     * fragment n'est envoyé à aucun serveur, il n'entre donc ni dans un journal, ni dans l'en-tête Referer.
+     */
+    public const ACTIVATION_PATH = '/admin/activer';
 
     public const FINDING_STATUSES = ['open', 'watch', 'explained', 'dismissed', 'confirmed'];
     public const FINDING_RULES = ['CASH_DISCREPANCY', 'DRAWER_NO_SALE', 'VOID_AFTER_SALE', 'REFUND_PATTERN', 'DISCOUNT_PATTERN', 'PRICE_OVERRIDE', 'APPROVAL_PATTERN'];

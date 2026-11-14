@@ -29,6 +29,25 @@ class SupportOrderSummary
         return $id === false || $id === null ? null : (int) $id;
     }
 
+    /**
+     * Identifiant de la commande qui porte cette référence sur ce site (lot SUPPORT-WEB). Inconnue : 404 `ORDER_REFERENCE_NOT_FOUND` ;
+     * portée par plusieurs commandes (la base ne l'interdit pas) : 409 `ORDER_REFERENCE_AMBIGUOUS`, avec leur nombre.
+     */
+    public function idByReference(string $reference): int
+    {
+        $reference = trim($reference);
+        $ids = $this->emProvider->getEntityManager()->getConnection()->fetchFirstColumn('SELECT id FROM "order" WHERE reference = ? ORDER BY id LIMIT 3', [$reference]);
+        if ($ids === []) {
+            throw new SupportException('ORDER_REFERENCE_NOT_FOUND', 'Aucune commande ne porte cette référence sur ce site.', 404, ['reference' => $reference]);
+        }
+        if (count($ids) > 1) {
+            $count = (int) $this->emProvider->getEntityManager()->getConnection()->fetchOne('SELECT COUNT(*) FROM "order" WHERE reference = ?', [$reference]);
+            throw new SupportException('ORDER_REFERENCE_AMBIGUOUS', 'Plusieurs commandes portent cette référence : précisez la commande.', 409, ['reference' => $reference, 'count' => $count]);
+        }
+
+        return (int) $ids[0];
+    }
+
     public function brief(?int $orderId): ?array
     {
         $o = $orderId === null ? null : $this->emProvider->getEntityManager()->find(Order::class, $orderId);

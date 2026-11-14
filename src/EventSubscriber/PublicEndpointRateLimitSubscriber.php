@@ -94,7 +94,7 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
             $path === '/api/pos/pin-login' => [
                 [$this->posPinLogin, 'terminal:' . ($request->headers->get('X-Pos-Terminal') ?: $ip)],
             ],
-            $path === '/api/password-reset/request', $path === '/api/password-reset/confirm' => [
+            $path === '/api/password-reset/request', $path === '/api/password-reset/confirm', $path === '/api/password-reset/verify' => [
                 [$this->resetAccount, $this->accountKey($request, ['email'])],
                 [$this->resetIp, $this->siteIpKey($request)],
                 [$this->resetGlobalIp, $ip],

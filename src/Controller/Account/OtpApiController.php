@@ -73,7 +73,7 @@ class OtpApiController extends AbstractController
 
         // Plateforme « admin » (application de gestion, 15/10/2026) : ROLE_ADMIN exigé ; les autres valeurs ne sont pas
         // contrôlées ici (comme avant : le rôle a été vérifié à l'étape de connexion)
-        if ($platform === 'admin' && $user instanceof User && ($refused = $this->authenticationService->platformRoleViolation($user, $platform))) {
+        if (in_array($platform, \App\Services\AuthenticationService::ADMIN_PLATFORMS, true) && $user instanceof User && ($refused = $this->authenticationService->platformRoleViolation($user, $platform))) {
             return $refused;
         }
 
