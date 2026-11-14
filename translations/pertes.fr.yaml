@@ -205,3 +205,66 @@ notice:
         Ce qu'il ne fait pas : il ne prend aucune décision, n'applique aucune sanction, n'utilise ni la reconnaissance des visages, ni le son, ni aucune caméra en cabine, et n'analyse pas vos gestes.
         Qui voit les constats : l'administrateur de la boutique seulement. L'ouverture de la fiche d'un constat est enregistrée, avec le compte qui l'ouvre et le jour.
         Vos droits : vous pouvez demander à l'administrateur de la boutique quelles données vous concernent, les faire corriger et donner votre explication avant toute décision.
+# Mode exercice (lot EX-1) : constats FICTIFS que le gérant lance et efface lui-même. Aucune personne réelle : deux comptes fictifs.
+exercise:
+    notice: 'Un exercice est un constat fictif : il ne touche pas à la caisse, ne concerne aucune personne réelle et n''entre dans aucun chiffre. Vous pouvez en garder 30 au plus ; effacez-les quand vous voulez.'
+    persons:
+        cashier: Caissier d'exercice
+        manager: Responsable d'exercice
+    texts:
+        discrepancy_reason: 'Exercice : « J''ai rendu la monnaie sur un billet de 50 au lieu de 20. »'
+        drawer_reason_change: 'Exercice : « Faire de la monnaie pour une cliente. »'
+        drawer_reason_check: 'Exercice : « Vérifier le fond de caisse. »'
+        return_reason: 'Exercice : « La cliente a changé d''avis. »'
+        return_no_receipt_reason: 'Exercice : « Le client a perdu son ticket. »'
+        article: Article d'exercice
+        price_reason: 'Exercice : « Prix négocié avec le client. »'
+    scenarios:
+        cash_shortage:
+            label: Manque de caisse à la fermeture
+            description: 'À la fermeture, les espèces comptées sont inférieures aux espèces attendues, juste au-dessus de votre seuil.'
+            learn: 'Lire un rapport de clôture, le motif saisi par la personne qui ferme, et décider : erreur de monnaie, ou fait à suivre.'
+        drawer_no_sale:
+            label: Tiroir ouvert plusieurs fois sans vente
+            description: 'Pendant une même session, le tiroir est ouvert sans vente une fois de plus que ce que vous tolérez.'
+            learn: 'Lire chaque ouverture avec son motif, et voir qu''un constat peut ne porter aucun montant.'
+        void_quick:
+            label: Vente en espèces annulée juste après l'encaissement
+            description: 'Une vente payée en espèces est annulée quelques minutes après, dans le délai que vous surveillez.'
+            learn: 'Rapprocher la vente et son annulation : heures, montant rendu, personne qui a validé.'
+        void_series:
+            label: Plusieurs annulations dans une session
+            description: 'Plusieurs ventes sont annulées pendant la même session de caisse.'
+            learn: 'Regarder une série plutôt qu''un acte seul, et le montant en jeu de l''ensemble.'
+        refund_no_receipt:
+            label: Retour sans ticket
+            description: 'Un article est repris sans ticket et remboursé en espèces.'
+            learn: 'Lire le motif du retour et qui l''a validé ; vérifier si votre boutique veut autoriser ces retours.'
+        refund_cash_for_card:
+            label: Espèces rendues pour une vente payée par carte
+            description: 'De l''argent est rendu en espèces pour une vente qui n''avait pas été payée en espèces.'
+            learn: 'Comprendre pourquoi ce cas mérite un regard : l''argent sort du tiroir sans y être entré.'
+        discount_vague:
+            label: Remises répétées au motif « Autre »
+            description: 'Plusieurs ventes de la même session portent une remise au motif fourre-tout.'
+            learn: 'Voir l''intérêt d''un motif précis pour chaque remise, et régler le seuil de la règle.'
+        price_override:
+            label: Prix baissés à la main
+            description: 'Plusieurs prix sont baissés à la main pendant la même session.'
+            learn: 'Comparer le prix du catalogue et le prix saisi ; le montant en jeu est la somme des baisses.'
+        approval_refused:
+            label: Validations refusées sur une tablette
+            description: 'Plusieurs demandes de validation par un responsable sont refusées le même jour sur la même tablette.'
+            learn: 'Lire ce qui a été demandé et pourquoi cela a été refusé : un code faux, ou un essai de trop.'
+        cash_shortage_series:
+            label: Manques de caisse répétés par un même compte
+            description: 'Plusieurs clôtures avec un manque sont fermées par le même compte sur une courte période.'
+            learn: 'Lire une règle par personne : elle montre une répétition à vérifier, elle n''accuse personne.'
+        refund_series:
+            label: Retours répétés par un même compte
+            description: 'Plusieurs retours sont faits par le même compte dans une même journée.'
+            learn: 'Regarder la répétition avant de conclure : une journée de soldes en produit aussi.'
+        discount_series:
+            label: Remises répétées près du plafond par un même compte
+            description: 'Plusieurs ventes du même compte portent une remise proche du plafond du caissier.'
+            learn: 'Voir ce que le plafond du caissier laisse passer sans validation, et décider s''il faut le changer.'

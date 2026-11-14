@@ -31,7 +31,8 @@
             "isNew": true,
             "newEvidenceSinceDecision": false,
             "backfill": false,
-            "updatedAt": "2026-11-14T22:07:47+00:00"
+            "exercise": false,
+            "updatedAt": "2026-11-14T22:17:20+00:00"
         },
         {
             "id": 5,
@@ -54,7 +55,8 @@
             "isNew": true,
             "newEvidenceSinceDecision": false,
             "backfill": false,
-            "updatedAt": "2026-11-14T22:07:47+00:00"
+            "exercise": false,
+            "updatedAt": "2026-11-14T22:17:20+00:00"
         },
         {
             "id": 4,
@@ -77,7 +79,8 @@
             "isNew": true,
             "newEvidenceSinceDecision": false,
             "backfill": false,
-            "updatedAt": "2026-11-14T22:07:47+00:00"
+            "exercise": false,
+            "updatedAt": "2026-11-14T22:17:20+00:00"
         },
         {
             "id": 3,
@@ -100,7 +103,8 @@
             "isNew": true,
             "newEvidenceSinceDecision": false,
             "backfill": false,
-            "updatedAt": "2026-11-14T22:07:47+00:00"
+            "exercise": false,
+            "updatedAt": "2026-11-14T22:17:20+00:00"
         },
         {
             "id": 2,
@@ -123,7 +127,8 @@
             "isNew": true,
             "newEvidenceSinceDecision": false,
             "backfill": false,
-            "updatedAt": "2026-11-14T22:07:47+00:00"
+            "exercise": false,
+            "updatedAt": "2026-11-14T22:17:20+00:00"
         },
         {
             "id": 1,
@@ -146,7 +151,8 @@
             "isNew": true,
             "newEvidenceSinceDecision": false,
             "backfill": false,
-            "updatedAt": "2026-11-14T22:07:47+00:00"
+            "exercise": false,
+            "updatedAt": "2026-11-14T22:17:20+00:00"
         }
     ]
 }

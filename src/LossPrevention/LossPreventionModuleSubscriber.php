@@ -19,11 +19,22 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * présente : les écrans s'en servent pour ne pas fermer toute la gestion), `requestable`, `request`, `trial`. Même règle du mode de la
  * plateforme : en mode « demo », rien n'est refusé. Indicateurs illisibles : la requête passe, la suite de la chaîne répond. Le chemin est
  * lu par `RequestPath::of` (lot CHEMIN), comme toute garde.
+ *
+ * Mode exercice (lot EX-1, décision du propriétaire) : les routes de `OPEN_ROUTES`, et elles seules, passent SANS le droit du module
+ * (démonstration avant achat). La liste est écrite en toutes lettres, méthode et chemin exact : jamais un préfixe. La garde de la gestion
+ * (priorité 15) et le rôle d'administrateur leur restent appliqués ; tout le reste de la section reste fermé sans le droit.
  */
 class LossPreventionModuleSubscriber implements EventSubscriberInterface
 {
     public const CODE = 'MODULE_INACTIVE';
     public const PATH = '#^/api/gestion/pertes(/|$)#';
+    /** Routes du mode exercice, ouvertes sans le droit du module : méthode => chemins exacts */
+    public const OPEN_ROUTES = [
+        'GET' => ['#^/api/gestion/pertes/exercices$#', '#^/api/gestion/pertes/exercices/\d+$#'],
+        'POST' => ['#^/api/gestion/pertes/exercices$#'],
+        'DELETE' => ['#^/api/gestion/pertes/exercices$#'],
+        'PUT' => ['#^/api/gestion/pertes/exercices/\d+/decision$#'],
+    ];
 
     public function __construct(private readonly ModuleAccessService $modules, private readonly PlatformModeService $platform, private readonly LoggerInterface $logger,
         private readonly ?ModuleRequestHint $hints = null)
@@ -41,6 +52,11 @@ class LossPreventionModuleSubscriber implements EventSubscriberInterface
         $path = RequestPath::of($event->getRequest());
         if (!$event->isMainRequest() || $event->hasResponse() || !preg_match(self::PATH, $path)) {
             return;
+        }
+        foreach (self::OPEN_ROUTES[strtoupper($event->getRequest()->getMethod())] ?? [] as $open) {
+            if (preg_match($open, $path)) {
+                return; // mode exercice : ouvert sans le droit du module
+            }
         }
         $module = ModuleAccessService::LOSS_PREVENTION;
         try {

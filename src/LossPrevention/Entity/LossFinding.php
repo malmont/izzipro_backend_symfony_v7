@@ -17,6 +17,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\UniqueConstraint(name: 'uniq_loss_finding_dedup', columns: ['dedup_key'])]
 #[ORM\Index(name: 'idx_loss_finding_status', columns: ['status', 'store_day'])]
 #[ORM\Index(name: 'idx_loss_finding_subject', columns: ['rule_code', 'variant', 'subject_type', 'subject_id'])]
+#[ORM\Index(name: 'idx_loss_finding_exercise', columns: ['id'], options: ['where' => 'exercise'])]
 class LossFinding
 {
     public const OPEN = 'open';
@@ -90,6 +91,13 @@ class LossFinding
     #[ORM\Column(options: ['default' => false])]
     private bool $backfill = false;
 
+    /**
+     * Constat d'exercice (lot EX-1) : fictif, lancé et effacé par le gérant, jamais compté dans un chiffre réel. La marque est figée à la
+     * création par un déclencheur de la base ; seul un constat marqué peut être effacé, avec ses preuves et ses lignes de journal.
+     */
+    #[ORM\Column(options: ['default' => false])]
+    private bool $exercise = false;
+
     #[ORM\Column(name: 'seen_at', type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $seenAt = null;
 
@@ -134,6 +142,7 @@ class LossFinding
     /** @return list<array{id: int, role: string}> */
     public function getOnDuty(): array { return $this->onDuty; }
     public function isBackfill(): bool { return $this->backfill; }
+    public function isExercise(): bool { return $this->exercise; }
     public function getSeenAt(): ?\DateTimeImmutable { return $this->seenAt; }
     public function getDecisionNote(): ?string { return $this->decisionNote; }
     public function getDecidedBy(): ?int { return $this->decidedBy; }

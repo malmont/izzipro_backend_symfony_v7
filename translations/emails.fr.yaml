@@ -210,6 +210,8 @@ loss_digest:
     next: 'Ouvrez la section « Prévention des pertes » de votre application de gestion pour lire leurs preuves et décider.'
     notice: 'Le montant en jeu est le montant concerné par les constats, pas une perte prouvée. Vous recevez ce courriel au plus une fois par jour ; vous pouvez l''arrêter dans les préférences de notification de la gestion.'
     signature: '%site%'
+    exercise_subject: '[Exercice] %subject%'
+    exercise_banner: 'EXERCICE : ce courriel montre l''alerte que vous recevriez pour un vrai constat. Le constat est fictif : il ne touche pas à la caisse et ne concerne aucune personne réelle.'
 
 # Assistance, lot SUPPORT-WEB : invitation d'un agent par l'administrateur du site (un lien à usage unique, valable %hours% heures)
 support_agent_invitation:

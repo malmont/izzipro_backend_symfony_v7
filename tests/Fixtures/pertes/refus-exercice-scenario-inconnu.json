@@ -1,0 +1,19 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/exercices?locale=fr",
+        "body": {
+            "scenario": "inconnu"
+        }
+    },
+    "status": 422,
+    "headers": {},
+    "body": {
+        "error": "VALIDATION_FAILED",
+        "code": "VALIDATION_FAILED",
+        "message": "Entrée invalide : scenario (INVALID_VALUE)",
+        "fields": {
+            "scenario": "INVALID_VALUE"
+        }
+    }
+}

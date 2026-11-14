@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (492)
+## Boutique et commun (497)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -450,6 +450,11 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PUT | `/api/gestion/pertes/constats/{id}/decision` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::decide` |
 | GET | `/api/gestion/pertes/constats/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::finding` |
 | GET | `/api/gestion/pertes/constats` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::findings` |
+| PUT | `/api/gestion/pertes/exercices/{id}/decision` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::decideExercise` |
+| GET | `/api/gestion/pertes/exercices/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::exercise` |
+| DELETE | `/api/gestion/pertes/exercices` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::deleteExercises` |
+| GET | `/api/gestion/pertes/exercices` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::exercises` |
+| POST | `/api/gestion/pertes/exercices` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::startExercise` |
 | GET | `/api/gestion/pertes/reglages` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::settings` |
 | PUT | `/api/gestion/pertes/reglages` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::putSettings` |
 | POST | `/api/gestion/pertes/regles/apercu` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::previewRule` |

@@ -20,6 +20,9 @@ use App\Services\TenantEntityManagerProvider;
 class LossFindingReader
 {
     public const SCREEN = 'pertes.constat';
+    /** Comptes FICTIFS des constats d'exercice (lot EX-1) : identifiants négatifs, jamais un compte du site */
+    public const EXERCISE_CASHIER = -1;
+    public const EXERCISE_MANAGER = -2;
     private const LIMIT_MAX = 100;
     private const PAGE_MAX = 100000;
 
@@ -64,6 +67,7 @@ class LossFindingReader
         if (isset($query['isNew']) && $query['isNew'] !== '' && $isNew === null) {
             $errors['isNew'] = 'MUST_BE_BOOLEAN';
         }
+        // La liste ne porte que de VRAIS constats : ceux d'exercice ne sortent que par les routes du mode exercice (jamais mêlés)
         // page et limite : des chiffres, sinon 422 ; une valeur démesurée est ramenée à la borne
         $number = function (string $key, int $default, int $max) use ($query, &$errors): int {
             if (!isset($query[$key]) || $query[$key] === '') {
@@ -97,12 +101,16 @@ class LossFindingReader
      * La fiche d'un constat. `$viewerId` : l'administrateur qui l'ouvre (consultation journalisée une fois par jour, « nouveau » éteint) ; null pour une lecture
      * interne (réponse d'une décision), qui ne journalise rien.
      *
+     * Vrais constats et constats d'exercice ne se croisent JAMAIS : `$exercise` faux (routes ordinaires de la section), seul un vrai constat est
+     * servi, un constat d'exercice y est « inconnu » ; `$exercise` vrai (routes du mode exercice, ouvertes sans le droit du module), seul un
+     * constat d'exercice est servi, un vrai constat y est « inconnu ».
+     *
      * @return array<string, mixed>
      */
-    public function detail(int $id, string $locale, ?int $viewerId): array
+    public function detail(int $id, string $locale, ?int $viewerId, bool $exercise = false): array
     {
         $row = $this->findings()->row($id);
-        if ($row === null) {
+        if ($row === null || (bool) $row['exercise'] !== $exercise) {
             throw new GestionConflictException('FINDING_NOT_FOUND', 'Constat inconnu.', 404);
         }
         $em = $this->emProvider->getEntityManager();
@@ -136,8 +144,23 @@ class LossFindingReader
             $userIds[] = $j['user_id'];
         }
         $names = $this->userNames($userIds, $locale);
-        $reasons = $this->liveReasons($evidenceRows);
-        $fromJournal = $this->liveFromJournal($evidenceRows);
+        if ($row['exercise']) {
+            // Constat d'exercice : RIEN n'est relu dans la caisse (ses preuves ne renvoient à aucune opération réelle). Motifs et noms
+            // d'articles sont des textes du scénario, désignés par une clé dans la copie et rédigés ici
+            $reasons = [];
+            $fromJournal = ['articles' => [], 'discountTexts' => []];
+            foreach ($snapshots as $evidenceId => $s) {
+                if (is_string($s['reasonText'] ?? null)) {
+                    $reasons[$evidenceId] = $this->texts->t('exercise.texts.' . $s['reasonText'], $locale);
+                }
+                if (is_string($s['articleText'] ?? null)) {
+                    $fromJournal['articles'][$evidenceId] = $this->texts->t('exercise.texts.' . $s['articleText'], $locale);
+                }
+            }
+        } else {
+            $reasons = $this->liveReasons($evidenceRows);
+            $fromJournal = $this->liveFromJournal($evidenceRows);
+        }
         $tz = $this->site->clock()->timezone();
         $intact = true;
         $evidence = [];
@@ -195,10 +218,10 @@ class LossFindingReader
      * @param array<string, mixed> $body
      * @return array<string, mixed> le constat complet
      */
-    public function decide(int $id, array $body, int $userId, string $locale): array
+    public function decide(int $id, array $body, int $userId, string $locale, bool $exercise = false): array
     {
         $row = $this->findings()->row($id);
-        if ($row === null) {
+        if ($row === null || (bool) $row['exercise'] !== $exercise) { // même règle que la fiche : vrais constats et exercices ne se croisent jamais
             throw new GestionConflictException('FINDING_NOT_FOUND', 'Constat inconnu.', 404);
         }
         $status = is_string($body['status'] ?? null) ? strtolower(trim($body['status'])) : '';
@@ -226,7 +249,20 @@ class LossFindingReader
             $this->emProvider->getEntityManager()->getRepository(LossJournalEntry::class)->append(LossJournalEntry::DECISION_CHANGED, $userId, $id, ['previous' => (string) $row['status'], 'status' => $status, 'hasNote' => $note !== null]);
         }
 
-        return $this->detail($id, $locale, null);
+        return $this->detail($id, $locale, null, $exercise);
+    }
+
+    /**
+     * Lignes de liste de constats donnés (les constats d'exercice du site, pour l'écran du mode exercice) : sans aucun nom.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    public function linesOf(array $rows, string $locale): array
+    {
+        $registers = $this->registerNames(array_column($rows, 'cash_register_id'));
+
+        return array_map(fn (array $r) => $this->line($r, $registers, $locale), $rows);
     }
 
     /**
@@ -253,6 +289,7 @@ class LossFindingReader
             'isNew' => $row['seen_at'] === null && !$row['backfill'],
             'newEvidenceSinceDecision' => $row['decided_at'] !== null && (string) $row['last_evidence_at'] > (string) $row['decided_at'],
             'backfill' => (bool) $row['backfill'],
+            'exercise' => (bool) ($row['exercise'] ?? false), // constat d'exercice (fictif) : l'écran porte le bandeau « Exercice »
             'updatedAt' => LossAuditEntry::iso(LossAuditEntry::utc((string) $row['updated_at'])),
         ];
     }
@@ -448,6 +485,13 @@ class LossFindingReader
     {
         $ids = array_values(array_unique(array_map('intval', array_filter($ids, fn ($v) => $v !== null))));
         $names = [];
+        // Comptes fictifs d'un constat d'exercice (identifiants négatifs) : un libellé, jamais une lecture de la table des comptes
+        foreach ([self::EXERCISE_CASHIER => 'exercise.persons.cashier', self::EXERCISE_MANAGER => 'exercise.persons.manager'] as $fictitious => $key) {
+            if (in_array($fictitious, $ids, true)) {
+                $names[$fictitious] = $this->texts->t($key, $locale);
+            }
+        }
+        $ids = array_values(array_filter($ids, fn (int $id) => $id > 0));
         if ($ids !== []) {
             foreach ($this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative('SELECT id, firstname, lastname FROM "user" WHERE id IN (' . implode(',', $ids) . ')') as $u) {
                 $names[(int) $u['id']] = trim(($u['firstname'] ?? '') . ' ' . ($u['lastname'] ?? ''));

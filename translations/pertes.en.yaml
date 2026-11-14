@@ -205,3 +205,66 @@ notice:
         What it does not do: it makes no decision, applies no sanction, uses neither facial recognition, nor audio, nor any camera in fitting rooms, and does not analyse your gestures.
         Who sees the findings: the shop administrator only. Opening the record of a finding is logged, with the account that opens it and the day.
         Your rights: you can ask the shop administrator which data concerns you, have it corrected, and give your explanation before any decision.
+# Drill mode (lot EX-1): FICTITIOUS findings the manager launches and deletes. No real person: two fictitious accounts.
+exercise:
+    notice: 'A drill is a fictitious finding: it does not touch the register, concerns no real person and counts in no figure. You can keep up to 30; delete them whenever you want.'
+    persons:
+        cashier: Drill cashier
+        manager: Drill manager
+    texts:
+        discrepancy_reason: 'Drill: "I gave change for a 50 instead of a 20."'
+        drawer_reason_change: 'Drill: "Making change for a customer."'
+        drawer_reason_check: 'Drill: "Checking the float."'
+        return_reason: 'Drill: "The customer changed her mind."'
+        return_no_receipt_reason: 'Drill: "The customer lost the receipt."'
+        article: Drill item
+        price_reason: 'Drill: "Price negotiated with the customer."'
+    scenarios:
+        cash_shortage:
+            label: Cash shortage at closing
+            description: 'At closing, the cash counted is lower than the cash expected, just above your threshold.'
+            learn: 'Read a closing report, the reason entered by the person who closed, and decide: a change mistake, or a fact to watch.'
+        drawer_no_sale:
+            label: Drawer opened several times without a sale
+            description: 'During one session, the drawer is opened without a sale once more than you tolerate.'
+            learn: 'Read each opening with its reason, and see that a finding may carry no amount.'
+        void_quick:
+            label: Cash sale cancelled right after payment
+            description: 'A sale paid in cash is cancelled a few minutes later, within the delay you watch.'
+            learn: 'Match the sale and its cancellation: times, amount refunded, person who approved.'
+        void_series:
+            label: Several cancellations in a session
+            description: 'Several sales are cancelled during the same register session.'
+            learn: 'Look at a series rather than a single act, and at the amount at stake of the whole.'
+        refund_no_receipt:
+            label: Return without a receipt
+            description: 'An item is taken back without a receipt and refunded in cash.'
+            learn: 'Read the reason for the return and who approved it; check whether your shop wants to allow such returns.'
+        refund_cash_for_card:
+            label: Cash refunded for a sale paid by card
+            description: 'Money is refunded in cash for a sale that was not paid in cash.'
+            learn: 'Understand why this case deserves a look: money leaves the drawer without having entered it.'
+        discount_vague:
+            label: Repeated discounts with the reason "Other"
+            description: 'Several sales of the same session carry a discount with the catch-all reason.'
+            learn: 'See the value of a precise reason for each discount, and set the threshold of the rule.'
+        price_override:
+            label: Prices lowered by hand
+            description: 'Several prices are lowered by hand during the same session.'
+            learn: 'Compare the catalogue price and the price entered; the amount at stake is the total of the reductions.'
+        approval_refused:
+            label: Refused approvals on a tablet
+            description: 'Several manager approval requests are refused on the same day on the same tablet.'
+            learn: 'Read what was requested and why it was refused: a wrong code, or one attempt too many.'
+        cash_shortage_series:
+            label: Repeated cash shortages by the same account
+            description: 'Several closings with a shortage are closed by the same account over a short period.'
+            learn: 'Read a per-person rule: it shows a repetition to review, it accuses no one.'
+        refund_series:
+            label: Repeated returns by the same account
+            description: 'Several returns are made by the same account in the same day.'
+            learn: 'Look at the repetition before concluding: a sale day produces it too.'
+        discount_series:
+            label: Repeated discounts near the limit by the same account
+            description: 'Several sales by the same account carry a discount close to the cashier limit.'
+            learn: 'See what the cashier limit lets through without approval, and decide whether to change it.'

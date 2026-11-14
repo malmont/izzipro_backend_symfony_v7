@@ -100,6 +100,17 @@ class LossPreventionExamplesTest extends LossPreventionTestCase
         $this->json($this->admin('POST', self::BASE . '/analyse'));
         $this->keep('constat-prix-baisses-a-la-main', 'GET', '/constats/' . $id('PRICE_OVERRIDE:session:' . $priceSession));
 
+        // Mode exercice (lot EX-1) : constats fictifs, lancés et effacés par le gérant ; ouverts sans le droit du module
+        $this->keep('exercices', 'GET', '/exercices');
+        $this->keep('exercice-lance', 'POST', '/exercices', ['scenario' => 'cash_shortage'], 201);
+        $exercise = (int) $this->db->fetchOne('SELECT MAX(id) FROM loss_finding WHERE exercise');
+        $this->keep('exercice-constat', 'GET', '/exercices/' . $exercise);
+        $this->keep('exercice-decision', 'PUT', '/exercices/' . $exercise . '/decision', ['status' => 'explained', 'note' => 'Exercice : erreur de monnaie reconnue par la personne.']);
+        $this->keep('exercices-avec-un-constat', 'GET', '/exercices');
+        $this->keep('refus-exercice-scenario-inconnu', 'POST', '/exercices', ['scenario' => 'inconnu'], 422);
+        $this->keep('refus-exercice-vrai-constat', 'GET', '/exercices/' . $id('CASH_DISCREPANCY:z_report:' . $report['id']), null, 404);
+        $this->keep('exercices-effaces', 'DELETE', '/exercices');
+
         // Analyse lancée par la lecture de la synthèse (la dernière a plus de dix minutes)
         $this->loginPos(['ROLE_USER_POS']);
         $this->openSession();

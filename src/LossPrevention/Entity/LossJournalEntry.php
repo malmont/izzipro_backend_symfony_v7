@@ -12,6 +12,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Entity(repositoryClass: LossJournalRepository::class)]
 #[ORM\Table(name: 'loss_journal')]
 #[ORM\Index(name: 'idx_loss_journal_finding', columns: ['finding_id', 'occurred_at'])]
+#[ORM\Index(name: 'idx_loss_journal_type', columns: ['type', 'id'])]
 class LossJournalEntry
 {
     public const FINDING_OPENED = 'FINDING_OPENED';
@@ -27,6 +28,12 @@ class LossJournalEntry
     public const ENTRIES_SKIPPED = 'ENTRIES_SKIPPED';
     /** Courriel de résumé du jour envoyé (lot L1-b) : nombre de constats nouveaux, montant en jeu, nombre de destinataires ; aucun nom, aucune adresse */
     public const DIGEST_SENT = 'DIGEST_SENT';
+    /** Exercice lancé (lot EX-1) : son numéro (qui ne redescend jamais) et son scénario ; sans constat rattaché, donc jamais supprimé */
+    public const EXERCISE_STARTED = 'EXERCISE_STARTED';
+    /** Exercices effacés par le gérant (lot EX-1) : leur nombre ; sans constat rattaché */
+    public const EXERCISES_DELETED = 'EXERCISES_DELETED';
+    /** Courriel d'exercice envoyé à l'administrateur qui l'a demandé (lot EX-1) : aucune adresse */
+    public const EXERCISE_EMAIL_SENT = 'EXERCISE_EMAIL_SENT';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

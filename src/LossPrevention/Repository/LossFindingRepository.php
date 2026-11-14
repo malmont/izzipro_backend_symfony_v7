@@ -7,7 +7,9 @@ use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\ORM\EntityRepository;
 
 /**
- * Constats : créés et complétés par l'analyse, décidés par le gérant. SQL direct ; jamais de cache ; rien ne se supprime.
+ * Constats : créés et complétés par l'analyse, décidés par le gérant. SQL direct ; jamais de cache ; rien ne se supprime, sauf les constats
+ * d'EXERCICE (lot EX-1), que le gérant efface lui-même. RÈGLE : tout chiffre réel (comptes, montant en jeu, « nouveaux », courriel, vignette,
+ * fenêtre d'une règle par personne, liste par défaut) écarte les constats d'exercice (`exercise = false`).
  *
  * @extends EntityRepository<LossFinding>
  */
@@ -36,12 +38,15 @@ class LossFindingRepository extends EntityRepository
     public function latestForPerson(string $ruleCode, int $userId, \DateTimeImmutable $since, \DateTimeImmutable $until): ?array
     {
         return $this->getEntityManager()->getConnection()->fetchAssociative(
-            "SELECT * FROM loss_finding WHERE rule_code = ? AND variant = 'person' AND subject_type = 'user_window' AND subject_id = ? AND occurred_to >= ? AND occurred_from <= ? ORDER BY id DESC LIMIT 1",
+            "SELECT * FROM loss_finding WHERE exercise = false AND rule_code = ? AND variant = 'person' AND subject_type = 'user_window' AND subject_id = ? AND occurred_to >= ? AND occurred_from <= ? ORDER BY id DESC LIMIT 1",
             [$ruleCode, $userId, $since->format('Y-m-d H:i:s'), $until->format('Y-m-d H:i:s')]) ?: null;
     }
 
     /**
      * Crée un constat (numéro suivant du site). L'appelant tient le verrou de l'analyse : un seul écrivain à la fois.
+     *
+     * Un constat d'EXERCICE (`exercise` vrai, `number` fourni par l'appelant) porte un numéro NÉGATIF, l'opposé du numéro de l'exercice : il ne
+     * consomme ni ne fait réutiliser aucun numéro de vrai constat (les vrais numéros se suivent parmi les vrais constats seulement).
      *
      * @param array<string, mixed> $f colonnes du constat (facts et on_duty en tableaux)
      * @return int identifiant
@@ -50,8 +55,10 @@ class LossFindingRepository extends EntityRepository
     {
         $conn = $this->getEntityManager()->getConnection();
         $now = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+        $exercise = (bool) ($f['exercise'] ?? false);
         $conn->insert('loss_finding', [
-            'number' => (int) $conn->fetchOne('SELECT COALESCE(MAX(number), 0) + 1 FROM loss_finding'),
+            'number' => $exercise ? -abs((int) $f['number']) : (int) $conn->fetchOne('SELECT COALESCE(MAX(number), 0) + 1 FROM loss_finding WHERE exercise = false'),
+            'exercise' => $exercise ? 'true' : 'false',
             'rule_code' => $f['rule_code'], 'variant' => $f['variant'], 'dedup_key' => $f['dedup_key'], 'status' => LossFinding::OPEN,
             'store_day' => $f['store_day'], 'occurred_from' => $f['occurred_from'], 'occurred_to' => $f['occurred_to'],
             'cash_register_id' => $f['cash_register_id'], 'session_id' => $f['session_id'], 'amount_at_stake' => $f['amount_at_stake'], 'currency' => $f['currency'],
@@ -97,7 +104,8 @@ class LossFindingRepository extends EntityRepository
     }
 
     /**
-     * @param array{statuses?: list<string>, rule?: ?string, from?: ?string, to?: ?string, cashRegisterId?: ?int, isNew?: ?bool} $filters journées du magasin (Y-m-d)
+     * @param array{statuses?: list<string>, rule?: ?string, from?: ?string, to?: ?string, cashRegisterId?: ?int, isNew?: ?bool} $filters journées du magasin (Y-m-d) ;
+     *        la recherche ne rend que de VRAIS constats (ceux d'exercice sortent par `exercises()`)
      * @return array{0: list<array<string, mixed>>, 1: int} lignes de la page et total
      */
     public function search(array $filters, string $sort, int $page, int $limit): array
@@ -116,13 +124,14 @@ class LossFindingRepository extends EntityRepository
      *
      * UNE seule instruction, sur les mêmes lignes : la borne est le dernier constat ANNONCÉ. Lue à part sur toute la table, elle aurait pu
      * dépasser un constat né entre les deux lectures (une analyse lancée par la synthèse pendant le passage du minuteur), jamais annoncé.
+     * Un constat d'exercice n'est jamais annoncé et ne fait pas avancer la borne.
      *
      * @return array{count: int, amount: int, lastId: int} `lastId` vaut 0 quand il n'y a rien à annoncer
      */
     public function bornAfter(int $findingId): array
     {
         $row = $this->getEntityManager()->getConnection()->fetchAssociative(
-            "SELECT COUNT(*) AS n, COALESCE(SUM(amount_at_stake), 0) AS amount, COALESCE(MAX(id), 0) AS last FROM loss_finding WHERE id > ? AND seen_at IS NULL AND backfill = false AND status = 'open'", [$findingId]) ?: [];
+            "SELECT COUNT(*) AS n, COALESCE(SUM(amount_at_stake), 0) AS amount, COALESCE(MAX(id), 0) AS last FROM loss_finding WHERE id > ? AND exercise = false AND seen_at IS NULL AND backfill = false AND status = 'open'", [$findingId]) ?: [];
 
         return ['count' => (int) ($row['n'] ?? 0), 'amount' => (int) ($row['amount'] ?? 0), 'lastId' => (int) ($row['last'] ?? 0)];
     }
@@ -137,31 +146,72 @@ class LossFindingRepository extends EntityRepository
         $conn = $this->getEntityManager()->getConnection();
         $p = ['from' => $from, 'to' => $to];
         $active = "status IN ('open', 'watch')";
+        $real = 'exercise = false'; // aucun chiffre de la synthèse ne compte un constat d'exercice
         $byStatus = array_fill_keys(LossFinding::STATUSES, 0);
-        foreach ($conn->fetchAllKeyValue('SELECT status, COUNT(*) FROM loss_finding WHERE store_day BETWEEN :from AND :to GROUP BY status', $p) as $s => $n) {
+        foreach ($conn->fetchAllKeyValue("SELECT status, COUNT(*) FROM loss_finding WHERE $real AND store_day BETWEEN :from AND :to GROUP BY status", $p) as $s => $n) {
             $byStatus[(string) $s] = (int) $n;
         }
 
         return [
             'byStatus' => $byStatus,
-            'new' => (int) $conn->fetchOne('SELECT COUNT(*) FROM loss_finding WHERE store_day BETWEEN :from AND :to AND seen_at IS NULL AND backfill = false', $p),
-            'amountAtStake' => (int) $conn->fetchOne("SELECT COALESCE(SUM(amount_at_stake), 0) FROM loss_finding WHERE store_day BETWEEN :from AND :to AND $active", $p),
-            'byRule' => $conn->fetchAllAssociative("SELECT rule_code AS code, COUNT(*) FILTER (WHERE $active) AS open, COUNT(*) AS total FROM loss_finding WHERE store_day BETWEEN :from AND :to GROUP BY rule_code ORDER BY rule_code", $p),
+            'new' => (int) $conn->fetchOne("SELECT COUNT(*) FROM loss_finding WHERE $real AND store_day BETWEEN :from AND :to AND seen_at IS NULL AND backfill = false", $p),
+            'amountAtStake' => (int) $conn->fetchOne("SELECT COALESCE(SUM(amount_at_stake), 0) FROM loss_finding WHERE $real AND store_day BETWEEN :from AND :to AND $active", $p),
+            'byRule' => $conn->fetchAllAssociative("SELECT rule_code AS code, COUNT(*) FILTER (WHERE $active) AS open, COUNT(*) AS total FROM loss_finding WHERE $real AND store_day BETWEEN :from AND :to GROUP BY rule_code ORDER BY rule_code", $p),
             'byRegister' => $conn->fetchAllAssociative("SELECT f.cash_register_id AS id, r.name, COUNT(*) FILTER (WHERE f.$active) AS open, COUNT(*) AS total FROM loss_finding f LEFT JOIN cash_register r ON r.id = f.cash_register_id"
-                . ' WHERE f.store_day BETWEEN :from AND :to AND f.cash_register_id IS NOT NULL GROUP BY f.cash_register_id, r.name ORDER BY f.cash_register_id', $p),
+                . ' WHERE f.exercise = false AND f.store_day BETWEEN :from AND :to AND f.cash_register_id IS NOT NULL GROUP BY f.cash_register_id, r.name ORDER BY f.cash_register_id', $p),
         ];
     }
 
     /** Constats encore à traiter (nouveaux ou à suivre), toutes dates confondues */
     public function activeCount(): int
     {
-        return (int) $this->getEntityManager()->getConnection()->fetchOne("SELECT COUNT(*) FROM loss_finding WHERE status IN ('open', 'watch')");
+        return (int) $this->getEntityManager()->getConnection()->fetchOne("SELECT COUNT(*) FROM loss_finding WHERE exercise = false AND status IN ('open', 'watch')");
+    }
+
+    /** Nombre de constats d'exercice du site (plafonné par `LossExerciseService::LIMIT`) */
+    public function exerciseCount(): int
+    {
+        return (int) $this->getEntityManager()->getConnection()->fetchOne('SELECT COUNT(*) FROM loss_finding WHERE exercise');
+    }
+
+    /** @return list<array<string, mixed>> les constats d'exercice du site, du plus récent au plus ancien */
+    public function exercises(): array
+    {
+        return $this->getEntityManager()->getConnection()->fetchAllAssociative('SELECT * FROM loss_finding WHERE exercise ORDER BY id DESC');
+    }
+
+    /**
+     * Efface TOUS les constats d'exercice du site, avec leurs preuves et leurs lignes de journal. UNE transaction, la porte
+     * `loss.purge = 'exercise'`, et un ORDRE imposé : preuves, puis journal, puis constats. Les déclencheurs de la base lisent la marque du
+     * constat pour laisser passer la suppression d'une preuve ou d'une ligne de journal : le constat doit encore exister. La base refuse
+     * elle-même tout ce qui n'appartient pas à un constat d'exercice, même si ce code se trompait.
+     *
+     * @return int nombre de constats d'exercice effacés
+     */
+    public function deleteExercises(): int
+    {
+        $conn = $this->getEntityManager()->getConnection();
+        $conn->beginTransaction();
+        try {
+            $conn->executeStatement("SET LOCAL loss.purge = 'exercise'");
+            $conn->executeStatement('DELETE FROM loss_evidence WHERE finding_id IN (SELECT id FROM loss_finding WHERE exercise)');
+            $conn->executeStatement('DELETE FROM loss_journal WHERE finding_id IN (SELECT id FROM loss_finding WHERE exercise)');
+            $deleted = (int) $conn->executeStatement('DELETE FROM loss_finding WHERE exercise');
+            $conn->commit();
+
+            return $deleted;
+        } catch (\Throwable $e) {
+            if ($conn->isTransactionActive()) {
+                $conn->rollBack();
+            }
+            throw $e;
+        }
     }
 
     /** @return array{0: string, 1: array<string, mixed>, 2: array<string, mixed>} */
     private static function where(array $filters): array
     {
-        $sql = [];
+        $sql = ['exercise = false'];
         $params = [];
         $types = [];
         if (($filters['statuses'] ?? []) !== []) {

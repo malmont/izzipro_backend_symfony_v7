@@ -27,6 +27,17 @@ class LossJournalRepository extends EntityRepository
             'SELECT 1 FROM loss_journal WHERE finding_id = ? AND type = ? AND user_id = ? AND occurred_at >= ? LIMIT 1', [$findingId, $type, $userId, $since->format('Y-m-d H:i:s')]);
     }
 
+    /**
+     * Numéro du dernier exercice lancé (0 s'il n'y en a jamais eu), lu dans la dernière ligne « exercice lancé » du journal : elle ne se
+     * supprime jamais, le numéro ne redescend donc pas même après un effacement. Lecture bornée par l'index (type, id).
+     */
+    public function lastExerciseNumber(): int
+    {
+        $data = $this->getEntityManager()->getConnection()->fetchOne('SELECT data FROM loss_journal WHERE type = ? ORDER BY id DESC LIMIT 1', [\App\LossPrevention\Entity\LossJournalEntry::EXERCISE_STARTED]);
+
+        return $data === false ? 0 : max(0, (int) ((json_decode((string) $data, true) ?: [])['number'] ?? 0));
+    }
+
     /** @return list<array<string, mixed>> entrées d'un constat, de la plus ancienne à la plus récente */
     public function forFinding(int $findingId): array
     {

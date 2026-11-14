@@ -6,6 +6,7 @@ use App\Gestion\Services\GestionConflictException;
 use App\Gestion\Services\GestionValidationException;
 use App\LossPrevention\Entity\LossFinding;
 use App\LossPrevention\Services\LossAnalysisService;
+use App\LossPrevention\Services\LossExerciseService;
 use App\LossPrevention\Services\LossFindingReader;
 use App\LossPrevention\Services\LossRuleCatalog;
 use App\LossPrevention\Services\LossRuleService;
@@ -21,7 +22,8 @@ use Psr\Log\LoggerInterface;
  */
 class LossPreventionUseCase
 {
-    public const SCREENS = ['home' => 'pertes.home', 'findings' => 'pertes.constats', 'finding' => 'pertes.constat', 'rules' => 'pertes.regles', 'settings' => 'pertes.reglages'];
+    public const SCREENS = ['home' => 'pertes.home', 'findings' => 'pertes.constats', 'finding' => 'pertes.constat', 'rules' => 'pertes.regles', 'settings' => 'pertes.reglages',
+        'exercises' => 'pertes.exercices'];
     private const DEFAULT_DAYS = 30;
 
     public function __construct(
@@ -33,6 +35,7 @@ class LossPreventionUseCase
         private readonly LossSite $site,
         private readonly LossTexts $texts,
         private readonly LoggerInterface $logger,
+        private readonly ?LossExerciseService $exercises = null, // lot EX-1 : mode exercice
     ) {
     }
 
@@ -124,6 +127,45 @@ class LossPreventionUseCase
     public function decide(int $id, array $body, string $locale, int $userId): array
     {
         return $this->reader->decide($id, $body, $userId, $locale);
+    }
+
+    // ----- Mode exercice (lot EX-1) : routes ouvertes SANS le droit du module ; elles ne servent et ne décident que des constats d'exercice,
+    // ne lancent jamais l'analyse réelle et ne créent pas la ligne de réglages du site -----
+
+    /** @return array<string, mixed> */
+    public function exercises(string $locale): array
+    {
+        return $this->exercises->overview($locale);
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     * @return array<string, mixed>
+     */
+    public function startExercise(array $body, string $locale, int $userId): array
+    {
+        return $this->exercises->start($body, $userId, $locale);
+    }
+
+    /** @return array<string, mixed> */
+    public function exercise(int $id, string $locale, int $userId): array
+    {
+        return $this->reader->detail($id, $locale, $userId, true);
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     * @return array<string, mixed>
+     */
+    public function decideExercise(int $id, array $body, string $locale, int $userId): array
+    {
+        return $this->reader->decide($id, $body, $userId, $locale, true);
+    }
+
+    /** @return array{deleted: int} */
+    public function deleteExercises(int $userId): array
+    {
+        return $this->exercises->deleteAll($userId);
     }
 
     /** @return array<string, mixed> */

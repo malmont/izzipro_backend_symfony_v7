@@ -29,7 +29,7 @@ class LossHomeTile
                 return null;
             }
             $row = $this->emProvider->getEntityManager()->getConnection()->fetchAssociative(
-                "SELECT COUNT(*) AS n, COALESCE(SUM(amount_at_stake), 0) AS amount, COALESCE(MAX(id), 0) AS last FROM loss_finding WHERE seen_at IS NULL AND backfill = false AND status = 'open'") ?: [];
+                "SELECT COUNT(*) AS n, COALESCE(SUM(amount_at_stake), 0) AS amount, COALESCE(MAX(id), 0) AS last FROM loss_finding WHERE exercise = false AND seen_at IS NULL AND backfill = false AND status = 'open'") ?: [];
             $count = (int) ($row['n'] ?? 0);
 
             return $count === 0 ? null : ['count' => $count, 'amount' => (int) $row['amount'], 'signature' => $count . ':' . (int) $row['last']];

@@ -3,7 +3,8 @@
 Fiche du module « Prévention des pertes » (vol en boutique physique), section de l'application de gestion activable avec sa propre clé.
 Décisions du propriétaire du 14/11/2026 (15 décisions, § 12). **Lot L1-a codé le 14/11/2026** : caisse seule, sans matériel, vague 1 des
 règles. **Lot L1-b codé le 14/11/2026** : vague 2 des règles, aperçu d'un seuil avant de l'appliquer, codes d'écran et guides, vignette de
-l'accueil, étapes du cheminement, courriel de résumé du jour. Code : `src/LossPrevention/` (module autonome, mêmes couches que le reste). Web : session « securite de la boutique » ; mobile :
+l'accueil, étapes du cheminement, courriel de résumé du jour. **Lot EX-1 codé le 14/11/2026** : mode exercice (constats fictifs que le
+gérant lance et efface, ouverts sans le droit du module et avant la notice ; § 8). Code : `src/LossPrevention/` (module autonome, mêmes couches que le reste). Web : session « securite de la boutique » ; mobile :
 le chef de projet, sur les mêmes routes. Caisse : `docs/caisse.md`. Bloc cashDesk des statistiques : `docs/statistiques-gestion.md` § 6.
 
 ## 1. Principes
@@ -145,8 +146,11 @@ screen, fingerprint }`.
 - **`lines`** : rédigées à la lecture, dans la langue demandée ; l'écran n'interprète aucune donnée brute.
 - **`screen`** : code d'écran de la gestion quand il existe ; `null` en L1 (aucun écran pour une vente au comptoir, une session, une clôture).
 - **Inaltérables** : un déclencheur de la base refuse modification, suppression et vidage de `loss_evidence` et `loss_journal`
-  (`loss_records_immutable()`). Seule porte : une suppression dans une transaction qui a posé `SET LOCAL loss.purge = 'on'`, réservée à la
-  future commande de conservation ; **aucune purge n'existe** (décision : aucune purge automatique sans l'accord du propriétaire).
+  (`loss_records_immutable()`). La porte de purge prévue en L1-a (`loss.purge = 'on'`), dont rien ne se servait, **n'existe plus** depuis le
+  lot EX-1 (migration `Version20270105100000`) : la seule porte est `loss.purge = 'exercise'`, et elle ne laisse supprimer que ce qui
+  appartient à un constat d'exercice (voir « Mode exercice », § 8). Rien d'un vrai constat ne se supprime : **aucune purge n'existe**
+  (décision : aucune purge automatique sans l'accord du propriétaire) ; le futur lot de conservation ouvrira sa propre porte, avec ses
+  conditions.
 - **Journal du module** (à part du journal de caisse) : `FINDING_OPENED`, `FINDING_COMPLETED`, `FINDING_VIEWED` (la fiche : une fois par
   administrateur et par journée du magasin ; la liste, qui ne porte aucun nom, n'est pas journalisée),
   `DECISION_CHANGED`, `RULE_CHANGED`, `SETTINGS_CHANGED`, `STAFF_NOTICE_CONFIRMED`, `STAFF_NOTICE_WITHDRAWN`, `ANALYSIS_STARTED`,
@@ -197,13 +201,63 @@ paramètre en tableau), `INVALID_DATE`, `BEFORE_FROM`, `REQUIRED` (note), `TOO_L
 Une valeur illisible (texte, paramètre en tableau, `page=abc`) rend toujours 422, jamais une erreur interne ni un défaut silencieux ;
 `page` et `limit` démesurés sont ramenés à leurs bornes (100 000 et 100).
 La garde du module lit le chemin décodé, comme le routeur : `/api/gestion/%70ertes` est la même route. Codes d'écran (contrat avec les fronts) : `pertes.home`, `pertes.constats`,
-`pertes.constat` (paramètre id), `pertes.regles`, `pertes.reglages` ; réservés : `pertes.installation`, `pertes.installation.etape`.
+`pertes.constat` (paramètre id), `pertes.regles`, `pertes.reglages`, `pertes.exercices` (lot EX-1) ; réservés : `pertes.installation`, `pertes.installation.etape`.
+
+### Mode exercice (lot EX-1, `Services/LossExerciseService`)
+
+Décisions du propriétaire (14/11/2026) : le gérant lance un **constat fictif** pour voir à quoi ressemble un vrai constat et comment y
+répondre. Ouvert **sans le droit du module** (démonstration avant achat) et **avant la notice aux salariés**, France et Québec compris ;
+plafond de **30 constats d'exercice par site** ; **effacement manuel seulement**, d'un geste ; comptes fictifs « Caissier d'exercice » et
+« Responsable d'exercice » ; l'alerte est montrée à l'écran et, sur demande, envoyée en vrai courriel « [Exercice] » au seul administrateur
+qui lance.
+
+| Méthode, route | Entrée | Réponse |
+|---|---|---|
+| `GET /exercices` | — | `{ scenarios [{ code, label, description, learn, rule { code, label }, personPattern, available }], findings [lignes de liste], count, limit: 30, remaining, notice, screen: "pertes.exercices" }` |
+| `POST /exercices` | `{ scenario, sendTestEmail? }` | 201 `{ finding (la fiche, `exercise: true`), alertPreview { tile { title, text }, email { subject, message } }, testEmail { requested, sent, reason: NO_RECIPIENT_ADDRESS \| NOT_DELIVERED \| null }, remaining, screen }` ; 422 `fields.scenario: REQUIRED \| INVALID_VALUE`, `fields.sendTestEmail: MUST_BE_BOOLEAN` ; 409 `EXERCISE_LIMIT_REACHED` (`limit`), `EXERCISE_SCENARIO_NOT_AVAILABLE` (`scenario`) |
+| `GET /exercices/{id}` | — | la fiche du constat d'exercice (même forme qu'un vrai) ; 404 `FINDING_NOT_FOUND` pour un vrai constat |
+| `PUT /exercices/{id}/decision` | `{ status, note? }` | la fiche ; mêmes règles que la décision d'un vrai constat ; 404 pour un vrai constat |
+| `DELETE /exercices` | — | `{ deleted }` : tous les constats d'exercice du site, avec leurs preuves et leurs lignes de journal |
+
+- **Scénarios** (`LossExerciseService::SCENARIOS`) : `cash_shortage`, `drawer_no_sale`, `void_quick`, `void_series`, `refund_no_receipt`,
+  `refund_cash_for_card`, `discount_vague`, `price_override`, `approval_refused`, et trois variantes par personne (`cash_shortage_series`,
+  `refund_series`, `discount_series`), `available` seulement là où le pays permet les règles par personne. Chaque scénario prend ses chiffres
+  dans les **seuils du site** (un manque juste au-dessus du seuil, une ouverture du tiroir de plus que le maximum…).
+- **Rien dans la caisse** : les règles réelles ne sont pas jouées ; le constat et ses preuves sont écrits à partir du scénario. Les preuves
+  ne renvoient à aucune opération (`ref { type: "exercise", id: rang, sequence: null, hash: null }`) ; la fiche d'un exercice ne relit rien
+  dans la caisse : motifs et noms d'articles sont des textes du scénario, gardés dans la copie par leur **clé** (`reasonText`,
+  `articleText`) et rédigés à la lecture. L'analyse réelle n'est pas lancée ; la ligne `loss_setting` d'un site sans le module n'est pas créée.
+- **Aucune personne réelle** : identifiants négatifs (`LossFindingReader::EXERCISE_CASHIER` -1, `EXERCISE_MANAGER` -2), nommés par un
+  libellé ; la table des comptes n'est pas lue pour eux.
+- **Jamais dans un chiffre réel** : `loss_finding.exercise` écarte ces constats de la synthèse, de la liste, de la vignette, du courriel du
+  jour (ni annoncés, ni dans sa borne), des constats à traiter et de la fenêtre des règles par personne (`exercise = false` dans chaque
+  requête de `LossFindingRepository` et de `LossHomeTile`) ; l'aperçu d'un seuil ne lit pas les constats.
+- **Vrais constats et exercices ne se croisent sur aucune route** : un exercice est « inconnu » (404) de `GET /constats/{id}` et de
+  `PUT /constats/{id}/decision`, un vrai constat l'est des routes d'exercice ; `GET /constats` ne rend jamais un exercice.
+- **Garde** : `LossPreventionModuleSubscriber::OPEN_ROUTES` nomme les cinq routes en toutes lettres (méthode et chemin exact, lu par
+  `RequestPath::of`) ; elles passent sans le droit du module. La garde de la gestion et le rôle d'administrateur restent exigés ; tout le
+  reste de la section reste fermé sans le droit.
+- **Numéros** : un exercice porte un numéro **négatif**, l'opposé de son rang ; le rang est lu dans la dernière ligne `EXERCISE_STARTED` du
+  journal du module (jamais supprimée : il ne redescend pas, même après un effacement), dans la même transaction que le constat, sous un
+  verrou consultatif propre aux exercices. Les vrais numéros se suivent parmi les vrais constats seulement.
+- **Effacement** : `LossFindingRepository::deleteExercises()`, une transaction, `SET LOCAL loss.purge = 'exercise'`, dans l'ordre preuves,
+  journal, constats. **La base garantit elle-même** qu'un vrai constat ne peut pas partir par ce chemin (migration `Version20270105100000`) :
+  marque `exercise` figée à la création ; la porte `on` de L1-a n'existe plus ; avec la porte `exercise`, seule une ligne dont le constat est
+  marqué exercice se supprime ; un constat d'exercice ne se supprime qu'après ses preuves et ses lignes de journal ; une ligne de journal
+  sans constat ne se supprime jamais ; le vidage des trois tables est refusé. Le journal garde pour toujours `EXERCISE_STARTED` (rang,
+  scénario), `EXERCISES_DELETED` (nombre) et `EXERCISE_EMAIL_SENT` (rang), sans constat rattaché ni adresse.
+- **Courriel d'exercice** : gabarit du courriel du jour avec le bandeau « EXERCICE » (`exerciseBanner`), objet préfixé « [Exercice] » ; il
+  n'entre pas dans le « un par jour » (ni `last_digest_day` ni la borne ne bougent). Sans configuration d'envoi : `sent: false`,
+  `reason: NOT_DELIVERED`.
 
 ## 9. Base
 
 Migration `Version20270101100000` (tables et colonne nouvelles seulement, idempotente) : `entreprise.is_loss_prevention_active` ;
 `loss_setting` (une ligne par site : notice, règles par personne, conservation, curseur, plancher d'analyse) ; `loss_rule` (réglages changés par le site) ;
-`loss_finding` ; `loss_evidence` ; `loss_journal` ; déclencheurs d'inaltérabilité. Entités déclarées dans `CacheTags::NO_CACHE_READ`
+`loss_finding` ; `loss_evidence` ; `loss_journal` ; déclencheurs d'inaltérabilité. Puis `Version20270102100000`
+(`loss_setting.last_digest_day`), `Version20270103100000` (`loss_setting.last_digest_finding_id`) et `Version20270105100000` (lot EX-1 :
+`loss_finding.exercise`, index `idx_loss_finding_exercise` et `idx_loss_journal_type`, marque d'exercice figée, porte de purge réduite aux
+constats d'exercice, constat non supprimable sauf exercice). Entités déclarées dans `CacheTags::NO_CACHE_READ`
 (lues et écrites en SQL par leurs dépôts). **À la mise en ligne, la colonne doit exister dans chaque base AVANT le code** :
 `ModuleAccessService::COLUMNS` la lit.
 
@@ -224,6 +278,11 @@ prix baissés à la main, validations refusées sur une tablette, variantes par 
 vente hors ligne synchronisée en retard lue par le curseur et datée à son heure réelle. `LossPreventionExamplesTest` : **exemples
 de réponse, un fichier JSON par route et par refus, dans `tests/Fixtures/pertes/`** (jeux d'essai des écrans du web et du mobile) ; le test
 vérifie que chaque exemple a toujours la forme de la réponse du serveur ; régénération : en-tête du test (`UPDATE_LOSS_EXAMPLES=1`).
+`LossPreventionExerciseTest` (lot EX-1) : chaque scénario donne un constat lu comme un vrai, sans une ligne dans la caisse ni un nom réel ;
+aucun chiffre réel ne compte un exercice (synthèse, liste, vignette, courriel du jour, constats à traiter, aperçu, cheminement, règles par
+personne) ; les quatre croisements de routes rendent 404 ; ouvert sans le droit du module et avant la notice, rien d'autre ne s'ouvre ;
+plafond de 30 et numéros qui ne reviennent pas ; **la base refuse elle-même**, sans passer par le code du module, de supprimer quoi que ce
+soit d'un vrai constat (et le mauvais ordre, l'ancienne porte, le changement de marque, le vidage) ; courriel d'exercice au seul demandeur.
 Jeux d'essai en base de test seulement : **rien n'est écrit sur `demo`** (le journal de caisse est inaltérable, une journée d'essai ne s'y
 défait pas).
 
