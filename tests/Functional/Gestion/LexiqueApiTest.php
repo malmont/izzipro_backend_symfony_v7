@@ -47,9 +47,9 @@ class LexiqueApiTest extends WebTestCase
     ];
     private const ADDED_KEYS = ['tresorerie', 'taxes', 'stock-dormant', 'budget', 'cout-d-achat', 'stock-bas', 'semblables', 'verdict',
         // prévention des pertes (14/11/2026) : notions du module, sans chiffre du site
-        'constat', 'montant-en-jeu', 'ecart-de-caisse', 'regle-de-detection', 'regle-par-personne', 'notice-salaries', 'preuve', 'decision-constat'];
+        'constat', 'montant-en-jeu', 'ecart-de-caisse', 'regle-de-detection', 'regle-par-personne', 'notice-salaries', 'preuve', 'decision-constat', 'exercice-pertes'];
     /** Notions de la prévention des pertes : la console ne lit aucune donnée du module, même sur un site qui l'a */
-    private const LOSS_KEYS = ['constat', 'montant-en-jeu', 'ecart-de-caisse', 'regle-de-detection', 'regle-par-personne', 'notice-salaries', 'preuve', 'decision-constat'];
+    private const LOSS_KEYS = ['constat', 'montant-en-jeu', 'ecart-de-caisse', 'regle-de-detection', 'regle-par-personne', 'notice-salaries', 'preuve', 'decision-constat', 'exercice-pertes'];
 
     private KernelBrowser $client;
     private string $token = '';
@@ -87,7 +87,7 @@ class LexiqueApiTest extends WebTestCase
         $en = $this->get('/api/gestion/lexique?locale=en');
         $this->assertSame(['version', 'entries'], array_keys($fr));
         $this->assertSame(array_merge(self::MOBILE_KEYS, self::ADDED_KEYS), array_column($fr['entries'], 'key'));
-        $this->assertSame([54, 70, LexiqueCatalog::keys()], [count(self::MOBILE_KEYS), count($fr['entries']), array_column($en['entries'], 'key')]);
+        $this->assertSame([54, 71, LexiqueCatalog::keys()], [count(self::MOBILE_KEYS), count($fr['entries']), array_column($en['entries'], 'key')]);
         // Prévention des pertes : aucune analyse liée, aucun écran, aucune illustration chiffrée ; `site` vaut null ; les textes ne disent
         // que ce que fait le système (aucune accusation, la décision est celle du gérant)
         $files0 = ['fr' => Yaml::parseFile(static::getContainer()->getParameter('kernel.project_dir') . '/translations/lexique.fr.yaml'), 'en' => Yaml::parseFile(static::getContainer()->getParameter('kernel.project_dir') . '/translations/lexique.en.yaml')];
@@ -457,7 +457,7 @@ class LexiqueApiTest extends WebTestCase
         $this->assertArrayNotHasKey('lesson', $answer, 'la marque reste au serveur');
         // Ce que le modèle a lu à l'appel 1 : le lexique (clé, terme, synonymes) et l'analyse lexique.term, 11e du catalogue
         $first = $payload(0);
-        $this->assertSame([70, ['key' => 'taux-de-marque', 'term' => 'Taux de marque', 'synonymes' => ['taux de marge']], 12], [count($first['lexique']), array_column($first['lexique'], null, 'key')['taux-de-marque'], count($first['analyses'])]);
+        $this->assertSame([71, ['key' => 'taux-de-marque', 'term' => 'Taux de marque', 'synonymes' => ['taux de marge']], 12], [count($first['lexique']), array_column($first['lexique'], null, 'key')['taux-de-marque'], count($first['analyses'])]);
         $this->assertContains('lexique.term', array_column($first['analyses'], 'key'));
         $this->assertStringContainsString('une question de DÉFINITION', (string) FakeLandingAiClient::$requests[0]['system']);
         $schema = FakeLandingAiClient::$requests[0]['output_config']['format']['schema']['properties']['analyses']['items'];
@@ -610,7 +610,7 @@ class LexiqueApiTest extends WebTestCase
         $dir = static::getContainer()->getParameter('kernel.project_dir') . '/translations';
         $files = ['fr' => Yaml::parseFile("$dir/ecrans.fr.yaml"), 'en' => Yaml::parseFile("$dir/ecrans.en.yaml")];
         $this->assertSame(array_keys($files['fr']), array_keys($files['en']));
-        $this->assertCount(41, $guides->codes(), 'les 36 écrans relevés dans l\'application web, et les 5 de la prévention des pertes (lot L1-b)');
+        $this->assertCount(42, $guides->codes(), 'les 36 écrans relevés dans l\'application web, les 5 de la prévention des pertes (lot L1-b) et celui de ses exercices (lot EX-1)');
         $linked = 0;
         foreach (array_keys(ConsoleScreens::SCREENS) as $code) {
             $this->assertTrue($guides->has($code), "$code : un guide (le sien, ou celui de l'écran du web qu'il reprend)");

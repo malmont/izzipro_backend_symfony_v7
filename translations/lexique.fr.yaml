@@ -442,3 +442,7 @@ decision-constat:
             b: 'L''IA, d''après les preuves'
             c: 'Vous, après vérification'
             explanation: 'L''application relève les faits et garde les preuves. Elle ne conclut jamais à votre place : la décision est toujours la vôtre.'
+exercice-pertes:
+    term: 'Exercice (prévention des pertes)'
+    definition: 'Un constat fictif que vous lancez vous-même pour voir à quoi ressemble un constat et comment y répondre. Il est marqué « Exercice », ne touche pas à la caisse, ne concerne aucune personne réelle et n''entre dans aucun chiffre. Vous l''effacez quand vous voulez.'
+    synonyms: 'mode exercice, constat d''exercice'

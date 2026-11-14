@@ -18,10 +18,10 @@ enregistré par utilisateur ici.**
 
 ## 1. Les notions
 
-70 notions : les **54 clés du glossaire du mobile**, avec leurs tirets et leurs définitions, 8 ajouts (`tresorerie`, `taxes`,
-`stock-dormant`, `budget`, `cout-d-achat`, `stock-bas`, `semblables`, `verdict`), et 8 notions de la prévention des pertes (14/11/2026 :
+71 notions : les **54 clés du glossaire du mobile**, avec leurs tirets et leurs définitions, 8 ajouts (`tresorerie`, `taxes`,
+`stock-dormant`, `budget`, `cout-d-achat`, `stock-bas`, `semblables`, `verdict`), et 9 notions de la prévention des pertes (14/11/2026 :
 `constat`, `montant-en-jeu`, `ecart-de-caisse`, `regle-de-detection`, `regle-par-personne`, `notice-salaries`, `preuve`,
-`decision-constat` ; `exercice-pertes` viendra avec le mode exercice).
+`decision-constat`, et `exercice-pertes` avec le mode exercice, lot EX-1).
 
 Les notions de la prévention des pertes (`docs/prevention-pertes.md`) sont à la fin de la liste, servies à tous les sites comme les autres
 (mêmes textes pour tous), **sans analyse liée ni illustration** : la console ne lit aucune donnée du module, même sur un site qui l'a ;
@@ -162,7 +162,7 @@ chaque libellé au terme, dans les deux langues.
 ## 6. Les guides des écrans (lot A-4)
 
 Pour chaque écran de l'application : **à quoi il sert, ce que veulent dire ses chiffres principaux, quoi faire ensuite**. Écrits par
-le serveur pour un débutant, à partir du relevé de l'application web (36 écrans, plus les 5 écrans de la prévention des pertes depuis le lot L1-b du 14/11/2026), dans les deux langues :
+le serveur pour un débutant, à partir du relevé de l'application web (36 écrans, plus les 5 écrans de la prévention des pertes depuis le lot L1-b du 14/11/2026 et celui de ses exercices, `pertes.exercices`, depuis le lot EX-1), dans les deux langues :
 `translations/ecrans.{fr,en}.yaml`, une entrée par code d'écran (« . » et « - » remplacés par « _ »).
 
 `GET /api/gestion/ecrans/{code}/guide?locale=fr|en` (sans IA, gratuit, `ROLE_ADMIN`) ; 404 `SCREEN_GUIDE_NOT_FOUND` :

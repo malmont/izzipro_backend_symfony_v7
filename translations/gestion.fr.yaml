@@ -1095,6 +1095,7 @@ console:
         pertes_constat: 'Un constat et ses preuves'
         pertes_regles: 'Règles et seuils de la prévention des pertes'
         pertes_reglages: 'Réglages de la prévention des pertes'
+        pertes_exercices: 'Exercices de la prévention des pertes'
         accueil: 'Accueil de la gestion'
         journee: 'Ma journée'
         periode_resultat: 'Résultat d''une période'

@@ -89,6 +89,7 @@ final class LexiqueCatalog
         'notice-salaries' => ['related' => ['regle-par-personne', 'constat'], 'analysis' => null, 'quiz' => ['q1' => 'b']],
         'preuve' => ['related' => ['constat', 'decision-constat'], 'analysis' => null, 'quiz' => []],
         'decision-constat' => ['related' => ['constat', 'preuve'], 'analysis' => null, 'quiz' => ['q1' => 'c']],
+        'exercice-pertes' => ['related' => ['constat', 'decision-constat'], 'analysis' => null, 'quiz' => []], // mode exercice (lot EX-1)
     ];
 
     /**

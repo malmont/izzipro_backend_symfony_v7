@@ -563,3 +563,19 @@ pertes_reglages:
             label: 'Ce que l''outil ne fait jamais'
             text: 'Reconnaissance des visages, enregistrement du son, caméra en cabine, analyse des gestes : exclus partout.'
     next: 'Faites relire ces réglages par un avocat avant de vous en servir pour une décision concernant un salarié.'
+pertes_exercices:
+    purpose: 'Les exercices de la prévention des pertes : vous lancez un constat fictif pour voir à quoi ressemble un vrai constat et comment y répondre, sans toucher à la caisse.'
+    points:
+        scenarios:
+            label: 'Scénarios'
+            text: 'Un scénario par situation que l''application relève : manque de caisse, tiroir ouvert sans vente, vente annulée, retour, remise, prix baissé. Ses chiffres suivent vos seuils.'
+        constat-d-exercice:
+            label: 'Constat d''exercice'
+            text: 'Il se lit et se décide comme un vrai, avec ses preuves. Il est marqué « Exercice », ne concerne aucune personne réelle et n''entre dans aucun chiffre.'
+        apercu-de-l-alerte:
+            label: 'Aperçu de l''alerte'
+            text: 'La vignette de l''accueil et le courriel tels que vous les recevriez pour un vrai constat. Vous pouvez vous envoyer le courriel d''exercice.'
+        tout-effacer:
+            label: 'Tout effacer'
+            text: 'Efface d''un geste tous les constats d''exercice. Les vrais constats ne peuvent pas être effacés.'
+    next: 'Lancez un scénario, ouvrez son constat, lisez les preuves et prenez une décision : c''est exactement ce que vous ferez pour un vrai constat.'

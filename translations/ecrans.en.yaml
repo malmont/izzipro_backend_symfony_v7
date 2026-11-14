@@ -563,3 +563,19 @@ pertes_reglages:
             label: 'What the tool never does'
             text: 'Facial recognition, audio recording, cameras in fitting rooms, gesture analysis: excluded everywhere.'
     next: 'Have these settings reviewed by a lawyer before using them for a decision about an employee.'
+pertes_exercices:
+    purpose: 'Loss prevention drills: you launch a fictitious finding to see what a real finding looks like and how to respond to it, without touching the register.'
+    points:
+        scenarios:
+            label: 'Scenarios'
+            text: 'One scenario per situation the app picks up: cash shortage, drawer opened without a sale, cancelled sale, return, discount, lowered price. Its figures follow your thresholds.'
+        constat-d-exercice:
+            label: 'Drill finding'
+            text: 'It is read and decided like a real one, with its evidence. It is marked "Drill", concerns no real person and counts in no figure.'
+        apercu-de-l-alerte:
+            label: 'Alert preview'
+            text: 'The home tile and the email as you would receive them for a real finding. You can send yourself the drill email.'
+        tout-effacer:
+            label: 'Delete all'
+            text: 'Deletes every drill finding at once. Real findings cannot be deleted.'
+    next: 'Launch a scenario, open its finding, read the evidence and make a decision: that is exactly what you will do for a real finding.'
