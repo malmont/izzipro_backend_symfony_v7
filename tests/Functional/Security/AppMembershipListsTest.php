@@ -28,12 +28,12 @@ class AppMembershipListsTest extends WebTestCase
     public function testTheProfileSaysTheFamiliesAndTheTeamRolesOfTheAccount(): void
     {
         $member = $this->user(['ROLE_USER_INTERNET']);
-        $this->membership($member, 'livingmemory', 'register', '2026-11-12 03:00:00');
         $this->membership($member, 'boutique', 'join', '2026-11-10 14:00:00', 'v-abc', '2026-11-10 14:00:05');
+        $this->membership($member, 'livingmemory', 'register', '2026-11-09 03:00:00'); // entré d'abord dans Living Memory
         $profile = $this->ok('/api/profile', $member);
         $this->assertSame(['id', 'email', 'firstName', 'lastName', 'username', 'roles', 'licenseNumber', 'licenseExpirationDate', 'phone', 'otpEnabled', 'passwordSet', 'memberships', 'teamRoles'], array_keys($profile),
             'deux champs en plus, rien d\'autre ne change');
-        $this->assertSame([[['app' => 'boutique', 'joinedAt' => '2026-11-10T14:00:00+00:00', 'termsVersion' => 'v-abc'], ['app' => 'livingmemory', 'joinedAt' => '2026-11-12T03:00:00+00:00', 'termsVersion' => null]], []],
+        $this->assertSame([[['app' => 'livingmemory', 'joinedAt' => '2026-11-09T03:00:00+00:00', 'termsVersion' => null], ['app' => 'boutique', 'joinedAt' => '2026-11-10T14:00:00+00:00', 'termsVersion' => 'v-abc']], []],
             [$profile['memberships'], $profile['teamRoles']], 'de la plus ancienne à la plus récente ; un client n\'a aucun rôle d\'équipe');
 
         // un compte d'équipe : ses rôles d'équipe, jamais d'appartenance ; un client sans famille : deux tableaux vides
@@ -55,7 +55,7 @@ class AppMembershipListsTest extends WebTestCase
         $mobileOnly = $this->user(['ROLE_USER_INTERNET'], 'mobile'); // dans la population mobile par sa trace, mais pas membre
         $webMember = $this->user(['ROLE_USER_INTERNET']); // membre, sans trace de l'application
         $this->membership($webMember, 'livingmemory', 'backfill', '2026-11-01 08:00:00');
-        $this->membership($webMember, 'boutique', 'register', '2026-10-01 08:00:00');
+        $this->membership($webMember, 'boutique', 'register', '2026-11-05 08:00:00'); // entré dans la boutique APRÈS : l'ordre rendu est celui des familles
         $shopper = $this->user(['ROLE_USER_INTERNET']);
         $this->membership($shopper, 'boutique', 'register', '2026-11-02 08:00:00');
         $mine = [$mobileMember->getId(), $mobileOnly->getId(), $webMember->getId(), $shopper->getId()];
@@ -96,7 +96,7 @@ class AppMembershipListsTest extends WebTestCase
         try {
             $admin = $this->user(['ROLE_ADMIN']);
             $member = $this->user(['ROLE_USER_INTERNET']);
-            $this->membership($member, 'livingmemory', 'backfill', '2026-11-12 03:00:00'); // 22 h le 11 au magasin
+            $this->membership($member, 'livingmemory', 'backfill', '2026-11-09 03:00:00'); // 22 h le 8 au magasin
             $this->membership($member, 'boutique', 'register', '2026-11-10 14:00:00', 'v-abc', '2026-11-10 14:30:00');
             $cashCustomer = $this->user(['ROLE_USER_INTERNET']);
             $this->membership($cashCustomer, 'pos', 'pos_link', '2026-11-11 10:00:00');
@@ -135,7 +135,7 @@ class AppMembershipListsTest extends WebTestCase
             $this->assertSame(200, $this->client->getResponse()->getStatusCode());
             $table = $crawler->filter('table[data-memberships]');
             $this->assertSame('2', $table->attr('data-memberships'));
-            $this->assertSame([['Boutique', '10/11/2026 09:00', 'Inscription', 'v-abc', '10/11/2026 09:30'], ['Living Memory', '11/11/2026 22:00', 'Reprise de l\'historique', '—', '—']],
+            $this->assertSame([['Living Memory', '08/11/2026 22:00', 'Reprise de l\'historique', '—', '—'], ['Boutique', '10/11/2026 09:00', 'Inscription', 'v-abc', '10/11/2026 09:30']],
                 $table->filter('tbody tr')->each(fn ($tr) => $tr->filter('td')->each(fn ($td) => trim($td->text()))));
             $this->assertSame(0, $table->filter('a, button, form, input')->count(), 'aucune action sur une appartenance');
             $this->assertStringContainsString('heure du magasin', $crawler->filter('table[data-memberships]')->ancestors()->first()->text());
