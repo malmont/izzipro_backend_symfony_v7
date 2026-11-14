@@ -98,6 +98,10 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(name: 'is_support_active', options: ['default' => false])]
     private bool $isSupportActive = false;
 
+    /** Module Prévention des pertes (lot L1-a, 14/11/2026, `docs/prevention-pertes.md`) : droit module.loss_prevention projeté ; faux partout */
+    #[ORM\Column(name: 'is_loss_prevention_active', options: ['default' => false])]
+    private bool $isLossPreventionActive = false;
+
     #[ORM\Column(type: 'boolean', options: ['default' => false])]
     private ?bool $isMemoireVivanteActive = false;
 
@@ -827,6 +831,9 @@ class Entreprise implements TranslatableInterface
 
     public function isSupportActive(): bool { return $this->isSupportActive; }
     public function setIsSupportActive(bool $on): static { $this->isSupportActive = $on; return $this; }
+
+    public function isLossPreventionActive(): bool { return $this->isLossPreventionActive; }
+    public function setIsLossPreventionActive(bool $on): static { $this->isLossPreventionActive = $on; return $this; }
 
     public function isBoussoleEsgActive(): ?bool
     {

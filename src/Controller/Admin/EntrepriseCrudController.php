@@ -216,6 +216,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             $this->superAdminBooleanField('isLandingPageActive', 'Landing Page', 'Activer le site vitrine / landing page.'),
             $this->superAdminBooleanField('isBoussoleEsgActive', 'Boussole ESG', 'Activer le module de diagnostic et bilans ESG.'),
             $this->superAdminBooleanField('isSupportActive', 'Assistance', 'Module Assistance : boîte des demandes des clients (lot 1).'),
+            $this->superAdminBooleanField('isLossPreventionActive', 'Prévention des pertes', 'Section « Prévention des pertes » de l\'application de gestion (exige l\'application de gestion).'),
             $this->superAdminBooleanField('isMemoireVivanteActive', 'Mémoire Vivante', 'Activer l\'application Mémoire Vivante.'),
 
             FormField::addPanel('Code court de la boutique')->collapsible()->setHelp($this->shortCodeHelp()),
@@ -530,6 +531,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 ->setIsLandingPageActive((bool) $defaults->isLandingPageActive())
                 ->setIsBoussoleEsgActive((bool) $defaults->isBoussoleEsgActive())
                 ->setIsSupportActive($defaults->isSupportActive())
+                ->setIsLossPreventionActive($defaults->isLossPreventionActive())
                 ->setIsMemoireVivanteActive((bool) $defaults->isMemoireVivanteActive())
                 ->setIsPosActive($defaults->isPosActive())
                 ->setIsMobileShopActive($defaults->isMobileShopActive())
@@ -546,7 +548,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
         try {
             $row = $this->emProvider->getEntityManager()->getConnection()->fetchAssociative(
                 'SELECT pos_terminal_fee_card_bp, pos_terminal_fee_interac_bp,
-                        is_boutique_active, is_landing_page_active, is_boussole_esg_active, is_memoire_vivante_active, is_support_active,
+                        is_boutique_active, is_landing_page_active, is_boussole_esg_active, is_memoire_vivante_active, is_support_active, is_loss_prevention_active,
                         is_pos_active, is_mobile_shop_active, is_management_app_active, is_living_memory_active, variant_promotions_enabled, app_membership_mode
                  FROM entreprise WHERE id = ?',
                 [$id]
@@ -565,6 +567,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             ->setIsLandingPageActive((bool) $row['is_landing_page_active'])
             ->setIsBoussoleEsgActive((bool) $row['is_boussole_esg_active'])
             ->setIsSupportActive((bool) $row['is_support_active'])
+            ->setIsLossPreventionActive((bool) $row['is_loss_prevention_active'])
             ->setIsMemoireVivanteActive((bool) $row['is_memoire_vivante_active'])
             ->setIsPosActive((bool) $row['is_pos_active'])
             ->setIsMobileShopActive((bool) $row['is_mobile_shop_active'])

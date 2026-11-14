@@ -37,6 +37,8 @@ final class FeatureCatalog
         'module.memoires' => ['label' => 'Mémoires Vivantes', 'group' => 'modules', 'scope' => self::SCOPE_PLATFORM, 'type' => 'boolean', 'storage' => 'entreprise.isMemoireVivanteActive', 'href' => 'entreprise'],
         'module.boussole' => ['label' => 'Boussole ESG', 'group' => 'modules', 'scope' => self::SCOPE_PLATFORM, 'type' => 'boolean', 'storage' => 'entreprise.isBoussoleEsgActive', 'href' => 'entreprise'],
         'module.support' => ['label' => 'Assistance (demandes des clients)', 'group' => 'modules', 'scope' => self::SCOPE_PLATFORM, 'type' => 'boolean', 'storage' => 'entreprise.isSupportActive', 'href' => 'entreprise'], // lot 1 Assistance (12/11/2026)
+        // Prévention des pertes (lot L1-a, 14/11/2026) : section de la gestion, exige aussi app.management (`docs/prevention-pertes.md`)
+        'module.loss_prevention' => ['label' => 'Prévention des pertes (section de la gestion)', 'group' => 'modules', 'scope' => self::SCOPE_PLATFORM, 'type' => 'boolean', 'storage' => 'entreprise.isLossPreventionActive', 'href' => 'entreprise'],
         // Applications mobiles (plateforme, lecture : clés gérées par la fiche Entreprise)
         'app.mobile_shop' => ['label' => 'Application e-commerce mobile', 'group' => 'apps', 'scope' => self::SCOPE_PLATFORM, 'type' => 'boolean', 'href' => 'app_keys'],
         'app.management' => ['label' => 'Application de gestion', 'group' => 'apps', 'scope' => self::SCOPE_PLATFORM, 'type' => 'boolean', 'href' => 'app_keys'],
@@ -76,6 +78,7 @@ final class FeatureCatalog
         'module.memoires' => 'is_memoire_vivante_active',
         'module.boussole' => 'is_boussole_esg_active',
         'module.support' => 'is_support_active',
+        'module.loss_prevention' => 'is_loss_prevention_active',
         'app.mobile_shop' => 'is_mobile_shop_active',
         'app.management' => 'is_management_app_active',
         'app.living_memory' => 'is_living_memory_active',
@@ -86,7 +89,7 @@ final class FeatureCatalog
     /** Accesseur de la fiche Entreprise pour chaque fonctionnalité gouvernée */
     public const GOVERNED_GETTERS = [
         'module.landing' => 'isLandingPageActive', 'module.boutique' => 'isBoutiqueActive', 'module.pos' => 'isPosActive',
-        'module.memoires' => 'isMemoireVivanteActive', 'module.boussole' => 'isBoussoleEsgActive', 'module.support' => 'isSupportActive', 'app.mobile_shop' => 'isMobileShopActive',
+        'module.memoires' => 'isMemoireVivanteActive', 'module.boussole' => 'isBoussoleEsgActive', 'module.support' => 'isSupportActive', 'module.loss_prevention' => 'isLossPreventionActive', 'app.mobile_shop' => 'isMobileShopActive',
         'app.management' => 'isManagementAppActive', 'app.living_memory' => 'isLivingMemoryActive',
         'ai.help' => 'isAiHelpActive', 'ai.full' => 'isAiFullActive',
     ];
@@ -97,7 +100,7 @@ final class FeatureCatalog
     /** Libellés anglais des fonctionnalités gouvernées (courriels en anglais) */
     public const LABELS_EN = [
         'module.landing' => 'Landing Page', 'module.boutique' => 'Online shop', 'module.pos' => 'Point of sale (app and counter sales)',
-        'module.memoires' => 'Living Memories', 'module.boussole' => 'ESG Compass', 'module.support' => 'Customer support', 'app.mobile_shop' => 'Mobile shop app',
+        'module.memoires' => 'Living Memories', 'module.boussole' => 'ESG Compass', 'module.support' => 'Customer support', 'module.loss_prevention' => 'Loss prevention', 'app.mobile_shop' => 'Mobile shop app',
         'app.management' => 'Management app', 'app.living_memory' => 'Living Memory app',
         'ai.help' => 'AI help (the assistant explains and guides)', 'ai.full' => 'Full AI (settings and operations by the assistant)',
     ];
@@ -110,6 +113,7 @@ final class FeatureCatalog
         'module.memoires' => 'Les livres de souvenirs : questionnaire, rédaction assistée, mise en page et impression.',
         'module.boussole' => 'Le diagnostic ESG des entreprises : questionnaire, score, recommandations, rapport.',
         'module.support' => 'La boîte des demandes de vos clients : tickets liés aux commandes et aux ventes, réponses par courriel, délai de réponse.',
+        'module.loss_prevention' => 'La prévention des pertes en boutique : constats tirés de la caisse (écarts de clôture, tiroir ouvert sans vente, annulations), preuves datées, décision du gérant.',
         'app.mobile_shop' => 'L\'application mobile de la boutique pour vos clients (iOS et Android).',
         'app.management' => 'L\'application de gestion (.NET MAUI) : achats, fournisseurs, notes de frais.',
         'app.living_memory' => 'L\'application mobile Living Memory, pour que chacun écrive ses souvenirs depuis son téléphone.',
@@ -125,6 +129,7 @@ final class FeatureCatalog
         'module.memoires' => 'Rien d\'autre : la console Mémoires Vivantes du site est prête.',
         'module.boussole' => 'Rien d\'autre : les référentiels sont fournis.',
         'module.support' => 'Régler le délai de réponse ; un compte administrateur (ou Assistance) répond aux demandes.',
+        'module.loss_prevention' => 'Avoir l\'application de gestion ; confirmer l\'information des salariés, relire les règles et leurs seuils dans la section « Prévention des pertes ».',
         'app.mobile_shop' => 'Générer une clé d\'activation (écran « Clés des applications ») ; vos clients saisissent le code court de la boutique.',
         'app.management' => 'Générer une clé d\'activation (écran « Clés des applications ») et la saisir dans l\'application de gestion.',
         'app.living_memory' => 'Générer une clé d\'activation (écran « Clés des applications ») ; l\'application la porte pour votre site.',
