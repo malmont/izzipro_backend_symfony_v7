@@ -78,9 +78,14 @@ Test : `tests/Functional/Gestion/CashApiTest.php`.
   - jours passés (du lendemain du solde à hier) : les encaissements **réels** de chaque jour ;
   - à partir d'aujourd'hui : la **moyenne** des 30 jours complets avant aujourd'hui (`estimatedDailyReceipts`), `receiptsEstimated: true`.
   - Encaissement net d'une commande client (jour du magasin, commandes incomplètes et annulées exclues) : ventes, locations, abonnements et
-    cartes-cadeaux vendues au **total TTC** (taxes, livraison et arrondi des espèces compris), **moins la part payée par carte-cadeau, avoir ou
-    coupon du fabricant** (`order.gift_card_applied`, `credit_applied`, `manufacturer_coupon_applied`) ; un retour retire son total, sauf la
-    part rendue en avoir. Approximation connue : la part d'un retour recréditée sur une carte-cadeau compte comme remboursée.
+    cartes-cadeaux vendues au **total TTC** (taxes, livraison et arrondi des espèces compris), **moins la part payée par carte-cadeau, avoir client ou
+    coupon du fabricant** (`order.gift_card_applied`, `credit_applied`, `manufacturer_coupon_applied`) ; **un retour ne retire que l'argent
+    réellement rendu** (lot AVOIRS, 14/11/2026) : pour un retour fait en caisse, les espèces et la carte de sa fiche (`pos_return.cash_refund
+    + card_refund`) ; ni l'avoir client émis, ni la part revenue sur une carte-cadeau, ni le coupon du fabricant non rendu, ni la part
+    reportée sur un échange. Un retour sans fiche de caisse retire son total, moins la part non payée en argent que porte la commande.
+    L'ancienne approximation (la part recréditée sur une carte-cadeau comptée comme remboursée) n'existe plus. La même règle sert « Ma
+    journée », la section « Paiements » des statistiques et l'attendu du rapprochement bancaire : rien n'est stocké, les jours passés
+    suivent la règle dès la lecture ; une décision de rapprochement déjà prise n'est pas réécrite.
 - `low` : point bas à partir d'aujourd'hui ; `low14` : point bas d'aujourd'hui aux 13 jours suivants ; `belowThresholdFrom` : premier jour
   (à partir d'aujourd'hui) sous le seuil ; `end` : dernier jour.
 - `alertSeries` : `projectionWithSales` si `includeEstimatedSales`, sinon `projection`. `status`, sur `low14` de cette série :

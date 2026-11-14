@@ -109,20 +109,29 @@ Un nombre rond sort en entier dans le JSON (`100`, pas `100.0`), comme dans S1.
   breakdown [{ method: "card" | "cash" | "paypal" | "other", label, received, refunded, net, share, previousNet, lastYearNet }],
   cashDesk { closings, discrepancy, discrepancyCount, bankDeposits, movements { deposits, withdrawals, fundDeposits, fundWithdrawals } } | null,
   chart { granularity, points [{ key, from, to, received, refunded, net, lastYear { received, refunded, net } }] },
-  caveats [{ code, text, amount? }], appliesSource: true }
+  caveats [{ code, text, amount? }], appliesSource: true,
+  storeCreditIssued, giftCardRecredited, paidByStoreCredit, paidByGiftCard: { amount, count, label } | null,
+  outstandingStoreCredit, outstandingGiftCards: { amount, count, asOf, label } | null }
 ```
 
 - **Règle : celle de « Ma journée » et de la trésorerie** (`GestionCashService::receiptsByDay`). Ce qui entre, **taxes comprises**, daté
-  par la **date de la commande** ; ventes, locations, abonnements et cartes-cadeaux vendues ; la part payée par carte-cadeau, avoir ou
-  coupon du fabricant n'en fait pas partie ; commandes incomplètes et annulées exclues. `received` = les ventes, `refunded` = les
-  retours, `net` = `received − refunded`. Sur « aujourd'hui », `net` égale `receipts.total` de « Ma journée » au cent près.
+  par la **date de la commande** ; ventes, locations, abonnements et cartes-cadeaux vendues ; la part payée par carte-cadeau, avoir client ou
+  coupon du fabricant n'en fait pas partie ; commandes incomplètes et annulées exclues. `received` = les ventes, `refunded` = l'argent
+  rendu par les retours, `net` = `received − refunded`.
+  **Un retour ne retire que l'argent réellement rendu** (lot AVOIRS, 14/11/2026, décision du propriétaire) : pour un retour fait en
+  caisse, ce que sa fiche enregistre en espèces et par carte (`pos_return.cash_refund + card_refund`). L'avoir client émis, la part
+  revenue sur la carte-cadeau de la vente, le coupon du fabricant non rendu et la part reportée sur un échange ne sortent pas de
+  l'encaissé. Un retour sans fiche de caisse garde la règle d'avant (son total, moins la part non payée en argent que porte la
+  commande). Les ventes, la marge, les retours et le résultat de période ne changent pas : un retour y reste un retour, en entier.
+  Rien n'est stocké : l'encaissé des jours passés suit la règle dès la lecture (demo, octobre 2026 : +45,34 $). Sur « aujourd'hui », `net` égale `receipts.total` de « Ma journée » au cent près.
   L'ancienne route (`payments/statistics`) date par la date du paiement : ses chiffres peuvent différer d'un jour à l'autre.
 - **`breakdown`** : les lignes de paiement **réussies** des mêmes commandes, par moyen (`payment_method` : 1 `card`, 2 `cash`,
   3 `paypal` ; un moyen ajouté plus tard sort en `method_<id>` avec son nom). `share` = part du net, en % ; `previousNet` et
   `lastYearNet` pour comparer. Ce que les lignes de paiement n'expliquent pas (une vente sans paiement enregistré) sort dans une
   ligne **`other`** (`received` et `refunded` à `null`), avec la remarque `PAYMENTS_UNMATCHED` et son montant : **les moyens additionnés
-  font toujours le net**. `other` peut être **négatif** : des remboursements sans ligne de paiement (un retour rendu en avoir, par
-  exemple ; constaté sur demo en octobre 2026 : −45,34 $) ; la remarque est alors `REFUNDS_UNMATCHED`, `amount` garde son signe et le
+  font toujours le net**. `other` peut être **négatif** : des remboursements sans ligne de paiement (un retour sans fiche de caisse,
+  par exemple ; jusqu'au lot AVOIRS, un retour rendu en avoir client y tombait : −45,34 $ sur demo en octobre 2026) ; la remarque est
+  alors `REFUNDS_UNMATCHED`, `amount` garde son signe et le
   texte dit le montant sans signe. « Ma journée » range en « carte » tout ce qui n'est pas en espèces : `card + paypal + other` ici.
 - **`cashDesk`** : les clôtures de caisse de la plage (rapports de fermeture, `cash_register_report`, datés par leur heure de
   fermeture) : `closings` (nombre), `discrepancy` (somme des écarts compté − attendu, signée), `discrepancyCount` (clôtures avec un
@@ -130,6 +139,17 @@ Un nombre rond sort en entier dans le JSON (`100`, pas `100.0`), comme dans S1.
   (dépôts, retraits, ajouts et retraits de fond, le vocabulaire du rapport de caisse). Rendu pour `source=all` et `source=pos` ;
   `null` pour les autres canaux. **La liste des transactions de la caisse ouverte n'est pas reprise** : c'est un outil de caisse (rapport
   X), pas une statistique.
+- **Lignes à part, hors de l'encaissé** (lot AVOIRS) : elles n'entrent ni dans `received`, ni dans `refunded`, ni dans `net`. Lues dans
+  les mouvements des cartes-cadeaux et des avoirs clients de la caisse, datées par le mouvement ; `count` = nombre de mouvements.
+  `storeCreditIssued` : avoirs clients émis par un retour (ou recrédités) ; `giftCardRecredited` : montants revenus sur des
+  cartes-cadeaux ; `paidByStoreCredit` : ventes payées par avoir client ; `paidByGiftCard` : ventes payées par carte-cadeau (la commande
+  range les deux dans la même colonne : c'est le genre de la carte qui les sépare). **Deux états du moment, pas des chiffres de la
+  plage** (`asOf` : l'instant de la lecture ; libellés « à ce jour ») : `outstandingStoreCredit`, le solde des avoirs clients actifs, et
+  `outstandingGiftCards`, le solde des cartes-cadeaux vendues et non dépensées : ce que le magasin doit encore en marchandise. Une
+  carte annulée, remplacée, épuisée ou expirée ne compte pas. Rendus pour `source=all` et `source=pos` ; `null` pour les autres canaux.
+  Vocabulaire : « avoir client » (anglais « store credit ») est le bon d'achat réutilisable ; la pièce numérotée d'un remboursement,
+  que la fiche de la caisse appelle aussi « avoir », n'est pas concernée.
+  Non couvert : le solde d'une carte-cadeau rendu en espèces au comptoir (mouvement de caisse, hors des commandes).
 - Remarques : `PAYMENTS_BY_ORDER_DATE` (toujours), `PAYMENTS_UNMATCHED` ou `REFUNDS_UNMATCHED` (`amount`, signé).
 
 ### `expenses` : les frais de l'entreprise (remplace l'écran Frais)

@@ -15,7 +15,9 @@ cents dans la devise du site, jour et heures au fuseau du magasin. Route ajouté
 { date, timezone, currency, generatedAt,
   sales: { total, orders, byChannel: [{ channel: "ecommerce" | "pos" | "mobile_app", total, orders }],
            vsSameWeekdayAverage: { percent | null, average, weeks, asOf } },
-  receipts: { total, byMethod: [{ method: "cash" | "card", total }] },
+  receipts: { total, byMethod: [{ method: "cash" | "card", total }],
+              storeCreditIssued, giftCardRecredited, paidByStoreCredit, paidByGiftCard: { amount, count },
+              outstandingStoreCredit, outstandingGiftCards: { amount, count, asOf } },
   toShip: { count, oldestAt | null },
   support: { open, overdue } | null,
   cash: { balance, balanceDate, lowestIn14Days: { amount, date }, state: "ok" | "warning" | "critical" } | null,
@@ -34,7 +36,11 @@ cents dans la devise du site, jour et heures au fuseau du magasin. Route ajouté
   - `asOf` : cette heure (`HH:MM`) ; `average` : la moyenne en cents ; `weeks` : 4.
   - `percent` = (aujourd'hui − moyenne) ÷ moyenne × 100, arrondi à 0,1 ; `null` si la moyenne vaut 0.
 - **`receipts`** : l'encaissé du jour, **taxes comprises** (ce qui entre en caisse), par `GestionCashService::receiptsSplit` : `cash`
-  (espèces) et `card` (le reste). À ne pas confondre avec `sales.total`, hors taxes.
+  (espèces) et `card` (le reste). À ne pas confondre avec `sales.total`, hors taxes. Un retour n'en retire que l'argent réellement
+  rendu (lot AVOIRS, 14/11/2026 : règle dans `docs/statistiques-gestion.md`, section `payments`). À part, hors de `total` : les avoirs
+  clients émis, les montants revenus sur des cartes-cadeaux, les ventes payées par avoir client ou par carte-cadeau du jour ; et, à
+  ce jour (`asOf`), le solde des avoirs clients actifs et celui des cartes-cadeaux non dépensées. Sans libellé : l'application écrit
+  les siens (« avoir client », « store credit »).
 - **`toShip`** : la définition de « À traiter › À expédier » d'EasyAdmin (`OrderDeskService::TO_SHIP`) : commande hors caisse, payée
   ou en préparation (statut 3 ou 4), avec une adresse de livraison, pas encore expédiée. `count` compte tout (sans le plafond de la
   liste) ; `oldestAt` est la date de la plus ancienne.
