@@ -18,7 +18,7 @@ class CsrfValidationListener
     {
         $request = $event->getRequest();
 
-        if (!preg_match('#^/api/#', $request->getPathInfo())) {
+        if (!preg_match('#^/api/#', \App\Services\Http\RequestPath::of($request))) {
             return;
         }
 
@@ -36,7 +36,7 @@ class CsrfValidationListener
             '/api/order/create-multi-payment'
         ];
 
-        if (in_array($request->getPathInfo(), $excludedPaths)) {
+        if (in_array(\App\Services\Http\RequestPath::of($request), $excludedPaths)) {
             return;
         }
 

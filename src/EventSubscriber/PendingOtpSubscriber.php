@@ -38,7 +38,7 @@ final class PendingOtpSubscriber implements EventSubscriberInterface
     public function onKernelRequest(RequestEvent $event): void
     {
         $request = $event->getRequest();
-        if (!$event->isMainRequest() || str_starts_with($request->getPathInfo(), '/api/') || in_array($request->attributes->get('_route'), self::OPEN_ROUTES, true)) {
+        if (!$event->isMainRequest() || str_starts_with(\App\Services\Http\RequestPath::of($request), '/api/') || in_array($request->attributes->get('_route'), self::OPEN_ROUTES, true)) {
             return;
         }
         $user = $this->security->getUser();

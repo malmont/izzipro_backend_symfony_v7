@@ -19,7 +19,7 @@ class InvalidIdentifierListener
         $exception = $event->getThrowable();
         if (!$exception instanceof \InvalidArgumentException
             || !str_starts_with($exception->getMessage(), 'Invalid UUID')
-            || !str_starts_with($event->getRequest()->getPathInfo(), '/api/memoires/')) {
+            || !str_starts_with(\App\Services\Http\RequestPath::of($event->getRequest()), '/api/memoires/')) {
             return;
         }
 

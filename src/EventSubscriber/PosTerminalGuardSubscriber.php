@@ -34,11 +34,11 @@ class PosTerminalGuardSubscriber implements EventSubscriberInterface
     public function onKernelRequest(RequestEvent $event): void
     {
         $request = $event->getRequest();
-        if (!$event->isMainRequest() || !str_starts_with($request->getPathInfo(), '/api/')) {
+        if (!$event->isMainRequest() || !str_starts_with(\App\Services\Http\RequestPath::of($request), '/api/')) {
             return;
         }
         $hasHeader = $request->headers->has(PosTerminalService::HEADER);
-        $posRoute = (bool) preg_match(self::POS_ROUTES, $request->getPathInfo());
+        $posRoute = (bool) preg_match(self::POS_ROUTES, \App\Services\Http\RequestPath::of($request));
         if (!$hasHeader && !$posRoute) {
             return;
         }
@@ -49,7 +49,7 @@ class PosTerminalGuardSubscriber implements EventSubscriberInterface
             return;
         }
         $this->terminals->touchIfStale($state);
-        if ($posRoute && $state['status'] !== 'valid' && !preg_match('#^/api/pos/(pin-login|users)$#', $request->getPathInfo()) && $this->settings->terminalRequired()) {
+        if ($posRoute && $state['status'] !== 'valid' && !preg_match('#^/api/pos/(pin-login|users)$#', \App\Services\Http\RequestPath::of($request)) && $this->settings->terminalRequired()) {
             $event->setResponse(new JsonResponse((new CashRegisterException('TERMINAL_REQUIRED', 'Ce site exige un terminal de caisse identifié (X-Pos-Terminal) : activez l\'application avec une clé', 403))->toBody(), 403));
         }
     }

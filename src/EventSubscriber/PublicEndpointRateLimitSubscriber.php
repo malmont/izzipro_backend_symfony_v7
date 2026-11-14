@@ -68,7 +68,7 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
             return;
         }
 
-        $path = rtrim($request->getPathInfo(), '/');
+        $path = rtrim(\App\Services\Http\RequestPath::of($request), '/');
         $ip = $request->getClientIp() ?? 'unknown';
 
         $checks = match (true) {
@@ -141,7 +141,7 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
     {
         $request = $event->getRequest();
         if ($event->isMainRequest() && $request->getMethod() === 'POST' && $event->getResponse()->isSuccessful()
-            && in_array(rtrim($request->getPathInfo(), '/'), self::PUBLIC_FORMS, true)) {
+            && in_array(rtrim(\App\Services\Http\RequestPath::of($request), '/'), self::PUBLIC_FORMS, true)) {
             $this->publicFormIp->create($this->publicFormKey($request))->consume();
             $this->publicFormGlobalIp->create($request->getClientIp() ?? 'unknown')->consume();
         }

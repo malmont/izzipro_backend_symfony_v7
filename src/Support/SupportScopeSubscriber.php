@@ -35,7 +35,7 @@ class SupportScopeSubscriber implements EventSubscriberInterface
     public function onKernelRequest(RequestEvent $event): void
     {
         $request = $event->getRequest();
-        $path = $request->getPathInfo();
+        $path = \App\Services\Http\RequestPath::of($request);
         if (!$event->isMainRequest() || !str_starts_with($path, '/api/') || preg_match('#^/api/support(/|$)#', $path)) {
             return;
         }

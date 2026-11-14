@@ -39,7 +39,7 @@ class TenantVisitorTrackingListener
         }
 
         $request = $event->getRequest();
-        $path = $request->getPathInfo();
+        $path = \App\Services\Http\RequestPath::of($request);
 
         // 1. Filtrer les routes exclues
         foreach (self::EXCLUDED_PREFIXES as $prefix) {

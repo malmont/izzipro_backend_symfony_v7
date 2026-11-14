@@ -35,7 +35,7 @@ class ApiExceptionSubscriber implements EventSubscriberInterface
         $request = $event->getRequest();
         $exception = $event->getThrowable();
 
-        if (!str_starts_with($request->getPathInfo(), '/api/') || !$exception instanceof HttpExceptionInterface) {
+        if (!str_starts_with(\App\Services\Http\RequestPath::of($request), '/api/') || !$exception instanceof HttpExceptionInterface) {
             return;
         }
         $status = $exception->getStatusCode();

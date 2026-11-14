@@ -28,7 +28,7 @@ class ApiExceptionListener
 
     public function __invoke(ExceptionEvent $event): void
     {
-        if ($this->debug || !str_starts_with($event->getRequest()->getPathInfo(), '/api/')) {
+        if ($this->debug || !str_starts_with(\App\Services\Http\RequestPath::of($event->getRequest()), '/api/')) {
             return;
         }
 

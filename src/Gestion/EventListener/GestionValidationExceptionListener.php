@@ -19,7 +19,7 @@ class GestionValidationExceptionListener
     public function __invoke(ExceptionEvent $event): void
     {
         $exception = $event->getThrowable();
-        if (!str_starts_with($event->getRequest()->getPathInfo(), '/api/')) {
+        if (!str_starts_with(\App\Services\Http\RequestPath::of($event->getRequest()), '/api/')) {
             return;
         }
         if ($exception instanceof GestionValidationException) {

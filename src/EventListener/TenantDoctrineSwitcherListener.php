@@ -28,7 +28,7 @@ class TenantDoctrineSwitcherListener
 
         // Routes qui reçoivent volontairement un site inconnu : elles répondent elles-mêmes (vérification, création)
         $excludedPaths = ['/api/tenant/check', '/api/tenant/check-mobile', '/api/tenant/hosts', '/setup/new-store'];
-        if (in_array($request->getPathInfo(), $excludedPaths)) {
+        if (in_array(\App\Services\Http\RequestPath::of($request), $excludedPaths)) {
             return;
         }
 

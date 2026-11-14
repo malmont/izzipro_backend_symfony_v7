@@ -36,7 +36,7 @@ class ModuleAccessSubscriber implements EventSubscriberInterface
             return;
         }
         $request = $event->getRequest();
-        $path = $request->getPathInfo();
+        $path = \App\Services\Http\RequestPath::of($request);
         if (!str_starts_with($path, '/api/')) {
             return;
         }
