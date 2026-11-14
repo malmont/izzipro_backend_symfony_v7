@@ -1,4 +1,4 @@
-# Statistiques unifiées — application de gestion (lot S1, 11/11/2026)
+# Statistiques unifiées — application de gestion (lot S1, 11/11/2026 ; sections : lot S2-a, 14/11/2026)
 
 Refonte des Statistiques décidée avec le propriétaire, contrat validé par l'application (« new easymakemoney ») le 11/11/2026. Une route, fiable et
 comparable, **une seule règle** : celle du résultat de période P2 (`docs/periodes-gestion.md`). Les anciennes routes de statistiques
@@ -8,11 +8,14 @@ intactes : la caisse en lit certaines. `ROLE_ADMIN`, cents dans la devise du sit
 Code : `Gestion/Services/GestionStatisticsService` (plages, indicateurs, séries, libellés), `PeriodResultCalculator::dailySales` (agrégats
 par jour du magasin, même requête que P2, filtre de source), `GestionStockSnapshotService` (valeur et instantané du stock),
 `Gestion/UseCase/GestionStatisticsUseCase`, `Gestion/Controller/GestionStatisticsController`. Test :
-`tests/Functional/Gestion/UnifiedStatisticsApiTest.php`.
+`tests/Functional/Gestion/UnifiedStatisticsApiTest.php`. Sections (§ 6) : `Gestion/Services/GestionStatisticsSections`, test
+`tests/Functional/Gestion/StatisticsSectionsApiTest.php`.
 
 ## 1. Route
 
-`GET /api/gestion/statistiques?from=&to=|periodId=|range=today|7d|month|year&source=all|ecommerce|pos|mobile_app&locale=`
+`GET /api/gestion/statistiques?from=&to=|periodId=|range=today|7d|month|year&source=all|ecommerce|pos|mobile_app&locale=&sections=`
+
+`sections` (lot S2, § 6) ajoute des sections à la réponse ; **sans lui, la réponse est celle de S1, clé pour clé**.
 
 | Plage | Plage choisie | Plage précédente | Même plage l'an dernier |
 |---|---|---|---|
@@ -78,6 +81,80 @@ par les mouvements. Schéma : Version20261217100000, `scripts/migrate_all_v2_ges
 | Lot | Contenu |
 |---|---|
 | **S1** | route unifiée, plages et comparaisons, séries, valeur du stock et instantané quotidien ; livré le 11/11/2026 |
-| S2 | analyses : articles, catégories, heures fortes, rotation du stock, moyens de paiement et remises, clients en nombres |
+| **S2-a** | sections `payments` (encaissé, moyens de paiement, clôtures de caisse) et `expenses` (notes de frais, port d'achat, publicité ; frais fixes à côté) ; codé le 14/11/2026 |
+| S2-b | sections `stock` (mouvements, courbe de valeur depuis le 11/11/2026), `shipping` (port facturé, par transporteur) et `taxes` (par taxe) |
 | S3 | « Pourquoi ? » par l'IA, export CSV et PDF |
+| S4 | analyses : articles, catégories, heures fortes, rotation du stock, remises, clients en nombres (nommé « S2 » avant le 14/11/2026) |
+| à part | marge sur le port : port facturé moins coût réel des étiquettes. Le coût n'est pas enregistré par étiquette (`shipping_label` n'a pas de montant) : il faut d'abord le garder |
 | AN | l'année de l'entreprise (statistiques › Année) |
+
+## 6. Sections : les anciens écrans de statistiques dans la route unifiée (lot S2)
+
+Décision du propriétaire du 14/11/2026 : les 5 anciens écrans de statistiques de l'application (Caisse, Paiements, Stock, Frais, Total
+frais) sont remplacés par des volets de l'écran unifié. Un ancien écran n'est retiré que quand toute son information utile a une place ici.
+
+`sections=payments,expenses` (une ou plusieurs, séparées par des virgules ; casse et espaces tolérés ; ordre de la réponse fixe). La
+réponse gagne `sections { <nom>: section }`. Chaque section suit la plage, la plage précédente, l'an dernier et la langue de la demande ;
+ses indicateurs ont la forme de ceux de S1 (`value`, `unit`, `previous`, `lastYear`, `changeVsPrevious`, `changeVsLastYear`,
+`changeUnit`, `spark`) ; son graphique a les mêmes tranches que celui de S1. Tout est calculé par le serveur. Une valeur inconnue, ou une
+section pas encore livrée (`stock`, `shipping`, `taxes` : S2-b) : 422 `VALIDATION_FAILED`, `fields.sections` = `INVALID_SECTION`.
+`appliesSource` dit si le filtre `source` a un sens pour la section : l'application grise son sélecteur de canal quand il est faux.
+Un nombre rond sort en entier dans le JSON (`100`, pas `100.0`), comme dans S1.
+
+### `payments` : l'encaissé (remplace les écrans Paiements et Caisse)
+
+```
+{ indicators { received, refunded, net },
+  breakdown [{ method: "card" | "cash" | "paypal" | "other", label, received, refunded, net, share, previousNet, lastYearNet }],
+  cashDesk { closings, discrepancy, discrepancyCount, bankDeposits, movements { deposits, withdrawals, fundDeposits, fundWithdrawals } } | null,
+  chart { granularity, points [{ key, from, to, received, refunded, net, lastYear { received, refunded, net } }] },
+  caveats [{ code, text, amount? }], appliesSource: true }
+```
+
+- **Règle : celle de « Ma journée » et de la trésorerie** (`GestionCashService::receiptsByDay`). Ce qui entre, **taxes comprises**, daté
+  par la **date de la commande** ; ventes, locations, abonnements et cartes-cadeaux vendues ; la part payée par carte-cadeau, avoir ou
+  coupon du fabricant n'en fait pas partie ; commandes incomplètes et annulées exclues. `received` = les ventes, `refunded` = les
+  retours, `net` = `received − refunded`. Sur « aujourd'hui », `net` égale `receipts.total` de « Ma journée » au cent près.
+  L'ancienne route (`payments/statistics`) date par la date du paiement : ses chiffres peuvent différer d'un jour à l'autre.
+- **`breakdown`** : les lignes de paiement **réussies** des mêmes commandes, par moyen (`payment_method` : 1 `card`, 2 `cash`,
+  3 `paypal` ; un moyen ajouté plus tard sort en `method_<id>` avec son nom). `share` = part du net, en % ; `previousNet` et
+  `lastYearNet` pour comparer. Ce que les lignes de paiement n'expliquent pas (une vente sans paiement enregistré) sort dans une
+  ligne **`other`** (`received` et `refunded` à `null`), avec la remarque `PAYMENTS_UNMATCHED` et son montant : **les moyens additionnés
+  font toujours le net**. « Ma journée » range en « carte » tout ce qui n'est pas en espèces : `card + paypal + other` ici.
+- **`cashDesk`** : les clôtures de caisse de la plage (rapports de fermeture, `cash_register_report`, datés par leur heure de
+  fermeture) : `closings` (nombre), `discrepancy` (somme des écarts compté − attendu, signée), `discrepancyCount` (clôtures avec un
+  écart), `bankDeposits` (dépôts en banque), chacun avec ses comparaisons ; `movements` : mouvements de fond hors ventes de la plage
+  (dépôts, retraits, ajouts et retraits de fond, le vocabulaire du rapport de caisse). Rendu pour `source=all` et `source=pos` ;
+  `null` pour les autres canaux. **La liste des transactions de la caisse ouverte n'est pas reprise** : c'est un outil de caisse (rapport
+  X), pas une statistique.
+- Remarques : `PAYMENTS_BY_ORDER_DATE` (toujours), `PAYMENTS_UNMATCHED` (`amount`).
+
+### `expenses` : les frais de l'entreprise (remplace l'écran Frais)
+
+```
+{ indicators { total, notes, purchaseShipping, advertising },
+  breakdown [{ kind: "notes" | "purchaseShipping" | "advertising", label, amount, share }],
+  notesByType [{ typeId | null, name, amount, share }], campaigns [{ id, name, amount, startDate }],
+  fixedCosts { value, unit, previous, lastYear, changeVsPrevious, changeVsLastYear, changeUnit, byCategory, days, includedInTotal: false } | null,
+  chart { granularity, points [{ key, from, to, total, notes, purchaseShipping, advertising, lastYear { total } }] },
+  caveats [{ code, text }], appliesSource: false }
+```
+
+- **Règle : celle du résultat de période.** Notes de frais datées dans la plage ; frais de port des commandes fournisseurs datées dans
+  la plage (au taux de change de la commande) ; publicité des campagnes dont la date de début est dans la plage. Les totaux viennent des
+  requêtes mêmes du résultat de période (`PurchaseMetricsCalculator::expensesBetween`, `PeriodResultCalculator::advertisingBetween`) :
+  **sur un `periodId`, `total` égale `expenses.total` du résultat de période au cent près**, composante par composante.
+- `notesByType` : les notes par type de frais, du plus gros au plus petit, `share` en % des notes ; `campaigns` : les campagnes comptées.
+- **Frais fixes : à côté, HORS du total** (`includedInTotal: false`). Ils sont répartis au prorata des jours
+  (`GestionFixedCostService::between`) et ne sont déduits que dans le résultat après frais fixes. Remarques
+  `FIXED_COSTS_OUTSIDE_TOTAL`, puis celles des frais fixes (`FIXED_COSTS_PRORATED`, `FIXED_COSTS_MAY_OVERLAP_NOTES`).
+- Le canal ne s'applique pas (ce sont des dépenses) : avec un `source`, mêmes chiffres et remarque `SOURCE_NOT_APPLICABLE`.
+- Graphique : chaque frais à son jour ; pour un port d'achat en devise, le point est arrondi (l'indicateur fait foi).
+- L'ancienne route (`frais/total`) n'applique pas le taux de change au port d'achat et ne compte pas la publicité.
+
+### Routes anciennes : gardées telles quelles
+
+`caisse/transactions?asList=1`, `payments/statistics`, `stock-evolution`, `stock-value`, `frais/total`, `carrier/statistics`,
+`taxes/monthly` ne sont pas touchées. Appelants au 14/11/2026 : l'application mobile de gestion les appelle toutes les 7 (elle passera
+aux volets) ; le web de gestion n'en appelle aucune ; la caisse a le droit de lire `payments/statistics/pos`. Leur retrait est une
+décision à part, route par route, quand le journal du serveur ne montre plus d'appel.
