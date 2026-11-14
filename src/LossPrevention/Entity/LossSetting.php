@@ -61,7 +61,7 @@ class LossSetting
     #[ORM\Column(name: 'last_digest_day', type: 'date_immutable', nullable: true)]
     private ?\DateTimeImmutable $lastDigestDay = null;
 
-    /** Dernier constat existant au moment du dernier courriel de résumé : le suivant n'annonce que les constats nés après lui */
+    /** Dernier constat ANNONCÉ par le dernier courriel de résumé : le suivant n'annonce que les constats nés après lui */
     #[ORM\Column(name: 'last_digest_finding_id', nullable: true)]
     private ?int $lastDigestFindingId = null;
 

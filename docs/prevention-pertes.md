@@ -247,8 +247,10 @@ défait pas).
 - **Courriel de résumé du jour (lot L1-b, `Services/LossDigestService`)** : après le passage de l'analyse planifiée sur un site, **à partir de
   8 h à l'heure du magasin** (`SEND_HOUR`, lue par l'horloge du site : le premier passage du minuteur après 8 h envoie), s'il y a des
   constats nouveaux **nés depuis le courriel précédent** et qu'aucun courriel n'est parti ce jour du magasin (`loss_setting.last_digest_day`,
-  migration `Version20270102100000` ; `loss_setting.last_digest_finding_id`, migration `Version20270103100000` : le dernier constat existant
-  au moment de l'envoi, posé dans la même instruction que le jour et rendu avec lui). Décisions du propriétaire (14/11/2026) : aucun
+  migration `Version20270102100000` ; `loss_setting.last_digest_finding_id`, migration `Version20270103100000` : le dernier constat ANNONCÉ,
+  lu dans la même instruction que le compte, posé dans la même instruction que le jour et rendu avec lui). Tout ce qui peut échouer
+  (langue, textes, objet, hôte du site) est préparé AVANT la réservation ; une erreur pendant l'envoi, avant qu'un seul courriel soit
+  parti, rend le jour et la borne et remonte. Décisions du propriétaire (14/11/2026) : aucun
   courriel les jours où rien n'est né, même s'il reste des constats ouverts (la vignette de l'accueil continue de les rappeler) ; un constat
   né après l'envoi part le lendemain. Un courriel part aux administrateurs du site (rôle `ROLE_ADMIN` exact, compte vérifié) qui ont gardé le type `loss_digest` actif dans leurs
   préférences de notification de la gestion (canal `email`, `docs/notifications-gestion.md`). Par le mailer du site (file et worker des

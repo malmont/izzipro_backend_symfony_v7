@@ -154,7 +154,7 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
 
             return $deliver;
         });
-        $digest = function () use ($mailer): \App\LossPrevention\Services\LossDigestService { // les services du noyau EN COURS, replacés sur le site de test
+        $build = function (\App\Services\EmailConfigurationService\EmailSenderService $mailer): \App\LossPrevention\Services\LossDigestService { // les services du noyau EN COURS, replacés sur le site de test
             $c = static::getContainer();
             $c->get(\App\Services\TenantEntityManagerProvider::class)->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
 
@@ -163,6 +163,7 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
                 $c->get(\App\Services\EmailConfigurationService\EmailLocale::class), $c->get('translator'), new \Psr\Log\NullLogger(),
                 $c->get(\App\Services\TenantConnectionManager::class), $c->get(\App\Services\TenantPublicHostResolver::class));
         };
+        $digest = fn (): \App\LossPrevention\Services\LossDigestService => $build($mailer);
         $mine = function () use (&$calls, $adminEmail): array {
             return array_values(array_filter($calls, fn (array $c) => $c['to'] === $adminEmail));
         }; // d'autres administrateurs d'essai s'accumulent dans la base de test
@@ -206,6 +207,37 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
         $this->assertSame('not_delivered', $digest()->sendIfDue($at('08:00'))['status']);
         $this->assertSame(['2020-01-01', 0], [$day(), $mark()], 'les deux valeurs d\'avant la réservation reviennent');
 
+        // C2 (relecture). Une erreur PENDANT l'envoi, avant qu'un seul courriel soit parti : la réservation est rendue, l'erreur remonte
+        $broken = $this->createMock(\App\Services\EmailConfigurationService\EmailSenderService::class);
+        $broken->method('subject')->willReturn('Sujet');
+        $broken->method('sendTemplatedEmail')->willThrowException(new \Error('panne pendant l\'envoi'));
+        try {
+            $build($broken)->sendIfDue($at('08:00'));
+            $this->fail('l\'erreur devait remonter');
+        } catch (\Error $e) {
+            $this->assertSame('panne pendant l\'envoi', $e->getMessage());
+        }
+        $this->assertSame(['2020-01-01', 0], [$day(), $mark()], 'erreur pendant l\'envoi : jour et borne d\'avant');
+        // Un envoi qui lève pour chaque destinataire : aucun courriel parti, tout est rendu
+        $refusing = $this->createMock(\App\Services\EmailConfigurationService\EmailSenderService::class);
+        $refusing->method('subject')->willReturn('Sujet');
+        $refusing->method('sendTemplatedEmail')->willThrowException(new \RuntimeException('refus du serveur d\'envoi'));
+        $this->assertSame(['status' => 'not_delivered', 'sent' => 0], $build($refusing)->sendIfDue($at('08:00')));
+        $this->assertSame(['2020-01-01', 0], [$day(), $mark()]);
+        // Une erreur pendant la PRÉPARATION (ici l'objet du courriel) : elle arrive AVANT la réservation, rien n'est posé ni envoyé
+        $unprepared = $this->createMock(\App\Services\EmailConfigurationService\EmailSenderService::class);
+        $unprepared->method('subject')->willThrowException(new \RuntimeException('objet illisible'));
+        $unprepared->expects($this->never())->method('sendTemplatedEmail');
+        $this->db->executeStatement("UPDATE loss_setting SET last_digest_day = NULL, last_digest_finding_id = NULL"); // une réservation laisserait ici une trace visible
+        try {
+            $build($unprepared)->sendIfDue($at('08:00'));
+            $this->fail('l\'erreur de préparation devait remonter');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('objet illisible', $e->getMessage());
+        }
+        $this->assertSame([null, null], [$day(), $mark()], 'erreur avant la réservation : ni jour ni borne');
+        $this->db->executeStatement("UPDATE loss_setting SET last_digest_day = '2020-01-01', last_digest_finding_id = 0");
+
         // Envoi qui aboutit : jour marqué, borne posée sur le dernier constat ; un second appel n'envoie rien (un seul courriel)
         $deliver = true;
         $calls = [];
@@ -230,6 +262,20 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
         $calls = [];
         $this->assertSame('sent', $digest()->sendIfDue($at('08:00'))['status']);
         $this->assertSame(['1', (int) $this->db->fetchOne('SELECT MAX(id) FROM loss_finding')], [array_values($mine()[0]['context']['rows'])[0], $mark()], 'un seul constat annoncé : celui qui est né depuis');
+
+        // C1 (relecture). La borne est le dernier constat ANNONCÉ, pas le dernier constat de la table : de deux constats nés depuis, le plus
+        // récent est déjà ouvert par le gérant ; il n'est pas annoncé, et la borne ne le dépasse pas
+        $finding = fn (array $report): int => (int) $this->db->fetchOne('SELECT id FROM loss_finding WHERE dedup_key = ?', ['CASH_DISCREPANCY:z_report:' . $report['id']]);
+        $this->openSession();
+        $announced = $finding($this->closeWith(-1600, 'Annoncé') + ['_' => $this->json($this->admin('POST', self::BASE . '/analyse'))]);
+        $this->openSession();
+        $opened = $finding($this->closeWith(-1700, 'Déjà ouvert') + ['_' => $this->json($this->admin('POST', self::BASE . '/analyse'))]);
+        $this->json($this->admin('GET', self::BASE . '/constats/' . $opened));
+        $this->assertGreaterThan($announced, $opened);
+        $this->db->executeStatement("UPDATE loss_setting SET last_digest_day = '2020-01-02'");
+        $calls = [];
+        $this->assertSame('sent', $digest()->sendIfDue($at('08:00'))['status']);
+        $this->assertSame(['1', $announced], [array_values($mine()[0]['context']['rows'])[0], $mark()], 'un constat annoncé ; la borne s\'arrête à lui');
 
         // La réservation elle-même : une écriture conditionnelle, que le second lancement n'obtient pas ; lui seul n'avance pas la borne
         $settings = $this->provider->getEntityManager()->getRepository(\App\LossPrevention\Entity\LossSetting::class);

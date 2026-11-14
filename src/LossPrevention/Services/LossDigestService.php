@@ -96,11 +96,8 @@ class LossDigestService
         if ($recipients === []) {
             return ['status' => 'no_recipient', 'sent' => 0];
         }
-        // Réserver le jour AVANT d'envoyer : de deux lancements qui se chevauchent (le minuteur et un lancement à la main), un seul passe
-        $reserved = $settings->reserveDigestDay($day, $new['lastId']);
-        if ($reserved === null) {
-            return ['status' => 'already_sent', 'sent' => 0];
-        }
+        // Tout ce qui peut échouer est préparé AVANT la réservation (langue, textes, objet, hôte du site lu dans la base maître) : une
+        // exception ici ne laisse ni jour ni borne posés. Avec la borne, une réservation jamais rendue ferait perdre ces constats pour toujours
         $language = $this->locale->language(null);
         $t = fn (string $key, array $params = []) => $this->translator->trans('loss_digest.' . $key, $params, 'emails', $language);
         $siteName = (string) ($em->getConnection()->fetchOne('SELECT name FROM entreprise ORDER BY id LIMIT 1') ?: '');
@@ -113,17 +110,27 @@ class LossDigestService
         ];
         $subject = $this->mailer->subject('loss_digest.subject', $params, $language);
         $host = $this->host();
+        // Réserver le jour AVANT d'envoyer : de deux lancements qui se chevauchent (le minuteur et un lancement à la main), un seul passe
+        $reserved = $settings->reserveDigestDay($day, $new['lastId']);
+        if ($reserved === null) {
+            return ['status' => 'already_sent', 'sent' => 0];
+        }
         $sent = 0;
-        foreach ($recipients as $to) {
-            try {
-                $sent += $this->mailer->sendTemplatedEmail($to, $subject, self::TEMPLATE, $context, $language, $host) ? 1 : 0;
-            } catch (\Throwable $e) { // un destinataire en échec n'arrête pas les autres
-                // Jamais le MESSAGE de l'exception au journal du serveur : il peut porter l'adresse du destinataire. Sa classe suffit.
-                $this->logger->error('Prévention des pertes : courriel de résumé, un envoi en échec (' . $e::class . ').');
+        try {
+            foreach ($recipients as $to) {
+                try {
+                    $sent += $this->mailer->sendTemplatedEmail($to, $subject, self::TEMPLATE, $context, $language, $host) ? 1 : 0;
+                } catch (\Exception $e) { // un destinataire en échec n'arrête pas les autres
+                    // Jamais le MESSAGE de l'exception au journal du serveur : il peut porter l'adresse du destinataire. Sa classe suffit.
+                    $this->logger->error('Prévention des pertes : courriel de résumé, un envoi en échec (' . $e::class . ').');
+                }
+            }
+        } finally {
+            if ($sent === 0) { // rien n'est parti (pas de configuration d'envoi, ou une erreur) : jour et borne sont RENDUS, on réessaiera
+                $settings->releaseDigestDay($day, $reserved['previous'], $reserved['previousFindingId']);
             }
         }
-        if ($sent === 0) { // pas de configuration d'envoi sur ce site : le jour est rendu, on réessaiera au passage suivant
-            $settings->releaseDigestDay($day, $reserved['previous'], $reserved['previousFindingId']);
+        if ($sent === 0) {
             $this->logger->warning('Prévention des pertes : courriel de résumé non envoyé (aucun envoi n\'a abouti : configuration d\'envoi du site à vérifier).');
 
             return ['status' => 'not_delivered', 'sent' => 0];

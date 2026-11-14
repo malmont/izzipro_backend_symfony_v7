@@ -112,17 +112,19 @@ class LossFindingRepository extends EntityRepository
 
     /**
      * Constats NÉS après un constat donné et encore nouveaux (jamais ouverts, hors reprise, non décidés), pour le courriel de résumé : leur
-     * nombre, leur montant en jeu, et le dernier constat existant (la borne que le courriel posera). Deux nombres : aucun nom.
+     * nombre, leur montant en jeu, et le plus grand identifiant parmi EUX (la borne que le courriel posera). Deux nombres : aucun nom.
      *
-     * @return array{count: int, amount: int, lastId: int}
+     * UNE seule instruction, sur les mêmes lignes : la borne est le dernier constat ANNONCÉ. Lue à part sur toute la table, elle aurait pu
+     * dépasser un constat né entre les deux lectures (une analyse lancée par la synthèse pendant le passage du minuteur), jamais annoncé.
+     *
+     * @return array{count: int, amount: int, lastId: int} `lastId` vaut 0 quand il n'y a rien à annoncer
      */
     public function bornAfter(int $findingId): array
     {
-        $conn = $this->getEntityManager()->getConnection();
-        $row = $conn->fetchAssociative(
-            "SELECT COUNT(*) AS n, COALESCE(SUM(amount_at_stake), 0) AS amount FROM loss_finding WHERE id > ? AND seen_at IS NULL AND backfill = false AND status = 'open'", [$findingId]) ?: [];
+        $row = $this->getEntityManager()->getConnection()->fetchAssociative(
+            "SELECT COUNT(*) AS n, COALESCE(SUM(amount_at_stake), 0) AS amount, COALESCE(MAX(id), 0) AS last FROM loss_finding WHERE id > ? AND seen_at IS NULL AND backfill = false AND status = 'open'", [$findingId]) ?: [];
 
-        return ['count' => (int) ($row['n'] ?? 0), 'amount' => (int) ($row['amount'] ?? 0), 'lastId' => (int) $conn->fetchOne('SELECT COALESCE(MAX(id), 0) FROM loss_finding')];
+        return ['count' => (int) ($row['n'] ?? 0), 'amount' => (int) ($row['amount'] ?? 0), 'lastId' => (int) ($row['last'] ?? 0)];
     }
 
     /**
