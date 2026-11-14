@@ -79,6 +79,16 @@ final class LexiqueCatalog
         'stock-bas' => ['related' => ['valeur-stock'], 'analysis' => ['key' => 'stock.overview', 'params' => [], 'figures' => ['lowStockItems']], 'quiz' => []],
         'semblables' => ['related' => ['coefficient', 'verdict'], 'analysis' => ['key' => 'articles.new', 'params' => [], 'figures' => ['newItems']], 'quiz' => []],
         'verdict' => ['related' => ['semblables', 'coefficient'], 'analysis' => ['key' => 'articles.new', 'params' => [], 'figures' => ['verdictKeep', 'verdictRaise', 'verdictLower']], 'quiz' => []],
+        // Prévention des pertes (14/11/2026, `docs/prevention-pertes.md`) : notions du module, à la FIN (dernières en importance pour le mode
+        // « apprendre »). Aucune analyse liée, aucune illustration : la console ne lit AUCUNE donnée du module, même sur un site qui l'a
+        'constat' => ['related' => ['preuve', 'montant-en-jeu', 'decision-constat'], 'analysis' => null, 'quiz' => ['q1' => 'b']],
+        'montant-en-jeu' => ['related' => ['constat', 'ecart-de-caisse'], 'analysis' => null, 'quiz' => ['q1' => 'b']],
+        'ecart-de-caisse' => ['related' => ['constat', 'montant-en-jeu'], 'analysis' => null, 'quiz' => ['q1' => 'b']],
+        'regle-de-detection' => ['related' => ['constat', 'regle-par-personne'], 'analysis' => null, 'quiz' => []],
+        'regle-par-personne' => ['related' => ['regle-de-detection', 'notice-salaries'], 'analysis' => null, 'quiz' => []],
+        'notice-salaries' => ['related' => ['regle-par-personne', 'constat'], 'analysis' => null, 'quiz' => ['q1' => 'b']],
+        'preuve' => ['related' => ['constat', 'decision-constat'], 'analysis' => null, 'quiz' => []],
+        'decision-constat' => ['related' => ['constat', 'preuve'], 'analysis' => null, 'quiz' => ['q1' => 'c']],
     ];
 
     /**

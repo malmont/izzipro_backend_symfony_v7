@@ -378,3 +378,67 @@ semblables:
 verdict:
     term: 'Verdict'
     definition: 'L''avis de l''application sur le prix d''un article, d''après ses semblables : garder, monter ou baisser. Il est calculé par une règle, pas par l''IA.'
+# Prévention des pertes (14/11/2026) : notions du module, relues par le chef de projet. Elles ne disent que ce que fait le système : un constat
+# n'accuse personne et ne prouve aucune perte ; la décision est toujours celle du gérant. Aucune illustration chiffrée.
+constat:
+    term: 'Constat'
+    definition: 'Un fait que l''application relève dans ce que la caisse a enregistré, et qui mérite votre vérification. Par exemple : un écart à la fermeture de la caisse, un tiroir ouvert plusieurs fois sans vente, une vente annulée juste après l''encaissement. Un constat n''accuse personne et ne prouve aucune perte : il vous montre les faits, et la décision vous revient.'
+    quiz:
+        q1:
+            question: 'Un constat « Tiroir ouvert sans vente » apparaît. Que vous dit-il ?'
+            a: 'Qu''un salarié a volé'
+            b: 'Que la caisse a enregistré des faits à vérifier'
+            c: 'Qu''il manque de l''argent dans la caisse'
+            explanation: 'Un constat relève des faits enregistrés par la caisse. Il n''accuse personne et ne prouve aucune perte : vous vérifiez, puis vous décidez.'
+montant-en-jeu:
+    term: 'Montant en jeu'
+    definition: 'Le montant concerné par un constat. Ce n''est pas une perte prouvée : pour un écart de caisse, c''est l''écart ; pour des prix baissés à la main, c''est la somme des baisses. Certains constats n''ont pas de montant. Il vous aide à choisir ce que vous vérifiez en premier.'
+    quiz:
+        q1:
+            question: 'Un constat affiche 80 $ en jeu. Qu''est-ce que cela veut dire ?'
+            a: 'Que 80 $ ont été volés'
+            b: 'Que les faits à vérifier portent sur 80 $'
+            c: 'Que vous devez 80 $'
+            explanation: 'Le montant en jeu est le montant concerné par le constat, pas une perte prouvée. Après vérification, il peut s''expliquer entièrement.'
+ecart-de-caisse:
+    term: 'Écart de caisse'
+    definition: 'La différence entre les espèces comptées à la fermeture d''une caisse et les espèces que la caisse attendait. Un manque : il y a moins d''argent que prévu ; un excédent : il y en a plus. Un petit écart est courant (une erreur de monnaie) : un constat ne s''ouvre qu''au-delà du seuil réglé (5 $ par défaut).'
+    synonyms: 'manque de caisse, excédent de caisse, erreur de caisse'
+    quiz:
+        q1:
+            question: 'La caisse attendait 300 $ en espèces. Vous en comptez 285 $. Quel est l''écart ?'
+            a: 'Un excédent de 15 $'
+            b: 'Un manque de 15 $'
+            c: 'Aucun écart'
+            explanation: '285 $ comptés pour 300 $ attendus : il manque 15 $. C''est un fait à vérifier (une erreur de monnaie, une vente mal enregistrée), pas la preuve d''un vol.'
+regle-de-detection:
+    term: 'Règle de détection'
+    definition: 'Ce qui fait naître un constat : une situation précise que l''application cherche dans ce que la caisse a enregistré, avec un seuil que vous réglez. Par exemple : plus de 3 ouvertures du tiroir sans vente dans une même session de caisse. Vous pouvez éteindre une règle ou changer son seuil ; cela ne ferme ni ne supprime aucun constat déjà ouvert.'
+    synonyms: 'règle de la prévention des pertes'
+regle-par-personne:
+    term: 'Règle par personne'
+    definition: 'Une règle qui compte les actes répétés d''un même compte de caisse : plusieurs manques de caisse, plusieurs retours ou plusieurs fortes remises sur une courte durée. Elle n''existe que dans les pays où l''application la permet ; ailleurs, elle reste éteinte et vous ne pouvez pas l''allumer. Même allumée, elle n''accuse personne : elle montre une répétition à vérifier. Elle ne dit jamais qui est en faute.'
+notice-salaries:
+    term: 'Notice aux salariés'
+    definition: 'L''information que vous donnez à vos salariés pour leur dire que les opérations de caisse sont analysées et qui voit les constats. Là où elle est exigée, l''application n''analyse rien tant que vous n''avez pas confirmé l''avoir donnée, et elle ne relit pas ce qui s''est passé avant. Un texte modèle vous est proposé dans les réglages ; faites-le vérifier selon les règles de votre pays.'
+    synonyms: 'information des salariés, avis aux employés, information des employés'
+    quiz:
+        q1:
+            question: 'Dans un pays où la notice est exigée, que fait l''application avant votre confirmation ?'
+            a: 'Elle analyse la caisse sans le dire'
+            b: 'Elle n''analyse rien'
+            c: 'Elle prévient elle-même les salariés'
+            explanation: 'Tant que vous n''avez pas confirmé avoir informé vos salariés, rien n''est analysé. L''application ne les prévient pas à votre place : c''est à vous de le faire.'
+preuve:
+    term: 'Preuve'
+    definition: 'Une pièce attachée à un constat : une fermeture de caisse, une ouverture de tiroir, une vente, un retour, une remise. C''est une copie datée de ce que la caisse a enregistré, qui ne peut plus être modifiée ensuite, avec un renvoi vers l''opération d''origine. Elle établit ce que la caisse a enregistré, pas qui est en faute.'
+decision-constat:
+    term: 'Décision sur un constat'
+    definition: 'Ce que vous concluez après avoir vérifié un constat. « À suivre » : vous gardez un œil dessus ; « Expliqué » : il y a une erreur ou une raison légitime ; « Classé sans suite » : rien à retenir ; « Confirmé » : pour vous, les faits sont établis. Une note est demandée pour « Expliqué » et « Confirmé ». La décision est toujours la vôtre, jamais celle de l''application ; vous pouvez la changer, et chaque changement est gardé.'
+    quiz:
+        q1:
+            question: 'Qui décide qu''un constat est « Confirmé » ?'
+            a: 'L''application, d''après ses règles'
+            b: 'L''IA, d''après les preuves'
+            c: 'Vous, après vérification'
+            explanation: 'L''application relève les faits et garde les preuves. Elle ne conclut jamais à votre place : la décision est toujours la vôtre.'

@@ -45,7 +45,11 @@ class LexiqueApiTest extends WebTestCase
         'mesure', 'panier-moyen', 'valeur-stock', 'commandes', 'taux-retour', 'evolution', 'gain-marge', 'grille-location',
         'promotion-location', 'revenu-location', 'revenu-date-location', 'occupation', 'recurrent', 'taux-depart',
     ];
-    private const ADDED_KEYS = ['tresorerie', 'taxes', 'stock-dormant', 'budget', 'cout-d-achat', 'stock-bas', 'semblables', 'verdict'];
+    private const ADDED_KEYS = ['tresorerie', 'taxes', 'stock-dormant', 'budget', 'cout-d-achat', 'stock-bas', 'semblables', 'verdict',
+        // prévention des pertes (14/11/2026) : notions du module, sans chiffre du site
+        'constat', 'montant-en-jeu', 'ecart-de-caisse', 'regle-de-detection', 'regle-par-personne', 'notice-salaries', 'preuve', 'decision-constat'];
+    /** Notions de la prévention des pertes : la console ne lit aucune donnée du module, même sur un site qui l'a */
+    private const LOSS_KEYS = ['constat', 'montant-en-jeu', 'ecart-de-caisse', 'regle-de-detection', 'regle-par-personne', 'notice-salaries', 'preuve', 'decision-constat'];
 
     private KernelBrowser $client;
     private string $token = '';
@@ -83,7 +87,34 @@ class LexiqueApiTest extends WebTestCase
         $en = $this->get('/api/gestion/lexique?locale=en');
         $this->assertSame(['version', 'entries'], array_keys($fr));
         $this->assertSame(array_merge(self::MOBILE_KEYS, self::ADDED_KEYS), array_column($fr['entries'], 'key'));
-        $this->assertSame([54, 62, LexiqueCatalog::keys()], [count(self::MOBILE_KEYS), count($fr['entries']), array_column($en['entries'], 'key')]);
+        $this->assertSame([54, 70, LexiqueCatalog::keys()], [count(self::MOBILE_KEYS), count($fr['entries']), array_column($en['entries'], 'key')]);
+        // Prévention des pertes : aucune analyse liée, aucun écran, aucune illustration chiffrée ; `site` vaut null ; les textes ne disent
+        // que ce que fait le système (aucune accusation, la décision est celle du gérant)
+        $files0 = ['fr' => Yaml::parseFile(static::getContainer()->getParameter('kernel.project_dir') . '/translations/lexique.fr.yaml'), 'en' => Yaml::parseFile(static::getContainer()->getParameter('kernel.project_dir') . '/translations/lexique.en.yaml')];
+        foreach (self::LOSS_KEYS as $key) {
+            $e = array_column($fr['entries'], null, 'key')[$key];
+            $this->assertSame([null, []], [$e['analysis'], $e['screens']], "$key : aucune donnée du module pour la console");
+            foreach (['fr', 'en'] as $locale) {
+                $this->assertArrayNotHasKey('illustration', $files0[$locale][$key], "$key ($locale) : aucune illustration chiffrée");
+            }
+            $this->assertDoesNotMatchRegularExpression('/voleur|coupable|fraudeur|malhonnête/iu', $e['definition'], "$key : aucun mot d'accusation");
+        }
+        $this->assertNull($this->get('/api/gestion/lexique/constat')['site']);
+        $this->assertStringContainsString('n\'accuse personne et ne prouve aucune perte', array_column($fr['entries'], null, 'key')['constat']['definition']);
+        $this->assertStringContainsString('La décision est toujours la vôtre', array_column($fr['entries'], null, 'key')['decision-constat']['definition']);
+        $this->assertSame(['Finding', 'Amount at stake', 'Cash discrepancy', 'Staff notice'], array_map(fn (string $k) => array_column($en['entries'], null, 'key')[$k]['term'], ['constat', 'montant-en-jeu', 'ecart-de-caisse', 'notice-salaries']));
+        // Aucun terme ni synonyme d'une notion du module ne désigne déjà une autre notion (« écart », « seuil », « exercice », « règle »)
+        $labels = fn (array $e): array => array_map('mb_strtolower', array_merge([$e['term']], $e['synonyms']));
+        foreach ($fr['entries'] as $loss) {
+            if (!in_array($loss['key'], self::LOSS_KEYS, true)) {
+                continue;
+            }
+            foreach ($fr['entries'] as $other) {
+                if ($other['key'] !== $loss['key']) {
+                    $this->assertSame([], array_values(array_intersect($labels($loss), $labels($other))), "{$loss['key']} et {$other['key']} partagent un terme ou un synonyme");
+                }
+            }
+        }
         foreach (LexiqueCatalog::keys() as $key) {
             $this->assertMatchesRegularExpression('/^[a-z]+(-[a-z]+)*$/', $key, 'forme des clés : minuscules et tirets');
         }
@@ -426,7 +457,7 @@ class LexiqueApiTest extends WebTestCase
         $this->assertArrayNotHasKey('lesson', $answer, 'la marque reste au serveur');
         // Ce que le modèle a lu à l'appel 1 : le lexique (clé, terme, synonymes) et l'analyse lexique.term, 11e du catalogue
         $first = $payload(0);
-        $this->assertSame([62, ['key' => 'taux-de-marque', 'term' => 'Taux de marque', 'synonymes' => ['taux de marge']], 12], [count($first['lexique']), array_column($first['lexique'], null, 'key')['taux-de-marque'], count($first['analyses'])]);
+        $this->assertSame([70, ['key' => 'taux-de-marque', 'term' => 'Taux de marque', 'synonymes' => ['taux de marge']], 12], [count($first['lexique']), array_column($first['lexique'], null, 'key')['taux-de-marque'], count($first['analyses'])]);
         $this->assertContains('lexique.term', array_column($first['analyses'], 'key'));
         $this->assertStringContainsString('une question de DÉFINITION', (string) FakeLandingAiClient::$requests[0]['system']);
         $schema = FakeLandingAiClient::$requests[0]['output_config']['format']['schema']['properties']['analyses']['items'];

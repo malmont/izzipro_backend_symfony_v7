@@ -18,8 +18,16 @@ enregistré par utilisateur ici.**
 
 ## 1. Les notions
 
-62 notions : les **54 clés du glossaire du mobile**, avec leurs tirets et leurs définitions, et 8 ajouts (`tresorerie`, `taxes`,
-`stock-dormant`, `budget`, `cout-d-achat`, `stock-bas`, `semblables`, `verdict`).
+70 notions : les **54 clés du glossaire du mobile**, avec leurs tirets et leurs définitions, 8 ajouts (`tresorerie`, `taxes`,
+`stock-dormant`, `budget`, `cout-d-achat`, `stock-bas`, `semblables`, `verdict`), et 8 notions de la prévention des pertes (14/11/2026 :
+`constat`, `montant-en-jeu`, `ecart-de-caisse`, `regle-de-detection`, `regle-par-personne`, `notice-salaries`, `preuve`,
+`decision-constat` ; `exercice-pertes` viendra avec le mode exercice).
+
+Les notions de la prévention des pertes (`docs/prevention-pertes.md`) sont à la fin de la liste, servies à tous les sites comme les autres
+(mêmes textes pour tous), **sans analyse liée ni illustration** : la console ne lit aucune donnée du module, même sur un site qui l'a ;
+`site` vaut null, la définition seule coûte 0 unité. Leurs textes, relus par le chef de projet, ne disent que ce que fait le système : un
+constat n'accuse personne et ne prouve aucune perte, la décision est toujours celle du gérant. Le test refuse une illustration, une
+analyse, un mot d'accusation dans ces définitions, et un terme ou un synonyme qui désignerait deux notions.
 
 - **Une clé ne change jamais** : les applications s'y relient. Forme : minuscules et tirets.
 - **Une notion = une seule définition partout** (serveur, web, mobile). On peut améliorer un texte, jamais une clé.

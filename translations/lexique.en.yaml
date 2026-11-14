@@ -375,3 +375,67 @@ semblables:
 verdict:
     term: 'Verdict'
     definition: 'The app''s opinion on the price of an item, from its similar items: keep, raise or lower. It is computed by a rule, not by the AI.'
+# Prévention des pertes (14/11/2026) : notions du module, relues par le chef de projet. Elles ne disent que ce que fait le système : un constat
+# n'accuse personne et ne prouve aucune perte ; la décision est toujours celle du gérant. Aucune illustration chiffrée.
+constat:
+    term: 'Finding'
+    definition: 'A fact the app picks up in what the register recorded and that deserves your review. For example: a discrepancy when the register is closed, a drawer opened several times without a sale, a sale cancelled right after payment. A finding accuses no one and proves no loss: it shows you the facts, and the decision is yours.'
+    quiz:
+        q1:
+            question: 'A "Drawer opened without a sale" finding appears. What does it tell you?'
+            a: 'That an employee stole'
+            b: 'That the register recorded facts to review'
+            c: 'That money is missing from the register'
+            explanation: 'A finding reports facts recorded by the register. It accuses no one and proves no loss: you review, then you decide.'
+montant-en-jeu:
+    term: 'Amount at stake'
+    definition: 'The amount a finding is about. It is not a proven loss: for a cash discrepancy, it is the discrepancy; for prices lowered by hand, it is the total of the reductions. Some findings have no amount. It helps you choose what to review first.'
+    quiz:
+        q1:
+            question: 'A finding shows $80 at stake. What does that mean?'
+            a: 'That $80 was stolen'
+            b: 'That the facts to review involve $80'
+            c: 'That you owe $80'
+            explanation: 'The amount at stake is the amount the finding is about, not a proven loss. After review, it may be fully explained.'
+ecart-de-caisse:
+    term: 'Cash discrepancy'
+    definition: 'The difference between the cash counted when a register is closed and the cash the register expected. A shortage: there is less money than expected; an overage: there is more. A small discrepancy is common (a change mistake): a finding only opens beyond the threshold set ($5 by default).'
+    synonyms: 'cash shortage, cash overage, till discrepancy'
+    quiz:
+        q1:
+            question: 'The register expected $300 in cash. You count $285. What is the discrepancy?'
+            a: 'An overage of $15'
+            b: 'A shortage of $15'
+            c: 'No discrepancy'
+            explanation: '$285 counted for $300 expected: $15 is missing. It is a fact to review (a change mistake, a sale recorded wrongly), not proof of theft.'
+regle-de-detection:
+    term: 'Detection rule'
+    definition: 'What makes a finding appear: a precise situation the app looks for in what the register recorded, with a threshold you set. For example: more than 3 drawer openings without a sale in the same register session. You can turn a rule off or change its threshold; this neither closes nor deletes any finding already open.'
+    synonyms: 'loss prevention rule'
+regle-par-personne:
+    term: 'Per-person rule'
+    definition: 'A rule that counts repeated acts by the same register account: several cash shortages, several returns or several large discounts over a short time. It only exists in countries where the app allows it; elsewhere it stays off and you cannot turn it on. Even when on, it accuses no one: it shows a repetition to review. It never says who is at fault.'
+notice-salaries:
+    term: 'Staff notice'
+    definition: 'The information you give your employees to tell them that register operations are analysed and who sees the findings. Where it is required, the app analyses nothing until you have confirmed giving it, and it does not go back over what happened before. A template is offered in the settings; have it checked against the rules of your country.'
+    synonyms: 'employee notice'
+    quiz:
+        q1:
+            question: 'In a country where the notice is required, what does the app do before your confirmation?'
+            a: 'It analyses the register without saying so'
+            b: 'It analyses nothing'
+            c: 'It informs the employees itself'
+            explanation: 'Until you have confirmed that you informed your employees, nothing is analysed. The app does not inform them for you: that is your job.'
+preuve:
+    term: 'Evidence'
+    definition: 'An item attached to a finding: a register closing, a drawer opening, a sale, a return, a discount. It is a dated copy of what the register recorded, which can no longer be changed afterwards, with a reference to the original operation. It establishes what the register recorded, not who is at fault.'
+decision-constat:
+    term: 'Decision on a finding'
+    definition: 'What you conclude after reviewing a finding. "To watch": you keep an eye on it; "Explained": there is a mistake or a legitimate reason; "Dismissed": nothing to keep; "Confirmed": for you, the facts are established. A note is required for "Explained" and "Confirmed". The decision is always yours, never the app''s; you can change it, and every change is kept.'
+    quiz:
+        q1:
+            question: 'Who decides that a finding is "Confirmed"?'
+            a: 'The app, from its rules'
+            b: 'The AI, from the evidence'
+            c: 'You, after review'
+            explanation: 'The app reports the facts and keeps the evidence. It never concludes for you: the decision is always yours.'
