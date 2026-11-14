@@ -14,15 +14,18 @@ final class MemoiresTeamVoter extends Voter
 {
     public const ATTRIBUTE = 'MEMOIRES_TEAM';
 
+    /** Voit tout Mémoires Vivantes (14/11/2026) : administrateur du site ou responsable des biographes (TeamRoles::MEMOIRES_MANAGE) */
+    public const MANAGE = 'MEMOIRES_MANAGE';
+
     protected function supports(string $attribute, mixed $subject): bool
     {
-        return $attribute === self::ATTRIBUTE;
+        return in_array($attribute, [self::ATTRIBUTE, self::MANAGE], true);
     }
 
     protected function voteOnAttribute(string $attribute, mixed $subject, TokenInterface $token): bool
     {
         $user = $token->getUser();
 
-        return $user instanceof UserInterface && TeamRoles::opensMemoires($user);
+        return $user instanceof UserInterface && ($attribute === self::MANAGE ? TeamRoles::managesMemoires($user) : TeamRoles::opensMemoires($user));
     }
 }

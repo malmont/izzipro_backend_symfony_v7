@@ -14,7 +14,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * Administrateur du site ou biographe. Contrat : docs/memoires-vivantes.md, « Équipe ».
  */
 #[Route('/api/memoires/team')]
-#[IsGranted(MemoiresTeamVoter::ATTRIBUTE)]
+#[IsGranted(MemoiresTeamVoter::MANAGE)] // administrateur du site ou responsable des biographes (14/11/2026) ; un biographe ne gère pas l'équipe
 final class TeamController extends AbstractController
 {
     public function __construct(private readonly ListTeamUseCase $listTeam)

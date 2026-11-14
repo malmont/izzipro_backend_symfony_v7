@@ -8,8 +8,8 @@ use App\Services\TenantEntityManagerProvider;
 
 /**
  * Conditions d'une famille d'applications (lot APPS-MEMBRES M1, `docs/apps-membres.md` § 3) : les textes EXISTANTS, sans nouveau
- * texte. Boutique : la fiche Entreprise du site. Mémoires Vivantes et caisse : le profil d'application de la famille, dont un champ
- * vide prend celui de la fiche Entreprise (`AppProfileService`).
+ * texte. Boutique : la fiche Entreprise du site. Living Memory et caisse : le profil d'application de la famille (`livingmemory`,
+ * `pos`), dont un champ vide prend celui de la fiche Entreprise (`AppProfileService`).
  *
  * La version est calculée par le serveur : une empreinte des textes ENREGISTRÉS de la famille, toutes langues confondues (lus en
  * SQL, pas par la fiche traduite : le résultat ne dépend ni de la langue demandée, ni de l'ordre des lectures). Elle change dès

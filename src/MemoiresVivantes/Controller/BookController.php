@@ -75,7 +75,7 @@ class BookController extends AbstractController
         /** @var \App\MemoiresVivantes\Repository\BookRepository $bookRepo */
         $bookRepo = $em->getRepository(Book::class);
 
-        $isAdmin = \App\Security\TeamRoles::opensMemoires($user); // administrateur du site ou biographe (13/11/2026) : livres de l'entreprise
+        $isAdmin = \App\Security\TeamRoles::managesMemoires($user); // administrateur du site ou responsable des biographes (14/11/2026) : tous les livres du site
         $scope = $request->query->get('scope', $isAdmin ? 'all' : 'my');
         $targetUserId = $request->query->get('userId') ? (int) $request->query->get('userId') : null;
 
@@ -88,6 +88,9 @@ class BookController extends AbstractController
                 return $this->json(['error' => 'biographerId : identifiant ou none.', 'code' => 'BIOGRAPHER_INVALID'], 400);
             }
             $books = $bookRepo->findAllWithChaptersAndPhotos($targetUserId, $biographerId, $unassigned);
+        } elseif (in_array(\App\Security\TeamRoles::MEMOIRES_BIOGRAPHE, $user->getRoles(), true)) {
+            // Biographe (14/11/2026) : SES livres seulement, possédés et affectés ; les filtres de l'entreprise ne lui sont pas ouverts
+            $books = $bookRepo->findWithChaptersAndPhotosOfBiographer($user);
         } else {
             $books = $this->getBooksByUserUseCase->execute($user);
         }
@@ -219,6 +222,11 @@ class BookController extends AbstractController
     {
         $user = $this->getUser();
         if (!$user) return $this->json(['error' => 'Unauthorized'], 401);
+        // Mémoires Vivantes web est l'outil de l'équipe (14/11/2026) : seule l'équipe crée un livre WEB. Un compte client n'a que des livres
+        // de l'application (POST /api/memoires/mobile/books), avec leurs quotas et leurs chapitres payants.
+        if (!\App\Security\TeamRoles::opensMemoires($user)) {
+            return $this->json(['error' => \App\Security\TeamRoles::MEMOIRES_TEAM_ONLY, 'code' => \App\Security\TeamRoles::MEMOIRES_TEAM_ONLY, 'message' => \App\Security\TeamRoles::MEMOIRES_TEAM_ONLY_MESSAGE], 403);
+        }
 
         $data = json_decode($request->getContent(), true);
         $dto = new BookInputDto(is_array($data) ? $data : []);
@@ -226,6 +234,7 @@ class BookController extends AbstractController
             return $this->json(['error' => 'Le titre du livre est obligatoire.'], 422);
         }
         $book = $this->createBookUseCase->execute($user, $dto);
+        $this->bookBiographer->assignCreator($book, $user); // un biographe devient le biographe affecté du livre qu'il crée
         
         $host = $this->resolveHost($request);
         return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book), typeInfo: $this->typeInfo($book), aiQuotaLimited: $this->aiQuota->isLimited($book, $this->getUser())), 201);

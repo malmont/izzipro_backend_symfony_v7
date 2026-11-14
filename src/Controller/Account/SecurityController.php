@@ -129,6 +129,10 @@ class SecurityController extends AbstractController
         if (!$user instanceof UserInterface) {
             return $this->json(['error' => 'User not found', 'code' => 'USER_NOT_FOUND', 'message' => 'User not found'], Response::HTTP_UNAUTHORIZED);
         }
+        // Mémoires Vivantes web : l'outil de l'équipe ; la session d'un compte client s'éteint ici (14/11/2026)
+        if ($refused = $auth->memoiresWebRefusal($user, $app, 'refresh')) {
+            return $refused;
+        }
         // Dernière activité du compte (16/10/2026) : un rafraîchissement vaut une connexion
         try {
             $user->setLastLoginAt(new \DateTimeImmutable());

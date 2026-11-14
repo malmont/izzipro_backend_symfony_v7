@@ -79,8 +79,10 @@ class OtpApiController extends AbstractController
 
         $em->remove($otpCode);
         $em->flush();
-        // APPS-MEMBRES M3 : en mode « require », un compte client qui n'est pas membre de la famille demandée passe par « Rejoindre »
-        if ($refused = $this->authenticationService->membershipRefusal($user, $data['app'] ?? null, $platform, 'otp-verify', $request)) {
+        // Mémoires Vivantes web est l'outil de l'équipe ; puis APPS-MEMBRES M3 : en mode « require », un compte client qui n'est pas membre
+        // de la famille demandée passe par « Rejoindre »
+        if ($refused = $this->authenticationService->memoiresWebRefusal($user, $data['app'] ?? null, 'otp-verify')
+            ?? $this->authenticationService->membershipRefusal($user, $data['app'] ?? null, $platform, 'otp-verify', $request)) {
             return $refused;
         }
         if ($user instanceof User) {

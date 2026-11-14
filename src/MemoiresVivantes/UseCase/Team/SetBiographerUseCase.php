@@ -13,14 +13,26 @@ final class SetBiographerUseCase
     {
     }
 
-    /** @return array{id: int, isBiographer: bool, teamRoles: list<string>, roles: list<string>, changed: bool} */
-    public function execute(User $user, bool $biographer): array
+    /**
+     * @param ?bool $biographer null : ce rôle n'est pas touché
+     * @param ?bool $responsable null : ce rôle n'est pas touché (responsable des biographes, 14/11/2026)
+     *
+     * @return array{id: int, isBiographer: bool, isResponsable: bool, teamRoles: list<string>, roles: list<string>, changed: bool}
+     */
+    public function execute(User $user, ?bool $biographer, ?bool $responsable = null): array
     {
-        $changed = $this->teamRoles->set($user, TeamRoles::MEMOIRES_BIOGRAPHE, $biographer);
+        $changed = false;
+        if ($biographer !== null) {
+            $changed = $this->teamRoles->set($user, TeamRoles::MEMOIRES_BIOGRAPHE, $biographer) || $changed;
+        }
+        if ($responsable !== null) {
+            $changed = $this->teamRoles->set($user, TeamRoles::MEMOIRES_RESPONSABLE, $responsable) || $changed;
+        }
 
         return [
             'id' => (int) $user->getId(),
             'isBiographer' => in_array(TeamRoles::MEMOIRES_BIOGRAPHE, $user->getRoles(), true),
+            'isResponsable' => in_array(TeamRoles::MEMOIRES_RESPONSABLE, $user->getRoles(), true),
             'teamRoles' => TeamRoles::of($user->getRoles()),
             'roles' => $user->getRoles(),
             'changed' => $changed,

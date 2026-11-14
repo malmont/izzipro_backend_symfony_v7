@@ -26,7 +26,7 @@ class UserActivityStatsRepository
     public function mobileUserIds(string $search, int $page, int $perPage): array
     {
         $where = 'WHERE (u.signup_channel = \'mobile\' OR EXISTS (SELECT 1 FROM mv_book b WHERE b.user_id = u.id AND b.channel = \'mobile\'))'
-            . ' AND u.roles::text NOT LIKE \'%ROLE_ADMIN%\' AND u.roles::text NOT LIKE \'%ROLE_MEMOIRES_BIOGRAPHE%\'';
+            . ' AND u.roles::text NOT LIKE \'%ROLE_ADMIN%\' AND u.roles::text NOT LIKE \'%ROLE_MEMOIRES_BIOGRAPHE%\' AND u.roles::text NOT LIKE \'%ROLE_MEMOIRES_RESPONSABLE%\'';
         $params = [];
         if ($search !== '') {
             $where .= ' AND (u.email ILIKE :like OR u.firstname ILIKE :like OR u.lastname ILIKE :like)';

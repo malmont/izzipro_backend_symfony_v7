@@ -53,7 +53,32 @@ class AuthenticationService
 
     public function appFamily(UserInterface $user, mixed $app, string $context): ?string
     {
+        if (self::isMemoiresWeb($app)) {
+            return \App\Security\TeamRoles::MEMOIRES_WEB_APP; // l'outil de l'équipe : pas une famille à membres, seulement dit dans le jeton
+        }
+
         return $user instanceof User ? $this->memberships?->sessionFamily($user, $app, $context) : null;
+    }
+
+    /**
+     * Mémoires Vivantes web est l'outil de l'équipe (14/11/2026, docs/memoires-vivantes.md, « Équipe ») : quand le front dit
+     * `app: "memoires"`, seuls un administrateur du site, un responsable des biographes ou un biographe reçoivent une session. Tout
+     * autre compte : 403 MEMOIRES_TEAM_ONLY, à la connexion, à la vérification du code ET au rafraîchissement (une session ouverte
+     * d'un compte client s'éteint à son prochain rafraîchissement). Sans `app: "memoires"`, rien ne change.
+     */
+    public function memoiresWebRefusal(UserInterface $user, mixed $app, string $context): ?JsonResponse
+    {
+        if (!self::isMemoiresWeb($app) || \App\Security\TeamRoles::opensMemoires($user)) {
+            return null;
+        }
+        $this->logger->info(sprintf('[MEMOIRES] web réservé à l\'équipe : compte %s refusé (%s, site %s)', $user instanceof User ? (string) $user->getId() : '?', $context, $this->tenantConnectionProvider->getTenantCode() ?? 'inconnu'));
+
+        return new JsonResponse(['error' => \App\Security\TeamRoles::MEMOIRES_TEAM_ONLY, 'code' => \App\Security\TeamRoles::MEMOIRES_TEAM_ONLY, 'message' => \App\Security\TeamRoles::MEMOIRES_TEAM_ONLY_MESSAGE], Response::HTTP_FORBIDDEN);
+    }
+
+    private static function isMemoiresWeb(mixed $app): bool
+    {
+        return is_string($app) && strtolower(trim($app)) === \App\Security\TeamRoles::MEMOIRES_WEB_APP;
     }
 
     /**
@@ -143,6 +168,11 @@ class AuthenticationService
 
         if ($refused = $this->platformRoleViolation($user, $platform)) {
             $this->auditPos($platform, null, $email, 'platform_not_allowed');
+            return $refused;
+        }
+
+        // Mémoires Vivantes web : l'outil de l'équipe ; un compte client est refusé avant tout envoi de code
+        if ($refused = $this->memoiresWebRefusal($user, $app, 'login')) {
             return $refused;
         }
 

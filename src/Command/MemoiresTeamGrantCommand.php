@@ -36,7 +36,8 @@ class MemoiresTeamGrantCommand extends Command
         $this
             ->addArgument('tenant', InputArgument::REQUIRED, 'Code du site (table tenants)')
             ->addArgument('email', InputArgument::REQUIRED, 'Adresse du compte existant')
-            ->addOption('revoke', null, InputOption::VALUE_NONE, 'Retirer le rôle au lieu de le poser');
+            ->addOption('revoke', null, InputOption::VALUE_NONE, 'Retirer le rôle au lieu de le poser')
+            ->addOption('role', null, InputOption::VALUE_REQUIRED, 'biographe (défaut) ou responsable (responsable des biographes, 14/11/2026)', 'biographe');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -56,9 +57,15 @@ class MemoiresTeamGrantCommand extends Command
 
             return Command::FAILURE;
         }
+        $role = ['biographe' => TeamRoles::MEMOIRES_BIOGRAPHE, 'responsable' => TeamRoles::MEMOIRES_RESPONSABLE][(string) $input->getOption('role')] ?? null;
+        if ($role === null) {
+            $io->error('--role : biographe ou responsable.');
+
+            return Command::FAILURE;
+        }
         $member = !$input->getOption('revoke');
-        $changed = $this->teamRoles->set($user, TeamRoles::MEMOIRES_BIOGRAPHE, $member, ['console']);
-        $io->success(sprintf('%s : %s (rôles : %s).', $user->getEmail(), $changed ? ($member ? 'biographe ajouté' : 'biographe retiré') : 'déjà dans cet état, rien écrit', implode(', ', $user->getRoles())));
+        $changed = $this->teamRoles->set($user, $role, $member, ['console']);
+        $io->success(sprintf('%s : %s (rôles : %s).', $user->getEmail(), $changed ? ($member ? 'rôle ' . $role . ' ajouté' : 'rôle ' . $role . ' retiré') : 'déjà dans cet état, rien écrit', implode(', ', $user->getRoles())));
 
         return Command::SUCCESS;
     }

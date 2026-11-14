@@ -23,7 +23,7 @@ final class UserPopulationResolver
 
     public static function isTeam(User $user): bool
     {
-        return in_array(TeamRoles::MEMOIRES_BIOGRAPHE, $user->getRoles(), true);
+        return TeamRoles::hasAny($user->getRoles(), [TeamRoles::MEMOIRES_BIOGRAPHE, TeamRoles::MEMOIRES_RESPONSABLE]); // biographe ou responsable des biographes (14/11/2026)
     }
 
     public static function isAdmin(User $user): bool

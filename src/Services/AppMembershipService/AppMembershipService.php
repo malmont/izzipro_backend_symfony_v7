@@ -17,13 +17,13 @@ use Psr\Log\LoggerInterface;
  * Appartenances des comptes clients aux familles d'applications (lot APPS-MEMBRES M1, 14/11/2026, `docs/apps-membres.md`).
  * Point d'entrée unique : toute création ou retrait passe ici et s'inscrit au journal du site (content_audit_log, ressource
  * `user_app`, action `grant` ou `revoke`). Jamais d'ajout silencieux : une appartenance naît d'un geste du client (inscription
- * dans la famille, commande en invité suivie du choix d'un mot de passe, consentement de rattachement en caisse) ou d'une
- * invitation de l'équipe, jamais d'une simple connexion.
+ * dans la famille, commande en invité suivie du choix d'un mot de passe, consentement de rattachement en caisse, étape
+ * « Rejoindre »), jamais d'une simple connexion.
  *
  * M1 ne refuse rien : `sessionFamily()` note seulement (journal de l'application, repère OBSERVE_MARK) la connexion d'un compte
  * client à une famille dont il n'est pas membre, ce que le mode « exiger » refusera au lot M3.
  *
- * Les points d'entrée appelés depuis une route existante (`registered`, `invited`, `passwordChosen`, `posLinked`,
+ * Les points d'entrée appelés depuis une route existante (`registered`, `passwordChosen`, `posLinked`,
  * `posUnlinked`, `sessionFamily`) ne lèvent jamais : une appartenance qui ne s'écrit pas est journalisée en erreur et la route
  * continue comme avant ce lot.
  */
@@ -31,7 +31,6 @@ final class AppMembershipService
 {
     public const ACTION_GRANT = 'grant';
     public const ACTION_REVOKE = 'revoke';
-    public const ACTION_ACCEPT = 'accept';
 
     /** Repère des lignes du journal de l'application en mode « observer » : une ligne par connexion qui serait refusée */
     public const OBSERVE_MARK = '[APPS-MEMBRES] observer';
@@ -102,8 +101,8 @@ final class AppMembershipService
 
     /**
      * Le refus `APP_MEMBERSHIP_REQUIRED`, ou null : la session peut être rendue. Refus seulement en mode « require », pour un compte
-     * CLIENT, quand le front a dit son application : (a) le compte n'est pas membre de la famille ; (b) il en est membre par invitation
-     * de l'équipe, n'a encore rien accepté, et la famille a des conditions. Le refus porte les conditions et un jeton de passage.
+     * CLIENT, quand le front a dit son application et que le compte n'est pas membre de sa famille. Le refus porte les conditions de
+     * la famille et un jeton de passage.
      * Sans `app` en mode « require », la connexion passe comme avant et elle est notée (un mode « strict » la refusera plus tard).
      * Une panne de ce contrôle ne ferme jamais la porte : elle est journalisée en erreur et la session est rendue.
      *
@@ -121,20 +120,15 @@ final class AppMembershipService
 
                 return null;
             }
-            $membership = $this->repository()->membership((int) $user->getId(), $family);
-            $reason = match (true) {
-                $membership === null => AppFamilies::REASON_MEMBERSHIP,
-                $membership['source'] === AppFamilies::SOURCE_INVITE && $membership['termsVersion'] === null && $this->terms->version($family) !== null => AppFamilies::REASON_TERMS,
-                default => null,
-            };
-            if ($reason === null) {
-                return null;
+            if ($this->repository()->membership((int) $user->getId(), $family) !== null) {
+                return null; // membre : une appartenance reprise ou née d'une inscription sans version est acquise, rien ne lui est demandé
             }
+            $reason = AppFamilies::REASON_MEMBERSHIP;
             $token = $this->tokens->issue($user, $family, $platform, $reason);
             $this->logger->info(sprintf('[APPS-MEMBRES] require : le compte %d doit rejoindre « %s » (%s, %s, site %s) ; session refusée', (int) $user->getId(), $family, $reason, $context, $this->tenant->getTenantCode() ?? 'inconnu'));
 
             return ['error' => 'APP_MEMBERSHIP_REQUIRED', 'code' => 'APP_MEMBERSHIP_REQUIRED',
-                'message' => $reason === AppFamilies::REASON_TERMS ? 'Acceptez les conditions de cette application pour continuer.' : 'Rejoignez cette application pour continuer.',
+                'message' => 'Rejoignez cette application pour continuer.',
                 'app' => $family, 'reason' => $reason, 'terms' => $this->termsOf($family, $host, $locale), 'joinToken' => $token['token'], 'expiresAt' => $token['expiresAt']];
         } catch (\Throwable $e) {
             $this->logger->error(sprintf('[APPS-MEMBRES] contrôle d\'appartenance en panne (%s) : session rendue', $e->getMessage()));
@@ -144,8 +138,8 @@ final class AppMembershipService
     }
 
     /**
-     * « Rejoindre » : le client accepte les conditions de la famille. Crée l'appartenance (source `join`) ou, pour un invité de
-     * l'équipe, enregistre son acceptation sur l'appartenance qu'il a déjà (action `accept`) ; le jeton de passage ne sert plus.
+     * « Rejoindre » : le client accepte les conditions de la famille. Crée l'appartenance (source `join`, version acceptée) ; le jeton
+     * de passage ne sert plus.
      * Jamais d'ajout silencieux : sans cet appel, rien n'est créé.
      *
      * @return array{user: User, app: string, platform: string} de quoi rendre la session, comme une connexion de la même plateforme
@@ -171,8 +165,6 @@ final class AppMembershipService
         $userId = (int) $user->getId();
         if ($this->repository()->membership($userId, $family) === null) {
             $this->grant($user, $family, AppFamilies::SOURCE_JOIN, $version);
-        } elseif ($version !== null && $this->repository()->accept($userId, $family, $version)) {
-            $this->audit->record(AppFamilies::AUDIT_RESOURCE, $userId, self::ACTION_ACCEPT, ['termsVersion' => null], ['app' => $family, 'termsVersion' => $version], [$family, self::ACTION_ACCEPT]);
         }
         if ($this->repository()->membership($userId, $family) === null) {
             throw $invalid; // le compte ne peut pas être membre (compte sans mot de passe choisi) : rien n'a été créé
@@ -303,12 +295,6 @@ final class AppMembershipService
             return;
         }
         $this->safely('inscription', fn () => $this->grant($user, $family, AppFamilies::SOURCE_REGISTER, $this->current($family, $termsVersion)));
-    }
-
-    /** Compte client créé par l'équipe de Mémoires Vivantes : membre de la famille, sans conditions acceptées (elles le seront à sa première connexion, lot M3) */
-    public function invited(User $user): void
-    {
-        $this->safely('invitation', fn () => $this->grant($user, AppFamilies::MEMOIRES, AppFamilies::SOURCE_INVITE));
     }
 
     /**

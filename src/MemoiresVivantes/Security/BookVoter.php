@@ -27,13 +27,23 @@ class BookVoter extends Voter
             return false;
         }
 
-        if (TeamRoles::opensMemoires($user)) { // administrateur du site ou biographe de l'équipe (13/11/2026)
+        return self::canAccess($user, $subject);
+    }
+
+    /**
+     * La règle d'accès à un livre (14/11/2026), commune aux livres et à leurs chapitres : l'administrateur du site et le responsable
+     * des biographes ont tous les livres ; un biographe a SES livres, ceux qu'il possède et ceux dont il est le biographe affecté ;
+     * tout autre compte a les livres qu'il possède.
+     */
+    public static function canAccess(UserInterface $user, Book $book): bool
+    {
+        if (TeamRoles::managesMemoires($user)) {
+            return true;
+        }
+        if ($book->getUser()->getUserIdentifier() === $user->getUserIdentifier()) {
             return true;
         }
 
-        /** @var Book $book */
-        $book = $subject;
-
-        return $book->getUser()->getUserIdentifier() === $user->getUserIdentifier();
+        return in_array(TeamRoles::MEMOIRES_BIOGRAPHE, $user->getRoles(), true) && $book->getBiographer()?->getUserIdentifier() === $user->getUserIdentifier();
     }
 }

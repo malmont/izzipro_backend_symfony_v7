@@ -32,11 +32,11 @@ final class BookBiographerService
     public function assign(Book $book, ?int $biographerId, User $editor): bool
     {
         $current = $book->getBiographer()?->getId();
-        if (!TeamRoles::opensMemoires($editor)) {
+        if (!TeamRoles::managesMemoires($editor)) { // administrateur du site ou responsable des biographes (14/11/2026) ; un biographe n'affecte pas
             if ($current === $biographerId) {
                 return false; // un front qui renvoie la fiche entière : rien à faire
             }
-            throw new ApiErrorException('FORBIDDEN', 'Seul un administrateur ou un biographe de l\'équipe affecte le biographe d\'un livre.', 403);
+            throw new ApiErrorException('FORBIDDEN', 'Seul un administrateur ou le responsable des biographes affecte le biographe d\'un livre.', 403);
         }
         $target = null;
         if ($biographerId !== null) {
@@ -52,6 +52,25 @@ final class BookBiographerService
         $book->setBiographer($target);
         $this->emProvider->getEntityManager()->flush();
         $this->audit->record(self::AUDIT_RESOURCE, (string) $book->getId(), $target === null ? 'unassign' : 'assign', $before, self::describe($target), ['biographerId']);
+
+        return true;
+    }
+
+    /**
+     * Un biographe qui crée un livre en devient le biographe affecté (14/11/2026) : sans cela son livre serait « sans biographe » dans
+     * les filtres du responsable. Au journal comme toute affectation. Rien pour un autre créateur, ni si le livre a déjà un biographe.
+     * Sert aussi au propriétaire d'un livre web devenu biographe (repère `family_split`, `AppFamilySplit`).
+     *
+     * @return bool vrai si le livre a changé
+     */
+    public function assignCreator(Book $book, User $creator, string $mark = 'creator'): bool
+    {
+        if ($book->getBiographer() !== null || !in_array(TeamRoles::MEMOIRES_BIOGRAPHE, $creator->getRoles(), true)) {
+            return false;
+        }
+        $book->setBiographer($creator);
+        $this->emProvider->getEntityManager()->flush();
+        $this->audit->record(self::AUDIT_RESOURCE, (string) $book->getId(), 'assign', null, self::describe($creator), ['biographerId', $mark]);
 
         return true;
     }

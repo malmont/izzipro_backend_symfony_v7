@@ -30,6 +30,29 @@ class BookRepository extends EntityRepository
     }
 
     /**
+     * Les livres d'un biographe (14/11/2026) : ceux qu'il possède et ceux dont il est le biographe affecté.
+     *
+     * @return Book[]
+     */
+    public function findWithChaptersAndPhotosOfBiographer(User $biographer): array
+    {
+        return $this->createQueryBuilder('b')
+            ->leftJoin('b.chapters', 'c')
+            ->addSelect('c')
+            ->leftJoin('c.photos', 'p')
+            ->addSelect('p')
+            ->leftJoin('b.contributors', 'cb')
+            ->addSelect('cb')
+            ->where('b.user = :user OR b.biographer = :user')
+            ->setParameter('user', $biographer)
+            ->orderBy('b.createdAt', 'DESC')
+            ->addOrderBy('c.position', 'ASC')
+            ->addOrderBy('cb.sortOrder', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * @return Book[]
      */
     public function findAllWithChaptersAndPhotos(?int $userId = null, ?int $biographerId = null, bool $unassigned = false): array

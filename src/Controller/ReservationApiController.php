@@ -37,7 +37,7 @@ class ReservationApiController extends AbstractController
         }
 
         $roles = method_exists($user, 'getRoles') ? $user->getRoles() : [];
-        $isAdmin = \App\Security\TeamRoles::opensMemoires($roles); // administrateur du site ou biographe de l'équipe (13/11/2026)
+        $isAdmin = \App\Security\TeamRoles::managesMemoires($roles); // administrateur du site ou responsable des biographes (14/11/2026) ; un biographe ne voit que les siens
 
         $filters = [];
 
@@ -255,8 +255,10 @@ class ReservationApiController extends AbstractController
                     'message' => 'Réservation introuvable pour l\'identifiant fourni.'
                 ], Response::HTTP_NOT_FOUND);
             }
-            $isAdmin = \App\Security\TeamRoles::opensMemoires($user); // administrateur du site ou biographe de l'équipe (13/11/2026)
-            if (!$isAdmin && $existing->getBiographer()?->getId() !== $user->getId()) {
+            // Tous les rendez-vous pour l'administrateur et le responsable des biographes ; le biographe : ceux dont il est le biographe et
+            // ceux de SES livres (14/11/2026)
+            $isAdmin = \App\Security\TeamRoles::managesMemoires($user);
+            if (!$isAdmin && $existing->getBiographer()?->getId() !== $user->getId() && !$this->isReservationOfOwnBook($existing, $user)) {
                 return $this->json([
                     'success' => false,
                     'message' => 'Seuls l\'administrateur du site et le biographe de ce rendez-vous peuvent le confirmer.'
@@ -327,5 +329,17 @@ class ReservationApiController extends AbstractController
             'step_number' => $int('step_number'), 'total_steps' => $int('total_steps'), 'forfait_name' => $text('forfait_name'),
             'step_label' => null, 'biographer_id' => $int('biographer_id'), 'biographer_name' => null, 'biographer_email' => null,
         ];
+    }
+
+    /** Le rendez-vous est-il celui d'un livre que ce compte possède ou dont il est le biographe affecté ? (règle du livre : BookVoter::canAccess) */
+    private function isReservationOfOwnBook(\App\Entity\Reservation $reservation, \Symfony\Component\Security\Core\User\UserInterface $user): bool
+    {
+        $bookId = $reservation->getBookId();
+        if ($bookId === null || !\Symfony\Component\Uid\Uuid::isValid($bookId)) {
+            return false;
+        }
+        $book = $this->emProvider->getEntityManager()->getRepository(\App\MemoiresVivantes\Entity\Book::class)->find(\Symfony\Component\Uid\Uuid::fromString($bookId));
+
+        return $book !== null && \App\MemoiresVivantes\Security\BookVoter::canAccess($user, $book);
     }
 }

@@ -27,14 +27,9 @@ class ChapterVoter extends Voter
             return false;
         }
 
-        if (TeamRoles::opensMemoires($user)) { // administrateur du site ou biographe de l'équipe (13/11/2026)
-            return true;
-        }
-
         /** @var Chapter $chapter */
         $chapter = $subject;
-        $book = $chapter->getBook();
 
-        return $book->getUser()->getUserIdentifier() === $user->getUserIdentifier();
+        return BookVoter::canAccess($user, $chapter->getBook()); // la règle du livre : tous, ses livres (possédés et affectés), ou les siens
     }
 }

@@ -53,9 +53,10 @@ security:
         - { path: ^/api/webhooks/, roles: PUBLIC_ACCESS }
 
         # 🔹 Administration Mémoires Vivantes (Gestion des utilisateurs, etc.) : ROLE_ADMIN ; depuis le 13/11/2026 le biographe de
-        #    l'équipe (ROLE_MEMOIRES_BIOGRAPHE) passe aussi, puis chaque contrôleur exige ROLE_ADMIN sauf la liste et l'invitation des
-        #    utilisateurs (UserManagementController, #[IsGranted('MEMOIRES_TEAM')])
-        - { path: ^/api/memoires/admin/, roles: [ROLE_ADMIN, ROLE_MEMOIRES_BIOGRAPHE] }
+        #    le responsable des biographes (ROLE_MEMOIRES_RESPONSABLE, 14/11/2026) passe aussi, puis chaque contrôleur exige ROLE_ADMIN sauf la
+        #    console Équipe : liste des comptes, invitation d'un biographe, rôle de biographe (UserManagementController, #[IsGranted('MEMOIRES_MANAGE')]).
+        #    Un biographe n'entre plus dans la console.
+        - { path: ^/api/memoires/admin/, roles: [ROLE_ADMIN, ROLE_MEMOIRES_RESPONSABLE] }
         # Équipe de Mémoires Vivantes (13/11/2026) : liste des biographes, pour un compte connecté (voter MEMOIRES_TEAM ensuite)
         - { path: ^/api/memoires/team$, roles: IS_AUTHENTICATED_FULLY }
 

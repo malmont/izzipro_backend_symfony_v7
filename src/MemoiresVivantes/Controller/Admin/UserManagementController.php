@@ -25,7 +25,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * (rôles, modification, suppression) reste à ROLE_ADMIN, méthode par méthode. Contrat : docs/memoires-vivantes.md, « Équipe ».
  */
 #[Route('/api/memoires/admin/users')]
-#[IsGranted(MemoiresTeamVoter::ATTRIBUTE)]
+#[IsGranted(MemoiresTeamVoter::MANAGE)] // administrateur du site ou responsable des biographes (14/11/2026)
 class UserManagementController extends AbstractController
 {
     /** Taille de page par défaut et maximale de la liste des utilisateurs */
@@ -41,7 +41,7 @@ class UserManagementController extends AbstractController
         private readonly \App\MemoiresVivantes\Services\MobileUserStatsService $mobileUserStats,
         private readonly \App\Services\AccountService\SessionIdentityService $sessions, // jetons de renouvellement après un changement de courriel
         private readonly \App\MemoiresVivantes\UseCase\Team\SetBiographerUseCase $setBiographer,
-        private readonly ?\App\Services\AppMembershipService\AppMembershipService $memberships = null // familles d'applications (APPS-MEMBRES M1, 14/11/2026)
+        private readonly \App\Services\TeamRoleService\TeamRoleService $teamRoles // rôle de biographe de l'invité, posé par le chemin unique (14/11/2026)
     ) {}
 
     /** Adresse du site frontend (les liens d'activation y renvoient ; avant, ils pointaient vers le stockage des médias) */
@@ -107,6 +107,7 @@ class UserManagementController extends AbstractController
                 'roles' => $u->getRoles(),
                 'role' => in_array('ROLE_ADMIN', $u->getRoles(), true) ? 'ROLE_ADMIN' : 'ROLE_USER',
                 'isBiographer' => in_array(TeamRoles::MEMOIRES_BIOGRAPHE, $u->getRoles(), true),
+                'isResponsable' => in_array(TeamRoles::MEMOIRES_RESPONSABLE, $u->getRoles(), true),
                 'teamRoles' => TeamRoles::of($u->getRoles()),
                 'isVerified' => $u->isVerified(),
                 'isPending' => $isPending,
@@ -131,10 +132,16 @@ class UserManagementController extends AbstractController
         $email = trim($data['email'] ?? '');
         $firstName = trim($data['firstName'] ?? $data['firstname'] ?? '');
         $lastName = trim($data['lastName'] ?? $data['lastname'] ?? '');
-        $role = $data['role'] ?? 'ROLE_USER';
+        // Mémoires Vivantes web est l'outil de l'équipe (14/11/2026) : la console n'invite plus de client. Elle invite un BIOGRAPHE (défaut),
+        // ou crée un administrateur (administrateur du site seulement). Les clients sont servis par les liens signés et par Living Memory.
+        $role = $data['role'] ?? TeamRoles::MEMOIRES_BIOGRAPHE;
         $password = !empty($data['password']) ? (string) $data['password'] : null;
-        if ($role === 'ROLE_ADMIN' && !$this->isGranted('ROLE_ADMIN')) { // biographe de l'équipe : invitation d'un client seulement (13/11/2026)
+        if ($role === 'ROLE_ADMIN' && !$this->isGranted('ROLE_ADMIN')) {
             return $this->json(['error' => 'Seul un administrateur du site peut créer un administrateur.', 'code' => 'FORBIDDEN'], Response::HTTP_FORBIDDEN);
+        }
+        if (!in_array($role, ['ROLE_ADMIN', TeamRoles::MEMOIRES_BIOGRAPHE], true)) {
+            return $this->json(['error' => TeamRoles::MEMOIRES_TEAM_ONLY, 'code' => TeamRoles::MEMOIRES_TEAM_ONLY, 'message' => 'La console invite un biographe (role : ROLE_MEMOIRES_BIOGRAPHE) ou crée un administrateur ; elle n\'invite plus de client.',
+                'params' => ['roles' => ['ROLE_ADMIN', TeamRoles::MEMOIRES_BIOGRAPHE]]], Response::HTTP_FORBIDDEN);
         }
 
         if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -187,9 +194,10 @@ class UserManagementController extends AbstractController
 
         $em->persist($newUser);
         $em->flush();
-        // APPS-MEMBRES M1 : un compte client créé par l'équipe est membre de la famille Mémoires Vivantes (source « invite »), sans
-        // conditions acceptées ; un compte d'équipe (administrateur) n'est jamais membre : le service l'écarte.
-        $this->memberships?->invited($newUser);
+        if ($role === TeamRoles::MEMOIRES_BIOGRAPHE) {
+            // le rôle d'équipe est posé par le chemin unique, au journal du site (user_team, grant, repère « invite »)
+            $this->teamRoles->set($newUser, TeamRoles::MEMOIRES_BIOGRAPHE, true, ['invite']);
+        }
 
         $emailSent = false;
         if ($activationUrl !== null) {
@@ -204,7 +212,9 @@ class UserManagementController extends AbstractController
                 'firstName' => $newUser->getFirstname(),
                 'lastName' => $newUser->getLastname(),
                 'fullName' => trim($newUser->getFirstname() . ' ' . $newUser->getLastname()),
-                'role' => ($role === 'ROLE_ADMIN') ? 'ROLE_ADMIN' : 'ROLE_USER',
+                'role' => $role,
+                'isBiographer' => $role === TeamRoles::MEMOIRES_BIOGRAPHE,
+                'teamRoles' => TeamRoles::of($newUser->getRoles()),
                 'isVerified' => $newUser->isVerified(),
                 'isPending' => !$newUser->isVerified(),
                 'booksCount' => 0,
@@ -338,11 +348,12 @@ class UserManagementController extends AbstractController
     }
 
     /**
-     * Équipe (13/11/2026) : pose ou retire le rôle de biographe ; corps {biographer: true|false} ; idempotent ; journal content_audit_log
-     * (user_team, grant | revoke). → {id, isBiographer, teamRoles, roles, changed}. 400 INVALID_BODY, 403 OWNER_PROTECTED, 404 USER_NOT_FOUND.
+     * Équipe : pose ou retire un rôle d'équipe ; corps {biographer?: true|false, responsable?: true|false} ; idempotent ; journal
+     * content_audit_log (user_team, grant | revoke). `biographer` : administrateur du site ou responsable des biographes ;
+     * `responsable` : administrateur du site seulement (14/11/2026).
+     * → {id, isBiographer, isResponsable, teamRoles, roles, changed}. 400 INVALID_BODY, 403 FORBIDDEN, 403 OWNER_PROTECTED, 404 USER_NOT_FOUND.
      */
     #[Route('/{id}/team', methods: ['PUT'])]
-    #[IsGranted('ROLE_ADMIN')]
     public function team(int $id, Request $request): JsonResponse
     {
         $targetUser = $this->emProvider->getEntityManager()->getRepository(User::class)->find($id);
@@ -353,11 +364,16 @@ class UserManagementController extends AbstractController
             return $denied;
         }
         $data = json_decode($request->getContent(), true);
-        if (!is_array($data) || !array_key_exists('biographer', $data) || !is_bool($data['biographer'])) {
-            return $this->json(['error' => 'Corps attendu : {"biographer": true|false}.', 'code' => 'INVALID_BODY'], Response::HTTP_BAD_REQUEST);
+        $fields = is_array($data) ? array_intersect_key($data, ['biographer' => 1, 'responsable' => 1]) : [];
+        if ($fields === [] || array_filter($fields, fn ($v) => !is_bool($v)) !== []) {
+            return $this->json(['error' => 'Corps attendu : {"biographer": true|false} et / ou {"responsable": true|false}.', 'code' => 'INVALID_BODY'], Response::HTTP_BAD_REQUEST);
+        }
+        // Nommer ou retirer un responsable des biographes : l'administrateur du site seulement (14/11/2026) ; le responsable gère les biographes
+        if (array_key_exists('responsable', $fields) && !$this->isGranted('ROLE_ADMIN')) {
+            return $this->json(['error' => 'Seul un administrateur du site nomme ou retire un responsable des biographes.', 'code' => 'FORBIDDEN'], Response::HTTP_FORBIDDEN);
         }
 
-        return $this->json($this->setBiographer->execute($targetUser, $data['biographer']));
+        return $this->json($this->setBiographer->execute($targetUser, $fields['biographer'] ?? null, $fields['responsable'] ?? null));
     }
 
     #[Route('/{id}', methods: ['DELETE'])]

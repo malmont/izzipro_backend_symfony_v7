@@ -15,13 +15,6 @@ class UserAppMembershipRepository extends EntityRepository
      * la boutique) ; une vente de caisse non plus (elle porte le compte du caissier).
      */
     private const TRACES = [
-        AppFamilies::MEMOIRES => [
-            'signup_living_memory' => 'SELECT id AS user_id, created_at AS at, NULL AS text_version FROM "user" WHERE signup_channel = \'mobile\'',
-            'team_invite' => 'SELECT id, created_at, NULL FROM "user" WHERE signup_channel = \'web_invite\'',
-            'book_owner' => 'SELECT user_id, MIN(created_at), NULL FROM mv_book WHERE user_id IS NOT NULL GROUP BY user_id',
-            'chapter_payment' => 'SELECT user_id, MIN(COALESCE(purchased_at, created_at)), NULL FROM mv_chapter_payment WHERE user_id IS NOT NULL GROUP BY user_id',
-            'print_order' => 'SELECT user_id, MIN(created_at), NULL FROM mv_book_print_order WHERE user_id IS NOT NULL GROUP BY user_id',
-        ],
         AppFamilies::BOUTIQUE => [
             'signup_mobile_shop' => 'SELECT id, created_at, NULL FROM "user" WHERE signup_channel = \'mobile_shop\'',
             // une commande du compte dont l'origine n'est pas la caisse ; annulée ou remboursée, c'est encore une trace
@@ -31,6 +24,14 @@ class UserAppMembershipRepository extends EntityRepository
             'checkout_session' => 'SELECT user_id, MIN(created_at), NULL FROM checkout_session WHERE user_id IS NOT NULL GROUP BY user_id',
             // un panier enregistré, rattaché au compte, avec au moins un article
             'cart' => 'SELECT c.user_cart_id, MIN(c.created_at), NULL FROM "Cart" c WHERE c.user_cart_id IS NOT NULL AND EXISTS (SELECT 1 FROM cart_details d WHERE d.carts_id = c.id) GROUP BY c.user_cart_id',
+        ],
+        // Living Memory (14/11/2026) : ce qui vient de l'application. Un livre web, une commande d'impression d'un livre web ou une
+        // invitation par la console ne sont pas des traces : Mémoires Vivantes web est l'outil de l'équipe, pas une famille à membres.
+        AppFamilies::LIVINGMEMORY => [
+            'signup_living_memory' => 'SELECT id AS user_id, created_at AS at, NULL AS text_version FROM "user" WHERE signup_channel = \'mobile\'',
+            'mobile_book' => 'SELECT user_id, MIN(created_at), NULL FROM mv_book WHERE user_id IS NOT NULL AND channel = \'mobile\' GROUP BY user_id',
+            'chapter_payment' => 'SELECT user_id, MIN(COALESCE(purchased_at, created_at)), NULL FROM mv_chapter_payment WHERE user_id IS NOT NULL GROUP BY user_id',
+            'print_order' => 'SELECT o.user_id, MIN(o.created_at), NULL FROM mv_book_print_order o JOIN mv_book b ON b.id = o.book_id WHERE o.user_id IS NOT NULL AND b.channel = \'mobile\' GROUP BY o.user_id',
         ],
         AppFamilies::POS => [
             // une fiche de caisse rattachée, ni effacée ni fusionnée, dont le DERNIER consentement account_link est accordé : sa date et sa version
@@ -128,13 +129,6 @@ class UserAppMembershipRepository extends EntityRepository
         $row = $this->getEntityManager()->getConnection()->fetchAssociative('SELECT source, terms_version AS "termsVersion" FROM user_app_membership WHERE user_id = ? AND app = ?', [$userId, $family]);
 
         return $row === false ? null : $row;
-    }
-
-    /** Enregistre l'acceptation des conditions sur une appartenance qui n'en porte pas encore ; @return bool vrai si elle a été enregistrée */
-    public function accept(int $userId, string $family, string $termsVersion): bool
-    {
-        return (int) $this->getEntityManager()->getConnection()->executeStatement(
-            'UPDATE user_app_membership SET terms_version = ?, terms_accepted_at = NOW() WHERE user_id = ? AND app = ? AND terms_version IS NULL', [$termsVersion, $userId, $family]) === 1;
     }
 
     /** Date de la reprise de l'historique du site ; null : pas faite */
