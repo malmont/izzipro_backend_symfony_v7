@@ -8,6 +8,7 @@ use App\LossPrevention\Entity\LossJournalEntry;
 use App\LossPrevention\Entity\LossSetting;
 use App\Services\EmailConfigurationService\EmailLocale;
 use App\Services\EmailConfigurationService\EmailSenderService;
+use App\Services\Site\AdminSpaceUrl;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantPublicHostResolver;
@@ -22,8 +23,9 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * (`GestionNotificationService`, canal `email`) ; par le mailer du site, donc par la file et le worker des courriels existants.
  *
  * Le courriel ne porte AUCUN nom, aucun montant par personne, aucun motif saisi à la caisse : le nombre de constats nouveaux, le montant en
- * jeu total, la journée du magasin. Pas de lien : il n'existe pas de façon établie de fabriquer une adresse du web de gestion depuis le
- * serveur ; le texte dit où regarder.
+ * jeu total, la journée du magasin. UN lien, vers la liste des constats nouveaux de l'espace d'administration (`AdminSpaceUrl`, lot LIEN :
+ * `<adresse>/admin/ouvrir?screen=pertes.constats&isNew=1`) : c'est la seule adresse du courriel ; sans adresse connue pour le site, pas de
+ * lien, le texte dit où regarder.
  *
  * Quatre règles, posées à la relecture du lot (14/11/2026) :
  * - RIEN ne part quand l'analyse est arrêtée (droit du module retiré, notice aux salariés exigée et non confirmée, ou retirée) : annoncer
@@ -51,6 +53,7 @@ class LossDigestService
         private readonly LoggerInterface $logger,
         private readonly TenantConnectionManager $tenants,
         private readonly TenantPublicHostResolver $hosts,
+        private readonly AdminSpaceUrl $links,
     ) {
     }
 
@@ -106,6 +109,8 @@ class LossDigestService
             'title' => $t('title'), 'greeting' => $t('greeting', $params), 'message' => $t('message', $params),
             'rows' => [$t('row_count') => (string) $new['count'], $t('row_amount') => $params['%amount%'], $t('row_day') => LossTexts::day(new \DateTimeImmutable($day), $language)],
             'nextStep' => $t('next'), 'notice' => $t('notice'), 'siteLine' => $t('signature', $params),
+            // Lien direct vers la liste des constats nouveaux (lot LIEN) : la seule adresse du courriel ; null (site sans adresse connue) : pas de lien
+            'linkUrl' => $this->links->to('pertes.constats', ['isNew' => true]), 'linkLabel' => $t('link'),
             'locale' => $language, 'intlLocale' => $language === 'en' ? 'en_CA' : 'fr_CA',
         ];
         $subject = $this->mailer->subject('loss_digest.subject', $params, $language);

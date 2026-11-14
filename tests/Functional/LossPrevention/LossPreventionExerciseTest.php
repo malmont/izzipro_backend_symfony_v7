@@ -186,7 +186,7 @@ class LossPreventionExerciseTest extends LossPreventionTestCase
         $this->assertSame('REQUIRED', $this->json($this->admin('PUT', self::EX . '/' . $exercise . '/decision', ['status' => 'explained']), 422)['fields']['note']);
         $decided = $this->json($this->admin('PUT', self::EX . '/' . $exercise . '/decision', ['status' => 'explained', 'note' => 'Erreur de monnaie, vue avec la personne.']));
         $this->assertSame([true, 'explained', 'Expliqué', false, 'Erreur de monnaie, vue avec la personne.', 1], [$decided['exercise'], $decided['status'], $decided['statusLabel'], $decided['isNew'], $decided['decision']['note'], count($decided['history'])]);
-        $this->assertSame('pertes.constat', $decided['screen']);
+        $this->assertSame('pertes.exercices', $decided['screen'], 'la fiche d\'un exercice renvoie à l\'écran des exercices, jamais à la fiche ordinaire');
 
         // Tout effacer : les exercices partent avec leurs preuves et leurs lignes de journal, les vrais constats restent entiers
         $realEvidence = (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_evidence e JOIN loss_finding f ON f.id = e.finding_id WHERE f.exercise = false');
@@ -376,7 +376,11 @@ class LossPreventionExerciseTest extends LossPreventionTestCase
         $this->assertStringContainsString('EXERCICE : ce courriel montre l\'alerte', $body, 'le bandeau « Exercice »');
         $this->assertStringContainsString('Montant en jeu', $body);
         $this->assertStringNotContainsString($this->mark, $body, 'aucun nom');
-        $this->assertStringNotContainsString('http', $body, 'aucun lien');
+        // Une seule adresse : le lien vers l'écran des exercices de l'espace d'administration
+        $link = $this->adminLink('pertes.exercices');
+        $this->assertMatchesRegularExpression('#^https://[^/]+/admin/ouvrir\?screen=pertes\.exercices$#', (string) $link);
+        $this->assertSame([$link], self::addressesOf((string) $mails[0]->getHtmlBody()));
+        $this->assertStringContainsString('Ouvrir les exercices', $body);
         // Il n'entre pas dans le « un par jour » du courriel du jour
         $this->assertSame(['2020-01-01', 4], [(string) $this->db->fetchOne('SELECT last_digest_day FROM loss_setting'), (int) $this->db->fetchOne('SELECT last_digest_finding_id FROM loss_setting')]);
         $line = $this->db->fetchAssociative("SELECT user_id, finding_id, data FROM loss_journal WHERE type = 'EXERCISE_EMAIL_SENT' ORDER BY id DESC LIMIT 1");

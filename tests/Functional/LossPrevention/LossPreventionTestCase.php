@@ -236,6 +236,27 @@ abstract class LossPreventionTestCase extends WebTestCase
             'discrepancyReason' => $reason], fn ($v) => $v !== null)))['report'];
     }
 
+    /**
+     * Les adresses (http, https) d'un courriel, sans doublon : un courriel du module n'en porte qu'UNE, le lien vers l'écran de l'espace
+     * d'administration (lot LIEN), sur le domaine du site.
+     *
+     * @return list<string>
+     */
+    protected static function addressesOf(string $html): array
+    {
+        preg_match_all('#https?://[^\s"\'<>]+#i', html_entity_decode($html, ENT_QUOTES), $m);
+
+        return array_values(array_unique($m[0]));
+    }
+
+    /** Le lien attendu vers un écran de l'espace d'administration du site de test (le service commun du lot LIEN) */
+    protected function adminLink(string $screen, array $params = []): ?string
+    {
+        $this->tenant();
+
+        return static::getContainer()->get(\App\Services\Site\AdminSpaceUrl::class)->to($screen, $params);
+    }
+
     protected function today(): string
     {
         return static::getContainer()->get(StoreClock::class)->day(new \DateTimeImmutable());

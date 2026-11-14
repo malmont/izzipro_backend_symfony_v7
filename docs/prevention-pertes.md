@@ -246,7 +246,8 @@ qui lance.
   marqué exercice se supprime ; un constat d'exercice ne se supprime qu'après ses preuves et ses lignes de journal ; une ligne de journal
   sans constat ne se supprime jamais ; le vidage des trois tables est refusé. Le journal garde pour toujours `EXERCISE_STARTED` (rang,
   scénario), `EXERCISES_DELETED` (nombre) et `EXERCISE_EMAIL_SENT` (rang), sans constat rattaché ni adresse.
-- **Courriel d'exercice** : gabarit du courriel du jour avec le bandeau « EXERCICE » (`exerciseBanner`), objet préfixé « [Exercice] » ; il
+- **Courriel d'exercice** : gabarit du courriel du jour avec le bandeau « EXERCICE » (`exerciseBanner`), objet préfixé « [Exercice] », lien
+  vers l'écran des exercices (`AdminSpaceUrl::to('pertes.exercices')`) ; il
   n'entre pas dans le « un par jour » (ni `last_digest_day` ni la borne ne bougent). Sans configuration d'envoi : `sent: false`,
   `reason: NOT_DELIVERED`.
 
@@ -314,7 +315,9 @@ défait pas).
   né après l'envoi part le lendemain. Un courriel part aux administrateurs du site (rôle `ROLE_ADMIN` exact, compte vérifié) qui ont gardé le type `loss_digest` actif dans leurs
   préférences de notification de la gestion (canal `email`, `docs/notifications-gestion.md`). Par le mailer du site (file et worker des
   courriels existants, aucun handler nouveau). Contenu : nombre de constats nouveaux, montant en jeu, journée du magasin ; **aucun nom, aucun
-  motif saisi à la caisse, aucun lien** (il n'existe pas de façon établie de fabriquer une adresse du web de gestion depuis le serveur).
+  motif saisi à la caisse**. **Un seul lien**, la seule adresse du courriel : l'écran des constats nouveaux de l'espace d'administration
+  (`AdminSpaceUrl::to('pertes.constats', ['isNew' => true])`, lot LIEN, `docs/liens-espace-administration.md` :
+  `<adresse>/admin/ouvrir?screen=pertes.constats&isNew=1`) ; sans adresse connue pour le site, pas de lien, le texte dit où regarder.
   **Rien ne part quand l'analyse est arrêtée** (statut `not_allowed` : droit retiré, notice exigée non confirmée ou retirée). **Le jour est
   réservé AVANT l'envoi** par une écriture conditionnelle (`LossSettingRepository::reserveDigestDay` : de deux lancements qui se chevauchent,
   un seul l'obtient), puis rendu si aucun envoi n'aboutit (pas de configuration d'envoi sur le site : on réessaiera). La dernière ligne du

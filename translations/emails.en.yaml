@@ -206,6 +206,8 @@ loss_digest:
     next: 'Open the “Loss prevention” section of your management app to read their evidence and decide.'
     notice: 'The amount at stake is the amount the findings are about, not a proven loss. You receive this email at most once a day; you can stop it in the notification preferences of the management app.'
     signature: '%site%'
+    link: 'Open the new findings'
+    exercise_link: 'Open the drills'
     exercise_subject: '[Drill] %subject%'
     exercise_banner: 'DRILL: this email shows the alert you would receive for a real finding. The finding is fictitious: it does not touch the register and concerns no real person.'
 

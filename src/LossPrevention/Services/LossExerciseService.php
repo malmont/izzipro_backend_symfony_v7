@@ -8,6 +8,7 @@ use App\LossPrevention\Entity\LossEvidence;
 use App\LossPrevention\Entity\LossFinding;
 use App\LossPrevention\Entity\LossJournalEntry;
 use App\Services\EmailConfigurationService\EmailSenderService;
+use App\Services\Site\AdminSpaceUrl;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantPublicHostResolver;
@@ -67,6 +68,7 @@ class LossExerciseService
         private readonly TenantConnectionManager $tenants,
         private readonly TenantPublicHostResolver $hosts,
         private readonly LoggerInterface $logger,
+        private readonly AdminSpaceUrl $links,
     ) {
     }
 
@@ -227,6 +229,8 @@ class LossExerciseService
             'rows' => [$t('row_count') => '1', $t('row_amount') => $amount, $t('row_day') => LossTexts::day(new \DateTimeImmutable((string) $detail['storeDay']), $locale)],
             'nextStep' => $t('next'), 'notice' => $t('notice'), 'siteLine' => $t('signature', ['%site%' => $siteName]),
             'exerciseBanner' => $t('exercise_banner'),
+            // le lien du courriel d'exercice mène à l'écran des exercices (lot LIEN) ; null : pas de lien
+            'linkUrl' => $this->links->to(self::SCREEN), 'linkLabel' => $t('exercise_link'),
             'locale' => $locale, 'intlLocale' => $locale === 'en' ? 'en_CA' : 'fr_CA',
         ];
         $sent = false;

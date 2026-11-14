@@ -92,7 +92,11 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
         $this->assertStringContainsString('Ouvrez la section « Prévention des pertes »', html_entity_decode($body));
         $this->assertStringNotContainsString($this->mark, $body, 'le courriel ne nomme personne');
         $this->assertStringNotContainsString('Courriel du jour', $body, 'ni aucun motif saisi à la caisse');
-        $this->assertDoesNotMatchRegularExpression('/href="https?:/i', preg_replace('/<img[^>]*>/i', '', $body), 'aucun lien dans ce lot');
+        // Une seule adresse dans le courriel : le lien vers les constats nouveaux de l'espace d'administration, sur le domaine du site
+        $link = $this->adminLink('pertes.constats', ['isNew' => true]);
+        $this->assertMatchesRegularExpression('#^https://[^/]+/admin/ouvrir\?screen=pertes\.constats&isNew=1$#', (string) $link);
+        $this->assertSame([$link], self::addressesOf($body), 'une seule adresse, celle du lien');
+        $this->assertStringContainsString('Ouvrir les nouveaux constats', $body);
         $this->assertSame($this->today(), (string) $this->db->fetchOne('SELECT last_digest_day FROM loss_setting'));
         $this->assertSame($pushLog, (int) $this->db->fetchOne('SELECT COUNT(*) FROM notification_log'), 'rien dans le journal des notifications du téléphone');
         $sent = json_decode((string) $this->db->fetchOne("SELECT data FROM loss_journal WHERE type = 'DIGEST_SENT' ORDER BY id DESC LIMIT 1"), true);
@@ -161,7 +165,7 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
             return new \App\LossPrevention\Services\LossDigestService($c->get(\App\Services\TenantEntityManagerProvider::class), $c->get(\App\LossPrevention\Services\LossSettingsService::class),
                 $c->get(\App\LossPrevention\Services\LossSite::class), $c->get(\App\Gestion\Services\GestionNotificationService::class), $mailer,
                 $c->get(\App\Services\EmailConfigurationService\EmailLocale::class), $c->get('translator'), new \Psr\Log\NullLogger(),
-                $c->get(\App\Services\TenantConnectionManager::class), $c->get(\App\Services\TenantPublicHostResolver::class));
+                $c->get(\App\Services\TenantConnectionManager::class), $c->get(\App\Services\TenantPublicHostResolver::class), $c->get(\App\Services\Site\AdminSpaceUrl::class));
         };
         $digest = fn (): \App\LossPrevention\Services\LossDigestService => $build($mailer);
         $mine = function () use (&$calls, $adminEmail): array {
@@ -294,6 +298,11 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
         $this->assertNotSame('emails', $sent['domain']);
         $this->assertArrayNotHasKey('signature', $sent['context']);
         $this->assertArrayHasKey('siteLine', $sent['context']);
+        // Le lien (lot LIEN) : celui du service commun ; un réglage du site le déplace ; sans adresse connue, pas de lien dans le courriel
+        $this->assertSame([$this->adminLink('pertes.constats', ['isNew' => true]), 'Ouvrir les nouveaux constats'], [$sent['context']['linkUrl'], $sent['context']['linkLabel']]);
+        $twig = static::getContainer()->get('twig');
+        $this->assertStringNotContainsString('href', $twig->render(\App\LossPrevention\Services\LossDigestService::TEMPLATE, ['linkUrl' => null] + $sent['context']), 'sans adresse connue : aucun lien, le texte dit où regarder');
+        $this->assertStringContainsString('href="' . htmlspecialchars((string) $sent['context']['linkUrl']) . '"', $twig->render(\App\LossPrevention\Services\LossDigestService::TEMPLATE, $sent['context']));
 
         // B2, par le VRAI envoi : la signature configurée du site (HTML, un nom, un lien) n'entre pas dans le courriel
         $signature = '<p>Jean-Michel Signataire<br><a href="https://signature.example.invalid/contact">Nous écrire</a></p>';
@@ -313,7 +322,8 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
             $this->assertNotEmpty($mails);
             $body = (string) $mails[0]->getHtmlBody();
             $this->assertStringNotContainsString('Signataire', $body, 'le nom porté par la signature du site n\'est pas dans le courriel');
-            $this->assertStringNotContainsString('http', $body, 'ni son lien, ni aucune adresse');
+            $this->assertSame([$this->adminLink('pertes.constats', ['isNew' => true])], self::addressesOf($body), 'ni son lien, ni aucune autre adresse que le lien vers les constats');
+            $this->assertStringNotContainsString('signature.example.invalid', $body);
             $this->assertStringNotContainsString('&lt;', $body, 'ni balise affichée en clair');
             $siteName = (string) $this->db->fetchOne('SELECT name FROM entreprise ORDER BY id LIMIT 1');
             if ($siteName !== '') {

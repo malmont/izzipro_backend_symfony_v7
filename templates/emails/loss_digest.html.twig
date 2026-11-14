@@ -1,6 +1,6 @@
 {% extends 'base.email.html.twig' %}
 
-{# Prévention des pertes, lot L1-b : résumé du jour. Deux nombres et une journée : aucun nom, aucun détail d'un constat, aucun lien.
+{# Prévention des pertes, lot L1-b : résumé du jour. Deux nombres et une journée : aucun nom, aucun détail d'un constat ; un seul lien, vers l'écran des constats nouveaux.
    `siteLine`, jamais `signature` : l'envoi commun remplace `signature` par celle de la configuration d'envoi du site (nom, lien, HTML). #}
 {% block title %}{{ title }}{% endblock %}
 
@@ -24,6 +24,8 @@
                             {% for label, value in rows %}<tr><td style="color: #64748b;">{{ label }}</td><td align="right" style="font-weight: 600;">{{ value }}</td></tr>{% endfor %}
                         </table>
                         <p>{{ nextStep }}</p>
+                        {# Lien direct vers l'écran (lot LIEN) : la seule adresse du courriel ; absent quand le site n'a pas d'adresse connue #}
+                        {% if linkUrl is defined and linkUrl %}<p style="margin: 22px 0;"><a href="{{ linkUrl }}" style="display: inline-block; padding: 10px 18px; background: #1e293b; color: #ffffff; border-radius: 8px; text-decoration: none; font-weight: 600;">{{ linkLabel }}</a></p>{% endif %}
                         <p style="color: #64748b; font-size: 13px;">{{ notice }}</p>
                         <p style="color: #64748b; font-size: 13px; margin-bottom: 0;">{{ siteLine }}</p>
                     </td>
