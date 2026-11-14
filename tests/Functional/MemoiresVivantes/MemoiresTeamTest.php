@@ -102,7 +102,7 @@ class MemoiresTeamTest extends BookTypeApiTestCase
         $manager = $this->user([TeamRoles::MEMOIRES_RESPONSABLE, 'ROLE_USER_INTERNET'], 'responsable');
         $owned = $this->book('Livre que le biographe possède', $biographer);
         $assigned = $this->book('Livre d\'un collègue, affecté au biographe', $colleague, $biographer);
-        $foreign = $this->book('Livre d\'un collègue', $colleague);
+        $foreign = $this->book('Livre d\'un collègue', $colleague, $colleague); // affecté à un AUTRE biographe : toujours fermé
         $refused = fn (int $status): bool => in_array($status, [401, 403], true);
 
         // La liste : ses livres, possédés et affectés ; les filtres de l'entreprise n'ont aucun effet pour lui
