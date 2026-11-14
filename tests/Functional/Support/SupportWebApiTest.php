@@ -318,6 +318,7 @@ class SupportWebApiTest extends WebTestCase
         $old = (string) $db->fetchOne('SELECT reset_token FROM "user" WHERE id = ?', [$second['id']]);
         $db->executeStatement("UPDATE \"user\" SET reset_token_expires_at = NOW() - INTERVAL '1 minute' WHERE id = ?", [$second['id']]);
         $this->assertSame([400, 'RESET_LINK_INVALID'], [($r = $this->send('POST', '/api/password-reset/confirm', ['token' => $old, 'password' => self::PASSWORD]))->getStatusCode(), $code($r)]);
+        $this->assertSame([400, 'RESET_LINK_INVALID'], [($r = $this->send('POST', '/api/password-reset/verify', ['token' => $old]))->getStatusCode(), $code($r)], 'un lien expiré : le même refus à la vérification');
         $this->assertTrue(array_column($this->json('GET', '/api/support/agents', null, $admin)['pending'], null, 'id')[$second['id']]['expired']);
         $this->assertSame(403, $this->call('POST', '/api/support/agents/' . $second['id'] . '/invitation', [], $agent)->getStatusCode());
         $again = $this->json('POST', '/api/support/agents/' . $second['id'] . '/invitation', [], $admin);
