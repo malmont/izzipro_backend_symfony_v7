@@ -1,4 +1,4 @@
-# Applications à membres — APPS-MEMBRES (contrat validé le 14/11/2026 ; lot M1 codé le 14/11/2026)
+# Applications à membres — APPS-MEMBRES (contrat validé le 14/11/2026 ; lots M1 et M2 codés le 14/11/2026)
 
 Un compte du site peut servir à plusieurs applications : la boutique, Mémoires Vivantes, la caisse. Jusqu'ici rien ne disait dans
 laquelle un client était entré, ni quelles conditions il avait acceptées. Ce chantier le dit, **sans jamais ajouter un client à une
@@ -6,12 +6,13 @@ application à son insu** : une appartenance naît d'un geste du client (ou d'un
 d'applications à une autre demandera une étape « Rejoindre » où il accepte les conditions de cette famille.
 
 État : **M1 codé** (table, appartenances créées aux entrées, conditions et version, routes de lecture, famille dans le jeton, mode
-« observer » : aucune connexion refusée). M2 (reprise de l'historique), M3 (« Rejoindre », mode « exiger », quitter une famille) et
-M4 (listes filtrées) restent à faire. **M1 ne change rien pour un client ni pour un front qui n'a pas bougé.**
+« observer » : aucune connexion refusée) ; **M2 codé** (reprise de l'historique par commande, § 8 ; elle s'applique site par site,
+sur accord). M3 (« Rejoindre », mode « exiger », quitter une famille) et M4 (listes filtrées) restent à faire. **M1 ne change rien pour un client ni pour un front qui n'a pas bougé.**
 
 Code : `src/Security/AppFamilies.php`, `src/Services/AppMembershipService/`, `src/Entity/UserAppMembership.php`,
-`src/Controller/AppMembershipController/`. Tests : `tests/Functional/Security/AppMembershipApiTest.php`, et le rattachement de
-caisse dans `tests/Functional/Boutique/PosCustomerApiTest.php`.
+`src/Controller/AppMembershipController/`, `src/Command/BackfillAppMembershipsCommand.php`. Tests :
+`tests/Functional/Security/AppMembershipApiTest.php`, `AppMembershipBackfillTest.php` (la reprise), et la caisse dans
+`tests/Functional/Boutique/PosCustomerApiTest.php`.
 
 ## 1. Ce qui existait
 
@@ -189,28 +190,62 @@ familles) et `termsVersion` à l'inscription ; `termsVersion` à la commande en 
 `user_app_membership` (unicité compte + famille, cascade avec le compte), `"order".terms_version`,
 `entreprise.app_membership_mode`. **Aucune donnée existante n'est modifiée et aucune appartenance n'est créée par la migration.**
 
-**Reprise de l'existant (M2)** : une commande à part, `app:members:backfill <site>`, qui **simule par défaut** et rend un rapport ;
-`--apply` écrit. Rejouable sans doublon, tout au journal. Une appartenance reprise porte la source `backfill`, la date de la plus
-ancienne trace, et **aucune** version de conditions. Traces retenues :
+**Reprise de l'existant (lot M2, codé le 14/11/2026)** : une commande à part, jamais dans une migration.
 
-- `memoires` : inscription par Living Memory, un livre dont le compte est le propriétaire, un paiement de chapitre, une invitation ;
-- `boutique` : inscription par l'application mobile de la boutique, une commande en ligne du compte, une adresse, un avis, un
-  abonnement, un panier de paiement ;
-- `pos` : une fiche de caisse rattachée au compte avec le consentement de rattachement.
+```
+php bin/console app:members:backfill <site>                          # simulation : aucune écriture, un rapport
+php bin/console app:members:backfill <site> --apply --confirm=<site> # écrit, puis marque la reprise faite
+```
 
-Les pièges, traités ainsi :
+`--apply` exige que le code du site soit redit (`--confirm`) : sans lui rien n'est écrit. `--json` rend le rapport en JSON. La
+commande est rejouable : une appartenance existante n'est jamais modifiée, un second passage ne crée rien. Une appartenance reprise
+porte la source `backfill`, la date de **la plus ancienne trace**, et **aucune version de conditions** ; seule la famille `pos`
+garde la version et la date du **vrai** consentement `account_link` de la fiche rattachée (ce n'est pas un consentement inventé).
+Chaque création est au journal du site, avec la liste des traces qui la fondent (`after_state.traces`). L'application d'un site
+est une seule transaction : tout ou rien. Code : `AppMembershipBackfill` (`plan()` ne fait que lire, `apply()` écrit),
+`UserAppMembershipRepository` (les requêtes des traces), `BackfillAppMembershipsUseCase`, `Command/BackfillAppMembershipsCommand`.
 
-1. une vente en caisse porte le compte du **caissier** : jamais une trace d'appartenance ;
-2. le compte d'un livre peut être celui du biographe : seul le propriétaire client compte ;
-3. **un compte né d'une commande en invité sans mot de passe choisi ne reçoit aucune appartenance**, même avec des commandes ;
-4. `signup_channel` vide ou `web_register` ne suffit jamais seul : il faut une trace d'usage ;
-5. un compte d'équipe a des traces de travail : aucune appartenance ;
-6. un compte sans trace reste sans appartenance : il passera par « Rejoindre » une fois son site en mode « exiger ».
+**Jamais repris** : un compte d'équipe, un compte effacé, un compte **sans mot de passe choisi** (même avec des commandes), un
+compte déjà membre de la famille.
 
-**Circuit de la reprise** (décision du propriétaire) : répétition sur une copie jetable de `db_demo` selon les règles de
-répétition de `docs/architecture.md` ; puis, sur chaque site, **la simulation seule**, avec un rapport chiffré lu par le chef de
-projet ; application **site par site sur son accord, `demo` en premier**, photo avant et après, tout au journal. Aucune application
-hors `demo` sans cet accord.
+Traces retenues (un compte peut entrer dans plusieurs familles) :
+
+| Famille | Trace (nom dans le rapport) | Date d'entrée |
+|---|---|---|
+| `memoires` | inscription par Living Memory (`signup_living_memory`) ; invitation par l'équipe (`team_invite`) | celle du compte |
+| `memoires` | propriétaire d'un livre (`book_owner`) ; paiement de chapitre, quel que soit son état (`chapter_payment`) ; commande d'impression (`print_order`) | la plus ancienne |
+| `boutique` | inscription par l'application mobile de la boutique (`signup_mobile_shop`) | celle du compte |
+| `boutique` | commande du compte dont l'origine est `Ecommerce` ou `Mobile_app`, annulée ou remboursée comprise (`order`) ; avis (`review`) ; abonnement (`subscription`) ; panier de paiement (`checkout_session`) ; panier enregistré avec au moins un article (`cart`) | la plus ancienne |
+| `pos` | fiche de caisse rattachée, ni effacée ni fusionnée, dont le **dernier** consentement `account_link` est accordé (`pos_link`) | celle du consentement |
+
+Ne sont pas des traces : une vente de caisse (elle porte le compte du **caissier**) ; **une adresse seule** (elle n'a pas de date et
+ne prouve pas la boutique : mieux vaut un « Rejoindre » de plus qu'une appartenance devinée) ; un panier vide ; `signup_channel`
+vide ou `web_register` ; une simple connexion ; une commande sans origine connue. Le compte d'un livre peut être celui du
+biographe : un compte d'équipe n'est jamais repris. Un compte sans trace reste sans appartenance : il passera par « Rejoindre »
+une fois son site en mode « exiger ».
+
+**Le rapport** ne porte que des nombres, aucun nom ni courriel : comptes du site et comptes écartés par raison (équipe, effacés,
+sans mot de passe choisi) ; par famille, les déjà membres, les appartenances proposées, leur détail par trace (un compte est compté
+une fois par trace qu'il porte) et les dates d'entrée extrêmes ; les comptes clients sans trace ni appartenance, dont ceux qui
+n'ont qu'une adresse ; trois signalements que la reprise ne touche pas (fiches de caisse rattachées sans consentement en vigueur,
+comptes sans mot de passe choisi qui ont des commandes, commandes de compte sans origine). Le détail compte par compte
+(identifiant, famille, date, traces) est écrit dans `var/members-backfill/<site>-<date>-<mode>.json`, sur le serveur, hors dépôt.
+
+**État du site « reprise faite »** : `entreprise.app_membership_backfilled_at` (migration `Version20261230100000`,
+`scripts/migrate_all_v2_apps_membres_reprise.sh`), posée par `--apply` à sa première réussite. Tant qu'elle est vide, aucune règle
+n'écarte un compte faute d'appartenance : les clients d'avant ce chantier n'ont pas encore la leur. Elle commande deux choses :
+
+- **la caisse** (décision du propriétaire, vie privée) : une fois la reprise faite, la recherche de comptes web
+  (`GET /api/pos/customers?q=`, courriel ou téléphone exact) ne trouve que les comptes membres de `boutique` ou de `pos`. Un compte
+  membre de `memoires` seulement, ou sans appartenance, n'apparaît pas, avec exactement la réponse « aucun compte » ; le rattacher
+  par son identifiant (`POST /api/pos/customers/{id}/link`) répond 404 `USER_NOT_FOUND`, comme un compte inexistant. Avant la
+  reprise : comme aujourd'hui ;
+- au lot M3, un site ne pourra passer en mode « exiger » que si sa reprise est faite.
+
+**Circuit de la reprise** (décision du propriétaire) : répétition sur une copie jetable de `db_demo`, avec un Postgres et un Redis
+jetables sur un réseau à part, selon les règles de répétition de `docs/architecture.md` ; puis, sur chaque site, **la simulation
+seule**, avec son rapport lu par le chef de projet ; application **site par site sur son accord, `demo` en premier**, photo avant
+et après, tout au journal. Aucune application hors `demo` sans cet accord.
 
 ## 9. Ce que chaque front aura à faire (rien pour M1)
 
@@ -226,6 +261,6 @@ hors `demo` sans cet accord.
 | Lot | Contenu | État |
 |---|---|---|
 | M1 | Familles, table, appartenances créées aux entrées, conditions et version, routes de lecture, famille dans le jeton, mode « observer » | codé le 14/11/2026 |
-| M2 | Reprise : commande, simulation, rapport, application site par site | à faire |
+| M2 | Reprise : commande `app:members:backfill` (simulation, rapport, `--apply`), état « reprise faite » du site, caisse limitée aux membres de la boutique ou de la caisse après la reprise | codé le 14/11/2026 ; application site par site sur accord |
 | M3 | « Rejoindre » (refus, jeton de passage, `POST /api/apps/join`), acceptation à la première connexion d'un compte invité, quitter une famille, mode « exiger » par site | à faire |
 | M4 | Listes d'administration et statistiques filtrées par appartenance | à faire |
