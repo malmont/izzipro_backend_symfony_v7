@@ -213,7 +213,9 @@ class UnifiedStatisticsApiTest extends WebTestCase
         // Encaissé (taxes comprises), trésorerie et stock bas : les services existants
         $cash = static::getContainer()->get(\App\Gestion\Services\GestionCashService::class);
         $split = $cash->receiptsSplit($day['date'], $day['date']);
-        $this->assertSame(['total' => $split['total'], 'byMethod' => [['method' => 'cash', 'total' => $split['cash']], ['method' => 'card', 'total' => $split['card']]]], $day['receipts']);
+        $this->assertSame(['total' => $split['total'], 'byMethod' => [['method' => 'cash', 'total' => $split['cash']], ['method' => 'card', 'total' => $split['card']]]], array_intersect_key($day['receipts'], ['total' => 1, 'byMethod' => 1]));
+        // (lot AVOIRS : lignes à part, hors de l'encaissé ; leur contenu est vérifié par StoreCreditReceiptsApiTest)
+        $this->assertSame(['total', 'byMethod', 'storeCreditIssued', 'giftCardRecredited', 'paidByStoreCredit', 'paidByGiftCard', 'outstandingStoreCredit', 'outstandingGiftCards'], array_keys($day['receipts']));
         $alert = $cash->alert();
         $this->assertSame($alert === null ? null : [(int) $alert['balance']['amount'], $alert['balance']['date'], (int) $alert['low14']['amount'], $alert['low14']['date'], $alert['status']],
             $day['cash'] === null ? null : [$day['cash']['balance'], $day['cash']['balanceDate'], $day['cash']['lowestIn14Days']['amount'], $day['cash']['lowestIn14Days']['date'], $day['cash']['state']]);

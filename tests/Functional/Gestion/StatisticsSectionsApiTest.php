@@ -108,7 +108,9 @@ class StatisticsSectionsApiTest extends WebTestCase
 
         $stats = $this->get('/api/gestion/statistiques?' . self::RANGE . '&sections=payments');
         $p = $stats['sections']['payments'];
-        $this->assertSame(['indicators', 'breakdown', 'cashDesk', 'chart', 'caveats', 'appliesSource'], array_keys($p));
+        // (lot AVOIRS : six lignes à part, hors de l'encaissé ; leur contenu est vérifié par StoreCreditReceiptsApiTest)
+        $this->assertSame(['indicators', 'breakdown', 'cashDesk', 'chart', 'caveats', 'appliesSource',
+            'storeCreditIssued', 'giftCardRecredited', 'paidByStoreCredit', 'paidByGiftCard', 'outstandingStoreCredit', 'outstandingGiftCards'], array_keys($p));
         $values = fn (array $i): array => [$i['value'], $i['unit'], $i['previous'], $i['lastYear'], $i['changeVsPrevious'], $i['changeVsLastYear'], $i['changeUnit']];
         // reçu 115,00 + 200,00 + 57,50 + 46,00 + 1,00 = 419,50 ; remboursé 23,00 ; net 396,50 ; précédente 100,00 + 7,00 ; an dernier 300,00 − 50,00
         $this->assertSame([
