@@ -269,6 +269,10 @@ class LossPreventionApiTest extends LossPreventionTestCase
         $this->assertSame(['CA', 'QC', true, null, false, false], [$settings['country'], $settings['region'], $settings['staffNotice']['required'], $settings['staffNotice']['confirmedAt'],
             $settings['personPatterns']['allowed'], $settings['personPatterns']['enabled']]);
         $this->assertSame(['faces', 'audio', 'fitting_room_camera', 'gesture_analysis'], array_column($settings['never'], 'code'));
+        // Noms du pays et de la région, dans la langue demandée, à côté des codes (qui ne changent pas)
+        $this->assertSame(['Canada', 'Québec'], [$settings['countryLabel'], $settings['regionLabel']]);
+        $english = $this->json($this->admin('GET', self::BASE . '/reglages?locale=en'));
+        $this->assertSame(['CA', 'QC', 'Canada', 'Quebec'], [$english['country'], $english['region'], $english['countryLabel'], $english['regionLabel']]);
         $this->assertSame(['none', 24, 60], [$settings['retention']['purge'], $settings['retention']['findingsMonths'], $settings['retention']['confirmedMonths']]);
         $this->assertNotSame('', $settings['staffNotice']['template']['text']);
         $this->assertSame('STAFF_NOTICE_REQUIRED', $this->json($this->admin('POST', self::BASE . '/analyse'), 409)['error']);
@@ -324,6 +328,10 @@ class LossPreventionApiTest extends LossPreventionTestCase
             $this->place($country, $state);
             $doubt = $this->json($this->admin('GET', self::BASE . '/reglages'));
             $this->assertTrue($doubt['staffNotice']['required'], "pays « $country », région « $state » : notice exigée dans le doute");
+            $this->assertNull($doubt['regionLabel'], "pays « $country », région « $state » : région inconnue, pas de nom inventé");
+            if ($country === 'FRA' || $country === '') {
+                $this->assertNull($doubt['countryLabel'], "pays « $country » : pas de nom pour un code inconnu");
+            }
             $this->assertFalse($doubt['personPatterns']['allowed']);
             $this->assertSame('STAFF_NOTICE_REQUIRED', $this->json($this->admin('POST', self::BASE . '/analyse'), 409)['error']);
         }
@@ -338,6 +346,8 @@ class LossPreventionApiTest extends LossPreventionTestCase
         $this->place('US', 'FL');
         $fl = $this->json($this->admin('GET', self::BASE . '/reglages'));
         $this->assertSame([true, true, true, false], [$fl['personPatterns']['allowed'], $fl['personPatterns']['enabled'], $fl['personPatterns']['default'], $fl['staffNotice']['required']]);
+        $this->assertSame(['États-Unis', 'Floride'], [$fl['countryLabel'], $fl['regionLabel']]);
+        $this->assertSame(['United States', 'Florida'], array_values(array_intersect_key($this->json($this->admin('GET', self::BASE . '/reglages?locale=en')), ['countryLabel' => 1, 'regionLabel' => 1])));
         $this->place('US', 'TX');
         $this->assertSame([true, false], array_values(array_intersect_key($this->json($this->admin('GET', self::BASE . '/reglages'))['personPatterns'], ['allowed' => 1, 'enabled' => 1])), 'ailleurs aux États-Unis : permises, éteintes par défaut');
         $this->place('US', 'FL');

@@ -92,6 +92,9 @@ class LossSettingsService
         return [
             'country' => $place['country'],
             'region' => $place['region'],
+            // noms à afficher, dans la langue demandée ; null quand le code est absent ou inconnu (l'écran garde alors le code)
+            'countryLabel' => LossPlaceLabels::country($place['country'], $locale),
+            'regionLabel' => LossPlaceLabels::region($place['country'], $place['region'], $locale),
             'staffNotice' => $this->staffNotice($locale, true),
             'personPatterns' => ['allowed' => $allowed, 'enabled' => $this->personPatternsOn(), 'default' => LossCountryPolicy::personPatternsDefault($place['country'], $place['region']),
                 'note' => $this->texts->t($allowed ? 'settings.personPatterns.allowed' : 'settings.personPatterns.notAllowed', $locale)],
