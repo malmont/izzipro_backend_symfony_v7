@@ -834,7 +834,7 @@ un nom d'utilisateur choisi, différent de l'adresse, reste inchangé et son anc
 
 | Client | Ce que contient la réponse en cas de changement | À faire côté front |
 |---|---|---|
-| Site Next.js (session par cookies) | nouveaux cookies `auth_token_<site>`, `refresh_token_<site>`, `XSRF-TOKEN_<site>` ; corps `{message, user, token, refresh_token, csrf_token}` | rien pour les cookies (le navigateur les remplace) ; **reprendre le nouveau jeton CSRF** (`csrf_token`, ou le cookie `XSRF-TOKEN_<site>`) pour l'en-tête `X-XSRF-TOKEN` des requêtes suivantes |
+| Site Next.js (session par cookies) | nouveaux cookies `auth_token_<site>`, `refresh_token_<site>`, `XSRF-TOKEN_<site>` ; corps `{message, user, csrf_token}` (aucun jeton dans le corps d'une session par cookies depuis le 14/11/2026) | rien pour les cookies (le navigateur les remplace) ; **reprendre le nouveau jeton CSRF** (`csrf_token`, ou le cookie `XSRF-TOKEN_<site>`) pour l'en-tête `X-XSRF-TOKEN` des requêtes suivantes |
 | Application e-commerce, Mémoires Vivantes, MAUI (jeton `Bearer`) | corps `{message, user, token, refresh_token}` | **enregistrer `token` et `refresh_token`** à la place des anciens |
 
 Changement d'adresse par un administrateur (console Mémoires Vivantes `PUT /api/memoires/admin/users/{id}`, EasyAdmin) : les jetons de

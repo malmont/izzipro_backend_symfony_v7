@@ -186,8 +186,10 @@ répondent **403** à un compte **client** dont le front a dit l'application, qu
   jamais en base, sous son empreinte) ; il ne sert qu'à « rejoindre » et ne donne aucun accès à l'API.
 - **`POST /api/apps/join { joinToken, termsVersion, accepted: true }`** (public, limité en débit comme la connexion) : crée
   l'appartenance (source `join`, version acceptée, date) ;
-  puis **rend la session exactement comme une connexion réussie sur la même plateforme** (jetons, cookies du web, famille dans le
-  jeton), et la connexion est marquée. Jamais d'ajout silencieux : sans cet appel, rien n'est créé. Refus :
+  puis **rend la session exactement comme une connexion réussie sur la même plateforme** (famille dans le jeton), et la connexion est
+  marquée. La plateforme est celle de la connexion refusée, gardée dans le jeton de passage : la demande n'en porte pas et `web` n'est
+  jamais pris par défaut. Application installée : `{token, refresh_token}` dans le corps, aucun cookie. Web : les cookies, et dans le
+  corps `{csrf_token}` seul (aucun jeton dans le corps d'une session par cookies, 14/11/2026). Jamais d'ajout silencieux : sans cet appel, rien n'est créé. Refus :
 
 | Statut et code | Quand | Ensuite |
 |---|---|---|

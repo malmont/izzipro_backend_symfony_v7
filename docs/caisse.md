@@ -283,7 +283,8 @@ PIN faux renvoie `attemptsLeft`.
 403 `TERMINAL_REQUIRED` ; 30 essais de connexion par PIN par terminal et par 15 minutes, en plus du blocage par compte) :
 - `GET /api/pos/users` → `[{id, name, initials, roles}]` : comptes vérifiés `ROLE_USER_POS` ou `ROLE_POS_MANAGER` qui
   ont un PIN, **sans** les administrateurs ni les comptes soumis au code e-mail.
-- `POST /api/pos/pin-login {userId, pin}` → mêmes jetons que `/api/login` en `pos` (`{token, refresh_token}`) ; 401
+- `POST /api/pos/pin-login {userId, pin}` → mêmes jetons que `/api/login` en `pos` (`{token, refresh_token}` dans le corps, aucun
+  cookie, quel que soit un champ `platform` envoyé : la règle « aucun jeton dans le corps » des sessions par cookies ne la concerne pas) ; 401
   `PIN_INVALID` ; 423 `PIN_LOCKED` ; 409 `PIN_NOT_SET` ; **403 `PIN_LOGIN_NOT_ALLOWED`** pour `ROLE_ADMIN`,
   `ROLE_SUPER_ADMIN`, tout compte dont le code e-mail est exigé (le PIN ne contourne jamais l'OTP) et tout compte sans
   rôle de caisse.

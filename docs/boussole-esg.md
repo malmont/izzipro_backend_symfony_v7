@@ -25,7 +25,7 @@ Tous sous `/api/boussole/` : liste complète et accès dans `docs/endpoints.md`,
 
 | Groupe | Routes | Contrôleur | Contrôle dans le code |
 |---|---|---|---|
-| Compte | `POST auth/register`, `POST auth/login` | `AuthController` | public ; limite de débit (`EventSubscriber/PublicEndpointRateLimitSubscriber`) ; pose les cookies `auth_token_<tenant>` et `XSRF-TOKEN_<tenant>` (1 h) ; inscription avec une adresse déjà connue : **409 `EMAIL_UNAVAILABLE`** (voir « Équipe ») |
+| Compte | `POST auth/register`, `POST auth/login` | `AuthController` | public ; limite de débit (`EventSubscriber/PublicEndpointRateLimitSubscriber`) ; pose les cookies `auth_token_<tenant>` (protégé) et `XSRF-TOKEN_<tenant>` (1 h) ; corps `{userId, email, firstName, lastName}` : le jeton n'est rendu que par le cookie, jamais dans le corps (14/11/2026) ; inscription avec une adresse déjà connue : **409 `EMAIL_UNAVAILABLE`** (voir « Équipe ») |
 | Qui suis-je | `GET me` | `MeController` | tout compte connecté ; `kind` : `company`, `team` ou `none` |
 | Équipe | `GET team/members`, `PUT team/members/{userId}`, `GET team/companies`, `GET team/companies/{id}`, `GET team/documents/{id}/download` | `TeamController` | voter `BOUSSOLE_TEAM` ; l'attribution : `ROLE_ADMIN` |
 | Entreprise | `GET`, `PUT company` | `CompanyController` | `EsgUser`, sa propre entreprise |

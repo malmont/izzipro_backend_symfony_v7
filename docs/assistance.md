@@ -88,9 +88,9 @@ l'administrateur du site. Tests : `tests/Functional/Support/SupportWebApiTest.ph
   `webadmin` accepte aussi `ROLE_SUPER_ADMIN`), **la session du navigateur de `web`** : mêmes cookies (`auth_token_<site>`,
   `refresh_token_<site>`, `XSRF-TOKEN_<site>`), renouvellement et déconnexion par cookies, écriture refusée sans l'en-tête
   `X-XSRF-TOKEN`. **Le corps de la connexion et de la vérification du code ne rend que `{ csrf_token }`** : le jeton d'accès et le jeton
-  de renouvellement ne vivent que dans les cookies protégés (HttpOnly, Secure), hors de portée d'un script de la page
-  (`TokenService::COOKIE_ONLY_PLATFORMS`, 14/11/2026 ; `web` rend encore les deux jetons dans le corps, et y viendra quand ses clients
-  auront confirmé qu'ils ne lisent que les cookies). `ROLE_USER_INTERNET` n'est pas demandé : un agent reste « Assistance seul ». Un
+  de renouvellement ne vivent que dans les cookies protégés (HttpOnly, Secure), hors de portée d'un script de la page (règle de toute
+  session par cookies, `web` compris, depuis le 14/11/2026 : `TokenService::webSessionBody`, `docs/architecture.md`, « Plateformes de
+  connexion »). `ROLE_USER_INTERNET` n'est pas demandé : un agent reste « Assistance seul ». Un
   compte client y reçoit 403 `PLATFORM_NOT_ALLOWED`, sans cookie. `web`, `admin` (application mobile de gestion : jetons dans le corps),
   `mobile` et `pos` ne changent pas. Code : `TokenService::COOKIE_PLATFORMS`, `AuthenticationService::ADMIN_PLATFORMS`.
 - **`GET /api/support/me`** (agent ou administrateur) : `{ id, name, email, roles, supportOnly, site { code, name, locale, timezone },
