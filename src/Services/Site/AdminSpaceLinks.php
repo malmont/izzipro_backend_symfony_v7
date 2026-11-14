@@ -8,8 +8,9 @@ namespace App\Services\Site;
  * toujours la même adresse d'entrée, `<adresse de l'espace d'administration>/admin/ouvrir?screen=<code>&<paramètres>`, et le web la
  * traduit lui-même. Cette liste est le contrat : un code ou un paramètre qui n'y est pas ne part dans aucun lien.
  *
- * Formes d'un paramètre : `id` (entier > 0), `flag` (présent = 1, absent sinon), `date` (AAAA-MM-JJ), une liste fermée (une valeur),
- * `['many' => [...]]` (une ou plusieurs valeurs d'une liste fermée, séparées par des virgules, dans l'ordre de la liste).
+ * Formes d'un paramètre : `id` (entier > 0), `flag` (présent = 1, absent sinon), une liste fermée (une valeur), `['many' => [...]]`
+ * (une ou plusieurs valeurs d'une liste fermée, séparées par des virgules, dans l'ordre de la liste). Une forme nouvelle (une date, par
+ * exemple) s'ajoute ici avec son test, le jour où un lien en a besoin.
  */
 final class AdminSpaceLinks
 {
@@ -77,9 +78,6 @@ final class AdminSpaceLinks
         }
         if ($shape === 'flag') {
             return in_array($given, [true, 1, '1'], true) ? '1' : null;
-        }
-        if ($shape === 'date') {
-            return is_string($given) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $given) && checkdate((int) substr($given, 5, 2), (int) substr($given, 8, 2), (int) substr($given, 0, 4)) ? $given : null;
         }
         if (is_array($shape) && isset($shape['many'])) {
             $asked = is_array($given) ? $given : explode(',', (string) $given);
