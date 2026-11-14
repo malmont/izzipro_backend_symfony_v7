@@ -70,6 +70,15 @@ d'assistance). Ce n'est **pas** un code d'écran de la liste, et le lien ne pass
 le retire de l'adresse, puis envoie le jeton dans le corps d'un POST (`/api/password-reset/verify`, `/api/password-reset/confirm` ;
 `docs/assistance.md`). Code : `AdminSpaceUrl::activation()`, `AdminSpaceLinks::ACTIVATION_PATH`.
 
+Le même écran sert au **mot de passe oublié d'un compte de l'espace d'administration** : quand la demande porte `"platform":
+"webadmin"` (`POST /api/password-reset/request`) et que le compte a accès à cet espace (administrateur, agent d'assistance,
+propriétaire de la plateforme), le courriel porte ce lien, jeton dans le fragment, valable 1 heure (`kind: "reset"` à la vérification).
+Sans ce champ, ou pour un compte client, le lien reste celui du site (`/reset-password?token=…`).
+
+**À faire, noté pour la campagne de tests** : le lien de mot de passe oublié de la **boutique** porte encore son jeton dans les
+paramètres de l'adresse, donc dans les journaux. Il faudra le passer au fragment aussi, avec le site Next et les applications mobiles
+qui l'ouvrent.
+
 ## 5. Ajouter un écran à la liste
 
 Ajouter le code à `AdminSpaceLinks::LINKS` avec ses paramètres et leur forme, l'écrire dans le tableau ci-dessus, et prévenir le web

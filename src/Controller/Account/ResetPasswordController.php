@@ -29,7 +29,8 @@ class ResetPasswordController extends AbstractController
         private EmailSenderService $emailSenderService,
         private LoggerInterface $logger,
         private EmailLogoHelper $emailLogoHelper,
-        private readonly ?\App\Services\AppMembershipService\AppMembershipService $memberships = null // familles d'applications (APPS-MEMBRES M1, 14/11/2026)
+        private readonly ?\App\Services\AppMembershipService\AppMembershipService $memberships = null, // familles d'applications (APPS-MEMBRES M1, 14/11/2026)
+        private readonly ?\App\Services\Site\AdminSpaceUrl $adminSpace = null, // lot SUPPORT-WEB : lien de l'espace d'administration (jeton dans le fragment)
     ) {}
 
     // --- ÉTAPE 1 : DEMANDE DE RESET (API POST) ---
@@ -98,6 +99,12 @@ class ResetPasswordController extends AbstractController
                 ['token' => $resetToken, 'tenant_host' => $clientHost],
                 UrlGeneratorInterface::ABSOLUTE_URL
             );
+        }
+        // Lot SUPPORT-WEB (14/11/2026) : la demande vient de l'espace d'administration du web (`platform: "webadmin"`) et le compte y a
+        // accès → le lien ouvre l'écran de cet espace, avec le jeton dans le FRAGMENT de l'adresse (jamais journalisé par un serveur),
+        // comme l'invitation d'un agent. Sans ce champ, ou pour un compte client, rien ne change : la page du site, comme avant.
+        if (is_array($data) && ($data['platform'] ?? null) === 'webadmin' && array_intersect(['ROLE_ADMIN', 'ROLE_SUPPORT', 'ROLE_SUPER_ADMIN'], $user->getRoles()) !== []) {
+            $resetUrl = $this->adminSpace?->activation($resetToken) ?? $resetUrl;
         }
 
         // CORRECTION ASSETS : Toujours utiliser le domaine du Backend (API)

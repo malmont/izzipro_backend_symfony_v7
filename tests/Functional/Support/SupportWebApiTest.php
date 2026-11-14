@@ -338,6 +338,43 @@ class SupportWebApiTest extends WebTestCase
         $this->assertSame(1, (int) $db->fetchOne("SELECT COUNT(*) FROM content_audit_log WHERE resource = 'user_team' AND action = 'revoke' AND resource_id = ?", [(string) $row['id']]));
     }
 
+    public function testAForgottenPasswordAskedFromTheAdminSpaceOpensItsOwnScreenWithTheTokenInTheFragment(): void
+    {
+        $agent = $this->user(['ROLE_SUPPORT']);
+        $customer = $this->user(['ROLE_USER_INTERNET']);
+        $db = $this->db();
+        $linkOf = function (User $user, array $body) use ($db): array {
+            $before = count($this->getMailerMessages());
+            $r = $this->send('POST', '/api/password-reset/request', ['email' => $user->getEmail()] + $body);
+            $this->assertSame([200, ['message' => 'Link sent if email exists.']], [$r->getStatusCode(), json_decode((string) $r->getContent(), true)], 'réponse neutre, inchangée');
+            $mails = array_values(array_filter($this->getMailerMessages(), fn ($m) => $m->getTo()[0]->getAddress() === $user->getEmail()));
+            $this->assertNotSame([], $mails, 'un courriel pour ' . json_encode($body));
+            preg_match('/href="([^"]+)"/', (string) end($mails)->getHtmlBody(), $m);
+
+            return [html_entity_decode($m[1] ?? ''), (string) $db->fetchOne('SELECT reset_token FROM "user" WHERE id = ?', [$user->getId()])];
+        };
+        // Demande venue de l'espace d'administration, pour un compte qui y a accès : son écran, le jeton dans le FRAGMENT, jamais après « ? »
+        [$link, $token] = $linkOf($agent, ['platform' => 'webadmin']);
+        $this->assertSame('https://' . MV_TEST_TENANT_HOST . '/admin/activer#token=' . $token, $link);
+        $this->assertStringNotContainsString('?', $link);
+        $check = json_decode((string) $this->send('POST', '/api/password-reset/verify', ['token' => $token])->getContent(), true);
+        $this->assertSame([true, 'reset'], [$check['valid'], $check['kind']]);
+        $minutes = (strtotime((string) $db->fetchOne('SELECT reset_token_expires_at FROM "user" WHERE id = ?', [$agent->getId()])) - time()) / 60;
+        $this->assertTrue($minutes > 58 && $minutes <= 60.1, "validité : $minutes min");
+        $this->assertSame(200, $this->send('POST', '/api/password-reset/confirm', ['token' => $token, 'password' => self::PASSWORD . '-neuf'])->getStatusCode());
+        $this->assertSame(200, $this->send('POST', '/api/login', ['username' => $agent->getEmail(), 'password' => self::PASSWORD . '-neuf', 'platform' => 'webadmin'])->getStatusCode());
+        // Sans le champ, ou pour un compte client même avec le champ : la page du site, comme avant (jeton dans les paramètres)
+        foreach ([[$agent, []], [$customer, ['platform' => 'webadmin']], [$customer, []]] as [$who, $body]) {
+            [$link, $token] = $linkOf($who, $body);
+            $this->assertStringStartsWith('https://' . MV_TEST_TENANT_HOST . '/reset-password?token=' . $token, $link, json_encode($body));
+            $this->assertStringNotContainsString('/admin/activer', $link);
+        }
+        // Adresse inconnue : la même réponse neutre, aucun courriel
+        $before = count($this->getMailerMessages());
+        $r = $this->send('POST', '/api/password-reset/request', ['email' => 'personne-' . bin2hex(random_bytes(3)) . '@example.invalid', 'platform' => 'webadmin']);
+        $this->assertSame([200, ['message' => 'Link sent if email exists.']], [$r->getStatusCode(), json_decode((string) $r->getContent(), true)]);
+    }
+
     // ----- aides -----
 
     /** @return array<string, string> cookies posés par la réponse */

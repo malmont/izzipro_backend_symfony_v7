@@ -124,9 +124,10 @@ l'administrateur du site. Tests : `tests/Functional/Support/SupportWebApiTest.ph
   session n'est rendue : l'agent se connecte ensuite par `webadmin`. C'est le mécanisme du mot de passe oublié (`resetToken`).
 - **À renforcer (remarque du chef de projet, 14/11/2026 ; rien de changé dans ce lot)** : 8 caractères sans autre règle, c'est faible
   pour un compte qui lit les données des clients. Proposition à préparer pour la campagne de tests : longueur minimale plus grande pour
-  les comptes de l'espace d'administration, refus des mots de passe les plus courants, code OTP pour les agents. À savoir aussi : le
-  lien d'un mot de passe oublié ouvre aujourd'hui la page du site avec le jeton dans les paramètres, pour tous les comptes ; un passage
-  par `/admin/activer#token=` pour les comptes de l'espace d'administration est proposé, pas codé.
+  les comptes de l'espace d'administration, refus des mots de passe les plus courants, code OTP pour les agents.
+- **Mot de passe oublié d'un compte de l'espace d'administration** : `POST /api/password-reset/request { email, platform: "webadmin" }`
+  → le courriel ouvre `/admin/activer#token=<jeton>` (fragment, 1 heure), comme l'invitation ; `kind: "reset"`. Sans `platform`, ou pour
+  un compte client, la page du site comme avant (`docs/liens-espace-administration.md` § 4).
 - **La règle gardée** : un compte Assistance seul ne voit jamais la gestion, les prix d'achat, la marge, la trésorerie ni les réglages du
   site ; `SupportScopeSubscriber` n'est pas assoupli, le lot n'ouvre que des routes sous `/api/support`.
 - **Piège rencontré** : une arobase dans un bloc de documentation d'un contrôleur (un exemple d'adresse masquée) est lue comme une
