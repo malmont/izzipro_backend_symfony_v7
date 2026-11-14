@@ -63,8 +63,9 @@ class AuthenticationService
     /**
      * Mémoires Vivantes web est l'outil de l'équipe (14/11/2026, docs/memoires-vivantes.md, « Équipe ») : quand le front dit
      * `app: "memoires"`, seuls un administrateur du site, un responsable des biographes ou un biographe reçoivent une session. Tout
-     * autre compte : 403 MEMOIRES_TEAM_ONLY, à la connexion, à la vérification du code ET au rafraîchissement (une session ouverte
-     * d'un compte client s'éteint à son prochain rafraîchissement). Sans `app: "memoires"`, rien ne change.
+     * autre compte : 403 MEMOIRES_TEAM_ONLY, à la connexion, à la vérification du code ET au rafraîchissement (l'outil n'obtient pas
+     * de nouveau jeton). Le refus est sans effet sur la session du site : il ne révoque aucun jeton, n'efface ni ne pose aucun cookie ;
+     * le front de l'outil affiche le message et ne déconnecte pas. Sans `app: "memoires"`, rien ne change.
      */
     public function memoiresWebRefusal(UserInterface $user, mixed $app, string $context): ?JsonResponse
     {

@@ -1,0 +1,22 @@
+{# Fiche d'un compte : ses appartenances aux familles d'applications, en lecture seule (APPS-MEMBRES, lot M4). Aucune action : une
+   appartenance naît d'un geste du client, jamais de l'administration #}
+{% set memberships = field.formattedValue %}
+{% if memberships is empty %}
+    <span class="text-muted" data-memberships="0">Aucune appartenance</span>
+{% else %}
+    <table class="table table-sm mb-0" data-memberships="{{ memberships|length }}">
+        <thead><tr><th>Famille</th><th>Depuis le</th><th>Source</th><th>Conditions acceptées</th><th>Acceptées le</th></tr></thead>
+        <tbody>
+        {% for m in memberships %}
+            <tr data-membership="{{ m.app }}">
+                <td>{{ m.label }}</td>
+                <td>{{ m.joinedAt|store_time('d/m/Y H:i') }}</td>
+                <td>{{ m.source }}</td>
+                <td>{{ m.termsVersion ?? '—' }}</td>
+                <td>{{ m.termsAcceptedAt ? m.termsAcceptedAt|store_time('d/m/Y H:i') : '—' }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <div class="text-muted small">{{ store_time_mention() }}</div>
+{% endif %}

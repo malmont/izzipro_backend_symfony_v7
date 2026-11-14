@@ -46,6 +46,17 @@ class UserAppMembershipRepository extends EntityRepository
         return $this->findBy(['userId' => $userId], ['joinedAt' => 'ASC', 'id' => 'ASC']);
     }
 
+    /** @return array<int, list<UserAppMembership>> compte => ses appartenances, de la plus ancienne à la plus récente (une seule requête, lot M4) */
+    public function allByUser(): array
+    {
+        $byUser = [];
+        foreach ($this->findBy([], ['joinedAt' => 'ASC', 'id' => 'ASC']) as $membership) {
+            $byUser[$membership->getUserId()][] = $membership;
+        }
+
+        return $byUser;
+    }
+
     /** @return list<array{id: int, roles: list<string>, deleted: bool, passwordSet: bool}> tous les comptes du site, par identifiant */
     public function backfillAccounts(): array
     {

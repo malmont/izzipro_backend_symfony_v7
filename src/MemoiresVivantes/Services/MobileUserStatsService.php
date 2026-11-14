@@ -26,7 +26,8 @@ class MobileUserStatsService
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly UserActivityStatsRepository $stats,
         private readonly AiQuotaService $quotas,
-        private readonly PricingService $pricing
+        private readonly PricingService $pricing,
+        private readonly \App\Services\AppMembershipService\AppMembershipDirectory $memberships // appartenance à la famille livingmemory (APPS-MEMBRES, lot M4)
     ) {}
 
     /** GET /admin/mobile-users */
@@ -170,6 +171,10 @@ class MobileUserStatsService
                 'userId' => $id, 'email' => $user->getEmail(), 'name' => trim($user->getFirstname() . ' ' . $user->getLastname()),
                 'signupChannel' => $user->getSignupChannel(), 'createdAt' => $this->iso($user->getCreatedAt()),
                 'lastActivityAt' => $this->lastActivity($user, $bookStats['lastActivity'], $totals['lastCallAt']),
+                // Appartenance à la famille de l'application (lot M4) : null tant que le compte n'y est pas entré de lui-même (il est dans
+                // la population mobile par ses traces, pas forcément membre)
+                'member' => ($m = $this->memberships->membership($id, \App\Security\AppFamilies::LIVINGMEMORY)) === null ? null
+                    : ['joinedAt' => $this->iso($m->getJoinedAt()), 'source' => $m->getSource(), 'termsVersion' => $m->getTermsVersion()],
             ],
             'books' => ['count' => $bookStats['books'], 'mobileCount' => $bookStats['mobileBooks'], 'chaptersTotal' => $bookStats['chaptersTotal'], 'chaptersWritten' => $bookStats['chaptersWritten'], 'chaptersPaid' => $bookStats['chaptersPaid'] ?? 0],
             // totalAmount et currency : repli (total de la devise par défaut du site) ; la vérité est dans totals, par devise

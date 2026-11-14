@@ -12,7 +12,8 @@ use Symfony\Component\Routing\Annotation\Route;
 class ProfileApiController extends BaseTenantApiController
 {
     public function __construct(\App\Services\TenantEntityManagerProvider $emProvider, private readonly \App\Services\AccountService\EmailChangeGuard $emailChanges,
-        private readonly \App\Services\AccountService\SessionIdentityService $sessions) // session après un changement de courriel (suite de S7)
+        private readonly \App\Services\AccountService\SessionIdentityService $sessions, // session après un changement de courriel (suite de S7)
+        private readonly \App\Services\AppMembershipService\AppMembershipDirectory $memberships) // familles d'applications du compte (APPS-MEMBRES, lot M4)
     {
         parent::__construct($emProvider);
     }
@@ -40,6 +41,11 @@ class ProfileApiController extends BaseTenantApiController
             // (faux seulement pour un compte créé par un achat invité, jusqu'à « mot de passe oublié »)
             'otpEnabled' => \App\Services\AccountService\EmailChangeGuard::method($user) === \App\Services\AccountService\EmailChangeGuard::METHOD_OTP,
             'passwordSet' => $user->isPasswordSet(),
+            // APPS-MEMBRES, lot M4 (ajouts) : familles d'applications dont le compte est membre (vide pour un compte d'équipe, jamais
+            // membre) et rôles d'équipe qu'il porte (vide pour un client). Le détail complet reste dans GET /api/account/memberships
+            'memberships' => array_map(fn (\App\Entity\UserAppMembership $m) => ['app' => $m->getApp(), 'joinedAt' => $m->getJoinedAt()->format(\DateTimeInterface::ATOM), 'termsVersion' => $m->getTermsVersion()],
+                $this->memberships->of((int) $user->getId())),
+            'teamRoles' => \App\Security\TeamRoles::of($user->getRoles()),
         ]);
     }
 

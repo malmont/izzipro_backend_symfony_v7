@@ -129,7 +129,9 @@ class SecurityController extends AbstractController
         if (!$user instanceof UserInterface) {
             return $this->json(['error' => 'User not found', 'code' => 'USER_NOT_FOUND', 'message' => 'User not found'], Response::HTTP_UNAUTHORIZED);
         }
-        // Mémoires Vivantes web : l'outil de l'équipe ; la session d'un compte client s'éteint ici (14/11/2026)
+        // Mémoires Vivantes web : l'outil de l'équipe. Un compte client n'y obtient pas de nouveau jeton (14/11/2026). Le refus est placé
+        // AVANT toute écriture et reste sans effet sur la session du site : rien n'est révoqué, prolongé ni effacé (un client de la
+        // boutique qui ouvre l'outil par erreur garde sa session boutique ; le même rafraîchissement, sans app, passe)
         if ($refused = $auth->memoiresWebRefusal($user, $app, 'refresh')) {
             return $refused;
         }

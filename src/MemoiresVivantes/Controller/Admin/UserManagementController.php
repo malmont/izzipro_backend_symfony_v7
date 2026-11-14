@@ -17,6 +17,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Annotation\Route;
 use App\Security\MemoiresTeamVoter;
+use App\Security\AppFamilies;
 use App\Security\TeamRoles;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -41,7 +42,8 @@ class UserManagementController extends AbstractController
         private readonly \App\MemoiresVivantes\Services\MobileUserStatsService $mobileUserStats,
         private readonly \App\Services\AccountService\SessionIdentityService $sessions, // jetons de renouvellement après un changement de courriel
         private readonly \App\MemoiresVivantes\UseCase\Team\SetBiographerUseCase $setBiographer,
-        private readonly \App\Services\TeamRoleService\TeamRoleService $teamRoles // rôle de biographe de l'invité, posé par le chemin unique (14/11/2026)
+        private readonly \App\Services\TeamRoleService\TeamRoleService $teamRoles, // rôle de biographe de l'invité, posé par le chemin unique (14/11/2026)
+        private readonly \App\Services\AppMembershipService\AppMembershipDirectory $memberships // familles d'applications des comptes (APPS-MEMBRES, lot M4)
     ) {}
 
     /** Adresse du site frontend (les liens d'activation y renvoient ; avant, ils pointaient vers le stockage des médias) */
@@ -65,10 +67,17 @@ class UserManagementController extends AbstractController
         if ($population !== null && !in_array($population, UserPopulationResolver::ALL, true)) {
             return $this->json(['error' => 'population inconnue : team, admin, mobile ou web_client.', 'code' => 'POPULATION_INVALID'], Response::HTTP_BAD_REQUEST);
         }
-        if ($population !== null) {
+        // Filtre serveur ?app=livingmemory (APPS-MEMBRES, lot M4) : les membres de la famille de l'application. `population` est calculée
+        // d'après les traces, `app` dit l'appartenance réelle ; les deux se combinent. Toute autre valeur : 400 APP_UNKNOWN
+        $app = $request->query->get('app');
+        if ($app !== null && $app !== AppFamilies::LIVINGMEMORY) {
+            return $this->json(['error' => 'APP_UNKNOWN', 'code' => 'APP_UNKNOWN', 'message' => sprintf('Application inconnue : « %s »', $app), 'params' => ['apps' => [AppFamilies::LIVINGMEMORY]]], Response::HTTP_BAD_REQUEST);
+        }
+        if ($population !== null || $app !== null) {
             $all = $userRepo->findBy([], ['id' => 'ASC']);
             $extra = $this->mobileUserStats->enrichment($all);
-            $users = array_values(array_filter($all, fn (User $u) => ($extra[$u->getId()]['population'] ?? null) === $population));
+            $users = array_values(array_filter($all, fn (User $u) => ($population === null || ($extra[$u->getId()]['population'] ?? null) === $population)
+                && ($app === null || $this->memberships->membership((int) $u->getId(), $app) !== null)));
             $total = count($users);
             $users = array_slice($users, ($page - 1) * $limit, $limit);
         } else {
@@ -109,6 +118,7 @@ class UserManagementController extends AbstractController
                 'isBiographer' => in_array(TeamRoles::MEMOIRES_BIOGRAPHE, $u->getRoles(), true),
                 'isResponsable' => in_array(TeamRoles::MEMOIRES_RESPONSABLE, $u->getRoles(), true),
                 'teamRoles' => TeamRoles::of($u->getRoles()),
+                'memberships' => $this->memberships->families((int) $u->getId()), // familles d'applications dont le compte est membre (lot M4)
                 'isVerified' => $u->isVerified(),
                 'isPending' => $isPending,
                 'booksCount' => $countMap[$u->getId()] ?? 0,

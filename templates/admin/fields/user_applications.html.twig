@@ -1,0 +1,4 @@
+{# Colonne « Applications » de l'écran Utilisateurs (APPS-MEMBRES, lot M4) : familles dont le compte est membre, « Équipe », ou « Aucune » #}
+{% for application in field.formattedValue %}
+    <span class="badge badge-{{ application.code == 'none' ? 'light' : (application.code == 'team' ? 'info' : 'secondary') }}" data-application="{{ application.code }}">{{ application.label }}</span>
+{% endfor %}

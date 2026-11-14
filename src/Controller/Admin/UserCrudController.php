@@ -9,6 +9,10 @@ use App\Controller\Admin\BaseTenantCrudController;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder; 
 use App\Security\RoleAssignmentPolicy;
+use App\Services\Admin\ApplicationFilter;
+use App\Services\AppMembershipService\AppMembershipDirectory;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Filters;
+use EasyCorp\Bundle\EasyAdminBundle\Field\Field;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField; 
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
@@ -30,6 +34,7 @@ class UserCrudController extends BaseTenantCrudController
         TenantEntityManagerProvider $emProvider,
         private readonly RoleAssignmentPolicy $rolePolicy,
         private readonly \App\Services\TeamRoleService\TeamRoleService $teamRoles,
+        private readonly AppMembershipDirectory $memberships,
         private readonly ?\App\Services\PosAuditService\PosPinService $posPins = null,
         private readonly ?\App\Services\PosAuditService\PosAuditService $posAudit = null,
         private readonly ?\App\Services\AccountService\SessionIdentityService $sessions = null // jetons après un changement de courriel
@@ -74,12 +79,27 @@ class UserCrudController extends BaseTenantCrudController
                 ->setChoices($this->rolePolicy->choices($this->isGranted(RoleAssignmentPolicy::SUPER_ADMIN)))
                 ->allowMultipleChoices()
                 ->renderExpanded(),
+            // Familles d'applications dont le compte est membre (APPS-MEMBRES, lot M4) : colonne calculée, lecture seule. Aucune action
+            // d'écriture : une appartenance naît d'un geste du client, jamais de l'administration (docs/apps-membres.md)
+            Field::new('applications', 'Applications')->hideOnForm()->setSortable(false)->setTemplatePath('admin/fields/user_applications.html.twig')
+                ->formatValue(fn ($value, User $user) => array_map(fn (string $code) => ['code' => $code, 'label' => AppMembershipDirectory::LABELS[$code]], $this->memberships->applications($user))),
+            Field::new('appMemberships', 'Appartenances')->onlyOnDetail()->setTemplatePath('admin/fields/user_memberships.html.twig')
+                ->formatValue(fn ($value, User $user) => array_map(fn (\App\Entity\UserAppMembership $m) => [
+                    'app' => $m->getApp(), 'label' => AppMembershipDirectory::LABELS[$m->getApp()] ?? $m->getApp(), 'joinedAt' => $m->getJoinedAt(),
+                    'source' => AppMembershipDirectory::SOURCE_LABELS[$m->getSource()] ?? $m->getSource(), 'termsVersion' => $m->getTermsVersion(), 'termsAcceptedAt' => $m->getTermsAcceptedAt(),
+                ], $this->memberships->of((int) $user->getId()))),
             BooleanField::new('isVerified', 'Courriel vérifié'),
             BooleanField::new('otpEnabled', 'Code à usage unique (OTP) activé'),
             TextField::new('plainPassword', 'Mot de passe')
                 ->setFormType(PasswordType::class)
                 ->onlyOnForms(),
         ];
+    }
+
+    /** Filtre « Application » (lot M4) : famille, « Aucune » ou « Équipe » ; il rend les comptes dont la colonne porte cette valeur */
+    public function configureFilters(Filters $filters): Filters
+    {
+        return parent::configureFilters($filters)->add(ApplicationFilter::new($this->memberships));
     }
 
     public function edit(\EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext $context)
