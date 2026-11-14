@@ -37,6 +37,7 @@ class PosCustomerApiTest extends WebTestCase
         static::getContainer()->get(BoutiqueDemoSeeder::class)->seed('client-fidelite@example.invalid', false, false);
         $this->db->executeStatement('DELETE FROM boutique_setting');
         $this->db->executeStatement("UPDATE address_entreprise SET country = 'CA', state = 'QC', city = 'Montréal', zip = 'H1M 0A9'");
+        $this->db->executeStatement('UPDATE entreprise SET app_membership_backfilled_at = NULL'); // APPS-MEMBRES M2 : reprise des appartenances pas faite
         $this->db->executeStatement("UPDATE entreprise SET currency = 'CAD', pos_discrepancy_threshold = 0, pos_cash_rounding_step = NULL, pos_approval_refund = NULL, pos_approval_withdrawal = NULL, pos_approval_fund_withdrawal = NULL, pos_approval_drawer_open = false, pos_approval_close_without_count = false, pos_terminal_header_required = false,
             pos_pay_cash = true, pos_pay_declared_card = true, pos_pay_paypal = true, pos_pay_multi = true, pos_declared_card_blocked_with_terminal = false, pos_return_max_days = NULL, pos_return_without_receipt = false, pos_return_cash_for_card_sale = true, pos_approval_return_mode = 'refund',
             pos_discount_enabled = true, pos_discount_ticket_enabled = true, pos_discount_reason_required = true, pos_discount_cashier_max_amount = 2000, pos_discount_cashier_max_percent_bp = 1000, pos_custom_item_enabled = false, pos_price_override_enabled = false, pos_offline_enabled = false,
@@ -225,6 +226,39 @@ class PosCustomerApiTest extends WebTestCase
         $this->assertSame(['text_version' => '2025-01', 'at' => '2025-01-02 03:04:05', 'granted' => true], $this->db->fetchAssociative("SELECT text_version, at, granted FROM pos_customer_consent WHERE customer_id = ? AND purpose = 'account_link' ORDER BY id DESC LIMIT 1", [$fc]),
             'une fusion n\'est pas un nouveau consentement');
         $this->assertSame([1, 0], [$members($wd), $revoked($wd, 'merge')]);
+
+        // APPS-MEMBRES M2 (décision du propriétaire, vie privée) : une fois la reprise de l'historique faite sur le site, la caisse ne trouve que
+        // les comptes membres de la boutique ou de la caisse. Un compte membre de Mémoires Vivantes seulement, ou sans appartenance, n'apparaît
+        // pas, avec exactement la réponse « aucun compte » ; le rattacher par son identifiant répond comme un compte inexistant.
+        $membership = static::getContainer()->get(\App\Services\AppMembershipService\AppMembershipService::class);
+        [$shopMember, $mvMember, $stranger] = [$this->user(['ROLE_USER', 'ROLE_USER_INTERNET']), $this->user(['ROLE_USER', 'ROLE_USER_INTERNET']), $this->user(['ROLE_USER', 'ROLE_USER_INTERNET'])];
+        $posMember = $this->user(['ROLE_USER', 'ROLE_USER_INTERNET']);
+        $membership->grant($shopMember, 'boutique', 'register');
+        $membership->grant($mvMember, 'memoires', 'register');
+        $membership->grant($posMember, 'pos', 'pos_link');
+        // la recherche par téléphone passe par l'adresse du compte : même règle
+        $this->db->executeStatement("INSERT INTO adress (id, user_adress_id, firstname, lastname, fullname, address, phone, city, codepostal, country) SELECT COALESCE(MAX(id), 0) + 1, ?, 'A', 'B', 'A B', '1 rue', '438 555 0177', 'Ville', 'H1A 1A1', 'CA' FROM adress", [$mvMember->getId()]);
+        $byPhone = fn (): array => array_column($this->json($this->request('GET', '/api/pos/customers?q=4385550177'))['results'], 'userId');
+        $this->assertSame([$mvMember->getId()], $byPhone());
+        $found = fn (User $u): array => array_map(fn (array $x) => [$x['source'], $x['userId']], $this->json($this->request('GET', '/api/pos/customers?q=' . $u->getEmail()))['results']);
+        $this->assertSame([[['web', $shopMember->getId()]], [['web', $mvMember->getId()]], [['web', $stranger->getId()]]], [$found($shopMember), $found($mvMember), $found($stranger)], 'reprise pas faite : la recherche est celle d\'avant');
+        $this->db->executeStatement('UPDATE entreprise SET app_membership_backfilled_at = NOW()');
+        $nobody = $this->json($this->request('GET', '/api/pos/customers?q=personne-du-tout@example.invalid'));
+        $hidden = $this->json($this->request('GET', '/api/pos/customers?q=' . $mvMember->getEmail()));
+        $this->assertStringContainsString('"webResults":0', (string) $this->db->fetchOne("SELECT payload FROM pos_audit_log WHERE type = 'CUSTOMER_SEARCHED' ORDER BY id DESC LIMIT 1"), 'le journal de caisse non plus ne dit rien du compte');
+        $this->assertSame([[['web', $shopMember->getId()]], [], []], [$found($shopMember), $hidden['results'], $found($stranger)], 'reprise faite : seul le membre de la boutique est trouvé');
+        $this->assertSame(array_diff_key($nobody, ['query' => 1]), array_diff_key($hidden, ['query' => 1]), 'la même réponse que « aucun compte »');
+        $this->assertSame([[], [['web', $posMember->getId()]]], [$byPhone(), $found($posMember)], 'par téléphone aussi ; un membre de la caisse reste visible');
+        $toLink = $this->json($this->request('POST', '/api/pos/customers', ['firstName' => 'Fiche', 'lastName' => 'À rattacher', 'phone' => '4385550106', 'consents' => ['account_link' => true]]), 201)['id'];
+        $refused = $this->request('POST', "/api/pos/customers/$toLink/link", ['userId' => $mvMember->getId()]);
+        $unknown = $this->request('POST', "/api/pos/customers/$toLink/link", ['userId' => 999999999]);
+        $body = fn (Response $r): array => array_diff_key(json_decode($r->getContent(), true), ['params' => 1, 'userId' => 1]);
+        $this->assertSame([404, 'USER_NOT_FOUND', $body($unknown), 404], [$refused->getStatusCode(), $body($refused)['error'], $body($refused), $unknown->getStatusCode()], 'comme un compte inexistant');
+        $this->assertSame([404, 'USER_NOT_FOUND'], $this->error($this->request('POST', "/api/pos/customers/$toLink/link", ['userId' => $stranger->getId()])));
+        $this->assertTrue($this->json($this->request('POST', "/api/pos/customers/$toLink/link", ['userId' => $shopMember->getId()]))['linkedAccount'], 'un membre de la boutique se rattache comme avant');
+        $second = $this->json($this->request('POST', '/api/pos/customers', ['firstName' => 'Fiche', 'lastName' => 'Membre de la caisse', 'phone' => '4385550107', 'consents' => ['account_link' => true]]), 201)['id'];
+        $this->assertTrue($this->json($this->request('POST', "/api/pos/customers/$second/link", ['userId' => $posMember->getId()]))['linkedAccount'], 'un membre de la caisse aussi');
+        $this->db->executeStatement('UPDATE entreprise SET app_membership_backfilled_at = NULL');
         // Points déjà dépensés : solde ramené à 0, manque indiqué, retour jamais bloqué (solde 95 → 0, puis retour de la vente à 19 points)
         $this->json($this->request('POST', "/api/pos/customers/$id/loyalty/adjust", ['points' => -95, 'reason' => 'test du manque', 'cashRegisterId' => $this->register]));
         $line2 = $this->json($this->request('GET', '/api/pos/returns/lookup?orderId=' . $sale2['orderId']))['lines'][0]['orderItemId'];
