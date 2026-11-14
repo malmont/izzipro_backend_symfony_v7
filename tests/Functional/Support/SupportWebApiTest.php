@@ -25,10 +25,13 @@ class SupportWebApiTest extends WebTestCase
     private const PASSWORD = 'Mot-de-passe-de-test-1!';
     private const TAG = 'SUPWEB-TEST';
     private KernelBrowser $client;
+    /** Adresse d'appel propre à chaque test : les limites de débit par adresse (connexion, mot de passe oublié) sont celles de ce test seul */
+    private string $ip = '';
 
     protected function setUp(): void
     {
         $this->client = static::createClient();
+        $this->ip = '10.85.' . random_int(1, 254) . '.' . random_int(1, 254);
         $this->clean();
     }
 
@@ -398,7 +401,7 @@ class SupportWebApiTest extends WebTestCase
         foreach ($cookies as $name => $value) {
             $this->client->getCookieJar()->set(new Cookie($name, $value, null, '/', MV_TEST_TENANT_HOST, true));
         }
-        $this->client->request($method, 'https://' . MV_TEST_TENANT_HOST . $path, [], [], $server + ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'],
+        $this->client->request($method, 'https://' . MV_TEST_TENANT_HOST . $path, [], [], $server + ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json', 'REMOTE_ADDR' => $this->ip],
             $body !== null ? json_encode($body) : null);
 
         return $this->client->getResponse();
