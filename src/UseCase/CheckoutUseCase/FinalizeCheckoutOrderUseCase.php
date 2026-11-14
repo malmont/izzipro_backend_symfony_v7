@@ -44,7 +44,8 @@ final class FinalizeCheckoutOrderUseCase
         private readonly OrderMailerService $mailer,
         private readonly MediaUrlResolver $media,
         private readonly TenantEntityManagerProvider $emProvider,
-        private readonly LoggerInterface $logger
+        private readonly LoggerInterface $logger,
+        private readonly ?\App\Services\AppMembershipService\AppMembershipService $memberships = null // familles d'applications (APPS-MEMBRES M1, 14/11/2026)
     ) {
     }
 
@@ -183,6 +184,9 @@ final class FinalizeCheckoutOrderUseCase
         if ($mode === self::MODE_GUEST) {
             // Jeton d'accès de l'invité à sa commande (GET /api/orders/{id}?token=)
             $result->setGuestToken(bin2hex(random_bytes(24)));
+            // APPS-MEMBRES M1 : version des conditions acceptées au paiement (`termsVersion`, facultatif), gardée si elle est celle en vigueur.
+            // Aucune appartenance ici : elle naîtra le jour où ce client choisira son mot de passe (AppMembershipService::passwordChosen).
+            $result->setTermsVersion($this->memberships?->guestTermsVersion($data['termsVersion'] ?? null));
             $em->flush();
             if (!empty($guest['isNewUser'])) {
                 $this->customers->completeLicense($user, $license[0], $license[1]);

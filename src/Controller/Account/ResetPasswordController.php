@@ -28,7 +28,8 @@ class ResetPasswordController extends AbstractController
         private TenantConnectionManager $tenantManager,
         private EmailSenderService $emailSenderService,
         private LoggerInterface $logger,
-        private EmailLogoHelper $emailLogoHelper
+        private EmailLogoHelper $emailLogoHelper,
+        private readonly ?\App\Services\AppMembershipService\AppMembershipService $memberships = null // familles d'applications (APPS-MEMBRES M1, 14/11/2026)
     ) {}
 
     // --- ÉTAPE 1 : DEMANDE DE RESET (API POST) ---
@@ -140,10 +141,12 @@ class ResetPasswordController extends AbstractController
         if (!$user || $user->getResetTokenExpiresAt() < new \DateTime()) {
             return $this->json(['error' => 'Lien invalide ou expiré : demandez un nouveau lien.', 'code' => 'RESET_LINK_INVALID', 'message' => 'Lien invalide ou expiré : demandez un nouveau lien.'], 400);
         }
+        $hadPassword = $user->isPasswordSet();
         $user->setPassword($passwordHasher->hashPassword($user, $newPassword))->setPasswordSet(true); // mot de passe choisi par le client
         $user->setResetToken(null);
         $user->setResetTokenExpiresAt(null);
         $em->flush();
+        $this->memberships?->passwordChosen($user, $hadPassword); // APPS-MEMBRES M1 : un compte né d'une commande en invité entre dans la famille boutique
         // Nouveau mot de passe = toutes les sessions ouvertes sont closes (01/11/2026) : jetons de rafraîchissement révoqués
         try {
             $em->getConnection()->executeStatement('DELETE FROM refresh_tokens WHERE username = ?', [(string) $user->getUserIdentifier()]);
@@ -253,10 +256,12 @@ class ResetPasswordController extends AbstractController
         }
 
         // Hash & Save
+        $hadPassword = $user->isPasswordSet();
         $user->setPassword($passwordHasher->hashPassword($user, (string) $newPassword))->setPasswordSet(true); // mot de passe choisi par le client
         $user->setResetToken(null);
         $user->setResetTokenExpiresAt(null);
         $em->flush();
+        $this->memberships?->passwordChosen($user, $hadPassword); // APPS-MEMBRES M1 : un compte né d'une commande en invité entre dans la famille boutique
 
         // 2. Récupération Config (Via Repository direct)
         /** @var EmailConfiguration|null $emailConfig */

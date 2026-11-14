@@ -31,7 +31,18 @@ class AuthenticationService
         private \Psr\Log\LoggerInterface $logger,
         private TenantConnectionProvider $tenantConnectionProvider,
         private ?\App\Services\PosAuditService\PosAuditService $posAudit = null,
+        private ?\App\Services\AppMembershipService\AppMembershipService $memberships = null, // familles d'applications (APPS-MEMBRES M1, 14/11/2026)
     ) {}
+
+    /**
+     * Famille d'applications de la session demandée (`app` de la connexion, de la vérification du code ou du rafraîchissement), à
+     * porter dans le jeton ; null sans `app` connu : rien ne change. Mode « observer » (M1) : un compte client qui n'est pas membre
+     * de cette famille est noté au journal et reçoit sa session quand même. Contrat : docs/apps-membres.md § 5.
+     */
+    public function appFamily(UserInterface $user, mixed $app, string $context): ?string
+    {
+        return $user instanceof User ? $this->memberships?->sessionFamily($user, $app, $context) : null;
+    }
 
     /**
      * Valeur platform normalisée (trim, minuscules) ou null si elle est inconnue (15/10/2026 : avant, une valeur
@@ -91,7 +102,7 @@ class AuthenticationService
         }
     }
 
-    public function login(string $email, string $password, string $platform, Request $request): Response
+    public function login(string $email, string $password, string $platform, Request $request, mixed $app = null): Response
     {
         $platform = $this->normalizePlatform($platform, 'login');
         if ($platform === null) {
@@ -137,7 +148,7 @@ class AuthenticationService
 
         $this->recordLogin($user);
         $this->auditPos($platform, $user, $email);
-        $tokens = $this->tokenService->generateTokens($user, $platform);
+        $tokens = $this->tokenService->generateTokens($user, $platform, $this->appFamily($user, $app, 'login'));
         $host = $request->getHost();
         return $this->tokenService->createResponseWithTokens($tokens, $platform, $host);
     }

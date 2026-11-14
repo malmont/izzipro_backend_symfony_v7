@@ -49,7 +49,8 @@ class RegistrationController extends AbstractController
         TenantConnectionManager $tenantManager,
         LoggerInterface $logger,
         EmailSenderService $emailSenderService,
-        EmailLogoHelper $emailLogoHelper
+        EmailLogoHelper $emailLogoHelper,
+        private readonly ?\App\Services\AppMembershipService\AppMembershipService $memberships = null // familles d'applications (APPS-MEMBRES M1, 14/11/2026)
     ) {
         $this->emailVerifier = $emailVerifier;
         $this->tenantEmProvider = $tenantEmProvider;
@@ -190,6 +191,9 @@ class RegistrationController extends AbstractController
 
         $em->persist($user);
         $em->flush();
+        // APPS-MEMBRES M1 : l'inscription dans une application fait entrer le compte dans sa famille (`app` : web, mobile, memoires,
+        // livingmemory ou la famille) ; `termsVersion` (facultatif) est gardé s'il est la version en vigueur. Sans `app` : rien.
+        $this->memberships?->registered($user, $decoded['app'] ?? null, $decoded['termsVersion'] ?? null);
 
         $this->logger->info("[Register API] User créé ID: " . $user->getId() . " pour le domaine: " . ($tenantHost ?? 'Inconnu'));
 

@@ -31,7 +31,8 @@ class PosCustomerService
     private const ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
     private const SEARCH_LIMIT = 20;
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly PosAuditService $audit, private readonly PosApprovalService $approvals, private readonly PosLoyaltyService $loyalty, private readonly TenantCacheService $cache)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly PosAuditService $audit, private readonly PosApprovalService $approvals, private readonly PosLoyaltyService $loyalty, private readonly TenantCacheService $cache,
+        private readonly ?\App\Services\AppMembershipService\AppMembershipService $memberships = null) // familles d'applications (APPS-MEMBRES M1, 14/11/2026)
     {
     }
 
@@ -388,6 +389,7 @@ class PosCustomerService
         $customer->setUserId($user->getId())->touch();
         $em->flush();
         $this->audit->record(PosAuditService::CUSTOMER_LINKED, ['customerId' => $customer->getId(), 'userId' => $user->getId()], subjectType: 'customer', subjectId: $customer->getId(), user: $actor);
+        $this->memberships?->posLinked($user, $customer); // APPS-MEMBRES M1 : le compte entre dans la famille de la caisse, à la version du texte consenti
 
         return $customer;
     }
@@ -457,8 +459,10 @@ class PosCustomerService
                 $em->persist(new PosCustomerConsent($customer, $p, false, $actor->getId(), $this->settings()['consentTextVersion']));
             }
         }
+        $linkedUserId = $customer->getUserId();
         $customer->setFirstName(null)->setLastName(null)->setPhone(null)->setEmail(null)->setUserId(null)->setLoyaltyCode(null)->setLoyaltyLastActivityAt(null)->setErasedAt(new \DateTimeImmutable())->touch();
         $em->flush();
+        $this->memberships?->posCustomerErased($linkedUserId); // APPS-MEMBRES M1 : l'appartenance du compte rattaché part avec la fiche
         $this->audit->record(PosAuditService::CUSTOMER_ERASED, ['customerId' => $customer->getId(), 'pointsCanceled' => $points], subjectType: 'customer', subjectId: $customer->getId(), user: $actor);
 
         return $customer;

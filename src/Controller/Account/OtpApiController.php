@@ -84,7 +84,8 @@ class OtpApiController extends AbstractController
             $this->authenticationService->auditPos($platform, $user, (string) $email);
         }
 
-        $tokens = $this->tokenService->generateTokens($user, $platform);
+        // `app` (facultatif, APPS-MEMBRES M1) : famille d'applications de la session, portée par le jeton ; sans lui rien ne change
+        $tokens = $this->tokenService->generateTokens($user, $platform, $this->authenticationService->appFamily($user, $data['app'] ?? null, 'otp-verify'));
 
         return $this->tokenService->createResponseWithTokens($tokens, $platform, $request->getHost());
     }

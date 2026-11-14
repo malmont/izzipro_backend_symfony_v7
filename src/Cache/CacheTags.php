@@ -380,6 +380,7 @@ final class CacheTags
         // Invitations par e-mail des chapitres Mémoires Vivantes (08/11/2026) : lues en SQL direct, jamais mises en cache
         \App\MemoiresVivantes\Entity\ChapterInvitation::class,
         AppProfile::class, // profils d'application (thème, image de marque) : aucune lecture en cache applicatif
+        \App\Entity\UserAppMembership::class, // appartenances aux familles d'applications (APPS-MEMBRES M1, 14/11/2026) : lues par leur dépôt ou en SQL, jamais en cache
         \App\Gestion\Entity\GestionDocument::class, // documents lus par IA (lot L1, 10/11/2026) : lus par leur dépôt, jamais en cache
         \App\Entity\PushDevice::class, // notifications sur téléphone (lot N1, 11/11/2026) : appareils, préférences, journal, en SQL par leurs dépôts
         \App\Entity\NotificationPreference::class,

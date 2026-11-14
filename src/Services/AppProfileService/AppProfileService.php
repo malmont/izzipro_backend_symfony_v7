@@ -96,8 +96,8 @@ class AppProfileService
         return $result;
     }
 
-    /** Fiche entreprise du site (la première : une seule par site), dans la langue demandée */
-    private function company(string $host, string $locale): ?EntrepriseDto
+    /** Fiche entreprise du site (la première : une seule par site), dans la langue demandée ; lue aussi par AppTermsService (conditions de la famille boutique) */
+    public function company(string $host, string $locale): ?EntrepriseDto
     {
         $entity = $this->emProvider->getEntityManager()->getRepository(Entreprise::class)->findOneBy([], ['id' => 'ASC']);
 

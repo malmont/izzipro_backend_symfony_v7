@@ -40,7 +40,8 @@ class UserManagementController extends AbstractController
         private readonly LoggerInterface $logger,
         private readonly \App\MemoiresVivantes\Services\MobileUserStatsService $mobileUserStats,
         private readonly \App\Services\AccountService\SessionIdentityService $sessions, // jetons de renouvellement après un changement de courriel
-        private readonly \App\MemoiresVivantes\UseCase\Team\SetBiographerUseCase $setBiographer
+        private readonly \App\MemoiresVivantes\UseCase\Team\SetBiographerUseCase $setBiographer,
+        private readonly ?\App\Services\AppMembershipService\AppMembershipService $memberships = null // familles d'applications (APPS-MEMBRES M1, 14/11/2026)
     ) {}
 
     /** Adresse du site frontend (les liens d'activation y renvoient ; avant, ils pointaient vers le stockage des médias) */
@@ -186,6 +187,9 @@ class UserManagementController extends AbstractController
 
         $em->persist($newUser);
         $em->flush();
+        // APPS-MEMBRES M1 : un compte client créé par l'équipe est membre de la famille Mémoires Vivantes (source « invite »), sans
+        // conditions acceptées ; un compte d'équipe (administrateur) n'est jamais membre : le service l'écarte.
+        $this->memberships?->invited($newUser);
 
         $emailSent = false;
         if ($activationUrl !== null) {

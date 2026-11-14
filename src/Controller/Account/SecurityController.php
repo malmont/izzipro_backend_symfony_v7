@@ -71,7 +71,8 @@ class SecurityController extends AbstractController
             $data['username']  ?? '',
             $data['password']  ?? '',
             $data['platform']  ?? 'web',
-            $request
+            $request,
+            $data['app'] ?? null // famille d'applications (APPS-MEMBRES M1) : facultatif, sans lui rien ne change
         );
     }
 
@@ -80,8 +81,13 @@ class SecurityController extends AbstractController
     public function refreshToken(
         Request $request,
         JWTTokenManagerInterface $JWTManager,
-        RefreshTokenManagerInterface $refreshTokenManager
+        RefreshTokenManagerInterface $refreshTokenManager,
+        AuthenticationService $auth
     ): Response {
+        // `app` (facultatif, APPS-MEMBRES M1, 14/11/2026) : famille d'applications de la session, redite à chaque rafraîchissement pour
+        // que le nouveau jeton la porte encore ; lue dans le corps, que la session soit web (cookies) ou non. Sans lui rien ne change.
+        $body = json_decode($request->getContent(), true);
+        $app = is_array($body) ? ($body['app'] ?? null) : null;
         // Isolation Tenant par Cookie Name
         $tenantCode = $this->tenantConnProvider->getTenantCode() ?? 'default';
         $refreshName = 'refresh_token_' . $tenantCode;
@@ -130,6 +136,7 @@ class SecurityController extends AbstractController
         } catch (\Throwable) {
         }
 
+        $family = $auth->appFamily($user, $app, 'refresh');
         if ($isWebSession) {
             // Session web : l'activité repousse la déconnexion automatique (fenêtre d'inactivité glissante)
             $validRefreshToken->setValid($this->tokenService->webSessionExpiry());
@@ -138,7 +145,7 @@ class SecurityController extends AbstractController
             $response = $this->json(['message' => 'Token refreshed successfully']);
             $csrfTokenValue = $this->tokenService->attachWebSessionCookies(
                 $response,
-                $this->tokenService->createWebAccessToken($user),
+                $this->tokenService->createWebAccessToken($user, $family),
                 $refreshToken
             );
             $response->setContent(json_encode([
@@ -154,7 +161,7 @@ class SecurityController extends AbstractController
             $refreshTokenManager->save($validRefreshToken);
         }
 
-        $newToken = $JWTManager->create($user);
+        $newToken = $this->tokenService->createAccessToken($user, $family);
 
         $response = $this->json([
             'message' => 'Token refreshed successfully'

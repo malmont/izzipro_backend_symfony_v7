@@ -39,13 +39,14 @@ class TokenService
      *
      * @param UserInterface $user
      * @param string|null $platform "web" : durées de la session web (cookies), sinon 7 jours
+     * @param string|null $app famille d'applications de la session (APPS-MEMBRES M1, 14/11/2026), portée par le jeton d'accès ; null : champ absent
      * @return array Un tableau contenant 'token' et 'refresh_token'
      */
-    public function generateTokens(UserInterface $user, ?string $platform = null): array
+    public function generateTokens(UserInterface $user, ?string $platform = null, ?string $app = null): array
     {
         $isWeb = $platform === 'web';
 
-        $jwt = $isWeb ? $this->createWebAccessToken($user) : $this->JWTManager->create($user);
+        $jwt = $isWeb ? $this->createWebAccessToken($user, $app) : $this->createAccessToken($user, $app);
 
         $em = $this->tenantEmProvider->getEntityManager();
 
@@ -64,9 +65,15 @@ class TokenService
     }
 
     /** Jeton d'accès web : même durée que son cookie (le jeton du corps ne survit pas au cookie) */
-    public function createWebAccessToken(UserInterface $user): string
+    public function createWebAccessToken(UserInterface $user, ?string $app = null): string
     {
-        return $this->JWTManager->createFromPayload($user, ['exp' => time() + $this->webAccessTokenTtl]);
+        return $this->JWTManager->createFromPayload($user, ['exp' => time() + $this->webAccessTokenTtl] + ($app === null ? [] : ['app' => $app]));
+    }
+
+    /** Jeton d'accès des applications installées ; `app` : la famille d'applications de la session, en ajout (APPS-MEMBRES M1) */
+    public function createAccessToken(UserInterface $user, ?string $app = null): string
+    {
+        return $app === null ? $this->JWTManager->create($user) : $this->JWTManager->createFromPayload($user, ['app' => $app]);
     }
 
     /** Fin de session web si aucune activité d'ici là */

@@ -201,6 +201,8 @@ security:
         - { path: ^/api/app/activate$, roles: PUBLIC_ACCESS }
         # Profil public d'une application du site (20/10/2026) : lecture sans connexion
         - { path: ^/api/app-profile/, methods: [GET], roles: PUBLIC_ACCESS }
+        # Conditions d'une famille d'applications (APPS-MEMBRES M1, 14/11/2026) : lues sans connexion par l'inscription et l'écran « Rejoindre »
+        - { path: '^/api/apps/[^/]+/terms$', methods: [GET], roles: PUBLIC_ACCESS }
         # Thème de l'application e-commerce mobile (31/10/2026) : lecture sans connexion, route dédiée (le profil ne change pas)
         - { path: ^/api/mobile/app-theme$, methods: [GET], roles: PUBLIC_ACCESS }
         - { path: ^/api/app-keys(/|$), roles: ROLE_ADMIN }

@@ -162,6 +162,10 @@ class Order
     #[ORM\Column(name: 'guest_token', length: 64, nullable: true)]
     private ?string $guestToken = null;
 
+    /** Version des conditions de la boutique acceptées au paiement d'une commande en invité (APPS-MEMBRES M1, 14/11/2026) ; null : non envoyée ou périmée */
+    #[ORM\Column(name: 'terms_version', length: 40, nullable: true)]
+    private ?string $termsVersion = null;
+
     /** Transaction fiscale Stripe Tax enregistrée pour cette commande (taxes par région, 09/10/2026) */
     #[ORM\Column(name: 'tax_transaction_id', length: 64, nullable: true)]
     private ?string $taxTransactionId = null;
@@ -570,6 +574,18 @@ class Order
     public function getGuestToken(): ?string
     {
         return $this->guestToken;
+    }
+
+    public function getTermsVersion(): ?string
+    {
+        return $this->termsVersion;
+    }
+
+    public function setTermsVersion(?string $termsVersion): static
+    {
+        $this->termsVersion = $termsVersion;
+
+        return $this;
     }
 
     public function setGuestToken(?string $guestToken): static
