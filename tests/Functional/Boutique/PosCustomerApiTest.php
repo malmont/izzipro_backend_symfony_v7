@@ -108,6 +108,11 @@ class PosCustomerApiTest extends WebTestCase
         $this->json($this->request('PATCH', "/api/pos/customers/$id", ['consents' => ['account_link' => true]]));
         $linked = $this->json($this->request('POST', "/api/pos/customers/$id/link", ['userId' => $web->getId()]));
         $this->assertSame([true, null], [$linked['linkedAccount'], $linked['userId']], 'rattaché ; identifiant du compte caché au caissier');
+        // APPS-MEMBRES M1 (14/11/2026) : le rattachement consenti fait entrer le compte dans la famille de la caisse, à la version du texte consenti
+        $membership = $this->db->fetchAssociative('SELECT app, source, terms_version, terms_accepted_at IS NOT NULL AS accepted FROM user_app_membership WHERE user_id = ?', [$web->getId()]);
+        $this->assertSame(['app' => 'pos', 'source' => 'pos_link', 'terms_version' => '2026-10', 'accepted' => true], $membership);
+        $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM content_audit_log WHERE resource = 'user_app' AND resource_id = ? AND action = 'grant' AND fields = 'pos,pos_link'", [(string) $web->getId()]));
+        $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM user_app_membership WHERE user_id = ?', [$cashier->getId()]), 'le caissier est un compte d\'équipe : jamais membre');
         $this->assertSame([], $this->json($this->request('GET', '/api/pos/customers?q=' . $web->getEmail()))['results'], 'compte rattaché : plus proposé comme résultat web');
         $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM "user" WHERE email = ?', ['marie.t@example.invalid']), 'aucun compte web créé');
         $other = $this->json($this->request('POST', '/api/pos/customers', ['firstName' => 'Paul', 'lastName' => 'Doublon', 'phone' => '4385550000', 'consents' => ['account_link' => true]]), 201);
@@ -189,6 +194,8 @@ class PosCustomerApiTest extends WebTestCase
         // Effacement : réservé au responsable (un responsable qui agit lui-même n'a pas besoin de validation C3, règle C3 ; l'action customer_erase existe pour les validations groupées)
         $erased = $this->json($this->request('POST', "/api/pos/customers/$id/erase", null, ['HTTP_IDEMPOTENCY_KEY' => self::uuid()]));
         $this->assertSame([true, 'Client effacé', null, null, 0, false, false], [$erased['erased'], $erased['displayName'], $erased['phone'], $erased['email'], $erased['loyalty']['points'], $erased['linkedAccount'], $erased['consents']['loyalty']['granted']]);
+        $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM user_app_membership WHERE user_id = ?', [$web->getId()]), 'fiche effacée : l\'appartenance du compte rattaché part avec elle');
+        $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM content_audit_log WHERE resource = 'user_app' AND resource_id = ? AND action = 'revoke' AND fields = 'pos,pos_customer_erased'", [(string) $web->getId()]));
         $this->assertSame($id, (int) $this->db->fetchOne('SELECT customer_id FROM "order" WHERE id = ?', [$sale1['orderId']]), 'ventes conservées, rattachées à la fiche anonymisée');
         $this->assertSame([410, 'CUSTOMER_ERASED'], $this->error($this->request('PATCH', "/api/pos/customers/$id", ['firstName' => 'X'])));
         $this->assertSame(200, $this->request('GET', "/api/pos/customers/$id/history")->getStatusCode(), 'historique d\'une fiche effacée lisible (comptabilité)');
