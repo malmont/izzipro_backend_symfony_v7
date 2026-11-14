@@ -363,6 +363,10 @@ class StatisticsSectionsApiTest extends WebTestCase
         $this->assertSame($old, array_column($week['breakdown'], 'quantity', 'code'));
         $this->assertGreaterThanOrEqual(7, $week['indicators']['receptions']['value']);
 
+        // Une plage sans mouvement ni l'an dernier : zéro, et pas de comparaison à l'an dernier
+        $quiet = $this->get('/api/gestion/statistiques?from=2007-06-01&to=2007-06-10&sections=stock')['sections']['stock'];
+        $this->assertSame([[0, null], [0, null]], [[$quiet['indicators']['unitsIn']['value'], $quiet['indicators']['unitsIn']['lastYear']], [$quiet['breakdown'][0]['quantity'], $quiet['breakdown'][0]['lastYear']]]);
+
         // Sans aucun instantané : la remarque le dit
         $this->db->executeStatement('DELETE FROM gestion_stock_snapshot');
         $none = $this->get('/api/gestion/statistiques?' . self::RANGE . '&sections=stock')['sections']['stock'];
@@ -378,6 +382,7 @@ class StatisticsSectionsApiTest extends WebTestCase
         $this->order('2007-04-03', 1, 3, 1, 11500, [], carrier: $a, shipping: 1500);
         $this->order('2007-04-05', 1, 3, 2, 5000, [], carrier: $b, shipping: 0);
         $this->order('2007-04-06', 1, 3, 3, 5800, [], shipping: 800);
+        $this->order('2007-04-04', 1, 3, 2, 1000, []); // vente de caisse sans transporteur ni port : n'apparaît nulle part
         $this->order('2007-04-08', 2, 6, 1, 11500, [], carrier: $a, shipping: 1500);
         $this->order('2007-04-09', 1, 7, 1, 9999, [], carrier: $a, shipping: 1500);
         $this->order('2007-04-09', 1, 1, 1, 8888, [], carrier: $a, shipping: 1500);
@@ -404,7 +409,7 @@ class StatisticsSectionsApiTest extends WebTestCase
         // Par canal
         $of = fn (string $source) => $this->get('/api/gestion/statistiques?' . self::RANGE . "&sections=shipping&source=$source")['sections']['shipping'];
         $this->assertSame([[1500, 2, 750], [0, 1, 0], [800, 0, null]], [array_column($of('ecommerce')['indicators'], 'value'), array_column($of('pos')['indicators'], 'value'), array_column($of('mobile_app')['indicators'], 'value')]);
-        $this->assertSame([[$a], [null]], [array_column($of('ecommerce')['breakdown'], 'carrierId'), array_column($of('mobile_app')['breakdown'], 'carrierId')]);
+        $this->assertSame([[$a], [null], [$b]], [array_column($of('ecommerce')['breakdown'], 'carrierId'), array_column($of('mobile_app')['breakdown'], 'carrierId'), array_column($of('pos')['breakdown'], 'carrierId')]);
         $this->assertSame('No carrier', $this->get('/api/gestion/statistiques?' . self::RANGE . '&sections=shipping&locale=en')['sections']['shipping']['breakdown'][1]['name']);
 
         // Recoupement : sur une période, le port facturé du résultat de période, au cent près
