@@ -486,3 +486,80 @@ reprise:
             label: 'Articles vendus sans coût'
             text: 'Les articles dont les ventes passées n''ont pas encore de coût : ce sont des ventes sans coût connu.'
     next: 'Choisissez la profondeur (6, 12 ou 24 mois), « Calculer », corrigez les coûts, puis « Reprendre l''historique ».'
+pertes_home:
+    purpose: 'La prévention des pertes : ce que la caisse a enregistré d''inhabituel (écart à la clôture, tiroir ouvert sans vente, vente annulée juste après l''encaissement), réuni en constats que vous vérifiez. Rien n''est décidé à votre place.'
+    points:
+        constats-a-traiter:
+            label: 'Constats à traiter'
+            text: 'Les constats nouveaux ou à suivre : ceux qui attendent votre regard.'
+        montant-en-jeu:
+            label: 'Montant en jeu'
+            text: 'Le montant concerné par les constats à traiter. Ce n''est pas une perte prouvée : c''est ce qu''il faut vérifier.'
+        clotures-de-caisse:
+            label: 'Clôtures de caisse'
+            text: 'Le nombre de clôtures de la période, la somme de leurs écarts et le nombre de clôtures avec un écart, comme dans vos statistiques.'
+        derniere-analyse:
+            label: 'Dernière analyse'
+            text: 'Quand la caisse a été relue pour la dernière fois. L''analyse lit ce que la caisse a enregistré, sans jamais rien y modifier.'
+    next: 'Ouvrez les constats nouveaux, lisez leurs preuves, puis décidez : à suivre, expliqué, classé sans suite ou confirmé.'
+pertes_constats:
+    purpose: 'La liste des constats : une ligne par fait inhabituel relevé dans la caisse, avec sa règle, sa journée, son poste et son montant en jeu. Aucune ligne ne nomme une personne.'
+    points:
+        etat-du-constat:
+            label: 'État'
+            text: 'Nouveau, à suivre, expliqué, classé sans suite ou confirmé : c''est vous qui le fixez.'
+        nouveau-constat:
+            label: 'Nouveau'
+            text: 'Un constat que personne n''a encore ouvert.'
+        nouvelles-preuves:
+            label: 'Nouvelles preuves'
+            text: 'Un constat déjà décidé qui a reçu de nouvelles preuves depuis : il n''est pas rouvert, mais il mérite un second regard.'
+        constat-de-reprise:
+            label: 'Reprise'
+            text: 'Un constat tiré de l''activité des jours qui ont précédé la mise en service : il vous est montré, sans être compté comme nouveau.'
+    next: 'Filtrez par état, par règle ou par poste, triez par date ou par montant, puis ouvrez un constat.'
+pertes_constat:
+    purpose: 'Un constat et son dossier : ce qui a été relevé, les preuves datées qui le montrent, les personnes qui étaient en poste, et votre décision. Les personnes citées ne sont pas accusées : la vérification vous revient.'
+    points:
+        preuves-du-constat:
+            label: 'Preuves'
+            text: 'Chaque preuve est une opération de la caisse, avec sa date et ses montants. Elles ne peuvent être ni modifiées ni supprimées.'
+        personnes-en-poste:
+            label: 'Qui était en poste'
+            text: 'Les comptes qui ont vendu, fermé la caisse, fait l''opération ou validé au moment des faits.'
+        decision-du-constat:
+            label: 'Décision'
+            text: 'Votre conclusion, avec une note pour « expliqué » et « confirmé ». Vous pouvez la changer ; chaque changement est gardé.'
+        montant-concerne:
+            label: 'Montant en jeu'
+            text: 'Le montant concerné par ce constat, pas une perte prouvée.'
+    next: 'Vérifiez avec la personne concernée avant de conclure, puis enregistrez votre décision.'
+pertes_regles:
+    purpose: 'Les règles qui ouvrent un constat, et leurs seuils. Vous pouvez éteindre une règle ou changer un seuil ; un changement ne ferme aucun constat et ne vaut que pour la suite.'
+    points:
+        seuil-de-la-regle:
+            label: 'Seuil'
+            text: 'La valeur à partir de laquelle la règle ouvre un constat, avec ses bornes et sa valeur de départ.'
+        apercu-du-reglage:
+            label: 'Aperçu'
+            text: 'Avant d''enregistrer : combien de constats la règle aurait ouverts sur les 30 derniers jours avec ce réglage. Rien n''est écrit.'
+        regle-par-compte:
+            label: 'Série d''actes d''un même compte'
+            text: 'Une variante qui compte les actes d''un même compte dans le temps. Elle n''est proposée que là où la loi du pays le permet.'
+    next: 'Regardez l''aperçu, puis enregistrez le seuil qui vous donne des constats utiles, ni trop ni trop peu.'
+pertes_reglages:
+    purpose: 'Les réglages de la prévention des pertes : ce que le pays de votre boutique permet, l''information de vos salariés et la durée de conservation des constats.'
+    points:
+        notice-aux-salaries:
+            label: 'Information des salariés'
+            text: 'Le texte à remettre à vos salariés. Dans certains pays, l''analyse ne commence qu''après votre confirmation de les avoir informés.'
+        pays-et-region:
+            label: 'Pays et région'
+            text: 'Ils viennent de l''adresse de votre entreprise et décident de ce qui est permis.'
+        duree-de-conservation:
+            label: 'Conservation'
+            text: 'Combien de temps les constats sont gardés. Rien n''est effacé automatiquement.'
+        jamais-utilise:
+            label: 'Ce que l''outil ne fait jamais'
+            text: 'Reconnaissance des visages, enregistrement du son, caméra en cabine, analyse des gestes : exclus partout.'
+    next: 'Faites relire ces réglages par un avocat avant de vous en servir pour une décision concernant un salarié.'

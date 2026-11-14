@@ -82,6 +82,14 @@ final class ConsoleScreens
         // Réglages
         'reglages' => ['theme' => 'reglages'],
         'reprise' => ['theme' => 'reglages'],
+        // Prévention des pertes (lot L1-b, `docs/prevention-pertes.md`) : codes déclarés pour que la console sache d'où part une question et que
+        // chaque écran ait son guide. Aucune analyse propre aux constats dans ce lot : un écran propose les analyses générales de son thème
+        // (règle de la console : tout écran en a au moins une), jamais un chiffre tiré des constats
+        'pertes.home' => ['theme' => 'accueil'],
+        'pertes.constats' => ['theme' => 'accueil'],
+        'pertes.constat' => ['theme' => 'accueil', 'params' => ['id' => 'id']],
+        'pertes.regles' => ['theme' => 'reglages'],
+        'pertes.reglages' => ['theme' => 'reglages'],
 
         // Codes de la première version du contrat (lot W2), gardés
         'accueil' => ['theme' => 'accueil', 'analyses' => self::HOME],

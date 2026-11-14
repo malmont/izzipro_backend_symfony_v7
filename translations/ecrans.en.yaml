@@ -486,3 +486,80 @@ reprise:
             label: 'Items sold without a cost'
             text: 'The items whose past sales do not have a cost yet: these are sales without known cost.'
     next: 'Choose the depth (6, 12 or 24 months), “Compute”, correct the costs, then “Import the history”.'
+pertes_home:
+    purpose: 'Loss prevention: what the cash register recorded that is out of the ordinary (a discrepancy at closing, the drawer opened without a sale, a sale cancelled right after payment), gathered into findings for you to check. Nothing is decided for you.'
+    points:
+        constats-a-traiter:
+            label: 'Findings to handle'
+            text: 'New findings and findings to watch: the ones waiting for you.'
+        montant-en-jeu:
+            label: 'Amount at stake'
+            text: 'The amount the findings to handle are about. It is not a proven loss: it is what needs checking.'
+        clotures-de-caisse:
+            label: 'Register closings'
+            text: 'The number of closings in the period, the sum of their discrepancies and the number of closings with a discrepancy, as in your statistics.'
+        derniere-analyse:
+            label: 'Last analysis'
+            text: 'When the cash register was last read. The analysis reads what the register recorded and never changes anything in it.'
+    next: 'Open the new findings, read their evidence, then decide: to watch, explained, dismissed or confirmed.'
+pertes_constats:
+    purpose: 'The list of findings: one line per unusual fact found in the cash register, with its rule, day, register and amount at stake. No line names a person.'
+    points:
+        etat-du-constat:
+            label: 'Status'
+            text: 'New, to watch, explained, dismissed or confirmed: you set it.'
+        nouveau-constat:
+            label: 'New'
+            text: 'A finding nobody has opened yet.'
+        nouvelles-preuves:
+            label: 'New evidence'
+            text: 'A finding already decided that received new evidence since: it is not reopened, but it deserves a second look.'
+        constat-de-reprise:
+            label: 'History'
+            text: 'A finding drawn from the activity of the days before the tool was switched on: it is shown to you without counting as new.'
+    next: 'Filter by status, rule or register, sort by date or amount, then open a finding.'
+pertes_constat:
+    purpose: 'A finding and its file: what was found, the dated evidence that shows it, the people who were on duty, and your decision. The people listed are not accused: checking is up to you.'
+    points:
+        preuves-du-constat:
+            label: 'Evidence'
+            text: 'Each piece of evidence is a cash register operation, with its date and amounts. Evidence can be neither changed nor deleted.'
+        personnes-en-poste:
+            label: 'Who was on duty'
+            text: 'The accounts that sold, closed the register, performed the operation or approved it when the events took place.'
+        decision-du-constat:
+            label: 'Decision'
+            text: 'Your conclusion, with a note for “explained” and “confirmed”. You can change it; every change is kept.'
+        montant-concerne:
+            label: 'Amount at stake'
+            text: 'The amount this finding is about, not a proven loss.'
+    next: 'Check with the person concerned before concluding, then save your decision.'
+pertes_regles:
+    purpose: 'The rules that open a finding, and their thresholds. You can turn a rule off or change a threshold; a change closes no finding and only applies from then on.'
+    points:
+        seuil-de-la-regle:
+            label: 'Threshold'
+            text: 'The value from which the rule opens a finding, with its bounds and its starting value.'
+        apercu-du-reglage:
+            label: 'Preview'
+            text: 'Before saving: how many findings the rule would have opened over the last 30 days with this setting. Nothing is written.'
+        regle-par-compte:
+            label: 'Series of actions by the same account'
+            text: 'A variant that counts the actions of the same account over time. It is only offered where the law of the country allows it.'
+    next: 'Look at the preview, then save the threshold that gives you useful findings, neither too many nor too few.'
+pertes_reglages:
+    purpose: 'Loss prevention settings: what the country of your shop allows, the information given to your staff and how long findings are kept.'
+    points:
+        notice-aux-salaries:
+            label: 'Staff information'
+            text: 'The text to hand to your staff. In some countries the analysis only starts once you have confirmed that you informed them.'
+        pays-et-region:
+            label: 'Country and region'
+            text: 'They come from the address of your business and decide what is allowed.'
+        duree-de-conservation:
+            label: 'Retention'
+            text: 'How long findings are kept. Nothing is erased automatically.'
+        jamais-utilise:
+            label: 'What the tool never does'
+            text: 'Facial recognition, audio recording, cameras in fitting rooms, gesture analysis: excluded everywhere.'
+    next: 'Have these settings reviewed by a lawyer before using them for a decision about an employee.'
