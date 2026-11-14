@@ -52,8 +52,17 @@ class SupportWebApiTest extends WebTestCase
         $cookies = $this->cookies($login);
         $body = json_decode((string) $login->getContent(), true);
         $this->assertSame(["auth_token_$tenant", "refresh_token_$tenant", "XSRF-TOKEN_$tenant"], array_keys($cookies));
-        $this->assertSame($cookies["XSRF-TOKEN_$tenant"], $body['csrf_token'], 'le jeton anti-CSRF est rendu dans le corps, comme sur « web »');
-        $roles = json_decode(base64_decode(strtr(explode('.', $body['token'])[1], '-_', '+/')), true)['roles'];
+        // Le corps ne rend QUE le jeton anti-CSRF : le jeton d'accès et le jeton de renouvellement ne vivent que dans les cookies
+        // protégés (HttpOnly, Secure), hors de portée d'un script de la page
+        $this->assertSame(['csrf_token' => $cookies["XSRF-TOKEN_$tenant"]], $body);
+        $this->assertStringNotContainsString($cookies["auth_token_$tenant"], (string) $login->getContent());
+        $this->assertStringNotContainsString($cookies["refresh_token_$tenant"], (string) $login->getContent());
+        $flags = [];
+        foreach ($login->headers->getCookies() as $cookie) {
+            $flags[$cookie->getName()] = [$cookie->isHttpOnly(), $cookie->isSecure()];
+        }
+        $this->assertSame(["auth_token_$tenant" => [true, true], "refresh_token_$tenant" => [true, true], "XSRF-TOKEN_$tenant" => [false, true]], $flags);
+        $roles = json_decode(base64_decode(strtr(explode('.', $cookies["auth_token_$tenant"])[1], '-_', '+/')), true)['roles'];
         $this->assertSame(['ROLE_SUPPORT', 'ROLE_USER'], [...array_values(array_diff($roles, ['ROLE_USER'])), 'ROLE_USER']);
         // Par les cookies seuls : le module répond, le reste du site reste fermé
         $me = $this->send('GET', '/api/support/me', null, $cookies);
@@ -86,10 +95,12 @@ class SupportWebApiTest extends WebTestCase
         $customer = $this->user(['ROLE_USER_INTERNET']);
         $refused = $this->send('POST', '/api/login', ['username' => $customer->getEmail(), 'password' => self::PASSWORD, 'platform' => 'webadmin']);
         $this->assertSame([403, 'PLATFORM_NOT_ALLOWED', []], [$refused->getStatusCode(), json_decode((string) $refused->getContent(), true)['code'] ?? null, $this->cookies($refused)]);
-        $this->assertSame(200, $this->send('POST', '/api/login', ['username' => $customer->getEmail(), 'password' => self::PASSWORD, 'platform' => 'web'])->getStatusCode());
+        // « web » ne change pas pour l'instant : ses clients lisent encore le corps (jetons et jeton anti-CSRF), en plus des cookies
+        $shop = $this->send('POST', '/api/login', ['username' => $customer->getEmail(), 'password' => self::PASSWORD, 'platform' => 'web']);
+        $this->assertSame([200, ['token', 'refresh_token', 'csrf_token'], 3], [$shop->getStatusCode(), array_keys(json_decode((string) $shop->getContent(), true)), count($this->cookies($shop))]);
         // L'application mobile de gestion (« admin ») ne change pas : jetons dans le corps, aucun cookie, aucun jeton anti-CSRF
         $mobile = $this->send('POST', '/api/login', ['username' => $agent->getEmail(), 'password' => self::PASSWORD, 'platform' => 'admin']);
-        $this->assertSame([200, [], false], [$mobile->getStatusCode(), $this->cookies($mobile), array_key_exists('csrf_token', json_decode((string) $mobile->getContent(), true))]);
+        $this->assertSame([200, [], ['token', 'refresh_token']], [$mobile->getStatusCode(), $this->cookies($mobile), array_keys(json_decode((string) $mobile->getContent(), true))]);
         // Propriétaire de la plateforme : « webadmin » lui est ouvert (code OTP imposé) ; « admin » ne l'était pas et ne l'est toujours pas
         $owner = $this->user(['ROLE_SUPER_ADMIN']);
         $otp = $this->send('POST', '/api/login', ['username' => $owner->getEmail(), 'password' => self::PASSWORD, 'platform' => 'webadmin']);
@@ -97,6 +108,8 @@ class SupportWebApiTest extends WebTestCase
         $this->db()->executeStatement("INSERT INTO otp_code (id, user_otp_id, code, expiration) VALUES (nextval('otp_code_id_seq'), ?, '424242', NOW() + INTERVAL '5 minutes')", [$owner->getId()]);
         $verified = $this->send('POST', '/api/otp-verify', ['username' => $owner->getEmail(), 'otp' => '424242', 'platform' => 'webadmin']);
         $this->assertSame([200, 3], [$verified->getStatusCode(), count($this->cookies($verified))], (string) $verified->getContent());
+        // Après le code aussi, le corps ne rend que le jeton anti-CSRF
+        $this->assertSame(['csrf_token' => $this->cookies($verified)["XSRF-TOKEN_$tenant"]], json_decode((string) $verified->getContent(), true));
         $this->assertSame(403, $this->send('POST', '/api/login', ['username' => $owner->getEmail(), 'password' => self::PASSWORD, 'platform' => 'admin'])->getStatusCode());
         // Un compte client ne passe pas non plus à l'étape du code sur « webadmin »
         $this->db()->executeStatement("INSERT INTO otp_code (id, user_otp_id, code, expiration) VALUES (nextval('otp_code_id_seq'), ?, '424242', NOW() + INTERVAL '5 minutes')", [$customer->getId()]);
