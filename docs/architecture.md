@@ -200,6 +200,27 @@ dont le contenu d'exemple de la landing page et de la boutique, marqué `is_demo
 route est calculé dans `docs/endpoints.md`. Garde-fou : `tests/Functional/Security/AnonymousWriteAccessTest.php`
 refuse toute route d'écriture sans rôle qui n'est pas une exception justifiée.
 
+### Chemin d'une requête : toujours celui que lit le routeur (lot CHEMIN, 14/11/2026)
+
+`Request::getPathInfo()` rend le chemin **brut**, non décodé. Le routeur et les règles d'accès de Symfony, eux, le **décodent**
+(`rawurldecode`) : `/api/%6cogin` est servi par la route `/api/login`, `/%61pi/profile` par `/api/profile`. Une garde qui compare le
+chemin brut ne reconnaît pas ces chemins et laisse passer.
+
+- **Constat du 14/11/2026** (prouvé dans la base de test, aucune trace dans le journal du serveur web du 26/10 au 14/11/2026) : la
+  limite de débit de la connexion et la vérification anti-CSRF se contournaient en encodant une lettre du chemin ; par lecture du
+  code, la garde du terminal de caisse, la garde des modules et la portée du compte Assistance aussi. L'authentification et les rôles
+  n'étaient pas touchés (ils s'appuient sur le chemin décodé).
+- **Règle** : tout code qui décide d'après le chemin lit `App\Services\Http\RequestPath::of($request)`, le chemin décodé une fois,
+  comme le routeur (un encodage double n'est décodé qu'une fois : `/%2561pi` n'est pas `/api`). Sont passés par là : limite de débit
+  (`PublicEndpointRateLimitSubscriber`), anti-CSRF (`CsrfValidationListener`), terminal de caisse (`PosTerminalGuardSubscriber`),
+  modules (`ModuleAccessSubscriber`), portée de l'Assistance (`SupportScopeSubscriber`), code à usage unique en attente
+  (`PendingOtpSubscriber`), choix du site (`TenantDoctrineSwitcherListener`), suivi des visites, et la mise en forme des erreurs de l'API.
+- **Garde-fou** : `tests/Functional/Security/RequestPathGuardTest.php` échoue si un fichier de `src/` appelle `getPathInfo()` ou
+  `getRequestUri()` hors de `RequestPath` (deux exceptions inscrites avec leur raison : une clé d'idempotence, un libellé de journal).
+  Preuves par route : `tests/Functional/Security/EncodedPathGuardTest.php` (connexion bloquée au onzième essai et écriture sans jeton
+  anti-CSRF refusée par un chemin encodé ; chaque garde rend au chemin encodé la réponse du chemin normal ; un chemin légitimement
+  encodé, accent ou espace, atteint sa route comme avant).
+
 ### Ressources API Platform (`#[ApiResource]`, audit S8 du 26/10/2026)
 
 Une collection API Platform **sans groupes de sérialisation** imbrique toutes les relations des entités qui ne sont pas des ressources

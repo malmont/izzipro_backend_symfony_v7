@@ -214,6 +214,8 @@ Un nombre rond sort en entier dans le JSON (`100`, pas `100.0`), comme dans S1.
 ### Routes anciennes : gardées telles quelles
 
 `caisse/transactions?asList=1`, `payments/statistics`, `stock-evolution`, `stock-value`, `frais/total`, `carrier/statistics`,
-`taxes/monthly` ne sont pas touchées. Appelants au 14/11/2026 : l'application mobile de gestion les appelle toutes les 7 (elle passera
-aux volets) ; le web de gestion n'en appelle aucune ; la caisse a le droit de lire `payments/statistics/pos`. Leur retrait est une
-décision à part, route par route, quand le journal du serveur ne montre plus d'appel.
+`taxes/monthly` ne sont pas touchées. Appelants : l'application mobile de gestion n'en appelle plus aucune depuis son passage aux volets
+(14/11/2026), ni les anciennes routes de chiffre d'affaires, de nombre de commandes et de panier moyen ; le web de gestion n'en appelait
+aucune ; restent la caisse (`payments/statistics/pos`, `chiffre-affaires/pos`, `nombre-commandes/pos`) et d'anciennes versions installées
+de l'application. Leur retrait est une décision à part, route par route, quand le journal du serveur ne montre plus d'appel sur une durée
+convenue.
