@@ -33,8 +33,9 @@ caisse dans `tests/Functional/Boutique/PosCustomerApiTest.php`.
 
 - **Le web et le mobile d'une même famille partagent l'appartenance et ses conditions.** « Rejoindre » est obligatoire **entre**
   familles, jamais à l'intérieur d'une famille.
-- La liste est dans `AppFamilies` et nulle part ailleurs (`ALL`, `APPS`). Un front peut envoyer son code d'application ou la
-  famille : le serveur rend toujours la **famille**.
+- La liste est dans `AppFamilies` et nulle part ailleurs (`ALL`, `APPS`). **Règle recommandée : un front envoie le code de SON
+  application** (`web`, `mobile`, `memoires`, `livingmemory`, `pos`), celui qu'il connaît déjà ; le serveur le traduit en famille
+  et rend toujours la **famille**. Envoyer la famille elle-même est accepté, sans plus.
 - Ne sont pas des familles à membres : la gestion et EasyAdmin (équipe seulement), la Boussole.
 - **Un compte d'équipe n'est jamais membre** et ne passera jamais par « Rejoindre » : son accès vient de son rôle. Compte d'équipe
   = il porte `ROLE_ADMIN`, `ROLE_SUPER_ADMIN`, `ROLE_USER_POS`, `ROLE_POS_MANAGER`, `ROLE_SUPPORT` ou un rôle d'équipe de
@@ -87,6 +88,15 @@ familles qui affichent exactement les mêmes textes ont la même version.
 404 `APP_UNKNOWN` (`params.apps`, `params.families`) pour tout autre code. `updatedAt` et `privacyPolicyUrl` viennent du profil
 d'application ; ils sont `null` pour la boutique.
 
+**Format des textes.** `privacyPolicy`, `termsOfUse` et `legalNotice` sont rendus **tels qu'ils sont enregistrés**, sans
+transformation, exactement comme `GET /api/entreprise` et `GET /api/app-profile/{app}` les rendent déjà : `null` quand le texte est
+vide ; sinon du texte, qui peut contenir du HTML. Les textes de la fiche Entreprise écrits depuis l'éditeur du site sont limités
+par `LegalTextPolicy` (titres, paragraphes, listes, tableaux, liens `<a href>` ; aucun style, script ni autre attribut) ; ceux
+saisis dans EasyAdmin (fiche Entreprise, profils d'application) sont des zones de texte que le serveur ne filtre pas. **Un front
+les affiche donc comme il affiche déjà ces textes : en HTML assaini de son côté**, avec les retours à la ligne d'un texte simple.
+Les liens d'un texte sont ceux que l'auteur a écrits, sans réécriture (le serveur ne les rend pas absolus) ; `privacyPolicyUrl`,
+lui, est une adresse absolue (`https://…`).
+
 Pas de nouvelle demande d'acceptation quand les conditions changent, dans ce chantier : la version acceptée est gardée, ce qui le
 permettra plus tard.
 
@@ -98,7 +108,8 @@ permettra plus tard.
 | **Compte client créé par l'équipe** (Mémoires Vivantes, `POST /api/memoires/admin/users`) | Membre de `memoires` (`invite`), **sans** conditions acceptées ; il les acceptera à sa première connexion (M3). Un compte d'équipe créé de même n'est pas membre. | M1 |
 | **Commande en invité** (`POST /api/order/create-guest`) | La commande crée un compte **sans mot de passe choisi** (c'est le fonctionnement d'avant ce chantier) : **aucune appartenance**. `termsVersion` (facultatif) est gardé sur la commande s'il est la version en vigueur de la boutique. | M1 |
 | **Ce client choisit son mot de passe** (« mot de passe oublié ») | C'est la création de son compte : il entre dans `boutique` (`guest_checkout`) **à la date et à la version de sa première commande en invité**. Un mot de passe posé par l'équipe n'est pas ce geste : aucune appartenance. | M1 |
-| **Fiche de caisse rattachée à un compte** (consentement `account_link`) | Le compte entre dans `pos` (`pos_link`), à la version du texte consenti et à la date du consentement. La fiche effacée à la demande du client retire cette appartenance. | M1 |
+| **Fiche de caisse rattachée à un compte** (consentement `account_link`) | Le compte entre dans `pos` (`pos_link`), à la version du texte consenti et à la date du consentement. | M1 |
+| **Le rattachement de caisse se défait** | L'appartenance `pos` du compte part avec lui, au journal (`revoke`). Trois cas : **retrait du consentement `account_link`** (`PATCH /api/pos/customers/{id}` avec `consents.account_link: false`) : le rattachement est défait (`user_id` vidé) et l'appartenance retirée **dans la même transaction**, raison `consent_withdrawn` ; la réponse montre la fiche sans compte rattaché. **Fiche effacée** à la demande du client : raison `pos_customer_erased`. **Fusion de deux fiches rattachées à deux comptes différents** : le compte de la fiche fusionnée perd son rattachement, raison `merge` ; si la fiche conservée n'avait pas de compte, elle reprend celui de la fiche fusionnée et l'appartenance survit. À la fusion, un consentement repris garde **sa version et sa date d'origine** : une fusion n'est pas un nouveau consentement. | M1 |
 | **Connexion à une famille dont le compte n'est pas membre** | M1 : la session est rendue, la connexion est seulement **notée** (mode « observer », § 6). M3 : refus `APP_MEMBERSHIP_REQUIRED` avec les conditions et un jeton de passage de 10 minutes ; `POST /api/apps/join { joinToken, termsVersion, accepted: true }` crée l'appartenance (`join`) et rend la session ; `TERMS_VERSION_CHANGED` si les conditions ont changé entre-temps. | M3 |
 | **Quitter une famille** sans supprimer son compte (retrait du consentement, Loi 25) | `DELETE /api/account/memberships/{app}`, journalisé ; il faudra « rejoindre » de nouveau. | M3 |
 | **Compte de l'historique** | Reprise par commande, à part (§ 8). Une appartenance reprise est acquise pour l'accès ; l'acceptation sera demandée plus tard, sur décision. | M2 |
@@ -116,6 +127,10 @@ Avec `app` :
 - **Le jeton d'accès porte la famille** : champ `app` du JWT (`boutique`, `memoires`, `pos`), en ajout ; les autres champs sont
   ceux d'avant. Le jeton de rafraîchissement ne garde pas la famille : **l'application la redit à chaque rafraîchissement**, sinon
   le nouveau jeton n'en porte pas.
+- **Rafraîchissement d'une session ouverte avant M1** (jeton d'accès sans `app`) : `app` dans le corps de
+  `POST /api/token/refresh` suffit, le nouveau jeton porte la famille. Le serveur ne compare avec rien : il n'a gardé aucune
+  famille, il prend celle du corps à chaque fois. Une application peut donc commencer à envoyer `app` au rafraîchissement sans
+  faire reconnecter personne.
 - **Mode « observer »** (M1, le seul mode pour l'instant) : si le compte est un compte client qui n'est pas membre de cette
   famille, la session est rendue quand même et une ligne est écrite au journal de l'application :
   `[APPS-MEMBRES] observer : le compte N n'est pas membre de « famille » (login | otp-verify | refresh, site code) ; session rendue`.
@@ -123,6 +138,29 @@ Avec `app` :
 - **Mode « exiger »** (M3) : par site, colonne `entreprise.app_membership_mode` (`observe` par défaut, déjà créée). On y passe un
   site seulement quand ses fronts sont prêts et sa reprise faite ; aucune session ouverte n'est coupée, le contrôle se fait à la
   connexion suivante.
+
+### Le refus du lot M3 (forme prévue, pour que les fronts se préparent ; rien de cela n'existe en M1)
+
+En mode « exiger », `POST /api/login` et `POST /api/otp-verify` (au moment où ils rendraient la session) répondent **403** :
+
+```
+{ code: "APP_MEMBERSHIP_REQUIRED", error: "APP_MEMBERSHIP_REQUIRED", message,
+  app: "memoires",
+  reason: "membership" | "terms",
+  terms: { version, locale, privacyPolicy, termsOfUse, legalNotice, privacyPolicyUrl, updatedAt },
+  joinToken, expiresAt }
+```
+
+- `reason: "membership"` : le compte n'est pas membre de la famille ; `"terms"` : il en est membre (invité par l'équipe) mais n'a
+  pas encore accepté ses conditions. Dans les deux cas l'écran est le même : les conditions, un bouton.
+- `terms` a la forme de `GET /api/apps/{app}/terms` ; `terms.version` est `null` quand la famille n'a aucun texte (rien à afficher,
+  seulement le bouton).
+- `joinToken` prouve que le mot de passe (et le code, s'il y en a un) vient d'être vérifié ; `expiresAt` (ISO 8601) : 10 minutes.
+  `POST /api/apps/join { joinToken, termsVersion, accepted: true }` rend la session exactement comme une connexion ; 409
+  `TERMS_VERSION_CHANGED` (avec les nouvelles `terms`) si la version a changé entre-temps.
+- **`POST /api/token/refresh` ne rend jamais ce refus** : aucune session ouverte n'est coupée (décision du propriétaire) ; le
+  contrôle se fait à la connexion suivante. Le rafraîchissement continue de noter, comme en mode « observer ».
+- Ce code est distinct de `PLATFORM_NOT_ALLOWED` (rôle) et des refus de site. Le contrat de M3 confirmera cette forme avant le code.
 
 ## 7. Routes
 
