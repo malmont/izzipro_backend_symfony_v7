@@ -14,8 +14,10 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 /**
- * Lot S2-a, sections des statistiques unifiées (14/11/2026, `docs/statistiques-gestion.md` § 6) : `sections=payments,expenses` sur
- * `GET /api/gestion/statistiques`. Sans le paramètre, la réponse de S1 ne change pas d'une clé. `payments` : l'encaissé daté par la
+ * Lots S2-a et S2-b, sections des statistiques unifiées (14/11/2026, `docs/statistiques-gestion.md` § 6) : `sections=payments,expenses,
+ * stock,shipping,taxes` sur `GET /api/gestion/statistiques`. S2-b : `stock` (mouvements par type, valeur et sa courbe par les instantanés,
+ * stock bas, égal à l'ancienne route sur la semaine), `shipping` (port facturé, par transporteur, égal au résultat de période) et `taxes`
+ * (taxes collectées par taxe, retours en négatif). Sans le paramètre, la réponse de S1 ne change pas d'une clé. `payments` : l'encaissé daté par la
  * commande (reçu, remboursé, net), par moyen de paiement, ce que les lignes de paiement n'expliquent pas en « autre », le canal, et les
  * clôtures de caisse (un nombre rond revient en entier dans le JSON : 100, pas 100.0). `expenses` : notes de frais, frais de port d'achat et publicité, au cent près le total des dépenses du résultat
  * de période ; frais fixes à côté, hors du total. Comparaisons à la plage précédente et à l'an dernier, graphique, erreurs.
@@ -63,8 +65,18 @@ class StatisticsSectionsApiTest extends WebTestCase
             $this->assertSame(array_column($without['chart']['points'], 'key'), array_column($with['sections'][$name]['chart']['points'], 'key'), "$name : les mêmes tranches que le graphique de S1");
         }
 
-        // Une section inconnue (ou pas encore livrée : stock, shipping et taxes viennent avec S2-b) : 422, rien n'est calculé
-        foreach (['sections=stock', 'sections=payments,inconnue', 'sections=,', 'sections[]=payments', 'sections=shipping', 'sections=taxes'] as $query) {
+        // Les cinq sections, dans leur ordre fixe ; chacune a les tranches du graphique de S1
+        $all = $this->get('/api/gestion/statistiques?' . self::RANGE . '&sections=taxes,shipping,stock,expenses,payments');
+        $this->assertSame(['payments', 'expenses', 'stock', 'shipping', 'taxes'], array_keys($all['sections']));
+        $this->assertSame($without, array_diff_key($all, ['sections' => true]));
+        foreach ($all['sections'] as $name => $section) {
+            $this->assertSame(array_column($without['chart']['points'], 'key'), array_column($section['chart']['points'], 'key'), $name);
+            $this->assertSame(['indicators', 'breakdown', 'chart', 'caveats', 'appliesSource'], array_values(array_intersect(array_keys($section), ['indicators', 'breakdown', 'chart', 'caveats', 'appliesSource'])), "$name : le socle commun");
+        }
+        $this->assertSame(['payments' => true, 'expenses' => false, 'stock' => false, 'shipping' => true, 'taxes' => true], array_map(fn (array $x) => $x['appliesSource'], $all['sections']));
+
+        // Une section inconnue : 422, rien n'est calculé
+        foreach (['sections=inconnue', 'sections=payments,inconnue', 'sections=,', 'sections[]=payments', 'sections=stocks'] as $query) {
             $this->request('GET', '/api/gestion/statistiques?' . self::RANGE . '&' . $query);
             $this->assertSame([422, ['sections' => 'INVALID_SECTION']], [$this->status(), $this->body()['fields'] ?? null], $query);
         }
@@ -280,6 +292,175 @@ class StatisticsSectionsApiTest extends WebTestCase
         $this->assertSame(['id', 'name', 'amount'], array_keys($result['other'][0]['campaigns'][0]), 'la forme du résultat de période ne change pas');
     }
 
+    public function testStockGivesTheMovementsOfTheRangeTheValueCurveAndMatchesTheOldRouteOnTheWeek(): void
+    {
+        $product = (int) $this->db->fetchOne("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type) VALUES (nextval('product_id_seq'), 'Article S2-TEST', 2500, false, 0, NOW(), ?, 'standard') RETURNING id", ['s2-test-' . bin2hex(random_bytes(3))]);
+        $variant = (int) $this->db->fetchOne("INSERT INTO product_variant (id, product_id, stock_quantity) VALUES (nextval('product_variant_id_seq'), ?, 0) RETURNING id", [$product]);
+        $move = fn (string $day, int $type, int $quantity, string $time = '12:00') => $this->db->executeStatement(
+            "INSERT INTO inventory_movements (id, product_variant_id, movement_type_id, quantity, movement_date) VALUES (nextval('inventory_movements_id_seq'), ?, ?, ?, ?)", [$variant, $type, $quantity, $this->utc($day, $time)]);
+        // Plage : 10 entrées, 3 + 1 sorties, 20 reçues d'un fournisseur, 2 ajustées ; précédente : 4 sorties ; an dernier : 5 entrées
+        $move('2007-04-02', 1, 10);
+        $move('2007-04-02', 2, 3);
+        $move('2007-04-05', 5, 20);
+        $move('2007-04-07', 4, 2);
+        $move('2007-04-10', 2, 1, '23:30'); // dernier jour, tard le soir : dans la plage
+        $move('2007-04-11', 2, 9, '00:30'); // le lendemain : hors plage
+        $move('2007-03-25', 2, 4);
+        $move('2006-04-03', 1, 5);
+        // Instantanés de la valeur du stock : le 3, le 4 et le 9 avril
+        foreach ([['2007-04-03', 100000, 60000], ['2007-04-04', 110000, 65000], ['2007-04-09', 90000, 50000]] as [$day, $sale, $cost]) {
+            $this->db->executeStatement('INSERT INTO gestion_stock_snapshot (snapshot_date, sale_value_cents, cost_value_cents, created_at) VALUES (?, ?, ?, NOW())', [$day, $sale, $cost]);
+        }
+        $first = substr((string) $this->db->fetchOne('SELECT MIN(snapshot_date) FROM gestion_stock_snapshot'), 0, 10);
+
+        $st = $this->get('/api/gestion/statistiques?' . self::RANGE . '&sections=stock')['sections']['stock'];
+        $this->assertSame(['indicators', 'breakdown', 'value', 'lowCount', 'chart', 'caveats', 'appliesSource'], array_keys($st));
+        $values = fn (array $i): array => [$i['value'], $i['unit'], $i['previous'], $i['lastYear'], $i['changeVsPrevious'], $i['changeVsLastYear']];
+        $this->assertSame([
+            'unitsIn' => [10, 'count', 0, 5, null, 100], 'unitsOut' => [4, 'count', 4, 0, 0, null], 'receptions' => [20, 'count', 0, 0, null, null],
+            'adjustments' => [2, 'count', 0, 0, null, null], 'returns' => [0, 'count', 0, 0, null, null],
+        ], array_map($values, $st['indicators']));
+        $this->assertSame([0, 3, 0, 0, 0, 0, 0, 0, 0, 1], $st['indicators']['unitsOut']['spark']);
+        $this->assertSame([
+            ['code' => 'in', 'label' => 'Entrées', 'quantity' => 10, 'previous' => 0, 'lastYear' => 5], ['code' => 'out', 'label' => 'Sorties', 'quantity' => 4, 'previous' => 4, 'lastYear' => 0],
+            ['code' => 'return', 'label' => 'Retours', 'quantity' => 0, 'previous' => 0, 'lastYear' => 0], ['code' => 'adjustment', 'label' => 'Ajustements', 'quantity' => 2, 'previous' => 0, 'lastYear' => 0],
+            ['code' => 'reception', 'label' => 'Réceptions fournisseur', 'quantity' => 20, 'previous' => 0, 'lastYear' => 0],
+        ], $st['breakdown']);
+        // Graphique : mouvements du jour, et la valeur du stock le jour d'un instantané (null sinon)
+        $points = array_column($st['chart']['points'], null, 'key');
+        $this->assertSame(['key' => '2007-04-02', 'from' => '2007-04-02', 'to' => '2007-04-02', 'in' => 10, 'out' => 3, 'return' => 0, 'adjustment' => 0, 'reception' => 0, 'saleValue' => null, 'costValue' => null,
+            'lastYear' => ['in' => 0, 'out' => 0, 'return' => 0, 'adjustment' => 0, 'reception' => 0]], $points['2007-04-02']);
+        $this->assertSame([[100000, 60000], [110000, 65000], [null, null], [90000, 50000], 5], [[$points['2007-04-03']['saleValue'], $points['2007-04-03']['costValue']], [$points['2007-04-04']['saleValue'], $points['2007-04-04']['costValue']],
+            [$points['2007-04-05']['saleValue'], $points['2007-04-05']['costValue']], [$points['2007-04-09']['saleValue'], $points['2007-04-09']['costValue']], $points['2007-04-03']['lastYear']['in']]);
+        // La courbe ne commence qu'au premier instantané : c'est dit, avec la date
+        $this->assertSame([$first, ['STOCK_HISTORY_STARTS'], $first], [$st['value']['historyStartsAt'], array_column($st['caveats'], 'code'), $st['caveats'][0]['date']]);
+        $this->assertStringContainsString((new \DateTimeImmutable($first))->format('d/m/Y'), $st['caveats'][0]['text']);
+        $this->assertFalse($st['appliesSource']);
+
+        // Valeur d'aujourd'hui et stock bas : les services existants (S1 et « Ma journée »)
+        $this->em();
+        $today = static::getContainer()->get(\App\Gestion\Services\PeriodCalendar::class)->today();
+        $now = static::getContainer()->get(\App\Gestion\Services\GestionStockSnapshotService::class)->current($today);
+        $this->assertSame([$now['saleValue'], $now['costValue'], count(static::getContainer()->get(\App\Gestion\Services\HomeTilesService::class)->lowStock()['all'])],
+            [$st['value']['saleValue'], $st['value']['costValue'], $st['lowCount']]);
+
+        // Par semaine : la valeur d'une tranche est son DERNIER instantané ; une plage qui commence au premier instantané : plus de remarque
+        $weeks = array_column($this->get('/api/gestion/statistiques?from=2007-01-01&to=2007-04-10&sections=stock')['sections']['stock']['chart']['points'], null, 'key');
+        $this->assertSame([[110000, 10, 3, 20, 2], [90000, 0, 1, 0, 0]], [[$weeks['2007-W14']['saleValue'], $weeks['2007-W14']['in'], $weeks['2007-W14']['out'], $weeks['2007-W14']['reception'], $weeks['2007-W14']['adjustment']],
+            [$weeks['2007-W15']['saleValue'], $weeks['2007-W15']['in'], $weeks['2007-W15']['out'], $weeks['2007-W15']['reception'], $weeks['2007-W15']['adjustment']]]);
+        $this->assertSame([], $this->get("/api/gestion/statistiques?from=$first&to=2007-04-10&sections=stock")['sections']['stock']['caveats']);
+        // Le canal ne s'applique pas : mêmes chiffres, et c'est dit ; libellés en anglais
+        $pos = $this->get('/api/gestion/statistiques?' . self::RANGE . '&sections=stock&source=pos&locale=en')['sections']['stock'];
+        $this->assertSame([array_column($st['indicators'], 'value'), 'SOURCE_NOT_APPLICABLE', ['In', 'Out', 'Returns', 'Adjustments', 'Supplier receptions']],
+            [array_column($pos['indicators'], 'value'), $pos['caveats'][0]['code'], array_column($pos['breakdown'], 'label')]);
+
+        // Recoupement : sur la semaine en cours, les mêmes totaux que l'ancienne route stock-evolution
+        $tz = static::getContainer()->get(StoreClock::class)->timezone();
+        $monday = (new \DateTimeImmutable('now', $tz))->modify('monday this week');
+        $this->db->executeStatement("INSERT INTO inventory_movements (id, product_variant_id, movement_type_id, quantity, movement_date) VALUES (nextval('inventory_movements_id_seq'), ?, 5, 7, NOW())", [$variant]);
+        $old = array_column($this->get('/api/stock-evolution')['stock_evolution_week'], 'quantity', 'code');
+        $week = $this->get('/api/gestion/statistiques?from=' . $monday->format('Y-m-d') . '&to=' . $monday->modify('+6 days')->format('Y-m-d') . '&sections=stock')['sections']['stock'];
+        $this->assertSame($old, array_column($week['breakdown'], 'quantity', 'code'));
+        $this->assertGreaterThanOrEqual(7, $week['indicators']['receptions']['value']);
+
+        // Sans aucun instantané : la remarque le dit
+        $this->db->executeStatement('DELETE FROM gestion_stock_snapshot');
+        $none = $this->get('/api/gestion/statistiques?' . self::RANGE . '&sections=stock')['sections']['stock'];
+        $this->assertSame([null, ['STOCK_HISTORY_EMPTY']], [$none['value']['historyStartsAt'], array_column($none['caveats'], 'code')]);
+    }
+
+    public function testShippingIsWhatWasBilledToCustomersByCarrierAndMatchesThePeriodResult(): void
+    {
+        $carrier = fn (string $name, string $kind): int => (int) $this->db->fetchOne("INSERT INTO carrier (id, name, description, price, created_at, kind) VALUES (nextval('carrier_id_seq'), ?, 'S2-TEST', 9999, NOW(), ?) RETURNING id", [$name, $kind]);
+        [$a, $b] = [$carrier('Transporteur A S2-TEST', 'fixed'), $carrier('Retrait B S2-TEST', 'pickup')];
+        // Plage : A 15,00 deux fois (web), B retrait gratuit (caisse), 8,00 sans transporteur (application), un retour de A −15,00 ; annulée et incomplète exclues
+        $this->order('2007-04-02', 1, 3, 1, 11500, [], carrier: $a, shipping: 1500);
+        $this->order('2007-04-03', 1, 3, 1, 11500, [], carrier: $a, shipping: 1500);
+        $this->order('2007-04-05', 1, 3, 2, 5000, [], carrier: $b, shipping: 0);
+        $this->order('2007-04-06', 1, 3, 3, 5800, [], shipping: 800);
+        $this->order('2007-04-08', 2, 6, 1, 11500, [], carrier: $a, shipping: 1500);
+        $this->order('2007-04-09', 1, 7, 1, 9999, [], carrier: $a, shipping: 1500);
+        $this->order('2007-04-09', 1, 1, 1, 8888, [], carrier: $a, shipping: 1500);
+        // Précédente : A 10,00 ; an dernier : B 5,00
+        $this->order('2007-03-25', 1, 3, 1, 5000, [], carrier: $a, shipping: 1000);
+        $this->order('2006-04-04', 1, 3, 2, 5000, [], carrier: $b, shipping: 500);
+
+        $sh = $this->get('/api/gestion/statistiques?' . self::RANGE . '&sections=shipping')['sections']['shipping'];
+        $this->assertSame(['indicators', 'breakdown', 'chart', 'caveats', 'appliesSource'], array_keys($sh));
+        $values = fn (array $i): array => [$i['value'], $i['unit'], $i['previous'], $i['lastYear'], $i['changeVsPrevious'], $i['changeVsLastYear']];
+        // facturé 15 + 15 + 0 + 8 − 15 = 23,00 ; 3 ventes avec transporteur ; 7,67 par vente
+        $this->assertSame(['billed' => [2300, 'money', 1000, 500, 130, 360], 'orders' => [3, 'count', 1, 1, 200, 200], 'averagePerOrder' => [767, 'money', 1000, 500, -23.3, 53.4]], array_map($values, $sh['indicators']));
+        $this->assertSame([
+            ['carrierId' => $a, 'name' => 'Transporteur A S2-TEST', 'kind' => 'fixed', 'billed' => 1500, 'orders' => 2, 'share' => 65.2],
+            ['carrierId' => null, 'name' => 'Sans transporteur', 'kind' => null, 'billed' => 800, 'orders' => 0, 'share' => 34.8],
+            ['carrierId' => $b, 'name' => 'Retrait B S2-TEST', 'kind' => 'pickup', 'billed' => 0, 'orders' => 1, 'share' => 0],
+        ], $sh['breakdown'], 'le prix catalogue du transporteur (99,99) ne compte pas : seul le port facturé');
+        $this->assertSame([2300, 3], [array_sum(array_column($sh['breakdown'], 'billed')), array_sum(array_column($sh['breakdown'], 'orders'))]);
+        $points = array_column($sh['chart']['points'], null, 'key');
+        $this->assertSame([['billed' => 1500, 'orders' => 1], ['billed' => -1500, 'orders' => 0], ['billed' => 500, 'orders' => 1], [0, 1500, 1500, 0, 0, 800, 0, -1500, 0, 0]],
+            [array_intersect_key($points['2007-04-02'], ['billed' => 1, 'orders' => 1]), array_intersect_key($points['2007-04-08'], ['billed' => 1, 'orders' => 1]), $points['2007-04-04']['lastYear'], $sh['indicators']['billed']['spark']]);
+        $this->assertSame([['SHIPPING_BILLED_NOT_COST'], true], [array_column($sh['caveats'], 'code'), $sh['appliesSource']]);
+
+        // Par canal
+        $of = fn (string $source) => $this->get('/api/gestion/statistiques?' . self::RANGE . "&sections=shipping&source=$source")['sections']['shipping'];
+        $this->assertSame([[1500, 2, 750], [0, 1, 0], [800, 0, null]], [array_column($of('ecommerce')['indicators'], 'value'), array_column($of('pos')['indicators'], 'value'), array_column($of('mobile_app')['indicators'], 'value')]);
+        $this->assertSame([[$a], [null]], [array_column($of('ecommerce')['breakdown'], 'carrierId'), array_column($of('mobile_app')['breakdown'], 'carrierId')]);
+        $this->assertSame('No carrier', $this->get('/api/gestion/statistiques?' . self::RANGE . '&sections=shipping&locale=en')['sections']['shipping']['breakdown'][1]['name']);
+
+        // Recoupement : sur une période, le port facturé du résultat de période, au cent près
+        $periodId = (int) $this->db->fetchOne("INSERT INTO collections (id, budget_collection, start_date_collection, end_date_collection, del, nom_collection, is_closed, kind, period_key)"
+            . " VALUES (nextval('collections_id_seq'), 0, '2007-04-01', '2007-04-30', false, 'Avril 2007 S2-TEST', false, 'period', 'T-S2-TEST') RETURNING id");
+        $result = static::getContainer()->get(PeriodResultCalculator::class)->compute($this->em()->find(\App\Entity\Collections::class, $periodId), null)['sales']['shippingBilled'];
+        $this->assertSame([2300, $result], [$result, $this->get("/api/gestion/statistiques?periodId=$periodId&sections=shipping")['sections']['shipping']['indicators']['billed']['value']]);
+    }
+
+    public function testTaxesAreTheCollectedTaxesByTaxWithReturnsAsNegatives(): void
+    {
+        $legacy = (int) $this->db->fetchOne("INSERT INTO tax (id, name, rate, type, code) VALUES (nextval('tax_id_seq'), 'Taxe S2-TEST', 3, 'percent', 'S2T') RETURNING id");
+        $tax = fn (int $order, int $amount, ?string $code, ?string $label = null, ?int $base = null, ?int $ppm = null, ?string $jurisdiction = null, ?int $taxId = null) => $this->db->executeStatement(
+            "INSERT INTO order_tax (id, order_tax_id, tax_id, amount, base, tax_label, tax_rate_ppm, tax_code, tax_jurisdiction) VALUES (nextval('order_tax_id_seq'), ?, ?, ?, ?, ?, ?, ?, ?)",
+            [$order, $taxId, $amount, $base, $label, $ppm, $code, $jurisdiction]);
+        $both = function (int $order, int $gst, int $qst, int $base) use ($tax): void {
+            $tax($order, $gst, 'gst', 'TPS', $base, 50000, 'CA');
+            $tax($order, $qst, 'qst', 'TVQ', $base, 99750, 'QC');
+        };
+        // Plage : caisse (5,00 + 9,98), web (2,50 + 4,99), retour caisse (−1,00 − 2,00), une ligne d'avant les codes (3,00) ; annulée et incomplète exclues
+        $both($this->order('2007-04-02', 1, 3, 2, 11498, []), 500, 998, 10000);
+        $both($this->order('2007-04-05', 1, 3, 1, 5749, []), 250, 499, 5000);
+        $both($this->order('2007-04-08', 2, 6, 2, 2300, []), -100, -200, -2000);
+        $tax($this->order('2007-04-06', 1, 3, 1, 10300, []), 300, null, taxId: $legacy);
+        $both($this->order('2007-04-09', 1, 7, 2, 9999, []), 999, 999, 9999);
+        $both($this->order('2007-04-09', 1, 1, 1, 8888, []), 888, 888, 8888);
+        // Précédente : 1,00 ; an dernier : 4,00
+        $tax($this->order('2007-03-25', 1, 3, 2, 2100, []), 100, 'gst', 'TPS', 2000, 50000, 'CA');
+        $tax($this->order('2006-04-03', 1, 3, 1, 8400, []), 400, 'gst', 'TPS', 8000, 50000, 'CA');
+
+        $tx = $this->get('/api/gestion/statistiques?' . self::RANGE . '&sections=taxes')['sections']['taxes'];
+        $this->assertSame(['indicators', 'breakdown', 'chart', 'caveats', 'appliesSource'], array_keys($tx));
+        $i = $tx['indicators']['collected'];
+        // 5,00 + 9,98 + 2,50 + 4,99 − 1,00 − 2,00 + 3,00 = 22,47
+        $this->assertSame([2247, 'money', 100, 400, 2147, 461.8, 'percent'], [$i['value'], $i['unit'], $i['previous'], $i['lastYear'], $i['changeVsPrevious'], $i['changeVsLastYear'], $i['changeUnit']]);
+        $this->assertSame([
+            ['code' => 'qst', 'label' => 'TVQ', 'jurisdiction' => 'QC', 'ratePpm' => 99750, 'base' => 13000, 'collected' => 1297, 'share' => 57.7],
+            ['code' => 'gst', 'label' => 'TPS', 'jurisdiction' => 'CA', 'ratePpm' => 50000, 'base' => 13000, 'collected' => 650, 'share' => 28.9],
+            ['code' => 'S2T', 'label' => 'Taxe S2-TEST', 'jurisdiction' => null, 'ratePpm' => null, 'base' => null, 'collected' => 300, 'share' => 13.4],
+        ], $tx['breakdown'], 'par taxe ; une ligne d\'avant les codes prend le code et le nom de sa taxe');
+        $this->assertSame(2247, array_sum(array_column($tx['breakdown'], 'collected')));
+        $points = array_column($tx['chart']['points'], null, 'key');
+        $this->assertSame([1498, -300, ['collected' => 400], [0, 1498, 0, 0, 749, 300, 0, -300, 0, 0]], [$points['2007-04-02']['collected'], $points['2007-04-08']['collected'], $points['2007-04-03']['lastYear'], $i['spark']]);
+        $this->assertSame([['TAXES_NOT_A_RETURN'], true], [array_column($tx['caveats'], 'code'), $tx['appliesSource']]);
+        $this->assertStringContainsString('n\'en sont pas une', $tx['caveats'][0]['text']);
+
+        // Par canal : la caisse (vente et retour), la boutique en ligne
+        $of = fn (string $source) => $this->get('/api/gestion/statistiques?' . self::RANGE . "&sections=taxes&source=$source")['sections']['taxes'];
+        $this->assertSame([[1198, 100, null], [1049, 0, 400]], [[$of('pos')['indicators']['collected']['value'], $of('pos')['indicators']['collected']['previous'], $of('pos')['indicators']['collected']['lastYear']],
+            [$of('ecommerce')['indicators']['collected']['value'], $of('ecommerce')['indicators']['collected']['previous'], $of('ecommerce')['indicators']['collected']['lastYear']]]);
+        $this->assertSame([['qst', 798], ['gst', 400]], array_map(fn (array $t) => [$t['code'], $t['collected']], $of('pos')['breakdown']));
+        // Aucune taxe : zéro, liste vide, pas de comparaison à l'an dernier
+        $empty = $this->get('/api/gestion/statistiques?from=2007-06-01&to=2007-06-10&sections=taxes')['sections']['taxes'];
+        $this->assertSame([0, null, []], [$empty['indicators']['collected']['value'], $empty['indicators']['collected']['lastYear'], $empty['breakdown']]);
+    }
+
     // ---------------------------------------------------------------- aides
 
     /**
@@ -287,11 +468,11 @@ class StatisticsSectionsApiTest extends WebTestCase
      *
      * @return int identifiant de la commande
      */
-    private function order(string $day, int $type, int $status, int $source, int $total, array $payments, int $giftCard = 0, string $time = '12:00'): int
+    private function order(string $day, int $type, int $status, int $source, int $total, array $payments, int $giftCard = 0, string $time = '12:00', ?int $carrier = null, ?int $shipping = null): int
     {
         $id = (int) $this->db->fetchOne(
-            "INSERT INTO \"order\" (id, reference, order_date, order_type_id, status_id, order_source_id, user_id_id, total_amount, gift_card_applied) VALUES (nextval('order_id_seq'), ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
-            [self::TAG, $this->utc($day, $time), $type, $status, $source, $this->userId, $total, $giftCard]
+            "INSERT INTO \"order\" (id, reference, order_date, order_type_id, status_id, order_source_id, user_id_id, total_amount, gift_card_applied, carrier_id, shipping_cost) VALUES (nextval('order_id_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+            [self::TAG, $this->utc($day, $time), $type, $status, $source, $this->userId, $total, $giftCard, $carrier, $shipping]
         );
         foreach ($payments as [$method, $amount]) {
             $this->payment($id, $method, $amount, 2);
@@ -332,7 +513,14 @@ class StatisticsSectionsApiTest extends WebTestCase
     private function clean(): void
     {
         $this->db->executeStatement("DELETE FROM payments WHERE order_payment_id IN (SELECT id FROM \"order\" WHERE reference = ?)", [self::TAG]);
+        $this->db->executeStatement("DELETE FROM order_tax WHERE order_tax_id IN (SELECT id FROM \"order\" WHERE reference = ?)", [self::TAG]);
+        $this->db->executeStatement("DELETE FROM inventory_movements WHERE product_variant_id IN (SELECT v.id FROM product_variant v JOIN product p ON p.id = v.product_id WHERE p.slug LIKE 's2-test-%')");
+        $this->db->executeStatement("DELETE FROM product_variant WHERE product_id IN (SELECT id FROM product WHERE slug LIKE 's2-test-%')");
+        $this->db->executeStatement("DELETE FROM product WHERE slug LIKE 's2-test-%'");
+        $this->db->executeStatement("DELETE FROM gestion_stock_snapshot WHERE snapshot_date BETWEEN '2007-01-01' AND '2007-12-31'");
         $this->db->executeStatement('DELETE FROM "order" WHERE reference = ?', [self::TAG]);
+        $this->db->executeStatement("DELETE FROM carrier WHERE description = 'S2-TEST'");
+        $this->db->executeStatement("DELETE FROM tax WHERE code = 'S2T'");
         $this->db->executeStatement('DELETE FROM note_de_frais WHERE name = ?', [self::TAG]);
         $this->db->executeStatement('DELETE FROM frais_de_port WHERE name = ?', [self::TAG]);
         $this->db->executeStatement('DELETE FROM commande WHERE name = ?', [self::TAG]);
