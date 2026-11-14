@@ -419,6 +419,31 @@ class PosCustomerService
         return $customer;
     }
 
+    /**
+     * Le client quitte la famille de la caisse depuis son compte (APPS-MEMBRES M3, `DELETE /api/account/memberships/pos`) : c'est le
+     * retrait de son consentement de rattachement. La fiche est détachée du compte et le retrait du consentement `account_link` y est
+     * enregistré (source `account`) ; l'appelant retire l'appartenance dans la même transaction. Rien si aucune fiche n'est rattachée.
+     *
+     * @return bool vrai si une fiche a été détachée
+     */
+    public function unlinkByAccount(User $account): bool
+    {
+        $em = $this->emProvider->getEntityManager();
+        $customer = $em->getRepository(PosCustomer::class)->findOneBy(['userId' => $account->getId(), 'erasedAt' => null, 'mergedIntoId' => null]);
+        if (!$customer instanceof PosCustomer) {
+            return false;
+        }
+        if ($this->consentGranted($customer, PosCustomerConsent::ACCOUNT_LINK)) {
+            $em->persist(new PosCustomerConsent($customer, PosCustomerConsent::ACCOUNT_LINK, false, $account->getId(), $this->settings()['consentTextVersion'], 'account'));
+        }
+        $customer->setUserId(null)->touch();
+        $em->flush();
+        $this->audit->record(PosAuditService::CUSTOMER_UPDATED, ['customerId' => $customer->getId(), 'changed' => [], 'consents' => [PosCustomerConsent::ACCOUNT_LINK => false], 'unlinked' => true, 'by' => 'account'],
+            subjectType: 'customer', subjectId: $customer->getId(), user: $account);
+
+        return true;
+    }
+
     /** Fusion de doublons (responsable) : ventes, cartes, points et consentements accordés passent sur la fiche conservée */
     public function merge(User $actor, PosCustomer $source, mixed $intoId): PosCustomer
     {

@@ -203,6 +203,9 @@ security:
         - { path: ^/api/app-profile/, methods: [GET], roles: PUBLIC_ACCESS }
         # Conditions d'une famille d'applications (APPS-MEMBRES M1, 14/11/2026) : lues sans connexion par l'inscription et l'écran « Rejoindre »
         - { path: '^/api/apps/[^/]+/terms$', methods: [GET], roles: PUBLIC_ACCESS }
+        # « Rejoindre » une famille d'applications (APPS-MEMBRES M3, 14/11/2026) : public ; la preuve est le jeton de passage rendu avec le
+        # refus APP_MEMBERSHIP_REQUIRED (10 minutes, usage unique) ; limité en débit comme la connexion
+        - { path: '^/api/apps/join$', methods: [POST], roles: PUBLIC_ACCESS }
         # Thème de l'application e-commerce mobile (31/10/2026) : lecture sans connexion, route dédiée (le profil ne change pas)
         - { path: ^/api/mobile/app-theme$, methods: [GET], roles: PUBLIC_ACCESS }
         - { path: ^/api/app-keys(/|$), roles: ROLE_ADMIN }

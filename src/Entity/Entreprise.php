@@ -351,6 +351,14 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(name: 'variant_promotions_enabled', options: ['default' => false])]
     private bool $variantPromotionsEnabled = false;
 
+    /**
+     * Mode du contrôle d'appartenance aux familles d'applications (APPS-MEMBRES M3, 14/11/2026, `docs/apps-membres.md` § 6) : « observe »
+     * (rien n'est refusé) ou « require » (une connexion à une famille dont le compte n'est pas membre passe par « Rejoindre »). Réglé
+     * par le super administrateur seulement, par `AppMembershipService::changeMode()` ou la fiche Entreprise d'EasyAdmin.
+     */
+    #[ORM\Column(name: 'app_membership_mode', length: 10, options: ['default' => 'observe'])]
+    private string $appMembershipMode = 'observe';
+
     /** Fréquence des périodes de gestion (lot P1, 10/11/2026) : quarterly (défaut) | semester | monthly ; null = quarterly ; registre `gestion.periods` */
     #[ORM\Column(name: 'purchase_period_frequency', length: 16, nullable: true)]
     private ?string $purchasePeriodFrequency = null;
@@ -1076,6 +1084,8 @@ class Entreprise implements TranslatableInterface
 
     // Fuseau horaire et plan de comptes (F14, 29/10/2026)
     public function getPosTimezone(): ?string { return $this->posTimezone; }
+    public function getAppMembershipMode(): string { return $this->appMembershipMode; }
+    public function setAppMembershipMode(string $mode): static { $this->appMembershipMode = $mode; return $this; }
     public function isVariantPromotionsEnabled(): bool { return $this->variantPromotionsEnabled; }
     public function setVariantPromotionsEnabled(bool $on): static { $this->variantPromotionsEnabled = $on; return $this; }
     public function getPurchasePeriodFrequency(): ?string { return $this->purchasePeriodFrequency; }

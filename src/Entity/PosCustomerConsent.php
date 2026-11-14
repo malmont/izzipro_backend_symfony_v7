@@ -48,8 +48,10 @@ class PosCustomerConsent
     #[ORM\Column(length: 12, options: ['default' => 'pos'])]
     private string $source = 'pos';
 
-    public function __construct(PosCustomer $customer, string $purpose, bool $granted, ?int $byUserId, ?string $textVersion)
+    /** @param string $source `pos` (la caisse) ou `account` (le client lui-même, depuis son compte : il quitte la famille de la caisse, 14/11/2026) */
+    public function __construct(PosCustomer $customer, string $purpose, bool $granted, ?int $byUserId, ?string $textVersion, string $source = 'pos')
     {
+        $this->source = $source;
         $this->customer = $customer;
         $this->purpose = $purpose;
         $this->granted = $granted;

@@ -108,6 +108,35 @@ class UserAppMembershipRepository extends EntityRepository
         return array_fill_keys(array_map('intval', $this->getEntityManager()->getConnection()->fetchFirstColumn('SELECT DISTINCT user_adress_id FROM adress WHERE user_adress_id IS NOT NULL')), true);
     }
 
+    /** Mode du site (`AppFamilies::MODES`) ; « observe » pour un site sans fiche Entreprise ou une valeur inconnue */
+    public function mode(): string
+    {
+        $mode = $this->getEntityManager()->getConnection()->fetchOne('SELECT app_membership_mode FROM entreprise ORDER BY id ASC LIMIT 1');
+
+        return in_array($mode, AppFamilies::MODES, true) ? (string) $mode : AppFamilies::MODE_OBSERVE;
+    }
+
+    /** @return bool vrai si la fiche Entreprise du site a été mise à jour */
+    public function setMode(string $mode): bool
+    {
+        return (int) $this->getEntityManager()->getConnection()->executeStatement('UPDATE entreprise SET app_membership_mode = ? WHERE id = (SELECT MIN(id) FROM entreprise)', [$mode]) === 1;
+    }
+
+    /** @return array{source: string, termsVersion: ?string}|null l'appartenance du compte à la famille */
+    public function membership(int $userId, string $family): ?array
+    {
+        $row = $this->getEntityManager()->getConnection()->fetchAssociative('SELECT source, terms_version AS "termsVersion" FROM user_app_membership WHERE user_id = ? AND app = ?', [$userId, $family]);
+
+        return $row === false ? null : $row;
+    }
+
+    /** Enregistre l'acceptation des conditions sur une appartenance qui n'en porte pas encore ; @return bool vrai si elle a été enregistrée */
+    public function accept(int $userId, string $family, string $termsVersion): bool
+    {
+        return (int) $this->getEntityManager()->getConnection()->executeStatement(
+            'UPDATE user_app_membership SET terms_version = ?, terms_accepted_at = NOW() WHERE user_id = ? AND app = ? AND terms_version IS NULL', [$termsVersion, $userId, $family]) === 1;
+    }
+
     /** Date de la reprise de l'historique du site ; null : pas faite */
     public function backfilledAt(): ?string
     {

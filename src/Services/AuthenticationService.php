@@ -39,6 +39,18 @@ class AuthenticationService
      * porter dans le jeton ; null sans `app` connu : rien ne change. Mode « observer » (M1) : un compte client qui n'est pas membre
      * de cette famille est noté au journal et reçoit sa session quand même. Contrat : docs/apps-membres.md § 5.
      */
+    /**
+     * Le refus `APP_MEMBERSHIP_REQUIRED` (403), ou null : la session peut être rendue. Seulement en mode « require » du site, pour
+     * un compte client dont le front a dit l'application (lot M3, docs/apps-membres.md § 6). À appeler au moment de rendre la
+     * session, AVANT de marquer la connexion : un refus ne rend ni jeton, ni cookie, et ne compte pas comme une connexion.
+     */
+    public function membershipRefusal(UserInterface $user, mixed $app, string $platform, string $context, Request $request): ?JsonResponse
+    {
+        $body = $user instanceof User ? $this->memberships?->gate($user, $app, $platform, $context, $request->getSchemeAndHttpHost(), $request->query->get('locale')) : null;
+
+        return $body === null ? null : new JsonResponse($body, Response::HTTP_FORBIDDEN);
+    }
+
     public function appFamily(UserInterface $user, mixed $app, string $context): ?string
     {
         return $user instanceof User ? $this->memberships?->sessionFamily($user, $app, $context) : null;
@@ -146,6 +158,9 @@ class AuthenticationService
             );
         }
 
+        if ($refused = $this->membershipRefusal($user, $app, $platform, 'login', $request)) {
+            return $refused;
+        }
         $this->recordLogin($user);
         $this->auditPos($platform, $user, $email);
         $tokens = $this->tokenService->generateTokens($user, $platform, $this->appFamily($user, $app, 'login'));

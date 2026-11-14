@@ -79,6 +79,10 @@ class OtpApiController extends AbstractController
 
         $em->remove($otpCode);
         $em->flush();
+        // APPS-MEMBRES M3 : en mode « require », un compte client qui n'est pas membre de la famille demandée passe par « Rejoindre »
+        if ($refused = $this->authenticationService->membershipRefusal($user, $data['app'] ?? null, $platform, 'otp-verify', $request)) {
+            return $refused;
+        }
         if ($user instanceof User) {
             $this->authenticationService->recordLogin($user);
             $this->authenticationService->auditPos($platform, $user, (string) $email);

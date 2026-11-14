@@ -35,7 +35,8 @@ class EntrepriseCrudController extends BaseTenantCrudController
         private readonly \App\Services\TenantConnectionManager $tenantManager,
         private readonly ?\App\Services\BoutiqueSettingsService\SiteCurrencyService $siteCurrency = null, // devise du site (F18 partie 1, 01/11/2026)
         private readonly ?\App\Services\OrderService\TaxInclusiveGuard $taxInclusive = null, // prix taxes comprises (F18 partie 2b)
-        private readonly ?\App\Services\Platform\EntitlementFlagSync $flagSync = null // droits d'usage alignés sur les activations (console, lot 3, 04/11/2026)
+        private readonly ?\App\Services\Platform\EntitlementFlagSync $flagSync = null, // droits d'usage alignés sur les activations (console, lot 3, 04/11/2026)
+        private readonly ?\App\Services\AppMembershipService\AppMembershipService $appMemberships = null // mode du contrôle d'appartenance (APPS-MEMBRES M3, 14/11/2026)
     ) {
         parent::__construct($emProvider);
         $this->adminUrlGenerator = $adminUrlGenerator;
@@ -81,7 +82,22 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 $this->addFlash('danger', $e->getMessage());
             }
         }
+        // Mode du contrôle d'appartenance (APPS-MEMBRES M3) : « require » refusé tant que la reprise de l'historique n'est pas faite
+        $modeChange = $entityInstance instanceof Entreprise && $this->appMemberships !== null ? ($changeSet['appMembershipMode'] ?? null) : null;
+        if ($modeChange !== null) {
+            try {
+                $this->appMemberships->assertModeAllowed((string) $modeChange[1]);
+            } catch (\App\Services\AppMembershipService\AppMembershipException $e) {
+                $entityInstance->setAppMembershipMode((string) $modeChange[0]);
+                $modeChange = null;
+                $this->addFlash('danger', $e->getMessage());
+            }
+        }
         parent::updateEntity($entityManager, $entityInstance);
+        if ($modeChange !== null) {
+            $this->appMemberships->journalMode((string) $modeChange[0], (string) $modeChange[1]);
+            $this->addFlash('success', sprintf('Applications à membres : mode « %s ».', $modeChange[1]));
+        }
         if ($ttcChange !== null) {
             $this->addFlash('success', $ttcChange[1] ? 'Prix taxes comprises activés : les prix du catalogue sont désormais TTC, la TVA est extraite par taux.' : 'Prix taxes comprises désactivés : les prix du catalogue sont hors taxes.');
         }
@@ -210,6 +226,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             $this->superAdminBooleanField('isManagementAppActive', 'Application de gestion'),
             $this->superAdminBooleanField('isLivingMemoryActive', 'LivingMemory (Mémoires Vivantes)'),
             $this->superAdminBooleanField('variantPromotionsEnabled', 'Promotions par variante', 'Lot VAR : à allumer seulement quand la caisse, la boutique Next et l\'app mobile savent appliquer une promotion de variante (pack hors ligne v4).', true),
+            $this->appMembershipModeField(),
 
             FormField::addPanel('Assistant IA')->collapsible()
                 ->setHelp('Paliers de l\'assistant IA (console IA, lot 6) : Aide IA explique et guide ; IA complète propose des réglages et des opérations sur les commandes, confirmées par l\'administrateur. Projetés depuis les droits d\'usage de la Plateforme ; en mode démo de la plateforme, tout est ouvert.'),
@@ -459,6 +476,27 @@ class EntrepriseCrudController extends BaseTenantCrudController
         return $field;
     }
 
+    /**
+     * Mode du contrôle d'appartenance aux familles d'applications (APPS-MEMBRES M3) : réservé au super administrateur. « Exiger » n'est
+     * accepté que si la reprise de l'historique du site est faite (vérifié à l'enregistrement, même par requête forgée).
+     */
+    private function appMembershipModeField(): \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField
+    {
+        $isSuperAdmin = $this->isGranted('ROLE_SUPER_ADMIN');
+        $field = \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField::new('appMembershipMode', 'Applications à membres : mode')
+            ->setChoices(['Observer : rien n\'est refusé' => \App\Security\AppFamilies::MODE_OBSERVE, 'Exiger : « Rejoindre » pour entrer dans une famille dont le compte n\'est pas membre' => \App\Security\AppFamilies::MODE_REQUIRE])
+            ->hideOnIndex()
+            ->setRequired(true)
+            ->setFormTypeOption('placeholder', false) // toujours une des deux valeurs, jamais vide
+            ->setHelp('À passer en « Exiger » seulement quand les applications du site envoient leur code à la connexion et savent afficher l\'étape « Rejoindre », et après la reprise de l\'historique (docs/apps-membres.md).'
+                . (!$isSuperAdmin ? ' Modifiable uniquement par le super administrateur.' : ''));
+        if (!$isSuperAdmin) {
+            $field->setFormTypeOption('disabled', true);
+        }
+
+        return $field;
+    }
+
     private function superAdminIntegerField(string $property, string $label, int $default = 100): \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField
     {
         $isSuperAdmin = $this->isGranted('ROLE_SUPER_ADMIN');
@@ -499,7 +537,8 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 ->setIsLivingMemoryActive($defaults->isLivingMemoryActive())
                 ->setIsAiHelpActive($defaults->isAiHelpActive())
                 ->setIsAiFullActive($defaults->isAiFullActive())
-                ->setVariantPromotionsEnabled($defaults->isVariantPromotionsEnabled());
+                ->setVariantPromotionsEnabled($defaults->isVariantPromotionsEnabled())
+                ->setAppMembershipMode($defaults->getAppMembershipMode());
 
             return;
         }
@@ -508,7 +547,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             $row = $this->emProvider->getEntityManager()->getConnection()->fetchAssociative(
                 'SELECT pos_terminal_fee_card_bp, pos_terminal_fee_interac_bp,
                         is_boutique_active, is_landing_page_active, is_boussole_esg_active, is_memoire_vivante_active, is_support_active,
-                        is_pos_active, is_mobile_shop_active, is_management_app_active, is_living_memory_active, variant_promotions_enabled
+                        is_pos_active, is_mobile_shop_active, is_management_app_active, is_living_memory_active, variant_promotions_enabled, app_membership_mode
                  FROM entreprise WHERE id = ?',
                 [$id]
             );
@@ -532,6 +571,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             ->setIsManagementAppActive((bool) $row['is_management_app_active'])
             ->setIsLivingMemoryActive((bool) $row['is_living_memory_active'])
             ->setVariantPromotionsEnabled((bool) $row['variant_promotions_enabled'])
+            ->setAppMembershipMode((string) $row['app_membership_mode'])
 ;
     }
 }

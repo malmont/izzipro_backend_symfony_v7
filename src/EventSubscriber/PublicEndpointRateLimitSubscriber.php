@@ -78,6 +78,11 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
                 [$this->loginIp, $this->siteIpKey($request)],
                 [$this->loginGlobalIp, $ip],
             ],
+            // « Rejoindre » une famille d'applications (APPS-MEMBRES M3) : comme une connexion, par site et IP puis plafond global par IP
+            $path === '/api/apps/join' => [
+                [$this->loginIp, $this->siteIpKey($request)],
+                [$this->loginGlobalIp, $ip],
+            ],
             $path === '/api/otp-verify' => [
                 [$this->otpAccount, $this->accountKey($request, ['username', 'email'])],
             ],

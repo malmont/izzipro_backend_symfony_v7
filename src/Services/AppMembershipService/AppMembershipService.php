@@ -31,6 +31,7 @@ final class AppMembershipService
 {
     public const ACTION_GRANT = 'grant';
     public const ACTION_REVOKE = 'revoke';
+    public const ACTION_ACCEPT = 'accept';
 
     /** Repère des lignes du journal de l'application en mode « observer » : une ligne par connexion qui serait refusée */
     public const OBSERVE_MARK = '[APPS-MEMBRES] observer';
@@ -41,8 +42,158 @@ final class AppMembershipService
         private readonly AppTermsService $terms,
         private readonly LoggerInterface $logger,
         private readonly TenantConnectionProvider $tenant,
+        private readonly AppJoinTokens $tokens,
     ) {
     }
+
+    // ------------------------------------------------------------------ mode du site, refus, « rejoindre » (lot M3)
+
+    /** Mode du site : « observe » (rien n'est refusé) ou « require » ; « observe » si la lecture échoue : une panne ne ferme jamais la porte */
+    public function mode(): string
+    {
+        try {
+            return $this->repository()->mode();
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf('[APPS-MEMBRES] mode du site illisible (%s) : « observe » retenu', $e->getMessage()));
+
+            return AppFamilies::MODE_OBSERVE;
+        }
+    }
+
+    /**
+     * Change le mode du site, au journal (action `mode`). Passer en « require » est refusé tant que la reprise de l'historique n'est
+     * pas faite : les clients d'avant n'auraient pas encore leur appartenance. Revenir en « observe » est toujours possible.
+     *
+     * @return bool vrai si le mode a changé
+     *
+     * @throws AppMembershipException 422 MODE_INVALID, 409 BACKFILL_REQUIRED, 409 SITE_NOT_SET_UP
+     */
+    public function changeMode(string $mode): bool
+    {
+        $before = $this->repository()->mode();
+        $this->assertModeAllowed($mode);
+        if ($before === $mode) {
+            return false;
+        }
+        if (!$this->repository()->setMode($mode)) {
+            throw new AppMembershipException('SITE_NOT_SET_UP', 'Ce site n\'a pas encore de fiche Entreprise : son mode ne peut pas être réglé.', 409);
+        }
+        $this->journalMode($before, $mode);
+
+        return true;
+    }
+
+    /** @throws AppMembershipException 422 MODE_INVALID, 409 BACKFILL_REQUIRED */
+    public function assertModeAllowed(string $mode): void
+    {
+        if (!in_array($mode, AppFamilies::MODES, true)) {
+            throw new AppMembershipException('MODE_INVALID', sprintf('Mode inconnu : « %s » (attendu : %s).', $mode, implode(', ', AppFamilies::MODES)), 422, ['params' => ['modes' => AppFamilies::MODES]]);
+        }
+        if ($mode === AppFamilies::MODE_REQUIRE && $this->repository()->backfilledAt() === null) {
+            throw new AppMembershipException('BACKFILL_REQUIRED', 'La reprise de l\'historique des appartenances de ce site doit être faite avant de passer en mode « require » (app:members:backfill).', 409);
+        }
+    }
+
+    /** Le changement de mode, au journal du site (aussi appelé par la fiche Entreprise d'EasyAdmin, qui enregistre elle-même la valeur) */
+    public function journalMode(string $before, string $after): void
+    {
+        $this->audit->record(AppFamilies::AUDIT_RESOURCE, null, 'mode', ['mode' => $before], ['mode' => $after], [$after]);
+    }
+
+    /**
+     * Le refus `APP_MEMBERSHIP_REQUIRED`, ou null : la session peut être rendue. Refus seulement en mode « require », pour un compte
+     * CLIENT, quand le front a dit son application : (a) le compte n'est pas membre de la famille ; (b) il en est membre par invitation
+     * de l'équipe, n'a encore rien accepté, et la famille a des conditions. Le refus porte les conditions et un jeton de passage.
+     * Sans `app` en mode « require », la connexion passe comme avant et elle est notée (un mode « strict » la refusera plus tard).
+     * Une panne de ce contrôle ne ferme jamais la porte : elle est journalisée en erreur et la session est rendue.
+     *
+     * @return array<string, mixed>|null corps de la réponse 403
+     */
+    public function gate(User $user, mixed $app, string $platform, string $context, string $host, mixed $locale): ?array
+    {
+        try {
+            if ($this->mode() !== AppFamilies::MODE_REQUIRE || AppFamilies::isTeam($user)) {
+                return null;
+            }
+            $family = AppFamilies::of($app);
+            if ($family === null) {
+                $this->logger->info(sprintf('[APPS-MEMBRES] require : connexion sans application du compte %d (%s, site %s) ; session rendue', (int) $user->getId(), $context, $this->tenant->getTenantCode() ?? 'inconnu'));
+
+                return null;
+            }
+            $membership = $this->repository()->membership((int) $user->getId(), $family);
+            $reason = match (true) {
+                $membership === null => AppFamilies::REASON_MEMBERSHIP,
+                $membership['source'] === AppFamilies::SOURCE_INVITE && $membership['termsVersion'] === null && $this->terms->version($family) !== null => AppFamilies::REASON_TERMS,
+                default => null,
+            };
+            if ($reason === null) {
+                return null;
+            }
+            $token = $this->tokens->issue($user, $family, $platform, $reason);
+            $this->logger->info(sprintf('[APPS-MEMBRES] require : le compte %d doit rejoindre « %s » (%s, %s, site %s) ; session refusée', (int) $user->getId(), $family, $reason, $context, $this->tenant->getTenantCode() ?? 'inconnu'));
+
+            return ['error' => 'APP_MEMBERSHIP_REQUIRED', 'code' => 'APP_MEMBERSHIP_REQUIRED',
+                'message' => $reason === AppFamilies::REASON_TERMS ? 'Acceptez les conditions de cette application pour continuer.' : 'Rejoignez cette application pour continuer.',
+                'app' => $family, 'reason' => $reason, 'terms' => $this->termsOf($family, $host, $locale), 'joinToken' => $token['token'], 'expiresAt' => $token['expiresAt']];
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf('[APPS-MEMBRES] contrôle d\'appartenance en panne (%s) : session rendue', $e->getMessage()));
+
+            return null;
+        }
+    }
+
+    /**
+     * « Rejoindre » : le client accepte les conditions de la famille. Crée l'appartenance (source `join`) ou, pour un invité de
+     * l'équipe, enregistre son acceptation sur l'appartenance qu'il a déjà (action `accept`) ; le jeton de passage ne sert plus.
+     * Jamais d'ajout silencieux : sans cet appel, rien n'est créé.
+     *
+     * @return array{user: User, app: string, platform: string} de quoi rendre la session, comme une connexion de la même plateforme
+     *
+     * @throws AppMembershipException 401 JOIN_TOKEN_INVALID, 422 TERMS_NOT_ACCEPTED, 409 TERMS_VERSION_CHANGED (avec les nouvelles `terms` ; le jeton reste valable)
+     */
+    public function join(mixed $token, mixed $termsVersion, mixed $accepted, string $host, mixed $locale): array
+    {
+        $invalid = new AppMembershipException('JOIN_TOKEN_INVALID', 'Cette étape a expiré : reconnectez-vous.', 401);
+        $proof = $this->tokens->read($token) ?? throw $invalid;
+        $user = $this->emProvider->getEntityManager()->find(User::class, $proof['userId']);
+        if (!$user instanceof User || $user->isDeleted() || !$user->isVerified() || AppFamilies::isTeam($user)) {
+            throw $invalid;
+        }
+        if ($accepted !== true) {
+            throw new AppMembershipException('TERMS_NOT_ACCEPTED', 'Les conditions doivent être acceptées pour rejoindre cette application.', 422);
+        }
+        $family = $proof['app'];
+        $version = $this->terms->version($family);
+        if ((is_string($termsVersion) && $termsVersion !== '' ? $termsVersion : null) !== $version) {
+            throw new AppMembershipException('TERMS_VERSION_CHANGED', 'Les conditions ont changé : relisez-les avant d\'accepter.', 409, ['app' => $family, 'terms' => $this->termsOf($family, $host, $locale)]);
+        }
+        $userId = (int) $user->getId();
+        if ($this->repository()->membership($userId, $family) === null) {
+            $this->grant($user, $family, AppFamilies::SOURCE_JOIN, $version);
+        } elseif ($version !== null && $this->repository()->accept($userId, $family, $version)) {
+            $this->audit->record(AppFamilies::AUDIT_RESOURCE, $userId, self::ACTION_ACCEPT, ['termsVersion' => null], ['app' => $family, 'termsVersion' => $version], [$family, self::ACTION_ACCEPT]);
+        }
+        if ($this->repository()->membership($userId, $family) === null) {
+            throw $invalid; // le compte ne peut pas être membre (compte sans mot de passe choisi) : rien n'a été créé
+        }
+        $this->tokens->consume((string) $token);
+
+        return ['user' => $user, 'app' => $family, 'platform' => $proof['platform']];
+    }
+
+    /** @return array<string, mixed> les conditions de la famille telles que le refus et « rejoindre » les rendent (sans la clé `app`, dite à côté) */
+    private function termsOf(string $family, string $host, mixed $locale): array
+    {
+        return array_diff_key($this->terms->terms($family, $host, AppTermsService::locale($locale)), ['app' => 1]);
+    }
+
+    private function repository(): UserAppMembershipRepository
+    {
+        return $this->emProvider->getEntityManager()->getRepository(UserAppMembership::class);
+    }
+
+    // ------------------------------------------------------------------ appartenances
 
     /**
      * Crée l'appartenance si elle manque. Idempotent : une seconde demande ne change rien (ni la date, ni la source, ni la version)

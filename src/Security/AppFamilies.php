@@ -46,6 +46,15 @@ final class AppFamilies
     /** Ressource du journal content_audit_log */
     public const AUDIT_RESOURCE = 'user_app';
 
+    /** Mode du site (lot M3) : rien n'est refusé, ou une connexion à une famille dont le compte n'est pas membre passe par « Rejoindre » */
+    public const MODE_OBSERVE = 'observe';
+    public const MODE_REQUIRE = 'require';
+    public const MODES = [self::MODE_OBSERVE, self::MODE_REQUIRE];
+
+    /** Raisons du refus `APP_MEMBERSHIP_REQUIRED` : pas membre de la famille ; membre invité par l'équipe qui n'a pas encore accepté ses conditions */
+    public const REASON_MEMBERSHIP = 'membership';
+    public const REASON_TERMS = 'terms';
+
     /** Rôles qui font d'un compte un compte d'équipe, en plus des rôles d'équipe de `TeamRoles` */
     public const STAFF_ROLES = ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_USER_POS', 'ROLE_POS_MANAGER', 'ROLE_SUPPORT'];
 
