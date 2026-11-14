@@ -53,6 +53,9 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * par le serveur. Demandé seul (« explique-moi cet écran »), il est assemblé sans appel 2, avec les chiffres des analyses de l'écran :
  * aucune unité. Un état qui n'est pas un jugement (« sans prévu », « aucun solde saisi ») est donné au modèle par une phrase entière.
  *
+ * Lot A-4b (14/11/2026, après l'essai réel) : « explique-moi cet écran », sans autre demande, est reconnu par le SERVEUR, qui répond par
+ * le guide et les chiffres du moment sans aucun appel au modèle (le modèle ajoutait des analyses, donc une rédaction et une unité).
+ *
  * Unités : 1 par réponse rédigée par le modèle (demande de précision rédigée par lui comprise) ; aucune si le serveur répond lui-même
  * (question hors périmètre, précision demandée par le serveur) ou si l'IA échoue.
  */
@@ -118,8 +121,15 @@ class ConsoleResponder
                 }
                 $history[] = $m->getKind() === ConsoleService::QUESTION ? ['role' => 'gérant', 'text' => (string) ($m->getContent()['text'] ?? '')] : ['role' => 'console', 'text' => self::plain($m->getContent()['blocks'] ?? [])];
             }
-            $choice = $this->model->choose($text, $screen, array_reverse(array_slice($history, 0, ConsoleService::HISTORY_MESSAGES)), $this->analyses->listed($locale), $this->periods($locale), $this->calendar->today(), $locale, $stats,
-                array_map(fn (array $e) => ['key' => $e['key'], 'term' => $e['term'], 'synonymes' => $e['synonyms']], $this->lexique->all($locale)));
+            // « Explique-moi cet écran », sans autre demande (lot A-4b) : c'est le SERVEUR qui répond, par le guide de l'écran et ses chiffres
+            // du moment. Aucun appel au modèle, aucune unité : le comportement ne dépend pas de ce que le modèle aurait choisi.
+            $guideOnly = $screen !== null && self::asksOnlyForTheScreen($text) && $this->analyses->accept('screen.guide', ['screen' => $screen['code']]) !== null;
+            if ($guideOnly) {
+                $choice = ['kind' => 'analyses', 'analyses' => [['key' => 'screen.guide', 'params' => []]], 'clarification' => ''];
+            } else {
+                $choice = $this->model->choose($text, $screen, array_reverse(array_slice($history, 0, ConsoleService::HISTORY_MESSAGES)), $this->analyses->listed($locale), $this->periods($locale), $this->calendar->today(), $locale, $stats,
+                    array_map(fn (array $e) => ['key' => $e['key'], 'term' => $e['term'], 'synonymes' => $e['synonyms']], $this->lexique->all($locale)));
+            }
 
             if ($choice['kind'] === 'out_of_scope') {
                 // Hors périmètre : le serveur répond lui-même, gratuitement
@@ -576,6 +586,26 @@ class ConsoleResponder
         }
 
         return $canon;
+    }
+
+    /**
+     * La question demande-t-elle SEULEMENT d'expliquer l'écran ? Oui si elle porte une demande d'explication (« explique-moi », « à quoi
+     * sert », « c'est quoi », « je ne comprends pas », « qu'est-ce que je dois regarder »…) ET désigne l'écran (« cet écran », « cette
+     * page », « ici »), sans autre demande : ni seconde proposition (après « : », « ; », « ? », ou « et … »), ni question d'état
+     * (« est-ce que ça va », « va-t-elle tenir », « combien », « pourquoi »). Alors le guide seul répond, sans le modèle.
+     */
+    public static function asksOnlyForTheScreen(string $question): bool
+    {
+        $q = mb_strtolower(trim(str_replace(['’', '  '], ["'", ' '], $question)));
+        $explain = preg_match("/expli(que|quer|quez)|à quoi (sert|servent)|c'est quoi|qu'est-ce que c'est|je ne comprends (pas|rien)|comment (lire|marche|fonctionne|utiliser)|qu'est-ce que je (dois|peux) (regarder|voir|faire|lire)|que (dois-je|faut-il) (regarder|voir|faire)|aide-moi|explain|what is|what's|what should i (look|do|see)|i (don't|do not) understand|how (do i (read|use)|does)/u", $q) === 1;
+        $here = preg_match("/\\b(cet écran|cette page|cet onglet|ce tableau de bord|ici|this screen|this page|here)\\b/u", $q) === 1;
+        if (!$explain || !$here) {
+            return false;
+        }
+        $state = preg_match("/(?<!qu')est-ce qu|ça va|va-t-|vont-|\\btenir\\b|\\bcombien\\b|\\bpourquoi\\b|\\binqui|\\bis it\\b|\\bare (we|they)\\b|\\bhow (much|many)\\b|\\bwhy\\b/u", $q) === 1;
+        $second = preg_match('/[?:;]\\s*\\S/u', rtrim($q, ' ?!.')) === 1 || preg_match("/\\bet\\s+(est|que|comment|combien|pourquoi|si|dis)\\b|\\band\\s+(is|are|how|why|what|tell)\\b/u", $q) === 1;
+
+        return !$state && !$second;
     }
 
     /**
