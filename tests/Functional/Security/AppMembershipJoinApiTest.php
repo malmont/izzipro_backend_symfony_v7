@@ -66,6 +66,15 @@ class AppMembershipJoinApiTest extends WebTestCase
         $this->assertSame([1, 'disabled', ['observe', 'require']], [$field->count(), $field->attr('disabled'), $field->filter('option')->each(fn ($o) => $o->attr('value'))]);
         $this->assertStringContainsString('Modifiable uniquement par le super administrateur.', (string) $this->client->getResponse()->getContent());
 
+        // Même par une requête forgée (le champ désactivé renvoyé quand même), et même reprise faite, l'administrateur du site ne change rien
+        $this->db->executeStatement('UPDATE entreprise SET app_membership_backfilled_at = NOW()');
+        $form = $edit(['ROLE_ADMIN'])->filter('form[name="Entreprise"]')->form();
+        $values = $form->getPhpValues();
+        $values['Entreprise']['appMembershipMode'] = 'require';
+        $this->client->request('POST', $form->getUri(), $values, [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        $this->assertSame(['observe', $before], [$this->mode(), $journal()], 'réglage réservé au super administrateur');
+        $this->db->executeStatement('UPDATE entreprise SET app_membership_backfilled_at = NULL');
+
         // Le super administrateur : « Exiger » est refusé tant que la reprise n'est pas faite, puis accepté ; au journal
         $save = function (string $mode) use ($edit): string {
             $crawler = $edit(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']);
