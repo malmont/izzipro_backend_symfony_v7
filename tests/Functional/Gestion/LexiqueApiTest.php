@@ -585,16 +585,28 @@ class LexiqueApiTest extends WebTestCase
             $treasury = ['module' => 'gestion', 'screen' => 'tresorerie', 'params' => []];
             // Lot A-4b : « explique-moi cet écran », sans autre demande, est reconnu par le SERVEUR. Aucun appel au modèle, aucune unité.
             // Les deux questions de l'essai réel du 13/11 (Trésorerie, puis l'écran d'une période), où le modèle ajoutait des analyses et rédigeait.
-            $real = $this->post('/api/gestion/console/messages', ['text' => 'Explique-moi cet écran', 'context' => $treasury], 202);
+            // Réponse directe (14/11/2026) : le serveur répond dans la requête même. Le POST rend déjà « done », les blocs, les analyses et
+            // les unités ; l'application n'attend pas le worker et n'a pas à relire l'échange.
             FakeLandingAiClient::$queue = [new \RuntimeException('le modèle ne doit pas être appelé')];
-            $this->runWorker((int) $real['messageId']);
+            $real = $this->post('/api/gestion/console/messages', ['text' => 'Explique-moi cet écran', 'context' => $treasury], 202);
+            $this->assertSame(['done', null, ['guide', 'figures'], []], [$real['state'], $real['error'], array_column($real['blocks'], 'type'), $real['proposals']], 'le POST rend la réponse, pas une attente');
+            $sentToWorker = fn (): int => count($this->client->getContainer()->get('messenger.transport.gestion_ai')->getSent());
+            $this->assertSame(0, $sentToWorker(), 'rien n\'est confié au worker');
+            $this->assertSame(['conversationId', 'questionMessageId', 'messageId', 'state', 'error', 'blocks', 'analyses', 'proposals', 'answeredAt', 'credits'], array_keys($real));
+            $this->assertNotNull($real['answeredAt']);
+            $this->em()->clear();
             $explained = $last((int) $real['conversationId']);
+            $this->assertSame([$real['messageId'], $real['questionMessageId'], $real['blocks'], $real['analyses'], $real['answeredAt']], [$explained['messageId'], $explained['replyTo'], $explained['blocks'], $explained['analyses'], $explained['answeredAt']],
+                'la réponse du POST est celle que garde l\'échange');
+            $this->runWorker((int) $real['messageId']); // un worker qui passerait après ne change rien : la réponse est close
+            $this->assertSame($explained, $last((int) $real['conversationId']));
             $this->assertSame([0, ['failed' => 1], 'done', ['guide', 'figures']], [count(FakeLandingAiClient::$requests), $usage(), $explained['state'], array_column($explained['blocks'], 'type')], 'ni appel au modèle, ni unité, ni texte');
             $this->assertSame([['screen.guide', ['screen' => 'tresorerie']], ['cash.projection', ['days' => 90]]], array_map(fn (array $x) => [$x['key'], $x['params']], $explained['analyses']));
             $periodId = (int) static::getContainer()->get(PeriodCalendar::class)->current()->getId();
             $this->em();
             $onPeriod = $this->post('/api/gestion/console/messages', ['text' => 'Explique-moi cet écran', 'context' => ['module' => 'gestion', 'screen' => 'periode', 'params' => ['periodId' => $periodId]]], 202);
-            $this->runWorker((int) $onPeriod['messageId']);
+            $this->assertSame(['done', 'guide'], [$onPeriod['state'], $onPeriod['blocks'][0]['type']]);
+            $this->em()->clear();
             $period = $last((int) $onPeriod['conversationId']);
             $this->assertSame([0, 'done', 'guide', 'periode'], [count(FakeLandingAiClient::$requests), $period['state'], $period['blocks'][0]['type'], $period['blocks'][0]['screen']]);
             $this->assertSame([], array_values(array_filter(array_column($period['blocks'], 'type'), fn (string $t) => !in_array($t, ['guide', 'figures'], true))), 'le guide et des cartes, rien de rédigé');
@@ -612,6 +624,9 @@ class LexiqueApiTest extends WebTestCase
                 'Explique-moi cet écran et est-il à jour', 'Explain this screen and tell me what to order', 'Explique-moi cet écran ; puis les budgets']));
             // Une question que le serveur ne reconnaît pas, mais où le modèle choisit le guide seul : assemblée par le serveur aussi (un appel, 0 unité)
             $a = $this->post('/api/gestion/console/messages', ['text' => 'Dis-m\'en plus sur ce que je vois', 'context' => $treasury], 202);
+            $this->assertSame(['pending', [], [], 0], [$a['state'], $a['blocks'], $a['analyses'], count(FakeLandingAiClient::$requests)], 'il faut le modèle pour choisir : la réponse reste en attente, comme avant');
+            $this->assertArrayNotHasKey('answeredAt', $a);
+            $this->assertSame(1, $sentToWorker(), 'la réponse est confiée au worker, une seule fois');
             // le modèle nomme un autre écran : le serveur ne l'écoute pas, l'écran est celui du contexte
             FakeLandingAiClient::$queue = [$this->reply(['kind' => 'analyses', 'clarification' => '', 'analyses' => [['key' => 'screen.guide', 'screen' => 'reglages'] + $none]])];
             $this->runWorker((int) $a['messageId']);
