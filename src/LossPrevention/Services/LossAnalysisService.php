@@ -166,8 +166,9 @@ class LossAnalysisService
      * @param array{enabled: bool, params: array<string, int>, personEnabled: bool, personParams: array<string, int>} $proposed
      * @return array{status: string, reason?: string, current: int, wouldOpen: int, days: int, truncated: bool, skipped: int, sample: list<array<string, mixed>>}
      */
-    public function preview(string $code, array $proposed): array
+    public function preview(string $code, array $proposed, int $max = self::PREVIEW_MAX): array
     {
+        $max = max(1, min(self::PREVIEW_MAX, $max)); // la borne ne se relève jamais ; un test peut la baisser pour la vérifier
         $none = ['current' => 0, 'wouldOpen' => 0, 'days' => self::PREVIEW_DAYS, 'truncated' => false, 'skipped' => 0, 'sample' => []];
         $blocked = $this->settings->blockedReason();
         if ($blocked !== null) {
@@ -184,11 +185,11 @@ class LossAnalysisService
         $since = (new \DateTimeImmutable('-' . self::PREVIEW_DAYS . ' days'))->format('Y-m-d H:i:s');
         $from = max($floor, (int) $conn->fetchOne('SELECT COALESCE(MAX(sequence), 0) FROM pos_audit_log WHERE occurred_at < ?', [$since]));
         $rows = $conn->fetchAllAssociative(
-            'SELECT ' . LossAuditEntry::COLUMNS . ' FROM pos_audit_log WHERE sequence > :from AND type IN (:types) ORDER BY sequence DESC LIMIT ' . (self::PREVIEW_MAX + 1),
+            'SELECT ' . LossAuditEntry::COLUMNS . ' FROM pos_audit_log WHERE sequence > :from AND type IN (:types) ORDER BY sequence DESC LIMIT ' . ($max + 1),
             ['from' => $from, 'types' => $types], ['types' => ArrayParameterType::STRING]);
-        $truncated = count($rows) > self::PREVIEW_MAX;
+        $truncated = count($rows) > $max;
         // Au-delà de la borne, ce sont les entrées les plus RÉCENTES qui sont jouées, dans l'ordre du journal
-        $entries = array_map([LossAuditEntry::class, 'fromRow'], array_reverse(array_slice($rows, 0, self::PREVIEW_MAX)));
+        $entries = array_map([LossAuditEntry::class, 'fromRow'], array_reverse(array_slice($rows, 0, $max)));
         $skipped = [];
         $play = function (array $config) use ($conn, $entries, $rules, $code, $floor, &$skipped): array {
             $sink = new LossPreviewSink();

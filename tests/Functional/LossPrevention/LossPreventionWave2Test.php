@@ -297,6 +297,40 @@ class LossPreventionWave2Test extends LossPreventionTestCase
         $this->assertSame(401, $this->call('POST', self::BASE . '/regles/apercu', ['code' => 'CASH_DISCREPANCY'], null)->getStatusCode());
     }
 
+    /**
+     * La borne de l'aperçu : au-delà, seules les opérations les plus RÉCENTES sont jouées, `truncated` le dit, et rien n'est lu au-delà
+     * (une borne retirée laisserait l'aperçu relire tout le journal de 30 jours ; mesure dans `LossAnalysisService::PREVIEW_MAX`).
+     */
+    public function testThePreviewPlaysOnlyTheMostRecentEntriesBeyondItsBoundAndSaysSo(): void
+    {
+        $this->drain();
+        $this->loginPos(['ROLE_USER_POS']);
+        $this->flags(true, true);
+        foreach ([-900, -1000, -1100] as $delta) { // trois clôtures avec un manque, de la plus ancienne à la plus récente
+            $this->openSession();
+            $this->closeWith($delta, 'Borne de l\'aperçu');
+        }
+        $analysis = $this->analysisWith([]);
+        $proposed = static::getContainer()->get(\App\LossPrevention\Services\LossRuleService::class)->proposed('CASH_DISCREPANCY', ['params' => ['minAmount' => 100]]);
+        $discrepancies = fn (array $preview): array => array_map(fn (array $f) => (int) $f['facts']['discrepancy'], $preview['sample']);
+
+        // Borne à 2 : les DEUX clôtures les plus récentes seulement, et l'aperçu dit qu'il est tronqué
+        $bounded = $analysis->preview('CASH_DISCREPANCY', $proposed, 2);
+        $this->assertSame(['done', true, 2, [-1000, -1100]], [$bounded['status'], $bounded['truncated'], $bounded['wouldOpen'], $discrepancies($bounded)]);
+        // Borne à 1 : la dernière seulement
+        $one = $analysis->preview('CASH_DISCREPANCY', $proposed, 1);
+        $this->assertSame([true, 1, [-1100]], [$one['truncated'], $one['wouldOpen'], $discrepancies($one)]);
+        // Sans baisser la borne : rien n'est tronqué, les trois y sont ; et la borne ne se relève jamais au-dessus de PREVIEW_MAX
+        $full = $analysis->preview('CASH_DISCREPANCY', $proposed);
+        $this->assertFalse($full['truncated']);
+        $this->assertGreaterThanOrEqual(3, $full['wouldOpen']);
+        $this->assertSame($full['wouldOpen'], $analysis->preview('CASH_DISCREPANCY', $proposed, 1000000)['wouldOpen']);
+        $this->assertSame(1000, \App\LossPrevention\Services\LossAnalysisService::PREVIEW_MAX, 'la borne mesurée ; la relever demande une nouvelle mesure');
+        // Par la route : même réponse que le service à la borne ordinaire
+        $route = $this->json($this->admin('POST', self::BASE . '/regles/apercu', ['code' => 'CASH_DISCREPANCY', 'params' => ['minAmount' => 100]]));
+        $this->assertSame([$full['wouldOpen'], false, 0], [$route['wouldOpen'], $route['truncated'], $route['skipped']]);
+    }
+
     public function testAnOfflineSaleSyncedLateIsReadByTheCursorAndDatedAtItsRealTime(): void
     {
         $this->drain();
