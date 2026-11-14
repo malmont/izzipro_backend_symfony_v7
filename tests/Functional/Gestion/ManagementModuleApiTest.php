@@ -103,6 +103,10 @@ class ManagementModuleApiTest extends WebTestCase
         $this->assertSame([403, 'MODULE_INACTIVE', 'MODULE_INACTIVE', 'management', 'app.management', true, null, ['allowed' => true, 'days' => 30]],
             [$r->getStatusCode(), $body['error'], $body['code'], $body['module'], $body['feature'], $body['requestable'], $body['request'], $body['trial']]);
         $this->assertStringContainsString('Application de gestion', $body['message']);
+        // Lot CHEMIN (14/11/2026) : une lettre du chemin encodée ne fait pas passer la garde ; la réponse est la même
+        $encoded = $this->call('GET', '/api/%67estion/ia', null, true);
+        $this->assertSame([403, $body], [$encoded->getStatusCode(), json_decode((string) $encoded->getContent(), true)], 'chemin encodé : même refus');
+        $this->assertSame(403, $this->call('GET', '/%61pi/gestion/ia', null, true)->getStatusCode());
         $this->assertSame(403, $this->call('GET', '/api/periodes/courante', null, true)->getStatusCode());
         $this->assertSame(403, $this->call('POST', '/api/gestion/promotions/variantes/apercu', [], false)->getStatusCode(), 'avant le pare-feu : même réponse sans jeton');
         $this->assertSame($onOthers, $others(), 'autres modules et caisse : mêmes réponses, gestion allumée ou éteinte');

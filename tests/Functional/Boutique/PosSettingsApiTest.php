@@ -204,6 +204,11 @@ class PosSettingsApiTest extends WebTestCase
         $this->db->executeStatement('UPDATE entreprise SET pos_terminal_header_required = true');
         $required = $this->request('GET', "/api/caisse?cashRegisterId=$this->register");
         $this->assertSame([403, 'TERMINAL_REQUIRED'], [$required->getStatusCode(), json_decode($required->getContent(), true)['error']]);
+        // Lot CHEMIN (14/11/2026) : une lettre du chemin encodée ne fait pas passer la garde du terminal
+        foreach (["/api/%63aisse?cashRegisterId=$this->register", "/%61pi/caisse?cashRegisterId=$this->register"] as $encodedPath) {
+            $encoded = $this->request('GET', $encodedPath);
+            $this->assertSame([403, 'TERMINAL_REQUIRED'], [$encoded->getStatusCode(), json_decode($encoded->getContent(), true)['error'] ?? null], $encodedPath);
+        }
         $this->assertSame(403, $this->request('POST', '/api/order/create-multi-payment', ['items' => [['productVariantId' => $this->variant, 'quantity' => 1]], 'paymentMethods' => [['type' => 2, 'amount' => $this->total / 100]], 'cashRegisterId' => $this->register])->getStatusCode());
         $this->assertSame(200, $this->request('POST', '/api/cart/quote', ['items' => [['productVariantId' => $this->variant, 'quantity' => 1]]])->getStatusCode(), 'boutique : jamais concernée');
         $this->assertSame(200, $this->request('GET', '/api/category')->getStatusCode(), 'autres applications et boutique : jamais concernées');
