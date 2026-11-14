@@ -13,13 +13,15 @@ use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Security\Core\Exception\BadCredentialsException;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[Route('/api/boussole/auth')]
 class AuthController extends AbstractController
 {
     public function __construct(
-        private readonly TenantConnectionProvider $tenantConnProvider
+        private readonly TenantConnectionProvider $tenantConnProvider,
+        private readonly \App\Services\Http\ClientSafeError $safeError // texte d'une panne imprévue : jamais celui de l'exception (ERREURS-3, docs/erreurs-client.md)
     ) {
     }
 
@@ -60,7 +62,8 @@ class AuthController extends AbstractController
             // adresse déjà connue (compte de la Boussole ou compte du site) : clé `error` gardée, `code` ajouté (lot BOUSSOLE-CONSEILLER)
             return $this->json(['error' => $e->getMessage(), 'code' => EmailUnavailableException::CODE], Response::HTTP_CONFLICT);
         } catch (\Exception $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_CONFLICT);
+            // toute autre exception est une panne (avant ERREURS-3 : son texte, une erreur SQL comprise, sortait ici) ; statut 409 gardé
+            return $this->json($this->safeError->body($e, 'POST /api/boussole/auth/register'), Response::HTTP_CONFLICT);
         }
     }
 
@@ -90,8 +93,13 @@ class AuthController extends AbstractController
             $response = $this->json($output, Response::HTTP_OK);
             $this->setAuthCookie($response, $request, $output->token);
             return $response;
+        } catch (BadCredentialsException) {
+            // mauvais mot de passe : refus voulu, levé avec une classe de Symfony que la règle par origine prendrait pour une panne.
+            // Même réponse que pour un compte inconnu, mot pour mot
+            return $this->json(['error' => 'Identifiants incorrects.'], Response::HTTP_UNAUTHORIZED);
         } catch (\Exception $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_UNAUTHORIZED);
+            // refus voulus (compte inconnu, compte ou entreprise désactivés) : texte gardé ; une panne : texte neutre ; statut 401 gardé
+            return $this->json($this->safeError->body($e, 'POST /api/boussole/auth/login'), Response::HTTP_UNAUTHORIZED);
         }
     }
 

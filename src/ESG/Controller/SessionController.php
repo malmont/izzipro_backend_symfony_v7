@@ -22,6 +22,11 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 #[Route('/api/boussole/sessions')]
 class SessionController extends AbstractController
 {
+    /** Texte d'une panne imprévue : jamais celui de l'exception (ERREURS-3, docs/erreurs-client.md) ; un refus voulu garde le sien */
+    public function __construct(private readonly \App\Services\Http\ClientSafeError $safeError)
+    {
+    }
+
     #[Route('', name: 'esg_session_create', methods: ['POST'])]
     public function create(CreateSessionUseCase $useCase): Response
     {
@@ -35,7 +40,7 @@ class SessionController extends AbstractController
             $output = $useCase->execute($user);
             return $this->json($output, Response::HTTP_CREATED);
         } catch (\Exception $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_CONFLICT);
+            return $this->json($this->safeError->body($e, 'POST /api/boussole/sessions'), Response::HTTP_CONFLICT);
         }
     }
 
@@ -52,7 +57,7 @@ class SessionController extends AbstractController
             $output = $useCase->execute($user);
             return $this->json($output, Response::HTTP_OK);
         } catch (\Exception $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_NOT_FOUND);
+            return $this->json($this->safeError->body($e, 'GET /api/boussole/sessions'), Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -71,7 +76,7 @@ class SessionController extends AbstractController
             $output = $useCase->execute($user);
             return $this->json($output, Response::HTTP_OK);
         } catch (\Exception $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_NOT_FOUND);
+            return $this->json($this->safeError->body($e, 'GET /api/boussole/sessions/historique'), Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -114,7 +119,7 @@ class SessionController extends AbstractController
             $output = $useCase->execute($dto);
             return $this->json($output, Response::HTTP_OK);
         } catch (\Exception $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_FORBIDDEN);
+            return $this->json($this->safeError->body($e, 'PUT /api/boussole/sessions/{uuid}/answers'), Response::HTTP_FORBIDDEN);
         }
     }
 

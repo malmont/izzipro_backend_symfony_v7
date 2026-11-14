@@ -18,6 +18,11 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 #[Route('/api/boussole/documents')]
 class DocumentController extends AbstractController
 {
+    /** Texte d'une panne imprévue : jamais celui de l'exception (ERREURS-3, docs/erreurs-client.md) ; un refus voulu garde le sien */
+    public function __construct(private readonly \App\Services\Http\ClientSafeError $safeError)
+    {
+    }
+
     #[Route('', name: 'esg_documents_upload', methods: ['POST'])]
     public function upload(
         Request $request,
@@ -52,9 +57,10 @@ class DocumentController extends AbstractController
             $output = $useCase->execute($user, $file, $dto);
             return $this->json($output, Response::HTTP_CREATED);
         } catch (\InvalidArgumentException $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+            // nos deux refus (type de fichier, taille) gardent leur texte ; la même classe levée par une bibliothèque : texte neutre
+            return $this->json($this->safeError->body($e, 'POST /api/boussole/documents'), Response::HTTP_BAD_REQUEST);
         } catch (\Exception $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return $this->json($this->safeError->body($e, 'POST /api/boussole/documents'), Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -75,7 +81,7 @@ class DocumentController extends AbstractController
         } catch (\InvalidArgumentException $e) {
             return $this->json(['error' => 'Domaine invalide.'], Response::HTTP_BAD_REQUEST);
         } catch (\Exception $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return $this->json($this->safeError->body($e, 'GET /api/boussole/documents'), Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -94,7 +100,7 @@ class DocumentController extends AbstractController
         } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
             return $this->json(['error' => $e->getMessage()], $e->getStatusCode());
         } catch (\Exception $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return $this->json($this->safeError->body($e, 'DELETE /api/boussole/documents/{id}'), Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -112,7 +118,7 @@ class DocumentController extends AbstractController
         } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
             return $this->json(['error' => $e->getMessage()], $e->getStatusCode());
         } catch (\Exception $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return $this->json($this->safeError->body($e, 'GET /api/boussole/documents/download/{id}'), Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -145,7 +151,7 @@ class DocumentController extends AbstractController
         } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
             return $this->json(['error' => $e->getMessage()], $e->getStatusCode());
         } catch (\Exception $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return $this->json($this->safeError->body($e, 'GET /api/boussole/documents/download'), Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 }

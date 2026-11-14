@@ -15,6 +15,11 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 #[Route('/api/boussole/company')]
 class CompanyController extends AbstractController
 {
+    /** Texte d'une panne imprévue : jamais celui de l'exception (ERREURS-3, docs/erreurs-client.md) ; un refus voulu garde le sien */
+    public function __construct(private readonly \App\Services\Http\ClientSafeError $safeError)
+    {
+    }
+
     #[Route('', name: 'esg_company_get', methods: ['GET'])]
     public function getProfile(GetCompanyProfileUseCase $useCase): Response
     {
@@ -28,7 +33,7 @@ class CompanyController extends AbstractController
             $output = $useCase->execute($user);
             return $this->json($output, Response::HTTP_OK);
         } catch (\Exception $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_NOT_FOUND);
+            return $this->json($this->safeError->body($e, 'GET /api/boussole/company'), Response::HTTP_NOT_FOUND);
         }
     }
 
@@ -69,7 +74,7 @@ class CompanyController extends AbstractController
             $output = $useCase->execute($user, $dto);
             return $this->json($output, Response::HTTP_OK);
         } catch (\Exception $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+            return $this->json($this->safeError->body($e, 'PUT /api/boussole/company'), Response::HTTP_BAD_REQUEST);
         }
     }
 }

@@ -20,7 +20,8 @@ class ReportController extends AbstractController
     public function __construct(
         private readonly string $projectDir,
         private readonly AuthorizationCheckerInterface $authorizationChecker,
-        private readonly TeamViewJournal $journal
+        private readonly TeamViewJournal $journal,
+        private readonly \App\Services\Http\ClientSafeError $safeError // texte d'une panne imprévue (ERREURS-3, docs/erreurs-client.md)
     ) {
     }
 
@@ -31,7 +32,7 @@ class ReportController extends AbstractController
             $output = $useCase->execute($uuid);
             return $this->json($output, Response::HTTP_OK);
         } catch (\Exception $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_NOT_FOUND);
+            return $this->json($this->safeError->body($e, 'GET /api/boussole/sessions/{uuid}/report'), Response::HTTP_NOT_FOUND);
         }
     }
 
