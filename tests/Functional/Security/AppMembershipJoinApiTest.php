@@ -268,6 +268,14 @@ class AppMembershipJoinApiTest extends WebTestCase
         $this->assertNotNull($tokensService->read($good));
         $this->db->executeStatement('UPDATE "user" SET deleted_at = NOW() WHERE id = ?', [$outsider->getId()]);
         $this->assertSame([[401, 'JOIN_TOKEN_INVALID'], []], [$error($join(['joinToken' => $good, 'termsVersion' => $boutique, 'accepted' => true])), $this->rows((int) $outsider->getId())]);
+        // même si une ligne d'appartenance lui restait : un compte effacé ne reçoit pas de session, et son jeton de passage n'est pas consommé
+        $this->db->executeStatement("INSERT INTO user_app_membership (id, user_id, app, source, joined_at, created_at) VALUES (nextval('user_app_membership_id_seq'), ?, 'boutique', 'register', NOW(), NOW())", [$outsider->getId()]);
+        $sessions = fn (): int => (int) $this->db->fetchOne('SELECT COUNT(*) FROM refresh_tokens WHERE username = ?', [$outsider->getEmail()]);
+        $open = $sessions();
+        $refused = $join(['joinToken' => $good, 'termsVersion' => $boutique, 'accepted' => true]);
+        $this->assertSame([[401, 'JOIN_TOKEN_INVALID'], false, []], [$error($refused), isset($this->body($refused)['token']), $refused->headers->getCookies()]);
+        $this->assertNotNull($tokensService->read($good));
+        $this->assertSame($open, $sessions(), 'aucune session ouverte');
     }
 
     /**
@@ -286,10 +294,29 @@ class AppMembershipJoinApiTest extends WebTestCase
         $this->assertSame([403, 403], [$this->login($client, ['app' => 'Memoires'])->getStatusCode(), $this->login($client, ['app' => ' memoires '])->getStatusCode()]);
         $open = $this->body($this->login($client, []));
         $this->assertArrayHasKey('token', $open, 'sans app : rien ne change');
-        // sa session ouverte s'éteint au rafraîchissement dès que le front dit « memoires »
+        // au rafraîchissement aussi, dès que le front dit « memoires » : l'outil n'obtient pas de jeton, et le refus est sans effet sur la
+        // session du site (rien n'est révoqué : le même rafraîchissement, sans app, passe)
         $refresh = $this->request('POST', '/api/token/refresh', ['refresh_token' => $open['refresh_token'], 'app' => 'memoires']);
         $this->assertSame([403, $refusal], [$refresh->getStatusCode(), $this->body($refresh)]);
         $this->assertArrayHasKey('token', $this->json('POST', '/api/token/refresh', ['refresh_token' => $open['refresh_token']]));
+        // Session web par cookies : un client de la boutique qui ouvre l'outil par erreur garde sa session BOUTIQUE. Le refus ne pose ni
+        // n'efface aucun cookie, ne révoque ni ne prolonge le jeton de rafraîchissement, ne marque aucune activité
+        $web = $this->login($client, [], 'web');
+        $cookies = [];
+        foreach ($web->headers->getCookies() as $cookie) {
+            $cookies[$cookie->getName()] = (string) $cookie->getValue();
+        }
+        $name = 'refresh_token_' . MV_TEST_TENANT_CODE;
+        $this->assertArrayHasKey($name, $cookies, 'la connexion web pose le cookie de rafraîchissement du site');
+        $this->db->executeStatement("UPDATE refresh_tokens SET valid = '2031-01-01 00:00:00' WHERE refresh_token = ?", [$cookies[$name]]);
+        $this->db->executeStatement("UPDATE \"user\" SET last_login_at = '2026-01-01 00:00:00' WHERE id = ?", [$client->getId()]);
+        $state = fn (): array => [$this->db->fetchOne('SELECT valid FROM refresh_tokens WHERE refresh_token = ?', [$cookies[$name]]), $this->db->fetchOne('SELECT last_login_at FROM "user" WHERE id = ?', [$client->getId()])];
+        $refusedByCookie = $this->withCookies($cookies, 'POST', '/api/token/refresh', ['app' => 'memoires']);
+        $this->assertSame([403, $refusal, [], ['2031-01-01 00:00:00', '2026-01-01 00:00:00']], [$refusedByCookie->getStatusCode(), $this->body($refusedByCookie), $refusedByCookie->headers->getCookies(), $state()]);
+        $kept = $this->withCookies($cookies, 'POST', '/api/token/refresh', []);
+        $this->assertSame(200, $kept->getStatusCode(), (string) $kept->getContent());
+        $this->assertContains($name, array_map(fn ($cookie) => $cookie->getName(), $kept->headers->getCookies()), 'la session du site continue : cookies renouvelés');
+        $this->assertNotSame(['2031-01-01 00:00:00', '2026-01-01 00:00:00'], $state(), 'un rafraîchissement accepté, lui, prolonge le jeton et marque l\'activité');
         // avec la double vérification : refusé AVANT l'envoi d'un code, et à la vérification du code aussi
         $otp = $this->user(['ROLE_USER', 'ROLE_USER_INTERNET'], true, true);
         $codes = fn (): int => (int) $this->db->fetchOne('SELECT COUNT(*) FROM otp_code WHERE user_otp_id = ?', [$otp->getId()]);
@@ -418,6 +445,24 @@ class AppMembershipJoinApiTest extends WebTestCase
             'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json',
             'HTTP_AUTHORIZATION' => $bearer ? 'Bearer ' . $bearer : null, 'REMOTE_ADDR' => $this->ip,
         ]), $body !== null ? json_encode($body) : null);
+
+        return $this->client->getResponse();
+    }
+
+    /** Requête d'une session web : les cookies du site sont envoyés (ceux que la connexion web a posés) */
+    private function withCookies(array $cookies, string $method, string $path, ?array $body = null): Response
+    {
+        $this->ip ??= '10.83.' . random_int(1, 254) . '.' . random_int(1, 254);
+        $this->client->getCookieJar()->clear();
+        foreach ($cookies as $name => $value) {
+            $this->client->getCookieJar()->set(new \Symfony\Component\BrowserKit\Cookie($name, $value, null, '/', MV_TEST_TENANT_HOST, true));
+        }
+        // comme le front web : le jeton anti-CSRF du cookie est redit dans l'en-tête
+        $this->client->request($method, 'https://' . MV_TEST_TENANT_HOST . $path, [], [], array_filter([
+            'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json', 'REMOTE_ADDR' => $this->ip,
+            'HTTP_X_XSRF_TOKEN' => $cookies['XSRF-TOKEN_' . MV_TEST_TENANT_CODE] ?? null,
+        ]), $body !== null ? json_encode($body) : null);
+        $this->client->getCookieJar()->clear();
 
         return $this->client->getResponse();
     }
