@@ -170,6 +170,26 @@ class AppMembershipBackfillTest extends KernelTestCase
         $this->assertStringContainsString('Reprise du site : faite le ', $display);
     }
 
+    /**
+     * Lot M2-b : un site neuf est une copie du modèle, sans fiche Entreprise ni historique. La fiche créée ensuite naît « reprise
+     * faite » (valeur par défaut de la colonne) ; une fiche qui existait garde sa valeur.
+     */
+    public function testAnEntrepriseFileCreatedFromNowOnIsBornWithItsBackfillDone(): void
+    {
+        $this->assertSame('now()', $this->db->fetchOne("SELECT column_default FROM information_schema.columns WHERE table_name = 'entreprise' AND column_name = 'app_membership_backfilled_at'"));
+        $first = (int) $this->db->fetchOne('SELECT MIN(id) FROM entreprise');
+        $this->assertNull($this->db->fetchOne('SELECT app_membership_backfilled_at FROM entreprise WHERE id = ?', [$first]), 'la fiche du site de test existait : reprise pas faite');
+        $this->db->beginTransaction();
+        try {
+            $created = (int) $this->db->fetchOne("INSERT INTO entreprise (id, name) VALUES (nextval('entreprise_id_seq'), 'Fiche née après la reprise') RETURNING id");
+            $this->assertNotNull($this->db->fetchOne('SELECT app_membership_backfilled_at FROM entreprise WHERE id = ?', [$created]), 'fiche créée maintenant : reprise faite, sans rien écrire de plus');
+            $this->assertNull($this->db->fetchOne('SELECT app_membership_backfilled_at FROM entreprise WHERE id = ?', [$first]), 'la fiche existante n\'est pas touchée');
+        } finally {
+            $this->db->rollBack();
+        }
+        $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM entreprise WHERE id >= ?', [$first]), 'la fiche d\'essai n\'est pas restée');
+    }
+
     // ---------------------------------------------------------------- aides
 
     /** @param list<string> $path */
