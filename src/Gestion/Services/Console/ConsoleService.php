@@ -70,7 +70,7 @@ class ConsoleService
      *
      * @return array<string, mixed>
      */
-    public function ask(mixed $text, mixed $conversationId, mixed $context, string $locale, ?string $user, bool $platformOwner, mixed $mode = null): array
+    public function ask(mixed $text, mixed $conversationId, mixed $context, string $locale, ?string $user, bool $platformOwner, mixed $mode = null, bool $dispatch = true): array
     {
         $text = is_string($text) ? trim($text) : '';
         $fields = [];
@@ -116,10 +116,35 @@ class ConsoleService
             ['state' => self::STATE_PENDING, 'replyTo' => (int) $question->getId(), 'error' => null, 'blocks' => [], 'analyses' => [], 'proposals' => [], 'answeredAt' => null, 'usageId' => $usage?->getId()]);
         $em->persist($answer);
         $em->flush();
-        $this->bus->dispatch(new AnswerConsoleQuestionMessage((int) $answer->getId(), (string) $this->tenants->getCurrentTenantCode()));
+        if ($dispatch) {
+            $this->dispatch((int) $answer->getId());
+        }
 
         return ['conversationId' => (int) $conversation->getId(), 'questionMessageId' => (int) $question->getId(), 'messageId' => (int) $answer->getId(), 'state' => self::STATE_PENDING,
             'blocks' => [], 'analyses' => [], 'proposals' => [], 'credits' => $this->quota->credits()];
+    }
+
+    /** Confie la réponse au worker `gestion_ai` (le cas général : la réponse demande le modèle) */
+    public function dispatch(int $messageId): void
+    {
+        $this->bus->dispatch(new AnswerConsoleQuestionMessage($messageId, (string) $this->tenants->getCurrentTenantCode()));
+    }
+
+    /**
+     * La réponse telle que le POST la rend, relue en base : `state` vaut « done » (ou « failed ») quand le serveur a répondu dans la
+     * requête même, sans le modèle (réponse directe, 14/11/2026). Mêmes clés que la réponse en attente, plus `error` et `answeredAt`.
+     *
+     * @return array<string, mixed>
+     */
+    public function posted(int $messageId): array
+    {
+        $em = $this->emProvider->getEntityManager();
+        $message = $em->find(GestionConversationMessage::class, $messageId);
+        $em->refresh($message); // la réponse est close en SQL (finish) : l'entité en mémoire est encore « en préparation »
+        $answer = self::message($message);
+
+        return ['conversationId' => (int) $message->getConversation()->getId(), 'questionMessageId' => $answer['replyTo'], 'messageId' => $messageId, 'state' => $answer['state'], 'error' => $answer['error'],
+            'blocks' => $answer['blocks'], 'analyses' => $answer['analyses'], 'proposals' => $answer['proposals'], 'answeredAt' => $answer['answeredAt'], 'credits' => $this->quota->credits()];
     }
 
     /**

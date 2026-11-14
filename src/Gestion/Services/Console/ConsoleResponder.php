@@ -96,6 +96,27 @@ class ConsoleResponder
     ) {
     }
 
+    /**
+     * Vrai si le serveur répondra à cette question en attente SANS AUCUN appel au modèle (aujourd'hui : « explique-moi cet écran »,
+     * lot A-4b). Le POST y répond alors dans la requête même (`GestionConsoleUseCase::ask`) au lieu de confier la réponse au worker.
+     * Une définition seule ou un guide choisi par le modèle demandent l'appel 1 : ils restent en attente.
+     */
+    public function answersAlone(int $messageId): bool
+    {
+        $em = $this->emProvider->getEntityManager();
+        $message = $em->find(GestionConversationMessage::class, $messageId);
+        $question = $message === null ? null : $em->find(GestionConversationMessage::class, (int) ($message->getContent()['replyTo'] ?? 0));
+        $context = $question?->getContent()['context'] ?? null;
+
+        return $question !== null && $this->guideOnly($this->screen(is_array($context) ? $context : null, $message->getConversation()->getLocale()), (string) ($question->getContent()['text'] ?? ''));
+    }
+
+    /** @param array<string, mixed>|null $screen l'écran connu d'où vient la question */
+    private function guideOnly(?array $screen, string $text): bool
+    {
+        return $screen !== null && self::asksOnlyForTheScreen($text) && $this->analyses->accept('screen.guide', ['screen' => $screen['code']]) !== null;
+    }
+
     public function answer(int $messageId): void
     {
         $em = $this->emProvider->getEntityManager();
@@ -123,8 +144,7 @@ class ConsoleResponder
             }
             // « Explique-moi cet écran », sans autre demande (lot A-4b) : c'est le SERVEUR qui répond, par le guide de l'écran et ses chiffres
             // du moment. Aucun appel au modèle, aucune unité : le comportement ne dépend pas de ce que le modèle aurait choisi.
-            $guideOnly = $screen !== null && self::asksOnlyForTheScreen($text) && $this->analyses->accept('screen.guide', ['screen' => $screen['code']]) !== null;
-            if ($guideOnly) {
+            if ($this->guideOnly($screen, $text)) {
                 $choice = ['kind' => 'analyses', 'analyses' => [['key' => 'screen.guide', 'params' => []]], 'clarification' => ''];
             } else {
                 $choice = $this->model->choose($text, $screen, array_reverse(array_slice($history, 0, ConsoleService::HISTORY_MESSAGES)), $this->analyses->listed($locale), $this->periods($locale), $this->calendar->today(), $locale, $stats,
