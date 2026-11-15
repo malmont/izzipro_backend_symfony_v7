@@ -147,6 +147,36 @@ class LossPieceRepository extends EntityRepository
         );
     }
 
+    /** Enregistre une puce lue à l'essai, pas encore posée (lot L2-b) ; rend son identifiant de ligne */
+    public function insertKnownTag(string $identifier, string $raw, string $technology, bool $exercise, ?int $userId, string $now): int
+    {
+        return (int) $this->db()->fetchOne(
+            'INSERT INTO loss_tag (identifier, raw, technology, status, exercise, created_by, created_at, updated_at)'
+            . " VALUES (:identifier, :raw, :technology, 'known', CAST(:exercise AS boolean), :user, :now, :now) RETURNING id",
+            ['identifier' => $identifier, 'raw' => $raw, 'technology' => $technology, 'exercise' => $exercise ? 'true' : 'false', 'user' => $userId, 'now' => $now]
+        );
+    }
+
+    /**
+     * Nombre de faits de chaque type, vrais ou d'exercice : de quoi calculer l'avancement de l'installation sans rien stocker.
+     *
+     * @param list<string> $types
+     *
+     * @return array<string, int>
+     */
+    public function eventCounts(array $types, bool $exercise): array
+    {
+        $out = array_fill_keys($types, 0);
+        foreach ($this->db()->fetchAllKeyValue(
+            'SELECT type, COUNT(*) FROM loss_piece_event WHERE exercise = CAST(:exercise AS boolean) AND type IN (:types) GROUP BY type',
+            ['exercise' => $exercise ? 'true' : 'false', 'types' => $types], ['types' => ArrayParameterType::STRING]
+        ) as $type => $count) {
+            $out[(string) $type] = (int) $count;
+        }
+
+        return $out;
+    }
+
     /** Pose sur une pièce une puce déjà connue (lue à l'essai), pas encore posée */
     public function associateKnownTag(int $tagId, int $pieceId, string $now): void
     {
@@ -249,7 +279,7 @@ class LossPieceRepository extends EntityRepository
             return $out;
         }
         foreach ($this->db()->fetchAllAssociative(
-            'SELECT v.id, v.product_id, v.barcode, v.stock_quantity, p.name, p.barcode AS product_barcode, c.name AS color, s.name AS size,'
+            'SELECT v.id, v.product_id, v.barcode, v.stock_quantity, v.price, p.price AS product_price, p.name, p.barcode AS product_barcode, c.name AS color, s.name AS size,'
             . ' (SELECT COUNT(*) FROM product_variant x WHERE x.product_id = v.product_id) AS siblings'
             . ' FROM product_variant v JOIN product p ON p.id = v.product_id LEFT JOIN color c ON c.id = v.color_id LEFT JOIN size s ON s.id = v.size_id WHERE v.id IN (?)',
             [array_values(array_unique($variantIds))], [ArrayParameterType::INTEGER]

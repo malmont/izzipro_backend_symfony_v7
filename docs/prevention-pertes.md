@@ -402,7 +402,8 @@ bloquante en France et au Québec ; 9 minuteur accordé ; 10 jeux d'essai en bas
 Le plan ci-dessous a été **validé par le propriétaire le 15/11/2026, avec toutes les propositions du point 13.8**. Il précise ce que
 le § 11 réservait (« pièce à numéro unique par variante », faits `PIECE_CREATED`, `TAG_ASSOCIATED`, `PAIR_SET`, `TEST_TAG_READ`).
 **Le lot L2-a est codé** (pièces, puces, association, recherche, puces simulées, synthèse) : son contrat exact est au point 13.9, qui
-fait foi là où il précise le plan. Le lot L2-b (étiquettes en rouleau, assistant d'installation, gamme de matériel) reste à coder.
+fait foi là où il précise le plan. **Le lot L2-b est codé** (étiquettes des pièces en planche ou en rouleau, assistant d'installation,
+gamme de matériel) : son contrat est au point 13.10.
 Lot à risque (données, preuves) : relecture indépendante et mutations avant la bascule.
 
 **Avant le premier client (décision du propriétaire, 15/11/2026)** : la lecture d'une puce sur un article VENDU (la puce part avec le
@@ -609,3 +610,55 @@ catalogue (lecture seule).
 Tests : `tests/Functional/LossPrevention/LossPreventionPiecesTest.php` (la base seule, à une et à deux connexions ; les routes ;
 l'exercice ; le même geste envoyé deux fois au même instant, par deux processus ; l'attente des verrous ; le rejeu et le retour
 arrière de la migration ; les règles de l'identifiant).
+
+### 13.10 Lot L2-b codé : étiquettes des pièces, assistant d'installation, gamme de matériel (15/11/2026)
+
+Code : `Controller/LossInstallationController`, `UseCase/LossInstallationUseCase`, `Services/LossPieceLabelService`,
+`Services/LossInstallationService`, `Services/LossHardwareCatalog` ; l'imprimeur d'étiquettes du catalogue
+(`Services/BarcodeService/BarcodeLabelPrinter`) gagne le format rouleau et une ligne de plus par étiquette. **Aucune migration.**
+Textes `translations/pertes.{fr,en}.yaml` (`piece_labels.*`, `installation.*`, `hardware.*`). Codes d'écran : `pertes.pieces`,
+`pertes.installation` (guides `translations/ecrans.*`, console, liens des courriels). Mêmes droits et mêmes gardes que le § 13.9.
+
+| Route | Corps | Réponse | Refus |
+|---|---|---|---|
+| `POST /pieces/etiquettes/pdf` | `{ pieceIds [entiers distincts], format? (a4-50x30 \| roll-50x30), showPrice? }` | 200 `application/pdf`, en-têtes `X-Labels-Count`, `X-Labels-Format` | 422 `VALIDATION_FAILED`, `LABELS_LIMIT_EXCEEDED { max, requested }`, `PIECES_NOT_FOUND { pieceIds }` ; 409 `PIECE_RETIRED { pieceIds }`, `BARCODE_MISSING { pieceIds, variantIds }` |
+| `GET /installation` | — | 200 `{ steps [{ code, title, text, image, status (done \| current \| todo), verify { kind (data \| none), label } }], progress { done, total }, complete, exercise, screen }` | — |
+| `POST /installation/etapes/{code}/verifier` | — | 200 `{ code, verified, hint }` | 404 `STEP_NOT_FOUND` |
+| `POST /installation/puce-test` | `{ identifier, technology (uhf \| nfc) }` | 200 `{ ok, identifier, technology, refusal (TAG_INVALID \| TAG_IS_BARCODE \| null), hint, tag, installation }` | 422 `VALIDATION_FAILED` |
+| `POST /installation/etiquette-test` | `{ format? }` | 200 `application/pdf`, `X-Labels-Format` | 422 `format: INVALID_VALUE` |
+| `GET /materiel` | — | 200 `{ needs [{ code (read \| print \| attach), label, levels [{ level (pro \| standard \| diy), label, technology, what, allows, limits }] }], levels [{ code, label, summary, soldWithHardware }], note, screen }` | — |
+
+- **Étiquettes des pièces** : une étiquette par pièce, dans l'ordre demandé : nom de l'article, variante, **code-barres de la
+  variante** (celui que la caisse lit ; règle du § 13.9), le numéro de la pièce (« Pièce n° 1042 »), le prix du catalogue hors
+  promotion si `showPrice` (un prix à zéro vaut « pas de prix »). `a4-50x30` : planche A4, 500 étiquettes au plus ; `roll-50x30` :
+  une page de 50 × 30 mm par étiquette, pour une imprimante thermique à rouleau, 200 au plus (mesuré le 15/11/2026 : 200 étiquettes
+  en 4 s, 500 en 16 s). Une pièce retirée n'a plus d'étiquette ; une pièce dont la variante n'a pas de code est refusée. Une
+  impression est une lecture : rien n'est écrit. Les PDF d'étiquettes du catalogue (`docs/codes-barres.md` § 7 et § 8) restent en
+  planche A4 ; leur donner le format rouleau est un ajout d'un paramètre, non fait dans ce lot.
+- **Assistant d'installation** : quatre étapes en L2, dans l'ordre : `hardware` (choisir son matériel : étape d'information, faite dès
+  qu'une étape suivante l'est), `test_label` (étiquette d'essai), `test_tag` (lire une puce d'essai), `first_piece` (poser la puce sur
+  une première pièce). **L'avancement se calcule à partir des faits** (`loss_piece_event` : `TEST_LABEL_PRINTED`, `TEST_TAG_READ`,
+  `TAG_ASSOCIATED`), jamais d'une case cochée ; rien n'est stocké pour l'assistant, et le lire ou « Vérifier » n'écrit rien. La
+  première étape pas faite est `current`. `image` : une clé d'illustration (`pertes/installation/<code>`) ; des dessins tant que le
+  matériel n'est pas choisi. Les étapes du boîtier (L3) et des antennes (L4) s'ajouteront à la même suite.
+- **Lire une puce d'essai** : si la lecture a la forme d'une puce, elle est enregistrée « lue, pas encore posée » (`known` ; une puce
+  déjà connue reste telle qu'elle est) et un fait `TEST_TAG_READ` prouve l'étape ; la réponse rend l'assistant à jour. La puce de
+  l'essai se pose ensuite comme une autre (`POST /puces/associer`). Si la puce est déjà posée ou retirée, la lecture marche
+  (`ok: true`) et `hint` dit d'en prendre une libre. Sinon rien n'est écrit, et `hint` dit quoi essayer : lecteur qui rend des chiffres
+  seulement, autre chose que de l'hexadécimal, mauvaise longueur pour la technologie, code-barres d'un article lu à la place.
+- **Étiquette d'essai** : une étiquette au format demandé, avec un code qui ne désigne aucun article (`ESSAI-ETIQUETTE`). Le serveur
+  ne voit pas l'imprimante : le fait `TEST_LABEL_PRINTED` dit seulement que l'étiquette a été demandée.
+- **Gamme de matériel** : trois besoins (lire une puce, imprimer l'étiquette, poser la puce), trois niveaux chacun (pro, standard,
+  bricoleur : code `diy`), avec ce qu'il faut, ce que ça permet, ses limites, et la technologie de puce conseillée pour lire. Des
+  textes, sans prix ni vente (lot L6). `soldWithHardware: false` pour le niveau bricoleur : il se vend sans matériel (décision du
+  propriétaire du 15/11/2026). Le modèle ne dépend pas du niveau.
+- **Mode exercice** (ouvert sans le droit du module, routes nommées une à une dans `OPEN_ROUTES`) : `POST /exercices/pieces/etiquettes/pdf`,
+  `GET /exercices/installation`, `POST /exercices/installation/etapes/{code}/verifier`, `POST /exercices/installation/puce-test`
+  (`identifier` facultatif : puce simulée), `POST /exercices/installation/etiquette-test`, `GET /exercices/materiel`. L'assistant
+  d'exercice suit les faits d'exercice seulement : il n'avance jamais l'installation réelle, et l'effacement des pièces d'exercice
+  le remet à zéro. Plafond : 60 essais de chaque sorte (409 `EXERCISE_LIMIT_REACHED`).
+- **Non fait, à savoir** : refuser de poser comme code-barres d'un article l'identifiant d'une puce connue (cela toucherait le service
+  des codes-barres du catalogue ; la garde `replace` du lot CB-3 et les champs distincts des écrans couvrent le geste distrait).
+
+Tests : `tests/Functional/LossPrevention/LossPreventionInstallationTest.php` (étiquettes dans les deux formats, une page par étiquette
+en rouleau ; l'assistant depuis zéro en exercice, puis dans le monde réel par ses propres faits ; la gamme).

@@ -656,7 +656,7 @@ class LossPieceService
      *
      * @return array<string, mixed>
      */
-    private static function catalogue(?array $variant): array
+    public static function catalogue(?array $variant): array
     {
         if ($variant === null) {
             return ['variantMissing' => true, 'name' => null, 'variantLabel' => null, 'barcode' => null, 'barcodeOf' => null, 'symbology' => null];
@@ -671,6 +671,12 @@ class LossPieceService
 
         return ['variantMissing' => false, 'name' => (string) $variant['name'], 'variantLabel' => $label !== '' ? $label : null,
             'barcode' => $code, 'barcodeOf' => $of, 'symbology' => $code !== null ? BarcodeLabelPrinter::symbology((string) $code) : null];
+    }
+
+    /** @return array<string, mixed> une puce prête à afficher (ligne de `loss_tag`) */
+    public function tagView(array $tag, string $locale): array
+    {
+        return $this->tagRow($tag, $locale);
     }
 
     /** @return array<string, mixed> une puce prête à afficher */

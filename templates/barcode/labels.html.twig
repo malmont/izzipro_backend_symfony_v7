@@ -1,11 +1,12 @@
-{# Planche d'étiquettes de codes-barres (lot CB-2, `docs/codes-barres.md`) : 50 × 30 mm sur A4. Rendu par BarcodeLabelPrinter. #}
+{# Planche d'étiquettes de codes-barres (lot CB-2, `docs/codes-barres.md`) : 50 × 30 mm sur A4, ou une étiquette par page de 50 × 30 mm
+   pour une imprimante à rouleau (`roll`, lot L2-b). Rendu par BarcodeLabelPrinter. #}
 <!DOCTYPE html>
 <html>
   <head>
     <meta charset="UTF-8">
     <title>{{ title }}</title>
     <style>
-      @page { margin: 8mm; }
+      @page { margin: {{ roll ? '0' : '8mm' }}; }
       body { font-family: Helvetica, sans-serif; margin: 0; padding: 0; }
       #labels { text-align: center; }
       .label { display: inline-block; width: 50mm; height: 30mm; margin: 1.5mm; padding: 1.5mm; box-sizing: border-box; border: 1px solid #ccc; text-align: center; vertical-align: top; overflow: hidden; }
@@ -15,16 +16,25 @@
       .label img { display: block; margin: 1pt auto 0 auto; width: 118pt; height: 30pt; }
       .label .code { font-size: 7pt; letter-spacing: 0.5pt; }
       .label .price { font-size: 8.5pt; font-weight: bold; }
+      .label .note { font-size: 6.5pt; }
+      {% if roll %}
+      {# hauteur + marges intérieures sous les 30 mm de la page (le rendu ajoute les marges intérieures à la hauteur) : sinon
+         l'étiquette déborde sur une page de plus #}
+      .label { display: block; width: 48mm; height: 27.5mm; margin: 0; padding: 1mm; border: none; page-break-before: always; }
+      #first-label { page-break-before: auto; }
+      .label img { width: 112pt; height: 26pt; }
+      {% endif %}
     </style>
   </head>
   <body>
     <div id="labels">
-      {% for label in labels %}{% for i in 1..label.copies %}<div class="label">
+      {% set printed = 0 %}{% for label in labels %}{% for i in 1..label.copies %}<div class="label"{% if printed == 0 %} id="first-label"{% endif %}>{% set printed = printed + 1 %}
           <p class="name">{{ label.title }}</p>
           <p class="variant">{{ label.subtitle }}</p>
           <img src="data:image/png;base64,{{ label.image }}" alt="">
           <p class="code">{{ label.barcode }}</p>
           {% if label.price %}<p class="price">{{ label.price }}</p>{% endif %}
+          {% if label.note %}<p class="note">{{ label.note }}</p>{% endif %}
         </div>{% endfor %}{% endfor %}
     </div>
   </body>

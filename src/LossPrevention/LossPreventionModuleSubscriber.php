@@ -33,10 +33,14 @@ class LossPreventionModuleSubscriber implements EventSubscriberInterface
         // `\z`, jamais `$` : un « $ » accepte un saut de ligne final (« …/exercices%0A » passerait la garde)
         'GET' => ['#^/api/gestion/pertes/exercices\z#', '#^/api/gestion/pertes/exercices/\d+\z#',
             // lot L2-a : pièces d'exercice et puces simulées
-            '#^/api/gestion/pertes/exercices/pieces\z#', '#^/api/gestion/pertes/exercices/pieces/\d+\z#', '#^/api/gestion/pertes/exercices/puces/recherche\z#'],
+            '#^/api/gestion/pertes/exercices/pieces\z#', '#^/api/gestion/pertes/exercices/pieces/\d+\z#', '#^/api/gestion/pertes/exercices/puces/recherche\z#',
+            // lot L2-b : assistant d'installation et gamme de matériel
+            '#^/api/gestion/pertes/exercices/installation\z#', '#^/api/gestion/pertes/exercices/materiel\z#'],
         'POST' => ['#^/api/gestion/pertes/exercices\z#',
             '#^/api/gestion/pertes/exercices/pieces\z#', '#^/api/gestion/pertes/exercices/pieces/\d+/retirer\z#',
-            '#^/api/gestion/pertes/exercices/puces/associer\z#', '#^/api/gestion/pertes/exercices/puces/\d+/retirer\z#'],
+            '#^/api/gestion/pertes/exercices/puces/associer\z#', '#^/api/gestion/pertes/exercices/puces/\d+/retirer\z#',
+            '#^/api/gestion/pertes/exercices/pieces/etiquettes/pdf\z#', '#^/api/gestion/pertes/exercices/installation/etapes/[a-z_]{1,30}/verifier\z#',
+            '#^/api/gestion/pertes/exercices/installation/puce-test\z#', '#^/api/gestion/pertes/exercices/installation/etiquette-test\z#'],
         'DELETE' => ['#^/api/gestion/pertes/exercices\z#', '#^/api/gestion/pertes/exercices/pieces\z#'],
         'PUT' => ['#^/api/gestion/pertes/exercices/\d+/decision\z#'],
     ];

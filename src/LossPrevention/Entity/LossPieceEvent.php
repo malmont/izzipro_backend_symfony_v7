@@ -25,6 +25,8 @@ class LossPieceEvent
     public const PIECE_RETIRED = 'PIECE_RETIRED';
     /** Puce lue pendant l'essai de l'assistant d'installation (lot L2-b) */
     public const TEST_TAG_READ = 'TEST_TAG_READ';
+    /** Étiquette d'essai demandée pendant l'installation (lot L2-b) : le serveur ne voit pas l'imprimante, il sait qu'elle a été demandée */
+    public const TEST_LABEL_PRINTED = 'TEST_LABEL_PRINTED';
 
     public const SOURCE_APP = 'app';
     public const SOURCE_EXERCISE = 'exercise';
