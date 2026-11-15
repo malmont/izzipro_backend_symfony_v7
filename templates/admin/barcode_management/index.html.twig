@@ -6,12 +6,15 @@
 <div class="container-fluid">
     <h1 class="mb-4">Gestion des Codes-Barres</h1>
 
-    {# Formulaire de recherche #}
-    <form method="get" action="{{ path('admin_barcode_management_search') }}" class="mb-3">
-        <div class="form-group row">
+    {# Recherche et filtre (lot CB-2) : nom, code d'article, code-barres ou identifiant d'article #}
+    <form method="get" action="{{ path('admin_barcode_management') }}" class="mb-3">
+        <div class="form-group row align-items-center">
             <label for="search" class="col-sm-2 col-form-label">Rechercher</label>
-            <div class="col-sm-6">
-                <input type="text" id="search" name="search" class="form-control" placeholder="Id ou nom de l'article" value="{{ app.request.get('search') }}">
+            <div class="col-sm-5">
+                <input type="text" id="search" name="search" class="form-control" placeholder="Nom, code d'article ou code-barres (scannez ici)" value="{{ search }}">
+            </div>
+            <div class="col-sm-3">
+                <label class="mb-0"><input type="checkbox" name="missing" value="1" {{ missingOnly ? 'checked' }}> Seulement sans code-barres</label>
             </div>
             <div class="col-sm-2">
                 <button type="submit" class="btn btn-primary">Rechercher</button>
@@ -61,68 +64,71 @@
     </div>
     {% endif %}
 
-    <div class="table-responsive">
-        <table class="table table-striped table-hover">
-            <thead class="thead-dark">
-                <tr>
-                    <th>Id</th>
-                    <th>Produit</th>
-                    <th>Photo de l'article</th>
-                    <th>Code Barre (texte)</th>
-                    <th>Image Code Barre</th>
-                    <th>Nombre à imprimer</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for product in products %}
+    {# Lot CB-2 : une ligne par variante et par article sans variante ; un nombre d'étiquettes par ligne, puis impression de la sélection #}
+    <form method="post" action="{{ path('admin_barcode_print') }}" target="_blank">
+        <input type="hidden" name="search" value="{{ search }}">
+        <input type="hidden" name="missing" value="{{ missingOnly ? '1' : '' }}">
+        <input type="hidden" name="page" value="{{ page }}">
+        <div class="d-flex align-items-center mb-2">
+            <span class="mr-3">{{ total }} ligne(s){% if pages > 1 %}, page {{ page }} sur {{ pages }}{% endif %}</span>
+            <label class="mb-0 mr-3"><input type="checkbox" name="showPrice" value="1"> Prix sur l'étiquette</label>
+            <button type="submit" name="output" value="html" class="btn btn-primary mr-2">Imprimer la sélection</button>
+            <button type="submit" name="output" value="pdf" class="btn btn-secondary mr-3">PDF de la sélection</button>
+            <span class="text-muted">Étiquettes 50 × 30 mm, {{ maxLabels }} au plus par impression.</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="thead-dark">
                     <tr>
-                        <td>{{ product.id }}</td>
-                        <td>{{ product.name }}</td>
-                        <td>
-                            {% if product.image %}
-                                <img src="{{ asset('assets/uploads/products/' ~ product.image) }}" alt="Photo de l'article" style="width: 150px; height: auto;">
-                            {% else %}
-                                <span class="text-muted">Aucune photo</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ product.barcode }}</td>
-                        <td>
-                            {% if product.barcode %}
-                                <img src="{{ path('admin_barcode_image', {'id': product.id}) }}" alt="Code Barre" style="width: 150px; height: 50px;">
-                            {% else %}
-                                <span class="text-muted">Aucun code barre</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <form method="post" action="{{ path('admin_barcode_management') }}" class="form-inline">
-                                <input type="hidden" name="product_id" value="{{ product.id }}">
-                                <div class="form-group mr-2">
-                                    <input type="number" name="copies" min="1" value="1" required class="form-control" style="width: 70px;">
-                                </div>
-                        </td>
-                        <td>
-                            {% if product.barcode %}
-                                <div class="btn-group" role="group">
-                                    <button type="submit" name="printType" value="html" class="btn btn-primary">Imprimer HTML</button>
-                                    <button type="submit" name="printType" value="pdf" class="btn btn-secondary">Générer PDF</button>
-                                </div>
-                            {% else %}
-                                <div class="btn-group" role="group">
-                                    <button type="button" class="btn btn-primary" disabled>Imprimer HTML</button>
-                                    <button type="button" class="btn btn-secondary" disabled>Générer PDF</button>
-                                </div>
-                            {% endif %}
-                            </form>
-                        </td>
+                        <th>Article</th>
+                        <th>Variante</th>
+                        <th>Code d'article</th>
+                        <th>Code-barres</th>
+                        <th>Prix</th>
+                        <th>Nombre d'étiquettes</th>
                     </tr>
-                {% else %}
-                    <tr>
-                        <td colspan="7" class="text-center">Aucun produit trouvé.</td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                        <tr data-key="{{ row.key }}">
+                            <td>{{ row.title }}</td>
+                            <td>{% if row.type == 'product' %}<span class="text-muted">sans variante</span>{% else %}{{ row.subtitle ?: 'variante n° ' ~ row.id }}{% endif %}</td>
+                            <td>{{ row.code }}</td>
+                            <td>
+                                {% if row.barcode %}
+                                    <code>{{ row.barcode }}</code>
+                                    <span class="text-muted">{{ row.symbology == 'ean13' ? 'EAN-13' : 'Code 128' }}{% if row.barcodeOf == 'product' and row.type == 'variant' %}, code de l'article{% endif %}</span>
+                                {% else %}
+                                    <span class="text-muted">Aucun code-barres</span>
+                                {% endif %}
+                            </td>
+                            <td>{% if row.priceCents is not null %}{{ (row.priceCents / 100)|number_format(2, ',', ' ') }} {{ currency }}{% endif %}</td>
+                            <td>
+                                {% if row.barcode %}
+                                    <input type="number" name="copies[{{ row.key }}]" min="0" max="{{ maxLabels }}" value="0" class="form-control" style="width: 90px;">
+                                {% else %}
+                                    <span class="text-muted">à générer d'abord</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center">Aucune ligne trouvée.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </form>
+    {% if pages > 1 %}
+        <nav aria-label="Pages">
+            <ul class="pagination">
+                {% set query = {'search': search}|merge(missingOnly ? {'missing': '1'} : {}) %}
+                <li class="page-item {{ page <= 1 ? 'disabled' }}"><a class="page-link" href="{{ path('admin_barcode_management', query|merge({'page': page - 1})) }}">Précédente</a></li>
+                <li class="page-item disabled"><span class="page-link">{{ page }} / {{ pages }}</span></li>
+                <li class="page-item {{ page >= pages ? 'disabled' }}"><a class="page-link" href="{{ path('admin_barcode_management', query|merge({'page': page + 1})) }}">Suivante</a></li>
+            </ul>
+        </nav>
+    {% endif %}
 </div>
 {% endblock %}

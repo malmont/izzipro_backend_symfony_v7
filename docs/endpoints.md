@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (497)
+## Boutique et commun (500)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -334,6 +334,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/commandes/lignes/a-recevoir` | ROLE_ADMIN | `Controller\CommandeController\CommandeLineController::toReceive` |
 | GET | `/api/commandes/products/disponibles` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\CommandeController\CommandeProductAttachmentController::available` |
 | GET | `/api/commandes/{id}/documents` | ROLE_ADMIN | `Gestion\Controller\CommandeDocumentsController::list` |
+| POST | `/api/commandes/{id}/etiquettes/codes` | ROLE_ADMIN | `Controller\CommandeController\CommandeLabelController::generate` |
+| POST | `/api/commandes/{id}/etiquettes/pdf` | ROLE_ADMIN | `Controller\CommandeController\CommandeLabelController::pdf` |
+| GET | `/api/commandes/{id}/etiquettes` | ROLE_ADMIN | `Controller\CommandeController\CommandeLabelController::list` |
 | DELETE | `/api/commandes/{id}/frais-de-port` | ROLE_ADMIN | `Controller\FraisDePortController\FraisDePortController::deleteFraisDePort` |
 | GET | `/api/commandes/{id}/frais-de-port` | ROLE_ADMIN | `Controller\FraisDePortController\FraisDePortController::getFraisDePort` |
 | PATCH | `/api/commandes/{id}/frais-de-port` | ROLE_ADMIN | `Controller\FraisDePortController\FraisDePortController::patchFraisDePort` |
@@ -813,10 +816,10 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/app-keys/generate` | ROLE_ADMIN | `Controller\Admin\AppKeyAdminController::generate` |
 | POST | `/admin/app-keys/{id}/revoke` | ROLE_ADMIN | `Controller\Admin\AppKeyAdminController::revoke` |
 | GET | `/admin/app-keys` | ROLE_ADMIN | `Controller\Admin\AppKeyAdminController::index` |
-| GET | `/admin/barcode-image/{id}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::barcodeImage` |
 | POST | `/admin/barcode-management/generate-missing` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::generateMissing` |
+| POST | `/admin/barcode-management/print` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::printSelection` |
 | GET | `/admin/barcode-management/search` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::search` |
-| ANY | `/admin/barcode-management` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::index` |
+| GET | `/admin/barcode-management` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::index` |
 | GET | `/admin/caisse` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\PosConsoleAdminController::index` |
 | GET | `/admin/commandes/a-traiter` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderDeskAdminController::todo` |
 | GET | `/admin/commandes/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderDeskAdminController::sheet` |
@@ -851,7 +854,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/orders/{id}/livree` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderShipmentAdminController::deliver` |
 | GET, POST | `/admin/orders/{id}/rembourser` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderOperationsAdminController::refund` |
 | GET, POST | `/admin/orders/{id}/retour` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderReturnAdminController::return` |
-| ANY | `/admin/pdf/print-barcode/{id}/{copies}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::pdfPrintBarcode` |
+| GET | `/admin/pdf/print-barcode/{id}/{copies}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::printProduct` |
 | POST | `/admin/plateforme/accorder` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::grant` |
 | POST | `/admin/plateforme/boutique` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shop` |
 | POST | `/admin/plateforme/demande/{id}/{decision}` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::request` |
@@ -869,7 +872,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET, POST | `/admin/pos/exports` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\PosAccountingExportController::index` |
 | GET | `/admin/pos/stripe/return` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\PosStripeAdminController::return` |
 | GET, POST | `/admin/pos/stripe` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\PosStripeAdminController::index` |
-| ANY | `/admin/print-barcode/{id}/{copies}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::printBarcode` |
+| GET | `/admin/print-barcode/{id}/{copies}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::printProduct` |
 | ANY | `/admin/product-variant/{id}/edit-custom` | ROLE_ADMIN | `Controller\Admin\CustomProductVariantController::edit` |
 | ANY | `/admin/product/{id}/specifications` | ROLE_ADMIN | `Controller\Admin\ProductSpecificationController::edit` |
 | GET, POST | `/admin/produits/depuis-photo` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ProductPhotoAdminController::index` |

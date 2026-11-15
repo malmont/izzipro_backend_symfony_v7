@@ -131,7 +131,11 @@ avec toutes ses variantes et **`matchedVariantId`** (la variante désignée ; `n
 liste sans recherche par code). Un code inconnu rend `data: []` (la caisse se replie alors sur son pack). `meta.total` ne tient pas
 compte du code (inchangé). La boutique ne reçoit toujours que le code de l'article.
 
-La création d'une fiche par l'IA pose le code sur l'ARTICLE, comme avant le lot (elle crée toujours au moins une variante).
+La création d'une fiche par l'IA (décision du propriétaire du 15/11/2026, règle 2) pose le code lu sur l'unique VARIANTE de la fiche
+créée ; l'article n'en porte alors pas. Quand la fiche a plusieurs variantes, le code reste sur l'article. La réponse le dit
+(`barcode`, `barcodeOn: variant | product | null`). Ce que les fronts voient : la boutique ne reçoit plus de code d'article pour ces
+fiches (elle ne reçoit jamais les codes des variantes) ; la caisse les trouve par la variante, en ligne (`matchedVariantId`) comme hors
+ligne (`variants[].barcode` du pack).
 Quand la traduction automatique est demandée, elle est faite (et débitée) AVANT la création, donc avant le refus d'un code : un
 `BARCODE_ALREADY_USED` arrive après le débit, et chaque nouvel essai est débité de nouveau (ordre des appelants, inchangé par ce lot).
 
@@ -141,7 +145,7 @@ article non vendu en caisse est rendu en ligne alors que le pack hors ligne l'ex
 Un code demandé mais vide une fois mis en forme (des espaces) rend `data: []` ; « 0 » est un code comme un autre ; `barcode=` sans
 valeur n'est pas une recherche par code.
 
-Impression des étiquettes (variantes, 50 × 30 mm, prix facultatif) : lot CB-2.
+Impression des étiquettes : § 7.
 
 ## 6. Mise en ligne et retour arrière
 
@@ -151,7 +155,84 @@ Impression des étiquettes (variantes, 50 × 30 mm, prix facultatif) : lot CB-2.
 - Retour arrière : le code d'avant marche sur la base migrée, la migration peut rester. Son `down` retire la règle (déclencheurs,
   fonction, index uniques, séquence) et laisse la colonne de la variante à 64 caractères (la rétrécir pourrait couper un code).
 
-## 7. Tests
+## 7. Étiquettes à la réception d'une commande fournisseur (lot CB-2)
+
+Contrat validé par le chef pour le mobile et par le web (15/11/2026). Code : `Controller/CommandeController/CommandeLabelController`,
+`Services/CommandeService/CommandeLabelService`, `Services/BarcodeService/BarcodeLabelPrinter`, gabarit `templates/barcode/labels.html.twig`.
+Administrateur (`access_control` `/api/commandes`). Erreurs à la forme des routes de la commande : `{ error, code, message, … }`.
+404 `COMMANDE_NOT_FOUND`. **Aucune écriture de stock** : la réception ne change pas.
+
+Une étiquette désigne la PIÈCE reçue : la variante qui a reçu le stock (la réception en crée toujours une, même pour un article sans
+variante). Trois appels : la lecture n'écrit jamais, le PDF ne cache pas une écriture.
+
+**1. `GET /api/commandes/{id}/etiquettes`** → 200
+
+```json
+{
+  "commande": { "id": 42, "name": "Printemps 2027", "receptionStatus": "partial" },
+  "format": { "code": "a4-50x30", "widthMm": 50, "heightMm": 30 },
+  "currency": "CAD", "pricesIncludeTax": false, "maxLabels": 500,
+  "labels": [
+    { "variantId": 412, "product": { "id": 88, "name": "Casquette lin", "code": "CASQ-LIN" },
+      "variant": { "id": 412, "size": "M", "color": "Beige" }, "title": "Casquette lin", "subtitle": "Beige / M",
+      "barcode": "2900000000418", "barcodeOf": "variant", "symbology": "ean13",
+      "priceCents": 3499, "priceIncludesTax": false, "quantityReceived": 12, "copies": 12, "printable": true, "reason": null },
+    { "variantId": 413, "product": { "id": 88, "name": "Casquette lin", "code": "CASQ-LIN" },
+      "variant": { "id": 413, "size": "L", "color": "Beige" }, "title": "Casquette lin", "subtitle": "Beige / L",
+      "barcode": null, "barcodeOf": null, "symbology": null,
+      "priceCents": 3499, "priceIncludesTax": false, "quantityReceived": 8, "copies": 8, "printable": false, "reason": "BARCODE_MISSING" }
+  ],
+  "missing": { "count": 1, "variantIds": [413] },
+  "skipped": [],
+  "totals": { "lines": 2, "printable": 1, "labels": 12 }
+}
+```
+
+- Une ligne par variante, dans l'ordre des lignes de la commande. `quantityReceived` : solde des mouvements de stock de la commande
+  sur cette variante (réceptions moins annulations ; une variante reçue en deux fois = une ligne).
+- Ligne « réputée reçue » (rattachement, reprise : reçue sans mouvement) : sa quantité va à la variante de la ligne, sinon à l'unique
+  variante de l'article. Si l'article a plusieurs variantes, la répartition n'est pas connue : chacune est listée, `quantityReceived`
+  à `null`, et `copies` propose son stock actuel. Si l'article n'a aucune variante (pas encore vendable), il n'a pas d'étiquette : il
+  est rendu dans `skipped [{ lineId, product, quantityReceived, reason: "NO_VARIANT" }]`.
+- `barcodeOf` : `variant` ; `product` quand la variante n'a pas de code, que l'article en a un et qu'elle est sa seule variante ;
+  `null` : pas de code (`printable: false`, `reason: "BARCODE_MISSING"`, la variante est dans `missing`).
+- `symbology` : `ean13` pour 13 chiffres à clé juste, sinon `code128`.
+- `priceCents` : prix du catalogue tel qu'affiché au client (variante, sinon article), hors promotion (une étiquette collée survit à la
+  promotion), sans calcul de taxe : TTC sur un site réglé « Prix affichés taxes comprises », HT sinon (`priceIncludesTax`, répété en
+  tête : `pricesIncludeTax`). `null` quand il n'y a pas de prix (variante sans prix propre et article au prix zéro : le prix de
+  l'article est obligatoire en base) : l'étiquette s'imprime sans prix, même avec `showPrice`.
+- `copies` : nombre proposé (= `quantityReceived` quand il est connu) ; l'application le change librement. `totals.labels` : somme des
+  `copies` des lignes imprimables. Commande sans rien de reçu : `labels: []`.
+
+**2. `POST /api/commandes/{id}/etiquettes/codes`** `{ variantIds?: [413] }` (sans corps : toutes celles de `missing`) → 200
+`{ generated: [{ variantId, barcode }], …la réponse du point 1, à jour }`. Donne un code généré (§ 4) aux variantes reçues qui n'en
+ont pas ; ne remplace jamais un code (une variante qui a déjà le sien est ignorée) ; idempotent (`generated: []`) ; une ligne au
+journal du site (`catalog_barcode`, `generate`, `scope: commande`, `commandeId`). Refus : 422 `VARIANT_NOT_IN_COMMANDE { variantIds }`,
+422 `VALIDATION_FAILED { fields: { variantIds: MUST_BE_INTEGER_LIST } }`.
+
+**3. `POST /api/commandes/{id}/etiquettes/pdf`** `{ labels: [{ variantId, copies }], showPrice?: false }` (`?locale=fr|en` pour l'écriture
+du prix) → 200 `application/pdf`, `Content-Disposition: attachment; filename="etiquettes-commande-{id}.pdf"`, `X-Labels-Count`.
+Planches A4 d'étiquettes 50 × 30 mm : nom de l'article, variante, barres, code en clair, prix si `showPrice`. Refus (JSON, rien n'est
+imprimé) : 422 `VALIDATION_FAILED { fields }` (`labels: REQUIRED` ; `labels[i].variantId: MUST_BE_POSITIVE | DUPLICATE` ;
+`labels[i].copies: MUST_BE_POSITIVE` ; `showPrice: MUST_BE_BOOLEAN`), 422 `LABELS_LIMIT_EXCEEDED { max: 500, requested }`,
+422 `VARIANT_NOT_IN_COMMANDE { variantIds }`, 409 `BARCODE_MISSING { variantIds }` (générer d'abord, ou retirer ces lignes).
+
+Parcours : après « Marquer comme reçue », « Imprimer les étiquettes » → appel 1 ; si `missing.count > 0`, « Générer les codes
+manquants (N) » → appel 2 ; choix des nombres et du prix → appel 3. Test : `tests/Functional/Gestion/CommandeLabelsApiTest.php`.
+
+### Écran « Gestion des Codes-Barres » d'EasyAdmin (repris par le lot CB-2)
+
+`/admin/barcode-management` (`BarcodeManagementController`, liste par `Services/BarcodeService/BarcodeCatalogList`, en SQL) : une ligne
+par variante et par article sans variante, **50 par page** (plus de chargement de tout le catalogue) ; recherche par nom, code
+d'article, code-barres (forme canonique : on peut scanner dans le champ) ou identifiant d'article ; filtre « seulement sans
+code-barres ». Le code d'une ligne suit la règle des étiquettes de la gestion (variante, sinon article quand elle est sa seule
+variante). On donne un nombre d'étiquettes par ligne puis « Imprimer la sélection » (page à imprimer) ou « PDF de la sélection »
+(`POST /admin/barcode-management/print` : `copies[variant-412]`, `copies[product-95]`, `showPrice`, `output`) : même planche que la
+gestion (`BarcodeLabelPrinter`), prix au choix, 500 étiquettes au plus, une ligne sans code refusée avec un message. La sélection
+porte sur la page affichée. Les anciennes adresses d'impression d'un article (`/admin/print-barcode/{id}/{copies}`,
+`/admin/pdf/print-barcode/{id}/{copies}`) rendent la même planche ; `/admin/barcode-image/{id}` n'existe plus.
+
+## 8. Tests
 
 - `tests/Functional/Boutique/CatalogBarcodeTest.php` : la base seule (forme canonique à l'insertion et à la mise à jour, quatre
   croisements sous toutes les casses, longueur, écritures simultanées sur les deux tables, code libéré avec sa ligne, migration jouée
@@ -164,3 +245,6 @@ Impression des étiquettes (variantes, 50 × 30 mm, prix facultatif) : lot CB-2.
 - `tests/Functional/Boutique/CatalogBarcodeAiSheetTest.php` : création d'une fiche par l'IA (refus avant de rien créer).
 - `tests/Functional/Boutique/CatalogBarcodeSearchApiTest.php` : recherche en ligne (code de variante, code d'article, code inconnu,
   `matchedVariantId`, cas exact de la caisse).
+- `tests/Functional/Gestion/CommandeLabelsApiTest.php` (lot CB-2) : les trois routes d'étiquettes d'une commande reçue (quantités par
+  variante, ligne réputée reçue, code de l'article pour une variante unique, génération qui ne remplace rien, refus du PDF, prix écrit
+  seulement si demandé, aucune écriture de stock).

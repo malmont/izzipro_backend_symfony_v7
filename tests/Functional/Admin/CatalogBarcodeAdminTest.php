@@ -325,6 +325,84 @@ class CatalogBarcodeAdminTest extends WebTestCase
         }
     }
 
+    public function testTheBarcodeScreenListsVariantsPageByPageAndPrintsTheSelection(): void
+    {
+        // Lot CB-2 : une ligne par variante et par article sans variante ; recherche, filtre « sans code », impression de la sélection
+        $cap = $this->article('Casquette', 2);
+        [$v1, $v2] = array_map(fn (ProductVariant $v) => (int) $v->getId(), $cap->getVariants()->toArray());
+        $bottle = $this->article('Gourde', 0);
+        $solo = $this->article('Sac', 1);
+        $soloVariant = (int) $solo->getVariants()->first()->getId();
+        $this->db()->executeStatement('UPDATE product_variant SET barcode = ?, price = 4500 WHERE id = ?', ['2900000000018', $v1]);
+        $this->db()->executeStatement('UPDATE product SET barcode = ? WHERE id = ?', ["GOURDE-$this->s", $bottle->getId()]);
+        $this->db()->executeStatement('UPDATE product SET barcode = ? WHERE id = ?', ["SAC-$this->s", $solo->getId()]); // seule variante : le code de l'article sert
+        $this->em()->clear();
+        $this->loginAs(['ROLE_ADMIN']);
+        $page = 'https://' . MV_TEST_TENANT_HOST . '/admin/barcode-management';
+        $keys = fn (): array => $this->client->getCrawler()->filter('tr[data-key]')->each(fn ($tr) => $tr->attr('data-key'));
+
+        $this->open($page . '?search=' . rawurlencode($this->suffix));
+        $this->assertSame(200, $this->status(), $this->text());
+        $this->assertSame(["variant-$v1", "variant-$v2", "product-{$bottle->getId()}", "variant-$soloVariant"], $keys(), 'par nom d\'article : les deux variantes, l\'article sans variante, la variante unique');
+        $this->assertStringContainsString('2900000000018 EAN-13', $this->text());
+        $this->assertStringContainsString("GOURDE-$this->s Code 128", $this->text());
+        $this->assertStringContainsString("SAC-$this->s Code 128, code de l'article", $this->text());
+        $this->assertSame(3, $this->client->getCrawler()->filter('input[name^="copies["]')->count(), 'un nombre d\'étiquettes seulement pour les lignes qui ont un code');
+        // Filtre « sans code » ; recherche par code-barres scanné (casse, espaces) ; rien de trouvé
+        $this->open($page . '?missing=1&search=' . rawurlencode($this->suffix));
+        $this->assertSame(["variant-$v2"], $keys());
+        $this->open($page . '?search=' . rawurlencode(' gourde-' . $this->suffix . ' '));
+        $this->assertSame(["product-{$bottle->getId()}"], $keys());
+        $this->open($page . '?search=' . rawurlencode("INCONNU-$this->s"));
+        $this->assertSame([], $keys());
+        $this->assertStringContainsString('Aucune ligne trouvée.', $this->text());
+        // Page par page : jamais plus de 50 lignes, quel que soit le catalogue
+        $this->open($page);
+        $this->assertLessThanOrEqual(50, count($keys()));
+        $this->open($page . '/search?search=' . rawurlencode($this->suffix));
+        $this->assertSame(302, $this->status(), 'ancienne adresse de la recherche');
+
+        // Impression de la sélection : 2 + 3 + 1 étiquettes, prix seulement si demandé
+        $print = function (array $copies, array $more = []) : void {
+            $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/admin/barcode-management/print', ['copies' => $copies] + $more, [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        };
+        $selection = ["variant-$v1" => '2', "product-{$bottle->getId()}" => '3', "variant-$soloVariant" => '1', "variant-$v2" => '0'];
+        $print($selection, ['showPrice' => '1']);
+        $this->assertSame(200, $this->status(), $this->text());
+        $html = (string) $this->client->getResponse()->getContent();
+        $this->assertSame([6, 6], [substr_count($html, 'class="label"'), substr_count($html, 'class="price"')]);
+        foreach (['2900000000018', "GOURDE-$this->s", "SAC-$this->s", '45,00', '19,90'] as $expected) {
+            $this->assertStringContainsString($expected, $html);
+        }
+        $print($selection);
+        $this->assertSame([6, 0], [substr_count((string) $this->client->getResponse()->getContent(), 'class="label"'), substr_count((string) $this->client->getResponse()->getContent(), 'class="price"')]);
+        $print($selection, ['output' => 'pdf']);
+        $this->assertSame([200, 'application/pdf'], [$this->status(), $this->client->getResponse()->headers->get('Content-Type')]);
+        $this->assertStringStartsWith('%PDF-', (string) $this->client->getResponse()->getContent());
+        // Refus : rien de choisi, trop d'étiquettes, une ligne sans code, une ligne inconnue ; retour à la liste avec le message
+        foreach ([
+            'Rien à imprimer' => ["variant-$v1" => '0'],
+            'Au plus 500 étiquettes' => ["variant-$v1" => '300', "product-{$bottle->getId()}" => '201'],
+            'pas de code-barres' => ["variant-$v1" => '1', "variant-$v2" => '1'],
+            'n\'existe plus' => ["variant-$v1" => '1', 'variant-999999999' => '1'],
+        ] as $message => $copies) {
+            $print($copies, ['search' => $this->suffix, 'missing' => '1', 'page' => '1']);
+            $this->assertSame(302, $this->status(), $message);
+            $this->assertStringContainsString('missing=1', (string) $this->client->getResponse()->headers->get('Location'), 'retour à la même liste');
+            $this->client->followRedirect();
+            $this->assertStringContainsString($message, $this->text());
+        }
+        // Anciennes adresses d'impression d'un article : même planche
+        $this->open('https://' . MV_TEST_TENANT_HOST . '/admin/print-barcode/' . $bottle->getId() . '/4');
+        $this->assertSame([200, 4], [$this->status(), substr_count((string) $this->client->getResponse()->getContent(), 'class="label"')]);
+        $this->open('https://' . MV_TEST_TENANT_HOST . '/admin/pdf/print-barcode/' . $bottle->getId() . '/2');
+        $this->assertSame('application/pdf', $this->client->getResponse()->headers->get('Content-Type'));
+        // Réservé à l'administrateur
+        $this->loginAs(['ROLE_USER_INTERNET']);
+        $print($selection);
+        $this->assertSame(403, $this->status());
+    }
+
     public function testTheProductApiResourceDoesNotWriteABarcode(): void
     {
         // La ressource d'API de l'article n'est pas un chemin d'écriture du code-barres : elle n'accepte qu'une liste de champs, dont il
