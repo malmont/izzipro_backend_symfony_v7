@@ -176,15 +176,20 @@ class ProductVariant
         }
     }
 
+    /**
+     * Variante supprimée : la quantité de son article est recalculée, seulement si l'article VIT encore. Quand la variante part avec
+     * son article, celui-ci n'est plus géré (il est supprimé lui aussi) : le « persister » ici le réenregistrait sous un nouvel
+     * identifiant, avec ses variantes, et l'article supprimé revenait (défaut corrigé le 15/11/2026, lot ART-SUPPR-2).
+     */
     #[ORM\PostRemove]
     public function updateProductQuantityPostRemove(PostRemoveEventArgs $args): void
     {
-        if ($this->product) {
-            $this->product->updateQuantity();
-            $entityManager = $args->getEntityManager();
-            $entityManager->persist($this->product);
-            $entityManager->flush();
+        $entityManager = $args->getEntityManager();
+        if ($this->product === null || $entityManager->getUnitOfWork()->getEntityState($this->product) !== \Doctrine\ORM\UnitOfWork::STATE_MANAGED) {
+            return;
         }
+        $this->product->updateQuantity();
+        $entityManager->flush();
     }
 
     /**

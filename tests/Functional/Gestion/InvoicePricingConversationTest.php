@@ -236,6 +236,8 @@ class InvoicePricingConversationTest extends WebTestCase
         $this->assertSame([], $this->get("/api/gestion/conversations/$id3")['undo']['blockers'], 'l\'article est visible parce que la confirmation l\'a décidé : ce n\'est pas une modification');
         $this->post("/api/gestion/conversations/$id3/undo", [], 200);
         $this->assertSame(0, (int) $conn()->fetchOne('SELECT COUNT(*) FROM product WHERE id IN (?, ?)', [$mitten, $hat]));
+        // lot ART-SUPPR-2 : par le NOM aussi. Un article retiré ne revient pas sous un nouvel identifiant
+        $this->assertSame(0, (int) $conn()->fetchOne('SELECT COUNT(*) FROM product WHERE name IN (?, ?)', ["Mitaine neuve $tag", "Bonnet neuf $tag"]), 'les articles créés par la facture annulée ne reviennent pas');
     }
 
     // ---- outils --------------------------------------------------------------------------------------------------------------------

@@ -429,6 +429,9 @@ class StatisticsSectionsApiTest extends WebTestCase
 
     public function testTaxesAreTheCollectedTaxesByTaxWithReturnsAsNegatives(): void
     {
+        // un autre test pose des taxes avec un identifiant donné à la main : le compteur est d'abord remis au plus grand identifiant, sinon
+        // ce test dépendait de l'ordre des tests (il cassait quand on jouait le dossier de la gestion seul)
+        $this->db->executeStatement("SELECT setval('tax_id_seq', GREATEST((SELECT COALESCE(MAX(id), 1) FROM tax), (SELECT last_value FROM tax_id_seq)))");
         $legacy = (int) $this->db->fetchOne("INSERT INTO tax (id, name, rate, type, code) VALUES (nextval('tax_id_seq'), 'Taxe S2-TEST', 3, 'percent', 'S2T') RETURNING id");
         $tax = fn (int $order, int $amount, ?string $code, ?string $label = null, ?int $base = null, ?int $ppm = null, ?string $jurisdiction = null, ?int $taxId = null) => $this->db->executeStatement(
             "INSERT INTO order_tax (id, order_tax_id, tax_id, amount, base, tax_label, tax_rate_ppm, tax_code, tax_jurisdiction) VALUES (nextval('order_tax_id_seq'), ?, ?, ?, ?, ?, ?, ?, ?)",
