@@ -14,7 +14,15 @@ les gardes. Règles voisines : `docs/architecture.md`, « Points de montage du c
   autre instance d'elle-même ne tourne (après une reprise ou une compaction).
 - **Le lot est committé**, par chemins précis (`git add` d'un dossier entier interdit), sur une branche qui part d'`origin/dev`.
 - **La suite complète est verte sur ce commit**, jouée dans un worktree, jamais dans l'arbre en ligne ; un seul phpunit à la fois sur
-  la machine.
+  la machine : tout lancement de phpunit, de suite ou de mutations passe par `flock /tmp/phpunit-app_v2.lock …` (verrou commun aux
+  sessions qui partagent la machine). Une tâche qui attend encore ce verrou peut être retirée ; une tâche dont le `docker exec` a démarré
+  ne s'arrête pas en tuant le lanceur (phpunit continuerait dans le conteneur, hors verrou) : on la laisse finir.
+- **Contrôles proportionnés au risque** (règles du propriétaire, 15/11/2026). Lot à risque (sécurité, argent, données des clients,
+  comptes et droits, espace des agences, matériel) : relecture indépendante, mutations, photo avant et après. Lot de texte, d'affichage
+  ou de petite logique sans risque : tests ciblés, photo, sans relecture indépendante ni mutations. Dans les deux cas : **une seule
+  suite complète par mise en ligne, sur la pointe finale** ; les petits commits et les petits lots se regroupent avant de la lancer,
+  pour ne payer qu'une suite et qu'une bascule. Les mutations d'un lot déjà relu peuvent se jouer après la bascule : une survivante
+  devient un test du lot suivant.
 - **L'accord de mise en ligne est donné** (propriétaire, ou chef de projet par délégation).
 - **Réglages de l'outil** : `var/bascule.conf` (modèle `ops/bascule/bascule.conf.exemple`) et `var/bascule.lectures` (modèle
   `ops/bascule/bascule.lectures.exemple`). Le dossier `var/` est hors dépôt : aucune adresse, aucun nom de site, aucun identifiant de
@@ -22,7 +30,9 @@ les gardes. Règles voisines : `docs/architecture.md`, « Points de montage du c
 
 ## 2. Déroulé
 
-Depuis l'arbre en ligne. `<n>` est un numéro de cache jamais utilisé (le suivant du dernier `var/swap_stage<n>`).
+Depuis l'arbre en ligne. `<n>` est un numéro de cache jamais utilisé (le suivant du dernier `var/swap_stage<n>`). Un numéro ne sert
+qu'à UN `build` : si la pointe change après un `build` (commit ajouté, repose), on reconstruit sous le numéro suivant, l'outil refuse
+de réécrire un cache.
 
 | Étape | Commande | Ce qu'on attend |
 |---|---|---|
@@ -37,8 +47,12 @@ Depuis l'arbre en ligne. `<n>` est un numéro de cache jamais utilisé (le suiva
 | 9. Pousser | `git push origin dev` | seulement après une comparaison propre |
 | 10. Fin | `ops/bascule/bascule.sh fin` | jeton de contrôle supprimé |
 
-Puis : compte rendu chiffré (commit, étape, nombre de lectures, différences, journal), et les suites propres au lot (minuteur à
-installer, worker à relancer, droits à accorder).
+Puis : compte rendu **court** (5 à 10 lignes : ce qui change, chiffres clés, ce qui reste à faire, décisions à prendre ; le détail va
+dans la fiche du lot), et les suites propres au lot (minuteur à installer, worker à relancer, droits à accorder). Une commande
+`systemctl enable` ou `disable` n'est jamais lancée par une session : elle est donnée au propriétaire.
+
+**Une photo ne doit rien écrire.** Avant d'ajouter une lecture à `var/bascule.lectures`, vérifier que la route ne fait que lire :
+`GET /api/pos/receipts?orderId=` compte une réimpression, `GET /api/gestion/pertes` lance une analyse à la lecture.
 
 **Priorité : les pages publiques.** Après chaque bascule, on regarde d'abord les pages publiques de tous les sites (l'outil le fait
 dans chaque photo) : un site vitrine qui ne répond plus est l'incident le plus grave.
