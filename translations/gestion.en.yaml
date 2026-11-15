@@ -1190,8 +1190,8 @@ reports:
     advice_title: 'Advice from the console'
     advice_note: 'Written by the AI on %moment%, from the figures of this review. No number is written by the AI: each one comes from the application''s calculations.'
     advice_missing: 'The advice from the console could not be written this time. No unit was charged; ask for the review with the advice again whenever you like.'
-    advice_question_period: 'Give your opinion on this period''s review: what is going well, what is worrying, and two or three priorities.'
-    advice_question_year: 'Give your opinion on this year''s review: what is going well, what is worrying, and two or three priorities.'
+    advice_question_period: 'Give your opinion on this period''s review: what is going well, what is worrying, then your priorities. Answer in sentences, without a numbered list.'
+    advice_question_year: 'Give your opinion on this year''s review: what is going well, what is worrying, then your priorities. Answer in sentences, without a numbered list.'
     tables:
         year_overview: 'Month by month'
         budget_status: 'Budget lines'

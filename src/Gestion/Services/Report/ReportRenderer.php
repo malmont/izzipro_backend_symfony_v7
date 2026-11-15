@@ -116,8 +116,9 @@ class ReportRenderer
                             // les comparaisons sont celles que l'analyse a gardées avec la carte (clés à plat) : rien n'est recalculé
                             foreach ([['previous', 'deltaPercent', 'compare_previous'], ['lastYear', 'deltaPercentLastYear', 'compare_last_year']] as [$key, $percent, $label]) {
                                 if (isset($item[$key]) && is_numeric($item[$key])) {
-                                    $change = isset($item[$percent]) && is_numeric($item[$percent]) ? ' (' . ((float) $item[$percent] > 0 ? '+' : '') . $write($item[$percent], 'percent') . ')' : '';
-                                    $compared[] = $t($label) . ' ' . $write($item[$key], $unit) . $change;
+                                    // la variation entre parenthèses est rendue à part : le gabarit l'écrit sans coupure possible
+                                    $change = isset($item[$percent]) && is_numeric($item[$percent]) ? '(' . ((float) $item[$percent] > 0 ? '+' : '') . $write($item[$percent], 'percent') . ')' : null;
+                                    $compared[] = ['text' => $t($label) . ' ' . $write($item[$key], $unit), 'change' => $change];
                                 }
                             }
                             $cards[] = ['label' => (string) ($item['label'] ?? ''), 'value' => $write($item['value'] ?? null, $unit), 'compared' => $compared];

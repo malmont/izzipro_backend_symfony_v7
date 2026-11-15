@@ -89,7 +89,7 @@ class GestionReviewReportsApiTest extends WebTestCase
 
         // Demandes refusées : rien n'est créé
         foreach ([[['kind' => 'period'], ['periodId' => 'REQUIRED']], [['kind' => 'period', 'periodId' => 'x'], ['periodId' => 'INVALID_ID']], [['kind' => 'period', 'periodId' => 0], ['periodId' => 'INVALID_ID']],
-            [['kind' => 'year', 'year' => 1999], ['year' => 'OUT_OF_RANGE']], [['kind' => 'year', 'year' => '2026'], ['year' => 'OUT_OF_RANGE']], [['kind' => 'year', 'year' => (int) substr($this->today, 0, 4) + 2], ['year' => 'OUT_OF_RANGE']],
+            [['kind' => 'year', 'year' => 1999], ['year' => 'OUT_OF_RANGE']], [['kind' => 'year', 'year' => '2026'], ['year' => 'OUT_OF_RANGE']], [['kind' => 'year', 'year' => (int) substr($this->today, 0, 4) + 2], ['year' => 'OUT_OF_RANGE']], [['kind' => 'year', 'year' => (int) substr($this->today, 0, 4) + 1], ['year' => 'OUT_OF_RANGE']], [['kind' => 'year', 'year' => 2025.5], ['year' => 'OUT_OF_RANGE']],
             [['kind' => 'period', 'periodId' => $pid, 'withAdvice' => 'oui'], ['withAdvice' => 'MUST_BE_BOOLEAN']], [['kind' => 'period', 'periodId' => $pid, 'locale' => 'de'], ['locale' => 'INVALID_VALUE']],
             [['kind' => 'livre', 'withAdvice' => true], ['kind' => 'INVALID_VALUE']]] as [$body, $fields]) {
             $this->request('POST', '/api/gestion/rapports', $body);
@@ -97,6 +97,12 @@ class GestionReviewReportsApiTest extends WebTestCase
         }
         $this->request('POST', '/api/gestion/rapports', ['kind' => 'period', 'periodId' => 2147483000]);
         $this->assertSame([404, 'PERIOD_NOT_FOUND'], [$this->status(), $this->body()['code']]);
+        // une collection qui n'est pas une période (une collection faite à la main) n'a pas de bilan de période
+        $manual = (int) $this->create(\App\Entity\Collections::class, ['kind' => \App\Entity\Collections::KIND_MANUAL])->getId();
+        $this->request('POST', '/api/gestion/rapports', ['kind' => 'period', 'periodId' => $manual]);
+        $this->assertSame([404, 'PERIOD_NOT_FOUND'], [$this->status(), $this->body()['code']]);
+        $this->em()->getConnection()->executeStatement('DELETE FROM collections WHERE id = ?', [$manual]);
+        $this->endOfWrite();
         $this->assertSame([0, 0, 0], $counts());
 
         // Demande acceptée : en préparation, confiée au worker pdf ; les chiffres sont déjà calculés et gardés avec le rapport
@@ -208,6 +214,14 @@ class GestionReviewReportsApiTest extends WebTestCase
         $this->assertSame([4, ['period']], [$list['total'], array_values(array_unique(array_column($list['reports'], 'kind')))]);
         $this->assertSame(0, $this->get('/api/gestion/rapports?kind=year')['total']);
         $this->assertSame([0, [4, 0, 0]], [count(FakeLandingAiClient::$requests), $counts()]);
+
+        // Le plafond du jour vaut pour les bilans, et il refuse AVANT la question à la console : ni échange, ni unité réservée
+        $conn()->executeStatement("INSERT INTO gestion_report (kind, params, state, title, locale, fingerprint, expires_at) SELECT 'console.answer', '{}', 'failed', 'Plein', 'fr', 'plein-' || g, NOW() + INTERVAL '90 days' FROM generate_series(1, 26) g");
+        foreach ([['kind' => 'year', 'year' => (int) substr($this->today, 0, 4) - 2], ['kind' => 'year', 'year' => (int) substr($this->today, 0, 4) - 2, 'withAdvice' => true]] as $body) {
+            $this->request('POST', '/api/gestion/rapports', $body);
+            $this->assertSame([429, 'REPORT_DAILY_LIMIT', GestionReportService::DAILY_LIMIT], [$this->status(), $this->body()['code'], $this->body()['limit']], json_encode($body));
+        }
+        $this->assertSame([GestionReportService::DAILY_LIMIT, 0, 0], $counts());
     }
 
     public function testAYearReviewShowsTheMonthsInOrderAndTheFiscalYearOfTheScreen(): void
@@ -342,8 +356,9 @@ class GestionReviewReportsApiTest extends WebTestCase
         $this->em();
         $missing = self::plain($renderer->html($renderer->review($stored->find((int) $failing['id'])['content'], ['included' => false], 'fr', 'CAD')));
         $this->assertStringContainsString(htmlspecialchars('L\'avis de la console n\'a pas pu être rédigé cette fois. Aucune unité n\'a été décomptée', ENT_QUOTES), $missing);
-        $nude = $this->post(['kind' => 'period', 'periodId' => $pid], 200);
-        $this->assertSame([$failing['id'], true], [$nude['id'], $nude['reused']], 'ce fichier est le bilan sans avis : la demande sans avis le reprend');
+        $nude = $this->post(['kind' => 'period', 'periodId' => $pid], 202);
+        $this->assertSame([false, ['periodId' => $pid, 'withAdvice' => false]], [$nude['reused'], $nude['params']], 'ce fichier dit que l\'avis manque : la demande sans avis fait un bilan propre');
+        $this->assertNotSame($failing['id'], $nude['id']);
         $retry = $this->post(['kind' => 'period', 'periodId' => $pid, 'withAdvice' => true], 202);
         $this->assertNotSame($failing['id'], $retry['id']);
         $this->assertSame(false, $retry['reused']);
@@ -355,14 +370,13 @@ class GestionReviewReportsApiTest extends WebTestCase
         $this->assertSame(['done', ['included' => false, 'code' => 'AI_UNAVAILABLE'], 0], [$fallback['state'], $fallback['advice'], $fallback['unitsCharged']]);
         $this->assertSame(['failed' => 2, 'success' => 1], $usage());
 
-        // Délai de la console dépassé avant le worker (file occupée) : la réponse est close par une lecture, l'avis manque, l'unité est rendue
+        // Délai de la console dépassé avant le worker (file occupée) : le worker clôt lui-même la réponse, sans appeler le modèle ; l'avis manque, l'unité est rendue
         $this->sale($this->variant, 1, 2500, 2500, $this->today);
         $this->endOfWrite();
         $late = $this->post(['kind' => 'year', 'withAdvice' => true], 202);
         $this->em();
         $lateAdvice = $stored->find((int) $late['id'])['advice'];
         $conn()->executeStatement("UPDATE gestion_conversation_message SET created_at = NOW() - INTERVAL '121 seconds' WHERE id = ?", [$lateAdvice['messageId']]);
-        $this->get('/api/gestion/console/conversations');
         $requests = count(FakeLandingAiClient::$requests);
         $this->generate((int) $late['id']);
         $timedOut = $this->get('/api/gestion/rapports/' . $late['id']);

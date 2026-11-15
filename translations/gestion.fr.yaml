@@ -1195,8 +1195,8 @@ reports:
     advice_title: 'Avis de la console'
     advice_note: 'Rédigé par l''IA le %moment%, à partir des chiffres de ce bilan. Aucun nombre n''est écrit par l''IA : chacun vient des calculs de l''application.'
     advice_missing: 'L''avis de la console n''a pas pu être rédigé cette fois. Aucune unité n''a été décomptée ; redemandez le bilan avec l''avis quand vous voulez.'
-    advice_question_period: 'Donne ton avis sur le bilan de cette période : ce qui va bien, ce qui inquiète, et deux ou trois priorités.'
-    advice_question_year: 'Donne ton avis sur le bilan de cette année : ce qui va bien, ce qui inquiète, et deux ou trois priorités.'
+    advice_question_period: 'Donne ton avis sur le bilan de cette période : ce qui va bien, ce qui inquiète, puis tes priorités. Réponds en phrases, sans liste numérotée.'
+    advice_question_year: 'Donne ton avis sur le bilan de cette année : ce qui va bien, ce qui inquiète, puis tes priorités. Réponds en phrases, sans liste numérotée.'
     tables:
         year_overview: 'Mois par mois'
         budget_status: 'Postes du budget'

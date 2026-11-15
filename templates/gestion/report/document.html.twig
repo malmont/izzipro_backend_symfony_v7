@@ -15,9 +15,12 @@
   h2 { font-size: 11pt; margin: 14px 0 6px 0; }
   p { margin: 0 0 7px 0; line-height: 1.35; }
   .question { background: #f1f5f9; padding: 7px 9px; margin: 0 0 12px 0; }
-  table.cards { width: 100%; border-collapse: separate; border-spacing: 6px 0; margin: 0 0 8px 0; page-break-inside: avoid; }
+  /* un bloc de cartes est UNE table (une ligne par rangée de trois) : il passe entier à la page suivante, jamais une rangée seule */
+  table.cards { width: 100%; border-collapse: separate; border-spacing: 6px 6px; margin: 0 0 4px 0; page-break-inside: avoid; }
+  table.cards tr { page-break-inside: avoid; }
+  .nowrap { white-space: nowrap; }
   table.cards td { width: 33%; border: 1px solid #cbd5e1; padding: 7px 8px; }
-  .value { font-size: 13pt; font-weight: bold; }
+  .value { font-size: 13pt; font-weight: bold; white-space: nowrap; }
   table.grid { width: 100%; border-collapse: collapse; margin: 0 0 8px 0; }
   table.grid th { background: #e2e8f0; text-align: left; padding: 4px 6px; font-size: 9pt; border-bottom: 1px solid #94a3b8; }
   table.grid td { padding: 4px 6px; border-bottom: 1px solid #e2e8f0; font-size: 9pt; }
@@ -51,12 +54,14 @@
   {% elseif section.type == 'text' %}
     {% for paragraph in section.paragraphs %}<p>{{ paragraph|nl2br }}</p>{% endfor %}
   {% elseif section.type == 'figures' %}
+    <table class="cards">
     {% for row in section.rows %}
-      <table class="cards"><tr>
-        {% for card in row %}<td><div class="small">{{ card.label }}</div><div class="value">{{ card.value }}</div>{% for line in card.compared %}<div class="small">{{ line }}</div>{% endfor %}</td>{% endfor %}
+      <tr>
+        {% for card in row %}<td><div class="small">{{ card.label }}</div><div class="value">{{ card.value }}</div>{% for line in card.compared %}<div class="small">{{ line.text }}{% if line.change %} <span class="nowrap">{{ line.change }}</span>{% endif %}</div>{% endfor %}</td>{% endfor %}
         {% if row|length < 3 %}{% for i in 1..(3 - row|length) %}<td style="border: none;"></td>{% endfor %}{% endif %}
-      </tr></table>
+      </tr>
     {% endfor %}
+    </table>
   {% elseif section.type == 'table' %}
     {% if section.title %}<h2>{{ section.title }}</h2>{% endif %}
     <table class="grid">

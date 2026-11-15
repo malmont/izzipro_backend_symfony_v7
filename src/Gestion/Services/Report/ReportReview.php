@@ -5,7 +5,9 @@ namespace App\Gestion\Services\Report;
 use App\Entity\Collections;
 use App\Gestion\Analysis\AnalysisCatalog;
 use App\Gestion\Analysis\RangeLabel;
+use App\Gestion\Services\GestionValidationException;
 use App\Gestion\Services\PeriodCalendar;
+use App\Services\CaisseService\StoreClock;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
@@ -29,6 +31,7 @@ class ReportReview
         private readonly PeriodCalendar $calendar,
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly TranslatorInterface $translator,
+        private readonly StoreClock $clock,
     ) {
     }
 
@@ -47,6 +50,9 @@ class ReportReview
             $selected[] = ['key' => 'stock.overview', 'params' => []];
         }
         $closedAt = $this->calendar->closedAt($period);
+        if ($closedAt !== null && $period->getClosedAt() !== null) {
+            $closedAt = $closedAt->setTimezone($this->clock->timezone()); // une clôture faite à la main est un instant : son jour est celui du magasin
+        }
         $notice = $closedAt === null
             ? $this->tr('provisional_period', $locale, ['%date%' => RangeLabel::day($today, $locale)])
             : $this->tr('closed_period', $locale, ['%date%' => RangeLabel::day($closedAt->format('Y-m-d'), $locale)]);
@@ -64,7 +70,11 @@ class ReportReview
                 return null;
             }
         }
-        $content = $this->content('year', '', '', null, [['key' => 'year.overview', 'params' => $params]], [], $locale);
+        try {
+            $content = $this->content('year', '', '', null, [['key' => 'year.overview', 'params' => $params]], [], $locale);
+        } catch (GestionValidationException) {
+            return null; // une année que l'écran Année refuse (au-delà de l'exercice en cours)
+        }
         $period = $content['analyses'][0]['period'] ?? [];
         $resolved = (int) ($content['analyses'][0]['params']['year'] ?? ($year ?? 0));
         $today = $this->calendar->today()->format('Y-m-d');

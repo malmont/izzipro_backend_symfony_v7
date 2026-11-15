@@ -22,7 +22,7 @@ message, … }` ; une validation : 422 `VALIDATION_FAILED { fields }`.
 
 | Route | Corps | Réponse | Refus |
 |---|---|---|---|
-| `POST /api/gestion/rapports` | `{ kind: "console.answer", messageId, locale? }` ; bilans (§ 7) : `{ kind: "period", periodId, withAdvice?, locale? }`, `{ kind: "year", year?, withAdvice?, locale? }` | 202, le rapport en préparation ; **200 si le fichier de la même demande est déjà prêt** (`reused: true`) | 422 `fields.kind` `REQUIRED` \| `INVALID_VALUE` ; `fields.messageId`, `fields.periodId` `REQUIRED` \| `INVALID_ID` ; `fields.year` `OUT_OF_RANGE` ; `fields.locale` `INVALID_VALUE` ; `fields.withAdvice` `MUST_BE_BOOLEAN` \| `NOT_ALLOWED` (réponse de la console) ; 404 `CONSOLE_MESSAGE_NOT_FOUND`, `PERIOD_NOT_FOUND` ; 409 `CONSOLE_ANSWER_PENDING`, `CONSOLE_ANSWER_FAILED` ; 429 `REPORT_DAILY_LIMIT { limit, resetAt }` ; 403 `AI_NOT_INCLUDED` (réponse de la console, ou bilan avec avis) ; avec avis : 402 `AI_CREDITS_EXHAUSTED`, 429 `AI_DAILY_LIMIT` |
+| `POST /api/gestion/rapports` | `{ kind: "console.answer", messageId, locale? }` ; bilans (§ 7) : `{ kind: "period", periodId, withAdvice?, locale? }`, `{ kind: "year", year?, withAdvice?, locale? }` | 202, le rapport en préparation ; **200 si le fichier de la même demande est déjà prêt** (`reused: true`) | 422 `fields.kind` `REQUIRED` \| `INVALID_VALUE` ; `fields.messageId`, `fields.periodId` `REQUIRED` \| `INVALID_ID` ; `fields.year` `OUT_OF_RANGE` ; `fields.locale` `INVALID_VALUE` ; `fields.withAdvice` `MUST_BE_BOOLEAN` \| `NOT_ALLOWED` (`true` sur une réponse de la console ; `false` y est admis) ; 404 `CONSOLE_MESSAGE_NOT_FOUND`, `PERIOD_NOT_FOUND` ; 409 `CONSOLE_ANSWER_PENDING`, `CONSOLE_ANSWER_FAILED` ; 429 `REPORT_DAILY_LIMIT { limit, resetAt }` ; 403 `AI_NOT_INCLUDED` (réponse de la console, ou bilan avec avis) ; avec avis : 402 `AI_CREDITS_EXHAUSTED`, 429 `AI_DAILY_LIMIT`, 429 `AI_TOO_MANY_FAILURES` (trop d'échecs de l'IA sur 24 heures) |
 | `GET /api/gestion/rapports/{id}` | — | le rapport (à relire toutes les 3 secondes tant que `state` vaut `pending`) | 404 `REPORT_NOT_FOUND` |
 | `GET /api/gestion/rapports/{id}/fichier` | — | `application/pdf`, en pièce jointe | 409 `REPORT_NOT_READY`, `REPORT_FAILED_NO_FILE` ; 404 `REPORT_NOT_FOUND` |
 | `GET /api/gestion/rapports?page=&kind=` | — | `{ reports, page, pages, total }`, 20 par page, du plus récent au plus ancien | 422 `fields.kind` `INVALID_VALUE` |
@@ -78,7 +78,7 @@ réponse, leur plage, la date du calcul) ; pied : nom du site, page x / y.
 | Bloc de la console | Sur le papier |
 |---|---|
 | `text` | paragraphes |
-| `figures` | cartes par rangées de trois : libellé, valeur, et les comparaisons gardées avec la carte (« Période précédente : … (+x %) », « An dernier : … ») |
+| `figures` | cartes par rangées de trois : libellé, valeur, et les comparaisons gardées avec la carte (« Période précédente : … (+x %) », « An dernier : … »). Un bloc de cartes est d'un seul tenant : s'il ne tient pas au bas de la page, il passe entier à la suivante (jamais une rangée seule) ; la variation entre parenthèses ne se coupe pas, et le « % » est tenu par une espace insécable (retouches du 15/11/2026) |
 | `table` | tableau, en-têtes répétés d'une page à l'autre, montants alignés à droite ; « et N autres lignes » (ou « et une autre ligne ») quand la console n'en a gardé qu'une partie (`more.count`) |
 | `verdicts` | les groupes du bilan avec leur compte, puis une ligne par article : nom, verdict, pourquoi |
 | `lesson` | la notion, sa définition, son illustration, les notions liées ; **pas** les questions de vérification (un jeu de l'écran) |
@@ -131,7 +131,9 @@ même langue, **sans changement de ses chiffres ni de sa mention**, rend le fich
 plus, ou le jour qui change sur une période provisoire, fait un nouveau bilan.
 
 `params` d'un bilan : `{ periodId, withAdvice }` ou `{ year, withAdvice }` (`year` : l'année retenue, même quand elle n'était pas
-donnée). `year` hors des bornes de la console (avant 2000, après l'an prochain) ou qui n'est pas un entier : 422 `OUT_OF_RANGE`.
+donnée). `year` qui n'est pas un entier, avant 2000, ou au-delà de l'exercice en cours (une année que l'écran Année refuse) : 422
+`OUT_OF_RANGE`. Une collection qui n'est pas une période, ou supprimée : 404 `PERIOD_NOT_FOUND`. La date d'une clôture faite à la
+main est écrite au jour du magasin.
 
 **L'avis de la console (`withAdvice: true`).** Le bilan se termine par une partie « Avis de la console », rédigée par l'IA.
 
@@ -140,16 +142,19 @@ donnée). `year` hors des bornes de la console (avant 2000, après l'an prochain
    `AI_NOT_INCLUDED` (dit dès le début de la demande), 402 `AI_CREDITS_EXHAUSTED`, 429 `AI_DAILY_LIMIT`. **1 unité est réservée.**
 2. Le worker `pdf` fait rédiger la réponse (`ConsoleResponder::answer($messageId, $forced)`) sur **les analyses du bilan, imposées
    par le serveur** : l'appel de choix n'a pas lieu, le modèle ne fait que rédiger (un seul appel), aux règles de la console (aucun
-   nombre que le serveur n'a pas fourni). Les analyses sont relancées à cet instant, quelques secondes après la demande.
-3. L'avis est « rédigé » si la console a rendu un texte du modèle : l'unité est décomptée (`unitsCharged: 1`, `advice: { included:
-   true }`). Sinon (IA en panne, réponse de repli écrite par le serveur, délai de la console dépassé parce que la file était
-   occupée) : le bilan sort **sans** avis, avec une ligne qui le dit, l'unité est rendue, `advice: { included: false, code:
-   "AI_UNAVAILABLE" | "CONSOLE_TIMEOUT" }`, et le rapport prend l'empreinte du bilan sans avis : redemander l'avis le redemande
-   vraiment, demander le bilan sans avis reprend ce fichier.
+   nombre que le serveur n'a pas fourni). Les analyses sont relancées à cet instant, quelques secondes après la demande. La question
+   demande des phrases, sans liste numérotée : un « 1. » serait un nombre inconnu pour le contrôle de la console.
+3. L'avis est « rédigé » si la console a rendu un texte du modèle sur ces analyses : l'unité est décomptée (`unitsCharged: 1`, relu
+   en base, `advice: { included: true }`). Sinon : le bilan sort **sans** avis, avec une ligne qui le dit, l'unité est rendue,
+   `advice: { included: false, code }`. `AI_UNAVAILABLE` : IA en panne, ou réponse de repli écrite par le serveur.
+   `CONSOLE_TIMEOUT` : la question a attendu plus de 120 secondes avant que le worker la prenne (file `pdf` occupée) ; le worker la
+   clôt lui-même (`ConsoleService::releaseStale`), sans appeler le modèle. Ce rapport prend alors une **empreinte à lui** : redemander
+   l'avis le redemande vraiment, et demander le bilan sans avis fait un bilan propre (aucune demande ne retombe sur ce fichier).
 4. L'échange se relit dans l'historique de la console (il compte dans son plafond du jour). `advice` vaut `null` tant que le
    rapport n'est pas prêt ; `credits` est le solde du site `{ monthly, used, remaining, resetAt }` pour une demande avec avis, `null`
-   sinon. Si le fichier échoue après un avis rédigé (plus de 40 pages), l'unité reste notée sur le rapport et l'avis reste lisible
-   dans la console.
+   sinon. Le délai de fabrication de 120 secondes se mesure après la rédaction de l'avis (elle est bornée par la console). Si le
+   fichier échoue après un avis rédigé (plus de 40 pages), l'unité reste notée sur le rapport et l'avis reste lisible dans la
+   console. Si la création du rapport échoue après la question posée, la question est retirée de l'historique et son unité rendue.
 
 La même demande avec avis, sans changement des chiffres : le fichier déjà prêt, aucune nouvelle question, aucune nouvelle unité.
 

@@ -124,9 +124,15 @@ class GestionReportsApiTest extends WebTestCase
         }
         $this->assertStringContainsString('<strong>À garder</strong> (2)', $html, 'les groupes d\'un bilan, avec leur compte');
         // les comparaisons gardées avec la carte, sans recalcul ; un texte qui ressemble à un nombre reste un texte ; un montant négatif
-        foreach (['Période précédente : 1 000,00 $ (+23,46 %)', 'An dernier : 1 500,00 $ (-17,7 %)', '>2024<', '>007<', '-12,50 $'] as $expected) {
+        foreach (['>2024<', '>007<', '-12,50 $'] as $expected) {
             $this->assertStringContainsString($expected, $html, $expected);
         }
+        // la variation entre parenthèses ne se coupe pas (retouche du 15/11/2026) : elle est dans un élément insécable, le « % » tenu par une espace insécable
+        foreach (['Période précédente : 1 000,00 $ <span class="nowrap">(+23,46 %)</span>', 'An dernier : 1 500,00 $ <span class="nowrap">(-17,7 %)</span>'] as $expected) {
+            $this->assertStringContainsString($expected, $html, $expected);
+        }
+        $this->assertStringContainsString("(+23,46\u{00A0}%)", $renderer->html($renderer->document(ConsoleService::message($message), "Que disent mes ventes {$this->tag} ?", 'fr', 'CAD')));
+        $this->assertSame(1, substr_count($html, '<table class="cards">'), 'les rangées d\'un bloc de cartes tiennent dans une seule table : le bloc ne se coupe pas entre deux pages');
         $this->assertStringNotContainsString('2 024', $html);
         // l'en-tête du site : son nom, et son numéro d'entreprise quand il est saisi
         $this->assertStringContainsString(htmlspecialchars((string) $conn->fetchOne('SELECT name FROM entreprise ORDER BY id LIMIT 1'), ENT_QUOTES), $html);

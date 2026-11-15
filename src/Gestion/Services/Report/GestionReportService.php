@@ -37,7 +37,8 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * page ces chiffres-là, sans rien recalculer. Sans `withAdvice` : aucun modèle, 0 unité. Avec `withAdvice: true`, le bilan se termine
  * par un « Avis de la console » : une question posée à la console pour le gérant (1 unité, réservée à la demande : palier, crédits et
  * plafond du jour refusent AVANT toute création), rédigée par le worker sur les analyses du bilan, imposées par le serveur. Si l'avis
- * ne peut pas être rédigé, le bilan sort sans lui, l'unité est rendue, et le rapport prend l'empreinte du bilan sans avis.
+ * ne peut pas être rédigé, le bilan sort sans lui (il le dit), l'unité est rendue, et le rapport prend une empreinte à lui : aucune
+ * demande suivante ne retombe sur ce fichier.
  */
 class GestionReportService
 {
@@ -54,6 +55,9 @@ class GestionReportService
     public const STALE_SECONDS = 900;
     public const RETENTION_DAYS = 90;
     public const PER_PAGE = 20;
+
+    /** Le solde d'unités du site, lu une fois par appel (une liste porte plusieurs rapports avec avis) */
+    private ?array $credits = null;
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -83,6 +87,7 @@ class GestionReportService
      */
     public function request(array $body, string $defaultLocale, ?string $by, bool $platformOwner): array
     {
+        $this->credits = null;
         $fields = [];
         $kind = $body['kind'] ?? null;
         if (!is_string($kind) || $kind === '') {
@@ -115,8 +120,8 @@ class GestionReportService
         if (array_key_exists('withAdvice', $body)) {
             if (!is_bool($body['withAdvice'])) {
                 $fields['withAdvice'] = 'MUST_BE_BOOLEAN';
-            } elseif ($kind === self::KIND_CONSOLE_ANSWER) {
-                $fields['withAdvice'] = 'NOT_ALLOWED'; // une réponse de la console est déjà un avis
+            } elseif ($kind === self::KIND_CONSOLE_ANSWER && $body['withAdvice']) {
+                $fields['withAdvice'] = 'NOT_ALLOWED'; // une réponse de la console est déjà un avis ; `false` ne demande rien : admis
             }
         }
         if ($fields !== []) {
@@ -190,9 +195,11 @@ class GestionReportService
                 if (is_int($report['advice']['messageId'] ?? null)) {
                     $advice = $this->advice($report['advice']['messageId'], (array) ($content['selected'] ?? []));
                     $units = $advice['units'];
+                    $started = microtime(true); // le délai de fabrication mesure la mise en page, pas la rédaction de l'avis (bornée par la console)
                     $outcome = $report['advice'] + ($advice['included'] ? ['included' => true] : ['included' => false, 'code' => $advice['code']]);
-                    // sans avis, ce fichier est le bilan nu : la même demande AVEC avis ne doit pas retomber dessus
-                    $fingerprint = $advice['included'] || !is_string($report['advice']['plain'] ?? null) ? null : $report['advice']['plain'];
+                    // avis manqué : ce fichier dit que l'avis manque. Ni la demande AVEC avis (elle le redemande), ni la demande SANS avis
+                    // (elle veut un bilan propre) ne doivent retomber dessus : il prend une empreinte à lui
+                    $fingerprint = $advice['included'] ? null : hash('sha256', (string) $report['fingerprint'] . '|missing|' . $id);
                 }
                 $document = $this->renderer->review($content, $advice, (string) $report['locale'], $currency);
             }
@@ -263,7 +270,7 @@ class GestionReportService
             // la question est posée à la console au nom du gérant : palier (403), crédits (402) et plafond du jour (429) refusent ici, avant
             // toute création ; 1 unité est réservée, que le worker confirme (avis rédigé) ou rend (avis impossible)
             $asked = $this->console->ask($this->translator->trans('reports.advice_question_' . $kind, [], 'gestion', $locale), null, null, $locale, $by, $platformOwner, null, false);
-            $advice = ['messageId' => (int) $asked['messageId'], 'conversationId' => (int) $asked['conversationId'], 'plain' => $plain];
+            $advice = ['messageId' => (int) $asked['messageId'], 'conversationId' => (int) $asked['conversationId']];
         }
         $params = $content['resolved'] + ['withAdvice' => $withAdvice];
         try {
@@ -274,6 +281,9 @@ class GestionReportService
             $pending = $this->store->pending($fingerprint) ?? throw new GestionConflictException('REPORT_NOT_READY', 'Ce rapport est déjà en préparation.', 409);
 
             return [$this->view($pending, $locale, true), 202];
+        } catch (\Throwable $e) {
+            $this->dropAdvice($advice); // aucun rapport : la question ne reste pas dans l'historique, son unité est rendue
+            throw $e;
         }
         $this->audit->record('gestion_report', $id, 'request', [], ['kind' => $kind, 'locale' => $locale, 'by' => $by] + $params, ['state']);
         try {
@@ -297,8 +307,10 @@ class GestionReportService
      */
     private function advice(int $messageId, array $selected): array
     {
-        $none = static fn (string $code): array => ['included' => false, 'code' => $code, 'blocks' => [], 'answeredAt' => null, 'units' => 0];
+        $none = fn (string $code): array => ['included' => false, 'code' => $code, 'blocks' => [], 'answeredAt' => null, 'units' => $this->unitsOf($messageId)];
         try {
+            // le délai de la console vaut ici aussi : une question restée trop longtemps en attente (file occupée) est close, son unité rendue
+            $this->console->releaseStale();
             $forced = array_values(array_filter($selected, static fn (mixed $a): bool => is_array($a) && is_string($a['key'] ?? null) && is_array($a['params'] ?? null)));
             $this->responder->answer($messageId, $forced);
             $em = $this->emProvider->getEntityManager();
@@ -310,22 +322,31 @@ class GestionReportService
             $raw = $message->getContent();
             $answer = ConsoleService::message($message);
             $texts = array_filter((array) $answer['blocks'], static fn (mixed $b): bool => is_array($b) && ($b['type'] ?? null) === 'text' && trim((string) ($b['text'] ?? '')) !== '');
-            if ($answer['state'] !== ConsoleService::STATE_DONE || ($raw['fallback'] ?? false) === true || $texts === []) {
+            // un avis est un texte du modèle sur des analyses : ni une réponse de repli, ni une demande de précision (aucune analyse)
+            if ($answer['state'] !== ConsoleService::STATE_DONE || ($raw['fallback'] ?? false) === true || $texts === [] || $answer['analyses'] === []) {
                 $code = is_array($answer['error']) ? ($answer['error']['code'] ?? null) : null;
 
                 return $none(in_array($code, self::ADVICE_CODES, true) ? $code : 'AI_UNAVAILABLE');
             }
-            $usage = isset($raw['usageId']) ? $em->find(AiUsage::class, (int) $raw['usageId']) : null;
-            if ($usage !== null) {
-                $em->refresh($usage);
-            }
 
-            return ['included' => true, 'code' => null, 'blocks' => array_values((array) $answer['blocks']), 'answeredAt' => $answer['answeredAt'],
-                'units' => $usage !== null && $usage->getStatus() === AiUsage::STATUS_SUCCESS ? $usage->getCredits() : 0];
+            return ['included' => true, 'code' => null, 'blocks' => array_values((array) $answer['blocks']), 'answeredAt' => $answer['answeredAt'], 'units' => $this->unitsOf($messageId)];
         } catch (\Throwable $e) {
             $this->logger->error('Rapports de la gestion : avis de la console non rédigé (' . $e::class . ').', ['exception' => $e]);
 
             return $none('AI_UNAVAILABLE');
+        }
+    }
+
+    /** L'unité réellement décomptée pour la question d'un avis, relue en base (0 si elle a été rendue, ou pour le propriétaire de la plateforme). Ne lève jamais. */
+    private function unitsOf(int $messageId): int
+    {
+        try {
+            $units = $this->emProvider->getEntityManager()->getConnection()->fetchOne(
+                "SELECT u.credits FROM ai_usage u JOIN gestion_conversation_message m ON (m.content::jsonb ->> 'usageId')::int = u.id WHERE m.id = ? AND u.status = ?", [$messageId, AiUsage::STATUS_SUCCESS]);
+
+            return $units === false ? 0 : (int) $units;
+        } catch (\Throwable) {
+            return 0;
         }
     }
 
@@ -355,6 +376,7 @@ class GestionReportService
     /** GET /api/gestion/rapports/{id} */
     public function show(int $id, string $locale): array
     {
+        $this->credits = null;
         $this->store->failStale(self::STALE_SECONDS, 'REPORT_TIMEOUT');
 
         return $this->view($this->report($id), $locale, false);
@@ -367,6 +389,7 @@ class GestionReportService
      */
     public function list(int $page, ?string $kind, string $locale): array
     {
+        $this->credits = null;
         $this->purgeExpired();
         $this->store->failStale(self::STALE_SECONDS, 'REPORT_TIMEOUT');
         if ($kind !== null && !in_array($kind, self::KINDS, true)) {
@@ -470,7 +493,7 @@ class GestionReportService
             'id' => $r['id'], 'kind' => $r['kind'], 'state' => $r['state'], 'title' => $r['title'], 'locale' => $r['locale'], 'params' => $r['params'] ?: new \stdClass(),
             'createdAt' => $iso($r['created_at']), 'readyAt' => $iso($r['ready_at']), 'expiresAt' => $iso($r['expires_at']), 'pages' => $r['pages'], 'size' => $r['size'],
             'download' => $done ? ['url' => '/api/gestion/rapports/' . $r['id'] . '/fichier', 'filename' => $this->filename($r), 'contentType' => 'application/pdf'] : null,
-            'advice' => $advice, 'error' => $error, 'reused' => $reused, 'unitsCharged' => (int) $r['units_charged'], 'credits' => ($r['params']['withAdvice'] ?? false) === true ? $this->quota->credits() : null,
+            'advice' => $advice, 'error' => $error, 'reused' => $reused, 'unitsCharged' => (int) $r['units_charged'], 'credits' => ($r['params']['withAdvice'] ?? false) === true ? ($this->credits ??= $this->quota->credits()) : null,
         ];
     }
 

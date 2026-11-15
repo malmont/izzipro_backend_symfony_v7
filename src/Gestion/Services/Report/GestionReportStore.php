@@ -19,7 +19,7 @@ class GestionReportStore
     /**
      * @param array<string, mixed>      $params
      * @param array<string, mixed>|null $content les chiffres calculés à la demande (bilans, lot DOC-2) ; null pour une réponse de la console
-     * @param array<string, mixed>|null $advice  l'avis de la console demandé avec le bilan : `{ messageId, plain }`, puis son issue
+     * @param array<string, mixed>|null $advice  l'avis de la console demandé avec le bilan : `{ messageId, conversationId }`, puis son issue
      */
     public function create(string $kind, array $params, string $title, string $locale, string $fingerprint, ?string $by, \DateTimeImmutable $expiresAt, ?array $content = null, ?array $advice = null): int
     {
@@ -71,8 +71,8 @@ class GestionReportStore
 
     /**
      * Passe un rapport en préparation à « prêt » ; vrai si c'est bien ce pas qui a été fait. Lot DOC-2 : l'issue de l'avis de la console
-     * (`advice`), l'unité décomptée, et l'empreinte du bilan SANS avis quand l'avis n'a pas pu être rédigé (la même demande avec avis
-     * ne retombe alors pas sur ce fichier : elle redemande l'avis).
+     * (`advice`), l'unité décomptée, et une empreinte à part quand l'avis n'a pas pu être rédigé (aucune demande suivante ne retombe
+     * alors sur ce fichier : avec avis, elle le redemande ; sans avis, elle fait un bilan propre).
      *
      * @param array<string, mixed>|null $advice
      */
