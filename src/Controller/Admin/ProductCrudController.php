@@ -7,7 +7,6 @@ use App\Repository\CategoriesRepository;
 use App\Repository\CommandeRepository;
 use App\Repository\ProductTypeRepository;
 use App\Repository\StyleRepository;
-use App\Services\BarcodeService\CatalogBarcodeException;
 use App\Services\BarcodeService\CatalogBarcodeService;
 use App\Services\TenantEntityManagerProvider;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
@@ -198,19 +197,23 @@ class ProductCrudController extends BaseTenantCrudController
     public function persistEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
     {
         parent::persistEntity($entityManager, $entityInstance);
-        $this->warnAboutBarcode($entityInstance);
+        $this->warnAboutBarcode($entityInstance, null);
     }
 
     public function updateEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
     {
+        $before = $entityInstance instanceof Product ? $this->barcodes->storedCode($entityInstance) : null;
         parent::updateEntity($entityManager, $entityInstance);
-        $this->warnAboutBarcode($entityInstance);
+        $this->warnAboutBarcode($entityInstance, $before);
     }
 
-    /** Code accepté mais à signaler (13 chiffres dont la clé de contrôle est fausse) : le refus, lui, est rendu sous le champ par la validation */
-    private function warnAboutBarcode(mixed $product): void
+    /**
+     * Code accepté mais à signaler (13 chiffres dont la clé de contrôle est fausse), seulement quand le code vient de changer (pas à
+     * chaque enregistrement, ni aux bascules de la liste) : le refus, lui, est rendu sous le champ par la validation
+     */
+    private function warnAboutBarcode(mixed $product, ?string $before): void
     {
-        $warning = $product instanceof Product ? $this->barcodes->warning($product->getBarcode()) : null;
+        $warning = $product instanceof Product ? $this->barcodes->warning($product->getBarcode(), $before) : null;
         if ($warning !== null) {
             $this->addFlash('warning', $warning);
         }
@@ -231,11 +234,8 @@ class ProductCrudController extends BaseTenantCrudController
         }
         
         // Lot CB-1 : EAN-13 interne tiré de la séquence du site, jamais par-dessus un code présent (avant : « BAR-… » au hasard, qui écrasait)
-        try {
-            $this->addFlash('success', 'Code-barres généré : ' . $this->barcodes->generateFor($product));
-        } catch (CatalogBarcodeException $e) {
-            $this->addFlash('warning', $e->getMessage());
-        }
+        $generated = $this->barcodes->tryGenerateFor($product); // un refus ou une panne revient en message, jamais en page d'erreur
+        $generated['code'] !== null ? $this->addFlash('success', 'Code-barres généré : ' . $generated['code']) : $this->addFlash($generated['failed'] ? 'danger' : 'warning', (string) $generated['refusal']);
 
         $url = $this->adminUrlGenerator
                     ->setController(self::class)

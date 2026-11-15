@@ -6,6 +6,7 @@ namespace App\Controller\Admin;
 
 use App\Entity\ProductVariant;
 use App\Form\ProductVariantCustomType;
+use App\Services\BarcodeService\CatalogBarcodeService;
 use App\Services\TenantEntityManagerProvider;
 use App\UseCase\OrderUseCase\UpdateStockAndInventoryUseCase;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
@@ -22,7 +23,8 @@ class CustomProductVariantController extends AbstractController
         Request $request,
         TenantEntityManagerProvider $emProvider,
         UpdateStockAndInventoryUseCase $updateStockAndInventoryUseCase,
-        AdminUrlGenerator $adminUrlGenerator 
+        AdminUrlGenerator $adminUrlGenerator,
+        CatalogBarcodeService $barcodes // lot CB-1 (`docs/codes-barres.md`) : avertissement d'une clé de contrôle fausse
     ): Response {
 
         $tenantEm = $emProvider->getEntityManager();
@@ -43,8 +45,14 @@ class CustomProductVariantController extends AbstractController
             $originalData = $unitOfWork->getOriginalEntityData($variantInstance);
             $stockBeforeMovement = $originalData['stockQuantity'] ?? 0;
             $updateStockAndInventoryUseCase->executeNewProductVariant($variantInstance, $stockBeforeMovement, 4);
+            $barcodeBefore = $barcodes->storedCode($variantInstance);
             $tenantEm->flush();
             $this->addFlash('success', 'La variante a été mise à jour avec succès.');
+            // Code accepté mais à signaler (13 chiffres dont la clé de contrôle est fausse), quand il vient de changer ; le refus, lui,
+            // vient de la contrainte de l'entité et s'affiche sous le champ
+            if (($warning = $barcodes->warning($variantInstance->getBarcode(), $barcodeBefore)) !== null) {
+                $this->addFlash('warning', $warning);
+            }
             $url = $adminUrlGenerator
                 ->setController(ProductVariantCrudController::class)
                 ->setAction('index')

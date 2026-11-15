@@ -2,14 +2,17 @@
 
 namespace App\Services\BarcodeService;
 
+use App\Cache\CacheInvalidationQueue;
+use App\Cache\CacheTags;
 use App\Entity\Product;
 use App\Entity\ProductVariant;
 use App\Services\ContentAuditService\ContentAuditRecorder;
+use App\Services\TenantCacheService;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Query;
+use Psr\Log\LoggerInterface;
 
 /**
  * Codes-barres du catalogue (lot CB-1, 15/11/2026, `docs/codes-barres.md`) : LE passage de tout chemin qui écrit un code d'article ou de
@@ -40,6 +43,8 @@ class CatalogBarcodeService
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly ContentAuditRecorder $audit,
+        private readonly ?CacheInvalidationQueue $cacheQueue = null, // écritures en SQL de la génération en masse : cache du site vidé à la validation
+        private readonly ?LoggerInterface $logger = null,
     ) {
     }
 
@@ -87,10 +92,13 @@ class CatalogBarcodeService
         return $code;
     }
 
-    /** Avertissement à montrer à la saisie d'un code accepté, ou null : 13 chiffres dont la clé de contrôle est fausse */
-    public function warning(?string $code): ?string
+    /**
+     * Avertissement à montrer après l'enregistrement d'un code accepté, ou null : 13 chiffres dont la clé de contrôle est fausse.
+     * `$before` : le code que la fiche portait ; un code inchangé n'avertit pas de nouveau (pas à chaque enregistrement de la fiche).
+     */
+    public function warning(?string $code, ?string $before = null): ?string
     {
-        return $code !== null && CatalogBarcode::hasWrongCheckDigit($code)
+        return $code !== null && $code !== $before && CatalogBarcode::hasWrongCheckDigit($code)
             ? 'Ce code de 13 chiffres n\'a pas une clé de contrôle d\'EAN-13 juste : il est accepté et sera imprimé en Code 128.'
             : null;
     }
@@ -151,8 +159,10 @@ class CatalogBarcodeService
         $table = $target instanceof Product ? 'product' : 'product_variant';
         $conn->beginTransaction();
         try {
-            // La valeur de la BASE, sous verrou de ligne : deux demandes simultanées ne se recouvrent pas, et un code saisi entre-temps reste
-            $current = $conn->fetchOne(sprintf('SELECT barcode FROM %s WHERE id = ? FOR UPDATE', $table), [$id]);
+            // La valeur de la BASE, sous verrou de ligne : deux demandes simultanées ne se recouvrent pas (la seconde attend, puis voit le
+            // code de la première), et un code saisi entre-temps reste. FOR NO KEY UPDATE : le verrou d'une mise à jour ordinaire, qui
+            // ne bloque pas l'écriture d'une ligne de vente référençant la fiche
+            $current = $conn->fetchOne(sprintf('SELECT barcode FROM %s WHERE id = ? FOR NO KEY UPDATE', $table), [$id]);
             if ($current === false) {
                 throw new \LogicException('Code-barres : fiche introuvable');
             }
@@ -174,6 +184,36 @@ class CatalogBarcodeService
         }
 
         return $code;
+    }
+
+    /**
+     * `generateFor` pour un bouton d'écran : rien ne remonte. Rend le code posé, ou le texte à montrer : le refus de la règle tel
+     * quel ; pour une panne (doublon en course, séquence épuisée, base), un texte neutre, le détail allant au journal du serveur.
+     *
+     * @return array{code: ?string, refusal: ?string, failed: bool}
+     */
+    public function tryGenerateFor(Product|ProductVariant $target): array
+    {
+        try {
+            return ['code' => $this->generateFor($target), 'refusal' => null, 'failed' => false];
+        } catch (CatalogBarcodeException $e) {
+            return ['code' => null, 'refusal' => $e->getMessage(), 'failed' => false];
+        } catch (\Throwable $e) {
+            $this->logger?->error('Codes-barres : génération d\'un code en échec (' . $e::class . ').', ['exception' => $e]);
+
+            return ['code' => null, 'refusal' => 'La génération a échoué : aucun code n\'a été écrit. Réessayez dans un instant.', 'failed' => true];
+        }
+    }
+
+    /** Le code que la fiche portait à sa lecture (celui de la base), avant les modifications en cours ; null pour une fiche nouvelle */
+    public function storedCode(Product|ProductVariant $entity): ?string
+    {
+        if ($entity->getId() === null) {
+            return null;
+        }
+        $original = $this->em()->getUnitOfWork()->getOriginalEntityData($entity);
+
+        return isset($original['barcode']) ? (string) $original['barcode'] : null;
     }
 
     /**
@@ -199,31 +239,22 @@ class CatalogBarcodeService
     public function generateMissing(int $limit = self::BULK_LIMIT): array
     {
         $limit = max(1, min(self::BULK_LIMIT, $limit));
-        $em = $this->em();
-        $conn = $em->getConnection();
+        $conn = $this->connection();
         $conn->beginTransaction();
         try {
-            // Lignes verrouillées par leur identifiant (un second lancement simultané attend, puis ne voit plus que ce qui reste sans code),
-            // puis relues : l'objet déjà en mémoire reprend la valeur de la base. Le verrou se prend en SQL, pas par la requête des
-            // entités : celle des articles joint la table des véhicules (héritage), ce que « FOR UPDATE » refuse.
-            $variantIds = $conn->fetchFirstColumn(sprintf('SELECT id FROM product_variant WHERE barcode IS NULL ORDER BY id LIMIT %d FOR UPDATE', $limit));
-            $productIds = count($variantIds) >= $limit ? [] : $conn->fetchFirstColumn(sprintf(
-                'SELECT p.id FROM product p WHERE p.barcode IS NULL AND NOT EXISTS (SELECT 1 FROM product_variant v WHERE v.product_id = p.id) ORDER BY p.id LIMIT %d FOR UPDATE OF p',
+            // Les lignes sans code sont verrouillées par leur identifiant, le temps d'écrire (quelques dizaines de millisecondes) :
+            // - FOR NO KEY UPDATE : le verrou d'une mise à jour ordinaire ; il ne bloque pas l'écriture d'une ligne de vente ;
+            // - SKIP LOCKED : une ligne tenue par une vente en cours, ou par un autre lancement, est laissée pour le lancement suivant
+            //   (`remaining` le dit) au lieu d'être attendue : ni attente, ni interblocage avec la caisse.
+            // Le verrou se prend en SQL : la requête Doctrine des articles joint la table des véhicules (héritage), ce qu'un verrou refuse.
+            $variantIds = array_map('intval', $conn->fetchFirstColumn(sprintf('SELECT id FROM product_variant WHERE barcode IS NULL ORDER BY id LIMIT %d FOR NO KEY UPDATE SKIP LOCKED', $limit)));
+            $productIds = count($variantIds) >= $limit ? [] : array_map('intval', $conn->fetchFirstColumn(sprintf(
+                'SELECT p.id FROM product p WHERE p.barcode IS NULL AND NOT EXISTS (SELECT 1 FROM product_variant v WHERE v.product_id = p.id) ORDER BY p.id LIMIT %d FOR NO KEY UPDATE OF p SKIP LOCKED',
                 $limit - count($variantIds)
-            ));
-            /** @var list<ProductVariant> $variants */
-            $variants = $this->reload(ProductVariant::class, $variantIds);
-            /** @var list<Product> $products */
-            $products = $this->reload(Product::class, $productIds);
-            $targets = [...$variants, ...$products];
-            $codes = $targets === [] ? [] : $this->generateMany(count($targets));
-            foreach ($targets as $i => $target) {
-                $target->setBarcode($codes[$i]);
-            }
-            $em->flush();
-            $remaining = $this->missingCount()['total'];
-            $result = ['written' => count($targets), 'variants' => count($variants), 'products' => count($products), 'remaining' => $remaining];
-            if ($targets !== []) {
+            )));
+            $codes = $this->write($variantIds, $productIds);
+            $result = ['written' => count($codes), 'variants' => count($variantIds), 'products' => count($productIds), 'remaining' => $this->missingCount()['total']];
+            if ($codes !== []) {
                 $this->audit->record(self::AUDIT_RESOURCE, null, 'generate', null, $result + ['scope' => 'catalog', 'first' => $codes[0], 'last' => $codes[count($codes) - 1]], ['barcode']);
             }
             $conn->commit();
@@ -235,6 +266,63 @@ class CatalogBarcodeService
         }
 
         return $result;
+    }
+
+    /**
+     * Écrit un code généré sur ces lignes, déjà verrouillées par l'appelant dans SA transaction : variantes, puis articles.
+     *
+     * En SQL, pas par les entités : `ProductVariant` re-flushe après chaque écriture (rappel qui recalcule le stock de l'article), et
+     * N variantes écrites en un flush coûtaient N² flush à vide (plusieurs minutes à 500, verrous tenus). Ce que Doctrine faisait pour
+     * nous est donc fait ici : le cache du site est invalidé à la validation, et les objets déjà en mémoire reprennent la ligne.
+     *
+     * @param list<int> $variantIds
+     * @param list<int> $productIds
+     *
+     * @return list<string> les codes écrits, dans l'ordre : variantes puis articles
+     */
+    private function write(array $variantIds, array $productIds): array
+    {
+        if ($variantIds === [] && $productIds === []) {
+            return [];
+        }
+        $em = $this->em();
+        $conn = $em->getConnection();
+        $codes = $this->generateMany(count($variantIds) + count($productIds));
+        $i = 0;
+        foreach (['product_variant' => $variantIds, 'product' => $productIds] as $table => $ids) {
+            foreach ($ids as $id) {
+                // `barcode IS NULL` : dernier garde-fou contre l'écrasement, même si un appelant oubliait de verrouiller
+                if ($conn->executeStatement("UPDATE $table SET barcode = ? WHERE id = ? AND barcode IS NULL", [$codes[$i++], $id]) !== 1) {
+                    throw new \RuntimeException('Code-barres : une fiche a reçu un code pendant la génération, rien n\'est écrit');
+                }
+            }
+        }
+        // Cache du site : fiches et listes des articles touchés, vidées à la validation de la transaction (file d'invalidation)
+        $touched = array_values(array_unique(array_merge($productIds, $variantIds === [] ? [] : array_map('intval',
+            $conn->fetchFirstColumn('SELECT DISTINCT product_id FROM product_variant WHERE id IN (?) AND product_id IS NOT NULL', [$variantIds], [ArrayParameterType::INTEGER])))));
+        $dbname = $conn->getParams()['dbname'] ?? '';
+        if ($this->cacheQueue !== null && is_string($dbname) && $dbname !== '') {
+            $tags = [];
+            foreach ([CacheTags::PRODUCTS, CacheTags::VEHICLES] as $component) {
+                $tags[] = TenantCacheService::componentTag($dbname, '', $component . '.list');
+                foreach ($touched as $productId) {
+                    $tags[] = TenantCacheService::componentTag($dbname, '', $component . '.item.' . $productId);
+                }
+            }
+            $this->cacheQueue->add($dbname, $tags);
+        }
+        // Objets déjà en mémoire : ils reprennent la valeur de la base (l'objet et la ligne portent le même code)
+        $uow = $em->getUnitOfWork();
+        foreach ([ProductVariant::class => $variantIds, Product::class => $productIds] as $class => $ids) {
+            foreach ($ids as $id) {
+                $entity = $uow->tryGetById($id, $class);
+                if (is_object($entity)) {
+                    $em->refresh($entity);
+                }
+            }
+        }
+
+        return $codes;
     }
 
     /**
@@ -262,24 +350,6 @@ class CatalogBarcodeService
         }
 
         return $codes;
-    }
-
-    /**
-     * Entités relues depuis la base (l'objet déjà en mémoire reprend la valeur de la ligne), par identifiant croissant.
-     *
-     * @param class-string $class
-     * @param list<int|string> $ids
-     *
-     * @return list<object>
-     */
-    private function reload(string $class, array $ids): array
-    {
-        if ($ids === []) {
-            return [];
-        }
-
-        return $this->em()->createQuery(sprintf('SELECT e FROM %s e WHERE e.id IN (:ids) ORDER BY e.id ASC', $class))
-            ->setParameter('ids', array_map('intval', $ids))->setHint(Query::HINT_REFRESH, true)->getResult();
     }
 
     /** Nom lisible de ce qui porte un code : « Casquette » ou « Casquette, Rouge / M » */

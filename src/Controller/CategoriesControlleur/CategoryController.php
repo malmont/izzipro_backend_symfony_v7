@@ -37,8 +37,14 @@ class CategoryController extends AbstractController
         $keyword = $request->query->get('keyword');
         $page = $request->query->getInt('page', 1);
         $pageSize = $request->query->getInt('pageSize', 12);
-        // Lot CB-1 (`docs/codes-barres.md`) : forme canonique de ce qui est scanné (espaces autour retirés, majuscules), comme à l'écriture
-        $barcode = CatalogBarcode::normalize($request->query->get('barcode'));
+        // Lot CB-1 (`docs/codes-barres.md`) : forme canonique de ce qui est scanné (espaces autour retirés, majuscules), comme à l'écriture.
+        // Un code demandé mais vide une fois mis en forme (des espaces) ne désigne rien : liste vide, jamais « le premier article du
+        // catalogue » (la caisse ne se replie sur son pack que sur une réponse vide). `barcode=` sans valeur : pas de recherche par code.
+        $rawBarcode = $request->query->get('barcode');
+        $barcode = CatalogBarcode::normalize($rawBarcode);
+        if ($barcode === null && is_string($rawBarcode) && $rawBarcode !== '') {
+            return new JsonResponse(['meta' => ['total' => 0, 'page' => $page, 'pageSize' => $pageSize], 'data' => []], JsonResponse::HTTP_OK);
+        }
         $isWeb = $request->query->has('isWeb')
             ? filter_var($request->query->get('isWeb'), FILTER_VALIDATE_BOOLEAN)
             : null;

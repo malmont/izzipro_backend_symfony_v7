@@ -10,7 +10,6 @@ use App\Repository\ColorRepository;
 use App\Repository\ProductRepository;
 use App\Repository\SizeRepository;
 use App\Repository\ProductOptionValueRepository;
-use App\Services\BarcodeService\CatalogBarcodeException;
 use App\Services\BarcodeService\CatalogBarcodeService;
 use App\Services\TenantEntityManagerProvider;
 use App\Controller\Admin\BaseTenantCrudController; 
@@ -128,7 +127,7 @@ class ProductVariantCrudController extends BaseTenantCrudController
             $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, 0, 1);
         }
         parent::persistEntity($entityManager, $entityInstance);
-        $this->warnAboutBarcode($entityInstance);
+        $this->warnAboutBarcode($entityInstance, null);
     }
 
     /**
@@ -136,6 +135,7 @@ class ProductVariantCrudController extends BaseTenantCrudController
      */
     public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
+        $barcodeBefore = $entityInstance instanceof ProductVariant ? $this->barcodes->storedCode($entityInstance) : null;
         if ($entityInstance instanceof ProductVariant) {
             $tenantEm = $this->emProvider->getEntityManager();
 
@@ -157,7 +157,7 @@ class ProductVariantCrudController extends BaseTenantCrudController
             $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, $stockBeforeMovement, 4);
         }
         parent::updateEntity($entityManager, $entityInstance);
-        $this->warnAboutBarcode($entityInstance);
+        $this->warnAboutBarcode($entityInstance, $barcodeBefore ?? null);
     }
 
     public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
@@ -213,19 +213,18 @@ class ProductVariantCrudController extends BaseTenantCrudController
 
             return $this->redirect($index);
         }
-        try {
-            $this->addFlash('success', sprintf('Code-barres généré pour la variante n° %d : %s', $variant->getId(), $this->barcodes->generateFor($variant)));
-        } catch (CatalogBarcodeException $e) {
-            $this->addFlash('warning', $e->getMessage());
-        }
+        $generated = $this->barcodes->tryGenerateFor($variant); // un refus ou une panne revient en message, jamais en page d'erreur
+        $generated['code'] !== null
+            ? $this->addFlash('success', sprintf('Code-barres généré pour la variante n° %d : %s', $variant->getId(), $generated['code']))
+            : $this->addFlash($generated['failed'] ? 'danger' : 'warning', (string) $generated['refusal']);
 
         return $this->redirect($index);
     }
 
     /** Code accepté mais à signaler (13 chiffres dont la clé de contrôle est fausse) : le refus, lui, est rendu sous le champ par la validation */
-    private function warnAboutBarcode(mixed $variant): void
+    private function warnAboutBarcode(mixed $variant, ?string $before): void
     {
-        $warning = $variant instanceof ProductVariant ? $this->barcodes->warning($variant->getBarcode()) : null;
+        $warning = $variant instanceof ProductVariant ? $this->barcodes->warning($variant->getBarcode(), $before) : null;
         if ($warning !== null) {
             $this->addFlash('warning', $warning);
         }

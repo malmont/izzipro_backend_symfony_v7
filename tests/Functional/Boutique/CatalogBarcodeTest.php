@@ -287,8 +287,20 @@ class CatalogBarcodeTest extends KernelTestCase
         //    par un déclencheur ne se change pas) : ni le schéma ni les données ne bougent, la séquence ne repart pas du début
         require_once dirname(__DIR__, 3) . '/migrations/Version20270107100000.php';
         foreach ([1, 2] as $pass) {
-            foreach (\DoctrineMigrations\Version20270107100000::STATEMENTS as $sql) {
-                $this->db->executeStatement($sql);
+            try {
+                foreach (\DoctrineMigrations\Version20270107100000::STATEMENTS as $sql) {
+                    $this->db->executeStatement($sql);
+                }
+            } catch (\Throwable $e) {
+                // Le rejeu se fait hors transaction : s'il casse en route, la base de test resterait sans déclencheurs pour toute la
+                // suite. Elle est remise d'aplomb (déclencheurs et index reposés) avant de rendre l'erreur
+                foreach (\DoctrineMigrations\Version20270107100000::STATEMENTS as $sql) {
+                    try {
+                        $this->db->executeStatement($sql);
+                    } catch (\Throwable) {
+                    }
+                }
+                throw $e;
             }
             $this->assertSame([$schemaBefore, $dataBefore], [$schema(), $data()], "rejeu $pass");
             $this->assertStringContainsString('déjà porté par un article', $this->refused(fn () => $this->db->executeStatement('UPDATE product_variant SET barcode = ? WHERE id = ?', [strtolower("REJEU-$s"), $variant])), "rejeu $pass : la règle tient");
@@ -370,11 +382,18 @@ class CatalogBarcodeTest extends KernelTestCase
         $this->assertNull($this->barcodes->holder("NEUF-$s"));
         // Une fiche pas encore enregistrée (création) n'écarte rien
         $this->assertSame(CatalogBarcodeService::ALREADY_USED, $this->refusal(fn () => $this->barcodes->check("CAP-$s", new ProductVariant()))->errorCode);
-        // Un identifiant de variante égal à celui d'un article ne fait pas passer le code de l'article pour le sien
-        $twin = $this->db->fetchOne('SELECT v.id FROM product_variant v JOIN product p ON p.id = v.id AND p.barcode IS NULL LIMIT 1');
-        if ($twin !== false) {
-            $this->db->executeStatement('UPDATE product SET barcode = ? WHERE id = ?', ["JUMEAU-$s", $twin]);
-            $this->assertSame('product', $this->barcodes->holder("JUMEAU-$s", $this->em->getReference(ProductVariant::class, (int) $twin))['type'] ?? null);
+        // Un identifiant de variante égal à celui d'un article ne fait pas passer le code de l'article pour le sien : le cas est
+        // fabriqué (une variante copiée sous l'identifiant de la gourde), jamais laissé au hasard des identifiants de la base
+        $twinId = (int) $bottle->getId();
+        if ($this->db->fetchOne('SELECT 1 FROM product_variant WHERE id = ?', [$twinId]) === false) {
+            $this->copyVariant((int) $plain->getId(), null, $twinId);
+        }
+        $this->db->executeStatement('UPDATE product SET barcode = ? WHERE id = ?', ["JUMEAU-$s", $twinId]);
+        $this->assertSame(['product', $twinId], array_values(array_intersect_key((array) $this->barcodes->holder("JUMEAU-$s", $this->em->getReference(ProductVariant::class, $twinId)), ['type' => 1, 'id' => 1])),
+            'la variante de même identifiant n\'est pas « elle-même »');
+        $this->assertNull($this->barcodes->holder("JUMEAU-$s", $bottle));
+        if ((int) $this->db->fetchOne('SELECT product_id FROM product_variant WHERE id = ?', [$twinId]) === (int) $cap->getId()) {
+            $this->db->executeStatement('DELETE FROM product_variant WHERE id = ?', [$twinId]); // la copie du test : la gourde reste sans variante
         }
     }
 
@@ -422,28 +441,68 @@ class CatalogBarcodeTest extends KernelTestCase
         $this->assertNotSame($code, $bottleCode);
         $this->assertSame(CatalogBarcodeService::ALREADY_SET, $this->refusal(fn () => $this->barcodes->generateFor($bottle))->errorCode);
 
-        // Deux demandes simultanées pour la même fiche : la seconde attend la ligne, puis voit le code de la première
+        // Deux demandes simultanées pour la même fiche : la première (un autre processus, sa propre connexion) verrouille la ligne, écrit
+        // son code et ne valide qu'une seconde et demie plus tard ; la seconde ATTEND la ligne, puis voit le code de la première et
+        // refuse. Sans le verrou pris avant la lecture, elle lirait « pas de code » et renuméroterait par-dessus.
         $v3 = (new ProductVariant())->setStockQuantity(1);
         $cap->addVariant($v3);
         $this->em->flush();
-        $other = DriverManager::getConnection($this->db->getParams());
+        $first = "PREMIER-$s";
+        $params = $this->db->getParams();
+        $child = proc_open([PHP_BINARY, '-r', <<<'PHP'
+            $pdo = new PDO(getenv('CB_DSN'), getenv('CB_USER'), getenv('CB_PASS'), [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+            $pdo->beginTransaction();
+            $pdo->query('SELECT barcode FROM product_variant WHERE id = ' . (int) getenv('CB_ID') . ' FOR NO KEY UPDATE')->fetchAll();
+            $pdo->prepare('UPDATE product_variant SET barcode = ? WHERE id = ?')->execute([getenv('CB_CODE'), (int) getenv('CB_ID')]);
+            echo "tenu\n";
+            usleep(1500000);
+            $pdo->commit();
+            echo "valide\n";
+            PHP], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, [
+            'CB_DSN' => sprintf('pgsql:host=%s;port=%d;dbname=%s', $params['host'] ?? 'localhost', (int) ($params['port'] ?? 5432), $params['dbname']),
+            'CB_USER' => (string) ($params['user'] ?? ''), 'CB_PASS' => (string) ($params['password'] ?? ''), 'CB_ID' => (string) $v3->getId(), 'CB_CODE' => $first,
+        ]);
+        $this->assertIsResource($child);
         try {
-            $other->beginTransaction();
-            $other->fetchOne('SELECT barcode FROM product_variant WHERE id = ? FOR UPDATE', [$v3->getId()]);
-            $this->db->executeStatement("SET lock_timeout = '400ms'");
-            try {
-                $this->barcodes->generateFor($v3);
-                $this->fail('la demande devait attendre la ligne');
-            } catch (\Doctrine\DBAL\Exception $e) {
-                $this->assertStringContainsString('lock timeout', strtolower($e->getMessage()));
+            $line = fgets($pipes[1]); // rend la main dès que le premier processus tient la ligne (sa sortie d'erreur n'est lue qu'en cas d'échec : la lire avant attendrait sa fin)
+            if ($line !== "tenu\n") {
+                $this->fail('le premier processus ne tient pas la ligne : ' . var_export($line, true) . ' ' . stream_get_contents($pipes[2]));
             }
-            $this->assertFalse($this->db->isTransactionActive());
-            $this->assertNull($this->codeOf('product_variant', $v3->getId()));
+            $started = microtime(true);
+            $refused = $this->refusal(fn () => $this->barcodes->generateFor($v3));
+            $waited = microtime(true) - $started;
+            $this->assertSame(CatalogBarcodeService::ALREADY_SET, $refused->errorCode);
+            $this->assertGreaterThan(0.8, $waited, 'la seconde demande a attendu la validation de la première');
+            $this->assertSame("valide\n", fgets($pipes[1]));
         } finally {
-            $this->db->executeStatement('SET lock_timeout = 0');
-            $other->rollBack();
-            $other->close();
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            proc_close($child);
         }
+        $this->assertSame($first, $this->codeOf('product_variant', $v3->getId()), 'le code de la première demande n\'est pas renuméroté');
+        $this->assertFalse($this->db->isTransactionActive());
+
+        // Une panne pendant la génération d'un bouton (ici : la séquence a disparu) revient en message neutre, jamais en exception
+        $v4 = (new ProductVariant())->setStockQuantity(1);
+        $cap->addVariant($v4);
+        $this->em->flush();
+        $this->db->beginTransaction();
+        try {
+            $this->db->executeStatement('ALTER SEQUENCE catalog_barcode_seq RENAME TO catalog_barcode_seq_ailleurs');
+            $failed = $this->barcodes->tryGenerateFor($v4);
+            $this->assertSame([null, true], [$failed['code'], $failed['failed']]);
+            $this->assertStringNotContainsStringIgnoringCase('sequence', (string) $failed['refusal']);
+            $this->assertStringNotContainsStringIgnoringCase('sqlstate', (string) $failed['refusal']);
+        } finally {
+            $this->db->rollBack();
+        }
+        $this->assertNull($this->codeOf('product_variant', $v4->getId()));
+        // … un refus de la règle revient tel quel, et un succès rend le code
+        $this->assertSame(['code' => null, 'refusal' => 'Cette fiche porte déjà un code-barres : un code saisi n\'est jamais remplacé par un code généré.', 'failed' => false], $this->barcodes->tryGenerateFor($v3));
+        $this->em->refresh($v4);
+        $ok = $this->barcodes->tryGenerateFor($v4);
+        $this->assertSame([$this->codeOf('product_variant', $v4->getId()), null, false], array_values($ok));
+        $this->assertTrue(CatalogBarcode::isEan13((string) $ok['code']));
     }
 
     public function testGeneratingTheMissingCodesIsCappedTracedAndNeverTouchesACodeAlreadyThere(): void
@@ -523,6 +582,57 @@ class CatalogBarcodeTest extends KernelTestCase
         $this->assertNotSame($old, $v1->getBarcode(), 'un code généré n\'est jamais redonné');
     }
 
+    public function testTheBulkGenerationKeepsItsCeilingAndStaysFastOnMoreThanFiveHundredRows(): void
+    {
+        // 520 variantes sans code de plus (copiées en SQL) : un lancement en écrit exactement 500, vite, et dit ce qui reste. Avant la
+        // correction de la relecture, l'écriture par les entités coûtait N² flush (le rappel de la variante re-flushe) : plusieurs
+        // minutes à 500, verrous tenus
+        $product = $this->article('Lot plafond', 1);
+        $source = (int) $product->getVariants()->first()->getId();
+        $base = (int) $this->db->fetchOne('SELECT MAX(id) + 2000 FROM product_variant');
+        $this->db->executeStatement(
+            "INSERT INTO product_variant SELECT (jsonb_populate_record(NULL::product_variant, to_jsonb(v) || jsonb_build_object('id', g.id, 'barcode', NULL))).* FROM product_variant v, generate_series(CAST(:from AS integer), CAST(:to AS integer)) AS g(id) WHERE v.id = :source",
+            ['from' => $base + 1, 'to' => $base + 520, 'source' => $source]
+        );
+        $missing = $this->barcodes->missingCount()['total'];
+        $this->assertGreaterThanOrEqual(521, $missing);
+        $audit = fn (): int => (int) $this->db->fetchOne("SELECT COUNT(*) FROM content_audit_log WHERE resource = 'catalog_barcode' AND action = 'generate'");
+        $auditBefore = $audit();
+
+        $started = microtime(true);
+        $run = $this->barcodes->generateMissing(100000); // un plafond demandé au-dessus de celui du service est ramené à 500
+        $seconds = microtime(true) - $started;
+        fwrite(STDERR, sprintf("\n[CB-1] generateMissing : %d codes écrits en %.2f s (%d fiches sans code au départ)\n", $run['written'], $seconds, $missing));
+        $this->assertSame([CatalogBarcodeService::BULK_LIMIT, 500, $missing - 500], [$run['written'], CatalogBarcodeService::BULK_LIMIT, $run['remaining']], 'exactement le plafond, pas une fiche de plus');
+        $this->assertLessThan(20.0, $seconds, 'le plafond de 500 doit tenir très loin du délai du serveur (300 s)');
+        $this->assertSame($auditBefore + 1, $audit(), 'une seule ligne au journal pour le lancement');
+        $codes = $this->db->fetchFirstColumn("SELECT barcode FROM product_variant WHERE barcode LIKE '29%' UNION ALL SELECT barcode FROM product WHERE barcode LIKE '29%'");
+        $this->assertSame([500, 500], [count($codes), count(array_unique($codes))]);
+        $this->assertFalse($this->db->isTransactionActive());
+        // La suite : le reste, sans redonner un code ni toucher aux 500 premiers
+        $rest = $this->barcodes->generateMissing();
+        $this->assertSame([min(500, $missing - 500), max(0, $missing - 1000)], [$rest['written'], $rest['remaining']]);
+        $this->assertSame(500, count(array_intersect($codes, $this->db->fetchFirstColumn("SELECT barcode FROM product_variant WHERE barcode LIKE '29%' UNION ALL SELECT barcode FROM product WHERE barcode LIKE '29%'"))));
+
+        // Une ligne tenue par une vente en cours (verrou de ligne d'une autre connexion) n'est pas attendue : elle est laissée au
+        // lancement suivant, et rien ne bloque
+        $this->db->executeStatement('UPDATE product_variant SET barcode = NULL WHERE id IN (?, ?)', [$base + 1, $base + 2]);
+        $other = DriverManager::getConnection($this->db->getParams());
+        try {
+            $other->beginTransaction();
+            $other->fetchOne('SELECT id FROM product_variant WHERE id = ? FOR UPDATE', [$base + 1]); // comme la vente d'une variante
+            $started = microtime(true);
+            $skipping = $this->barcodes->generateMissing();
+            $this->assertLessThan(5.0, microtime(true) - $started, 'aucune attente');
+            $this->assertSame([1, 1], [$skipping['written'], $skipping['remaining']], 'la ligne libre reçoit son code, la ligne tenue reste à faire');
+            $this->assertSame([null, true], [$this->codeOf('product_variant', $base + 1), $this->codeOf('product_variant', $base + 2) !== null]);
+        } finally {
+            $other->rollBack();
+            $other->close();
+        }
+        $this->assertSame(1, $this->barcodes->generateMissing()['written']);
+    }
+
     /** Article d'essai, avec `$variants` variantes sans taille ni couleur */
     private function article(string $name, int $variants): Product
     {
@@ -545,9 +655,9 @@ class CatalogBarcodeTest extends KernelTestCase
     }
 
     /** Copie une variante telle quelle sous un nouvel identifiant, seul le code change (insertion SQL, sans le code de l'application) */
-    private function copyVariant(int $id, ?string $code): int
+    private function copyVariant(int $id, ?string $code, ?int $as = null): int
     {
-        $new = (int) $this->db->fetchOne('SELECT MAX(id) + 1000 + (random() * 100000)::int FROM product_variant');
+        $new = $as ?? (int) $this->db->fetchOne('SELECT MAX(id) + 1000 + (random() * 100000)::int FROM product_variant');
         $this->db->executeStatement(
             "INSERT INTO product_variant SELECT (jsonb_populate_record(NULL::product_variant, to_jsonb(v) || jsonb_build_object('id', :new::int, 'barcode', :code::text))).* FROM product_variant v WHERE v.id = :id",
             ['new' => $new, 'code' => $code, 'id' => $id]

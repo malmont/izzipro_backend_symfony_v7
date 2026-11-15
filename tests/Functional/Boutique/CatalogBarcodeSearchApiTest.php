@@ -79,6 +79,21 @@ class CatalogBarcodeSearchApiTest extends WebTestCase
         $this->assertSame([], $search("VAR-M-$s-X"));
         $this->assertSame([], $search("AR-$s"), 'pas de recherche par morceau de code');
 
+        // Un code demandé mais vide une fois mis en forme (des espaces) ne désigne rien : liste vide, jamais le premier article du
+        // catalogue (la caisse le mettrait au panier). « 0 » est un code comme un autre. `barcode=` sans valeur : pas de recherche par code
+        foreach (['%20%20', '%20', '%09', '+'] as $blank) {
+            $response = $this->get("/api/products/by-category?locale=fr&barcode=$blank&limit=1&pageSize=1");
+            $this->assertSame([[], 0], [$response['data'], $response['meta']['total']], "barcode=$blank");
+        }
+        $this->assertSame([], $search('0'), 'aucune fiche ne porte le code « 0 »');
+        $em2 = $this->em();
+        $em2->getConnection()->executeStatement('UPDATE product_variant SET barcode = ? WHERE id = ?', ['0', $ids['S']]);
+        // (autres paramètres que la recherche précédente : la réponse vide de celle-ci est en cache 300 s sous sa propre clé)
+        $this->assertSame([[$capId, $ids['S']]], array_map(fn (array $p) => [$p['id'], $p['matchedVariantId']], $search('0', '&limit=1&pageSize=1&isPos=true')), 'le code « 0 » se cherche comme un autre');
+        $em2->getConnection()->executeStatement('UPDATE product_variant SET barcode = ? WHERE id = ?', ["VAR-S-$s", $ids['S']]);
+        $unfiltered = $this->get('/api/products/by-category?locale=fr&barcode=&pageSize=50&keyword=' . rawurlencode("Casquette $this->suffix"))['data'];
+        $this->assertSame([[$capId, null]], array_map(fn (array $p) => [$p['id'], $p['matchedVariantId']], $unfiltered), 'barcode vide : comme sans le paramètre');
+
         // Les filtres habituels s'appliquent toujours ; sans recherche par code, le champ est là et vaut null
         $this->assertCount(1, $search("VAR-M-$s", '&isPos=true&pageSize=5'));
         $this->assertSame([], $search("VAR-M-$s", '&isPos=false&pageSize=5'));

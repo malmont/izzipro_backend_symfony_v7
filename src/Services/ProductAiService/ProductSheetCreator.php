@@ -77,7 +77,11 @@ class ProductSheetCreator
         // Code-barres (lot CB-1) : forme, formes réservées à la caisse et code libre vérifiés AVANT de rien créer (avant : coupé à 64
         // caractères et écrit tel quel ; un code déjà porté par un autre article passait)
         try {
-            $barcode = $this->barcodes->check(is_scalar($input['barcode'] ?? null) ? (string) $input['barcode'] : null);
+            $rawBarcode = $input['barcode'] ?? null;
+            if ($rawBarcode !== null && !is_string($rawBarcode) && !is_int($rawBarcode)) { // un tableau, un booléen : refusé, pas ignoré en silence
+                throw new CatalogBarcodeException(\App\Services\BarcodeService\CatalogBarcode::INVALID, 'Code-barres refusé : une suite de caractères est attendue.');
+            }
+            $barcode = $this->barcodes->check($rawBarcode === null ? null : (string) $rawBarcode);
         } catch (CatalogBarcodeException $e) {
             return ['status' => 422, 'body' => ['error' => $e->errorCode, 'message' => $e->getMessage()] + ($e->holder !== null ? ['holder' => $e->holder] : [])];
         }

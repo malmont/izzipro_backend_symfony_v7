@@ -126,7 +126,7 @@ class ProductRepository extends EntityRepository
                          ->setParameter('keyword', '%' . $keyword . '%');
         }
 
-        if ($barcode) {
+        if ($barcode !== null && $barcode !== '') { // « 0 » est un code comme un autre (avant : tenu pour « pas de code »)
             // Lot CB-1 (15/11/2026, `docs/codes-barres.md`) : le code scanné désigne un article OU une variante (jamais les deux : la base
             // le garantit) ; l'article est rendu dans les deux cas, avec TOUTES ses variantes (sous-requête : filtrer la jointure `v`
             // ne rendrait que la variante trouvée). La recherche se fait sur la forme canonique, comme l'écriture.

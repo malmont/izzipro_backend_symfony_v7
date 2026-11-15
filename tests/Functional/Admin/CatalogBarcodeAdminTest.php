@@ -107,6 +107,11 @@ class CatalogBarcodeAdminTest extends WebTestCase
         $this->assertSame('4006381333932', $code());
         $this->client->followRedirect();
         $this->assertStringContainsString('Code 128', $this->text());
+        // … une seule fois : la fiche enregistrée de nouveau sans toucher au code n'avertit plus
+        $this->submitProduct((int) $bottle->getId(), ['Product[name]' => "Gourde encore $this->suffix"]);
+        $this->assertSame(302, $this->status(), $this->text());
+        $this->client->followRedirect();
+        $this->assertStringNotContainsString('Code 128', $this->text());
 
         // Code retiré : « pas de code »
         $this->submitProduct((int) $bottle->getId(), ['Product[barcode]' => '   ']);
@@ -203,6 +208,16 @@ class CatalogBarcodeAdminTest extends WebTestCase
         // Enregistrer de nouveau la fiche sans toucher au code : pas de refus contre son propre code
         $submit("PIECE-$this->s");
         $this->assertSame(302, $this->status(), $this->text());
+        // 13 chiffres dont la clé de contrôle est fausse : accepté, avec un avertissement, comme sur la fiche article ; une seule fois
+        $submit('4006381333932');
+        $this->assertSame(302, $this->status(), $this->text());
+        $this->assertSame('4006381333932', $this->codeOf('product_variant', $v1));
+        $this->client->followRedirect();
+        $this->assertStringContainsString('Code 128', $this->text());
+        $submit('4006381333932');
+        $this->assertSame(302, $this->status(), $this->text());
+        $this->client->followRedirect();
+        $this->assertStringNotContainsString('Code 128', $this->text(), 'code inchangé : pas d\'avertissement répété');
     }
 
     public function testGeneratingTheMissingCodesAnnouncesTheNumberNeedsItsTokenAndLeavesATrace(): void
@@ -242,6 +257,15 @@ class CatalogBarcodeAdminTest extends WebTestCase
         $audit = fn (): int => (int) $this->db()->fetchOne("SELECT COUNT(*) FROM content_audit_log WHERE resource = 'catalog_barcode' AND action = 'generate'");
         $auditBefore = $audit();
 
+        // La fiche publique de l'article, mise en cache AVANT la génération (elle dit « pas de code »)
+        $publicCode = function () use ($bottle): ?string {
+            $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/api/products/' . $bottle->getId() . '?locale=fr', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json']);
+            $this->assertSame(200, $this->status(), $this->text());
+
+            return json_decode((string) $this->client->getResponse()->getContent(), true)['barcode'] ?? null;
+        };
+        $this->assertNull($publicCode());
+
         // Avec le formulaire de la page : tout ce qui manque reçoit un code, le code saisi reste, l'article à variantes n'en reçoit pas
         $this->client->submit($form, [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
         $this->assertSame(302, $this->status(), $this->text());
@@ -257,6 +281,7 @@ class CatalogBarcodeAdminTest extends WebTestCase
         $this->assertStringContainsString($missing['total'] . ' code(s)-barres généré(s)', $this->text());
         $this->assertStringContainsString('Toutes les variantes et tous les articles sans variante ont un code-barres.', $this->text());
         $this->assertStringNotContainsString('Générer les codes manquants (', $this->text());
+        $this->assertSame($this->codeOf('product', (int) $bottle->getId()), $publicCode(), 'l\'écriture en SQL vide le cache du site : la fiche montre le code généré');
     }
 
     public function testTheProductApiResourceDoesNotWriteABarcode(): void
@@ -273,6 +298,38 @@ class CatalogBarcodeAdminTest extends WebTestCase
         $this->assertSame(422, $this->status(), $this->text());
         $this->assertStringContainsString('barcode', (string) $this->client->getResponse()->getContent());
         $this->assertNull($this->codeOf('product', (int) $bottle->getId()));
+    }
+
+    public function testTheVehicleApiResourceCannotBreakTheRule(): void
+    {
+        // La ressource d'API des véhicules (API Platform, écriture réservée à l'administrateur) laisse écrire le code-barres : la même
+        // contrainte s'y applique (un véhicule est un article)
+        static::getContainer()->get(\App\Services\BoutiqueDemoService\BoutiqueDemoSeeder::class)->seed('client-codes@example.invalid', false, false);
+        $vehicle = (int) $this->db()->fetchOne("SELECT id FROM product WHERE product_type = 'vehicle' ORDER BY id LIMIT 1");
+        $this->assertGreaterThan(0, $vehicle, 'le jeu de démonstration porte un véhicule');
+        $cap = $this->article('Casquette', 0);
+        $this->db()->executeStatement('UPDATE product SET barcode = ? WHERE id = ?', ["PRIS-$this->s", $cap->getId()]);
+        $this->db()->executeStatement('UPDATE product SET barcode = NULL WHERE id = ?', [$vehicle]);
+        $this->em()->clear();
+        // Cette adresse est hors du pare-feu des jetons de l'API : seule une session d'administrateur (celle d'EasyAdmin) peut y écrire
+        $this->loginAs(['ROLE_ADMIN']);
+        $patch = function (array $body) use ($vehicle): int {
+            $this->client->request('PATCH', 'https://' . MV_TEST_TENANT_HOST . '/api/vehicle_products/' . $vehicle, [], [], [
+                'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/merge-patch+json', 'HTTP_ACCEPT' => 'application/ld+json',
+            ], json_encode($body));
+
+            return $this->status();
+        };
+        try {
+            $this->assertSame(422, $patch(['barcode' => strtolower("PRIS-$this->s")]), $this->text());
+            $this->assertStringContainsString('Ce code-barres est déjà celui de « ' . $cap->getName() . ' »', (string) (json_decode((string) $this->client->getResponse()->getContent(), true)['message'] ?? ''));
+            $this->assertSame(422, $patch(['barcode' => 'IZ-T-1-000001']), $this->text());
+            $this->assertNull($this->codeOf('product', $vehicle), 'aucun refus n\'a rien écrit');
+            $this->assertSame(200, $patch(['barcode' => ' libre-' . $this->suffix]), $this->text());
+            $this->assertSame("LIBRE-$this->s", $this->codeOf('product', $vehicle), 'un code libre est écrit en forme canonique');
+        } finally {
+            $this->db()->executeStatement('UPDATE product SET barcode = NULL WHERE id = ?', [$vehicle]);
+        }
     }
 
     /** Ouvre la fiche de l'article et l'envoie avec ces valeurs en plus de celles qu'elle porte */

@@ -75,7 +75,12 @@ class CatalogBarcodeAiSheetTest extends KernelTestCase
             $this->assertArrayNotHasKey('holder', $refused['body']);
             $this->assertNotSame('', (string) $refused['body']['message']);
         }
-        $this->assertSame(1, $count(), 'aucun refus n\'a rien créé');
+        foreach ([['tableau'], true, 12.5] as $notText) { // ni tableau, ni booléen, ni décimal : refusé, pas ignoré en silence
+            $refused = $create('Gourde', $notText);
+            $this->assertSame([422, 'BARCODE_INVALID'], [$refused['status'], $refused['body']['error']], var_export($notText, true));
+        }
+        $this->assertSame(201, $create('Tasse', 9000000000000 + random_int(1, 999999999))['status'], 'un code donné en nombre entier est accepté');
+        $this->assertSame(2, $count(), 'aucun refus n\'a rien créé');
 
         // Sans code, ou avec un code vide : créé sans code
         foreach ([null, '', '   '] as $i => $barcode) {
@@ -83,7 +88,7 @@ class CatalogBarcodeAiSheetTest extends KernelTestCase
             $this->assertSame(201, $created['status'], json_encode($created['body']));
             $this->assertNull($this->db->fetchOne('SELECT barcode FROM product WHERE id = ?', [$created['body']['productId']]));
         }
-        $this->assertSame(4, $count());
+        $this->assertSame(5, $count());
         $this->assertInstanceOf(Product::class, static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager()->find(Product::class, $firstId));
     }
 }

@@ -76,11 +76,33 @@ relit pas la ligne après l'écriture). La variante ne coupe plus en silence un 
   sans importance. Si le code tiré existe déjà (saisi à la main), le générateur prend le suivant.
 - **Ce qui reçoit un code généré** : la variante ; l'article seulement s'il n'a aucune variante.
 - **Jamais d'écrasement** : `generateFor` relit la valeur de la BASE sous verrou de ligne (deux demandes simultanées ne se recouvrent
-  pas ; un code posé entre-temps par un autre chemin reste). `generateMissing` verrouille les lignes sans code avant de les remplir (un
-  second lancement simultané attend, puis ne voit que ce qui reste) et écrit par les entités, pour que le cache du site soit invalidé.
+  pas : la seconde attend, puis voit le code de la première ; un code posé entre-temps par un autre chemin reste).
+- **Génération en masse** (`generateMissing`) : les lignes sans code sont verrouillées (`FOR NO KEY UPDATE SKIP LOCKED`), puis écrites
+  **en SQL** dans la même transaction (`UPDATE … WHERE barcode IS NULL`). Pas par les entités : `ProductVariant` re-flushe après chaque
+  écriture (rappel qui recalcule le stock de l'article) et N variantes écrites en un flush coûtaient N² flush à vide, verrous tenus.
+  Ce que Doctrine faisait est donc fait à la main : le cache du site (fiches et listes des articles touchés) est vidé à la validation
+  par la file d'invalidation, et les objets déjà en mémoire sont relus. Le verrou est celui d'une mise à jour ordinaire : il ne bloque
+  pas l'écriture d'une ligne de vente ; une ligne tenue par une vente en cours ou par un autre lancement n'est pas attendue, elle
+  reste pour le lancement suivant (`remaining`) : ni attente, ni interblocage avec la caisse. **Mesure** (base de test, 15/11/2026) :
+  500 codes écrits en moins d'une seconde (test `testTheBulkGenerationKeepsItsCeilingAndStaysFastOnMoreThanFiveHundredRows`, qui
+  échoue au-delà de 20 s ou si le plafond saute).
 - **Trace** : une ligne au journal du site par lancement de `generateMissing` (`content_audit_log`, ressource `catalog_barcode`,
   action `generate` : qui, quand, combien de variantes et d'articles, premier et dernier code, ce qui reste).
 - Le code maison « BAR-… » reste accepté s'il est saisi ; il n'est plus généré.
+
+### Limites connues de la règle
+
+- **Deux formes canoniques presque identiques** : la base retire les ESPACES autour (`BTRIM`) et met en majuscules selon sa locale ;
+  l'application (`trim()`, `mb_strtoupper`) retire aussi tabulation et retour à la ligne, et « straße » y devient « STRASSE » avant
+  le contrôle de forme. Par les chemins de l'application, aucune différence (les caractères permis sont ASCII) ; par SQL direct, un
+  code suivi d'un retour à la ligne peut exister à côté du même code sans lui.
+- **Coupons** : le refus des formes de coupon ne vise que les codes tout en chiffres. Un code d'article avec des séparateurs
+  (« 5-12345-67890-1 ») est accepté ; l'analyseur de coupons retire les séparateurs avant de lire. Il ne serait pris pour un coupon que
+  si la tablette le soumet à la lecture de coupon : cela dépend de son aiguillage, hors de ce lot.
+- **UPC-A et EAN-13** : la même étiquette lue en 12 chiffres, ou en 13 avec un zéro devant, donne deux codes distincts. On saisit le
+  code tel que le lecteur du magasin le rend.
+- **Retour arrière de la migration puis rejeu** (`down` puis `up`) : la séquence repart de 1 ; un code généré puis effacé pourrait
+  être redonné. Ne jamais jouer `down` sur un site qui a déjà généré des codes sans remettre la séquence à sa valeur.
 
 ## 5. Chemins d'écriture et de lecture
 
@@ -92,12 +114,14 @@ relit pas la ligne après l'écriture). La variante ne coupe plus en silence un 
 | « Générer les codes manquants » (`POST /admin/barcode-management/generate-missing`, écran « Gestion des Codes-Barres ») | `generateMissing` ; nombre annoncé avant d'écrire, formulaire à jeton, administrateur |
 | Création d'une fiche par l'IA (`ProductSheetCreator` : `POST /api/products/ai/create`, page « depuis une photo ») | `check` avant de rien créer ; refus 422 `{error, code, message, holder?}` |
 | Ressource d'API de l'article (`POST`, `PUT`, `PATCH /api/products`, administrateur) | n'écrit pas de code-barres : le champ n'est pas dans la liste des champs acceptés (422 « champ non modifiable », gardé par un test) |
+| Ressource d'API des véhicules (`PATCH /api/vehicle_products/{id}`, API Platform ; hors du pare-feu des jetons : seule une session d'administrateur y écrit) | le champ y est inscriptible ; un véhicule est un article : la même contrainte s'y applique (422 pour un code pris ou réservé, forme canonique pour un code libre ; gardé par un test) |
 | Tout autre chemin (SQL direct) | la base refuse le doublon et met en forme |
 
 La contrainte `CatalogBarcodeFree` (classe, sur les deux entités) appelle `CatalogBarcodeService::check`, puis compare le code aux autres
 fiches du même formulaire (l'article et ses variantes en mémoire). Elle ne juge qu'un code qui CHANGE : un code ancien, d'une forme
 refusée aujourd'hui, ne bloque pas la modification du reste de la fiche. Un code de 13 chiffres dont la clé de contrôle est fausse est
-accepté, avec un avertissement après l'enregistrement.
+accepté, avec un avertissement après l'enregistrement (article, variante créée ou modifiée), une seule fois : seulement quand le code
+vient de changer. Les boutons « Générer » ne rendent jamais une page d'erreur : un refus ou une panne revient en message.
 
 **Recherche en ligne** (`GET /api/products/by-category?barcode=…`, publique, lue par la caisse en ligne avec `limit=1&pageSize=1`) :
 le code scanné, mis en forme canonique, trouve l'article dont il est le code OU celui d'une de ses variantes ; l'article est rendu
@@ -106,6 +130,14 @@ liste sans recherche par code). Un code inconnu rend `data: []` (la caisse se re
 compte du code (inchangé). La boutique ne reçoit toujours que le code de l'article.
 
 La création d'une fiche par l'IA pose le code sur l'ARTICLE, comme avant le lot (elle crée toujours au moins une variante).
+Quand la traduction automatique est demandée, elle est faite (et débitée) AVANT la création, donc avant le refus d'un code : un
+`BARCODE_ALREADY_USED` arrive après le débit, et chaque nouvel essai est débité de nouveau (ordre des appelants, inchangé par ce lot).
+
+Recherche en ligne, à savoir : la condition « code de l'article OU d'une de ses variantes » se lit par parcours de la table (sans
+effet aux tailles actuelles ; la réponse est en cache 300 s par code) ; l'appel de la caisse ne porte pas `isPos=true`, donc un
+article non vendu en caisse est rendu en ligne alors que le pack hors ligne l'exclut (déjà vrai pour le code d'article avant le lot).
+Un code demandé mais vide une fois mis en forme (des espaces) rend `data: []` ; « 0 » est un code comme un autre ; `barcode=` sans
+valeur n'est pas une recherche par code.
 
 Impression des étiquettes (variantes, 50 × 30 mm, prix facultatif) : lot CB-2.
 
