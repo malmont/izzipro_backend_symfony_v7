@@ -187,10 +187,10 @@ class ShopifyCustomerImportTest extends WebTestCase
         $this->assertSame(1, count($this->getMailerMessages()));
         $this->assertNotNull($conn()->fetchOne('SELECT reset_token FROM "user" WHERE id = ?', [$existing]));
 
-        // L'INTERRUPTEUR des invitations. Dans le code livré il est ÉTEINT ; éteint, rien ne part : la route refuse sans rien mettre en
-        // file, et le worker, même s'il recevait un message, n'envoie rien et ne pose aucun jeton
-        $this->assertFalse(static::getContainer()->getParameter('app.import.invitations_open'), 'éteint par défaut en production');
-        $this->assertFalse((new \App\Import\ImportInvitationSwitch(false))->isOpen());
+        // L'INTERRUPTEUR des invitations (ouvert le 15/11/2026, quand la page du lien a été mise en ligne et le texte validé). Éteint, rien ne
+        // part : la route refuse sans rien mettre en file, et le worker, même s'il recevait un message, n'envoie rien et ne pose aucun jeton
+        $this->assertTrue(static::getContainer()->getParameter('app.import.invitations_open'), 'ouvert dans le code livré');
+        $this->assertSame([false, true], [(new \App\Import\ImportInvitationSwitch(false))->isOpen(), (new \App\Import\ImportInvitationSwitch(true))->isOpen()]);
         FakeImportInvitationSwitch::$open = false;
         $this->request('POST', "/api/site/imports/$id/invitations");
         $this->assertSame([409, 'IMPORT_INVITATIONS_NOT_OPEN'], [$this->status(), $this->body()['error']]);

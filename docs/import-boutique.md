@@ -188,11 +188,11 @@ Règles :
 
 ### 9.3 L'invitation
 
-**Interrupteur de la plateforme.** L'envoi des invitations est **éteint dans le code livré** (`app.import.invitations_open: false`,
-`config/services.yaml`, lu par `ImportInvitationSwitch`) tant que la page du lien n'existe pas sur la boutique publique et que le
-propriétaire n'a pas validé le texte : `POST …/invitations` rend alors 409 `IMPORT_INVITATIONS_NOT_OPEN`, le worker n'envoie rien
-même si un message traînait dans la file, et la vue de l'import porte `invitationsOpen: false` (l'application ne propose pas le
-bouton). L'ouvrir est une ligne de configuration, à livrer ce jour-là. Tout le reste de l'import des clients marche éteint.
+**Interrupteur de la plateforme** (`app.import.invitations_open`, `config/services.yaml`, lu par `ImportInvitationSwitch`). Livré
+éteint, il est **ouvert depuis le 15/11/2026** : la page du lien est en ligne sur la boutique publique et le propriétaire a validé le
+texte du courriel. Éteint (`false`), `POST …/invitations` rend 409 `IMPORT_INVITATIONS_NOT_OPEN`, le worker n'envoie rien même si un
+message traînait dans la file, et la vue de l'import porte `invitationsOpen: false` (l'application ne propose pas le bouton) ; tout
+le reste de l'import des clients marche. Le refermer est une ligne de configuration.
 
 « Envoyer les invitations » est un geste du commerçant. Chaque invité reçoit **un** courriel (`customer_import_invitation`, classé
 indispensable, `templates/emails/customer_import_invitation.html.twig`, textes `translations/emails.{fr,en}.yaml`), dans la langue du
