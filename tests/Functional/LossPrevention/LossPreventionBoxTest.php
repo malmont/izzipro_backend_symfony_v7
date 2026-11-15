@@ -207,6 +207,7 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $row = $this->db->fetchAssociative('SELECT status, generation, machine_hash, version, arch, enrolled_at IS NOT NULL AS enrolled, last_seen_at IS NOT NULL AS seen FROM loss_box WHERE id = ?', [$id]);
         $tokens = static::getContainer()->get(LossBoxToken::class);
         $this->assertNotSame(hash('sha256', self::MACHINE), $row['machine_hash']);
+        $this->assertNotSame($tokens->machineHash('un-autre-site', self::MACHINE), $row['machine_hash'], 'l\'empreinte de la machine dépend du site');
         $this->assertSame(['active', 2, $tokens->machineHash(MV_TEST_TENANT_CODE, self::MACHINE), '1.0.0', 'arm64', true, true], [$row['status'], (int) $row['generation'], $row['machine_hash'], $row['version'], $row['arch'], $row['enrolled'], $row['seen']]);
         $this->assertSame([['BOX_CREATED', []], ['BOX_ENROLLED', ['version' => '1.0.0', 'arch' => 'arm64', 'again' => false]]], $events($id));
         // une autre machine avec la même clé : refusée ; la même machine : réinscrite, l'ancien jeton ne vaut plus rien
@@ -460,7 +461,8 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $before = $pieceEvents();
         foreach ([['POST', '/inscription', $good, null], ['POST', '/jeton', ['machine' => self::MACHINE], $token], ['POST', '/signe-de-vie', ['now' => $now()], $token], ['GET', '/reglages', null, $token],
             ['POST', '/faits', ['facts' => [$fact('x')]], $token]] as [$method, $path, $body, $with]) {
-            $this->assertSame('MODULE_INACTIVE', $this->json($this->box($method, $path, $body, $with), 403)['code'], "$method $path");
+            $closed = $this->json($this->box($method, $path, $body, $with), 403);
+            $this->assertSame(['MODULE_INACTIVE', ['error', 'code', 'message']], [$closed['code'], array_keys($closed)], "$method $path : une réponse nue, sans rien dire de l'offre du site");
         }
         $this->assertSame($before, $pieceEvents());
         $this->flags(true, true);
@@ -534,11 +536,28 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $this->assertGreaterThan(0, $limits->failuresLeft($site, $anIp));
         $this->assertNull($limits->failuresLeft($site, self::randomIp()));
 
+        // Le canal applique le plafond de faits par boîtier et par heure : le lot qui le dépasse est refusé en entier, sans rien écrire
+        $quotaBox = $this->json($this->admin('POST', self::BOXES, ['name' => "Quota $this->s"]), 201);
+        $quotaToken = $this->json($this->box('POST', '/inscription', ['key' => $quotaBox['key'], 'machine' => self::MACHINE, 'version' => '1.0.0', 'arch' => 'amd64'], null))['token'];
+        $this->tenant();
+        $c = static::getContainer();
+        $metered = new LossBoxChannelService($c->get(\App\Services\TenantEntityManagerProvider::class), $c->get(\App\Services\TenantConnectionProvider::class), $c->get(LossBoxToken::class),
+            $c->get(\App\LossPrevention\Services\LossHealthService::class), new LossBoxLimits($c->get('cache.rate_limiter'), ['facts' => 3]));
+        $authenticated = $metered->authenticate($quotaToken);
+        $two = ['facts' => [['key' => "quota-$this->s-1", 'type' => 'SPOT_CHECK'], ['key' => "quota-$this->s-2", 'type' => 'SPOT_CHECK']]];
+        $this->assertSame(2, $metered->facts($authenticated, $two)['refused'], 'deux faits (refusés pour leur forme) : comptés quand même, ils ont été envoyés');
+        try {
+            $metered->facts($authenticated, $two);
+            $this->fail('quatre faits envoyés sous un plafond de trois');
+        } catch (LossBoxException $e) {
+            $this->assertSame(['RATE_LIMITED', 429], [$e->error, $e->status]);
+            $this->assertGreaterThan(0, $e->details['retryAfterSeconds']);
+        }
+
         // La garde applique ces plafonds : appels d'un boîtier, puis jetons refusés (arrêtés avant toute lecture de la base)
         $created = $this->json($this->admin('POST', self::BOXES, ['name' => "Plafonds $this->s"]), 201);
         $token = $this->json($this->box('POST', '/inscription', ['key' => $created['key'], 'machine' => self::MACHINE, 'version' => '1.0.0', 'arch' => 'amd64'], null))['token'];
         $this->tenant();
-        $c = static::getContainer();
         $low = new LossBoxLimits($c->get('cache.rate_limiter'), ['calls' => 3, 'failed' => 2]);
         $guard = new LossBoxGuardSubscriber($c->get(LossBoxChannelService::class), $c->get(\App\Services\TenantConnectionProvider::class), $low);
         $guardIp = self::randomIp();
@@ -675,6 +694,11 @@ class LossPreventionBoxTest extends LossPreventionTestCase
             . ' (SELECT COUNT(*) FROM loss_box_event WHERE exercise), (SELECT COUNT(*) FROM loss_piece_event WHERE exercise AND box_id IS NOT NULL), (SELECT COUNT(*) FROM loss_piece WHERE exercise)')));
         $this->assertSame(['deleted' => 0], $this->json($this->admin('DELETE', self::EX . '/boitiers')));
         $this->assertSame(['box' => 'todo'], $install(true));
+        static::getContainer()->get(PlatformModeService::class)->setMode('live', 'test');
+        $this->flags(true, false);
+        $this->assertSame(['deleted' => 0], $this->json($this->admin('DELETE', self::EX . '/boitiers')), 'effacer ses exercices reste ouvert sans le droit du module');
+        $this->flags(true, true);
+        static::getContainer()->get(PlatformModeService::class)->setMode('demo', 'test');
         // effacer les pièces d'exercice quand un boîtier simulé a lu leurs puces : les faits partent avec elles, le boîtier reste
         $again = $this->json($this->admin('POST', self::EX . '/boitiers'), 201)['box']['id'];
         $this->assertSame(3, $this->json($this->admin('POST', self::EX . "/boitiers/$again/scenarios", ['scenario' => 'spot_check']))['written']);
