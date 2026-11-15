@@ -156,6 +156,8 @@ class CommandeLabelService
             'currency' => $this->currency->code(),
             'pricesIncludeTax' => $includesTax,
             'maxLabels' => BarcodeLabelPrinter::MAX_LABELS,
+            // formats que le PDF sait rendre (`format` du corps de l'appel 3), chacun avec son plafond ; `format` ci-dessus est celui par défaut
+            'formats' => BarcodeLabelPrinter::formats(),
             'labels' => $labels,
             'missing' => ['count' => count($missing), 'variantIds' => $missing],
             'skipped' => $skipped,
@@ -195,16 +197,17 @@ class CommandeLabelService
     /**
      * `POST /api/commandes/{id}/etiquettes/pdf` : la planche de la sélection.
      *
-     * @param array<string, mixed> $data { labels: [{ variantId, copies }], showPrice? }
+     * @param array<string, mixed> $data { labels: [{ variantId, copies }], showPrice?, format? (a4-50x30 | roll-50x30) }
      *
-     * @return array{content: string, count: int}
+     * @return array{content: string, count: int, format: string}
      */
     public function pdf(Commande $commande, array $data, string $locale = 'fr'): array
     {
         $labels = $this->selection($commande, $data, $locale);
+        $format = (string) BarcodeLabelPrinter::formatAsked($data['format'] ?? null); // déjà vérifié par selection()
 
-        return ['content' => $this->printer->pdf($labels, sprintf('Étiquettes de la commande %s', (string) ($commande->getName() ?? $commande->getId()))),
-            'count' => array_sum(array_column($labels, 'copies'))];
+        return ['content' => $this->printer->pdf($labels, sprintf('Étiquettes de la commande %s', (string) ($commande->getName() ?? $commande->getId())), $format),
+            'count' => array_sum(array_column($labels, 'copies')), 'format' => $format];
     }
 
     /**
@@ -240,12 +243,17 @@ class CommandeLabelService
         if (array_key_exists('showPrice', $data) && !is_bool($data['showPrice'])) {
             $errors['showPrice'] = 'MUST_BE_BOOLEAN';
         }
+        $format = BarcodeLabelPrinter::formatAsked($data['format'] ?? null);
+        if ($format === null) {
+            $errors['format'] = 'INVALID_VALUE';
+        }
         if ($errors !== []) {
             throw new GestionValidationException($errors, 'Sélection d\'étiquettes invalide');
         }
         $requested = array_sum($copiesOf);
-        if ($requested > BarcodeLabelPrinter::MAX_LABELS) {
-            throw new GestionConflictException('LABELS_LIMIT_EXCEEDED', sprintf('Au plus %d étiquettes par impression.', BarcodeLabelPrinter::MAX_LABELS), 422, ['max' => BarcodeLabelPrinter::MAX_LABELS, 'requested' => $requested]);
+        $max = BarcodeLabelPrinter::maxLabels($format); // 500 en planche A4, 200 en rouleau (une page par étiquette)
+        if ($requested > $max) {
+            throw new GestionConflictException('LABELS_LIMIT_EXCEEDED', sprintf('Au plus %d étiquettes par impression.', $max), 422, ['max' => $max, 'requested' => $requested]);
         }
         $list = $this->labels($commande);
         $this->assertInCommande(array_keys($copiesOf), $list);

@@ -72,7 +72,7 @@ class GestionBarcodeController extends AbstractController
         return $this->json($this->useCase->put('product', $id, self::body($request), self::locale($request)));
     }
 
-    /** Planche d'étiquettes d'une sélection hors commande (A4, 50 × 30 mm) → 200 application/pdf, en-tête X-Labels-Count ; une lecture, rien n'est écrit */
+    /** Étiquettes d'une sélection hors commande (50 × 30 mm : planche A4, ou rouleau avec `format: roll-50x30`) → 200 application/pdf, en-têtes X-Labels-Count et X-Labels-Format ; une lecture, rien n'est écrit */
     #[Route('/etiquettes/pdf', name: 'gestion_codes_barres_etiquettes_pdf', methods: ['POST'])]
     public function pdf(Request $request): Response
     {
@@ -82,6 +82,7 @@ class GestionBarcodeController extends AbstractController
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="etiquettes.pdf"',
             'X-Labels-Count' => (string) $pdf['count'],
+            'X-Labels-Format' => $pdf['format'],
         ]);
     }
 

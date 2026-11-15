@@ -152,6 +152,24 @@ class LossPreventionInstallationTest extends LossPreventionTestCase
         $statuses = fn (array $installation): array => array_column($installation['steps'], 'status', 'code');
         $events = fn (string $type, bool $exercise): int => (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_piece_event WHERE type = ? AND exercise = CAST(? AS boolean)', [$type, $exercise ? 'true' : 'false']);
         $exercise = fn (): array => $this->json($this->admin('GET', self::EX . '/installation'));
+        // L'assistant réel et ce que les seules données réelles en disent (preuves des essais, pièce qui porte une puce)
+        $real = fn (): array => $statuses($this->json($this->admin('GET', self::INSTALL)));
+        $expected = function () use ($events): array {
+            $done = ['hardware' => false, 'test_label' => $events('TEST_LABEL_PRINTED', false) > 0, 'test_tag' => $events('TEST_TAG_READ', false) > 0,
+                'first_piece' => (bool) $this->db->fetchOne("SELECT 1 FROM loss_tag t JOIN loss_piece p ON p.id = t.piece_id WHERE t.status = 'associated' AND p.status <> 'retired' AND NOT t.exercise LIMIT 1")];
+            $codes = array_keys($done);
+            for ($i = count($codes) - 2; $i >= 0; --$i) {
+                $done[$codes[$i]] = $done[$codes[$i]] || $done[$codes[$i + 1]];
+            }
+            $out = [];
+            $current = false;
+            foreach ($done as $code => $ok) {
+                $out[$code] = $ok ? 'done' : ($current ? 'todo' : 'current');
+                $current = $current || !$ok;
+            }
+
+            return $out;
+        };
 
         // ----- En exercice, depuis zéro (rien d'exercice ne reste d'un test à l'autre)
         $before = $rows();
@@ -212,6 +230,8 @@ class LossPreventionInstallationTest extends LossPreventionTestCase
         $retired = $this->json($this->admin('POST', self::EX . '/installation/puce-test', ['identifier' => $read['identifier']]));
         $this->assertSame([true, 'retired'], [$retired['ok'], $retired['tag']['status']]);
         $this->assertStringContainsString('a été retirée', (string) $retired['hint']);
+        // Les preuves d'exercice ne comptent que pour l'exercice : l'assistant réel ne lit que les siennes
+        $this->assertSame([1, 1, $expected()], [$events('TEST_LABEL_PRINTED', true), $events('TEST_TAG_READ', true), $real()], 'les essais d\'exercice ne font pas avancer l\'installation réelle');
         // Un site qui pose déjà ses puces n'a pas à refaire les essais : une étape suivante faite fait les précédentes
         $this->json($this->admin('DELETE', self::EX . '/pieces'));
         $this->assertSame([['hardware' => 'current', 'test_label' => 'todo', 'test_tag' => 'todo', 'first_piece' => 'todo'], 0], [$statuses($exercise()), (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_piece_event WHERE exercise')],
@@ -221,23 +241,6 @@ class LossPreventionInstallationTest extends LossPreventionTestCase
         $this->assertSame([['hardware' => 'done', 'test_label' => 'done', 'test_tag' => 'done', 'first_piece' => 'done'], true, 0], [$statuses($equipped), $equipped['complete'], $events('TEST_TAG_READ', true)]);
 
         // ----- Le monde réel : l'exercice ne l'a pas fait avancer d'un pas ; il suit ses propres données
-        $real = fn (): array => $statuses($this->json($this->admin('GET', self::INSTALL)));
-        $expected = function () use ($events): array {
-            $done = ['hardware' => false, 'test_label' => $events('TEST_LABEL_PRINTED', false) > 0, 'test_tag' => $events('TEST_TAG_READ', false) > 0,
-                'first_piece' => (bool) $this->db->fetchOne("SELECT 1 FROM loss_tag t JOIN loss_piece p ON p.id = t.piece_id WHERE t.status = 'associated' AND p.status <> 'retired' AND NOT t.exercise LIMIT 1")];
-            $codes = array_keys($done);
-            for ($i = count($codes) - 2; $i >= 0; --$i) {
-                $done[$codes[$i]] = $done[$codes[$i]] || $done[$codes[$i + 1]];
-            }
-            $out = [];
-            $current = false;
-            foreach ($done as $code => $ok) {
-                $out[$code] = $ok ? 'done' : ($current ? 'todo' : 'current');
-                $current = $current || !$ok;
-            }
-
-            return $out;
-        };
         $this->assertSame($expected(), $real(), 'les étapes réelles se lisent dans les vraies données, pas dans celles de l\'exercice');
         $this->assertFalse($this->json($this->admin('GET', self::INSTALL))['exercise']);
         // Lectures refusées : rien n'est écrit, et on dit quoi essayer
@@ -311,6 +314,9 @@ class LossPreventionInstallationTest extends LossPreventionTestCase
 
         // Les essais d'exercice attendent le verrou des exercices (un effacement en cours ne laisse rien derrière lui)
         $this->json($this->admin('DELETE', self::EX . '/pieces'));
+        // Et dans l'autre sens : le réel a ses deux preuves, l'exercice effacé repart de zéro (chaque genre ne compte que ses faits)
+        $this->assertSame([true, true, ['hardware' => 'current', 'test_label' => 'todo', 'test_tag' => 'todo', 'first_piece' => 'todo']],
+            [$events('TEST_LABEL_PRINTED', false) > 0, $events('TEST_TAG_READ', false) > 0, $statuses($exercise())], 'les preuves réelles ne font pas avancer l\'exercice');
         $service = static::getContainer()->get(LossInstallationService::class);
         // La connexion DU SERVICE (le noyau a été relancé par les requêtes : ce n'est plus celle du début du test) : c'est sur elle que
         // l'attente de verrou doit être bornée. L'autre connexion est coupée d'office par la base si elle reste ouverte : rien ici ne

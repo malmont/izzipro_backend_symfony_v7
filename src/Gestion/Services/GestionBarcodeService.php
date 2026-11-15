@@ -138,9 +138,9 @@ class GestionBarcodeService
     /**
      * Planche d'étiquettes d'une sélection de variantes ou d'articles sans variante, hors commande (même planche que la réception).
      *
-     * @param array<string, mixed> $body { labels: [{ variantId | productId, copies }], showPrice? }
+     * @param array<string, mixed> $body { labels: [{ variantId | productId, copies }], showPrice?, format? (a4-50x30 | roll-50x30) }
      *
-     * @return array{content: string, count: int}
+     * @return array{content: string, count: int, format: string}
      */
     public function pdf(array $body, string $locale): array
     {
@@ -174,12 +174,17 @@ class GestionBarcodeService
         if (array_key_exists('showPrice', $body) && !is_bool($body['showPrice'])) {
             $errors['showPrice'] = 'MUST_BE_BOOLEAN';
         }
+        $format = BarcodeLabelPrinter::formatAsked($body['format'] ?? null);
+        if ($format === null) {
+            $errors['format'] = 'INVALID_VALUE';
+        }
         if ($errors !== []) {
             throw new GestionValidationException($errors, $this->t('error.LABELS_INVALID', $locale));
         }
         $requested = array_sum($copiesOf);
-        if ($requested > BarcodeLabelPrinter::MAX_LABELS) {
-            throw new GestionConflictException('LABELS_LIMIT_EXCEEDED', $this->t('error.LABELS_LIMIT_EXCEEDED', $locale, ['%max%' => BarcodeLabelPrinter::MAX_LABELS]), 422, ['max' => BarcodeLabelPrinter::MAX_LABELS, 'requested' => $requested]);
+        $max = BarcodeLabelPrinter::maxLabels($format); // 500 en planche A4, 200 en rouleau (une page par étiquette)
+        if ($requested > $max) {
+            throw new GestionConflictException('LABELS_LIMIT_EXCEEDED', $this->t('error.LABELS_LIMIT_EXCEEDED', $locale, ['%max%' => $max]), 422, ['max' => $max, 'requested' => $requested]);
         }
         $rows = $this->catalog->rowsFor(array_keys($copiesOf));
         $unknown = array_keys(array_diff_key($copiesOf, $rows));
@@ -200,7 +205,7 @@ class GestionBarcodeService
                 'price' => $showPrice && $row['priceCents'] !== null ? (string) $formatter->formatCurrency($row['priceCents'] / 100, $currency) : null];
         }
 
-        return ['content' => $this->printer->pdf($labels, $this->t('pdf_title', $locale)), 'count' => $requested];
+        return ['content' => $this->printer->pdf($labels, $this->t('pdf_title', $locale), $format), 'count' => $requested, 'format' => $format];
     }
 
     /** @throws GestionConflictException 404 `VARIANT_NOT_FOUND` ou `PRODUCT_NOT_FOUND` */
