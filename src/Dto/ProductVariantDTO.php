@@ -14,6 +14,8 @@ class ProductVariantDTO
     public ?ColorDTO $color = null;
     public ?SizeDTO $size = null;
     public array $options;
+    /** Code-barres de la variante, en forme canonique, ou null (15/11/2026, demande du web : panneau des variantes) */
+    public ?string $barcode = null;
 
     public function __construct(
         int $id,
@@ -51,12 +53,15 @@ class ProductVariantDTO
         }, ProductCommerceDto::orderedOptionValues($variant)); // même ordre que la fiche produit (31/10/2026)
         // --- FIN DE L'AJOUT ---
 
-        return new self(
+        $dto = new self(
             $variant->getId(),
             $variant->getStockQuantity(),
             $variant->getColor() ? ColorDTO::fromEntity($variant->getColor(), $locale) : null,
             $variant->getSize() ? SizeDTO::fromEntity($variant->getSize(), $locale) : null,
             $options 
         );
+        $dto->barcode = $variant instanceof ProductVariant ? $variant->getBarcode() : null;
+
+        return $dto;
     }
 }
