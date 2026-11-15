@@ -3,6 +3,7 @@
 namespace App\Controller\CategoriesControlleur;
 
 use App\Dto\ProductOutputCategoryDto;
+use App\Services\BarcodeService\CatalogBarcode;
 use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
 use App\UseCase\CategoriesUseCase\GetProductsByCategoryUseCase;
 use App\UseCase\CategoriesUseCase\CountProductsByCategoryUseCase;
@@ -36,7 +37,8 @@ class CategoryController extends AbstractController
         $keyword = $request->query->get('keyword');
         $page = $request->query->getInt('page', 1);
         $pageSize = $request->query->getInt('pageSize', 12);
-        $barcode = $request->query->get('barcode');
+        // Lot CB-1 (`docs/codes-barres.md`) : forme canonique de ce qui est scanné (espaces autour retirés, majuscules), comme à l'écriture
+        $barcode = CatalogBarcode::normalize($request->query->get('barcode'));
         $isWeb = $request->query->has('isWeb')
             ? filter_var($request->query->get('isWeb'), FILTER_VALIDATE_BOOLEAN)
             : null;
@@ -77,6 +79,18 @@ class CategoryController extends AbstractController
                 );
                 $currency = $this->currency->code();
                 $dtos = array_map(fn ($product) => new ProductOutputCategoryDto($product, $host, $locale, $currency), $products);
+                if ($barcode !== null) {
+                    // Le code scanné est celui d'une variante : l'article est rendu, et `matchedVariantId` dit laquelle (la caisse la met
+                    // au panier sans la demander) ; null quand le code est celui de l'article
+                    foreach ($products as $i => $product) {
+                        foreach ($product->getVariants() as $variant) {
+                            if ($variant->getBarcode() === $barcode) {
+                                $dtos[$i]->matchedVariantId = $variant->getId();
+                                break;
+                            }
+                        }
+                    }
+                }
 
                 $total = $this->countProductsByCategoryUseCase->execute($locale, $categoryIds, $keyword, $isWeb, $isPos);
 

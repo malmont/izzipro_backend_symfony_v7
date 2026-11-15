@@ -127,8 +127,11 @@ class ProductRepository extends EntityRepository
         }
 
         if ($barcode) {
-            $queryBuilder->andWhere('p.barcode = :barcode')
-                         ->setParameter('barcode', $barcode);
+            // Lot CB-1 (15/11/2026, `docs/codes-barres.md`) : le code scanné désigne un article OU une variante (jamais les deux : la base
+            // le garantit) ; l'article est rendu dans les deux cas, avec TOUTES ses variantes (sous-requête : filtrer la jointure `v`
+            // ne rendrait que la variante trouvée). La recherche se fait sur la forme canonique, comme l'écriture.
+            $queryBuilder->andWhere('p.barcode = :barcode OR EXISTS (SELECT bv.id FROM ' . \App\Entity\ProductVariant::class . ' bv WHERE bv.product = p AND bv.barcode = :barcode)')
+                         ->setParameter('barcode', \App\Services\BarcodeService\CatalogBarcode::normalize($barcode));
         }
         
         if ($isWeb !== null) {

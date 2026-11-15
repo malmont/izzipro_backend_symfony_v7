@@ -37,6 +37,8 @@ class ProductOutputCategoryDto
     public ?float $purchasePrice;
     public ?float $coefficientMultiplier;
     public ?string $barcode;
+    /** Recherche par code-barres (lot CB-1, `docs/codes-barres.md`) : la variante que le code scanné désigne ; null si le code est celui de l'article ou sans recherche par code */
+    public ?int $matchedVariantId = null;
     public ?string $code = null;
     public ?array $saleUnit = null;
     

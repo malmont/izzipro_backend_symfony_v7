@@ -785,6 +785,11 @@ customizable}]}]` (produits `isPos` vendables, sans location ; `customizable` : 
 `testCases: "/api/pos/offline-cases"`. Chaque pack émis est conservé sous sa version
 (`pos_offline_pack` : prix, taxes, pas d'arrondi) pour recalculer les ventes aux conditions connues de la tablette. Scan
 hors ligne : d'abord `variants[].barcode`, puis `products[].barcode`.
+Scan en ligne (lot CB-1, 15/11/2026, `docs/codes-barres.md`) : `GET /api/products/by-category?barcode=<code>&limit=1&pageSize=1`
+trouve l'article dont le code est celui de l'article OU d'une de ses variantes (un code ne désigne qu'une seule chose sur un site) ;
+chaque article rendu porte **`matchedVariantId`** : l'identifiant de la variante que le code scanné désigne (à mettre au panier sans
+la demander), `null` quand le code est celui de l'article. Champ ajouté, rien n'est retiré ; un code inconnu rend toujours `data: []`.
+Le code est cherché sous sa forme canonique (espaces autour retirés, majuscules).
 Grille de favoris (F10) : clé `favorites [{productId, variantId, defaultVariantId, pinned, rank}]` **seulement si les favoris sont
 activés** ; sinon contenu et ETag du pack inchangés. Depuis le 28/10/2026, elle ne contient que les **épinglés** du poste (ou du site),
 toujours `pinned: true`, rangs 1..n, prix dans `products` ; les plus vendus restent servis en ligne par `GET /api/pos/favorites` (ils
