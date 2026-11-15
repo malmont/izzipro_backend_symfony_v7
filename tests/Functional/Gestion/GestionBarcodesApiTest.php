@@ -271,6 +271,14 @@ class GestionBarcodesApiTest extends WebTestCase
         $pdf(['labels' => [['variantId' => $v1, 'copies' => 2], ['productId' => $bottle, 'copies' => 1]], 'showPrice' => true], '?locale=en');
         $this->assertSame([200, 'application/pdf', '3'], [$this->status(), $this->client->getResponse()->headers->get('Content-Type'), $this->client->getResponse()->headers->get('X-Labels-Count')], (string) $this->client->getResponse()->getContent());
         $this->assertStringStartsWith('%PDF-', (string) $this->client->getResponse()->getContent());
+        $this->assertSame('a4-50x30', $this->client->getResponse()->headers->get('X-Labels-Format'), 'sans `format` : la planche A4, comme avant');
+        // Format rouleau (imprimante thermique) : une page de 50 × 30 mm par étiquette, 200 au plus ; format inconnu refusé
+        $pdf(['labels' => [['variantId' => $v1, 'copies' => 2], ['productId' => $bottle, 'copies' => 1]], 'format' => 'roll-50x30']);
+        $this->assertSame([200, '3', 'roll-50x30', 3], [$this->status(), $this->client->getResponse()->headers->get('X-Labels-Count'), $this->client->getResponse()->headers->get('X-Labels-Format'),
+            preg_match_all('#/Type\s*/Page\b#', (string) $this->client->getResponse()->getContent())]);
+        $this->assertMatchesRegularExpression('#/MediaBox\s*\[0\.0+ 0\.0+ 141\.7\d* 85\.0\d*\]#', (string) $this->client->getResponse()->getContent(), 'la page a la taille de l\'étiquette');
+        $pdf(['labels' => [['variantId' => $v1, 'copies' => 201]], 'format' => 'roll-50x30']);
+        $this->assertSame([422, 'LABELS_LIMIT_EXCEEDED', 200, 201], [$this->status(), $this->body()['error'], $this->body()['max'], $this->body()['requested']], 'en rouleau le plafond est 200');
         $fields = function (array $body) use ($pdf): array {
             $pdf($body);
             $this->assertSame([422, 'VALIDATION_FAILED'], [$this->status(), $this->body()['error']]);
@@ -279,6 +287,9 @@ class GestionBarcodesApiTest extends WebTestCase
         };
         $this->assertSame(['labels' => 'REQUIRED'], $fields([]));
         $this->assertSame(['labels' => 'REQUIRED'], $fields(['labels' => []]));
+        foreach (['a5', 12, ['roll-50x30']] as $unknown) {
+            $this->assertSame(['format' => 'INVALID_VALUE'], $fields(['labels' => [['variantId' => $v1, 'copies' => 1]], 'format' => $unknown]), var_export($unknown, true));
+        }
         $this->assertSame(['labels[0]' => 'ONE_TARGET_REQUIRED', 'labels[1]' => 'ONE_TARGET_REQUIRED', 'labels[2].variantId' => 'MUST_BE_POSITIVE', 'labels[3].productId' => 'MUST_BE_POSITIVE', 'labels[4].copies' => 'MUST_BE_POSITIVE', 'labels[6]' => 'DUPLICATE', 'showPrice' => 'MUST_BE_BOOLEAN'],
             $fields(['labels' => [['variantId' => $v1, 'productId' => $bottle, 'copies' => 1], ['copies' => 1], ['variantId' => '12', 'copies' => 1], ['productId' => 0, 'copies' => 1], ['productId' => $bottle, 'copies' => 0],
                 ['variantId' => $v1, 'copies' => 1], ['variantId' => $v1, 'copies' => 2]], 'showPrice' => 'oui']));

@@ -115,7 +115,9 @@ class CommandeLabelsApiTest extends WebTestCase
 
         // 1. La liste : une ligne par variante qui a reçu, dans l'ordre des lignes de la commande
         $list = $this->get($base);
-        $this->assertSame(['commande', 'format', 'currency', 'pricesIncludeTax', 'maxLabels', 'labels', 'missing', 'skipped', 'totals'], array_keys($list));
+        $this->assertSame(['commande', 'format', 'currency', 'pricesIncludeTax', 'maxLabels', 'formats', 'labels', 'missing', 'skipped', 'totals'], array_keys($list));
+        $this->assertSame([['code' => 'a4-50x30', 'widthMm' => 50, 'heightMm' => 30, 'maxLabels' => 500], ['code' => 'roll-50x30', 'widthMm' => 50, 'heightMm' => 30, 'maxLabels' => 200]], $list['formats'],
+            'les formats que le PDF sait rendre, chacun avec son plafond');
         $this->assertSame([['id' => $commande, 'name' => "Étiquettes $this->tag", 'receptionStatus' => 'partial'], ['code' => 'a4-50x30', 'widthMm' => 50, 'heightMm' => 30], 500],
             [$list['commande'], $list['format'], $list['maxLabels']]);
         $this->assertSame((string) $conn->fetchOne('SELECT currency FROM entreprise ORDER BY id LIMIT 1'), $list['currency']);
@@ -184,7 +186,7 @@ class CommandeLabelsApiTest extends WebTestCase
         }
         $this->assertSame($list['missing'], $this->get($base)['missing'], 'aucun refus n\'a rien écrit');
         $one = $this->post("$base/codes", ['variantIds' => [$va, $d2]], 200); // d2 a déjà son code : rien à faire pour elle
-        $this->assertSame(['generated', 'commande', 'format', 'currency', 'pricesIncludeTax', 'maxLabels', 'labels', 'missing', 'skipped', 'totals'], array_keys($one));
+        $this->assertSame(['generated', 'commande', 'format', 'currency', 'pricesIncludeTax', 'maxLabels', 'formats', 'labels', 'missing', 'skipped', 'totals'], array_keys($one));
         $this->assertSame([$va], array_column($one['generated'], 'variantId'));
         $codeA = $one['generated'][0]['barcode'];
         $this->assertTrue(str_starts_with($codeA, '29') && CatalogBarcode::isEan13($codeA), $codeA);
@@ -209,6 +211,21 @@ class CommandeLabelsApiTest extends WebTestCase
             [$response->getStatusCode(), $response->headers->get('Content-Type'), $response->headers->get('Content-Disposition'), $response->headers->get('X-Labels-Count')]);
         $this->assertStringStartsWith('%PDF-', (string) $response->getContent());
         $this->assertGreaterThan(2000, strlen((string) $response->getContent()));
+        $this->assertSame('a4-50x30', $response->headers->get('X-Labels-Format'), 'sans `format` : la planche A4, comme avant');
+        // Format rouleau (imprimante thermique) : une page de 50 × 30 mm par étiquette, 200 au plus ; format inconnu refusé
+        $this->request('POST', "$base/pdf", ['labels' => [['variantId' => $va, 'copies' => 2], ['variantId' => $bm, 'copies' => 1]], 'format' => 'roll-50x30']);
+        $roll = $this->client->getResponse();
+        $this->assertSame([200, '3', 'roll-50x30', 3], [$roll->getStatusCode(), $roll->headers->get('X-Labels-Count'), $roll->headers->get('X-Labels-Format'), preg_match_all('#/Type\s*/Page\b#', (string) $roll->getContent())]);
+        $this->assertMatchesRegularExpression('#/MediaBox\s*\[0\.0+ 0\.0+ 141\.7\d* 85\.0\d*\]#', (string) $roll->getContent(), 'la page a la taille de l\'étiquette');
+        $this->request('POST', "$base/pdf", ['labels' => [['variantId' => $va, 'copies' => 1]], 'format' => 'a4-50x30']);
+        $this->assertSame([200, 'a4-50x30'], [$this->client->getResponse()->getStatusCode(), $this->client->getResponse()->headers->get('X-Labels-Format')]);
+        foreach (['a5', 12, ['roll-50x30']] as $unknown) {
+            $this->assertSame(['format' => 'INVALID_VALUE'], $this->post("$base/pdf", ['labels' => [['variantId' => $va, 'copies' => 1]], 'format' => $unknown], 422)['fields'], var_export($unknown, true));
+        }
+        $tooManyOnARoll = $this->post("$base/pdf", ['labels' => [['variantId' => $va, 'copies' => 201]], 'format' => 'roll-50x30'], 422);
+        $this->assertSame(['LABELS_LIMIT_EXCEEDED', 200, 201], [$tooManyOnARoll['error'], $tooManyOnARoll['max'], $tooManyOnARoll['requested']], 'en rouleau le plafond est 200');
+        $this->request('POST', "$base/pdf", ['labels' => [['variantId' => $va, 'copies' => 201]]]);
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode(), 'la planche A4 garde son plafond de 500');
         // Ce qui part à l'impression : prix écrit seulement si on le demande (et s'il existe), symbole selon le code
         $service = static::getContainer()->get(CommandeLabelService::class);
         $entity = $service->commande($commande);

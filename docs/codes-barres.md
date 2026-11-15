@@ -174,6 +174,8 @@ variante). Trois appels : la lecture n'écrit jamais, le PDF ne cache pas une é
   "commande": { "id": 42, "name": "Printemps 2027", "receptionStatus": "partial" },
   "format": { "code": "a4-50x30", "widthMm": 50, "heightMm": 30 },
   "currency": "CAD", "pricesIncludeTax": false, "maxLabels": 500,
+  "formats": [ { "code": "a4-50x30", "widthMm": 50, "heightMm": 30, "maxLabels": 500 },
+               { "code": "roll-50x30", "widthMm": 50, "heightMm": 30, "maxLabels": 200 } ],
   "labels": [
     { "variantId": 412, "product": { "id": 88, "name": "Casquette lin", "code": "CASQ-LIN" },
       "variant": { "id": 412, "size": "M", "color": "Beige" }, "title": "Casquette lin", "subtitle": "Beige / M",
@@ -212,11 +214,14 @@ ont pas ; ne remplace jamais un code (une variante qui a déjà le sien est igno
 journal du site (`catalog_barcode`, `generate`, `scope: commande`, `commandeId`). Refus : 422 `VARIANT_NOT_IN_COMMANDE { variantIds }`,
 422 `VALIDATION_FAILED { fields: { variantIds: MUST_BE_INTEGER_LIST } }`.
 
-**3. `POST /api/commandes/{id}/etiquettes/pdf`** `{ labels: [{ variantId, copies }], showPrice?: false }` (`?locale=fr|en` pour l'écriture
-du prix) → 200 `application/pdf`, `Content-Disposition: attachment; filename="etiquettes-commande-{id}.pdf"`, `X-Labels-Count`.
-Planches A4 d'étiquettes 50 × 30 mm : nom de l'article, variante, barres, code en clair, prix si `showPrice`. Refus (JSON, rien n'est
-imprimé) : 422 `VALIDATION_FAILED { fields }` (`labels: REQUIRED` ; `labels[i].variantId: MUST_BE_POSITIVE | DUPLICATE` ;
-`labels[i].copies: MUST_BE_POSITIVE` ; `showPrice: MUST_BE_BOOLEAN`), 422 `LABELS_LIMIT_EXCEEDED { max: 500, requested }`,
+**3. `POST /api/commandes/{id}/etiquettes/pdf`** `{ labels: [{ variantId, copies }], showPrice?: false, format?: "a4-50x30" }`
+(`?locale=fr|en` pour l'écriture du prix) → 200 `application/pdf`, `Content-Disposition: attachment;
+filename="etiquettes-commande-{id}.pdf"`, `X-Labels-Count`, `X-Labels-Format`. Étiquettes 50 × 30 mm : nom de l'article, variante,
+barres, code en clair, prix si `showPrice`. **`format`** (lot CB-ROULEAU, 15/11/2026) : `a4-50x30` (par défaut : planches A4, 500
+étiquettes au plus) ou `roll-50x30` (imprimante thermique à rouleau : une page de 50 × 30 mm par étiquette, 200 au plus) ; la
+liste (appel 1) rend les formats et leur plafond dans `formats`. Refus (JSON, rien n'est imprimé) : 422 `VALIDATION_FAILED { fields }`
+(`labels: REQUIRED` ; `labels[i].variantId: MUST_BE_POSITIVE | DUPLICATE` ; `labels[i].copies: MUST_BE_POSITIVE` ;
+`showPrice: MUST_BE_BOOLEAN` ; `format: INVALID_VALUE`), 422 `LABELS_LIMIT_EXCEEDED { max, requested }` (`max` : celui du format),
 422 `VARIANT_NOT_IN_COMMANDE { variantIds }`, 409 `BARCODE_MISSING { variantIds }` (générer d'abord, ou retirer ces lignes).
 
 Parcours : après « Marquer comme reçue », « Imprimer les étiquettes » → appel 1 ; si `missing.count > 0`, « Générer les codes
@@ -238,8 +243,8 @@ Plafond de 500 étiquettes, mesuré le 15/11/2026 dans le conteneur (rendu seul,
 
 L'imprimeur (`BarcodeLabelPrinter`) sait aussi, depuis le lot L2-b de la prévention des pertes (`docs/prevention-pertes.md` § 13.10),
 rendre le format rouleau `roll-50x30` (une page de 50 × 30 mm par étiquette, 200 au plus) et une ligne de plus par étiquette (`note` :
-le numéro d'une pièce). Les routes de cette fiche rendent toujours la planche A4 `a4-50x30` : leur donner le choix du format est un
-paramètre à ajouter. Les anciennes adresses d'impression d'un article (`/admin/print-barcode/{id}/{copies}`,
+le numéro d'une pièce). Depuis le lot CB-ROULEAU (15/11/2026), les deux PDF de l'API (réception, § 7, et hors commande, § 8) prennent
+le paramètre `format` ; sans lui, rien ne change : la planche A4. L'écran d'EasyAdmin imprime toujours en planche A4. Les anciennes adresses d'impression d'un article (`/admin/print-barcode/{id}/{copies}`,
 `/admin/pdf/print-barcode/{id}/{copies}`) rendent la même planche ; `/admin/barcode-image/{id}` n'existe plus.
 
 ## 8. Codes-barres dans l'application de gestion (lot CB-3)
@@ -274,7 +279,7 @@ La **fiche** (`sheet`) rendue par ces routes, de quoi l'afficher et l'ouvrir :
 | `POST …/articles/{id}/generer` | — | `{ barcode, sheet }` | 404 `PRODUCT_NOT_FOUND` ; 409 `BARCODE_ALREADY_SET`, `BARCODE_HAS_VARIANTS` |
 | `PUT …/variantes/{id}` | `{ barcode, replace? }` | `{ barcode, changed, warning, sheet }` | 404 ; 422 `VALIDATION_FAILED { fields: { barcode: REQUIRED \| MUST_BE_STRING, replace: MUST_BE_BOOLEAN } }`, `BARCODE_INVALID`, `BARCODE_RESERVED` ; 409 `BARCODE_ALREADY_USED { holder }`, `BARCODE_ALREADY_SET { current }` |
 | `PUT …/articles/{id}` | `{ barcode, replace? }` | idem | idem |
-| `POST …/etiquettes/pdf` | `{ labels: [{ variantId \| productId, copies }], showPrice? }` | `application/pdf`, `X-Labels-Count` | 422 `VALIDATION_FAILED { fields }`, `LABELS_LIMIT_EXCEEDED { max, requested }`, `SHEET_NOT_FOUND { variantIds, productIds }` ; 409 `BARCODE_MISSING { variantIds, productIds }` |
+| `POST …/etiquettes/pdf` | `{ labels: [{ variantId \| productId, copies }], showPrice?, format? (a4-50x30 \| roll-50x30) }` | `application/pdf`, `X-Labels-Count`, `X-Labels-Format` | 422 `VALIDATION_FAILED { fields }`, `LABELS_LIMIT_EXCEEDED { max, requested }`, `SHEET_NOT_FOUND { variantIds, productIds }` ; 409 `BARCODE_MISSING { variantIds, productIds }` |
 
 - **Poser un code** (`PUT`) : `barcode` saisi ou scanné, mis en forme canonique ; vide ou `null` : le code est retiré. Un code
   inchangé rend `changed: false` et n'écrit rien. **Garde-fou** (décision du 15/11/2026) : une fiche qui porte déjà un AUTRE code ne
@@ -288,8 +293,9 @@ La **fiche** (`sheet`) rendue par ces routes, de quoi l'afficher et l'ouvrir :
   généré, il n'y a pas de `replace` ici) ;
   un article à variantes n'en reçoit pas (`BARCODE_HAS_VARIANTS`).
 - **Étiquettes hors commande** : une ligne par `variantId` ou par `productId` (article SANS variante ; un article à variantes est
-  refusé, son étiquette se fait par variante), `copies` ≥ 1, 500 étiquettes au plus ; même planche et mêmes règles de code et de prix
-  que la réception (§ 7 : code de la variante, sinon celui de l'article quand elle est sa seule variante ; `showPrice`, `?locale=`).
+  refusé, son étiquette se fait par variante), `copies` ≥ 1 ; même rendu et mêmes règles de code et de prix que la réception (§ 7 :
+  code de la variante, sinon celui de l'article quand elle est sa seule variante ; `showPrice`, `?locale=` ; `format` : planche A4,
+  500 étiquettes au plus, ou rouleau `roll-50x30`, une page par étiquette, 200 au plus).
   Une lecture : rien n'est écrit. Les trois routes par commande du § 7 restent.
 - **Journal du site** : chaque écriture laisse une ligne `content_audit_log` (ressource `catalog_barcode`, compte de l'administrateur,
   `source: gestion`) : `set` et `remove` (clé `variant-412` / `product-95`, code avant et après), `generate` (la fiche et son code, ou

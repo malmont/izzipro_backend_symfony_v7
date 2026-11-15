@@ -41,6 +41,25 @@ class BarcodeLabelPrinter
         return $format === self::ROLL ? self::ROLL_MAX_LABELS : self::MAX_LABELS;
     }
 
+    /**
+     * Le format demandé par une route (`format` du corps) : absent, la planche A4 ; sinon un des formats connus, ou null si la valeur
+     * n'en est pas un (la route répond alors `format: INVALID_VALUE`).
+     */
+    public static function formatAsked(mixed $asked): ?string
+    {
+        if ($asked === null) {
+            return self::A4;
+        }
+
+        return is_string($asked) && isset(self::FORMATS[$asked]) ? $asked : null;
+    }
+
+    /** @return list<array{code: string, widthMm: int, heightMm: int, maxLabels: int}> les formats proposés, avec leur plafond */
+    public static function formats(): array
+    {
+        return array_map(static fn (array $f): array => $f + ['maxLabels' => self::maxLabels($f['code'])], array_values(self::FORMATS));
+    }
+
     /** Symbole qui imprimera ce code */
     public static function symbology(string $code): string
     {

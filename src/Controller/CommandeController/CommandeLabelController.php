@@ -34,7 +34,7 @@ class CommandeLabelController extends AbstractController
         return $this->json($this->labels->generate($this->labels->commande($id), $this->body($request)));
     }
 
-    /** Le PDF de la sélection (planches A4 d'étiquettes 50 × 30 mm) → 200 application/pdf, en-tête X-Labels-Count */
+    /** Le PDF de la sélection (étiquettes 50 × 30 mm : planche A4, ou rouleau avec `format: roll-50x30`) → 200 application/pdf, en-têtes X-Labels-Count et X-Labels-Format */
     #[Route('/api/commandes/{id}/etiquettes/pdf', name: 'commande_labels_pdf', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function pdf(int $id, Request $request): Response
     {
@@ -44,6 +44,7 @@ class CommandeLabelController extends AbstractController
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => sprintf('attachment; filename="etiquettes-commande-%d.pdf"', $id),
             'X-Labels-Count' => (string) $pdf['count'],
+            'X-Labels-Format' => $pdf['format'],
         ]);
     }
 
