@@ -3,7 +3,7 @@
         "method": "POST",
         "path": "/api/gestion/pertes/installation/puce-test?locale=fr",
         "body": {
-            "identifier": "0741C2B8",
+            "identifier": "070A5E69",
             "technology": "nfc"
         }
     },
@@ -11,7 +11,7 @@
     "headers": {},
     "body": {
         "ok": true,
-        "identifier": "0741C2B8",
+        "identifier": "070A5E69",
         "technology": "nfc",
         "refusal": null,
         "hint": null,
@@ -73,7 +73,9 @@
                     "verify": {
                         "kind": "data",
                         "label": "Vérifier"
-                    }
+                    },
+                    "state": "absent",
+                    "hint": "Aucun boîtier n'est installé. Ajoutez un boîtier, puis inscrivez sa machine avec la clé."
                 }
             ],
             "progress": {

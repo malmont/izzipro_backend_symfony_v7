@@ -38,7 +38,7 @@ class LossPreventionModuleSubscriber implements EventSubscriberInterface
             // lot L2-b : assistant d'installation et gamme de matériel
             '#^/api/gestion/pertes/exercices/installation\z#', '#^/api/gestion/pertes/exercices/materiel\z#',
             // lot L3-a : boîtier simulé
-            '#^/api/gestion/pertes/exercices/boitiers\z#', '#^/api/gestion/pertes/exercices/boitiers/\d+\z#'],
+            '#^/api/gestion/pertes/exercices/boitiers\z#', '#^/api/gestion/pertes/exercices/boitiers/\d+\z#', '#^/api/gestion/pertes/exercices/sante\z#'],
         'POST' => ['#^/api/gestion/pertes/exercices\z#',
             '#^/api/gestion/pertes/exercices/pieces\z#', '#^/api/gestion/pertes/exercices/pieces/\d+/retirer\z#',
             '#^/api/gestion/pertes/exercices/puces/associer\z#', '#^/api/gestion/pertes/exercices/puces/\d+/retirer\z#',
@@ -78,6 +78,13 @@ class LossPreventionModuleSubscriber implements EventSubscriberInterface
             }
         } catch (\Throwable $e) {
             $this->logger->warning('LossPreventionModuleSubscriber : indicateurs de modules illisibles, requête laissée passer : ' . $e->getMessage());
+
+            return;
+        }
+        if (preg_match(LossBoxGuardSubscriber::PATH, $path)) {
+            // Routes du boîtier : appelées sans compte, parfois sans jeton (inscription). La réponse ne dit rien de l'offre du site
+            // (ni essai, ni demande en cours), et un appel anonyme n'écrit pas au journal
+            $event->setResponse(new JsonResponse(['error' => self::CODE, 'code' => self::CODE, 'message' => 'Ce site n\'a pas le module du boîtier.'], 403));
 
             return;
         }

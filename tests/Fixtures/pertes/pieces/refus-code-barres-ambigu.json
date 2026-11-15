@@ -3,7 +3,7 @@
         "method": "POST",
         "path": "/api/gestion/pertes/pieces?locale=fr",
         "body": {
-            "barcode": "VESTE-LIN-41C2B8"
+            "barcode": "VESTE-LIN-0A5E69"
         }
     },
     "status": 409,
@@ -11,7 +11,7 @@
     "body": {
         "error": "BARCODE_AMBIGUOUS",
         "code": "BARCODE_AMBIGUOUS",
-        "message": "Ce code-barres est celui de l'article « Veste en lin (exemple 41C2B8) », qui a plusieurs variantes : choisissez la variante.",
+        "message": "Ce code-barres est celui de l'article « Veste en lin (exemple 0A5E69) », qui a plusieurs variantes : choisissez la variante.",
         "productId": 15,
         "variantIds": [
             23,

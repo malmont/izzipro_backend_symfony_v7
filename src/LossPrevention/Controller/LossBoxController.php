@@ -66,6 +66,20 @@ class LossBoxController extends AbstractController
         return $this->json($this->useCase->revoke($id, $this->body($request), $this->locale($request), $this->userId()));
     }
 
+    /** Tableau de santé du matériel → 200 { devices, summary, thresholdSeconds, exercise, screen, checkedAt } ; une lecture légère, relue par l'écran toutes les quelques secondes */
+    #[Route('/sante', name: 'gestion_pertes_sante', methods: ['GET'])]
+    public function health(Request $request): JsonResponse
+    {
+        return $this->json($this->useCase->health($this->locale($request)));
+    }
+
+    /** Régler le délai de silence `{ silentAfterSeconds }` (120 à 3600, null : 300) → 200 { thresholdSeconds, default, min, max } */
+    #[Route('/sante/seuil', name: 'gestion_pertes_sante_seuil', methods: ['PUT'])]
+    public function healthThreshold(Request $request): JsonResponse
+    {
+        return $this->json($this->useCase->healthThreshold($this->body($request), $this->userId()));
+    }
+
     // ----- Mode exercice : le boîtier simulé, ouvert sans le droit du module (`LossPreventionModuleSubscriber::OPEN_ROUTES`) -----
 
     /** Boîtiers simulés → 200 { items, total, limit, exercise, screen, scenarios } */
@@ -73,6 +87,13 @@ class LossBoxController extends AbstractController
     public function exerciseList(Request $request): JsonResponse
     {
         return $this->json($this->useCase->list($this->locale($request), true));
+    }
+
+    /** Tableau de santé des boîtiers simulés → 200, même forme que `/sante` */
+    #[Route('/exercices/sante', name: 'gestion_pertes_exercices_sante', methods: ['GET'])]
+    public function exerciseHealth(Request $request): JsonResponse
+    {
+        return $this->json($this->useCase->health($this->locale($request), true));
     }
 
     /** Créer un boîtier simulé (aucun corps) → 201 { box, scenarios } ; 409 EXERCISE_LIMIT_REACHED */

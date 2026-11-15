@@ -1,0 +1,36 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/sante?locale=fr"
+    },
+    "status": 200,
+    "body": {
+        "devices": [
+            {
+                "code": "box",
+                "kind": "box",
+                "label": "Boîtier",
+                "zone": null,
+                "cashRegisterId": null,
+                "state": "absent",
+                "stateLabel": "Pas installé",
+                "lastSeenAt": null,
+                "silentSince": null,
+                "silentSeconds": null,
+                "hint": "Aucun boîtier n'est installé. Ajoutez un boîtier, puis inscrivez sa machine avec la clé."
+            }
+        ],
+        "summary": {
+            "ok": 0,
+            "pending": 0,
+            "down": 0,
+            "absent": 1,
+            "allOk": false,
+            "label": "1 appareil à vérifier"
+        },
+        "thresholdSeconds": 300,
+        "exercise": false,
+        "screen": "pertes.boitiers",
+        "checkedAt": "2026-11-15T22:53:55+00:00"
+    }
+}

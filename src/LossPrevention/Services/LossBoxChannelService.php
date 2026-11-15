@@ -6,6 +6,7 @@ use App\LossPrevention\Entity\LossBox;
 use App\LossPrevention\Entity\LossBoxEvent;
 use App\LossPrevention\Entity\LossDevice;
 use App\LossPrevention\Entity\LossPieceEvent;
+use App\LossPrevention\Entity\LossTag;
 use App\LossPrevention\Repository\LossBoxRepository;
 use App\Services\TenantConnectionProvider;
 use App\Services\TenantEntityManagerProvider;
@@ -16,35 +17,40 @@ use App\Services\TenantEntityManagerProvider;
  *
  * - **Le boîtier n'est pas un utilisateur.** Son jeton lui donne exactement ceci, sur son site : dire qu'il est là, lire SES
  *   réglages (ses appareils, les zones, les faits acceptés), envoyer des faits. Rien ici ne lit une vente, un client, le catalogue
- *   ni un constat ; aucune réponse ne porte de nom d'article, de prix ni de personne.
- * - **Chaque appel relit le boîtier** : actif, de la génération du jeton. Révoquer un boîtier ou remettre sa clé à zéro vaut à
- *   l'appel suivant.
+ *   ni un constat ; aucune réponse ne porte de nom (d'article, de personne, ni même du boîtier), de prix ni de donnée d'un autre site.
+ * - **Chaque appel relit le boîtier** : actif, de la génération du jeton. Le signe de vie et un lot de faits le relisent encore
+ *   SOUS VERROU avant d'écrire : une révocation validée entre-temps arrête l'écriture.
+ * - **La clé et la machine ne sont gardées que par leur empreinte**, liée au site et au secret de l'application
+ *   (`LossBoxToken::keyHash`, `machineHash`) : une copie de la base ne donne ni l'une ni l'autre, et ne vaut pas sur un autre site.
  * - **Faits rejouables** : un fait porte une clé d'idempotence ; un fait déjà reçu répond « déjà connu ». Un fait refusé ne fait
  *   jamais échouer le lot, et il n'est pas à renvoyer.
  * - **Le signe de vie n'est pas un fait** : il met à jour l'état du boîtier et de ses appareils ; seul un CHANGEMENT écrit un fait
- *   (appareil vu pour la première fois, en panne, revenu ; boîtier revenu après un silence).
+ *   (appareil vu pour la première fois, en panne, revenu ; boîtier revenu après un silence). Un appareil refusé (genre qui change,
+ *   trop d'appareils) est dit dans la réponse : il n'empêche jamais le boîtier de donner signe de vie.
  * - Aucun état de pièce ne change en L3-a : les faits de pièces sont gardés tels quels (les lots L3-b et L4 les liront).
  */
 class LossBoxChannelService
 {
     public const MAX_FACTS = 200;
     public const HEARTBEAT_SECONDS = 60;
-    /** Sans signe de vie depuis plus longtemps, le boîtier est dit silencieux ; son retour écrit un fait */
-    public const SILENT_AFTER = 300;
     /** Écart d'horloge toléré (secondes) : au-delà, les faits portent un doute sur leur heure */
     public const CLOCK_TOLERANCE = 60;
+    /** Un fait plus vieux que cela (la file du boîtier garde 7 jours) porte aussi un doute sur son heure */
+    public const OLDEST_FACT = 691200;
     private const MACHINE = '/\A[A-Za-z0-9_.:-]{16,128}\z/';
     private const VERSION = '/\A[0-9A-Za-z.+_-]{1,40}\z/';
     private const SERIAL = '/\A[A-Za-z0-9_.:-]{1,64}\z/';
     private const MODEL = '/\A[\p{L}\p{N} _.()\/+-]{1,60}\z/u';
     private const FACT_KEY = '/\A[A-Za-z0-9_-]{8,48}\z/';
-    private const TIME = '/\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})\z/';
+    private const TIME = '/\A(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})\z/';
     public const ARCHS = ['amd64', 'arm64'];
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly TenantConnectionProvider $tenant,
         private readonly LossBoxToken $tokens,
+        private readonly LossHealthService $health,
+        private readonly LossBoxLimits $limits,
     ) {
     }
 
@@ -62,7 +68,7 @@ class LossBoxChannelService
         if ($claims === null) {
             throw new LossBoxException('BOX_TOKEN_INVALID', 'Jeton de boîtier invalide.', 401);
         }
-        $box = $this->boxOfToken($claims);
+        $box = self::usable($this->repository()->box($claims['boxId']), $claims['generation']);
         if ($claims['expiresAt'] <= time()) {
             throw new LossBoxException('BOX_TOKEN_EXPIRED', 'Jeton de boîtier expiré : demandez-en un neuf.', 401);
         }
@@ -80,6 +86,7 @@ class LossBoxChannelService
      */
     public function enrol(array $body): array
     {
+        $site = $this->tenantCode(); // avant toute lecture : sans site résolu, rien n'est cherché
         $errors = [];
         foreach (['machine' => self::MACHINE, 'version' => self::VERSION] as $field => $pattern) {
             if (!is_string($body[$field] ?? null) || preg_match($pattern, $body[$field]) !== 1) {
@@ -97,24 +104,31 @@ class LossBoxChannelService
         }
         // une saisie qui n'a pas la forme d'une clé reçoit la réponse d'une clé inconnue
         $key = LossBoxKey::canonical($body['key']) ?? throw new LossBoxException('BOX_KEY_INVALID', 'Clé de boîtier inconnue.', 404);
-        $machine = hash('sha256', $body['machine']);
+        $machine = $this->tokens->machineHash($site, $body['machine']);
 
-        return $this->transaction(function () use ($key, $machine, $body): array {
+        return $this->transaction(function () use ($site, $key, $machine, $body): array {
             $repository = $this->repository();
-            $box = $repository->boxByKeyHash(LossBoxKey::hash($key)) ?? throw new LossBoxException('BOX_KEY_INVALID', 'Clé de boîtier inconnue.', 404);
+            $box = $repository->boxByKeyHash($this->tokens->keyHash($site, $key)) ?? throw new LossBoxException('BOX_KEY_INVALID', 'Clé de boîtier inconnue.', 404);
             if ($box['status'] === LossBox::REVOKED) {
                 throw new LossBoxException('BOX_REVOKED', 'Ce boîtier a été révoqué.', 403);
             }
             if ($box['machine_hash'] !== null && !hash_equals((string) $box['machine_hash'], $machine)) {
                 throw new LossBoxException('BOX_KEY_ALREADY_ENROLLED', 'Cette clé est déjà liée à une autre machine : l\'administrateur doit la remettre à zéro.', 409);
             }
-            $now = self::now();
-            $generation = $repository->enrol((int) $box['id'], $machine, $body['version'], $body['arch'], $now);
-            $repository->event((int) $box['id'], null, LossBoxEvent::BOX_ENROLLED, null, false, ['version' => $body['version'], 'arch' => $body['arch'], 'again' => $box['machine_hash'] !== null], $now);
-            $token = $this->tokens->issue($this->tenantCode(), (int) $box['id'], $generation);
+            $serverNow = time();
+            $now = gmdate('Y-m-d H:i:s', $serverNow);
+            $boxId = (int) $box['id'];
+            $again = $box['machine_hash'] !== null;
+            // une machine qui se réinscrit après un silence : le trou est un fait, comme au retour d'un signe de vie
+            $silent = $again && $box['last_seen_at'] !== null ? $serverNow - self::stamp((string) $box['last_seen_at']) : 0;
+            if ($silent > $this->health->silentAfter()) {
+                $repository->event($boxId, null, LossBoxEvent::BOX_BACK, null, false, ['silentSeconds' => $silent, 'since' => self::iso(self::stamp((string) $box['last_seen_at']))], $now);
+            }
+            $generation = $repository->enrol($boxId, $machine, $body['version'], $body['arch'], $now);
+            $repository->event($boxId, null, LossBoxEvent::BOX_ENROLLED, null, false, ['version' => $body['version'], 'arch' => $body['arch'], 'again' => $again], $now);
+            $token = $this->tokens->issue($site, $boxId, $generation, $serverNow);
 
-            return ['box' => ['id' => (int) $box['id'], 'name' => (string) $box['name']], 'token' => $token['token'], 'expiresAt' => self::iso($token['expiresAt']),
-                'serverTime' => self::iso(time()), 'settings' => $this->settingsOf((int) $box['id'])];
+            return ['box' => ['id' => $boxId], 'token' => $token['token'], 'expiresAt' => self::iso($token['expiresAt']), 'serverTime' => self::iso($serverNow), 'settings' => $this->settingsOf($boxId)];
         });
     }
 
@@ -128,43 +142,50 @@ class LossBoxChannelService
      */
     public function renew(mixed $token, array $body): array
     {
-        $claims = is_string($token) ? $this->tokens->read($this->tenantCode(), $token) : null;
+        $site = $this->tenantCode();
+        $claims = is_string($token) ? $this->tokens->read($site, $token) : null;
         if ($claims === null || $claims['expiresAt'] + LossBoxToken::GRACE <= time()) {
             throw new LossBoxException('BOX_TOKEN_INVALID', 'Jeton de boîtier invalide : il faut une nouvelle inscription.', 401);
         }
-        $box = $this->boxOfToken($claims);
-        if (!is_string($body['machine'] ?? null) || !hash_equals((string) $box['machine_hash'], hash('sha256', $body['machine']))) {
-            throw new LossBoxException('BOX_TOKEN_INVALID', 'Jeton de boîtier invalide : il faut une nouvelle inscription.', 401);
-        }
-        $fresh = $this->tokens->issue($this->tenantCode(), (int) $box['id'], (int) $box['generation']);
+        $box = self::usable($this->repository()->box($claims['boxId']), $claims['generation']);
+        $this->sameMachine($box, $body, $site);
+        $fresh = $this->tokens->issue($site, (int) $box['id'], (int) $box['generation']);
 
         return ['token' => $fresh['token'], 'expiresAt' => self::iso($fresh['expiresAt']), 'serverTime' => self::iso(time())];
     }
 
     /**
-     * Signe de vie `{ now, version?, devices: [{ serial, kind, model?, status }] }` : dernier contact, écart d'horloge, état des
-     * appareils. Un appareil connu que le boîtier n'annonce plus est noté en panne. Rend un jeton neuf dès la mi-vie du sien.
+     * Signe de vie `{ now, machine, version?, devices: [{ serial, kind, model?, status }] }` : dernier contact, écart d'horloge,
+     * état des appareils. Un appareil connu que le boîtier n'annonce plus est noté en panne. Un appareil que la plateforme ne peut
+     * pas prendre (genre qui change, série en double, trop d'appareils) est rendu dans `refusedDevices` : le signe de vie vaut
+     * quand même. Rend un jeton neuf dès la mi-vie du sien.
      *
      * @param array<string, mixed> $box  le boîtier authentifié
      * @param array<string, mixed> $body
      *
-     * @return array<string, mixed> { serverTime, clockOffsetSeconds, clockDoubt, token, settings }
+     * @return array<string, mixed> { serverTime, clockOffsetSeconds, clockDoubt, token, refusedDevices, settings }
      */
     public function heartbeat(array $box, array $body): array
     {
+        $site = $this->tenantCode();
         $errors = [];
         $boxNow = self::time($body['now'] ?? null);
         if ($boxNow === null) {
             $errors['now'] = array_key_exists('now', $body) ? 'INVALID_VALUE' : 'REQUIRED';
         }
+        if (!is_string($body['machine'] ?? null) || preg_match(self::MACHINE, $body['machine']) !== 1) {
+            $errors['machine'] = array_key_exists('machine', $body) ? 'INVALID_VALUE' : 'REQUIRED';
+        }
         $version = $body['version'] ?? null;
         if ($version !== null && (!is_string($version) || preg_match(self::VERSION, $version) !== 1)) {
             $errors['version'] = 'INVALID_VALUE';
         }
-        $devices = $body['devices'] ?? [];
+        // la liste est obligatoire : un signe de vie sans elle déclarerait tous les appareils débranchés
+        $devices = $body['devices'] ?? null;
         $announced = [];
+        $refused = [];
         if (!is_array($devices) || !array_is_list($devices)) {
-            $errors['devices'] = 'MUST_BE_LIST';
+            $errors['devices'] = array_key_exists('devices', $body) ? 'MUST_BE_LIST' : 'REQUIRED';
         } elseif (count($devices) > LossDevice::MAX_PER_BOX) {
             $errors['devices'] = 'TOO_MANY';
         } else {
@@ -174,71 +195,75 @@ class LossBoxChannelService
                     continue;
                 }
                 $serial = $device['serial'] ?? null;
+                $valid = true;
                 if (!is_string($serial) || preg_match(self::SERIAL, $serial) !== 1) {
                     $errors["devices[$i].serial"] = array_key_exists('serial', $device) ? 'INVALID_VALUE' : 'REQUIRED';
-                } elseif (isset($announced[$serial])) {
-                    $errors["devices[$i].serial"] = 'DUPLICATE';
+                    $valid = false;
                 }
                 if (!in_array($device['kind'] ?? null, LossDevice::KINDS, true)) {
                     $errors["devices[$i].kind"] = array_key_exists('kind', $device) ? 'INVALID_VALUE' : 'REQUIRED';
+                    $valid = false;
                 }
                 if (!in_array($device['status'] ?? null, [LossDevice::OK, LossDevice::DOWN], true)) {
                     $errors["devices[$i].status"] = array_key_exists('status', $device) ? 'INVALID_VALUE' : 'REQUIRED';
+                    $valid = false;
                 }
                 $model = $device['model'] ?? null;
                 if ($model !== null && (!is_string($model) || preg_match(self::MODEL, $model) !== 1)) {
                     $errors["devices[$i].model"] = 'INVALID_VALUE';
+                    $valid = false;
                 }
-                if (is_string($serial)) {
-                    $announced[$serial] = ['kind' => $device['kind'] ?? null, 'status' => $device['status'] ?? null, 'model' => $model];
+                if (!$valid) {
+                    continue;
                 }
+                if (isset($announced[$serial])) {
+                    $refused[] = ['serial' => $serial, 'code' => 'DUPLICATE']; // deux appareils au même numéro de série : le premier compte
+                    continue;
+                }
+                $announced[$serial] = ['kind' => $device['kind'], 'status' => $device['status'], 'model' => $model];
             }
         }
         if ($errors !== []) {
             throw new LossBoxException('VALIDATION_FAILED', 'Signe de vie invalide.', 422, ['fields' => $errors]);
         }
+        $this->sameMachine($box, $body, $site);
         $boxId = (int) $box['id'];
 
-        return $this->transaction(function () use ($boxId, $boxNow, $version, $announced, $box): array {
+        return $this->transaction(function () use ($site, $boxId, $boxNow, $version, $announced, $refused, $box): array {
             $repository = $this->repository();
-            // la ligne du boîtier est verrouillée : deux signes de vie du même boîtier ne se croisent pas
-            $current = $repository->box($boxId, true);
-            if ($current === null || $current['status'] !== LossBox::ACTIVE || (int) $current['generation'] !== (int) $box['generation']) {
-                throw new LossBoxException('BOX_TOKEN_INVALID', 'Jeton de boîtier invalide.', 401);
-            }
+            // la ligne du boîtier est verrouillée : deux signes de vie du même boîtier ne se croisent pas, et un boîtier révoqué
+            // entre-temps n'écrit plus rien
+            $current = self::usable($repository->box($boxId, true), (int) $box['generation']);
             $serverNow = time();
             $now = gmdate('Y-m-d H:i:s', $serverNow);
             $known = [];
             foreach ($repository->devicesOf([$boxId])[$boxId] as $row) {
                 $known[(string) $row['serial']] = $row;
             }
-            $errors = [];
-            $i = 0;
-            foreach ($announced as $serial => $device) {
-                if (isset($known[$serial]) && $known[$serial]['kind'] !== $device['kind']) {
-                    $errors["devices[$i].kind"] = 'MISMATCH'; // le genre d'un appareil ne change pas
-                }
-                ++$i;
-            }
-            if (count($known + $announced) > LossDevice::MAX_PER_BOX) {
-                $errors['devices'] = 'TOO_MANY';
-            }
-            if ($errors !== []) {
-                throw new LossBoxException('VALIDATION_FAILED', 'Signe de vie invalide.', 422, ['fields' => $errors]);
-            }
             $silent = $current['last_seen_at'] !== null ? $serverNow - self::stamp((string) $current['last_seen_at']) : 0;
-            if ($silent > self::SILENT_AFTER) {
+            if ($silent > $this->health->silentAfter()) { // le délai de silence du site (5 minutes par défaut)
                 $repository->event($boxId, null, LossBoxEvent::BOX_BACK, null, false, ['silentSeconds' => $silent, 'since' => self::iso(self::stamp((string) $current['last_seen_at']))], $now);
             }
             $offset = max(-2147483647, min(2147483647, $boxNow - $serverNow));
             $repository->seen($boxId, $now, $version, $offset);
+            $count = count($known);
             foreach ($announced as $serial => $device) {
+                $serial = (string) $serial;
                 if (!isset($known[$serial])) {
-                    $id = $repository->insertDevice($boxId, (string) $serial, $device['kind'], $device['model'], $device['status'], null, false, $now);
+                    if ($count >= LossDevice::MAX_KNOWN_PER_BOX) {
+                        $refused[] = ['serial' => $serial, 'code' => 'TOO_MANY'];
+                        continue;
+                    }
+                    ++$count;
+                    $id = $repository->insertDevice($boxId, $serial, $device['kind'], $device['model'], $device['status'], null, false, $now);
                     $repository->event($boxId, $id, LossBoxEvent::DEVICE_SEEN, null, false, ['kind' => $device['kind']], $now);
                     if ($device['status'] === LossDevice::DOWN) {
                         $repository->event($boxId, $id, LossBoxEvent::SOURCE_DOWN, null, false, ['reason' => 'reported'], $now);
                     }
+                    continue;
+                }
+                if ($known[$serial]['kind'] !== $device['kind']) {
+                    $refused[] = ['serial' => $serial, 'code' => 'MISMATCH']; // le genre d'un appareil ne change pas : l'appareil connu reste comme il est
                     continue;
                 }
                 $id = (int) $known[$serial]['id'];
@@ -256,12 +281,12 @@ class LossBoxChannelService
             }
             $token = null;
             if ((int) $box['token_expires_at'] - $serverNow < LossBoxToken::RENEW_BEFORE) {
-                $fresh = $this->tokens->issue($this->tenantCode(), $boxId, (int) $current['generation'], $serverNow);
+                $fresh = $this->tokens->issue($site, $boxId, (int) $current['generation'], $serverNow);
                 $token = ['token' => $fresh['token'], 'expiresAt' => self::iso($fresh['expiresAt'])];
             }
 
             return ['serverTime' => self::iso($serverNow), 'clockOffsetSeconds' => $offset, 'clockDoubt' => abs($offset) > self::CLOCK_TOLERANCE, 'token' => $token,
-                'settings' => $this->settingsOf($boxId)];
+                'refusedDevices' => $refused, 'settings' => $this->settingsOf($boxId)];
         });
     }
 
@@ -274,7 +299,7 @@ class LossBoxChannelService
      */
     public function settings(array $box): array
     {
-        return ['box' => ['id' => (int) $box['id'], 'name' => (string) $box['name']], 'serverTime' => self::iso(time())] + $this->settingsOf((int) $box['id']);
+        return ['box' => ['id' => (int) $box['id']], 'serverTime' => self::iso(time())] + $this->settingsOf((int) $box['id']);
     }
 
     /**
@@ -296,6 +321,11 @@ class LossBoxChannelService
             throw new LossBoxException('FACTS_LIMIT_EXCEEDED', sprintf('Au plus %d faits par lot.', self::MAX_FACTS), 422, ['max' => self::MAX_FACTS, 'received' => count($facts)]);
         }
         $boxId = (int) $box['id'];
+        // plafond de faits par boîtier et par heure : la table des faits ne se vide pas, un boîtier déréglé ne la remplit pas
+        $wait = $this->limits->facts($this->tenantCode(), $boxId, count($facts));
+        if ($wait !== null) {
+            throw new LossBoxException('RATE_LIMITED', 'Trop de faits envoyés. Réessayez plus tard.', 429, ['retryAfterSeconds' => $wait]);
+        }
         $repository = $this->repository();
         $devices = [];
         foreach ($repository->devicesOf([$boxId])[$boxId] as $row) {
@@ -306,16 +336,18 @@ class LossBoxChannelService
         $checked = [];
         $identifiers = [];
         foreach ($facts as $index => $fact) {
-            $checked[$index] = $this->checkFact($fact, $devices, $serverNow);
+            $checked[$index] = $this->checkFact($fact, $devices);
             if (isset($checked[$index]['identifier'])) {
                 $identifiers[$checked[$index]['identifier']] = true;
             }
         }
         $tags = $repository->tagsByIdentifier(array_map('strval', array_keys($identifiers)));
-        // l'heure d'un fait est douteuse si l'horloge du boîtier n'a pas été mesurée, ou si elle s'écarte de celle du serveur
-        $offsetDoubt = $box['clock_offset'] === null || abs((int) $box['clock_offset']) > self::CLOCK_TOLERANCE;
 
-        return $this->transaction(function () use ($checked, $tags, $boxId, $repository, $serverNow, $offsetDoubt): array {
+        return $this->transaction(function () use ($checked, $tags, $boxId, $box, $repository, $serverNow): array {
+            // le boîtier est relu et tenu : révoqué ou réinscrit depuis l'authentification, il n'écrit rien
+            $current = self::usable($repository->box($boxId, false, true), (int) $box['generation']);
+            // l'heure d'un fait est douteuse si l'horloge du boîtier n'a pas été mesurée, ou si elle s'écarte de celle du serveur
+            $offsetDoubt = $current['clock_offset'] === null || abs((int) $current['clock_offset']) > self::CLOCK_TOLERANCE;
             $now = gmdate('Y-m-d H:i:s', $serverNow);
             $results = [];
             $counts = ['accepted' => 0, 'duplicate' => 0, 'refused' => 0];
@@ -332,8 +364,11 @@ class LossBoxChannelService
                     $results[] = ['index' => $index, 'key' => $fact['key'], 'status' => 'refused', 'code' => $refusal];
                     continue;
                 }
+                // un fait daté du futur, ou plus vieux que la file du boîtier, porte lui aussi un doute sur son heure
+                $doubt = $offsetDoubt || $fact['at'] > $serverNow + self::CLOCK_TOLERANCE || $fact['at'] < $serverNow - self::OLDEST_FACT;
                 $data = array_filter(['zone' => $fact['zone'], 'seq' => $fact['seq']], static fn (mixed $v): bool => $v !== null)
-                    + ($offsetDoubt || $fact['at'] > $serverNow + self::CLOCK_TOLERANCE ? ['clockDoubt' => true] : []);
+                    + ($tag['status'] === LossTag::RETIRED ? ['tagRetired' => true] : []) // la puce a été retirée : lue quand même, et dite
+                    + ($doubt ? ['clockDoubt' => true] : []);
                 $written = $repository->pieceFact($fact['type'], gmdate('Y-m-d H:i:s', $fact['at']), $tag['piece_id'] !== null ? (int) $tag['piece_id'] : null, (int) $tag['id'], $boxId,
                     $fact['deviceId'], 'b' . $boxId . ':' . $fact['key'], false, $data, $now);
                 $status = $written ? 'accepted' : 'duplicate';
@@ -353,7 +388,7 @@ class LossBoxChannelService
      *
      * @return array<string, mixed> { key, refusal } ou { key, type, at, deviceId, zone, seq, identifier }
      */
-    private function checkFact(mixed $fact, array $devices, int $serverNow): array
+    private function checkFact(mixed $fact, array $devices): array
     {
         $key = is_array($fact) && is_string($fact['key'] ?? null) && preg_match(self::FACT_KEY, $fact['key']) === 1 ? $fact['key'] : null;
         $refused = static fn (string $code): array => ['key' => $key, 'refusal' => $code];
@@ -410,26 +445,39 @@ class LossBoxChannelService
     }
 
     /**
-     * Le boîtier que désigne un jeton à la signature bonne : réel, actif, de la même génération.
+     * Un boîtier qui a le droit de parler : réel, actif, lié à une machine, de la génération attendue. Révoqué : 403, le boîtier
+     * s'arrête ; tout autre cas : 401, il lui faut une nouvelle inscription.
      *
-     * @param array{boxId: int, generation: int, expiresAt: int} $claims
+     * @param array<string, mixed>|null $box
      *
      * @return array<string, mixed>
      */
-    private function boxOfToken(array $claims): array
+    private static function usable(?array $box, int $generation): array
     {
-        $box = $this->repository()->box($claims['boxId']);
         if ($box === null || (bool) $box['exercise']) {
             throw new LossBoxException('BOX_TOKEN_INVALID', 'Jeton de boîtier invalide.', 401);
         }
         if ($box['status'] === LossBox::REVOKED) {
             throw new LossBoxException('BOX_REVOKED', 'Ce boîtier a été révoqué.', 403);
         }
-        if ($box['status'] !== LossBox::ACTIVE || (int) $box['generation'] !== $claims['generation'] || $box['machine_hash'] === null) {
+        if ($box['status'] !== LossBox::ACTIVE || (int) $box['generation'] !== $generation || $box['machine_hash'] === null) {
             throw new LossBoxException('BOX_TOKEN_INVALID', 'Jeton de boîtier invalide.', 401);
         }
 
         return $box;
+    }
+
+    /**
+     * La machine qui appelle est-elle celle qui s'est inscrite ? Un jeton copié ne suffit pas à tenir un boîtier en vie.
+     *
+     * @param array<string, mixed> $box
+     * @param array<string, mixed> $body
+     */
+    private function sameMachine(array $box, array $body, string $site): void
+    {
+        if (!is_string($body['machine'] ?? null) || !hash_equals((string) $box['machine_hash'], $this->tokens->machineHash($site, $body['machine']))) {
+            throw new LossBoxException('BOX_TOKEN_INVALID', 'Jeton de boîtier invalide : il faut une nouvelle inscription.', 401);
+        }
     }
 
     private function tenantCode(): string
@@ -442,10 +490,13 @@ class LossBoxChannelService
         return $code;
     }
 
-    /** Une heure ISO 8601 avec son décalage → secondes depuis l'époque ; null si elle n'en est pas une */
+    /** Une heure ISO 8601 avec son décalage → secondes depuis l'époque ; null si elle n'en est pas une (le 30 février n'existe pas) */
     private static function time(mixed $value): ?int
     {
-        if (!is_string($value) || preg_match(self::TIME, $value) !== 1) {
+        if (!is_string($value) || preg_match(self::TIME, $value, $m) !== 1) {
+            return null;
+        }
+        if (!checkdate((int) $m[2], (int) $m[3], (int) $m[1]) || (int) $m[4] > 23 || (int) $m[5] > 59 || (int) $m[6] > 59) {
             return null;
         }
         try {
@@ -466,11 +517,6 @@ class LossBoxChannelService
     private static function iso(int $stamp): string
     {
         return gmdate('Y-m-d\TH:i:s\+00:00', $stamp);
-    }
-
-    private static function now(): string
-    {
-        return gmdate('Y-m-d H:i:s');
     }
 
     /**

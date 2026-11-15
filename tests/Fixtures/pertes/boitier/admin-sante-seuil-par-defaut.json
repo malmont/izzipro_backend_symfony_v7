@@ -1,0 +1,16 @@
+{
+    "request": {
+        "method": "PUT",
+        "path": "/api/gestion/pertes/sante/seuil?locale=fr",
+        "body": {
+            "silentAfterSeconds": null
+        }
+    },
+    "status": 200,
+    "body": {
+        "thresholdSeconds": 300,
+        "default": 300,
+        "min": 120,
+        "max": 3600
+    }
+}

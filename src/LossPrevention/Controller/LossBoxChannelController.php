@@ -3,9 +3,9 @@
 namespace App\LossPrevention\Controller;
 
 use App\LossPrevention\LossBoxGuardSubscriber;
-use App\LossPrevention\Services\LossBoxChannelService;
 use App\LossPrevention\Services\LossBoxException;
 use App\LossPrevention\Services\LossBoxToken;
+use App\LossPrevention\UseCase\LossBoxChannelUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -23,7 +23,7 @@ class LossBoxChannelController extends AbstractController
     /** Corps accepté au plus (octets) : 200 faits tiennent très au large */
     private const MAX_BODY = 262144;
 
-    public function __construct(private readonly LossBoxChannelService $channel)
+    public function __construct(private readonly LossBoxChannelUseCase $channel)
     {
     }
 
@@ -41,7 +41,7 @@ class LossBoxChannelController extends AbstractController
         return $this->answer(fn (): array => $this->channel->renew($request->headers->get(LossBoxToken::HEADER), $this->body($request)));
     }
 
-    /** Signe de vie `{ now, version?, devices }` → 200 { serverTime, clockOffsetSeconds, clockDoubt, token, settings } */
+    /** Signe de vie `{ now, machine, version?, devices }` → 200 { serverTime, clockOffsetSeconds, clockDoubt, token, refusedDevices, settings } */
     #[Route('/signe-de-vie', name: 'pertes_boitier_signe_de_vie', methods: ['POST'])]
     public function heartbeat(Request $request): JsonResponse
     {
@@ -55,7 +55,7 @@ class LossBoxChannelController extends AbstractController
         return $this->answer(fn (): array => $this->channel->settings($this->box($request)));
     }
 
-    /** Lot de faits `{ facts }` (1 à 200) → 200 { received, accepted, duplicates, refused, results, serverTime } ; rejouable */
+    /** Lot de faits `{ facts }` (1 à 200) → 200 { received, accepted, duplicates, refused, results, serverTime } ; rejouable ; 429 RATE_LIMITED (plafond de faits par heure) */
     #[Route('/faits', name: 'pertes_boitier_faits', methods: ['POST'])]
     public function facts(Request $request): JsonResponse
     {

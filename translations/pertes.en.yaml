@@ -501,3 +501,26 @@ boxes:
         BOX_LIMIT_REACHED: 'This site already has %limit% boxes: revoke those no longer in use.'
         EXERCISE_LIMIT_REACHED: 'You already have %limit% simulated boxes: delete them before creating more.'
         EXERCISE_NO_PIECE: 'No exercise piece carries a tag: first put a simulated tag on an exercise piece.'
+# Hardware health board (lot L3-a, 2026-11-15, docs/prevention-pertes.md § 16.13)
+health:
+    kind:
+        box: Box
+    state:
+        ok: All good
+        pending: Waiting
+        down: Silent
+        absent: Not installed
+    summary:
+        all_ok: Everything is in order
+        to_check_one: '%count% device to check'
+        to_check_many: '%count% devices to check'
+    duration:
+        minutes: '%count% min'
+        hours: '%count% h'
+        days: '%count% d'
+    hint:
+        box:
+            absent: 'No box is installed. Add a box, then enrol its machine with the key.'
+            pending: 'This box is waiting for its machine. Run the enrolment command on it, with the site address and the box key.'
+            down: 'Silent for %duration%. Check its power supply, its network cable and the shop''s Internet connection.'
+            down_exercise: 'Silent for %duration%. Play the "Heartbeat" scenario to bring it back.'

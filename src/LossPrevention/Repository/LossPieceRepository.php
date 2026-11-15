@@ -20,6 +20,9 @@ class LossPieceRepository extends EntityRepository
     /** Verrou consultatif des pièces d'exercice : création et effacement ne se croisent pas (comme les constats d'exercice) */
     public const EXERCISE_LOCK = 7461081;
 
+    /** Faits montrés dans la fiche d'une pièce, au plus (les derniers) */
+    public const EVENTS_SHOWN = 200;
+
     /** Suite des numéros des vraies pièces, et celle des pièces d'exercice (un exercice ne creuse pas de trou dans la première) */
     private const NUMBERS = 'loss_piece_number_seq';
     private const EXERCISE_NUMBERS = 'loss_piece_exercise_number_seq';
@@ -210,7 +213,9 @@ class LossPieceRepository extends EntityRepository
     /** @return list<array<string, mixed>> les faits d'une pièce (les siens et ceux de ses puces), du plus ancien au plus récent */
     public function eventsOf(int $pieceId): array
     {
-        return $this->db()->fetchAllAssociative('SELECT id, type, occurred_at, user_id, piece_id, tag_id, source, data FROM loss_piece_event WHERE piece_id = ? ORDER BY id', [$pieceId]);
+        // les 200 derniers, rendus dans l'ordre : depuis le lot L3-a un lecteur de boîtier peut relire une puce des milliers de fois
+        return array_reverse($this->db()->fetchAllAssociative('SELECT id, type, occurred_at, user_id, piece_id, tag_id, source, data FROM loss_piece_event WHERE piece_id = ? ORDER BY id DESC LIMIT '
+            . self::EVENTS_SHOWN, [$pieceId]));
     }
 
     /**

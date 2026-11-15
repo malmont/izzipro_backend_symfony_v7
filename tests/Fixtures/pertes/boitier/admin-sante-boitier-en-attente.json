@@ -1,0 +1,36 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/sante?locale=fr"
+    },
+    "status": 200,
+    "body": {
+        "devices": [
+            {
+                "code": "box-1",
+                "kind": "box",
+                "label": "Boîtier du comptoir",
+                "zone": null,
+                "cashRegisterId": null,
+                "state": "pending",
+                "stateLabel": "En attente",
+                "lastSeenAt": null,
+                "silentSince": null,
+                "silentSeconds": null,
+                "hint": "Ce boîtier attend sa machine. Lancez sur elle la commande d'inscription, avec l'adresse du site et la clé du boîtier."
+            }
+        ],
+        "summary": {
+            "ok": 0,
+            "pending": 1,
+            "down": 0,
+            "absent": 0,
+            "allOk": false,
+            "label": "1 appareil à vérifier"
+        },
+        "thresholdSeconds": 300,
+        "exercise": false,
+        "screen": "pertes.boitiers",
+        "checkedAt": "2026-11-15T22:53:56+00:00"
+    }
+}

@@ -18,11 +18,12 @@ use App\Services\TenantPublicHostResolver;
  * Les boîtiers vus par l'administrateur (lot L3-a, 15/11/2026, `docs/prevention-pertes.md` § 16) : les créer, les nommer, remettre
  * leur clé à zéro, les révoquer, voir s'ils donnent signe de vie et ce que leurs appareils disent.
  *
- * - **La clé n'est montrée qu'une fois**, à la création et à la remise à zéro ; la base n'en garde que l'empreinte. Aucune lecture
- *   ne la rend, ni elle ni l'empreinte de la machine.
+ * - **La clé n'est montrée qu'une fois**, à la création et à la remise à zéro ; la base n'en garde qu'une empreinte liée au site et
+ *   au secret de l'application. Aucune lecture ne la rend, ni elle ni l'empreinte de la machine.
  * - **Une clé = un boîtier = une machine.** Remettre la clé à zéro détache la machine (boîtier remplacé) et périme ses jetons ;
  *   révoquer est définitif.
- * - **« En ligne » se calcule** : le dernier signe de vie a moins de 5 minutes. Rien n'est écrit pour le dire.
+ * - **« En ligne » se calcule** : le dernier signe de vie est plus récent que le délai de silence du site (5 minutes par défaut,
+ *   `LossHealthService`). Rien n'est écrit pour le dire.
  * - `$exercise` : un boîtier simulé, fabriqué par le serveur (aucune machine, aucune clé), qui joue des scénarios écrits dans les
  *   tables du module, marqués exercice ; ouvert sans le droit du module, plafonné, effacé d'un geste, jamais dans un chiffre réel.
  */
@@ -44,6 +45,8 @@ class LossBoxService
         private readonly TenantPublicHostResolver $hosts,
         private readonly LossSite $site,
         private readonly LossTexts $texts,
+        private readonly LossHealthService $health,
+        private readonly LossBoxToken $tokens,
     ) {
     }
 
@@ -53,7 +56,8 @@ class LossBoxService
         $repository = $this->repository();
         $boxes = $repository->boxes($exercise);
         $devices = $repository->devicesOf(array_map(static fn (array $b): int => (int) $b['id'], $boxes));
-        $items = array_map(fn (array $box): array => $this->view($box, $devices[(int) $box['id']], $locale), $boxes);
+        $silentAfter = $this->health->silentAfter();
+        $items = array_map(fn (array $box): array => $this->view($box, $devices[(int) $box['id']], $locale, $silentAfter), $boxes);
 
         return ['items' => $items, 'total' => count($items), 'limit' => $exercise ? self::EXERCISE_BOX_LIMIT : self::BOX_LIMIT, 'exercise' => $exercise, 'screen' => self::SCREEN];
     }
@@ -78,7 +82,7 @@ class LossBoxService
                 'silentSeconds' => isset($data['silentSeconds']) ? (int) $data['silentSeconds'] : null, 'byUser' => $row['user_id'] !== null];
         }
 
-        return $this->view($box, $devices, $locale) + ['events' => $events, 'factsReceived' => $repository->pieceFactCount($id)];
+        return $this->view($box, $devices, $locale, $this->health->silentAfter()) + ['events' => $events, 'factsReceived' => $repository->pieceFactCount($id)];
     }
 
     /**
@@ -101,7 +105,7 @@ class LossBoxService
             }
             $key = LossBoxKey::generate();
             $now = self::now();
-            $id = $repository->create($name, $place, LossBoxKey::hash($key), LossBoxKey::hint($key), false, $userId, $now);
+            $id = $repository->create($name, $place, $this->tokens->keyHash($this->site(), $key), LossBoxKey::hint($key), false, $userId, $now);
             $repository->event($id, null, LossBoxEvent::BOX_CREATED, $userId, false, [], $now);
 
             return ['box' => $this->sheet($id, $locale, false), 'key' => $key, 'enrolment' => $this->enrolment($key, $locale)];
@@ -117,11 +121,18 @@ class LossBoxService
      */
     public function update(int $id, array $body, string $locale): array
     {
-        $box = $this->find($id, false, $locale);
         [$name, $place] = $this->names($body, false);
-        $this->repository()->rename($id, $name ?? (string) $box['name'], array_key_exists('place', $body) ? $place : $box['place'], self::now());
 
-        return $this->sheet($id, $locale, false);
+        return $this->transaction(function () use ($id, $body, $name, $place, $locale): array {
+            // la ligne est verrouillée : deux renommages qui se croisent (l'un le nom, l'autre l'endroit) ne s'effacent pas
+            $box = $this->repository()->box($id, true);
+            if ($box === null || (bool) $box['exercise']) {
+                throw new GestionConflictException('BOX_NOT_FOUND', $this->texts->t('boxes.error.BOX_NOT_FOUND', $locale), 404);
+            }
+            $this->repository()->rename($id, $name ?? (string) $box['name'], array_key_exists('place', $body) ? $place : $box['place'], self::now());
+
+            return $this->sheet($id, $locale, false);
+        });
     }
 
     /**
@@ -147,7 +158,7 @@ class LossBoxService
             }
             $key = LossBoxKey::generate();
             $now = self::now();
-            $repository->resetKey($id, LossBoxKey::hash($key), LossBoxKey::hint($key), $now);
+            $repository->resetKey($id, $this->tokens->keyHash($this->site(), $key), LossBoxKey::hint($key), $now);
             $repository->event($id, null, LossBoxEvent::BOX_KEY_RESET, $userId, false, [], $now);
 
             return ['box' => $this->sheet($id, $locale, false), 'key' => $key, 'enrolment' => $this->enrolment($key, $locale)];
@@ -305,14 +316,14 @@ class LossBoxService
      *
      * @return array<string, mixed> ce que l'administrateur voit d'un boîtier ; jamais la clé, ni l'empreinte de la machine
      */
-    private function view(array $box, array $devices, string $locale): array
+    private function view(array $box, array $devices, string $locale, int $silentAfter): array
     {
         $tz = $this->site->clock()->timezone();
         $stamp = static fn (mixed $stored): ?\DateTimeImmutable => $stored === null ? null : new \DateTimeImmutable((string) $stored, new \DateTimeZone('UTC'));
         $seen = $stamp($box['last_seen_at']);
         $silent = $seen !== null ? max(0, time() - $seen->getTimestamp()) : null;
         $active = $box['status'] === LossBox::ACTIVE;
-        $online = $active && $silent !== null && $silent <= LossBoxChannelService::SILENT_AFTER;
+        $online = $active && $silent !== null && $silent <= $silentAfter;
         $offset = $box['clock_offset'] !== null ? (int) $box['clock_offset'] : null;
 
         return [
@@ -336,11 +347,21 @@ class LossBoxService
         ];
     }
 
+    /** Le site de la requête : la clé d'un boîtier n'a de sens que pour lui */
+    private function site(): string
+    {
+        $code = $this->tenant->getTenantCode();
+        if (!is_string($code) || $code === '') {
+            throw new \LogicException('Aucun site : un boîtier se crée dans un site.');
+        }
+
+        return $code;
+    }
+
     /** @return array{host: ?string, key: string, code: ?string, text: string} ce qu'il faut donner à la machine pour l'inscrire */
     private function enrolment(string $key, string $locale): array
     {
-        $code = $this->tenant->getTenantCode();
-        $host = is_string($code) && $code !== '' ? ($this->hosts->describe($code)['host'] ?? null) : null;
+        $host = $this->hosts->describe($this->site())['host'] ?? null;
 
         return ['host' => $host, 'key' => $key, 'code' => $host !== null ? $host . '#' . $key : null, 'text' => $this->texts->t('boxes.enrolment.text', $locale)];
     }

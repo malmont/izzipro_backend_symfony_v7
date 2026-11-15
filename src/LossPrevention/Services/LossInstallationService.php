@@ -4,7 +4,6 @@ namespace App\LossPrevention\Services;
 
 use App\Gestion\Services\GestionConflictException;
 use App\Gestion\Services\GestionValidationException;
-use App\LossPrevention\Entity\LossBox;
 use App\LossPrevention\Entity\LossPiece;
 use App\LossPrevention\Entity\LossPieceEvent;
 use App\LossPrevention\Entity\LossTag;
@@ -29,7 +28,8 @@ use App\Services\TenantEntityManagerProvider;
  *   d'exercice et n'avancent jamais l'installation réelle.
  * - Étapes facultatives (`OPTIONAL`, lot L3-a) : le boîtier. Une boutique peut poser et lire ses puces sans boîtier ; ces étapes
  *   sont donc rendues à part (`optionalSteps`), elles ne comptent ni dans l'avancement ni dans « terminé », et aucune étape ne
- *   dépend d'elles. `box` est faite quand un boîtier est inscrit (un boîtier simulé, en exercice).
+ *   dépend d'elles. `box` est faite quand un boîtier est inscrit et donne signe de vie (un boîtier simulé, en exercice) : elle
+ *   reprend l'état du boîtier au tableau de santé (`LossHealthService`) et dit quoi essayer quand il n'est pas en ordre.
  * Les étapes du tapis de comptoir (L3-b) et des antennes (L4) s'ajouteront de la même façon.
  */
 class LossInstallationService
@@ -53,6 +53,7 @@ class LossInstallationService
         private readonly CatalogBarcodeService $barcodes,
         private readonly BarcodeLabelPrinter $printer,
         private readonly LossTexts $texts,
+        private readonly LossHealthService $health,
     ) {
     }
 
@@ -88,14 +89,17 @@ class LossInstallationService
         }
 
         $optional = [];
-        foreach ($this->optionalProofs($exercise) as $code => $proven) {
+        foreach ($this->optionalStates($locale, $exercise) as $code => $device) {
             $optional[] = [
                 'code' => $code,
                 'title' => $this->texts->t("installation.steps.$code.title", $locale),
                 'text' => $this->texts->t("installation.steps.$code.text", $locale),
                 'image' => 'pertes/installation/' . $code,
-                'status' => $proven ? 'done' : 'todo', // jamais « en cours » : rien n'oblige à la faire
+                'status' => $device['state'] === 'ok' ? 'done' : 'todo', // jamais « en cours » : rien n'oblige à la faire
                 'verify' => ['kind' => 'data', 'label' => $this->texts->t("installation.steps.$code.verify", $locale)],
+                // l'état de l'appareil de l'étape, celui du tableau de santé, et quoi essayer s'il n'est pas en ordre
+                'state' => $device['state'],
+                'hint' => $device['hint'],
             ];
         }
 
@@ -117,7 +121,8 @@ class LossInstallationService
         $step = array_values(array_filter([...$installation['steps'], ...$installation['optionalSteps']], static fn (array $s): bool => $s['code'] === $code))[0];
         $verified = $step['status'] === 'done';
 
-        return ['code' => $code, 'verified' => $verified, 'hint' => $verified ? null : $this->texts->t("installation.steps.$code.hint", $locale)];
+        // une étape d'appareil dit quoi essayer d'après l'état de l'appareil (câble, alimentation, silence depuis N minutes)
+        return ['code' => $code, 'verified' => $verified, 'hint' => $verified ? null : ($step['hint'] ?? $this->texts->t("installation.steps.$code.hint", $locale))];
     }
 
     /**
@@ -228,13 +233,14 @@ class LossInstallationService
     }
 
     /**
-     * Ce que les données prouvent des étapes facultatives : `box`, un boîtier de ce genre est inscrit (révoqué, il ne prouve plus rien).
+     * L'état des appareils des étapes facultatives, lu au tableau de santé : `box` est faite quand un boîtier de ce genre est
+     * inscrit ET donne signe de vie ; sinon l'étape dit quoi essayer.
      *
-     * @return array<string, bool>
+     * @return array<string, array{state: string, hint: ?string}>
      */
-    private function optionalProofs(bool $exercise): array
+    private function optionalStates(string $locale, bool $exercise): array
     {
-        return ['box' => $this->emProvider->getEntityManager()->getRepository(LossBox::class)->activeBoxExists($exercise)];
+        return ['box' => $this->health->boxState($locale, $exercise)];
     }
 
     /**

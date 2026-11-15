@@ -61,7 +61,9 @@
                 "verify": {
                     "kind": "data",
                     "label": "Vérifier"
-                }
+                },
+                "state": "ok",
+                "hint": null
             }
         ],
         "progress": {

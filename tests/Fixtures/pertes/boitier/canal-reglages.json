@@ -3,16 +3,15 @@
         "method": "GET",
         "path": "/api/pertes/boitier/reglages",
         "headers": {
-            "X-Loss-Box": "b1.2.1794867482.0000000000000000000000000000000000000000000000000000000000000000"
+            "X-Loss-Box": "b1.2.1794869636.0000000000000000000000000000000000000000000000000000000000000000"
         }
     },
     "status": 200,
     "body": {
         "box": {
-            "id": 1,
-            "name": "Boîtier de la caisse 1"
+            "id": 1
         },
-        "serverTime": "2026-11-15T22:18:03+00:00",
+        "serverTime": "2026-11-15T22:53:56+00:00",
         "heartbeatSeconds": 60,
         "facts": {
             "types": [

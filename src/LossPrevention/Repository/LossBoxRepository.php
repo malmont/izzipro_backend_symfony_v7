@@ -33,10 +33,15 @@ class LossBoxRepository extends EntityRepository
         );
     }
 
-    /** @return array<string, mixed>|null */
-    public function box(int $id, bool $lock = false): ?array
+    /**
+     * @param bool $lock  la ligne est verrouillée pour l'écrire (signe de vie, révocation, remise à zéro de la clé)
+     * @param bool $share la ligne est seulement tenue : elle ne change pas tant que la transaction dure (lot de faits)
+     *
+     * @return array<string, mixed>|null
+     */
+    public function box(int $id, bool $lock = false, bool $share = false): ?array
     {
-        return $this->db()->fetchAssociative('SELECT ' . self::BOX . ' FROM loss_box WHERE id = ?' . ($lock ? ' FOR UPDATE' : ''), [$id]) ?: null;
+        return $this->db()->fetchAssociative('SELECT ' . self::BOX . ' FROM loss_box WHERE id = ?' . ($lock ? ' FOR UPDATE' : ($share ? ' FOR SHARE' : '')), [$id]) ?: null;
     }
 
     /** @return array<string, mixed>|null le boîtier de cette clé, verrouillé (deux inscriptions de la même clé ne se croisent pas) */
@@ -51,16 +56,22 @@ class LossBoxRepository extends EntityRepository
         return $this->db()->fetchAllAssociative('SELECT ' . self::BOX . ' FROM loss_box WHERE exercise = CAST(? AS boolean) ORDER BY id', [$exercise ? 'true' : 'false']);
     }
 
+    /** @return list<array<string, mixed>> les boîtiers d'un genre qui ne sont pas révoqués : ce que le tableau de santé en lit */
+    public function liveBoxes(bool $exercise): array
+    {
+        return $this->db()->fetchAllAssociative("SELECT id, name, status, last_seen_at FROM loss_box WHERE exercise = CAST(? AS boolean) AND status <> 'revoked' ORDER BY id", [$exercise ? 'true' : 'false']);
+    }
+
     /** Boîtiers d'un genre qui ne sont pas révoqués */
     public function liveCount(bool $exercise): int
     {
         return (int) $this->db()->fetchOne("SELECT COUNT(*) FROM loss_box WHERE exercise = CAST(? AS boolean) AND status <> 'revoked'", [$exercise ? 'true' : 'false']);
     }
 
-    /** Un boîtier de ce genre est-il inscrit ? (preuve de l'étape `box` de l'assistant d'installation) */
-    public function activeBoxExists(bool $exercise): bool
+    /** Nombre d'appareils qu'un boîtier a déjà annoncés */
+    public function deviceCount(int $boxId): int
     {
-        return (bool) $this->db()->fetchOne("SELECT 1 FROM loss_box WHERE exercise = CAST(? AS boolean) AND status = 'active' LIMIT 1", [$exercise ? 'true' : 'false']);
+        return (int) $this->db()->fetchOne('SELECT COUNT(*) FROM loss_device WHERE box_id = ?', [$boxId]);
     }
 
     public function rename(int $id, string $name, ?string $place, string $now): void

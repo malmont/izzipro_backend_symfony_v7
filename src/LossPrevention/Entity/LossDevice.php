@@ -24,8 +24,10 @@ class LossDevice
     public const DOWN = 'down';
     /** Zones de la boutique (§ 11) */
     public const ZONES = ['stockroom', 'stockroom_door', 'floor', 'counter', 'exit'];
-    /** Appareils qu'un boîtier peut déclarer au plus */
+    /** Appareils qu'un boîtier peut annoncer dans un signe de vie, au plus */
     public const MAX_PER_BOX = 16;
+    /** Appareils qu'un boîtier peut avoir annoncés au fil du temps (les remplacés comptent : rien ne se supprime) ; au-delà, un nouveau est refusé */
+    public const MAX_KNOWN_PER_BOX = 64;
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

@@ -52,6 +52,21 @@ class LossBoxToken
         return ['boxId' => $boxId, 'generation' => $generation, 'expiresAt' => $expires];
     }
 
+    /**
+     * Empreinte gardée d'une clé de boîtier : liée au site et au secret de l'application. Une copie de la base ne suffit pas à
+     * retrouver la clé (il faut aussi le secret), et la clé copiée avec une base ne vaut pas sur un autre site.
+     */
+    public function keyHash(string $tenantCode, string $key): string
+    {
+        return hash_hmac('sha256', 'loss-box-key|' . $tenantCode . '|' . $key, $this->secret);
+    }
+
+    /** Empreinte gardée de la machine inscrite : même principe que la clé */
+    public function machineHash(string $tenantCode, string $machine): string
+    {
+        return hash_hmac('sha256', 'loss-box-machine|' . $tenantCode . '|' . $machine, $this->secret);
+    }
+
     private function signature(string $tenantCode, int $boxId, int $generation, int $expires): string
     {
         return hash_hmac('sha256', sprintf('loss-box|%s|%d|%d|%d', $tenantCode, $boxId, $generation, $expires), $this->secret);

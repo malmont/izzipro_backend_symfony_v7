@@ -989,10 +989,11 @@ d'essai sur du vrai matériel (§ 13.7, risque 7) avant tout client.
 ### 16.13 Lot L3-a codé : clé, inscription, canal des faits, boîtier simulé (15/11/2026)
 
 Code : `Services/LossBoxService` (l'administrateur), `Services/LossBoxChannelService` (le boîtier), `Services/LossBoxToken`,
-`Services/LossBoxKey`, `LossBoxGuardSubscriber`, `Repository/LossBoxRepository`, `Controller/LossBoxController` et
+`Services/LossBoxKey`, `Services/LossBoxLimits` (plafonds), `Services/LossHealthService`, `LossBoxGuardSubscriber`,
+`Repository/LossBoxRepository`, `UseCase/LossBoxUseCase` et `LossBoxChannelUseCase`, `Controller/LossBoxController` et
 `Controller/LossBoxChannelController`. Migration `Version20270113100000` (script `scripts/migrate_all_v2_pertes_l3a.sh`) : tables
 `loss_box`, `loss_device`, `loss_box_event` ; trois colonnes facultatives sur `loss_piece_event` (`box_id`, `device_id`,
-`received_at`). Exemples de chaque appel, demande et réponse : `tests/Fixtures/pertes/boitier/` (35 fichiers ; `admin-…` pour les
+`received_at`) et une sur `loss_setting` (`silent_after_seconds`). Exemples de chaque appel, demande et réponse : `tests/Fixtures/pertes/boitier/` (un fichier par appel ; `admin-…` pour les
 écrans, `canal-…` pour le logiciel du boîtier), vérifiés par `LossPreventionBoxExamplesTest`. Code d'écran : `pertes.boitiers`.
 
 **Ce que le plan disait autrement** (détails techniques tranchés au code) :
@@ -1020,7 +1021,7 @@ gestion ; `?locale=fr|en`) :
 `box` : `{ id, name, place, status: pending | active | revoked, statusLabel, online, onlineLabel, lastSeenAt, lastSeenLabel,
 silentSeconds, version, arch, enrolledAt, clockOffsetSeconds, clockDoubt, keyHint, exercise, devices [{ id, serial, kind: counter_mat
 | reader | printer | camera, kindLabel, model, status: ok | down, statusLabel, zone, zoneLabel, lastSeenAt }], createdAt, screen }`.
-`online` se calcule (boîtier actif dont le dernier signe de vie a moins de 5 minutes) ; `silentSeconds` : depuis quand un boîtier actif
+`online` se calcule (boîtier actif dont le dernier signe de vie est plus récent que le délai de silence du site, 5 minutes par défaut) ; `silentSeconds` : depuis quand un boîtier actif
 se tait ; `clockDoubt` : son horloge s'écarte de plus d'une minute. **Aucune lecture ne rend la clé, son empreinte ni celle de la
 machine.**
 
@@ -1034,54 +1035,138 @@ puce), `DELETE /exercices/boitiers` → `{ deleted }`. Un boîtier simulé n'a n
 son nom est refusé) ; ses faits portent `exercise = true` et n'entrent dans aucun chiffre réel ; `DELETE /exercices/pieces` emporte
 les lectures faites par un boîtier simulé avec les pièces.
 
+**Tableau de santé du matériel** (demande du propriétaire, 15/11/2026 ; `Services/LossHealthService`) :
+
+| Route | Réponse | Refus |
+|---|---|---|
+| `GET /sante` | `{ devices [{ code, kind, label, zone, cashRegisterId, state, stateLabel, lastSeenAt, silentSince, silentSeconds, hint }], summary { ok, pending, down, absent, allOk, label }, thresholdSeconds, exercise, screen, checkedAt }` | |
+| `PUT /sante/seuil` `{ silentAfterSeconds }` | `{ thresholdSeconds, default: 300, min: 120, max: 3600 }` | 422 `fields.silentAfterSeconds` : `REQUIRED`, `MUST_BE_INTEGER`, `PARAM_OUT_OF_RANGE` |
+| `GET /exercices/sante` | la même forme, sur les boîtiers simulés ; ouverte sans le droit du module | |
+
+- **États** : `ok` (un signe de vie plus récent que le délai de silence) ; `pending` (branché mais pas encore vérifié : en L3-a, un
+  boîtier qui attend sa machine) ; `down` (silencieux : `silentSince`, `silentSeconds`, et `hint` dit quoi essayer : alimentation,
+  câble réseau, connexion de la boutique) ; `absent` (pas encore installé). `summary.allOk` est vrai quand toutes les lignes sont
+  `ok` ; `summary.label` est le texte du bandeau (« Tout est en ordre », « 1 appareil à vérifier »).
+- **En L3-a le tableau ne connaît que le boîtier** : une ligne par boîtier non révoqué (`code: box-<id>`, `kind: box`) ; sans aucun
+  boîtier, une seule ligne `code: box`, `state: absent`. Le tapis (L3-b), l'imprimante (L3-c), la caméra (L3-d) et les antennes (L4)
+  y ajouteront leurs lignes (`kind: mat | printer | camera | antenna`, avec `zone` ou `cashRegisterId`).
+- **Légère** : l'écran la relit toutes les 5 secondes ; elle fait deux lectures (les boîtiers, le délai) et n'écrit rien.
+- **Le délai de silence se règle par site** (`loss_setting.silent_after_seconds`, 300 par défaut, 120 à 3600 ; `null` revient au
+  défaut ; écrit au journal du module, `SETTINGS_CHANGED`). C'est le même délai partout : la pastille, `online` de la fiche d'un
+  boîtier, l'étape de l'assistant, et le fait `BOX_BACK` au retour d'un silence.
+- **Pour plus tard, avec le lot NOTIF, sans code aujourd'hui** : un appareil qui passe à `down` pendant les heures d'ouverture
+  donnera une notification de la famille « urgent ».
+
 **Assistant d'installation** (§ 13.10) : la réponse gagne `optionalSteps [{ code: box, title, text, image, status: todo | done,
-verify }]`. L'étape `box` est faite quand un boîtier de ce genre est inscrit (révoqué, il ne prouve plus rien). Elle est rendue à
-part parce qu'une boutique peut poser et lire ses puces sans boîtier : elle ne compte ni dans `progress` ni dans `complete`, et
-`steps` ne change pas. `POST /installation/etapes/box/verifier` répond comme pour les autres étapes.
+verify, state, hint }]`. L'étape `box` reprend l'état du boîtier au tableau de santé : elle est faite quand un boîtier de ce genre
+est inscrit ET donne signe de vie (`state: ok` ; un seul boîtier en ordre suffit) ; sinon `state` et `hint` disent où l'on en est
+et quoi essayer (aucun boîtier, boîtier qui attend sa machine, boîtier silencieux depuis N minutes). Elle est rendue à part parce
+qu'une boutique peut poser et lire ses puces sans boîtier : elle ne compte ni dans `progress` ni dans `complete`, et `steps` ne
+change pas. `POST /installation/etapes/box/verifier` répond `{ code, verified, hint }` avec le même conseil.
 
 **Routes du boîtier** (`/api/pertes/boitier`, jamais appelées par une personne ; en-tête `X-Loss-Box: <jeton>` ; en-tête
 `X-Tenant-Host` du site, comme toute l'API ; erreurs `{ error, code, message, … }`) :
 
 | Route | Réponse | Refus |
 |---|---|---|
-| `POST /inscription` `{ key, machine, version, arch: amd64 \| arm64 }` (sans jeton) | `{ box { id, name }, token, expiresAt, serverTime, settings }` | 422 `VALIDATION_FAILED { fields }` ; 404 `BOX_KEY_INVALID` (clé inconnue, ou saisie qui n'en est pas une : même réponse) ; 403 `BOX_REVOKED` ; 409 `BOX_KEY_ALREADY_ENROLLED` (la clé est liée à une autre machine) |
+| `POST /inscription` `{ key, machine, version, arch: amd64 \| arm64 }` (sans jeton) | `{ box { id }, token, expiresAt, serverTime, settings }` | 422 `VALIDATION_FAILED { fields }` ; 404 `BOX_KEY_INVALID` (clé inconnue, ou saisie qui n'en est pas une : même réponse) ; 403 `BOX_REVOKED` ; 409 `BOX_KEY_ALREADY_ENROLLED` (la clé est liée à une autre machine) |
 | `POST /jeton` `{ machine }` (jeton encore bon, ou expiré depuis moins de 30 jours) | `{ token, expiresAt, serverTime }` | 401 `BOX_TOKEN_INVALID` (il faut une nouvelle inscription) ; 403 `BOX_REVOKED` |
-| `POST /signe-de-vie` `{ now, version?, devices [{ serial, kind, model?, status }] }` | `{ serverTime, clockOffsetSeconds, clockDoubt, token: { token, expiresAt } \| null, settings }` | 422 `VALIDATION_FAILED { fields }` (`now`, `version`, `devices`, `devices[i].serial \| kind \| status \| model` ; `devices[i].kind: MISMATCH` : le genre d'un appareil ne change pas ; `devices: TOO_MANY` : 16 au plus) |
-| `GET /reglages` | `{ box, serverTime, heartbeatSeconds: 60, facts { types, maxBatch: 200 }, zones, devices [{ id, serial, kind, zone, cashRegisterId }] }` | |
-| `POST /faits` `{ facts [{ key, type, at, device, zone?, seq?, data { identifier, technology? } }] }` (1 à 200) | `{ received, accepted, duplicates, refused, results [{ index, key, status: accepted \| duplicate \| refused, code }], serverTime }` | 422 `VALIDATION_FAILED { fields.facts }`, `FACTS_LIMIT_EXCEEDED { max, received }` ; 413 `PAYLOAD_TOO_LARGE` (256 Ko) |
+| `POST /signe-de-vie` `{ now, machine, version?, devices [{ serial, kind, model?, status }] }` | `{ serverTime, clockOffsetSeconds, clockDoubt, token: { token, expiresAt } \| null, refusedDevices [{ serial, code }], settings }` | 422 `VALIDATION_FAILED { fields }` (`now`, `machine`, `version`, `devices` : liste obligatoire, 16 appareils au plus par signe de vie, `devices[i].serial \| kind \| status \| model`) ; 401 `BOX_TOKEN_INVALID` (ce n'est pas la machine inscrite) |
+| `GET /reglages` | `{ box { id }, serverTime, heartbeatSeconds: 60, facts { types, maxBatch: 200 }, zones, devices [{ id, serial, kind, zone, cashRegisterId }] }` | |
+| `POST /faits` `{ facts [{ key, type, at, device, zone?, seq?, data { identifier, technology? } }] }` (1 à 200) | `{ received, accepted, duplicates, refused, results [{ index, key, status: accepted \| duplicate \| refused, code }], serverTime }` | 422 `VALIDATION_FAILED { fields.facts }`, `FACTS_LIMIT_EXCEEDED { max, received }` ; 413 `PAYLOAD_TOO_LARGE` (256 Ko) ; 429 `RATE_LIMITED` (20 000 faits par boîtier et par heure) |
 
 Toute route du canal : 401 `BOX_TOKEN_REQUIRED` (pas d'en-tête), `BOX_TOKEN_INVALID` (signature, site, boîtier, génération),
-`BOX_TOKEN_EXPIRED` (appeler `/jeton`) ; 403 `BOX_REVOKED` ; 403 `MODULE_INACTIVE` (le site n'a plus le droit du module : le boîtier
-garde sa file et réessaie) ; 429 `RATE_LIMITED { retryAfterSeconds }`.
+`BOX_TOKEN_EXPIRED` (appeler `/jeton`) ; 403 `BOX_REVOKED` (le boîtier s'arrête) ; 403 `MODULE_INACTIVE` (le site n'a plus le droit du
+module : le boîtier garde sa file et réessaie ; sur ce préfixe la réponse est nue, `{ error, code, message }`, sans rien dire de
+l'offre du site) ; 429 `RATE_LIMITED { retryAfterSeconds }`. **Aucune réponse faite au boîtier ne porte de nom** : ni article, ni
+personne, ni même le nom que l'administrateur a donné au boîtier.
 
-- **Inscription** : `machine` est une empreinte que le boîtier fabrique de sa machine (16 à 128 caractères) ; la plateforme n'en garde
-  que le SHA-256. La clé se lie à la première machine ; la même machine peut se réinscrire (la génération avance, l'ancien jeton
-  meurt) ; une autre machine est refusée tant que l'administrateur n'a pas remis la clé à zéro.
+- **Clé et machine** : la clé a 60 bits ; l'aperçu gardé (`keyHint`) n'en montre que les deux premiers caractères. La base ne garde
+  de la clé et de la machine qu'une empreinte **liée au site et au secret de l'application** (`LossBoxToken::keyHash`,
+  `machineHash`) : une copie de la base ne donne ni l'une ni l'autre, et une clé copiée avec une base (site créé d'après le modèle,
+  répétition) ne vaut pas sur un autre site.
+- **Inscription** : `machine` est une empreinte que le boîtier fabrique de sa machine (16 à 128 caractères). La clé se lie à la
+  première machine ; la même machine peut se réinscrire (la génération avance, l'ancien jeton meurt ; si elle se taisait depuis plus
+  longtemps que le délai de silence, le fait `BOX_BACK` dit le trou) ; une autre machine est refusée tant que l'administrateur n'a
+  pas remis la clé à zéro.
 - **Jeton** : `b<boîtier>.<génération>.<échéance>.<signature>`, signé avec le secret de l'application pour ce site ; 24 heures ; le
   signe de vie en rend un neuf dès la mi-vie. **Chaque appel relit le boîtier** (réel, actif, même génération) : une révocation ou une
-  remise à zéro de la clé vaut à l'appel suivant. Le jeton ne donne que les cinq routes ci-dessus : présenté à une route de la gestion
-  ou de la caisse, seul ou comme jeton d'utilisateur, il reçoit 401 (test).
+  remise à zéro de la clé vaut à l'appel suivant ; le signe de vie et un lot de faits le relisent encore SOUS VERROU avant d'écrire
+  (un appel en route pendant une révocation n'écrit rien). Le jeton ne donne que les cinq routes ci-dessus : présenté à une route de
+  la gestion ou de la caisse, seul ou comme jeton d'utilisateur, il reçoit 401 (test). **Un jeton copié ne tient pas un boîtier en
+  vie** : le signe de vie et l'échange de jeton exigent l'empreinte de la machine inscrite.
 - **Signe de vie** : toutes les 60 secondes. Il met à jour le dernier contact, la version, l'écart d'horloge (`now` du boîtier moins
-  l'heure du serveur) et l'état des appareils. **Il n'écrit un fait que pour un changement** : `DEVICE_SEEN` (première annonce d'un
+  l'heure du serveur) et l'état des appareils. **Un appareil que la plateforme ne peut pas prendre n'empêche jamais le signe de
+  vie** : il est rendu dans `refusedDevices`, avec `MISMATCH` (le genre d'un appareil ne change pas : l'appareil connu reste comme
+  il est), `DUPLICATE` (deux appareils au même numéro de série : le premier compte) ou `TOO_MANY` (le boîtier a déjà annoncé 64
+  appareils au fil du temps ; les remplacés comptent, rien ne se supprime). **Il n'écrit un fait que pour un changement** : `DEVICE_SEEN` (première annonce d'un
   appareil), `SOURCE_DOWN` et `SOURCE_UP` (`reason: reported`, ou `absent` quand un appareil connu n'est plus annoncé), `BOX_BACK
-  { silentSeconds, since }` au retour d'un silence de plus de 5 minutes. Les autres faits de `loss_box_event` viennent de
+  { silentSeconds, since }` au retour d'un silence plus long que le délai du site (5 minutes par défaut). Les autres faits de `loss_box_event` viennent de
   l'administrateur ou de l'inscription : `BOX_CREATED`, `BOX_ENROLLED { version, arch, again }`, `BOX_KEY_RESET`, `BOX_REVOKED`.
 - **Faits** : `key` (8 à 48 caractères, `A-Z a-z 0-9 _ -`) est la clé d'idempotence, propre au boîtier (gardée sous la forme
   `b<boîtier>:<clé>`) ; `at` est l'heure du boîtier, ISO 8601 avec son décalage ; `device` est le numéro de série d'un lecteur que le
   boîtier a annoncé dans un signe de vie ; `zone` est obligatoire pour `ZONE_SEEN`, facultative pour `SPOT_CHECK` ; `identifier` est
-  nettoyé comme au § 13.9 (la technologie est facultative). Refus par fait, à ne pas renvoyer : `FACT_INVALID`, `FACT_TYPE_UNKNOWN`,
+  nettoyé comme au § 13.9 (la technologie est facultative). **La clé doit être aléatoire** (un UUID) : elle est gardée par boîtier,
+  pas par machine ; un logiciel qui numéroterait ses faits depuis 1 verrait ceux d'une machine de remplacement répondus « déjà connu ». Refus par fait, à ne pas renvoyer : `FACT_INVALID`, `FACT_TYPE_UNKNOWN`,
   `DEVICE_UNKNOWN`, `DEVICE_KIND_INVALID` (seul un lecteur lit une puce), `ZONE_INVALID`, `TAG_INVALID`, `TAG_UNKNOWN` (aucune puce du
   site ne porte cet identifiant), `TAG_SIMULATED`. Un fait accepté est une ligne de `loss_piece_event` (`source: box`, la pièce et la
   puce, le boîtier, l'appareil, l'heure du boîtier dans `occurred_at`, l'heure de réception dans `received_at`, `data { zone, seq,
-  clockDoubt }`) ; il apparaît dans la fiche de la pièce. **Aucun état de pièce ne change en L3-a.**
+  tagRetired, clockDoubt }`) ; il apparaît dans la fiche de la pièce (qui montre ses 200 derniers faits). La lecture d'une puce
+  **retirée** est gardée et dite (`tagRetired`) : les lots suivants ne s'en serviront pas pour rattacher une vente. **Aucun état de
+  pièce ne change en L3-a.**
 - **Heure douteuse** : `clockDoubt: true` sur un fait reçu quand l'horloge du boîtier n'a pas encore été mesurée, quand elle s'écarte
-  de plus d'une minute, ou quand le fait est daté de plus d'une minute dans le futur. Les lots L3-b et L4 n'utiliseront pas un tel fait
+  de plus d'une minute, quand le fait est daté de plus d'une minute dans le futur, ou de plus de 8 jours dans le passé (la file du
+  boîtier en garde 7). Une date qui n'existe pas (30 février) n'est pas une heure : `FACT_INVALID`. Les lots L3-b et L4 n'utiliseront pas un tel fait
   pour rattacher une vente.
-- **Débit** : inscription et échange de jeton, 20 essais par site et par adresse et 60 par adresse, sur 15 minutes ; 600 appels par
-  boîtier sur 5 minutes.
+- **Débit** (`LossBoxLimits`) : inscription et échange de jeton, 20 essais par site et par adresse et 60 par adresse, sur 15
+  minutes ; appels au jeton refusé, 60 par site et par adresse sur 15 minutes (l'adresse est alors arrêtée avant toute lecture de
+  la base) ; 600 appels par boîtier sur 5 minutes ; 20 000 faits envoyés par boîtier et par heure.
 - **La base garde elle-même** (migration) : une clé pour un seul boîtier ; un vrai boîtier a une clé, un boîtier d'exercice n'en a
-  pas ; un boîtier actif réel est lié à une machine ; un boîtier révoqué ne revient pas ; la génération ne recule pas ; un appareil et
-  un fait sont du même genre (réel ou exercice) que leur boîtier ; un fait désigne un appareil de SON boîtier ; les faits sont en ajout
-  seul ; rien ne se supprime, sauf l'exercice par sa porte, dans l'ordre faits, appareils, boîtiers.
+  pas ; un boîtier actif réel est lié à une machine ; un boîtier révoqué ne revient pas, et porte sa date de révocation ; la
+  génération commence à 1, ne recule pas, et avance quand la clé ou la machine change ; un appareil et un fait sont du même genre
+  (réel ou exercice) que leur boîtier ; un fait désigne un appareil de SON boîtier, tenus le temps de l'écriture ; les genres de
+  faits de boîtier sont connus ; un fait de pièce venu d'un boîtier dit sa source, son heure de réception et sa clé, ne vient jamais
+  d'un utilisateur, et une clé au nom d'un boîtier (`b<boîtier>:`) ne s'écrit que pour lui ; les faits sont en ajout seul ; rien ne
+  se supprime, sauf l'exercice par sa porte, dans l'ordre faits, appareils, boîtiers.
+- **Retour arrière de la migration** : il retire les tables et les colonnes du lot, mais les faits de pièces déjà reçus des boîtiers
+  restent dans `loss_piece_event` (sans leur boîtier ni leur appareil, avec leur clé) : rien ne se supprime dans cette table. Si la
+  migration est reposée ensuite, ces faits ne sont plus comptés pour leur boîtier et leur rejeu répond « déjà connu ».
+- **Relecture indépendante** (15/11/2026) : aucun défaut sur la règle « le jeton du boîtier ne lit ni les ventes, ni les clients,
+  ni les constats » ; corrigés : empreintes de la clé et de la machine liées au site et au secret, aperçu de la clé réduit, réponse
+  nue quand le module manque, relecture du boîtier sous verrou avant d'écrire des faits, machine exigée au signe de vie, plafond des
+  jetons refusés et des faits par heure, appareils refusés sans bloquer le signe de vie, liste des appareils obligatoire, code de
+  la révocation en course, fait de retour à la réinscription, renommage sous verrou, dates strictes, gardes de la base durcies.
 - **Tests** : `LossPreventionBoxTest` (administrateur ; inscription, garde, jeton, signe de vie, faits rejoués, « ne lit rien
-  d'autre » ; limites de débit ; boîtier simulé ; gardes de la base et rejeu de la migration), `LossPreventionBoxExamplesTest`.
+  d'autre », appel en route pendant une révocation ; plafonds ; contrôleur appelé sans la garde ; boîtier simulé ; tableau de
+  santé et délai réglable ; gardes de la base et rejeu de la migration), `LossPreventionBoxExamplesTest`.
+
+### 16.14 Ajouts du propriétaire pour L3 et L4 (15/11/2026, relayés par le chef de projet)
+
+1. **Une étape de l'assistant par appareil branché sur le boîtier**, chacune avec son « Vérifier » prouvé par des faits du boîtier :
+   - L3-a : le boîtier est inscrit et donne signe de vie (**codé**, étape `box`, § 16.13) ;
+   - L3-b : le tapis est lu et lié à son poste ;
+   - L3-c : l'imprimante écrit et relit la puce de l'étiquette d'essai ;
+   - L3-d : la caméra envoie un extrait d'essai ;
+   - L4 : chaque antenne lit une puce d'essai dans la bonne zone.
+
+   Quand une vérification échoue, l'étape dit quoi essayer : le câble, l'alimentation, un boîtier silencieux depuis N minutes.
+2. **Un guide de l'installateur à part, illustré**, dans le dépôt du boîtier, en français et en anglais : la clé USB d'installation,
+   Debian, le paquet `.deb`, la saisie de la clé du boîtier ; pour le Raspberry Pi, une image toute prête. À écrire à la création du
+   dépôt du boîtier.
+3. **Un voyant d'état sur le boîtier** : connecté, en attente d'inscription, en panne. Le détail se lit dans l'écran
+   `pertes.boitiers`. Pas de page web locale, puisqu'aucun port n'est ouvert. À faire dans le dépôt du boîtier, à sa création.
+4. **Un tableau de santé du matériel**, une pastille par appareil (**codé** pour le boîtier, § 16.13, « Tableau de santé ») : chaque
+   lot de matériel y ajoute sa ligne ; chaque étape de l'assistant reprend l'état de son appareil ; le bandeau dit « Tout est en
+   ordre » quand `allOk` est vrai ; plus tard, avec NOTIF, un appareil qui tombe pendant les heures d'ouverture notifie en « urgent ».
+5. **L'offre du boîtier** (décision du propriétaire ; à reprendre dans le plan de L6 et dans le guide ; sans code) :
+   - **le boîtier prêt à brancher**, vendu pour les gammes pro et standard : un mini-ordinateur préinstallé, livré avec sa clé
+     préparée ; le commerçant le branche, saisit la clé, et la pastille passe au vert ; matériel et logiciel sont garantis et
+     assurés par notre support ;
+   - **le logiciel seul**, que le client installe, pour la gamme bricoleur ou un client à l'aise : le paquet `.deb`, l'image
+     Raspberry Pi et un guide très simple (le système, les commandes à copier une par une, le branchement de chaque appareil) ; la
+     liste du matériel que nous avons essayé ; un avertissement visible dans le guide et dans les conditions de vente :
+     « Installation à vos risques : nous ne garantissons pas le fonctionnement sur votre matériel ; notre support couvre le
+     logiciel seulement » ;
+   - la formulation de cet avertissement est à faire valider par l'avocat ; les prix sont fixés en L6 par le propriétaire ;
+   - le guide de l'installateur du dépôt du boîtier sert les deux offres : une version courte pour le boîtier prêt à brancher, la
+     version complète, avec les commandes, pour le logiciel seul.

@@ -8,7 +8,7 @@
     "headers": {},
     "body": {
         "ok": true,
-        "identifier": "SIM-132DB6C85B1A",
+        "identifier": "SIM-1724EC2FAC29",
         "technology": "simulated",
         "refusal": null,
         "hint": null,
@@ -70,7 +70,9 @@
                     "verify": {
                         "kind": "data",
                         "label": "Vérifier"
-                    }
+                    },
+                    "state": "absent",
+                    "hint": "Aucun boîtier n'est installé. Ajoutez un boîtier, puis inscrivez sa machine avec la clé."
                 }
             ],
             "progress": {

@@ -3,10 +3,11 @@
         "method": "POST",
         "path": "/api/pertes/boitier/signe-de-vie",
         "headers": {
-            "X-Loss-Box": "b1.2.1794867482.0000000000000000000000000000000000000000000000000000000000000000"
+            "X-Loss-Box": "b1.2.1794869636.0000000000000000000000000000000000000000000000000000000000000000"
         },
         "body": {
             "now": "hier",
+            "machine": "machine-d-exemple-0123456789abcdef",
             "devices": [
                 {
                     "serial": "LECTEUR-0001",

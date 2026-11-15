@@ -4,7 +4,8 @@ namespace App\LossPrevention\Services;
 
 /**
  * Clé d'un boîtier (lot L3-a) : `IZ-BOX-XXXX-XXXX-XXXX`, alphabet sans caractères ambigus, 60 bits d'aléa. Montrée une seule fois ;
- * la base n'en garde que l'empreinte SHA-256 et un aperçu. Elle vit dans la table du module (`loss_box`), pas dans les clés
+ * la base n'en garde qu'une empreinte liée au site et au secret de l'application (`LossBoxToken::keyHash`) et un aperçu de deux
+ * caractères. Elle vit dans la table du module (`loss_box`), pas dans les clés
  * d'activation de la plateforme : le module n'écrit que dans ses tables, et une clé de boîtier n'active aucune application.
  */
 final class LossBoxKey
@@ -35,14 +36,9 @@ final class LossBoxKey
         return sprintf('IZ-BOX-%s-%s-%s', substr($m[1], 0, 4), substr($m[1], 4, 4), substr($m[1], 8, 4));
     }
 
-    public static function hash(string $key): string
-    {
-        return hash('sha256', $key);
-    }
-
-    /** Ce qu'on montre d'une clé après sa création : son début */
+    /** Ce qu'on montre d'une clé après sa création : ses deux premiers caractères seulement (10 bits sur 60) */
     public static function hint(string $key): string
     {
-        return substr($key, 0, 11) . '-****-****';
+        return substr($key, 0, 9) . '**-****-****';
     }
 }

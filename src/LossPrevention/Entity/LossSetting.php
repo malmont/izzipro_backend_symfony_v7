@@ -38,6 +38,10 @@ class LossSetting
     #[ORM\Column(name: 'retention_confirmed_months', type: 'smallint', options: ['default' => self::DEFAULT_CONFIRMED_MONTHS])]
     private int $retentionConfirmedMonths = self::DEFAULT_CONFIRMED_MONTHS;
 
+    /** Tableau de santé du matériel (lot L3-a) : secondes sans signe de vie au-delà desquelles un appareil est dit silencieux ; null = 300 */
+    #[ORM\Column(name: 'silent_after_seconds', nullable: true)]
+    private ?int $silentAfterSeconds = null;
+
     /** Dernière séquence du journal de caisse lue par l'analyse ; null = analyse jamais lancée */
     #[ORM\Column(name: 'cursor_sequence', nullable: true)]
     private ?int $cursorSequence = null;

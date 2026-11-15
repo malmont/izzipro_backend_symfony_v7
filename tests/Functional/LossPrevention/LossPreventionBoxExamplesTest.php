@@ -38,6 +38,7 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
     {
         try {
             $this->db->executeStatement("UPDATE loss_box SET status = 'revoked', revoked_at = NOW() WHERE NOT exercise AND status <> 'revoked'");
+            $this->db->executeStatement('UPDATE loss_setting SET silent_after_seconds = NULL');
             $this->db->beginTransaction();
             $this->provider->getEntityManager()->getRepository(LossPiece::class)->deleteExercise();
             $this->provider->getEntityManager()->getRepository(LossBox::class)->deleteExercise();
@@ -62,7 +63,9 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
         $this->json($this->admin('POST', self::BASE . '/puces/associer', ['variantId' => $variant, 'identifier' => $nfc, 'technology' => 'nfc']));
 
         // ----- Ce que l'administrateur voit
+        $this->admin_('admin-sante-sans-boitier', 'GET', '/sante');
         $this->admin_('admin-boitier-cree', 'POST', '/boitiers', ['name' => 'Boîtier du comptoir', 'place' => 'Près de la caisse'], 201);
+        $this->admin_('admin-sante-boitier-en-attente', 'GET', '/sante');
         $id = $this->examples['admin-boitier-cree']['body']['box']['id'];
         $key = $this->examples['admin-boitier-cree']['body']['key'];
         $this->admin_('admin-refus-validation', 'POST', '/boitiers', ['place' => 12], 422);
@@ -76,8 +79,9 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
         $this->channel('canal-refus-autre-machine', 'POST', '/inscription', ['machine' => 'une-autre-machine-0123456789'] + $enrol, null, 409);
         $this->channel('canal-refus-sans-jeton', 'GET', '/reglages', null, null, 401);
         $devices = [['serial' => 'LECTEUR-0001', 'kind' => 'reader', 'status' => 'ok', 'model' => 'Lecteur de bureau (USB)'], ['serial' => 'IMPR-0001', 'kind' => 'printer', 'status' => 'down']];
-        $this->channel('canal-signe-de-vie', 'POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'version' => '1.0.0', 'devices' => $devices], $token);
-        $this->channel('canal-refus-signe-de-vie-invalide', 'POST', '/signe-de-vie', ['now' => 'hier', 'devices' => [['serial' => 'LECTEUR-0001', 'kind' => 'antenne', 'status' => 'ok']]], $token, 422);
+        $this->channel('canal-signe-de-vie', 'POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => self::MACHINE, 'version' => '1.0.0', 'devices' => $devices], $token);
+        $this->channel('canal-signe-de-vie-appareil-refuse', 'POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => self::MACHINE, 'devices' => [['serial' => 'LECTEUR-0001', 'kind' => 'camera', 'status' => 'ok'], $devices[1]]], $token);
+        $this->channel('canal-refus-signe-de-vie-invalide', 'POST', '/signe-de-vie', ['now' => 'hier', 'machine' => self::MACHINE, 'devices' => [['serial' => 'LECTEUR-0001', 'kind' => 'antenne', 'status' => 'ok']]], $token, 422);
         $this->channel('canal-reglages', 'GET', '/reglages', null, $token);
         $at = gmdate('Y-m-d\TH:i:s\Z', time() - 30);
         $facts = [
@@ -95,6 +99,13 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
 
         // ----- L'administrateur, après : la liste, la fiche, la clé remise à zéro, la révocation
         $this->admin_('admin-boitiers', 'GET', '/boitiers');
+        $this->admin_('admin-sante-en-ordre', 'GET', '/sante');
+        $this->db->executeStatement("UPDATE loss_box SET last_seen_at = NOW() AT TIME ZONE 'UTC' - INTERVAL '12 minutes' WHERE id = ?", [$id]);
+        $this->admin_('admin-sante-boitier-silencieux', 'GET', '/sante');
+        $this->admin_('admin-installation-boitier-silencieux', 'GET', '/installation');
+        $this->admin_('admin-sante-seuil-regle', 'PUT', '/sante/seuil', ['silentAfterSeconds' => 900]);
+        $this->admin_('admin-sante-refus-seuil', 'PUT', '/sante/seuil', ['silentAfterSeconds' => 30], 422);
+        $this->admin_('admin-sante-seuil-par-defaut', 'PUT', '/sante/seuil', ['silentAfterSeconds' => null]);
         $this->admin_('admin-boitier', 'GET', "/boitiers/$id");
         $this->admin_('admin-cle-remise-a-zero', 'POST', "/boitiers/$id/cle", ['confirm' => true]);
         $this->channel('canal-refus-jeton-perime', 'GET', '/reglages', null, $token, 401);
@@ -116,6 +127,7 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
         $this->admin_('admin-exercices-refus-scenario', 'POST', "/exercices/boitiers/$simulated/scenarios", ['scenario' => 'incendie'], 422);
         $this->admin_('admin-exercices-boitier', 'GET', "/exercices/boitiers/$simulated");
         $this->admin_('admin-exercices-installation', 'GET', '/exercices/installation');
+        $this->admin_('admin-exercices-sante', 'GET', '/exercices/sante');
         $this->admin_('admin-exercices-boitiers-effaces', 'DELETE', '/exercices/boitiers');
 
         if (getenv('UPDATE_LOSS_EXAMPLES') === '1') {
@@ -175,7 +187,7 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
     private static function masked(string $json): string
     {
         $json = (string) preg_replace('/IZ-BOX-(?!AAAA-AAAA-AAAA)[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/', 'IZ-BOX-XXXX-XXXX-XXXX', $json);
-        $json = (string) preg_replace('/IZ-BOX-(?!AAAA|XXXX)[A-Z0-9]{4}-\*{4}-\*{4}/', 'IZ-BOX-XXXX-****-****', $json);
+        $json = (string) preg_replace('/IZ-BOX-(?!XX)[A-Z0-9]{2}\*\*-\*{4}-\*{4}/', 'IZ-BOX-XX**-****-****', $json);
 
         return (string) preg_replace('/(b\d+\.\d+\.\d{10}\.)(?!0{64})[0-9a-f]{64}/', '${1}' . str_repeat('0', 64), $json);
     }

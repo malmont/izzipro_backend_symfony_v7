@@ -61,7 +61,9 @@
                 "verify": {
                     "kind": "data",
                     "label": "Vérifier"
-                }
+                },
+                "state": "absent",
+                "hint": "Aucun boîtier n'est installé. Ajoutez un boîtier, puis inscrivez sa machine avec la clé."
             }
         ],
         "progress": {
