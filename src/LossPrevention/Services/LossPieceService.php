@@ -307,7 +307,7 @@ class LossPieceService
             if ($exercise) {
                 $this->exerciseLock();
             }
-            $tag = $repository->tag($id, true);
+            $tag = $repository->tagById($id, true);
             if ($tag === null || (bool) $tag['exercise'] !== $exercise) {
                 throw new GestionConflictException('TAG_NOT_FOUND', $this->texts->t('pieces.error.TAG_NOT_FOUND', $locale), 404);
             }
@@ -319,7 +319,7 @@ class LossPieceService
 
             return true;
         });
-        $tag = $repository->tag($id);
+        $tag = $repository->tagById($id);
         if ($tag === null) {
             throw new GestionConflictException('TAG_NOT_FOUND', $this->texts->t('pieces.error.TAG_NOT_FOUND', $locale), 404); // effacée entre-temps (exercice)
         }

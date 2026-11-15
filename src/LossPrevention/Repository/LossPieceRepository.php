@@ -108,7 +108,7 @@ class LossPieceRepository extends EntityRepository
     }
 
     /** @return array<string, mixed>|null */
-    public function tag(int $id, bool $lock = false): ?array
+    public function tagById(int $id, bool $lock = false): ?array
     {
         return $this->db()->fetchAssociative('SELECT * FROM loss_tag WHERE id = ?' . ($lock ? ' FOR NO KEY UPDATE' : ''), [$id]) ?: null;
     }
