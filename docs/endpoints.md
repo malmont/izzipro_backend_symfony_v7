@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (519)
+## Boutique et commun (535)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -461,11 +461,27 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PUT | `/api/gestion/pertes/constats/{id}/decision` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::decide` |
 | GET | `/api/gestion/pertes/constats/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::finding` |
 | GET | `/api/gestion/pertes/constats` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::findings` |
+| POST | `/api/gestion/pertes/exercices/pieces/{id}/retirer` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::retireExercisePiece` |
+| GET | `/api/gestion/pertes/exercices/pieces/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::exercisePiece` |
+| DELETE | `/api/gestion/pertes/exercices/pieces` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::deleteExercisePieces` |
+| GET | `/api/gestion/pertes/exercices/pieces` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::exercisePieces` |
+| POST | `/api/gestion/pertes/exercices/pieces` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::createExercisePieces` |
+| POST | `/api/gestion/pertes/exercices/puces/associer` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::associateExercise` |
+| GET | `/api/gestion/pertes/exercices/puces/recherche` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::searchExercise` |
+| POST | `/api/gestion/pertes/exercices/puces/{id}/retirer` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::retireExerciseTag` |
 | PUT | `/api/gestion/pertes/exercices/{id}/decision` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::decideExercise` |
 | GET | `/api/gestion/pertes/exercices/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::exercise` |
 | DELETE | `/api/gestion/pertes/exercices` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::deleteExercises` |
 | GET | `/api/gestion/pertes/exercices` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::exercises` |
 | POST | `/api/gestion/pertes/exercices` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::startExercise` |
+| GET | `/api/gestion/pertes/pieces/synthese` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::synthesis` |
+| POST | `/api/gestion/pertes/pieces/{id}/retirer` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::retirePiece` |
+| GET | `/api/gestion/pertes/pieces/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::piece` |
+| GET | `/api/gestion/pertes/pieces` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::pieces` |
+| POST | `/api/gestion/pertes/pieces` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::create` |
+| POST | `/api/gestion/pertes/puces/associer` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::associate` |
+| GET | `/api/gestion/pertes/puces/recherche` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::search` |
+| POST | `/api/gestion/pertes/puces/{id}/retirer` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::retireTag` |
 | GET | `/api/gestion/pertes/reglages` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::settings` |
 | PUT | `/api/gestion/pertes/reglages` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::putSettings` |
 | POST | `/api/gestion/pertes/regles/apercu` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::previewRule` |
