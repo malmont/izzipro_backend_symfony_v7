@@ -79,6 +79,7 @@ final class ConsoleScreens
         'preparation' => ['theme' => 'resultats', 'analyses' => ['period.result', 'cash.projection', 'budget.status']],
         'statistiques' => ['theme' => 'resultats', 'params' => ['range' => self::STAT_RANGES, 'source' => ['all', 'ecommerce', 'pos', 'mobile_app'], 'periodId' => 'id'], 'analyses' => ['sales.overview']],
         'statistiques.annee' => ['theme' => 'resultats', 'params' => ['year' => 'year', 'pricePercent' => 'number'], 'analyses' => ['year.overview']],
+        'rapports' => ['theme' => 'resultats', 'params' => ['page' => 'page']], // lot DOC-2 : la liste « Mes rapports » (bilans et réponses de la console en PDF)
         // Réglages
         'reglages' => ['theme' => 'reglages'],
         'reprise' => ['theme' => 'reglages'],

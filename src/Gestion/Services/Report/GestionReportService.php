@@ -2,8 +2,10 @@
 
 namespace App\Gestion\Services\Report;
 
+use App\Entity\AiUsage;
 use App\Gestion\Entity\GestionConversationMessage;
 use App\Gestion\Message\GenerateGestionReportMessage;
+use App\Gestion\Services\Console\ConsoleResponder;
 use App\Gestion\Services\Console\ConsoleService;
 use App\Gestion\Services\Document\GestionDocumentService;
 use App\Gestion\Services\GestionConflictException;
@@ -11,6 +13,7 @@ use App\Gestion\Services\GestionValidationException;
 use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
 use App\Services\CaisseService\StoreClock;
 use App\Services\ContentAuditService\ContentAuditRecorder;
+use App\Services\LandingAiService\LandingAiQuotaService;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use Psr\Log\LoggerInterface;
@@ -24,16 +27,26 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * Lot DOC-1 (15/11/2026, `docs/rapports-gestion.md`) : rapports PDF de la gestion. Un rapport se demande (il est aussitôt « en
  * préparation »), se fabrique en tâche de fond (file `pdf`), puis se lit, se télécharge, se liste et s'efface.
  *
- * Genre de ce lot : `console.answer`, une réponse de la console IA telle qu'elle a été lue. Le serveur reprend les blocs gardés :
- * rien n'est recalculé, AUCUN modèle n'est appelé, aucune unité n'est décomptée. Lecture seule : le lot n'écrit que la liste de ses
- * propres rapports. Garde-fous : `DAILY_LIMIT` rapports par jour du magasin et par site, `MAX_PAGES` pages, `TIMEOUT_SECONDS`
- * secondes, conservation `RETENTION_DAYS` jours. La même réponse demandée de nouveau rend le fichier déjà prêt (`reused`).
+ * Genre `console.answer` : une réponse de la console IA telle qu'elle a été lue. Le serveur reprend les blocs gardés : rien n'est
+ * recalculé, AUCUN modèle n'est appelé, aucune unité n'est décomptée. Lecture seule : le lot n'écrit que la liste de ses propres
+ * rapports. Garde-fous : `DAILY_LIMIT` rapports par jour du magasin et par site, `MAX_PAGES` pages, `TIMEOUT_SECONDS` secondes,
+ * conservation `RETENTION_DAYS` jours. La même réponse demandée de nouveau rend le fichier déjà prêt (`reused`).
+ *
+ * Lot DOC-2 (15/11/2026) : genres `period` (bilan d'une période) et `year` (bilan de l'année ou de l'exercice). Le serveur lance
+ * lui-même les analyses nommées de la console (`ReportReview`) À LA DEMANDE et garde leur résultat avec le rapport : le worker met en
+ * page ces chiffres-là, sans rien recalculer. Sans `withAdvice` : aucun modèle, 0 unité. Avec `withAdvice: true`, le bilan se termine
+ * par un « Avis de la console » : une question posée à la console pour le gérant (1 unité, réservée à la demande : palier, crédits et
+ * plafond du jour refusent AVANT toute création), rédigée par le worker sur les analyses du bilan, imposées par le serveur. Si l'avis
+ * ne peut pas être rédigé, le bilan sort sans lui, l'unité est rendue, et le rapport prend l'empreinte du bilan sans avis.
  */
 class GestionReportService
 {
     public const KIND_CONSOLE_ANSWER = 'console.answer';
-    /** Genres que le contrat connaît ; ceux de ce lot sont dans `KINDS` */
-    public const KINDS = [self::KIND_CONSOLE_ANSWER];
+    public const KIND_PERIOD = 'period';
+    public const KIND_YEAR = 'year';
+    public const KINDS = [self::KIND_CONSOLE_ANSWER, self::KIND_PERIOD, self::KIND_YEAR];
+    /** Issues d'un avis qui n'a pas pu être rédigé, telles que l'application les lit */
+    public const ADVICE_CODES = ['AI_UNAVAILABLE', 'CONSOLE_TIMEOUT'];
     public const DAILY_LIMIT = 30;
     public const MAX_PAGES = 40;
     public const TIMEOUT_SECONDS = 120;
@@ -54,6 +67,10 @@ class GestionReportService
         private readonly ContentAuditRecorder $audit,
         private readonly TranslatorInterface $translator,
         private readonly LoggerInterface $logger,
+        private readonly ReportReview $reviews,
+        private readonly ConsoleService $console,
+        private readonly ConsoleResponder $responder,
+        private readonly LandingAiQuotaService $quota,
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
     ) {
     }
@@ -61,7 +78,7 @@ class GestionReportService
     /**
      * POST /api/gestion/rapports.
      *
-     * @param array<string, mixed> $body { kind, messageId, locale? }
+     * @param array<string, mixed> $body { kind: console.answer + messageId | period + periodId + withAdvice? | year + year? + withAdvice?, locale? }
      * @return array{0: array<string, mixed>, 1: int} le rapport et le statut HTTP (202 en préparation, 200 déjà prêt)
      */
     public function request(array $body, string $defaultLocale, ?string $by, bool $platformOwner): array
@@ -81,15 +98,32 @@ class GestionReportService
                 $fields['messageId'] = 'INVALID_ID';
             }
         }
+        if ($kind === self::KIND_PERIOD) {
+            if (($body['periodId'] ?? null) === null) {
+                $fields['periodId'] = 'REQUIRED';
+            } elseif (!is_int($body['periodId']) || $body['periodId'] <= 0) {
+                $fields['periodId'] = 'INVALID_ID';
+            }
+        }
+        if ($kind === self::KIND_YEAR && ($body['year'] ?? null) !== null && !is_int($body['year'])) {
+            $fields['year'] = 'OUT_OF_RANGE';
+        }
         $locale = $body['locale'] ?? $defaultLocale;
         if (!in_array($locale, ['fr', 'en'], true)) {
             $fields['locale'] = 'INVALID_VALUE';
         }
         if (array_key_exists('withAdvice', $body)) {
-            $fields['withAdvice'] = is_bool($body['withAdvice']) ? 'NOT_ALLOWED' : 'MUST_BE_BOOLEAN';
+            if (!is_bool($body['withAdvice'])) {
+                $fields['withAdvice'] = 'MUST_BE_BOOLEAN';
+            } elseif ($kind === self::KIND_CONSOLE_ANSWER) {
+                $fields['withAdvice'] = 'NOT_ALLOWED'; // une réponse de la console est déjà un avis
+            }
         }
         if ($fields !== []) {
             throw new GestionValidationException($fields, 'Demande de rapport invalide');
+        }
+        if ($kind !== self::KIND_CONSOLE_ANSWER) {
+            return $this->requestReview($kind, $body, $locale, $by, $platformOwner);
         }
         $this->documents->assertAiIncluded($platformOwner); // 403 : le rapport d'une réponse de la console demande le palier d'IA
         [$answer, $question] = $this->answer((int) $messageId);
@@ -137,21 +171,39 @@ class GestionReportService
     public function generate(int $id): void
     {
         $started = microtime(true);
+        $units = 0; // l'unité de l'avis de la console, s'il a été rédigé : elle reste notée même si le fichier échoue ensuite
         try {
             $report = $this->store->find($id);
             if ($report === null || $report['state'] !== GestionReportStore::PENDING) {
                 return;
             }
-            [$answer, $question] = $this->answer((int) ($report['params']['messageId'] ?? 0));
-            $document = $this->renderer->document($answer, $question, (string) $report['locale'], $this->currency->code(true)); // relue : un worker vit longtemps
+            $outcome = null;
+            $fingerprint = null;
+            $currency = $this->currency->code(true); // relue : un worker vit longtemps
+            if ($report['kind'] === self::KIND_CONSOLE_ANSWER) {
+                [$answer, $question] = $this->answer((int) ($report['params']['messageId'] ?? 0));
+                $document = $this->renderer->document($answer, $question, (string) $report['locale'], $currency);
+            } else {
+                // un bilan : les chiffres calculés à la demande, tels quels
+                $content = is_array($report['content']) ? $report['content'] : throw new \RuntimeException('bilan sans contenu');
+                $advice = null;
+                if (is_int($report['advice']['messageId'] ?? null)) {
+                    $advice = $this->advice($report['advice']['messageId'], (array) ($content['selected'] ?? []));
+                    $units = $advice['units'];
+                    $outcome = $report['advice'] + ($advice['included'] ? ['included' => true] : ['included' => false, 'code' => $advice['code']]);
+                    // sans avis, ce fichier est le bilan nu : la même demande AVEC avis ne doit pas retomber dessus
+                    $fingerprint = $advice['included'] || !is_string($report['advice']['plain'] ?? null) ? null : $report['advice']['plain'];
+                }
+                $document = $this->renderer->review($content, $advice, (string) $report['locale'], $currency);
+            }
             $pdf = $this->renderer->pdf($document);
             if ($pdf['pages'] > self::MAX_PAGES) {
-                $this->store->failed($id, 'REPORT_TOO_LONG', $pdf['pages']);
+                $this->store->failed($id, 'REPORT_TOO_LONG', $pdf['pages'], $units);
 
                 return;
             }
             if (microtime(true) - $started > self::TIMEOUT_SECONDS) {
-                $this->store->failed($id, 'REPORT_TIMEOUT', $pdf['pages']);
+                $this->store->failed($id, 'REPORT_TIMEOUT', $pdf['pages'], $units);
 
                 return;
             }
@@ -160,16 +212,143 @@ class GestionReportService
             if (file_put_contents($this->directory() . '/' . $name, $pdf['content']) === false) {
                 throw new \RuntimeException('fichier du rapport non écrit');
             }
-            if (!$this->store->done($id, $name, strlen($pdf['content']), $pdf['pages'])) {
+            if (!$this->store->done($id, $name, strlen($pdf['content']), $pdf['pages'], $outcome, $units, $fingerprint)) {
                 @unlink($this->directory() . '/' . $name); // le rapport a quitté « en préparation » entre-temps (délai, effacement)
             }
         } catch (\Throwable $e) {
             $this->logger->error('Rapports de la gestion : rapport ' . $id . ' en échec (' . $e::class . ').', ['exception' => $e]);
             try {
-                $this->store->failed($id, 'REPORT_FAILED');
+                $this->store->failed($id, 'REPORT_FAILED', null, $units);
             } catch (\Throwable) {
                 // la base ne répond plus : le rapport restera « en préparation », puis sera tenu pour interrompu
             }
+        }
+    }
+
+    /**
+     * Demande d'un bilan de période ou d'année (lot DOC-2). Les chiffres sont calculés ICI, par les analyses nommées : la même période
+     * sans changement de ses chiffres rend le fichier déjà prêt.
+     *
+     * @param array<string, mixed> $body
+     * @return array{0: array<string, mixed>, 1: int}
+     */
+    private function requestReview(string $kind, array $body, string $locale, ?string $by, bool $platformOwner): array
+    {
+        $withAdvice = ($body['withAdvice'] ?? false) === true;
+        if ($withAdvice) {
+            $this->documents->assertAiIncluded($platformOwner); // 403 : l'avis demande le palier d'IA, dit avant tout calcul
+        }
+        if ($kind === self::KIND_PERIOD) {
+            $content = $this->reviews->period((int) $body['periodId'], $locale) ?? throw new GestionConflictException('PERIOD_NOT_FOUND', 'Période introuvable.', 404, ['periodId' => (int) $body['periodId']]);
+        } else {
+            $content = $this->reviews->year($body['year'] ?? null, $locale) ?? throw new GestionValidationException(['year' => 'OUT_OF_RANGE'], 'Demande de rapport invalide');
+        }
+        $this->store->failStale(self::STALE_SECONDS, 'REPORT_TIMEOUT');
+        // le même bilan : mêmes chiffres, même texte, même langue, même en-tête du site ; l'avis fait un autre rapport
+        $plain = hash('sha256', implode('|', [$kind, (string) json_encode($content['resolved']), $locale, ReportReview::key($content), $this->renderer->siteKey()]));
+        $fingerprint = $withAdvice ? hash('sha256', $plain . '|advice') : $plain;
+        $existing = $this->store->ready($fingerprint);
+        if ($existing !== null && is_file($this->path($existing))) {
+            return [$this->view($existing, $locale, true), 200];
+        }
+        if (($pending = $this->store->pending($fingerprint)) !== null) {
+            return [$this->view($pending, $locale, true), 202];
+        }
+        [$dayStart, $dayEnd] = $this->clock->range(null, null);
+        if ($this->store->createdBetween($dayStart, $dayEnd) >= self::DAILY_LIMIT) {
+            throw new GestionConflictException('REPORT_DAILY_LIMIT', sprintf('%d rapports par jour au plus : reprenez demain.', self::DAILY_LIMIT), 429, ['limit' => self::DAILY_LIMIT, 'resetAt' => $dayEnd->format(\DateTimeInterface::ATOM)]);
+        }
+        $advice = null;
+        if ($withAdvice) {
+            // la question est posée à la console au nom du gérant : palier (403), crédits (402) et plafond du jour (429) refusent ici, avant
+            // toute création ; 1 unité est réservée, que le worker confirme (avis rédigé) ou rend (avis impossible)
+            $asked = $this->console->ask($this->translator->trans('reports.advice_question_' . $kind, [], 'gestion', $locale), null, null, $locale, $by, $platformOwner, null, false);
+            $advice = ['messageId' => (int) $asked['messageId'], 'conversationId' => (int) $asked['conversationId'], 'plain' => $plain];
+        }
+        $params = $content['resolved'] + ['withAdvice' => $withAdvice];
+        try {
+            $id = $this->store->create($kind, $params, mb_substr((string) $content['title'], 0, 120), $locale, $fingerprint, $by, new \DateTimeImmutable('+' . self::RETENTION_DAYS . ' days', new \DateTimeZone('UTC')), $content, $advice);
+        } catch (\Doctrine\DBAL\Exception\UniqueConstraintViolationException) {
+            // la même demande au même instant : la base n'en garde qu'une en préparation ; la question posée pour rien est retirée, son unité rendue
+            $this->dropAdvice($advice);
+            $pending = $this->store->pending($fingerprint) ?? throw new GestionConflictException('REPORT_NOT_READY', 'Ce rapport est déjà en préparation.', 409);
+
+            return [$this->view($pending, $locale, true), 202];
+        }
+        $this->audit->record('gestion_report', $id, 'request', [], ['kind' => $kind, 'locale' => $locale, 'by' => $by] + $params, ['state']);
+        try {
+            $this->bus->dispatch(new GenerateGestionReportMessage($id, (string) $this->tenants->getCurrentTenantCode()));
+        } catch (\Throwable $e) {
+            $this->logger->error('Rapports de la gestion : rapport ' . $id . ' non mis en file (' . $e::class . ').');
+            $this->store->failed($id, 'REPORT_FAILED');
+            $this->dropAdvice($advice);
+        }
+
+        return [$this->view($this->report($id), $locale, false), 202];
+    }
+
+    /**
+     * Fait rédiger l'avis de la console joint à un bilan (worker) : les analyses sont celles du bilan, imposées par le serveur ; le modèle
+     * ne choisit rien, il rédige. Ne lève jamais. Un avis n'est « rédigé » que si la console a rendu un texte du modèle : une réponse de
+     * repli (écrite par le serveur), un échec ou un délai dépassé valent « non rédigé », et l'unité est alors rendue par la console.
+     *
+     * @param array<int, mixed> $selected
+     * @return array{included: bool, code: ?string, blocks: list<array<string, mixed>>, answeredAt: ?string, units: int}
+     */
+    private function advice(int $messageId, array $selected): array
+    {
+        $none = static fn (string $code): array => ['included' => false, 'code' => $code, 'blocks' => [], 'answeredAt' => null, 'units' => 0];
+        try {
+            $forced = array_values(array_filter($selected, static fn (mixed $a): bool => is_array($a) && is_string($a['key'] ?? null) && is_array($a['params'] ?? null)));
+            $this->responder->answer($messageId, $forced);
+            $em = $this->emProvider->getEntityManager();
+            $message = $em->find(GestionConversationMessage::class, $messageId);
+            if ($message === null) {
+                return $none('AI_UNAVAILABLE');
+            }
+            $em->refresh($message); // la réponse est close en SQL
+            $raw = $message->getContent();
+            $answer = ConsoleService::message($message);
+            $texts = array_filter((array) $answer['blocks'], static fn (mixed $b): bool => is_array($b) && ($b['type'] ?? null) === 'text' && trim((string) ($b['text'] ?? '')) !== '');
+            if ($answer['state'] !== ConsoleService::STATE_DONE || ($raw['fallback'] ?? false) === true || $texts === []) {
+                $code = is_array($answer['error']) ? ($answer['error']['code'] ?? null) : null;
+
+                return $none(in_array($code, self::ADVICE_CODES, true) ? $code : 'AI_UNAVAILABLE');
+            }
+            $usage = isset($raw['usageId']) ? $em->find(AiUsage::class, (int) $raw['usageId']) : null;
+            if ($usage !== null) {
+                $em->refresh($usage);
+            }
+
+            return ['included' => true, 'code' => null, 'blocks' => array_values((array) $answer['blocks']), 'answeredAt' => $answer['answeredAt'],
+                'units' => $usage !== null && $usage->getStatus() === AiUsage::STATUS_SUCCESS ? $usage->getCredits() : 0];
+        } catch (\Throwable $e) {
+            $this->logger->error('Rapports de la gestion : avis de la console non rédigé (' . $e::class . ').', ['exception' => $e]);
+
+            return $none('AI_UNAVAILABLE');
+        }
+    }
+
+    /**
+     * Retire la question posée à la console pour un bilan qui n'aura pas lieu (demande en double, mise en file impossible) : la réponse en
+     * attente est close en échec, ce qui rend son unité, puis l'échange est retiré de l'historique.
+     *
+     * @param array<string, mixed>|null $advice
+     */
+    private function dropAdvice(?array $advice): void
+    {
+        if ($advice === null) {
+            return;
+        }
+        try {
+            $em = $this->emProvider->getEntityManager();
+            $message = $em->find(GestionConversationMessage::class, (int) $advice['messageId']);
+            if ($message !== null) {
+                $this->console->finish((int) $advice['messageId'], $message->getContent(), ConsoleService::STATE_FAILED, ['error' => ['code' => 'AI_UNAVAILABLE', 'message' => 'Bilan non fabriqué.']], false);
+            }
+            $em->getConnection()->executeStatement('DELETE FROM gestion_conversation WHERE id = ? AND kind = ?', [(int) $advice['conversationId'], ConsoleService::KIND]);
+        } catch (\Throwable $e) {
+            $this->logger->error('Rapports de la gestion : question de l\'avis non retirée (' . $e::class . ').'); // l'unité sera rendue au délai de la console
         }
     }
 
@@ -276,6 +455,11 @@ class GestionReportService
     {
         $iso = static fn (?string $at): ?string => $at === null ? null : (new \DateTimeImmutable($at, new \DateTimeZone('UTC')))->format(\DateTimeInterface::ATOM);
         $done = $r['state'] === GestionReportStore::DONE;
+        // l'avis de la console (bilans) : dit seulement quand le rapport est prêt ; `credits` : le solde du site, pour une demande avec avis
+        $advice = null;
+        if ($done && is_array($r['advice'] ?? null) && array_key_exists('included', $r['advice'])) {
+            $advice = $r['advice']['included'] === true ? ['included' => true] : ['included' => false, 'code' => in_array($r['advice']['code'] ?? null, self::ADVICE_CODES, true) ? $r['advice']['code'] : 'AI_UNAVAILABLE'];
+        }
         $error = null;
         if ($r['state'] === GestionReportStore::FAILED) {
             $code = in_array($r['error_code'], ['REPORT_TOO_LONG', 'REPORT_TIMEOUT', 'REPORT_FAILED'], true) ? $r['error_code'] : 'REPORT_FAILED';
@@ -286,7 +470,7 @@ class GestionReportService
             'id' => $r['id'], 'kind' => $r['kind'], 'state' => $r['state'], 'title' => $r['title'], 'locale' => $r['locale'], 'params' => $r['params'] ?: new \stdClass(),
             'createdAt' => $iso($r['created_at']), 'readyAt' => $iso($r['ready_at']), 'expiresAt' => $iso($r['expires_at']), 'pages' => $r['pages'], 'size' => $r['size'],
             'download' => $done ? ['url' => '/api/gestion/rapports/' . $r['id'] . '/fichier', 'filename' => $this->filename($r), 'contentType' => 'application/pdf'] : null,
-            'advice' => null, 'error' => $error, 'reused' => $reused, 'unitsCharged' => (int) $r['units_charged'], 'credits' => null,
+            'advice' => $advice, 'error' => $error, 'reused' => $reused, 'unitsCharged' => (int) $r['units_charged'], 'credits' => ($r['params']['withAdvice'] ?? false) === true ? $this->quota->credits() : null,
         ];
     }
 

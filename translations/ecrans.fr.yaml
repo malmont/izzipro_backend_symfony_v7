@@ -486,6 +486,25 @@ reprise:
             label: 'Articles vendus sans coût'
             text: 'Les articles dont les ventes passées n''ont pas encore de coût : ce sont des ventes sans coût connu.'
     next: 'Choisissez la profondeur (6, 12 ou 24 mois), « Calculer », corrigez les coûts, puis « Reprendre l''historique ».'
+rapports:
+    purpose: 'Vos rapports PDF : les bilans de période et d''année et les réponses de la console que vous avez demandés, à télécharger, à remettre ou à imprimer.'
+    points:
+        bilan-de-periode:
+            label: 'Bilan de période'
+            text: 'Le résultat, les ventes et la marge, le budget prévu et réel d''une période, mis en page par l''application. Tant que la période n''est pas clôturée, le bilan porte la mention « chiffres provisoires ».'
+        bilan-de-l-annee:
+            label: 'Bilan de l''année'
+            text: 'L''année ou l''exercice : les chiffres clés, puis le mois par mois.'
+        reponse-de-la-console:
+            label: 'Réponse de la console'
+            text: 'Une réponse de la console IA telle que vous l''avez lue, mise en PDF sans rien recalculer.'
+        avis-de-la-console:
+            label: 'Avis de la console'
+            text: 'Sur demande, un bilan se termine par un avis rédigé par l''IA à partir de ses chiffres. Il coûte une unité d''IA ; rien n''est décompté s''il ne peut pas être rédigé.'
+        conservation:
+            label: 'Conservation'
+            text: 'Un rapport reste téléchargeable pendant 90 jours, puis il est retiré. Vous pouvez en demander 30 par jour au plus.'
+    next: 'Demandez un bilan depuis l''écran d''une période ou de l''année, puis téléchargez-le ici pour le remettre à votre comptable ou à votre banque.'
 pertes_home:
     purpose: 'La prévention des pertes : ce que la caisse a enregistré d''inhabituel (écart à la clôture, tiroir ouvert sans vente, vente annulée juste après l''encaissement), réuni en constats que vous vérifiez. Rien n''est décidé à votre place.'
     points:

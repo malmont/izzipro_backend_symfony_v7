@@ -62,7 +62,7 @@ class GestionReportsApiTest extends WebTestCase
         $this->token = $admin;
 
         // Demandes refusées : rien n'est créé
-        foreach ([[[], ['kind' => 'REQUIRED']], [['kind' => 'period', 'periodId' => 1], ['kind' => 'INVALID_VALUE']], [['kind' => 'console.answer'], ['messageId' => 'REQUIRED']],
+        foreach ([[[], ['kind' => 'REQUIRED']], [['kind' => 'livre', 'periodId' => 1], ['kind' => 'INVALID_VALUE']], [['kind' => 'console.answer'], ['messageId' => 'REQUIRED']],
             [['kind' => 'console.answer', 'messageId' => 'x'], ['messageId' => 'INVALID_ID']], [['kind' => 'console.answer', 'messageId' => $answerId, 'locale' => 'de'], ['locale' => 'INVALID_VALUE']],
             [['kind' => 'console.answer', 'messageId' => $answerId, 'withAdvice' => true], ['withAdvice' => 'NOT_ALLOWED']]] as [$body, $fields]) {
             $this->request('POST', '/api/gestion/rapports', $body);
@@ -155,7 +155,8 @@ class GestionReportsApiTest extends WebTestCase
         $list = $this->get('/api/gestion/rapports');
         $this->assertSame([[$englishId, $id], 1, 1, 2], [array_column($list['reports'], 'id'), $list['page'], $list['pages'], $list['total']]);
         $this->assertSame(2, $this->get('/api/gestion/rapports?kind=console.answer')['total']);
-        $this->request('GET', '/api/gestion/rapports?kind=period');
+        $this->assertSame(0, $this->get('/api/gestion/rapports?kind=period')['total'], 'les bilans (lot DOC-2) se filtrent aussi : aucun ici');
+        $this->request('GET', '/api/gestion/rapports?kind=livre');
         $this->assertSame([422, ['kind' => 'INVALID_VALUE']], [$this->status(), $this->body()['fields']]);
         $path = static::getContainer()->getParameter('kernel.project_dir') . '/var/storage/private_media/gestion-rapports/' . MV_TEST_TENANT_CODE . '/' . $conn->fetchOne('SELECT file_name FROM gestion_report WHERE id = ?', [$id]);
         $this->assertFileExists($path);

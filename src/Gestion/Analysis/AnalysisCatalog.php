@@ -141,6 +141,30 @@ class AnalysisCatalog
     }
 
     /**
+     * Une ligne d'analyse telle que le gérant la lit : un état ou un verdict rédigé, le code restant à côté (`statusCode`,
+     * `verdictCode`) ; un mois « 2026-11 » rend « novembre 2026 » (`monthKey` garde la clé).
+     *
+     * @param array<string, mixed> $row
+     *
+     * @return array<string, mixed>
+     */
+    public function writtenRow(array $row, string $locale): array
+    {
+        foreach (self::CODED as $field => $set) {
+            if (is_string($row[$field] ?? null)) {
+                $row[$field . 'Code'] = $row[$field];
+                $row[$field] = self::valueLabel($this->translator, $set, $row[$field], $locale);
+            }
+        }
+        if (is_string($row['month'] ?? null) && preg_match('/^\d{4}-\d{2}$/', $row['month']) === 1) {
+            $row['monthKey'] = $row['month'];
+            $row['month'] = RangeLabel::month($row['month'], $locale);
+        }
+
+        return $row;
+    }
+
+    /**
      * Contrôle des paramètres proposés pour une analyse : seuls les paramètres déclarés sont gardés, chacun vérifié contre les données du
      * site. Rend les paramètres à utiliser, ou null si l'analyse ne peut pas être lancée (clé inconnue, paramètre obligatoire absent ou
      * faux). Un paramètre facultatif faux est simplement écarté.

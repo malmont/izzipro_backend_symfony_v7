@@ -134,7 +134,11 @@ class ConsoleResponder
         return null;
     }
 
-    public function answer(int $messageId): void
+    /**
+     * @param list<array{key: string, params: array<string, mixed>}>|null $forced analyses imposées par le SERVEUR (l'avis joint à un
+     *        bilan PDF, lot DOC-2) : l'appel 1 n'a pas lieu, le modèle ne choisit rien ; il rédige seulement, sur ces chiffres
+     */
+    public function answer(int $messageId, ?array $forced = null): void
     {
         $em = $this->emProvider->getEntityManager();
         $message = $em->find(GestionConversationMessage::class, $messageId);
@@ -162,7 +166,7 @@ class ConsoleResponder
             // « Explique-moi cet écran », sans autre demande (lot A-4b), ou la définition d'une notion demandée sans ambiguïté (14/11/2026) :
             // c'est le SERVEUR qui répond, par le guide de l'écran et ses chiffres du moment, ou par la leçon de la notion. Aucun appel au
             // modèle, aucune unité : le comportement ne dépend pas de ce que le modèle aurait choisi.
-            $choice = $this->serverChoice($screen, $text);
+            $choice = $forced !== null ? ['kind' => 'analyses', 'analyses' => $forced, 'clarification' => ''] : $this->serverChoice($screen, $text);
             if ($choice === null) {
                 $choice = $this->model->choose($text, $screen, array_reverse(array_slice($history, 0, ConsoleService::HISTORY_MESSAGES)), $this->analyses->listed($locale), $this->periods($locale), $this->calendar->today(), $locale, $stats,
                     array_map(fn (array $e) => ['key' => $e['key'], 'term' => $e['term'], 'synonymes' => $e['synonyms']], $this->lexique->all($locale)));
@@ -841,18 +845,7 @@ class ConsoleResponder
      */
     private function writtenRow(array $row, string $locale): array
     {
-        foreach (AnalysisCatalog::CODED as $field => $set) {
-            if (is_string($row[$field] ?? null)) {
-                $row[$field . 'Code'] = $row[$field];
-                $row[$field] = AnalysisCatalog::valueLabel($this->translator, $set, $row[$field], $locale);
-            }
-        }
-        if (is_string($row['month'] ?? null) && preg_match('/^\d{4}-\d{2}$/', $row['month']) === 1) {
-            $row['monthKey'] = $row['month'];
-            $row['month'] = RangeLabel::month($row['month'], $locale);
-        }
-
-        return $row;
+        return $this->analyses->writtenRow($row, $locale);
     }
 
     /**

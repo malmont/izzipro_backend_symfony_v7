@@ -486,6 +486,25 @@ reprise:
             label: 'Items sold without a cost'
             text: 'The items whose past sales do not have a cost yet: these are sales without known cost.'
     next: 'Choose the depth (6, 12 or 24 months), “Compute”, correct the costs, then “Import the history”.'
+rapports:
+    purpose: 'Your PDF reports: the period and year reviews and the console answers you asked for, to download, hand over or print.'
+    points:
+        bilan-de-periode:
+            label: 'Period review'
+            text: 'The result, sales and margin, and planned versus actual budget of a period, laid out by the application. Until the period is closed, the review is marked "provisional figures".'
+        bilan-de-l-annee:
+            label: 'Year review'
+            text: 'The year or fiscal year: the key figures, then month by month.'
+        reponse-de-la-console:
+            label: 'Console answer'
+            text: 'An answer from the AI console as you read it, turned into a PDF without recomputing anything.'
+        avis-de-la-console:
+            label: 'Advice from the console'
+            text: 'On request, a review ends with advice written by the AI from its figures. It costs one AI unit; nothing is charged if it cannot be written.'
+        conservation:
+            label: 'Retention'
+            text: 'A report can be downloaded for 90 days, then it is removed. You can ask for 30 a day at most.'
+    next: 'Ask for a review from the screen of a period or of the year, then download it here to hand it to your accountant or your bank.'
 pertes_home:
     purpose: 'Loss prevention: what the cash register recorded that is out of the ordinary (a discrepancy at closing, the drawer opened without a sale, a sale cancelled right after payment), gathered into findings for you to check. Nothing is decided for you.'
     points:

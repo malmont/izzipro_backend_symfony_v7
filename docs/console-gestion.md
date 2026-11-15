@@ -8,6 +8,11 @@ Cette fiche est le contrat validé par le propriétaire le 13/11/2026, et la des
 échanges sont dans les tables du fil (`gestion_conversation`, type `console`) et ne sont jamais rendus par les routes du fil.
 Test : `tests/Functional/Gestion/ConsoleApiTest.php` (modèle simulé).
 
+Lot DOC-2 (15/11/2026) : un bilan PDF demandé avec l'avis de la console (`docs/rapports-gestion.md` § 7) pose une question à la
+console au nom du gérant, puis le worker `pdf` la fait rédiger par `ConsoleResponder::answer($messageId, $forced)` : les analyses
+sont **imposées par le serveur** (celles du bilan), l'appel de choix n'a pas lieu, tout le reste est inchangé (contrôle des nombres,
+repli, unité). L'écran `rapports` est au registre `ConsoleScreens`.
+
 **Lot W2-b (13/11/2026), retouches après le premier essai réel sur demo** : l'écran d'où vient la question est traduit par le serveur
 (codes de l'application web, § 4.1) ; une question qui dit « période » lit les ventes sur la période ; les libellés de plage sont
 rédigés et ceux des chiffres disent ce qu'ils comptent (§ 2) ; tout chiffre dont un texte parle a sa carte à la suite ; un bilan

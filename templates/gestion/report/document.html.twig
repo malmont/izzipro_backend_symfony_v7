@@ -1,4 +1,4 @@
-{# Lot DOC-1 : mise en page d'un rapport de la gestion (Dompdf, A4 portrait). Tout le texte arrive déjà rédigé par ReportRenderer. #}
+{# Lots DOC-1 et DOC-2 : mise en page d'un rapport de la gestion (Dompdf, A4 portrait). Tout le texte arrive déjà rédigé par ReportRenderer. #}
 <!DOCTYPE html>
 <html lang="{{ doc.locale }}">
 <head>
@@ -24,6 +24,8 @@
   table.grid tr { page-break-inside: avoid; }
   .num { text-align: right; white-space: nowrap; }
   .box { border-left: 3px solid #64748b; padding: 4px 0 4px 9px; margin: 0 0 9px 0; page-break-inside: avoid; }
+  h2.part { font-size: 12pt; margin: 18px 0 3px 0; padding-bottom: 3px; border-bottom: 1px solid #cbd5e1; page-break-after: avoid; }
+  .notice { border: 1px solid #94a3b8; background: #f8fafc; padding: 6px 9px; margin: 0 0 12px 0; }
 </style>
 </head>
 <body>
@@ -37,11 +39,16 @@
 
 <div class="small">{{ doc.kindLabel }}</div>
 <h1>{{ doc.title }}</h1>
+{% if doc.subtitle %}<p>{{ doc.subtitle }}</p>{% endif %}
 <p class="small">{{ doc.answeredLabel }}</p>
+{% if doc.notice %}<div class="notice">{{ doc.notice }}</div>{% endif %}
 {% if doc.question %}<div class="question"><span class="small">{{ doc.questionLabel }}</span><br>{{ doc.question }}</div>{% endif %}
 
 {% for section in doc.sections %}
-  {% if section.type == 'text' %}
+  {% if section.type == 'heading' %}
+    <h2 class="part">{{ section.title }}</h2>
+    {% if section.note %}<p class="small">{{ section.note }}</p>{% endif %}
+  {% elseif section.type == 'text' %}
     {% for paragraph in section.paragraphs %}<p>{{ paragraph|nl2br }}</p>{% endfor %}
   {% elseif section.type == 'figures' %}
     {% for row in section.rows %}

@@ -43,14 +43,65 @@ class ReportRenderer
      */
     public function document(array $answer, string $question, string $locale, string $currency): array
     {
-        $t = fn (string $key, array $params = []): string => $this->translator->trans('reports.' . $key, $params, 'gestion', $locale === 'en' ? 'en' : 'fr');
+        $t = fn (string $key, array $params = []): string => $this->tr($key, $locale, $params);
+        $title = mb_substr(trim($question), 0, 120);
+
+        return [
+            'title' => $title !== '' ? $title : $t('answer_title'), 'kindLabel' => $t('answer_title'), 'subtitle' => null, 'notice' => null, 'question' => trim($question), 'questionLabel' => $t('question'),
+            'answeredLabel' => $t('computed_at', ['%moment%' => $this->moment($answer['answeredAt'] ?? null, $locale)]), 'sections' => $this->sections((array) ($answer['blocks'] ?? []), $locale, $currency),
+            'sources' => $this->sources((array) ($answer['analyses'] ?? []), null, $locale), 'labels' => $this->labels($locale), 'site' => $this->site(), 'locale' => $locale === 'en' ? 'en' : 'fr',
+        ];
+    }
+
+    /**
+     * Lot DOC-2 : le document d'un bilan de période ou d'année, depuis le contenu calculé à la demande (`ReportReview`). Avec `advice`,
+     * la partie « Avis de la console » ferme le bilan : les blocs de la réponse de la console, ou une ligne qui dit qu'elle n'a pas pu
+     * être rédigée.
+     *
+     * @param array<string, mixed>      $content
+     * @param array<string, mixed>|null $advice  null : avis non demandé ; sinon `{ included, blocks, answeredAt }`
+     * @return array<string, mixed>
+     */
+    public function review(array $content, ?array $advice, string $locale, string $currency): array
+    {
+        $t = fn (string $key, array $params = []): string => $this->tr($key, $locale, $params);
+        $sections = $this->sections((array) ($content['blocks'] ?? []), $locale, $currency);
+        if ($advice !== null) {
+            $included = ($advice['included'] ?? false) === true;
+            $sections[] = ['type' => 'heading', 'title' => $t('advice_title'), 'note' => $included ? $t('advice_note', ['%moment%' => $this->moment($advice['answeredAt'] ?? null, $locale)]) : ''];
+            $sections = $included ? [...$sections, ...$this->sections((array) ($advice['blocks'] ?? []), $locale, $currency)] : [...$sections, ['type' => 'text', 'paragraphs' => [$t('advice_missing')]]];
+        }
+
+        return [
+            'title' => (string) ($content['title'] ?? ''), 'kindLabel' => (string) ($content['kindLabel'] ?? ''), 'subtitle' => (string) ($content['range'] ?? '') !== '' ? (string) $content['range'] : null,
+            'notice' => is_string($content['notice'] ?? null) && $content['notice'] !== '' ? $content['notice'] : null, 'question' => '', 'questionLabel' => $t('question'),
+            'answeredLabel' => $t('computed_at', ['%moment%' => $this->moment($content['computedAt'] ?? null, $locale)]), 'sections' => $sections,
+            'sources' => $this->sources((array) ($content['analyses'] ?? []), is_string($content['computedAt'] ?? null) ? $content['computedAt'] : null, $locale),
+            'labels' => $this->labels($locale), 'site' => $this->site(), 'locale' => $locale === 'en' ? 'en' : 'fr',
+        ];
+    }
+
+    /**
+     * Les blocs (ceux de la console, plus `heading` pour le titre d'une partie d'un bilan) rangés en sections déjà rédigées.
+     *
+     * @param array<int, mixed> $blocks
+     * @return list<array<string, mixed>>
+     */
+    private function sections(array $blocks, string $locale, string $currency): array
+    {
+        $t = fn (string $key, array $params = []): string => $this->tr($key, $locale, $params);
         $write = static fn (mixed $value, ?string $unit): string => ReportValue::write($value, $unit, $locale, $currency);
         $sections = [];
-        foreach ((array) ($answer['blocks'] ?? []) as $block) {
+        foreach ($blocks as $block) {
             if (!is_array($block)) {
                 continue;
             }
             switch ($block['type'] ?? null) {
+                case 'heading':
+                    if (trim((string) ($block['title'] ?? '')) !== '') {
+                        $sections[] = ['type' => 'heading', 'title' => (string) $block['title'], 'note' => (string) ($block['note'] ?? '')];
+                    }
+                    break;
                 case 'text':
                     if (trim((string) ($block['text'] ?? '')) !== '') {
                         $sections[] = ['type' => 'text', 'paragraphs' => preg_split('/\n{2,}/', trim((string) $block['text'])) ?: []];
@@ -126,21 +177,38 @@ class ReportRenderer
                     break;
             }
         }
+
+        return $sections;
+    }
+
+    /**
+     * @param array<int, mixed> $analyses
+     * @param string|null       $computedAt l'instant commun du calcul (bilan) ; null : celui de chaque analyse (réponse de la console)
+     * @return list<array{title: string, period: string, computedAt: string}>
+     */
+    private function sources(array $analyses, ?string $computedAt, string $locale): array
+    {
         $sources = [];
-        foreach ((array) ($answer['analyses'] ?? []) as $analysis) {
+        foreach ($analyses as $analysis) {
             if (is_array($analysis)) {
                 $sources[] = ['title' => (string) ($analysis['title'] ?? ''), 'period' => is_array($analysis['period'] ?? null) ? (string) ($analysis['period']['label'] ?? '') : '',
-                    'computedAt' => $this->moment($analysis['computedAt'] ?? null, $locale)];
+                    'computedAt' => $this->moment($computedAt ?? ($analysis['computedAt'] ?? null), $locale)];
             }
         }
-        $title = mb_substr(trim($question), 0, 120);
 
-        return [
-            'title' => $title !== '' ? $title : $t('answer_title'), 'kindLabel' => $t('answer_title'), 'question' => trim($question), 'questionLabel' => $t('question'),
-            'answeredLabel' => $t('computed_at', ['%moment%' => $this->moment($answer['answeredAt'] ?? null, $locale)]), 'sections' => $sections, 'sources' => $sources,
-            'labels' => ['sources' => $t('sources_title'), 'computed' => $t('source_computed'), 'page' => $t('page'), 'next' => $t('guide_next')],
-            'site' => $this->site(), 'locale' => $locale === 'en' ? 'en' : 'fr',
-        ];
+        return $sources;
+    }
+
+    /** @return array<string, string> */
+    private function labels(string $locale): array
+    {
+        return ['sources' => $this->tr('sources_title', $locale), 'computed' => $this->tr('source_computed', $locale), 'page' => $this->tr('page', $locale), 'next' => $this->tr('guide_next', $locale)];
+    }
+
+    /** @param array<string, string|int> $params */
+    private function tr(string $key, string $locale, array $params = []): string
+    {
+        return $this->translator->trans('reports.' . $key, $params, 'gestion', $locale === 'en' ? 'en' : 'fr');
     }
 
     /** @param array<string, mixed> $document */

@@ -2,10 +2,11 @@
 
 Contrat accepté par le propriétaire le 14/11/2026. Un rapport est un PDF fabriqué par le serveur à partir de chiffres déjà calculés,
 **sans aucun appel d'IA**. Lot DOC-1 (codé le 15/11/2026) : le moteur de mise en page et le rapport d'une **réponse de la console IA**.
-Lot DOC-2 (à venir) : bilan de période et bilan de l'année, avec un avis de la console en option.
+Lot DOC-2 (codé le 15/11/2026) : **bilan de période** et **bilan de l'année**, avec un avis de la console en option (§ 7).
 
-Code : `src/Gestion/Services/Report/`, `src/Gestion/Controller/GestionReportController.php`. Test :
-`tests/Functional/Gestion/GestionReportsApiTest.php`. Console IA : `docs/console-gestion.md`.
+Code : `src/Gestion/Services/Report/`, `src/Gestion/Controller/GestionReportController.php`. Tests :
+`tests/Functional/Gestion/GestionReportsApiTest.php` (DOC-1), `GestionReviewReportsApiTest.php` (DOC-2). Console IA :
+`docs/console-gestion.md`.
 
 ## 1. Ce que fait le lot DOC-1
 
@@ -21,7 +22,7 @@ message, … }` ; une validation : 422 `VALIDATION_FAILED { fields }`.
 
 | Route | Corps | Réponse | Refus |
 |---|---|---|---|
-| `POST /api/gestion/rapports` | `{ kind: "console.answer", messageId, locale? }` | 202, le rapport en préparation ; **200 si le fichier de la même réponse est déjà prêt** (`reused: true`) | 422 `fields.kind` `REQUIRED` \| `INVALID_VALUE` (`period` et `year` : lot DOC-2) ; `fields.messageId` `REQUIRED` \| `INVALID_ID` ; `fields.locale` `INVALID_VALUE` ; `fields.withAdvice` `NOT_ALLOWED` \| `MUST_BE_BOOLEAN` ; 404 `CONSOLE_MESSAGE_NOT_FOUND` ; 409 `CONSOLE_ANSWER_PENDING`, `CONSOLE_ANSWER_FAILED` ; 429 `REPORT_DAILY_LIMIT { limit, resetAt }` ; 403 `AI_NOT_INCLUDED` |
+| `POST /api/gestion/rapports` | `{ kind: "console.answer", messageId, locale? }` ; bilans (§ 7) : `{ kind: "period", periodId, withAdvice?, locale? }`, `{ kind: "year", year?, withAdvice?, locale? }` | 202, le rapport en préparation ; **200 si le fichier de la même demande est déjà prêt** (`reused: true`) | 422 `fields.kind` `REQUIRED` \| `INVALID_VALUE` ; `fields.messageId`, `fields.periodId` `REQUIRED` \| `INVALID_ID` ; `fields.year` `OUT_OF_RANGE` ; `fields.locale` `INVALID_VALUE` ; `fields.withAdvice` `MUST_BE_BOOLEAN` \| `NOT_ALLOWED` (réponse de la console) ; 404 `CONSOLE_MESSAGE_NOT_FOUND`, `PERIOD_NOT_FOUND` ; 409 `CONSOLE_ANSWER_PENDING`, `CONSOLE_ANSWER_FAILED` ; 429 `REPORT_DAILY_LIMIT { limit, resetAt }` ; 403 `AI_NOT_INCLUDED` (réponse de la console, ou bilan avec avis) ; avec avis : 402 `AI_CREDITS_EXHAUSTED`, 429 `AI_DAILY_LIMIT` |
 | `GET /api/gestion/rapports/{id}` | — | le rapport (à relire toutes les 3 secondes tant que `state` vaut `pending`) | 404 `REPORT_NOT_FOUND` |
 | `GET /api/gestion/rapports/{id}/fichier` | — | `application/pdf`, en pièce jointe | 409 `REPORT_NOT_READY`, `REPORT_FAILED_NO_FILE` ; 404 `REPORT_NOT_FOUND` |
 | `GET /api/gestion/rapports?page=&kind=` | — | `{ reports, page, pages, total }`, 20 par page, du plus récent au plus ancien | 422 `fields.kind` `INVALID_VALUE` |
@@ -44,7 +45,7 @@ Un rapport :
 - `error` (pour `failed`) : `{ code, message }`, code `REPORT_TOO_LONG` (plus de 40 pages ; `pages` dit combien), `REPORT_TIMEOUT`
   (fabrication trop longue, ou rapport resté en préparation), `REPORT_FAILED` ; le message est rédigé dans la langue de `?locale=`.
 - `reused` : vrai quand la demande a rendu un rapport qui existait déjà (prêt, ou encore en préparation).
-- `advice`, `credits` : toujours `null` dans ce lot ; `unitsCharged` : toujours 0. Ils serviront à l'avis de la console (DOC-2).
+- `advice`, `credits`, `unitsCharged` : l'avis de la console d'un bilan (§ 7) ; `null`, `null` et 0 pour une réponse de la console.
 - Le fichier ne se lit jamais par un lien public : `download.url` est une route à jeton.
 
 ## 3. Garde-fous
@@ -95,11 +96,62 @@ ressemble à un nombre (un article nommé « 2024 »). Tout texte d'un bloc est 
 - Le logo est pris en PNG, JPEG ou GIF de 500 Ko au plus ; un autre format est laissé de côté sans message.
 - Le numéro de TVA intracommunautaire n'est pas dans l'en-tête ; les tableaux du bilan et des sources n'ont pas d'en-tête de colonnes.
 - Pas d'envoi par courriel : le téléchargement suffit (décision du propriétaire).
-- DOC-2 : `kind: "period"` et `"year"`, `withAdvice` (un avis de la console, 1 unité, rendue si l'IA échoue), l'écran « rapports » au
-  registre des écrans de la console.
+- Bilans : pas de commentaire rédigé sans `withAdvice` ; le stock d'un bilan de période est celui d'aujourd'hui, donc absent d'une
+  période passée ; le bilan de l'année n'a pas les leviers chiffrés de l'écran Année.
 
 ## 6. Base
 
 Migration `Version20270110100000`, script `scripts/migrate_all_v2_rapports.sh` : table `gestion_report` et trois index (dont l'index
 unique d'une seule préparation par demande). Additive ; à
 appliquer à toutes les bases **avant** l'échange du code. Un message de worker s'ajoute : les workers sont relancés à la bascule.
+
+Lot DOC-2 : migration `Version20270111100000`, script `scripts/migrate_all_v2_rapports_doc2.sh` : colonnes `content` (les chiffres
+calculés à la demande) et `advice` (l'avis de la console : sa question, puis son issue), en JSONB, nulles pour une réponse de la
+console. Additive, à appliquer avant l'échange du code.
+
+## 7. Bilans de période et d'année (lot DOC-2)
+
+**Ce que c'est.** Pour une période (`kind: "period"`, `periodId`) ou pour une année (`kind: "year"`, `year` facultatif : sans lui,
+l'exercice en cours, celui de l'écran Année), le serveur lance lui-même les **analyses nommées de la console** (`AnalysisCatalog`,
+`docs/console-gestion.md`) et met leurs chiffres en page (`ReportReview`). Un chiffre du bilan est donc celui de l'écran, au cent.
+Sans `withAdvice` : aucun modèle n'est appelé, 0 unité, et le palier d'IA n'est pas exigé.
+
+| Bilan | Analyses, dans l'ordre du papier |
+|---|---|
+| Période | `period.result` (résultat), `sales.overview` (ventes et marge, avec la période précédente et l'an dernier), `budget.status` (prévu et réel, tableau des postes) ; `stock.overview` (valeur du stock, articles en stock bas) **seulement pour la période en cours** : ce stock est celui d'aujourd'hui |
+| Année | `year.overview` : chiffres clés, puis le **mois par mois** en tableau, dans l'ordre de l'exercice (le rang de chaque mois reste en colonne) |
+
+Chaque analyse fait une partie : son titre, sa plage, ses cartes, son tableau ; une partie sans donnée le dit. La mention sous le
+titre : « Chiffres provisoires au … » tant que la période n'est pas clôturée (ou que l'exercice n'est pas terminé) ; « Période
+clôturée le … : ses chiffres sont figés » ensuite. Le document se termine par « d'où viennent ces chiffres ».
+
+**Quand les chiffres sont calculés.** À la demande, dans la requête : leur résultat est gardé avec le rapport (`gestion_report.content`)
+et le worker met en page **ces chiffres-là**, sans rien recalculer. C'est aussi ce qui fait l'empreinte : la même période, dans la
+même langue, **sans changement de ses chiffres ni de sa mention**, rend le fichier déjà prêt (200, `reused: true`) ; une vente de
+plus, ou le jour qui change sur une période provisoire, fait un nouveau bilan.
+
+`params` d'un bilan : `{ periodId, withAdvice }` ou `{ year, withAdvice }` (`year` : l'année retenue, même quand elle n'était pas
+donnée). `year` hors des bornes de la console (avant 2000, après l'an prochain) ou qui n'est pas un entier : 422 `OUT_OF_RANGE`.
+
+**L'avis de la console (`withAdvice: true`).** Le bilan se termine par une partie « Avis de la console », rédigée par l'IA.
+
+1. À la demande, après les contrôles et le réemploi : la question (« Donne ton avis sur le bilan de cette période… ») est posée à la
+   console **au nom du gérant** (`ConsoleService::ask`, sans mise en file). C'est elle qui refuse, avant toute création : 403
+   `AI_NOT_INCLUDED` (dit dès le début de la demande), 402 `AI_CREDITS_EXHAUSTED`, 429 `AI_DAILY_LIMIT`. **1 unité est réservée.**
+2. Le worker `pdf` fait rédiger la réponse (`ConsoleResponder::answer($messageId, $forced)`) sur **les analyses du bilan, imposées
+   par le serveur** : l'appel de choix n'a pas lieu, le modèle ne fait que rédiger (un seul appel), aux règles de la console (aucun
+   nombre que le serveur n'a pas fourni). Les analyses sont relancées à cet instant, quelques secondes après la demande.
+3. L'avis est « rédigé » si la console a rendu un texte du modèle : l'unité est décomptée (`unitsCharged: 1`, `advice: { included:
+   true }`). Sinon (IA en panne, réponse de repli écrite par le serveur, délai de la console dépassé parce que la file était
+   occupée) : le bilan sort **sans** avis, avec une ligne qui le dit, l'unité est rendue, `advice: { included: false, code:
+   "AI_UNAVAILABLE" | "CONSOLE_TIMEOUT" }`, et le rapport prend l'empreinte du bilan sans avis : redemander l'avis le redemande
+   vraiment, demander le bilan sans avis reprend ce fichier.
+4. L'échange se relit dans l'historique de la console (il compte dans son plafond du jour). `advice` vaut `null` tant que le
+   rapport n'est pas prêt ; `credits` est le solde du site `{ monthly, used, remaining, resetAt }` pour une demande avec avis, `null`
+   sinon. Si le fichier échoue après un avis rédigé (plus de 40 pages), l'unité reste notée sur le rapport et l'avis reste lisible
+   dans la console.
+
+La même demande avec avis, sans changement des chiffres : le fichier déjà prêt, aucune nouvelle question, aucune nouvelle unité.
+
+**Écran.** `rapports` (la liste « Mes rapports ») est au registre des écrans de la console (`ConsoleScreens`), avec son guide en
+français et en anglais (`translations/ecrans.*.yaml`).

@@ -33,7 +33,10 @@ class GestionReportController extends AbstractController
         return $this->json($this->reports->list(max(1, $request->query->getInt('page', 1)), is_string($kind) && $kind !== '' ? $kind : null, self::locale($request->query->get('locale'))));
     }
 
-    /** Demande un rapport { kind: "console.answer", messageId, locale? } → 202 en préparation, 200 si le fichier de la même réponse est déjà prêt */
+    /**
+     * Demande un rapport { kind: "console.answer" + messageId | "period" + periodId + withAdvice? | "year" + year? + withAdvice?, locale? }
+     * → 202 en préparation, 200 si le fichier de la même demande est déjà prêt (lots DOC-1 et DOC-2)
+     */
     #[Route('', name: 'gestion_rapports_request', methods: ['POST'])]
     public function request(Request $request): JsonResponse
     {
@@ -49,7 +52,7 @@ class GestionReportController extends AbstractController
         } catch (LandingAiException $e) {
             $code = match ($e->getStatusCode()) { 402 => 'AI_CREDITS_EXHAUSTED', 403 => 'AI_NOT_INCLUDED', 429 => 'AI_TOO_MANY_FAILURES', default => 'AI_UNAVAILABLE' };
 
-            $message = $code === 'AI_NOT_INCLUDED' ? 'Le rapport d\'une réponse de la console demande le palier d\'IA de votre site.' : $e->getMessage();
+            $message = $code === 'AI_NOT_INCLUDED' ? 'Ce rapport demande le palier d\'IA de votre site (réponse de la console, ou bilan avec l\'avis de la console).' : $e->getMessage();
 
             return $this->json(['error' => $code, 'code' => $code, 'message' => $message], $e->getStatusCode());
         }
