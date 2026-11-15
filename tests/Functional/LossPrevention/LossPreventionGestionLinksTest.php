@@ -47,6 +47,22 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
         $this->json($this->admin('GET', self::BASE . '/constats/' . $id));
         $this->assertSame($before + 1, $tile()['sources'][0]['value']);
 
+        // Aucun des constats nouveaux ne porte de montant (tiroir ouvert sans vente) : la vignette ne dit pas « 0,00 $ en jeu » ; dès qu'un
+        // constat en porte un, le montant est la somme de ceux qui en ont un
+        $this->db->executeStatement('UPDATE loss_finding SET seen_at = NOW(), seen_by = ? WHERE seen_at IS NULL', [$this->adminId]);
+        $this->assertNull($tile(), 'plus aucun constat nouveau : pas de vignette');
+        $this->openSession();
+        foreach (range(1, 4) as $i) {
+            $this->pos('POST', '/api/caisse/drawer-open', ['cashRegisterId' => $this->register, 'reason' => 'Sans montant ' . $i]);
+        }
+        $this->assertSame(1, $this->json($this->admin('POST', self::BASE . '/analyse'))['opened']);
+        $noAmount = $tile();
+        $this->assertSame(['1 nouveau constat à vérifier.', 1, 0], [$noAmount['text'], $noAmount['sources'][0]['value'], $noAmount['sources'][1]['value']]);
+        $this->assertSame('1 new finding to check.', $tile('en')['text']);
+        $this->closeWith(-1500, 'Avec un montant');
+        $this->assertSame(1, $this->json($this->admin('POST', self::BASE . '/analyse'))['opened']);
+        $this->assertMatchesRegularExpression('/^2 nouveaux constats à vérifier, 15,00/u', $tile()['text'], 'le montant est la somme des constats qui en portent un');
+
         // Sans le droit du module : pas de vignette
         $this->flags(true, false);
         $this->assertNull($tile(), 'module non accordé : la vignette n\'existe pas');
@@ -320,6 +336,49 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
         $this->json($this->admin('POST', self::BASE . '/analyse'));
         $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM loss_journal WHERE type = 'FINDING_RENEWED' AND finding_id = ?", [$old]));
         $this->assertSame('nothing_new', $digest()->sendIfDue($at('08:00'))['status']);
+        $this->closeWith(0);
+        // Un courriel qui n'annonce QUE des constats redevenus « nouveaux », tous plus anciens que la borne : rien n'est né, la réservation
+        // reçoit « pas de borne » et GARDE celle qu'elle a. Vidée, le courriel suivant ré-annoncerait tous les constats nés depuis toujours
+        $session = $this->openSession();
+        foreach (range(1, 4) as $i) {
+            $this->pos('POST', '/api/caisse/drawer-open', ['cashRegisterId' => $this->register, 'reason' => 'Reprise bis ' . $i]);
+        }
+        $this->assertSame(1, $this->json($this->admin('POST', self::BASE . '/analyse'))['opened']);
+        $older = (int) $this->db->fetchOne('SELECT id FROM loss_finding WHERE dedup_key = ?', ['DRAWER_NO_SALE:session:' . $session]);
+        $this->db->executeStatement('UPDATE loss_finding SET backfill = true WHERE id = ?', [$older]);
+        // la borne est à sa hauteur ou au-dessus, comme si les constats nés jusque-là avaient déjà été annoncés
+        $this->db->executeStatement("UPDATE loss_setting SET last_digest_day = '2020-01-06', last_digest_finding_id = (SELECT MAX(id) FROM loss_finding)");
+        $top = $mark();
+        $this->assertGreaterThanOrEqual($older, $top);
+        $this->pos('POST', '/api/caisse/drawer-open', ['cashRegisterId' => $this->register, 'reason' => 'Preuve récente bis']);
+        $this->assertSame([0, 1], array_values(array_intersect_key($this->json($this->admin('POST', self::BASE . '/analyse')), ['opened' => 1, 'completed' => 1])));
+        $calls = [];
+        $this->assertSame('sent', $digest()->sendIfDue($at('08:00'))['status']);
+        $this->assertSame(['Nouveaux constats' => '1', 'Dont complétés par une nouvelle preuve' => '1'], array_slice($mine()[0]['context']['rows'], 0, 2, true));
+        $this->assertSame($top, $mark(), 'rien de né : la borne des constats nés ne bouge pas, et surtout n\'est pas vidée');
+        $this->db->executeStatement("UPDATE loss_setting SET last_digest_day = '2020-01-07'");
+        $this->assertSame('nothing_new', $digest()->sendIfDue($at('08:00'))['status'], 'le lendemain : aucun constat né n\'est ré-annoncé');
+        $this->closeWith(0);
+        // Ce que la commande dit du courriel : envoyé, retenu par les niveaux des courriels de suivi (avec ou sans le nombre), sinon rien
+        $this->assertSame(['demo : courriel de résumé envoyé à 2 destinataire(s)', 'demo : courriel de résumé retenu pour 3 destinataire(s) (niveau de notification) : rien n\'est parti',
+            'demo : courriel de résumé retenu (niveau de notification des destinataires) : rien n\'est parti', null, null, null], [
+            \App\LossPrevention\Command\LossAnalyseCommand::digestLine('demo', ['status' => 'sent', 'sent' => 2]),
+            \App\LossPrevention\Command\LossAnalyseCommand::digestLine('demo', ['status' => 'held', 'sent' => 0, 'held' => 3]),
+            \App\LossPrevention\Command\LossAnalyseCommand::digestLine('demo', ['status' => 'held', 'sent' => 0]),
+            \App\LossPrevention\Command\LossAnalyseCommand::digestLine('demo', ['status' => 'nothing_new', 'sent' => 0]),
+            \App\LossPrevention\Command\LossAnalyseCommand::digestLine('demo', ['status' => 'not_delivered', 'sent' => 0]),
+            \App\LossPrevention\Command\LossAnalyseCommand::digestLine('demo', null)]);
+        // Le courriel suit la même règle que la vignette : un constat né sans montant n'annonce pas « 0,00 $ », ni dans la phrase ni dans le tableau
+        $this->db->executeStatement("UPDATE loss_setting SET last_digest_day = '2020-01-05', last_digest_finding_id = (SELECT MAX(id) FROM loss_finding)");
+        $this->openSession();
+        foreach (range(1, 4) as $i) {
+            $this->pos('POST', '/api/caisse/drawer-open', ['cashRegisterId' => $this->register, 'reason' => 'Sans montant ' . $i]);
+        }
+        $this->assertSame(1, $this->json($this->admin('POST', self::BASE . '/analyse'))['opened']);
+        $calls = [];
+        $this->assertSame('sent', $digest()->sendIfDue($at('08:00'))['status']);
+        $plain = $mine()[0]['context'];
+        $this->assertSame(['1 nouveau constat attend votre vérification.', ['Nouveaux constats', 'Journée du magasin']], [$plain['message'], array_keys($plain['rows'])]);
         $this->closeWith(0);
         $this->db->executeStatement("UPDATE loss_setting SET last_digest_day = ?", [$this->today()]); // l'état attendu par la suite du test
 

@@ -64,8 +64,23 @@ class LossPreventionExerciseTest extends LossPreventionTestCase
                 $this->assertGreaterThan(10, mb_strlen($s[$text]));
             }
         }
-        $english = array_column($this->json($this->admin('GET', self::EX . '?locale=en'))['scenarios'], null, 'code');
+        $englishOverview = $this->json($this->admin('GET', self::EX . '?locale=en'));
+        $english = array_column($englishOverview['scenarios'], null, 'code');
         $this->assertSame('Cash shortage at closing', $english['cash_shortage']['label']);
+        // En anglais (décision du 15/11/2026) : « Practice » pour le mode et l'écran, « exercise » pour l'élément, « Practice cashier » et
+        // « Practice manager » pour les deux comptes fictifs ; jamais « drill »
+        $this->assertStringStartsWith('An exercise is a fictitious finding', $englishOverview['notice']);
+        $translator = static::getContainer()->get('translator');
+        $this->assertSame(['Practice cashier', 'Practice manager', '[Exercise] Sujet', 'Exercise (loss prevention)', 'Loss prevention practice'], [
+            $translator->trans('exercise.persons.cashier', [], 'pertes', 'en'), $translator->trans('exercise.persons.manager', [], 'pertes', 'en'),
+            $translator->trans('loss_digest.exercise_subject', ['%subject%' => 'Sujet'], 'emails', 'en'), $translator->trans('exercice-pertes.term', [], 'lexique', 'en'),
+            $translator->trans('console.screens.pertes_exercices', [], 'gestion', 'en')]);
+        foreach (['pertes', 'emails', 'ecrans', 'lexique', 'gestion'] as $domain) {
+            $this->assertDoesNotMatchRegularExpression('/\bdrills?\b/i', (string) file_get_contents(static::getContainer()->getParameter('kernel.project_dir') . "/translations/$domain.en.yaml"), "$domain.en.yaml : « practice », pas « drill »");
+        }
+        $this->assertSame(['1 new finding to check.', '3 new findings to check.', '1 new finding is waiting for you to check.'], [
+            $translator->trans('tiles.loss_findings_no_amount.text', ['%count%' => 1], 'gestion', 'en'), $translator->trans('tiles.loss_findings_no_amount.text', ['%count%' => 3], 'gestion', 'en'),
+            $translator->trans('loss_digest.message_no_amount', ['%count%' => 1], 'emails', 'en')]);
 
         $fictitious = ['Caissier d\'exercice', 'Responsable d\'exercice'];
         foreach (array_keys(LossExerciseService::SCENARIOS) as $n => $code) {
@@ -102,6 +117,14 @@ class LossPreventionExerciseTest extends LossPreventionTestCase
             $this->assertSame('Prévention des pertes', $out['alertPreview']['tile']['title']);
             $this->assertStringStartsWith('1 nouveau constat à vérifier', $out['alertPreview']['tile']['text']);
             $this->assertSame('Prévention des pertes : 1 nouveau constat à vérifier', $out['alertPreview']['email']['subject']);
+            // Un constat sans montant (tiroir ouvert sans vente, validations refusées) n'annonce pas « 0,00 $ en jeu »
+            if ($f['amountAtStake'] === null) {
+                $this->assertSame(['1 nouveau constat à vérifier.', '1 nouveau constat attend votre vérification.'], [$out['alertPreview']['tile']['text'], $out['alertPreview']['email']['message']], $code);
+                $this->assertStringNotContainsString('0,00', (string) json_encode($out['alertPreview'], JSON_UNESCAPED_UNICODE), $code);
+            } else {
+                $this->assertMatchesRegularExpression('/^1 nouveau constat à vérifier, [\d\x{A0}\x{202F} ,]+[\x{A0}\x{202F} ]\$ en jeu\.$/u', $out['alertPreview']['tile']['text'], $code);
+                $this->assertStringContainsString('pour un montant en jeu de ', $out['alertPreview']['email']['message'], $code);
+            }
             $this->assertSame(['requested' => false, 'sent' => false, 'reason' => null], $out['testEmail']);
             $this->assertSame(30 - $n - 1, $out['remaining']);
         }
@@ -113,7 +136,7 @@ class LossPreventionExerciseTest extends LossPreventionTestCase
         $this->assertStringStartsWith('Exercice : ', array_column($shortage['evidence'][0]['lines'], 'value', 'label')['Motif saisi à la fermeture']);
         $this->assertCount(4, $byRule('drawer_no_sale')['evidence'], 'maximum 3 : quatre ouvertures');
         $this->assertSame('Article d\'exercice', array_column($byRule('price_override')['evidence'][0]['lines'], 'value', 'label')['Article']);
-        $this->assertSame('Drill cashier', $this->json($this->admin('GET', self::EX . '/' . $shortage['id'] . '?locale=en'))['onDuty'][0]['name']);
+        $this->assertSame('Practice cashier', $this->json($this->admin('GET', self::EX . '/' . $shortage['id'] . '?locale=en'))['onDuty'][0]['name']);
 
         // Rien dans la caisse, ni dans son journal ; l'analyse réelle n'a pas été lancée
         $this->assertSame($before, $cash(), 'aucune ligne écrite dans les tables de la caisse');
@@ -664,7 +687,7 @@ class LossPreventionExerciseTest extends LossPreventionTestCase
     {
         $fr = $this->json($this->call('GET', '/api/gestion/ecrans/pertes.exercices/guide?locale=fr', null, $this->adminToken));
         $en = $this->json($this->call('GET', '/api/gestion/ecrans/pertes.exercices/guide?locale=en', null, $this->adminToken));
-        $this->assertSame(['pertes.exercices', 'Exercices de la prévention des pertes', 'Loss prevention drills', 4, 4], [$fr['screen'], $fr['title'], $en['title'], count($fr['points']), count($en['points'])]);
+        $this->assertSame(['pertes.exercices', 'Exercices de la prévention des pertes', 'Loss prevention practice', 4, 4], [$fr['screen'], $fr['title'], $en['title'], count($fr['points']), count($en['points'])]);
         $this->assertStringNotContainsString('pertes_', (string) json_encode([$fr, $en]));
     }
 }

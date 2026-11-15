@@ -205,20 +205,21 @@ notice:
         What it does not do: it makes no decision, applies no sanction, uses neither facial recognition, nor audio, nor any camera in fitting rooms, and does not analyse your gestures.
         Who sees the findings: the shop administrator only. Opening the record of a finding is logged, with the account that opens it and the day.
         Your rights: you can ask the shop administrator which data concerns you, have it corrected, and give your explanation before any decision.
-# Drill mode (lot EX-1): FICTITIOUS findings the manager launches and deletes. No real person: two fictitious accounts.
+# Practice mode (lot EX-1). English words, decided 15/11/2026: « Practice » for the mode and its screen, « exercise » for one item,
+# « Practice cashier » / « Practice manager » for the two fictitious accounts (no other word: a test checks it). FICTITIOUS findings the manager launches and deletes. No real person: two fictitious accounts.
 exercise:
-    notice: 'A drill is a fictitious finding: it does not touch the register, concerns no real person and counts in no figure. You can keep up to 30; delete them whenever you want.'
+    notice: 'An exercise is a fictitious finding: it does not touch the register, concerns no real person and counts in no figure. You can keep up to 30; delete them whenever you want.'
     persons:
-        cashier: Drill cashier
-        manager: Drill manager
+        cashier: Practice cashier
+        manager: Practice manager
     texts:
-        discrepancy_reason: 'Drill: "I gave change for a 50 instead of a 20."'
-        drawer_reason_change: 'Drill: "Making change for a customer."'
-        drawer_reason_check: 'Drill: "Checking the float."'
-        return_reason: 'Drill: "The customer changed her mind."'
-        return_no_receipt_reason: 'Drill: "The customer lost the receipt."'
-        article: Drill item
-        price_reason: 'Drill: "Price negotiated with the customer."'
+        discrepancy_reason: 'Exercise: "I gave change for a 50 instead of a 20."'
+        drawer_reason_change: 'Exercise: "Making change for a customer."'
+        drawer_reason_check: 'Exercise: "Checking the float."'
+        return_reason: 'Exercise: "The customer changed her mind."'
+        return_no_receipt_reason: 'Exercise: "The customer lost the receipt."'
+        article: Exercise item
+        price_reason: 'Exercise: "Price negotiated with the customer."'
     scenarios:
         cash_shortage:
             label: Cash shortage at closing

@@ -58,7 +58,7 @@ le chef de projet, sur les mêmes routes. Caisse : `docs/caisse.md`. Bloc cashDe
 - **Lectures bornées du journal de caisse** : il ne se purge jamais et n'a d'index que sur la séquence, le type et (poste, heure). Les
   lectures par session passent par ce dernier (`LossAuditEntry::ofSession` : poste et heure d'ouverture de la session). Aucun index n'est
   ajouté à cette table de caisse.
-- **Quand** : (1) commande `app:pertes:analyser` (`--tenant=`, `--passes=`, `--courriel-maintenant` : le courriel de résumé sans attendre 8 h, pour un lancement à la main ; `--sans-courriel` : l'analyse seule, aucun courriel par ce lancement), lancée par le minuteur de l'hôte
+- **Quand** : (1) commande `app:pertes:analyser` (`--tenant=`, `--passes=`, `--courriel-maintenant` : le courriel de résumé sans attendre 8 h, pour un lancement à la main ; `--sans-courriel` : l'analyse seule, aucun courriel par ce lancement ; la commande dit, par site, si le courriel de résumé est parti (« envoyé à N destinataire(s) ») ou s'il est retenu par le niveau de notification des destinataires (« retenu », rien n'est parti : `LossAnalyseCommand::digestLine`)), lancée par le minuteur de l'hôte
   `ops/systemd/pertes-analyse.{service,timer}` (minutes 8, 23, 38 et 53 ; installation en tête du fichier `.service`) : **seulement sur les
   sites dont le module est accordé** (`is_loss_prevention_active`), même en mode « demo » de la plateforme ; (2) à la lecture de la synthèse
   si la dernière analyse a plus de 10 minutes (sauf `analyse=0`) ; (3) `POST /api/gestion/pertes/analyse`.
@@ -264,6 +264,11 @@ qui lance.
   (`--dry-run` pour compter, `--tenant=<code>` pour un site ; `Command/LossExercisePurgeCommand`), qui efface par la porte, site par site,
   et sort en échec si un site est en erreur (`docs/mise-en-ligne.md`, § 5). La migration peut rester ; si on la défait, `down()`
   (`DOWN_STATEMENTS`) purge lui aussi les exercices avant de retirer la colonne.
+- **Mots** : en anglais, « Practice » pour le mode et son écran (menu, titre du guide), « exercise » pour l'élément (« An exercise is a
+  fictitious finding… », « [Exercise] … », notion « Exercise (loss prevention) »), « Practice cashier » et « Practice manager » pour les
+  deux comptes fictifs ; jamais « drill » (décision du 15/11/2026 ; un test le garde). L'aperçu de l'alerte d'un constat sans montant (tiroir ouvert sans vente,
+  validations refusées) dit « 1 nouveau constat à vérifier. », sans « 0,00 $ en jeu » : même règle que la vraie vignette et le vrai
+  courriel du jour, dont le montant est la somme des constats qui en portent un.
 - **Courriel d'exercice** : gabarit du courriel du jour avec le bandeau « EXERCICE » (`exerciseBanner`), objet préfixé « [Exercice] », lien
   vers l'écran des exercices (`AdminSpaceUrl::to('pertes.exercices')`) ; il
   n'entre pas dans le « un par jour » (ni `last_digest_day` ni la borne ne bougent). Sans configuration d'envoi : `sent: false`,

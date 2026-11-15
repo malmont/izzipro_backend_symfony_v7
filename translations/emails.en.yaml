@@ -200,6 +200,7 @@ loss_digest:
     title: 'Loss prevention'
     greeting: 'Hello,'
     message: "{1}1 new finding is waiting for you to check, for an amount at stake of %amount%.|]1,Inf[%count% new findings are waiting for you to check, for an amount at stake of %amount%."
+    message_no_amount: "{1}1 new finding is waiting for you to check.|]1,Inf[%count% new findings are waiting for you to check."
     row_count: 'New findings'
     row_renewed: 'Of which completed by new evidence'
     row_amount: 'Amount at stake'
@@ -209,9 +210,9 @@ loss_digest:
     notice: 'The amount at stake is the amount the findings are about, not a proven loss. You receive this email at most once a day; you can stop it in the notification preferences of the management app.'
     signature: '%site%'
     link: 'Open the new findings'
-    exercise_link: 'Open the drills'
-    exercise_subject: '[Drill] %subject%'
-    exercise_banner: 'DRILL: this email shows the alert you would receive for a real finding. The finding is fictitious: it does not touch the register and concerns no real person.'
+    exercise_link: 'Open Practice'
+    exercise_subject: '[Exercise] %subject%'
+    exercise_banner: 'EXERCISE: this email shows the alert you would receive for a real finding. The finding is fictitious: it does not touch the register and concerns no real person.'
 
 # Support, SUPPORT-WEB: an agent invited by the site administrator (a single-use link, valid for %hours% hours)
 support_agent_invitation:

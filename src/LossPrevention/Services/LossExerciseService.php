@@ -277,11 +277,15 @@ class LossExerciseService
      */
     private function alertPreview(array $detail, string $locale): array
     {
-        $params = ['%count%' => 1, '%amount%' => LossTexts::money((int) ($detail['amountAtStake'] ?? 0), $locale, (string) $detail['currency'])];
+        $amount = (int) ($detail['amountAtStake'] ?? 0);
+        $params = ['%count%' => 1, '%amount%' => LossTexts::money($amount, $locale, (string) $detail['currency'])];
+        // un constat sans montant (tiroir ouvert sans vente, validations refusées) : les mêmes textes que la vraie alerte, sans « 0,00 $ »
+        $tile = $amount > 0 ? 'loss_findings' : 'loss_findings_no_amount';
 
         return [
-            'tile' => ['title' => $this->translator->trans('tiles.loss_findings.title', $params, 'gestion', $locale), 'text' => $this->translator->trans('tiles.loss_findings.text', $params, 'gestion', $locale)],
-            'email' => ['subject' => $this->translator->trans('loss_digest.subject', $params, 'emails', $locale), 'message' => $this->translator->trans('loss_digest.message', $params, 'emails', $locale)],
+            'tile' => ['title' => $this->translator->trans("tiles.$tile.title", $params, 'gestion', $locale), 'text' => $this->translator->trans("tiles.$tile.text", $params, 'gestion', $locale)],
+            'email' => ['subject' => $this->translator->trans('loss_digest.subject', $params, 'emails', $locale),
+                'message' => $this->translator->trans($amount > 0 ? 'loss_digest.message' : 'loss_digest.message_no_amount', $params, 'emails', $locale)],
         ];
     }
 
@@ -310,7 +314,8 @@ class LossExerciseService
         $amount = LossTexts::money((int) ($detail['amountAtStake'] ?? 0), $locale, (string) $detail['currency']);
         $context = [
             'title' => $t('title'), 'greeting' => $t('greeting'), 'message' => $alert['email']['message'],
-            'rows' => [$t('row_count') => '1', $t('row_amount') => $amount, $t('row_day') => LossTexts::day(new \DateTimeImmutable((string) $detail['storeDay']), $locale)],
+            'rows' => [$t('row_count') => '1'] + ((int) ($detail['amountAtStake'] ?? 0) > 0 ? [$t('row_amount') => $amount] : [])
+                + [$t('row_day') => LossTexts::day(new \DateTimeImmutable((string) $detail['storeDay']), $locale)],
             'nextStep' => $t('next'), 'notice' => $t('notice'), 'siteLine' => $t('signature', ['%site%' => $siteName]),
             'exerciseBanner' => $t('exercise_banner'),
             // le lien du courriel d'exercice mène à l'écran des exercices (lot LIEN) ; null : pas de lien

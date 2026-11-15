@@ -130,9 +130,11 @@ class LossDigestService
         $context = [
             'title' => $t('title'), 'greeting' => $t('greeting', $params),
             // la mention « complété par une nouvelle preuve » distingue un constat plus ancien qui revient d'un constat né depuis
-            'message' => $t('message', $params) . ($again['count'] > 0 ? ' ' . $t('message_renewed', ['%count%' => $again['count']]) : ''),
+            // le montant en jeu est la somme des constats qui en portent un ; quand aucun n'en porte (tiroir ouvert sans vente, validations
+            // refusées), ni la phrase ni le tableau ne disent « 0,00 $ »
+            'message' => $t($total['amount'] > 0 ? 'message' : 'message_no_amount', $params) . ($again['count'] > 0 ? ' ' . $t('message_renewed', ['%count%' => $again['count']]) : ''),
             'rows' => [$t('row_count') => (string) $total['count']] + ($again['count'] > 0 ? [$t('row_renewed') => (string) $again['count']] : [])
-                + [$t('row_amount') => $params['%amount%'], $t('row_day') => LossTexts::day(new \DateTimeImmutable($day), $language)],
+                + ($total['amount'] > 0 ? [$t('row_amount') => $params['%amount%']] : []) + [$t('row_day') => LossTexts::day(new \DateTimeImmutable($day), $language)],
             'nextStep' => $t('next'), 'notice' => $t('notice'), 'siteLine' => $t('signature', $params),
             // Lien direct vers la liste des constats nouveaux (lot LIEN) : la seule adresse du courriel ; null (site sans adresse connue) : pas de lien
             'linkUrl' => $this->links->to('pertes.constats', ['isNew' => true]), 'linkLabel' => $t('link'),

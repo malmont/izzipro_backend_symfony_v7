@@ -85,8 +85,9 @@ class LossAnalyseCommand extends Command
                 // Courriel de résumé du jour (lot L1-b) : au plus un par journée du magasin ; un échec d'envoi n'est pas une erreur de l'analyse
                 try {
                     $digest = $input->getOption('sans-courriel') ? null : $this->digest?->sendIfDue(null, (bool) $input->getOption('courriel-maintenant'));
-                    if ($digest !== null && $digest['status'] === 'sent') {
-                        $io->text(sprintf('%s : courriel de résumé envoyé à %d destinataire(s)', $row['code'], $digest['sent']));
+                    $line = self::digestLine((string) $row['code'], $digest);
+                    if ($line !== null) {
+                        $io->text($line);
                     }
                 } catch (\Throwable $e) {
                     $this->logger->error(sprintf('Prévention des pertes : site %s, courriel de résumé en échec : %s', $row['code'], $e->getMessage()), ['exception' => $e]);
@@ -109,5 +110,23 @@ class LossAnalyseCommand extends Command
         $io->success($summary);
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * Ce que la commande dit du courriel de résumé d'un site, ou null quand il n'y a rien à dire. Le statut `held` (niveaux des courriels
+     * de suivi) : aucun courriel n'est parti, les destinataires l'auront avec leur prochain résumé ; il faut le dire à qui a lancé la
+     * commande à la main et attend un courriel.
+     *
+     * @param array{status: string, sent?: int, held?: int}|null $digest le retour de `LossDigestService::sendIfDue`
+     */
+    public static function digestLine(string $site, ?array $digest): ?string
+    {
+        return match ($digest['status'] ?? null) {
+            'sent' => sprintf('%s : courriel de résumé envoyé à %d destinataire(s)', $site, (int) ($digest['sent'] ?? 0)),
+            'held' => isset($digest['held'])
+                ? sprintf('%s : courriel de résumé retenu pour %d destinataire(s) (niveau de notification) : rien n\'est parti', $site, (int) $digest['held'])
+                : sprintf('%s : courriel de résumé retenu (niveau de notification des destinataires) : rien n\'est parti', $site),
+            default => null,
+        };
     }
 }

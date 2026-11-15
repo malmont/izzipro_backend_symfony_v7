@@ -204,6 +204,7 @@ loss_digest:
     title: 'Prévention des pertes'
     greeting: 'Bonjour,'
     message: "{1}1 nouveau constat attend votre vérification, pour un montant en jeu de %amount%.|]1,Inf[%count% nouveaux constats attendent votre vérification, pour un montant en jeu de %amount%."
+    message_no_amount: "{1}1 nouveau constat attend votre vérification.|]1,Inf[%count% nouveaux constats attendent votre vérification."
     row_count: 'Nouveaux constats'
     row_renewed: 'Dont complétés par une nouvelle preuve'
     row_amount: 'Montant en jeu'
