@@ -270,6 +270,47 @@ class CatalogBarcodeService
     }
 
     /**
+     * Donne un code généré à celles de ces variantes qui n'en ont pas (lot CB-2 : étiquettes d'une commande reçue), au plus `BULK_LIMIT`
+     * par appel, sans jamais toucher un code présent : mêmes verrous et même écriture que `generateMissing` (une variante tenue par
+     * une vente en cours est laissée pour l'appel suivant). Une ligne au journal du site par appel qui écrit ; `$context` s'y ajoute
+     * (d'où vient la demande).
+     *
+     * @param list<int|string> $variantIds
+     * @param array<string, mixed> $context
+     *
+     * @return array<int, string> le code posé, par identifiant de variante (vide si rien n'était à générer)
+     */
+    public function generateForVariants(array $variantIds, array $context = []): array
+    {
+        $variantIds = array_values(array_unique(array_map('intval', $variantIds)));
+        if ($variantIds === []) {
+            return [];
+        }
+        $conn = $this->connection();
+        $conn->beginTransaction();
+        try {
+            $locked = array_map('intval', $conn->fetchFirstColumn(
+                sprintf('SELECT id FROM product_variant WHERE id IN (?) AND barcode IS NULL ORDER BY id LIMIT %d FOR NO KEY UPDATE SKIP LOCKED', self::BULK_LIMIT),
+                [$variantIds], [ArrayParameterType::INTEGER]
+            ));
+            $codes = $this->write($locked, []);
+            $written = $locked === [] ? [] : array_combine($locked, $codes);
+            if ($written !== []) {
+                $this->audit->record(self::AUDIT_RESOURCE, null, 'generate', null,
+                    $context + ['written' => count($written), 'variants' => count($written), 'products' => 0, 'scope' => 'selection', 'first' => $codes[0], 'last' => $codes[count($codes) - 1]], ['barcode']); // le contexte de l'appelant prime (`scope`)
+            }
+            $conn->commit();
+        } catch (\Throwable $e) {
+            if ($conn->isTransactionActive()) {
+                $conn->rollBack();
+            }
+            throw $e;
+        }
+
+        return $written;
+    }
+
+    /**
      * Écrit un code généré sur ces lignes, déjà verrouillées par l'appelant dans SA transaction : variantes, puis articles.
      *
      * En SQL, pas par les entités : `ProductVariant` re-flushe après chaque écriture (rappel qui recalcule le stock de l'article), et

@@ -1,0 +1,31 @@
+{# Planche d'étiquettes de codes-barres (lot CB-2, `docs/codes-barres.md`) : 50 × 30 mm sur A4. Rendu par BarcodeLabelPrinter. #}
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>{{ title }}</title>
+    <style>
+      @page { margin: 8mm; }
+      body { font-family: Helvetica, sans-serif; margin: 0; padding: 0; }
+      #labels { text-align: center; }
+      .label { display: inline-block; width: 50mm; height: 30mm; margin: 1.5mm; padding: 1.5mm; box-sizing: border-box; border: 1px solid #ccc; text-align: center; vertical-align: top; overflow: hidden; }
+      .label p { margin: 0; line-height: 1.1; }
+      .label .name { font-size: 7pt; font-weight: bold; height: 8pt; overflow: hidden; }
+      .label .variant { font-size: 6.5pt; height: 7.5pt; overflow: hidden; }
+      .label img { display: block; margin: 1pt auto 0 auto; width: 118pt; height: 30pt; }
+      .label .code { font-size: 7pt; letter-spacing: 0.5pt; }
+      .label .price { font-size: 8.5pt; font-weight: bold; }
+    </style>
+  </head>
+  <body>
+    <div id="labels">
+      {% for label in labels %}{% for i in 1..label.copies %}<div class="label">
+          <p class="name">{{ label.title }}</p>
+          <p class="variant">{{ label.subtitle }}</p>
+          <img src="data:image/png;base64,{{ label.image }}" alt="">
+          <p class="code">{{ label.barcode }}</p>
+          {% if label.price %}<p class="price">{{ label.price }}</p>{% endif %}
+        </div>{% endfor %}{% endfor %}
+    </div>
+  </body>
+</html>
