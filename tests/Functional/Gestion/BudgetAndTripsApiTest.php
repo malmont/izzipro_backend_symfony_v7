@@ -39,8 +39,16 @@ class BudgetAndTripsApiTest extends WebTestCase
         foreach (['gestion_trip', 'gestion_budget_line', 'push_device', 'notification_log', 'notification_preference', 'gestion_tile_dismissal'] as $table) { // tables propres à ces tests
             $conn->executeStatement("DELETE FROM $table");
         }
+        // lot NOTIF-2 : ces tests portent sur la règle « une notification par jour », celle du niveau « Normal » (les sites de test sont à « Tout »)
+        $conn->executeStatement("UPDATE entreprise SET notification_level = 'normal'");
         FakePushSender::reset();
         $this->login();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->em()->getConnection()->executeStatement("UPDATE entreprise SET notification_level = 'all'"); // le niveau des sites de test (tests/bootstrap.php)
+        parent::tearDown();
     }
 
     public function testPeriodBudgetPlannedVersusActual(): void

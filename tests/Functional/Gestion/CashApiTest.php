@@ -41,6 +41,8 @@ class CashApiTest extends WebTestCase
     {
         $this->client = static::createClient();
         $this->clean();
+        // lot NOTIF-2 : ces tests portent sur la règle « une notification par jour », celle du niveau « Normal » (les sites de test sont à « Tout »)
+        $this->em()->getConnection()->executeStatement("UPDATE entreprise SET notification_level = 'normal'");
         FakePushSender::reset();
         $this->login();
     }
@@ -48,6 +50,7 @@ class CashApiTest extends WebTestCase
     protected function tearDown(): void
     {
         $this->clean();
+        $this->em()->getConnection()->executeStatement("UPDATE entreprise SET notification_level = 'all'"); // le niveau des sites de test (tests/bootstrap.php)
         parent::tearDown();
     }
 
