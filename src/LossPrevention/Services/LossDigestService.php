@@ -113,9 +113,11 @@ class LossDigestService
         if ($total['count'] === 0) {
             return ['status' => 'nothing_new', 'sent' => 0];
         }
-        // Administrateurs du site (le rôle exact : ni un super administrateur seul, ni un compte Assistance) qui ont gardé le courriel actif
+        // Administrateurs du site (le rôle exact, pas un compte Assistance) qui ont gardé le courriel actif. Le compte super administrateur
+        // de la plateforme, présent sur chaque base avec le rôle d'administrateur, n'en fait pas partie (décision du 15/11/2026, comme le
+        // résumé de la semaine) : il recevrait le résumé de chaque site. Un site sans autre administrateur garde ses constats dans l'application
         $recipients = [];
-        foreach ($em->getConnection()->fetchAllAssociative('SELECT id, email FROM "user" WHERE roles::text LIKE \'%"ROLE_ADMIN"%\' AND deleted_at IS NULL AND is_verified = true ORDER BY id') as $user) {
+        foreach ($em->getConnection()->fetchAllAssociative('SELECT id, email FROM "user" WHERE roles::text LIKE \'%"ROLE_ADMIN"%\' AND roles::text NOT LIKE \'%"ROLE_SUPER_ADMIN"%\' AND deleted_at IS NULL AND is_verified = true ORDER BY id') as $user) {
             $email = trim((string) $user['email']);
             if ($email !== '' && str_contains($email, '@') && $this->preferences->isKindEnabled((int) $user['id'], GestionNotificationService::LOSS_DIGEST)) {
                 $recipients[] = $email;

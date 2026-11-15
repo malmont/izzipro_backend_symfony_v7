@@ -86,6 +86,9 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
         $adminEmail = (string) $this->db->fetchOne('SELECT email FROM "user" WHERE id = ?', [$this->adminId]);
         $pushLog = (int) $this->db->fetchOne("SELECT COUNT(*) FROM notification_log WHERE channel = 'push'");
 
+        // Le compte super administrateur de la plateforme porte aussi le rôle d'administrateur sur chaque site : il ne reçoit pas le résumé
+        $platform = $this->user(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'], 'Plateforme');
+
         $run = function (): string {
             $tester = new \Symfony\Component\Console\Tester\CommandTester((new \Symfony\Bundle\FrameworkBundle\Console\Application(static::$kernel))->find('app:pertes:analyser'));
             $tester->execute(['--tenant' => MV_TEST_TENANT_CODE, '--courriel-maintenant' => true]);
@@ -100,6 +103,7 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
         $to = array_merge(...array_map(fn ($m) => array_map(fn ($a) => $a->getAddress(), $m->getTo()), $mails));
         $this->assertContains($adminEmail, $to, 'l\'administrateur du site le reçoit');
         $this->assertNotContains($cashier->getEmail(), $to, 'un caissier ne le reçoit pas');
+        $this->assertNotContains($platform->getEmail(), $to, 'le compte super administrateur de la plateforme ne le reçoit pas');
         $mine = array_values(array_filter($mails, fn ($m) => $m->getTo()[0]->getAddress() === $adminEmail))[0];
         $this->assertMatchesRegularExpression('/^Prévention des pertes : \d+ nouveaux? constats? à vérifier$/u', (string) $mine->getSubject());
         $body = (string) $mine->getHtmlBody();

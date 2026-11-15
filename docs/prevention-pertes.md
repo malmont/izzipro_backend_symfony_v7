@@ -342,7 +342,7 @@ défait pas).
   complété) est annoncé lui aussi dans le courriel du jour suivant, à part (« complété par une nouvelle preuve » : ligne du tableau et
   phrase du message), **une seule fois par retour à « nouveau »** : le retour est écrit au journal du module (`FINDING_RENEWED`,
   `LossFindingWriter::complete`), le courriel annonce ceux qui sont postérieurs au rang noté par le courriel précédent (`renewedUpTo` dans sa
-  ligne `DIGEST_SENT`) et encore jamais ouverts. Un courriel part aux administrateurs du site (rôle `ROLE_ADMIN` exact, compte vérifié) qui ont gardé le type `loss_digest` actif dans leurs
+  ligne `DIGEST_SENT`) et encore jamais ouverts. Un courriel part aux administrateurs du site (rôle `ROLE_ADMIN` exact, compte vérifié ; **pas le compte super administrateur de la plateforme**, qui porte ce rôle sur chaque base et recevrait le résumé de chaque site : décision du 15/11/2026, comme le résumé de la semaine ; un site sans autre administrateur ne reçoit pas le courriel, `no_recipient`, ses constats restent dans l'application) qui ont gardé le type `loss_digest` actif dans leurs
   préférences de notification de la gestion (canal `email`, `docs/notifications-gestion.md`). Par le mailer du site (file et worker des
   courriels existants, aucun handler nouveau). Contenu : nombre de constats nouveaux, montant en jeu, journée du magasin ; **aucun nom, aucun
   motif saisi à la caisse**. **Un seul lien**, la seule adresse du courriel : l'écran des constats nouveaux de l'espace d'administration
@@ -377,8 +377,9 @@ défait pas).
   vendue garde ses puces actives ; la pièce ne remplace pas le stock) ; faits du boîtier en lots rejouables (`PIECE_CREATED`,
   `TAG_ASSOCIATED`, `PAIR_SET`, `SPOT_CHECK`, `COUNTER_OCCUPIED`, `DOOR_OPENED`, `BOX_HEARTBEAT` avec la liste des appareils vus,
   `SOURCE_DOWN`, `COUNT_DONE`, `ZONE_SEEN`, `TEST_TAG_READ`) ; assistant d'installation pas à pas (progression gardée par le serveur) ;
-  avis et alertes (L5). Avant L2, un lot du catalogue à part : « code-barres de variante : remplir, rendre unique, imprimer »
-  (`ProductVariant::barcode` existe, vide et non unique).
+  avis et alertes (L5). Avant L2, un lot du catalogue à part : « code-barres de variante : remplir, rendre unique, imprimer » :
+  **fait pour « remplir, rendre unique »** (lot CB-1, en ligne le 15/11/2026 : un code désigne une seule chose par site, garanti par la
+  base ; codes générés à la demande) ; « imprimer » est le lot CB-2 (étiquettes à la réception). Fiche : `docs/codes-barres.md`.
 
 ## 12. Décisions du propriétaire (14/11/2026)
 
