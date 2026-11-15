@@ -96,7 +96,6 @@ class ProductSheetCreator
             ->setSaleEnabled(($modes['sale'] ?? true) !== false)->setRentalEnabled(($modes['rental'] ?? false) === true)->setSubscriptionEnabled(($modes['subscription'] ?? false) === true)
             ->setIsbestseller(false)->setIsnewarrival(true)->setIsfeatured(false)->setIsspecialoffer(false)->setIsPreOrder(false)->setIsAccessory(false)->setCustomizable(false)
             ->setRequiresShipping(($input['requiresShipping'] ?? true) !== false)->setCreatedAt(new \DateTimeImmutable());
-        $product->setBarcode($barcode);
         if ($pictures !== []) {
             $product->setImage($pictures[0]);
         }
@@ -133,6 +132,15 @@ class ProductSheetCreator
                 $variants[] = $variant;
             }
         }
+        // Où va le code lu (décision du propriétaire du 15/11/2026, règle c de `docs/codes-barres.md`) : le code d'une variante est celui de
+        // la pièce vendue. Une seule variante : le code va sur ELLE, l'article n'en porte pas. Plusieurs : il reste sur l'article (il
+        // ouvre le choix de la variante en caisse), chaque variante recevant le sien plus tard.
+        $barcodeOn = $barcode === null ? null : (count($variants) === 1 ? 'variant' : 'product');
+        if ($barcodeOn === 'variant') {
+            $variants[0]->setBarcode($barcode);
+        } elseif ($barcodeOn === 'product') {
+            $product->setBarcode($barcode);
+        }
         $em->persist($product);
         foreach ($variants as $variant) {
             $em->persist($variant);
@@ -140,7 +148,7 @@ class ProductSheetCreator
         $em->flush();
         $this->audit->record('product', (int) $product->getId(), 'create', [], ['name' => $name, 'priceCents' => $price, 'source' => 'ai_sheet', 'languages' => array_keys($translations), 'pictures' => count($pictures), 'variants' => count($variants), 'channels' => ['web' => $product->isWeb(), 'pos' => $product->isPos(), 'landing' => $product->isLandingPage()], 'by' => $by], ['product']);
 
-        return ['status' => 201, 'body' => ['productId' => (int) $product->getId(), 'variantId' => (int) $variants[0]->getId(), 'variants' => count($variants), 'sizes' => array_values(array_map(fn (Size $s) => (string) $s->getName(), $sizes)), 'colors' => array_values(array_map(fn (Color $c) => (string) $c->getName(), $colors)), 'slug' => $slug, 'code' => $code, 'languages' => array_keys($translations), 'pictures' => count($pictures)]];
+        return ['status' => 201, 'body' => ['productId' => (int) $product->getId(), 'variantId' => (int) $variants[0]->getId(), 'barcode' => $barcode, 'barcodeOn' => $barcodeOn, 'variants' => count($variants), 'sizes' => array_values(array_map(fn (Size $s) => (string) $s->getName(), $sizes)), 'colors' => array_values(array_map(fn (Color $c) => (string) $c->getName(), $colors)), 'slug' => $slug, 'code' => $code, 'languages' => array_keys($translations), 'pictures' => count($pictures)]];
     }
 
     /**
