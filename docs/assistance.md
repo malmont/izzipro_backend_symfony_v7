@@ -68,7 +68,11 @@ Contrat validé par l'application de gestion (« new easymakemoney ») ; décisi
 - **ROLE_SUPPORT** : `access_control` `^/api/support` ; connexion `platform=admin` acceptée (rôles dans le jeton) ; `Support/SupportScopeSubscriber`
   (après le pare-feu) : un compte Assistance **seul** reçoit 403 `SUPPORT_SCOPE_ONLY` sur toute route non publique hors du module, et les routes
   publiques lui sont servies comme à un anonyme (plusieurs routes ne demandent qu'un utilisateur connecté, et `User::getRoles` ajoute `ROLE_USER`).
-  Preuve : `SupportRoleMatrixTest` balaie toutes les routes de l'API. EasyAdmin reste réservé à `ROLE_ADMIN`. **Aucun compte ROLE_SUPPORT ne doit
+  Quand c'est la règle d'accès du pare-feu qui refuse (route qui exige un rôle : `/api/profile`, `/api/gestion/…`), elle passe avant la
+  garde : `ApiExceptionSubscriber` rend alors le même corps `SUPPORT_SCOPE_ONLY` (15/11/2026 ; avant : `FORBIDDEN`). La règle `^/api` reste
+  telle quelle, sans `ROLE_SUPPORT` : c'est une seconde barrière. Preuve : `SupportRoleMatrixTest` balaie toutes les routes de l'API et
+  vérifie le CODE de chaque refus (seule exception admise : une route publique qui refuse aussi un anonyme avec le même code, comme la
+  caisse sans poste). EasyAdmin reste réservé à `ROLE_ADMIN`. **Aucun compte ROLE_SUPPORT ne doit
   être créé en production avant que l'application et le web le gèrent** (le rôle n'est pas proposé dans l'écran Utilisateurs).
 - **Module payant** : droit gouverné `module.support` (`entreprise.is_support_active`, faux partout), garde « support » en mode plateforme live ;
   offre à créer quand le propriétaire en aura fixé le prix.
@@ -97,6 +101,8 @@ l'administrateur du site. Tests : `tests/Functional/Support/SupportWebApiTest.ph
   module { key, state: active | trial | inactive, endsAt, platformMode: demo | live }, screens, canEditSettings }`. Remplace `/api/profile`,
   `/api/validate-token` et `/api/site/features`, fermés à un compte Assistance seul ; ne porte rien d'autre du site. `platformMode` : en
   mode « demo » de la plateforme les routes répondent même quand `state` vaut `inactive`.
+  `site.name` est le nom de la FICHE du site (`entreprise.name`), sinon celui que la plateforme lui connaît (`Services/Site/SiteName`,
+  15/11/2026) : le même nom que l'objet du courriel d'invitation et que `siteName` de la vérification d'un lien.
 - **Liste** `GET /api/support/tickets` : filtres `overdue=1` (non fermée, délai dépassé) et `awaiting=1` (non fermée, le dernier mot est
   au client), cumulables avec les autres ; toute autre valeur : 422 `fields.overdue | awaiting = INVALID_VALUE`. La réponse porte
   `counts { overdue, awaiting, unassigned }`, sur toute la boîte, quels que soient les filtres et la page.
