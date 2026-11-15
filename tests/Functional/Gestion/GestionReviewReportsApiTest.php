@@ -262,27 +262,31 @@ class GestionReviewReportsApiTest extends WebTestCase
         };
 
         // 1. Un budget GLOBAL, sans aucun poste : le bilan dit le budget de l'écran de la période (prévu, utilisé, reste), au cent
+        // (le budget est posé d'après ce que la période a déjà dépensé : la base de test est partagée, d'autres essais y laissent des achats)
         $conn()->executeStatement('DELETE FROM gestion_budget_line WHERE period_id = ?', [$pid]);
-        $conn()->executeStatement('UPDATE collections SET budget_collection = 2500000 WHERE id = ?', [$pid]);
+        static::getContainer()->get(TenantCacheService::class)->invalidateTenant();
+        $used = (int) $this->get("/api/dashboard/collection/$pid")['BudgetGeneral']['usedBudget'];
+        $this->assertGreaterThan(0, $used, 'l\'article acheté aujourd\'hui compte dans le budget utilisé');
+        $global = 2 * $used + 2500000;
+        $conn()->executeStatement('UPDATE collections SET budget_collection = ? WHERE id = ?', [$global, $pid]);
         [$figures, $html] = $budgetOf();
         $screen = $this->get("/api/dashboard/collection/$pid")['BudgetGeneral'];
-        $this->assertSame(2500000, $screen['generalBudget']);
-        $this->assertGreaterThan(0, $screen['usedBudget'], 'l\'article acheté aujourd\'hui compte dans le budget utilisé');
+        $this->assertSame([$global, $used, $global - $used], [$screen['generalBudget'], $screen['usedBudget'], $screen['remainingBudget']]);
         $this->assertSame([$screen['generalBudget'], $screen['usedBudget'], $screen['remainingBudget'], 'ok'], [$figures['planned'], $figures['actual'], $figures['remaining'], $figures['budgetStatus']]);
         $this->assertArrayNotHasKey('plannedByPost', $figures);
-        foreach ([$money(2500000), $money($screen['usedBudget']), $money($screen['remainingBudget']), 'Dans le budget'] as $expected) {
+        foreach ([$money($global), $money($screen['usedBudget']), $money($screen['remainingBudget']), 'Dans le budget'] as $expected) {
             $this->assertStringContainsString(htmlspecialchars($expected, ENT_QUOTES), $html, $expected);
         }
         $this->assertStringNotContainsString('>Sans prévu</div>', $html, 'la période a un budget : elle n\'est pas « sans prévu »');
         // … et la console, qui rédige l'avis sur la même analyse, lit les mêmes chiffres
         $this->em();
         $analysis = array_column(static::getContainer()->get(\App\Gestion\Analysis\AnalysisCatalog::class)->run('budget.status', ['periodId' => $pid], 'fr')['figures'], 'value', 'id');
-        $this->assertSame([2500000, $screen['usedBudget'], $screen['remainingBudget']], [$analysis['planned'], $analysis['actual'], $analysis['remaining']]);
+        $this->assertSame([$global, $screen['usedBudget'], $screen['remainingBudget']], [$analysis['planned'], $analysis['actual'], $analysis['remaining']]);
 
         // 2. Un budget global ET des postes : le prévu reste celui de l'écran de la période ; le total des postes est dit à part, le tableau les garde
         $conn()->executeStatement("INSERT INTO gestion_budget_line (period_id, category, planned_cents, updated_at) VALUES (?, 'purchases', 300000, NOW()), (?, 'advertising', 50000, NOW())", [$pid, $pid]);
         [$both, $html] = $budgetOf();
-        $this->assertSame([2500000, $screen['usedBudget'], $screen['remainingBudget'], 350000], [$both['planned'], $both['actual'], $both['remaining'], $both['plannedByPost']]);
+        $this->assertSame([$global, $screen['usedBudget'], $screen['remainingBudget'], 350000], [$both['planned'], $both['actual'], $both['remaining'], $both['plannedByPost']]);
         foreach (['Prévu par poste (total des postes)', $money(350000), $money(300000), $money(50000), 'Postes du budget'] as $expected) {
             $this->assertStringContainsString(htmlspecialchars($expected, ENT_QUOTES), $html, $expected);
         }
