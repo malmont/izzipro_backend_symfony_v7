@@ -735,8 +735,19 @@ le boîtier qui la contacte, § 14, point 5). Le plan détaillé sera écrit ave
   n'importe quel lecteur UHF, il suit la forme canonique déjà acceptée (24 caractères hexadécimaux). **Pas de code de fabricant ni
   de numérotation GS1** : la boutique n'a pas de préfixe d'entreprise GS1, et écrire le code d'un fabricant suivi de nos numéros
   de série mettrait nos pièces dans SA numérotation ; la puce se déclare hors de cette numérotation. Le code-barres imprimé sur
-  l'étiquette reste celui de la variante (ce que la caisse lit). À décider avec le plan : verrouiller ou non la puce après
-  l'écriture (mot de passe d'accès), pour qu'un tiers ne la réécrive pas.
+  l'étiquette reste celui de la variante (ce que la caisse lit).
+- **Verrouillage de la puce** (décision du propriétaire, 15/11/2026) : après l'écriture, la puce est verrouillée **par mot de passe,
+  jamais par un verrou définitif**. Un mot de passe d'accès **par site**, rangé chiffré dans la plateforme, que seul le boîtier
+  utilise, à l'impression ; il n'est jamais imprimé, jamais affiché, et n'apparaît dans aucun journal (ni de la plateforme, ni du
+  boîtier, ni dans un fait). La **lecture reste ouverte à tous** : les antennes et les lecteurs doivent lire sans rien savoir. La
+  **réécriture n'est possible qu'avec le mot de passe**, ce qui permet de corriger une puce mal écrite. À dire dans le plan : ce
+  mot de passe est une protection légère (celle que la puce offre), qui arrête la réécriture ordinaire ; il ne remplace pas le
+  contrôle qui suit.
+- **Numéro d'usine de la puce** (PROPOSÉ par le chef de projet, **pas encore validé par le propriétaire**) : enregistrer à l'écriture
+  le numéro d'usine de chaque puce (son TID, gravé par le fabricant, qu'on ne peut pas réécrire), à côté de notre identifiant. Une
+  puce qui porte notre identifiant avec un autre numéro d'usine ouvrirait un constat « puce copiée ». À reprendre dans le plan de
+  L3 si le propriétaire le retient : colonne de plus sur la puce, lecture du numéro d'usine par l'imprimante puis par les lecteurs
+  qui savent le rendre, règle et scénario d'exercice du constat.
 - **Si l'écriture échoue** : la puce n'est jamais enregistrée sans relecture conforme. L'imprimante annule l'étiquette ratée (elle la
   marque comme nulle) et réessaie sur l'étiquette suivante, un petit nombre de fois ; au-delà, la ligne du travail passe en échec
   avec son motif (puce illisible, écriture refusée, imprimante arrêtée, plus d'étiquettes) et **la pièce reste sans puce** : on la
