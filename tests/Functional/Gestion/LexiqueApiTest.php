@@ -105,13 +105,16 @@ class LexiqueApiTest extends WebTestCase
         $this->assertSame(['Finding', 'Amount at stake', 'Cash discrepancy', 'Staff notice'], array_map(fn (string $k) => array_column($en['entries'], null, 'key')[$k]['term'], ['constat', 'montant-en-jeu', 'ecart-de-caisse', 'notice-salaries']));
         // Aucun terme ni synonyme d'une notion du module ne désigne déjà une autre notion (« écart », « seuil », « exercice », « règle »)
         $labels = fn (array $e): array => array_map('mb_strtolower', array_merge([$e['term']], $e['synonyms']));
-        foreach ($fr['entries'] as $loss) {
-            if (!in_array($loss['key'], self::LOSS_KEYS, true)) {
-                continue;
-            }
-            foreach ($fr['entries'] as $other) {
-                if ($other['key'] !== $loss['key']) {
-                    $this->assertSame([], array_values(array_intersect($labels($loss), $labels($other))), "{$loss['key']} et {$other['key']} partagent un terme ou un synonyme");
+        // dans les DEUX langues : la console lit le lexique en français et en anglais
+        foreach (['fr' => $fr['entries'], 'en' => $en['entries']] as $language => $entries) {
+            foreach ($entries as $loss) {
+                if (!in_array($loss['key'], self::LOSS_KEYS, true)) {
+                    continue;
+                }
+                foreach ($entries as $other) {
+                    if ($other['key'] !== $loss['key']) {
+                        $this->assertSame([], array_values(array_intersect($labels($loss), $labels($other))), "{$loss['key']} et {$other['key']} partagent un terme ou un synonyme ($language)");
+                    }
                 }
             }
         }
