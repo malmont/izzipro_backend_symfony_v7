@@ -70,7 +70,7 @@ class ProductVariantBarcodeListTest extends WebTestCase
         $this->assertSame("LISTE-{$this->tag}", $put['barcode']);
         $this->assertSame(["LISTE-{$this->tag}", null], array_values($list()));
 
-        // Un code généré en masse (écrit en SQL) se lit aussitôt aussi
+        // Un code généré pour une fiche se lit aussitôt aussi
         $this->json('POST', "/api/gestion/codes-barres/variantes/$second/generer");
         $after = $list();
         $this->assertSame("LISTE-{$this->tag}", $after[$first]);
