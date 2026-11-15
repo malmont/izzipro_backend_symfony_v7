@@ -97,3 +97,11 @@ services:
         autowire: true
         public: true
     App\Services\PosStripeService\PosStripeAccountGatewayInterface: '@App\Tests\Fake\FakePosStripeAccountGateway'
+    # Prévention des pertes, mode exercice (EX-1) : les plafonds PAR JOUR (30 lancements, 10 courriels d'exercice) sont comptés au journal du
+    # module, que rien n'efface ; la suite de tests lance bien plus de 30 exercices dans la même journée. Les tests des plafonds montent le
+    # service à la main avec de petites valeurs (LossPreventionExerciseTest)
+    App\LossPrevention\Services\LossExerciseService:
+        autowire: true
+        arguments:
+            $dailyLimit: 1000000
+            $dailyEmailLimit: 1000000

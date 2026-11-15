@@ -89,6 +89,18 @@ Deux choses apprises :
 Si l'authentification reste en échec après le retour (401 partout) : un point de montage a été remplacé, il ne revient qu'au
 redémarrage du conteneur (`docs/architecture.md`, « Points de montage du conteneur »).
 
+**Retour à un commit d'avant le mode exercice de la prévention des pertes (lot EX-1) : purger d'abord les exercices.** Le code d'avant
+EX-1 ne connaît pas la marque `loss_finding.exercise` : un constat d'exercice resté en base y deviendrait un vrai constat (synthèse,
+liste, vignette, courriel du jour) et ne pourrait plus être effacé. AVANT l'échange du code, avec le code d'EX-1 encore en ligne :
+```
+docker exec -w /var/www symfony_app_v2 php bin/console app:pertes:exercices:effacer --all --dry-run   # compte, site par site
+docker exec -w /var/www symfony_app_v2 php bin/console app:pertes:exercices:effacer --all             # efface ; doit finir en succès
+```
+La commande n'efface que des constats d'exercice (la base refuse elle-même tout le reste) ; elle sort en échec si un site est en
+erreur : ne pas revenir en arrière tant qu'elle n'a pas réussi partout. La migration `Version20270105100000` peut rester en place
+(l'ancien code ignore la colonne) ; si on la défait, son `down()` purge lui aussi les exercices avant de retirer la colonne. Détail :
+`docs/prevention-pertes.md`, § 8, « Retour arrière ».
+
 ## 6. Ce que l'outil garde, et pourquoi
 
 | Garde | Raison |
