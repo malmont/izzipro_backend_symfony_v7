@@ -7,7 +7,9 @@ use App\Services\TenantConnectionManager;
 /** Droits d'usage, base maître (table tenant_entitlements + journal tenant_entitlement_events), PDO (lot 3, 04/11/2026) */
 class EntitlementRepository
 {
-    public const SOURCES = ['manual', 'trial', 'free', 'subscription', 'purchase'];
+    /** `agency` (lot AG-2) : droit posé par l'agence qui a créé le site ; il suit l'agence (suspension en cascade) */
+    public const SOURCE_AGENCY = 'agency';
+    public const SOURCES = ['manual', 'trial', 'free', 'subscription', 'purchase', self::SOURCE_AGENCY];
     public const STATUSES = ['active', 'grace', 'suspended', 'expired', 'cancelled'];
     public const LIVE_STATUSES = ['active', 'grace'];
     private const COLUMNS = 'id, tenant_code, feature_key, source, status, starts_at, ends_at, grace_until, offer_code, reference, granted_by, note, created_at, updated_at';
@@ -120,6 +122,19 @@ class EntitlementRepository
         }
         $stmt = $this->pdo()->prepare($sql . ' ORDER BY id');
         $stmt->execute($params);
+
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Les droits d'une source pour un site, dans les états donnés (lot AG-2 : les droits « agence » d'un site créé par une agence)
+     * @param list<string> $statuses
+     * @return list<array<string, mixed>>
+     */
+    public function bySource(string $tenantCode, string $source, array $statuses = self::LIVE_STATUSES): array
+    {
+        $stmt = $this->pdo()->prepare('SELECT ' . self::COLUMNS . ' FROM tenant_entitlements WHERE tenant_code = ? AND source = ? AND status IN (' . implode(', ', array_fill(0, count($statuses), '?')) . ') ORDER BY feature_key, id DESC');
+        $stmt->execute([$tenantCode, $source, ...$statuses]);
 
         return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }

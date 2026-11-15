@@ -140,7 +140,8 @@ class EntitlementService
         return $this->grant($tenantCode, $featureKey, 'free', null, $by, $note);
     }
 
-    public function suspend(int $id, ?string $by, ?string $note = null): array
+    /** `$notify` faux (lot AG-2) : suspension en cascade d'une agence, sans courriel au site */
+    public function suspend(int $id, ?string $by, ?string $note = null, bool $notify = true): array
     {
         $row = $this->mustFind($id);
         if (!in_array($row['status'], EntitlementRepository::LIVE_STATUSES, true)) {
@@ -149,12 +150,14 @@ class EntitlementService
         $this->repository->update($id, ['status' => 'suspended', 'note' => self::appendNote($row, $note)]);
         $this->project($row['tenant_code']);
         $this->repository->recordEvent($id, $row['tenant_code'], $row['feature_key'], self::EVENT_SUSPENDED, ['by' => $by, 'note' => $note]);
-        $this->notify($row['tenant_code'], $row['feature_key'], self::EVENT_SUSPENDED, $id, ['note' => $note]);
+        if ($notify) {
+            $this->notify($row['tenant_code'], $row['feature_key'], self::EVENT_SUSPENDED, $id, ['note' => $note]);
+        }
 
         return $this->mustFind($id);
     }
 
-    public function resume(int $id, ?string $by, ?string $note = null): array
+    public function resume(int $id, ?string $by, ?string $note = null, bool $notify = true): array
     {
         $row = $this->mustFind($id);
         if (!in_array($row['status'], ['suspended', 'grace'], true)) {
@@ -168,7 +171,9 @@ class EntitlementService
         }
         $this->project($row['tenant_code']);
         $this->repository->recordEvent($id, $row['tenant_code'], $row['feature_key'], self::EVENT_RESUMED, ['by' => $by]);
-        $this->notify($row['tenant_code'], $row['feature_key'], self::EVENT_RESUMED, $id, []);
+        if ($notify) {
+            $this->notify($row['tenant_code'], $row['feature_key'], self::EVENT_RESUMED, $id, []);
+        }
 
         return $this->mustFind($id);
     }
@@ -202,18 +207,25 @@ class EntitlementService
         return $this->mustFind($id);
     }
 
-    /** Impayé d'un abonnement : le droit reste effectif pendant le délai de grâce de la politique */
-    public function grace(int $id, ?string $by, ?string $note = null): array
+    /**
+     * Impayé d'un abonnement : le droit reste effectif pendant le délai de grâce de la politique. `$until` (lot AG-2) : une fin de
+     * grâce donnée (la page publique d'un site gardée 30 jours quand son agence est suspendue) ; `$notify` faux : sans courriel.
+     */
+    public function grace(int $id, ?string $by, ?string $note = null, ?\DateTimeImmutable $until = null, bool $notify = true): array
     {
         $row = $this->mustFind($id);
         if ($row['status'] !== 'active') {
             return $row;
         }
-        $days = $this->policies->get($row['feature_key'])['grace_days'];
-        $until = (new \DateTimeImmutable())->modify("+$days days");
+        if ($until === null) {
+            $days = $this->policies->get($row['feature_key'])['grace_days'];
+            $until = (new \DateTimeImmutable())->modify("+$days days");
+        }
         $this->repository->update($id, ['status' => 'grace', 'grace_until' => $until, 'note' => self::appendNote($row, $note)]);
         $this->repository->recordEvent($id, $row['tenant_code'], $row['feature_key'], self::EVENT_GRACE, ['by' => $by, 'graceUntil' => $until->format('Y-m-d H:i:s')]);
-        $this->notify($row['tenant_code'], $row['feature_key'], self::EVENT_GRACE, $id, ['graceUntil' => $until->format(\DateTimeInterface::ATOM)]);
+        if ($notify) {
+            $this->notify($row['tenant_code'], $row['feature_key'], self::EVENT_GRACE, $id, ['graceUntil' => $until->format(\DateTimeInterface::ATOM)]);
+        }
 
         return $this->mustFind($id);
     }

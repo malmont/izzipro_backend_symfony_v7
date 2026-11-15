@@ -22,7 +22,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_SUPER_ADMIN')]
 class PlatformAgenciesController extends AbstractController
 {
-    public function __construct(private readonly AgencyService $agencies, private readonly AgencyMemberService $members)
+    public function __construct(private readonly AgencyService $agencies, private readonly AgencyMemberService $members, private readonly \App\Services\Agency\AgencySiteRequestService $requests)
     {
     }
 
@@ -40,11 +40,22 @@ class PlatformAgenciesController extends AbstractController
         return $this->handle(fn () => $this->json(['agency' => $this->agencies->create($this->body($request), $this->by())], 201));
     }
 
-    /** Une agence → 200 `{ agency, sites, members, events }` */
+    /** Une agence → 200 `{ agency, sites, members, events, requests }` */
     #[Route('/{id}', name: 'api_platform_agencies_show', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function show(int $id): JsonResponse
     {
-        return $this->handle(fn () => $this->json($this->agencies->show($id) + ['members' => $this->members->members($this->agencies->agency($id))]));
+        return $this->handle(fn () => $this->json($this->agencies->show($id) + ['members' => $this->members->members($this->agencies->agency($id)),
+            'requests' => $this->requests->requestsOf($this->agencies->agency($id))])); // lot AG-2 : les demandes de création de l'agence
+    }
+
+    /**
+     * Limites d'une agence (lot AG-2) `{ maxSites?: int | null, dailySiteRequests?: int }` → 200 `{ agency }`. `maxSites` null :
+     * illimité ; `dailySiteRequests` : garde-fou technique des demandes de création par 24 heures.
+     */
+    #[Route('/{id}', name: 'api_platform_agencies_limits', methods: ['PATCH'], requirements: ['id' => '\d+'])]
+    public function limits(int $id, Request $request): JsonResponse
+    {
+        return $this->handle(fn () => $this->json(['agency' => $this->agencies->setLimits($id, $this->body($request), $this->by())]));
     }
 
     /** Rattache un site existant `{ tenantCode }` → 201 `{ agency, sites }` */

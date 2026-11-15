@@ -26,6 +26,9 @@ const MV_TEST_TENANT2_HOST = 'mvtest2.test';
 const MV_TEST_TENANT2_DB = 'db_mv_contract_test2';
 // Site de référence du contenu d'exemple (12/10/2026) : clone du modèle vidé de son contenu, rempli par SiteContentApiTest
 const SITE_CONTENT_REFERENCE_TEST_DB = 'db_site_reference_test';
+// Modèle des sites créés pendant les tests (lot AG-2) : clone du modèle, sans autre compte que celui de la plateforme, mais chargé de
+// ce qu'un site neuf ne doit PAS hériter (un compte Boussole, un serveur de courriel, une fiche, des chiffres), pour le prouver
+const SITE_TEMPLATE_TEST_DB = 'db_site_template_test';
 
 $prodUrl = getenv('DATABASE_URL') ?: ($_SERVER['DATABASE_URL'] ?? null);
 if (!$prodUrl) {
@@ -53,6 +56,8 @@ $overrides = [
     'DEPLOY_SYNC_TOKEN' => 'jeton-de-deploiement-de-test-0123456789abcdef',
     // Contenu d'exemple copié depuis une base de test, jamais depuis gmasuite
     'SITE_CONTENT_REFERENCE_DB' => SITE_CONTENT_REFERENCE_TEST_DB,
+    // Lot AG-2 : un site créé pendant un essai copie le modèle des tests, JAMAIS le site de référence (la copie coupe ses connexions)
+    'TENANT_TEMPLATE_DB' => SITE_TEMPLATE_TEST_DB,
 ];
 if (getenv('LANDING_AI_REAL_TEST')) {
     unset($overrides['ANTHROPIC_API_KEY_LANDING']); // lue dans .env
@@ -68,7 +73,7 @@ if (method_exists(Dotenv::class, 'bootEnv')) {
 
 // Bases de test recréées à chaque lancement
 $pdo = new PDO(sprintf('pgsql:host=%s;port=%d;dbname=postgres', $u['host'], $u['port'] ?? 5432), urldecode($u['user']), urldecode($u['pass']), [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB, MV_TEST_MASTER_DB, SITE_CONTENT_REFERENCE_TEST_DB] as $db) {
+foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB, MV_TEST_MASTER_DB, SITE_CONTENT_REFERENCE_TEST_DB, SITE_TEMPLATE_TEST_DB] as $db) {
     $pdo->exec("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$db' AND pid <> pg_backend_pid()");
     $pdo->exec("DROP DATABASE IF EXISTS \"$db\"");
 }
@@ -79,6 +84,17 @@ $pdo->exec(sprintf('CREATE DATABASE "%s" WITH TEMPLATE "%s"', SITE_CONTENT_REFER
 $reference = new PDO(sprintf('pgsql:host=%s;port=%d;dbname=%s', $u['host'], $u['port'] ?? 5432, SITE_CONTENT_REFERENCE_TEST_DB), urldecode($u['user']), urldecode($u['pass']), [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 $reference->exec('TRUNCATE presentation, presentation_group, baniere_statique, banniere, video, service_offer, marque, categorie_marque, explore_card, categories, product, product_option, home_slider, feature CASCADE');
 $reference = null;
+// Modèle des sites créés pendant les tests : les comptes du modèle (et ce qui leur est lié) partent ; restent un compte de la
+// plateforme, et ce que la création d'un site doit retirer
+$pdo->exec(sprintf('CREATE DATABASE "%s" WITH TEMPLATE "%s"', SITE_TEMPLATE_TEST_DB, MV_TEST_TEMPLATE_DB));
+$template = new PDO(sprintf('pgsql:host=%s;port=%d;dbname=%s', $u['host'], $u['port'] ?? 5432, SITE_TEMPLATE_TEST_DB), urldecode($u['user']), urldecode($u['pass']), [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$template->exec('TRUNCATE "user" CASCADE');
+$template->exec("INSERT INTO \"user\" (id, email, roles, password, username, firstname, lastname, is_verified, password_set, otp_enabled, created_at) VALUES (1, 'plateforme@example.invalid', '[\"ROLE_ADMIN\",\"ROLE_SUPER_ADMIN\"]', 'inutilisable', 'plateforme@example.invalid', 'Compte', 'Plateforme', true, true, false, NOW())");
+$template->exec("INSERT INTO esg_company (id, name, slug, sector, size_category, territory, existing_certifications, contact_email, is_active, created_at, updated_at, uploaded_document_codes) VALUES (9001, 'Entreprise du modèle', 'entreprise-du-modele', 'commerce', 'tpe', 'QC', '[]', 'esg@example.invalid', true, NOW(), NOW(), '[]')");
+$template->exec("INSERT INTO esg_user (id, company_id, email, roles, password, first_name, last_name, is_verified, is_active, created_at, locale) VALUES (9001, 9001, 'esg@example.invalid', '[\"ROLE_COMPANY\"]', 'un-mot-de-passe-du-modele', 'Compte', 'Hérité', true, true, NOW(), 'fr')");
+$template->exec("INSERT INTO gestion_stock_snapshot (snapshot_date, sale_value_cents, cost_value_cents, created_at) VALUES ('2026-01-01', 123400, 56700, NOW())");
+$template->exec("UPDATE entreprise SET admin_space_url = 'https://ancien.example.invalid/espace'");
+$template = null;
 
 $master = new PDO(sprintf('pgsql:host=%s;port=%d;dbname=%s', $u['host'], $u['port'] ?? 5432, MV_TEST_MASTER_DB), urldecode($u['user']), urldecode($u['pass']), [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 $master->exec('CREATE TABLE tenants (id SERIAL PRIMARY KEY, code VARCHAR(50) NOT NULL UNIQUE, name VARCHAR(255) NOT NULL, dbname VARCHAR(255) NOT NULL, dbuser VARCHAR(255), dbpass VARCHAR(255), gemsuite_token TEXT, is_internal_store BOOLEAN DEFAULT false, custom_domain VARCHAR(255) UNIQUE, short_code VARCHAR(6) UNIQUE)');

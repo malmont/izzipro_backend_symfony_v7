@@ -228,6 +228,18 @@ support_agent_invitation:
     validity: 'Ce lien ne sert qu''une fois et reste valable %hours% heures. Passé ce délai, demandez une nouvelle invitation.'
     ignore: 'Si vous n''attendiez pas cette invitation, ignorez ce courriel : aucun accès n''est ouvert tant que le mot de passe n''est pas choisi.'
 
+# Lot AG-2 (15/11/2026) : l'administrateur d'un site créé par une agence choisit son mot de passe. %agency% : le nom de l'agence ;
+# %site% : le nom du site ; %days% : durée du lien. greeting_plain : quand l'agence n'a pas donné de prénom.
+site_admin_invitation:
+    subject: '%site% : votre accès d''administrateur'
+    title: 'Votre site est prêt'
+    greeting: 'Bonjour %name%,'
+    greeting_plain: 'Bonjour,'
+    message: '%agency% a créé le site %site% pour vous et vous en confie l''administration. Choisissez votre mot de passe pour ouvrir votre espace d''administration.'
+    button: 'Choisir mon mot de passe'
+    validity: 'Ce lien ne sert qu''une fois et reste valable %days% jours. Passé ce délai, demandez un nouveau lien à %agency%.'
+    ignore: 'Si vous n''attendiez pas ce courriel, ignorez-le : aucun accès n''est ouvert tant que le mot de passe n''est pas choisi.'
+
 # Lot IMP-2 (15/11/2026) : invitation d'un client repris du fichier d'une ancienne boutique. Un seul courriel, décidé par le commerçant,
 # jamais relancé ; sobre, SANS aucune promotion (texte validé par le propriétaire). %expires% : fin de validité du lien ; %erase% : jour
 # où les informations reprises sont effacées si le client ne fait rien.

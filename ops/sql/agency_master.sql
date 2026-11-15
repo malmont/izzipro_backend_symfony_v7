@@ -68,3 +68,35 @@ CREATE TABLE IF NOT EXISTS agency_events (
     created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_agency_events_agency ON agency_events (agency_id, id);
+
+-- Lot AG-2 (15/11/2026, docs/agences-et-import.md § 8) : création d'un site par l'agence, par une file. Idempotent.
+-- Retour arrière : DROP TABLE agency_site_requests ; ALTER TABLE agencies DROP COLUMN daily_site_requests (les colonnes max_sites
+-- redevenues obligatoires seulement si aucune ligne n'est vide).
+-- Le nombre de sites d'un forfait peut valoir « illimité » : NULL.
+ALTER TABLE agencies ALTER COLUMN max_sites DROP NOT NULL;
+ALTER TABLE agency_plans ALTER COLUMN max_sites DROP NOT NULL;
+-- Garde-fou technique : nombre de demandes de création par 24 heures, réglable par agence par le super administrateur.
+ALTER TABLE agencies ADD COLUMN IF NOT EXISTS daily_site_requests INT NOT NULL DEFAULT 5;
+
+-- La file des demandes de création. status : pending (en attente) | building (en création) | ready (prêt) | failed (en échec).
+-- options : ce que la demande précise (langue, pays, province, devise, fuseau, modules, nom de l'administrateur) ; result : ce que la
+-- fabrication a fait (invitation, droits, signalements). Une demande en cours (pending, building) retient son code de site : l'index
+-- unique partiel garantit qu'un code n'est demandé qu'une fois à la fois, quelles que soient les demandes simultanées.
+CREATE TABLE IF NOT EXISTS agency_site_requests (
+    id SERIAL PRIMARY KEY,
+    agency_id INT NOT NULL REFERENCES agencies (id),
+    tenant_code VARCHAR(50) NOT NULL,
+    name VARCHAR(160) NOT NULL,
+    admin_email VARCHAR(180) NOT NULL,
+    options JSONB DEFAULT NULL,
+    status VARCHAR(12) NOT NULL DEFAULT 'pending',
+    error_code VARCHAR(40) DEFAULT NULL,
+    result JSONB DEFAULT NULL,
+    requested_by VARCHAR(255) DEFAULT NULL,
+    requested_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+    started_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL,
+    finished_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_agency_site_request_open ON agency_site_requests (tenant_code) WHERE status IN ('pending', 'building');
+CREATE INDEX IF NOT EXISTS idx_agency_site_requests_agency ON agency_site_requests (agency_id, id);
+CREATE INDEX IF NOT EXISTS idx_agency_site_requests_status ON agency_site_requests (status, id);

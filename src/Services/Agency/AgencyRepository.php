@@ -12,7 +12,7 @@ use App\Services\TenantConnectionManager;
 class AgencyRepository
 {
     public const STATUSES = ['trial', 'active', 'suspended', 'closed'];
-    private const COLUMNS = 'id, code, name, home_tenant_code, status, trial_ends_at, max_sites, plan_code, currency, contact_email, is_test, suspended_at, created_at, created_by, updated_at';
+    private const COLUMNS = 'id, code, name, home_tenant_code, status, trial_ends_at, max_sites, plan_code, currency, contact_email, is_test, suspended_at, created_at, created_by, updated_at, daily_site_requests';
 
     public function __construct(private readonly TenantConnectionManager $tenants)
     {
@@ -55,7 +55,7 @@ class AgencyRepository
      *
      * @return array<string, mixed>|null
      */
-    public function insert(string $code, string $name, string $homeTenantCode, \DateTimeImmutable $trialEndsAt, int $maxSites, ?string $planCode, ?string $contactEmail, bool $isTest, ?string $by): ?array
+    public function insert(string $code, string $name, string $homeTenantCode, \DateTimeImmutable $trialEndsAt, ?int $maxSites, ?string $planCode, ?string $contactEmail, bool $isTest, ?string $by): ?array
     {
         $pdo = $this->pdo();
         $pdo->beginTransaction();
@@ -111,8 +111,9 @@ class AgencyRepository
     /**
      * Rattache un site à une agence, sous verrou de l'agence : la limite de sites est comptée et le site écrit dans la même
      * transaction. Rend `attached`, `limit` (la limite est atteinte) ou `taken` (le site a déjà une agence : index unique).
+     * `$maxSites` vide : pas de limite. Les demandes de création en cours (lot AG-2) comptent : leur place est déjà retenue.
      */
-    public function attach(int $agencyId, string $tenantCode, string $origin, int $maxSites, ?string $by): string
+    public function attach(int $agencyId, string $tenantCode, string $origin, ?int $maxSites, ?string $by): string
     {
         $pdo = $this->pdo();
         $pdo->beginTransaction();
@@ -128,9 +129,7 @@ class AgencyRepository
 
                 return 'taken';
             }
-            $count = $pdo->prepare('SELECT COUNT(*) FROM agency_sites WHERE agency_id = ? AND detached_at IS NULL');
-            $count->execute([$agencyId]);
-            if ((int) $count->fetchColumn() >= $maxSites) {
+            if ($maxSites !== null && $this->used($pdo, $agencyId) >= $maxSites) {
                 $pdo->rollBack();
 
                 return 'limit';
@@ -157,6 +156,27 @@ class AgencyRepository
             }
             throw $e;
         }
+    }
+
+    /** Places prises : les sites gérés aujourd'hui, plus les demandes de création en cours (lot AG-2) */
+    public function used(\PDO $pdo, int $agencyId): int
+    {
+        $count = $pdo->prepare("SELECT (SELECT COUNT(*) FROM agency_sites WHERE agency_id = ? AND detached_at IS NULL) + (SELECT COUNT(*) FROM agency_site_requests WHERE agency_id = ? AND status IN ('pending', 'building'))");
+        $count->execute([$agencyId, $agencyId]);
+
+        return (int) $count->fetchColumn();
+    }
+
+    /** Le site géré aujourd'hui par cette agence, ou null : { tenant_code, origin, attached_at } */
+    public function site(int $agencyId, string $tenantCode): ?array
+    {
+        return $this->one('SELECT tenant_code, origin, attached_at FROM agency_sites WHERE agency_id = ? AND tenant_code = ? AND detached_at IS NULL', [$agencyId, $tenantCode], false);
+    }
+
+    /** Limites d'une agence (lot AG-2) : nombre de sites (vide = illimité), demandes de création par 24 heures */
+    public function setLimits(int $id, ?int $maxSites, int $dailySiteRequests): void
+    {
+        $this->pdo()->prepare('UPDATE agencies SET max_sites = ?, daily_site_requests = ?, updated_at = NOW() WHERE id = ?')->execute([$maxSites, $dailySiteRequests, $id]);
     }
 
     /** Détache un site de son agence ; vrai si c'est bien ce pas qui a été fait */
@@ -195,12 +215,12 @@ class AgencyRepository
         return $stmt->fetchColumn() !== false;
     }
 
-    /** @return array{code: string, label: string, trial_days: int, max_sites: int}|null le forfait commun de ce code, s'il est actif */
+    /** @return array{code: string, label: string, trial_days: int, max_sites: ?int}|null le forfait commun de ce code, s'il est actif (max_sites vide : illimité) */
     public function commonPlan(string $code): ?array
     {
         $row = $this->one('SELECT code, label, trial_days, max_sites FROM agency_plans WHERE code = ? AND agency_id IS NULL AND is_active', [$code], false);
 
-        return $row === null ? null : ['code' => (string) $row['code'], 'label' => (string) $row['label'], 'trial_days' => (int) $row['trial_days'], 'max_sites' => (int) $row['max_sites']];
+        return $row === null ? null : ['code' => (string) $row['code'], 'label' => (string) $row['label'], 'trial_days' => (int) $row['trial_days'], 'max_sites' => $row['max_sites'] !== null ? (int) $row['max_sites'] : null];
     }
 
     /** @param array<string, mixed>|null $payload */
@@ -251,13 +271,14 @@ class AgencyRepository
     private static function decode(array $row): array
     {
         $row['id'] = (int) $row['id'];
-        $row['max_sites'] = (int) $row['max_sites'];
+        $row['max_sites'] = $row['max_sites'] !== null ? (int) $row['max_sites'] : null; // vide : illimité (lot AG-2)
+        $row['daily_site_requests'] = (int) ($row['daily_site_requests'] ?? 5);
         $row['is_test'] = in_array($row['is_test'], [true, 't', 'true', 1, '1'], true);
 
         return $row;
     }
 
-    private function pdo(): \PDO
+    public function pdo(): \PDO
     {
         return $this->tenants->getPdoMaster();
     }

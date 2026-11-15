@@ -6,8 +6,11 @@ use App\Security\AgencyRoles;
 use App\Services\Agency\AgencyContext;
 use App\Services\Agency\AgencyException;
 use App\Services\Agency\AgencyService;
+use App\Services\Agency\AgencySiteRequestService;
+use App\UseCase\PlatformUseCase\PlatformValidationException;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
@@ -18,7 +21,7 @@ use Symfony\Component\Routing\Attribute\Route;
 #[Route('/api/agency')]
 class AgencyController extends AbstractController
 {
-    public function __construct(private readonly AgencyContext $context, private readonly AgencyService $agencies)
+    public function __construct(private readonly AgencyContext $context, private readonly AgencyService $agencies, private readonly AgencySiteRequestService $requests)
     {
     }
 
@@ -41,9 +44,105 @@ class AgencyController extends AbstractController
             $agency = $this->context->current();
             $sites = $this->agencies->sitesOf($agency);
 
-            return $this->json(['sites' => $sites, 'maxSites' => $agency['max_sites'], 'used' => count($sites)]);
+            // maxSites null : illimité ; `used` : les sites gérés ; `pending` : les demandes de création en cours, qui retiennent chacune une place (lot AG-2)
+            $view = $this->agencies->view($agency);
+
+            return $this->json(['sites' => $sites, 'maxSites' => $agency['max_sites'], 'used' => count($sites), 'pending' => $view['sitesUsed'] - count($sites)]);
         } catch (AgencyException $e) {
             return $this->json($e->body(), $e->status);
         }
+    }
+
+    // --- Lot AG-2 (15/11/2026) : création d'un site par l'agence. Écrire est réservé au responsable (`ROLE_AGENCY`) ; le collaborateur lit.
+
+    /** Ce nom de site est-il libre ? `?code=` → 200 `{ code, available, reason: INVALID | RESERVED | TAKEN | null }` */
+    #[Route('/sites/availability', name: 'api_agency_sites_availability', methods: ['GET'], priority: 5)]
+    public function availability(Request $request): JsonResponse
+    {
+        return $this->handle(function () use ($request) {
+            $this->context->current();
+
+            return $this->json($this->requests->availability($request->query->get('code')));
+        });
+    }
+
+    /**
+     * Demande la création d'un site `{ code, name, adminEmail, adminFirstName?, adminLastName?, locale?, country?, province?, currency?,
+     * timezone?, modules? }` → 202 `{ request }` (« pending ») ; le site est fabriqué en tâche de fond.
+     */
+    #[Route('/sites', name: 'api_agency_sites_request', methods: ['POST'])]
+    public function requestSite(Request $request): JsonResponse
+    {
+        return $this->handle(fn () => $this->json(['request' => $this->requests->request($this->manager(), $this->body($request), $this->by())], 202));
+    }
+
+    /** Les demandes de création de mon agence → 200 `{ requests }`, de la plus récente à la plus ancienne */
+    #[Route('/site-requests', name: 'api_agency_site_requests', methods: ['GET'])]
+    public function siteRequests(): JsonResponse
+    {
+        return $this->handle(fn () => $this->json(['requests' => $this->requests->requestsOf($this->context->current())]));
+    }
+
+    /** Une demande → 200 `{ request }` : pending | building | ready | failed, avec `errorCode`, puis `site`, `invitation`, `modules` */
+    #[Route('/site-requests/{id}', name: 'api_agency_site_request', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function siteRequest(int $id): JsonResponse
+    {
+        return $this->handle(fn () => $this->json(['request' => $this->requests->show($this->context->current(), $id)]));
+    }
+
+    /** Les modules d'un site que mon agence a créé → 200 `{ modules: [{ key, label, enabled, byAgency, status, graceUntil }] }` */
+    #[Route('/sites/{code}/modules', name: 'api_agency_site_modules', methods: ['GET'], requirements: ['code' => '[a-z0-9-]{1,50}'])]
+    public function modules(string $code): JsonResponse
+    {
+        return $this->handle(fn () => $this->json(['modules' => $this->requests->modules($this->context->current(), $code)]));
+    }
+
+    /** Ouvre ou ferme un module d'un site que mon agence a créé `{ enabled }` → 200 `{ modules }` */
+    #[Route('/sites/{code}/modules/{feature}', name: 'api_agency_site_module_set', methods: ['PUT'], requirements: ['code' => '[a-z0-9-]{1,50}', 'feature' => '[a-z_.]{1,40}'])]
+    public function setModule(string $code, string $feature, Request $request): JsonResponse
+    {
+        return $this->handle(fn () => $this->json(['modules' => $this->requests->setModule($this->manager(), $code, $feature, $this->body($request)['enabled'] ?? null, $this->by())]));
+    }
+
+    /** Renvoie à l'administrateur désigné d'un site créé par mon agence le lien pour choisir son mot de passe → 202 `{ request }` */
+    #[Route('/sites/{code}/invitation', name: 'api_agency_site_invitation', methods: ['POST'], requirements: ['code' => '[a-z0-9-]{1,50}'])]
+    public function invitation(string $code): JsonResponse
+    {
+        return $this->handle(fn () => $this->json(['request' => $this->requests->askInvitation($this->manager(), $code, $this->by())], 202));
+    }
+
+    /** @return array<string, mixed> mon agence, pour un geste réservé à son responsable ; 403 `AGENCY_MANAGER_ONLY` pour un collaborateur */
+    private function manager(): array
+    {
+        $agency = $this->context->current();
+        if (!in_array(AgencyRoles::MANAGER, $this->getUser()?->getRoles() ?? [], true)) {
+            throw new AgencyException('AGENCY_MANAGER_ONLY', 403);
+        }
+
+        return $agency;
+    }
+
+    private function handle(callable $action): JsonResponse
+    {
+        try {
+            return $action();
+        } catch (PlatformValidationException $e) {
+            return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => $e->getMessage(), 'errors' => $e->errors], 422);
+        } catch (AgencyException $e) {
+            return $this->json($e->body(), $e->status);
+        }
+    }
+
+    /** @return array<string, mixed> */
+    private function body(Request $request): array
+    {
+        $body = json_decode((string) $request->getContent(), true);
+
+        return is_array($body) ? $body : [];
+    }
+
+    private function by(): ?string
+    {
+        return $this->getUser()?->getUserIdentifier();
     }
 }

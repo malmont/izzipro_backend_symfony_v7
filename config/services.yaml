@@ -8,6 +8,8 @@ parameters:
     # la boutique publique et le propriétaire a validé le texte du courriel. Éteint (false), aucune invitation ne part, ni par la route, ni par
     # le worker, et la vue d'un import porte invitationsOpen: false
     app.import.invitations_open: true
+    # Lot AG-2 : la base que tout site neuf copie, sauf TENANT_TEMPLATE_DB (les tests copient leur modèle, une répétition copie une copie)
+    app.tenant_template_db: gmasuite
     # Session web : durée du jeton d'accès et déconnexion après inactivité (secondes)
     env(WEB_ACCESS_TOKEN_TTL): '900'
     env(WEB_SESSION_IDLE_TTL): '3600'
@@ -189,6 +191,9 @@ services:
             # Reconnaissance d'un site par son code en sous-domaine (codeFromHost, 17/10/2026)
             $frontendBaseDomain: '%env(resolve:FRONTEND_BASE_DOMAIN)%'
             $backendBaseDomain: '%env(resolve:BACKEND_BASE_DOMAIN)%'
+            # Base copiée pour tout site neuf (lot AG-2) : le site de référence, sauf TENANT_TEMPLATE_DB (tests, répétition)
+            $tenantTemplateDb: '%env(default:app.tenant_template_db:TENANT_TEMPLATE_DB)%'
+            $environment: '%kernel.environment%'
 
        
     App\Services\TenantConnectionProvider:

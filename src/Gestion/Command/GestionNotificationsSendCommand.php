@@ -39,6 +39,7 @@ class GestionNotificationsSendCommand extends Command
         private readonly ?\App\Services\Notification\NotificationWeeklyService $weekly = null, // lot NOTIF-2 : résumé de la semaine, le lundi à partir de 8 h du magasin
         private readonly ?\App\Gestion\Services\Report\GestionReportService $reports = null, // lot DOC-1 : retrait des rapports PDF passé leur délai de conservation
         private readonly ?\App\Import\CustomerImportService $customerImports = null, // lot IMP-2 : effacement des clients repris d'une ancienne boutique qui n'ont pas accepté à temps
+        private readonly ?\App\Services\Agency\AgencySiteRequestService $agencySites = null, // lot AG-2 : rattrapage de la file des sites demandés par les agences
     ) {
         parent::__construct();
     }
@@ -84,6 +85,18 @@ class GestionNotificationsSendCommand extends Command
                 ++$errors;
                 $this->logger->error(sprintf('Notifications gestion : site %s non traité : %s', $row['code'], $e->getMessage()));
                 $io->warning(sprintf('%s : non traité (%s)', $row['code'], $e->getMessage()));
+            }
+        }
+        // Lot AG-2 : la file des sites demandés par les agences (base maître, une fois par passage, hors de tout site). Une fabrication
+        // interrompue passe en échec ; une demande restée en attente est confiée de nouveau au worker. Jamais bloquant.
+        if ($only === null && $at === null) {
+            try {
+                $swept = $this->agencySites?->sweep() ?? ['interrupted' => 0, 'requeued' => 0];
+                if (array_sum($swept) > 0) {
+                    $io->text(sprintf('Sites demandés par les agences : %d fabrication(s) interrompue(s) en échec, %d demande(s) confiée(s) de nouveau au worker', $swept['interrupted'], $swept['requeued']));
+                }
+            } catch (\Throwable $e) {
+                $this->logger->error(sprintf('Sites demandés par les agences : passage de rattrapage en échec (%s)', $e::class));
             }
         }
         $io->success(sprintf('%d site(s) à leur heure, %d notification(s), %d site(s) en erreur.', $sites, $notified, $errors));

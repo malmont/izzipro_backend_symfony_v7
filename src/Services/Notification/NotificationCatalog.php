@@ -66,6 +66,7 @@ final class NotificationCatalog
         'account_deleted_notice' => [self::INDISPENSABLE, null],
         'memoires_account_invitation' => [self::INDISPENSABLE, null],
         'support_agent_invitation' => [self::INDISPENSABLE, null],
+        'site_admin_invitation' => [self::INDISPENSABLE, null], // lot AG-2 : l'administrateur désigné d'un site créé par une agence choisit son mot de passe
         'customer_import_invitation' => [self::INDISPENSABLE, null], // lot IMP-2 : un seul courriel par client repris d'une ancienne boutique, décidé par le commerçant, jamais relancé
         'chapter_invitation' => [self::INDISPENSABLE, null], // garde son propre lien de désabonnement
         // Avis au CLIENT propriétaire d'un livre (invitation épuisée sans réponse) : il parle de son livre à un client du site, pas à
@@ -109,6 +110,7 @@ final class NotificationCatalog
         'src/Services/FormSubmissionService/FormSubmissionNotifier.php' => ['customer_message', 'customer_acknowledgement'],
         'src/Services/Notification/NotificationSummaryService.php' => [self::FOLLOWUP_SUMMARY],
         'src/Services/Notification/NotificationWeeklyService.php' => [self::WEEKLY_DIGEST],
+        'src/Services/Agency/AgencySiteInviter.php' => ['site_admin_invitation'],
         'src/Services/OrderService/OrderMailerService.php' => ['order_confirmation', self::ORDER_TO_SHIP, 'order_notice'],
         'src/Services/OrderService/OrderShipmentService.php' => ['order_shipped'],
         'src/Services/OtpService.php' => ['otp_code'],

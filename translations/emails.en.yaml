@@ -224,6 +224,18 @@ support_agent_invitation:
     validity: 'This link works once and stays valid for %hours% hours. After that, ask for a new invitation.'
     ignore: 'If you were not expecting this invitation, ignore this e-mail: no access is opened until the password is chosen.'
 
+# AG-2 (2026-11-15): the administrator of a site created by an agency chooses a password. %agency%: the agency's name; %site%: the
+# site's name; %days%: how long the link lasts. greeting_plain: when the agency gave no first name.
+site_admin_invitation:
+    subject: '%site%: your administrator access'
+    title: 'Your site is ready'
+    greeting: 'Hello %name%,'
+    greeting_plain: 'Hello,'
+    message: '%agency% created the site %site% for you and entrusts you with its administration. Choose your password to open your administration space.'
+    button: 'Choose my password'
+    validity: 'This link works once and stays valid for %days% days. After that, ask %agency% for a new link.'
+    ignore: 'If you were not expecting this e-mail, ignore it: no access is opened until the password is chosen.'
+
 # IMP-2 (2026-11-15): invitation of a customer carried over from the file of a former store. A single e-mail, decided by the merchant,
 # never repeated; sober, with NO promotion at all (text validated by the owner). %expires%: end of validity of the link; %erase%: day on
 # which the carried-over information is erased if the customer does nothing.

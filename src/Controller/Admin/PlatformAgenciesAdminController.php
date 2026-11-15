@@ -29,6 +29,7 @@ class PlatformAgenciesAdminController extends AbstractController
         private readonly AgencyMemberService $members,
         private readonly PlatformConsoleService $console,
         private readonly AdminUrlGenerator $urls,
+        private readonly \App\Services\Agency\AgencySiteRequestService $requests,
     ) {
     }
 
@@ -40,7 +41,7 @@ class PlatformAgenciesAdminController extends AbstractController
         $detail = null;
         if ($id > 0) {
             try {
-                $detail = $this->agencies->show($id) + ['members' => $this->members->members($this->agencies->agency($id))];
+                $detail = $this->agencies->show($id) + ['members' => $this->members->members($this->agencies->agency($id)), 'requests' => $this->requests->requestsOf($this->agencies->agency($id))];
             } catch (AgencyException) {
                 $detail = null; // agence inconnue : la liste seule
             }
@@ -92,6 +93,20 @@ class PlatformAgenciesAdminController extends AbstractController
         return $this->action($request, function () use ($id, $to, $request): int {
             $agency = $to === 'suspend' ? $this->agencies->suspend($id, $this->getUser()?->getUserIdentifier(), $request->request->get('reason')) : $this->agencies->resume($id, $this->getUser()?->getUserIdentifier());
             $this->addFlash('success', sprintf('Agence « %s » : %s.', htmlspecialchars((string) $agency['name'], ENT_QUOTES), $agency['status']));
+
+            return $id;
+        });
+    }
+
+    /** Lot AG-2 : nombre de sites (vide = illimité) et demandes de création par jour */
+    #[Route('/admin/plateforme/agences/{id}/limites', name: 'admin_plateforme_agences_limits', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function limits(int $id, Request $request): Response
+    {
+        return $this->action($request, function () use ($id, $request): int {
+            $max = trim((string) $request->request->get('maxSites', ''));
+            $daily = trim((string) $request->request->get('dailySiteRequests', ''));
+            $agency = $this->agencies->setLimits($id, ['maxSites' => $max === '' ? null : (ctype_digit($max) ? (int) $max : $max), 'dailySiteRequests' => ctype_digit($daily) ? (int) $daily : $daily], $this->getUser()?->getUserIdentifier());
+            $this->addFlash('success', sprintf('Limites réglées : %s site(s), %d demande(s) de création par jour.', $agency['maxSites'] === null ? 'illimité' : (string) $agency['maxSites'], $agency['dailySiteRequests']));
 
             return $id;
         });

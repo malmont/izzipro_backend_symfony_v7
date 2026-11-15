@@ -25,9 +25,12 @@ class AgencyService
     public const EVENT_SITE_DETACHED = 'site_detached';
     public const EVENT_SUSPENDED = 'suspended';
     public const EVENT_RESUMED = 'resumed';
+    public const EVENT_LIMITS = 'limits_changed';
     public const OPEN_STATUSES = ['trial', 'active'];
+    /** Plafond du garde-fou technique : demandes de création par 24 heures qu'un super administrateur peut accorder à une agence */
+    public const MAX_DAILY_REQUESTS = 500;
 
-    public function __construct(private readonly AgencyRepository $repository, private readonly TenantPublicHostResolver $hosts)
+    public function __construct(private readonly AgencyRepository $repository, private readonly TenantPublicHostResolver $hosts, private readonly AgencyEntitlements $rights)
     {
     }
 
@@ -89,7 +92,7 @@ class AgencyService
         if ($this->repository->sharesDatabase($site['code'], $site['dbname'])) {
             throw new AgencyException('AGENCY_SITE_SHARES_DATABASE', 409, ['tenantCode' => $site['code']]);
         }
-        $plan = $this->repository->commonPlan(self::DEFAULT_PLAN) ?? ['code' => null, 'trial_days' => 60, 'max_sites' => 3];
+        $plan = $this->repository->commonPlan(self::DEFAULT_PLAN) ?? ['code' => null, 'trial_days' => 60, 'max_sites' => 3]; // max_sites vide : illimité
         $trialEndsAt = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->modify('+' . $plan['trial_days'] . ' days');
         try {
             $agency = $this->repository->insert($code, $name, $site['code'], $trialEndsAt, $plan['max_sites'], $plan['code'], is_string($email) && $email !== '' ? mb_strtolower($email) : null, ($data['test'] ?? false) === true, $by);
@@ -151,14 +154,19 @@ class AgencyService
         return ['agency' => $this->view($agency), 'sites' => $this->sitesOf($agency)];
     }
 
-    /** Suspend une agence en essai ou active : elle lit encore, mais ne reçoit plus de site. @return array<string, mixed> l'agence */
+    /**
+     * Suspend une agence en essai ou active : elle lit encore, mais ne reçoit plus de site et n'en crée plus. Lot AG-2, en cascade :
+     * les droits « agence » des sites qu'elle a CRÉÉS sont suspendus, sauf leur page publique, gardée 30 jours ; les sites rattachés
+     * à la main ne changent pas. @return array<string, mixed> l'agence
+     */
     public function suspend(int $id, ?string $by, mixed $reason = null): array
     {
         $agency = $this->agency($id);
         if (!$this->repository->move($agency['id'], self::OPEN_STATUSES, 'suspended')) {
             throw new AgencyException('AGENCY_STATE', 409, ['status' => $this->agency($id)['status']]);
         }
-        $this->repository->recordEvent($agency['id'], self::EVENT_SUSPENDED, null, ['from' => $agency['status'], 'reason' => is_string($reason) && trim($reason) !== '' ? mb_substr(trim($reason), 0, 300) : null], $by);
+        $taken = $this->rights->suspendAll($agency, $this->createdCodes($agency), $by);
+        $this->repository->recordEvent($agency['id'], self::EVENT_SUSPENDED, null, ['from' => $agency['status'], 'reason' => is_string($reason) && trim($reason) !== '' ? mb_substr(trim($reason), 0, 300) : null, 'rights' => $taken], $by);
 
         return $this->view($this->agency($id));
     }
@@ -172,9 +180,58 @@ class AgencyService
         if (!$this->repository->move($agency['id'], ['suspended'], $to)) {
             throw new AgencyException('AGENCY_STATE', 409, ['status' => $this->agency($id)['status']]);
         }
-        $this->repository->recordEvent($agency['id'], self::EVENT_RESUMED, null, ['to' => $to], $by);
+        // lot AG-2 : les droits que la suspension avait pris sur les sites créés par l'agence leur sont rendus
+        $given = $this->rights->resumeAll($agency, $this->createdCodes($agency), $by);
+        $this->repository->recordEvent($agency['id'], self::EVENT_RESUMED, null, ['to' => $to, 'rights' => $given], $by);
 
         return $this->view($this->agency($id));
+    }
+
+    /**
+     * Limites d'une agence (lot AG-2), par le super administrateur : `maxSites` (entier, ou null pour « illimité ») et
+     * `dailySiteRequests` (garde-fou technique : demandes de création par 24 heures, à relever pour une grosse migration). Un champ
+     * absent garde sa valeur. La limite de sites ne descend pas sous le nombre de sites déjà gérés.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed> l'agence
+     */
+    public function setLimits(int $id, array $data, ?string $by): array
+    {
+        $agency = $this->agency($id);
+        $errors = [];
+        $maxSites = $agency['max_sites'];
+        if (array_key_exists('maxSites', $data)) {
+            $maxSites = $data['maxSites'];
+            if ($maxSites !== null && (!is_int($maxSites) || $maxSites < 0 || $maxSites > 100000)) {
+                $errors[] = ['path' => 'maxSites', 'message' => 'entier positif attendu, ou null pour « illimité »'];
+            }
+        }
+        $daily = $agency['daily_site_requests'];
+        if (array_key_exists('dailySiteRequests', $data)) {
+            $daily = $data['dailySiteRequests'];
+            if (!is_int($daily) || $daily < 0 || $daily > self::MAX_DAILY_REQUESTS) {
+                $errors[] = ['path' => 'dailySiteRequests', 'message' => 'entier de 0 à ' . self::MAX_DAILY_REQUESTS . ' attendu'];
+            }
+        }
+        if ($errors !== []) {
+            throw new PlatformValidationException($errors);
+        }
+        $used = $this->repository->used($this->repository->pdo(), $agency['id']);
+        if ($maxSites !== null && $maxSites < $used) {
+            throw new AgencyException('AGENCY_LIMITS', 409, ['used' => $used]);
+        }
+        if ($maxSites !== $agency['max_sites'] || $daily !== $agency['daily_site_requests']) {
+            $this->repository->setLimits($agency['id'], $maxSites, $daily);
+            $this->repository->recordEvent($agency['id'], self::EVENT_LIMITS, null, ['maxSites' => $maxSites, 'dailySiteRequests' => $daily, 'from' => ['maxSites' => $agency['max_sites'], 'dailySiteRequests' => $agency['daily_site_requests']]], $by);
+        }
+
+        return $this->view($this->agency($id));
+    }
+
+    /** @param array<string, mixed> $agency @return list<string> les sites que l'agence a créés (lot AG-2) : les seuls qui portent des droits « agence » */
+    private function createdCodes(array $agency): array
+    {
+        return array_values(array_map(static fn (array $row): string => (string) $row['tenant_code'], array_filter($this->repository->sites($agency['id']), static fn (array $row): bool => $row['origin'] === 'created')));
     }
 
     /** @return array<string, mixed> l'agence par son identifiant ; 404 sinon */
@@ -199,7 +256,9 @@ class AgencyService
             'homeSite' => $this->site((string) $agency['home_tenant_code']), 'trialEndsAt' => $iso($agency['trial_ends_at']),
             // l'essai est-il passé ? Affiché seulement : rien ne se ferme tout seul dans ce lot
             'trialEnded' => $agency['status'] === 'trial' && $trialEndsAt !== null && $trialEndsAt <= new \DateTimeImmutable('now', new \DateTimeZone('UTC')),
-            'maxSites' => $agency['max_sites'], 'sitesCount' => count($this->repository->sites($agency['id'])), 'planCode' => $agency['plan_code'], 'contactEmail' => $agency['contact_email'],
+            // maxSites null : illimité (lot AG-2) ; sitesUsed : sites gérés plus demandes de création en cours (chacune retient une place)
+            'maxSites' => $agency['max_sites'], 'sitesCount' => count($this->repository->sites($agency['id'])), 'sitesUsed' => $this->repository->used($this->repository->pdo(), $agency['id']),
+            'dailySiteRequests' => $agency['daily_site_requests'], 'planCode' => $agency['plan_code'], 'contactEmail' => $agency['contact_email'],
             'suspendedAt' => $iso($agency['suspended_at']), 'createdAt' => $iso($agency['created_at']),
         ];
     }

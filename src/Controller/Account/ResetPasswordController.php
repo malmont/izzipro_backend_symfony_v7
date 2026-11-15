@@ -166,7 +166,8 @@ class ResetPasswordController extends AbstractController
         $user->setResetTokenExpiresAt(null);
         // Agent d'assistance invité (lot SUPPORT-WEB) : le lien reçu par courriel prouve son adresse ; son compte devient utilisable
         // au moment où il choisit son mot de passe. Les autres comptes non vérifiés gardent leur parcours de vérification.
-        if (!$user->isVerified() && $user->getSignupChannel() === User::SIGNUP_SUPPORT_INVITE) {
+        // De même pour l'administrateur d'un site créé par une agence (lot AG-2).
+        if (!$user->isVerified() && in_array($user->getSignupChannel(), User::TEAM_INVITES, true)) {
             $user->setIsVerified(true);
         }
         $em->flush();
@@ -203,7 +204,7 @@ class ResetPasswordController extends AbstractController
         // Ce que l'écran peut montrer à qui tient un jeton valide : le site, l'adresse du compte MASQUÉE, la fin de validité. Rien d'autre.
         $siteName = $site->name(); // le nom de la fiche du site : le même que GET /api/support/me et que le courriel d'invitation
 
-        return $this->json(['valid' => true, 'kind' => !$user->isVerified() && $user->getSignupChannel() === User::SIGNUP_SUPPORT_INVITE ? 'invitation' : 'reset',
+        return $this->json(['valid' => true, 'kind' => !$user->isVerified() && in_array($user->getSignupChannel(), User::TEAM_INVITES, true) ? 'invitation' : 'reset',
             'expiresAt' => $user->getResetTokenExpiresAt()?->format(\DateTimeInterface::ATOM), 'siteName' => $siteName, 'emailMasked' => self::maskEmail((string) $user->getEmail()),
             'passwordMinLength' => 8]);
     }

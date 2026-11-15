@@ -521,6 +521,10 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public const SIGNUP_WEB_INVITE = 'web_invite';
     /** Agent d'assistance invité par l'administrateur du site (lot SUPPORT-WEB, 14/11/2026) : vérifié quand il choisit son mot de passe */
     public const SIGNUP_SUPPORT_INVITE = 'support_invite';
+    /** Administrateur d'un site créé par une agence, désigné par elle (lot AG-2, 15/11/2026) : vérifié quand il choisit son mot de passe */
+    public const SIGNUP_ADMIN_INVITE = 'admin_invite';
+    /** Comptes d'équipe nés d'une invitation : le lien reçu par courriel prouve l'adresse, le compte devient utilisable quand le mot de passe est choisi */
+    public const TEAM_INVITES = [self::SIGNUP_SUPPORT_INVITE, self::SIGNUP_ADMIN_INVITE];
     public const SIGNUP_WEB_REGISTER = 'web_register';
     public const SIGNUP_MOBILE = 'mobile';
     /** Application e-commerce mobile (01/11/2026) */

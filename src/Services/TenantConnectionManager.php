@@ -39,6 +39,12 @@ class TenantConnectionManager
     private string           $pdoPass;
     /** Domaines dont un sous-domaine désigne un site par son code (frontend, backend) ; voir codeFromHost() */
     private array            $siteBaseDomains;
+    /** Le site de référence : la base que tout site neuf copie, en production */
+    public const REFERENCE_DB = 'gmasuite';
+    private string           $templateDb;
+    private string           $environment;
+    /** @var array<string, string> base → code des sites que CE processus a créés (voir discardCreatedTenant) */
+    private array            $createdHere = [];
 
     public function __construct(
         string $masterDatabaseUrl,
@@ -49,8 +55,14 @@ class TenantConnectionManager
         TenantConnectionProvider $connectionProvider,
         TagAwareCacheInterface $cache, // <-- Injection automatique par Symfony
         ?string $frontendBaseDomain = null,
-        ?string $backendBaseDomain = null
+        ?string $backendBaseDomain = null,
+        ?string $tenantTemplateDb = null,
+        string $environment = 'prod'
     ) {
+        // Base copiée pour tout site neuf (lot AG-2, 15/11/2026) : le site de référence, sauf réglage (les tests copient leur propre
+        // modèle, une répétition copie une copie). Fermé par défaut : un essai ne coupe JAMAIS les connexions du site de référence
+        $this->templateDb = $tenantTemplateDb !== null && trim($tenantTemplateDb) !== '' ? trim($tenantTemplateDb) : self::REFERENCE_DB;
+        $this->environment = $environment;
         $env = static fn (string $name): string => (string) ($_SERVER[$name] ?? $_ENV[$name] ?? getenv($name) ?: '');
         $this->siteBaseDomains = array_values(array_filter(array_map(
             static fn (string $d): string => strtolower(trim($d, " .\"'")),
@@ -125,8 +137,22 @@ class TenantConnectionManager
             throw new \InvalidArgumentException("Code ou dbname invalide : seuls [a-z0-9_-] sont autorisés");
         }
 
+        // Lot AG-2 : la base copiée est un réglage ; en essai, jamais le site de référence (la copie coupe ses connexions un instant)
+        $templateDbName = $this->templateDb;
+        if (!preg_match('/^[a-z0-9_-]+$/i', $templateDbName)) {
+            throw new \InvalidArgumentException('Base modèle invalide');
+        }
+        if ($this->environment === 'test' && $templateDbName === self::REFERENCE_DB) {
+            throw new \LogicException('Un essai ne copie jamais le site de référence : TENANT_TEMPLATE_DB attendu');
+        }
+        // Lot AG-2 : une base qui existe déjà n'est NI copiée NI supprimée. Avant, l'échec de la copie sur une base existante passait
+        // par le « DROP DATABASE » du rattrapage : choisir le nom d'une base existante l'effaçait.
+        if ($this->databaseExists($dbname)) {
+            throw new \RuntimeException(sprintf('La base "%s" existe déjà : aucun site créé, rien de supprimé.', $dbname));
+        }
+        $created = false; // la base a-t-elle été créée par CET appel ? Seule une base créée ici est supprimée en cas d'échec
+
         try {
-            $templateDbName = 'gmasuite';
             $this->logger->info(sprintf('Tentative d\'isolation et de terminaison des connexions pour la base template "%s"', $templateDbName));
             try {
                 // Bloquer temporairement les nouvelles connexions sur la base template pour éviter les conflits concurrents
@@ -144,18 +170,20 @@ class TenantConnectionManager
                 $this->pdoMaster->exec(
                     sprintf('CREATE DATABASE "%s" WITH TEMPLATE "%s"', $dbname, $templateDbName)
                 );
+                $created = true;
             } finally {
                 // Rétablir immédiatement les connexions sur la base template
                 try {
                     $this->pdoMaster->exec(sprintf('ALTER DATABASE "%s" WITH allow_connections = true', $templateDbName));
                 } catch (\Throwable $allowEx) {
-                    $this->logger->warning('Impossible de rétablir les connexions sur gmasuite: ' . $allowEx->getMessage());
+                    $this->logger->warning('Impossible de rétablir les connexions sur la base modèle: ' . $allowEx->getMessage());
                 }
             }
 
             $this->fixSequences($dbname);
             $this->markDemoContent($dbname);
             $this->clearCopiedNotifications($dbname);
+            $this->clearInheritedAccounts($dbname);
 
             // Insertion en base
             $stmt = $this->pdoMaster->prepare(
@@ -180,15 +208,66 @@ class TenantConnectionManager
 
             $this->cache->invalidateTags(['tenants']);
             $this->logger->info("Cache 'tenants' invalidé après création de '$code'.");
+            $this->createdHere[$dbname] = $code;
         } catch (\Throwable $e) {
             $this->logger->error("Échec création tenant '{$code}' / '{$dbname}': " . $e->getMessage());
-            try {
-                $this->pdoMaster->exec(sprintf('DROP DATABASE IF EXISTS "%s"', $dbname));
-            } catch (\Throwable $dropEx) {
-                $this->logger->warning("Échec DROP DATABASE '{$dbname}' : " . $dropEx->getMessage());
+            if ($created) {
+                try {
+                    $this->pdoMaster->exec(sprintf('DROP DATABASE IF EXISTS "%s"', $dbname));
+                } catch (\Throwable $dropEx) {
+                    $this->logger->warning("Échec DROP DATABASE '{$dbname}' : " . $dropEx->getMessage());
+                }
             }
             throw $e;
         }
+    }
+
+    /**
+     * Défait un site que CE processus vient de créer (lot AG-2 : une fabrication abandonnée avant d'être livrée ne laisse pas un site
+     * à moitié fait). Garde : ne fait RIEN pour un site que ce processus n'a pas créé lui-même, ni si un autre code partage la base.
+     * Retire la ligne du site, puis supprime sa base. Rend vrai si le site a été défait.
+     */
+    public function discardCreatedTenant(string $code, string $dbname): bool
+    {
+        if (($this->createdHere[$dbname] ?? null) !== $code) {
+            return false;
+        }
+        $pdo = $this->getPdoMaster();
+        $others = $pdo->prepare('SELECT COUNT(*) FROM tenants WHERE dbname = ? AND code <> ?');
+        $others->execute([$dbname, $code]);
+        if ((int) $others->fetchColumn() > 0) {
+            return false;
+        }
+        $pdo->prepare('DELETE FROM tenants WHERE code = ? AND dbname = ?')->execute([$code, $dbname]);
+        unset($this->createdHere[$dbname]);
+        try {
+            $this->cache->invalidateTags(['tenants']);
+        } catch (\Throwable) {
+        }
+        try {
+            $stmt = $pdo->prepare('SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = ? AND pid <> pg_backend_pid()');
+            $stmt->execute([$dbname]);
+            $pdo->exec(sprintf('DROP DATABASE IF EXISTS "%s"', $dbname));
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf('Site "%s" retiré, mais sa base "%s" n\'a pas pu être supprimée (%s)', $code, $dbname, $e::class));
+        }
+
+        return true;
+    }
+
+    /** Une base de ce nom existe-t-elle sur le serveur ? (lot AG-2 : avant toute création, et pour dire qu'un code de site est pris) */
+    public function databaseExists(string $dbname): bool
+    {
+        $stmt = $this->getPdoMaster()->prepare('SELECT 1 FROM pg_database WHERE datname = ?');
+        $stmt->execute([$dbname]);
+
+        return $stmt->fetchColumn() !== false;
+    }
+
+    /** La base que tout site neuf copie (le site de référence, sauf réglage `TENANT_TEMPLATE_DB`) */
+    public function templateDatabase(): string
+    {
+        return $this->templateDb;
     }
 
     public function migrateTenant(string $dbname): void
@@ -718,6 +797,35 @@ class TenantConnectionManager
             $pdo->exec('DELETE FROM notification_preference');
         } catch (\Throwable $e) {
             $this->logger->warning('Journal des notifications du site neuf non vidé (' . $e::class . ').');
+        }
+    }
+
+    /**
+     * Lot AG-2 (inventaire du 15/11/2026) : la copie du site de référence portait un compte Boussole ESG (avec son mot de passe) et son
+     * entreprise, et les instantanés de stock de la gestion du site de référence. Un site neuf n'hérite d'AUCUN compte autre que ceux
+     * de la plateforme (`SuperAdminAccountService`), d'aucun accès à un serveur de courriel, d'aucune fiche d'entreprise, d'aucune
+     * session ni d'aucun chiffre. BLOQUANT, à la différence des autres nettoyages : un site né avec le compte ou l'accès d'un autre
+     * n'est pas livré (la création échoue, la base créée est supprimée).
+     *
+     * Les comptes du site lui-même (table `user`) ne se retirent pas sans emporter ce qui leur est lié : s'il en reste un qui n'est
+     * pas un compte de la plateforme, c'est que le site de référence n'est plus propre, et la création est REFUSÉE.
+     */
+    private function clearInheritedAccounts(string $dbname): void
+    {
+        $params = $this->tenantParams;
+        $pdo = new PDO(sprintf('pgsql:host=%s;port=%d;dbname=%s', $params['host'] ?? $this->masterParams['host'], $params['port'] ?? $this->masterParams['port'], $dbname),
+            $params['user'] ?? $params['username'] ?? '', $params['password'] ?? '', [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        // CASCADE : les sessions de diagnostic et les documents du compte retiré partent avec lui (aucun référentiel ne pointe vers eux)
+        $pdo->exec('TRUNCATE esg_user, esg_company CASCADE');
+        $pdo->exec('TRUNCATE gestion_stock_snapshot');
+        $pdo->exec('DELETE FROM refresh_tokens');
+        // l'expéditeur des courriels d'un site neuf est posé d'après SA fiche (SiteDefaultsService) : jamais le serveur d'un autre
+        $pdo->exec('TRUNCATE email_configuration CASCADE');
+        // la fiche d'un site neuf est créée pour lui : ni la fiche d'un autre, ni son adresse, ses réseaux, ses réservations
+        $pdo->exec('TRUNCATE entreprise CASCADE');
+        $foreign = (int) $pdo->query('SELECT COUNT(*) FROM "user" WHERE roles::text NOT LIKE \'%"ROLE_SUPER_ADMIN"%\'')->fetchColumn();
+        if ($foreign > 0) {
+            throw new \RuntimeException(sprintf('Le site de référence porte %d compte(s) qui ne sont pas ceux de la plateforme : création refusée.', $foreign));
         }
     }
 

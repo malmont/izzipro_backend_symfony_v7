@@ -18,6 +18,17 @@ final class AgencyException extends \RuntimeException
         'AGENCY_STATE' => 'Ce geste ne s\'applique pas à l\'état de l\'agence.',
         'AGENCY_MEMBER_NOT_FOUND' => 'Aucun compte du site d\'attache ne porte cette adresse.',
         'AGENCY_SCOPE' => 'Cette route n\'est ouverte que sur le site d\'attache d\'une agence.',
+        // lot AG-2 : création d'un site par l'agence
+        'AGENCY_MANAGER_ONLY' => 'Ce geste est réservé au responsable de l\'agence.',
+        'AGENCY_TRIAL_ENDED' => 'L\'essai de l\'agence est terminé : elle ne crée plus de site.',
+        'AGENCY_REQUEST_LIMIT' => 'Le nombre de demandes de création par jour est atteint.',
+        'AGENCY_SITE_CODE_RESERVED' => 'Ce nom de site est réservé.',
+        'AGENCY_SITE_CODE_TAKEN' => 'Ce nom de site est déjà pris.',
+        'AGENCY_REQUEST_NOT_FOUND' => 'Demande de création introuvable.',
+        'AGENCY_SITE_NOT_CREATED' => 'Ce site n\'a pas été créé par l\'agence : elle ne règle ni ses modules ni ses comptes.',
+        'AGENCY_MODULE_UNKNOWN' => 'Module inconnu.',
+        'AGENCY_MODULE_HELD' => 'Le site tient déjà ce module d\'une autre source : l\'agence ne le change pas.',
+        'AGENCY_LIMITS' => 'La limite de sites est inférieure au nombre de sites déjà gérés.',
     ];
 
     /** @param array<string, mixed> $extra */
