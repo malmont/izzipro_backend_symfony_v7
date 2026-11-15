@@ -329,8 +329,10 @@ Test : `tests/Functional/Admin/PlatformAiCreditsTest.php`.
   louables sans règles ni tarif, abonnements sans formule, avis en attente, commandes incomplètes > 24 h, payées non expédiées > 3 jours,
   en transit > 10 jours, paiements autorisés non capturés, comptes sans courriel. Rouge = bloque, orange = à regarder ; chaque ligne mène à
   l'écran. Outil de l'assistant `get_controls`. Test : `tests/Functional/Admin/ControlsConsolePageTest.php`.
-- **Point hebdomadaire** (`app:site:weekly-digest`, `ops/systemd/site-weekly-digest.{service,timer}` le lundi 07:00 UTC) : courriel de la
-  plateforme au courriel de la fiche Entreprise de chaque site, seulement s'il y a quelque chose à dire (`--always`, `--tenant`, `--dry-run`) :
+- **Point hebdomadaire**, devenu le résumé de la semaine au lot NOTIF-2 (15/11/2026, `docs/notifications-courriels.md` § 6) : il part le
+  lundi à partir de 8 h du magasin, au passage horaire des notifications, à chaque administrateur du site (plus à l'adresse de la fiche
+  Entreprise), avec les courriels de suivi retenus de la semaine. L'ancien minuteur `site-weekly-digest.timer` ne sert plus ;
+  `app:site:weekly-digest` reste pour un lancement à la main (`--tenant`, `--dry-run`, `--force`, `--always`). Contenu du point :
   étapes indispensables restantes, commandes à traiter, contrôles en défaut, crédits IA restants (≤ 20 %), alertes caisse ouvertes
   (`pos_health_alert.resolved_at IS NULL`). Gabarit `emails/weekly_digest.html.twig`. Test : `tests/Functional/Admin/WeeklyDigestCommandTest.php`.
 - **Aide intégrée** (`docs/aide/<clé>.md` avec en-tête key, title, summary, screen, steps, settings ; `Services/Help/HelpCatalogService`,

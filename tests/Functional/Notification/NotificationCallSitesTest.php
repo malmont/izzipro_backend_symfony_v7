@@ -113,7 +113,7 @@ class NotificationCallSitesTest extends WebTestCase
         $this->db()->executeStatement("UPDATE notification_log SET sent_at = NOW() - INTERVAL '120 days' WHERE recipient = ?", [$to]);
         $run = function (): string {
             $tester = new CommandTester((new Application(static::$kernel))->find('app:gestion:notifications:envoyer'));
-            $tester->execute(['--tenant' => MV_TEST_TENANT_CODE]);
+            $tester->execute(['--tenant' => MV_TEST_TENANT_CODE, '--at' => '2031-09-10 15:00']); // un mercredi : pas de résumé de la semaine
             static::getContainer()->get(TenantEntityManagerProvider::class)->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
 
             return $tester->getDisplay();
@@ -129,6 +129,35 @@ class NotificationCallSitesTest extends WebTestCase
         $before = count($this->getMailerMessages());
         $this->assertStringNotContainsString('courriel(s) de suivi retenus', $run());
         $this->assertCount($before, $this->getMailerMessages());
+    }
+
+    public function testTheHourlyCommandSendsTheWeeklySummaryOnMondayToTheAdministrators(): void
+    {
+        $gate = static::getContainer()->get(NotificationGate::class);
+        $this->db()->executeStatement("UPDATE entreprise SET notification_level = 'essential'");
+        $admin = $this->user(['ROLE_ADMIN']);
+        $tag = bin2hex(random_bytes(3));
+        $gate->record(Catalog::ORDER_TO_SHIP, "contact-$tag@example.invalid", null, NotificationGate::STATUS_HELD, "Commande $tag de la semaine", [], '2031-09-03', NotificationGate::HELD_WEEKLY);
+        $run = function (string $at): string {
+            $tester = new CommandTester((new Application(static::$kernel))->find('app:gestion:notifications:envoyer'));
+            $tester->execute(['--tenant' => MV_TEST_TENANT_CODE, '--at' => $at]);
+            static::getContainer()->get(TenantEntityManagerProvider::class)->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+
+            return $tester->getDisplay();
+        };
+        // Un mardi : rien. Le lundi suivant, au premier passage du matin du magasin (les tests n'ont pas la règle des 8 h) : le résumé part
+        $before = count($this->getMailerMessages());
+        $this->assertStringNotContainsString('résumé de la semaine', $run('2031-09-09 15:00'));
+        $this->assertCount($before, $this->getMailerMessages());
+        $this->assertStringContainsString('résumé de la semaine envoyé', $run('2031-09-15 05:30'));
+        $mine = array_values(array_filter(array_slice($this->getMailerMessages(), $before), fn ($m) => $m->getTo()[0]->getAddress() === $admin->getEmail()));
+        $this->assertCount(1, $mine);
+        $this->assertStringContainsString("Commande $tag de la semaine", (string) $mine[0]->getHtmlBody());
+        $this->assertSame('sent', $this->db()->fetchOne('SELECT status FROM notification_log WHERE title = ?', ["Commande $tag de la semaine"]));
+        // Passage suivant du même lundi : personne n'est servi deux fois
+        $before = count($this->getMailerMessages());
+        $run('2031-09-15 06:30');
+        $this->assertSame([], array_filter(array_slice($this->getMailerMessages(), $before), fn ($m) => $m->getTo()[0]->getAddress() === $admin->getEmail()));
     }
 
     public function testNothingIsLostWhenTheDecisionBreaksOrTheSummaryCannotBeSent(): void

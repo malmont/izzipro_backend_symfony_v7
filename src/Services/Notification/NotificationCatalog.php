@@ -53,7 +53,7 @@ final class NotificationCatalog
         self::BOOK_PAYMENT_RECEIVED => [self::FOLLOWUP, self::TOPIC_PAYMENTS],
         self::LOSS_DIGEST => [self::FOLLOWUP, self::TOPIC_LOSS],
         self::ENTITLEMENT_FOLLOWUP => [self::FOLLOWUP, self::TOPIC_ENTITLEMENTS], // essai commencé, droit accordé à la main ou à l'essai, fin d'essai dans 7 jours, accès rétabli, demande enregistrée ou refusée
-        self::WEEKLY_DIGEST => [self::FOLLOWUP, null], // le résumé lui-même (lot NOTIF-2) : type coupable dans « Avancé »
+        self::WEEKLY_DIGEST => [self::FOLLOWUP, null], // le résumé de la semaine lui-même (NotificationWeeklyService) : type coupable dans « Avancé »
         self::FOLLOWUP_SUMMARY => [self::FOLLOWUP, null],
         // Urgent
         self::ENTITLEMENT_URGENT => [self::URGENT, null], // paiement en attente, accès suspendu, accès terminé, fin d'essai demain
@@ -92,7 +92,6 @@ final class NotificationCatalog
 
     /** @var array<string, list<string>> fichier de `src/` qui envoie un courriel → les types qu'il envoie */
     public const SENDERS = [
-        'src/Command/SiteWeeklyDigestCommand.php' => [self::WEEKLY_DIGEST],
         'src/Command/TestTenantSmtpCommand.php' => ['test_email'],
         'src/Controller/Account/RegistrationController.php' => ['email_verification'],
         'src/Controller/Account/ResetPasswordController.php' => ['password_reset'],
@@ -108,6 +107,7 @@ final class NotificationCatalog
         'src/Services/ContactService/ContactMailerService.php' => ['customer_message', 'customer_acknowledgement'],
         'src/Services/FormSubmissionService/FormSubmissionNotifier.php' => ['customer_message', 'customer_acknowledgement'],
         'src/Services/Notification/NotificationSummaryService.php' => [self::FOLLOWUP_SUMMARY],
+        'src/Services/Notification/NotificationWeeklyService.php' => [self::WEEKLY_DIGEST],
         'src/Services/OrderService/OrderMailerService.php' => ['order_confirmation', self::ORDER_TO_SHIP, 'order_notice'],
         'src/Services/OrderService/OrderShipmentService.php' => ['order_shipped'],
         'src/Services/OtpService.php' => ['otp_code'],

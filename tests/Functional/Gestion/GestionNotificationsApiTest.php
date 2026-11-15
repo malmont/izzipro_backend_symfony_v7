@@ -45,7 +45,15 @@ class GestionNotificationsApiTest extends WebTestCase
         foreach (['push_device', 'notification_log', 'notification_preference'] as $table) { // tables propres à ce test
             $conn->executeStatement("DELETE FROM $table");
         }
+        // lot NOTIF-2 : ces tests portent sur la règle « une notification par jour », celle du niveau « Normal » (les sites de test sont à « Tout »)
+        $conn->executeStatement("UPDATE entreprise SET notification_level = 'normal'");
         $this->login();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->em()->getConnection()->executeStatement("UPDATE entreprise SET notification_level = 'all'"); // le niveau des sites de test (tests/bootstrap.php)
+        parent::tearDown();
     }
 
     public function testDevicesRegistrationIsIdempotentAndScoped(): void

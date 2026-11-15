@@ -238,8 +238,14 @@ notification_summary:
         support: '%site% : %count% nouveauté(s) à l''assistance'
         entitlements: '%site% : %count% nouveauté(s) sur vos fonctionnalités'
         management: '%site% : %count% nouveauté(s) de gestion'
+        general: '%site% : %count% nouveauté(s) à voir'
     title: 'Depuis votre dernier courriel'
     intro: 'Voici ce qui s''est passé depuis votre dernier courriel sur ce sujet :'
     more: 'et %count% autre(s), à lire dans votre espace d''administration.'
     button: 'Ouvrir mon espace d''administration'
     why: 'Vous recevez au plus un courriel par jour et par sujet. Vous pouvez changer ce réglage dans « Notifications ».'
+
+weekly_digest:
+    held_title: 'Les courriels de suivi de la semaine'
+    held_more: 'et %count% autre(s), à lire dans votre espace d''administration.'
+    held_why: 'Au niveau « Essentiel », les courriels de suivi ne partent pas un par un : ils sont réunis ici chaque lundi. Vous pouvez changer ce réglage dans « Notifications ».'

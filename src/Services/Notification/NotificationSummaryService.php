@@ -72,10 +72,10 @@ class NotificationSummaryService
         $conn = $this->emProvider->getEntityManager()->getConnection();
         $conn->executeStatement("DELETE FROM notification_log WHERE channel = 'email' AND status <> 'held' AND sent_at < NOW() - INTERVAL '" . self::RETENTION_DAYS . " days'");
         // le plus ancien retenu d'abord : quand le plafond du jour arrête la sortie, ce n'est jamais toujours le même sujet qui attend
-        $groups = $conn->fetchAllAssociative("SELECT recipient, topic, MIN(id) AS first FROM notification_log WHERE channel = 'email' AND status = 'held' AND recipient IS NOT NULL AND topic IS NOT NULL GROUP BY recipient, topic ORDER BY first");
+        $groups = $conn->fetchAllAssociative("SELECT recipient, topic, MIN(id) AS first FROM notification_log WHERE channel = 'email' AND status = 'held' AND recipient IS NOT NULL GROUP BY recipient, topic ORDER BY first");
         foreach ($groups as $group) {
             $recipient = (string) $group['recipient'];
-            $topic = (string) $group['topic'];
+            $topic = $group['topic'] !== null ? (string) $group['topic'] : null; // null : courriels de suivi sans sujet, réunis entre eux
             $who = $this->levels->forAddress($recipient);
             if ($who['level'] === NotificationLevel::ESSENTIAL) {
                 continue; // résumé de la semaine
@@ -83,7 +83,7 @@ class NotificationSummaryService
             $conn->beginTransaction();
             try {
                 $rows = $conn->fetchAllAssociative(
-                    "SELECT id, kind, title, store_day, subject FROM notification_log WHERE channel = 'email' AND status = 'held' AND recipient = ? AND topic = ? ORDER BY id FOR UPDATE SKIP LOCKED",
+                    "SELECT id, kind, title, store_day, subject FROM notification_log WHERE channel = 'email' AND status = 'held' AND recipient = ? AND topic IS NOT DISTINCT FROM ? ORDER BY id FOR UPDATE SKIP LOCKED",
                     [$recipient, $topic]
                 );
                 $keep = [];
@@ -113,23 +113,23 @@ class NotificationSummaryService
     }
 
     /** Le courriel de sortie compte comme les autres : plafond du jour, et un seul par sujet et par jour au niveau « Normal » */
-    private function allowed(string $recipient, string $topic, string $level, string $day): bool
+    private function allowed(string $recipient, ?string $topic, string $level, string $day): bool
     {
         if ($this->gate->sentToday($recipient, $day) >= $this->gate->dailyCap()) {
             return false;
         }
 
-        return $level !== NotificationLevel::NORMAL || $this->gate->sentToday($recipient, $day, $topic) === 0;
+        return $level !== NotificationLevel::NORMAL || $topic === null || $this->gate->sentToday($recipient, $day, $topic) === 0;
     }
 
     /** @param list<string> $titles */
-    private function send(string $recipient, string $topic, array $titles): bool
+    private function send(string $recipient, ?string $topic, array $titles): bool
     {
         $language = $this->locale->language(null);
         $code = (string) $this->tenants->getCurrentTenantCode();
         $host = $code !== '' ? (string) ($this->hosts->describe($code)['host'] ?? '') : '';
         $t = fn (string $key, array $params = []) => $this->translator->trans('notification_summary.' . $key, $params, 'emails', $language);
-        [$screen, $params] = self::SCREENS[$topic] ?? [null, []];
+        [$screen, $params] = self::SCREENS[$topic ?? ''] ?? [null, []];
         $more = max(0, count($titles) - self::MAX_LINES);
         try {
             return $this->mailer->sendTemplatedEmail($recipient, $this->subject($topic, count($titles)), self::TEMPLATE, [
@@ -143,8 +143,8 @@ class NotificationSummaryService
         }
     }
 
-    private function subject(string $topic, int $count): string
+    private function subject(?string $topic, int $count): string
     {
-        return $this->translator->trans('notification_summary.subject.' . $topic, ['%site%' => $this->siteName->name(), '%count%' => $count], 'emails', $this->locale->language(null));
+        return $this->translator->trans('notification_summary.subject.' . ($topic ?? 'general'), ['%site%' => $this->siteName->name(), '%count%' => $count], 'emails', $this->locale->language(null));
     }
 }

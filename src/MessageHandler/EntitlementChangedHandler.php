@@ -7,9 +7,14 @@ use App\Message\EntitlementChangedMessage;
 use App\Services\EmailConfigurationService\EmailLocale;
 use App\Services\EmailConfigurationService\EmailSenderService;
 use App\Services\FeatureAccess\FeatureCatalog;
+use App\Services\Messenger\WorkerContext;
+use App\Services\Notification\NotificationCatalog;
+use App\Services\Notification\NotificationGate;
 use App\Services\OrderService\TaxEngine;
 use App\Services\Platform\PlatformModeService;
 use App\Services\Platform\TenantDatabaseConnector;
+use App\Services\TenantConnectionManager;
+use App\Services\TenantEntityManagerProvider;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Contracts\Translation\TranslatorInterface;
@@ -17,8 +22,15 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 /**
  * Courriel au contact du site quand un droit d'usage change (lot 3, 04/11/2026) : sujet et textes du domaine `emails`
  * (`entitlement.*`, fr et en), langue du site, gabarit `emails/entitlement_notice.html.twig`. Le site cible est lu en SQL direct
- * (TenantDatabaseConnector) et le courriel part par le serveur de la plateforme (repli : serveur du site courant) : la connexion du site courant n'est jamais
- * basculée (le message peut être traité dans la requête d'un autre site, et un switchTenant y détacherait ses entités).
+ * (TenantDatabaseConnector) et le courriel part par le serveur de la plateforme (repli : serveur du site courant).
+ *
+ * Lot NOTIF-2 (15/11/2026) : un courriel de droits urgent ou de suivi passe par la décision d'envoi (`NotificationGate`) DU SITE
+ * CONCERNÉ : niveau du site et du destinataire, plafond, heures, journal des notifications de ce site. La décision lit le site
+ * courant ; le gestionnaire s'y place donc d'abord (`enter`). Dans un worker (le cas de la production : transport `email`,
+ * `WorkerContext`) il bascule la connexion vers le site concerné, puis la remet. Hors d'un worker (transport en direct : requête ou
+ * commande d'un AUTRE site), il ne bascule jamais (un switchTenant y détacherait les entités de l'appelant) : le courriel part alors
+ * comme avant les niveaux. Un droit acheté
+ * (`entitlement_purchase`) et l'avis à la plateforme sont envoyés tels quels.
  * Destinataire : contact de la fiche Entreprise, sinon expéditeur configuré du site, sinon premier administrateur. Jamais relancé.
  */
 #[AsMessageHandler]
@@ -27,6 +39,10 @@ final class EntitlementChangedHandler
     private const EVENTS_WITH_EMAIL = ['granted', 'trial_started', 'expiring_7', 'expiring_1', 'expired', 'grace', 'suspended', 'resumed', 'request_received', 'request_refused', 'request_new'];
     /** Événements adressés au super administrateur de la plateforme (compte présent sur chaque base) plutôt qu'au contact du site */
     private const EVENTS_TO_PLATFORM = ['request_new'];
+    /** Événements urgents : paiement en attente, accès suspendu, accès terminé, fin d'essai demain ; les autres sont du suivi */
+    private const EVENTS_URGENT = ['grace', 'suspended', 'expired', 'expiring_1'];
+    /** Sources d'un droit payé : sa confirmation est un courriel indispensable (décision C du propriétaire) */
+    private const PAID_SOURCES = ['subscription', 'purchase'];
 
     public function __construct(
         private readonly TenantDatabaseConnector $connector,
@@ -35,6 +51,10 @@ final class EntitlementChangedHandler
         private readonly PlatformModeService $platform,
         private readonly LoggerInterface $logger,
         private readonly \App\Services\TenantPublicHostResolver $hosts,
+        private readonly ?NotificationGate $gate = null,
+        private readonly ?TenantEntityManagerProvider $emProvider = null,
+        private readonly ?TenantConnectionManager $tenants = null,
+        private readonly ?WorkerContext $worker = null,
     ) {
     }
 
@@ -99,9 +119,73 @@ final class EntitlementChangedHandler
         ];
         $subject = $this->mailer->subject("entitlement.subject_$event", $params, $language);
         // serveur de la plateforme d'abord ; sans compte expéditeur de plateforme (tests, poste de développement), serveur du site courant
-        $sent = $this->mailer->sendPlatformEmail($to, $subject, 'emails/entitlement_notice.html.twig', $context)
+        $send = fn (): bool => $this->mailer->sendPlatformEmail($to, $subject, 'emails/entitlement_notice.html.twig', $context)
             || $this->mailer->sendTemplatedEmail($to, $subject, 'emails/entitlement_notice.html.twig', $context, $language, $this->host($tenant));
-        $this->logger->info(sprintf('[Entitlements] courriel %s pour %s / %s : %s', $event, $message->tenantCode, $message->featureKey, $sent ? 'envoyé' : 'non envoyé'));
+        $kind = self::kind($event, $message->payload);
+        $governed = in_array(NotificationCatalog::family($kind), [NotificationCatalog::URGENT, NotificationCatalog::FOLLOWUP], true);
+        $leave = $governed ? $this->enter($tenant) : null;
+        if ($leave === null) {
+            $outcome = $send() ? NotificationGate::STATUS_SENT : NotificationGate::STATUS_FAILED;
+        } else {
+            try {
+                $outcome = $this->gate->deliver($kind, $to, $subject, [], $send);
+            } finally {
+                $leave();
+            }
+        }
+        $this->logger->info(sprintf('[Entitlements] courriel %s pour %s / %s : %s', $event, $message->tenantCode, $message->featureKey, $outcome));
+    }
+
+    /** Le type de courriel d'un événement de droits (`NotificationCatalog`) */
+    public static function kind(string $event, array $payload): string
+    {
+        if (in_array($event, self::EVENTS_TO_PLATFORM, true)) {
+            return 'platform_feature_request';
+        }
+        if ($event === 'granted' && in_array($payload['source'] ?? null, self::PAID_SOURCES, true)) {
+            return 'entitlement_purchase';
+        }
+
+        return in_array($event, self::EVENTS_URGENT, true) ? NotificationCatalog::ENTITLEMENT_URGENT : NotificationCatalog::ENTITLEMENT_FOLLOWUP;
+    }
+
+    /**
+     * Se place sur le site concerné pour que la décision d'envoi lise SES niveaux et écrive dans SON journal. Rend de quoi revenir au
+     * site d'avant, ou null quand la décision ne peut pas être prise ici (pas de décision d'envoi, ou autre site hors d'un worker : on
+     * ne bascule jamais la connexion d'un appelant en plein travail).
+     */
+    private function enter(array $tenant): ?\Closure
+    {
+        if ($this->gate === null || $this->emProvider === null || $this->tenants === null) {
+            return null;
+        }
+        $current = (string) $this->tenants->getCurrentTenantCode();
+        if ($current === (string) $tenant['code']) {
+            return static function (): void {};
+        }
+        if ($this->worker?->inWorker() !== true) {
+            return null;
+        }
+        try {
+            // lu des paramètres, sans requête : une connexion tombée ne doit pas faire partir le courriel sans décision
+            $previous = $current !== '' ? (string) ($this->emProvider->getEntityManager()->getConnection()->getParams()['dbname'] ?? '') : '';
+            $this->emProvider->switchTenant((string) $tenant['dbname'], (string) $tenant['code']);
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf('[Entitlements] site %s : connexion impossible pour la décision d\'envoi (%s), le courriel part sans elle', $tenant['code'], $e::class));
+
+            return null;
+        }
+
+        return function () use ($previous, $current): void {
+            if ($previous === '') {
+                return;
+            }
+            try {
+                $this->emProvider->switchTenant($previous, $current);
+            } catch (\Throwable $e) {
+                $this->logger->error(sprintf('[Entitlements] retour au site %s impossible (%s)', $current, $e::class));
+            }
+        };
     }
 
     /** Hôte du site concerné, pour les adresses absolues du gabarit (avant le 15/11/2026 : le mot « emails », passé à la place d'un hôte) */

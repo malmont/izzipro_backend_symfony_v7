@@ -6,8 +6,8 @@ d'essai ou qui démarre.
 Code : `src/Services/Notification/`. Tests : `tests/Functional/Notification/`. Notifications sur téléphone : `docs/notifications-gestion.md`.
 
 Lot NOTIF-1 (codé le 15/11/2026) : classement, niveaux du site et du compte, décision d'envoi, courriels retenus et leur sortie par sujet,
-plafond, routes, EasyAdmin. Lot NOTIF-2 (à venir) : résumé de la semaine du niveau « Essentiel », courriels des droits d'un site,
-niveaux appliqués au téléphone.
+plafond, routes, EasyAdmin. Lot NOTIF-2 (codé le 15/11/2026) : résumé de la semaine, courriels des droits d'un site, niveaux
+appliqués au téléphone, courriel de suivi sans sujet (§ 6).
 
 ## 1. Trois familles de courriels
 
@@ -93,7 +93,7 @@ Un courriel retenu n'est jamais perdu. Sa ligne dit pourquoi il attend (`subject
 
 | Raison | Quand | Il sort |
 |---|---|---|
-| `weekly` | niveau « Essentiel » | dans le résumé de la semaine (lot NOTIF-2) |
+| `weekly` | niveau « Essentiel » | dans le résumé de la semaine, le lundi (§ 6) |
 | `before_hours` | avant 8 h du magasin | le jour même, à partir de 8 h |
 | `topic_done` | niveau « Normal », le sujet a déjà eu son courriel du jour | le lendemain |
 | `daily_cap` | plafond du jour atteint | le lendemain |
@@ -149,19 +149,45 @@ ensemble ou séparément ; rend la forme du `GET`. Refus : 422 `VALIDATION_FAILE
 `?channel=push` ou `?channel=email` ne rend que ce canal (l'écran du téléphone demande ainsi ses 20 lignes sans les courriels) ; sans le
 paramètre, les deux ; autre valeur : 422 `fields.channel = INVALID_VALUE`.
 
-## 6. Ce que le lot NOTIF-1 ne fait pas encore
+## 6. Le résumé de la semaine, les courriels des droits, le téléphone (lot NOTIF-2)
 
-- **Résumé de la semaine** : au niveau « Essentiel » les courriels de suivi sont retenus (`weekly`) et attendent le lot NOTIF-2. D'ici
-  là ils ne partent pas ; ils se lisent dans le journal de l'application.
-- **Point de la semaine** : son minuteur (`site-weekly-digest.timer`) est **suspendu par le propriétaire depuis le 15/11/2026**. À la
-  mise en ligne de NOTIF-2, le propriétaire le remet en marche : `sudo systemctl enable --now site-weekly-digest.timer`.
-- **Courriels des droits d'un site** (`EntitlementChangedHandler`) : classés, mais envoyés comme avant. Ce gestionnaire écrit pour un
-  site qui n'est pas le site courant ; la décision d'envoi lit le site courant. À brancher au lot NOTIF-2.
-- **Téléphone** : la règle « une notification par jour » ne change pas ; les niveaux s'y appliqueront au lot NOTIF-2.
-- **Courriel de suivi sans sujet** (le point de la semaine) : la sortie des retenus ne traite que les lignes qui ont un sujet. Sans
-  effet aujourd'hui (aucun n'est branché) ; à régler avec le point de la semaine.
+**Résumé de la semaine** (`NotificationWeeklyService`). Il réunit le point de la semaine (étapes indispensables restantes, commandes à
+traiter, contrôles en défaut, crédits IA, alertes de la caisse) et les courriels de suivi retenus au niveau « Essentiel ».
 
-Ces deux dettes sont écrites dans `NotificationCatalogGuardTest::NOT_YET_GATED`.
+- **Quand** : le lundi du magasin, à partir de 8 h et pendant 4 heures (`WINDOW_HOURS`), au passage horaire de
+  `app:gestion:notifications:envoyer` (minuteur `gestion-notifications`, déjà en marche). Un envoi en échec est retenté au passage
+  suivant de la fenêtre. Rien ne part s'il n'y a rien à dire.
+- **À qui** : chaque administrateur du site (compte vérifié), sauf au niveau « Aucune » et sauf s'il a coupé le type « résumé de la
+  semaine » (`weekly_digest`) dans « Avancé ». L'adresse de contact du site ne le reçoit que si elle est celle d'un administrateur.
+  Le compte du super administrateur de la plateforme, présent sur chaque base, n'est pas un administrateur du site : il ne reçoit
+  pas le résumé de chaque site. Personne ne reçoit deux résumés la même semaine : la preuve est la ligne `weekly_digest` du journal,
+  écrite aussitôt le courriel parti, hors de toute transaction.
+- **Les retenus** : toute ligne retenue dont le destinataire est au niveau « Essentiel » (un même titre n'est écrit qu'une fois ; un
+  administrateur ne lit pas les titres d'un type qu'il a coupé dans « Avancé »).
+  Dès qu'un administrateur a reçu le résumé, elles passent à `sent`. Si aucun administrateur ne peut le recevoir, elles passent à
+  `kept` : gardées, lisibles dans l'application. Si l'envoi échoue, elles restent retenues. Un courriel retenu après le résumé attend
+  celui de la semaine suivante.
+- **À la main** : `app:site:weekly-digest [--tenant=code] [--dry-run] [--force] [--always]`. Sans `--force`, la commande suit la
+  même règle que le passage horaire. `--dry-run` n'envoie ni n'écrit rien.
+- **L'ancien minuteur** `site-weekly-digest.timer` (lundi 07:00 UTC) est suspendu depuis le 15/11/2026 et **ne sert plus** : à cette
+  heure aucun magasin d'Amérique n'a passé 8 h. Le propriétaire n'a aucune commande à lancer.
+
+**Courriels des droits d'un site** (`EntitlementChangedHandler`). Paiement en attente, accès suspendu, accès terminé et fin d'essai
+demain sont urgents ; les autres sont du suivi (sujet `entitlements`) ; un droit acheté est indispensable ; l'avis à la plateforme est
+interne. Un courriel urgent ou de suivi passe par la décision d'envoi **du site concerné** : dans un worker (le cas de la production,
+`Services/Messenger/WorkerContext`), le gestionnaire se place sur ce site le temps de la décision, puis revient au site d'avant.
+Limite : traité en direct pour un autre site que le site courant (requête, commande, tests), il ne change jamais de site (cela
+détacherait les entités de l'appelant) et le courriel part comme avant les niveaux. Un courriel de suivi des droits retenu ne sort
+que comme titre, dans le résumé du lundi ou dans le courriel de son sujet. Après un changement de ce gestionnaire :
+`messenger:stop-workers`.
+
+**Courriel de suivi sans sujet** : la sortie des retenus réunit entre eux les courriels sans sujet (objet « nouveautés à voir »).
+
+**Téléphone** (`GestionNotificationService::notify`) : le niveau du compte, sinon du site, s'y applique. « Aucune » : rien.
+« Essentiel » : seulement l'urgent (`PUSH_URGENT` : la trésorerie critique), une par jour. « Normal » : une notification par jour,
+la règle d'avant les niveaux. « Tout » : chaque événement, au plus 3 par jour, l'urgent passant au-dessus du plafond. Ce compte est
+tenu à part de celui des courriels. **Conséquence** : tant que la plateforme est en mode demo, tous les sites sont au niveau
+« Essentiel » ; les notifications de stock bas, de budget de voyage et de facture en double ne partent donc plus sur le téléphone.
 
 ## 7. Ajouter un courriel
 
@@ -170,7 +196,7 @@ Ces deux dettes sont écrites dans `NotificationCatalogGuardTest::NOT_YET_GATED`
 3. S'il est urgent ou de suivi, l'envoyer par `NotificationGate::deliver()`.
 
 Le garde-fou `NotificationCatalogGuardTest` balaie `src/` : un fichier qui envoie un courriel sans être inscrit, ou un courriel urgent ou
-de suivi qui ne passe pas par la décision d'envoi, fait échouer la suite.
+de suivi qui ne passe pas par la décision d'envoi, fait échouer la suite. Il n'y a plus de dette écrite (`NOT_YET_GATED` est vide).
 
 ## 8. Tests
 

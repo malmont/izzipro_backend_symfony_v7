@@ -2,6 +2,7 @@
 
 namespace App\Gestion\Services;
 
+use App\Services\Notification\NotificationLevel;
 use App\Gestion\Entity\GestionDocument;
 use App\Entity\NotificationLog;
 use App\Entity\PushDevice;
@@ -29,6 +30,8 @@ class GestionNotificationService
     /** type → disponible (cash_critical et trip_budget arrivent avec B1 ; coupables dès maintenant) */
     public const TRIP_BUDGET = 'trip_budget';
     public const CASH_CRITICAL = 'cash_critical';
+    /** Notifications de téléphone urgentes : les seules qui partent au niveau « Essentiel » (lot NOTIF-2) */
+    public const PUSH_URGENT = [self::CASH_CRITICAL];
     /** Prévention des pertes (lot L1-b) : courriel de résumé du jour, « N nouveaux constats, X en jeu ». Envoyé par le module, par COURRIEL :
      *  il n'entre pas dans la règle « une notification par jour » du téléphone. Depuis NOTIF-1 il suit le niveau des courriels de suivi
      *  et s'écrit au journal des notifications sur le canal `email` (`docs/notifications-courriels.md`). */
@@ -257,7 +260,7 @@ class GestionNotificationService
     {
         $now ??= new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
         $day = $this->clock->day($now);
-        if (!($this->log()->preferences($userId)[$kind] ?? true) || $this->log()->usedToday($userId, $day) || !$this->isAdmin($userId)) {
+        if (!($this->log()->preferences($userId)[$kind] ?? true) || !$this->isAdmin($userId) || !$this->levelAllows($userId, $kind, $day)) {
             return null;
         }
         $devices = $this->devices()->activeFor($userId, self::PLATFORM);
@@ -297,6 +300,27 @@ class GestionNotificationService
         }
 
         return $status;
+    }
+
+    /**
+     * Lot NOTIF-2 : le niveau du compte (sinon du site) s'applique au téléphone. « Aucune » : rien. « Essentiel » : seulement l'urgent
+     * (`PUSH_URGENT`), une par jour. « Normal » : une notification par jour, la règle d'avant les niveaux. « Tout » : chaque événement,
+     * au plus `NotificationLevel::DAILY_CAP` par jour, l'urgent passant au-dessus du plafond. Ce compte est tenu à part de celui des
+     * courriels.
+     */
+    private function levelAllows(int $userId, string $kind, string $day): bool
+    {
+        $level = $this->levels?->forUser($userId)['value'] ?? NotificationLevel::NORMAL;
+        if ($level === NotificationLevel::NONE || ($level === NotificationLevel::ESSENTIAL && !in_array($kind, self::PUSH_URGENT, true))) {
+            return false;
+        }
+
+        if ($level === NotificationLevel::ALL) {
+            // comme pour les courriels : au niveau « Tout », une notification urgente part même quand le plafond du jour est atteint
+            return in_array($kind, self::PUSH_URGENT, true) || $this->log()->countToday($userId, $day) < NotificationLevel::DAILY_CAP;
+        }
+
+        return $this->log()->countToday($userId, $day) < 1;
     }
 
     private function isAdmin(int $userId): bool

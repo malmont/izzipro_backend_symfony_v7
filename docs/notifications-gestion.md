@@ -41,6 +41,9 @@ Code : `Services/NotificationService/` (`PushSenderInterface`, `NotConfiguredPus
   (notice aux salariés exigée et non confirmée, ou retirée). Il n'entre pas dans
   la règle « une notification par jour » du téléphone. Depuis le lot NOTIF-1 (15/11/2026) il suit le niveau des courriels de suivi de
   chaque administrateur et s'écrit dans `notification_log` sur le canal `email` (`docs/notifications-courriels.md`).
+- **Niveaux sur le téléphone (lot NOTIF-2, 15/11/2026)** : le niveau du compte, sinon du site, règle aussi les notifications de
+  téléphone. « Aucune » : rien. « Essentiel » : seulement la trésorerie critique (`cash_critical`). « Normal » : une notification
+  par jour, la règle d'origine. « Tout » : chaque événement, au plus 3 par jour. Rien ne change dans les routes ni dans les formes.
 - `GET /api/gestion/notifications/journal?limit=20` (100 au plus) → `[{ id, kind, title, body, action: { screen, params }, status, sentAt,
   channel, topic }]` ; depuis NOTIF-1 le journal porte aussi les courriels du compte (`channel: email`), dont ceux qui sont retenus
   (`status: held`) ou gardés sans envoi (`kept`) : une application qui ne veut que le téléphone appelle `?channel=push` (`?channel=email` pour les seuls courriels ; autre valeur : 422)

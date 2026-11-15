@@ -447,12 +447,251 @@ class NotificationLevelsTest extends WebTestCase
         $this->assertSame([1000000, 0], [$container->dailyCap(), $container->fromHour()], 'le service des tests porte les valeurs relevées');
     }
 
+    public function testTheWeeklySummaryLeavesOnMondayMorningForEachAdministratorWithTheHeldEmails(): void
+    {
+        $gate = $this->gate();
+        $weekly = $this->weekly($gate);
+        $this->siteLevel(NotificationLevel::ESSENTIAL);
+        $anna = $this->user(['ROLE_ADMIN']);
+        $bruno = $this->user(['ROLE_ADMIN']); // a coupé le résumé de la semaine
+        $this->db()->executeStatement("INSERT INTO notification_preference (user_id, kind, enabled, updated_at) VALUES (?, 'weekly_digest', false, NOW())", [$bruno->getId()]);
+        $chloe = $this->user(['ROLE_ADMIN']); // a coupé le résumé des pertes : elle n'en lit pas les titres
+        $this->db()->executeStatement("INSERT INTO notification_preference (user_id, kind, enabled, updated_at) VALUES (?, 'loss_digest', false, NOW())", [$chloe->getId()]);
+        $dana = $this->user(['ROLE_ADMIN']); // a choisi « Normal » : ses retenus sortent au passage horaire, pas dans le résumé
+        $this->db()->executeStatement("UPDATE \"user\" SET notification_level = 'normal' WHERE id = ?", [$dana->getId()]);
+        $owner = $this->user(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']); // le compte de la plateforme, présent sur chaque base
+        $contact = $this->address('contact'); // adresse de contact du site, sans compte
+        $send = fn (): bool => true;
+        $this->assertSame(NotificationGate::STATUS_HELD, $gate->deliver(Catalog::ORDER_TO_SHIP, (string) $dana->getEmail(), "Avant 8 h {$this->tag}", [], $send, $this->moment('2031-09-08 06:00')));
+        // Mercredi : deux courriels de suivi retenus pour le résumé de la semaine (le même titre pour deux destinataires n'est écrit qu'une fois)
+        $this->assertSame(NotificationGate::STATUS_HELD, $gate->deliver(Catalog::ORDER_TO_SHIP, $contact, "Commande {$this->tag} à expédier", [], $send, $this->moment('2031-09-03 11:00')));
+        $this->assertSame(NotificationGate::STATUS_HELD, $gate->deliver(Catalog::LOSS_DIGEST, (string) $anna->getEmail(), "Pertes {$this->tag}", [], $send, $this->moment('2031-09-03 12:00')));
+        $this->assertSame(NotificationGate::STATUS_HELD, $gate->deliver(Catalog::LOSS_DIGEST, (string) $bruno->getEmail(), "Pertes {$this->tag}", [], $send, $this->moment('2031-09-03 12:00')));
+
+        // Ni le dimanche, ni le lundi avant 8 h, ni le lundi après la fenêtre, ni un mardi
+        foreach (['2031-09-07 10:00', '2031-09-08 07:59', '2031-09-08 12:00', '2031-09-09 09:00'] as $when) {
+            $this->assertFalse($weekly->sendIfDue($this->moment($when))['ran'], $when);
+        }
+        $this->assertSame(4, (int) $this->db()->fetchOne("SELECT COUNT(*) FROM notification_log WHERE status = 'held' AND title LIKE ?", ["%{$this->tag}%"]));
+
+        // Lundi 8 h : un courriel par administrateur qui l'accepte, avec les retenus ; Bruno, qui l'a coupé, ne reçoit rien
+        $before = count($this->getMailerMessages());
+        $run = $weekly->sendIfDue($this->moment('2031-09-08 08:00'));
+        $this->assertTrue($run['ran']);
+        $this->assertContains((string) $anna->getEmail(), $run['recipients']);
+        $this->assertNotContains((string) $bruno->getEmail(), $run['recipients']);
+        $this->assertNotContains($contact, $run['recipients'], 'l\'adresse de contact ne reçoit le résumé que si elle est celle d\'un administrateur');
+        $this->assertNotContains((string) $owner->getEmail(), $run['recipients'], 'le super administrateur de la plateforme n\'est pas un administrateur du site');
+        $this->assertSame([3, 3], [$run['held'], $run['released']], 'le retenu d\'un destinataire au niveau « Normal » n\'est pas pris');
+        $mine = array_values(array_filter(array_slice($this->getMailerMessages(), $before), fn ($m) => $m->getTo()[0]->getAddress() === $anna->getEmail()));
+        $this->assertCount(1, $mine);
+        $html = (string) $mine[0]->getHtmlBody();
+        $this->assertStringContainsString('point de la semaine', (string) $mine[0]->getSubject());
+        $this->assertStringContainsString("Commande {$this->tag} à expédier", $html);
+        $this->assertSame(1, substr_count($html, "Pertes {$this->tag}"), 'un même titre retenu pour deux destinataires n\'est écrit qu\'une fois');
+        $this->assertStringContainsString('Les courriels de suivi de la semaine', $html);
+        $this->assertStringNotContainsString("Avant 8 h {$this->tag}", $html);
+        $hers = array_values(array_filter(array_slice($this->getMailerMessages(), $before), fn ($m) => $m->getTo()[0]->getAddress() === $chloe->getEmail()));
+        $this->assertCount(1, $hers);
+        $this->assertStringContainsString("Commande {$this->tag} à expédier", (string) $hers[0]->getHtmlBody());
+        $this->assertStringNotContainsString("Pertes {$this->tag}", (string) $hers[0]->getHtmlBody(), 'un type coupé dans « Avancé » ne se lit pas dans le résumé');
+        $this->assertSame(["Avant 8 h {$this->tag}"], $this->db()->fetchFirstColumn("SELECT title FROM notification_log WHERE status = 'held'"), 'il attend le passage horaire, pas le résumé');
+        $this->assertSame(3, (int) $this->db()->fetchOne("SELECT COUNT(*) FROM notification_log WHERE status = 'sent' AND released_at IS NOT NULL AND title LIKE ?", ["%{$this->tag}%"]));
+        $this->assertSame(1, (int) $this->db()->fetchOne("SELECT COUNT(*) FROM notification_log WHERE kind = 'weekly_digest' AND status = 'sent' AND recipient = ? AND store_day = '2031-09-08'", [$anna->getEmail()]));
+        $this->assertSame(0, (int) $this->db()->fetchOne("SELECT COUNT(*) FROM notification_log WHERE kind = 'weekly_digest' AND recipient = ?", [$bruno->getEmail()]));
+
+        // Passage suivant du même lundi, puis lancement à la main dans la semaine : personne n'a deux résumés la même semaine
+        $gate->deliver(Catalog::ORDER_TO_SHIP, $contact, "Seconde commande {$this->tag}", [], $send, $this->moment('2031-09-08 08:30'));
+        $before = count($this->getMailerMessages());
+        $again = $weekly->sendIfDue($this->moment('2031-09-08 09:00'));
+        $this->assertSame([true, 0, 0], [$again['ran'], $again['emails'], $again['released']]);
+        $forced = $weekly->sendIfDue($this->moment('2031-09-10 15:00'), true, true);
+        $this->assertSame([true, 0], [$forced['ran'], $forced['emails']]);
+        $this->assertCount($before, $this->getMailerMessages());
+        $this->assertSame(1, (int) $this->db()->fetchOne("SELECT COUNT(*) FROM notification_log WHERE status = 'held' AND recipient = ?", [$contact]), 'retenu après le résumé : il attend celui de la semaine suivante');
+
+        // Lundi suivant : il part ; un essai à blanc avant n'envoie ni n'écrit rien
+        $dry = $weekly->sendIfDue($this->moment('2031-09-15 08:00'), false, false, true);
+        $this->assertSame([0, 0, 1], [$dry['emails'], $dry['released'], $dry['held']]);
+        $this->assertContains((string) $anna->getEmail(), $dry['recipients']);
+        $this->assertSame(1, (int) $this->db()->fetchOne("SELECT COUNT(*) FROM notification_log WHERE kind = 'weekly_digest' AND recipient = ?", [$anna->getEmail()]), 'un essai à blanc n\'écrit rien');
+        $next = $weekly->sendIfDue($this->moment('2031-09-15 08:00'));
+        $this->assertSame(1, $next['released']);
+        $this->assertContains((string) $anna->getEmail(), $next['recipients']);
+    }
+
+    public function testHeldEmailsAreKeptWhenNoAdministratorTakesTheWeeklySummary(): void
+    {
+        $gate = $this->gate();
+        // Le site est au niveau « Aucune » ; seule Carla a choisi « Essentiel », mais elle a coupé le résumé de la semaine
+        $this->siteLevel(NotificationLevel::NONE);
+        $carla = $this->user(['ROLE_ADMIN']);
+        $this->db()->executeStatement("UPDATE \"user\" SET notification_level = 'essential' WHERE id = ?", [$carla->getId()]);
+        $this->assertSame(NotificationGate::STATUS_HELD, $gate->deliver(Catalog::ORDER_TO_SHIP, (string) $carla->getEmail(), 'Commande sans résumé', [], fn (): bool => true, $this->moment('2031-10-01 11:00')));
+        $this->db()->executeStatement("INSERT INTO notification_preference (user_id, kind, enabled, updated_at) VALUES (?, 'weekly_digest', false, NOW())", [$carla->getId()]);
+        $before = count($this->getMailerMessages());
+        $run = $this->weekly($gate)->sendIfDue($this->moment('2031-10-06 08:00'));
+        $this->assertSame([true, 0, 0, 1, []], [$run['ran'], $run['emails'], $run['released'], $run['kept'], $run['recipients']]);
+        $this->assertCount($before, $this->getMailerMessages());
+        $this->assertSame(['kept' => 1], $this->statuses((string) $carla->getEmail()), 'gardé, lisible dans l\'application, jamais envoyé');
+    }
+
+    public function testAnAddressIsCountedWhateverItsCaseAndAHeldEmailWithoutTopicLeavesToo(): void
+    {
+        $gate = $this->gate();
+        $send = fn (): bool => true;
+        // Niveau « Tout » : trois courriels à une adresse écrite avec des majuscules, le quatrième bute sur le plafond même écrit autrement
+        $this->siteLevel(NotificationLevel::ALL);
+        $mixed = 'Majuscules-' . $this->tag . '@Example.INVALID';
+        foreach ([Catalog::ORDER_TO_SHIP, Catalog::BOOKING_NEW, Catalog::BOOK_PAYMENT_RECEIVED] as $kind) {
+            $this->assertSame(NotificationGate::STATUS_SENT, $gate->deliver($kind, $mixed, "Courriel $kind", [], $send, $this->moment('2031-11-03 10:00')));
+        }
+        $this->assertSame(NotificationGate::STATUS_HELD, $gate->deliver(Catalog::LOSS_DIGEST, mb_strtolower($mixed), 'Quatrième', [], $send, $this->moment('2031-11-03 11:00')));
+        $this->assertSame(['daily_cap'], $this->reasons(mb_strtolower($mixed)));
+        $this->assertSame(4, $this->rows(mb_strtolower($mixed)), 'les quatre lignes portent l\'adresse en minuscules');
+        $this->assertSame(1, $gate->heldCount($mixed));
+
+        // Niveau « Normal » : un courriel de suivi sans sujet retenu avant 8 h sort au premier passage, comme les autres
+        $this->siteLevel(NotificationLevel::NORMAL);
+        $to = $this->address('sans-sujet');
+        $this->assertSame(NotificationGate::STATUS_HELD, $gate->deliver(Catalog::WEEKLY_DIGEST, $to, 'Suivi sans sujet', [], $send, $this->moment('2031-11-04 06:00')));
+        $before = count($this->getMailerMessages());
+        $out = $this->summary($gate)->releaseDue($this->moment('2031-11-04 08:00'));
+        $this->assertGreaterThanOrEqual(1, $out['released']);
+        $mine = array_values(array_filter(array_slice($this->getMailerMessages(), $before), fn ($m) => $m->getTo()[0]->getAddress() === $to));
+        $this->assertCount(1, $mine);
+        $this->assertStringContainsString('Suivi sans sujet', (string) $mine[0]->getHtmlBody());
+        $this->assertStringContainsString('nouveauté(s) à voir', (string) $mine[0]->getSubject());
+        $this->assertSame(0, $gate->heldCount($to));
+    }
+
+    public function testThePhoneFollowsTheLevelNoneNothingEssentialOnlyTheUrgentNormalOneADayAllThree(): void
+    {
+        \App\Tests\Fake\FakePushSender::reset();
+        $admin = $this->user(['ROLE_ADMIN']);
+        $id = (int) $admin->getId();
+        $this->json('POST', '/api/notifications/appareils', ['token' => 'niveau-' . $this->tag, 'platform' => 'admin', 'locale' => 'fr'], $admin, 201);
+        $service = static::getContainer()->get(GestionNotificationService::class);
+        $push = fn (string $kind, string $when): ?string => $service->notify($id, $kind, ['%count%' => 2, '%amount%' => '10 $', '%date%' => '1 déc.', '%place%' => 'Lyon'], ['screen' => 'stock.low', 'params' => []], [], $this->moment($when));
+        $count = fn (): int => (int) $this->db()->fetchOne("SELECT COUNT(*) FROM notification_log WHERE channel = 'push' AND user_id = ?", [$id]);
+
+        $this->siteLevel(NotificationLevel::NONE);
+        $this->assertNull($push(GestionNotificationService::CASH_CRITICAL, '2031-12-01 10:00'));
+        $this->assertNull($push(GestionNotificationService::LOW_STOCK, '2031-12-01 10:00'));
+        $this->assertSame(0, $count());
+
+        $this->siteLevel(NotificationLevel::ESSENTIAL);
+        $this->assertNull($push(GestionNotificationService::LOW_STOCK, '2031-12-02 10:00'), 'au niveau « Essentiel », le stock bas ne part pas sur le téléphone');
+        $this->assertSame('sent', $push(GestionNotificationService::CASH_CRITICAL, '2031-12-02 10:00'), 'la trésorerie critique est urgente');
+        $this->assertNull($push(GestionNotificationService::CASH_CRITICAL, '2031-12-02 11:00'), 'une seule par jour');
+
+        $this->siteLevel(NotificationLevel::NORMAL);
+        $this->assertSame(NotificationGate::STATUS_SENT, $this->gate()->deliver(Catalog::ORDER_TO_SHIP, (string) $admin->getEmail(), 'Courriel du jour', [], fn (): bool => true, $this->moment('2031-12-03 09:00')));
+        $this->assertSame('sent', $push(GestionNotificationService::LOW_STOCK, '2031-12-03 10:00'), 'un courriel parti le même jour ne prend pas la place de la notification du téléphone');
+        $this->assertNull($push(GestionNotificationService::TRIP_BUDGET, '2031-12-03 11:00'), 'au niveau « Normal », une notification par jour');
+
+        $this->siteLevel(NotificationLevel::ALL);
+        foreach ([GestionNotificationService::LOW_STOCK, GestionNotificationService::TRIP_BUDGET, GestionNotificationService::DUPLICATE_INVOICE] as $kind) {
+            $this->assertSame('sent', $push($kind, '2031-12-04 10:00'), $kind);
+        }
+        $this->assertNull($push(GestionNotificationService::LOW_STOCK, '2031-12-04 12:00'), 'au niveau « Tout », au plus trois par jour');
+        $this->assertSame('sent', $push(GestionNotificationService::CASH_CRITICAL, '2031-12-04 13:00'), 'l\'urgent passe au-dessus du plafond');
+        $this->assertSame(6, $count());
+
+        // Le niveau du compte passe avant celui du site
+        $this->db()->executeStatement("UPDATE \"user\" SET notification_level = 'none' WHERE id = ?", [$id]);
+        $this->assertNull($push(GestionNotificationService::CASH_CRITICAL, '2031-12-05 10:00'));
+        $this->db()->executeStatement("DELETE FROM notification_log WHERE channel = 'push' AND user_id = ?", [$id]);
+    }
+
+    public function testEntitlementEmailsFollowTheLevelOfTheSiteTheyAreAbout(): void
+    {
+        $handler = static::getContainer()->get(\App\MessageHandler\EntitlementChangedHandler::class);
+        $this->assertSame(
+            ['platform_feature_request', 'entitlement_purchase', 'entitlement_purchase', Catalog::ENTITLEMENT_FOLLOWUP, Catalog::ENTITLEMENT_FOLLOWUP, Catalog::ENTITLEMENT_FOLLOWUP, Catalog::ENTITLEMENT_URGENT, Catalog::ENTITLEMENT_URGENT, Catalog::ENTITLEMENT_URGENT, Catalog::ENTITLEMENT_URGENT, Catalog::ENTITLEMENT_FOLLOWUP],
+            [$handler::kind('request_new', []), $handler::kind('granted', ['source' => 'purchase']), $handler::kind('granted', ['source' => 'subscription']), $handler::kind('granted', ['source' => 'manual']),
+                $handler::kind('trial_started', ['source' => 'trial']), $handler::kind('expiring_7', []), $handler::kind('expiring_1', []), $handler::kind('expired', []), $handler::kind('grace', []), $handler::kind('suspended', []), $handler::kind('resumed', [])]
+        );
+        $contact = $this->address('droits');
+        $previous = $this->db()->fetchOne('SELECT email FROM entreprise ORDER BY id LIMIT 1');
+        $this->db()->executeStatement('UPDATE entreprise SET email = ?', [$contact]);
+        static::getContainer()->get(TenantCacheService::class)->invalidateTenant();
+        try {
+            $this->provider(); // le site courant est le site concerné : la décision d'envoi lit ses niveaux
+            $message = fn (string $event, array $payload = []) => new \App\Message\EntitlementChangedMessage(MV_TEST_TENANT_CODE, 'module.support', $event, 1, $payload);
+
+            // Niveau « Aucune » : ni suivi ni urgent ; l'achat, indispensable, part
+            $this->siteLevel(NotificationLevel::NONE);
+            $before = count($this->getMailerMessages());
+            $handler($message('trial_started', ['source' => 'trial']));
+            $handler($message('suspended'));
+            $this->assertCount($before, $this->getMailerMessages());
+            $handler($message('granted', ['source' => 'purchase']));
+            $this->assertCount($before + 1, $this->getMailerMessages());
+            $this->assertSame(0, $this->rows($contact), 'un indispensable n\'est ni compté ni écrit');
+
+            // Niveau « Essentiel » : le suivi est retenu pour le résumé de la semaine, l'urgent part
+            $this->siteLevel(NotificationLevel::ESSENTIAL);
+            $before = count($this->getMailerMessages());
+            $handler($message('trial_started', ['source' => 'trial']));
+            $this->assertCount($before, $this->getMailerMessages());
+            $this->assertSame(['weekly'], $this->reasons($contact));
+            $handler($message('suspended'));
+            $this->assertCount($before + 1, $this->getMailerMessages());
+            $this->assertSame(['held' => 1, 'sent' => 1], $this->statuses($contact));
+            $this->assertSame(['entitlement_followup', 'entitlement_urgent'], $this->db()->fetchFirstColumn('SELECT kind FROM notification_log WHERE recipient = ? ORDER BY id', [$contact]));
+
+            // Un AUTRE site que le site courant. Hors d'un worker : la connexion n'est pas basculée, le courriel part comme avant les
+            // niveaux et rien n'est écrit. Dans un worker : la décision du site concerné s'applique (ici « Essentiel » : retenu chez lui)
+            $other = static::getContainer()->get(\App\Services\Platform\TenantDatabaseConnector::class)->pdo(MV_TEST_TENANT2_DB);
+            $otherBefore = [$other->query('SELECT email FROM entreprise ORDER BY id LIMIT 1')->fetchColumn(), $other->query('SELECT notification_level FROM entreprise ORDER BY id LIMIT 1')->fetchColumn()];
+            $far = $this->address('autre-site');
+            $other->prepare("UPDATE entreprise SET email = ?, notification_level = 'essential'")->execute([$far]);
+            $worker = static::getContainer()->get(\App\Services\Messenger\WorkerContext::class);
+            $elsewhere = fn (string $event) => new \App\Message\EntitlementChangedMessage(MV_TEST_TENANT2_CODE, 'module.support', $event, 1, ['source' => 'trial']);
+            try {
+                $before = count($this->getMailerMessages());
+                $handler($elsewhere('trial_started'));
+                $this->assertCount($before + 1, $this->getMailerMessages(), 'hors d\'un worker : envoyé comme avant les niveaux');
+                $this->assertSame(0, (int) $other->query("SELECT COUNT(*) FROM notification_log WHERE recipient = " . $other->quote($far))->fetchColumn());
+                $worker->simulate(true);
+                $handler($elsewhere('trial_started'));
+                // lu tout de suite, sans passer par les aides du test (elles se replacent elles-mêmes sur le site de test)
+                $back = [static::getContainer()->get(TenantConnectionManager::class)->getCurrentTenantCode(),
+                    static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager()->getConnection()->fetchOne('SELECT current_database()')];
+                $this->assertCount($before + 1, $this->getMailerMessages(), 'dans un worker : retenu par le niveau du site concerné');
+                $this->assertSame(['held'], $other->query("SELECT status FROM notification_log WHERE recipient = " . $other->quote($far))->fetchAll(\PDO::FETCH_COLUMN));
+                $this->assertSame(0, $this->rows($far), 'rien n\'est écrit dans la base du site courant');
+                $this->assertSame([MV_TEST_TENANT_CODE, MV_TEST_TENANT_DB], $back, 'le gestionnaire revient au site d\'avant');
+            } finally {
+                $worker->simulate(false);
+                $other->prepare('UPDATE entreprise SET email = ?, notification_level = ?')->execute($otherBefore);
+                $other->prepare("DELETE FROM notification_log WHERE recipient = ?")->execute([$far]);
+                $this->provider();
+            }
+        } finally {
+            $this->db()->executeStatement('UPDATE entreprise SET email = ?', [$previous]);
+            static::getContainer()->get(TenantCacheService::class)->invalidateTenant();
+        }
+    }
+
     /** La décision d'envoi avec les vraies valeurs de la production (plafond de 3, rien avant 8 h du magasin) */
     private function gate(): NotificationGate
     {
         $c = static::getContainer();
 
         return new NotificationGate($c->get(TenantEntityManagerProvider::class), $c->get(NotificationLevelResolver::class), $c->get(StoreClock::class));
+    }
+
+    /** Le résumé de la semaine monté sur la décision d'envoi aux vraies valeurs (8 h du magasin) */
+    private function weekly(NotificationGate $gate): \App\Services\Notification\NotificationWeeklyService
+    {
+        $c = static::getContainer();
+
+        return new \App\Services\Notification\NotificationWeeklyService($c->get(TenantEntityManagerProvider::class), $gate, $c->get(NotificationLevelResolver::class), $c->get(StoreClock::class),
+            $c->get(\App\Services\Platform\SiteReadinessService::class), $c->get(\App\Services\OrderService\OrderDeskService::class), $c->get(\App\Services\Platform\SiteControlsService::class),
+            $c->get(\App\Services\LandingAiService\LandingAiQuotaService::class), $c->get(EmailSenderService::class), $c->get(EmailLocale::class), $c->get(TranslatorInterface::class),
+            $c->get(TenantConnectionManager::class), $c->get(TenantPublicHostResolver::class), new NullLogger());
     }
 
     private function summary(NotificationGate $gate): NotificationSummaryService

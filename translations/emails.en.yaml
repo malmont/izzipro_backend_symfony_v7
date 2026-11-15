@@ -234,8 +234,14 @@ notification_summary:
         support: '%site%: %count% update(s) in support'
         entitlements: '%site%: %count% update(s) about your features'
         management: '%site%: %count% management update(s)'
+        general: '%site%: %count% update(s) to see'
     title: 'Since your last e-mail'
     intro: 'Here is what happened since your last e-mail on this topic:'
     more: 'and %count% more, to read in your admin space.'
     button: 'Open my admin space'
     why: 'You receive at most one e-mail per day and per topic. You can change this in "Notifications".'
+
+weekly_digest:
+    held_title: 'This week''s follow-up emails'
+    held_more: 'and %count% more, to read in your administration space.'
+    held_why: 'At the "Essential" level, follow-up emails are not sent one by one: they are gathered here every Monday. You can change this setting in "Notifications".'

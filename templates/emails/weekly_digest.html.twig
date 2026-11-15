@@ -25,6 +25,11 @@
                 {% endif %}
                 {% if lowCredits %}<p style="color: #b45309;"><strong>Crédits IA :</strong> il vous reste {{ creditsRemaining }} crédit(s) sur {{ creditsMonthly }} ce mois-ci. Achetez des crédits ou changez de forfait pour ne pas être bloqué.</p>{% endif %}
                 {% if posAlerts > 0 %}<p style="color: #b91c1c;"><strong>Caisse :</strong> {{ posAlerts }} alerte{{ posAlerts > 1 ? 's' : '' }} non résolue{{ posAlerts > 1 ? 's' : '' }} (écart, terminal, hors ligne).</p>{% endif %}
+                {% if heldLines is defined and heldLines %}
+                    <p><strong>{{ heldTitle }}</strong></p>
+                    <ul>{% for line in heldLines %}<li>{{ line }}</li>{% endfor %}{% if heldMore > 0 %}<li>{{ heldMoreLine }}</li>{% endif %}</ul>
+                    <p style="color: #64748b; font-size: 13px;">{{ heldWhy }}</p>
+                {% endif %}
                 <p style="text-align: center; margin: 24px 0;"><a href="{{ adminUrl }}" style="background: #1e293b; color: #ffffff; text-decoration: none; padding: 12px 22px; border-radius: 8px; display: inline-block;">Ouvrir mon back-office</a></p>
                 <p style="color: #64748b; font-size: 13px;">Ce courriel part chaque lundi quand il y a quelque chose à signaler.</p>
             </td></tr>

@@ -23,12 +23,9 @@ class NotificationCatalogGuardTest extends TestCase
      * dette écrite : elle se vide au lot indiqué.
      */
     /** Le service qui sort les courriels retenus : il applique lui-même le plafond et la règle du sujet (`allowed`) */
-    private const RELEASE = 'src/Services/Notification/NotificationSummaryService.php';
+    private const RELEASE = ['src/Services/Notification/NotificationSummaryService.php', 'src/Services/Notification/NotificationWeeklyService.php'];
 
-    private const NOT_YET_GATED = [
-        'src/MessageHandler/EntitlementChangedHandler.php' => 'NOTIF-2 : ce gestionnaire écrit pour un site qui n\'est pas le site courant ; la décision d\'envoi lit le site courant',
-        'src/Command/SiteWeeklyDigestCommand.php' => 'NOTIF-2 : le point de la semaine devient le résumé du niveau « Essentiel », envoyé à chaque administrateur',
-    ];
+    private const NOT_YET_GATED = [];
 
     public function testEveryFileThatSendsAnEmailIsClassified(): void
     {
@@ -68,8 +65,8 @@ class NotificationCatalogGuardTest extends TestCase
                 $sent[$kind] = true;
             }
             $governed = array_intersect($kinds, Catalog::governed());
-            // un APPEL à la décision d'envoi, pas seulement son nom dans un constructeur ; le service des retenus est la décision elle-même
-            if ($governed !== [] && $file !== self::RELEASE && !preg_match('/->(deliver|decide)\(/', (string) file_get_contents($root . $file))) {
+            // un APPEL à la décision d'envoi, pas seulement son nom dans un constructeur ; la sortie des retenus et le résumé de la semaine sont la décision elle-même
+            if ($governed !== [] && !in_array($file, self::RELEASE, true) && !preg_match('/->(deliver|decide)\(/', (string) file_get_contents($root . $file))) {
                 $ungated[] = $file;
             }
         }

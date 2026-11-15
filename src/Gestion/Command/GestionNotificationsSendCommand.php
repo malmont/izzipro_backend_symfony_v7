@@ -36,6 +36,7 @@ class GestionNotificationsSendCommand extends Command
         private readonly ?\App\Services\FeatureAccess\ModuleAccessService $modules = null, // lot MOD : module de gestion éteint (mode live) = pas de notification
         private readonly ?\App\Services\Platform\PlatformModeService $platform = null,
         private readonly ?\App\Services\Notification\NotificationSummaryService $held = null, // lot NOTIF-1 : sortie des courriels de suivi retenus
+        private readonly ?\App\Services\Notification\NotificationWeeklyService $weekly = null, // lot NOTIF-2 : résumé de la semaine, le lundi à partir de 8 h du magasin
     ) {
         parent::__construct();
     }
@@ -43,13 +44,15 @@ class GestionNotificationsSendCommand extends Command
     protected function configure(): void
     {
         $this->addOption('tenant', null, InputOption::VALUE_REQUIRED, 'Code d\'un seul site')
-            ->addOption('force', null, InputOption::VALUE_NONE, 'Traiter même hors de l\'heure prévue');
+            ->addOption('force', null, InputOption::VALUE_NONE, 'Traiter même hors de l\'heure prévue')
+            ->addOption('at', null, InputOption::VALUE_REQUIRED, 'Instant simulé, en UTC (AAAA-MM-JJ HH:MM) : pour un essai, jamais dans le minuteur');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
         $only = $input->getOption('tenant');
+        $at = $input->getOption('at') !== null ? new \DateTimeImmutable((string) $input->getOption('at'), new \DateTimeZone('UTC')) : null;
         $rows = $this->tenants->getPdoMaster()->query('SELECT code, dbname FROM tenants ORDER BY code')->fetchAll(\PDO::FETCH_ASSOC) ?: [];
         $sites = 0;
         $notified = 0;
@@ -60,13 +63,13 @@ class GestionNotificationsSendCommand extends Command
             }
             try {
                 $this->emProvider->switchTenant((string) $row['dbname'], (string) $row['code']);
-                $this->releaseHeld((string) $row['code'], $io); // pour tout site, module de gestion activé ou non : ces courriels ne sont pas ceux de la gestion
+                $this->releaseHeld((string) $row['code'], $io, $at); // pour tout site, module de gestion activé ou non : ces courriels ne sont pas ceux de la gestion
                 if ($this->platform !== null && $this->modules !== null && !$this->platform->isDemo() && !$this->modules->isEnabled(\App\Services\FeatureAccess\ModuleAccessService::MANAGEMENT)) {
                     $this->snapshot((string) $row['code']); // lot MOD : module éteint, plateforme en live : pas de notification ; l'instantané du stock reste pris (historique)
                     $io->text(sprintf('%s : application de gestion non activée, aucune notification', $row['code']));
                     continue;
                 }
-                $result = $this->notifications->runDaily(null, (bool) $input->getOption('force'));
+                $result = $this->notifications->runDaily($at, (bool) $input->getOption('force'));
                 if ($result['ran']) {
                     $this->snapshot((string) $row['code']);
                     ++$sites;
@@ -89,18 +92,29 @@ class GestionNotificationsSendCommand extends Command
      * (`NotificationSummaryService`). À chaque passage horaire : un second passage ne retrouve plus ce que le premier a sorti. Une erreur
      * n'empêche jamais les notifications du téléphone.
      */
-    private function releaseHeld(string $code, SymfonyStyle $io): void
+    private function releaseHeld(string $code, SymfonyStyle $io, ?\DateTimeImmutable $at = null): void
     {
         if ($this->held === null) {
             return;
         }
         try {
-            $result = $this->held->releaseDue();
+            $result = $this->held->releaseDue($at);
             if ($result['emails'] > 0 || $result['kept'] > 0) {
                 $io->text(sprintf('%s : %d courriel(s) de suivi retenus sortis en %d courriel(s), %d gardé(s) sans envoi', $code, $result['released'], $result['emails'], $result['kept']));
             }
         } catch (\Throwable $e) {
             $this->logger->error(sprintf('Courriels de suivi retenus : site %s non traité : %s', $code, $e->getMessage()));
+        }
+        if ($this->weekly === null || $code === 'gmasuite') {
+            return;
+        }
+        try {
+            $result = $this->weekly->sendIfDue($at);
+            if ($result['emails'] > 0 || $result['kept'] > 0) {
+                $io->text(sprintf('%s : résumé de la semaine envoyé à %d administrateur(s), %d courriel(s) retenu(s) sorti(s), %d gardé(s) sans envoi', $code, $result['emails'], $result['released'], $result['kept']));
+            }
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf('Résumé de la semaine : site %s non traité : %s', $code, $e->getMessage()));
         }
     }
 

@@ -29,6 +29,14 @@ class NotificationLogRepository extends EntityRepository
         ) !== false;
     }
 
+    /** Notifications de téléphone comptées aujourd'hui pour ce compte (lot NOTIF-2 : plafond de 3 au niveau « Tout ») */
+    public function countToday(int $userId, string $storeDay): int
+    {
+        return (int) $this->getEntityManager()->getConnection()->fetchOne(
+            "SELECT COUNT(*) FROM notification_log WHERE channel = 'push' AND user_id = ? AND store_day = ? AND status IN (?, ?, ?)", [$userId, $storeDay, ...self::COUNTED]
+        );
+    }
+
     /** @return list<array<string, mixed>> sujets des notifications de ce type depuis cette date (UTC) */
     public function subjectsSince(int $userId, string $kind, \DateTimeImmutable $sinceUtc): array
     {
