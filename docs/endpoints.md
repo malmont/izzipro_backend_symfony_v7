@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (506)
+## Boutique et commun (514)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -395,6 +395,14 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PATCH | `/api/gestion/campagnes/{id}` | ROLE_ADMIN | `Gestion\Controller\MarketingCampaignController::update` |
 | GET | `/api/gestion/campagnes` | ROLE_ADMIN | `Gestion\Controller\MarketingCampaignController::list` |
 | POST | `/api/gestion/campagnes` | ROLE_ADMIN | `Gestion\Controller\MarketingCampaignController::create` |
+| POST | `/api/gestion/codes-barres/articles/{id}/generer` | ROLE_ADMIN | `Gestion\Controller\GestionBarcodeController::generateProduct` |
+| PUT | `/api/gestion/codes-barres/articles/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionBarcodeController::putProduct` |
+| POST | `/api/gestion/codes-barres/etiquettes/pdf` | ROLE_ADMIN | `Gestion\Controller\GestionBarcodeController::pdf` |
+| POST | `/api/gestion/codes-barres/manquants/generer` | ROLE_ADMIN | `Gestion\Controller\GestionBarcodeController::generateMissing` |
+| GET | `/api/gestion/codes-barres/manquants` | ROLE_ADMIN | `Gestion\Controller\GestionBarcodeController::missing` |
+| GET | `/api/gestion/codes-barres/recherche` | ROLE_ADMIN | `Gestion\Controller\GestionBarcodeController::search` |
+| POST | `/api/gestion/codes-barres/variantes/{id}/generer` | ROLE_ADMIN | `Gestion\Controller\GestionBarcodeController::generateVariant` |
+| PUT | `/api/gestion/codes-barres/variantes/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionBarcodeController::putVariant` |
 | POST | `/api/gestion/conseils/actualiser` | ROLE_ADMIN | `Gestion\Controller\GestionAdviceController::refresh` |
 | POST | `/api/gestion/conseils/{id}/ecarter` | ROLE_ADMIN | `Gestion\Controller\GestionAdviceController::dismiss` |
 | POST | `/api/gestion/conseils/{id}/fait` | ROLE_ADMIN | `Gestion\Controller\GestionAdviceController::done` |
