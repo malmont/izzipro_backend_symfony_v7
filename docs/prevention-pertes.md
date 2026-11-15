@@ -397,11 +397,17 @@ défaut validés ; 6 conservation 24 mois / 5 ans, extraits vidéo 30 jours, auc
 bloquante en France et au Québec ; 9 minuteur accordé ; 10 jeux d'essai en base de test seulement ; 11 pourcentage calculé par le serveur ;
 12 pays et région ; 13 vignette et notification réservées ; 14 lot du catalogue avant L2 ; 15 relecture par un avocat avant tout vrai client.
 
-## 13. Plan du lot L2 : étiquettes à puce (15/11/2026, SANS CODE, à valider par le propriétaire)
+## 13. Lot L2 : étiquettes à puce (plan validé par le propriétaire le 15/11/2026 ; L2-a codé, L2-b à venir)
 
-Rien de ce paragraphe n'est codé. Il précise ce que le § 11 réservait (« pièce à numéro unique par variante », faits `PIECE_CREATED`,
-`TAG_ASSOCIATED`, `PAIR_SET`, `TEST_TAG_READ`). Les questions ouvertes sont au point 13.8 ; le contrat exact des réponses sera écrit
-après la validation, avant le code. Lot à risque (données, preuves) : relecture indépendante et mutations avant la bascule.
+Le plan ci-dessous a été **validé par le propriétaire le 15/11/2026, avec toutes les propositions du point 13.8**. Il précise ce que
+le § 11 réservait (« pièce à numéro unique par variante », faits `PIECE_CREATED`, `TAG_ASSOCIATED`, `PAIR_SET`, `TEST_TAG_READ`).
+**Le lot L2-a est codé** (pièces, puces, association, recherche, puces simulées, synthèse) : son contrat exact est au point 13.9, qui
+fait foi là où il précise le plan. Le lot L2-b (étiquettes en rouleau, assistant d'installation, gamme de matériel) reste à coder.
+Lot à risque (données, preuves) : relecture indépendante et mutations avant la bascule.
+
+**Avant le premier client (décision du propriétaire, 15/11/2026)** : la lecture d'une puce sur un article VENDU (la puce part avec le
+client, ou reste lisible sur lui) demande l'avis d'un avocat, comme la décision 15 du § 12. Rien dans le code ne lit aujourd'hui une
+puce après la vente.
 
 ### 13.1 Ce que L2 apporte, et ce qu'il n'apporte pas
 
@@ -418,7 +424,7 @@ après la validation, avant le code. Lot à risque (données, preuves) : relectu
 
 - **`loss_piece`** : `id`, `number` (numéro lisible, unique sur le site, tiré d'une séquence, jamais redonné), `variant_id`
   (obligatoire : la pièce est un exemplaire d'UNE variante), `product_id` (copie de lecture), `status`, `zone` (null en L2),
-  `commande_line_id` (null si la pièce vient du stock déjà en rayon), `exercise`, dates. Le code-barres n'est PAS recopié : il se lit
+  `commande_id` (null si la pièce vient du stock déjà en rayon), `exercise`, dates. Le code-barres n'est PAS recopié : il se lit
   sur la variante (règle du lot CB-1 : le code d'une variante est celui de la pièce vendue), l'article quand elle est sa seule variante.
 - **`loss_tag`** : `id`, `identifier` (forme canonique : hexadécimal en majuscules, sans séparateur), `raw` (ce que le lecteur a rendu),
   `technology` (`uhf`, `nfc`, `simulated`), `piece_id`, `status`, dates. **Un identifiant désigne une seule puce sur le site : index
@@ -517,3 +523,71 @@ Textes en français et en anglais par le serveur (`?locale=`), erreurs à la for
    module) ; un droit de magasinier avec le boîtier, au lot L3.*
 8. **Découpage** : *proposition : L2-a (pièces, puces, association, recherche, puces simulées, synthèse), puis L2-b (étiquettes en
    rouleau, assistant d'installation, gamme de matériel).*
+
+Réponse du propriétaire (15/11/2026, relayée par le chef de projet) : les huit propositions sont retenues ; la gamme a trois niveaux
+(pro, standard, bricoleur), et le niveau bricoleur se vend sans matériel.
+
+### 13.9 Lot L2-a codé : contrat des routes (15/11/2026)
+
+Code : `Controller/LossPieceController`, `UseCase/LossPieceUseCase`, `Services/LossPieceService`, `Services/LossTagIdentifier`,
+`Repository/LossPieceRepository`, entités `LossPiece`, `LossTag`, `LossPieceEvent`. Migration `Version20270109100000` (tables
+`loss_piece`, `loss_tag`, `loss_piece_event`, séquence `loss_piece_number_seq` ; équivalent `scripts/migrate_all_v2_pertes_l2a.sh`).
+Textes `translations/pertes.{fr,en}.yaml` (`pieces.*`). Toutes les routes : `/api/gestion/pertes`, administrateur, garde de la gestion
+puis du module, `?locale=fr|en`, erreurs `{ error, code, message, … }`. **Aucune n'écrit dans le stock, les ventes ni le catalogue.**
+
+**Fiche d'une pièce** (rendue partout) : `{ id, number, status (created | retired), statusLabel, zone (null en L2), exercise,
+variantId, productId, variantMissing, name, variantLabel, barcode, barcodeOf (variant | product | null), symbology, tags [puce],
+tagged, commandeId, retiredReason, retiredReasonLabel, createdAt, retiredAt }`. Le code-barres est lu sur la variante (celui de
+l'article quand elle est sa seule variante) ; `variantMissing: true` si la variante n'est plus au catalogue (la pièce reste).
+**Puce** : `{ id, identifier, technology (uhf | nfc | simulated), technologyLabel, status (known | associated | retired),
+statusLabel, pieceId, exercise, associatedAt, retiredAt, retiredReason, retiredReasonLabel }`.
+
+| Route | Corps | Réponse | Refus |
+|---|---|---|---|
+| `GET /pieces` | `?variantId&productId&status&tagged=0\|1&page&limit` (50, 100 au plus) | 200 `[fiche]`, les plus récentes d'abord ; en-têtes `X-Total-Count`, `X-Page`, `X-Limit` | 422 `VALIDATION_FAILED` |
+| `POST /pieces` | `{ variantId \| barcode, count (1 à 500, 1 par défaut), commandeId? }` | 201 `{ pieces [fiche], count }` | 422 (`count: OUT_OF_RANGE`, `target: ONE_TARGET_REQUIRED`…) ; 404 `VARIANT_NOT_FOUND`, `BARCODE_NOT_FOUND`, `COMMANDE_NOT_FOUND` ; 409 `BARCODE_AMBIGUOUS { productId, variantIds }`, `NO_VARIANT { productId }` |
+| `GET /pieces/{id}` | — | 200 fiche + `events [{ id, type, label, at, userId, tagId, data }]` | 404 `PIECE_NOT_FOUND` |
+| `POST /pieces/{id}/retirer` | `{ reason (damaged \| lost \| sold \| error), confirm: true }` | 200 `{ changed, piece }` ; ses puces actives sont retirées avec elle (`piece_retired`) | 409 `CONFIRMATION_REQUIRED` ; 422 ; 404 |
+| `POST /puces/associer` | `{ pieceId \| variantId \| barcode, identifier, technology (uhf \| nfc) }` | 200 `{ created, associated, piece, tag }` | 422 `TAG_INVALID { technology }`, `VALIDATION_FAILED` ; 409 `TAG_ALREADY_ASSOCIATED { holder }`, `TAG_RETIRED`, `TAG_IS_BARCODE { holder }`, `PIECE_RETIRED`, `PIECE_TAG_LIMIT { limit: 4 }`, `BARCODE_AMBIGUOUS`, `NO_VARIANT` ; 404 `PIECE_NOT_FOUND`, `VARIANT_NOT_FOUND`, `BARCODE_NOT_FOUND` |
+| `GET /puces/recherche?identifier=` | — | 200 `{ identifier (forme canonique), found, refusal (TAG_INVALID \| null), tag, piece }` | 422 `identifier: REQUIRED` |
+| `POST /puces/{id}/retirer` | `{ reason (detached \| destroyed \| lost \| error), confirm: true }` | 200 `{ changed, tag, piece }` | 409 `CONFIRMATION_REQUIRED` ; 422 ; 404 `TAG_NOT_FOUND` |
+| `GET /pieces/synthese` | `?page&limit` | 200 `{ rows [{ variantId, productId, …catalogue, stock, pieces { active, retired, tagged, untagged }, gap }], total, page, limit, totals { variants, pieces, retired, tagged, untagged } }` | 422 |
+
+- **Associer, LE geste** : avec `pieceId`, la puce se pose sur cette pièce ; avec `variantId` ou `barcode` (le code-barres lu), une
+  pièce est créée pour la variante puis reçoit la puce (`created: true`). **Rejouer le même geste ne crée rien** : la puce déjà
+  posée sur une pièce de cette variante rend cette pièce (`created: false`, `associated: false`). La même puce pour une autre pièce
+  ou une autre variante : 409 `TAG_ALREADY_ASSOCIATED`, `holder { id, number, variantId, productId, name, variantLabel }`. Une pièce
+  porte quatre puces au plus ; à partir de la deuxième, un fait `PAIR_SET`.
+- **Identifiant** (`LossTagIdentifier`) : la lecture est nettoyée (espaces, `:`, `-`, `.`, préfixe `0x`, majuscules) ; NFC : 8, 14,
+  16 ou 20 caractères hexadécimaux ; UHF : 16 à 64, par multiples de 4. La lecture brute est gardée (`loss_tag.raw`). Une lecture qui
+  est le code-barres d'un article est refusée (`TAG_IS_BARCODE` : lecteur en clavier dans le mauvais champ).
+- **Retirer** : jamais d'un geste distrait (`confirm: true`, sinon 409) ; retirer deux fois ne fait rien (`changed: false`). Une puce
+  retirée ne se repose sur aucune pièce (`TAG_RETIRED`), pas même la sienne ; une pièce retirée ne reçoit plus de puce.
+- **Faits** (`loss_piece_event`, en ajout seul) : `PIECE_CREATED`, `TAG_ASSOCIATED`, `PAIR_SET`, `TAG_RETIRED`, `PIECE_RETIRED`, dans la
+  transaction de la ligne qu'ils changent, avec le compte de l'administrateur ; nombres, codes et identifiants seulement.
+- **Ce que la base garantit seule** (déclencheurs de la migration) : identifiant unique et en forme canonique ; une puce associée ne
+  change jamais de pièce ; une puce ou une pièce retirée ne revient pas ; identité figée (numéro, variante, technologie, marque
+  d'exercice) ; puce posée seulement sur une pièce du même genre et non retirée ; faits non modifiables ; aucune suppression ni
+  vidage, sauf une ligne d'exercice par la porte `loss.purge = 'exercise'`.
+- **Synthèse** : par variante suivie, à côté du stock, pour information ; `gap` = stock − pièces en service. Vraies pièces seulement.
+
+**Mode exercice** (ouvert sans le droit du module, comme le lot EX-1 ; routes nommées une à une dans
+`LossPreventionModuleSubscriber::OPEN_ROUTES`) : les mêmes gestes sur des pièces d'exercice et des puces simulées.
+
+| Route | Rôle |
+|---|---|
+| `GET /exercices/pieces` | `{ pieces, count, limit: 30, remaining, createLimit: 10, daily { limit: 30, remaining, resetAt } }` |
+| `POST /exercices/pieces` `{ variantId \| barcode, count (1 à 10) }` | 201 `{ pieces, count }` ; 409 `EXERCISE_LIMIT_REACHED { limit }`, `EXERCISE_DAILY_LIMIT { limit, resetAt }` |
+| `POST /exercices/puces/associer` `{ pieceId \| variantId \| barcode, identifier? }` | « Simuler une lecture » : sans `identifier`, le serveur fabrique la puce (`SIM-` + 12 caractères) |
+| `GET /exercices/puces/recherche?identifier=`, `GET /exercices/pieces/{id}` | comme les vraies routes |
+| `POST /exercices/puces/{id}/retirer`, `POST /exercices/pieces/{id}/retirer` | comme les vraies routes |
+| `DELETE /exercices/pieces` | `{ deleted }` : toutes les pièces d'exercice, leurs puces et leurs faits |
+
+Les deux mondes ne se croisent sur aucune route (une vraie pièce est 404 pour les routes d'exercice, et l'inverse ; une puce simulée
+n'est pas une lecture valide sur une vraie route, ni une vraie lecture en exercice), et **rien d'exercice n'entre dans un chiffre
+réel** (liste, synthèse). Plafonds : 30 pièces d'exercice présentes, 10 par appel, 30 créations par jour du magasin (comptées au
+journal du module, lignes `EXERCISE_PIECES_CREATED` : effacer ne rend aucune création). L'exercice lit de vraies variantes du
+catalogue (lecture seule).
+
+Tests : `tests/Functional/LossPrevention/LossPreventionPiecesTest.php` (la base seule ; les routes ; l'exercice ; les règles de
+l'identifiant).

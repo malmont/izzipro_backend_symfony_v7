@@ -598,7 +598,8 @@ class LossPreventionExerciseTest extends LossPreventionTestCase
             (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_journal j JOIN loss_finding f ON f.id = j.finding_id WHERE f.exercise = false')];
         $realBefore = $counts();
         $schema = fn (): array => [
-            $this->db->fetchFirstColumn("SELECT tgname FROM pg_trigger WHERE tgname LIKE 'loss_%' AND NOT tgisinternal ORDER BY tgname"),
+            // déclencheurs des tables de L1-a et d'EX-1 seulement (les pièces et les puces du lot L2-a ont les leurs, vérifiés dans leur test)
+            $this->db->fetchFirstColumn("SELECT t.tgname FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE c.relname IN ('loss_finding', 'loss_evidence', 'loss_journal') AND NOT t.tgisinternal ORDER BY t.tgname"),
             $this->db->fetchFirstColumn("SELECT indexname FROM pg_indexes WHERE indexname IN ('idx_loss_finding_exercise', 'idx_loss_journal_type') ORDER BY indexname"),
             (int) $this->db->fetchOne("SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'loss_finding' AND column_name = 'exercise'"),
         ];

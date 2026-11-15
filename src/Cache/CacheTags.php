@@ -375,6 +375,8 @@ final class CacheTags
         // Prévention des pertes (lot L1-a, 14/11/2026) : constats, preuves, règles, réglages et journal lus et écrits en SQL par leurs dépôts, jamais en cache
         \App\LossPrevention\Entity\LossFinding::class, \App\LossPrevention\Entity\LossEvidence::class, \App\LossPrevention\Entity\LossRule::class,
         \App\LossPrevention\Entity\LossSetting::class, \App\LossPrevention\Entity\LossJournalEntry::class,
+        // lot L2-a : pièces, puces et leurs faits, lus et écrits en SQL par `LossPieceRepository`
+        \App\LossPrevention\Entity\LossPiece::class, \App\LossPrevention\Entity\LossTag::class, \App\LossPrevention\Entity\LossPieceEvent::class,
         // Module Assistance (lot 1, 12/11/2026) : boîte de demandes lue en direct, jamais mise en cache
         \App\Support\Entity\SupportTicket::class, \App\Support\Entity\SupportMessage::class, \App\Support\Entity\SupportAttachment::class, \App\Support\Entity\SupportSetting::class,
         // Jeton de rafraîchissement JWT : le bundle Gesdinet persiste sa propre classe, pas App\Entity\RefreshToken

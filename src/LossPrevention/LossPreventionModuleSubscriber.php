@@ -31,9 +31,13 @@ class LossPreventionModuleSubscriber implements EventSubscriberInterface
     /** Routes du mode exercice, ouvertes sans le droit du module : méthode => chemins exacts */
     public const OPEN_ROUTES = [
         // `\z`, jamais `$` : un « $ » accepte un saut de ligne final (« …/exercices%0A » passerait la garde)
-        'GET' => ['#^/api/gestion/pertes/exercices\z#', '#^/api/gestion/pertes/exercices/\d+\z#'],
-        'POST' => ['#^/api/gestion/pertes/exercices\z#'],
-        'DELETE' => ['#^/api/gestion/pertes/exercices\z#'],
+        'GET' => ['#^/api/gestion/pertes/exercices\z#', '#^/api/gestion/pertes/exercices/\d+\z#',
+            // lot L2-a : pièces d'exercice et puces simulées
+            '#^/api/gestion/pertes/exercices/pieces\z#', '#^/api/gestion/pertes/exercices/pieces/\d+\z#', '#^/api/gestion/pertes/exercices/puces/recherche\z#'],
+        'POST' => ['#^/api/gestion/pertes/exercices\z#',
+            '#^/api/gestion/pertes/exercices/pieces\z#', '#^/api/gestion/pertes/exercices/pieces/\d+/retirer\z#',
+            '#^/api/gestion/pertes/exercices/puces/associer\z#', '#^/api/gestion/pertes/exercices/puces/\d+/retirer\z#'],
+        'DELETE' => ['#^/api/gestion/pertes/exercices\z#', '#^/api/gestion/pertes/exercices/pieces\z#'],
         'PUT' => ['#^/api/gestion/pertes/exercices/\d+/decision\z#'],
     ];
 

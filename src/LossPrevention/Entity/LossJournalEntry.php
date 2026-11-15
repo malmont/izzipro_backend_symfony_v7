@@ -39,6 +39,10 @@ class LossJournalEntry
     public const EXERCISES_DELETED = 'EXERCISES_DELETED';
     /** Courriel d'exercice envoyé à l'administrateur qui l'a demandé (lot EX-1) : aucune adresse */
     public const EXERCISE_EMAIL_SENT = 'EXERCISE_EMAIL_SENT';
+    /** Pièces d'exercice créées (lot L2-a) : leur nombre ; sert au plafond du jour, sans constat rattaché, donc jamais supprimé */
+    public const EXERCISE_PIECES_CREATED = 'EXERCISE_PIECES_CREATED';
+    /** Pièces d'exercice effacées par le gérant (lot L2-a) : leur nombre, avec leurs puces et leurs faits */
+    public const EXERCISE_PIECES_DELETED = 'EXERCISE_PIECES_DELETED';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

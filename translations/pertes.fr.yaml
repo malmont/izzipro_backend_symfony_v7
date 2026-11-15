@@ -268,3 +268,58 @@ exercise:
             label: Remises répétées près du plafond par un même compte
             description: 'Plusieurs ventes du même compte portent une remise proche du plafond du caissier.'
             learn: 'Voir ce que le plafond du caissier laisse passer sans validation, et décider s''il faut le changer.'
+# Pièces et puces (lot L2-a, 15/11/2026, docs/prevention-pertes.md § 13)
+pieces:
+    status:
+        created: En service
+        in_stockroom: En réserve
+        on_floor: En rayon
+        at_counter: Au comptoir
+        sold: Vendue
+        returned: Retournée
+        missing: Manquante
+        retired: Retirée
+    tag_status:
+        known: Lue, pas encore posée
+        associated: Posée
+        retired: Retirée
+    technology:
+        uhf: Puce lisible à distance (UHF)
+        nfc: Puce NFC
+        simulated: Puce simulée
+    reason:
+        damaged: Pièce abîmée
+        lost: Perdue
+        sold: Vendue sans suivi
+        error: Créée ou posée par erreur
+        detached: Puce détachée
+        destroyed: Puce détruite
+        piece_retired: Pièce retirée
+    event:
+        PIECE_CREATED: Pièce créée
+        TAG_ASSOCIATED: Puce posée
+        PAIR_SET: Plusieurs puces sur la pièce
+        TAG_RETIRED: Puce retirée
+        PIECE_RETIRED: Pièce retirée
+        TEST_TAG_READ: Puce lue à l'essai
+    error:
+        VARIANT_NOT_FOUND: 'Variante introuvable.'
+        PIECE_NOT_FOUND: 'Pièce introuvable.'
+        TAG_NOT_FOUND: 'Puce introuvable.'
+        COMMANDE_NOT_FOUND: 'Commande introuvable.'
+        BARCODE_NOT_FOUND: 'Ce code-barres ne désigne aucun article : posez-le d''abord sur la variante.'
+        BARCODE_AMBIGUOUS: 'Ce code-barres est celui de l''article « %label% », qui a plusieurs variantes : choisissez la variante.'
+        NO_VARIANT: 'L''article « %label% » n''a aucune variante : il n''est pas encore vendable, une pièce ne peut pas en être un exemplaire.'
+        TAG_INVALID:
+            uhf: 'Cette lecture n''a pas la forme d''une puce lisible à distance : 16 à 64 caractères, chiffres et lettres de A à F.'
+            nfc: 'Cette lecture n''a pas la forme d''une puce NFC : 8, 14, 16 ou 20 caractères, chiffres et lettres de A à F.'
+            simulated: 'Cette lecture n''est pas celle d''une puce simulée.'
+        TAG_IS_BARCODE: 'Cette lecture est le code-barres de « %label% », pas une puce : lisez la puce.'
+        TAG_ALREADY_ASSOCIATED: 'Cette puce est déjà posée sur la pièce n° %number% (%name%).'
+        TAG_ALREADY_ASSOCIATED_UNKNOWN: 'Cette puce vient d''être posée sur une autre pièce.'
+        TAG_RETIRED: 'Cette puce a été retirée : une puce retirée ne se repose sur aucune pièce.'
+        PIECE_RETIRED: 'Cette pièce est retirée : elle ne reçoit plus de puce.'
+        PIECE_TAG_LIMIT: 'Une pièce porte au plus %limit% puces.'
+        CONFIRMATION_REQUIRED: 'Un retrait ne s''annule pas : confirmez-le.'
+        EXERCISE_LIMIT_REACHED: 'Vous avez déjà %limit% pièces d''exercice : effacez-les avant d''en créer d''autres.'
+        EXERCISE_DAILY_LIMIT: 'Vous avez créé des pièces d''exercice %limit% fois aujourd''hui : vous pourrez recommencer demain.'

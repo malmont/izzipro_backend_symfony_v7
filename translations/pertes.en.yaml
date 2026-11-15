@@ -269,3 +269,58 @@ exercise:
             label: Repeated discounts near the limit by the same account
             description: 'Several sales by the same account carry a discount close to the cashier limit.'
             learn: 'See what the cashier limit lets through without approval, and decide whether to change it.'
+# Pieces and tags (lot L2-a, 2026-11-15, docs/prevention-pertes.md § 13)
+pieces:
+    status:
+        created: In service
+        in_stockroom: In the stockroom
+        on_floor: On the floor
+        at_counter: At the counter
+        sold: Sold
+        returned: Returned
+        missing: Missing
+        retired: Retired
+    tag_status:
+        known: Read, not yet attached
+        associated: Attached
+        retired: Retired
+    technology:
+        uhf: Long-range tag (UHF)
+        nfc: NFC tag
+        simulated: Simulated tag
+    reason:
+        damaged: Damaged piece
+        lost: Lost
+        sold: Sold without tracking
+        error: Created or attached by mistake
+        detached: Tag detached
+        destroyed: Tag destroyed
+        piece_retired: Piece retired
+    event:
+        PIECE_CREATED: Piece created
+        TAG_ASSOCIATED: Tag attached
+        PAIR_SET: Several tags on the piece
+        TAG_RETIRED: Tag retired
+        PIECE_RETIRED: Piece retired
+        TEST_TAG_READ: Tag read during the test
+    error:
+        VARIANT_NOT_FOUND: 'Variant not found.'
+        PIECE_NOT_FOUND: 'Piece not found.'
+        TAG_NOT_FOUND: 'Tag not found.'
+        COMMANDE_NOT_FOUND: 'Purchase order not found.'
+        BARCODE_NOT_FOUND: 'This barcode does not designate any item: set it on the variant first.'
+        BARCODE_AMBIGUOUS: 'This barcode belongs to the item "%label%", which has several variants: choose the variant.'
+        NO_VARIANT: 'The item "%label%" has no variant: it cannot be sold yet, so a piece cannot be a copy of it.'
+        TAG_INVALID:
+            uhf: 'This read does not have the form of a long-range tag: 16 to 64 characters, digits and letters A to F.'
+            nfc: 'This read does not have the form of an NFC tag: 8, 14, 16 or 20 characters, digits and letters A to F.'
+            simulated: 'This read is not that of a simulated tag.'
+        TAG_IS_BARCODE: 'This read is the barcode of "%label%", not a tag: read the tag.'
+        TAG_ALREADY_ASSOCIATED: 'This tag is already attached to piece no. %number% (%name%).'
+        TAG_ALREADY_ASSOCIATED_UNKNOWN: 'This tag has just been attached to another piece.'
+        TAG_RETIRED: 'This tag has been retired: a retired tag is never attached to a piece again.'
+        PIECE_RETIRED: 'This piece is retired: it no longer receives tags.'
+        PIECE_TAG_LIMIT: 'A piece carries at most %limit% tags.'
+        CONFIRMATION_REQUIRED: 'A retirement cannot be undone: confirm it.'
+        EXERCISE_LIMIT_REACHED: 'You already have %limit% practice pieces: delete them before creating more.'
+        EXERCISE_DAILY_LIMIT: 'You have created practice pieces %limit% times today: you can start again tomorrow.'
