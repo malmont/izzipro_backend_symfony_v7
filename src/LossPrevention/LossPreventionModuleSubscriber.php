@@ -27,7 +27,8 @@ use Symfony\Component\HttpKernel\KernelEvents;
 class LossPreventionModuleSubscriber implements EventSubscriberInterface
 {
     public const CODE = 'MODULE_INACTIVE';
-    public const PATH = '#^/api/gestion/pertes(/|$)#';
+    /** La section de la gestion, et les routes du boîtier de la boutique (lot L3-a) : un boîtier ne parle pas à un site sans le module */
+    public const PATH = '#^/api/(gestion/pertes|pertes/boitier)(/|$)#';
     /** Routes du mode exercice, ouvertes sans le droit du module : méthode => chemins exacts */
     public const OPEN_ROUTES = [
         // `\z`, jamais `$` : un « $ » accepte un saut de ligne final (« …/exercices%0A » passerait la garde)
@@ -35,13 +36,16 @@ class LossPreventionModuleSubscriber implements EventSubscriberInterface
             // lot L2-a : pièces d'exercice et puces simulées
             '#^/api/gestion/pertes/exercices/pieces\z#', '#^/api/gestion/pertes/exercices/pieces/\d+\z#', '#^/api/gestion/pertes/exercices/puces/recherche\z#',
             // lot L2-b : assistant d'installation et gamme de matériel
-            '#^/api/gestion/pertes/exercices/installation\z#', '#^/api/gestion/pertes/exercices/materiel\z#'],
+            '#^/api/gestion/pertes/exercices/installation\z#', '#^/api/gestion/pertes/exercices/materiel\z#',
+            // lot L3-a : boîtier simulé
+            '#^/api/gestion/pertes/exercices/boitiers\z#', '#^/api/gestion/pertes/exercices/boitiers/\d+\z#'],
         'POST' => ['#^/api/gestion/pertes/exercices\z#',
             '#^/api/gestion/pertes/exercices/pieces\z#', '#^/api/gestion/pertes/exercices/pieces/\d+/retirer\z#',
             '#^/api/gestion/pertes/exercices/puces/associer\z#', '#^/api/gestion/pertes/exercices/puces/\d+/retirer\z#',
             '#^/api/gestion/pertes/exercices/pieces/etiquettes/pdf\z#', '#^/api/gestion/pertes/exercices/installation/etapes/[a-z_]{1,30}/verifier\z#',
-            '#^/api/gestion/pertes/exercices/installation/puce-test\z#', '#^/api/gestion/pertes/exercices/installation/etiquette-test\z#'],
-        'DELETE' => ['#^/api/gestion/pertes/exercices\z#', '#^/api/gestion/pertes/exercices/pieces\z#'],
+            '#^/api/gestion/pertes/exercices/installation/puce-test\z#', '#^/api/gestion/pertes/exercices/installation/etiquette-test\z#',
+            '#^/api/gestion/pertes/exercices/boitiers\z#', '#^/api/gestion/pertes/exercices/boitiers/\d+/scenarios\z#'],
+        'DELETE' => ['#^/api/gestion/pertes/exercices\z#', '#^/api/gestion/pertes/exercices/pieces\z#', '#^/api/gestion/pertes/exercices/boitiers\z#'],
         'PUT' => ['#^/api/gestion/pertes/exercices/\d+/decision\z#'],
     ];
 

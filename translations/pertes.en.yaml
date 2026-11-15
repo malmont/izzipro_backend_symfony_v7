@@ -304,6 +304,8 @@ pieces:
         PIECE_RETIRED: Piece retired
         TEST_TAG_READ: Tag read during the test
         TEST_LABEL_PRINTED: Test label produced
+        SPOT_CHECK: Read by the handheld reader of the box
+        ZONE_SEEN: Read in a zone
     error:
         VARIANT_NOT_FOUND: 'Variant not found.'
         PIECE_NOT_FOUND: 'Piece not found.'
@@ -360,6 +362,11 @@ installation:
             text: 'Read the barcode of an item, then its tag: the piece is created and carries its tag.'
             verify: Check
             hint: 'No piece carries a tag yet. Read the barcode of an item, then a free tag.'
+        box:
+            title: Plug in a box
+            text: 'Optional. The box links the counter mat, the tag printer and the camera to the platform. Add it under "Boxes", then enrol its machine with the key.'
+            verify: Check
+            hint: 'No box is enrolled. Add a box, then run the enrolment command on its machine with the site address and the key.'
     hint:
         decimal: 'The reader seems to return a number made of digits only. Set it to return the identifier in hexadecimal (digits and letters A to F).'
         form: 'This read contains something other than digits and letters A to F: it is not a tag. Check that the cursor is in the tag field.'
@@ -431,3 +438,66 @@ hardware:
                 what: 'The same sticker tags, NFC or UHF depending on your reader.'
                 allows: 'Starting with a few dozen tags.'
                 limits: 'Two moves: stick, then read.'
+# Shop boxes (lot L3-a, 2026-11-15, docs/prevention-pertes.md § 16)
+boxes:
+    status:
+        pending: Waiting for its machine
+        active: Enrolled
+        revoked: Revoked
+    online:
+        online: Online
+        silent: Silent
+        none: '—'
+    device:
+        counter_mat: Counter mat
+        reader: Tag reader
+        printer: Tag printer
+        camera: Camera
+    deviceStatus:
+        ok: Working
+        down: Down or unplugged
+    zone:
+        stockroom: Stockroom
+        stockroom_door: Stockroom door
+        floor: Shop floor
+        counter: Counter
+        exit: Exit
+    event:
+        BOX_CREATED: Box added
+        BOX_ENROLLED: Machine enrolled
+        BOX_KEY_RESET: Key reset
+        BOX_REVOKED: Box revoked
+        BOX_BACK: Box back after a silence
+        DEVICE_SEEN: Device seen for the first time
+        SOURCE_DOWN: Device down or unplugged
+        SOURCE_UP: Device back
+    enrolment:
+        text: 'On the box, run the enrolment command and give the site address, then this key. The key is shown only once: write it down now.'
+    exercise:
+        name: Simulated box
+        place: Exercise
+    scenario:
+        heartbeat:
+            label: Heartbeat
+            text: 'The box says it is there: it is back "online".'
+        network_cut:
+            label: Network cut
+            text: 'The box comes back after two hours without network: a fact records the gap.'
+        device_down:
+            label: Reader unplugged
+            text: 'The exit reader goes down: it is recorded, once.'
+        device_up:
+            label: Reader plugged back
+            text: 'The exit reader is back.'
+        spot_check:
+            label: Handheld check
+            text: 'The handheld reader reads up to three exercise pieces: each read is added to the history of the piece.'
+        zone_exit:
+            label: Read at the exit
+            text: 'The exit reader reads an exercise piece.'
+    error:
+        BOX_NOT_FOUND: 'Box not found.'
+        BOX_REVOKED: 'This box is revoked: add another one.'
+        BOX_LIMIT_REACHED: 'This site already has %limit% boxes: revoke those no longer in use.'
+        EXERCISE_LIMIT_REACHED: 'You already have %limit% simulated boxes: delete them before creating more.'
+        EXERCISE_NO_PIECE: 'No exercise piece carries a tag: first put a simulated tag on an exercise piece.'

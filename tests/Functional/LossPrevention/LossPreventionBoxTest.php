@@ -1,0 +1,781 @@
+<?php
+
+namespace App\Tests\Functional\LossPrevention;
+
+use App\LossPrevention\Entity\LossBox;
+use App\LossPrevention\Entity\LossPiece;
+use App\LossPrevention\LossBoxGuardSubscriber;
+use App\LossPrevention\Services\LossBoxKey;
+use App\LossPrevention\Services\LossBoxService;
+use App\LossPrevention\Services\LossBoxToken;
+use App\Services\Platform\PlatformModeService;
+use Doctrine\DBAL\ArrayParameterType;
+use Symfony\Component\HttpFoundation\Response;
+
+/**
+ * Lot L3-a (15/11/2026, `docs/prevention-pertes.md` § 16) : le boîtier de la boutique. Sa clé et son inscription, son jeton, son
+ * signe de vie, ses lots de faits rejouables ; ce que l'administrateur en voit ; le boîtier simulé du mode exercice ; ce que la
+ * base garde elle-même. Un vrai boîtier ne se supprime pas : chaque test révoque les siens à la fin (un boîtier révoqué ne compte
+ * plus dans le plafond du site) et ne regarde que ceux qu'il a créés.
+ */
+class LossPreventionBoxTest extends LossPreventionTestCase
+{
+    private const BOXES = self::BASE . '/boitiers';
+    private const EX = self::BASE . '/exercices';
+    private const CHANNEL = '/api/pertes/boitier';
+    private const MACHINE = 'machine-de-test-0123456789abcdef';
+
+    private string $s;
+    /** Adresse d'où ce test appelle le canal du boîtier : au hasard, pour que les plafonds d'essais (gardés d'un lancement à l'autre) ne se cumulent pas */
+    private string $ip;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->s = strtoupper(bin2hex(random_bytes(3)));
+        $this->ip = self::randomIp();
+        $this->flags(true, true);
+    }
+
+    protected function tearDown(): void
+    {
+        try {
+            while ($this->db->isTransactionActive()) {
+                $this->db->rollBack();
+            }
+            $this->db->executeStatement("UPDATE loss_box SET status = 'revoked', revoked_at = NOW() WHERE NOT exercise AND status <> 'revoked'");
+            $this->db->beginTransaction();
+            $this->provider->getEntityManager()->getRepository(LossPiece::class)->deleteExercise();
+            $this->provider->getEntityManager()->getRepository(LossBox::class)->deleteExercise();
+            $this->db->commit();
+            $ids = $this->db->fetchFirstColumn('SELECT id FROM product WHERE name LIKE ?', ['% L3A-' . $this->s]);
+            if ($ids !== []) {
+                $this->db->executeStatement('DELETE FROM product_variant WHERE product_id IN (?)', [$ids], [ArrayParameterType::INTEGER]);
+                $this->db->executeStatement('DELETE FROM product WHERE id IN (?)', [$ids], [ArrayParameterType::INTEGER]);
+            }
+        } finally {
+            parent::tearDown();
+        }
+    }
+
+    public function testTheAdministratorManagesBoxesAndTheKeyIsShownOnlyOnce(): void
+    {
+        $outside = fn (): array => array_map('intval', $this->db->fetchNumeric('SELECT (SELECT COUNT(*) FROM loss_finding), (SELECT COUNT(*) FROM loss_journal), (SELECT COUNT(*) FROM loss_piece), (SELECT COUNT(*) FROM loss_tag)'));
+        $outsideBefore = $outside();
+        $keysBefore = (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_box');
+        $list = $this->json($this->admin('GET', self::BOXES));
+        $this->assertSame([0, 20, false, 'pertes.boitiers'], [count(array_filter($list['items'], fn (array $b): bool => $b['status'] !== 'revoked')), $list['limit'], $list['exercise'], $list['screen']]);
+
+        // Créer : le nom est obligatoire ; rien n'est écrit par un refus
+        $fields = fn (?array $body): array => $this->json($this->admin('POST', self::BOXES, $body), 422)['fields'];
+        $this->assertSame(['name' => 'REQUIRED'], $fields([]));
+        $this->assertSame(['name' => 'MUST_BE_STRING'], $fields(['name' => 12]));
+        $this->assertSame(['name' => 'INVALID_VALUE'], $fields(['name' => '   ']));
+        $this->assertSame(['name' => 'INVALID_VALUE'], $fields(['name' => str_repeat('a', 81)]));
+        $this->assertSame(['place' => 'MUST_BE_STRING'], $fields(['name' => 'Comptoir', 'place' => ['x']]));
+        $this->assertSame($keysBefore, (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_box'));
+
+        $created = $this->json($this->admin('POST', self::BOXES, ['name' => "  Boîtier   du comptoir $this->s ", 'place' => ' Près de la caisse ']), 201);
+        $this->assertSame(['box', 'key', 'enrolment'], array_keys($created));
+        $key = $created['key'];
+        $this->assertMatchesRegularExpression('/\AIZ-BOX-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}\z/', $key);
+        $box = $created['box'];
+        $id = $box['id'];
+        $this->assertSame(["Boîtier du comptoir $this->s", 'Près de la caisse', 'pending', 'En attente de sa machine', false, '—', null, null, null, null, null, null, false, substr($key, 0, 11) . '-****-****', false, [], 'pertes.boitiers'],
+            [$box['name'], $box['place'], $box['status'], $box['statusLabel'], $box['online'], $box['onlineLabel'], $box['lastSeenAt'], $box['silentSeconds'], $box['version'], $box['arch'], $box['enrolledAt'],
+                $box['clockOffsetSeconds'], $box['clockDoubt'], $box['keyHint'], $box['exercise'], $box['devices'], $box['screen']]);
+        $this->assertSame([['BOX_CREATED', 'Boîtier ajouté', null, true]], array_map(fn (array $e): array => [$e['type'], $e['label'], $e['device'], $e['byUser']], $box['events']));
+        $this->assertSame(0, $box['factsReceived']);
+        $this->assertSame([MV_TEST_TENANT_HOST, $key, MV_TEST_TENANT_HOST . '#' . $key], [$created['enrolment']['host'], $created['enrolment']['key'], $created['enrolment']['code']]);
+        $this->assertStringContainsString('montrée qu\'une fois', $created['enrolment']['text']);
+        // La base ne garde que l'empreinte ; aucune lecture ne rend la clé, ni l'empreinte, ni la machine
+        $row = $this->db->fetchAssociative('SELECT * FROM loss_box WHERE id = ?', [$id]);
+        $this->assertSame([hash('sha256', $key), 1, null, $this->adminId], [$row['key_hash'], (int) $row['generation'], $row['machine_hash'], (int) $row['created_by']]);
+        $this->assertStringNotContainsString($key, json_encode($row) . (string) $this->db->fetchOne('SELECT string_agg(data, \'\') FROM loss_box_event WHERE box_id = ?', [$id]));
+        $secret = substr($key, 12);
+        foreach ([$this->admin('GET', self::BOXES), $this->admin('GET', self::BOXES . "/$id"), $this->admin('PUT', self::BOXES . "/$id", ['name' => "Boîtier $this->s"])] as $response) {
+            $content = (string) $response->getContent();
+            $this->assertSame(200, $response->getStatusCode(), $content);
+            $this->assertStringNotContainsString($secret, $content);
+            $this->assertStringNotContainsString($row['key_hash'], $content);
+            $this->assertStringNotContainsString('hash', strtolower($content));
+        }
+        // Renommer : le nom seul, l'endroit seul, l'endroit effacé ; en anglais
+        $this->assertSame(["Boîtier $this->s", 'Près de la caisse'], array_values(array_intersect_key($this->json($this->admin('GET', self::BOXES . "/$id")), ['name' => 0, 'place' => 0])));
+        $this->assertSame(["Boîtier $this->s", 'Réserve'], array_values(array_intersect_key($this->json($this->admin('PUT', self::BOXES . "/$id", ['place' => 'Réserve'])), ['name' => 0, 'place' => 0])));
+        $this->assertNull($this->json($this->admin('PUT', self::BOXES . "/$id", ['place' => null]))['place']);
+        $this->assertSame(['name' => 'INVALID_VALUE'], $this->json($this->admin('PUT', self::BOXES . "/$id", ['name' => '']), 422)['fields']);
+        $this->assertSame(['Waiting for its machine', 'Box added'], [($en = $this->json($this->admin('GET', self::BOXES . "/$id?locale=en")))['statusLabel'], $en['events'][0]['label']]);
+
+        // Remettre la clé à zéro : confirmation exigée ; nouvelle clé, la génération avance, l'ancienne clé n'inscrit plus personne
+        $this->assertSame(['confirm' => 'REQUIRED'], $this->json($this->admin('POST', self::BOXES . "/$id/cle", []), 422)['fields']);
+        $this->assertSame(['confirm' => 'MUST_BE_TRUE'], $this->json($this->admin('POST', self::BOXES . "/$id/cle", ['confirm' => 'oui']), 422)['fields']);
+        $reset = $this->json($this->admin('POST', self::BOXES . "/$id/cle", ['confirm' => true]));
+        $this->assertNotSame($key, $reset['key']);
+        $this->assertSame(['pending', substr($reset['key'], 0, 11) . '-****-****', ['BOX_KEY_RESET', 'BOX_CREATED']], [$reset['box']['status'], $reset['box']['keyHint'], array_column($reset['box']['events'], 'type')]);
+        $this->assertSame([2, hash('sha256', $reset['key'])], array_values($this->db->fetchNumeric('SELECT generation, key_hash FROM loss_box WHERE id = ?', [$id])));
+        $enrol = fn (string $k): Response => $this->box('POST', '/inscription', ['key' => $k, 'machine' => self::MACHINE, 'version' => '1.0.0', 'arch' => 'amd64'], null);
+        $this->assertSame('BOX_KEY_INVALID', $this->json($enrol($key), 404)['error'], 'l\'ancienne clé ne vaut plus rien');
+        $this->assertSame($id, $this->json($enrol($reset['key']))['box']['id']);
+
+        // Révoquer : confirmation exigée ; définitif ; révoquer deux fois ne fait rien ; une clé ne se remet pas à zéro sur un boîtier révoqué
+        $this->assertSame(['confirm' => 'REQUIRED'], $this->json($this->admin('POST', self::BOXES . "/$id/revoquer", []), 422)['fields']);
+        $this->assertSame('active', $this->json($this->admin('GET', self::BOXES . "/$id"))['status']);
+        $revoked = $this->json($this->admin('POST', self::BOXES . "/$id/revoquer", ['confirm' => true]));
+        $this->assertSame(['revoked', 'Révoqué', false, '—', 'BOX_REVOKED'], [$revoked['status'], $revoked['statusLabel'], $revoked['online'], $revoked['onlineLabel'], $revoked['events'][0]['type']]);
+        $again = $this->json($this->admin('POST', self::BOXES . "/$id/revoquer", ['confirm' => true]));
+        $this->assertSame(['revoked', 1], [$again['status'], count(array_filter($again['events'], fn (array $e): bool => $e['type'] === 'BOX_REVOKED'))]);
+        $this->assertSame('BOX_REVOKED', $this->json($this->admin('POST', self::BOXES . "/$id/cle", ['confirm' => true]), 409)['error']);
+        $this->assertSame('BOX_REVOKED', $this->json($enrol($reset['key']), 403)['error']);
+
+        // Introuvable : identifiant inconnu, et un boîtier d'exercice par les routes réelles (et l'inverse)
+        $simulated = $this->json($this->admin('POST', self::EX . '/boitiers'), 201)['box']['id'];
+        foreach ([['GET', self::BOXES . '/999999999', null], ['PUT', self::BOXES . '/999999999', ['name' => 'x']], ['POST', self::BOXES . '/999999999/cle', ['confirm' => true]],
+            ['POST', self::BOXES . '/999999999/revoquer', ['confirm' => true]], ['GET', self::BOXES . "/$simulated", null], ['PUT', self::BOXES . "/$simulated", ['name' => 'x']],
+            ['POST', self::BOXES . "/$simulated/cle", ['confirm' => true]], ['POST', self::BOXES . "/$simulated/revoquer", ['confirm' => true]], ['GET', self::EX . "/boitiers/$id", null],
+            ['POST', self::EX . "/boitiers/$id/scenarios", ['scenario' => 'heartbeat']]] as [$method, $path, $body]) {
+            $this->assertSame('BOX_NOT_FOUND', $this->json($this->admin($method, $path, $body), 404)['error'], "$method $path");
+        }
+        $this->assertSame('active', $this->db->fetchOne('SELECT status FROM loss_box WHERE id = ?', [$simulated]), 'un boîtier simulé ne se révoque pas par la route réelle');
+
+        // Plafond du site : 20 boîtiers non révoqués ; un boîtier révoqué rend sa place
+        $ids = [];
+        for ($i = 0; $i < LossBoxService::BOX_LIMIT; ++$i) {
+            $ids[] = $this->json($this->admin('POST', self::BOXES, ['name' => "Plafond $i $this->s"]), 201)['box']['id'];
+        }
+        $full = $this->json($this->admin('POST', self::BOXES, ['name' => 'De trop']), 409);
+        $this->assertSame(['BOX_LIMIT_REACHED', 20], [$full['error'], $full['limit']]);
+        $this->json($this->admin('POST', self::BOXES . "/$ids[0]/revoquer", ['confirm' => true]));
+        $this->json($this->admin('POST', self::BOXES, ['name' => "Place rendue $this->s"]), 201);
+
+        // Droits : administrateur seulement ; sans le droit du module, les routes réelles sont fermées
+        $this->assertSame(401, $this->call('GET', self::BOXES, null, null)->getStatusCode());
+        $this->loginPos(['ROLE_USER_POS']);
+        foreach ([['GET', self::BOXES], ['POST', self::BOXES], ['GET', self::BOXES . "/$id"], ['PUT', self::BOXES . "/$id"], ['POST', self::BOXES . "/$id/cle"], ['POST', self::BOXES . "/$id/revoquer"],
+            ['GET', self::EX . '/boitiers'], ['POST', self::EX . '/boitiers'], ['DELETE', self::EX . '/boitiers']] as [$method, $path]) {
+            $this->assertSame(403, $this->call($method, $path, $method === 'GET' ? null : [], $this->posToken)->getStatusCode(), "$method $path : un caissier");
+        }
+        static::getContainer()->get(PlatformModeService::class)->setMode('live', 'test');
+        $this->flags(true, false);
+        foreach ([['GET', self::BOXES], ['POST', self::BOXES], ['GET', self::BOXES . "/$id"], ['PUT', self::BOXES . "/$id"], ['POST', self::BOXES . "/$id/cle"], ['POST', self::BOXES . "/$id/revoquer"]] as [$method, $path]) {
+            $closed = $this->admin($method, $path, $method === 'GET' ? null : ['name' => 'x', 'confirm' => true]);
+            $this->assertSame([403, 'MODULE_INACTIVE'], [$closed->getStatusCode(), $this->json($closed, 403)['code']], "$method $path");
+        }
+        $this->flags(true, true);
+        $this->assertSame($outsideBefore, $outside(), 'ni constat, ni journal du module, ni pièce, ni puce : les boîtiers n\'écrivent que chez eux');
+    }
+
+    public function testABoxEnrolsGivesSignsOfLifeAndSendsReplayableFactsAndReadsNothingElse(): void
+    {
+        [, [$variant]] = $this->article('Blouson', ["BLOUSON-$this->s"]);
+        $nfc = '04' . $this->s . 'A1B2C3'; // 14 caractères
+        $uhf = 'E280' . $this->s . '0000' . $this->s . '1234'; // 24 caractères
+        $piece = $this->json($this->admin('POST', self::BASE . '/puces/associer', ['variantId' => $variant, 'identifier' => $nfc, 'technology' => 'nfc']))['piece']['id'];
+        $this->json($this->admin('POST', self::BASE . '/puces/associer', ['pieceId' => $piece, 'identifier' => $uhf, 'technology' => 'uhf']));
+        $created = $this->json($this->admin('POST', self::BOXES, ['name' => "Canal $this->s"]), 201);
+        [$id, $key] = [$created['box']['id'], $created['key']];
+        $watched = fn (): array => array_map('intval', $this->db->fetchNumeric('SELECT (SELECT COUNT(*) FROM "order"), (SELECT COUNT(*) FROM pos_audit_log), (SELECT COUNT(*) FROM loss_finding), (SELECT COUNT(*) FROM loss_journal),'
+            . ' (SELECT COUNT(*) FROM loss_tag), (SELECT COUNT(*) FROM loss_piece), (SELECT COUNT(*) FROM inventory_movements)'));
+        $watchedBefore = $watched();
+        $events = fn (int $box): array => array_map(fn (array $r): array => [$r['type'], json_decode((string) $r['data'], true)],
+            $this->db->fetchAllAssociative('SELECT type, data FROM loss_box_event WHERE box_id = ? ORDER BY id', [$box]));
+
+        // ----- Inscription : forme, clé, machine
+        $enrol = fn (array $body): Response => $this->box('POST', '/inscription', $body, null);
+        $good = ['key' => strtolower(str_replace('-', ' ', $key)), 'machine' => self::MACHINE, 'version' => '1.0.0', 'arch' => 'arm64'];
+        $this->assertSame(['machine' => 'REQUIRED', 'version' => 'REQUIRED', 'arch' => 'REQUIRED', 'key' => 'REQUIRED'], $this->json($enrol([]), 422)['fields']);
+        $this->assertSame(['machine' => 'INVALID_VALUE', 'version' => 'INVALID_VALUE', 'arch' => 'INVALID_VALUE'],
+            $this->json($enrol(['key' => $key, 'machine' => 'court', 'version' => 'v 1', 'arch' => 'x86']), 422)['fields']);
+        $this->assertSame(['machine' => 'INVALID_VALUE'], $this->json($enrol(['machine' => ['x']] + $good), 422)['fields']);
+        foreach (['IZ-BOX-AAAA-AAAA-AAAA', 'IZ-POS-AAAA-AAAA-AAAA', 'pas une clé', 12, ['IZ-BOX'], str_repeat('A', 100)] as $wrong) {
+            $refused = $this->json($enrol(['key' => $wrong] + $good), 404);
+            $this->assertSame(['BOX_KEY_INVALID', 'Clé de boîtier inconnue.'], [$refused['error'], $refused['message']], 'même réponse pour une clé inconnue et pour une saisie qui n\'en est pas une');
+        }
+        $this->assertSame('pending', $this->db->fetchOne('SELECT status FROM loss_box WHERE id = ?', [$id]));
+        $enrolled = $this->json($enrol($good));
+        $this->assertSame(['box', 'token', 'expiresAt', 'serverTime', 'settings'], array_keys($enrolled));
+        $this->assertSame(['id' => $id, 'name' => "Canal $this->s"], $enrolled['box']);
+        $this->assertSame(['heartbeatSeconds' => 60, 'facts' => ['types' => ['SPOT_CHECK', 'ZONE_SEEN'], 'maxBatch' => 200], 'zones' => ['stockroom', 'stockroom_door', 'floor', 'counter', 'exit'], 'devices' => []], $enrolled['settings']);
+        $token = $enrolled['token'];
+        $this->assertMatchesRegularExpression('/\Ab' . $id . '\.2\.\d{10}\.[0-9a-f]{64}\z/', $token);
+        $this->assertEqualsWithDelta(time() + 86400, strtotime($enrolled['expiresAt']), 5);
+        $row = $this->db->fetchAssociative('SELECT status, generation, machine_hash, version, arch, enrolled_at IS NOT NULL AS enrolled, last_seen_at IS NOT NULL AS seen FROM loss_box WHERE id = ?', [$id]);
+        $this->assertSame(['active', 2, hash('sha256', self::MACHINE), '1.0.0', 'arm64', true, true], [$row['status'], (int) $row['generation'], $row['machine_hash'], $row['version'], $row['arch'], $row['enrolled'], $row['seen']]);
+        $this->assertSame([['BOX_CREATED', []], ['BOX_ENROLLED', ['version' => '1.0.0', 'arch' => 'arm64', 'again' => false]]], $events($id));
+        // une autre machine avec la même clé : refusée ; la même machine : réinscrite, l'ancien jeton ne vaut plus rien
+        $this->assertSame('BOX_KEY_ALREADY_ENROLLED', $this->json($enrol(['machine' => 'une-autre-machine-0123456789'] + $good), 409)['error']);
+        $this->assertSame(2, (int) $this->db->fetchOne('SELECT generation FROM loss_box WHERE id = ?', [$id]));
+        $second = $this->json($enrol(['version' => '1.0.1'] + $good))['token'];
+        $this->assertSame('BOX_TOKEN_INVALID', $this->json($this->box('GET', '/reglages', null, $token), 401)['error']);
+        $token = $second;
+        $this->assertSame(['BOX_ENROLLED', ['version' => '1.0.1', 'arch' => 'arm64', 'again' => true]], $events($id)[2]);
+
+        // ----- La garde : tout le préfixe est fermé sans jeton valable ; le jeton du boîtier n'ouvre rien d'autre
+        $tokens = static::getContainer()->get(LossBoxToken::class);
+        foreach ([['GET', '/reglages'], ['POST', '/faits'], ['POST', '/signe-de-vie']] as [$method, $path]) {
+            $this->assertSame([401, 'BOX_TOKEN_REQUIRED'], [($r = $this->box($method, $path, $method === 'GET' ? null : [], null))->getStatusCode(), $this->json($r, 401)['error']], "$method $path sans jeton");
+        }
+        // une adresse du préfixe qui n'est pas une route, ou une route sous une autre méthode : le routeur répond avant tout contrôleur
+        foreach ([['GET', '/une-route-qui-n-existe-pas', 404], ['GET', '', 404], ['GET', '/inscription', 405], ['PUT', '/jeton', 405], ['POST', '/reglages', 405], ['DELETE', '/faits', 405]] as [$method, $path, $status]) {
+            $this->assertSame($status, $this->box($method, $path, $method === 'GET' ? null : [], null)->getStatusCode(), "$method $path");
+        }
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/api/pertes/%62oitier/reglages', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json']);
+        $this->assertSame(401, $this->client->getResponse()->getStatusCode(), 'chemin encodé : la même garde');
+        $expired = $tokens->issue(MV_TEST_TENANT_CODE, $id, 3, time() - 2 * 86400)['token'];
+        $wrong = [
+            'du bruit' => ['n-importe-quoi', 'BOX_TOKEN_INVALID'],
+            'signé pour un autre site' => [$tokens->issue('un-autre-site', $id, 3)['token'], 'BOX_TOKEN_INVALID'],
+            'un autre boîtier sous la même signature' => [preg_replace('/\Ab\d+\./', 'b' . ($id + 1) . '.', $token), 'BOX_TOKEN_INVALID'],
+            'une échéance repoussée à la main' => [preg_replace('/\.(\d{10})\./', '.' . (time() + 99999999) . '.', $token), 'BOX_TOKEN_INVALID'],
+            'une autre génération' => [$tokens->issue(MV_TEST_TENANT_CODE, $id, 2)['token'], 'BOX_TOKEN_INVALID'],
+            'un boîtier qui n\'existe pas' => [$tokens->issue(MV_TEST_TENANT_CODE, 999999999, 1)['token'], 'BOX_TOKEN_INVALID'],
+            'expiré' => [$expired, 'BOX_TOKEN_EXPIRED'],
+        ];
+        foreach ($wrong as $what => [$bad, $code]) {
+            $this->assertSame($code, $this->json($this->box('GET', '/reglages', null, $bad), 401)['error'], $what);
+            $this->assertSame($code, $this->json($this->box('POST', '/faits', ['facts' => []], $bad), 401)['error'], $what);
+        }
+        $this->assertSame(401, $this->call('GET', self::CHANNEL . '/reglages', null, $this->adminToken)->getStatusCode(), 'un administrateur n\'est pas un boîtier');
+        // Le jeton du boîtier, seul ou présenté comme un jeton d'utilisateur, ne lit ni les ventes, ni les clients, ni les constats, ni rien de la gestion
+        foreach (['/api/gestion/pertes', '/api/gestion/pertes/constats', '/api/gestion/pertes/boitiers', '/api/gestion/pertes/pieces', '/api/pos/customers', '/api/orders', '/api/gestion/statistiques',
+            '/api/app-keys', '/api/cash-registers', '/api/caisse/transactions', '/api/pos/statistics/cashiers'] as $path) {
+            foreach ([['HTTP_X_LOSS_BOX' => $token], ['HTTP_AUTHORIZATION' => 'Bearer ' . $token], ['HTTP_X_LOSS_BOX' => $token, 'HTTP_AUTHORIZATION' => 'Bearer ' . $token]] as $headers) {
+                $this->client->getCookieJar()->clear();
+                $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . $path, [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json'] + $headers);
+                $this->assertSame(401, $this->client->getResponse()->getStatusCode(), "$path avec le jeton du boîtier : " . substr((string) $this->client->getResponse()->getContent(), 0, 200));
+            }
+        }
+        // Ses réglages : ce qu'il a le droit de savoir, et rien d'autre
+        $settings = $this->json($this->box('GET', '/reglages', null, $token));
+        $this->assertSame(['box', 'serverTime', 'heartbeatSeconds', 'facts', 'zones', 'devices'], array_keys($settings));
+        $this->assertSame(['id' => $id, 'name' => "Canal $this->s"], $settings['box']);
+
+        // ----- Signe de vie
+        $beat = fn (array $body, ?string $with = null): Response => $this->box('POST', '/signe-de-vie', $body, $with ?? $token);
+        $now = fn (int $shift = 0): string => gmdate('Y-m-d\TH:i:s\Z', time() + $shift);
+        $this->assertSame(['now' => 'REQUIRED'], $this->json($beat([]), 422)['fields']);
+        $this->assertSame(['now' => 'INVALID_VALUE', 'version' => 'INVALID_VALUE', 'devices' => 'MUST_BE_LIST'], $this->json($beat(['now' => 'hier', 'version' => 'v 2', 'devices' => ['a' => 1]]), 422)['fields']);
+        $this->assertSame(['now' => 'INVALID_VALUE'], $this->json($beat(['now' => '1970-01-01T00:00:00Z']), 422)['fields']);
+        $this->assertSame(['devices[0].serial' => 'REQUIRED', 'devices[0].kind' => 'REQUIRED', 'devices[0].status' => 'REQUIRED', 'devices[1]' => 'INVALID_VALUE', 'devices[2].serial' => 'INVALID_VALUE',
+            'devices[2].kind' => 'INVALID_VALUE', 'devices[2].status' => 'INVALID_VALUE', 'devices[2].model' => 'INVALID_VALUE', 'devices[4].serial' => 'DUPLICATE'],
+            $this->json($beat(['now' => $now(), 'devices' => [[], 'x', ['serial' => 'a b', 'kind' => 'antenne', 'status' => 'bof', 'model' => '<script>'], ['serial' => 'L1', 'kind' => 'reader', 'status' => 'ok'],
+                ['serial' => 'L1', 'kind' => 'reader', 'status' => 'ok']]]), 422)['fields']);
+        $this->assertSame(['devices' => 'TOO_MANY'], $this->json($beat(['now' => $now(), 'devices' => array_map(fn (int $i): array => ['serial' => "S$i", 'kind' => 'reader', 'status' => 'ok'], range(1, 17))]), 422)['fields']);
+        $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_device WHERE box_id = ?', [$id]), 'un signe de vie refusé n\'écrit rien');
+        $devices = [['serial' => "LECTEUR-$this->s", 'kind' => 'reader', 'status' => 'ok', 'model' => 'Lecteur de bureau (USB)'], ['serial' => "IMPR-$this->s", 'kind' => 'printer', 'status' => 'down']];
+        $first = $this->json($beat(['now' => $now(), 'version' => '1.0.2', 'devices' => $devices]));
+        $this->assertSame(['serverTime', 'clockOffsetSeconds', 'clockDoubt', 'token', 'settings'], array_keys($first));
+        $this->assertSame([false, null], [$first['clockDoubt'], $first['token']]);
+        $this->assertEqualsWithDelta(0, $first['clockOffsetSeconds'], 3);
+        $this->assertSame([["LECTEUR-$this->s", 'reader', null, null], ["IMPR-$this->s", 'printer', null, null]], array_map(fn (array $d): array => [$d['serial'], $d['kind'], $d['zone'], $d['cashRegisterId']], $first['settings']['devices']));
+        $reader = $first['settings']['devices'][0]['id'];
+        $this->assertSame([['DEVICE_SEEN', ['kind' => 'reader']], ['DEVICE_SEEN', ['kind' => 'printer']], ['SOURCE_DOWN', ['reason' => 'reported']]], array_slice($events($id), 3));
+        $this->assertSame('1.0.2', $this->db->fetchOne('SELECT version FROM loss_box WHERE id = ?', [$id]));
+        // le même signe de vie n'écrit aucun fait : seul un changement en écrit un
+        $count = fn (): int => (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_box_event WHERE box_id = ?', [$id]);
+        $before = $count();
+        $this->json($beat(['now' => $now(), 'devices' => $devices]));
+        $this->json($beat(['now' => $now(), 'devices' => $devices]));
+        $this->assertSame($before, $count());
+        // l'imprimante revient ; le lecteur n'est plus annoncé : en panne, une seule fois ; puis il revient
+        $this->json($beat(['now' => $now(), 'devices' => [['serial' => "IMPR-$this->s", 'kind' => 'printer', 'status' => 'ok']]]));
+        $this->json($beat(['now' => $now(), 'devices' => [['serial' => "IMPR-$this->s", 'kind' => 'printer', 'status' => 'ok']]]));
+        $this->assertSame([['SOURCE_UP', ['reason' => 'reported']], ['SOURCE_DOWN', ['reason' => 'absent']]], array_slice($events($id), $before));
+        $this->assertSame(['down', 'ok'], $this->db->fetchFirstColumn('SELECT status FROM loss_device WHERE box_id = ? ORDER BY id', [$id]));
+        $this->json($beat(['now' => $now(), 'devices' => $devices]));
+        $this->assertSame([['SOURCE_UP', ['reason' => 'reported']], ['SOURCE_DOWN', ['reason' => 'reported']]], array_slice($events($id), $before + 2));
+        // le genre d'un appareil ne change pas ; rien n'est écrit par ce refus
+        $before = $count();
+        $this->assertSame(['devices[0].kind' => 'MISMATCH'], $this->json($beat(['now' => $now(), 'devices' => [['serial' => "LECTEUR-$this->s", 'kind' => 'camera', 'status' => 'ok']]]), 422)['fields']);
+        $this->assertSame(['devices' => 'TOO_MANY'], $this->json($beat(['now' => $now(), 'devices' => array_map(fn (int $i): array => ['serial' => "N$i", 'kind' => 'reader', 'status' => 'ok'], range(1, 15))]), 422)['fields'],
+            'les appareils déjà connus comptent dans le plafond');
+        $this->assertSame([$before, 2], [$count(), (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_device WHERE box_id = ?', [$id])]);
+        // Horloge du boîtier : l'écart est mesuré ; au-delà d'une minute, il est dit
+        $late = $this->json($beat(['now' => gmdate('Y-m-d\TH:i:s', time() + 7200 - 300) . '+02:00', 'devices' => $devices]));
+        $this->assertEqualsWithDelta(-300, $late['clockOffsetSeconds'], 3);
+        $this->assertTrue($late['clockDoubt']);
+        $sheet = $this->json($this->admin('GET', self::BOXES . "/$id"));
+        $this->assertSame([true, 'En ligne', null, true, '1.0.2', 'arm64'], [$sheet['online'], $sheet['onlineLabel'], $sheet['silentSeconds'], $sheet['clockDoubt'], $sheet['version'], $sheet['arch']]);
+        $this->assertSame([["LECTEUR-$this->s", 'reader', 'Lecteur de puces', 'Lecteur de bureau (USB)', 'ok', 'En marche', null, null], ["IMPR-$this->s", 'printer', 'Imprimante à puce', null, 'down', 'En panne ou débranché', null, null]],
+            array_map(fn (array $d): array => [$d['serial'], $d['kind'], $d['kindLabel'], $d['model'], $d['status'], $d['statusLabel'], $d['zone'], $d['zoneLabel']], $sheet['devices']));
+        $this->assertSame("LECTEUR-$this->s", array_values(array_filter($sheet['events'], fn (array $e): bool => $e['type'] === 'DEVICE_SEEN'))[1]['device']);
+        // Silence : sans signe de vie depuis plus de 5 minutes, le boîtier est dit silencieux ; son retour écrit UN fait qui dit le trou
+        $this->db->executeStatement("UPDATE loss_box SET last_seen_at = NOW() AT TIME ZONE 'UTC' - INTERVAL '10 minutes' WHERE id = ?", [$id]);
+        $silent = $this->json($this->admin('GET', self::BOXES . "/$id"));
+        $this->assertSame([false, 'Silencieux'], [$silent['online'], $silent['onlineLabel']]);
+        $this->assertEqualsWithDelta(600, $silent['silentSeconds'], 5);
+        $before = $count();
+        $this->json($beat(['now' => $now(), 'devices' => $devices]));
+        $this->json($beat(['now' => $now(), 'devices' => $devices]));
+        $back = array_slice($events($id), $before);
+        $this->assertSame([1, 'BOX_BACK'], [count($back), $back[0][0]]);
+        $this->assertEqualsWithDelta(600, $back[0][1]['silentSeconds'], 5);
+        $this->assertSame(array_values(array_filter(array_column($this->json($this->admin('GET', self::BOXES . "/$id"))['events'], 'silentSeconds')))[0], $back[0][1]['silentSeconds']);
+        $this->assertTrue($this->json($this->admin('GET', self::BOXES . "/$id"))['online']);
+        // Jeton : renouvelé au signe de vie dès la mi-vie ; un jeton expiré s'échange, avec la machine, pendant 30 jours
+        $halfLife = $tokens->issue(MV_TEST_TENANT_CODE, $id, 3, time() - 13 * 3600)['token'];
+        $renewed = $this->json($beat(['now' => $now(), 'devices' => $devices], $halfLife))['token'];
+        $this->assertEqualsWithDelta(time() + 86400, strtotime($renewed['expiresAt']), 5);
+        $this->assertSame(200, $this->box('GET', '/reglages', null, $renewed['token'])->getStatusCode());
+        $this->assertNull($this->json($beat(['now' => $now(), 'devices' => $devices], $tokens->issue(MV_TEST_TENANT_CODE, $id, 3, time() - 11 * 3600)['token']))['token'], 'avant la mi-vie : le jeton reste');
+        $this->ip = self::randomIp(); // les essais d'inscription de ce test ont déjà entamé le plafond de son adresse
+        $renew = fn (?string $with, array $body): Response => $this->box('POST', '/jeton', $body, $with);
+        $fresh = $this->json($renew($expired, ['machine' => self::MACHINE]));
+        $this->assertSame(['token', 'expiresAt', 'serverTime'], array_keys($fresh));
+        $this->assertSame(200, $this->box('GET', '/reglages', null, $fresh['token'])->getStatusCode());
+        foreach (['sans jeton' => [null, ['machine' => self::MACHINE]], 'une autre machine' => [$expired, ['machine' => 'une-autre-machine-0123456789']], 'sans machine' => [$expired, []],
+            'expiré depuis plus de 30 jours' => [$tokens->issue(MV_TEST_TENANT_CODE, $id, 3, time() - 32 * 86400)['token'], ['machine' => self::MACHINE]],
+            'une génération passée' => [$tokens->issue(MV_TEST_TENANT_CODE, $id, 2)['token'], ['machine' => self::MACHINE]],
+            'un autre site' => [$tokens->issue('un-autre-site', $id, 3)['token'], ['machine' => self::MACHINE]]] as $what => [$with, $body]) {
+            $this->assertSame('BOX_TOKEN_INVALID', $this->json($renew($with, $body), 401)['error'], $what);
+        }
+
+        // ----- Faits : un lot, une réponse par fait ; rejouable
+        $this->json($beat(['now' => $now(), 'devices' => $devices])); // l'horloge du boîtier est à l'heure
+        $at = gmdate('Y-m-d\TH:i:s\Z', time() - 90);
+        $fact = fn (string $k, array $over = []): array => $over + ['key' => "fait-$this->s-$k", 'type' => 'SPOT_CHECK', 'at' => $at, 'device' => "LECTEUR-$this->s", 'data' => ['identifier' => $nfc, 'technology' => 'nfc']];
+        $batch = [
+            $fact('a', ['seq' => 7]),
+            $fact('b', ['type' => 'ZONE_SEEN', 'zone' => 'exit', 'data' => ['identifier' => implode(':', str_split(strtolower($uhf), 2))], 'at' => gmdate('Y-m-d\TH:i:s', time() + 7200 - 60) . '+02:00']),
+            $fact('a'), // même clé dans le même lot
+            $fact('c', ['type' => 'PIECE_SOLD']),
+            ['type' => 'SPOT_CHECK'],
+            $fact('d', ['key' => 'court']),
+            $fact('e', ['at' => 'tout à l\'heure']),
+            $fact('f', ['seq' => -1]),
+            $fact('g', ['device' => 'INCONNU']),
+            $fact('h', ['device' => "IMPR-$this->s"]),
+            $fact('i', ['type' => 'ZONE_SEEN']),
+            $fact('j', ['zone' => 'toilettes']),
+            $fact('k', ['data' => ['identifier' => 'AABBCCDD', 'technology' => 'nfc']]),
+            $fact('l', ['data' => ['identifier' => 'SIM-0123456789AB']]),
+            $fact('m', ['data' => ['identifier' => 'pas une puce']]),
+            $fact('n', ['data' => ['identifier' => $nfc, 'technology' => 'simulated']]),
+            $fact('o', ['data' => 'x']),
+            'pas un fait',
+            $fact('p', ['zone' => 'floor']),
+        ];
+        $pieceEvents = fn (): int => (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_piece_event');
+        $before = $pieceEvents();
+        $sent = $this->json($this->box('POST', '/faits', ['facts' => $batch], $token));
+        $this->assertSame(['received', 'accepted', 'duplicates', 'refused', 'results', 'serverTime'], array_keys($sent));
+        $this->assertSame([19, 3, 1, 15], [$sent['received'], $sent['accepted'], $sent['duplicates'], $sent['refused']]);
+        $k = fn (string $x): string => "fait-$this->s-$x";
+        $this->assertSame([
+            [0, $k('a'), 'accepted', null], [1, $k('b'), 'accepted', null], [2, $k('a'), 'duplicate', null], [3, $k('c'), 'refused', 'FACT_TYPE_UNKNOWN'], [4, null, 'refused', 'FACT_INVALID'],
+            [5, null, 'refused', 'FACT_INVALID'], [6, $k('e'), 'refused', 'FACT_INVALID'], [7, $k('f'), 'refused', 'FACT_INVALID'], [8, $k('g'), 'refused', 'DEVICE_UNKNOWN'],
+            [9, $k('h'), 'refused', 'DEVICE_KIND_INVALID'], [10, $k('i'), 'refused', 'ZONE_INVALID'], [11, $k('j'), 'refused', 'ZONE_INVALID'], [12, $k('k'), 'refused', 'TAG_UNKNOWN'],
+            [13, $k('l'), 'refused', 'TAG_SIMULATED'], [14, $k('m'), 'refused', 'TAG_INVALID'], [15, $k('n'), 'refused', 'TAG_INVALID'], [16, $k('o'), 'refused', 'TAG_INVALID'],
+            [17, null, 'refused', 'FACT_INVALID'], [18, $k('p'), 'accepted', null],
+        ], array_map(fn (array $r): array => [$r['index'], $r['key'], $r['status'], $r['code']], $sent['results']));
+        $this->assertSame($before + 3, $pieceEvents());
+        $written = $this->db->fetchAllAssociative('SELECT type, occurred_at, user_id, piece_id, tag_id, source, event_key, exercise, data, box_id, device_id, received_at FROM loss_piece_event WHERE box_id = ? ORDER BY id', [$id]);
+        $tagIds = array_map('intval', $this->db->fetchAllKeyValue('SELECT identifier, id FROM loss_tag WHERE identifier IN (?, ?)', [$nfc, $uhf]));
+        $this->assertSame([
+            ['SPOT_CHECK', gmdate('Y-m-d H:i:s', strtotime($at)), null, $piece, $tagIds[$nfc], 'box', "b$id:" . $k('a'), false, ['seq' => 7], $id, $reader],
+            ['ZONE_SEEN', '(vérifiée plus bas)', null, $piece, $tagIds[$uhf], 'box', "b$id:" . $k('b'), false, ['zone' => 'exit'], $id, $reader],
+            ['SPOT_CHECK', gmdate('Y-m-d H:i:s', strtotime($at)), null, $piece, $tagIds[$nfc], 'box', "b$id:" . $k('p'), false, ['zone' => 'floor'], $id, $reader],
+        ], array_map(fn (array $r): array => [$r['type'], $r['type'] === 'ZONE_SEEN' ? '(vérifiée plus bas)' : $r['occurred_at'], $r['user_id'], (int) $r['piece_id'], (int) $r['tag_id'], $r['source'], $r['event_key'],
+            (bool) $r['exercise'], json_decode($r['data'], true), (int) $r['box_id'], (int) $r['device_id']], $written));
+        $this->assertEqualsWithDelta(time() - 60, strtotime($written[1]['occurred_at'] . ' UTC'), 5, 'l\'heure du boîtier, ramenée en UTC');
+        $this->assertEqualsWithDelta(time(), strtotime($written[0]['received_at'] . ' UTC'), 5, 'l\'heure de réception');
+        // Rejouer le même lot : rien de plus ; les faits reçus répondent « déjà connu »
+        $replayed = $this->json($this->box('POST', '/faits', ['facts' => $batch], $token));
+        $this->assertSame([19, 0, 4, 15, $before + 3], [$replayed['received'], $replayed['accepted'], $replayed['duplicates'], $replayed['refused'], $pieceEvents()]);
+        // Aucun état ne change : la pièce et ses puces sont comme avant ; la fiche de la pièce raconte les lectures
+        $this->assertSame(['created', null], array_values($this->db->fetchNumeric('SELECT status, zone FROM loss_piece WHERE id = ?', [$piece])));
+        $this->assertSame(['associated', 'associated'], $this->db->fetchFirstColumn('SELECT status FROM loss_tag WHERE piece_id = ? ORDER BY id', [$piece]));
+        $history = array_column($this->json($this->admin('GET', self::BASE . "/pieces/$piece"))['events'], 'label', 'type');
+        $this->assertSame(['Lue par le lecteur à main du boîtier', 'Lue dans une zone'], [$history['SPOT_CHECK'], $history['ZONE_SEEN']]);
+        $this->assertSame(3, $this->json($this->admin('GET', self::BOXES . "/$id"))['factsReceived']);
+        // Lot refusé en entier : forme, plafond, corps
+        $this->assertSame(['facts' => 'REQUIRED'], $this->json($this->box('POST', '/faits', [], $token), 422)['fields']);
+        $this->assertSame(['facts' => 'MUST_BE_LIST'], $this->json($this->box('POST', '/faits', ['facts' => []], $token), 422)['fields']);
+        $this->assertSame(['facts' => 'MUST_BE_LIST'], $this->json($this->box('POST', '/faits', ['facts' => ['a' => $fact('q')]], $token), 422)['fields']);
+        $tooMany = $this->json($this->box('POST', '/faits', ['facts' => array_fill(0, 201, $fact('r'))], $token), 422);
+        $this->assertSame(['FACTS_LIMIT_EXCEEDED', 200, 201], [$tooMany['error'], $tooMany['max'], $tooMany['received']]);
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . self::CHANNEL . '/faits', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_X_LOSS_BOX' => $token], '{pas du json');
+        $this->assertSame(['body' => 'INVALID_JSON'], $this->json($this->client->getResponse(), 422)['fields']);
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . self::CHANNEL . '/faits', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_X_LOSS_BOX' => $token],
+            json_encode(['facts' => [$fact('s')], 'bourrage' => str_repeat('x', 262144)]));
+        $this->assertSame('PAYLOAD_TOO_LARGE', $this->json($this->client->getResponse(), 413)['error']);
+        $this->assertSame($before + 3, $pieceEvents());
+        // Heure douteuse : horloge du boîtier décalée, ou fait daté du futur
+        $this->json($beat(['now' => $now(-600), 'devices' => $devices]));
+        $this->json($this->box('POST', '/faits', ['facts' => [$fact('t')]], $token));
+        $this->json($beat(['now' => $now(), 'devices' => $devices]));
+        $this->json($this->box('POST', '/faits', ['facts' => [$fact('u'), $fact('v', ['at' => $now(600)])]], $token));
+        $this->assertSame([[$k('t'), true], [$k('u'), false], [$k('v'), true]], array_map(fn (array $r): array => [substr($r['event_key'], strlen("b$id:")), json_decode($r['data'], true)['clockDoubt'] ?? false],
+            array_reverse($this->db->fetchAllAssociative('SELECT event_key, data FROM loss_piece_event WHERE box_id = ? ORDER BY id DESC LIMIT 3', [$id]))));
+        // Deux boîtiers, la même clé de fait : chacun la sienne
+        $this->ip = self::randomIp();
+        $other = $this->json($this->admin('POST', self::BOXES, ['name' => "Second $this->s"]), 201);
+        $otherToken = $this->json($enrol(['key' => $other['key'], 'machine' => 'seconde-machine-0123456789abcdef'] + $good))['token'];
+        $this->json($this->box('POST', '/signe-de-vie', ['now' => $now(), 'devices' => [['serial' => "LECTEUR-$this->s", 'kind' => 'reader', 'status' => 'ok']]], $otherToken));
+        $this->assertSame('DEVICE_UNKNOWN', $this->json($this->box('POST', '/faits', ['facts' => [$fact('w', ['device' => "IMPR-$this->s"])]], $otherToken))['results'][0]['code'], 'l\'appareil d\'un autre boîtier');
+        $this->assertSame('accepted', $this->json($this->box('POST', '/faits', ['facts' => [$fact('a')]], $otherToken))['results'][0]['status']);
+        $this->assertSame([$other['box']['id'], 'b' . $other['box']['id'] . ':' . $k('a')], array_values($this->db->fetchNumeric('SELECT box_id, event_key FROM loss_piece_event ORDER BY id DESC LIMIT 1')));
+
+        // ----- Rien d'autre n'a bougé : ni vente, ni journal de caisse, ni constat, ni journal du module, ni puce, ni pièce, ni stock
+        $this->assertSame($watchedBefore, $watched());
+
+        // ----- Sans le droit du module : tout le canal est fermé, inscription comprise ; rien n'est écrit
+        static::getContainer()->get(PlatformModeService::class)->setMode('live', 'test');
+        $this->flags(true, false);
+        $before = $pieceEvents();
+        foreach ([['POST', '/inscription', $good, null], ['POST', '/jeton', ['machine' => self::MACHINE], $token], ['POST', '/signe-de-vie', ['now' => $now()], $token], ['GET', '/reglages', null, $token],
+            ['POST', '/faits', ['facts' => [$fact('x')]], $token]] as [$method, $path, $body, $with]) {
+            $this->assertSame('MODULE_INACTIVE', $this->json($this->box($method, $path, $body, $with), 403)['code'], "$method $path");
+        }
+        $this->assertSame($before, $pieceEvents());
+        $this->flags(true, true);
+        static::getContainer()->get(PlatformModeService::class)->setMode('demo', 'test');
+
+        // ----- Clé remise à zéro, puis révocation : le jeton est refusé à l'appel suivant
+        $this->json($this->admin('POST', self::BOXES . '/' . $other['box']['id'] . '/cle', ['confirm' => true]));
+        $this->assertSame('BOX_TOKEN_INVALID', $this->json($this->box('GET', '/reglages', null, $otherToken), 401)['error']);
+        $this->assertSame('BOX_TOKEN_INVALID', $this->json($renew($otherToken, ['machine' => 'seconde-machine-0123456789abcdef']), 401)['error']);
+        $this->json($this->admin('POST', self::BOXES . "/$id/revoquer", ['confirm' => true]));
+        foreach ([['GET', '/reglages', null], ['POST', '/faits', ['facts' => [$fact('y')]]], ['POST', '/signe-de-vie', ['now' => $now()]], ['POST', '/jeton', ['machine' => self::MACHINE]]] as [$method, $path, $body]) {
+            $this->assertSame('BOX_REVOKED', $this->json($this->box($method, $path, $body, $token), 403)['error'], "$method $path");
+        }
+        $this->assertSame('BOX_REVOKED', $this->json($enrol($good), 403)['error']);
+    }
+
+    public function testEnrolmentAttemptsAndBoxCallsAreRateLimited(): void
+    {
+        $ip = '11.' . random_int(1, 250) . '.' . random_int(1, 250) . '.' . random_int(1, 250);
+        $try = fn (string $path): Response => $this->box('POST', $path, ['key' => 'IZ-BOX-AAAA-AAAA-AAAA', 'machine' => self::MACHINE, 'version' => '1', 'arch' => 'amd64'], null, ['REMOTE_ADDR' => $ip]);
+        for ($i = 0; $i < LossBoxGuardSubscriber::OPEN_LIMIT; ++$i) {
+            $this->assertContains($try($i % 2 === 0 ? '/inscription' : '/jeton')->getStatusCode(), [401, 404], "essai $i");
+        }
+        $limited = $try('/inscription');
+        $this->assertSame([429, 'RATE_LIMITED'], [$limited->getStatusCode(), $this->json($limited, 429)['error']]);
+        $this->assertGreaterThan(0, (int) $limited->headers->get('Retry-After'));
+        $this->assertSame(429, $try('/jeton')->getStatusCode(), 'l\'échange de jeton partage le plafond');
+        $this->assertNotSame(429, $this->box('POST', '/inscription', [], null, ['REMOTE_ADDR' => '12.251.' . random_int(1, 250) . '.' . random_int(1, 250)])->getStatusCode(), 'une autre adresse n\'est pas touchée');
+    }
+
+    public function testTheSimulatedBoxPlaysScenariosIsErasedAndNeverMixesWithRealBoxes(): void
+    {
+        $realBefore = array_map('intval', $this->db->fetchNumeric('SELECT (SELECT COUNT(*) FROM loss_box WHERE NOT exercise), (SELECT COUNT(*) FROM loss_box_event WHERE NOT exercise), (SELECT COUNT(*) FROM loss_piece_event WHERE NOT exercise)'));
+        $real = $this->json($this->admin('POST', self::BOXES, ['name' => "Réel $this->s"]), 201)['box']['id'];
+        $start = $this->json($this->admin('GET', self::EX . '/boitiers'));
+        $this->assertSame([[], 0, 3, true, 'pertes.boitiers', ['heartbeat', 'network_cut', 'device_down', 'device_up', 'spot_check', 'zone_exit']],
+            [$start['items'], $start['total'], $start['limit'], $start['exercise'], $start['screen'], array_column($start['scenarios'], 'code')]);
+        $this->assertSame(['code' => 'network_cut', 'label' => 'Coupure du réseau', 'text' => 'Le boîtier revient après deux heures sans réseau : un fait dit le trou.'], $start['scenarios'][1]);
+        $install = fn (bool $exercise): array => array_column($this->json($this->admin('GET', $exercise ? self::EX . '/installation' : self::BASE . '/installation'))['optionalSteps'], 'status', 'code');
+        $this->assertSame([['box' => 'todo'], ['box' => 'todo']], [$install(true), $install(false)]);
+
+        $created = $this->json($this->admin('POST', self::EX . '/boitiers'), 201);
+        $this->assertSame(['box', 'scenarios'], array_keys($created));
+        $box = $created['box'];
+        $id = $box['id'];
+        $this->assertSame(['Boîtier simulé', 'Exercice', 'active', true, 'En ligne', null, true, ['BOX_CREATED', 'BOX_ENROLLED', 'DEVICE_SEEN', 'DEVICE_SEEN'], 0],
+            [$box['name'], $box['place'], $box['status'], $box['online'], $box['onlineLabel'], $box['keyHint'], $box['exercise'], array_reverse(array_column($box['events'], 'type')), $box['factsReceived']]);
+        $this->assertSame([['SIM-LECTEUR-SORTIE', 'reader', 'ok', 'exit', 'Sortie'], ['SIM-LECTEUR-MAIN', 'reader', 'ok', null, null]], array_map(fn (array $d): array => [$d['serial'], $d['kind'], $d['status'], $d['zone'], $d['zoneLabel']], $box['devices']));
+        $this->assertSame([null, null, true], array_values($this->db->fetchNumeric('SELECT key_hash, machine_hash, exercise FROM loss_box WHERE id = ?', [$id])), 'ni clé ni machine : personne ne s\'y inscrit');
+        // l'assistant d'exercice voit le boîtier simulé ; l'assistant réel, non (son boîtier attend encore sa machine)
+        $this->assertSame([['box' => 'done'], ['box' => 'todo']], [$install(true), $install(false)]);
+        $this->assertSame(['code' => 'box', 'verified' => true, 'hint' => null], $this->json($this->admin('POST', self::EX . '/installation/etapes/box/verifier', [])));
+        $verify = $this->json($this->admin('POST', self::BASE . '/installation/etapes/box/verifier', []));
+        $this->assertSame(['box', false], [$verify['code'], $verify['verified']]);
+        $this->assertStringContainsString('Aucun boîtier n\'est inscrit', $verify['hint']);
+        $steps = $this->json($this->admin('GET', self::EX . '/installation'));
+        $this->assertSame([4, ['code' => 'box', 'title' => 'Brancher un boîtier', 'image' => 'pertes/installation/box', 'status' => 'done', 'verify' => ['kind' => 'data', 'label' => 'Vérifier']]],
+            [$steps['progress']['total'], array_diff_key($steps['optionalSteps'][0], ['text' => 0])], 'une étape facultative ne compte pas dans l\'avancement');
+        // un boîtier simulé n'a pas de jeton : même signé par le serveur, il est refusé
+        $forged = static::getContainer()->get(LossBoxToken::class)->issue(MV_TEST_TENANT_CODE, $id, 1)['token'];
+        $this->assertSame('BOX_TOKEN_INVALID', $this->json($this->box('GET', '/reglages', null, $forged), 401)['error']);
+        $this->assertSame('BOX_TOKEN_INVALID', $this->json($this->box('POST', '/jeton', ['machine' => self::MACHINE], $forged), 401)['error']);
+
+        // Scénarios
+        $play = fn (mixed $scenario, int $status = 200): array => $this->json($this->admin('POST', self::EX . "/boitiers/$id/scenarios", ['scenario' => $scenario]), $status);
+        $this->assertSame(['scenario' => 'REQUIRED'], $this->json($this->admin('POST', self::EX . "/boitiers/$id/scenarios", []), 422)['fields']);
+        $this->assertSame(['scenario' => 'INVALID_VALUE'], $play('incendie', 422)['fields']);
+        $this->assertSame(['scenario' => 'INVALID_VALUE'], $play(['heartbeat'], 422)['fields']);
+        $this->db->executeStatement("UPDATE loss_box SET last_seen_at = NOW() AT TIME ZONE 'UTC' - INTERVAL '1 hour' WHERE id = ?", [$id]);
+        $this->assertFalse($this->json($this->admin('GET', self::EX . "/boitiers/$id"))['online']);
+        $beat = $play('heartbeat');
+        $this->assertSame(['scenario', 'written', 'box'], array_keys($beat));
+        $this->assertSame(['heartbeat', 0, true], [$beat['scenario'], $beat['written'], $beat['box']['online']]);
+        $cut = $play('network_cut');
+        $this->assertSame([1, 'BOX_BACK', 7200, 'Boîtier revenu après un silence'], [$cut['written'], $cut['box']['events'][0]['type'], $cut['box']['events'][0]['silentSeconds'], $cut['box']['events'][0]['label']]);
+        $down = $play('device_down');
+        $this->assertSame([1, 'SOURCE_DOWN', 'SIM-LECTEUR-SORTIE', 'down'], [$down['written'], $down['box']['events'][0]['type'], $down['box']['events'][0]['device'], $down['box']['devices'][0]['status']]);
+        $this->assertSame(0, $play('device_down')['written'], 'déjà en panne : rien de plus');
+        $up = $play('device_up');
+        $this->assertSame([1, 'SOURCE_UP', 'ok'], [$up['written'], $up['box']['events'][0]['type'], $up['box']['devices'][0]['status']]);
+        $this->assertSame(0, $play('device_up')['written']);
+        // lectures : il faut une pièce d'exercice qui porte une puce
+        $none = $play('spot_check', 409);
+        $this->assertSame('EXERCISE_NO_PIECE', $none['error']);
+        $this->assertStringContainsString('posez d\'abord une puce simulée', $none['message']);
+        [, [$variant]] = $this->article('Robe', ["ROBE-$this->s"]);
+        $pieces = [];
+        for ($i = 0; $i < 4; ++$i) {
+            $pieces[] = $this->json($this->admin('POST', self::EX . '/puces/associer', ['variantId' => $variant]))['piece']['id'];
+        }
+        $spot = $play('spot_check');
+        $this->assertSame([3, 3], [$spot['written'], $spot['box']['factsReceived']]);
+        $exit = $play('zone_exit');
+        $this->assertSame([1, 4], [$exit['written'], $exit['box']['factsReceived']]);
+        $facts = $this->db->fetchAllAssociative('SELECT type, piece_id, source, event_key, exercise, data, box_id, device_id FROM loss_piece_event WHERE box_id = ? ORDER BY id', [$id]);
+        $reader = array_column($exit['box']['devices'], 'id', 'serial');
+        $this->assertSame([['SPOT_CHECK', $pieces[3], 'exercise', null, true, [], $reader['SIM-LECTEUR-MAIN']], ['SPOT_CHECK', $pieces[2], 'exercise', null, true, [], $reader['SIM-LECTEUR-MAIN']],
+            ['SPOT_CHECK', $pieces[1], 'exercise', null, true, [], $reader['SIM-LECTEUR-MAIN']], ['ZONE_SEEN', $pieces[3], 'exercise', null, true, ['zone' => 'exit'], $reader['SIM-LECTEUR-SORTIE']]],
+            array_map(fn (array $f): array => [$f['type'], (int) $f['piece_id'], $f['source'], $f['event_key'], (bool) $f['exercise'], json_decode($f['data'], true), (int) $f['device_id']], $facts));
+        $this->assertSame(['Lue par le lecteur à main du boîtier', 'Lue dans une zone'],
+            array_slice(array_column($this->json($this->admin('GET', self::EX . "/pieces/$pieces[3]"))['events'], 'label'), -2), 'la fiche de la pièce d\'exercice raconte les lectures');
+        $this->assertSame('created', $this->db->fetchOne('SELECT status FROM loss_piece WHERE id = ?', [$pieces[3]]), 'aucun état ne change');
+
+        // Plafond : trois boîtiers simulés ; listes étanches ; ouvert sans le droit du module
+        $this->json($this->admin('POST', self::EX . '/boitiers'), 201);
+        $this->json($this->admin('POST', self::EX . '/boitiers?locale=en'), 201);
+        $full = $this->json($this->admin('POST', self::EX . '/boitiers'), 409);
+        $this->assertSame(['EXERCISE_LIMIT_REACHED', 3], [$full['error'], $full['limit']]);
+        $this->assertSame([3, ['Boîtier simulé', 'Boîtier simulé', 'Simulated box']], [($list = $this->json($this->admin('GET', self::EX . '/boitiers')))['total'], array_column($list['items'], 'name')]);
+        $this->assertSame([], array_filter($this->json($this->admin('GET', self::BOXES))['items'], fn (array $b): bool => $b['exercise']), 'la liste réelle ne montre aucun boîtier simulé');
+        $this->assertNotContains($real, array_column($list['items'], 'id'));
+        static::getContainer()->get(PlatformModeService::class)->setMode('live', 'test');
+        $this->flags(true, false);
+        $this->assertSame(200, $this->admin('GET', self::EX . '/boitiers')->getStatusCode());
+        $this->assertSame(200, $this->admin('GET', self::EX . "/boitiers/$id")->getStatusCode());
+        $this->assertSame(200, $this->admin('POST', self::EX . "/boitiers/$id/scenarios", ['scenario' => 'heartbeat'])->getStatusCode());
+        $this->assertSame(409, $this->admin('POST', self::EX . '/boitiers')->getStatusCode(), 'ouverte : c\'est le plafond qui répond');
+        $this->assertSame(401, $this->call('POST', self::EX . '/boitiers', [], null)->getStatusCode());
+        $this->flags(true, true);
+        static::getContainer()->get(PlatformModeService::class)->setMode('demo', 'test');
+
+        // Effacer : les boîtiers simulés, leurs appareils et leurs faits partent ; les pièces d'exercice restent ; rien de réel ne bouge
+        $deleted = $this->json($this->admin('DELETE', self::EX . '/boitiers'));
+        $this->assertSame(['deleted' => 3], $deleted);
+        $this->assertSame([0, 0, 0, 0, 4], array_map('intval', $this->db->fetchNumeric('SELECT (SELECT COUNT(*) FROM loss_box WHERE exercise), (SELECT COUNT(*) FROM loss_device WHERE exercise),'
+            . ' (SELECT COUNT(*) FROM loss_box_event WHERE exercise), (SELECT COUNT(*) FROM loss_piece_event WHERE exercise AND box_id IS NOT NULL), (SELECT COUNT(*) FROM loss_piece WHERE exercise)')));
+        $this->assertSame(['deleted' => 0], $this->json($this->admin('DELETE', self::EX . '/boitiers')));
+        $this->assertSame(['box' => 'todo'], $install(true));
+        // effacer les pièces d'exercice quand un boîtier simulé a lu leurs puces : les faits partent avec elles, le boîtier reste
+        $again = $this->json($this->admin('POST', self::EX . '/boitiers'), 201)['box']['id'];
+        $this->assertSame(3, $this->json($this->admin('POST', self::EX . "/boitiers/$again/scenarios", ['scenario' => 'spot_check']))['written']);
+        $this->json($this->admin('DELETE', self::EX . '/pieces'));
+        $this->assertSame(0, $this->json($this->admin('GET', self::EX . "/boitiers/$again"))['factsReceived']);
+        $this->assertSame(['deleted' => 1], $this->json($this->admin('DELETE', self::EX . '/boitiers')));
+        $this->assertSame([$realBefore[0] + 1, $realBefore[1] + 1, $realBefore[2]],
+            array_map('intval', $this->db->fetchNumeric('SELECT (SELECT COUNT(*) FROM loss_box WHERE NOT exercise), (SELECT COUNT(*) FROM loss_box_event WHERE NOT exercise), (SELECT COUNT(*) FROM loss_piece_event WHERE NOT exercise)')),
+            'le monde réel : le boîtier créé par ce test et son fait, rien d\'autre');
+
+        // Les écritures d'exercice attendent le verrou des exercices (un effacement en cours ne laisse rien derrière lui)
+        $service = static::getContainer()->get(LossBoxService::class);
+        $conn = $this->tenant()->getEntityManager()->getConnection();
+        $other = \Doctrine\DBAL\DriverManager::getConnection($conn->getParams());
+        $conn->executeStatement("SET lock_timeout = '1s'");
+        try {
+            $other->executeStatement("SET idle_in_transaction_session_timeout = '20s'");
+            $other->beginTransaction();
+            $other->executeStatement('SELECT pg_advisory_xact_lock(' . \App\LossPrevention\Repository\LossPieceRepository::EXERCISE_LOCK . ')');
+            foreach (['créer' => fn () => $service->createExercise('fr', $this->adminId), 'effacer' => fn () => $service->deleteExercise(), 'jouer' => fn () => $service->play(1, ['scenario' => 'heartbeat'], 'fr')] as $what => $write) {
+                try {
+                    $write();
+                    $this->fail("$what : devait attendre le verrou des exercices");
+                } catch (\Doctrine\DBAL\Exception $e) {
+                    $this->assertStringContainsString('lock timeout', $e->getMessage(), $what);
+                }
+                $this->assertFalse($conn->isTransactionActive());
+            }
+            $other->rollBack();
+            $this->assertSame(0, (int) $conn->fetchOne('SELECT COUNT(*) FROM loss_box WHERE exercise'));
+        } finally {
+            $conn->executeStatement('SET lock_timeout = 0');
+            try {
+                if ($other->isTransactionActive()) {
+                    $other->rollBack();
+                }
+            } catch (\Throwable) {
+                // connexion déjà coupée par la garde
+            }
+            $other->close();
+        }
+    }
+
+    public function testTheDatabaseGuardsBoxesItselfAndTheMigrationReplays(): void
+    {
+        $schema = fn (): array => [
+            $this->db->fetchFirstColumn("SELECT c.relname || '.' || t.tgname FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE NOT t.tgisinternal"
+                . " AND (c.relname IN ('loss_box', 'loss_device', 'loss_box_event') OR t.tgname = 'loss_piece_event_box_guard') ORDER BY 1"),
+            $this->db->fetchFirstColumn("SELECT indexname FROM pg_indexes WHERE tablename IN ('loss_box', 'loss_device', 'loss_box_event') OR indexname = 'idx_loss_piece_event_box' ORDER BY indexname"),
+            $this->db->fetchFirstColumn("SELECT proname FROM pg_proc WHERE proname IN ('loss_box_guard', 'loss_device_guard', 'loss_box_event_guard', 'loss_box_event_frozen', 'loss_box_rows_kept', 'loss_piece_event_box_guard') ORDER BY proname"),
+            $this->db->fetchFirstColumn("SELECT column_name FROM information_schema.columns WHERE table_name = 'loss_piece_event' AND column_name IN ('box_id', 'device_id', 'received_at') ORDER BY 1"),
+        ];
+        $before = $schema();
+        $this->assertSame([
+            ['loss_box.loss_box_guard', 'loss_box.loss_box_no_delete', 'loss_box.loss_box_no_truncate', 'loss_box_event.loss_box_event_frozen', 'loss_box_event.loss_box_event_guard',
+                'loss_box_event.loss_box_event_no_delete', 'loss_box_event.loss_box_event_no_truncate', 'loss_device.loss_device_guard', 'loss_device.loss_device_no_delete', 'loss_device.loss_device_no_truncate',
+                'loss_piece_event.loss_piece_event_box_guard'],
+            ['idx_loss_box_event_box', 'idx_loss_box_event_exercise', 'idx_loss_box_exercise', 'idx_loss_piece_event_box', 'loss_box_event_pkey', 'loss_box_pkey', 'loss_device_pkey', 'uniq_loss_box_key',
+                'uniq_loss_device_box_serial'],
+            ['loss_box_event_frozen', 'loss_box_event_guard', 'loss_box_guard', 'loss_box_rows_kept', 'loss_device_guard', 'loss_piece_event_box_guard'],
+            ['box_id', 'device_id', 'received_at'],
+        ], $before);
+        $outside = fn (): array => array_map('intval', $this->db->fetchNumeric('SELECT (SELECT COUNT(*) FROM loss_finding), (SELECT COUNT(*) FROM loss_evidence), (SELECT COUNT(*) FROM loss_journal), (SELECT COUNT(*) FROM loss_piece),'
+            . ' (SELECT COUNT(*) FROM loss_tag), (SELECT COUNT(*) FROM loss_piece_event), (SELECT COUNT(*) FROM product), (SELECT COUNT(*) FROM "order")'));
+        $outsideBefore = $outside();
+        $rows = fn (): array => array_map('intval', $this->db->fetchNumeric('SELECT (SELECT COUNT(*) FROM loss_box), (SELECT COUNT(*) FROM loss_device), (SELECT COUNT(*) FROM loss_box_event)'));
+        $rowsBefore = $rows();
+
+        // ----- Ce que la base refuse d'elle-même, quel que soit le chemin (tout est annulé à la fin)
+        $this->db->beginTransaction();
+        try {
+            $refused = function (string $what, string $sql, array $params = []): void {
+                $this->db->executeStatement('SAVEPOINT garde');
+                try {
+                    $this->db->executeStatement($sql, $params);
+                    $this->fail("$what : la base devait refuser");
+                } catch (\Doctrine\DBAL\Exception $e) {
+                    $this->db->executeStatement('ROLLBACK TO SAVEPOINT garde');
+                    $this->assertMatchesRegularExpression('/prévention des pertes|uniq_loss_/u', $e->getMessage(), $what);
+                }
+            };
+            $box = fn (string $name, ?string $key, bool $exercise, string $status = 'pending', ?string $machine = null): int => (int) $this->db->fetchOne(
+                "INSERT INTO loss_box (name, key_hash, status, machine_hash, exercise, created_at, updated_at) VALUES (?, ?, ?, ?, CAST(? AS boolean), NOW(), NOW()) RETURNING id", [$name, $key, $status, $machine, $exercise ? 'true' : 'false']);
+            $insertBox = "INSERT INTO loss_box (name, key_hash, status, machine_hash, exercise, created_at, updated_at) VALUES ('x', ?, ?, ?, CAST(? AS boolean), NOW(), NOW())";
+            $refused('un vrai boîtier sans clé', $insertBox, [null, 'pending', null, 'false']);
+            $refused('un boîtier d\'exercice avec une clé', $insertBox, ["cle-$this->s-x", 'active', null, 'true']);
+            $refused('un état inconnu', $insertBox, ["cle-$this->s-y", 'perdu', null, 'false']);
+            $refused('un boîtier actif sans machine', $insertBox, ["cle-$this->s-z", 'active', null, 'false']);
+            $real = $box('Réel', "cle-$this->s-1", false, 'active', 'machine-1');
+            $sim = $box('Simulé', null, true, 'active');
+            $refused('deux boîtiers, la même clé', $insertBox, ["cle-$this->s-1", 'pending', null, 'false']);
+            $refused('changer la marque d\'exercice', 'UPDATE loss_box SET exercise = true, key_hash = NULL WHERE id = ?', [$real]);
+            $refused('changer la date de création', "UPDATE loss_box SET created_at = created_at - INTERVAL '1 day' WHERE id = ?", [$real]);
+            $refused('reculer la génération', 'UPDATE loss_box SET generation = generation - 1 WHERE id = ?', [$real]);
+            $refused('ôter la clé d\'un vrai boîtier', 'UPDATE loss_box SET key_hash = NULL WHERE id = ?', [$real]);
+            $refused('ôter la machine d\'un boîtier actif', 'UPDATE loss_box SET machine_hash = NULL WHERE id = ?', [$real]);
+            $this->db->executeStatement('UPDATE loss_box SET generation = generation + 1 WHERE id = ?', [$real]); // avancer : permis
+            // Appareils
+            $insertDevice = "INSERT INTO loss_device (box_id, serial, kind, status, zone, exercise, first_seen_at, last_seen_at) VALUES (?, ?, ?, ?, ?, CAST(? AS boolean), NOW(), NOW())";
+            $refused('un genre d\'appareil inconnu', $insertDevice, [$real, 'A1', 'antenne', 'ok', null, 'false']);
+            $refused('un état d\'appareil inconnu', $insertDevice, [$real, 'A1', 'reader', 'bof', null, 'false']);
+            $refused('une zone inconnue', $insertDevice, [$real, 'A1', 'reader', 'ok', 'toilettes', 'false']);
+            $refused('un numéro de série vide', $insertDevice, [$real, '', 'reader', 'ok', null, 'false']);
+            $refused('un boîtier qui n\'existe pas', $insertDevice, [999999999, 'A1', 'reader', 'ok', null, 'false']);
+            $refused('un appareil d\'exercice sur un vrai boîtier', $insertDevice, [$real, 'A1', 'reader', 'ok', null, 'true']);
+            $refused('un vrai appareil sur un boîtier d\'exercice', $insertDevice, [$sim, 'A1', 'reader', 'ok', null, 'false']);
+            $this->db->executeStatement($insertDevice, [$real, 'A1', 'reader', 'ok', 'exit', 'false']);
+            $this->db->executeStatement($insertDevice, [$sim, 'A1', 'reader', 'ok', null, 'true']);
+            $realDevice = (int) $this->db->fetchOne('SELECT id FROM loss_device WHERE box_id = ?', [$real]);
+            $simDevice = (int) $this->db->fetchOne('SELECT id FROM loss_device WHERE box_id = ?', [$sim]);
+            $refused('deux appareils, le même numéro de série sur un boîtier', $insertDevice, [$real, 'A1', 'reader', 'ok', null, 'false']);
+            $refused('changer le genre d\'un appareil', "UPDATE loss_device SET kind = 'camera' WHERE id = ?", [$realDevice]);
+            $refused('changer le boîtier d\'un appareil', 'UPDATE loss_device SET box_id = ? WHERE id = ?', [$sim, $realDevice]);
+            $refused('changer le numéro de série d\'un appareil', "UPDATE loss_device SET serial = 'B2' WHERE id = ?", [$realDevice]);
+            $this->db->executeStatement("UPDATE loss_device SET status = 'down', zone = NULL WHERE id = ?", [$realDevice]); // état et zone : modifiables
+            // Faits de boîtier
+            $insertEvent = "INSERT INTO loss_box_event (box_id, device_id, type, occurred_at, exercise, data) VALUES (?, ?, 'SOURCE_DOWN', NOW(), CAST(? AS boolean), '{}')";
+            $refused('un fait pour un boîtier inconnu', $insertEvent, [999999999, null, 'false']);
+            $refused('un fait d\'exercice sur un vrai boîtier', $insertEvent, [$real, null, 'true']);
+            $refused('un vrai fait sur un boîtier d\'exercice', $insertEvent, [$sim, null, 'false']);
+            $refused('un fait qui désigne l\'appareil d\'un autre boîtier', $insertEvent, [$real, $simDevice, 'false']);
+            $this->db->executeStatement($insertEvent, [$real, $realDevice, 'false']);
+            $this->db->executeStatement($insertEvent, [$sim, $simDevice, 'true']);
+            $refused('modifier un fait de boîtier', "UPDATE loss_box_event SET type = 'SOURCE_UP' WHERE box_id = ?", [$real]);
+            // Faits de pièces venus d'un boîtier
+            $insertFact = "INSERT INTO loss_piece_event (type, occurred_at, source, exercise, data, box_id, device_id) VALUES ('SPOT_CHECK', NOW(), 'box', CAST(? AS boolean), '{}', ?, ?)";
+            $refused('un appareil sans son boîtier', $insertFact, ['false', null, $realDevice]);
+            $refused('un vrai fait de pièce venu d\'un boîtier d\'exercice', $insertFact, ['false', $sim, null]);
+            $refused('un fait de pièce d\'exercice venu d\'un vrai boîtier', $insertFact, ['true', $real, null]);
+            $refused('un fait de pièce par l\'appareil d\'un autre boîtier', $insertFact, ['false', $real, $simDevice]);
+            $refused('un fait de pièce pour un boîtier inconnu', $insertFact, ['false', 999999999, null]);
+            $this->db->executeStatement($insertFact, ['true', $sim, $simDevice]);
+            // Un boîtier révoqué ne revient pas
+            $this->db->executeStatement("UPDATE loss_box SET status = 'revoked', revoked_at = NOW() WHERE id = ?", [$real]);
+            $refused('faire revenir un boîtier révoqué', "UPDATE loss_box SET status = 'active' WHERE id = ?", [$real]);
+            $refused('changer la clé d\'un boîtier révoqué', "UPDATE loss_box SET key_hash = 'autre-$this->s' WHERE id = ?", [$real]);
+            $refused('changer la date de révocation', "UPDATE loss_box SET revoked_at = revoked_at - INTERVAL '1 day' WHERE id = ?", [$real]);
+            $refused('avancer la génération d\'un boîtier révoqué', 'UPDATE loss_box SET generation = generation + 1 WHERE id = ?', [$real]);
+            $this->db->executeStatement("UPDATE loss_box SET name = 'Révoqué, renommé' WHERE id = ?", [$real]); // le nom reste modifiable
+            // Rien ne se supprime ni ne se vide ; l'exercice, par sa porte, dans l'ordre : faits, appareils, boîtiers
+            foreach (['loss_box_event', 'loss_device', 'loss_box'] as $table) {
+                $refused("vider $table", "TRUNCATE $table");
+                $refused("supprimer dans $table sans la porte", "DELETE FROM $table WHERE exercise");
+            }
+            $this->db->executeStatement("SET LOCAL loss.purge = 'exercise'");
+            $refused('supprimer un vrai boîtier par la porte d\'exercice', 'DELETE FROM loss_box WHERE id = ?', [$real]);
+            $refused('supprimer un vrai appareil par la porte d\'exercice', 'DELETE FROM loss_device WHERE id = ?', [$realDevice]);
+            $refused('supprimer un vrai fait par la porte d\'exercice', 'DELETE FROM loss_box_event WHERE box_id = ?', [$real]);
+            $refused('le boîtier avant ses appareils', 'DELETE FROM loss_box WHERE id = ?', [$sim]);
+            $refused('l\'appareil avant ses faits', 'DELETE FROM loss_device WHERE id = ?', [$simDevice]);
+            $this->db->executeStatement('DELETE FROM loss_box_event WHERE box_id = ?', [$sim]);
+            $refused('l\'appareil avant les faits de pièces qui le désignent', 'DELETE FROM loss_device WHERE id = ?', [$simDevice]);
+            $this->db->executeStatement('DELETE FROM loss_piece_event WHERE box_id = ?', [$sim]);
+            $this->db->executeStatement('DELETE FROM loss_device WHERE id = ?', [$simDevice]);
+            $this->assertSame(1, $this->db->executeStatement('DELETE FROM loss_box WHERE id = ?', [$sim]));
+        } finally {
+            $this->db->rollBack();
+        }
+        $this->assertSame([$rowsBefore, $outsideBefore], [$rows(), $outside()]);
+
+        require_once dirname(__DIR__, 3) . '/migrations/Version20270113100000.php';
+        // La migration se rejoue sur une base qui la porte déjà : rien ne change, ni le schéma, ni les lignes
+        $this->db->beginTransaction();
+        foreach (\DoctrineMigrations\Version20270113100000::STATEMENTS as $sql) {
+            $this->db->executeStatement($sql);
+        }
+        $this->db->commit();
+        $this->assertSame([$before, $rowsBefore, $outsideBefore], [$schema(), $rows(), $outside()]);
+
+        // Le retour arrière retire ses tables, ses colonnes, ses fonctions, et rien d'autre ; puis la migration repose le même schéma.
+        // Le tout dans une transaction annulée à la fin : la base de test garde ses boîtiers
+        $this->db->beginTransaction();
+        try {
+            $this->db->executeStatement("SET LOCAL lock_timeout = '5s'"); // si une autre connexion tenait ces tables, le test échoue au lieu de se bloquer
+            foreach (\DoctrineMigrations\Version20270113100000::DOWN_STATEMENTS as $sql) {
+                $this->db->executeStatement($sql);
+            }
+            $this->assertSame([[], [], [], []], $schema());
+            $this->assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) FROM information_schema.tables WHERE table_name IN ('loss_box', 'loss_device', 'loss_box_event')"));
+            $this->assertSame($outsideBefore, $outside(), 'le retour arrière ne touche à rien d\'autre : les faits de pièces gardent leurs lignes');
+            foreach (\DoctrineMigrations\Version20270113100000::STATEMENTS as $sql) {
+                $this->db->executeStatement($sql);
+            }
+            $this->assertSame($before, $schema());
+        } finally {
+            $this->db->rollBack();
+        }
+        $this->assertSame([$before, $rowsBefore, $outsideBefore], [$schema(), $rows(), $outside()]);
+    }
+
+    private static function randomIp(): string
+    {
+        return '10.' . random_int(1, 250) . '.' . random_int(1, 250) . '.' . random_int(1, 250);
+    }
+
+    /** Un appel du boîtier : son jeton dans l'en-tête X-Loss-Box, jamais de jeton d'utilisateur */
+    private function box(string $method, string $path, ?array $body, ?string $token, array $server = []): Response
+    {
+        $this->client->getCookieJar()->clear();
+        $this->client->request($method, 'https://' . MV_TEST_TENANT_HOST . self::CHANNEL . $path, [], [], array_filter([
+            'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json', 'HTTP_X_LOSS_BOX' => $token,
+        ]) + $server + ['REMOTE_ADDR' => $this->ip], $body !== null ? json_encode($body) : null);
+
+        return $this->client->getResponse();
+    }
+
+    /**
+     * @param list<?string> $variantBarcodes
+     *
+     * @return array{int, list<int>}
+     */
+    private function article(string $name, array $variantBarcodes): array
+    {
+        $slug = 'l3a-' . bin2hex(random_bytes(4));
+        $this->db->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type, is_web, is_pos) VALUES (nextval('product_id_seq'), :n, 3000, false, 0, NOW(), :s, 'standard', true, true)",
+            ['n' => "$name L3A-$this->s", 's' => $slug]);
+        $product = (int) $this->db->fetchOne('SELECT id FROM product WHERE slug = ?', [$slug]);
+        $ids = [];
+        foreach ($variantBarcodes as $barcode) {
+            $ids[] = (int) $this->db->fetchOne("INSERT INTO product_variant (id, product_id, stock_quantity, barcode) VALUES (nextval('product_variant_id_seq'), ?, 5, ?) RETURNING id", [$product, $barcode]);
+        }
+
+        return [$product, $ids];
+    }
+}

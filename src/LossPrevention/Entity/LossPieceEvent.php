@@ -15,6 +15,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Index(name: 'idx_loss_piece_event_tag', columns: ['tag_id', 'id'])]
 #[ORM\UniqueConstraint(name: 'uniq_loss_piece_event_key', columns: ['event_key'], options: ['where' => 'event_key IS NOT NULL'])]
 #[ORM\Index(name: 'idx_loss_piece_event_exercise', columns: ['id'], options: ['where' => 'exercise'])]
+#[ORM\Index(name: 'idx_loss_piece_event_box', columns: ['box_id', 'id'], options: ['where' => 'box_id IS NOT NULL'])]
 class LossPieceEvent
 {
     public const PIECE_CREATED = 'PIECE_CREATED';
@@ -28,8 +29,17 @@ class LossPieceEvent
     /** Étiquette d'essai demandée pendant l'installation (lot L2-b) : le serveur ne voit pas l'imprimante, il sait qu'elle a été demandée */
     public const TEST_LABEL_PRINTED = 'TEST_LABEL_PRINTED';
 
+    /** Puce lue par le lecteur à main d'un boîtier (lot L3-a) : la pièce a été vue, son état ne change pas */
+    public const SPOT_CHECK = 'SPOT_CHECK';
+    /** Puce lue dans une zone par un appareil d'un boîtier (lot L3-a) : gardé tel quel, aucun état ne change avant les lots L3-b et L4 */
+    public const ZONE_SEEN = 'ZONE_SEEN';
+    /** Faits qu'un boîtier peut envoyer par son canal */
+    public const FROM_BOX = [self::SPOT_CHECK, self::ZONE_SEEN];
+
     public const SOURCE_APP = 'app';
     public const SOURCE_EXERCISE = 'exercise';
+    /** Fait envoyé par un boîtier (lot L3-a) : `box_id`, `device_id`, `received_at` et `event_key` sont remplis */
+    public const SOURCE_BOX = 'box';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -62,6 +72,16 @@ class LossPieceEvent
 
     #[ORM\Column(type: 'text')]
     private string $data = '{}';
+
+    #[ORM\Column(name: 'box_id', nullable: true)]
+    private ?int $boxId = null;
+
+    #[ORM\Column(name: 'device_id', nullable: true)]
+    private ?int $deviceId = null;
+
+    /** Heure de réception par le serveur (un fait de boîtier garde aussi l'heure du boîtier, dans `occurred_at`) */
+    #[ORM\Column(name: 'received_at', type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $receivedAt = null;
 
     public function getId(): ?int { return $this->id; }
     public function getType(): string { return $this->type; }

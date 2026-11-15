@@ -4,7 +4,7 @@
         "path": "/api/gestion/pertes/puces/associer?locale=fr",
         "body": {
             "pieceId": 2,
-            "identifier": "04AA72C4C3D4E5",
+            "identifier": "0441C2B8C3D4E5",
             "technology": "nfc"
         }
     },
@@ -13,13 +13,13 @@
     "body": {
         "error": "TAG_ALREADY_ASSOCIATED",
         "code": "TAG_ALREADY_ASSOCIATED",
-        "message": "Cette puce est déjà posée sur la pièce n° 1 (Veste en lin (exemple AA72C4)).",
+        "message": "Cette puce est déjà posée sur la pièce n° 1 (Veste en lin (exemple 41C2B8)).",
         "holder": {
             "id": 1,
             "number": 1,
             "variantId": 23,
             "productId": 15,
-            "name": "Veste en lin (exemple AA72C4)",
+            "name": "Veste en lin (exemple 41C2B8)",
             "variantLabel": null
         }
     }

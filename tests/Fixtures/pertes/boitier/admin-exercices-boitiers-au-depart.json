@@ -1,0 +1,46 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/exercices/boitiers?locale=fr"
+    },
+    "status": 200,
+    "body": {
+        "items": [],
+        "total": 0,
+        "limit": 3,
+        "exercise": true,
+        "screen": "pertes.boitiers",
+        "scenarios": [
+            {
+                "code": "heartbeat",
+                "label": "Signe de vie",
+                "text": "Le boîtier dit qu'il est là : il repasse « en ligne »."
+            },
+            {
+                "code": "network_cut",
+                "label": "Coupure du réseau",
+                "text": "Le boîtier revient après deux heures sans réseau : un fait dit le trou."
+            },
+            {
+                "code": "device_down",
+                "label": "Lecteur débranché",
+                "text": "Le lecteur de la sortie tombe en panne : il est noté, une seule fois."
+            },
+            {
+                "code": "device_up",
+                "label": "Lecteur rebranché",
+                "text": "Le lecteur de la sortie revient."
+            },
+            {
+                "code": "spot_check",
+                "label": "Contrôle au lecteur à main",
+                "text": "Le lecteur à main lit jusqu'à trois pièces d'exercice : chaque lecture s'ajoute à l'histoire de la pièce."
+            },
+            {
+                "code": "zone_exit",
+                "label": "Lecture à la sortie",
+                "text": "Le lecteur de la sortie lit une pièce d'exercice."
+            }
+        ]
+    }
+}

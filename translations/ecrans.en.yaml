@@ -633,3 +633,22 @@ pertes_installation:
             label: 'Without hardware'
             text: 'In practice mode, tags are simulated: you follow the whole path before buying anything.'
     next: 'Start with the test label, in your printer''s format.'
+pertes_boitiers:
+    purpose: 'The shop boxes: the small machine that links the counter mat, the readers, the tag printer and the camera to the platform.'
+    points:
+        cle:
+            label: 'Box key'
+            text: 'Each box has its key, shown only once when it is created. It enrols one machine, and only one.'
+        en-ligne:
+            label: 'Online'
+            text: 'The box sends a heartbeat every minute. With no news for five minutes, it is reported silent.'
+        appareils:
+            label: 'Devices'
+            text: 'What is plugged into the box, and whether each device works. An unplugged device is reported down.'
+        revoquer:
+            label: 'Revoke'
+            text: 'A stolen or lost box is revoked: it can no longer send anything. This is final. For a replaced box, reset its key.'
+        simule:
+            label: 'Simulated box'
+            text: 'In practice mode, a simulated box plays scenarios without any hardware.'
+    next: 'Add a box, write down its key, then enrol its machine.'

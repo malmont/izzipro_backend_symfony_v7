@@ -1,0 +1,12 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/boitiers/999999999?locale=fr"
+    },
+    "status": 404,
+    "body": {
+        "error": "BOX_NOT_FOUND",
+        "code": "BOX_NOT_FOUND",
+        "message": "Boîtier introuvable."
+    }
+}

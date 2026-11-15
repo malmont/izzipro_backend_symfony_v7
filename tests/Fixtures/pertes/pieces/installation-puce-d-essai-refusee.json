@@ -63,6 +63,19 @@
                     }
                 }
             ],
+            "optionalSteps": [
+                {
+                    "code": "box",
+                    "title": "Brancher un boîtier",
+                    "text": "Facultatif. Le boîtier relie à la plateforme le tapis de comptoir, l'imprimante à puce et la caméra. Ajoutez-le dans « Boîtiers », puis inscrivez sa machine avec la clé.",
+                    "image": "pertes/installation/box",
+                    "status": "todo",
+                    "verify": {
+                        "kind": "data",
+                        "label": "Vérifier"
+                    }
+                }
+            ],
             "progress": {
                 "done": 4,
                 "total": 4

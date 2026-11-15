@@ -633,3 +633,22 @@ pertes_installation:
             label: 'Sans matériel'
             text: 'En mode exercice, les puces sont simulées : vous suivez tout le parcours avant d''acheter quoi que ce soit.'
     next: 'Commencez par l''étiquette d''essai, dans le format de votre imprimante.'
+pertes_boitiers:
+    purpose: 'Les boîtiers de la boutique : la petite machine qui relie à la plateforme le tapis de comptoir, les lecteurs, l''imprimante à puce et la caméra.'
+    points:
+        cle:
+            label: 'Clé du boîtier'
+            text: 'Chaque boîtier a sa clé, montrée une seule fois à sa création. Elle sert à inscrire une machine, et une seule.'
+        en-ligne:
+            label: 'En ligne'
+            text: 'Le boîtier donne signe de vie chaque minute. Sans nouvelles depuis cinq minutes, il est dit silencieux.'
+        appareils:
+            label: 'Appareils'
+            text: 'Ce que le boîtier a de branché, et si chaque appareil marche. Un appareil débranché est noté en panne.'
+        revoquer:
+            label: 'Révoquer'
+            text: 'Un boîtier volé ou perdu se révoque : il ne peut plus rien envoyer. C''est définitif. Pour un boîtier remplacé, remettez sa clé à zéro.'
+        simule:
+            label: 'Boîtier simulé'
+            text: 'En mode exercice, un boîtier simulé joue des scénarios sans aucun matériel.'
+    next: 'Ajoutez un boîtier, notez sa clé, puis inscrivez sa machine.'

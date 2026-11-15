@@ -8,7 +8,7 @@
     "headers": {},
     "body": {
         "ok": true,
-        "identifier": "SIM-630008A9991B",
+        "identifier": "SIM-132DB6C85B1A",
         "technology": "simulated",
         "refusal": null,
         "hint": null,
@@ -54,6 +54,19 @@
                     "text": "Lisez le code-barres d'un article, puis sa puce : la pièce est créée et porte sa puce.",
                     "image": "pertes/installation/first_piece",
                     "status": "done",
+                    "verify": {
+                        "kind": "data",
+                        "label": "Vérifier"
+                    }
+                }
+            ],
+            "optionalSteps": [
+                {
+                    "code": "box",
+                    "title": "Brancher un boîtier",
+                    "text": "Facultatif. Le boîtier relie à la plateforme le tapis de comptoir, l'imprimante à puce et la caméra. Ajoutez-le dans « Boîtiers », puis inscrivez sa machine avec la clé.",
+                    "image": "pertes/installation/box",
+                    "status": "todo",
                     "verify": {
                         "kind": "data",
                         "label": "Vérifier"

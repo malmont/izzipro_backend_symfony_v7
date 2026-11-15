@@ -1,0 +1,62 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/boitiers?locale=fr"
+    },
+    "status": 200,
+    "body": {
+        "items": [
+            {
+                "id": 1,
+                "name": "Boîtier de la caisse 1",
+                "place": "Près de la caisse",
+                "status": "active",
+                "statusLabel": "Inscrit",
+                "online": true,
+                "onlineLabel": "En ligne",
+                "lastSeenAt": "2026-11-15T22:18:03+00:00",
+                "lastSeenLabel": "15/11/2026 17 h 18",
+                "silentSeconds": null,
+                "version": "1.0.0",
+                "arch": "amd64",
+                "enrolledAt": "2026-11-15T22:18:02+00:00",
+                "clockOffsetSeconds": 0,
+                "clockDoubt": false,
+                "keyHint": "IZ-BOX-XXXX-****-****",
+                "exercise": false,
+                "devices": [
+                    {
+                        "id": 1,
+                        "serial": "LECTEUR-0001",
+                        "kind": "reader",
+                        "kindLabel": "Lecteur de puces",
+                        "model": "Lecteur de bureau (USB)",
+                        "status": "ok",
+                        "statusLabel": "En marche",
+                        "zone": null,
+                        "zoneLabel": null,
+                        "lastSeenAt": "2026-11-15T22:18:03+00:00"
+                    },
+                    {
+                        "id": 2,
+                        "serial": "IMPR-0001",
+                        "kind": "printer",
+                        "kindLabel": "Imprimante à puce",
+                        "model": null,
+                        "status": "down",
+                        "statusLabel": "En panne ou débranché",
+                        "zone": null,
+                        "zoneLabel": null,
+                        "lastSeenAt": "2026-11-15T22:18:03+00:00"
+                    }
+                ],
+                "createdAt": "2026-11-15T22:18:02+00:00",
+                "screen": "pertes.boitiers"
+            }
+        ],
+        "total": 1,
+        "limit": 20,
+        "exercise": false,
+        "screen": "pertes.boitiers"
+    }
+}

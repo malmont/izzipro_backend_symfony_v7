@@ -1,0 +1,12 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/pertes/boitier/reglages"
+    },
+    "status": 401,
+    "body": {
+        "error": "BOX_TOKEN_REQUIRED",
+        "code": "BOX_TOKEN_REQUIRED",
+        "message": "En-tête X-Loss-Box requis."
+    }
+}

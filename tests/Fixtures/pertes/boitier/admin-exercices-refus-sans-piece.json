@@ -1,0 +1,15 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/exercices/boitiers/2/scenarios?locale=fr",
+        "body": {
+            "scenario": "spot_check"
+        }
+    },
+    "status": 409,
+    "body": {
+        "error": "EXERCISE_NO_PIECE",
+        "code": "EXERCISE_NO_PIECE",
+        "message": "Aucune pièce d'exercice ne porte de puce : posez d'abord une puce simulée sur une pièce d'exercice."
+    }
+}

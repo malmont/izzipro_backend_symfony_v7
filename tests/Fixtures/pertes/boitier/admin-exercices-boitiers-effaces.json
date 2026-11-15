@@ -1,0 +1,10 @@
+{
+    "request": {
+        "method": "DELETE",
+        "path": "/api/gestion/pertes/exercices/boitiers?locale=fr"
+    },
+    "status": 200,
+    "body": {
+        "deleted": 1
+    }
+}

@@ -1,0 +1,18 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/exercices/boitiers/2/scenarios?locale=fr",
+        "body": {
+            "scenario": "incendie"
+        }
+    },
+    "status": 422,
+    "body": {
+        "error": "VALIDATION_FAILED",
+        "code": "VALIDATION_FAILED",
+        "message": "Entrée invalide : scenario (INVALID_VALUE)",
+        "fields": {
+            "scenario": "INVALID_VALUE"
+        }
+    }
+}

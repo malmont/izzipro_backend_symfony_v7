@@ -1,0 +1,18 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/pertes/boitier/inscription",
+        "body": {
+            "key": "IZ-BOX-XXXX-XXXX-XXXX",
+            "machine": "machine-d-exemple-0123456789abcdef",
+            "version": "1.0.0",
+            "arch": "amd64"
+        }
+    },
+    "status": 403,
+    "body": {
+        "error": "BOX_REVOKED",
+        "code": "BOX_REVOKED",
+        "message": "Ce boîtier a été révoqué."
+    }
+}

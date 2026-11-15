@@ -1,0 +1,18 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/pertes/boitier/inscription",
+        "body": {
+            "key": "IZ-BOX-AAAA-AAAA-AAAA",
+            "machine": "machine-d-exemple-0123456789abcdef",
+            "version": "1.0.0",
+            "arch": "amd64"
+        }
+    },
+    "status": 404,
+    "body": {
+        "error": "BOX_KEY_INVALID",
+        "code": "BOX_KEY_INVALID",
+        "message": "Clé de boîtier inconnue."
+    }
+}
