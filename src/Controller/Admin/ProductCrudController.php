@@ -7,6 +7,8 @@ use App\Repository\CategoriesRepository;
 use App\Repository\CommandeRepository;
 use App\Repository\ProductTypeRepository;
 use App\Repository\StyleRepository;
+use App\Services\BarcodeService\CatalogBarcodeException;
+use App\Services\BarcodeService\CatalogBarcodeService;
 use App\Services\TenantEntityManagerProvider;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use App\Form\ProductPictureType;
@@ -43,6 +45,7 @@ class ProductCrudController extends BaseTenantCrudController
     public function __construct(
         TenantEntityManagerProvider $emProvider,
         AdminUrlGenerator $adminUrlGenerator,
+        private readonly CatalogBarcodeService $barcodes, // codes-barres du catalogue (lot CB-1, 15/11/2026, `docs/codes-barres.md`)
         private readonly ?\App\Services\OrderService\TaxCategoryAudit $taxAudit = null, // alerte « catégorie sans taxe » (F18 partie 2a)
         private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null // devise du site (libellés, 07/11/2026)
     ) {
@@ -76,7 +79,8 @@ class ProductCrudController extends BaseTenantCrudController
         yield MoneyField::new('price', 'Prix de vente')->setCurrency($this->currency?->code() ?? 'CAD')->setStoredAsCents(true)->setColumns('col-md-4');
         yield MoneyField::new('purchasePrice', "Prix d'achat")->setCurrency($this->currency?->code() ?? 'CAD')->setStoredAsCents(true)->setColumns('col-md-4');
         yield NumberField::new('coefficientMultiplier', 'Coefficient')->setColumns('col-md-4');
-        yield TextField::new('barcode', 'Code Barre')->setColumns('col-md-4');
+        yield TextField::new('barcode', 'Code-barres')->setColumns('col-md-4')->setRequired(false)->setFormTypeOption('attr', ['maxlength' => 64])
+            ->setHelp('Facultatif. Le code du fabricant quand la pièce en porte un (scannez-le dans ce champ), sinon « Générer un code-barres ». Un code ne désigne qu\'une seule chose : un article ou une variante. Un article qui a des variantes porte ses codes sur ses variantes.');
         yield MoneyField::new('specialPrice', 'Prix promotionnel')->setCurrency($this->currency?->code() ?? 'CAD')->setStoredAsCents(true)->setColumns('col-md-4');
         // Catégorie fiscale (F18 partie 2a) : vide = standard ; « exonéré » = aucune taxe ; figée sur chaque ligne de commande à la vente
         yield \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField::new('taxCategory', 'Catégorie fiscale')->setChoices(array_flip(\App\Services\OrderService\TaxCategory::LABELS))->setRequired(false)->setColumns('col-md-4')->hideOnIndex()
@@ -171,8 +175,11 @@ class ProductCrudController extends BaseTenantCrudController
         // IA pour ce produit (07/11/2026) : description depuis les photos, traductions, image générée
         $ai = Action::new('productAi', 'IA', 'fas fa-magic')->linkToRoute('admin_product_ai', fn (\App\Entity\Product $p) => ['id' => $p->getId()]);
         $photos = Action::new('productPhotos', 'Photos', 'fas fa-images')->linkToRoute('admin_product_photos', fn (\App\Entity\Product $p) => ['id' => $p->getId()]); // page Photos (07/11/2026)
-        $generateBarcode = Action::new('generateBarcode', 'Générer Code Barre', 'fa fa-barcode')
-            ->linkToUrl(fn (Product $product) => $this->csrfActionUrl('generateBarcode', $product->getId()));
+        // Lot CB-1 : proposé seulement à l'article qui n'a ni code ni variante (le code généré d'un article à variantes va sur ses variantes) ;
+        // l'action ne remplace jamais un code présent
+        $generateBarcode = Action::new('generateBarcode', 'Générer un code-barres', 'fa fa-barcode')
+            ->linkToUrl(fn (Product $product) => $this->csrfActionUrl('generateBarcode', $product->getId()))
+            ->displayIf(static fn (Product $product): bool => $product->getBarcode() === null && $product->getVariants()->isEmpty());
 
         $manageSpecifications = Action::new('manageSpecifications', 'Caractéristiques', 'fa fa-cogs')
             ->linkToRoute('admin_product_specifications', function (Product $product): array {
@@ -186,6 +193,27 @@ class ProductCrudController extends BaseTenantCrudController
             ->add(Crud::PAGE_EDIT, $generateBarcode)
             ->add(Crud::PAGE_INDEX, $ai)->add(Crud::PAGE_EDIT, $ai)->add(Crud::PAGE_DETAIL, $ai)
             ->add(Crud::PAGE_INDEX, $photos)->add(Crud::PAGE_EDIT, $photos)->add(Crud::PAGE_DETAIL, $photos);
+    }
+
+    public function persistEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        parent::persistEntity($entityManager, $entityInstance);
+        $this->warnAboutBarcode($entityInstance);
+    }
+
+    public function updateEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        parent::updateEntity($entityManager, $entityInstance);
+        $this->warnAboutBarcode($entityInstance);
+    }
+
+    /** Code accepté mais à signaler (13 chiffres dont la clé de contrôle est fausse) : le refus, lui, est rendu sous le champ par la validation */
+    private function warnAboutBarcode(mixed $product): void
+    {
+        $warning = $product instanceof Product ? $this->barcodes->warning($product->getBarcode()) : null;
+        if ($warning !== null) {
+            $this->addFlash('warning', $warning);
+        }
     }
 
     public function generateBarcode(AdminContext $context): RedirectResponse
@@ -202,13 +230,12 @@ class ProductCrudController extends BaseTenantCrudController
             return $this->redirect($this->adminUrlGenerator->setAction('index')->generateUrl());
         }
         
-        $tenantEm = $this->emProvider->getEntityManager();
-        
-        $generatedBarcode = 'BAR-' . strtoupper(bin2hex(random_bytes(6)));
-        $product->setBarcode($generatedBarcode);
-
-        $tenantEm->flush();
-        $this->addFlash('success', 'Code barre généré avec succès : ' . $generatedBarcode);
+        // Lot CB-1 : EAN-13 interne tiré de la séquence du site, jamais par-dessus un code présent (avant : « BAR-… » au hasard, qui écrasait)
+        try {
+            $this->addFlash('success', 'Code-barres généré : ' . $this->barcodes->generateFor($product));
+        } catch (CatalogBarcodeException $e) {
+            $this->addFlash('warning', $e->getMessage());
+        }
 
         $url = $this->adminUrlGenerator
                     ->setController(self::class)

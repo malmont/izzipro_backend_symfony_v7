@@ -803,7 +803,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (92)
+## Administration (EasyAdmin) (93)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -814,6 +814,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/app-keys/{id}/revoke` | ROLE_ADMIN | `Controller\Admin\AppKeyAdminController::revoke` |
 | GET | `/admin/app-keys` | ROLE_ADMIN | `Controller\Admin\AppKeyAdminController::index` |
 | GET | `/admin/barcode-image/{id}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::barcodeImage` |
+| POST | `/admin/barcode-management/generate-missing` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::generateMissing` |
 | GET | `/admin/barcode-management/search` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::search` |
 | ANY | `/admin/barcode-management` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::index` |
 | GET | `/admin/caisse` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\PosConsoleAdminController::index` |

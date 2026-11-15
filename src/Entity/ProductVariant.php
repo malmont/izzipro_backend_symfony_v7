@@ -14,6 +14,8 @@ use App\Services\BarcodeService\CatalogBarcode;
 
 #[ORM\Entity(repositoryClass: ProductVariantRepository::class)]
 #[ORM\HasLifecycleCallbacks]
+// Lot CB-1 (15/11/2026, `docs/codes-barres.md`) : le code-barres ne désigne rien d'autre sur le site (refus sous le champ, avant la base)
+#[\App\Validator\CatalogBarcodeFree]
 class ProductVariant
 {
     #[ORM\Id]

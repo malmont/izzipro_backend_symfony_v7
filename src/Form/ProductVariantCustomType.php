@@ -12,6 +12,7 @@ use Doctrine\ORM\EntityRepository;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
@@ -56,6 +57,15 @@ class ProductVariantCustomType extends AbstractType
             ])
             ->add('stockQuantity', IntegerType::class, [
                 'label' => 'Quantité en stock',
+            ])
+            // Lot CB-1 (15/11/2026, `docs/codes-barres.md`) : le refus (forme, code réservé à la caisse, code déjà porté) vient de la
+            // contrainte `CatalogBarcodeFree` de l'entité et s'affiche sous le champ
+            ->add('barcode', TextType::class, [
+                'label' => 'Code-barres de la variante',
+                'required' => false,
+                'empty_data' => null,
+                'attr' => ['maxlength' => 64, 'autocomplete' => 'off'],
+                'help' => 'Facultatif : c\'est le code de la pièce vendue. Le code du fabricant quand la pièce en porte un (scannez-le dans ce champ) ; sinon laissez vide et utilisez « Générer un code-barres » dans la liste des variantes. Un code ne désigne qu\'une seule chose : un article ou une variante.',
             ])
             ->add('optionValues', EntityType::class, [
             'class' => ProductOptionValue::class,

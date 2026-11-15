@@ -3,11 +3,13 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Product;
+use App\Services\BarcodeService\CatalogBarcodeService;
 use App\Services\TenantEntityManagerProvider;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use Picqer\Barcode\BarcodeGeneratorPNG;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -22,7 +24,9 @@ class BarcodeManagementController extends AbstractController
 
     public function __construct(
         AdminUrlGenerator $adminUrlGenerator,
-        TenantEntityManagerProvider $emProvider
+        TenantEntityManagerProvider $emProvider,
+        private readonly CatalogBarcodeService $barcodes, // lot CB-1 (15/11/2026, `docs/codes-barres.md`)
+        private readonly LoggerInterface $logger,
     ) {
         $this->adminUrlGenerator = $adminUrlGenerator;
         $this->emProvider = $emProvider;
@@ -60,7 +64,43 @@ class BarcodeManagementController extends AbstractController
 
         return $this->render('admin/barcode_management/index.html.twig', [
             'products' => $products,
+            'missing' => $this->barcodes->missingCount(),
+            'bulkLimit' => CatalogBarcodeService::BULK_LIMIT,
         ]);
+    }
+
+    /**
+     * « Générer les codes manquants » (lot CB-1) : un code généré pour chaque variante sans code et chaque article sans variante ni code,
+     * sur tout le catalogue, au plus `BULK_LIMIT` par lancement (on relance pour la suite). Ne touche jamais un code présent ; une ligne
+     * au journal du site par lancement. Écriture : formulaire POST avec jeton, réservé à l'administrateur comme tout `/admin`.
+     */
+    #[Route('/admin/barcode-management/generate-missing', name: 'admin_barcode_generate_missing', methods: ['POST'])]
+    public function generateMissing(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('catalog_barcode_generate_missing', (string) $request->request->get('_token', ''))) {
+            $this->addFlash('error', 'Formulaire expiré : rien n\'a été généré. Rechargez la page et recommencez.');
+
+            return $this->redirectToRoute('admin_barcode_management');
+        }
+        try {
+            $run = $this->barcodes->generateMissing();
+        } catch (\Throwable $e) {
+            $this->logger->error('Codes-barres : génération des codes manquants en échec : ' . $e->getMessage(), ['exception' => $e]);
+            $this->addFlash('error', 'La génération a échoué : aucun code n\'a été écrit. Réessayez dans un instant.');
+
+            return $this->redirectToRoute('admin_barcode_management');
+        }
+        if ($run['written'] === 0) {
+            $this->addFlash('success', 'Aucun code à générer : toutes les variantes et tous les articles sans variante ont déjà un code-barres.');
+        } else {
+            $this->addFlash('success', sprintf(
+                '%d code(s)-barres généré(s) : %d variante(s), %d article(s) sans variante.%s',
+                $run['written'], $run['variants'], $run['products'],
+                $run['remaining'] > 0 ? sprintf(' Il en reste %d à générer : relancez.', $run['remaining']) : ''
+            ));
+        }
+
+        return $this->redirectToRoute('admin_barcode_management');
     }
 
     #[Route('/admin/barcode-image/{id}', name: 'admin_barcode_image', methods: ['GET'])]
@@ -171,6 +211,8 @@ class BarcodeManagementController extends AbstractController
 
         return $this->render('admin/barcode_management/index.html.twig', [
             'products' => $products,
+            'missing' => $this->barcodes->missingCount(),
+            'bulkLimit' => CatalogBarcodeService::BULK_LIMIT,
         ]);
     }
 }

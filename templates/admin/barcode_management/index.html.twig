@@ -37,6 +37,30 @@
         </div>
     {% endfor %}
 
+    {# Lot CB-1 : « Générer les codes manquants », sur tout le catalogue, avec le nombre annoncé avant d'écrire #}
+    {% if missing is defined %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <h2 class="h5">Codes manquants</h2>
+            {% if missing.total == 0 %}
+                <p class="mb-0 text-muted">Toutes les variantes et tous les articles sans variante ont un code-barres.</p>
+            {% else %}
+                <p>
+                    <strong>{{ missing.variants }}</strong> variante(s) et <strong>{{ missing.products }}</strong> article(s) sans variante n'ont pas de code-barres.
+                    La génération leur donne un code interne de 13 chiffres (EAN-13), lisible par tout lecteur.
+                    Elle ne remplace jamais un code déjà saisi ; un article qui a des variantes reçoit ses codes sur ses variantes.
+                    {% if missing.total > bulkLimit %}Un lancement écrit au plus {{ bulkLimit }} codes : relancez pour la suite.{% endif %}
+                </p>
+                <form method="post" action="{{ path('admin_barcode_generate_missing') }}"
+                      onsubmit="return confirm('Générer {{ min(missing.total, bulkLimit) }} code(s)-barres ? Les codes déjà saisis ne sont pas touchés.');">
+                    <input type="hidden" name="_token" value="{{ csrf_token('catalog_barcode_generate_missing') }}">
+                    <button type="submit" class="btn btn-primary">Générer les codes manquants ({{ min(missing.total, bulkLimit) }})</button>
+                </form>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
     <div class="table-responsive">
         <table class="table table-striped table-hover">
             <thead class="thead-dark">

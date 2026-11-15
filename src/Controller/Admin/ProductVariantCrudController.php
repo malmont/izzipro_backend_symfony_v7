@@ -10,6 +10,8 @@ use App\Repository\ColorRepository;
 use App\Repository\ProductRepository;
 use App\Repository\SizeRepository;
 use App\Repository\ProductOptionValueRepository;
+use App\Services\BarcodeService\CatalogBarcodeException;
+use App\Services\BarcodeService\CatalogBarcodeService;
 use App\Services\TenantEntityManagerProvider;
 use App\Controller\Admin\BaseTenantCrudController; 
 use App\UseCase\OrderUseCase\UpdateStockAndInventoryUseCase;
@@ -22,18 +24,23 @@ use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
+use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 
 
 
 
 class ProductVariantCrudController extends BaseTenantCrudController
 {
+    use CsrfProtectedActionTrait;
+
     private UpdateStockAndInventoryUseCase $updateStockAndInventoryUseCase;
     private AdminUrlGenerator $adminUrlGenerator;
     public function __construct(
         TenantEntityManagerProvider $emProvider, 
         UpdateStockAndInventoryUseCase $updateStockAndInventoryUseCase,
-        AdminUrlGenerator $adminUrlGenerator 
+        AdminUrlGenerator $adminUrlGenerator,
+        private readonly CatalogBarcodeService $barcodes // codes-barres du catalogue (lot CB-1, 15/11/2026, `docs/codes-barres.md`)
     ) {
         parent::__construct($emProvider); 
         $this->updateStockAndInventoryUseCase = $updateStockAndInventoryUseCase;
@@ -71,7 +78,8 @@ class ProductVariantCrudController extends BaseTenantCrudController
                 ]),
             IntegerField::new('stockQuantity', 'Quantité en stock'),
             IntegerField::new('price', 'Prix de la variante (cents)')->setHelp('Vide : prix du produit. 2 499 $ = 249900.')->hideOnIndex(),
-            TextField::new('barcode', 'Code-barres de la variante (EAN/UPC)')->setRequired(false)->setHelp('Facultatif (C5 hors ligne) : le POS cherche d\'abord la variante, puis le code-barres du produit.')->hideOnIndex(),
+            TextField::new('barcode', 'Code-barres de la variante')->setRequired(false)->setFormTypeOption('attr', ['maxlength' => 64])
+                ->setHelp('Facultatif : c\'est le code de la pièce vendue. Le code du fabricant quand la pièce en porte un (scannez-le dans ce champ), sinon « Générer un code-barres » depuis la liste. Un code ne désigne qu\'une seule chose : un article ou une variante. La caisse cherche d\'abord la variante, puis l\'article.'),
             AssociationField::new('optionValues', 'Valeurs de cette variante')
                 ->setHelp('Sélectionnez la combinaison exacte de valeurs pour cette variante (ex: "Rouge" et "XL").')
                 ->setFormTypeOption('by_reference', false) 
@@ -120,6 +128,7 @@ class ProductVariantCrudController extends BaseTenantCrudController
             $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, 0, 1);
         }
         parent::persistEntity($entityManager, $entityInstance);
+        $this->warnAboutBarcode($entityInstance);
     }
 
     /**
@@ -148,6 +157,7 @@ class ProductVariantCrudController extends BaseTenantCrudController
             $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, $stockBeforeMovement, 4);
         }
         parent::updateEntity($entityManager, $entityInstance);
+        $this->warnAboutBarcode($entityInstance);
     }
 
     public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
@@ -173,11 +183,51 @@ class ProductVariantCrudController extends BaseTenantCrudController
                 return ['id' => $variant->getId()];
             });
 
+        // Lot CB-1 : proposé seulement à la variante sans code ; l'action ne remplace jamais un code présent
+        $generateBarcode = Action::new('generateBarcode', 'Générer un code-barres', 'fa fa-barcode')
+            ->linkToUrl(fn (ProductVariant $variant) => $this->csrfActionUrl('generateBarcode', $variant->getId()))
+            ->displayIf(static fn (ProductVariant $variant): bool => $variant->getBarcode() === null);
+
         return $actions
             // On remplace l'action 'edit' par la nôtre sur la page de liste
             ->remove(Crud::PAGE_INDEX, Action::EDIT)
             ->add(Crud::PAGE_INDEX, $editCustom)
+            ->add(Crud::PAGE_INDEX, $generateBarcode)
+            ->add(Crud::PAGE_DETAIL, $generateBarcode)
             // On peut aussi la retirer de la page de détail si besoin
             ->remove(Crud::PAGE_DETAIL, Action::EDIT);
+    }
+
+    /** Donne à la variante un code généré (EAN-13 interne du site), jamais par-dessus un code présent (lot CB-1) */
+    public function generateBarcode(AdminContext $context): RedirectResponse
+    {
+        $index = $this->container->get(AdminUrlGenerator::class)->unsetAll()->setController(self::class)->setAction('index')->generateUrl();
+        if (!$this->isCsrfActionValid($context, 'generateBarcode')) {
+            $this->addFlash('danger', 'Lien invalide ou expiré : action annulée. Utilisez le bouton depuis la liste.');
+
+            return $this->redirect($index);
+        }
+        $variant = $context->getEntity()->getInstance();
+        if (!$variant instanceof ProductVariant) {
+            $this->addFlash('danger', 'Variante introuvable.');
+
+            return $this->redirect($index);
+        }
+        try {
+            $this->addFlash('success', sprintf('Code-barres généré pour la variante n° %d : %s', $variant->getId(), $this->barcodes->generateFor($variant)));
+        } catch (CatalogBarcodeException $e) {
+            $this->addFlash('warning', $e->getMessage());
+        }
+
+        return $this->redirect($index);
+    }
+
+    /** Code accepté mais à signaler (13 chiffres dont la clé de contrôle est fausse) : le refus, lui, est rendu sous le champ par la validation */
+    private function warnAboutBarcode(mixed $variant): void
+    {
+        $warning = $variant instanceof ProductVariant ? $this->barcodes->warning($variant->getBarcode()) : null;
+        if ($warning !== null) {
+            $this->addFlash('warning', $warning);
+        }
     }
 }
