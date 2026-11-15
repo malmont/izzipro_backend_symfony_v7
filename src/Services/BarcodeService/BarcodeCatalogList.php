@@ -105,7 +105,7 @@ class BarcodeCatalogList
             'title' => (string) $row['name'], 'subtitle' => $subtitle !== '' ? $subtitle : null, 'code' => $row['code'],
             'barcode' => $barcode, 'barcodeOf' => $barcode === null ? null : ($row['type'] === 'variant' && $row['own_barcode'] === null ? 'product' : (string) $row['type']),
             'symbology' => $barcode !== null ? BarcodeLabelPrinter::symbology($barcode) : null,
-            'priceCents' => $row['price_cents'] !== null ? (int) $row['price_cents'] : null,
+            'priceCents' => (int) ($row['price_cents'] ?? 0) > 0 ? (int) $row['price_cents'] : null, // prix à zéro : « pas de prix », comme les étiquettes de la gestion
         ];
     }
 }

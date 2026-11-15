@@ -86,7 +86,7 @@ class BarcodeManagementController extends AbstractController
         }
         $rows = $this->catalog->rowsFor(array_keys($copies));
         $without = array_filter($rows, static fn (array $row): bool => $row['barcode'] === null);
-        if (count($rows) !== count($copies) || $without !== []) {
+        if (array_diff_key($copies, $rows) !== [] || $without !== []) { // toute clé demandée doit avoir SA ligne (« variant-007 » n'est pas « variant-7 »)
             $this->addFlash('error', $without !== []
                 ? sprintf('%d ligne(s) de la sélection n\'ont pas de code-barres (« %s ») : générez les codes manquants, ou retirez-les.', count($without), (string) reset($without)['title'])
                 : 'Une ligne de la sélection n\'existe plus : rechargez la page.');

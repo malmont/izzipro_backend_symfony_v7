@@ -228,8 +228,11 @@ d'article, code-barres (forme canonique : on peut scanner dans le champ) ou iden
 code-barres ». Le code d'une ligne suit la règle des étiquettes de la gestion (variante, sinon article quand elle est sa seule
 variante). On donne un nombre d'étiquettes par ligne puis « Imprimer la sélection » (page à imprimer) ou « PDF de la sélection »
 (`POST /admin/barcode-management/print` : `copies[variant-412]`, `copies[product-95]`, `showPrice`, `output`) : même planche que la
-gestion (`BarcodeLabelPrinter`), prix au choix, 500 étiquettes au plus, une ligne sans code refusée avec un message. La sélection
-porte sur la page affichée. Les anciennes adresses d'impression d'un article (`/admin/print-barcode/{id}/{copies}`,
+gestion (`BarcodeLabelPrinter`), prix au choix (un prix à zéro vaut « pas de prix », comme en gestion), 500 étiquettes au plus, une
+ligne sans code ou une clé inconnue refusée avec un message. La sélection porte sur la page affichée.
+
+Plafond de 500 étiquettes, mesuré le 15/11/2026 dans le conteneur (rendu seul, sans base) : 500 étiquettes de 50 codes en 2,2 s,
+500 étiquettes de 500 codes distincts (pire cas) en 5,6 s, 66 Mo au plus ; 100 étiquettes en 0,4 s. Les anciennes adresses d'impression d'un article (`/admin/print-barcode/{id}/{copies}`,
 `/admin/pdf/print-barcode/{id}/{copies}`) rendent la même planche ; `/admin/barcode-image/{id}` n'existe plus.
 
 ## 8. Tests

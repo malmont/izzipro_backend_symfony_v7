@@ -385,6 +385,7 @@ class CatalogBarcodeAdminTest extends WebTestCase
             'Au plus 500 étiquettes' => ["variant-$v1" => '300', "product-{$bottle->getId()}" => '201'],
             'pas de code-barres' => ["variant-$v1" => '1', "variant-$v2" => '1'],
             'n\'existe plus' => ["variant-$v1" => '1', 'variant-999999999' => '1'],
+            'Une ligne de la sélection n\'existe plus' => ["variant-0$v1" => '1'], // clé mal formée : refusée, pas une page d'erreur
         ] as $message => $copies) {
             $print($copies, ['search' => $this->suffix, 'missing' => '1', 'page' => '1']);
             $this->assertSame(302, $this->status(), $message);
@@ -392,6 +393,10 @@ class CatalogBarcodeAdminTest extends WebTestCase
             $this->client->followRedirect();
             $this->assertStringContainsString($message, $this->text());
         }
+        // Prix à zéro : « pas de prix », l'étiquette s'imprime sans prix (même règle que les étiquettes de la gestion)
+        $this->db()->executeStatement('UPDATE product SET price = 0 WHERE id = ?', [$bottle->getId()]);
+        $print($selection, ['showPrice' => '1']);
+        $this->assertSame([6, 3], [substr_count((string) $this->client->getResponse()->getContent(), 'class="label"'), substr_count((string) $this->client->getResponse()->getContent(), 'class="price"')]);
         // Anciennes adresses d'impression d'un article : même planche
         $this->open('https://' . MV_TEST_TENANT_HOST . '/admin/print-barcode/' . $bottle->getId() . '/4');
         $this->assertSame([200, 4], [$this->status(), substr_count((string) $this->client->getResponse()->getContent(), 'class="label"')]);
