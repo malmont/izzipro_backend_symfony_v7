@@ -234,7 +234,12 @@ gestion (`BarcodeLabelPrinter`), prix au choix (un prix à zéro vaut « pas de 
 ligne sans code ou une clé inconnue refusée avec un message. La sélection porte sur la page affichée.
 
 Plafond de 500 étiquettes, mesuré le 15/11/2026 dans le conteneur (rendu seul, sans base) : 500 étiquettes de 50 codes en 2,2 s,
-500 étiquettes de 500 codes distincts (pire cas) en 5,6 s, 66 Mo au plus ; 100 étiquettes en 0,4 s. Les anciennes adresses d'impression d'un article (`/admin/print-barcode/{id}/{copies}`,
+500 étiquettes de 500 codes distincts (pire cas) en 5,6 s, 66 Mo au plus ; 100 étiquettes en 0,4 s.
+
+L'imprimeur (`BarcodeLabelPrinter`) sait aussi, depuis le lot L2-b de la prévention des pertes (`docs/prevention-pertes.md` § 13.10),
+rendre le format rouleau `roll-50x30` (une page de 50 × 30 mm par étiquette, 200 au plus) et une ligne de plus par étiquette (`note` :
+le numéro d'une pièce). Les routes de cette fiche rendent toujours la planche A4 `a4-50x30` : leur donner le choix du format est un
+paramètre à ajouter. Les anciennes adresses d'impression d'un article (`/admin/print-barcode/{id}/{copies}`,
 `/admin/pdf/print-barcode/{id}/{copies}`) rendent la même planche ; `/admin/barcode-image/{id}` n'existe plus.
 
 ## 8. Codes-barres dans l'application de gestion (lot CB-3)

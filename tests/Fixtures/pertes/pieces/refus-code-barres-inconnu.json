@@ -1,0 +1,17 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/pieces?locale=fr",
+        "body": {
+            "barcode": "INCONNU-AA72C4"
+        }
+    },
+    "status": 404,
+    "headers": {},
+    "body": {
+        "error": "BARCODE_NOT_FOUND",
+        "code": "BARCODE_NOT_FOUND",
+        "message": "Ce code-barres ne désigne aucun article : posez-le d'abord sur la variante.",
+        "barcode": "INCONNU-AA72C4"
+    }
+}

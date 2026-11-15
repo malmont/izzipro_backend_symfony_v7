@@ -1,0 +1,18 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/puces/associer?locale=fr",
+        "body": {
+            "pieceId": 1,
+            "identifier": "06AA72C4",
+            "technology": "nfc"
+        }
+    },
+    "status": 409,
+    "headers": {},
+    "body": {
+        "error": "PIECE_RETIRED",
+        "code": "PIECE_RETIRED",
+        "message": "Cette pièce est retirée : elle ne reçoit plus de puce."
+    }
+}

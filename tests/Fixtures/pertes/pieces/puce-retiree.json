@@ -1,0 +1,109 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/puces/1/retirer?locale=fr",
+        "body": {
+            "reason": "detached",
+            "confirm": true
+        }
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "changed": true,
+        "tag": {
+            "id": 1,
+            "identifier": "04AA72C4C3D4E5",
+            "technology": "nfc",
+            "technologyLabel": "Puce NFC",
+            "status": "retired",
+            "statusLabel": "Retirée",
+            "pieceId": 1,
+            "exercise": false,
+            "associatedAt": "2026-11-15T19:03:21+00:00",
+            "retiredAt": "2026-11-15T19:03:22+00:00",
+            "retiredReason": "detached",
+            "retiredReasonLabel": "Puce détachée"
+        },
+        "piece": {
+            "id": 1,
+            "number": 1,
+            "status": "created",
+            "statusLabel": "En service",
+            "zone": null,
+            "exercise": false,
+            "variantId": 23,
+            "productId": 15,
+            "variantMissing": false,
+            "name": "Veste en lin (exemple AA72C4)",
+            "variantLabel": null,
+            "barcode": "VESTE-LIN-M-AA72C4",
+            "barcodeOf": "variant",
+            "symbology": "code128",
+            "tags": [
+                {
+                    "id": 1,
+                    "identifier": "04AA72C4C3D4E5",
+                    "technology": "nfc",
+                    "technologyLabel": "Puce NFC",
+                    "status": "retired",
+                    "statusLabel": "Retirée",
+                    "pieceId": 1,
+                    "exercise": false,
+                    "associatedAt": "2026-11-15T19:03:21+00:00",
+                    "retiredAt": "2026-11-15T19:03:22+00:00",
+                    "retiredReason": "detached",
+                    "retiredReasonLabel": "Puce détachée"
+                },
+                {
+                    "id": 3,
+                    "identifier": "01AA72C4",
+                    "technology": "nfc",
+                    "technologyLabel": "Puce NFC",
+                    "status": "associated",
+                    "statusLabel": "Posée",
+                    "pieceId": 1,
+                    "exercise": false,
+                    "associatedAt": "2026-11-15T19:03:21+00:00",
+                    "retiredAt": null,
+                    "retiredReason": null,
+                    "retiredReasonLabel": null
+                },
+                {
+                    "id": 4,
+                    "identifier": "02AA72C4",
+                    "technology": "nfc",
+                    "technologyLabel": "Puce NFC",
+                    "status": "associated",
+                    "statusLabel": "Posée",
+                    "pieceId": 1,
+                    "exercise": false,
+                    "associatedAt": "2026-11-15T19:03:21+00:00",
+                    "retiredAt": null,
+                    "retiredReason": null,
+                    "retiredReasonLabel": null
+                },
+                {
+                    "id": 5,
+                    "identifier": "03AA72C4",
+                    "technology": "nfc",
+                    "technologyLabel": "Puce NFC",
+                    "status": "associated",
+                    "statusLabel": "Posée",
+                    "pieceId": 1,
+                    "exercise": false,
+                    "associatedAt": "2026-11-15T19:03:22+00:00",
+                    "retiredAt": null,
+                    "retiredReason": null,
+                    "retiredReasonLabel": null
+                }
+            ],
+            "tagged": true,
+            "commandeId": null,
+            "retiredReason": null,
+            "retiredReasonLabel": null,
+            "createdAt": "2026-11-15T19:03:20+00:00",
+            "retiredAt": null
+        }
+    }
+}

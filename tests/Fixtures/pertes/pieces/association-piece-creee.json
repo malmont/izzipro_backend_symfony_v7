@@ -1,0 +1,69 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/puces/associer?locale=fr",
+        "body": {
+            "barcode": "VESTE-LIN-L-AA72C4",
+            "identifier": "E280AA72C400000000AA72C4",
+            "technology": "uhf"
+        }
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "created": true,
+        "associated": true,
+        "piece": {
+            "id": 3,
+            "number": 3,
+            "status": "created",
+            "statusLabel": "En service",
+            "zone": null,
+            "exercise": false,
+            "variantId": 24,
+            "productId": 15,
+            "variantMissing": false,
+            "name": "Veste en lin (exemple AA72C4)",
+            "variantLabel": null,
+            "barcode": "VESTE-LIN-L-AA72C4",
+            "barcodeOf": "variant",
+            "symbology": "code128",
+            "tags": [
+                {
+                    "id": 2,
+                    "identifier": "E280AA72C400000000AA72C4",
+                    "technology": "uhf",
+                    "technologyLabel": "Puce lisible à distance (UHF)",
+                    "status": "associated",
+                    "statusLabel": "Posée",
+                    "pieceId": 3,
+                    "exercise": false,
+                    "associatedAt": "2026-11-15T19:03:21+00:00",
+                    "retiredAt": null,
+                    "retiredReason": null,
+                    "retiredReasonLabel": null
+                }
+            ],
+            "tagged": true,
+            "commandeId": null,
+            "retiredReason": null,
+            "retiredReasonLabel": null,
+            "createdAt": "2026-11-15T19:03:21+00:00",
+            "retiredAt": null
+        },
+        "tag": {
+            "id": 2,
+            "identifier": "E280AA72C400000000AA72C4",
+            "technology": "uhf",
+            "technologyLabel": "Puce lisible à distance (UHF)",
+            "status": "associated",
+            "statusLabel": "Posée",
+            "pieceId": 3,
+            "exercise": false,
+            "associatedAt": "2026-11-15T19:03:21+00:00",
+            "retiredAt": null,
+            "retiredReason": null,
+            "retiredReasonLabel": null
+        }
+    }
+}

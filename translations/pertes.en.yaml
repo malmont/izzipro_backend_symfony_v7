@@ -303,6 +303,7 @@ pieces:
         TAG_RETIRED: Tag retired
         PIECE_RETIRED: Piece retired
         TEST_TAG_READ: Tag read during the test
+        TEST_LABEL_PRINTED: Test label produced
     error:
         VARIANT_NOT_FOUND: 'Variant not found.'
         PIECE_NOT_FOUND: 'Piece not found.'
@@ -326,3 +327,107 @@ pieces:
         CONFIRMATION_REQUIRED: 'A retirement cannot be undone: confirm it.'
         EXERCISE_LIMIT_REACHED: 'You already have %limit% practice pieces: delete them before creating more.'
         EXERCISE_DAILY_LIMIT: 'You have created practice pieces %limit% times today: you can start again tomorrow.'
+# Piece labels (lot L2-b, 2026-11-15, docs/prevention-pertes.md § 13.10)
+piece_labels:
+    title: Piece labels
+    note: 'Piece no. %number%'
+    exercise_note: 'Practice no. %number%'
+    error:
+        LABELS_LIMIT_EXCEEDED: 'At most %max% labels per print in this format.'
+        PIECES_NOT_FOUND: 'Some selected pieces do not exist.'
+        PIECE_RETIRED: 'Some selected pieces are retired: a retired piece no longer has a label.'
+        BARCODE_MISSING: 'Some selected pieces have no barcode: set it on their variant first.'
+# Installation assistant for tag labels (lot L2-b)
+installation:
+    steps:
+        hardware:
+            title: Choose your hardware
+            text: 'Three levels for each need: reading a tag, printing the label, attaching the tag. Look at the range and take what suits your shop.'
+            verify: See the range
+            hint: 'This step has nothing to check: it is done as soon as you print a test label, read a tag or attach a tag to a piece.'
+        test_label:
+            title: Print a test label
+            text: 'Print the test label in your printer''s format: A4 sheet or roll. Check that it comes out straight and that the bars are sharp.'
+            verify: Check
+            hint: 'No test label has been requested yet. Choose your printer''s format and print it.'
+        test_tag:
+            title: Read a test tag
+            text: 'Bring a tag close to the reader. The app must show its identifier.'
+            verify: Check
+            hint: 'No tag has been read yet. If nothing shows: set the reader to type like a keyboard, put the cursor in the tag field, and bring the tag closer.'
+        first_piece:
+            title: Attach the tag to a first piece
+            text: 'Read the barcode of an item, then its tag: the piece is created and carries its tag.'
+            verify: Check
+            hint: 'No piece carries a tag yet. Read the barcode of an item, then a free tag.'
+    hint:
+        decimal: 'The reader seems to return a number made of digits only. Set it to return the identifier in hexadecimal (digits and letters A to F).'
+        form: 'This read contains something other than digits and letters A to F: it is not a tag. Check that the cursor is in the tag field.'
+        length_nfc: 'This read does not have the length of an NFC tag (8, 14, 16 or 20 characters). Try the other technology, or another tag.'
+        length_uhf: 'This read does not have the length of a long-range tag (16 to 64 characters, in groups of 4). Try the other technology, or another tag.'
+        simulated: 'This read is not that of a simulated tag.'
+        barcode: 'This read is the barcode of "%label%", not a tag: read the tag.'
+        already_associated: 'Reading works. This tag is already attached to a piece: take a free one for the next step.'
+        retired: 'Reading works. This tag has been retired: take a free one for the next step.'
+    test_label:
+        title: Test label
+        subtitle: Loss prevention
+        note: 'Does not designate any item'
+    error:
+        STEP_NOT_FOUND: 'Unknown step.'
+# Hardware range for tag labels (lot L2-b): three levels per need, no prices
+hardware:
+    note: 'The do-it-yourself level is sold without hardware: you buy the parts yourself. All three levels give the same pieces and the same tags in the app.'
+    levels:
+        pro:
+            label: Pro
+            summary: 'Everything in one move: the printer writes the tag while printing the label, the handheld reader reads from a distance.'
+        standard:
+            label: Standard
+            summary: 'Pre-numbered sticker tags, an ordinary thermal printer, a desktop reader.'
+        diy:
+            label: Do it yourself
+            summary: 'The same sticker tags, labels on A4 sheets, the phone or a board you assemble yourself for reading.'
+    needs:
+        read:
+            label: Reading a tag
+            pro:
+                what: 'A handheld reader for long-range (UHF) tags.'
+                allows: 'Reading a tag several metres away, without looking for it; ready for counting and for the antennas to come.'
+                limits: 'The most expensive of the three.'
+            standard:
+                what: 'A desktop UHF tag reader, plugged in by USB, which types like a keyboard.'
+                allows: 'Reading a tag placed on the reader; ready for the antennas to come.'
+                limits: 'One tag at a time, a few centimetres away.'
+            diy:
+                what: 'A phone that reads NFC, or a reader module mounted on an Arduino-type board and plugged in as a keyboard.'
+                allows: 'Attaching a tag and checking a piece, for next to nothing.'
+                limits: 'Reads a few centimetres away; NFC tags serve neither remote counting nor antennas.'
+        print:
+            label: Printing the label
+            pro:
+                what: 'A printer that prints the label and writes the tag in the same move.'
+                allows: 'A single label, barcode and tag together.'
+                limits: 'Specialised hardware; the app does not offer writing the tag yet.'
+            standard:
+                what: 'An ordinary thermal printer, with a roll of 50 × 30 mm labels.'
+                allows: 'One label per piece, on demand, without ink.'
+                limits: 'The tag is a second label, stuck on separately.'
+            diy:
+                what: 'A desktop printer and A4 sheets of 50 × 30 mm labels.'
+                allows: 'Printing with the hardware you already have.'
+                limits: 'By whole sheets; less convenient one at a time.'
+        attach:
+            label: Attaching the tag
+            pro:
+                what: 'Labels with a built-in tag, straight from the printer.'
+                allows: 'One attachment, one move.'
+                limits: 'Labels cost more each.'
+            standard:
+                what: 'Sticker tags pre-numbered at the factory.'
+                allows: 'Sticking the tag on the item''s removable label, then reading it once.'
+                limits: 'Two moves: stick, then read.'
+            diy:
+                what: 'The same sticker tags, NFC or UHF depending on your reader.'
+                allows: 'Starting with a few dozen tags.'
+                limits: 'Two moves: stick, then read.'

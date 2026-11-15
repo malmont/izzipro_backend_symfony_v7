@@ -1,0 +1,15 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/puces/recherche?identifier=AABBCCDD&locale=fr"
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "identifier": "AABBCCDD",
+        "found": false,
+        "refusal": null,
+        "tag": null,
+        "piece": null
+    }
+}

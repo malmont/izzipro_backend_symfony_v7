@@ -1,0 +1,67 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/exercices/puces/associer?locale=fr",
+        "body": {
+            "pieceId": 4
+        }
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "created": false,
+        "associated": true,
+        "piece": {
+            "id": 4,
+            "number": 1,
+            "status": "created",
+            "statusLabel": "En service",
+            "zone": null,
+            "exercise": true,
+            "variantId": 25,
+            "productId": 16,
+            "variantMissing": false,
+            "name": "Sac de plage (exemple AA72C4)",
+            "variantLabel": null,
+            "barcode": "ABCDEF03AA72C4AA",
+            "barcodeOf": "variant",
+            "symbology": "code128",
+            "tags": [
+                {
+                    "id": 6,
+                    "identifier": "SIM-A5867D744F22",
+                    "technology": "simulated",
+                    "technologyLabel": "Puce simulée",
+                    "status": "associated",
+                    "statusLabel": "Posée",
+                    "pieceId": 4,
+                    "exercise": true,
+                    "associatedAt": "2026-11-15T19:03:23+00:00",
+                    "retiredAt": null,
+                    "retiredReason": null,
+                    "retiredReasonLabel": null
+                }
+            ],
+            "tagged": true,
+            "commandeId": null,
+            "retiredReason": null,
+            "retiredReasonLabel": null,
+            "createdAt": "2026-11-15T19:03:22+00:00",
+            "retiredAt": null
+        },
+        "tag": {
+            "id": 6,
+            "identifier": "SIM-A5867D744F22",
+            "technology": "simulated",
+            "technologyLabel": "Puce simulée",
+            "status": "associated",
+            "statusLabel": "Posée",
+            "pieceId": 4,
+            "exercise": true,
+            "associatedAt": "2026-11-15T19:03:23+00:00",
+            "retiredAt": null,
+            "retiredReason": null,
+            "retiredReasonLabel": null
+        }
+    }
+}

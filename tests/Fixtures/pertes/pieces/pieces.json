@@ -1,0 +1,127 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/pieces?productId=15&page=1&limit=20&locale=fr"
+    },
+    "status": 200,
+    "headers": {
+        "X-Total-Count": "3",
+        "X-Page": "1",
+        "X-Limit": "20"
+    },
+    "body": [
+        {
+            "id": 3,
+            "number": 3,
+            "status": "created",
+            "statusLabel": "En service",
+            "zone": null,
+            "exercise": false,
+            "variantId": 24,
+            "productId": 15,
+            "variantMissing": false,
+            "name": "Veste en lin (exemple AA72C4)",
+            "variantLabel": null,
+            "barcode": "VESTE-LIN-L-AA72C4",
+            "barcodeOf": "variant",
+            "symbology": "code128",
+            "tags": [
+                {
+                    "id": 2,
+                    "identifier": "E280AA72C400000000AA72C4",
+                    "technology": "uhf",
+                    "technologyLabel": "Puce lisible à distance (UHF)",
+                    "status": "associated",
+                    "statusLabel": "Posée",
+                    "pieceId": 3,
+                    "exercise": false,
+                    "associatedAt": "2026-11-15T19:03:21+00:00",
+                    "retiredAt": null,
+                    "retiredReason": null,
+                    "retiredReasonLabel": null
+                }
+            ],
+            "tagged": true,
+            "commandeId": null,
+            "retiredReason": null,
+            "retiredReasonLabel": null,
+            "createdAt": "2026-11-15T19:03:21+00:00",
+            "retiredAt": null
+        },
+        {
+            "id": 2,
+            "number": 2,
+            "status": "created",
+            "statusLabel": "En service",
+            "zone": null,
+            "exercise": false,
+            "variantId": 23,
+            "productId": 15,
+            "variantMissing": false,
+            "name": "Veste en lin (exemple AA72C4)",
+            "variantLabel": null,
+            "barcode": "VESTE-LIN-M-AA72C4",
+            "barcodeOf": "variant",
+            "symbology": "code128",
+            "tags": [],
+            "tagged": false,
+            "commandeId": null,
+            "retiredReason": null,
+            "retiredReasonLabel": null,
+            "createdAt": "2026-11-15T19:03:20+00:00",
+            "retiredAt": null
+        },
+        {
+            "id": 1,
+            "number": 1,
+            "status": "created",
+            "statusLabel": "En service",
+            "zone": null,
+            "exercise": false,
+            "variantId": 23,
+            "productId": 15,
+            "variantMissing": false,
+            "name": "Veste en lin (exemple AA72C4)",
+            "variantLabel": null,
+            "barcode": "VESTE-LIN-M-AA72C4",
+            "barcodeOf": "variant",
+            "symbology": "code128",
+            "tags": [
+                {
+                    "id": 1,
+                    "identifier": "04AA72C4C3D4E5",
+                    "technology": "nfc",
+                    "technologyLabel": "Puce NFC",
+                    "status": "associated",
+                    "statusLabel": "Posée",
+                    "pieceId": 1,
+                    "exercise": false,
+                    "associatedAt": "2026-11-15T19:03:21+00:00",
+                    "retiredAt": null,
+                    "retiredReason": null,
+                    "retiredReasonLabel": null
+                },
+                {
+                    "id": 3,
+                    "identifier": "01AA72C4",
+                    "technology": "nfc",
+                    "technologyLabel": "Puce NFC",
+                    "status": "associated",
+                    "statusLabel": "Posée",
+                    "pieceId": 1,
+                    "exercise": false,
+                    "associatedAt": "2026-11-15T19:03:21+00:00",
+                    "retiredAt": null,
+                    "retiredReason": null,
+                    "retiredReasonLabel": null
+                }
+            ],
+            "tagged": true,
+            "commandeId": null,
+            "retiredReason": null,
+            "retiredReasonLabel": null,
+            "createdAt": "2026-11-15T19:03:20+00:00",
+            "retiredAt": null
+        }
+    ]
+}

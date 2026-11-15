@@ -598,3 +598,38 @@ pertes_exercices:
             label: 'Delete all'
             text: 'Deletes every exercise at once. Real findings cannot be deleted.'
     next: 'Launch a scenario, open its finding, read the evidence and make a decision: that is exactly what you will do for a real finding.'
+pertes_pieces:
+    purpose: 'Pieces and their tags: each tracked copy of an item carries a number and a tag, so you know which piece you are talking about.'
+    points:
+        piece:
+            label: 'Piece'
+            text: 'One copy of an item, with its number. It does not replace stock: you choose which items to track piece by piece.'
+        associer:
+            label: 'Attach a tag'
+            text: 'Read the item''s barcode, then the tag: the piece is created and carries its tag. A tag never moves from one piece to another.'
+        chercher:
+            label: 'Look up a tag'
+            text: 'Read a tag to see the piece it designates.'
+        retirer:
+            label: 'Retire'
+            text: 'A detached tag or a damaged piece is retired, with a reason. A retirement cannot be undone.'
+        synthese:
+            label: 'Summary'
+            text: 'Per tracked item: stock, pieces in service, those carrying a tag, and the gap between the two.'
+    next: 'Create the pieces of an item when it is received, then attach a tag to each.'
+pertes_installation:
+    purpose: 'Installing tag labels, step by step: choose your hardware, print a test label, read a tag, attach the first one.'
+    points:
+        etapes:
+            label: 'Steps'
+            text: 'Each step checks itself from what you have done: nothing to tick.'
+        verifier:
+            label: 'Check'
+            text: 'The button re-reads your tests and says whether the step is done, or what to try.'
+        gamme:
+            label: 'Hardware range'
+            text: 'Three levels for each need, from the simplest to the most complete. The do-it-yourself level is sold without hardware.'
+        sans-materiel:
+            label: 'Without hardware'
+            text: 'In practice mode, tags are simulated: you follow the whole path before buying anything.'
+    next: 'Start with the test label, in your printer''s format.'

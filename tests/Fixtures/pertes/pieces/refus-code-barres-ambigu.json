@@ -1,0 +1,21 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/pieces?locale=fr",
+        "body": {
+            "barcode": "VESTE-LIN-AA72C4"
+        }
+    },
+    "status": 409,
+    "headers": {},
+    "body": {
+        "error": "BARCODE_AMBIGUOUS",
+        "code": "BARCODE_AMBIGUOUS",
+        "message": "Ce code-barres est celui de l'article « Veste en lin (exemple AA72C4) », qui a plusieurs variantes : choisissez la variante.",
+        "productId": 15,
+        "variantIds": [
+            23,
+            24
+        ]
+    }
+}

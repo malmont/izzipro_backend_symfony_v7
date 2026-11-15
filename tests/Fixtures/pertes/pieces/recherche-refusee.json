@@ -1,0 +1,15 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/puces/recherche?identifier=pas-une-puce&locale=fr"
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "identifier": null,
+        "found": false,
+        "refusal": "TAG_INVALID",
+        "tag": null,
+        "piece": null
+    }
+}

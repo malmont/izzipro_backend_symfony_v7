@@ -229,7 +229,9 @@ class LossPieceService
                     throw new GestionConflictException('PIECE_TAG_LIMIT', $this->texts->t('pieces.error.PIECE_TAG_LIMIT', $locale, ['limit' => LossTag::MAX_PER_PIECE]), 409, ['limit' => LossTag::MAX_PER_PIECE]);
                 }
                 if ($tag !== null) {
+                    // une puce déjà connue garde la technologie sous laquelle elle a été enregistrée (la base la fige) : le fait dit la même
                     $tagId = (int) $tag['id'];
+                    $technology = (string) $tag['technology'];
                     $repository->associateKnownTag($tagId, $pieceId, $now);
                 } else {
                     $tagId = $repository->insertAssociatedTag($identifier, mb_substr(trim((string) $raw), 0, LossTagIdentifier::RAW_MAX), $technology, $pieceId, $exercise, $userId, $now);
@@ -656,7 +658,7 @@ class LossPieceService
      *
      * @return array<string, mixed>
      */
-    private static function catalogue(?array $variant): array
+    public static function catalogue(?array $variant): array
     {
         if ($variant === null) {
             return ['variantMissing' => true, 'name' => null, 'variantLabel' => null, 'barcode' => null, 'barcodeOf' => null, 'symbology' => null];
@@ -671,6 +673,12 @@ class LossPieceService
 
         return ['variantMissing' => false, 'name' => (string) $variant['name'], 'variantLabel' => $label !== '' ? $label : null,
             'barcode' => $code, 'barcodeOf' => $of, 'symbology' => $code !== null ? BarcodeLabelPrinter::symbology((string) $code) : null];
+    }
+
+    /** @return array<string, mixed> une puce prête à afficher (ligne de `loss_tag`) */
+    public function tagView(array $tag, string $locale): array
+    {
+        return $this->tagRow($tag, $locale);
     }
 
     /** @return array<string, mixed> une puce prête à afficher */

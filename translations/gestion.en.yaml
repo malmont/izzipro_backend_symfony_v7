@@ -1118,6 +1118,8 @@ console:
         pertes_regles: 'Loss prevention rules and thresholds'
         pertes_reglages: 'Loss prevention settings'
         pertes_exercices: 'Loss prevention practice'
+        pertes_pieces: 'Pieces and tags'
+        pertes_installation: 'Tag label installation'
         accueil: 'Management home'
         journee: 'My day'
         periode_resultat: 'Period result'

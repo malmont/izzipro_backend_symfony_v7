@@ -1,0 +1,75 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/installation/puce-test?locale=fr",
+        "body": {
+            "identifier": "0012345678",
+            "technology": "nfc"
+        }
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "ok": false,
+        "identifier": null,
+        "technology": "nfc",
+        "refusal": "TAG_INVALID",
+        "hint": "Le lecteur semble rendre un numéro en chiffres seulement. Réglez-le pour qu'il rende l'identifiant en hexadécimal (chiffres et lettres de A à F).",
+        "tag": null,
+        "installation": {
+            "steps": [
+                {
+                    "code": "hardware",
+                    "title": "Choisir son matériel",
+                    "text": "Trois niveaux pour chaque besoin : lire une puce, imprimer l'étiquette, poser la puce. Regardez la gamme et prenez ce qui convient à votre boutique.",
+                    "image": "pertes/installation/hardware",
+                    "status": "done",
+                    "verify": {
+                        "kind": "none",
+                        "label": "Voir la gamme"
+                    }
+                },
+                {
+                    "code": "test_label",
+                    "title": "Imprimer une étiquette d'essai",
+                    "text": "Imprimez l'étiquette d'essai dans le format de votre imprimante : planche A4 ou rouleau. Vérifiez qu'elle sort droite et que les barres sont nettes.",
+                    "image": "pertes/installation/test_label",
+                    "status": "done",
+                    "verify": {
+                        "kind": "data",
+                        "label": "Vérifier"
+                    }
+                },
+                {
+                    "code": "test_tag",
+                    "title": "Lire une puce d'essai",
+                    "text": "Approchez une puce du lecteur. L'application doit afficher son identifiant.",
+                    "image": "pertes/installation/test_tag",
+                    "status": "done",
+                    "verify": {
+                        "kind": "data",
+                        "label": "Vérifier"
+                    }
+                },
+                {
+                    "code": "first_piece",
+                    "title": "Poser la puce sur une première pièce",
+                    "text": "Lisez le code-barres d'un article, puis sa puce : la pièce est créée et porte sa puce.",
+                    "image": "pertes/installation/first_piece",
+                    "status": "done",
+                    "verify": {
+                        "kind": "data",
+                        "label": "Vérifier"
+                    }
+                }
+            ],
+            "progress": {
+                "done": 4,
+                "total": 4
+            },
+            "complete": true,
+            "exercise": false,
+            "screen": "pertes.installation"
+        }
+    }
+}

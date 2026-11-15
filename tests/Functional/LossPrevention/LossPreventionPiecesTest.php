@@ -678,7 +678,11 @@ class LossPreventionPiecesTest extends LossPreventionTestCase
             }
             $this->assertFalse($this->db->isTransactionActive(), $what . ' : la transaction est refermée');
         };
+        // La connexion du service est celle du test (aucune requête HTTP n'a relancé le noyau) ; l'autre est coupée d'office par la base
+        // si elle reste ouverte : rien ici ne peut tenir le verrou commun des tests
+        $this->assertSame($this->db, $this->tenant()->getEntityManager()->getConnection(), 'le délai de verrou doit être posé sur la connexion du service');
         $other = DriverManager::getConnection($this->db->getParams());
+        $other->executeStatement("SET idle_in_transaction_session_timeout = '30s'");
         $this->db->executeStatement("SET lock_timeout = '1s'");
         try {
             // Poser une puce prend la pièce sous le verrou d'une mise à jour : une autre connexion qui la lit sous verrou partagé (la
@@ -704,8 +708,12 @@ class LossPreventionPiecesTest extends LossPreventionTestCase
                 (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_piece WHERE exercise')], 'rien n\'a été écrit pendant l\'attente');
         } finally {
             $this->db->executeStatement('SET lock_timeout = 0');
-            if ($other->isTransactionActive()) {
-                $other->rollBack();
+            try {
+                if ($other->isTransactionActive()) {
+                    $other->rollBack();
+                }
+            } catch (\Throwable) {
+                // connexion déjà coupée par la garde
             }
             $other->close();
         }

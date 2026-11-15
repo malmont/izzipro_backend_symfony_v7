@@ -1,0 +1,21 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/pieces/etiquettes/pdf?locale=fr",
+        "body": {
+            "pieceIds": [
+                1
+            ]
+        }
+    },
+    "status": 409,
+    "headers": {},
+    "body": {
+        "error": "PIECE_RETIRED",
+        "code": "PIECE_RETIRED",
+        "message": "Des pièces de la sélection sont retirées : une pièce retirée n'a plus d'étiquette.",
+        "pieceIds": [
+            1
+        ]
+    }
+}

@@ -1,0 +1,14 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/installation/etapes/first_piece/verifier?locale=fr",
+        "body": []
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "code": "first_piece",
+        "verified": true,
+        "hint": null
+    }
+}

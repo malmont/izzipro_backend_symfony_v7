@@ -598,3 +598,38 @@ pertes_exercices:
             label: 'Tout effacer'
             text: 'Efface d''un geste tous les constats d''exercice. Les vrais constats ne peuvent pas être effacés.'
     next: 'Lancez un scénario, ouvrez son constat, lisez les preuves et prenez une décision : c''est exactement ce que vous ferez pour un vrai constat.'
+pertes_pieces:
+    purpose: 'Les pièces et leurs puces : chaque exemplaire suivi d''un article porte un numéro et une puce, pour savoir de quelle pièce on parle.'
+    points:
+        piece:
+            label: 'Pièce'
+            text: 'Un exemplaire d''un article, avec son numéro. Elle ne remplace pas le stock : vous choisissez quels articles suivre pièce par pièce.'
+        associer:
+            label: 'Associer une puce'
+            text: 'Lisez le code-barres de l''article, puis la puce : la pièce est créée et porte sa puce. Une puce ne passe jamais d''une pièce à une autre.'
+        chercher:
+            label: 'Chercher une puce'
+            text: 'Lisez une puce pour voir la pièce qu''elle désigne.'
+        retirer:
+            label: 'Retirer'
+            text: 'Une puce détachée ou une pièce abîmée se retire, avec un motif. Un retrait ne s''annule pas.'
+        synthese:
+            label: 'Synthèse'
+            text: 'Par article suivi : le stock, les pièces en service, celles qui portent une puce, et l''écart entre les deux.'
+    next: 'Créez les pièces d''un article à sa réception, puis posez une puce sur chacune.'
+pertes_installation:
+    purpose: 'L''installation des étiquettes à puce, étape par étape : choisir son matériel, imprimer une étiquette d''essai, lire une puce, poser la première.'
+    points:
+        etapes:
+            label: 'Étapes'
+            text: 'Chaque étape se vérifie d''elle-même à partir de ce que vous avez fait : rien à cocher.'
+        verifier:
+            label: 'Vérifier'
+            text: 'Le bouton relit vos essais et dit si l''étape est faite, ou quoi essayer.'
+        gamme:
+            label: 'Gamme de matériel'
+            text: 'Trois niveaux pour chaque besoin, du plus simple au plus complet. Le niveau bricoleur se vend sans matériel.'
+        sans-materiel:
+            label: 'Sans matériel'
+            text: 'En mode exercice, les puces sont simulées : vous suivez tout le parcours avant d''acheter quoi que ce soit.'
+    next: 'Commencez par l''étiquette d''essai, dans le format de votre imprimante.'

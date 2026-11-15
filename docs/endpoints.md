@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (535)
+## Boutique et commun (547)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -461,6 +461,12 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PUT | `/api/gestion/pertes/constats/{id}/decision` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::decide` |
 | GET | `/api/gestion/pertes/constats/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::finding` |
 | GET | `/api/gestion/pertes/constats` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::findings` |
+| POST | `/api/gestion/pertes/exercices/installation/etapes/{code}/verifier` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::exerciseVerify` |
+| POST | `/api/gestion/pertes/exercices/installation/etiquette-test` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::exerciseTestLabel` |
+| POST | `/api/gestion/pertes/exercices/installation/puce-test` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::exerciseTestRead` |
+| GET | `/api/gestion/pertes/exercices/installation` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::exerciseInstallation` |
+| GET | `/api/gestion/pertes/exercices/materiel` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::exerciseHardware` |
+| POST | `/api/gestion/pertes/exercices/pieces/etiquettes/pdf` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::exercisePieceLabels` |
 | POST | `/api/gestion/pertes/exercices/pieces/{id}/retirer` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::retireExercisePiece` |
 | GET | `/api/gestion/pertes/exercices/pieces/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::exercisePiece` |
 | DELETE | `/api/gestion/pertes/exercices/pieces` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::deleteExercisePieces` |
@@ -474,6 +480,12 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/gestion/pertes/exercices` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::deleteExercises` |
 | GET | `/api/gestion/pertes/exercices` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::exercises` |
 | POST | `/api/gestion/pertes/exercices` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::startExercise` |
+| POST | `/api/gestion/pertes/installation/etapes/{code}/verifier` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::verify` |
+| POST | `/api/gestion/pertes/installation/etiquette-test` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::testLabel` |
+| POST | `/api/gestion/pertes/installation/puce-test` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::testRead` |
+| GET | `/api/gestion/pertes/installation` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::installation` |
+| GET | `/api/gestion/pertes/materiel` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::hardware` |
+| POST | `/api/gestion/pertes/pieces/etiquettes/pdf` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::pieceLabels` |
 | GET | `/api/gestion/pertes/pieces/synthese` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::synthesis` |
 | POST | `/api/gestion/pertes/pieces/{id}/retirer` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::retirePiece` |
 | GET | `/api/gestion/pertes/pieces/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::piece` |
