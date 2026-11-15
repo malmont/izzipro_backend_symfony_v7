@@ -27,6 +27,7 @@ final class ImportException extends \RuntimeException
         // Lot IMP-2 : import des clients
         'IMPORT_KIND_UNKNOWN' => 'Nature d\'import inconnue.',
         'IMPORT_NOT_A_CUSTOMER_FILE' => 'Ce fichier n\'est pas un export de clients : les colonnes « Email » et « First Name » ou « Last Name » sont attendues.',
+        'IMPORT_INVITATIONS_NOT_OPEN' => 'L\'envoi des invitations n\'est pas encore ouvert.',
         'IMPORT_NOTHING_TO_INVITE' => 'Aucun client de cet import n\'attend d\'invitation.',
         'IMPORT_INVITATION_LINK_UNKNOWN' => 'L\'adresse publique de la boutique est inconnue : le lien de l\'invitation ne mènerait nulle part.',
         'IMPORT_INVITATION_INVALID' => 'Ce lien n\'est plus valable.',

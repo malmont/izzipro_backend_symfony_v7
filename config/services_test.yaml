@@ -119,6 +119,10 @@ services:
     import.test_http_client:
         class: Symfony\Component\HttpClient\MockHttpClient
         arguments: [['App\Tests\Fake\FakeImportImages', 'respond']]
+    # Interrupteur des invitations d'un import de clients (lot IMP-2) : éteint en production, réglable par les tests
+    App\Import\ImportInvitationSwitch:
+        class: App\Tests\Fake\FakeImportInvitationSwitch
+        public: true
     App\Import\ImportImageFetcher:
         autowire: true
         public: true

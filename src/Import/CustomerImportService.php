@@ -65,6 +65,7 @@ class CustomerImportService
         private readonly TenantPublicHostResolver $hosts,
         private readonly SiteName $siteName,
         private readonly StoreClock $clock,
+        private readonly ImportInvitationSwitch $switch,
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
     ) {
     }
@@ -241,6 +242,9 @@ class CustomerImportService
     public function invite(int $id, ?string $by): array
     {
         $job = $this->customersJob($id);
+        if (!$this->switch->isOpen()) {
+            throw new ImportException('IMPORT_INVITATIONS_NOT_OPEN', 409); // interrupteur de la plateforme éteint : aucune invitation ne part
+        }
         if (!in_array($job['status'], [ImportJobStore::DONE, ImportJobStore::FAILED], true)) {
             throw new ImportException('IMPORT_NOT_READY', 409, ['status' => $job['status']]);
         }
@@ -273,6 +277,11 @@ class CustomerImportService
     public function sendInvitations(int $id): array
     {
         $out = ['sent' => 0, 'failed' => 0];
+        if (!$this->switch->isOpen()) {
+            $this->logger->warning(sprintf('[Import] invitations de l\'import %d non envoyées : l\'envoi des invitations est éteint', $id));
+
+            return $out; // même si un message traînait dans la file : rien ne part, aucun jeton n'est posé
+        }
         try {
             $job = $this->store->find($id);
             if ($job === null || $job['kind'] !== ImportJobStore::KIND_CUSTOMERS) {
@@ -632,6 +641,8 @@ class CustomerImportService
             'id' => $job['id'], 'source' => $job['source'], 'kind' => $job['kind'], 'status' => $job['status'], 'fileName' => $job['file_name'], 'rows' => $job['row_count'],
             'createdAt' => $iso($job['created_at']), 'analysedAt' => $iso($job['analysed_at']), 'startedAt' => $iso($job['started_at']), 'finishedAt' => $iso($job['finished_at']), 'cancelledAt' => $iso($job['cancelled_at']),
             'cancellable' => $this->cancellable($job), 'cancellableUntil' => null, 'error' => $job['error'], 'options' => $job['options'],
+            // faux tant que la plateforme n'a pas ouvert l'envoi des invitations : l'application ne propose pas « Envoyer les invitations »
+            'invitationsOpen' => $this->switch->isOpen(),
             // les clients repris par cet import, par état ; `invitable` : ceux à qui une invitation peut encore partir
             'guests' => $guests + ['invitable' => in_array($job['status'], [ImportJobStore::DONE, ImportJobStore::FAILED], true) ? count($this->guests->toInvite((int) $job['id'])) : 0],
         ];

@@ -159,12 +159,12 @@ Les routes du § 1 valent pour les deux natures ; chaque import porte `kind` (`c
 |---|---|---|---|
 | `POST /api/site/imports` | multipart `file`, `source=shopify`, **`kind=customers`** (défaut : `catalog`) | 201, l'import analysé | 422 `IMPORT_KIND_UNKNOWN`, `IMPORT_NOT_A_CUSTOMER_FILE` (colonnes « Email » et « First Name » ou « Last Name » attendues), `IMPORT_TOO_MANY_ROWS` (5 000), `IMPORT_NOT_UTF8`, `IMPORT_EMPTY_FILE`, `IMPORT_FILE_TOO_BIG` ; 409 `IMPORT_ALREADY_ACTIVE` (un seul import actif par site, toutes natures) |
 | `POST /api/site/imports/{id}/confirm` | `{ attestMarketingConsent?: bool }` | 202, `running` | 422 `fields.attestMarketingConsent` `MUST_BE_BOOLEAN` ; 409 `IMPORT_NOTHING_TO_IMPORT`, `IMPORT_NOT_READY` ; 503 `IMPORT_QUEUE_UNAVAILABLE` |
-| `POST /api/site/imports/{id}/invitations` | — | 202 `{ importId, queued }` : les invitations partent en tâche de fond, 300 au plus par demande (`guests.invitable` dit ce qu'il reste) | 409 `IMPORT_NOT_READY` (import non terminé), `IMPORT_NOTHING_TO_INVITE` (tous déjà invités : aucune relance), `IMPORT_INVITATION_LINK_UNKNOWN` (aucune adresse publique connue pour le site) ; 404 pour un import de catalogue |
+| `POST /api/site/imports/{id}/invitations` | — | 202 `{ importId, queued }` : les invitations partent en tâche de fond, 300 au plus par demande (`guests.invitable` dit ce qu'il reste) | 409 `IMPORT_INVITATIONS_NOT_OPEN` (interrupteur de la plateforme éteint), `IMPORT_NOT_READY` (import non terminé), `IMPORT_NOTHING_TO_INVITE` (tous déjà invités : aucune relance), `IMPORT_INVITATION_LINK_UNKNOWN` (aucune adresse publique connue pour le site) ; 404 pour un import de catalogue |
 | `GET /api/site/imports/{id}/customers?page=&state=` | — | `{ customers, page, pages, total }`, 50 par page | 422 `fields.state` `INVALID_VALUE` |
 | `POST /api/site/imports/{id}/cancel` | — | 200, `cancelled` ; `result.cancel = { erased, kept }` | 409 `IMPORT_NOT_CANCELLABLE` (plus aucun invité en attente) |
 | `GET /api/site/imports/{id}/issues.csv` | — | `line;code` (jamais une adresse) | |
 
-La vue d'un import de clients : les champs du § 1, plus `guests: { imported, invited, accepted, kept, invitable }` ; `report.customers
+La vue d'un import de clients : les champs du § 1, plus `invitationsOpen` et `guests: { imported, invited, accepted, kept, invitable }` ; `report.customers
 = { total, importable, alreadyCustomer, alreadyImported, duplicates, refused, withAddress, marketingClaimed }`, `report.issues`
 (`{ line, code }` : `NO_EMAIL`, `EMAIL_INVALID`, `DUPLICATE_IN_FILE`, `ALREADY_CUSTOMER`, `ALREADY_IMPORTED`, `ADDRESS_INCOMPLETE`),
 `report.eraseDays` (90), `report.linkDays` (30) ; `result = { created, withAddress, marketingClaimed, skipped, failed, failures,
@@ -187,6 +187,12 @@ Règles :
   **tant qu'il en reste**. Un client qui a accepté reste un client.
 
 ### 9.3 L'invitation
+
+**Interrupteur de la plateforme.** L'envoi des invitations est **éteint dans le code livré** (`app.import.invitations_open: false`,
+`config/services.yaml`, lu par `ImportInvitationSwitch`) tant que la page du lien n'existe pas sur la boutique publique et que le
+propriétaire n'a pas validé le texte : `POST …/invitations` rend alors 409 `IMPORT_INVITATIONS_NOT_OPEN`, le worker n'envoie rien
+même si un message traînait dans la file, et la vue de l'import porte `invitationsOpen: false` (l'application ne propose pas le
+bouton). L'ouvrir est une ligne de configuration, à livrer ce jour-là. Tout le reste de l'import des clients marche éteint.
 
 « Envoyer les invitations » est un geste du commerçant. Chaque invité reçoit **un** courriel (`customer_import_invitation`, classé
 indispensable, `templates/emails/customer_import_invitation.html.twig`, textes `translations/emails.{fr,en}.yaml`), dans la langue du

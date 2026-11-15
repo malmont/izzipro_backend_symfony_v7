@@ -4,6 +4,9 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
+    # Import des clients d'une boutique existante (lot IMP-2) : envoi des invitations. ÉTEINT tant que la page du lien n'existe pas sur la
+    # boutique publique et que le propriétaire n'a pas validé le texte du courriel : aucune invitation ne part, ni par la route, ni par le worker
+    app.import.invitations_open: false
     # Session web : durée du jeton d'accès et déconnexion après inactivité (secondes)
     env(WEB_ACCESS_TOKEN_TTL): '900'
     env(WEB_SESSION_IDLE_TTL): '3600'

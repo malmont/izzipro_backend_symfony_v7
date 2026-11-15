@@ -16,6 +16,7 @@ use App\Security\AppFamilies;
 use App\Services\AppMembershipService\AppMembershipDirectory;
 use App\Services\AppMembershipService\AppTermsService;
 use App\Services\TenantEntityManagerProvider;
+use App\Tests\Fake\FakeImportInvitationSwitch;
 use App\Tests\Functional\Cache\CacheTestEntityFactory;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
@@ -48,6 +49,7 @@ class ShopifyCustomerImportTest extends WebTestCase
     protected function setUp(): void
     {
         $this->client = static::createClient();
+        FakeImportInvitationSwitch::$open = true;
         $this->tag = bin2hex(random_bytes(3));
         $this->ip = '10.84.' . random_int(1, 254) . '.' . random_int(1, 254); // les limites de débit (Redis) survivent d'un lancement à l'autre
         $this->wipe();
@@ -56,6 +58,7 @@ class ShopifyCustomerImportTest extends WebTestCase
 
     protected function tearDown(): void
     {
+        FakeImportInvitationSwitch::$open = true;
         $this->wipe();
         foreach ($this->files as $file) {
             @unlink($file);
@@ -183,6 +186,22 @@ class ShopifyCustomerImportTest extends WebTestCase
         $this->publicRequest('/api/password-reset/request', ['email' => "fanny-$t@example.invalid"]);
         $this->assertSame(1, count($this->getMailerMessages()));
         $this->assertNotNull($conn()->fetchOne('SELECT reset_token FROM "user" WHERE id = ?', [$existing]));
+
+        // L'INTERRUPTEUR des invitations. Dans le code livré il est ÉTEINT ; éteint, rien ne part : la route refuse sans rien mettre en
+        // file, et le worker, même s'il recevait un message, n'envoie rien et ne pose aucun jeton
+        $this->assertFalse(static::getContainer()->getParameter('app.import.invitations_open'), 'éteint par défaut en production');
+        $this->assertFalse((new \App\Import\ImportInvitationSwitch(false))->isOpen());
+        FakeImportInvitationSwitch::$open = false;
+        $this->request('POST', "/api/site/imports/$id/invitations");
+        $this->assertSame([409, 'IMPORT_INVITATIONS_NOT_OPEN'], [$this->status(), $this->body()['error']]);
+        $this->assertCount(0, array_filter(static::getContainer()->get('messenger.transport.media')->getSent(), fn ($e) => $e->getMessage() instanceof SendImportInvitationsMessage));
+        static::getContainer()->get(\App\Import\MessageHandler\CustomerImportHandler::class)->invite(new SendImportInvitationsMessage($id, MV_TEST_TENANT_CODE));
+        $this->assertSame(['sent' => 0, 'failed' => 0], $this->sendInvitations($id));
+        $this->assertSame([0, 3, 0], [count($this->getMailerMessages()), (int) $conn()->fetchOne("SELECT COUNT(*) FROM import_customer_invitation WHERE state = 'imported'"),
+            (int) $conn()->fetchOne('SELECT COUNT(*) FROM import_customer_invitation WHERE token_hash IS NOT NULL OR invited_at IS NOT NULL')], 'interrupteur éteint : aucun courriel, aucun jeton, aucun invité marqué');
+        $this->assertFalse($this->get("/api/site/imports/$id")['invitationsOpen']);
+        FakeImportInvitationSwitch::$open = true;
+        $this->assertTrue($this->get("/api/site/imports/$id")['invitationsOpen']);
 
         // « Envoyer les invitations » : une par invité, en tâche de fond ; un seul courriel chacun, deux liens, aucune promotion
         $this->request('POST', "/api/site/imports/$id/invitations");
