@@ -1164,3 +1164,25 @@ barcodes:
         LABELS_REQUIRED: 'A selection of labels is required.'
         LABELS_INVALID: 'Invalid selection of labels.'
         LABELS_LIMIT_EXCEEDED: 'At most %max% labels per print.'
+
+reports:
+    answer_title: 'Console answer'
+    question: 'Question asked'
+    computed_at: 'Figures computed on %moment% (store time)'
+    sources_title: 'Where these figures come from'
+    source_computed: 'computed on'
+    page: 'Page'
+    table_more: 'and one more row, to read in the application.|and %count% more rows, to read in the application.'
+    verdicts_title: 'Review'
+    lesson_related: 'Related notions:'
+    guide_next: 'Next:'
+    compare_previous: 'Previous period:'
+    compare_last_year: 'Last year:'
+    verdict:
+        keep: 'Keep'
+        raise: 'Raise'
+        lower: 'Lower'
+    error:
+        REPORT_TOO_LONG: 'This report is over %max% pages: it was not made.'
+        REPORT_TIMEOUT: 'Making the report took too long.'
+        REPORT_FAILED: 'The report could not be made.'

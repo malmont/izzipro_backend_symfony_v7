@@ -127,3 +127,15 @@ services:
     App\Import\CatalogImportService:
         autowire: true
         public: true
+
+    # Lot DOC-1 : les tests fabriquent un rapport comme le worker, et lisent le document avant sa mise en PDF
+    App\Gestion\Services\Report\GestionReportService:
+        autowire: true
+        public: true
+    App\Gestion\Services\Report\ReportRenderer:
+        autowire: true
+        public: true
+    App\Gestion\MessageHandler\GenerateGestionReportHandler:
+        autowire: true
+        autoconfigure: true
+        public: true

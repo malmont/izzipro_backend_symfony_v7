@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (514)
+## Boutique et commun (519)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -493,6 +493,11 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/gestion/promotions/variantes/terminer` | ROLE_ADMIN | `Gestion\Controller\GestionVariantPromotionController::end` |
 | GET | `/api/gestion/promotions/variantes` | ROLE_ADMIN | `Gestion\Controller\GestionVariantPromotionController::current` |
 | GET | `/api/gestion/promotions` | ROLE_ADMIN | `Gestion\Controller\GestionPromotionController::current` |
+| GET | `/api/gestion/rapports/{id}/fichier` | ROLE_ADMIN | `Gestion\Controller\GestionReportController::download` |
+| DELETE | `/api/gestion/rapports/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionReportController::delete` |
+| GET | `/api/gestion/rapports/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionReportController::show` |
+| GET | `/api/gestion/rapports` | ROLE_ADMIN | `Gestion\Controller\GestionReportController::list` |
+| POST | `/api/gestion/rapports` | ROLE_ADMIN | `Gestion\Controller\GestionReportController::request` |
 | GET | `/api/gestion/reglages/exercice` | ROLE_ADMIN | `Gestion\Controller\GestionFiscalYearController::settings` |
 | PUT | `/api/gestion/reglages/exercice` | ROLE_ADMIN | `Gestion\Controller\GestionFiscalYearController::put` |
 | GET | `/api/gestion/reglages/prix` | ROLE_ADMIN | `Gestion\Controller\GestionPriceSettingsController::settings` |

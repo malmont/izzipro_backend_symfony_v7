@@ -1169,3 +1169,25 @@ barcodes:
         LABELS_REQUIRED: 'Sélection d''étiquettes attendue.'
         LABELS_INVALID: 'Sélection d''étiquettes invalide.'
         LABELS_LIMIT_EXCEEDED: 'Au plus %max% étiquettes par impression.'
+
+reports:
+    answer_title: 'Réponse de la console'
+    question: 'Question posée'
+    computed_at: 'Chiffres calculés le %moment% (heure du magasin)'
+    sources_title: 'D''où viennent ces chiffres'
+    source_computed: 'calculé le'
+    page: 'Page'
+    table_more: 'et une autre ligne, à lire dans l''application.|et %count% autres lignes, à lire dans l''application.'
+    verdicts_title: 'Bilan'
+    lesson_related: 'Notions liées :'
+    guide_next: 'Ensuite :'
+    compare_previous: 'Période précédente :'
+    compare_last_year: 'An dernier :'
+    verdict:
+        keep: 'À garder'
+        raise: 'À monter'
+        lower: 'À baisser'
+    error:
+        REPORT_TOO_LONG: 'Ce rapport dépasse %max% pages : il n''a pas été fabriqué.'
+        REPORT_TIMEOUT: 'La fabrication du rapport a pris trop de temps.'
+        REPORT_FAILED: 'Le rapport n''a pas pu être fabriqué.'

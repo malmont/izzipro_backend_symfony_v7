@@ -89,6 +89,7 @@ framework:
             'App\Import\Message\RunCatalogImportMessage': media # import de catalogue confirmé (lot IMP-1) : téléchargement des images compris
             'App\Message\SendTenantEmailMessage': email
             'App\MemoiresVivantes\Message\GenerateBookPdfMessage': pdf
+            'App\Gestion\Message\GenerateGestionReportMessage': pdf # rapports PDF de la gestion (lot DOC-1, 15/11/2026) : jamais relancé, l'échec est noté sur le rapport
             'App\Gestion\Message\ReadGestionDocumentMessage': gestion_ai # lecture de documents de la gestion (lot L1, 10/11/2026)
             'App\Gestion\Message\GenerateGestionAdviceMessage': gestion_ai # rédaction des conseils du guide de la gestion (lot G1a, 11/11/2026)
             'App\Gestion\Message\AnswerConsoleQuestionMessage': gestion_ai # réponses de la console IA de la gestion (lot W2, 13/11/2026)

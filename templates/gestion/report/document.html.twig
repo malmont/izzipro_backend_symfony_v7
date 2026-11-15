@@ -1,0 +1,92 @@
+{# Lot DOC-1 : mise en page d'un rapport de la gestion (Dompdf, A4 portrait). Tout le texte arrive déjà rédigé par ReportRenderer. #}
+<!DOCTYPE html>
+<html lang="{{ doc.locale }}">
+<head>
+<meta charset="UTF-8">
+<title>{{ doc.title }}</title>
+<style>
+  @page { margin: 22mm 15mm 20mm 15mm; }
+  body { font-family: "DejaVu Sans", sans-serif; font-size: 10pt; color: #1e293b; }
+  .head { border-bottom: 1px solid #94a3b8; padding-bottom: 8px; margin-bottom: 14px; }
+  .head td { vertical-align: top; }
+  .site { font-size: 13pt; font-weight: bold; }
+  .small { font-size: 8pt; color: #475569; }
+  h1 { font-size: 14pt; margin: 0 0 4px 0; }
+  h2 { font-size: 11pt; margin: 14px 0 6px 0; }
+  p { margin: 0 0 7px 0; line-height: 1.35; }
+  .question { background: #f1f5f9; padding: 7px 9px; margin: 0 0 12px 0; }
+  table.cards { width: 100%; border-collapse: separate; border-spacing: 6px 0; margin: 0 0 8px 0; page-break-inside: avoid; }
+  table.cards td { width: 33%; border: 1px solid #cbd5e1; padding: 7px 8px; }
+  .value { font-size: 13pt; font-weight: bold; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 0 0 8px 0; }
+  table.grid th { background: #e2e8f0; text-align: left; padding: 4px 6px; font-size: 9pt; border-bottom: 1px solid #94a3b8; }
+  table.grid td { padding: 4px 6px; border-bottom: 1px solid #e2e8f0; font-size: 9pt; }
+  table.grid tr { page-break-inside: avoid; }
+  .num { text-align: right; white-space: nowrap; }
+  .box { border-left: 3px solid #64748b; padding: 4px 0 4px 9px; margin: 0 0 9px 0; page-break-inside: avoid; }
+</style>
+</head>
+<body>
+<table class="head" width="100%"><tr>
+  <td>
+    <div class="site">{{ doc.site.name }}</div>
+    {% for line in doc.site.lines %}<div class="small">{{ line }}</div>{% endfor %}
+  </td>
+  <td align="right">{% if doc.site.logo %}<img src="{{ doc.site.logo }}" style="max-height: 46px; max-width: 150px;" alt="">{% endif %}</td>
+</tr></table>
+
+<div class="small">{{ doc.kindLabel }}</div>
+<h1>{{ doc.title }}</h1>
+<p class="small">{{ doc.answeredLabel }}</p>
+{% if doc.question %}<div class="question"><span class="small">{{ doc.questionLabel }}</span><br>{{ doc.question }}</div>{% endif %}
+
+{% for section in doc.sections %}
+  {% if section.type == 'text' %}
+    {% for paragraph in section.paragraphs %}<p>{{ paragraph|nl2br }}</p>{% endfor %}
+  {% elseif section.type == 'figures' %}
+    {% for row in section.rows %}
+      <table class="cards"><tr>
+        {% for card in row %}<td><div class="small">{{ card.label }}</div><div class="value">{{ card.value }}</div>{% for line in card.compared %}<div class="small">{{ line }}</div>{% endfor %}</td>{% endfor %}
+        {% if row|length < 3 %}{% for i in 1..(3 - row|length) %}<td style="border: none;"></td>{% endfor %}{% endif %}
+      </tr></table>
+    {% endfor %}
+  {% elseif section.type == 'table' %}
+    {% if section.title %}<h2>{{ section.title }}</h2>{% endif %}
+    <table class="grid">
+      <thead><tr>{% for column in section.columns %}<th class="{{ column.number ? 'num' : '' }}">{{ column.label }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for row in section.rows %}<tr>{% for cell in row %}<td class="{{ cell.number ? 'num' : '' }}">{{ cell.text }}</td>{% endfor %}</tr>{% endfor %}
+      </tbody>
+    </table>
+    {% if section.more %}<p class="small">{{ section.more }}</p>{% endif %}
+  {% elseif section.type == 'verdicts' %}
+    <h2>{{ section.title }}</h2>
+    {% for group in section.groups %}<p><strong>{{ group.label }}</strong> ({{ group.count }})</p>{% endfor %}
+    {% if section.items %}
+      <table class="grid"><tbody>
+        {% for item in section.items %}<tr><td>{{ item.subject }}</td><td><strong>{{ item.verdict }}</strong></td><td>{{ item.why }}</td></tr>{% endfor %}
+      </tbody></table>
+    {% endif %}
+  {% elseif section.type == 'lesson' %}
+    <div class="box">
+      <p><strong>{{ section.term }}</strong></p>
+      <p>{{ section.definition|nl2br }}</p>
+      {% if section.illustration %}<p>{{ section.illustration|nl2br }}</p>{% endif %}
+      {% if section.related %}<p class="small">{{ section.relatedLabel }} {{ section.related|join(', ') }}</p>{% endif %}
+    </div>
+  {% elseif section.type == 'guide' %}
+    <h2>{{ section.title }}</h2>
+    <p>{{ section.purpose|nl2br }}</p>
+    {% for point in section.points %}<div class="box"><p><strong>{{ point.label }}</strong></p><p>{{ point.text|nl2br }}</p></div>{% endfor %}
+    {% if section.next %}<p><strong>{{ doc.labels.next }}</strong> {{ section.next }}</p>{% endif %}
+  {% endif %}
+{% endfor %}
+
+{% if doc.sources %}
+  <h2>{{ doc.labels.sources }}</h2>
+  <table class="grid"><tbody>
+    {% for source in doc.sources %}<tr><td>{{ source.title }}</td><td>{{ source.period }}</td><td class="small">{{ doc.labels.computed }} {{ source.computedAt }}</td></tr>{% endfor %}
+  </tbody></table>
+{% endif %}
+</body>
+</html>
