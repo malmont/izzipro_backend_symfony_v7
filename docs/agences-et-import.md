@@ -1,6 +1,7 @@
 # Agences et import d'une boutique existante : plan
 
 **État : PLAN, aucun code.** Écrit le 15/11/2026 à la demande du chef de projet, d'après les décisions du propriétaire du même jour.
+Le propriétaire a répondu le jour même aux onze questions du plan : ses réponses sont au § 6. Ordre retenu : IMP-1 d'abord, puis AG-1.
 Rien de ce qui suit n'existe dans le code tant qu'un lot n'est pas marqué « codé ». Chaque lot aura son contrat, validé avant le code.
 Le lot AGENCE est l'« espace partenaire » annoncé par `docs/incidents-et-signalements.md` et `docs/gestion-mise-a-niveau.md` : un seul
 chantier, pas deux.
@@ -48,7 +49,7 @@ Deux façons de donner une identité à une agence :
 - **B. L'agence a son propre site (son « site d'attache »)**, et ses collaborateurs sont des comptes de ce site qui portent un rôle
   d'agence. La base maître dit seulement « ce site est le site d'attache de telle agence, et telle agence gère tels sites ».
 
-**Recommandation : B.** Tout ce qui protège une connexion existe déjà et reste unique. L'agence a de toute façon besoin d'un site (sa
+**Décidé par le propriétaire (15/11/2026) : B.** Tout ce qui protège une connexion existe déjà et reste unique. L'agence a de toute façon besoin d'un site (sa
 vitrine). Le code neuf se limite au lien agence ↔ sites, au passage vers le site d'un client et à la facturation.
 
 ### 3.2 Modèle de données (base maître)
@@ -91,23 +92,29 @@ Le jeton d'un compte ne vaut que pour son site. Pour passer du site d'attache au
 rend un code de passage à usage unique, valable une minute ; le site du client l'échange contre une session d'administrateur ordinaire,
 ouverte au nom d'un compte « opérateur d'agence » propre à ce collaborateur (sans mot de passe : on n'y entre que par le passage).
 Chaque entrée est écrite au journal de l'agence et au journal du site. Le commerçant voit ce compte dans son écran Utilisateurs, avec la
-mention de l'agence. Un opérateur ne reçoit aucun courriel du site et ne compte pas parmi ses clients.
+mention de l'agence, sans pouvoir le couper : seule la plateforme détache un site. Un opérateur ne reçoit aucun courriel du site et ne
+compte pas parmi ses clients. **Avant l'ouverture des agences au public, la clause des conditions qui annonce cet accès (Loi 25) doit
+être relue par un juriste** (décision du propriétaire, 15/11/2026).
 
 ### 3.6 Marque blanche, niveau a
 
 Une seule source : la marque de l'agence (`agencies`), lue par un service unique pour tout site géré. Elle remplace le nom et le logo de
 la plateforme dans l'en-tête de l'espace d'administration (EasyAdmin et web) et dans les courriels du serveur (nom d'expéditeur,
 signature, adresse d'assistance). L'adresse technique d'envoi reste celle de la plateforme, pour que les courriels arrivent. Le nom du
-commerce, lui, reste celui de la fiche du site.
+commerce, lui, reste celui de la fiche du site. Aucune mention « propulsé par » ; une option pourra venir plus tard.
 
 ### 3.7 Prix, relevé, essai, suspension
 
 - Le relevé du mois se calcule : pour chaque site géré, le prix de gros du palier atteint, plus chaque option ouverte, plus les unités IA
   consommées au-delà de ce que le forfait comprend. Un mois entamé se compte au prorata des jours.
-- Offre de départ : à la création, l'agence est en essai (60 jours, 3 sites, tous les modules). Rappels 7 jours et 1 jour avant la fin.
-- Sans forfait payé à la fin : délai de grâce, puis suspension de l'agence, qui suspend les droits de source `agency` de ses sites.
-  Le super administrateur peut aussi suspendre un seul site.
-- Le paiement lui-même (carte, virement) : voir la question 5.
+- Offre de départ : à la création, l'agence est en essai (60 jours, 3 sites de clients, tous les modules). Rappels 7 jours et 1 jour
+  avant la fin. Le site de l'agence elle-même est gratuit pendant l'essai et ne compte pas dans les 3 ; ensuite il est payant au prix
+  d'agence et suit les règles d'un site géré : forfait d'agence, options payantes en plus, accès à ce qui est payé.
+- Sans forfait payé à la fin : 7 jours de grâce, puis suspension de l'agence, qui suspend les droits de source `agency` de ses sites.
+  La page publique d'un commerçant reste en ligne 30 jours pendant la suspension. Le super administrateur peut aussi suspendre un seul site.
+- Le paiement : au départ, un relevé mensuel réglé hors de la plateforme (virement ou facture) et marqué « payé » par le super
+  administrateur ; le prélèvement par carte viendra dans un lot suivant.
+- Les prix (paliers du prix de gros, options, unités IA) ne sont pas encore fixés : AG-1 n'en a pas besoin, ils servent à AG-5.
 
 ### 3.8 Écrans
 
@@ -157,7 +164,7 @@ du circuit ne change pas.
 | Option1 à Option3 (nom et valeur) | variantes : couleur, taille, ou valeurs d'options |
 | Variant Price, Variant Compare At Price | prix en cents ; prix barré si présent |
 | Cost per item | coût d'achat (application de gestion) |
-| Variant Inventory Qty | stock de départ (question 9) |
+| Variant Inventory Qty | stock de départ |
 | Variant Barcode | code-barres, par la règle de CB-1 ; un code refusé ou déjà pris est signalé, l'article est importé sans code |
 | Variant SKU | référence de la variante |
 | Image Src, Image Position, Variant Image | images, téléchargées par le worker depuis les seuls serveurs d'images de Shopify, taille et type contrôlés |
@@ -171,7 +178,7 @@ du circuit ne change pas.
   moment seulement que naît l'appartenance `boutique`, de source `import`, avec la version acceptée et la date.
 - Le consentement aux courriels commerciaux n'est repris que s'il est marqué dans le fichier, et le commerçant atteste qu'il l'a obtenu ;
   l'attestation est au journal du site.
-- Un client qui n'accepte pas dans le délai est effacé (question 10).
+- Un client invité qui n'a pas accepté au bout de 90 jours est effacé.
 
 ### 4.4 Historique des commandes
 
@@ -187,7 +194,7 @@ d'avant » des statistiques, jamais dans le journal de caisse, la numérotation 
 | IMP-3 | Historique des commandes | données |
 | IMP-4, IMP-5 | Lecteurs WooCommerce, puis PrestaShop | faible |
 
-IMP-1 ne dépend pas d'AGENCE : il peut passer avant ou entre deux lots d'agence.
+IMP-1 ne dépend pas d'AGENCE. **Ordre décidé : IMP-1 d'abord, puis AG-1.** Chaque lot a son contrat, validé par le chef avant le code.
 
 ## 5. Risques
 
@@ -197,31 +204,30 @@ IMP-1 ne dépend pas d'AGENCE : il peut passer avant ou entre deux lots d'agence
 | Le code de passage volé ou rejoué | usage unique, une minute, lié au collaborateur et au site, journal des deux côtés |
 | La création de sites en rafale bloque la base modèle | file avec un worker, une création à la fois, limite par agence |
 | Un relevé faux | lignes figées à la clôture du mois, calcul rejouable, tests sur les prorata et les paliers |
-| Une suspension coupe la page publique d'un commerçant | voir la question 6 : la page publique peut rester en ligne |
+| Une suspension coupe la page publique d'un commerçant | la page publique reste en ligne 30 jours pendant la suspension (§ 3.7) |
 | Données personnelles importées sans base légale | comptes invités, rien d'actif sans acceptation, attestation du commerçant, effacement au délai |
 | Fichier d'import piégé (HTML, adresses d'images) | HTML nettoyé, images prises sur une liste de serveurs permis, plafonds de taille |
 | Doublons de codes-barres | règle de CB-1, déjà garantie par la base |
 
-## 6. Questions pour le propriétaire
+## 6. Réponses du propriétaire aux questions du plan (15/11/2026, relayées par le chef de projet)
 
-1. **L'agence est d'abord un site** (§ 3.1, option B) : ses collaborateurs se connectent sur le site de l'agence. D'accord ?
-2. Le site de l'agence est-il gratuit, et compte-t-il parmi les 3 sites de l'offre de départ ? (Proposition : gratuit, hors compte.)
-3. Qui ouvre une agence : le super administrateur sur demande, ou l'agence seule par un formulaire ? (Proposition : sur demande.)
-4. Les prix : paliers du prix de gros (la fourchette du 06/11 était 169 à 269 $ CA par site selon le nombre de sites), prix de chaque
-   option, prix et nombre d'unités IA comprises, unités offertes pendant l'essai.
-5. Le paiement : au départ un relevé mensuel réglé hors de la plateforme (virement ou facture), marqué « payé » par le super
-   administrateur, ou tout de suite un prélèvement par carte ? (Proposition : le relevé d'abord.)
-6. À la fin des 60 jours sans forfait payé : combien de jours de grâce, et la page publique du commerçant reste-t-elle en ligne pendant
-   la suspension ? (Proposition : 7 jours, page publique gardée 30 jours.)
-7. Le commerçant voit-il le nom de la plateforme quelque part (« propulsé par … ») ou jamais ?
-8. L'agence entre dans le site de son client comme administrateur, et le commerçant le voit sans pouvoir le couper (seule la plateforme
-   détache un site). D'accord ? Une clause des conditions doit le dire (Loi 25).
-9. Import : les quantités en stock du fichier deviennent-elles le stock de départ ? Les commandes importées comptent-elles dans les
-   statistiques (comparaison avec l'an dernier) ?
-10. Import des clients : combien de temps garder un client invité qui n'a pas accepté ? (Proposition : 90 jours.)
-11. L'ordre : IMP-1 (catalogue) avant AG-1, ou les agences d'abord ?
+| # | Question | Décision |
+|---|---|---|
+| 1 | L'agence est-elle d'abord un site (§ 3.1, option B) ? | Oui |
+| 2 | Le site de l'agence est-il gratuit, compte-t-il parmi les 3 ? | Gratuit pendant l'essai de 60 jours seulement, hors des 3 sites ; ensuite payant au prix d'agence. Une fois payant, il suit les mêmes règles qu'un site de client : le forfait d'agence, plus les options payantes (Assistance, prévention des pertes, unités IA, fonctionnalités ajoutées) ; l'agence a accès à ce qu'elle paie. Aucun garde-fou particulier |
+| 3 | Qui ouvre une agence ? | Le super administrateur, sur demande |
+| 4 | Paliers du prix de gros, prix des options et des unités IA | **Ouvert** : les prix suivront. AG-1 n'en a pas besoin ; ils serviront à AG-5 |
+| 5 | Paiement | Relevé mensuel réglé hors de la plateforme et marqué « payé » par le super administrateur ; la carte dans un lot suivant |
+| 6 | Fin des 60 jours sans forfait payé | 7 jours de grâce ; page publique du commerçant gardée 30 jours |
+| 7 | Mention « propulsé par » | Aucune. Une option pourra venir plus tard |
+| 8 | L'agence administrateur du site de son client, que le commerçant ne peut pas couper | Oui. La clause de la Loi 25 sera relue par un juriste avant l'ouverture des agences au public |
+| 9 | Stock et commandes importés | Les quantités du fichier deviennent le stock de départ ; les commandes importées vont dans une série à part « ventes d'avant », jamais dans la caisse, les factures, les taxes ni les exports comptables |
+| 10 | Durée de garde d'un client invité qui n'a pas accepté | 90 jours, puis effacement |
+| 11 | Ordre | IMP-1 d'abord, puis AG-1 |
+
+Reste à faire avant le code : le contrat d'IMP-1 (envoyé au chef en dix lignes), après CB-1, CB-2 et NOTIF-2.
 
 ## Tenir cette fiche à jour
 
-À chaque décision du propriétaire, la reporter au § 1 ou rayer la question du § 6. À chaque lot codé, le dire en tête et dans le
+À chaque décision du propriétaire, la reporter au § 1 ou au § 6. À chaque lot codé, le dire en tête et dans le
 tableau des lots, avec le contrat du lot.
