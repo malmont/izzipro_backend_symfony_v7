@@ -459,13 +459,19 @@ class LossPreventionApiTest extends LossPreventionTestCase
         // Commande du minuteur : rien sur un site sans le module, même en mode demo ; un passage quand le module est accordé
         $command = new CommandTester((new Application(static::$kernel))->find('app:pertes:analyser'));
         $this->flags(true, false);
-        $command->execute(['--tenant' => MV_TEST_TENANT_CODE]);
+        // `--sans-courriel` : ce test ne porte pas sur le courriel du jour, qui part ou non selon l'heure du magasin ; sans l'option, ses
+        // écritures (réservation du jour, ligne au journal, courriel) dépendraient de l'heure à laquelle la suite tourne
+        $command->execute(['--tenant' => MV_TEST_TENANT_CODE, '--sans-courriel' => true]);
         $this->assertStringContainsString('0 site(s) analysé(s)', $command->getDisplay());
         $this->openSession();
         $report = $this->closeWith(-2500, 'Pour la commande');
         $this->flags(true, true);
-        $command->execute(['--tenant' => MV_TEST_TENANT_CODE]);
+        $digests = fn (): array => [(string) $this->db->fetchOne('SELECT COALESCE(last_digest_day::text, \'\') FROM loss_setting'), (int) $this->db->fetchOne("SELECT COUNT(*) FROM loss_journal WHERE type = 'DIGEST_SENT'")];
+        $digestsBefore = $digests();
+        $command->execute(['--tenant' => MV_TEST_TENANT_CODE, '--sans-courriel' => true]);
         $this->assertStringContainsString('1 site(s) analysé(s), 1 constat(s) ouvert(s), 0 site(s) en erreur', $command->getDisplay());
+        $this->assertSame($digestsBefore, $digests(), 'avec --sans-courriel : ni réservation du jour, ni courriel, quelle que soit l\'heure');
+        $this->assertEmailCount(0);
         $this->provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
         $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_finding WHERE dedup_key = ?', ['CASH_DISCREPANCY:z_report:' . $report['id']]));
         $this->flags(false, false);

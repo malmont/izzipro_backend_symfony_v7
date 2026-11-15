@@ -353,6 +353,21 @@ class LossPreventionAnalysisTest extends LossPreventionTestCase
         $preview = $failing->preview('DRAWER_NO_SALE', static::getContainer()->get(\App\LossPrevention\Services\LossRuleService::class)->proposed('DRAWER_NO_SALE', ['params' => ['maxPerSession' => 0]]));
         $this->assertSame(['done', 0], [$preview['status'], $preview['wouldOpen']]);
         $this->assertGreaterThanOrEqual(1, $preview['skipped'], 'les entrées sautées par l\'aperçu sont comptées');
+        // Une règle qui ÉCRIT son constat dans le puits de l'aperçu, puis échoue : ce constat n'est pas compté (comme l'analyse réelle, qui
+        // annule par un point de reprise ce qu'une règle en échec avait écrit)
+        $writesThenFails = new class extends \App\LossPrevention\Services\Rule\DrawerNoSaleRule {
+            public function handle(array $entry, LossAnalysisContext $ctx): void
+            {
+                parent::handle($entry, $ctx);
+                throw new \RuntimeException('échec après écriture');
+            }
+        };
+        $proposed = static::getContainer()->get(\App\LossPrevention\Services\LossRuleService::class)->proposed('DRAWER_NO_SALE', ['params' => ['maxPerSession' => 0]]);
+        $honest = $this->analysisWith([])->preview('DRAWER_NO_SALE', $proposed);
+        $this->assertGreaterThanOrEqual(1, $honest['wouldOpen'], 'la vraie règle ouvrirait au moins un constat avec ce seuil');
+        $broken = $this->analysisWith([$writesThenFails])->preview('DRAWER_NO_SALE', $proposed);
+        $this->assertSame(['done', 0, 0], [$broken['status'], $broken['wouldOpen'], $broken['current']], 'rien de ce qu\'une règle en échec a écrit n\'est compté');
+        $this->assertGreaterThanOrEqual($honest['wouldOpen'], $broken['skipped']);
         $provider = $this->tenant();
         $tester = new CommandTester(new LossAnalyseCommand($c->get(TenantConnectionManager::class), $provider, $failing, new NullLogger()));
         $this->assertSame(Command::FAILURE, $tester->execute(['--tenant' => MV_TEST_TENANT_CODE]));

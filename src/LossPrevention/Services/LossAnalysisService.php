@@ -202,9 +202,11 @@ class LossAnalysisService
                     if (!in_array($entry['type'], $rule->types(), true)) {
                         continue;
                     }
+                    $before = $sink->snapshot();
                     try { // rien n'est écrit (puits en mémoire) : une règle en échec saute l'entrée, l'aperçu continue et le dit (`skipped`)
                         $rule->handle($entry, $ctx);
                     } catch (\Throwable $e) {
+                        $sink->restore($before); // ce que la règle avait posé dans le puits avant de lever n'est pas compté
                         $skipped[$entry['sequence']] = true;
                         $this->logger->error(sprintf('Prévention des pertes : aperçu, règle %s en échec sur l\'entrée %d du journal de caisse, entrée sautée : %s', $rule::class, $entry['sequence'], $e->getMessage()), ['exception' => $e]);
                     }

@@ -59,12 +59,18 @@ class LossSettingRepository extends EntityRepository
     public function reserveDigestDay(string $day, ?int $lastFindingId = null): ?array
     {
         $row = $this->row(true); // crée la ligne au besoin
-        $touched = $this->getEntityManager()->getConnection()->executeStatement(
-            'UPDATE loss_setting SET last_digest_day = ?, last_digest_finding_id = COALESCE(?, last_digest_finding_id) WHERE id = ? AND last_digest_day IS DISTINCT FROM ?',
-            [$day, $lastFindingId, $row['id'], $day], [\Doctrine\DBAL\ParameterType::STRING, $lastFindingId === null ? \Doctrine\DBAL\ParameterType::NULL : \Doctrine\DBAL\ParameterType::INTEGER]);
+        // UNE instruction : elle verrouille la ligne, lit les valeurs d'avant et écrit les nouvelles. Lues à part (hors transaction, le verrou
+        // d'une lecture tombe aussitôt), les valeurs d'avant pouvaient être celles d'un autre lancement : un envoi en échec les aurait
+        // « rendues » fausses
+        $old = $this->getEntityManager()->getConnection()->fetchAssociative(
+            'WITH old AS (SELECT id, last_digest_day, last_digest_finding_id FROM loss_setting WHERE id = ? FOR UPDATE)'
+            . ' UPDATE loss_setting s SET last_digest_day = ?, last_digest_finding_id = COALESCE(?, s.last_digest_finding_id) FROM old'
+            . ' WHERE s.id = old.id AND old.last_digest_day IS DISTINCT FROM ? RETURNING old.last_digest_day AS previous, old.last_digest_finding_id AS previous_finding',
+            [$row['id'], $day, $lastFindingId, $day],
+            [2 => $lastFindingId === null ? \Doctrine\DBAL\ParameterType::NULL : \Doctrine\DBAL\ParameterType::INTEGER]);
 
-        return $touched === 1 ? ['previous' => $row['last_digest_day'] !== null ? (string) $row['last_digest_day'] : null,
-            'previousFindingId' => $row['last_digest_finding_id'] !== null ? (int) $row['last_digest_finding_id'] : null] : null;
+        return $old === false ? null : ['previous' => $old['previous'] !== null ? (string) $old['previous'] : null,
+            'previousFindingId' => $old['previous_finding'] !== null ? (int) $old['previous_finding'] : null];
     }
 
     /** Rend la journée réservée (aucun envoi n'a abouti) : les valeurs d'avant reviennent, seulement si la réservation est encore la nôtre */

@@ -54,6 +54,23 @@ final class LossPreviewSink implements LossFindingSink
         return $found;
     }
 
+    /**
+     * État du puits, à noter avant de jouer une règle et à remettre si elle échoue : ce qu'elle avait écrit avant de lever n'est pas compté
+     * (l'analyse réelle fait la même chose par un point de reprise de la base).
+     *
+     * @return array{0: array<string, array<string, mixed>>, 1: array<int, array<string, bool>>}
+     */
+    public function snapshot(): array
+    {
+        return [$this->findings, $this->evidence];
+    }
+
+    /** @param array{0: array<string, array<string, mixed>>, 1: array<int, array<string, bool>>} $snapshot */
+    public function restore(array $snapshot): void
+    {
+        [$this->findings, $this->evidence] = $snapshot;
+    }
+
     /** @return list<array<string, mixed>> constats que les règles ouvriraient, dans l'ordre de leur naissance */
     public function findings(): array
     {
