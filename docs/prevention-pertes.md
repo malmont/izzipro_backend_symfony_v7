@@ -741,13 +741,10 @@ le boîtier qui la contacte, § 14, point 5). Le plan détaillé sera écrit ave
   utilise, à l'impression ; il n'est jamais imprimé, jamais affiché, et n'apparaît dans aucun journal (ni de la plateforme, ni du
   boîtier, ni dans un fait). La **lecture reste ouverte à tous** : les antennes et les lecteurs doivent lire sans rien savoir. La
   **réécriture n'est possible qu'avec le mot de passe**, ce qui permet de corriger une puce mal écrite. À dire dans le plan : ce
-  mot de passe est une protection légère (celle que la puce offre), qui arrête la réécriture ordinaire ; il ne remplace pas le
-  contrôle qui suit.
-- **Numéro d'usine de la puce** (PROPOSÉ par le chef de projet, **pas encore validé par le propriétaire**) : enregistrer à l'écriture
-  le numéro d'usine de chaque puce (son TID, gravé par le fabricant, qu'on ne peut pas réécrire), à côté de notre identifiant. Une
-  puce qui porte notre identifiant avec un autre numéro d'usine ouvrirait un constat « puce copiée ». À reprendre dans le plan de
-  L3 si le propriétaire le retient : colonne de plus sur la puce, lecture du numéro d'usine par l'imprimante puis par les lecteurs
-  qui savent le rendre, règle et scénario d'exercice du constat.
+  mot de passe est une protection légère (celle que la puce offre), qui arrête la réécriture ordinaire.
+- **Pas de contrôle des copies** (décision du propriétaire, 15/11/2026) : on n'enregistre pas le numéro d'usine des puces (TID) et
+  il n'y a pas de constat « puce copiée ». Le risque est trop faible pour des articles à 200 $ au plus. Seul le verrou par mot de
+  passe reste.
 - **Si l'écriture échoue** : la puce n'est jamais enregistrée sans relecture conforme. L'imprimante annule l'étiquette ratée (elle la
   marque comme nulle) et réessaie sur l'étiquette suivante, un petit nombre de fois ; au-delà, la ligne du travail passe en échec
   avec son motif (puce illisible, écriture refusée, imprimante arrêtée, plus d'étiquettes) et **la pièce reste sans puce** : on la
