@@ -1,0 +1,19 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/puces/associer?locale=fr",
+        "body": {
+            "pieceId": 2,
+            "identifier": "XYZ",
+            "technology": "nfc"
+        }
+    },
+    "status": 422,
+    "headers": {},
+    "body": {
+        "error": "TAG_INVALID",
+        "code": "TAG_INVALID",
+        "message": "Cette lecture n'a pas la forme d'une puce NFC : 8, 14, 16 ou 20 caractères, chiffres et lettres de A à F.",
+        "technology": "nfc"
+    }
+}

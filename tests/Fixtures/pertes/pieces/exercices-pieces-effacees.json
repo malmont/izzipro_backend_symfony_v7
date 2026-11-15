@@ -1,0 +1,11 @@
+{
+    "request": {
+        "method": "DELETE",
+        "path": "/api/gestion/pertes/exercices/pieces?locale=fr"
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "deleted": 1
+    }
+}

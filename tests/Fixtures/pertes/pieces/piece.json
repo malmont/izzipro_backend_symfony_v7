@@ -1,0 +1,107 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/pieces/1?locale=fr"
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "id": 1,
+        "number": 1,
+        "status": "created",
+        "statusLabel": "En service",
+        "zone": null,
+        "exercise": false,
+        "variantId": 23,
+        "productId": 15,
+        "variantMissing": false,
+        "name": "Veste en lin (exemple F4AE54)",
+        "variantLabel": null,
+        "barcode": "VESTE-LIN-M-F4AE54",
+        "barcodeOf": "variant",
+        "symbology": "code128",
+        "tags": [
+            {
+                "id": 1,
+                "identifier": "04F4AE54C3D4E5",
+                "technology": "nfc",
+                "technologyLabel": "Puce NFC",
+                "status": "associated",
+                "statusLabel": "Posée",
+                "pieceId": 1,
+                "exercise": false,
+                "associatedAt": "2026-11-15T18:34:39+00:00",
+                "retiredAt": null,
+                "retiredReason": null,
+                "retiredReasonLabel": null
+            },
+            {
+                "id": 3,
+                "identifier": "01F4AE54",
+                "technology": "nfc",
+                "technologyLabel": "Puce NFC",
+                "status": "associated",
+                "statusLabel": "Posée",
+                "pieceId": 1,
+                "exercise": false,
+                "associatedAt": "2026-11-15T18:34:40+00:00",
+                "retiredAt": null,
+                "retiredReason": null,
+                "retiredReasonLabel": null
+            }
+        ],
+        "tagged": true,
+        "commandeId": null,
+        "retiredReason": null,
+        "retiredReasonLabel": null,
+        "createdAt": "2026-11-15T18:34:39+00:00",
+        "retiredAt": null,
+        "events": [
+            {
+                "id": 1,
+                "type": "PIECE_CREATED",
+                "label": "Pièce créée",
+                "at": "2026-11-15T18:34:39+00:00",
+                "userId": 18,
+                "tagId": null,
+                "data": {
+                    "variantId": 23,
+                    "commandeId": null
+                }
+            },
+            {
+                "id": 3,
+                "type": "TAG_ASSOCIATED",
+                "label": "Puce posée",
+                "at": "2026-11-15T18:34:39+00:00",
+                "userId": 18,
+                "tagId": 1,
+                "data": {
+                    "technology": "nfc"
+                }
+            },
+            {
+                "id": 6,
+                "type": "TAG_ASSOCIATED",
+                "label": "Puce posée",
+                "at": "2026-11-15T18:34:40+00:00",
+                "userId": 18,
+                "tagId": 3,
+                "data": {
+                    "technology": "nfc"
+                }
+            },
+            {
+                "id": 7,
+                "type": "PAIR_SET",
+                "label": "Plusieurs puces sur la pièce",
+                "at": "2026-11-15T18:34:40+00:00",
+                "userId": 18,
+                "tagId": 3,
+                "data": {
+                    "tags": 2
+                }
+            }
+        ]
+    }
+}

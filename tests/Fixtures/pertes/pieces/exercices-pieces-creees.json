@@ -1,0 +1,40 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/exercices/pieces?locale=fr",
+        "body": {
+            "variantId": 25,
+            "count": 1
+        }
+    },
+    "status": 201,
+    "headers": {},
+    "body": {
+        "pieces": [
+            {
+                "id": 4,
+                "number": 1,
+                "status": "created",
+                "statusLabel": "En service",
+                "zone": null,
+                "exercise": true,
+                "variantId": 25,
+                "productId": 16,
+                "variantMissing": false,
+                "name": "Sac de plage (exemple F4AE54)",
+                "variantLabel": null,
+                "barcode": "ABCDEF03F4AE54AA",
+                "barcodeOf": "variant",
+                "symbology": "code128",
+                "tags": [],
+                "tagged": false,
+                "commandeId": null,
+                "retiredReason": null,
+                "retiredReasonLabel": null,
+                "createdAt": "2026-11-15T18:34:42+00:00",
+                "retiredAt": null
+            }
+        ],
+        "count": 1
+    }
+}

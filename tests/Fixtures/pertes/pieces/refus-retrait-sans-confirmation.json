@@ -1,0 +1,16 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/puces/1/retirer?locale=fr",
+        "body": {
+            "reason": "detached"
+        }
+    },
+    "status": 409,
+    "headers": {},
+    "body": {
+        "error": "CONFIRMATION_REQUIRED",
+        "code": "CONFIRMATION_REQUIRED",
+        "message": "Un retrait ne s'annule pas : confirmez-le."
+    }
+}

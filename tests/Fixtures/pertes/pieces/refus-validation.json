@@ -1,0 +1,22 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/puces/associer?locale=fr",
+        "body": {
+            "identifier": 12,
+            "technology": "simulated"
+        }
+    },
+    "status": 422,
+    "headers": {},
+    "body": {
+        "error": "VALIDATION_FAILED",
+        "code": "VALIDATION_FAILED",
+        "message": "Entrée invalide : target (ONE_TARGET_REQUIRED), technology (INVALID_VALUE), identifier (MUST_BE_STRING)",
+        "fields": {
+            "target": "ONE_TARGET_REQUIRED",
+            "technology": "INVALID_VALUE",
+            "identifier": "MUST_BE_STRING"
+        }
+    }
+}

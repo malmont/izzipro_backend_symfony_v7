@@ -1,0 +1,13 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/exercices/pieces/2?locale=fr"
+    },
+    "status": 404,
+    "headers": {},
+    "body": {
+        "error": "PIECE_NOT_FOUND",
+        "code": "PIECE_NOT_FOUND",
+        "message": "Pièce introuvable."
+    }
+}

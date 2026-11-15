@@ -1,0 +1,124 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/materiel?locale=fr"
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "needs": [
+            {
+                "code": "read",
+                "label": "Lire une puce",
+                "levels": [
+                    {
+                        "level": "pro",
+                        "label": "Pro",
+                        "technology": "uhf",
+                        "what": "Un lecteur à main de puces lisibles à distance (UHF).",
+                        "allows": "Lire une puce à plusieurs mètres, sans la chercher ; prêt pour le comptage et les antennes à venir.",
+                        "limits": "Le plus cher des trois."
+                    },
+                    {
+                        "level": "standard",
+                        "label": "Standard",
+                        "technology": "uhf",
+                        "what": "Un lecteur de bureau de puces UHF, branché en USB, qui écrit comme un clavier.",
+                        "allows": "Lire une puce posée sur le lecteur ; prêt pour les antennes à venir.",
+                        "limits": "Une puce à la fois, à quelques centimètres."
+                    },
+                    {
+                        "level": "diy",
+                        "label": "Bricoleur",
+                        "technology": "nfc",
+                        "what": "Un téléphone qui lit le NFC, ou un module lecteur monté sur une carte de type Arduino et branché en clavier.",
+                        "allows": "Associer une puce et contrôler une pièce, pour presque rien.",
+                        "limits": "Lecture à quelques centimètres ; les puces NFC ne servent ni au comptage à distance ni aux antennes."
+                    }
+                ]
+            },
+            {
+                "code": "print",
+                "label": "Imprimer l'étiquette",
+                "levels": [
+                    {
+                        "level": "pro",
+                        "label": "Pro",
+                        "technology": null,
+                        "what": "Une imprimante qui imprime l'étiquette et écrit la puce d'un même geste.",
+                        "allows": "Une seule étiquette, code-barres et puce ensemble.",
+                        "limits": "Matériel spécialisé ; l'écriture de la puce viendra dans un lot suivant."
+                    },
+                    {
+                        "level": "standard",
+                        "label": "Standard",
+                        "technology": null,
+                        "what": "Une imprimante thermique ordinaire, à rouleau d'étiquettes de 50 × 30 mm.",
+                        "allows": "Une étiquette par pièce, à la demande, sans encre.",
+                        "limits": "La puce est une seconde étiquette, collée à part."
+                    },
+                    {
+                        "level": "diy",
+                        "label": "Bricoleur",
+                        "technology": null,
+                        "what": "Une imprimante de bureau et des planches d'étiquettes A4 de 50 × 30 mm.",
+                        "allows": "Imprimer avec le matériel que vous avez déjà.",
+                        "limits": "Par planches entières ; moins pratique à l'unité."
+                    }
+                ]
+            },
+            {
+                "code": "attach",
+                "label": "Poser la puce",
+                "levels": [
+                    {
+                        "level": "pro",
+                        "label": "Pro",
+                        "technology": null,
+                        "what": "Des étiquettes à puce intégrée, sorties de l'imprimante.",
+                        "allows": "Une pose, un geste.",
+                        "limits": "Étiquettes plus chères à l'unité."
+                    },
+                    {
+                        "level": "standard",
+                        "label": "Standard",
+                        "technology": null,
+                        "what": "Des puces autocollantes déjà numérotées en usine.",
+                        "allows": "Coller la puce sur l'étiquette détachable de l'article, puis la lire une fois.",
+                        "limits": "Deux gestes : coller, puis lire."
+                    },
+                    {
+                        "level": "diy",
+                        "label": "Bricoleur",
+                        "technology": null,
+                        "what": "Les mêmes puces autocollantes, en NFC ou en UHF selon votre lecteur.",
+                        "allows": "Commencer avec quelques dizaines de puces.",
+                        "limits": "Deux gestes : coller, puis lire."
+                    }
+                ]
+            }
+        ],
+        "levels": [
+            {
+                "code": "pro",
+                "label": "Pro",
+                "summary": "Tout d'un geste : l'imprimante écrit la puce en imprimant l'étiquette, le lecteur à main lit à distance.",
+                "soldWithHardware": true
+            },
+            {
+                "code": "standard",
+                "label": "Standard",
+                "summary": "Des puces autocollantes déjà numérotées, une imprimante thermique ordinaire, un lecteur de bureau.",
+                "soldWithHardware": true
+            },
+            {
+                "code": "diy",
+                "label": "Bricoleur",
+                "summary": "Les mêmes puces autocollantes, des étiquettes sur feuilles A4, le téléphone ou une carte à monter soi-même pour lire.",
+                "soldWithHardware": false
+            }
+        ],
+        "note": "Le niveau bricoleur se vend sans matériel : vous achetez vous-même les pièces. Les trois niveaux donnent les mêmes pièces et les mêmes puces dans l'application.",
+        "screen": "pertes.installation"
+    }
+}

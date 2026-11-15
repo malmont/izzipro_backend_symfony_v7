@@ -1,0 +1,24 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/puces/associer?locale=fr",
+        "body": {
+            "pieceId": 2,
+            "identifier": "ABCDEF03F4AE54AA",
+            "technology": "uhf"
+        }
+    },
+    "status": 409,
+    "headers": {},
+    "body": {
+        "error": "TAG_IS_BARCODE",
+        "code": "TAG_IS_BARCODE",
+        "message": "Cette lecture est le code-barres de « Sac de plage (exemple F4AE54), variante n° 25 », pas une puce : lisez la puce.",
+        "holder": {
+            "type": "variant",
+            "id": 25,
+            "productId": 16,
+            "label": "Sac de plage (exemple F4AE54), variante n° 25"
+        }
+    }
+}

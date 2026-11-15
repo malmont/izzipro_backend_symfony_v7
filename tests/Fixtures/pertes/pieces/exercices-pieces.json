@@ -1,0 +1,60 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/exercices/pieces?locale=fr"
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "pieces": [
+            {
+                "id": 4,
+                "number": 1,
+                "status": "created",
+                "statusLabel": "En service",
+                "zone": null,
+                "exercise": true,
+                "variantId": 25,
+                "productId": 16,
+                "variantMissing": false,
+                "name": "Sac de plage (exemple F4AE54)",
+                "variantLabel": null,
+                "barcode": "ABCDEF03F4AE54AA",
+                "barcodeOf": "variant",
+                "symbology": "code128",
+                "tags": [
+                    {
+                        "id": 7,
+                        "identifier": "SIM-A0B0BACF92B3",
+                        "technology": "simulated",
+                        "technologyLabel": "Puce simulée",
+                        "status": "associated",
+                        "statusLabel": "Posée",
+                        "pieceId": 4,
+                        "exercise": true,
+                        "associatedAt": "2026-11-15T18:34:42+00:00",
+                        "retiredAt": null,
+                        "retiredReason": null,
+                        "retiredReasonLabel": null
+                    }
+                ],
+                "tagged": true,
+                "commandeId": null,
+                "retiredReason": null,
+                "retiredReasonLabel": null,
+                "createdAt": "2026-11-15T18:34:42+00:00",
+                "retiredAt": null
+            }
+        ],
+        "count": 1,
+        "limit": 30,
+        "remaining": 29,
+        "createLimit": 10,
+        "tagLimit": 60,
+        "daily": {
+            "limit": 30,
+            "remaining": 29,
+            "resetAt": "2026-11-16T05:00:00+00:00"
+        }
+    }
+}

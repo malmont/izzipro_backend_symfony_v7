@@ -662,3 +662,9 @@ Textes `translations/pertes.{fr,en}.yaml` (`piece_labels.*`, `installation.*`, `
 
 Tests : `tests/Functional/LossPrevention/LossPreventionInstallationTest.php` (étiquettes dans les deux formats, une page par étiquette
 en rouleau ; l'assistant depuis zéro en exercice, puis dans le monde réel par ses propres faits ; la gamme).
+
+**Exemples de réponse** (lots L2-a et L2-b) : `tests/Fixtures/pertes/pieces/`, un fichier JSON par route et par refus (création,
+association créée / rejouée / deuxième puce, liste, fiche avec ses faits, recherche trouvée / inconnue / refusée, synthèse, retraits,
+assistant, lecture d'essai, gamme, état et parcours d'exercice, refus avec leurs détails), pour les tests de contrat du web et du
+mobile. `LossPreventionPiecesExamplesTest` rejoue le parcours et échoue si un exemple n'a plus la forme de la réponse du serveur ;
+son en-tête dit comment les régénérer. Les PDF ne sont pas des exemples.

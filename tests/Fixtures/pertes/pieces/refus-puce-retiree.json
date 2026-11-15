@@ -1,0 +1,19 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/puces/associer?locale=fr",
+        "body": {
+            "pieceId": 2,
+            "identifier": "04F4AE54C3D4E5",
+            "technology": "nfc"
+        }
+    },
+    "status": 409,
+    "headers": {},
+    "body": {
+        "error": "TAG_RETIRED",
+        "code": "TAG_RETIRED",
+        "message": "Cette puce a été retirée : une puce retirée ne se repose sur aucune pièce.",
+        "tagId": 1
+    }
+}

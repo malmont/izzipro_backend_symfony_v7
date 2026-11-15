@@ -1,0 +1,21 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/exercices/pieces?locale=fr"
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "pieces": [],
+        "count": 0,
+        "limit": 30,
+        "remaining": 30,
+        "createLimit": 10,
+        "tagLimit": 60,
+        "daily": {
+            "limit": 30,
+            "remaining": 30,
+            "resetAt": "2026-11-16T05:00:00+00:00"
+        }
+    }
+}

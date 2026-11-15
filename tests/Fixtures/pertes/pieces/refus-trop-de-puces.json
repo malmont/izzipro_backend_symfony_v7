@@ -1,0 +1,19 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/puces/associer?locale=fr",
+        "body": {
+            "pieceId": 1,
+            "identifier": "05F4AE54",
+            "technology": "nfc"
+        }
+    },
+    "status": 409,
+    "headers": {},
+    "body": {
+        "error": "PIECE_TAG_LIMIT",
+        "code": "PIECE_TAG_LIMIT",
+        "message": "Une pièce porte au plus 4 puces.",
+        "limit": 4
+    }
+}
