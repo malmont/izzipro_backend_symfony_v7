@@ -56,7 +56,8 @@ permis, formes réservées).
 | `holder(string, $except)` | ce qui porte déjà le code : `{type: product ou variant, id, productId, label}` ; null s'il est libre |
 | `warning(?string)` | avertissement d'un code accepté : 13 chiffres dont la clé de contrôle est fausse (imprimé en Code 128) |
 | `generate()` | un code généré libre, sans rien écrire |
-| `generateFor($fiche)` | donne un code généré à une variante, ou à un article SANS variante, qui n'en a pas : `BARCODE_ALREADY_SET`, `BARCODE_HAS_VARIANTS` |
+| `generateFor($fiche, ?$audit)` | donne un code généré à une variante, ou à un article SANS variante, qui n'en a pas : `BARCODE_ALREADY_SET`, `BARCODE_HAS_VARIANTS` ; `$audit` (lot CB-3) : contexte d'une ligne au journal du site, null pour ne rien journaliser (boutons d'EasyAdmin) |
+| `assign($fiche, ?string, $replace, $contexte)` | lot CB-3 : pose un code saisi sur une fiche, ou le retire (vide) : ligne relue sous verrou, `check` si le code change, `BARCODE_ALREADY_SET` (avec `current`) si la fiche porte un autre code et que `$replace` est faux, écriture et ligne au journal (`set` / `remove`) dans la même transaction ; rend `{barcode, before, changed}` |
 | `missingCount()` | ce que « Générer les codes manquants » écrirait : `{variants, products, total}` |
 | `generateMissing($limit)` | donne un code à tout ce qui n'en a pas, variantes d'abord, au plus 500 par lancement ; rend `{written, variants, products, remaining}` |
 
@@ -117,6 +118,7 @@ relit pas la ligne après l'écriture). La variante ne coupe plus en silence un 
 | Création d'une fiche par l'IA (`ProductSheetCreator` : `POST /api/products/ai/create`, page « depuis une photo ») | `check` avant de rien créer ; refus 422 `{error, code, message, holder?}` |
 | Ressource d'API de l'article (`POST`, `PUT`, `PATCH /api/products`, administrateur) | n'écrit pas de code-barres : le champ n'est pas dans la liste des champs acceptés (422 « champ non modifiable », gardé par un test) |
 | Ressource d'API des véhicules (`PATCH /api/vehicle_products/{id}`, API Platform ; hors du pare-feu des jetons : seule une session d'administrateur y écrit) | le champ y est inscriptible ; un véhicule est un article : la même contrainte s'y applique (422 pour un code pris ou réservé, forme canonique pour un code libre ; gardé par un test) |
+| Application de gestion (lot CB-3, § 8 : `/api/gestion/codes-barres`) | `assign` (poser, retirer), `generateFor`, `generateMissing` ; refus à la forme de la gestion, dans la langue demandée ; une ligne au journal du site par écriture |
 | Tout autre chemin (SQL direct) | la base refuse le doublon et met en forme |
 
 La contrainte `CatalogBarcodeFree` (classe, sur les deux entités) appelle `CatalogBarcodeService::check`, puis compare le code aux autres
@@ -235,7 +237,64 @@ Plafond de 500 étiquettes, mesuré le 15/11/2026 dans le conteneur (rendu seul,
 500 étiquettes de 500 codes distincts (pire cas) en 5,6 s, 66 Mo au plus ; 100 étiquettes en 0,4 s. Les anciennes adresses d'impression d'un article (`/admin/print-barcode/{id}/{copies}`,
 `/admin/pdf/print-barcode/{id}/{copies}`) rendent la même planche ; `/admin/barcode-image/{id}` n'existe plus.
 
-## 8. Tests
+## 8. Codes-barres dans l'application de gestion (lot CB-3)
+
+Décision du propriétaire (15/11/2026) : les codes-barres se gèrent aussi dans l'application mobile de gestion ; le web utilise les
+mêmes routes hors commande. Code : `Gestion/Controller/GestionBarcodeController`, `Gestion/UseCase/GestionBarcodeUseCase`,
+`Gestion/Services/GestionBarcodeService`. **Aucune règle nouvelle** : tout passe par `CatalogBarcodeService` (§ 2 à § 4 : un code
+désigne une seule chose, jamais d'écrasement par un code généré, mêmes codes d'erreur). Droits : ceux de toute route `/api/gestion`
+(`ROLE_ADMIN`, à jeton ; module de gestion actif, sinon 403 `MODULE_INACTIVE`). Messages dans la langue de `?locale=fr|en`
+(`translations/gestion.{fr,en}.yaml`, `barcodes.*`). Erreurs à la forme de la gestion : `{ error, code, message, … }`.
+
+La **fiche** (`sheet`) rendue par ces routes, de quoi l'afficher et l'ouvrir :
+
+```json
+{ "type": "variant", "productId": 88, "variantId": 412, "name": "Casquette lin", "variantLabel": "Beige / M",
+  "barcode": "2900000000418", "symbology": "ean13", "isPos": true, "isWeb": false, "stock": 12,
+  "priceCents": 3499, "priceIncludesTax": false }
+```
+
+`type` : `variant` ou `product` ; `productId` toujours rendu, `variantId` à `null` pour un article ; `variantLabel` : couleur / taille,
+`null` sans l'une ni l'autre ; `barcode` : le code de la fiche elle-même ; `isPos` / `isWeb` : vendu en caisse, visible sur le web
+(ceux de l'article) ; `stock` : celui de la variante, pour un article la somme de ses variantes (`null` s'il n'en a aucune) ;
+`priceCents` : prix du catalogue hors promotion (variante, sinon article ; `null` pour un prix à zéro), TTC ou HT selon le site
+(`priceIncludesTax`).
+
+| Route | Corps | Réponse 200 | Refus |
+|---|---|---|---|
+| `GET /api/gestion/codes-barres/recherche?code=` | — | `{ code, found, refusal, currency, sheet }` : `code` en forme canonique ; `sheet` : ce qui porte le code (articles non vendus en caisse compris), ou `null` ; `refusal` quand rien ne le porte : `null` si le code pourrait être posé, sinon `BARCODE_INVALID` ou `BARCODE_RESERVED` | 422 `VALIDATION_FAILED { fields: { code: REQUIRED } }` |
+| `GET …/manquants` | — | `{ variants, products, total, limit: 500 }` : variantes sans code, articles sans variante ni code, plafond d'un lancement | — |
+| `POST …/manquants/generer` | — | `{ written, variants, products, remaining, limit }` : au plus 500 par appel (relancer tant que `remaining > 0` ; `written: 0` avec `remaining > 0` : fiches occupées par une vente, réessayer) | — |
+| `POST …/variantes/{id}/generer` | — | `{ barcode, sheet }` | 404 `VARIANT_NOT_FOUND` ; 409 `BARCODE_ALREADY_SET` |
+| `POST …/articles/{id}/generer` | — | `{ barcode, sheet }` | 404 `PRODUCT_NOT_FOUND` ; 409 `BARCODE_ALREADY_SET`, `BARCODE_HAS_VARIANTS` |
+| `PUT …/variantes/{id}` | `{ barcode, replace? }` | `{ barcode, changed, warning, sheet }` | 404 ; 422 `VALIDATION_FAILED { fields: { barcode: REQUIRED \| MUST_BE_STRING, replace: MUST_BE_BOOLEAN } }`, `BARCODE_INVALID`, `BARCODE_RESERVED` ; 409 `BARCODE_ALREADY_USED { holder }`, `BARCODE_ALREADY_SET { current }` |
+| `PUT …/articles/{id}` | `{ barcode, replace? }` | idem | idem |
+| `POST …/etiquettes/pdf` | `{ labels: [{ variantId \| productId, copies }], showPrice? }` | `application/pdf`, `X-Labels-Count` | 422 `VALIDATION_FAILED { fields }`, `LABELS_LIMIT_EXCEEDED { max, requested }`, `SHEET_NOT_FOUND { variantIds, productIds }` ; 409 `BARCODE_MISSING { variantIds, productIds }` |
+
+- **Poser un code** (`PUT`) : `barcode` saisi ou scanné, mis en forme canonique ; vide ou `null` : le code est retiré. Un code
+  inchangé rend `changed: false` et n'écrit rien. **Garde-fou** (décision du 15/11/2026) : une fiche qui porte déjà un AUTRE code ne
+  le perd, remplacé ou retiré, qu'avec `replace: true` ; sans lui, 409 `BARCODE_ALREADY_SET { current }` (le code en place) : un scan
+  distrait ne remplace pas le code du fabricant. Le code proposé est jugé d'abord (forme, code libre) : on ne demande pas de
+  confirmer un code refusé. Une fiche sans code n'a rien à confirmer.
+  `warning` : `null`, ou `{ code: "BARCODE_CHECK_DIGIT", message }` pour 13 chiffres à la clé de contrôle fausse (accepté, imprimé en
+  Code 128). `holder` d'un refus : `{ type, id, productId, variantId, label }`, ce qui porte déjà le code (`null` si deux écritures
+  simultanées se sont croisées : la base a tranché). Service : `CatalogBarcodeService::assign` (ligne relue sous verrou).
+- **Générer** : seulement pour une fiche sans code (`BARCODE_ALREADY_SET { current }` sinon : un code n'est jamais remplacé par un code
+  généré, il n'y a pas de `replace` ici) ;
+  un article à variantes n'en reçoit pas (`BARCODE_HAS_VARIANTS`).
+- **Étiquettes hors commande** : une ligne par `variantId` ou par `productId` (article SANS variante ; un article à variantes est
+  refusé, son étiquette se fait par variante), `copies` ≥ 1, 500 étiquettes au plus ; même planche et mêmes règles de code et de prix
+  que la réception (§ 7 : code de la variante, sinon celui de l'article quand elle est sa seule variante ; `showPrice`, `?locale=`).
+  Une lecture : rien n'est écrit. Les trois routes par commande du § 7 restent.
+- **Journal du site** : chaque écriture laisse une ligne `content_audit_log` (ressource `catalog_barcode`, compte de l'administrateur,
+  `source: gestion`) : `set` et `remove` (clé `variant-412` / `product-95`, code avant et après), `generate` (la fiche et son code, ou
+  le lancement : combien, premier et dernier code, `scope: catalog`). Un appel qui n'écrit rien n'en laisse pas.
+- **Cache du site** : vidé par chaque écriture (la recherche de la caisse trouve aussitôt le code posé).
+
+Test : `tests/Functional/Gestion/GestionBarcodesApiTest.php` (anonyme, compte client, module éteint ; chaque refus dans les deux
+langues ; jamais d'écrasement ; journal ; cache).
+
+## 9. Tests
 
 - `tests/Functional/Boutique/CatalogBarcodeTest.php` : la base seule (forme canonique à l'insertion et à la mise à jour, quatre
   croisements sous toutes les casses, longueur, écritures simultanées sur les deux tables, code libéré avec sa ligne, migration jouée
@@ -251,3 +310,6 @@ Plafond de 500 étiquettes, mesuré le 15/11/2026 dans le conteneur (rendu seul,
 - `tests/Functional/Gestion/CommandeLabelsApiTest.php` (lot CB-2) : les trois routes d'étiquettes d'une commande reçue (quantités par
   variante, ligne réputée reçue, code de l'article pour une variante unique, génération qui ne remplace rien, refus du PDF, prix écrit
   seulement si demandé, aucune écriture de stock).
+- `tests/Functional/Gestion/GestionBarcodesApiTest.php` (lot CB-3) : les routes de l'application de gestion (droits : anonyme, compte
+  client, module éteint ; recherche ; poser, retirer, générer ; chaque refus dans les deux langues ; jamais d'écrasement ; étiquettes
+  hors commande ; journal du site ; cache vidé).

@@ -11,6 +11,7 @@ use App\Services\TenantCacheService;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 
@@ -146,9 +147,14 @@ class CatalogBarcodeService
     /**
      * Donne un code généré à une variante, ou à un article sans variante, qui n'en a pas ; l'écrit et le rend.
      *
+     * `$audit` (lot CB-3) : contexte d'une ligne au journal du site, écrite dans la même transaction (`catalog_barcode`, `generate`,
+     * la fiche, le code) ; null : pas de ligne (les boutons des fiches d'EasyAdmin, inchangés).
+     *
+     * @param array<string, mixed>|null $audit
+     *
      * @throws CatalogBarcodeException `BARCODE_ALREADY_SET` (un code n'est jamais écrasé), `BARCODE_HAS_VARIANTS`
      */
-    public function generateFor(Product|ProductVariant $target): string
+    public function generateFor(Product|ProductVariant $target, ?array $audit = null): string
     {
         $id = $target->getId();
         if ($id === null) {
@@ -167,7 +173,8 @@ class CatalogBarcodeService
                 throw new \LogicException('Code-barres : fiche introuvable');
             }
             if (CatalogBarcode::normalize($current) !== null || CatalogBarcode::normalize($target->getBarcode()) !== null) {
-                throw new CatalogBarcodeException(self::ALREADY_SET, 'Cette fiche porte déjà un code-barres : un code saisi n\'est jamais remplacé par un code généré.');
+                throw new CatalogBarcodeException(self::ALREADY_SET, 'Cette fiche porte déjà un code-barres : un code saisi n\'est jamais remplacé par un code généré.',
+                    null, CatalogBarcode::normalize($current) ?? CatalogBarcode::normalize($target->getBarcode()));
             }
             if ($target instanceof Product && $conn->fetchOne('SELECT 1 FROM product_variant WHERE product_id = ? LIMIT 1', [$id]) !== false) {
                 throw new CatalogBarcodeException(self::HAS_VARIANTS, 'Cet article a des variantes : le code généré se pose sur chaque variante, pas sur l\'article.');
@@ -175,6 +182,9 @@ class CatalogBarcodeService
             $code = $this->generate();
             $target->setBarcode($code);
             $em->flush();
+            if ($audit !== null) {
+                $this->audit->record(self::AUDIT_RESOURCE, self::key($target), 'generate', null, $audit + ['barcode' => $code, 'type' => self::type($target), 'id' => $id], ['barcode']);
+            }
             $conn->commit();
         } catch (\Throwable $e) {
             if ($conn->isTransactionActive()) {
@@ -184,6 +194,73 @@ class CatalogBarcodeService
         }
 
         return $code;
+    }
+
+    /**
+     * Pose sur une fiche un code saisi ou scanné, ou le retire (`$raw` vide ou null) : lot CB-3, routes de la gestion. Le code en
+     * place est celui de la BASE, relu sous verrou de ligne ; un code inchangé ne fait rien (un code ancien, d'une forme refusée
+     * aujourd'hui, ne bloque donc pas). Sinon : forme, formes réservées, code libre (`check`), écriture, et une ligne au journal du
+     * site (`catalog_barcode`, `set` ou `remove`, avant / après) dans la même transaction. Le cache du site est vidé par l'écriture.
+     * L'objet est relu depuis la ligne avant d'être modifié : ne pas l'appeler avec d'autres modifications en attente sur la fiche.
+     *
+     * Garde-fou (décision du 15/11/2026) : une fiche qui porte déjà un AUTRE code ne le perd que si `$replace` est vrai, qu'on le
+     * remplace ou qu'on le retire ; sinon `BARCODE_ALREADY_SET`, avec le code en place (`current`). Un scan distrait ne remplace pas
+     * le code du fabricant. Le code proposé est jugé d'abord (forme, code libre) : on ne demande pas de confirmer un code refusé.
+     *
+     * @param array<string, mixed> $context ajouté à la ligne du journal (d'où vient l'écriture)
+     *
+     * @return array{barcode: ?string, before: ?string, changed: bool}
+     *
+     * @throws CatalogBarcodeException `BARCODE_INVALID`, `BARCODE_RESERVED`, `BARCODE_ALREADY_USED`, `BARCODE_ALREADY_SET`
+     */
+    public function assign(Product|ProductVariant $target, ?string $raw, bool $replace = false, array $context = []): array
+    {
+        $id = $target->getId();
+        if ($id === null) {
+            throw new \LogicException('Code-barres : la fiche doit être enregistrée avant de recevoir un code');
+        }
+        $em = $this->em();
+        $conn = $em->getConnection();
+        $table = $target instanceof Product ? 'product' : 'product_variant';
+        $code = CatalogBarcode::normalize($raw);
+        $conn->beginTransaction();
+        try {
+            $current = $conn->fetchOne(sprintf('SELECT barcode FROM %s WHERE id = ? FOR NO KEY UPDATE', $table), [$id]);
+            if ($current === false) {
+                throw new \LogicException('Code-barres : fiche introuvable');
+            }
+            $before = CatalogBarcode::normalize($current);
+            if ($code === $before) {
+                $conn->commit();
+
+                return ['barcode' => $before, 'before' => $before, 'changed' => false];
+            }
+            if ($code !== null) {
+                $this->check($code, $target);
+            }
+            if ($before !== null && !$replace) {
+                throw new CatalogBarcodeException(self::ALREADY_SET, sprintf('Cette fiche porte déjà le code-barres « %s » : confirmez pour le %s.', $before, $code === null ? 'retirer' : 'remplacer'), null, $before);
+            }
+            $em->refresh($target); // l'objet repart de la ligne verrouillée : Doctrine écrit bien le changement, et rien d'autre
+            $target->setBarcode($code);
+            $em->flush();
+            $this->audit->record(self::AUDIT_RESOURCE, self::key($target), $code === null ? 'remove' : 'set', ['barcode' => $before],
+                $context + ['barcode' => $code, 'type' => self::type($target), 'id' => $id], ['barcode']);
+            $conn->commit();
+        } catch (UniqueConstraintViolationException $e) {
+            // Le même code posé au même instant sur une autre fiche : la base a tranché (déclencheur, index uniques)
+            if ($conn->isTransactionActive()) {
+                $conn->rollBack();
+            }
+            throw new CatalogBarcodeException(self::ALREADY_USED, 'Ce code-barres vient d\'être pris par une autre fiche.');
+        } catch (\Throwable $e) {
+            if ($conn->isTransactionActive()) {
+                $conn->rollBack();
+            }
+            throw $e;
+        }
+
+        return ['barcode' => $code, 'before' => $before, 'changed' => true];
     }
 
     /**
@@ -234,9 +311,11 @@ class CatalogBarcodeService
      * « Générer les codes manquants » : donne un code généré à ce qui n'en a pas (variantes d'abord, puis articles sans variante), au plus
      * `$limit` par lancement, sans jamais toucher un code présent. Une ligne au journal du site par lancement (qui, quand, combien).
      *
+     * @param array<string, mixed> $context ajouté à la ligne du journal (lot CB-3 : d'où vient le lancement)
+     *
      * @return array{written: int, variants: int, products: int, remaining: int}
      */
-    public function generateMissing(int $limit = self::BULK_LIMIT): array
+    public function generateMissing(int $limit = self::BULK_LIMIT, array $context = []): array
     {
         $limit = max(1, min(self::BULK_LIMIT, $limit));
         $conn = $this->connection();
@@ -256,7 +335,7 @@ class CatalogBarcodeService
             $codes = $this->write($variantIds, $productIds);
             $result = ['written' => count($codes), 'variants' => count($variantIds), 'products' => count($productIds), 'remaining' => $this->missingCount()['total']];
             if ($codes !== []) {
-                $this->audit->record(self::AUDIT_RESOURCE, null, 'generate', null, $result + ['scope' => 'catalog', 'first' => $codes[0], 'last' => $codes[count($codes) - 1]], ['barcode']);
+                $this->audit->record(self::AUDIT_RESOURCE, null, 'generate', null, $context + $result + ['scope' => 'catalog', 'first' => $codes[0], 'last' => $codes[count($codes) - 1]], ['barcode']);
             }
             $conn->commit();
         } catch (\Throwable $e) {
@@ -409,6 +488,18 @@ class CatalogBarcodeService
         $parts = array_values(array_filter([trim((string) $variant?->getColor()?->getName()), trim((string) $variant?->getSize()?->getName())], static fn (string $p): bool => $p !== ''));
 
         return ($name !== '' ? $name : 'article') . ', ' . ($parts !== [] ? implode(' / ', $parts) : sprintf('variante n° %d', $id));
+    }
+
+    /** `variant` ou `product` */
+    private static function type(Product|ProductVariant $target): string
+    {
+        return $target instanceof Product ? 'product' : 'variant';
+    }
+
+    /** Clé d'une fiche au journal du site : `variant-412`, `product-95` */
+    private static function key(Product|ProductVariant $target): string
+    {
+        return self::type($target) . '-' . $target->getId();
     }
 
     private function em(): EntityManagerInterface

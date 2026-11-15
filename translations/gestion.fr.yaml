@@ -1146,3 +1146,26 @@ console:
     clarify: 'Pouvez-vous préciser votre question ? Par exemple la période, ou ce que vous voulez regarder : ventes, marge, budget, trésorerie, stock ou articles.'
     fallback: 'Voici les chiffres calculés par votre application pour cette question.'
     more: '%count% autres lignes, %total% au total'
+# Codes-barres du catalogue dans la gestion (lot CB-3, 15/11/2026, docs/codes-barres.md § 8) : refus et avertissement rendus par
+# /api/gestion/codes-barres ; les codes d'erreur sont ceux du lot CB-1
+barcodes:
+    pdf_title: Étiquettes
+    warning:
+        BARCODE_CHECK_DIGIT: 'Ce code de 13 chiffres n''a pas une clé de contrôle d''EAN-13 juste : il est accepté et sera imprimé en Code 128.'
+    error:
+        CODE_REQUIRED: 'Code-barres à chercher attendu.'
+        BARCODE_FIELD: 'Champ « barcode » attendu : le code à poser, ou vide pour retirer le code ; « replace » : vrai ou faux.'
+        BARCODE_INVALID: 'Code-barres refusé : 1 à 64 caractères, lettres sans accent, chiffres et - . _ / seulement, sans espace.'
+        BARCODE_RESERVED: 'Ce code-barres a la forme d''un document de la caisse (ticket, avoir, carte-cadeau, fiche client) ou d''un coupon de fabricant : il ne peut pas désigner un article.'
+        BARCODE_ALREADY_USED: 'Ce code-barres est déjà celui de « %label% ».'
+        BARCODE_ALREADY_USED_UNKNOWN: 'Ce code-barres vient d''être pris par une autre fiche.'
+        BARCODE_ALREADY_SET: 'Cette fiche porte déjà un code-barres : un code saisi n''est jamais remplacé par un code généré.'
+        BARCODE_ALREADY_SET_REPLACE: 'Cette fiche porte déjà le code-barres « %current% » : confirmez pour le remplacer ou le retirer.'
+        BARCODE_HAS_VARIANTS: 'Cet article a des variantes : le code généré se pose sur chaque variante, pas sur l''article.'
+        BARCODE_MISSING: 'Des fiches de la sélection n''ont pas de code-barres : générez-les d''abord, ou retirez-les.'
+        VARIANT_NOT_FOUND: 'Variante introuvable.'
+        PRODUCT_NOT_FOUND: 'Article introuvable.'
+        SHEET_NOT_FOUND: 'Des fiches de la sélection n''existent pas, ou sont des articles à variantes : leur étiquette se fait par variante.'
+        LABELS_REQUIRED: 'Sélection d''étiquettes attendue.'
+        LABELS_INVALID: 'Sélection d''étiquettes invalide.'
+        LABELS_LIMIT_EXCEEDED: 'Au plus %max% étiquettes par impression.'

@@ -1142,3 +1142,25 @@ console:
     clarify: 'Could you make your question more precise? For example the period, or what you want to look at: sales, margin, budget, cash, stock or items.'
     fallback: 'Here are the figures computed by your application for this question.'
     more: '%count% more rows, %total% in total'
+# Catalogue barcodes in the management app (lot CB-3, 2026-11-15, docs/codes-barres.md § 8)
+barcodes:
+    pdf_title: Labels
+    warning:
+        BARCODE_CHECK_DIGIT: 'This 13-digit code does not have a valid EAN-13 check digit: it is accepted and will be printed as Code 128.'
+    error:
+        CODE_REQUIRED: 'A barcode to look up is required.'
+        BARCODE_FIELD: 'The "barcode" field is required: the code to set, or empty to remove the code; "replace": true or false.'
+        BARCODE_INVALID: 'Barcode refused: 1 to 64 characters, unaccented letters, digits and - . _ / only, no spaces.'
+        BARCODE_RESERVED: 'This barcode has the form of a point-of-sale document (receipt, credit note, gift card, customer card) or of a manufacturer coupon: it cannot designate an item.'
+        BARCODE_ALREADY_USED: 'This barcode already belongs to "%label%".'
+        BARCODE_ALREADY_USED_UNKNOWN: 'This barcode has just been taken by another item.'
+        BARCODE_ALREADY_SET: 'This item already has a barcode: an entered code is never replaced by a generated one.'
+        BARCODE_ALREADY_SET_REPLACE: 'This item already has the barcode "%current%": confirm to replace or remove it.'
+        BARCODE_HAS_VARIANTS: 'This item has variants: the generated code goes on each variant, not on the item.'
+        BARCODE_MISSING: 'Some selected items have no barcode: generate them first, or remove them.'
+        VARIANT_NOT_FOUND: 'Variant not found.'
+        PRODUCT_NOT_FOUND: 'Item not found.'
+        SHEET_NOT_FOUND: 'Some selected items do not exist, or are items with variants: their label is printed per variant.'
+        LABELS_REQUIRED: 'A selection of labels is required.'
+        LABELS_INVALID: 'Invalid selection of labels.'
+        LABELS_LIMIT_EXCEEDED: 'At most %max% labels per print.'
