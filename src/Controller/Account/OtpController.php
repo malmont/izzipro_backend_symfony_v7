@@ -26,7 +26,8 @@ class OtpController extends AbstractController
         TenantEntityManagerProvider $tenantEmProvider, 
         RequestStack $requestStack, 
         UrlGeneratorInterface $urlGenerator,
-        ?\App\Services\MediaUrlResolver $mediaUrlResolver = null
+        ?\App\Services\MediaUrlResolver $mediaUrlResolver = null,
+        private readonly ?\App\Services\Platform\PlatformAccessJournal $platformAccess = null // lot AG-2 : connexions du compte de la plateforme tracées
     ) {
         $this->tenantEmProvider = $tenantEmProvider;
         $this->session = $requestStack->getSession();
@@ -75,6 +76,8 @@ class OtpController extends AbstractController
                         $em->flush();
                         $this->session->set('otp_validated', true);
                         $this->session->remove('pending_otp_user');
+                        // Lot AG-2 : la connexion à l'espace d'administration est aboutie ; celle d'un compte de la plateforme est tracée au journal du site
+                        $this->platformAccess?->recordLogin($user, 'easyadmin');
                         
                         // Rediriger vers le dashboard admin (/admin)
                         return new RedirectResponse($this->urlGenerator->generate('admin'));

@@ -660,6 +660,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Demandes reçues', 'fas fa-inbox', \App\Entity\FormSubmission::class);
         yield MenuItem::linkToCrud('Contact', 'fas fa-envelope', Contact::class);
         yield MenuItem::linkToCrud('Users', 'fas fa-user', User::class);
+        yield MenuItem::linkToRoute('Accès de la plateforme', 'fas fa-user-shield', 'admin_acces_plateforme'); // lot AG-2 : connexions du compte de la plateforme sur ce site
         yield MenuItem::linkToCrud('Adresse user', 'fas fa-shipping-fast', Adress::class);
         yield MenuItem::linkToCrud('Email Configuration', 'fa fa-envelope', EmailConfiguration::class);
         yield MenuItem::linkToCrud('Newsletter', 'fa fa-envelope', NewsletterSubscriber::class);

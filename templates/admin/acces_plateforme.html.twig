@@ -1,0 +1,25 @@
+{# Accès de la plateforme (lot AG-2, 15/11/2026) : les connexions du compte de la plateforme sur ce site, lues par son administrateur.
+   Habillage EasyAdmin depuis le menu, sinon page nue. #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Accès de la plateforme{% endblock %}
+{% block content_title %}Accès de la plateforme{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}<div class="py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block panel %}
+<div class="container-fluid" style="max-width: 900px" data-acces-plateforme>
+    <p>Votre site porte un compte de la plateforme, marqué « {{ label }} » dans la liste de vos utilisateurs. La plateforme peut l'utiliser pour le dépannage et la sécurité de votre site. Chaque connexion de ce compte est notée ici.</p>
+    <table class="table table-sm align-middle acces-plateforme-lignes">
+        <thead><tr><th>Date et heure (heure du magasin, {{ timezone }})</th><th>Compte</th><th>Par où</th></tr></thead>
+        <tbody>
+        {% for line in lines %}
+            <tr><td>{{ line.at }}</td><td>{{ line.account }}</td><td>{{ line.channel }}</td></tr>
+        {% else %}
+            <tr><td colspan="3" class="text-muted">Aucune connexion du compte de la plateforme sur ce site.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <p class="text-muted small">Les lignes sont gardées 180 jours.</p>
+</div>
+{% endblock %}

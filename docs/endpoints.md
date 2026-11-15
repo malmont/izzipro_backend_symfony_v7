@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (562)
+## Boutique et commun (570)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -292,7 +292,14 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/adresses` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::getUserAdresses` |
 | POST | `/api/adresses` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::createAdress` |
 | GET | `/api/agency/me` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::me` |
+| GET | `/api/agency/site-requests/{id}` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::siteRequest` |
+| GET | `/api/agency/site-requests` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::siteRequests` |
+| GET | `/api/agency/sites/availability` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::availability` |
+| POST | `/api/agency/sites/{code}/invitation` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::invitation` |
+| PUT | `/api/agency/sites/{code}/modules/{feature}` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::setModule` |
+| GET | `/api/agency/sites/{code}/modules` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::modules` |
 | GET | `/api/agency/sites` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::sites` |
+| POST | `/api/agency/sites` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::requestSite` |
 | DELETE | `/api/app-keys/{id}` | ROLE_ADMIN | `Controller\AppKeyController\AppKeyController::revoke` |
 | PUT | `/api/app-keys/{id}` | ROLE_ADMIN | `Controller\AppKeyController\AppKeyController::update` |
 | GET | `/api/app-keys` | ROLE_ADMIN | `Controller\AppKeyController\AppKeyController::list` |
@@ -602,6 +609,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/platform/agencies/{id}/sites` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformAgenciesController::attach` |
 | POST | `/api/platform/agencies/{id}/suspend` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformAgenciesController::suspend` |
 | GET | `/api/platform/agencies/{id}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformAgenciesController::show` |
+| PATCH | `/api/platform/agencies/{id}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformAgenciesController::limits` |
 | GET | `/api/platform/agencies` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformAgenciesController::list` |
 | POST | `/api/platform/agencies` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformAgenciesController::create` |
 | POST | `/api/platform/billing-events` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformBillingEventsController::receive` |
@@ -868,10 +876,11 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (99)
+## Administration (EasyAdmin) (101)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
+| GET | `/admin/acces-plateforme` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\PlatformAccessAdminController::index` |
 | GET | `/admin/aide/{key}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\HelpAdminController::page` |
 | GET | `/admin/aide` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\HelpAdminController::index` |
 | GET | `/admin/apercu/{code}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ApercuController::show` |
@@ -921,6 +930,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/plateforme/agences/creer` | ROLE_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::create` |
 | POST | `/admin/plateforme/agences/{id}/detacher` | ROLE_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::detach` |
 | POST | `/admin/plateforme/agences/{id}/etat/{to}` | ROLE_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::state` |
+| POST | `/admin/plateforme/agences/{id}/limites` | ROLE_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::limits` |
 | POST | `/admin/plateforme/agences/{id}/rattacher` | ROLE_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::attach` |
 | POST | `/admin/plateforme/agences/{id}/role` | ROLE_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::member` |
 | GET | `/admin/plateforme/agences` | ROLE_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::index` |

@@ -86,7 +86,7 @@ class OtpApiController extends AbstractController
             return $refused;
         }
         if ($user instanceof User) {
-            $this->authenticationService->recordLogin($user);
+            $this->authenticationService->recordLogin($user, $platform); // lot AG-2 : la connexion d'un compte de la plateforme est tracée au journal du site
             $this->authenticationService->auditPos($platform, $user, (string) $email);
         }
 

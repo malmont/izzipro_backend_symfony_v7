@@ -114,6 +114,8 @@ class UserManagementController extends AbstractController
                 'fullName' => trim($u->getFirstname() . ' ' . $u->getLastname()),
                 'username' => $u->getUsername(),
                 'roles' => $u->getRoles(),
+                // lot AG-2 : le compte de la plateforme (dépannage) est visible et dit ; il ne se modifie ni ne se supprime ici (OWNER_PROTECTED)
+                'platformAccount' => \App\Services\Platform\PlatformAccessJournal::isPlatformAccount($u->getRoles()),
                 'role' => in_array('ROLE_ADMIN', $u->getRoles(), true) ? 'ROLE_ADMIN' : 'ROLE_USER',
                 'isBiographer' => in_array(TeamRoles::MEMOIRES_BIOGRAPHE, $u->getRoles(), true),
                 'isResponsable' => in_array(TeamRoles::MEMOIRES_RESPONSABLE, $u->getRoles(), true),

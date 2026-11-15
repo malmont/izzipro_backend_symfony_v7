@@ -37,6 +37,7 @@ class AuthenticationService
         private TenantConnectionProvider $tenantConnectionProvider,
         private ?\App\Services\PosAuditService\PosAuditService $posAudit = null,
         private ?\App\Services\AppMembershipService\AppMembershipService $memberships = null, // familles d'applications (APPS-MEMBRES M1, 14/11/2026)
+        private ?\App\Services\Platform\PlatformAccessJournal $platformAccess = null, // lot AG-2 : connexions du compte de la plateforme tracées au journal du site
     ) {}
 
     /**
@@ -136,14 +137,21 @@ class AuthenticationService
      */
     // private function createIsolatedEntityManager(): EntityManagerInterface { ... }
 
-    /** Dernière connexion réussie (16/10/2026) ; ne doit jamais faire échouer la connexion */
-    public function recordLogin(User $user): void
+    /**
+     * Dernière connexion réussie (16/10/2026) ; ne doit jamais faire échouer la connexion. `$loginPlatform` (lot AG-2) : la plateforme
+     * d'une VRAIE connexion (identifiants, puis code à usage unique s'il est exigé) : la connexion d'un compte de la plateforme est
+     * alors tracée au journal du site. Sans lui (session renouvelée), rien n'est tracé.
+     */
+    public function recordLogin(User $user, ?string $loginPlatform = null): void
     {
         try {
             $user->setLastLoginAt(new \DateTimeImmutable());
             $this->emProvider->getEntityManager()->flush();
         } catch (\Throwable $e) {
             $this->logger->warning('Dernière connexion non enregistrée : ' . $e->getMessage());
+        }
+        if ($loginPlatform !== null) {
+            $this->platformAccess?->recordLogin($user, $loginPlatform);
         }
     }
 
@@ -199,7 +207,7 @@ class AuthenticationService
         if ($refused = $this->membershipRefusal($user, $app, $platform, 'login', $request)) {
             return $refused;
         }
-        $this->recordLogin($user);
+        $this->recordLogin($user, $platform);
         $this->auditPos($platform, $user, $email);
         $tokens = $this->tokenService->generateTokens($user, $platform, $this->appFamily($user, $app, 'login'));
         $host = $request->getHost();

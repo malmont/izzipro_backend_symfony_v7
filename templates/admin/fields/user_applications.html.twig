@@ -1,5 +1,5 @@
 {# Colonne « Applications » de l'écran Utilisateurs (APPS-MEMBRES, lot M4) : familles dont le compte est membre, « Équipe », ou « Aucune » ;
    lot IMP-2 : « Invité (boutique importée) » pour un compte repris d'une ancienne boutique qui n'a pas accepté son invitation #}
 {% for application in field.formattedValue %}
-    <span class="badge badge-{{ application.code == 'none' ? 'light' : (application.code == 'team' ? 'info' : (application.code == 'invited' ? 'warning' : 'secondary')) }}" data-application="{{ application.code }}">{{ application.label }}</span>
+    <span class="badge badge-{{ application.code == 'platform' ? 'dark' : application.code == 'none' ? 'light' : (application.code == 'team' ? 'info' : (application.code == 'invited' ? 'warning' : 'secondary')) }}" data-application="{{ application.code }}">{{ application.label }}</span>
 {% endfor %}

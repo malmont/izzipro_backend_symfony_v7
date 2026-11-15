@@ -31,6 +31,7 @@ class AdminDateTimeZoneGuardTest extends TestCase
     /** `setTimezone` qui n'est pas celui d'un champ : « fichier » => raison */
     private const NOT_A_FIELD = [
         'src/Controller/Admin/DashboardController.php' => 'conversion d\'un instant en UTC pour les chiffres du tableau de bord',
+        'src/Controller/Admin/PlatformAccessAdminController.php' => 'page de lecture (lot AG-2) : les instants du journal du site sont affichés à l\'heure du magasin par l\'horloge commune (StoreClock) ; aucun champ, aucune saisie',
     ];
 
     /** Saisie de date et heure construite à la main : « fichier » => raison */

@@ -82,7 +82,11 @@ class UserCrudController extends BaseTenantCrudController
             // Familles d'applications dont le compte est membre (APPS-MEMBRES, lot M4) : colonne calculée, lecture seule. Aucune action
             // d'écriture : une appartenance naît d'un geste du client, jamais de l'administration (docs/apps-membres.md)
             Field::new('applications', 'Applications')->hideOnForm()->setSortable(false)->setTemplatePath('admin/fields/user_applications.html.twig')
-                ->formatValue(fn ($value, User $user) => array_map(fn (string $code) => ['code' => $code, 'label' => AppMembershipDirectory::LABELS[$code]], $this->memberships->applications($user))),
+                // lot AG-2 (décision du propriétaire) : le compte de la plateforme est VISIBLE de l'administrateur du site, avec sa mention
+                ->formatValue(fn ($value, User $user) => [
+                    ...(\App\Services\Platform\PlatformAccessJournal::isPlatformAccount($user->getRoles()) ? [['code' => 'platform', 'label' => \App\Services\Platform\PlatformAccessJournal::LABEL]] : []),
+                    ...array_map(fn (string $code) => ['code' => $code, 'label' => AppMembershipDirectory::LABELS[$code]], $this->memberships->applications($user)),
+                ]),
             Field::new('appMemberships', 'Appartenances')->onlyOnDetail()->setTemplatePath('admin/fields/user_memberships.html.twig')
                 ->formatValue(fn ($value, User $user) => array_map(fn (\App\Entity\UserAppMembership $m) => [
                     'app' => $m->getApp(), 'label' => AppMembershipDirectory::LABELS[$m->getApp()] ?? $m->getApp(), 'joinedAt' => $m->getJoinedAt(),

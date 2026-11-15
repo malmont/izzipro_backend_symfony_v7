@@ -128,6 +128,7 @@ erreur : ne pas revenir en arrière tant qu'elle n'a pas réussi partout. La mig
 | Workers arrêtés puis attendus (le worker des courriels doit battre après son redémarrage) | un worker garde l'ancien code en mémoire |
 | Lecture authentifiée et compte des clés juste après | une page publique à 200 ne dit rien des clés des jetons |
 | Jeton de contrôle dans `var/`, lisible du seul compte du serveur web, jamais affiché, supprimé à la fin | aucun secret dans un journal ni dans le dépôt |
+| Règle, hors de l'outil : le secret de l'application (`APP_SECRET`) ne se change jamais sans le plan des boîtiers de la prévention des pertes | depuis le lot L3-a, les clés des boîtiers, les machines inscrites et leurs jetons en dépendent : le changer les rend tous inconnus, sur tous les sites (`docs/prevention-pertes.md` § 16.13) |
 
 ## 7. Anciens caches
 
