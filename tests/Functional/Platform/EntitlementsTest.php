@@ -125,6 +125,9 @@ class EntitlementsTest extends WebTestCase
         $this->assertEqualsWithDelta(time() + 10 * 86400, strtotime($trial['ends_at']), 120);
         $this->assertTrue($this->flag('is_memoire_vivante_active'));
         $this->assertEmailCount(1);
+        // Le courriel est signé par la plateforme, même quand il part par le serveur d'envoi du site (repli des tests) : la signature de
+        // la configuration d'envoi du site ne la remplace pas
+        $this->assertStringContainsString('La plateforme Arkanoa', (string) $this->getMailerMessages()[0]->getHtmlBody());
 
         // rappel à J-7 une seule fois
         $this->master->prepare("UPDATE tenant_entitlements SET ends_at = NOW() + INTERVAL '5 days' WHERE id = ?")->execute([$trial['id']]);

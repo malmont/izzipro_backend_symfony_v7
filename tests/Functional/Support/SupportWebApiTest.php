@@ -67,11 +67,12 @@ class SupportWebApiTest extends WebTestCase
         // Par les cookies seuls : le module répond, le reste du site reste fermé
         $me = $this->send('GET', '/api/support/me', null, $cookies);
         $this->assertSame([200, true, ['ROLE_SUPPORT']], [$me->getStatusCode(), json_decode((string) $me->getContent(), true)['supportOnly'] ?? null, json_decode((string) $me->getContent(), true)['roles'] ?? null]);
-        // (refus par les règles d'accès quand la route exige un rôle, par la garde de l'Assistance quand elle n'exige qu'un compte connecté)
+        // (refus par la règle d'accès quand la route exige un rôle, par la garde de l'Assistance quand elle n'exige qu'un compte connecté :
+        // le même code dans les deux cas, celui que le web lit pour se replier sur /api/support/me)
         foreach (['/api/profile', '/api/validate-token', '/api/site/features', '/api/gestion/statistiques', '/api/boussole/company'] as $closed) {
             $r = $this->send('GET', $closed, null, $cookies);
             $this->assertSame(403, $r->getStatusCode(), $closed);
-            $this->assertContains(json_decode((string) $r->getContent(), true)['code'] ?? null, ['SUPPORT_SCOPE_ONLY', 'FORBIDDEN'], $closed);
+            $this->assertSame(['error' => 'SUPPORT_SCOPE_ONLY', 'code' => 'SUPPORT_SCOPE_ONLY', 'message' => 'Un compte Assistance n\'accède qu\'aux demandes d\'assistance.'], json_decode((string) $r->getContent(), true), $closed);
         }
         $r = $this->send('GET', '/api/boussole/company', null, $cookies);
         $this->assertSame('SUPPORT_SCOPE_ONLY', json_decode((string) $r->getContent(), true)['code'] ?? null);
@@ -124,7 +125,17 @@ class SupportWebApiTest extends WebTestCase
         $this->assertSame(['id', 'name', 'email', 'roles', 'supportOnly', 'site', 'module', 'screens', 'canEditSettings'], array_keys($me));
         $this->assertSame([(int) $agent->getId(), 'Aline Agent', $agent->getEmail(), ['ROLE_SUPPORT'], true, false, ['assistance', 'assistance-reglages']],
             [$me['id'], $me['name'], $me['email'], $me['roles'], $me['supportOnly'], $me['canEditSettings'], $me['screens']]);
-        $this->assertSame([MV_TEST_TENANT_CODE, 'Tenant de test'], [$me['site']['code'], $me['site']['name']]);
+        // Le nom du site est celui de sa FICHE (réglé par le gérant), pas celui que la plateforme lui connaît ; fiche sans nom : celui de
+        // la plateforme sert
+        $fiche = (string) $this->db()->fetchOne('SELECT name FROM entreprise ORDER BY id LIMIT 1');
+        $this->assertNotContains($fiche, ['', 'Tenant de test'], 'la fiche du site de test porte un nom à elle');
+        $this->assertSame([MV_TEST_TENANT_CODE, $fiche], [$me['site']['code'], $me['site']['name']]);
+        try {
+            $this->db()->executeStatement("UPDATE entreprise SET name = '' WHERE id = (SELECT MIN(id) FROM entreprise)");
+            $this->assertSame('Tenant de test', $this->json('GET', '/api/support/me', null, $agent)['site']['name']);
+        } finally {
+            $this->db()->executeStatement('UPDATE entreprise SET name = ? WHERE id = (SELECT MIN(id) FROM entreprise)', [$fiche]);
+        }
         $this->assertContains($me['site']['locale'], ['fr', 'en']);
         $this->assertNotSame('', $me['site']['timezone']);
         // Module : sans le droit, en mode « demo » de la plateforme (les routes répondent quand même : le mode le dit)
@@ -322,6 +333,11 @@ class SupportWebApiTest extends WebTestCase
         $this->assertStringNotContainsString('?token', $html);
         $this->assertSame(1, substr_count($html, 'href="http'), 'un seul lien dans le courriel');
         $this->assertStringContainsString('Gabriel Gérant', $html);
+        // Le site est nommé comme sur sa fiche, dans l'objet et dans le courriel : le même nom que `me` et que la vérification du lien
+        $fiche = (string) $db->fetchOne('SELECT name FROM entreprise ORDER BY id LIMIT 1');
+        $this->assertStringContainsString($fiche, (string) $mails[0]->getSubject());
+        $this->assertStringContainsString($fiche, $html);
+        $this->assertStringNotContainsString('Tenant de test', $mails[0]->getSubject() . $html);
         $this->assertStringContainsString('48 heures', $html);
         // Tant que le mot de passe n'est pas choisi : aucun accès, absent de la liste d'attribution, visible de l'administrateur en attente
         $this->assertNotSame(200, $this->send('POST', '/api/login', ['username' => $email, 'password' => 'nimporte-lequel', 'platform' => 'webadmin'])->getStatusCode());
@@ -335,7 +351,7 @@ class SupportWebApiTest extends WebTestCase
         $this->assertSame([200, true, 'invitation'], [$check->getStatusCode(), json_decode((string) $check->getContent(), true)['valid'], json_decode((string) $check->getContent(), true)['kind']]);
         $checked = json_decode((string) $check->getContent(), true);
         $this->assertSame(['valid', 'kind', 'expiresAt', 'siteName', 'emailMasked', 'passwordMinLength'], array_keys($checked));
-        $this->assertSame(['i***@e***.invalid', 8], [$checked['emailMasked'], $checked['passwordMinLength']]);
+        $this->assertSame(['i***@e***.invalid', 8, $fiche], [$checked['emailMasked'], $checked['passwordMinLength'], $checked['siteName']]);
         $this->assertStringNotContainsString($email, (string) $check->getContent(), 'jamais l\'adresse entière');
         $this->assertNotNull($db->fetchOne('SELECT reset_token FROM "user" WHERE id = ?', [$row['id']]), 'la vérification ne consomme pas le jeton');
         $this->assertSame([400, 'RESET_LINK_INVALID'], [($r = $this->send('POST', '/api/password-reset/verify', ['token' => str_repeat('a', 64)]))->getStatusCode(), $code($r)]);

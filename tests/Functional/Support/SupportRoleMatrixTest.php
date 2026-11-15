@@ -20,6 +20,9 @@ class SupportRoleMatrixTest extends WebTestCase
 
     private KernelBrowser $client;
 
+    /** Code d'erreur du corps de la dernière réponse lue par `status()`, ou null */
+    private ?string $lastCode = null;
+
     protected function setUp(): void
     {
         $this->client = static::createClient();
@@ -49,6 +52,7 @@ class SupportRoleMatrixTest extends WebTestCase
         $this->assertGreaterThan(500, count($routes));
         $violations = [];
         $served = 0;
+        $sameAsAnonymous = 0;
         foreach ($routes as [$method, $path, $name]) {
             $support = $this->status($method, $path, $token);
             if (str_starts_with($path, '/api/support')) {
@@ -63,6 +67,16 @@ class SupportRoleMatrixTest extends WebTestCase
                 ++$served;
                 continue;
             }
+            if ($support === 403 && $this->lastCode !== 'SUPPORT_SCOPE_ONLY') {
+                // Un refus hors du module porte TOUJOURS le code de la garde, que ce soit elle ou la règle d'accès du pare-feu qui refuse.
+                // Seule exception : une route publique qui refuse aussi un anonyme, avec le même code (caisse sans poste : TERMINAL_REQUIRED)
+                $code = $this->lastCode;
+                if ([$this->status($method, $path, null), $this->lastCode] !== [403, $code] || $code === null) {
+                    $violations[] = "$method $path ($name) : refus sans le code SUPPORT_SCOPE_ONLY (" . ($code ?? 'aucun code') . ')';
+                }
+                ++$sameAsAnonymous;
+                continue;
+            }
             if (in_array($support, [401, 403, 429], true) || in_array("$method $path", self::OWN_ACCOUNT, true)) {
                 continue;
             }
@@ -72,6 +86,7 @@ class SupportRoleMatrixTest extends WebTestCase
             }
         }
         $this->assertSame([], $violations, 'ROLE_SUPPORT n\'obtient rien de plus qu\'un anonyme hors du module');
+        $this->assertLessThanOrEqual(4, $sameAsAnonymous, 'les refus sans le code de la garde restent une poignée de routes publiques');
         $this->assertSame(14, $served, 'les 14 routes du module (8 du lot 1 ; lot SUPPORT-WEB : moi, agents, commande par référence, inviter, relancer, retirer)');
     }
 
@@ -85,8 +100,12 @@ class SupportRoleMatrixTest extends WebTestCase
             ]), in_array($method, ['POST', 'PUT', 'PATCH'], true) ? '{}' : null);
         } catch (\Throwable) {
             // une route qui plante (données laissées par d'autres tests) compte comme une 500, pour l'Assistance comme pour l'anonyme
+            $this->lastCode = null;
+
             return 500;
         }
+        $body = json_decode((string) $this->client->getResponse()->getContent(), true);
+        $this->lastCode = is_array($body) && is_string($body['code'] ?? null) ? $body['code'] : null;
 
         return $this->client->getResponse()->getStatusCode();
     }
