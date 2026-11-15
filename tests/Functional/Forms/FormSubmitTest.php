@@ -135,8 +135,15 @@ class FormSubmitTest extends WebTestCase
 
     public function testReservationTargetCreatesTheAppointmentInTheSameTransaction(): void
     {
-        // option écrite avec un tiret long : enregistrée avec un trait d'union, comme les créneaux des formulaires actuels
-        $response = $this->submit('s-rdv', ['creneau' => '09:00 – 12:00'] + $this->answers());
+        // Lot NOTIF-1 : la demande d'un formulaire à étapes est un message écrit par un client, donc INDISPENSABLE : elle part à l'équipe
+        // même au niveau « Aucune » du site (une réservation prise autrement est un courriel de suivi, que ce niveau arrêterait)
+        $this->db()->executeStatement("UPDATE entreprise SET notification_level = 'none'");
+        try {
+            // option écrite avec un tiret long : enregistrée avec un trait d'union, comme les créneaux des formulaires actuels
+            $response = $this->submit('s-rdv', ['creneau' => '09:00 – 12:00'] + $this->answers());
+        } finally {
+            $this->db()->executeStatement("UPDATE entreprise SET notification_level = 'all'");
+        }
 
         $this->assertSame(201, $response->getStatusCode(), $response->getContent());
         $reference = json_decode($response->getContent(), true)['reference'];
@@ -150,6 +157,7 @@ class FormSubmitTest extends WebTestCase
         $this->assertSame(['marie@formulaire.test', 'direction@mvtest.test'], array_map(fn (Email $m) => $m->getTo()[0]->getAddress(), $emails), 'courriels de la réservation, pas de notification générique');
         $this->assertStringContainsString($reference, (string) $emails[0]->getHtmlBody(), 'référence dans l\'accusé');
         $this->assertCount(1, $emails[0]->getAttachments(), 'invitation de calendrier');
+        $this->assertSame(0, (int) $this->db()->fetchOne("SELECT COUNT(*) FROM notification_log WHERE channel = 'email' AND recipient = 'direction@mvtest.test'"), 'indispensable : ni compté ni retenu');
 
         $taken = $this->submit('s-rdv', ['courriel' => 'autre@formulaire.test'] + $this->answers());
         $this->assertSame(409, $taken->getStatusCode(), 'même créneau (tiret simple) : déjà pris');

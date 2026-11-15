@@ -84,7 +84,7 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
         $this->assertSame([true, true, 'email', 'Prévention des pertes : résumé du jour par courriel'], [$prefs['loss_digest']['enabled'], $prefs['loss_digest']['available'], $prefs['loss_digest']['channel'], $prefs['loss_digest']['label']]);
         $this->assertSame('push', $prefs['low_stock']['channel']);
         $adminEmail = (string) $this->db->fetchOne('SELECT email FROM "user" WHERE id = ?', [$this->adminId]);
-        $pushLog = (int) $this->db->fetchOne('SELECT COUNT(*) FROM notification_log');
+        $pushLog = (int) $this->db->fetchOne("SELECT COUNT(*) FROM notification_log WHERE channel = 'push'");
 
         $run = function (): string {
             $tester = new \Symfony\Component\Console\Tester\CommandTester((new \Symfony\Bundle\FrameworkBundle\Console\Application(static::$kernel))->find('app:pertes:analyser'));
@@ -114,7 +114,8 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
         $this->assertSame([$link], self::addressesOf($body), 'une seule adresse, celle du lien');
         $this->assertStringContainsString('Ouvrir les nouveaux constats', $body);
         $this->assertSame($this->today(), (string) $this->db->fetchOne('SELECT last_digest_day FROM loss_setting'));
-        $this->assertSame($pushLog, (int) $this->db->fetchOne('SELECT COUNT(*) FROM notification_log'), 'rien dans le journal des notifications du téléphone');
+        // (lot NOTIF-1 : le journal porte aussi les courriels, sur le canal « email » ; la notification du jour du téléphone ne compte que « push »)
+        $this->assertSame($pushLog, (int) $this->db->fetchOne("SELECT COUNT(*) FROM notification_log WHERE channel = 'push'"), 'rien dans le journal des notifications du téléphone');
         $sent = json_decode((string) $this->db->fetchOne("SELECT data FROM loss_journal WHERE type = 'DIGEST_SENT' ORDER BY id DESC LIMIT 1"), true);
         $this->assertSame(['day', 'count', 'amount', 'recipients', 'renewed', 'renewedUpTo'], array_keys($sent), 'au journal du module : des nombres, aucune adresse');
 
@@ -181,7 +182,8 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
             return new \App\LossPrevention\Services\LossDigestService($c->get(\App\Services\TenantEntityManagerProvider::class), $c->get(\App\LossPrevention\Services\LossSettingsService::class),
                 $c->get(\App\LossPrevention\Services\LossSite::class), $c->get(\App\Gestion\Services\GestionNotificationService::class), $mailer,
                 $c->get(\App\Services\EmailConfigurationService\EmailLocale::class), $c->get('translator'), new \Psr\Log\NullLogger(),
-                $c->get(\App\Services\TenantConnectionManager::class), $c->get(\App\Services\TenantPublicHostResolver::class), $c->get(\App\Services\Site\AdminSpaceUrl::class));
+                $c->get(\App\Services\TenantConnectionManager::class), $c->get(\App\Services\TenantPublicHostResolver::class), $c->get(\App\Services\Site\AdminSpaceUrl::class),
+                $c->get(\App\Services\Notification\NotificationGate::class)); // lot NOTIF-1 : la décision d'envoi (sites de test au niveau « Tout »)
         };
         $digest = fn (): \App\LossPrevention\Services\LossDigestService => $build($mailer);
         $mine = function () use (&$calls, $adminEmail): array {

@@ -101,6 +101,10 @@ $master->prepare("INSERT INTO tenant_entitlements (tenant_code, feature_key, sou
 foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
     $tenantDb = new PDO(sprintf('pgsql:host=%s;port=%d;dbname=%s', $u['host'], $u['port'] ?? 5432, $db), urldecode($u['user']), urldecode($u['pass']), [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     $tenantDb->exec("UPDATE email_configuration SET smtp_host = NULL, smtp_user = NULL, smtp_password = NULL, from_email = 'contact@mvtest.test'");
+    // Lot NOTIF-1 : les sites de test sont au niveau « Tout » (chaque courriel de suivi part), pour que les tests écrits avant les niveaux
+    // voient toujours leurs courriels. Le niveau automatique d'un vrai site (« Essentiel » pour un site d'essai) et chaque autre niveau
+    // sont vérifiés par les tests du lot, qui règlent le niveau eux-mêmes (NotificationLevelsTest)
+    $tenantDb->exec("UPDATE entreprise SET notification_level = 'all'");
     $tenantDb = null;
 }
 

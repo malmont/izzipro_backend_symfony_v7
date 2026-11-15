@@ -105,3 +105,12 @@ services:
         arguments:
             $dailyLimit: 1000000
             $dailyEmailLimit: 1000000
+    # Lot NOTIF-1 : le plafond des courriels de notification (3 par jour et par destinataire) est compté au journal des notifications, que la
+    # suite ne vide pas, et aucun courriel de suivi ne part avant 8 h du magasin : sans ces deux réglages, le résultat des tests dépendrait de
+    # leur nombre et de l'heure à laquelle ils tournent. Les tests des niveaux montent la décision d'envoi à la main avec les vraies valeurs
+    # (NotificationLevelsTest), et vérifient que seules ces deux valeurs sont réglées ici
+    App\Services\Notification\NotificationGate:
+        autowire: true
+        arguments:
+            $dailyCap: 1000000
+            $fromHour: 0
