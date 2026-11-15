@@ -6,6 +6,7 @@ use App\Entity\User;
 use App\Import\Message\RunCustomerImportMessage;
 use App\Import\Message\SendImportInvitationsMessage;
 use App\Import\Shopify\ShopifyCustomerCsv;
+use App\Services\CaisseService\StoreClock;
 use App\Services\CheckoutService\CheckoutCustomerService;
 use App\Services\ContentAuditService\ContentAuditRecorder;
 use App\Services\EmailConfigurationService\EmailLocale;
@@ -44,6 +45,10 @@ class CustomerImportService
     public const INVITATION_PATH = '/invitation';
     /** Envois d'affilée en échec avant d'arrêter une série d'invitations (le site ne peut pas envoyer) */
     public const MAX_SEND_FAILURES = 5;
+    /** Invitations envoyées par passage : au-delà, le commerçant redemande l'envoi (un serveur d'envoi a souvent un plafond par heure ou par jour) */
+    public const MAX_PER_RUN = 300;
+    /** Un import de clients déposé et jamais confirmé est abandonné après ce délai, et son fichier supprimé */
+    public const ABANDON_DAYS = 7;
     private const TEMPLATE = 'emails/customer_import_invitation.html.twig';
 
     public function __construct(
@@ -59,6 +64,7 @@ class CustomerImportService
         private readonly TranslatorInterface $translator,
         private readonly TenantPublicHostResolver $hosts,
         private readonly SiteName $siteName,
+        private readonly StoreClock $clock,
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
     ) {
     }
@@ -89,12 +95,16 @@ class CustomerImportService
             throw new ImportException('IMPORT_' . $parsed['error'], 422, $parsed['error'] === ShopifyCustomerCsv::TOO_MANY_ROWS ? ['maxRows' => ShopifyCustomerCsv::MAX_ROWS] : []);
         }
         try {
+            $report = $this->report($this->plan($parsed['customers']));
             $id = $this->store->create($source, ImportJobStore::KIND_CUSTOMERS, $original !== '' ? $original : 'clients.csv', $stored, (string) hash_file('sha256', $path), $parsed['rows'], $by);
         } catch (\Doctrine\DBAL\Exception\UniqueConstraintViolationException) {
             @unlink($path); // deux dépôts au même instant : la base n'en garde qu'un
             throw new ImportException('IMPORT_ALREADY_ACTIVE', 409, ['importId' => $this->store->activeId()]);
+        } catch (\Throwable $e) {
+            @unlink($path); // aucun import n'a été créé : le fichier ne reste pas sur le serveur
+            throw $e;
         }
-        $this->store->move($id, ImportJobStore::UPLOADED, ImportJobStore::ANALYSED, ['report' => $this->report($this->plan($parsed['customers'])), 'analysed_at' => true]);
+        $this->store->move($id, ImportJobStore::UPLOADED, ImportJobStore::ANALYSED, ['report' => $report, 'analysed_at' => true]);
 
         return $this->view($this->job($id));
     }
@@ -122,7 +132,7 @@ class CustomerImportService
             throw new ImportException('IMPORT_NOT_READY', 409, ['status' => $this->job($id)['status']]);
         }
         if ($attested) {
-            $this->audit->record('import_job', $id, 'attest', null, ['marketingConsent' => true, 'by' => $by, 'claimed' => (int) ($job['report']['customers']['marketingClaimed'] ?? 0)], ['attestMarketingConsent']);
+            $this->journal($id, 'attest', ['marketingConsent' => true, 'by' => $by, 'claimed' => (int) ($job['report']['customers']['marketingClaimed'] ?? 0)], ['attestMarketingConsent']);
         }
         try {
             $this->bus->dispatch(new RunCustomerImportMessage($id, (string) $this->tenants->getCurrentTenantCode(), $by));
@@ -137,8 +147,10 @@ class CustomerImportService
     }
 
     /**
-     * Exécute un import de clients confirmé sur le site courant (worker). Un client en échec n'arrête pas les autres. Le fichier est
-     * supprimé du serveur à la fin, quelle que soit l'issue : il ne contient que des données personnelles.
+     * Exécute un import de clients confirmé sur le site courant (worker). Une adresse prise entre-temps est passée ; une écriture en
+     * échec est comptée, et si elle a fermé la connexion l'import s'arrête (`IMPORT_INTERRUPTED`) : déposer de nouveau le fichier reprend
+     * où il s'est arrêté, sans doublon. Le fichier est supprimé du serveur à la fin, quelle que soit l'issue : il ne contient que des
+     * données personnelles. Un import annulé pendant qu'il tourne s'arrête au contrôle suivant.
      */
     public function run(int $id, ?string $by): void
     {
@@ -195,7 +207,7 @@ class CustomerImportService
                         $this->logger->error(sprintf('[Import] import de clients %d, ligne %d non écrite (%s)', $id, $item['line'], $e::class));
                     }
                     if (!$em->isOpen()) {
-                        throw new \RuntimeException('connexion fermée après une écriture en échec', 0, $e);
+                        throw new \RuntimeException('connexion fermée après une écriture en échec (' . $e::class . ')'); // sans l'exception d'origine : son message peut porter une adresse
                     }
                     $em->clear();
                     continue;
@@ -206,11 +218,14 @@ class CustomerImportService
                 $em->clear();
                 if (++$done % 50 === 0) {
                     $this->store->saveResult($id, $result); // l'avancement se lit pendant l'exécution
+                    if (($this->store->find($id)['status'] ?? null) !== ImportJobStore::RUNNING) {
+                        return; // annulé entre-temps (import tenu pour interrompu) : on n'écrit plus rien sous un import annulé
+                    }
                 }
             }
             $this->store->move($id, ImportJobStore::RUNNING, ImportJobStore::DONE, ['result' => $result, 'finished_at' => true]);
         } catch (\Throwable $e) {
-            $this->logger->error(sprintf('[Import] import de clients %d arrêté (%s)', $id, $e::class), ['exception' => $e]);
+            $this->logger->error(sprintf('[Import] import de clients %d arrêté (%s)', $id, $e::class));
             $this->store->move($id, ImportJobStore::RUNNING, ImportJobStore::FAILED, ['result' => $result, 'error' => 'IMPORT_INTERRUPTED', 'finished_at' => true]);
         } finally {
             @unlink($path);
@@ -242,14 +257,16 @@ class CustomerImportService
             $this->logger->error(sprintf('[Import] invitations de l\'import %d non mises en file (%s)', $id, $e::class));
             throw new ImportException('IMPORT_QUEUE_UNAVAILABLE', 503);
         }
-        $this->audit->record('import_job', $id, 'invite', null, ['queued' => $queued, 'by' => $by], ['invitations']);
+        $this->journal($id, 'invite', ['queued' => $queued, 'by' => $by], ['invitations']);
 
         return ['importId' => $id, 'queued' => $queued];
     }
 
     /**
-     * Envoie les invitations d'un import (worker) : pour chaque invité jamais invité, pose son jeton puis envoie son courriel. Un
-     * envoi en échec rend l'invité à « repris » (rien n'est parti : il pourra être invité plus tard). Ne lève jamais.
+     * Envoie les invitations d'un import (worker) : pour chaque invité jamais invité, pose son jeton puis envoie son courriel, TOUT DE
+     * SUITE, par le serveur d'envoi (sans la file des courriels) : « envoyé » veut dire remis au serveur d'envoi. Un envoi en échec rend
+     * l'invité à « repris » (rien n'est parti : il pourra être invité plus tard), et `MAX_SEND_FAILURES` échecs d'affilée arrêtent la
+     * série. `MAX_PER_RUN` invitations au plus par passage : le commerçant redemande l'envoi pour les suivantes. Ne lève jamais.
      *
      * @return array{sent: int, failed: int}
      */
@@ -264,7 +281,7 @@ class CustomerImportService
             $em = $this->emProvider->getEntityManager();
             $site = $this->siteName->name();
             $streak = 0;
-            foreach ($this->guests->toInvite($id) as $userId) {
+            foreach (array_slice($this->guests->toInvite($id), 0, self::MAX_PER_RUN) as $userId) {
                 $invitation = $this->guests->invite($userId);
                 $user = $invitation === null ? null : $em->find(User::class, $userId);
                 if ($invitation === null || !$user instanceof User) {
@@ -293,7 +310,7 @@ class CustomerImportService
             $result['invitations'] = ['sent' => (int) ($before['sent'] ?? 0) + $out['sent'], 'failed' => $out['failed'], 'lastRunAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM)];
             $this->store->saveResult($id, $result);
         } catch (\Throwable $e) {
-            $this->logger->error(sprintf('[Import] invitations de l\'import %d interrompues (%s)', $id, $e::class), ['exception' => $e]);
+            $this->logger->error(sprintf('[Import] invitations de l\'import %d interrompues (%s)', $id, $e::class));
         }
 
         return $out;
@@ -318,23 +335,57 @@ class CustomerImportService
         if (!$this->cancellable($job)) {
             throw new ImportException('IMPORT_NOT_CANCELLABLE', 409, ['status' => $job['status']]);
         }
-        if (!$this->store->move($id, (string) $job['status'], ImportJobStore::CANCELLED, ['cancelled_at' => true])) {
+        // un import encore « en cours » quitte d'abord cet état : son worker, s'il vit encore, s'arrête au contrôle suivant
+        if ($job['status'] === ImportJobStore::RUNNING && !$this->store->move($id, ImportJobStore::RUNNING, ImportJobStore::FAILED, ['error' => 'IMPORT_INTERRUPTED', 'finished_at' => true])) {
             throw new ImportException('IMPORT_NOT_CANCELLABLE', 409, ['status' => $this->job($id)['status']]);
         }
         @unlink($this->directory() . '/' . $job['stored_name']); // un import interrompu a pu laisser son fichier
+        // les invités sont effacés AVANT que l'import soit dit « annulé » : si l'effacement s'interrompt, l'annulation se redemande
         $erased = $this->guests->eraseOfJob($id);
+        $status = (string) $this->job($id)['status'];
+        if (!$this->store->move($id, $status, ImportJobStore::CANCELLED, ['cancelled_at' => true])) {
+            throw new ImportException('IMPORT_NOT_CANCELLABLE', 409, ['status' => $this->job($id)['status']]);
+        }
         $result = (array) ($this->store->find($id)['result'] ?? []);
         $result['cancel'] = $erased;
         $this->store->saveResult($id, $result);
-        $this->audit->record('import_job', $id, 'cancel', null, ['kind' => ImportJobStore::KIND_CUSTOMERS, 'by' => $by] + $erased, ['status']);
+        $this->journal($id, 'cancel', ['kind' => ImportJobStore::KIND_CUSTOMERS, 'by' => $by] + $erased, ['status']);
 
         return $this->view($this->job($id));
     }
 
-    /** Efface les invités du site dont le délai est passé (passage horaire, lecture de la liste). @return array{erased: int, kept: int} */
+    /**
+     * Passage horaire et lecture de la liste : efface les invités du site dont le délai est passé, et abandonne les imports de clients
+     * déposés et jamais confirmés depuis `ABANDON_DAYS` jours (leur fichier, qui ne contient que des données personnelles, est supprimé).
+     *
+     * @return array{erased: int, kept: int, failed: int, abandoned: int}
+     */
     public function purgeDue(): array
     {
-        return $this->guests->eraseDue();
+        $abandoned = 0;
+        $conn = $this->emProvider->getEntityManager()->getConnection();
+        $stale = $conn->fetchAllAssociative(
+            "SELECT id, status, stored_name FROM import_job WHERE kind = ? AND status IN ('uploaded', 'analysed') AND created_at < NOW() - make_interval(days => ?) ORDER BY id LIMIT 50",
+            [ImportJobStore::KIND_CUSTOMERS, self::ABANDON_DAYS]
+        );
+        foreach ($stale as $job) {
+            if ($this->store->move((int) $job['id'], (string) $job['status'], ImportJobStore::CANCELLED, ['cancelled_at' => true])) {
+                @unlink($this->directory() . '/' . $job['stored_name']);
+                ++$abandoned;
+            }
+        }
+
+        return $this->guests->eraseDue() + ['abandoned' => $abandoned];
+    }
+
+    /** Écrit au journal du site ; un journal en échec n'annule jamais le geste déjà fait */
+    private function journal(int $id, string $action, array $after, array $fields): void
+    {
+        try {
+            $this->audit->record('import_job', $id, $action, null, $after, $fields);
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf('[Import] journal de l\'import %d non écrit (%s)', $id, $e::class));
+        }
     }
 
     public function show(int $id): array
@@ -481,7 +532,7 @@ class CustomerImportService
         $taken = [];
         foreach (array_chunk($emails, 500) as $chunk) {
             $rows = $conn->fetchAllAssociative(
-                "SELECT LOWER(u.email) AS email, EXISTS (SELECT 1 FROM import_customer_invitation i WHERE i.user_id = u.id AND i.state IN ('imported', 'invited')) AS pending FROM \"user\" u WHERE LOWER(u.email) IN (?)",
+                "SELECT LOWER(u.email) AS email, (u.password_set = false AND u.is_verified = false AND u.roles::text = '[]' AND EXISTS (SELECT 1 FROM import_customer_invitation i WHERE i.user_id = u.id AND i.state IN ('imported', 'invited'))) AS pending FROM \"user\" u WHERE LOWER(u.email) IN (?)",
                 [$chunk], [\Doctrine\DBAL\ArrayParameterType::STRING]
             );
             foreach ($rows as $row) {
@@ -506,8 +557,9 @@ class CustomerImportService
         if ($link === null) {
             return false;
         }
-        $day = static function (string $at) use ($language): string {
-            $written = (new \IntlDateFormatter($language === 'en' ? 'en_CA' : 'fr_CA', \IntlDateFormatter::NONE, \IntlDateFormatter::NONE, 'UTC', null, $language === 'en' ? 'MMMM d, y' : 'd MMMM y'))->format(new \DateTimeImmutable($at, new \DateTimeZone('UTC')));
+        $zone = $this->clock->timezone()->getName(); // le jour écrit est celui du magasin
+        $day = static function (string $at) use ($language, $zone): string {
+            $written = (new \IntlDateFormatter($language === 'en' ? 'en_CA' : 'fr_CA', \IntlDateFormatter::NONE, \IntlDateFormatter::NONE, $zone, null, $language === 'en' ? 'MMMM d, y' : 'd MMMM y'))->format(new \DateTimeImmutable($at, new \DateTimeZone('UTC')));
 
             return $written === false ? substr($at, 0, 10) : $written;
         };
@@ -519,17 +571,20 @@ class CustomerImportService
         return $this->mailer->sendTemplatedEmail((string) $user->getEmail(), $t('subject', $params), self::TEMPLATE, [
             'title' => $t('title', $params), 'greeting' => $name !== '' ? $t('greeting', ['%name%' => $name]) : $t('greeting_plain'), 'message' => $t('message', $params),
             'button' => $t('button'), 'link' => $link, 'afterButton' => $t('after_button'), 'validity' => $t('validity', $params), 'declineIntro' => $t('decline_intro'),
-            'declineLabel' => $t('decline_label'), 'declineLink' => $link . '&decline=1', 'once' => $t('once'), 'siteLine' => $site,
-        ], $language, (string) ($this->hosts->describe($code)['host'] ?? $code));
+            'declineLabel' => $t('decline_label'), 'declineLink' => $this->link($invitation['token'], $language, true), 'once' => $t('once'), 'siteLine' => $site,
+        ], $language, (string) ($this->hosts->describe($code)['host'] ?? $code), null, null, [], true); // envoi direct : le résultat est celui de la remise au serveur d'envoi
     }
 
-    /** L'adresse de la page du lien sur la boutique publique du site, ou null si le site n'a pas d'adresse publique connue */
-    private function link(string $token, string $language): ?string
+    /**
+     * L'adresse de la page du lien sur la boutique publique du site, ou null si le site n'a pas d'adresse publique connue. Le jeton est
+     * dans le FRAGMENT de l'adresse (`#token=`) : un fragment n'est envoyé à aucun serveur, ni journalisé, ni transmis par un Referer.
+     */
+    private function link(string $token, string $language, bool $decline = false): ?string
     {
         $code = (string) $this->tenants->getCurrentTenantCode();
         $host = $code !== '' ? trim((string) ($this->hosts->describe($code)['host'] ?? '')) : '';
 
-        return $host === '' ? null : sprintf('https://%s%s?%s', $host, self::INVITATION_PATH, http_build_query(['token' => $token, 'locale' => $language]));
+        return $host === '' ? null : sprintf('https://%s%s?%s#token=%s', $host, self::INVITATION_PATH, http_build_query(['locale' => $language] + ($decline ? ['decline' => 1] : [])), $token);
     }
 
     /** @param array<string, mixed> $job */

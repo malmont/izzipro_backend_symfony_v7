@@ -59,8 +59,11 @@ class EmailSenderService
         string $domain,
         ?string $customFromName = null,
         ?string $replyTo = null,
-        array $attachments = []
+        array $attachments = [],
+        bool $direct = false
     ): bool {
+        // $direct (lot IMP-2, 15/11/2026) : envoi immédiat par le serveur d'envoi, sans la file des courriels. Pour un envoi fait PAR un worker
+        // qui doit savoir si le courriel est vraiment parti (invitation envoyée une seule fois : rendre vrai à la mise en file serait faux).
         // $attachments (15/10/2026) : [{name, body, contentType, inline?}] ; inline => image incorporée, cid = name
         try {
             $emailConfig = $this->emailConfigService->findOneByLocale($locale);
@@ -133,7 +136,7 @@ class EmailSenderService
             // Serveur d'envoi du site (configuration e-mail du tenant), comme les e-mails de rendez-vous et de
             // paiement ; le serveur global (.env) ne sert que si le site n'a pas le sien. Avant, ces e-mails (mot de
             // passe oublié, code de connexion, contact, commande) passaient toujours par le serveur global.
-            $this->tenantMailerFactory->createMailer($emailConfig)->send($emailMessage);
+            ($direct ? $this->tenantMailerFactory->createDirectMailer($emailConfig) : $this->tenantMailerFactory->createMailer($emailConfig))->send($emailMessage);
 
             return true;
         } catch (\Throwable $e) {

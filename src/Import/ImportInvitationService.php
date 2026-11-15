@@ -59,7 +59,7 @@ class ImportInvitationService
     /**
      * @return array{accepted: true, email: string, marketing: bool}
      *
-     * @throws ImportException 404 IMPORT_INVITATION_INVALID ; 422 VALIDATION_FAILED (fields.password REQUIRED | TOO_SHORT | TOO_LONG, fields.marketing MUST_BE_BOOLEAN) ;
+     * @throws ImportException 404 IMPORT_INVITATION_INVALID ; 503 IMPORT_INVITATION_FAILED (rien d'écrit, le lien reste valable) ; 422 VALIDATION_FAILED (fields.password REQUIRED | TOO_SHORT | TOO_LONG, fields.marketing MUST_BE_BOOLEAN) ;
      *                         422 TERMS_NOT_ACCEPTED ; 409 TERMS_VERSION_CHANGED (avec les conditions du moment ; le lien reste valable)
      */
     public function accept(mixed $token, mixed $password, mixed $termsVersion, mixed $accepted, mixed $marketing, string $host, mixed $locale): array
@@ -115,10 +115,10 @@ class ImportInvitationService
             if ($e instanceof ImportException) {
                 throw $e;
             }
-            $this->logger->error('[Import] acceptation d\'une invitation en échec (' . $e::class . ').', ['exception' => $e]);
-            throw new ImportException('IMPORT_INVITATION_INVALID', 404);
+            $this->logger->error('[Import] acceptation d\'une invitation en échec (' . $e::class . ').');
+            throw new ImportException('IMPORT_INVITATION_FAILED', 503); // rien n'a été écrit : le lien reste valable, le client peut réessayer
         }
-        $this->audit->record('user_import', $userId, 'accept', null, ['importId' => (int) $invitation['job_id'], 'termsVersion' => $version, 'marketing' => $subscribe], ['state']);
+        $this->journal($userId, 'accept', ['importId' => (int) $invitation['job_id'], 'termsVersion' => $version, 'marketing' => $subscribe]);
 
         return ['accepted' => true, 'email' => (string) $user->getEmail(), 'marketing' => $subscribe];
     }
@@ -135,9 +135,19 @@ class ImportInvitationService
         $userId = (int) $user->getId();
         $this->emProvider->getEntityManager()->clear();
         $outcome = $this->guests->erase($userId);
-        $this->audit->record('user_import', $userId, 'decline', null, ['importId' => (int) $invitation['job_id'], 'outcome' => $outcome], ['state']);
+        $this->journal($userId, 'decline', ['importId' => (int) $invitation['job_id'], 'outcome' => $outcome]);
 
         return ['declined' => true];
+    }
+
+    /** Écrit au journal du site ; un journal en échec n'annule jamais le geste déjà fait */
+    private function journal(int $userId, string $action, array $after): void
+    {
+        try {
+            $this->audit->record('user_import', $userId, $action, null, $after, ['state']);
+        } catch (\Throwable $e) {
+            $this->logger->error('[Import] journal d\'une invitation non écrit (' . $e::class . ').');
+        }
     }
 
     /** @return array{0: array<string, mixed>, 1: User} l'invitation ouverte par ce jeton et son compte */

@@ -143,6 +143,11 @@ jeton) : « mot de passe oublié » (`/api/password-reset/request`, `verify`, `c
 du lien de vérification (`/api/resend-verification`), l'activation de Mémoires Vivantes (`/api/memoires/auth/activate`). Chacun
 demande `ImportGuests::isPending()`. **Toute nouvelle route publique qui pose un mot de passe ou envoie un lien doit le demander aussi.**
 
+**Un invité n'est « en attente » que si son compte est resté tel que l'import l'a créé** (aucun mot de passe choisi, non vérifié, aucun
+rôle). Un compte que l'administration a activé entre-temps (mot de passe posé dans l'écran des utilisateurs, rôle donné, compte
+d'équipe…) n'est plus un invité : il n'est **jamais effacé ni modifié** par l'import (ni à l'échéance, ni par l'annulation, ni par
+l'inscription d'un tiers avec son adresse) ; sa ligne passe à `kept` et son lien ne vaut plus rien.
+
 Ne sont repris que le prénom, le nom, le courriel (gardé en minuscules), le téléphone et l'adresse par défaut (si elle porte rue,
 ville, code postal et pays). **Ne sont pas lus** : notes, étiquettes, total dépensé, nombre de commandes.
 
@@ -154,7 +159,7 @@ Les routes du § 1 valent pour les deux natures ; chaque import porte `kind` (`c
 |---|---|---|---|
 | `POST /api/site/imports` | multipart `file`, `source=shopify`, **`kind=customers`** (défaut : `catalog`) | 201, l'import analysé | 422 `IMPORT_KIND_UNKNOWN`, `IMPORT_NOT_A_CUSTOMER_FILE` (colonnes « Email » et « First Name » ou « Last Name » attendues), `IMPORT_TOO_MANY_ROWS` (5 000), `IMPORT_NOT_UTF8`, `IMPORT_EMPTY_FILE`, `IMPORT_FILE_TOO_BIG` ; 409 `IMPORT_ALREADY_ACTIVE` (un seul import actif par site, toutes natures) |
 | `POST /api/site/imports/{id}/confirm` | `{ attestMarketingConsent?: bool }` | 202, `running` | 422 `fields.attestMarketingConsent` `MUST_BE_BOOLEAN` ; 409 `IMPORT_NOTHING_TO_IMPORT`, `IMPORT_NOT_READY` ; 503 `IMPORT_QUEUE_UNAVAILABLE` |
-| `POST /api/site/imports/{id}/invitations` | — | 202 `{ importId, queued }` : les invitations partent en tâche de fond | 409 `IMPORT_NOT_READY` (import non terminé), `IMPORT_NOTHING_TO_INVITE` (tous déjà invités : aucune relance), `IMPORT_INVITATION_LINK_UNKNOWN` (aucune adresse publique connue pour le site) ; 404 pour un import de catalogue |
+| `POST /api/site/imports/{id}/invitations` | — | 202 `{ importId, queued }` : les invitations partent en tâche de fond, 300 au plus par demande (`guests.invitable` dit ce qu'il reste) | 409 `IMPORT_NOT_READY` (import non terminé), `IMPORT_NOTHING_TO_INVITE` (tous déjà invités : aucune relance), `IMPORT_INVITATION_LINK_UNKNOWN` (aucune adresse publique connue pour le site) ; 404 pour un import de catalogue |
 | `GET /api/site/imports/{id}/customers?page=&state=` | — | `{ customers, page, pages, total }`, 50 par page | 422 `fields.state` `INVALID_VALUE` |
 | `POST /api/site/imports/{id}/cancel` | — | 200, `cancelled` ; `result.cancel = { erased, kept }` | 409 `IMPORT_NOT_CANCELLABLE` (plus aucun invité en attente) |
 | `GET /api/site/imports/{id}/issues.csv` | — | `line;code` (jamais une adresse) | |
@@ -176,7 +181,8 @@ Règles :
   Marketing ») **et** si le commerçant l'atteste à la confirmation (`attestMarketingConsent: true`). L'attestation est gardée sur
   l'import (`options.attestedBy`, `attestedAt` : le journal du site ne garde ses lignes que 180 jours) et écrite au journal
   (`import_job` / `attest`). L'inscription à l'infolettre (`newsletter_subscriber`) n'est écrite **qu'à l'acceptation**.
-- **Le fichier est supprimé du serveur dès la fin de l'exécution**, réussie ou non.
+- **Le fichier est supprimé du serveur dès la fin de l'exécution**, réussie ou non. Un fichier déposé et jamais confirmé est supprimé
+  après 7 jours (l'import passe à `cancelled`), au passage horaire.
 - Annuler : un import non confirmé est abandonné ; un import terminé efface ses invités en attente (leurs liens ne valent plus rien),
   **tant qu'il en reste**. Un client qui a accepté reste un client.
 
@@ -185,12 +191,20 @@ Règles :
 « Envoyer les invitations » est un geste du commerçant. Chaque invité reçoit **un** courriel (`customer_import_invitation`, classé
 indispensable, `templates/emails/customer_import_invitation.html.twig`, textes `translations/emails.{fr,en}.yaml`), dans la langue du
 site : sobre, sans aucune promotion, deux liens (« Rouvrir mon compte », « Ne pas rouvrir mon compte ») et la phrase « Vous ne
-recevrez pas d'autre message à ce sujet ». **Aucune relance** : un invité déjà invité ne l'est jamais de nouveau. Un envoi en échec
-rend l'invité à « repris » (rien n'est parti) ; cinq échecs d'affilée arrêtent la série.
+recevrez pas d'autre message à ce sujet ». **Aucune relance** : un invité déjà invité ne l'est jamais de nouveau.
 
-Le lien : `https://<adresse publique du site>/invitation?token=…&locale=…` (et `&decline=1` pour le refus) : une page de la **boutique
-publique**. Le jeton est aléatoire (64 caractères hexadécimaux) ; **seule son empreinte est en base** ; il ne sert qu'une fois ; il
-vaut 30 jours, **jamais au-delà de l'effacement** de l'invité ; un invité à moins d'un jour de son effacement n'est plus invité.
+L'envoi est fait par le worker `media`, **directement par le serveur d'envoi du site, sans la file des courriels**
+(`EmailSenderService::sendTemplatedEmail(…, direct: true)`) : « envoyé » veut dire remis au serveur d'envoi, pas « mis en file ». Un
+envoi en échec rend l'invité à « repris » (rien n'est parti, il reste à inviter) ; cinq échecs d'affilée arrêtent la série (le site
+ne peut pas envoyer). 300 invitations au plus par demande : un serveur d'envoi a souvent un plafond ; le commerçant redemande l'envoi
+pour les suivantes.
+
+Le lien : `https://<adresse publique du site>/invitation?locale=…#token=…` (et `&decline=1` avant le `#` pour le refus) : une page de
+la **boutique publique**. Le jeton est dans le **fragment** de l'adresse : il n'est envoyé à aucun serveur, ni journalisé, ni transmis
+par un Referer ; la page le lit et l'envoie dans le corps des routes du § 9.4. Il est aléatoire (64 caractères hexadécimaux) ;
+**seule son empreinte est en base** ; il ne sert qu'une fois ; il vaut 30 jours, **jamais au-delà de l'effacement** de l'invité ; un
+invité à moins d'un jour de son effacement n'est plus invité. Les dates du courriel sont au jour du magasin. **La page `decline=1`
+doit demander un clic avant d'appeler le refus** : un antivirus de messagerie qui ouvre les liens ne doit rien effacer.
 
 ### 9.4 Le lien, côté client (routes publiques, limitées en débit comme la connexion)
 
@@ -200,7 +214,7 @@ même refus : 404 `IMPORT_INVITATION_INVALID`.
 | Route | Corps | Réponse | Refus |
 |---|---|---|---|
 | `POST /api/import-invitation/verify` | `{ token, locale? }` | `{ firstname, email, site, expiresAt, marketing, terms }` (`terms` : les conditions de la boutique, comme `GET /api/apps/boutique/terms`, avec `version`) | 404 |
-| `POST /api/import-invitation/accept` | `{ token, password, termsVersion, accepted: true, marketing?: bool, locale? }` | `{ accepted: true, email, marketing }` ; le client se connecte ensuite par la connexion ordinaire | 422 `VALIDATION_FAILED` (`fields.password` `REQUIRED` \| `TOO_SHORT` (8) \| `TOO_LONG`, `fields.marketing` `MUST_BE_BOOLEAN`) ; 422 `TERMS_NOT_ACCEPTED` ; 409 `TERMS_VERSION_CHANGED { terms }` (le lien reste valable) ; 404 |
+| `POST /api/import-invitation/accept` | `{ token, password, termsVersion, accepted: true, marketing?: bool, locale? }` | `{ accepted: true, email, marketing }` ; le client se connecte ensuite par la connexion ordinaire | 422 `VALIDATION_FAILED` (`fields.password` `REQUIRED` \| `TOO_SHORT` (8) \| `TOO_LONG`, `fields.marketing` `MUST_BE_BOOLEAN`) ; 422 `TERMS_NOT_ACCEPTED` ; 409 `TERMS_VERSION_CHANGED { terms }` (le lien reste valable) ; 503 `IMPORT_INVITATION_FAILED` (rien d'écrit, le lien reste valable : réessayer) ; 404 |
 | `POST /api/import-invitation/decline` | `{ token }` | `{ declined: true }` | 404 |
 
 Accepter, dans une seule transaction : l'invitation est close, le mot de passe est posé, le compte devient un compte de client
@@ -221,6 +235,7 @@ Cas particuliers :
 - Un invité qu'une commande (ou un panier, un abonnement, un livre, une fiche de caisse) tient **n'est pas effacé** : à l'échéance, à
   l'annulation ou à son refus, il devient un compte d'achat sans compte ordinaire (`kept` : vérifié, rôle de client, toujours sans mot
   de passe choisi), comme tout compte né d'une commande passée sans compte.
+- Un invité en échec n'arrête pas l'effacement des suivants (il est compté, et retenté au passage suivant).
 - Une personne qui **s'inscrit d'elle-même** avec l'adresse d'un invité en attente : la fiche reprise est effacée et l'inscription
   repart d'un compte neuf (pas de refus `EMAIL_ALREADY_USED`, qui révélerait l'import).
 
@@ -234,6 +249,12 @@ index. Additive ; à appliquer à toutes les bases **avant** l'échange du code.
 
 - Tant qu'un invité est en attente, une commande passée sans compte avec son adresse se rattache à son compte (règle générale du
   tunnel) ; il ne peut alors choisir un mot de passe que par son invitation, jusqu'à l'échéance ou l'annulation.
-- Les invitations partent toutes d'un coup, par la file `media` puis la file des courriels : pas d'envoi étalé.
+- Les invitations partent 300 par demande, d'affilée : pas d'envoi étalé sur plusieurs jours (le commerçant redemande l'envoi).
+- Une personne qui connaît l'adresse d'un invité peut, en s'inscrivant avec elle, faire effacer la fiche reprise (son lien
+  d'invitation avec) ; le titulaire reçoit alors le courriel de vérification ordinaire. L'inscription est limitée en débit (par site
+  et par adresse IP). C'est le prix de la règle « pas de refus qui révélerait l'import ».
+- Trois chemins répondent encore « cette adresse est déjà prise » pour un invité comme pour tout compte : l'inscription de la Boussole,
+  l'ancien formulaire `/register`, le changement de courriel d'un client connecté. Ils ne disent pas qu'il s'agit d'un invité.
+- La console de Mémoires Vivantes (`GET /api/memoires/admin/users`) liste tous les comptes du site, invités compris.
 - La langue de l'invitation est celle du site (l'export de Shopify ne dit pas celle du client).
 - WooCommerce et PrestaShop : lecteurs à écrire derrière la même interface.

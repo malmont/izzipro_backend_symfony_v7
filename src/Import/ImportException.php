@@ -30,6 +30,7 @@ final class ImportException extends \RuntimeException
         'IMPORT_NOTHING_TO_INVITE' => 'Aucun client de cet import n\'attend d\'invitation.',
         'IMPORT_INVITATION_LINK_UNKNOWN' => 'L\'adresse publique de la boutique est inconnue : le lien de l\'invitation ne mènerait nulle part.',
         'IMPORT_INVITATION_INVALID' => 'Ce lien n\'est plus valable.',
+        'IMPORT_INVITATION_FAILED' => 'Votre compte n\'a pas pu être rouvert : réessayez dans un instant.',
         'TERMS_NOT_ACCEPTED' => 'Les conditions doivent être acceptées pour rouvrir le compte.',
         'TERMS_VERSION_CHANGED' => 'Les conditions ont changé : relisez-les avant d\'accepter.',
     ];

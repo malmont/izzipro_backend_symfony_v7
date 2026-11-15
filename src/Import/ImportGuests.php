@@ -17,6 +17,10 @@ use Doctrine\DBAL\Connection;
  * seulement. Sans acceptation, il est effacé `ERASE_DAYS` jours après l'import ; s'il a passé une commande entre-temps, son compte
  * est gardé et devient un compte d'achat sans compte ordinaire (`kept`).
  *
+ * « En attente » se lit sur DEUX choses : la ligne d'invitation ET le compte, qui doit être resté tel que l'import l'a créé (`PRISTINE` :
+ * aucun mot de passe choisi, non vérifié, aucun rôle). Un compte que l'administration a activé entre-temps (mot de passe posé dans
+ * l'écran des utilisateurs, rôle d'équipe donné…) n'est plus un invité : il n'est jamais effacé ni modifié ici, sa ligne passe à `kept`.
+ *
  * Seule l'empreinte du jeton d'un lien est gardée ; le lien ne sert qu'une fois et n'est envoyé qu'une fois (aucune relance).
  */
 class ImportGuests
@@ -30,6 +34,8 @@ class ImportGuests
     public const ERASE_DAYS = 90;
     public const LINK_DAYS = 30;
     /** Tables qui tiennent un compte : un invité qu'une de ces lignes désigne n'est jamais effacé (table => colonne) */
+    /** Le compte est resté tel que l'import l'a créé (alias `u` de la table des comptes) */
+    private const PRISTINE = "u.password_set = false AND u.is_verified = false AND u.roles::text = '[]' AND u.deleted_at IS NULL";
     private const HOLDERS = ['"order"' => 'user_id_id', '"Cart"' => 'user_cart_id', 'checkout_session' => 'user_id', 'subscription' => 'user_id', 'mv_book' => 'user_id',
         'pos_customer' => 'user_id', 'reviews_product' => 'user_review_id', 'transaction_caisse' => 'user_caisse_id', 'collections' => 'user_collections_id'];
 
@@ -37,22 +43,46 @@ class ImportGuests
     {
     }
 
-    /** Ce compte est-il un invité par import qui n'a pas (encore) accepté ? */
+    /** Ce compte est-il un invité par import qui n'a pas (encore) accepté, et que personne n'a activé autrement ? */
     public function isPending(?User $user): bool
     {
-        return $user !== null && $user->getId() !== null
-            && $this->conn()->fetchOne("SELECT 1 FROM import_customer_invitation WHERE user_id = ? AND state IN ('imported', 'invited')", [(int) $user->getId()]) !== false;
+        if ($user === null || $user->getId() === null) {
+            return false;
+        }
+        try {
+            return $this->conn()->fetchOne(
+                'SELECT 1 FROM import_customer_invitation i JOIN "user" u ON u.id = i.user_id WHERE i.user_id = ? AND i.state IN (\'imported\', \'invited\') AND ' . self::PRISTINE, [(int) $user->getId()]) !== false;
+        } catch (\Doctrine\DBAL\Exception\TableNotFoundException) {
+            return false; // une base qui n'a pas encore sa migration n'a aucun invité
+        }
     }
 
     /** L'invité en attente qui porte cette adresse (comparée sans la casse), ou null */
     public function pendingIdByEmail(string $email): ?int
     {
-        $id = $this->conn()->fetchOne(
-            "SELECT i.user_id FROM import_customer_invitation i JOIN \"user\" u ON u.id = i.user_id WHERE LOWER(u.email) = ? AND i.state IN ('imported', 'invited') ORDER BY i.id LIMIT 1",
-            [mb_strtolower(trim($email))]
-        );
+        try {
+            $id = $this->conn()->fetchOne(
+                'SELECT i.user_id FROM import_customer_invitation i JOIN "user" u ON u.id = i.user_id WHERE LOWER(u.email) = ? AND i.state IN (\'imported\', \'invited\') AND ' . self::PRISTINE . ' ORDER BY i.id LIMIT 1',
+                [mb_strtolower(trim($email))]
+            );
+        } catch (\Doctrine\DBAL\Exception\TableNotFoundException) {
+            return null;
+        }
 
         return $id === false ? null : (int) $id;
+    }
+
+    /**
+     * Range les lignes dont le compte n'est plus un invité (activé par l'administration) : elles passent à `kept`, leur lien ne vaut
+     * plus rien, et le compte n'est pas touché. Rend leur nombre.
+     */
+    public function settle(?int $jobId = null): int
+    {
+        return (int) $this->conn()->executeStatement(
+            'UPDATE import_customer_invitation i SET state = \'kept\', token_hash = NULL FROM "user" u WHERE u.id = i.user_id AND i.state IN (\'imported\', \'invited\') AND NOT (' . self::PRISTINE . ')'
+            . ($jobId !== null ? ' AND i.job_id = ?' : ''),
+            $jobId !== null ? [$jobId] : []
+        );
     }
 
     /** Inscrit le compte qu'un import vient de créer : il sera effacé dans `ERASE_DAYS` jours s'il n'accepte pas */
@@ -101,7 +131,7 @@ class ImportGuests
         }
         $row = $this->conn()->fetchAssociative(
             "SELECT i.id, i.user_id, i.job_id, i.locale, i.marketing_claimed, i.expires_at, i.erase_at FROM import_customer_invitation i JOIN \"user\" u ON u.id = i.user_id
-             WHERE i.token_hash = ? AND i.state = 'invited' AND i.expires_at > NOW() AND u.deleted_at IS NULL",
+             WHERE i.token_hash = ? AND i.state = 'invited' AND i.expires_at > NOW() AND " . self::PRISTINE,
             [hash('sha256', $token)]
         );
         if ($row === false) {
@@ -120,44 +150,61 @@ class ImportGuests
 
     /**
      * Efface un invité en attente : son compte, ses adresses, sa ligne d'invitation, la trace de l'import. Rien d'autre n'est touché
-     * (ni une inscription à l'infolettre, ni une réservation faites par la même personne hors de l'import). Un invité qu'une commande,
-     * un panier, un abonnement ou un livre tient n'est PAS effacé : il est gardé comme un compte d'achat sans compte ordinaire.
+     * (ni une inscription à l'infolettre, ni une réservation faites par la même personne hors de l'import).
+     * N'est PAS effacé, et rend `kept` : un compte qui n'est plus tel que l'import l'a créé (activé par l'administration : il n'est
+     * alors PAS modifié), et un invité qu'une commande, un panier, un abonnement, un livre ou une fiche de caisse tient (il devient
+     * un compte d'achat sans compte ordinaire).
      *
-     * @return string `erased`, `kept`, ou `none` (ce compte n'est pas un invité en attente)
+     * @return string `erased`, `kept`, ou `none` (ce compte n'a pas d'invitation en attente)
      */
-    public function erase(int $userId): string
+    public function erase(int $userId, bool $invalidate = true): string
     {
         $conn = $this->conn();
-        if ($conn->fetchOne("SELECT 1 FROM import_customer_invitation WHERE user_id = ? AND state IN ('imported', 'invited')", [$userId]) === false) {
-            return 'none';
-        }
-        if ($this->held($userId)) {
-            return $this->keep($userId);
-        }
         $conn->beginTransaction();
         try {
-            // de nouveau sous verrou : l'invité a pu accepter entre-temps
-            if ($conn->fetchOne("SELECT 1 FROM import_customer_invitation WHERE user_id = ? AND state IN ('imported', 'invited') FOR UPDATE", [$userId]) === false) {
+            // sous verrou : l'invité a pu accepter, ou être activé par l'administration, entre-temps
+            $pristine = $conn->fetchOne(
+                'SELECT CASE WHEN ' . self::PRISTINE . ' THEN 1 ELSE 0 END FROM import_customer_invitation i JOIN "user" u ON u.id = i.user_id WHERE i.user_id = ? AND i.state IN (\'imported\', \'invited\') FOR UPDATE',
+                [$userId]
+            );
+            if ($pristine === false) {
                 $conn->rollBack();
 
                 return 'none';
             }
-            $conn->executeStatement('UPDATE "user" SET primary_address_id = NULL WHERE id = ?', [$userId]);
-            $conn->executeStatement('DELETE FROM adress WHERE user_adress_id = ?', [$userId]);
-            $conn->executeStatement("DELETE FROM import_item WHERE kind = 'customer' AND entity_id = ?", [$userId]);
-            $conn->executeStatement('DELETE FROM "user" WHERE id = ?', [$userId]); // sa ligne d'invitation suit (suppression en cascade)
-            $conn->commit();
-        } catch (\Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException) {
-            $conn->rollBack();
+            if ((int) $pristine !== 1 || $this->held($userId)) {
+                $conn->executeStatement("UPDATE import_customer_invitation SET state = 'kept', token_hash = NULL WHERE user_id = ?", [$userId]);
+                // un invité qu'une commande tient devient un compte d'achat sans compte ordinaire ; un compte déjà activé n'est pas touché
+                $conn->executeStatement('UPDATE "user" u SET is_verified = true, roles = \'["ROLE_USER_INTERNET"]\' WHERE u.id = ? AND ' . self::PRISTINE, [$userId]);
+                $conn->commit();
+                $invalidate && $this->cache->invalidateTenant();
 
-            return $this->keep($userId); // une donnée que la liste ne connaît pas tient ce compte : on ne force rien
+                return 'kept';
+            }
+            $conn->executeStatement('SAVEPOINT guest_erase');
+            try {
+                $conn->executeStatement('UPDATE "user" SET primary_address_id = NULL WHERE id = ?', [$userId]);
+                $conn->executeStatement('DELETE FROM adress WHERE user_adress_id = ?', [$userId]);
+                $conn->executeStatement("DELETE FROM import_item WHERE kind = 'customer' AND entity_id = ?", [$userId]);
+                $conn->executeStatement('DELETE FROM "user" WHERE id = ?', [$userId]); // sa ligne d'invitation suit (suppression en cascade)
+            } catch (\Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException) {
+                // une donnée que la liste ne connaît pas tient ce compte : on ne force rien, il est gardé comme un compte tenu
+                $conn->executeStatement('ROLLBACK TO SAVEPOINT guest_erase');
+                $conn->executeStatement("UPDATE import_customer_invitation SET state = 'kept', token_hash = NULL WHERE user_id = ?", [$userId]);
+                $conn->executeStatement('UPDATE "user" u SET is_verified = true, roles = \'["ROLE_USER_INTERNET"]\' WHERE u.id = ? AND ' . self::PRISTINE, [$userId]);
+                $conn->commit();
+                $invalidate && $this->cache->invalidateTenant();
+
+                return 'kept';
+            }
+            $conn->commit();
         } catch (\Throwable $e) {
             if ($conn->isTransactionActive()) {
                 $conn->rollBack();
             }
             throw $e;
         }
-        $this->cache->invalidateTenant();
+        $invalidate && $this->cache->invalidateTenant();
 
         return 'erased';
     }
@@ -165,22 +212,29 @@ class ImportGuests
     /**
      * Efface les invités en attente dont le délai est passé (passage horaire) ; rend leur nombre par issue.
      *
-     * @return array{erased: int, kept: int}
+     * @return array{erased: int, kept: int, failed: int}
      */
     public function eraseDue(int $limit = 500): array
     {
-        return $this->eraseAll($this->conn()->fetchFirstColumn("SELECT user_id FROM import_customer_invitation WHERE state IN ('imported', 'invited') AND erase_at <= NOW() ORDER BY id LIMIT " . max(1, $limit)));
+        $kept = $this->settle();
+        $out = $this->eraseAll($this->conn()->fetchFirstColumn("SELECT user_id FROM import_customer_invitation WHERE state IN ('imported', 'invited') AND erase_at <= NOW() ORDER BY id LIMIT " . max(1, $limit)));
+
+        return ['kept' => $out['kept'] + $kept] + $out;
     }
 
-    /** Efface les invités en attente d'un import (annulation). @return array{erased: int, kept: int} */
+    /** Efface les invités en attente d'un import (annulation). @return array{erased: int, kept: int, failed: int} */
     public function eraseOfJob(int $jobId): array
     {
-        return $this->eraseAll($this->conn()->fetchFirstColumn("SELECT user_id FROM import_customer_invitation WHERE job_id = ? AND state IN ('imported', 'invited') ORDER BY id", [$jobId]));
+        $kept = $this->settle($jobId);
+        $out = $this->eraseAll($this->conn()->fetchFirstColumn("SELECT user_id FROM import_customer_invitation WHERE job_id = ? AND state IN ('imported', 'invited') ORDER BY id", [$jobId]));
+
+        return ['kept' => $out['kept'] + $kept] + $out;
     }
 
     /** @return array<string, int> le nombre d'invités d'un import par état */
     public function countsOf(int $jobId): array
     {
+        $this->settle($jobId);
         $counts = array_fill_keys(self::STATES, 0);
         foreach ($this->conn()->fetchAllKeyValue('SELECT state, COUNT(*) FROM import_customer_invitation WHERE job_id = ? GROUP BY state', [$jobId]) as $state => $n) {
             $counts[(string) $state] = (int) $n;
@@ -192,6 +246,7 @@ class ImportGuests
     /** @return list<int> les invités d'un import qui n'ont jamais été invités */
     public function toInvite(int $jobId): array
     {
+        $this->settle($jobId);
         return array_map('intval', $this->conn()->fetchFirstColumn("SELECT user_id FROM import_customer_invitation WHERE job_id = ? AND state = 'imported' AND erase_at > NOW() + INTERVAL '1 day' ORDER BY id", [$jobId]));
     }
 
@@ -233,29 +288,28 @@ class ImportGuests
         return false;
     }
 
-    /** Le compte reste : il devient un compte d'achat sans compte ordinaire (vérifié, rôle de client, toujours sans mot de passe choisi) */
-    private function keep(int $userId): string
-    {
-        $em = $this->emProvider->getEntityManager();
-        $this->conn()->executeStatement("UPDATE import_customer_invitation SET state = 'kept', token_hash = NULL WHERE user_id = ? AND state IN ('imported', 'invited')", [$userId]);
-        $user = $em->find(User::class, $userId);
-        if ($user instanceof User) {
-            $user->setIsVerified(true)->setRoles(['ROLE_USER_INTERNET']);
-            $em->flush();
-        }
-
-        return 'kept';
-    }
-
-    /** @param list<int|string> $ids @return array{erased: int, kept: int} */
+    /**
+     * Un invité en échec n'arrête pas les suivants (il est compté, et retenté au passage suivant) ; le cache du site est vidé une
+     * fois, à la fin.
+     *
+     * @param list<int|string> $ids
+     * @return array{erased: int, kept: int, failed: int}
+     */
     private function eraseAll(array $ids): array
     {
-        $out = ['erased' => 0, 'kept' => 0];
+        $out = ['erased' => 0, 'kept' => 0, 'failed' => 0];
         foreach ($ids as $id) {
-            $done = $this->erase((int) $id);
+            try {
+                $done = $this->erase((int) $id, false);
+            } catch (\Throwable) {
+                $done = 'failed';
+            }
             if (isset($out[$done])) {
                 ++$out[$done];
             }
+        }
+        if ($out['erased'] + $out['kept'] > 0) {
+            $this->cache->invalidateTenant();
         }
 
         return $out;

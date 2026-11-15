@@ -166,6 +166,18 @@ class ShopifyCustomerImportTest extends WebTestCase
         $this->assertSame([200, 0], [$this->status(), count($this->getMailerMessages())]);
         $this->assertSame([null, null], array_values($conn()->fetchAssociative('SELECT reset_token, verification_token FROM "user" WHERE id = ?', [$alice['id']])),
             'ni jeton, ni courriel : ces chemins ouvriraient un invité sans acceptation');
+        // Même si un jeton de réinitialisation ou de vérification se trouvait posé sur un invité, aucun chemin public ne lui donnerait un
+        // mot de passe : les deux confirmations du mot de passe oublié, sa vérification, et l'activation de Mémoires Vivantes le refusent
+        [$reset, $verification] = [bin2hex(random_bytes(32)), bin2hex(random_bytes(32))];
+        $conn()->executeStatement("UPDATE \"user\" SET reset_token = ?, reset_token_expires_at = NOW() + INTERVAL '1 hour', verification_token = ? WHERE id = ?", [$reset, $verification, $alice['id']]);
+        foreach ([['/api/password-reset/verify', ['token' => $reset], 400], ['/api/password-reset/confirm', ['token' => $reset, 'password' => self::PASSWORD], 400],
+            ['/password-reset/confirm', ['token' => $reset, 'password' => self::PASSWORD], 400], ['/api/memoires/auth/activate', ['token' => $verification, 'password' => self::PASSWORD], 404]] as [$route, $body, $status]) {
+            $this->publicRequest($route, $body);
+            $this->assertSame($status, $this->status(), $route . ' : ' . substr((string) $this->client->getResponse()->getContent(), 0, 200));
+        }
+        $untouched = $conn()->fetchAssociative('SELECT password, password_set, is_verified FROM "user" WHERE id = ?', [$alice['id']]);
+        $this->assertSame([$alice['password'], false, false], [$untouched['password'], (bool) $untouched['password_set'], (bool) $untouched['is_verified']], 'le mot de passe de l\'invité n\'a pas bougé');
+        $conn()->executeStatement('UPDATE "user" SET reset_token = NULL, reset_token_expires_at = NULL, verification_token = NULL WHERE id = ?', [$alice['id']]);
         // … alors que le même chemin sert bien un compte ordinaire (le garde ne vise que les invités)
         $this->publicRequest('/api/password-reset/request', ['email' => "fanny-$t@example.invalid"]);
         $this->assertSame(1, count($this->getMailerMessages()));
@@ -181,9 +193,11 @@ class ShopifyCustomerImportTest extends WebTestCase
         $tokens = [];
         foreach ($sent as $mail) {
             $html = (string) $mail->getHtmlBody();
-            $this->assertSame(1, preg_match('#href="(https://[^"/]+/invitation\?token=([a-f0-9]{64})&amp;locale=fr)"#', $html, $m), $html);
+            // le jeton est dans le FRAGMENT de l'adresse : il n'est envoyé à aucun serveur, ni journalisé, ni transmis par un Referer
+            $this->assertSame(1, preg_match('~href="(https://[^"/]+)/invitation\?locale=fr#token=([a-f0-9]{64})"~', $html, $m), $html);
             $tokens[$mail->getTo()[0]->getAddress()] = $m[2];
-            $this->assertStringContainsString('href="' . $m[1] . '&amp;decline=1"', $html, 'le lien « ne pas rouvrir mon compte »');
+            $this->assertStringContainsString('href="' . $m[1] . '/invitation?locale=fr&amp;decline=1#token=' . $m[2] . '"', $html, 'le lien « ne pas rouvrir mon compte »');
+            $this->assertStringNotContainsString('?token=', $html);
             $this->assertSame(2, substr_count($html, 'href="http'), 'deux liens, pas un de plus');
             foreach (['Rouvrir mon compte', 'Ne pas rouvrir mon compte', 'Vous ne recevrez pas d&#039;autre message à ce sujet.', 'seront effacées le '] as $expected) {
                 $this->assertStringContainsString($expected, $html, $expected);
@@ -200,6 +214,7 @@ class ShopifyCustomerImportTest extends WebTestCase
         $this->assertSame([409, 'IMPORT_NOTHING_TO_INVITE'], [$this->status(), $this->body()['error']]);
         $this->assertSame(['sent' => 0, 'failed' => 0], $this->sendInvitations($id));
         $this->assertCount(0, $this->invitationMails());
+        $this->assertNull(static::getContainer()->get(ImportGuests::class)->invite((int) $alice['id']), 'un invité déjà invité ne reçoit jamais un second jeton');
         $this->assertEquals(['imported' => 0, 'invited' => 3, 'accepted' => 0, 'kept' => 0, 'invitable' => 0], $this->get("/api/site/imports/$id")['guests']);
 
         // Le lien, côté client. Un jeton inconnu, mal formé ou absent : le même refus
@@ -310,10 +325,11 @@ class ShopifyCustomerImportTest extends WebTestCase
         $this->assertSame([202, 2], [$this->status(), $this->body()['queued']]);
         $this->assertSame(['sent' => 2, 'failed' => 0], $this->sendInvitations($id));
         $this->assertSame(['invited', 'imported', 'invited'], [$state($alice), $state($bruno), $state($chloe)]);
+        $this->assertNull($guests->invite($bruno), 'à moins d\'un jour de son effacement, un invité ne reçoit plus de lien');
         $this->assertEqualsWithDelta(time() + 10 * 86400, strtotime($conn()->fetchOne('SELECT expires_at FROM import_customer_invitation WHERE user_id = ?', [$chloe]) . ' UTC'), 300);
         $tokens = [];
         foreach ($this->invitationMails() as $mail) {
-            preg_match('#/invitation\?token=([a-f0-9]{64})#', (string) $mail->getHtmlBody(), $m);
+            preg_match('~\#token=([a-f0-9]{64})~', (string) $mail->getHtmlBody(), $m);
             $tokens[$mail->getTo()[0]->getAddress()] = $m[1];
         }
         $this->publicRequest('/api/import-invitation/verify', ['token' => $tokens["chloe-$t@example.invalid"]]);
@@ -330,11 +346,19 @@ class ShopifyCustomerImportTest extends WebTestCase
         // Bruno passe une commande sans compte : son compte tient une commande. À l'échéance, il est GARDÉ et devient un compte ordinaire
         $this->order($bruno);
         $conn()->executeStatement("UPDATE import_customer_invitation SET erase_at = NOW() - INTERVAL '1 minute' WHERE user_id IN (?, ?)", [$bruno, $chloe]);
+        // … un fichier de clients déposé il y a plus de 7 jours et jamais confirmé ne reste pas sur le serveur
+        $this->upload($this->csv(), 'customers');
+        $forgotten = (int) $this->body()['id'];
+        $forgottenPath = static::getContainer()->getParameter('kernel.project_dir') . '/var/storage/private_media/imports/' . MV_TEST_TENANT_CODE . '/' . $conn()->fetchOne('SELECT stored_name FROM import_job WHERE id = ?', [$forgotten]);
+        $conn()->executeStatement("UPDATE import_job SET created_at = NOW() - INTERVAL '8 days' WHERE id = ?", [$forgotten]);
         // … le passage horaire efface Chloé (délai passé), garde Bruno, ne touche pas Alice (délai non passé)
         $application = new Application(static::getContainer()->get('kernel'));
         $tester = new CommandTester($application->find('app:gestion:notifications:envoyer'));
         $tester->execute(['--tenant' => MV_TEST_TENANT_CODE]);
         $this->assertStringContainsString('1 client(s) repris non acceptés effacé(s), 1 gardé(s)', $tester->getDisplay());
+        $this->assertStringContainsString('1 import(s) de clients abandonné(s)', $tester->getDisplay());
+        $this->assertSame('cancelled', $conn()->fetchOne('SELECT status FROM import_job WHERE id = ?', [$forgotten]));
+        $this->assertFileDoesNotExist($forgottenPath);
         $this->assertSame([0, 'kept', 'invited'], [(int) $conn()->fetchOne('SELECT COUNT(*) FROM "user" WHERE id = ?', [$chloe]), $state($bruno), $state($alice)]);
         $kept = $conn()->fetchAssociative('SELECT roles, is_verified, password_set FROM "user" WHERE id = ?', [$bruno]);
         $this->assertSame(['["ROLE_USER_INTERNET"]', true, false], [$kept['roles'], (bool) $kept['is_verified'], (bool) $kept['password_set']], 'un compte d\'achat sans compte ordinaire');
@@ -364,22 +388,78 @@ class ShopifyCustomerImportTest extends WebTestCase
         $this->assertSame('Elle-Même', $registered['lastname'], 'rien de la fiche reprise ne reste');
         $this->assertNotSame('import_invite', $registered['signup_channel']);
 
-        // Annulation d'un import terminé : les invités qui n'ont pas accepté sont effacés, leurs liens ne valent plus rien
+        // Chloé accepte mais décoche les courriels commerciaux : le fichier le disait, le commerçant l'a attesté, elle a le dernier mot
         $this->request('POST', "/api/site/imports/$second/invitations");
         $this->sendInvitations($second);
-        preg_match('#/invitation\?token=([a-f0-9]{64})#', (string) $this->invitationMails()[0]->getHtmlBody(), $m);
-        $chloeAgain = $idOf("chloe-$t@example.invalid");
-        $this->request('POST', "/api/site/imports/$second/cancel");
-        $cancelled = $this->body();
-        $this->assertEquals([200, 'cancelled', ['erased' => 1, 'kept' => 0]], [$this->status(), $cancelled['status'], $cancelled['result']['cancel']]);
-        $this->assertSame(0, (int) $conn()->fetchOne('SELECT COUNT(*) FROM "user" WHERE id = ?', [$chloeAgain]));
+        preg_match('~\#token=([a-f0-9]{64})~', (string) $this->invitationMails()[0]->getHtmlBody(), $m);
+        $version = static::getContainer()->get(AppTermsService::class)->version(AppFamilies::BOUTIQUE);
         $this->publicRequest('/api/import-invitation/verify', ['token' => $m[1]]);
-        $this->assertSame(404, $this->status());
-        $this->assertSame(1, (int) $conn()->fetchOne("SELECT COUNT(*) FROM content_audit_log WHERE resource = 'import_job' AND action = 'cancel' AND resource_id = ?", [(string) $second]));
+        $this->assertSame([200, true], [$this->status(), $this->body()['marketing']]);
+        $this->publicRequest('/api/import-invitation/accept', ['token' => $m[1], 'password' => self::PASSWORD, 'termsVersion' => $version, 'accepted' => true, 'marketing' => false]);
+        $this->assertSame([200, ['accepted' => true, 'email' => "chloe-$t@example.invalid", 'marketing' => false]], [$this->status(), $this->body()]);
+        $this->assertSame(0, (int) $conn()->fetchOne('SELECT COUNT(*) FROM newsletter_subscriber WHERE email = ?', ["chloe-$t@example.invalid"]));
+
+        // Un troisième import : Gaël et Hugo. L'envoi des courriels échoue (le site ne peut pas envoyer) : personne n'est marqué « invité »,
+        // rien n'est parti, l'envoi pourra être redemandé
+        $this->upload($this->csv(["'7010,Gaël,Nouveau,gael-$t@example.invalid,no,,,,,,,,,,no,0,0,,no,", "'7011,Hugo,Fiché,hugo-$t@example.invalid,no,,,,,,,,,,no,0,0,,no,",
+            "'7012,Inès,Activée,ines-$t@example.com,no,,,,,,,,,,no,0,0,,no,"]), 'customers');
+        $third = (int) $this->body()['id'];
+        $this->assertSame(3, $this->body()['report']['customers']['importable']);
+        $this->request('POST', "/api/site/imports/$third/confirm", []);
+        $this->runImport($third);
+        [$gael, $hugo, $ines] = [$idOf("gael-$t@example.invalid"), $idOf("hugo-$t@example.invalid"), $idOf("ines-$t@example.com")];
+
+        // Inès appelle le commerçant, qui lui pose un mot de passe depuis l'administration : son compte n'est plus un invité. Il n'est plus
+        // jamais effacé ni modifié par l'import : ni à l'échéance, ni par un tiers qui s'inscrit avec son adresse, ni par l'annulation
+        $hash = static::getContainer()->get(UserPasswordHasherInterface::class)->hashPassword($this->em()->find(User::class, $ines), self::PASSWORD);
+        $conn()->executeStatement('UPDATE "user" SET password = ?, password_set = true, is_verified = true, roles = \'["ROLE_USER_INTERNET"]\' WHERE id = ?', [$hash, $ines]);
+        $conn()->executeStatement("UPDATE import_customer_invitation SET erase_at = NOW() - INTERVAL '1 minute' WHERE user_id = ?", [$ines]);
+        $this->em()->clear();
+        $this->endOfWrite();
+        $this->assertFalse($guests->isPending($this->em()->find(User::class, $ines)));
+        $this->publicRequest('/api/register', ['email' => "ines-$t@example.com", 'password' => 'Le-mot-de-passe-d-un-tiers-99', 'firstName' => 'Un', 'lastName' => 'Tiers', 'platform' => 'mobile']);
+        $this->assertSame([409, 'EMAIL_ALREADY_USED'], [$this->status(), $this->body()['code']], 'un tiers ne remplace pas un compte activé');
+        $this->assertEquals(['erased' => 0, 'kept' => 1, 'failed' => 0], $guests->eraseDue(), 'à l\'échéance : rangée, pas effacée');
+        $activated = $conn()->fetchAssociative('SELECT password, roles, lastname FROM "user" WHERE id = ?', [$ines]);
+        $this->assertSame([$hash, '["ROLE_USER_INTERNET"]', 'Activée', 'kept'], [$activated['password'], $activated['roles'], $activated['lastname'], $state($ines)]);
+        $this->publicRequest('/api/password-reset/request', ['email' => "ines-$t@example.com"]);
+        $this->assertNotNull($conn()->fetchOne('SELECT reset_token FROM "user" WHERE id = ?', [$ines]), 'un compte ordinaire : « mot de passe oublié » lui répond');
+        $this->assertEquals(['imported' => 2, 'invited' => 0, 'accepted' => 0, 'kept' => 1, 'invitable' => 2], $this->get("/api/site/imports/$third")['guests']);
+        $this->request('POST', "/api/site/imports/$third/invitations");
+        $this->assertSame(202, $this->status());
+        $this->request('GET', '/api/site/help'); // un noyau neuf, où l'envoi des courriels peut être remplacé avant d'être construit
+        $mute = $this->createMock(\App\Services\EmailConfigurationService\EmailSenderService::class);
+        $mute->method('sendTemplatedEmail')->willReturn(false);
+        static::getContainer()->set(\App\Services\EmailConfigurationService\EmailSenderService::class, $mute);
+        $this->assertSame(['sent' => 0, 'failed' => 2], $this->sendInvitations($third));
+        $this->assertSame(['imported', 'imported', null], [$state($gael), $state($hugo), $conn()->fetchOne('SELECT token_hash FROM import_customer_invitation WHERE user_id = ?', [$gael])], 'un envoi en échec ne laisse ni « invité », ni jeton');
+        $this->request('POST', "/api/site/imports/$third/invitations");
+        $this->assertSame([202, 2], [$this->status(), $this->body()['queued']], 'rien n\'est parti : les deux restent à inviter');
+        $this->assertSame(['sent' => 2, 'failed' => 0], $this->sendInvitations($third));
+        $tokens = [];
+        foreach ($this->invitationMails() as $mail) {
+            preg_match('~\#token=([a-f0-9]{64})~', (string) $mail->getHtmlBody(), $m);
+            $tokens[$mail->getTo()[0]->getAddress()] = $m[1];
+        }
+
+        // Annulation d'un import terminé : les invités qui n'ont pas accepté sont effacés, leurs liens ne valent plus rien. Hugo a une fiche
+        // de caisse qui désigne son compte (aucune clé étrangère ne le dirait à la base) : il est gardé, comme un compte ordinaire
+        $conn()->executeStatement('INSERT INTO pos_customer (user_id, created_at, updated_at) VALUES (?, NOW(), NOW())', [$hugo]);
+        $this->request('POST', "/api/site/imports/$third/cancel");
+        $cancelled = $this->body();
+        $this->assertEquals([200, 'cancelled', ['erased' => 1, 'kept' => 1, 'failed' => 0]], [$this->status(), $cancelled['status'], $cancelled['result']['cancel']]);
+        $this->assertSame([0, 'kept'], [(int) $conn()->fetchOne('SELECT COUNT(*) FROM "user" WHERE id = ?', [$gael]), $state($hugo)]);
+        foreach ($tokens as $token) {
+            $this->publicRequest('/api/import-invitation/verify', ['token' => $token]);
+            $this->assertSame(404, $this->status());
+        }
+        $this->assertSame(1, (int) $conn()->fetchOne("SELECT COUNT(*) FROM content_audit_log WHERE resource = 'import_job' AND action = 'cancel' AND resource_id = ?", [(string) $third]));
+        $this->request('POST', "/api/site/imports/$second/cancel");
+        $this->assertSame([409, 'IMPORT_NOT_CANCELLABLE'], [$this->status(), $this->body()['error']], 'le deuxième import n\'a plus d\'invité en attente');
     }
 
     /** Le fichier d'export des clients, au format de Shopify : 8 lignes, avec les cas difficiles */
-    private function csv(): string
+    private function csv(array $more = []): string
     {
         $t = $this->tag;
 
@@ -393,6 +473,7 @@ class ShopifyCustomerImportTest extends WebTestCase
             "'7006,Alice,Doublon,alice-$t@example.com,no,,,,,,,,,,no,0,0,,no,",
             "'7007,Fanny,Déjà Cliente,FANNY-$t@example.invalid,yes,,,,,,,,,,no,0,0,,no,",
             "'7008,Irène,Administratrice,{$this->adminEmail},no,,,,,,,,,,no,0,0,,no,",
+            ...$more,
         ]) . "\n";
     }
 
@@ -436,11 +517,12 @@ class ShopifyCustomerImportTest extends WebTestCase
     private function wipe(): void
     {
         $conn = $this->em()->getConnection();
-        $ids = array_map('intval', $conn->fetchFirstColumn("SELECT id FROM \"user\" WHERE email LIKE '%@example.invalid' AND (email LIKE 'bruno-%' OR email LIKE 'chloe-%' OR email LIKE 'fanny-%' OR email LIKE 'import-clients-%')
-            UNION SELECT id FROM \"user\" WHERE LOWER(email) LIKE 'alice-%@example.com' UNION SELECT user_id FROM import_customer_invitation"));
+        $ids = array_map('intval', $conn->fetchFirstColumn("SELECT id FROM \"user\" WHERE email LIKE '%@example.invalid' AND (email LIKE 'bruno-%' OR email LIKE 'chloe-%' OR email LIKE 'fanny-%' OR email LIKE 'gael-%' OR email LIKE 'hugo-%' OR email LIKE 'import-clients-%')
+            UNION SELECT id FROM \"user\" WHERE LOWER(email) LIKE 'alice-%@example.com' OR LOWER(email) LIKE 'ines-%@example.com' UNION SELECT user_id FROM import_customer_invitation"));
         if ($ids !== []) {
             $in = implode(',', $ids);
             $conn->executeStatement("DELETE FROM \"order\" WHERE user_id_id IN ($in)");
+            $conn->executeStatement("DELETE FROM pos_customer WHERE user_id IN ($in)");
             $conn->executeStatement("UPDATE \"user\" SET primary_address_id = NULL WHERE id IN ($in)");
             $conn->executeStatement("DELETE FROM adress WHERE user_adress_id IN ($in)");
             $conn->executeStatement("DELETE FROM \"user\" WHERE id IN ($in)");
