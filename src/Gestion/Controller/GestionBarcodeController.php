@@ -45,28 +45,28 @@ class GestionBarcodeController extends AbstractController
     }
 
     /** Un code généré pour une variante qui n'en a pas → 200 { barcode, sheet } ; 404 VARIANT_NOT_FOUND ; 409 BARCODE_ALREADY_SET */
-    #[Route('/variantes/{id}/generer', name: 'gestion_codes_barres_variante_generer', methods: ['POST'], requirements: ['id' => '\d{1,9}'])]
+    #[Route('/variantes/{id}/generer', name: 'gestion_codes_barres_variante_generer', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function generateVariant(int $id, Request $request): JsonResponse
     {
         return $this->json($this->useCase->generate('variant', $id, self::locale($request)));
     }
 
     /** Un code généré pour un article sans variante qui n'en a pas → 200 { barcode, sheet } ; 404 PRODUCT_NOT_FOUND ; 409 BARCODE_ALREADY_SET, BARCODE_HAS_VARIANTS */
-    #[Route('/articles/{id}/generer', name: 'gestion_codes_barres_article_generer', methods: ['POST'], requirements: ['id' => '\d{1,9}'])]
+    #[Route('/articles/{id}/generer', name: 'gestion_codes_barres_article_generer', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function generateProduct(int $id, Request $request): JsonResponse
     {
         return $this->json($this->useCase->generate('product', $id, self::locale($request)));
     }
 
     /** Pose un code saisi ou scanné sur une variante (`barcode` vide ou null : le retire) → 200 { barcode, changed, warning, sheet } ; 422 BARCODE_INVALID, BARCODE_RESERVED ; 409 BARCODE_ALREADY_USED { holder } */
-    #[Route('/variantes/{id}', name: 'gestion_codes_barres_variante_put', methods: ['PUT'], requirements: ['id' => '\d{1,9}'])]
+    #[Route('/variantes/{id}', name: 'gestion_codes_barres_variante_put', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function putVariant(int $id, Request $request): JsonResponse
     {
         return $this->json($this->useCase->put('variant', $id, self::body($request), self::locale($request)));
     }
 
     /** Pose un code saisi ou scanné sur un article (`barcode` vide ou null : le retire) → 200 { barcode, changed, warning, sheet } ; mêmes refus */
-    #[Route('/articles/{id}', name: 'gestion_codes_barres_article_put', methods: ['PUT'], requirements: ['id' => '\d{1,9}'])]
+    #[Route('/articles/{id}', name: 'gestion_codes_barres_article_put', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function putProduct(int $id, Request $request): JsonResponse
     {
         return $this->json($this->useCase->put('product', $id, self::body($request), self::locale($request)));

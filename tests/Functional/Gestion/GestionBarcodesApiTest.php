@@ -188,6 +188,11 @@ class GestionBarcodesApiTest extends WebTestCase
         $notFound = $this->put('/variantes/999999999', ['barcode' => 'X'], 404);
         $this->assertSame(['VARIANT_NOT_FOUND', 'Variante introuvable.'], [$notFound['error'], $notFound['message']]);
         $this->assertSame('PRODUCT_NOT_FOUND', $this->put('/articles/999999999', ['barcode' => 'X'], 404)['error']);
+        // Identifiant trop grand pour un entier : 404 avant le contrôleur, comme sur toute la plateforme (garde commune des identifiants de route)
+        foreach (['PUT' => '/variantes/99999999999', 'POST' => '/articles/99999999999/generer'] as $method => $path) {
+            $this->request($method, self::BASE . $path, ['barcode' => 'X']);
+            $this->assertSame(404, $this->status(), $path);
+        }
         $this->assertSame(['replace' => 'MUST_BE_BOOLEAN'], $this->put("/variantes/$v1", ['barcode' => "AUTRE-$s", 'replace' => 'oui'], 422)['fields']);
         $this->assertSame([null, null, $auditBefore + 1], [$this->codeOf('product_variant', $v2), $this->codeOf('product', $bottle), $audit()], 'aucun refus n\'a écrit');
 
