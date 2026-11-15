@@ -9,12 +9,20 @@ use Doctrine\ORM\EntityRepository;
 /**
  * Constats : créés et complétés par l'analyse, décidés par le gérant. SQL direct ; jamais de cache ; rien ne se supprime, sauf les constats
  * d'EXERCICE (lot EX-1), que le gérant efface lui-même. RÈGLE : tout chiffre réel (comptes, montant en jeu, « nouveaux », courriel, vignette,
- * fenêtre d'une règle par personne, liste par défaut) écarte les constats d'exercice (`exercise = false`).
+ * fenêtre d'une règle par personne, liste par défaut) écarte les constats d'exercice (`exercise = false`). `row()` et `byKey()` rendent la
+ * ligne telle quelle : c'est leur appelant qui garde (la fiche et la décision refusent le mauvais genre ; une clé d'exercice commence par
+ * `EXERCISE:`, aucune règle ne la produit).
  *
  * @extends EntityRepository<LossFinding>
  */
 class LossFindingRepository extends EntityRepository
 {
+    /**
+     * Verrou consultatif des exercices (celui de l'analyse est 7461077). Pris, dans une transaction, par tout ce qui écrit pour un constat
+     * d'exercice : lancement, lecture d'une fiche (elle écrit au journal), décision, effacement. L'effacement ne peut donc ni échouer sur
+     * une écriture arrivée entre deux de ses suppressions, ni laisser derrière lui une ligne de journal d'un exercice disparu.
+     */
+    public const EXERCISE_LOCK = 7461078;
     public const SORTS = ['date' => 'store_day DESC, id DESC', 'amount' => 'amount_at_stake DESC NULLS LAST, id DESC'];
 
     /** @return array<string, mixed>|null */
@@ -218,6 +226,7 @@ class LossFindingRepository extends EntityRepository
         $conn = $this->getEntityManager()->getConnection();
         $conn->beginTransaction();
         try {
+            $conn->executeStatement('SELECT pg_advisory_xact_lock(' . self::EXERCISE_LOCK . ')'); // personne n'écrit pour un exercice pendant l'effacement
             $conn->executeStatement("SET LOCAL loss.purge = 'exercise'");
             $conn->executeStatement('DELETE FROM loss_evidence WHERE finding_id IN (SELECT id FROM loss_finding WHERE exercise)');
             $conn->executeStatement('DELETE FROM loss_journal WHERE finding_id IN (SELECT id FROM loss_finding WHERE exercise)');

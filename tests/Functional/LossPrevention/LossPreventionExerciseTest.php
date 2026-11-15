@@ -17,6 +17,7 @@ class LossPreventionExerciseTest extends LossPreventionTestCase
 {
     private const EX = self::BASE . '/exercices';
     /** Tables de la caisse : un exercice n'y écrit rien */
+    private ?int $entitlement = null;
     private const CASH_TABLES = ['pos_audit_log', '"order"', 'order_items', 'payments', 'transaction_caisse', 'caisse', 'cash_register_report', 'pos_return'];
 
     protected function setUp(): void
@@ -27,6 +28,11 @@ class LossPreventionExerciseTest extends LossPreventionTestCase
 
     protected function tearDown(): void
     {
+        if ($this->entitlement !== null) { // droit d'usage accordé par un test : retiré, le site de test retrouve son état
+            static::getContainer()->get(\App\Services\Platform\EntitlementService::class)->cancel($this->entitlement, 'test', 'PERTES-EXERCICE');
+            $this->provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+            $this->entitlement = null;
+        }
         $this->flags(true, $this->db->fetchOne('SELECT is_loss_prevention_active FROM entreprise ORDER BY id LIMIT 1') === true);
         $this->admin('DELETE', self::EX); // sans vérification : un test en échec ne doit pas en cacher la cause
         parent::tearDown();
@@ -45,7 +51,9 @@ class LossPreventionExerciseTest extends LossPreventionTestCase
         $lastNumber = (int) (json_decode((string) ($this->db->fetchOne("SELECT data FROM loss_journal WHERE type = 'EXERCISE_STARTED' ORDER BY id DESC LIMIT 1") ?: '{}'), true)['number'] ?? 0);
 
         $overview = $this->json($this->admin('GET', self::EX . '?locale=fr'));
-        $this->assertSame(['scenarios', 'findings', 'count', 'limit', 'remaining', 'notice', 'screen'], array_keys($overview));
+        $this->assertSame(['scenarios', 'findings', 'count', 'limit', 'remaining', 'daily', 'notice', 'screen'], array_keys($overview));
+        $this->assertSame(['limit', 'remaining', 'resetAt'], array_keys($overview['daily']));
+        $this->assertGreaterThan(gmdate('c'), $overview['daily']['resetAt'], 'le compte du jour repart au début de la journée suivante du magasin');
         $this->assertSame([array_keys(LossExerciseService::SCENARIOS), [], 0, 30, 30, 'pertes.exercices'],
             [array_column($overview['scenarios'], 'code'), $overview['findings'], $overview['count'], $overview['limit'], $overview['remaining'], $overview['screen']]);
         foreach ($overview['scenarios'] as $s) {
@@ -123,6 +131,9 @@ class LossPreventionExerciseTest extends LossPreventionTestCase
         $this->loginPos(['ROLE_USER_POS']);
         $this->place('US', 'FL');
         $this->flags(true, true);
+        // le droit d'usage du module, accordé le temps du test : sans lui le cheminement ne porte aucune étape du module à comparer
+        $this->entitlement = (int) static::getContainer()->get(\App\Services\Platform\EntitlementService::class)->grant(MV_TEST_TENANT_CODE, 'module.loss_prevention', 'manual', null, 'test', 'PERTES-EXERCICE', null, null, false)['id'];
+        $this->provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
         // Un exercice existe déjà quand naît le vrai constat : son numéro négatif ne compte pas dans la suite des vrais numéros
         $this->json($this->admin('POST', self::EX, ['scenario' => 'refund_cash_for_card']), 201);
         $lastRealNumber = (int) $this->db->fetchOne('SELECT COALESCE(MAX(number), 0) FROM loss_finding WHERE exercise = false');
@@ -156,6 +167,8 @@ class LossPreventionExerciseTest extends LossPreventionTestCase
         };
         $before = $figures();
         $this->assertSame(1, $before['liste par défaut'] >= 1 ? 1 : 0);
+        $this->assertNotNull($before['vignette'], 'la vignette existe : la comparer avant / après vérifie bien son filtre');
+        $this->assertNotSame([], $before['cheminement']);
 
         // Six exercices, dont un par personne et un sur la même règle que le vrai constat
         $exercises = [];
@@ -245,14 +258,15 @@ class LossPreventionExerciseTest extends LossPreventionTestCase
             $state = fn (): array => [(int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_finding'), (string) $this->db->fetchOne('SELECT status FROM loss_finding WHERE id = ?', [$id])];
             $before = $state();
             foreach ([['GET', '/exercices/'], ['GET', '/exercices/' . $id . '/decision'], ['POST', '/exercices/' . $id], ['PUT', '/exercices'], ['DELETE', '/exercices/' . $id], ['GET', '/exercices/abc'],
-                ['PATCH', '/exercices'], ['GET', '/exercices-anciens'], ['PUT', '/exercices/' . $id . '/decision/encore'], ['POST', '/exercices/' . $id . '/decision']] as [$method, $path]) {
+                ['PATCH', '/exercices'], ['GET', '/exercices-anciens'], ['GET', '/exercices%0A'], ['POST', '/exercices%0A'], ['PUT', '/exercices/' . $id . '/decision/encore'], ['POST', '/exercices/' . $id . '/decision']] as [$method, $path]) {
                 $status = $this->admin($method, self::BASE . $path, $method === 'GET' ? null : ['status' => 'explained', 'note' => 'x', 'scenario' => 'cash_shortage'])->getStatusCode();
                 $this->assertContains($status, [403, 404, 405], "$method $path : ni servi, ni exécuté");
                 $this->assertSame($before, $state(), "$method $path : rien n'est écrit");
             }
             foreach (\App\LossPrevention\LossPreventionModuleSubscriber::OPEN_ROUTES as $method => $patterns) {
                 foreach ($patterns as $pattern) {
-                    $this->assertMatchesRegularExpression('/^#\^\/api\/gestion\/pertes\/exercices[^#]*\$#$/', $pattern, "$method : chaque route ouverte est ancrée au début et à la fin, sous /exercices");
+                    $this->assertMatchesRegularExpression('/^#\^\/api\/gestion\/pertes\/exercices[^#$]*\\\\z#$/', $pattern, "$method : chaque route ouverte est ancrée au début et à la fin (\\z, jamais \$), sous /exercices");
+                    $this->assertSame(0, preg_match($pattern, "/api/gestion/pertes/exercices\n"), "$method : un saut de ligne final ne passe pas");
                 }
             }
             $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_setting'));
@@ -337,6 +351,12 @@ class LossPreventionExerciseTest extends LossPreventionTestCase
         // On ne marque pas un vrai constat pour le supprimer, et on ne démarque pas un exercice
         $refused("UPDATE loss_finding SET exercise = true WHERE id = $real", 'exercise', 'marquer un vrai constat');
         $refused("UPDATE loss_finding SET exercise = false WHERE id = $exercise", 'exercise', 'démarquer un exercice');
+        // A2 (relecture). L'identifiant d'un constat est figé comme sa marque : sinon on déplacerait le vrai constat, on donnerait son
+        // identifiant à un exercice, et la porte laisserait effacer ses preuves et son journal
+        $refused("UPDATE loss_finding SET id = 900000 WHERE id = $real", null, 'déplacer l\'identifiant d\'un vrai constat');
+        $refused("UPDATE loss_finding SET id = 900001 WHERE id = $exercise", 'exercise', 'déplacer l\'identifiant d\'un exercice');
+        $refused("UPDATE loss_finding SET id = $real + 900000, exercise = true WHERE id = $real", 'exercise', 'déplacer et marquer d\'un coup');
+        $this->assertSame([$real, $exercise], [(int) $this->db->fetchOne('SELECT id FROM loss_finding WHERE id = ?', [$real]), (int) $this->db->fetchOne('SELECT id FROM loss_finding WHERE id = ?', [$exercise])]);
         // Une ligne du journal sans constat (« exercice lancé ») ne se supprime jamais
         $refused("DELETE FROM loss_journal WHERE id = $startedLine", 'exercise', 'ligne de journal sans constat');
         // Sans la porte, ou avec l'ancienne porte de L1-a : même un exercice ne se supprime pas
@@ -388,6 +408,256 @@ class LossPreventionExerciseTest extends LossPreventionTestCase
         // Sans demande : aucun courriel
         $this->json($this->admin('POST', self::EX, ['scenario' => 'void_quick', 'sendTestEmail' => false]), 201);
         $this->assertEmailCount(0);
+    }
+
+    /** Le service du mode exercice monté à la main (noyau en cours, site de test), avec un envoi et des plafonds par jour choisis */
+    private function exercises(?\App\Services\EmailConfigurationService\EmailSenderService $mailer = null, int $dailyLimit = 1000000, int $dailyEmailLimit = 1000000): LossExerciseService
+    {
+        $this->tenant();
+        $c = static::getContainer();
+
+        return new LossExerciseService($c->get(\App\Services\TenantEntityManagerProvider::class), $c->get(\App\LossPrevention\Services\LossFindingReader::class),
+            $c->get(\App\LossPrevention\Services\LossRuleService::class), $c->get(\App\LossPrevention\Services\LossSite::class), $c->get(\App\LossPrevention\Services\LossTexts::class),
+            $mailer ?? $c->get(\App\Services\EmailConfigurationService\EmailSenderService::class), $c->get('translator'), $c->get(\App\Services\TenantConnectionManager::class),
+            $c->get(\App\Services\TenantPublicHostResolver::class), new \Psr\Log\NullLogger(), $c->get(\App\Services\Site\AdminSpaceUrl::class), $dailyLimit, $dailyEmailLimit);
+    }
+
+    /**
+     * Relecture du lot : le plafond de 30 compte les exercices PRÉSENTS ; sans plafond de lancements, « effacer puis relancer » serait
+     * illimité sur des routes ouvertes sans le droit du module (chaque lancement laisse une ligne définitive au journal). Décision du chef :
+     * 30 lancements par jour du magasin et par site, 409 `EXERCISE_DAILY_LIMIT` avec `resetAt` ; et un plafond de courriels d'exercice.
+     */
+    public function testLaunchesAndExerciseEmailsAreCappedPerStoreDay(): void
+    {
+        $this->assertSame([30, 10], [LossExerciseService::DAILY_LIMIT, LossExerciseService::DAILY_EMAIL_LIMIT], 'les plafonds de la production');
+        // Hors des tests, le service reçoit ces plafonds-là : ce sont les valeurs par défaut de son constructeur, et AUCUNE configuration
+        // autre que celle des tests ne les règle (un plafond relevé ailleurs passerait inaperçu, les tests tournant avec des valeurs relevées)
+        $defaults = [];
+        foreach ((new \ReflectionClass(LossExerciseService::class))->getConstructor()->getParameters() as $parameter) {
+            if (in_array($parameter->getName(), ['dailyLimit', 'dailyEmailLimit'], true)) {
+                $defaults[$parameter->getName()] = $parameter->getDefaultValue();
+            }
+        }
+        $this->assertSame(['dailyLimit' => 30, 'dailyEmailLimit' => 10], $defaults);
+        $configDir = static::getContainer()->getParameter('kernel.project_dir') . '/config';
+        $elsewhere = [];
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($configDir, \FilesystemIterator::SKIP_DOTS)) as $file) {
+            if (preg_match('#/(jwt|secrets)(/|$)#', $file->getPathname())) {
+                continue; // clés et secrets : jamais lus, même par un test
+            }
+            if ($file->isFile() && in_array($file->getExtension(), ['yaml', 'yml', 'php', 'xml'], true) && $file->getFilename() !== 'services_test.yaml'
+                && preg_match('/dailyLimit|dailyEmailLimit|LossExerciseService/', (string) file_get_contents($file->getPathname()))) {
+                $elsewhere[] = $file->getFilename();
+            }
+        }
+        $this->assertSame([], $elsewhere, 'seul config/services_test.yaml règle les plafonds par jour du mode exercice');
+        $testConfig = \Symfony\Component\Yaml\Yaml::parseFile($configDir . '/services_test.yaml')['services'][LossExerciseService::class]['arguments'] ?? [];
+        $this->assertSame(['$dailyLimit', '$dailyEmailLimit'], array_keys($testConfig), 'et il ne règle rien d\'autre');
+        // Le service du conteneur de test porte bien les valeurs relevées (sinon les autres tests buteraient sur le plafond du jour)
+        $this->assertGreaterThan(1000, $this->exercises(null, 1000000)->overview('fr')['daily']['limit']);
+        $this->assertSame(1000000, $this->json($this->admin('GET', self::EX))['daily']['limit']);
+        [$dayStart, $dayEnd] = static::getContainer()->get(\App\Services\CaisseService\StoreClock::class)->range(null, null);
+        $launched = fn (): int => (int) $this->db->fetchOne("SELECT COUNT(*) FROM loss_journal WHERE type = 'EXERCISE_STARTED' AND occurred_at >= ?", [$dayStart->format('Y-m-d H:i:s')]);
+        $today = $launched();
+        // Deux lancements encore permis aujourd'hui, pas un de plus ; effacer ne rend AUCUN lancement
+        $limited = fn (): LossExerciseService => $this->exercises(null, $today + 2);
+        $this->assertSame(['limit' => $today + 2, 'remaining' => 2, 'resetAt' => $dayEnd->format('c')], $limited()->overview('fr')['daily']);
+        $limited()->start(['scenario' => 'drawer_no_sale'], $this->adminId, 'fr');
+        $limited()->start(['scenario' => 'drawer_no_sale'], $this->adminId, 'fr');
+        $this->assertSame(['deleted' => 2], $limited()->deleteAll($this->adminId));
+        $this->assertSame(0, $limited()->overview('fr')['daily']['remaining'], 'effacer puis relancer n\'est pas illimité');
+        try {
+            $limited()->start(['scenario' => 'drawer_no_sale'], $this->adminId, 'fr');
+            $this->fail('le plafond du jour devait refuser');
+        } catch (\App\Gestion\Services\GestionConflictException $e) {
+            $this->assertSame(['EXERCISE_DAILY_LIMIT', 409, ['limit' => $today + 2, 'resetAt' => $dayEnd->format('c')]], [$e->errorCode, $e->status, $e->details]);
+            $this->assertStringNotContainsString($this->mark, $e->getMessage());
+        }
+        $this->assertSame([$today + 2, 0], [$launched(), (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_finding WHERE exercise')], 'le refus n\'écrit rien');
+
+        // Courriels d'exercice : un seul encore permis aujourd'hui ; au-delà, l'exercice est lancé mais le courriel ne part pas
+        $sentToday = (int) $this->db->fetchOne("SELECT COUNT(*) FROM loss_journal WHERE type = 'EXERCISE_EMAIL_SENT' AND occurred_at >= ?", [$dayStart->format('Y-m-d H:i:s')]);
+        $calls = 0;
+        $mailer = $this->createMock(\App\Services\EmailConfigurationService\EmailSenderService::class);
+        $mailer->method('sendTemplatedEmail')->willReturnCallback(function () use (&$calls): bool {
+            ++$calls;
+
+            return true;
+        });
+        $mailing = fn (): LossExerciseService => $this->exercises($mailer, 1000000, $sentToday + 1);
+        $this->assertSame(['requested' => true, 'sent' => true, 'reason' => null], $mailing()->start(['scenario' => 'void_quick', 'sendTestEmail' => true], $this->adminId, 'fr')['testEmail']);
+        $second = $mailing()->start(['scenario' => 'void_quick', 'sendTestEmail' => true], $this->adminId, 'fr');
+        $this->assertSame([['requested' => true, 'sent' => false, 'reason' => 'DAILY_LIMIT_REACHED'], true, 1], [$second['testEmail'], $second['finding']['exercise'], $calls]);
+
+        // Les deux autres raisons : l'envoi commun ne livre pas (pas de configuration d'envoi) ; le compte n'a pas d'adresse utilisable
+        $silent = $this->createMock(\App\Services\EmailConfigurationService\EmailSenderService::class);
+        $silent->method('sendTemplatedEmail')->willReturn(false);
+        $emails = fn (): int => (int) $this->db->fetchOne("SELECT COUNT(*) FROM loss_journal WHERE type = 'EXERCISE_EMAIL_SENT'");
+        $before = $emails();
+        $this->assertSame(['requested' => true, 'sent' => false, 'reason' => 'NOT_DELIVERED'], $this->exercises($silent)->start(['scenario' => 'void_quick', 'sendTestEmail' => true], $this->adminId, 'fr')['testEmail']);
+        $address = (string) $this->db->fetchOne('SELECT email FROM "user" WHERE id = ?', [$this->adminId]);
+        $this->db->executeStatement('UPDATE "user" SET email = ? WHERE id = ?', ['sans-arobase-' . $this->adminId, $this->adminId]);
+        try {
+            $never = $this->createMock(\App\Services\EmailConfigurationService\EmailSenderService::class);
+            $never->expects($this->never())->method('sendTemplatedEmail');
+            $this->assertSame(['requested' => true, 'sent' => false, 'reason' => 'NO_RECIPIENT_ADDRESS'], $this->exercises($never)->start(['scenario' => 'void_quick', 'sendTestEmail' => true], $this->adminId, 'fr')['testEmail']);
+        } finally {
+            $this->db->executeStatement('UPDATE "user" SET email = ? WHERE id = ?', [$address, $this->adminId]);
+        }
+        $this->assertSame($before, $emails(), 'un courriel non parti n\'est pas noté au journal');
+    }
+
+    /**
+     * Relecture du lot (A3) : tout ce qui écrit pour un constat d'exercice (lancement, fiche, décision, effacement) tient le verrou des
+     * exercices dans une transaction. Pendant qu'une autre connexion le tient, rien ne passe ni n'écrit ; l'effacement ne peut donc pas
+     * laisser une ligne de journal d'un exercice disparu.
+     */
+    public function testEveryWriteForAnExerciseWaitsForTheExerciseLock(): void
+    {
+        $id = (int) $this->json($this->admin('POST', self::EX, ['scenario' => 'cash_shortage']), 201)['finding']['id'];
+        $state = fn (): array => [(int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_finding WHERE exercise'), (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_journal'),
+            (string) $this->db->fetchOne('SELECT status FROM loss_finding WHERE id = ?', [$id])];
+        $before = $state();
+        $other = \Doctrine\DBAL\DriverManager::getConnection($this->db->getParams()); // une autre connexion tient le verrou, comme un effacement en cours
+        try {
+            $other->executeQuery('SELECT pg_advisory_lock(' . \App\LossPrevention\Repository\LossFindingRepository::EXERCISE_LOCK . ')');
+            $service = $this->exercises();
+            // la connexion du SERVICE (celle du noyau en cours, pas celle du test) : sans délai d'attente, l'appel resterait bloqué
+            $serviceDb = static::getContainer()->get(\App\Services\TenantEntityManagerProvider::class)->getEntityManager()->getConnection();
+            $serviceDb->executeStatement("SET lock_timeout = '300ms'");
+            foreach ([
+                'fiche' => fn () => $service->detail($id, 'fr', $this->adminId),
+                'décision' => fn () => $service->decide($id, ['status' => 'watch'], $this->adminId, 'fr'),
+                'lancement' => fn () => $service->start(['scenario' => 'drawer_no_sale'], $this->adminId, 'fr'),
+                'effacement' => fn () => $service->deleteAll($this->adminId),
+            ] as $what => $write) {
+                try {
+                    $write();
+                    $this->fail("$what : devait attendre le verrou des exercices");
+                } catch (\Doctrine\DBAL\Exception $e) {
+                    $this->assertStringContainsString('lock timeout', strtolower($e->getMessage()), $what);
+                }
+                $this->assertSame($before, $state(), "$what : rien n'est écrit sans le verrou");
+            }
+        } finally {
+            if (isset($serviceDb)) {
+                if ($serviceDb->isTransactionActive()) {
+                    $serviceDb->rollBack();
+                }
+                $serviceDb->executeStatement('SET lock_timeout = 0');
+            }
+            $other->executeQuery('SELECT pg_advisory_unlock_all()');
+            $other->close();
+        }
+        // Le verrou relâché : la fiche se lit (une ligne de journal), puis l'effacement emporte tout, sans ligne orpheline
+        $this->assertSame($id, $this->exercises()->detail($id, 'fr', $this->adminId)['id']);
+        $this->assertSame(['deleted' => 1], $this->exercises()->deleteAll($this->adminId));
+        $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_journal j WHERE j.finding_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM loss_finding f WHERE f.id = j.finding_id)'), 'aucune ligne de journal d\'un constat disparu');
+        $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_evidence e WHERE NOT EXISTS (SELECT 1 FROM loss_finding f WHERE f.id = e.finding_id)'));
+    }
+
+    /**
+     * Relecture du lot (A4) : la migration se rejoue sans rien changer ; son retour arrière PURGE les exercices par la porte avant de retirer
+     * la colonne (sans la colonne, un exercice resté en base deviendrait un vrai constat) ; et la commande à jouer avant de remettre en
+     * ligne un code d'avant EX-1 efface les exercices de chaque site sans toucher à un vrai constat.
+     */
+    public function testTheMigrationReplaysItsRollbackPurgesTheExercisesAndTheCommandDoesItSiteBySite(): void
+    {
+        $this->drain();
+        $this->loginPos(['ROLE_USER_POS']);
+        $this->flags(true, true);
+        $this->openSession();
+        $report = $this->closeWith(-1300, 'Vrai constat, retour arrière');
+        $this->json($this->admin('POST', self::BASE . '/analyse'));
+        $real = (int) $this->db->fetchOne('SELECT id FROM loss_finding WHERE dedup_key = ?', ['CASH_DISCREPANCY:z_report:' . $report['id']]);
+        $counts = fn (): array => [(int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_finding WHERE exercise = false'),
+            (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_evidence e JOIN loss_finding f ON f.id = e.finding_id WHERE f.exercise = false'),
+            (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_journal j JOIN loss_finding f ON f.id = j.finding_id WHERE f.exercise = false')];
+        $realBefore = $counts();
+        $schema = fn (): array => [
+            $this->db->fetchFirstColumn("SELECT tgname FROM pg_trigger WHERE tgname LIKE 'loss_%' AND NOT tgisinternal ORDER BY tgname"),
+            $this->db->fetchFirstColumn("SELECT indexname FROM pg_indexes WHERE indexname IN ('idx_loss_finding_exercise', 'idx_loss_journal_type') ORDER BY indexname"),
+            (int) $this->db->fetchOne("SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'loss_finding' AND column_name = 'exercise'"),
+        ];
+        $schemaBefore = $schema();
+        $this->assertSame([['loss_evidence_no_change', 'loss_evidence_no_truncate', 'loss_finding_exercise_frozen', 'loss_finding_no_delete', 'loss_finding_no_truncate', 'loss_journal_no_change', 'loss_journal_no_truncate'],
+            ['idx_loss_finding_exercise', 'idx_loss_journal_type'], 1], $schemaBefore);
+
+        // 1. La migration se rejoue : rien ne bouge, ni le schéma ni les données
+        require_once dirname(__DIR__, 3) . '/migrations/Version20270105100000.php';
+        foreach ([1, 2] as $pass) {
+            foreach (\DoctrineMigrations\Version20270105100000::STATEMENTS as $sql) {
+                $this->db->executeStatement($sql);
+            }
+            $this->assertSame([$schemaBefore, $realBefore], [$schema(), $counts()], "rejeu $pass");
+        }
+
+        // 2. Le retour arrière, joué dans une transaction puis annulé (la base de test retrouve la migration) : les exercices sont purgés
+        //    par la porte AVANT que la colonne ne parte, les vrais constats sont intacts
+        foreach (['cash_shortage', 'drawer_no_sale', 'void_series'] as $scenario) {
+            $this->json($this->admin('POST', self::EX, ['scenario' => $scenario]), 201);
+        }
+        $this->json($this->admin('GET', self::EX . '/' . $this->db->fetchOne('SELECT MAX(id) FROM loss_finding WHERE exercise')));
+        $this->db->beginTransaction();
+        try {
+            $beforeColumnDrop = null;
+            foreach (\DoctrineMigrations\Version20270105100000::DOWN_STATEMENTS as $sql) {
+                if (str_contains($sql, 'DROP COLUMN')) {
+                    $beforeColumnDrop = [(int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_finding WHERE exercise'), $counts()];
+                }
+                $this->db->executeStatement($sql);
+            }
+            $this->assertSame([0, $realBefore], $beforeColumnDrop, 'avant de retirer la colonne : plus aucun exercice, vrais constats intacts');
+            $this->assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'loss_finding' AND column_name = 'exercise'"));
+            $this->assertSame($realBefore[0], (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_finding'), 'il ne reste que les vrais constats');
+            $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_evidence e WHERE NOT EXISTS (SELECT 1 FROM loss_finding f WHERE f.id = e.finding_id)'), 'aucune preuve orpheline');
+            $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_journal j WHERE j.finding_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM loss_finding f WHERE f.id = j.finding_id)'));
+        } finally {
+            $this->db->rollBack();
+        }
+        $this->assertSame([$schemaBefore, 3], [$schema(), (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_finding WHERE exercise')], 'transaction annulée : la base de test est comme avant');
+
+        // 3. La commande du retour arrière : compter, puis effacer, sur le site demandé seulement ; jamais un vrai constat
+        $command = function (array $options): array {
+            $tester = new \Symfony\Component\Console\Tester\CommandTester((new \Symfony\Bundle\FrameworkBundle\Console\Application(static::$kernel))->find('app:pertes:exercices:effacer'));
+            $code = $tester->execute($options);
+            $this->provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+
+            return [$code, $tester->getDisplay()];
+        };
+        [$code, $display] = $command([]);
+        $this->assertSame(\Symfony\Component\Console\Command\Command::INVALID, $code, 'ni --tenant ni --all : rien n\'est effacé');
+        $this->assertSame(\Symfony\Component\Console\Command\Command::INVALID, $command(['--tenant' => MV_TEST_TENANT_CODE, '--all' => true])[0]);
+        [$code, $display] = $command(['--tenant' => MV_TEST_TENANT_CODE, '--dry-run' => true]);
+        $this->assertSame([\Symfony\Component\Console\Command\Command::SUCCESS, 3], [$code, (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_finding WHERE exercise')]);
+        $this->assertStringContainsString('3 constat(s) d\'exercice présent(s)', $display);
+        $this->assertSame(\Symfony\Component\Console\Command\Command::FAILURE, $command(['--tenant' => 'site-qui-n-existe-pas'])[0]);
+        [$code, $display] = $command(['--tenant' => MV_TEST_TENANT_CODE]);
+        $this->assertSame(\Symfony\Component\Console\Command\Command::SUCCESS, $code);
+        $this->assertStringContainsString(MV_TEST_TENANT_CODE . ' : 3 constat(s) d\'exercice effacé(s)', $display);
+        $this->assertSame([0, $realBefore], [(int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_finding WHERE exercise'), $counts()], 'les exercices sont partis, les vrais constats sont intacts');
+        $this->assertSame(200, $this->admin('GET', self::BASE . '/constats/' . $real)->getStatusCode());
+        $this->assertStringContainsString('0 constat(s) d\'exercice effacé(s)', $command(['--tenant' => MV_TEST_TENANT_CODE])[1], 'rejouée : rien à effacer');
+    }
+
+    /** Relecture du lot (R4) : avec un seuil élevé (jusqu'à 10 000 $), les chiffres d'un scénario de manque restent cohérents */
+    public function testACashShortageScenarioStaysCoherentWithAVeryHighThreshold(): void
+    {
+        $this->place('US', 'FL');
+        $this->flags(true, true);
+        $this->json($this->admin('PUT', self::BASE . '/regles/CASH_DISCREPANCY', ['params' => ['minAmount' => 1000000]]));
+        foreach (['cash_shortage', 'cash_shortage_series'] as $scenario) {
+            $finding = $this->json($this->admin('POST', self::EX . '?locale=fr', ['scenario' => $scenario]), 201)['finding'];
+            $this->assertGreaterThan(1000000, $finding['amountAtStake'], $scenario);
+            foreach ($this->db->fetchFirstColumn('SELECT snapshot FROM loss_evidence WHERE finding_id = ?', [$finding['id']]) as $snapshot) {
+                $s = json_decode((string) $snapshot, true);
+                $this->assertGreaterThan(0, $s['countedCash'], "$scenario : espèces comptées positives");
+                $this->assertGreaterThan(0, $s['bankDeposit'], "$scenario : dépôt en banque positif");
+                $this->assertSame($s['expectedCash'] + $s['discrepancy'], $s['countedCash'], "$scenario : compté = attendu + écart");
+                $this->assertLessThan(-1000000, $s['discrepancy'], "$scenario : le manque dépasse le seuil du site");
+            }
+            $this->assertStringNotContainsString('-', (string) preg_replace('/Écart \(compté − attendu\)[^}]*/u', '', (string) json_encode(array_column($finding['evidence'][0]['lines'], 'value', 'label'), JSON_UNESCAPED_UNICODE)), "$scenario : aucun montant négatif hors de l'écart");
+        }
     }
 
     public function testTheExerciseScreenHasItsGuide(): void

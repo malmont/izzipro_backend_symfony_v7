@@ -88,11 +88,24 @@ class LossDigestService
         // « nouveaux » depuis (une preuve récente les a complétés) : annoncés à part, une seule fois par retour à « nouveau » (décision du
         // propriétaire). Leur rang est lu au journal du module ; le courriel le note dans sa ligne « courriel envoyé » (`renewedUpTo`)
         $journal = $em->getRepository(LossJournalEntry::class);
-        $renewedMark = $journal->digestRenewedMark();
-        $renewed = $journal->renewedAfter($renewedMark);
         $findings = $em->getRepository(LossFinding::class);
-        $again = $findings->renewedAmong($renewed['findingIds']);
-        $new = $findings->bornAfter((int) ($row['last_digest_finding_id'] ?? 0), $renewed['findingIds']);
+        // Les trois lectures se font sur la MÊME photo de la base (transaction en lecture répétable) : une analyse qui validerait entre deux
+        // d'entre elles ferait compter un constat « né » aujourd'hui puis « complété » demain
+        $conn = $em->getConnection();
+        $conn->beginTransaction();
+        try {
+            $conn->executeStatement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+            $renewedMark = $journal->digestRenewedMark();
+            $renewed = $journal->renewedAfter($renewedMark);
+            $again = $findings->renewedAmong($renewed['findingIds']);
+            $new = $findings->bornAfter((int) ($row['last_digest_finding_id'] ?? 0), $renewed['findingIds']);
+            $conn->commit();
+        } catch (\Throwable $e) {
+            if ($conn->isTransactionActive()) {
+                $conn->rollBack();
+            }
+            throw $e;
+        }
         $total = ['count' => $new['count'] + $again['count'], 'amount' => $new['amount'] + $again['amount']];
         if ($total['count'] === 0) {
             return ['status' => 'nothing_new', 'sent' => 0];

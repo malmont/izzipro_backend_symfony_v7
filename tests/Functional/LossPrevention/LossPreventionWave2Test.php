@@ -324,7 +324,8 @@ class LossPreventionWave2Test extends LossPreventionTestCase
         $full = $analysis->preview('CASH_DISCREPANCY', $proposed);
         $this->assertFalse($full['truncated']);
         $this->assertGreaterThanOrEqual(3, $full['wouldOpen']);
-        $this->assertSame($full['wouldOpen'], $analysis->preview('CASH_DISCREPANCY', $proposed, 1000000)['wouldOpen']);
+        $raised = $analysis->preview('CASH_DISCREPANCY', $proposed, 1000000);
+        $this->assertSame([$full['wouldOpen'], 1000, 1000, 2], [$raised['wouldOpen'], $raised['limit'], $full['limit'], $bounded['limit']], 'une borne demandée plus haute est ramenée à PREVIEW_MAX');
         $this->assertSame(1000, \App\LossPrevention\Services\LossAnalysisService::PREVIEW_MAX, 'la borne mesurée ; la relever demande une nouvelle mesure');
         // Par la route : même réponse que le service à la borne ordinaire
         $route = $this->json($this->admin('POST', self::BASE . '/regles/apercu', ['code' => 'CASH_DISCREPANCY', 'params' => ['minAmount' => 100]]));

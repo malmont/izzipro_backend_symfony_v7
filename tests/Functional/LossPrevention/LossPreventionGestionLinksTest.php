@@ -298,6 +298,11 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
         $this->assertSame([false, 1], [(bool) $this->db->fetchOne('SELECT backfill FROM loss_finding WHERE id = ?', [$old]),
             (int) $this->db->fetchOne("SELECT COUNT(*) FROM loss_journal WHERE type = 'FINDING_RENEWED' AND finding_id = ?", [$old])]);
         $markBefore = $mark();
+        // Un envoi qui échoue d'abord : rien n'est noté, le constat reste à annoncer ; au réessai il l'est, une fois
+        $deliver = false;
+        $this->assertSame('not_delivered', $digest()->sendIfDue($at('08:00'))['status']);
+        $this->assertSame(['2020-01-03', $markBefore], [$day(), $mark()]);
+        $deliver = true;
         $calls = [];
         $this->assertSame('sent', $digest()->sendIfDue($at('08:00'))['status']);
         $context = $mine()[0]['context'];

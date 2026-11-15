@@ -156,6 +156,11 @@
         "count": 0,
         "limit": 30,
         "remaining": 30,
+        "daily": {
+            "limit": 1000000,
+            "remaining": 1000000,
+            "resetAt": "2026-11-15T05:00:00+00:00"
+        },
         "notice": "Un exercice est un constat fictif : il ne touche pas à la caisse, ne concerne aucune personne réelle et n'entre dans aucun chiffre. Vous pouvez en garder 30 au plus ; effacez-les quand vous voulez.",
         "screen": "pertes.exercices"
     }

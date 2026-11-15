@@ -172,12 +172,17 @@
                 "newEvidenceSinceDecision": false,
                 "backfill": false,
                 "exercise": true,
-                "updatedAt": "2026-11-14T23:25:28+00:00"
+                "updatedAt": "2026-11-15T00:35:10+00:00"
             }
         ],
         "count": 1,
         "limit": 30,
         "remaining": 29,
+        "daily": {
+            "limit": 1000000,
+            "remaining": 999999,
+            "resetAt": "2026-11-15T05:00:00+00:00"
+        },
         "notice": "Un exercice est un constat fictif : il ne touche pas à la caisse, ne concerne aucune personne réelle et n'entre dans aucun chiffre. Vous pouvez en garder 30 au plus ; effacez-les quand vous voulez.",
         "screen": "pertes.exercices"
     }

@@ -54,6 +54,17 @@ class LossJournalRepository extends EntityRepository
     }
 
     /**
+     * Nombre de lignes d'un type depuis un instant, compté sur les `$cap + 1` plus récentes seulement (index type, id) : sert aux plafonds
+     * par jour du mode exercice, qui n'ont pas besoin de compter au-delà du plafond.
+     */
+    public function countRecent(string $type, \DateTimeImmutable $since, int $cap): int
+    {
+        return (int) $this->getEntityManager()->getConnection()->fetchOne(
+            'SELECT COUNT(*) FROM (SELECT occurred_at FROM loss_journal WHERE type = ? ORDER BY id DESC LIMIT ' . max(1, $cap + 1) . ') recent WHERE occurred_at >= ?',
+            [$type, $since->format('Y-m-d H:i:s')]);
+    }
+
+    /**
      * Numéro du dernier exercice lancé (0 s'il n'y en a jamais eu), lu dans la dernière ligne « exercice lancé » du journal : elle ne se
      * supprime jamais, le numéro ne redescend donc pas même après un effacement. Lecture bornée par l'index (type, id).
      */

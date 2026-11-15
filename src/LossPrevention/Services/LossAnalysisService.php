@@ -164,12 +164,12 @@ class LossAnalysisService
      * sous le plancher de l'analyse.
      *
      * @param array{enabled: bool, params: array<string, int>, personEnabled: bool, personParams: array<string, int>} $proposed
-     * @return array{status: string, reason?: string, current: int, wouldOpen: int, days: int, truncated: bool, skipped: int, sample: list<array<string, mixed>>}
+     * @return array{status: string, reason?: string, current: int, wouldOpen: int, days: int, truncated: bool, skipped: int, limit: int, sample: list<array<string, mixed>>}
      */
     public function preview(string $code, array $proposed, int $max = self::PREVIEW_MAX): array
     {
         $max = max(1, min(self::PREVIEW_MAX, $max)); // la borne ne se relève jamais ; un test peut la baisser pour la vérifier
-        $none = ['current' => 0, 'wouldOpen' => 0, 'days' => self::PREVIEW_DAYS, 'truncated' => false, 'skipped' => 0, 'sample' => []];
+        $none = ['current' => 0, 'wouldOpen' => 0, 'days' => self::PREVIEW_DAYS, 'truncated' => false, 'skipped' => 0, 'limit' => $max, 'sample' => []];
         $blocked = $this->settings->blockedReason();
         if ($blocked !== null) {
             return ['status' => 'blocked', 'reason' => $blocked] + $none;
@@ -216,7 +216,7 @@ class LossAnalysisService
         $would = $play($proposed);
 
         return ['status' => 'done', 'current' => count($play($this->ruleSettings->effective($code))), 'wouldOpen' => count($would), 'days' => self::PREVIEW_DAYS,
-            'truncated' => $truncated, 'skipped' => count($skipped), 'sample' => array_slice($would, 0, self::PREVIEW_SAMPLE)];
+            'truncated' => $truncated, 'skipped' => count($skipped), 'limit' => $max, 'sample' => array_slice($would, 0, self::PREVIEW_SAMPLE)];
     }
 
     /**
@@ -247,11 +247,11 @@ class LossAnalysisService
      */
     public function skipped(): ?array
     {
-        // lecture bornée : les dernières lignes du journal du module par identifiant (clé primaire), filtrées ensuite ; le journal n'a pas
-        // d'index sur le type et ne doit pas être relu en entier à chaque synthèse
+        // lecture bornée, par l'index (type, id) du journal du module (lot EX-1) : les lignes « entrées sautées » les plus récentes, jamais
+        // le journal entier. Lues par leur TYPE : d'autres lignes en nombre (exercices lancés, consultations) ne les repoussent pas hors de
+        // la lecture
         $rows = $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
-            'SELECT occurred_at, data FROM (SELECT id, type, occurred_at, data FROM loss_journal ORDER BY id DESC LIMIT ' . self::SKIPPED_SCAN . ') recent WHERE type = ? ORDER BY id DESC',
-            [LossJournalEntry::ENTRIES_SKIPPED]);
+            'SELECT occurred_at, data FROM loss_journal WHERE type = ? ORDER BY id DESC LIMIT ' . self::SKIPPED_SCAN, [LossJournalEntry::ENTRIES_SKIPPED]);
         $since = (new \DateTimeImmutable('-' . self::SKIPPED_DAYS . ' days'))->format('Y-m-d H:i:s');
         $rows = array_values(array_filter($rows, fn (array $row) => (string) $row['occurred_at'] >= $since));
         if ($rows === []) {

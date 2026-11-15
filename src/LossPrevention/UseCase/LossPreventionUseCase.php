@@ -150,7 +150,7 @@ class LossPreventionUseCase
     /** @return array<string, mixed> */
     public function exercise(int $id, string $locale, int $userId): array
     {
-        return $this->reader->detail($id, $locale, $userId, true);
+        return $this->exercises->detail($id, $locale, $userId);
     }
 
     /**
@@ -159,7 +159,7 @@ class LossPreventionUseCase
      */
     public function decideExercise(int $id, array $body, string $locale, int $userId): array
     {
-        return $this->reader->decide($id, $body, $userId, $locale, true);
+        return $this->exercises->decide($id, $body, $userId, $locale);
     }
 
     /** @return array{deleted: int} */

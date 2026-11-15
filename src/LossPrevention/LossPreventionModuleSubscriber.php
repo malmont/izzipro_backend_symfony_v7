@@ -30,10 +30,11 @@ class LossPreventionModuleSubscriber implements EventSubscriberInterface
     public const PATH = '#^/api/gestion/pertes(/|$)#';
     /** Routes du mode exercice, ouvertes sans le droit du module : méthode => chemins exacts */
     public const OPEN_ROUTES = [
-        'GET' => ['#^/api/gestion/pertes/exercices$#', '#^/api/gestion/pertes/exercices/\d+$#'],
-        'POST' => ['#^/api/gestion/pertes/exercices$#'],
-        'DELETE' => ['#^/api/gestion/pertes/exercices$#'],
-        'PUT' => ['#^/api/gestion/pertes/exercices/\d+/decision$#'],
+        // `\z`, jamais `$` : un « $ » accepte un saut de ligne final (« …/exercices%0A » passerait la garde)
+        'GET' => ['#^/api/gestion/pertes/exercices\z#', '#^/api/gestion/pertes/exercices/\d+\z#'],
+        'POST' => ['#^/api/gestion/pertes/exercices\z#'],
+        'DELETE' => ['#^/api/gestion/pertes/exercices\z#'],
+        'PUT' => ['#^/api/gestion/pertes/exercices/\d+/decision\z#'],
     ];
 
     public function __construct(private readonly ModuleAccessService $modules, private readonly PlatformModeService $platform, private readonly LoggerInterface $logger,

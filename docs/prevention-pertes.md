@@ -214,8 +214,8 @@ qui lance.
 
 | Méthode, route | Entrée | Réponse |
 |---|---|---|
-| `GET /exercices` | — | `{ scenarios [{ code, label, description, learn, rule { code, label }, personPattern, available }], findings [lignes de liste], count, limit: 30, remaining, notice, screen: "pertes.exercices" }` |
-| `POST /exercices` | `{ scenario, sendTestEmail? }` | 201 `{ finding (la fiche, `exercise: true`), alertPreview { tile { title, text }, email { subject, message } }, testEmail { requested, sent, reason: NO_RECIPIENT_ADDRESS \| NOT_DELIVERED \| null }, remaining, screen }` ; 422 `fields.scenario: REQUIRED \| INVALID_VALUE`, `fields.sendTestEmail: MUST_BE_BOOLEAN` ; 409 `EXERCISE_LIMIT_REACHED` (`limit`), `EXERCISE_SCENARIO_NOT_AVAILABLE` (`scenario`) |
+| `GET /exercices` | — | `{ scenarios [{ code, label, description, learn, rule { code, label }, personPattern, available }], findings [lignes de liste], count, limit: 30, remaining, daily { limit: 30, remaining, resetAt }, notice, screen: "pertes.exercices" }` |
+| `POST /exercices` | `{ scenario, sendTestEmail? }` | 201 `{ finding (la fiche, `exercise: true`), alertPreview { tile { title, text }, email { subject, message } }, testEmail { requested, sent, reason: NO_RECIPIENT_ADDRESS \| NOT_DELIVERED \| DAILY_LIMIT_REACHED \| null }, remaining, screen }` ; 422 `fields.scenario: REQUIRED \| INVALID_VALUE`, `fields.sendTestEmail: MUST_BE_BOOLEAN` ; 409 `EXERCISE_DAILY_LIMIT` (`limit`, `resetAt`), `EXERCISE_LIMIT_REACHED` (`limit`), `EXERCISE_SCENARIO_NOT_AVAILABLE` (`scenario`) |
 | `GET /exercices/{id}` | — | la fiche du constat d'exercice (même forme qu'un vrai) ; 404 `FINDING_NOT_FOUND` pour un vrai constat |
 | `PUT /exercices/{id}/decision` | `{ status, note? }` | la fiche ; mêmes règles que la décision d'un vrai constat ; 404 pour un vrai constat |
 | `DELETE /exercices` | — | `{ deleted }` : tous les constats d'exercice du site, avec leurs preuves et leurs lignes de journal |
@@ -232,25 +232,45 @@ qui lance.
   libellé ; la table des comptes n'est pas lue pour eux.
 - **Jamais dans un chiffre réel** : `loss_finding.exercise` écarte ces constats de la synthèse, de la liste, de la vignette, du courriel du
   jour (ni annoncés, ni dans sa borne), des constats à traiter et de la fenêtre des règles par personne (`exercise = false` dans chaque
-  requête de `LossFindingRepository` et de `LossHomeTile`) ; l'aperçu d'un seuil ne lit pas les constats.
+  requête qui compte ou liste, dans `LossFindingRepository` et `LossHomeTile`) ; l'aperçu d'un seuil ne lit pas les constats. Deux lectures
+  rendent la ligne telle quelle, `row()` et `byKey()` : c'est leur appelant qui garde (la fiche et la décision refusent le mauvais genre ;
+  une clé d'exercice commence par `EXERCISE:`, aucune règle ne la produit).
 - **Vrais constats et exercices ne se croisent sur aucune route** : un exercice est « inconnu » (404) de `GET /constats/{id}` et de
   `PUT /constats/{id}/decision`, un vrai constat l'est des routes d'exercice ; `GET /constats` ne rend jamais un exercice.
 - **Garde** : `LossPreventionModuleSubscriber::OPEN_ROUTES` nomme les cinq routes en toutes lettres (méthode et chemin exact, lu par
   `RequestPath::of`) ; elles passent sans le droit du module. La garde de la gestion et le rôle d'administrateur restent exigés ; tout le
   reste de la section reste fermé sans le droit.
+- **Plafonds** : 30 constats d'exercice PRÉSENTS par site (409 `EXERCISE_LIMIT_REACHED`, `limit`), et **30 lancements par jour du magasin
+  et par site** (409 `EXERCISE_DAILY_LIMIT`, `limit`, `resetAt` : le début de la journée suivante du magasin, en UTC) : effacer ne rend
+  aucun lancement, « effacer puis relancer » n'est donc pas illimité sur des routes ouvertes sans le droit du module. 10 courriels
+  d'exercice par jour et par site : au-delà, l'exercice est lancé, `testEmail.reason` vaut `DAILY_LIMIT_REACHED`. Les comptes du jour sont
+  lus au journal du module (lignes `EXERCISE_STARTED`, `EXERCISE_EMAIL_SENT`, par l'index du type, jamais au-delà du plafond). `GET
+  /exercices` rend `daily { limit, remaining, resetAt }`. Dans les tests, les plafonds par jour sont relevés (`config/services_test.yaml`).
+- **Verrou** : tout ce qui écrit pour un constat d'exercice (lancement, lecture d'une fiche, qui journalise la consultation, décision,
+  effacement) se fait dans une transaction qui tient le verrou consultatif des exercices (`LossFindingRepository::EXERCISE_LOCK`) : un
+  effacement ne peut ni échouer sur une écriture arrivée entre deux de ses suppressions, ni laisser une ligne de journal d'un exercice disparu.
 - **Numéros** : un exercice porte un numéro **négatif**, l'opposé de son rang ; le rang est lu dans la dernière ligne `EXERCISE_STARTED` du
   journal du module (jamais supprimée : il ne redescend pas, même après un effacement), dans la même transaction que le constat, sous un
   verrou consultatif propre aux exercices. Les vrais numéros se suivent parmi les vrais constats seulement.
 - **Effacement** : `LossFindingRepository::deleteExercises()`, une transaction, `SET LOCAL loss.purge = 'exercise'`, dans l'ordre preuves,
   journal, constats. **La base garantit elle-même** qu'un vrai constat ne peut pas partir par ce chemin (migration `Version20270105100000`) :
-  marque `exercise` figée à la création ; la porte `on` de L1-a n'existe plus ; avec la porte `exercise`, seule une ligne dont le constat est
+  marque `exercise` ET identifiant du constat figés à la création (preuves et journal désignent leur constat par son identifiant, et la
+  porte lit la marque par lui) ; la porte `on` de L1-a n'existe plus ; avec la porte `exercise`, seule une ligne dont le constat est
   marqué exercice se supprime ; un constat d'exercice ne se supprime qu'après ses preuves et ses lignes de journal ; une ligne de journal
   sans constat ne se supprime jamais ; le vidage des trois tables est refusé. Le journal garde pour toujours `EXERCISE_STARTED` (rang,
   scénario), `EXERCISES_DELETED` (nombre) et `EXERCISE_EMAIL_SENT` (rang), sans constat rattaché ni adresse.
+- **Retour arrière** : un code d'avant EX-1 ne connaît pas la marque `exercise` ; sur une base migrée, un exercice resté en base y
+  deviendrait un vrai constat. AVANT de remettre en ligne un tel code : `php bin/console app:pertes:exercices:effacer --all`
+  (`--dry-run` pour compter, `--tenant=<code>` pour un site ; `Command/LossExercisePurgeCommand`), qui efface par la porte, site par site,
+  et sort en échec si un site est en erreur (`docs/mise-en-ligne.md`, § 5). La migration peut rester ; si on la défait, `down()`
+  (`DOWN_STATEMENTS`) purge lui aussi les exercices avant de retirer la colonne.
 - **Courriel d'exercice** : gabarit du courriel du jour avec le bandeau « EXERCICE » (`exerciseBanner`), objet préfixé « [Exercice] », lien
   vers l'écran des exercices (`AdminSpaceUrl::to('pertes.exercices')`) ; il
   n'entre pas dans le « un par jour » (ni `last_digest_day` ni la borne ne bougent). Sans configuration d'envoi : `sent: false`,
   `reason: NOT_DELIVERED`.
+- **Limite connue du courriel du jour** : le rang des constats « complétés » (`renewedUpTo`) est écrit dans la ligne `DIGEST_SENT`, après
+  l'envoi ; si cette écriture échouait après un envoi réussi, ces constats seraient annoncés une seconde fois le lendemain. Le compte des
+  constats nés et des constats complétés se lit sur une même photo de la base (transaction en lecture répétable).
 
 ## 9. Base
 
@@ -337,8 +357,7 @@ défait pas).
   lieu) ; `appScreen` : `pertes.reglages`, `pertes.regles`, `pertes.home`. Sans le droit : l'étape générique « Obtenir ».
 - **Une lecture n'écrit rien** : la ligne `loss_setting` d'un site n'est créée qu'au premier enregistrement ou à la première analyse ; une
   lecture (synthèse, réglages) rend les valeurs par défaut. Un refus 403 `MODULE_INACTIVE` ne touche à aucune table (test).
-- **Mode exercice** (après L1-b, plan à part) : scénarios joués dans les tables du module seulement, constats marqués « exercice », exclus
-  des chiffres réels, supprimables.
+- **Mode exercice** : codé (lot EX-1, § 8, « Mode exercice »).
 - **L2 à L6** : pièce à numéro unique par variante (`created`, `in_stockroom`, `on_floor`, `at_counter`, `sold`, `returned`, `missing`,
   `retired` ; zones `stockroom`, `stockroom_door`, `floor`, `counter`, `exit` ; un changement d'état n'existe que par un fait ; une pièce
   vendue garde ses puces actives ; la pièce ne remplace pas le stock) ; faits du boîtier en lots rejouables (`PIECE_CREATED`,

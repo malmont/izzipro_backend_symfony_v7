@@ -7,6 +7,7 @@ use App\Gestion\Services\GestionValidationException;
 use App\LossPrevention\Entity\LossEvidence;
 use App\LossPrevention\Entity\LossFinding;
 use App\LossPrevention\Entity\LossJournalEntry;
+use App\LossPrevention\Repository\LossFindingRepository;
 use App\Services\EmailConfigurationService\EmailSenderService;
 use App\Services\Site\AdminSpaceUrl;
 use App\Services\TenantConnectionManager;
@@ -35,11 +36,16 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  */
 class LossExerciseService
 {
-    /** Plafond de constats d'exercice par site (décision du propriétaire) */
+    /** Plafond de constats d'exercice PRÉSENTS par site (décision du propriétaire) */
     public const LIMIT = 30;
+    /**
+     * Plafond de LANCEMENTS par jour du magasin et par site (décision du chef de projet, relecture du lot) : sans lui, « effacer puis
+     * relancer » serait illimité sur des routes ouvertes sans le droit du module, et chaque lancement laisse une ligne définitive au journal
+     */
+    public const DAILY_LIMIT = 30;
+    /** Plafond de courriels d'exercice par jour du magasin et par site */
+    public const DAILY_EMAIL_LIMIT = 10;
     public const SCREEN = 'pertes.exercices';
-    /** Verrou consultatif propre aux exercices (celui de l'analyse est 7461077) : deux lancements simultanés ne prennent pas le même numéro */
-    private const LOCK_KEY = 7461078;
 
     /** Scénario => règle, variante par personne ; l'ordre est celui de l'écran (vague 1, vague 2, puis les variantes par personne) */
     public const SCENARIOS = [
@@ -69,6 +75,10 @@ class LossExerciseService
         private readonly TenantPublicHostResolver $hosts,
         private readonly LoggerInterface $logger,
         private readonly AdminSpaceUrl $links,
+        // Plafonds par jour du magasin. Réglables par le constructeur pour les TESTS seulement (`config/services_test.yaml`) : les lancements
+        // du jour sont comptés au journal du module, que rien n'efface ; une suite de tests en lance bien plus de 30 dans la même journée
+        private readonly int $dailyLimit = self::DAILY_LIMIT,
+        private readonly int $dailyEmailLimit = self::DAILY_EMAIL_LIMIT,
     ) {
     }
 
@@ -86,6 +96,8 @@ class LossExerciseService
             'scenarios' => array_map(fn (string $code) => $this->scenario($code, $locale, $personAllowed), array_keys(self::SCENARIOS)),
             'findings' => $this->reader->linesOf($rows, $locale),
             'count' => count($rows), 'limit' => self::LIMIT, 'remaining' => max(0, self::LIMIT - count($rows)),
+            // lancements du jour du magasin : `resetAt`, l'instant (UTC) où le compte repart
+            'daily' => ['limit' => $this->dailyLimit, 'remaining' => max(0, $this->dailyLimit - $this->launchedToday()), 'resetAt' => $this->resetAt()],
             'notice' => $this->texts->t('exercise.notice', $locale),
             'screen' => self::SCREEN,
         ];
@@ -122,7 +134,11 @@ class LossExerciseService
         $conn->beginTransaction();
         try {
             // Numéro, constat et ligne « exercice lancé » dans UNE transaction, sous le verrou des exercices
-            $conn->executeStatement('SELECT pg_advisory_xact_lock(' . self::LOCK_KEY . ')');
+            $conn->executeStatement('SELECT pg_advisory_xact_lock(' . LossFindingRepository::EXERCISE_LOCK . ')');
+            if ($this->launchedToday() >= $this->dailyLimit) {
+                throw new GestionConflictException('EXERCISE_DAILY_LIMIT', sprintf('Vous avez lancé %d exercices aujourd\'hui : vous pourrez en relancer demain.', $this->dailyLimit), 409,
+                    ['limit' => $this->dailyLimit, 'resetAt' => $this->resetAt()]);
+            }
             if ($this->findings()->exerciseCount() >= self::LIMIT) {
                 throw new GestionConflictException('EXERCISE_LIMIT_REACHED', sprintf('Vous avez déjà %d constats d\'exercice : effacez-les avant d\'en lancer d\'autres.', self::LIMIT), 409, ['limit' => self::LIMIT]);
             }
@@ -154,6 +170,28 @@ class LossExerciseService
         ];
     }
 
+    /**
+     * GET /exercices/{id} : la fiche d'un constat d'exercice. Sa lecture écrit au journal (consultation) : elle se fait dans une transaction,
+     * sous le verrou des exercices, pour qu'un effacement simultané ne laisse pas une ligne de journal d'un exercice disparu.
+     *
+     * @return array<string, mixed>
+     */
+    public function detail(int $id, string $locale, int $viewerId): array
+    {
+        return $this->locked(fn () => $this->reader->detail($id, $locale, $viewerId, true));
+    }
+
+    /**
+     * PUT /exercices/{id}/decision : même verrou que la fiche.
+     *
+     * @param array<string, mixed> $body
+     * @return array<string, mixed>
+     */
+    public function decide(int $id, array $body, int $userId, string $locale): array
+    {
+        return $this->locked(fn () => $this->reader->decide($id, $body, $userId, $locale, true));
+    }
+
     /** DELETE /exercices : efface tous les constats d'exercice du site (effacement manuel seulement) @return array{deleted: int} */
     public function deleteAll(int $userId): array
     {
@@ -163,6 +201,47 @@ class LossExerciseService
         }
 
         return ['deleted' => $deleted];
+    }
+
+    /**
+     * Une écriture pour un constat d'exercice, dans une transaction qui tient le verrou des exercices du début à la fin.
+     *
+     * @template T
+     * @param callable(): T $work
+     * @return T
+     */
+    private function locked(callable $work): mixed
+    {
+        $conn = $this->emProvider->getEntityManager()->getConnection();
+        $conn->beginTransaction();
+        try {
+            $conn->executeStatement('SELECT pg_advisory_xact_lock(' . LossFindingRepository::EXERCISE_LOCK . ')');
+            $out = $work();
+            $conn->commit();
+
+            return $out;
+        } catch (\Throwable $e) {
+            if ($conn->isTransactionActive()) {
+                $conn->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    /** Lancements du jour du magasin (lus au journal du module, par l'index du type ; pas plus que le plafond n'est compté) */
+    private function launchedToday(): int
+    {
+        [$start] = $this->site->clock()->range(null, null);
+
+        return $this->emProvider->getEntityManager()->getRepository(LossJournalEntry::class)->countRecent(LossJournalEntry::EXERCISE_STARTED, $start, $this->dailyLimit);
+    }
+
+    /** L'instant (UTC, ISO 8601) où le compte des lancements du jour repart : le début de la journée suivante du magasin */
+    private function resetAt(): string
+    {
+        [, $end] = $this->site->clock()->range(null, null);
+
+        return LossAuditEntry::iso($end);
     }
 
     /** @return array<string, mixed> */
@@ -212,11 +291,16 @@ class LossExerciseService
      *
      * @param array<string, mixed> $detail
      * @param array{tile: array<string, string>, email: array{subject: string, message: string}} $alert
-     * @return array{requested: bool, sent: bool, reason: ?string} `reason` : NO_RECIPIENT_ADDRESS, NOT_DELIVERED (pas de configuration d'envoi sur le site)
+     * @return array{requested: bool, sent: bool, reason: ?string} `reason` : NO_RECIPIENT_ADDRESS, NOT_DELIVERED (pas de configuration d'envoi
+     *                                                                 sur le site), DAILY_LIMIT_REACHED (plafond de courriels d'exercice du jour)
      */
     private function sendTestEmail(array $detail, array $alert, int $userId, string $locale): array
     {
         $em = $this->emProvider->getEntityManager();
+        [$dayStart] = $this->site->clock()->range(null, null);
+        if ($em->getRepository(LossJournalEntry::class)->countRecent(LossJournalEntry::EXERCISE_EMAIL_SENT, $dayStart, $this->dailyEmailLimit) >= $this->dailyEmailLimit) {
+            return ['requested' => true, 'sent' => false, 'reason' => 'DAILY_LIMIT_REACHED'];
+        }
         $to = trim((string) $em->getConnection()->fetchOne('SELECT email FROM "user" WHERE id = ? AND deleted_at IS NULL', [$userId]));
         if ($to === '' || !str_contains($to, '@')) {
             return ['requested' => true, 'sent' => false, 'reason' => 'NO_RECIPIENT_ADDRESS'];
@@ -274,7 +358,9 @@ class LossExerciseService
         $subject = 'session';
         $subjectId = 0;
         $zReport = function (int $n, int $discrepancy, \DateTimeImmutable $closedAt) use ($iso, $cashier): array {
-            $expected = 30000;
+            // Les espèces attendues suivent le manque (lui-même tiré du seuil du site, jusqu'à 10 000 $) : le compté et le dépôt en banque
+            // restent positifs, quel que soit le seuil
+            $expected = max(30000, 2 * abs($discrepancy) + 20000);
 
             return ['kind' => LossEvidence::Z_REPORT, 'at' => $closedAt, 'snapshot' => [
                 'reportNumber' => $n, 'cashRegisterId' => null, 'sessionId' => null, 'closedAt' => $iso($closedAt), 'closedById' => $cashier,
