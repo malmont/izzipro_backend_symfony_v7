@@ -58,7 +58,7 @@ final class AppFamilies
     public const REASON_MEMBERSHIP = 'membership';
 
     /** Rôles qui font d'un compte un compte d'équipe, en plus des rôles d'équipe de `TeamRoles` */
-    public const STAFF_ROLES = ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_USER_POS', 'ROLE_POS_MANAGER', 'ROLE_SUPPORT'];
+    public const STAFF_ROLES = ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_USER_POS', 'ROLE_POS_MANAGER', 'ROLE_SUPPORT', AgencyRoles::MANAGER, AgencyRoles::MEMBER]; // lot AG-1 : un compte d'agence est un compte d'équipe, pas un client
 
     /** Famille de ce que le front a envoyé, ou null (rien d'envoyé, valeur inconnue, valeur qui n'est pas un texte) */
     public static function of(mixed $app): ?string

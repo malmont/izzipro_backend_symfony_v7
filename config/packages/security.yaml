@@ -210,6 +210,9 @@ security:
         # Lien d'invitation d'un client repris d'une ancienne boutique (lot IMP-2, 15/11/2026) : public ; la preuve est le jeton du lien (usage
         # unique, 30 jours, empreinte seule en base), envoyé dans le corps ; limité en débit comme la connexion
         - { path: '^/api/import-invitation/(verify|accept|decline)$', methods: [POST], roles: PUBLIC_ACCESS }
+        # Espace de l'agence (lot AG-1, 15/11/2026) : rôles d'agence seulement, donnés par le super administrateur sur des comptes du site
+        # d'attache ; l'agence est lue du site de la requête (AgencyContext). AVANT la règle générale ^/api, qu'un simple client passerait.
+        - { path: ^/api/agency(/|$), roles: [ROLE_AGENCY, ROLE_AGENCY_MEMBER] }
         # Thème de l'application e-commerce mobile (31/10/2026) : lecture sans connexion, route dédiée (le profil ne change pas)
         - { path: ^/api/mobile/app-theme$, methods: [GET], roles: PUBLIC_ACCESS }
         - { path: ^/api/app-keys(/|$), roles: ROLE_ADMIN }

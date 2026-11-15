@@ -128,7 +128,7 @@ commerce, lui, reste celui de la fiche du site. Aucune mention « propulsé par 
 
 | Lot | Contenu | Risque |
 |---|---|---|
-| AG-1 | Tables maîtres, agence et forfait créés par le super administrateur, rattachement de sites existants, rôles sur le site d'attache, lecture `GET /api/agency/me` et `/sites` | comptes et droits |
+| AG-1 | Tables maîtres, agence et forfait créés par le super administrateur, rattachement de sites existants, rôles sur le site d'attache, lecture `GET /api/agency/me` et `/sites` (**codé le 15/11/2026** : § 7) | comptes et droits |
 | AG-2 | Création d'un site par l'agence (file, limites), droits de source `agency`, options ouvertes et fermées dans le cadre du forfait, suspension en cascade | droits, base |
 | AG-3 | Entrer dans le site d'un client (code de passage, opérateur, journaux, mention au commerçant) | sécurité |
 | AG-4 | Marque blanche, niveau a | faible |
@@ -226,6 +226,91 @@ IMP-1 ne dépend pas d'AGENCE. **Ordre décidé : IMP-1 d'abord, puis AG-1.** Ch
 | 11 | Ordre | IMP-1 d'abord, puis AG-1 |
 
 Reste à faire avant le code : le contrat d'IMP-1 (envoyé au chef en dix lignes), après CB-1, CB-2 et NOTIF-2.
+
+## 7. Lot AG-1 : ce qui est codé (15/11/2026)
+
+Code : `src/Services/Agency/` (`AgencyRepository` : base maître en PDO ; `AgencyService` : créer, rattacher, détacher, suspendre,
+reprendre ; `AgencyMemberService` : rôles sur le site d'attache ; `AgencyContext` : l'agence de la requête ; `AgencyException` : refus
+à code stable), `src/Security/AgencyRoles.php`, `src/Security/AgencyScopeSubscriber.php`, contrôleurs
+`PlatformController/PlatformAgenciesController`, `AgencyController/AgencyController`, `Admin/PlatformAgenciesAdminController` (page
+« Plateforme : agences »). Test : `tests/Functional/Platform/AgenciesTest.php`.
+
+**Aucune agence n'existe en production** : pas d'agence de test avant AG-2 ou la campagne de tests (décision du propriétaire). Le lot
+ne touche à aucune base de site ni à aucun droit d'usage : rattacher un site ne change rien pour lui.
+
+### 7.1 Base maître
+
+`ops/sql/agency_master.sql`, appliqué par `scripts/migrate_master_v2_agencies.sh` (hors dépôt) et relu par `tests/bootstrap.php` :
+`agencies` (code unique, **site d'attache unique**, état `trial` | `active` | `suspended` | `closed`, fin de l'essai, nombre maximum de
+sites, forfait, courriel de contact, marque « agence de test »), `agency_sites` (un **index unique partiel** garantit qu'un site n'a
+qu'une agence à la fois), `agency_plans` (une ligne commune `essai` : 60 jours, 3 sites ; les prix arrivent au lot AG-5),
+`agency_events` (journal en ajout seul). Dates en UTC, sans fuseau. Pas de migration Doctrine : c'est la base maître.
+
+### 7.2 Règles
+
+- Création : en essai, 60 jours, 3 sites gérés au plus (forfait commun `essai`) ; **le site d'attache n'est pas compté**.
+- Un site n'a qu'une agence ; un site d'attache n'en sert qu'une et n'est jamais un site géré.
+- Ne se confient jamais, ni comme site d'attache ni comme site géré (`AgencyService::RESERVED_SITES`) : `gmasuite`, `tenantdefaut`,
+  `demo` (le site de contrôle des mises en ligne).
+- Deux codes de site qui partagent une base (les mêmes comptes) ne se confient pas deux fois : `AGENCY_SITE_SHARES_DATABASE`.
+- Une agence suspendue ou fermée ne reçoit plus de site ; une agence suspendue lit encore son espace, avec son état.
+- **La fin de l'essai est affichée (`trialEndsAt`, `trialEnded`) : rien ne se ferme tout seul dans ce lot.** Lever une suspension
+  rend l'agence à l'essai si sa fin n'est pas passée, sinon `active`.
+
+### 7.3 Rôles d'agence
+
+`ROLE_AGENCY` (responsable) et `ROLE_AGENCY_MEMBER` (collaborateur), sur des comptes du **site d'attache**. Un compte n'en porte
+qu'un ; ses autres rôles ne bougent pas.
+
+- **Donnés et retirés par le super administrateur seulement** (`PUT /api/platform/agencies/{id}/members`, page « Plateforme :
+  agences »), par une connexion directe à la base du site d'attache (`TenantDatabaseConnector`), sans changer le site de la requête.
+  Journal : `agency_events` (`role_granted`, `role_revoked`, avec l'identifiant du compte, jamais son adresse).
+- Ils ne sont ni dans `TeamRoles::ALL` ni dans `RoleAssignmentPolicy::ASSIGNABLE` : l'écran des utilisateurs ne les propose pas, un
+  formulaire forgé ne les ajoute pas, et un rôle d'agence déjà présent est conservé (un administrateur de site ne peut pas le retirer).
+- Un compte d'agence est un **compte d'équipe** (`AppFamilies::STAFF_ROLES`), pas un client.
+- **Un compte d'agence seul n'atteint que `/api/agency`** (`AgencyScopeSubscriber`, même mécanique que la garde de l'assistance) :
+  toute autre route protégée répond 403 (`AGENCY_SCOPE_ONLY` quand la route ne demande qu'un compte connecté, `FORBIDDEN` quand c'est
+  la règle d'accès qui refuse) ; une route publique lui est servie comme à un anonyme. S'il porte aussi `ROLE_SUPPORT`, `/api/support`
+  lui reste ouvert. Un compte qui porte un autre rôle d'accès (administrateur du site d'attache, par exemple) garde ses accès.
+- Connexion : la plateforme `webadmin` (l'espace d'administration du web) accepte un compte d'agence ; `web`, `mobile`, `admin` et
+  `pos` le refusent s'il n'a pas le rôle qu'elles exigent.
+
+### 7.4 Routes de l'agence (`ROLE_AGENCY` ou `ROLE_AGENCY_MEMBER`, règle `^/api/agency` placée avant la règle générale `^/api`)
+
+**Règle de sécurité : l'agence est lue du site de la requête (`AgencyContext`), jamais d'un paramètre, d'un en-tête ou du corps.** Le
+jeton d'un site ne vaut pas sur un autre (401). Sur un site qui n'est pas le site d'attache d'une agence, ou sans site reconnu, même
+un compte qui porterait le rôle reçoit 403 `AGENCY_SCOPE`.
+
+| Route | Réponse |
+|---|---|
+| `GET /api/agency/me` | `{ agency, role }` ; `role` : `manager` \| `member` |
+| `GET /api/agency/sites` | `{ sites: [{ code, name, host, origin, attachedAt }], maxSites, used }` |
+
+`agency` : `{ id, code, name, status, isTest, homeSite: { code, name, host }, trialEndsAt, trialEnded, maxSites, sitesCount, planCode,
+contactEmail, suspendedAt, createdAt }` (dates ISO 8601, UTC).
+
+### 7.5 Routes de la plateforme (`ROLE_SUPER_ADMIN`, `/api/platform/agencies`)
+
+| Route | Corps | Réponse | Refus |
+|---|---|---|---|
+| `GET /api/platform/agencies` | — | `{ agencies }` | |
+| `POST /api/platform/agencies` | `{ code, name, homeTenantCode, contactEmail?, test? }` | 201 `{ agency }` | 422 `VALIDATION_FAILED { errors: [{ path, message }] }` ; 409 `AGENCY_SITE_RESERVED`, `AGENCY_CODE_TAKEN`, `AGENCY_HOME_TAKEN`, `AGENCY_SITE_SHARES_DATABASE` |
+| `GET /api/platform/agencies/{id}` | — | `{ agency, sites, members, events }` | 404 `AGENCY_NOT_FOUND` |
+| `POST /api/platform/agencies/{id}/sites` | `{ tenantCode }` | 201 `{ agency, sites }` | 422 ; 409 `AGENCY_NOT_OPEN`, `AGENCY_SITE_RESERVED`, `AGENCY_SITE_TAKEN`, `AGENCY_SITE_SHARES_DATABASE`, `AGENCY_SITE_LIMIT { maxSites }` |
+| `DELETE /api/platform/agencies/{id}/sites/{tenantCode}` | — | `{ agency, sites }` | 404 `AGENCY_SITE_NOT_ATTACHED` |
+| `POST /api/platform/agencies/{id}/suspend` | `{ reason? }` | `{ agency }` | 409 `AGENCY_STATE` |
+| `POST /api/platform/agencies/{id}/resume` | — | `{ agency }` | 409 `AGENCY_STATE` |
+| `PUT /api/platform/agencies/{id}/members` | `{ email, role: "manager" \| "member" \| "none" }` | `{ member: { userId, email, role, changed }, members }` | 422 ; 404 `AGENCY_MEMBER_NOT_FOUND` ; 409 `AGENCY_NOT_OPEN` (agence fermée) |
+
+La page d'administration `/admin/plateforme/agences` (menu « Plateforme : agences », super administrateur) fait les mêmes gestes par
+les mêmes services ; chaque action refait le contrôle du rôle et du jeton CSRF.
+
+### 7.6 Limites connues
+
+- Les rôles d'agence ne sont pas retirés quand un site cesse d'être un site d'attache (aucune route ne ferme une agence dans ce lot) ;
+  sans agence sur ce site, ils n'ouvrent rien (403 `AGENCY_SCOPE`).
+- Aucun droit de source `agency`, aucune création de site, aucune entrée dans un site géré, aucun relevé : lots AG-2 à AG-5.
+- La page d'administration liste tous les sites comme candidats, sauf les sites réservés ; les refus sont dits au moment du geste.
 
 ## Tenir cette fiche à jour
 

@@ -116,7 +116,8 @@ class AuthenticationService
         } elseif (in_array($platform, self::ADMIN_PLATFORMS, true)) {
             // Assistance, lot 1 (12/11/2026) : un compte ROLE_SUPPORT se connecte à l'application de gestion ; le serveur ne lui ouvre que /api/support
             // « webadmin » (lot SUPPORT-WEB) : l'espace d'administration du web, ouvert aussi au propriétaire de la plateforme
-            if (!array_intersect($platform === 'webadmin' ? ['ROLE_ADMIN', 'ROLE_SUPPORT', 'ROLE_SUPER_ADMIN'] : ['ROLE_ADMIN', 'ROLE_SUPPORT'], $user->getRoles())) {
+            // Lot AG-1 (15/11/2026) : un compte d'agence entre dans l'espace d'administration du web, où le serveur ne lui ouvre que /api/agency
+            if (!array_intersect($platform === 'webadmin' ? ['ROLE_ADMIN', 'ROLE_SUPPORT', 'ROLE_SUPER_ADMIN', ...\App\Security\AgencyRoles::ALL] : ['ROLE_ADMIN', 'ROLE_SUPPORT'], $user->getRoles())) {
                 return new JsonResponse(['error' => 'This account is not allowed to access the admin platform.', 'code' => 'PLATFORM_NOT_ALLOWED', 'message' => 'This account is not allowed to access the admin platform.'], Response::HTTP_FORBIDDEN);
             }
         }

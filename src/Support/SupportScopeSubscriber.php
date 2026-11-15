@@ -42,6 +42,10 @@ class SupportScopeSubscriber implements EventSubscriberInterface
         if (!self::supportOnly($this->tokens->getToken()?->getRoleNames() ?? [])) {
             return;
         }
+        // Lot AG-1 : un compte d'assistance qui porte aussi un rôle d'agence garde l'espace de son agence (sa règle d'accès exige ce rôle)
+        if (preg_match('#^/api/agency(/|$)#', $path) && \App\Security\AgencyRoles::has($this->tokens->getToken()?->getRoleNames() ?? [])) {
+            return;
+        }
         [$attributes] = $this->accessMap->getPatterns($request);
         if ($attributes === null || $attributes === [] || in_array('PUBLIC_ACCESS', $attributes, true)) {
             $this->tokens->setToken(null); // route publique : servie EXACTEMENT comme à un anonyme (le contrôleur ne voit aucun utilisateur ; pare-feu sans état)

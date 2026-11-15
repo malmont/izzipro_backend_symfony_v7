@@ -566,6 +566,9 @@ class DashboardController extends AbstractDashboardController
         // Console de pilotage de la plateforme : mode, droits d'usage de tous les sites, politiques, offres, demandes (lot 4, 04/11/2026)
         yield MenuItem::linkToRoute('Plateforme : pilotage', 'fas fa-sliders-h', 'admin_plateforme')
             ->setPermission('ROLE_SUPER_ADMIN');
+        // Agences (lot AG-1, 15/11/2026) : agences, sites gérés, rôles d'agence, journal
+        yield MenuItem::linkToRoute('Plateforme : agences', 'fas fa-handshake', 'admin_plateforme_agences')
+            ->setPermission('ROLE_SUPER_ADMIN');
         
         yield MenuItem::section('Boutique : accueil et pages');
         yield MenuItem::linkToCrud('Diaporama de l\'accueil', 'fas fa-images', HomeSlider::class);

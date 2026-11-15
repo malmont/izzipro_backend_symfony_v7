@@ -1,0 +1,113 @@
+{# Page « Plateforme : agences » (PlatformAgenciesAdminController, lot AG-1, 15/11/2026). Habillage EasyAdmin depuis le menu ; ea() dit s'il y a un contexte. #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Plateforme : agences{% endblock %}
+{% block content_title %}Plateforme : agences{% endblock %}
+
+{% block main %}{{ block('agences_panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}
+    <div class="container-fluid py-3">
+        <h1 class="h3 mb-3">Plateforme : agences</h1>
+        {{ block('agences_panel') }}
+    </div>
+{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block agences_panel %}
+<div class="agences-panel">
+    {% for type, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ type }}">{{ message }}</div>{% endfor %}{% endfor %}
+    <p class="text-muted">Une agence est d'abord un site : son « site d'attache ». Elle gère d'autres sites, rattachés ici. Rattacher un site ne change rien pour lui : ni ses droits, ni ses comptes. Les rôles d'agence se donnent à des comptes du site d'attache, ici seulement.</p>
+
+    <h2 class="h5 mt-4">Agences</h2>
+    <table class="table table-sm align-middle agences-liste">
+        <thead><tr><th>Code</th><th>Nom</th><th>Site d'attache</th><th>État</th><th>Fin de l'essai</th><th>Sites</th><th></th></tr></thead>
+        <tbody>
+        {% for a in agencies %}
+            <tr data-agence="{{ a.id }}">
+                <td><code>{{ a.code }}</code>{% if a.isTest %} <span class="badge badge-warning">test</span>{% endif %}</td>
+                <td>{{ a.name }}</td>
+                <td>{{ a.homeSite.code }}{% if a.homeSite.host %} <span class="text-muted">({{ a.homeSite.host }})</span>{% endif %}</td>
+                <td><span class="badge badge-{{ a.status == 'suspended' ? 'danger' : (a.status == 'trial' ? 'info' : 'success') }}">{{ a.status }}</span>{% if a.trialEnded %} <span class="text-danger">essai passé</span>{% endif %}</td>
+                <td>{{ a.trialEndsAt ? a.trialEndsAt|slice(0, 10) : '—' }}</td>
+                <td>{{ a.sitesCount }} / {{ a.maxSites }}</td>
+                <td><a class="btn btn-sm btn-secondary" href="{{ ea() is not null ? ea_url().unsetAll().setRoute('admin_plateforme_agences', {agence: a.id}) : path('admin_plateforme_agences', {agence: a.id}) }}">Ouvrir</a></td>
+            </tr>
+        {% else %}
+            <tr><td colspan="7" class="text-muted">Aucune agence.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h2 class="h5 mt-4">Créer une agence</h2>
+    <form method="post" action="{{ path('admin_plateforme_agences_create') }}" class="row g-2 align-items-end agences-creer">
+        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+        <div class="col-md-2"><label class="form-label" for="a-code">Code</label><input class="form-control" id="a-code" name="code" required pattern="[a-z0-9][a-z0-9-]{1,48}[a-z0-9]" placeholder="mon-agence"></div>
+        <div class="col-md-3"><label class="form-label" for="a-name">Nom</label><input class="form-control" id="a-name" name="name" required maxlength="160"></div>
+        <div class="col-md-3"><label class="form-label" for="a-home">Site d'attache</label>
+            <select class="form-select" id="a-home" name="homeTenantCode" required>{% for s in sites %}{% if s not in reserved %}<option value="{{ s }}">{{ s }}</option>{% endif %}{% endfor %}</select></div>
+        <div class="col-md-2"><label class="form-label" for="a-email">Courriel de contact</label><input class="form-control" id="a-email" name="contactEmail" type="email"></div>
+        <div class="col-md-1"><div class="form-check"><input class="form-check-input" id="a-test" name="test" type="checkbox" value="1"><label class="form-check-label" for="a-test">Agence de test</label></div></div>
+        <div class="col-md-1"><button class="btn btn-primary" type="submit">Créer</button></div>
+    </form>
+    <p class="text-muted small mt-1">L'agence naît en essai : 60 jours, 3 sites gérés au plus (le site d'attache n'est pas compté). La fin de l'essai est affichée ; rien ne se ferme tout seul.</p>
+
+    {% if detail %}
+        {% set a = detail.agency %}
+        <h2 class="h5 mt-4">Agence « {{ a.name }} » <code>{{ a.code }}</code></h2>
+        <p>Site d'attache : <strong>{{ a.homeSite.code }}</strong> ; état : <strong>{{ a.status }}</strong> ; essai jusqu'au {{ a.trialEndsAt ? a.trialEndsAt|slice(0, 10) : '—' }} ; {{ a.sitesCount }} site(s) sur {{ a.maxSites }}.</p>
+        <form method="post" action="{{ path('admin_plateforme_agences_state', {id: a.id, to: a.status == 'suspended' ? 'resume' : 'suspend'}) }}" class="row g-2 align-items-end agences-etat">
+            <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><input type="hidden" name="agence" value="{{ a.id }}">
+            {% if a.status != 'suspended' %}<div class="col-md-4"><input class="form-control" name="reason" maxlength="300" placeholder="Raison de la suspension (facultatif)"></div>{% endif %}
+            <div class="col-md-2"><button class="btn btn-{{ a.status == 'suspended' ? 'success' : 'warning' }}" type="submit">{{ a.status == 'suspended' ? 'Lever la suspension' : 'Suspendre' }}</button></div>
+        </form>
+
+        <h3 class="h6 mt-4">Sites gérés</h3>
+        <table class="table table-sm align-middle agences-sites">
+            <tbody>
+            {% for s in detail.sites %}
+                <tr><td><code>{{ s.code }}</code></td><td>{{ s.name }}</td><td class="text-muted">{{ s.host }}</td><td>rattaché le {{ s.attachedAt|slice(0, 10) }}</td>
+                    <td><form method="post" action="{{ path('admin_plateforme_agences_detach', {id: a.id}) }}" onsubmit="return confirm('Détacher ce site de l\'agence ?');">
+                        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><input type="hidden" name="agence" value="{{ a.id }}"><input type="hidden" name="tenantCode" value="{{ s.code }}">
+                        <button class="btn btn-sm btn-outline-danger" type="submit">Détacher</button></form></td></tr>
+            {% else %}
+                <tr><td class="text-muted">Aucun site géré.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <form method="post" action="{{ path('admin_plateforme_agences_attach', {id: a.id}) }}" class="row g-2 align-items-end agences-rattacher">
+            <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><input type="hidden" name="agence" value="{{ a.id }}">
+            <div class="col-md-3"><label class="form-label" for="s-code">Rattacher un site</label>
+                <select class="form-select" id="s-code" name="tenantCode" required>{% for s in sites %}{% if s not in reserved and s != a.homeSite.code %}<option value="{{ s }}">{{ s }}</option>{% endif %}{% endfor %}</select></div>
+            <div class="col-md-2"><button class="btn btn-primary" type="submit">Rattacher</button></div>
+        </form>
+
+        <h3 class="h6 mt-4">Rôles d'agence (comptes du site d'attache)</h3>
+        <table class="table table-sm align-middle agences-membres">
+            <tbody>
+            {% for m in detail.members %}
+                <tr><td>{{ m.name }}</td><td>{{ m.email }}</td><td>{{ m.role == 'manager' ? 'Responsable' : 'Collaborateur' }}</td>
+                    <td><form method="post" action="{{ path('admin_plateforme_agences_member', {id: a.id}) }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><input type="hidden" name="agence" value="{{ a.id }}"><input type="hidden" name="email" value="{{ m.email }}"><input type="hidden" name="role" value="none">
+                        <button class="btn btn-sm btn-outline-danger" type="submit">Retirer</button></form></td></tr>
+            {% else %}
+                <tr><td class="text-muted">Aucun compte ne porte un rôle d'agence.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <form method="post" action="{{ path('admin_plateforme_agences_member', {id: a.id}) }}" class="row g-2 align-items-end agences-role">
+            <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><input type="hidden" name="agence" value="{{ a.id }}">
+            <div class="col-md-4"><label class="form-label" for="m-email">Adresse d'un compte du site d'attache</label><input class="form-control" id="m-email" name="email" type="email" required></div>
+            <div class="col-md-2"><label class="form-label" for="m-role">Rôle</label><select class="form-select" id="m-role" name="role"><option value="manager">Responsable</option><option value="member">Collaborateur</option></select></div>
+            <div class="col-md-2"><button class="btn btn-primary" type="submit">Donner le rôle</button></div>
+        </form>
+
+        <h3 class="h6 mt-4">Journal</h3>
+        <table class="table table-sm agences-journal">
+            <tbody>
+            {% for e in detail.events %}
+                <tr><td class="text-muted">{{ e.createdAt|slice(0, 16)|replace({'T': ' '}) }}</td><td>{{ e.event }}</td><td>{{ e.tenantCode }}</td><td class="text-muted">{{ e.actor }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+</div>
+{% endblock %}

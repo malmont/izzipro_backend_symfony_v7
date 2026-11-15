@@ -89,6 +89,8 @@ $master->exec('CREATE TABLE tenant_app_keys (id SERIAL PRIMARY KEY, tenant_code 
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/tech_metrics_master.sql'));
 // Console de pilotage (04/11/2026) : réglages de la plateforme (mode demo par défaut), droits d'usage, offres (ops/sql/platform_master.sql)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_master.sql'));
+// Agences (lot AG-1, 15/11/2026) : agences, sites gérés, forfaits, journal (ops/sql/agency_master.sql, même SQL que la base maître réelle)
+$master->exec(file_get_contents(__DIR__ . '/../ops/sql/agency_master.sql'));
 // Codes courts fixes des sites de test (31/10/2026) : MVT001 et MVT002 (alphabet Crockford)
 $insertTenant = $master->prepare('INSERT INTO tenants (code, name, dbname, custom_domain, short_code) VALUES (?, ?, ?, ?, ?)');
 $insertTenant->execute([MV_TEST_TENANT_CODE, 'Tenant de test', MV_TEST_TENANT_DB, MV_TEST_TENANT_HOST, 'MVT001']);
