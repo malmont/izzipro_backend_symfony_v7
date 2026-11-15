@@ -12,12 +12,12 @@
         "statusLabel": "Inscrit",
         "online": false,
         "onlineLabel": "Silencieux",
-        "lastSeenAt": "2026-11-15T22:41:57+00:00",
-        "lastSeenLabel": "15/11/2026 17 h 41",
-        "silentSeconds": 720,
+        "lastSeenAt": "2026-11-15T23:21:00+00:00",
+        "lastSeenLabel": "15/11/2026 18 h 21",
+        "silentSeconds": 719,
         "version": "1.0.0",
         "arch": "amd64",
-        "enrolledAt": "2026-11-15T22:53:56+00:00",
+        "enrolledAt": "2026-11-15T23:32:58+00:00",
         "clockOffsetSeconds": 0,
         "clockDoubt": false,
         "keyHint": "IZ-BOX-XX**-****-****",
@@ -29,11 +29,11 @@
                 "kind": "reader",
                 "kindLabel": "Lecteur de puces",
                 "model": "Lecteur de bureau (USB)",
-                "status": "ok",
-                "statusLabel": "En marche",
+                "status": "down",
+                "statusLabel": "En panne ou débranché",
                 "zone": null,
                 "zoneLabel": null,
-                "lastSeenAt": "2026-11-15T22:53:56+00:00"
+                "lastSeenAt": "2026-11-15T23:32:58+00:00"
             },
             {
                 "id": 2,
@@ -45,18 +45,28 @@
                 "statusLabel": "En panne ou débranché",
                 "zone": null,
                 "zoneLabel": null,
-                "lastSeenAt": "2026-11-15T22:53:56+00:00"
+                "lastSeenAt": "2026-11-15T23:32:59+00:00"
             }
         ],
-        "createdAt": "2026-11-15T22:53:56+00:00",
+        "createdAt": "2026-11-15T23:32:58+00:00",
         "screen": "pertes.boitiers",
         "events": [
+            {
+                "id": 6,
+                "type": "SOURCE_DOWN",
+                "label": "Appareil en panne ou débranché",
+                "at": "2026-11-15T23:32:59+00:00",
+                "atLabel": "15/11/2026 18 h 32",
+                "device": "LECTEUR-0001",
+                "silentSeconds": null,
+                "byUser": false
+            },
             {
                 "id": 5,
                 "type": "SOURCE_DOWN",
                 "label": "Appareil en panne ou débranché",
-                "at": "2026-11-15T22:53:56+00:00",
-                "atLabel": "15/11/2026 17 h 53",
+                "at": "2026-11-15T23:32:58+00:00",
+                "atLabel": "15/11/2026 18 h 32",
                 "device": "IMPR-0001",
                 "silentSeconds": null,
                 "byUser": false
@@ -65,8 +75,8 @@
                 "id": 4,
                 "type": "DEVICE_SEEN",
                 "label": "Appareil vu pour la première fois",
-                "at": "2026-11-15T22:53:56+00:00",
-                "atLabel": "15/11/2026 17 h 53",
+                "at": "2026-11-15T23:32:58+00:00",
+                "atLabel": "15/11/2026 18 h 32",
                 "device": "IMPR-0001",
                 "silentSeconds": null,
                 "byUser": false
@@ -75,8 +85,8 @@
                 "id": 3,
                 "type": "DEVICE_SEEN",
                 "label": "Appareil vu pour la première fois",
-                "at": "2026-11-15T22:53:56+00:00",
-                "atLabel": "15/11/2026 17 h 53",
+                "at": "2026-11-15T23:32:58+00:00",
+                "atLabel": "15/11/2026 18 h 32",
                 "device": "LECTEUR-0001",
                 "silentSeconds": null,
                 "byUser": false
@@ -85,8 +95,8 @@
                 "id": 2,
                 "type": "BOX_ENROLLED",
                 "label": "Machine inscrite",
-                "at": "2026-11-15T22:53:56+00:00",
-                "atLabel": "15/11/2026 17 h 53",
+                "at": "2026-11-15T23:32:58+00:00",
+                "atLabel": "15/11/2026 18 h 32",
                 "device": null,
                 "silentSeconds": null,
                 "byUser": false
@@ -95,8 +105,8 @@
                 "id": 1,
                 "type": "BOX_CREATED",
                 "label": "Boîtier ajouté",
-                "at": "2026-11-15T22:53:56+00:00",
-                "atLabel": "15/11/2026 17 h 53",
+                "at": "2026-11-15T23:32:58+00:00",
+                "atLabel": "15/11/2026 18 h 32",
                 "device": null,
                 "silentSeconds": null,
                 "byUser": true

@@ -68,12 +68,6 @@ class LossBoxRepository extends EntityRepository
         return (int) $this->db()->fetchOne("SELECT COUNT(*) FROM loss_box WHERE exercise = CAST(? AS boolean) AND status <> 'revoked'", [$exercise ? 'true' : 'false']);
     }
 
-    /** Nombre d'appareils qu'un boîtier a déjà annoncés */
-    public function deviceCount(int $boxId): int
-    {
-        return (int) $this->db()->fetchOne('SELECT COUNT(*) FROM loss_device WHERE box_id = ?', [$boxId]);
-    }
-
     public function rename(int $id, string $name, ?string $place, string $now): void
     {
         $this->db()->executeStatement('UPDATE loss_box SET name = :name, place = :place, updated_at = :now WHERE id = :id', ['name' => $name, 'place' => $place, 'now' => $now, 'id' => $id]);

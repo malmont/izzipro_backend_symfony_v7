@@ -511,6 +511,7 @@ health:
         absent: Pas installé
     summary:
         all_ok: Tout est en ordre
+        none: Aucun appareil installé
         to_check_one: '%count% appareil à vérifier'
         to_check_many: '%count% appareils à vérifier'
     duration:
@@ -520,6 +521,7 @@ health:
     hint:
         box:
             absent: 'Aucun boîtier n''est installé. Ajoutez un boîtier, puis inscrivez sa machine avec la clé.'
+            absent_exercise: 'Aucun boîtier simulé. Créez-en un pour voir le tableau vivre, sans aucun matériel.'
             pending: 'Ce boîtier attend sa machine. Lancez sur elle la commande d''inscription, avec l''adresse du site et la clé du boîtier.'
             down: 'Silencieux depuis %duration%. Vérifiez son alimentation, son câble réseau et la connexion Internet de la boutique.'
             down_exercise: 'Silencieux depuis %duration%. Jouez le scénario « Signe de vie » pour le faire revenir.'

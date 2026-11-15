@@ -68,7 +68,7 @@ class LossBoxChannelController extends AbstractController
         try {
             return $this->json($work());
         } catch (LossBoxException $e) {
-            return $this->json($e->body(), $e->status);
+            return $this->json($e->body(), $e->status, isset($e->details['retryAfterSeconds']) ? ['Retry-After' => (string) $e->details['retryAfterSeconds']] : []);
         }
     }
 

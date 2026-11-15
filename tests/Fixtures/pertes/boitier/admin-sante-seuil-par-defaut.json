@@ -10,7 +10,7 @@
     "body": {
         "thresholdSeconds": 300,
         "default": 300,
-        "min": 120,
+        "min": 180,
         "max": 3600
     }
 }

@@ -18,12 +18,12 @@
             "statusLabel": "Inscrit",
             "online": true,
             "onlineLabel": "En ligne",
-            "lastSeenAt": "2026-11-15T22:53:58+00:00",
-            "lastSeenLabel": "15/11/2026 17 h 53",
+            "lastSeenAt": "2026-11-15T23:33:00+00:00",
+            "lastSeenLabel": "15/11/2026 18 h 33",
             "silentSeconds": null,
             "version": null,
             "arch": null,
-            "enrolledAt": "2026-11-15T22:53:58+00:00",
+            "enrolledAt": "2026-11-15T23:33:00+00:00",
             "clockOffsetSeconds": 0,
             "clockDoubt": false,
             "keyHint": null,
@@ -39,7 +39,7 @@
                     "statusLabel": "En marche",
                     "zone": "exit",
                     "zoneLabel": "Sortie",
-                    "lastSeenAt": "2026-11-15T22:53:58+00:00"
+                    "lastSeenAt": "2026-11-15T23:33:00+00:00"
                 },
                 {
                     "id": 4,
@@ -51,58 +51,58 @@
                     "statusLabel": "En marche",
                     "zone": null,
                     "zoneLabel": null,
-                    "lastSeenAt": "2026-11-15T22:53:58+00:00"
+                    "lastSeenAt": "2026-11-15T23:33:00+00:00"
                 }
             ],
-            "createdAt": "2026-11-15T22:53:58+00:00",
+            "createdAt": "2026-11-15T23:33:00+00:00",
             "screen": "pertes.boitiers",
             "events": [
                 {
-                    "id": 12,
+                    "id": 13,
                     "type": "BOX_BACK",
                     "label": "Boîtier revenu après un silence",
-                    "at": "2026-11-15T22:53:58+00:00",
-                    "atLabel": "15/11/2026 17 h 53",
+                    "at": "2026-11-15T23:33:00+00:00",
+                    "atLabel": "15/11/2026 18 h 33",
                     "device": null,
                     "silentSeconds": 7200,
+                    "byUser": false
+                },
+                {
+                    "id": 12,
+                    "type": "DEVICE_SEEN",
+                    "label": "Appareil vu pour la première fois",
+                    "at": "2026-11-15T23:33:00+00:00",
+                    "atLabel": "15/11/2026 18 h 33",
+                    "device": "SIM-LECTEUR-MAIN",
+                    "silentSeconds": null,
                     "byUser": false
                 },
                 {
                     "id": 11,
                     "type": "DEVICE_SEEN",
                     "label": "Appareil vu pour la première fois",
-                    "at": "2026-11-15T22:53:58+00:00",
-                    "atLabel": "15/11/2026 17 h 53",
-                    "device": "SIM-LECTEUR-MAIN",
-                    "silentSeconds": null,
-                    "byUser": false
-                },
-                {
-                    "id": 10,
-                    "type": "DEVICE_SEEN",
-                    "label": "Appareil vu pour la première fois",
-                    "at": "2026-11-15T22:53:58+00:00",
-                    "atLabel": "15/11/2026 17 h 53",
+                    "at": "2026-11-15T23:33:00+00:00",
+                    "atLabel": "15/11/2026 18 h 33",
                     "device": "SIM-LECTEUR-SORTIE",
                     "silentSeconds": null,
                     "byUser": false
                 },
                 {
-                    "id": 9,
+                    "id": 10,
                     "type": "BOX_ENROLLED",
                     "label": "Machine inscrite",
-                    "at": "2026-11-15T22:53:58+00:00",
-                    "atLabel": "15/11/2026 17 h 53",
+                    "at": "2026-11-15T23:33:00+00:00",
+                    "atLabel": "15/11/2026 18 h 33",
                     "device": null,
                     "silentSeconds": null,
                     "byUser": false
                 },
                 {
-                    "id": 8,
+                    "id": 9,
                     "type": "BOX_CREATED",
                     "label": "Boîtier ajouté",
-                    "at": "2026-11-15T22:53:58+00:00",
-                    "atLabel": "15/11/2026 17 h 53",
+                    "at": "2026-11-15T23:33:00+00:00",
+                    "atLabel": "15/11/2026 18 h 33",
                     "device": null,
                     "silentSeconds": null,
                     "byUser": true

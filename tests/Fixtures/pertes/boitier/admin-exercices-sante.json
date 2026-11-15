@@ -14,7 +14,7 @@
                 "cashRegisterId": null,
                 "state": "ok",
                 "stateLabel": "En ordre",
-                "lastSeenAt": "2026-11-15T22:53:58+00:00",
+                "lastSeenAt": "2026-11-15T23:33:00+00:00",
                 "silentSince": null,
                 "silentSeconds": null,
                 "hint": null
@@ -31,6 +31,6 @@
         "thresholdSeconds": 300,
         "exercise": true,
         "screen": "pertes.boitiers",
-        "checkedAt": "2026-11-15T22:53:58+00:00"
+        "checkedAt": "2026-11-15T23:33:01+00:00"
     }
 }

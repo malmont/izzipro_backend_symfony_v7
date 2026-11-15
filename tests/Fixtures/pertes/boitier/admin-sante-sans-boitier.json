@@ -26,11 +26,11 @@
             "down": 0,
             "absent": 1,
             "allOk": false,
-            "label": "1 appareil à vérifier"
+            "label": "Aucun appareil installé"
         },
         "thresholdSeconds": 300,
         "exercise": false,
         "screen": "pertes.boitiers",
-        "checkedAt": "2026-11-15T22:53:55+00:00"
+        "checkedAt": "2026-11-15T23:32:58+00:00"
     }
 }

@@ -24,8 +24,9 @@ use Symfony\Component\HttpKernel\KernelEvents;
  *   l'inscription (elle demande la clé du boîtier) et l'échange de jeton (elle vérifie elle-même un jeton, même expiré). Toutes
  *   deux sont limitées en débit par adresse.
  * - Le boîtier authentifié est posé dans l'attribut `_loss_box` de la requête ; le contrôleur refuse de travailler sans lui (une
- *   garde débranchée ne laisse donc rien passer). Plafonds (`LossBoxLimits`) : essais des deux routes ouvertes par adresse,
- *   appels au jeton refusé par adresse (arrêtés avant toute lecture de la base), appels de chaque boîtier.
+ *   garde débranchée ne laisse donc rien passer). Plafonds (`LossBoxLimits`) : essais des deux routes ouvertes par adresse ;
+ *   appels d'un jeton bien signé mais refusé, par boîtier et par génération (arrêtés avant toute lecture de la base, sans jamais
+ *   arrêter une adresse : du bruit envoyé depuis le réseau de la boutique ne fait pas taire ses boîtiers) ; appels de chaque boîtier.
  * - Priorité 13 : après la garde du module (14), qui répond 403 `MODULE_INACTIVE` quand le droit est retiré, avant le pare-feu.
  */
 class LossBoxGuardSubscriber implements EventSubscriberInterface
@@ -53,26 +54,34 @@ class LossBoxGuardSubscriber implements EventSubscriberInterface
             return;
         }
         $site = (string) $this->tenant->getTenantCode();
-        $ip = $request->getClientIp() ?? 'unknown';
         if ($request->getMethod() === 'POST' && self::isOpen($path)) {
-            $wait = $this->limits->open($site, $ip);
+            $wait = $this->limits->open($site, $request->getClientIp() ?? 'unknown');
             if ($wait !== null) {
                 $event->setResponse(self::tooMany($wait));
             }
 
             return; // la route vérifie elle-même la clé ou le jeton
         }
-        // une adresse qui enchaîne les jetons refusés est arrêtée avant toute lecture de la base
-        $wait = $this->limits->failuresLeft($site, $ip);
+        try {
+            // la signature d'abord : elle ne coûte aucune lecture, et un jeton mal signé ou absent n'entame aucun compte
+            $claims = $this->channel->claims($request->headers->get(LossBoxToken::HEADER));
+        } catch (LossBoxException $e) {
+            $event->setResponse(new JsonResponse($e->body(), $e->status));
+
+            return;
+        }
+        // un jeton bien signé mais refusé qui insiste (expiré, révoqué, génération passée) est arrêté avant la lecture de la base :
+        // lui seul, jamais l'adresse d'où il vient (les boîtiers d'une boutique et le Wi-Fi de ses visiteurs partagent la leur)
+        $wait = $this->limits->refusedLeft($site, $claims['boxId'], $claims['generation']);
         if ($wait !== null) {
             $event->setResponse(self::tooMany($wait));
 
             return;
         }
         try {
-            $box = $this->channel->authenticate($request->headers->get(LossBoxToken::HEADER));
+            $box = $this->channel->authenticated($claims);
         } catch (LossBoxException $e) {
-            $this->limits->failed($site, $ip);
+            $this->limits->refused($site, $claims['boxId'], $claims['generation']);
             $event->setResponse(new JsonResponse($e->body(), $e->status));
 
             return;

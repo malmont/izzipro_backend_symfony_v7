@@ -26,7 +26,7 @@ use App\Services\TenantEntityManagerProvider;
  *   jamais échouer le lot, et il n'est pas à renvoyer.
  * - **Le signe de vie n'est pas un fait** : il met à jour l'état du boîtier et de ses appareils ; seul un CHANGEMENT écrit un fait
  *   (appareil vu pour la première fois, en panne, revenu ; boîtier revenu après un silence). Un appareil refusé (genre qui change,
- *   trop d'appareils) est dit dans la réponse : il n'empêche jamais le boîtier de donner signe de vie.
+ *   série en double, trop d'appareils) est dit dans la réponse : il n'empêche jamais le boîtier de donner signe de vie.
  * - Aucun état de pièce ne change en L3-a : les faits de pièces sont gardés tels quels (les lots L3-b et L4 les liront).
  */
 class LossBoxChannelService
@@ -61,13 +61,32 @@ class LossBoxChannelService
      */
     public function authenticate(mixed $token): array
     {
+        return $this->authenticated($this->claims($token));
+    }
+
+    /**
+     * Ce que dit un jeton dont la signature est bonne pour ce site (expiré ou non). Aucune lecture de la base.
+     *
+     * @return array{boxId: int, generation: int, expiresAt: int}
+     */
+    public function claims(mixed $token): array
+    {
         if (!is_string($token) || $token === '') {
             throw new LossBoxException('BOX_TOKEN_REQUIRED', 'En-tête ' . LossBoxToken::HEADER . ' requis.', 401);
         }
-        $claims = $this->tokens->read($this->tenantCode(), $token);
-        if ($claims === null) {
-            throw new LossBoxException('BOX_TOKEN_INVALID', 'Jeton de boîtier invalide.', 401);
-        }
+
+        return $this->tokens->read($this->tenantCode(), $token) ?? throw new LossBoxException('BOX_TOKEN_INVALID', 'Jeton de boîtier invalide.', 401);
+    }
+
+    /**
+     * Le boîtier que désigne un jeton à la signature bonne : réel, actif, de la même génération, jeton non expiré.
+     *
+     * @param array{boxId: int, generation: int, expiresAt: int} $claims
+     *
+     * @return array<string, mixed> la ligne du boîtier, avec `token_expires_at`
+     */
+    public function authenticated(array $claims): array
+    {
         $box = self::usable($this->repository()->box($claims['boxId']), $claims['generation']);
         if ($claims['expiresAt'] <= time()) {
             throw new LossBoxException('BOX_TOKEN_EXPIRED', 'Jeton de boîtier expiré : demandez-en un neuf.', 401);
@@ -186,8 +205,6 @@ class LossBoxChannelService
         $refused = [];
         if (!is_array($devices) || !array_is_list($devices)) {
             $errors['devices'] = array_key_exists('devices', $body) ? 'MUST_BE_LIST' : 'REQUIRED';
-        } elseif (count($devices) > LossDevice::MAX_PER_BOX) {
-            $errors['devices'] = 'TOO_MANY';
         } else {
             foreach ($devices as $i => $device) {
                 if (!is_array($device)) {
@@ -218,6 +235,10 @@ class LossBoxChannelService
                 }
                 if (isset($announced[$serial])) {
                     $refused[] = ['serial' => $serial, 'code' => 'DUPLICATE']; // deux appareils au même numéro de série : le premier compte
+                    continue;
+                }
+                if (count($announced) >= LossDevice::MAX_PER_BOX) {
+                    $refused[] = ['serial' => $serial, 'code' => 'TOO_MANY']; // 16 appareils par signe de vie : les suivants ne sont pas pris
                     continue;
                 }
                 $announced[$serial] = ['kind' => $device['kind'], 'status' => $device['status'], 'model' => $model];
@@ -263,7 +284,13 @@ class LossBoxChannelService
                     continue;
                 }
                 if ($known[$serial]['kind'] !== $device['kind']) {
-                    $refused[] = ['serial' => $serial, 'code' => 'MISMATCH']; // le genre d'un appareil ne change pas : l'appareil connu reste comme il est
+                    // le genre d'un appareil ne change pas : celui qu'on connaissait sous ce numéro n'est plus là. Il est noté en panne,
+                    // une fois, pour que l'administrateur le voie dans la fiche du boîtier
+                    $refused[] = ['serial' => $serial, 'code' => 'MISMATCH'];
+                    if ($known[$serial]['status'] !== LossDevice::DOWN) {
+                        $repository->event($boxId, (int) $known[$serial]['id'], LossBoxEvent::SOURCE_DOWN, null, false, ['reason' => 'mismatch'], $now);
+                        $repository->deviceStatus((int) $known[$serial]['id'], LossDevice::DOWN, null, false, $now);
+                    }
                     continue;
                 }
                 $id = (int) $known[$serial]['id'];
@@ -475,7 +502,14 @@ class LossBoxChannelService
      */
     private function sameMachine(array $box, array $body, string $site): void
     {
+        $boxId = (int) $box['id'];
+        // un jeton copié ne sert pas à deviner la machine : quelques empreintes fausses, et ce boîtier attend
+        $wait = $this->limits->machineLeft($site, $boxId);
+        if ($wait !== null) {
+            throw new LossBoxException('RATE_LIMITED', 'Trop d\'essais. Réessayez plus tard.', 429, ['retryAfterSeconds' => $wait]);
+        }
         if (!is_string($body['machine'] ?? null) || !hash_equals((string) $box['machine_hash'], $this->tokens->machineHash($site, $body['machine']))) {
+            $this->limits->machineFailed($site, $boxId);
             throw new LossBoxException('BOX_TOKEN_INVALID', 'Jeton de boîtier invalide : il faut une nouvelle inscription.', 401);
         }
     }

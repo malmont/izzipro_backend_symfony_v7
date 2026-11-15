@@ -22,8 +22,8 @@ use App\Services\TenantEntityManagerProvider;
 class LossHealthService
 {
     public const DEFAULT_SILENT_AFTER = 300;
-    /** Bornes du délai réglable : le boîtier donne signe de vie chaque minute ; au-delà d'une heure une panne passerait inaperçue */
-    public const SILENT_AFTER_MIN = 120;
+    /** Bornes du délai réglable : le boîtier donne signe de vie chaque minute (deux appels perdus ne font pas un silence) ; au-delà d'une heure une panne passerait inaperçue */
+    public const SILENT_AFTER_MIN = 180;
     public const SILENT_AFTER_MAX = 3600;
     public const STATES = ['ok', 'pending', 'down', 'absent'];
 
@@ -55,17 +55,21 @@ class LossHealthService
         if ($devices === []) {
             $devices[] = ['code' => 'box', 'kind' => 'box', 'label' => $this->texts->t('health.kind.box', $locale), 'zone' => null, 'cashRegisterId' => null, 'state' => 'absent',
                 'stateLabel' => $this->texts->t('health.state.absent', $locale), 'lastSeenAt' => null, 'silentSince' => null, 'silentSeconds' => null,
-                'hint' => $this->texts->t('health.hint.box.absent', $locale)];
+                'hint' => $this->texts->t('health.hint.box.' . ($exercise ? 'absent_exercise' : 'absent'), $locale)];
         }
         $counts = array_fill_keys(self::STATES, 0);
         foreach ($devices as $device) {
             ++$counts[$device['state']];
         }
-        $allOk = $counts['ok'] === count($devices);
-        $toCheck = count($devices) - $counts['ok'];
+        // « à vérifier » : ce qui est branché et ne va pas. Un appareil pas encore installé n'est pas une panne (une boutique peut
+        // suivre ses pièces sans boîtier) : sans rien d'installé, le bandeau le dit, sans alarme
+        $toCheck = $counts['pending'] + $counts['down'];
+        $installed = $counts['ok'] + $toCheck;
+        $allOk = $installed > 0 && $toCheck === 0;
+        $label = $installed === 0 ? 'none' : ($allOk ? 'all_ok' : ($toCheck > 1 ? 'to_check_many' : 'to_check_one'));
 
         return ['devices' => $devices,
-            'summary' => $counts + ['allOk' => $allOk, 'label' => $allOk ? $this->texts->t('health.summary.all_ok', $locale) : $this->texts->t('health.summary.' . ($toCheck > 1 ? 'to_check_many' : 'to_check_one'), $locale, ['count' => $toCheck])],
+            'summary' => $counts + ['allOk' => $allOk, 'label' => $this->texts->t('health.summary.' . $label, $locale, ['count' => $toCheck])],
             'thresholdSeconds' => $threshold, 'exercise' => $exercise, 'screen' => LossBoxService::SCREEN, 'checkedAt' => gmdate('Y-m-d\TH:i:s\+00:00', $now)];
     }
 
