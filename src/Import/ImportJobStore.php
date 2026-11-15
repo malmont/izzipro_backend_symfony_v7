@@ -14,6 +14,9 @@ class ImportJobStore
 {
     public const SOURCE_SHOPIFY = 'shopify';
     public const KIND_CATALOG = 'catalog';
+    /** Lot IMP-2 : le fichier des clients (comptes invités, `CustomerImportService`) */
+    public const KIND_CUSTOMERS = 'customers';
+    public const KINDS = [self::KIND_CATALOG, self::KIND_CUSTOMERS];
     public const UPLOADED = 'uploaded';
     public const ANALYSED = 'analysed';
     public const RUNNING = 'running';
@@ -26,6 +29,7 @@ class ImportJobStore
     public const ITEM_VARIANT = 'variant';
     public const ITEM_CATEGORY = 'category';
     public const ITEM_PICTURE = 'picture';
+    public const ITEM_CUSTOMER = 'customer';
 
     public function __construct(private readonly TenantEntityManagerProvider $emProvider)
     {

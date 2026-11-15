@@ -83,6 +83,11 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
                 [$this->loginIp, $this->siteIpKey($request)],
                 [$this->loginGlobalIp, $ip],
             ],
+            // Lien d'invitation d'un client repris d'une ancienne boutique (lot IMP-2) : lire, accepter, refuser ; comme une connexion
+            in_array($path, ['/api/import-invitation/verify', '/api/import-invitation/accept', '/api/import-invitation/decline'], true) => [
+                [$this->loginIp, $this->siteIpKey($request)],
+                [$this->loginGlobalIp, $ip],
+            ],
             $path === '/api/otp-verify' => [
                 [$this->otpAccount, $this->accountKey($request, ['username', 'email'])],
             ],

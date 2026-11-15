@@ -20,19 +20,25 @@ class AppMembershipDirectory implements ResetInterface
     /** Valeurs du filtre en plus des familles : un compte client sans aucune appartenance ; un compte d'équipe (jamais membre) */
     public const NONE = 'none';
     public const TEAM = 'team';
-    public const CHOICES = [AppFamilies::BOUTIQUE, AppFamilies::LIVINGMEMORY, AppFamilies::POS, self::NONE, self::TEAM];
+    /** Lot IMP-2 : compte repris du fichier des clients d'une ancienne boutique, qui n'a pas (encore) accepté son invitation : pas un client */
+    public const INVITED = 'invited';
+    public const CHOICES = [AppFamilies::BOUTIQUE, AppFamilies::LIVINGMEMORY, AppFamilies::POS, self::NONE, self::TEAM, self::INVITED];
 
     /** Libellés de l'administration (français, comme le reste d'EasyAdmin) */
-    public const LABELS = [AppFamilies::BOUTIQUE => 'Boutique', AppFamilies::LIVINGMEMORY => 'Living Memory', AppFamilies::POS => 'Caisse', self::NONE => 'Aucune', self::TEAM => 'Équipe'];
+    public const LABELS = [AppFamilies::BOUTIQUE => 'Boutique', AppFamilies::LIVINGMEMORY => 'Living Memory', AppFamilies::POS => 'Caisse', self::NONE => 'Aucune', self::TEAM => 'Équipe', self::INVITED => 'Invité (boutique importée)'];
 
     /** D'où vient une appartenance, dit à l'administrateur */
     public const SOURCE_LABELS = [
         AppFamilies::SOURCE_REGISTER => 'Inscription', AppFamilies::SOURCE_JOIN => 'A rejoint', AppFamilies::SOURCE_GUEST_CHECKOUT => 'Commande en invité',
         AppFamilies::SOURCE_POS_LINK => 'Fiche de caisse', AppFamilies::SOURCE_BACKFILL => 'Reprise de l\'historique',
+        AppFamilies::SOURCE_IMPORT => 'Invitation acceptée (boutique importée)',
     ];
 
     /** @var array<string, array<int, list<UserAppMembership>>> site => compte => appartenances */
     private array $bySite = [];
+
+    /** @var array<string, array<int, true>> site => comptes invités par import en attente */
+    private array $invitedBySite = [];
 
     public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly TenantConnectionProvider $tenant)
     {
@@ -41,6 +47,7 @@ class AppMembershipDirectory implements ResetInterface
     public function reset(): void
     {
         $this->bySite = [];
+        $this->invitedBySite = [];
     }
 
     /** @return list<UserAppMembership> appartenances d'un compte, de la plus ancienne à la plus récente */
@@ -79,7 +86,28 @@ class AppMembershipDirectory implements ResetInterface
     {
         $shown = [...(AppFamilies::isTeam($user) ? [self::TEAM] : []), ...$this->families((int) $user->getId())];
 
-        return $shown === [] ? [self::NONE] : $shown;
+        return $shown === [] ? [isset($this->invited()[(int) $user->getId()]) ? self::INVITED : self::NONE] : $shown;
+    }
+
+    /**
+     * Lot IMP-2 : les comptes « invités par import » du site qui n'ont pas accepté leur invitation (`import_customer_invitation`). Un
+     * invité n'est membre de rien : sa colonne dit « Invité » au lieu de « Aucune ».
+     *
+     * @return array<int, true>
+     */
+    private function invited(): array
+    {
+        $site = $this->tenant->getTenantCode() ?? '';
+        if (!isset($this->invitedBySite[$site])) {
+            try {
+                $ids = $this->emProvider->getEntityManager()->getConnection()->fetchFirstColumn("SELECT user_id FROM import_customer_invitation WHERE state IN ('imported', 'invited')");
+            } catch (\Throwable) {
+                $ids = []; // table absente d'une base qui n'a pas encore sa migration : aucun invité
+            }
+            $this->invitedBySite[$site] = array_fill_keys(array_map('intval', $ids), true);
+        }
+
+        return $this->invitedBySite[$site];
     }
 
     /** @return list<int> comptes du site dont la colonne « Applications » porte cette valeur ; valeur inconnue : aucun */
@@ -91,7 +119,7 @@ class AppMembershipDirectory implements ResetInterface
         $ids = [];
         foreach ($this->repository()->backfillAccounts() as $account) {
             $shown = [...(AppFamilies::isTeam($account['roles']) ? [self::TEAM] : []), ...$this->families($account['id'])];
-            if (in_array($choice, $shown === [] ? [self::NONE] : $shown, true)) {
+            if (in_array($choice, $shown === [] ? [isset($this->invited()[(int) $account['id']]) ? self::INVITED : self::NONE] : $shown, true)) {
                 $ids[] = $account['id'];
             }
         }

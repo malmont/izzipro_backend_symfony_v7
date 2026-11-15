@@ -38,6 +38,7 @@ class GestionNotificationsSendCommand extends Command
         private readonly ?\App\Services\Notification\NotificationSummaryService $held = null, // lot NOTIF-1 : sortie des courriels de suivi retenus
         private readonly ?\App\Services\Notification\NotificationWeeklyService $weekly = null, // lot NOTIF-2 : résumé de la semaine, le lundi à partir de 8 h du magasin
         private readonly ?\App\Gestion\Services\Report\GestionReportService $reports = null, // lot DOC-1 : retrait des rapports PDF passé leur délai de conservation
+        private readonly ?\App\Import\ImportGuests $importGuests = null, // lot IMP-2 : effacement des clients repris d'une ancienne boutique qui n'ont pas accepté à temps
     ) {
         parent::__construct();
     }
@@ -65,6 +66,7 @@ class GestionNotificationsSendCommand extends Command
             try {
                 $this->emProvider->switchTenant((string) $row['dbname'], (string) $row['code']);
                 $this->purgeReports((string) $row['code']);
+                $this->eraseImportGuests((string) $row['code'], $io); // pour tout site, module de gestion activé ou non
                 $this->releaseHeld((string) $row['code'], $io, $at); // pour tout site, module de gestion activé ou non : ces courriels ne sont pas ceux de la gestion
                 if ($this->platform !== null && $this->modules !== null && !$this->platform->isDemo() && !$this->modules->isEnabled(\App\Services\FeatureAccess\ModuleAccessService::MANAGEMENT)) {
                     $this->snapshot((string) $row['code']); // lot MOD : module éteint, plateforme en live : pas de notification ; l'instantané du stock reste pris (historique)
@@ -121,6 +123,22 @@ class GestionNotificationsSendCommand extends Command
     }
 
     /** Lot DOC-1 : les rapports PDF de la gestion passé leur délai de conservation (90 jours) sont retirés, avec leur fichier ; une erreur n'empêche rien d'autre */
+    /**
+     * Lot IMP-2 : un client repris du fichier d'une ancienne boutique qui n'a pas accepté son invitation est effacé 90 jours après
+     * l'import (`ImportGuests::ERASE_DAYS`). À chaque passage horaire, pour tout site ; une erreur n'empêche jamais la suite.
+     */
+    private function eraseImportGuests(string $code, SymfonyStyle $io): void
+    {
+        try {
+            $result = $this->importGuests?->eraseDue() ?? ['erased' => 0, 'kept' => 0];
+            if ($result['erased'] > 0 || $result['kept'] > 0) {
+                $io->text(sprintf('%s : %d client(s) repris non acceptés effacé(s), %d gardé(s) (une commande les tient)', $code, $result['erased'], $result['kept']));
+            }
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf('Clients repris par import : effacement du site %s en échec (%s)', $code, $e::class));
+        }
+    }
+
     private function purgeReports(string $code): void
     {
         try {

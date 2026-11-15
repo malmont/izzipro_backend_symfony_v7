@@ -334,10 +334,12 @@ Entreprise créée à la mise en place du site porte aussitôt sa date de repris
 gardent leur valeur. Tant qu'un site n'a pas de fiche Entreprise, sa reprise n'est « pas faite » et la caisse cherche comme avant
 (il n'a pas de client non plus).
 
-**À retenir pour un import de clients** (lot IMPORT à venir : Shopify, WooCommerce, PrestaShop) : puisqu'un site neuf naît
-« reprise faite », des clients et des commandes importés **après** sa création ne recevront aucune appartenance par la reprise.
-L'import devra créer lui-même l'appartenance `boutique` de chaque client importé, avec une source `import` à ajouter alors
-(`AppFamilies::SOURCES`), et sans version de conditions. Sinon tous ces clients passeraient par « Rejoindre ».
+**Import de clients** (lot IMP-2, 15/11/2026, `docs/import-boutique.md` § 9) : puisqu'un site neuf naît « reprise faite », des
+clients importés **après** sa création ne reçoivent aucune appartenance par la reprise, et l'import **n'en crée aucune** non plus :
+un client repris du fichier d'une ancienne boutique est un compte « invité par import », qui n'est membre de rien. Son appartenance
+`boutique` naît quand il **accepte son invitation** (mot de passe choisi, conditions lues et acceptées) : source `import`
+(`AppFamilies::SOURCE_IMPORT`), **avec** la version des conditions acceptée et la date. La colonne « Applications » de l'écran des
+utilisateurs dit « Invité (boutique importée) » tant qu'il n'a pas accepté.
 
 **Circuit de la reprise** (décision du propriétaire) : répétition sur une copie jetable de `db_demo`, avec un Postgres et un Redis
 jetables sur un réseau à part, selon les règles de répétition de `docs/architecture.md` ; puis, sur chaque site, **la simulation

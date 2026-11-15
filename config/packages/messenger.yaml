@@ -87,6 +87,8 @@ framework:
             'App\Message\ProductAiBulkMessage': landing_ai # lots IA produits (fiches, traductions, images), même worker IA (07/11/2026)
             'App\Message\PrepareScrollVideoMessage': media
             'App\Import\Message\RunCatalogImportMessage': media # import de catalogue confirmé (lot IMP-1) : téléchargement des images compris
+            'App\Import\Message\RunCustomerImportMessage': media # import de clients confirmé (lot IMP-2) : jamais relancé
+            'App\Import\Message\SendImportInvitationsMessage': media # invitations des clients repris (lot IMP-2) : une par invité, une seule fois
             'App\Message\SendTenantEmailMessage': email
             'App\MemoiresVivantes\Message\GenerateBookPdfMessage': pdf
             'App\Gestion\Message\GenerateGestionReportMessage': pdf # rapports PDF de la gestion (lot DOC-1, 15/11/2026) : jamais relancé, l'échec est noté sur le rapport

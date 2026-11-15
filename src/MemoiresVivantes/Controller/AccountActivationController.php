@@ -16,7 +16,8 @@ class AccountActivationController extends AbstractController
 {
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
-        private readonly UserPasswordHasherInterface $passwordHasher
+        private readonly UserPasswordHasherInterface $passwordHasher,
+        private readonly ?\App\Import\ImportGuests $importGuests = null, // lot IMP-2 : comptes invités par import
     ) {}
 
     #[Route('/activate', methods: ['POST'])]
@@ -40,7 +41,8 @@ class AccountActivationController extends AbstractController
         /** @var User|null $user */
         $user = $userRepo->findOneBy(['verificationToken' => $token]);
 
-        if (!$user) {
+        // lot IMP-2 : un invité par import ne s'active que par son invitation (conditions de la boutique acceptées)
+        if (!$user || $this->importGuests?->isPending($user)) {
             return $this->json(['error' => 'Ce lien d\'activation est invalide ou a déjà été utilisé.'], Response::HTTP_NOT_FOUND);
         }
 

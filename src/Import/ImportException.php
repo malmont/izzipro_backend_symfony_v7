@@ -24,6 +24,14 @@ final class ImportException extends \RuntimeException
         'IMPORT_CANCEL_WINDOW_PASSED' => 'Le délai d\'annulation de cet import est passé.',
         'IMPORT_CANCEL_INTERRUPTED' => 'L\'annulation a été interrompue : relancez-la.',
         'VALIDATION_FAILED' => 'Choix de confirmation invalides.',
+        // Lot IMP-2 : import des clients
+        'IMPORT_KIND_UNKNOWN' => 'Nature d\'import inconnue.',
+        'IMPORT_NOT_A_CUSTOMER_FILE' => 'Ce fichier n\'est pas un export de clients : les colonnes « Email » et « First Name » ou « Last Name » sont attendues.',
+        'IMPORT_NOTHING_TO_INVITE' => 'Aucun client de cet import n\'attend d\'invitation.',
+        'IMPORT_INVITATION_LINK_UNKNOWN' => 'L\'adresse publique de la boutique est inconnue : le lien de l\'invitation ne mènerait nulle part.',
+        'IMPORT_INVITATION_INVALID' => 'Ce lien n\'est plus valable.',
+        'TERMS_NOT_ACCEPTED' => 'Les conditions doivent être acceptées pour rouvrir le compte.',
+        'TERMS_VERSION_CHANGED' => 'Les conditions ont changé : relisez-les avant d\'accepter.',
     ];
 
     /** @param array<string, mixed> $extra */

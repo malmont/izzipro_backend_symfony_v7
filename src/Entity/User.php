@@ -525,6 +525,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public const SIGNUP_MOBILE = 'mobile';
     /** Application e-commerce mobile (01/11/2026) */
     public const SIGNUP_MOBILE_SHOP = 'mobile_shop';
+    /** Lot IMP-2 : compte repris du fichier des clients d'une ancienne boutique (invité par import : `App\Import\ImportGuests`) */
+    public const SIGNUP_IMPORT_INVITE = 'import_invite';
 
     #[ORM\Column(name: 'signup_channel', length: 20, nullable: true)]
     private ?string $signupChannel = null;

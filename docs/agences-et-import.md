@@ -190,7 +190,7 @@ d'avant » des statistiques, jamais dans le journal de caisse, la numérotation 
 | Lot | Contenu | Risque |
 |---|---|---|
 | IMP-1 | Catalogue Shopify : dépôt, analyse, confirmation, exécution, images, rapport, annulation | données |
-| IMP-2 | Clients avec consentement | données personnelles |
+| IMP-2 | Clients avec consentement (**codé le 15/11/2026** : `docs/import-boutique.md` § 9) | données personnelles |
 | IMP-3 | Historique des commandes | données |
 | IMP-4, IMP-5 | Lecteurs WooCommerce, puis PrestaShop | faible |
 

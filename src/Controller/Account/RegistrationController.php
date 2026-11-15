@@ -50,7 +50,8 @@ class RegistrationController extends AbstractController
         LoggerInterface $logger,
         EmailSenderService $emailSenderService,
         EmailLogoHelper $emailLogoHelper,
-        private readonly ?\App\Services\AppMembershipService\AppMembershipService $memberships = null // familles d'applications (APPS-MEMBRES M1, 14/11/2026)
+        private readonly ?\App\Services\AppMembershipService\AppMembershipService $memberships = null, // familles d'applications (APPS-MEMBRES M1, 14/11/2026)
+        private readonly ?\App\Import\ImportGuests $importGuests = null // lot IMP-2 : comptes invités par import
     ) {
         $this->emailVerifier = $emailVerifier;
         $this->tenantEmProvider = $tenantEmProvider;
@@ -147,6 +148,14 @@ class RegistrationController extends AbstractController
             return $this->json(['error' => 'Email domain appears invalid', 'code' => 'EMAIL_DOMAIN_INVALID', 'message' => 'Email domain appears invalid'], Response::HTTP_BAD_REQUEST);
         }
 
+        // Lot IMP-2 : cette adresse est celle d'un compte « invité par import » qui n'a pas accepté son invitation. La personne
+        // s'inscrit d'elle-même : la fiche reprise de l'ancienne boutique est effacée et l'inscription repart d'un compte neuf (pas de
+        // refus « adresse déjà utilisée », qui révélerait l'import). Un invité qu'une commande tient devient un compte ordinaire : le
+        // refus habituel s'applique alors.
+        if (($guestId = $this->importGuests?->pendingIdByEmail((string) $email)) !== null) {
+            $this->importGuests->erase($guestId);
+            $em->clear();
+        }
         // Vérification doublon
         $existingUser = $em->getRepository(User::class)->findOneBy(['email' => $email]);
         if ($existingUser) {
@@ -342,7 +351,8 @@ class RegistrationController extends AbstractController
         /** @var User|null $user */
         $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
 
-        if (!$user || $user->isVerified()) {
+        // lot IMP-2 : un invité par import n'a pas de lien de vérification, seulement son invitation : même réponse neutre, aucun courriel
+        if (!$user || $user->isVerified() || $this->importGuests?->isPending($user)) {
             return $this->json(['message' => self::RESEND_NEUTRAL_MESSAGE], Response::HTTP_OK);
         }
 

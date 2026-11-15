@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (547)
+## Boutique et commun (552)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -560,6 +560,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/voyages` | ROLE_ADMIN | `Gestion\Controller\GestionTripController::list` |
 | POST | `/api/gestion/voyages` | ROLE_ADMIN | `Gestion\Controller\GestionTripController::create` |
 | GET | `/api/homeslider` | PUBLIC_ACCESS | `Controller\HomeSliderController\HomeSliderController::getHomeSlider` |
+| POST | `/api/import-invitation/accept` | PUBLIC_ACCESS | `Import\Controller\ImportInvitationController::accept` |
+| POST | `/api/import-invitation/decline` | PUBLIC_ACCESS | `Import\Controller\ImportInvitationController::decline` |
+| POST | `/api/import-invitation/verify` | PUBLIC_ACCESS | `Import\Controller\ImportInvitationController::verify` |
 | DELETE | `/api/media/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::delete` |
 | PATCH | `/api/media/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::rename` |
 | GET | `/api/media` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::list` |
@@ -730,6 +733,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/site/help` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\HelpController\HelpController::list` |
 | POST | `/api/site/imports/{id}/cancel` | ROLE_ADMIN | `Import\Controller\SiteImportController::cancel` |
 | POST | `/api/site/imports/{id}/confirm` | ROLE_ADMIN | `Import\Controller\SiteImportController::confirm` |
+| GET | `/api/site/imports/{id}/customers` | ROLE_ADMIN | `Import\Controller\SiteImportController::customers` |
+| POST | `/api/site/imports/{id}/invitations` | ROLE_ADMIN | `Import\Controller\SiteImportController::invite` |
 | GET | `/api/site/imports/{id}/issues.csv` | ROLE_ADMIN | `Import\Controller\SiteImportController::issues` |
 | GET | `/api/site/imports/{id}` | ROLE_ADMIN | `Import\Controller\SiteImportController::show` |
 | GET | `/api/site/imports` | ROLE_ADMIN | `Import\Controller\SiteImportController::list` |

@@ -66,6 +66,7 @@ final class NotificationCatalog
         'account_deleted_notice' => [self::INDISPENSABLE, null],
         'memoires_account_invitation' => [self::INDISPENSABLE, null],
         'support_agent_invitation' => [self::INDISPENSABLE, null],
+        'customer_import_invitation' => [self::INDISPENSABLE, null], // lot IMP-2 : un seul courriel par client repris d'une ancienne boutique, décidé par le commerçant, jamais relancé
         'chapter_invitation' => [self::INDISPENSABLE, null], // garde son propre lien de désabonnement
         // Avis au CLIENT propriétaire d'un livre (invitation épuisée sans réponse) : il parle de son livre à un client du site, pas à
         // l'équipe du site ; les niveaux, qui règlent les courriels de l'espace d'administration, ne s'y appliquent pas
@@ -111,6 +112,7 @@ final class NotificationCatalog
         'src/Services/OrderService/OrderMailerService.php' => ['order_confirmation', self::ORDER_TO_SHIP, 'order_notice'],
         'src/Services/OrderService/OrderShipmentService.php' => ['order_shipped'],
         'src/Services/OtpService.php' => ['otp_code'],
+        'src/Import/CustomerImportService.php' => ['customer_import_invitation'],
         'src/Services/Platform/SiteConfigurationPathsService.php' => ['test_email'],
         'src/Services/PosAuditService/PosReceiptMailer.php' => ['pos_receipt'],
         'src/Services/PosStripeService/PosHealthService.php' => [self::POS_HEALTH_ALERT, 'platform_pos_health_copy'],

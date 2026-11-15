@@ -207,6 +207,9 @@ security:
         # « Rejoindre » une famille d'applications (APPS-MEMBRES M3, 14/11/2026) : public ; la preuve est le jeton de passage rendu avec le
         # refus APP_MEMBERSHIP_REQUIRED (10 minutes, usage unique) ; limité en débit comme la connexion
         - { path: '^/api/apps/join$', methods: [POST], roles: PUBLIC_ACCESS }
+        # Lien d'invitation d'un client repris d'une ancienne boutique (lot IMP-2, 15/11/2026) : public ; la preuve est le jeton du lien (usage
+        # unique, 30 jours, empreinte seule en base), envoyé dans le corps ; limité en débit comme la connexion
+        - { path: '^/api/import-invitation/(verify|accept|decline)$', methods: [POST], roles: PUBLIC_ACCESS }
         # Thème de l'application e-commerce mobile (31/10/2026) : lecture sans connexion, route dédiée (le profil ne change pas)
         - { path: ^/api/mobile/app-theme$, methods: [GET], roles: PUBLIC_ACCESS }
         - { path: ^/api/app-keys(/|$), roles: ROLE_ADMIN }

@@ -22,6 +22,7 @@ class AnonymousWriteAccessTest extends WebTestCase
     private const PUBLIC_WRITES = [
         '#^/api/(login|logout|token/refresh|register|password-reset/|otp-verify|resend-verification)#' => 'authentification (limites de débit, jetons)',
         '#^/api/apps/join$#' => '« Rejoindre » une famille d\'applications : jeton de passage à usage unique rendu par une connexion vérifiée (limite de débit)',
+        '#^/api/import-invitation/(verify|accept|decline)$#' => 'lien d\'invitation d\'un client repris d\'une ancienne boutique (lot IMP-2) : jeton du lien à usage unique, 30 jours, empreinte seule en base (limite de débit)',
         '#^/(logout|register|password-reset/confirm|contact/)$#' => 'anciennes pages Twig (formulaires avec jeton CSRF)',
         '#^/$#' => 'page de connexion (LoginAuthenticator, limite de tentatives)',
         '#^/cart#' => 'panier de l\'ancienne boutique (session du visiteur)',

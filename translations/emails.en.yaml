@@ -224,6 +224,22 @@ support_agent_invitation:
     validity: 'This link works once and stays valid for %hours% hours. After that, ask for a new invitation.'
     ignore: 'If you were not expecting this invitation, ignore this e-mail: no access is opened until the password is chosen.'
 
+# IMP-2 (2026-11-15): invitation of a customer carried over from the file of a former store. A single e-mail, decided by the merchant,
+# never repeated; sober, with NO promotion at all (text validated by the owner). %expires%: end of validity of the link; %erase%: day on
+# which the carried-over information is erased if the customer does nothing.
+customer_import_invitation:
+    subject: '%site%: your customer account'
+    title: 'Your customer account'
+    greeting: 'Hello %name%,'
+    greeting_plain: 'Hello,'
+    message: '%site% has moved its online store to a new site. You had a customer account on the old site: we can reopen it on the new one, if you wish.'
+    button: 'Reopen my account'
+    after_button: 'You will choose a password and read the terms of use before accepting.'
+    validity: 'This link is valid until %expires%. If you do nothing, no account will be opened, and the information carried over from the old site (your name, your e-mail address, your postal address) will be erased on %erase% at the latest.'
+    decline_intro: 'You can also have it erased right now:'
+    decline_label: 'Do not reopen my account'
+    once: 'You will not receive any other message about this.'
+
 # NOTIF-1 (2026-11-15): held follow-up e-mails, gathered into one per topic
 notification_summary:
     subject:

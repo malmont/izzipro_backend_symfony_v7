@@ -228,6 +228,22 @@ support_agent_invitation:
     validity: 'Ce lien ne sert qu''une fois et reste valable %hours% heures. Passé ce délai, demandez une nouvelle invitation.'
     ignore: 'Si vous n''attendiez pas cette invitation, ignorez ce courriel : aucun accès n''est ouvert tant que le mot de passe n''est pas choisi.'
 
+# Lot IMP-2 (15/11/2026) : invitation d'un client repris du fichier d'une ancienne boutique. Un seul courriel, décidé par le commerçant,
+# jamais relancé ; sobre, SANS aucune promotion (texte validé par le propriétaire). %expires% : fin de validité du lien ; %erase% : jour
+# où les informations reprises sont effacées si le client ne fait rien.
+customer_import_invitation:
+    subject: '%site% : votre compte client'
+    title: 'Votre compte client'
+    greeting: 'Bonjour %name%,'
+    greeting_plain: 'Bonjour,'
+    message: '%site% a changé de site pour sa boutique en ligne. Vous aviez un compte client sur l''ancien site : nous pouvons le rouvrir sur le nouveau, si vous le souhaitez.'
+    button: 'Rouvrir mon compte'
+    after_button: 'Vous choisirez un mot de passe et vous lirez les conditions d''utilisation avant d''accepter.'
+    validity: 'Ce lien est valable jusqu''au %expires%. Si vous ne faites rien, aucun compte ne sera ouvert, et les informations reprises de l''ancien site (votre nom, votre adresse courriel, votre adresse postale) seront effacées le %erase% au plus tard.'
+    decline_intro: 'Vous pouvez aussi les faire effacer tout de suite :'
+    decline_label: 'Ne pas rouvrir mon compte'
+    once: 'Vous ne recevrez pas d''autre message à ce sujet.'
+
 # Lot NOTIF-1 (15/11/2026) : courriels de suivi retenus, réunis en un seul par sujet
 notification_summary:
     subject:

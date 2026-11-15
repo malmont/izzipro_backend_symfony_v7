@@ -31,7 +31,17 @@ class ResetPasswordController extends AbstractController
         private EmailLogoHelper $emailLogoHelper,
         private readonly ?\App\Services\AppMembershipService\AppMembershipService $memberships = null, // familles d'applications (APPS-MEMBRES M1, 14/11/2026)
         private readonly ?\App\Services\Site\AdminSpaceUrl $adminSpace = null, // lot SUPPORT-WEB : lien de l'espace d'administration (jeton dans le fragment)
+        private readonly ?\App\Import\ImportGuests $importGuests = null, // lot IMP-2 : comptes invités par import
     ) {}
+
+    /**
+     * Lot IMP-2 : un compte « invité par import » qui n'a pas accepté son invitation est traité ici comme un compte inconnu : aucun
+     * courriel, aucun jeton, aucun mot de passe. Il n'obtient un mot de passe qu'en acceptant les conditions par son lien d'invitation.
+     */
+    private function notImportGuest(?User $user): ?User
+    {
+        return $user !== null && $this->importGuests?->isPending($user) ? null : $user;
+    }
 
     // --- ÉTAPE 1 : DEMANDE DE RESET (API POST) ---
     #[Route('/api/password-reset/request', name: 'app_password_reset_request', methods: ['POST'])]
@@ -76,6 +86,7 @@ class ResetPasswordController extends AbstractController
         // 3. Recherche User
         $em = $this->tenantEmProvider->getEntityManager();
         $user = $em->getRepository(User::class)->findOneBy(['email' => $emailInput]);
+        $user = $this->notImportGuest($user); // lot IMP-2 : un invité par import n'obtient un mot de passe que par son invitation
 
         if (!$user) {
             return $this->json(['message' => 'Link sent if email exists.']);
@@ -145,6 +156,7 @@ class ResetPasswordController extends AbstractController
         }
         $em = $this->tenantEmProvider->getEntityManager();
         $user = $em->getRepository(User::class)->findOneBy(['resetToken' => $token]);
+        $user = $this->notImportGuest($user); // lot IMP-2 : un invité par import n'obtient un mot de passe que par son invitation
         if (!$user || $user->getResetTokenExpiresAt() < new \DateTime()) {
             return $this->json(['error' => 'Lien invalide ou expiré : demandez un nouveau lien.', 'code' => 'RESET_LINK_INVALID', 'message' => 'Lien invalide ou expiré : demandez un nouveau lien.'], 400);
         }
@@ -183,6 +195,7 @@ class ResetPasswordController extends AbstractController
             return $this->json(['error' => 'token attendu.', 'code' => 'FIELDS_REQUIRED', 'message' => 'token attendu.', 'params' => ['fields' => ['token']]], 400);
         }
         $user = $this->tenantEmProvider->getEntityManager()->getRepository(User::class)->findOneBy(['resetToken' => $token]);
+        $user = $this->notImportGuest($user); // lot IMP-2 : un invité par import n'obtient un mot de passe que par son invitation
         if (!$user || $user->getResetTokenExpiresAt() < new \DateTime()) {
             return $this->json(['error' => 'Lien invalide ou expiré : demandez un nouveau lien.', 'code' => 'RESET_LINK_INVALID', 'message' => 'Lien invalide ou expiré : demandez un nouveau lien.'], 400);
         }
@@ -302,6 +315,7 @@ class ResetPasswordController extends AbstractController
 
         $em = $this->tenantEmProvider->getEntityManager();
         $user = $em->getRepository(User::class)->findOneBy(['resetToken' => $token]);
+        $user = $this->notImportGuest($user); // lot IMP-2 : un invité par import n'obtient un mot de passe que par son invitation
 
         if (!$user || $user->getResetTokenExpiresAt() < new \DateTime()) {
             return $this->json(['error' => 'Invalid or expired token.'], 400);

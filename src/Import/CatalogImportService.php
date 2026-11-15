@@ -324,6 +324,12 @@ class CatalogImportService
         return $this->view($this->job($id));
     }
 
+    /** @param array<string, mixed> $job @return array<string, mixed> la vue courte d'un import de catalogue, pour la liste (lot IMP-2 : la liste mêle les natures) */
+    public function summary(array $job): array
+    {
+        return $this->view($job, false);
+    }
+
     /**
      * Le fichier des lignes signalées (refusées, codes-barres écartés, images refusées), pour un tableur. Une cellule qui commence par
      * = + - @ (ou une tabulation, un retour) reçoit une apostrophe devant : un tableur ne l'exécute pas comme une formule.

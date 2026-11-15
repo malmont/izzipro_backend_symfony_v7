@@ -1,4 +1,6 @@
-# Import d'une boutique existante (lot IMP-1 : catalogue Shopify par fichier)
+# Import d'une boutique existante (lots IMP-1 : catalogue Shopify par fichier ; IMP-2 : clients, avec leur consentement)
+
+Le lot IMP-2 (les clients) est décrit au § 9 ; les § 1 à 8 décrivent le catalogue.
 
 Plan d'ensemble et décisions du propriétaire : `docs/agences-et-import.md` § 4 et § 6. Ce lot (codé le 15/11/2026) importe les
 **articles, variantes, images et catégories** d'une boutique Shopify depuis son **fichier d'export des produits** (CSV), sans connexion
@@ -111,4 +113,127 @@ ne pas le renommer, l'import le cherche par son nom). Additive ; à appliquer à
 - Un prix à trois décimales (« 12.500 ») est lu comme des milliers ; l'export de Shopify en donne deux.
 - Marque, poids, image propre à une variante et coût des variantes autres que la première ne sont pas repris.
 - Un gros import occupe le worker `media` (les vidéos attendent).
-- Les fichiers des imports terminés ne sont pas encore purgés (30 jours prévus).
+- Les fichiers des imports de catalogue terminés ne sont pas encore purgés (30 jours prévus) ; le fichier d'un import de clients, lui,
+  est supprimé dès la fin de l'exécution (§ 9).
+
+## 9. Clients, avec leur consentement (lot IMP-2, 15/11/2026)
+
+Contrat validé par le propriétaire le 15/11/2026. Code : `src/Import/CustomerImportService.php` (dépôt, analyse, exécution, invitations,
+annulation), `ImportGuests.php` (les comptes invités : états, jeton, effacement), `ImportInvitationService.php` (le lien, côté client),
+`Shopify/ShopifyCustomerCsv.php`, `Controller/ImportInvitationController.php`. Test : `tests/Functional/Import/ShopifyCustomerImportTest.php`.
+
+**À faire avant l'ouverture au public** (décision du propriétaire) : la conformité à la loi anti-pourriel et à la Loi 25 (texte de
+l'invitation, reprise du consentement commercial, durées) sera **vérifiée par l'avocat**.
+
+### 9.1 Le principe
+
+Le fichier d'export des clients suit le même circuit que le catalogue (dépôt, analyse sans écriture, confirmation, exécution par le
+worker `media`). Chaque client du fichier devient un **compte « invité par import »** : il n'est **pas** un client.
+
+| Un invité | |
+|---|---|
+| Mot de passe | inutilisable (`!` suivi d'un aléa : aucun hachage ne lui correspond), `passwordSet` faux |
+| Connexion | impossible, par aucun chemin : compte non vérifié, aucun rôle de client |
+| Appartenance | aucune (`docs/apps-membres.md`) |
+| Courriel | **aucun** avant que le commerçant décide d'envoyer les invitations, puis **un seul**, jamais relancé |
+| Marque | `signup_channel = import_invite`, une ligne dans `import_customer_invitation` ; « Invité (boutique importée) » dans la colonne « Applications » de l'écran des utilisateurs (et dans son filtre) |
+
+**Chemins publics fermés à un invité en attente** (ils ouvriraient un compte sans acceptation ; réponse neutre, aucun courriel, aucun
+jeton) : « mot de passe oublié » (`/api/password-reset/request`, `verify`, `confirm` et l'ancien `/password-reset/confirm`), le renvoi
+du lien de vérification (`/api/resend-verification`), l'activation de Mémoires Vivantes (`/api/memoires/auth/activate`). Chacun
+demande `ImportGuests::isPending()`. **Toute nouvelle route publique qui pose un mot de passe ou envoie un lien doit le demander aussi.**
+
+Ne sont repris que le prénom, le nom, le courriel (gardé en minuscules), le téléphone et l'adresse par défaut (si elle porte rue,
+ville, code postal et pays). **Ne sont pas lus** : notes, étiquettes, total dépensé, nombre de commandes.
+
+### 9.2 Routes du commerçant (`ROLE_ADMIN`, `/api/site/imports`)
+
+Les routes du § 1 valent pour les deux natures ; chaque import porte `kind` (`catalog` ou `customers`) et la liste les mêle.
+
+| Route | Corps | Réponse | Refus |
+|---|---|---|---|
+| `POST /api/site/imports` | multipart `file`, `source=shopify`, **`kind=customers`** (défaut : `catalog`) | 201, l'import analysé | 422 `IMPORT_KIND_UNKNOWN`, `IMPORT_NOT_A_CUSTOMER_FILE` (colonnes « Email » et « First Name » ou « Last Name » attendues), `IMPORT_TOO_MANY_ROWS` (5 000), `IMPORT_NOT_UTF8`, `IMPORT_EMPTY_FILE`, `IMPORT_FILE_TOO_BIG` ; 409 `IMPORT_ALREADY_ACTIVE` (un seul import actif par site, toutes natures) |
+| `POST /api/site/imports/{id}/confirm` | `{ attestMarketingConsent?: bool }` | 202, `running` | 422 `fields.attestMarketingConsent` `MUST_BE_BOOLEAN` ; 409 `IMPORT_NOTHING_TO_IMPORT`, `IMPORT_NOT_READY` ; 503 `IMPORT_QUEUE_UNAVAILABLE` |
+| `POST /api/site/imports/{id}/invitations` | — | 202 `{ importId, queued }` : les invitations partent en tâche de fond | 409 `IMPORT_NOT_READY` (import non terminé), `IMPORT_NOTHING_TO_INVITE` (tous déjà invités : aucune relance), `IMPORT_INVITATION_LINK_UNKNOWN` (aucune adresse publique connue pour le site) ; 404 pour un import de catalogue |
+| `GET /api/site/imports/{id}/customers?page=&state=` | — | `{ customers, page, pages, total }`, 50 par page | 422 `fields.state` `INVALID_VALUE` |
+| `POST /api/site/imports/{id}/cancel` | — | 200, `cancelled` ; `result.cancel = { erased, kept }` | 409 `IMPORT_NOT_CANCELLABLE` (plus aucun invité en attente) |
+| `GET /api/site/imports/{id}/issues.csv` | — | `line;code` (jamais une adresse) | |
+
+La vue d'un import de clients : les champs du § 1, plus `guests: { imported, invited, accepted, kept, invitable }` ; `report.customers
+= { total, importable, alreadyCustomer, alreadyImported, duplicates, refused, withAddress, marketingClaimed }`, `report.issues`
+(`{ line, code }` : `NO_EMAIL`, `EMAIL_INVALID`, `DUPLICATE_IN_FILE`, `ALREADY_CUSTOMER`, `ALREADY_IMPORTED`, `ADDRESS_INCOMPLETE`),
+`report.eraseDays` (90), `report.linkDays` (30) ; `result = { created, withAddress, marketingClaimed, skipped, failed, failures,
+invitations?: { sent, failed, lastRunAt }, cancel? }`. **Le rapport ne porte ni adresse ni nom.**
+
+Un client repris (`customers[]`) : `{ userId, email, firstname, lastname, state, marketingClaimed, importedAt, invitedAt,
+linkExpiresAt, eraseAt, acceptedAt }`. États : `imported` (repris), `invited` (son lien est parti), `accepted` (client), `kept`
+(n'a pas accepté mais une commande tient son compte : compte d'achat sans compte ordinaire).
+
+Règles :
+- Une adresse qui est déjà celle d'un compte du site (comparée sans la casse) : ligne `ALREADY_CUSTOMER`, **le compte n'est pas
+  touché**. Rejouer le fichier ne crée aucun doublon (`ALREADY_IMPORTED`).
+- **Consentement aux courriels commerciaux** : noté sur l'invité (`marketingClaimed`) seulement si le fichier le dit (« Accepts Email
+  Marketing ») **et** si le commerçant l'atteste à la confirmation (`attestMarketingConsent: true`). L'attestation est gardée sur
+  l'import (`options.attestedBy`, `attestedAt` : le journal du site ne garde ses lignes que 180 jours) et écrite au journal
+  (`import_job` / `attest`). L'inscription à l'infolettre (`newsletter_subscriber`) n'est écrite **qu'à l'acceptation**.
+- **Le fichier est supprimé du serveur dès la fin de l'exécution**, réussie ou non.
+- Annuler : un import non confirmé est abandonné ; un import terminé efface ses invités en attente (leurs liens ne valent plus rien),
+  **tant qu'il en reste**. Un client qui a accepté reste un client.
+
+### 9.3 L'invitation
+
+« Envoyer les invitations » est un geste du commerçant. Chaque invité reçoit **un** courriel (`customer_import_invitation`, classé
+indispensable, `templates/emails/customer_import_invitation.html.twig`, textes `translations/emails.{fr,en}.yaml`), dans la langue du
+site : sobre, sans aucune promotion, deux liens (« Rouvrir mon compte », « Ne pas rouvrir mon compte ») et la phrase « Vous ne
+recevrez pas d'autre message à ce sujet ». **Aucune relance** : un invité déjà invité ne l'est jamais de nouveau. Un envoi en échec
+rend l'invité à « repris » (rien n'est parti) ; cinq échecs d'affilée arrêtent la série.
+
+Le lien : `https://<adresse publique du site>/invitation?token=…&locale=…` (et `&decline=1` pour le refus) : une page de la **boutique
+publique**. Le jeton est aléatoire (64 caractères hexadécimaux) ; **seule son empreinte est en base** ; il ne sert qu'une fois ; il
+vaut 30 jours, **jamais au-delà de l'effacement** de l'invité ; un invité à moins d'un jour de son effacement n'est plus invité.
+
+### 9.4 Le lien, côté client (routes publiques, limitées en débit comme la connexion)
+
+Le jeton va dans le **corps** (jamais dans l'adresse de l'API). Tout lien inconnu, expiré, déjà servi ou d'un compte effacé rend le
+même refus : 404 `IMPORT_INVITATION_INVALID`.
+
+| Route | Corps | Réponse | Refus |
+|---|---|---|---|
+| `POST /api/import-invitation/verify` | `{ token, locale? }` | `{ firstname, email, site, expiresAt, marketing, terms }` (`terms` : les conditions de la boutique, comme `GET /api/apps/boutique/terms`, avec `version`) | 404 |
+| `POST /api/import-invitation/accept` | `{ token, password, termsVersion, accepted: true, marketing?: bool, locale? }` | `{ accepted: true, email, marketing }` ; le client se connecte ensuite par la connexion ordinaire | 422 `VALIDATION_FAILED` (`fields.password` `REQUIRED` \| `TOO_SHORT` (8) \| `TOO_LONG`, `fields.marketing` `MUST_BE_BOOLEAN`) ; 422 `TERMS_NOT_ACCEPTED` ; 409 `TERMS_VERSION_CHANGED { terms }` (le lien reste valable) ; 404 |
+| `POST /api/import-invitation/decline` | `{ token }` | `{ declined: true }` | 404 |
+
+Accepter, dans une seule transaction : l'invitation est close, le mot de passe est posé, le compte devient un compte de client
+(vérifié, `ROLE_USER_INTERNET`), l'appartenance `boutique` est créée (source `import`, version acceptée, date). `marketing` (dans
+`verify`) dit que l'ancienne boutique lui envoyait ses courriels commerciaux : il est alors inscrit à l'infolettre, **sauf s'il
+envoie `marketing: false`** (la page l'écrit en clair, avec une case qu'il peut décocher). Sans cette mention dans le fichier, ou
+sans attestation, rien n'est repris, même s'il envoie `true`. Refuser : tout ce qui a été repris est effacé tout de suite.
+
+### 9.5 Effacement
+
+Un invité qui n'a pas accepté est **effacé 90 jours après l'import** (`ImportGuests::ERASE_DAYS`) : son compte, ses adresses, sa ligne
+d'invitation, la trace de l'import. Rien d'autre n'est touché (une inscription à l'infolettre ou une réservation faites par la même
+personne hors de l'import restent : `PersonalDataEraser` n'est volontairement pas employé). L'effacement passe au **passage horaire
+déjà en marche** (`app:gestion:notifications:envoyer`, pour tout site, module de gestion activé ou non : aucun minuteur de plus) et à
+la lecture de la liste des imports.
+
+Cas particuliers :
+- Un invité qu'une commande (ou un panier, un abonnement, un livre, une fiche de caisse) tient **n'est pas effacé** : à l'échéance, à
+  l'annulation ou à son refus, il devient un compte d'achat sans compte ordinaire (`kept` : vérifié, rôle de client, toujours sans mot
+  de passe choisi), comme tout compte né d'une commande passée sans compte.
+- Une personne qui **s'inscrit d'elle-même** avec l'adresse d'un invité en attente : la fiche reprise est effacée et l'inscription
+  repart d'un compte neuf (pas de refus `EMAIL_ALREADY_USED`, qui révélerait l'import).
+
+### 9.6 Base
+
+Migration `Version20270112100000`, script `scripts/migrate_all_v2_import_clients.sh` : table `import_customer_invitation` (compte,
+import, état, empreinte du jeton, langue, consentement repris, dates : repris, invité, fin du lien, effacement, accepté) et trois
+index. Additive ; à appliquer à toutes les bases **avant** l'échange du code. Deux messages de worker s'ajoutent (file `media`).
+
+### 9.7 Limites connues
+
+- Tant qu'un invité est en attente, une commande passée sans compte avec son adresse se rattache à son compte (règle générale du
+  tunnel) ; il ne peut alors choisir un mot de passe que par son invitation, jusqu'à l'échéance ou l'annulation.
+- Les invitations partent toutes d'un coup, par la file `media` puis la file des courriels : pas d'envoi étalé.
+- La langue de l'invitation est celle du site (l'export de Shopify ne dit pas celle du client).
+- WooCommerce et PrestaShop : lecteurs à écrire derrière la même interface.

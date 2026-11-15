@@ -42,7 +42,9 @@ final class AppFamilies
     public const SOURCE_GUEST_CHECKOUT = 'guest_checkout';
     public const SOURCE_POS_LINK = 'pos_link';
     public const SOURCE_BACKFILL = 'backfill';
-    public const SOURCES = [self::SOURCE_REGISTER, self::SOURCE_JOIN, self::SOURCE_GUEST_CHECKOUT, self::SOURCE_POS_LINK, self::SOURCE_BACKFILL];
+    /** Lot IMP-2 : le client d'une boutique importée a accepté son invitation (conditions lues et acceptées, version et date gardées) */
+    public const SOURCE_IMPORT = 'import';
+    public const SOURCES = [self::SOURCE_REGISTER, self::SOURCE_JOIN, self::SOURCE_GUEST_CHECKOUT, self::SOURCE_POS_LINK, self::SOURCE_BACKFILL, self::SOURCE_IMPORT];
 
     /** Ressource du journal content_audit_log */
     public const AUDIT_RESOURCE = 'user_app';
