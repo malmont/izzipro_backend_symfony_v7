@@ -352,11 +352,19 @@ class AnalysisCatalog
         $rows = array_map(fn (array $l) => ['category' => $l['category'] ?? null, 'label' => $l['label'] ?? null, 'planned' => $l['planned'] ?? null, 'actual' => $l['actual'] ?? null,
             'remaining' => $l['remaining'] ?? null, 'status' => $l['status'] ?? null], $b['lines']);
 
+        // Le budget de la période est son budget GLOBAL quand elle en a un : ce sont les chiffres de l'écran de la période (prévu, utilisé,
+        // reste). Sans budget global, c'est le total des postes. Quand les deux existent, le total prévu par poste est dit à part, et le
+        // tableau garde les postes (15/11/2026 : avant, seuls les postes étaient lus, et une période au budget global était dite « sans prévu »).
+        $global = (int) ($b['globalBudget'] ?? 0) > 0 && is_array($b['global'] ?? null) ? $b['global'] : null;
+        $main = $global ?? $b['total'];
+        $byPost = $global !== null && (int) ($b['total']['planned'] ?? 0) > 0 ? (int) $b['total']['planned'] : null;
+
         return ['period' => $this->periodOf($period, $locale), 'params' => ['periodId' => (int) $period->getId()], 'rows' => $rows, 'figures' => [
-            $this->figure('planned', $b['total']['planned'] ?? null, 'money', $locale),
-            $this->figure('actual', $b['total']['actual'] ?? null, 'money', $locale),
-            $this->figure('remaining', $b['total']['remaining'] ?? null, 'money', $locale),
-            $this->coded('budgetStatus', $b['total']['status'] ?? null, 'budget', $locale),
+            $this->figure('planned', $main['planned'] ?? null, 'money', $locale),
+            $this->figure('actual', $main['actual'] ?? null, 'money', $locale),
+            $this->figure('remaining', $main['remaining'] ?? null, 'money', $locale),
+            $this->coded('budgetStatus', $main['status'] ?? null, 'budget', $locale),
+            $this->figure('plannedByPost', $byPost, 'money', $locale),
         ]];
     }
 

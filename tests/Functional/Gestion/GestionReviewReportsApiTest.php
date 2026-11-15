@@ -41,6 +41,7 @@ class GestionReviewReportsApiTest extends WebTestCase
     private int $period = 0;
     private int $variant = 0;
     private string $today = '';
+    private int $globalBudget = 0;
 
     protected function setUp(): void
     {
@@ -62,6 +63,10 @@ class GestionReviewReportsApiTest extends WebTestCase
         $conn = $this->em()->getConnection();
         $conn->executeStatement('DELETE FROM gestion_budget_line WHERE period_id = ?', [$this->period]);
         $conn->executeStatement("INSERT INTO gestion_budget_line (period_id, category, planned_cents, updated_at) VALUES (?, 'purchases', 300000, NOW())", [$this->period]);
+        // la période n'a pas de budget global au départ (un essai lui en donne un) ; sa valeur d'origine est remise à la fin
+        $this->globalBudget = (int) $conn->fetchOne('SELECT budget_collection FROM collections WHERE id = ?', [$this->period]);
+        $conn->executeStatement('UPDATE collections SET budget_collection = 0 WHERE id = ?', [$this->period]);
+        static::getContainer()->get(TenantCacheService::class)->invalidateTenant();
         $this->endOfWrite();
     }
 
@@ -72,6 +77,8 @@ class GestionReviewReportsApiTest extends WebTestCase
         $conn->executeStatement('DELETE FROM ai_usage WHERE id > ?', [$this->usageMark]);
         $conn->executeStatement("DELETE FROM gestion_conversation WHERE kind = 'console'");
         $conn->executeStatement('DELETE FROM gestion_budget_line WHERE period_id = ?', [$this->period]);
+        $conn->executeStatement('UPDATE collections SET budget_collection = ? WHERE id = ?', [$this->globalBudget, $this->period]);
+        static::getContainer()->get(TenantCacheService::class)->invalidateTenant();
         $this->removePricingFixtures();
         foreach (glob(static::getContainer()->getParameter('kernel.project_dir') . '/var/storage/private_media/gestion-rapports/' . MV_TEST_TENANT_CODE . '/*.pdf') ?: [] as $file) {
             @unlink($file);
@@ -226,6 +233,72 @@ class GestionReviewReportsApiTest extends WebTestCase
             $this->assertSame([429, 'REPORT_DAILY_LIMIT', GestionReportService::DAILY_LIMIT], [$this->status(), $this->body()['code'], $this->body()['limit']], json_encode($body));
         }
         $this->assertSame([GestionReportService::DAILY_LIMIT, 0, 0], $counts());
+    }
+
+    public function testTheBudgetOfAReviewIsTheGlobalBudgetOfThePeriodAsItsScreenShowsIt(): void
+    {
+        $conn = fn () => $this->em()->getConnection();
+        $pid = $this->period;
+        $stored = static::getContainer()->get(GestionReportStore::class);
+        $renderer = static::getContainer()->get(ReportRenderer::class);
+        $currency = static::getContainer()->get(TenantCurrencyProvider::class)->code(true);
+        $money = fn (int $cents): string => self::plain(ReportValue::write($cents, 'money', 'fr', $currency));
+        /** les chiffres de la partie « Budget » du bilan de la période, et son document */
+        $budgetOf = function () use ($pid, $stored, $renderer, $currency): array {
+            static::getContainer()->get(TenantCacheService::class)->invalidateTenant();
+            $report = $this->post(['kind' => 'period', 'periodId' => $pid], 202);
+            $this->em();
+            $content = $stored->find((int) $report['id'])['content'];
+            $figures = [];
+            foreach ($content['blocks'] as $block) {
+                foreach ($block['type'] === 'figures' ? $block['items'] : [] as $item) {
+                    if ($item['source']['screen'] === 'periode.budget') {
+                        $figures[$item['id']] = $item['code'] ?? $item['value'];
+                    }
+                }
+            }
+
+            return [$figures, self::plain($renderer->html($renderer->review($content, null, 'fr', $currency)))];
+        };
+
+        // 1. Un budget GLOBAL, sans aucun poste : le bilan dit le budget de l'écran de la période (prévu, utilisé, reste), au cent
+        $conn()->executeStatement('DELETE FROM gestion_budget_line WHERE period_id = ?', [$pid]);
+        $conn()->executeStatement('UPDATE collections SET budget_collection = 2500000 WHERE id = ?', [$pid]);
+        [$figures, $html] = $budgetOf();
+        $screen = $this->get("/api/dashboard/collection/$pid")['BudgetGeneral'];
+        $this->assertSame(2500000, $screen['generalBudget']);
+        $this->assertGreaterThan(0, $screen['usedBudget'], 'l\'article acheté aujourd\'hui compte dans le budget utilisé');
+        $this->assertSame([$screen['generalBudget'], $screen['usedBudget'], $screen['remainingBudget'], 'ok'], [$figures['planned'], $figures['actual'], $figures['remaining'], $figures['budgetStatus']]);
+        $this->assertArrayNotHasKey('plannedByPost', $figures);
+        foreach ([$money(2500000), $money($screen['usedBudget']), $money($screen['remainingBudget']), 'Dans le budget'] as $expected) {
+            $this->assertStringContainsString(htmlspecialchars($expected, ENT_QUOTES), $html, $expected);
+        }
+        $this->assertStringNotContainsString('>Sans prévu</div>', $html, 'la période a un budget : elle n\'est pas « sans prévu »');
+        // … et la console, qui rédige l'avis sur la même analyse, lit les mêmes chiffres
+        $this->em();
+        $analysis = array_column(static::getContainer()->get(\App\Gestion\Analysis\AnalysisCatalog::class)->run('budget.status', ['periodId' => $pid], 'fr')['figures'], 'value', 'id');
+        $this->assertSame([2500000, $screen['usedBudget'], $screen['remainingBudget']], [$analysis['planned'], $analysis['actual'], $analysis['remaining']]);
+
+        // 2. Un budget global ET des postes : le prévu reste celui de l'écran de la période ; le total des postes est dit à part, le tableau les garde
+        $conn()->executeStatement("INSERT INTO gestion_budget_line (period_id, category, planned_cents, updated_at) VALUES (?, 'purchases', 300000, NOW()), (?, 'advertising', 50000, NOW())", [$pid, $pid]);
+        [$both, $html] = $budgetOf();
+        $this->assertSame([2500000, $screen['usedBudget'], $screen['remainingBudget'], 350000], [$both['planned'], $both['actual'], $both['remaining'], $both['plannedByPost']]);
+        foreach (['Prévu par poste (total des postes)', $money(350000), $money(300000), $money(50000), 'Postes du budget'] as $expected) {
+            $this->assertStringContainsString(htmlspecialchars($expected, ENT_QUOTES), $html, $expected);
+        }
+
+        // 3. Un budget global dépassé : le reste est négatif et l'état le dit
+        $conn()->executeStatement('UPDATE collections SET budget_collection = ? WHERE id = ?', [$screen['usedBudget'] - 100, $pid]);
+        [$over] = $budgetOf();
+        $this->assertSame([$screen['usedBudget'] - 100, -100, 'over'], [$over['planned'], $over['remaining'], $over['budgetStatus']]);
+
+        // 4. Des postes sans budget global : le total des postes, comme avant
+        $conn()->executeStatement('UPDATE collections SET budget_collection = 0 WHERE id = ?', [$pid]);
+        [$posts] = $budgetOf();
+        $budget = $this->get("/api/periodes/$pid/budget");
+        $this->assertSame([350000, $budget['total']['actual'], $budget['total']['remaining']], [$posts['planned'], $posts['actual'], $posts['remaining']]);
+        $this->assertArrayNotHasKey('plannedByPost', $posts);
+        $this->assertSame(0, count(FakeLandingAiClient::$requests));
     }
 
     public function testAYearReviewShowsTheMonthsInOrderAndTheFiscalYearOfTheScreen(): void

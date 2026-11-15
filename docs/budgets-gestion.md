@@ -16,7 +16,7 @@ Migration `Version20261207100000`, script `scripts/migrate_all_v2_gestion_budget
 `GET /api/periodes/{id}/budget?locale=` →
 
 ```
-{ period: { id, name, periodKey }, currency, globalBudget,
+{ period: { id, name, periodKey }, currency, globalBudget, global: { planned, actual, remaining, ratio, status },
   lines: [{ category, label, planned, actual, remaining, ratio, status, details: [{ key, label, actual }] }],
   total: { planned, actual, remaining, ratio, status } }
 ```
@@ -30,6 +30,10 @@ Migration `Version20261207100000`, script `scripts/migrate_all_v2_gestion_budget
   - Σ `actual` = `investment.purchases` + `expenses.total` du résultat de période.
 - `ratio` = actual ÷ planned (2 décimales), `null` si planned = 0 ; `status` : `none` (sans prévu), `ok`, `warning` (≥ 80 %), `over` (> 100 %).
 - `total.planned` = somme des postes ; `globalBudget` = budget global existant (`PATCH /api/periodes/{id}`), indépendant des postes.
+- `global` (15/11/2026) : le budget global de la période tel que l'écran de la période le montre : `planned` = `globalBudget`,
+  `actual` = le budget utilisé du tableau de bord de la période (achats, frais de port, notes de frais ; la publicité n'y entre pas),
+  `remaining`, `ratio`, `status`. L'analyse `budget.status` de la console et le bilan PDF de période prennent `global` quand la
+  période a un budget global, sinon `total` (`docs/rapports-gestion.md` § 7).
 - `PUT /api/periodes/{id}/budget { lines: [{ category, planned }] }` → même forme. Les postes absents gardent leur prévu ; `planned` 0 l'efface ;
   le budget global n'est pas touché. 422 `VALIDATION_FAILED` : `lines[n].category` `INVALID_CATEGORY` / `DUPLICATE_CATEGORY`,
   `lines[n].planned` `MUST_BE_INTEGER_CENTS` (rien n'est écrit) ; 409 `PERIOD_CLOSED` ; 404 `NOT_A_PERIOD` pour une collection manuelle.

@@ -952,6 +952,7 @@ console:
         grossMargin: 'Gross margin'
         netResult: 'Profit'
         businessResult: 'Business profit'
+        plannedByPost: 'Planned per budget line (total of the lines)'
         marginRate: 'Margin rate'
         unknownCostRevenue: 'Sales without known cost'
         unknownCostItems: 'Sales without known cost (units)'

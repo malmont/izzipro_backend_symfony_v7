@@ -68,6 +68,11 @@ class GestionBudgetService
             'period' => ['id' => $period->getId(), 'name' => PeriodCalendar::displayName($period, $locale), 'periodKey' => $period->getPeriodKey()],
             'currency' => $this->currency?->code() ?? TenantCurrencyProvider::DEFAULT,
             'globalBudget' => $period->getBudgetCollection(),
+            // Le budget GLOBAL de la période tel que l'écran de la période le montre (tableau de bord de la période : prévu, utilisé, reste) :
+            // le même calcul, `CollectionDashboardService::data` (achats, frais de port et notes de frais ; la publicité n'y entre pas).
+            // Ajouté le 15/11/2026 : le bilan PDF et la console lisaient seulement les postes et disaient « sans prévu » d'une période qui
+            // a un budget global.
+            'global' => $this->figures((int) $period->getBudgetCollection(), (int) ($totals['purchaseCost'] ?? 0) + (int) ($totals['shippingCost'] ?? 0) + (int) ($totals['expenseCost'] ?? 0)),
             'lines' => $lines,
             'total' => $this->figures(array_sum(array_column($lines, 'planned')), array_sum(array_column($lines, 'actual'))),
         ];

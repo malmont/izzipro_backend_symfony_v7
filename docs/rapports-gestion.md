@@ -119,8 +119,15 @@ Sans `withAdvice` : aucun modèle n'est appelé, 0 unité, et le palier d'IA n'e
 
 | Bilan | Analyses, dans l'ordre du papier |
 |---|---|
-| Période | `period.result` (résultat), `sales.overview` (ventes et marge, avec la période précédente et l'an dernier), `budget.status` (prévu et réel, tableau des postes) ; `stock.overview` (valeur du stock, articles en stock bas) **seulement pour la période en cours** : ce stock est celui d'aujourd'hui |
+| Période | `period.result` (résultat), `sales.overview` (ventes et marge, avec la période précédente et l'an dernier), `budget.status` (le budget de la période : voir plus bas ; tableau des postes) ; `stock.overview` (valeur du stock, articles en stock bas) **seulement pour la période en cours** : ce stock est celui d'aujourd'hui |
 | Année | `year.overview` : chiffres clés, puis le **mois par mois** en tableau, dans l'ordre de l'exercice (le rang de chaque mois reste en colonne) |
+
+**Le budget d'un bilan de période** (correctif du 15/11/2026) : c'est le **budget global de la période**, tel que l'écran de la période
+le montre (prévu, utilisé, reste : le calcul du tableau de bord de la période, `GET /api/dashboard/collection/{id}`, bloc
+`BudgetGeneral`), quand la période en a un. Sans budget global, c'est le total des postes (`GET /api/periodes/{id}/budget`,
+`total`). Quand les deux existent, le prévu reste le budget global, le total des postes est dit à part (« Prévu par poste ») et le
+tableau garde les postes. La règle est dans l'analyse `budget.status` elle-même : la console et l'avis lisent donc les mêmes
+chiffres. Avant ce correctif, seuls les postes étaient lus, et une période au budget global était dite « sans prévu ».
 
 Chaque analyse fait une partie : son titre, sa plage, ses cartes, son tableau ; une partie sans donnée le dit. La mention sous le
 titre : « Chiffres provisoires au … » tant que la période n'est pas clôturée (ou que l'exercice n'est pas terminé) ; « Période

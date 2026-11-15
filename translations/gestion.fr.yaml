@@ -956,6 +956,7 @@ console:
         grossMargin: 'Marge brute'
         netResult: 'Résultat'
         businessResult: 'Résultat de l''entreprise'
+        plannedByPost: 'Prévu par poste (total des postes)'
         marginRate: 'Taux de marque'
         unknownCostRevenue: 'Ventes sans coût connu'
         unknownCostItems: 'Ventes sans coût connu (unités)'
