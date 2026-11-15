@@ -10,6 +10,7 @@ use Doctrine\ORM\Event\PostRemoveEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
 use Doctrine\ORM\Event\PostPersistEventArgs;
 use App\Repository\ProductVariantRepository;
+use App\Services\BarcodeService\CatalogBarcode;
 
 #[ORM\Entity(repositoryClass: ProductVariantRepository::class)]
 #[ORM\HasLifecycleCallbacks]
@@ -37,8 +38,9 @@ class ProductVariant
     private ?int $price = null;
 
     // Code-barres de la variante (C5 hors ligne, 25/10/2026) : EAN/UPC propre à la variante, saisissable dans EasyAdmin ;
-    // le POS cherche la variante puis le produit (code-barres produit existant)
-    #[ORM\Column(length: 32, nullable: true)]
+    // le POS cherche la variante puis le produit (code-barres produit existant). Lot CB-1 (15/11/2026, `docs/codes-barres.md`) : 64
+    // caractères, forme canonique, et un code ne désigne qu'UNE chose sur le site (article ou variante), garanti par la base
+    #[ORM\Column(length: 64, nullable: true)]
     private ?string $barcode = null;
 
     /**
@@ -302,7 +304,8 @@ class ProductVariant
         return $this;
     }
     public function getBarcode(): ?string { return $this->barcode; }
-    public function setBarcode(?string $barcode): static { $b = $barcode !== null ? trim($barcode) : ''; $this->barcode = $b === '' ? null : mb_substr($b, 0, 32); return $this; }
+    /** Forme canonique dès l'écriture ; plus de coupe silencieuse : `CatalogBarcodeService` refuse un code trop long, la base aussi */
+    public function setBarcode(?string $barcode): static { $this->barcode = CatalogBarcode::normalize($barcode); return $this; }
 
     /** @return Collection<int, VariantPromotion> */
     public function getVariantPromotions(): Collection

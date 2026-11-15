@@ -9,6 +9,7 @@ use Doctrine\DBAL\Types\Types;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use App\Repository\ProductRepository;
+use App\Services\BarcodeService\CatalogBarcode;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\Common\Collections\ArrayCollection;
 use App\Entity\TranslatableInterface;
@@ -588,9 +589,10 @@ class Product implements TranslatableInterface, DemoContentInterface
         return $this->barcode;
     }
 
+    /** Forme canonique dès l'écriture (lot CB-1, `docs/codes-barres.md`) : la même que celle que la base impose, l'objet et la ligne ne divergent pas */
     public function setBarcode(?string $barcode): static
     {
-        $this->barcode = $barcode;
+        $this->barcode = CatalogBarcode::normalize($barcode);
 
         return $this;
     }
