@@ -1,0 +1,14 @@
+﻿Handle,Title,Body (HTML),Vendor,Product Category,Type,Tags,Published,Option1 Name,Option1 Value,Option2 Name,Option2 Value,Option3 Name,Option3 Value,Variant SKU,Variant Grams,Variant Inventory Qty,Variant Price,Variant Compare At Price,Variant Barcode,Image Src,Image Position,Image Alt Text,Variant Image,Cost per item,Status
+t-shirt-ete,T-shirt Été,"<p>Un <strong>t-shirt</strong> d'été,
+coupe droite.</p>
+<script>alert(""x"")</script>
+<ul><li>Coton bio</li><li>Lavage à 30 °C</li></ul>",Atelier Zoé,Vêtements > Hauts > T-shirts,Hauts,"été, coton, nouveauté",TRUE,Taille,S,,,,,TS-ETE-S,,5,19.99,24.99,3760123456789,https://cdn.shopify.com/s/files/1/0001/t-shirt-face.png,1,,,7.50,active
+t-shirt-ete,,,,,,,,,M,,,,,TS-ETE-M,,0,19.99,,DOUBLE-1,,,,,,
+t-shirt-ete,,,,,,,,,L,,,,,TS-ETE-L,,3,21.00,,,,,,,,
+t-shirt-ete,,,,,,,,,,,,,,,,,,,,https://cdn.shopify.com/s/files/1/0001/t-shirt-dos.png,2,,,,
+mug-cafe,Mug « Café »,Mug en grès ; 30 cl,,,Maison,,FALSE,Title,Default Title,,,,,MUG-1,,12,"12,50",,double-1,https://evil.example.com/mug.png,,,,,active
+veste-laine,Veste en laine,<p>Chaude.</p>,,Vêtements > Vestes,,,TRUE,Couleur,Bleu nuit,Size,M,Matière,Laine,,,2,120,,VESTE-BLEU-M,https://cdn.shopify.com/s/files/1/0001/veste-redirigee.png,,,,,draft
+veste-laine,,,,,,,,,Rouge,,M,,Laine,,,-4,125.5,,é pas bon,,,,,,
+=cmd|calc,,,,,,,,,,,,,,,,,10,,,,,,,,active
+prix-illisible,Article au prix illisible,,,,,,,,,,,,,,,,abc,,,,,,,,active
+deja-pris,Article au code déjà pris,,,,Maison,,TRUE,,,,,,,,,1,8.00,,__SITE_CODE__,,,,,,active

@@ -114,3 +114,16 @@ services:
         arguments:
             $dailyCap: 1000000
             $fromHour: 0
+
+    # Lot IMP-1 : les images d'un import ne sont jamais téléchargées pour de vrai pendant les tests
+    import.test_http_client:
+        class: Symfony\Component\HttpClient\MockHttpClient
+        arguments: [['App\Tests\Fake\FakeImportImages', 'respond']]
+    App\Import\ImportImageFetcher:
+        autowire: true
+        public: true
+        arguments:
+            $client: '@import.test_http_client'
+    App\Import\CatalogImportService:
+        autowire: true
+        public: true

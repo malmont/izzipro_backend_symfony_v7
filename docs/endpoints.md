@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (500)
+## Boutique et commun (506)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -687,6 +687,12 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PUT | `/api/site/features` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteFeaturesController::update` |
 | GET | `/api/site/help/{key}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\HelpController\HelpController::page` |
 | GET | `/api/site/help` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\HelpController\HelpController::list` |
+| POST | `/api/site/imports/{id}/cancel` | ROLE_ADMIN | `Import\Controller\SiteImportController::cancel` |
+| POST | `/api/site/imports/{id}/confirm` | ROLE_ADMIN | `Import\Controller\SiteImportController::confirm` |
+| GET | `/api/site/imports/{id}/issues.csv` | ROLE_ADMIN | `Import\Controller\SiteImportController::issues` |
+| GET | `/api/site/imports/{id}` | ROLE_ADMIN | `Import\Controller\SiteImportController::show` |
+| GET | `/api/site/imports` | ROLE_ADMIN | `Import\Controller\SiteImportController::list` |
+| POST | `/api/site/imports` | ROLE_ADMIN | `Import\Controller\SiteImportController::upload` |
 | GET | `/api/site/readiness` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteReadinessController::show` |
 | GET | `/api/site/shipping` | ROLE_ADMIN | `Controller\SiteFeaturesController\SiteShippingController::index` |
 | GET | `/api/sizes` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\SizesController\SizeController::getSizes` |

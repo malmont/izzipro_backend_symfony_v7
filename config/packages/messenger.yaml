@@ -86,6 +86,7 @@ framework:
             'App\Message\LandingAiJobMessage': landing_ai
             'App\Message\ProductAiBulkMessage': landing_ai # lots IA produits (fiches, traductions, images), même worker IA (07/11/2026)
             'App\Message\PrepareScrollVideoMessage': media
+            'App\Import\Message\RunCatalogImportMessage': media # import de catalogue confirmé (lot IMP-1) : téléchargement des images compris
             'App\Message\SendTenantEmailMessage': email
             'App\MemoiresVivantes\Message\GenerateBookPdfMessage': pdf
             'App\Gestion\Message\ReadGestionDocumentMessage': gestion_ai # lecture de documents de la gestion (lot L1, 10/11/2026)

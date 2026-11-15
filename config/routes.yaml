@@ -24,3 +24,8 @@ support_controllers:
 loss_prevention_controllers:
     resource: ../src/LossPrevention/Controller/
     type: attribute
+
+# Import d'une boutique existante (lot IMP-1, 15/11/2026) : contrôleurs regroupés dans src/Import
+import_controllers:
+    resource: ../src/Import/Controller/
+    type: attribute
