@@ -722,8 +722,10 @@ class LossPreventionPiecesTest extends LossPreventionTestCase
     public function testTheMigrationReplaysAndItsRollbackRemovesOnlyItsOwnObjects(): void
     {
         $schema = fn (): array => [
-            $this->db->fetchFirstColumn("SELECT c.relname || '.' || t.tgname FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE c.relname IN ('loss_piece', 'loss_tag', 'loss_piece_event') AND NOT t.tgisinternal ORDER BY 1"),
-            $this->db->fetchFirstColumn("SELECT indexname FROM pg_indexes WHERE tablename IN ('loss_piece', 'loss_tag', 'loss_piece_event') ORDER BY indexname"),
+            $this->db->fetchFirstColumn("SELECT c.relname || '.' || t.tgname FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE c.relname IN ('loss_piece', 'loss_tag', 'loss_piece_event') AND NOT t.tgisinternal"
+                // les objets de CE lot seulement : le lot L3-a pose son propre déclencheur et son propre index sur loss_piece_event
+                . " AND t.tgname NOT IN ('loss_piece_event_box_guard') ORDER BY 1"),
+            $this->db->fetchFirstColumn("SELECT indexname FROM pg_indexes WHERE tablename IN ('loss_piece', 'loss_tag', 'loss_piece_event') AND indexname NOT IN ('idx_loss_piece_event_box') ORDER BY indexname"),
             $this->db->fetchFirstColumn("SELECT proname FROM pg_proc WHERE proname IN ('loss_piece_guard', 'loss_tag_guard', 'loss_piece_rows_kept', 'loss_piece_event_frozen', 'loss_piece_event_guard') ORDER BY proname"),
             (int) $this->db->fetchOne("SELECT COUNT(*) FROM pg_class WHERE relkind = 'S' AND relname IN ('loss_piece_number_seq', 'loss_piece_exercise_number_seq')"),
         ];
