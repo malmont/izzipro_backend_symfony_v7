@@ -38,9 +38,12 @@ Code : `Services/NotificationService/` (`PushSenderInterface`, `NotConfiguredPus
 - Types : `low_stock`, `duplicate_invoice`, `trip_budget`, `cash_critical` (tous disponibles depuis le lot B1b-1), sur téléphone ; et
   `loss_digest` (14/11/2026, prévention des pertes, lot L1-b), par COURRIEL : le résumé du jour « N nouveaux constats, X en jeu », envoyé par
   le module (`docs/prevention-pertes.md`). `available` seulement si le droit `module.loss_prevention` est accordé au site. Il part à partir de 8 h à l'heure du magasin, au plus une fois par jour, et seulement pour les constats nés depuis le courriel précédent (plus les constats de reprise complétés par une nouvelle preuve, annoncés une fois). Rien ne part quand l'analyse du site est arrêtée
-  (notice aux salariés exigée et non confirmée, ou retirée). Il n'entre ni dans
-  la règle « une notification par jour » du téléphone, ni dans `notification_log`.
-- `GET /api/gestion/notifications/journal?limit=20` (100 au plus) → `[{ id, kind, title, body, action: { screen, params }, status, sentAt }]`
+  (notice aux salariés exigée et non confirmée, ou retirée). Il n'entre pas dans
+  la règle « une notification par jour » du téléphone. Depuis le lot NOTIF-1 (15/11/2026) il suit le niveau des courriels de suivi de
+  chaque administrateur et s'écrit dans `notification_log` sur le canal `email` (`docs/notifications-courriels.md`).
+- `GET /api/gestion/notifications/journal?limit=20` (100 au plus) → `[{ id, kind, title, body, action: { screen, params }, status, sentAt,
+  channel, topic }]` ; depuis NOTIF-1 le journal porte aussi les courriels du compte (`channel: email`), dont ceux qui sont retenus
+  (`status: held`) ou gardés sans envoi (`kept`) : une application qui ne veut que le téléphone filtre sur `channel: push`
   du gérant connecté ; `status` `sent` | `not_configured` | `failed` | `no_device`.
 
 ## 3. Règles

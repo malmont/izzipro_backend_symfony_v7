@@ -353,8 +353,13 @@ défait pas).
   un seul l'obtient ; la même instruction verrouille la ligne et rend les valeurs d'avant, celles qu'un envoi en échec remettra), puis rendu si aucun envoi n'aboutit (pas de configuration d'envoi sur le site : on réessaiera). La dernière ligne du
   courriel est le nom du site, sous la clé `siteLine` : **jamais `signature`**, que l'envoi commun (`EmailSenderService::sendTemplatedEmail`)
   remplace par la signature de la configuration d'envoi du site (elle peut porter un nom de personne et un lien). Le domaine passé à
-  l'envoi commun est l'hôte public du site (il sert à l'adresse du logo). Rien n'est écrit dans `notification_log` (journal du
-  téléphone) ; le journal du module garde `DIGEST_SENT` (jour, nombres, nombre de destinataires). Textes `translations/emails.*`
+  l'envoi commun est l'hôte public du site (il sert à l'adresse du logo). Depuis le lot NOTIF-1 (15/11/2026) le résumé est un
+  courriel de SUIVI (`docs/notifications-courriels.md`) : pour chaque administrateur, son niveau décide s'il part, s'il est retenu
+  (niveau « Essentiel » : il attend le résumé de la semaine) ou s'il ne part pas (niveau « Aucune ») ; chaque destinataire servi ou
+  retenu a sa ligne dans `notification_log` (canal `email`). Le jour et la borne sont posés dès qu'un destinataire est servi OU retenu
+  (statut `held` quand tous sont retenus) : le constat est annoncé une fois. Un destinataire dont l'envoi échoue alors que d'autres sont
+  servis est retenu lui aussi (`send_failed`). Le lancement à la main (`--courriel-maintenant`) ignore aussi la règle des 8 h de la
+  décision d'envoi. Le journal du module garde `DIGEST_SENT` (jour, nombres, nombre de destinataires, `held`). Textes `translations/emails.*`
   (`loss_digest.*`), gabarit `templates/emails/loss_digest.html.twig`.
 - **Cheminement du site (lot L1-b)** : quand le droit est accordé, le groupe `module.loss_prevention` de `SiteReadinessService` porte cinq
   étapes : `loss.management` (la gestion est activée ; bloquante), `loss.place` (pays de l'adresse lisible ; bloquante), `loss.staff_notice`
