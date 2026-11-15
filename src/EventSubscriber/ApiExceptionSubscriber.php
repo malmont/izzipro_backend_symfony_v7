@@ -23,6 +23,10 @@ use Symfony\Component\HttpKernel\KernelEvents;
  */
 class ApiExceptionSubscriber implements EventSubscriberInterface
 {
+    public function __construct(private readonly ?\Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface $tokens = null)
+    {
+    }
+
     public static function getSubscribedEvents(): array
     {
         // Après le pare-feu (qui transforme les refus d'accès en AccessDeniedHttpException),
@@ -40,6 +44,13 @@ class ApiExceptionSubscriber implements EventSubscriberInterface
         }
         $status = $exception->getStatusCode();
         if ($status < 400 || $status >= 500) {
+            return;
+        }
+        // Compte Assistance seul refusé par la règle d'accès du pare-feu hors de son module : le code de sa garde, pas un FORBIDDEN nu
+        if ($exception instanceof AccessDeniedHttpException && !preg_match('#^/api/support(/|$)#', \App\Services\Http\RequestPath::of($request))
+            && \App\Support\SupportScopeSubscriber::supportOnly($this->tokens?->getToken()?->getRoleNames() ?? [])) {
+            $event->setResponse(\App\Support\SupportScopeSubscriber::refusal());
+
             return;
         }
 

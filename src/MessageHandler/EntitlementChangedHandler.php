@@ -34,6 +34,7 @@ final class EntitlementChangedHandler
         private readonly TranslatorInterface $translator,
         private readonly PlatformModeService $platform,
         private readonly LoggerInterface $logger,
+        private readonly \App\Services\TenantPublicHostResolver $hosts,
     ) {
     }
 
@@ -90,14 +91,27 @@ final class EntitlementChangedHandler
             'message' => $this->translator->trans("entitlement.message_$event", $params, 'emails', $language),
             'nextStep' => $this->translator->trans($nextKey, $params, 'emails', $language),
             'rows' => $rows,
+            // `platformSignature` : `signature` est écrasée par celle de la configuration d'envoi du site quand le courriel part par le
+            // serveur du site (repli), et ce site est celui de la requête en cours, pas forcément celui du courriel
             'signature' => $this->translator->trans('entitlement.signature', [], 'emails', $language),
+            'platformSignature' => $this->translator->trans('entitlement.signature', [], 'emails', $language),
             'locale' => $language, 'intlLocale' => $language === 'en' ? 'en_CA' : 'fr_CA',
         ];
         $subject = $this->mailer->subject("entitlement.subject_$event", $params, $language);
         // serveur de la plateforme d'abord ; sans compte expéditeur de plateforme (tests, poste de développement), serveur du site courant
         $sent = $this->mailer->sendPlatformEmail($to, $subject, 'emails/entitlement_notice.html.twig', $context)
-            || $this->mailer->sendTemplatedEmail($to, $subject, 'emails/entitlement_notice.html.twig', $context, $language, 'emails');
+            || $this->mailer->sendTemplatedEmail($to, $subject, 'emails/entitlement_notice.html.twig', $context, $language, $this->host($tenant));
         $this->logger->info(sprintf('[Entitlements] courriel %s pour %s / %s : %s', $event, $message->tenantCode, $message->featureKey, $sent ? 'envoyé' : 'non envoyé'));
+    }
+
+    /** Hôte du site concerné, pour les adresses absolues du gabarit (avant le 15/11/2026 : le mot « emails », passé à la place d'un hôte) */
+    private function host(array $tenant): string
+    {
+        try {
+            return (string) ($this->hosts->describe((string) $tenant['code'])['host'] ?? '');
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     /** Contact du site (fiche Entreprise), sinon l'expéditeur configuré du site, sinon le premier administrateur ; null si rien */

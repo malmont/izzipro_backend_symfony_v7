@@ -7,6 +7,7 @@ use App\Services\ContentAuditService\ContentAuditRecorder;
 use App\Services\EmailConfigurationService\EmailLocale;
 use App\Services\EmailConfigurationService\EmailSenderService;
 use App\Services\Site\AdminSpaceUrl;
+use App\Services\Site\SiteName;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantPublicHostResolver;
@@ -41,6 +42,7 @@ class SupportAgentService
         private readonly TenantPublicHostResolver $hosts,
         private readonly ContentAuditRecorder $audit,
         private readonly LoggerInterface $logger,
+        private readonly SiteName $siteName,
     ) {
     }
 
@@ -158,7 +160,7 @@ class SupportAgentService
         $code = (string) $this->tenants->getCurrentTenantCode();
         $site = $code !== '' ? $this->hosts->describe($code) : null;
         $t = fn (string $key, array $params = []) => $this->translator->trans('support_agent_invitation.' . $key, $params, 'emails', $language);
-        $params = ['%site%' => (string) ($site['name'] ?? $code), '%inviter%' => SupportDirectoryService::name($by), '%hours%' => self::INVITATION_HOURS];
+        $params = ['%site%' => $this->siteName->name(), '%inviter%' => SupportDirectoryService::name($by), '%hours%' => self::INVITATION_HOURS];
         $sent = false;
         if ($link !== null) {
             try {

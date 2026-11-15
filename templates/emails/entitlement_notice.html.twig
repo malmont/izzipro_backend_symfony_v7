@@ -20,7 +20,7 @@
                             {% for label, value in rows %}<tr><td style="color: #64748b;">{{ label }}</td><td align="right" style="font-weight: 600;">{{ value }}</td></tr>{% endfor %}
                         </table>
                         {% if nextStep %}<p>{{ nextStep }}</p>{% endif %}
-                        <p style="color: #64748b; font-size: 13px; margin-bottom: 0;">{{ signature }}</p>
+                        <p style="color: #64748b; font-size: 13px; margin-bottom: 0;">{{ platformSignature|default(signature) }}</p>
                     </td>
                 </tr>
             </table>

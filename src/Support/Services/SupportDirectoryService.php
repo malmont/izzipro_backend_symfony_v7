@@ -7,9 +7,9 @@ use App\Services\CaisseService\StoreClock;
 use App\Services\Platform\EntitlementService;
 use App\Services\Platform\PlatformModeService;
 use App\Services\CaisseService\SiteLocaleResolver;
+use App\Services\Site\SiteName;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
-use App\Services\TenantPublicHostResolver;
 
 /**
  * Ce que le web doit savoir pour afficher l'Assistance à un compte qui n'ouvre que le module (lot SUPPORT-WEB, 14/11/2026,
@@ -25,7 +25,7 @@ class SupportDirectoryService
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly TenantConnectionManager $tenants,
-        private readonly TenantPublicHostResolver $hosts,
+        private readonly SiteName $siteName,
         private readonly EntitlementService $entitlements,
         private readonly PlatformModeService $platform,
         private readonly SiteLocaleResolver $locale,
@@ -43,11 +43,10 @@ class SupportDirectoryService
         $roles = array_values(array_diff($user->getRoles(), ['ROLE_USER']));
         $supportOnly = in_array('ROLE_SUPPORT', $roles, true) && array_intersect(self::OTHER_ROLES, $roles) === [];
         $code = (string) $this->tenants->getCurrentTenantCode();
-        $site = $code !== '' ? $this->hosts->describe($code) : null;
 
         return [
             'id' => (int) $user->getId(), 'name' => self::name($user), 'email' => $user->getEmail(), 'roles' => $roles, 'supportOnly' => $supportOnly,
-            'site' => ['code' => $code, 'name' => (string) ($site['name'] ?? $code), 'locale' => $this->locale->siteLocale(), 'timezone' => $this->clock->timezone()->getName()],
+            'site' => ['code' => $code, 'name' => $this->siteName->name(), 'locale' => $this->locale->siteLocale(), 'timezone' => $this->clock->timezone()->getName()],
             'module' => $this->module($code),
             // un agent lit les réglages de l'Assistance, seul l'administrateur du site les change
             'screens' => ['assistance', 'assistance-reglages'],

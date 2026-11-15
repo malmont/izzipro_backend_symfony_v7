@@ -175,7 +175,7 @@ class ResetPasswordController extends AbstractController
      * (400 `RESET_LINK_INVALID`) pour un jeton inconnu, déjà utilisé ou expiré, sans rien dire du compte. Ne consomme pas le jeton.
      */
     #[Route('/api/password-reset/verify', name: 'api_password_reset_verify', methods: ['POST'])]
-    public function verifyPasswordResetApi(Request $request): JsonResponse
+    public function verifyPasswordResetApi(Request $request, \App\Services\Site\SiteName $site): JsonResponse
     {
         $content = json_decode($request->getContent(), true);
         $token = is_array($content) ? ($content['token'] ?? null) : null;
@@ -188,11 +188,7 @@ class ResetPasswordController extends AbstractController
         }
 
         // Ce que l'écran peut montrer à qui tient un jeton valide : le site, l'adresse du compte MASQUÉE, la fin de validité. Rien d'autre.
-        $siteName = '';
-        try {
-            $siteName = (string) ($this->tenantEmProvider->getEntityManager()->getConnection()->fetchOne('SELECT name FROM entreprise ORDER BY id LIMIT 1') ?: '');
-        } catch (\Throwable) {
-        }
+        $siteName = $site->name(); // le nom de la fiche du site : le même que GET /api/support/me et que le courriel d'invitation
 
         return $this->json(['valid' => true, 'kind' => !$user->isVerified() && $user->getSignupChannel() === User::SIGNUP_SUPPORT_INVITE ? 'invitation' : 'reset',
             'expiresAt' => $user->getResetTokenExpiresAt()?->format(\DateTimeInterface::ATOM), 'siteName' => $siteName, 'emailMasked' => self::maskEmail((string) $user->getEmail()),

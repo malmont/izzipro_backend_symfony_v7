@@ -39,8 +39,7 @@ class SupportScopeSubscriber implements EventSubscriberInterface
         if (!$event->isMainRequest() || !str_starts_with($path, '/api/') || preg_match('#^/api/support(/|$)#', $path)) {
             return;
         }
-        $roles = $this->tokens->getToken()?->getRoleNames() ?? [];
-        if (!in_array('ROLE_SUPPORT', $roles, true) || array_intersect(self::OTHER_ROLES, $roles) !== []) {
+        if (!self::supportOnly($this->tokens->getToken()?->getRoleNames() ?? [])) {
             return;
         }
         [$attributes] = $this->accessMap->getPatterns($request);
@@ -48,6 +47,22 @@ class SupportScopeSubscriber implements EventSubscriberInterface
             $this->tokens->setToken(null); // route publique : servie EXACTEMENT comme à un anonyme (le contrôleur ne voit aucun utilisateur ; pare-feu sans état)
             return;
         }
-        $event->setResponse(new JsonResponse(['error' => self::CODE, 'code' => self::CODE, 'message' => 'Un compte Assistance n\'accède qu\'aux demandes d\'assistance.'], 403));
+        $event->setResponse(self::refusal());
+    }
+
+    /** Un compte Assistance SEUL : ROLE_SUPPORT sans aucun autre rôle d'accès */
+    public static function supportOnly(array $roles): bool
+    {
+        return in_array('ROLE_SUPPORT', $roles, true) && array_intersect(self::OTHER_ROLES, $roles) === [];
+    }
+
+    /**
+     * Le refus rendu à un compte Assistance seul hors du module. Rendu ici quand la route ne demande qu'un compte connecté, et par
+     * `ApiExceptionSubscriber` quand c'est la règle d'accès du pare-feu qui refuse (elle passe avant cette garde) : le même code des
+     * deux côtés (15/11/2026 ; avant, le second cas rendait FORBIDDEN, et la fiche annonçait SUPPORT_SCOPE_ONLY).
+     */
+    public static function refusal(): JsonResponse
+    {
+        return new JsonResponse(['error' => self::CODE, 'code' => self::CODE, 'message' => 'Un compte Assistance n\'accède qu\'aux demandes d\'assistance.'], 403);
     }
 }
