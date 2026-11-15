@@ -199,6 +199,8 @@ class SupportWebApiTest extends WebTestCase
         $body = $this->call('GET', '/api/support/agents', null, $me);
         $this->assertSame(200, $body->getStatusCode());
         $this->assertStringNotContainsString('@', (string) $body->getContent(), 'aucun courriel dans la liste');
+        $ids = array_column(json_decode((string) $body->getContent(), true)['agents'], 'id');
+        $this->assertSame(array_values(array_unique($ids)), $ids, 'chaque compte une seule fois, le compte connecté compris');
         $mine = array_column(array_filter(json_decode((string) $body->getContent(), true)['agents'], fn (array $a) => in_array($a['id'], [$me->getId(), $admin->getId(), $unnamed->getId(), $owner->getId(), $customer->getId(), $pending->getId()], true)), null, 'id');
         $this->assertSame([
             (int) $admin->getId() => ['id' => (int) $admin->getId(), 'name' => 'Alain Gérant', 'role' => 'admin', 'me' => false],
