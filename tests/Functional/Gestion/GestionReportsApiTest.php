@@ -118,7 +118,7 @@ class GestionReportsApiTest extends WebTestCase
         $renderer = static::getContainer()->get(ReportRenderer::class);
         $message = $this->em()->getRepository(GestionConversationMessage::class)->find($answerId);
         $html = self::plain($renderer->html($renderer->document(ConsoleService::message($message), "Que disent mes ventes {$this->tag} ?", 'fr', 'CAD')));
-        foreach (['1 234,56 $', '42,35 %', '12 jours', '1,8', '3 456', 'Casquette lin', '34,99 $', 'À monter', 'Coefficient sous les semblables', 'Taux de marque', 'La marge rapportée au prix de vente.',
+        foreach (['1 234,56 $', '42,4 %', '12 jours', '1,8', '3 456', 'Casquette lin', '34,99 $', 'À monter', 'Coefficient sous les semblables', 'Taux de marque', 'La marge rapportée au prix de vente.',
             'Ventes du mois', 'novembre 2026', 'D\'où viennent ces chiffres', 'Question posée', 'et 4 autres lignes, à lire dans l\'application.', 'Écran des périodes', 'Chaque ligne est une période.'] as $expected) {
             $this->assertStringContainsString(htmlspecialchars($expected, ENT_QUOTES), $html, $expected);
         }
@@ -128,10 +128,10 @@ class GestionReportsApiTest extends WebTestCase
             $this->assertStringContainsString($expected, $html, $expected);
         }
         // la variation entre parenthèses ne se coupe pas (retouche du 15/11/2026) : elle est dans un élément insécable, le « % » tenu par une espace insécable
-        foreach (['Période précédente : 1 000,00 $ <span class="nowrap">(+23,46 %)</span>', 'An dernier : 1 500,00 $ <span class="nowrap">(-17,7 %)</span>'] as $expected) {
+        foreach (['Période précédente : 1 000,00 $ <span class="nowrap">(+23,5 %)</span>', 'An dernier : 1 500,00 $ <span class="nowrap">(-17,7 %)</span>'] as $expected) {
             $this->assertStringContainsString($expected, $html, $expected);
         }
-        $this->assertStringContainsString("(+23,46\u{00A0}%)", $renderer->html($renderer->document(ConsoleService::message($message), "Que disent mes ventes {$this->tag} ?", 'fr', 'CAD')));
+        $this->assertStringContainsString("(+23,5\u{00A0}%)", $renderer->html($renderer->document(ConsoleService::message($message), "Que disent mes ventes {$this->tag} ?", 'fr', 'CAD')));
         $this->assertSame(1, substr_count($html, '<table class="cards">'), 'les rangées d\'un bloc de cartes tiennent dans une seule table : le bloc ne se coupe pas entre deux pages');
         $this->assertStringNotContainsString('2 024', $html);
         // l'en-tête du site : son nom, et son numéro d'entreprise quand il est saisi
@@ -141,7 +141,7 @@ class GestionReportsApiTest extends WebTestCase
         $this->assertStringContainsString('&lt;b&gt;gras&lt;/b&gt;', $html, 'un texte de bloc est échappé, jamais interprété');
         // En anglais : mêmes chiffres, écrits à l'anglaise
         $english = self::plain($renderer->html($renderer->document(ConsoleService::message($message), 'What about my sales?', 'en', 'CAD')));
-        foreach (['$1,234.56', '42.35%', '12 days', '1.8', '3,456', 'Raise', 'Where these figures come from'] as $expected) {
+        foreach (['$1,234.56', '42.4%', '12 days', '1.8', '3,456', 'Raise', 'Where these figures come from'] as $expected) {
             $this->assertStringContainsString(htmlspecialchars($expected, ENT_QUOTES), $english, $expected);
         }
 

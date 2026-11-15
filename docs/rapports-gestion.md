@@ -86,7 +86,8 @@ réponse, leur plage, la date du calcul) ; pied : nom du site, page x / y.
 | type inconnu | laissé de côté |
 
 Les valeurs sont écrites par `ReportValue` selon l'unité du bloc (`money` en cents de la devise du site, `percent`, `count`, `days`,
-`ratio`, `date`, `text`), dans la langue demandée ; une valeur absente s'écrit par un tiret ; un texte reste un texte, même s'il
+`ratio`, `date`, `text`), dans la langue demandée ; un pourcentage est arrondi à une décimale, comme à l'écran et dans la console
+(« 12,02 » s'écrit « 12 % ») ; une valeur absente s'écrit par un tiret ; un texte reste un texte, même s'il
 ressemble à un nombre (un article nommé « 2024 »). Tout texte d'un bloc est échappé.
 
 ## 5. Limites connues et suite

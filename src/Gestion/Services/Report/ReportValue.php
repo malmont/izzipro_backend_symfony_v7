@@ -40,7 +40,9 @@ final class ReportValue
 
         return match ($unit) {
             'money' => HomeTilesService::money((int) round((float) $value), $locale, $currency),
-            'percent' => $number((float) $value, 2) . ($en ? '%' : "\u{00A0}%"), // espace insécable : le signe ne passe jamais seul à la ligne
+            // un pourcentage s'écrit comme à l'écran et dans la console (`GestionAdviceService::format`) : arrondi à une décimale ; espace
+            // insécable : le signe ne passe jamais seul à la ligne
+            'percent' => $number(round((float) $value, 1), 1) . ($en ? '%' : "\u{00A0}%"),
             'days' => $number((float) $value, 0) . ' ' . ($en ? ((int) round((float) $value) === 1 ? 'day' : 'days') : ((int) round((float) $value) > 1 ? 'jours' : 'jour')),
             'ratio' => $number((float) $value, 2),
             'count' => $number((float) $value, 2), // un compte entier s'écrit sans décimale ; une moyenne garde les siennes
