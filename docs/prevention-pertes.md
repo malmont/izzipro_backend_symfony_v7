@@ -379,7 +379,8 @@ défait pas).
   `SOURCE_DOWN`, `COUNT_DONE`, `ZONE_SEEN`, `TEST_TAG_READ`) ; assistant d'installation pas à pas (progression gardée par le serveur) ;
   avis et alertes (L5). Avant L2, un lot du catalogue à part : « code-barres de variante : remplir, rendre unique, imprimer » :
   **fait pour « remplir, rendre unique »** (lot CB-1, en ligne le 15/11/2026 : un code désigne une seule chose par site, garanti par la
-  base ; codes générés à la demande) ; « imprimer » est le lot CB-2 (étiquettes à la réception). Fiche : `docs/codes-barres.md`.
+  base ; codes générés à la demande) ; « imprimer » est fait aussi (lot CB-2, étiquettes à la réception, et lot CB-3, les mêmes gestes
+  dans l'application de gestion ; en ligne le 15/11/2026). Fiche : `docs/codes-barres.md`. **Plan du lot L2 : § 13.**
 
 ## 12. Décisions du propriétaire (14/11/2026)
 
@@ -395,3 +396,124 @@ interrupteur par pays et région, permises aux États-Unis, allumées d'office e
 défaut validés ; 6 conservation 24 mois / 5 ans, extraits vidéo 30 jours, aucune purge automatique ; 7 reprise de 30 jours ; 8 notice
 bloquante en France et au Québec ; 9 minuteur accordé ; 10 jeux d'essai en base de test seulement ; 11 pourcentage calculé par le serveur ;
 12 pays et région ; 13 vignette et notification réservées ; 14 lot du catalogue avant L2 ; 15 relecture par un avocat avant tout vrai client.
+
+## 13. Plan du lot L2 : étiquettes à puce (15/11/2026, SANS CODE, à valider par le propriétaire)
+
+Rien de ce paragraphe n'est codé. Il précise ce que le § 11 réservait (« pièce à numéro unique par variante », faits `PIECE_CREATED`,
+`TAG_ASSOCIATED`, `PAIR_SET`, `TEST_TAG_READ`). Les questions ouvertes sont au point 13.8 ; le contrat exact des réponses sera écrit
+après la validation, avant le code. Lot à risque (données, preuves) : relecture indépendante et mutations avant la bascule.
+
+### 13.1 Ce que L2 apporte, et ce qu'il n'apporte pas
+
+- **Apporte** : une **pièce** (un exemplaire physique d'une variante) reçoit un numéro unique et une ou plusieurs **puces** ; le gérant
+  associe la puce à la pièce en lisant l'une puis l'autre ; il retrouve ce que porte une puce ; il imprime l'étiquette de la pièce.
+- **N'apporte pas** : aucun appareil ne parle au serveur (le boîtier et sa clé sont le lot L3) ; aucune lecture à distance, ni comptage,
+  ni sortie de zone (antennes : lot L4) ; aucun constat nouveau (les règles sur les pièces viennent avec L3 et L4) ; **aucune écriture
+  de stock, de vente ni de catalogue** : le module n'écrit que dans ses tables (§ 1), et la pièce ne remplace pas le stock.
+- Sans boîtier ni antenne, une vente ne dit pas QUELLE pièce est partie (la caisse lit le code-barres de la variante). En L2 une pièce
+  ne connaît donc que deux états : `created` et `retired`. Les autres états du § 11 (`in_stockroom`, `on_floor`, `at_counter`, `sold`,
+  `returned`, `missing`) n'apparaissent qu'avec les faits des appareils.
+
+### 13.2 Modèle (tables du module seulement, une migration additive)
+
+- **`loss_piece`** : `id`, `number` (numéro lisible, unique sur le site, tiré d'une séquence, jamais redonné), `variant_id`
+  (obligatoire : la pièce est un exemplaire d'UNE variante), `product_id` (copie de lecture), `status`, `zone` (null en L2),
+  `commande_line_id` (null si la pièce vient du stock déjà en rayon), `exercise`, dates. Le code-barres n'est PAS recopié : il se lit
+  sur la variante (règle du lot CB-1 : le code d'une variante est celui de la pièce vendue), l'article quand elle est sa seule variante.
+- **`loss_tag`** : `id`, `identifier` (forme canonique : hexadécimal en majuscules, sans séparateur), `raw` (ce que le lecteur a rendu),
+  `technology` (`uhf`, `nfc`, `simulated`), `piece_id`, `status`, dates. **Un identifiant désigne une seule puce sur le site : index
+  unique en base**, comme pour les codes-barres ; deux lectures simultanées de la même puce sont départagées par la base.
+- **`loss_piece_event`** (inaltérable, comme `loss_journal`) : un fait par ligne (`PIECE_CREATED`, `TAG_ASSOCIATED`, `TAG_RETIRED`,
+  `PAIR_SET`, `PIECE_RETIRED`, `TEST_TAG_READ`), qui, quand, d'où (application, exercice), clé d'idempotence. **Un état ne change que
+  par un fait** ; `loss_piece.status` et `loss_tag.status` sont la projection des faits, recalculable.
+- **Cycle de vie d'une puce** : `known` (lue pendant l'essai de l'assistant, pas encore posée) → `associated` (posée sur une pièce) →
+  `retired` (détachée, détruite, perdue ; motif obligatoire). **Une puce associée n'est jamais redonnée à une autre pièce** : son
+  histoire reste celle d'une seule pièce (question 3). Une pièce peut porter plusieurs puces (une paire de chaussures : `PAIR_SET`) ;
+  une pièce vendue garde ses puces actives (§ 11, question 5).
+- **Lien avec le stock** : aucun. La synthèse montre l'écart « pièces suivies / stock » par variante, pour information.
+
+### 13.3 Routes (toutes sous `/api/gestion/pertes`, administrateur, garde du module)
+
+| Route | Rôle |
+|---|---|
+| `GET /pieces`, `GET /pieces/{id}` | liste paginée (variante, état, avec ou sans puce) ; fiche d'une pièce, ses puces, ses faits |
+| `POST /pieces` `{ variantId, count, commandeId? }` | crée N pièces d'une variante (500 au plus par appel) : à la réception d'une commande ou pour le stock déjà en rayon |
+| `POST /puces/associer` `{ barcode \| variantId \| pieceId, identifier, technology }` | LE geste : lire le code-barres (ou choisir la pièce), lire la puce ; crée la pièce si besoin et pose la puce ; idempotent ; refus `TAG_ALREADY_ASSOCIATED { holder }`, `TAG_INVALID`, `BARCODE_NOT_FOUND`, `PIECE_RETIRED` |
+| `GET /puces/recherche?identifier=` | ce que porte une puce : la pièce, sa variante, son état (ou rien) |
+| `POST /puces/{id}/retirer`, `POST /pieces/{id}/retirer` `{ reason }` | retirer une puce, retirer une pièce (confirmation exigée, comme `replace` du lot CB-3) |
+| `POST /pieces/etiquettes/pdf` `{ pieceIds, format }` | étiquette de la pièce : code-barres de la variante, numéro de la pièce, nom, prix au choix ; formats `a4-50x30` (lot CB-2) et `roll-50x30` (une étiquette par page, pour une imprimante thermique à rouleau) |
+| `GET /pieces/synthese` | par variante : stock, pièces par état, pièces avec puce, écart |
+| `GET /installation`, `POST /installation/etapes/{code}/verifier`, `POST /installation/puce-test` | assistant d'installation (13.5) |
+| `GET /materiel` | gamme de matériel par besoin et par niveau (13.6) |
+| `POST /exercices/puces`, `DELETE /exercices/pieces` | puces et pièces simulées du mode exercice (13.4) |
+
+Textes en français et en anglais par le serveur (`?locale=`), erreurs à la forme de la gestion, codes d'écran (`pertes.pieces`,
+`pertes.installation`) déclarés dans `ConsoleScreens` avec leur guide. Le mobile et le web utilisent les mêmes routes.
+
+### 13.4 Sans matériel : puces simulées
+
+- Technologie `simulated` : le serveur fabrique des identifiants `SIM-…` (une forme qu'aucune vraie puce ne rend) ; l'application
+  montre « Simuler une lecture » à la place du lecteur. Tout le parcours (créer, associer, chercher, retirer, étiquette, assistant) se
+  joue ainsi sans rien acheter : mode exercice, démonstration avant achat, tests automatiques.
+- Mêmes règles que le lot EX-1 : ouvert sans le droit du module, plafonné, effacé d'un geste, `exercise = true` sur la pièce, la puce
+  et les faits, **jamais dans un chiffre réel** (synthèse, liste, futurs constats). Une vraie pièce refuse une puce simulée, et l'inverse.
+
+### 13.5 Assistant d'installation
+
+- Une suite d'étapes gardée par le serveur, sur le modèle du guide des séquences de la gestion (`docs/sequences-gestion.md` : l'avancement
+  se calcule à partir des données, jamais d'une case cochée) : `GET /installation` rend
+  `{ steps [{ code, title, text, image, status: todo | current | done, verify { kind, label } }], progress }`.
+- Étapes de L2 : 1 choisir son niveau de matériel (13.6) ; 2 imprimer une étiquette d'essai ; 3 lire une puce d'essai (« Vérifier » :
+  le serveur a reçu un fait `TEST_TAG_READ` lisible, de forme attendue, pour une puce encore libre ; sinon il dit quoi essayer :
+  lecteur réglé en clavier, octets inversés, puce déjà posée) ; 4 poser la puce sur une première pièce (« Vérifier » : une pièce réelle
+  porte une puce associée) ; 5 terminé. Les étapes du boîtier (L3) et des antennes (L4) s'ajouteront à la même suite.
+- `image` : une clé d'illustration par étape. Des dessins tant que le matériel n'est pas choisi ; des photos du vrai matériel ensuite
+  (question 6). « Vérifier » ne coche rien : il relit les données et répond `{ verified, hint }`.
+
+### 13.6 Gamme de matériel, niveau bricoleur compris
+
+- `GET /materiel` : pour chaque **besoin** (« lire une puce », « imprimer l'étiquette », « poser la puce »), plusieurs **niveaux**
+  (`pro`, `standard`, `bricoleur`) avec ce qu'il faut, ce que ça permet et ses limites. Des textes servis par le serveur, sans prix ni
+  vente (l'offre et la vente du matériel restent au lot L6).
+- Niveaux prévus pour L2 : **pro** : imprimante qui imprime et écrit la puce d'un geste, lecteur à main ; **standard** : puces
+  autocollantes déjà numérotées en usine, imprimante thermique ordinaire, lecteur de bureau branché en clavier ; **bricoleur** : les mêmes
+  puces autocollantes, étiquettes sur feuilles A4, lecture par le téléphone (puces NFC) ou par un module lecteur monté sur une carte de
+  type Arduino, branché en clavier. Aucun niveau n'envoie rien au serveur de lui-même en L2 : la lecture passe par l'application.
+- Le modèle ne dépend pas du niveau : une puce est un identifiant et une technologie.
+
+### 13.7 Risques
+
+1. **Identité** : une puce pour deux pièces, ou deux lectures au même instant. Parade : index unique en base, refus avec ce qui porte
+   déjà la puce, test à deux connexions (comme le lot CB-1).
+2. **Preuve** : un état modifié après coup ôterait sa valeur au dossier. Parade : faits inaltérables, état recalculable, aucun
+   changement d'état hors d'un fait.
+3. **Vie privée** : une puce reste lisible sur un article vendu. Parade proposée : puce sur l'étiquette détachable, affichette en
+   magasin, point à faire relire par l'avocat (décision 15) avant tout vrai client.
+4. **Lecteurs** : formats différents pour une même puce (octets inversés, décimal, préfixes). Parade : forme canonique, valeur brute
+   gardée, étape d'essai de l'assistant qui détecte les cas connus.
+5. **Confusion avec un code-barres** : un lecteur branché en clavier écrit là où est le curseur ; un identifiant de puce a la forme
+   d'un code-barres acceptable. Parade : champs distincts, refus de poser comme code-barres un identifiant de puce connu, garde
+   `replace` du lot CB-3.
+6. **Volume** : des milliers de pièces par boutique. Parade : listes paginées, créations plafonnées, index.
+7. **Matériel jamais vu** : tout est bâti sur des puces simulées. Parade : une campagne d'essai sur du vrai matériel avant d'ouvrir
+   à un client, quand le propriétaire aura choisi un lecteur.
+
+### 13.8 Questions au propriétaire, avec la proposition
+
+1. **Technologie** : puces lisibles à distance (UHF : nécessaires aux antennes et au comptage du lot L4, illisibles par un téléphone)
+   ou puces NFC (lues par le téléphone, à quelques centimètres) ? *Proposition : le modèle accepte les deux ; l'offre vise l'UHF ; le NFC
+   reste le niveau d'entrée, pour associer et contrôler seulement.*
+2. **Étiquette** : une étiquette qui porte tout (imprimante spéciale) ou l'étiquette de code-barres d'aujourd'hui plus une puce
+   autocollante numérotée en usine ? *Proposition : la seconde en L2, aucune écriture dans la puce ; l'imprimante spéciale reste le
+   niveau pro, plus tard.*
+3. **Réemploi** : une puce détachée peut-elle resservir sur une autre pièce (antivols rigides) ? *Proposition : non en L2, puces
+   jetables seulement ; le réemploi demandera sa propre règle.*
+4. **Quoi suivre** : toutes les pièces, ou seulement les articles choisis ? *Proposition : au choix du gérant, article par article
+   (rien par défaut) ; suivre tout coûte cher en puces et en gestes.*
+5. **Article vendu** : la puce part-elle avec le client ? *Proposition : puce sur l'étiquette détachable, affichette, avis de l'avocat.*
+6. **Images de l'assistant** : *proposition : des dessins maintenant, des photos quand le matériel sera choisi (fournies par le
+   propriétaire ou par le fournisseur).*
+7. **Qui associe** : l'administrateur seulement, ou aussi un magasinier ? *Proposition : l'administrateur seulement en L2 (règle du
+   module) ; un droit de magasinier avec le boîtier, au lot L3.*
+8. **Découpage** : *proposition : L2-a (pièces, puces, association, recherche, puces simulées, synthèse), puis L2-b (étiquettes en
+   rouleau, assistant d'installation, gamme de matériel).*
