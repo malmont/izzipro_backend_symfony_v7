@@ -12,6 +12,7 @@ use App\Services\BarcodeService\CatalogBarcodeService;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\DriverManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -265,6 +266,18 @@ class CatalogBarcodeAdminTest extends WebTestCase
             return json_decode((string) $this->client->getResponse()->getContent(), true)['barcode'] ?? null;
         };
         $this->assertNull($publicCode());
+        // … et la recherche en ligne du code que la génération va donner à cet article (le prochain numéro de la séquence, après ceux
+        // des fiches qui passent avant lui : variantes, puis articles par identifiant) : réponse VIDE, mise en cache elle aussi
+        $searched = function (string $code): array {
+            $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/api/products/by-category?locale=fr&limit=1&pageSize=1&barcode=' . rawurlencode($code), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json']);
+            $this->assertSame(200, $this->status(), $this->text());
+
+            return array_column(json_decode((string) $this->client->getResponse()->getContent(), true)['data'], 'id');
+        };
+        $next = (int) $this->db()->fetchOne('SELECT CASE WHEN is_called THEN last_value + 1 ELSE last_value END FROM catalog_barcode_seq');
+        $before = (int) $this->db()->fetchOne('SELECT COUNT(*) FROM product p WHERE p.barcode IS NULL AND p.id < ? AND NOT EXISTS (SELECT 1 FROM product_variant v WHERE v.product_id = p.id)', [$bottle->getId()]);
+        $expected = CatalogBarcode::generated($next + $missing['variants'] + $before);
+        $this->assertSame([], $searched($expected), 'personne ne porte encore ce code');
 
         // Avec le formulaire de la page : tout ce qui manque reçoit un code, le code saisi reste, l'article à variantes n'en reçoit pas
         $this->client->submit($form, [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
@@ -282,6 +295,34 @@ class CatalogBarcodeAdminTest extends WebTestCase
         $this->assertStringContainsString('Toutes les variantes et tous les articles sans variante ont un code-barres.', $this->text());
         $this->assertStringNotContainsString('Générer les codes manquants (', $this->text());
         $this->assertSame($this->codeOf('product', (int) $bottle->getId()), $publicCode(), 'l\'écriture en SQL vide le cache du site : la fiche montre le code généré');
+        $this->assertSame($expected, $this->codeOf('product', (int) $bottle->getId()), 'le code prévu est bien celui que l\'article a reçu');
+        $this->assertSame([(int) $bottle->getId()], $searched($expected), 'les LISTES en cache sont vidées aussi : la recherche du code, vide il y a un instant, rend l\'article');
+
+        // Tout ce qui manque est tenu ailleurs (ici : une variante sans code, verrouillée par une autre connexion comme par une vente en
+        // cours) : le lancement ne l'attend pas, n'écrit rien, et l'écran dit qu'il en reste, jamais « aucun code à générer »
+        $this->db()->executeStatement('UPDATE product_variant SET barcode = NULL WHERE id = ?', [$v1]);
+        $other = DriverManager::getConnection($this->db()->getParams());
+        try {
+            // Garde contre un blocage : si le lancement se mettait à attendre cette connexion, la base la coupe d'elle-même et le test échoue
+            $other->executeStatement("SET idle_in_transaction_session_timeout = '20s'");
+            $other->beginTransaction();
+            $other->fetchOne('SELECT id FROM product_variant WHERE id = ? FOR UPDATE', [$v1]);
+            $this->open($page);
+            $this->client->submit($this->client->getCrawler()->selectButton('Générer les codes manquants (1)')->form(), [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+            $this->assertSame(302, $this->status(), $this->text());
+            $this->assertNull($this->codeOf('product_variant', $v1));
+            $this->client->followRedirect();
+            $this->assertStringContainsString('Aucun code écrit pour l\'instant : 1 fiche(s) sans code-barres sont occupées', $this->text());
+            $this->assertStringNotContainsString('Aucun code à générer', $this->text());
+            $this->assertSame($auditBefore + 1, $audit(), 'rien d\'écrit : pas de ligne au journal');
+        } finally {
+            try {
+                $other->rollBack();
+            } catch (\Throwable) {
+                // connexion déjà coupée par la garde
+            }
+            $other->close();
+        }
     }
 
     public function testTheProductApiResourceDoesNotWriteABarcode(): void

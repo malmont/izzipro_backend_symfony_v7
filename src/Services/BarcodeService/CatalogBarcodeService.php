@@ -43,7 +43,7 @@ class CatalogBarcodeService
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly ContentAuditRecorder $audit,
-        private readonly ?CacheInvalidationQueue $cacheQueue = null, // écritures en SQL de la génération en masse : cache du site vidé à la validation
+        private readonly CacheInvalidationQueue $cacheQueue, // écritures en SQL de la génération en masse : cache du site vidé à la validation (obligatoire : sans elle le cache ne serait jamais vidé, sans rien dire)
         private readonly ?LoggerInterface $logger = null,
     ) {
     }
@@ -245,7 +245,8 @@ class CatalogBarcodeService
             // Les lignes sans code sont verrouillées par leur identifiant, le temps d'écrire (quelques dizaines de millisecondes) :
             // - FOR NO KEY UPDATE : le verrou d'une mise à jour ordinaire ; il ne bloque pas l'écriture d'une ligne de vente ;
             // - SKIP LOCKED : une ligne tenue par une vente en cours, ou par un autre lancement, est laissée pour le lancement suivant
-            //   (`remaining` le dit) au lieu d'être attendue : ni attente, ni interblocage avec la caisse.
+            //   (`remaining` le dit) au lieu d'être attendue : le lancement n'attend personne, et pas d'interblocage avec la caisse
+            //   (une vente d'une fiche que le lancement tient, elle, attend la fin du lancement : une fraction de seconde).
             // Le verrou se prend en SQL : la requête Doctrine des articles joint la table des véhicules (héritage), ce qu'un verrou refuse.
             $variantIds = array_map('intval', $conn->fetchFirstColumn(sprintf('SELECT id FROM product_variant WHERE barcode IS NULL ORDER BY id LIMIT %d FOR NO KEY UPDATE SKIP LOCKED', $limit)));
             $productIds = count($variantIds) >= $limit ? [] : array_map('intval', $conn->fetchFirstColumn(sprintf(
@@ -301,16 +302,17 @@ class CatalogBarcodeService
         $touched = array_values(array_unique(array_merge($productIds, $variantIds === [] ? [] : array_map('intval',
             $conn->fetchFirstColumn('SELECT DISTINCT product_id FROM product_variant WHERE id IN (?) AND product_id IS NOT NULL', [$variantIds], [ArrayParameterType::INTEGER])))));
         $dbname = $conn->getParams()['dbname'] ?? '';
-        if ($this->cacheQueue !== null && is_string($dbname) && $dbname !== '') {
-            $tags = [];
-            foreach ([CacheTags::PRODUCTS, CacheTags::VEHICLES] as $component) {
-                $tags[] = TenantCacheService::componentTag($dbname, '', $component . '.list');
-                foreach ($touched as $productId) {
-                    $tags[] = TenantCacheService::componentTag($dbname, '', $component . '.item.' . $productId);
-                }
-            }
-            $this->cacheQueue->add($dbname, $tags);
+        if (!is_string($dbname) || $dbname === '') {
+            throw new \LogicException('Code-barres : base du site inconnue, le cache ne pourrait pas être vidé ; rien n\'est écrit');
         }
+        $tags = [];
+        foreach ([CacheTags::PRODUCTS, CacheTags::VEHICLES] as $component) {
+            $tags[] = TenantCacheService::componentTag($dbname, '', $component . '.list');
+            foreach ($touched as $productId) {
+                $tags[] = TenantCacheService::componentTag($dbname, '', $component . '.item.' . $productId);
+            }
+        }
+        $this->cacheQueue->add($dbname, $tags);
         // Objets déjà en mémoire : ils reprennent la valeur de la base (l'objet et la ligne portent le même code)
         $uow = $em->getUnitOfWork();
         foreach ([ProductVariant::class => $variantIds, Product::class => $productIds] as $class => $ids) {

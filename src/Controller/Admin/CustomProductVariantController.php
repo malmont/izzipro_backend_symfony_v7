@@ -44,8 +44,8 @@ class CustomProductVariantController extends AbstractController
             $unitOfWork = $tenantEm->getUnitOfWork();
             $originalData = $unitOfWork->getOriginalEntityData($variantInstance);
             $stockBeforeMovement = $originalData['stockQuantity'] ?? 0;
+            $barcodeBefore = $barcodes->storedCode($variantInstance); // lu AVANT tout ce qui pourrait écrire la fiche (l'écriture met à jour la valeur d'origine)
             $updateStockAndInventoryUseCase->executeNewProductVariant($variantInstance, $stockBeforeMovement, 4);
-            $barcodeBefore = $barcodes->storedCode($variantInstance);
             $tenantEm->flush();
             $this->addFlash('success', 'La variante a été mise à jour avec succès.');
             // Code accepté mais à signaler (13 chiffres dont la clé de contrôle est fausse), quand il vient de changer ; le refus, lui,

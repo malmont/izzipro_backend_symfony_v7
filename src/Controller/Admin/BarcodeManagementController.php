@@ -90,7 +90,11 @@ class BarcodeManagementController extends AbstractController
 
             return $this->redirectToRoute('admin_barcode_management');
         }
-        if ($run['written'] === 0) {
+        if ($run['written'] === 0 && $run['remaining'] > 0) {
+            // Rien d'écrit alors qu'il en manque : les fiches sans code sont tenues ailleurs (une vente en cours, un autre lancement) et
+            // le lancement ne les attend pas
+            $this->addFlash('error', sprintf('Aucun code écrit pour l\'instant : %d fiche(s) sans code-barres sont occupées (une vente en cours, ou un autre lancement). Relancez dans un instant.', $run['remaining']));
+        } elseif ($run['written'] === 0) {
             $this->addFlash('success', 'Aucun code à générer : toutes les variantes et tous les articles sans variante ont déjà un code-barres.');
         } else {
             $this->addFlash('success', sprintf(

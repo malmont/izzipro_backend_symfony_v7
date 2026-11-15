@@ -83,7 +83,9 @@ relit pas la ligne après l'écriture). La variante ne coupe plus en silence un 
   Ce que Doctrine faisait est donc fait à la main : le cache du site (fiches et listes des articles touchés) est vidé à la validation
   par la file d'invalidation, et les objets déjà en mémoire sont relus. Le verrou est celui d'une mise à jour ordinaire : il ne bloque
   pas l'écriture d'une ligne de vente ; une ligne tenue par une vente en cours ou par un autre lancement n'est pas attendue, elle
-  reste pour le lancement suivant (`remaining`) : ni attente, ni interblocage avec la caisse. **Mesure** (base de test, 15/11/2026) :
+  reste pour le lancement suivant (`remaining`) : le lancement n'attend personne et ne s'interbloque pas avec la caisse ; dans l'autre
+  sens, la vente d'une fiche que le lancement tient attend sa fin (une fraction de seconde). Si tout ce qui manque est occupé, l'écran
+  le dit (« N fiche(s) sans code-barres sont occupées… Relancez »), jamais « aucun code à générer ». **Mesure** (base de test, 15/11/2026) :
   500 codes écrits en moins d'une seconde (test `testTheBulkGenerationKeepsItsCeilingAndStaysFastOnMoreThanFiveHundredRows`, qui
   échoue au-delà de 20 s ou si le plafond saute).
 - **Trace** : une ligne au journal du site par lancement de `generateMissing` (`content_audit_log`, ressource `catalog_barcode`,

@@ -9,7 +9,6 @@ use App\Entity\Size;
 use App\Services\BarcodeService\CatalogBarcode;
 use App\Services\BarcodeService\CatalogBarcodeException;
 use App\Services\BarcodeService\CatalogBarcodeService;
-use App\Services\ContentAuditService\ContentAuditRecorder;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
@@ -44,8 +43,8 @@ class CatalogBarcodeTest extends KernelTestCase
         $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
         $this->em = $provider->getEntityManager();
         $this->db = $this->em->getConnection();
-        // Construit à la main : tant qu'aucun écran ne l'injecte (commits suivants du lot), le conteneur de test retirerait le service
-        $this->barcodes = new CatalogBarcodeService($provider, static::getContainer()->get(ContentAuditRecorder::class));
+        // Le service du conteneur, avec sa vraie file d'invalidation du cache (les écrans l'injectent : il n'est pas retiré)
+        $this->barcodes = static::getContainer()->get(CatalogBarcodeService::class);
         $this->suffix = bin2hex(random_bytes(3));
         // La base de test est partagée : les codes déjà là sont mis de côté le temps du test, puis remis (tearDown)
         $this->codesBefore = [
@@ -463,21 +462,36 @@ class CatalogBarcodeTest extends KernelTestCase
             'CB_USER' => (string) ($params['user'] ?? ''), 'CB_PASS' => (string) ($params['password'] ?? ''), 'CB_ID' => (string) $v3->getId(), 'CB_CODE' => $first,
         ]);
         $this->assertIsResource($child);
+        // Rien ici ne peut se bloquer (le verrou commun des tests arrêterait toutes les sessions) : lecture de la sortie du premier
+        // processus avec un délai, attente de verrou bornée pour la seconde demande, et le processus est arrêté quoi qu'il arrive
+        $readLine = static function ($pipe, int $seconds): string|false {
+            $read = [$pipe];
+            $write = $except = null;
+
+            return stream_select($read, $write, $except, $seconds) > 0 ? fgets($pipe) : false;
+        };
         try {
-            $line = fgets($pipes[1]); // rend la main dès que le premier processus tient la ligne (sa sortie d'erreur n'est lue qu'en cas d'échec : la lire avant attendrait sa fin)
+            $line = $readLine($pipes[1], 15); // rend la main dès que le premier processus tient la ligne (sa sortie d'erreur n'est lue qu'en cas d'échec : la lire avant attendrait sa fin)
             if ($line !== "tenu\n") {
+                proc_terminate($child);
                 $this->fail('le premier processus ne tient pas la ligne : ' . var_export($line, true) . ' ' . stream_get_contents($pipes[2]));
             }
+            $this->db->executeStatement("SET lock_timeout = '10s'");
             $started = microtime(true);
             $refused = $this->refusal(fn () => $this->barcodes->generateFor($v3));
             $waited = microtime(true) - $started;
             $this->assertSame(CatalogBarcodeService::ALREADY_SET, $refused->errorCode);
             $this->assertGreaterThan(0.8, $waited, 'la seconde demande a attendu la validation de la première');
-            $this->assertSame("valide\n", fgets($pipes[1]));
+            $this->assertSame("valide\n", $readLine($pipes[1], 15));
         } finally {
+            proc_terminate($child);
             fclose($pipes[1]);
             fclose($pipes[2]);
             proc_close($child);
+            if ($this->db->isTransactionActive()) {
+                $this->db->rollBack();
+            }
+            $this->db->executeStatement('SET lock_timeout = 0');
         }
         $this->assertSame($first, $this->codeOf('product_variant', $v3->getId()), 'le code de la première demande n\'est pas renuméroté');
         $this->assertFalse($this->db->isTransactionActive());
@@ -618,19 +632,87 @@ class CatalogBarcodeTest extends KernelTestCase
         // lancement suivant, et rien ne bloque
         $this->db->executeStatement('UPDATE product_variant SET barcode = NULL WHERE id IN (?, ?)', [$base + 1, $base + 2]);
         $other = DriverManager::getConnection($this->db->getParams());
+        // Attente de verrou bornée : si le lancement se mettait à attendre l'autre connexion, le test échoue au lieu de se bloquer
+        $this->db->executeStatement("SET lock_timeout = '5s'");
         try {
             $other->beginTransaction();
             $other->fetchOne('SELECT id FROM product_variant WHERE id = ? FOR UPDATE', [$base + 1]); // comme la vente d'une variante
             $started = microtime(true);
             $skipping = $this->barcodes->generateMissing();
-            $this->assertLessThan(5.0, microtime(true) - $started, 'aucune attente');
+            $this->assertLessThan(4.0, microtime(true) - $started, 'aucune attente');
             $this->assertSame([1, 1], [$skipping['written'], $skipping['remaining']], 'la ligne libre reçoit son code, la ligne tenue reste à faire');
             $this->assertSame([null, true], [$this->codeOf('product_variant', $base + 1), $this->codeOf('product_variant', $base + 2) !== null]);
-        } finally {
             $other->rollBack();
+
+            // Une ligne seulement RÉFÉRENCÉE par une écriture en cours (une ligne de vente qu'on insère prend FOR KEY SHARE sur la
+            // variante) n'est pas « occupée » : le lancement prend le verrou d'une mise à jour ordinaire (FOR NO KEY UPDATE), qui
+            // s'en accommode, et lui donne son code. Avec FOR UPDATE, il la sauterait à chaque vente en cours
+            $other->beginTransaction();
+            $other->fetchOne('SELECT id FROM product_variant WHERE id = ? FOR KEY SHARE', [$base + 1]);
+            $started = microtime(true);
+            $referenced = $this->barcodes->generateMissing();
+            $this->assertLessThan(4.0, microtime(true) - $started, 'aucune attente');
+            $this->assertSame([1, 0], [$referenced['written'], $referenced['remaining']], 'la ligne référencée par une vente en cours reçoit son code');
+            $this->assertNotNull($this->codeOf('product_variant', $base + 1));
+        } finally {
+            if ($this->db->isTransactionActive()) {
+                $this->db->rollBack();
+            }
+            $this->db->executeStatement('SET lock_timeout = 0');
+            if ($other->isTransactionActive()) {
+                $other->rollBack();
+            }
             $other->close();
         }
-        $this->assertSame(1, $this->barcodes->generateMissing()['written']);
+        $this->assertSame(0, $this->barcodes->generateMissing()['written']);
+
+        // Dernier garde-fou de l'écriture : même si un appelant lui passait une fiche qui a déjà un code (verrou oublié), ce code
+        // n'est pas remplacé et rien n'est écrit
+        $kept = (string) $this->codeOf('product_variant', $base + 2);
+        $this->db->executeStatement('UPDATE product_variant SET barcode = NULL WHERE id = ?', [$base + 3]);
+        $write = new \ReflectionMethod(CatalogBarcodeService::class, 'write');
+        $refusedWrite = null;
+        $this->db->beginTransaction();
+        try {
+            $write->invoke($this->barcodes, [$base + 3, $base + 2], []);
+        } catch (\RuntimeException $e) {
+            $refusedWrite = $e->getMessage();
+        } finally {
+            $this->db->rollBack();
+        }
+        $this->assertStringContainsString('rien n\'est écrit', (string) $refusedWrite, 'l\'écriture devait refuser une fiche qui porte déjà un code');
+        $this->assertSame([$kept, null], [$this->codeOf('product_variant', $base + 2), $this->codeOf('product_variant', $base + 3)]);
+    }
+
+    public function testTheSheetConstraintAlsoComparesTheCodesOfTheSameFormThatTheDatabaseDoesNotKnowYet(): void
+    {
+        // Contrainte des fiches (`CatalogBarcodeFree`) : la base ne connaît pas encore ce qu'on vient de saisir dans le MÊME formulaire
+        $validator = static::getContainer()->get('validator');
+        $codes = static fn ($entity): array => array_values(array_map(
+            static fn ($v): string => $v->getCode() . ' ' . $v->getPropertyPath() . ' ' . $v->getMessage(),
+            array_filter(iterator_to_array($validator->validate($entity)), static fn ($v): bool => str_starts_with((string) $v->getCode(), 'BARCODE_'))
+        ));
+        $s = strtoupper($this->suffix);
+        $cap = $this->article('Formulaire casquette', 2);
+        [$v1, $v2] = $cap->getVariants()->toArray();
+        $this->assertSame([], $codes($cap));
+        $this->assertSame([], $codes($v1));
+
+        // La variante prend le code qu'on vient de saisir sur son article (rien n'est encore en base)
+        $cap->setBarcode("MEME-$s");
+        $v1->setBarcode("meme-$s ");
+        $this->assertSame(["BARCODE_ALREADY_USED barcode Ce code-barres est déjà celui de l'article : une variante porte son propre code."], $codes($v1));
+        $this->assertSame(["BARCODE_ALREADY_USED barcode Ce code-barres est déjà celui d'une variante de cet article : l'article et ses variantes portent des codes différents."], $codes($cap));
+        // Deux variantes du formulaire portent le même code
+        $cap->setBarcode(null);
+        $v2->setBarcode("MEME-$s");
+        $this->assertSame(["BARCODE_ALREADY_USED barcode Ce code-barres est déjà celui d'une autre variante de cet article."], $codes($v1));
+        $this->assertSame(["BARCODE_ALREADY_USED barcode Ce code-barres est déjà celui d'une autre variante de cet article."], $codes($v2));
+        // Des codes différents : rien à redire
+        $v2->setBarcode("AUTRE-$s");
+        $this->assertSame([[], [], []], [$codes($v1), $codes($v2), $codes($cap)]);
+        $this->assertNull($this->codeOf('product_variant', $v1->getId()), 'la contrainte n\'écrit rien');
+        $this->em->clear(); // rien de ces saisies ne doit partir au prochain flush
     }
 
     /** Article d'essai, avec `$variants` variantes sans taille ni couleur */
