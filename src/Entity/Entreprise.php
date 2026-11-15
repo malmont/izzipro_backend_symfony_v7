@@ -839,6 +839,13 @@ class Entreprise implements TranslatableInterface
     public function isSupportActive(): bool { return $this->isSupportActive; }
     public function setIsSupportActive(bool $on): static { $this->isSupportActive = $on; return $this; }
 
+    /** Lot NOTIF-1 : niveau des courriels de suivi du site (`NotificationLevel`), réservé à la plateforme ; null : automatique */
+    #[ORM\Column(name: 'notification_level', length: 12, nullable: true)]
+    private ?string $notificationLevel = null;
+
+    public function getNotificationLevel(): ?string { return $this->notificationLevel; }
+    public function setNotificationLevel(?string $level): static { $this->notificationLevel = \App\Services\Notification\NotificationLevel::isValid($level) ? $level : null; return $this; }
+
     public function getAdminSpaceUrl(): ?string { return $this->adminSpaceUrl; }
 
     /** Vide, ou une adresse refusée (autre que https://hôte[/chemin], identifiants, paramètres) → null : le domaine principal du site sert alors */

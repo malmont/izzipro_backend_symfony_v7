@@ -13,6 +13,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Entity(repositoryClass: NotificationLogRepository::class)]
 #[ORM\Table(name: 'notification_log')]
 #[ORM\Index(name: 'idx_notification_log_user_day', columns: ['user_id', 'store_day'])]
+#[ORM\Index(name: 'idx_notification_log_email', columns: ['recipient', 'store_day'], options: ['where' => "(channel = 'email')"])]
 class NotificationLog
 {
     #[ORM\Id]
@@ -52,6 +53,22 @@ class NotificationLog
 
     #[ORM\Column(name: 'sent_at', type: 'datetime_immutable')]
     private ?\DateTimeImmutable $sentAt = null;
+
+    /** Lot NOTIF-1 : `push` (téléphone, tout l'existant) ou `email` (courriel urgent ou de suivi, parti, retenu ou gardé) */
+    #[ORM\Column(length: 8, options: ['default' => 'push'])]
+    private string $channel = 'push';
+
+    /** Adresse du destinataire d'un courriel (en minuscules) ; `user_id` vaut 0 quand elle n'est celle d'aucun compte */
+    #[ORM\Column(length: 180, nullable: true)]
+    private ?string $recipient = null;
+
+    /** Sujet d'un courriel de suivi (`NotificationCatalog::TOPICS`) */
+    #[ORM\Column(length: 20, nullable: true)]
+    private ?string $topic = null;
+
+    /** Quand un courriel retenu est sorti dans un résumé, ou a été gardé sans envoi */
+    #[ORM\Column(name: 'released_at', type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $releasedAt = null;
 
     public function getId(): ?int { return $this->id; }
 }

@@ -155,6 +155,7 @@ class TenantConnectionManager
 
             $this->fixSequences($dbname);
             $this->markDemoContent($dbname);
+            $this->clearCopiedNotifications($dbname);
 
             // Insertion en base
             $stmt = $this->pdoMaster->prepare(
@@ -705,6 +706,21 @@ class TenantConnectionManager
      * This method re-attaches every sequence to its column on the newly created tenant DB.
      * It must be called once right after CREATE DATABASE ... WITH TEMPLATE gmasuite.
      */
+    private function clearCopiedNotifications(string $dbname): void
+    {
+        // Lot NOTIF-1 : le journal des notifications du site de référence est copié avec le reste ; ses courriels retenus sortiraient
+        // depuis le site neuf vers les adresses du site de référence. Un site neuf part d'un journal vide. Jamais bloquant.
+        try {
+            $params = $this->tenantParams;
+            $pdo = new PDO(sprintf('pgsql:host=%s;port=%d;dbname=%s', $params['host'] ?? $this->masterParams['host'], $params['port'] ?? $this->masterParams['port'], $dbname),
+                $params['user'] ?? $params['username'] ?? '', $params['password'] ?? '', [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+            $pdo->exec('DELETE FROM notification_log');
+            $pdo->exec('DELETE FROM notification_preference');
+        } catch (\Throwable $e) {
+            $this->logger->warning('Journal des notifications du site neuf non vidé (' . $e::class . ').');
+        }
+    }
+
     private function fixSequences(string $dbname): void
     {
         $params = $this->tenantParams;

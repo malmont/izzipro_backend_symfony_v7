@@ -227,3 +227,19 @@ support_agent_invitation:
     button: 'Choisir mon mot de passe'
     validity: 'Ce lien ne sert qu''une fois et reste valable %hours% heures. Passé ce délai, demandez une nouvelle invitation.'
     ignore: 'Si vous n''attendiez pas cette invitation, ignorez ce courriel : aucun accès n''est ouvert tant que le mot de passe n''est pas choisi.'
+
+# Lot NOTIF-1 (15/11/2026) : courriels de suivi retenus, réunis en un seul par sujet
+notification_summary:
+    subject:
+        orders: '%site% : %count% commande(s) à expédier'
+        bookings: '%site% : %count% réservation(s) à voir'
+        payments: '%site% : %count% nouveauté(s) sur vos paiements'
+        loss: '%site% : %count% nouveauté(s) en prévention des pertes'
+        support: '%site% : %count% nouveauté(s) à l''assistance'
+        entitlements: '%site% : %count% nouveauté(s) sur vos fonctionnalités'
+        management: '%site% : %count% nouveauté(s) de gestion'
+    title: 'Depuis votre dernier courriel'
+    intro: 'Voici ce qui s''est passé depuis votre dernier courriel sur ce sujet :'
+    more: 'et %count% autre(s), à lire dans votre espace d''administration.'
+    button: 'Ouvrir mon espace d''administration'
+    why: 'Vous recevez au plus un courriel par jour et par sujet. Vous pouvez changer ce réglage dans « Notifications ».'

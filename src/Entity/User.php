@@ -545,6 +545,13 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setDeletedAt(?\DateTimeImmutable $at): static { $this->deletedAt = $at; return $this; }
     public function isDeleted(): bool { return $this->deletedAt !== null; }
 
+    /** Lot NOTIF-1 : niveau des courriels de suivi choisi par ce compte (`NotificationLevel`) ; null : comme le site */
+    #[ORM\Column(name: 'notification_level', length: 12, nullable: true)]
+    private ?string $notificationLevel = null;
+
+    public function getNotificationLevel(): ?string { return $this->notificationLevel; }
+    public function setNotificationLevel(?string $level): static { $this->notificationLevel = \App\Services\Notification\NotificationLevel::isValid($level) ? $level : null; return $this; }
+
     public function getSignupChannel(): ?string { return $this->signupChannel; }
     public function setSignupChannel(?string $signupChannel): static { $this->signupChannel = $signupChannel; return $this; }
     public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }

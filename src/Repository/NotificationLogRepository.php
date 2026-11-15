@@ -25,7 +25,7 @@ class NotificationLogRepository extends EntityRepository
     public function usedToday(int $userId, string $storeDay): bool
     {
         return $this->getEntityManager()->getConnection()->fetchOne(
-            'SELECT 1 FROM notification_log WHERE user_id = ? AND store_day = ? AND status IN (?, ?, ?) LIMIT 1', [$userId, $storeDay, ...self::COUNTED]
+            "SELECT 1 FROM notification_log WHERE channel = 'push' AND user_id = ? AND store_day = ? AND status IN (?, ?, ?) LIMIT 1", [$userId, $storeDay, ...self::COUNTED]
         ) !== false;
     }
 
@@ -33,7 +33,7 @@ class NotificationLogRepository extends EntityRepository
     public function subjectsSince(int $userId, string $kind, \DateTimeImmutable $sinceUtc): array
     {
         $rows = $this->getEntityManager()->getConnection()->fetchFirstColumn(
-            'SELECT subject FROM notification_log WHERE user_id = ? AND kind = ? AND sent_at >= ? AND status IN (?, ?, ?)', [$userId, $kind, $sinceUtc->format('Y-m-d H:i:s'), ...self::COUNTED]
+            "SELECT subject FROM notification_log WHERE channel = 'push' AND user_id = ? AND kind = ? AND sent_at >= ? AND status IN (?, ?, ?)", [$userId, $kind, $sinceUtc->format('Y-m-d H:i:s'), ...self::COUNTED]
         );
 
         return array_map(fn ($s) => json_decode((string) $s, true) ?: [], $rows);
@@ -43,13 +43,21 @@ class NotificationLogRepository extends EntityRepository
     public function journal(int $userId, int $limit): array
     {
         $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative(
-            'SELECT id, kind, title, body, action, status, sent_at FROM notification_log WHERE user_id = ? ORDER BY sent_at DESC, id DESC LIMIT ' . max(1, min(100, $limit)), [$userId]
+            'SELECT id, kind, title, body, action, status, sent_at, channel, topic FROM notification_log WHERE user_id = ? ORDER BY sent_at DESC, id DESC LIMIT ' . max(1, min(100, $limit)), [$userId]
         );
 
         return array_map(fn (array $r) => [
             'id' => (int) $r['id'], 'kind' => $r['kind'], 'title' => $r['title'], 'body' => $r['body'], 'action' => json_decode((string) $r['action'], true) ?: new \stdClass(),
             'status' => $r['status'], 'sentAt' => (new \DateTimeImmutable($r['sent_at'], new \DateTimeZone('UTC')))->format(\DATE_ATOM),
+            // lot NOTIF-1 : le journal porte aussi les courriels (`email`), dont ceux qui sont retenus (`held`) ou gardés sans envoi (`kept`)
+            'channel' => $r['channel'], 'topic' => $r['topic'],
         ], $rows);
+    }
+
+    /** Courriels de suivi retenus en attente pour ce compte (lot NOTIF-1) : la pastille de l'écran « Notifications » */
+    public function heldCount(int $userId): int
+    {
+        return (int) $this->getEntityManager()->getConnection()->fetchOne("SELECT COUNT(*) FROM notification_log WHERE channel = 'email' AND user_id = ? AND status = 'held'", [$userId]);
     }
 
     /** @return array<string, bool> type → actif, pour les types réglés par cet utilisateur */

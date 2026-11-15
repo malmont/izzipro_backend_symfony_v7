@@ -223,3 +223,19 @@ support_agent_invitation:
     button: 'Choose my password'
     validity: 'This link works once and stays valid for %hours% hours. After that, ask for a new invitation.'
     ignore: 'If you were not expecting this invitation, ignore this e-mail: no access is opened until the password is chosen.'
+
+# NOTIF-1 (2026-11-15): held follow-up e-mails, gathered into one per topic
+notification_summary:
+    subject:
+        orders: '%site%: %count% order(s) to ship'
+        bookings: '%site%: %count% booking(s) to review'
+        payments: '%site%: %count% update(s) about your payments'
+        loss: '%site%: %count% update(s) in loss prevention'
+        support: '%site%: %count% update(s) in support'
+        entitlements: '%site%: %count% update(s) about your features'
+        management: '%site%: %count% management update(s)'
+    title: 'Since your last e-mail'
+    intro: 'Here is what happened since your last e-mail on this topic:'
+    more: 'and %count% more, to read in your admin space.'
+    button: 'Open my admin space'
+    why: 'You receive at most one e-mail per day and per topic. You can change this in "Notifications".'

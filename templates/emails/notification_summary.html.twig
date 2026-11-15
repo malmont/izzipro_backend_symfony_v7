@@ -1,0 +1,25 @@
+{% extends 'base.email.html.twig' %}
+
+{# Lot NOTIF-1 (15/11/2026, docs/notifications-courriels.md) : les courriels de suivi d'un sujet qui ont été retenus (un seul courriel
+   par jour et par sujet, plafond du jour, avant 8 h du magasin), réunis en un seul. Une ligne par événement ; un lien vers l'écran du web
+   quand le serveur en connaît un. La dernière ligne est `siteLine` : l'envoi commun écrase `signature` par celle du site. #}
+{% block title %}{{ title }}{% endblock %}
+
+{% block body %}
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <tr><td align="center">
+        <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden;">
+            <tr><td style="padding: 28px 32px; color: #1e293b; font-size: 15px; line-height: 1.6;">
+                <p>{{ intro }}</p>
+                <ul style="padding-left: 20px; margin: 16px 0;">
+                    {% for line in lines %}<li style="margin-bottom: 6px;">{{ line }}</li>{% endfor %}
+                </ul>
+                {% if more > 0 %}<p style="color: #64748b; font-size: 13px;">{{ moreLine }}</p>{% endif %}
+                {% if link %}<p style="text-align: center; margin: 28px 0;"><a href="{{ link }}" style="display: inline-block; background: #1e293b; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px;">{{ button }}</a></p>{% endif %}
+                <p style="color: #64748b; font-size: 13px;">{{ why }}</p>
+                <p style="color: #64748b; font-size: 13px; margin-bottom: 0;">{{ siteLine }}</p>
+            </td></tr>
+        </table>
+    </td></tr>
+</table>
+{% endblock %}
