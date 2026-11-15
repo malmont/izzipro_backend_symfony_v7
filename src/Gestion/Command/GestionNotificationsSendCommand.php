@@ -35,6 +35,7 @@ class GestionNotificationsSendCommand extends Command
         private readonly ?PeriodCalendar $calendar = null,
         private readonly ?\App\Services\FeatureAccess\ModuleAccessService $modules = null, // lot MOD : module de gestion éteint (mode live) = pas de notification
         private readonly ?\App\Services\Platform\PlatformModeService $platform = null,
+        private readonly ?\App\Services\Notification\NotificationSummaryService $held = null, // lot NOTIF-1 : sortie des courriels de suivi retenus
     ) {
         parent::__construct();
     }
@@ -59,6 +60,7 @@ class GestionNotificationsSendCommand extends Command
             }
             try {
                 $this->emProvider->switchTenant((string) $row['dbname'], (string) $row['code']);
+                $this->releaseHeld((string) $row['code'], $io); // pour tout site, module de gestion activé ou non : ces courriels ne sont pas ceux de la gestion
                 if ($this->platform !== null && $this->modules !== null && !$this->platform->isDemo() && !$this->modules->isEnabled(\App\Services\FeatureAccess\ModuleAccessService::MANAGEMENT)) {
                     $this->snapshot((string) $row['code']); // lot MOD : module éteint, plateforme en live : pas de notification ; l'instantané du stock reste pris (historique)
                     $io->text(sprintf('%s : application de gestion non activée, aucune notification', $row['code']));
@@ -80,6 +82,26 @@ class GestionNotificationsSendCommand extends Command
         $io->success(sprintf('%d site(s) à leur heure, %d notification(s), %d site(s) en erreur.', $sites, $notified, $errors));
 
         return $errors > 0 ? Command::FAILURE : Command::SUCCESS;
+    }
+
+    /**
+     * Lot NOTIF-1 : les courriels de suivi retenus qui sont dus sortent, un par destinataire et par sujet, à partir de 8 h du magasin
+     * (`NotificationSummaryService`). À chaque passage horaire : un second passage ne retrouve plus ce que le premier a sorti. Une erreur
+     * n'empêche jamais les notifications du téléphone.
+     */
+    private function releaseHeld(string $code, SymfonyStyle $io): void
+    {
+        if ($this->held === null) {
+            return;
+        }
+        try {
+            $result = $this->held->releaseDue();
+            if ($result['emails'] > 0 || $result['kept'] > 0) {
+                $io->text(sprintf('%s : %d courriel(s) de suivi retenus sortis en %d courriel(s), %d gardé(s) sans envoi', $code, $result['released'], $result['emails'], $result['kept']));
+            }
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf('Courriels de suivi retenus : site %s non traité : %s', $code, $e->getMessage()));
+        }
     }
 
     /** Lot S1 : instantané de la valeur du stock du jour du magasin ; une erreur n'empêche jamais les notifications */

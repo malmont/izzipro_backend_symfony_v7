@@ -29,7 +29,8 @@ class OrderMailerService
         TenantEntityManagerProvider $emProvider,
         private readonly ?TenantCurrencyProvider $currency = null,
         private readonly ?EmailLocale $emailLocale = null,
-        private readonly ?\App\Services\Booking\BookingClock $clock = null // fuseau de la boutique (04/11/2026)
+        private readonly ?\App\Services\Booking\BookingClock $clock = null, // fuseau de la boutique (04/11/2026)
+        private readonly ?\App\Services\Notification\NotificationGate $gate = null // lot NOTIF-1 : niveau des courriels de suivi du destinataire
     ) {
         $this->emailSenderService = $emailSenderService;
         $this->logger = $logger;
@@ -84,9 +85,11 @@ class OrderMailerService
             // Courriel du marchand : toujours en français (03/11/2026) ; devise du site, montants au format de la langue et du pays du site
             $itemsData = $this->prepareOrderItemsData($order, EmailLocale::FRENCH);
 
-            $this->emailSenderService->sendTemplatedEmail(
+            // Courriel de suivi (lot NOTIF-1) : selon le niveau du destinataire, il part, ou il est retenu pour le courriel suivant du sujet
+            $subject = 'Nouvelle commande à expédier : ' . $order->getReference();
+            $send = fn (): bool => $this->emailSenderService->sendTemplatedEmail(
                 $toEmail,
-                'Nouvelle commande à expédier : ' . $order->getReference(),
+                $subject,
                 'emails/shipping_notification.html.twig',
                 [
                     'order'     => $order,
@@ -98,6 +101,7 @@ class OrderMailerService
                 $locale,
                 $domain
             );
+            $this->gate !== null ? $this->gate->deliver(\App\Services\Notification\NotificationCatalog::ORDER_TO_SHIP, $toEmail, $subject, [], $send) : $send();
         } catch (\Exception $e) {
             $this->logger->error("Erreur email shipping: " . $e->getMessage());
         }

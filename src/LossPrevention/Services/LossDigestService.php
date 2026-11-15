@@ -55,6 +55,7 @@ class LossDigestService
         private readonly TenantConnectionManager $tenants,
         private readonly TenantPublicHostResolver $hosts,
         private readonly AdminSpaceUrl $links,
+        private readonly \App\Services\Notification\NotificationGate $gate, // lot NOTIF-1 : niveau des courriels de suivi de chaque destinataire
     ) {
     }
 
@@ -62,7 +63,8 @@ class LossDigestService
      * Envoie le résumé du jour s'il est dû.
      *
      * @param \DateTimeImmutable|null $now l'instant du passage (les tests le fixent) ; `$anyHour` : sans attendre 8 h (lancement à la main)
-     * @return array{status: string, sent: int} status : sent | nothing_new | already_sent | too_early | no_recipient | not_delivered | not_granted | not_allowed
+     * @return array{status: string, sent: int} status : sent | held | nothing_new | already_sent | too_early | no_recipient | not_delivered | not_granted | not_allowed
+     *                                          (`held`, lot NOTIF-1 : aucun courriel parti, tous les destinataires servis sont retenus par leur niveau ; le jour est posé)
      */
     public function sendIfDue(?\DateTimeImmutable $now = null, bool $anyHour = false): array
     {
@@ -142,25 +144,66 @@ class LossDigestService
         ];
         $subject = $this->mailer->subject('loss_digest.subject', $params, $language);
         $host = $this->host();
+        // Lot NOTIF-1 : le résumé est un courriel de SUIVI (sujet « prévention des pertes »). Pour chaque destinataire, son niveau décide :
+        // il part, il est retenu (niveau « Essentiel » : il sortira dans le résumé de la semaine ; plafond du jour atteint), ou rien
+        // (niveau « Aucune »). Décidé AVANT la réservation : sans personne à servir, ni jour ni borne ne sont posés
+        $verdicts = [];
+        foreach ($recipients as $to) {
+            $verdict = $this->gate->decide(\App\Services\Notification\NotificationCatalog::LOSS_DIGEST, $to, $now, $anyHour); // lancement à la main : sans la règle des 8 h
+            if ($verdict['decision'] !== \App\Services\Notification\NotificationGate::DROP) {
+                $verdicts[$to] = $verdict;
+            }
+        }
+        if ($verdicts === []) {
+            return ['status' => 'no_recipient', 'sent' => 0];
+        }
+        $action = ['screen' => 'pertes.constats', 'params' => ['isNew' => true]];
         // Réserver le jour AVANT d'envoyer : de deux lancements qui se chevauchent (le minuteur et un lancement à la main), un seul passe
         $reserved = $settings->reserveDigestDay($day, $new['lastId'] > 0 ? $new['lastId'] : null); // rien de né : la borne des constats nés ne bouge pas
         if ($reserved === null) {
             return ['status' => 'already_sent', 'sent' => 0];
         }
         $sent = 0;
+        $held = 0; // retenus pour un résumé : le constat est annoncé plus tard, il n'est pas perdu ; le jour et la borne restent posés
+        $failed = [];
         try {
-            foreach ($recipients as $to) {
+            foreach ($verdicts as $to => $verdict) {
                 try {
-                    $sent += $this->mailer->sendTemplatedEmail($to, $subject, self::TEMPLATE, $context, $language, $host) ? 1 : 0;
+                    if ($verdict['decision'] === \App\Services\Notification\NotificationGate::HOLD) {
+                        $this->gate->record(\App\Services\Notification\NotificationCatalog::LOSS_DIGEST, $to, $verdict['userId'], \App\Services\Notification\NotificationGate::STATUS_HELD, $subject, $action, $verdict['day'], $verdict['reason']);
+                        ++$held; // écrit AVANT d'être compté : une retenue qui n'a pas pu s'écrire n'est pas une retenue
+
+                        continue;
+                    }
+                    if ($this->mailer->sendTemplatedEmail($to, $subject, self::TEMPLATE, $context, $language, $host)) {
+                        ++$sent; // compté dès l'envoi : une panne du journal ne doit pas faire croire que rien n'est parti (le courriel repartirait)
+                        $this->record($to, $verdict, \App\Services\Notification\NotificationGate::STATUS_SENT, $subject, $action, null);
+                    } else {
+                        $failed[$to] = $verdict;
+                    }
                 } catch (\Exception $e) { // un destinataire en échec n'arrête pas les autres
                     // Jamais le MESSAGE de l'exception au journal du serveur : il peut porter l'adresse du destinataire. Sa classe suffit.
                     $this->logger->error('Prévention des pertes : courriel de résumé, un envoi en échec (' . $e::class . ').');
+                    $failed[$to] = $verdict;
+                }
+            }
+            // Le jour reste posé dès qu'un destinataire est servi ou retenu : celui dont l'envoi a échoué ne serait jamais réessayé. Son
+            // courriel est donc retenu lui aussi, et sortira au prochain passage par le courriel des retenus
+            if ($sent + $held > 0) {
+                foreach ($failed as $to => $verdict) {
+                    $this->record($to, $verdict, \App\Services\Notification\NotificationGate::STATUS_HELD, $subject, $action, \App\Services\Notification\NotificationGate::HELD_SEND_FAILED);
                 }
             }
         } finally {
-            if ($sent === 0) { // rien n'est parti (pas de configuration d'envoi, ou une erreur) : jour et borne sont RENDUS, on réessaiera
+            if ($sent === 0 && $held === 0) { // rien n'est parti ni retenu (pas de configuration d'envoi, ou une erreur) : jour et borne sont RENDUS, on réessaiera
                 $settings->releaseDigestDay($day, $reserved['previous'], $reserved['previousFindingId']);
             }
+        }
+        if ($sent === 0 && $held > 0) {
+            $journal->append(LossJournalEntry::DIGEST_SENT, null, null, ['day' => $day, 'count' => $total['count'], 'amount' => $total['amount'], 'recipients' => 0, 'held' => $held,
+                'renewed' => $again['count'], 'renewedUpTo' => $renewed['lastId']]);
+
+            return ['status' => 'held', 'sent' => 0];
         }
         if ($sent === 0) {
             $this->logger->warning('Prévention des pertes : courriel de résumé non envoyé (aucun envoi n\'a abouti : configuration d\'envoi du site à vérifier).');
@@ -172,6 +215,16 @@ class LossDigestService
             'renewed' => $again['count'], 'renewedUpTo' => $renewed['lastId']]);
 
         return ['status' => 'sent', 'sent' => $sent];
+    }
+
+    /** Écrit un courriel du résumé au journal des notifications ; une panne de ce journal ne change rien à l'envoi */
+    private function record(string $to, array $verdict, string $status, string $subject, array $action, ?string $reason): void
+    {
+        try {
+            $this->gate->record(\App\Services\Notification\NotificationCatalog::LOSS_DIGEST, $to, $verdict['userId'], $status, $subject, $action, $verdict['day'], $reason);
+        } catch (\Throwable $e) {
+            $this->logger->error('Prévention des pertes : courriel de résumé non écrit au journal des notifications (' . $e::class . ').');
+        }
     }
 
     /** Hôte public du site (son domaine propre, sinon <code>.<domaine du frontend>) : l'envoi commun en fait l'adresse du logo */

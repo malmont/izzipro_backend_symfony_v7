@@ -27,7 +27,8 @@ class ReservationMailerService
         private LoggerInterface $logger,
         private TenantEntityManagerProvider $emProvider,
         private TenantMailerFactory $tenantMailerFactory,
-        private TenantConnectionManager $tenantManager
+        private TenantConnectionManager $tenantManager,
+        private \App\Services\Notification\NotificationGate $gate, // lot NOTIF-1 : niveau des courriels de suivi du destinataire
     ) {
     }
 
@@ -343,18 +344,27 @@ class ReservationMailerService
                 'googleCalendarUrl' => $googleCalendarUrl,
             ]);
 
+            $subject = $session
+                ? sprintf('Séance programmée — %s avec %s', $context['sessionLabel'], $reservation->getClientName())
+                : sprintf('🔔 Nouvelle réservation #%d — %s (%s)', $reservation->getId(), $reservation->getServiceName(), $reservation->getClientName());
             $email = (new Email())
                 ->from(sprintf('%s <%s>', $fromName, $fromEmail))
                 ->to($adminEmail)
                 ->replyTo($reservation->getClientEmail())
-                ->subject($session
-                    ? sprintf('Séance programmée — %s avec %s', $context['sessionLabel'], $reservation->getClientName())
-                    : sprintf('🔔 Nouvelle réservation #%d — %s (%s)', $reservation->getId(), $reservation->getServiceName(), $reservation->getClientName()))
+                ->subject($subject)
                 ->html($html)
                 ->addPart(new DataPart($icsContent, 'rendez-vous.ics', 'text/calendar; charset=utf-8; method=REQUEST'));
 
-            $mailer->send($email);
-            $this->logger->info(sprintf('Notification admin envoyée pour réservation #%d à %s', $reservation->getId(), $adminEmail));
+            // Lot NOTIF-1. Réservation ou séance : courriel de SUIVI (sujet « réservations ») : selon le niveau du destinataire, il part ou
+            // il est retenu pour le courriel suivant du sujet. Demande venue d'un formulaire à étapes (elle porte sa référence) : message
+            // écrit par un client, INDISPENSABLE : il part toujours, comme un message de contact
+            $kind = $this->formReference !== null ? 'customer_message' : \App\Services\Notification\NotificationCatalog::BOOKING_NEW;
+            $status = $this->gate->deliver($kind, $adminEmail, $subject, [], function () use ($mailer, $email): bool {
+                $mailer->send($email);
+
+                return true;
+            });
+            $this->logger->info(sprintf('Notification de l\'équipe pour la réservation #%d : %s', $reservation->getId(), $status)); // jamais l'adresse au journal
         } catch (\Throwable $e) {
             $this->logger->error('Erreur email admin réservation: ' . $e->getMessage(), ['reservationId' => $reservation->getId()]);
         }

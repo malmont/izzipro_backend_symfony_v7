@@ -38,6 +38,7 @@ class PosHealthService
         private readonly PosAuditService $audit,
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
         #[Autowire('%kernel.environment%')] private readonly string $environment = 'dev',
+        private readonly ?\App\Services\Notification\NotificationGate $gate = null, // lot NOTIF-1 : niveau des courriels du destinataire du site
     ) {
     }
 
@@ -202,8 +203,13 @@ class PosHealthService
         $site = $e?->getName() ?: $report['site'];
         $subject = sprintf('[Caisse %s] %s : %d alerte(s)', $site, $report['status'] === 'critical' ? 'CRITIQUE' : 'attention', count($toSend));
         $sent = 0;
+        $platform = $this->platformRecipient();
         foreach ($recipients as $to) {
-            $sent += $this->mailer->sendPlatformEmail($to, $subject, 'emails/pos_health_alert.html.twig', ['site' => $site, 'siteCode' => $report['site'], 'checks' => $toSend, 'report' => $report]) ? 1 : 0;
+            $send = fn (): bool => $this->mailer->sendPlatformEmail($to, $subject, 'emails/pos_health_alert.html.twig', ['site' => $site, 'siteCode' => $report['site'], 'checks' => $toSend, 'report' => $report]);
+            // Lot NOTIF-1 : pour le destinataire du site, courriel URGENT (il part à tout niveau sauf « Aucune », et compte dans le plafond du
+            // jour) ; la copie de l'équipe de la plateforme est interne : elle part toujours
+            $status = $this->gate !== null && $to !== $platform ? $this->gate->deliver(\App\Services\Notification\NotificationCatalog::POS_HEALTH_ALERT, $to, $subject, [], $send) : ($send() ? 'sent' : 'failed');
+            $sent += $status === 'sent' ? 1 : 0;
         }
         $this->audit->record(PosAuditService::HEALTH_ALERT_SENT, ['codes' => array_column($toSend, 'code'), 'recipients' => count($recipients), 'sent' => $sent, 'status' => $report['status']], null, null, null, null, null, true);
 

@@ -30,7 +30,8 @@ class BookPaymentService
         private readonly MailerInterface $defaultMailer,
         private readonly Environment $twig,
         private readonly LoggerInterface $logger,
-        private readonly string $projectDir
+        private readonly string $projectDir,
+        private readonly ?\App\Services\Notification\NotificationGate $gate = null, // lot NOTIF-1 : niveau des courriels de suivi du destinataire
     ) {}
 
     private function getEm(): EntityManagerInterface
@@ -358,13 +359,20 @@ class BookPaymentService
             ? $this->tenantMailerFactory->createMailer($emailConfig)
             : $this->defaultMailer;
 
+        $subject = '🎉 Paiement reçu pour le livre « ' . $book->getTitle() . ' » (' . $amountPaid . ' ' . $currency . ')';
         $email = (new Email())
             ->from(new Address($fromEmail, $fromName))
             ->to($adminEmail)
-            ->subject('🎉 Paiement reçu pour le livre « ' . $book->getTitle() . ' » (' . $amountPaid . ' ' . $currency . ')')
+            ->subject($subject)
             ->html($html);
 
-        $mailer->send($email);
+        // Courriel de suivi (lot NOTIF-1) : selon le niveau du destinataire, il part, ou il est retenu pour le courriel suivant du sujet
+        $send = function () use ($mailer, $email): bool {
+            $mailer->send($email);
+
+            return true;
+        };
+        $this->gate !== null ? $this->gate->deliver(\App\Services\Notification\NotificationCatalog::BOOK_PAYMENT_RECEIVED, (string) $adminEmail, $subject, [], $send) : $send();
     }
 
     /**
