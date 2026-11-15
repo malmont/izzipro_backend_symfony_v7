@@ -113,10 +113,11 @@ class HomeTilesService
                 [['date' => $cash['low14']['date'], 'amount' => $cash['low14']['amount'], 'threshold' => $cash['threshold'], 'status' => $cash['status'], 'series' => $cash['series']]],
                 $cash['low14']['date'] . ':' . $cash['status']);
         }
-        // Prévention des pertes (lot L1-b) : « N nouveaux constats, X en jeu ». Deux nombres, aucun nom ; écartée, elle revient quand la liste change
+        // Prévention des pertes (lot L1-b) : « N nouveaux constats, X en jeu ». Deux nombres, aucun nom ; écartée, elle revient quand la liste change.
+        // Le montant est la somme des constats qui en portent un ; quand aucun n'en porte, le texte ne dit pas « 0,00 $ en jeu »
         $loss = $this->lossPrevention?->newFindings();
         if ($loss !== null) {
-            $tiles[] = $this->tile(self::LOSS_FINDINGS, 'alert', 78, 'loss_findings', $locale,
+            $tiles[] = $this->tile(self::LOSS_FINDINGS, 'alert', 78, $loss['amount'] > 0 ? 'loss_findings' : 'loss_findings_no_amount', $locale,
                 ['%count%' => $loss['count'], '%amount%' => self::money($loss['amount'], $locale, $this->siteCurrency())],
                 ['screen' => 'pertes.constats', 'params' => ['isNew' => true]],
                 [['label' => $this->t('tiles.sources.loss_new_findings', $locale), 'value' => $loss['count'], 'unit' => 'count'], ['label' => $this->t('tiles.sources.loss_amount_at_stake', $locale), 'value' => $loss['amount'], 'unit' => 'money']],

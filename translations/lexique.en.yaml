@@ -440,6 +440,6 @@ decision-constat:
             c: 'You, after review'
             explanation: 'The app reports the facts and keeps the evidence. It never concludes for you: the decision is always yours.'
 exercice-pertes:
-    term: 'Drill (loss prevention)'
-    definition: 'A fictitious finding you launch yourself to see what a finding looks like and how to respond to it. It is marked "Drill", does not touch the register, concerns no real person and counts in no figure. You delete it whenever you want.'
-    synonyms: 'drill mode, practice finding'
+    term: 'Exercise (loss prevention)'
+    definition: 'A fictitious finding you launch yourself to see what a finding looks like and how to respond to it. It is marked "Exercise", does not touch the register, concerns no real person and counts in no figure. You delete it whenever you want.'
+    synonyms: 'practice mode, practice exercise'

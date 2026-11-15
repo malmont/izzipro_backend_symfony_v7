@@ -41,6 +41,10 @@ tiles:
     loss_findings:
         title: Prévention des pertes
         text: "{1}1 nouveau constat à vérifier, %amount% en jeu.|]1,Inf[%count% nouveaux constats à vérifier, %amount% en jeu."
+    # aucun des constats nouveaux ne porte de montant (tiroir ouvert sans vente, validations refusées) : on n'annonce pas « 0,00 $ en jeu »
+    loss_findings_no_amount:
+        title: Prévention des pertes
+        text: "{1}1 nouveau constat à vérifier.|]1,Inf[%count% nouveaux constats à vérifier."
     budget_over:
         title: Budget dépassé
         text: "{1}1 poste dépasse le prévu.|]1,Inf[%count% postes dépassent le prévu."
