@@ -168,12 +168,14 @@ class ProductVariant
     #[ORM\PostUpdate]
     public function updateProductQuantityPostPersistAndUpdate(PostPersistEventArgs|PostUpdateEventArgs $args): void
     {
-        if ($this->product) {
-            $this->product->updateQuantity();
-            $entityManager = $args->getEntityManager();
-            $entityManager->persist($this->product);
-            $entityManager->flush();
+        // même forme que la suppression (lot ART-SUPPR-2) : jamais de « persist » d'un article qui n'est pas géré (il serait réenregistré
+        // sous un nouvel identifiant) ; la quantité n'est recalculée que pour un article vivant
+        $entityManager = $args->getEntityManager();
+        if ($this->product === null || $entityManager->getUnitOfWork()->getEntityState($this->product) !== \Doctrine\ORM\UnitOfWork::STATE_MANAGED) {
+            return;
         }
+        $this->product->updateQuantity();
+        $entityManager->flush();
     }
 
     /**

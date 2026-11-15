@@ -128,7 +128,9 @@ class ProductSheetCreator
                 if ($colorName !== null) {
                     $variant->setColor($colors[mb_strtolower($colorName)] ??= $this->color($em, $colorName));
                 }
-                $variant->setProduct($product);
+                // addVariant, pas setProduct seul : la quantité de l'article est la somme du stock de ses variantes ; sans cela l'article
+                // était écrit à 0 alors que ses variantes avaient du stock, jusqu'à la prochaine écriture d'une variante (corrigé le 15/11/2026)
+                $product->addVariant($variant);
                 $variants[] = $variant;
             }
         }
