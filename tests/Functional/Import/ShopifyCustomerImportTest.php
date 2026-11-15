@@ -260,7 +260,7 @@ class ShopifyCustomerImportTest extends WebTestCase
             'un refus ne change rien : le lien reste valable');
 
         // Acceptation : mot de passe, compte de client, appartenance `boutique` de source `import` avec la version et la date ; infolettre reprise
-        $this->publicRequest('/api/import-invitation/accept', $accept);
+        $this->publicRequest('/api/import-invitation/accept', ['marketing' => true] + $accept); // elle a coché la case des courriels commerciaux
         $this->assertSame([200, ['accepted' => true, 'email' => "alice-$t@example.com", 'marketing' => true]], [$this->status(), $this->body()]);
         $this->em()->clear();
         $account = $this->em()->find(User::class, (int) $alice['id']);
@@ -408,14 +408,15 @@ class ShopifyCustomerImportTest extends WebTestCase
         $this->assertSame('Elle-Même', $registered['lastname'], 'rien de la fiche reprise ne reste');
         $this->assertNotSame('import_invite', $registered['signup_channel']);
 
-        // Chloé accepte mais décoche les courriels commerciaux : le fichier le disait, le commerçant l'a attesté, elle a le dernier mot
+        // Chloé accepte sans cocher la case des courriels commerciaux : le fichier le disait, le commerçant l'a attesté, mais la case est
+        // VIDE par défaut et c'est elle qui décide (décision du propriétaire) : rien n'est repris
         $this->request('POST', "/api/site/imports/$second/invitations");
         $this->sendInvitations($second);
         preg_match('~\#token=([a-f0-9]{64})~', (string) $this->invitationMails()[0]->getHtmlBody(), $m);
         $version = static::getContainer()->get(AppTermsService::class)->version(AppFamilies::BOUTIQUE);
         $this->publicRequest('/api/import-invitation/verify', ['token' => $m[1]]);
         $this->assertSame([200, true], [$this->status(), $this->body()['marketing']]);
-        $this->publicRequest('/api/import-invitation/accept', ['token' => $m[1], 'password' => self::PASSWORD, 'termsVersion' => $version, 'accepted' => true, 'marketing' => false]);
+        $this->publicRequest('/api/import-invitation/accept', ['token' => $m[1], 'password' => self::PASSWORD, 'termsVersion' => $version, 'accepted' => true]);
         $this->assertSame([200, ['accepted' => true, 'email' => "chloe-$t@example.invalid", 'marketing' => false]], [$this->status(), $this->body()]);
         $this->assertSame(0, (int) $conn()->fetchOne('SELECT COUNT(*) FROM newsletter_subscriber WHERE email = ?', ["chloe-$t@example.invalid"]));
 

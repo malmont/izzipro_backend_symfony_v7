@@ -20,7 +20,7 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  * Accepter : le client choisit son mot de passe et accepte les conditions de la boutique, dans leur version du moment. C'est à cet
  * instant seulement que son compte devient un compte de client (vérifié, rôle de client) et que naît son appartenance à la famille
  * `boutique`, de source `import`, avec la version acceptée et la date. Les courriels commerciaux ne sont repris que si le fichier le
- * disait, si le commerçant l'a attesté, et si le client ne l'a pas décoché.
+ * disait, si le commerçant l'a attesté, ET si le client coche lui-même la case (`marketing: true`).
  * Refuser : tout ce qui a été repris est effacé tout de suite.
  * Un lien inconnu, expiré, déjà servi ou d'un compte effacé rend toujours le même refus (`IMPORT_INVITATION_INVALID`).
  */
@@ -52,7 +52,8 @@ class ImportInvitationService
 
         return ['firstname' => (string) $user->getFirstname(), 'email' => (string) $user->getEmail(), 'site' => $this->siteName->name(),
             'expiresAt' => (new \DateTimeImmutable((string) $invitation['expires_at'], new \DateTimeZone('UTC')))->format(\DateTimeInterface::ATOM),
-            // vrai : l'ancienne boutique lui envoyait ses courriels commerciaux (dit par le fichier, attesté par le commerçant) ; il peut le décocher
+            // vrai : l'ancienne boutique lui envoyait ses courriels commerciaux (dit par le fichier, attesté par le commerçant) : la page lui
+            // propose une case VIDE, « cochez la case pour continuer à les recevoir »
             'marketing' => (bool) $invitation['marketing_claimed'], 'terms' => $this->termsOf($host, $locale)];
     }
 
@@ -89,7 +90,8 @@ class ImportInvitationService
         $em = $this->emProvider->getEntityManager();
         $conn = $em->getConnection();
         $userId = (int) $user->getId();
-        $subscribe = (bool) $invitation['marketing_claimed'] && $marketing !== false;
+        // décision du propriétaire (15/11/2026) : une case VIDE que le client coche lui-même ; sans `marketing: true`, rien n'est repris
+        $subscribe = (bool) $invitation['marketing_claimed'] && $marketing === true;
         $conn->beginTransaction();
         try {
             if (!$this->guests->accept((int) $invitation['id'])) {

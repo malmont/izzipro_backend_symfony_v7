@@ -225,9 +225,10 @@ même refus : 404 `IMPORT_INVITATION_INVALID`.
 
 Accepter, dans une seule transaction : l'invitation est close, le mot de passe est posé, le compte devient un compte de client
 (vérifié, `ROLE_USER_INTERNET`), l'appartenance `boutique` est créée (source `import`, version acceptée, date). `marketing` (dans
-`verify`) dit que l'ancienne boutique lui envoyait ses courriels commerciaux : il est alors inscrit à l'infolettre, **sauf s'il
-envoie `marketing: false`** (la page l'écrit en clair, avec une case qu'il peut décocher). Sans cette mention dans le fichier, ou
-sans attestation, rien n'est repris, même s'il envoie `true`. Refuser : tout ce qui a été repris est effacé tout de suite.
+`verify`) dit que l'ancienne boutique lui envoyait ses courriels commerciaux : la page affiche alors « Vous receviez les courriels de
+{site} : cochez la case pour continuer à les recevoir », avec une **case vide** (décision du propriétaire, 15/11/2026). Il n'est
+inscrit à l'infolettre **que s'il a coché**, donc si `accept` porte `marketing: true`. Sans cette mention dans le fichier, ou sans
+attestation, rien n'est repris, même s'il envoie `true`. Refuser : tout ce qui a été repris est effacé tout de suite.
 
 ### 9.5 Effacement
 
