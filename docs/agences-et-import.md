@@ -251,7 +251,10 @@ qu'une agence à la fois), `agency_plans` (une ligne commune `essai` : 60 jours,
 - Création : en essai, 60 jours, 3 sites gérés au plus (forfait commun `essai`) ; **le site d'attache n'est pas compté**.
 - Un site n'a qu'une agence ; un site d'attache n'en sert qu'une et n'est jamais un site géré.
 - Ne se confient jamais, ni comme site d'attache ni comme site géré (`AgencyService::RESERVED_SITES`) : `gmasuite`, `tenantdefaut`,
-  `demo` (le site de contrôle des mises en ligne).
+  `demo` (le site de contrôle des mises en ligne), ni un second code de site posé sur la base de l'un d'eux.
+- « Un site d'attache n'est jamais un site géré » ne tient à aucune contrainte de la base : la création d'une agence et le
+  rattachement d'un site prennent le même verrou du site (`pg_advisory_xact_lock`) et revérifient sous ce verrou.
+- Le nom d'une agence ne porte ni `<` ni `>` (les messages de la page d'administration sont de toute façon échappés).
 - Deux codes de site qui partagent une base (les mêmes comptes) ne se confient pas deux fois : `AGENCY_SITE_SHARES_DATABASE`.
 - Une agence suspendue ou fermée ne reçoit plus de site ; une agence suspendue lit encore son espace, avec son état.
 - **La fin de l'essai est affichée (`trialEndsAt`, `trialEnded`) : rien ne se ferme tout seul dans ce lot.** Lever une suspension
@@ -273,7 +276,16 @@ qu'un ; ses autres rôles ne bougent pas.
   la règle d'accès qui refuse) ; une route publique lui est servie comme à un anonyme. S'il porte aussi `ROLE_SUPPORT`, `/api/support`
   lui reste ouvert. Un compte qui porte un autre rôle d'accès (administrateur du site d'attache, par exemple) garde ses accès.
 - Connexion : la plateforme `webadmin` (l'espace d'administration du web) accepte un compte d'agence ; `web`, `mobile`, `admin` et
-  `pos` le refusent s'il n'a pas le rôle qu'elles exigent.
+  `pos` le refusent s'il n'a pas le rôle qu'elles exigent. Le lien « mot de passe oublié » demandé depuis cet espace y ramène.
+- **Retirer le rôle d'agence d'un compte qui n'a plus aucun autre rôle d'accès clôt ses sessions** (jetons de renouvellement
+  retirés, comme pour un agent d'assistance révoqué) : sans cela sa session du web se renouvellerait et, n'étant plus « agence seul »,
+  il atteindrait les routes qui ne demandent qu'un compte connecté. Le jeton d'accès restant vit 15 minutes au plus.
+- La route de paiement `POST /api/stripe/create-intent` lit le jeton elle-même, hors du pare-feu (`OptionalCustomerResolver`) : un
+  compte borné à un seul espace (agence seul, assistance seul) n'y est jamais reconnu comme client.
+- Un agent d'assistance qui reçoit un rôle d'agence reste un agent que l'administrateur du site peut révoquer ; la révocation lui
+  laisse son rôle d'agence, qui ne se retire que par la plateforme.
+- Pour le front : un compte d'agence seul reçoit 403 sur `/api/profile`, `/api/validate-token` et `/api/account/memberships` ;
+  l'espace de l'agence s'appuie sur `GET /api/agency/me`.
 
 ### 7.4 Routes de l'agence (`ROLE_AGENCY` ou `ROLE_AGENCY_MEMBER`, règle `^/api/agency` placée avant la règle générale `^/api`)
 
@@ -311,6 +323,10 @@ les mêmes services ; chaque action refait le contrôle du rôle et du jeton CSR
   sans agence sur ce site, ils n'ouvrent rien (403 `AGENCY_SCOPE`).
 - Aucun droit de source `agency`, aucune création de site, aucune entrée dans un site géré, aucun relevé : lots AG-2 à AG-5.
 - La page d'administration liste tous les sites comme candidats, sauf les sites réservés ; les refus sont dits au moment du geste.
+- Un compte client (`ROLE_USER_INTERNET`) qui reçoit un rôle d'agence devient un compte d'équipe : en mode « exiger », il n'a plus à
+  rejoindre une famille d'applications (même règle que les autres rôles d'équipe).
+- Un rôle d'agence retiré par un autre chemin (effacement du compte) n'est pas écrit au journal de l'agence.
+- Aucune clé étrangère vers `tenants` : un code de site supprimé puis recréé retrouverait son agence.
 
 ## Tenir cette fiche à jour
 

@@ -115,7 +115,8 @@ class SupportAgentService
     {
         $user = $this->agent($id);
         $em = $this->emProvider->getEntityManager();
-        $user->setRoles([])->setResetToken(null)->setResetTokenExpiresAt(null);
+        // lot AG-1 : un rôle d'agence n'est ni donné ni retiré par un administrateur de site : il reste
+        $user->setRoles(array_values(array_intersect($user->getRoles(), \App\Security\AgencyRoles::ALL)))->setResetToken(null)->setResetTokenExpiresAt(null);
         $em->flush();
         $conn = $em->getConnection();
         $conn->executeStatement('DELETE FROM refresh_tokens WHERE username = ?', [(string) $user->getUserIdentifier()]);
@@ -183,7 +184,8 @@ class SupportAgentService
     private function agent(int $id): User
     {
         $user = $this->emProvider->getEntityManager()->find(User::class, $id);
-        if (!$user instanceof User || array_values(array_diff($user->getRoles(), ['ROLE_USER'])) !== [self::ROLE]) {
+        // lot AG-1 : un rôle d'agence (donné par la plateforme) ne retire pas à un agent sa qualité d'agent
+        if (!$user instanceof User || array_values(array_diff($user->getRoles(), ['ROLE_USER', ...\App\Security\AgencyRoles::ALL])) !== [self::ROLE]) {
             throw new SupportException('AGENT_NOT_FOUND', 'Agent d\'assistance introuvable.', 404);
         }
 

@@ -64,10 +64,13 @@ class AgenciesTest extends WebTestCase
         // Créations refusées : champs, site inconnu, site réservé
         $refused = $this->json('POST', '/api/platform/agencies', ['code' => 'A', 'name' => '', 'homeTenantCode' => 'inconnu', 'contactEmail' => 'pas-une-adresse', 'test' => 'oui'], 'super', 422);
         $this->assertSame(['VALIDATION_FAILED', ['code', 'name', 'homeTenantCode', 'contactEmail', 'test']], [$refused['code'], array_column($refused['errors'], 'path')]);
+        $this->assertSame(['name'], array_column($this->json('POST', '/api/platform/agencies', ['code' => 'agence-test', 'name' => 'Agence <img src=x>', 'homeTenantCode' => MV_TEST_TENANT_CODE], 'super', 422)['errors'], 'path'));
         foreach (['demo', 'gmasuite', 'tenantdefaut'] as $reserved) {
             $this->master->prepare('INSERT INTO tenants (code, name, dbname) SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM tenants WHERE code = ?)')->execute([$reserved, 'Réservé', 'db_agfict_' . $reserved, $reserved]);
             $this->assertSame('AGENCY_SITE_RESERVED', $this->json('POST', '/api/platform/agencies', ['code' => 'agence-test', 'name' => 'Agence', 'homeTenantCode' => $reserved], 'super', 409)['code'], $reserved);
         }
+        $this->master->prepare('INSERT INTO tenants (code, name, dbname) VALUES (?, ?, ?)')->execute(['agfict-demo-bis', 'Second code sur la base de demo', 'db_agfict_demo']);
+        $this->assertSame('AGENCY_SITE_RESERVED', $this->json('POST', '/api/platform/agencies', ['code' => 'agence-test', 'name' => 'Agence', 'homeTenantCode' => 'agfict-demo-bis'], 'super', 409)['code'], 'un second code sur la base d\'un site réservé');
         $this->assertSame(0, (int) $this->master->query('SELECT COUNT(*) FROM agencies')->fetchColumn());
 
         // Création : en essai, 60 jours, 3 sites ; le site d'attache est le site de test
@@ -184,11 +187,14 @@ class AgenciesTest extends WebTestCase
             AgencyScopeSubscriber::agencyOnly(['ROLE_AGENCY', 'ROLE_SUPPORT']), AgencyScopeSubscriber::agencyOnly(['ROLE_AGENCY', 'ROLE_ADMIN'])]);
 
         // Le collaborateur entre dans l'espace d'administration du web (et seulement là), et lit son agence : jamais d'un paramètre
-        $this->assertSame(403, $this->login("agence-collab-{$this->tag}@example.invalid", 'web', MV_TEST_TENANT_HOST)->getStatusCode(), 'pas un client');
-        $this->assertSame(403, $this->login("agence-collab-{$this->tag}@example.invalid", 'admin', MV_TEST_TENANT_HOST)->getStatusCode(), 'pas l\'application de gestion mobile');
+        foreach (['web', 'mobile', 'pos', 'admin'] as $platform) {
+            $this->assertSame(403, $this->login("agence-collab-{$this->tag}@example.invalid", $platform, MV_TEST_TENANT_HOST)->getStatusCode(), "$platform : ni client, ni caissier, ni application de gestion mobile");
+        }
         $login = $this->login("agence-collab-{$this->tag}@example.invalid", 'webadmin', MV_TEST_TENANT_HOST);
         $this->assertSame(200, $login->getStatusCode(), (string) $login->getContent());
         $this->tokens['member'] = $this->tokenOf($login, MV_TEST_TENANT_CODE);
+        $sessions = fn (): int => (int) $this->pdo(MV_TEST_TENANT_DB)->query("SELECT COUNT(*) FROM refresh_tokens WHERE username = 'agence-collab-{$this->tag}@example.invalid'")->fetchColumn();
+        $this->assertSame(1, $sessions(), 'la connexion a ouvert une session du web');
         $me = $this->json('GET', '/api/agency/me', null, 'member', 200);
         $this->assertSame(['agence-test', 'trial', 1, 3, MV_TEST_TENANT_CODE, 'member'], [$me['agency']['code'], $me['agency']['status'], $me['agency']['sitesCount'], $me['agency']['maxSites'], $me['agency']['homeSite']['code'], $me['role']]);
         $sites = $this->json('GET', '/api/agency/sites?agency=999&tenant=agfict-a&agencyId=2', null, 'member', 200);
@@ -201,6 +207,23 @@ class AgenciesTest extends WebTestCase
         $scoped = $this->api('GET', '/api/memoires/team', null, 'member');
         $this->assertSame([403, AgencyScopeSubscriber::CODE], [$scoped->getStatusCode(), json_decode((string) $scoped->getContent(), true)['code']], 'une route ouverte à tout compte connecté lui est fermée');
         $this->assertSame(403, $this->api('POST', '/api/site/imports', [], 'member')->getStatusCode());
+        $this->assertSame(403, $this->api('GET', '/api/%6demoires/team', null, 'member')->getStatusCode(), 'un chemin encodé ne contourne pas la garde');
+        // une route publique lui est servie comme à un anonyme ; la route de paiement, qui lit le jeton elle-même, ne le reconnaît pas non plus
+        $this->assertSame(200, $this->api('GET', '/api/apps/boutique/terms', null, 'member')->getStatusCode());
+        $resolver = static::getContainer()->get(\App\Security\OptionalCustomerResolver::class);
+        $provider = static::getContainer()->get(TenantEntityManagerProvider::class);
+        $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $asked = fn (string $token): \Symfony\Component\HttpFoundation\Request => \Symfony\Component\HttpFoundation\Request::create('/api/stripe/create-intent', 'POST', [], [], [], ['HTTP_AUTHORIZATION' => 'Bearer ' . $token]);
+        $customer = $this->account("agence-cliente-{$this->tag}@example.invalid", ['ROLE_USER_INTERNET'], MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $customerToken = static::getContainer()->get('lexik_jwt_authentication.jwt_manager')->create($provider->getEntityManager()->find(User::class, $customer));
+        $this->assertSame([null, $customer], [$resolver->resolve($asked($this->tokens['member'])), $resolver->resolve($asked($customerToken))?->getId()], 'un compte d\'agence seul n\'est jamais un client');
+        // le responsable, sans autre rôle, lit le même espace ; son rôle est dit
+        $boss = $this->account("agence-chef-{$this->tag}@example.invalid", [], MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $this->json('PUT', "/api/platform/agencies/$id/members", ['email' => "agence-chef-{$this->tag}@example.invalid", 'role' => 'manager'], 'super', 200);
+        $login = $this->login("agence-chef-{$this->tag}@example.invalid", 'webadmin', MV_TEST_TENANT_HOST);
+        $this->tokens['boss'] = $this->tokenOf($login, MV_TEST_TENANT_CODE);
+        $this->assertSame('manager', $this->json('GET', '/api/agency/me', null, 'boss', 200)['role']);
+        $this->assertGreaterThan(0, $boss);
 
         // Le périmètre : le jeton d'un site ne vaut pas sur un autre ; un site qui n'est pas un site d'attache n'a pas d'espace d'agence, même
         // pour un compte qui porterait le rôle ; un administrateur sans rôle d'agence, et le super administrateur, n'y entrent pas
@@ -230,18 +253,28 @@ class AgenciesTest extends WebTestCase
             $this->assertSame(403, $this->api('GET', $route, null, 'both')->getStatusCode(), $route);
         }
         $this->assertGreaterThan(0, $both);
+        $this->assertSame(200, $this->api('DELETE', "/api/support/agents/$both", null, 'admin')->getStatusCode(), 'l\'administrateur du site révoque toujours cet agent');
+        $this->assertSame(['ROLE_AGENCY_MEMBER'], $roles($both), 'le rôle d\'agence, lui, ne se retire que par la plateforme');
+        $this->assertSame(403, $this->api('GET', '/api/support/me', null, 'both')->getStatusCode());
+        $this->assertSame('member', $this->json('GET', '/api/agency/me', null, 'both', 200)['role']);
 
         // Une agence suspendue lit encore son espace, avec son état ; retirer le rôle ferme l'espace tout de suite (les rôles sont relus en base)
         $this->json('POST', "/api/platform/agencies/$id/suspend", [], 'super', 200);
         $this->assertSame('suspended', $this->json('GET', '/api/agency/me', null, 'member', 200)['agency']['status']);
         $revoked = $this->json('PUT', "/api/platform/agencies/$id/members", ['email' => "agence-collab-{$this->tag}@example.invalid", 'role' => 'none'], 'super', 200);
-        $this->assertSame([null, true, ['manager', 'member']], [$revoked['member']['role'], $revoked['member']['changed'], array_column($revoked['members'], 'role')]);
+        $this->assertSame([null, true, ['manager', 'manager', 'member']], [$revoked['member']['role'], $revoked['member']['changed'], array_column($revoked['members'], 'role')]);
         $this->assertSame([], $roles($member));
         $this->assertSame(403, $this->api('GET', '/api/agency/me', null, 'member')->getStatusCode());
+        $this->assertSame(0, $sessions(), 'le compte n\'a plus aucun rôle d\'accès : sa session du web est close, elle ne se renouvelle plus');
+        // le responsable, lui, garde sa session : il porte encore un rôle d'accès quand on lui retire celui d'agence
+        $this->json('PUT', "/api/platform/agencies/$id/members", ['email' => "agence-resp-{$this->tag}@example.invalid", 'role' => 'none'], 'super', 200);
+        $this->assertSame(['ROLE_ADMIN'], $roles($manager));
         // une agence fermée n'a plus d'espace, même pour qui porte encore le rôle
         $this->master->prepare("UPDATE agencies SET status = 'closed' WHERE id = ?")->execute([$id]);
         $closed = $this->api('GET', '/api/agency/me', null, 'both');
         $this->assertSame([403, 'AGENCY_SCOPE'], [$closed->getStatusCode(), json_decode((string) $closed->getContent(), true)['code']]);
+        $this->assertSame('AGENCY_NOT_OPEN', $this->json('POST', "/api/platform/agencies/$id/sites", ['tenantCode' => 'agfict-d'], 'super', 409)['code']);
+        $this->assertSame('AGENCY_NOT_OPEN', $this->json('PUT', "/api/platform/agencies/$id/members", ['email' => "agence-chef-{$this->tag}@example.invalid", 'role' => 'none'], 'super', 409)['code']);
     }
 
     public function testTheSuperAdministratorManagesAgenciesFromTheAdministrationPage(): void
@@ -312,6 +345,7 @@ class AgenciesTest extends WebTestCase
         $this->master->exec('DELETE FROM agencies');
         $this->master->exec("DELETE FROM tenants WHERE code LIKE 'agfict-%' OR code IN ('demo', 'gmasuite', 'tenantdefaut') AND dbname LIKE 'db_agfict_%'");
         foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
+            $this->pdo($db)->exec("DELETE FROM refresh_tokens WHERE username LIKE 'agence-%@example.invalid'");
             $this->pdo($db)->exec("DELETE FROM \"user\" WHERE email LIKE 'agence-%@example.invalid' OR email = 'super-agences@example.invalid' OR email = 'admin-agences@example.invalid'");
         }
     }

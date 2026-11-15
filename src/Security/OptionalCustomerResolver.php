@@ -46,10 +46,22 @@ final class OptionalCustomerResolver
         if (isset($payload['id']) && is_numeric($payload['id'])) {
             $user = $em->find(User::class, (int) $payload['id']);
 
-            return $user instanceof User && ($user->getEmail() === $identifier || $user->getUsername() === $identifier) ? $user : null;
+            return $user instanceof User && ($user->getEmail() === $identifier || $user->getUsername() === $identifier) ? self::customer($user) : null;
         }
         $user = $em->getRepository(User::class)->findOneBy(['email' => $identifier]);
 
-        return $user instanceof User ? $user : null;
+        return $user instanceof User ? self::customer($user) : null;
+    }
+
+    /**
+     * Lot AG-1 (15/11/2026) : ce résolveur lit le jeton lui-même, hors du pare-feu ; les gardes de périmètre (`AgencyScopeSubscriber`,
+     * `SupportScopeSubscriber`) n'y ont donc aucun effet. Un compte borné à un seul espace (agence seul, assistance seul) n'est pas un
+     * client : la route est servie comme à un anonyme, jamais sous son identité.
+     */
+    private static function customer(User $user): ?User
+    {
+        $roles = $user->getRoles();
+
+        return AgencyScopeSubscriber::agencyOnly($roles) || \App\Support\SupportScopeSubscriber::supportOnly($roles) ? null : $user;
     }
 }

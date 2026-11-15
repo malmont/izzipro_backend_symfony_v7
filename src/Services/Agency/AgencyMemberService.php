@@ -18,6 +18,8 @@ class AgencyMemberService
 {
     public const EVENT_GRANTED = 'role_granted';
     public const EVENT_REVOKED = 'role_revoked';
+    /** Rôles qui donnent un accès : un compte qui n'en porte plus aucun n'a plus de session à garder */
+    private const ACCESS_ROLES = ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_USER_INTERNET', 'ROLE_USER_POS', 'ROLE_POS_MANAGER', 'ROLE_SUPPORT', 'ROLE_COMPANY', 'ROLE_CONSULTANT', ...AgencyRoles::ALL];
 
     public function __construct(private readonly AgencyRepository $repository, private readonly TenantDatabaseConnector $connector)
     {
@@ -83,10 +85,20 @@ class AgencyMemberService
             if ($role !== 'none') {
                 $after[] = AgencyRoles::NAMES[$role];
             }
-            $changed = $before !== $after;
+            [$sortedBefore, $sortedAfter] = [$before, $after];
+            sort($sortedBefore);
+            sort($sortedAfter);
+            $changed = $sortedBefore !== $sortedAfter; // les mêmes rôles dans un autre ordre : aucun changement
             if ($changed) {
                 $update = $pdo->prepare('UPDATE "user" SET roles = ? WHERE id = ?');
                 $update->execute([json_encode($after), (int) $user['id']]);
+                // Le compte ne porte plus aucun rôle d'accès : ses sessions sont closes (jetons de renouvellement retirés), comme pour un
+                // agent d'assistance révoqué. Sans cela, la session du web se renouvellerait sans fin et, n'étant plus « agence seul »,
+                // le compte atteindrait les routes qui ne demandent qu'un compte connecté. Le jeton d'accès restant vit 15 minutes au plus.
+                if (array_intersect($after, self::ACCESS_ROLES) === []) {
+                    $close = $pdo->prepare('DELETE FROM refresh_tokens WHERE username = ?');
+                    $close->execute([(string) $user['email']]);
+                }
             }
             $pdo->commit();
         } catch (\Throwable $e) {

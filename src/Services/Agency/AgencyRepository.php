@@ -48,13 +48,45 @@ class AgencyRepository
         return $this->one('SELECT ' . self::COLUMNS . ' FROM agencies WHERE id = (SELECT agency_id FROM agency_sites WHERE tenant_code = ? AND detached_at IS NULL)', [$tenantCode]);
     }
 
-    /** @return array<string, mixed> l'agence créée */
-    public function insert(string $code, string $name, string $homeTenantCode, \DateTimeImmutable $trialEndsAt, int $maxSites, ?string $planCode, ?string $contactEmail, bool $isTest, ?string $by): array
+    /**
+     * Crée une agence. Sous un verrou du site (le même que le rattachement) : « un site d'attache n'est jamais un site géré » ne tient
+     * à aucune contrainte de la base, il se vérifie donc ICI, à l'abri d'un rattachement fait au même instant. Rend l'agence créée, ou
+     * null si le site est géré par une agence. Une violation d'unicité (code, site d'attache) remonte en `PDOException` 23505.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function insert(string $code, string $name, string $homeTenantCode, \DateTimeImmutable $trialEndsAt, int $maxSites, ?string $planCode, ?string $contactEmail, bool $isTest, ?string $by): ?array
     {
-        $stmt = $this->pdo()->prepare('INSERT INTO agencies (code, name, home_tenant_code, status, trial_ends_at, max_sites, plan_code, contact_email, is_test, created_by) VALUES (?, ?, ?, \'trial\', ?, ?, ?, ?, ?, ?) RETURNING id');
-        $stmt->execute([$code, $name, $homeTenantCode, self::utc($trialEndsAt), $maxSites, $planCode, $contactEmail, $isTest ? 'true' : 'false', $by !== null ? mb_substr($by, 0, 255) : null]);
+        $pdo = $this->pdo();
+        $pdo->beginTransaction();
+        try {
+            $this->lockSite($pdo, $homeTenantCode);
+            $managed = $pdo->prepare('SELECT 1 FROM agency_sites WHERE tenant_code = ? AND detached_at IS NULL');
+            $managed->execute([$homeTenantCode]);
+            if ($managed->fetchColumn() !== false) {
+                $pdo->rollBack();
 
-        return $this->find((int) $stmt->fetchColumn()) ?? throw new \RuntimeException('agence non relue');
+                return null;
+            }
+            $stmt = $pdo->prepare('INSERT INTO agencies (code, name, home_tenant_code, status, trial_ends_at, max_sites, plan_code, contact_email, is_test, created_by) VALUES (?, ?, ?, \'trial\', ?, ?, ?, ?, ?, ?) RETURNING id');
+            $stmt->execute([$code, $name, $homeTenantCode, self::utc($trialEndsAt), $maxSites, $planCode, $contactEmail, $isTest ? 'true' : 'false', $by !== null ? mb_substr($by, 0, 255) : null]);
+            $id = (int) $stmt->fetchColumn();
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+
+        return $this->find($id) ?? throw new \RuntimeException('agence non relue');
+    }
+
+    /** Verrou d'un site, tenu jusqu'à la fin de la transaction : création d'une agence et rattachement d'un site ne se croisent pas */
+    private function lockSite(\PDO $pdo, string $tenantCode): void
+    {
+        $lock = $pdo->prepare('SELECT pg_advisory_xact_lock(hashtext(?))');
+        $lock->execute(['agency-site:' . $tenantCode]);
     }
 
     /** Passe une agence d'un état à un autre, seulement si elle est dans l'un des états attendus ; vrai si le pas a été fait */
@@ -87,6 +119,15 @@ class AgencyRepository
         try {
             $lock = $pdo->prepare('SELECT id FROM agencies WHERE id = ? FOR UPDATE');
             $lock->execute([$agencyId]);
+            // sous le verrou du site : il n'est pas devenu, au même instant, le site d'attache d'une agence
+            $this->lockSite($pdo, $tenantCode);
+            $home = $pdo->prepare('SELECT 1 FROM agencies WHERE home_tenant_code = ?');
+            $home->execute([$tenantCode]);
+            if ($home->fetchColumn() !== false) {
+                $pdo->rollBack();
+
+                return 'taken';
+            }
             $count = $pdo->prepare('SELECT COUNT(*) FROM agency_sites WHERE agency_id = ? AND detached_at IS NULL');
             $count->execute([$agencyId]);
             if ((int) $count->fetchColumn() >= $maxSites) {
@@ -138,6 +179,18 @@ class AgencyRepository
              OR t.code IN (SELECT home_tenant_code FROM agencies WHERE status <> 'closed')) LIMIT 1"
         );
         $stmt->execute([$dbname, $tenantCode]);
+
+        return $stmt->fetchColumn() !== false;
+    }
+
+    /** Cette base est-elle celle d'un des sites nommés ? (un second code posé sur la base d'un site réservé) @param list<string> $codes */
+    public function onDatabaseOf(string $dbname, array $codes): bool
+    {
+        if ($codes === []) {
+            return false;
+        }
+        $stmt = $this->pdo()->prepare('SELECT 1 FROM tenants WHERE dbname = ? AND code IN (' . implode(',', array_fill(0, count($codes), '?')) . ') LIMIT 1');
+        $stmt->execute([$dbname, ...$codes]);
 
         return $stmt->fetchColumn() !== false;
     }

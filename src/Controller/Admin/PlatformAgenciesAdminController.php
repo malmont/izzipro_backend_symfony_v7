@@ -57,7 +57,8 @@ class PlatformAgenciesAdminController extends AbstractController
         return $this->action($request, function () use ($request): ?int {
             $agency = $this->agencies->create(['code' => $request->request->get('code'), 'name' => $request->request->get('name'), 'homeTenantCode' => $request->request->get('homeTenantCode'),
                 'contactEmail' => $request->request->get('contactEmail'), 'test' => $request->request->getBoolean('test')], $this->getUser()?->getUserIdentifier());
-            $this->addFlash('success', sprintf('Agence « %s » créée, en essai jusqu\'au %s.', $agency['name'], substr((string) $agency['trialEndsAt'], 0, 10)));
+            // EasyAdmin affiche ses messages sans échappement : tout ce qui vient d'une saisie est échappé ici
+            $this->addFlash('success', sprintf('Agence « %s » créée, en essai jusqu\'au %s.', htmlspecialchars((string) $agency['name'], ENT_QUOTES), substr((string) $agency['trialEndsAt'], 0, 10)));
 
             return (int) $agency['id'];
         });
@@ -68,7 +69,7 @@ class PlatformAgenciesAdminController extends AbstractController
     {
         return $this->action($request, function () use ($id, $request): int {
             $this->agencies->attach($id, $request->request->get('tenantCode'), $this->getUser()?->getUserIdentifier());
-            $this->addFlash('success', sprintf('Site « %s » rattaché.', $request->request->get('tenantCode')));
+            $this->addFlash('success', sprintf('Site « %s » rattaché.', htmlspecialchars((string) $request->request->get('tenantCode'), ENT_QUOTES)));
 
             return $id;
         });
@@ -79,7 +80,7 @@ class PlatformAgenciesAdminController extends AbstractController
     {
         return $this->action($request, function () use ($id, $request): int {
             $this->agencies->detach($id, (string) $request->request->get('tenantCode'), $this->getUser()?->getUserIdentifier());
-            $this->addFlash('success', sprintf('Site « %s » détaché.', $request->request->get('tenantCode')));
+            $this->addFlash('success', sprintf('Site « %s » détaché.', htmlspecialchars((string) $request->request->get('tenantCode'), ENT_QUOTES)));
 
             return $id;
         });
@@ -90,7 +91,7 @@ class PlatformAgenciesAdminController extends AbstractController
     {
         return $this->action($request, function () use ($id, $to, $request): int {
             $agency = $to === 'suspend' ? $this->agencies->suspend($id, $this->getUser()?->getUserIdentifier(), $request->request->get('reason')) : $this->agencies->resume($id, $this->getUser()?->getUserIdentifier());
-            $this->addFlash('success', sprintf('Agence « %s » : %s.', $agency['name'], $agency['status']));
+            $this->addFlash('success', sprintf('Agence « %s » : %s.', htmlspecialchars((string) $agency['name'], ENT_QUOTES), $agency['status']));
 
             return $id;
         });
@@ -121,7 +122,7 @@ class PlatformAgenciesAdminController extends AbstractController
             $id = (int) ($do() ?? $id);
         } catch (PlatformValidationException $e) {
             foreach ($e->errors as $error) {
-                $this->addFlash('danger', $error['path'] . ' : ' . $error['message']);
+                $this->addFlash('danger', htmlspecialchars($error['path'] . ' : ' . $error['message'], ENT_QUOTES));
             }
         } catch (AgencyException $e) {
             $this->addFlash('danger', $e->getMessage());

@@ -114,7 +114,7 @@ class ResetPasswordController extends AbstractController
         // Lot SUPPORT-WEB (14/11/2026) : la demande vient de l'espace d'administration du web (`platform: "webadmin"`) et le compte y a
         // accès → le lien ouvre l'écran de cet espace, avec le jeton dans le FRAGMENT de l'adresse (jamais journalisé par un serveur),
         // comme l'invitation d'un agent. Sans ce champ, ou pour un compte client, rien ne change : la page du site, comme avant.
-        if (is_array($data) && ($data['platform'] ?? null) === 'webadmin' && array_intersect(['ROLE_ADMIN', 'ROLE_SUPPORT', 'ROLE_SUPER_ADMIN'], $user->getRoles()) !== []) {
+        if (is_array($data) && ($data['platform'] ?? null) === 'webadmin' && array_intersect(['ROLE_ADMIN', 'ROLE_SUPPORT', 'ROLE_SUPER_ADMIN', ...\App\Security\AgencyRoles::ALL], $user->getRoles()) !== []) {
             $resetUrl = $this->adminSpace?->activation($resetToken) ?? $resetUrl;
         }
 

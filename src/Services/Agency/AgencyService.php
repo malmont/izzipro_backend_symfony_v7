@@ -59,8 +59,8 @@ class AgencyService
             $errors[] = ['path' => 'code', 'message' => '3 à 50 caractères : lettres minuscules, chiffres, tirets'];
         }
         $name = is_string($data['name'] ?? null) ? trim($data['name']) : '';
-        if (mb_strlen($name) < 2 || mb_strlen($name) > 160) {
-            $errors[] = ['path' => 'name', 'message' => 'nom de 2 à 160 caractères attendu'];
+        if (mb_strlen($name) < 2 || mb_strlen($name) > 160 || preg_match('/[<>]/', $name) === 1) {
+            $errors[] = ['path' => 'name', 'message' => 'nom de 2 à 160 caractères attendu, sans < ni >'];
         }
         $home = is_string($data['homeTenantCode'] ?? null) ? trim($data['homeTenantCode']) : '';
         $site = $home !== '' ? $this->repository->tenant($home) : null;
@@ -77,7 +77,7 @@ class AgencyService
         if ($errors !== []) {
             throw new PlatformValidationException($errors);
         }
-        if (in_array($site['code'], self::RESERVED_SITES, true)) {
+        if ($this->reserved($site)) {
             throw new AgencyException('AGENCY_SITE_RESERVED', 409, ['tenantCode' => $site['code']]);
         }
         if ($this->repository->findByCode($code) !== null) {
@@ -99,6 +99,9 @@ class AgencyService
             }
             throw $e;
         }
+        if ($agency === null) {
+            throw new AgencyException('AGENCY_HOME_TAKEN', 409, ['tenantCode' => $site['code']]); // le site vient d'être rattaché à une agence, au même instant
+        }
         $this->repository->recordEvent($agency['id'], self::EVENT_CREATED, $site['code'], ['code' => $code, 'trialDays' => $plan['trial_days'], 'maxSites' => $plan['max_sites'], 'test' => $agency['is_test']], $by);
 
         return $this->view($agency);
@@ -115,7 +118,7 @@ class AgencyService
         if (!in_array($agency['status'], self::OPEN_STATUSES, true)) {
             throw new AgencyException('AGENCY_NOT_OPEN', 409, ['status' => $agency['status']]);
         }
-        if (in_array($site['code'], self::RESERVED_SITES, true)) {
+        if ($this->reserved($site)) {
             throw new AgencyException('AGENCY_SITE_RESERVED', 409, ['tenantCode' => $site['code']]);
         }
         if ($this->repository->findByHome($site['code']) !== null || $this->repository->managing($site['code']) !== null) {
@@ -216,6 +219,17 @@ class AgencyService
     {
         return array_map(static fn (array $e): array => ['id' => (int) $e['id'], 'event' => (string) $e['event'], 'tenantCode' => $e['tenant_code'], 'payload' => $e['payload'], 'actor' => $e['actor'],
             'createdAt' => (new \DateTimeImmutable((string) $e['created_at'], new \DateTimeZone('UTC')))->format(\DateTimeInterface::ATOM)], $this->repository->events($agency['id'], $limit));
+    }
+
+    /**
+     * Un site qui ne se confie jamais : par son code, ou parce qu'il partage sa base avec un site réservé (un second code posé sur la
+     * base du site de contrôle ou du site de référence).
+     *
+     * @param array{code: string, name: string, dbname: string} $site
+     */
+    private function reserved(array $site): bool
+    {
+        return in_array($site['code'], self::RESERVED_SITES, true) || $this->repository->onDatabaseOf($site['dbname'], self::RESERVED_SITES);
     }
 
     /** @return array{code: string, name: string, host: ?string} un site tel que la plateforme le connaît (un site disparu garde son code) */
