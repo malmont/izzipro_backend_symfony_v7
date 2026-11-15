@@ -34,6 +34,7 @@ class SupportTicketService
         private readonly SupportAttachmentStorage $storage,
         private readonly SupportMailer $mailer,
         private readonly ContentAuditRecorder $audit,
+        private readonly SupportDirectoryService $directory,
     ) {
     }
 
@@ -224,8 +225,10 @@ class SupportTicketService
         }
         $assignee = null;
         if (array_key_exists('assignedTo', $body) && $body['assignedTo'] !== null) {
-            $assignee = is_int($body['assignedTo']) ? $em->find(User::class, $body['assignedTo']) : null;
-            if ($assignee === null || !array_intersect(['ROLE_SUPPORT', 'ROLE_ADMIN'], $assignee->getRoles())) {
+            // les comptes de `GET /api/support/agents` pour ce compte, et eux seuls : agents et administrateurs vérifiés du site, plus
+            // soi-même ; jamais le propriétaire de la plateforme par quelqu'un d'autre, ni une invitation en attente
+            $assignee = is_int($body['assignedTo']) && $this->directory->assignable($body['assignedTo'], $agent) ? $em->find(User::class, $body['assignedTo']) : null;
+            if ($assignee === null) {
                 $errors['assignedTo'] = 'INVALID_AGENT';
             }
         }

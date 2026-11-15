@@ -101,8 +101,11 @@ l'administrateur du site. Tests : `tests/Functional/Support/SupportWebApiTest.ph
   au client), cumulables avec les autres ; toute autre valeur : 422 `fields.overdue | awaiting = INVALID_VALUE`. La réponse porte
   `counts { overdue, awaiting, unassigned }`, sur toute la boîte, quels que soient les filtres et la page.
 - **`GET /api/support/agents`** : `{ agents: [{ id, name, role: support | admin, me }] }`, les comptes vérifiés à qui attribuer une demande
-  (jamais un courriel ; le propriétaire de la plateforme n'y figure pas). Pour l'administrateur, en plus : `pending [{ id, name,
-  expiresAt, expired }]`, les invitations en attente.
+  (jamais un courriel ; le propriétaire de la plateforme n'y figure pas, sauf dans SA propre liste : le compte connecté y est
+  toujours, avec `me: true`, puisqu'il peut s'attribuer une demande). **`PATCH /api/support/tickets/{id}` `assignedTo` accepte
+  exactement les comptes de cette liste** (`SupportDirectoryService::assignable`) ; tout autre identifiant, une invitation en attente
+  comprise, rend 422 `INVALID_AGENT`. Pour l'administrateur, en plus : `pending [{ id, name, expiresAt, expired }]`, les invitations
+  en attente.
 - **Commande par sa référence**, pour les deux rôles : `orderReference` dans `POST /api/support/tickets` (avec `orderId` : 422
   `NOT_WITH_ORDER_ID` ; inconnue : 404 `ORDER_REFERENCE_NOT_FOUND` ; portée par plusieurs commandes : 409 `ORDER_REFERENCE_AMBIGUOUS`
   avec `count` ; rien n'est créé) ; le client de la commande remplit la demande, sauf si `customer` est donné.

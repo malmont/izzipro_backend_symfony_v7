@@ -81,7 +81,9 @@ class SupportDirectoryService
 
     /**
      * GET /api/support/agents : les comptes à qui une demande peut être attribuée (agents d'assistance et administrateurs du site,
-     * vérifiés). Un nom, jamais un courriel ; le propriétaire de la plateforme n'y figure pas.
+     * vérifiés). Un nom, jamais un courriel ; le propriétaire de la plateforme n'y figure pas, SAUF pour lui-même : le compte connecté
+     * est toujours dans sa propre liste (`me: true`), parce qu'il peut s'attribuer une demande (15/11/2026). C'est aussi la règle de
+     * `PATCH /api/support/tickets/{id}` (`assignable`) : la liste et l'attribution acceptent exactement les mêmes comptes.
      *
      * @return array{agents: list<array{id: int, name: string, role: string, me: bool}>}
      */
@@ -97,9 +99,20 @@ class SupportDirectoryService
             $agents[] = ['id' => (int) $r['id'], 'name' => $name !== '' ? $name : sprintf('Compte n° %d', (int) $r['id']),
                 'role' => str_contains((string) $r['roles'], '"ROLE_ADMIN"') ? 'admin' : 'support', 'me' => (int) $r['id'] === (int) $me->getId()];
         }
+        if (!in_array((int) $me->getId(), array_column($agents, 'id'), true)) {
+            // le compte connecté hors de la requête (propriétaire de la plateforme) : dans sa propre liste seulement
+            $alone = array_values(array_diff($me->getRoles(), ['ROLE_USER'])) === ['ROLE_SUPPORT'];
+            $agents[] = ['id' => (int) $me->getId(), 'name' => self::name($me), 'role' => $alone ? 'support' : 'admin', 'me' => true];
+        }
         usort($agents, fn (array $a, array $b) => [mb_strtolower($a['name']), $a['id']] <=> [mb_strtolower($b['name']), $b['id']]);
 
         return ['agents' => $agents];
+    }
+
+    /** Ce compte peut-il recevoir une demande attribuée par `$by` ? Exactement les comptes que `agents($by)` lui montre */
+    public function assignable(int $userId, User $by): bool
+    {
+        return in_array($userId, array_column($this->agents($by)['agents'], 'id'), true);
     }
 
     public static function name(User $user): string

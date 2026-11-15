@@ -205,6 +205,24 @@ class SupportWebApiTest extends WebTestCase
             (int) $unnamed->getId() => ['id' => (int) $unnamed->getId(), 'name' => 'Compte n° ' . $unnamed->getId(), 'role' => 'support', 'me' => false],
             (int) $me->getId() => ['id' => (int) $me->getId(), 'name' => 'Zoé Agent', 'role' => 'support', 'me' => true],
         ], $mine, 'par nom ; ni le propriétaire de la plateforme, ni un client, ni un compte non vérifié');
+
+        // La liste et l'attribution acceptent exactement les mêmes comptes : ceux de la liste passent, les autres sont refusés
+        $ticket = json_decode((string) $this->call('POST', '/api/support/tickets', ['subject' => 'Colis', 'body' => 'Message.', 'customer' => ['name' => 'Cliente']], $me)->getContent(), true)['id'];
+        $assign = fn (User $to, User $by): array => [($r = $this->call('PATCH', "/api/support/tickets/$ticket", ['assignedTo' => (int) $to->getId()], $by))->getStatusCode(),
+            json_decode((string) $r->getContent(), true)['fields']['assignedTo'] ?? json_decode((string) $r->getContent(), true)['assignedTo']['id'] ?? null];
+        foreach ([$admin, $unnamed, $me] as $listed) {
+            $this->assertSame([200, (int) $listed->getId()], $assign($listed, $me));
+        }
+        foreach ([$owner, $customer, $pending] as $hidden) {
+            $this->assertSame([422, 'INVALID_AGENT'], $assign($hidden, $me), 'hors de la liste : jamais attribué par un autre');
+        }
+        // Le propriétaire de la plateforme, connecté, est dans SA liste (me : true) et peut s'attribuer la demande ; il reste absent de
+        // celle des autres
+        $own = array_column(json_decode((string) $this->call('GET', '/api/support/agents', null, $owner)->getContent(), true)['agents'], null, 'id');
+        $this->assertSame(['id' => (int) $owner->getId(), 'name' => 'Propriétaire Plateforme', 'role' => 'admin', 'me' => true], $own[(int) $owner->getId()] ?? null);
+        $this->assertSame(1, count(array_filter($own, fn (array $a) => $a['me'])), 'un seul « moi »');
+        $this->assertSame([200, (int) $owner->getId()], $assign($owner, $owner));
+        $this->assertSame([422, 'INVALID_AGENT'], $assign($pending, $owner));
     }
 
     public function testAnOrderIsGivenByItsReferenceForBothRoles(): void
