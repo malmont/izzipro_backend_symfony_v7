@@ -65,6 +65,27 @@ notifications:
         cash_critical: Trésorerie critique
         trip_budget: Budget du voyage dépassé
         loss_digest: 'Prévention des pertes : résumé du jour par courriel'
+        weekly_digest: 'Point de la semaine par courriel'
+    # Lot NOTIF-1 : niveaux des courriels de suivi (écran « Notifications »)
+    levels:
+        site: 'Comme le site'
+        none:
+            label: Aucune
+            description: 'Aucun courriel de suivi ni d''alerte. Les courriels indispensables (mot de passe, invitations, confirmations) partent toujours.'
+        essential:
+            label: Essentiel
+            description: 'Seulement l''urgent, tout de suite, et un résumé par semaine au plus.'
+        normal:
+            label: Normal
+            description: 'L''urgent tout de suite, et au plus un courriel par jour pour chaque sujet, seulement s''il y a du nouveau.'
+        all:
+            label: Tout
+            description: 'Chaque événement, dans la limite de 3 courriels par jour ; le reste est réuni le lendemain.'
+        reasons:
+            platform_demo: 'site d''essai'
+            trial: 'site d''essai'
+            active: 'site en activité'
+            manual: 'réglé par la plateforme'
     low_stock:
         title: Stock bas
         body: "{1}1 article qui se vend bien va manquer d'ici une semaine.|]1,Inf[%count% articles qui se vendent bien vont manquer d'ici une semaine."

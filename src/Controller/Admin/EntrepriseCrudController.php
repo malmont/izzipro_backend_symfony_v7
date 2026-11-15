@@ -231,6 +231,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             $this->superAdminBooleanField('isLivingMemoryActive', 'LivingMemory (Mémoires Vivantes)'),
             $this->superAdminBooleanField('variantPromotionsEnabled', 'Promotions par variante', 'Lot VAR : à allumer seulement quand la caisse, la boutique Next et l\'app mobile savent appliquer une promotion de variante (pack hors ligne v4).', true),
             $this->appMembershipModeField(),
+            $this->notificationLevelField(),
 
             FormField::addPanel('Assistant IA')->collapsible()
                 ->setHelp('Paliers de l\'assistant IA (console IA, lot 6) : Aide IA explique et guide ; IA complète propose des réglages et des opérations sur les commandes, confirmées par l\'administrateur. Projetés depuis les droits d\'usage de la Plateforme ; en mode démo de la plateforme, tout est ouvert.'),
@@ -501,6 +502,33 @@ class EntrepriseCrudController extends BaseTenantCrudController
         return $field;
     }
 
+    /**
+     * Niveau des courriels de suivi du site (lot NOTIF-1, `docs/notifications-courriels.md`) : réservé au super administrateur (la
+     * plateforme, plus tard l'agence). « Automatique » : Essentiel pour un site d'essai, Normal pour un site en activité. Chaque
+     * administrateur règle son propre niveau dans l'application de gestion.
+     */
+    private function notificationLevelField(): \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField
+    {
+        $isSuperAdmin = $this->isGranted('ROLE_SUPER_ADMIN');
+        $field = \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField::new('notificationLevel', 'Niveau des courriels de suivi')
+            ->setChoices([
+                'Aucune : seulement les courriels indispensables' => \App\Services\Notification\NotificationLevel::NONE,
+                'Essentiel : l\'urgent, et un résumé par semaine au plus' => \App\Services\Notification\NotificationLevel::ESSENTIAL,
+                'Normal : l\'urgent, et un courriel par jour et par sujet au plus' => \App\Services\Notification\NotificationLevel::NORMAL,
+                'Tout : chaque événement' => \App\Services\Notification\NotificationLevel::ALL,
+            ])
+            ->hideOnIndex()
+            ->setRequired(false)
+            ->setFormTypeOption('placeholder', 'Automatique : Essentiel pour un site d\'essai, Normal pour un site en activité')
+            ->setHelp('Courriels de suivi envoyés à l\'équipe du site (commandes à expédier, réservations, résumés). Les courriels indispensables (mot de passe, invitations, confirmations aux clients) partent toujours. Chaque administrateur peut choisir son propre niveau dans l\'application de gestion.'
+                . (!$isSuperAdmin ? ' Modifiable uniquement par le super administrateur.' : ''));
+        if (!$isSuperAdmin) {
+            $field->setFormTypeOption('disabled', true);
+        }
+
+        return $field;
+    }
+
     private function superAdminIntegerField(string $property, string $label, int $default = 100): \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField
     {
         $isSuperAdmin = $this->isGranted('ROLE_SUPER_ADMIN');
@@ -543,7 +571,8 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 ->setIsAiHelpActive($defaults->isAiHelpActive())
                 ->setIsAiFullActive($defaults->isAiFullActive())
                 ->setVariantPromotionsEnabled($defaults->isVariantPromotionsEnabled())
-                ->setAppMembershipMode($defaults->getAppMembershipMode());
+                ->setAppMembershipMode($defaults->getAppMembershipMode())
+                ->setNotificationLevel($defaults->getNotificationLevel());
 
             return;
         }
@@ -552,7 +581,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             $row = $this->emProvider->getEntityManager()->getConnection()->fetchAssociative(
                 'SELECT pos_terminal_fee_card_bp, pos_terminal_fee_interac_bp,
                         is_boutique_active, is_landing_page_active, is_boussole_esg_active, is_memoire_vivante_active, is_support_active, is_loss_prevention_active,
-                        is_pos_active, is_mobile_shop_active, is_management_app_active, is_living_memory_active, variant_promotions_enabled, app_membership_mode
+                        is_pos_active, is_mobile_shop_active, is_management_app_active, is_living_memory_active, variant_promotions_enabled, app_membership_mode, notification_level
                  FROM entreprise WHERE id = ?',
                 [$id]
             );
@@ -578,6 +607,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             ->setIsLivingMemoryActive((bool) $row['is_living_memory_active'])
             ->setVariantPromotionsEnabled((bool) $row['variant_promotions_enabled'])
             ->setAppMembershipMode((string) $row['app_membership_mode'])
+            ->setNotificationLevel($row['notification_level'] !== null ? (string) $row['notification_level'] : null)
 ;
     }
 }

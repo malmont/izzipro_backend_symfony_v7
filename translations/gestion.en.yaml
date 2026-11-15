@@ -62,6 +62,27 @@ notifications:
         cash_critical: Critical cash position
         trip_budget: Trip budget exceeded
         loss_digest: 'Loss prevention: daily summary by email'
+        weekly_digest: 'Weekly update by email'
+    # NOTIF-1: follow-up e-mail levels ("Notifications" screen)
+    levels:
+        site: 'Same as the site'
+        none:
+            label: None
+            description: 'No follow-up or alert e-mails. Essential e-mails (password, invitations, confirmations) are always sent.'
+        essential:
+            label: Essential
+            description: 'Only what is urgent, right away, and at most one summary per week.'
+        normal:
+            label: Normal
+            description: 'What is urgent right away, and at most one e-mail per day for each topic, only when there is something new.'
+        all:
+            label: Everything
+            description: 'Every event, up to 3 e-mails per day; the rest is gathered the next day.'
+        reasons:
+            platform_demo: 'trial site'
+            trial: 'trial site'
+            active: 'active site'
+            manual: 'set by the platform'
     low_stock:
         title: Low stock
         body: '{1}1 item that sells well will run out within a week.|]1,Inf[%count% items that sell well will run out within a week.'

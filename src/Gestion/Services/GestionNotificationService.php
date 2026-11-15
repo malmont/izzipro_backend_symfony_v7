@@ -30,11 +30,19 @@ class GestionNotificationService
     public const TRIP_BUDGET = 'trip_budget';
     public const CASH_CRITICAL = 'cash_critical';
     /** Prévention des pertes (lot L1-b) : courriel de résumé du jour, « N nouveaux constats, X en jeu ». Envoyé par le module, par COURRIEL :
-     *  il n'entre pas dans la règle « une notification par jour » du téléphone, ni dans le journal des notifications. */
+     *  il n'entre pas dans la règle « une notification par jour » du téléphone. Depuis NOTIF-1 il suit le niveau des courriels de suivi
+     *  et s'écrit au journal des notifications sur le canal `email` (`docs/notifications-courriels.md`). */
     public const LOSS_DIGEST = 'loss_digest';
-    public const KINDS = [self::LOW_STOCK => true, self::DUPLICATE_INVOICE => true, self::CASH_CRITICAL => true, self::TRIP_BUDGET => true, self::LOSS_DIGEST => true]; // trip_budget : lot B1a ; cash_critical : lot B1b-1
+    /** Point de la semaine (lot NOTIF) : courriel de suivi qui se coupe ici, indépendamment du niveau */
+    public const WEEKLY_DIGEST = 'weekly_digest';
+    public const KINDS = [self::LOW_STOCK => true, self::DUPLICATE_INVOICE => true, self::CASH_CRITICAL => true, self::TRIP_BUDGET => true, self::LOSS_DIGEST => true, self::WEEKLY_DIGEST => true]; // trip_budget : lot B1a ; cash_critical : lot B1b-1
     /** Canal d'un type : `push` (téléphone) par défaut ; `email` pour ceux listés ici */
-    public const EMAIL_KINDS = [self::LOSS_DIGEST];
+    public const EMAIL_KINDS = [self::LOSS_DIGEST, self::WEEKLY_DIGEST];
+    /** Lot NOTIF-1, type → [famille, sujet] : `urgent` part dès le niveau « Essentiel », `followup` (suivi) est regroupé par les niveaux */
+    public const FAMILIES = [
+        self::LOW_STOCK => ['followup', 'management'], self::DUPLICATE_INVOICE => ['followup', 'management'], self::CASH_CRITICAL => ['urgent', 'management'],
+        self::TRIP_BUDGET => ['followup', 'management'], self::LOSS_DIGEST => ['followup', 'loss'], self::WEEKLY_DIGEST => ['followup', null],
+    ];
     public const CASH_REPEAT_DAYS = 7;
     public const DAILY_HOUR = 10;
     public const DAY_FROM_HOUR = 8;
@@ -54,10 +62,16 @@ class GestionNotificationService
         private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null,
         private readonly ?GestionCashService $cash = null,
         private readonly ?\App\Services\FeatureAccess\ModuleAccessService $modules = null, // lot L1-b : le type loss_digest n'est disponible que si le module est accordé
+        private readonly ?\App\Services\Notification\NotificationLevelResolver $levels = null, // lot NOTIF-1 : niveau des courriels de suivi
     ) {
     }
 
-    /** @return array{kinds: list<array{kind: string, label: string, enabled: bool, available: bool, channel: string}>} */
+    /**
+     * Lot NOTIF-1 : en tête, `level` (le niveau des courriels de suivi qui s'applique à ce compte, son choix, celui du site, le plafond du
+     * jour, le nombre de courriels retenus en attente, les quatre choix rédigés) ; chaque type gagne `family` et `subject`.
+     *
+     * @return array{level?: array<string, mixed>, kinds: list<array{kind: string, label: string, enabled: bool, available: bool, channel: string, family: string, subject: ?string}>}
+     */
     public function preferences(int $userId, string $locale): array
     {
         $prefs = $this->log()->preferences($userId);
@@ -67,10 +81,29 @@ class GestionNotificationService
                 $available = $this->modules !== null && $this->lossPreventionGranted();
             }
             $kinds[] = ['kind' => $kind, 'label' => $this->translator->trans("notifications.kinds.$kind", [], 'gestion', $locale), 'enabled' => $prefs[$kind] ?? true, 'available' => $available,
-                'channel' => in_array($kind, self::EMAIL_KINDS, true) ? 'email' : 'push'];
+                'channel' => in_array($kind, self::EMAIL_KINDS, true) ? 'email' : 'push', 'family' => self::FAMILIES[$kind][0], 'subject' => self::FAMILIES[$kind][1]];
         }
 
-        return ['kinds' => $kinds];
+        return ($this->levels !== null ? ['level' => $this->level($userId, $locale)] : []) + ['kinds' => $kinds];
+    }
+
+    /** @return array<string, mixed> le bloc `level` de l'écran « Notifications » */
+    private function level(int $userId, string $locale): array
+    {
+        $t = fn (string $key): string => $this->translator->trans("notifications.levels.$key", [], 'gestion', $locale);
+        $level = $this->levels->forUser($userId);
+        $site = $level['siteLevel'];
+        $choices = [];
+        foreach (\App\Services\Notification\NotificationLevel::LEVELS as $key) {
+            $choices[] = ['key' => $key, 'label' => $t("$key.label"), 'description' => $t("$key.description")];
+        }
+
+        return [
+            'value' => $level['value'], 'source' => $level['source'], 'userLevel' => $level['userLevel'],
+            'siteLevel' => $site + ['label' => $t($site['value'] . '.label'), 'reasonLabel' => $t('reasons.' . ($site['reason'] ?? 'manual'))],
+            'dailyCap' => \App\Services\Notification\NotificationLevel::DAILY_CAP, 'heldCount' => $this->log()->heldCount($userId),
+            'siteChoiceLabel' => $t('site'), 'choices' => $choices,
+        ];
     }
 
     /** Ce gérant a-t-il gardé ce type actif ? (actif par défaut) */
@@ -87,11 +120,16 @@ class GestionNotificationService
 
     public function updatePreferences(int $userId, array $body): void
     {
-        $kinds = $body['kinds'] ?? null;
+        // Lot NOTIF-1 : `level` (none | essential | normal | all, ou null : comme le site) et `kinds`, ensemble ou séparément
+        $hasLevel = array_key_exists('level', $body);
+        $kinds = $body['kinds'] ?? ($hasLevel ? [] : null);
         if (!is_array($kinds) || ($kinds !== [] && array_is_list($kinds))) {
             throw new GestionValidationException(['kinds' => 'MUST_BE_OBJECT']);
         }
         $fields = [];
+        if ($hasLevel && $body['level'] !== null && !\App\Services\Notification\NotificationLevel::isValid($body['level'])) {
+            $fields['level'] = 'INVALID_VALUE';
+        }
         foreach ($kinds as $kind => $enabled) {
             if (!array_key_exists((string) $kind, self::KINDS)) {
                 $fields["kinds.$kind"] = 'UNKNOWN_KIND';
@@ -104,6 +142,9 @@ class GestionNotificationService
         }
         foreach ($kinds as $kind => $enabled) {
             $this->log()->setPreference($userId, (string) $kind, $enabled);
+        }
+        if ($hasLevel) {
+            $this->emProvider->getEntityManager()->getConnection()->executeStatement('UPDATE "user" SET notification_level = ? WHERE id = ?', [$body['level'], $userId]);
         }
     }
 
