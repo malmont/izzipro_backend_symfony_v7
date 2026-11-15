@@ -63,10 +63,19 @@ class NotificationLossDigestTest extends LossPreventionTestCase
 
             return true;
         });
-        $digest = function () use ($mailer): LossDigestService { // les services du noyau EN COURS ; la décision d'envoi aux valeurs de la production
+        $brokenGate = false;
+        $digest = function () use ($mailer, &$brokenGate): LossDigestService { // les services du noyau EN COURS ; la décision d'envoi aux valeurs de la production
             $c = static::getContainer();
             $c->get(TenantEntityManagerProvider::class)->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
             $gate = new NotificationGate($c->get(TenantEntityManagerProvider::class), $c->get(NotificationLevelResolver::class), $c->get(StoreClock::class));
+            if ($brokenGate) { // une décision d'envoi en panne : elle lève à chaque appel
+                $gate = new class($c->get(TenantEntityManagerProvider::class), $c->get(NotificationLevelResolver::class), $c->get(StoreClock::class)) extends NotificationGate {
+                    public function decide(string $kind, string $email, ?\DateTimeImmutable $now = null, bool $ignoreHours = false): array
+                    {
+                        throw new \RuntimeException('base illisible');
+                    }
+                };
+            }
 
             return new LossDigestService($c->get(TenantEntityManagerProvider::class), $c->get(\App\LossPrevention\Services\LossSettingsService::class),
                 $c->get(\App\LossPrevention\Services\LossSite::class), $c->get(\App\Gestion\Services\GestionNotificationService::class), $mailer,
@@ -85,7 +94,10 @@ class NotificationLossDigestTest extends LossPreventionTestCase
         // Niveau « Essentiel » (celui d'un site d'essai) : aucun courriel ne part ; le résumé est RETENU pour chaque administrateur, lisible
         // dans l'application, et le jour est posé : le constat est annoncé une fois, il ne sera pas redit demain
         $site('essential');
-        $this->assertSame(['status' => 'held', 'sent' => 0], $digest()->sendIfDue($at('09:00')));
+        $result = $digest()->sendIfDue($at('09:00'));
+        $this->assertSame(['held', 0], [$result['status'], $result['sent']]);
+        $this->assertGreaterThanOrEqual(2, $result['held'], 'le nombre de destinataires retenus est rendu (au moins les deux administrateurs de ce test)');
+        $this->assertSame((int) $this->db->fetchOne("SELECT COUNT(*) FROM notification_log WHERE channel = 'email' AND kind = 'loss_digest' AND status = 'held'"), $result['held']);
         $this->assertSame([[], $this->today()], [$sentTo, $day()]);
         $held = $rows($mine);
         $this->assertCount(1, $held);
@@ -114,9 +126,21 @@ class NotificationLossDigestTest extends LossPreventionTestCase
         $reset();
         $sentTo = [];
         $failing = [$mine];
-        $this->assertSame(['status' => 'held', 'sent' => 0], $digest()->sendIfDue($at('09:00')));
+        $this->assertSame('held', $digest()->sendIfDue($at('09:00'))['status']);
         $this->assertSame([[], $this->today()], [$sentTo, $day()]);
         $this->assertSame(['held', 'send_failed'], [$rows($mine)[0]['status'], json_decode($rows($mine)[0]['subject'], true)['reason']]);
+        // La décision d'envoi en panne : le résumé PART quand même, à tous, comme avant les niveaux (sans ce repli il ne partirait plus
+        // du tout tant que la panne dure) ; le jour est posé
+        $reset();
+        $sentTo = [];
+        $failing = [];
+        $site('none');
+        $brokenGate = true;
+        $this->assertSame('sent', $digest()->sendIfDue($at('09:00'))['status']);
+        $this->assertContains($mine, $sentTo);
+        $this->assertSame($this->today(), $day());
+        $brokenGate = false;
+
         // Tous en échec (aucun retenu) : comme avant le lot, le jour est rendu et tout sera rejoué
         $reset();
         $site('all');

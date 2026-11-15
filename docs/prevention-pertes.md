@@ -359,7 +359,11 @@ défait pas).
   retenu a sa ligne dans `notification_log` (canal `email`). Le jour et la borne sont posés dès qu'un destinataire est servi OU retenu
   (statut `held` quand tous sont retenus) : le constat est annoncé une fois. Un destinataire dont l'envoi échoue alors que d'autres sont
   servis est retenu lui aussi (`send_failed`). Le lancement à la main (`--courriel-maintenant`) ignore aussi la règle des 8 h de la
-  décision d'envoi. Le journal du module garde `DIGEST_SENT` (jour, nombres, nombre de destinataires, `held`). Textes `translations/emails.*`
+  décision d'envoi. Si la décision d'envoi est en panne, le résumé part quand même, à tous. **Conséquence à connaître** : tant qu'un
+  site est au niveau « Essentiel » (le niveau automatique d'un site d'essai, donc de tous les sites tant que la plateforme est en mode
+  « demo »), le résumé du jour ne part plus par courriel : il est retenu chaque jour, lisible dans l'application, jusqu'au résumé de la
+  semaine du lot NOTIF-2. Un administrateur qui veut le courriel du jour choisit le niveau « Normal » ou « Tout » dans ses notifications,
+  ou la plateforme règle le niveau du site. Le journal du module garde `DIGEST_SENT` (jour, nombres, nombre de destinataires, `held`). Textes `translations/emails.*`
   (`loss_digest.*`), gabarit `templates/emails/loss_digest.html.twig`.
 - **Cheminement du site (lot L1-b)** : quand le droit est accordé, le groupe `module.loss_prevention` de `SiteReadinessService` porte cinq
   étapes : `loss.management` (la gestion est activée ; bloquante), `loss.place` (pays de l'adresse lisible ; bloquante), `loss.staff_notice`

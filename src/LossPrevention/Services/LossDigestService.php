@@ -63,8 +63,9 @@ class LossDigestService
      * Envoie le résumé du jour s'il est dû.
      *
      * @param \DateTimeImmutable|null $now l'instant du passage (les tests le fixent) ; `$anyHour` : sans attendre 8 h (lancement à la main)
-     * @return array{status: string, sent: int} status : sent | held | nothing_new | already_sent | too_early | no_recipient | not_delivered | not_granted | not_allowed
-     *                                          (`held`, lot NOTIF-1 : aucun courriel parti, tous les destinataires servis sont retenus par leur niveau ; le jour est posé)
+     * @return array{status: string, sent: int, held?: int} status : sent | held | nothing_new | already_sent | too_early | no_recipient | not_delivered | not_granted | not_allowed
+     *                                          (`held`, lot NOTIF-1 : aucun courriel parti, tous les destinataires servis sont retenus par leur niveau ; le jour est posé ;
+     *                                          la clé `held` donne alors leur nombre)
      */
     public function sendIfDue(?\DateTimeImmutable $now = null, bool $anyHour = false): array
     {
@@ -149,7 +150,14 @@ class LossDigestService
         // (niveau « Aucune »). Décidé AVANT la réservation : sans personne à servir, ni jour ni borne ne sont posés
         $verdicts = [];
         foreach ($recipients as $to) {
-            $verdict = $this->gate->decide(\App\Services\Notification\NotificationCatalog::LOSS_DIGEST, $to, $now, $anyHour); // lancement à la main : sans la règle des 8 h
+            try {
+                $verdict = $this->gate->decide(\App\Services\Notification\NotificationCatalog::LOSS_DIGEST, $to, $now, $anyHour); // lancement à la main : sans la règle des 8 h
+            } catch (\Throwable $e) {
+                // La décision d'envoi est en panne (base, colonne absente sur un site) : le résumé PART, comme avant les niveaux. Sans ce
+                // repli il ne partirait plus du tout, à chaque passage, tant que la panne dure. Seule la classe de l'erreur va au journal
+                $this->logger->error('Prévention des pertes : décision d\'envoi du résumé en panne (' . $e::class . '), le courriel part sans elle.');
+                $verdict = ['decision' => \App\Services\Notification\NotificationGate::SEND, 'reason' => null, 'level' => \App\Services\Notification\NotificationLevel::ALL, 'userId' => null, 'day' => $day];
+            }
             if ($verdict['decision'] !== \App\Services\Notification\NotificationGate::DROP) {
                 $verdicts[$to] = $verdict;
             }
@@ -203,7 +211,7 @@ class LossDigestService
             $journal->append(LossJournalEntry::DIGEST_SENT, null, null, ['day' => $day, 'count' => $total['count'], 'amount' => $total['amount'], 'recipients' => 0, 'held' => $held,
                 'renewed' => $again['count'], 'renewedUpTo' => $renewed['lastId']]);
 
-            return ['status' => 'held', 'sent' => 0];
+            return ['status' => 'held', 'sent' => 0, 'held' => $held];
         }
         if ($sent === 0) {
             $this->logger->warning('Prévention des pertes : courriel de résumé non envoyé (aucun envoi n\'a abouti : configuration d\'envoi du site à vérifier).');
