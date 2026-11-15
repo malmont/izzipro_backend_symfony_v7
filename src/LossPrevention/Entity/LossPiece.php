@@ -6,13 +6,14 @@ use App\LossPrevention\Repository\LossPieceRepository;
 use Doctrine\ORM\Mapping as ORM;
 
 /**
- * Pièce (lot L2-a, `docs/prevention-pertes.md` § 13) : un exemplaire physique d'une variante, à numéro unique sur le site, qui porte
+ * Pièce (lot L2-a, `docs/prevention-pertes.md` § 13) : un exemplaire physique d'une variante, à numéro unique sur le site (les pièces
+ * d'exercice ont leur propre suite de numéros), qui porte
  * une ou plusieurs puces. Elle ne remplace pas le stock et n'a aucune clé étrangère vers le catalogue. Son état ne change que par un
  * fait (`loss_piece_event`). Lue et écrite en SQL par son dépôt ; la base fige son identité et refuse sa suppression (sauf exercice).
  */
 #[ORM\Entity(repositoryClass: LossPieceRepository::class)]
 #[ORM\Table(name: 'loss_piece')]
-#[ORM\UniqueConstraint(name: 'uniq_loss_piece_number', columns: ['number'])]
+#[ORM\UniqueConstraint(name: 'uniq_loss_piece_kind_number', columns: ['exercise', 'number'])]
 #[ORM\Index(name: 'idx_loss_piece_variant', columns: ['variant_id', 'status'])]
 #[ORM\Index(name: 'idx_loss_piece_exercise', columns: ['id'], options: ['where' => 'exercise'])]
 class LossPiece

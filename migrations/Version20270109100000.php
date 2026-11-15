@@ -14,14 +14,19 @@ use Doctrine\Migrations\AbstractMigration;
  *
  * Ce que la base garantit ELLE-MÊME, quel que soit le chemin d'écriture :
  * - un identifiant de puce désigne une seule puce sur le site (index unique), en forme canonique (majuscules, sans espace autour) ;
- * - une puce associée ne change jamais de pièce ; une puce retirée ne revient pas ; identifiant, technologie et marque d'exercice
- *   d'une puce sont figés ; une puce simulée est une puce d'exercice, et elle seule ; une puce ne se pose que sur une pièce qui
- *   existe, qui n'est pas retirée, et du même genre qu'elle (réelle ou d'exercice) ;
- * - numéro, variante, article et marque d'exercice d'une pièce sont figés ; une pièce retirée ne revient pas ;
- * - un fait ne se modifie jamais ;
- * - rien ne se supprime ni ne se vide, sauf les lignes d'EXERCICE, par la porte déjà en place (`SET LOCAL loss.purge = 'exercise'`).
+ * - une puce associée ne change jamais de pièce ; son état n'avance que dans un sens (connue, associée, retirée) et une puce
+ *   retirée ne bouge plus ; identifiant, lecture brute, technologie, marque d'exercice, auteur et date de création sont figés ; la
+ *   date de pose ne change plus une fois posée, le motif et la date du retrait non plus ; une puce simulée est une puce d'exercice,
+ *   et elle seule ; une puce ne se pose que sur une pièce qui existe, qui n'est pas retirée, et du même genre qu'elle ;
+ * - numéro, variante, article, commande d'origine, auteur, date de création et marque d'exercice d'une pièce sont figés ; une pièce
+ *   retirée ne revient pas, et son motif et sa date de retrait ne changent plus ; les vraies pièces et les pièces d'exercice ont
+ *   chacune leur suite de numéros (un exercice ne creuse pas de trou dans la numérotation réelle) ;
+ * - un fait ne se modifie jamais, et il est du même genre (réel ou exercice) que la pièce et la puce qu'il désigne : on ne marque
+ *   pas « exercice » le fait d'une vraie pièce pour l'effacer ;
+ * - rien ne se supprime ni ne se vide, sauf les lignes d'EXERCICE, par la porte déjà en place (`SET LOCAL loss.purge = 'exercise'`),
+ *   et dans un ordre imposé : les faits, puis les puces, puis les pièces (une pièce ne part pas tant qu'une puce ou un fait la désigne).
  *
- * Tables, séquence, index, fonctions et déclencheurs nouveaux seulement ; additive, idempotente ;
+ * Tables, séquences, index, fonctions et déclencheurs nouveaux seulement ; additive, idempotente ;
  * équivalent `scripts/migrate_all_v2_pertes_l2a.sh`.
  */
 final class Version20270109100000 extends AbstractMigration
@@ -51,16 +56,22 @@ final class Version20270109100000 extends AbstractMigration
         'DROP TABLE IF EXISTS loss_tag',
         'DROP TABLE IF EXISTS loss_piece',
         'DROP FUNCTION IF EXISTS loss_piece_event_frozen()',
+        'DROP FUNCTION IF EXISTS loss_piece_event_guard()',
         'DROP FUNCTION IF EXISTS loss_piece_rows_kept()',
         'DROP FUNCTION IF EXISTS loss_tag_guard()',
         'DROP FUNCTION IF EXISTS loss_piece_guard()',
         'DROP SEQUENCE IF EXISTS loss_piece_number_seq',
+        'DROP SEQUENCE IF EXISTS loss_piece_exercise_number_seq',
     ];
 
     public const STATEMENTS = [
         'CREATE SEQUENCE IF NOT EXISTS loss_piece_number_seq',
+        'CREATE SEQUENCE IF NOT EXISTS loss_piece_exercise_number_seq',
         "CREATE TABLE IF NOT EXISTS loss_piece (id SERIAL NOT NULL, number INT NOT NULL, variant_id INT NOT NULL, product_id INT NOT NULL, status VARCHAR(16) DEFAULT 'created' NOT NULL, zone VARCHAR(20) DEFAULT NULL, commande_id INT DEFAULT NULL, exercise BOOLEAN DEFAULT false NOT NULL, retired_reason VARCHAR(20) DEFAULT NULL, retired_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, created_by INT DEFAULT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, PRIMARY KEY(id))",
-        'CREATE UNIQUE INDEX IF NOT EXISTS uniq_loss_piece_number ON loss_piece (number)',
+        // un numéro par genre : les vraies pièces et les pièces d'exercice ont chacune leur suite (l'index d'une première version du
+        // lot, sur le numéro seul, est retiré là où il a été posé)
+        'DROP INDEX IF EXISTS uniq_loss_piece_number',
+        'CREATE UNIQUE INDEX IF NOT EXISTS uniq_loss_piece_kind_number ON loss_piece (exercise, number)',
         'CREATE INDEX IF NOT EXISTS idx_loss_piece_variant ON loss_piece (variant_id, status)',
         'CREATE INDEX IF NOT EXISTS idx_loss_piece_exercise ON loss_piece (id) WHERE exercise',
         'CREATE TABLE IF NOT EXISTS loss_tag (id SERIAL NOT NULL, identifier VARCHAR(64) NOT NULL, raw VARCHAR(128) NOT NULL, technology VARCHAR(12) NOT NULL, status VARCHAR(12) NOT NULL, piece_id INT DEFAULT NULL, exercise BOOLEAN DEFAULT false NOT NULL, retired_reason VARCHAR(20) DEFAULT NULL, associated_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, retired_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, created_by INT DEFAULT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, PRIMARY KEY(id))',
@@ -76,8 +87,11 @@ final class Version20270109100000 extends AbstractMigration
         "CREATE OR REPLACE FUNCTION loss_piece_guard() RETURNS trigger LANGUAGE plpgsql AS \$fn\$ BEGIN"
         . " IF NEW.status NOT IN ('created', 'in_stockroom', 'on_floor', 'at_counter', 'sold', 'returned', 'missing', 'retired') THEN RAISE EXCEPTION 'prévention des pertes : état de pièce inconnu' USING ERRCODE = 'check_violation'; END IF;"
         . " IF TG_OP = 'UPDATE' THEN"
-        . " IF NEW.id <> OLD.id OR NEW.number <> OLD.number OR NEW.variant_id <> OLD.variant_id OR NEW.product_id <> OLD.product_id OR NEW.exercise <> OLD.exercise THEN RAISE EXCEPTION 'prévention des pertes : le numéro, la variante et la marque d''exercice d''une pièce ne changent pas' USING ERRCODE = 'check_violation'; END IF;"
-        . " IF OLD.status = 'retired' AND NEW.status <> 'retired' THEN RAISE EXCEPTION 'prévention des pertes : une pièce retirée ne revient pas' USING ERRCODE = 'check_violation'; END IF;"
+        . " IF NEW.id <> OLD.id OR NEW.number <> OLD.number OR NEW.variant_id <> OLD.variant_id OR NEW.product_id <> OLD.product_id OR NEW.exercise <> OLD.exercise"
+        . " OR NEW.commande_id IS DISTINCT FROM OLD.commande_id OR NEW.created_by IS DISTINCT FROM OLD.created_by OR NEW.created_at <> OLD.created_at"
+        . " THEN RAISE EXCEPTION 'prévention des pertes : le numéro, la variante, l''origine et la marque d''exercice d''une pièce ne changent pas' USING ERRCODE = 'check_violation'; END IF;"
+        . " IF OLD.status = 'retired' AND (NEW.status <> 'retired' OR NEW.retired_reason IS DISTINCT FROM OLD.retired_reason OR NEW.retired_at IS DISTINCT FROM OLD.retired_at)"
+        . " THEN RAISE EXCEPTION 'prévention des pertes : une pièce retirée ne revient pas, et son retrait ne se réécrit pas' USING ERRCODE = 'check_violation'; END IF;"
         . " END IF; RETURN NEW; END \$fn\$",
         // Puce : forme canonique, valeurs connues, identité figée, jamais deux pièces, jamais de retour, pièce du même genre
         "CREATE OR REPLACE FUNCTION loss_tag_guard() RETURNS trigger LANGUAGE plpgsql AS \$fn\$ DECLARE newly_set BOOLEAN := false; BEGIN"
@@ -86,9 +100,14 @@ final class Version20270109100000 extends AbstractMigration
         . " IF NEW.exercise <> (NEW.technology = 'simulated') THEN RAISE EXCEPTION 'prévention des pertes : une puce simulée est une puce d''exercice, et elle seule' USING ERRCODE = 'check_violation'; END IF;"
         . " IF NEW.status = 'associated' AND NEW.piece_id IS NULL THEN RAISE EXCEPTION 'prévention des pertes : une puce associée porte sa pièce' USING ERRCODE = 'check_violation'; END IF;"
         . " IF TG_OP = 'UPDATE' THEN"
-        . " IF NEW.id <> OLD.id OR NEW.identifier <> OLD.identifier OR NEW.technology <> OLD.technology OR NEW.exercise <> OLD.exercise THEN RAISE EXCEPTION 'prévention des pertes : l''identifiant, la technologie et la marque d''exercice d''une puce ne changent pas' USING ERRCODE = 'check_violation'; END IF;"
+        . " IF NEW.id <> OLD.id OR NEW.identifier <> OLD.identifier OR NEW.raw <> OLD.raw OR NEW.technology <> OLD.technology OR NEW.exercise <> OLD.exercise"
+        . " OR NEW.created_by IS DISTINCT FROM OLD.created_by OR NEW.created_at <> OLD.created_at"
+        . " THEN RAISE EXCEPTION 'prévention des pertes : l''identifiant, la lecture, la technologie et la marque d''exercice d''une puce ne changent pas' USING ERRCODE = 'check_violation'; END IF;"
         . " IF OLD.piece_id IS NOT NULL AND NEW.piece_id IS DISTINCT FROM OLD.piece_id THEN RAISE EXCEPTION 'prévention des pertes : une puce associée ne change jamais de pièce' USING ERRCODE = 'check_violation'; END IF;"
-        . " IF OLD.status = 'retired' AND NEW.status <> 'retired' THEN RAISE EXCEPTION 'prévention des pertes : une puce retirée ne revient pas' USING ERRCODE = 'check_violation'; END IF;"
+        . " IF OLD.status = 'retired' AND (NEW.status <> 'retired' OR NEW.piece_id IS DISTINCT FROM OLD.piece_id OR NEW.retired_reason IS DISTINCT FROM OLD.retired_reason OR NEW.retired_at IS DISTINCT FROM OLD.retired_at)"
+        . " THEN RAISE EXCEPTION 'prévention des pertes : une puce retirée ne bouge plus' USING ERRCODE = 'check_violation'; END IF;"
+        . " IF OLD.status = 'associated' AND NEW.status = 'known' THEN RAISE EXCEPTION 'prévention des pertes : une puce posée ne redevient pas une puce seulement lue' USING ERRCODE = 'check_violation'; END IF;"
+        . " IF OLD.associated_at IS NOT NULL AND NEW.associated_at IS DISTINCT FROM OLD.associated_at THEN RAISE EXCEPTION 'prévention des pertes : la date de pose d''une puce ne change pas' USING ERRCODE = 'check_violation'; END IF;"
         . " newly_set := NEW.piece_id IS NOT NULL AND OLD.piece_id IS NULL;"
         . " ELSE newly_set := NEW.piece_id IS NOT NULL;"
         . " END IF;"
@@ -98,14 +117,29 @@ final class Version20270109100000 extends AbstractMigration
         . " END IF; RETURN NEW; END \$fn\$",
         // Rien ne se supprime ni ne se vide, sauf une ligne d'exercice par la porte « exercise » (pièces, puces, faits : même colonne)
         "CREATE OR REPLACE FUNCTION loss_piece_rows_kept() RETURNS trigger LANGUAGE plpgsql AS \$fn\$ BEGIN"
-        . " IF TG_OP = 'DELETE' THEN IF current_setting('loss.purge', true) = 'exercise' AND OLD.exercise THEN RETURN OLD; END IF; END IF;"
+        . " IF TG_OP = 'DELETE' THEN IF current_setting('loss.purge', true) = 'exercise' AND OLD.exercise THEN"
+        // ordre imposé : les faits, puis les puces, puis les pièces
+        . " IF TG_TABLE_NAME = 'loss_piece' AND (EXISTS (SELECT 1 FROM loss_tag t WHERE t.piece_id = OLD.id) OR EXISTS (SELECT 1 FROM loss_piece_event e WHERE e.piece_id = OLD.id))"
+        . " THEN RAISE EXCEPTION 'prévention des pertes : une pièce ne part pas tant qu''une puce ou un fait la désigne'; END IF;"
+        . " IF TG_TABLE_NAME = 'loss_tag' AND EXISTS (SELECT 1 FROM loss_piece_event e WHERE e.tag_id = OLD.id)"
+        . " THEN RAISE EXCEPTION 'prévention des pertes : une puce ne part pas tant qu''un fait la désigne'; END IF;"
+        . " RETURN OLD; END IF; END IF;"
         . " RAISE EXCEPTION 'prévention des pertes : % ne se supprime pas (% refusé)', TG_TABLE_NAME, TG_OP; END \$fn\$",
+        // Un fait est du même genre (réel ou exercice) que la pièce et la puce qu'il désigne
+        "CREATE OR REPLACE FUNCTION loss_piece_event_guard() RETURNS trigger LANGUAGE plpgsql AS \$fn\$ BEGIN"
+        . " IF NEW.piece_id IS NOT NULL THEN PERFORM 1 FROM loss_piece p WHERE p.id = NEW.piece_id AND p.exercise = NEW.exercise;"
+        . " IF NOT FOUND THEN RAISE EXCEPTION 'prévention des pertes : le fait désigne une pièce inconnue ou d''un autre genre' USING ERRCODE = 'foreign_key_violation'; END IF; END IF;"
+        . " IF NEW.tag_id IS NOT NULL THEN PERFORM 1 FROM loss_tag t WHERE t.id = NEW.tag_id AND t.exercise = NEW.exercise;"
+        . " IF NOT FOUND THEN RAISE EXCEPTION 'prévention des pertes : le fait désigne une puce inconnue ou d''un autre genre' USING ERRCODE = 'foreign_key_violation'; END IF; END IF;"
+        . " RETURN NEW; END \$fn\$",
         // Un fait ne se modifie jamais
         "CREATE OR REPLACE FUNCTION loss_piece_event_frozen() RETURNS trigger LANGUAGE plpgsql AS \$fn\$ BEGIN RAISE EXCEPTION 'prévention des pertes : un fait ne se modifie pas'; END \$fn\$",
         'DROP TRIGGER IF EXISTS loss_piece_guard ON loss_piece',
         'CREATE TRIGGER loss_piece_guard BEFORE INSERT OR UPDATE ON loss_piece FOR EACH ROW EXECUTE FUNCTION loss_piece_guard()',
         'DROP TRIGGER IF EXISTS loss_tag_guard ON loss_tag',
         'CREATE TRIGGER loss_tag_guard BEFORE INSERT OR UPDATE ON loss_tag FOR EACH ROW EXECUTE FUNCTION loss_tag_guard()',
+        'DROP TRIGGER IF EXISTS loss_piece_event_guard ON loss_piece_event',
+        'CREATE TRIGGER loss_piece_event_guard BEFORE INSERT ON loss_piece_event FOR EACH ROW EXECUTE FUNCTION loss_piece_event_guard()',
         'DROP TRIGGER IF EXISTS loss_piece_event_frozen ON loss_piece_event',
         'CREATE TRIGGER loss_piece_event_frozen BEFORE UPDATE ON loss_piece_event FOR EACH ROW EXECUTE FUNCTION loss_piece_event_frozen()',
         'DROP TRIGGER IF EXISTS loss_piece_no_delete ON loss_piece',

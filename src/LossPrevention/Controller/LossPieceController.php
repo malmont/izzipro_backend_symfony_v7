@@ -39,7 +39,7 @@ class LossPieceController extends AbstractController
         return $this->json($this->useCase->create($this->body($request), $this->locale($request), $this->userId()), 201);
     }
 
-    /** Synthèse par variante : stock, pièces en service, avec puce, écart → 200 { rows, total, page, limit, totals } */
+    /** Synthèse par variante (`variantId`, `productId`, `page`, `limit`) : stock, pièces en service, avec puce, écart → 200 { rows, total, page, limit, totals } */
     #[Route('/pieces/synthese', name: 'gestion_pertes_pieces_synthese', methods: ['GET'], priority: 1)]
     public function synthesis(Request $request): JsonResponse
     {

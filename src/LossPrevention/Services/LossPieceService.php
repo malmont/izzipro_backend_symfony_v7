@@ -34,6 +34,9 @@ class LossPieceService
     public const EXERCISE_LIMIT = 30;
     public const EXERCISE_CREATE_LIMIT = 10;
     public const EXERCISE_DAILY_LIMIT = 30;
+    /** Puces simulées présentes au plus sur un site, retirées comprises : poser puis retirer en boucle ne remplit pas la base */
+    public const EXERCISE_TAG_LIMIT = 60;
+    private const TAG_IDENTIFIER_INDEX = 'uniq_loss_tag_identifier';
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -107,7 +110,7 @@ class LossPieceService
             $errors['count'] = 'OUT_OF_RANGE';
         }
         $commandeId = $body['commandeId'] ?? null;
-        if ($commandeId !== null && (!is_int($commandeId) || $commandeId < 1 || $exercise)) {
+        if ($commandeId !== null && (!is_int($commandeId) || $commandeId < 1 || $commandeId > 2147483647 || $exercise)) {
             $errors['commandeId'] = $exercise ? 'NOT_ALLOWED' : 'MUST_BE_POSITIVE';
         }
         $target = $this->targetOf($body, ['variantId', 'barcode'], $errors);
@@ -170,15 +173,22 @@ class LossPieceService
         if ($identifier === null) {
             throw new GestionConflictException('TAG_INVALID', $this->texts->t('pieces.error.TAG_INVALID.' . $technology, $locale), 422, ['technology' => $technology]);
         }
-        // Un lecteur branché en clavier écrit là où est le curseur : le code-barres d'un article n'est pas une puce
-        if (!$exercise && ($holder = $this->barcodes->holder($identifier)) !== null) {
-            throw new GestionConflictException('TAG_IS_BARCODE', $this->texts->t('pieces.error.TAG_IS_BARCODE', $locale, ['label' => $holder['label']]), 409, ['holder' => $holder]);
+        // Un lecteur branché en clavier écrit là où est le curseur : le code-barres d'un article n'est pas une puce. On compare la
+        // lecture telle qu'un code-barres l'écrirait (« ABCD-1234 ») et sa forme nettoyée de puce (« ABCD1234 »)
+        if (!$exercise) {
+            $asBarcode = CatalogBarcode::normalize($raw);
+            $holder = ($asBarcode !== null ? $this->barcodes->holder($asBarcode) : null) ?? $this->barcodes->holder($identifier);
+            if ($holder !== null) {
+                throw new GestionConflictException('TAG_IS_BARCODE', $this->texts->t('pieces.error.TAG_IS_BARCODE', $locale, ['label' => $holder['label']]), 409, ['holder' => $holder]);
+            }
         }
         $variant = isset($target['pieceId']) ? null : $this->variant($target, $locale);
         $repository = $this->repository();
         $now = self::now();
-        try {
-            $done = $this->transaction(function () use ($repository, $target, $variant, $identifier, $raw, $technology, $exercise, $userId, $now, $locale): array {
+        $attempt = fn (): array => $this->transaction(function () use ($repository, $target, $variant, $identifier, $raw, $technology, $exercise, $userId, $now, $locale): array {
+                if ($exercise) {
+                    $this->exerciseLock(); // toute écriture d'exercice attend un effacement en cours, et l'inverse
+                }
                 $pieceId = $target['pieceId'] ?? null;
                 $piece = null;
                 if ($pieceId !== null) {
@@ -211,6 +221,9 @@ class LossPieceService
                     }
                     $created = true;
                 }
+                if ($exercise && $tag === null && $repository->exerciseTagCount() >= self::EXERCISE_TAG_LIMIT) {
+                    throw new GestionConflictException('EXERCISE_LIMIT_REACHED', $this->texts->t('pieces.error.EXERCISE_TAG_LIMIT_REACHED', $locale, ['limit' => self::EXERCISE_TAG_LIMIT]), 409, ['limit' => self::EXERCISE_TAG_LIMIT]);
+                }
                 $active = $repository->activeTagCount($pieceId);
                 if ($active >= LossTag::MAX_PER_PIECE) {
                     throw new GestionConflictException('PIECE_TAG_LIMIT', $this->texts->t('pieces.error.PIECE_TAG_LIMIT', $locale, ['limit' => LossTag::MAX_PER_PIECE]), 409, ['limit' => LossTag::MAX_PER_PIECE]);
@@ -228,13 +241,26 @@ class LossPieceService
 
                 return ['created' => $created, 'associated' => true, 'pieceId' => $pieceId, 'tagId' => $tagId];
             });
-        } catch (UniqueConstraintViolationException) {
-            // La même puce lue au même instant sur un autre poste : la base a tranché, on dit ce qui la porte
-            $tag = $repository->tagByIdentifier($identifier);
-            throw $tag !== null ? $this->tagTaken($tag, $locale) : new GestionConflictException('TAG_ALREADY_ASSOCIATED', $this->texts->t('pieces.error.TAG_ALREADY_ASSOCIATED_UNKNOWN', $locale), 409, ['holder' => null]);
+        try {
+            $done = $attempt();
+        } catch (UniqueConstraintViolationException $e) {
+            if (!str_contains($e->getMessage(), self::TAG_IDENTIFIER_INDEX)) {
+                throw $e; // une autre unicité violée n'est pas « cette puce est déjà posée »
+            }
+            // La même puce lue au même instant ailleurs : la base a tranché et tout ce que cette demande avait écrit est annulé. On
+            // rejoue la demande une fois : elle voit maintenant la puce, et rend le rejeu (même geste envoyé deux fois) ou le refus
+            // avec ce qui la porte
+            try {
+                $done = $attempt();
+            } catch (UniqueConstraintViolationException) {
+                throw new GestionConflictException('TAG_ALREADY_ASSOCIATED', $this->texts->t('pieces.error.TAG_ALREADY_ASSOCIATED_UNKNOWN', $locale), 409, ['holder' => null]);
+            }
         }
-        $piece = $this->sheets($repository->pieces([$done['pieceId']]), $locale)[0];
+        $piece = $this->pieceSheet($done['pieceId'], $locale);
         $tags = array_values(array_filter($piece['tags'], static fn (array $t): bool => $t['id'] === $done['tagId']));
+        if ($tags === []) {
+            throw new GestionConflictException('TAG_NOT_FOUND', $this->texts->t('pieces.error.TAG_NOT_FOUND', $locale), 404); // effacée entre-temps (exercice)
+        }
 
         return ['created' => $done['created'], 'associated' => $done['associated'], 'piece' => $piece, 'tag' => $tags[0]];
     }
@@ -254,7 +280,7 @@ class LossPieceService
         if ($tag !== null && (bool) $tag['exercise'] !== $exercise) {
             $tag = null; // une puce de l'autre monde est « inconnue » ici
         }
-        $piece = $tag !== null && $tag['piece_id'] !== null ? $this->sheets($this->repository()->pieces([(int) $tag['piece_id']]), $locale)[0] : null;
+        $piece = $tag !== null && $tag['piece_id'] !== null ? ($this->sheets($this->repository()->pieces([(int) $tag['piece_id']]), $locale)[0] ?? null) : null;
 
         return [
             'identifier' => $identifier,
@@ -278,6 +304,9 @@ class LossPieceService
         $repository = $this->repository();
         $now = self::now();
         $changed = $this->transaction(function () use ($repository, $id, $reason, $exercise, $userId, $now, $locale): bool {
+            if ($exercise) {
+                $this->exerciseLock();
+            }
             $tag = $repository->tag($id, true);
             if ($tag === null || (bool) $tag['exercise'] !== $exercise) {
                 throw new GestionConflictException('TAG_NOT_FOUND', $this->texts->t('pieces.error.TAG_NOT_FOUND', $locale), 404);
@@ -291,9 +320,11 @@ class LossPieceService
             return true;
         });
         $tag = $repository->tag($id);
+        if ($tag === null) {
+            throw new GestionConflictException('TAG_NOT_FOUND', $this->texts->t('pieces.error.TAG_NOT_FOUND', $locale), 404); // effacée entre-temps (exercice)
+        }
 
-        return ['changed' => $changed, 'tag' => $this->tagRow($tag, $locale),
-            'piece' => $tag['piece_id'] !== null ? $this->sheets($repository->pieces([(int) $tag['piece_id']]), $locale)[0] : null];
+        return ['changed' => $changed, 'tag' => $this->tagRow($tag, $locale), 'piece' => $tag['piece_id'] !== null ? $this->pieceSheet((int) $tag['piece_id'], $locale) : null];
     }
 
     /**
@@ -309,6 +340,9 @@ class LossPieceService
         $repository = $this->repository();
         $now = self::now();
         $changed = $this->transaction(function () use ($repository, $id, $reason, $exercise, $userId, $now, $locale): bool {
+            if ($exercise) {
+                $this->exerciseLock();
+            }
             $piece = $repository->piece($id, true);
             if ($piece === null || (bool) $piece['exercise'] !== $exercise) {
                 throw new GestionConflictException('PIECE_NOT_FOUND', $this->texts->t('pieces.error.PIECE_NOT_FOUND', $locale), 404);
@@ -326,24 +360,31 @@ class LossPieceService
             return true;
         });
 
-        return ['changed' => $changed, 'piece' => $this->sheets($repository->pieces([$id]), $locale)[0]];
+        return ['changed' => $changed, 'piece' => $this->pieceSheet($id, $locale)];
     }
 
     /**
      * Synthèse des vraies pièces par variante : à côté du stock, pour information (la pièce ne remplace pas le stock).
      *
-     * @param array<string, mixed> $query page, limit
+     * @param array<string, mixed> $query variantId, productId, page, limit
      *
      * @return array<string, mixed>
      */
     public function synthesis(array $query, string $locale): array
     {
         $errors = [];
+        $filters = [];
+        foreach (['variantId', 'productId'] as $key) {
+            if (isset($query[$key]) && $query[$key] !== '') {
+                $id = self::positiveInt($query[$key]);
+                $id === null ? $errors[$key] = 'MUST_BE_POSITIVE' : $filters[$key] = $id;
+            }
+        }
         [$page, $limit] = self::paging($query, $errors);
         if ($errors !== []) {
             throw new GestionValidationException($errors);
         }
-        $found = $this->repository()->synthesis($page, $limit);
+        $found = $this->repository()->synthesis($filters, $page, $limit);
         $variants = $this->repository()->variants(array_map(static fn (array $r): int => (int) $r['variant_id'], $found['rows']));
         $rows = [];
         foreach ($found['rows'] as $row) {
@@ -374,7 +415,7 @@ class LossPieceService
         $count = $this->repository()->exerciseCount();
 
         return ['pieces' => $this->sheets($found['rows'], $locale), 'count' => $count, 'limit' => self::EXERCISE_LIMIT, 'remaining' => max(0, self::EXERCISE_LIMIT - $count),
-            'createLimit' => self::EXERCISE_CREATE_LIMIT,
+            'createLimit' => self::EXERCISE_CREATE_LIMIT, 'tagLimit' => self::EXERCISE_TAG_LIMIT,
             'daily' => ['limit' => $this->exerciseDailyLimit, 'remaining' => max(0, $this->exerciseDailyLimit - $this->createdToday()), 'resetAt' => $this->resetAt()]];
     }
 
@@ -382,7 +423,7 @@ class LossPieceService
     public function deleteExercise(int $userId): array
     {
         $deleted = $this->transaction(function () use ($userId): int {
-            $this->emProvider->getEntityManager()->getConnection()->executeStatement('SELECT pg_advisory_xact_lock(' . LossPieceRepository::EXERCISE_LOCK . ')');
+            $this->exerciseLock();
             $deleted = $this->repository()->deleteExercise();
             if ($deleted > 0) {
                 $this->journal()->append(LossJournalEntry::EXERCISE_PIECES_DELETED, $userId, null, ['deleted' => $deleted]);
@@ -400,7 +441,7 @@ class LossPieceService
      */
     private function exerciseRoom(int $count, string $locale): void
     {
-        $this->emProvider->getEntityManager()->getConnection()->executeStatement('SELECT pg_advisory_xact_lock(' . LossPieceRepository::EXERCISE_LOCK . ')');
+        $this->exerciseLock();
         if ($this->createdToday() >= $this->exerciseDailyLimit) {
             throw new GestionConflictException('EXERCISE_DAILY_LIMIT', $this->texts->t('pieces.error.EXERCISE_DAILY_LIMIT', $locale, ['limit' => $this->exerciseDailyLimit]), 409,
                 ['limit' => $this->exerciseDailyLimit, 'resetAt' => $this->resetAt()]);
@@ -408,6 +449,26 @@ class LossPieceService
         if ($this->repository()->exerciseCount() + $count > self::EXERCISE_LIMIT) {
             throw new GestionConflictException('EXERCISE_LIMIT_REACHED', $this->texts->t('pieces.error.EXERCISE_LIMIT_REACHED', $locale, ['limit' => self::EXERCISE_LIMIT]), 409, ['limit' => self::EXERCISE_LIMIT]);
         }
+    }
+
+    /**
+     * Verrou des écritures d'exercice, tenu jusqu'à la fin de la transaction de l'appelant : créer, poser, retirer et effacer ne se
+     * croisent pas (un effacement ne laisse ni puce ni fait sans leur pièce). Les vraies pièces ne le prennent jamais.
+     */
+    private function exerciseLock(): void
+    {
+        $this->emProvider->getEntityManager()->getConnection()->executeStatement('SELECT pg_advisory_xact_lock(' . LossPieceRepository::EXERCISE_LOCK . ')');
+    }
+
+    /** @return array<string, mixed> la fiche d'une pièce ; 404 si elle n'existe plus (une pièce d'exercice effacée entre-temps) */
+    private function pieceSheet(int $id, string $locale): array
+    {
+        $sheets = $this->sheets($this->repository()->pieces([$id]), $locale);
+        if ($sheets === []) {
+            throw new GestionConflictException('PIECE_NOT_FOUND', $this->texts->t('pieces.error.PIECE_NOT_FOUND', $locale), 404);
+        }
+
+        return $sheets[0];
     }
 
     /** Créations d'exercice du jour du magasin, lues au journal du module (qui ne se supprime pas : effacer ne rend aucune création) */
@@ -543,7 +604,8 @@ class LossPieceService
         $holder = $sheet === null ? null : array_intersect_key($sheet, array_flip(['id', 'number', 'variantId', 'productId', 'name', 'variantLabel']));
 
         return new GestionConflictException('TAG_ALREADY_ASSOCIATED',
-            $this->texts->t($holder !== null ? 'pieces.error.TAG_ALREADY_ASSOCIATED' : 'pieces.error.TAG_ALREADY_ASSOCIATED_UNKNOWN', $locale, ['number' => (string) ($holder['number'] ?? ''), 'name' => (string) ($holder['name'] ?? '')]),
+            $this->texts->t($holder === null ? 'pieces.error.TAG_ALREADY_ASSOCIATED_UNKNOWN' : ((string) $holder['name'] !== '' ? 'pieces.error.TAG_ALREADY_ASSOCIATED' : 'pieces.error.TAG_ALREADY_ASSOCIATED_NO_NAME'),
+                $locale, ['number' => (string) ($holder['number'] ?? ''), 'name' => (string) ($holder['name'] ?? '')]),
             409, ['holder' => $holder]);
     }
 

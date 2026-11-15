@@ -49,12 +49,12 @@ final class LossTagIdentifier
     }
 
     /**
-     * Forme canonique d'une lecture dont on ne connaît pas la technologie (recherche) : puce simulée, sinon hexadécimal nettoyé ;
-     * null si ce n'est ni l'un ni l'autre.
+     * Forme canonique d'une lecture de vraie puce dont on ne connaît pas la technologie (recherche) : NFC, sinon UHF ; null si ce
+     * n'est ni l'un ni l'autre. Une puce simulée n'est jamais une lecture valide ici.
      */
     public static function loose(mixed $raw): ?string
     {
-        return self::canonical($raw, self::SIMULATED) ?? self::canonical($raw, self::NFC) ?? self::canonical($raw, self::UHF);
+        return self::canonical($raw, self::NFC) ?? self::canonical($raw, self::UHF);
     }
 
     /** Un identifiant de puce simulée, au hasard */

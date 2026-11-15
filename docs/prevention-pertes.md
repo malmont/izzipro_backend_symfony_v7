@@ -531,7 +531,8 @@ Réponse du propriétaire (15/11/2026, relayée par le chef de projet) : les hui
 
 Code : `Controller/LossPieceController`, `UseCase/LossPieceUseCase`, `Services/LossPieceService`, `Services/LossTagIdentifier`,
 `Repository/LossPieceRepository`, entités `LossPiece`, `LossTag`, `LossPieceEvent`. Migration `Version20270109100000` (tables
-`loss_piece`, `loss_tag`, `loss_piece_event`, séquence `loss_piece_number_seq` ; équivalent `scripts/migrate_all_v2_pertes_l2a.sh`).
+`loss_piece`, `loss_tag`, `loss_piece_event`, séquences `loss_piece_number_seq` et `loss_piece_exercise_number_seq`, cinq fonctions,
+dix déclencheurs ; équivalent `scripts/migrate_all_v2_pertes_l2a.sh`). Relu par un relecteur indépendant avant la mise en ligne.
 Textes `translations/pertes.{fr,en}.yaml` (`pieces.*`). Toutes les routes : `/api/gestion/pertes`, administrateur, garde de la gestion
 puis du module, `?locale=fr|en`, erreurs `{ error, code, message, … }`. **Aucune n'écrit dans le stock, les ventes ni le catalogue.**
 
@@ -551,7 +552,7 @@ statusLabel, pieceId, exercise, associatedAt, retiredAt, retiredReason, retiredR
 | `POST /puces/associer` | `{ pieceId \| variantId \| barcode, identifier, technology (uhf \| nfc) }` | 200 `{ created, associated, piece, tag }` | 422 `TAG_INVALID { technology }`, `VALIDATION_FAILED` ; 409 `TAG_ALREADY_ASSOCIATED { holder }`, `TAG_RETIRED`, `TAG_IS_BARCODE { holder }`, `PIECE_RETIRED`, `PIECE_TAG_LIMIT { limit: 4 }`, `BARCODE_AMBIGUOUS`, `NO_VARIANT` ; 404 `PIECE_NOT_FOUND`, `VARIANT_NOT_FOUND`, `BARCODE_NOT_FOUND` |
 | `GET /puces/recherche?identifier=` | — | 200 `{ identifier (forme canonique), found, refusal (TAG_INVALID \| null), tag, piece }` | 422 `identifier: REQUIRED` |
 | `POST /puces/{id}/retirer` | `{ reason (detached \| destroyed \| lost \| error), confirm: true }` | 200 `{ changed, tag, piece }` | 409 `CONFIRMATION_REQUIRED` ; 422 ; 404 `TAG_NOT_FOUND` |
-| `GET /pieces/synthese` | `?page&limit` | 200 `{ rows [{ variantId, productId, …catalogue, stock, pieces { active, retired, tagged, untagged }, gap }], total, page, limit, totals { variants, pieces, retired, tagged, untagged } }` | 422 |
+| `GET /pieces/synthese` | `?variantId&productId&page&limit` | 200 `{ rows [{ variantId, productId, …catalogue, stock, pieces { active, retired, tagged, untagged }, gap }], total, page, limit, totals { variants, pieces, retired, tagged, untagged } }` | 422 |
 
 - **Associer, LE geste** : avec `pieceId`, la puce se pose sur cette pièce ; avec `variantId` ou `barcode` (le code-barres lu), une
   pièce est créée pour la variante puis reçoit la puce (`created: true`). **Rejouer le même geste ne crée rien** : la puce déjà
@@ -560,23 +561,36 @@ statusLabel, pieceId, exercise, associatedAt, retiredAt, retiredReason, retiredR
   porte quatre puces au plus ; à partir de la deuxième, un fait `PAIR_SET`.
 - **Identifiant** (`LossTagIdentifier`) : la lecture est nettoyée (espaces, `:`, `-`, `.`, préfixe `0x`, majuscules) ; NFC : 8, 14,
   16 ou 20 caractères hexadécimaux ; UHF : 16 à 64, par multiples de 4. La lecture brute est gardée (`loss_tag.raw`). Une lecture qui
-  est le code-barres d'un article est refusée (`TAG_IS_BARCODE` : lecteur en clavier dans le mauvais champ).
+  est le code-barres d'un article est refusée (`TAG_IS_BARCODE` : lecteur en clavier dans le mauvais champ ; comparée telle qu'un
+  code-barres l'écrirait et sous sa forme nettoyée). Une puce simulée n'est jamais une lecture valide sur une vraie route, recherche
+  comprise (`refusal: TAG_INVALID`).
+- **Deux envois au même instant** : la base tranche (index unique de l'identifiant). Le second envoi est annulé en entier puis rejoué
+  une fois : le même geste envoyé deux fois rend le rejeu (la pièce du premier, `created: false`), une autre cible rend
+  `TAG_ALREADY_ASSOCIATED` avec ce qui porte la puce. Poser une puce prend la pièce sous verrou : une pièce qu'on retire au même
+  instant ne reçoit pas de puce.
 - **Retirer** : jamais d'un geste distrait (`confirm: true`, sinon 409) ; retirer deux fois ne fait rien (`changed: false`). Une puce
   retirée ne se repose sur aucune pièce (`TAG_RETIRED`), pas même la sienne ; une pièce retirée ne reçoit plus de puce.
 - **Faits** (`loss_piece_event`, en ajout seul) : `PIECE_CREATED`, `TAG_ASSOCIATED`, `PAIR_SET`, `TAG_RETIRED`, `PIECE_RETIRED`, dans la
   transaction de la ligne qu'ils changent, avec le compte de l'administrateur ; nombres, codes et identifiants seulement.
 - **Ce que la base garantit seule** (déclencheurs de la migration) : identifiant unique et en forme canonique ; une puce associée ne
-  change jamais de pièce ; une puce ou une pièce retirée ne revient pas ; identité figée (numéro, variante, technologie, marque
-  d'exercice) ; puce posée seulement sur une pièce du même genre et non retirée ; faits non modifiables ; aucune suppression ni
-  vidage, sauf une ligne d'exercice par la porte `loss.purge = 'exercise'`.
-- **Synthèse** : par variante suivie, à côté du stock, pour information ; `gap` = stock − pièces en service. Vraies pièces seulement.
+  change jamais de pièce ; l'état d'une puce n'avance que dans un sens (connue, associée, retirée) ; une puce ou une pièce retirée
+  ne bouge plus (ni l'état, ni le motif, ni la date) ; identité figée (numéro, variante, article, commande d'origine, lecture brute,
+  technologie, auteur, dates de création et de pose, marque d'exercice) ; puce posée seulement sur une pièce du même genre et non
+  retirée ; faits non modifiables, et du même genre que la pièce et la puce qu'ils désignent ; aucune suppression ni vidage, sauf
+  une ligne d'exercice par la porte `loss.purge = 'exercise'`, dans l'ordre faits, puces, pièces.
+- **Synthèse** : par variante suivie, à côté du stock, pour information ; `gap` = stock − pièces en service ; filtres `variantId`,
+  `productId` ; `total` et `totals` portent sur tout ce que le filtre retient, pas sur la page. Vraies pièces seulement.
+- **Listes** : `X-Total-Count` et `total` ne dépendent pas de la page demandée (une page au-delà de la dernière est vide).
+- **Limites connues** : `POST /pieces` n'est pas rejouable (deux envois créent deux séries ; une série créée par erreur se retire
+  pièce par pièce) ; rien n'empêche encore de poser comme code-barres d'un article l'identifiant d'une puce connue (sens inverse de
+  `TAG_IS_BARCODE`, à traiter dans un lot du catalogue) ; un identifiant de route au-delà d'un entier rend 404 par la garde commune.
 
 **Mode exercice** (ouvert sans le droit du module, comme le lot EX-1 ; routes nommées une à une dans
 `LossPreventionModuleSubscriber::OPEN_ROUTES`) : les mêmes gestes sur des pièces d'exercice et des puces simulées.
 
 | Route | Rôle |
 |---|---|
-| `GET /exercices/pieces` | `{ pieces, count, limit: 30, remaining, createLimit: 10, daily { limit: 30, remaining, resetAt } }` |
+| `GET /exercices/pieces` | `{ pieces, count, limit: 30, remaining, createLimit: 10, tagLimit: 60, daily { limit: 30, remaining, resetAt } }` |
 | `POST /exercices/pieces` `{ variantId \| barcode, count (1 à 10) }` | 201 `{ pieces, count }` ; 409 `EXERCISE_LIMIT_REACHED { limit }`, `EXERCISE_DAILY_LIMIT { limit, resetAt }` |
 | `POST /exercices/puces/associer` `{ pieceId \| variantId \| barcode, identifier? }` | « Simuler une lecture » : sans `identifier`, le serveur fabrique la puce (`SIM-` + 12 caractères) |
 | `GET /exercices/puces/recherche?identifier=`, `GET /exercices/pieces/{id}` | comme les vraies routes |
@@ -585,9 +599,13 @@ statusLabel, pieceId, exercise, associatedAt, retiredAt, retiredReason, retiredR
 
 Les deux mondes ne se croisent sur aucune route (une vraie pièce est 404 pour les routes d'exercice, et l'inverse ; une puce simulée
 n'est pas une lecture valide sur une vraie route, ni une vraie lecture en exercice), et **rien d'exercice n'entre dans un chiffre
-réel** (liste, synthèse). Plafonds : 30 pièces d'exercice présentes, 10 par appel, 30 créations par jour du magasin (comptées au
-journal du module, lignes `EXERCISE_PIECES_CREATED` : effacer ne rend aucune création). L'exercice lit de vraies variantes du
+réel** (liste, synthèse). Plafonds : 30 pièces d'exercice présentes, 10 par appel, 60 puces simulées présentes (retirées comprises :
+poser puis retirer en boucle ne remplit pas la base ; 409 `EXERCISE_LIMIT_REACHED { limit: 60 }`), 30 APPELS de création par jour du
+magasin (comptés au journal du module, lignes `EXERCISE_PIECES_CREATED` : effacer ne rend aucun appel). Les pièces d'exercice ont
+leur propre suite de numéros : un exercice ne creuse aucun trou dans la numérotation réelle. Toute écriture d'exercice prend le
+verrou des exercices : un effacement en cours ne laisse ni puce ni fait sans leur pièce. L'exercice lit de vraies variantes du
 catalogue (lecture seule).
 
-Tests : `tests/Functional/LossPrevention/LossPreventionPiecesTest.php` (la base seule ; les routes ; l'exercice ; les règles de
-l'identifiant).
+Tests : `tests/Functional/LossPrevention/LossPreventionPiecesTest.php` (la base seule, à une et à deux connexions ; les routes ;
+l'exercice ; le même geste envoyé deux fois au même instant, par deux processus ; l'attente des verrous ; le rejeu et le retour
+arrière de la migration ; les règles de l'identifiant).

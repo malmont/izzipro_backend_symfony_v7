@@ -20,8 +20,12 @@ class LossPieceRepository extends EntityRepository
     /** Verrou consultatif des pièces d'exercice : création et effacement ne se croisent pas (comme les constats d'exercice) */
     public const EXERCISE_LOCK = 7461081;
 
+    /** Suite des numéros des vraies pièces, et celle des pièces d'exercice (un exercice ne creuse pas de trou dans la première) */
+    private const NUMBERS = 'loss_piece_number_seq';
+    private const EXERCISE_NUMBERS = 'loss_piece_exercise_number_seq';
+
     /**
-     * Crée `$count` pièces d'une variante, chacune avec le numéro suivant de la séquence (jamais redonné).
+     * Crée `$count` pièces d'une variante, chacune avec le numéro suivant de la suite de son genre (jamais redonné).
      *
      * @return list<int> identifiants des pièces créées, dans l'ordre des numéros
      */
@@ -29,7 +33,7 @@ class LossPieceRepository extends EntityRepository
     {
         return array_map('intval', $this->db()->fetchFirstColumn(
             "INSERT INTO loss_piece (number, variant_id, product_id, status, commande_id, exercise, created_by, created_at, updated_at)"
-            . " SELECT nextval('loss_piece_number_seq'), CAST(:variant AS integer), CAST(:product AS integer), 'created', CAST(:commande AS integer), CAST(:exercise AS boolean),"
+            . " SELECT nextval('" . ($exercise ? self::EXERCISE_NUMBERS : self::NUMBERS) . "'), CAST(:variant AS integer), CAST(:product AS integer), 'created', CAST(:commande AS integer), CAST(:exercise AS boolean),"
             . ' CAST(:user AS integer), CAST(:now AS timestamp), CAST(:now AS timestamp) FROM generate_series(1, CAST(:count AS integer)) RETURNING id',
             ['variant' => $variantId, 'product' => $productId, 'commande' => $commandeId, 'exercise' => $exercise ? 'true' : 'false', 'user' => $userId, 'now' => $now, 'count' => $count]
         ));
@@ -72,18 +76,24 @@ class LossPieceRepository extends EntityRepository
             $where[] = ($filters['tagged'] ? '' : 'NOT ') . "EXISTS (SELECT 1 FROM loss_tag t WHERE t.piece_id = p.id AND t.status = 'associated')";
         }
         $rows = $this->db()->fetchAllAssociative(
-            'SELECT p.*, COUNT(*) OVER () AS total FROM loss_piece p WHERE ' . implode(' AND ', $where)
-            . sprintf(' ORDER BY p.number DESC LIMIT %d OFFSET %d', $limit, ($page - 1) * $limit),
+            'SELECT p.* FROM loss_piece p WHERE ' . implode(' AND ', $where) . sprintf(' ORDER BY p.number DESC LIMIT %d OFFSET %d', $limit, ($page - 1) * $limit),
             $params
         );
 
-        return ['rows' => $rows, 'total' => $rows === [] ? 0 : (int) $rows[0]['total']];
+        // le total ne dépend pas de la page demandée (une page au-delà de la dernière rend une liste vide, pas un total à zéro)
+        return ['rows' => $rows, 'total' => (int) $this->db()->fetchOne('SELECT COUNT(*) FROM loss_piece p WHERE ' . implode(' AND ', $where), $params)];
     }
 
     /** Pièces d'exercice présentes sur le site */
     public function exerciseCount(): int
     {
         return (int) $this->db()->fetchOne('SELECT COUNT(*) FROM loss_piece WHERE exercise');
+    }
+
+    /** Puces simulées présentes sur le site, retirées comprises */
+    public function exerciseTagCount(): int
+    {
+        return (int) $this->db()->fetchOne('SELECT COUNT(*) FROM loss_tag WHERE exercise');
     }
 
     public function retirePiece(int $id, string $reason, string $now): void
@@ -175,21 +185,34 @@ class LossPieceRepository extends EntityRepository
     }
 
     /**
-     * Synthèse des vraies pièces par variante : pièces en service, retirées, avec puce.
+     * Synthèse des vraies pièces par variante : pièces en service, retirées, avec puce. Les totaux portent sur toutes les variantes
+     * retenues par le filtre, pas sur la page.
+     *
+     * @param array{variantId?: int, productId?: int} $filters
      *
      * @return array{rows: list<array<string, mixed>>, total: int, totals: array{active: int, retired: int, tagged: int}}
      */
-    public function synthesis(int $page, int $limit): array
+    public function synthesis(array $filters, int $page, int $limit): array
     {
+        $where = ['NOT p.exercise'];
+        $params = [];
+        foreach (['variantId' => 'p.variant_id', 'productId' => 'p.product_id'] as $key => $column) {
+            if (isset($filters[$key])) {
+                $where[] = "$column = :$key";
+                $params[$key] = $filters[$key];
+            }
+        }
+        $from = 'FROM loss_piece p WHERE ' . implode(' AND ', $where);
         $tagged = "EXISTS (SELECT 1 FROM loss_tag t WHERE t.piece_id = p.id AND t.status = 'associated')";
         $counts = "COUNT(*) FILTER (WHERE p.status <> 'retired') AS active, COUNT(*) FILTER (WHERE p.status = 'retired') AS retired, COUNT(*) FILTER (WHERE p.status <> 'retired' AND $tagged) AS tagged";
         $rows = $this->db()->fetchAllAssociative(
-            "SELECT p.variant_id, MIN(p.product_id) AS product_id, $counts, COUNT(*) OVER () AS total FROM loss_piece p WHERE NOT p.exercise"
-            . sprintf(' GROUP BY p.variant_id ORDER BY MIN(p.product_id), p.variant_id LIMIT %d OFFSET %d', $limit, ($page - 1) * $limit)
+            "SELECT p.variant_id, MIN(p.product_id) AS product_id, $counts $from"
+            . sprintf(' GROUP BY p.variant_id ORDER BY MIN(p.product_id), p.variant_id LIMIT %d OFFSET %d', $limit, ($page - 1) * $limit),
+            $params
         );
-        $totals = $this->db()->fetchAssociative("SELECT $counts FROM loss_piece p WHERE NOT p.exercise") ?: [];
+        $totals = $this->db()->fetchAssociative("SELECT COUNT(DISTINCT p.variant_id) AS variants, $counts $from", $params) ?: [];
 
-        return ['rows' => $rows, 'total' => $rows === [] ? 0 : (int) $rows[0]['total'],
+        return ['rows' => $rows, 'total' => (int) ($totals['variants'] ?? 0),
             'totals' => ['active' => (int) ($totals['active'] ?? 0), 'retired' => (int) ($totals['retired'] ?? 0), 'tagged' => (int) ($totals['tagged'] ?? 0)]];
     }
 
