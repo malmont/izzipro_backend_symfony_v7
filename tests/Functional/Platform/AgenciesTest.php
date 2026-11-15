@@ -116,11 +116,14 @@ class AgenciesTest extends WebTestCase
         $detached = $this->json('DELETE', "/api/platform/agencies/$id/sites/agfict-a", null, 'super', 200);
         $this->assertSame([2, [MV_TEST_TENANT2_CODE, 'agfict-b']], [$detached['agency']['sitesCount'], array_column($detached['sites'], 'code')]);
         $this->json('POST', "/api/platform/agencies/$second/sites", ['tenantCode' => 'agfict-a'], 'super', 201);
+        // un site détaché ne compte plus dans la limite : la place est rendue
+        $this->assertSame(3, $this->json('POST', "/api/platform/agencies/$id/sites", ['tenantCode' => 'agfict-d'], 'super', 201)['agency']['sitesCount']);
 
         // Suspendre : l'agence ne reçoit plus de site ; reprendre : elle revient à l'essai (sa fin n'est pas passée)
         $suspended = $this->json('POST', "/api/platform/agencies/$id/suspend", ['reason' => 'Impayé du relevé'], 'super', 200)['agency'];
         $this->assertSame('suspended', $suspended['status']);
         $this->assertNotNull($suspended['suspendedAt']);
+        $this->json('DELETE', "/api/platform/agencies/$id/sites/agfict-d", null, 'super', 200);
         $this->assertSame('AGENCY_NOT_OPEN', $this->json('POST', "/api/platform/agencies/$id/sites", ['tenantCode' => 'agfict-d'], 'super', 409)['code']);
         $this->assertSame('AGENCY_STATE', $this->json('POST', "/api/platform/agencies/$id/suspend", [], 'super', 409)['code'], 'déjà suspendue');
         $resumed = $this->json('POST', "/api/platform/agencies/$id/resume", null, 'super', 200)['agency'];
@@ -137,8 +140,8 @@ class AgenciesTest extends WebTestCase
         $this->assertSame(['agence-test', 'agence-deux'], array_column($this->json('GET', '/api/platform/agencies', null, 'super', 200)['agencies'], 'code'));
         $detail = $this->json('GET', "/api/platform/agencies/$id", null, 'super', 200);
         $this->assertSame([[], [MV_TEST_TENANT2_CODE, 'agfict-b']], [$detail['members'], array_column($detail['sites'], 'code')]);
-        $this->assertSame(['resumed', 'suspended', 'resumed', 'suspended', 'site_detached', 'site_attached', 'site_attached', 'site_attached', 'created'], array_column($detail['events'], 'event'));
-        $this->assertSame(['super-agences@example.invalid', 'agfict-a', 'Impayé du relevé'], [$detail['events'][8]['actor'], $detail['events'][4]['tenantCode'], $detail['events'][3]['payload']['reason']]);
+        $this->assertSame(['resumed', 'suspended', 'resumed', 'site_detached', 'suspended', 'site_attached', 'site_detached', 'site_attached', 'site_attached', 'site_attached', 'created'], array_column($detail['events'], 'event'));
+        $this->assertSame(['super-agences@example.invalid', 'agfict-a', 'Impayé du relevé'], [$detail['events'][10]['actor'], $detail['events'][6]['tenantCode'], $detail['events'][4]['payload']['reason']]);
 
         // Aucun droit d'usage, aucun site : rattacher ne change rien pour un site
         $this->assertSame(0, (int) $this->master->query("SELECT COUNT(*) FROM tenant_entitlements WHERE source = 'agency' OR tenant_code LIKE 'agfict-%'")->fetchColumn());
@@ -215,13 +218,30 @@ class AgenciesTest extends WebTestCase
         $this->assertSame(401, $this->api('GET', '/api/agency/me', null, null)->getStatusCode());
         $this->assertGreaterThan(0, $stray);
 
+        // Un agent d'assistance qui porte aussi un rôle d'agence garde ses deux espaces, et rien d'autre
+        $both = $this->account("agence-assist-{$this->tag}@example.invalid", ['ROLE_SUPPORT'], MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $this->json('PUT', "/api/platform/agencies/$id/members", ['email' => "agence-assist-{$this->tag}@example.invalid", 'role' => 'member'], 'super', 200);
+        $login = $this->login("agence-assist-{$this->tag}@example.invalid", 'webadmin', MV_TEST_TENANT_HOST);
+        $this->assertSame(200, $login->getStatusCode(), (string) $login->getContent());
+        $this->tokens['both'] = $this->tokenOf($login, MV_TEST_TENANT_CODE);
+        $this->assertSame('member', $this->json('GET', '/api/agency/me', null, 'both', 200)['role']);
+        $this->assertSame(200, $this->api('GET', '/api/support/me', null, 'both')->getStatusCode());
+        foreach (['/api/memoires/team', '/api/gestion/statistiques', '/api/site/imports'] as $route) {
+            $this->assertSame(403, $this->api('GET', $route, null, 'both')->getStatusCode(), $route);
+        }
+        $this->assertGreaterThan(0, $both);
+
         // Une agence suspendue lit encore son espace, avec son état ; retirer le rôle ferme l'espace tout de suite (les rôles sont relus en base)
         $this->json('POST', "/api/platform/agencies/$id/suspend", [], 'super', 200);
         $this->assertSame('suspended', $this->json('GET', '/api/agency/me', null, 'member', 200)['agency']['status']);
         $revoked = $this->json('PUT', "/api/platform/agencies/$id/members", ['email' => "agence-collab-{$this->tag}@example.invalid", 'role' => 'none'], 'super', 200);
-        $this->assertSame([null, true, ['manager']], [$revoked['member']['role'], $revoked['member']['changed'], array_column($revoked['members'], 'role')]);
+        $this->assertSame([null, true, ['manager', 'member']], [$revoked['member']['role'], $revoked['member']['changed'], array_column($revoked['members'], 'role')]);
         $this->assertSame([], $roles($member));
         $this->assertSame(403, $this->api('GET', '/api/agency/me', null, 'member')->getStatusCode());
+        // une agence fermée n'a plus d'espace, même pour qui porte encore le rôle
+        $this->master->prepare("UPDATE agencies SET status = 'closed' WHERE id = ?")->execute([$id]);
+        $closed = $this->api('GET', '/api/agency/me', null, 'both');
+        $this->assertSame([403, 'AGENCY_SCOPE'], [$closed->getStatusCode(), json_decode((string) $closed->getContent(), true)['code']]);
     }
 
     public function testTheSuperAdministratorManagesAgenciesFromTheAdministrationPage(): void
