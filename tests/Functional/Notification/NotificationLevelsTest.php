@@ -396,6 +396,19 @@ class NotificationLevelsTest extends WebTestCase
         $this->assertCount(1, $journal);
         $this->assertSame(['order_to_ship', 'Commande retenue', 'held', 'email', 'orders', ['screen' => 'commandes', 'params' => []]],
             [$journal[0]['kind'], $journal[0]['title'], $journal[0]['status'], $journal[0]['channel'], $journal[0]['topic'], $journal[0]['action']]);
+        // Le journal se filtre par canal : l'écran du téléphone ne demande que « push », celui des courriels que « email »
+        $gate->record(Catalog::ORDER_TO_SHIP, (string) $admin->getEmail(), (int) $admin->getId(), NotificationGate::STATUS_SENT, 'Commande partie', [], '2031-07-01', null);
+        $this->db()->executeStatement("INSERT INTO notification_log (user_id, kind, title, body, action, subject, status, devices, store_day, sent_at) VALUES (?, 'low_stock', 'Stock bas', 'Corps', '{}', '{}', 'sent', 1, '2031-07-01', NOW())", [$admin->getId()]);
+        $titles = fn (string $query): array => array_column($this->json('GET', '/api/gestion/notifications/journal' . $query, null, $admin), 'title');
+        $all = $titles('');
+        sort($all);
+        $this->assertSame(['Commande partie', 'Commande retenue', 'Stock bas'], $all);
+        $emails = $titles('?channel=email');
+        sort($emails);
+        $this->assertSame([['Stock bas'], ['Commande partie', 'Commande retenue']], [$titles('?channel=push'), $emails]);
+        $this->assertCount(1, $titles('?channel=email&limit=1'));
+        $r = $this->call('GET', '/api/gestion/notifications/journal?channel=sms', null, $admin);
+        $this->assertSame([422, 'INVALID_VALUE'], [$r->getStatusCode(), $this->decode($r)['fields']['channel'] ?? null]);
     }
 
     public function testAnEmailNeverConsumesThePhoneNotificationOfTheDayAndTheRealLimitsAreTheDefaults(): void

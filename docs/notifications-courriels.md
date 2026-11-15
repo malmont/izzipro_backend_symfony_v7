@@ -146,6 +146,8 @@ défaut), le point de la semaine, qui se coupe indépendamment du niveau.
 ensemble ou séparément ; rend la forme du `GET`. Refus : 422 `VALIDATION_FAILED`, `fields.level = INVALID_VALUE`.
 
 `GET /api/gestion/notifications/journal` rend aussi les courriels du compte, avec `channel` (`push` | `email`), `topic` et leur état.
+`?channel=push` ou `?channel=email` ne rend que ce canal (l'écran du téléphone demande ainsi ses 20 lignes sans les courriels) ; sans le
+paramètre, les deux ; autre valeur : 422 `fields.channel = INVALID_VALUE`.
 
 ## 6. Ce que le lot NOTIF-1 ne fait pas encore
 

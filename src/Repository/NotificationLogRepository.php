@@ -40,10 +40,11 @@ class NotificationLogRepository extends EntityRepository
     }
 
     /** @return list<array<string, mixed>> */
-    public function journal(int $userId, int $limit): array
+    public function journal(int $userId, int $limit, ?string $channel = null): array
     {
         $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative(
-            'SELECT id, kind, title, body, action, status, sent_at, channel, topic FROM notification_log WHERE user_id = ? ORDER BY sent_at DESC, id DESC LIMIT ' . max(1, min(100, $limit)), [$userId]
+            'SELECT id, kind, title, body, action, status, sent_at, channel, topic FROM notification_log WHERE user_id = ?' . ($channel !== null ? ' AND channel = ?' : '')
+            . ' ORDER BY sent_at DESC, id DESC LIMIT ' . max(1, min(100, $limit)), $channel !== null ? [$userId, $channel] : [$userId]
         );
 
         return array_map(fn (array $r) => [

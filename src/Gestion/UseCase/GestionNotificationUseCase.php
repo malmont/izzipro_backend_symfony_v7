@@ -24,8 +24,8 @@ class GestionNotificationUseCase
     }
 
     /** @return list<array<string, mixed>> */
-    public function journal(int $userId, int $limit): array
+    public function journal(int $userId, int $limit, ?string $channel = null): array
     {
-        return $this->notifications->journal($userId, $limit);
+        return $this->notifications->journal($userId, $limit, $channel);
     }
 }

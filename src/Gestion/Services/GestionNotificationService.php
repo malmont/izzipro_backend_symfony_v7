@@ -149,9 +149,9 @@ class GestionNotificationService
     }
 
     /** @return list<array<string, mixed>> */
-    public function journal(int $userId, int $limit): array
+    public function journal(int $userId, int $limit, ?string $channel = null): array
     {
-        return $this->log()->journal($userId, $limit);
+        return $this->log()->journal($userId, $limit, $channel);
     }
 
     /**

@@ -42,7 +42,13 @@ class GestionNotificationController extends AbstractController
     #[Route('/journal', name: 'gestion_notifications_journal', methods: ['GET'])]
     public function journal(Request $request): JsonResponse
     {
-        return $this->json($this->useCase->journal($this->userId(), (int) $request->query->get('limit', 20)));
+        // `channel` (facultatif, lot NOTIF-1) : `push` (téléphone) ou `email` (courriels urgents et de suivi, retenus compris) ; sans lui, les deux
+        $channel = $request->query->get('channel');
+        if ($channel !== null && !in_array($channel, ['push', 'email'], true)) {
+            throw new GestionValidationException(['channel' => 'INVALID_VALUE']);
+        }
+
+        return $this->json($this->useCase->journal($this->userId(), (int) $request->query->get('limit', 20), $channel));
     }
 
     private function userId(): int

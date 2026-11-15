@@ -43,7 +43,7 @@ Code : `Services/NotificationService/` (`PushSenderInterface`, `NotConfiguredPus
   chaque administrateur et s'écrit dans `notification_log` sur le canal `email` (`docs/notifications-courriels.md`).
 - `GET /api/gestion/notifications/journal?limit=20` (100 au plus) → `[{ id, kind, title, body, action: { screen, params }, status, sentAt,
   channel, topic }]` ; depuis NOTIF-1 le journal porte aussi les courriels du compte (`channel: email`), dont ceux qui sont retenus
-  (`status: held`) ou gardés sans envoi (`kept`) : une application qui ne veut que le téléphone filtre sur `channel: push`
+  (`status: held`) ou gardés sans envoi (`kept`) : une application qui ne veut que le téléphone appelle `?channel=push` (`?channel=email` pour les seuls courriels ; autre valeur : 422)
   du gérant connecté ; `status` `sent` | `not_configured` | `failed` | `no_device`.
 
 ## 3. Règles
