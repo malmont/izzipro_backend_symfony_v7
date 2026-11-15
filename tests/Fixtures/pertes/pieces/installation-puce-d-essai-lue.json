@@ -3,7 +3,7 @@
         "method": "POST",
         "path": "/api/gestion/pertes/installation/puce-test?locale=fr",
         "body": {
-            "identifier": "07F4AE54",
+            "identifier": "07AA72C4",
             "technology": "nfc"
         }
     },
@@ -11,24 +11,11 @@
     "headers": {},
     "body": {
         "ok": true,
-        "identifier": "07F4AE54",
+        "identifier": "07AA72C4",
         "technology": "nfc",
         "refusal": null,
         "hint": null,
-        "tag": {
-            "id": 6,
-            "identifier": "07F4AE54",
-            "technology": "nfc",
-            "technologyLabel": "Puce NFC",
-            "status": "known",
-            "statusLabel": "Lue, pas encore posée",
-            "pieceId": null,
-            "exercise": false,
-            "associatedAt": null,
-            "retiredAt": null,
-            "retiredReason": null,
-            "retiredReasonLabel": null
-        },
+        "tag": null,
         "installation": {
             "steps": [
                 {
@@ -47,7 +34,7 @@
                     "title": "Imprimer une étiquette d'essai",
                     "text": "Imprimez l'étiquette d'essai dans le format de votre imprimante : planche A4 ou rouleau. Vérifiez qu'elle sort droite et que les barres sont nettes.",
                     "image": "pertes/installation/test_label",
-                    "status": "current",
+                    "status": "done",
                     "verify": {
                         "kind": "data",
                         "label": "Vérifier"
@@ -77,10 +64,10 @@
                 }
             ],
             "progress": {
-                "done": 3,
+                "done": 4,
                 "total": 4
             },
-            "complete": false,
+            "complete": true,
             "exercise": false,
             "screen": "pertes.installation"
         }

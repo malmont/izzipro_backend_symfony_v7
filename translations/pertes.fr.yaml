@@ -302,6 +302,7 @@ pieces:
         TAG_RETIRED: Puce retirée
         PIECE_RETIRED: Pièce retirée
         TEST_TAG_READ: Puce lue à l'essai
+        TEST_LABEL_PRINTED: Étiquette d'essai produite
     error:
         VARIANT_NOT_FOUND: 'Variante introuvable.'
         PIECE_NOT_FOUND: 'Pièce introuvable.'
@@ -342,7 +343,7 @@ installation:
             title: Choisir son matériel
             text: 'Trois niveaux pour chaque besoin : lire une puce, imprimer l''étiquette, poser la puce. Regardez la gamme et prenez ce qui convient à votre boutique.'
             verify: Voir la gamme
-            hint: 'Cette étape n''a rien à vérifier : elle est faite dès que vous imprimez une étiquette d''essai ou lisez une puce.'
+            hint: 'Cette étape n''a rien à vérifier : elle est faite dès que vous imprimez une étiquette d''essai, lisez une puce ou posez une puce sur une pièce.'
         test_label:
             title: Imprimer une étiquette d'essai
             text: 'Imprimez l''étiquette d''essai dans le format de votre imprimante : planche A4 ou rouleau. Vérifiez qu''elle sort droite et que les barres sont nettes.'
@@ -362,7 +363,7 @@ installation:
         decimal: 'Le lecteur semble rendre un numéro en chiffres seulement. Réglez-le pour qu''il rende l''identifiant en hexadécimal (chiffres et lettres de A à F).'
         form: 'Cette lecture contient autre chose que des chiffres et des lettres de A à F : ce n''est pas une puce. Vérifiez que le curseur est dans le champ de la puce.'
         length_nfc: 'Cette lecture n''a pas la longueur d''une puce NFC (8, 14, 16 ou 20 caractères). Essayez l''autre technologie, ou une autre puce.'
-        length_uhf: 'Cette lecture n''a pas la longueur d''une puce lisible à distance (16 à 64 caractères). Essayez l''autre technologie, ou une autre puce.'
+        length_uhf: 'Cette lecture n''a pas la longueur d''une puce lisible à distance (16 à 64 caractères, par groupes de 4). Essayez l''autre technologie, ou une autre puce.'
         simulated: 'Cette lecture n''est pas celle d''une puce simulée.'
         barcode: 'Cette lecture est le code-barres de « %label% », pas une puce : lisez la puce.'
         already_associated: 'La lecture marche. Cette puce est déjà posée sur une pièce : prenez-en une libre pour la suite.'
@@ -373,7 +374,6 @@ installation:
         note: 'Ne désigne aucun article'
     error:
         STEP_NOT_FOUND: 'Étape inconnue.'
-        EXERCISE_TEST_LIMIT: 'Vous avez déjà fait %limit% essais : effacez les pièces d''exercice avant de recommencer.'
 # Gamme de matériel des étiquettes à puce (lot L2-b) : trois niveaux par besoin, sans prix
 hardware:
     note: 'Le niveau bricoleur se vend sans matériel : vous achetez vous-même les pièces. Les trois niveaux donnent les mêmes pièces et les mêmes puces dans l''application.'
@@ -407,7 +407,7 @@ hardware:
             pro:
                 what: 'Une imprimante qui imprime l''étiquette et écrit la puce d''un même geste.'
                 allows: 'Une seule étiquette, code-barres et puce ensemble.'
-                limits: 'Matériel spécialisé ; l''écriture de la puce viendra dans un lot suivant.'
+                limits: 'Matériel spécialisé ; l''application ne propose pas encore l''écriture de la puce.'
             standard:
                 what: 'Une imprimante thermique ordinaire, à rouleau d''étiquettes de 50 × 30 mm.'
                 allows: 'Une étiquette par pièce, à la demande, sans encre.'

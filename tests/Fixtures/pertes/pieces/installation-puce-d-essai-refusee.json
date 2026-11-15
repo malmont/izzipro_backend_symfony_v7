@@ -34,7 +34,7 @@
                     "title": "Imprimer une étiquette d'essai",
                     "text": "Imprimez l'étiquette d'essai dans le format de votre imprimante : planche A4 ou rouleau. Vérifiez qu'elle sort droite et que les barres sont nettes.",
                     "image": "pertes/installation/test_label",
-                    "status": "current",
+                    "status": "done",
                     "verify": {
                         "kind": "data",
                         "label": "Vérifier"
@@ -64,10 +64,10 @@
                 }
             ],
             "progress": {
-                "done": 3,
+                "done": 4,
                 "total": 4
             },
-            "complete": false,
+            "complete": true,
             "exercise": false,
             "screen": "pertes.installation"
         }

@@ -303,6 +303,7 @@ pieces:
         TAG_RETIRED: Tag retired
         PIECE_RETIRED: Piece retired
         TEST_TAG_READ: Tag read during the test
+        TEST_LABEL_PRINTED: Test label produced
     error:
         VARIANT_NOT_FOUND: 'Variant not found.'
         PIECE_NOT_FOUND: 'Piece not found.'
@@ -343,7 +344,7 @@ installation:
             title: Choose your hardware
             text: 'Three levels for each need: reading a tag, printing the label, attaching the tag. Look at the range and take what suits your shop.'
             verify: See the range
-            hint: 'This step has nothing to check: it is done as soon as you print a test label or read a tag.'
+            hint: 'This step has nothing to check: it is done as soon as you print a test label, read a tag or attach a tag to a piece.'
         test_label:
             title: Print a test label
             text: 'Print the test label in your printer''s format: A4 sheet or roll. Check that it comes out straight and that the bars are sharp.'
@@ -363,7 +364,7 @@ installation:
         decimal: 'The reader seems to return a number made of digits only. Set it to return the identifier in hexadecimal (digits and letters A to F).'
         form: 'This read contains something other than digits and letters A to F: it is not a tag. Check that the cursor is in the tag field.'
         length_nfc: 'This read does not have the length of an NFC tag (8, 14, 16 or 20 characters). Try the other technology, or another tag.'
-        length_uhf: 'This read does not have the length of a long-range tag (16 to 64 characters). Try the other technology, or another tag.'
+        length_uhf: 'This read does not have the length of a long-range tag (16 to 64 characters, in groups of 4). Try the other technology, or another tag.'
         simulated: 'This read is not that of a simulated tag.'
         barcode: 'This read is the barcode of "%label%", not a tag: read the tag.'
         already_associated: 'Reading works. This tag is already attached to a piece: take a free one for the next step.'
@@ -374,7 +375,6 @@ installation:
         note: 'Does not designate any item'
     error:
         STEP_NOT_FOUND: 'Unknown step.'
-        EXERCISE_TEST_LIMIT: 'You have already run %limit% tests: delete the practice pieces before starting again.'
 # Hardware range for tag labels (lot L2-b): three levels per need, no prices
 hardware:
     note: 'The do-it-yourself level is sold without hardware: you buy the parts yourself. All three levels give the same pieces and the same tags in the app.'
@@ -408,7 +408,7 @@ hardware:
             pro:
                 what: 'A printer that prints the label and writes the tag in the same move.'
                 allows: 'A single label, barcode and tag together.'
-                limits: 'Specialised hardware; writing the tag will come in a later lot.'
+                limits: 'Specialised hardware; the app does not offer writing the tag yet.'
             standard:
                 what: 'An ordinary thermal printer, with a roll of 50 × 30 mm labels.'
                 allows: 'One label per piece, on demand, without ink.'

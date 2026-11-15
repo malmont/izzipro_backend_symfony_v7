@@ -12,15 +12,18 @@ use App\Services\BarcodeService\BarcodeLabelPrinter;
 use App\Services\BarcodeService\CatalogBarcode;
 use App\Services\BarcodeService\CatalogBarcodeService;
 use App\Services\TenantEntityManagerProvider;
-use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 
 /**
  * Assistant d'installation des étiquettes à puce (lot L2-b, 15/11/2026, `docs/prevention-pertes.md` § 13.10) : une suite d'étapes
- * dont l'avancement se CALCULE à partir des faits (`loss_piece_event`), jamais d'une case cochée ; rien n'est stocké pour lui.
+ * dont l'avancement se CALCULE à partir des données, jamais d'une case cochée ; rien n'est stocké pour lui.
  *
  * - Lire l'assistant, ou « Vérifier » une étape, n'écrit rien.
- * - Deux gestes écrivent un fait, parce que c'est lui qui prouve l'étape : l'étiquette d'essai (`TEST_LABEL_PRINTED`) et la lecture
- *   d'une puce d'essai (`TEST_TAG_READ`, avec la puce enregistrée « lue, pas encore posée »).
+ * - Une étape est faite si sa preuve existe, ou si une étape qui la suit est faite (un site qui pose déjà ses puces n'a pas à
+ *   refaire les essais). Preuves : l'étiquette d'essai demandée (fait `TEST_LABEL_PRINTED`), une puce d'essai lue (fait
+ *   `TEST_TAG_READ`), une pièce qui porte une puce (lue dans `loss_tag` : une puce retirée ne prouve plus rien).
+ * - Les deux gestes d'essai n'écrivent leur fait qu'UNE fois (la première preuve suffit) : ni un double appui ni des essais
+ *   répétés ne remplissent une table où rien ne s'efface. La lecture d'essai n'enregistre PAS la puce : elle ne le sera qu'en étant
+ *   posée sur une pièce, avec la technologie donnée ce jour-là (une lecture d'essai ne fige rien).
  * - `$exercise` : le même assistant sur des puces simulées, ouvert sans le droit du module ; ses faits s'effacent avec les pièces
  *   d'exercice et n'avancent jamais l'installation réelle.
  * Les étapes du boîtier (L3) et des antennes (L4) s'ajouteront à `STEPS`.
@@ -28,17 +31,15 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 class LossInstallationService
 {
     public const SCREEN = 'pertes.installation';
-    /** Étapes, dans l'ordre : code => le fait qui prouve l'étape (null : étape d'information, faite dès qu'une étape suivante l'est) */
+    /** Étapes, dans l'ordre : code => le fait qui prouve l'étape (null : pas de fait ; voir `proofs()`) */
     public const STEPS = [
-        'hardware' => null,
+        'hardware' => null, // étape d'information : faite dès qu'une étape suivante l'est
         'test_label' => LossPieceEvent::TEST_LABEL_PRINTED,
         'test_tag' => LossPieceEvent::TEST_TAG_READ,
-        'first_piece' => LossPieceEvent::TAG_ASSOCIATED,
+        'first_piece' => null, // prouvée par l'état : une pièce porte une puce
     ];
-    /** Faits d'essai gardés au plus en exercice (routes ouvertes sans le droit du module) */
-    public const EXERCISE_TEST_LIMIT = 60;
-    /** Code imprimé sur l'étiquette d'essai : il ne désigne aucun article */
-    public const TEST_BARCODE = 'ESSAI-ETIQUETTE';
+    /** Code imprimé sur l'étiquette d'essai : sous le préfixe réservé aux documents de la caisse, il ne peut désigner aucun article */
+    public const TEST_BARCODE = 'IZ-ESSAI-ETIQUETTE';
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -56,17 +57,11 @@ class LossInstallationService
      */
     public function steps(string $locale, bool $exercise): array
     {
-        $counts = $this->repository()->eventCounts(array_values(array_filter(self::STEPS)), $exercise);
-        $done = [];
-        foreach (self::STEPS as $code => $event) {
-            $done[$code] = $event !== null && $counts[$event] > 0;
-        }
-        // une étape d'information est faite dès qu'une étape qui la suit l'est
+        $done = $this->proofs($exercise);
+        // une étape est faite aussi quand une étape qui la suit l'est
         $codes = array_keys(self::STEPS);
-        foreach ($codes as $i => $code) {
-            if (self::STEPS[$code] === null) {
-                $done[$code] = in_array(true, array_map(static fn (string $next): bool => $done[$next], array_slice($codes, $i + 1)), true);
-            }
+        for ($i = count($codes) - 2; $i >= 0; --$i) {
+            $done[$codes[$i]] = $done[$codes[$i]] || $done[$codes[$i + 1]];
         }
         $steps = [];
         $current = null;
@@ -82,7 +77,7 @@ class LossInstallationService
                 'image' => 'pertes/installation/' . $code, // clé d'illustration : un dessin tant que le matériel n'est pas choisi
                 'status' => $status,
                 // « Vérifier » relit les données ; `none` : étape d'information, rien à vérifier
-                'verify' => ['kind' => self::STEPS[$code] === null ? 'none' : 'data', 'label' => $this->texts->t("installation.steps.$code.verify", $locale)],
+                'verify' => ['kind' => $code === 'hardware' ? 'none' : 'data', 'label' => $this->texts->t("installation.steps.$code.verify", $locale)],
             ];
         }
 
@@ -107,8 +102,9 @@ class LossInstallationService
     }
 
     /**
-     * Lire une puce d'essai : la lecture a-t-elle la forme d'une puce ? Si oui, la puce est enregistrée « lue, pas encore posée »
-     * (une puce déjà connue reste telle qu'elle est) et un fait `TEST_TAG_READ` est écrit ; sinon rien n'est écrit et on dit quoi essayer.
+     * Lire une puce d'essai : la lecture a-t-elle la forme d'une puce ? Si oui, l'étape est prouvée (un fait `TEST_TAG_READ`, écrit
+     * la première fois seulement) ; la puce n'est pas enregistrée. Sinon rien n'est écrit et on dit quoi essayer. Une lecture qui
+     * marche sur une puce déjà posée ou retirée le dit : il en faudra une libre pour la suite.
      *
      * @param array<string, mixed> $body { identifier, technology (uhf | nfc) } ; exercice : `identifier` facultatif, puce simulée
      *
@@ -134,6 +130,15 @@ class LossInstallationService
         $failed = fn (string $refusal, string $hint, array $params = []): array => ['ok' => false, 'identifier' => null, 'technology' => $technology, 'refusal' => $refusal,
             'hint' => $this->texts->t("installation.hint.$hint", $locale, $params), 'tag' => null, 'installation' => $this->steps($locale, $exercise)];
         $identifier = LossTagIdentifier::canonical($raw, $technology);
+        if (!$exercise) {
+            // Le code-barres d'un article lu à la place de la puce (lecteur en clavier dans le mauvais champ) : on le dit, que la
+            // lecture ait ou non la forme d'une puce. Comparée telle qu'un code-barres l'écrirait, et sous sa forme nettoyée
+            $asBarcode = CatalogBarcode::normalize($raw);
+            $holder = ($asBarcode !== null ? $this->barcodes->holder($asBarcode) : null) ?? ($identifier !== null ? $this->barcodes->holder($identifier) : null);
+            if ($holder !== null) {
+                return $failed('TAG_IS_BARCODE', 'barcode', ['label' => $holder['label']]);
+            }
+        }
         if ($identifier === null) {
             // quoi essayer, d'après ce que le lecteur a rendu
             $clean = (string) preg_replace('/[\s:.\-]+/', '', $raw);
@@ -141,67 +146,26 @@ class LossInstallationService
 
             return $failed('TAG_INVALID', $hint);
         }
-        if (!$exercise) {
-            $asBarcode = CatalogBarcode::normalize($raw);
-            $holder = ($asBarcode !== null ? $this->barcodes->holder($asBarcode) : null) ?? $this->barcodes->holder($identifier);
-            if ($holder !== null) {
-                return $failed('TAG_IS_BARCODE', 'barcode', ['label' => $holder['label']]);
-            }
-        }
-        $repository = $this->repository();
-        $conn = $this->emProvider->getEntityManager()->getConnection();
-        $now = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s');
-        $write = function () use ($repository, $conn, $identifier, $raw, $technology, $exercise, $userId, $now, $locale): array {
-            $conn->beginTransaction();
-            try {
-                if ($exercise) {
-                    $conn->executeStatement('SELECT pg_advisory_xact_lock(' . LossPieceRepository::EXERCISE_LOCK . ')');
-                    if ($repository->eventCounts([LossPieceEvent::TEST_TAG_READ], true)[LossPieceEvent::TEST_TAG_READ] >= self::EXERCISE_TEST_LIMIT) {
-                        throw new GestionConflictException('EXERCISE_LIMIT_REACHED', $this->texts->t('installation.error.EXERCISE_TEST_LIMIT', $locale, ['limit' => self::EXERCISE_TEST_LIMIT]), 409, ['limit' => self::EXERCISE_TEST_LIMIT]);
-                    }
-                }
-                $tag = $repository->tagByIdentifier($identifier, true);
-                if ($tag !== null && (bool) $tag['exercise'] !== $exercise) {
-                    throw new \LogicException('Puce d\'un autre genre que la lecture'); // impossible : les deux formes ne se recouvrent pas
-                }
-                if ($tag === null) {
-                    if ($exercise && $repository->exerciseTagCount() >= LossPieceService::EXERCISE_TAG_LIMIT) {
-                        throw new GestionConflictException('EXERCISE_LIMIT_REACHED', $this->texts->t('pieces.error.EXERCISE_TAG_LIMIT_REACHED', $locale, ['limit' => LossPieceService::EXERCISE_TAG_LIMIT]), 409, ['limit' => LossPieceService::EXERCISE_TAG_LIMIT]);
-                    }
-                    $tagId = $repository->insertKnownTag($identifier, mb_substr(trim((string) $raw), 0, LossTagIdentifier::RAW_MAX), $technology, $exercise, $userId, $now);
-                } else {
-                    $tagId = (int) $tag['id'];
-                }
-                $repository->event(LossPieceEvent::TEST_TAG_READ, $userId, null, $tagId, $exercise, ['technology' => $technology], $now);
-                $conn->commit();
-
-                return (array) $repository->tagById($tagId);
-            } catch (\Throwable $e) {
-                if ($conn->isTransactionActive()) {
-                    $conn->rollBack();
-                }
-                throw $e;
-            }
-        };
-        try {
-            $tag = $write();
-        } catch (UniqueConstraintViolationException) {
-            $tag = $write(); // la même puce lue au même instant ailleurs : elle est connue maintenant
+        $this->prove(LossPieceEvent::TEST_TAG_READ, $userId, $exercise, ['technology' => $technology, 'identifier' => $identifier]);
+        $tag = $this->repository()->tagByIdentifier($identifier);
+        if ($tag !== null && (bool) $tag['exercise'] !== $exercise) {
+            $tag = null; // impossible : les deux formes ne se recouvrent pas
         }
         // La lecture marche. Si la puce est déjà posée ou retirée, on le dit : il en faudra une libre pour la suite
-        $hint = match ($tag['status']) {
+        $hint = match ($tag['status'] ?? null) {
             LossTag::ASSOCIATED => $this->texts->t('installation.hint.already_associated', $locale),
             LossTag::RETIRED => $this->texts->t('installation.hint.retired', $locale),
             default => null,
         };
 
-        return ['ok' => true, 'identifier' => $identifier, 'technology' => $technology, 'refusal' => null, 'hint' => $hint, 'tag' => $this->pieces->tagView($tag, $locale),
-            'installation' => $this->steps($locale, $exercise)];
+        return ['ok' => true, 'identifier' => $identifier, 'technology' => $technology, 'refusal' => null, 'hint' => $hint,
+            'tag' => $tag !== null ? $this->pieces->tagView($tag, $locale) : null, 'installation' => $this->steps($locale, $exercise)];
     }
 
     /**
-     * L'étiquette d'essai : une étiquette au format demandé, avec un code qui ne désigne aucun article. Le fait `TEST_LABEL_PRINTED`
-     * prouve l'étape (le serveur ne voit pas l'imprimante : il sait seulement que l'étiquette a été demandée).
+     * L'étiquette d'essai : une étiquette au format demandé, avec un code qui ne peut désigner aucun article. Le fait
+     * `TEST_LABEL_PRINTED`, écrit la première fois seulement et APRÈS le rendu, prouve l'étape (le serveur ne voit pas
+     * l'imprimante : il sait seulement que l'étiquette a été produite).
      *
      * @param array<string, mixed> $body { format?: a4-50x30 | roll-50x30 }
      *
@@ -213,17 +177,55 @@ class LossInstallationService
         if (!is_string($format) || !isset(BarcodeLabelPrinter::FORMATS[$format])) {
             throw new GestionValidationException(['format' => 'INVALID_VALUE']);
         }
+        $content = $this->printer->pdf([$this->testLabelRow($locale)], $this->texts->t('installation.test_label.title', $locale), $format);
+        $this->prove(LossPieceEvent::TEST_LABEL_PRINTED, $userId, $exercise, ['format' => $format]);
+
+        return ['content' => $content, 'format' => $format];
+    }
+
+    /** @return array{title: string, subtitle: string, barcode: string, price: null, copies: int, note: string} ce que porte l'étiquette d'essai */
+    public function testLabelRow(string $locale): array
+    {
+        return ['title' => $this->texts->t('installation.test_label.title', $locale), 'subtitle' => $this->texts->t('installation.test_label.subtitle', $locale),
+            'barcode' => self::TEST_BARCODE, 'price' => null, 'copies' => 1, 'note' => $this->texts->t('installation.test_label.note', $locale)];
+    }
+
+    /**
+     * Ce que les données prouvent, étape par étape (sans la règle « une étape suivante faite »).
+     *
+     * @return array<string, bool>
+     */
+    private function proofs(bool $exercise): array
+    {
+        $repository = $this->repository();
+        $counts = $repository->eventCounts(array_values(array_filter(self::STEPS)), $exercise);
+        $done = [];
+        foreach (self::STEPS as $code => $event) {
+            $done[$code] = $event !== null && $counts[$event] > 0;
+        }
+        $done['first_piece'] = $repository->associatedTagExists($exercise);
+
+        return $done;
+    }
+
+    /**
+     * Écrit le fait qui prouve une étape, s'il n'existe pas déjà : une preuve suffit. En exercice, sous le verrou des exercices (un
+     * effacement en cours ne laisse rien derrière lui).
+     *
+     * @param array<string, mixed> $data
+     */
+    private function prove(string $event, int $userId, bool $exercise, array $data): void
+    {
         $repository = $this->repository();
         $conn = $this->emProvider->getEntityManager()->getConnection();
         $conn->beginTransaction();
         try {
             if ($exercise) {
                 $conn->executeStatement('SELECT pg_advisory_xact_lock(' . LossPieceRepository::EXERCISE_LOCK . ')');
-                if ($repository->eventCounts([LossPieceEvent::TEST_LABEL_PRINTED], true)[LossPieceEvent::TEST_LABEL_PRINTED] >= self::EXERCISE_TEST_LIMIT) {
-                    throw new GestionConflictException('EXERCISE_LIMIT_REACHED', $this->texts->t('installation.error.EXERCISE_TEST_LIMIT', $locale, ['limit' => self::EXERCISE_TEST_LIMIT]), 409, ['limit' => self::EXERCISE_TEST_LIMIT]);
-                }
             }
-            $repository->event(LossPieceEvent::TEST_LABEL_PRINTED, $userId, null, null, $exercise, ['format' => $format], (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s'));
+            if ($repository->eventCounts([$event], $exercise)[$event] === 0) {
+                $repository->event($event, $userId, null, null, $exercise, $data, (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s'));
+            }
             $conn->commit();
         } catch (\Throwable $e) {
             if ($conn->isTransactionActive()) {
@@ -231,10 +233,6 @@ class LossInstallationService
             }
             throw $e;
         }
-        $label = ['title' => $this->texts->t('installation.test_label.title', $locale), 'subtitle' => $this->texts->t('installation.test_label.subtitle', $locale),
-            'barcode' => self::TEST_BARCODE, 'price' => null, 'copies' => 1, 'note' => $this->texts->t('installation.test_label.note', $locale)];
-
-        return ['content' => $this->printer->pdf([$label], $this->texts->t('installation.test_label.title', $locale), $format), 'format' => $format];
     }
 
     private function repository(): LossPieceRepository

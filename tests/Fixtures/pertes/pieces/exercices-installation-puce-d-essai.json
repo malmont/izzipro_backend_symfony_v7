@@ -8,24 +8,11 @@
     "headers": {},
     "body": {
         "ok": true,
-        "identifier": "SIM-BFF65680C45A",
+        "identifier": "SIM-630008A9991B",
         "technology": "simulated",
         "refusal": null,
         "hint": null,
-        "tag": {
-            "id": 8,
-            "identifier": "SIM-BFF65680C45A",
-            "technology": "simulated",
-            "technologyLabel": "Puce simulée",
-            "status": "known",
-            "statusLabel": "Lue, pas encore posée",
-            "pieceId": null,
-            "exercise": true,
-            "associatedAt": null,
-            "retiredAt": null,
-            "retiredReason": null,
-            "retiredReasonLabel": null
-        },
+        "tag": null,
         "installation": {
             "steps": [
                 {
@@ -44,7 +31,7 @@
                     "title": "Imprimer une étiquette d'essai",
                     "text": "Imprimez l'étiquette d'essai dans le format de votre imprimante : planche A4 ou rouleau. Vérifiez qu'elle sort droite et que les barres sont nettes.",
                     "image": "pertes/installation/test_label",
-                    "status": "current",
+                    "status": "done",
                     "verify": {
                         "kind": "data",
                         "label": "Vérifier"
@@ -74,10 +61,10 @@
                 }
             ],
             "progress": {
-                "done": 3,
+                "done": 4,
                 "total": 4
             },
-            "complete": false,
+            "complete": true,
             "exercise": true,
             "screen": "pertes.installation"
         }

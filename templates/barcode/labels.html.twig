@@ -23,6 +23,10 @@
       .label { display: block; width: 48mm; height: 27.5mm; margin: 0; padding: 1mm; border: none; page-break-before: always; }
       #first-label { page-break-before: auto; }
       .label img { width: 112pt; height: 26pt; }
+      {# une ligne par texte, coupée si elle déborde : un code très long ne pousse pas l'étiquette sur une seconde page #}
+      .label .code { height: 8pt; overflow: hidden; white-space: nowrap; }
+      .label .price { height: 9.5pt; overflow: hidden; white-space: nowrap; }
+      .label .note { height: 7.5pt; overflow: hidden; white-space: nowrap; }
       {% endif %}
     </style>
   </head>

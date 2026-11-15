@@ -47,7 +47,7 @@
                         "technology": null,
                         "what": "Une imprimante qui imprime l'étiquette et écrit la puce d'un même geste.",
                         "allows": "Une seule étiquette, code-barres et puce ensemble.",
-                        "limits": "Matériel spécialisé ; l'écriture de la puce viendra dans un lot suivant."
+                        "limits": "Matériel spécialisé ; l'application ne propose pas encore l'écriture de la puce."
                     },
                     {
                         "level": "standard",

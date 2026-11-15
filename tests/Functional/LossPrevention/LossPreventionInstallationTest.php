@@ -69,6 +69,7 @@ class LossPreventionInstallationTest extends LossPreventionTestCase
         $this->admin('POST', self::PIECES . '/etiquettes/pdf', ['pieceIds' => [$a, $b, $c], 'format' => 'roll-50x30']);
         $this->assertSame([200, 'application/pdf', '3', 'roll-50x30'], $headers());
         $this->assertSame(3, $pages(), 'en rouleau : une page de 50 × 30 mm par étiquette, pas une de plus');
+        $this->assertMatchesRegularExpression('#/MediaBox\s*\[0\.0+ 0\.0+ 141\.7\d* 85\.0\d*\]#', (string) $this->client->getResponse()->getContent(), 'la page a la taille de l\'étiquette (50 × 30 mm en points), pas celle d\'une feuille A4');
         // Ce qui part à l'impression : le code-barres de la variante, le numéro de la pièce, le prix seulement si on le demande
         $labels = $this->labels()->selection(['pieceIds' => [$b, $a], 'showPrice' => true], 'fr', false);
         $this->assertSame('a4-50x30', $labels['format']);
@@ -78,6 +79,24 @@ class LossPreventionInstallationTest extends LossPreventionTestCase
         $this->assertMatchesRegularExpression('/^55,00/', (string) $labels['labels'][0]['price'], 'le prix propre de la variante');
         $english = $this->labels()->selection(['pieceIds' => [$a], 'format' => 'roll-50x30'], 'en', false);
         $this->assertSame(['roll-50x30', null, 'Piece no. ' . $pieces[$a]['number']], [$english['format'], $english['labels'][0]['price'], $english['labels'][0]['note']]);
+        // Le prix : celui de la variante, sinon celui de l'article ; un prix à zéro vaut « pas de prix »
+        $this->db->executeStatement('UPDATE product_variant SET price = NULL WHERE id = ?', [$v1]);
+        $this->assertMatchesRegularExpression('/^42,00/', (string) $this->labels()->selection(['pieceIds' => [$a], 'showPrice' => true, 'format' => 'roll-50x30'], 'fr', false)['labels'][0]['price'], 'le prix de l\'article');
+        $this->db->executeStatement('UPDATE product SET price = 0 WHERE id = (SELECT product_id FROM product_variant WHERE id = ?)', [$v1]);
+        $this->assertNull($this->labels()->selection(['pieceIds' => [$a], 'showPrice' => true], 'fr', false)['labels'][0]['price']);
+        $this->db->executeStatement('UPDATE product_variant SET price = 5500 WHERE id = ?', [$v1]);
+        // Le numéro de la pièce est bien imprimé, et la première étiquette seule ne commence pas par un saut de page
+        $printer = static::getContainer()->get(\App\Services\BarcodeService\BarcodeLabelPrinter::class);
+        $html = $printer->html($labels['labels'], 'x', 'roll-50x30');
+        $this->assertSame([2, 1, 1, 1], [substr_count($html, 'class="label"'), substr_count($html, 'id="first-label"'), substr_count($html, 'Pièce n° ' . $pieces[$a]['number'] . '<'), substr_count($html, 'Pièce n° ' . $pieces[$b]['number'] . '<')]);
+        $this->assertSame([200, 500], [$printer::maxLabels('roll-50x30'), $printer::maxLabels()]);
+        try {
+            $printer->html([['title' => 'x', 'subtitle' => null, 'barcode' => 'X1', 'price' => null, 'copies' => 201]], 'x', 'roll-50x30');
+            $this->fail('plus de 200 étiquettes en rouleau');
+        } catch (\LengthException) {
+            $this->addToAssertionCount(1);
+        }
+        $this->assertStringContainsString('class="label"', $printer->html([['title' => 'x', 'subtitle' => null, 'barcode' => 'X1', 'price' => null, 'copies' => 201]], 'x'), 'la planche A4 garde son plafond de 500');
 
         // Refus : rien n'est imprimé
         $fields = fn (array $body): array => $this->json($this->admin('POST', self::PIECES . '/etiquettes/pdf', $body), 422)['fields'];
@@ -87,13 +106,22 @@ class LossPreventionInstallationTest extends LossPreventionTestCase
         $this->assertSame(['pieceIds' => 'MUST_BE_DISTINCT_POSITIVE'], $fields(['pieceIds' => [$a, '12']]));
         $this->assertSame(['pieceIds' => 'MUST_BE_DISTINCT_POSITIVE'], $fields(['pieceIds' => [3000000000]]));
         $this->assertSame(['pieceIds' => 'REQUIRED'], $fields(['pieceIds' => ['a' => $a]]));
+        $this->assertSame(['pieceIds' => 'MUST_BE_DISTINCT_POSITIVE'], $fields(['pieceIds' => [0]]));
+        $this->assertSame(['pieceIds' => 'MUST_BE_DISTINCT_POSITIVE'], $fields(['pieceIds' => [-1]]));
+        $this->assertSame(['format' => 'INVALID_VALUE'], $fields(['pieceIds' => [$a], 'format' => ['a4-50x30']]));
         $refusal = fn (array $body, int $status, string $path = self::PIECES): array => $this->json($this->admin('POST', $path . '/etiquettes/pdf', $body), $status);
         $tooMany = $refusal(['pieceIds' => range(1, 201), 'format' => 'roll-50x30'], 422);
         $this->assertSame(['LABELS_LIMIT_EXCEEDED', 200, 201, 'Au plus 200 étiquettes par impression dans ce format.'], [$tooMany['error'], $tooMany['max'], $tooMany['requested'], $tooMany['message']]);
         $this->assertSame(['LABELS_LIMIT_EXCEEDED', 500], [$refusal(['pieceIds' => range(1, 501)], 422)['error'], $refusal(['pieceIds' => range(1, 501)], 422)['max']]);
+        // … exactement au plafond, la demande passe le plafond (ces pièces n'existent pas : c'est ce que dit le refus)
+        $this->assertSame('PIECES_NOT_FOUND', $refusal(['pieceIds' => range(2000000001, 2000000200), 'format' => 'roll-50x30'], 422)['error']);
+        $this->assertSame('PIECES_NOT_FOUND', $refusal(['pieceIds' => range(2000000001, 2000000500)], 422)['error']);
         $this->assertSame(['PIECES_NOT_FOUND', [2000000000]], [$refusal(['pieceIds' => [$a, 2000000000]], 422)['error'], $refusal(['pieceIds' => [$a, 2000000000]], 422)['pieceIds']]);
         $missing = $refusal(['pieceIds' => [$a, $bare['id']]], 409);
         $this->assertSame(['BARCODE_MISSING', [$bare['id']], [$v2]], [$missing['error'], $missing['pieceIds'], $missing['variantIds']]);
+        // Une pièce dont la variante n'est plus au catalogue n'a plus de code à imprimer
+        $this->db->executeStatement('DELETE FROM product_variant WHERE id = ?', [$v2]);
+        $this->assertSame(['BARCODE_MISSING', [$bare['id']]], [$refusal(['pieceIds' => [$bare['id']]], 409)['error'], $refusal(['pieceIds' => [$bare['id']]], 409)['pieceIds']]);
         $this->json($this->admin('POST', self::PIECES . "/$c/retirer", ['reason' => 'damaged', 'confirm' => true]));
         $before = $rows();
         $gone = $refusal(['pieceIds' => [$a, $c]], 409);
@@ -123,15 +151,16 @@ class LossPreventionInstallationTest extends LossPreventionTestCase
         $rows = fn (): array => array_map('intval', $this->db->fetchNumeric('SELECT (SELECT COUNT(*) FROM loss_piece), (SELECT COUNT(*) FROM loss_tag), (SELECT COUNT(*) FROM loss_piece_event), (SELECT COUNT(*) FROM loss_journal)'));
         $statuses = fn (array $installation): array => array_column($installation['steps'], 'status', 'code');
         $events = fn (string $type, bool $exercise): int => (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_piece_event WHERE type = ? AND exercise = CAST(? AS boolean)', [$type, $exercise ? 'true' : 'false']);
+        $exercise = fn (): array => $this->json($this->admin('GET', self::EX . '/installation'));
 
         // ----- En exercice, depuis zéro (rien d'exercice ne reste d'un test à l'autre)
         $before = $rows();
-        $start = $this->json($this->admin('GET', self::EX . '/installation'));
+        $start = $exercise();
         $this->assertSame(['hardware' => 'current', 'test_label' => 'todo', 'test_tag' => 'todo', 'first_piece' => 'todo'], $statuses($start));
         $this->assertSame([['done' => 0, 'total' => 4], false, true, 'pertes.installation'], [$start['progress'], $start['complete'], $start['exercise'], $start['screen']]);
         $this->assertSame(['code' => 'hardware', 'title' => 'Choisir son matériel', 'image' => 'pertes/installation/hardware', 'status' => 'current', 'verify' => ['kind' => 'none', 'label' => 'Voir la gamme']],
             array_diff_key($start['steps'][0], ['text' => 0]));
-        $this->assertSame(['kind' => 'data', 'label' => 'Vérifier'], $start['steps'][2]['verify']);
+        $this->assertSame([['kind' => 'data', 'label' => 'Vérifier'], ['kind' => 'data', 'label' => 'Vérifier']], [$start['steps'][2]['verify'], $start['steps'][3]['verify']]);
         $this->assertSame('Read a test tag', $this->json($this->admin('GET', self::EX . '/installation?locale=en'))['steps'][2]['title']);
         // « Vérifier » relit les données : pas faite, avec quoi essayer ; étape inconnue ; rien n'est écrit par ces lectures
         $verify = $this->json($this->admin('POST', self::EX . '/installation/etapes/test_tag/verifier', []));
@@ -140,44 +169,66 @@ class LossPreventionInstallationTest extends LossPreventionTestCase
         $this->assertSame('STEP_NOT_FOUND', $this->json($this->admin('POST', self::EX . '/installation/etapes/antenne/verifier', []), 404)['error']);
         $this->assertSame($before, $rows(), 'lire l\'assistant et vérifier n\'écrivent rien');
 
-        // 1. L'étiquette d'essai : l'étape est faite, et l'étape d'information qui la précède aussi
+        // 1. L'étiquette d'essai : l'étape est faite, et l'étape d'information qui la précède aussi ; la preuve s'écrit UNE fois
         $this->admin('POST', self::EX . '/installation/etiquette-test', ['format' => 'roll-50x30']);
-        $this->assertSame([200, 'application/pdf', 'roll-50x30', 1], [$this->client->getResponse()->getStatusCode(), $this->client->getResponse()->headers->get('Content-Type'),
-            $this->client->getResponse()->headers->get('X-Labels-Format'), preg_match_all('#/Type\s*/Page\b#', (string) $this->client->getResponse()->getContent())]);
+        $this->assertSame([200, 'application/pdf', 'roll-50x30', '1', 1], [$this->client->getResponse()->getStatusCode(), $this->client->getResponse()->headers->get('Content-Type'),
+            $this->client->getResponse()->headers->get('X-Labels-Format'), $this->client->getResponse()->headers->get('X-Labels-Count'), preg_match_all('#/Type\s*/Page\b#', (string) $this->client->getResponse()->getContent())]);
         $this->assertSame(['format' => 'roll-50x30'], json_decode((string) $this->db->fetchOne("SELECT data FROM loss_piece_event WHERE type = 'TEST_LABEL_PRINTED' AND exercise ORDER BY id DESC LIMIT 1"), true));
+        $this->admin('POST', self::EX . '/installation/etiquette-test', []);
+        $this->assertSame([200, 'a4-50x30', 1], [$this->client->getResponse()->getStatusCode(), $this->client->getResponse()->headers->get('X-Labels-Format'), $events('TEST_LABEL_PRINTED', true)], 'une seconde étiquette d\'essai n\'ajoute pas de fait');
         $this->assertSame(['format' => 'INVALID_VALUE'], $this->json($this->admin('POST', self::EX . '/installation/etiquette-test', ['format' => 'a5']), 422)['fields']);
-        $this->assertSame(['hardware' => 'done', 'test_label' => 'done', 'test_tag' => 'current', 'first_piece' => 'todo'], $statuses($this->json($this->admin('GET', self::EX . '/installation'))));
-        // 2. La lecture d'essai simulée : la puce est connue, pas encore posée
+        $this->assertSame(['format' => 'INVALID_VALUE'], $this->json($this->admin('POST', self::EX . '/installation/etiquette-test', ['format' => ['a4-50x30']]), 422)['fields']);
+        $this->assertSame(['hardware' => 'done', 'test_label' => 'done', 'test_tag' => 'current', 'first_piece' => 'todo'], $statuses($exercise()));
+        // Ce que porte l'étiquette d'essai : un code qui ne peut désigner aucun article (préfixe réservé aux documents de la caisse)
+        $this->tenant();
+        $row = static::getContainer()->get(LossInstallationService::class)->testLabelRow('fr');
+        $this->assertSame(['Étiquette d\'essai', 'IZ-ESSAI-ETIQUETTE', null, 1, 'Ne désigne aucun article'], [$row['title'], $row['barcode'], $row['price'], $row['copies'], $row['note']]);
+        $this->assertSame(\App\Services\BarcodeService\CatalogBarcode::RESERVED, \App\Services\BarcodeService\CatalogBarcode::refusal($row['barcode']), 'le catalogue refuse ce code : aucun article ne le portera');
+        // 2. La lecture d'essai simulée : l'étape est prouvée, la puce n'est PAS enregistrée (elle le sera en étant posée)
         $read = $this->json($this->admin('POST', self::EX . '/installation/puce-test', []));
         $this->assertMatchesRegularExpression('/\ASIM-[0-9A-F]{12}\z/', $read['identifier']);
-        $this->assertSame([true, 'simulated', null, null, 'known', 'Lue, pas encore posée', null, true], [$read['ok'], $read['technology'], $read['refusal'], $read['hint'], $read['tag']['status'], $read['tag']['statusLabel'],
-            $read['tag']['pieceId'], $read['tag']['exercise']]);
+        $this->assertSame([true, 'simulated', null, null, null], [$read['ok'], $read['technology'], $read['refusal'], $read['hint'], $read['tag']]);
         $this->assertSame(['hardware' => 'done', 'test_label' => 'done', 'test_tag' => 'done', 'first_piece' => 'current'], $statuses($read['installation']), 'la réponse rend l\'assistant à jour');
-        $this->assertSame(['ok' => false, 'refusal' => 'TAG_INVALID'], array_intersect_key($this->json($this->admin('POST', self::EX . '/installation/puce-test', ['identifier' => '04A1B2C3'])), ['ok' => 0, 'refusal' => 0]), 'une vraie lecture n\'est pas une puce simulée');
-        // 3. La première pièce : la puce lue à l'essai se pose (elle était connue), l'installation est complète
+        $this->assertSame([0, ['technology' => 'simulated', 'identifier' => $read['identifier']]], [(int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_tag WHERE identifier = ?', [$read['identifier']]),
+            json_decode((string) $this->db->fetchOne("SELECT data FROM loss_piece_event WHERE type = 'TEST_TAG_READ' AND exercise"), true)]);
+        $this->json($this->admin('POST', self::EX . '/installation/puce-test', []));
+        $this->assertSame([1, 0], [$events('TEST_TAG_READ', true), (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_tag WHERE exercise')], 'relire n\'ajoute ni fait ni puce : une preuve suffit');
+        $notSimulated = $this->json($this->admin('POST', self::EX . '/installation/puce-test', ['identifier' => '04A1B2C3']));
+        $this->assertSame([false, 'TAG_INVALID', 'Cette lecture n\'est pas celle d\'une puce simulée.'], [$notSimulated['ok'], $notSimulated['refusal'], $notSimulated['hint']], 'une vraie lecture n\'est pas une puce simulée');
+        $this->assertSame(['identifier' => 'MUST_BE_STRING'], $this->json($this->admin('POST', self::EX . '/installation/puce-test', ['identifier' => '   ']), 422)['fields']);
+        // 3. La première pièce : la puce lue à l'essai se pose comme une autre ; l'installation est complète
         $posed = $this->json($this->admin('POST', self::EX . '/puces/associer', ['variantId' => $v1, 'identifier' => $read['identifier']]));
-        $this->assertSame([true, $read['tag']['id'], 'associated'], [$posed['created'], $posed['tag']['id'], $posed['tag']['status']]);
-        $done = $this->json($this->admin('GET', self::EX . '/installation'));
+        $this->assertSame([true, true, 'associated'], [$posed['created'], $posed['associated'], $posed['tag']['status']]);
+        $done = $exercise();
         $this->assertSame([['hardware' => 'done', 'test_label' => 'done', 'test_tag' => 'done', 'first_piece' => 'done'], ['done' => 4, 'total' => 4], true], [$statuses($done), $done['progress'], $done['complete']]);
         $this->assertSame(['code' => 'first_piece', 'verified' => true, 'hint' => null], $this->json($this->admin('POST', self::EX . '/installation/etapes/first_piece/verifier', [])));
         $again = $this->json($this->admin('POST', self::EX . '/installation/puce-test', ['identifier' => strtolower($read['identifier'])]));
-        $this->assertSame([true, 'associated'], [$again['ok'], $again['tag']['status']]);
+        $this->assertSame([true, 'associated', $posed['tag']['id']], [$again['ok'], $again['tag']['status'], $again['tag']['id']]);
         $this->assertStringContainsString('déjà posée', (string) $again['hint']);
-        $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_tag WHERE identifier = ?', [$read['identifier']]), 'relire une puce connue ne crée pas une seconde ligne');
-        // Plafonds des essais d'exercice (routes ouvertes sans le droit du module)
-        $this->db->executeStatement("INSERT INTO loss_piece_event (type, occurred_at, source, exercise, data) SELECT 'TEST_TAG_READ', NOW(), 'exercise', true, '{}' FROM generate_series(1, CAST(? AS integer))",
-            [LossInstallationService::EXERCISE_TEST_LIMIT - $events('TEST_TAG_READ', true)]);
-        $capped = $this->json($this->admin('POST', self::EX . '/installation/puce-test', []), 409);
-        $this->assertSame(['EXERCISE_LIMIT_REACHED', 60], [$capped['error'], $capped['limit']]);
-        $this->db->executeStatement("INSERT INTO loss_piece_event (type, occurred_at, source, exercise, data) SELECT 'TEST_LABEL_PRINTED', NOW(), 'exercise', true, '{}' FROM generate_series(1, CAST(? AS integer))",
-            [LossInstallationService::EXERCISE_TEST_LIMIT - $events('TEST_LABEL_PRINTED', true)]);
-        $this->assertSame('EXERCISE_LIMIT_REACHED', $this->json($this->admin('POST', self::EX . '/installation/etiquette-test', []), 409)['error']);
+        // Une puce retirée ne prouve plus la première pièce (les essais, eux, restent faits) ; la relire dit d'en prendre une libre
+        $this->json($this->admin('POST', self::EX . '/puces/' . $posed['tag']['id'] . '/retirer', ['reason' => 'error', 'confirm' => true]));
+        $this->assertSame(['hardware' => 'done', 'test_label' => 'done', 'test_tag' => 'done', 'first_piece' => 'current'], $statuses($exercise()));
+        $this->assertStringContainsString('Aucune pièce ne porte encore de puce', (string) $this->json($this->admin('POST', self::EX . '/installation/etapes/first_piece/verifier', []))['hint']);
+        $retired = $this->json($this->admin('POST', self::EX . '/installation/puce-test', ['identifier' => $read['identifier']]));
+        $this->assertSame([true, 'retired'], [$retired['ok'], $retired['tag']['status']]);
+        $this->assertStringContainsString('a été retirée', (string) $retired['hint']);
+        // Un site qui pose déjà ses puces n'a pas à refaire les essais : une étape suivante faite fait les précédentes
+        $this->json($this->admin('DELETE', self::EX . '/pieces'));
+        $this->assertSame([['hardware' => 'current', 'test_label' => 'todo', 'test_tag' => 'todo', 'first_piece' => 'todo'], 0], [$statuses($exercise()), (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_piece_event WHERE exercise')],
+            'l\'effacement emporte aussi les essais de l\'assistant');
+        $this->json($this->admin('POST', self::EX . '/puces/associer', ['variantId' => $v1]));
+        $equipped = $exercise();
+        $this->assertSame([['hardware' => 'done', 'test_label' => 'done', 'test_tag' => 'done', 'first_piece' => 'done'], true, 0], [$statuses($equipped), $equipped['complete'], $events('TEST_TAG_READ', true)]);
 
-        // ----- Le monde réel : l'exercice ne l'a pas fait avancer d'un pas ; il suit ses propres faits
+        // ----- Le monde réel : l'exercice ne l'a pas fait avancer d'un pas ; il suit ses propres données
         $real = fn (): array => $statuses($this->json($this->admin('GET', self::INSTALL)));
         $expected = function () use ($events): array {
-            $done = ['test_label' => $events('TEST_LABEL_PRINTED', false) > 0, 'test_tag' => $events('TEST_TAG_READ', false) > 0, 'first_piece' => $events('TAG_ASSOCIATED', false) > 0];
-            $done = ['hardware' => in_array(true, $done, true)] + $done;
+            $done = ['hardware' => false, 'test_label' => $events('TEST_LABEL_PRINTED', false) > 0, 'test_tag' => $events('TEST_TAG_READ', false) > 0,
+                'first_piece' => (bool) $this->db->fetchOne("SELECT 1 FROM loss_tag t JOIN loss_piece p ON p.id = t.piece_id WHERE t.status = 'associated' AND p.status <> 'retired' AND NOT t.exercise LIMIT 1")];
+            $codes = array_keys($done);
+            for ($i = count($codes) - 2; $i >= 0; --$i) {
+                $done[$codes[$i]] = $done[$codes[$i]] || $done[$codes[$i + 1]];
+            }
             $out = [];
             $current = false;
             foreach ($done as $code => $ok) {
@@ -187,7 +238,7 @@ class LossPreventionInstallationTest extends LossPreventionTestCase
 
             return $out;
         };
-        $this->assertSame($expected(), $real(), 'les étapes réelles se lisent dans les vrais faits, pas dans ceux de l\'exercice');
+        $this->assertSame($expected(), $real(), 'les étapes réelles se lisent dans les vraies données, pas dans celles de l\'exercice');
         $this->assertFalse($this->json($this->admin('GET', self::INSTALL))['exercise']);
         // Lectures refusées : rien n'est écrit, et on dit quoi essayer
         $before = $rows();
@@ -197,55 +248,102 @@ class LossPreventionInstallationTest extends LossPreventionTestCase
         $this->assertStringContainsString('en chiffres seulement', $decimal['hint']);
         $this->assertStringContainsString('autre chose que des chiffres', $bad(['identifier' => 'bonjour', 'technology' => 'nfc'])['hint']);
         $this->assertStringContainsString('longueur d\'une puce NFC', $bad(['identifier' => '04A1B2', 'technology' => 'nfc'])['hint']);
-        $this->assertStringContainsString('16 à 64 caractères', $bad(['identifier' => '04A1B2C3', 'technology' => 'uhf'])['hint']);
-        $asBarcode = $bad(['identifier' => "gilet-$this->s", 'technology' => 'nfc']);
-        $this->assertSame('TAG_INVALID', $asBarcode['refusal'], 'un code-barres qui n\'a pas la forme d\'une puce : refusé pour sa forme');
+        $this->assertStringContainsString('par groupes de 4', $bad(['identifier' => '04A1B2C3', 'technology' => 'uhf'])['hint']);
+        // Le code-barres d'un article lu à la place de la puce : on le dit, que la lecture ait ou non la forme d'une puce
+        $asBarcode = $bad(['identifier' => " gilet-$this->s ", 'technology' => 'nfc']);
+        $this->assertSame([false, 'TAG_IS_BARCODE'], [$asBarcode['ok'], $asBarcode['refusal']], 'un code-barres qui n\'a pas la forme d\'une puce');
+        $this->assertStringContainsString("Gilet L2B-$this->s", $asBarcode['hint']);
+        $this->db->executeStatement('UPDATE product_variant SET barcode = ? WHERE id = ?', ['2900000000017', $v1]);
+        $this->assertSame('TAG_IS_BARCODE', $bad(['identifier' => '2900000000017', 'technology' => 'uhf'])['refusal'], 'un code généré du catalogue, tout en chiffres : pas le conseil « décimal »');
         $hexCode = 'ABCDEF02' . $this->s . 'AA';
         $this->db->executeStatement('UPDATE product_variant SET barcode = ? WHERE id = ?', [$hexCode, $v1]);
-        $isBarcode = $bad(['identifier' => $hexCode, 'technology' => 'uhf']);
-        $this->assertSame([false, 'TAG_IS_BARCODE'], [$isBarcode['ok'], $isBarcode['refusal']]);
-        $this->assertStringContainsString("Gilet L2B-$this->s", $isBarcode['hint']);
+        $this->assertSame('TAG_IS_BARCODE', $bad(['identifier' => implode(':', str_split(strtolower($hexCode), 2)), 'technology' => 'uhf'])['refusal'], 'reconnu sous sa forme nettoyée de puce');
         $this->db->executeStatement('UPDATE product_variant SET barcode = ? WHERE id = ?', ["GILET-$this->s", $v1]);
         $this->assertSame(['technology' => 'REQUIRED', 'identifier' => 'REQUIRED'], $this->json($this->admin('POST', self::INSTALL . '/puce-test', []), 422)['fields']);
         $this->assertSame(['technology' => 'INVALID_VALUE', 'identifier' => 'MUST_BE_STRING'], $this->json($this->admin('POST', self::INSTALL . '/puce-test', ['identifier' => 12, 'technology' => 'simulated']), 422)['fields']);
         $this->assertSame($before, $rows(), 'aucune lecture refusée n\'a écrit');
-        // Une vraie lecture : la puce est enregistrée « lue, pas encore posée », un fait prouve l'étape ; la relire n'ajoute pas de puce
-        $nfc = '0E' . $this->s;
-        $tagRead = $bad(['identifier' => ' 0e:' . strtolower($this->s) . ' ', 'technology' => 'nfc']);
-        $this->assertSame([true, $nfc, 'nfc', null, null, 'known', false], [$tagRead['ok'], $tagRead['identifier'], $tagRead['technology'], $tagRead['refusal'], $tagRead['hint'], $tagRead['tag']['status'], $tagRead['tag']['exercise']]);
+        // Une vraie lecture : l'étape est prouvée, une fois ; la puce n'est pas enregistrée, sa technologie n'est figée par rien
+        $nfc = '0E' . $this->s . '11223344'; // 16 caractères : la longueur valide dans les deux technologies
+        $readsBefore = $events('TEST_TAG_READ', false);
+        $tagRead = $bad(['identifier' => ' ' . strtolower($nfc) . ' ', 'technology' => 'uhf']);
+        $this->assertSame([true, $nfc, 'uhf', null, null, null], [$tagRead['ok'], $tagRead['identifier'], $tagRead['technology'], $tagRead['refusal'], $tagRead['hint'], $tagRead['tag']]);
         $this->assertSame('done', $statuses($tagRead['installation'])['test_tag']);
-        $this->assertSame([$this->adminId, $tagRead['tag']['id'], ['technology' => 'nfc']], [(int) $this->db->fetchOne('SELECT user_id FROM loss_piece_event WHERE tag_id = ?', [$tagRead['tag']['id']]),
-            (int) $this->db->fetchOne('SELECT tag_id FROM loss_piece_event WHERE tag_id = ?', [$tagRead['tag']['id']]), json_decode((string) $this->db->fetchOne('SELECT data FROM loss_piece_event WHERE tag_id = ?', [$tagRead['tag']['id']]), true)]);
         $bad(['identifier' => $nfc, 'technology' => 'nfc']);
-        $this->assertSame([1, 2], [(int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_tag WHERE identifier = ?', [$nfc]), (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_piece_event WHERE tag_id = ?', [$tagRead['tag']['id']])]);
+        $this->assertSame([0, max(1, $readsBefore)], [(int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_tag WHERE identifier = ?', [$nfc]), $events('TEST_TAG_READ', false)], 'aucune puce enregistrée ; une seule preuve, quel que soit le nombre d\'essais');
+        if ($readsBefore === 0) {
+            $this->assertSame([$this->adminId, ['technology' => 'uhf', 'identifier' => $nfc]], [(int) $this->db->fetchOne("SELECT user_id FROM loss_piece_event WHERE type = 'TEST_TAG_READ' AND NOT exercise"),
+                json_decode((string) $this->db->fetchOne("SELECT data FROM loss_piece_event WHERE type = 'TEST_TAG_READ' AND NOT exercise"), true)]);
+        }
         $this->assertSame(['code' => 'test_tag', 'verified' => true, 'hint' => null], $this->json($this->admin('POST', self::INSTALL . '/etapes/test_tag/verifier', [])));
-        // L'étiquette d'essai réelle, puis la première pièce : la puce de l'essai se pose sur elle
+        // L'étiquette d'essai réelle, puis la première pièce : la puce de l'essai se pose avec la technologie donnée CE JOUR-LÀ
         $labelsBefore = $events('TEST_LABEL_PRINTED', false);
         $this->admin('POST', self::INSTALL . '/etiquette-test', []);
-        $this->assertSame([200, 'a4-50x30', $labelsBefore + 1], [$this->client->getResponse()->getStatusCode(), $this->client->getResponse()->headers->get('X-Labels-Format'), $events('TEST_LABEL_PRINTED', false)]);
+        $this->admin('POST', self::INSTALL . '/etiquette-test', []);
+        $this->assertSame([200, 'a4-50x30', max(1, $labelsBefore)], [$this->client->getResponse()->getStatusCode(), $this->client->getResponse()->headers->get('X-Labels-Format'), $events('TEST_LABEL_PRINTED', false)]);
         $piece = $this->json($this->admin('POST', self::TAGS . '/associer', ['barcode' => "GILET-$this->s", 'identifier' => $nfc, 'technology' => 'nfc']));
-        $this->assertSame([true, $tagRead['tag']['id'], 'associated'], [$piece['created'], $piece['tag']['id'], $piece['tag']['status']]);
+        $this->assertSame([true, 'associated', 'nfc', ['technology' => 'nfc']], [$piece['created'], $piece['tag']['status'], $piece['tag']['technology'],
+            json_decode((string) $this->db->fetchOne("SELECT data FROM loss_piece_event WHERE tag_id = ? AND type = 'TAG_ASSOCIATED'", [$piece['tag']['id']]), true)], 'la lecture d\'essai en UHF n\'a rien figé');
         $complete = $this->json($this->admin('GET', self::INSTALL));
         $this->assertSame([['hardware' => 'done', 'test_label' => 'done', 'test_tag' => 'done', 'first_piece' => 'done'], true, ['done' => 4, 'total' => 4]], [$statuses($complete), $complete['complete'], $complete['progress']]);
         $posedRead = $bad(['identifier' => $nfc, 'technology' => 'nfc']);
         $this->assertSame([true, 'associated'], [$posedRead['ok'], $posedRead['tag']['status']]);
         $this->assertStringContainsString('prenez-en une libre', (string) $posedRead['hint']);
 
-        // Droits : administrateur ; sans le droit du module, seul l'assistant d'exercice s'ouvre ; effacer l'exercice le remet à zéro
+        // Droits : administrateur ; sans le droit du module, seul l'assistant d'exercice s'ouvre, toutes ses routes comprises
         $this->assertSame(401, $this->call('GET', self::INSTALL, null, null)->getStatusCode());
+        $this->loginPos(['ROLE_USER_POS']);
+        foreach ([['GET', self::INSTALL], ['POST', self::INSTALL . '/puce-test'], ['POST', self::INSTALL . '/etiquette-test'], ['POST', self::PIECES . '/etiquettes/pdf'], ['GET', self::BASE . '/materiel'], ['POST', self::EX . '/installation/puce-test']] as [$method, $path]) {
+            $this->assertSame(403, $this->call($method, $path, $method === 'GET' ? null : [], $this->posToken)->getStatusCode(), "$method $path : un caissier");
+        }
         static::getContainer()->get(PlatformModeService::class)->setMode('live', 'test');
         $this->flags(true, false);
         foreach ([['GET', self::INSTALL], ['POST', self::INSTALL . '/etapes/test_tag/verifier'], ['POST', self::INSTALL . '/puce-test'], ['POST', self::INSTALL . '/etiquette-test'], ['GET', self::BASE . '/materiel']] as [$method, $path]) {
             $closed = $this->admin($method, $path, $method === 'GET' ? null : ['identifier' => '04A1B2C3', 'technology' => 'nfc']);
             $this->assertSame([403, 'MODULE_INACTIVE'], [$closed->getStatusCode(), $this->json($closed, 403)['code']], "$method $path");
         }
-        $this->assertSame(true, $this->json($this->admin('GET', self::EX . '/installation'))['complete']);
+        $this->assertSame(true, $exercise()['complete']);
+        $this->assertSame(true, $this->json($this->admin('POST', self::EX . '/installation/etapes/first_piece/verifier', []))['verified']);
+        $this->assertSame(true, $this->json($this->admin('POST', self::EX . '/installation/puce-test', []))['ok']);
+        $this->assertSame(200, $this->admin('POST', self::EX . '/installation/etiquette-test', [])->getStatusCode());
         $this->assertSame(401, $this->call('POST', self::EX . '/installation/puce-test', [], null)->getStatusCode());
-        $this->json($this->admin('DELETE', self::EX . '/pieces'));
-        $this->assertSame([['hardware' => 'current', 'test_label' => 'todo', 'test_tag' => 'todo', 'first_piece' => 'todo'], 0], [$statuses($this->json($this->admin('GET', self::EX . '/installation'))),
-            (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_piece_event WHERE exercise')], 'l\'effacement emporte aussi les essais de l\'assistant');
         $this->flags(true, true);
         $this->assertSame(true, $this->json($this->admin('GET', self::INSTALL))['complete'], 'l\'installation réelle n\'a pas bougé');
+
+        // Les essais d'exercice attendent le verrou des exercices (un effacement en cours ne laisse rien derrière lui)
+        $this->json($this->admin('DELETE', self::EX . '/pieces'));
+        $service = static::getContainer()->get(LossInstallationService::class);
+        // La connexion DU SERVICE (le noyau a été relancé par les requêtes : ce n'est plus celle du début du test) : c'est sur elle que
+        // l'attente de verrou doit être bornée. L'autre connexion est coupée d'office par la base si elle reste ouverte : rien ici ne
+        // peut tenir le verrou commun des tests
+        $conn = $this->tenant()->getEntityManager()->getConnection();
+        $other = \Doctrine\DBAL\DriverManager::getConnection($conn->getParams());
+        $conn->executeStatement("SET lock_timeout = '1s'");
+        try {
+            $other->executeStatement("SET idle_in_transaction_session_timeout = '20s'");
+            $other->beginTransaction();
+            $other->executeStatement('SELECT pg_advisory_xact_lock(' . \App\LossPrevention\Repository\LossPieceRepository::EXERCISE_LOCK . ')');
+            foreach (['lecture d\'essai' => fn () => $service->testRead([], 'fr', $this->adminId, true), 'étiquette d\'essai' => fn () => $service->testLabel([], 'fr', $this->adminId, true)] as $what => $write) {
+                try {
+                    $write();
+                    $this->fail("$what : devait attendre le verrou des exercices");
+                } catch (\Doctrine\DBAL\Exception $e) {
+                    $this->assertStringContainsString('lock timeout', $e->getMessage(), $what);
+                }
+                $this->assertFalse($conn->isTransactionActive());
+            }
+            $other->rollBack();
+            $this->assertSame(0, (int) $conn->fetchOne('SELECT COUNT(*) FROM loss_piece_event WHERE exercise'));
+        } finally {
+            $conn->executeStatement('SET lock_timeout = 0');
+            try {
+                if ($other->isTransactionActive()) {
+                    $other->rollBack();
+                }
+            } catch (\Throwable) {
+                // connexion déjà coupée par la garde
+            }
+            $other->close();
+        }
     }
 
     public function testTheHardwareRangeHasThreeLevelsForEachNeedAndNoPrice(): void

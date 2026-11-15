@@ -147,14 +147,13 @@ class LossPieceRepository extends EntityRepository
         );
     }
 
-    /** Enregistre une puce lue à l'essai, pas encore posée (lot L2-b) ; rend son identifiant de ligne */
-    public function insertKnownTag(string $identifier, string $raw, string $technology, bool $exercise, ?int $userId, string $now): int
+    /** Une pièce en service porte-t-elle une puce posée, dans ce monde (réel ou exercice) ? Une puce retirée ne compte plus */
+    public function associatedTagExists(bool $exercise): bool
     {
-        return (int) $this->db()->fetchOne(
-            'INSERT INTO loss_tag (identifier, raw, technology, status, exercise, created_by, created_at, updated_at)'
-            . " VALUES (:identifier, :raw, :technology, 'known', CAST(:exercise AS boolean), :user, :now, :now) RETURNING id",
-            ['identifier' => $identifier, 'raw' => $raw, 'technology' => $technology, 'exercise' => $exercise ? 'true' : 'false', 'user' => $userId, 'now' => $now]
-        );
+        return $this->db()->fetchOne(
+            "SELECT 1 FROM loss_tag t JOIN loss_piece p ON p.id = t.piece_id WHERE t.status = 'associated' AND p.status <> 'retired' AND t.exercise = CAST(:exercise AS boolean) LIMIT 1",
+            ['exercise' => $exercise ? 'true' : 'false']
+        ) !== false;
     }
 
     /**

@@ -397,7 +397,7 @@ défaut validés ; 6 conservation 24 mois / 5 ans, extraits vidéo 30 jours, auc
 bloquante en France et au Québec ; 9 minuteur accordé ; 10 jeux d'essai en base de test seulement ; 11 pourcentage calculé par le serveur ;
 12 pays et région ; 13 vignette et notification réservées ; 14 lot du catalogue avant L2 ; 15 relecture par un avocat avant tout vrai client.
 
-## 13. Lot L2 : étiquettes à puce (plan validé par le propriétaire le 15/11/2026 ; L2-a codé, L2-b à venir)
+## 13. Lot L2 : étiquettes à puce (plan validé par le propriétaire le 15/11/2026 ; L2-a et L2-b codés)
 
 Le plan ci-dessous a été **validé par le propriétaire le 15/11/2026, avec toutes les propositions du point 13.8**. Il précise ce que
 le § 11 réservait (« pièce à numéro unique par variante », faits `PIECE_CREATED`, `TAG_ASSOCIATED`, `PAIR_SET`, `TEST_TAG_READ`).
@@ -635,19 +635,27 @@ Textes `translations/pertes.{fr,en}.yaml` (`piece_labels.*`, `installation.*`, `
   en 4 s, 500 en 16 s). Une pièce retirée n'a plus d'étiquette ; une pièce dont la variante n'a pas de code est refusée. Une
   impression est une lecture : rien n'est écrit. Les PDF d'étiquettes du catalogue (`docs/codes-barres.md` § 7 et § 8) restent en
   planche A4 ; leur donner le format rouleau est un ajout d'un paramètre, non fait dans ce lot.
-- **Assistant d'installation** : quatre étapes en L2, dans l'ordre : `hardware` (choisir son matériel : étape d'information, faite dès
-  qu'une étape suivante l'est), `test_label` (étiquette d'essai), `test_tag` (lire une puce d'essai), `first_piece` (poser la puce sur
-  une première pièce). **L'avancement se calcule à partir des faits** (`loss_piece_event` : `TEST_LABEL_PRINTED`, `TEST_TAG_READ`,
-  `TAG_ASSOCIATED`), jamais d'une case cochée ; rien n'est stocké pour l'assistant, et le lire ou « Vérifier » n'écrit rien. La
-  première étape pas faite est `current`. `image` : une clé d'illustration (`pertes/installation/<code>`) ; des dessins tant que le
-  matériel n'est pas choisi. Les étapes du boîtier (L3) et des antennes (L4) s'ajouteront à la même suite.
-- **Lire une puce d'essai** : si la lecture a la forme d'une puce, elle est enregistrée « lue, pas encore posée » (`known` ; une puce
-  déjà connue reste telle qu'elle est) et un fait `TEST_TAG_READ` prouve l'étape ; la réponse rend l'assistant à jour. La puce de
-  l'essai se pose ensuite comme une autre (`POST /puces/associer`). Si la puce est déjà posée ou retirée, la lecture marche
-  (`ok: true`) et `hint` dit d'en prendre une libre. Sinon rien n'est écrit, et `hint` dit quoi essayer : lecteur qui rend des chiffres
-  seulement, autre chose que de l'hexadécimal, mauvaise longueur pour la technologie, code-barres d'un article lu à la place.
-- **Étiquette d'essai** : une étiquette au format demandé, avec un code qui ne désigne aucun article (`ESSAI-ETIQUETTE`). Le serveur
-  ne voit pas l'imprimante : le fait `TEST_LABEL_PRINTED` dit seulement que l'étiquette a été demandée.
+- **Assistant d'installation** : quatre étapes en L2, dans l'ordre : `hardware` (choisir son matériel : étape d'information),
+  `test_label` (étiquette d'essai), `test_tag` (lire une puce d'essai), `first_piece` (poser la puce sur une première pièce).
+  **L'avancement se calcule à partir des données**, jamais d'une case cochée ; rien n'est stocké pour l'assistant, et le lire ou
+  « Vérifier » n'écrit rien. Preuves : `test_label`, un fait `TEST_LABEL_PRINTED` ; `test_tag`, un fait `TEST_TAG_READ` ;
+  `first_piece`, une pièce en service qui porte une puce posée (lue dans `loss_tag` : une puce retirée ne prouve plus rien).
+  **Une étape est faite si sa preuve existe ou si une étape qui la suit est faite** : un site qui pose déjà ses puces n'a pas à
+  refaire les essais. La première étape pas faite est `current`. `image` : une clé d'illustration (`pertes/installation/<code>`) ;
+  des dessins tant que le matériel n'est pas choisi. Les étapes du boîtier (L3) et des antennes (L4) s'ajouteront à la même suite.
+  Un code d'étape hors de la forme attendue (lettres minuscules et `_`) rend le 404 du routeur.
+- **Lire une puce d'essai** : si la lecture a la forme d'une puce, l'étape est prouvée par un fait `TEST_TAG_READ` (technologie et
+  identifiant lus) ; la réponse rend l'assistant à jour. **La puce n'est pas enregistrée** : elle ne le sera qu'en étant posée sur une
+  pièce (`POST /puces/associer`), avec la technologie donnée ce jour-là. Une lecture d'essai ne fige donc rien (les longueurs de 16
+  et 20 caractères sont valides en NFC comme en UHF). L'étape prouve que le LECTEUR marche : si la puce est déjà posée ou retirée, la
+  lecture marche (`ok: true`, `tag` rendu) et `hint` dit d'en prendre une libre. Sinon rien n'est écrit, et `hint` dit quoi essayer :
+  code-barres d'un article lu à la place de la puce (`TAG_IS_BARCODE`, que la lecture ait ou non la forme d'une puce), lecteur qui
+  rend des chiffres seulement, autre chose que de l'hexadécimal, mauvaise longueur pour la technologie.
+- **Étiquette d'essai** : une étiquette au format demandé, avec un code qui ne peut désigner aucun article (`IZ-ESSAI-ETIQUETTE` : le
+  préfixe `IZ-` est réservé aux documents de la caisse, le catalogue le refuse). Le serveur ne voit pas l'imprimante : le fait
+  `TEST_LABEL_PRINTED`, écrit après le rendu, dit seulement que l'étiquette a été produite.
+- **Une preuve suffit** : chacun des deux gestes d'essai n'écrit son fait que la première fois, dans le monde réel comme en exercice.
+  Ni un double appui ni des essais répétés ne remplissent une table où rien ne s'efface.
 - **Gamme de matériel** : trois besoins (lire une puce, imprimer l'étiquette, poser la puce), trois niveaux chacun (pro, standard,
   bricoleur : code `diy`), avec ce qu'il faut, ce que ça permet, ses limites, et la technologie de puce conseillée pour lire. Des
   textes, sans prix ni vente (lot L6). `soldWithHardware: false` pour le niveau bricoleur : il se vend sans matériel (décision du
@@ -655,16 +663,93 @@ Textes `translations/pertes.{fr,en}.yaml` (`piece_labels.*`, `installation.*`, `
 - **Mode exercice** (ouvert sans le droit du module, routes nommées une à une dans `OPEN_ROUTES`) : `POST /exercices/pieces/etiquettes/pdf`,
   `GET /exercices/installation`, `POST /exercices/installation/etapes/{code}/verifier`, `POST /exercices/installation/puce-test`
   (`identifier` facultatif : puce simulée), `POST /exercices/installation/etiquette-test`, `GET /exercices/materiel`. L'assistant
-  d'exercice suit les faits d'exercice seulement : il n'avance jamais l'installation réelle, et l'effacement des pièces d'exercice
-  le remet à zéro. Plafond : 60 essais de chaque sorte (409 `EXERCISE_LIMIT_REACHED`).
+  d'exercice suit les données d'exercice seulement : il n'avance jamais l'installation réelle, et l'effacement des pièces d'exercice
+  (`DELETE /exercices/pieces`, à proposer même quand il n'y a aucune pièce) le remet à zéro, essais compris. Les essais d'exercice
+  prennent le verrou des exercices.
 - **Non fait, à savoir** : refuser de poser comme code-barres d'un article l'identifiant d'une puce connue (cela toucherait le service
   des codes-barres du catalogue ; la garde `replace` du lot CB-3 et les champs distincts des écrans couvrent le geste distrait).
 
+Relu par un relecteur indépendant avant la mise en ligne. L'état `known` d'une puce (§ 13.2) reste réservé : aucune route ne le
+crée dans ce lot.
+
 Tests : `tests/Functional/LossPrevention/LossPreventionInstallationTest.php` (étiquettes dans les deux formats, une page par étiquette
-en rouleau ; l'assistant depuis zéro en exercice, puis dans le monde réel par ses propres faits ; la gamme).
+en rouleau, à la taille de l'étiquette ; l'assistant depuis zéro en exercice, puis dans le monde réel par ses propres données ; une
+preuve écrite une seule fois ; l'attente du verrou des exercices ; la gamme).
 
 **Exemples de réponse** (lots L2-a et L2-b) : `tests/Fixtures/pertes/pieces/`, un fichier JSON par route et par refus (création,
 association créée / rejouée / deuxième puce, liste, fiche avec ses faits, recherche trouvée / inconnue / refusée, synthèse, retraits,
 assistant, lecture d'essai, gamme, état et parcours d'exercice, refus avec leurs détails), pour les tests de contrat du web et du
 mobile. `LossPreventionPiecesExamplesTest` rejoue le parcours et échoue si un exemple n'a plus la forme de la réponse du serveur ;
 son en-tête dit comment les régénérer. Les PDF ne sont pas des exemples.
+
+## 14. Ajouts du propriétaire pour les plans des lots L3, L4 et L5 (15/11/2026, SANS CODE)
+
+Relayés par le chef de projet le 15/11/2026. Rien de ce paragraphe n'est codé ni planifié en détail : ce sont des décisions à
+reprendre telles quelles dans les plans de L3 (boîtier et comptoir), L4 (antennes, comptage) et L5 (avis de l'IA, alertes), chaque
+plan étant validé par le propriétaire avant son code.
+
+1. **Antenne à l'entrée de la zone des toilettes** : à l'ENTRÉE de la zone, jamais dedans ; sans caméra ni son ; avec une affichette.
+   Elle a son scénario : une pièce lue en entrant dans cette zone, puis plus jamais lue ailleurs, donne le constat « puce disparue
+   après la zone sensible ».
+2. **Caméra au dépôt** : elle filme le stock et les accès ; jamais un poste en continu, une salle de pause ni un vestiaire. Elle suit
+   la notice aux salariés, les interrupteurs par pays et la consultation des représentants du personnel en France. On ne garde que
+   les extraits liés aux incidents, sans son.
+3. **Nouveaux scénarios, réels et d'exercice** : une sortie du dépôt sans transfert ; la porte arrière du dépôt ; une sortie du dépôt
+   hors des heures d'ouverture.
+4. **La caméra ne déclenche jamais d'alerte seule** : la puce donne l'alerte. Le boîtier joint l'extrait des dernières minutes de la
+   zone où la puce a été lue en dernier. En L5, l'IA n'analyse que cet extrait et donne un avis en pourcentage (décision 11 du § 12 :
+   le pourcentage est calculé par le serveur).
+5. **Pour L3** :
+   - le lecteur de comptoir est un tapis à courte portée branché au boîtier, et la plateforme relie la vente aux puces lues au
+     comptoir ;
+   - une route rend, avant le paiement, les articles suivis du panier qui n'ont pas été lus sur le tapis de ce poste ; le lien entre
+     un tapis et un poste de caisse se fixe dans l'assistant d'installation (§ 13.10 : ses étapes s'ajoutent à la même suite) ;
+   - au portique, le rattrapage accepte une pièce de la variante quand une vente de cette variante n'a pas encore de pièce, une seule
+     par article vendu ;
+   - le boîtier tourne sous Linux Debian, avec le logiciel en conteneur multi-architecture installé par un paquet `.deb`, et il
+     contacte la plateforme sans jamais ouvrir de port (§ 2, « clé de boîtier »).
+6. **Avant le premier client**, l'avocat devra vérifier la zone des toilettes et la caméra du dépôt, avec la lecture d'une puce sur
+   un article vendu (§ 13) et la décision 15 du § 12.
+
+Ces ajouts restent dans les limites du § 1 : jamais de reconnaissance des visages, de son, de caméra en cabine ni d'analyse de gestes
+par vidéo ; aucune suite automatique, la décision reste humaine.
+
+## 15. Niveau pro avec imprimante à puce (demande du propriétaire, 15/11/2026, SANS CODE) : rangé dans le lot L3
+
+L'imprimante à puce imprime l'étiquette et écrit la puce d'un même geste, et la pièce est associée à l'impression, sans geste de
+plus. **Lot choisi : L3**, comme sous-lot placé après la clé de boîtier et le canal des faits du boîtier : sans boîtier, rien dans
+la boutique ne peut recevoir un travail de la plateforme ni piloter une imprimante (la plateforme ne joint jamais la boutique : c'est
+le boîtier qui la contacte, § 14, point 5). Le plan détaillé sera écrit avec celui de L3 et validé par le propriétaire avant son code.
+
+- **Chemin** : (1) le gérant demande les étiquettes de pièces (créées à la réception ou déjà là, § 13.9) avec le format « imprimante à
+  puce » ; (2) la plateforme enregistre un **travail d'impression** : une ligne par pièce, avec ce qu'il faut imprimer et l'identifiant
+  à écrire dans la puce ; (3) le boîtier, à son prochain contact (il vient chercher ses travaux avec son jeton signé, il n'ouvre aucun
+  port), reçoit le travail ; (4) il pilote l'imprimante, branchée sur lui en USB ou sur le réseau de la boutique, dans le langage de
+  l'imprimante ; (5) pour chaque étiquette, l'imprimante imprime, écrit la puce puis la RELIT ; (6) le boîtier renvoie un fait par
+  étiquette, dans un lot rejouable (clé d'idempotence par ligne du travail : `loss_piece_event.event_key` existe déjà) ; (7) la
+  plateforme associe la puce à la pièce pour chaque écriture vérifiée, et marque la ligne faite. L'application suit le travail
+  (en attente, en cours, fait, lignes en échec).
+- **Format d'encodage** (proposition, à arrêter à l'essai du matériel) : un identifiant de 96 bits fabriqué par la plateforme, écrit
+  dans la mémoire d'identification de la puce : une marque fixe de la plateforme, le site, le numéro de la pièce, une clé de
+  contrôle. Unique sur toute la plateforme, donc sur le site (l'index unique du § 13.9 s'applique tel quel) ; lisible ensuite par
+  n'importe quel lecteur UHF, il suit la forme canonique déjà acceptée (24 caractères hexadécimaux). **Pas de code de fabricant ni
+  de numérotation GS1** : la boutique n'a pas de préfixe d'entreprise GS1, et écrire le code d'un fabricant suivi de nos numéros
+  de série mettrait nos pièces dans SA numérotation ; la puce se déclare hors de cette numérotation. Le code-barres imprimé sur
+  l'étiquette reste celui de la variante (ce que la caisse lit). À décider avec le plan : verrouiller ou non la puce après
+  l'écriture (mot de passe d'accès), pour qu'un tiers ne la réécrive pas.
+- **Si l'écriture échoue** : la puce n'est jamais enregistrée sans relecture conforme. L'imprimante annule l'étiquette ratée (elle la
+  marque comme nulle) et réessaie sur l'étiquette suivante, un petit nombre de fois ; au-delà, la ligne du travail passe en échec
+  avec son motif (puce illisible, écriture refusée, imprimante arrêtée, plus d'étiquettes) et **la pièce reste sans puce** : on la
+  réimprime, ou on lui pose une puce à la main par le geste ordinaire. Un travail rejoué par le boîtier ne pose pas deux puces sur
+  une pièce (clé d'idempotence), et une pièce qui a déjà sa puce n'est pas réimprimée sans confirmation. Boîtier ou imprimante
+  injoignable : le travail attend, l'application le dit ; rien n'est perdu ni associé à tort.
+- **Modèles visés** (à confirmer chez le fournisseur au moment de l'achat : références, disponibilité, prix) : en premier, une
+  imprimante de bureau thermique à encodeur UHF qui parle le langage ZPL, la famille la plus répandue en boutique (Zebra ZD621R en
+  4 pouces, ZD611R en 2 pouces) ; ensuite, selon la demande, les imprimantes à encodeur UHF d'autres marques qui acceptent le même
+  langage. Critères : encodage et relecture de puces UHF, étiquettes de 50 × 30 mm à puce intégrée, pilotage en USB ou par le réseau
+  local depuis le boîtier Debian (§ 14, point 5). Aucun de ces modèles n'a été essayé : la campagne d'essai sur du vrai matériel
+  (§ 13.7, risque 7) vaut aussi pour l'imprimante.
+- **Dans l'application dès aujourd'hui** : la gamme (`GET /materiel`, § 13.10) décrit déjà ce niveau pour « imprimer l'étiquette » et
+  « poser la puce », en disant que l'écriture de la puce n'est pas encore proposée ; le texte changera avec ce sous-lot. Les niveaux
+  standard et bricoleur ne changent pas : puces autocollantes numérotées en usine, lues une fois.
+
