@@ -9,6 +9,8 @@ use App\Entity\ProductPicture;
 use App\Entity\ProductTranslation;
 use App\Entity\ProductVariant;
 use App\Entity\Size;
+use App\Services\BarcodeService\CatalogBarcodeException;
+use App\Services\BarcodeService\CatalogBarcodeService;
 use App\Services\ContentAuditService\ContentAuditRecorder;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\ORM\EntityManagerInterface;
@@ -28,8 +30,11 @@ class ProductSheetCreator
     public const MESSAGES = ['NAME_REQUIRED' => 'Le nom du produit est obligatoire.', 'PRICE_INVALID' => 'Prix en cents attendu, supérieur à zéro.', 'CATEGORY_UNKNOWN' => 'Catégorie inconnue.', 'PICTURE_INVALID' => 'Photo invalide : adresse https ou nom de fichier attendu.', 'VARIANTS_TOO_MANY' => 'Trop de variantes : 20 tailles et 20 couleurs au plus, 100 combinaisons au plus.'];
     public const MAX_VARIANTS = 100;
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly ContentAuditRecorder $audit)
-    {
+    public function __construct(
+        private readonly TenantEntityManagerProvider $emProvider,
+        private readonly ContentAuditRecorder $audit,
+        private readonly CatalogBarcodeService $barcodes, // lot CB-1 (15/11/2026, `docs/codes-barres.md`)
+    ) {
     }
 
     /**
@@ -69,7 +74,14 @@ class ProductSheetCreator
         if ($spec === false) {
             return $this->refuse('VARIANTS_TOO_MANY');
         }
-        $language = in_array($input['language'] ?? 'fr', ['fr', 'en'], true) ? $input['language'] : 'fr';
+        // Code-barres (lot CB-1) : forme, formes réservées à la caisse et code libre vérifiés AVANT de rien créer (avant : coupé à 64
+        // caractères et écrit tel quel ; un code déjà porté par un autre article passait)
+        try {
+            $barcode = $this->barcodes->check(is_scalar($input['barcode'] ?? null) ? (string) $input['barcode'] : null);
+        } catch (CatalogBarcodeException $e) {
+            return ['status' => 422, 'body' => ['error' => $e->errorCode, 'message' => $e->getMessage()] + ($e->holder !== null ? ['holder' => $e->holder] : [])];
+        }
+        $language = in_array($input['language'] ?? 'fr', ['fr', 'en'], true) ? ($input['language'] ?? 'fr') : 'fr'; // sans `language` : français (avant : clé lue sans exister)
         $channels = (array) ($input['channels'] ?? []);
         $modes = (array) ($input['modes'] ?? []);
         $slug = $this->uniqueSlug($name);
@@ -80,9 +92,7 @@ class ProductSheetCreator
             ->setSaleEnabled(($modes['sale'] ?? true) !== false)->setRentalEnabled(($modes['rental'] ?? false) === true)->setSubscriptionEnabled(($modes['subscription'] ?? false) === true)
             ->setIsbestseller(false)->setIsnewarrival(true)->setIsfeatured(false)->setIsspecialoffer(false)->setIsPreOrder(false)->setIsAccessory(false)->setCustomizable(false)
             ->setRequiresShipping(($input['requiresShipping'] ?? true) !== false)->setCreatedAt(new \DateTimeImmutable());
-        if (isset($input['barcode']) && trim((string) $input['barcode']) !== '') {
-            $product->setBarcode(mb_substr(trim((string) $input['barcode']), 0, 64));
-        }
+        $product->setBarcode($barcode);
         if ($pictures !== []) {
             $product->setImage($pictures[0]);
         }
