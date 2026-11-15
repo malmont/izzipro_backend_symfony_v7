@@ -761,3 +761,219 @@ le boîtier qui la contacte, § 14, point 5). Le plan détaillé sera écrit ave
   « poser la puce », en disant que l'écriture de la puce n'est pas encore proposée ; le texte changera avec ce sous-lot. Les niveaux
   standard et bricoleur ne changent pas : puces autocollantes numérotées en usine, lues une fois.
 
+
+## 16. Lot L3 : boîtier, comptoir et imprimante à puce (PLAN du 15/11/2026, SANS CODE, à valider par le propriétaire)
+
+Ce plan reprend tout le § 14 (point 5 en entier, points 2, 4 et 6 pour la caméra) et tout le § 15. Rien n'est codé. Le dépôt du
+logiciel du boîtier n'existe pas : il sera créé au moment du code, sur décision du propriétaire. Lot à risque d'un bout à l'autre
+(une entrée nouvelle sur la plateforme, la caisse, un secret, de la vidéo, du matériel) : relecteur neuf et mutations à chaque
+sous-lot.
+
+### 16.1 Ce que L3 apporte, et ce qu'il n'apporte pas
+
+- **Apporte** : un **boîtier** dans la boutique, qui envoie des faits à la plateforme ; un **tapis de comptoir** qui dit QUELLE pièce
+  est vendue (L2 ne le savait pas, § 13.1) ; pour la caisse, la liste des **articles suivis du panier qui n'ont pas été lus** avant
+  le paiement ; le **rattrapage** d'une pièce lue à la sortie après sa vente ; l'**imprimante à puce** du niveau pro (§ 15) ; la
+  **caméra du comptoir**, qui ne fournit que des extraits ; un **simulateur** et une **machine de test**, pour tout jouer sans matériel.
+- **N'apporte pas** : les antennes de zone, le portique réel, le comptage et le bilan du soir (L4) ; le constat « sortie sans
+  vente » (L4, il lui faut le portique) ; l'avis de l'IA et les alertes en caisse (L5) ; la vente du matériel (L6). **Aucune
+  écriture de vente, de stock ni de catalogue** (§ 1) : le module continue de n'écrire que dans ses tables.
+- **Deux règles du § 1 guident tout le plan** : aucun code de caisse n'appelle le module pendant une vente ; la décision reste
+  humaine (la caisse n'est jamais bloquée par le module).
+
+### 16.2 Le boîtier : Debian, paquet, clé, inscription
+
+- **Machine** : un petit ordinateur sous Linux **Debian stable**, en `amd64` ou en `arm64`. Le logiciel est un **conteneur
+  multi-architecture** installé par un **paquet `.deb`** : le paquet pose le service (`systemd`), ses réglages (`/etc`), sa file de
+  faits sur disque (`/var/lib`), le pare-feu qui **refuse toute connexion entrante**, et l'image du conteneur à une version exacte
+  (jamais « la dernière »). Mise à jour = nouvelle version du paquet, servie par un dépôt de paquets signé de la plateforme.
+- **Jamais de port ouvert** : le boîtier appelle la plateforme en HTTPS sortant, à l'adresse du site ; la plateforme ne le joint
+  jamais. Pas d'accès à distance (ni SSH ni tunnel) en L3. Les appareils (tapis, imprimante, caméra) sont branchés sur lui en USB
+  ou sur le réseau local de la boutique.
+- **Clé de boîtier** (§ 2) : une application de plus dans les clés d'activation (`tenant_app_keys`, forme `IZ-BOX-…`), créée par
+  l'administrateur dans l'écran du module (« Ajouter un boîtier » : nom, endroit) et montrée une seule fois, avec son code QR.
+  **Une clé = un boîtier** (à la différence d'une clé de caisse, qui sert à plusieurs tablettes).
+- **Inscription** : sur le boîtier, la commande d'installation demande la clé (tapée, ou lue par un lecteur de codes-barres) et
+  appelle la route d'inscription, publique et limitée en débit comme `POST /api/app/activate`. La plateforme lie la clé à CETTE
+  machine (empreinte de la machine, version, architecture) et rend un **jeton signé**. Une seconde machine avec la même clé est
+  refusée (`BOX_KEY_ALREADY_ENROLLED`) tant que l'administrateur n'a pas remis la clé à zéro (boîtier remplacé).
+- **Jeton** : envoyé à chaque appel ; durée courte, renouvelé au contact ; révoqué d'un geste par l'administrateur (403
+  `BOX_REVOKED` aussitôt). **Le boîtier n'est pas un utilisateur** : son jeton ne donne que quatre droits, sur son propre site :
+  envoyer des faits, lire SES réglages (appareils, zones), prendre SES travaux (impression, extrait), déposer un extrait. **Aucune
+  lecture** des ventes, des clients, du catalogue ni des constats.
+- **Routes du boîtier** : hors de `/api/gestion` (réservé à l'administrateur), sous un préfixe à elles (`/api/pertes/boitier/…`),
+  derrière un contrôle d'accès propre (rôle technique `ROLE_LOSS_BOX`, que rien d'autre ne porte), limitées en débit par site, par
+  adresse et par boîtier, et fermées quand le droit du module est retiré (le boîtier garde alors sa file, bornée, et réessaie).
+  Ces fichiers sont partagés (clés d'activation, `security.yaml`) : à écrire avec « appli degestion backend ».
+- **État** : `loss_box` (nom, endroit, clé, empreinte, version, dernier contact, écart d'horloge, état) et `loss_device` (un appareil
+  déclaré par le boîtier : genre `counter_mat | reader | printer | camera`, numéro de série, zone, poste de caisse pour un tapis,
+  dernier signe de vie). L'application liste les boîtiers et leurs appareils, « en ligne » ou « silencieux depuis… ».
+
+### 16.3 Le canal des faits
+
+- **Un appel** : le boîtier envoie des **lots rejouables** de 1 à 200 faits `{ key, type, at, seq, device, zone, data }`. `key` est
+  la clé d'idempotence du fait (`loss_piece_event.event_key` existe déjà) : un fait déjà reçu répond « déjà connu », sans doublon.
+  La réponse dit, fait par fait, `accepted`, `duplicate` ou `refused { code }` ; un fait refusé (puce inconnue, forme invalide,
+  appareil non déclaré) n'est pas renvoyé, et il ne fait jamais échouer le lot.
+- **Faits de L3** (les noms du § 11 sont gardés) : sur les pièces, `COUNTER_SEEN` et `COUNTER_LEFT` (une puce arrive sur un tapis,
+  le quitte), `ZONE_SEEN` (lecture en zone ; en L3 la seule zone qui compte est `exit`), `SPOT_CHECK` (lecteur à main),
+  `TAG_WRITTEN` et `TAG_WRITE_FAILED` (imprimante) ; sur les appareils, `SOURCE_DOWN` et `SOURCE_UP`, `CLIP_READY`. Les faits de
+  pièces vont dans `loss_piece_event` ; ceux des appareils dans une table inaltérable à eux (`loss_box_event`).
+- **Le signe de vie n'est pas un fait gardé** : toutes les minutes le boîtier dit « je suis là » avec la liste de ses appareils ; la
+  plateforme met à jour `loss_box` et n'écrit un fait que pour un CHANGEMENT (boîtier ou appareil devenu silencieux, revenu).
+  Sinon chaque boîtier écrirait 1 440 lignes inaltérables par jour pour ne rien dire.
+- **Heure** : chaque fait garde l'heure du boîtier et l'heure de réception. L'écart d'horloge est mesuré à chaque signe de vie ;
+  au-delà d'une minute, l'assistant le dit et les faits portent un doute sur l'heure (ils ne servent pas à rattacher une vente).
+- **Coupure du réseau** : le boîtier range ses faits sur disque et les envoie dans l'ordre au retour ; la file est bornée (7 jours),
+  et un trou est dit par un fait (`SOURCE_DOWN` avec la période). Le tapis ne dit pas tout ce qu'il voit : une arrivée, un départ.
+- **Exercice** : un boîtier d'exercice et ses faits portent `exercise = true`, comme les puces simulées (§ 13.4) : jamais dans un
+  chiffre réel, effacés d'un geste. Un vrai boîtier refuse une puce simulée, et l'inverse.
+
+### 16.4 Le tapis de comptoir, le lien tapis-poste, la vente reliée aux pièces
+
+- **Le tapis** : un lecteur à très courte portée (quelques centimètres) posé sur le comptoir et branché au boîtier. Il lit les puces
+  des articles posés dessus. La plateforme garde, par tapis, les pièces présentes et depuis quand (projection des faits).
+- **Lien tapis-poste** : un tapis sert UN poste de caisse (`loss_device.cash_register_id`), un poste a au plus un tapis, un boîtier
+  peut porter plusieurs tapis. Le lien se fixe dans l'**assistant d'installation**, dont la suite s'allonge (§ 13.10) :
+  `box` (un boîtier inscrit a donné signe de vie), `counter_mat` (un tapis déclaré a lu une puce d'essai), `mat_register`
+  (l'administrateur choisit le poste, pose une puce sur le tapis, « Vérifier » : la lecture est bien venue de ce tapis),
+  puis `printer` et `camera`, facultatives. Toujours sans case cochée : chaque étape se prouve par un fait.
+- **Relier la vente aux pièces, après coup** : le module ne touche pas à la vente. Son analyse à curseur sur le journal de caisse
+  (§ 3, toutes les 15 minutes, et à la demande) lit chaque vente : poste, heure, lignes. Pour chaque **article suivi** vendu
+  (variante qui a au moins une pièce réelle portant une puce), elle prend une pièce de CETTE variante présente sur le tapis de CE
+  poste dans les minutes qui précèdent la vente, **une pièce par article vendu**, et écrit le fait `PIECE_SOLD` : la pièce passe à
+  `sold`. La base garantit qu'une pièce n'est vendue qu'une fois et qu'un article vendu n'a qu'une pièce. Un retour lu sur le
+  tapis remet la pièce en rayon de la même façon (`PIECE_RETURNED`).
+- **Ce qui reste** : un article suivi vendu **sans pièce lue** reste « à rattraper » (16.6). Une pièce posée sur le tapis et non
+  vendue ne donne rien : le client a pu renoncer.
+- **Une règle de plus, par poste et jamais par personne** : « articles suivis vendus sans lecture » sur une journée et un poste
+  (tapis en panne, tapis non utilisé, puces retirées). Elle suit le circuit des règles (§ 4 : seuil réglable, aperçu, exercice).
+
+### 16.5 La route « articles non lus avant paiement »
+
+- **Qui l'appelle** : la caisse, avant le paiement, avec le droit du caissier. Elle vit donc sous les routes de la caisse (pas sous
+  `/api/gestion`), dans le code du module. Corps : le poste et les lignes du panier (variante, quantité).
+- **Réponse** : `{ active, reason, tracked, read, unread [{ productVariantId, name, quantity, missing }], extra, checkedAt }`.
+  `unread` : les articles suivis du panier dont la pièce n'est pas sur le tapis de ce poste ; `extra` : le nombre de pièces posées
+  sur le tapis qui ne sont pas dans le panier. Aucun nom de personne.
+- **Une lecture, rien n'est écrit**, et **la vente n'est jamais bloquée** : la caisse affiche l'avis, le caissier pose l'article sur
+  le tapis ou continue. Module éteint, poste sans tapis, tapis ou boîtier silencieux : `active: false` avec la raison, en 200 ;
+  la caisse traite toute erreur ou tout retard comme « pas de contrôle ». Caisse hors ligne : pas de contrôle.
+- Contrat à remettre à la session de la caisse (par le chef) avant le code.
+
+### 16.6 Le rattrapage au portique
+
+- **Règle** (§ 14, point 5) : une pièce non vendue lue à la sortie (`ZONE_SEEN`, zone `exit`), alors qu'une vente récente de SA
+  variante a encore un article sans pièce, est rattachée à cette vente : fait `PIECE_SOLD` avec la mention « rattrapage », **une
+  seule pièce par article vendu**, la vente la plus ancienne d'abord. Pas de constat.
+- **Dans les deux sens** : la vente peut être lue par le curseur après la lecture à la sortie ; le rattrapage se rejoue donc quand
+  la vente arrive (lectures de sortie encore sans vente) comme quand la lecture arrive (ventes encore sans pièce).
+- **En L3** la règle est codée et jouée par le simulateur et le lecteur à main ; le portique réel et le constat « sortie sans
+  vente » sont L4, qui attendra que le curseur ait dépassé l'heure de la lecture avant de juger.
+
+### 16.7 L'imprimante à puce du niveau pro
+
+Le § 15 fait foi (chemin en sept temps, identifiant de 96 bits de la plateforme sans numérotation GS1, relecture avant toute
+association, échecs, modèles visés). Ce que le plan ajoute :
+
+- **Travail d'impression** : routes de l'administrateur pour le créer (pièces, imprimante, prix ou non), le suivre et l'annuler ;
+  tables `loss_print_job` et ses lignes. Le boîtier prend ses travaux par le canal du 16.2 et renvoie un fait par étiquette
+  (`TAG_WRITTEN` après relecture conforme, sinon `TAG_WRITE_FAILED` et son motif). Le langage de l'imprimante reste dans le
+  boîtier : la plateforme envoie les textes, le code-barres et l'identifiant à écrire.
+- **Verrou par mot de passe** (décision du propriétaire) : un mot de passe d'accès par site, tiré au hasard par la plateforme,
+  **rangé chiffré** (clé de chiffrement hors de la base), jamais montré, jamais imprimé, **dans aucun journal ni aucun fait**.
+  Le boîtier le reçoit avec le travail, par HTTPS, le garde en mémoire le temps du travail, ne l'écrit jamais sur son disque.
+  Sur la puce : l'identifiant est verrouillé en écriture par ce mot de passe (jamais de verrou définitif), **et la zone qui porte
+  le mot de passe est fermée à la lecture** (sans quoi n'importe quel lecteur le lirait). La lecture de l'identifiant reste
+  ouverte à tous. La puce garde le rang du mot de passe utilisé (un nombre), pour un changement de mot de passe futur.
+- **Protection légère, dite telle quelle** : un mot de passe par site arrête la réécriture ordinaire, pas un attaquant équipé.
+  Pas de contrôle des copies (décision du propriétaire, § 15).
+- La gamme (`GET /materiel`) change son texte du niveau pro quand ce sous-lot est en ligne.
+
+### 16.8 La caméra du comptoir
+
+- **Elle ne déclenche jamais rien** (§ 14, point 4) : c'est un fait de puce ou de caisse qui demande un extrait. Jamais de
+  reconnaissance des visages, de son, ni d'analyse de gestes (§ 1).
+- **Cadre** : le tapis et le plan du comptoir, pas le visage du caissier ni un poste filmé en continu. Elle suit la notice aux
+  salariés et un **interrupteur par pays et région** (§ 7), avec une affichette pour les clients.
+- **Chemin** : la caméra (réseau local ou USB) est lue par le boîtier, qui garde sur son disque une boucle courte, **sans piste
+  son**, et n'envoie rien en continu. Quand l'analyse trouve une vente avec des articles suivis non lus sur un poste qui a une
+  caméra, la plateforme dépose une **demande d'extrait** (même file que les travaux d'impression) : de 2 minutes avant la vente à
+  1 minute après. Le boîtier découpe, envoie (taille et durée plafonnées), et l'extrait devient une **preuve** du constat
+  (`kind: clip`, empreinte SHA-256, fichier dans le stockage privé du site, jamais d'adresse publique).
+- **Consultation** : administrateur seulement, depuis la fiche du constat, par une route authentifiée ; chaque visionnage est
+  écrit au journal du module. **Conservation : 30 jours** (décision 6 du § 12) : le fichier est supprimé, la preuve garde son
+  empreinte et dit « extrait expiré ».
+- **L5** : l'IA ne lira que cet extrait. Rien de cela en L3.
+- **Avant le premier client** : avis de l'avocat (§ 14, point 6, et décision 15).
+
+### 16.9 La machine de test et le simulateur
+
+- **Simulateur** : le logiciel du boîtier lancé avec des appareils simulés (tapis, lecteur de sortie, imprimante à puce qui peut
+  rater une écriture, caméra qui filme une mire datée). Il joue des **scénarios écrits** : vente normale ; article non posé sur le
+  tapis ; rattrapage à la sortie ; réseau coupé deux heures puis rejeu ; horloge décalée ; lot envoyé deux fois ; écriture de puce
+  ratée puis réussie ; clé révoquée.
+- **Contrat partagé** : les lots de faits de ces scénarios sont des fichiers JSON du dépôt du backend
+  (`tests/Fixtures/pertes/boitier/`), comme les exemples remis au web. Les tests du backend les rejouent sans boîtier ; ceux du
+  boîtier vérifient qu'il produit les mêmes. Un changement de contrat casse un test des deux côtés.
+- **Machine de test** : une machine virtuelle Debian montée par un script : installer le paquet, inscrire le boîtier, lancer le
+  simulateur, couper et rendre le réseau, mettre à jour le paquet, le retirer. Elle prouve le paquet et l'inscription, ce qu'aucun
+  test du backend ne peut faire. Elle ne vise **jamais un site de client** (16.12, question 9).
+- **Pour le gérant** : le mode exercice gagne un « boîtier simulé » fabriqué par le serveur (aucun matériel, aucun boîtier) : il
+  joue les mêmes scénarios dans les tables du module, marqués exercice.
+
+### 16.10 Découpage proposé
+
+| Sous-lot | Contenu | Dépend de |
+|---|---|---|
+| **L3-a** | clé de boîtier, inscription, jeton, canal des faits, boîtiers et appareils, étape `box` de l'assistant, boîtier simulé d'exercice, fichiers du contrat | L2 |
+| **L3-b** | tapis, lien tapis-poste, vente reliée aux pièces, route avant paiement, rattrapage, règle « vendus sans lecture » | L3-a |
+| **L3-c** | travaux d'impression, imprimante à puce, mot de passe d'accès | L3-a |
+| **L3-d** | caméra du comptoir : demandes d'extrait, dépôt, preuve, conservation, interrupteur par pays | L3-b |
+| **Boîtier** (autre dépôt, créé au moment du code) | paquet, conteneur, simulateur, machine de test | contrat de L3-a |
+
+Une migration additive par sous-lot (la première : `Version20270113100000`, réservée auprès de « appli degestion backend »).
+L3-a et L3-b se jouent entièrement sans matériel ; L3-c et L3-d se codent sur le simulateur et demandent ensuite la campagne
+d'essai sur du vrai matériel (§ 13.7, risque 7) avant tout client.
+
+### 16.11 Risques
+
+1. **Une entrée nouvelle, tenue par une machine** : boîtier volé, jeton copié. Parade : une clé par boîtier, jeton court lié à la
+   machine, révocation immédiate, aucun droit de lecture, débit limité, routes fermées sans le droit du module.
+2. **Faits faux ou rejoués** : lots idempotents, puce inconnue refusée, appareil non déclaré refusé, heure douteuse écartée des
+   rattachements, exercice et réel étanches.
+3. **Mauvais rattachement d'une vente** (deux articles pareils, tapis du voisin). Parade : courte portée, même poste, même
+   variante, fenêtre courte, une pièce par article, garanties de la base ; le fait dit par quel chemin la pièce a été rattachée.
+4. **La caisse dépend du module** : jamais. La route d'avant paiement ne bloque rien et la caisse ignore ses pannes.
+5. **Volume** : départs et arrivées seulement, signe de vie non gardé, lots plafonnés, file du boîtier bornée.
+6. **Secret** : le mot de passe des puces ne sort que vers le boîtier, pour un travail ; test : il n'apparaît dans aucune réponse
+   de l'administrateur, aucun journal, aucun fait.
+7. **Vidéo et vie privée** : interrupteur par pays, notice, cadre, pas de son, extraits courts et datés, 30 jours, avocat.
+8. **Matériel jamais vu** : tapis, imprimante et caméra sont bâtis sur le simulateur ; la campagne d'essai tranche les détails.
+9. **Code partagé** : clés d'activation, `security.yaml`, routes de la caisse : écrit avec les sessions qui les tiennent.
+
+### 16.12 Questions au propriétaire, avec la proposition
+
+1. **Machine du boîtier** : mini-ordinateur ou carte de type Raspberry Pi ? *Proposition : le paquet accepte les deux ; modèle
+   conseillé : un mini-ordinateur sans ventilateur à disque SSD (une carte mémoire s'use), à confirmer à l'achat.*
+2. **Mises à jour du boîtier** : *proposition : automatiques, la nuit, hors des heures du magasin, avec retour à la version
+   d'avant si le boîtier ne redémarre pas bien ; l'application montre la version.*
+3. **Dépannage à distance** : *proposition : aucun accès à distance en L3 ; le boîtier envoie son état technique, sans donnée
+   personnelle, et l'assistant dit quoi vérifier.*
+4. **Articles non lus avant le paiement** : simple avis au caissier, ou validation d'un responsable ? *Proposition : un avis
+   seulement, la vente n'est jamais bloquée ; la validation se décidera avec les alertes en caisse (L5).*
+5. **Fenêtres** : *proposition : une pièce compte pour la vente si elle était sur le tapis dans les 10 minutes avant ; le
+   rattrapage à la sortie vaut 30 minutes après la vente ; deux réglages du module.*
+6. **Règle « articles suivis vendus sans lecture »** : *proposition : par poste et par jour, jamais par personne ; seuil de départ :
+   5 articles et 20 % des articles suivis vendus ce jour-là sur ce poste.*
+7. **Caméra du comptoir** : *proposition : éteinte d'office en France et au Québec jusqu'à l'avis de l'avocat, allumable aux
+   États-Unis ; extraits de 3 minutes ; suppression du fichier après 30 jours par un minuteur (c'est une suppression
+   automatique : il faut votre accord) ; téléchargement permis à l'administrateur, écrit au journal.*
+8. **Mot de passe des puces** : *proposition : envoyé au boîtier avec chaque travail et gardé en mémoire seulement ; un changement
+   de mot de passe ne vaut que pour les puces écrites ensuite.*
+9. **Machine de test** : où tourne-t-elle, et vers quel site ? *Proposition : hors du serveur de production, vers un site de
+   répétition isolé ; `demo` seulement avec votre accord exprès, en mode exercice.*
+10. **Droit de magasinier** (promis pour L3 à la question 7 du § 13.8) : *proposition : un rôle limité à associer une puce, chercher
+    une puce et imprimer les étiquettes de pièces, sans les constats ni les réglages ; codé après L3-b, en petit lot.*
+11. **Ordre** : *proposition : L3-a, L3-b, puis L3-c ; L3-d en dernier, après l'avis de l'avocat ; le dépôt du boîtier est créé
+    quand le contrat de L3-a est validé.*
