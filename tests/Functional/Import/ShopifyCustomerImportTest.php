@@ -103,6 +103,7 @@ class ShopifyCustomerImportTest extends WebTestCase
         $this->assertStringNotContainsString('@example', (string) $this->client->getResponse()->getContent(), 'aucune adresse dans le rapport');
         $this->assertStringNotContainsString('Martin', (string) $this->client->getResponse()->getContent(), 'aucun nom dans le rapport');
         $this->assertSame([$before, 0], [$users(), (int) $conn()->fetchOne('SELECT COUNT(*) FROM import_customer_invitation')], 'l\'analyse n\'écrit aucun compte');
+        $this->assertSame('analysed', $this->get('/api/site/imports')['imports'][0]['status'], 'un import déposé à l\'instant n\'est pas abandonné par la lecture de la liste');
         $this->request('GET', "/api/site/imports/$id/issues.csv");
         $this->assertSame(200, $this->status());
         $this->assertStringContainsString("5;NO_EMAIL\n", (string) $this->client->getResponse()->getContent());
@@ -171,7 +172,7 @@ class ShopifyCustomerImportTest extends WebTestCase
         [$reset, $verification] = [bin2hex(random_bytes(32)), bin2hex(random_bytes(32))];
         $conn()->executeStatement("UPDATE \"user\" SET reset_token = ?, reset_token_expires_at = NOW() + INTERVAL '1 hour', verification_token = ? WHERE id = ?", [$reset, $verification, $alice['id']]);
         foreach ([['/api/password-reset/verify', ['token' => $reset], 400], ['/api/password-reset/confirm', ['token' => $reset, 'password' => self::PASSWORD], 400],
-            ['/password-reset/confirm', ['token' => $reset, 'password' => self::PASSWORD], 400], ['/api/memoires/auth/activate', ['token' => $verification, 'password' => self::PASSWORD], 404]] as [$route, $body, $status]) {
+            ['/password-reset/confirm', ['token' => $reset, 'newPassword' => self::PASSWORD], 400], ['/api/memoires/auth/activate', ['token' => $verification, 'password' => self::PASSWORD], 404]] as [$route, $body, $status]) {
             $this->publicRequest($route, $body);
             $this->assertSame($status, $this->status(), $route . ' : ' . substr((string) $this->client->getResponse()->getContent(), 0, 200));
         }
@@ -419,7 +420,13 @@ class ShopifyCustomerImportTest extends WebTestCase
         $this->assertFalse($guests->isPending($this->em()->find(User::class, $ines)));
         $this->publicRequest('/api/register', ['email' => "ines-$t@example.com", 'password' => 'Le-mot-de-passe-d-un-tiers-99', 'firstName' => 'Un', 'lastName' => 'Tiers', 'platform' => 'mobile']);
         $this->assertSame([409, 'EMAIL_ALREADY_USED'], [$this->status(), $this->body()['code']], 'un tiers ne remplace pas un compte activé');
-        $this->assertEquals(['erased' => 0, 'kept' => 1, 'failed' => 0], $guests->eraseDue(), 'à l\'échéance : rangée, pas effacée');
+        // rejouer le fichier : Inès est maintenant un compte du site (« déjà client »), plus une invitée déjà reprise
+        $this->upload($this->csv(["'7010,Gaël,Nouveau,gael-$t@example.invalid,no,,,,,,,,,,no,0,0,,no,", "'7012,Inès,Activée,ines-$t@example.com,no,,,,,,,,,,no,0,0,,no,"]), 'customers');
+        $this->assertSame([0, 1, 6], [$this->body()['report']['customers']['importable'], $this->body()['report']['customers']['alreadyImported'], $this->body()['report']['customers']['alreadyCustomer']]);
+        $this->request('POST', '/api/site/imports/' . $this->body()['id'] . '/cancel');
+        // l'effacement lui-même, demandé pour ce compte, ne l'efface pas et ne le modifie pas
+        $this->assertSame('kept', $guests->erase($ines));
+        $this->assertEquals(['erased' => 0, 'kept' => 0, 'failed' => 0], $guests->eraseDue(), 'à l\'échéance : plus rien à effacer pour elle');
         $activated = $conn()->fetchAssociative('SELECT password, roles, lastname FROM "user" WHERE id = ?', [$ines]);
         $this->assertSame([$hash, '["ROLE_USER_INTERNET"]', 'Activée', 'kept'], [$activated['password'], $activated['roles'], $activated['lastname'], $state($ines)]);
         $this->publicRequest('/api/password-reset/request', ['email' => "ines-$t@example.com"]);
@@ -429,9 +436,15 @@ class ShopifyCustomerImportTest extends WebTestCase
         $this->assertSame(202, $this->status());
         $this->request('GET', '/api/site/help'); // un noyau neuf, où l'envoi des courriels peut être remplacé avant d'être construit
         $mute = $this->createMock(\App\Services\EmailConfigurationService\EmailSenderService::class);
-        $mute->method('sendTemplatedEmail')->willReturn(false);
+        $calls = [];
+        $mute->method('sendTemplatedEmail')->willReturnCallback(function (...$args) use (&$calls): bool {
+            $calls[] = $args;
+
+            return false;
+        });
         static::getContainer()->set(\App\Services\EmailConfigurationService\EmailSenderService::class, $mute);
         $this->assertSame(['sent' => 0, 'failed' => 2], $this->sendInvitations($third));
+        $this->assertSame([2, true], [count($calls), $calls[0][9] ?? null], 'envoi direct, sans la file des courriels : le résultat est celui de la remise au serveur d\'envoi');
         $this->assertSame(['imported', 'imported', null], [$state($gael), $state($hugo), $conn()->fetchOne('SELECT token_hash FROM import_customer_invitation WHERE user_id = ?', [$gael])], 'un envoi en échec ne laisse ni « invité », ni jeton');
         $this->request('POST', "/api/site/imports/$third/invitations");
         $this->assertSame([202, 2], [$this->status(), $this->body()['queued']], 'rien n\'est parti : les deux restent à inviter');
