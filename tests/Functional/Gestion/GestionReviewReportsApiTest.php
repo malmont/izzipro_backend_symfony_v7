@@ -151,6 +151,10 @@ class GestionReviewReportsApiTest extends WebTestCase
         }
         $this->assertStringNotContainsString('Avis de la console', $html);
         $this->assertStringNotContainsString('Question posée', $html);
+        // chaque analyse fait une partie, sous son titre (le même titre revient aussi dans « d'où viennent ces chiffres »)
+        foreach (['Résultat d\'une période', 'Ventes et marge', 'Budget : prévu et réel', 'Stock : valeur et articles en stock bas'] as $part) {
+            $this->assertStringContainsString('<h2 class="part">' . htmlspecialchars($part, ENT_QUOTES) . '</h2>', $html, $part);
+        }
         foreach ($figures as $screen => $list) {
             foreach ($list as $figureId => $value) {
                 $unit = null;
