@@ -337,9 +337,11 @@ class LossPreventionSaleLinkTest extends LossPreventionTestCase
     {
         // Réglages : trois valeurs, leurs bornes, leurs valeurs par défaut, la règle de conservation en clair
         $view = fn (): array => $this->json($this->admin('GET', self::BASE . '/reglages'))['pieces'];
-        $this->assertSame(['bounds' => ['counterWindowMinutes' => ['min' => 1, 'max' => 60], 'catchUpMinutes' => ['min' => 5, 'max' => 120], 'presenceRetentionDays' => ['min' => 30, 'max' => 730]],
-            'defaults' => ['counterWindowMinutes' => 10, 'catchUpMinutes' => 30, 'presenceRetentionDays' => 90], 'counterWindowMinutes' => 10, 'catchUpMinutes' => 30, 'presenceRetentionDays' => 90,
-            'note' => 'Les présences sur le tapis de comptoir fermées depuis plus de 90 jours sont effacées automatiquement. Les faits (lectures, ventes, retours) sont conservés.'], $view());
+        $this->assertSame(['bounds' => ['counterWindowMinutes' => ['min' => 1, 'max' => 60], 'catchUpMinutes' => ['min' => 5, 'max' => 120], 'presenceRetentionDays' => ['min' => 30, 'max' => 730],
+            'zoneArriveSeconds' => ['min' => 1, 'max' => 60], 'zoneLeaveSeconds' => ['min' => 5, 'max' => 600]],
+            'defaults' => ['counterWindowMinutes' => 10, 'catchUpMinutes' => 30, 'presenceRetentionDays' => 90, 'zoneArriveSeconds' => 3, 'zoneLeaveSeconds' => 30],
+            'counterWindowMinutes' => 10, 'catchUpMinutes' => 30, 'presenceRetentionDays' => 90, 'zoneArriveSeconds' => 3, 'zoneLeaveSeconds' => 30,
+            'note' => 'Les présences sur le tapis de comptoir et dans les zones, fermées depuis plus de 90 jours, sont effacées automatiquement ; la dernière zone où chaque pièce a été vue est gardée. Les faits (lectures, ventes, retours) sont conservés.'], $view());
         $put = fn (mixed $pieces, int $status = 200): array => $this->json($this->admin('PUT', self::BASE . '/reglages', ['pieces' => $pieces]), $status);
         $this->assertSame(['pieces.counterWindowMinutes' => 'PARAM_OUT_OF_RANGE', 'pieces.catchUpMinutes' => 'MUST_BE_INTEGER', 'pieces.presenceRetentionDays' => 'PARAM_OUT_OF_RANGE'],
             $put(['counterWindowMinutes' => 61, 'catchUpMinutes' => '30', 'presenceRetentionDays' => 29], 422)['fields']);
@@ -347,7 +349,7 @@ class LossPreventionSaleLinkTest extends LossPreventionTestCase
             $put(['counterWindowMinutes' => 0, 'catchUpMinutes' => 121, 'presenceRetentionDays' => 731], 422)['fields']);
         $this->assertSame(['pieces' => 'MUST_BE_OBJECT'], $put('dix', 422)['fields']);
         $set = $put(['counterWindowMinutes' => 1, 'catchUpMinutes' => 120, 'presenceRetentionDays' => 30])['pieces'];
-        $this->assertSame([1, 120, 30, 'Les présences sur le tapis de comptoir fermées depuis plus de 30 jours sont effacées automatiquement. Les faits (lectures, ventes, retours) sont conservés.'],
+        $this->assertSame([1, 120, 30, 'Les présences sur le tapis de comptoir et dans les zones, fermées depuis plus de 30 jours, sont effacées automatiquement ; la dernière zone où chaque pièce a été vue est gardée. Les faits (lectures, ventes, retours) sont conservés.'],
             [$set['counterWindowMinutes'], $set['catchUpMinutes'], $set['presenceRetentionDays'], $set['note']]);
         $this->assertSame(['60', '7200', '30'], array_map('strval', $this->db->fetchNumeric('SELECT counter_window_seconds, catch_up_seconds, presence_retention_days FROM loss_setting')));
         $this->assertSame(['counter' => 60, 'catchUp' => 7200, 'presenceDays' => 30], static::getContainer()->get(LossSaleLinkService::class)->windows());

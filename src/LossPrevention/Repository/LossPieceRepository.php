@@ -270,6 +270,7 @@ class LossPieceRepository extends EntityRepository
         $conn->executeStatement("SET LOCAL loss.purge = 'exercise'");
         $conn->executeStatement('DELETE FROM loss_print_job WHERE exercise'); // lot L3-c : les travaux de l'imprimante simulée portent sur ces pièces
         $conn->executeStatement('DELETE FROM loss_counter_presence WHERE exercise'); // lot L3-b1 : une pièce d'exercice posée sur un tapis simulé
+        $conn->executeStatement('DELETE FROM loss_zone_presence WHERE exercise'); // lot L4-a : une pièce d'exercice vue par une antenne simulée
         $conn->executeStatement('DELETE FROM loss_piece_event WHERE exercise');
         $conn->executeStatement('DELETE FROM loss_tag WHERE exercise');
         $deleted = (int) $conn->executeStatement('DELETE FROM loss_piece WHERE exercise');
@@ -313,6 +314,53 @@ class LossPieceRepository extends EntityRepository
     public function commandeExists(int $id): bool
     {
         return $this->db()->fetchOne('SELECT 1 FROM commande WHERE id = ?', [$id]) !== false;
+    }
+
+    /**
+     * Lot L4-a. Où chaque pièce a été vue en dernier par une antenne de zone : sa présence la plus récente (ouverte ou fermée).
+     *
+     * @param list<int> $pieceIds
+     *
+     * @return array<int, array{zone: string, since: string, until: ?string, serial: string}> par pièce ; absente si aucune antenne ne l'a vue
+     */
+    public function lastSeenOf(array $pieceIds): array
+    {
+        if ($pieceIds === []) {
+            return [];
+        }
+        $rows = $this->db()->fetchAllAssociative(
+            'SELECT DISTINCT ON (z.piece_id) z.piece_id, z.zone, z.since, z.until, d.serial FROM loss_zone_presence z JOIN loss_device d ON d.id = z.device_id'
+            . ' WHERE z.piece_id IN (?) ORDER BY z.piece_id, z.since DESC, z.id DESC', [$pieceIds], [ArrayParameterType::INTEGER]);
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row['piece_id']] = ['zone' => (string) $row['zone'], 'since' => (string) $row['since'], 'until' => $row['until'] !== null ? (string) $row['until'] : null, 'serial' => (string) $row['serial']];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Lot L4-a. Les vraies pièces en service (ni vendues ni retirées) vues en dernier dans chaque zone, sans départ connu, avec les
+     * mêmes filtres que la synthèse (variante, article).
+     *
+     * @param array{variantId?: int, productId?: int} $filters
+     *
+     * @return array<string, int> nombre de pièces par zone
+     */
+    public function zoneCounts(array $filters = []): array
+    {
+        $where = '';
+        $params = ['gone' => [LossPiece::SOLD, LossPiece::RETIRED]];
+        foreach (['variantId' => 'p.variant_id', 'productId' => 'p.product_id'] as $key => $column) {
+            if (isset($filters[$key])) {
+                $where .= " AND $column = :$key";
+                $params[$key] = (int) $filters[$key];
+            }
+        }
+
+        return array_map('intval', $this->db()->fetchAllKeyValue(
+            'SELECT z.zone, COUNT(DISTINCT z.piece_id) FROM loss_zone_presence z JOIN loss_piece p ON p.id = z.piece_id'
+            . ' WHERE z.until IS NULL AND NOT z.exercise AND NOT p.exercise AND p.status NOT IN (:gone)' . $where . ' GROUP BY z.zone', $params, ['gone' => ArrayParameterType::STRING]));
     }
 
     private function db(): Connection

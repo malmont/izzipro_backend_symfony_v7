@@ -65,6 +65,11 @@
                 "code": "print_no_labels",
                 "label": "Plus d'étiquettes",
                 "text": "Le rouleau se termine après la première étiquette : les lignes suivantes passent en échec."
+            },
+            {
+                "code": "zone_move",
+                "label": "De la réserve au rayon",
+                "text": "Une pièce d'exercice est vue par l'antenne de la réserve, en part, puis arrive devant l'antenne du rayon : sa fiche dit où elle a été vue en dernier."
             }
         ]
     }

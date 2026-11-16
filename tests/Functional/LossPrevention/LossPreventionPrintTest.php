@@ -445,8 +445,8 @@ class LossPreventionPrintTest extends LossPreventionTestCase
         $box = $this->json($this->admin('POST', self::EX . '/boitiers'), 201);
         $sim = $box['box']['id'];
         $this->assertContains('printer', array_column($box['box']['devices'], 'kind'), 'le boîtier simulé a son imprimante à puce');
-        $this->assertSame(['print_ok', 'print_refused', 'print_no_labels'], array_slice(array_column($box['scenarios'], 'code'), -3));
-        $this->assertSame(['Étiquettes imprimées', 'Écriture refusée', 'Plus d\'étiquettes'], array_slice(array_column($box['scenarios'], 'label'), -3));
+        $this->assertSame(['print_ok', 'print_refused', 'print_no_labels'], array_slice(array_column($box['scenarios'], 'code'), -4, 3));
+        $this->assertSame(['Étiquettes imprimées', 'Écriture refusée', 'Plus d\'étiquettes'], array_slice(array_column($box['scenarios'], 'label'), -4, 3));
         $play = fn (string $scenario, int $status = 200): array => $this->json($this->admin('POST', self::EX . "/boitiers/$sim/scenarios", ['scenario' => $scenario]), $status);
         $line = fn (): array => array_column($this->json($this->admin('GET', self::EX . '/sante'))['devices'], null, 'kind')['printer'];
         $this->assertSame(['pending', 'L\'imprimante simulée n\'a encore rien écrit. Jouez le scénario « Étiquettes imprimées ».'], [$line()['state'], $line()['hint']]);

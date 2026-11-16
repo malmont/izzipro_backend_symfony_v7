@@ -52,6 +52,13 @@ class LossSetting
     #[ORM\Column(name: 'presence_retention_days', nullable: true)]
     private ?int $presenceRetentionDays = null;
 
+    /** Lot L4-a : durée de lecture qui fait arriver une pièce dans une zone, silence qui l'en fait partir (secondes) ; nul = la valeur du code */
+    #[ORM\Column(name: 'zone_arrive_seconds', nullable: true)]
+    private ?int $zoneArriveSeconds = null;
+
+    #[ORM\Column(name: 'zone_leave_seconds', nullable: true)]
+    private ?int $zoneLeaveSeconds = null;
+
     /** Dernière séquence du journal de caisse lue par l'analyse ; null = analyse jamais lancée */
     #[ORM\Column(name: 'cursor_sequence', nullable: true)]
     private ?int $cursorSequence = null;

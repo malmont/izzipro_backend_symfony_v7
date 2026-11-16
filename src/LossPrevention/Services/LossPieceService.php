@@ -4,6 +4,7 @@ namespace App\LossPrevention\Services;
 
 use App\Gestion\Services\GestionConflictException;
 use App\Gestion\Services\GestionValidationException;
+use App\LossPrevention\Entity\LossDevice;
 use App\LossPrevention\Entity\LossJournalEntry;
 use App\LossPrevention\Entity\LossPiece;
 use App\LossPrevention\Entity\LossPieceEvent;
@@ -423,7 +424,11 @@ class LossPieceService
             ];
         }
 
-        return ['rows' => $rows, 'total' => $found['total'], 'page' => $page, 'limit' => $limit,
+        // lot L4-a : les pièces en service vues en dernier dans chaque zone, sans départ connu (zéro tant qu'aucune antenne n'a rien lu)
+        $counts = $this->repository()->zoneCounts($filters);
+        $zones = array_map(fn (string $zone): array => ['zone' => $zone, 'label' => $this->texts->t('boxes.zone.' . $zone, $locale), 'pieces' => $counts[$zone] ?? 0], LossDevice::ZONES);
+
+        return ['rows' => $rows, 'total' => $found['total'], 'page' => $page, 'limit' => $limit, 'zones' => $zones,
             'totals' => ['variants' => $found['total'], 'pieces' => $found['totals']['active'], 'sold' => $found['totals']['sold'], 'retired' => $found['totals']['retired'],
                 'tagged' => $found['totals']['tagged'], 'untagged' => $found['totals']['active'] - $found['totals']['tagged']]];
     }
@@ -645,16 +650,23 @@ class LossPieceService
         $repository = $this->repository();
         $variants = $repository->variants(array_map(static fn (array $p): int => (int) $p['variant_id'], $pieces));
         $tags = $repository->tagsOf(array_map(static fn (array $p): int => (int) $p['id'], $pieces));
+        $seen = $repository->lastSeenOf(array_map(static fn (array $p): int => (int) $p['id'], $pieces));
         $out = [];
         foreach ($pieces as $piece) {
             $id = (int) $piece['id'];
+            $last = $seen[$id] ?? null; // lot L4-a : où une antenne a vu la pièce en dernier (une dernière lecture, pas une certitude)
             $rows = array_map(fn (array $t): array => $this->tagRow($t, $locale), $tags[$id] ?? []);
             $out[] = [
                 'id' => $id,
                 'number' => (int) $piece['number'],
                 'status' => (string) $piece['status'],
                 'statusLabel' => $this->texts->t('pieces.status.' . $piece['status'], $locale),
-                'zone' => $piece['zone'],
+                'zone' => $last['zone'] ?? null,
+                'zoneLabel' => $last !== null ? $this->texts->t('boxes.zone.' . $last['zone'], $locale) : null,
+                // l'heure de l'arrivée dans cette zone, celle du départ si l'antenne l'a vue partir, et l'antenne
+                'zoneSeenAt' => $last !== null ? self::iso($last['since']) : null,
+                'zoneLeftAt' => $last !== null ? self::iso($last['until']) : null,
+                'zoneDevice' => $last['serial'] ?? null,
                 'exercise' => (bool) $piece['exercise'],
                 'variantId' => (int) $piece['variant_id'],
                 'productId' => (int) $piece['product_id'],

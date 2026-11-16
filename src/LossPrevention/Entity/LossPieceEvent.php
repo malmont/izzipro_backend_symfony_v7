@@ -39,12 +39,16 @@ class LossPieceEvent
     /** La pièce est reliée à une vente par l'analyse, ou revient (lot L3-b2a) : écrits par le module, jamais par un boîtier */
     public const PIECE_SOLD = 'PIECE_SOLD';
     public const PIECE_RETURNED = 'PIECE_RETURNED';
+    /** Lot L4-a : une antenne ne voit plus la pièce dans sa zone (le pendant de `ZONE_SEEN`, qui dit son arrivée) */
+    public const ZONE_LEFT = 'ZONE_LEFT';
     /** Faits qu'un LECTEUR de boîtier peut envoyer par le canal */
-    public const FROM_BOX = [self::SPOT_CHECK, self::ZONE_SEEN];
+    public const FROM_BOX = [self::SPOT_CHECK, self::ZONE_SEEN, self::ZONE_LEFT];
+    /** Arrivée et départ d'une zone : ils disent leur zone, et tiennent la présence par zone */
+    public const FROM_ZONE = [self::ZONE_SEEN, self::ZONE_LEFT];
     /** Faits qu'un TAPIS de comptoir peut envoyer par le canal */
     public const FROM_MAT = [self::COUNTER_SEEN, self::COUNTER_LEFT];
     /** Lectures de puces par un appareil : nombreuses, la fiche d'une pièce n'en montre que les dernières */
-    public const READS = [self::SPOT_CHECK, self::ZONE_SEEN, self::COUNTER_SEEN, self::COUNTER_LEFT];
+    public const READS = [self::SPOT_CHECK, self::ZONE_SEEN, self::COUNTER_SEEN, self::COUNTER_LEFT, self::ZONE_LEFT];
     /**
      * Résultats d'une imprimante à puce (lot L3-c), envoyés par le boîtier avec ses autres faits : puce écrite et RELUE conforme, ou
      * écriture en échec. Ce ne sont pas des faits de pièce : ils closent une ligne de travail d'impression (`LossPrintService::result`) ;

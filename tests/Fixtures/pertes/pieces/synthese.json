@@ -11,9 +11,9 @@
                 "variantId": 23,
                 "productId": 15,
                 "variantMissing": false,
-                "name": "Veste en lin (exemple 5D8303)",
+                "name": "Veste en lin (exemple BE4837)",
                 "variantLabel": null,
-                "barcode": "VESTE-LIN-M-5D8303",
+                "barcode": "VESTE-LIN-M-BE4837",
                 "barcodeOf": "variant",
                 "symbology": "code128",
                 "stock": 6,
@@ -30,9 +30,9 @@
                 "variantId": 24,
                 "productId": 15,
                 "variantMissing": false,
-                "name": "Veste en lin (exemple 5D8303)",
+                "name": "Veste en lin (exemple BE4837)",
                 "variantLabel": null,
-                "barcode": "VESTE-LIN-L-5D8303",
+                "barcode": "VESTE-LIN-L-BE4837",
                 "barcodeOf": "variant",
                 "symbology": "code128",
                 "stock": 6,
@@ -49,6 +49,33 @@
         "total": 2,
         "page": 1,
         "limit": 50,
+        "zones": [
+            {
+                "zone": "stockroom",
+                "label": "Réserve",
+                "pieces": 0
+            },
+            {
+                "zone": "stockroom_door",
+                "label": "Porte de la réserve",
+                "pieces": 0
+            },
+            {
+                "zone": "floor",
+                "label": "Rayon",
+                "pieces": 0
+            },
+            {
+                "zone": "counter",
+                "label": "Comptoir",
+                "pieces": 0
+            },
+            {
+                "zone": "exit",
+                "label": "Sortie",
+                "pieces": 0
+            }
+        ],
         "totals": {
             "variants": 2,
             "pieces": 3,

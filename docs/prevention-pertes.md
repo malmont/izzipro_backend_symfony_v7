@@ -2131,3 +2131,49 @@ dix lignes avant son code, et les routes nouvelles au web avant la bascule.
 6. **Le comptage change-t-il le stock ?** *Non : il montre l'écart, la gestion corrige.*
 7. **Bilan du soir par courriel** : *joint au résumé du jour qui existe, sans courriel de plus.*
 8. **Ordre** : *L4-a, L4-b, L4-c, L4-d, puis L4-e après l'avocat.*
+
+### 17.12 Lot L4-a codé : zones et antennes (16/11/2026)
+
+Contrat validé par le chef de projet le 16/11/2026, avec deux écarts au plan : **l'état d'une pièce ne change pas** (la zone
+s'affiche à côté de l'état ; les états `in_stockroom`, `on_floor`, `at_counter` restent réservés), et **aucune zone nouvelle**
+dans ce lot (`back_door` vient avec L4-c, `restricted_entrance` avec L4-e). **Codé sous Opus, à faire vérifier par Fable**
+(demande du propriétaire, 16/11/2026). Migration `Version20270120100000` (script `scripts/migrate_all_v2_pertes_l4a.sh`, 13
+instructions) : table `loss_zone_presence`, sa garde, deux colonnes de `loss_setting`. Aucune fonction ni table d'un lot précédent
+n'est remplacée ni indexée.
+
+- **Antenne de zone** : un lecteur (`reader`) qui a une zone, réglée par la route qui existe
+  (`PUT /boitiers/{id}/appareils/{deviceId}` `{ zone }`). Un lecteur sans zone reste un lecteur à main.
+- **Faits du boîtier** : `ZONE_SEEN` (l'arrivée, qui existait) et **`ZONE_LEFT`** (nouveau : le départ), tous deux avec leur
+  `zone`, refusés `ZONE_INVALID` sans zone connue, `DEVICE_KIND_INVALID` s'ils viennent d'un tapis. Un boîtier qui ne dit que
+  les arrivées marche toujours.
+- **Présence par zone** (`loss_zone_presence`, `Entity/LossZonePresence`) : la projection de ces faits, tenue par le serveur
+  comme celle du tapis. Une arrivée ouvre une présence (une puce n'est vue que par une antenne à la fois : ce qu'une autre
+  croyait voir se ferme) ; une arrivée plus ancienne que ce qu'on connaît, ou à l'heure douteuse, ne pose rien ; un départ ferme,
+  à l'heure du serveur s'il est douteux ; un départ plus ancien que l'arrivée connue ne ferme rien ; un fait rejoué ne touche
+  rien deux fois. La base garantit : un lecteur et lui seul, une puce du même genre et sa pièce, une zone, une fin après le début,
+  rien de l'identité ne change. Conservation : la règle des présences du tapis (`presenceRetentionDays`, 90 jours), **sauf la
+  dernière présence de chaque pièce**, toujours gardée. Effacée avec l'exercice.
+- **Réglages** (`GET/PUT /reglages`, bloc `pieces`) : `zoneArriveSeconds` (3 par défaut, 1 à 60) et `zoneLeaveSeconds` (30 par
+  défaut, 5 à 600), avec leurs bornes et leurs valeurs par défaut. **Servis au boîtier** dans ses réglages :
+  `zonePresence { arriveSeconds, leaveSeconds }` ; `facts.types` gagne `ZONE_LEFT`. Le texte de la règle de conservation
+  (`pieces.note`) dit maintenant aussi les zones.
+- **« Où est la pièce »** : la fiche et la liste des pièces gagnent `zoneLabel`, `zoneSeenAt`, `zoneLeftAt` (null tant
+  qu'aucun départ n'est connu), `zoneDevice` (le numéro de série de l'antenne) ; `zone` (qui existait et valait toujours null)
+  dit la dernière zone. C'est une dernière lecture, pas une certitude. La synthèse (`GET /pieces/synthese`) gagne `zones` :
+  pour chaque zone, les vraies pièces en service vues en dernier là sans départ connu, avec les filtres de la synthèse.
+- **Tableau de santé** : une ligne par antenne (`kind: zone_reader`, code `reader-{id}`, libellé « Antenne : Réserve »), en
+  ordre, en attente (aucune puce vue) ou en panne ; son conseil nomme la zone.
+- **Assistant** : étape facultative `zone_reader`, faite quand **chaque** antenne a vu une puce dans sa zone ; sinon elle
+  reprend la ligne de l'antenne qui demande un geste (en panne d'abord).
+- **Exercice** : le boîtier simulé gagne deux antennes (`SIM-ANTENNE-RESERVE` à la réserve, `SIM-ANTENNE-RAYON` en rayon ; son
+  lecteur de sortie, qui a une zone, devient lui aussi une ligne d'antenne) et la scène `zone_move` « De la réserve au rayon »
+  (trois faits : arrivée, départ, arrivée). La scène `zone_exit` pose aussi la présence à la sortie. 409
+  `EXERCISE_NO_ZONE_READER` pour un boîtier simulé d'avant ce lot.
+- **Logiciel du boîtier** (dépôt local, lot B5) : la classe `Antenne` lit sans cesse ce qui passe et ne met en file que les
+  arrivées (après `arriveSeconds` de lecture, datée de la première lecture) et les départs (après `leaveSeconds` de silence,
+  datés de la dernière lecture) ; une lecture isolée à travers une cloison ne produit rien ; mémoire bornée.
+- **Ce que le lot ne fait pas** : aucun constat, aucune alerte, rien dans la caisse, rien dans le stock, aucune route nouvelle.
+
+**Tests** : `LossPreventionZoneTest` (arrivée, départ, ordre des faits, heure douteuse, rejeu, une antenne à la fois, fiche,
+liste, synthèse et ses filtres, réglages et leurs bornes, réglages servis, santé et étape, antenne en panne, pièce retirée,
+conservation ; antennes simulées, scène, exercice étanche au réel, gardes de la base, migration rejouée et son script).

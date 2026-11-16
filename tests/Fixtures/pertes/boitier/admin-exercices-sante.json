@@ -14,7 +14,7 @@
                 "cashRegisterId": null,
                 "state": "ok",
                 "stateLabel": "En ordre",
-                "lastSeenAt": "2026-11-16T11:15:46+00:00",
+                "lastSeenAt": "2026-11-16T14:50:21+00:00",
                 "silentSince": null,
                 "silentSeconds": null,
                 "hint": null
@@ -27,7 +27,7 @@
                 "cashRegisterId": null,
                 "state": "pending",
                 "stateLabel": "En attente",
-                "lastSeenAt": "2026-11-16T11:15:45+00:00",
+                "lastSeenAt": "2026-11-16T14:50:21+00:00",
                 "silentSince": null,
                 "silentSeconds": null,
                 "hint": "Le tapis simulé n'a encore rien lu. Jouez le scénario « Pièce posée sur le tapis »."
@@ -40,23 +40,62 @@
                 "cashRegisterId": null,
                 "state": "ok",
                 "stateLabel": "En ordre",
-                "lastSeenAt": "2026-11-16T11:15:45+00:00",
+                "lastSeenAt": "2026-11-16T14:50:21+00:00",
                 "silentSince": null,
                 "silentSeconds": null,
                 "hint": null
+            },
+            {
+                "code": "reader-5",
+                "kind": "zone_reader",
+                "label": "Antenne : Sortie",
+                "zone": "exit",
+                "cashRegisterId": null,
+                "state": "pending",
+                "stateLabel": "En attente",
+                "lastSeenAt": "2026-11-16T14:50:21+00:00",
+                "silentSince": null,
+                "silentSeconds": null,
+                "hint": "L'antenne simulée « Sortie » n'a encore rien vu. Jouez le scénario « De la réserve au rayon » ou « Lecture à la sortie »."
+            },
+            {
+                "code": "reader-9",
+                "kind": "zone_reader",
+                "label": "Antenne : Réserve",
+                "zone": "stockroom",
+                "cashRegisterId": null,
+                "state": "pending",
+                "stateLabel": "En attente",
+                "lastSeenAt": "2026-11-16T14:50:21+00:00",
+                "silentSince": null,
+                "silentSeconds": null,
+                "hint": "L'antenne simulée « Réserve » n'a encore rien vu. Jouez le scénario « De la réserve au rayon » ou « Lecture à la sortie »."
+            },
+            {
+                "code": "reader-10",
+                "kind": "zone_reader",
+                "label": "Antenne : Rayon",
+                "zone": "floor",
+                "cashRegisterId": null,
+                "state": "pending",
+                "stateLabel": "En attente",
+                "lastSeenAt": "2026-11-16T14:50:21+00:00",
+                "silentSince": null,
+                "silentSeconds": null,
+                "hint": "L'antenne simulée « Rayon » n'a encore rien vu. Jouez le scénario « De la réserve au rayon » ou « Lecture à la sortie »."
             }
         ],
         "summary": {
             "ok": 2,
-            "pending": 1,
+            "pending": 4,
             "down": 0,
             "absent": 0,
             "allOk": false,
-            "label": "1 appareil à vérifier"
+            "label": "4 appareils à vérifier"
         },
         "thresholdSeconds": 300,
         "exercise": true,
         "screen": "pertes.boitiers",
-        "checkedAt": "2026-11-16T11:15:46+00:00"
+        "checkedAt": "2026-11-16T14:50:22+00:00"
     }
 }

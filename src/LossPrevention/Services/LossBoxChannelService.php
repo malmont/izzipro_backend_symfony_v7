@@ -7,7 +7,9 @@ use App\LossPrevention\Entity\LossBoxEvent;
 use App\LossPrevention\Entity\LossDevice;
 use App\LossPrevention\Entity\LossPieceEvent;
 use App\LossPrevention\Entity\LossPrintJobLine;
+use App\LossPrevention\Entity\LossSetting;
 use App\LossPrevention\Entity\LossTag;
+use App\LossPrevention\Entity\LossZonePresence;
 use App\LossPrevention\Repository\LossBoxRepository;
 use App\Services\TenantConnectionProvider;
 use App\Services\TenantEntityManagerProvider;
@@ -573,6 +575,13 @@ class LossBoxChannelService
                 } elseif ($written && $fact['type'] === LossPieceEvent::COUNTER_LEFT) {
                     $doubt ? $repository->closePresencesOfTag($fact['deviceId'], (int) $tag['id'], self::boxTime($serverNow, $current['clock_offset'])) : $repository->closePresence($fact['deviceId'], (int) $tag['id'], $at, false);
                 }
+                // Antenne de zone (lot L4-a) : la présence par zone dit où la pièce a été vue en dernier. Mêmes règles que le tapis : un
+                // fait rejoué ne la touche pas deux fois, une arrivée à l'heure douteuse ne pose rien, un départ vaut toujours
+                if ($written && !$doubt && $fact['type'] === LossPieceEvent::ZONE_SEEN) {
+                    $repository->openZonePresence($fact['deviceId'], (int) $tag['id'], (string) $fact['zone'], $at, false);
+                } elseif ($written && $fact['type'] === LossPieceEvent::ZONE_LEFT) {
+                    $repository->closeZonePresence($fact['deviceId'], (int) $tag['id'], (string) $fact['zone'], $doubt ? self::boxTime($serverNow, $current['clock_offset']) : $at, $doubt, false);
+                }
                 $status = $written ? 'accepted' : 'duplicate';
                 ++$counts[$status];
                 $results[] = ['index' => $index, 'key' => $fact['key'], 'status' => $status, 'code' => null];
@@ -624,7 +633,7 @@ class LossBoxChannelService
                 return $refused('ZONE_INVALID');
             }
             $zone = 'counter'; // un tapis est au comptoir
-        } elseif (($zone === null && $type === LossPieceEvent::ZONE_SEEN) || ($zone !== null && !in_array($zone, LossDevice::ZONES, true))) {
+        } elseif (($zone === null && in_array($type, LossPieceEvent::FROM_ZONE, true)) || ($zone !== null && !in_array($zone, LossDevice::ZONES, true))) {
             return $refused('ZONE_INVALID');
         }
         $data = $fact['data'] ?? null;
@@ -689,7 +698,12 @@ class LossBoxChannelService
                 'cashRegisterId' => $row['cash_register_id'] !== null ? (int) $row['cash_register_id'] : null];
         }
 
-        return ['heartbeatSeconds' => self::HEARTBEAT_SECONDS, 'silentAfterSeconds' => $this->health->silentAfter(), 'facts' => ['types' => [...LossPieceEvent::READS, ...LossPieceEvent::PRINTS], 'maxBatch' => self::MAX_FACTS], 'zones' => LossDevice::ZONES, 'devices' => $devices];
+        $row = $this->emProvider->getEntityManager()->getRepository(LossSetting::class)->row();
+
+        return ['heartbeatSeconds' => self::HEARTBEAT_SECONDS, 'silentAfterSeconds' => $this->health->silentAfter(), 'facts' => ['types' => [...LossPieceEvent::READS, ...LossPieceEvent::PRINTS], 'maxBatch' => self::MAX_FACTS], 'zones' => LossDevice::ZONES,
+            // lot L4-a : ce que le boîtier attend avant de dire qu'une pièce est arrivée dans une zone, ou qu'elle en est partie
+            'zonePresence' => ['arriveSeconds' => (int) ($row['zone_arrive_seconds'] ?? LossZonePresence::ARRIVE_SECONDS), 'leaveSeconds' => (int) ($row['zone_leave_seconds'] ?? LossZonePresence::LEAVE_SECONDS)],
+            'devices' => $devices];
     }
 
     /**

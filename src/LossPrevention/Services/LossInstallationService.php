@@ -43,7 +43,7 @@ class LossInstallationService
         'first_piece' => null, // prouvée par l'état : une pièce porte une puce
     ];
     /** Étapes facultatives, rendues à part : elles ne comptent pas dans l'avancement */
-    public const OPTIONAL = ['box', 'counter_mat', 'tag_printer'];
+    public const OPTIONAL = ['box', 'counter_mat', 'tag_printer', 'zone_reader'];
     /** Code imprimé sur l'étiquette d'essai : sous le préfixe réservé aux documents de la caisse, il ne peut désigner aucun article */
     public const TEST_BARCODE = 'IZ-ESSAI-ETIQUETTE';
 
@@ -243,7 +243,9 @@ class LossInstallationService
     {
         // `tag_printer` (lot L3-c) : faite quand une imprimante à puce a écrit et relu une puce
         return ['box' => $this->health->kindState('box', $locale, $exercise), 'counter_mat' => $this->health->kindState('mat', $locale, $exercise),
-            'tag_printer' => $this->health->kindState('printer', $locale, $exercise)];
+            'tag_printer' => $this->health->kindState('printer', $locale, $exercise),
+            // `zone_reader` (lot L4-a) : faite quand CHAQUE antenne de zone a vu une puce dans sa zone
+            'zone_reader' => $this->health->zoneReadersState($locale, $exercise)];
     }
 
     /**

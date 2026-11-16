@@ -5,6 +5,7 @@ namespace App\LossPrevention\Services;
 use App\Gestion\Services\GestionValidationException;
 use App\LossPrevention\Entity\LossJournalEntry;
 use App\LossPrevention\Entity\LossSetting;
+use App\LossPrevention\Entity\LossZonePresence;
 use App\Services\TenantEntityManagerProvider;
 
 /**
@@ -115,6 +116,9 @@ class LossSettingsService
         'counterWindowMinutes' => ['counter_window_seconds', LossSaleLinkService::COUNTER_WINDOW, LossSaleLinkService::COUNTER_BOUNDS, 60],
         'catchUpMinutes' => ['catch_up_seconds', LossSaleLinkService::CATCH_UP_WINDOW, LossSaleLinkService::CATCH_UP_BOUNDS, 60],
         'presenceRetentionDays' => ['presence_retention_days', LossSaleLinkService::PRESENCE_DAYS, LossSaleLinkService::PRESENCE_BOUNDS, 1],
+        // lot L4-a : ce que le boîtier attend avant de dire qu'une pièce est arrivée dans une zone, ou qu'elle en est partie (secondes)
+        'zoneArriveSeconds' => ['zone_arrive_seconds', LossZonePresence::ARRIVE_SECONDS, LossZonePresence::ARRIVE_BOUNDS, 1],
+        'zoneLeaveSeconds' => ['zone_leave_seconds', LossZonePresence::LEAVE_SECONDS, LossZonePresence::LEAVE_BOUNDS, 1],
     ];
 
     /**

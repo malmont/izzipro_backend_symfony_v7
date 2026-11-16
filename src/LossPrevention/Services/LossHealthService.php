@@ -124,7 +124,9 @@ class LossHealthService
         // les tapis de comptoir (lot L3-b1) et les imprimantes à puce (lot L3-c) : facultatifs, aucune ligne tant qu'aucun n'est branché
         $keyProblem = $exercise ? null : $this->prints?->keyProblem(); // un exercice n'emploie aucun mot de passe : il n'a besoin d'aucune clé
         $printers = array_map(fn (array $printer): array => $this->printerLine($printer, $threshold, $now, $locale, $exercise, $keyProblem), $repository->livePrinters($exercise));
-        $devices = [...$devices, ...$mats, ...$printers];
+        // les antennes de zone (lot L4-a) : une ligne par lecteur qui a une zone
+        $readers = array_map(fn (array $reader): array => $this->zoneReaderLine($reader, $threshold, $now, $locale, $exercise), $repository->liveZoneReaders($exercise));
+        $devices = [...$devices, ...$mats, ...$printers, ...$readers];
         $counts = array_fill_keys(self::STATES, 0);
         foreach ($devices as $device) {
             ++$counts[$device['state']];
@@ -166,6 +168,32 @@ class LossHealthService
         }
 
         return ['state' => $best[1]['state'], 'hint' => $best[1]['hint']];
+    }
+
+    /**
+     * L'état des antennes de zone vu par l'assistant d'installation (lot L4-a). Contrairement aux autres appareils, une seule en ordre
+     * ne suffit pas : l'étape est faite quand CHAQUE antenne a vu une puce dans sa zone ; sinon elle montre celle qui demande un
+     * geste (en panne d'abord), et son conseil nomme la zone.
+     *
+     * @return array{state: string, hint: ?string}
+     */
+    public function zoneReadersState(string $locale, bool $exercise): array
+    {
+        $worst = null;
+        foreach ($this->board($locale, $exercise)['devices'] as $device) {
+            if ($device['kind'] !== 'zone_reader') {
+                continue;
+            }
+            $rank = array_search($device['state'], ['down', 'pending', 'ok'], true);
+            if ($worst === null || $rank < $worst[0]) {
+                $worst = [$rank, $device];
+            }
+        }
+        if ($worst === null) {
+            return ['state' => 'absent', 'hint' => $this->texts->t('health.hint.zone_reader.' . ($exercise ? 'absent_exercise' : 'absent'), $locale)];
+        }
+
+        return ['state' => $worst[1]['state'], 'hint' => $worst[1]['hint']];
     }
 
     /**
@@ -268,6 +296,34 @@ class LossHealthService
 
         return ['code' => 'mat-' . $mat['id'], 'kind' => 'mat', 'label' => $label, 'zone' => 'counter', 'cashRegisterId' => $register, 'state' => $state,
             'stateLabel' => $this->texts->t('health.state.' . $state, $locale), 'lastSeenAt' => gmdate('Y-m-d\TH:i:s\+00:00', $seen),
+            'silentSince' => $since !== null ? gmdate('Y-m-d\TH:i:s\+00:00', $since) : null, 'silentSeconds' => $since !== null ? max(0, $now - $since) : null, 'hint' => $hint];
+    }
+
+    /**
+     * La ligne d'une antenne de zone (lot L4-a) : en panne si elle ou son boîtier se tait ; en attente tant qu'elle n'a vu arriver
+     * aucune puce ; sinon en ordre. Son libellé et son conseil nomment sa zone.
+     *
+     * @param array<string, mixed> $reader
+     *
+     * @return array<string, mixed>
+     */
+    private function zoneReaderLine(array $reader, int $threshold, int $now, string $locale, bool $exercise): array
+    {
+        $boxSeen = $reader['box_seen'] !== null ? (new \DateTimeImmutable((string) $reader['box_seen'], new \DateTimeZone('UTC')))->getTimestamp() : null;
+        $seen = (new \DateTimeImmutable((string) $reader['last_seen_at'], new \DateTimeZone('UTC')))->getTimestamp();
+        $boxSilent = $reader['box_status'] !== LossBox::ACTIVE || $boxSeen === null || $now - $boxSeen > $threshold;
+        $zone = ['zone' => $this->texts->t('boxes.zone.' . $reader['zone'], $locale)];
+        if ($reader['status'] === 'down' || $boxSilent) {
+            [$state, $hint] = ['down', $this->texts->t('health.hint.zone_reader.' . ($boxSilent ? 'box_silent' : 'down'), $locale, $zone)];
+        } elseif (!(bool) $reader['has_read']) {
+            [$state, $hint] = ['pending', $this->texts->t('health.hint.zone_reader.' . ($exercise ? 'never_read_exercise' : 'never_read'), $locale, $zone)];
+        } else {
+            [$state, $hint] = ['ok', null];
+        }
+        $since = $state === 'down' ? ($boxSilent && $boxSeen !== null ? min($boxSeen, $seen) : $seen) : null;
+
+        return ['code' => 'reader-' . $reader['id'], 'kind' => 'zone_reader', 'label' => $this->texts->t('health.kind.zone_reader', $locale, $zone), 'zone' => (string) $reader['zone'], 'cashRegisterId' => null,
+            'state' => $state, 'stateLabel' => $this->texts->t('health.state.' . $state, $locale), 'lastSeenAt' => gmdate('Y-m-d\TH:i:s\+00:00', $seen),
             'silentSince' => $since !== null ? gmdate('Y-m-d\TH:i:s\+00:00', $since) : null, 'silentSeconds' => $since !== null ? max(0, $now - $since) : null, 'hint' => $hint];
     }
 
