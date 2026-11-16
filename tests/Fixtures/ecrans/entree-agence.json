@@ -122,6 +122,7 @@
     "PUT /api/service-offers/1",
     "PUT /api/site/charter",
     "PUT /api/site/domain",
+    "PUT /api/site/features",
     "PUT /api/team/1",
     "PUT /api/vehicle_products/1",
     "PUT /api/vehicles/1",

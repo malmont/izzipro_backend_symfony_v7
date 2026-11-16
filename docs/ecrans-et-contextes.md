@@ -252,8 +252,11 @@ rendrait un jeton ordinaire : 403 `MODE_FORBIDDEN` (`reason` : `account`).
 3. Fermés même dans la construction (précisions du chef, relectures) : clés d'API et d'activation (`keys`), export (`export`),
    paiement (`payment`), changement des modules du site (`modules` : le forfait de l'agence n'y est pas encore relu) ; l'écriture du
    coût d'un article (`cost` : coût d'achat, coefficient, coût et quantité de la commande fournisseur) ; dans la fiche du site
-   (`field`), l'adresse qui reçoit les commandes, les demandes et les réservations des clients, la devise, les prix taxes comprises, le
-   fuseau et la fréquence des périodes ; ouvrir ou fermer la boutique d'un site que l'agence n'a pas créé (`storefront`) ; l'import des
+   (`field`), l'adresse qui reçoit les commandes, les demandes et les réservations des clients, la devise, le fuseau et la fréquence
+   des périodes (les TAXES restent à l'agence, décision du propriétaire : le commerçant confirme « Taxes vérifiées », AG-3d) ; dans
+   `PUT /api/site/features`, une LISTE BLANCHE : seules les clés de `FeatureCatalog::AGENCY_WRITABLE` (langue, prix taxes comprises,
+   modes de vente, achat sans compte, abonnements, calcul des taxes, livraison) s'écrivent ; toute autre clé, inconnue comprise, répond
+   `field` (`modules` pour une clé de module) ; chaque clé du registre est classée (`AGENCY_WRITABLE` ou `AGENCY_CLOSED`) ; ouvrir ou fermer la boutique d'un site que l'agence n'a pas créé (`storefront`) ; l'import des
    clients et des commandes (`kind`) ; un import du catalogue confirmé en entrée n'écrit pas le coût d'achat du fichier. Comptes et
    rôles du site, Stripe et paiements, exports, pertes sont d'autres familles : fermés par la règle 1. `HEAD` suit la règle de `GET`.
 4. La réponse d'un écran de construction perd ses **champs sensibles** (§ 5, par suffixe du chemin du champ) ; la liste des imports ne

@@ -99,6 +99,21 @@ final class FeatureCatalog
     ];
 
     /** Application (clés d'activation) portée par une fonctionnalité gouvernée */
+    /**
+     * Lot AG-3b (16/11/2026, consigne du chef de projet) : le CLASSEMENT de chaque clé du registre pour une agence entrée dans le site
+     * d'un client (`PUT /api/site/features`). LISTE BLANCHE : seules les clés de construction s'écrivent par l'agence ; toute autre clé,
+     * inconnue ou nouvelle comprise, est refusée (403 `field`, ou `modules` pour une clé `platform`). Chaque clé du registre est rangée
+     * dans l'une des deux listes : `EntryTest` échoue sur une clé ajoutée sans classement.
+     */
+    public const AGENCY_WRITABLE = ['site.locale', 'site.prices_include_tax', 'commerce.sales_modes', 'commerce.guest_checkout', 'commerce.subscriptions',
+        'commerce.tax_provider', 'shipping.mode', 'shipping.default_weight_kg', 'shipping.free_above'];
+    /** Fermées à l'agence : devise, fuseau, périodes (sens des montants), modules et applications (droits), niveau des courriels et
+     *  adresse de l'espace d'administration (le commerçant), environnement d'EasyPost (achats d'étiquettes), et les clés en lecture seule */
+    public const AGENCY_CLOSED = ['site.timezone', 'site.country', 'site.currency', 'gestion.periods', 'shop.variant_promotions', 'site.domain', 'site.admin_space_url',
+        'site.notification_level', 'module.landing', 'module.boutique', 'module.pos', 'module.memoires', 'module.boussole', 'module.support', 'module.loss_prevention',
+        'app.mobile_shop', 'app.management', 'app.living_memory', 'ai.help', 'ai.full', 'shipping.easypost_environment', 'stripe.online', 'stripe.pos',
+        'shipping.easypost', 'maps.google_places', 'email.smtp', 'ai.landing', 'ai.memoires', 'reviews.enabled'];
+
     public const GOVERNED_APP = ['module.pos' => 'pos', 'app.mobile_shop' => 'mobile', 'app.management' => 'admin', 'app.living_memory' => 'livingmemory'];
 
     /** Libellés anglais des fonctionnalités gouvernées (courriels en anglais) */

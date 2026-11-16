@@ -104,8 +104,11 @@ class EntryTest extends WebTestCase
         foreach ([['POST', '/api/memoires/admin/users', 'family'], ['PUT', '/api/memoires/admin/users/1/team', 'family'], ['POST', '/api/support/agents', 'family'],
             ['POST', '/api/app-keys', 'keys'], ['GET', '/api/app-keys', 'keys'], ['GET', '/api/payments', 'family'],
             ['GET', '/api/gestion/exports/achats.csv', 'family'], ['PUT', '/api/gestion/pertes/reglages', 'family'], ['POST', '/api/site/features/module.pos/request', 'modules'],
-            ['PUT', '/api/site/features', 'modules']] as [$method, $path, $reason]) {
-            $response = $this->request($method, $path, $token, MV_TEST_TENANT2_HOST, []);
+            ['PUT', '/api/site/features', 'modules', ['values' => ['module.landing' => false]]], ['PUT', '/api/site/features', 'field', ['values' => ['site.currency' => 'EUR']]],
+            ['PUT', '/api/site/features', 'field', ['values' => ['site.timezone' => 'Europe/Paris']]],
+            ['PUT', '/api/site/features', 'field', ['values' => ['site.prices_include_tax' => true, 'cle.inconnue' => 1]]]] as $case) {
+            [$method, $path, $reason] = $case;
+            $response = $this->request($method, $path, $token, MV_TEST_TENANT2_HOST, $case[3] ?? []);
             $body = json_decode((string) $response->getContent(), true);
             $this->assertSame([403, 'MODE_FORBIDDEN', $reason], [$response->getStatusCode(), $body['code'] ?? null, $body['reason'] ?? null], "$method $path");
         }
@@ -143,9 +146,13 @@ class EntryTest extends WebTestCase
         $this->assertSame(1, (int) $this->pdo(MV_TEST_TENANT2_DB)->query("SELECT COUNT(*) FROM content_audit_log WHERE resource = 'external_access' AND action = 'write' AND user_identifier = 'Agence Atelier Web, Julie' AND after_state LIKE '%/api/entreprise/%'")->fetchColumn(),
             'chaque écriture réussie de l\'opérateur est notée à son nom, même là où la route n\'écrit pas au journal');
         // … l'adresse qui reçoit les commandes et les demandes des clients, la devise, les taxes, le fuseau, les périodes : fermés
-        foreach (['email' => 'agence@example.invalid', 'currency' => 'EUR', 'pricesIncludeTax' => true, 'posTimezone' => 'Europe/Paris', 'purchasePeriodFrequency' => 'monthly'] as $field => $value) {
+        foreach (['email' => 'agence@example.invalid', 'currency' => 'EUR', 'posTimezone' => 'Europe/Paris', 'purchasePeriodFrequency' => 'monthly'] as $field => $value) {
             $this->assertSame([403, 'field'], $this->reason('PUT', "/api/entreprise/$sheetId", $token, [$field => $value]), $field);
         }
+        // … les TAXES, elles, restent à l'agence (décision du propriétaire), par la fiche comme par le registre des fonctionnalités
+        $ttc = (bool) $this->pdo(MV_TEST_TENANT2_DB)->query('SELECT prices_include_tax FROM entreprise ORDER BY id LIMIT 1')->fetchColumn();
+        $this->assertSame(200, $this->request('PUT', "/api/entreprise/$sheetId", $token, MV_TEST_TENANT2_HOST, ['pricesIncludeTax' => $ttc])->getStatusCode());
+        $this->assertSame(200, $this->request('PUT', '/api/site/features', $token, MV_TEST_TENANT2_HOST, ['values' => ['site.prices_include_tax' => $ttc]])->getStatusCode());
         // … ouvrir ou fermer la boutique : seulement l'agence qui a CRÉÉ le site (celui-ci lui est rattaché)
         $this->assertSame([403, 'storefront'], $this->reason('POST', '/api/site/storefront/close', $token, []));
         $this->assertSame([403, 'storefront'], $this->reason('POST', '/api/site/storefront/open', $token, []));
@@ -300,6 +307,29 @@ class EntryTest extends WebTestCase
         // HEAD est une lecture : la règle de GET, jamais celle des écritures
         $this->assertSame([EntryModeGuardSubscriber::PUBLIC, '@public'], array_slice(EntryModeGuardSubscriber::decision('HEAD', '/api/entreprise/1'), 0, 2));
         $this->assertSame([EntryModeGuardSubscriber::OPEN, 'site.reglages'], array_slice(EntryModeGuardSubscriber::decision('PUT', '/api/entreprise/1'), 0, 2));
+    }
+
+    /**
+     * LISTE BLANCHE du registre des fonctionnalités (consigne du chef) : chaque clé est classée, ouverte ou fermée à l'agence ; une clé
+     * ajoutée sans classement fait échouer cet essai ; une clé non ouverte, inconnue comprise, est refusée.
+     */
+    public function testEveryFeatureKeyIsClassifiedAndOnlyConstructionKeysAreWrittenByTheAgency(): void
+    {
+        $keys = array_keys(\App\Services\FeatureAccess\FeatureCatalog::FEATURES);
+        $writable = \App\Services\FeatureAccess\FeatureCatalog::AGENCY_WRITABLE;
+        $closed = \App\Services\FeatureAccess\FeatureCatalog::AGENCY_CLOSED;
+        $this->assertSame([], array_intersect($writable, $closed), 'une clé dans les deux listes');
+        $unclassified = array_diff($keys, $writable, $closed);
+        $this->assertSame([], array_values($unclassified), 'clé du registre sans classement pour l\'agence : la ranger dans FeatureCatalog::AGENCY_WRITABLE ou AGENCY_CLOSED');
+        $this->assertSame([], array_values(array_diff([...$writable, ...$closed], $keys)), 'clé classée absente du registre');
+        $this->assertSame(['commerce.guest_checkout', 'commerce.sales_modes', 'commerce.subscriptions', 'commerce.tax_provider', 'shipping.default_weight_kg', 'shipping.free_above',
+            'shipping.mode', 'site.locale', 'site.prices_include_tax'], (static function (array $list): array { sort($list); return $list; })($writable), 'les clés ouvertes à l\'agence, écrites ici en toutes lettres');
+        foreach ($keys as $key) {
+            $this->assertSame(in_array($key, $writable, true), EntryModeGuardSubscriber::featureKeyRefused($key) === null, $key);
+        }
+        $this->assertSame('modules', EntryModeGuardSubscriber::featureKeyRefused('module.landing'));
+        $this->assertSame('field', EntryModeGuardSubscriber::featureKeyRefused('site.currency'));
+        $this->assertSame('field', EntryModeGuardSubscriber::featureKeyRefused('cle.nouvelle-' . $this->tag), 'une clé inconnue ou nouvelle est refusée');
     }
 
     /** Le retrait d'un champ par suffixe de son chemin, à toute profondeur, sans toucher au reste ni à la forme de la réponse */

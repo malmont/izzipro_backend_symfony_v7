@@ -47,14 +47,16 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         ['#^/api/app-keys(/|$)#', [], 'keys'],
         ['#(^|/)exports?(/|\.|$)#i', [], 'export'],
         ['#stripe#i', [], 'payment'],
-        ['#^/api/site/features(/|$)#', self::WRITE, 'modules'],
+        // les gestes de module (demander, essayer, allumer, éteindre) ; `PUT /api/site/features` se filtre par ses clés (bodyRefused)
+        ['#^/api/site/features/[^/]+/(request|trial|enable|disable)$#', [], 'modules'],
     ];
     /** Champs du coût d'un article, jamais écrits par l'opérateur (le coût d'achat, et le coût de la commande fournisseur que lisent la
      *  marge, la valeur du stock et le résultat de période) */
     private const COST_FIELDS = ['purchasePrice', 'coefficientMultiplier', 'commande', 'commandeCostCents', 'commandeQuantity', 'commandeAttachedAt', 'commandeCostEstimated'];
     /** Champs de la fiche du site fermés à l'opérateur : l'adresse qui reçoit les commandes, les demandes et les réservations des
-     *  clients ; la devise, les prix taxes comprises, le fuseau et la fréquence des périodes, qui changent le sens des montants enregistrés */
-    private const SITE_FIELDS = ['email', 'currency', 'pricesIncludeTax', 'posTimezone', 'purchasePeriodFrequency'];
+     *  clients ; la devise, le fuseau et la fréquence des périodes, qui changent le sens des montants enregistrés. Les TAXES (prix taxes
+     *  comprises) restent ouvertes à l'agence : décision du propriétaire du 15/11/2026, le commerçant confirme « Taxes vérifiées » (AG-3d) */
+    private const SITE_FIELDS = ['email', 'currency', 'posTimezone', 'purchasePeriodFrequency'];
 
     public function __construct(
         private readonly TokenStorageInterface $tokens,
@@ -257,9 +259,18 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         }
     }
 
-    /** Ce que le corps ou l'objet de la requête ferme : le coût d'un article, un champ réservé de la fiche, un import de clients ou de commandes */
+    /** Ce que le corps ou l'objet de la requête ferme : le coût d'un article, un champ réservé de la fiche ou du registre, un import de clients ou de commandes */
     private function bodyRefused(Request $request, string $target, string $path): ?string
     {
+        if ($target === 'site.modules' && $path === '/api/site/features' && in_array($request->getMethod(), self::WRITE, true)) {
+            $body = json_decode((string) $request->getContent(), true);
+            foreach (is_array($body) && is_array($body['values'] ?? null) ? array_keys($body['values']) : [] as $key) {
+                $reason = self::featureKeyRefused((string) $key);
+                if ($reason !== null) {
+                    return $reason;
+                }
+            }
+        }
         if ($target === 'site.reglages' && preg_match('#^/api/entreprise(/|$)#', $path) === 1 && in_array($request->getMethod(), self::WRITE, true)) {
             $body = json_decode((string) $request->getContent(), true);
             if (is_array($body) && array_intersect(self::SITE_FIELDS, array_keys($body)) !== []) {
@@ -284,6 +295,19 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         }
 
         return null;
+    }
+
+    /**
+     * Une clé du registre des fonctionnalités que l'agence n'écrit pas (LISTE BLANCHE, `FeatureCatalog::AGENCY_WRITABLE`) : `modules` pour
+     * une clé `platform`, `field` pour toute autre, inconnue comprise ; null : clé de construction.
+     */
+    public static function featureKeyRefused(string $key): ?string
+    {
+        if (in_array($key, \App\Services\FeatureAccess\FeatureCatalog::AGENCY_WRITABLE, true)) {
+            return null;
+        }
+
+        return \App\Services\FeatureAccess\FeatureCatalog::exists($key) && \App\Services\FeatureAccess\FeatureCatalog::get($key)['scope'] === \App\Services\FeatureAccess\FeatureCatalog::SCOPE_PLATFORM ? 'modules' : 'field';
     }
 
     /** @param array<mixed> $body */
