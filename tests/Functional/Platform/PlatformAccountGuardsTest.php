@@ -68,7 +68,9 @@ class PlatformAccountGuardsTest extends WebTestCase
             $refresh = str_starts_with($cookie->getName(), 'refresh_token') ? $cookie->getName() : $refresh;
         }
         $this->assertNotNull($refresh, 'la connexion a rendu un jeton de renouvellement');
-        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/api/token/refresh', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_X_XSRF_TOKEN' => 'jeton-xsrf-de-test'], json_encode(['platform' => 'webadmin']));
+        $csrf = (string) (json_decode((string) $verified->getContent(), true)['csrf_token'] ?? '');
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/api/token/refresh', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_X_XSRF_TOKEN' => $csrf], '{}');
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode(), 'la session se renouvelle : ' . substr((string) $this->client->getResponse()->getContent(), 0, 300));
         $this->assertCount(1, $lines());
 
         // Par l'espace d'administration : la ligne s'écrit quand le code est validé

@@ -115,6 +115,9 @@ class AgencySitesTest extends WebTestCase
         $sheet = $site->query('SELECT name, email, tel, website, ein, admin_space_url, locale, currency, pos_timezone FROM entreprise')->fetchAll(\PDO::FETCH_ASSOC);
         $this->assertSame([['name' => 'Boutique de Zoé', 'email' => "zoe-{$this->tag}@example.invalid", 'tel' => null, 'website' => 'https://' . $host, 'ein' => null, 'admin_space_url' => null, 'locale' => 'fr', 'currency' => 'CAD', 'pos_timezone' => 'America/Toronto']], $sheet);
         $this->assertSame([['CA', 'QC', '']], $site->query('SELECT country, state, street1 FROM address_entreprise')->fetchAll(\PDO::FETCH_NUM));
+        // la fiche est une fiche NEUVE, pas celle du modèle réécrite : ce qui dépend de la fiche d'un autre (réseaux, réservations) ne passe pas
+        $this->assertSame([1, 0], [(int) $one('SELECT COUNT(*) FROM entreprise'), (int) $one('SELECT COUNT(*) FROM reservation')]);
+        $this->assertNotSame((int) $this->pdo(SITE_TEMPLATE_TEST_DB)->query('SELECT id FROM entreprise')->fetchColumn(), (int) $one('SELECT id FROM entreprise'));
         $this->assertSame(["zoe-{$this->tag}@example.invalid"], $site->query('SELECT from_email FROM email_configuration')->fetchAll(\PDO::FETCH_COLUMN), 'l\'expéditeur des courriels est posé d\'après la fiche du site');
 
         // Les droits de source « agence » : les modules et les applications, pas l'IA ; projetés sur la fiche du site
@@ -166,6 +169,10 @@ class AgencySitesTest extends WebTestCase
 
         // Une demande d'une autre agence n'est pas lisible ; un site inconnu non plus
         $this->assertSame('AGENCY_REQUEST_NOT_FOUND', $this->json('GET', '/api/agency/site-requests/999999', null, 'manager', 404)['code']);
+        $other = (int) $this->master->query("INSERT INTO agencies (code, name, home_tenant_code, status, max_sites) VALUES ('agence-autre', 'Autre agence', 'agfict-attache', 'trial', 3) RETURNING id")->fetchColumn();
+        $foreign = (int) $this->master->query("INSERT INTO agency_site_requests (agency_id, tenant_code, name, admin_email) VALUES ($other, 'agtest-ailleurs', 'Site d''une autre agence', 'ailleurs@example.invalid') RETURNING id")->fetchColumn();
+        $this->assertSame('AGENCY_REQUEST_NOT_FOUND', $this->json('GET', "/api/agency/site-requests/$foreign", null, 'manager', 404)['code']);
+        $this->assertNotContains($foreign, array_column($this->json('GET', '/api/agency/site-requests', null, 'manager', 200)['requests'], 'id'));
         $this->assertSame('AGENCY_SITE_NOT_ATTACHED', $this->json('GET', '/api/agency/sites/agtest-inconnu/modules', null, 'manager', 404)['code']);
     }
 
@@ -173,9 +180,20 @@ class AgencySitesTest extends WebTestCase
     {
         $code = 'agtest-' . $this->tag;
         $db = AgencySiteCode::database($code);
-        $id = (int) $this->json('POST', '/api/agency/sites', ['code' => $code, 'name' => 'Atelier Rémi', 'adminEmail' => "remi-{$this->tag}@example.invalid", 'modules' => ['module.landing', 'module.boutique', 'module.pos', 'module.support', 'app.management']], 'manager', 202)['request']['id'];
+        // L'agence désigne comme administrateur une adresse qui est DÉJÀ celle d'un compte du site neuf (ici le compte de la plateforme) :
+        // le site est créé, mais ce compte n'est jamais transformé, ne reçoit ni lien ni courriel, même à la demande d'un renvoi
+        $id = (int) $this->json('POST', '/api/agency/sites', ['code' => $code, 'name' => 'Atelier Rémi', 'adminEmail' => 'plateforme@example.invalid', 'modules' => ['module.landing', 'module.boutique', 'module.pos', 'module.support', 'app.management']], 'manager', 202)['request']['id'];
         $this->service()->process($id);
-        $this->assertSame('ready', $this->json('GET', "/api/agency/site-requests/$id", null, 'manager', 200)['request']['status']);
+        $made = $this->json('GET', "/api/agency/site-requests/$id", null, 'manager', 200)['request'];
+        $this->assertSame(['ready', ['sent' => false, 'reason' => 'ACCOUNT_EXISTS', 'expiresAt' => null]], [$made['status'], $made['invitation']]);
+        $this->assertCount(0, self::getMailerMessages());
+        $account = fn (): array => $this->pdo($db)->query("SELECT COUNT(*), MIN(roles::text), BOOL_OR(reset_token IS NOT NULL), MIN(password) FROM \"user\" WHERE email = 'plateforme@example.invalid'")->fetch(\PDO::FETCH_NUM);
+        $untouched = $account();
+        $this->assertSame([1, false, 'inutilisable'], [$untouched[0], $untouched[2], $untouched[3]]);
+        $this->json('POST', "/api/agency/sites/$code/invitation", null, 'manager', 202);
+        $this->service()->resendInvitation($id, 'agence-resp@example.invalid');
+        $this->assertSame(['sent' => false, 'reason' => 'NOT_FOUND', 'expiresAt' => null], $this->json('GET', "/api/agency/site-requests/$id", null, 'manager', 200)['request']['invitation']);
+        $this->assertSame([$untouched, 0], [$account(), count(self::getMailerMessages())], 'un compte qui n\'est pas né de l\'invitation ne reçoit jamais de lien');
         $flags = fn (): array => $this->pdo($db)->query('SELECT is_landing_page_active, is_boutique_active, is_pos_active, is_support_active, is_management_app_active, is_boussole_esg_active FROM entreprise')->fetch(\PDO::FETCH_NUM);
         $this->assertSame([true, true, true, true, true, false], $flags(), 'seuls les modules demandés sont ouverts');
         $modules = fn (string $as = 'member'): array => array_column($this->json('GET', "/api/agency/sites/$code/modules", null, $as, 200)['modules'], null, 'key');
@@ -206,6 +224,7 @@ class AgencySitesTest extends WebTestCase
         // Un site rattaché à la main par la plateforme reste inchangé : l'agence ne règle pas ses modules, et la cascade ne le touche pas
         $this->json('POST', "/api/platform/agencies/{$this->agency}/sites", ['tenantCode' => MV_TEST_TENANT2_CODE], 'super', 201);
         static::getContainer()->get(EntitlementService::class)->grant(MV_TEST_TENANT2_CODE, 'module.boutique', 'manual', null, 'essai', 'droit du site rattaché', null, null, false);
+        $this->master->exec("INSERT INTO tenant_entitlements (tenant_code, feature_key, source, status, granted_by, reference) VALUES ('" . MV_TEST_TENANT2_CODE . "', 'module.support', 'agency', 'active', 'essai', 'agency:{$this->agency}')");
         $this->assertSame('AGENCY_SITE_NOT_CREATED', $this->json('GET', '/api/agency/sites/' . MV_TEST_TENANT2_CODE . '/modules', null, 'manager', 409)['code']);
         $this->assertSame('AGENCY_SITE_NOT_CREATED', $this->json('PUT', '/api/agency/sites/' . MV_TEST_TENANT2_CODE . '/modules/module.boutique', ['enabled' => false], 'manager', 409)['code']);
         $this->assertSame('AGENCY_SITE_NOT_CREATED', $this->json('POST', '/api/agency/sites/' . MV_TEST_TENANT2_CODE . '/invitation', null, 'manager', 409)['code']);
@@ -323,6 +342,24 @@ class AgencySitesTest extends WebTestCase
         $this->assertSame(0, (int) $this->master->query("SELECT COUNT(*) FROM tenant_entitlements WHERE tenant_code = '$b' AND status IN ('active', 'grace', 'suspended')")->fetchColumn(), 'aucun droit ne reste au nom d\'un site qui n\'existe pas');
         $this->assertSame(0, count(self::getMailerMessages()), 'aucune invitation pour un site qui n\'existe pas');
         $this->master->exec("DELETE FROM agency_sites WHERE agency_id = $other");
+
+        // Le modèle des sites porte un compte qui n'est pas un compte de la plateforme : la création est REFUSÉE, rien ne reste
+        $template = $this->pdo(SITE_TEMPLATE_TEST_DB);
+        $template->exec("INSERT INTO \"user\" (id, email, roles, password, username, firstname, lastname, is_verified, created_at) VALUES (99001, 'etranger@example.invalid', '[\"ROLE_USER_INTERNET\"]', 'x', 'etranger@example.invalid', 'Compte', 'Étranger', true, NOW())");
+        $template = null;
+        try {
+            $dirty = (int) $ask('agtest-e' . $this->tag, 202)['request']['id'];
+            $this->service()->process($dirty);
+            $this->assertSame(['failed', 'BUILD_FAILED'], $status($dirty));
+            $this->assertFalse($this->databaseExists(AgencySiteCode::database('agtest-e' . $this->tag)), 'un site né avec le compte d\'un autre n\'est pas livré');
+            $this->assertSame(0, (int) $this->master->query("SELECT COUNT(*) FROM tenants WHERE code = 'agtest-e{$this->tag}'")->fetchColumn());
+        } finally {
+            $this->pdo(SITE_TEMPLATE_TEST_DB)->exec('DELETE FROM "user" WHERE id = 99001');
+        }
+
+        // Défaire un site : seulement celui que le processus vient de créer. Jamais un site existant, même sur demande directe
+        $this->assertFalse(static::getContainer()->get(TenantConnectionManager::class)->discardCreatedTenant(MV_TEST_TENANT2_CODE, MV_TEST_TENANT2_DB));
+        $this->assertSame([true, 1], [$this->databaseExists(MV_TEST_TENANT2_DB), (int) $this->master->query("SELECT COUNT(*) FROM tenants WHERE code = '" . MV_TEST_TENANT2_CODE . "'")->fetchColumn()]);
 
         // Un nom qui a servi : des droits vivants ou une clé d'application restés dans la base maître le rendent indisponible
         $this->master->exec("INSERT INTO tenant_entitlements (tenant_code, feature_key, source, status, granted_by) VALUES ('$c', 'module.pos', 'manual', 'active', 'essai')");
