@@ -103,8 +103,8 @@ class SiteReadinessPluralsTest extends WebTestCase
         // 3. Textes exacts, d'après les comptes de la base, dans les modules qui ne sont pas la gestion
         $count = fn (string $sql): int => (int) $this->db->fetchOne($sql);
         $n = fn (int $c, string $one, string $many): string => sprintf($c <= 1 ? $one : $many, $c);
-        $sellable = $count('SELECT COUNT(*) FROM product p WHERE EXISTS (SELECT 1 FROM product_variant v WHERE v.product_id = p.id AND v.price > 0)');
-        $this->assertSame($sellable > 0 ? $n($sellable, '%d produit avec un prix.', '%d produits avec un prix.') : 'Créez au moins un produit avec une variante et un prix supérieur à zéro (vente, location ou abonnement).',
+        $sellable = $count('SELECT COUNT(*) FROM product p WHERE p.is_web = TRUE AND ' . \App\Services\Storefront\SellableProduct::CONDITION);
+        $this->assertSame($sellable > 0 ? $n($sellable, '%d produit avec un prix.', '%d produits avec un prix.') : 'Mettez en ligne au moins un produit qui s\'achète : une variante avec un prix supérieur à zéro, le sien ou à défaut celui du produit (vente, location ou abonnement).',
             $fr['boutique.product']['description'], 'boutique');
         $agents = $count("SELECT COUNT(*) FROM \"user\" WHERE roles::text LIKE '%ROLE_SUPPORT%' OR roles::text LIKE '%ROLE_ADMIN%'");
         $this->assertGreaterThanOrEqual(1, $agents);

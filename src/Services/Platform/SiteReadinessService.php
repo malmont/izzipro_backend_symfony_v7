@@ -309,7 +309,8 @@ class SiteReadinessService
         $legal = ['legal_notice' => 'mentions légales', 'condition_of_use' => 'conditions générales (CGV / CGU)', 'privacy_policy' => 'politique de confidentialité'];
         $missingLegal = [];
         foreach ($legal as $column => $label) {
-            if ($this->count($pdo, 'entreprise_translation', "COALESCE($column, '') <> ''") === 0) {
+            // dans chaque langue que sert le site (correctif du 16/11/2026), pas dans une seule
+            if (\App\Services\Storefront\LegalTextLanguages::missing($pdo, $column) !== []) {
                 $missingLegal[] = $label;
             }
         }
@@ -357,8 +358,8 @@ class SiteReadinessService
             $taxOk = ($commerce['taxProvider'] ?? 'table') === 'stripe' || $this->count($pdo, 'tax') > 0;
             $add('boutique.taxes', 'module.boutique', 'Taxes', 'Au moins une taxe dans la table du site (TPS, TVQ…), ou Stripe Tax.', $taxOk, 'backend', ['type' => 'screen', 'screen' => 'configuration']); // cheminement Taxes (lot 5)
             $add('boutique.stripe', 'module.boutique', 'Paiements en ligne (Stripe)', 'Compte Stripe connecté du site pour encaisser les commandes.', $stripeOk, 'backend', ['type' => 'screen', 'screen' => 'configuration']); // cheminement Stripe (lot 5)
-            $sellable = $this->count($pdo, 'product p', 'EXISTS (SELECT 1 FROM product_variant v WHERE v.product_id = p.id AND v.price > 0)');
-            $add('boutique.product', 'module.boutique', 'Premier produit vendable', $sellable > 0 ? self::n($sellable, '%d produit avec un prix.', '%d produits avec un prix.') : 'Créez au moins un produit avec une variante et un prix supérieur à zéro (vente, location ou abonnement).', $sellable > 0, 'backend', ['type' => 'screen', 'screen' => 'products']);
+            $sellable = $this->count($pdo, 'product p', 'p.is_web = TRUE AND ' . \App\Services\Storefront\SellableProduct::CONDITION); // en ligne, achetable (règle du panier)
+            $add('boutique.product', 'module.boutique', 'Premier produit vendable', $sellable > 0 ? self::n($sellable, '%d produit avec un prix.', '%d produits avec un prix.') : 'Mettez en ligne au moins un produit qui s\'achète : une variante avec un prix supérieur à zéro, le sien ou à défaut celui du produit (vente, location ou abonnement).', $sellable > 0, 'backend', ['type' => 'screen', 'screen' => 'products']);
             $products = $this->count($pdo, 'product');
             $noPicture = $this->count($pdo, 'product p', 'NOT EXISTS (SELECT 1 FROM product_picture pp WHERE pp.product_id = p.id)');
             $add('boutique.pictures', 'module.boutique', 'Photos des produits', $products > 0 && $noPicture === 0 ? 'Tous vos produits ont au moins une photo.' : self::n($noPicture, '%d produit sans photo : un produit sans image se vend mal.', '%d produits sans photo : un produit sans image se vend mal.'), $products > 0 && $noPicture === 0, 'backend', ['type' => 'screen', 'screen' => 'products'], false);

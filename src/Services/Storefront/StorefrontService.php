@@ -174,15 +174,25 @@ class StorefrontService
                 return null;
             }
         };
-        $products = (int) $one('SELECT COUNT(*) FROM product p WHERE p.is_web = TRUE AND EXISTS (SELECT 1 FROM product_variant v WHERE v.product_id = p.id AND v.price > 0)') > 0;
+        $products = (int) $one('SELECT COUNT(*) FROM product p WHERE p.is_web = TRUE AND ' . SellableProduct::CONDITION) > 0; // en ligne et achetable (règle du panier)
         $payment = $this->tenants->isTenantInternal($site['code']) || (int) $one("SELECT COUNT(*) FROM stripe_config WHERE (COALESCE(account_id, '') <> '' AND is_active) OR (COALESCE(live_account_id, '') <> '' AND live_is_active)") > 0;
-        $terms = (int) $one("SELECT COUNT(*) FROM entreprise_translation WHERE COALESCE(TRIM(condition_of_use), '') <> ''") > 0;
+        // les conditions de vente dans CHAQUE langue que sert le site (correctif du 16/11/2026), pas dans une seule
+        try {
+            $termsMissing = LegalTextLanguages::missing($pdo, 'condition_of_use');
+        } catch (\Throwable) {
+            $termsMissing = ['?'];
+        }
+        $terms = $termsMissing === [];
+        // un article EN LIGNE qui ne s'achète pas (sans variante, ou sans aucun prix) : le commerçant croirait qu'il se vend
+        $unbuyable = (int) $one('SELECT COUNT(*) FROM product p WHERE p.is_web = TRUE AND NOT ' . SellableProduct::CONDITION);
         // Sans le module Boutique (éteint sur un site jamais ouvert, pour n'en faire qu'un site d'applications), il n'y a rien à
         // contrôler : le site s'ouvre d'un geste, sans moyen de paiement
         $items = !$state['shop'] ? [] : [
             ['key' => 'products', 'ok' => $products, 'blocking' => false, 'message' => $products ? 'Des articles sont visibles sur la boutique.' : 'Aucun article n\'est visible sur la boutique.'],
             ['key' => 'payment', 'ok' => $payment, 'blocking' => !$payment, 'message' => $payment ? 'Un moyen de paiement est réglé.' : 'Aucun moyen de paiement n\'est réglé : la boutique ne peut pas encaisser.'],
-            ['key' => 'terms', 'ok' => $terms, 'blocking' => false, 'message' => $terms ? 'Les conditions de vente sont remplies.' : 'Les conditions de vente sont vides.'],
+            ['key' => 'terms', 'ok' => $terms, 'blocking' => false, 'message' => $terms ? 'Les conditions de vente sont remplies.' : ($termsMissing === ['?'] ? 'Les conditions de vente sont vides.' : 'Les conditions de vente sont vides en : ' . implode(', ', $termsMissing) . '.')],
+            ['key' => 'unbuyable', 'ok' => $unbuyable === 0, 'blocking' => false, 'message' => $unbuyable === 0 ? 'Tous les articles en ligne peuvent être achetés.'
+                : sprintf($unbuyable === 1 ? '%d article en ligne ne peut pas être acheté : ajoutez-lui une variante avec un prix.' : '%d articles en ligne ne peuvent pas être achetés : ajoutez-leur une variante avec un prix.', $unbuyable)],
         ];
 
         return ['state' => $scope !== null ? self::CONSTRUCTION : self::OPEN, 'scope' => $scope, 'shop' => $state['shop'], 'openedAt' => $scope === null ? self::iso($state['openedAt']) : null,

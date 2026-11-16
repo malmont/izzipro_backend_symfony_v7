@@ -243,9 +243,9 @@ class StorefrontTest extends WebTestCase
         $this->db()->executeStatement('UPDATE stripe_config SET account_id = NULL, live_account_id = NULL');
         $checklist = $this->json($this->api('GET', '/api/site/storefront/checklist', null, $admin));
         $items = array_column($checklist['items'], null, 'key');
-        $this->assertSame([['construction', 'site', true, false], ['products', 'payment', 'terms'], [false, true, true]], [[$checklist['state'], $checklist['scope'], $checklist['shop'], $checklist['canOpen']], array_keys($items), [$items['payment']['ok'], $items['payment']['blocking'], !$items['products']['blocking'] && !$items['terms']['blocking']]]);
+        $this->assertSame([['construction', 'site', true, false], ['products', 'payment', 'terms', 'unbuyable'], [false, true, true]], [[$checklist['state'], $checklist['scope'], $checklist['shop'], $checklist['canOpen']], array_keys($items), [$items['payment']['ok'], $items['payment']['blocking'], !$items['products']['blocking'] && !$items['terms']['blocking']]]);
         $notReady = $this->api('POST', '/api/site/storefront/open', null, $admin);
-        $this->assertSame([409, 'STOREFRONT_NOT_READY', ['products', 'payment', 'terms']], [$notReady->getStatusCode(), $this->json($notReady)['code'], array_column($this->json($notReady)['items'], 'key')]);
+        $this->assertSame([409, 'STOREFRONT_NOT_READY', ['products', 'payment', 'terms', 'unbuyable']], [$notReady->getStatusCode(), $this->json($notReady)['code'], array_column($this->json($notReady)['items'], 'key')]);
         // un compte de paiement connecté mais pas encore actif (inscription abandonnée) ne suffit pas
         $this->assertGreaterThan(0, (int) $this->db()->fetchOne('SELECT COUNT(*) FROM stripe_config'), 'le modèle des tests porte une ligne de configuration de paiement');
         $this->db()->executeStatement("UPDATE stripe_config SET account_id = 'acct_essai_construction', is_active = false, live_account_id = NULL");

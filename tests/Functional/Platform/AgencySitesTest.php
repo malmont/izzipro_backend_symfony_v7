@@ -150,7 +150,7 @@ class AgencySitesTest extends WebTestCase
         $this->assertSame([200, 'Boutique de Zoé', false], [$status, $legal['name'], $legal['isBoutiqueActive']]);
         // L'agence lit l'état de son site, l'ouvre (le responsable seulement) et obtient un lien d'aperçu : elle n'a pas de compte dans ce site
         $store = $this->json('GET', "/api/agency/sites/$code/storefront", null, 'member', 200);
-        $this->assertSame(['construction', 'site', true, false, ['products', 'payment', 'terms']], [$store['state'], $store['scope'], $store['shop'], $store['canOpen'], array_column($store['items'], 'key')]);
+        $this->assertSame(['construction', 'site', true, false, ['products', 'payment', 'terms', 'unbuyable']], [$store['state'], $store['scope'], $store['shop'], $store['canOpen'], array_column($store['items'], 'key')]);
         $this->assertSame('AGENCY_MANAGER_ONLY', $this->json('POST', "/api/agency/sites/$code/storefront/open", null, 'member', 403)['code']);
         $this->assertSame('AGENCY_MANAGER_ONLY', $this->json('POST', "/api/agency/sites/$code/storefront/preview-link", null, 'member', 403)['code']);
         $this->assertSame('STOREFRONT_NOT_READY', $this->json('POST', "/api/agency/sites/$code/storefront/open", null, 'manager', 409)['code'], 'boutique sans moyen de paiement : elle n\'ouvre pas');

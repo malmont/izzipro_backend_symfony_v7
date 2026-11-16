@@ -143,7 +143,7 @@ Administrateur du site (`ROLE_ADMIN`) :
 
 | Route | Rôle |
 |---|---|
-| `GET /api/site/storefront/checklist` | `{ state, scope, shop, openedAt, canOpen, items: [{ key: products \| payment \| terms, ok, blocking, message }] }` ; `shop` : le module Boutique est actif |
+| `GET /api/site/storefront/checklist` | `{ state, scope, shop, openedAt, canOpen, items: [{ key: products \| payment \| terms \| unbuyable, ok, blocking, message }] }` ; `shop` : le module Boutique est actif. Correctif du 16/11/2026 : `products` compte un article en ligne ACHETABLE (règle du panier, `SellableProduct` : une variante dont le prix, ou à défaut celui de l'article, est > 0) ; `unbuyable` (avertissement, jamais bloquant) compte les articles en ligne qui ne s'achètent pas (sans variante, ou sans aucun prix) ; `terms` exige les conditions de vente dans chaque langue que sert le site (`LegalTextLanguages`) ; `payment` : Stripe seul (Square n'encaisse rien) |
 | `POST /api/site/storefront/open` | `{ state: open, scope: null, openedAt }`, ou 409 `STOREFRONT_NOT_READY { items }` |
 | `POST /api/site/storefront/close` | `{ state: construction, scope: shop, openedAt: null }` : la boutique seule se referme |
 | `POST /api/site/storefront/preview-link` | `{ url, expiresAt }` |
