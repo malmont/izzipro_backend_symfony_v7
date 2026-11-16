@@ -178,6 +178,7 @@ class StorefrontTest extends WebTestCase
         $after = $this->json($this->api('GET', '/api/site/storefront'));
         $this->assertSame(['open', $opened['openedAt'], false], [$after['state'], $after['openedAt'], $after['preview']['active']]);
         $this->assertSame(200, $this->api('GET', '/api/category')->getStatusCode());
+        $this->assertFalse($this->json($this->api('GET', '/api/site/storefront', null, $admin))['preview']['active'], 'sur un site ouvert, il n\'y a plus d\'aperçu');
         $this->assertSame(array_replace($full, ['isBoutiqueActive' => true]), $this->json($this->api('GET', "/api/entreprise/$id")), 'la fiche entière (l\'essai a ouvert le module Boutique)');
         $this->assertNotSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($this->api('POST', '/api/contacts', ['x' => 1]))['code'] ?? null);
         $this->assertNull($this->db()->fetchOne('SELECT storefront_preview_hash FROM entreprise ORDER BY id LIMIT 1'));
