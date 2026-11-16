@@ -69,6 +69,15 @@ class SiteReadinessCompleteTest extends WebTestCase
                     $this->assertSame('https://' . $links['host'] . $path, array_column($links['pages'], 'url', 'key')[$feature]);
                 }
             }
+            // la gestion web du site (17/11/2026) : l'espace d'administration du front, à la même adresse que la page publique
+            $this->assertSame('https://' . $links['host'] . '/admin', array_column($links['pages'], 'url', 'key')['gestion'] ?? null);
+            $this->assertSame('Gestion web', array_column($links['pages'], 'label', 'key')['gestion']);
+            // location (17/11/2026) : sans produit louable, ni configuration, ni tarifs, ni caution ne s'affichent
+            if (isset($byKey['boutique.rental_product']) && $byKey['boutique.rental_product']['status'] !== 'done') {
+                foreach (['boutique.rental_booking', 'boutique.rental_rates', 'boutique.rental_deposit'] as $without) {
+                    $this->assertArrayNotHasKey($without, $byKey, $without);
+                }
+            }
             $this->assertSame($body['blockingTodo'], count(array_filter($body['steps'], fn ($s) => $s['status'] === 'todo' && $s['blocking'])));
             $site = array_column($body['groups'], null, 'key')['site'];
             $this->assertSame('Site : identité et socle', $site['label']);

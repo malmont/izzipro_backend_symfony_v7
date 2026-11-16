@@ -33,7 +33,7 @@
     {# Cheminement complet (07/11/2026) : par produit actif ; rouge = indispensable à faire, orange = amélioration ou facultatif, vert = fait, gris = plateforme #}
     <div class="card border-0 shadow-sm rounded-lg mb-4 p-3 bg-white dashboard-cheminement" style="border-left: 4px solid {{ readiness.blockingTodo > 0 ? '#e74a3b' : (readiness.improvementTodo > 0 ? '#f6c23e' : '#1cc88a') }} !important;" data-readiness-card data-blocking="{{ readiness.blockingTodo }}" data-improvement="{{ readiness.improvementTodo }}">
         <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
-            <div class="text-xs font-weight-bold text-uppercase">Préparer mes produits</div>
+            <div class="text-xs font-weight-bold text-uppercase">Préparer mon site</div>
             <div class="progress flex-grow-1" style="height: 10px; min-width: 10em"><div class="progress-bar {{ readiness.percent >= 100 ? 'bg-success' : '' }}" style="width: {{ readiness.percent }}%"></div></div>
             <strong>{{ readiness.percent }} %</strong>
             {% if readiness.blockingTodo > 0 %}<span class="badge bg-danger">{{ readiness.blockingTodo }} indispensable{{ readiness.blockingTodo > 1 ? 's' : '' }}</span>{% endif %}

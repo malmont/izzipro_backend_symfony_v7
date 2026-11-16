@@ -141,6 +141,9 @@
 
     <h2 class="h5 mt-4" id="domaine">Domaine propre</h2>
     <div class="card mb-3 mon-site-domaine"><div class="card-body">
+        {# Gestion web (17/11/2026) : l'espace d'administration du front, à l'adresse de la page publique (domaine propre actif, sinon la plateforme) #}
+        {% set gestionHost = domain.state == 'live' and domain.domain ? domain.domain : domain.platformHost %}
+        {% if gestionHost %}<p class="small mb-2"><a class="btn btn-sm btn-outline-primary" href="https://{{ gestionHost }}/admin" target="_blank" rel="noopener" data-gestion-web>Gestion web <i class="fas fa-external-link-alt small"></i></a></p>{% endif %}
         <p class="small text-muted mb-2">Votre site répond déjà sur <code>{{ domain.platformHost }}</code>. Pour utiliser votre propre domaine : achetez-le chez un registraire, enregistrez-le ici (il entre aussitôt dans l'annuaire de la plateforme), créez les enregistrements DNS indiqués, puis vérifiez ; le certificat HTTPS est émis automatiquement.</p>
         <form method="post" action="{{ path('admin_mon_site_domaine') }}" class="row g-2 align-items-end">
             <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">

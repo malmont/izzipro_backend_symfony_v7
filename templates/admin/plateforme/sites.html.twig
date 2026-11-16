@@ -31,7 +31,7 @@
         <tbody>
         {% for site in sites %}
             <tr data-site="{{ site.code }}">
-                <td>{{ site.code }}</td><td>{{ site.name }}</td><td>{{ site.host }}</td>
+                <td>{{ site.code }}</td><td>{{ site.name }}</td><td>{% if site.host %}<a href="https://{{ site.host }}" target="_blank" rel="noopener">{{ site.host }}</a><br><a class="small" href="https://{{ site.host }}/admin" target="_blank" rel="noopener">Gestion web</a>{% else %}—{% endif %}</td>
                 <td>{% for b in site.badges %}<span class="badge badge-{{ b.type == 'creation_incomplete' ? 'warning' : 'secondary' }}" data-pastille="{{ b.type }}">{{ labels[b.type] }}{% if b.agencyName is defined %} {{ b.agencyName }}{% endif %}</span> {% endfor %}</td>
             </tr>
         {% else %}

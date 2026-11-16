@@ -23,7 +23,7 @@ class SiteReadinessService
 {
     /**
      * Pages publiques des produits sur le site Next, relatives à l'hôte public du site (08/11/2026) : liens « Voir le résultat » du tableau
-     * « Préparer mes produits » et de `GET /api/site/readiness` (`links`). La landing page est à `/landingpage` (clé `site`, Next sert l'accueil)
+     * « Préparer mon site » et de `GET /api/site/readiness` (`links`). La landing page est à `/landingpage` (clé `site`, Next sert l'accueil)
      * et chaque autre onglet à `/landingpage/<slug>` ; un module n'a son lien que s'il est accordé.
      */
     public const PUBLIC_PATHS = ['module.boutique' => '/catalogue', 'module.memoires' => '/memoires', 'module.boussole' => '/boussole'];
@@ -378,14 +378,19 @@ class SiteReadinessService
             }
             $add('boutique.reviews', 'module.boutique', 'Avis clients', 'Réglages des avis et politique affichée (page Configuration, Avis clients).', $this->count($pdo, 'review_setting', "policy IS NOT NULL AND policy::text <> 'null' AND policy::text <> '{}'") > 0, 'backend', ['type' => 'screen', 'screen' => 'configuration'], false);
             if (in_array('rental', (array) ($commerce['salesModes'] ?? ['sale', 'rental', 'subscription']), true)) {
+                // la location n'est INDISPENSABLE que si le commerçant l'a choisie comme mode de vente (réglage enregistré) ; le réglage par
+                // défaut accepte les trois modes, un site neuf qui ne loue rien ne voit donc qu'une ligne facultative (demande du propriétaire, 17/11/2026)
+                $rentalChosen = is_array($commerce['salesModes'] ?? null) && in_array('rental', $commerce['salesModes'], true);
                 // Location (cheminement complet, 07/11/2026) : un produit louable a besoin d'une configuration de réservation et d'un tarif (pack lié à sa catégorie)
                 $rentable = $this->count($pdo, 'product', 'rental_enabled = TRUE');
                 $configured = $this->count($pdo, 'product p', 'p.rental_enabled = TRUE AND EXISTS (SELECT 1 FROM booking_configuration bc WHERE bc.product_id = p.id AND bc.granularity IS NOT NULL)');
                 $priced = $this->count($pdo, 'product p', 'p.rental_enabled = TRUE AND EXISTS (SELECT 1 FROM product_categories pc JOIN rental_pack_categories rpc ON rpc.categories_id = pc.categories_id JOIN rental_pack rp ON rp.id = rpc.rental_pack_id WHERE pc.product_id = p.id AND COALESCE(rp.day_rate, rp.hour_rate, rp.half_day_rate, rp.week_rate, rp.month_rate, 0) > 0)');
-                $add('boutique.rental_product', 'module.boutique', 'Location : un produit louable', $rentable > 0 ? self::n($rentable, '%d produit proposé à la location.', '%d produits proposés à la location.') : 'Le mode location est activé mais aucun produit n\'est louable : cochez « Location » sur la fiche d\'un produit, ou retirez ce mode de vente (Mon site, Commerce).', $rentable > 0, 'backend', ['type' => 'screen', 'screen' => 'rental']);
+                $add('boutique.rental_product', 'module.boutique', 'Location : un produit louable', $rentable > 0 ? self::n($rentable, '%d produit proposé à la location.', '%d produits proposés à la location.') : 'Le mode location est activé mais aucun produit n\'est louable : cochez « Location » sur la fiche d\'un produit, ou retirez ce mode de vente (Mon site, Commerce).', $rentable > 0, 'backend', ['type' => 'screen', 'screen' => 'rental'], $rentalChosen);
+                if ($rentable > 0) { // configuration, tarifs et caution n'ont de sens qu'avec un produit louable
                 $add('boutique.rental_booking', 'module.boutique', 'Location : configuration de réservation', $rentable > 0 && $configured === $rentable ? 'Chaque produit louable a sa granularité (heure, jour…), son stock et ses durées.' : self::n(max(0, $rentable - $configured), '%d produit louable sans configuration de réservation (granularité, stock, durée minimale, horaires) : sans elle, aucun créneau ne peut être réservé.', '%d produits louables sans configuration de réservation (granularité, stock, durée minimale, horaires) : sans elle, aucun créneau ne peut être réservé.'), $rentable > 0 && $configured === $rentable, 'backend', ['type' => 'screen', 'screen' => 'rental']);
                 $add('boutique.rental_rates', 'module.boutique', 'Location : tarifs', $rentable > 0 && $priced === $rentable ? 'Chaque produit louable a un tarif (pack de location lié à sa catégorie).' : self::n(max(0, $rentable - $priced), '%d produit louable sans tarif : créez un pack de location (tarif à l\'heure, à la journée…) et rattachez-le à la catégorie du produit.', '%d produits louables sans tarif : créez un pack de location (tarif à l\'heure, à la journée…) et rattachez-le à la catégorie de chaque produit.'), $rentable > 0 && $priced === $rentable, 'backend', ['type' => 'screen', 'screen' => 'rental']);
                 $add('boutique.rental_deposit', 'module.boutique', 'Location : caution et conditions d\'annulation', 'Caution et politique d\'annulation sur la configuration de réservation : recommandé pour les biens de valeur.', $rentable > 0 && $this->count($pdo, 'booking_configuration', 'deposit > 0 OR COALESCE(cancellation_policy, \'\') <> \'\'') > 0, 'backend', ['type' => 'screen', 'screen' => 'rental'], false);
+                }
             }
             $add('boutique.carrier', 'module.boutique', 'Livraison', 'Au moins un mode de remise (transporteur à prix fixe, retrait en magasin ou EasyPost) ; vous expédiez vous-même en saisissant le suivi sur la commande. Réglages et cheminement : page Livraison.', $this->count($pdo, 'carrier') > 0, 'backend', ['type' => 'screen', 'screen' => 'shipping']);
             // Livraison, lot 1 (07/11/2026) : poids des produits exigé seulement quand le site estime ou achète des étiquettes (mode own_key ou platform)
@@ -616,6 +621,10 @@ class SiteReadinessService
                 $pages[] = ['key' => $feature, 'label' => FeatureCatalog::label($feature), 'url' => 'https://' . $host . $path];
             }
         }
+
+        // la gestion web du site : l'espace d'administration du front (même adresse que la page publique : domaine propre actif, sinon
+        // l'adresse sur la plateforme), demande du propriétaire du 17/11/2026
+        $pages[] = ['key' => 'gestion', 'label' => 'Gestion web', 'url' => 'https://' . $host . '/admin'];
 
         return ['host' => $host, 'platformHost' => (string) $domain['platformHost'], 'customDomain' => $domain['domain'], 'customState' => (string) $domain['state'], 'pages' => $pages];
     }
