@@ -1738,4 +1738,7 @@ la règle ; autre poste, article sans poste, journée trop ancienne non comptés
 rien d'écrit ; article revenu et constat passé sous les seuils ; décision gardée ; seuil changé sans effet sur un constat aux
 mêmes nombres ; règle éteinte ; aperçu sans écriture ; aucune personne dans le constat, sa preuve ni la base ; rattrapage avant
 une clôture seulement s'il y a du neuf et si la règle est allumée ; écran des pièces), le scénario d'exercice dans `LossPreventionExerciseTest`.
+Ajouté avec ce lot, pour le lot CONSTRUCTION (`docs/boutique-en-construction.md`) : sur un site neuf fermé en entier, le boîtier
+s'inscrit, donne signe de vie et envoie ses faits, la caisse pose sa question et le gérant lit son matériel
+(`LossPreventionCounterTest::testABoxAndATillWorkOnASiteStillUnderConstruction` ; un commerçant installe son matériel avant d'ouvrir).
 
