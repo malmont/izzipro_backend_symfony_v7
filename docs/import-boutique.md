@@ -265,3 +265,94 @@ index. Additive ; à appliquer à toutes les bases **avant** l'échange du code.
 - La console de Mémoires Vivantes (`GET /api/memoires/admin/users`) liste tous les comptes du site, invités compris.
 - La langue de l'invitation est celle du site (l'export de Shopify ne dit pas celle du client).
 - WooCommerce et PrestaShop : lecteurs à écrire derrière la même interface.
+
+## 10. Historique des commandes, en archive à part (lot IMP-3, 16/11/2026)
+
+Code : `src/Import/OrderImportService.php` (dépôt, analyse, exécution, annulation), `src/Import/Shopify/ShopifyOrderCsv.php` (lecteur
+du fichier), `src/Import/OrderArchive.php` (le seul lecteur de l'archive). Tests : `tests/Functional/Import/ShopifyOrderImportTest.php`.
+Contrat validé par le propriétaire le 15/11/2026.
+
+### 10.1 Le principe
+
+- Le fichier d'export des commandes de Shopify suit le même circuit que le catalogue et les clients : dépôt
+  (`POST /api/site/imports`, `kind = orders`), analyse sans écriture, confirmation, exécution par le worker `media`, rejeu sans
+  doublon (le numéro de commande d'origine est unique par source), annulation.
+- Les commandes vont dans une **archive à part** : tables `import_order` et `import_order_line`. Elles n'entrent **jamais** dans les
+  commandes du site, le journal de caisse, la numérotation des factures, les taxes, les exports comptables, le stock, la fidélité, ni
+  le résultat des périodes de la gestion. Aucun courriel n'est envoyé.
+- **Ce qui est repris** d'une commande : date, numéro d'origine, état de paiement, montants (total ; taxes, port et remboursé à titre
+  d'information), devise, et ses lignes (nom de l'article, quantité, prix). **Ne sont pas lus** : adresses, téléphone, notes, moyen de
+  paiement. Le courriel du fichier ne sert qu'à retrouver le compte du site ; il n'est écrit nulle part.
+- **Profondeur** : les 24 derniers mois avant le dépôt (`OrderImportService::MONTHS`). Une commande dans une autre devise que celle du
+  site est refusée à l'analyse.
+- **Rattachement au client** : par son adresse courriel, si un compte existe sur le site (client, ou invité repris par IMP-2). Sans
+  compte, la commande est gardée sans identité. `import_order.user_id` n'a pas de clé étrangère : il est remis à vide quand le compte
+  est effacé (à sa demande, ou invité non accepté) ; la commande reste dans la série, sans lien avec lui, et elle ne « tient » pas un
+  invité.
+- **Rattachement à l'article** : par la référence de la ligne, quand elle désigne sans ambiguïté le code d'un article du site (l'import
+  du catalogue pose la référence de la première variante comme code de l'article) ; sinon le nom du fichier, tel quel.
+- **Seul le commerçant** voit ces commandes ; le client ne les voit pas dans son compte. Aucun point de fidélité.
+
+### 10.2 L'état d'une commande et le montant de la série
+
+| État de paiement du fichier | État retenu | Dans la série |
+|---|---|---|
+| `paid` | `paid` | oui |
+| `partially_refunded` | `paid` | oui, montant réduit du remboursé |
+| `refunded` | `refunded` | non |
+| date d'annulation remplie, ou `voided` | `cancelled` | non |
+| `pending`, `authorized`, `partially_paid`, autre | `unpaid` | non |
+
+Le montant qui entre dans la série (`net_cents`) est **hors taxes et hors port** : total − taxes − port − remboursé. Ce calcul vaut le
+hors taxes que les prix de l'ancienne boutique aient contenu les taxes ou non. La date est celle du paiement, à défaut celle de la
+création ; le jour (`day`) est celui du magasin, posé à l'import.
+
+### 10.3 Routes (`ROLE_ADMIN`)
+
+| Route | Rôle |
+|---|---|
+| `POST /api/site/imports` (`kind = orders`), `GET …/{id}`, `POST …/{id}/confirm`, `POST …/{id}/cancel`, `GET …/{id}/issues.csv` | le circuit commun ; la vue d'un import de commandes porte `archived` (commandes encore en archive) et `report.orders` |
+| `GET /api/site/imports/archive/orders?userId=&page=` | les commandes d'avant d'un compte, avec leurs lignes (fiche du client) |
+| `GET /api/gestion/statistiques/avant-migration?from=&to=` | la série « ventes d'avant » : totaux, mois par mois, compte par état |
+
+`report.orders` : `total`, `importable`, `paid`, `refunded`, `cancelled`, `unpaid`, `already` (déjà en archive), `tooOld`, `refused`,
+`linkedToAccount`, `withoutAccount`, `lines`, `linesWithProduct`, `netCents`, `firstDay`, `lastDay`. Raisons d'un refus (fichier des
+lignes signalées) : `REF_MISSING`, `DATE_INVALID`, `AMOUNT_INVALID`, `CURRENCY_MISMATCH`, `CURRENCY_MISSING`, `DUPLICATE_ORDER`.
+Erreurs du dépôt : `IMPORT_NOT_AN_ORDER_FILE`, `IMPORT_TOO_MANY_ROWS` (20 000 lignes d'articles), `IMPORT_EMPTY_FILE`,
+`IMPORT_NOT_UTF8`, et celles du circuit commun.
+
+L'annulation est possible à tout moment : elle retire de l'archive les commandes de CET import (rien d'autre ne dépend d'elles).
+
+Dans l'espace d'administration du serveur : fiche d'un client → action « Commandes d'avant la migration »
+(`/admin/clients/{id}/commandes-avant`).
+
+### 10.4 « An dernier » lu de l'archive
+
+Un site qui vient d'une autre boutique n'a aucune vente « l'an dernier ». La comparaison lit alors l'archive, sous une règle stricte :
+
+- **seulement si le site n'a AUCUNE vraie vente sur la plage de l'an dernier**. Dès qu'il en a une, l'archive n'est plus lue : les
+  ventes d'avant ne sont jamais mêlées aux ventes du site, ni additionnées à elles ;
+- la réponse le dit : `lastYear.source` vaut `before_migration` (sinon `site`), le libellé de l'an dernier finit par « (avant la
+  migration) », et la remarque `LAST_YEAR_BEFORE_MIGRATION` est jointe ;
+- l'archive ne connaît ni le coût d'achat, ni les retours, ni le canal : pour l'an dernier, la marge, le taux de marge, le taux de
+  retour, les locations et les abonnements restent **vides** (jamais zéro), et un filtre de canal ne lit pas l'archive.
+
+| Où | Ce qui change |
+|---|---|
+| `GET /api/gestion/statistiques` | `lastYear.source` (toujours présent), indicateurs `revenue`, `orders`, `averageBasket` et points du graphique lus de l'archive |
+| `GET /api/gestion/statistiques/annee` | `lastYear.source` ; mois de l'an dernier réduits aux ventes, le reste vide ; la **projection de l'année ne s'appuie pas sur l'archive** |
+| analyse `year.overview` (console, bilan PDF d'année) | la comparaison à l'an dernier était toujours vide (le cumul était mal lu) : corrigé |
+
+### 10.5 Base
+
+Migration `Version20270117100000`, script `scripts/migrate_all_v2_import_commandes.sh` (hors dépôt) : `import_order` (numéro d'origine
+unique par source, contrainte sur l'état), `import_order_line` (supprimée avec sa commande), cinq index.
+
+### 10.6 Limites connues
+
+- Les autres comparaisons de la gestion (conseils, simulateur, préparation d'une période, rentabilité d'une campagne) ne lisent pas
+  l'archive : elles restent sans « an dernier » pour un site qui vient d'ailleurs.
+- La valeur du stock de l'an dernier reste vide : l'archive ne connaît pas le stock.
+- Un article ne se rattache que par un code égal à la référence du fichier ; les variantes ne sont pas rattachées.
+- Une commande au-delà de 200 lignes est reprise avec ses 200 premières ; son montant vient de son total.
+- Le jour d'une commande est figé à l'import, dans le fuseau du magasin de ce jour-là.

@@ -25,13 +25,16 @@ par jour du magasin, même requête que P2, filtre de source), `GestionStockSnap
 | `year` | l'exercice en cours : du 1er du mois de début (réglage du site, janvier par défaut, `docs/annee-gestion.md` § 1) à aujourd'hui | `null` (seule la comparaison à l'an dernier) | mêmes dates |
 | `from` & `to` (366 jours au plus), `periodId` | les dates | même durée juste avant | mêmes dates |
 
-L'an dernier : mêmes dates décalées d'un an, un 29 février devient le 28. Erreurs 422 `VALIDATION_FAILED` : `range` `INVALID_RANGE`, `source`
+L'an dernier : mêmes dates décalées d'un an, un 29 février devient le 28. Si le site n'a AUCUNE vente sur cette plage et qu'il porte une
+archive des ventes d'avant sa migration (lot IMP-3, `docs/import-boutique.md` § 10.4), l'an dernier vient de cette archive : `lastYear.source`
+vaut `before_migration`, le libellé finit par « (avant la migration) », la remarque `LAST_YEAR_BEFORE_MIGRATION` est jointe, et seuls le
+chiffre d'affaires, les commandes et le panier moyen sont connus (marge, retours, locations et abonnements restent vides). Erreurs 422 `VALIDATION_FAILED` : `range` `INVALID_RANGE`, `source`
 `INVALID_SOURCE`, `from` / `to` `REQUIRED` | `INVALID_DATE`, `to` `BEFORE_START` | `RANGE_TOO_LONG`, `periodId` `RANGE_TOO_LONG` ; 404 `PERIOD_NOT_FOUND`.
 
 ## 2. Réponse
 
 ```
-{ currency, source, range { type, from, to, days, granularity }, previous { from, to } | null, lastYear { from, to },
+{ currency, source, range { type, from, to, days, granularity }, previous { from, to } | null, lastYear { from, to, source },       // source : site | before_migration (lot IMP-3)
   comparison { currentLabel, previousLabel | null, lastYearLabel },          // « 1-11 oct. », « 1-11 nov. 2025 » ; en anglais « Oct 1-11 »
   indicators { revenue, grossMargin, grossMarginRate, orders, averageBasket, returnRate, stockValue },
   otherRevenue { rentals, subscriptions },

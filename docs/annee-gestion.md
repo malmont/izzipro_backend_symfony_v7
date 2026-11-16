@@ -31,7 +31,7 @@ en cours, sinon 422 `INVALID_YEAR` ; `pricePercent` de 1 à 30, 5 par défaut, s
 
 ```
 { currency, year, status: in_progress | finished, today, fiscalYear { startMonth, from, to, label },
-  months[12], cumulative[12], lastYear { year, label, from, to, months[12], cumulative[12] } | null, periods[], totals,
+  months[12], cumulative[12], lastYear { year, label, from, to, source, months[12], cumulative[12] } | null, periods[], totals,
   profitability { tauxMarque, projection, breakEven, gap }, levers[] | null, finished | null, caveats[] }
 ```
 
@@ -55,6 +55,9 @@ en cours, sinon 422 `INVALID_YEAR` ; `pricePercent` de 1 à 30, 5 par défaut, s
 
 - `tauxMarque` : marge ÷ ventes au coût connu × 100, **en %**, arrondi à 0,1, sur l'exercice écoulé.
 - `projection` (exercice en cours) : réalisé + reste estimé jour par jour, `{ …mêmes champs, method, reason, months[] }`. Ventes et autres
+  (`lastYear.source` : `site`, ou `before_migration` quand le site n'a aucun chiffre sur l'exercice précédent et porte une archive des
+  ventes d'avant sa migration, lot IMP-3, `docs/import-boutique.md` § 10.4 : mois réduits aux ventes, le reste vide, remarque
+  `LAST_YEAR_BEFORE_MIGRATION` ; la projection ci-dessous ne s'appuie jamais sur l'archive)
   revenus : `lastYear` (mêmes dates l'exercice précédent, s'il y a des ventes), sinon `pace` (rythme des 30 derniers jours), sinon `none` ;
   marge restante = ventes × taux de marque ÷ 100. Frais variables, par jour : budget prévu B1a de la période qui couvre le jour (réparti sur
   ses jours), sinon le même mois l'exercice précédent s'il a des frais, sinon le rythme des 90 derniers jours. Frais fixes : FF1. Chaque
