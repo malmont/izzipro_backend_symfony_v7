@@ -131,16 +131,6 @@ class OrderArchive
         ], $rows), 'page' => $page, 'pages' => max(1, (int) ceil($total / self::PER_PAGE)), 'total' => $total];
     }
 
-    /** Le compte est effacé (à sa demande, ou invité non accepté) : ses commandes d'avant restent dans la série, sans lien avec lui */
-    public function forgetAccount(int $userId): int
-    {
-        try {
-            return (int) $this->conn()->executeStatement('UPDATE import_order SET user_id = NULL WHERE user_id = ?', [$userId]);
-        } catch (\Throwable) {
-            return 0;
-        }
-    }
-
     private function conn(): Connection
     {
         return $this->emProvider->getEntityManager()->getConnection();

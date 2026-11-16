@@ -68,6 +68,14 @@ class ShopifyOrderImportTest extends WebTestCase
         $alice = $this->account("alice-imp3-$t@example.invalid", 'Alice', ['ROLE_USER_INTERNET']);
         $conn->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type, code) VALUES (nextval('product_id_seq'), 'Tasse', 1500, false, 0, NOW(), ?, 'standard', ?)", ["imp3-test-$t", "TASSE-$t"]);
         $productId = (int) $conn->fetchOne('SELECT id FROM product WHERE slug = ?', ["imp3-test-$t"]);
+        // deux articles portent la même référence : elle ne désigne aucun des deux
+        foreach (['x', 'y'] as $twin) {
+            $conn->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type, code) VALUES (nextval('product_id_seq'), 'Jumeau', 1500, false, 0, NOW(), ?, 'standard', ?)", ["imp3-test-$twin-$t", "DOUBLE-$t"]);
+        }
+        // la lecture d'un montant et d'une date du fichier
+        $this->assertSame([123450, 123450, 1250, 1200, 0, null, null, null, null], array_map(OrderImportService::cents(...), ['1 234,50', '1,234.50', '12,5', '12', '0.00', '', '-5', 'abc', '1.2.3']));
+        $this->assertSame(['2025-03-05 19:23:11', '2025-03-05 00:00:00', '2025-03-05 14:23:00', null, null, null], array_map(static fn (string $d): ?string => OrderImportService::date($d)?->format('Y-m-d H:i:s'),
+            ['2025-03-05 14:23:11 -0500', '2025-03-05', '2025-03-05T14:23Z', 'hier', '05/03/2025', '']));
         $ago = static fn (string $delay): string => (new \DateTimeImmutable($delay, new \DateTimeZone('UTC')))->format('Y-m-d H:i:s') . ' +0000';
         $before = ['orders' => (int) $conn->fetchOne('SELECT COUNT(*) FROM "order"'), 'items' => (int) $conn->fetchOne('SELECT COUNT(*) FROM order_items'), 'users' => (int) $conn->fetchOne('SELECT COUNT(*) FROM "user"')];
         $head = 'Name,Email,Financial Status,Paid at,Fulfillment Status,Currency,Subtotal,Shipping,Taxes,Total,Created at,Lineitem quantity,Lineitem name,Lineitem price,Lineitem sku,Billing Name,Billing Street,Shipping Phone,Notes,Payment Method,Cancelled at,Refunded Amount';
@@ -75,7 +83,7 @@ class ShopifyOrderImportTest extends WebTestCase
             $head,
             // payée, 2 lignes, le courriel d'un compte du site (casse différente), prix taxes en plus : net = 125 − 15 − 10 = 100
             "#1001,ALICE-imp3-$t@Example.invalid,paid,{$ago('-3 months')},fulfilled,$currency,100.00,10.00,15.00,125.00,{$ago('-3 months')},2,Tasse bleue,30.00,TASSE-$t,Alice Martin,12 rue des Érables,+15145550101,Note privée du client,Visa,,0.00",
-            "#1001,,,,,,,,,,,1,Carnet,40.00,INCONNU-$t,,,,,,,",
+            "#1001,,,,,,,,,,,1,Carnet,40.00,double-$t,,,,,,,",
             // payée, sans compte correspondant : gardée sans identité
             "#1002,inconnu-imp3-$t@example.invalid,paid,{$ago('-2 months')},fulfilled,$currency,50.00,0.00,0.00,50.00,{$ago('-2 months')},1,Affiche,50.00,,Bob Sans Compte,1 rue X,,,Mastercard,,",
             // remboursée en partie : dans la série, net réduit du remboursé : 80 − 10 − 0 − 20 = 50
@@ -237,6 +245,8 @@ class ShopifyOrderImportTest extends WebTestCase
         $this->assertStringEndsWith('(avant la migration)', $stats['comparison']['lastYearLabel']);
         $i = $stats['indicators'];
         $this->assertSame([20000, 2, 10000], [$i['revenue']['lastYear'], $i['orders']['lastYear'], $i['averageBasket']['lastYear']]);
+        $points = array_column($stats['chart']['points'], null, 'key');
+        $this->assertSame(['revenue' => 12000, 'grossMargin' => null, 'orders' => 1], $points['2011-03-10']['lastYear'], 'le point du graphique : chiffre et commandes, marge vide');
         // ce que l'archive ne connaît pas reste VIDE, jamais zéro : marge, taux de marge, retours, locations, abonnements
         $this->assertSame([null, null, null, null, null], [$i['grossMargin']['lastYear'], $i['grossMarginRate']['lastYear'], $i['returnRate']['lastYear'], $stats['otherRevenue']['rentals']['lastYear'], $stats['otherRevenue']['subscriptions']['lastYear']]);
         $codes = array_column($stats['caveats'], 'code');
@@ -263,6 +273,9 @@ class ShopifyOrderImportTest extends WebTestCase
         $this->assertSame(['sales' => 25000, 'grossMargin' => null, 'result' => null], array_intersect_key(end($year['lastYear']['cumulative']), ['sales' => 1, 'grossMargin' => 1, 'result' => 1]));
         $this->assertContains('LAST_YEAR_BEFORE_MIGRATION', array_column($year['caveats'], 'code'));
         $this->assertSame(0, $year['totals']['sales'], 'les ventes d\'avant n\'entrent pas dans l\'année du site');
+        // l'analyse nommée de l'année (console, bilan PDF) lit l'an dernier au cumul du dernier mois : les ventes de l'archive, rien d'autre
+        $figures = array_column(static::getContainer()->get(\App\Gestion\Analysis\AnalysisCatalog::class)->run('year.overview', ['year' => 2011], 'fr')['figures'], null, 'id');
+        $this->assertSame([25000, false, false], [$figures['sales']['lastYear'] ?? null, isset($figures['grossMargin']['lastYear']), isset($figures['netResult']['lastYear'])]);
 
         // Dès que le site a UNE vraie vente sur la plage de l'an dernier, l'archive n'est plus lue : jamais de mélange
         $conn->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type, purchase_price) VALUES (nextval('product_id_seq'), 'Vraie vente', 2500, false, 0, NOW(), ?, 'standard', 1000)", ["imp3-test-v-$t"]);
@@ -280,7 +293,10 @@ class ShopifyOrderImportTest extends WebTestCase
         $this->assertLessThan(20000, $real['indicators']['revenue']['lastYear'], 'la vraie vente seule, sans les 200 de l\'archive');
         $this->assertStringEndsNotWith('(avant la migration)', $real['comparison']['lastYearLabel']);
         $this->assertNotContains('LAST_YEAR_BEFORE_MIGRATION', array_column($real['caveats'], 'code'));
-        $this->assertSame('site', $this->get('/api/gestion/statistiques/annee?year=2011')['lastYear']['source']);
+        $yearReal = $this->get('/api/gestion/statistiques/annee?year=2011');
+        $this->assertSame('site', $yearReal['lastYear']['source']);
+        $this->assertNotContains('LAST_YEAR_BEFORE_MIGRATION', array_column($yearReal['caveats'], 'code'));
+        $this->assertNotNull(array_column($yearReal['lastYear']['months'], null, 'month')[3]['grossMargin'], 'les mois de l\'an dernier sont ceux du site, marge comprise');
 
         // Un invité d'import effacé (délai passé, ou annulation de l'import des clients) : ses commandes d'avant ne le tiennent pas
         $guest = $this->account("guest-imp3-$t@example.invalid", 'Invitée', []);
