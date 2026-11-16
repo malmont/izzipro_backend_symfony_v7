@@ -255,8 +255,8 @@ class SecretsNeverShownTest extends WebTestCase
         foreach (['resetToken', 'verificationToken', 'password', 'smtpPassword', 'easypostApiKeySandbox', 'guestToken', 'accessToken', 'pinHash', 'tokenHash', 'keyHash', 'user.resetToken'] as $property) {
             $this->assertTrue(SecretKeys::unsearchable($property), $property);
         }
-        foreach (['email', 'username', 'firstname', 'smtpHost', 'smtpUser', 'id', 'user.email', 'periodKey'] as $property) {
-            $this->assertFalse(SecretKeys::unsearchable($property), $property);
+        foreach (['email', 'username', 'firstname', 'smtpHost', 'smtpUser', 'id', 'user.email', 'periodKey', 'secretQuestion.label', 'passwordPolicy.name'] as $property) {
+            $this->assertFalse(SecretKeys::unsearchable($property), $property . ' (seul le dernier segment d\'une association compte)');
         }
         // un écran qui fabrique lui-même sa requête de liste ne passe pas par ce filtre : aucun ne porte sur une table à secret
         $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(dirname(__DIR__, 3) . '/src', \FilesystemIterator::SKIP_DOTS));
@@ -271,6 +271,23 @@ class SecretsNeverShownTest extends WebTestCase
                 $this->assertSame([], array_values(array_filter($metadata->getMetadataFor($entity)->getFieldNames(), [SecretKeys::class, 'unsearchable'])), $file->getFilename() . ' : liste faite à la main sur une table à secret');
             }
         }
+    }
+
+    /** Le mot de passe et les jetons d'un compte ne sortent d'aucune sérialisation, quel que soit le groupe */
+    public function testAnAccountIsNeverSerializedWithItsPasswordOrItsTokens(): void
+    {
+        $user = $this->em()->find(User::class, $this->userId);
+        $user->setPassword('EMPREINTE-SERIALISEE-' . $this->tag)->setResetTokenExpiresAt(new \DateTime('+1 hour'));
+        $serializer = static::getContainer()->get('serializer');
+        foreach ([[], ['groups' => ['product:list']], ['groups' => ['vehicle_product:read']]] as $context) {
+            $normalized = $serializer->normalize($user, 'json', $context + [\Symfony\Component\Serializer\Normalizer\AbstractNormalizer::CIRCULAR_REFERENCE_HANDLER => static fn ($o) => null]);
+            foreach (['password', 'plainPassword', 'resetToken', 'resetTokenExpiresAt', 'verificationToken', 'verificationTokenExpiresAt'] as $key) {
+                $this->assertArrayNotHasKey($key, (array) $normalized, $key);
+            }
+            $this->assertSame([], $this->shown((string) json_encode($normalized)));
+            $this->assertStringNotContainsString('EMPREINTE-SERIALISEE-' . $this->tag, (string) json_encode($normalized));
+        }
+        $this->em()->clear();
     }
 
     /** Le compte de la plateforme ne se réinitialise jamais par un site : aucun lien créé, aucun lien accepté */
