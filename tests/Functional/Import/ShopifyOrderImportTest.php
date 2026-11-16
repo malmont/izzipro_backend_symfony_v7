@@ -327,6 +327,14 @@ class ShopifyOrderImportTest extends WebTestCase
         $figures = array_column($analysis->run('year.overview', ['year' => 2011], 'fr')['figures'], null, 'id');
         $this->assertSame([false, false, false], [isset($figures['sales']['lastYear']), isset($figures['grossMargin']['lastYear']), isset($figures['netResult']['lastYear'])]);
 
+        // … de même pour l'analyse des ventes du mois en cours : une vente d'avant, il y a un an jour pour jour, n'y est pas transmise
+        $lastYearToday = static::getContainer()->get(StoreClock::class)->day(new \DateTimeImmutable('-1 year'));
+        $conn->executeStatement("INSERT INTO import_order (job_id, source, ref, ordered_at, day, financial_status, state, total_cents, net_cents, currency, items_count) VALUES (0, 'shopify', ?, ?, ?, 'paid', 'paid', 4000, 4000, ?, 1)",
+            ["#A9-$t", "$lastYearToday 15:00:00", $lastYearToday, $currency]);
+        $this->assertSame(OrderArchive::SOURCE, $this->get('/api/gestion/statistiques?range=month')['lastYear']['source'], 'le site de test n\'a aucune vente il y a un an');
+        $month = $analysis->run('sales.overview', ['range' => 'month'], 'fr');
+        $this->assertSame([false, false, false], [isset($month['period']['lastYearLabel']), isset(array_column($month['figures'], null, 'id')['revenue']['lastYear']), isset(array_column($month['figures'], null, 'id')['revenue']['deltaLastYear'])]);
+
         // Un RETOUR seul du site sur la plage de l'an dernier (avril 2010) : c'est une ligne de vente du site, l'archive n'est plus lue
         $conn->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type, purchase_price) VALUES (nextval('product_id_seq'), 'Vraie vente', 2500, false, 0, NOW(), ?, 'standard', 1000)", ["imp3-test-v-$t"]);
         $variant = (int) $this->create(ProductVariant::class, ['product' => $this->em()->find(Product::class, (int) $conn->fetchOne('SELECT id FROM product WHERE slug = ?', ["imp3-test-v-$t"]))])->getId();
@@ -356,6 +364,12 @@ class ShopifyOrderImportTest extends WebTestCase
         $this->assertNotContains('LAST_YEAR_BEFORE_MIGRATION', array_column($real['caveats'], 'code'));
         $figures = array_column($analysis->run('year.overview', ['year' => 2011], 'fr')['figures'], null, 'id');
         $this->assertGreaterThan(0, $figures['sales']['lastYear'] ?? 0, 'un exercice terminé se compare à l\'exercice précédent du site (le cumul de son dernier mois)');
+        // … mais un exercice EN COURS ne se compare pas à l'exercice précédent entier : avec une vraie vente il y a un an, toujours rien
+        $sell($lastYearToday, 1, 3);
+        $running = array_column($analysis->run('year.overview', [], 'fr')['figures'], null, 'id');
+        $this->assertFalse(isset($running['sales']['lastYear']), 'dix mois ne se comparent pas à douze');
+        $withSite = $analysis->run('sales.overview', ['range' => 'month'], 'fr');
+        $this->assertSame([true, 2500], [isset($withSite['period']['lastYearLabel']), array_column($withSite['figures'], null, 'id')['revenue']['lastYear'] ?? null], 'l\'an dernier du site, lui, est transmis');
         $yearReal = $this->get('/api/gestion/statistiques/annee?year=2011');
         $this->assertSame('site', $yearReal['lastYear']['source']);
         $this->assertNotContains('LAST_YEAR_BEFORE_MIGRATION', array_column($yearReal['caveats'], 'code'));
