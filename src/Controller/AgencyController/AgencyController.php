@@ -21,7 +21,8 @@ use Symfony\Component\Routing\Attribute\Route;
 #[Route('/api/agency')]
 class AgencyController extends AbstractController
 {
-    public function __construct(private readonly AgencyContext $context, private readonly AgencyService $agencies, private readonly AgencySiteRequestService $requests)
+    public function __construct(private readonly AgencyContext $context, private readonly AgencyService $agencies, private readonly AgencySiteRequestService $requests,
+        private readonly \App\Services\Storefront\StorefrontService $storefront)
     {
     }
 
@@ -115,6 +116,29 @@ class AgencyController extends AbstractController
         return $this->handle(fn () => $this->json(['request' => $this->requests->askInvitation($this->manager(), $code, $this->by(), $this->body($request)['adminEmail'] ?? null)], 202));
     }
 
+    // --- Lot CONSTRUCTION (16/11/2026) : un site créé par l'agence naît « en construction » ; elle lit son état, l'ouvre, et obtient un lien d'aperçu
+
+    /** État et liste de contrôle d'un site que mon agence a créé → 200 `{ state, openedAt, canOpen, items }` */
+    #[Route('/sites/{code}/storefront', name: 'api_agency_site_storefront', methods: ['GET'], requirements: ['code' => '[a-z0-9-]{1,50}'])]
+    public function storefront(string $code): JsonResponse
+    {
+        return $this->handle(fn () => $this->json($this->storefront->checklist($this->requests->createdSiteOf($this->context->current(), $code))));
+    }
+
+    /** Ouvre la boutique d'un site que mon agence a créé (responsable) → 200 `{ state, openedAt }`, ou 409 `STOREFRONT_NOT_READY { items }` */
+    #[Route('/sites/{code}/storefront/open', name: 'api_agency_site_storefront_open', methods: ['POST'], requirements: ['code' => '[a-z0-9-]{1,50}'])]
+    public function storefrontOpen(string $code): JsonResponse
+    {
+        return $this->handle(fn () => $this->json($this->storefront->open($this->requests->createdSiteOf($this->manager(), $code, true), $this->by())));
+    }
+
+    /** Un lien d'aperçu neuf d'un site que mon agence a créé (responsable) → 200 `{ url, expiresAt }` (7 jours ; il remplace l'ancien) */
+    #[Route('/sites/{code}/storefront/preview-link', name: 'api_agency_site_storefront_preview_link', methods: ['POST'], requirements: ['code' => '[a-z0-9-]{1,50}'])]
+    public function storefrontPreviewLink(string $code): JsonResponse
+    {
+        return $this->handle(fn () => $this->json($this->storefront->previewLink($this->requests->createdSiteOf($this->manager(), $code, true), $this->by()), 200, ['Cache-Control' => 'no-store']));
+    }
+
     /** @return array<string, mixed> mon agence, pour un geste réservé à son responsable ; 403 `AGENCY_MANAGER_ONLY` pour un collaborateur */
     private function manager(): array
     {
@@ -133,6 +157,8 @@ class AgencyController extends AbstractController
         } catch (PlatformValidationException $e) {
             return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => $e->getMessage(), 'errors' => $e->errors], 422);
         } catch (AgencyException $e) {
+            return $this->json($e->body(), $e->status);
+        } catch (\App\Services\Storefront\StorefrontException $e) {
             return $this->json($e->body(), $e->status);
         }
     }

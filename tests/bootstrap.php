@@ -93,7 +93,7 @@ $template->exec("INSERT INTO \"user\" (id, email, roles, password, username, fir
 $template->exec("INSERT INTO esg_company (id, name, slug, sector, size_category, territory, existing_certifications, contact_email, is_active, created_at, updated_at, uploaded_document_codes) VALUES (9001, 'Entreprise du modèle', 'entreprise-du-modele', 'commerce', 'tpe', 'QC', '[]', 'esg@example.invalid', true, NOW(), NOW(), '[]')");
 $template->exec("INSERT INTO esg_user (id, company_id, email, roles, password, first_name, last_name, is_verified, is_active, created_at, locale) VALUES (9001, 9001, 'esg@example.invalid', '[\"ROLE_COMPANY\"]', 'un-mot-de-passe-du-modele', 'Compte', 'Hérité', true, true, NOW(), 'fr')");
 $template->exec("INSERT INTO gestion_stock_snapshot (snapshot_date, sale_value_cents, cost_value_cents, created_at) VALUES ('2026-01-01', 123400, 56700, NOW())");
-$template->exec("UPDATE entreprise SET admin_space_url = 'https://ancien.example.invalid/espace'");
+$template->exec("UPDATE entreprise SET admin_space_url = 'https://ancien.example.invalid/espace', seo_keywords = 'mots du modèle'");
 $template->exec("INSERT INTO content_audit_log (created_at, user_identifier, tenant, resource, action, fields) VALUES (NOW(), 'plateforme@example.invalid', 'modele', 'platform_access', 'login', 'channel')");
 $template = null;
 

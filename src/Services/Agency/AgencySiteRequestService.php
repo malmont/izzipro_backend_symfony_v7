@@ -306,6 +306,24 @@ class AgencySiteRequestService
     }
 
     /**
+     * Le site que cette agence a créé, pour un geste fait dans sa base (lot CONSTRUCTION : état public, ouverture, lien d'aperçu).
+     * `$write` : un geste qui change quelque chose, refusé à une agence suspendue.
+     *
+     * @param array<string, mixed> $agency
+     * @return array{code: string, dbname: string}
+     */
+    public function createdSiteOf(array $agency, string $code, bool $write = false): array
+    {
+        if ($write) {
+            $this->mustBeOpen($agency);
+        }
+        $this->createdSite($agency, $code);
+        $site = $this->agencies->tenant($code) ?? throw new AgencyException('AGENCY_SITE_NOT_ATTACHED', 404, ['tenantCode' => $code]);
+
+        return ['code' => $site['code'], 'dbname' => $site['dbname']];
+    }
+
+    /**
      * Une demande telle que les routes la rendent. Dates en ISO 8601 (UTC).
      *
      * @param array<string, mixed> $row

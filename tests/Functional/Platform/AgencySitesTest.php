@@ -135,7 +135,36 @@ class AgencySitesTest extends WebTestCase
         $this->assertSame([['CA', 'QC', '']], $site->query('SELECT country, state, street1 FROM address_entreprise')->fetchAll(\PDO::FETCH_NUM));
         // la fiche est une fiche NEUVE, pas celle du modèle réécrite : ce qui dépend de la fiche d'un autre (réseaux, réservations) ne passe pas
         $this->assertSame([1, 0], [(int) $one('SELECT COUNT(*) FROM entreprise'), (int) $one('SELECT COUNT(*) FROM reservation')]);
-        $this->assertNotSame((int) $this->pdo(SITE_TEMPLATE_TEST_DB)->query('SELECT id FROM entreprise')->fetchColumn(), (int) $one('SELECT id FROM entreprise'));
+        $this->assertSame('mots du modèle', $this->pdo(SITE_TEMPLATE_TEST_DB)->query('SELECT seo_keywords FROM entreprise')->fetchColumn(), 'le modèle porte bien une fiche');
+        $this->assertSame([1, null], [(int) $one('SELECT id FROM entreprise'), $one('SELECT seo_keywords FROM entreprise')], 'une fiche neuve, numéro 1 (celui que les fronts lisent), sans rien de celle du modèle');
+
+        // Lot CONSTRUCTION : le site neuf naît « en construction » ; le visiteur n'en lit que le nom, le serveur refuse le reste
+        $this->assertSame('construction', $one('SELECT storefront_state FROM entreprise'));
+        $visitor = fn (string $path): array => [$this->api('GET', $path, null, null, $host)->getStatusCode(), json_decode((string) $this->client->getResponse()->getContent(), true)];
+        [$status, $state] = $visitor('/api/site/storefront');
+        $this->assertSame([200, 'construction', 'Boutique de Zoé', false], [$status, $state['state'], $state['name'], $state['preview']['active']]);
+        $this->assertSame([403, 'STOREFRONT_UNDER_CONSTRUCTION'], [$visitor('/api/category')[0], $visitor('/api/category')[1]['code']]);
+        [$status, $legal] = $visitor('/api/entreprise/1');
+        $this->assertSame([200, 'Boutique de Zoé', false], [$status, $legal['name'], $legal['isBoutiqueActive']]);
+        // L'agence lit l'état de son site, l'ouvre (le responsable seulement) et obtient un lien d'aperçu : elle n'a pas de compte dans ce site
+        $store = $this->json('GET', "/api/agency/sites/$code/storefront", null, 'member', 200);
+        $this->assertSame(['construction', false, ['products', 'payment', 'terms']], [$store['state'], $store['canOpen'], array_column($store['items'], 'key')]);
+        $this->assertSame('AGENCY_MANAGER_ONLY', $this->json('POST', "/api/agency/sites/$code/storefront/open", null, 'member', 403)['code']);
+        $this->assertSame('AGENCY_MANAGER_ONLY', $this->json('POST', "/api/agency/sites/$code/storefront/preview-link", null, 'member', 403)['code']);
+        $this->assertSame('STOREFRONT_NOT_READY', $this->json('POST', "/api/agency/sites/$code/storefront/open", null, 'manager', 409)['code'], 'boutique sans moyen de paiement : elle n\'ouvre pas');
+        $preview = $this->json('POST', "/api/agency/sites/$code/storefront/preview-link", null, 'manager', 200);
+        $this->assertMatchesRegularExpression('#^https://' . preg_quote($host, '#') . '/apercu\#token=[0-9a-f]{64}$#', $preview['url']);
+        $this->client->request('GET', 'https://' . $host . '/api/category', [], [], ['HTTP_X_TENANT_HOST' => $host, 'HTTP_X_STOREFRONT_PREVIEW' => substr($preview['url'], -64)]);
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode(), 'le lien d\'aperçu ouvre les lectures du site neuf');
+        // un moyen de paiement réglé : le responsable ouvre la boutique, le visiteur la lit
+        $this->assertSame(0, (int) $one('SELECT COUNT(*) FROM stripe_config'), 'le compte de paiement du modèle ne passe pas au site neuf');
+        $this->assertGreaterThan(0, (int) $this->pdo(SITE_TEMPLATE_TEST_DB)->query('SELECT COUNT(*) FROM stripe_config')->fetchColumn(), 'le modèle en porte bien un');
+        $site->exec("INSERT INTO stripe_config (id, account_id, is_active) VALUES (1, 'acct_essai_agence', true)");
+        $this->assertSame('open', $this->json('POST', "/api/agency/sites/$code/storefront/open", null, 'manager', 200)['state']);
+        $this->assertSame([200, 'open'], [$visitor('/api/site/storefront')[0], $visitor('/api/site/storefront')[1]['state']]);
+        $this->assertSame(200, $visitor('/api/category')[0]);
+        $this->assertSame(['preview_link', 'open'], $site->query("SELECT action FROM content_audit_log WHERE resource = 'storefront' ORDER BY id")->fetchAll(\PDO::FETCH_COLUMN));
+        $site->exec("DELETE FROM content_audit_log WHERE resource = 'storefront'");
         $this->assertSame(["zoe-{$this->tag}@example.invalid"], $site->query('SELECT from_email FROM email_configuration')->fetchAll(\PDO::FETCH_COLUMN), 'l\'expéditeur des courriels est posé d\'après la fiche du site');
 
         // Les droits de source « agence » : les modules et les applications, pas l'IA ; projetés sur la fiche du site
@@ -286,6 +315,9 @@ class AgencySitesTest extends WebTestCase
         $this->assertSame('AGENCY_SITE_NOT_CREATED', $this->json('GET', '/api/agency/sites/' . MV_TEST_TENANT2_CODE . '/modules', null, 'manager', 409)['code']);
         $this->assertSame('AGENCY_SITE_NOT_CREATED', $this->json('PUT', '/api/agency/sites/' . MV_TEST_TENANT2_CODE . '/modules/module.boutique', ['enabled' => false], 'manager', 409)['code']);
         $this->assertSame('AGENCY_SITE_NOT_CREATED', $this->json('POST', '/api/agency/sites/' . MV_TEST_TENANT2_CODE . '/invitation', null, 'manager', 409)['code']);
+        foreach ([['GET', 'storefront'], ['POST', 'storefront/open'], ['POST', 'storefront/preview-link']] as [$method, $route]) {
+            $this->assertSame('AGENCY_SITE_NOT_CREATED', $this->json($method, '/api/agency/sites/' . MV_TEST_TENANT2_CODE . '/' . $route, null, 'manager', 409)['code']);
+        }
 
         // Un droit « agence » que la plateforme a suspendu elle-même, pour une autre raison, avant la suspension de l'agence
         $rights = fn (string $tenant = ''): array => $this->master->query("SELECT feature_key, status, reference FROM tenant_entitlements WHERE tenant_code = '" . ($tenant ?: $code) . "' AND status IN ('active', 'grace', 'suspended') AND feature_key NOT LIKE 'ai.%' ORDER BY feature_key")->fetchAll(\PDO::FETCH_NUM);
@@ -317,6 +349,9 @@ class AgencySitesTest extends WebTestCase
         $this->assertSame('AGENCY_NOT_OPEN', $this->json('POST', '/api/agency/sites', ['code' => 'agtest-autre', 'name' => 'Autre', 'adminEmail' => 'autre@example.invalid'], 'manager', 409)['code']);
         $this->assertSame('AGENCY_NOT_OPEN', $put('module.boussole', true, 'manager', 409)['code']);
         $this->assertSame('AGENCY_NOT_OPEN', $this->json('POST', "/api/agency/sites/$code/invitation", null, 'manager', 409)['code']);
+        $this->assertSame('AGENCY_NOT_OPEN', $this->json('POST', "/api/agency/sites/$code/storefront/open", null, 'manager', 409)['code']);
+        $this->assertSame('AGENCY_NOT_OPEN', $this->json('POST', "/api/agency/sites/$code/storefront/preview-link", null, 'manager', 409)['code']);
+        $this->assertSame('construction', $this->json('GET', "/api/agency/sites/$code/storefront", null, 'manager', 200)['state'], 'suspendue, l\'agence lit encore');
         // Au bout des 30 jours, le balayage des droits suspend la page publique (elle reste marquée par la cascade)
         static::getContainer()->get(EntitlementService::class)->sweep((new \DateTimeImmutable())->modify('+31 days'));
         $this->assertSame(['module.landing', 'suspended', $mark], $rights()[2]);

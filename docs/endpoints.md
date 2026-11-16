@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (589)
+## Boutique et commun (598)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -298,6 +298,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/agency/sites/{code}/invitation` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::invitation` |
 | PUT | `/api/agency/sites/{code}/modules/{feature}` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::setModule` |
 | GET | `/api/agency/sites/{code}/modules` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::modules` |
+| POST | `/api/agency/sites/{code}/storefront/open` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::storefrontOpen` |
+| POST | `/api/agency/sites/{code}/storefront/preview-link` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::storefrontPreviewLink` |
+| GET | `/api/agency/sites/{code}/storefront` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::storefront` |
 | GET | `/api/agency/sites` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::sites` |
 | POST | `/api/agency/sites` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::requestSite` |
 | DELETE | `/api/app-keys/{id}` | ROLE_ADMIN | `Controller\AppKeyController\AppKeyController::revoke` |
@@ -778,6 +781,12 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/site/imports` | ROLE_ADMIN | `Import\Controller\SiteImportController::upload` |
 | GET | `/api/site/readiness` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteReadinessController::show` |
 | GET | `/api/site/shipping` | ROLE_ADMIN | `Controller\SiteFeaturesController\SiteShippingController::index` |
+| GET | `/api/site/storefront/checklist` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\StorefrontController\StorefrontController::checklist` |
+| POST | `/api/site/storefront/close` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\StorefrontController\StorefrontController::close` |
+| POST | `/api/site/storefront/open` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\StorefrontController\StorefrontController::open` |
+| POST | `/api/site/storefront/preview-link` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\StorefrontController\StorefrontController::previewLink` |
+| POST | `/api/site/storefront/preview` | PUBLIC_ACCESS | `Controller\StorefrontController\StorefrontController::preview` |
+| GET | `/api/site/storefront` | PUBLIC_ACCESS | `Controller\StorefrontController\StorefrontController::state` |
 | GET | `/api/sizes` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\SizesController\SizeController::getSizes` |
 | POST | `/api/sizes` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::createSize` |
 | GET | `/api/social-networks` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\SocialNetworkController\SocialNetworkController::list` |

@@ -847,8 +847,15 @@ class TenantConnectionManager
         $pdo->exec('DELETE FROM content_audit_log');
         // l'expéditeur des courriels d'un site neuf est posé d'après SA fiche (SiteDefaultsService) : jamais le serveur d'un autre
         $pdo->exec('TRUNCATE email_configuration CASCADE');
+        // ni le compte de paiement d'un autre : un site neuf connecte le sien (lot CONSTRUCTION : sans lui, la boutique n'ouvre pas)
+        $pdo->exec('DELETE FROM stripe_config');
         // la fiche d'un site neuf est créée pour lui : ni la fiche d'un autre, ni son adresse, ses réseaux, ses réservations
-        $pdo->exec('TRUNCATE entreprise CASCADE');
+        // Lot CONSTRUCTION (16/11/2026) : tout site neuf naît « en construction ». La fiche du site n'existe pas encore (elle sera créée
+        // par le formulaire, par l'agence ou par l'administrateur) : c'est la valeur par défaut de la colonne, dans la base de CE site,
+        // qui le garantit, quel que soit le chemin qui créera la fiche. Les sites existants gardent « open ». La remise à zéro du
+        // compteur donne à la fiche neuve le numéro 1, que les fronts lisent (`GET /api/entreprise/1`)
+        $pdo->exec('TRUNCATE entreprise RESTART IDENTITY CASCADE');
+        $pdo->exec("ALTER TABLE entreprise ALTER COLUMN storefront_state SET DEFAULT 'construction'");
         $foreign = (int) $pdo->query('SELECT COUNT(*) FROM "user" WHERE roles::text NOT LIKE \'%"ROLE_SUPER_ADMIN"%\'')->fetchColumn();
         if ($foreign > 0) {
             throw new \RuntimeException(sprintf('Le site de référence porte %d compte(s) qui ne sont pas ceux de la plateforme : création refusée.', $foreign));

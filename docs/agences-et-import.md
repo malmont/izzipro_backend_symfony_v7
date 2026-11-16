@@ -491,6 +491,10 @@ de la plateforme pour dépanner tant qu'AG-3 n'existe pas. Trois garde-fous, sur
 
 Le site de référence porte deux comptes de ce rôle : le propriétaire regarde lui-même le second.
 
+Depuis le lot CONSTRUCTION (16/11/2026, `docs/boutique-en-construction.md`), un site créé par une agence naît « en construction » :
+l'agence lit son état, l'ouvre (`POST /api/agency/sites/{code}/storefront/open`) et obtient un lien d'aperçu
+(`POST …/storefront/preview-link`). La création d'un site retire aussi le compte de paiement que le modèle porterait.
+
 ### 8.10 Limites connues
 
 - Un administrateur de site peut demander lui-même l'essai d'un module que l'agence a fermé (chemin « Demander » de la plateforme) :

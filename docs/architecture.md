@@ -59,7 +59,7 @@ selon les politiques de la plateforme (`Services/Platform/TenantSetupFeaturesSer
 |---|---|
 | `code` | **le sous-domaine du site chez le frontend**, un seul mot (`demo`, `esgboost`) : le site répond sur `<code>.<domaine de base>` (`FRONTEND_BASE_DOMAIN`) ; c'est aussi `<code>.backend-strapi.online` et `?tenant=<code>` pour EasyAdmin |
 | `name` | nom affiché |
-| `dbname` | `db_<code>` (base clonée de `gmasuite` par `TenantConnectionManager::createTenant`). Depuis le lot AG-2 (15/11/2026) : une base qui existe déjà n'est ni copiée ni supprimée ; un site neuf n'hérite ni compte (hors ceux de la plateforme : la création est refusée si le site de référence en porte un autre), ni serveur de courriel, ni fiche, ni chiffres ; la base copiée se règle par `TENANT_TEMPLATE_DB` (tests, répétition). Une agence crée aussi un site, par une file : `docs/agences-et-import.md` § 8 |
+| `dbname` | `db_<code>` (base clonée de `gmasuite` par `TenantConnectionManager::createTenant`). Depuis le lot AG-2 (15/11/2026) : une base qui existe déjà n'est ni copiée ni supprimée ; un site neuf n'hérite ni compte (hors ceux de la plateforme : la création est refusée si le site de référence en porte un autre), ni serveur de courriel, ni fiche, ni chiffres ; la base copiée se règle par `TENANT_TEMPLATE_DB` (tests, répétition) ; depuis le lot CONSTRUCTION (16/11/2026), un site neuf naît « en construction » (`docs/boutique-en-construction.md`). Une agence crée aussi un site, par une file : `docs/agences-et-import.md` § 8 |
 | `custom_domain` | **NULL**, sauf quand le client a son propre domaine (`esgboost.ca`, `karaandb.com`) : il n'a rien à voir avec le code |
 | `dbuser`, `dbpass`, `gemsuite_token` | vides (connexion par `DATABASE_URL`) |
 | `is_internal_store` | `false` |
