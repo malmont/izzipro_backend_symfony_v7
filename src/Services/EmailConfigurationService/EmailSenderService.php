@@ -118,7 +118,8 @@ class EmailSenderService
             // l'adresse du site passe en « Répondre à » (sauf réponse déjà choisie par l'appelant).
             $platformFrom = !TenantEmailDelivery::isComplete($emailConfig) ? $this->platformSender() : null;
             if ($platformFrom !== null && strcasecmp($platformFrom, $fromEmail) !== 0) {
-                if (!$replyTo && filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
+                // jamais une réponse renvoyée au destinataire lui-même (signe d'hameçonnage pour les messageries)
+                if (!$replyTo && filter_var($fromEmail, FILTER_VALIDATE_EMAIL) && strcasecmp(trim($fromEmail), trim($to)) !== 0) {
                     $replyTo = $fromEmail;
                 }
                 $fromEmail = $platformFrom;
@@ -168,6 +169,12 @@ class EmailSenderService
     {
         $language = $this->emailLocale?->language($locale) ?? EmailLocale::FRENCH;
         $context += $this->emailLocale?->context($language) ?? ['locale' => $language, 'intlLocale' => $language];
+        // Courriel de COMPTE (code de connexion, avis de compte) d'un site SANS serveur d'envoi : il part exactement comme les courriels de
+        // la plateforme qui arrivent (même expéditeur, nom « Arkanoa », sans « Répondre à ») ; incident du 16/11/2026 : le code d'un site neuf,
+        // parti sous le nom du site avec une réponse renvoyée au destinataire lui-même, accepté par le serveur, n'a jamais été livré
+        if ($platformSubjectKey !== null && $this->platformSender() !== null && !$this->siteHasOwnServer($language)) {
+            return $this->sendPlatformEmail($to, $this->subject($platformSubjectKey, $subjectParams, $language), $template, $context);
+        }
         $sent = $this->sendTemplatedEmail($to, $this->subject($subjectKey, $subjectParams, $language), $template, $context, $language, $domain);
         if (!$sent && $platformSubjectKey !== null) {
             $sent = $this->sendPlatformEmail($to, $this->subject($platformSubjectKey, $subjectParams, $language), $template, $context);
@@ -210,6 +217,16 @@ class EmailSenderService
         } catch (\Throwable $e) {
             $this->logger->error('Erreur lors de l\'envoi d\'un e-mail de la plateforme : ' . $e->getMessage());
 
+            return false;
+        }
+    }
+
+    /** Le site courant a-t-il son propre serveur d'envoi (configuration complète) ? Sinon ses courriels passent par la plateforme */
+    public function siteHasOwnServer(string $locale = 'fr'): bool
+    {
+        try {
+            return TenantEmailDelivery::isComplete($this->emailConfigService->findOneByLocale($locale));
+        } catch (\Throwable) {
             return false;
         }
     }

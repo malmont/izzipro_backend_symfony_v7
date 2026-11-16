@@ -40,9 +40,24 @@ class PlatformSenderFallbackTest extends KernelTestCase
         $mail = $this->getMailerMessages()[count($this->getMailerMessages()) - 1];
         $this->assertSame(['agence@example.invalid'], array_map(static fn ($a) => $a->getAddress(), $mail->getReplyTo()));
 
+        // jamais de « Répondre à » égal au destinataire (le destinataire est l'adresse du site)
+        $this->assertTrue($sender->sendTemplatedEmail('contact@mvtest.test', 'Votre code', 'emails/support_agent_invitation.html.twig', $context, 'fr', 'https://example.invalid'));
+        $mail = $this->getMailerMessages()[count($this->getMailerMessages()) - 1];
+        $this->assertSame([], $mail->getReplyTo());
+
+        // un courriel de COMPTE (code de connexion) d'un site sans serveur : exactement le chemin de la plateforme (nom « Arkanoa », objet de
+        // la plateforme, sans « Répondre à ») ; incident du 16/11/2026
+        $this->assertFalse($sender->siteHasOwnServer());
+        $this->assertTrue($sender->sendCustomerEmail('destinataire@example.invalid', 'otp.subject', [], 'security/2fa_email.html.twig', ['code' => '000000', 'lifetime' => 300, 'domain' => '', 'entreprise' => null], 'fr', 'https://example.invalid', 'otp.subject_platform'));
+        $mail = $this->getMailerMessages()[count($this->getMailerMessages()) - 1];
+        $this->assertSame(['plateforme@arkanoa.test', 'Arkanoa', []], [$mail->getFrom()[0]->getAddress(), $mail->getFrom()[0]->getName(), $mail->getReplyTo()]);
+        $this->assertSame($sender->subject('otp.subject_platform', [], 'fr'), $mail->getSubject());
+
         // sans compte expéditeur de la plateforme (poste de développement) : rien ne change
         $this->assertTrue($make('null://null')->sendTemplatedEmail('destinataire@example.invalid', 'Votre code', 'emails/support_agent_invitation.html.twig', $context, 'fr', 'https://example.invalid'));
         $mail = $this->getMailerMessages()[count($this->getMailerMessages()) - 1];
         $this->assertSame('contact@mvtest.test', $mail->getFrom()[0]->getAddress());
+        $this->assertTrue($make('null://null')->sendCustomerEmail('destinataire@example.invalid', 'otp.subject', [], 'security/2fa_email.html.twig', ['code' => '000000', 'lifetime' => 300, 'domain' => '', 'entreprise' => null], 'fr', 'https://example.invalid', 'otp.subject_platform'));
+        $this->assertSame('contact@mvtest.test', $this->getMailerMessages()[count($this->getMailerMessages()) - 1]->getFrom()[0]->getAddress(), 'code de connexion : chemin d\'avant');
     }
 }
