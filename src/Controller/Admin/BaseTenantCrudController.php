@@ -53,7 +53,7 @@ abstract class BaseTenantCrudController extends AbstractCrudController
         // recherche disait si un jeton de réinitialisation ou un mot de passe de serveur d'envoi le contenait. Les colonnes cherchées
         // sont donc toujours une liste explicite, sans les secrets (`SecretKeys::unsearchable`).
         $hidden = static fn (string $property): bool => \App\Security\SecretKeys::unsearchable($property);
-        $sort = array_filter($searchDto->getSort(), fn (string $property) => !$hidden($property) && !\App\Services\Admin\UnsortableFieldConfigurator::isUnsortable($entityDto, $property), ARRAY_FILTER_USE_KEY);
+        $sort = self::safeSort($searchDto->getSort(), fn (string $property): bool => $hidden($property) || \App\Services\Admin\UnsortableFieldConfigurator::isUnsortable($entityDto, $property));
         $configured = $searchDto->getSearchableProperties();
         $searchable = array_values(array_filter($configured === null || $configured === [] ? $entityDto->getClassMetadata()->getFieldNames() : $configured, static fn (string $property): bool => !$hidden($property)));
         // (une liste vide vaudrait « toutes les colonnes » pour EasyAdmin : il reste toujours au moins l'identifiant)
@@ -63,6 +63,30 @@ abstract class BaseTenantCrudController extends AbstractCrudController
         }
 
         return parent::createIndexQueryBuilder($searchDto, $entityDto, $fields, $filters);
+    }
+
+    /**
+     * Le tri demandé par l'adresse (`sort[champ]=sens`), réduit à ce qui est sûr : un NOM de champ simple (ou `association.champ`) et
+     * un SENS `ASC` ou `DESC`, rien d'autre ; ni une colonne de secret, ni une colonne non triable. EasyAdmin recopie la clé et la
+     * valeur dans l'ORDER BY : `sort[id]=ASC, entity.resetToken` ou `sort[resetToken,entity.id]=ASC` glissaient un tri par un secret
+     * (train de sécurité du 16/11/2026, relecture du train 89).
+     *
+     * @param array<mixed> $sort
+     * @param callable(string): bool $refused
+     * @return array<string, string>
+     */
+    public static function safeSort(array $sort, callable $refused): array
+    {
+        $safe = [];
+        foreach ($sort as $property => $direction) {
+            if (!is_string($property) || preg_match('/^[A-Za-z_]\w*(\.[A-Za-z_]\w*)?$/', $property) !== 1 || !is_string($direction)
+                || !in_array(strtoupper($direction), ['ASC', 'DESC'], true) || $refused($property)) {
+                continue;
+            }
+            $safe[$property] = strtoupper($direction);
+        }
+
+        return $safe;
     }
 
     /**

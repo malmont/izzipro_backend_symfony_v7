@@ -242,7 +242,9 @@ class UserManagementController extends AbstractController
             'message' => $activationUrl
                 ? ($emailSent
                     ? 'Invitation envoyée par e-mail. Le lien d\'activation reste disponible ci-dessous si besoin.'
-                    : 'Compte créé, mais l\'e-mail d\'invitation n\'a pas pu être envoyé : transmettez le lien d\'activation vous-même.')
+                    : ($this->isGranted('ROLE_ADMIN')
+                        ? 'Compte créé, mais l\'e-mail d\'invitation n\'a pas pu être envoyé : transmettez le lien d\'activation vous-même.'
+                        : 'Compte créé, mais l\'e-mail d\'invitation n\'a pas pu être envoyé : demandez à un administrateur du site de transmettre le lien d\'activation.'))
                 : 'Utilisateur créé avec succès avec son mot de passe initial.'
         ], Response::HTTP_CREATED);
     }
@@ -444,6 +446,11 @@ class UserManagementController extends AbstractController
     /** Compte du propriétaire de la plateforme (ROLE_SUPER_ADMIN) : modifiable ou supprimable par un super admin seulement */
     private function protectOwner(User $targetUser): ?JsonResponse
     {
+        // Train de sécurité du 16/11/2026 : de même un compte d'AGENCE, sauf par lui-même (ses rôles sont donnés par la plateforme seule)
+        $self = $this->getUser() instanceof User && $this->getUser()->getId() === $targetUser->getId();
+        if (\App\Security\AgencyRoles::has($targetUser->getRoles()) && !$this->isGranted(RoleAssignmentPolicy::SUPER_ADMIN) && !$self) {
+            return $this->json(['error' => 'Compte d\'agence : modification réservée à la plateforme.', 'code' => 'OWNER_PROTECTED'], Response::HTTP_FORBIDDEN);
+        }
         if (in_array(RoleAssignmentPolicy::SUPER_ADMIN, $targetUser->getRoles(), true) && !$this->isGranted(RoleAssignmentPolicy::SUPER_ADMIN)) {
             return $this->json(['error' => 'Compte du propriétaire de la plateforme : modification réservée.', 'code' => 'OWNER_PROTECTED'], Response::HTTP_FORBIDDEN);
         }

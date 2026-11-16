@@ -138,6 +138,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         if ($this->email !== null && mb_strtolower(trim($this->email)) !== mb_strtolower(trim($email))) {
             $this->resetToken = null;
             $this->resetTokenExpiresAt = null;
+            // de même le lien d'ACTIVATION d'un compte invité par la console, qui pose aussi un mot de passe : il a été envoyé à
+            // l'ancienne adresse (relecture du train 89). Le jeton de vérification d'un inscrit, lui, ne pose rien : il reste.
+            if ($this->signupChannel === self::SIGNUP_WEB_INVITE && !$this->isVerified) {
+                $this->verificationToken = null;
+                $this->verificationTokenExpiresAt = null;
+            }
         }
         $this->email = $email;
 

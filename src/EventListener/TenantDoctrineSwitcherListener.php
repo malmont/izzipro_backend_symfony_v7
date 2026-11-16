@@ -37,6 +37,14 @@ class TenantDoctrineSwitcherListener
         $host = $request->headers->get('X-Tenant-Host');
         // Site demandé explicitement (en-tête ou paramètre) : inconnu, la requête est refusée (voir plus bas)
         $explicit = (bool) $host;
+        // Train de sécurité du 16/11/2026 : un site demandé qui n'a pas la FORME d'un nom d'hôte est refusé, avant toute résolution
+        // (`victime:@pirate.example` était lu comme le site `victime`, et un lien de courriel reprenait la valeur brute)
+        $asked = $host ?: $request->query->get('tenant') ?? $request->query->get('t');
+        if (is_string($asked) && $asked !== '' && !\App\Services\Http\TenantHostFormat::valid($asked)) {
+            $event->setResponse(new JsonResponse(['error' => 'TENANT_HOST_INVALID', 'code' => 'TENANT_HOST_INVALID', 'message' => 'Site demandé invalide'], 400));
+
+            return;
+        }
 
         // Support du paramètre ?tenant= ou ?t= pour l'accès direct à EasyAdmin dans le navigateur
         if (!$host) {

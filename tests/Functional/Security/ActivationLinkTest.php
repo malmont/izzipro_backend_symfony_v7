@@ -66,6 +66,15 @@ class ActivationLinkTest extends WebTestCase
         $this->assertSame(201, $status, json_encode($byManager));
         $this->assertSame([null, null, true], [$byManager['user']['token'], $byManager['user']['activationUrl'], $byManager['user']['isPending']]);
 
+        // L'ADRESSE CORRIGÉE : le lien envoyé à l'ancienne adresse ne vaut plus (une invitation nouvelle se fait à la bonne adresse)
+        $wrong = "activation-mauvaise-adresse-{$this->tag}@example.invalid";
+        [$status, $mistyped] = $this->api('POST', '/api/memoires/admin/users', ['email' => $wrong, 'firstName' => 'Mal', 'lastName' => 'Tapé'], $admin);
+        $this->assertSame(201, $status, json_encode($mistyped));
+        $this->api('PUT', '/api/memoires/admin/users/' . $mistyped['user']['id'] . '?locale=fr', ['email' => "activation-bonne-adresse-{$this->tag}@example.invalid"], $admin);
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
+        $this->assertSame([404, 'ACTIVATION_LINK_INVALID'], $this->activate((string) $mistyped['user']['token']));
+        $this->assertSame([null, null], array_values($this->db->fetchAssociative('SELECT verification_token, verification_token_expires_at FROM "user" WHERE id = ?', [$mistyped['user']['id']])));
+
         // UN LIEN EXPIRÉ, ou sans échéance, ne vaut rien
         $this->db->executeStatement("UPDATE \"user\" SET verification_token_expires_at = NOW() - INTERVAL '1 minute' WHERE id = ?", [$id]);
         $this->assertSame([404, 'ACTIVATION_LINK_INVALID'], $this->activate($token));

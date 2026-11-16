@@ -67,9 +67,18 @@ class SuperAdminAccountService
             try {
                 $pdo = $this->pdo($db['dbname']);
                 $pdo->beginTransaction();
-                $find = $pdo->prepare('SELECT id, roles FROM "user" WHERE lower(email) = lower(:email) LIMIT 1');
+                // Train de sécurité du 16/11/2026 : la ligne VISÉE est celle qui porte déjà le rôle de la plateforme. Avant, la première
+                // ligne venue de même adresse à la casse près (sans ordre) recevait le rôle et le mot de passe de la plateforme : un compte
+                // qui aurait pris l'adresse de la plateforme à une majuscule près pouvait devenir super administrateur. Plusieurs lignes
+                // de même adresse, sans une seule qui porte déjà le rôle : rien n'est écrit, la base est signalée.
+                $find = $pdo->prepare('SELECT id, roles FROM "user" WHERE lower(email) = lower(:email) ORDER BY id');
                 $find->execute(['email' => $email]);
-                $existing = $find->fetch(\PDO::FETCH_ASSOC);
+                $rows = $find->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+                $owners = array_values(array_filter($rows, static fn (array $row): bool => in_array('ROLE_SUPER_ADMIN', (array) json_decode((string) $row['roles'], true), true)));
+                if (count($rows) > 1 && count($owners) !== 1) {
+                    throw new \RuntimeException('plusieurs comptes portent cette adresse à la casse près : à régler à la main avant d\'appliquer');
+                }
+                $existing = $owners[0] ?? $rows[0] ?? null;
                 if ($existing) {
                     $merged = array_values(array_unique(array_merge((array) json_decode((string) $existing['roles'], true), self::ROLES)));
                     $stmt = $pdo->prepare('UPDATE "user" SET password = :hash, roles = :roles, firstname = :firstname, lastname = :lastname, is_verified = true, password_set = true, otp_enabled = true WHERE id = :id');

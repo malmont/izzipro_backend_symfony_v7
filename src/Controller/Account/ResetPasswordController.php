@@ -66,8 +66,12 @@ class ResetPasswordController extends AbstractController
             return $this->json(['error' => 'Email is required.', 'code' => 'EMAIL_REQUIRED', 'message' => 'Email is required.'], Response::HTTP_BAD_REQUEST); // codes stables (04/11/2026)
         }
 
-        // 1. Détection du Host Client (Frontend)
+        // 1. Détection du Host Client (Frontend). La forme de l'en-tête est contrôlée à l'entrée (TenantDoctrineSwitcherListener : un nom
+        // d'hôte, rien d'autre) : le lien construit plus bas ne mène jamais ailleurs que chez un hôte du site.
         $clientHost = $request->headers->get('x-tenant-host');
+        if (is_string($clientHost) && !\App\Services\Http\TenantHostFormat::valid($clientHost)) {
+            return $this->json(['error' => 'TENANT_HOST_INVALID', 'code' => 'TENANT_HOST_INVALID', 'message' => 'Site demandé invalide'], Response::HTTP_BAD_REQUEST);
+        }
         if (!$clientHost) {
             $origin = $request->headers->get('origin') ?? $request->headers->get('referer');
             if ($origin) {

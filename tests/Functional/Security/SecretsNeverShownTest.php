@@ -249,8 +249,18 @@ class SecretsNeverShownTest extends WebTestCase
                 $this->assertSame($order('ASC', $property), $order('DESC', $property), "tri par $property ignoré");
             }
             $this->assertNotSame($order('ASC', 'id'), $order('DESC', 'id'), 'le tri par une colonne ordinaire, lui, change l\'ordre');
+            // un secret glissé dans le SENS ou dans le NOM du tri ne passe pas non plus : la liste répond, comme sans tri
+            foreach ([['id' => 'ASC, entity.resetToken'], ['resetToken,entity.id' => 'ASC'], ['id' => 'ASC; DROP'], ['entity.password' => 'DESC']] as $forged) {
+                $crawler = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin?' . http_build_query(['crudAction' => 'index', 'crudControllerFqcn' => UserCrudController::class, 'query' => 'secrets-', 'sort' => $forged]), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+                $this->assertSame(200, $this->client->getResponse()->getStatusCode(), json_encode($forged));
+            }
             $this->client->getCookieJar()->clear();
         }
+        // le tri sûr : un nom de champ simple, un sens ASC ou DESC ; rien d'autre ne passe
+        $none = static fn (string $property): bool => false;
+        $this->assertSame(['id' => 'ASC', 'user.email' => 'DESC', 'name' => 'ASC'], \App\Controller\Admin\BaseTenantCrudController::safeSort(
+            ['id' => 'ASC', 'user.email' => 'desc', 'name' => 'Asc', 'x' => 'ASC, entity.resetToken', 'resetToken,entity.id' => 'ASC', 'a.b.c' => 'ASC', '1x' => 'ASC', 'y' => ['ASC'], 3 => 'ASC'], $none));
+        $this->assertSame([], \App\Controller\Admin\BaseTenantCrudController::safeSort(['resetToken' => 'ASC'], [SecretKeys::class, 'unsearchable']));
         // les noms de colonne qu'une liste ne cherche ni ne trie
         foreach (['resetToken', 'verificationToken', 'password', 'smtpPassword', 'easypostApiKeySandbox', 'guestToken', 'accessToken', 'pinHash', 'tokenHash', 'keyHash', 'user.resetToken'] as $property) {
             $this->assertTrue(SecretKeys::unsearchable($property), $property);

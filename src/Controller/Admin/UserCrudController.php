@@ -174,6 +174,12 @@ class UserCrudController extends BaseTenantCrudController
         if (in_array(RoleAssignmentPolicy::SUPER_ADMIN, $roles, true) && !$this->isGranted(RoleAssignmentPolicy::SUPER_ADMIN)) {
             throw $this->createAccessDeniedException('Compte du propriétaire de la plateforme : modification réservée.');
         }
+        // Train de sécurité du 16/11/2026 : un compte d'AGENCE (rôles donnés par le super administrateur seul) ne se modifie que par
+        // lui-même ou par la plateforme. Avant, l'administrateur du site d'attache changeait son mot de passe ou son adresse, et
+        // prenait la main sur l'espace de l'agence (`/api/agency` : sites, invitations, modules).
+        if (\App\Security\AgencyRoles::has($roles) && !$this->isGranted(RoleAssignmentPolicy::SUPER_ADMIN) && !$this->isSelf($targetUser)) {
+            throw $this->createAccessDeniedException('Compte d\'agence : modification réservée à la plateforme.');
+        }
 
         return $roles;
     }
