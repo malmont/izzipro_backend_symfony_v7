@@ -65,6 +65,9 @@ class AssistanceTest extends WebTestCase
         $this->assertSame([422, 'ASSISTANCE_SECTION_INVALID'], $this->refusal('POST', '/api/site/assistance', $merchant, ['section' => 'cles']));
         $this->assertSame([422, 'ASSISTANCE_MODE_INVALID'], $this->refusal('POST', '/api/site/assistance', $merchant, ['section' => 'commandes', 'mode' => 'tout']));
         $this->assertSame([422, 'ASSISTANCE_READ_ONLY'], $this->refusal('POST', '/api/site/assistance', $merchant, ['section' => 'pertes', 'mode' => 'write']), 'les pertes : consultation seulement');
+        foreach (['caisse', 'stock', 'assistance'] as $later) {
+            $this->assertSame([422, 'ASSISTANCE_SECTION_UNAVAILABLE'], $this->refusal('POST', '/api/site/assistance', $merchant, ['section' => $later]), "$later : avec EasyAdmin (AG-3c)");
+        }
         // avant la demande, la section reste fermée à l'opérateur
         $this->assertSame([403, 'family'], $this->reason('GET', '/api/orders', $operator));
 
@@ -92,7 +95,9 @@ class AssistanceTest extends WebTestCase
 
         // LA TRACE : chaque écran consulté, au nom de l'agence et du prénom, avec le numéro de l'assistance
         $journal = json_decode((string) $this->call('GET', '/api/site/assistance/' . $grant['id'] . '/journal', $merchant)->getContent(), true)['journal'] ?? [];
-        $this->assertSame([['GET', '/api/payments', 'assistance_read'], ['GET', '/api/orders', 'assistance_read']], array_map(static fn (array $l): array => [$l['method'], $l['path'], $l['action']], $journal));
+        $this->assertSame([['GET', '/api/payments', 'assistance_read', null], ['POST', '/api/order/cancel/1', 'assistance_refused', 'assistance_read_only'], ['GET', '/api/orders', 'assistance_read', null]],
+            array_map(static fn (array $l): array => [$l['method'], $l['path'], $l['action'], $l['reason']], $journal), 'chaque écran consulté ET chaque refus');
+        $this->assertNotNull($journal[0]['status'], 'le statut de la réponse est ajouté à la ligne écrite avant de servir');
         $this->assertSame('Agence Atelier Web, Julie, pendant l\'assistance n° ' . $grant['id'], $journal[0]['account']);
         $this->assertSame(403, $this->call('GET', '/api/site/assistance/' . $grant['id'] . '/journal', $this->account(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'client', ['ROLE_USER_INTERNET'], 'Paul'))->getStatusCode(), 'un client du site ne lit rien');
         $states = array_column(json_decode((string) $this->call('GET', '/api/site/assistance', $merchant)->getContent(), true)['assistance'], 'state', 'id');
@@ -115,6 +120,9 @@ class AssistanceTest extends WebTestCase
         $this->assertSame(201, $asked->getStatusCode(), (string) $asked->getContent());
         $id = (int) json_decode((string) $asked->getContent(), true)['assistance']['id'];
 
+        // un REFUS n'ouvre pas la fenêtre (supprimer un contact reste fermé, même en modifier)
+        $this->assertSame([403, 'assistance_closed'], $this->reason('DELETE', '/api/contacts/999999', $operator));
+        $this->assertNull($this->grant($id)['started_at'], 'une requête refusée ne fait pas partir l\'heure');
         // modifier : l'écriture de la section passe (la route répond selon la fiche), tracée comme une écriture
         $written = $this->call('PUT', '/api/contacts/999999', $operator, ['status' => 'read']);
         $this->assertNotSame('MODE_FORBIDDEN', json_decode((string) $written->getContent(), true)['code'] ?? null, (string) $written->getContent());
@@ -123,6 +131,7 @@ class AssistanceTest extends WebTestCase
         // toujours fermés, même en modifier : supprimer un client, un export, une autre section
         $this->assertSame([403, 'assistance_closed'], $this->reason('DELETE', '/api/contacts/999999', $operator));
         $this->assertSame([403, 'assistance_closed'], $this->reason('GET', '/api/form-submissions/export', $operator));
+        $this->assertSame([403, 'assistance_closed'], $this->reason('GET', '/api/newsletter', $operator), 'la liste des adresses des abonnés : un export de fait');
         $this->assertSame([403, 'family'], $this->reason('POST', '/api/order/cancel/1', $operator), 'hors de la section : fermé');
 
         // la fenêtre passée : plus rien, ni lecture ni écriture
@@ -150,6 +159,66 @@ class AssistanceTest extends WebTestCase
         $this->assertSame([403, 'ASSISTANCE_FORBIDDEN'], $this->refusal('POST', '/api/site/assistance', $platform, ['section' => 'gestion']));
         $this->assertSame([403, 'ASSISTANCE_FORBIDDEN'], $this->refusal('POST', '/api/site/assistance/' . $id . '/close', $platform));
         $this->assertSame(200, $this->call('GET', '/api/site/assistance', $platform)->getStatusCode(), 'il lit');
+    }
+
+    /** En « modifier » dans les commandes : annuler une vente (un remboursement), acheter une étiquette restent fermés ; préparer un colis passe */
+    public function testInEditModeTheOrdersSectionNeverMovesMoney(): void
+    {
+        $merchant = $this->account(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'commercant', ['ROLE_ADMIN'], 'Claire');
+        [$agencyId, $operator, $member] = $this->agencyInside();
+        $this->assertSame(201, $this->call('POST', '/api/site/assistance', $merchant, ['section' => 'commandes', 'mode' => 'write'])->getStatusCode());
+        $this->assertSame([403, 'assistance_closed'], $this->reason('POST', '/api/order/cancel/1', $operator), 'annuler une vente la rembourse');
+        $this->assertSame([403, 'assistance_closed'], $this->reason('POST', '/api/shipping/buy', $operator, ['orderId' => 1]), 'acheter une étiquette dépense l\'argent du commerçant');
+        $parcel = $this->call('POST', '/api/shipping/parcels', $operator, []);
+        $this->assertNotSame('MODE_FORBIDDEN', json_decode((string) $parcel->getContent(), true)['code'] ?? null, (string) $parcel->getContent());
+
+        // l'agence DÉTACHÉE du site n'a plus rien, même une demande ouverte d'avant
+        static::getContainer()->get(AgencyService::class)->detach($agencyId, MV_TEST_TENANT2_CODE, 'essai');
+        $this->assertSame([], json_decode((string) $this->call('GET', '/api/agency/assistance', $member, null, MV_TEST_TENANT_HOST)->getContent(), true)['assistance'] ?? null);
+    }
+
+    /**
+     * FERMÉ PAR DÉFAUT : chaque écriture de l'API d'une section d'assistance est rangée, permise (`AssistanceSections::WRITES`) ou refusée,
+     * dans le fichier témoin `tests/Fixtures/ecrans/assistance-ecritures.json`. Une route nouvelle fait échouer cet essai : la ranger, puis
+     * régénérer le témoin (variable REGENERER_ASSISTANCE) et RELIRE son diff.
+     */
+    public function testEveryWriteOfASectionIsListed(): void
+    {
+        $computed = [];
+        foreach (static::getContainer()->get('router')->getRouteCollection() as $route) {
+            $template = $route->getPath();
+            if (!str_starts_with($template, '/api/')) {
+                continue;
+            }
+            $path = (string) preg_replace('/\{[^}]+\}/', '1', $template);
+            foreach (array_intersect($route->getMethods() ?: ['POST'], ['POST', 'PUT', 'PATCH', 'DELETE']) as $method) {
+                $screen = \App\Services\Screens\ScreenRegistry::classify($method, $path);
+                if (!is_string($screen) || str_starts_with($screen, '@')) {
+                    continue;
+                }
+                foreach (\App\Services\Agency\Assistance\AssistanceSections::of($screen, \App\Services\Screens\ScreenRegistry::familyOf($screen)) as $section) {
+                    $computed[$section][\App\Services\Agency\Assistance\AssistanceSections::writeAllowed($section, $method, $path) ? 'allowed' : 'refused'][] = "$method $template";
+                }
+            }
+        }
+        ksort($computed);
+        foreach ($computed as &$lists) {
+            ksort($lists);
+            foreach ($lists as &$list) {
+                $list = array_values(array_unique($list));
+                sort($list);
+            }
+        }
+        unset($lists, $list);
+        $file = __DIR__ . '/../../Fixtures/ecrans/assistance-ecritures.json';
+        if (getenv('REGENERER_ASSISTANCE')) {
+            file_put_contents((string) getenv('REGENERER_ASSISTANCE'), json_encode($computed, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) . "\n");
+            $this->markTestIncomplete('Témoin écrit dans ' . getenv('REGENERER_ASSISTANCE') . ' : le copier dans tests/Fixtures/ecrans/assistance-ecritures.json, puis relire son diff.');
+        }
+        $this->assertSame(json_decode((string) file_get_contents($file), true), $computed, 'écriture d\'une section non rangée : la permettre ou la refuser dans AssistanceSections::WRITES, puis régénérer le témoin');
+        $this->assertSame([], $computed['pertes']['allowed'] ?? [], 'les pertes : aucune écriture');
+        $this->assertNotContains('POST /api/order/cancel/{id}', $computed['commandes']['allowed'] ?? []);
+        $this->assertNotContains('POST /api/shipping/buy', $computed['commandes']['allowed'] ?? []);
     }
 
     /** L'agence créée, le second site rattaché, un membre entré : [agence, jeton d'entrée de l'opérateur, jeton du membre sur son site d'attache] */

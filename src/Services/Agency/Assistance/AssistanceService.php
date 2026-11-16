@@ -49,6 +49,9 @@ class AssistanceService
         if (!in_array($mode, AssistanceSections::MODES, true)) {
             throw new AssistanceException('ASSISTANCE_MODE_INVALID', 422, 'mode : read ou write attendu');
         }
+        if (!in_array($section, AssistanceSections::API_AVAILABLE, true)) {
+            throw new AssistanceException('ASSISTANCE_SECTION_UNAVAILABLE', 422, 'Cette section ne s\'ouvre pas encore à l\'agence depuis l\'espace d\'administration du web : elle viendra avec l\'espace d\'administration (EasyAdmin).');
+        }
         if ($mode === AssistanceSections::WRITE && !AssistanceSections::SECTIONS[$section]['writable']) {
             throw new AssistanceException('ASSISTANCE_READ_ONLY', 422, 'Cette section s\'ouvre à l\'agence en consultation seulement : décider d\'un constat, le classer ou gérer la notice aux salariés vous reste réservé.');
         }
@@ -119,7 +122,9 @@ class AssistanceService
             $view = $this->view($row, null);
             if (in_array($view['state'], [self::WAITING, self::ACTIVE], true)) {
                 $site = $this->agencies->tenant((string) $row['tenant_code']);
-                $out[] = ['site' => (string) $row['tenant_code'], 'siteName' => (string) ($site['name'] ?? $row['tenant_code'])] + $view;
+                // l'agence ne lit que le prénom de la personne qui demande (jamais son adresse)
+                $first = str_contains($view['requestedBy'], '@') ? '' : (string) strtok($view['requestedBy'], ' ');
+                $out[] = ['site' => (string) $row['tenant_code'], 'siteName' => (string) ($site['name'] ?? $row['tenant_code'])] + ['requestedBy' => $first] + $view;
             }
         }
 
@@ -127,34 +132,49 @@ class AssistanceService
     }
 
     /**
-     * L'assistance qui couvre une requête de l'opérateur de l'agence : une demande vivante de CETTE agence sur CE site, pour l'une des
-     * sections données. Une demande en attente démarre ici (première requête : la fenêtre d'une heure part maintenant).
+     * L'assistance qui couvre une requête de l'opérateur de l'agence : une demande vivante (en cours, ou en attente) de CETTE agence, qui
+     * gère ENCORE ce site, pour l'une des sections données. RIEN n'est écrit ici : la fenêtre ne s'ouvre qu'une fois la requête acceptée
+     * par la garde (`start`). Ordre : une demande en cours avant une demande en attente ; pour une écriture, une demande « modifier » d'abord.
      *
      * @param list<string> $sections
-     * @return array<string, mixed>|null la demande en cours (`mode`, `id`, `section`)
+     * @return array<string, mixed>|null
      */
-    public function covering(string $tenantCode, int $agencyId, array $sections): ?array
+    public function covering(string $tenantCode, int $agencyId, array $sections, bool $write = false): ?array
     {
-        if ($sections === []) {
-            return null;
+        if ($sections === [] || (int) ($this->agencies->managing($tenantCode)['id'] ?? 0) !== $agencyId) {
+            return null; // une agence détachée n'a plus rien sur ce site, même une demande d'avant
         }
         $now = self::now();
+        $candidates = [];
         foreach ($this->grants->openFor($tenantCode, $agencyId) as $row) {
-            if (!in_array($row['section'], $sections, true)) {
-                continue;
-            }
             $state = self::state($row, $now);
-            if ($state === self::WAITING) {
-                $this->grants->start((int) $row['id'], $now, $now->modify('+' . self::WINDOW . ' seconds'));
-                $row = $this->grants->find((int) $row['id']) ?? $row;
-                $state = self::state($row, $now);
-            }
-            if ($state === self::ACTIVE) {
-                return $row;
+            if (in_array($row['section'], $sections, true) && in_array($state, [self::ACTIVE, self::WAITING], true)) {
+                $candidates[] = [$state === self::ACTIVE ? 0 : 1, $write && $row['mode'] === AssistanceSections::WRITE ? 0 : 1, (int) $row['id'], $row];
             }
         }
+        if ($candidates === []) {
+            return null;
+        }
+        usort($candidates, static fn (array $a, array $b): int => [$a[0], $a[1], $a[2]] <=> [$b[0], $b[1], $b[2]]);
 
-        return null;
+        return $candidates[0][3];
+    }
+
+    /**
+     * La requête est acceptée : une demande en attente démarre maintenant (une seule fois, même si deux requêtes arrivent ensemble).
+     *
+     * @param array<string, mixed> $grant
+     * @return array<string, mixed>
+     */
+    public function start(array $grant): array
+    {
+        if ($grant['started_at'] === null) {
+            $now = self::now();
+            $this->grants->start((int) $grant['id'], $now, $now->modify('+' . self::WINDOW . ' seconds'));
+            $grant = $this->grants->find((int) $grant['id']) ?? $grant;
+        }
+
+        return $grant;
     }
 
     /** @param array<string, mixed> $row */

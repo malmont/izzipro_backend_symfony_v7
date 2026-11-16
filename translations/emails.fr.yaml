@@ -305,4 +305,4 @@ assistance_request:
     message_write: '%who% demande l''assistance de %agency% sur le site %site%, section « %section% », en CONSULTATION ET MODIFICATION (assistance n° %number%). Entrez dans le site depuis « Tous mes clients » : la section vous sera ouverte pendant une heure à partir de votre première entrée ; chaque modification sera tracée à votre nom.'
     button: 'Ouvrir « Tous mes clients »'
     validity: 'Sans entrée dans les 24 heures, la demande expire. Le commerçant peut fermer l''assistance à tout moment, et voit chaque écran consulté.'
-    ignore: 'Les clés, les paiements, le courriel expéditeur, les comptes et les exports restent fermés pendant l''assistance.'
+    ignore: 'Pendant l''assistance, les clés, Stripe, le courriel expéditeur, les comptes et les exports restent fermés, et aucun paiement, remboursement ni encaissement ne peut être fait.'

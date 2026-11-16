@@ -300,4 +300,4 @@ assistance_request:
     message_write: '%who% asks %agency% for support on the site %site%, section "%section%", VIEW AND EDIT (support no. %number%). Enter the site from "All my clients": the section will be open to you for one hour from your first entry; every change will be recorded under your name.'
     button: 'Open "All my clients"'
     validity: 'Without an entry within 24 hours, the request expires. The merchant can close the support at any time and sees every screen viewed.'
-    ignore: 'Keys, payments, the sender email, accounts and exports stay closed during support.'
+    ignore: 'During support, keys, Stripe, the sender email, accounts and exports stay closed, and no payment, refund or cash collection can be made.'

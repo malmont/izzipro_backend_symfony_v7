@@ -12,7 +12,7 @@
             <tr><td style="padding: 28px 32px; color: #1e293b; font-size: 15px; line-height: 1.6;">
                 <p>{{ greeting }}</p>
                 <p>{{ message }}</p>
-                <p style="text-align: center; margin: 28px 0;"><a href="{{ link }}" style="display: inline-block; background: #1e293b; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px;">{{ button }}</a></p>
+                {% if link %}<p style="text-align: center; margin: 28px 0;"><a href="{{ link }}" style="display: inline-block; background: #1e293b; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px;">{{ button }}</a></p>{% endif %}
                 <p style="color: #64748b; font-size: 13px;">{{ validity }}</p>
                 <p style="color: #64748b; font-size: 13px;">{{ ignore }}</p>
                 <p style="color: #64748b; font-size: 13px; margin-bottom: 0;">{{ siteLine }}</p>

@@ -55,8 +55,8 @@ class AssistanceMailer
         foreach ($recipients as $email) {
             try {
                 $sent += $this->mailer->sendPlatformEmail($email, $t('subject'), self::TEMPLATE, [
-                    'title' => $t('title'), 'greeting' => $t('greeting'), 'message' => $t('message_' . $grant['mode']), 'button' => $t('button'),
-                    'link' => $link, 'validity' => $t('validity'), 'ignore' => $t('ignore'), 'siteLine' => $params['%site%'],
+                    'title' => $t('title'), 'greeting' => $t('greeting'), 'message' => $t('message_' . $grant['mode']), 'button' => $link !== null ? $t('button') : '',
+                    'link' => (string) $link, // sans adresse connue du site d'attache : pas de bouton (jamais un lien vide) 'validity' => $t('validity'), 'ignore' => $t('ignore'), 'siteLine' => $params['%site%'],
                 ]) ? 1 : 0;
             } catch (\Throwable $e) {
                 $this->logger->error('Assistance : courriel à l\'agence en échec (' . $e::class . ').');

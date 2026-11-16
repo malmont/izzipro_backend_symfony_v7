@@ -120,11 +120,12 @@ class PlatformAccessJournal
      */
     public function assistance(int $limit = 200, ?int $grantId = null): array
     {
-        $sql = 'SELECT created_at, user_identifier, action, after_state FROM content_audit_log WHERE resource = ? AND action IN (?, ?) AND tenant = ?';
-        $params = [\App\Services\Entry\EntryService::JOURNAL_RESOURCE, 'assistance_read', 'assistance_write', $this->tenant()];
+        $sql = 'SELECT created_at, user_identifier, action, after_state FROM content_audit_log WHERE resource = ? AND action IN (?, ?, ?) AND tenant = ?';
+        $params = [\App\Services\Entry\EntryService::JOURNAL_RESOURCE, 'assistance_read', 'assistance_write', 'assistance_refused', $this->tenant()];
         if ($grantId !== null) {
-            $sql .= ' AND after_state LIKE ?';
-            $params[] = '{"assistance":' . $grantId . ',%';
+            // la ligne est relue en JSON (le statut ajouté après coup en change l'écriture) ; le CASE ne lit en JSON que les lignes d'assistance
+            $sql .= " AND (CASE WHEN resource = 'external_access' AND action LIKE 'assistance\\_%' THEN after_state::jsonb ->> 'assistance' END) = ?";
+            $params[] = (string) $grantId;
         }
         $rows = $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative($sql . ' ORDER BY id DESC LIMIT ' . max(1, min(1000, $limit)), $params);
 
@@ -132,13 +133,14 @@ class PlatformAccessJournal
             $after = is_string($row['after_state']) ? json_decode($row['after_state'], true) : null;
             $after = is_array($after) ? $after : [];
             $write = $row['action'] === 'assistance_write';
+            $refused = $row['action'] === 'assistance_refused';
             $method = (string) ($after['method'] ?? '');
             $path = (string) ($after['path'] ?? '');
 
             return ['at' => new \DateTimeImmutable((string) $row['created_at'], new \DateTimeZone('UTC')), 'account' => (string) $row['user_identifier'],
-                'channel' => (string) $row['action'], 'channelLabel' => sprintf('Assistance n° %s, %s : %s %s', $after['assistance'] ?? '?', $write ? 'modification' : 'consultation', $method, $path),
+                'channel' => (string) $row['action'], 'channelLabel' => sprintf('Assistance n° %s, %s : %s %s', $after['assistance'] ?? '?', $refused ? 'refusé' : ($write ? 'modification' : 'consultation'), $method, $path),
                 'assistance' => isset($after['assistance']) ? (int) $after['assistance'] : null, 'section' => isset($after['section']) ? (string) $after['section'] : null,
-                'method' => $method, 'path' => $path, 'status' => isset($after['status']) ? (int) $after['status'] : null];
+                'method' => $method, 'path' => $path, 'status' => isset($after['status']) ? (int) $after['status'] : null, 'reason' => isset($after['reason']) ? (string) $after['reason'] : null];
         }, $rows);
     }
 }

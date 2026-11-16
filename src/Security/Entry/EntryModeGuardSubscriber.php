@@ -45,9 +45,9 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
     public const ASSISTANCE_ATTRIBUTE = '_entry_assistance';
     /** Toujours fermés pendant une assistance, en lecture comme en écriture : les comptes et leurs rôles (les clés, l'export, Stripe et les
      *  modules sont déjà dans CLOSED_PATHS) */
-    private const ASSISTANCE_CLOSED = ['#(^|/)(users?|accounts?|comptes?|roles?|team-roles?)(/|$)#i'];
-    /** Fermés en ÉCRITURE même en mode « modifier » : aucun paiement, remboursement ni encaissement */
-    private const ASSISTANCE_NO_WRITE = ['#(refund|rembours|payment|paiement|encaiss|capture|charge|cash-out|payout)#i'];
+    private const ASSISTANCE_CLOSED = ['#(^|/)(users?|accounts?|comptes?|roles?|team-roles?)(/|$)#i',
+        // des exports de fait : la liste des adresses des abonnés, le fichier entier d'un rapport
+        '#^/api/newsletter(/|$)#', '#/fichier$#'];
     private const WRITE = ['POST', 'PUT', 'PATCH', 'DELETE'];
     /** Fermés même dans la construction : expression du chemin => [méthodes (vide : toutes), raison] */
     private const CLOSED_PATHS = [
@@ -151,10 +151,12 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
     }
 
     /**
-     * Lot AG-ASSIST : la requête de l'opérateur est-elle couverte par une assistance vivante de SON agence sur CE site, pour la section
-     * de l'écran ? null : servie (la requête porte alors le numéro de l'assistance, pour sa trace et l'auteur de ses écritures) ; sinon la
-     * raison du refus. Lecture : toujours (hors comptes et listes de CLOSED_PATHS) ; écriture : seulement en mode « modifier », jamais un
-     * paiement, un remboursement, un encaissement, ni la suppression d'un client.
+     * Lot AG-ASSIST : la requête de l'opérateur est-elle couverte par une assistance vivante de SON agence (qui gère encore CE site), pour la
+     * section de l'écran ? null : servie ; sinon la raison du refus. Lecture : toujours, hors comptes et rôles, exports de fait et
+     * CLOSED_PATHS (clés, export, Stripe, modules). Écriture : seulement en mode « modifier » ET si la route est dans la liste blanche de
+     * la section (`AssistanceSections::WRITES`) : fermé par défaut. La fenêtre d'une heure ne démarre que sur une requête ACCEPTÉE ; chaque
+     * requête couverte (acceptée ou refusée) est écrite au journal du site AVANT d'être servie ; si cette trace ne s'écrit pas, la requête
+     * est refusée (503).
      */
     private function assistanceRefused(Request $request, string $target, string $path, ExternalOperator $operator): ?string
     {
@@ -162,37 +164,50 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
             return 'family';
         }
         $sections = \App\Services\Agency\Assistance\AssistanceSections::of($target, ScreenRegistry::familyOf($target));
-        $grant = $sections === [] ? null : $this->assistance->covering((string) ($this->tenants?->getTenantCode() ?? ''), $operator->getAgencyId(), $sections);
+        $method = $request->getMethod();
+        $write = in_array($method, self::WRITE, true);
+        $tenant = (string) ($this->tenants?->getTenantCode() ?? '');
+        $grant = $sections === [] ? null : $this->assistance->covering($tenant, $operator->getAgencyId(), $sections, $write);
         if ($grant === null) {
             return 'family';
         }
-        $method = $request->getMethod();
+        $reason = null;
         foreach ([...array_map(static fn (array $c): string => $c[0], self::CLOSED_PATHS), ...self::ASSISTANCE_CLOSED] as $pattern) {
             if (preg_match($pattern, $path) === 1) {
-                return 'assistance_closed';
+                $reason = 'assistance_closed';
+                break;
             }
         }
-        if (in_array($method, self::WRITE, true)) {
+        if ($reason === null && $write) {
             if ($grant['mode'] !== \App\Services\Agency\Assistance\AssistanceSections::WRITE) {
-                return 'assistance_read_only';
-            }
-            foreach (self::ASSISTANCE_NO_WRITE as $pattern) {
-                if (preg_match($pattern, $path) === 1) {
-                    return 'assistance_closed';
-                }
-            }
-            if ($method === 'DELETE' && $grant['section'] === 'clients') {
-                return 'assistance_closed';
+                $reason = 'assistance_read_only';
+            } elseif (!\App\Services\Agency\Assistance\AssistanceSections::writeAllowed((string) $grant['section'], $method, $path)) {
+                $reason = 'assistance_closed';
             }
         }
+        if ($reason !== null) {
+            $this->traceAssistance($request, $operator, $grant, $target, 'assistance_refused', $reason); // le refus aussi se lit au journal
+
+            return $reason;
+        }
+        $grant = $this->assistance->start($grant); // la première requête ACCEPTÉE ouvre la fenêtre d'une heure
         $operator->duringAssistance((int) $grant['id']);
-        $request->attributes->set(self::ASSISTANCE_ATTRIBUTE, ['id' => (int) $grant['id'], 'section' => (string) $grant['section'], 'screen' => $target]);
+        $traceId = $this->traceAssistance($request, $operator, $grant, $target, $write ? 'assistance_write' : 'assistance_read', null);
+        if ($traceId === null) {
+            return 'assistance_trace'; // pas de lecture sans trace
+        }
+        $request->attributes->set(self::ASSISTANCE_ATTRIBUTE, ['id' => (int) $grant['id'], 'section' => (string) $grant['section'], 'screen' => $target, 'trace' => $traceId]);
 
         return null;
     }
 
     private function refusal(?string $reason): JsonResponse
     {
+        if ($reason === 'assistance_trace') {
+            return new JsonResponse(['error' => 'SERVICE_UNAVAILABLE', 'code' => 'SERVICE_UNAVAILABLE', 'reason' => $reason,
+                'message' => 'Le journal de l\'assistance est indisponible : la page n\'est pas servie.'], 503);
+        }
+
         return new JsonResponse(['error' => self::CODE, 'code' => self::CODE, 'reason' => $reason,
             'message' => 'Cette page n\'est pas ouverte à une agence dans le site de son client.'], 403);
     }
@@ -207,7 +222,7 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
     {
         $request = $event->getRequest();
         if ($event->isMainRequest() && is_array($request->attributes->get(self::ASSISTANCE_ATTRIBUTE))) {
-            $this->traceAssistance($request, $event->getResponse()->getStatusCode());
+            $this->traceStatus((int) ($request->attributes->get(self::ASSISTANCE_ATTRIBUTE)['trace'] ?? 0), $event->getResponse()->getStatusCode());
 
             return; // une section ouverte par le commerçant : servie entière (ni champs sensibles de la construction à retirer, ni filtre)
         }
@@ -320,27 +335,44 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
     }
 
     /**
-     * Lot AG-ASSIST : CHAQUE requête faite pendant une assistance (écran consulté, fiche lue, écriture) est écrite au journal du site, lu
-     * par « Accès extérieurs » : l'auteur « Agence X, prénom, pendant l'assistance n° N », la méthode, le chemin, la réponse.
+     * Lot AG-ASSIST : CHAQUE requête couverte par une assistance (écran consulté, fiche lue, écriture, refus) est écrite au journal du site
+     * AVANT d'être servie, lue par « Accès extérieurs » : l'auteur « Agence X, prénom, pendant l'assistance n° N », la méthode, le chemin, la
+     * raison d'un refus ; le statut de la réponse est ajouté ensuite. Rend le numéro de la ligne, ou null si elle n'a pas pu s'écrire.
+     *
+     * @param array<string, mixed> $grant
      */
-    private function traceAssistance(Request $request, int $status): void
+    private function traceAssistance(Request $request, ExternalOperator $operator, array $grant, string $screen, string $action, ?string $reason): ?int
     {
-        $operator = $this->tokens->getToken()?->getUser();
-        $grant = (array) $request->attributes->get(self::ASSISTANCE_ATTRIBUTE);
-        if (!$operator instanceof ExternalOperator) {
-            return;
-        }
-        $write = in_array($request->getMethod(), self::WRITE, true);
         try {
-            $this->emProvider->getEntityManager()->getConnection()->insert('content_audit_log', [
+            $connection = $this->emProvider->getEntityManager()->getConnection();
+            $connection->insert('content_audit_log', [
                 'created_at' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s'), 'user_identifier' => mb_substr($operator->getUserIdentifier(), 0, 180),
                 'tenant' => (string) ($this->tenants?->getTenantCode() ?? ''), 'resource' => \App\Services\Entry\EntryService::JOURNAL_RESOURCE, 'resource_id' => (string) $operator->getEntryId(),
-                'action' => $write ? 'assistance_write' : 'assistance_read', 'fields' => 'request',
-                'after_state' => json_encode(['assistance' => $grant['id'] ?? null, 'section' => $grant['section'] ?? null, 'screen' => $grant['screen'] ?? null,
-                    'method' => $request->getMethod(), 'path' => mb_substr(RequestPath::of($request), 0, 200), 'query' => mb_substr((string) $request->getQueryString(), 0, 200), 'status' => $status], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE),
+                'action' => $action, 'fields' => 'request',
+                'after_state' => json_encode(['assistance' => (int) $grant['id'], 'section' => (string) $grant['section'], 'screen' => $screen, 'method' => $request->getMethod(),
+                    'path' => mb_substr(RequestPath::of($request), 0, 200), 'query' => mb_substr((string) $request->getQueryString(), 0, 200), 'reason' => $reason, 'status' => null], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE),
             ]);
+            $id = (int) $connection->lastInsertId();
+
+            return $id > 0 ? $id : null;
         } catch (\Throwable) {
-            // la trace manque : la réponse part quand même
+            return null;
+        }
+    }
+
+    /** Le statut de la réponse, ajouté à la ligne du journal écrite avant de servir (sans lui, la ligne dit déjà la requête) */
+    private function traceStatus(int $traceId, int $status): void
+    {
+        if ($traceId <= 0) {
+            return;
+        }
+        try {
+            $this->emProvider->getEntityManager()->getConnection()->executeStatement(
+                "UPDATE content_audit_log SET after_state = jsonb_set(after_state::jsonb, '{status}', to_jsonb(?::int))::text WHERE id = ? AND resource = ?",
+                [$status, $traceId, \App\Services\Entry\EntryService::JOURNAL_RESOURCE]
+            );
+        } catch (\Throwable) {
+            // le statut manque : la ligne dit déjà la requête
         }
     }
 

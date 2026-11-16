@@ -26,7 +26,7 @@ class PlatformAccessAdminController extends AbstractController
     {
         $timezone = $this->clock->timezone();
         // lot AG-3b : « Accès extérieurs » : les connexions du compte de la plateforme ET les entrées d'une agence ou de la plateforme
-        $all = [...$this->journal->recent(200), ...$this->journal->entries(200), ...$this->journal->assistance(200)]; // lot AG-ASSIST : chaque écran consulté pendant une assistance
+        $all = [...$this->journal->recent(200), ...$this->journal->entries(200), ...$this->journal->assistance(60)]; // lot AG-ASSIST : chaque écran consulté pendant une assistance (borné : les connexions et les entrées gardent leur place)
         usort($all, static fn (array $a, array $b): int => $b['at'] <=> $a['at']);
         $lines = array_map(static fn (array $line): array => ['at' => $line['at']->setTimezone($timezone)->format('Y-m-d H:i'), 'account' => $line['account'], 'channel' => $line['channelLabel']], array_slice($all, 0, 200));
 

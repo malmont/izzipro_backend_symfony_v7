@@ -326,16 +326,25 @@ clients » du site d'attache (`/admin/ouvrir?screen=agence.clients`), sans jeton
 **Fenêtre** : une heure à partir de la PREMIÈRE requête de l'opérateur dans la section (la demande `waiting` démarre alors, une seule
 fois) ; une demande sans requête dans les 24 h expire. Aucun minuteur.
 
-**Garde** (`EntryModeGuardSubscriber::assistanceRefused`) : pour un écran hors construction (raison `family`), une assistance vivante de
-L'agence de l'opérateur sur CE site, pour une section de l'écran, sert la requête. Lecture : toujours, hors comptes et rôles et hors
-`CLOSED_PATHS` (clés, export, Stripe, modules) → `assistance_closed`. Écriture : seulement en `write` (sinon `assistance_read_only`),
-jamais un paiement, un remboursement, un encaissement (`ASSISTANCE_NO_WRITE`), ni un `DELETE` de la section `clients`. La réponse de la
-section est servie entière (elle n'est pas une page de construction). L'auteur au journal devient « Agence X, prénom, pendant
-l'assistance n° N » (`ExternalOperator::duringAssistance`), y compris dans le journal des écritures du site.
+**Garde** (`EntryModeGuardSubscriber::assistanceRefused`, après la double relecture) : pour un écran hors construction (raison `family`),
+une assistance vivante (en cours avant en attente ; pour une écriture, « modifier » d'abord) de L'agence de l'opérateur, qui gère ENCORE ce
+site, pour une section de l'écran, sert la requête. Lecture : toujours, hors comptes et rôles, exports de fait (`/api/newsletter`, fichier
+d'un rapport) et `CLOSED_PATHS` (clés, export, Stripe, modules) → `assistance_closed`. Écriture : seulement en `write` (sinon
+`assistance_read_only`) ET si la route est dans la **liste blanche** de la section (`AssistanceSections::WRITES`, fermé par défaut ;
+témoin `tests/Fixtures/ecrans/assistance-ecritures.json`, essai `testEveryWriteOfASectionIsListed`) : commandes = préparer un colis (jamais
+annuler une vente, qui la rembourse, ni acheter une étiquette, capturer, rembourser) ; clients = statut d'un contact ou d'une demande,
+confirmer un rendez-vous (jamais supprimer) ; gestion = tout sauf la console IA, les fils d'action, les documents lus par l'IA, les
+rapports, les avis rédigés (unités IA du commerçant), le lexique, les préférences de notification et les réglages ; pertes = rien. La
+fenêtre d'une heure ne démarre que sur une requête ACCEPTÉE. La réponse de la section est servie entière. L'auteur au journal devient
+« Agence X, prénom, pendant l'assistance n° N » (`ExternalOperator::duringAssistance`). Sections demandables aujourd'hui par l'API :
+commandes, clients, gestion, pertes ; caisse, stock, assistance → 422 `ASSISTANCE_SECTION_UNAVAILABLE` jusqu'à AG-3c.
 
-**Trace** : une ligne par requête couverte dans `content_audit_log` (`resource` `external_access`, `action` `assistance_read` |
-`assistance_write`, `after_state` : numéro, section, écran, méthode, chemin, paramètres, statut), lue par la route `journal` et par la
-page « Accès extérieurs » d'EasyAdmin.
+**Trace** : une ligne par requête couverte, ACCEPTÉE OU REFUSÉE, écrite dans `content_audit_log` AVANT de servir (`resource`
+`external_access`, `action` `assistance_read` | `assistance_write` | `assistance_refused`, `after_state` : numéro, section, écran, méthode,
+chemin, paramètres, raison d'un refus, puis le statut de la réponse ajouté après) ; si elle ne s'écrit pas, la requête n'est pas servie
+(503 `SERVICE_UNAVAILABLE`). Lue par la route `journal` et par la page « Accès extérieurs » d'EasyAdmin (60 lignes d'assistance au plus,
+pour garder la place des connexions et des entrées). L'agence ne lit que le prénom du demandeur, et seulement pour les sites qu'elle gère
+encore ; une demande d'une autre agence est fermée à la demande suivante (raison `agency`).
 
 **Base maître** : table `assistance_grants` (`ops/sql/assistance_master.sql`, script `scripts/migrate_master_v2_assistance.sh <SQL du
 worktree de construction>` AVANT l'échange). Bases des sites : rien. Essai : `tests/Functional/Security/AssistanceTest.php`.

@@ -94,7 +94,7 @@ class SiteAssistanceController extends AbstractController
         }
 
         return $this->json(['journal' => array_map(static fn (array $line): array => ['at' => $line['at']->format(\DATE_ATOM), 'account' => $line['account'], 'action' => $line['channel'],
-            'method' => $line['method'], 'path' => $line['path'], 'status' => $line['status']], $this->journal->assistance(1000, $id))]);
+            'method' => $line['method'], 'path' => $line['path'], 'status' => $line['status'], 'reason' => $line['reason']], $this->journal->assistance(1000, $id))]);
     }
 
     /** Le compte du site qui parle, ou null : opérateur extérieur, entrée par un jeton, ou (pour écrire) compte de la plateforme */
