@@ -44,6 +44,7 @@ class ModuleSwitchTest extends WebTestCase
         $this->master->prepare('DELETE FROM tenant_entitlements WHERE id > ?')->execute([$this->lastEntitlement]);
         $this->master->prepare('DELETE FROM tenant_app_keys WHERE id > ?')->execute([$this->lastKey]);
         $this->master->prepare('DELETE FROM tenant_feature_switches WHERE tenant_code = ?')->execute([MV_TEST_TENANT_CODE]);
+        $this->master->prepare("DELETE FROM tenant_feature_requests WHERE tenant_code = ? AND created_at > NOW() - INTERVAL '1 hour' AND feature_key = 'module.boussole'")->execute([MV_TEST_TENANT_CODE]);
         $this->master->exec("DELETE FROM platform_feature_policies WHERE updated_by = 'essai-mod1'");
         $set = implode(', ', array_map(static fn (string $c): string => "$c = :$c", FeatureCatalog::GOVERNED));
         $stmt = $this->site()->prepare("UPDATE entreprise SET $set WHERE id = :id");
@@ -166,6 +167,10 @@ class ModuleSwitchTest extends WebTestCase
         $rights->suspend((int) $suspended['id'], 'essai-mod1', null, false);
         $this->assertNull($this->feature('module.boussole', $admin)['available']['trial']);
         $this->assertSame([409, 'ENTITLEMENT_SUSPENDED'], $this->refusal('POST', '/api/site/features/module.boussole/trial', $admin));
+        // « Demander » un module suspendu part à la plateforme : jamais un essai ouvert par ce chemin en contournant la suspension
+        $asked = $this->call('POST', '/api/site/features/module.boussole/request', $admin);
+        $this->assertSame('request', json_decode((string) $asked->getContent(), true)['kind'] ?? null, (string) $asked->getContent());
+        $this->assertSame(0, (int) $this->master->query("SELECT COUNT(*) FROM tenant_entitlements WHERE id > {$this->lastEntitlement} AND feature_key = 'module.boussole' AND source = 'trial'")->fetchColumn());
     }
 
     /** @return array<string, mixed> */
