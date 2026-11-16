@@ -231,6 +231,9 @@ security:
         # Espace de l'agence (lot AG-1, 15/11/2026) : rôles d'agence seulement, donnés par le super administrateur sur des comptes du site
         # d'attache ; l'agence est lue du site de la requête (AgencyContext). AVANT la règle générale ^/api, qu'un simple client passerait.
         - { path: ^/api/agency(/|$), roles: [ROLE_AGENCY, ROLE_AGENCY_MEMBER] }
+        # Contextes du compte connecté (lot AG-3a, 16/11/2026) : son mode, ses sites, ses écrans. Toute personne connectée, quel que soit
+        # son rôle (un compte d'agence ou d'assistance seul ne passerait pas la règle générale ^/api) ; lecture seule.
+        - { path: ^/api/me/contexts$, methods: [GET], roles: IS_AUTHENTICATED_FULLY }
         # Thème de l'application e-commerce mobile (31/10/2026) : lecture sans connexion, route dédiée (le profil ne change pas)
         - { path: ^/api/mobile/app-theme$, methods: [GET], roles: PUBLIC_ACCESS }
         - { path: ^/api/app-keys(/|$), roles: ROLE_ADMIN }

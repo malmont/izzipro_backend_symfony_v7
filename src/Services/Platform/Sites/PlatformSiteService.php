@@ -315,11 +315,13 @@ class PlatformSiteService
     /**
      * Les sites de la plateforme avec leurs PASTILLES, calculées depuis les liens de la base maître (jamais un champ « mode ») :
      * `independent`, `agency_home` (site d'attache d'une agence), `agency_managed` (géré par une agence), `creation_incomplete` (une
-     * demande de création reste à compléter). Un site peut en porter plusieurs ; `$badge` filtre.
+     * demande de création reste à compléter). Un site peut en porter plusieurs ; `$badge` filtre. `$codes` (lot AG-3a) : ces sites-là
+     * seulement, les autres ne sont ni décrits ni rendus.
      *
+     * @param list<string>|null $codes
      * @return list<array{code: string, name: string, host: ?string, badges: list<array<string, mixed>>}>
      */
-    public function sites(?string $badge = null): array
+    public function sites(?string $badge = null, ?array $codes = null): array
     {
         if ($badge !== null && !in_array($badge, self::BADGES, true)) {
             throw new PlatformValidationException([['path' => 'badge', 'message' => 'pastille inconnue']]);
@@ -337,6 +339,9 @@ class PlatformSiteService
         $out = [];
         foreach ($pdo->query('SELECT code FROM tenants ORDER BY code')->fetchAll(\PDO::FETCH_COLUMN) ?: [] as $code) {
             $code = (string) $code;
+            if ($codes !== null && !in_array($code, $codes, true)) {
+                continue;
+            }
             $badges = array_values(array_filter([$homes[$code] ?? null, $managed[$code] ?? null]));
             if ($badges === []) {
                 $badges[] = ['type' => self::BADGE_INDEPENDENT];

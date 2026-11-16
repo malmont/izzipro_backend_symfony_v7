@@ -1,0 +1,99 @@
+<?php
+
+namespace App\Services\Screens;
+
+use App\Security\AgencyRoles;
+use App\Services\Agency\AgencyRepository;
+use App\Services\Platform\Sites\PlatformSiteService;
+use App\Services\TenantConnectionManager;
+use Symfony\Component\Security\Core\Role\RoleHierarchyInterface;
+
+/**
+ * Les CONTEXTES du compte connecté (lot AG-3a, 16/11/2026, `docs/ecrans-et-contextes.md`) : son mode, les sites qu'il peut ouvrir et,
+ * pour chacun, ses pastilles, son état, ses modules actifs et les codes des écrans qu'un menu peut lui montrer. Les fronts
+ * construisent leur sélecteur et leur menu de cette réponse, sans coder les règles d'un mode.
+ *
+ * Le mode se CALCULE depuis les liens réels (rôles du compte, agence dont le site courant est l'attache), jamais d'un champ tenu à la
+ * main. Ce lot ne change aucun droit : la réponse dit ce qui peut se MONTRER ; refuser est l'affaire des gardes (AG-3b pour l'entrée).
+ *
+ * Un compte ne voit QUE les sites qu'il peut ouvrir : le site de sa connexion ; pour un compte d'agence, les sites que son agence
+ * gère ; pour le super administrateur, tous les sites.
+ */
+class ContextService
+{
+    public const MODE_SINGLE = 'single';
+    public const MODE_AGENCY = 'agency';
+    public const MODE_SUPER_ADMIN = 'super_admin';
+    /** Familles d'un site que voit le compte de ce site (ses rôles tranchent ensuite, écran par écran) */
+    private const SITE_FAMILIES = [ScreenRegistry::CONSTRUCTION, ScreenRegistry::VENTE, ScreenRegistry::CLIENTS, ScreenRegistry::GESTION, ScreenRegistry::PERTES,
+        ScreenRegistry::ASSISTANCE, ScreenRegistry::CONTENUS];
+    /** Mode agence chez un client : construction et entretien, jamais un chiffre */
+    private const AGENCY_FAMILIES = [ScreenRegistry::CONSTRUCTION];
+
+    public function __construct(
+        private readonly TenantConnectionManager $tenants,
+        private readonly AgencyRepository $agencies,
+        private readonly PlatformSiteService $platformSites,
+        private readonly SiteSnapshotReader $snapshots,
+        private readonly RoleHierarchyInterface $hierarchy,
+    ) {
+    }
+
+    /**
+     * @param list<string> $roles les rôles du compte connecté
+     * @return array<string, mixed>
+     */
+    public function contexts(array $roles): array
+    {
+        $reachable = $this->hierarchy->getReachableRoleNames($roles);
+        $hasRole = static fn (string $role): bool => in_array($role, $reachable, true);
+        $current = (string) $this->tenants->getCurrentTenantCode();
+
+        if ($hasRole('ROLE_SUPER_ADMIN')) {
+            // tous les sites, plus les écrans de la plateforme
+            $sites = array_map(fn (array $site): array => $this->site($site, $current, self::SITE_FAMILIES, $hasRole), $this->platformSites->sites());
+
+            return ['mode' => self::MODE_SUPER_ADMIN, 'site' => $current, 'agency' => null, 'sites' => $sites,
+                'all' => ['key' => 'sites', 'screens' => ScreenRegistry::visible([ScreenRegistry::PLATEFORME], [], $hasRole)]];
+        }
+        $agency = AgencyRoles::has($roles) && $current !== '' ? $this->agencies->findByHome($current) : null;
+        if ($agency !== null && $agency['status'] !== 'closed') {
+            // le site d'attache, avec ce que les rôles du compte y ouvrent ; puis les sites que l'agence gère, en construction seulement
+            $managed = array_values(array_filter(array_map(static fn (array $row): string => (string) $row['tenant_code'], $this->agencies->sites((int) $agency['id'])),
+                static fn (string $code): bool => $code !== $current));
+            $sites = [];
+            foreach ($this->platformSites->sites(null, [$current]) as $site) {
+                $sites[] = $this->site($site, $current, self::SITE_FAMILIES, $hasRole) + ['home' => true];
+            }
+            // chez un client, l'agence tient les écrans de construction d'un administrateur : son rôle d'agence en tient lieu
+            $asBuilder = static fn (string $role): bool => $role === 'ROLE_ADMIN';
+            foreach ($managed === [] ? [] : $this->platformSites->sites(null, $managed) as $site) {
+                $sites[] = $this->site($site, $current, self::AGENCY_FAMILIES, $asBuilder) + ['home' => false];
+            }
+
+            return ['mode' => self::MODE_AGENCY, 'site' => $current, 'agency' => ['id' => (int) $agency['id'], 'code' => (string) $agency['code'], 'name' => (string) $agency['name'], 'status' => (string) $agency['status']],
+                'sites' => $sites, 'all' => ['key' => 'clients', 'screens' => ScreenRegistry::visible([ScreenRegistry::AGENCE], [], $hasRole)]];
+        }
+        $sites = [];
+        foreach ($current === '' ? [] : $this->platformSites->sites(null, [$current]) as $site) {
+            $sites[] = $this->site($site, $current, self::SITE_FAMILIES, $hasRole);
+        }
+
+        return ['mode' => self::MODE_SINGLE, 'site' => $current, 'agency' => null, 'sites' => $sites, 'all' => null];
+    }
+
+    /**
+     * @param array{code: string, name: string, host: ?string, badges: list<array<string, mixed>>} $site
+     * @param list<string> $families
+     * @param callable(string): bool $hasRole
+     * @return array<string, mixed>
+     */
+    private function site(array $site, string $current, array $families, callable $hasRole): array
+    {
+        $snapshot = $this->snapshots->read($site['code']);
+
+        return ['code' => $site['code'], 'name' => $site['name'], 'host' => $site['host'], 'current' => $site['code'] === $current, 'badges' => $site['badges'],
+            'state' => $snapshot['state'], 'scope' => $snapshot['scope'], 'modules' => array_keys(array_filter($snapshot['modules'])),
+            'screens' => ScreenRegistry::visible($families, $snapshot['modules'], $hasRole)];
+    }
+}

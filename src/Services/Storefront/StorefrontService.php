@@ -140,6 +140,20 @@ class StorefrontService
     }
 
     /**
+     * L'état d'un site DÉSIGNÉ, tel qu'un menu le montre (lot AG-3a, `GET /api/me/contexts`) : ouvert ou en construction, et l'étendue
+     * de la construction. Lu dans la base de ce site, sur la connexion donnée s'il y en a une (une seule connexion par site listé).
+     *
+     * @param array{code: string, dbname: string} $site
+     * @return array{state: string, scope: ?string}
+     */
+    public function viewOf(array $site, ?\PDO $pdo = null): array
+    {
+        $scope = self::closureOf($this->load($site, $pdo));
+
+        return ['state' => $scope !== null ? self::CONSTRUCTION : self::OPEN, 'scope' => $scope];
+    }
+
+    /**
      * La liste de contrôle avant d'ouvrir. Elle avertit sans bloquer, sauf sans moyen de paiement (un compte de paiement connecté ET
      * actif). Sans le module Boutique (`shop` faux), la liste est vide : un site né sans boutique est « open », il n'y a rien à
      * ouvrir ; un site neuf dont la boutique a été éteinte reste fermé, et s'ouvre sans moyen de paiement.

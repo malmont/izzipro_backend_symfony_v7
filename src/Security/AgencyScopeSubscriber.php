@@ -42,6 +42,9 @@ class AgencyScopeSubscriber implements EventSubscriberInterface
         if (!$event->isMainRequest() || !str_starts_with($path, '/api/') || preg_match('#^/api/agency(/|$)#', $path)) {
             return;
         }
+        if ($path === \App\Services\Screens\ScreenRegistry::CONTEXTS_PATH) {
+            return; // lot AG-3a : le compte lit SES contextes (son mode, ses sites, ses écrans) ; rien d'autre ne s'ouvre
+        }
         $roles = $this->tokens->getToken()?->getRoleNames() ?? [];
         if (!self::agencyOnly($roles)) {
             return;

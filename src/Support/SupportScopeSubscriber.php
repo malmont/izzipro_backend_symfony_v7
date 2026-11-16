@@ -42,6 +42,9 @@ class SupportScopeSubscriber implements EventSubscriberInterface
         if (!self::supportOnly($this->tokens->getToken()?->getRoleNames() ?? [])) {
             return;
         }
+        if ($path === \App\Services\Screens\ScreenRegistry::CONTEXTS_PATH) {
+            return; // lot AG-3a : le compte lit SES contextes (son mode, ses sites, ses écrans) ; rien d'autre ne s'ouvre
+        }
         // Lot AG-1 : un compte d'assistance qui porte aussi un rôle d'agence garde l'espace de son agence (sa règle d'accès exige ce rôle)
         if (preg_match('#^/api/agency(/|$)#', $path) && \App\Security\AgencyRoles::has($this->tokens->getToken()?->getRoleNames() ?? [])) {
             return;
