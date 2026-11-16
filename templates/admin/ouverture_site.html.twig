@@ -13,16 +13,19 @@
     {% if checklist is null %}
         <p class="text-muted">Ce site n'a pas encore de fiche d'entreprise : créez-la d'abord.</p>
     {% else %}
-        {% if not checklist.shop %}
+        {% if not checklist.shop and checklist.state == 'open' %}
             <p data-etat="open" data-etendue="">Votre site n'a pas de boutique en ligne : il est servi au public, il n'y a rien à ouvrir ici.</p>
         {% else %}
-        <p>État de la boutique : <strong data-etat="{{ checklist.state }}" data-etendue="{{ checklist.scope }}">{{ checklist.state == 'open' ? 'ouverte au public' : 'en construction' }}</strong>{% if checklist.openedAt %} depuis le {{ checklist.openedAt|slice(0, 10) }} (UTC){% endif %}.</p>
+        <p>État {{ checklist.shop ? 'de la boutique' : 'du site' }} : <strong data-etat="{{ checklist.state }}" data-etendue="{{ checklist.scope }}">{{ checklist.state == 'open' ? 'ouverte au public' : 'en construction' }}</strong>{% if checklist.openedAt %} depuis le {{ checklist.openedAt|slice(0, 10) }} (UTC){% endif %}.</p>
         {% if checklist.scope == 'site' %}
             <p class="text-muted">Vos visiteurs voient « Bientôt ouvert », au nom de votre boutique, sur tout le site. Les commandes et les formulaires sont fermés. Vous, connecté, voyez la vraie boutique.</p>
         {% elseif checklist.scope == 'shop' %}
             <p class="text-muted">Votre site vitrine est servi au public ; seule la boutique montre « Bientôt ouvert », et ses commandes sont fermées. Vous, connecté, voyez la vraie boutique.</p>
         {% endif %}
-        <table class="table table-sm align-middle ouverture-controle">
+        {% if not checklist.shop %}
+            <p class="text-muted">La boutique en ligne de ce site n'est pas active : il n'y a rien à contrôler, le site s'ouvre d'un geste, sans moyen de paiement.</p>
+        {% endif %}
+        <table class="table table-sm align-middle ouverture-controle"{{ checklist.items is empty ? ' hidden' : '' }}>
             <thead><tr><th>Point de contrôle</th><th>État</th></tr></thead>
             <tbody>
             {% for item in checklist.items %}
@@ -33,7 +36,7 @@
         <div class="d-flex gap-2 flex-wrap">
             {% if checklist.state != 'open' %}
                 <form method="post" action="{{ path('admin_ouverture_site_action', {action: 'ouvrir'}) }}" class="ouverture-ouvrir" onsubmit="return confirm('Ouvrir le site au public ?');">
-                    <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-success" type="submit" {{ checklist.canOpen ? '' : 'disabled' }}>Ouvrir la boutique</button>
+                    <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-success" type="submit" {{ checklist.canOpen ? '' : 'disabled' }}>{{ checklist.shop ? 'Ouvrir la boutique' : 'Ouvrir le site' }}</button>
                 </form>
                 <form method="post" action="{{ path('admin_ouverture_site_action', {action: 'apercu'}) }}" class="ouverture-apercu">
                     <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-secondary" type="submit">Créer un lien d'aperçu ({{ days }} jours)</button>

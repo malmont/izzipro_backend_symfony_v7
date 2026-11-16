@@ -13,15 +13,20 @@ use Psr\Log\LoggerInterface;
 /**
  * La boutique « en construction » (lot CONSTRUCTION, 16/11/2026, `docs/boutique-en-construction.md`).
  *
- * Décisions du propriétaire : la construction ne vaut que si le MODULE BOUTIQUE est actif sur le site ; elle ne ferme que la boutique
- * en ligne et, pour un site neuf, le site vitrine ; Mémoires Vivantes, Living Memory et Boussole n'en dépendent pas.
+ * Décisions du propriétaire : un site né SANS le module Boutique n'est jamais bloqué ; la construction ne ferme que la boutique en
+ * ligne et, pour un site neuf, le site vitrine ; Mémoires Vivantes, Living Memory et Boussole n'en dépendent pas.
  *
  * L'état gardé sur la fiche du site (`entreprise.storefront_state`) :
- * - `construction` : la valeur de naissance de tout site neuf. Avec le module Boutique : la boutique ET le site vitrine sont fermés au
- *   public (étendue `site`). Sans le module, rien n'est fermé ; un site neuf servi sans boutique passe à `open` (`born`,
- *   `shopDeactivated`) : il est « en service ».
- * - `boutique` : la boutique a été ajoutée à un site déjà en service (ou refermée) : elle seule est fermée (étendue `shop`).
- * - `open` : en service. C'est l'état de tout site d'avant ce lot. Avec une heure d'ouverture : la boutique a été ouverte une fois.
+ * - `construction` : la valeur de naissance de tout site neuf : la boutique ET le site vitrine sont fermés au public (étendue
+ *   `site`) jusqu'au geste explicite « Ouvrir ». Éteindre ou suspendre le module Boutique n'ouvre PAS le site (décision du chef de
+ *   projet, 16/11/2026) ; sans boutique, il s'ouvre d'un geste, sans moyen de paiement. Seul un site NÉ sans boutique n'est jamais
+ *   bloqué : sa fabrication le pose à `open` (`born`).
+ * - `boutique` : la boutique d'un site en service a été refermée : elle seule est fermée (étendue `shop`), tant que son module est
+ *   actif.
+ * - `open` : en service. C'est l'état de tout site d'avant ce lot. `storefront_opened_at` dit si la BOUTIQUE a été ouverte une
+ *   fois : sans cette heure, une boutique active est en construction (étendue `shop`). C'est ainsi qu'une boutique activée plus
+ *   tard sur un site en service naît en construction, sans aucun passage d'état à l'activation du module (rien à rater entre deux
+ *   écritures). Une boutique déjà ouverte une fois n'est pas refermée par un module éteint puis rallumé.
  * `closure()` rend l'étendue effective : `site`, `shop`, ou null (rien de fermé).
  *
  * L'administrateur du site, ou le responsable de l'agence qui a créé le site, ouvre après une liste de contrôle qui avertit sans
@@ -136,7 +141,8 @@ class StorefrontService
 
     /**
      * La liste de contrôle avant d'ouvrir. Elle avertit sans bloquer, sauf sans moyen de paiement (un compte de paiement connecté ET
-     * actif). Sans le module Boutique il n'y a rien à ouvrir : `shop` est faux, l'état est « open ».
+     * actif). Sans le module Boutique (`shop` faux), la liste est vide : un site né sans boutique est « open », il n'y a rien à
+     * ouvrir ; un site neuf dont la boutique a été éteinte reste fermé, et s'ouvre sans moyen de paiement.
      *
      * @param array{code: string, dbname: string}|null $site un site géré (agence) ; null : le site courant
      * @return array{state: string, scope: ?string, shop: bool, openedAt: ?string, canOpen: bool, items: list<array{key: string, ok: bool, blocking: bool, message: string}>}
@@ -157,7 +163,9 @@ class StorefrontService
         $products = (int) $one('SELECT COUNT(*) FROM product p WHERE p.is_web = TRUE AND EXISTS (SELECT 1 FROM product_variant v WHERE v.product_id = p.id AND v.price > 0)') > 0;
         $payment = $this->tenants->isTenantInternal($site['code']) || (int) $one("SELECT COUNT(*) FROM stripe_config WHERE (COALESCE(account_id, '') <> '' AND is_active) OR (COALESCE(live_account_id, '') <> '' AND live_is_active)") > 0;
         $terms = (int) $one("SELECT COUNT(*) FROM entreprise_translation WHERE COALESCE(TRIM(condition_of_use), '') <> ''") > 0;
-        $items = [
+        // Sans le module Boutique (éteint sur un site jamais ouvert, pour n'en faire qu'un site d'applications), il n'y a rien à
+        // contrôler : le site s'ouvre d'un geste, sans moyen de paiement
+        $items = !$state['shop'] ? [] : [
             ['key' => 'products', 'ok' => $products, 'blocking' => false, 'message' => $products ? 'Des articles sont visibles sur la boutique.' : 'Aucun article n\'est visible sur la boutique.'],
             ['key' => 'payment', 'ok' => $payment, 'blocking' => !$payment, 'message' => $payment ? 'Un moyen de paiement est réglé.' : 'Aucun moyen de paiement n\'est réglé : la boutique ne peut pas encaisser.'],
             ['key' => 'terms', 'ok' => $terms, 'blocking' => false, 'message' => $terms ? 'Les conditions de vente sont remplies.' : 'Les conditions de vente sont vides.'],
@@ -168,8 +176,8 @@ class StorefrontService
     }
 
     /**
-     * Ouvre la boutique au public. Refus `STOREFRONT_NOT_READY` (409) sans moyen de paiement. Rien à ouvrir (déjà ouverte, ou site
-     * sans boutique) : rien ne change.
+     * Ouvre au public : la boutique, ou le site entier s'il est neuf. Refus `STOREFRONT_NOT_READY` (409) sans moyen de paiement quand
+     * la boutique est active. Rien à ouvrir (déjà ouvert, ou site né sans boutique) : rien ne change.
      *
      * @param array{code: string, dbname: string}|null $site
      * @return array{state: string, scope: ?string, openedAt: ?string}
@@ -184,7 +192,9 @@ class StorefrontService
         if (!$checklist['canOpen']) {
             throw new StorefrontException('STOREFRONT_NOT_READY', 409, ['items' => $checklist['items']]);
         }
-        $this->write($site, "UPDATE entreprise SET storefront_state = 'open', storefront_opened_at = ?, storefront_preview_hash = NULL, storefront_preview_expires_at = NULL WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1)",
+        // l'heure d'ouverture est celle de la BOUTIQUE : un site ouvert sans elle la laisse vide, et sa boutique, activée plus tard,
+        // naîtra en construction (`closureOf`)
+        $this->write($site, "UPDATE entreprise SET storefront_state = 'open', storefront_opened_at = CASE WHEN is_boutique_active THEN CAST(? AS TIMESTAMP) ELSE NULL END, storefront_preview_hash = NULL, storefront_preview_expires_at = NULL WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1)",
             [(new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s')], 'open', $by);
         $state = $this->load($site);
 
@@ -193,7 +203,7 @@ class StorefrontService
 
     /**
      * Referme la boutique d'un site en service : la boutique SEULE repasse en construction (ses commandes se ferment aussitôt), le
-     * site vitrine reste servi. Le lien d'aperçu est retiré. Déjà en construction : rien ne change.
+     * site vitrine reste servi. Le lien d'aperçu est retiré. Déjà en construction, ou sans module Boutique : rien ne change.
      *
      * @param array{code: string, dbname: string}|null $site
      * @return array{state: string, scope: ?string, openedAt: ?string}
@@ -202,7 +212,8 @@ class StorefrontService
     {
         $site = $this->site($site);
         $state = $this->load($site);
-        if ($state['state'] === self::OPEN) {
+        // seule une boutique ouverte se referme : sans module Boutique, ou déjà en construction, rien n'est écrit
+        if (self::closureOf($state) === null && $state['shop']) {
             $this->write($site, "UPDATE entreprise SET storefront_state = 'boutique', storefront_preview_hash = NULL, storefront_preview_expires_at = NULL WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1)", [], 'close', $by);
             $state = $this->load($site);
         }
@@ -212,31 +223,10 @@ class StorefrontService
     }
 
     /**
-     * Le module Boutique vient d'être activé sur un site DÉJÀ EN SERVICE (droit accordé, indicateur coché) : si sa boutique n'a jamais
-     * été ouverte, elle naît en construction, et elle seule ; le site vitrine reste servi. Un site est « en service » quand son état
-     * gardé est `open` : tout site d'avant ce lot, et tout site neuf qui a été servi sans boutique (`shopDeactivated`, `born`). Une
-     * boutique déjà ouverte une fois n'est pas refermée par un module éteint puis rallumé. Un site neuf pas encore ouvert (état
-     * `construction`) n'est pas touché : avec sa boutique, il reste fermé en entier. Rend vrai si l'état a changé.
-     */
-    public function shopActivated(string $tenantCode): bool
-    {
-        return $this->transition($tenantCode, "UPDATE entreprise SET storefront_state = 'boutique' WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1) AND storefront_opened_at IS NULL AND storefront_state = 'open'", 'boutique activée');
-    }
-
-    /**
-     * Le module Boutique vient d'être éteint sur un site neuf encore en construction : sans boutique, un site n'est jamais fermé, il
-     * est donc servi au public, et il est désormais « en service ». Si la boutique lui revient plus tard, elle seule naîtra en
-     * construction (`shopActivated`) : un site vitrine déjà servi ne se referme pas. Rend vrai si l'état a changé.
-     */
-    public function shopDeactivated(string $tenantCode): bool
-    {
-        return $this->transition($tenantCode, "UPDATE entreprise SET storefront_state = 'open' WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1) AND storefront_opened_at IS NULL AND storefront_state = 'construction'", 'boutique éteinte');
-    }
-
-    /**
-     * La fin de la fabrication d'un site neuf, une fois sa fiche écrite et ses modules posés (ils le sont un par un : les passages
-     * d'un module pendant la fabrication ne disent rien du site). Avec la boutique : le site naît fermé en entier. Sans elle : il
-     * est en service. Rend faux si l'état n'a pas pu être posé.
+     * La fin de la fabrication d'un site neuf, une fois sa fiche écrite et ses modules posés (agence, formulaire de la plateforme).
+     * Avec la boutique : le site naît fermé en entier. NÉ SANS elle : il est en service, jamais bloqué ; si la boutique lui vient
+     * plus tard, elle seule sera en construction. Rend faux si l'état n'a pas pu être posé (le site reste alors fermé en entier, sa
+     * valeur de naissance : son administrateur l'ouvre d'un geste).
      */
     public function born(string $tenantCode): bool
     {
@@ -313,16 +303,21 @@ class StorefrontService
         return $out;
     }
 
-    /** @param array<string, mixed> $state l'étendue effective : rien n'est fermé sans le module Boutique */
+    /**
+     * L'étendue effective, CALCULÉE depuis la fiche (aucun passage d'état à l'activation d'un module : rien à rater).
+     * - Un site neuf jamais ouvert (`construction`) reste fermé en entier jusqu'au geste « Ouvrir », que sa boutique soit active,
+     *   éteinte ou suspendue : éteindre un module n'ouvre jamais un site.
+     * - Sur un site en service, une boutique ACTIVE est en construction tant qu'elle n'a jamais été ouverte (pas d'heure
+     *   d'ouverture), ou quand elle a été refermée (`boutique`). Sans module Boutique, rien n'est fermé.
+     *
+     * @param array<string, mixed> $state
+     */
     private static function closureOf(array $state): ?string
     {
-        if (!$state['shop']) {
-            return null;
-        }
-
-        return match ($state['state']) {
-            self::CONSTRUCTION => self::SCOPE_SITE,
-            self::SHOP_ONLY => self::SCOPE_SHOP,
+        return match (true) {
+            $state['state'] === self::CONSTRUCTION => self::SCOPE_SITE,
+            !$state['shop'] => null,
+            $state['state'] === self::SHOP_ONLY, $state['openedAt'] === null => self::SCOPE_SHOP,
             default => null,
         };
     }

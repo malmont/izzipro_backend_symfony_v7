@@ -353,9 +353,16 @@ class AgencySitesTest extends WebTestCase
         $this->assertSame('AGENCY_NOT_OPEN', $this->json('POST', "/api/agency/sites/$code/invitation", null, 'manager', 409)['code']);
         $this->assertSame('AGENCY_NOT_OPEN', $this->json('POST', "/api/agency/sites/$code/storefront/open", null, 'manager', 409)['code']);
         $this->assertSame('AGENCY_NOT_OPEN', $this->json('POST', "/api/agency/sites/$code/storefront/preview-link", null, 'manager', 409)['code']);
-        // (la boutique de ce site est suspendue avec l'agence : sans module Boutique, rien n'est « en construction »)
+        // Lot CONSTRUCTION : ce site n'a JAMAIS été ouvert. Sa boutique suspendue avec l'agence ne l'ouvre pas : il reste fermé en entier
+        $host = (string) $made['site']['host'];
+        $public = function () use ($host): array {
+            $state = json_decode((string) $this->api('GET', '/api/site/storefront', null, null, $host)->getContent(), true);
+
+            return [$state['state'], $state['scope'], $this->api('GET', '/api/landingpage-settings', null, null, $host)->getStatusCode(), $this->api('GET', '/api/category', null, null, $host)->getStatusCode()];
+        };
         $read = $this->json('GET', "/api/agency/sites/$code/storefront", null, 'manager', 200);
-        $this->assertSame(['open', null, false, false], [$read['state'], $read['scope'], $read['shop'], $read['canOpen']], 'suspendue, l\'agence lit encore');
+        $this->assertSame(['construction', 'site', false], [$read['state'], $read['scope'], $read['shop']], 'suspendue, l\'agence lit encore');
+        $this->assertSame(['construction', 'site', 403, 403], $public(), 'agence suspendue : le site jamais ouvert reste fermé au public');
         // Au bout des 30 jours, le balayage des droits suspend la page publique (elle reste marquée par la cascade)
         static::getContainer()->get(EntitlementService::class)->sweep((new \DateTimeImmutable())->modify('+31 days'));
         $this->assertSame(['module.landing', 'suspended', $mark], $rights()[2]);
@@ -374,6 +381,14 @@ class AgencySitesTest extends WebTestCase
         $this->assertSame($attachedBefore, $rights(MV_TEST_TENANT2_CODE));
         $resumed = json_decode((string) $this->master->query('SELECT payload FROM agency_events WHERE agency_id = ' . $this->agency . " AND event = 'resumed'")->fetchColumn(), true);
         $this->assertSame(2, $resumed['rights']);
+        // La suspension levée, le site est TOUJOURS fermé en entier : il ne s'ouvre que par le geste « Ouvrir »
+        $this->assertSame(['construction', 'site', 403, 403], $public(), 'suspension levée : toujours fermé');
+        $this->assertSame(['construction', null], $this->pdo($db)->query('SELECT storefront_state, storefront_opened_at FROM entreprise')->fetch(\PDO::FETCH_NUM));
+        $this->pdo($db)->exec("INSERT INTO stripe_config (id, account_id, is_active) VALUES (1, 'acct_essai_agence', true)");
+        $this->assertSame('open', $this->json('POST', "/api/agency/sites/$code/storefront/open", null, 'manager', 200)['state']);
+        $opened = $public();
+        $this->assertSame(['open', null, 200], [$opened[0], $opened[1], $opened[3]], 'ouvert par le geste, et par lui seul');
+        $this->assertNotSame(403, $opened[2]);
     }
 
     public function testLimitsFailuresAndInterruptedBuildsNeverLeaveAHalfMadeSiteNorDropAnExistingDatabase(): void

@@ -12,8 +12,7 @@ use Psr\Log\LoggerInterface;
  */
 class EntitlementProjector
 {
-    public function __construct(private readonly TenantDatabaseConnector $connector, private readonly LoggerInterface $logger,
-        private readonly ?\App\Services\Storefront\StorefrontService $storefront = null) // lot CONSTRUCTION : une boutique activée plus tard naît en construction
+    public function __construct(private readonly TenantDatabaseConnector $connector, private readonly LoggerInterface $logger)
     {
     }
 
@@ -40,16 +39,9 @@ class EntitlementProjector
         }
         try {
             $pdo = $this->connector->pdo($tenant['dbname']);
-            // Lot CONSTRUCTION (16/11/2026) : le module Boutique change-t-il par cette projection ? (lu en ligne entière : `fetchColumn`
-            // rend `false` pour « aucune fiche » comme pour un indicateur éteint)
-            $shopRow = array_key_exists('module.boutique', $enabled) ? $pdo->query('SELECT is_boutique_active FROM entreprise ORDER BY id LIMIT 1')->fetch(\PDO::FETCH_NUM) : false;
             $count = $pdo->prepare('UPDATE entreprise SET ' . implode(', ', $sets) . ' WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1)');
             $count->execute($params);
             $this->connector->invalidateSiteCache($tenant['code'], $tenant['dbname']);
-            if (is_array($shopRow) && in_array($shopRow[0], [true, 't', 'true', 1, '1'], true) !== (bool) $enabled['module.boutique']) {
-                // activée sur un site en service : la boutique seule naît en construction ; éteinte sur un site neuf : il est en service
-                $enabled['module.boutique'] ? $this->storefront?->shopActivated($tenant['code']) : $this->storefront?->shopDeactivated($tenant['code']);
-            }
             if ($count->rowCount() === 0) {
                 $this->logger->warning(sprintf('[Entitlements] projection : aucune fiche Entreprise sur %s', $tenantCode));
 

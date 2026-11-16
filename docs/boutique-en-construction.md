@@ -6,7 +6,11 @@ par le chef de projet le même jour.
 
 Décisions du propriétaire (16/11/2026), à ne pas défaire :
 
-- **La construction ne vaut que si le module Boutique est actif** sur le site. Un site sans ce module n'est jamais bloqué.
+- **Un site né sans le module Boutique n'est jamais bloqué.** Sur un site en service, la construction ne vaut que si le module
+  Boutique est actif.
+- **Un site neuf né avec sa boutique reste fermé en entier jusqu'au geste explicite « Ouvrir »** : éteindre ou suspendre le module
+  Boutique (agence suspendue, abonnement impayé) ne l'ouvre pas. Si son administrateur éteint la boutique pour n'en faire qu'un site
+  d'applications, il l'ouvre d'un geste, sans moyen de paiement (décision du chef de projet, 16/11/2026).
 - Elle ne ferme que **la boutique en ligne et le site vitrine** : catalogue, panier, commande, inscription d'un client de la
   boutique, formulaires de contact et de réservation, ancienne boutique du serveur.
 - **Mémoires Vivantes, Living Memory et Boussole sont indépendantes de la boutique** : la construction ne les ferme jamais. Un compte
@@ -26,35 +30,43 @@ Quatre colonnes sur la fiche du site (`entreprise`), lues et écrites en SQL dir
 `storefront_preview_hash`, `storefront_preview_expires_at`. Migration `Version20270115100000`, script
 `scripts/migrate_all_v2_construction.sh` (hors dépôt).
 
-| État gardé | Sens | Avec le module Boutique | Sans le module |
+L'étendue est **calculée** depuis la fiche (`StorefrontService::closureOf`) : il n'y a aucun passage d'état à l'activation ou à
+l'extinction d'un module, donc rien à rater entre deux écritures.
+
+| État gardé | Module Boutique | Heure d'ouverture de la boutique | Étendue |
 |---|---|---|---|
-| `construction` | site neuf, jamais servi | étendue **`site`** : boutique ET site vitrine fermés | rien n'est fermé |
-| `boutique` | boutique ajoutée à un site en service, ou refermée | étendue **`shop`** : la boutique seule est fermée | rien n'est fermé |
-| `open` | site en service ; avec `storefront_opened_at` : boutique déjà ouverte une fois | ouvert | ouvert |
+| `construction` (site neuf, jamais ouvert) | actif, éteint ou suspendu | — | **`site`** : boutique ET site vitrine fermés |
+| `open` (site en service) | actif | vide : boutique jamais ouverte | **`shop`** : la boutique seule est fermée |
+| `open` | actif | posée : boutique ouverte une fois | ouvert |
+| `boutique` (boutique refermée) | actif | — | **`shop`** |
+| `open` ou `boutique` | éteint | — | rien n'est fermé |
 
-`StorefrontService::closure()` rend l'étendue effective : `site`, `shop` ou `null`. Les passages :
+Qui écrit l'état :
 
-- **Site existant** : la colonne naît à `open` ; la migration pose l'heure d'ouverture sur toute boutique active (tenue pour « déjà
-  ouverte »). Aucun site existant n'est fermé par la migration.
+- **Site existant** : la colonne naît à `open` ; la migration pose l'heure d'ouverture sur toute boutique ACTIVE ce jour-là (tenue
+  pour « déjà ouverte »). Aucun site existant n'est fermé par la migration.
 - **Site neuf** : `TenantConnectionManager::createTenant` règle la valeur par défaut de la colonne, dans la base de CE site, sur
-  `construction` : sa fiche, quel que soit le chemin qui la crée, naît en construction. Un site créé par une agence reçoit ses
-  modules un par un : son état de naissance est posé à la FIN de la fabrication (`StorefrontService::born`) : `construction` avec sa
-  boutique, `open` sans elle.
-- **Module Boutique activé** (droit accordé, indicateur coché : `EntitlementProjector`, `EntitlementFlagSync`) sur un site en service
-  (état `open`) dont la boutique n'a jamais été ouverte : `boutique` (`shopActivated`). Une boutique déjà ouverte une fois n'est pas
-  refermée par un module éteint puis rallumé. Un site neuf encore en `construction` n'est pas touché.
-- **Module Boutique éteint** sur un site neuf encore en `construction` : le site est servi sans boutique, il devient `open`
-  (`shopDeactivated`). Si la boutique lui revient, elle seule sera en construction : un site vitrine déjà servi ne se referme pas.
-- **Ouvrir** : `open`, avec l'heure. **Refermer** : `boutique` (la boutique seule ; le site vitrine reste servi).
+  `construction` : sa fiche, quel que soit le chemin qui la crée, naît fermée en entier. Une fois ses modules posés, sa fabrication
+  pose son état de naissance (`StorefrontService::born`, appelé par `AgencySiteBuilder` et par `TenantSetupFeaturesService`) :
+  `construction` avec sa boutique, `open` s'il naît SANS elle (jamais bloqué).
+- **Ouvrir** (`open`) : état `open` ; l'heure d'ouverture n'est posée que si la boutique est active (c'est l'heure de la BOUTIQUE).
+  Un site ouvert sans boutique garde donc une heure vide : si la boutique lui vient plus tard, elle naît en construction.
+- **Refermer** (`close`) : état `boutique`, pour une boutique ouverte seulement ; le site vitrine reste servi. Sans module Boutique,
+  ou déjà en construction : rien n'est écrit.
+- **Module Boutique activé plus tard** sur un site en service : rien n'est écrit ; la boutique est en construction parce qu'elle n'a
+  pas d'heure d'ouverture. Une boutique déjà ouverte une fois n'est pas refermée par un module éteint puis rallumé.
+- **Module Boutique éteint ou suspendu** : rien n'est écrit. Un site neuf jamais ouvert reste fermé en entier ; un site en service
+  n'a simplement plus de boutique.
 - Un site sans fiche suit la valeur par défaut de sa base. Une base pas encore migrée ou injoignable est tenue pour « ouverte »
   (jamais un site existant fermé par accident), sans que cette réponse soit gardée en cache.
-- L'état est gardé en cache 15 secondes côté serveur ; tout geste vide le cache du site.
+- L'état est gardé en cache 15 secondes côté serveur ; tout geste, et toute écriture de la fiche, vide le cache du site.
 
 ## 2. Ce que le visiteur obtient
 
 `GET /api/site/storefront` (public, lu hors du pare-feu de l'API : un jeton expiré ne coûte pas l'état au visiteur) →
 `{ state: construction | open, scope: site | shop | null, name, locale, openedAt, preview: { active, expiresAt } }`. `state` vaut
-`construction` dans les deux étendues ; `scope` dit ce qui est fermé. Sans module Boutique : `state: open`, `scope: null`.
+`construction` dans les deux étendues ; `scope` dit ce qui est fermé. Site en service sans module Boutique : `state: open`,
+`scope: null`.
 `Cache-Control` de 15 secondes (`public` pour un visiteur, `private` dès qu'un compte, un cookie ou un jeton d'aperçu est en jeu).
 Tant que cette route n'existe pas sur un serveur (404), le front se comporte comme pour `open`.
 
@@ -68,7 +80,7 @@ relecture indépendante l'a contournée par une autre adresse de la fiche d'un a
 |---|---|---|---|
 | `KEPT` | connexion, mot de passe, code à usage unique, devises, découverte et état du site, fiche du site, fichiers (logo), espace d'administration, création de site, entrée des applications de l'équipe (activation, profil, thème, PIN de caisse), webhooks, déploiement des réglages, boîtiers | servi à tous | servi à tous |
 | `APPS` | toutes les routes `/api/memoires` et `/api/boussole` ; routes de compte communes (`/api/account`, `/api/profile`, `/api/notifications`, `validate-token`, `resend-verification`, `stripe-config`, `/verify/email`) ; conditions de Living Memory et de la caisse ; reçu numérique de la caisse (`/api/r/{jeton}`) ; inscription et adhésion quand elles ne visent pas la boutique | comme sur un site ouvert | comme sur un site ouvert |
-| `SHOWCASE` | le site vitrine : pages, réglages de la page, présentations, bannières, vidéos, médias partagés, équipe, emplois, véhicules, offres, formulaires | **fermé** | servi |
+| `SHOWCASE` | le site vitrine : réglages de la page, présentations, bannières, vidéos, médias partagés, équipe, emplois, véhicules, offres, formulaires. Rien de la boutique : `/api/landingpage` (articles de la page d'accueil), `/api/customization` (options et prix d'un article) et `/api/booking` (disponibilité d'une location) sont des routes de la boutique | **fermé** | servi |
 | tout le reste | la boutique : catalogue, réglages de la boutique, commandes, abonnements, comptes clients de la boutique, pages de l'ancienne boutique | **fermé** | **fermé** |
 
 Pour une route fermée :
@@ -82,9 +94,10 @@ Pour une route fermée :
 Écritures fermées à **tous**, équipe et aperçu compris :
 
 - dans les deux étendues (`SHOP_ORDERS`, `SHOP_ORDER_PAGES`, `SHOP_SIGNUP`) : commander, chiffrer un panier, payer, s'abonner, donner
-  un avis, accepter une invitation de client repris, s'inscrire ou adhérer à la boutique (`POST /api/register` et
-  `POST /api/apps/join` quand le champ `app` vise la boutique, ou est absent ou inconnu), pages de l'ancienne boutique (elles écrivent
-  aussi sur une simple lecture : fermées quelle que soit la méthode) ;
+  un avis, accepter une invitation de client repris, s'inscrire à la boutique (`POST /api/register` quand le champ `app` vise la
+  boutique, ou est absent ou inconnu), adhérer à la boutique (`POST /api/apps/join` quand le JETON de passage est de la famille
+  boutique : jamais d'après un champ du corps), pages de l'ancienne boutique (elles écrivent aussi sur une simple lecture : fermées
+  quelle que soit la méthode) ;
 - dans l'étendue `site` seulement (`SHOWCASE_ORDERS`) : formulaire de contact, infolettre, réservation, formulaire à étapes,
   candidature, financement.
 
@@ -102,7 +115,8 @@ Pour une route fermée :
   qui n'est pas fermée garde son cache habituel.
 - `StorefrontTest::testEveryRouteOfTheApplicationIsFiledAndOnlyTheShopAndTheShowcaseCloseUnderConstruction` relit TOUTES les routes
   de l'application, dans les deux sens : toute route de Mémoires Vivantes, Living Memory et Boussole est ouverte ; tout le reste est
-  fermé pour un site neuf, sauf les routes de `KEPT` et les routes de compte de `APPS`, écrites en toutes lettres dans l'essai.
+  fermé pour un site neuf, sauf les routes de `KEPT` et les routes de compte de `APPS`, écrites en toutes lettres dans l'essai ;
+  les routes de `SHOWCASE`, servies quand la boutique seule est en construction, y sont écrites en toutes lettres aussi.
 
 ## 3. Voir la vraie boutique avant l'ouverture
 
@@ -111,7 +125,7 @@ Pour une route fermée :
   il est retiré à l'ouverture et quand la boutique est refermée. Le jeton est dans le fragment de l'adresse, jamais dans les
   paramètres. Le front le garde pour la session du navigateur et l'envoie dans l'en-tête `X-Storefront-Preview`. Contrôle :
   `POST /api/site/storefront/preview { token }` → `{ valid: true, expiresAt }` ou 400 `PREVIEW_LINK_INVALID`. Le lien ouvre les
-  LECTURES seulement. Sur une boutique ouverte, ou sans module Boutique : 409 `STOREFRONT_ALREADY_OPEN`.
+  LECTURES seulement. Quand rien n'est fermé (boutique ouverte, site en service sans boutique) : 409 `STOREFRONT_ALREADY_OPEN`.
 - La base ne garde que l'empreinte du jeton. Ni le jeton ni l'en-tête ne sont écrits dans un journal : le lien n'est rendu qu'une
   fois, à sa création.
 
@@ -126,7 +140,9 @@ Administrateur du site (`ROLE_ADMIN`) :
 | `POST /api/site/storefront/close` | `{ state: construction, scope: shop, openedAt: null }` : la boutique seule se referme |
 | `POST /api/site/storefront/preview-link` | `{ url, expiresAt }` |
 
-Sans module Boutique : la liste rend `state: open`, `shop: false`, `canOpen: false` ; il n'y a rien à ouvrir, et aucun geste n'écrit.
+Sans module Boutique (`shop: false`), `items` est vide. Site en service : `state: open`, `canOpen: false`, il n'y a rien à ouvrir
+et aucun geste n'écrit. Site neuf jamais ouvert dont la boutique est éteinte : `state: construction`, `scope: site`,
+`canOpen: true` : il s'ouvre d'un geste, sans moyen de paiement.
 
 Les mêmes gestes sont dans l'espace d'administration du serveur, page **« Ouverture du site »** (`/admin/ouverture-du-site`, menu
 « Mon site ») : état, liste de contrôle, « Ouvrir la boutique », « Refermer la boutique », « Créer un lien d'aperçu » (le lien est
@@ -134,7 +150,7 @@ rendu dans la réponse du geste, une fois ; il n'est gardé ni en session ni ail
 viendront ensuite.
 
 La liste de contrôle avertit sans bloquer (articles visibles, conditions de vente remplies), sauf **sans aucun moyen de paiement**
-(un compte de paiement connecté ET actif). Chaque geste est au journal du site (`content_audit_log`, ressource `storefront` : `open`,
+(un compte de paiement connecté ET actif) quand la boutique est active. Chaque geste est au journal du site (`content_audit_log`, ressource `storefront` : `open`,
 `close`, `preview_link`).
 
 Agence, pour un site qu'elle a **créé** (`docs/agences-et-import.md` § 8) : `GET /api/agency/sites/{code}/storefront` (les deux rôles),
@@ -158,17 +174,23 @@ n'a pas de compte dans le site de son client. Une agence suspendue lit encore, m
   construction. Inviter ses clients après l'ouverture.
 - Les routes de compte communes (`APPS`) restent servies sur un site en construction : un compte né par Living Memory lit son profil,
   quitte une application, efface son compte. Elles ne montrent rien de la boutique.
-- Un module Boutique **suspendu** (agence suspendue, abonnement impayé) vaut « sans boutique » : un site neuf encore fermé en entier
-  devient servi (son site vitrine, tant que la page publique a son droit), et il est alors « en service » : à la reprise, la boutique
-  seule revient en construction.
-- Un site neuf créé par le formulaire de la plateforme naît avec les modules par défaut de sa fiche (boutique comprise) : il est fermé
-  en entier. Si la plateforme lui retire la boutique avant toute ouverture, il devient servi (règle du module éteint, § 1).
+- Un site EXISTANT dont le module Boutique est éteint le jour de la migration (jamais eu de boutique, essai échu, droit suspendu)
+  n'a pas d'heure d'ouverture : si la boutique lui est activée ou rendue, elle est en construction jusqu'au geste « Ouvrir ». C'est
+  la règle voulue pour une boutique neuve ; pour une boutique qui avait déjà servi, son administrateur la rouvre d'un geste.
+- Un site créé par la commande `app:tenant:create` n'a pas de fiche : il suit la valeur de naissance (fermé en entier) jusqu'à ce
+  que son administrateur l'ouvre.
+- Une application (Living Memory, caisse) qui n'est pas active sur le site accepte quand même l'inscription d'un compte en
+  construction (`app` nommé) : ce compte ne voit rien de la boutique.
+- Après « refermer », une lecture de la boutique déjà gardée par un cache intermédiaire (60 s, plus 60 s de revalidation) peut
+  encore être servie deux minutes.
+- Les quatre colonnes sont hors de l'entité `Entreprise` : une migration produite par comparaison du schéma proposerait de les
+  supprimer. Ne pas l'accepter.
 - L'en-tête `X-Storefront-Preview` n'est pas dans la liste des en-têtes autorisés du serveur web (`docker/nginx`, hors de ce lot) :
   sans effet tant que le front appelle le serveur par son relais ; un appel direct du navigateur demanderait ce réglage.
 - La liste de contrôle lit les conditions de vente dans les traductions de la fiche, et accepte un compte de paiement actif de l'un ou
   l'autre mode (essai ou réel) : elle ne regarde pas le mode de paiement du site.
 - Refermer une boutique ouverte ferme aussitôt ses commandes ; les commandes déjà passées se traitent normalement dans
-  l'administration. Refermer ne referme jamais le site vitrine : l'étendue `site` ne vaut qu'avant la première mise en service.
+  l'administration. Refermer ne referme jamais le site vitrine : l'étendue `site` ne vaut qu'avant la première ouverture.
 - La valeur par défaut de `storefront_state` diffère d'une base à l'autre (`open` sur les sites d'avant le lot, `construction` sur
   les sites nés après) : une migration future ne doit pas la réécrire.
 

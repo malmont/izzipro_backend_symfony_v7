@@ -16,8 +16,7 @@ use Symfony\Bundle\SecurityBundle\Security;
  */
 class EntitlementFlagSync
 {
-    public function __construct(private readonly EntitlementService $entitlements, private readonly TenantConnectionManager $tenants, private readonly TenantEntityManagerProvider $emProvider, private readonly Security $security, private readonly LoggerInterface $logger,
-        private readonly ?\App\Services\Storefront\StorefrontService $storefront = null)
+    public function __construct(private readonly EntitlementService $entitlements, private readonly TenantConnectionManager $tenants, private readonly TenantEntityManagerProvider $emProvider, private readonly Security $security, private readonly LoggerInterface $logger)
     {
     }
 
@@ -41,13 +40,6 @@ class EntitlementFlagSync
         }
         try {
             $result = $this->entitlements->syncFromFlags($code, $flags, $this->security->getUser()?->getUserIdentifier());
-            // Lot CONSTRUCTION (16/11/2026) : le module Boutique coché à la main sur un site en service : sa boutique naît en construction
-            // (éteint à la main sur un site neuf encore en construction : le site, servi sans boutique, est en service)
-            if (in_array('module.boutique', $result['granted'], true)) {
-                $this->storefront?->shopActivated($code);
-            } elseif (in_array('module.boutique', $result['cancelled'], true)) {
-                $this->storefront?->shopDeactivated($code);
-            }
             if ($result['granted'] !== [] || $result['cancelled'] !== []) {
                 $this->logger->notice(sprintf('[Entitlements] %s : alignement depuis la fiche Entreprise, accordés %s, annulés %s', $code, implode(',', $result['granted']) ?: '-', implode(',', $result['cancelled']) ?: '-'));
             }

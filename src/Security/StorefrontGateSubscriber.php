@@ -2,6 +2,7 @@
 
 namespace App\Security;
 
+use App\Services\AppMembershipService\AppJoinTokens;
 use App\Services\Http\RequestPath;
 use App\Services\Storefront\StorefrontException;
 use App\Services\Storefront\StorefrontService;
@@ -86,9 +87,13 @@ class StorefrontGateSubscriber implements EventSubscriberInterface
         '#^/verify/email$#',
     ];
 
-    /** Le site vitrine : fermé pour un site neuf (`site`), servi quand seule la boutique est en construction (`shop`) */
+    /**
+     * Le site vitrine : fermé pour un site neuf (`site`), servi quand seule la boutique est en construction (`shop`). Rien de la
+     * boutique ici : `/api/landingpage` (les articles de la page d'accueil), `/api/customization` (options et prix d'un article) et
+     * `/api/booking` (disponibilité d'un article en location) sont des routes de la boutique. L'essai écrit ces routes en toutes lettres.
+     */
     public const SHOWCASE = [
-        '#^/api/(landingpage|landingpage-settings|components-config|presentations|presentation-groups|bannieres|baniere-statiques|homeslider|explore-cards|features|videos|shared-media|embeds|multiliens|recherches|service-offers|service-families|team|emplois|candidatures|vehicles|vehicle_products|vehicle-products|financement|offers|admin-settings|customization|contacts|contact|newsletter|form-submissions|reservations|booking|social-networks)(/|\.|$)#',
+        '#^/api/(landingpage-settings|components-config|presentations|presentation-groups|bannieres|baniere-statiques|homeslider|explore-cards|features|videos|shared-media|embeds|multiliens|recherches|service-offers|service-families|team|emplois|candidatures|vehicles|vehicle_products|vehicle-products|financement|offers|admin-settings|contacts|contact|newsletter|form-submissions|reservations|social-networks)(/|\.|$)#',
         '#^/(videos|shared-media|contact|cgu)(/|$)#',
     ];
 
@@ -103,11 +108,10 @@ class StorefrontGateSubscriber implements EventSubscriberInterface
     /** Écritures par un formulaire du site vitrine : fermées à TOUS dans l'étendue `site` seulement */
     public const SHOWCASE_ORDERS = [
         '#^/api/(contact/submit|contacts|contacts/create|newsletter/subscribe|form-submissions|reservations|candidatures|financement/submit)$#',
-        '#^/api/booking(/|$)#',
         '#^/contact(/|$)#',
     ];
 
-    public function __construct(private readonly StorefrontService $storefront, private readonly StorefrontViewer $viewer)
+    public function __construct(private readonly StorefrontService $storefront, private readonly StorefrontViewer $viewer, private readonly AppJoinTokens $joinTokens)
     {
     }
 
@@ -130,7 +134,7 @@ class StorefrontGateSubscriber implements EventSubscriberInterface
         $path = RequestPath::of($request);
         $write = !in_array($request->getMethod(), ['GET', 'HEAD', 'OPTIONS'], true);
         // 1. écritures fermées à tous
-        if (preg_match(self::SHOP_ORDER_PAGES, $path) === 1 || ($write && (self::matches(self::SHOP_ORDERS, $path) || (preg_match(self::SHOP_SIGNUP, $path) === 1 && self::signsUpForShop($request))))
+        if (preg_match(self::SHOP_ORDER_PAGES, $path) === 1 || ($write && (self::matches(self::SHOP_ORDERS, $path) || (preg_match(self::SHOP_SIGNUP, $path) === 1 && $this->signsUpForShop($path, $request))))
             || ($write && $scope === StorefrontService::SCOPE_SITE && self::matches(self::SHOWCASE_ORDERS, $path))) {
             $event->setResponse($this->refusal($path, $scope));
 
@@ -197,13 +201,23 @@ class StorefrontGateSubscriber implements EventSubscriberInterface
         return $roles !== [] && AppFamilies::isTeam($roles);
     }
 
-    /** L'inscription ou l'adhésion vise-t-elle la boutique ? Oui, sauf si le corps nomme une autre application (Living Memory, caisse) */
-    private static function signsUpForShop(Request $request): bool
+    /**
+     * L'inscription ou l'adhésion vise-t-elle la boutique ?
+     * - Inscription (`POST /api/register`) : oui, sauf si le champ `app` du corps nomme une autre application (lu comme le lit
+     *   l'inscription elle-même, `AppFamilies::of`) ; absent ou inconnu : la boutique.
+     * - Adhésion (`POST /api/apps/join { joinToken, … }`) : la famille est celle du JETON de passage, jamais un champ du corps (un
+     *   corps forgé ne déplace pas une adhésion à la boutique vers une autre application). Jeton illisible : la garde laisse la
+     *   route le refuser elle-même, rien n'est créé.
+     */
+    private function signsUpForShop(string $path, Request $request): bool
     {
         $body = json_decode((string) $request->getContent(), true);
-        $app = is_array($body) && is_string($body['app'] ?? null) ? $body['app'] : null;
+        $body = is_array($body) ? $body : [];
+        if (str_ends_with($path, '/apps/join')) {
+            return ($this->joinTokens->read($body['joinToken'] ?? null)['app'] ?? null) === AppFamilies::BOUTIQUE;
+        }
 
-        return (AppFamilies::APPS[$app] ?? AppFamilies::BOUTIQUE) === AppFamilies::BOUTIQUE;
+        return (AppFamilies::of($body['app'] ?? null) ?? AppFamilies::BOUTIQUE) === AppFamilies::BOUTIQUE;
     }
 
     /** @param list<string> $patterns */

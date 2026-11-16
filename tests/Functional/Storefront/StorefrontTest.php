@@ -130,10 +130,19 @@ class StorefrontTest extends WebTestCase
         foreach ([[], ['app' => 'mobile'], ['app' => 'web'], ['app' => 'inconnue']] as $body) {
             $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $code($this->api('POST', '/api/register', $body + ['email' => "vitrine-b-{$id}@example.invalid", 'password' => self::PASSWORD])), json_encode($body));
         }
-        $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $code($this->api('POST', '/api/apps/join', ['app' => 'boutique'], $customer)));
+        // adhérer : la famille est celle du JETON de passage, jamais un champ du corps
+        $this->em();
+        $tokens = static::getContainer()->get(\App\Services\AppMembershipService\AppJoinTokens::class);
+        $pass = fn (string $family): string => $tokens->issue($customer, $family, 'web', 'essai')['token'];
+        $join = fn (array $body): mixed => $code($this->api('POST', '/api/apps/join', $body + ['termsVersion' => '1', 'accepted' => true], $customer));
+        $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $join(['joinToken' => $pass('boutique')]));
+        $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $join(['joinToken' => $pass('boutique'), 'app' => 'livingmemory']), 'un champ « app » forgé ne déplace pas une adhésion à la boutique');
+        $this->assertNotSame('STOREFRONT_UNDER_CONSTRUCTION', $join(['joinToken' => $pass('livingmemory')]), 'Living Memory n\'envoie pas de champ « app » : son adhésion n\'est pas celle de la boutique');
+        $this->assertNotSame('STOREFRONT_UNDER_CONSTRUCTION', $join(['joinToken' => str_repeat('0', 64)]), 'un jeton inconnu : la route le refuse elle-même');
+        $this->assertSame(0, (int) $this->db()->fetchOne("SELECT COUNT(*) FROM user_app_membership WHERE user_id = ? AND app = 'boutique'", [$customer->getId()]), 'aucune appartenance à la boutique n\'est née');
         $signup = $this->api('POST', '/api/register', ['app' => 'livingmemory', 'email' => 'vitrine-lm-' . bin2hex(random_bytes(3)) . '@example.invalid', 'password' => self::PASSWORD, 'firstname' => 'Léa', 'lastname' => 'Mémoire', 'termsVersion' => '1']);
         $this->assertNotSame('STOREFRONT_UNDER_CONSTRUCTION', $code($signup), 'l\'inscription par Living Memory n\'est pas celle de la boutique');
-        $this->assertNotSame('STOREFRONT_UNDER_CONSTRUCTION', $code($this->api('POST', '/api/apps/join', ['app' => 'livingmemory'], $customer)));
+        $this->assertNotSame('STOREFRONT_UNDER_CONSTRUCTION', $code($this->api('POST', '/api/register', ['app' => ' LivingMemory ', 'email' => "vitrine-b-{$id}@example.invalid"])), 'le champ est lu comme le lit l\'inscription');
         // … et un compte né par ces applications N'OUVRE PAS la boutique : il n'en voit rien et n'y commande pas
         $this->assertSame(403, $this->api('GET', '/api/category', null, $customer)->getStatusCode());
         $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $code($this->api('POST', '/api/order/create', ['x' => 1], $customer)));
@@ -155,6 +164,7 @@ class StorefrontTest extends WebTestCase
             $this->assertSame(403, $this->api('POST', $path, ['x' => 1])->getStatusCode(), $path);
         }
         $this->assertSame(403, $this->api('GET', '/cart/add/1')->getStatusCode());
+        $this->assertSame(403, $this->api('GET', '/cart/add/1', null, $admin)->getStatusCode(), 'à l\'équipe aussi : cette page écrit par une simple lecture');
         $this->assertSame(403, $this->api('GET', '/stripe-payment-succes/abc')->getStatusCode());
 
         // L'équipe voit la vraie boutique sans lien d'aperçu, y compris sur les lectures que le pare-feu de l'API ne couvre pas
@@ -248,8 +258,9 @@ class StorefrontTest extends WebTestCase
         $state = fn (): array => array_intersect_key($this->json($this->api('GET', '/api/site/storefront')), ['state' => 1, 'scope' => 1]);
         $stored = fn (): string => (string) $this->db()->fetchOne('SELECT storefront_state FROM entreprise ORDER BY id LIMIT 1');
 
-        // SANS le module Boutique, un site n'est JAMAIS bloqué, quel que soit l'état gardé : il rend « open », il n'y a rien à ouvrir
-        foreach (['construction', 'boutique', 'open'] as $kept) {
+        // Un site NÉ sans le module Boutique (état « open »), ou dont la boutique seule était en construction, n'est JAMAIS bloqué
+        // sans ce module : il rend « open », il n'y a rien à ouvrir
+        foreach (['boutique', 'open'] as $kept) {
             $this->state($kept, false);
             $this->assertSame(['state' => 'open', 'scope' => null], $state(), $kept);
             $this->assertSame(200, $this->api('GET', '/api/landingpage-settings')->getStatusCode(), $kept);
@@ -257,20 +268,39 @@ class StorefrontTest extends WebTestCase
             $this->assertNotSame('STOREFRONT_UNDER_CONSTRUCTION', $code($this->api('POST', '/api/contacts', ['x' => 1])), $kept);
         }
         $checklist = $this->json($this->api('GET', '/api/site/storefront/checklist', null, $admin));
-        $this->assertSame(['open', null, false, false], [$checklist['state'], $checklist['scope'], $checklist['shop'], $checklist['canOpen']]);
+        $this->assertSame(['open', null, false, false, []], [$checklist['state'], $checklist['scope'], $checklist['shop'], $checklist['canOpen'], $checklist['items']]);
         $this->assertSame(['open', null], [$this->json($this->api('POST', '/api/site/storefront/open', null, $admin))['state'], $this->json($this->client->getResponse())['scope']]);
         $this->assertSame('open', $stored(), 'rien à ouvrir : rien n\'est écrit');
         $this->assertSame(409, $this->api('POST', '/api/site/storefront/preview-link', null, $admin)->getStatusCode());
+        $this->assertSame(['state' => 'open', 'scope' => null, 'openedAt' => null], $this->json($this->api('POST', '/api/site/storefront/close', null, $admin)));
+        $this->assertSame(['open', 0], [$stored(), (int) $this->db()->fetchOne("SELECT COUNT(*) FROM content_audit_log WHERE resource = 'storefront'")], 'sans boutique, refermer n\'écrit rien');
+
+        // Un site NEUF jamais ouvert dont la boutique est éteinte reste FERMÉ en entier : éteindre un module n'ouvre jamais un site.
+        // Son administrateur l'ouvre d'un geste, sans liste de contrôle ni moyen de paiement (un site d'applications)
+        $this->state('construction', false);
+        $this->db()->executeStatement('UPDATE stripe_config SET account_id = NULL, live_account_id = NULL, is_active = false');
+        $this->assertSame(['state' => 'construction', 'scope' => 'site'], $state());
+        $this->assertSame([403, 'site'], [$this->api('GET', '/api/landingpage-settings')->getStatusCode(), $this->json($this->client->getResponse())['scope']]);
+        $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $code($this->api('POST', '/api/contacts', ['x' => 1])));
+        $this->assertNotSame('STOREFRONT_UNDER_CONSTRUCTION', $code($this->api('GET', '/api/memoires/mobile/pricing')), 'les applications indépendantes, elles, restent servies');
+        $checklist = $this->json($this->api('GET', '/api/site/storefront/checklist', null, $admin));
+        $this->assertSame(['construction', 'site', false, true, []], [$checklist['state'], $checklist['scope'], $checklist['shop'], $checklist['canOpen'], $checklist['items']]);
+        $this->assertSame(['state' => 'open', 'scope' => null, 'openedAt' => null], $this->json($this->api('POST', '/api/site/storefront/open', null, $admin)));
+        $this->assertSame(['open', null], [$stored(), $this->db()->fetchOne('SELECT storefront_opened_at FROM entreprise ORDER BY id LIMIT 1')], 'l\'heure d\'ouverture est celle de la boutique : elle reste vide');
+        $this->assertSame(['state' => 'open', 'scope' => null], $state());
+        $this->assertSame(200, $this->api('GET', '/api/landingpage-settings')->getStatusCode());
 
         // Le module Boutique est activé PLUS TARD sur ce site déjà en service (un droit accordé) : la boutique naît « en construction »,
         // et elle seule (étendue « shop ») ; rien d'autre du site ne se ferme
         $this->state('open', false, false);
         static::getContainer()->get(EntitlementService::class)->grant(MV_TEST_TENANT_CODE, 'module.boutique', 'manual', null, 'essai', 'boutique ajoutée', null, null, false);
         $this->flush();
-        $this->assertSame(['boutique', true], [$stored(), (bool) $this->db()->fetchOne('SELECT is_boutique_active FROM entreprise ORDER BY id LIMIT 1')]);
+        // (aucun passage d'état : c'est l'absence d'heure d'ouverture de la boutique qui la tient en construction)
+        $this->assertSame(['open', true, null], [$stored(), (bool) $this->db()->fetchOne('SELECT is_boutique_active FROM entreprise ORDER BY id LIMIT 1'), $this->db()->fetchOne('SELECT storefront_opened_at FROM entreprise ORDER BY id LIMIT 1')]);
         $this->assertSame(['state' => 'construction', 'scope' => 'shop'], $state());
         // la boutique est fermée au visiteur et au compte client…
-        foreach (['/api/category', '/api/products/by-category', '/api/boutique-settings', '/api/subscription-plans', '/api/productsid/12'] as $path) {
+        foreach (['/api/category', '/api/products/by-category', '/api/boutique-settings', '/api/subscription-plans', '/api/productsid/12', '/api/landingpage', '/api/customization/config/1',
+            '/api/booking/check/1', '/api/booking/calendar/1'] as $path) {
             $refused = $this->api('GET', $path);
             $this->assertSame([403, 'STOREFRONT_UNDER_CONSTRUCTION', 'shop'], [$refused->getStatusCode(), $this->json($refused)['code'] ?? null, $this->json($refused)['scope'] ?? null], $path);
             $this->assertSame(403, $this->api('GET', $path, null, $customer)->getStatusCode(), $path);
@@ -294,8 +324,13 @@ class StorefrontTest extends WebTestCase
         $sheet = $this->json($this->api('GET', "/api/entreprise/$id"));
         $this->assertTrue($sheet['isBoutiqueActive'], 'la fiche du site n\'est pas réduite : le site est en service');
         $this->assertSame($sheet, $this->json($this->api('GET', "/api/entreprise/$id", null, $admin)));
-        // l'équipe voit la boutique ; l'administrateur l'ouvre (avec un moyen de paiement), la referme : elle seule se referme
+        // l'équipe voit la boutique, un lien d'aperçu aussi ; l'administrateur l'ouvre (avec un moyen de paiement), la referme : elle seule se referme
         $this->assertSame(200, $this->api('GET', '/api/category', null, $admin)->getStatusCode());
+        $token = substr($this->json($this->api('POST', '/api/site/storefront/preview-link', null, $admin))['url'], -64);
+        $this->assertSame(200, $this->api('GET', '/api/category', null, null, ['HTTP_X_STOREFRONT_PREVIEW' => $token])->getStatusCode());
+        $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $code($this->api('POST', '/api/cart/quote', ['x' => 1], null, ['HTTP_X_STOREFRONT_PREVIEW' => $token])));
+        $this->db()->executeStatement('UPDATE stripe_config SET account_id = NULL, live_account_id = NULL, is_active = false');
+        $this->assertSame('STOREFRONT_NOT_READY', $code($this->api('POST', '/api/site/storefront/open', null, $admin)), 'avec une boutique, il faut un moyen de paiement');
         $this->db()->executeStatement("UPDATE stripe_config SET account_id = 'acct_essai_construction', is_active = true");
         $this->assertSame('open', $this->json($this->api('POST', '/api/site/storefront/open', null, $admin))['state']);
         $this->assertSame(['state' => 'open', 'scope' => null], $state());
@@ -316,25 +351,51 @@ class StorefrontTest extends WebTestCase
         $this->flush();
         $this->assertSame(['open', ['state' => 'open', 'scope' => null]], [$stored(), $state()]);
 
-        // Un site NEUF encore fermé en entier, dont la boutique est éteinte : il est servi sans boutique, donc « en service » ; si la
-        // boutique lui revient, elle seule est en construction : un site vitrine déjà servi ne se referme pas
+        // Un site NEUF encore fermé en entier : son module Boutique éteint, suspendu ou rendu n'y change rien, il reste fermé en
+        // entier jusqu'au geste « Ouvrir »
         $right = fn (): int => (int) $this->master()->query("SELECT id FROM tenant_entitlements WHERE tenant_code = '" . MV_TEST_TENANT_CODE . "' AND feature_key = 'module.boutique' AND status = 'active'")->fetchColumn();
         $this->state('construction', true);
         $this->assertSame(['state' => 'construction', 'scope' => 'site'], $state());
         $rights->cancel($right(), 'essai');
         $this->flush();
-        $this->assertSame(['open', ['state' => 'open', 'scope' => null]], [$stored(), $state()]);
-        $this->assertSame(200, $this->api('GET', '/api/landingpage-settings')->getStatusCode());
+        $this->assertSame([false, 'construction', ['state' => 'construction', 'scope' => 'site']], [(bool) $this->db()->fetchOne('SELECT is_boutique_active FROM entreprise ORDER BY id LIMIT 1'), $stored(), $state()]);
+        $this->assertSame(403, $this->api('GET', '/api/landingpage-settings')->getStatusCode(), 'éteindre la boutique n\'ouvre pas le site vitrine');
         $rights->grant(MV_TEST_TENANT_CODE, 'module.boutique', 'manual', null, 'essai', 'boutique revenue', null, null, false);
         $this->flush();
-        $this->assertSame(['boutique', ['state' => 'construction', 'scope' => 'shop']], [$stored(), $state()]);
-        // … un droit de plus sur un site neuf fermé en entier ne change rien à son état (les modules d'un site neuf sont posés un par un)
+        $this->assertSame([true, 'construction', ['state' => 'construction', 'scope' => 'site']], [(bool) $this->db()->fetchOne('SELECT is_boutique_active FROM entreprise ORDER BY id LIMIT 1'), $stored(), $state()]);
+
+        // La même règle quand le module est coché ou décoché à la main sur la fiche du site (espace d'administration)
+        $sync = static::getContainer()->get(\App\Services\Platform\EntitlementFlagSync::class);
+        $tick = function (bool $on) use ($sync, $id): void {
+            $this->db()->executeStatement('UPDATE entreprise SET is_boutique_active = ?', [$on ? 'true' : 'false']);
+            $this->em()->clear();
+            $sync->afterEntrepriseId($id);
+            $this->flush();
+        };
+        $this->master()->exec("DELETE FROM tenant_entitlements WHERE tenant_code = '" . MV_TEST_TENANT_CODE . "' AND feature_key = 'module.boutique'");
+        $this->state('open', false, false);
+        $tick(true);
+        $this->assertSame(['open', ['state' => 'construction', 'scope' => 'shop']], [$stored(), $state()], 'cochée sur un site en service : la boutique seule naît en construction');
         $this->state('construction', true);
-        $rights->cancel($right(), 'essai');
-        $this->state('construction', true);
-        $rights->grant(MV_TEST_TENANT_CODE, 'module.boutique', 'manual', null, 'essai', 'déjà actif', null, null, false);
-        $this->flush();
-        $this->assertSame(['construction', ['state' => 'construction', 'scope' => 'site']], [$stored(), $state()]);
+        $tick(false);
+        $this->assertSame(['construction', ['state' => 'construction', 'scope' => 'site']], [$stored(), $state()], 'décochée sur un site neuf : il reste fermé');
+
+        // Un site créé par le FORMULAIRE DE LA PLATEFORME : ses modules posés, son état de naissance l'est aussi. Avec sa boutique, il
+        // naît fermé en entier ; né sans elle, il n'est jamais bloqué
+        $setup = static::getContainer()->get(\App\Services\Platform\TenantSetupFeaturesService::class);
+        $create = function (array $features) use ($setup): array {
+            $this->master()->exec("DELETE FROM tenant_entitlement_events WHERE tenant_code = '" . MV_TEST_TENANT_CODE . "' AND feature_key = 'module.boutique'");
+            $this->master()->exec("DELETE FROM tenant_entitlements WHERE tenant_code = '" . MV_TEST_TENANT_CODE . "' AND feature_key = 'module.boutique'");
+            $this->state('construction', true);
+            $this->em()->clear();
+            $result = $setup->apply(MV_TEST_TENANT_CODE, $this->em()->getRepository(\App\Entity\Entreprise::class)->findOneBy([]), 'fr', 'America/Toronto', 'CAD', $features, ['sale', 'rental', 'subscription'], 'essai');
+            $this->flush();
+
+            return $result['errors'];
+        };
+        $this->assertSame([[], 'construction', ['state' => 'construction', 'scope' => 'site']], [$create(['module.boutique']), $stored(), $state()]);
+        $this->assertSame([[], 'open', ['state' => 'open', 'scope' => null]], [$create([]), $stored(), $state()], 'né sans boutique : en service');
+        $this->assertFalse((bool) $this->db()->fetchOne('SELECT is_boutique_active FROM entreprise ORDER BY id LIMIT 1'));
 
         // La fin de la fabrication d'un site neuf pose son état de naissance, quoi que les passages de modules aient écrit avant
         $storefront = static::getContainer()->get(StorefrontService::class);
@@ -343,9 +404,9 @@ class StorefrontTest extends WebTestCase
         $this->assertSame(['storefront_state' => 'construction', 'storefront_opened_at' => null, 'storefront_preview_hash' => null, 'storefront_preview_expires_at' => null],
             $this->db()->fetchAssociative('SELECT storefront_state, storefront_opened_at, storefront_preview_hash, storefront_preview_expires_at FROM entreprise ORDER BY id LIMIT 1'));
         $this->assertSame(['state' => 'construction', 'scope' => 'site'], $state(), 'le cache de l\'état est vidé par le geste');
-        $this->db()->executeStatement("UPDATE entreprise SET storefront_state = 'boutique', is_boutique_active = false");
+        $this->db()->executeStatement("UPDATE entreprise SET storefront_state = 'construction', is_boutique_active = false");
         $this->assertTrue($storefront->born(MV_TEST_TENANT_CODE));
-        $this->assertSame('open', $stored(), 'né sans boutique : le site est en service');
+        $this->assertSame(['open', ['state' => 'open', 'scope' => null]], [$stored(), $state()], 'né sans boutique : le site est en service (et le cache de l\'état est vidé par le geste)');
         $this->assertFalse($storefront->born('un-site-qui-n-existe-pas'));
     }
 
@@ -353,7 +414,7 @@ class StorefrontTest extends WebTestCase
     {
         // Fermé par défaut : tout ce qui n'est rangé nulle part est une route de la BOUTIQUE, fermée en construction. Toutes les routes
         // de l'application sont relues (leur chemin, hors de l'espace d'administration et des outils du développement).
-        $classes = ['kept' => [], 'apps' => [], 'showcase' => 0, 'shop' => 0];
+        $classes = ['kept' => [], 'apps' => [], 'showcase' => [], 'shop' => 0];
         $independent = 0;
         foreach (static::getContainer()->get('router')->getRouteCollection() as $name => $route) {
             $path = preg_replace('/\.1$/', '', (string) preg_replace('/\{[^}]+\}/', '1', $route->getPath()));
@@ -380,9 +441,9 @@ class StorefrontTest extends WebTestCase
         }
         $this->assertGreaterThan(100, $independent, 'les routes de Mémoires Vivantes, de Living Memory et de Boussole');
         $this->assertGreaterThan(400, $classes['shop'], 'tout le reste : la boutique et ce que personne n\'a rangé');
-        $this->assertGreaterThan(80, $classes['showcase']);
         sort($classes['kept']);
         sort($classes['apps']);
+        sort($classes['showcase']);
         // les routes servies à tous, toujours : écrites en toutes lettres
         $this->assertSame([
             'account_otp', 'api_app_activate', 'api_app_profile', 'api_currencies_get', 'api_entreprise_get', 'api_entreprise_update', 'api_landingpage_config_rollback',
@@ -396,6 +457,38 @@ class StorefrontTest extends WebTestCase
         // les routes de compte que les applications indépendantes partagent (et le reçu numérique de la caisse) : en toutes lettres aussi
         $this->assertSame(['api_account_delete', 'api_account_membership_leave', 'api_account_memberships', 'api_app_join', 'api_profile_get', 'api_profile_update', 'api_resend_verification',
             'api_validate_token', 'app_verify_email', 'get_stripe_config', 'notifications_appareils_delete', 'notifications_appareils_register', 'pos_public_receipt', 'register'], $classes['apps']);
+        // le site vitrine, servi quand la boutique seule est en construction : en toutes lettres aussi. Une route qui sert un article,
+        // un prix ou une disponibilité n'a rien à faire ici (la relecture en avait trouvé trois)
+        $this->assertSame([
+            '_api_/vehicle_products/{id}{._format}_delete', '_api_/vehicle_products/{id}{._format}_get',
+            '_api_/vehicle_products/{id}{._format}_patch', '_api_/vehicle_products/{id}{._format}_put',
+            '_api_/vehicle_products{._format}_get_collection', '_api_/vehicle_products{._format}_post', '_api_/vehicles/{id}{._format}_delete',
+            '_api_/vehicles/{id}{._format}_get', '_api_/vehicles/{id}{._format}_patch', '_api_/vehicles/{id}{._format}_put',
+            '_api_/vehicles{._format}_get_collection', '_api_/vehicles{._format}_post', 'api_baniere_statique_get_one', 'api_baniere_statique_list',
+            'api_banniere_create', 'api_banniere_delete', 'api_banniere_get_one', 'api_banniere_list', 'api_banniere_update',
+            'api_candidature_create', 'api_candidature_get_one', 'api_candidature_list', 'api_components_config', 'api_contact_create',
+            'api_contact_create_alias', 'api_contact_delete', 'api_contact_get_one', 'api_contact_list', 'api_contact_submit', 'api_contact_update',
+            'api_embed_get_one', 'api_embed_list', 'api_emploi_create', 'api_emploi_delete', 'api_emploi_list', 'api_emploi_update',
+            'api_explore_cards', 'api_feature_create', 'api_feature_delete', 'api_feature_order', 'api_features', 'api_financement_submit',
+            'api_form_submissions_delete', 'api_form_submissions_export', 'api_form_submissions_forms', 'api_form_submissions_get',
+            'api_form_submissions_list', 'api_form_submissions_status', 'api_form_submissions_submit', 'api_landingpage_settings_get',
+            'api_landingpage_settings_update', 'api_multilien_create', 'api_multilien_delete', 'api_multilien_get_one', 'api_multilien_list',
+            'api_multilien_update', 'api_newsletter_list', 'api_newsletter_subscribe', 'api_offers', 'api_presentation_get_one',
+            'api_presentation_group_add', 'api_presentation_group_get_one', 'api_presentation_group_list', 'api_presentation_group_order',
+            'api_presentation_group_remove', 'api_presentation_list', 'api_recherche_create', 'api_recherche_delete', 'api_recherche_get_one',
+            'api_recherche_list', 'api_recherche_update', 'api_reservations_booked_slots', 'api_reservations_confirm', 'api_reservations_create',
+            'api_reservations_list', 'api_reservations_services', 'api_service_families_create', 'api_service_families_delete',
+            'api_service_families_list', 'api_service_families_update', 'api_service_offer_create', 'api_service_offer_delete',
+            'api_service_offer_get_one', 'api_service_offer_list', 'api_service_offer_update', 'api_shared_media_get_one',
+            'api_shared_media_get_one.1', 'api_shared_media_list', 'api_shared_media_list.1', 'api_social_networks_list', 'api_team_create',
+            'api_team_delete', 'api_team_get', 'api_team_list', 'api_team_update', 'api_vehicles_carousel', 'api_video_create', 'api_video_create.1',
+            'api_video_delete', 'api_video_delete.1', 'api_video_get_one', 'api_video_get_one.1', 'api_video_list', 'api_video_list.1',
+            'api_video_update', 'api_video_update.1', 'app_contact_new', 'cgu_condition', 'delete_admin_preset', 'get_admin_presets',
+            'get_admin_settings', 'get_home_slider', 'save_admin_preset', 'update_admin_settings',
+        ], $classes['showcase'], 'routes du site vitrine : rien de la boutique (`StorefrontGateSubscriber::SHOWCASE`)');
+        foreach (['/api/landingpage', '/api/customization/config/12', '/api/booking/check/12', '/api/booking/calendar/12'] as $path) {
+            $this->assertSame(['shop', true], [StorefrontGateSubscriber::classOf($path), StorefrontGateSubscriber::closed($path, 'shop')], $path);
+        }
         // aucune adresse voisine d'une route ouverte n'est ouverte
         foreach (['/api/products/12', '/api/productsid/12', '/api/category', '/api/vehicles.json', '/api/entreprise/12/x', '/api/entreprises', '/api/login/x', '/api/site/storefront/open', '/shop', '/api/tenant/hostsx', '/API/login', '/uploadsx',
             '/administrateur', '/api/memoiresx', '/api/boussoles', '/api/apps/boutique/terms', '/api/profilex', '/api/accounts', '/api/une-route-que-personne-n-a-rangee'] as $path) {
@@ -407,7 +500,7 @@ class StorefrontTest extends WebTestCase
             '/api/import-invitation/accept', '/api/products/12/reviews', '/register', '/checkout/confirm', '/cart/add/3', '/create-checkout-session/abc', '/stripe-payment-succes/abc'] as $path) {
             $this->assertSame([true, true], [StorefrontGateSubscriber::order($path, 'site'), StorefrontGateSubscriber::order($path, 'shop')], $path);
         }
-        foreach (['/api/contacts', '/api/contacts/create', '/api/contact/submit', '/api/newsletter/subscribe', '/api/form-submissions', '/api/reservations', '/api/candidatures', '/api/financement/submit', '/api/booking/x', '/contact/'] as $path) {
+        foreach (['/api/contacts', '/api/contacts/create', '/api/contact/submit', '/api/newsletter/subscribe', '/api/form-submissions', '/api/reservations', '/api/candidatures', '/api/financement/submit', '/contact/'] as $path) {
             $this->assertSame([true, false], [StorefrontGateSubscriber::order($path, 'site'), StorefrontGateSubscriber::order($path, 'shop')], $path);
         }
         // … et rien de l'équipe n'y est : ni la vente en caisse, ni la gestion d'une demande ou d'un article
@@ -453,9 +546,16 @@ class StorefrontTest extends WebTestCase
         $this->assertSame('boutique', $stored());
         $closed = $this->client->followRedirect();
         $this->assertSame(['construction', 'shop'], [$closed->filter('[data-etat]')->attr('data-etat'), $closed->filter('[data-etat]')->attr('data-etendue')]);
-        // sans le module Boutique : rien à ouvrir, aucun bouton
+        // un site jamais ouvert dont la boutique est éteinte : il s'ouvre d'un geste, sans liste de contrôle
         $this->state('construction', false);
-        $none = $this->client->request('GET', $url);
+        $off = $this->client->request('GET', $url);
+        $this->assertSame(['construction', 'site'], [$off->filter('[data-etat]')->attr('data-etat'), $off->filter('[data-etat]')->attr('data-etendue')]);
+        $this->assertCount(0, $off->filter('table.ouverture-controle tr[data-point]'));
+        $this->assertSame('Ouvrir le site', $off->filter('form.ouverture-ouvrir button')->text());
+        $this->client->submit($off->filter('form.ouverture-ouvrir')->form());
+        $this->assertSame('open', $stored());
+        // un site en service sans boutique : rien à ouvrir, aucun bouton
+        $none = $this->client->followRedirect();
         $this->assertSame(['open', ''], [$none->filter('[data-etat]')->attr('data-etat'), $none->filter('[data-etat]')->attr('data-etendue')]);
         $this->assertCount(0, $none->filter('form'));
         $this->assertStringContainsString('rien à ouvrir', $none->filter('[data-ouverture-site]')->text());
@@ -473,9 +573,10 @@ class StorefrontTest extends WebTestCase
         $this->flush();
     }
 
-    /** Pose l'état gardé de la boutique du site de test, son module, et dit si elle a déjà été ouverte une fois */
-    private function state(string $state, bool $shop, bool $openedOnce = false): void
+    /** Pose l'état gardé du site de test, son module Boutique, et dit si la boutique a déjà été ouverte une fois (par défaut : oui pour une boutique active d'un site « open ») */
+    private function state(string $state, bool $shop, ?bool $openedOnce = null): void
     {
+        $openedOnce ??= $state === 'open' && $shop;
         $this->db()->executeStatement('UPDATE entreprise SET storefront_state = ?, is_boutique_active = ?, storefront_opened_at = ' . ($openedOnce ? 'NOW()' : 'NULL'), [$state, $shop ? 'true' : 'false']);
         $this->flush();
     }
