@@ -15,8 +15,12 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
  */
 class SupportRoleMatrixTest extends WebTestCase
 {
-    /** Routes de son propre compte, ouvertes à tout utilisateur connecté (lecture et suppression de soi-même) */
-    private const OWN_ACCOUNT = [];
+    /**
+     * Routes de son propre compte, ouvertes à tout utilisateur connecté (lecture et suppression de soi-même). Lot AG-3a (16/11/2026) :
+     * ses CONTEXTES (son mode, son site, ses deux écrans d'assistance) : la seule route que la garde lui ouvre hors de son module, par
+     * son chemin exact ; ce qu'elle lui rend est vérifié par `tests/Functional/Screens/MeContextsApiTest.php`.
+     */
+    private const OWN_ACCOUNT = ['GET /api/me/contexts'];
 
     private KernelBrowser $client;
 

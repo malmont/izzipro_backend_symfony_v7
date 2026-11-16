@@ -1083,7 +1083,9 @@ class ConsoleApiTest extends WebTestCase
             $this->assertSame("Contre {$revenue['lastYear']} l'an dernier, avant la migration.", $answer['blocks'][0]['text']);
             // la CARTE range cet an dernier à part, avec sa note : une application qui ne connaît pas la marque n'affiche pas « An dernier »
             $cards = array_values(array_filter($answer['blocks'], static fn (array $block): bool => $block['type'] === 'figures'))[0]['items'];
-            $this->assertSame(['value' => 432100, 'delta' => -432100, 'deltaPercent' => $cards[0]['lastYearBeforeMigration']['deltaPercent'], 'note' => 'avant la migration'], $cards[0]['lastYearBeforeMigration']);
+            // (l'écart est celui du chiffre d'affaires du mois, que d'autres essais de la suite font varier : il se calcule, il ne se devine pas)
+            $this->assertSame(['value' => 432100, 'delta' => (float) $cards[0]['value'] - 432100, 'deltaPercent' => $cards[0]['lastYearBeforeMigration']['deltaPercent'], 'note' => 'avant la migration'],
+                array_replace($cards[0]['lastYearBeforeMigration'], ['delta' => (float) $cards[0]['lastYearBeforeMigration']['delta']]));
             foreach (['lastYear', 'deltaLastYear', 'deltaPercentLastYear'] as $flat) {
                 $this->assertArrayNotHasKey($flat, $cards[0], "$flat : jamais à plat pour un chiffre venu d'ailleurs");
             }
