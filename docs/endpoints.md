@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (607)
+## Boutique et commun (613)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -658,7 +658,13 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/platform/shipping/balances/{code}` | ROLE_SUPER_ADMIN | `Controller\PlatformController\PlatformShippingController::balance` |
 | PUT | `/api/platform/shipping/settings` | ROLE_SUPER_ADMIN | `Controller\PlatformController\PlatformShippingController::settings` |
 | GET | `/api/platform/shipping` | ROLE_SUPER_ADMIN | `Controller\PlatformController\PlatformShippingController::index` |
+| POST | `/api/platform/site-requests/{id}/abandon` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformSitesController::abandon` |
+| POST | `/api/platform/site-requests/{id}/resume` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformSitesController::resume` |
+| GET | `/api/platform/site-requests/{id}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformSitesController::show` |
+| GET | `/api/platform/site-requests` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformSitesController::requests` |
+| GET | `/api/platform/sites/badges` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformSitesController::list` |
 | GET | `/api/platform/sites` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::sites` |
+| POST | `/api/platform/sites` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformSitesController::create` |
 | POST | `/api/pos/approvals` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosPinController::approve` |
 | GET | `/api/pos/archive/{year}` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosArchiveController::download` |
 | GET | `/api/pos/audit/verify` | ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosAuditController::verify` |
@@ -913,7 +919,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (104)
+## Administration (EasyAdmin) (107)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -984,6 +990,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/plateforme/mode` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::switchMode` |
 | POST | `/admin/plateforme/offre/{code}` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::offer` |
 | POST | `/admin/plateforme/politique/{feature}` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::policy` |
+| POST | `/admin/plateforme/sites/creer` | ROLE_ADMIN | `Controller\Admin\PlatformSitesAdminController::create` |
+| POST | `/admin/plateforme/sites/demandes/{id}/{geste}` | ROLE_ADMIN | `Controller\Admin\PlatformSitesAdminController::gesture` |
+| GET | `/admin/plateforme/sites` | ROLE_ADMIN | `Controller\Admin\PlatformSitesAdminController::index` |
 | GET | `/admin/plateforme` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::index` |
 | GET, POST | `/admin/pos/archive` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\PosArchiveAdminController::index` |
 | GET, POST | `/admin/pos/coupons` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\PosCouponAdminController::index` |

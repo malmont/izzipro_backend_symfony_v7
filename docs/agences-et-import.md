@@ -511,6 +511,86 @@ sans le module Boutique, le site est en service aussitôt) : l'agence lit son é
   renseignée hors des comptes.
 - Aucune agence n'existe en production : la première sera une agence de test, à la campagne de tests.
 
+## 9. Lot TYPE-1 : le type d'un site dès sa création (16/11/2026)
+
+Code : `src/Services/Platform/Sites/` (`PlatformSiteService`, `PlatformSiteRequestRepository`), `src/Controller/PlatformController/
+PlatformSitesController.php`, `src/Controller/Admin/PlatformSitesAdminController.php`. Tests : `tests/Functional/Platform/PlatformSitesTest.php`.
+Base maître : `ops/sql/platform_sites_master.sql` (une table, `platform_site_requests`).
+
+### 9.1 Le principe
+
+Le super administrateur crée un site en choisissant son **type** : `normal` ou `agency`. Le type est un RACCOURCI qui enchaîne des
+gestes existants, pas un champ enregistré : il reste porté par les liens de la base maître, et les pastilles en découlent. Une seule
+logique sert la route de l'API et l'écran « Plateforme : sites » d'EasyAdmin (le panneau du front la reprendra). L'ancien formulaire
+`/setup/new-store`, protégé par une clé, reste tel quel. Le type « groupe » viendra avec le lot qui crée le groupe
+(`docs/plan-entree-et-groupe.md`).
+
+Une demande est une ligne de la base maître, écrite AVANT sa première étape, avec ses étapes et l'état de chacune (`todo`, `done`,
+`failed`, `waiting`, `skipped`) :
+
+| Étape | Ce qu'elle fait | Rejouée |
+|---|---|---|
+| `site` | la fabrication d'AG-2 (§ 8.2), sans agence : copie du site de référence sous le verrou commun des fabrications, comptes hérités nettoyés, fiche neuve, modules cochés posés comme des **accords de la plateforme** (source `manual`, sans essai automatique, sans courriel), site né en construction s'il a la boutique | jamais refaite une fois faite |
+| `invitation` | l'administrateur désigné est invité par courriel (lien de 7 jours). Le courriel ne nomme aucune agence | un nouveau lien, l'ancien ne vaut plus |
+| `agency` (type agence) | la fiche d'agence naît avec ce site pour attache, par le geste d'AG-1 (§ 7) ; les jours d'essai et le nombre de sites du formulaire remplacent ceux du forfait d'essai | si la fiche existe déjà pour ce site, rien n'est doublé |
+| `manager` (type agence, case cochée par défaut) | le rôle de responsable de l'agence est donné à l'administrateur **quand il accepte son invitation**, pas avant : l'étape attend (`waiting`) | donné à l'acceptation (`/api/password-reset/confirm`), ou au rattrapage (lecture de la liste, `app:agency:sites:build`) |
+
+États d'une demande : `pending` (en attente), `building` (en cours), `ready` (faite ; le rôle de responsable peut encore attendre),
+`incomplete` (**à compléter** : une étape a échoué APRÈS la création du site), `failed` (échec AVANT que le site existe : rien n'a été
+créé, on redemande), `abandoned`.
+
+- Rien n'est défait en silence : une demande à compléter garde l'étape en cause (`failedStep`) et son code (`errorCode`), et le site
+  porte la pastille « Création à compléter ».
+- **Reprendre** rejoue les seules étapes manquantes. Elle peut désigner une autre adresse pour l'administrateur tant que son
+  invitation n'est pas partie (adresse fausse, ou déjà celle d'un compte du site neuf : `ACCOUNT_EXISTS`).
+- **Abandonner** (demande à compléter, ou pas encore commencée) : le site, s'il existe, reste un site normal, ni défait ni supprimé ;
+  la demande le dit (`site`).
+- Une demande vivante (en attente, en cours, à compléter) retient son code : ni la plateforme ni une agence ne le redemandent.
+
+### 9.2 Routes (`ROLE_SUPER_ADMIN`, règle `^/api/platform`)
+
+| Route | Rôle |
+|---|---|
+| `POST /api/platform/sites` | `{ type: normal \| agency, code, name, adminEmail, adminFirstName?, adminLastName?, locale?, modules?, agency?: { name, code?, contactEmail?, isTest?, trialDays?, maxSites?, managerRole? } }` → 202 `{ request }`. `modules` absent : page publique et boutique |
+| `GET /api/platform/sites/badges?badge=` | les sites et leurs pastilles → `{ sites: [{ code, name, host, badges: [{ type, agencyId?, agencyCode?, agencyName?, requestId? }] }], badges }` |
+| `GET /api/platform/site-requests`, `GET …/{id}` | `{ id, type, siteCode, name, adminEmail, status, steps, failedStep, errorCode, agencyId, site, invitation, modules, warnings, requestedAt, startedAt, finishedAt }` |
+| `POST /api/platform/site-requests/{id}/resume` | corps facultatif `{ adminEmail }` → 202 |
+| `POST /api/platform/site-requests/{id}/abandon` | → 200 |
+
+`GET /api/platform/sites` reste la grille sites × fonctionnalités de la console de pilotage : la liste à pastilles a sa propre adresse.
+Refus : 422 `VALIDATION_FAILED { errors: [{ path, message }] }`, 409 `PLATFORM_SITE_CODE_RESERVED`, `PLATFORM_SITE_CODE_TAKEN`,
+`PLATFORM_SITE_REQUEST_STATE`, 404 `PLATFORM_SITE_REQUEST_NOT_FOUND`. Codes d'une étape en échec : `SITE_CODE_TAKEN`, `BUILD_FAILED`,
+`ACCOUNT_EXISTS`, `EMAIL_FAILED`, `NO_LINK`, `INVITATION_FAILED`, et les codes d'agence (`AGENCY_CODE_TAKEN`…).
+
+### 9.3 Pastilles
+
+Calculées à la lecture depuis les liens de la base maître, jamais depuis un champ « mode » ; un site peut en porter plusieurs, et la
+liste se filtre :
+
+| Pastille | Lien |
+|---|---|
+| `independent` (« Indépendant ») | aucun lien d'agence |
+| `agency_home` (« Agence X ») | le site est le site d'attache d'une agence non fermée |
+| `agency_managed` (« Géré par l'agence X ») | le site est géré par une agence non fermée |
+| `creation_incomplete` (« Création à compléter ») | une demande de création de ce site reste à compléter |
+
+« Groupe X » et « Site principal » viendront avec le lot du groupe.
+
+### 9.4 Écran
+
+EasyAdmin, super administrateur : **« Plateforme : sites »** (`/admin/plateforme/sites`) : la liste filtrable, le formulaire de création
+(type, code, nom, administrateur, langue, modules, et le bloc de l'agence), et les demandes avec leurs étapes, « Reprendre » et
+« Abandonner ».
+
+### 9.5 Limites connues
+
+- Les fabrications d'agence et de la plateforme partagent un seul verrou : une copie du site de référence à la fois.
+- Une fabrication interrompue (worker arrêté pendant la copie) laisse la demande « en cours » : le passage `app:agency:sites:build`
+  ne reprend que les demandes en attente. À voir à la main, comme pour une agence (§ 8.10).
+- Le rôle de responsable n'est donné qu'à l'adresse désignée par la demande ; si une autre personne doit l'être, la page
+  « Plateforme : agences » le fait.
+- Le pays, la devise et le fuseau du site neuf suivent le modèle : ils se règlent ensuite dans le site.
+
 ## Tenir cette fiche à jour
 
 À chaque décision du propriétaire, la reporter au § 1 ou au § 6. À chaque lot codé, le dire en tête et dans le
