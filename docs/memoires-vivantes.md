@@ -695,6 +695,22 @@ Détail : `docs/architecture.md`, « Modules et mode de la plateforme » ; `docs
 - Après une modification d'un handler : `messenger:stop-workers` (voir `docs/architecture.md`), ou attendre le
   redémarrage automatique (15 min).
 
+## À reprendre avec Mémoires Vivantes (décisions du propriétaire, 16/11/2026)
+
+Mémoires Vivantes est traitée **comme un projet à part** : aucun lot n'y touche sans demande du propriétaire, sauf ce qui relève de
+l'authentification ou des services communs. Deux constats faits par des lots de sécurité de la plateforme sont donc **laissés tels
+quels**, et notés ici pour la reprise :
+
+- **Coût d'impression.** Le devis et les commandes d'impression rendent au propriétaire d'un livre ce que l'imprimeur nous facture
+  (`print_cost`, `shipping_cost`, `tax_cost`, `total_cost`) à côté du prix qu'il paie (`billing`, `total`, `charged_amount`) :
+  `POST /api/memoires/books/{id}/print/estimate`, `GET /api/memoires/books/{id}/print/orders`, `GET /api/memoires/print/orders/
+  {orderId}`, et la fiche du livre. La différence est la marge d'impression. Trouvé par la relecture du lot COST-1 ; décision : on
+  n'y touche pas pour l'instant.
+- **Lien d'activation.** La console de l'équipe (`GET /api/memoires/admin/users`, `ROLE_ADMIN` ou `ROLE_MEMOIRES_RESPONSABLE`) rend
+  `activationUrl` pour tout compte en attente : le lien porte le jeton de vérification du compte, pour que l'équipe le transmette à
+  la main. Exception déclarée du garde-fou des secrets (`tests/Functional/Security/SecretsNeverShownTest.php`, lot SECRETS-1) ; à
+  trancher à la reprise.
+
 ## Tenir cette fiche à jour
 
 À chaque nouvel endpoint, table, type de message ou changement des types de livre : mettre à jour cette fiche, puis
