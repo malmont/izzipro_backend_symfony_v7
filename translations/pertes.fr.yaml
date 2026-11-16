@@ -14,6 +14,7 @@ role:
 user:
     unnamed: 'Compte n° %id%'
 subject:
+    cash_register: Poste de caisse
     user_window: Série d'actes d'un même compte
     terminal: Tablette de caisse
 onDutyNotice: 'Ces personnes étaient en poste au moment des faits. Ce n''est pas une accusation : la décision vous revient, après vérification.'
@@ -78,6 +79,12 @@ rules:
         description: 'Plusieurs validations d''un responsable refusées sur une même tablette dans une même journée (code faux, code bloqué, compte sans le droit de valider).'
         params:
             perDay: Nombre de validations refusées dans la journée qui ouvre un constat
+    UNREAD_SOLD:
+        label: Articles suivis vendus sans lecture
+        description: 'Sur un même poste de caisse et une même journée, plusieurs articles suivis ont été vendus sans que leur pièce soit lue, ni sur le tapis du comptoir ni à la sortie. Par poste, jamais par personne.'
+        params:
+            minCount: Nombre d'articles vendus sans lecture dans la journée qui ouvre un constat
+            minShare: Part minimale de ces articles parmi les articles suivis vendus ce jour-là sur le poste (en %)
 summary:
     default: Constat relevé dans l'activité de la caisse.
     CASH_DISCREPANCY:
@@ -100,6 +107,9 @@ summary:
         rule: '%count% prix baissés à la main pendant une même session, %amount% de baisse au total.'
     APPROVAL_PATTERN:
         rule: '%count% validations d''un responsable refusées sur une même tablette dans la journée.'
+    UNREAD_SOLD:
+        rule: 'Articles suivis vendus sans lecture ce jour-là à ce poste : %unread% sur %tracked% (%share% %).'
+        below: 'Articles suivis vendus sans lecture ce jour-là à ce poste : %unread% sur %tracked% (%share% %), sous les seuils depuis la dernière clôture.'
 evidence:
     noReason: Aucun motif saisi
     z_report:
@@ -118,9 +128,17 @@ evidence:
         title: Prix saisi à la main
     approval:
         title: Validation refusée
+    sale_units:
+        title: Articles suivis vendus sur le poste ce jour-là
     'yes': Oui
     'no': Non
     lines:
+        saleDay: Journée
+        trackedSold: Articles suivis vendus
+        unreadSold: Vendus sans lecture
+        linkedByCounter: Lus sur le tapis du comptoir
+        caughtUpAtExit: Rattrapés à la sortie
+        returnedUnits: Revenus (retour ou vente annulée)
         reportNumber: Rapport de clôture n°
         closedAt: Caisse fermée le
         closedBy: Fermée par
@@ -258,6 +276,10 @@ exercise:
             label: Validations refusées sur une tablette
             description: 'Plusieurs demandes de validation par un responsable sont refusées le même jour sur la même tablette.'
             learn: 'Lire ce qui a été demandé et pourquoi cela a été refusé : un code faux, ou un essai de trop.'
+        unread_sold:
+            label: Articles suivis vendus sans lecture
+            description: 'Sur un poste de caisse, dans la journée, plusieurs articles suivis sont vendus sans que leur pièce soit lue.'
+            learn: 'Lire les nombres du poste : le tapis était-il branché, les articles sont-ils posés dessus avant le paiement ? Le constat ne désigne personne.'
         cash_shortage_series:
             label: Manques de caisse répétés par un même compte
             description: 'Plusieurs clôtures avec un manque sont fermées par le même compte sur une courte période.'

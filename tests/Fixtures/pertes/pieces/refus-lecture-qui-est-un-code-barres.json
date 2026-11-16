@@ -4,7 +4,7 @@
         "path": "/api/gestion/pertes/puces/associer?locale=fr",
         "body": {
             "pieceId": 2,
-            "identifier": "ABCDEF037F95C2AA",
+            "identifier": "ABCDEF035D8303AA",
             "technology": "uhf"
         }
     },
@@ -13,12 +13,12 @@
     "body": {
         "error": "TAG_IS_BARCODE",
         "code": "TAG_IS_BARCODE",
-        "message": "Cette lecture est le code-barres de « Sac de plage (exemple 7F95C2), variante n° 25 », pas une puce : lisez la puce.",
+        "message": "Cette lecture est le code-barres de « Sac de plage (exemple 5D8303), variante n° 25 », pas une puce : lisez la puce.",
         "holder": {
             "type": "variant",
             "id": 25,
             "productId": 16,
-            "label": "Sac de plage (exemple 7F95C2), variante n° 25"
+            "label": "Sac de plage (exemple 5D8303), variante n° 25"
         }
     }
 }

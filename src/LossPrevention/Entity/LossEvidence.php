@@ -25,6 +25,8 @@ class LossEvidence
     public const DISCOUNT = 'discount';
     public const PRICE_CHANGE = 'price_change';
     public const APPROVAL = 'approval';
+    /** Lot L3-b2b : les nombres d'articles suivis vendus sur un poste et une journée, à une clôture (aucune vente, aucun compte) */
+    public const SALE_UNITS = 'sale_units';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

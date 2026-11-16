@@ -93,7 +93,7 @@ class LossAnalyseCommand extends Command
                     $this->logger->error(sprintf('Prévention des pertes : site %s, courriel de résumé en échec : %s', $row['code'], $e->getMessage()), ['exception' => $e]);
                 }
                 if ($siteSkipped > 0) {
-                    $this->logger->error(sprintf('Prévention des pertes : site %s, %d entrée(s) du journal de caisse sautée(s) par une règle en échec', $row['code'], $siteSkipped));
+                    $this->logger->error(sprintf('Prévention des pertes : site %s, %d entrée(s) du journal de caisse sautée(s) par une règle, ou par l\'étape qui relie les ventes aux pièces, en échec', $row['code'], $siteSkipped));
                 }
             } catch (\Throwable $e) {
                 ++$errors;

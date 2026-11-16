@@ -1439,6 +1439,16 @@ une vente et doit avoir une session ouverte (mêmes refus : `CASH_REGISTER_NOT_F
 comme « pas de contrôle » ; hors ligne, elle n'appelle pas. La route est dans le module (`src/LossPrevention/`) : aucun code de
 caisse n'est touché. Contrat complet : `docs/prevention-pertes.md` § 16.15.
 
+**Gestes au comptoir** (lots L3-b2a et L3-b2b, 16/11/2026 ; à reprendre dans le guide du caissier de l'application) :
+- avant le paiement, **poser les articles suivis sur le tapis** ; la caisse affiche ceux qui n'ont pas été lus, le caissier les
+  pose ou continue ;
+- **retour d'un article suivi : poser la pièce rendue sur le tapis AVANT de valider le retour**. C'est ainsi que le module sait
+  quelle pièce revient ; elle redevient vendable. Pour la revendre, la reposer sur le tapis (une pièce rendue restée sur le tapis
+  n'est pas prise pour la vente suivante : dans un échange du même article, c'est la pièce neuve qui sort) ;
+- une vente annulée puis ressaisie retrouve seule sa pièce, sans rien reposer ;
+- rien de tout cela ne bloque la caisse : sans tapis, sans réseau ou sans le module, la vente se fait comme avant.
+
+
 ### Cartes-cadeaux : réponse uniforme et limite de codes refusés (S2.8)
 
 - Carte **inconnue, annulée ou remplacée** : même réponse 404 `GIFT_CARD_NOT_FOUND` « Carte-cadeau ou avoir inconnu ou

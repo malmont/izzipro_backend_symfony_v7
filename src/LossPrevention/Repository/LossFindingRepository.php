@@ -51,6 +51,18 @@ class LossFindingRepository extends EntityRepository
     }
 
     /**
+     * Les faits du vrai constat de cette clé, s'il existe (la clé est unique parmi les vrais constats).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function factsOf(string $dedupKey): ?array
+    {
+        $facts = $this->getEntityManager()->getConnection()->fetchOne('SELECT facts FROM loss_finding WHERE exercise = false AND dedup_key = ? ORDER BY id DESC LIMIT 1', [$dedupKey]);
+
+        return is_string($facts) ? (json_decode($facts, true) ?: []) : null;
+    }
+
+    /**
      * Crée un constat (numéro suivant du site). L'appelant tient le verrou de l'analyse : un seul écrivain à la fois.
      *
      * Un constat d'EXERCICE (`exercise` vrai, `number` fourni par l'appelant) porte un numéro NÉGATIF, l'opposé du numéro de l'exercice : il ne

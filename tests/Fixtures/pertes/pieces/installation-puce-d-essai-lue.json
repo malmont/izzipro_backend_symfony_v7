@@ -3,7 +3,7 @@
         "method": "POST",
         "path": "/api/gestion/pertes/installation/puce-test?locale=fr",
         "body": {
-            "identifier": "077F95C2",
+            "identifier": "075D8303",
             "technology": "nfc"
         }
     },
@@ -11,7 +11,7 @@
     "headers": {},
     "body": {
         "ok": true,
-        "identifier": "077F95C2",
+        "identifier": "075D8303",
         "technology": "nfc",
         "refusal": null,
         "hint": null,

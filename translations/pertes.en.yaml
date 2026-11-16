@@ -14,6 +14,7 @@ role:
 user:
     unnamed: 'Account no. %id%'
 subject:
+    cash_register: Till
     user_window: Series of actions by the same account
     terminal: Cash register tablet
 onDutyNotice: 'These people were on duty when the events took place. This is not an accusation: the decision is yours, after checking.'
@@ -78,6 +79,12 @@ rules:
         description: 'Several manager approvals refused on the same tablet during the same day (wrong code, locked code, account not allowed to approve).'
         params:
             perDay: Number of refused approvals during the day that opens a finding
+    UNREAD_SOLD:
+        label: Tracked items sold without a read
+        description: 'On one till and one day, several tracked items were sold without their piece being read, neither on the counter mat nor at the exit. Per till, never per person.'
+        params:
+            minCount: Number of items sold without a read in the day that opens a finding
+            minShare: Minimum share of these items among the tracked items sold that day on the till (in %)
 summary:
     default: Finding raised from cash register activity.
     CASH_DISCREPANCY:
@@ -100,6 +107,9 @@ summary:
         rule: '%count% prices lowered by hand during the same session, %amount% of reduction in total.'
     APPROVAL_PATTERN:
         rule: '%count% manager approvals refused on the same tablet during the day.'
+    UNREAD_SOLD:
+        rule: 'Tracked items sold without a read that day on this till: %unread% out of %tracked% (%share% %).'
+        below: 'Tracked items sold without a read that day on this till: %unread% out of %tracked% (%share% %), below the thresholds since the last closing.'
 evidence:
     noReason: No reason entered
     z_report:
@@ -118,9 +128,17 @@ evidence:
         title: Price entered by hand
     approval:
         title: Refused approval
+    sale_units:
+        title: Tracked items sold on the till that day
     'yes': 'Yes'
     'no': 'No'
     lines:
+        saleDay: Day
+        trackedSold: Tracked items sold
+        unreadSold: Sold without a read
+        linkedByCounter: Read on the counter mat
+        caughtUpAtExit: Caught up at the exit
+        returnedUnits: Returned (return or cancelled sale)
         reportNumber: Closing report no.
         closedAt: Register closed on
         closedBy: Closed by
@@ -259,6 +277,10 @@ exercise:
             label: Refused approvals on a tablet
             description: 'Several manager approval requests are refused on the same day on the same tablet.'
             learn: 'Read what was requested and why it was refused: a wrong code, or one attempt too many.'
+        unread_sold:
+            label: Tracked items sold without a read
+            description: 'On one till, during the day, several tracked items are sold without their piece being read.'
+            learn: 'Read the numbers of the till: was the mat plugged in, are the items put on it before payment? The finding names nobody.'
         cash_shortage_series:
             label: Repeated cash shortages by the same account
             description: 'Several closings with a shortage are closed by the same account over a short period.'

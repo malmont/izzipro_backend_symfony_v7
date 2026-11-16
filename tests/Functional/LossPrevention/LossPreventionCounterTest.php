@@ -462,6 +462,50 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $this->assertSame(401, $this->client->getResponse()->getStatusCode());
     }
 
+    public function testABoxAndATillWorkOnASiteStillUnderConstruction(): void
+    {
+        // Un commerçant installe son matériel AVANT d'ouvrir : sur un site neuf, fermé en entier (lot CONSTRUCTION, étendue « site »), le
+        // boîtier s'inscrit, donne signe de vie et envoie ses faits, la caisse pose sa question, le gérant règle et lit son matériel
+        [$variant] = $this->article('Robe');
+        $nfc = $this->tagged($variant, '01');
+        $kept = $this->db->fetchAssociative('SELECT storefront_state, is_boutique_active, storefront_opened_at FROM entreprise ORDER BY id LIMIT 1');
+        $set = function (string $state, bool $shop, ?string $openedAt): void {
+            $this->db->executeStatement('UPDATE entreprise SET storefront_state = ?, is_boutique_active = ?, storefront_opened_at = ?', [$state, $shop ? 'true' : 'false', $openedAt]);
+            static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateSite(MV_TEST_TENANT_CODE, MV_TEST_TENANT_DB);
+        };
+        try {
+            $set('construction', true, null);
+            $front = $this->json($this->call('GET', '/api/site/storefront', null, null));
+            $this->assertSame(['construction', 'site'], [$front['state'], $front['scope']], 'le site est fermé en entier');
+            $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($this->call('GET', '/api/landingpage-settings', null, null), 403)['code'] ?? null, 'témoin : le visiteur est bien refusé');
+
+            // le boîtier : inscription par sa clé, signe de vie, faits ; le gérant relie le tapis à un poste et lit le tableau de santé
+            [$id, $token, $devices] = $this->enrolled('Comptoir', [['serial' => "TAPIS-$this->s", 'kind' => 'counter_mat', 'status' => 'ok']]);
+            $mat = $devices["TAPIS-$this->s"];
+            $this->json($this->admin('PUT', self::BOXES . "/$id/appareils/$mat", ['cashRegisterId' => $this->register]));
+            $this->assertSame(['accepted', null], $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc));
+            $this->assertSame(200, $this->box('GET', '/reglages', null, $token)->getStatusCode());
+            $line = array_column($this->json($this->admin('GET', self::BASE . '/sante'))['devices'], null, 'code')["mat-$mat"];
+            $this->assertSame(['ok', $this->register], [$line['state'], $line['cashRegisterId']]);
+            // un jeton inconnu reste refusé par la garde du boîtier, pas par la fermeture du site
+            $refused = $this->box('POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => self::MACHINE, 'devices' => []], str_repeat('0', 64));
+            $this->assertSame(401, $refused->getStatusCode());
+            $this->assertNotSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($refused, 401)['code'] ?? null);
+
+            // la caisse : connexion du caissier, session, question avant paiement (la vente en magasin n'est pas fermée par la construction)
+            $this->loginPos(['ROLE_USER_POS']);
+            $this->openSession();
+            $answer = $this->json($this->pos('POST', self::UNREAD, ['cashRegisterId' => $this->register, 'items' => [['productVariantId' => $variant, 'quantity' => 1]]]));
+            $this->assertSame([true, null, 1, 1, []], [$answer['active'], $answer['reason'], $answer['tracked'], $answer['read'], $answer['unread']]);
+            $this->closeWith(0);
+            // l'analyse passe et la synthèse du gérant répond
+            $this->drain();
+            $this->assertSame(200, $this->admin('GET', self::BASE)->getStatusCode());
+        } finally {
+            $set((string) $kept['storefront_state'], (bool) $kept['is_boutique_active'], $kept['storefront_opened_at']);
+        }
+    }
+
     public function testTheTillQuestionHasACeilingPerAccount(): void
     {
         $this->loginPos(['ROLE_USER_POS']);

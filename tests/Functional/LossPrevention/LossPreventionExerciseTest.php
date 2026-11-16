@@ -94,8 +94,9 @@ class LossPreventionExerciseTest extends LossPreventionTestCase
             $this->assertNotEmpty($f['evidence'], $code);
             $this->assertTrue($f['evidenceIntact'], $code);
             $this->assertNotSame('', $f['summary']);
-            // Aucune personne réelle : seuls les deux comptes fictifs, aux identifiants négatifs
-            $this->assertNotEmpty($f['onDuty'], $code);
+            // Aucune personne réelle : seuls les deux comptes fictifs, aux identifiants négatifs. Une règle par poste et par jour ne
+            // liste personne (lot L3-b2b)
+            $code === 'unread_sold' ? $this->assertSame([[], 'cash_register'], [$f['onDuty'], $f['subject']['type']], $code) : $this->assertNotEmpty($f['onDuty'], $code);
             foreach ($f['onDuty'] as $p) {
                 $this->assertLessThan(0, $p['id'], $code);
                 $this->assertContains($p['name'], $fictitious, $code);
@@ -141,11 +142,11 @@ class LossPreventionExerciseTest extends LossPreventionTestCase
         // Rien dans la caisse, ni dans son journal ; l'analyse réelle n'a pas été lancée
         $this->assertSame($before, $cash(), 'aucune ligne écrite dans les tables de la caisse');
         $this->assertSame($analysisBefore, $analysis(), 'ni analyse, ni curseur déplacé');
-        // La liste de l'écran : les douze, sans aucun nom
+        // La liste de l'écran : les treize (un scénario par règle ou variante ; le treizième est venu avec le lot L3-b2b), sans aucun nom
         $after = $this->json($this->admin('GET', self::EX));
-        $this->assertSame([12, 18, 12], [$after['count'], $after['remaining'], count($after['findings'])]);
+        $this->assertSame([13, 17, 13], [$after['count'], $after['remaining'], count($after['findings'])]);
         $this->assertStringNotContainsString('exercice"', (string) json_encode($after['findings'], JSON_UNESCAPED_UNICODE), 'la liste ne porte pas les noms fictifs non plus');
-        $this->assertSame(array_fill(0, 12, true), array_column($after['findings'], 'exercise'));
+        $this->assertSame(array_fill(0, 13, true), array_column($after['findings'], 'exercise'));
     }
 
     public function testNoRealFigureEverCountsAnExerciseAndTheTwoKindsNeverCrossOnARoute(): void

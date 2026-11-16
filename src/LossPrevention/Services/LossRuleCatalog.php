@@ -16,6 +16,8 @@ final class LossRuleCatalog
     public const DISCOUNT_PATTERN = 'DISCOUNT_PATTERN';
     public const PRICE_OVERRIDE = 'PRICE_OVERRIDE';
     public const APPROVAL_PATTERN = 'APPROVAL_PATTERN';
+    /** Lot L3-b2b : articles suivis vendus sans lecture, par poste et par jour (jamais par personne) */
+    public const UNREAD_SOLD = 'UNREAD_SOLD';
 
     /** Types de paramètre : l'écran sait comment saisir et afficher */
     public const COUNT = 'count';
@@ -71,6 +73,12 @@ final class LossRuleCatalog
             'wave' => 2,
             // les validations refusées n'ont pas de session au journal de caisse : elles sont comptées par tablette et par journée du magasin
             'params' => ['perDay' => ['type' => self::COUNT, 'default' => 3, 'min' => 2, 'max' => 50]],
+            'person' => null,
+        ],
+        self::UNREAD_SOLD => [
+            'wave' => 3,
+            // les deux seuils sont exigés : un nombre d'articles sans lecture, et leur part parmi les articles suivis vendus ce jour-là sur ce poste
+            'params' => ['minCount' => ['type' => self::COUNT, 'default' => 5, 'min' => 1, 'max' => 500], 'minShare' => ['type' => self::PERCENT, 'default' => 20, 'min' => 1, 'max' => 100]],
             'person' => null,
         ],
     ];

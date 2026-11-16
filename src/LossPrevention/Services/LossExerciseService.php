@@ -58,6 +58,7 @@ class LossExerciseService
         'discount_vague' => ['rule' => LossRuleCatalog::DISCOUNT_PATTERN, 'person' => false],
         'price_override' => ['rule' => LossRuleCatalog::PRICE_OVERRIDE, 'person' => false],
         'approval_refused' => ['rule' => LossRuleCatalog::APPROVAL_PATTERN, 'person' => false],
+        'unread_sold' => ['rule' => LossRuleCatalog::UNREAD_SOLD, 'person' => false],
         'cash_shortage_series' => ['rule' => LossRuleCatalog::CASH_DISCREPANCY, 'person' => true],
         'refund_series' => ['rule' => LossRuleCatalog::REFUND_PATTERN, 'person' => true],
         'discount_series' => ['rule' => LossRuleCatalog::DISCOUNT_PATTERN, 'person' => true],
@@ -473,6 +474,16 @@ class LossExerciseService
                 $facts = ['count' => $perDay, 'perDay' => $perDay];
                 $subject = 'terminal';
                 $from = $evidence[0]['at'];
+                break;
+            case 'unread_sold':
+                // un poste, une journée, des nombres : personne n'est listé, ni dans le constat ni dans sa preuve
+                $unread = (int) $params['minCount'] + 1;
+                $tracked = max($unread, intdiv($unread * 100, max(1, (int) $params['minShare'])));
+                $numbers = ['tracked' => $tracked, 'unread' => $unread, 'counter' => $tracked - $unread, 'catchUp' => 0, 'returned' => 0];
+                $evidence[] = ['kind' => LossEvidence::SALE_UNITS, 'at' => $to, 'snapshot' => ['day' => $clock->day($to), 'cashRegisterId' => null] + $numbers];
+                $facts = $numbers + ['share' => intdiv($unread * 100, $tracked), 'minCount' => (int) $params['minCount'], 'minShare' => (int) $params['minShare'], 'below' => false];
+                $subject = 'cash_register';
+                $onDuty = [];
                 break;
             case 'cash_shortage_series':
                 $count = (int) $personParams['count'];

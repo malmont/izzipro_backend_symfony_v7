@@ -244,7 +244,9 @@ class LossPieceRepository extends EntityRepository
         }
         $from = 'FROM loss_piece p WHERE ' . implode(' AND ', $where);
         $tagged = "EXISTS (SELECT 1 FROM loss_tag t WHERE t.piece_id = p.id AND t.status = 'associated')";
-        $counts = "COUNT(*) FILTER (WHERE p.status <> 'retired') AS active, COUNT(*) FILTER (WHERE p.status = 'retired') AS retired, COUNT(*) FILTER (WHERE p.status <> 'retired' AND $tagged) AS tagged";
+        // en service : ni retirée ni vendue (lot L3-b2b : une pièce vendue n'est plus dans la boutique ; revenue, elle l'est de nouveau)
+        $counts = "COUNT(*) FILTER (WHERE p.status NOT IN ('retired', 'sold')) AS active, COUNT(*) FILTER (WHERE p.status = 'sold') AS sold, COUNT(*) FILTER (WHERE p.status = 'retired') AS retired,"
+            . " COUNT(*) FILTER (WHERE p.status NOT IN ('retired', 'sold') AND $tagged) AS tagged";
         $rows = $this->db()->fetchAllAssociative(
             "SELECT p.variant_id, MIN(p.product_id) AS product_id, $counts $from"
             . sprintf(' GROUP BY p.variant_id ORDER BY MIN(p.product_id), p.variant_id LIMIT %d OFFSET %d', $limit, ($page - 1) * $limit),
@@ -253,7 +255,7 @@ class LossPieceRepository extends EntityRepository
         $totals = $this->db()->fetchAssociative("SELECT COUNT(DISTINCT p.variant_id) AS variants, $counts $from", $params) ?: [];
 
         return ['rows' => $rows, 'total' => (int) ($totals['variants'] ?? 0),
-            'totals' => ['active' => (int) ($totals['active'] ?? 0), 'retired' => (int) ($totals['retired'] ?? 0), 'tagged' => (int) ($totals['tagged'] ?? 0)]];
+            'totals' => ['active' => (int) ($totals['active'] ?? 0), 'sold' => (int) ($totals['sold'] ?? 0), 'retired' => (int) ($totals['retired'] ?? 0), 'tagged' => (int) ($totals['tagged'] ?? 0)]];
     }
 
     /**

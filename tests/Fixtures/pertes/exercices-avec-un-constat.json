@@ -116,6 +116,18 @@
                 "available": true
             },
             {
+                "code": "unread_sold",
+                "label": "Articles suivis vendus sans lecture",
+                "description": "Sur un poste de caisse, dans la journée, plusieurs articles suivis sont vendus sans que leur pièce soit lue.",
+                "learn": "Lire les nombres du poste : le tapis était-il branché, les articles sont-ils posés dessus avant le paiement ? Le constat ne désigne personne.",
+                "rule": {
+                    "code": "UNREAD_SOLD",
+                    "label": "Articles suivis vendus sans lecture"
+                },
+                "personPattern": false,
+                "available": true
+            },
+            {
                 "code": "cash_shortage_series",
                 "label": "Manques de caisse répétés par un même compte",
                 "description": "Plusieurs clôtures avec un manque sont fermées par le même compte sur une courte période.",
@@ -172,7 +184,7 @@
                 "newEvidenceSinceDecision": false,
                 "backfill": false,
                 "exercise": true,
-                "updatedAt": "2026-11-16T05:30:21+00:00"
+                "updatedAt": "2026-11-16T07:32:48+00:00"
             }
         ],
         "count": 1,

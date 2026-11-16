@@ -65,7 +65,8 @@ class LossPieceService
             }
         }
         if (isset($query['status']) && $query['status'] !== '') {
-            in_array($query['status'], [LossPiece::CREATED, LossPiece::RETIRED], true) ? $filters['status'] = $query['status'] : $errors['status'] = 'INVALID_VALUE';
+            // depuis le lot L3-b2a une pièce peut être vendue, ou revenue (de nouveau vendable)
+            in_array($query['status'], [LossPiece::CREATED, LossPiece::SOLD, LossPiece::RETURNED, LossPiece::RETIRED], true) ? $filters['status'] = $query['status'] : $errors['status'] = 'INVALID_VALUE';
         }
         if (isset($query['tagged']) && $query['tagged'] !== '') {
             in_array($query['tagged'], ['0', '1'], true) ? $filters['tagged'] = $query['tagged'] === '1' : $errors['tagged'] = 'INVALID_VALUE';
@@ -413,14 +414,15 @@ class LossPieceService
             $stock = $variant !== null ? (int) $variant['stock_quantity'] : null;
             $rows[] = ['variantId' => (int) $row['variant_id'], 'productId' => (int) $row['product_id']] + self::catalogue($variant) + [
                 'stock' => $stock,
-                'pieces' => ['active' => $active, 'retired' => (int) $row['retired'], 'tagged' => (int) $row['tagged'], 'untagged' => $active - (int) $row['tagged']],
+                // en service = dans la boutique : ni retirée ni vendue (une pièce revenue est de nouveau en service)
+                'pieces' => ['active' => $active, 'sold' => (int) $row['sold'], 'retired' => (int) $row['retired'], 'tagged' => (int) $row['tagged'], 'untagged' => $active - (int) $row['tagged']],
                 // écart « stock − pièces en service » : positif, des exemplaires en stock ne sont pas suivis ; négatif, plus de pièces que de stock
                 'gap' => $stock !== null ? $stock - $active : null,
             ];
         }
 
         return ['rows' => $rows, 'total' => $found['total'], 'page' => $page, 'limit' => $limit,
-            'totals' => ['variants' => $found['total'], 'pieces' => $found['totals']['active'], 'retired' => $found['totals']['retired'],
+            'totals' => ['variants' => $found['total'], 'pieces' => $found['totals']['active'], 'sold' => $found['totals']['sold'], 'retired' => $found['totals']['retired'],
                 'tagged' => $found['totals']['tagged'], 'untagged' => $found['totals']['active'] - $found['totals']['tagged']]];
     }
 

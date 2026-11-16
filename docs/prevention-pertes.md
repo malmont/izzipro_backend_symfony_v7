@@ -101,6 +101,7 @@ analyses suivantes**. Valeurs par défaut validées par le propriétaire.
 | `DISCOUNT_PATTERN`, par personne (`DiscountSeriesRule`) | 2 | `count` ventes en `days` jours, encaissées par le même compte, dont la remise atteint `share` % du plafond du caissier (en pourcentage du brut ou en montant ; un plafond réglé à 0 n'est pas un plafond : son critère est ignoré) ; ventes relues dans les commandes de caisse | `count` 5 (2 à 50), `days` 7 (1 à 30), `share` 90 % (50 à 100) | `user_window` ; un constat par fenêtre |
 | `PRICE_OVERRIDE` | 2 | `perSession` baisses de prix à la main dans une session (une hausse ne compte pas) ; montant en jeu : la somme des baisses | `perSession` 3 (2 à 50) | session ; `PRICE_OVERRIDE:session:<id>` |
 | `APPROVAL_PATTERN` | 2 | `perDay` validations d'un responsable refusées (code faux, code bloqué, compte sans le droit de valider, trop d'essais) **sur une même tablette dans une journée du magasin**. Une validation refusée est journalisée sans session ni poste : seule la tablette y est connue. Une demande mal formée et un responsable sans code ne comptent pas | `perDay` 3 (2 à 50) | tablette (`terminal`) ; `APPROVAL_PATTERN:terminal:<id>:day:<jour>` |
+| `UNREAD_SOLD` (lot L3-b2b, § 16.19) | 3 | Sur un POSTE de caisse et une JOURNÉE du magasin, `minCount` articles suivis vendus sans lecture (ni sur le tapis, ni rattrapés à la sortie, fenêtre de rattrapage passée), qui font au moins `minShare` % des articles suivis vendus ce jour-là sur ce poste. Jugée à chaque clôture du poste, pour le jour et pour la dernière journée d'activité d'avant. **Jamais par personne : personne n'est listé « en poste »** ; pas de montant en jeu | `minCount` 5 (1 à 500), `minShare` 20 % (1 à 100) | `cash_register` ; `UNREAD_SOLD:register:<poste>:day:<jour>` |
 
 - Date d'une annulation : `order.canceled_at` (posé par `CancelOrderUseCase` pour tous les chemins), sinon l'heure de l'entrée REFUND pour
   une annulation d'avant PAYS-1b ; un retour (commande de type 2) n'est pas une annulation.
@@ -112,7 +113,7 @@ analyses suivantes**. Valeurs par défaut validées par le propriétaire.
 
 `{ id, number, rule { code, label }, personPattern, status, statusLabel, summary, storeDay, cashRegister { id, name } | null, amountAtStake,
 currency, isNew, newEvidenceSinceDecision, backfill, updatedAt }` (ligne de la liste) ; la fiche ajoute `from`, `to`, `sessionId`,
-`subject { type: z_report | session | order | return | terminal | user_window, id, name?, label? }`, `onDuty [{ id, name, role: seller | closer | approver |
+`subject { type: z_report | session | order | return | terminal | user_window | cash_register, id, name?, label? }` (`cash_register` : lot L3-b2b, avec le nom du poste et le libellé « Poste de caisse »), `onDuty [{ id, name, role: seller | closer | approver |
 operator, roleLabel }]`, `onDutyNotice`, `amountNotice`, `evidence []`, `evidenceIntact`, `opinion: null` (lot L5),
 `decision { status, note, at, by { id, name } } | null`, `history [{ at, previous, status, statusLabel, hasNote, by }]`, `lastEvidenceAt`,
 `createdAt`, `screen`.
@@ -128,7 +129,7 @@ operator, roleLabel }]`, `onDutyNotice`, `amountNotice`, `evidence []`, `evidenc
 
 ## 6. Preuves (`loss_evidence`) et journal du module (`loss_journal`)
 
-Preuve : `{ id, kind: z_report | drawer | order | credit_note | return | discount | price_change | approval, at, atLabel, title, lines [{ label, value }], ref { type, id, sequence, hash },
+Preuve : `{ id, kind: z_report | drawer | order | credit_note | return | discount | price_change | approval | sale_units (lot L3-b2b, § 16.19 : des nombres par poste et par jour, son renvoi `ref.type` vaut `closing`), at, atLabel, title, lines [{ label, value }], ref { type, id, sequence, hash },
 screen, fingerprint }`.
 
 - **Copie figée ET renvoi** : la copie (`snapshot`, JSON canonique : identifiants, montants, dates, numéros, et les **codes de motif**
@@ -224,7 +225,8 @@ qui lance.
 | `DELETE /exercices` | — | `{ deleted }` : tous les constats d'exercice du site, avec leurs preuves et leurs lignes de journal |
 
 - **Scénarios** (`LossExerciseService::SCENARIOS`) : `cash_shortage`, `drawer_no_sale`, `void_quick`, `void_series`, `refund_no_receipt`,
-  `refund_cash_for_card`, `discount_vague`, `price_override`, `approval_refused`, et trois variantes par personne (`cash_shortage_series`,
+  `refund_cash_for_card`, `discount_vague`, `price_override`, `approval_refused`, `unread_sold` (lot L3-b2b : un poste, une journée,
+  personne n'est listé), et trois variantes par personne (`cash_shortage_series`,
   `refund_series`, `discount_series`), `available` seulement là où le pays permet les règles par personne. Chaque scénario prend ses chiffres
   dans les **seuils du site** (un manque juste au-dessus du seuil, une ouverture du tiroir de plus que le maximum…).
 - **Rien dans la caisse** : les règles réelles ne sont pas jouées ; le constat et ses preuves sont écrits à partir du scénario. Les preuves
@@ -870,6 +872,13 @@ sous-lot.
 - Contrat à remettre à la session de la caisse (par le chef) avant le code.
 
 ### 16.6 Le rattrapage au portique
+
+> **À reprendre dans le plan de L4** (demande du chef de projet, 16/11/2026, après la relecture de L3-b2a) : chaque vente suivie
+> sans pièce « couvre », pendant la fenêtre du rattrapage, la sortie d'une pièce NON vendue de sa variante, tous postes confondus.
+> Avec un étiquetage partiel, **une vente sans pièce peut donc absorber la sortie d'une pièce volée** du même article, et le
+> constat « sortie sans vente » ne la verra pas. Deux parades à trancher au plan de L4 : (a) ne rattraper que pour les variantes
+> dont TOUTES les pièces en rayon portent une puce (l'article vendu sans pièce ne peut alors être qu'une lecture manquée) ;
+> (b) garder le rattrapage, mais ouvrir un constat « faible » chaque fois qu'il absorbe une sortie, pour qu'une série se voie.
 
 - **Règle** (§ 14, point 5) : une pièce non vendue lue à la sortie (`ZONE_SEEN`, zone `exit`), alors qu'une vente récente de SA
   variante a encore un article sans pièce, est rattachée à cette vente : fait `PIECE_SOLD` avec la mention « rattrapage », **une
@@ -1647,4 +1656,89 @@ une vente sans poste ; une pièce louée dite vendue pour toujours. **Seconde pa
 deux corrections avaient ouvert un défaut chacune, corrigés à leur tour : une vente annulée puis ressaisie ne retrouvait plus sa
 pièce (la règle « après le dernier retour » ne vaut plus que pour un retour d'articles), et la limite des lectures de sortie,
 prise sur les plus anciennes, pouvait priver les ventes du jour de leur rattrapage.
+
+### 16.19 Lot L3-b2b codé : la règle « articles suivis vendus sans lecture » (16/11/2026)
+
+Contrat validé par le chef de projet (neuf points). **Aucune migration, aucune route nouvelle.** Code :
+`Services/Rule/UnreadSoldRule`, une entrée de `LossRuleCatalog`, un type de preuve (`LossEvidence::SALE_UNITS`), un sujet de
+constat (`cash_register`), un scénario d'exercice.
+
+**La règle `UNREAD_SOLD`** (vague 3), **par poste de caisse et par journée du magasin, jamais par personne** :
+- elle s'évalue à chaque **clôture d'un poste** (entrée `Z_REPORT_CREATED` du journal de caisse), **après le rattrapage** (tapis
+  retenté, sortie : l'analyse le lance juste avant de présenter une clôture aux règles, seulement si cette règle est allumée et
+  s'il y a du neuf depuis le dernier rattrapage du passage : début du passage, vente ou retour lu depuis ; le tapis n'est retenté
+  qu'une fois par passage), pour le jour de la clôture ET pour **la
+  dernière journée d'avant où ce poste a vendu des articles suivis** (la veille le plus souvent ; le samedi pour une boutique
+  fermée le dimanche ; une semaine au plus) : celle-ci est rejugée une fois ses rattrapages terminés ;
+- elle lit `loss_sale_unit` (§ 16.18) : les articles suivis vendus ce jour-là sur ce poste et pas revenus (`tracked`), et parmi
+  eux ceux qui n'ont pas de pièce **alors que leur fenêtre de rattrapage est passée** (`unread`) ; un article encore rattrapable
+  compte parmi les suivis, pas parmi les « sans lecture » ; un article revenu (retour, vente annulée) n'est plus compté ;
+- constat si **les deux seuils** sont atteints : `unread >= minCount` (5 par défaut, de 1 à 500) ET `unread` fait au moins
+  `minShare` % de `tracked` (20 par défaut, de 1 à 100). Réglages, interrupteur et aperçu sur 30 jours par les routes des règles
+  (`GET /regles`, `PUT /regles/UNREAD_SOLD`, `POST /regles/apercu`), comme les autres ;
+- **un constat par poste et par jour** (`UNREAD_SOLD:register:<poste>:day:<jour>`), sujet `{ type: cash_register, id, name,
+  label: « Poste de caisse » }`, `onDuty: []`, `sessionId: null`, pas de montant en jeu ; résumé : « Articles suivis vendus sans
+  lecture ce jour-là à ce poste : 3 sur 5 (60 %). » ;
+- `facts { tracked, unread, counter, catchUp, returned, share, minCount, minShare, below }` ;
+- **la vie du constat** : il s'ouvre quand les deux seuils sont atteints. Ensuite, une clôture qui trouve **d'autres nombres** y
+  ajoute sa preuve (`kind: sale_units` : journée, articles suivis vendus, vendus sans lecture, lus sur le tapis, rattrapés à la
+  sortie, revenus) et met les nombres à jour, **même s'ils sont passés sous les seuils** : le constat le dit alors (`facts.below`,
+  résumé « …, sous les seuils depuis la dernière clôture. ») plutôt que d'afficher un chiffre que le rattrapage ou un retour a
+  démenti ; le côté des seuils est alors jugé avec les seuils du moment. Une clôture qui trouve **les mêmes nombres n'ajoute
+  rien** : ni preuve, ni « du nouveau depuis la décision » ; **un seuil changé ne touche donc pas un constat dont les ventes n'ont
+  pas bougé** (§ 4). Une décision du gérant n'est jamais touchée : un constat déjà décidé dont les nombres changent garde son état
+  et sa note, et porte « du nouveau depuis la décision » (`newEvidenceSinceDecision`), comme pour toute règle. (Précisions
+  apportées par les relectures au point 5 du contrat validé.) ;
+- **aucune personne** : ni compte, ni nom, ni vente dans le constat et dans ses preuves (consigne du chef de projet) ; le constat
+  dit où et quand, pas pourquoi (tapis en panne, tapis non utilisé, puces retirées avant la caisse). Le renvoi de la preuve
+  (`ref.type: closing`, `ref.id` : numéro du rapport de clôture, `sequence` et `hash` : son entrée au journal de caisse) dit quelle
+  clôture a fait juger la journée : un repère de vérification, sans écran (`screen: null`), qui ne sert ni nom ni compte ;
+  `onDutyNotice` est `null`
+  pour un constat dont le sujet est un poste. Dans une boutique à un seul caissier par poste, « par poste et par jour » désigne de
+  fait quelqu'un sans le nommer : c'est une lecture du gérant, pas une donnée du module.
+
+**Mode exercice** : un scénario de plus, `unread_sold`, qui fabrique un constat fictif à partir des seuils du site (sujet « poste
+de caisse », personne listé). **Pas de vente simulée** dans le boîtier simulé (décision du chef de projet : la table des articles
+vendus ne porte que de vraies ventes de la caisse).
+
+**Écran des pièces** : le filtre `status` accepte `sold` et `returned` en plus de `created` et `retired` ; la synthèse par article
+et ses totaux gagnent `sold`, et « en service » (`active`, `pieces`) ne compte plus une pièce vendue (une pièce revenue y est de
+nouveau).
+
+**Pour le web et le mobile** : une règle de plus dans la liste des règles et dans le filtre des constats (`rule=UNREAD_SOLD`,
+aussi dans les liens `pertes.constats` des courriels) ; un sujet de constat nouveau, `cash_register` ; un type de preuve nouveau,
+`sale_units`, rendu comme les autres en lignes `{ label, value }`.
+
+**Documentation** : page d'aide `docs/aide/pertes.md` (créée : le module pour l'administrateur) ; le geste « poser la pièce
+rendue sur le tapis AVANT de valider le retour » dans `docs/caisse.md` et `docs/aide/caisse.md` ; la note pour le plan de L4 au
+§ 16.6.
+
+**À savoir** : la règle juge avec ce que l'analyse a relié au moment de la clôture, rattrapage compris ; elle ne regarde que le
+jour de la clôture et la dernière journée d'activité d'avant (une vente hors ligne synchronisée plus tard, pour une journée plus
+ancienne, n'est plus jugée) ; les articles vendus dans la dernière fenêtre de rattrapage avant une clôture ne sont jugés qu'à la
+clôture suivante de ce poste (dans la semaine) ; un seuil changé ne vaut que pour les journées dont les nombres changent
+ensuite et pour les constats à venir.
+
+**Note pour le plan de L5 (les alertes), décision du chef de projet du 16/11/2026** : cette règle grossit dans la journée. Un
+constat que le gérant a classé à midi (3 sur 6) garde sa décision si la clôture du soir trouve 15 sur 20 : il ne porte que « du
+nouveau depuis la décision », comme pour toute règle, sans courriel ni vignette. C'est voulu pour ce lot (la décision reste au
+gérant). À étudier en L5 : signaler de nouveau un constat classé dont les nombres ont doublé depuis la décision.
+
+**Relecture indépendante** (16/11/2026) : aucune personne dans le constat ni ses preuves, règle bien par poste et par jour du
+magasin, rien d'écrit hors du constat ; corrigés : la règle jugeait avant le rattrapage du même passage ; un constat n'était jamais
+corrigé à la baisse ; la veille rejugée ajoutait une preuve identique à chaque clôture (« du nouveau depuis la décision » pour
+rien) ; la fin d'une journée n'était jamais jugée si le poste ne fermait pas le lendemain ; le renvoi de la preuve désignait le
+rapport de clôture. **Seconde passe** : aucun point bloquant ; corrigés : le rattrapage passait avant CHAQUE clôture d'un passage,
+règle éteinte comprise (une reprise d'historique aurait refait des centaines de recherches par clôture) ; un seuil changé
+modifiait à la clôture suivante un constat dont les ventes n'avaient pas bougé ; la règle lisait le constat existant par la
+classe du puits (désormais `LossFindingSink::factsOf`) ; résumé rédigé sans accord en nombre (« 1 articles »).
+
+**Tests** : `LossPreventionUnreadSoldTest` (catalogue et bornes ; les deux seuils ; article encore rattrapable ; rattrapage avant
+la règle ; autre poste, article sans poste, journée trop ancienne non comptés ; dernière journée d'activité jugée ; mêmes nombres :
+rien d'écrit ; article revenu et constat passé sous les seuils ; décision gardée ; seuil changé sans effet sur un constat aux
+mêmes nombres ; règle éteinte ; aperçu sans écriture ; aucune personne dans le constat, sa preuve ni la base ; rattrapage avant
+une clôture seulement s'il y a du neuf et si la règle est allumée ; écran des pièces), le scénario d'exercice dans `LossPreventionExerciseTest`.
+Ajouté avec ce lot, pour le lot CONSTRUCTION (`docs/boutique-en-construction.md`) : sur un site neuf fermé en entier, le boîtier
+s'inscrit, donne signe de vie et envoie ses faits, la caisse pose sa question et le gérant lit son matériel
+(`LossPreventionCounterTest::testABoxAndATillWorkOnASiteStillUnderConstruction` ; un commerçant installe son matériel avant d'ouvrir).
 
