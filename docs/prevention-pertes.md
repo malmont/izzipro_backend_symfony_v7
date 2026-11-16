@@ -1076,7 +1076,7 @@ change pas. `POST /installation/etapes/box/verifier` répond `{ code, verified, 
 |---|---|---|
 | `POST /inscription` `{ key, machine, version, arch: amd64 \| arm64 }` (sans jeton) | `{ box { id }, token, expiresAt, serverTime, settings }` | 422 `VALIDATION_FAILED { fields }` ; 404 `BOX_KEY_INVALID` (clé inconnue, ou saisie qui n'en est pas une : même réponse) ; 403 `BOX_REVOKED` ; 409 `BOX_KEY_ALREADY_ENROLLED` (la clé est liée à une autre machine) |
 | `POST /jeton` `{ machine }` (jeton encore bon, ou expiré depuis moins de 30 jours) | `{ token, expiresAt, serverTime }` | 401 `BOX_TOKEN_INVALID` (il faut une nouvelle inscription) ; 403 `BOX_REVOKED` |
-| `POST /signe-de-vie` `{ now, machine, version?, devices [{ serial, kind, model?, status }] }` | `{ serverTime, clockOffsetSeconds, clockDoubt, token: { token, expiresAt } \| null, refusedDevices [{ serial, code }], settings }` | 422 `VALIDATION_FAILED { fields }` (`now`, `machine`, `version`, `devices` : liste obligatoire, `devices[i].serial \| kind \| status \| model`) ; 401 `BOX_TOKEN_INVALID` (ce n'est pas la machine inscrite) ; 429 `RATE_LIMITED` (trop d'empreintes de machine fausses) |
+| `POST /signe-de-vie` `{ now, machine, version?, lastServerTime?, devices [{ serial, kind, model?, status }] }` (`lastServerTime` : lot L3-b1, § 16.15) | `{ serverTime, clockOffsetSeconds, clockDoubt, token: { token, expiresAt } \| null, refusedDevices [{ serial, code }], resendMats, settings }` | 422 `VALIDATION_FAILED { fields }` (`now`, `machine`, `version`, `lastServerTime`, `devices` : liste obligatoire, `devices[i].serial \| kind \| status \| model`) ; 401 `BOX_TOKEN_INVALID` (ce n'est pas la machine inscrite) ; 429 `RATE_LIMITED` (trop d'empreintes de machine fausses) |
 | `GET /reglages` | `{ box { id }, serverTime, heartbeatSeconds: 60, facts { types, maxBatch: 200 }, zones, devices [{ id, serial, kind, zone, cashRegisterId }] }` | |
 | `POST /faits` `{ facts [{ key, type, at, device, zone?, seq?, data { identifier, technology? } }] }` (1 à 200) | `{ received, accepted, duplicates, refused, results [{ index, key, status: accepted \| duplicate \| refused, code }], serverTime }` | 422 `VALIDATION_FAILED { fields.facts }`, `FACTS_LIMIT_EXCEEDED { max, received }` ; 413 `PAYLOAD_TOO_LARGE` (256 Ko) ; 429 `RATE_LIMITED` (20 000 faits par boîtier et par heure) |
 
@@ -1221,6 +1221,12 @@ trois gardes du lot L3-a remplacées par leur version élargie. **Aucune vente n
   la liste des numéros de série des tapis dont le boîtier doit REDIRE le contenu (`COUNTER_SEEN` pour chaque puce encore posée) :
   au retour d'un silence, d'une panne ou d'un retrait du tapis, ou quand l'horloge du boîtier redevient juste. Le boîtier lit
   aussi dans ses réglages `silentAfterSeconds`, le délai de silence du site ;
+- **une réponse perdue ne perd pas cette demande** : dans chaque signe de vie, le boîtier renvoie dans `lastServerTime` le
+  `serverTime` de la DERNIÈRE réponse qu'il a lue à une inscription ou à un signe de vie (et à rien d'autre). S'il ne correspond
+  pas au dernier signe de vie que la plateforme a traité (la réponse s'est perdue en route), ou s'il manque (le boîtier vient de
+  redémarrer : il ne le garde pas d'un démarrage à l'autre), on ne sait plus ce que le boîtier sait : les présences de ses tapis
+  se ferment et `resendMats` les nomme tous, à chaque signe de vie, jusqu'à ce qu'il ait lu une réponse. Un boîtier qui n'envoie
+  jamais `lastServerTime` redit donc tout à chaque signe de vie : le champ est à envoyer dès qu'un tapis est branché ;
 - une puce refusée `TAG_UNKNOWN` sur un tapis (posée avant d'être associée) n'est pas à renvoyer : elle sera redite au prochain
   `resendMats`, ou quand on la reposera.
 
@@ -1235,7 +1241,14 @@ trois gardes du lot L3-a remplacées par leur version élargie. **Aucune vente n
 - une puce n'est que sur un tapis à la fois : arrivée sur un autre, sa présence sur le premier se ferme (règle tenue par le code) ;
 - les présences ouvertes d'un tapis se ferment quand on ne sait plus ce qui est posé dessus : tapis noté en panne (annoncé `down`,
   plus annoncé, genre changé) ou retiré ; boîtier revenu d'un silence (fermées au dernier signe de vie), réinscrit, à la clé
-  remise à zéro, révoqué ; horloge du boîtier qui se dérègle.
+  remise à zéro, révoqué ; horloge du boîtier qui se dérègle ; réponse d'un signe de vie perdue, ou boîtier redémarré ;
+- **une fermeture décidée par le serveur est datée à l'horloge du BOÎTIER** (heure du serveur plus l'écart mesuré au dernier signe
+  de vie ; écart inconnu ou douteux : la tolérance de 60 secondes est retirée ; jamais avant l'arrivée) : les arrivées sont datées
+  par le boîtier, et ce qu'il redit juste après ne doit pas être jugé « plus ancien qu'un départ connu » parce qu'il retarde de
+  quelques secondes (`LossBoxChannelService::boxTime`). Restent hors de portée : une horloge de boîtier qui recule d'un coup, et
+  une puce qui passe d'un tapis à l'autre puis revient en moins que l'écart entre les horloges de deux boîtiers ;
+- **un départ reçu seul vaut lecture** : le tapis a bien vu la puce. La pièce compte comme lue pendant la fenêtre de 10 minutes,
+  elle n'est pas dite posée (ni `onMat`, ni `extra`), et le tapis n'est plus « en attente d'une première lecture ».
 - À savoir : rien ne recalcule la présence depuis les faits, et la table n'est pas purgée (une ligne par pose) ; le lot L3-b2, qui
   s'en sert pour relier les ventes, réglera sa conservation.
 
@@ -1246,7 +1259,8 @@ trois gardes du lot L3-a remplacées par leur version élargie. **Aucune vente n
 | `PUT /boitiers/{id}/appareils/{appareil}` `{ cashRegisterId }` pour un tapis, `{ zone }` pour un lecteur (`null` délie) | la fiche du boîtier | 422 `fields` : `REQUIRED`, `MUST_BE_POSITIVE_INTEGER`, `INVALID_VALUE`, `NOT_FOR_THIS_DEVICE` (un poste pour un tapis, une zone pour un lecteur), `device: NOT_ASSIGNABLE` (imprimante, caméra) ; 404 `BOX_NOT_FOUND`, `DEVICE_NOT_FOUND`, `CASH_REGISTER_NOT_FOUND` (poste inconnu ou inactif) ; 409 `REGISTER_ALREADY_HAS_MAT { deviceId }` |
 | `POST /boitiers/{id}/appareils/{appareil}/retirer` `{ confirm: true }` | la fiche du boîtier | 422 `fields.confirm` ; 404 |
 
-- **Un tapis par poste, un poste par tapis** (index unique en base : deux liaisons au même instant, la seconde reçoit le 409). Fait
+- **Un tapis par poste, un poste par tapis** (deux liaisons au même instant : la seconde attend la première sur un verrou
+  consultatif du poste, puis reçoit le 409 ; l'index unique de la base reste la ceinture, son 409 porte alors `deviceId: null`). Fait
   `DEVICE_ASSIGNED { cashRegisterId | zone }` ; relier au même poste n'écrit rien. Un appareil retiré, ou celui d'un boîtier
   révoqué, ne se relie plus (404 `DEVICE_NOT_FOUND`). **Révoquer un boîtier rend les postes de ses tapis.**
 - **Retirer un appareil remplacé** : il sort de la fiche, du tableau de santé et des réglages du boîtier, ne compte plus dans le
@@ -1258,8 +1272,9 @@ trois gardes du lot L3-a remplacées par leur version élargie. **Aucune vente n
 **Tableau de santé** (§ 16.13) : une ligne par tapis en service, `code: mat-<id>`, `kind: mat`, `zone: counter`,
 `cashRegisterId`, libellé « Tapis de comptoir · <nom du poste> ». États : `down` s'il est débranché (conseil : le câble, puis
 l'alimentation), si son boîtier se tait (conseil : vérifier le boîtier) ou si l'horloge de son boîtier est déréglée (conseil :
-l'accès du boîtier à Internet) ; `pending` tant qu'il n'a lu aucune puce (conseil :
-poser une pièce dessus), puis tant qu'il n'est relié à aucun poste (conseil : choisir son poste) ; sinon `ok`. Le tapis est
+l'accès du boîtier à Internet ; ce n'est pas un silence : `silentSince` et `silentSeconds` restent nuls) ; `pending` tant que
+l'horloge d'un boîtier tout juste réinscrit n'est pas mesurée (prêt à son premier signe de vie), tant qu'il n'a lu aucune puce
+(conseil : poser une pièce dessus), puis tant qu'il n'est relié à aucun poste (conseil : choisir son poste) ; sinon `ok`. Le tapis est
 facultatif : aucune ligne tant qu'aucun n'est branché, et le bandeau ne s'alarme pas. La lecture fait maintenant trois requêtes.
 
 **Assistant** : `optionalSteps` gagne `counter_mat` (« Brancher le tapis de comptoir »), faite quand un tapis a lu une puce et qu'il
@@ -1289,8 +1304,9 @@ pièce d'exercice qui porte une puce. Rien de cela n'existe pour la caisse.
   - `NO_MAT` : ce poste n'a pas de tapis en service ;
   - `MAT_SILENT` : tapis en panne, boîtier silencieux depuis plus longtemps que le délai du site, ou horloge du boîtier déréglée
     (ses arrivées ne posent alors rien : dire « non lu » serait un faux avis) ;
-  - `TOO_MANY_REQUESTS` : plus de 300 questions en 5 minutes pour ce compte (une par paiement suffit très au large ; la route ne
-    sert pas à sonder le catalogue).
+  - `TOO_MANY_REQUESTS` : plus de 6 000 LIGNES de panier en 5 minutes pour ce compte (une question compte pour ses lignes, au
+    moins une ; une question par paiement suffit très au large ; la route ne sert pas à sonder le catalogue). Si le compteur
+    lui-même est en panne, la question passe.
 - **Un caissier ne lit que le tapis de SON poste** (consigne du chef de projet). Le poste se résout comme pour une vente
   (`CashRegisterResolver`) et doit avoir une session ouverte ; refus de la caisse, à la forme de la caisse : 404
   `CASH_REGISTER_NOT_FOUND`, 400 `CASH_REGISTER_REQUIRED`, 409 `CASH_REGISTER_CLOSED`, 403 `CASH_REGISTER_FORBIDDEN` (tablette
@@ -1300,7 +1316,10 @@ pièce d'exercice qui porte une puce. Rien de cela n'existe pour la caisse.
   question ne se pose pas. Le responsable et l'administrateur lisent tous les postes, comme à la caisse. Seul le tapis du poste
   résolu est lu ; les données sont celles du site de la requête.
 - **À savoir** : en envoyant des paniers au hasard, un caissier peut apprendre quels articles sont suivis (c'est ce que la route
-  lui dit de son panier) ; le plafond borne la chose, et le catalogue lui est déjà ouvert.
+  lui dit de son panier) ; le plafond, compté en lignes, borne la chose à 6 000 variantes par 5 minutes, et le catalogue lui est
+  déjà ouvert. Sur un site qui gagne un second poste, le contrôle s'arrête pour toute tablette non rattachée
+  (`TERMINAL_NOT_BOUND`) : rien ne le dit encore à l'administrateur (à montrer par le web ou la caisse ; étape d'assistant à voir
+  en L3-b2).
 - **Une lecture : le module n'écrit rien** (ni fait, ni constat, ni journal du module, ni journal de caisse). Comme sur toute route
   de caisse, la garde de la tablette note son dernier usage dans les clés d'activation, au plus une fois par 5 minutes.
 - **Pour la caisse, à voir à sa reprise** : un indicateur dans ses réglages (`/api/pos/settings`) lui éviterait l'appel sur un site
@@ -1316,7 +1335,11 @@ pièce d'exercice qui porte une puce. Rien de cela n'existe pour la caisse.
   tablette rattachée lisait le tapis de n'importe quel poste ouvert ; un boîtier à l'horloge déréglée donnait un faux avis à
   chaque vente ; présences jamais fermées après une réinscription ; boîtier révoqué qui gardait le poste de ses tapis ; le serveur
   fermait des présences sans que le boîtier le sache (`resendMats`) ; faits dans le désordre ; appareil retiré qu'on pouvait
-  relier ; liaisons simultanées ; lecture des appareils avant le verrou ; plafond des questions.
+  relier ; liaisons simultanées ; lecture des appareils avant le verrou ; plafond des questions. **Seconde passe** : aucun chemin
+  par lequel un caissier lit le tapis d'un autre poste ; corrigés : deux liaisons simultanées rendaient encore 500 (verrou du
+  poste) ; un `resendMats` perdu avec sa réponse n'était jamais redit (`lastServerTime`) ; ce qu'un boîtier en retard redisait
+  après une fermeture du serveur n'était pas posé (fermetures datées à l'horloge du boîtier) ; le plafond comptait les questions,
+  pas les lignes ; pastille « horloge » qui annonçait un silence, ou une panne juste après une réinscription.
 - **Tests** : `LossPreventionCounterTest` (tapis lu, relié, retiré, pastille, étape, horloge, désordre, réinscription, révocation ;
   la question de la caisse, poste par poste, sans rien écrire ; tapis simulé ; gardes de la base et rejeu de la migration).
 

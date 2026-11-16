@@ -162,7 +162,8 @@ class LossBoxService
             $key = LossBoxKey::generate();
             $now = self::now();
             $repository->resetKey($id, $this->tokens->keyHash($this->site(), $key), LossBoxKey::hint($key), $now);
-            $repository->closePresencesOf($repository->matIdsOf($id), $now); // la machine d'avant est détachée : ce qu'elle disait posé ne l'est plus
+            // la machine d'avant est détachée : ce qu'elle disait posé ne l'est plus (fermé à l'heure de SON horloge, comme ses faits)
+            $repository->closePresencesOf($repository->matIdsOf($id), LossBoxChannelService::boxTime(time(), $box['clock_offset']));
             $repository->event($id, null, LossBoxEvent::BOX_KEY_RESET, $userId, false, [], $now);
 
             return ['box' => $this->sheet($id, $locale, false), 'key' => $key, 'enrolment' => $this->enrolment($key, $locale)];
@@ -191,7 +192,7 @@ class LossBoxService
                 $repository->revoke($id, $now);
                 $repository->event($id, null, LossBoxEvent::BOX_REVOKED, $userId, false, [], $now);
                 // un boîtier révoqué ne dit plus rien de ses tapis, et rend leurs postes de caisse : un autre tapis peut les prendre
-                $repository->closePresencesOf($repository->matIdsOf($id), $now);
+                $repository->closePresencesOf($repository->matIdsOf($id), LossBoxChannelService::boxTime(time(), $box['clock_offset']));
                 $repository->releaseRegistersOf($id);
             }
 
@@ -241,6 +242,8 @@ class LossBoxService
                 if ($repository->cashRegister($value) === null) {
                     throw new GestionConflictException('CASH_REGISTER_NOT_FOUND', $this->texts->t('boxes.error.CASH_REGISTER_NOT_FOUND', $locale), 404);
                 }
+                // deux tapis reliés au même poste au même instant, depuis deux boîtiers : le second attend ici, puis lit le premier
+                $repository->lockRegister($value);
                 $holder = $repository->matOfRegisterId($value, $deviceId);
                 if ($holder !== null) {
                     throw new GestionConflictException('REGISTER_ALREADY_HAS_MAT', $this->texts->t('boxes.error.REGISTER_ALREADY_HAS_MAT', $locale), 409, ['deviceId' => $holder]);
@@ -252,8 +255,9 @@ class LossBoxService
                 try {
                     $repository->assignDevice($deviceId, $column, $value);
                 } catch (\Doctrine\DBAL\Exception\UniqueConstraintViolationException) {
-                    // deux tapis reliés au même poste au même instant, depuis deux boîtiers : la base n'en garde qu'un
-                    throw new GestionConflictException('REGISTER_ALREADY_HAS_MAT', $this->texts->t('boxes.error.REGISTER_ALREADY_HAS_MAT', $locale), 409, ['deviceId' => $repository->matOfRegisterId((int) $value, $deviceId)]);
+                    // ceinture : l'index de la base a refusé malgré le verrou du poste. La transaction est perdue (aucune lecture de
+                    // plus n'y est possible) : le refus part sans dire quel tapis tient le poste
+                    throw new GestionConflictException('REGISTER_ALREADY_HAS_MAT', $this->texts->t('boxes.error.REGISTER_ALREADY_HAS_MAT', $locale), 409, ['deviceId' => null]);
                 }
                 $repository->event($id, $deviceId, LossBoxEvent::DEVICE_ASSIGNED, $userId, false, [$key => $value], self::now());
             }
@@ -276,10 +280,10 @@ class LossBoxService
 
         return $this->transaction(function () use ($id, $deviceId, $locale, $userId): array {
             $repository = $this->repository();
-            [, $device] = $this->lockedDevice($id, $deviceId, $locale);
+            [$box, $device] = $this->lockedDevice($id, $deviceId, $locale);
             if ($device['status'] !== LossDevice::RETIRED) {
                 $now = self::now();
-                $repository->closePresencesOf([$deviceId], $now);
+                $repository->closePresencesOf([$deviceId], LossBoxChannelService::boxTime(time(), $box['clock_offset']));
                 $repository->retireDevice($deviceId);
                 $repository->event($id, $deviceId, LossBoxEvent::DEVICE_RETIRED, $userId, false, [], $now);
             }

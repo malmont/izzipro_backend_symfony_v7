@@ -15,12 +15,12 @@
         "statusLabel": "Inscrit",
         "online": true,
         "onlineLabel": "En ligne",
-        "lastSeenAt": "2026-11-16T01:40:26+00:00",
-        "lastSeenLabel": "15/11/2026 20 h 40",
+        "lastSeenAt": "2026-11-16T02:28:05+00:00",
+        "lastSeenLabel": "15/11/2026 21 h 28",
         "silentSeconds": null,
         "version": "1.0.0",
         "arch": "amd64",
-        "enrolledAt": "2026-11-16T01:40:25+00:00",
+        "enrolledAt": "2026-11-16T02:28:05+00:00",
         "clockOffsetSeconds": 0,
         "clockDoubt": false,
         "keyHint": "IZ-BOX-XX**-****-****",
@@ -38,7 +38,7 @@
                 "zoneLabel": null,
                 "cashRegister": null,
                 "onMat": null,
-                "lastSeenAt": "2026-11-16T01:40:26+00:00"
+                "lastSeenAt": "2026-11-16T02:28:05+00:00"
             },
             {
                 "id": 2,
@@ -52,18 +52,18 @@
                 "zoneLabel": null,
                 "cashRegister": null,
                 "onMat": null,
-                "lastSeenAt": "2026-11-16T01:40:26+00:00"
+                "lastSeenAt": "2026-11-16T02:28:05+00:00"
             }
         ],
-        "createdAt": "2026-11-16T01:40:25+00:00",
+        "createdAt": "2026-11-16T02:28:05+00:00",
         "screen": "pertes.boitiers",
         "events": [
             {
                 "id": 12,
                 "type": "DEVICE_RETIRED",
                 "label": "Appareil retiré",
-                "at": "2026-11-16T01:40:27+00:00",
-                "atLabel": "15/11/2026 20 h 40",
+                "at": "2026-11-16T02:28:06+00:00",
+                "atLabel": "15/11/2026 21 h 28",
                 "device": "TAPIS-0001",
                 "silentSeconds": null,
                 "byUser": true
@@ -72,8 +72,8 @@
                 "id": 11,
                 "type": "DEVICE_ASSIGNED",
                 "label": "Appareil relié",
-                "at": "2026-11-16T01:40:26+00:00",
-                "atLabel": "15/11/2026 20 h 40",
+                "at": "2026-11-16T02:28:06+00:00",
+                "atLabel": "15/11/2026 21 h 28",
                 "device": "TAPIS-0001",
                 "silentSeconds": null,
                 "byUser": true
@@ -82,8 +82,8 @@
                 "id": 10,
                 "type": "SOURCE_UP",
                 "label": "Appareil revenu",
-                "at": "2026-11-16T01:40:26+00:00",
-                "atLabel": "15/11/2026 20 h 40",
+                "at": "2026-11-16T02:28:05+00:00",
+                "atLabel": "15/11/2026 21 h 28",
                 "device": "TAPIS-0001",
                 "silentSeconds": null,
                 "byUser": false
@@ -92,8 +92,8 @@
                 "id": 9,
                 "type": "SOURCE_UP",
                 "label": "Appareil revenu",
-                "at": "2026-11-16T01:40:26+00:00",
-                "atLabel": "15/11/2026 20 h 40",
+                "at": "2026-11-16T02:28:05+00:00",
+                "atLabel": "15/11/2026 21 h 28",
                 "device": "LECTEUR-0001",
                 "silentSeconds": null,
                 "byUser": false
@@ -102,8 +102,8 @@
                 "id": 8,
                 "type": "SOURCE_DOWN",
                 "label": "Appareil en panne ou débranché",
-                "at": "2026-11-16T01:40:26+00:00",
-                "atLabel": "15/11/2026 20 h 40",
+                "at": "2026-11-16T02:28:05+00:00",
+                "atLabel": "15/11/2026 21 h 28",
                 "device": "TAPIS-0001",
                 "silentSeconds": null,
                 "byUser": false
@@ -112,8 +112,8 @@
                 "id": 7,
                 "type": "SOURCE_DOWN",
                 "label": "Appareil en panne ou débranché",
-                "at": "2026-11-16T01:40:26+00:00",
-                "atLabel": "15/11/2026 20 h 40",
+                "at": "2026-11-16T02:28:05+00:00",
+                "atLabel": "15/11/2026 21 h 28",
                 "device": "LECTEUR-0001",
                 "silentSeconds": null,
                 "byUser": false
@@ -122,8 +122,8 @@
                 "id": 6,
                 "type": "DEVICE_SEEN",
                 "label": "Appareil vu pour la première fois",
-                "at": "2026-11-16T01:40:25+00:00",
-                "atLabel": "15/11/2026 20 h 40",
+                "at": "2026-11-16T02:28:05+00:00",
+                "atLabel": "15/11/2026 21 h 28",
                 "device": "TAPIS-0001",
                 "silentSeconds": null,
                 "byUser": false
@@ -132,8 +132,8 @@
                 "id": 5,
                 "type": "SOURCE_DOWN",
                 "label": "Appareil en panne ou débranché",
-                "at": "2026-11-16T01:40:25+00:00",
-                "atLabel": "15/11/2026 20 h 40",
+                "at": "2026-11-16T02:28:05+00:00",
+                "atLabel": "15/11/2026 21 h 28",
                 "device": "IMPR-0001",
                 "silentSeconds": null,
                 "byUser": false
@@ -142,8 +142,8 @@
                 "id": 4,
                 "type": "DEVICE_SEEN",
                 "label": "Appareil vu pour la première fois",
-                "at": "2026-11-16T01:40:25+00:00",
-                "atLabel": "15/11/2026 20 h 40",
+                "at": "2026-11-16T02:28:05+00:00",
+                "atLabel": "15/11/2026 21 h 28",
                 "device": "IMPR-0001",
                 "silentSeconds": null,
                 "byUser": false
@@ -152,8 +152,8 @@
                 "id": 3,
                 "type": "DEVICE_SEEN",
                 "label": "Appareil vu pour la première fois",
-                "at": "2026-11-16T01:40:25+00:00",
-                "atLabel": "15/11/2026 20 h 40",
+                "at": "2026-11-16T02:28:05+00:00",
+                "atLabel": "15/11/2026 21 h 28",
                 "device": "LECTEUR-0001",
                 "silentSeconds": null,
                 "byUser": false
@@ -162,8 +162,8 @@
                 "id": 2,
                 "type": "BOX_ENROLLED",
                 "label": "Machine inscrite",
-                "at": "2026-11-16T01:40:25+00:00",
-                "atLabel": "15/11/2026 20 h 40",
+                "at": "2026-11-16T02:28:05+00:00",
+                "atLabel": "15/11/2026 21 h 28",
                 "device": null,
                 "silentSeconds": null,
                 "byUser": false
@@ -172,8 +172,8 @@
                 "id": 1,
                 "type": "BOX_CREATED",
                 "label": "Boîtier ajouté",
-                "at": "2026-11-16T01:40:25+00:00",
-                "atLabel": "15/11/2026 20 h 40",
+                "at": "2026-11-16T02:28:05+00:00",
+                "atLabel": "15/11/2026 21 h 28",
                 "device": null,
                 "silentSeconds": null,
                 "byUser": true

@@ -1432,7 +1432,8 @@ administrateur : tous les postes. Clé sans poste : comportement inchangé.
 paiement, la caisse demande au module Prévention des pertes quels articles **suivis** du panier n'ont pas été lus sur le tapis de
 comptoir de ce poste. Réponse 200 `{ active, reason, cashRegisterId, tracked, read, unread [{ productVariantId, name,
 variantLabel, quantity, missing }], extra, checkedAt }`. C'est une **lecture** : rien n'est écrit, et la vente n'est **jamais
-bloquée** ; `active: false` (`MODULE_INACTIVE`, `NO_MAT`, `MAT_SILENT`) veut dire « pas de contrôle ». Le poste se résout comme pour
+bloquée** ; `active: false` (`MODULE_INACTIVE`, `TERMINAL_NOT_BOUND` : sur un site à plusieurs postes, la tablette du caissier
+doit être rattachée à ce poste ; `NO_MAT`, `MAT_SILENT`, `TOO_MANY_REQUESTS`) veut dire « pas de contrôle ». Le poste se résout comme pour
 une vente et doit avoir une session ouverte (mêmes refus : `CASH_REGISTER_NOT_FOUND`, `CASH_REGISTER_REQUIRED`,
 `CASH_REGISTER_CLOSED`, `CASH_REGISTER_FORBIDDEN`). La caisse traite toute autre réponse, et tout retard de plus de 2 secondes,
 comme « pas de contrôle » ; hors ligne, elle n'appelle pas. La route est dans le module (`src/LossPrevention/`) : aucun code de

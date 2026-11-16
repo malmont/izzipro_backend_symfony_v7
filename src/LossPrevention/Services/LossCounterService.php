@@ -64,6 +64,7 @@ class LossCounterService
     public function unread(array $body): array
     {
         $items = $this->items($body);
+        $lines = count($body['items']);
         $registerId = $body['cashRegisterId'] ?? null;
         if ($registerId !== null && (!is_int($registerId) || $registerId < 1 || $registerId > 2147483647)) {
             throw new CashRegisterException('VALIDATION_FAILED', 'Panier invalide', 422, [['path' => 'cashRegisterId', 'message' => 'entier positif attendu']]);
@@ -76,8 +77,14 @@ class LossCounterService
             return $answer($registerId, false, 'MODULE_INACTIVE');
         }
         $user = $this->security->getUser();
-        // une question par paiement suffit très au large : au-delà, pas de contrôle (la route ne sert pas à sonder le catalogue)
-        if ($user instanceof User && $this->limits->till((string) $this->tenant->getTenantCode(), (int) $user->getId()) !== null) {
+        // une question par paiement suffit très au large : au-delà d'un plafond de LIGNES de panier par compte, pas de contrôle (la
+        // route ne sert pas à sonder le catalogue). Le compteur en panne ne gêne pas la caisse : la question passe
+        try {
+            $over = $user instanceof User && $this->limits->till((string) $this->tenant->getTenantCode(), (int) $user->getId(), $lines) !== null;
+        } catch (\Throwable) {
+            $over = false;
+        }
+        if ($over) {
             return $answer($registerId, false, 'TOO_MANY_REQUESTS');
         }
         // le poste se résout comme pour une vente, session ouverte comprise

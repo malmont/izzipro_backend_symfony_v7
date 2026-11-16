@@ -82,8 +82,11 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
         $this->channel('canal-refus-sans-jeton', 'GET', '/reglages', null, null, 401);
         $devices = [['serial' => 'LECTEUR-0001', 'kind' => 'reader', 'status' => 'ok', 'model' => 'Lecteur de bureau (USB)'], ['serial' => 'IMPR-0001', 'kind' => 'printer', 'status' => 'down'],
             ['serial' => 'TAPIS-0001', 'kind' => 'counter_mat', 'status' => 'ok', 'model' => 'Tapis de comptoir']];
-        $this->channel('canal-signe-de-vie', 'POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => self::MACHINE, 'version' => '1.0.0', 'devices' => $devices], $token);
-        $this->channel('canal-signe-de-vie-appareil-refuse', 'POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => self::MACHINE, 'devices' => [['serial' => 'LECTEUR-0001', 'kind' => 'camera', 'status' => 'ok'], $devices[1]]], $token);
+        // dans chaque signe de vie, le boîtier renvoie l'heure du serveur de la dernière réponse qu'il a lue (inscription ou signe de vie)
+        $this->channel('canal-signe-de-vie', 'POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => self::MACHINE, 'version' => '1.0.0',
+            'lastServerTime' => $this->examples['canal-inscription']['body']['serverTime'], 'devices' => $devices], $token);
+        $this->channel('canal-signe-de-vie-appareil-refuse', 'POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => self::MACHINE,
+            'lastServerTime' => $this->examples['canal-signe-de-vie']['body']['serverTime'], 'devices' => [['serial' => 'LECTEUR-0001', 'kind' => 'camera', 'status' => 'ok'], $devices[1]]], $token);
         $this->channel('canal-refus-signe-de-vie-invalide', 'POST', '/signe-de-vie', ['now' => 'hier', 'machine' => self::MACHINE, 'devices' => [['serial' => 'LECTEUR-0001', 'kind' => 'antenne', 'status' => 'ok']]], $token, 422);
         $this->channel('canal-reglages', 'GET', '/reglages', null, $token);
         $at = gmdate('Y-m-d\TH:i:s\Z', time() - 30);
@@ -96,7 +99,8 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
         $this->channel('canal-faits', 'POST', '/faits', ['facts' => $facts], $token);
         $this->channel('canal-faits-rejoues', 'POST', '/faits', ['facts' => $facts], $token);
         // ----- Lot L3-b1 : le tapis de comptoir, relié à un poste, et la question de la caisse avant un paiement
-        $this->channel('canal-signe-de-vie-avec-tapis', 'POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => self::MACHINE, 'devices' => $devices], $token);
+        $this->channel('canal-signe-de-vie-avec-tapis', 'POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => self::MACHINE,
+            'lastServerTime' => $this->examples['canal-signe-de-vie-appareil-refuse']['body']['serverTime'], 'devices' => $devices], $token);
         $mat = array_column($this->examples['canal-reglages']['body']['devices'], 'id', 'serial')['TAPIS-0001'];
         $this->admin_('admin-sante-tapis-en-attente', 'GET', '/sante');
         $this->admin_('admin-tapis-relie-a-un-poste', 'PUT', "/boitiers/$id/appareils/$mat", ['cashRegisterId' => $this->register]);

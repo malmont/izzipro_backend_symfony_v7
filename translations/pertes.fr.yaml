@@ -551,6 +551,7 @@ health:
             down: 'Le tapis ne répond plus. Vérifiez son câble sur le boîtier, puis son alimentation.'
             box_silent: 'Son boîtier ne donne plus signe de vie : on ne sait plus ce qui est posé sur le tapis. Vérifiez le boîtier.'
             clock: 'L''horloge de son boîtier est déréglée : le tapis ne peut pas dire ce qui est posé. Vérifiez que le boîtier a accès à Internet (il se met à l''heure tout seul).'
+            clock_pending: 'Son boîtier vient d''être inscrit : le tapis sera prêt à son premier signe de vie, dans la minute.'
             never_read: 'Le tapis n''a encore lu aucune puce. Posez dessus une pièce qui porte une puce.'
             never_read_exercise: 'Le tapis simulé n''a encore rien lu. Jouez le scénario « Pièce posée sur le tapis ».'
             no_register: 'Ce tapis n''est relié à aucun poste de caisse. Choisissez son poste dans la fiche du boîtier.'

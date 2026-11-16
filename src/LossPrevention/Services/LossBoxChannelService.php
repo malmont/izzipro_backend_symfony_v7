@@ -144,7 +144,7 @@ class LossBoxChannelService
                 $repository->event($boxId, null, LossBoxEvent::BOX_BACK, null, false, ['silentSeconds' => $silent, 'since' => self::iso(self::stamp((string) $box['last_seen_at']))], $now);
             }
             // une machine (ré)inscrite ne sait plus ce que la plateforme croyait posé sur ses tapis : tout se ferme, elle le redira
-            $repository->closePresencesOf($repository->matIdsOf($boxId), $now);
+            $repository->closePresencesOf($repository->matIdsOf($boxId), self::boxTime($serverNow, $box['clock_offset']));
             $generation = $repository->enrol($boxId, $machine, $body['version'], $body['arch'], $now);
             $repository->event($boxId, null, LossBoxEvent::BOX_ENROLLED, null, false, ['version' => $body['version'], 'arch' => $body['arch'], 'again' => $again], $now);
             $token = $this->tokens->issue($site, $boxId, $generation, $serverNow);
@@ -201,6 +201,12 @@ class LossBoxChannelService
         if ($version !== null && (!is_string($version) || preg_match(self::VERSION, $version) !== 1)) {
             $errors['version'] = 'INVALID_VALUE';
         }
+        // l'heure du serveur lue dans la DERNIÈRE réponse reçue (inscription ou signe de vie) : absente au démarrage du boîtier
+        $echo = $body['lastServerTime'] ?? null;
+        $lastAnswer = $echo !== null ? self::time($echo) : null;
+        if ($echo !== null && $lastAnswer === null) {
+            $errors['lastServerTime'] = 'INVALID_VALUE';
+        }
         // la liste est obligatoire : un signe de vie sans elle déclarerait tous les appareils débranchés
         $devices = $body['devices'] ?? null;
         $announced = [];
@@ -252,7 +258,7 @@ class LossBoxChannelService
         $this->sameMachine($box, $body, $site);
         $boxId = (int) $box['id'];
 
-        return $this->transaction(function () use ($site, $boxId, $boxNow, $version, $announced, $refused, $box): array {
+        return $this->transaction(function () use ($site, $boxId, $boxNow, $version, $announced, $refused, $box, $lastAnswer): array {
             $repository = $this->repository();
             // la ligne du boîtier est verrouillée : deux signes de vie du même boîtier ne se croisent pas, et un boîtier révoqué
             // entre-temps n'écrit plus rien
@@ -272,18 +278,24 @@ class LossBoxChannelService
                 $repository->event($boxId, null, LossBoxEvent::BOX_BACK, null, false, ['silentSeconds' => $silent, 'since' => self::iso(self::stamp((string) $current['last_seen_at']))], $now);
                 // pendant le silence on ne sait plus ce qui était sur les tapis : les présences se ferment au dernier signe de vie,
                 // et le boîtier redit ce qui est posé (COUNTER_SEEN) maintenant qu'il est revenu
-                $repository->closePresencesOf($mats, (string) $current['last_seen_at']);
+                $repository->closePresencesOf($mats, self::boxTime(self::stamp((string) $current['last_seen_at']), $current['clock_offset']));
+            }
+            // Le boîtier n'a pas lu notre dernière réponse (perdue en route), ou il vient de redémarrer : on ne sait plus ce qu'il sait.
+            // Tout repart de zéro : ce qu'on croyait posé se ferme, et il redit tout. Un `resendMats` perdu n'est donc jamais perdu
+            $missed = $current['last_seen_at'] !== null && $lastAnswer !== self::stamp((string) $current['last_seen_at']);
+            if ($missed) {
+                $repository->closePresencesOf($mats, self::boxTime($serverNow, $current['clock_offset']));
             }
             $offset = max(-2147483647, min(2147483647, $boxNow - $serverNow));
             $repository->seen($boxId, $now, $version, $offset);
             // Tapis dont le boîtier doit REDIRE ce qui est posé (`resendMats`) : chaque fois que le serveur a fermé ses présences sans que
-            // le boîtier le sache (retour d'un silence, tapis revenu d'une panne ou d'un retrait, horloge redevenue juste)
-            $resendAll = $silent > $this->health->silentAfter();
+            // le boîtier le sache (retour d'un silence, tapis revenu d'une panne ou d'un retrait, horloge redevenue juste, réponse perdue)
+            $resendAll = $missed || $silent > $this->health->silentAfter();
             $doubtBefore = $current['clock_offset'] === null || abs((int) $current['clock_offset']) > self::CLOCK_TOLERANCE;
             $doubtNow = abs($offset) > self::CLOCK_TOLERANCE;
             if ($doubtNow && !$doubtBefore) {
                 // l'horloge du boîtier vient de se dérégler : ses faits ne poseront plus rien, ce qu'on croyait posé ne l'est plus pour nous
-                $repository->closePresencesOf($mats, $now);
+                $repository->closePresencesOf($mats, self::boxTime($serverNow, $current['clock_offset']));
             }
             $resendAll = $resendAll || ($doubtBefore && !$doubtNow);
             $back = [];
@@ -345,7 +357,7 @@ class LossBoxChannelService
                 }
             }
             // un tapis en panne ne dit plus ce qui est posé sur lui : ses présences se ferment
-            $repository->closePresencesOf(array_values(array_intersect($down, $mats)), $now);
+            $repository->closePresencesOf(array_values(array_intersect($down, $mats)), self::boxTime($serverNow, $doubtNow ? $current['clock_offset'] : $offset));
             $token = null;
             if ((int) $box['token_expires_at'] - $serverNow < LossBoxToken::RENEW_BEFORE) {
                 $fresh = $this->tokens->issue($site, $boxId, (int) $current['generation'], $serverNow);
@@ -454,7 +466,7 @@ class LossBoxChannelService
                 if ($written && !$doubt && $fact['type'] === LossPieceEvent::COUNTER_SEEN) {
                     $repository->openPresence($fact['deviceId'], (int) $tag['id'], $at, false);
                 } elseif ($written && $fact['type'] === LossPieceEvent::COUNTER_LEFT) {
-                    $doubt ? $repository->closePresencesOfTag($fact['deviceId'], (int) $tag['id'], $now) : $repository->closePresence($fact['deviceId'], (int) $tag['id'], $at, false);
+                    $doubt ? $repository->closePresencesOfTag($fact['deviceId'], (int) $tag['id'], self::boxTime($serverNow, $current['clock_offset'])) : $repository->closePresence($fact['deviceId'], (int) $tag['id'], $at, false);
                 }
                 $status = $written ? 'accepted' : 'duplicate';
                 ++$counts[$status];
@@ -606,6 +618,19 @@ class LossBoxChannelService
 
         // une heure hors de ce que la base garde (avant 2000, après 2100) n'est pas une heure de boîtier
         return $stamp >= 946684800 && $stamp < 4102444800 ? $stamp : null;
+    }
+
+    /**
+     * L'heure d'une fermeture décidée par le SERVEUR, dite dans l'horloge du BOÎTIER. Les arrivées et les départs d'un tapis sont
+     * datés par le boîtier ; une fermeture datée par l'horloge du serveur ferait juger « plus ancienne qu'un départ connu » une
+     * arrivée que le boîtier redit juste après, dès qu'il retarde de quelques secondes. Écart inconnu ou douteux : la tolérance
+     * entière est retirée (la fermeture est alors dite au plus tôt ; le dépôt ne ferme jamais avant l'arrivée).
+     */
+    public static function boxTime(int $serverStamp, mixed $clockOffset): string
+    {
+        $known = $clockOffset !== null && abs((int) $clockOffset) <= self::CLOCK_TOLERANCE;
+
+        return gmdate('Y-m-d H:i:s', $serverStamp + ($known ? (int) $clockOffset : -self::CLOCK_TOLERANCE));
     }
 
     private static function stamp(string $stored): int

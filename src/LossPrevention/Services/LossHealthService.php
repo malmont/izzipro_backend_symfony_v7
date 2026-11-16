@@ -177,12 +177,16 @@ class LossHealthService
         $seen = (new \DateTimeImmutable((string) $mat['last_seen_at'], new \DateTimeZone('UTC')))->getTimestamp();
         $boxSilent = $mat['box_status'] !== LossBox::ACTIVE || $boxSeen === null || $now - $boxSeen > $threshold;
         $register = $mat['cash_register_id'] !== null ? (int) $mat['cash_register_id'] : null;
-        // l'horloge du boîtier est déréglée (ou pas encore mesurée, pour un vrai boîtier) : ses faits ne posent rien sur le tapis
-        $clockDoubt = $mat['box_clock'] !== null ? abs((int) $mat['box_clock']) > LossBoxChannelService::CLOCK_TOLERANCE : !$exercise;
+        // l'horloge du boîtier est déréglée : ses faits ne posent rien sur le tapis. Pas encore mesurée (un vrai boîtier tout juste
+        // inscrit, avant son premier signe de vie) : rien n'est en panne, on attend
+        $clockDoubt = $mat['box_clock'] !== null && abs((int) $mat['box_clock']) > LossBoxChannelService::CLOCK_TOLERANCE;
+        $clockUnknown = $mat['box_clock'] === null && !$exercise;
         if ($mat['status'] === 'down' || $boxSilent) {
             [$state, $hint] = ['down', $this->texts->t('health.hint.mat.' . ($boxSilent ? 'box_silent' : 'down'), $locale)];
         } elseif ($clockDoubt) {
             [$state, $hint] = ['down', $this->texts->t('health.hint.mat.clock', $locale)];
+        } elseif ($clockUnknown) {
+            [$state, $hint] = ['pending', $this->texts->t('health.hint.mat.clock_pending', $locale)];
         } elseif (!(bool) $mat['has_read']) {
             [$state, $hint] = ['pending', $this->texts->t('health.hint.mat.' . ($exercise ? 'never_read_exercise' : 'never_read'), $locale)];
         } elseif ($register === null && !$exercise) {
@@ -190,8 +194,9 @@ class LossHealthService
         } else {
             [$state, $hint] = ['ok', null];
         }
-        // depuis quand il se tait : le dernier signe de vie de son boîtier s'il s'est tu, sinon la dernière fois que le tapis a été annoncé
-        $since = $state === 'down' ? ($boxSilent && $boxSeen !== null ? min($boxSeen, $seen) : $seen) : null;
+        // depuis quand il se tait : le dernier signe de vie de son boîtier s'il s'est tu, sinon la dernière fois que le tapis a été
+        // annoncé. Une horloge déréglée n'est pas un silence : le tapis parle, aucune durée n'est dite
+        $since = $state === 'down' && ($mat['status'] === 'down' || $boxSilent) ? ($boxSilent && $boxSeen !== null ? min($boxSeen, $seen) : $seen) : null;
         $label = $this->texts->t('health.kind.mat', $locale) . ($mat['register_name'] !== null ? ' · ' . $mat['register_name'] : '');
 
         return ['code' => 'mat-' . $mat['id'], 'kind' => 'mat', 'label' => $label, 'zone' => 'counter', 'cashRegisterId' => $register, 'state' => $state,

@@ -19,6 +19,8 @@ class LossBoxRepository extends EntityRepository
 {
     /** Verrou consultatif des créations de boîtiers d'un site : le plafond se compte sans course */
     public const CREATE_LOCK = 7461082;
+    /** Verrou consultatif de la liaison d'un tapis à un poste de caisse (première des deux clés ; la seconde est le poste) */
+    public const REGISTER_LOCK = 7461083;
 
     private const BOX = 'id, name, place, key_hint, status, generation, machine_hash, version, arch, enrolled_at, last_seen_at, clock_offset, exercise, created_at, revoked_at';
 
@@ -154,6 +156,12 @@ class LossBoxRepository extends EntityRepository
     public function assignDevice(int $id, string $column, int|string|null $value): void
     {
         $this->db()->executeStatement('UPDATE loss_device SET ' . ($column === 'cash_register_id' ? 'cash_register_id' : 'zone') . ' = ? WHERE id = ?', [$value, $id]);
+    }
+
+    /** Tient le poste de caisse jusqu'à la fin de la transaction (verrou consultatif : rien n'est verrouillé dans les tables de la caisse) */
+    public function lockRegister(int $cashRegisterId): void
+    {
+        $this->db()->executeStatement('SELECT pg_advisory_xact_lock(?, ?)', [self::REGISTER_LOCK, $cashRegisterId]);
     }
 
     /** Le tapis en service déjà relié à ce poste, s'il y en a un (hors `$exceptDeviceId`) */

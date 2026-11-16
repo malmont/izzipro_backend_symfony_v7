@@ -187,18 +187,34 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $line = $health()["mat-$mat"];
         $this->assertSame(['down', 'Son boîtier ne donne plus signe de vie : on ne sait plus ce qui est posé sur le tapis. Vérifiez le boîtier.'], [$line['state'], $line['hint']]);
         $lastSeen = (string) $this->db->fetchOne('SELECT last_seen_at FROM loss_box WHERE id = ?', [$id]);
+        $this->answered[$token] = gmdate('Y-m-d\TH:i:s\Z', strtotime($lastSeen . ' UTC')); // le boîtier avait bien lu la réponse de ce signe de vie-là : seul le silence joue
         $this->assertSame(["TAPIS-$this->s"], $this->beat($token, [['serial' => "TAPIS-$this->s", 'kind' => 'counter_mat', 'status' => 'ok']])['resendMats']);
-        $this->assertSame([0, 'ok', $lastSeen], [$sheet()[$mat]['onMat'], $health()["mat-$mat"]['state'], (string) $this->db->fetchOne('SELECT until FROM loss_counter_presence WHERE device_id = ? ORDER BY id DESC LIMIT 1', [$mat])],
+        $this->assertSame([0, 'ok'], [$sheet()[$mat]['onMat'], $health()["mat-$mat"]['state']]);
+        $this->assertEqualsWithDelta(strtotime($lastSeen . ' UTC'), strtotime($this->db->fetchOne('SELECT until FROM loss_counter_presence WHERE device_id = ? ORDER BY id DESC LIMIT 1', [$mat]) . ' UTC'), 2,
             'fermée au dernier signe de vie d\'avant le silence, pas à l\'heure du retour');
+        // La réponse d'un signe de vie se perd en route : le boîtier n'a pas lu `resendMats`. Au suivant, il renvoie l'heure de la
+        // dernière réponse qu'il a lue : ce n'est pas la nôtre, donc tout se ferme et tout est redemandé, jusqu'à ce qu'il l'ait lu
+        $mats = [['serial' => "TAPIS-$this->s", 'kind' => 'counter_mat', 'status' => 'ok']];
+        $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc);
+        $this->assertSame([[], 1], [$this->beat($token, $mats, 0, true)['resendMats'], $sheet()[$mat]['onMat']], 'cette réponse-là ne demandait rien, mais elle se perd');
+        $this->assertSame([["TAPIS-$this->s"], 0], [$this->beat($token, $mats, 0, true)['resendMats'], $sheet()[$mat]['onMat']], 'réponse perdue : on ne sait plus ce que le boîtier sait');
+        $this->assertSame(["TAPIS-$this->s"], $this->beat($token, $mats)['resendMats'], 'encore perdue : redemandé, tant qu\'il ne l\'a pas lu');
+        $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc);
+        $this->assertSame([[], 1], [$this->beat($token, $mats)['resendMats'], $sheet()[$mat]['onMat']], 'lue : plus rien à redire, ce qui a été redit reste posé');
+        // Le boîtier redémarre : il ne sait plus quelle réponse il a lue, et ne renvoie rien. Même traitement
+        $boot = $this->json($this->box('POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => self::MACHINE, 'devices' => $mats], $token));
+        $this->answered[$token] = $boot['serverTime'];
+        $this->assertSame([["TAPIS-$this->s"], 0], [$boot['resendMats'], $sheet()[$mat]['onMat']]);
+        $this->assertSame(['lastServerTime' => 'INVALID_VALUE'], $this->json($this->box('POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => self::MACHINE, 'devices' => $mats, 'lastServerTime' => 'hier'], $token), 422)['fields']);
         // Horloge du boîtier déréglée : ce qu'on croyait posé ne l'est plus, ses arrivées ne posent rien, la pastille le dit ; remise
         // à l'heure, le boîtier redit
         $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc);
-        $drift = fn (int $seconds): array => $this->json($this->box('POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z', time() + $seconds), 'machine' => self::MACHINE,
-            'devices' => [['serial' => "TAPIS-$this->s", 'kind' => 'counter_mat', 'status' => 'ok']]], $token));
+        $drift = fn (int $seconds): array => $this->beat($token, $mats, -$seconds);
         $this->assertSame([true, []], [($d = $drift(-300))['clockDoubt'], $d['resendMats']]);
         $line = $health()["mat-$mat"];
         $this->assertSame([0, 'down'], [$sheet()[$mat]['onMat'], $line['state']]);
         $this->assertStringContainsString('L\'horloge de son boîtier est déréglée', $line['hint']);
+        $this->assertSame([null, null], [$line['silentSince'], $line['silentSeconds']], 'une horloge déréglée n\'est pas un silence : le tapis parle');
         $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc);
         $this->assertSame(0, $sheet()[$mat]['onMat']);
         $this->assertSame([false, ["TAPIS-$this->s"]], [($d = $drift(0))['clockDoubt'], $d['resendMats']]);
@@ -207,9 +223,38 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc);
         $token = $this->reenrol($id, $token);
         $this->assertSame(0, $sheet()[$mat]['onMat'], 'réinscrite : rien n\'est plus dit posé');
-        $this->beat($token, [['serial' => "TAPIS-$this->s", 'kind' => 'counter_mat', 'status' => 'ok']]);
+        $this->assertSame(['pending', 'Son boîtier vient d\'être inscrit : le tapis sera prêt à son premier signe de vie, dans la minute.', null], [($line = $health()["mat-$mat"])['state'], $line['hint'], $line['silentSince']],
+            'horloge pas encore mesurée : rien n\'est en panne, on attend');
+        $this->assertSame(["TAPIS-$this->s"], $this->beat($token, $mats)['resendMats'], 'premier signe de vie après la réinscription : le boîtier redit');
         $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc);
         $this->assertSame(1, $sheet()[$mat]['onMat']);
+        // Un boîtier dont l'horloge RETARDE de 30 secondes (dans la tolérance). Ce que le serveur ferme de lui-même est daté à l'horloge
+        // du boîtier : ce que le boîtier redit juste après n'est pas jugé « plus ancien qu'un départ connu »
+        $this->fact($token, 'COUNTER_LEFT', "TAPIS-$this->s", $nfc);
+        [$fifth, $sixth] = [$this->tagged($variant, '05'), $this->tagged($variant, '06')];
+        $late = fn (string $identifier): array => $this->fact($this->current, 'COUNTER_SEEN', "TAPIS-$this->s", $identifier, ['at' => gmdate('Y-m-d\TH:i:s\Z', time() - 30)]);
+        $this->current = $token;
+        $this->assertEqualsWithDelta(-30, $this->beat($token, $mats, 30)['clockOffsetSeconds'], 2);
+        $late($fifth);
+        $late($sixth);
+        $this->assertSame(2, $sheet()[$mat]['onMat']);
+        $this->beat($token, [['serial' => "TAPIS-$this->s", 'kind' => 'counter_mat', 'status' => 'down']], 30); // le tapis tombe : tout se ferme
+        $this->assertSame([0, ["TAPIS-$this->s"]], [$sheet()[$mat]['onMat'], $this->beat($token, $mats, 30)['resendMats']]);
+        $late($fifth);
+        $late($sixth);
+        $this->assertSame(2, $sheet()[$mat]['onMat'], 'tapis revenu, boîtier en retard : ce qu\'il redit est bien posé');
+        $token = $this->reenrol($id, $token); // la même machine se réinscrit, les pièces sont restées sur le tapis
+        $this->current = $token;
+        $this->assertSame([0, ["TAPIS-$this->s"]], [$sheet()[$mat]['onMat'], $this->beat($token, $mats, 30)['resendMats']]);
+        $late($fifth);
+        $this->assertSame(1, $sheet()[$mat]['onMat'], 'réinscrite, boîtier en retard : ce qu\'il redit est bien posé');
+        // retiré par erreur, annoncé de nouveau aussitôt, toujours en retard : pareil
+        $this->json($this->admin('POST', self::BOXES . "/$id/appareils/$mat/retirer", ['confirm' => true]));
+        $this->assertSame([0, ["TAPIS-$this->s"]], [(int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_counter_presence WHERE device_id = ? AND until IS NULL', [$mat]), $this->beat($token, $mats, 30)['resendMats']]);
+        $late($fifth);
+        $this->assertSame(1, $sheet()[$mat]['onMat'], 'retiré puis revenu, boîtier en retard : ce qu\'il redit est bien posé');
+        $this->json($this->admin('PUT', self::BOXES . "/$id/appareils/$mat", ['cashRegisterId' => $this->register])); // son poste lui est rendu pour la suite
+        $this->beat($token, $mats); // remis à l'heure
 
         // Retirer un appareil remplacé : confirmation ; il ne compte plus, n'envoie plus de faits, rend son poste ; annoncé de nouveau, il revient
         $retire = fn (int $device, array $body, int $status = 200): array => $this->json($this->admin('POST', self::BOXES . "/$id/appareils/$device/retirer", $body), $status);
@@ -234,6 +279,7 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $this->assertSame(['ok', null, ['DEVICE_SEEN', $mat, ['kind' => 'counter_mat', 'again' => true]]],
             [$this->db->fetchOne('SELECT status FROM loss_device WHERE id = ?', [$mat]), $this->db->fetchOne('SELECT cash_register_id FROM loss_device WHERE id = ?', [$mat]), $events()[$before]],
             'il revient, sans poste : le sien a été repris par un autre tapis');
+        $this->assertSame([], $this->beat($token, [...$mats, ['serial' => "LECTEUR-$this->s", 'kind' => 'reader', 'status' => 'ok']])['resendMats'], 'déjà redemandé à son retour : plus rien à redire');
         // Boîtier révoqué : ses tapis rendent leur poste (un autre tapis peut le prendre) et ne se relient plus
         $otherMat = $otherDevices["TAPIS-B-$this->s"];
         $this->json($this->admin('POST', self::BOXES . "/$otherBox/revoquer", ['confirm' => true]));
@@ -255,7 +301,7 @@ class LossPreventionCounterTest extends LossPreventionTestCase
 
     public function testTheTillAsksWhichTrackedItemsWereNotReadOnTheMatOfItsOwnRegisterAndNothingIsWritten(): void
     {
-        [$a, $b, $c, $d, $e, $f] = $this->article('Veste', 6);
+        [$a, $b, $c, $d, $e, $f, $g] = $this->article('Veste', 7);
         $a1 = $this->tagged($a, '01');
         $a2 = $this->tagged($a, '02');
         $b1 = $this->tagged($b, '03');
@@ -345,6 +391,7 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         // Chaque tablette rattachée à son poste : son caissier lit le tapis de CE poste, et lui seul
         $first = $this->activateTerminal("Tablette 1 $this->s");
         $firstHeader = $this->terminal;
+        $this->assertSame('TERMINAL_NOT_BOUND', $ask($basket)['reason'], 'une tablette activée mais rattachée à aucun poste : pas de contrôle');
         $this->json($this->call('PUT', '/api/app-keys/' . $first, ['cashRegisterId' => $this->register], $this->adminToken));
         $forbidden = $ask($basket, $second, 403);
         $this->assertSame(['CASH_REGISTER_FORBIDDEN', false], [$forbidden['error'], array_key_exists('unread', $forbidden)], 'la tablette du poste 1 ne lit pas le tapis du poste 2');
@@ -363,6 +410,11 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $this->assertSame([true, null, 1, 1, [], 0], $short($ask([['productVariantId' => $e, 'quantity' => 1]], $second)));
         $this->terminal = $firstHeader;
         $this->assertSame(0, $ask($basket)['extra'], 'la pièce posée sur le second tapis n\'est plus comptée sur le premier : une puce n\'est que sur un tapis à la fois');
+        // Un départ reçu seul (son arrivée s'est perdue) : le tapis a bien vu la puce, la pièce compte comme lue ; elle n'est pas « posée »
+        $g1 = $this->tagged($g, '06');
+        $this->assertSame([true, null, 1, 0, [[$g, 1, 1]], 1], $short($ask([['productVariantId' => $g, 'quantity' => 1]])));
+        $this->fact($token, 'COUNTER_LEFT', "TAPIS-$this->s", $g1, ['at' => gmdate('Y-m-d\TH:i:s\Z', time() - 5)]);
+        $this->assertSame([true, null, 1, 1, [], 1], $short($ask([['productVariantId' => $g, 'quantity' => 1]])), 'un départ seul vaut lecture, pas présence');
 
         // Pas de contrôle plutôt qu'un faux avis : tapis en panne, boîtier silencieux, horloge déréglée, tapis retiré, boîtier révoqué,
         // module absent. Toujours 200
@@ -390,8 +442,10 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $this->json($this->admin('POST', self::BOXES . "/$id/appareils/$mat/retirer", ['confirm' => true]));
         $this->assertSame([false, 'NO_MAT'], array_slice($short($ask($basket)), 0, 2));
         $this->terminal = $secondHeader;
+        $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_counter_presence WHERE device_id = ? AND until IS NULL', [$otherDevices["TAPIS-2-$this->s"]]));
         $this->json($this->admin('POST', self::BOXES . "/$otherBox/revoquer", ['confirm' => true]));
         $this->assertSame([false, 'NO_MAT'], array_slice($short($ask($basket, $second)), 0, 2));
+        $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_counter_presence WHERE device_id = ? AND until IS NULL', [$otherDevices["TAPIS-2-$this->s"]]), 'boîtier révoqué : plus rien n\'est dit posé sur ses tapis');
         $this->terminal = null;
 
         // Droits : la caisse et l'administrateur ; ni un anonyme, ni un client du web, ni un boîtier
@@ -410,17 +464,21 @@ class LossPreventionCounterTest extends LossPreventionTestCase
     {
         $this->loginPos(['ROLE_USER_POS']);
         $this->openSession();
-        $ask = fn (): array => $this->json($this->pos('POST', self::UNREAD, ['cashRegisterId' => $this->register, 'items' => []]));
-        for ($i = 0; $i < \App\LossPrevention\Services\LossBoxLimits::LIMITS['till']; ++$i) {
-            if ($ask()['reason'] !== 'NO_MAT') {
-                $this->fail("question $i : " . json_encode($ask()));
+        // le plafond compte les LIGNES de panier (une question vide compte pour une) : 200 lignes par question, le plus qu'elle porte
+        $ask = fn (int $lines): array => $this->json($this->pos('POST', self::UNREAD, ['cashRegisterId' => $this->register, 'items' => array_fill(0, $lines, ['productVariantId' => 999999999, 'quantity' => 1])]));
+        $limit = \App\LossPrevention\Services\LossBoxLimits::LIMITS['till'];
+        $this->assertSame(0, $limit % 200);
+        for ($i = 0; $i < intdiv($limit, 200) - 1; ++$i) {
+            if ($ask(200)['reason'] !== 'NO_MAT') {
+                $this->fail("question $i : " . json_encode($ask(200)));
             }
         }
-        $this->assertSame([false, 'TOO_MANY_REQUESTS', $this->register, 0, []], [($over = $ask())['active'], $over['reason'], $over['cashRegisterId'], $over['tracked'], $over['unread']],
+        $this->assertSame(['NO_MAT', 'NO_MAT'], [$ask(199)['reason'], $ask(0)['reason']], 'il reste 200 lignes : 199, puis une question vide, qui compte pour une');
+        $this->assertSame([false, 'TOO_MANY_REQUESTS', $this->register, 0, []], [($over = $ask(1))['active'], $over['reason'], $over['cashRegisterId'], $over['tracked'], $over['unread']],
             'au-delà du plafond : pas de contrôle, toujours 200 (la caisse n\'est jamais gênée)');
         // un autre compte n'est pas touché
         $this->loginPos(['ROLE_USER_POS']);
-        $this->assertSame('NO_MAT', $ask()['reason']);
+        $this->assertSame('NO_MAT', $ask(1)['reason']);
     }
 
     public function testTheSimulatedMatPlaysItsScenariosAndIsErasedWithTheExercise(): void
@@ -446,6 +504,7 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $play('counter_put');
         $this->assertSame([1, 0], [$onMat($play('heartbeat')), $onMat($play('network_cut'))], 'comme un vrai boîtier : au retour d\'une coupure, ce qui était posé ne l\'est plus pour nous');
         $play('counter_put');
+        $this->json($this->admin('POST', self::EX . '/puces/associer', ['variantId' => $variant])); // une pièce d'exercice de plus, créée après : ce n'est pas elle qui est posée
         $take = $play('counter_take');
         $this->assertSame([1, 0, 'Reprise du tapis de comptoir'], [$take['written'], $onMat($take), array_slice(array_column($this->json($this->admin('GET', self::EX . "/pieces/$piece"))['events'], 'label'), -1)[0]]);
         // rien de tout cela n'existe pour la caisse : un tapis simulé n'a pas de poste, une pièce d'exercice n'est pas suivie
@@ -586,9 +645,11 @@ class LossPreventionCounterTest extends LossPreventionTestCase
     private function enrolled(string $name, array $devices, string $machine = self::MACHINE): array
     {
         $created = $this->json($this->admin('POST', self::BOXES, ['name' => "$name $this->s"]), 201);
-        $token = $this->json($this->box('POST', '/inscription', ['key' => $created['key'], 'machine' => $machine, 'version' => '1.0.0', 'arch' => 'amd64'], null))['token'];
-        $settings = $this->json($this->box('POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => $machine, 'devices' => $devices], $token))['settings'];
+        $enrolment = $this->json($this->box('POST', '/inscription', ['key' => $created['key'], 'machine' => $machine, 'version' => '1.0.0', 'arch' => 'amd64'], null));
+        $token = $enrolment['token'];
         $this->machines[$token] = $machine;
+        $this->answered[$token] = $enrolment['serverTime'];
+        $settings = $this->beat($token, $devices)['settings'];
 
         return [$created['box']['id'], $token, array_column($settings['devices'], 'id', 'serial')];
     }
@@ -600,19 +661,42 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $this->assertSame([], array_filter(array_column($reset['box']['devices'], 'onMat')), 'clé remise à zéro : la machine d\'avant est détachée, rien n\'est plus dit posé');
         $key = $reset['key'];
         $machine = $this->machines[$oldToken];
-        $token = $this->json($this->box('POST', '/inscription', ['key' => $key, 'machine' => $machine, 'version' => '1.0.1', 'arch' => 'amd64'], null))['token'];
-        $this->machines[$token] = $machine;
+        $enrolment = $this->json($this->box('POST', '/inscription', ['key' => $key, 'machine' => $machine, 'version' => '1.0.1', 'arch' => 'amd64'], null));
+        $this->machines[$enrolment['token']] = $machine;
+        $this->answered[$enrolment['token']] = $enrolment['serverTime'];
 
-        return $token;
+        return $enrolment['token'];
     }
+
+    /** Le jeton du moment, pour une fonction définie avant une réinscription */
+    private string $current = '';
 
     /** @var array<string, string> la machine de chaque jeton */
     private array $machines = [];
 
-    /** @param list<array<string, mixed>> $devices */
-    private function beat(string $token, array $devices): array
+    /** @var array<string, string> l'heure du serveur lue dans la dernière réponse reçue par chaque boîtier d'essai (inscription, signe de vie) */
+    private array $answered = [];
+
+    /**
+     * Un signe de vie. Le boîtier y renvoie l'heure du serveur de la dernière réponse qu'il a reçue.
+     *
+     * @param list<array<string, mixed>> $devices
+     * @param int                        $late    retard de l'horloge du boîtier sur celle du serveur (secondes ; négatif : avance)
+     * @param bool                       $lost    la réponse se perd en route : le boîtier ne la lit pas
+     */
+    private function beat(string $token, array $devices, int $late = 0, bool $lost = false): array
     {
-        return $this->json($this->box('POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => $this->machines[$token], 'devices' => $devices], $token));
+        // en vrai une minute sépare deux signes de vie : une réponse qui va se perdre ne porte pas la même heure que la dernière lue
+        while ($lost && time() <= strtotime($this->answered[$token])) {
+            usleep(100000);
+        }
+        $answer = $this->json($this->box('POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z', time() - $late), 'machine' => $this->machines[$token], 'devices' => $devices,
+            'lastServerTime' => $this->answered[$token]], $token));
+        if (!$lost) {
+            $this->answered[$token] = $answer['serverTime'];
+        }
+
+        return $answer;
     }
 
     /**
