@@ -24,7 +24,7 @@ class UserArchiveOrdersController extends AbstractController
     {
     }
 
-    #[Route('/admin/clients/{id}/commandes-avant', name: 'admin_user_archive_orders', methods: ['GET'], requirements: ['id' => '[1-9]\d{0,8}'])]
+    #[Route('/admin/clients/{id}/commandes-avant', name: 'admin_user_archive_orders', methods: ['GET'], requirements: ['id' => '\d+'])] // un identifiant hors bornes est refusé par la garde commune des identifiants de route
     public function index(int $id, Request $request): Response
     {
         $user = $this->emProvider->getEntityManager()->getRepository(User::class)->find($id);
