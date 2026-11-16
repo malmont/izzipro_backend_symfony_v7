@@ -162,7 +162,7 @@ chaque libellé au terme, dans les deux langues.
 ## 6. Les guides des écrans (lot A-4)
 
 Pour chaque écran de l'application : **à quoi il sert, ce que veulent dire ses chiffres principaux, quoi faire ensuite**. Écrits par
-le serveur pour un débutant, à partir du relevé de l'application web (36 écrans, plus les 5 écrans de la prévention des pertes depuis le lot L1-b du 14/11/2026, celui de ses exercices, `pertes.exercices`, depuis le lot EX-1, ceux des pièces et de l'installation, `pertes.pieces` et `pertes.installation`, depuis les lots L2-a et L2-b, la liste des rapports PDF, `rapports`, depuis le lot DOC-2 du 15/11/2026, et les boîtiers, `pertes.boitiers`, depuis le lot L3-a : 46 en tout), dans les deux langues :
+le serveur pour un débutant, à partir du relevé de l'application web (36 écrans, plus les 5 écrans de la prévention des pertes depuis le lot L1-b du 14/11/2026, celui de ses exercices, `pertes.exercices`, depuis le lot EX-1, ceux des pièces et de l'installation, `pertes.pieces` et `pertes.installation`, depuis les lots L2-a et L2-b, la liste des rapports PDF, `rapports`, depuis le lot DOC-2 du 15/11/2026, les boîtiers, `pertes.boitiers`, depuis le lot L3-a, et les impressions de puces, `pertes.impressions`, depuis le lot L3-c : 47 en tout), dans les deux langues :
 `translations/ecrans.{fr,en}.yaml`, une entrée par code d'écran (« . » et « - » remplacés par « _ »).
 
 `GET /api/gestion/ecrans/{code}/guide?locale=fr|en` (sans IA, gratuit, `ROLE_ADMIN`) ; 404 `SCREEN_GUIDE_NOT_FOUND` :

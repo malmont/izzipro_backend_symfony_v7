@@ -23,9 +23,9 @@
                 "failed": 0,
                 "waiting": 0,
                 "cancelled": 1,
-                "createdAt": "2026-11-16T09:25:50+00:00",
+                "createdAt": "2026-11-16T11:15:45+00:00",
                 "finishedAt": null,
-                "cancelledAt": "2026-11-16T09:25:50+00:00",
+                "cancelledAt": "2026-11-16T11:15:45+00:00",
                 "exercise": false
             },
             {
@@ -45,8 +45,8 @@
                 "failed": 1,
                 "waiting": 0,
                 "cancelled": 0,
-                "createdAt": "2026-11-16T09:25:49+00:00",
-                "finishedAt": "2026-11-16T09:25:49+00:00",
+                "createdAt": "2026-11-16T11:15:45+00:00",
+                "finishedAt": "2026-11-16T11:15:45+00:00",
                 "cancelledAt": null,
                 "exercise": false
             }
@@ -60,6 +60,7 @@
                 "serial": "IMPR-EXEMPLE",
                 "model": "ZD621R",
                 "status": "ok",
+                "statusLabel": "En marche",
                 "boxId": 3,
                 "boxName": "Boîtier de l'arrière-boutique",
                 "boxEnrolled": true
@@ -68,12 +69,13 @@
         "ready": {
             "ok": false,
             "reason": "PRINT_KEY_MISSING",
-            "message": "L'écriture des puces n'est pas encore activée sur ce serveur : la clé de chiffrement du mot de passe des puces (LOSS_TAG_KEYS) n'est pas posée. Contactez la plateforme."
+            "message": "L'écriture des puces n'est pas encore activée sur ce serveur. Contactez la plateforme."
         },
         "limits": {
             "lines": 200,
             "openJobs": 20
         },
-        "exercise": false
+        "exercise": false,
+        "screen": "pertes.impressions"
     }
 }

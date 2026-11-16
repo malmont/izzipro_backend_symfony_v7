@@ -15,6 +15,7 @@
                 "serial": "IMPR-EXEMPLE",
                 "model": "ZD621R",
                 "status": "ok",
+                "statusLabel": "En marche",
                 "boxId": 3,
                 "boxName": "Boîtier de l'arrière-boutique",
                 "boxEnrolled": true
@@ -29,6 +30,7 @@
             "lines": 200,
             "openJobs": 20
         },
-        "exercise": false
+        "exercise": false,
+        "screen": "pertes.impressions"
     }
 }

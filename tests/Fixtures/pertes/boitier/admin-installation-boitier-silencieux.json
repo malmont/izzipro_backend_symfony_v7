@@ -63,7 +63,7 @@
                     "label": "Vérifier"
                 },
                 "state": "down",
-                "hint": "Silencieux depuis 11 min. Vérifiez son alimentation, son câble réseau et la connexion Internet de la boutique."
+                "hint": "Silencieux depuis 12 min. Vérifiez son alimentation, son câble réseau et la connexion Internet de la boutique."
             },
             {
                 "code": "counter_mat",
@@ -88,8 +88,8 @@
                     "kind": "data",
                     "label": "Vérifier"
                 },
-                "state": "down",
-                "hint": "Son boîtier ne donne plus signe de vie : les travaux d'impression attendent. Vérifiez le boîtier."
+                "state": "absent",
+                "hint": "Aucune imprimante à puce. Branchez l'imprimante sur le boîtier : elle apparaît ici d'elle-même."
             }
         ],
         "progress": {

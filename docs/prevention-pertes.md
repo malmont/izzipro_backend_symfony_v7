@@ -1762,9 +1762,9 @@ l'attente qu'une fois.
 
 | Route | Réponse |
 |---|---|
-| `GET /impressions` (`page`, `limit` ≤ 50) | `{ items [travail], total, page, limit, printers [{ deviceId, serial, model, status, boxId, boxName, boxEnrolled }], ready { ok, reason, message }, limits { lines: 200, openJobs: 20 }, exercise }` |
+| `GET /impressions` (`page`, `limit` ≤ 50) | `{ items [travail], total, page, limit, printers [{ deviceId, serial, model, status, statusLabel, boxId, boxName, boxEnrolled }], ready { ok, reason, message }, limits { lines: 200, openJobs: 20 }, exercise, screen: pertes.impressions }` |
 | `POST /impressions` `{ deviceId, pieceIds, withPrice?, confirmTagged? }` | 201 le travail et ses lignes |
-| `GET /impressions/{id}` | le travail et `lineItems` |
+| `GET /impressions/{id}` | le travail, `lineItems` et `screen` |
 | `POST /impressions/{id}/annuler` | le travail et `cancelledLines` ; rejouable ; ce qui est écrit le reste |
 | `GET /exercices/impressions`, `GET /exercices/impressions/{id}` | les travaux de l'imprimante simulée, même forme ; ouvertes sans le droit du module |
 
@@ -1776,7 +1776,7 @@ name, variantLabel }, identifier, status, statusLabel, reason, reasonLabel, tagI
 Refus de la création : 422 (`deviceId`, `pieceIds` : les règles des étiquettes de pièces, dont `PIECES_NOT_FOUND` et
 `LABELS_LIMIT_EXCEEDED` au-delà de 200 lignes) ; 404
 `PRINTER_NOT_FOUND` (inconnue, retirée, d'un boîtier révoqué, simulée, ou pas une imprimante) ; 409 `PRINT_KEY_MISSING` |
-`PRINT_KEY_INVALID` | `PRINT_KEY_MISMATCH` (avec `variable`), `PIECES_ALREADY_QUEUED` (`pieceIds` : elles attendent déjà dans un
+`PRINT_KEY_INVALID` | `PRINT_KEY_MISMATCH`, `PIECES_ALREADY_QUEUED` (`pieceIds` : elles attendent déjà dans un
 travail), `PIECES_ALREADY_TAGGED` (`pieceIds` : elles portent déjà une puce ; `confirmTagged: true` pour leur en imprimer une de
 plus), `PIECE_TAG_LIMIT`, `PIECE_RETIRED`, `BARCODE_MISSING`, `PRINT_JOBS_LIMIT` (20 travaux ouverts par site),
 `PIECE_LABELS_EXHAUSTED` (256 étiquettes pour une même pièce), `PRINT_ON_REFERENCE_SITE` (le site de référence, que tout site
@@ -1845,6 +1845,10 @@ secret du serveur, dont la rotation rendrait les puces déjà écrites impossibl
   travaux ; (4) garder une copie de la clé en lieu sûr, hors du serveur : **sans elle, les mots de passe rangés ne se relisent
   plus et les puces déjà écrites ne peuvent plus être réécrites** (elles restent lisibles). Ne jamais écrire la clé dans le
   dépôt, un message ou un journal.
+- **Le marchand ne lit jamais le nom de la variable** (correctif du 16/11/2026, demande du web) : `ready.message`, le message du
+  409 et le conseil du tableau de santé disent seulement que l'écriture des puces n'est pas activée ou pas disponible, et de
+  contacter la plateforme. Le nom `LOSS_TAG_KEYS` reste pour l'exploitant : dans cette fiche, et dans le journal du serveur à
+  chaque création refusée.
 - **Tant que la variable manque** : aucun vrai travail ne se crée (409 `PRINT_KEY_MISSING`), l'écran le dit (`ready`), et la
   ligne de l'imprimante au tableau de santé reste « en attente » avec la même phrase. Illisible (pas 32 octets, pas de rang, rang
   répété) : `PRINT_KEY_INVALID`. Posée mais pas celle du mot de passe rangé : `PRINT_KEY_MISMATCH`, et les travaux en attente ne

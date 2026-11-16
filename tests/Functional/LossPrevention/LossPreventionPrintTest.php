@@ -80,10 +80,12 @@ class LossPreventionPrintTest extends LossPreventionTestCase
 
         // L'écran : l'imprimante est proposée, tout est prêt ; le tableau de santé attend sa première puce
         $list = $this->json($this->admin('GET', self::PRINTS));
-        $this->assertSame(['items', 'total', 'page', 'limit', 'printers', 'ready', 'limits', 'exercise'], array_keys($list));
+        $this->assertSame(['items', 'total', 'page', 'limit', 'printers', 'ready', 'limits', 'exercise', 'screen'], array_keys($list));
+        $this->assertSame('pertes.impressions', $list['screen']);
         $this->assertSame([['ok' => true, 'reason' => null, 'message' => null], ['lines' => 200, 'openJobs' => 20], false], [$list['ready'], $list['limits'], $list['exercise']]);
         $mine = array_column($list['printers'], null, 'deviceId')[$printer];
-        $this->assertSame(['deviceId' => $printer, 'serial' => "IMPR-$this->s", 'model' => null, 'status' => 'ok', 'boxId' => $boxId, 'boxName' => "Arrière-boutique $this->s", 'boxEnrolled' => true], $mine);
+        $this->assertSame(['deviceId' => $printer, 'serial' => "IMPR-$this->s", 'model' => null, 'status' => 'ok', 'statusLabel' => 'En marche', 'boxId' => $boxId, 'boxName' => "Arrière-boutique $this->s", 'boxEnrolled' => true], $mine);
+        $this->assertSame('Working', array_column($this->json($this->admin('GET', self::PRINTS . '?locale=en'))['printers'], null, 'deviceId')[$printer]['statusLabel']);
         $this->assertArrayNotHasKey($mat, array_column($list['printers'], null, 'deviceId'), 'un tapis n\'est pas une imprimante');
         $line = fn (): array => array_column($this->json($this->admin('GET', self::BASE . '/sante'))['devices'], null, 'code')["printer-$printer"];
         $this->assertSame(['printer', 'Imprimante à puce', 'pending', 'L\'imprimante n\'a encore écrit aucune puce. Lancez un travail d\'impression sur une pièce.'],
@@ -121,6 +123,7 @@ class LossPreventionPrintTest extends LossPreventionTestCase
             $this->assertSame(LossTagEpc::make(MV_TEST_TENANT_CODE, $l['piece']['number'], 0), $l['identifier'], 'première étiquette de la pièce : exemplaire 0');
         }
         $this->assertSame($job, $this->json($this->admin('GET', self::PRINTS . "/$id")));
+        $this->assertSame('pertes.impressions', $job['screen']);
         $this->assertSame($id, $this->json($this->admin('GET', self::PRINTS))['items'][0]['id'], 'le plus récent d\'abord');
         $this->assertArrayNotHasKey('lineItems', $this->json($this->admin('GET', self::PRINTS))['items'][0]);
         $this->assertSame(['PIECES_ALREADY_QUEUED', [$p1, $p2]], [($q = $create(['deviceId' => $printer, 'pieceIds' => [$p4, $p2, $p1]], 409))['code'], $q['pieceIds']]);
@@ -371,10 +374,11 @@ class LossPreventionPrintTest extends LossPreventionTestCase
         // La variable n'est pas posée : refus net, rien d'écrit, l'écran et le tableau de santé le disent
         $this->tagKeys(null);
         $refused = $this->json($this->admin('POST', self::PRINTS, $body($p1)), 409);
-        $this->assertSame(['PRINT_KEY_MISSING', 'LOSS_TAG_KEYS', 'L\'écriture des puces n\'est pas encore activée sur ce serveur. Contactez la plateforme.'], [$refused['code'], $refused['variable'], $refused['message']]);
+        $this->assertSame(['PRINT_KEY_MISSING', 'L\'écriture des puces n\'est pas encore activée sur ce serveur. Contactez la plateforme.'], [$refused['code'], $refused['message']]);
+        $this->assertStringNotContainsString('LOSS_TAG', json_encode($refused), 'le marchand ne lit jamais le nom de la variable du serveur');
         $this->assertSame($before, $jobs());
         $this->assertSame([false, 'PRINT_KEY_MISSING'], [$ready()['ok'], $ready()['reason']]);
-        $this->assertStringContainsString('LOSS_TAG_KEYS', (string) $ready()['message']);
+        $this->assertSame('L\'écriture des puces n\'est pas encore activée sur ce serveur. Contactez la plateforme.', $ready()['message']);
         $this->assertSame(['pending', $ready()['message']], [$line()['state'], $line()['hint']]);
         // Posée mais illisible : pas une clé de 32 octets, pas de rang, un rang donné deux fois
         foreach (['1:' . base64_encode('trop court'), self::tagKey(1), '0:' . self::tagKey(1), '1:' . self::tagKey(1) . ',1:' . self::tagKey(2), '1:pas du base64 !'] as $bad) {
@@ -382,6 +386,7 @@ class LossPreventionPrintTest extends LossPreventionTestCase
             $this->assertSame('PRINT_KEY_INVALID', $this->json($this->admin('POST', self::PRINTS, $body($p1)), 409)['code'], $bad === self::tagKey(1) ? 'sans rang' : 'clé illisible');
         }
         $this->assertSame([$before, 'PRINT_KEY_INVALID', 'pending'], [$jobs(), $ready()['reason'], $line()['state']]);
+        $this->assertStringNotContainsString('LOSS_TAG', json_encode([$ready(), $line(), $this->json($this->admin('POST', self::PRINTS, $body($p1)), 409)]));
 
         // La bonne clé. Mais le site de référence, que tout site neuf copie, ne reçoit jamais de vrai travail : il ne doit porter aucun
         // mot de passe de puces (le chiffre est lié au site : un site né de cette copie ne pourrait plus imprimer)
@@ -413,6 +418,7 @@ class LossPreventionPrintTest extends LossPreventionTestCase
         $this->tagKeys(self::tagKey(2));
         $this->assertSame('PRINT_KEY_MISMATCH', $this->json($this->admin('POST', self::PRINTS, $body($p2)), 409)['code']);
         $this->assertSame([false, 'PRINT_KEY_MISMATCH', 'pending'], [$ready()['ok'], $ready()['reason'], $line()['state']]);
+        $this->assertStringNotContainsString('LOSS_TAG', json_encode([$ready(), $line()]));
         $this->assertSame([[], false], [($none = $this->json($this->box('GET', '/travaux', null, $token)))['jobs'], $none['more']], 'sans mot de passe relisible, le travail attend : il n\'est pas servi sans lui, et rien n\'est annoncé');
         $this->assertSame('waiting', $this->json($this->admin('GET', self::PRINTS . '/' . $job['id']))['status']);
         // la variable retirée : pareil, le travail attend ; reposée, il repart

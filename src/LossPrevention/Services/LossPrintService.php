@@ -19,6 +19,7 @@ use App\Services\CaisseService\SiteLocaleResolver;
 use App\Services\TenantConnectionProvider;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
@@ -41,6 +42,8 @@ class LossPrintService
     /** Travaux ouverts au plus sur un site */
     public const MAX_OPEN_JOBS = 20;
     public const PAGE_LIMIT = 50;
+    /** Code d'écran du web (`docs/liens-espace-administration.md`) : « Impressions de puces » */
+    public const SCREEN = 'pertes.impressions';
     /** Lignes servies au boîtier par appel */
     public const BOX_BATCH = 50;
     /** Scénarios de l'imprimante simulée, et nombre d'étiquettes qu'ils jouent */
@@ -60,6 +63,7 @@ class LossPrintService
         private readonly LossSite $site,
         private readonly ?SiteLocaleResolver $siteLocale = null,
         #[Autowire('%env(default:app.tenant_template_db:TENANT_TEMPLATE_DB)%')] private readonly ?string $templateDb = null,
+        private readonly ?LoggerInterface $logger = null,
     ) {
     }
 
@@ -83,11 +87,11 @@ class LossPrintService
         }
         $repository = $this->repository();
         [$rows, $total] = $repository->jobs($exercise, $page, $limit);
-        $printers = array_map(fn (array $row): array => self::printerView($row), $repository->printers($exercise));
+        $printers = array_map(fn (array $row): array => $this->printerView($row, $locale), $repository->printers($exercise));
 
         return ['items' => array_map(fn (array $row): array => $this->jobView($row, $locale), $rows), 'total' => $total, 'page' => $page, 'limit' => $limit,
             'printers' => $printers, 'ready' => $this->readiness($locale, $exercise, $printers !== []),
-            'limits' => ['lines' => self::MAX_LINES, 'openJobs' => self::MAX_OPEN_JOBS], 'exercise' => $exercise];
+            'limits' => ['lines' => self::MAX_LINES, 'openJobs' => self::MAX_OPEN_JOBS], 'exercise' => $exercise, 'screen' => self::SCREEN];
     }
 
     /** @return array<string, mixed> le travail et ses lignes */
@@ -109,7 +113,7 @@ class LossPrintService
                 'identifier' => (string) $line['identifier'], 'status' => (string) $line['status'], 'statusLabel' => $this->texts->t('prints.line.' . $line['status'], $locale),
                 'reason' => $line['reason'], 'reasonLabel' => $line['reason'] !== null ? $this->texts->t('prints.reason.' . $line['reason'], $locale) : null,
                 'tagId' => $line['tag_id'] !== null ? (int) $line['tag_id'] : null, 'doneAt' => self::iso($line['done_at'])];
-        }, $lines)];
+        }, $lines), 'screen' => self::SCREEN];
     }
 
     /**
@@ -143,7 +147,9 @@ class LossPrintService
         }
         $problem = $this->keyProblem();
         if ($problem !== null) {
-            throw new GestionConflictException($problem, $this->texts->t('prints.error.' . $problem, $locale), 409, ['variable' => LossTagVault::VARIABLE]);
+            // le marchand ne lit jamais le nom de la variable : il est pour l'exploitant, dans le journal du serveur et dans la fiche
+            $this->logger?->warning(sprintf('Prévention des pertes : travail d\'impression refusé (%s). Variable d\'environnement %s : voir docs/prevention-pertes.md § 16.20.', $problem, LossTagVault::VARIABLE));
+            throw new GestionConflictException($problem, $this->texts->t('prints.error.' . $problem, $locale), 409);
         }
         $site = (string) $this->tenant->getTenantCode();
         $repository = $this->repository();
@@ -252,7 +258,7 @@ class LossPrintService
             $reason = 'NO_PRINTER';
         }
 
-        return ['ok' => $reason === null, 'reason' => $reason, 'message' => $reason !== null ? $this->texts->t('prints.ready.' . $reason, $locale, ['variable' => LossTagVault::VARIABLE]) : null];
+        return ['ok' => $reason === null, 'reason' => $reason, 'message' => $reason !== null ? $this->texts->t('prints.ready.' . $reason, $locale) : null];
     }
 
     /** Ce qui empêche de chiffrer ou de relire le mot de passe : un code `PRINT_KEY_…`, ou null si tout va */
@@ -507,9 +513,10 @@ class LossPrintService
     }
 
     /** @param array<string, mixed> $row @return array<string, mixed> */
-    private static function printerView(array $row): array
+    private function printerView(array $row, string $locale): array
     {
         return ['deviceId' => (int) $row['id'], 'serial' => (string) $row['serial'], 'model' => $row['model'], 'status' => (string) $row['status'],
+            'statusLabel' => $this->texts->t('boxes.deviceStatus.' . $row['status'], $locale),
             'boxId' => (int) $row['box_id'], 'boxName' => (string) $row['box_name'], 'boxEnrolled' => $row['box_status'] === LossBox::ACTIVE];
     }
 

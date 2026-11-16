@@ -14,7 +14,7 @@
                 "cashRegisterId": null,
                 "state": "ok",
                 "stateLabel": "En ordre",
-                "lastSeenAt": "2026-11-16T09:25:50+00:00",
+                "lastSeenAt": "2026-11-16T11:15:46+00:00",
                 "silentSince": null,
                 "silentSeconds": null,
                 "hint": null
@@ -27,7 +27,7 @@
                 "cashRegisterId": null,
                 "state": "pending",
                 "stateLabel": "En attente",
-                "lastSeenAt": "2026-11-16T09:25:50+00:00",
+                "lastSeenAt": "2026-11-16T11:15:45+00:00",
                 "silentSince": null,
                 "silentSeconds": null,
                 "hint": "Le tapis simulé n'a encore rien lu. Jouez le scénario « Pièce posée sur le tapis »."
@@ -40,7 +40,7 @@
                 "cashRegisterId": null,
                 "state": "ok",
                 "stateLabel": "En ordre",
-                "lastSeenAt": "2026-11-16T09:25:50+00:00",
+                "lastSeenAt": "2026-11-16T11:15:45+00:00",
                 "silentSince": null,
                 "silentSeconds": null,
                 "hint": null
@@ -57,6 +57,6 @@
         "thresholdSeconds": 300,
         "exercise": true,
         "screen": "pertes.boitiers",
-        "checkedAt": "2026-11-16T09:25:51+00:00"
+        "checkedAt": "2026-11-16T11:15:46+00:00"
     }
 }

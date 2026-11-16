@@ -652,3 +652,25 @@ pertes_boitiers:
             label: 'Boîtier simulé'
             text: 'En mode exercice, un boîtier simulé joue des scénarios sans aucun matériel.'
     next: 'Ajoutez un boîtier, notez sa clé, puis inscrivez sa machine.'
+pertes_impressions:
+    purpose: 'Les impressions de puces : l''imprimante à puce imprime l''étiquette d''une pièce et écrit sa puce d''un même geste.'
+    points:
+        imprimante:
+            label: 'Imprimante à puce'
+            text: 'Elle se branche sur un boîtier de la boutique. Elle apparaît ici d''elle-même dès que le boîtier l''annonce.'
+        travail:
+            label: 'Travail d''impression'
+            text: 'Vous choisissez des pièces et une imprimante, avec ou sans le prix. Le boîtier vient chercher le travail tout seul.'
+        relecture:
+            label: 'Écrite'
+            text: 'Chaque puce est relue après l''écriture. Une puce relue est posée sur sa pièce, sans geste de plus.'
+        echec:
+            label: 'En échec'
+            text: 'La ligne dit pourquoi : puce illisible, plus d''étiquettes, pièce retirée. La pièce reste sans puce : relancez un travail pour elle.'
+        activation:
+            label: 'Pas encore activée'
+            text: 'Si l''écran dit que l''écriture des puces n''est pas activée sur le serveur, contactez la plateforme : ce n''est pas un réglage de votre site.'
+        simule:
+            label: 'Imprimante simulée'
+            text: 'En mode exercice, le boîtier simulé a son imprimante : elle joue ses scénarios sans aucun matériel.'
+    next: 'Choisissez les pièces à étiqueter, puis lancez le travail.'

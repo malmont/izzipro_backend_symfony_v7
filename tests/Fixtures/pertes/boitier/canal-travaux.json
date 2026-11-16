@@ -3,12 +3,12 @@
         "method": "GET",
         "path": "/api/pertes/boitier/travaux",
         "headers": {
-            "X-Loss-Box": "b3.2.1794907549.0000000000000000000000000000000000000000000000000000000000000000"
+            "X-Loss-Box": "b3.2.1794914144.0000000000000000000000000000000000000000000000000000000000000000"
         }
     },
     "status": 200,
     "body": {
-        "serverTime": "2026-11-16T09:25:49+00:00",
+        "serverTime": "2026-11-16T11:15:45+00:00",
         "jobs": [
             {
                 "id": 1,
@@ -24,9 +24,9 @@
                         "position": 1,
                         "identifier": "F1A7C63DA5B50000000200C7",
                         "piece": 2,
-                        "title": "Veste en lin (exemple boîtier 4591DE)",
+                        "title": "Veste en lin (exemple boîtier BA9462)",
                         "subtitle": null,
-                        "barcode": "VESTE-4591DE",
+                        "barcode": "VESTE-BA9462",
                         "symbology": "code128",
                         "price": "$45.00",
                         "note": "Piece no. 2"
@@ -36,9 +36,9 @@
                         "position": 2,
                         "identifier": "F1A7C63DA5B500000003002A",
                         "piece": 3,
-                        "title": "Veste en lin (exemple boîtier 4591DE)",
+                        "title": "Veste en lin (exemple boîtier BA9462)",
                         "subtitle": null,
-                        "barcode": "VESTE-4591DE",
+                        "barcode": "VESTE-BA9462",
                         "symbology": "code128",
                         "price": "$45.00",
                         "note": "Piece no. 3"
