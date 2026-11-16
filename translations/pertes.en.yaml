@@ -305,6 +305,8 @@ pieces:
         TEST_TAG_READ: Tag read during the test
         TEST_LABEL_PRINTED: Test label produced
         SPOT_CHECK: Read by the handheld reader of the box
+        COUNTER_SEEN: Put on the counter mat
+        COUNTER_LEFT: Taken off the counter mat
         ZONE_SEEN: Read in a zone
     error:
         VARIANT_NOT_FOUND: 'Variant not found.'
@@ -367,6 +369,11 @@ installation:
             text: 'Optional. The box links the counter mat, the tag printer and the camera to the platform. Add it under "Boxes", then enrol its machine with the key.'
             verify: Check
             hint: 'No box is enrolled. Add a box, then run the enrolment command on its machine with the site address and the key.'
+        counter_mat:
+            title: Plug in the counter mat
+            text: 'Optional. The mat reads the tags of the items put on the counter: the till knows which tracked items of the basket were not read. Plug it into the box, put a piece on it, then choose its cash register.'
+            verify: Check
+            hint: 'No counter mat. Plug the mat into the box.'
     hint:
         decimal: 'The reader seems to return a number made of digits only. Set it to return the identifier in hexadecimal (digits and letters A to F).'
         form: 'This read contains something other than digits and letters A to F: it is not a tag. Check that the cursor is in the tag field.'
@@ -456,6 +463,7 @@ boxes:
     deviceStatus:
         ok: Working
         down: Down or unplugged
+        retired: Retired
     zone:
         stockroom: Stockroom
         stockroom_door: Stockroom door
@@ -471,6 +479,8 @@ boxes:
         DEVICE_SEEN: Device seen for the first time
         SOURCE_DOWN: Device down or unplugged
         SOURCE_UP: Device back
+        DEVICE_ASSIGNED: Device linked
+        DEVICE_RETIRED: Device retired
     enrolment:
         text: 'On the box, run the enrolment command and give the site address, then this key. The key is shown only once: write it down now.'
     exercise:
@@ -495,8 +505,17 @@ boxes:
         zone_exit:
             label: Read at the exit
             text: 'The exit reader reads an exercise piece.'
+        counter_put:
+            label: Piece put on the mat
+            text: 'An exercise piece is put on the simulated counter mat: the mat sees it.'
+        counter_take:
+            label: Piece taken off the mat
+            text: 'The piece leaves the simulated counter mat.'
     error:
         BOX_NOT_FOUND: 'Box not found.'
+        DEVICE_NOT_FOUND: 'Device not found on this box.'
+        CASH_REGISTER_NOT_FOUND: 'Cash register not found or inactive.'
+        REGISTER_ALREADY_HAS_MAT: 'This cash register already has a mat: unlink or retire it first.'
         BOX_REVOKED: 'This box is revoked: add another one.'
         BOX_LIMIT_REACHED: 'This site already has %limit% boxes: revoke those no longer in use.'
         EXERCISE_LIMIT_REACHED: 'You already have %limit% simulated boxes: delete them before creating more.'
@@ -505,6 +524,7 @@ boxes:
 health:
     kind:
         box: Box
+        mat: Counter mat
     state:
         ok: All good
         pending: Waiting
@@ -526,3 +546,11 @@ health:
             pending: 'This box is waiting for its machine. Run the enrolment command on it, with the site address and the box key.'
             down: 'Silent for %duration%. Check its power supply, its network cable and the shop''s Internet connection.'
             down_exercise: 'Silent for %duration%. Play the "Heartbeat" scenario to bring it back.'
+        mat:
+            absent: 'No counter mat. Plug the mat into the box: it appears here by itself.'
+            absent_exercise: 'No simulated mat. Create a simulated box: it has its mat.'
+            down: 'The mat no longer answers. Check its cable on the box, then its power supply.'
+            box_silent: 'Its box no longer gives a sign of life: what is on the mat is unknown. Check the box.'
+            never_read: 'The mat has not read any tag yet. Put a tagged piece on it.'
+            never_read_exercise: 'The simulated mat has not read anything yet. Play the "Piece put on the mat" scenario.'
+            no_register: 'This mat is not linked to any cash register. Choose its register in the box sheet.'

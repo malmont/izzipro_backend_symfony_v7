@@ -9,8 +9,9 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Exemples du contrat du boîtier (lot L3-a), un fichier JSON par appel (`tests/Fixtures/pertes/boitier/`) : la demande et la
- * réponse. Deux familles : `admin-…` (ce que l'administrateur voit, pour les écrans du web et du mobile) et `canal-…` (ce que le
- * boîtier envoie et reçoit : le logiciel du boîtier et son simulateur se règlent dessus). Ce test rejoue le parcours sur la base de
+ * réponse. Trois familles : `admin-…` (ce que l'administrateur voit, pour les écrans du web et du mobile), `canal-…` (ce que le
+ * boîtier envoie et reçoit : le logiciel du boîtier et son simulateur se règlent dessus) et `caisse-…` (la question de la caisse
+ * avant un paiement, lot L3-b1). Ce test rejoue le parcours sur la base de
  * test et vérifie que chaque exemple gardé a toujours la FORME de la réponse du serveur (mêmes clés, mêmes types) : un changement de
  * contrat casse ce test. Les clés et les signatures des jetons sont masquées dans les fichiers.
  *
@@ -38,6 +39,7 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
     {
         try {
             $this->db->executeStatement("UPDATE loss_box SET status = 'revoked', revoked_at = NOW() WHERE NOT exercise AND status <> 'revoked'");
+            $this->db->executeStatement("UPDATE loss_device SET status = 'retired', cash_register_id = NULL WHERE NOT exercise AND status <> 'retired'");
             $this->db->executeStatement('UPDATE loss_setting SET silent_after_seconds = NULL');
             $this->db->beginTransaction();
             $this->provider->getEntityManager()->getRepository(LossPiece::class)->deleteExercise();
@@ -78,7 +80,8 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
         $this->channel('canal-refus-cle-inconnue', 'POST', '/inscription', ['key' => 'IZ-BOX-AAAA-AAAA-AAAA'] + $enrol, null, 404);
         $this->channel('canal-refus-autre-machine', 'POST', '/inscription', ['machine' => 'une-autre-machine-0123456789'] + $enrol, null, 409);
         $this->channel('canal-refus-sans-jeton', 'GET', '/reglages', null, null, 401);
-        $devices = [['serial' => 'LECTEUR-0001', 'kind' => 'reader', 'status' => 'ok', 'model' => 'Lecteur de bureau (USB)'], ['serial' => 'IMPR-0001', 'kind' => 'printer', 'status' => 'down']];
+        $devices = [['serial' => 'LECTEUR-0001', 'kind' => 'reader', 'status' => 'ok', 'model' => 'Lecteur de bureau (USB)'], ['serial' => 'IMPR-0001', 'kind' => 'printer', 'status' => 'down'],
+            ['serial' => 'TAPIS-0001', 'kind' => 'counter_mat', 'status' => 'ok', 'model' => 'Tapis de comptoir']];
         $this->channel('canal-signe-de-vie', 'POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => self::MACHINE, 'version' => '1.0.0', 'devices' => $devices], $token);
         $this->channel('canal-signe-de-vie-appareil-refuse', 'POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => self::MACHINE, 'devices' => [['serial' => 'LECTEUR-0001', 'kind' => 'camera', 'status' => 'ok'], $devices[1]]], $token);
         $this->channel('canal-refus-signe-de-vie-invalide', 'POST', '/signe-de-vie', ['now' => 'hier', 'machine' => self::MACHINE, 'devices' => [['serial' => 'LECTEUR-0001', 'kind' => 'antenne', 'status' => 'ok']]], $token, 422);
@@ -92,6 +95,26 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
         ];
         $this->channel('canal-faits', 'POST', '/faits', ['facts' => $facts], $token);
         $this->channel('canal-faits-rejoues', 'POST', '/faits', ['facts' => $facts], $token);
+        // ----- Lot L3-b1 : le tapis de comptoir, relié à un poste, et la question de la caisse avant un paiement
+        $this->channel('canal-signe-de-vie-avec-tapis', 'POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => self::MACHINE, 'devices' => $devices], $token);
+        $mat = array_column($this->examples['canal-reglages']['body']['devices'], 'id', 'serial')['TAPIS-0001'];
+        $this->admin_('admin-sante-tapis-en-attente', 'GET', '/sante');
+        $this->admin_('admin-tapis-relie-a-un-poste', 'PUT', "/boitiers/$id/appareils/$mat", ['cashRegisterId' => $this->register]);
+        $this->admin_('admin-refus-appareil-validation', 'PUT', "/boitiers/$id/appareils/$mat", ['zone' => 'counter'], 422);
+        $this->loginPos(['ROLE_USER_POS']);
+        $this->openSession();
+        $basket = ['cashRegisterId' => $this->register, 'items' => [['productVariantId' => $variant, 'quantity' => 2]]];
+        $this->till('caisse-articles-non-lus', $basket);
+        $this->channel('canal-faits-tapis', 'POST', '/faits', ['facts' => [['key' => "exemple-$this->s-0010", 'type' => 'COUNTER_SEEN', 'at' => gmdate('Y-m-d\TH:i:s\Z'), 'device' => 'TAPIS-0001', 'data' => ['identifier' => $nfc]],
+            ['key' => "exemple-$this->s-0011", 'type' => 'COUNTER_SEEN', 'at' => gmdate('Y-m-d\TH:i:s\Z'), 'device' => 'LECTEUR-0001', 'data' => ['identifier' => $nfc]]]], $token);
+        $this->till('caisse-un-article-lu-un-manquant', $basket);
+        $this->till('caisse-refus-panier-invalide', ['items' => [['productVariantId' => $variant, 'quantity' => 0]]], 422);
+        $this->till('caisse-refus-poste-inconnu', ['cashRegisterId' => 999999999, 'items' => []], 404);
+        $this->admin_('admin-sante-tapis-en-ordre', 'GET', '/sante');
+        $this->admin_('admin-boitier-avec-tapis', 'GET', "/boitiers/$id");
+        $this->admin_('admin-installation-tapis-fait', 'GET', '/installation');
+        $this->admin_('admin-tapis-retire', 'POST', "/boitiers/$id/appareils/$mat/retirer", ['confirm' => true]);
+        $this->till('caisse-pas-de-controle', $basket);
         $this->channel('canal-refus-lot-vide', 'POST', '/faits', ['facts' => []], $token, 422);
         $this->channel('canal-refus-lot-trop-grand', 'POST', '/faits', ['facts' => array_fill(0, 201, $facts[0])], $token, 422);
         $this->channel('canal-jeton-echange', 'POST', '/jeton', ['machine' => self::MACHINE], $token);
@@ -159,6 +182,13 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
     {
         $path = self::BASE . $path . '?locale=fr';
         $this->remember($name, $method, $path, [], $body, $status, $this->call($method, $path, $body, $this->adminToken));
+    }
+
+    /** Un appel de la caisse (un caissier connecté), gardé comme exemple */
+    private function till(string $name, array $body, int $status = 200): void
+    {
+        $path = '/api/pos/pertes/articles-non-lus';
+        $this->remember($name, 'POST', $path, [], $body, $status, $this->pos('POST', $path, $body));
     }
 
     /** Un appel du boîtier (en-tête X-Loss-Box), gardé comme exemple */

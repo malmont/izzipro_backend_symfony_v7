@@ -43,7 +43,7 @@ class LossInstallationService
         'first_piece' => null, // prouvée par l'état : une pièce porte une puce
     ];
     /** Étapes facultatives, rendues à part : elles ne comptent pas dans l'avancement */
-    public const OPTIONAL = ['box'];
+    public const OPTIONAL = ['box', 'counter_mat'];
     /** Code imprimé sur l'étiquette d'essai : sous le préfixe réservé aux documents de la caisse, il ne peut désigner aucun article */
     public const TEST_BARCODE = 'IZ-ESSAI-ETIQUETTE';
 
@@ -234,13 +234,14 @@ class LossInstallationService
 
     /**
      * L'état des appareils des étapes facultatives, lu au tableau de santé : `box` est faite quand un boîtier de ce genre est
-     * inscrit ET donne signe de vie ; sinon l'étape dit quoi essayer.
+     * inscrit ET donne signe de vie ; `counter_mat` quand un tapis a lu une puce et qu'il est relié à son poste de caisse ; sinon
+     * l'étape dit quoi essayer.
      *
      * @return array<string, array{state: string, hint: ?string}>
      */
     private function optionalStates(string $locale, bool $exercise): array
     {
-        return ['box' => $this->health->boxState($locale, $exercise)];
+        return ['box' => $this->health->kindState('box', $locale, $exercise), 'counter_mat' => $this->health->kindState('mat', $locale, $exercise)];
     }
 
     /**

@@ -191,6 +191,10 @@ security:
         - { path: ^/api/pos/coupons(/|$), roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
         # 🔹 Surveillance des paiements de caisse (M1) : administrateur seulement
         - { path: ^/api/pos/health$, roles: [ROLE_ADMIN] }
+        # 🔹 Prévention des pertes, lot L3-b1 (16/11/2026) : la caisse demande, avant un paiement, les articles suivis du panier non lus
+        #    sur le tapis de son poste. Une lecture, droit du caissier (sans cette règle la route tomberait sous la règle générale ^/api,
+        #    qui admet aussi les clients du web).
+        - { path: ^/api/pos/pertes(/|$), roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
         # 🔹 Grille de favoris (F10) : grille (caisse) ; épinglés et leur remplacement réservés au responsable (dans le service)
         - { path: ^/api/pos/favorites(/|$), roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
         # 🔹 Location au comptoir (09/11/2026) : catalogue des locations, cautions, locations en cours (caisse ; retenue validée par un responsable dans le service)

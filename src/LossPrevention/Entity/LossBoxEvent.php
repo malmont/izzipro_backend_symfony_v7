@@ -25,6 +25,10 @@ class LossBoxEvent
     public const DEVICE_SEEN = 'DEVICE_SEEN';
     public const SOURCE_DOWN = 'SOURCE_DOWN';
     public const SOURCE_UP = 'SOURCE_UP';
+    /** Un tapis relié à un poste de caisse, ou un lecteur à une zone (lot L3-b1) : `data.cashRegisterId` ou `data.zone` */
+    public const DEVICE_ASSIGNED = 'DEVICE_ASSIGNED';
+    /** Un appareil remplacé, retiré par l'administrateur (lot L3-b1) */
+    public const DEVICE_RETIRED = 'DEVICE_RETIRED';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

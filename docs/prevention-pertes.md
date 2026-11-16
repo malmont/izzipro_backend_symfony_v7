@@ -1200,3 +1200,86 @@ personne, ni même le nom que l'administrateur a donné au boîtier.
    - la formulation de cet avertissement est à faire valider par l'avocat ; les prix sont fixés en L6 par le propriétaire ;
    - le guide de l'installateur du dépôt du boîtier sert les deux offres : une version courte pour le boîtier prêt à brancher, la
      version complète, avec les commandes, pour le logiciel seul.
+
+### 16.15 Lot L3-b1 codé : tapis de comptoir et route de la caisse (16/11/2026)
+
+L3-b est coupé en deux (découpage validé par le chef de projet) : **L3-b1**, ci-dessous, et **L3-b2** (la vente reliée aux pièces
+après coup par l'analyse, le rattrapage au portique, la règle « articles suivis vendus sans lecture » et ses fenêtres réglables).
+Code : `Services/LossCounterService` (la question de la caisse), `Controller/LossPosController`, et les ajouts à
+`LossBoxChannelService` (faits du tapis, présence), `LossBoxService` (relier, retirer un appareil, tapis simulé),
+`LossHealthService` (ligne du tapis), `LossInstallationService` (étape `counter_mat`). Migration `Version20270114100000` (script
+`scripts/migrate_all_v2_pertes_l3b1.sh`) : table `loss_counter_presence` ; index unique « un poste a au plus un tapis en service » ;
+trois gardes du lot L3-a remplacées par leur version élargie. **Aucune vente n'est lue ni écrite, aucun état de pièce ne change.**
+
+**Le tapis, vu du boîtier** (même canal, § 16.13) :
+- il se déclare dans le signe de vie comme un appareil `counter_mat` ;
+- il envoie deux faits de plus, que ses réglages annoncent (`facts.types`) : `COUNTER_SEEN` (une puce arrive sur le tapis) et
+  `COUNTER_LEFT` (elle le quitte). Même forme que les autres faits ; `zone` vaut `counter` (facultative, toute autre valeur :
+  `ZONE_INVALID`). **Chacun ses faits** : un tapis n'envoie que ceux-là, un lecteur que `SPOT_CHECK` et `ZONE_SEEN`
+  (`DEVICE_KIND_INVALID` sinon). Une arrivée, un départ : le tapis ne redit pas à chaque seconde ce qu'il voit ;
+- **après une panne du tapis ou un silence du boîtier, le boîtier redit ce qui est posé** (`COUNTER_SEEN` pour chaque puce encore
+  sur le tapis) : la plateforme a fermé ce qu'elle croyait posé.
+
+**La présence** (`loss_counter_presence`) est la projection de ces faits, tenue par le serveur : une puce est sur un tapis depuis
+`since`, jusqu'à `until` (nul tant qu'elle y est). Elle n'est la preuve de rien (les faits le sont) et se recalcule. Règles :
+- une arrivée ouvre une présence, sauf si la puce y est déjà ; un départ la ferme ; un fait rejoué ne la touche pas deux fois ;
+- **un fait à l'heure douteuse (`clockDoubt`) est gardé mais n'alimente pas la présence** : elle sert à dire ce qui est posé avant
+  un paiement ; les heures sont celles du boîtier ;
+- une puce n'est que sur un tapis à la fois : arrivée sur un autre, sa présence sur le premier se ferme ;
+- un tapis noté en panne (annoncé `down`, plus annoncé, genre changé), un tapis retiré, un boîtier revenu d'un silence : les
+  présences ouvertes se ferment (au moment de la panne ; au dernier signe de vie pour un silence).
+
+**Routes de l'administrateur** (`/api/gestion/pertes`, `ROLE_ADMIN`, garde du module) :
+
+| Route | Réponse | Refus |
+|---|---|---|
+| `PUT /boitiers/{id}/appareils/{appareil}` `{ cashRegisterId }` pour un tapis, `{ zone }` pour un lecteur (`null` délie) | la fiche du boîtier | 422 `fields` : `REQUIRED`, `MUST_BE_POSITIVE_INTEGER`, `INVALID_VALUE`, `NOT_FOR_THIS_DEVICE` (un poste pour un tapis, une zone pour un lecteur), `device: NOT_ASSIGNABLE` (imprimante, caméra) ; 404 `BOX_NOT_FOUND`, `DEVICE_NOT_FOUND`, `CASH_REGISTER_NOT_FOUND` (poste inconnu ou inactif) ; 409 `REGISTER_ALREADY_HAS_MAT { deviceId }` |
+| `POST /boitiers/{id}/appareils/{appareil}/retirer` `{ confirm: true }` | la fiche du boîtier | 422 `fields.confirm` ; 404 |
+
+- **Un tapis par poste, un poste par tapis** (index unique en base). Fait `DEVICE_ASSIGNED { cashRegisterId | zone }` ; relier au
+  même poste n'écrit rien.
+- **Retirer un appareil remplacé** : il sort de la fiche, du tableau de santé et des réglages du boîtier, ne compte plus dans le
+  plafond des 64 appareils, ses faits reçoivent `DEVICE_UNKNOWN`, et il rend son poste de caisse pour de bon. Fait
+  `DEVICE_RETIRED`. Si le boîtier l'annonce de nouveau, il revient (`DEVICE_SEEN { again: true }`), sans poste.
+- La fiche d'un boîtier montre pour chaque appareil `cashRegister { id, name } | null` et, pour un tapis, `onMat` (le nombre de
+  puces posées dessus en ce moment ; `null` pour les autres appareils).
+
+**Tableau de santé** (§ 16.13) : une ligne par tapis en service, `code: mat-<id>`, `kind: mat`, `zone: counter`,
+`cashRegisterId`, libellé « Tapis de comptoir · <nom du poste> ». États : `down` s'il est débranché (conseil : le câble, puis
+l'alimentation) ou si son boîtier se tait (conseil : vérifier le boîtier) ; `pending` tant qu'il n'a lu aucune puce (conseil :
+poser une pièce dessus), puis tant qu'il n'est relié à aucun poste (conseil : choisir son poste) ; sinon `ok`. Le tapis est
+facultatif : aucune ligne tant qu'aucun n'est branché, et le bandeau ne s'alarme pas. La lecture fait maintenant trois requêtes.
+
+**Assistant** : `optionalSteps` gagne `counter_mat` (« Brancher le tapis de comptoir »), faite quand un tapis a lu une puce et qu'il
+est relié à son poste ; `state` et `hint` reprennent la pastille du tapis ; sans tapis : `absent`, « branchez le tapis sur le
+boîtier ».
+
+**Exercice** : le boîtier simulé a un tapis simulé (`SIM-TAPIS`, sans poste de caisse : lu, il est en ordre) et deux scénarios de
+plus, `counter_put` (une pièce d'exercice est posée sur le tapis) et `counter_take` (elle le quitte) ; 409 `EXERCISE_NO_PIECE` sans
+pièce d'exercice qui porte une puce. Rien de cela n'existe pour la caisse.
+
+**La route de la caisse** : `POST /api/pos/pertes/articles-non-lus` (droit du caissier : `ROLE_USER_POS`, `ROLE_POS_MANAGER`,
+`ROLE_ADMIN` ; en-tête de la tablette comme toute la caisse), appelée AVANT le paiement.
+
+- Corps : `{ cashRegisterId?, items: [{ productVariantId, quantity }] }` (200 lignes au plus ; deux lignes de la même variante
+  s'additionnent ; un article libre, sans variante, n'est pas envoyé).
+- Réponse 200 : `{ active, reason, cashRegisterId, tracked, read, unread [{ productVariantId, name, variantLabel, quantity,
+  missing }], extra, checkedAt }`. `tracked` : articles suivis du panier ; `read` : combien sont lus ; `unread` : ceux qui manquent,
+  avec `missing` ; `extra` : le nombre de pièces ENCORE posées sur le tapis qui ne sont pas dans le panier (un nombre, sans dire
+  lesquelles).
+- **Un article est suivi** quand sa variante a au moins une vraie pièce en service qui porte une puce. **Une pièce est lue** si elle
+  est sur le tapis de ce poste, ou l'a quitté depuis moins de 10 minutes (`LossCounterService::READ_WINDOW` ; réglable en L3-b2).
+  Une pièce vendue ou retirée ne compte pas ; une puce retirée ne lit plus sa pièce.
+- **Pas de contrôle plutôt qu'un faux avis** : `active: false`, listes vides, avec `reason` : `MODULE_INACTIVE` (le site n'a pas le
+  droit du module, quel que soit le mode de la plateforme), `NO_MAT` (ce poste n'a pas de tapis en service), `MAT_SILENT` (tapis en
+  panne, ou boîtier silencieux depuis plus longtemps que le délai du site). Toujours 200.
+- **Le poste est celui où la caisse a le droit de vendre** : il se résout comme pour une vente (`CashRegisterResolver`) et doit
+  avoir une session ouverte. Refus de la caisse, à la forme de la caisse : 404 `CASH_REGISTER_NOT_FOUND`, 400
+  `CASH_REGISTER_REQUIRED`, 409 `CASH_REGISTER_CLOSED`, 403 `CASH_REGISTER_FORBIDDEN` (un caissier sur une tablette rattachée à un
+  poste ne lit que le tapis de CE poste), 422 `VALIDATION_FAILED { errors [{ path, message }] }`. Seul le tapis du poste résolu est
+  lu ; les données sont celles du site de la requête.
+- **Une lecture : rien n'est écrit** (ni fait, ni constat, ni journal du module, ni journal de caisse). **Elle ne bloque jamais la
+  vente** : la caisse affiche un avis, le caissier pose l'article ou continue ; la caisse traite toute réponse autre que 200, et
+  tout retard, comme « pas de contrôle » ; hors ligne, elle n'appelle pas.
+- **Tests** : `LossPreventionCounterTest` (tapis lu, relié, retiré, pastille, étape ; la question de la caisse, poste par poste,
+  sans rien écrire ; tapis simulé ; gardes de la base et rejeu de la migration).

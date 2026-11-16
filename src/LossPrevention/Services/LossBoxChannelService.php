@@ -258,16 +258,24 @@ class LossBoxChannelService
             $serverNow = time();
             $now = gmdate('Y-m-d H:i:s', $serverNow);
             $known = [];
+            $mats = [];
             foreach ($repository->devicesOf([$boxId])[$boxId] as $row) {
                 $known[(string) $row['serial']] = $row;
+                if ($row['kind'] === LossDevice::COUNTER_MAT) {
+                    $mats[] = (int) $row['id'];
+                }
             }
             $silent = $current['last_seen_at'] !== null ? $serverNow - self::stamp((string) $current['last_seen_at']) : 0;
             if ($silent > $this->health->silentAfter()) { // le délai de silence du site (5 minutes par défaut)
                 $repository->event($boxId, null, LossBoxEvent::BOX_BACK, null, false, ['silentSeconds' => $silent, 'since' => self::iso(self::stamp((string) $current['last_seen_at']))], $now);
+                // pendant le silence on ne sait plus ce qui était sur les tapis : les présences se ferment au dernier signe de vie,
+                // et le boîtier redit ce qui est posé (COUNTER_SEEN) maintenant qu'il est revenu
+                $repository->closePresencesOf($mats, (string) $current['last_seen_at']);
             }
             $offset = max(-2147483647, min(2147483647, $boxNow - $serverNow));
             $repository->seen($boxId, $now, $version, $offset);
-            $count = count($known);
+            $count = count(array_filter($known, static fn (array $row): bool => $row['status'] !== LossDevice::RETIRED)); // un appareil retiré ne compte plus
+            $down = [];
             foreach ($announced as $serial => $device) {
                 $serial = (string) $serial;
                 if (!isset($known[$serial])) {
@@ -287,25 +295,40 @@ class LossBoxChannelService
                     // le genre d'un appareil ne change pas : celui qu'on connaissait sous ce numéro n'est plus là. Il est noté en panne,
                     // une fois, pour que l'administrateur le voie dans la fiche du boîtier
                     $refused[] = ['serial' => $serial, 'code' => 'MISMATCH'];
-                    if ($known[$serial]['status'] !== LossDevice::DOWN) {
+                    if (!in_array($known[$serial]['status'], [LossDevice::DOWN, LossDevice::RETIRED], true)) {
                         $repository->event($boxId, (int) $known[$serial]['id'], LossBoxEvent::SOURCE_DOWN, null, false, ['reason' => 'mismatch'], $now);
                         $repository->deviceStatus((int) $known[$serial]['id'], LossDevice::DOWN, null, false, $now);
+                        $down[] = (int) $known[$serial]['id'];
                     }
                     continue;
                 }
                 $id = (int) $known[$serial]['id'];
-                if ($known[$serial]['status'] !== $device['status']) {
+                if ($known[$serial]['status'] === LossDevice::RETIRED) {
+                    // un appareil retiré que le boîtier annonce de nouveau est là : il revient (s'il y a encore de la place)
+                    if ($count >= LossDevice::MAX_KNOWN_PER_BOX) {
+                        $refused[] = ['serial' => $serial, 'code' => 'TOO_MANY'];
+                        continue;
+                    }
+                    ++$count;
+                    $repository->event($boxId, $id, LossBoxEvent::DEVICE_SEEN, null, false, ['kind' => $device['kind'], 'again' => true], $now);
+                } elseif ($known[$serial]['status'] !== $device['status']) {
                     $repository->event($boxId, $id, $device['status'] === LossDevice::DOWN ? LossBoxEvent::SOURCE_DOWN : LossBoxEvent::SOURCE_UP, null, false, ['reason' => 'reported'], $now);
+                }
+                if ($device['status'] === LossDevice::DOWN) {
+                    $down[] = $id;
                 }
                 $repository->deviceStatus($id, $device['status'], $device['model'], true, $now);
             }
-            // un appareil connu que le boîtier n'annonce plus : en panne (débranché), une seule fois
+            // un appareil connu que le boîtier n'annonce plus : en panne (débranché), une seule fois ; un appareil retiré reste retiré
             foreach (array_diff_key($known, $announced) as $row) {
-                if ($row['status'] !== LossDevice::DOWN) {
+                if (!in_array($row['status'], [LossDevice::DOWN, LossDevice::RETIRED], true)) {
                     $repository->event($boxId, (int) $row['id'], LossBoxEvent::SOURCE_DOWN, null, false, ['reason' => 'absent'], $now);
                     $repository->deviceStatus((int) $row['id'], LossDevice::DOWN, null, false, $now);
+                    $down[] = (int) $row['id'];
                 }
             }
+            // un tapis en panne ne dit plus ce qui est posé sur lui : ses présences se ferment
+            $repository->closePresencesOf(array_values(array_intersect($down, $mats)), $now);
             $token = null;
             if ((int) $box['token_expires_at'] - $serverNow < LossBoxToken::RENEW_BEFORE) {
                 $fresh = $this->tokens->issue($site, $boxId, (int) $current['generation'], $serverNow);
@@ -355,7 +378,7 @@ class LossBoxChannelService
         }
         $repository = $this->repository();
         $devices = [];
-        foreach ($repository->devicesOf([$boxId])[$boxId] as $row) {
+        foreach ($repository->devicesOf([$boxId], false)[$boxId] as $row) { // un appareil retiré n'envoie plus de faits
             $devices[(string) $row['serial']] = $row;
         }
         $serverNow = time();
@@ -396,8 +419,16 @@ class LossBoxChannelService
                 $data = array_filter(['zone' => $fact['zone'], 'seq' => $fact['seq']], static fn (mixed $v): bool => $v !== null)
                     + ($tag['status'] === LossTag::RETIRED ? ['tagRetired' => true] : []) // la puce a été retirée : lue quand même, et dite
                     + ($doubt ? ['clockDoubt' => true] : []);
-                $written = $repository->pieceFact($fact['type'], gmdate('Y-m-d H:i:s', $fact['at']), $tag['piece_id'] !== null ? (int) $tag['piece_id'] : null, (int) $tag['id'], $boxId,
-                    $fact['deviceId'], 'b' . $boxId . ':' . $fact['key'], false, $data, $now);
+                $at = gmdate('Y-m-d H:i:s', $fact['at']);
+                $pieceId = $tag['piece_id'] !== null ? (int) $tag['piece_id'] : null;
+                $written = $repository->pieceFact($fact['type'], $at, $pieceId, (int) $tag['id'], $boxId, $fact['deviceId'], 'b' . $boxId . ':' . $fact['key'], false, $data, $now);
+                // Tapis de comptoir : la présence est la projection de ces faits. Un fait rejoué ne la touche pas une seconde fois, et
+                // un fait à l'heure douteuse ne l'alimente pas (elle sert à dire ce qui est posé AVANT un paiement)
+                if ($written && !$doubt && $fact['type'] === LossPieceEvent::COUNTER_SEEN) {
+                    $repository->openPresence($fact['deviceId'], (int) $tag['id'], $pieceId, $at, false);
+                } elseif ($written && !$doubt && $fact['type'] === LossPieceEvent::COUNTER_LEFT) {
+                    $repository->closePresence($fact['deviceId'], (int) $tag['id'], $at);
+                }
                 $status = $written ? 'accepted' : 'duplicate';
                 ++$counts[$status];
                 $results[] = ['index' => $index, 'key' => $fact['key'], 'status' => $status, 'code' => null];
@@ -423,9 +454,10 @@ class LossBoxChannelService
             return $refused('FACT_INVALID');
         }
         $type = $fact['type'] ?? null;
-        if (!is_string($type) || !in_array($type, LossPieceEvent::FROM_BOX, true)) {
+        if (!is_string($type) || !in_array($type, LossPieceEvent::READS, true)) {
             return $refused('FACT_TYPE_UNKNOWN');
         }
+        $fromMat = in_array($type, LossPieceEvent::FROM_MAT, true);
         $at = self::time($fact['at'] ?? null);
         $seq = $fact['seq'] ?? null;
         if ($at === null || ($seq !== null && (!is_int($seq) || $seq < 0))) {
@@ -435,11 +467,17 @@ class LossBoxChannelService
         if ($device === null) {
             return $refused('DEVICE_UNKNOWN'); // le boîtier annonce ses appareils dans son signe de vie, avant leurs faits
         }
-        if ($device['kind'] !== LossDevice::READER) {
+        // un tapis dit ce qui arrive sur lui et ce qui en part ; un lecteur dit ce qu'il lit : chacun ses faits
+        if ($device['kind'] !== ($fromMat ? LossDevice::COUNTER_MAT : LossDevice::READER)) {
             return $refused('DEVICE_KIND_INVALID');
         }
         $zone = $fact['zone'] ?? null;
-        if (($zone === null && $type === LossPieceEvent::ZONE_SEEN) || ($zone !== null && !in_array($zone, LossDevice::ZONES, true))) {
+        if ($fromMat) {
+            if ($zone !== null && $zone !== 'counter') {
+                return $refused('ZONE_INVALID');
+            }
+            $zone = 'counter'; // un tapis est au comptoir
+        } elseif (($zone === null && $type === LossPieceEvent::ZONE_SEEN) || ($zone !== null && !in_array($zone, LossDevice::ZONES, true))) {
             return $refused('ZONE_INVALID');
         }
         $data = $fact['data'] ?? null;
@@ -463,12 +501,12 @@ class LossBoxChannelService
     private function settingsOf(int $boxId): array
     {
         $devices = [];
-        foreach ($this->repository()->devicesOf([$boxId])[$boxId] as $row) {
+        foreach ($this->repository()->devicesOf([$boxId], false)[$boxId] as $row) {
             $devices[] = ['id' => (int) $row['id'], 'serial' => (string) $row['serial'], 'kind' => (string) $row['kind'], 'zone' => $row['zone'],
                 'cashRegisterId' => $row['cash_register_id'] !== null ? (int) $row['cash_register_id'] : null];
         }
 
-        return ['heartbeatSeconds' => self::HEARTBEAT_SECONDS, 'facts' => ['types' => LossPieceEvent::FROM_BOX, 'maxBatch' => self::MAX_FACTS], 'zones' => LossDevice::ZONES, 'devices' => $devices];
+        return ['heartbeatSeconds' => self::HEARTBEAT_SECONDS, 'facts' => ['types' => LossPieceEvent::READS, 'maxBatch' => self::MAX_FACTS], 'zones' => LossDevice::ZONES, 'devices' => $devices];
     }
 
     /**

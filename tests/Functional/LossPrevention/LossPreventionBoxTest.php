@@ -203,7 +203,7 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $enrolled = $this->json($enrol($good));
         $this->assertSame(['box', 'token', 'expiresAt', 'serverTime', 'settings'], array_keys($enrolled));
         $this->assertSame(['id' => $id], $enrolled['box'], 'le boîtier ne reçoit même pas son nom');
-        $this->assertSame(['heartbeatSeconds' => 60, 'facts' => ['types' => ['SPOT_CHECK', 'ZONE_SEEN'], 'maxBatch' => 200], 'zones' => ['stockroom', 'stockroom_door', 'floor', 'counter', 'exit'], 'devices' => []], $enrolled['settings']);
+        $this->assertSame(['heartbeatSeconds' => 60, 'facts' => ['types' => ['SPOT_CHECK', 'ZONE_SEEN', 'COUNTER_SEEN', 'COUNTER_LEFT'], 'maxBatch' => 200], 'zones' => ['stockroom', 'stockroom_door', 'floor', 'counter', 'exit'], 'devices' => []], $enrolled['settings']);
         $token = $enrolled['token'];
         $this->assertMatchesRegularExpression('/\Ab' . $id . '\.2\.\d{10}\.[0-9a-f]{64}\z/', $token);
         $this->assertEqualsWithDelta(time() + 86400, strtotime($enrolled['expiresAt']), 5);
@@ -650,10 +650,10 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $realBefore = array_map('intval', $this->db->fetchNumeric('SELECT (SELECT COUNT(*) FROM loss_box WHERE NOT exercise), (SELECT COUNT(*) FROM loss_box_event WHERE NOT exercise), (SELECT COUNT(*) FROM loss_piece_event WHERE NOT exercise)'));
         $real = $this->json($this->admin('POST', self::BOXES, ['name' => "Réel $this->s"]), 201)['box']['id'];
         $start = $this->json($this->admin('GET', self::EX . '/boitiers'));
-        $this->assertSame([[], 0, 3, true, 'pertes.boitiers', ['heartbeat', 'network_cut', 'device_down', 'device_up', 'spot_check', 'zone_exit']],
+        $this->assertSame([[], 0, 3, true, 'pertes.boitiers', ['heartbeat', 'network_cut', 'device_down', 'device_up', 'spot_check', 'zone_exit', 'counter_put', 'counter_take']],
             [$start['items'], $start['total'], $start['limit'], $start['exercise'], $start['screen'], array_column($start['scenarios'], 'code')]);
         $this->assertSame(['code' => 'network_cut', 'label' => 'Coupure du réseau', 'text' => 'Le boîtier revient après deux heures sans réseau : un fait dit le trou.'], $start['scenarios'][1]);
-        $install = fn (bool $exercise): array => array_column($this->json($this->admin('GET', $exercise ? self::EX . '/installation' : self::BASE . '/installation'))['optionalSteps'], 'status', 'code');
+        $install = fn (bool $exercise): array => array_intersect_key(array_column($this->json($this->admin('GET', $exercise ? self::EX . '/installation' : self::BASE . '/installation'))['optionalSteps'], 'status', 'code'), ['box' => 0]);
         $this->assertSame([['box' => 'todo'], ['box' => 'todo']], [$install(true), $install(false)]);
 
         $created = $this->json($this->admin('POST', self::EX . '/boitiers'), 201);
@@ -661,8 +661,9 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $box = $created['box'];
         $id = $box['id'];
         $this->assertSame(['Boîtier simulé', 'Exercice', 'active', true, 'En ligne', null, true, ['BOX_CREATED', 'BOX_ENROLLED', 'DEVICE_SEEN', 'DEVICE_SEEN'], 0],
-            [$box['name'], $box['place'], $box['status'], $box['online'], $box['onlineLabel'], $box['keyHint'], $box['exercise'], array_reverse(array_column($box['events'], 'type')), $box['factsReceived']]);
-        $this->assertSame([['SIM-LECTEUR-SORTIE', 'reader', 'ok', 'exit', 'Sortie'], ['SIM-LECTEUR-MAIN', 'reader', 'ok', null, null]], array_map(fn (array $d): array => [$d['serial'], $d['kind'], $d['status'], $d['zone'], $d['zoneLabel']], $box['devices']));
+            [$box['name'], $box['place'], $box['status'], $box['online'], $box['onlineLabel'], $box['keyHint'], $box['exercise'], array_slice(array_reverse(array_column($box['events'], 'type')), 0, 4), $box['factsReceived']]);
+        $this->assertSame([['SIM-LECTEUR-SORTIE', 'reader', 'ok', 'exit', 'Sortie'], ['SIM-LECTEUR-MAIN', 'reader', 'ok', null, null], ['SIM-TAPIS', 'counter_mat', 'ok', null, null]],
+            array_map(fn (array $d): array => [$d['serial'], $d['kind'], $d['status'], $d['zone'], $d['zoneLabel']], $box['devices']));
         $this->assertSame([null, null, true], array_values($this->db->fetchNumeric('SELECT key_hash, machine_hash, exercise FROM loss_box WHERE id = ?', [$id])), 'ni clé ni machine : personne ne s\'y inscrit');
         // l'assistant d'exercice voit le boîtier simulé ; l'assistant réel, non (son boîtier attend encore sa machine)
         $this->assertSame([['box' => 'done'], ['box' => 'todo']], [$install(true), $install(false)]);
@@ -896,7 +897,8 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $this->assertSame([['absent'], true, false, 'Aucun appareil installé', 'Aucun boîtier simulé. Créez-en un pour voir le tableau vivre, sans aucun matériel.'],
             [array_column(($none = $exercise())['devices'], 'state'), $none['exercise'], $none['summary']['allOk'], $none['summary']['label'], $none['devices'][0]['hint']]);
         $simulated = $this->json($this->admin('POST', self::EX . '/boitiers'), 201)['box']['id'];
-        $this->assertSame([["box-$simulated"], ['ok'], true], [array_column(($sim = $exercise())['devices'], 'code'), array_column($sim['devices'], 'state'), $sim['summary']['allOk']]);
+        // le boîtier simulé a son tapis simulé (lot L3-b1), qui n'a encore rien lu : une ligne de plus, en attente
+        $this->assertSame(["box-$simulated", ['box', 'mat'], ['ok', 'pending'], false], [($sim = $exercise())['devices'][0]['code'], array_column($sim['devices'], 'kind'), array_column($sim['devices'], 'state'), $sim['summary']['allOk']]);
         $this->assertNotContains("box-$simulated", array_column($board()['devices'], 'code'));
         $this->db->executeStatement("UPDATE loss_box SET last_seen_at = NOW() AT TIME ZONE 'UTC' - INTERVAL '630 seconds' WHERE id = ?", [$simulated]);
         $this->assertSame(['down', 'Silencieux depuis 10 min. Jouez le scénario « Signe de vie » pour le faire revenir.'], [($silent = $exercise()['devices'][0])['state'], $silent['hint']]);
