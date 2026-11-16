@@ -124,7 +124,7 @@ class SiteBreakingSettingsGuardTest extends WebTestCase
                 $this->loginAs($roles);
                 $index = (string) $this->indexRow(SquareConfigCrudController::class, 'square_config', $id)->closest('table')?->html();
                 $this->assertStringNotContainsString(self::SQUARE_SECRET, $index, 'jeton absent de la liste (y compris des attributs title)');
-                $this->assertStringContainsString('••••••••', $index);
+                $this->assertStringContainsString('défini', $index, 'la liste dit seulement que le jeton est défini');
                 $this->assertStringNotContainsString('form-switch', $index, 'aucun interrupteur de modification en ligne');
                 $detail = (string) $this->client->request('GET', $this->adminUrl(SquareConfigCrudController::class, 'detail', $id))->html();
                 $this->assertSame(200, $this->client->getResponse()->getStatusCode());

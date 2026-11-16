@@ -76,8 +76,11 @@ class EmailConfigurationCrudController extends BaseTenantCrudController
             TextField::new('smtpUser', 'Utilisateur SMTP')
                 ->setHelp('Exemple : contact@lintendantprive.com')
                 ->setRequired(false),
+            // Lot SECRETS-1 (16/11/2026) : la fiche détail affichait ce mot de passe en clair. Il ne s'affiche plus nulle part
+            // (« défini » ou « non défini ») ; le formulaire le remplace seulement.
             TextField::new('smtpPassword', 'Mot de passe SMTP')
                 ->setFormType(PasswordType::class)
+                ->setTemplatePath('admin/field/masked_secret.html.twig') // liste et fiche : jamais la valeur, même dans title
                 ->setHelp('Saisissez le mot de passe de la boîte mail. Laissez vide lors d\'une modification pour conserver le mot de passe actuel.')
                 ->hideOnIndex()
                 ->setRequired(false),

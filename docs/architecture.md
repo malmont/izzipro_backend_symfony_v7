@@ -222,6 +222,31 @@ chemin brut ne reconnaît pas ces chemins et laisse passer.
   anti-CSRF refusée par un chemin encodé ; chaque garde rend au chemin encodé la réponse du chemin normal ; un chemin légitimement
   encodé, accent ou espace, atteint sa route comme avant).
 
+### Secrets : jamais affichés, seulement remplacés (lot SECRETS-1, 16/11/2026)
+
+Un secret d'un site (mot de passe du serveur d'envoi, clés EasyPost et Google Places, jeton Square) **ne s'affiche jamais** : ni
+dans une liste, ni dans une fiche, ni dans un export, ni dans une réponse de l'API. Un écran dit seulement « défini » ou « non
+défini » ; le formulaire le **remplace** (champ laissé vide : valeur gardée). Jusqu'à ce lot, la fiche détail de la configuration du
+courriel montrait le mot de passe du serveur d'envoi en clair à l'administrateur du site.
+
+- **EasyAdmin** : tout champ dont le nom dit un secret passe par le gabarit `templates/admin/field/masked_secret.html.twig` (le
+  gabarit texte d'EasyAdmin met la valeur brute dans l'attribut `title` : `formatValue` ne suffit pas), ou n'existe que dans le
+  formulaire (`onlyOnForms`). EasyAdmin n'a pas d'export général ; les deux exports qui existent (formulaires reçus, caisse) ne
+  touchent aucun de ces champs.
+- **Quels noms disent un secret** : `App\Security\SecretKeys::names()` (contient `password`, `secret` ou `apikey` ; finit par
+  `token`, `accesskey` ou `privatekey`). `inputTokens` ou `memoryKey` n'en sont pas.
+- **Journal des modifications** (`GET /api/landingpage-audit/{id}`) : tout secret qu'une ligne aurait gardé dans son avant ou son
+  après est masqué **à la lecture** (`SecretKeys::mask`) ; la ligne elle-même n'est pas touchée, le retour arrière la relit entière.
+  Aucun des écrans qui portent un secret n'écrit aujourd'hui à ce journal.
+- **Garde-fous** (`tests/Functional/Security/SecretsNeverShownTest.php`) : des valeurs reconnaissables sont posées dans tous ces
+  secrets et dans les jetons d'un compte, puis chaque écran d'EasyAdmin qui les porte (liste, fiche, formulaire), toutes les pages
+  d'administration et toutes les lectures de l'API de la gestion, du site et de la plateforme sont ouverts par l'administrateur et par
+  le super administrateur : aucune ne rend une de ces valeurs. Un second garde-fou relit le code de tous les écrans d'EasyAdmin : un
+  champ au nom de secret qui ne serait ni masqué ni réservé au formulaire le fait échouer.
+- **Deux exceptions déclarées**, avec leur raison, dans cet essai : la clé d'un lien de partage de médias (faite pour être copiée) ;
+  le lien d'activation d'un compte en attente, que la console de Mémoires Vivantes rend exprès à l'équipe (`activationUrl` de
+  `GET /api/memoires/admin/users`, qui porte le jeton de vérification : décision du propriétaire en attente).
+
 ### Ressources API Platform (`#[ApiResource]`, audit S8 du 26/10/2026)
 
 Une collection API Platform **sans groupes de sérialisation** imbrique toutes les relations des entités qui ne sont pas des ressources

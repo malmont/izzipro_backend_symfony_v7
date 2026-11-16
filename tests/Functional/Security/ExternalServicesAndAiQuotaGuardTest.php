@@ -136,7 +136,7 @@ class ExternalServicesAndAiQuotaGuardTest extends WebTestCase
             $row = $this->indexRow(GooglePlacesConfigCrudController::class, 'google_places_config', $id);
             $indexHtml = (string) $this->client->getResponse()->getContent();
             $this->assertCount(1, $row);
-            $this->assertStringContainsString('••••••••', $row->text());
+            $this->assertStringContainsString('défini', $row->text());
             $this->assertStringNotContainsString('AIzaSyTestSecretKey_2b_111', $indexHtml, 'clé test jamais en clair dans l\'index');
             $this->assertStringNotContainsString('AIzaSyProdSecretKey_2b_222', $indexHtml, 'clé prod jamais en clair dans l\'index');
             $this->assertCount(0, $this->client->getCrawler()->filter('a.action-new, [data-action-name="new"], [data-action-name="batchDelete"]'));
@@ -145,7 +145,7 @@ class ExternalServicesAndAiQuotaGuardTest extends WebTestCase
             $this->crud(GooglePlacesConfigCrudController::class, 'detail', $id);
             $this->assertSame(200, $this->client->getResponse()->getStatusCode());
             $detailHtml = (string) $this->client->getResponse()->getContent();
-            $this->assertStringContainsString('••••••••', $detailHtml);
+            $this->assertStringContainsString('défini', $detailHtml);
             $this->assertStringNotContainsString('AIzaSyTestSecretKey_2b_111', $detailHtml, 'clé test jamais en clair dans le détail');
             $this->assertStringNotContainsString('AIzaSyProdSecretKey_2b_222', $detailHtml, 'clé prod jamais en clair dans le détail');
 
@@ -217,7 +217,7 @@ class ExternalServicesAndAiQuotaGuardTest extends WebTestCase
             $row = $this->indexRow(EasyPostConfigurationCrudController::class, 'easy_post_configuration', $id);
             $indexHtml = (string) $this->client->getResponse()->getContent();
             $this->assertCount(1, $row);
-            $this->assertStringContainsString('••••••••', $row->text());
+            $this->assertStringContainsString('défini', $row->text());
             $this->assertStringNotContainsString('EZTK_sandbox_secret_2b_111', $indexHtml, 'clé sandbox jamais en clair dans l\'index');
             $this->assertStringNotContainsString('EZAK_prod_secret_2b_222', $indexHtml, 'clé prod jamais en clair dans l\'index');
             $this->assertCount(0, $this->client->getCrawler()->filter('a.action-new, [data-action-name="new"], [data-action-name="batchDelete"]'));
@@ -226,7 +226,7 @@ class ExternalServicesAndAiQuotaGuardTest extends WebTestCase
             $this->crud(EasyPostConfigurationCrudController::class, 'detail', $id);
             $this->assertSame(200, $this->client->getResponse()->getStatusCode());
             $detailHtml = (string) $this->client->getResponse()->getContent();
-            $this->assertStringContainsString('••••••••', $detailHtml);
+            $this->assertStringContainsString('défini', $detailHtml);
             $this->assertStringNotContainsString('EZTK_sandbox_secret_2b_111', $detailHtml, 'clé sandbox jamais en clair dans le détail');
             $this->assertStringNotContainsString('EZAK_prod_secret_2b_222', $detailHtml, 'clé prod jamais en clair dans le détail');
 

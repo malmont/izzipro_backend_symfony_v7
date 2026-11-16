@@ -38,8 +38,10 @@ final class ContentAuditEntryDto
             $entry->getFields(),
             ContentAuditRestorer::restorable($entry),
             $entry->getRestoredFrom(),
-            $withStates && $entry->getBefore() !== null ? json_decode($entry->getBefore()) : null,
-            $withStates && $entry->getAfter() !== null ? json_decode($entry->getAfter()) : null
+            // lot SECRETS-1 : un secret gardé dans une ligne du journal (mot de passe, clé, jeton) est masqué À LA LECTURE ; la ligne
+            // elle-même n'est pas touchée (le retour arrière la relit entière)
+            $withStates && $entry->getBefore() !== null ? \App\Security\SecretKeys::mask(json_decode($entry->getBefore())) : null,
+            $withStates && $entry->getAfter() !== null ? \App\Security\SecretKeys::mask(json_decode($entry->getAfter())) : null
         );
     }
 }

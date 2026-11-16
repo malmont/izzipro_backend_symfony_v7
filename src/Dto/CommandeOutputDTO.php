@@ -30,7 +30,7 @@ class CommandeOutputDTO
         $this->id = $commande->getId();
         $this->budget = (int) $commande->getBudget();
         $this->date = $commande->getDate()->format('Y-m-d H:i:s');
-        $this->name = $commande->getName();
+        $this->name = (string) $commande->getName(); // une commande sans nom (colonne facultative) ne fait plus planter sa liste (trouvé par le balayage de SECRETS-1)
         $this->kind = $commande->getKind();
         $this->document = $commande->getDocument()?->invoiceSummary();
         $this->receptionStatus = $commande->receptionStatus();
