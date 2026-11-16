@@ -27,7 +27,8 @@ final class PendingOtpSubscriber implements EventSubscriberInterface
         private readonly TwoFactorPolicy $twoFactor,
         private readonly UrlGeneratorInterface $urls,
         private readonly ?\App\Services\TenantConnectionProvider $tenants = null,
-        private readonly ?\App\Services\OtpService $otp = null,
+        // construit seulement pour envoyer un code (lot SÉCURITÉ-2) : l'envoi des courriels n'est pas bâti à chaque requête
+        #[\Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure(\App\Services\OtpService::class)] private readonly ?\Closure $otp = null,
         private readonly ?\App\Services\TenantEntityManagerProvider $emProvider = null,
     ) {
     }
@@ -59,7 +60,7 @@ final class PendingOtpSubscriber implements EventSubscriberInterface
             $em = $this->emProvider?->getEntityManager();
             $active = $em?->getConnection()->fetchOne("SELECT COUNT(*) FROM otp_code WHERE user_otp_id = ? AND purpose = 'login' AND expiration > NOW()", [$user->getId()]);
             if ($em !== null && (int) $active === 0) {
-                $this->otp?->generateAndSendOtp($user, $request);
+                $this->otp !== null && ($this->otp)()->generateAndSendOtp($user, $request);
             }
         } catch (\Throwable) {
             // un échec d'envoi n'ouvre rien : la page du code reste fermée
