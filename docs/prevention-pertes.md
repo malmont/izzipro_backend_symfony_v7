@@ -1102,7 +1102,10 @@ personne, ni même le nom que l'administrateur a donné au boîtier.
   vie** : le signe de vie et l'échange de jeton exigent l'empreinte de la machine inscrite. `/faits` et `/reglages` ne la demandent
   pas : un jeton copié peut encore envoyer des faits jusqu'à son échéance (24 heures au plus), dans la limite de 20 000 par heure.
 - **Si le secret de l'application change**, les jetons meurent, et avec eux les empreintes des clés et des machines : chaque
-  boîtier de chaque site doit alors recevoir une nouvelle clé (remise à zéro par l'administrateur) et se réinscrire.
+  boîtier de chaque site doit alors recevoir une nouvelle clé (remise à zéro par l'administrateur) et se réinscrire. **Avant toute
+  rotation de ce secret** (elle est prévue dans la campagne de mise en production) : prévoir une nouvelle clé pour chaque boîtier,
+  ou une période où l'ancien et le nouveau secret sont acceptés tous les deux. Au 16/11/2026 aucun boîtier réel n'existe : rien
+  n'est à faire. La garde est aussi dans `docs/mise-en-ligne.md` (tenue par « appli degestion backend »).
 - **Signe de vie** : toutes les 60 secondes. Il met à jour le dernier contact, la version, l'écart d'horloge (`now` du boîtier moins
   l'heure du serveur) et l'état des appareils. **Un appareil que la plateforme ne peut pas prendre n'empêche jamais le signe de
   vie** : il est rendu dans `refusedDevices`, avec `MISMATCH` (le genre d'un appareil ne change pas : celui qu'on connaissait sous
@@ -1159,7 +1162,9 @@ personne, ni même le nom que l'administrateur a donné au boîtier.
   par adresse, permettait de faire taire les boîtiers d'une boutique depuis son réseau : il est compté par boîtier et par
   génération, après la signature) ; corrigés aussi : plafond des empreintes de machine fausses, appareil au genre changé noté en
   panne, plus de 16 appareils sans refus de tout l'appel, fiche d'une pièce qui garde sa vie entière, bandeau sans alarme quand
-  rien n'est installé, délai de silence d'au moins 3 minutes. Laissé, connu : en SQL direct on peut encore écrire un fait pour un
+  rien n'est installé, délai de silence d'au moins 3 minutes. Mutations ciblées : 106 jouées, 103 tuées, aucun défaut de code (une
+  assertion de test mal écrite, corrigée ; deux mutations sans effet : la garde écartée, la relecture de la fiche refuse quand
+  même et la transaction s'annule). Laissé, connu : en SQL direct on peut encore écrire un fait pour un
   boîtier en attente ou révoqué, ou repasser un boîtier d'actif à en attente sans avancer sa génération (le code ne le fait pas).
 - **Tests** : `LossPreventionBoxTest` (administrateur ; inscription, garde, jeton, signe de vie, faits rejoués, « ne lit rien
   d'autre », appel en route pendant une révocation ; plafonds ; contrôleur appelé sans la garde ; boîtier simulé ; tableau de

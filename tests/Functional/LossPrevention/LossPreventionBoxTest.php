@@ -95,7 +95,8 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $row = $this->db->fetchAssociative('SELECT * FROM loss_box WHERE id = ?', [$id]);
         $tokens = static::getContainer()->get(LossBoxToken::class);
         $this->assertSame([$tokens->keyHash(MV_TEST_TENANT_CODE, $key), 1, null, $this->adminId], [$row['key_hash'], (int) $row['generation'], $row['machine_hash'], (int) $row['created_by']]);
-        $this->assertNotSame([hash('sha256', $key), $tokens->keyHash('un-autre-site', $key)], [$row['key_hash'], $row['key_hash']], 'l\'empreinte dépend du secret de l\'application et du site : une base copiée ne donne pas la clé, et la clé copiée ne vaut pas ailleurs');
+        $this->assertNotSame(hash('sha256', $key), $row['key_hash'], 'l\'empreinte dépend du secret de l\'application : une base copiée ne donne pas la clé');
+        $this->assertNotSame($tokens->keyHash('un-autre-site', $key), $row['key_hash'], 'l\'empreinte dépend du site : la clé copiée avec une base ne vaut pas ailleurs');
         $this->assertStringNotContainsString($key, json_encode($row) . (string) $this->db->fetchOne('SELECT string_agg(data, \'\') FROM loss_box_event WHERE box_id = ?', [$id]));
         $secret = substr($key, 12);
         foreach ([$this->admin('GET', self::BOXES), $this->admin('GET', self::BOXES . "/$id"), $this->admin('PUT', self::BOXES . "/$id", ['name' => "Boîtier $this->s"])] as $response) {
@@ -142,6 +143,8 @@ class LossPreventionBoxTest extends LossPreventionTestCase
             $this->assertSame('BOX_NOT_FOUND', $this->json($this->admin($method, $path, $body), 404)['error'], "$method $path");
         }
         $this->assertSame('active', $this->db->fetchOne('SELECT status FROM loss_box WHERE id = ?', [$simulated]), 'un boîtier simulé ne se révoque pas par la route réelle');
+        $this->assertSame(['Boîtier simulé', 1], [$this->db->fetchOne('SELECT name FROM loss_box WHERE id = ?', [$simulated]), (int) $this->db->fetchOne("SELECT COUNT(*) FROM loss_box_event WHERE box_id = ? AND type = 'BOX_REVOKED'", [$id])],
+            'ni renommé par la route réelle, ni le vrai boîtier touché par un scénario d\'exercice');
 
         // Plafond du site : 20 boîtiers non révoqués ; un boîtier révoqué rend sa place
         $ids = [];
