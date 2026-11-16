@@ -302,7 +302,7 @@ dans les sections fermées, garde de l'opérateur dans EasyAdmin) entre dans AG-
 
 **Sections** (`App\Services\Agency\Assistance\AssistanceSections`, écrans du registre) : `commandes` (commandes, expéditions,
 abonnements), `clients` (demandes, réservations), `caisse` (EasyAdmin), `stock`, `gestion` (toute la famille), `pertes` (toute la
-famille, **consultation seulement** : `write` → 422 `ASSISTANCE_READ_ONLY`), `assistance` (tickets). Jamais demandables : paiement,
+famille, **consultation seulement** : `write` → 422 `ASSISTANCE_READ_ONLY`), `assistance` (tickets). `stock` et `caisse` valent pour EasyAdmin (mouvements de stock, caisse) et les écrans du stock : dans l'API, le stock se lit aujourd'hui par les statistiques, donc par la section `gestion`. Jamais demandables : paiement,
 clés, courriel expéditeur, comptes, Mémoires Vivantes, Boussole.
 
 **Routes du commerçant** (`SiteAssistanceController`, `ROLE_ADMIN` d'un compte DU site ; un opérateur extérieur ou toute entrée par

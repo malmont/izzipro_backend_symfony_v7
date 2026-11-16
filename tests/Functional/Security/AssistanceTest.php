@@ -139,15 +139,15 @@ class AssistanceTest extends WebTestCase
     {
         $merchant = $this->account(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'commercant', ['ROLE_ADMIN'], 'Claire');
         [, $operator] = $this->agencyInside();
-        $this->assertSame(201, $this->call('POST', '/api/site/assistance', $merchant, ['section' => 'stock'])->getStatusCode());
-        $id = (int) $this->grantOf('stock')['id'];
+        $this->assertSame(201, $this->call('POST', '/api/site/assistance', $merchant, ['section' => 'gestion'])->getStatusCode());
+        $id = (int) $this->grantOf('gestion')['id'];
         $this->master->prepare("UPDATE assistance_grants SET requested_at = NOW() - INTERVAL '25 hours', request_expires_at = NOW() - INTERVAL '1 hour' WHERE id = ?")->execute([$id]);
-        $this->assertSame([403, 'family'], $this->reason('GET', '/api/gestion/stock', $operator), 'personne n\'est entré dans les 24 h : expirée');
+        $this->assertSame([403, 'family'], $this->reason('GET', '/api/gestion/journee', $operator), 'personne n\'est entré dans les 24 h : expirée');
         $this->assertNull($this->grant($id)['started_at'], 'une demande expirée ne démarre jamais');
         $this->assertSame('expired', array_column(json_decode((string) $this->call('GET', '/api/site/assistance', $merchant)->getContent(), true)['assistance'], 'state', 'id')[$id]);
         // le compte de la plateforme ne demande ni ne ferme l'assistance à la place du commerçant
         $platform = $this->account(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'plateforme', ['ROLE_SUPER_ADMIN', 'ROLE_ADMIN'], 'Plateforme');
-        $this->assertSame([403, 'ASSISTANCE_FORBIDDEN'], $this->refusal('POST', '/api/site/assistance', $platform, ['section' => 'stock']));
+        $this->assertSame([403, 'ASSISTANCE_FORBIDDEN'], $this->refusal('POST', '/api/site/assistance', $platform, ['section' => 'gestion']));
         $this->assertSame([403, 'ASSISTANCE_FORBIDDEN'], $this->refusal('POST', '/api/site/assistance/' . $id . '/close', $platform));
         $this->assertSame(200, $this->call('GET', '/api/site/assistance', $platform)->getStatusCode(), 'il lit');
     }
