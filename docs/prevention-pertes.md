@@ -1967,3 +1967,157 @@ annulation, réimpression à un autre exemplaire, confirmation d'une pièce déj
 absente, illisible, autre ; imprimante simulée ; imprimante simulée d'un vrai boîtier, jamais servie ; identifiant et coffre ;
 gardes de la base et migration rejouée). La clé d'essai
 est commune aux classes de la suite (`LossTagKeysTrait`).
+
+## 17. Lot L4 : antennes de zone, portique, dépôt et comptage (PLAN du 16/11/2026, SANS CODE, à valider)
+
+Plan demandé par le chef de projet, à valider par le propriétaire avant tout code. Il reprend le § 14 (points 1 et 3), le
+§ 16.14 (une étape de l'assistant par antenne, une ligne de santé par appareil), la réserve du § 16.6 (rattrapage qui absorbe une
+sortie) et les deux notes laissées pour la suite (§ 16.18, index des lectures de zone ; § 16.19, « du nouveau depuis la
+décision »). Rien n'est codé. La caméra du dépôt (§ 14, point 2) reste avec L3-d, après l'avis de l'avocat : elle n'est pas dans
+ce lot.
+
+### 17.1 Ce que L4 apporte, et ce qu'il n'apporte pas
+
+- **Apporte** : des **antennes de zone** branchées au boîtier (dépôt, porte du dépôt, rayon, sortie) et un **portique réel** à la
+  sortie ; pour chaque pièce, **où elle a été vue en dernier** ; quatre constats nouveaux, tous **par lieu et par jour ou par
+  pièce, jamais par personne** : « sortie sans vente », « sortie du dépôt sans mise en rayon », « porte arrière du dépôt » et
+  « mouvement hors des heures d'ouverture » ; le constat « puce disparue après la zone sensible » (§ 14, point 1), éteint tant que
+  l'avocat n'a pas rendu son avis ; le **comptage** au lecteur à main et le **bilan du soir** ; une étape de l'assistant et une
+  ligne de santé par antenne ; les mêmes scènes en mode exercice et dans le simulateur du boîtier.
+- **N'apporte pas** : aucune alerte sonore ou en caisse au moment de la sortie (L5) ; aucun avis de l'IA (L5) ; aucune caméra ;
+  aucune écriture de vente, de stock ni de catalogue (§ 1) : le comptage du module ne corrige pas le stock, il le compare ;
+  aucun constat qui nomme ou vise une personne ; aucune suite automatique, la décision reste humaine.
+
+### 17.2 Les zones et les antennes
+
+- **Zones** : celles du contrat (`stockroom`, `stockroom_door`, `floor`, `counter`, `exit`), plus deux nouvelles :
+  `back_door` (la porte arrière du dépôt) et `restricted_entrance` (l'ENTRÉE de la zone sensible, jamais l'intérieur). Une
+  antenne est un appareil `reader` avec une zone ; le lien se règle par la route qui existe déjà
+  (`PUT /boitiers/{id}/appareils/{deviceId}`), dans l'assistant.
+- **Ce que le boîtier envoie** : le fait `ZONE_SEEN` qui existe déjà, **à l'arrivée d'une pièce dans une zone et à son départ
+  seulement** (jamais une ligne par lecture radio : une antenne lit la même puce des dizaines de fois par seconde). Le boîtier
+  tient la présence en mémoire et n'envoie que les changements, comme le tapis. Côté plateforme, un plafond par pièce et par
+  zone borne ce qu'un boîtier mal réglé peut écrire.
+- **Où est la pièce** : deux colonnes sur la pièce, « dernière zone » et « vue à », écrites par les faits de zone. Les états
+  réservés depuis L2 prennent vie par ces faits seulement : `in_stockroom`, `on_floor`, `at_counter`. `missing` vient du
+  comptage (17.6). Une pièce vendue reste `sold` quoi qu'on lise ensuite.
+- **Lectures parasites** : une antenne peut lire à travers une cloison. Parade côté boîtier : une pièce n'« arrive » dans une
+  zone qu'après avoir été lue pendant une durée réglable (par défaut 3 secondes) et n'en « part » qu'après un silence réglable
+  (par défaut 30 secondes). Ces deux durées sont des réglages servis au boîtier ; leurs bonnes valeurs se trouvent à l'essai du
+  matériel (matériel jamais vu : § 13.7, risque 7).
+- **Base** : un index partiel sur les `ZONE_SEEN` par heure (note du § 16.18), et la conservation des lectures de zone suit le
+  réglage qui existe pour les présences du tapis.
+
+### 17.3 Le portique et le constat « sortie sans vente »
+
+- **Règle** : une vraie pièce jamais vendue (ni retirée) est lue à la sortie (`ZONE_SEEN`, zone `exit`), et aucune vente ne
+  l'explique. Le constat est **par pièce** : il dit l'article, l'heure, l'antenne, et où la pièce avait été vue avant. Aucun nom.
+- **Jamais avant que la caisse ait parlé** : l'analyse attend que son curseur ait dépassé l'heure de la lecture, plus la fenêtre
+  du rattrapage, avant de juger (une vente hors ligne ou un boîtier en retard arrivent après). Une lecture à l'heure douteuse
+  n'ouvre pas de constat.
+- **Réserve du § 16.6, à trancher par le propriétaire.** Aujourd'hui, une vente suivie sans pièce « couvre » la sortie d'une
+  pièce non vendue de la même variante : avec un étiquetage partiel, elle peut absorber la sortie d'une pièce volée.
+  *Proposition : les deux parades ensemble.* (a) Le rattrapage silencieux ne vaut que pour une variante **entièrement
+  étiquetée** (autant de pièces à puce non vendues que d'articles en stock, lu dans le catalogue sans rien y écrire) : la vente
+  sans pièce ne peut alors être qu'une lecture manquée. (b) Sinon, le rattrapage a lieu quand même (le client honnête n'est pas
+  inquiété), mais il ouvre un constat de **gravité faible**, « sortie couverte par une vente sans lecture », pour qu'une série
+  se voie : trois dans la semaine sur le même article remontent en gravité.
+- **Ce que le portique ne fait pas** : il ne sonne pas et ne retient personne (L5 décidera des alertes). Une pièce d'exercice
+  ne déclenche jamais un vrai constat.
+
+### 17.4 Le dépôt : trois constats
+
+- **« Sortie du dépôt sans mise en rayon »** (§ 14, point 3) : une pièce passe la porte du dépôt vers la boutique
+  (`stockroom_door`), puis n'est vue ni en rayon, ni au comptoir, ni vendue dans un délai réglable (par défaut 30 minutes).
+  Le « transfert » n'est pas un geste à saisir : c'est la lecture en rayon qui le prouve.
+- **« Porte arrière du dépôt »** : une pièce lue à `back_door` et qu'aucun retour au fournisseur ni retrait de pièce n'explique
+  dans la journée. Sans antenne à cette porte, la règle est éteinte et l'écran le dit.
+- **« Mouvement hors des heures d'ouverture »** : une pièce qui change de zone, ou passe une porte, alors que le magasin est
+  fermé. Les heures sont un réglage du module (une plage par jour de la semaine, à l'heure du magasin) ; sans heures réglées,
+  la règle est éteinte. Le comptage et la mise en rayon du matin ne doivent pas déclencher : une marge réglable avant
+  l'ouverture et après la fermeture (par défaut 1 heure).
+- Les trois sont **par pièce et par lieu**, avec un regroupement par jour et par zone quand plusieurs pièces bougent ensemble
+  (un carton entier ne fait pas vingt constats).
+
+### 17.5 La zone sensible (§ 14, point 1)
+
+- Antenne à l'ENTRÉE de la zone, jamais dedans, sans caméra ni son, avec une affichette (texte à faire valider par l'avocat).
+- **Constat « puce disparue après la zone sensible »** : une pièce non vendue lue à `restricted_entrance`, puis plus jamais lue
+  ailleurs ni vendue dans un délai réglable (par défaut jusqu'à la fermeture du jour). Par pièce, sans personne.
+- **Éteint d'office partout** tant que l'avocat n'a pas rendu son avis (§ 14, point 6) : un interrupteur par pays et région,
+  comme les règles par personne ; la règle et l'étape de l'assistant existent, le super administrateur ne peut pas l'allumer
+  avant une décision écrite du propriétaire. Codé en dernier.
+
+### 17.6 Le comptage et le bilan du soir
+
+- **Comptage** : le gérant ouvre un comptage (tout le magasin, ou une zone), passe le lecteur à main, ferme le comptage. Le
+  boîtier marque ses lectures du numéro du comptage. Résultat : les pièces attendues (à puce, ni vendues ni retirées) et **non
+  lues**. Une pièce absente à **deux comptages de suite** passe à `missing` et ouvre un constat « pièce absente au comptage »,
+  groupé par comptage. Une pièce `missing` relue redevient ce qu'elle était, et le constat le dit.
+- **Le comptage ne touche pas au stock** : il affiche l'écart entre le stock du catalogue et les pièces à puce comptées, par
+  article ; la correction du stock reste un geste de la gestion.
+- **Bilan du soir** (une lecture, calculée à la demande, puis jointe au résumé du jour) : articles suivis vendus avec et sans
+  lecture, sorties sans vente, pièces sorties du dépôt, pièces non vues depuis N jours, antennes en panne dans la journée.
+  Aucun nom, aucun classement de personnes ou de postes.
+
+### 17.7 Assistant, santé, exercice, boîtier
+
+- **Assistant** (§ 16.14) : une étape par antenne, « l'antenne lit une puce d'essai dans la bonne zone » (le fait
+  `TEST_TAG_READ` existe déjà), et une étape « heures d'ouverture réglées ». Quand la vérification échoue, l'étape dit quoi
+  essayer.
+- **Santé** : une ligne par antenne (en ordre, silencieuse depuis N minutes, jamais vue), dans le tableau qui existe.
+- **Exercice** : le boîtier simulé gagne des antennes simulées et une scène par constat (sortie sans vente, sortie couverte,
+  sortie du dépôt sans mise en rayon, porte arrière, hors des heures, zone sensible, comptage avec une pièce absente).
+- **Logiciel du boîtier** (dépôt local) : un lot B5, antennes simulées et présence par zone avec ses deux durées ; les pilotes
+  des vraies antennes viennent à l'essai du matériel, comme ceux du tapis et de l'imprimante.
+
+### 17.8 Deux corrections à embarquer
+
+1. **« Du nouveau depuis la décision » à la seconde** (§ 16.19) : aujourd'hui comparé par les dates, à la seconde ; une preuve
+   arrivée dans la seconde de la décision n'est pas vue. À comparer par le **rang** de la dernière preuve connue au moment de
+   la décision (une colonne additive sur le constat). À faire en tête de L4-b : les constats par pièce reçoivent des preuves en
+   rafale.
+2. **Constat classé dont les nombres doublent** (note du § 16.19 pour L5) : hors de L4, rappelé ici pour qu'il ne se perde pas.
+
+### 17.9 Découpage proposé
+
+| Sous-lot | Contenu | Risque |
+|---|---|---|
+| **L4-a** | zones nouvelles, arrivée et départ par zone, « où est la pièce », index, santé et assistant des antennes, antennes simulées (exercice et boîtier B5) | ordinaire : je me vérifie |
+| **L4-b** | correction « du nouveau depuis la décision » ; constat « sortie sans vente » ; la réserve du rattrapage tranchée | **à risque** : relecteur neuf et mutations |
+| **L4-c** | heures d'ouverture ; les trois constats du dépôt | **à risque** (faux constats) : relecteur neuf |
+| **L4-d** | comptage, `missing`, bilan du soir, résumé du jour | ordinaire |
+| **L4-e** | zone sensible : règle, interrupteur, affichette ; éteinte d'office | **à risque** (vie privée) : relecteur neuf, après l'avocat |
+
+Une migration additive par sous-lot, annoncée au chaperon avec son empreinte. Tout se joue sans matériel (exercice et
+simulateur) ; la campagne d'essai sur de vraies antennes reste avant tout client. Le contrat de chaque sous-lot va au chef en
+dix lignes avant son code, et les routes nouvelles au web avant la bascule.
+
+### 17.10 Risques
+
+1. **Faux constats** (lecture à travers une cloison, pièce posée près de la sortie, employé qui range) : arrivée et départ
+   avec durées, attente de la caisse, marges autour des heures, gravité faible par défaut pour tout ce qui n'est pas une sortie
+   sans vente, regroupement par jour et par zone.
+2. **Sortie volée absorbée par le rattrapage** : 17.3.
+3. **Volume** : arrivées et départs seulement, plafond par pièce et par zone, conservation bornée.
+4. **Vie privée** : aucun fait ne désigne une personne ; la zone sensible est éteinte d'office ; les heures d'ouverture ne
+   servent qu'aux pièces.
+5. **Matériel jamais vu** : portée réelle des antennes, lecture d'une puce contre le corps ou dans un sac, portique étroit ou
+   large : rien de cela ne se règle avant l'essai. Le plan ne promet pas qu'une sortie est toujours lue.
+6. **Stock du catalogue inexact** : il sert à dire « entièrement étiquetée » (17.3) ; un stock faux fait pencher vers le
+   constat faible, jamais vers le silence.
+
+### 17.11 Questions au propriétaire, avec la proposition
+
+1. **Rattrapage** : *les deux parades ensemble (17.3) : silencieux pour une variante entièrement étiquetée, constat faible
+   sinon.*
+2. **Seuils par défaut** : *sortie sans vente : un constat par pièce, gravité haute ; sortie du dépôt sans mise en rayon :
+   30 minutes ; marge autour des heures : 1 heure ; absente au comptage : deux comptages de suite.*
+3. **Heures d'ouverture** : *un réglage du module, une plage par jour ; sans réglage, la règle « hors des heures » est
+   éteinte.*
+4. **Porte arrière** : antenne (elle dit quelle pièce sort) ou simple contact de porte (il dit seulement que la porte
+   s'ouvre) ? *Proposition : antenne ; le contact de porte ne prouve rien sur une pièce.*
+5. **Zone sensible** : *codée en dernier, éteinte d'office partout, allumée seulement après l'avis écrit de l'avocat.*
+6. **Le comptage change-t-il le stock ?** *Non : il montre l'écart, la gestion corrige.*
+7. **Bilan du soir par courriel** : *joint au résumé du jour qui existe, sans courriel de plus.*
+8. **Ordre** : *L4-a, L4-b, L4-c, L4-d, puis L4-e après l'avocat.*
