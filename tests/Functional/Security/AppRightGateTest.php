@@ -192,7 +192,7 @@ class AppRightGateTest extends WebTestCase
         $user = (int) $db->fetchOne('SELECT id FROM "user" ORDER BY id LIMIT 1');
         $intent = 'pi_ent1_' . bin2hex(random_bytes(6));
         $db->executeStatement("INSERT INTO pos_terminal_payment (id, stripe_payment_intent_id, cash_register_id, user_id, reader_id, amount, currency, status, quote_total, other_payments, quote_hash, application_fee, idempotency_key, created_at, updated_at, order_id)
-            VALUES (nextval('pos_terminal_payment_id_seq'), ?, ?, ?, 'tmr_ent1', 1000, 'CAD', ?, 1000, '[]', 'h', 0, ?, NOW(), NOW(), ?)", [$intent, (int) $register, $user, $status, 'ent1-' . bin2hex(random_bytes(6)), $orderId]);
+            VALUES (nextval('pos_terminal_payment_id_seq'), ?, ?, ?, 'tmr_ent1', 1000, 'CAD', ?, 1000, 0, 'h', 0, ?, NOW(), NOW(), ?)", [$intent, (int) $register, $user, $status, 'ent1-' . bin2hex(random_bytes(6)), $orderId]);
         $id = (int) $db->fetchOne('SELECT id FROM pos_terminal_payment WHERE stripe_payment_intent_id = ?', [$intent]);
         $this->created[] = $id;
 
