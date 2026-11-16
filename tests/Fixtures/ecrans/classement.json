@@ -538,6 +538,7 @@
         "POST /admin/site/configurer/composition/{jobId}/appliquer"
     ],
     "agence.clients": [
+        "GET /api/agency/assistance",
         "GET /api/agency/me",
         "GET /api/agency/site-requests",
         "GET /api/agency/site-requests/{id}",
@@ -1128,6 +1129,12 @@
     "site.aide": [
         "GET /api/site/help",
         "GET /api/site/help/{key}"
+    ],
+    "site.assistance": [
+        "GET /api/site/assistance",
+        "GET /api/site/assistance/{id}/journal",
+        "POST /api/site/assistance",
+        "POST /api/site/assistance/{id}/close"
     ],
     "site.assistant": [
         "GET /api/site/assistant/credits",
