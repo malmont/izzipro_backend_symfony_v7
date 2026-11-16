@@ -27,6 +27,8 @@ class LossEvidence
     public const APPROVAL = 'approval';
     /** Lot L3-b2b : les nombres d'articles suivis vendus sur un poste et une journée, à une clôture (aucune vente, aucun compte) */
     public const SALE_UNITS = 'sale_units';
+    /** Lot L4-b : une pièce lue à la sortie (l'antenne, l'heure, la dernière zone d'avant ; aucune personne) */
+    public const EXIT_READ = 'exit_read';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

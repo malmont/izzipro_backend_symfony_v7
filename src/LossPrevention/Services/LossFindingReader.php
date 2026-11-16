@@ -202,7 +202,8 @@ class LossFindingReader
             'subject' => $subject,
             'onDuty' => array_map(fn (array $p) => ['id' => (int) $p['id'], 'name' => $names[(int) $p['id']], 'role' => (string) $p['role'], 'roleLabel' => $this->texts->t('role.' . $p['role'], $locale)], $onDuty),
             // un constat par poste et par jour ne liste personne : pas de phrase sur « ces personnes en poste »
-            'onDutyNotice' => $row['subject_type'] === 'cash_register' ? null : $this->texts->t('onDutyNotice', $locale),
+            // un constat par poste, par pièce ou par article (lots L3-b2b, L4-b) ne liste personne : pas de phrase sur « ces personnes en poste »
+            'onDutyNotice' => in_array($row['subject_type'], ['cash_register', 'piece', 'product_variant'], true) ? null : $this->texts->t('onDutyNotice', $locale),
             'amountNotice' => $this->texts->t('amountNotice', $locale),
             'evidence' => $evidence,
             'evidenceIntact' => $intact,
@@ -293,7 +294,8 @@ class LossFindingReader
             'cashRegister' => $register !== null ? ['id' => $register, 'name' => $registers[$register] ?? null] : null,
             'amountAtStake' => $row['amount_at_stake'] !== null ? (int) $row['amount_at_stake'] : null, 'currency' => (string) $row['currency'],
             'isNew' => $row['seen_at'] === null && !$row['backfill'],
-            'newEvidenceSinceDecision' => $row['decided_at'] !== null && (string) $row['last_evidence_at'] > (string) $row['decided_at'],
+            // lot L4-b : le drapeau posé quand une preuve s'ajoute après la décision ; la comparaison des dates reste pour une décision d'avant
+            'newEvidenceSinceDecision' => $row['decided_at'] !== null && ((bool) ($row['evidence_after_decision'] ?? false) || (string) $row['last_evidence_at'] > (string) $row['decided_at']),
             'backfill' => (bool) $row['backfill'],
             'exercise' => (bool) ($row['exercise'] ?? false), // constat d'exercice (fictif) : l'écran porte le bandeau « Exercice »
             'updatedAt' => LossAuditEntry::iso(LossAuditEntry::utc((string) $row['updated_at'])),
@@ -333,8 +335,25 @@ class LossFindingReader
             LossRuleCatalog::APPROVAL_PATTERN => $this->texts->t("summary.$code.rule", $locale, ['count' => (int) ($facts['count'] ?? 0)]),
             LossRuleCatalog::UNREAD_SOLD => $this->texts->t("summary.$code." . (($facts['below'] ?? false) ? 'below' : 'rule'), $locale,
                 ['unread' => (int) ($facts['unread'] ?? 0), 'tracked' => (int) ($facts['tracked'] ?? 0), 'share' => (int) ($facts['share'] ?? 0)]),
+            // lot L4-b : par pièce, par article ; aucun nom
+            LossRuleCatalog::EXIT_WITHOUT_SALE => $this->texts->t("summary.$code.rule", $locale, ['number' => (int) ($facts['pieceNumber'] ?? 0), 'reads' => (int) ($facts['reads'] ?? 1),
+                'article' => $this->articleOf($facts, $locale)]),
+            LossRuleCatalog::EXIT_COVERED => $this->texts->t("summary.$code." . (($facts['level'] ?? '') === 'medium' ? 'medium' : 'low'), $locale,
+                ['count' => (int) ($facts['count'] ?? 0), 'minCount' => (int) ($facts['minCount'] ?? 0), 'article' => $this->articleOf($facts, $locale)]),
             default => $this->texts->t('summary.default', $locale),
         };
+    }
+
+    /**
+     * Le nom de l'article d'un constat de la sortie (lot L4-b), gardé dans ses faits ; un constat d'exercice n'en a pas.
+     *
+     * @param array<string, mixed> $facts
+     */
+    private function articleOf(array $facts, string $locale): string
+    {
+        $article = trim((string) ($facts['article'] ?? ''));
+
+        return $article !== '' ? $article : $this->texts->t(($facts['practice'] ?? false) === true ? 'summary.exerciseArticle' : 'summary.unknownArticle', $locale);
     }
 
     /**
@@ -374,6 +393,10 @@ class LossFindingReader
             // des nombres seulement : personne n'est nommé (règle par poste et par jour)
             LossEvidence::SALE_UNITS => ['saleDay' => isset($s['day']) && self::isDay((string) $s['day']) ? LossTexts::day(new \DateTimeImmutable((string) $s['day']), $locale) : null, 'trackedSold' => $text('tracked'), 'unreadSold' => $text('unread'), 'linkedByCounter' => $text('counter'),
                 'caughtUpAtExit' => $text('catchUp'), 'returnedUnits' => $text('returned')],
+            // lot L4-b : la lecture à la sortie, l'antenne, la dernière zone d'avant, et la vente qui l'a rattrapée s'il y en a une
+            LossEvidence::EXIT_READ => ['pieceNumber' => $text('pieceNumber'), 'readAt' => $when('readAt'), 'antenna' => $text('device'),
+                'lastZone' => isset($s['lastZone']) && $this->texts->has('boxes.zone.' . $s['lastZone'], $locale) ? $this->texts->t('boxes.zone.' . $s['lastZone'], $locale) : null,
+                'lastZoneAt' => $when('lastZoneAt'), 'matchedSaleAt' => $when('soldAt')],
             default => [],
         };
         $lines = [];

@@ -59,6 +59,10 @@ class LossSetting
     #[ORM\Column(name: 'zone_leave_seconds', nullable: true)]
     private ?int $zoneLeaveSeconds = null;
 
+    /** Lot L4-b : rang du dernier fait de pièce jugé par les règles de la sortie */
+    #[ORM\Column(name: 'exit_cursor', nullable: true)]
+    private ?int $exitCursor = null;
+
     /** Dernière séquence du journal de caisse lue par l'analyse ; null = analyse jamais lancée */
     #[ORM\Column(name: 'cursor_sequence', nullable: true)]
     private ?int $cursorSequence = null;

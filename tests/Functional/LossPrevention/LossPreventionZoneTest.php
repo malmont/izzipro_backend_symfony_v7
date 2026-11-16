@@ -114,19 +114,21 @@ class LossPreventionZoneTest extends LossPreventionTestCase
         $this->assertSame([0, 'stockroom'], [$zones()['stockroom'], $sheet($otherPiece)['zone']]);
 
         // La pièce A arrive à la réserve : sa fiche le dit, son état ne change pas
-        $this->assertSame(['accepted', null], $this->fact($token, 'ZONE_SEEN', $serials['res'], $a, ['zone' => 'stockroom', 'at' => $at(-60)]));
+        $arrived = $at(-60);
+        $this->assertSame(['accepted', null], $this->fact($token, 'ZONE_SEEN', $serials['res'], $a, ['zone' => 'stockroom', 'at' => $arrived]));
         $p = $sheet($pieceA);
         $this->assertSame(['stockroom', 'Réserve', null, $serials['res'], 'created'], [$p['zone'], $p['zoneLabel'], $p['zoneLeftAt'], $p['zoneDevice'], $p['status']]);
-        $this->assertSame(strtotime($at(-60)), strtotime((string) $p['zoneSeenAt']));
+        $this->assertSame(strtotime($arrived), strtotime((string) $p['zoneSeenAt']));
         $this->assertSame(1, $zones()['stockroom']);
         $this->assertSame('ok', $health()['reader-' . $devices[$serials['res']]]['state']);
         // l'étape n'est pas faite tant que CHAQUE antenne n'a pas vu une puce : elle nomme celle qui manque
         $this->assertSame(['todo', 'pending', true], [($s = $step())['status'], $s['state'], str_contains((string) $s['hint'], '« Rayon »')]);
 
         // Elle en part : la fiche garde la zone et dit l'heure du départ ; elle ne compte plus parmi les pièces vues à la réserve
-        $this->assertSame(['accepted', null], $this->fact($token, 'ZONE_LEFT', $serials['res'], $a, ['zone' => 'stockroom', 'at' => $at(-40)]));
+        $left = $at(-40); // une seule fois : deux appels peuvent tomber de part et d'autre d'une seconde
+        $this->assertSame(['accepted', null], $this->fact($token, 'ZONE_LEFT', $serials['res'], $a, ['zone' => 'stockroom', 'at' => $left]));
         $p = $sheet($pieceA);
-        $this->assertSame(['stockroom', strtotime($at(-40))], [$p['zone'], strtotime((string) $p['zoneLeftAt'])]);
+        $this->assertSame(['stockroom', strtotime($left)], [$p['zone'], strtotime((string) $p['zoneLeftAt'])]);
         $this->assertSame(0, $zones()['stockroom']);
         // Elle arrive en rayon ; la liste des pièces dit la même chose que la fiche
         $this->assertSame(['accepted', null], $this->fact($token, 'ZONE_SEEN', $serials['ray'], $a, ['zone' => 'floor', 'at' => $at(-20)]));

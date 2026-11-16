@@ -40,6 +40,10 @@ class LossFinding
     #[ORM\Column]
     private int $number;
 
+    /** Lot L4-b : une preuve s'est ajoutée après la décision du gérant (remis à faux par chaque décision) */
+    #[ORM\Column(name: 'evidence_after_decision', options: ['default' => false])]
+    private bool $evidenceAfterDecision = false;
+
     #[ORM\Column(name: 'rule_code', length: 40)]
     private string $ruleCode;
 

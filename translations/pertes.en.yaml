@@ -26,6 +26,7 @@ caveats:
     STAFF_NOTICE_REQUIRED: 'The analysis only starts once you have confirmed that you informed your staff (Settings).'
 rules:
     previewNotice: 'Preview over the last 30 days: nothing is saved, no finding is created or closed.'
+    previewUnavailable: 'This rule judges the reads of the exit antennas: the preview only replays the till journal, it cannot count it.'
     notice: 'Changing a threshold neither closes nor deletes any finding: the new setting only applies to later analyses.'
     CASH_DISCREPANCY:
         label: Cash discrepancy at closing
@@ -85,8 +86,19 @@ rules:
         params:
             minCount: Number of items sold without a read in the day that opens a finding
             minShare: Minimum share of these items among the tracked items sold that day on the till (in %)
+    EXIT_WITHOUT_SALE:
+        label: Exit without a sale
+        description: 'A tracked piece, neither sold nor retired, was read by the exit antenna, and no sale explains it once the catch-up window has passed. One finding per piece and per day; later reads of the same day are added to it. Per piece, never per person.'
+        params: {  }
+    EXIT_COVERED:
+        label: Exit matched on a partly tagged item
+        description: 'A piece read at the exit was matched to a sale whose tag had not been read. As not every piece of this item carries a tag, we cannot be sure it is the piece that was sold. Tagging the whole item removes the doubt.'
+        params:
+            minCount: Number of matched exits in the week on the same item from which the severity goes from low to medium
 summary:
     default: Finding raised from cash register activity.
+    exerciseArticle: practice item
+    unknownArticle: item with no name in the catalogue
     CASH_DISCREPANCY:
         short: 'Closing no. %number%: %amount% is missing from the cash register (expected %expected%, counted %counted%).'
         over: 'Closing no. %number%: there is %amount% too much in the cash register (expected %expected%, counted %counted%).'
@@ -110,6 +122,11 @@ summary:
     UNREAD_SOLD:
         rule: 'Tracked items sold without a read that day on this till: %unread% out of %tracked% (%share% %).'
         below: 'Tracked items sold without a read that day on this till: %unread% out of %tracked% (%share% %), below the thresholds since the last closing.'
+    EXIT_WITHOUT_SALE:
+        rule: 'Piece no. %number% (%article%) read at the exit, with no sale to explain it. Reads at the exit that day: %reads%.'
+    EXIT_COVERED:
+        low: 'Matched exits this week on "%article%", partly tagged: %count%.'
+        medium: 'Matched exits this week on "%article%", partly tagged: %count% (threshold of %minCount% reached).'
 evidence:
     noReason: No reason entered
     z_report:
@@ -130,9 +147,17 @@ evidence:
         title: Refused approval
     sale_units:
         title: Tracked items sold on the till that day
+    exit_read:
+        title: Read at the exit
     'yes': 'Yes'
     'no': 'No'
     lines:
+        pieceNumber: Piece no.
+        readAt: Read at the exit on
+        antenna: Antenna
+        lastZone: Seen before in the zone
+        lastZoneAt: Seen in that zone on
+        matchedSaleAt: Matched to the sale of
         saleDay: Day
         trackedSold: Tracked items sold
         unreadSold: Sold without a read
@@ -281,6 +306,14 @@ exercise:
             label: Tracked items sold without a read
             description: 'On one till, during the day, several tracked items are sold without their piece being read.'
             learn: 'Read the numbers of the till: was the mat plugged in, are the items put on it before payment? The finding names nobody.'
+        exit_without_sale:
+            label: Exit without a sale
+            description: 'A tracked piece is read by the exit antenna, and no sale explains it.'
+            learn: 'Look at where the piece was seen before the exit, and whether a sale of the same item was made without its piece being read. The finding names no one.'
+        exit_covered:
+            label: Exit matched on a partly tagged item
+            description: 'Several pieces read at the exit were matched to sales whose tag had not been read, on an item whose pieces do not all carry a tag.'
+            learn: 'Tagging every piece of the item removes the doubt: a sale without a read can then only be a missed read. The finding names no one.'
         cash_shortage_series:
             label: Repeated cash shortages by the same account
             description: 'Several closings with a shortage are closed by the same account over a short period.'

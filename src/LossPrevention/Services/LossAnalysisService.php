@@ -62,6 +62,7 @@ class LossAnalysisService
         private readonly LoggerInterface $logger,
         #[AutowireIterator('loss_prevention.rule')] iterable $rules,
         private readonly ?LossSaleLinkService $sales = null,
+        private readonly ?LossExitService $exits = null,
     ) {
         $list = [...$rules];
         usort($list, fn (LossRuleInterface $a, LossRuleInterface $b) => strcmp($a::class, $b::class));
@@ -193,6 +194,27 @@ class LossAnalysisService
             }
             $full = count($rows) >= max(1, $limit);
             $newCursor = $full ? (int) end($rows)['sequence'] : $max;
+            $exitPending = false;
+            if ($this->sales !== null && $this->exits !== null) {
+                // Lot L4-b : les règles de la sortie, APRÈS le rattrapage. Les ventes sont lues jusqu'à maintenant si le journal a été lu
+                // jusqu'au bout, sinon jusqu'à l'heure de la dernière entrée lue ; une lecture plus récente que cela, moins la fenêtre du
+                // rattrapage, attend le passage suivant. Sous son point de reprise : un échec n'arrête pas l'analyse
+                $horizon = $full ? (new \DateTimeImmutable((string) end($rows)['occurred_at'], new \DateTimeZone('UTC')))->getTimestamp() : time();
+                $exitConfigs = [];
+                foreach (LossRuleCatalog::EXIT_RULES as $code) {
+                    $exitConfigs[$code] = $this->ruleSettings->effective($code);
+                }
+                $conn->executeStatement('SAVEPOINT loss_sweep');
+                $counters = $this->writer->counters();
+                try {
+                    $exitPending = $this->exits->sweep($ctx, $exitConfigs, $horizon, $this->sales->windows()['catchUp'])['pending'];
+                    $conn->executeStatement('RELEASE SAVEPOINT loss_sweep');
+                } catch (\Throwable $e) {
+                    $conn->executeStatement('ROLLBACK TO SAVEPOINT loss_sweep');
+                    $this->writer->restoreCounters($counters);
+                    $this->logger->error('Prévention des pertes : règles de la sortie en échec, passage poursuivi : ' . $e->getMessage(), ['exception' => $e]);
+                }
+            }
             $settings->update(['cursor_sequence' => $newCursor, 'backfill_until_sequence' => $backfillUntil, 'last_analysis_at' => (new \DateTimeImmutable())->format('Y-m-d H:i:s')]);
             $conn->commit();
         } catch (\Throwable $e) {
@@ -203,7 +225,8 @@ class LossAnalysisService
             throw $e;
         }
 
-        return ['status' => 'done', 'read' => count($rows), 'skipped' => $skipped, 'pending' => $full] + $this->writer->flushCounters();
+        // il en reste : des entrées du journal de caisse, ou des lectures de sortie mûres derrière la limite du passage (lot L4-b)
+        return ['status' => 'done', 'read' => count($rows), 'skipped' => $skipped, 'pending' => $full || $exitPending] + $this->writer->flushCounters();
     }
 
     /**
@@ -226,6 +249,10 @@ class LossAnalysisService
         }
         $em = $this->emProvider->getEntityManager();
         $conn = $em->getConnection();
+        if (in_array($code, LossRuleCatalog::EXIT_RULES, true)) {
+            // les règles de la sortie (lot L4-b) lisent les antennes, pas le journal de caisse : l'aperçu n'a rien à rejouer, il le dit
+            return ['status' => 'unavailable', 'reason' => 'READS_NOT_REPLAYED'] + $none;
+        }
         $rules = array_values(array_filter($this->rules, fn (LossRuleInterface $r) => $r->code() === $code));
         $types = array_values(array_unique(array_merge([], ...array_map(fn (LossRuleInterface $r) => $r->types(), $rules))));
         if ($types === []) {

@@ -241,6 +241,34 @@
                     }
                 ],
                 "personVariant": null
+            },
+            {
+                "code": "EXIT_WITHOUT_SALE",
+                "label": "Sortie sans vente",
+                "description": "Une pièce suivie, ni vendue ni retirée, a été lue par l'antenne de la sortie, et aucune vente ne l'explique une fois passée la fenêtre du rattrapage. Un constat par pièce et par jour ; les lectures suivantes du même jour s'y ajoutent. Par pièce, jamais par personne.",
+                "wave": 4,
+                "enabled": true,
+                "params": [],
+                "personVariant": null
+            },
+            {
+                "code": "EXIT_COVERED",
+                "label": "Sortie rattrapée sur un article pas entièrement étiqueté",
+                "description": "Une pièce lue à la sortie a été reliée à une vente dont la puce n'avait pas été lue. Comme toutes les pièces de cet article ne portent pas de puce, on ne peut pas être sûr que ce soit la pièce vendue. Étiqueter tout l'article lève le doute.",
+                "wave": 4,
+                "enabled": true,
+                "params": [
+                    {
+                        "key": "minCount",
+                        "label": "Nombre de sorties rattrapées dans la semaine sur un même article à partir duquel la gravité passe de faible à moyenne",
+                        "type": "count",
+                        "value": 3,
+                        "default": 3,
+                        "min": 2,
+                        "max": 20
+                    }
+                ],
+                "personVariant": null
             }
         ],
         "notice": "Changer un seuil ne ferme ni ne supprime aucun constat : le nouveau réglage ne vaut que pour les analyses suivantes.",

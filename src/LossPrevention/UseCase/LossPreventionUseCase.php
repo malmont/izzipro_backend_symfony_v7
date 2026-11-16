@@ -198,6 +198,10 @@ class LossPreventionUseCase
             throw new GestionConflictException('RULE_NOT_FOUND', 'Règle inconnue.', 404);
         }
         $out = $this->analysis->preview($code, $this->rules->proposed($code, array_diff_key($body, ['code' => 1])));
+        if ($out['status'] === 'unavailable') {
+            // lot L4-b : les règles de la sortie lisent les antennes ; l'aperçu ne rejoue que le journal de caisse, il le dit au lieu de compter zéro
+            throw new GestionConflictException('RULE_PREVIEW_UNAVAILABLE', $this->texts->t('rules.previewUnavailable', $locale), 409);
+        }
         if ($out['status'] === 'blocked') {
             throw new GestionConflictException($out['reason'], $out['reason'] === LossSettingsService::MODULE_NOT_GRANTED
                 ? 'Le module Prévention des pertes n\'est pas accordé à ce site : aucune analyse.'

@@ -29,7 +29,8 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
         $this->assertNotNull($t, 'un constat nouveau : la vignette est là');
         $this->assertSame(['alert', 78, ['screen' => 'pertes.constats', 'params' => ['isNew' => true]], true, 'CAD'], [$t['kind'], $t['priority'], $t['action'], $t['dismissible'], $t['currency']]);
         $this->assertSame([$before + 1, 'count', 'money'], [$t['sources'][0]['value'], $t['sources'][0]['unit'], $t['sources'][1]['unit']]);
-        $this->assertSame((int) $this->db->fetchOne("SELECT COALESCE(SUM(amount_at_stake), 0) FROM loss_finding WHERE seen_at IS NULL AND backfill = false AND status = 'open'"), $t['sources'][1]['value']);
+        $this->assertSame((int) $this->db->fetchOne("SELECT COALESCE(SUM(amount_at_stake), 0) FROM loss_finding WHERE exercise = false AND seen_at IS NULL AND backfill = false AND status = 'open'"), $t['sources'][1]['value'],
+            'la vignette ne compte jamais un constat d\'exercice');
         $this->assertMatchesRegularExpression($before === 0 ? '/^1 nouveau constat à vérifier, 13,00/u' : '/^\d+ nouveaux constats à vérifier, /u', $t['text']);
         $this->assertStringNotContainsString($this->mark, (string) json_encode($t), 'la vignette ne nomme personne');
         $this->assertMatchesRegularExpression('/new findings? to check/', $tile('en')['text']);
