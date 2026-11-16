@@ -107,7 +107,8 @@ class ReportReview
             $r = $this->analyses->run($key, $params, $locale);
             $blocks[] = ['type' => 'heading', 'title' => $r['title'], 'note' => is_array($r['period']) ? (string) ($r['period']['label'] ?? '') : ''];
             if ($r['figures'] !== []) {
-                $blocks[] = ['type' => 'figures', 'items' => array_map(static fn (array $f): array => $f + ['source' => $r['source']], $r['figures'])];
+                // (la carte range à part un an dernier venu des ventes d'avant la migration : jamais sous la clé « an dernier »)
+                $blocks[] = ['type' => 'figures', 'items' => array_map(static fn (array $f): array => \App\Gestion\Services\Console\ConsoleResponder::card($f) + ['source' => $r['source']], $r['figures'])];
             }
             if ($r['rows'] !== []) {
                 $rows = array_map(fn (array $row): array => $this->analyses->writtenRow($row, $locale), $r['rows']);

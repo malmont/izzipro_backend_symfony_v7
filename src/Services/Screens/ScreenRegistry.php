@@ -75,8 +75,11 @@ final class ScreenRegistry
         'assistance-reglages' => ['family' => self::ASSISTANCE, 'module' => 'module.support'],
         'memoires.console' => ['family' => self::CONTENUS, 'module' => 'module.memoires', 'roles' => ['ROLE_ADMIN', 'ROLE_MEMOIRES_RESPONSABLE']],
         'boussole.conseiller' => ['family' => self::CONTENUS, 'module' => 'module.boussole', 'roles' => ['ROLE_ADMIN', 'ROLE_BOUSSOLE_CONSEILLER']],
-        // --- Ventes (web) : un seul code, émis par « Ma journée »
+        // --- Ventes (web) : les commandes à expédier (code émis par « Ma journée ») ; les commandes et les paiements du site, que les
+        // mêmes routes rendent à un client pour les siens et à un administrateur pour tout le site
         'commandes.a_expedier' => ['family' => self::VENTE, 'module' => 'module.boutique'],
+        'ventes.commandes' => ['family' => self::VENTE, 'module' => 'module.boutique'],
+        'clients.reservations' => ['family' => self::CLIENTS, 'module' => null],
         // --- Gestion (codes de `ConsoleScreens::SCREENS`, des guides d'écran, des séquences et de « Ma journée »)
         'gestion.home' => self::G, 'sequences' => self::G, 'sequences.detail' => self::G, 'conseils' => self::G, 'conversations' => self::G, 'conversation' => self::G,
         'theme' => self::G, 'commandes' => self::G, 'a-recevoir' => self::G, 'a-classer' => self::G, 'fournisseurs' => self::G, 'frais-de-port' => self::G,
@@ -156,12 +159,17 @@ final class ScreenRegistry
         ['#^/api/me/contexts$#', '@compte'],
         ['#^/api/(login|logout|token|otp-verify|register|resend-verification|validate-token|password-reset|import-invitation)(/|$)#', '@compte'],
         ['#^/api/(profile|account|adresses|ordersuser|notifications|subscriptions|reviews|payment)(/|$)#', '@compte'],
+        // (les commandes, les paiements, l'achat d'une étiquette, l'annulation : un administrateur y agit sur TOUT le site : ventes)
+        ['#^/api/orders$#', 'ventes.commandes'],
+        ['#^/api/order/cancel(/|$)#', 'ventes.commandes'],
+        ['#^/api/shipping/(buy|parcels)$#', 'ventes.commandes'],
         ['#^/api/(tenant|app|app-profile|apps|mobile)(/|$)#', '@apps'],
         ['#^/api/(health|webhooks|landingpage-config)(/|$)#', '@technique'],
         // (API Platform : sa documentation, ses erreurs, ses contextes JSON-LD, son point d'entrée)
         ['#^/api/(\.well-known|errors|validation_errors|docs|contexts)([./]|$)#', '@technique'],
         ['#^/api/(\{index\}|index)(\.[^/]+)?$#', '@technique'],
         ['#^/(api/)?stripe/webhook$#', '@technique'],
+        ['#^/stripe/(connect|disconnect|success)$#', 'admin.paiement'],
         ['#^/(assets|uploads|media|bucket-simulator|setup)(/|$)#', '@technique'],
         ['#^/api/agency(/|$)#', 'agence.clients'],
         ['#^/api/pertes/boitier(/|$)#', '@boitier'],
@@ -237,14 +245,14 @@ final class ScreenRegistry
         ['#^/api/(transporteurs|carrier)(/|$)#', 'transporteurs'],
         ['#^/api/(statistiques|stock-value|stock-evolution|taxes)(/|$)#', 'statistiques'],
         ['#^/api/payments/statistics(/|$)#', 'statistiques'],
-        ['#^/api/payments$#', '@compte'],
+        ['#^/api/payments$#', 'ventes.commandes'],
         // --- construction : catalogue
         ['#^/api/products/ai(/|$)#', 'catalogue.ia'],
         ['#^/api/products/[^/]+/reviews(/|$)#', ['GET' => '@public', '*' => '@compte']],
         ['#^/api/products(\.[^/]+)?$#', 'catalogue'],
         // (ressources d'API Platform : le gabarit de leurs routes porte le format, `.{_format}`)
         ['#^/api/(categories|vehicle_products)([./]|$)#', ['GET' => '@public', '*' => 'catalogue']],
-        ['#^/api/vehicles(\.[^/]+)?$#', ['GET' => '@public', '*' => 'catalogue']],
+        ['#^/api/vehicles(/|\.|$)#', ['GET' => '@public', '*' => 'catalogue']],
         ['#^/api/products(/|$)#', ['GET' => '@public', '*' => 'catalogue']],
         ['#^/api/(product-variants|customization-combinations|customization-options|customization-values)(/|$)#', 'catalogue'],
         ['#^/api/(colors|sizes)$#', ['GET' => '@public', '*' => 'catalogue']],
@@ -277,7 +285,15 @@ final class ScreenRegistry
         ['#^/api/newsletter/subscribe$#', '@public'],
         ['#^/api/(contacts|candidatures|form-submissions|newsletter)(/|$)#', 'clients.demandes'],
         // --- site public : lectures et envois sans écran d'administration
-        ['#^/api/(productsid|category|currencies|customization|components-config|embeds|explore-cards|homeslider|landingpage|offers|presentations|shared-media|subscription-plans|vehicles|baniere-statiques|booking|reservations|cart|contact|financement|Carrier|order-statuses|stripe-config|styles|social-networks|r)(/|$)#', '@public'],
+        // (les rendez-vous : un visiteur en prend un et lit les créneaux ; la liste et la confirmation sont celles de l'équipe)
+        ['#^/api/reservations/(booked-slots|services)$#', '@public'],
+        ['#^/api/reservations$#', ['POST' => '@public', '*' => 'clients.reservations']],
+        ['#^/api/reservations/#', 'clients.reservations'],
+        // (envois d'un visiteur : devis du panier, formulaires)
+        ['#^/api/(cart|contact|financement)(/|$)#', '@public'],
+        // (LECTURES du site public. Une écriture sur ces chemins est celle du contenu : la route générique `PATCH /api/{resource}/{id}`
+        // y arrive pour ses ressources `presentations`, `baniere-statiques`, `category`, `homeslider`, `explore-cards`, `subscription-plans`)
+        ['#^/api/(productsid|category|currencies|customization|components-config|embeds|explore-cards|homeslider|landingpage|offers|presentations|shared-media|subscription-plans|baniere-statiques|booking|Carrier|order-statuses|stripe-config|styles|social-networks|r)(/|$)#', ['GET' => '@public', '*' => 'pages.contenus']],
         ['#^/api/stripe/create-intent$#', '@public'],
         ['#^/api/shipping/(rates|summary)$#', '@public'],
         ['#^/api/order/create-guest$#', '@public'],
@@ -305,7 +321,8 @@ final class ScreenRegistry
     ];
 
     /**
-     * Les écrans CRUD d'EasyAdmin, qui passent tous par l'adresse `/admin` : nom court du contrôleur => écran du registre.
+     * Les écrans CRUD d'EasyAdmin, qui passent tous par l'adresse `/admin` : nom court du contrôleur => écran du registre. Tout
+     * contrôleur qui hérite d'un contrôleur CRUD en fait partie, quel que soit son nom (`…CrudController`, `…ListController`).
      *
      * @var array<string, string>
      */
@@ -313,7 +330,7 @@ final class ScreenRegistry
         // entreprise et réglages
         'EntrepriseCrudController' => 'admin.entreprise', 'AddressEntrepriseCrudController' => 'admin.entreprise', 'SocialNetworkCrudController' => 'admin.entreprise',
         'AppProfileCrudController' => 'admin.entreprise', 'TeamCrudController' => 'admin.entreprise', 'EmailConfigurationCrudController' => 'admin.entreprise',
-        'GooglePlacesConfigCrudController' => 'admin.entreprise', 'SquareConfigCrudController' => 'admin.entreprise',
+        'GooglePlacesConfigCrudController' => 'admin.entreprise',
         // site vitrine
         'BanniereCrudController' => 'admin.vitrine', 'EmploiCrudController' => 'admin.vitrine', 'MarqueCrudController' => 'admin.vitrine', 'CategorieMarqueCrudController' => 'admin.vitrine',
         'MultilienCrudController' => 'admin.vitrine', 'RechercheCrudController' => 'admin.vitrine', 'ServiceOfferCrudController' => 'admin.vitrine', 'ServiceFamilyCrudController' => 'admin.vitrine',
@@ -330,26 +347,28 @@ final class ScreenRegistry
         'SizeCrudController' => 'admin.catalogue', 'CategoriesCrudController' => 'admin.catalogue', 'ProductOptionCrudController' => 'admin.catalogue',
         'ProductOptionValueCrudController' => 'admin.catalogue', 'ProductCustomizationImageCrudController' => 'admin.catalogue', 'ProductTypeCrudController' => 'admin.catalogue',
         'SaleUnitCrudController' => 'admin.catalogue', 'ProductPictureCrudController' => 'admin.catalogue', 'VehicleProductCrudController' => 'admin.catalogue',
-        'VehicleCrudController' => 'admin.catalogue', 'ReviewSettingCrudController' => 'admin.catalogue',
+        'VehicleCrudController' => 'admin.catalogue', 'ReviewSettingCrudController' => 'admin.catalogue', 'ProductVariantListController' => 'admin.catalogue',
+        'ProductOptionValueListController' => 'admin.catalogue',
         // livraison, taxes, location : réglages
         'CarrierCrudController' => 'admin.livraison', 'ProductShippingCrudController' => 'admin.livraison', 'PackagingTypeCrudController' => 'admin.livraison',
         'ShippingClassCrudController' => 'admin.livraison', 'EasyPostConfigurationCrudController' => 'admin.livraison',
         'TaxCrudController' => 'admin.taxes',
         'BookingConfigurationCrudController' => 'admin.location', 'RentalPackCrudController' => 'admin.location',
-        // référentiels des commandes : des listes de réglage, aucune vente
+        // référentiels des commandes : des listes de réglage ; leur fiche détail cite pourtant les commandes et les paiements (SENSITIVE)
         'StatusCommandeCrudController' => 'admin.commandes-reglages', 'OrderSourceCrudController' => 'admin.commandes-reglages', 'OrderTypeCrudController' => 'admin.commandes-reglages',
         'PaymentTypeCrudController' => 'admin.commandes-reglages', 'StatusPaymentCrudController' => 'admin.commandes-reglages', 'PaymentMethodCrudController' => 'admin.commandes-reglages',
         'CurrencyCrudController' => 'admin.commandes-reglages',
         // ventes
         'OrderCrudController' => 'admin.commandes', 'OrderAllCrudController' => 'admin.commandes', 'OrderItemsCrudController' => 'admin.commandes', 'CartCrudController' => 'admin.commandes',
-        'PaymentsCrudController' => 'admin.commandes', 'OrderTaxCrudController' => 'admin.commandes',
-        'StripeConfigCrudController' => 'admin.paiement',
+        'PaymentsCrudController' => 'admin.commandes', 'OrderTaxCrudController' => 'admin.commandes', 'OrderItemsListController' => 'admin.commandes',
+        'StripeConfigCrudController' => 'admin.paiement', 'SquareConfigCrudController' => 'admin.paiement',
         'ShippingOrderCrudController' => 'admin.expeditions', 'ParcelCrudController' => 'admin.expeditions', 'ShippingLabelCrudController' => 'admin.expeditions',
         'SubscriptionCrudController' => 'admin.abonnements',
         'MovementTypeCrudController' => 'admin.stock', 'InventoryMovementsCrudController' => 'admin.stock',
         'CashRegisterCrudController' => 'admin.caisse', 'PosFavoriteCrudController' => 'admin.caisse', 'CaisseCrudController' => 'admin.caisse', 'CashRegisterReportCrudController' => 'admin.caisse',
         'PosAuditLogCrudController' => 'admin.caisse', 'TransactionCaisseCrudController' => 'admin.caisse', 'TransactionTypeCrudController' => 'admin.caisse',
-        'CashDetailsCrudController' => 'admin.caisse', 'TypeCashCrudController' => 'admin.caisse',
+        'CashDetailsCrudController' => 'admin.caisse', 'TypeCashCrudController' => 'admin.caisse', 'TransactionCaisseListController' => 'admin.caisse',
+        'CashDetailsListController' => 'admin.caisse',
         // clients
         'ReservationCrudController' => 'admin.clients', 'BookingCrudController' => 'admin.clients', 'FormSubmissionCrudController' => 'admin.clients', 'ContactCrudController' => 'admin.clients',
         'CandidatureCrudController' => 'admin.clients', 'NewsletterSubscriberCrudController' => 'admin.clients', 'ReviewCrudController' => 'admin.clients',
@@ -374,21 +393,29 @@ final class ScreenRegistry
      * @var array<string, array{fields?: list<string>, closed?: list<string>, why: string}>
      */
     public const SENSITIVE = [
-        'catalogue' => ['fields' => ['purchasePrice', 'coefficientMultiplier', 'commande', 'uses.sales', 'uses.purchaseLines', 'uses.bookings'],
-            'why' => 'coût d\'achat, coefficient et commande fournisseur d\'un article ; nombres de ventes, de lignes d\'achat et de locations dans le refus de suppression (PRODUCT_IN_USE)'],
+        'catalogue' => ['fields' => ['purchasePrice', 'coefficientMultiplier', 'commande', 'commandeCostCents', 'commandeQuantity', 'commandeAttachedAt', 'commandeCostEstimated',
+            'bookings', 'reviewsProducts', 'uses.sales', 'uses.purchaseLines', 'uses.bookings', 'uses.openCheckouts'],
+            'closed' => ['écriture de purchasePrice et de coefficientMultiplier par POST, PUT ou PATCH /api/products (API Platform)'],
+            'why' => 'coût d\'achat, coefficient, commande fournisseur et son coût, locations et avis d\'un article (les écritures d\'API Platform rendent toute l\'entité) ; nombres de ventes, de lignes d\'achat, de locations et de paniers en cours dans le refus de suppression (PRODUCT_IN_USE)'],
         'admin.catalogue' => ['fields' => ['purchasePrice', 'coefficientMultiplier', 'commande'], 'why' => 'colonnes « Prix d\'achat », « Coefficient » et « Dernière commande fournisseur » de l\'écran Produits'],
-        'admin.accueil' => ['fields' => ['totalSales', 'totalOrders', 'totalCustomers', 'recentOrders', 'charts'], 'closed' => ['console flottante de l\'assistant'],
-            'why' => 'la page d\'accueil d\'EasyAdmin est un tableau de ventes : totaux, courbes, dernières commandes avec nom, courriel et montant ; sa console flottante est l\'assistant du site'],
-        'admin.entreprise' => ['fields' => ['cardPaymentsCount', 'figures'], 'closed' => ['création d\'une clé pour les applications admin et pos'],
-            'why' => 'la page Configuration compte les paiements par carte encaissés ; « Mon site » reprend les chiffres des étapes de la gestion ; une clé d\'application active la gestion ou la caisse'],
+        // la page d'accueil d'EasyAdmin est un tableau de ventes : elle se FERME (une page de construction la remplacera), et ses variables
+        // sont nommées pour qu'aucune ne passe dans cette page-là
+        'admin.accueil' => ['fields' => ['totalSales', 'salesThisMonth', 'salesDiffPercent', 'totalOrders', 'ordersThisMonth', 'ordersDiffPercent', 'avgOrderValue', 'avgDiffPercent',
+            'totalCustomers', 'totalTaxes', 'ordersTodo', 'values7Days', 'valuesMonth', 'valuesYear', 'paymentSeries', 'carrierSeries', 'recentOrders'],
+            'closed' => ['la page d\'accueil entière', 'la console flottante de l\'assistant du site', 'toute requête /admin?routeName=… ou crudControllerFqcn=… : elle se classe par sa route ou son écran (adminTarget), jamais par le chemin /admin'],
+            'why' => 'totaux, courbes et dernières commandes avec nom, courriel et montant ; sa console flottante est l\'assistant du site ; le chemin /admin sert tous les écrans d\'EasyAdmin'],
+        'admin.entreprise' => ['fields' => ['figures', 'steps[].description', 'password'],
+            'closed' => ['étape stripe.first_payment de la page Configuration (sa description compte les paiements par carte encaissés)', 'création d\'une clé pour les applications admin et pos'],
+            'why' => '« Mon site » et la page Configuration reprennent les chiffres des étapes de la gestion, dans `figures` et dans le texte de leur description ; la fiche de la configuration du courriel montre le mot de passe du serveur d\'envoi ; une clé d\'application active la gestion ou la caisse'],
+        'admin.vitrine' => ['fields' => ['candidatures'], 'why' => 'l\'écran des offres d\'emploi compte les candidatures reçues'],
+        'admin.commandes-reglages' => ['fields' => ['orders', 'payments'], 'why' => 'la fiche d\'un statut ou d\'un type de commande cite les références de ses commandes ; celle d\'un type de paiement, les identifiants de ses paiements'],
+        'admin.taxes' => ['fields' => ['orderTaxes'], 'why' => 'l\'écran des taxes compte les lignes de taxe des commandes'],
         'admin.ia' => ['fields' => ['promptExcerpt'], 'why' => 'l\'historique des demandes garde le début des questions posées à la console de gestion'],
-        'site.reglages' => ['fields' => ['charges', 'figures'], 'closed' => ['POST /api/app-keys pour les applications admin et pos'],
-            'why' => 'achats d\'étiquettes par commande (numéro, référence, suivi, montant) ; nombres d\'articles sans coût, de fournisseurs et de frais fixes des étapes de la gestion ; une clé d\'application active la gestion ou la caisse'],
+        'site.reglages' => ['fields' => ['charges', 'figures', 'steps[].description'], 'closed' => ['POST /api/app-keys pour les applications admin et pos'],
+            'why' => 'achats d\'étiquettes par commande (numéro, référence, suivi, montant) ; nombres d\'articles sans coût, de fournisseurs et de frais fixes des étapes de la gestion, dans `figures` et dans leur description ; une clé d\'application active la gestion ou la caisse'],
         'pages.ia' => ['fields' => ['history[].promptExcerpt'], 'why' => 'l\'usage de l\'IA garde le début des questions posées à la console de gestion'],
-        'imports' => ['fields' => ['summary.orders', 'report.orders', 'result.cancel.kept[].reason'], 'closed' => ['kind=customers', 'kind=orders'],
+        'imports' => ['fields' => ['summary.orders', 'summary.customers', 'summary.guests', 'summary.archived', 'report.orders', 'result.cancel.kept[].reason'], 'closed' => ['kind=customers', 'kind=orders'],
             'why' => 'les imports de clients et de commandes passent par les mêmes routes que l\'import du catalogue : leur fiche est nominative ou chiffrée ; la liste mêle les natures ; l\'annulation dit quels articles ont été vendus'],
-        // pour TOUS, pas seulement pour une agence : les fiches produit publiques rendent le coût à un visiteur sans connexion
-        '@public' => ['fields' => ['purchasePrice', 'coefficientMultiplier'], 'why' => 'fiches produit publiques (/api/products/{id}, /by-slug, /by-category, /api/productsid) : coût et coefficient lisibles sans connexion ; à retirer pour tous'],
     ];
 
     /** @return array{family: string, module: ?string, roles: list<string>, surface: string}|null */
@@ -416,6 +443,22 @@ final class ScreenRegistry
         return null;
     }
 
+    /**
+     * Les rôles d'ÉQUIPE : ceux qui ouvrent au moins un écran. Un compte qui n'en porte aucun (un client) n'a rien à savoir d'un
+     * site au-delà de ce que le site public dit.
+     *
+     * @return list<string>
+     */
+    public static function teamRoles(): array
+    {
+        $roles = self::ADMIN;
+        foreach (self::SCREENS as $screen) {
+            $roles = array_merge($roles, $screen['roles'] ?? []);
+        }
+
+        return array_values(array_unique($roles));
+    }
+
     /** La famille d'une cible : celle de l'écran ; null pour une liste hors écran ou une cible inconnue */
     public static function familyOf(string $target): ?string
     {
@@ -428,6 +471,26 @@ final class ScreenRegistry
         $short = ($pos = strrpos($controller, '\\')) === false ? $controller : substr($controller, $pos + 1);
 
         return self::ADMIN_CRUDS[$short] ?? null;
+    }
+
+    /**
+     * L'écran d'une REQUÊTE d'EasyAdmin. Le chemin `/admin` sert tous ses écrans : un écran CRUD est désigné par `crudControllerFqcn`,
+     * et une page par `routeName` (EasyAdmin exécute alors cette route sous le chemin `/admin`). Une garde ne classe donc jamais une
+     * telle requête par son chemin : elle passe par ici. Un écran CRUD ou une route que le registre ne connaît pas : null (fermé).
+     *
+     * @param string|null $crudController la valeur de `crudControllerFqcn`, s'il y en a une
+     * @param string|null $routePath le chemin (gabarit) de la route nommée par `routeName`, s'il y en a une ; `''` : route inconnue
+     */
+    public static function adminTarget(?string $crudController, ?string $routePath, string $method = 'GET'): ?string
+    {
+        if ($crudController !== null && $crudController !== '') {
+            return self::adminCrud($crudController);
+        }
+        if ($routePath !== null) {
+            return $routePath === '' ? null : self::classify($method, $routePath);
+        }
+
+        return 'admin.accueil';
     }
 
     /**

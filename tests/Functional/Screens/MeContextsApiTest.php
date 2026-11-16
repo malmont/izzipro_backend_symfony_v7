@@ -96,8 +96,11 @@ class MeContextsApiTest extends WebTestCase
         $this->modules(MV_TEST_TENANT_DB, ['app.management' => true, 'module.loss_prevention' => true]);
 
         // un compte client : son site, aucun écran d'administration
-        $customer = $this->contexts($this->token('client', ['ROLE_USER_INTERNET']));
+        // … et rien que le site public ne dise déjà : ni ses modules (assistance, pertes, IA…), ni ses liens d'agence
+        $customerToken = $this->token('client', ['ROLE_USER_INTERNET']);
+        $customer = $this->contexts($customerToken);
         $this->assertSame(['single', [MV_TEST_TENANT_CODE], []], [$customer['mode'], array_column($customer['sites'], 'code'), $customer['sites'][0]['screens']]);
+        $this->assertSame([[], []], [$customer['sites'][0]['modules'], $customer['sites'][0]['badges']]);
 
         // un agent d'assistance SEUL lit ses contextes (deux écrans), et rien d'autre ne s'ouvre à lui
         $support = $this->token('assistance', ['ROLE_SUPPORT']);
@@ -111,6 +114,8 @@ class MeContextsApiTest extends WebTestCase
         $agencies = static::getContainer()->get(AgencyService::class);
         $agencyId = (int) $agencies->create(['code' => 'agence-ctx-' . $this->tag, 'name' => 'Agence Contextes', 'homeTenantCode' => MV_TEST_TENANT_CODE, 'test' => true], 'essai')['id'];
         $agencies->attach($agencyId, MV_TEST_TENANT2_CODE, 'essai');
+        // (le compte client n'apprend pas que son site est celui d'une agence)
+        $this->assertSame([[], []], [$this->contexts($customerToken)['sites'][0]['badges'], $this->contexts($customerToken)['sites'][0]['modules']]);
         // … l'administrateur du site d'attache, SANS rôle d'agence, ne voit toujours que son site (qui porte maintenant la pastille de l'agence)
         $still = $this->contexts($admin);
         $this->assertSame(['single', [MV_TEST_TENANT_CODE], 'agency_home'], [$still['mode'], array_column($still['sites'], 'code'), $still['sites'][0]['badges'][0]['type']]);
@@ -154,6 +159,16 @@ class MeContextsApiTest extends WebTestCase
         $this->assertContains('gestion.home', $manager['sites'][0]['screens']);
         $this->assertNotContains('gestion.home', $manager['sites'][1]['screens']);
         $this->assertSame($client['screens'], $manager['sites'][1]['screens']);
+        // … une agence SUSPENDUE garde la liste de ses clients, sans aucun écran chez eux ; son site d'attache reste le sien
+        $this->master->exec("UPDATE agencies SET status = 'suspended' WHERE id = $agencyId");
+        $suspended = $this->contexts($this->token('responsable-suspendu', ['ROLE_ADMIN', 'ROLE_AGENCY']));
+        $this->assertSame(['agency', 'suspended', [MV_TEST_TENANT_CODE, MV_TEST_TENANT2_CODE], []], [$suspended['mode'], $suspended['agency']['status'], array_column($suspended['sites'], 'code'), $suspended['sites'][1]['screens']]);
+        $this->assertContains('gestion.home', $suspended['sites'][0]['screens']);
+        $this->master->exec("UPDATE agencies SET status = 'trial' WHERE id = $agencyId");
+        // … le numéro d'une demande de création à compléter n'est rendu qu'à la plateforme
+        $this->master->exec("INSERT INTO platform_site_requests (type, tenant_code, name, admin_email, options, steps, status) VALUES ('normal', '" . MV_TEST_TENANT_CODE . "', 'Contextes', 'contextes-demande@example.invalid', '{}', '{}', 'incomplete')");
+        $incomplete = array_column($this->contexts($admin)['sites'][0]['badges'], null, 'type')['creation_incomplete'];
+        $this->assertSame(['type' => 'creation_incomplete'], $incomplete);
         // … un site détaché sort de la liste ; une agence fermée n'ouvre plus le mode agence
         $agencies->detach($agencyId, MV_TEST_TENANT2_CODE, 'essai');
         $this->assertSame([MV_TEST_TENANT_CODE], array_column($this->contexts($member)['sites'], 'code'));
@@ -170,6 +185,7 @@ class MeContextsApiTest extends WebTestCase
         $own = array_column($super['sites'], null, 'code')[MV_TEST_TENANT_CODE];
         $this->assertContains('gestion.home', $own['screens']);
         $this->assertNotContains('plateforme.sites', $own['screens'], 'les écrans de la plateforme ne sont pas ceux d\'un site');
+        $this->assertArrayHasKey('requestId', array_column($own['badges'], null, 'type')['creation_incomplete'], 'la plateforme, elle, lit le numéro de la demande');
         // les exemples de la fiche (`docs/ecrans-et-contextes.md` § 3) sortent d'ici : EXEMPLES_CONTEXTES=/tmp/contextes.json
         if (is_string(getenv('EXEMPLES_CONTEXTES')) && getenv('EXEMPLES_CONTEXTES') !== '') {
             file_put_contents(getenv('EXEMPLES_CONTEXTES'), json_encode(['single' => $single, 'agency' => $agency, 'super_admin' => ['mode' => $super['mode'], 'site' => $super['site'], 'agency' => null,
@@ -257,6 +273,7 @@ class MeContextsApiTest extends WebTestCase
         }
         $this->master->exec('DELETE FROM agency_plans WHERE agency_id IS NOT NULL');
         $this->master->exec('DELETE FROM agencies');
+        $this->master->exec("DELETE FROM platform_site_requests WHERE admin_email = 'contextes-demande@example.invalid'");
         foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
             $this->pdo($db)->exec("DELETE FROM refresh_tokens WHERE username LIKE 'contextes-%@example.invalid'");
             $this->pdo($db)->exec("DELETE FROM \"user\" WHERE email LIKE 'contextes-%@example.invalid'");

@@ -1081,15 +1081,26 @@ class ConsoleApiTest extends WebTestCase
             $this->assertStringContainsString('lastYearNote', $payload($before + 2)['correction']);
             $answer = $last($id);
             $this->assertSame("Contre {$revenue['lastYear']} l'an dernier, avant la migration.", $answer['blocks'][0]['text']);
-            // la carte du chiffre porte la marque, pour les applications et pour le PDF
+            // la CARTE range cet an dernier à part, avec sa note : une application qui ne connaît pas la marque n'affiche pas « An dernier »
             $cards = array_values(array_filter($answer['blocks'], static fn (array $block): bool => $block['type'] === 'figures'))[0]['items'];
-            $this->assertSame(['before_migration', 'avant la migration', 432100], [$cards[0]['lastYearSource'], $cards[0]['lastYearNote'], $cards[0]['lastYear']]);
+            $this->assertSame(['value' => 432100, 'delta' => -432100, 'deltaPercent' => $cards[0]['lastYearBeforeMigration']['deltaPercent'], 'note' => 'avant la migration'], $cards[0]['lastYearBeforeMigration']);
+            foreach (['lastYear', 'deltaLastYear', 'deltaPercentLastYear'] as $flat) {
+                $this->assertArrayNotHasKey($flat, $cards[0], "$flat : jamais à plat pour un chiffre venu d'ailleurs");
+            }
+            // (un an dernier du site lui-même garde ses clés à plat ; une carte déjà rangée ne bouge plus)
+            $this->assertSame(['id' => 'x', 'lastYear' => 5], ConsoleResponder::card(['id' => 'x', 'lastYear' => 5]));
+            $this->assertSame($cards[0], ConsoleResponder::card($cards[0]));
             $this->assertSame('before_migration', $answer['analyses'][0]['period']['lastYearSource']);
             $renderer = static::getContainer()->get(\App\Gestion\Services\Report\ReportRenderer::class);
             $html = html_entity_decode(strip_tags($renderer->html($renderer->document($answer, 'Et par rapport à l\'an dernier ?', 'fr', $currency))));
             $this->assertStringContainsString('An dernier, avant la migration :', $html);
             $this->assertStringNotContainsString('An dernier :', $html, 'jamais la mention nue pour un chiffre venu d\'ailleurs');
             $this->assertStringContainsString('Last year, before the migration:', html_entity_decode(strip_tags($renderer->html($renderer->document($answer, 'x', 'en', $currency)))));
+            // … et une carte restée à plat avec sa marque (un bilan, un contenu gardé) est rendue avec la même mention, jamais nue
+            $flat = ['blocks' => [['type' => 'figures', 'items' => [['id' => 'a1.revenue', 'label' => 'Chiffre d\'affaires', 'value' => 0, 'unit' => 'money', 'lastYear' => 432100, 'lastYearSource' => 'before_migration', 'lastYearNote' => 'avant la migration']]]], 'analyses' => []];
+            $flatHtml = html_entity_decode(strip_tags($renderer->html($renderer->document($flat, 'x', 'fr', $currency))));
+            $this->assertStringContainsString('An dernier, avant la migration :', $flatHtml);
+            $this->assertStringNotContainsString('An dernier :', $flatHtml);
 
             // 3. deux textes de suite sans la note : le serveur écrit le repli, le texte fautif n'est rendu nulle part
             $c = $this->post('/api/gestion/console/messages', ['text' => 'Redis-moi l\'an dernier.', 'conversationId' => $id], 202);

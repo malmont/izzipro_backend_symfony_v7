@@ -4,7 +4,6 @@
         "GET /password-reset/form",
         "GET /shared-media",
         "GET /shared-media/{id}",
-        "GET /stripe/success",
         "GET /verify/email",
         "GET /videos",
         "GET /videos/{id}",
@@ -12,8 +11,6 @@
         "GET|POST /adress/{id}/edit",
         "GET|POST /booking-setup/",
         "GET|POST /contact/",
-        "GET|POST /stripe/connect",
-        "GET|POST /stripe/disconnect",
         "GET|POST|PUT|PATCH|DELETE /",
         "GET|POST|PUT|PATCH|DELETE /account",
         "GET|POST|PUT|PATCH|DELETE /account/order/{id}",
@@ -180,9 +177,7 @@
         "GET /api/adresses/autocomplete",
         "GET /api/adresses/details",
         "GET /api/me/contexts",
-        "GET /api/orders",
         "GET /api/ordersuser",
-        "GET /api/payments",
         "GET /api/profile",
         "GET /api/reviews/mine",
         "GET /api/subscriptions",
@@ -195,7 +190,6 @@
         "POST /api/login",
         "POST /api/logout",
         "POST /api/notifications/appareils",
-        "POST /api/order/cancel/{id}",
         "POST /api/order/create",
         "POST /api/otp-verify",
         "POST /api/password-reset/confirm",
@@ -205,8 +199,6 @@
         "POST /api/products/{id}/reviews",
         "POST /api/register",
         "POST /api/resend-verification",
-        "POST /api/shipping/buy",
-        "POST /api/shipping/parcels",
         "POST /api/subscriptions",
         "POST /api/subscriptions/portal-session",
         "POST /api/subscriptions/{id}/cancel",
@@ -289,7 +281,6 @@
         "PUT /api/memoires/photos/{id}"
     ],
     "@public": [
-        "DELETE /api/vehicles/{id}.{_format}",
         "GET /api/Carrier",
         "GET /api/admin-settings",
         "GET /api/admin-settings/presets",
@@ -340,7 +331,6 @@
         "GET /api/r/{token}",
         "GET /api/recherches",
         "GET /api/recherches/{id}",
-        "GET /api/reservations",
         "GET /api/reservations/booked-slots",
         "GET /api/reservations/services",
         "GET /api/service-families",
@@ -363,7 +353,6 @@
         "GET /api/vehicles/{id}.{_format}",
         "GET /api/videos",
         "GET /api/videos/{id}",
-        "PATCH /api/vehicles/{id}.{_format}",
         "POST /api/candidatures",
         "POST /api/cart/quote",
         "POST /api/contact/submit",
@@ -374,12 +363,10 @@
         "POST /api/newsletter/subscribe",
         "POST /api/order/create-guest",
         "POST /api/reservations",
-        "POST /api/reservations/{id}/confirm",
         "POST /api/shipping/rates",
         "POST /api/shipping/summary",
         "POST /api/site/storefront/preview",
-        "POST /api/stripe/create-intent",
-        "PUT /api/vehicles/{id}.{_format}"
+        "POST /api/stripe/create-intent"
     ],
     "@technique": [
         "GET /api/.well-known/genid/{id}",
@@ -527,8 +514,11 @@
     ],
     "admin.paiement": [
         "GET /admin/stripe/success",
+        "GET /stripe/success",
         "GET|POST /admin/stripe/connect",
-        "GET|POST /admin/stripe/disconnect"
+        "GET|POST /admin/stripe/disconnect",
+        "GET|POST /stripe/connect",
+        "GET|POST /stripe/disconnect"
     ],
     "admin.utilisateurs": [
         "GET /admin/clients/{id}/commandes-avant",
@@ -604,11 +594,13 @@
         "DELETE /api/products/{id}",
         "DELETE /api/products/{id}.{_format}",
         "DELETE /api/vehicle_products/{id}.{_format}",
+        "DELETE /api/vehicles/{id}.{_format}",
         "GET /api/products",
         "GET /api/products.{_format}",
         "PATCH /api/categories/{id}.{_format}",
         "PATCH /api/products/{id}.{_format}",
         "PATCH /api/vehicle_products/{id}.{_format}",
+        "PATCH /api/vehicles/{id}.{_format}",
         "POST /api/categories.{_format}",
         "POST /api/colors",
         "POST /api/customization-options/{id}/values",
@@ -620,7 +612,8 @@
         "POST /api/vehicles.{_format}",
         "PUT /api/categories/{id}.{_format}",
         "PUT /api/products/{id}.{_format}",
-        "PUT /api/vehicle_products/{id}.{_format}"
+        "PUT /api/vehicle_products/{id}.{_format}",
+        "PUT /api/vehicles/{id}.{_format}"
     ],
     "catalogue.ia": [
         "GET /api/products/ai/bulk/plan",
@@ -644,6 +637,10 @@
         "GET /api/newsletter",
         "PATCH /api/form-submissions/{id}",
         "PUT /api/contacts/{id}"
+    ],
+    "clients.reservations": [
+        "GET /api/reservations",
+        "POST /api/reservations/{id}/confirm"
     ],
     "codes-barres": [
         "GET /api/gestion/codes-barres/manquants",
@@ -1188,6 +1185,13 @@
     ],
     "tresorerie.rapprochements": [
         "GET /api/gestion/tresorerie/rapprochements"
+    ],
+    "ventes.commandes": [
+        "GET /api/orders",
+        "GET /api/payments",
+        "POST /api/order/cancel/{id}",
+        "POST /api/shipping/buy",
+        "POST /api/shipping/parcels"
     ],
     "voyages": [
         "DELETE /api/gestion/voyages/{id}",

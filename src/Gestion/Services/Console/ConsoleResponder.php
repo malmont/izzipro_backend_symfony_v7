@@ -913,6 +913,25 @@ class ConsoleResponder
     }
 
     /**
+     * La CARTE d'un chiffre. Un an dernier venu des ventes d'avant la migration n'y garde pas les clés `lastYear`, `deltaLastYear`,
+     * `deltaPercentLastYear` : une application qui ne connaît pas la marque l'afficherait « An dernier », sans le dire. Il est rangé à
+     * part, avec sa note : `lastYearBeforeMigration { value, delta, deltaPercent, note }`.
+     *
+     * @param array<string, mixed> $figure
+     * @return array<string, mixed>
+     */
+    public static function card(array $figure): array
+    {
+        if (!isset($figure['lastYearSource'], $figure['lastYear'])) {
+            return $figure;
+        }
+        $figure['lastYearBeforeMigration'] = ['value' => $figure['lastYear'], 'delta' => $figure['deltaLastYear'] ?? null, 'deltaPercent' => $figure['deltaPercentLastYear'] ?? null,
+            'note' => (string) ($figure['lastYearNote'] ?? '')];
+
+        return array_diff_key($figure, ['lastYear' => 1, 'deltaLastYear' => 1, 'deltaPercentLastYear' => 1, 'lastYearNote' => 1, 'lastYearSource' => 1]);
+    }
+
+    /**
      * Le texte cite-t-il, sans le dire, un an dernier qui vient des ventes d'avant la migration ? Il le cite s'il écrit sa valeur ou
      * sa variation ; il le dit s'il porte la note du chiffre (« avant la migration »).
      *
@@ -944,7 +963,7 @@ class ConsoleResponder
         foreach ($results as $r) {
             foreach ($r['figures'] as $f) {
                 if (in_array($f['id'], $ids, true)) {
-                    $items[] = $f + ['source' => $r['source']];
+                    $items[] = self::card($f) + ['source' => $r['source']];
                 }
             }
         }

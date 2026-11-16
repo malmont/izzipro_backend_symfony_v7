@@ -159,9 +159,14 @@ class ReportRenderer
                             $unit = $item['unit'] ?? null;
                             $compared = [];
                             // les comparaisons sont celles que l'analyse a gardées avec la carte (clés à plat) : rien n'est recalculé
-                            // lot AG-3a : un an dernier venu des ventes d'avant la migration est nommé comme tel sur la carte
-                            $lastYearLabel = ($item['lastYearSource'] ?? null) === \App\Import\OrderArchive::SOURCE ? 'compare_last_year_before_migration' : 'compare_last_year';
-                            foreach ([['previous', 'deltaPercent', 'compare_previous'], ['lastYear', 'deltaPercentLastYear', $lastYearLabel]] as [$key, $percent, $label]) {
+                            // lot AG-3a : un an dernier venu des ventes d'avant la migration est rangé à part sur la carte, et nommé comme tel
+                            // (une carte qui porterait encore la marque à plat, d'un contenu gardé avant ce lot ou d'un bilan, est rangée de même)
+                            $item = \App\Gestion\Services\Console\ConsoleResponder::card($item);
+                            if (is_array($item['lastYearBeforeMigration'] ?? null)) {
+                                $item['beforeMigration'] = $item['lastYearBeforeMigration']['value'] ?? null;
+                                $item['beforeMigrationPercent'] = $item['lastYearBeforeMigration']['deltaPercent'] ?? null;
+                            }
+                            foreach ([['previous', 'deltaPercent', 'compare_previous'], ['lastYear', 'deltaPercentLastYear', 'compare_last_year'], ['beforeMigration', 'beforeMigrationPercent', 'compare_last_year_before_migration']] as [$key, $percent, $label]) {
                                 if (isset($item[$key]) && is_numeric($item[$key])) {
                                     // la variation entre parenthèses est rendue à part : le gabarit l'écrit sans coupure possible
                                     $change = isset($item[$percent]) && is_numeric($item[$percent]) ? '(' . ((float) $item[$percent] > 0 ? '+' : '') . $write($item[$percent], 'percent') . ')' : null;

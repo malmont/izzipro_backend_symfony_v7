@@ -80,15 +80,32 @@ class ScreenRegistryTest extends KernelTestCase
 
     public function testEveryEasyAdminScreenIsRangedAndTheRegistryIsConsistent(): void
     {
-        // tous les écrans CRUD d'EasyAdmin, où qu'ils soient dans le code
-        $found = [];
+        // tous les écrans CRUD d'EasyAdmin, où qu'ils soient dans le code et QUEL QUE SOIT LEUR NOM : toute classe concrète qui
+        // hérite, de près ou de loin, du contrôleur CRUD d'EasyAdmin (cinq d'entre eux s'appellent « …ListController »)
+        $parents = [];
+        $abstract = [];
         $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(dirname(__DIR__, 3) . '/src', \FilesystemIterator::SKIP_DOTS));
         foreach ($files as $file) {
-            if (preg_match('/^(\w+CrudController)\.php$/', $file->getFilename(), $m) && $m[1] !== 'BaseTenantCrudController') {
-                $found[] = $m[1];
+            if ($file->getExtension() === 'php' && preg_match('/^\s*(abstract\s+)?(?:final\s+)?class\s+(\w+)\s+extends\s+\\\\?([\w\\\\]+)/m', (string) file_get_contents($file->getPathname()), $m)) {
+                $parents[$m[2]] = substr((string) strrchr('\\' . $m[3], '\\'), 1);
+                $abstract[$m[2]] = $m[1] !== '';
+            }
+        }
+        $found = [];
+        foreach (array_keys($parents) as $class) {
+            for ($parent = $parents[$class], $depth = 0; $parent !== null && $depth < 10; $parent = $parents[$parent] ?? null, ++$depth) {
+                if ($parent === 'AbstractCrudController') {
+                    if (!$abstract[$class]) {
+                        $found[] = $class;
+                    }
+                    break;
+                }
             }
         }
         sort($found);
+        foreach (['OrderItemsListController', 'TransactionCaisseListController', 'ProductCrudController', 'BookCrudController'] as $known) {
+            $this->assertContains($known, $found, "$known est un écran CRUD d'EasyAdmin");
+        }
         $this->assertGreaterThan(100, count($found));
         $this->assertSame([], array_values(array_diff($found, array_keys(ScreenRegistry::ADMIN_CRUDS))), 'Écran(s) d\'EasyAdmin rangé(s) nulle part : les ajouter à ScreenRegistry::ADMIN_CRUDS.');
         $this->assertSame([], array_values(array_diff(array_keys(ScreenRegistry::ADMIN_CRUDS), $found)), 'Écran(s) du registre qui n\'existe(nt) plus.');
@@ -97,6 +114,16 @@ class ScreenRegistryTest extends KernelTestCase
             $this->assertSame('easyadmin', ScreenRegistry::screen($screen)['surface'] ?? null, "$controller : $screen n'est pas un écran d'EasyAdmin du registre");
             $this->assertSame($screen, ScreenRegistry::adminCrud('App\\Controller\\Admin\\' . $controller));
         }
+        // UNE REQUÊTE d'EasyAdmin ne se classe jamais par son chemin : `/admin` sert tous les écrans. Un écran CRUD se classe par son
+        // contrôleur, une page ouverte par `routeName` par sa route ; ce que le registre ne connaît pas n'a pas d'écran (fermé)
+        $this->assertSame('admin.accueil', ScreenRegistry::adminTarget(null, null));
+        $this->assertSame('admin.commandes', ScreenRegistry::adminTarget('App\\Controller\\Admin\\OrderCrudController', null));
+        $this->assertSame('admin.commandes', ScreenRegistry::adminTarget('App\\Controller\\Admin\\OrderItemsListController', null));
+        $this->assertSame('admin.commandes', ScreenRegistry::adminTarget(null, '/admin/orders/{id}/rembourser', 'POST'), 'une page de remboursement ouverte par routeName reste une page de vente');
+        $this->assertSame('admin.catalogue', ScreenRegistry::adminTarget('', '/admin/produits/{id}/photos'));
+        $this->assertNull(ScreenRegistry::adminTarget('App\\Controller\\Admin\\InconnuCrudController', '/admin/produits/{id}/photos'), 'un écran inconnu ne se rattrape pas par la route');
+        $this->assertNull(ScreenRegistry::adminTarget(null, ''), 'une route inconnue');
+        $this->assertNull(ScreenRegistry::adminTarget(null, '/api/route-inconnue'));
 
         // chaque écran : une famille connue, un module gouverné (ou aucun), des rôles
         foreach (ScreenRegistry::SCREENS as $code => $screen) {
@@ -108,7 +135,7 @@ class ScreenRegistryTest extends KernelTestCase
         // LES CHAMPS SENSIBLES ne se marquent que là où ils ont un sens : sur un écran de construction (ailleurs, l'écran entier est
         // fermé à l'agence), ou sur le site public
         foreach (ScreenRegistry::SENSITIVE as $code => $mark) {
-            $this->assertTrue($code === '@public' || ScreenRegistry::familyOf($code) === ScreenRegistry::CONSTRUCTION, "$code : champs sensibles marqués hors de la construction");
+            $this->assertSame(ScreenRegistry::CONSTRUCTION, ScreenRegistry::familyOf($code), "$code : champs sensibles marqués hors de la construction");
             $this->assertNotSame([], array_merge($mark['fields'] ?? [], $mark['closed'] ?? []), $code);
             $this->assertNotSame('', $mark['why']);
         }
@@ -165,13 +192,26 @@ class ScreenRegistryTest extends KernelTestCase
         $this->assertSame(['catalogue', '@public', 'catalogue'], [ScreenRegistry::classify('GET', '/api/products'), ScreenRegistry::classify('GET', '/api/products/12'), ScreenRegistry::classify('DELETE', '/api/products/12')]);
         $this->assertNull(ScreenRegistry::classify('GET', '/api/route-inconnue'));
         $this->assertNull(ScreenRegistry::classify('PATCH', '/api/ressource-inconnue/12'), 'la route générique de contenu ne range que ses ressources connues');
+        // … et CHACUNE de ses ressources, par son vrai chemin, est une écriture de la construction (jamais « site public »)
+        foreach (array_keys(\App\Services\LandingContentService\LandingContentSpec::RESOURCES) as $resource) {
+            $this->assertSame(ScreenRegistry::CONSTRUCTION, ScreenRegistry::familyOf((string) ScreenRegistry::classify('PATCH', "/api/$resource/12")), "PATCH /api/$resource/12");
+        }
+        // une liste hors écran ne porte aucune écriture d'administration ni aucune lecture de tout le site : les commandes, les paiements,
+        // l'achat d'une étiquette, l'annulation et les rendez-vous sont des écrans de vente ou de clients
+        $this->assertSame(['ventes.commandes', 'ventes.commandes', 'ventes.commandes', 'ventes.commandes', 'clients.reservations', '@public', 'clients.reservations', '@public'], [
+            ScreenRegistry::classify('GET', '/api/orders'), ScreenRegistry::classify('GET', '/api/payments'), ScreenRegistry::classify('POST', '/api/shipping/buy'),
+            ScreenRegistry::classify('POST', '/api/order/cancel/12'), ScreenRegistry::classify('GET', '/api/reservations'), ScreenRegistry::classify('POST', '/api/reservations'),
+            ScreenRegistry::classify('POST', '/api/reservations/12/confirm'), ScreenRegistry::classify('GET', '/api/reservations/booked-slots')]);
+        $this->assertSame(['catalogue', 'catalogue', '@public', 'admin.paiement', '@technique'], [ScreenRegistry::classify('DELETE', '/api/vehicles/12'), ScreenRegistry::classify('PUT', '/api/vehicles/12.json'),
+            ScreenRegistry::classify('GET', '/api/vehicles/carousel'), ScreenRegistry::classify('GET', '/stripe/connect'), ScreenRegistry::classify('POST', '/stripe/webhook')]);
+        $this->assertSame('admin.paiement', ScreenRegistry::adminCrud('SquareConfigCrudController'));
         $this->assertNull(ScreenRegistry::familyOf('@public'));
         // ce qu'une agence ne doit jamais ouvrir n'est pas en construction
         foreach (['/api/gestion/articles', '/api/gestion/statistiques', '/api/commandes/12', '/api/fournisseurs', '/api/gestion/pertes/constats', '/api/support/tickets',
             '/api/contacts/12', '/api/form-submissions/export', '/api/memoires/admin/users', '/api/platform/sites', '/admin/orders/12/rembourser', '/admin/clients/12/commandes-avant',
             '/admin/pos/exports', '/admin/stripe/connect', '/admin/users/12/effacer', '/admin/controles',
             '/api/landingpage-audit', '/api/landingpage-audit/12', '/api/site/assistant', '/api/site/imports/archive/orders', '/api/site/imports/12/customers', '/api/site/imports/12/invitations',
-            '/admin/mon-site/assistant'] as $path) {
+            '/admin/mon-site/assistant', '/api/orders', '/api/payments', '/api/reservations', '/stripe/connect'] as $path) {
             $this->assertNotSame(ScreenRegistry::CONSTRUCTION, ScreenRegistry::familyOf((string) ScreenRegistry::classify('GET', $path)), $path);
             $this->assertNotNull(ScreenRegistry::familyOf((string) ScreenRegistry::classify('GET', $path)), $path);
         }

@@ -29,6 +29,9 @@ class ContextService
         ScreenRegistry::ASSISTANCE, ScreenRegistry::CONTENUS];
     /** Mode agence chez un client : construction et entretien, jamais un chiffre */
     private const AGENCY_FAMILIES = [ScreenRegistry::CONSTRUCTION];
+    /** Le compte de la requête porte-t-il un rôle d'équipe ? est-il celui de la plateforme ? (posés par `contexts`, lus par `site`) */
+    private bool $team = false;
+    private bool $platform = false;
 
     public function __construct(
         private readonly TenantConnectionManager $tenants,
@@ -48,6 +51,10 @@ class ContextService
         $reachable = $this->hierarchy->getReachableRoleNames($roles);
         $hasRole = static fn (string $role): bool => in_array($role, $reachable, true);
         $current = (string) $this->tenants->getCurrentTenantCode();
+        // un compte sans aucun rôle d'équipe (un client) ne lit ni les modules ni les liens d'agence de son site : rien que le site public
+        // ne dise déjà. Le numéro d'une demande de création n'intéresse que la plateforme.
+        $this->team = array_intersect(ScreenRegistry::teamRoles(), $reachable) !== [];
+        $this->platform = $hasRole('ROLE_SUPER_ADMIN');
 
         if ($hasRole('ROLE_SUPER_ADMIN')) {
             // tous les sites, plus les écrans de la plateforme
@@ -65,10 +72,12 @@ class ContextService
             foreach ($this->platformSites->sites(null, [$current]) as $site) {
                 $sites[] = $this->site($site, $current, self::SITE_FAMILIES, $hasRole) + ['home' => true];
             }
-            // chez un client, l'agence tient les écrans de construction d'un administrateur : son rôle d'agence en tient lieu
+            // chez un client, l'agence tient les écrans de construction d'un administrateur : son rôle d'agence en tient lieu.
+            // Une agence SUSPENDUE garde la liste de ses clients, sans aucun écran chez eux : suspendre ferme toutes les entrées.
             $asBuilder = static fn (string $role): bool => $role === 'ROLE_ADMIN';
+            $families = $agency['status'] === 'suspended' ? [] : self::AGENCY_FAMILIES;
             foreach ($managed === [] ? [] : $this->platformSites->sites(null, $managed) as $site) {
-                $sites[] = $this->site($site, $current, self::AGENCY_FAMILIES, $asBuilder) + ['home' => false];
+                $sites[] = $this->site($site, $current, $families, $asBuilder) + ['home' => false];
             }
 
             return ['mode' => self::MODE_AGENCY, 'site' => $current, 'agency' => ['id' => (int) $agency['id'], 'code' => (string) $agency['code'], 'name' => (string) $agency['name'], 'status' => (string) $agency['status']],
@@ -91,9 +100,10 @@ class ContextService
     private function site(array $site, string $current, array $families, callable $hasRole): array
     {
         $snapshot = $this->snapshots->read($site['code']);
+        $badges = $this->platform ? $site['badges'] : array_map(static fn (array $badge): array => array_diff_key($badge, ['requestId' => 1]), $site['badges']);
 
-        return ['code' => $site['code'], 'name' => $site['name'], 'host' => $site['host'], 'current' => $site['code'] === $current, 'badges' => $site['badges'],
-            'state' => $snapshot['state'], 'scope' => $snapshot['scope'], 'modules' => array_keys(array_filter($snapshot['modules'])),
+        return ['code' => $site['code'], 'name' => $site['name'], 'host' => $site['host'], 'current' => $site['code'] === $current, 'badges' => $this->team ? $badges : [],
+            'state' => $snapshot['state'], 'scope' => $snapshot['scope'], 'modules' => $this->team ? array_keys(array_filter($snapshot['modules'])) : [],
             'screens' => ScreenRegistry::visible($families, $snapshot['modules'], $hasRole)];
     }
 }
