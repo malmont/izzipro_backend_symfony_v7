@@ -164,7 +164,8 @@ class PlatformSiteRequestRepository
             }
             // le résultat est FONDU dans celui de la base, jamais remplacé : une acceptation notée entre-temps n'est pas effacée
             $sql .= $column === 'result' ? ", result = COALESCE(result, '{}'::jsonb) || ?::jsonb" : ", $column = ?";
-            $params[] = is_array($value) ? self::json($value) : $value;
+            // (un résultat vide est un objet vide : fondu, un tableau vide donnerait un tableau)
+            $params[] = is_array($value) ? ($column === 'result' && $value === [] ? '{}' : self::json($value)) : $value;
         }
         $stmt = $this->pdo()->prepare($sql . ' WHERE id = ? AND status IN (' . implode(',', array_fill(0, count($from), '?')) . ')');
         $stmt->execute([...$params, $id, ...$from]);

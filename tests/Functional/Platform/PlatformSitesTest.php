@@ -273,6 +273,7 @@ class PlatformSitesTest extends WebTestCase
         $this->assertSame(0, (int) $this->master->query("SELECT COUNT(*) FROM tenants WHERE code = '$free'")->fetchColumn());
         $this->assertSame(1, (int) $this->master->query("SELECT COUNT(*) FROM pg_database WHERE datname = '" . AgencySiteCode::database($free) . "'")->fetchColumn(), 'une base existante n\'est jamais supprimée');
         $this->assertSame('PLATFORM_SITE_REQUEST_STATE', $this->json('POST', "/api/platform/site-requests/$fourth/resume", null, 'super', 409)['code']);
+        $this->assertSame('object', $this->master->query("SELECT jsonb_typeof(result) FROM platform_site_requests WHERE id = $fourth")->fetchColumn(), 'un résultat vide reste un objet');
 
         // LE RÔLE VA AU COMPTE QUI ACCEPTE, et seulement sur une acceptation NOTÉE par la demande
         $late = 'agtest-d' . $this->tag;
@@ -311,29 +312,42 @@ class PlatformSitesTest extends WebTestCase
         // PASSAGE HORAIRE : une demande restée « en cours » est celle d'un worker tombé ; elle redevient visible
         $lost = 'agtest-e' . $this->tag;
         $sixth = (int) $this->json('POST', '/api/platform/sites', ['code' => $lost, 'name' => 'Worker tombé', 'adminEmail' => "perdu-{$this->tag}@example.invalid"], 'super', 202)['request']['id'];
-        $this->master->exec("UPDATE platform_site_requests SET status = 'building', started_at = NOW() - INTERVAL '59 minutes' WHERE id = $sixth");
-        $this->assertSame(0, $this->sites()->sweep()['interrupted'], 'une fabrication de moins d\'une heure n\'est pas tenue pour interrompue');
+        $this->master->exec("UPDATE platform_site_requests SET status = 'building', started_at = NOW() - INTERVAL '14 minutes' WHERE id = $sixth");
+        $this->assertSame(0, $this->sites()->sweep()['interrupted'], 'une fabrication de moins d\'un quart d\'heure n\'est pas tenue pour interrompue');
         $this->assertSame('building', $state($sixth)['status']);
         // a) avant que le site existe ; b) le site existe et une étape manque (l'acceptation, elle, est déjà notée) ;
         // c) le site existe mais son étape n'est pas notée faite : la fabrication a été coupée en route
-        $this->master->exec("UPDATE platform_site_requests SET started_at = NOW() - INTERVAL '61 minutes' WHERE id = $sixth");
+        // d) aucun site, mais la copie a laissé une base de ce nom : la demande le dit, et le code reste pris
+        $this->master->exec("UPDATE platform_site_requests SET started_at = NOW() - INTERVAL '16 minutes' WHERE id = $sixth");
+        $orphan = 'agtest-g' . $this->tag;
+        $eighth = (int) $this->json('POST', '/api/platform/sites', ['code' => $orphan, 'name' => 'Base restée', 'adminEmail' => "reste-{$this->tag}@example.invalid"], 'super', 202)['request']['id'];
+        $this->master->exec("UPDATE platform_site_requests SET status = 'building', started_at = NOW() - INTERVAL '2 hours' WHERE id = $eighth");
+        $this->master->exec('CREATE DATABASE "' . AgencySiteCode::database($orphan) . '"');
         $lateSite->exec("UPDATE \"user\" SET roles = '[\"ROLE_ADMIN\"]' WHERE id = $invited");
         $this->master->exec("UPDATE platform_site_requests SET status = 'building', started_at = NOW() - INTERVAL '2 hours', finished_at = NULL, steps = steps || '{\"invitation\": \"todo\", \"manager\": \"todo\"}'::jsonb WHERE id = $fifth");
         $this->master->exec("UPDATE platform_site_requests SET status = 'building', started_at = NOW() - INTERVAL '2 hours', finished_at = NULL, steps = steps || '{\"site\": \"todo\"}'::jsonb WHERE id = $second");
         $swept = $this->sites()->sweep();
-        $this->assertSame([3, 0], [$swept['interrupted'], $swept['managers']]);
+        $this->assertSame([4, 0], [$swept['interrupted'], $swept['managers']]);
+        $this->assertSame(['failed', 'site', 'INTERRUPTED_DATABASE_LEFT', 'failed'], array_slice(array_values($state($eighth)), 0, 4));
+        $this->assertFalse(static::getContainer()->get(AgencySiteRequestService::class)->availability($orphan)['available']);
         $this->assertSame(['failed', 'site', 'INTERRUPTED', 'failed'], array_slice(array_values($state($sixth)), 0, 4), 'aucun site : la demande est en échec');
         $this->assertNotNull($this->master->query("SELECT finished_at FROM platform_site_requests WHERE id = $sixth")->fetchColumn());
         $this->assertTrue(static::getContainer()->get(AgencySiteRequestService::class)->availability($lost)['available'], 'son code redevient libre');
+        $this->assertNull($this->json('GET', "/api/platform/site-requests/$sixth", null, 'super', 200)['request']['site'], 'aucun site n\'existe : la demande n\'en annonce pas');
         $this->assertSame(['incomplete', 'invitation', 'INTERRUPTED', 'done', 'failed'], array_slice(array_values($state($fifth)), 0, 5), 'le site existe : la demande est à compléter, à l\'étape qui manquait');
         $this->assertSame(['incomplete', 'site', 'INTERRUPTED', 'failed'], array_slice(array_values($state($second)), 0, 4));
+        $this->assertSame($other, $this->json('GET', "/api/platform/site-requests/$second", null, 'super', 200)['request']['site']['code'], 'le site laissé par la fabrication coupée existe : la demande le dit');
+        // la personne désignée a déjà choisi son mot de passe : la demande ne la remplace plus (elle resterait administratrice en silence)
+        $this->assertSame('PLATFORM_SITE_ADMIN_ACTIVE', $this->json('POST', "/api/platform/site-requests/$fifth/resume", ['adminEmail' => "autre-{$this->tag}@example.invalid"], 'super', 409)['code']);
+        $this->assertSame([$lateEmail, 'incomplete'], $this->master->query("SELECT admin_email, status FROM platform_site_requests WHERE id = $fifth")->fetch(\PDO::FETCH_NUM));
         $this->assertSame(0, $this->sites()->sweep()['interrupted'], 'une demande rendue visible ne l\'est pas deux fois');
         // c) un site laissé par une fabrication coupée n'est JAMAIS adopté ni refait par « Reprendre » : il est à regarder, puis la demande s'abandonne
         $this->assertSame('pending', $this->json('POST', "/api/platform/site-requests/$second/resume", null, 'super', 202)['request']['status']);
         $this->sites()->process($second);
         $this->assertSame(['incomplete', 'site', 'SITE_TO_CHECK', 'failed'], array_slice(array_values($state($second)), 0, 4));
         $this->assertSame(1, (int) $this->master->query("SELECT COUNT(*) FROM tenants WHERE code = '$other'")->fetchColumn());
-        $this->assertSame('abandoned', $this->json('POST', "/api/platform/site-requests/$second/abandon", null, 'super', 200)['request']['status']);
+        $left = $this->json('POST', "/api/platform/site-requests/$second/abandon", null, 'super', 200)['request'];
+        $this->assertSame(['abandoned', $other], [$left['status'], $left['site']['code']], 'abandonnée, la demande dit toujours que le site existe');
         // une demande restée en attente plus de cinq minutes est confiée de nouveau au worker ; une demande fraîche ne l'est pas
         $seventh = (int) $this->json('POST', '/api/platform/sites', ['code' => 'agtest-f' . $this->tag, 'name' => 'En attente', 'adminEmail' => "attente-{$this->tag}@example.invalid"], 'super', 202)['request']['id'];
         $this->assertSame(0, $this->sites()->sweep()['requeued']);

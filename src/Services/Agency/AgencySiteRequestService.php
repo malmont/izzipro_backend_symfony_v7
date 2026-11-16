@@ -261,7 +261,7 @@ class AgencySiteRequestService
     }
 
     /** L'administrateur désigné a-t-il déjà choisi son mot de passe ? Lu dans la base du site, sans changer de site courant */
-    private function adminActivated(string $code, string $email): bool
+    public function adminActivated(string $code, string $email): bool
     {
         $site = $this->agencies->tenant($code);
         if ($site === null) {

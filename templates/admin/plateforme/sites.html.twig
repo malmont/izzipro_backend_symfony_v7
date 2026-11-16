@@ -75,7 +75,7 @@
         <tbody>
         {% for r in requests %}
             <tr data-demande="{{ r.id }}" data-etat="{{ r.status }}">
-                <td>{{ r.id }}</td><td>{{ r.type == 'agency' ? 'agence' : 'normal' }}</td><td>{{ r.siteCode }}{% if r.site is null and r.status in ['abandoned', 'failed'] %} <span class="text-muted">(aucun site créé)</span>{% endif %}</td>
+                <td>{{ r.id }}</td><td>{{ r.type == 'agency' ? 'agence' : 'normal' }}</td><td>{{ r.siteCode }}{% if r.errorCode == 'INTERRUPTED_DATABASE_LEFT' %} <span class="text-warning">(aucun site, mais une base de ce nom est restée : à regarder)</span>{% elseif r.site is null and r.status in ['abandoned', 'failed'] %} <span class="text-muted">(aucun site créé)</span>{% elseif r.errorCode in ['INTERRUPTED', 'SITE_TO_CHECK'] and r.failedStep == 'site' %} <span class="text-warning">(le site existe : à regarder)</span>{% endif %}</td>
                 <td>{{ statuses[r.status] ?? r.status }}{% if r.failedStep %} : {{ steps[r.failedStep] ?? r.failedStep }} ({{ r.errorCode }}){% endif %}</td>
                 <td>{% for step, state in r.steps %}<span data-etape="{{ step }}" data-etat-etape="{{ state }}">{{ steps[step] ?? step }} : {{ states[state] ?? state }}</span>{% if not loop.last %} · {% endif %}{% endfor %}</td>
                 <td class="text-nowrap">

@@ -10,6 +10,7 @@ final class PlatformSiteException extends \RuntimeException
         'PLATFORM_SITE_CODE_TAKEN' => 'Ce nom de site est déjà pris.',
         'PLATFORM_SITE_REQUEST_NOT_FOUND' => 'Demande de création introuvable.',
         'PLATFORM_SITE_REQUEST_STATE' => 'Ce geste ne s\'applique pas à l\'état de la demande.',
+        'PLATFORM_SITE_ADMIN_ACTIVE' => 'La personne désignée a déjà choisi son mot de passe : elle administre le site. La remplacer se fait dans le site.',
     ];
 
     /** @param array<string, mixed> $extra */

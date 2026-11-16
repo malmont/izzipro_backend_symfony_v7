@@ -62,8 +62,8 @@ class PlatformSiteService
     private const LOCALES = ['fr', 'en'];
     /** Attente du verrou de fabrication : 60 essais espacés de 2 secondes (le même verrou que les fabrications d'agence) */
     private const LOCK_TRIES = 60;
-    /** Une demande « en cours » depuis plus longtemps est tenue pour interrompue (son worker est tombé) */
-    public const STALE_MINUTES = 60;
+    /** Une demande « en cours » depuis plus longtemps est tenue pour interrompue (son worker est tombé) ; la même durée que pour une agence */
+    public const STALE_MINUTES = 15;
     /** Une demande restée en attente depuis plus longtemps est confiée de nouveau au worker */
     public const REQUEUE_MINUTES = 5;
 
@@ -183,6 +183,11 @@ class PlatformSiteService
             }
             if (($row['steps'][self::STEP_INVITATION] ?? null) === self::DONE) {
                 throw new PlatformSiteException('PLATFORM_SITE_REQUEST_STATE', 409, ['status' => $row['status'], 'step' => self::STEP_INVITATION]);
+            }
+            // la première personne a DÉJÀ choisi son mot de passe : elle administre le site. La remplacer est l'affaire du site, pas de la
+            // demande (sinon elle resterait administratrice sans que rien ne le dise) : même refus que pour une agence
+            if ($email !== $row['admin_email'] && $this->agencySites->adminActivated((string) $row['tenant_code'], (string) $row['admin_email'])) {
+                throw new PlatformSiteException('PLATFORM_SITE_ADMIN_ACTIVE', 409);
             }
             // en une instruction, sous condition de l'état : deux reprises simultanées n'en laissent passer qu'une
             if ($email !== $row['admin_email'] && !$this->requests->changeAdmin($id, $email, (string) $row['admin_email'])) {
@@ -353,7 +358,9 @@ class PlatformSiteService
     public function view(array $row): array
     {
         $iso = static fn (?string $at): ?string => $at === null ? null : (new \DateTimeImmutable($at, new \DateTimeZone('UTC')))->format(\DateTimeInterface::ATOM);
-        $built = ($row['steps'][self::STEP_SITE] ?? null) === self::DONE;
+        $built = ($row['steps'][self::STEP_SITE] ?? null) === self::DONE
+            // une fabrication coupée a pu laisser un site sans que son étape soit notée faite : il existe, la demande le dit
+            || (in_array($row['error_code'], ['INTERRUPTED', 'SITE_TO_CHECK'], true) && $row['failed_step'] === self::STEP_SITE && $this->agencyRepository->tenant((string) $row['tenant_code']) !== null);
         $described = $built ? $this->hosts->describe((string) $row['tenant_code']) : null;
 
         return [
@@ -407,7 +414,9 @@ class PlatformSiteService
                 $result = $this->builder->build(null, $row, $by) + $result;
             } catch (\Throwable $e) {
                 $this->logger->error(sprintf('[Plateforme] demande de site %d (%s) : fabrication en échec (%s)', $id, $code, $e::class), ['exception' => $e]);
-                $stop(self::STEP_SITE, 'BUILD_FAILED');
+                // un échec défait le site ; s'il existe encore (échec après sa naissance), il est à regarder, jamais passé sous silence
+                $left = $this->agencyRepository->tenant($code) !== null;
+                $stop(self::STEP_SITE, $left ? 'SITE_TO_CHECK' : 'BUILD_FAILED', $left);
 
                 return;
             }
@@ -483,8 +492,10 @@ class PlatformSiteService
         if ($step !== null) {
             $steps[$step] = self::FAILED;
         }
+        // coupée PENDANT la copie : aucun site, mais une base de ce nom a pu rester ; elle retient le code, et la demande le dit
+        $error = !$exists && $this->builder->databaseExists((string) $row['tenant_code']) ? 'INTERRUPTED_DATABASE_LEFT' : 'INTERRUPTED';
         $this->requests->move((int) $row['id'], [PlatformSiteRequestRepository::BUILDING], $exists ? PlatformSiteRequestRepository::INCOMPLETE : PlatformSiteRequestRepository::FAILED,
-            ['steps' => $steps, 'failed_step' => $step, 'error_code' => 'INTERRUPTED'] + ($exists ? [] : ['finished' => true]));
+            ['steps' => $steps, 'failed_step' => $step, 'error_code' => $error] + ($exists ? [] : ['finished' => true]));
     }
 
     /**
