@@ -3,36 +3,36 @@
         "method": "POST",
         "path": "/api/pertes/boitier/faits",
         "headers": {
-            "X-Loss-Box": "b1.2.1794899681.0000000000000000000000000000000000000000000000000000000000000000"
+            "X-Loss-Box": "b1.2.1794907545.0000000000000000000000000000000000000000000000000000000000000000"
         },
         "body": {
             "facts": [
                 {
-                    "key": "exemple-1DC372-0001",
+                    "key": "exemple-4591DE-0001",
                     "type": "SPOT_CHECK",
-                    "at": "2026-11-16T07:14:11Z",
+                    "at": "2026-11-16T09:25:16Z",
                     "device": "LECTEUR-0001",
                     "seq": 1,
                     "data": {
-                        "identifier": "041DC372C3D4E5",
+                        "identifier": "044591DEC3D4E5",
                         "technology": "nfc"
                     }
                 },
                 {
-                    "key": "exemple-1DC372-0002",
+                    "key": "exemple-4591DE-0002",
                     "type": "ZONE_SEEN",
-                    "at": "2026-11-16T07:14:11Z",
+                    "at": "2026-11-16T09:25:16Z",
                     "device": "LECTEUR-0001",
                     "zone": "exit",
                     "seq": 2,
                     "data": {
-                        "identifier": "041DC372C3D4E5"
+                        "identifier": "044591DEC3D4E5"
                     }
                 },
                 {
-                    "key": "exemple-1DC372-0003",
+                    "key": "exemple-4591DE-0003",
                     "type": "ZONE_SEEN",
-                    "at": "2026-11-16T07:14:11Z",
+                    "at": "2026-11-16T09:25:16Z",
                     "device": "LECTEUR-0001",
                     "zone": "exit",
                     "data": {
@@ -41,12 +41,12 @@
                     }
                 },
                 {
-                    "key": "exemple-1DC372-0004",
+                    "key": "exemple-4591DE-0004",
                     "type": "SPOT_CHECK",
-                    "at": "2026-11-16T07:14:11Z",
+                    "at": "2026-11-16T09:25:16Z",
                     "device": "IMPR-0001",
                     "data": {
-                        "identifier": "041DC372C3D4E5"
+                        "identifier": "044591DEC3D4E5"
                     }
                 }
             ]
@@ -61,29 +61,29 @@
         "results": [
             {
                 "index": 0,
-                "key": "exemple-1DC372-0001",
+                "key": "exemple-4591DE-0001",
                 "status": "duplicate",
                 "code": null
             },
             {
                 "index": 1,
-                "key": "exemple-1DC372-0002",
+                "key": "exemple-4591DE-0002",
                 "status": "duplicate",
                 "code": null
             },
             {
                 "index": 2,
-                "key": "exemple-1DC372-0003",
+                "key": "exemple-4591DE-0003",
                 "status": "refused",
                 "code": "TAG_UNKNOWN"
             },
             {
                 "index": 3,
-                "key": "exemple-1DC372-0004",
+                "key": "exemple-4591DE-0004",
                 "status": "refused",
                 "code": "DEVICE_KIND_INVALID"
             }
         ],
-        "serverTime": "2026-11-16T07:14:42+00:00"
+        "serverTime": "2026-11-16T09:25:46+00:00"
     }
 }

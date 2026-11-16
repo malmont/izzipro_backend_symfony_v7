@@ -1,0 +1,55 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/pertes/boitier/faits",
+        "headers": {
+            "X-Loss-Box": "b3.2.1794907549.0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "body": {
+            "facts": [
+                {
+                    "key": "impr-4591DE-0001",
+                    "type": "TAG_WRITTEN",
+                    "at": "2026-11-16T09:25:49Z",
+                    "device": "IMPR-EXEMPLE",
+                    "data": {
+                        "line": 1,
+                        "identifier": "F1A7C63DA5B50000000200C7"
+                    }
+                },
+                {
+                    "key": "impr-4591DE-0002",
+                    "type": "TAG_WRITE_FAILED",
+                    "at": "2026-11-16T09:25:49Z",
+                    "device": "IMPR-EXEMPLE",
+                    "data": {
+                        "line": 2,
+                        "reason": "write_refused"
+                    }
+                }
+            ]
+        }
+    },
+    "status": 200,
+    "body": {
+        "received": 2,
+        "accepted": 2,
+        "duplicates": 0,
+        "refused": 0,
+        "results": [
+            {
+                "index": 0,
+                "key": "impr-4591DE-0001",
+                "status": "accepted",
+                "code": null
+            },
+            {
+                "index": 1,
+                "key": "impr-4591DE-0002",
+                "status": "accepted",
+                "code": null
+            }
+        ],
+        "serverTime": "2026-11-16T09:25:49+00:00"
+    }
+}

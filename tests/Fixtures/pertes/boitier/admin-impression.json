@@ -1,0 +1,65 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/impressions/1?locale=fr"
+    },
+    "status": 200,
+    "body": {
+        "id": 1,
+        "status": "done",
+        "statusLabel": "Terminé",
+        "printer": {
+            "deviceId": 4,
+            "serial": "IMPR-EXEMPLE",
+            "model": "ZD621R",
+            "boxId": 3,
+            "boxName": "Boîtier de l'arrière-boutique"
+        },
+        "withPrice": true,
+        "lines": 2,
+        "written": 1,
+        "failed": 1,
+        "waiting": 0,
+        "cancelled": 0,
+        "createdAt": "2026-11-16T09:25:49+00:00",
+        "finishedAt": "2026-11-16T09:25:49+00:00",
+        "cancelledAt": null,
+        "exercise": false,
+        "lineItems": [
+            {
+                "id": 1,
+                "position": 1,
+                "piece": {
+                    "id": 2,
+                    "number": 2,
+                    "name": "Veste en lin (exemple boîtier 4591DE)",
+                    "variantLabel": null
+                },
+                "identifier": "F1A7C63DA5B50000000200C7",
+                "status": "written",
+                "statusLabel": "Écrite",
+                "reason": null,
+                "reasonLabel": null,
+                "tagId": 2,
+                "doneAt": "2026-11-16T09:25:49+00:00"
+            },
+            {
+                "id": 2,
+                "position": 2,
+                "piece": {
+                    "id": 3,
+                    "number": 3,
+                    "name": "Veste en lin (exemple boîtier 4591DE)",
+                    "variantLabel": null
+                },
+                "identifier": "F1A7C63DA5B500000003002A",
+                "status": "failed",
+                "statusLabel": "En échec",
+                "reason": "write_refused",
+                "reasonLabel": "Écriture refusée par la puce",
+                "tagId": null,
+                "doneAt": "2026-11-16T09:25:49+00:00"
+            }
+        ]
+    }
+}

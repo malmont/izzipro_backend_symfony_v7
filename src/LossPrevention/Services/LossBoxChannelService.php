@@ -6,6 +6,7 @@ use App\LossPrevention\Entity\LossBox;
 use App\LossPrevention\Entity\LossBoxEvent;
 use App\LossPrevention\Entity\LossDevice;
 use App\LossPrevention\Entity\LossPieceEvent;
+use App\LossPrevention\Entity\LossPrintJobLine;
 use App\LossPrevention\Entity\LossTag;
 use App\LossPrevention\Repository\LossBoxRepository;
 use App\Services\TenantConnectionProvider;
@@ -51,6 +52,7 @@ class LossBoxChannelService
         private readonly LossBoxToken $tokens,
         private readonly LossHealthService $health,
         private readonly LossBoxLimits $limits,
+        private readonly ?LossPrintService $prints = null,
     ) {
     }
 
@@ -444,7 +446,21 @@ class LossBoxChannelService
     }
 
     /**
-     * Un lot de faits `{ facts: [{ key, type, at, device, zone?, seq?, data: { identifier, technology? } }] }`, de 1 à 200. Chaque
+     * Les travaux d'impression que ce boîtier doit encore faire (lot L3-c), avec le mot de passe d'accès des puces : la SEULE réponse
+     * de la plateforme qui le porte. Une lecture.
+     *
+     * @param array<string, mixed> $box le boîtier authentifié
+     *
+     * @return array<string, mixed> { serverTime, jobs [{ id, printer, withPrice, access { rank, password }, lines [...] }], more }
+     */
+    public function jobs(array $box): array
+    {
+        return ['serverTime' => self::iso(time())] + ($this->prints?->jobsOf((int) $box['id']) ?? ['jobs' => [], 'more' => false]);
+    }
+
+    /**
+     * Un lot de faits `{ facts: [{ key, type, at, device, zone?, seq?, data: { identifier, technology? } }] }`, de 1 à 200.
+     * Résultats d'une imprimante à puce (lot L3-c) : `TAG_WRITTEN { data: { line, identifier } }`, `TAG_WRITE_FAILED { data: { line, reason } }`. Chaque
      * fait a sa réponse : `accepted`, `duplicate` (déjà reçu : même clé) ou `refused` avec un code (à ne pas renvoyer).
      *
      * @param array<string, mixed> $box  le boîtier authentifié
@@ -483,11 +499,16 @@ class LossBoxChannelService
             $identifiers = [];
             foreach ($facts as $index => $fact) {
                 $checked[$index] = $this->checkFact($fact, $devices);
-                if (isset($checked[$index]['identifier'])) {
+                if (isset($checked[$index]['identifier']) && !isset($checked[$index]['line'])) {
                     $identifiers[$checked[$index]['identifier']] = true;
                 }
             }
             $tags = $repository->tagsByIdentifier(array_map('strval', array_keys($identifiers)));
+            // les résultats d'impression du lot : leurs pièces puis leurs travaux sont tenus d'avance, dans l'ordre commun au module
+            $prints = array_values(array_filter($checked, static fn (array $fact): bool => !isset($fact['refusal']) && isset($fact['line'])));
+            if ($prints !== []) {
+                $this->prints?->hold($boxId, $prints);
+            }
             // l'heure d'un fait est douteuse si l'horloge du boîtier n'a pas été mesurée, ou si elle s'écarte de celle du serveur
             $offsetDoubt = $current['clock_offset'] === null || abs((int) $current['clock_offset']) > self::CLOCK_TOLERANCE;
             $now = gmdate('Y-m-d H:i:s', $serverNow);
@@ -495,6 +516,14 @@ class LossBoxChannelService
             $counts = ['accepted' => 0, 'duplicate' => 0, 'refused' => 0];
             foreach ($checked as $index => $fact) {
                 $refusal = $fact['refusal'] ?? null;
+                if ($refusal === null && isset($fact['line'])) {
+                    // résultat d'une imprimante à puce : il clôt une ligne de travail (et pose la puce relue conforme sur la pièce)
+                    $late = $offsetDoubt || $fact['at'] > $serverNow + self::CLOCK_TOLERANCE || $fact['at'] < $serverNow - self::OLDEST_FACT;
+                    [$status, $code] = $this->prints !== null ? $this->prints->result($boxId, $fact + ['doubt' => $late], $now) : ['refused', 'FACT_TYPE_UNKNOWN'];
+                    ++$counts[$status];
+                    $results[] = ['index' => $index, 'key' => $fact['key'], 'status' => $status, 'code' => $code];
+                    continue;
+                }
                 $tag = $refusal === null ? ($tags[$fact['identifier']] ?? null) : null;
                 if ($refusal === null && $tag === null) {
                     $refusal = 'TAG_UNKNOWN';
@@ -547,6 +576,9 @@ class LossBoxChannelService
             return $refused('FACT_INVALID');
         }
         $type = $fact['type'] ?? null;
+        if (is_string($type) && in_array($type, LossPieceEvent::PRINTS, true)) {
+            return $this->checkPrintFact($fact, $key, $type, $devices);
+        }
         if (!is_string($type) || !in_array($type, LossPieceEvent::READS, true)) {
             return $refused('FACT_TYPE_UNKNOWN');
         }
@@ -590,6 +622,42 @@ class LossBoxChannelService
         return ['key' => $key, 'type' => $type, 'at' => $at, 'deviceId' => (int) $device['id'], 'zone' => $zone, 'seq' => $seq, 'identifier' => $identifier];
     }
 
+    /**
+     * La forme d'un résultat d'imprimante à puce : sa clé, son heure, son imprimante, la ligne du travail, et l'identifiant relu
+     * (écriture réussie) ou le motif (échec).
+     *
+     * @param array<string, mixed>                $fact
+     * @param array<string, array<string, mixed>> $devices
+     *
+     * @return array<string, mixed> { key, refusal } ou { key, type, at, deviceId, line, identifier | reason }
+     */
+    private function checkPrintFact(array $fact, string $key, string $type, array $devices): array
+    {
+        $refused = static fn (string $code): array => ['key' => $key, 'refusal' => $code];
+        $at = self::time($fact['at'] ?? null);
+        $data = $fact['data'] ?? null;
+        $line = is_array($data) ? ($data['line'] ?? null) : null;
+        if ($at === null || !is_int($line) || $line < 1 || $line > 2147483647) {
+            return $refused('FACT_INVALID');
+        }
+        $device = is_string($fact['device'] ?? null) ? ($devices[$fact['device']] ?? null) : null;
+        if ($device === null) {
+            return $refused('DEVICE_UNKNOWN');
+        }
+        if ($device['kind'] !== LossDevice::PRINTER) {
+            return $refused('DEVICE_KIND_INVALID'); // seule une imprimante à puce écrit une puce
+        }
+        $checked = ['key' => $key, 'type' => $type, 'at' => $at, 'deviceId' => (int) $device['id'], 'line' => $line];
+        if ($type === LossPieceEvent::TAG_WRITE_FAILED) {
+            $reason = $data['reason'] ?? null;
+
+            return is_string($reason) && in_array($reason, LossPrintJobLine::BOX_REASONS, true) ? $checked + ['reason' => $reason] : $refused('REASON_INVALID');
+        }
+        $identifier = LossTagIdentifier::canonical($data['identifier'] ?? null, LossTagIdentifier::UHF);
+
+        return $identifier !== null ? $checked + ['identifier' => $identifier] : $refused('TAG_INVALID');
+    }
+
     /** @return array<string, mixed> les réglages servis au boîtier : cadence, faits acceptés, zones, ses appareils */
     private function settingsOf(int $boxId): array
     {
@@ -599,7 +667,7 @@ class LossBoxChannelService
                 'cashRegisterId' => $row['cash_register_id'] !== null ? (int) $row['cash_register_id'] : null];
         }
 
-        return ['heartbeatSeconds' => self::HEARTBEAT_SECONDS, 'silentAfterSeconds' => $this->health->silentAfter(), 'facts' => ['types' => LossPieceEvent::READS, 'maxBatch' => self::MAX_FACTS], 'zones' => LossDevice::ZONES, 'devices' => $devices];
+        return ['heartbeatSeconds' => self::HEARTBEAT_SECONDS, 'silentAfterSeconds' => $this->health->silentAfter(), 'facts' => ['types' => [...LossPieceEvent::READS, ...LossPieceEvent::PRINTS], 'maxBatch' => self::MAX_FACTS], 'zones' => LossDevice::ZONES, 'devices' => $devices];
     }
 
     /**

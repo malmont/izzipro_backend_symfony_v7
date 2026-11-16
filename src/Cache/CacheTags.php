@@ -381,6 +381,8 @@ final class CacheTags
         \App\LossPrevention\Entity\LossBox::class, \App\LossPrevention\Entity\LossDevice::class, \App\LossPrevention\Entity\LossBoxEvent::class,
         \App\LossPrevention\Entity\LossCounterPresence::class, // lot L3-b1 : présence sur un tapis de comptoir, projection tenue en SQL
         \App\LossPrevention\Entity\LossSaleUnit::class, // lot L3-b2a : articles suivis vendus et pièces reliées, écrits en SQL par l'analyse
+        // lot L3-c : travaux d'impression des puces et mot de passe d'accès rangé chiffré, lus et écrits en SQL par `LossPrintRepository`
+        \App\LossPrevention\Entity\LossPrintJob::class, \App\LossPrevention\Entity\LossPrintJobLine::class, \App\LossPrevention\Entity\LossTagSecret::class,
         // Module Assistance (lot 1, 12/11/2026) : boîte de demandes lue en direct, jamais mise en cache
         \App\Support\Entity\SupportTicket::class, \App\Support\Entity\SupportMessage::class, \App\Support\Entity\SupportAttachment::class, \App\Support\Entity\SupportSetting::class,
         // Jeton de rafraîchissement JWT : le bundle Gesdinet persiste sa propre classe, pas App\Entity\RefreshToken

@@ -1,0 +1,19 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/impressions?locale=fr",
+        "body": {
+            "deviceId": 4,
+            "pieceIds": [
+                4
+            ]
+        }
+    },
+    "status": 409,
+    "body": {
+        "error": "PRINT_KEY_MISSING",
+        "code": "PRINT_KEY_MISSING",
+        "message": "L'écriture des puces n'est pas encore activée sur ce serveur. Contactez la plateforme.",
+        "variable": "LOSS_TAG_KEYS"
+    }
+}

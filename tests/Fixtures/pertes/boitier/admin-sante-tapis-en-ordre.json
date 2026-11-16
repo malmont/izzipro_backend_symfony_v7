@@ -14,7 +14,7 @@
                 "cashRegisterId": null,
                 "state": "ok",
                 "stateLabel": "En ordre",
-                "lastSeenAt": "2026-11-16T07:14:42+00:00",
+                "lastSeenAt": "2026-11-16T09:25:46+00:00",
                 "silentSince": null,
                 "silentSeconds": null,
                 "hint": null
@@ -27,23 +27,36 @@
                 "cashRegisterId": 1,
                 "state": "ok",
                 "stateLabel": "En ordre",
-                "lastSeenAt": "2026-11-16T07:14:42+00:00",
+                "lastSeenAt": "2026-11-16T09:25:46+00:00",
                 "silentSince": null,
                 "silentSeconds": null,
                 "hint": null
+            },
+            {
+                "code": "printer-2",
+                "kind": "printer",
+                "label": "Imprimante à puce",
+                "zone": null,
+                "cashRegisterId": null,
+                "state": "down",
+                "stateLabel": "Silencieux",
+                "lastSeenAt": "2026-11-16T09:25:46+00:00",
+                "silentSince": "2026-11-16T09:25:46+00:00",
+                "silentSeconds": 0,
+                "hint": "L'imprimante ne répond plus. Vérifiez son câble sur le boîtier, puis son alimentation et son rouleau."
             }
         ],
         "summary": {
             "ok": 2,
             "pending": 0,
-            "down": 0,
+            "down": 1,
             "absent": 0,
-            "allOk": true,
-            "label": "Tout est en ordre"
+            "allOk": false,
+            "label": "1 appareil à vérifier"
         },
         "thresholdSeconds": 300,
         "exercise": false,
         "screen": "pertes.boitiers",
-        "checkedAt": "2026-11-16T07:14:42+00:00"
+        "checkedAt": "2026-11-16T09:25:47+00:00"
     }
 }

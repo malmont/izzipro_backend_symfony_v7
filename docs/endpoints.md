@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (613)
+## Boutique et commun (620)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -487,6 +487,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/gestion/pertes/exercices/boitiers` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::exerciseDelete` |
 | GET | `/api/gestion/pertes/exercices/boitiers` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::exerciseList` |
 | POST | `/api/gestion/pertes/exercices/boitiers` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::exerciseCreate` |
+| GET | `/api/gestion/pertes/exercices/impressions/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPrintController::exerciseSheet` |
+| GET | `/api/gestion/pertes/exercices/impressions` | ROLE_ADMIN | `LossPrevention\Controller\LossPrintController::exerciseList` |
 | POST | `/api/gestion/pertes/exercices/installation/etapes/{code}/verifier` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::exerciseVerify` |
 | POST | `/api/gestion/pertes/exercices/installation/etiquette-test` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::exerciseTestLabel` |
 | POST | `/api/gestion/pertes/exercices/installation/puce-test` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::exerciseTestRead` |
@@ -507,6 +509,10 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/gestion/pertes/exercices` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::deleteExercises` |
 | GET | `/api/gestion/pertes/exercices` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::exercises` |
 | POST | `/api/gestion/pertes/exercices` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::startExercise` |
+| POST | `/api/gestion/pertes/impressions/{id}/annuler` | ROLE_ADMIN | `LossPrevention\Controller\LossPrintController::cancel` |
+| GET | `/api/gestion/pertes/impressions/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPrintController::sheet` |
+| GET | `/api/gestion/pertes/impressions` | ROLE_ADMIN | `LossPrevention\Controller\LossPrintController::list` |
+| POST | `/api/gestion/pertes/impressions` | ROLE_ADMIN | `LossPrevention\Controller\LossPrintController::create` |
 | POST | `/api/gestion/pertes/installation/etapes/{code}/verifier` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::verify` |
 | POST | `/api/gestion/pertes/installation/etiquette-test` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::testLabel` |
 | POST | `/api/gestion/pertes/installation/puce-test` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::testRead` |
@@ -632,6 +638,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/pertes/boitier/jumelage` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::pairingDeposit` |
 | GET | `/api/pertes/boitier/reglages` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::settings` |
 | POST | `/api/pertes/boitier/signe-de-vie` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::heartbeat` |
+| GET | `/api/pertes/boitier/travaux` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::jobs` |
 | PUT | `/api/platform/agencies/{id}/members` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformAgenciesController::member` |
 | POST | `/api/platform/agencies/{id}/resume` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformAgenciesController::resume` |
 | DELETE | `/api/platform/agencies/{id}/sites/{tenantCode}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformAgenciesController::detach` |

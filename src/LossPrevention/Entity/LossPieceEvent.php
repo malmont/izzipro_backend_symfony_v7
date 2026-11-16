@@ -45,6 +45,14 @@ class LossPieceEvent
     public const FROM_MAT = [self::COUNTER_SEEN, self::COUNTER_LEFT];
     /** Lectures de puces par un appareil : nombreuses, la fiche d'une pièce n'en montre que les dernières */
     public const READS = [self::SPOT_CHECK, self::ZONE_SEEN, self::COUNTER_SEEN, self::COUNTER_LEFT];
+    /**
+     * Résultats d'une imprimante à puce (lot L3-c), envoyés par le boîtier avec ses autres faits : puce écrite et RELUE conforme, ou
+     * écriture en échec. Ce ne sont pas des faits de pièce : ils closent une ligne de travail d'impression (`LossPrintService::result`) ;
+     * une écriture réussie pose la puce sur la pièce, ce qui écrit le fait `TAG_ASSOCIATED`.
+     */
+    public const TAG_WRITTEN = 'TAG_WRITTEN';
+    public const TAG_WRITE_FAILED = 'TAG_WRITE_FAILED';
+    public const PRINTS = [self::TAG_WRITTEN, self::TAG_WRITE_FAILED];
 
     public const SOURCE_APP = 'app';
     public const SOURCE_EXERCISE = 'exercise';

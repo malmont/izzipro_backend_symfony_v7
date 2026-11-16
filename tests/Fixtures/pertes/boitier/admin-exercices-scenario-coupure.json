@@ -1,7 +1,7 @@
 {
     "request": {
         "method": "POST",
-        "path": "/api/gestion/pertes/exercices/boitiers/3/scenarios?locale=fr",
+        "path": "/api/gestion/pertes/exercices/boitiers/4/scenarios?locale=fr",
         "body": {
             "scenario": "network_cut"
         }
@@ -11,19 +11,19 @@
         "scenario": "network_cut",
         "written": 1,
         "box": {
-            "id": 3,
+            "id": 4,
             "name": "Boîtier simulé",
             "place": "Exercice",
             "status": "active",
             "statusLabel": "Inscrit",
             "online": true,
             "onlineLabel": "En ligne",
-            "lastSeenAt": "2026-11-16T07:14:45+00:00",
-            "lastSeenLabel": "16/11/2026 02 h 14",
+            "lastSeenAt": "2026-11-16T09:25:50+00:00",
+            "lastSeenLabel": "16/11/2026 04 h 25",
             "silentSeconds": null,
             "version": null,
             "arch": null,
-            "enrolledAt": "2026-11-16T07:14:44+00:00",
+            "enrolledAt": "2026-11-16T09:25:50+00:00",
             "clockOffsetSeconds": 0,
             "clockDoubt": false,
             "keyHint": null,
@@ -31,7 +31,7 @@
             "paired": false,
             "devices": [
                 {
-                    "id": 4,
+                    "id": 5,
                     "serial": "SIM-LECTEUR-SORTIE",
                     "kind": "reader",
                     "kindLabel": "Lecteur de puces",
@@ -42,10 +42,10 @@
                     "zoneLabel": "Sortie",
                     "cashRegister": null,
                     "onMat": null,
-                    "lastSeenAt": "2026-11-16T07:14:44+00:00"
+                    "lastSeenAt": "2026-11-16T09:25:50+00:00"
                 },
                 {
-                    "id": 5,
+                    "id": 6,
                     "serial": "SIM-LECTEUR-MAIN",
                     "kind": "reader",
                     "kindLabel": "Lecteur de puces",
@@ -56,10 +56,10 @@
                     "zoneLabel": null,
                     "cashRegister": null,
                     "onMat": null,
-                    "lastSeenAt": "2026-11-16T07:14:44+00:00"
+                    "lastSeenAt": "2026-11-16T09:25:50+00:00"
                 },
                 {
-                    "id": 6,
+                    "id": 7,
                     "serial": "SIM-TAPIS",
                     "kind": "counter_mat",
                     "kindLabel": "Tapis de comptoir",
@@ -70,68 +70,92 @@
                     "zoneLabel": null,
                     "cashRegister": null,
                     "onMat": 0,
-                    "lastSeenAt": "2026-11-16T07:14:44+00:00"
+                    "lastSeenAt": "2026-11-16T09:25:50+00:00"
+                },
+                {
+                    "id": 8,
+                    "serial": "SIM-IMPRIMANTE",
+                    "kind": "printer",
+                    "kindLabel": "Imprimante à puce",
+                    "model": null,
+                    "status": "ok",
+                    "statusLabel": "En marche",
+                    "zone": null,
+                    "zoneLabel": null,
+                    "cashRegister": null,
+                    "onMat": null,
+                    "lastSeenAt": "2026-11-16T09:25:50+00:00"
                 }
             ],
-            "createdAt": "2026-11-16T07:14:44+00:00",
+            "createdAt": "2026-11-16T09:25:50+00:00",
             "screen": "pertes.boitiers",
             "events": [
                 {
-                    "id": 23,
+                    "id": 27,
                     "type": "BOX_BACK",
                     "label": "Boîtier revenu après un silence",
-                    "at": "2026-11-16T07:14:45+00:00",
-                    "atLabel": "16/11/2026 02 h 14",
+                    "at": "2026-11-16T09:25:50+00:00",
+                    "atLabel": "16/11/2026 04 h 25",
                     "device": null,
                     "silentSeconds": 7200,
                     "byUser": false
                 },
                 {
-                    "id": 22,
+                    "id": 26,
                     "type": "DEVICE_SEEN",
                     "label": "Appareil vu pour la première fois",
-                    "at": "2026-11-16T07:14:44+00:00",
-                    "atLabel": "16/11/2026 02 h 14",
+                    "at": "2026-11-16T09:25:50+00:00",
+                    "atLabel": "16/11/2026 04 h 25",
+                    "device": "SIM-IMPRIMANTE",
+                    "silentSeconds": null,
+                    "byUser": false
+                },
+                {
+                    "id": 25,
+                    "type": "DEVICE_SEEN",
+                    "label": "Appareil vu pour la première fois",
+                    "at": "2026-11-16T09:25:50+00:00",
+                    "atLabel": "16/11/2026 04 h 25",
                     "device": "SIM-TAPIS",
                     "silentSeconds": null,
                     "byUser": false
                 },
                 {
-                    "id": 21,
+                    "id": 24,
                     "type": "DEVICE_SEEN",
                     "label": "Appareil vu pour la première fois",
-                    "at": "2026-11-16T07:14:44+00:00",
-                    "atLabel": "16/11/2026 02 h 14",
+                    "at": "2026-11-16T09:25:50+00:00",
+                    "atLabel": "16/11/2026 04 h 25",
                     "device": "SIM-LECTEUR-MAIN",
                     "silentSeconds": null,
                     "byUser": false
                 },
                 {
-                    "id": 20,
+                    "id": 23,
                     "type": "DEVICE_SEEN",
                     "label": "Appareil vu pour la première fois",
-                    "at": "2026-11-16T07:14:44+00:00",
-                    "atLabel": "16/11/2026 02 h 14",
+                    "at": "2026-11-16T09:25:50+00:00",
+                    "atLabel": "16/11/2026 04 h 25",
                     "device": "SIM-LECTEUR-SORTIE",
                     "silentSeconds": null,
                     "byUser": false
                 },
                 {
-                    "id": 19,
+                    "id": 22,
                     "type": "BOX_ENROLLED",
                     "label": "Machine inscrite",
-                    "at": "2026-11-16T07:14:44+00:00",
-                    "atLabel": "16/11/2026 02 h 14",
+                    "at": "2026-11-16T09:25:50+00:00",
+                    "atLabel": "16/11/2026 04 h 25",
                     "device": null,
                     "silentSeconds": null,
                     "byUser": false
                 },
                 {
-                    "id": 18,
+                    "id": 21,
                     "type": "BOX_CREATED",
                     "label": "Boîtier ajouté",
-                    "at": "2026-11-16T07:14:44+00:00",
-                    "atLabel": "16/11/2026 02 h 14",
+                    "at": "2026-11-16T09:25:50+00:00",
+                    "atLabel": "16/11/2026 04 h 25",
                     "device": null,
                     "silentSeconds": null,
                     "byUser": true

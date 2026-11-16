@@ -77,6 +77,19 @@
                 },
                 "state": "absent",
                 "hint": "Aucun tapis de comptoir. Branchez le tapis sur le boîtier : il apparaît ici de lui-même."
+            },
+            {
+                "code": "tag_printer",
+                "title": "Brancher l'imprimante à puce",
+                "text": "Facultatif (niveau pro). L'imprimante imprime l'étiquette et écrit la puce d'un même geste. Branchez-la sur le boîtier, puis lancez un travail d'impression : la première puce écrite et relue termine cette étape.",
+                "image": "pertes/installation/tag_printer",
+                "status": "todo",
+                "verify": {
+                    "kind": "data",
+                    "label": "Vérifier"
+                },
+                "state": "absent",
+                "hint": "Aucune imprimante à puce. Branchez l'imprimante sur le boîtier : elle apparaît ici d'elle-même."
             }
         ],
         "progress": {

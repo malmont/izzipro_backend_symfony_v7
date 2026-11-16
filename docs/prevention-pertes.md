@@ -1742,3 +1742,158 @@ Ajouté avec ce lot, pour le lot CONSTRUCTION (`docs/boutique-en-construction.md
 s'inscrit, donne signe de vie et envoie ses faits, la caisse pose sa question et le gérant lit son matériel
 (`LossPreventionCounterTest::testABoxAndATillWorkOnASiteStillUnderConstruction` ; un commerçant installe son matériel avant d'ouvrir).
 
+
+### 16.20 Lot L3-c codé : l'imprimante à puce (16/11/2026)
+
+Contrat validé par le chef de projet (dix points ; § 15 et § 16.7 font foi pour le fond). Une migration
+(`Version20270118100000`, 23 instructions, script `scripts/migrate_all_v2_pertes_l3c.sh`), sept routes, deux faits nouveaux du boîtier. Code :
+`Services/LossPrintService`, `LossTagEpc`, `LossTagVault`, `Repository/LossPrintRepository`, `Controller/LossPrintController`,
+`UseCase/LossPrintUseCase` ; entités `LossPrintJob`, `LossPrintJobLine`, `LossTagSecret`. **Tout se joue sur le simulateur :
+aucune imprimante réelle n'a été essayée** (campagne d'essai à l'achat du matériel).
+
+**Le travail d'impression.** Le gérant choisit des pièces et une imprimante à puce branchée sur un boîtier ; la plateforme
+enregistre un travail (`loss_print_job`) et une ligne par pièce (`loss_print_job_line`) avec l'identifiant à écrire. Le boîtier
+vient chercher ses travaux (la plateforme ne joint jamais la boutique), imprime, écrit la puce, la **RELIT**, et renvoie un fait
+par étiquette. États d'un travail : `waiting` (aucun résultat), `running` (au moins une ligne close), `done` (plus aucune ligne
+en attente), `cancelled`. États d'une ligne : `waiting`, `written`, `failed` (avec `reason`), `cancelled` ; une ligne ne quitte
+l'attente qu'une fois.
+
+**Routes de l'administrateur** (`/api/gestion/pertes`, `ROLE_ADMIN`, gardes de la gestion et du module) :
+
+| Route | Réponse |
+|---|---|
+| `GET /impressions` (`page`, `limit` ≤ 50) | `{ items [travail], total, page, limit, printers [{ deviceId, serial, model, status, boxId, boxName, boxEnrolled }], ready { ok, reason, message }, limits { lines: 200, openJobs: 20 }, exercise }` |
+| `POST /impressions` `{ deviceId, pieceIds, withPrice?, confirmTagged? }` | 201 le travail et ses lignes |
+| `GET /impressions/{id}` | le travail et `lineItems` |
+| `POST /impressions/{id}/annuler` | le travail et `cancelledLines` ; rejouable ; ce qui est écrit le reste |
+| `GET /exercices/impressions`, `GET /exercices/impressions/{id}` | les travaux de l'imprimante simulée, même forme ; ouvertes sans le droit du module |
+
+Travail : `{ id, status, statusLabel, printer { deviceId, serial, model, boxId, boxName }, withPrice, lines, written, failed,
+waiting, cancelled, createdAt, finishedAt, cancelledAt, exercise }`. Ligne (`lineItems`) : `{ id, position, piece { id, number,
+name, variantLabel }, identifier, status, statusLabel, reason, reasonLabel, tagId, doneAt }`. `ready.reason` :
+`PRINT_KEY_MISSING`, `PRINT_KEY_INVALID`, `PRINT_KEY_MISMATCH`, `NO_PRINTER`, ou `null`.
+
+Refus de la création : 422 (`deviceId`, `pieceIds` : les règles des étiquettes de pièces, dont `PIECES_NOT_FOUND` et
+`LABELS_LIMIT_EXCEEDED` au-delà de 200 lignes) ; 404
+`PRINTER_NOT_FOUND` (inconnue, retirée, d'un boîtier révoqué, simulée, ou pas une imprimante) ; 409 `PRINT_KEY_MISSING` |
+`PRINT_KEY_INVALID` | `PRINT_KEY_MISMATCH` (avec `variable`), `PIECES_ALREADY_QUEUED` (`pieceIds` : elles attendent déjà dans un
+travail), `PIECES_ALREADY_TAGGED` (`pieceIds` : elles portent déjà une puce ; `confirmTagged: true` pour leur en imprimer une de
+plus), `PIECE_TAG_LIMIT`, `PIECE_RETIRED`, `BARCODE_MISSING`, `PRINT_JOBS_LIMIT` (20 travaux ouverts par site),
+`PIECE_LABELS_EXHAUSTED` (256 étiquettes pour une même pièce), `PRINT_ON_REFERENCE_SITE` (le site de référence, que tout site
+neuf copie, ne reçoit jamais de vrai travail : voir le mot de passe). Un refus n'écrit rien.
+
+**Canal du boîtier.**
+- `GET /api/pertes/boitier/travaux` (jeton `X-Loss-Box`) → `{ serverTime, jobs [{ id, printer (numéro de série), withPrice,
+  access { rank, password }, lines [{ id, position, identifier, piece (numéro), title, subtitle, barcode, symbology, price,
+  note }] }], more }`. Une lecture : rien n'est écrit. 50 lignes au plus par appel (`more` : il en reste). Seules les lignes en
+  attente des travaux ouverts de CE boîtier, sur ses imprimantes en service. Les textes sont ceux des étiquettes de pièces, dans la
+  langue du site ; le prix est celui du catalogue, hors promotion, si le travail le demande. `Cache-Control: no-store`. Une ligne
+  qui ne peut pas être servie n'occupe pas la file et n'est pas annoncée par `more` : celle dont le mot de passe ne se relit pas
+  (clé retirée ou autre clé : elle repart quand la bonne clé revient), celle d'un article qui n'a plus de code-barres, celle
+  d'une imprimante retirée (ces deux-là attendent : annuler le travail). **Retirer une pièce clôt aussitôt ses lignes en
+  attente** (`failed`, `piece_retired`) : rien ne sera imprimé pour elle, et son travail n'attend pas après elle.
+- **Le jeton du boîtier suffit** pour lire ses travaux et le mot de passe (pas de preuve de la machine sur cet appel, comme pour
+  les réglages) : un jeton copié, valable 24 heures, l'obtient, et révoquer le boîtier ne change pas un mot de passe déjà connu.
+  C'est la protection légère du plan (§ 16.7) ; le rang prépare un changement de mot de passe.
+- Deux faits de plus dans `POST /faits`, envoyés par un appareil de genre `printer` :
+  `TAG_WRITTEN { key, type, at, device, data { line, identifier } }` (puce écrite et relue conforme) et
+  `TAG_WRITE_FAILED { …, data { line, reason } }`, `reason` : `tag_unreadable`, `write_refused`, `verify_failed`,
+  `printer_stopped`, `out_of_labels`. Réponse de chaque fait comme les autres : `accepted`, `duplicate` (la ligne est déjà close
+  de la même façon, ou une écriture que la plateforme avait elle-même close en échec : rien de plus n'est posé), `refused` avec `PRINT_LINE_UNKNOWN` (ligne inconnue, ou d'un autre boîtier ou
+  d'une autre imprimante), `PRINT_LINE_CLOSED` (résultat contraire après coup, ou ligne annulée), `IDENTIFIER_MISMATCH`
+  (l'imprimante a relu autre chose que l'identifiant demandé : rien n'est associé, la ligne attend), `REASON_INVALID`,
+  `TAG_INVALID`, `DEVICE_KIND_INVALID`, `DEVICE_UNKNOWN`, `FACT_INVALID`. Les réglages du boîtier (`facts.types`) annoncent les
+  deux genres.
+- **Une écriture réussie pose la puce sur la pièce**, comme le geste ordinaire : puce `uhf` associée, fait `TAG_ASSOCIATED`
+  (source `box`, `data { technology, printLineId }`, clé d'idempotence propre à la ligne ; à l'heure du boîtier, ou à celle du
+  serveur avec `clockDoubt` si son horloge est douteuse), `PAIR_SET` si la pièce portait déjà une puce. Si la pièce porte déjà
+  quatre puces, ou si l'identifiant est déjà connu sur le site pour une autre puce, la ligne passe en échec (`tag_limit`,
+  `identifier_taken`) et rien n'est associé ; si l'identifiant a été posé à la main sur SA pièce entre-temps, la ligne est écrite
+  avec cette puce, sans doublon. Ordre des verrous, le même partout : les pièces (par identifiant croissant), les travaux, puis
+  la ligne ; un lot de faits tient d'avance les pièces et les travaux de tous ses résultats d'impression, si bien qu'un lot, une
+  annulation et un retrait de pièce ne s'interbloquent pas. Limite connue : l'analyse des ventes (§ 16.18) tient des pièces dans
+  l'ordre des ventes ; si elle croise un lot de résultats sur les mêmes pièces, la base tue l'un des deux, qui se rejoue sans perte. Une étiquette écrite après
+  l'annulation du travail n'est pas associée (`PRINT_LINE_CLOSED`) : sa puce se pose à la main, par le geste ordinaire.
+
+**L'identifiant écrit dans la puce** (`LossTagEpc`, seule classe à connaître le découpage, à arrêter à l'essai du matériel) :
+96 bits, 24 caractères hexadécimaux : marque de la plateforme (`F1A7`), site (4 octets : une empreinte de son code), numéro de la
+pièce (4 octets), exemplaire (1 octet : 0 pour la première étiquette de la pièce, puis 1… : une pièce réétiquetée ne reçoit pas
+deux fois le même identifiant), clé de contrôle (1 octet). Sans numérotation GS1. L'unicité sur le site est gardée par la base ;
+entre deux sites, elle tient à l'empreinte du code du site (une puce d'un autre site est de toute façon inconnue ici).
+
+**Le mot de passe d'accès des puces** (`LossTagVault`, table `loss_tag_secret`) :
+- un par site, 32 bits tirés au hasard par la plateforme au premier travail, jamais nul ; rangé **chiffré** (chiffrement
+  authentifié XChaCha20-Poly1305), avec son rang (`rank`, un seul aujourd'hui) et le rang de la clé qui l'a chiffré (`key_rank`) ;
+- **le chiffre est lié au site et au rang** : copié dans la base d'un autre site, il ne se relit pas (`PRINT_KEY_MISMATCH`).
+  Deux conséquences : (1) **le site de référence ne porte jamais de mot de passe** : le code y refuse tout vrai travail
+  (409 `PRINT_ON_REFERENCE_SITE`, la base du site étant celle que les sites neufs copient) ; un site né d'une copie qui en
+  porterait un ne pourrait pas imprimer sans intervention sur sa base ; (2) **changer le code d'un site rend son mot de passe
+  illisible** (`PRINT_KEY_MISMATCH`) : à ne pas faire sur un site qui a écrit des puces sans prévoir le rechiffrement ;
+- **il n'est remis qu'au boîtier**, dans `GET /travaux` (`access.password`, avec `access.rank`). Il n'apparaît dans aucune
+  réponse à l'administrateur, aucun journal (ni du module, ni du serveur), aucun fait, aucun exemple JSON (masqué). Le journal du
+  module note seulement qu'un mot de passe a été tiré : `TAG_SECRET_CREATED { rank, keyRank }`. Un essai le vérifie partout ;
+- la base refuse de le supprimer et de changer son rang ; son chiffre et le rang de sa clé peuvent changer (changement de clé) ;
+- protection légère, dite telle quelle : elle arrête la réécriture ordinaire, pas un attaquant équipé (§ 16.7).
+
+**La clé de chiffrement : variable `LOSS_TAG_KEYS`, posée par le propriétaire** (décision du chef de projet : jamais dérivée du
+secret du serveur, dont la rotation rendrait les puces déjà écrites impossibles à réécrire).
+- Forme : `rang:clé`, la clé étant 32 octets au hasard en base64 ; plusieurs paires séparées par des virgules le jour où la clé
+  change (`1:…,2:…`). Le plus grand rang chiffre ; un mot de passe rangé se déchiffre avec la clé de SON rang.
+- **Geste du propriétaire, à faire une fois, à l'achat du matériel** : (1) tirer une clé : `openssl rand -base64 32` ; (2) ajouter
+  au fichier d'environnement du serveur la ligne `LOSS_TAG_KEYS=1:<la clé tirée>` ; (3) recréer le conteneur de l'application
+  (le fichier d'environnement n'est lu qu'à la création du conteneur), et celui des workers s'ils doivent un jour créer des
+  travaux ; (4) garder une copie de la clé en lieu sûr, hors du serveur : **sans elle, les mots de passe rangés ne se relisent
+  plus et les puces déjà écrites ne peuvent plus être réécrites** (elles restent lisibles). Ne jamais écrire la clé dans le
+  dépôt, un message ou un journal.
+- **Tant que la variable manque** : aucun vrai travail ne se crée (409 `PRINT_KEY_MISSING`), l'écran le dit (`ready`), et la
+  ligne de l'imprimante au tableau de santé reste « en attente » avec la même phrase. Illisible (pas 32 octets, pas de rang, rang
+  répété) : `PRINT_KEY_INVALID`. Posée mais pas celle du mot de passe rangé : `PRINT_KEY_MISMATCH`, et les travaux en attente ne
+  sont pas servis au boîtier (ils repartent quand la bonne clé revient).
+- Changer de clé (plus tard, sans code de plus pour la lecture) : poser `1:<ancienne>,2:<nouvelle>` ; les mots de passe déjà
+  rangés restent lus sous le rang 1. Le rechiffrement sous la nouvelle clé (une commande) est à écrire le jour venu ; la base le
+  permet déjà.
+
+**Mode exercice : l'imprimante simulée, SANS mot de passe.** Le boîtier simulé gagne un quatrième appareil
+(`SIM-IMPRIMANTE`) et trois scénarios (`POST /exercices/boitiers/{id}/scenarios`) : `print_ok` (trois pièces d'exercice sans
+puce reçoivent leur puce simulée), `print_refused` (la première étiquette échoue, `write_refused`), `print_no_labels` (la
+première passe, puis `out_of_labels`). La réponse porte `printJobId`. 409 `EXERCISE_NO_UNTAGGED_PIECE` s'il n'y a aucune pièce
+d'exercice sans puce, `EXERCISE_LIMIT_REACHED` au-delà de 60 puces simulées, `EXERCISE_NO_PRINTER` sur un boîtier simulé créé avant
+ce lot (en créer un nouveau). Un travail d'exercice ne porte jamais de rang de mot de passe (la base le refuse) : l'exercice marche sans
+la variable et ne touche jamais au mot de passe des vraies puces. (Écart signalé au chef de projet : il demandait une clé de
+test réservée aux exercices ; ne rien chiffrer du tout est plus sûr.) Les travaux simulés s'effacent avec l'exercice.
+
+**Tableau de santé et installation.** Une ligne par imprimante à puce (`code: printer-<id>`, `kind: printer`) : silencieuse si
+elle ou son boîtier se tait ; en attente tant que la clé manque ou qu'elle n'a écrit aucune puce relue conforme ; en ordre
+ensuite. Étape facultative `tag_printer` de l'assistant d'installation : faite quand une imprimante a écrit et relu une puce. Le
+texte du niveau pro de la gamme (`GET /materiel`, besoin « imprimer l'étiquette ») renvoie aux impressions de puces.
+
+**Ce que la base garde elle-même** (migration du lot) : un travail vise une imprimante de son boîtier, simulé pour un exercice,
+vrai sinon ; un vrai travail dit le rang d'un mot de passe rangé, un travail d'exercice n'en porte jamais ; ce qui décrit un
+travail ou une ligne ne change pas ; un travail fini ou annulé ne repart pas ; une ligne close ne change plus ; la puce d'une
+ligne écrite est une puce en service, posée sur sa pièce, qui porte son identifiant ; une pièce n'attend que dans un travail à
+la fois ; un identifiant n'est donné qu'à une ligne ; un mot de passe rangé ne se supprime pas. **Retour arrière de la
+migration : il supprime les mots de passe rangés** ; sur une base où des puces ont été écrites, exporter `loss_tag_secret` avant.
+
+**Journal du module** : `PRINT_JOB_CREATED { jobId, deviceId, lines, withPrice }`, `PRINT_JOB_CANCELLED { jobId, lines }`,
+`TAG_SECRET_CREATED { rank, keyRank }`.
+
+**Hors du lot** : le pilotage réel de l'imprimante (logiciel du boîtier, dépôt local, langage de l'imprimante), le changement de
+mot de passe (le rang le prépare) et le rechiffrement sous une nouvelle clé, le contrôle des copies (écarté par le propriétaire),
+la caméra (L3-d).
+
+**Relecture indépendante** (16/11/2026) : aucune fuite du mot de passe ni de la clé, aucun point bloquant ; corrigés : deux clés
+d'essai différentes sous le même rang dans la suite ; des lignes impossibles à servir occupaient la file et `more` l'annonçait à
+tort ; une pièce retirée laissait sa ligne en attente pour toujours ; un résultat et une annulation pouvaient s'interbloquer
+(ordre des verrous) ; la clé passait en argument nu d'un service construit à chaque requête (lecture au premier usage, paramètre
+marqué sensible) ; le chiffre n'était lié ni au site ni au rang ; une écriture close en échec par la plateforme, rejouée,
+répondait « refusé » ; la clé du fait d'association dépendait de celle choisie par le boîtier ; la garde ne vérifiait pas que la
+puce d'une ligne écrite est en service ; index par pièce. **Seconde passe** : toujours aucune fuite, aucun point bloquant ;
+corrigés : un lot de plusieurs résultats tenait un travail avant la pièce du résultat suivant (pièces et travaux tenus d'avance,
+dans l'ordre) ; repli quand un article change entre deux lectures ; règle du site de référence gardée par le code ; le coffre
+ne garde plus la variable après l'avoir lue.
+
+**Tests** : `LossPreventionPrintTest` (travail servi à son boîtier et à lui seul, par 50 lignes ; résultats rejoués, refus,
+annulation, réimpression à un autre exemplaire, confirmation d'une pièce déjà équipée, plafonds ; écritures qui ne peuvent plus
+être associées, pièce retirée, article sans code-barres ; le mot de passe remis au boîtier seulement et écrit nulle part ; clé
+absente, illisible, autre ; imprimante simulée ; identifiant et coffre ; gardes de la base et migration rejouée). La clé d'essai
+est commune aux classes de la suite (`LossTagKeysTrait`).

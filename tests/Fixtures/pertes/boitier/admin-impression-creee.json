@@ -1,0 +1,73 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/impressions?locale=fr",
+        "body": {
+            "deviceId": 4,
+            "pieceIds": [
+                2,
+                3
+            ],
+            "withPrice": true
+        }
+    },
+    "status": 201,
+    "body": {
+        "id": 1,
+        "status": "waiting",
+        "statusLabel": "En attente",
+        "printer": {
+            "deviceId": 4,
+            "serial": "IMPR-EXEMPLE",
+            "model": "ZD621R",
+            "boxId": 3,
+            "boxName": "Boîtier de l'arrière-boutique"
+        },
+        "withPrice": true,
+        "lines": 2,
+        "written": 0,
+        "failed": 0,
+        "waiting": 2,
+        "cancelled": 0,
+        "createdAt": "2026-11-16T09:25:49+00:00",
+        "finishedAt": null,
+        "cancelledAt": null,
+        "exercise": false,
+        "lineItems": [
+            {
+                "id": 1,
+                "position": 1,
+                "piece": {
+                    "id": 2,
+                    "number": 2,
+                    "name": "Veste en lin (exemple boîtier 4591DE)",
+                    "variantLabel": null
+                },
+                "identifier": "F1A7C63DA5B50000000200C7",
+                "status": "waiting",
+                "statusLabel": "En attente",
+                "reason": null,
+                "reasonLabel": null,
+                "tagId": null,
+                "doneAt": null
+            },
+            {
+                "id": 2,
+                "position": 2,
+                "piece": {
+                    "id": 3,
+                    "number": 3,
+                    "name": "Veste en lin (exemple boîtier 4591DE)",
+                    "variantLabel": null
+                },
+                "identifier": "F1A7C63DA5B500000003002A",
+                "status": "waiting",
+                "statusLabel": "En attente",
+                "reason": null,
+                "reasonLabel": null,
+                "tagId": null,
+                "doneAt": null
+            }
+        ]
+    }
+}
