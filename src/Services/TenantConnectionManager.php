@@ -688,8 +688,10 @@ class TenantConnectionManager
 
     public function findTenantConfigByHost(string $host): ?TenantConfig
     {
-        // Un nom d'hôte ne dépend pas de la casse (17/10/2026) : « WWW.Boutique.ca » = « www.boutique.ca »
-        $host = strtolower(trim($host));
+        // Un nom d'hôte ne dépend pas de la casse (17/10/2026) : « WWW.Boutique.ca » = « www.boutique.ca ». Train de sécurité du
+        // 16/11/2026 : le point final d'un nom complet (« boutique.ca. ») est retiré aussi, port ou non : un hôte saisi ainsi désigne
+        // le même site (avant : site inconnu, 404)
+        $host = (string) preg_replace('/\.(?=:\d{1,5}$|$)/', '', strtolower(trim($host)));
 
         // 1. Clé unique basée sur le host (md5 sécurise les caractères spéciaux)
         $cacheKey = 'tenant_conf_host_' . md5($host);

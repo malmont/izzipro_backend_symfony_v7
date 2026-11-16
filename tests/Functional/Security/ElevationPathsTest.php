@@ -68,6 +68,19 @@ class ElevationPathsTest extends WebTestCase
             $this->assertNull($this->db->fetchOne('SELECT reset_token FROM "user" WHERE id = ?', [$admin->getId()]) ?: null, "$poisoned : aucun lien créé");
             $this->assertCount(0, self::getMailerMessages());
         }
+        // LES FORMES QU'ENVOIENT LES FRONTS ne sont jamais refusées par la forme : majuscules (hôte saisi), point final, port (développement).
+        // Elles sont normalisées par la résolution du site (casse, point final, port retiré), et la lecture répond comme avec l'hôte exact.
+        $exact = $this->status(MV_TEST_TENANT_HOST);
+        $this->assertSame(200, $exact);
+        foreach ([strtoupper(MV_TEST_TENANT_HOST), ucfirst(MV_TEST_TENANT_HOST), MV_TEST_TENANT_HOST . '.', strtoupper(MV_TEST_TENANT_HOST) . '.', MV_TEST_TENANT_CODE, strtoupper(MV_TEST_TENANT_CODE)] as $form) {
+            $this->assertSame(200, $this->status($form), "« $form » : servi comme le site");
+        }
+        foreach ([MV_TEST_TENANT_HOST . ':8000', MV_TEST_TENANT_CODE . ':3000', 'MVTEST.LOCALHOST:3000'] as $form) {
+            $this->assertNotSame('TENANT_HOST_INVALID', json_decode((string) $this->client->getResponse()->getContent(), true)['code'] ?? null, $form);
+            $this->status($form);
+            $this->assertNotSame(400, $this->client->getResponse()->getStatusCode(), "« $form » : jamais refusé par la forme");
+            $this->assertNotSame('TENANT_HOST_INVALID', json_decode((string) $this->client->getResponse()->getContent(), true)['code'] ?? null, $form);
+        }
         // de même par le paramètre ?tenant= et sur toute autre route
         $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/api/site/storefront?tenant=' . urlencode('mvtest:@pirate.example'), [], [], ['HTTP_ACCEPT' => 'application/json']);
         $this->assertSame(400, $this->client->getResponse()->getStatusCode());
@@ -135,6 +148,15 @@ class ElevationPathsTest extends WebTestCase
         $this->client->request('PUT', 'https://' . MV_TEST_TENANT_HOST . '/api/memoires/admin/users/' . $ordinary->getId() . '?locale=fr', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json',
             'HTTP_AUTHORIZATION' => 'Bearer ' . $admin], json_encode(['firstName' => 'Autre']));
         $this->assertSame(200, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
+    }
+
+    /** Le code de réponse d'une lecture publique du site, l'en-tête de site valant `$host` */
+    private function status(string $host): int
+    {
+        $this->client->getCookieJar()->clear();
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/api/site/storefront', [], [], ['HTTP_X_TENANT_HOST' => $host, 'HTTP_ACCEPT' => 'application/json']);
+
+        return $this->client->getResponse()->getStatusCode();
     }
 
     private function insert(string $email, string $roles, string $password): void
