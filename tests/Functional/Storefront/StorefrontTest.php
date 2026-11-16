@@ -134,6 +134,8 @@ class StorefrontTest extends WebTestCase
         foreach (['/api/order/create', '/api/payment', '/api/order/create-guest', '/api/subscriptions', '/api/cart/quote', '/api/contacts', '/api/import-invitation/accept'] as $path) {
             $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($this->api('POST', $path, ['x' => 1], $cashier))['code'] ?? null, "$path : fermé à la caisse comme à tous");
         }
+        // un chemin encodé ne contourne pas la fermeture des commandes, même pour l'équipe (le chemin est lu décodé)
+        $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($this->api('POST', '/api/cont%61cts', ['x' => 1], $admin))['code'] ?? null);
         // la vente en magasin a sa propre route, que la construction ne ferme pas
         $this->assertNotSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($this->api('POST', '/api/order/create-multi-payment', ['x' => 1], $cashier))['code'] ?? null);
         // les formulaires des pages du serveur aussi, pour tous
