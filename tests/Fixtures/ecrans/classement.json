@@ -463,6 +463,8 @@
         "POST /admin/contenu-exemple/effacer/{resource}",
         "POST /admin/mon-site/demander/{key}",
         "POST /admin/mon-site/domaine",
+        "POST /admin/mon-site/essayer/{key}",
+        "POST /admin/mon-site/module/{key}/{state}",
         "POST /admin/mon-site/regler",
         "POST /admin/ouverture-du-site/{action}"
     ],
@@ -1131,7 +1133,10 @@
     ],
     "site.modules": [
         "GET /api/site/features",
+        "POST /api/site/features/{key}/disable",
+        "POST /api/site/features/{key}/enable",
         "POST /api/site/features/{key}/request",
+        "POST /api/site/features/{key}/trial",
         "PUT /api/site/features"
     ],
     "site.ouverture": [
