@@ -1106,6 +1106,21 @@ class ConsoleApiTest extends WebTestCase
             FakeLandingAiClient::$queue = [$choose, $write('Voici les ventes du mois, sans comparaison.')];
             $this->runWorker((int) $d['messageId']);
             $this->assertSame('Voici les ventes du mois, sans comparaison.', $last($id)['blocks'][0]['text']);
+
+            // 4. le garde-fou lui-même, sur un chiffre dont la valeur de l'an dernier, l'écart et la variation diffèrent : chacun des
+            // trois, écrit sans la note, fait rejeter le texte ; avec la note, ou sans aucun des trois, le texte passe
+            $guard = new \ReflectionMethod(ConsoleResponder::class, 'citesUnmarked');
+            $guard->setAccessible(true);
+            $responder = static::getContainer()->get(ConsoleResponder::class);
+            $marked = [['figures' => [['id' => 'a1.revenue', 'unit' => 'money', 'value' => 532100, 'lastYear' => 432100, 'deltaLastYear' => 100000, 'deltaPercentLastYear' => 23.1,
+                'lastYearSource' => 'before_migration', 'lastYearNote' => 'avant la migration']]]];
+            $cites = fn (string $t): bool => $guard->invoke($responder, $t, $marked, 'fr');
+            $this->assertSame([true, true, true, false, false, false], [
+                $cites('Contre 4 321,00 $ l\'an dernier.'), $cites('Soit 1 000,00 $ de plus que l\'an dernier.'), $cites('En hausse de 23,1 % sur un an.'),
+                $cites('Contre 4 321,00 $ l\'an dernier, AVANT LA MIGRATION.'), $cites('Le chiffre d\'affaires est de 5 321,00 $.'), $cites('Voici les ventes.')]);
+            // un an dernier qui vient du site lui-même (aucune note) ne demande rien
+            $own = [['figures' => [['id' => 'a1.revenue', 'unit' => 'money', 'value' => 532100, 'lastYear' => 432100, 'deltaLastYear' => 100000]]]];
+            $this->assertFalse($guard->invoke($responder, 'Contre 4 321,00 $ l\'an dernier.', $own, 'fr'));
         } finally {
             $conn->executeStatement('DELETE FROM import_order WHERE ref = ?', ["#CONS-{$this->tag}"]);
         }
