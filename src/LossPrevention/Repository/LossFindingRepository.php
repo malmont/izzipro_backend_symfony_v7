@@ -102,7 +102,8 @@ class LossFindingRepository extends EntityRepository
         // (il redevient « nouveau » s'il n'a jamais été consulté)
         $this->getEntityManager()->getConnection()->executeStatement(
             'UPDATE loss_finding SET facts = :facts, on_duty = :duty, amount_at_stake = :amount, occurred_to = GREATEST(occurred_to, :to), updated_at = :now'
-            . ($newEvidence ? ', last_evidence_at = :now' : '') . ($newEvidence && $recent ? ', backfill = false' : '') . ' WHERE id = :id',
+            // lot L4-b : une preuve ajoutée pendant qu'une décision tient est « du nouveau depuis la décision », quelle que soit la seconde
+            . ($newEvidence ? ', last_evidence_at = :now, evidence_after_decision = (decided_at IS NOT NULL)' : '') . ($newEvidence && $recent ? ', backfill = false' : '') . ' WHERE id = :id',
             ['facts' => json_encode((object) $facts), 'duty' => json_encode(array_values($onDuty)), 'amount' => $amountAtStake, 'to' => $occurredTo->format('Y-m-d H:i:s'), 'now' => $now, 'id' => $id]
         );
     }
@@ -119,7 +120,8 @@ class LossFindingRepository extends EntityRepository
         $now = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
         $open = $status === LossFinding::OPEN;
         $this->getEntityManager()->getConnection()->executeStatement(
-            'UPDATE loss_finding SET status = ?, decision_note = ?, decided_by = ?, decided_at = ?, updated_at = ? WHERE id = ?',
+            // une décision (ou sa reprise) remet à zéro « du nouveau depuis la décision » (lot L4-b)
+            'UPDATE loss_finding SET status = ?, decision_note = ?, decided_by = ?, decided_at = ?, updated_at = ?, evidence_after_decision = false WHERE id = ?',
             [$status, $note, $open ? null : $userId, $open ? null : $now, $now, $id]);
     }
 

@@ -168,6 +168,9 @@ class LossSettingsService
                         // (notice retirée puis reconfirmée : le plancher remonte encore).
                         $floor = (int) $this->emProvider->getEntityManager()->getConnection()->fetchOne('SELECT COALESCE(MAX(sequence), 0) FROM pos_audit_log');
                         $fields['analysis_floor_sequence'] = $fields['cursor_sequence'] = $fields['backfill_until_sequence'] = $floor;
+                        // lot L4-b : les lectures de la sortie d'avant la notice ne sont pas jugées non plus (le plancher du journal de caisse
+                        // ne les borne pas : elles peuvent suivre sa dernière entrée, ou précéder toute vente)
+                        $fields['exit_cursor'] = LossExitService::lastExitRead($this->emProvider->getEntityManager()->getConnection());
                         $data = ['floor' => $floor];
                     }
                     $journal[] = [$body['staffNoticeConfirmed'] ? LossJournalEntry::STAFF_NOTICE_CONFIRMED : LossJournalEntry::STAFF_NOTICE_WITHDRAWN, $data];
@@ -221,7 +224,7 @@ class LossSettingsService
             foreach ($journal as [$type, $data]) {
                 $journalRepo->append($type, $userId, null, $data);
             }
-            $changed = array_values(array_diff(array_keys($fields), ['staff_notice_confirmed_at', 'staff_notice_confirmed_by', 'analysis_floor_sequence', 'cursor_sequence', 'backfill_until_sequence']));
+            $changed = array_values(array_diff(array_keys($fields), ['staff_notice_confirmed_at', 'staff_notice_confirmed_by', 'analysis_floor_sequence', 'cursor_sequence', 'backfill_until_sequence', 'exit_cursor']));
             if ($changed !== []) {
                 $journalRepo->append(LossJournalEntry::SETTINGS_CHANGED, $userId, null, ['fields' => $changed]);
             }

@@ -102,6 +102,8 @@ analyses suivantes**. Valeurs par défaut validées par le propriétaire.
 | `PRICE_OVERRIDE` | 2 | `perSession` baisses de prix à la main dans une session (une hausse ne compte pas) ; montant en jeu : la somme des baisses | `perSession` 3 (2 à 50) | session ; `PRICE_OVERRIDE:session:<id>` |
 | `APPROVAL_PATTERN` | 2 | `perDay` validations d'un responsable refusées (code faux, code bloqué, compte sans le droit de valider, trop d'essais) **sur une même tablette dans une journée du magasin**. Une validation refusée est journalisée sans session ni poste : seule la tablette y est connue. Une demande mal formée et un responsable sans code ne comptent pas | `perDay` 3 (2 à 50) | tablette (`terminal`) ; `APPROVAL_PATTERN:terminal:<id>:day:<jour>` |
 | `UNREAD_SOLD` (lot L3-b2b, § 16.19) | 3 | Sur un POSTE de caisse et une JOURNÉE du magasin, `minCount` articles suivis vendus sans lecture (ni sur le tapis, ni rattrapés à la sortie, fenêtre de rattrapage passée), qui font au moins `minShare` % des articles suivis vendus ce jour-là sur ce poste. Jugée à chaque clôture du poste, pour le jour et pour la dernière journée d'activité d'avant. **Jamais par personne : personne n'est listé « en poste »** ; pas de montant en jeu | `minCount` 5 (1 à 500), `minShare` 20 % (1 à 100) | `cash_register` ; `UNREAD_SOLD:register:<poste>:day:<jour>` |
+| `EXIT_WITHOUT_SALE` (lot L4-b, § 17.13) | 4 | une vraie pièce ni vendue ni retirée est lue en arrivée à la sortie, à une heure sûre, et aucune vente ne l'explique une fois passée la fenêtre du rattrapage. Gravité haute | aucun | pièce ; `EXIT_WITHOUT_SALE:piece:<id>:day:<jour>` (les lectures suivantes du jour s'y ajoutent) |
+| `EXIT_COVERED` (lot L4-b, § 17.13) | 4 | une lecture de sortie a été rattrapée sur une vente sans lecture, sur un article pas entièrement étiqueté. Gravité faible, moyenne à `minCount` dans la semaine | `minCount` 3 (2 à 20) | variante ; `EXIT_COVERED:variant:<id>:week:<semaine ISO>` |
 
 - Date d'une annulation : `order.canceled_at` (posé par `CancelOrderUseCase` pour tous les chemins), sinon l'heure de l'entrée REFUND pour
   une annulation d'avant PAYS-1b ; un retour (commande de type 2) n'est pas une annulation.
@@ -2182,6 +2184,8 @@ choisi de basculer sans attendre, Fable relira ensuite). La liste fait foi pour 
 |---|---|---|---|
 | L4-a, migration | backend `app_v2` | `3d6e4ce6` | `migrations/Version20270120100000.php`, et le script `scripts/migrate_all_v2_pertes_l4a.sh` (hors dépôt) |
 | L4-a, code | backend `app_v2` | `27e6c73f` | `Entity/LossZonePresence`, le canal (`LossBoxChannelService` : contrôle et écriture des faits de zone, réglages servis), `LossBoxRepository` (présence par zone, antennes en service, effacement de l'exercice), `LossPieceRepository` et `LossPieceService` (dernière zone, compte par zone), conservation (`LossSaleUnitRepository::purgePresences`), santé, assistant, réglages, boîtier simulé, textes, `LossPreventionZoneTest` et les attentes mises à jour de quatre essais, 40 exemples JSON |
+| L4-b, migration | backend `app_v2` | `65a02c5b` | `migrations/Version20270122100000.php`, et le script `scripts/migrate_all_v2_pertes_l4b.sh` (hors dépôt) |
+| L4-b, code | backend `app_v2` | (commit du lot, § 17.13) | `LossExitService` (tout), son branchement dans `LossAnalysisService::run` et l'aperçu, `LossFindingRepository` (drapeau de « du nouveau »), `LossFindingReader` (résumé, preuve, drapeau), catalogue, exercice, textes, `LossPreventionExitTest` et les attentes de trois essais |
 | B5 | boîtier, dépôt local | `2a4ce6f`, `8f0faf7` | `izzibox/appareils.py` (`Antenne`, `Parc.regler`, `Parc.veiller`), `izzibox/service.py`, `izzibox/scenarios.py`, `izzibox/canal.py` (`nom_de_site` aligné sur la règle de la plateforme), `tests/test_zones.py`, le faux serveur, la copie du contrat |
 
 Vérifié sous Opus : `LossPreventionZoneTest` et le dossier du module verts ; 21 mutations sur L4-a (20 tuées, une équivalente :
@@ -2191,3 +2195,100 @@ Aucun relecteur indépendant (lot ordinaire).
 **Tests** : `LossPreventionZoneTest` (arrivée, départ, ordre des faits, heure douteuse, rejeu, une antenne à la fois, fiche,
 liste, synthèse et ses filtres, réglages et leurs bornes, réglages servis, santé et étape, antenne en panne, pièce retirée,
 conservation ; antennes simulées, scène, exercice étanche au réel, gardes de la base, migration rejouée et son script).
+
+### 17.13 Lot L4-b codé : la sortie sans vente (16/11/2026)
+
+Contrat validé par le chef de projet le 16/11/2026 (dix points), avec ses libellés et deux points à tenir et à tester (une pièce
+retirée ou d'exercice n'ouvre jamais de constat ; le constat par pièce et par jour ne se rouvre pas). **Codé sous Opus, à faire
+relire par Fable** (§ 17.12). Migration `Version20270122100000` (script `scripts/migrate_all_v2_pertes_l4b.sh`, 4 instructions) :
+`loss_finding.evidence_after_decision`, `loss_setting.exit_cursor`, index partiel `idx_loss_piece_event_exit` (les seules arrivées
+à la sortie), index `idx_loss_sale_unit_piece` (la pièce des articles vendus, rendus compris). Aucune fonction d'un lot précédent
+n'est remplacée. Relecteur neuf, deux passes : deux bloquants et sept points à la première, cinq points à la seconde, tous corrigés.
+Mutations : 22, une seule survit (la vérification « pièce retirée » du jugement, ceinture : la puce est retirée avec la pièce).
+
+- **Du nouveau depuis la décision** (`newEvidenceSinceDecision`) : un drapeau posé par l'écriture qui ajoute une preuve pendant
+  qu'une décision tient, remis à faux par chaque décision. Il ne dépend plus de deux dates à la seconde (une preuve écrite dans la
+  seconde d'une décision n'était pas vue). Une décision d'avant ce lot garde aussi la comparaison des dates. Écart signalé au
+  chef : le plan disait « par le rang de la dernière preuve » ; le drapeau dit la même chose sans reprise des constats existants.
+  Une décision redite à l'identique (même état, même note) n'est pas réécrite : elle ne remet pas le drapeau à zéro (comme avant).
+- **Les règles de la sortie** (`Services/LossExitService`) : une étape de l'analyse à curseur (§ 3), jouée à la fin de chaque
+  passage, APRÈS le rattrapage ; elle lit les arrivées en zone (`ZONE_SEEN`) des vraies pièces par rang (`exit_cursor`), sous son
+  point de reprise par lecture (une lecture qui échoue est sautée, écrite au journal du serveur et au journal du module,
+  `ENTRIES_SKIPPED { exitReads }` ; elle n'arrête pas la sortie). Au plus 500 lectures par passage : au-delà, l'analyse dit qu'il en
+  reste (`pending`). **Ordre des rangs** : un lot de faits du boîtier tient en partage un verrou consultatif
+  (`LossExitService::READS_LOCK`), le balayage le prend en exclusif le temps de sa lecture (verrou de session, relâché même si la
+  lecture échoue : elle se fait sous un point de reprise) : une lecture validée après une autre de rang plus grand n'est jamais
+  sautée. Inter-blocage possible et rare : un lot du boîtier qui porte des résultats d'impression tient le partage puis verrouille une
+  pièce, que l'analyse a pu modifier dans le même passage avant de demander l'exclusif ; PostgreSQL tranche en une seconde (le
+  passage de la sortie est repris au suivant, ou le lot du boîtier est rejoué). **Jamais trop tôt** : une lecture n'est jugée que lorsque l'analyse a lu les ventes jusqu'à son heure plus la
+  fenêtre du rattrapage (jusqu'à maintenant si le journal de caisse a été lu jusqu'au bout, sinon jusqu'à l'heure de la dernière
+  entrée lue) ; sinon le curseur s'arrête devant elle et elle attend (une fenêtre au plus : 2 heures). Une lecture sans objet (pas
+  à la sortie, heure douteuse, puce retirée, sans pièce, d'avant le plancher de la notice) est passée tout de suite : une heure
+  douteuse dans le futur n'arrête jamais le curseur. Au premier passage, le curseur se pose sur la dernière lecture connue : rien
+  d'avant n'est jugé ; quand la notice aux salariés est confirmée là où elle est exigée, le curseur se pose de même. Une règle
+  éteinte laisse le curseur avancer : rallumée, elle ne rejuge pas le passé.
+- **Ce qui explique une sortie**, dans l'ordre : (1) la vente EN COURS à l'heure de la lecture (vendue avant, ou dans les deux
+  minutes qui suivent, et pas encore RENDUE à cette heure) : une cliente qui rapporte un article passe le portique en entrant, le
+  retour est fait ensuite, ce n'est pas une sortie sans vente. Une vente ANNULÉE après la lecture, elle, n'explique plus rien :
+  l'annulation ne prouve pas que la pièce est revenue (`VOID_AFTER_SALE` juge l'annulation elle-même) ; (2) des ventes du même
+  article encore SANS pièce autour de la lecture (dans la fenêtre du rattrapage avant, deux minutes après) : le rattrapage ne les a
+  pas encore vues (plus de 500 articles en attente, analyse en retard de plus de 48 heures, lot du boîtier arrivé après le
+  rattrapage). **Une vente n'explique qu'une sortie** : la lecture n'est expliquée que s'il y a plus de ventes en attente dans sa
+  fenêtre que de pièces de l'article sorties avant elle sans vente qui les explique (le compte ne dépend pas du passage) ; (3) sinon,
+  rien ne l'explique.
+- **`EXIT_WITHOUT_SALE`** « Sortie sans vente », par pièce et par journée du magasin, gravité haute (`facts.level: high`) : la
+  pièce n'est ni vendue ni retirée (une pièce rendue compte), pas d'exercice. Montant en jeu : le prix de la variante (celui de
+  l'article à défaut). Les lectures suivantes du même jour s'ajoutent comme preuves (`facts.reads`) : le constat ne se rouvre pas.
+- **`EXIT_COVERED`** « Sortie rattrapée sur un article pas entièrement étiqueté », par variante et par semaine ISO : la sortie est
+  expliquée par une vente sans lecture (cas 1 quand c'est CETTE lecture qui l'a rattrapée, `PIECE_SOLD { by: catch_up, orderItemId,
+  readEventId }` ; ou cas 2, la preuve dit alors `saleWaiting`), et l'article a moins de pièces à puce non vendues que d'articles en
+  stock (lus dans le catalogue au moment du jugement, jamais écrits ; une pièce `missing` ou `returned` compte comme étiquetée). Gravité faible, moyenne à `minCount` dans la semaine
+  (`facts.level`). Un article entièrement étiqueté reste silencieux. Montant en jeu : le prix fois le nombre de sorties.
+- **Preuve** `exit_read` (une par lecture, renvoi `piece_event`) : numéro de la pièce, heure, antenne, dernière zone où la pièce
+  avait été vue avant et quand, et pour une sortie rattrapée l'heure de la vente et son poste. Aucune personne.
+- **Aperçu d'un réglage** (`POST /regles/apercu`) : pour ces deux règles, refus 409 `RULE_PREVIEW_UNAVAILABLE` avec sa phrase
+  (l'aperçu rejoue le journal de caisse, pas les antennes : il ne compte pas zéro, il dit qu'il ne peut pas chiffrer).
+- **Une lecture sautée** (en échec) est écrite au journal du module, `ENTRIES_SKIPPED { count: 0, exitReads, exitReadsCount }` :
+  `count` reste à zéro, la synthèse ne la compte pas parmi les opérations de caisse sautées. Une erreur passagère saute la lecture
+  pour toujours (pas de nouvel essai).
+- **Exercice** : deux constats fictifs de plus, `exit_without_sale` et `exit_covered`.
+- **Aucune route nouvelle.** La liste des règles en gagne deux (vague 4) ; les constats, leurs fiches, la vignette et le courriel
+  du jour les montrent comme les autres.
+- **Le résumé nomme l'article** (nom et variante lus dans le catalogue au moment du constat, gardés dans ses faits : `article`), et la
+  fiche n'a pas la phrase sur « les personnes en poste » (`onDutyNotice: null` pour un sujet `piece` ou `product_variant`).
+- **Limites connues** : une vente hors ligne synchronisée APRÈS le jugement d'une lecture (la caisse hors ligne garde ses ventes
+  jusqu'à 24 heures) n'empêche pas le constat ; le rattrapage relie quand même la pièce ensuite, et la fiche de la pièce le dit.
+  **Une location au comptoir et une commande web retirée en boutique** ne sont pas des ventes de la caisse (§ 16.18) : la pièce
+  qui sort ainsi ouvre une sortie sans vente. À traiter avec les locations et les retraits (un lot à part), ou à classer par le
+  gérant (« expliqué »). Une pièce à deux puces lues ensemble compte deux lectures pour un seul passage. Une décision redite à
+  l'identique ne remet pas « du nouveau » à zéro.
+
+**Tests** : `LossPreventionExitTest` (sortie sans vente : un constat, preuves, lectures du même jour ajoutées, rejeu, du nouveau
+depuis la décision, pièce retirée, heure douteuse, lecture en rayon, jamais trop tôt, règle éteinte, exercice ; sortie rattrapée :
+constat faible, compté, gravité moyenne au seuil, article entièrement étiqueté silencieux, règle éteinte, catalogue, aperçu,
+exercice, migration rejouée et son script).
+
+### 17.14 Lot L4-b2 : retraits en boutique et locations (contrat validé par le chef de projet le 16/11/2026 ; non codé)
+
+Demandé par le chef de projet après la relecture de L4-b : un retrait en boutique d'une commande web et une location sont des cas
+normaux, qui ne doivent pas ouvrir de « sortie sans vente » chez un vrai client. Part après L4-b, avec relecteur neuf et mutations.
+**À coder sous Opus, à faire relire par Fable** (§ 17.12).
+
+- **Retrait en boutique** : une commande web dont le transporteur est de genre `pickup` (`Carrier::KIND_PICKUP`), **payée** au sens
+  de la boutique (`OrderPresenter::paymentStatus` = `paid` : un paiement Stripe réussi ou un paiement « Complété ») et non annulée.
+  Une commande à payer au retrait est encaissée en caisse : elle est alors couverte par la vente au comptoir (§ 16.18). Chacun de
+  ses articles suivis devient une « vente à relier » (`loss_sale_unit`, origine `pickup`, heure : celle de la commande, aucun poste) :
+  il ne compte pas dans la règle par poste (`UNREAD_SOLD`).
+- **Fenêtre de retrait** : 14 jours par défaut (réglable de 1 à 60). Une pièce de la variante lue à la sortie pendant la fenêtre est
+  reliée à la commande (rattrapage, une pièce par article) ; tant qu'elle ne l'est pas, la commande en attente explique la sortie
+  (§ 17.13, cas 2) ; le constat faible s'ouvre si l'article n'est pas entièrement étiqueté.
+- **Commande web annulée** (état annulé, ou remboursée) : ses articles sont dits revenus, comme une vente annulée au comptoir ; la
+  pièce redevient vendable.
+- **Location** : une location non annulée « en cours » ce jour-là (de la veille de son début au lendemain de sa fin, en journées du
+  magasin) explique la sortie d'une pièce de sa variante, **au plus autant de sorties que d'unités louées** ce jour-là ; la sortie
+  suivante de la même variante ouvre le constat normal. Le retour se compte de même. Les locations sont lues seulement ; aucune pièce
+  n'y est reliée, la pièce reste en service.
+- **Limite, plus étroite** : on ne sait pas laquelle des pièces de la variante est louée ; une pièce volée de la même variante peut
+  prendre la place d'une pièce louée dans le compte.
+- **Aucune écriture** dans les commandes, leurs lignes ni les réservations. Une migration additive : l'origine sur `loss_sale_unit`
+  (avec sa garde, une fonction nouvelle) et le réglage de la fenêtre.

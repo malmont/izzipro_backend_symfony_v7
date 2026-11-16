@@ -59,6 +59,8 @@ class LossExerciseService
         'price_override' => ['rule' => LossRuleCatalog::PRICE_OVERRIDE, 'person' => false],
         'approval_refused' => ['rule' => LossRuleCatalog::APPROVAL_PATTERN, 'person' => false],
         'unread_sold' => ['rule' => LossRuleCatalog::UNREAD_SOLD, 'person' => false],
+        'exit_without_sale' => ['rule' => LossRuleCatalog::EXIT_WITHOUT_SALE, 'person' => false],
+        'exit_covered' => ['rule' => LossRuleCatalog::EXIT_COVERED, 'person' => false],
         'cash_shortage_series' => ['rule' => LossRuleCatalog::CASH_DISCREPANCY, 'person' => true],
         'refund_series' => ['rule' => LossRuleCatalog::REFUND_PATTERN, 'person' => true],
         'discount_series' => ['rule' => LossRuleCatalog::DISCOUNT_PATTERN, 'person' => true],
@@ -484,6 +486,25 @@ class LossExerciseService
                 $facts = $numbers + ['share' => intdiv($unread * 100, $tracked), 'minCount' => (int) $params['minCount'], 'minShare' => (int) $params['minShare'], 'below' => false];
                 $subject = 'cash_register';
                 $onDuty = [];
+                break;
+            case 'exit_without_sale':
+            case 'exit_covered':
+                // lot L4-b : une pièce fictive lue à la sortie ; aucune personne, ni dans le constat ni dans sa preuve
+                $covered = $code === 'exit_covered';
+                $count = $covered ? (int) $params['minCount'] : 1;
+                foreach (range(1, $count) as $i) {
+                    $readAt = $ago(($count + 1 - $i) * 30);
+                    $evidence[] = ['kind' => LossEvidence::EXIT_READ, 'at' => $readAt, 'snapshot' => array_filter(['pieceNumber' => 900 + $i, 'readAt' => $iso($readAt),
+                        'device' => 'SIM-LECTEUR-SORTIE', 'lastZone' => 'floor', 'lastZoneAt' => $iso($readAt->modify('-12 minutes')),
+                        'soldAt' => $covered ? $iso($readAt->modify('-4 minutes')) : null], static fn (mixed $v): bool => $v !== null)];
+                }
+                $facts = $covered
+                    ? ['variantId' => 0, 'practice' => true, 'week' => (new \DateTimeImmutable($clock->day($to)))->format('o-\WW'), 'count' => $count, 'minCount' => (int) $params['minCount'], 'level' => LossExitService::LEVEL_MEDIUM]
+                    : ['pieceId' => 0, 'pieceNumber' => 901, 'variantId' => 0, 'practice' => true, 'reads' => 1, 'level' => LossExitService::LEVEL_HIGH];
+                $amount = 4500 * $count;
+                $onDuty = [];
+                $subject = $covered ? 'product_variant' : 'piece';
+                $from = $evidence[0]['at'];
                 break;
             case 'cash_shortage_series':
                 $count = (int) $personParams['count'];

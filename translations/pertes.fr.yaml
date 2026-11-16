@@ -26,6 +26,7 @@ caveats:
     STAFF_NOTICE_REQUIRED: 'L''analyse ne démarre qu''après votre confirmation d''avoir informé vos salariés (Réglages).'
 rules:
     previewNotice: 'Aperçu sur les 30 derniers jours : rien n''est enregistré, aucun constat n''est créé ni fermé.'
+    previewUnavailable: 'Cette règle juge les lectures des antennes de la sortie : l''aperçu ne rejoue que le journal de caisse, il ne peut pas la chiffrer.'
     notice: 'Changer un seuil ne ferme ni ne supprime aucun constat : le nouveau réglage ne vaut que pour les analyses suivantes.'
     CASH_DISCREPANCY:
         label: Écart de caisse à la clôture
@@ -85,8 +86,19 @@ rules:
         params:
             minCount: Nombre d'articles vendus sans lecture dans la journée qui ouvre un constat
             minShare: Part minimale de ces articles parmi les articles suivis vendus ce jour-là sur le poste (en %)
+    EXIT_WITHOUT_SALE:
+        label: Sortie sans vente
+        description: 'Une pièce suivie, ni vendue ni retirée, a été lue par l''antenne de la sortie, et aucune vente ne l''explique une fois passée la fenêtre du rattrapage. Un constat par pièce et par jour ; les lectures suivantes du même jour s''y ajoutent. Par pièce, jamais par personne.'
+        params: {  }
+    EXIT_COVERED:
+        label: Sortie rattrapée sur un article pas entièrement étiqueté
+        description: 'Une pièce lue à la sortie a été reliée à une vente dont la puce n''avait pas été lue. Comme toutes les pièces de cet article ne portent pas de puce, on ne peut pas être sûr que ce soit la pièce vendue. Étiqueter tout l''article lève le doute.'
+        params:
+            minCount: Nombre de sorties rattrapées dans la semaine sur un même article à partir duquel la gravité passe de faible à moyenne
 summary:
     default: Constat relevé dans l'activité de la caisse.
+    exerciseArticle: article d'exercice
+    unknownArticle: article sans nom au catalogue
     CASH_DISCREPANCY:
         short: 'Clôture n° %number% : il manque %amount% dans la caisse (attendu %expected%, compté %counted%).'
         over: 'Clôture n° %number% : il y a %amount% de trop dans la caisse (attendu %expected%, compté %counted%).'
@@ -110,6 +122,11 @@ summary:
     UNREAD_SOLD:
         rule: 'Articles suivis vendus sans lecture ce jour-là à ce poste : %unread% sur %tracked% (%share% %).'
         below: 'Articles suivis vendus sans lecture ce jour-là à ce poste : %unread% sur %tracked% (%share% %), sous les seuils depuis la dernière clôture.'
+    EXIT_WITHOUT_SALE:
+        rule: 'Pièce n° %number% (%article%) lue à la sortie, sans vente qui l''explique. Lectures à la sortie ce jour-là : %reads%.'
+    EXIT_COVERED:
+        low: 'Sorties rattrapées cette semaine sur « %article% », pas entièrement étiqueté : %count%.'
+        medium: 'Sorties rattrapées cette semaine sur « %article% », pas entièrement étiqueté : %count% (seuil de %minCount% atteint).'
 evidence:
     noReason: Aucun motif saisi
     z_report:
@@ -130,9 +147,17 @@ evidence:
         title: Validation refusée
     sale_units:
         title: Articles suivis vendus sur le poste ce jour-là
+    exit_read:
+        title: Lecture à la sortie
     'yes': Oui
     'no': Non
     lines:
+        pieceNumber: Pièce n°
+        readAt: Lue à la sortie le
+        antenna: Antenne
+        lastZone: Vue avant dans la zone
+        lastZoneAt: Vue dans cette zone le
+        matchedSaleAt: Reliée à la vente du
         saleDay: Journée
         trackedSold: Articles suivis vendus
         unreadSold: Vendus sans lecture
@@ -280,6 +305,14 @@ exercise:
             label: Articles suivis vendus sans lecture
             description: 'Sur un poste de caisse, dans la journée, plusieurs articles suivis sont vendus sans que leur pièce soit lue.'
             learn: 'Lire les nombres du poste : le tapis était-il branché, les articles sont-ils posés dessus avant le paiement ? Le constat ne désigne personne.'
+        exit_without_sale:
+            label: Sortie sans vente
+            description: 'Une pièce suivie est lue par l''antenne de la sortie, et aucune vente ne l''explique.'
+            learn: 'Regarder où la pièce a été vue avant la sortie, et si une vente du même article a été faite sans que sa pièce soit lue. Le constat ne désigne personne.'
+        exit_covered:
+            label: Sortie rattrapée sur un article pas entièrement étiqueté
+            description: 'Plusieurs pièces lues à la sortie ont été reliées à des ventes dont la puce n''avait pas été lue, sur un article dont toutes les pièces ne portent pas de puce.'
+            learn: 'Étiqueter toutes les pièces de l''article lève le doute : une vente sans lecture ne peut alors être qu''une lecture manquée. Le constat ne désigne personne.'
         cash_shortage_series:
             label: Manques de caisse répétés par un même compte
             description: 'Plusieurs clôtures avec un manque sont fermées par le même compte sur une courte période.'

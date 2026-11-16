@@ -511,6 +511,9 @@ class LossBoxChannelService
         $serverNow = time();
 
         return $this->transaction(function () use ($facts, $boxId, $box, $repository, $serverNow): array {
+            // lot L4-b : un lot de faits tient en partage le verrou des lectures de la sortie ; le balayage de l'analyse le prend en exclusif
+            // le temps de sa lecture, et ne saute donc jamais une lecture validée après une autre de rang plus grand
+            $this->emProvider->getEntityManager()->getConnection()->fetchOne('SELECT pg_advisory_xact_lock_shared(?)', [LossExitService::READS_LOCK]);
             // le boîtier est relu et tenu : révoqué ou réinscrit depuis l'authentification, il n'écrit rien. Ses appareils et les puces
             // sont lus APRÈS ce verrou : un appareil retiré ou une puce associée entre-temps est vu tel qu'il est maintenant
             $current = self::usable($repository->box($boxId, false, true), (int) $box['generation']);

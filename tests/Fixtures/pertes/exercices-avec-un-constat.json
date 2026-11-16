@@ -128,6 +128,30 @@
                 "available": true
             },
             {
+                "code": "exit_without_sale",
+                "label": "Sortie sans vente",
+                "description": "Une pièce suivie est lue par l'antenne de la sortie, et aucune vente ne l'explique.",
+                "learn": "Regarder où la pièce a été vue avant la sortie, et si une vente du même article a été faite sans que sa pièce soit lue. Le constat ne désigne personne.",
+                "rule": {
+                    "code": "EXIT_WITHOUT_SALE",
+                    "label": "Sortie sans vente"
+                },
+                "personPattern": false,
+                "available": true
+            },
+            {
+                "code": "exit_covered",
+                "label": "Sortie rattrapée sur un article pas entièrement étiqueté",
+                "description": "Plusieurs pièces lues à la sortie ont été reliées à des ventes dont la puce n'avait pas été lue, sur un article dont toutes les pièces ne portent pas de puce.",
+                "learn": "Étiqueter toutes les pièces de l'article lève le doute : une vente sans lecture ne peut alors être qu'une lecture manquée. Le constat ne désigne personne.",
+                "rule": {
+                    "code": "EXIT_COVERED",
+                    "label": "Sortie rattrapée sur un article pas entièrement étiqueté"
+                },
+                "personPattern": false,
+                "available": true
+            },
+            {
                 "code": "cash_shortage_series",
                 "label": "Manques de caisse répétés par un même compte",
                 "description": "Plusieurs clôtures avec un manque sont fermées par le même compte sur une courte période.",
@@ -184,7 +208,7 @@
                 "newEvidenceSinceDecision": false,
                 "backfill": false,
                 "exercise": true,
-                "updatedAt": "2026-11-16T07:32:48+00:00"
+                "updatedAt": "2026-11-16T17:57:28+00:00"
             }
         ],
         "count": 1,

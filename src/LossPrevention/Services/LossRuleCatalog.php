@@ -18,6 +18,12 @@ final class LossRuleCatalog
     public const APPROVAL_PATTERN = 'APPROVAL_PATTERN';
     /** Lot L3-b2b : articles suivis vendus sans lecture, par poste et par jour (jamais par personne) */
     public const UNREAD_SOLD = 'UNREAD_SOLD';
+    /** Lot L4-b : une pièce lue à la sortie qu'aucune vente n'explique, par pièce et par jour (jamais par personne) */
+    public const EXIT_WITHOUT_SALE = 'EXIT_WITHOUT_SALE';
+    /** Lot L4-b : sorties rattrapées sur un article pas entièrement étiqueté, par article et par semaine (jamais par personne) */
+    public const EXIT_COVERED = 'EXIT_COVERED';
+    /** Les règles de la sortie : elles ne lisent pas le journal de caisse, mais les lectures des antennes (`LossExitService`) */
+    public const EXIT_RULES = [self::EXIT_WITHOUT_SALE, self::EXIT_COVERED];
 
     /** Types de paramètre : l'écran sait comment saisir et afficher */
     public const COUNT = 'count';
@@ -79,6 +85,18 @@ final class LossRuleCatalog
             'wave' => 3,
             // les deux seuils sont exigés : un nombre d'articles sans lecture, et leur part parmi les articles suivis vendus ce jour-là sur ce poste
             'params' => ['minCount' => ['type' => self::COUNT, 'default' => 5, 'min' => 1, 'max' => 500], 'minShare' => ['type' => self::PERCENT, 'default' => 20, 'min' => 1, 'max' => 100]],
+            'person' => null,
+        ],
+        // Vague 4 (lot L4-b) : les antennes de la sortie
+        self::EXIT_WITHOUT_SALE => [
+            'wave' => 4,
+            'params' => [], // un constat par pièce et par journée du magasin, gravité haute
+            'person' => null,
+        ],
+        self::EXIT_COVERED => [
+            'wave' => 4,
+            // nombre de sorties rattrapées dans la semaine sur un même article à partir duquel la gravité passe de faible à moyenne
+            'params' => ['minCount' => ['type' => self::COUNT, 'default' => 3, 'min' => 2, 'max' => 20]],
             'person' => null,
         ],
     ];
