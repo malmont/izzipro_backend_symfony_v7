@@ -39,6 +39,7 @@ class GestionNotificationsSendCommand extends Command
         private readonly ?\App\Services\Notification\NotificationWeeklyService $weekly = null, // lot NOTIF-2 : résumé de la semaine, le lundi à partir de 8 h du magasin
         private readonly ?\App\Gestion\Services\Report\GestionReportService $reports = null, // lot DOC-1 : retrait des rapports PDF passé leur délai de conservation
         private readonly ?\App\Import\CustomerImportService $customerImports = null, // lot IMP-2 : effacement des clients repris d'une ancienne boutique qui n'ont pas accepté à temps
+        private readonly ?\App\Import\OrderImportService $orderImports = null, // lot IMP-3 : fichiers de commandes abandonnés
         private readonly ?\App\Services\Agency\AgencySiteRequestService $agencySites = null, // lot AG-2 : rattrapage de la file des sites demandés par les agences
     ) {
         parent::__construct();
@@ -145,6 +146,11 @@ class GestionNotificationsSendCommand extends Command
     {
         try {
             $result = $this->customerImports?->purgeDue() ?? ['erased' => 0, 'kept' => 0, 'failed' => 0, 'abandoned' => 0];
+            // lot IMP-3 : un fichier de commandes déposé et jamais confirmé (ou un import resté en cours plus d'un jour) est supprimé
+            $orders = $this->orderImports?->purgeDue() ?? 0;
+            if ($orders > 0) {
+                $io->text(sprintf('%s : %d import(s) de commandes abandonné(s), fichier supprimé', $code, $orders));
+            }
             if (array_sum($result) > 0) {
                 $io->text(sprintf('%s : %d client(s) repris non acceptés effacé(s), %d gardé(s) (une commande les tient, ou le compte a été activé), %d en échec, %d import(s) de clients abandonné(s)', $code, $result['erased'], $result['kept'], $result['failed'], $result['abandoned']));
             }

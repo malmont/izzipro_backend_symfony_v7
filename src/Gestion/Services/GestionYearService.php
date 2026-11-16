@@ -78,18 +78,18 @@ class GestionYearService
                 + $this->block($salesLy, $costs, $lyStart->format('Y-m-d'), $lyStart->modify('last day of this month')->format('Y-m-d'));
         }
         $hasLy = array_sum(array_map(fn ($b) => abs($b['sales']) + $b['variableCosts']['total'] + abs($b['otherRevenue']['total']), $ly)) > 0;
-        // Lot IMP-3 (16/11/2026) : sans aucun chiffre du site sur l'exercice précédent, l'an dernier se lit dans l'archive des ventes
+        // Lot IMP-3 (16/11/2026) : sans aucune ligne de vente du site sur l'exercice précédent, l'an dernier se lit dans l'archive des ventes
         // d'avant la migration : les VENTES seulement, mois par mois (marge, frais et résultat y sont inconnus : vides). Jamais mêlé aux
         // chiffres du site, et marqué (`lastYear.source`). La PROJECTION de l'année ne s'appuie pas sur l'archive.
         $lyArchive = null;
-        if (!$hasLy && $this->archive !== null && ($archived = $this->archive->dailySales($lyJan, $lyDec)) !== []) {
+        if ($salesLy === [] && $this->archive !== null && ($archived = $this->archive->dailySales($lyJan, $lyDec)) !== []) { // aucune LIGNE de vente du site sur l'exercice précédent (même prédicat que les statistiques)
             $lyArchive = ['months' => [], 'cumulative' => []];
             $run = 0;
             foreach ($ly as $b) {
                 $sold = (int) array_sum(array_map(static fn (array $row): int => (int) $row['sales_amount'], GestionStatisticsService::slice($archived, $b['from'], $b['to'])));
                 $run += $sold;
                 $public = self::publicBlock($b);
-                $lyArchive['months'][] = array_replace(array_fill_keys(array_keys($public), null), ['month' => $b['month'], 'year' => $b['year'], 'from' => $b['from'], 'to' => $b['to'], 'elapsed' => true, 'sales' => $sold]);
+                $lyArchive['months'][] = array_replace(self::nulls($public), ['month' => $b['month'], 'year' => $b['year'], 'from' => $b['from'], 'to' => $b['to'], 'elapsed' => true, 'sales' => $sold]);
                 $lyArchive['cumulative'][] = ['month' => $b['month'], 'sales' => $run, 'grossMargin' => null, 'otherRevenue' => null, 'variableCosts' => null, 'fixedCosts' => null, 'result' => null];
             }
         }
@@ -150,9 +150,10 @@ class GestionYearService
             'months' => array_map(fn ($b) => self::publicBlock($b), $months),
             'cumulative' => self::cumulative($months),
             // `source` : `site` (les chiffres du site) ou `before_migration` (l'archive des ventes d'avant, lot IMP-3 : ventes seules)
-            'lastYear' => $hasLy ? ['year' => $year - 1, 'label' => GestionFiscalYearService::label($year - 1, $sm), 'from' => $lyJan, 'to' => $lyDec, 'source' => 'site', 'months' => array_map(fn ($b) => self::publicBlock($b), $ly), 'cumulative' => self::cumulative($ly)]
-                : ($lyArchive !== null ? ['year' => $year - 1, 'label' => GestionFiscalYearService::label($year - 1, $sm) . ' (' . $this->translator->trans('statistics.beforeMigration', [], 'gestion', $locale) . ')', 'from' => $lyJan, 'to' => $lyDec,
-                    'source' => \App\Import\OrderArchive::SOURCE] + $lyArchive : null),
+            'lastYear' => $lyArchive !== null
+                ? ['year' => $year - 1, 'label' => GestionFiscalYearService::label($year - 1, $sm) . ' (' . $this->translator->trans('statistics.beforeMigration', [], 'gestion', $locale) . ')', 'from' => $lyJan, 'to' => $lyDec,
+                    'source' => \App\Import\OrderArchive::SOURCE] + $lyArchive
+                : ($hasLy ? ['year' => $year - 1, 'label' => GestionFiscalYearService::label($year - 1, $sm), 'from' => $lyJan, 'to' => $lyDec, 'source' => 'site', 'months' => array_map(fn ($b) => self::publicBlock($b), $ly), 'cumulative' => self::cumulative($ly)] : null),
             'periods' => $periods,
             'totals' => self::publicBlock($totals) + ['from' => $jan, 'to' => $end],
             'profitability' => [
@@ -289,6 +290,12 @@ class GestionYearService
     }
 
     /** Champs rendus d'un bloc (sans les champs internes) */
+    /** La forme d'un bloc, toutes valeurs vides (les sous-tableaux gardent leurs clés) : ce que l'archive ne connaît pas */
+    private static function nulls(array $block): array
+    {
+        return array_map(static fn (mixed $value): mixed => is_array($value) ? self::nulls($value) : null, $block);
+    }
+
     private static function publicBlock(array $b): array
     {
         return array_diff_key($b, ['tauxMarque' => 1, 'remaining' => 1, 'method' => 1, 'months' => 1, 'unknownCostRevenue' => 1]) + (isset($b['unknownCostRevenue']) ? ['unknownCostRevenue' => $b['unknownCostRevenue']] : []);

@@ -26,6 +26,7 @@ final class ImportException extends \RuntimeException
         'VALIDATION_FAILED' => 'Choix de confirmation invalides.',
         // Lot IMP-2 : import des clients
         'IMPORT_KIND_UNKNOWN' => 'Nature d\'import inconnue.',
+        'IMPORT_NOT_AN_ORDER_FILE' => 'Ce fichier n\'est pas un export de commandes : les colonnes « Name », « Financial Status », « Total » et « Lineitem name » sont attendues.',
         'IMPORT_NOT_A_CUSTOMER_FILE' => 'Ce fichier n\'est pas un export de clients : les colonnes « Email » et « First Name » ou « Last Name » sont attendues.',
         'IMPORT_INVITATIONS_NOT_OPEN' => 'L\'envoi des invitations n\'est pas encore ouvert.',
         'IMPORT_NOTHING_TO_INVITE' => 'Aucun client de cet import n\'attend d\'invitation.',

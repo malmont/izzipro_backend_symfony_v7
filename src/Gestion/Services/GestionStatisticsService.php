@@ -67,12 +67,13 @@ class GestionStatisticsService
         $ml = self::metrics($dailyLy);
         $hasLy = $ml['orders'] > 0 || $ml['salesGross'] > 0 || $ml['rentals'] != 0 || $ml['subscriptions'] != 0;
         // Lot IMP-3 (16/11/2026) : un site qui vient d'une autre boutique n'a aucune vente « l'an dernier ». Si, et seulement si, le site
-        // n'a AUCUNE vraie vente sur cette plage, l'an dernier se lit dans l'archive des commandes d'avant la migration. Jamais mêlé aux
+        // n'a AUCUNE ligne de vente sur cette plage (même prédicat que `GestionYearService`), l'an dernier se lit dans l'archive des
+        // commandes d'avant la migration. Jamais mêlé aux
         // ventes du site ; la réponse le dit (`lastYear.source`, libellé, remarque). L'archive ne connaît ni le coût, ni les retours, ni
         // le canal : marge, taux de marge, taux de retour, locations et abonnements de l'an dernier restent vides, et un filtre de
         // canal ne lit pas l'archive.
         $lyArchive = false;
-        if (!$hasLy && $source === null && $this->archive !== null) {
+        if ($dailyLy === [] && $source === null && $this->archive !== null) { // aucune LIGNE de vente du site (vente, retour, location) sur la plage
             $archived = $this->archive->dailySales($ly[0], $ly[1]);
             if ($archived !== []) {
                 $dailyLy = $archived;

@@ -32,6 +32,7 @@ class SiteImportController extends AbstractController
     {
         try {
             $this->customers->purgeDue(); // les invités dont le délai est passé sont effacés à la lecture aussi (le passage horaire le fait pour tous les sites)
+            $this->orders->purgeDue(); // un fichier de commandes abandonné ne reste pas sur le serveur (lot IMP-3)
         } catch (\Throwable) {
             // la liste se lit quand même
         }
@@ -122,7 +123,7 @@ class SiteImportController extends AbstractController
     public function archiveOrders(Request $request): JsonResponse
     {
         $userId = $request->query->get('userId');
-        if (!is_string($userId) || preg_match('/^[1-9]\d{0,9}$/', $userId) !== 1) {
+        if (!is_string($userId) || preg_match('/^[1-9]\d{0,9}$/', $userId) !== 1 || (int) $userId > 2147483647) {
             return $this->json(['error' => 'VALIDATION_FAILED', 'message' => 'userId est attendu.', 'fields' => ['userId' => 'REQUIRED']], 422);
         }
 

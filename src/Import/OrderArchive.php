@@ -21,21 +21,12 @@ use Doctrine\DBAL\Connection;
 class OrderArchive
 {
     public const PER_PAGE = 20;
+    public const MAX_PAGE = 10000;
     /** Marque de l'origine d'une plage « an dernier » dans les réponses de la gestion */
     public const SOURCE = 'before_migration';
 
     public function __construct(private readonly TenantEntityManagerProvider $emProvider)
     {
-    }
-
-    /** L'archive du site courant porte-t-elle une commande payée sur ces jours du magasin (inclus, Y-m-d) ? Sans archive : faux */
-    public function hasSales(string $fromDay, string $toDay): bool
-    {
-        try {
-            return (bool) $this->conn()->fetchOne("SELECT 1 FROM import_order WHERE state = 'paid' AND day BETWEEN ? AND ? LIMIT 1", [$fromDay, $toDay]);
-        } catch (\Throwable) {
-            return false; // base pas encore migrée : pas d'archive
-        }
     }
 
     /**
@@ -113,7 +104,7 @@ class OrderArchive
     public function ordersOf(int $userId, int $page = 1): array
     {
         $conn = $this->conn();
-        $page = max(1, $page);
+        $page = max(1, min(self::MAX_PAGE, $page));
         $total = (int) $conn->fetchOne('SELECT COUNT(*) FROM import_order WHERE user_id = ?', [$userId]);
         $rows = $conn->fetchAllAssociative('SELECT id, ref, ordered_at, day, state, financial_status, total_cents, tax_cents, shipping_cents, refunded_cents, net_cents, currency, items_count FROM import_order WHERE user_id = ?'
             . ' ORDER BY ordered_at DESC, id DESC LIMIT ' . self::PER_PAGE . ' OFFSET ' . (($page - 1) * self::PER_PAGE), [$userId]);

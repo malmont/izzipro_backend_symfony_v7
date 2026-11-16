@@ -43,6 +43,8 @@ class OrderImportService
     public const STALE_MINUTES = 60;
     /** Lignes gardées par commande (au-delà, la commande est reprise avec ses premières lignes ; son montant vient de son total) */
     public const MAX_LINES = 200;
+    /** Un fichier de commandes déposé et jamais confirmé est abandonné après ce délai, et supprimé du serveur */
+    public const ABANDON_DAYS = CustomerImportService::ABANDON_DAYS;
     public const PAID = 'paid';
     public const REFUNDED = 'refunded';
     public const CANCELLED = 'cancelled';
@@ -135,7 +137,7 @@ class OrderImportService
         if ($job === null || $job['status'] !== ImportJobStore::RUNNING || $job['kind'] !== ImportJobStore::KIND_ORDERS) {
             return;
         }
-        $result = ['created' => 0, 'paid' => 0, 'linkedToAccount' => 0, 'lines' => 0, 'skipped' => 0, 'failed' => 0, 'failures' => []];
+        $result = ['created' => 0, 'paid' => 0, 'linkedToAccount' => 0, 'lines' => 0, 'skipped' => 0, 'tooOld' => 0, 'refused' => 0, 'failed' => 0, 'failures' => []];
         $path = $this->directory() . '/' . $job['stored_name'];
         try {
             $parsed = (new ShopifyOrderCsv())->read($path);
@@ -147,11 +149,19 @@ class OrderImportService
             // le plan est refait : le site a pu changer depuis l'analyse. La profondeur de l'historique se compte depuis le DÉPÔT
             foreach ($this->plan($parsed['orders'], (string) $job['source'], new \DateTimeImmutable((string) $job['created_at'], new \DateTimeZone('UTC'))) as $item) {
                 if ($item['status'] !== 'ok') {
-                    $item['status'] === 'already' ? ++$result['skipped'] : null;
+                    // ce que le plan refait écarte se compte : le site a pu changer depuis l'analyse (devise, commandes reprises)
+                    ++$result[['already' => 'skipped', 'too_old' => 'tooOld'][$item['status']] ?? 'refused'];
                     continue;
                 }
                 $conn->beginTransaction();
                 try {
+                    // l'état de l'import est relu SOUS VERROU, dans la transaction de la commande : une annulation attend la fin de
+                    // cette écriture, puis retire tout ; la commande suivante voit l'import annulé et rien n'est plus écrit
+                    if ($conn->fetchOne('SELECT status FROM import_job WHERE id = ? FOR SHARE', [$id]) !== ImportJobStore::RUNNING) {
+                        $conn->rollBack();
+
+                        return;
+                    }
                     $orderId = (int) $conn->fetchOne(
                         'INSERT INTO import_order (job_id, source, ref, ordered_at, day, financial_status, state, total_cents, tax_cents, shipping_cents, refunded_cents, net_cents, currency, user_id, items_count)'
                         . ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id',
@@ -187,11 +197,10 @@ class OrderImportService
                 $result['lines'] += count($item['lines']);
                 if (++$done % 50 === 0) {
                     $this->store->saveResult($id, $result); // l'avancement se lit pendant l'exécution
-                    if (($this->store->find($id)['status'] ?? null) !== ImportJobStore::RUNNING) {
-                        return; // annulé entre-temps : on n'écrit plus rien sous un import annulé (ce qu'il a écrit est retiré par l'annulation)
-                    }
                 }
             }
+            // un compte effacé pendant l'exécution (les comptes sont relevés une fois, au début) : ses commandes ne gardent pas son lien
+            $conn->executeStatement('UPDATE import_order o SET user_id = NULL WHERE o.job_id = ? AND o.user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM "user" u WHERE u.id = o.user_id AND u.deleted_at IS NULL)', [$id]);
             $this->store->move($id, ImportJobStore::RUNNING, ImportJobStore::DONE, ['result' => $result, 'finished_at' => true]);
             $this->journal($id, 'run', ['kind' => ImportJobStore::KIND_ORDERS, 'by' => $by, 'created' => $result['created'], 'paid' => $result['paid']], ['status']);
         } catch (\Throwable $e) {
@@ -221,23 +230,56 @@ class OrderImportService
         if (!$this->cancellable($job)) {
             throw new ImportException('IMPORT_NOT_CANCELLABLE', 409, ['status' => $job['status']]);
         }
-        // un import encore « en cours » quitte d'abord cet état : son worker, s'il vit encore, s'arrête au contrôle suivant
-        if ($job['status'] === ImportJobStore::RUNNING && !$this->store->move($id, ImportJobStore::RUNNING, ImportJobStore::FAILED, ['error' => 'IMPORT_INTERRUPTED', 'finished_at' => true])) {
-            throw new ImportException('IMPORT_NOT_CANCELLABLE', 409, ['status' => $this->job($id)['status']]);
+        // Sous le VERROU de l'import, en une transaction : un worker qui écrit encore une commande finit d'abord (il tient le verrou
+        // partagé le temps de son écriture), puis l'import quitte « en cours », ses commandes sont retirées et il est dit « annulé ».
+        // Le worker, à la commande suivante, voit l'import annulé et n'écrit plus rien : aucune commande ne reste sous un import annulé.
+        $conn = $this->conn();
+        $conn->beginTransaction();
+        try {
+            $status = $conn->fetchOne('SELECT status FROM import_job WHERE id = ? FOR UPDATE', [$id]);
+            if (!in_array($status, [ImportJobStore::RUNNING, ImportJobStore::DONE, ImportJobStore::FAILED], true)) {
+                throw new ImportException('IMPORT_NOT_CANCELLABLE', 409, ['status' => (string) $status]);
+            }
+            $removed = (int) $conn->executeStatement('DELETE FROM import_order WHERE job_id = ?', [$id]); // ses lignes partent avec elle
+            $set = ['cancelled_at' => true] + ($status === ImportJobStore::RUNNING ? ['error' => 'IMPORT_INTERRUPTED', 'finished_at' => true] : []);
+            if (!$this->store->move($id, (string) $status, ImportJobStore::CANCELLED, $set)) {
+                throw new ImportException('IMPORT_NOT_CANCELLABLE', 409, ['status' => (string) $status]);
+            }
+            $conn->commit();
+        } catch (\Throwable $e) {
+            if ($conn->isTransactionActive()) {
+                $conn->rollBack();
+            }
+            throw $e;
         }
         @unlink($this->directory() . '/' . $job['stored_name']); // un import interrompu a pu laisser son fichier
-        // les commandes sont retirées AVANT que l'import soit dit « annulé » : si le retrait s'interrompt, l'annulation se redemande
-        $removed = (int) $this->conn()->executeStatement('DELETE FROM import_order WHERE job_id = ?', [$id]); // ses lignes partent avec elle
-        $status = (string) $this->job($id)['status'];
-        if (!$this->store->move($id, $status, ImportJobStore::CANCELLED, ['cancelled_at' => true])) {
-            throw new ImportException('IMPORT_NOT_CANCELLABLE', 409, ['status' => $this->job($id)['status']]);
-        }
         $result = (array) ($this->store->find($id)['result'] ?? []);
         $result['cancel'] = ['removed' => $removed];
         $this->store->saveResult($id, $result);
         $this->journal($id, 'cancel', ['kind' => ImportJobStore::KIND_ORDERS, 'by' => $by, 'removed' => $removed], ['status']);
 
         return $this->view($this->job($id));
+    }
+
+    /**
+     * Passage horaire et lecture de la liste : un fichier de commandes déposé et jamais confirmé depuis `ABANDON_DAYS` jours est
+     * abandonné, et un import resté « en cours » plus d'un jour est tenu pour interrompu. Dans les deux cas le fichier, qui porte
+     * les données personnelles de tous les clients de l'ancienne boutique, est supprimé du serveur. Rend le nombre d'imports clos.
+     */
+    public function purgeDue(): int
+    {
+        $closed = 0;
+        $rows = $this->conn()->fetchAllAssociative("SELECT id, status, stored_name FROM import_job WHERE kind = 'orders' AND ((status IN ('uploaded', 'analysed') AND created_at < NOW() - INTERVAL '" . self::ABANDON_DAYS
+            . " days') OR (status = 'running' AND started_at < NOW() - INTERVAL '1 day'))");
+        foreach ($rows as $row) {
+            $running = $row['status'] === ImportJobStore::RUNNING;
+            if ($this->store->move((int) $row['id'], (string) $row['status'], $running ? ImportJobStore::FAILED : ImportJobStore::CANCELLED, $running ? ['error' => 'IMPORT_INTERRUPTED', 'finished_at' => true] : ['cancelled_at' => true])) {
+                @unlink($this->directory() . '/' . $row['stored_name']);
+                ++$closed;
+            }
+        }
+
+        return $closed;
     }
 
     public function show(int $id): array
@@ -279,7 +321,8 @@ class OrderImportService
         $oldest = $uploadedAt->modify('-' . self::MONTHS . ' months');
         $siteCurrency = strtoupper($this->currency->code(true));
         $conn = $this->conn();
-        $refs = array_values(array_unique(array_filter(array_map(static fn (array $o): string => mb_substr((string) $o['ref'], 0, 80), $orders), static fn (string $r): bool => $r !== '')));
+        $timezone = $this->clock->timezone(); // lu une fois : le jour du magasin de chaque commande
+        $refs = array_values(array_unique(array_filter(array_map(static fn (array $o): string => self::text((string) $o['ref'], 80), $orders), static fn (string $r): bool => $r !== '')));
         $known = [];
         foreach (array_chunk($refs, 500) as $chunk) {
             foreach ($conn->fetchFirstColumn('SELECT ref FROM import_order WHERE source = ? AND ref IN (' . implode(',', array_fill(0, count($chunk), '?')) . ')', [$source, ...$chunk]) as $ref) {
@@ -291,7 +334,7 @@ class OrderImportService
         $seen = [];
         $plan = [];
         foreach ($orders as $order) {
-            $ref = mb_substr((string) $order['ref'], 0, 80);
+            $ref = self::text((string) $order['ref'], 80);
             $item = ['line' => (int) $order['line'], 'ref' => $ref, 'status' => 'refused', 'code' => null];
             $refuse = static function (string $code) use (&$item, &$plan): void {
                 $item['code'] = $code;
@@ -312,7 +355,8 @@ class OrderImportService
                 $plan[] = $item;
                 continue;
             }
-            $at = self::date((string) ($order['paidAt'] !== '' ? $order['paidAt'] : $order['createdAt']));
+            // la date du paiement, à défaut (absente ou illisible) celle de la création
+            $at = self::date((string) $order['paidAt']) ?? self::date((string) $order['createdAt']);
             if ($at === null) {
                 $refuse('DATE_INVALID');
                 continue;
@@ -331,16 +375,16 @@ class OrderImportService
                 $refuse($currency === '' ? 'CURRENCY_MISSING' : 'CURRENCY_MISMATCH');
                 continue;
             }
+            // le total est exigé ; taxes, port et remboursé absents valent zéro ; un montant ÉCRIT mais illisible refuse la commande
+            // (le tenir pour nul fausserait le montant de la série)
             $amounts = [];
             foreach (['total', 'taxes', 'shipping', 'refunded'] as $field) {
-                $amounts[$field] = self::cents((string) $order[$field]);
+                $raw = trim((string) $order[$field]);
+                $amounts[$field] = $raw === '' && $field !== 'total' ? 0 : self::cents($raw);
             }
-            if ($amounts['total'] === null) {
+            if (in_array(null, $amounts, true)) {
                 $refuse('AMOUNT_INVALID');
                 continue;
-            }
-            foreach (['taxes', 'shipping', 'refunded'] as $field) {
-                $amounts[$field] ??= 0; // absent ou illisible : tenu pour nul, le total fait foi
             }
             $financial = mb_strtolower(trim((string) $order['financial']));
             $state = match (true) {
@@ -349,20 +393,23 @@ class OrderImportService
                 in_array($financial, ['paid', 'partially_refunded'], true) => self::PAID,
                 default => self::UNPAID,
             };
-            // le montant qui entre dans la série : hors taxes et hors port, moins ce qui a été remboursé. `total − taxes − port` vaut le
-            // hors taxes que les prix d'origine aient contenu les taxes ou non
-            $net = max(0, $amounts['total'] - $amounts['taxes'] - $amounts['shipping'] - $amounts['refunded']);
+            // le montant qui entre dans la série : hors taxes et hors port (`total − taxes − port`, que les prix d'origine aient contenu
+            // les taxes ou non), réduit de la PART remboursée de la commande. Le montant remboursé du fichier est toutes taxes
+            // comprises : il ne se retire pas tel quel d'un montant hors taxes, il se rapporte au total.
+            $beforeTax = max(0, $amounts['total'] - $amounts['taxes'] - $amounts['shipping']);
+            $kept = $amounts['total'] > 0 ? max(0.0, 1 - $amounts['refunded'] / $amounts['total']) : 0.0;
+            $net = (int) round($beforeTax * $kept);
             $lines = [];
             $items = 0;
             foreach (array_slice($order['lines'], 0, self::MAX_LINES) as $line) {
                 $quantity = is_numeric($line['quantity']) ? (int) max(0, min(100000, (float) $line['quantity'])) : 1;
                 $sku = mb_strtolower(trim((string) $line['sku']));
-                $lines[] = ['name' => mb_substr((string) $line['name'], 0, 255), 'quantity' => $quantity, 'price' => self::cents((string) $line['price']) ?? 0,
+                $lines[] = ['name' => self::text((string) $line['name'], 255), 'quantity' => $quantity, 'price' => self::cents((string) $line['price']) ?? 0,
                     'productId' => $sku !== '' ? ($products[$sku] ?? null) : null];
                 $items += $quantity;
             }
             $email = mb_strtolower(trim((string) $order['email']));
-            $plan[] = ['status' => 'ok', 'orderedAt' => $at->format('Y-m-d H:i:s'), 'day' => $this->clock->day($at), 'financial' => mb_substr($financial, 0, 30), 'state' => $state,
+            $plan[] = ['status' => 'ok', 'orderedAt' => $at->format('Y-m-d H:i:s'), 'day' => $at->setTimezone($timezone)->format('Y-m-d'), 'financial' => self::text($financial, 30), 'state' => $state,
                 'total' => $amounts['total'], 'taxes' => $amounts['taxes'], 'shipping' => $amounts['shipping'], 'refunded' => $amounts['refunded'], 'net' => $net, 'currency' => $currency,
                 'userId' => $email !== '' ? ($accounts[$email] ?? null) : null, 'items' => $items, 'lines' => $lines] + $item;
         }
@@ -419,6 +466,9 @@ class OrderImportService
         if ($text === '' || preg_match('/^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?( ?(Z|[+-]\d{2}:?\d{2}|UTC))?$/', $text) !== 1) {
             return null;
         }
+        if (!checkdate((int) substr($text, 5, 2), (int) substr($text, 8, 2), (int) substr($text, 0, 4))) {
+            return null; // « 2025-02-30 » : PHP la décalerait au 2 mars
+        }
         try {
             return (new \DateTimeImmutable($text, new \DateTimeZone('UTC')))->setTimezone(new \DateTimeZone('UTC'));
         } catch (\Throwable) {
@@ -426,23 +476,25 @@ class OrderImportService
         }
     }
 
-    /** Un montant du fichier (« 1234.50 », « 1 234,50 ») en cents ; null s'il est vide, négatif ou illisible */
+    /** Un texte libre du fichier (numéro, état, nom d'un article) : sans caractère de contrôle, borné */
+    private static function text(string $text, int $max): string
+    {
+        return mb_substr(trim((string) preg_replace('/[\x00-\x1F\x7F]/u', '', $text)), 0, $max);
+    }
+
+    /**
+     * Un montant du fichier en cents : « 1234.50 » (la forme de l'export), « 1234,50 », « 1 234,50 ». Null s'il est vide, négatif ou
+     * AMBIGU : un séparateur de milliers (« 1,234.50 », « 1.234 ») n'est jamais deviné, il serait lu mille fois trop haut ou trop bas.
+     * Neuf chiffres au plus avant la virgule.
+     */
     public static function cents(string $text): ?int
     {
-        $text = str_replace(["\u{00A0}", "\u{202F}", ' ', "'"], '', trim($text));
-        if ($text === '') {
-            return null;
-        }
-        if (preg_match('/^\d+(,\d{1,2})$/', $text) === 1) {
-            $text = str_replace(',', '.', $text); // « 12,50 »
-        } else {
-            $text = str_replace(',', '', $text); // « 1,234.50 »
-        }
-        if (preg_match('/^\d{1,12}(\.\d{1,4})?$/', $text) !== 1) {
+        $text = str_replace(["\u{00A0}", "\u{202F}", ' '], '', trim($text));
+        if (preg_match('/^\d{1,9}([.,]\d{1,2})?$/', $text) !== 1) {
             return null;
         }
 
-        return (int) round((float) $text * 100);
+        return (int) round((float) str_replace(',', '.', $text) * 100);
     }
 
     /**

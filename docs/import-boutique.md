@@ -298,14 +298,20 @@ Contrat validé par le propriétaire le 15/11/2026.
 | État de paiement du fichier | État retenu | Dans la série |
 |---|---|---|
 | `paid` | `paid` | oui |
-| `partially_refunded` | `paid` | oui, montant réduit du remboursé |
+| `partially_refunded` | `paid` | oui, montant réduit de la part remboursée |
 | `refunded` | `refunded` | non |
 | date d'annulation remplie, ou `voided` | `cancelled` | non |
 | `pending`, `authorized`, `partially_paid`, autre | `unpaid` | non |
 
-Le montant qui entre dans la série (`net_cents`) est **hors taxes et hors port** : total − taxes − port − remboursé. Ce calcul vaut le
-hors taxes que les prix de l'ancienne boutique aient contenu les taxes ou non. La date est celle du paiement, à défaut celle de la
-création ; le jour (`day`) est celui du magasin, posé à l'import.
+Le montant qui entre dans la série (`net_cents`) est **hors taxes et hors port**, réduit de la **part remboursée** de la commande :
+(total − taxes − port) × (1 − remboursé ÷ total). Le montant remboursé du fichier est toutes taxes comprises : il se rapporte au
+total, il ne se retire pas tel quel d'un montant hors taxes. `total − taxes − port` vaut le hors taxes que les prix de l'ancienne
+boutique aient contenu les taxes ou non (à la taxe du port près, quand le port était taxé et les prix taxes comprises). La date est
+celle du paiement, à défaut (absente ou illisible) celle de la création ; le jour (`day`) est celui du magasin, posé à l'import.
+
+Un montant s'écrit `1234.50` (la forme de l'export), `1234,50` ou `1 234,50`. Un séparateur de milliers (`1,234.50`, `1.234`) n'est
+jamais deviné : la commande est refusée (`AMOUNT_INVALID`) plutôt que lue mille fois trop haut ou trop bas. Le total est exigé ;
+taxes, port et remboursé absents valent zéro.
 
 ### 10.3 Routes (`ROLE_ADMIN`)
 
@@ -322,6 +328,13 @@ Erreurs du dépôt : `IMPORT_NOT_AN_ORDER_FILE`, `IMPORT_TOO_MANY_ROWS` (20 000 
 `IMPORT_NOT_UTF8`, et celles du circuit commun.
 
 L'annulation est possible à tout moment : elle retire de l'archive les commandes de CET import (rien d'autre ne dépend d'elles).
+Elle se fait sous le verrou de l'import : un worker qui écrit encore une commande finit d'abord, puis tout est retiré, et il n'écrit
+plus rien ensuite (il relit l'état de l'import, sous verrou, dans la transaction de chaque commande). Un import encore « en cours » ne
+s'annule qu'une heure après sa confirmation.
+
+Un fichier déposé et jamais confirmé est abandonné après 7 jours, et un import resté « en cours » plus d'un jour est tenu pour
+interrompu : dans les deux cas le fichier est supprimé du serveur (`OrderImportService::purgeDue`, à la lecture de la liste et au
+passage horaire). Ce fichier porte les données personnelles de tous les clients de l'ancienne boutique.
 
 Dans l'espace d'administration du serveur : fiche d'un client → action « Commandes d'avant la migration »
 (`/admin/clients/{id}/commandes-avant`).
@@ -330,8 +343,9 @@ Dans l'espace d'administration du serveur : fiche d'un client → action « Comm
 
 Un site qui vient d'une autre boutique n'a aucune vente « l'an dernier ». La comparaison lit alors l'archive, sous une règle stricte :
 
-- **seulement si le site n'a AUCUNE vraie vente sur la plage de l'an dernier**. Dès qu'il en a une, l'archive n'est plus lue : les
-  ventes d'avant ne sont jamais mêlées aux ventes du site, ni additionnées à elles ;
+- **seulement si le site n'a AUCUNE ligne de vente sur la plage de l'an dernier** (vente, retour, location : le même prédicat pour
+  les statistiques et pour l'année). Dès qu'il en a une, même une seule vente d'essai, l'archive n'est plus lue pour toute plage qui
+  la contient : les ventes d'avant ne sont jamais mêlées aux ventes du site, ni additionnées à elles ;
 - la réponse le dit : `lastYear.source` vaut `before_migration` (sinon `site`), le libellé de l'an dernier finit par « (avant la
   migration) », et la remarque `LAST_YEAR_BEFORE_MIGRATION` est jointe ;
 - l'archive ne connaît ni le coût d'achat, ni les retours, ni le canal : pour l'an dernier, la marge, le taux de marge, le taux de
@@ -341,7 +355,8 @@ Un site qui vient d'une autre boutique n'a aucune vente « l'an dernier ». La c
 |---|---|
 | `GET /api/gestion/statistiques` | `lastYear.source` (toujours présent), indicateurs `revenue`, `orders`, `averageBasket` et points du graphique lus de l'archive |
 | `GET /api/gestion/statistiques/annee` | `lastYear.source` ; mois de l'an dernier réduits aux ventes, le reste vide ; la **projection de l'année ne s'appuie pas sur l'archive** |
-| analyse `year.overview` (console, bilan PDF d'année) | la comparaison à l'an dernier était toujours vide (le cumul était mal lu) : corrigé |
+| analyses `sales.overview` et `year.overview` (console IA, bilans PDF) | un an dernier venu de l'archive ne leur est **pas transmis** : elles ne savent pas encore le marquer « avant la migration » |
+| analyse `year.overview` | la comparaison à l'an dernier était toujours vide (le cumul était mal lu) : corrigé. Elle n'est fournie que pour un exercice **terminé** : en cours d'année, dix mois ne se comparent pas à douze |
 
 ### 10.5 Base
 
@@ -350,6 +365,20 @@ unique par source, contrainte sur l'état), `import_order_line` (supprimée avec
 
 ### 10.6 Limites connues
 
+- La console IA et les bilans PDF ne montrent pas l'an dernier quand il vient de l'archive (§ 10.4) : le marquage y reste à faire.
+- `lastYear.source` vaut pour les indicateurs et le graphique ; les sections demandées par `sections=` (paiements, taxes, port,
+  stock) restent celles du site.
+- Les jours que l'archive ne couvre pas (export arrêté avant la bascule, coupe des 24 mois) valent 0 dans les mois de l'an dernier,
+  pas « vide » : la série `avant-migration` donne le premier et le dernier jour couverts (`firstDay`, `lastDay`).
+- Si le site a des frais saisis sur l'exercice précédent mais aucune vente, l'année montre les ventes de l'archive et ne montre pas
+  ces frais dans les mois de l'an dernier.
+- Le rejeu ne met rien à jour : une commande déjà en archive n'est pas relue (remboursée depuis, compte ou article créé depuis).
+  Pour la relire, annuler l'import qui l'a reprise puis déposer de nouveau le fichier. Importer les clients et le catalogue AVANT les
+  commandes, pour qu'elles s'y rattachent.
+- Deux anciennes boutiques qui portent les mêmes numéros de commande : la seconde est dite « déjà en archive ».
+- Le nom d'un article est gardé tel que le fichier l'écrit : un article personnalisé peut porter un prénom.
+- 20 000 lignes d'articles par fichier : au-delà (`IMPORT_TOO_MANY_ROWS`), découper l'export par période ; le rejeu ne double rien.
+- La page 2 de la page d'administration s'affiche sans le menu d'EasyAdmin.
 - Les autres comparaisons de la gestion (conseils, simulateur, préparation d'une période, rentabilité d'une campagne) ne lisent pas
   l'archive : elles restent sans « an dernier » pour un site qui vient d'ailleurs.
 - La valeur du stock de l'an dernier reste vide : l'archive ne connaît pas le stock.
