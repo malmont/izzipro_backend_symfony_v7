@@ -474,7 +474,7 @@ class StorefrontTest extends WebTestCase
             'api_token_refresh', 'api_webhook_revenuecat', 'app_home', 'app_login', 'app_logout', 'app_memoiresvivantes_luluwebhook_handleluluwebhook', 'app_password_reset_confirm',
             'app_password_reset_confirm_form', 'app_password_reset_request', 'app_setup_status', 'app_stripe_connect', 'app_stripe_disconnect', 'app_stripe_success', 'app_tenant_setup',
             'bucket_simulator', 'health_check', 'legacy_assets_uploads', 'legacy_uploads', 'pertes_boitier_faits', 'pertes_boitier_inscription', 'pertes_boitier_jeton',
-            'pertes_boitier_reglages', 'pertes_boitier_signe_de_vie', 'pos_pin_login', 'pos_users', 'secure_media_delivery', 'stripe_webhook',
+            'pertes_boitier_jumelage', 'pertes_boitier_jumelage_etat', 'pertes_boitier_reglages', 'pertes_boitier_signe_de_vie', 'pos_pin_login', 'pos_users', 'secure_media_delivery', 'stripe_webhook',
         ], $classes['kept'], 'routes gardées ouvertes : à justifier dans StorefrontGateSubscriber::KEPT et dans la fiche du lot');
         // les routes de compte que les applications indépendantes partagent (et le reçu numérique de la caisse) : en toutes lettres aussi
         $this->assertSame(['api_account_delete', 'api_account_membership_leave', 'api_account_memberships', 'api_app_join', 'api_profile_get', 'api_profile_update', 'api_resend_verification',
