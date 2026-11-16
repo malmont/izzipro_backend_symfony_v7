@@ -126,8 +126,10 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $this->assertSame($this->register, array_column($this->json($this->box('GET', '/reglages', null, $token))['devices'], null, 'id')[$mat]['cashRegisterId']);
 
         // La puce quitte le tapis : la présence se ferme ; partir deux fois ne casse rien
-        $this->assertSame(['accepted', null], $this->fact($token, 'COUNTER_LEFT', "TAPIS-$this->s", $nfc));
-        $this->assertSame(['accepted', null], $this->fact($token, 'COUNTER_LEFT', "TAPIS-$this->s", $nfc));
+        // (le même départ redit, à la même heure : un second départ daté plus tard serait un autre départ, retenu à part)
+        $leftAt = gmdate('Y-m-d\TH:i:s\Z');
+        $this->assertSame(['accepted', null], $this->fact($token, 'COUNTER_LEFT', "TAPIS-$this->s", $nfc, ['at' => $leftAt]));
+        $this->assertSame(['accepted', null], $this->fact($token, 'COUNTER_LEFT', "TAPIS-$this->s", $nfc, ['at' => $leftAt]));
         $this->assertSame([[[$mat, false]], 0], [$presence(), $sheet()[$mat]['onMat']]);
         // Un fait à l'heure douteuse est gardé, mais ne pose rien sur le tapis
         $this->assertSame(['accepted', null], $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc, ['at' => gmdate('Y-m-d\TH:i:s\Z', time() + 600), 'key' => "futur-$this->s-0001"]));
