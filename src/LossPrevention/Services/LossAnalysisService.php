@@ -61,6 +61,7 @@ class LossAnalysisService
         private readonly LossFindingWriter $writer,
         private readonly LoggerInterface $logger,
         #[AutowireIterator('loss_prevention.rule')] iterable $rules,
+        private readonly ?LossSaleLinkService $sales = null,
     ) {
         $list = [...$rules];
         usort($list, fn (LossRuleInterface $a, LossRuleInterface $b) => strcmp($a::class, $b::class));
@@ -116,13 +117,29 @@ class LossAnalysisService
             }
             $ctx = new LossAnalysisContext($conn, $this->site->clock(), $this->site->currency(), $this->site->discrepancyThreshold(), $config, $this->writer, $backfillUntil, $floor);
             $this->writer->flushCounters();
-            $rows = $byType === [] ? [] : $conn->fetchAllAssociative(
+            $this->sales?->begin();
+            // Les ventes et les retours sont toujours lus (lot L3-b2a) : la vente se relie aux pièces quelles que soient les règles allumées
+            $types = array_values(array_unique(array_merge(array_keys($byType), $this->sales !== null ? LossSaleLinkService::TYPES : [])));
+            $rows = $types === [] ? [] : $conn->fetchAllAssociative(
                 'SELECT ' . LossAuditEntry::COLUMNS . ' FROM pos_audit_log WHERE sequence > :cursor AND sequence <= :max AND type IN (:types) ORDER BY sequence LIMIT ' . max(1, $limit),
-                ['cursor' => $cursor, 'max' => $max, 'types' => array_keys($byType)], ['types' => ArrayParameterType::STRING]);
+                ['cursor' => $cursor, 'max' => $max, 'types' => $types], ['types' => ArrayParameterType::STRING]);
             $skipped = 0;
             $skippedSequences = [];
             foreach ($rows as $row) {
                 $entry = LossAuditEntry::fromRow($row);
+                if ($this->sales !== null && in_array($entry['type'], LossSaleLinkService::TYPES, true)) {
+                    // la vente reliée aux pièces : sous son propre point de reprise, comme une règle (une entrée en échec est sautée et dite)
+                    $conn->executeStatement('SAVEPOINT loss_entry');
+                    try {
+                        $this->sales->handle($entry);
+                        $conn->executeStatement('RELEASE SAVEPOINT loss_entry');
+                    } catch (\Throwable $e) {
+                        $conn->executeStatement('ROLLBACK TO SAVEPOINT loss_entry');
+                        $skippedSequences[$entry['sequence']] = true;
+                        $skipped = count($skippedSequences);
+                        $this->logger->error(sprintf('Prévention des pertes : vente reliée aux pièces en échec sur l\'entrée %d du journal de caisse, entrée sautée : %s', $entry['sequence'], $e->getMessage()), ['exception' => $e]);
+                    }
+                }
                 foreach ($byType[$entry['type']] ?? [] as $rule) {
                     $conn->executeStatement('SAVEPOINT loss_entry');
                     $counters = $this->writer->counters();
@@ -135,6 +152,20 @@ class LossAnalysisService
                         $skippedSequences[$entry['sequence']] = true;
                         $skipped = count($skippedSequences); // une opération sautée par deux règles compte une fois
                         $this->logger->error(sprintf('Prévention des pertes : règle %s en échec sur l\'entrée %d du journal de caisse, entrée sautée : %s', $rule::class, $entry['sequence'], $e->getMessage()), ['exception' => $e]);
+                    }
+                }
+            }
+            if ($this->sales !== null) {
+                // rattrapage (tapis, sortie) puis conservation des présences : à chaque passage, chacun sous son point de reprise (un
+                // échec de l'un n'arrête ni l'autre ni l'analyse ; il est écrit au journal du serveur)
+                foreach (['rattrapage' => fn (): int => $this->sales->catchUp(time()), 'conservation des présences' => fn (): int => $this->sales->purge(time())] as $what => $step) {
+                    $conn->executeStatement('SAVEPOINT loss_sweep');
+                    try {
+                        $step();
+                        $conn->executeStatement('RELEASE SAVEPOINT loss_sweep');
+                    } catch (\Throwable $e) {
+                        $conn->executeStatement('ROLLBACK TO SAVEPOINT loss_sweep');
+                        $this->logger->error(sprintf('Prévention des pertes : %s en échec, passage poursuivi : %s', $what, $e->getMessage()), ['exception' => $e]);
                     }
                 }
             }

@@ -20,8 +20,11 @@ class LossPiece
 {
     public const CREATED = 'created';
     public const RETIRED = 'retired';
-    /** États de la pièce ; en L2 seuls `created` et `retired` existent, les autres viennent avec les faits des appareils (L3, L4) */
-    public const STATUSES = [self::CREATED, 'in_stockroom', 'on_floor', 'at_counter', 'sold', 'returned', 'missing', self::RETIRED];
+    /** Reliée à une vente par l'analyse (lot L3-b2a) ; revenue (retour, vente annulée) : de nouveau vendable */
+    public const SOLD = 'sold';
+    public const RETURNED = 'returned';
+    /** États de la pièce ; `sold` et `returned` viennent avec la vente reliée aux pièces (L3-b2a), les autres avec les lots suivants (L4) */
+    public const STATUSES = [self::CREATED, 'in_stockroom', 'on_floor', 'at_counter', self::SOLD, self::RETURNED, 'missing', self::RETIRED];
     /** Motifs du retrait d'une pièce */
     public const RETIRE_REASONS = ['damaged', 'lost', 'sold', 'error'];
 

@@ -7,7 +7,7 @@
     "headers": {},
     "body": {
         "status": "done",
-        "read": 8,
+        "read": 12,
         "skipped": 0,
         "pending": false,
         "opened": 6,

@@ -103,13 +103,40 @@ class LossSettingsService
             'video' => ['allowed' => false, 'enabled' => false, 'clipDays' => 30, 'clipDaysMax' => 30, 'availableFrom' => 'L3'],
             'retention' => ['findingsMonths' => (int) $row['retention_findings_months'], 'confirmedMonths' => (int) $row['retention_confirmed_months'], 'purge' => 'none',
                 'bounds' => self::MONTHS, 'defaults' => ['findingsMonths' => LossSetting::DEFAULT_FINDINGS_MONTHS, 'confirmedMonths' => LossSetting::DEFAULT_CONFIRMED_MONTHS]],
+            // lot L3-b2a : fenêtres de la vente reliée aux pièces, conservation des présences sur le tapis
+            'pieces' => $this->piecesView($row, $locale),
             'never' => array_map(fn (string $code) => ['code' => $code, 'label' => $this->texts->t('never.' . $code, $locale)], LossCountryPolicy::NEVER),
             'legalNotice' => $this->texts->t('settings.legalNotice', $locale),
         ];
     }
 
+    /** Réglages de la vente reliée aux pièces : `clé de l'API => [colonne, valeur par défaut, bornes, secondes par unité]` */
+    private const PIECES = [
+        'counterWindowMinutes' => ['counter_window_seconds', LossSaleLinkService::COUNTER_WINDOW, LossSaleLinkService::COUNTER_BOUNDS, 60],
+        'catchUpMinutes' => ['catch_up_seconds', LossSaleLinkService::CATCH_UP_WINDOW, LossSaleLinkService::CATCH_UP_BOUNDS, 60],
+        'presenceRetentionDays' => ['presence_retention_days', LossSaleLinkService::PRESENCE_DAYS, LossSaleLinkService::PRESENCE_BOUNDS, 1],
+    ];
+
     /**
-     * `{ staffNoticeConfirmed?: bool, personPatterns?: { enabled: bool }, retention?: { findingsMonths?, confirmedMonths? } }` : seules les clés
+     * @param array<string, mixed> $row
+     *
+     * @return array<string, mixed> les trois réglages dans l'unité de l'écran (minutes, jours), leurs bornes, leurs valeurs par défaut, et la règle de conservation en clair
+     */
+    private function piecesView(array $row, string $locale): array
+    {
+        $out = ['bounds' => [], 'defaults' => []];
+        foreach (self::PIECES as $key => [$column, $default, $bounds, $unit]) {
+            $out[$key] = intdiv((int) ($row[$column] ?? $default), $unit);
+            $out['bounds'][$key] = ['min' => intdiv($bounds['min'], $unit), 'max' => intdiv($bounds['max'], $unit)];
+            $out['defaults'][$key] = intdiv($default, $unit);
+        }
+
+        return $out + ['note' => $this->texts->t('settings.pieces.retention', $locale, ['days' => $out['presenceRetentionDays']])];
+    }
+
+    /**
+     * `{ staffNoticeConfirmed?: bool, personPatterns?: { enabled: bool }, retention?: { findingsMonths?, confirmedMonths? },
+     * pieces?: { counterWindowMinutes?, catchUpMinutes?, presenceRetentionDays? } }` (une valeur nulle remet la valeur par défaut) : seules les clés
      * envoyées changent.
      *
      * @param array<string, mixed> $body
@@ -164,6 +191,21 @@ class LossSettingsService
                     $fields[$column] = $value;
                 }
             }
+        }
+        foreach (self::PIECES as $key => [$column, , $bounds, $unit]) {
+            if (is_array($body['pieces'] ?? null) && array_key_exists($key, $body['pieces'])) {
+                $value = $body['pieces'][$key];
+                if ($value !== null && !is_int($value)) {
+                    $errors["pieces.$key"] = 'MUST_BE_INTEGER';
+                } elseif ($value !== null && ($value * $unit < $bounds['min'] || $value * $unit > $bounds['max'])) {
+                    $errors["pieces.$key"] = 'PARAM_OUT_OF_RANGE';
+                } else {
+                    $fields[$column] = $value !== null ? $value * $unit : null;
+                }
+            }
+        }
+        if (array_key_exists('pieces', $body) && !is_array($body['pieces'])) {
+            $errors['pieces'] = 'MUST_BE_OBJECT';
         }
         if ($errors !== []) {
             throw new GestionValidationException($errors);

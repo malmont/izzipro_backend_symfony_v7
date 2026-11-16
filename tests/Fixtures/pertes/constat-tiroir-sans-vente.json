@@ -16,7 +16,7 @@
         "status": "open",
         "statusLabel": "Nouveau",
         "summary": "4 ouvertures du tiroir sans vente pendant une même session (toléré : 3).",
-        "storeDay": "2026-11-14",
+        "storeDay": "2026-11-16",
         "cashRegister": {
             "id": 1,
             "name": "Caisse principale"
@@ -27,9 +27,9 @@
         "newEvidenceSinceDecision": false,
         "backfill": false,
         "exercise": false,
-        "updatedAt": "2026-11-15T00:35:05+00:00",
-        "from": "2026-11-15T00:35:03+00:00",
-        "to": "2026-11-15T00:35:03+00:00",
+        "updatedAt": "2026-11-16T05:30:16+00:00",
+        "from": "2026-11-16T05:30:14+00:00",
+        "to": "2026-11-16T05:30:15+00:00",
         "sessionId": 1,
         "subject": {
             "type": "session",
@@ -49,8 +49,8 @@
             {
                 "id": 1,
                 "kind": "drawer",
-                "at": "2026-11-15T00:35:03+00:00",
-                "atLabel": "14/11/2026 19 h 35",
+                "at": "2026-11-16T05:30:14+00:00",
+                "atLabel": "16/11/2026 00 h 30",
                 "title": "Ouverture du tiroir sans vente",
                 "lines": [
                     {
@@ -66,7 +66,7 @@
                     "type": "pos_audit",
                     "id": 3,
                     "sequence": 3,
-                    "hash": "c7663825268545afaba752cefd2ea8e04e4d5c1a32651ce9cf159f31bb840860"
+                    "hash": "65ed23b8ebe23a2f69d8a8436b3999609acf17de3eed680b9560be1ac2b41927"
                 },
                 "screen": null,
                 "fingerprint": "deb5708c494deb11c63e4e961817f7e1b9ab2122fa993464afcf26c767e18020"
@@ -74,8 +74,8 @@
             {
                 "id": 2,
                 "kind": "drawer",
-                "at": "2026-11-15T00:35:03+00:00",
-                "atLabel": "14/11/2026 19 h 35",
+                "at": "2026-11-16T05:30:15+00:00",
+                "atLabel": "16/11/2026 00 h 30",
                 "title": "Ouverture du tiroir sans vente",
                 "lines": [
                     {
@@ -91,7 +91,7 @@
                     "type": "pos_audit",
                     "id": 4,
                     "sequence": 4,
-                    "hash": "731a2cdf48e947aed8c1a0f4c1e1fb61913e25083045b7807a4375e76bb81618"
+                    "hash": "c8df07804caa809c31b42c113e3acc9e8418bdb17e9607154ed6060dbda30b33"
                 },
                 "screen": null,
                 "fingerprint": "deb5708c494deb11c63e4e961817f7e1b9ab2122fa993464afcf26c767e18020"
@@ -99,8 +99,8 @@
             {
                 "id": 3,
                 "kind": "drawer",
-                "at": "2026-11-15T00:35:03+00:00",
-                "atLabel": "14/11/2026 19 h 35",
+                "at": "2026-11-16T05:30:15+00:00",
+                "atLabel": "16/11/2026 00 h 30",
                 "title": "Ouverture du tiroir sans vente",
                 "lines": [
                     {
@@ -116,7 +116,7 @@
                     "type": "pos_audit",
                     "id": 5,
                     "sequence": 5,
-                    "hash": "e6cb9c1976c7d64292e1f677cc76bafbead0189a1687ec93aa710852ec24ac77"
+                    "hash": "11708123c27085c5964d10a2a791b3e12d62d43d82b2cd85388c1ca75ca3bb06"
                 },
                 "screen": null,
                 "fingerprint": "deb5708c494deb11c63e4e961817f7e1b9ab2122fa993464afcf26c767e18020"
@@ -124,8 +124,8 @@
             {
                 "id": 4,
                 "kind": "drawer",
-                "at": "2026-11-15T00:35:03+00:00",
-                "atLabel": "14/11/2026 19 h 35",
+                "at": "2026-11-16T05:30:15+00:00",
+                "atLabel": "16/11/2026 00 h 30",
                 "title": "Ouverture du tiroir sans vente",
                 "lines": [
                     {
@@ -141,7 +141,7 @@
                     "type": "pos_audit",
                     "id": 6,
                     "sequence": 6,
-                    "hash": "687e05e2269af32ee9366f4bd9cab0fe13a13a7cee36d396c87d0c1400f05a4b"
+                    "hash": "e0d8369061b006546bac70c360191b39c437f7ac45867750b8977501dd5d108b"
                 },
                 "screen": null,
                 "fingerprint": "deb5708c494deb11c63e4e961817f7e1b9ab2122fa993464afcf26c767e18020"
@@ -151,8 +151,8 @@
         "opinion": null,
         "decision": null,
         "history": [],
-        "lastEvidenceAt": "2026-11-15T00:35:05+00:00",
-        "createdAt": "2026-11-15T00:35:05+00:00",
+        "lastEvidenceAt": "2026-11-16T05:30:16+00:00",
+        "createdAt": "2026-11-16T05:30:16+00:00",
         "screen": "pertes.constat"
     }
 }

@@ -81,6 +81,12 @@ class LossBoxUseCase
         return $this->health->board($locale, $exercise);
     }
 
+    /** @return array<string, mixed> les postes de caisse du site : leur tapis, et si une tablette leur est rattachée */
+    public function registers(): array
+    {
+        return $this->health->registers();
+    }
+
     /** @param array<string, mixed> $body @return array{thresholdSeconds: int, default: int, min: int, max: int} */
     public function healthThreshold(array $body, int $userId): array
     {

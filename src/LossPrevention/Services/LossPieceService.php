@@ -91,7 +91,25 @@ class LossPieceService
                 'data' => json_decode((string) $row['data'], true) ?: (object) []];
         }
 
-        return $this->sheets([$piece], $locale)[0] + ['events' => $events];
+        return $this->sheets([$piece], $locale)[0] + ['sale' => $this->saleOf($id, $locale), 'events' => $events];
+    }
+
+    /**
+     * La vente à laquelle une pièce est reliée (lot L3-b2a) : le ticket, le poste, l'heure, et par quoi (lue sur le tapis, ou
+     * rattrapée à la sortie). Aucun nom de personne. Null si la pièce n'est pas vendue.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function saleOf(int $pieceId, string $locale): ?array
+    {
+        $sale = $this->emProvider->getEntityManager()->getRepository(\App\LossPrevention\Entity\LossSaleUnit::class)->salesOfPieces([$pieceId])[$pieceId] ?? null;
+        if ($sale === null) {
+            return null;
+        }
+
+        return ['orderId' => (int) $sale['order_id'], 'reference' => $sale['reference'], 'cashRegisterId' => $sale['cash_register_id'] !== null ? (int) $sale['cash_register_id'] : null,
+            'soldAt' => self::iso($sale['sold_at']), 'by' => (string) $sale['matched_by'], 'byLabel' => $this->texts->t('pieces.sale.' . $sale['matched_by'], $locale),
+            'linkedAt' => self::iso($sale['matched_at'])];
     }
 
     /**

@@ -21,7 +21,7 @@
         "sample": [
             {
                 "summary": "Clôture n° 1 : il manque 12,00 $ dans la caisse (attendu 132,75 $, compté 120,75 $).",
-                "storeDay": "2026-11-14",
+                "storeDay": "2026-11-16",
                 "amountAtStake": 1200,
                 "personPattern": false
             }

@@ -108,6 +108,7 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
         $this->admin_('admin-sante-tapis-en-attente', 'GET', '/sante');
         $this->admin_('admin-tapis-relie-a-un-poste', 'PUT', "/boitiers/$id/appareils/$mat", ['cashRegisterId' => $this->register]);
         $this->admin_('admin-refus-appareil-validation', 'PUT', "/boitiers/$id/appareils/$mat", ['zone' => 'counter'], 422);
+        $this->admin_('admin-postes', 'GET', '/postes'); // lot L3-b2a : les postes de caisse, leur tapis, leur tablette
         $this->loginPos(['ROLE_USER_POS']);
         $this->openSession();
         $basket = ['cashRegisterId' => $this->register, 'items' => [['productVariantId' => $variant, 'quantity' => 2]]];

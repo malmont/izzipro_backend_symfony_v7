@@ -188,6 +188,8 @@ approval:
         APPROVER_NOT_ALLOWED: Ce compte n'a pas le droit de valider
         APPROVAL_RATE_LIMITED: Trop d'essais
 settings:
+    pieces:
+        retention: 'Les présences sur le tapis de comptoir fermées depuis plus de %days% jours sont effacées automatiquement. Les faits (lectures, ventes, retours) sont conservés.'
     legalNotice: 'Ces réglages suivent le pays et la région de votre boutique. Faites-les relire par un avocat avant de vous en servir pour une décision concernant un salarié.'
     personPatterns:
         allowed: 'Les règles qui comptent les actes d''un même compte dans le temps sont permises dans votre région. Vous pouvez les éteindre.'
@@ -270,6 +272,9 @@ exercise:
             learn: 'Voir ce que le plafond du caissier laisse passer sans validation, et décider s''il faut le changer.'
 # Pièces et puces (lot L2-a, 15/11/2026, docs/prevention-pertes.md § 13)
 pieces:
+    sale:
+        counter: Lue sur le tapis du comptoir
+        catch_up: Rattrapée à la sortie
     status:
         created: En service
         in_stockroom: En réserve
@@ -306,6 +311,8 @@ pieces:
         SPOT_CHECK: Lue par le lecteur à main du boîtier
         COUNTER_SEEN: Posée sur le tapis de comptoir
         COUNTER_LEFT: Reprise du tapis de comptoir
+        PIECE_SOLD: Vendue
+        PIECE_RETURNED: Revenue en magasin
         ZONE_SEEN: Lue dans une zone
     error:
         VARIANT_NOT_FOUND: 'Variante introuvable.'
@@ -557,3 +564,4 @@ health:
             never_read: 'Le tapis n''a encore lu aucune puce. Posez dessus une pièce qui porte une puce.'
             never_read_exercise: 'Le tapis simulé n''a encore rien lu. Jouez le scénario « Pièce posée sur le tapis ».'
             no_register: 'Ce tapis n''est relié à aucun poste de caisse. Choisissez son poste dans la fiche du boîtier.'
+            no_terminal: 'Aucune tablette de caisse n''est rattachée au poste « %register% » : le contrôle avant paiement est arrêté pour les caissiers de ce poste. Rattachez une tablette à ce poste (clés d''activation de la caisse).'

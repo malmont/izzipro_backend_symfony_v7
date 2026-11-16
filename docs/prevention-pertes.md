@@ -1505,3 +1505,146 @@ sur aucune base avant sa version finale (il ne met pas à niveau une version ant
 seul sans preuve ; jeton refusé sur un autre site ; réponse perdue ; détacher, clé remise à zéro, module retiré, site introuvable ;
 boîtier orphelin rejumelé ; plafond de boîtiers ; expiration ; code jamais libéré ; chemin encodé ; les six plafonds). Exemples : `tests/Fixtures/pertes/boitier/canal-jumelage-*.json`,
 `admin-boitier-jumele*.json`, `admin-refus-jumelage.json`.
+
+### 16.18 Lot L3-b2a codé : la vente reliée aux pièces (16/11/2026)
+
+L3-b2 est coupé en deux (validé par le chef de projet) : **L3-b2a**, ci-dessous, et **L3-b2b** (la règle « articles suivis vendus
+sans lecture », par poste et par jour, et les scénarios d'exercice). Code : `Services/LossSaleLinkService` (une étape de l'analyse
+à curseur, § 3), `Repository/LossSaleUnitRepository`, `Entity/LossSaleUnit`. Migration `Version20270116100000` (script
+`scripts/migrate_all_v2_pertes_l3b2a.sh`) : table `loss_sale_unit`, sa garde, trois colonnes de réglage ; **aucune fonction d'un
+lot précédent n'est remplacée, aucune table d'un lot précédent ne reçoit d'index** (un ancien test de migration énumère tous
+ceux de `loss_piece_event`).
+
+**Ce que le lot ne fait pas** : aucun appel du module pendant une vente, aucune vente bloquée, **aucune écriture dans une table de
+la caisse** (il lit `pos_audit_log`, `"order"`, `order_items`) ; rien pour un article non suivi ni pour un article libre ; aucun
+constat (le constat « sortie sans vente » est L4) ; aucun nom de personne lu ou écrit.
+
+**Quand** : à chaque passage de l'analyse (toutes les 15 minutes, et à la demande : `POST /api/gestion/pertes/analyse`), donc
+jamais sans le droit du module, ni avant la notice aux salariés là où elle est exigée (§ 3). Les entrées `SALE` et `REFUND` du
+journal de caisse sont maintenant toujours lues, quelles que soient les règles allumées.
+
+**Une vente** (`SALE`) :
+- pour chaque **article suivi** vendu, une ligne `loss_sale_unit` : la commande, la ligne de la vente, son rang dans la ligne (une
+  ligne de 3 articles donne 3 lignes), la variante, le poste, l'heure, l'entrée du journal ;
+- **suivi à l'heure de la vente** : la variante avait alors une vraie pièce qui portait une puce, ni l'une ni l'autre retirée. Un
+  article dont la première puce est posée après la vente n'est pas compté pour elle ;
+- **l'heure est l'heure RÉELLE de la vente** : celle de la commande (`"order".order_date`, en UTC pour une vente en ligne) ou, pour
+  une **vente hors ligne** synchronisée plus tard, l'instant que la caisse a écrit dans le journal (`data.offline.soldAt`, avec
+  son décalage horaire, converti en UTC : la colonne de la commande garde alors l'heure du magasin). La vente est reliée à ce qui
+  était posé quand elle a eu lieu, pas à l'heure de la synchronisation ;
+- **une ligne de location n'est pas une vente** (elle porte une réservation) : elle n'est pas lue, sa pièce ne devient pas `sold` ;
+- **suivi veut dire la même chose qu'à la caisse** : un article dont TOUTES les pièces à puce sont déjà vendues n'est plus suivi ;
+  le réassort vendu avant d'être étiqueté n'est pas compté ;
+- une pièce de cette variante **lue sur le tapis de CE poste** (posée dessus, ou partie depuis moins que la fenêtre du tapis avant
+  la vente) lui est reliée : fait `PIECE_SOLD { by: counter, orderId, orderItemId, cashRegisterId, soldAt }`, pièce au statut
+  `sold`. La pièce posée depuis le plus longtemps d'abord ; **une pièce par article, un article par pièce** (deux index uniques).
+  Le tapis d'un autre poste ne compte pas, ni une puce retirée ;
+- **une pièce rendue par un RETOUR d'articles, restée sur le tapis depuis avant son retour, n'est pas prise pour la vente
+  suivante** (échange du même article : c'est la pièce neuve qui sort) : il faut la reposer. Le geste attendu au comptoir : poser
+  la pièce rendue AVANT de valider le retour. **Une vente annulée puis ressaisie, elle, retrouve sa pièce** : une annulation n'a
+  pas fait sortir la pièce (`returned_by` dit par quoi un article est revenu : `return` ou `cancellation`) ;
+- la puce lue portait déjà cette pièce à l'heure de la vente (une puce qui traînait sur le tapis, posée sur une pièce après la
+  vente, ne relie rien) ;
+- un article suivi vendu sans pièce lue reste « à rattraper ».
+
+**Le rattrapage par le tapis**, à chaque passage : les faits du boîtier peuvent arriver APRÈS la vente (boîtier revenu d'une
+coupure, vente hors ligne). Pour un article écrit depuis moins de deux heures et encore sans pièce, le lien par le tapis de son
+poste est retenté, avec la même fenêtre autour de l'heure de la vente (500 articles au plus par passage, comptés à part de ceux
+qui attendent la sortie).
+
+**Le rattrapage à la sortie**, à chaque passage : une vraie pièce ni vendue ni retirée, lue à la **sortie** (`ZONE_SEEN`, zone
+`exit`, heure sûre) entre 2 minutes avant et la fenêtre du rattrapage après une vente de SA variante encore sans pièce, lui est
+reliée : `PIECE_SOLD { by: catch_up, readEventId, … }`. **La vente la plus ancienne d'abord, la première lecture d'abord, une
+pièce par article.** Ne comptent pas : une lecture par une puce retirée, et **une lecture d'AVANT le dernier retour d'articles de
+la pièce** (la sortie du client qui l'a rapportée depuis ne vaut pas pour une autre vente). Une seule requête par passage, pour
+toutes les variantes : elle ne rend que les lectures qui tombent dans la fenêtre d'au moins un article en attente (5 000 au plus),
+si bien qu'un portant près de la porte, relu sans cesse, n'empêche pas les ventes du jour d'être rattrapées. Dans les deux sens : que la vente soit lue après la lecture, ou la lecture après la vente. Tous les postes
+du site sont regardés (la sortie est commune) ; rien ne sort du site (la base est la sienne, la table n'a pas de colonne de site).
+Le rattrapage regarde les ventes des 48 dernières heures.
+
+**Un retour** (`REFUND`, `kind: return`, avec ses lignes) : pour chaque ligne, l'article de la ligne d'origine revient
+(`returned_at`), dans cet ordre : celui dont la pièce est **relue sur le tapis du poste** du retour, puis un article sans pièce,
+puis le premier de la ligne. Sa pièce redevient vendable : `PIECE_RETURNED { by: return, readOnCounter, orderItemId, sequence }`,
+statut `returned`. Si la pièce n'a pas été relue, le fait le dit (`readOnCounter: false`) : quand un client a acheté deux fois le
+même article et n'en rend qu'un, la pièce dite revenue peut ne pas être celle qui est revenue. **Une vente annulée**
+(`kind: cancellation`) : tous ses articles reviennent (`by: cancellation`). Un retour de l'ancien chemin (sans ligne d'origine)
+n'écrit rien. Un échange est un retour puis une vente : les deux sont lus.
+
+**Ce que la base garantit elle-même** : un article vendu n'a qu'une ligne ; une pièce n'est reliée qu'à un article non revenu à
+la fois ; la pièce est une vraie pièce de la variante vendue ; la pièce d'un article ne change pas et ne se retire pas ; un article
+revenu ne change plus ; ce qui décrit la vente ne change pas ; aucune ligne ne se supprime.
+
+**Réglages** (`GET | PUT /api/gestion/pertes/reglages`, `ROLE_ADMIN`) : la réponse gagne `pieces { counterWindowMinutes,
+catchUpMinutes, presenceRetentionDays, bounds, defaults, note }` ; `PUT { pieces: { … } }` change les valeurs envoyées (`null`
+remet la valeur par défaut ; 422 `MUST_BE_INTEGER`, `PARAM_OUT_OF_RANGE`, `pieces: MUST_BE_OBJECT`).
+
+| Réglage | Défaut | Bornes | Effet |
+|---|---|---|---|
+| `counterWindowMinutes` | 10 | 1 à 60 | fenêtre du tapis, pour relier une vente ET pour la route de la caisse « articles non lus » (§ 16.15) |
+| `catchUpMinutes` | 30 | 5 à 120 | fenêtre du rattrapage à la sortie, après la vente |
+| `presenceRetentionDays` | 90 | 30 à 730 | conservation des présences fermées |
+
+**Conservation** (accord du propriétaire, 16/11/2026) : les présences sur le tapis **fermées depuis plus de 90 jours sont effacées
+automatiquement**, à chaque passage de l'analyse (5 000 au plus par passage). Une présence ouverte n'est jamais effacée ; **les
+faits (lectures, ventes, retours) restent**. `note` le dit à l'administrateur, avec la durée en vigueur.
+
+**Fiche d'une pièce** (`GET /api/gestion/pertes/pieces/{id}`) : `sale { orderId, reference, cashRegisterId, soldAt, by, byLabel,
+linkedAt } | null` (la vente en cours de la pièce : « Lue sur le tapis du comptoir » ou « Rattrapée à la sortie ») ; les faits
+`PIECE_SOLD` (« Vendue ») et `PIECE_RETURNED` (« Revenue en magasin ») sont dans `events`.
+
+**Postes de caisse, pour l'administrateur** (demande du chef de projet, 16/11/2026) : `GET /api/gestion/pertes/postes`
+(`ROLE_ADMIN`, garde du module ; sous la gestion, donc **hors de la garde de la tablette** : la route de la caisse
+`GET /api/cash-registers` répond `TERMINAL_REQUIRED` à l'administration du web sur un site qui exige le terminal, et
+l'administrateur ne pouvait relier aucun tapis). Réponse : `{ items [{ id, name, active, matDeviceId, terminalBound }],
+terminalNeeded }` : tous les postes du site, actifs ou non ; `matDeviceId`, le tapis en service relié à ce poste ou `null` ;
+`terminalBound`, une tablette de caisse en service est rattachée à ce poste ; `terminalNeeded`, le site a plusieurs postes actifs
+(c'est alors qu'un caissier a besoin d'une tablette rattachée, et que le tableau de santé avertit). Une lecture ; pas de jumeau
+d'exercice (le tapis simulé n'a pas de poste).
+
+**Tableau de santé** (validé par le chef de projet) : sur un site à plusieurs postes, un tapis dont le poste n'a **aucune tablette
+de caisse rattachée** (clé d'activation `pos` en service) est `pending`, avec le conseil « Aucune tablette de caisse n'est
+rattachée au poste « X » : le contrôle avant paiement est arrêté pour les caissiers de ce poste… ». C'est la règle de L3-b1
+(`TERMINAL_NOT_BOUND`) rendue visible.
+
+**À savoir** :
+- les faits `PIECE_SOLD` sont datés de l'heure de la VENTE, `PIECE_RETURNED` de celle du retour ;
+- « suivi à l'heure de la vente » est jugé avec les liens connus quand la vente est lue : une pièce rattrapée plus tard pour une
+  vente antérieure ne change pas ce qui a été écrit entre-temps ;
+- l'heure d'un retour est celle du serveur, celle d'une pose ou d'une lecture est celle du boîtier (60 secondes d'écart tolérées) :
+  une pièce reposée dans la minute qui suit son retour, par un boîtier en retard, peut être écartée ; il suffit de la reposer ;
+- si l'analyse reste arrêtée plus longtemps que la conservation des présences, son premier passage efface les présences anciennes
+  avant que les suivants lisent les ventes de la même époque (elles restent rattrapables à la sortie) ;
+- les pièces `sold` comptent encore parmi les pièces « actives » des totaux de l'écran des pièces, et son filtre ne connaît que
+  `created` et `retired` : à reprendre avec l'écran (L3-b2b) ; le message de la commande d'analyse parle de « règle en échec »
+  pour toute entrée sautée, y compris par cette étape ;
+- une vente de caisse annulée par un chemin qui n'écrit pas de `REFUND` au journal de caisse, ou un retour lui-même annulé, ne
+  sont pas vus : la pièce garde son statut (à corriger à la main en retirant la pièce, ou à traiter quand un tel chemin existera) ;
+- le rattrapage relit à chaque passage les lectures de sortie des pièces non vendues des variantes en attente : sans index sur
+  ces lectures aujourd'hui (aucun portique réel avant L4). **À poser en L4** : un index partiel sur les `ZONE_SEEN` par heure,
+  avec la mise à jour du test de migration de L2-a qui énumère les index de `loss_piece_event` ;
+- chaque vente suivie sans pièce « couvre » pendant la fenêtre du rattrapage la sortie d'une pièce non vendue de sa variante, tous
+  postes confondus : avec un étiquetage partiel, un vol d'un article courant peut être absorbé (voulu par le § 16.6, à garder en
+  tête pour le constat « sortie sans vente » de L4) ;
+- **la migration passe AVANT le code** : sans la table, chaque vente serait sautée pour toujours par l'analyse ;
+- le lien entre un tapis et son poste est celui d'AUJOURD'HUI : une vente hors ligne synchronisée après que le tapis a changé de
+  poste, ou a été retiré, n'est pas reliée par le tapis (elle reste rattrapable à la sortie) ;
+- une vente lue avec retard (hors ligne) peut trouver sa pièce déjà reliée à une vente plus récente du même article ;
+- une ligne de plus de 200 articles identiques n'en relie que 200 ;
+- une entrée du journal qui fait échouer cette étape est sautée et comptée comme pour une règle (`ENTRIES_SKIPPED`, § 3) ; un
+  échec du rattrapage est écrit au journal du serveur et n'arrête pas le passage.
+
+**Tests** : `LossPreventionSaleLinkTest` (vente reliée par le tapis ; rien d'écrit dans la caisse ; rattrapage dans les deux sens,
+la plus ancienne d'abord ; heure réelle ; fenêtres ; suivi à l'heure de la vente ; tapis d'un autre poste ; retour avec et sans
+pièce relue, annulation, pièce revendue ; gardes de la base et rejeu de la migration ; réglages ; conservation ; avertissement du
+tableau de santé ; analyse bloquée ; vente hors ligne avec décalage horaire et sans poste ; article dont toutes les pièces sont
+vendues ; pièce rendue restée sur le tapis, puis reposée ; lecture de sortie d'avant le retour).
+
+**Relecture indépendante** (16/11/2026) : rien n'est écrit dans la caisse, le rattrapage ne sort pas du site, une pièce n'est
+vendue qu'une fois et un article n'a qu'une pièce (par la base et par le code) ; corrigés : l'heure d'une vente hors ligne prise
+pour de l'UTC ; une lecture d'avant le retour d'une pièce réutilisée (la pièce rendue redevenait « vendue ») ; le lien par le
+tapis tenté une seule fois ; « suivi » plus large qu'à la caisse ; une requête par article au rattrapage ; une erreur de type sur
+une vente sans poste ; une pièce louée dite vendue pour toujours. **Seconde passe** : tout est corrigé, les trois points tiennent ;
+deux corrections avaient ouvert un défaut chacune, corrigés à leur tour : une vente annulée puis ressaisie ne retrouvait plus sa
+pièce (la règle « après le dernier retour » ne vaut plus que pour un retour d'articles), et la limite des lectures de sortie,
+prise sur les plus anciennes, pouvait priver les ventes du jour de leur rattrapage.
+

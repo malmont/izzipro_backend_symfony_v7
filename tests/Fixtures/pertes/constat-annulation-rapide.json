@@ -16,7 +16,7 @@
         "status": "open",
         "statusLabel": "Nouveau",
         "summary": "Vente de 32,77 $ avec une part en espèces, annulée 0 min après l'encaissement.",
-        "storeDay": "2026-11-14",
+        "storeDay": "2026-11-16",
         "cashRegister": {
             "id": 1,
             "name": "Caisse principale"
@@ -27,9 +27,9 @@
         "newEvidenceSinceDecision": false,
         "backfill": false,
         "exercise": false,
-        "updatedAt": "2026-11-15T00:35:05+00:00",
-        "from": "2026-11-15T00:35:03+00:00",
-        "to": "2026-11-15T00:35:04+00:00",
+        "updatedAt": "2026-11-16T05:30:16+00:00",
+        "from": "2026-11-16T05:30:15+00:00",
+        "to": "2026-11-16T05:30:15+00:00",
         "sessionId": 1,
         "subject": {
             "type": "order",
@@ -55,17 +55,17 @@
             {
                 "id": 5,
                 "kind": "order",
-                "at": "2026-11-15T00:35:03+00:00",
-                "atLabel": "14/11/2026 19 h 35",
+                "at": "2026-11-16T05:30:15+00:00",
+                "atLabel": "16/11/2026 00 h 30",
                 "title": "Vente",
                 "lines": [
                     {
                         "label": "Vente",
-                        "value": "REF#6af8fe37cfebe"
+                        "value": "REF#6afa94e74e3e5"
                     },
                     {
                         "label": "Encaissée le",
-                        "value": "14/11/2026 19 h 35"
+                        "value": "16/11/2026 00 h 30"
                     },
                     {
                         "label": "Total de la vente",
@@ -87,26 +87,26 @@
                     "hash": null
                 },
                 "screen": null,
-                "fingerprint": "410ce7b0c1b7f013ed3511ca4108a54c6aa23ebbf25826a6b8538ae3b2dbe720"
+                "fingerprint": "48fa09c66678dd1a7d870ee1a4f009d3df202c9cc109c484507857fc514bdb65"
             },
             {
                 "id": 6,
                 "kind": "credit_note",
-                "at": "2026-11-15T00:35:04+00:00",
-                "atLabel": "14/11/2026 19 h 35",
+                "at": "2026-11-16T05:30:15+00:00",
+                "atLabel": "16/11/2026 00 h 30",
                 "title": "Annulation de la vente",
                 "lines": [
                     {
                         "label": "Vente",
-                        "value": "REF#6af8fe37cfebe"
+                        "value": "REF#6afa94e74e3e5"
                     },
                     {
                         "label": "Encaissée le",
-                        "value": "14/11/2026 19 h 35"
+                        "value": "16/11/2026 00 h 30"
                     },
                     {
                         "label": "Annulée le",
-                        "value": "14/11/2026 19 h 35"
+                        "value": "16/11/2026 00 h 30"
                     },
                     {
                         "label": "Avoir n°",
@@ -129,18 +129,18 @@
                     "type": "pos_audit",
                     "id": 8,
                     "sequence": 8,
-                    "hash": "4c0fbee6540dd15e534c97196daf50dd99dd2b06959d4eeab3dccd8672e882b9"
+                    "hash": "96f5479596ad706d7724829879534dd9086e13ba33d2fcaf0c14ddd4c88dfc41"
                 },
                 "screen": null,
-                "fingerprint": "f15f0376b5584fa1d9dbd7f4e6de445b05934680e3412a6d68404ec1a6a1857d"
+                "fingerprint": "d81ddca3a94357e9ea8833c363d185bb427f6a59c14269b3a25e872bd1d03e7c"
             }
         ],
         "evidenceIntact": true,
         "opinion": null,
         "decision": null,
         "history": [],
-        "lastEvidenceAt": "2026-11-15T00:35:05+00:00",
-        "createdAt": "2026-11-15T00:35:05+00:00",
+        "lastEvidenceAt": "2026-11-16T05:30:16+00:00",
+        "createdAt": "2026-11-16T05:30:16+00:00",
         "screen": "pertes.constat"
     }
 }

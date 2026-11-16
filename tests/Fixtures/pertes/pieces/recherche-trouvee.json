@@ -1,24 +1,24 @@
 {
     "request": {
         "method": "GET",
-        "path": "/api/gestion/pertes/puces/recherche?identifier=044D4FB0C3D4E5&locale=fr"
+        "path": "/api/gestion/pertes/puces/recherche?identifier=047F95C2C3D4E5&locale=fr"
     },
     "status": 200,
     "headers": {},
     "body": {
-        "identifier": "044D4FB0C3D4E5",
+        "identifier": "047F95C2C3D4E5",
         "found": true,
         "refusal": null,
         "tag": {
             "id": 1,
-            "identifier": "044D4FB0C3D4E5",
+            "identifier": "047F95C2C3D4E5",
             "technology": "nfc",
             "technologyLabel": "Puce NFC",
             "status": "associated",
             "statusLabel": "Posée",
             "pieceId": 1,
             "exercise": false,
-            "associatedAt": "2026-11-16T01:40:36+00:00",
+            "associatedAt": "2026-11-16T05:31:00+00:00",
             "retiredAt": null,
             "retiredReason": null,
             "retiredReasonLabel": null
@@ -33,36 +33,36 @@
             "variantId": 23,
             "productId": 15,
             "variantMissing": false,
-            "name": "Veste en lin (exemple 4D4FB0)",
+            "name": "Veste en lin (exemple 7F95C2)",
             "variantLabel": null,
-            "barcode": "VESTE-LIN-M-4D4FB0",
+            "barcode": "VESTE-LIN-M-7F95C2",
             "barcodeOf": "variant",
             "symbology": "code128",
             "tags": [
                 {
                     "id": 1,
-                    "identifier": "044D4FB0C3D4E5",
+                    "identifier": "047F95C2C3D4E5",
                     "technology": "nfc",
                     "technologyLabel": "Puce NFC",
                     "status": "associated",
                     "statusLabel": "Posée",
                     "pieceId": 1,
                     "exercise": false,
-                    "associatedAt": "2026-11-16T01:40:36+00:00",
+                    "associatedAt": "2026-11-16T05:31:00+00:00",
                     "retiredAt": null,
                     "retiredReason": null,
                     "retiredReasonLabel": null
                 },
                 {
                     "id": 3,
-                    "identifier": "014D4FB0",
+                    "identifier": "017F95C2",
                     "technology": "nfc",
                     "technologyLabel": "Puce NFC",
                     "status": "associated",
                     "statusLabel": "Posée",
                     "pieceId": 1,
                     "exercise": false,
-                    "associatedAt": "2026-11-16T01:40:36+00:00",
+                    "associatedAt": "2026-11-16T05:31:01+00:00",
                     "retiredAt": null,
                     "retiredReason": null,
                     "retiredReasonLabel": null
@@ -72,7 +72,7 @@
             "commandeId": null,
             "retiredReason": null,
             "retiredReasonLabel": null,
-            "createdAt": "2026-11-16T01:40:36+00:00",
+            "createdAt": "2026-11-16T05:31:00+00:00",
             "retiredAt": null
         }
     }

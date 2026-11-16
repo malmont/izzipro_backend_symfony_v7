@@ -16,7 +16,7 @@
         "status": "open",
         "statusLabel": "Nouveau",
         "summary": "Clôture n° 1 : il manque 12,00 $ dans la caisse (attendu 132,75 $, compté 120,75 $).",
-        "storeDay": "2026-11-14",
+        "storeDay": "2026-11-16",
         "cashRegister": {
             "id": 1,
             "name": "Caisse principale"
@@ -27,9 +27,9 @@
         "newEvidenceSinceDecision": false,
         "backfill": false,
         "exercise": false,
-        "updatedAt": "2026-11-15T00:35:05+00:00",
-        "from": "2026-11-15T00:35:03+00:00",
-        "to": "2026-11-15T00:35:05+00:00",
+        "updatedAt": "2026-11-16T05:30:16+00:00",
+        "from": "2026-11-16T05:30:14+00:00",
+        "to": "2026-11-16T05:30:16+00:00",
         "sessionId": 1,
         "subject": {
             "type": "z_report",
@@ -55,8 +55,8 @@
             {
                 "id": 14,
                 "kind": "z_report",
-                "at": "2026-11-15T00:35:05+00:00",
-                "atLabel": "14/11/2026 19 h 35",
+                "at": "2026-11-16T05:30:16+00:00",
+                "atLabel": "16/11/2026 00 h 30",
                 "title": "Rapport de clôture",
                 "lines": [
                     {
@@ -65,7 +65,7 @@
                     },
                     {
                         "label": "Caisse fermée le",
-                        "value": "14/11/2026 19 h 35"
+                        "value": "16/11/2026 00 h 30"
                     },
                     {
                         "label": "Fermée par",
@@ -100,18 +100,18 @@
                     "type": "z_report",
                     "id": 1,
                     "sequence": 16,
-                    "hash": "6323ece8eae7be28abce95210eddb3ecdd1483bcacefd2cb98a9151720e1759d"
+                    "hash": "e9c9ff08a5c164e822795e3f002b424555ecc49c3083bfeca87bc86688f22228"
                 },
                 "screen": null,
-                "fingerprint": "41597d19e6f591a24bcca1f6a94fa5b590aedd538427dd0878e42fdaad4f4863"
+                "fingerprint": "475513cda4b43a7b92ad9aa9a3a43e2985f7f21c5002fba78318905e48b5be62"
             }
         ],
         "evidenceIntact": true,
         "opinion": null,
         "decision": null,
         "history": [],
-        "lastEvidenceAt": "2026-11-15T00:35:05+00:00",
-        "createdAt": "2026-11-15T00:35:05+00:00",
+        "lastEvidenceAt": "2026-11-16T05:30:16+00:00",
+        "createdAt": "2026-11-16T05:30:16+00:00",
         "screen": "pertes.constat"
     }
 }

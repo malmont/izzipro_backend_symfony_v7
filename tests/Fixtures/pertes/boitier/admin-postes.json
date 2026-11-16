@@ -1,0 +1,19 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/postes?locale=fr"
+    },
+    "status": 200,
+    "body": {
+        "items": [
+            {
+                "id": 1,
+                "name": "Caisse principale",
+                "active": true,
+                "matDeviceId": 3,
+                "terminalBound": false
+            }
+        ],
+        "terminalNeeded": false
+    }
+}

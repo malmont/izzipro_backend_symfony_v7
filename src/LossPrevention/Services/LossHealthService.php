@@ -28,8 +28,67 @@ class LossHealthService
     public const SILENT_AFTER_MAX = 3600;
     public const STATES = ['ok', 'pending', 'down', 'absent'];
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly LossTexts $texts)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly LossTexts $texts,
+        private readonly ?\App\Repository\TenantAppKeyRepository $appKeys = null, private readonly ?\App\Services\TenantConnectionProvider $tenant = null)
     {
+    }
+
+    /**
+     * Les postes de caisse qui ont une tablette de caisse rattachée (clé d'activation `pos` en service). Sur un site à plusieurs
+     * postes, un caissier n'a le contrôle avant paiement que depuis une tablette rattachée à SON poste (lot L3-b1) : un tapis dont
+     * le poste n'en a aucune est donc sans effet pour les caissiers, et le tableau le dit (lot L3-b2a).
+     *
+     * @return array<int, true>|null null : la question ne se pose pas (un seul poste, ou rien pour le savoir)
+     */
+    private function boundRegisters(): ?array
+    {
+        if ($this->emProvider->getEntityManager()->getRepository(LossBox::class)->activeRegisterCount() < 2) {
+            return null;
+        }
+
+        return $this->boundSet();
+    }
+
+    /** @return array<int, true>|null les postes qui ont une tablette de caisse rattachée, en service ; null : rien pour le savoir */
+    private function boundSet(): ?array
+    {
+        $site = $this->tenant?->getTenantCode();
+        if ($this->appKeys === null || !is_string($site) || $site === '') {
+            return null;
+        }
+        $bound = [];
+        $now = gmdate('Y-m-d H:i:s');
+        foreach ($this->appKeys->listForTenant($site) as $key) {
+            if ($key['app'] === 'pos' && $key['revoked_at'] === null && $key['cash_register_id'] !== null && ($key['expires_at'] === null || (string) $key['expires_at'] > $now)) {
+                $bound[(int) $key['cash_register_id']] = true;
+            }
+        }
+
+        return $bound;
+    }
+
+    /**
+     * Les postes de caisse du site, pour relier un tapis à son poste (lot L3-b2a, `docs/prevention-pertes.md` § 16.18) : une lecture
+     * pour l'ADMINISTRATEUR, sous la gestion, donc hors de la garde de la tablette (la route de la caisse `GET /api/cash-registers`
+     * lui répond `TERMINAL_REQUIRED` sur un site qui exige le terminal). Aucun nom de personne.
+     *
+     * @return array{items: list<array{id: int, name: string, active: bool, matDeviceId: ?int, terminalBound: bool}>, terminalNeeded: bool}
+     */
+    public function registers(): array
+    {
+        $repository = $this->emProvider->getEntityManager()->getRepository(LossBox::class);
+        $bound = $this->boundSet() ?? [];
+        $mats = $repository->matsByRegister();
+        $items = [];
+        $active = 0;
+        foreach ($repository->cashRegisters() as $row) {
+            $id = (int) $row['id'];
+            $active += (bool) $row['is_active'] ? 1 : 0;
+            $items[] = ['id' => $id, 'name' => (string) $row['name'], 'active' => (bool) $row['is_active'], 'matDeviceId' => $mats[$id] ?? null, 'terminalBound' => isset($bound[$id])];
+        }
+
+        // à partir de deux postes actifs, un caissier n'a le contrôle avant paiement que depuis une tablette rattachée à son poste
+        return ['items' => $items, 'terminalNeeded' => $active > 1];
     }
 
     /** Délai (secondes) sans signe de vie au-delà duquel un appareil est dit silencieux ; lire ne crée pas la ligne des réglages */
@@ -54,7 +113,8 @@ class LossHealthService
         foreach ($repository->liveBoxes($exercise) as $box) {
             $devices[] = $this->boxLine($box, $threshold, $now, $locale, $exercise);
         }
-        $mats = array_map(fn (array $mat): array => $this->matLine($mat, $threshold, $now, $locale, $exercise), $repository->liveMats($exercise));
+        $bound = $exercise ? null : $this->boundRegisters();
+        $mats = array_map(fn (array $mat): array => $this->matLine($mat, $threshold, $now, $locale, $exercise, $bound), $repository->liveMats($exercise));
         if ($devices === []) {
             $devices[] = ['code' => 'box', 'kind' => 'box', 'label' => $this->texts->t('health.kind.box', $locale), 'zone' => null, 'cashRegisterId' => null, 'state' => 'absent',
                 'stateLabel' => $this->texts->t('health.state.absent', $locale), 'lastSeenAt' => null, 'silentSince' => null, 'silentSeconds' => null,
@@ -171,7 +231,7 @@ class LossHealthService
      *
      * @return array<string, mixed>
      */
-    private function matLine(array $mat, int $threshold, int $now, string $locale, bool $exercise): array
+    private function matLine(array $mat, int $threshold, int $now, string $locale, bool $exercise, ?array $bound = null): array
     {
         $boxSeen = $mat['box_seen'] !== null ? (new \DateTimeImmutable((string) $mat['box_seen'], new \DateTimeZone('UTC')))->getTimestamp() : null;
         $seen = (new \DateTimeImmutable((string) $mat['last_seen_at'], new \DateTimeZone('UTC')))->getTimestamp();
@@ -191,6 +251,9 @@ class LossHealthService
             [$state, $hint] = ['pending', $this->texts->t('health.hint.mat.' . ($exercise ? 'never_read_exercise' : 'never_read'), $locale)];
         } elseif ($register === null && !$exercise) {
             [$state, $hint] = ['pending', $this->texts->t('health.hint.mat.no_register', $locale)]; // un tapis simulé n'a pas de poste
+        } elseif ($register !== null && $bound !== null && !isset($bound[$register])) {
+            // plusieurs postes, et aucune tablette rattachée à celui-ci : le contrôle avant paiement est arrêté pour ses caissiers
+            [$state, $hint] = ['pending', $this->texts->t('health.hint.mat.no_terminal', $locale, ['register' => (string) ($mat['register_name'] ?? $register)])];
         } else {
             [$state, $hint] = ['ok', null];
         }

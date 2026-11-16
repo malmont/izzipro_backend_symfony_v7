@@ -3,7 +3,7 @@
         "method": "POST",
         "path": "/api/gestion/pertes/pieces?locale=fr",
         "body": {
-            "barcode": "VESTE-LIN-4D4FB0"
+            "barcode": "VESTE-LIN-7F95C2"
         }
     },
     "status": 409,
@@ -11,7 +11,7 @@
     "body": {
         "error": "BARCODE_AMBIGUOUS",
         "code": "BARCODE_AMBIGUOUS",
-        "message": "Ce code-barres est celui de l'article « Veste en lin (exemple 4D4FB0) », qui a plusieurs variantes : choisissez la variante.",
+        "message": "Ce code-barres est celui de l'article « Veste en lin (exemple 7F95C2) », qui a plusieurs variantes : choisissez la variante.",
         "productId": 15,
         "variantIds": [
             23,

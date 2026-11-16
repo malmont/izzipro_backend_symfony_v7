@@ -4,7 +4,7 @@
         "path": "/api/gestion/pertes/puces/associer?locale=fr",
         "body": {
             "pieceId": 2,
-            "identifier": "044D4FB0C3D4E5",
+            "identifier": "047F95C2C3D4E5",
             "technology": "nfc"
         }
     },

@@ -49,6 +49,7 @@ class LossCounterService
         private readonly Security $security,
         private readonly LossBoxLimits $limits,
         private readonly TenantConnectionProvider $tenant,
+        private readonly ?LossSaleLinkService $sales = null,
     ) {
     }
 
@@ -114,7 +115,8 @@ class LossCounterService
         $tracked = array_flip($repository->trackedVariants(array_keys($items)));
         // lues : posées en ce moment, ou parties depuis peu ; posées : encore sur le tapis
         $readByVariant = $presentByVariant = [];
-        foreach ($repository->readOnMat((int) $mat['id'], gmdate('Y-m-d H:i:s', $now - self::READ_WINDOW)) as $piece) {
+        // la fenêtre du tapis est celle du site (réglable depuis le lot L3-b2a), la même que celle qui relie la vente aux pièces
+        foreach ($repository->readOnMat((int) $mat['id'], gmdate('Y-m-d H:i:s', $now - ($this->sales?->windows()['counter'] ?? self::READ_WINDOW))) as $piece) {
             $readByVariant[$piece['variant']] = ($readByVariant[$piece['variant']] ?? 0) + 1;
             if ($piece['present']) {
                 $presentByVariant[$piece['variant']] = ($presentByVariant[$piece['variant']] ?? 0) + 1;

@@ -36,6 +36,9 @@ class LossPieceEvent
     /** Une puce arrive sur un tapis de comptoir, puis le quitte (lot L3-b1) : la présence sur le tapis en est la projection */
     public const COUNTER_SEEN = 'COUNTER_SEEN';
     public const COUNTER_LEFT = 'COUNTER_LEFT';
+    /** La pièce est reliée à une vente par l'analyse, ou revient (lot L3-b2a) : écrits par le module, jamais par un boîtier */
+    public const PIECE_SOLD = 'PIECE_SOLD';
+    public const PIECE_RETURNED = 'PIECE_RETURNED';
     /** Faits qu'un LECTEUR de boîtier peut envoyer par le canal */
     public const FROM_BOX = [self::SPOT_CHECK, self::ZONE_SEEN];
     /** Faits qu'un TAPIS de comptoir peut envoyer par le canal */
