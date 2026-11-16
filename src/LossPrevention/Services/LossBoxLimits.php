@@ -37,17 +37,18 @@ use Symfony\Component\RateLimiter\Storage\CacheStorage;
  * - `pairPolls` : questions « où en est mon jumelage ? » d'un boîtier qui a fait sa preuve, par demande (5 minutes) ;
  * - `pairDelivery` : jetons remis à un boîtier jumelé, par demande (15 minutes) : chaque remise est une inscription (un fait de
  *   plus au journal du boîtier), un boîtier mal réglé ne le remplit pas ;
- * - `pairAdmin` et `pairAdminSite` : essais de code d'un administrateur, par site et adresse, et par site (15 minutes).
+ * - `pairAdmin` et `pairAdminSite` : essais de code d'un administrateur, par site et adresse, et par site (15 minutes) ;
+ * - `pairWarning` : lignes écrites au journal du serveur pour un jumelage qu'on ne peut ni servir ni fermer, par demande (1 heure).
  *
  * Chaque méthode rend null quand l'appel passe, sinon le nombre de secondes à attendre.
  */
 class LossBoxLimits
 {
     public const LIMITS = ['open' => 20, 'openGlobal' => 60, 'refused' => 60, 'machine' => 10, 'calls' => 600, 'facts' => 20000, 'till' => 6000,
-        'pairOpen' => 20, 'pairNew' => 10, 'pairFailed' => 30, 'pairPolls' => 120, 'pairDelivery' => 10, 'pairAdmin' => 10, 'pairAdminSite' => 30];
+        'pairOpen' => 20, 'pairNew' => 10, 'pairFailed' => 30, 'pairPolls' => 120, 'pairDelivery' => 10, 'pairAdmin' => 10, 'pairAdminSite' => 30, 'pairWarning' => 1];
     private const INTERVALS = ['open' => '15 minutes', 'openGlobal' => '15 minutes', 'refused' => '15 minutes', 'machine' => '15 minutes', 'calls' => '5 minutes', 'facts' => '1 hour', 'till' => '5 minutes',
         'pairOpen' => '15 minutes', 'pairNew' => '1 hour', 'pairFailed' => '15 minutes', 'pairPolls' => '5 minutes', 'pairDelivery' => '15 minutes', 'pairAdmin' => '15 minutes',
-        'pairAdminSite' => '15 minutes'];
+        'pairAdminSite' => '15 minutes', 'pairWarning' => '1 hour'];
 
     /** @var array<string, RateLimiterFactory> */
     private array $factories = [];
@@ -119,6 +120,12 @@ class LossBoxLimits
     public function pairDelivery(string $codeHash): ?int
     {
         return $this->consume('pairDelivery', $codeHash, 1);
+    }
+
+    /** Peut-on écrire au journal du serveur pour ce jumelage ? (Une ligne par heure au plus.) */
+    public function pairWarning(int $pairingId): bool
+    {
+        return $this->consume('pairWarning', (string) $pairingId, 1) === null;
     }
 
     /** Cette adresse a-t-elle encore droit à un code inconnu ou à une mauvaise preuve ? Lu avant la base, sans rien compter */

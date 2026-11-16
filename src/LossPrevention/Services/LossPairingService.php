@@ -6,9 +6,9 @@ use App\Gestion\Services\GestionConflictException;
 use App\LossPrevention\Master\LossPairingRepository;
 use App\Services\FeatureAccess\ModuleAccessService;
 use App\Services\Platform\PlatformModeService;
-use App\Services\TenantConnectionManager;
 use App\Services\TenantConnectionProvider;
 use App\Services\TenantPublicHostResolver;
+use Psr\Log\LoggerInterface;
 
 /**
  * Jumelage d'un boîtier par code (lot L3-a2, 16/11/2026, `docs/prevention-pertes.md` § 16.16) : on ne tape plus de clé dans le
@@ -46,6 +46,8 @@ class LossPairingService
     /** Ce que la plateforme conseille au boîtier entre deux questions (secondes) */
     public const POLL_SECONDS = 15;
     public const INVALID = 'PAIRING_CODE_INVALID';
+    /** Les seules raisons qui ferment un jumelage relié : des preuves lues sur le boîtier que ce jumelage a créé */
+    private const CLOSING = [LossBoxChannelService::PAIRED_REVOKED, LossBoxChannelService::PAIRED_KEY_RESET, LossBoxChannelService::PAIRED_OTHER_MACHINE];
 
     public function __construct(
         private readonly LossPairingRepository $pairings,
@@ -53,12 +55,12 @@ class LossPairingService
         private readonly LossBoxLimits $limits,
         private readonly LossBoxChannelService $channel,
         private readonly LossBoxService $boxes,
-        private readonly TenantConnectionManager $tenants,
         private readonly TenantConnectionProvider $tenant,
         private readonly TenantPublicHostResolver $hosts,
         private readonly ModuleAccessService $modules,
         private readonly PlatformModeService $platform,
         private readonly LossTexts $texts,
+        private readonly ?LoggerInterface $logger = null,
     ) {
     }
 
@@ -156,13 +158,24 @@ class LossPairingService
         }
         // Jumelé : la suite se passe dans le site que l'administrateur a choisi en jumelant (lu de la demande, jamais de la requête)
         $site = (string) $row['tenant_code'];
-        $config = $this->tenants->findTenantByCode($site);
-        if ($config === null) {
-            // site introuvable : il a disparu, ou la base maître a eu une panne d'un instant (la lecture ne distingue pas les deux).
-            // Rien n'est remis et rien n'est fermé : le boîtier patiente
+        // Le site est relu dans la base maître, SANS cache : rien de ce qui suit ne peut fermer un jumelage sur une fiche de site
+        // périmée ou fausse
+        try {
+            $config = $this->pairings->tenant($site);
+        } catch (\PDOException $failure) {
+            // la base maître ne répond pas : rien n'est remis, rien n'est fermé, le boîtier patiente. (Le code SQL seulement : le
+            // message d'une erreur de connexion peut nommer un serveur ou un compte.)
+            $this->warn($id, sprintf('la base maître ne répond pas (%s)', (string) $failure->getCode()));
+
             return self::answer(LossPairingRepository::WAITING, $serverNow, null);
         }
-        $this->tenant->switchTenant((string) $config['dbname'], $site);
+        if ($config === null) {
+            // site introuvable (renommé, supprimé) : rien n'est remis et rien n'est fermé, le boîtier patiente
+            $this->warn($id, sprintf('le site %s est introuvable dans la base maître', $site));
+
+            return self::answer(LossPairingRepository::WAITING, $serverNow, null);
+        }
+        $this->tenant->switchTenant($config['dbname'], $site);
         if (!$this->platform->isDemo() && !$this->modules->isEnabled(ModuleAccessService::LOSS_PREVENTION)) {
             // le site n'a plus le module : rien n'est remis, le boîtier patiente (comme ses autres appels, refusés sans le module)
             return self::answer(LossPairingRepository::WAITING, $serverNow, null);
@@ -172,16 +185,34 @@ class LossPairingService
         if ($wait !== null) {
             throw self::tooMany($wait);
         }
-        $enrolment = $this->channel->enrolPaired(self::linked($code, (string) $row['link']), $body['machine'], (string) $row['version'], (string) $row['arch']);
-        if ($enrolment === null) {
-            // boîtier révoqué (« détaché »), clé remise à zéro, autre machine inscrite par la clé : ce code ne vaut plus rien
+        $enrolment = $this->channel->enrolPaired(self::linked($code, (string) $row['link']), (int) $row['box_id'], $body['machine'], (string) $row['version'], (string) $row['arch']);
+        if (is_array($enrolment)) {
+            $this->pairings->delivered($id, $now);
+
+            return ['status' => LossPairingRepository::PAIRED, 'host' => $this->hosts->describe($site)['host'] ?? null] + $enrolment;
+        }
+        if (in_array($enrolment, self::CLOSING, true)) {
+            // preuve sûre, lue sur le boîtier que CE jumelage a créé : il est révoqué (« détaché »), sa clé a été remise à zéro, ou
+            // une autre machine s'y est inscrite. Ce code ne vaut plus rien
             $this->pairings->close($id, $now);
 
             return self::answer(LossPairingRepository::CLOSED, $serverNow, null);
         }
-        $this->pairings->delivered($id, $now);
+        // Toute autre raison (aujourd'hui : le boîtier de ce jumelage n'est PAS dans la base où l'on vient de le chercher) ne prouve
+        // pas qu'il a été détaché : un boîtier ne se supprime pas. C'est le signe d'une base qui n'est pas la sienne, ou reprise
+        // d'une sauvegarde plus ancienne que le jumelage. Un jumelage ne se ferme JAMAIS là-dessus : le boîtier patiente, et
+        // l'exploitant est prévenu par le journal (procédure : fiche § 16.17)
+        $this->warn($id, sprintf('le boîtier %d est introuvable dans la base du site %s, ou n\'est pas celui de ce jumelage (%s)', (int) $row['box_id'], $site, $enrolment));
 
-        return ['status' => LossPairingRepository::PAIRED, 'host' => $this->hosts->describe($site)['host'] ?? null] + $enrolment;
+        return self::answer(LossPairingRepository::WAITING, $serverNow, null);
+    }
+
+    /** Une ligne au journal du serveur, au plus une par jumelage et par heure : un boîtier qui redemande ne le remplit pas */
+    private function warn(int $pairingId, string $what): void
+    {
+        if ($this->limits->pairWarning($pairingId)) {
+            $this->logger?->error(sprintf('Prévention des pertes : jumelage %d laissé tel quel, %s.', $pairingId, $what));
+        }
     }
 
     /**

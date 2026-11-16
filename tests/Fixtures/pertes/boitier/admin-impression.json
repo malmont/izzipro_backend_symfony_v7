@@ -56,7 +56,7 @@
                 "status": "failed",
                 "statusLabel": "En échec",
                 "reason": "write_refused",
-                "reasonLabel": "Écriture refusée par la puce",
+                "reasonLabel": "Écriture refusée par la puce. Ne posez pas cette étiquette : jetez-la, puis relancez l'impression de cette pièce.",
                 "tagId": null,
                 "doneAt": "2026-11-16T11:15:45+00:00"
             }

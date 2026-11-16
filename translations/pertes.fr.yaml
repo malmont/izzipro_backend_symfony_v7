@@ -622,10 +622,10 @@ prints:
         failed: En échec
         cancelled: Annulée
     reason:
-        tag_unreadable: 'Puce illisible'
-        write_refused: 'Écriture refusée par la puce'
-        verify_failed: 'Relecture non conforme'
-        printer_stopped: 'Imprimante arrêtée'
+        tag_unreadable: 'Puce illisible. Ne posez pas cette étiquette : jetez-la, puis relancez l''impression de cette pièce.'
+        write_refused: 'Écriture refusée par la puce. Ne posez pas cette étiquette : jetez-la, puis relancez l''impression de cette pièce.'
+        verify_failed: 'Relecture non conforme. Ne posez pas cette étiquette : jetez-la, puis relancez l''impression de cette pièce.'
+        printer_stopped: 'Imprimante arrêtée. Si une étiquette est sortie pour cette pièce, ne la posez pas : jetez-la, puis relancez l''impression de cette pièce.'
         out_of_labels: 'Plus d''étiquettes'
         piece_retired: 'Pièce retirée entre-temps'
         tag_limit: 'La pièce porte déjà le nombre maximal de puces'

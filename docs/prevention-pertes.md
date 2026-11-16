@@ -902,7 +902,15 @@ association, échecs, modèles visés). Ce que le plan ajoute :
   Le boîtier le reçoit avec le travail, par HTTPS, le garde en mémoire le temps du travail, ne l'écrit jamais sur son disque.
   Sur la puce : l'identifiant est verrouillé en écriture par ce mot de passe (jamais de verrou définitif), **et la zone qui porte
   le mot de passe est fermée à la lecture** (sans quoi n'importe quel lecteur le lirait). La lecture de l'identifiant reste
-  ouverte à tous. La puce garde le rang du mot de passe utilisé (un nombre), pour un changement de mot de passe futur.
+  ouverte à tous. **Le rang du mot de passe utilisé reste à la plateforme** (un nombre, gardé avec le travail d'impression :
+  `loss_print_job.secret_rank`) ; il n'est pas écrit sur la puce. C'est lui qui servira à un changement de mot de passe futur
+  (décision du chef de projet du 16/11/2026, après la relecture du logiciel du boîtier).
+- **Condition ferme de l'essai du matériel** (chef de projet, 16/11/2026) : avant toute vraie pièce étiquetée, **toute la zone
+  réservée de la puce**, le mot de passe d'accès ET le mot de passe de mise à mort, est verrouillée derrière le mot de passe
+  d'accès. Personne d'autre ne doit pouvoir écrire un mot de passe de mise à mort, puis tuer la puce. Les commandes écrites dans
+  le logiciel du boîtier ferment aujourd'hui la zone du mot de passe d'accès et verrouillent l'identifiant ; le verrou de la zone
+  de mise à mort reste à écrire et à prouver, imprimante en main. Ce n'est pas une option : aucun travail d'impression réel
+  n'est lancé chez un marchand tant que ce verrou n'est pas vérifié sur une puce.
 - **Protection légère, dite telle quelle** : un mot de passe par site arrête la réécriture ordinaire, pas un attaquant équipé.
   Pas de contrôle des copies (décision du propriétaire, § 15).
 - La gamme (`GET /materiel`) change son texte du niveau pro quand ce sous-lot est en ligne.
@@ -1436,8 +1444,33 @@ en secours.
   machine s'y est inscrite par la clé. Le code ne vaut plus rien, pour toujours : le boîtier remet son jumelage à zéro (nouveau
   code, nouveau secret de machine) et redevient jumelable.
 - **`pollSeconds`** (15) : le rythme conseillé des questions. **Sans le module** sur le site jumelé, ou si ce site est introuvable
-  (disparu, ou base maître en panne un instant : la lecture ne distingue pas les deux), rien n'est remis et rien n'est fermé :
-  `waiting`, `expiresAt: null`.
+  (renommé, supprimé), ou si la base maître ne répond pas, rien n'est remis et rien n'est fermé : `waiting`, `expiresAt: null` ;
+  les deux cas sont écrits au journal du serveur, chacun sous son nom.
+- **Un jumelage ne se ferme que sur une preuve sûre** (correctif du 16/11/2026, relevé par la relecture du logiciel du boîtier) :
+  - le site d'un jumelage relié est relu **dans la base maître, sans cache** (`LossPairingRepository::tenant`), et le boîtier est
+    lu **par son numéro** (`box_id` de la demande) dans la base de ce site ;
+  - on vérifie d'abord que le boîtier lu est bien **celui que ce jumelage a créé** : l'empreinte de sa clé est celle du jumelage,
+    ou, si sa clé a été remise à zéro depuis, son fait de création porte la **marque du jumelage**
+    (`BOX_CREATED { pairing: true, ref }`, `LossBoxToken::pairingRef` ; un fait ne se modifie jamais) ;
+  - sur ce boîtier-là, trois preuves ferment : il est révoqué ; sa clé a été remise à zéro ; une autre machine y est inscrite
+    (`LossPairingService::CLOSING`, liste fermée : toute autre raison fait patienter) ;
+  - **un boîtier introuvable, d'exercice, ou qui n'est pas celui du jumelage ne ferme rien**, même révoqué : c'est ce qu'on lirait
+    dans une base qui n'est pas celle du site (fiche de site fausse, base remplacée par la copie d'un autre site), où un boîtier
+    du même numéro existe presque toujours. Le boîtier patiente (`waiting`, `expiresAt: null`) ; comme chaque question compte
+    pour une remise, il reçoit `429` après dix questions par quart d'heure ;
+  - le serveur l'écrit à son journal, **une ligne au plus par jumelage et par heure** (plafond `pairWarning`) : « jumelage N laissé
+    tel quel », avec le numéro du boîtier et le code du site, jamais le code du jumelage. Même ligne quand le site est introuvable
+    dans la base maître, ou que la base maître ne répond pas (le code SQL de l'erreur seulement).
+  - **Ce que l'exploitant fait de cette ligne.** Si la base du site est la mauvaise (ligne `tenants` fausse), il la corrige : le
+    boîtier est servi à sa question suivante. Si la base du site a été reprise d'une sauvegarde plus ancienne que le jumelage, le
+    boîtier n'existe plus et ne reviendra pas : l'exploitant ferme la demande à la main dans la base maître
+    (`UPDATE loss_box_pairing SET status = 'closed', closed_at = NOW() AT TIME ZONE 'UTC' WHERE id = N`) ; le boîtier reçoit
+    `closed`, tire un nouveau code, et l'administrateur le jumelle de nouveau.
+  - Un boîtier jumelé **avant ce correctif** n'a pas la marque dans son fait de création : tant que sa clé n'est pas remise à
+    zéro, rien ne change pour lui (son empreinte le prouve) ; après une remise à zéro, son jumelage n'est plus fermé d'office, le
+    boîtier patiente et l'installateur le relie par sa nouvelle clé. Aucun vrai boîtier n'était jumelé à cette date.
+  - Avant ce correctif, une fiche de site fausse dans le cache menait dans la base d'un autre site, où le boîtier était
+    « introuvable », et fermait pour toujours un jumelage sain : le boîtier devait être rejumelé à la main.
 
 **L'administrateur** (`ROLE_ADMIN`, garde du module) : `POST /api/gestion/pertes/boitiers/jumeler` `{ code, name, place? }` → 201
 `{ box }`, la fiche du boîtier, `status: pending` (il attend sa machine), `paired: true`, `keyHint: null`. Refus : 422
@@ -1449,12 +1482,13 @@ en secours.
   pour mot : « Code inconnu, ou boîtier pas encore branché à Internet. Branchez le boîtier, attendez que son voyant clignote, puis
   réessayez. » **Le code ne sert qu'une fois.**
 - Toute fiche de boîtier gagne `paired` (vrai pour un boîtier ajouté par code tant que personne ne lui a donné de clé). Fait
-  `BOX_CREATED { pairing: true }`. **« Détacher »** est la révocation du boîtier (`POST /boitiers/{id}/revoquer`).
+  `BOX_CREATED { pairing: true, ref }` (`ref` : la marque du jumelage, qu'aucune lecture ne rend). **« Détacher »** est la révocation du boîtier (`POST /boitiers/{id}/revoquer`).
 - **Ce qui lie le boîtier du site à son code** : à la place de l'empreinte d'une clé, le boîtier jumelé porte une empreinte liée
   AU SITE, au code, et à un aléa tiré à chaque jumelage et écrit sur la demande (`link` ; `LossBoxToken::pairingKeyHash`). À la
-  remise du jeton, le boîtier est retrouvé par cette empreinte, dans le site écrit sur la demande par le jumelage : aucun
-  identifiant venu d'une requête ne désigne un boîtier ni un site (le `box_id` de la demande ne sert à aucune recherche). Ce
-  n'est pas une clé `IZ-BOX` : la route d'inscription ne l'accepte pas.
+  remise du jeton, le boîtier est lu par le numéro écrit sur la demande par le jumelage (`box_id`), dans le site écrit sur la
+  demande, puis **reconnu par cette empreinte** (ou, clé remise à zéro, par la marque de son fait de création) : aucun
+  identifiant venu d'une requête ne désigne un boîtier ni un site, et un numéro seul ne décide de rien. Ce n'est pas une clé
+  `IZ-BOX` : la route d'inscription ne l'accepte pas.
 
 **Plafonds** (`LossBoxLimits`) : dépôts, 20 par adresse et par quart d'heure ; **demandes nouvelles** (un code que la
 plateforme ne connaît pas : une ligne de la base maître qui ne s'efface pas, et n'importe qui peut en déposer), **10 par adresse et
@@ -1512,7 +1546,10 @@ sur aucune base avant sa version finale (il ne met pas à niveau une version ant
 
 **Tests** : `LossPreventionPairingTest` (le parcours entier ; refus neutres mot pour mot ; un administrateur d'un second site ; code
 seul sans preuve ; jeton refusé sur un autre site ; réponse perdue ; détacher, clé remise à zéro, module retiré, site introuvable ;
-boîtier orphelin rejumelé ; plafond de boîtiers ; expiration ; code jamais libéré ; chemin encodé ; les six plafonds). Exemples : `tests/Fixtures/pertes/boitier/canal-jumelage-*.json`,
+boîtier orphelin rejumelé ; plafond de boîtiers ; expiration ; code jamais libéré ; chemin encodé ; les six plafonds ;
+`testAPairingIsNeverClosedOnAStaleSiteRecordOrAMissingBox` : fiche de site fausse dans le cache, boîtier introuvable ou d'exercice,
+numéro d'un autre boîtier (en service, révoqué, ou d'un autre jumelage à la clé remise à zéro), clé remise à zéro puis révocation,
+site disparu, une seule ligne au journal par heure). Exemples : `tests/Fixtures/pertes/boitier/canal-jumelage-*.json`,
 `admin-boitier-jumele*.json`, `admin-refus-jumelage.json`.
 
 ### 16.18 Lot L3-b2a codé : la vente reliée aux pièces (16/11/2026)
@@ -1857,6 +1894,34 @@ secret du serveur, dont la rotation rendrait les puces déjà écrites impossibl
   rangés restent lus sous le rang 1. Le rechiffrement sous la nouvelle clé (une commande) est à écrire le jour venu ; la base le
   permet déjà.
 
+**L'imprimante simulée d'un VRAI boîtier ne prend aucun vrai travail** (correctif du 16/11/2026, relevé par la relecture du
+logiciel du boîtier). Un boîtier sans matériel, en démonstration, peut être relié à un vrai site et y annoncer des appareils
+simulés (numéro de série qui commence par `SIM-`). Aucune puce n'existe derrière son imprimante : elle n'est pas comptée parmi
+les imprimantes à puce d'un vrai travail (`LossPrintRepository::printers`), donc absente de `printers`, `ready.reason` vaut
+`NO_PRINTER` si elle est seule, et `POST /impressions` sur elle répond 404 `PRINTER_NOT_FOUND`. En ceinture, `GET /travaux` ne
+sert jamais de ligne pour une telle imprimante : le mot de passe des puces ne lui est jamais remis. Le logiciel du boîtier tient
+la même règle de son côté (son imprimante de démonstration ne demande pas les travaux). Le mode exercice n'est pas touché.
+- **Le préfixe `SIM-` est réservé** aux appareils simulés : c'est une convention tenue avec le logiciel du boîtier, pas une
+  preuve. Une vraie imprimante dont le numéro de série commencerait par `SIM-` serait écartée de la même façon (aucun modèle
+  visé n'en a) ; une imprimante simulée annoncée sous un autre nom ne le serait pas.
+- **Le résultat aussi est refusé** : un `TAG_WRITTEN` ou un `TAG_WRITE_FAILED` pour une ligne d'une telle imprimante reçoit
+  `PRINT_LINE_UNKNOWN` (`LossPrintRepository::lineRef`) ; aucune puce n'est posée sur une pièce par du matériel simulé.
+- **Le tableau de santé et l'assistant d'installation** ne comptent pas non plus cette imprimante
+  (`LossBoxRepository::livePrinters`) : pas de ligne « imprimante », pas de conseil d'imprimer, et l'étape `tag_printer` ne peut
+  pas être « faite » par du matériel simulé (condition ferme du § 16.7). Le boîtier, lui, montre toujours ses appareils.
+- **Avant ce correctif** (étape 87, 16/11/2026), rien n'empêchait de créer un vrai travail sur une telle imprimante. Aucun n'a pu
+  l'être en production : la variable `LOSS_TAG_KEYS` n'y est pas posée, toute création répond `PRINT_KEY_MISSING`. Il n'y a donc
+  rien à annuler à la bascule, et aucun mot de passe n'a été remis à un boîtier de démonstration.
+
+**Le texte d'un motif d'échec dit quoi faire de l'étiquette** (chef de projet, 16/11/2026). Une étiquette dont le résultat est un
+échec peut être sortie de l'imprimante, et sa puce peut même être bonne : le site ne la connaît pas. `reasonLabel` des motifs
+`tag_unreadable`, `write_refused` et `verify_failed` se termine donc par « Ne posez pas cette étiquette : jetez-la, puis relancez
+l'impression de cette pièce. » ; `printer_stopped` dit la même chose « si une étiquette est sortie pour cette pièce » ;
+`out_of_labels` ne change pas (aucune étiquette n'est sortie). Le mode exercice montre les mêmes textes, pour que le gérant
+lise à l'entraînement ce qu'il lira le jour venu, bien qu'aucune étiquette n'y existe. Le boîtier dit `verify_failed` aussi quand il ne sait plus ce
+qu'une étiquette est devenue (service coupé pendant l'impression, résultat qui n'a pas pu être gardé) : il ne réimprime jamais
+une étiquette au sort inconnu, deux puces porteraient le même identifiant.
+
 **Mode exercice : l'imprimante simulée, SANS mot de passe.** Le boîtier simulé gagne un quatrième appareil
 (`SIM-IMPRIMANTE`) et trois scénarios (`POST /exercices/boitiers/{id}/scenarios`) : `print_ok` (trois pièces d'exercice sans
 puce reçoivent leur puce simulée), `print_refused` (la première étiquette échoue, `write_refused`), `print_no_labels` (la
@@ -1899,5 +1964,170 @@ ne garde plus la variable après l'avoir lue.
 **Tests** : `LossPreventionPrintTest` (travail servi à son boîtier et à lui seul, par 50 lignes ; résultats rejoués, refus,
 annulation, réimpression à un autre exemplaire, confirmation d'une pièce déjà équipée, plafonds ; écritures qui ne peuvent plus
 être associées, pièce retirée, article sans code-barres ; le mot de passe remis au boîtier seulement et écrit nulle part ; clé
-absente, illisible, autre ; imprimante simulée ; identifiant et coffre ; gardes de la base et migration rejouée). La clé d'essai
+absente, illisible, autre ; imprimante simulée ; imprimante simulée d'un vrai boîtier, jamais servie ; identifiant et coffre ;
+gardes de la base et migration rejouée). La clé d'essai
 est commune aux classes de la suite (`LossTagKeysTrait`).
+
+## 17. Lot L4 : antennes de zone, portique, dépôt et comptage (plan validé par le propriétaire le 16/11/2026 ; rien n'est codé)
+
+**Plan validé par le propriétaire le 16/11/2026, tel quel, avec les huit propositions du point 17.11** (relayé par le chef de
+projet), plus un ajout sur les heures d'ouverture (17.4). Ordre : L4-a, L4-b, L4-c, L4-d, puis L4-e après l'avis de l'avocat. Le
+contrat de chaque sous-lot va au chef de projet en dix lignes avant son code ; L4-b et L4-c passent par un relecteur neuf.
+
+Il reprend le § 14 (points 1 et 3), le
+§ 16.14 (une étape de l'assistant par antenne, une ligne de santé par appareil), la réserve du § 16.6 (rattrapage qui absorbe une
+sortie) et les deux notes laissées pour la suite (§ 16.18, index des lectures de zone ; § 16.19, « du nouveau depuis la
+décision »). Rien n'est codé. La caméra du dépôt (§ 14, point 2) reste avec L3-d, après l'avis de l'avocat : elle n'est pas dans
+ce lot.
+
+### 17.1 Ce que L4 apporte, et ce qu'il n'apporte pas
+
+- **Apporte** : des **antennes de zone** branchées au boîtier (dépôt, porte du dépôt, rayon, sortie) et un **portique réel** à la
+  sortie ; pour chaque pièce, **où elle a été vue en dernier** ; quatre constats nouveaux, tous **par lieu et par jour ou par
+  pièce, jamais par personne** : « sortie sans vente », « sortie du dépôt sans mise en rayon », « porte arrière du dépôt » et
+  « mouvement hors des heures d'ouverture » ; le constat « puce disparue après la zone sensible » (§ 14, point 1), éteint tant que
+  l'avocat n'a pas rendu son avis ; le **comptage** au lecteur à main et le **bilan du soir** ; une étape de l'assistant et une
+  ligne de santé par antenne ; les mêmes scènes en mode exercice et dans le simulateur du boîtier.
+- **N'apporte pas** : aucune alerte sonore ou en caisse au moment de la sortie (L5) ; aucun avis de l'IA (L5) ; aucune caméra ;
+  aucune écriture de vente, de stock ni de catalogue (§ 1) : le comptage du module ne corrige pas le stock, il le compare ;
+  aucun constat qui nomme ou vise une personne ; aucune suite automatique, la décision reste humaine.
+
+### 17.2 Les zones et les antennes
+
+- **Zones** : celles du contrat (`stockroom`, `stockroom_door`, `floor`, `counter`, `exit`), plus deux nouvelles :
+  `back_door` (la porte arrière du dépôt) et `restricted_entrance` (l'ENTRÉE de la zone sensible, jamais l'intérieur). Une
+  antenne est un appareil `reader` avec une zone ; le lien se règle par la route qui existe déjà
+  (`PUT /boitiers/{id}/appareils/{deviceId}`), dans l'assistant.
+- **Ce que le boîtier envoie** : le fait `ZONE_SEEN` qui existe déjà, **à l'arrivée d'une pièce dans une zone et à son départ
+  seulement** (jamais une ligne par lecture radio : une antenne lit la même puce des dizaines de fois par seconde). Le boîtier
+  tient la présence en mémoire et n'envoie que les changements, comme le tapis. Côté plateforme, un plafond par pièce et par
+  zone borne ce qu'un boîtier mal réglé peut écrire.
+- **Où est la pièce** : deux colonnes sur la pièce, « dernière zone » et « vue à », écrites par les faits de zone. Les états
+  réservés depuis L2 prennent vie par ces faits seulement : `in_stockroom`, `on_floor`, `at_counter`. `missing` vient du
+  comptage (17.6). Une pièce vendue reste `sold` quoi qu'on lise ensuite.
+- **Lectures parasites** : une antenne peut lire à travers une cloison. Parade côté boîtier : une pièce n'« arrive » dans une
+  zone qu'après avoir été lue pendant une durée réglable (par défaut 3 secondes) et n'en « part » qu'après un silence réglable
+  (par défaut 30 secondes). Ces deux durées sont des réglages servis au boîtier ; leurs bonnes valeurs se trouvent à l'essai du
+  matériel (matériel jamais vu : § 13.7, risque 7).
+- **Base** : un index partiel sur les `ZONE_SEEN` par heure (note du § 16.18), et la conservation des lectures de zone suit le
+  réglage qui existe pour les présences du tapis.
+
+### 17.3 Le portique et le constat « sortie sans vente »
+
+- **Règle** : une vraie pièce jamais vendue (ni retirée) est lue à la sortie (`ZONE_SEEN`, zone `exit`), et aucune vente ne
+  l'explique. Le constat est **par pièce** : il dit l'article, l'heure, l'antenne, et où la pièce avait été vue avant. Aucun nom.
+- **Jamais avant que la caisse ait parlé** : l'analyse attend que son curseur ait dépassé l'heure de la lecture, plus la fenêtre
+  du rattrapage, avant de juger (une vente hors ligne ou un boîtier en retard arrivent après). Une lecture à l'heure douteuse
+  n'ouvre pas de constat.
+- **Réserve du § 16.6, à trancher par le propriétaire.** Aujourd'hui, une vente suivie sans pièce « couvre » la sortie d'une
+  pièce non vendue de la même variante : avec un étiquetage partiel, elle peut absorber la sortie d'une pièce volée.
+  *Proposition : les deux parades ensemble.* (a) Le rattrapage silencieux ne vaut que pour une variante **entièrement
+  étiquetée** (autant de pièces à puce non vendues que d'articles en stock, lu dans le catalogue sans rien y écrire) : la vente
+  sans pièce ne peut alors être qu'une lecture manquée. (b) Sinon, le rattrapage a lieu quand même (le client honnête n'est pas
+  inquiété), mais il ouvre un constat de **gravité faible**, « sortie couverte par une vente sans lecture », pour qu'une série
+  se voie : trois dans la semaine sur le même article remontent en gravité.
+- **Ce que le portique ne fait pas** : il ne sonne pas et ne retient personne (L5 décidera des alertes). Une pièce d'exercice
+  ne déclenche jamais un vrai constat.
+
+### 17.4 Le dépôt : trois constats
+
+- **« Sortie du dépôt sans mise en rayon »** (§ 14, point 3) : une pièce passe la porte du dépôt vers la boutique
+  (`stockroom_door`), puis n'est vue ni en rayon, ni au comptoir, ni vendue dans un délai réglable (par défaut 30 minutes).
+  Le « transfert » n'est pas un geste à saisir : c'est la lecture en rayon qui le prouve.
+- **« Porte arrière du dépôt »** : une pièce lue à `back_door` et qu'aucun retour au fournisseur ni retrait de pièce n'explique
+  dans la journée. Sans antenne à cette porte, la règle est éteinte et l'écran le dit.
+- **« Mouvement hors des heures d'ouverture »** : une pièce qui change de zone, ou passe une porte, alors que le magasin est
+  fermé. Les heures sont un réglage du module (une plage par jour de la semaine, à l'heure du magasin) ; sans heures réglées,
+  la règle est éteinte. **Ajout du chef de projet (16/11/2026)** : si la boutique a déjà saisi ses heures ailleurs, le module
+  les reprend par défaut et son réglage ne sert qu'à les remplacer. **Relevé du 16/11/2026, en lecture** : aucune heure
+  d'ouverture du magasin n'existe aujourd'hui dans la plateforme. La fiche de l'entreprise n'en a pas ; les réservations ont une
+  seule plage pour tous les jours (`booking_configuration.opening_start / opening_end` : les heures où une réservation peut
+  commencer, pas celles du magasin) ; l'assistance a des jours ouvrés (`support_setting.business_days`), sans heures. À trancher
+  au contrat de L4-c : proposer ces valeurs comme point de départ à confirmer par le gérant, plutôt que les appliquer en
+  silence (des heures fausses feraient de faux constats). Le comptage et la mise en rayon du matin ne doivent pas déclencher : une marge réglable avant
+  l'ouverture et après la fermeture (par défaut 1 heure).
+- Les trois sont **par pièce et par lieu**, avec un regroupement par jour et par zone quand plusieurs pièces bougent ensemble
+  (un carton entier ne fait pas vingt constats).
+
+### 17.5 La zone sensible (§ 14, point 1)
+
+- Antenne à l'ENTRÉE de la zone, jamais dedans, sans caméra ni son, avec une affichette (texte à faire valider par l'avocat).
+- **Constat « puce disparue après la zone sensible »** : une pièce non vendue lue à `restricted_entrance`, puis plus jamais lue
+  ailleurs ni vendue dans un délai réglable (par défaut jusqu'à la fermeture du jour). Par pièce, sans personne.
+- **Éteint d'office partout** tant que l'avocat n'a pas rendu son avis (§ 14, point 6) : un interrupteur par pays et région,
+  comme les règles par personne ; la règle et l'étape de l'assistant existent, le super administrateur ne peut pas l'allumer
+  avant une décision écrite du propriétaire. Codé en dernier.
+
+### 17.6 Le comptage et le bilan du soir
+
+- **Comptage** : le gérant ouvre un comptage (tout le magasin, ou une zone), passe le lecteur à main, ferme le comptage. Le
+  boîtier marque ses lectures du numéro du comptage. Résultat : les pièces attendues (à puce, ni vendues ni retirées) et **non
+  lues**. Une pièce absente à **deux comptages de suite** passe à `missing` et ouvre un constat « pièce absente au comptage »,
+  groupé par comptage. Une pièce `missing` relue redevient ce qu'elle était, et le constat le dit.
+- **Le comptage ne touche pas au stock** : il affiche l'écart entre le stock du catalogue et les pièces à puce comptées, par
+  article ; la correction du stock reste un geste de la gestion.
+- **Bilan du soir** (une lecture, calculée à la demande, puis jointe au résumé du jour) : articles suivis vendus avec et sans
+  lecture, sorties sans vente, pièces sorties du dépôt, pièces non vues depuis N jours, antennes en panne dans la journée.
+  Aucun nom, aucun classement de personnes ou de postes.
+
+### 17.7 Assistant, santé, exercice, boîtier
+
+- **Assistant** (§ 16.14) : une étape par antenne, « l'antenne lit une puce d'essai dans la bonne zone » (le fait
+  `TEST_TAG_READ` existe déjà), et une étape « heures d'ouverture réglées ». Quand la vérification échoue, l'étape dit quoi
+  essayer.
+- **Santé** : une ligne par antenne (en ordre, silencieuse depuis N minutes, jamais vue), dans le tableau qui existe.
+- **Exercice** : le boîtier simulé gagne des antennes simulées et une scène par constat (sortie sans vente, sortie couverte,
+  sortie du dépôt sans mise en rayon, porte arrière, hors des heures, zone sensible, comptage avec une pièce absente).
+- **Logiciel du boîtier** (dépôt local) : un lot B5, antennes simulées et présence par zone avec ses deux durées ; les pilotes
+  des vraies antennes viennent à l'essai du matériel, comme ceux du tapis et de l'imprimante.
+
+### 17.8 Deux corrections à embarquer
+
+1. **« Du nouveau depuis la décision » à la seconde** (§ 16.19) : aujourd'hui comparé par les dates, à la seconde ; une preuve
+   arrivée dans la seconde de la décision n'est pas vue. À comparer par le **rang** de la dernière preuve connue au moment de
+   la décision (une colonne additive sur le constat). À faire en tête de L4-b : les constats par pièce reçoivent des preuves en
+   rafale.
+2. **Constat classé dont les nombres doublent** (note du § 16.19 pour L5) : hors de L4, rappelé ici pour qu'il ne se perde pas.
+
+### 17.9 Découpage proposé
+
+| Sous-lot | Contenu | Risque |
+|---|---|---|
+| **L4-a** | zones nouvelles, arrivée et départ par zone, « où est la pièce », index, santé et assistant des antennes, antennes simulées (exercice et boîtier B5) | ordinaire : je me vérifie |
+| **L4-b** | correction « du nouveau depuis la décision » ; constat « sortie sans vente » ; la réserve du rattrapage tranchée | **à risque** : relecteur neuf et mutations |
+| **L4-c** | heures d'ouverture ; les trois constats du dépôt | **à risque** (faux constats) : relecteur neuf |
+| **L4-d** | comptage, `missing`, bilan du soir, résumé du jour | ordinaire |
+| **L4-e** | zone sensible : règle, interrupteur, affichette ; éteinte d'office | **à risque** (vie privée) : relecteur neuf, après l'avocat |
+
+Une migration additive par sous-lot, annoncée au chaperon avec son empreinte. Tout se joue sans matériel (exercice et
+simulateur) ; la campagne d'essai sur de vraies antennes reste avant tout client. Le contrat de chaque sous-lot va au chef en
+dix lignes avant son code, et les routes nouvelles au web avant la bascule.
+
+### 17.10 Risques
+
+1. **Faux constats** (lecture à travers une cloison, pièce posée près de la sortie, employé qui range) : arrivée et départ
+   avec durées, attente de la caisse, marges autour des heures, gravité faible par défaut pour tout ce qui n'est pas une sortie
+   sans vente, regroupement par jour et par zone.
+2. **Sortie volée absorbée par le rattrapage** : 17.3.
+3. **Volume** : arrivées et départs seulement, plafond par pièce et par zone, conservation bornée.
+4. **Vie privée** : aucun fait ne désigne une personne ; la zone sensible est éteinte d'office ; les heures d'ouverture ne
+   servent qu'aux pièces.
+5. **Matériel jamais vu** : portée réelle des antennes, lecture d'une puce contre le corps ou dans un sac, portique étroit ou
+   large : rien de cela ne se règle avant l'essai. Le plan ne promet pas qu'une sortie est toujours lue.
+6. **Stock du catalogue inexact** : il sert à dire « entièrement étiquetée » (17.3) ; un stock faux fait pencher vers le
+   constat faible, jamais vers le silence.
+
+### 17.11 Questions au propriétaire, avec la proposition
+
+1. **Rattrapage** : *les deux parades ensemble (17.3) : silencieux pour une variante entièrement étiquetée, constat faible
+   sinon.*
+2. **Seuils par défaut** : *sortie sans vente : un constat par pièce, gravité haute ; sortie du dépôt sans mise en rayon :
+   30 minutes ; marge autour des heures : 1 heure ; absente au comptage : deux comptages de suite.*
+3. **Heures d'ouverture** : *un réglage du module, une plage par jour ; sans réglage, la règle « hors des heures » est
+   éteinte.*
+4. **Porte arrière** : antenne (elle dit quelle pièce sort) ou simple contact de porte (il dit seulement que la porte
+   s'ouvre) ? *Proposition : antenne ; le contact de porte ne prouve rien sur une pièce.*
+5. **Zone sensible** : *codée en dernier, éteinte d'office partout, allumée seulement après l'avis écrit de l'avocat.*
+6. **Le comptage change-t-il le stock ?** *Non : il montre l'écart, la gestion corrige.*
+7. **Bilan du soir par courriel** : *joint au résumé du jour qui existe, sans courriel de plus.*
+8. **Ordre** : *L4-a, L4-b, L4-c, L4-d, puis L4-e après l'avocat.*

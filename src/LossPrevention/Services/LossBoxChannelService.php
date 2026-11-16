@@ -45,6 +45,11 @@ class LossBoxChannelService
     private const FACT_KEY = '/\A[A-Za-z0-9_-]{8,48}\z/';
     private const TIME = '/\A(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})\z/';
     public const ARCHS = ['amd64', 'arm64'];
+    /** Pourquoi un boîtier jumelé n'est pas inscrit (`enrolPaired`) : trois raisons sûres, et « introuvable », qui ne prouve rien */
+    public const PAIRED_REVOKED = 'revoked';
+    public const PAIRED_KEY_RESET = 'key_reset';
+    public const PAIRED_OTHER_MACHINE = 'other_machine';
+    public const PAIRED_UNKNOWN = 'unknown';
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -133,24 +138,41 @@ class LossBoxChannelService
     }
 
     /**
-     * Inscription de la machine d'un boîtier JUMELÉ par code (lot L3-a2, § 16.17), dans le site courant. Le boîtier du site est
-     * retrouvé par l'empreinte qui le lie à CE site et à `$code` (le code, et l'aléa du jumelage qui l'a créé) : aucun identifiant
-     * venu d'ailleurs ne désigne un boîtier.
+     * Inscription de la machine d'un boîtier JUMELÉ par code (lot L3-a2, § 16.17), dans le site courant.
      * La forme de `$machine`, `$version` et `$arch` est vérifiée par l'appelant (`LossPairingService`).
      *
-     * @return array<string, mixed>|null { box, token, expiresAt, serverTime, settings } ; null : ce jumelage ne vaut plus rien
-     *                                   (boîtier révoqué, clé remise à zéro depuis, autre machine inscrite)
+     * Le boîtier est lu PAR SON NUMÉRO (celui que la demande de jumelage porte), puis on vérifie que c'est bien le boîtier que CE
+     * jumelage a créé : l'empreinte de sa clé est celle du jumelage (`$code` : le code, et l'aléa du jumelage), ou, si sa clé a
+     * été remise à zéro depuis, son fait de création porte la marque du jumelage. Sans l'une de ces deux preuves, le boîtier lu
+     * n'est PAS celui du jumelage (base qui n'est pas la sienne, numéro d'un autre boîtier) : rien ne se décide sur lui, pas même
+     * s'il est révoqué. Sur le boîtier du jumelage, trois raisons sûres de ne plus servir ce code : il est révoqué, sa clé a été
+     * remise à zéro, une autre machine s'y est inscrite.
+     *
+     * @return array<string, mixed>|string { box, token, expiresAt, serverTime, settings }, ou la raison de ne pas inscrire :
+     *                                     `PAIRED_REVOKED`, `PAIRED_KEY_RESET`, `PAIRED_OTHER_MACHINE` (sûres), `PAIRED_UNKNOWN`
      */
-    public function enrolPaired(string $code, string $machine, string $version, string $arch): ?array
+    public function enrolPaired(string $code, int $boxId, string $machine, string $version, string $arch): array|string
     {
         $site = $this->tenantCode();
         $machineHash = $this->tokens->machineHash($site, $machine);
 
-        return $this->transaction(function () use ($site, $code, $machineHash, $version, $arch): ?array {
-            $box = $this->repository()->boxByKeyHash($this->tokens->pairingKeyHash($site, $code));
-            if ($box === null || (bool) $box['exercise'] || $box['status'] === LossBox::REVOKED
-                || ($box['machine_hash'] !== null && !hash_equals((string) $box['machine_hash'], $machineHash))) {
-                return null;
+        return $this->transaction(function () use ($site, $code, $boxId, $machineHash, $version, $arch): array|string {
+            $box = $this->repository()->boxOfPairing($boxId);
+            if ($box === null || (bool) $box['exercise']) {
+                return self::PAIRED_UNKNOWN;
+            }
+            $sameKey = is_string($box['key_hash']) && hash_equals($box['key_hash'], $this->tokens->pairingKeyHash($site, $code));
+            if (!$sameKey && !$this->repository()->createdByPairing($boxId, $this->tokens->pairingRef($site, $code))) {
+                return self::PAIRED_UNKNOWN; // ce n'est pas le boîtier de ce jumelage : son état ne prouve rien
+            }
+            if ($box['status'] === LossBox::REVOKED) {
+                return self::PAIRED_REVOKED;
+            }
+            if (!$sameKey) {
+                return self::PAIRED_KEY_RESET;
+            }
+            if ($box['machine_hash'] !== null && !hash_equals((string) $box['machine_hash'], $machineHash)) {
+                return self::PAIRED_OTHER_MACHINE; // en ceinture : seule cette méthode pose la machine d'un boîtier jumelé
             }
 
             return $this->enrolLocked($box, $site, $machineHash, $version, $arch, true);

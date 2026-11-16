@@ -127,7 +127,11 @@ class LossPreventionPairingTest extends LossPreventionTestCase
         $row = $this->row($code);
         $this->assertSame(['paired', MV_TEST_TENANT_CODE, $box['id']], [$row['status'], $row['tenant_code'], (int) $row['box_id']]);
         $event = $this->db->fetchAssociative('SELECT type, user_id, data FROM loss_box_event WHERE box_id = ? ORDER BY id', [$box['id']]);
-        $this->assertSame(['BOX_CREATED', $this->adminId, ['pairing' => true]], [$event['type'], (int) $event['user_id'], json_decode($event['data'], true)]);
+        // le fait de création garde la marque du jumelage (elle survivra à une remise à zéro de la clé) ; elle ne donne ni le code ni l'empreinte
+        $ref = static::getContainer()->get(\App\LossPrevention\Services\LossBoxToken::class)->pairingRef(MV_TEST_TENANT_CODE, $code . '|' . $row['link']);
+        $this->assertSame(['BOX_CREATED', $this->adminId, ['pairing' => true, 'ref' => $ref]], [$event['type'], (int) $event['user_id'], json_decode($event['data'], true)]);
+        $this->assertNotSame($ref, $this->db->fetchOne('SELECT key_hash FROM loss_box WHERE id = ?', [$box['id']]));
+        $this->assertStringNotContainsString($ref, json_encode($this->sheet($box['id'])), 'aucune lecture ne rend cette marque');
         $keyed = $this->keyed();
         $this->assertSame([$box['id'] => true, $keyed => false], array_intersect_key(array_column($this->json($this->admin('GET', self::BOXES))['items'], 'paired', 'id'), [$box['id'] => 1, $keyed => 1]),
             'un boîtier ajouté par sa clé n\'est pas « jumelé »');
@@ -270,6 +274,85 @@ class LossPreventionPairingTest extends LossPreventionTestCase
         $this->assertSame('waiting', $this->json($this->box('/etat', ['code' => $old, 'machine' => self::MACHINE]))['status'], 'branché cinq ans après, il redevient jumelable');
         $this->db->executeStatement("UPDATE loss_box SET status = 'revoked', revoked_at = NOW() WHERE id = (SELECT MIN(id) FROM loss_box WHERE NOT exercise AND status <> 'revoked')"); // une place dans le site
         $this->assertSame('pending', $this->json($this->pair(['code' => $old, 'name' => "Cinq ans après $this->s"]), 201)['box']['status']);
+    }
+
+    public function testAPairingIsNeverClosedOnAStaleSiteRecordOrAMissingBox(): void
+    {
+        // 1. Une fiche de site FAUSSE dans le cache (elle mène dans la base d'un autre site, où ce boîtier n'existe pas) : le jumelage
+        // ne la lit pas. Le site est relu dans la base maître ; le boîtier reçoit son jeton, rien n'est fermé
+        [$code, , $proof, $id] = $this->pairedBox('Cache faux');
+        $manager = static::getContainer()->get(\App\Services\TenantConnectionManager::class);
+        $cache = (new \ReflectionProperty($manager, 'cache'))->getValue($manager);
+        $key = 'tenant_data_code_' . MV_TEST_TENANT_CODE;
+        try {
+            $cache->delete($key);
+            $cache->get($key, fn (): array => ['id' => 999999, 'code' => MV_TEST_TENANT_CODE, 'dbname' => MV_TEST_TENANT2_DB]);
+            $this->assertSame(MV_TEST_TENANT2_DB, $manager->findTenantByCode(MV_TEST_TENANT_CODE)['dbname'] ?? null, 'la fiche fausse est bien celle que le cache rend');
+            $given = $this->json($this->box('/etat', $proof));
+            $this->assertSame(['paired', $id, 'paired'], [$given['status'], $given['box']['id'], $this->row($code)['status']]);
+        } finally {
+            $cache->delete($key);
+        }
+        $this->assertSame('active', $this->sheet($id)['status'], 'inscrit dans SA base');
+
+        // 2. Le boîtier que le jumelage désigne est INTROUVABLE dans la base du site : ce n'est pas la preuve qu'il a été détaché (un
+        // boîtier ne se supprime pas). Rien n'est remis, RIEN n'est fermé, le boîtier patiente ; l'erreur réparée, il est servi
+        [$code, , $proof, $id] = $this->pairedBox('Introuvable');
+        $hash = $this->row($code)['code_hash'];
+        $pairing = (int) $this->row($code)['id'];
+        self::pairingLimiter('pairWarning', '1 hour', (string) $pairing)->reset(); // le frein du journal est gardé d'un lancement à l'autre
+        $log = static::getContainer()->getParameter('kernel.logs_dir') . '/test.log';
+        $from = is_file($log) ? filesize($log) : 0;
+        $this->master->prepare('UPDATE loss_box_pairing SET box_id = 999999999 WHERE code_hash = ?')->execute([$hash]);
+        for ($i = 0; $i < 2; ++$i) {
+            $lost = $this->json($this->box('/etat', $proof));
+            $this->assertSame(['waiting', null, false, 'paired', null], [$lost['status'], $lost['expiresAt'], array_key_exists('token', $lost), $this->row($code)['status'], $this->row($code)['closed_at']]);
+        }
+        $this->assertSame('pending', $this->sheet($id)['status'], 'le vrai boîtier n\'a pas bougé');
+        // un boîtier d'exercice au même numéro ne vaut pas mieux qu'aucun boîtier
+        $simulated = $this->json($this->admin('POST', self::BASE . '/exercices/boitiers'), 201)['box']['id'];
+        $this->master->prepare('UPDATE loss_box_pairing SET box_id = ? WHERE code_hash = ?')->execute([$simulated, $hash]);
+        $this->assertSame(['waiting', 'paired'], [$this->json($this->box('/etat', $proof))['status'], $this->row($code)['status']]);
+        $this->json($this->admin('DELETE', self::BASE . '/exercices/boitiers'));
+        // l'exploitant est prévenu par le journal du serveur : UNE ligne par jumelage et par heure, pas une par question du boîtier
+        clearstatcache();
+        $written = is_file($log) ? (string) file_get_contents($log, false, null, $from) : '';
+        $this->assertSame(1, substr_count($written, "jumelage $pairing laissé tel quel, le boîtier 999999999 est introuvable"), 'trois questions, une seule ligne au journal');
+        $this->assertStringNotContainsString($code, $written, 'le code du jumelage n\'est pas au journal');
+
+        // 3. Le numéro d'un AUTRE vrai boîtier ne prouve rien non plus : c'est exactement ce qu'on lirait dans une base qui n'est pas
+        // celle du site (un boîtier du même numéro y existe presque toujours). Qu'il soit en service, RÉVOQUÉ, ou jumelé par un
+        // autre code et sa clé remise à zéro : rien n'est fermé, rien n'est remis
+        $other = $this->keyed();
+        $this->master->prepare('UPDATE loss_box_pairing SET box_id = ? WHERE code_hash = ?')->execute([$other, $hash]);
+        $this->assertSame(['waiting', 'paired'], [$this->json($this->box('/etat', $proof))['status'], $this->row($code)['status']], 'un autre boîtier, par clé');
+        $this->json($this->admin('POST', self::BOXES . "/$other/revoquer", ['confirm' => true]));
+        $this->assertSame(['waiting', 'paired'], [$this->json($this->box('/etat', $proof))['status'], $this->row($code)['status']], 'un autre boîtier, révoqué');
+        [$elsewhere, , $elsewhereProof, $stranger] = $this->pairedBox('Autre jumelage');
+        $this->json($this->admin('POST', self::BOXES . "/$stranger/cle", ['confirm' => true]));
+        $this->master->prepare('UPDATE loss_box_pairing SET box_id = ? WHERE code_hash = ?')->execute([$stranger, $hash]);
+        $this->assertSame(['waiting', 'paired'], [$this->json($this->box('/etat', $proof))['status'], $this->row($code)['status']], 'le boîtier d\'un autre jumelage, clé remise à zéro');
+        // … alors que ce boîtier-là ferme bien SON jumelage : la marque de son fait de création a survécu à la remise à zéro
+        $this->assertSame(['closed', 'closed'], [$this->json($this->box('/etat', $elsewhereProof))['status'], $this->row($elsewhere)['status']]);
+
+        // 4. Sur le boîtier que ce jumelage a créé, les preuves ferment toujours. Révoqué (essai « détacher »), clé remise à zéro (essai
+        // précédent), et ici les deux à la suite : la clé remise à zéro PUIS le boîtier révoqué
+        $this->master->prepare('UPDATE loss_box_pairing SET box_id = ? WHERE code_hash = ?')->execute([$id, $hash]);
+        $this->assertSame(['paired', $id], [($given = $this->json($this->box('/etat', $proof)))['status'], $given['box']['id']], 'l\'erreur réparée, il est servi');
+        $this->json($this->admin('POST', self::BOXES . "/$id/cle", ['confirm' => true]));
+        $this->json($this->admin('POST', self::BOXES . "/$id/revoquer", ['confirm' => true]));
+        $this->assertSame(['closed', 'closed'], [$this->json($this->box('/etat', $proof))['status'], $this->row($code)['status']]);
+
+        // 5. Un site que la base maître ne connaît plus (renommé, supprimé) : rien n'est fermé, le boîtier patiente, et c'est dit au journal
+        [$code, , $proof] = $this->pairedBox('Site disparu');
+        $pairing = (int) $this->row($code)['id'];
+        self::pairingLimiter('pairWarning', '1 hour', (string) $pairing)->reset();
+        $this->master->prepare('UPDATE loss_box_pairing SET tenant_code = ? WHERE code_hash = ?')->execute(['site-qui-n-existe-pas', $this->row($code)['code_hash']]);
+        clearstatcache();
+        $from = is_file($log) ? filesize($log) : 0;
+        $this->assertSame(['waiting', 'paired'], [$this->json($this->box('/etat', $proof))['status'], $this->row($code)['status']]);
+        clearstatcache();
+        $this->assertSame(1, substr_count(is_file($log) ? (string) file_get_contents($log, false, null, $from) : '', "jumelage $pairing laissé tel quel, le site site-qui-n-existe-pas est introuvable"));
     }
 
     public function testNoCodeIsGuessedByTryingThemInARow(): void

@@ -80,6 +80,23 @@ class LossPairingRepository
         return (int) $stmt->fetchColumn();
     }
 
+    /**
+     * Le site d'un jumelage, lu dans la base maître SANS cache : la décision de fermer un jumelage ne repose jamais sur une fiche
+     * de site gardée en cache (une fiche fausse mènerait dans la base d'un autre site).
+     *
+     * @return array{code: string, dbname: string}|null null : site inconnu, ou sans base
+     *
+     * @throws \PDOException la base maître ne répond pas (l'appelant fait patienter le boîtier, et le dit au journal)
+     */
+    public function tenant(string $code): ?array
+    {
+        $stmt = $this->pdo()->prepare('SELECT code, dbname FROM tenants WHERE code = ?');
+        $stmt->execute([$code]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+        return is_array($row) && is_string($row['dbname'] ?? null) && $row['dbname'] !== '' ? ['code' => (string) $row['code'], 'dbname' => $row['dbname']] : null;
+    }
+
     /** @return array<string, mixed>|null la demande de ce code ; `$lock` : tenue jusqu'à la fin de la transaction */
     public function byCodeHash(string $codeHash, bool $lock = false): ?array
     {
