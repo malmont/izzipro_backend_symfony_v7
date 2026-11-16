@@ -1106,8 +1106,9 @@ publique du commerçant**, nom affiché « Marie D. ». Moyenne et nombre tenus 
 
 `php bin/console app:boutique:seed-demo [--customer-email=…] [--reset-password] [--otp]` (`SeedBoutiqueDemoCommand`,
 `SeedBoutiqueDemoUseCase`, `Services/BoutiqueDemoService/` : `BoutiqueDemoCatalog` pour les données,
-`BoutiqueDemoSeeder`, `DemoImageGenerator`). Refusé sur tout autre site que `demo` (`ALLOWED_TENANTS`, base lue dans
-`tenants`). Rejouable : n'ajoute que ce qui manque (produits repérés par leur code `DEMO-…`), n'efface rien ; les
+`BoutiqueDemoSeeder`, `DemoImageGenerator`). Refusé sur tout autre site que `demo` (`ALLOWED_TENANTS`) et les sites d'une agence de test (`App\Services\Platform\TestSites` :
+site d'attache ou site géré d'une agence `is_test`, relu dans la base maître ; lot ESSAI-DONNÉES, 17/11/2026), base lue dans
+`tenants`. Rejouable : n'ajoute que ce qui manque (produits repérés par leur code `DEMO-…`), n'efface rien ; les
 caches des lectures publiques sont vidés par ses écritures (registre `Cache/CacheTags`). Le mot de passe du client n'est
 affiché qu'à sa création (ou avec `--reset-password`).
 

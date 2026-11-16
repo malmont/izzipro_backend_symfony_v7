@@ -176,14 +176,18 @@ faux = amélioration ou facultatif, orange) ; `forSite()` rend en plus `blocking
 `label` via `groupLabel()`, `blockingTodo`, `improvementTodo`, `done`, `pending`, `total`, `ready`), aussi dans `GET /api/site/readiness`
 (contrat front). Les « Obtenir : … » restent hors groupes.
 
+**Location (17/11/2026, demande du propriétaire).** « Location : un produit louable » n'est indispensable que si la location a été CHOISIE
+(`commerce.salesModes` enregistré et contenant `rental`) ; sans réglage enregistré (le défaut accepte les trois modes), la ligne est
+facultative. « Configuration de réservation », « tarifs » et « caution » ne s'affichent que s'il existe au moins un produit louable.
+
 **Voir mon site en ligne (08/11/2026).** `forSite()` et `GET /api/site/readiness` rendent aussi `links` : `{ host, platformHost, customDomain,
 customState, pages: [{ key, label, url }] }`. `pages` commence par la landing page : `site` mène à `/landingpage` (sans slug : Next y sert
 l'accueil lui-même, décision du propriétaire du 08/11/2026), puis un lien `landing.<slug>` par onglet suivant de `landing_page_setting.tabs`, à
 `/landingpage/<slug>` (slug du titre dans la langue du site : ascii minuscule, tirets, suffixe -2, -3… en cas de doublon, même règle que
 l'assistant IA) ; sans landing page, `site` mène à `/`. Puis chaque module
 accordé qui a une page publique (`SiteReadinessService::PUBLIC_PATHS` : `module.boutique` → `/catalogue`, `module.memoires` → `/memoires`, `module.boussole` →
-`/boussole`). L'hôte est le domaine propre dès qu'il sert le site en HTTPS (`customState` = `live`), sinon l'adresse de la plateforme
-`<code>.<FRONTEND_BASE_DOMAIN>` : un domaine en attente de DNS donnerait des liens morts. Le tableau « Préparer mes produits » de l'accueil du
+`/boussole`). Enfin `gestion` (« Gestion web », 17/11/2026) : l'espace d'administration du front, `https://<hôte>/admin`. L'hôte est le domaine propre dès qu'il sert le site en HTTPS (`customState` = `live`), sinon l'adresse de la plateforme
+`<code>.<FRONTEND_BASE_DOMAIN>` : un domaine en attente de DNS donnerait des liens morts. Le tableau « Préparer mon site » (titre du 17/11/2026, avant « Préparer mes produits ») de l'accueil du
 back-office les montre dans un bandeau « Voir mon site en ligne » (boutons, nouvel onglet, adresse de la plateforme et état du domaine propre) et
 chaque groupe qui a une page porte un lien « voir en ligne » ; le front peut faire de même avec `links`. Les étapes, par groupe :
 
