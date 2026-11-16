@@ -113,15 +113,20 @@ class ActivationLinkTest extends WebTestCase
         $this->assertStringNotContainsString((string) $invitedAdmin['user']['token'], (string) $this->client->getResponse()->getContent());
     }
 
-    /** @return array<string, mixed> la ligne d'un compte dans la liste de la console */
+    /** @return array<string, mixed> la ligne d'un compte dans la liste de la console (paginée par 200, triée par identifiant : les pages sont lues jusqu'à le trouver) */
     private function listed(string $bearer, string $email): array
     {
-        [$status, $body] = $this->api('GET', '/api/memoires/admin/users?limit=200&search=' . urlencode($email), null, $bearer);
-        $this->assertSame(200, $status, json_encode($body));
-        $rows = $body['users'] ?? $body['data'] ?? $body['items'] ?? $body;
-        foreach ($rows as $row) {
-            if (is_array($row) && ($row['email'] ?? null) === $email) {
-                return $row;
+        for ($page = 1; $page <= 50; ++$page) {
+            [$status, $body] = $this->api('GET', "/api/memoires/admin/users?limit=200&page=$page", null, $bearer);
+            $this->assertSame(200, $status, json_encode($body));
+            $rows = $body['users'] ?? $body['data'] ?? $body['items'] ?? $body;
+            foreach ($rows as $row) {
+                if (is_array($row) && ($row['email'] ?? null) === $email) {
+                    return $row;
+                }
+            }
+            if (count($rows) < 200) {
+                break;
             }
         }
         $this->fail("compte $email absent de la liste");
