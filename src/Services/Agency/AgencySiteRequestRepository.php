@@ -179,6 +179,30 @@ class AgencySiteRequestRepository
         $this->pdo()->prepare('UPDATE agency_site_requests SET result = ? WHERE id = ?')->execute([json_encode($result, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES), $id]);
     }
 
+    /**
+     * L'agence désigne une autre personne pour administrer le site : la nouvelle adresse remplace l'ancienne, gardée le temps que le
+     * worker retire le compte jamais activé de la première (`replacedAdminEmail`). Le prénom et le nom donnés pour la première ne
+     * valent plus.
+     */
+    public function changeAdmin(int $id, string $email, string $previous): void
+    {
+        $this->pdo()->prepare("UPDATE agency_site_requests SET admin_email = ?, options = (COALESCE(options, '{}'::jsonb) - 'adminFirstName' - 'adminLastName') || ?::jsonb WHERE id = ?")
+            ->execute([$email, json_encode(['replacedAdminEmail' => $previous], \JSON_UNESCAPED_UNICODE), $id]);
+    }
+
+    /** Le worker a traité le changement de personne */
+    public function clearReplacedAdmin(int $id): void
+    {
+        $this->pdo()->prepare("UPDATE agency_site_requests SET options = COALESCE(options, '{}'::jsonb) - 'replacedAdminEmail' WHERE id = ?")->execute([$id]);
+    }
+
+    /** Note l'instant d'une demande de renvoi d'invitation (un renvoi par site et par délai) */
+    public function markInvitationAsked(int $id, \DateTimeImmutable $at): void
+    {
+        $this->pdo()->prepare("UPDATE agency_site_requests SET result = COALESCE(result, '{}'::jsonb) || ?::jsonb WHERE id = ?")
+            ->execute([json_encode(['invitationAskedAt' => $at->setTimezone(new \DateTimeZone('UTC'))->format(\DateTimeInterface::ATOM)]), $id]);
+    }
+
     /** La demande passe « en échec », avec un code stable ; vrai si elle était en cours @param array<string, mixed>|null $result */
     public function fail(int $id, string $errorCode, ?array $result = null): bool
     {

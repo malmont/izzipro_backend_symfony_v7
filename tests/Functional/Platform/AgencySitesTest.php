@@ -34,14 +34,19 @@ class AgencySitesTest extends WebTestCase
     /** @var array<string, string> jetons par clé */
     private array $tokens = [];
     private int $agency = 0;
+    /** @var array<string, mixed> les indicateurs de modules du second site de test, rendus à la fin (un droit posé par un essai les projette) */
+    private array $flags = [];
 
     protected function setUp(): void
     {
         $this->client = static::createClient();
         $this->master = static::getContainer()->get(TenantConnectionManager::class)->getPdoMaster();
         $this->tag = bin2hex(random_bytes(3));
+        // l'invitation part par l'expéditeur de la plateforme : le serveur d'envoi des tests reçoit un compte
+        $_ENV['MAILER_DSN'] = $_SERVER['MAILER_DSN'] = 'null://plateforme-envoi%40example.invalid:x@default';
+        $this->flags = $this->pdo(MV_TEST_TENANT2_DB)->query('SELECT ' . implode(', ', \App\Services\FeatureAccess\FeatureCatalog::GOVERNED) . ' FROM entreprise ORDER BY id LIMIT 1')->fetch(\PDO::FETCH_ASSOC) ?: [];
         $this->clean();
-        $this->agency = (int) $this->json('POST', '/api/platform/agencies', ['code' => 'agence-sites', 'name' => 'Agence des Sites', 'homeTenantCode' => MV_TEST_TENANT_CODE, 'test' => true], 'super', 201)['agency']['id'];
+        $this->agency = (int) $this->json('POST', '/api/platform/agencies', ['code' => 'agence-sites', 'name' => 'Agence des Sites', 'homeTenantCode' => MV_TEST_TENANT_CODE, 'contactEmail' => 'contact-agence@example.invalid', 'test' => true], 'super', 201)['agency']['id'];
         $this->account('agence-resp@example.invalid', ['ROLE_ADMIN', 'ROLE_AGENCY'], 'manager');
         $this->account('agence-collab@example.invalid', ['ROLE_AGENCY_MEMBER'], 'member');
     }
@@ -49,6 +54,15 @@ class AgencySitesTest extends WebTestCase
     protected function tearDown(): void
     {
         $this->clean();
+        if ($this->flags !== []) {
+            $sets = implode(', ', array_map(static fn (string $column): string => "$column = :$column", array_keys($this->flags)));
+            $stmt = $this->pdo(MV_TEST_TENANT2_DB)->prepare("UPDATE entreprise SET $sets WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1)");
+            foreach ($this->flags as $column => $value) {
+                $stmt->bindValue($column, in_array($value, [true, 't', 'true', 1, '1'], true), \PDO::PARAM_BOOL);
+            }
+            $stmt->execute();
+        }
+        unset($_ENV['MAILER_DSN'], $_SERVER['MAILER_DSN']);
         parent::tearDown();
     }
 
@@ -59,6 +73,7 @@ class AgencySitesTest extends WebTestCase
 
         // Le nom du site : forme, mots réservés, noms déjà pris (un site, une BASE qui existe sans être un site, un domaine)
         $reason = fn (string $c): ?string => $this->json('GET', '/api/agency/sites/availability?code=' . rawurlencode($c), null, 'member', 200)['reason'];
+        $this->assertSame('INVALID', $reason('boutique-v2'), 'un hôte en « -v2 » se résout vers le site sans ce suffixe');
         $this->assertSame(['INVALID', 'INVALID', 'INVALID', 'INVALID', 'RESERVED', 'RESERVED', 'TAKEN', 'TAKEN', 'TAKEN', null],
             [$reason('ab'), $reason('1site'), $reason('mon--site'), $reason('mon_site'), $reason('admin'), $reason('gmasuite'), $reason(MV_TEST_TENANT2_CODE), $reason('mv-contract-test'), $reason('site-template-test'), $reason($code)]);
         $this->assertSame(['code' => $code, 'available' => true, 'reason' => null], $this->json('GET', '/api/agency/sites/availability?code=' . strtoupper($code), null, 'manager', 200));
@@ -140,6 +155,8 @@ class AgencySitesTest extends WebTestCase
         $this->assertCount(1, $mails);
         $mail = $mails[0];
         $this->assertSame(["zoe-{$this->tag}@example.invalid"], array_map(static fn ($a) => $a->getAddress(), $mail->getTo()));
+        $this->assertSame([['plateforme-envoi@example.invalid'], ['contact-agence@example.invalid']], [array_map(static fn ($a) => $a->getAddress(), $mail->getFrom()), array_map(static fn ($a) => $a->getAddress(), $mail->getReplyTo())],
+            'par l\'expéditeur de la plateforme (pas « de » l\'adresse du destinataire), réponses vers le contact de l\'agence');
         $this->assertSame('Boutique de Zoé : votre accès d\'administrateur', $mail->getSubject());
         $html = (string) $mail->getHtmlBody();
         $this->assertStringContainsString('Bonjour Zoé,', $html);
@@ -173,6 +190,12 @@ class AgencySitesTest extends WebTestCase
         $foreign = (int) $this->master->query("INSERT INTO agency_site_requests (agency_id, tenant_code, name, admin_email) VALUES ($other, 'agtest-ailleurs', 'Site d''une autre agence', 'ailleurs@example.invalid') RETURNING id")->fetchColumn();
         $this->assertSame('AGENCY_REQUEST_NOT_FOUND', $this->json('GET', "/api/agency/site-requests/$foreign", null, 'manager', 404)['code']);
         $this->assertNotContains($foreign, array_column($this->json('GET', '/api/agency/site-requests', null, 'manager', 200)['requests'], 'id'));
+        // … ni un site qu'une autre agence a créé : ni ses modules, ni son administrateur
+        $this->master->exec("INSERT INTO agency_sites (agency_id, tenant_code, origin) VALUES ($other, 'agtest-ailleurs', 'created')");
+        $this->assertSame('AGENCY_SITE_NOT_ATTACHED', $this->json('GET', '/api/agency/sites/agtest-ailleurs/modules', null, 'manager', 404)['code']);
+        $this->assertSame('AGENCY_SITE_NOT_ATTACHED', $this->json('PUT', '/api/agency/sites/agtest-ailleurs/modules/module.pos', ['enabled' => true], 'manager', 404)['code']);
+        $this->assertSame('AGENCY_SITE_NOT_ATTACHED', $this->json('POST', '/api/agency/sites/agtest-ailleurs/invitation', ['adminEmail' => 'moi@example.invalid'], 'manager', 404)['code']);
+        $this->assertSame(0, (int) $this->master->query("SELECT COUNT(*) FROM tenant_entitlements WHERE tenant_code = 'agtest-ailleurs'")->fetchColumn());
         $this->assertSame('AGENCY_SITE_NOT_ATTACHED', $this->json('GET', '/api/agency/sites/agtest-inconnu/modules', null, 'manager', 404)['code']);
     }
 
@@ -192,8 +215,37 @@ class AgencySitesTest extends WebTestCase
         $this->assertSame([1, false, 'inutilisable'], [$untouched[0], $untouched[2], $untouched[3]]);
         $this->json('POST', "/api/agency/sites/$code/invitation", null, 'manager', 202);
         $this->service()->resendInvitation($id, 'agence-resp@example.invalid');
-        $this->assertSame(['sent' => false, 'reason' => 'NOT_FOUND', 'expiresAt' => null], $this->json('GET', "/api/agency/site-requests/$id", null, 'manager', 200)['request']['invitation']);
+        $this->assertSame(['sent' => false, 'reason' => 'ACCOUNT_EXISTS', 'expiresAt' => null], $this->json('GET', "/api/agency/site-requests/$id", null, 'manager', 200)['request']['invitation']);
         $this->assertSame([$untouched, 0], [$account(), count(self::getMailerMessages())], 'un compte qui n\'est pas né de l\'invitation ne reçoit jamais de lien');
+        // Un renvoi par site toutes les 10 minutes : chaque renvoi fait partir un courriel de la plateforme
+        $soon = $this->json('POST', "/api/agency/sites/$code/invitation", null, 'manager', 429);
+        $this->assertSame('AGENCY_INVITATION_TOO_SOON', $soon['code']);
+        $this->assertGreaterThan(500, $soon['retryAfterSeconds']);
+        $later = fn () => $this->master->exec("UPDATE agency_site_requests SET result = result || jsonb_build_object('invitationAskedAt', to_char(NOW() - INTERVAL '11 minutes', 'YYYY-MM-DD\"T\"HH24:MI:SS+00:00')) WHERE id = $id");
+        $later();
+        // Sortie de l'impasse : le responsable désigne UNE AUTRE personne ; elle est invitée, le compte de la plateforme reste intact
+        $this->assertSame('adminEmail', $this->json('POST', "/api/agency/sites/$code/invitation", ['adminEmail' => 'pas-une-adresse'], 'manager', 422)['errors'][0]['path']);
+        $changed = $this->json('POST', "/api/agency/sites/$code/invitation", ['adminEmail' => "Remi-{$this->tag}@Example.invalid"], 'manager', 202)['request'];
+        $this->assertSame("remi-{$this->tag}@example.invalid", $changed['adminEmail']);
+        $this->service()->resendInvitation($id, 'agence-resp@example.invalid');
+        $invited = self::getMailerMessages();
+        $this->assertSame([1, "remi-{$this->tag}@example.invalid"], [count($invited), $invited[0]->getTo()[0]->getAddress()]);
+        $this->assertSame([true, null], [$this->json('GET', "/api/agency/site-requests/$id", null, 'manager', 200)['request']['invitation']['sent'], $this->master->query("SELECT options->>'replacedAdminEmail' FROM agency_site_requests WHERE id = $id")->fetchColumn()]);
+        $this->assertSame($untouched, $account());
+        $people = fn (): array => $this->pdo($db)->query("SELECT email FROM \"user\" WHERE signup_channel = 'admin_invite' ORDER BY id")->fetchAll(\PDO::FETCH_COLUMN);
+        $this->assertSame(["remi-{$this->tag}@example.invalid"], $people());
+        // Une troisième personne : le compte jamais activé de la deuxième est retiré (son lien ne vaut plus)
+        $later();
+        $this->json('POST', "/api/agency/sites/$code/invitation", ['adminEmail' => "lea-{$this->tag}@example.invalid"], 'manager', 202);
+        $this->service()->resendInvitation($id, 'agence-resp@example.invalid');
+        $this->assertSame(["lea-{$this->tag}@example.invalid"], $people());
+        $this->assertSame(['site_admin_changed', 'site_admin_changed'], $this->master->query('SELECT event FROM agency_events WHERE agency_id = ' . $this->agency . " AND event = 'site_admin_changed'")->fetchAll(\PDO::FETCH_COLUMN));
+        // Une fois le mot de passe choisi, changer d'administrateur n'est plus l'affaire de l'agence
+        $this->pdo($db)->exec("UPDATE \"user\" SET is_verified = true WHERE email = 'lea-{$this->tag}@example.invalid'");
+        $later();
+        $this->assertSame('AGENCY_ADMIN_ACTIVE', $this->json('POST', "/api/agency/sites/$code/invitation", ['adminEmail' => "autre-{$this->tag}@example.invalid"], 'manager', 409)['code']);
+        $this->assertSame(["lea-{$this->tag}@example.invalid"], $people());
+        self::getMailerMessages();
         $flags = fn (): array => $this->pdo($db)->query('SELECT is_landing_page_active, is_boutique_active, is_pos_active, is_support_active, is_management_app_active, is_boussole_esg_active FROM entreprise')->fetch(\PDO::FETCH_NUM);
         $this->assertSame([true, true, true, true, true, false], $flags(), 'seuls les modules demandés sont ouverts');
         $modules = fn (string $as = 'member'): array => array_column($this->json('GET', "/api/agency/sites/$code/modules", null, $as, 200)['modules'], null, 'key');
@@ -235,6 +287,10 @@ class AgencySitesTest extends WebTestCase
         $this->assertSame([['ai.help', 'trial']], $this->master->query("SELECT feature_key, source FROM tenant_entitlements WHERE tenant_code = '$code' AND feature_key LIKE 'ai.%' AND status = 'active'")->fetchAll(\PDO::FETCH_NUM));
         $support = (int) $this->master->query("SELECT id FROM tenant_entitlements WHERE tenant_code = '$code' AND feature_key = 'module.support' AND status = 'active'")->fetchColumn();
         static::getContainer()->get(EntitlementService::class)->suspend($support, 'plateforme', 'autre raison', false);
+        // … et que l'agence ne peut pas rouvrir d'un geste : un droit suspendu ne se contourne pas
+        $held = $put('module.support', true, 'manager', 409);
+        $this->assertSame(['AGENCY_MODULE_HELD', 'suspended'], [$held['code'], $held['status']]);
+        $this->assertSame(0, (int) $this->master->query("SELECT COUNT(*) FROM tenant_entitlements WHERE tenant_code = '$code' AND feature_key = 'module.support' AND status = 'active'")->fetchColumn());
         $attachedBefore = $rights(MV_TEST_TENANT2_CODE);
         self::getMailerMessages();
 
@@ -260,14 +316,19 @@ class AgencySitesTest extends WebTestCase
         $this->assertSame(['module.landing', 'suspended', $mark], $rights()[2]);
         $this->assertFalse($flags()[0]);
 
+        // Pendant la suspension, le site prend la boutique d'une autre source (un essai) : la reprise ne doit pas le lui annuler
+        static::getContainer()->get(EntitlementService::class)->trial($code, 'module.boutique', 5, 'essai', 'essai pris pendant la suspension');
+
         // Lever la suspension : ce que la cascade avait pris est rendu, rien d'autre
         $this->json('POST', "/api/platform/agencies/{$this->agency}/resume", null, 'super', 200);
-        $this->assertSame([['app.management', 'active', 'agency:' . $this->agency], ['module.boutique', 'active', 'agency:' . $this->agency], ['module.landing', 'active', 'agency:' . $this->agency],
+        $this->assertSame([['trial', 'active'], ['agency', 'cancelled']], $this->master->query("SELECT source, status FROM tenant_entitlements WHERE tenant_code = '$code' AND feature_key = 'module.boutique' ORDER BY id DESC LIMIT 2")->fetchAll(\PDO::FETCH_NUM),
+            'le site garde son essai ; c\'est le droit de l\'agence qui s\'efface');
+        $this->assertSame([['app.management', 'active', 'agency:' . $this->agency], ['module.boutique', 'active', null], ['module.landing', 'active', 'agency:' . $this->agency],
             ['module.support', 'suspended', 'agency:' . $this->agency]], $rights(), 'l\'essai de la caisse, lui, est arrivé à sa fin pendant ces 31 jours');
         $this->assertSame([true, true, false, false, true, false], $flags());
         $this->assertSame($attachedBefore, $rights(MV_TEST_TENANT2_CODE));
         $resumed = json_decode((string) $this->master->query('SELECT payload FROM agency_events WHERE agency_id = ' . $this->agency . " AND event = 'resumed'")->fetchColumn(), true);
-        $this->assertSame(3, $resumed['rights']);
+        $this->assertSame(2, $resumed['rights']);
     }
 
     public function testLimitsFailuresAndInterruptedBuildsNeverLeaveAHalfMadeSiteNorDropAnExistingDatabase(): void
@@ -396,7 +457,7 @@ class AgencySitesTest extends WebTestCase
     public function testTheSuperAdministratorSetsLimitsAndReadsSiteRequestsOnTheAgenciesPage(): void
     {
         $this->json('POST', '/api/agency/sites', ['code' => 'agtest-' . $this->tag, 'name' => 'Site <vu>', 'adminEmail' => 'vu@example.invalid'], 'manager', 422);
-        $this->json('POST', '/api/agency/sites', ['code' => 'agtest-' . $this->tag, 'name' => 'Site vu à l\'écran', 'adminEmail' => 'vu@example.invalid'], 'manager', 202);
+        $request = (int) $this->json('POST', '/api/agency/sites', ['code' => 'agtest-' . $this->tag, 'name' => 'Site vu à l\'écran', 'adminEmail' => 'vu@example.invalid', 'modules' => []], 'manager', 202)['request']['id'];
         $this->client->getCookieJar()->clear();
         $this->loginAs(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']);
         $crawler = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin/plateforme/agences?agence=' . $this->agency, [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
@@ -412,6 +473,27 @@ class AgencySitesTest extends WebTestCase
         // un jeton de sécurité faux ne règle rien
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . "/admin/plateforme/agences/{$this->agency}/limites", ['_token' => 'faux', 'maxSites' => '2', 'dailySiteRequests' => '1'], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
         $this->assertSame([null, 40], $this->master->query('SELECT max_sites, daily_site_requests FROM agencies WHERE id = ' . $this->agency)->fetch(\PDO::FETCH_NUM));
+
+        // Une demande sans aucun module : la fiche neuve ne garde aucun module ouvert par défaut (elle reflète les droits)
+        $code = 'agtest-' . $this->tag;
+        $this->service()->process($request);
+        $flags = fn (): array => $this->pdo(AgencySiteCode::database($code))->query('SELECT is_landing_page_active, is_boutique_active, is_pos_active FROM entreprise')->fetch(\PDO::FETCH_NUM);
+        $this->assertSame([[false, false, false], 0], [$flags(), (int) $this->master->query("SELECT COUNT(*) FROM tenant_entitlements WHERE tenant_code = '$code' AND source = 'agency'")->fetchColumn()]);
+
+        // Un worker arrêté APRÈS la copie, avant le rattachement : le site existe sans agence. Le rattrapage passe la demande en échec,
+        // annule les droits « agence » restés vivants, rouvre la base modèle aux connexions, et le dit au journal ; rien n'est supprimé
+        $this->json('PUT', "/api/agency/sites/$code/modules/module.pos", ['enabled' => true], 'manager', 200);
+        $this->master->exec("DELETE FROM agency_sites WHERE tenant_code = '$code'");
+        $this->master->exec("UPDATE agency_site_requests SET status = 'building', started_at = NOW() - INTERVAL '20 minutes' WHERE id = $request");
+        $this->master->exec('ALTER DATABASE "' . SITE_TEMPLATE_TEST_DB . '" WITH allow_connections = false');
+        try {
+            $this->assertSame(['interrupted' => 1, 'requeued' => 0], $this->service()->sweep());
+            $this->assertTrue((bool) $this->master->query("SELECT datallowconn FROM pg_database WHERE datname = '" . SITE_TEMPLATE_TEST_DB . "'")->fetchColumn(), 'la base modèle est rouverte');
+        } finally {
+            $this->master->exec('ALTER DATABASE "' . SITE_TEMPLATE_TEST_DB . '" WITH allow_connections = true');
+        }
+        $this->assertSame([0, false, true], [(int) $this->master->query("SELECT COUNT(*) FROM tenant_entitlements WHERE tenant_code = '$code' AND status IN ('active', 'grace', 'suspended') AND source = 'agency'")->fetchColumn(), $flags()[2], $this->databaseExists(AgencySiteCode::database($code))]);
+        $this->assertEquals(['requestId' => $request, 'error' => 'INTERRUPTED', 'siteExists' => true], json_decode((string) $this->master->query('SELECT payload FROM agency_events WHERE agency_id = ' . $this->agency . " AND event = 'site_failed'")->fetchColumn(), true));
     }
 
     private function service(): AgencySiteRequestService
@@ -444,7 +526,6 @@ class AgencySitesTest extends WebTestCase
         $site = $this->pdo(MV_TEST_TENANT_DB);
         $site->exec("DELETE FROM refresh_tokens WHERE username LIKE 'agence-%@example.invalid'");
         $site->exec("DELETE FROM \"user\" WHERE email LIKE 'agence-%@example.invalid' OR email IN ('super-agences@example.invalid', 'admin-agences@example.invalid')");
-        $this->pdo(MV_TEST_TENANT2_DB)->exec('UPDATE entreprise SET is_boutique_active = is_boutique_active'); // la base du second site n'est pas modifiée par ces essais
     }
 
     /** Une connexion directe à la base d'un site (celle de la requête en cours n'est pas touchée) */

@@ -11,7 +11,7 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 /**
  * Création d'un site par une agence (lot AG-2) : fabrique le site d'une demande, ou renvoie l'invitation de son administrateur.
  * Jamais relancé : une demande qui échoue le dit par son état ; une fabrication interrompue est passée « en échec » par le passage
- * planifié (`app:agency:sites:build`).
+ * horaire de la plateforme (`AgencySiteRequestService::sweep`, appelé par `app:gestion:notifications:envoyer`).
  */
 final class AgencySiteHandler
 {

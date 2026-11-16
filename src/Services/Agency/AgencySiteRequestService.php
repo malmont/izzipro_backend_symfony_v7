@@ -4,6 +4,7 @@ namespace App\Services\Agency;
 
 use App\Services\Agency\Message\BuildAgencySiteMessage;
 use App\Services\Agency\Message\ResendAgencySiteInvitationMessage;
+use App\Services\Platform\TenantDatabaseConnector;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantPublicHostResolver;
 use App\UseCase\PlatformUseCase\PlatformValidationException;
@@ -31,6 +32,9 @@ class AgencySiteRequestService
     public const EVENT_INVITED = 'site_admin_invited';
     public const EVENT_MODULE_OPENED = 'site_module_opened';
     public const EVENT_MODULE_CLOSED = 'site_module_closed';
+    public const EVENT_ADMIN_CHANGED = 'site_admin_changed';
+    /** Délai entre deux demandes de renvoi de l'invitation d'un même site (chaque renvoi fait partir un courriel de la plateforme) */
+    public const INVITATION_DELAY_MINUTES = 10;
     /** Une demande « en création » depuis plus longtemps a perdu son worker : elle passe en échec */
     public const STALE_MINUTES = 15;
     private const LOCALES = ['fr', 'en'];
@@ -44,6 +48,7 @@ class AgencySiteRequestService
         private readonly AgencyEntitlements $rights,
         private readonly TenantConnectionManager $tenants,
         private readonly TenantPublicHostResolver $hosts,
+        private readonly TenantDatabaseConnector $connector,
         private readonly MessageBusInterface $bus,
         private readonly LoggerInterface $logger,
     ) {
@@ -169,11 +174,28 @@ class AgencySiteRequestService
         return ['interrupted' => $interrupted, 'requeued' => count($ids)];
     }
 
+    /**
+     * Les fabrications interrompues (worker arrêté en cours de route) passent en échec. Le worker a pu tomber PENDANT la copie : le
+     * site de référence, fermé le temps de la copie, est rouvert. Il a pu tomber APRÈS : le site existe alors sans être rattaché ; ses
+     * droits « agence » sont annulés (aucun droit vivant sur un site que personne ne gère) et le journal le dit à la plateforme, qui
+     * regarde ce site. Rien n'est supprimé tout seul.
+     */
     private function failInterrupted(): int
     {
         $stale = $this->requests->failStale(self::STALE_MINUTES);
+        if ($stale !== []) {
+            $this->tenants->reopenTemplate();
+        }
         foreach ($stale as $row) {
-            $this->agencies->recordEvent($row['agency_id'], self::EVENT_FAILED, (string) $row['tenant_code'], ['requestId' => $row['id'], 'error' => 'INTERRUPTED'], 'worker');
+            $code = (string) $row['tenant_code'];
+            $exists = $this->agencies->tenant($code) !== null;
+            if ($this->agencies->managing($code) === null) {
+                $this->rights->cancelOfAgency($code);
+                if ($exists) {
+                    $this->rights->project($code);
+                }
+            }
+            $this->agencies->recordEvent($row['agency_id'], self::EVENT_FAILED, $code, ['requestId' => $row['id'], 'error' => 'INTERRUPTED', 'siteExists' => $exists], 'worker');
         }
 
         return count($stale);
@@ -183,17 +205,40 @@ class AgencySiteRequestService
      * Le responsable demande un nouveau lien pour l'administrateur d'un site que son agence a créé. Le renvoi est fait par le worker
      * (sur le site neuf, avec les accès de la plateforme) ; son issue se lit sur la demande du site.
      *
+     * Avec `adminEmail`, l'agence désigne UNE AUTRE personne (la première adresse était fausse, ou déjà celle d'un compte) : possible
+     * tant que l'administrateur désigné n'a pas activé son compte ; ensuite, changer d'administrateur est l'affaire du site.
+     * Un renvoi par site toutes les `INVITATION_DELAY_MINUTES` minutes : chaque renvoi fait partir un courriel de la plateforme.
+     *
      * @param array<string, mixed> $agency
      * @return array<string, mixed> la demande du site
      */
-    public function askInvitation(array $agency, string $code, ?string $by): array
+    public function askInvitation(array $agency, string $code, ?string $by, mixed $adminEmail = null): array
     {
         $this->mustBeOpen($agency);
         $this->createdSite($agency, $code);
         $row = $this->requests->readyFor($agency['id'], $code) ?? throw new AgencyException('AGENCY_REQUEST_NOT_FOUND', 404);
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        $asked = is_string($row['result']['invitationAskedAt'] ?? null) ? new \DateTimeImmutable($row['result']['invitationAskedAt']) : null;
+        if ($asked !== null && $asked > $now->modify('-' . self::INVITATION_DELAY_MINUTES . ' minutes')) {
+            throw new AgencyException('AGENCY_INVITATION_TOO_SOON', 429, ['retryAfterSeconds' => max(1, $asked->modify('+' . self::INVITATION_DELAY_MINUTES . ' minutes')->getTimestamp() - $now->getTimestamp())]);
+        }
+        if ($adminEmail !== null && $adminEmail !== '') {
+            $email = is_string($adminEmail) ? mb_strtolower(trim($adminEmail)) : '';
+            if ($email === '' || mb_strlen($email) > 180 || filter_var($email, \FILTER_VALIDATE_EMAIL) === false) {
+                throw new PlatformValidationException([['path' => 'adminEmail', 'message' => 'adresse courriel valide attendue : celle de la personne qui administrera le site']]);
+            }
+            if ($email !== $row['admin_email']) {
+                if ($this->adminActivated($code, (string) $row['admin_email'])) {
+                    throw new AgencyException('AGENCY_ADMIN_ACTIVE', 409);
+                }
+                $this->requests->changeAdmin($row['id'], $email, (string) $row['admin_email']);
+                $this->agencies->recordEvent($agency['id'], self::EVENT_ADMIN_CHANGED, $code, ['requestId' => $row['id']], $by);
+            }
+        }
+        $this->requests->markInvitationAsked($row['id'], $now);
         $this->bus->dispatch(new ResendAgencySiteInvitationMessage($row['id'], $by));
 
-        return $this->view($row);
+        return $this->view($this->requests->find($row['id']) ?? $row);
     }
 
     /** Renvoie l'invitation (worker) et note son issue sur la demande */
@@ -205,9 +250,26 @@ class AgencySiteRequestService
             || $this->agencies->site($agency['id'], (string) $row['tenant_code']) === null) {
             return; // le site n'est plus à cette agence, ou l'agence n'est plus ouverte : rien ne part
         }
-        $invitation = $this->builder->invite($agency, $row, true);
+        $replaced = is_string($row['options']['replacedAdminEmail'] ?? null) ? $row['options']['replacedAdminEmail'] : null;
+        $invitation = $this->builder->invite($agency, $row, true, $replaced);
+        if ($replaced !== null) {
+            $this->requests->clearReplacedAdmin($row['id']);
+        }
         $this->requests->setResult($row['id'], ['invitation' => $invitation] + $row['result']);
         $this->agencies->recordEvent($agency['id'], self::EVENT_INVITED, (string) $row['tenant_code'], ['requestId' => $row['id'], 'sent' => $invitation['sent'], 'reason' => $invitation['reason'], 'again' => true], $by);
+    }
+
+    /** L'administrateur désigné a-t-il déjà choisi son mot de passe ? Lu dans la base du site, sans changer de site courant */
+    private function adminActivated(string $code, string $email): bool
+    {
+        $site = $this->agencies->tenant($code);
+        if ($site === null) {
+            return false;
+        }
+        $stmt = $this->connector->pdo($site['dbname'])->prepare('SELECT is_verified FROM "user" WHERE LOWER(email) = ? AND signup_channel = ?');
+        $stmt->execute([$email, \App\Entity\User::SIGNUP_ADMIN_INVITE]);
+
+        return in_array($stmt->fetchColumn(), [true, 't', 'true', 1, '1'], true);
     }
 
     /**
@@ -260,6 +322,7 @@ class AgencySiteRequestService
             'requestedAt' => $iso($row['requested_at']), 'startedAt' => $iso($row['started_at']), 'finishedAt' => $iso($row['finished_at']),
             'site' => $ready ? ['code' => $row['tenant_code'], 'name' => (string) ($described['name'] ?? $row['name']), 'host' => isset($described['host']) ? (string) $described['host'] : null] : null,
             'invitation' => $ready ? ($row['result']['invitation'] ?? null) : null,
+            'invitationAskedAt' => $ready ? ($row['result']['invitationAskedAt'] ?? null) : null,
             'modules' => $ready ? ($row['result']['modules'] ?? null) : null,
             'warnings' => $ready ? ($row['result']['warnings'] ?? []) : [],
         ];
@@ -305,6 +368,7 @@ class AgencySiteRequestService
 
             return;
         }
+        $this->builder->delivered($code);
         $this->agencies->recordEvent($agency['id'], self::EVENT_CREATED, $code, ['requestId' => $id, 'modules' => $result['modules']['opened'], 'warnings' => $result['warnings']], $by);
         $invitation = $this->builder->invite($agency, $row);
         $this->requests->setResult($id, $result + ['invitation' => $invitation]);

@@ -75,6 +75,12 @@ Mise en page : en-tête (nom du site, logo, adresse, SIRET, numéros TPS et TVQ 
 calculés le … (heure du magasin) », la question, puis les blocs dans l'ordre, puis « d'où viennent ces chiffres » (les analyses de la
 réponse, leur plage, la date du calcul) ; pied : nom du site, page x / y.
 
+**Un titre ne reste jamais seul en bas de page** (retouche du 16/11/2026) : un titre de partie (et le titre ou la note qui le suit) est
+tenu avec le premier bloc qui vient après lui, et un bloc qui porte son propre titre (tableau, verdicts, guide) avec ce titre ; si la
+place manque, l'ensemble passe à la page suivante (`ReportRenderer::keepTitles`, cadre `table.keep` du gabarit). Limite : un bloc trop
+long pour tenir d'un seul tenant (tableau de plus de 25 lignes, plus de 6 rangées de cartes, plus de 20 verdicts) n'est pas enfermé ;
+son titre reste alors tenu « au mieux ».
+
 | Bloc de la console | Sur le papier |
 |---|---|
 | `text` | paragraphes |

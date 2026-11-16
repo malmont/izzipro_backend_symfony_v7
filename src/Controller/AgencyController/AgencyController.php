@@ -104,11 +104,15 @@ class AgencyController extends AbstractController
         return $this->handle(fn () => $this->json(['modules' => $this->requests->setModule($this->manager(), $code, $feature, $this->body($request)['enabled'] ?? null, $this->by())]));
     }
 
-    /** Renvoie à l'administrateur désigné d'un site créé par mon agence le lien pour choisir son mot de passe → 202 `{ request }` */
+    /**
+     * Renvoie à l'administrateur désigné d'un site créé par mon agence le lien pour choisir son mot de passe → 202 `{ request }`.
+     * `{ adminEmail }` (facultatif) désigne une autre personne, tant que la première n'a pas activé son compte (409
+     * `AGENCY_ADMIN_ACTIVE` ensuite). Un renvoi par site toutes les 10 minutes (429 `AGENCY_INVITATION_TOO_SOON`).
+     */
     #[Route('/sites/{code}/invitation', name: 'api_agency_site_invitation', methods: ['POST'], requirements: ['code' => '[a-z0-9-]{1,50}'])]
-    public function invitation(string $code): JsonResponse
+    public function invitation(string $code, Request $request): JsonResponse
     {
-        return $this->handle(fn () => $this->json(['request' => $this->requests->askInvitation($this->manager(), $code, $this->by())], 202));
+        return $this->handle(fn () => $this->json(['request' => $this->requests->askInvitation($this->manager(), $code, $this->by(), $this->body($request)['adminEmail'] ?? null)], 202));
     }
 
     /** @return array<string, mixed> mon agence, pour un geste réservé à son responsable ; 403 `AGENCY_MANAGER_ONLY` pour un collaborateur */

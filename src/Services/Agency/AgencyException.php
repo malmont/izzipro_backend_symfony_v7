@@ -28,6 +28,8 @@ final class AgencyException extends \RuntimeException
         'AGENCY_SITE_NOT_CREATED' => 'Ce site n\'a pas été créé par l\'agence : elle ne règle ni ses modules ni ses comptes.',
         'AGENCY_MODULE_UNKNOWN' => 'Module inconnu.',
         'AGENCY_MODULE_HELD' => 'Le site tient déjà ce module d\'une autre source : l\'agence ne le change pas.',
+        'AGENCY_INVITATION_TOO_SOON' => 'Une invitation vient d\'être demandée pour ce site : attendez quelques minutes avant d\'en demander une autre.',
+        'AGENCY_ADMIN_ACTIVE' => 'L\'administrateur de ce site a déjà choisi son mot de passe : changer d\'administrateur se fait dans le site.',
         'AGENCY_LIMITS' => 'La limite de sites est inférieure au nombre de sites déjà gérés.',
     ];
 

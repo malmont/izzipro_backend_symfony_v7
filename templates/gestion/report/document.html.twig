@@ -27,6 +27,10 @@
   table.grid tr { page-break-inside: avoid; }
   .num { text-align: right; white-space: nowrap; }
   .box { border-left: 3px solid #64748b; padding: 4px 0 4px 9px; margin: 0 0 9px 0; page-break-inside: avoid; }
+  /* un titre et le premier bloc qui le suit : un cadre qui passe entier à la page suivante (un titre ne reste jamais seul en bas de page) */
+  table.keep { width: 100%; border-collapse: collapse; margin: 0; page-break-inside: avoid; }
+  table.keep tr.keeprow { page-break-inside: avoid; }
+  table.keep td.keepcell { padding: 0; border: none; }
   h2.part { font-size: 12pt; margin: 18px 0 3px 0; padding-bottom: 3px; border-bottom: 1px solid #cbd5e1; page-break-after: avoid; }
   .notice { border: 1px solid #94a3b8; background: #f8fafc; padding: 6px 9px; margin: 0 0 12px 0; }
 </style>
@@ -48,6 +52,7 @@
 {% if doc.question %}<div class="question"><span class="small">{{ doc.questionLabel }}</span><br>{{ doc.question }}</div>{% endif %}
 
 {% for section in doc.sections %}
+  {% if section.keepOpen|default(false) %}<table class="keep"><tr class="keeprow"><td class="keepcell">{% endif %}
   {% if section.type == 'heading' %}
     <h2 class="part">{{ section.title }}</h2>
     {% if section.note %}<p class="small">{{ section.note }}</p>{% endif %}
@@ -92,6 +97,7 @@
     {% for point in section.points %}<div class="box"><p><strong>{{ point.label }}</strong></p><p>{{ point.text|nl2br }}</p></div>{% endfor %}
     {% if section.next %}<p><strong>{{ doc.labels.next }}</strong> {{ section.next }}</p>{% endif %}
   {% endif %}
+  {% if section.keepClose|default(false) %}</td></tr></table>{% endif %}
 {% endfor %}
 
 {% if doc.sources %}

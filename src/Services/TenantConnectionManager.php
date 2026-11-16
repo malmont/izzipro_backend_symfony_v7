@@ -213,6 +213,9 @@ class TenantConnectionManager
             $this->logger->error("Échec création tenant '{$code}' / '{$dbname}': " . $e->getMessage());
             if ($created) {
                 try {
+                    // la ligne du site posée par cet appel part avec sa base (jamais une ligne sans base) ; code ET base doivent
+                    // correspondre : une ligne d'un autre site portant ce code a forcément une autre base
+                    $this->pdoMaster->prepare('DELETE FROM tenants WHERE code = ? AND dbname = ?')->execute([$code, $dbname]);
                     $this->pdoMaster->exec(sprintf('DROP DATABASE IF EXISTS "%s"', $dbname));
                 } catch (\Throwable $dropEx) {
                     $this->logger->warning("Échec DROP DATABASE '{$dbname}' : " . $dropEx->getMessage());
@@ -253,6 +256,27 @@ class TenantConnectionManager
         }
 
         return true;
+    }
+
+    /** Un site livré ne se défait plus : le processus (un worker vit longtemps) oublie qu'il l'a créé */
+    public function forgetCreated(string $dbname): void
+    {
+        unset($this->createdHere[$dbname]);
+    }
+
+    /**
+     * Rouvre la base modèle aux connexions. La copie la ferme un instant ; un processus arrêté de force pendant la copie la laisserait
+     * fermée (le site de référence ne répondrait plus). Appelé par le rattrapage quand une fabrication a été interrompue.
+     */
+    public function reopenTemplate(): void
+    {
+        try {
+            if (preg_match('/^[a-z0-9_-]+$/i', $this->templateDb)) {
+                $this->getPdoMaster()->exec(sprintf('ALTER DATABASE "%s" WITH allow_connections = true', $this->templateDb));
+            }
+        } catch (\Throwable $e) {
+            $this->logger->error('Base modèle non rouverte aux connexions (' . $e::class . ').');
+        }
     }
 
     /** Une base de ce nom existe-t-elle sur le serveur ? (lot AG-2 : avant toute création, et pour dire qu'un code de site est pris) */
@@ -819,6 +843,8 @@ class TenantConnectionManager
         $pdo->exec('TRUNCATE esg_user, esg_company CASCADE');
         $pdo->exec('TRUNCATE gestion_stock_snapshot');
         $pdo->exec('DELETE FROM refresh_tokens');
+        // le journal d'un site neuf commence avec lui : ni les écritures, ni les connexions de la plateforme sur le site de référence
+        $pdo->exec('DELETE FROM content_audit_log');
         // l'expéditeur des courriels d'un site neuf est posé d'après SA fiche (SiteDefaultsService) : jamais le serveur d'un autre
         $pdo->exec('TRUNCATE email_configuration CASCADE');
         // la fiche d'un site neuf est créée pour lui : ni la fiche d'un autre, ni son adresse, ses réseaux, ses réservations

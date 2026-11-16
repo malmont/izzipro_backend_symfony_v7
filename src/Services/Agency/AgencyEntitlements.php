@@ -111,6 +111,13 @@ class AgencyEntitlements
             if ($live !== []) {
                 return false;
             }
+            // Un droit SUSPENDU de cette fonctionnalité (par la plateforme, ou un abonnement impayé) ne se contourne pas : en poser un neuf
+            // lèverait la suspension d'un geste. La cascade de l'agence elle-même n'arrive pas ici : suspendue, l'agence ne règle rien.
+            foreach ($this->rights->listForTenant($tenantCode) as $row) {
+                if ($row['feature_key'] === $feature && $row['status'] === 'suspended') {
+                    throw new AgencyException('AGENCY_MODULE_HELD', 409, ['feature' => $feature, 'source' => (string) $row['source'], 'status' => 'suspended']);
+                }
+            }
             $this->grant($tenantCode, $feature, $agency, $by);
 
             return true;
@@ -176,6 +183,13 @@ class AgencyEntitlements
                     continue; // suspendu par la plateforme pour une autre raison : la reprise de l'agence ne le rend pas
                 }
                 try {
+                    // Pendant la suspension, le site a pu prendre ce module d'une autre source (essai, abonnement, accord de la
+                    // plateforme). Rendre le droit de l'agence ANNULERAIT ce droit-là (`EntitlementService::resume` remplace les droits
+                    // vivants de la même fonctionnalité) : le site garde le sien, et c'est le droit de l'agence qui s'efface.
+                    if (array_filter($this->rights->liveFor($code, (string) $row['feature_key']), static fn (array $live): bool => $live['source'] !== EntitlementRepository::SOURCE_AGENCY) !== []) {
+                        $this->rights->update((int) $row['id'], ['status' => 'cancelled', 'reference' => self::reference((int) $agency['id']), 'note' => trim(($row['note'] ?? '') . ' | non rendu à la reprise : le site tient ce module d\'une autre source')]);
+                        continue;
+                    }
                     $this->entitlements->resume((int) $row['id'], $by, 'suspension de l\'agence levée', false);
                     $this->rights->update((int) $row['id'], ['reference' => self::reference((int) $agency['id'])]);
                     ++$given;
@@ -186,6 +200,24 @@ class AgencyEntitlements
         }
 
         return $given;
+    }
+
+    /** Projette les droits effectifs du site sur sa fiche (les modules sans droit sont fermés), même quand aucun droit n'a été posé */
+    public function project(string $tenantCode): void
+    {
+        $this->entitlements->project($tenantCode);
+    }
+
+    /** Un site resté sans agence après une fabrication interrompue : ses droits « agence » ne restent pas vivants (les autres sont à lui) */
+    public function cancelOfAgency(string $tenantCode): void
+    {
+        foreach ($this->rights->bySource($tenantCode, EntitlementRepository::SOURCE_AGENCY, ['active', 'grace', 'suspended']) as $row) {
+            try {
+                $this->rights->update((int) $row['id'], ['status' => 'cancelled', 'note' => trim(($row['note'] ?? '') . ' | fabrication interrompue : site sans agence')]);
+            } catch (\Throwable $e) {
+                $this->logger->error(sprintf('[Agences] droit n° %d de %s non annulé (%s)', (int) $row['id'], $tenantCode, $e::class));
+            }
+        }
     }
 
     /** Une fabrication abandonnée : aucun droit ne reste au nom d'un site qui n'existe pas (un autre site prendrait ce code plus tard) */

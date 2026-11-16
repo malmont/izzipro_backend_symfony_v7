@@ -48,7 +48,7 @@ class ReportRenderer
 
         return [
             'title' => $title !== '' ? $title : $t('answer_title'), 'kindLabel' => $t('answer_title'), 'subtitle' => null, 'notice' => null, 'question' => trim($question), 'questionLabel' => $t('question'),
-            'answeredLabel' => $t('computed_at', ['%moment%' => $this->moment($answer['answeredAt'] ?? null, $locale)]), 'sections' => $this->sections((array) ($answer['blocks'] ?? []), $locale, $currency),
+            'answeredLabel' => $t('computed_at', ['%moment%' => $this->moment($answer['answeredAt'] ?? null, $locale)]), 'sections' => self::keepTitles($this->sections((array) ($answer['blocks'] ?? []), $locale, $currency)),
             'sources' => $this->sources((array) ($answer['analyses'] ?? []), null, $locale), 'labels' => $this->labels($locale), 'site' => $this->site(), 'locale' => $locale === 'en' ? 'en' : 'fr',
         ];
     }
@@ -75,10 +75,55 @@ class ReportRenderer
         return [
             'title' => (string) ($content['title'] ?? ''), 'kindLabel' => (string) ($content['kindLabel'] ?? ''), 'subtitle' => (string) ($content['range'] ?? '') !== '' ? (string) $content['range'] : null,
             'notice' => is_string($content['notice'] ?? null) && $content['notice'] !== '' ? $content['notice'] : null, 'question' => '', 'questionLabel' => $t('question'),
-            'answeredLabel' => $t('computed_at', ['%moment%' => $this->moment($content['computedAt'] ?? null, $locale)]), 'sections' => $sections,
+            'answeredLabel' => $t('computed_at', ['%moment%' => $this->moment($content['computedAt'] ?? null, $locale)]), 'sections' => self::keepTitles($sections),
             'sources' => $this->sources((array) ($content['analyses'] ?? []), is_string($content['computedAt'] ?? null) ? $content['computedAt'] : null, $locale),
             'labels' => $this->labels($locale), 'site' => $this->site(), 'locale' => $locale === 'en' ? 'en' : 'fr',
         ];
+    }
+
+    /**
+     * Un titre ne reste jamais seul en bas de page (retouche du 16/11/2026). Chaque suite de titres de partie est tenue avec le premier
+     * bloc qui la suit, et un bloc qui porte son propre titre (tableau, verdicts, guide) est tenu avec lui : la première section du
+     * groupe porte `keepOpen`, la dernière `keepClose`, et le gabarit les enferme dans un cadre qui passe ENTIER à la page suivante
+     * quand la place manque. Un bloc trop long pour tenir d'un seul tenant (`fitsTogether`) n'est pas enfermé : son titre reste tenu
+     * « au mieux » par la règle `page-break-after: avoid`.
+     *
+     * @param list<array<string, mixed>> $sections
+     * @return list<array<string, mixed>>
+     */
+    private static function keepTitles(array $sections): array
+    {
+        $count = count($sections);
+        for ($i = 0; $i < $count; ++$i) {
+            $start = $i;
+            while ($i < $count && $sections[$i]['type'] === 'heading') {
+                ++$i;
+            }
+            if ($i >= $count) {
+                break; // des titres en fin de document : rien à tenir avec eux
+            }
+            $titled = $start < $i || (in_array($sections[$i]['type'], ['table', 'verdicts', 'guide'], true) && ($sections[$i]['title'] ?? '') !== '');
+            if ($titled && self::fitsTogether($sections[$i])) {
+                $sections[$start]['keepOpen'] = true;
+                $sections[$i]['keepClose'] = true;
+            }
+        }
+
+        return $sections;
+    }
+
+    /** Ce bloc est-il assez court pour passer d'un seul tenant à la page suivante ? @param array<string, mixed> $section */
+    private static function fitsTogether(array $section): bool
+    {
+        return match ($section['type']) {
+            'figures' => count($section['rows'] ?? []) <= 6,
+            'table' => count($section['rows'] ?? []) <= 25,
+            'verdicts' => count($section['items'] ?? []) <= 20,
+            'guide' => count($section['points'] ?? []) <= 5,
+            'text' => mb_strlen(implode('', $section['paragraphs'] ?? [])) <= 1500,
+            'lesson' => true,
+            default => false,
+        };
     }
 
     /**

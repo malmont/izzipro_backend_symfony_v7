@@ -2,7 +2,6 @@
 
 namespace App\Services\Platform;
 
-use App\Entity\ContentAuditLog;
 use App\Security\RoleAssignmentPolicy;
 use App\Services\TenantConnectionProvider;
 use App\Services\TenantEntityManagerProvider;
@@ -17,7 +16,8 @@ use Symfony\Component\Security\Core\User\UserInterface;
  *   pouvoir le modifier ni le supprimer (`UserCrudController::protectOwner`) ;
  * - écrit : la clause « la plateforme peut accéder au site pour le dépannage et la sécurité » fait partie des conditions (liste remise
  *   à l'avocat) ;
- * - tracé : chaque connexion de ce compte laisse une ligne dans le journal du site (`content_audit_log`, ressource `RESOURCE`), que
+ * - tracé : chaque connexion de ce compte, et chaque entrée dans l'espace d'administration d'un autre site sans se reconnecter
+ *   (`?tenant=`, `PlatformAccessSubscriber`), laisse une ligne dans le journal du site (`content_audit_log`, ressource `RESOURCE`), que
  *   l'administrateur du site lit (page « Accès de la plateforme », `GET /api/landingpage-audit?resource=platform_access`).
  *
  * La ligne dit qui (l'adresse du compte, que l'administrateur voit déjà dans sa liste), quand, et par où (`channel`). Elle ne porte ni
@@ -53,15 +53,21 @@ class PlatformAccessJournal
         }
         try {
             $channel = isset(self::CHANNELS[$channel]) ? $channel : 'webadmin';
-            $entry = (new ContentAuditLog())->setUser($user->getUserIdentifier())->setTenant((string) ($this->tenantProvider->getTenantCode() ?? ''))
-                ->setResource(self::RESOURCE)->setResourceId(method_exists($user, 'getId') ? (string) $user->getId() : null)->setAction(self::ACTION_LOGIN)
-                ->setFields(['channel'])->setBefore(null)->setAfter(json_encode(['channel' => $channel]));
-            $em = $this->emProvider->getEntityManager();
-            $em->persist($entry);
-            $em->flush();
+            // Écriture directe, sans l'ORM : une panne du journal ne ferme pas le gestionnaire d'entités dont la connexion a encore
+            // besoin (jeton de renouvellement), et rien d'autre n'est écrit au passage
+            $this->emProvider->getEntityManager()->getConnection()->insert('content_audit_log', [
+                'created_at' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s'), 'user_identifier' => mb_substr($user->getUserIdentifier(), 0, 180),
+                'tenant' => $this->tenant(), 'resource' => self::RESOURCE, 'resource_id' => method_exists($user, 'getId') ? (string) $user->getId() : null,
+                'action' => self::ACTION_LOGIN, 'fields' => 'channel', 'after_state' => json_encode(['channel' => $channel]),
+            ]);
         } catch (\Throwable $e) {
             $this->logger->error('Accès de la plateforme : connexion non tracée au journal du site (' . $e::class . ').');
         }
+    }
+
+    private function tenant(): string
+    {
+        return (string) ($this->tenantProvider->getTenantCode() ?? '');
     }
 
     /**
@@ -72,8 +78,8 @@ class PlatformAccessJournal
     public function recent(int $limit = 100): array
     {
         $rows = $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
-            'SELECT created_at, user_identifier, after_state FROM content_audit_log WHERE resource = ? AND action = ? ORDER BY id DESC LIMIT ' . max(1, min(500, $limit)),
-            [self::RESOURCE, self::ACTION_LOGIN]
+            'SELECT created_at, user_identifier, after_state FROM content_audit_log WHERE resource = ? AND action = ? AND tenant = ? ORDER BY id DESC LIMIT ' . max(1, min(500, $limit)),
+            [self::RESOURCE, self::ACTION_LOGIN, $this->tenant()]
         );
 
         return array_map(static function (array $row): array {

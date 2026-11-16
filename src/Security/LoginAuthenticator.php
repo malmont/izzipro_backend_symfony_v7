@@ -40,8 +40,7 @@ class LoginAuthenticator extends AbstractLoginFormAuthenticator
         TenantEntityManagerProvider $tenantEmProvider,
         RequestStack $requestStack,
         OtpService $otpService,
-        private readonly TwoFactorPolicy $twoFactor,
-        private readonly ?\App\Services\Platform\PlatformAccessJournal $platformAccess = null // lot AG-2 : connexions du compte de la plateforme tracées
+        private readonly TwoFactorPolicy $twoFactor
     ) {
         $this->urlGenerator     = $urlGenerator;
         $this->tenantEmProvider = $tenantEmProvider;
@@ -88,6 +87,8 @@ class LoginAuthenticator extends AbstractLoginFormAuthenticator
 
         /** @var User $user */
         $user = $token->getUser();
+        // Lot AG-2 : une nouvelle connexion ; l'entrée du compte de la plateforme sur chaque site sera tracée de nouveau (PlatformAccessSubscriber)
+        $session->remove(PlatformAccessSubscriber::SESSION_KEY);
 
         // 1) Si OTP activé et non validé en session -> générer + rediriger vers le formulaire OTP
         if ($this->twoFactor->required($user) && !$session->get('otp_validated')) {
@@ -98,12 +99,6 @@ class LoginAuthenticator extends AbstractLoginFormAuthenticator
             return new RedirectResponse(
                 $this->urlGenerator->generate('account_otp')
             );
-        }
-
-        // Lot AG-2 : connexion aboutie sans code à usage unique ; celle d'un compte de la plateforme est tracée au journal du site
-        // (avec un code, la trace est écrite quand le code est validé : OtpController)
-        if ($user instanceof \Symfony\Component\Security\Core\User\UserInterface) {
-            $this->platformAccess?->recordLogin($user, 'easyadmin');
         }
 
         // 2) Sinon, redirection vers la page demandée ou vers le tableau de bord admin

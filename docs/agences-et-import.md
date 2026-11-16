@@ -345,15 +345,16 @@ est choisie librement par l'agence, dans les règles de forme.
 
 Le **responsable** de l'agence (`ROLE_AGENCY` ; le collaborateur lit seulement) demande un site : code (son adresse), nom, courriel de
 la personne qui l'administrera. La réponse est immédiate, `pending` ; le site est fabriqué par le worker `media`
-(`BuildAgencySiteMessage`, jamais relancé), **un seul à la fois sur toute la plateforme** (verrou consultatif de la base maître : la
-copie ferme un instant le site de référence). États : `pending` → `building` → `ready` | `failed` (`errorCode`).
+(`BuildAgencySiteMessage`, jamais relancé), **un seul à la fois pour toutes les agences** (verrou consultatif de la base maître : la
+copie ferme un instant le site de référence ; le formulaire `/setup/new-store` et `app:tenant:create` ne prennent pas ce verrou : une
+copie qui tomberait en même temps ferait échouer l'une des deux, sans rien détruire). États : `pending` → `building` → `ready` | `failed` (`errorCode`).
 
 Refus avant la file : agence suspendue ou fermée (`AGENCY_NOT_OPEN`) ; essai terminé (`AGENCY_TRIAL_ENDED`) ; limite de sites atteinte,
 demandes en cours comprises (`AGENCY_SITE_LIMIT`) ; plus de `daily_site_requests` demandes en 24 heures, quelle que soit leur issue
 (429 `AGENCY_REQUEST_LIMIT`) ; code mal formé (422), réservé (`AGENCY_SITE_CODE_RESERVED`) ou pris (`AGENCY_SITE_CODE_TAKEN`).
 
 **Code du site** (`AgencySiteCode`) : 3 à 40 caractères, lettres minuscules, chiffres et tirets, une lettre d'abord, ni tiret final ni
-deux tirets de suite. Sa base s'appelle `db_<code>`, tirets devenus soulignés. Un code est « pris » s'il désigne un site (tiret et
+deux tirets de suite, ni « -v2 » final (la résolution d'un hôte retire ce suffixe : l'adresse mènerait à un autre site). Sa base s'appelle `db_<code>`, tirets devenus soulignés. Un code est « pris » s'il désigne un site (tiret et
 souligné tenus pour équivalents), une base qui existe sur le serveur, un domaine propre, une demande en cours, ou s'il reste à son nom
 dans la base maître un droit d'usage vivant ou une clé d'application (un site neuf n'hérite pas d'un ancien site du même nom).
 
@@ -370,7 +371,8 @@ Script hors dépôt : `scripts/migrate_master_v2_agencies_ag2.sh`.
    province si la demande les donne ;
 3. les droits de source `agency` (§ 8.4) ;
 4. les référentiels automatiques de tout site neuf (taxes d'après le pays, expéditeur des courriels, profils des applications, essai
-   « Aide IA » de la plateforme) ;
+   « Aide IA » de la plateforme), puis la projection des droits sur la fiche (même sans module demandé, la fiche ne garde aucun module
+   ouvert par défaut) ;
 5. le rattachement à l'agence (origine `created`) et le passage à `ready`, dans une même transaction ;
 6. l'invitation de l'administrateur désigné (§ 8.3).
 
@@ -380,19 +382,28 @@ site créé par le processus en cours). Codes d'échec : `BUILD_FAILED`, `SITE_C
 `INTERRUPTED`. Une demande en échec rend sa place et son code ; elle n'est jamais refabriquée : l'agence en fait une autre.
 
 **Rattrapage** : à chaque passage horaire (`app:gestion:notifications:envoyer`), une fabrication « en création » depuis plus de
-15 minutes passe en échec `INTERRUPTED` (rien n'est supprimé tout seul : une base restée là est à regarder par la plateforme), et une
-demande restée en attente plus de 15 minutes est confiée de nouveau au worker. `app:agency:sites:build` fabrique sur place les demandes
+15 minutes passe en échec `INTERRUPTED`, et une demande restée en attente plus de 15 minutes est confiée de nouveau au worker. Un worker
+arrêté pendant la copie laisserait le site de référence fermé : le rattrapage le rouvre. Arrêté après la copie, il laisse un site sans
+agence : ses droits `agency` sont annulés, l'événement `site_failed` porte `siteExists`, et la plateforme regarde ce site (rien n'est
+supprimé tout seul). `app:agency:sites:build` fabrique sur place les demandes
 en attente (rattrapage à la main, répétition).
 
 ### 8.3 L'administrateur du site
 
 Le courriel de l'administrateur est **obligatoire**. La personne reçoit un courriel (`site_admin_invitation`, français ou anglais,
-classé « indispensable ») avec un lien à usage unique, valable **7 jours**, vers l'écran du web où elle choisit son mot de passe
-(`/admin/activer#token=…`, puis `POST /api/password-reset/verify` et `/confirm` sur le site neuf). Son compte (`ROLE_ADMIN`, canal
-`admin_invite`) ne sert à rien avant : mot de passe aléatoire, compte non vérifié. Le jeton n'est jamais rendu à l'agence. Le
-responsable peut faire renvoyer le lien (l'ancien ne vaut plus) ; le renvoi est fait par le worker et son issue se lit sur la demande
-(`invitation { sent, reason, expiresAt }` ; `reason` : `ACCOUNT_EXISTS`, `ALREADY_ACTIVE`, `NOT_FOUND`, `NO_LINK`, `EMAIL_FAILED`,
-`INVITATION_FAILED`). Un compte qui existe déjà à cette adresse n'est jamais transformé.
+classé « indispensable », texte validé par le propriétaire le 16/11/2026) avec un lien à usage unique, valable **7 jours**, vers
+l'écran du web où elle choisit son mot de passe (`/admin/activer#token=…`, puis `POST /api/password-reset/verify` et `/confirm` sur le
+site neuf). Le courriel part par l'**expéditeur de la plateforme**, réponses vers le contact de l'agence : l'expéditeur d'un site neuf
+est l'adresse de son administrateur, et un courriel « de » cette adresse « à » cette adresse serait rejeté. Son compte (`ROLE_ADMIN`,
+canal `admin_invite`) ne sert à rien avant : mot de passe aléatoire, compte non vérifié. Le jeton n'est jamais rendu à l'agence.
+
+Le responsable peut faire **renvoyer** le lien (l'ancien ne vaut plus), une fois par site toutes les 10 minutes
+(429 `AGENCY_INVITATION_TOO_SOON`) ; si la première invitation n'avait pas abouti, le compte est créé à ce moment. Il peut aussi
+**désigner une autre personne** (`adminEmail` dans le corps) tant que la première n'a pas choisi son mot de passe : le compte jamais
+activé de la première est retiré ; ensuite, changer d'administrateur est l'affaire du site (409 `AGENCY_ADMIN_ACTIVE`). Le renvoi est
+fait par le worker et son issue se lit sur la demande (`invitation { sent, reason, expiresAt }` ; `reason` : `ACCOUNT_EXISTS`,
+`ALREADY_ACTIVE`, `NO_LINK`, `EMAIL_FAILED`, `INVITATION_FAILED`). Un compte qui existe déjà à cette adresse sans être né de
+l'invitation n'est jamais transformé ni invité : `ACCOUNT_EXISTS`, et l'agence désigne une autre adresse.
 
 ### 8.4 Droits de source `agency`
 
@@ -401,12 +412,14 @@ responsable peut faire renvoyer le lien (l'ancien ne vaut plus) ; le renvoi est 
 - À la création : les modules et les applications (`module.*`, `app.*`, 10 clés), ou la liste `modules` de la demande. **Pas l'IA** :
   elle suit la plateforme (essai « Aide IA » automatique de tout site neuf), en attendant AG-5. Sans fin, sans courriel au site.
 - L'agence ferme ou rouvre un module d'un de ses sites. Elle ne touche jamais à un droit qu'elle n'a pas posé : un droit vivant d'une
-  autre source (essai, abonnement, accord de la plateforme) n'est ni fermé ni remplacé (`AGENCY_MODULE_HELD`).
+  autre source (essai, abonnement, accord de la plateforme) n'est ni fermé ni remplacé, et un droit **suspendu** (par la plateforme, ou
+  un abonnement impayé) ne se contourne pas en en posant un neuf (`AGENCY_MODULE_HELD`).
 - **Suspension en cascade** : suspendre l'agence suspend ses droits sur les sites qu'elle a créés, sauf la page publique
   (`module.landing`), gardée **30 jours** en « grâce », puis suspendue par le balayage des droits. Aucun courriel au site au moment de
   la cascade ; au bout des 30 jours, le courriel habituel « fonctionnalité suspendue » part. Lever la suspension rend ce que la cascade
   avait pris, et rien d'autre : la cascade marque ses droits (`reference` `agency:<id>:suspended`), un droit suspendu par la plateforme
-  pour une autre raison reste suspendu.
+  pour une autre raison reste suspendu. Si le site a pris entre-temps le module d'une autre source (essai, abonnement), il garde le
+  sien : c'est le droit de l'agence qui s'efface (le rendre annulerait l'autre).
 - Suspendue, l'agence lit encore ; elle ne crée plus, ne règle plus de module et ne renvoie plus d'invitation.
 
 ### 8.5 Routes de l'agence (lot AG-2)
@@ -419,10 +432,10 @@ responsable peut faire renvoyer le lien (l'ancien ne vaut plus) ; le renvoi est 
 | `GET /api/agency/site-requests/{id}` | les deux rôles | `{ request }` |
 | `GET /api/agency/sites/{code}/modules` | les deux rôles | `{ modules: [{ key, label, enabled, byAgency, status, graceUntil }] }` |
 | `PUT /api/agency/sites/{code}/modules/{feature}` | responsable | `{ enabled }` → `{ modules }` |
-| `POST /api/agency/sites/{code}/invitation` | responsable | renvoie le lien de l'administrateur → 202 `{ request }` |
+| `POST /api/agency/sites/{code}/invitation` | responsable | renvoie le lien de l'administrateur ; `{ adminEmail? }` désigne une autre personne → 202 `{ request }` |
 
 `request` : `{ id, siteCode, name, adminEmail, status, errorCode, requestedAt, startedAt, finishedAt, site: { code, name, host } | null,
-invitation, modules: { opened, failed }, warnings }`. `GET /api/agency/me` rend aussi `sitesUsed` (sites gérés plus demandes en cours)
+invitation, invitationAskedAt, modules: { opened, failed }, warnings }`. `GET /api/agency/me` rend aussi `sitesUsed` (sites gérés plus demandes en cours)
 et `dailySiteRequests` ; `maxSites` peut valoir `null` (illimité) ; `GET /api/agency/sites` rend aussi `pending`. Un collaborateur qui
 tente d'écrire reçoit 403 `AGENCY_MANAGER_ONLY`.
 
@@ -433,7 +446,7 @@ valeur ; `maxSites` ne descend pas sous le nombre de places prises : `AGENCY_LIM
 `requests`. Page « Plateforme : agences » : formulaire des limites, tableau des demandes de création.
 
 Journal de l'agence (`agency_events`) : `site_requested`, `site_created`, `site_failed`, `site_admin_invited`, `site_module_opened`,
-`site_module_closed`, `limits_changed` ; `suspended` et `resumed` portent le nombre de droits pris ou rendus. Aucune adresse de
+`site_module_closed`, `site_admin_changed`, `limits_changed` ; `suspended` et `resumed` portent le nombre de droits pris ou rendus. Aucune adresse de
 courriel dans le journal.
 
 ### 8.7 Ce qu'un site neuf n'hérite plus (toute création de site, pas seulement par une agence)
@@ -446,7 +459,8 @@ instantanés de stock de la gestion. Depuis ce lot, `createTenant` :
   du rattrapage ; choisir le nom d'une base existante l'effaçait. Désormais la base est vérifiée avant, et seule une base créée par
   l'appel est supprimée en cas d'échec ;
 - **retire, de façon bloquante**, ce qui ne doit pas passer d'un site à l'autre : comptes Boussole et leurs entreprises, instantanés de
-  stock, sessions, configuration du courriel (l'expéditeur d'un site neuf vient de SA fiche), fiche d'entreprise et ce qui en dépend ;
+  stock, sessions, journal du site, configuration du courriel (l'expéditeur d'un site neuf vient de SA fiche), fiche d'entreprise et ce
+  qui en dépend ; si la création échoue après la copie, la ligne du site part avec sa base ;
 - **refuse la création** si le site de référence porte un compte qui n'est pas un compte de la plateforme ;
 - copie la base nommée par `TENANT_TEMPLATE_DB` quand elle est réglée (les tests copient leur propre modèle de site,
   `db_site_template_test` ; une répétition copie une copie) ; en environnement de test, copier le site de référence est refusé.
@@ -466,9 +480,12 @@ de la plateforme pour dépanner tant qu'AG-3 n'existe pas. Trois garde-fous, sur
    voit ; il ne peut ni le modifier ni le supprimer (gardes existantes de l'écran et des routes).
 2. **Écrit** : la clause « la plateforme peut accéder au site pour le dépannage et la sécurité » s'ajoute aux conditions. **À porter
    dans la liste remise à l'avocat**, avec les points d'IMP-2.
-3. **Tracé** : chaque connexion de ce compte sur un site (par l'API, une fois le code à usage unique validé ; par l'espace
-   d'administration) laisse une ligne dans le journal du site (`content_audit_log`, ressource `platform_access`, action `login`) :
-   le compte, la date, par où. Ni adresse IP ni appareil. L'administrateur du site la lit sur la page « Accès de la plateforme »
+3. **Tracé** : chaque connexion de ce compte sur un site par l'API (une fois le code à usage unique validé), et chaque entrée dans
+   l'espace d'administration d'un site, laisse une ligne dans le journal de CE site (`content_audit_log`, ressource `platform_access`,
+   action `login`) : le compte, la date, par où. Dans l'espace d'administration, une même session passe d'un site à l'autre sans
+   nouvelle connexion (`/admin?tenant=<code>`) : la trace tient donc à la première page ouverte sur chaque site, par session
+   (`PlatformAccessSubscriber`), une fois le code validé. La ligne est écrite hors de l'ORM : une panne du journal ne fait pas
+   échouer la connexion. Ni adresse IP ni appareil. L'administrateur du site la lit sur la page « Accès de la plateforme »
    (`/admin/acces-plateforme`) et par `GET /api/landingpage-audit?resource=platform_access`. Le renouvellement d'une session n'est pas
    une connexion. Lignes gardées 180 jours, comme tout le journal du site.
 
@@ -481,7 +498,12 @@ Le site de référence porte deux comptes de ce rôle : le propriétaire regarde
 - Détacher de l'agence un site qu'elle a créé laisse ses droits `agency` tels quels : la cascade ne le couvre plus. C'est à la
   plateforme de les reprendre à la main.
 - Supprimer un site créé reste un geste de la plateforme, hors de ce lot.
-- Une connexion du compte de la plateforme à la caisse par code PIN est au journal de caisse, pas au journal du site.
+- La caisse par code PIN n'est pas un chemin d'entrée du compte de la plateforme : elle est refusée aux administrateurs.
+- Le verrou de fabrication est un verrou de session de la connexion maître : si cette connexion est rouverte au milieu d'une
+  fabrication, il tombe ; une seconde copie simultanée échouerait alors (`BUILD_FAILED`), sans rien détruire.
+- Ce qu'un site neuf garde du site de référence hors des tables nettoyées (réglages de transporteur, référentiels) n'a pas été relu
+  ligne à ligne : l'inventaire a cherché, par leur nom, les colonnes de clés, de jetons et de mots de passe, et n'en a trouvé aucune
+  renseignée hors des comptes.
 - Aucune agence n'existe en production : la première sera une agence de test, à la campagne de tests.
 
 ## Tenir cette fiche à jour

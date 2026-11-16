@@ -73,11 +73,32 @@ class PlatformAccountGuardsTest extends WebTestCase
         $this->assertSame(200, $this->client->getResponse()->getStatusCode(), 'la session se renouvelle : ' . substr((string) $this->client->getResponse()->getContent(), 0, 300));
         $this->assertCount(1, $lines());
 
-        // Par l'espace d'administration : la ligne s'écrit quand le code est validé
+        // Par l'espace d'administration : rien tant que le code n'est pas validé ; puis UNE ligne, à la première page ouverte
         $this->client->getCookieJar()->clear();
         $this->client->loginUser($platform, 'main');
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin');
+        $this->assertSame(302, $this->client->getResponse()->getStatusCode(), 'le code à usage unique est demandé');
+        $this->assertCount(1, $lines(), 'le compte n\'est pas encore entré');
         OtpTestHelper::validateIfRequired($this->client, $platform);
-        $this->assertSame(['{"channel":"webadmin"}', '{"channel":"easyadmin"}'], array_column($lines(), 'after_state'));
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin');
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin/acces-plateforme');
+        $this->assertSame(['{"channel":"webadmin"}', '{"channel":"easyadmin"}'], array_column($lines(), 'after_state'), 'une ligne par entrée, pas une par page');
+
+        // Sans se reconnecter, le compte de la plateforme passe à l'espace d'administration d'un AUTRE site (son compte y existe, avec le
+        // même mot de passe) : une ligne s'écrit au journal de CE site-là
+        $second = static::getContainer()->get(\App\Services\Platform\TenantDatabaseConnector::class)->pdo(MV_TEST_TENANT2_DB);
+        $second->exec("DELETE FROM content_audit_log WHERE resource = 'platform_access'");
+        $second->prepare('INSERT INTO "user" (id, email, roles, password, username, firstname, lastname, is_verified, password_set, otp_enabled, created_at) VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM "user"), ?, ?, ?, ?, \'Garde\', \'Plateforme\', true, true, false, NOW())')
+            ->execute([$platform->getEmail(), '["ROLE_ADMIN","ROLE_SUPER_ADMIN"]', $platform->getPassword(), $platform->getEmail()]);
+        try {
+            $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin?tenant=' . MV_TEST_TENANT2_CODE, [], [], ['HTTP_X_TENANT_HOST' => '']);
+            $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin/acces-plateforme', [], [], ['HTTP_X_TENANT_HOST' => '']);
+            $this->assertSame([[$platform->getEmail(), MV_TEST_TENANT2_CODE, '{"channel":"easyadmin"}']], $second->query("SELECT user_identifier, tenant, after_state FROM content_audit_log WHERE resource = 'platform_access' ORDER BY id")->fetchAll(\PDO::FETCH_NUM));
+            $this->assertCount(2, $lines(), 'rien de plus au journal du premier site');
+        } finally {
+            $second->exec("DELETE FROM content_audit_log WHERE resource = 'platform_access'");
+            $second->prepare('DELETE FROM "user" WHERE email = ?')->execute([$platform->getEmail()]);
+        }
 
         // L'administrateur du site lit ces lignes : sur sa page, et par l'API du journal
         $this->client->getCookieJar()->clear();

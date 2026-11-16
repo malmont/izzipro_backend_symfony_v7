@@ -72,6 +72,8 @@ class AgencySiteBuilder
             $warnings[] = 'DEFAULTS_NOT_APPLIED';
             $this->logger->error(sprintf('[Agences] site %s : référentiels automatiques non posés (%s)', $code, $e::class));
         }
+        // la fiche reflète les droits, même quand aucun n'a été posé (demande sans module) : une fiche neuve ouvre des modules par défaut
+        $this->rights->project($code);
 
         return ['modules' => $modules, 'defaults' => $applied, 'warnings' => $warnings];
     }
@@ -81,19 +83,25 @@ class AgencySiteBuilder
      *
      * @param array<string, mixed> $agency
      * @param array<string, mixed> $request
+     * @param string|null $replaced l'adresse de la personne désignée avant, quand l'agence vient d'en désigner une autre
      * @return array{sent: bool, reason: ?string, expiresAt: ?string}
      */
-    public function invite(array $agency, array $request, bool $again = false): array
+    public function invite(array $agency, array $request, bool $again = false, ?string $replaced = null): array
     {
         $code = (string) $request['tenant_code'];
         $options = $request['options'];
         try {
             $this->emProvider->switchTenant(AgencySiteCode::database($code), $code);
             $locale = is_string($options['locale'] ?? null) ? $options['locale'] : null;
+            $names = [(string) ($options['adminFirstName'] ?? ''), (string) ($options['adminLastName'] ?? '')];
+            $replyTo = is_string($agency['contact_email'] ?? null) ? $agency['contact_email'] : null;
+            if ($replaced !== null && $replaced !== $request['admin_email']) {
+                $this->inviter->withdraw($replaced);
+            }
 
             return $again
-                ? $this->inviter->resend((string) $request['admin_email'], $locale, (string) $agency['name'])
-                : $this->inviter->invite((string) $request['admin_email'], (string) ($options['adminFirstName'] ?? ''), (string) ($options['adminLastName'] ?? ''), $locale, (string) $agency['name']);
+                ? $this->inviter->resend((string) $request['admin_email'], $names[0], $names[1], $locale, (string) $agency['name'], $replyTo)
+                : $this->inviter->invite((string) $request['admin_email'], $names[0], $names[1], $locale, (string) $agency['name'], $replyTo);
         } catch (\Throwable $e) {
             $this->logger->error(sprintf('[Agences] site %s : invitation de l\'administrateur en échec (%s)', $code, $e::class), ['exception' => $e]);
 
@@ -104,10 +112,19 @@ class AgencySiteBuilder
     /** Défait le site que cet appel vient de créer, et les droits déjà posés à son nom */
     public function discard(string $code): void
     {
-        $this->rights->cancelAll($code);
+        // d'abord la garde (« créé par ce processus »), ensuite seulement les droits : rien n'est annulé au nom d'un site existant
         if (!$this->tenants->discardCreatedTenant($code, AgencySiteCode::database($code))) {
             $this->logger->error(sprintf('[Agences] site %s : non défait (il n\'a pas été créé par ce processus)', $code));
+
+            return;
         }
+        $this->rights->cancelAll($code);
+    }
+
+    /** Le site est livré : le processus ne peut plus le défaire */
+    public function delivered(string $code): void
+    {
+        $this->tenants->forgetCreated(AgencySiteCode::database($code));
     }
 
     /**

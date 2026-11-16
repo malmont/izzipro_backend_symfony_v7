@@ -5,7 +5,7 @@ namespace App\Services\Agency;
 /**
  * Le code d'un site demandé par une agence (lot AG-2) : c'est son adresse (`<code>.<domaine de la plateforme>`). L'agence le choisit
  * librement, dans ces règles de forme : 3 à 40 caractères, lettres minuscules, chiffres et tirets, une lettre d'abord, pas de tiret à
- * la fin ni deux tirets de suite. Les noms d'usage technique et les sites qui ne se confient pas sont refusés. La base du site
+ * la fin ni deux tirets de suite, pas de « -v2 » final. Les noms d'usage technique et les sites qui ne se confient pas sont refusés. La base du site
  * s'appelle `db_<code>`, les tirets devenus des soulignés.
  */
 final class AgencySiteCode
@@ -20,7 +20,9 @@ final class AgencySiteCode
 
     public static function valid(string $code): bool
     {
-        return preg_match(self::PATTERN, $code) === 1;
+        // « -v2 » en fin de code : la résolution d'un hôte retire ce suffixe (`TenantConnectionManager::findTenantConfigByHost`),
+        // l'adresse `<code>.<domaine>` mènerait donc à un autre site, ou à rien
+        return preg_match(self::PATTERN, $code) === 1 && !str_ends_with($code, '-v2');
     }
 
     public static function reserved(string $code): bool
