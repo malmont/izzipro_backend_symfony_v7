@@ -107,6 +107,8 @@ class AgencySitesTest extends WebTestCase
         // Le worker fabrique le site
         $this->service()->process($id);
         $mails = self::getMailerMessages();
+        // un site LIVRÉ ne se défait plus, même par le processus qui l'a fabriqué
+        $this->assertFalse(static::getContainer()->get(TenantConnectionManager::class)->discardCreatedTenant($code, $db));
         $done = $this->json('GET', "/api/agency/site-requests/$id", null, 'member', 200)['request'];
         $this->assertSame(['ready', null, [], $code, 'Boutique de Zoé'], [$done['status'], $done['errorCode'], $done['warnings'], $done['site']['code'], $done['site']['name']]);
         $host = (string) $done['site']['host'];
@@ -122,6 +124,7 @@ class AgencySitesTest extends WebTestCase
         // courriel, ni fiche d'un autre, ni chiffres, ni adresse d'espace d'administration
         $site = $this->pdo($db);
         $one = fn (string $sql) => $site->query($sql)->fetchColumn();
+        $this->assertSame(0, (int) $one('SELECT COUNT(*) FROM content_audit_log'), 'le journal du modèle (dont ses accès de la plateforme) ne passe pas au site neuf');
         $this->assertSame([0, 0, 0, 0, 0], [(int) $one('SELECT COUNT(*) FROM esg_user'), (int) $one('SELECT COUNT(*) FROM esg_company'), (int) $one('SELECT COUNT(*) FROM gestion_stock_snapshot'),
             (int) $one('SELECT COUNT(*) FROM refresh_tokens'), (int) $one('SELECT COUNT(*) FROM email_configuration WHERE smtp_host IS NOT NULL OR smtp_password IS NOT NULL')]);
         $this->assertSame([['plateforme@example.invalid', '["ROLE_ADMIN","ROLE_SUPER_ADMIN"]'], ["zoe-{$this->tag}@example.invalid", '["ROLE_ADMIN"]']],
@@ -144,6 +147,9 @@ class AgencySitesTest extends WebTestCase
         sort($sorted);
         $this->assertSame([$sorted, ['agency'], ['active'], ['agency:' . $this->agency]], [array_column($rights, 'feature_key'), array_values(array_unique(array_column($rights, 'source'))), array_values(array_unique(array_column($rights, 'status'))), array_values(array_unique(array_column($rights, 'reference')))]);
         $this->assertSame($features, $done['modules']['opened']);
+        // les 10 droits posés par l'agence n'écrivent à personne (ni courriel parti, ni courriel retenu) : le seul avis possible est
+        // celui de l'essai « Aide IA » que la plateforme ouvre à tout site neuf
+        $this->assertLessThanOrEqual(1, (int) $one('SELECT COUNT(*) FROM notification_log'));
         $this->assertSame([true, true, true, false], $site->query('SELECT is_landing_page_active, is_boutique_active, is_pos_active, is_ai_full_active FROM entreprise')->fetch(\PDO::FETCH_NUM));
 
         // L'invitation : un compte d'administrateur du site neuf, inutilisable tant que le mot de passe n'est pas choisi ; un courriel, un lien
