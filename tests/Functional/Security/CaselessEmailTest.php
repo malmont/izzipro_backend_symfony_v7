@@ -83,6 +83,14 @@ class CaselessEmailTest extends WebTestCase
         $this->assertSame(['sent' => false, 'reason' => 'ACCOUNT_EXISTS'], array_intersect_key($invite, ['sent' => 1, 'reason' => 1]));
         $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM "user" WHERE lower(email) = lower(?)', [$stored]), 'un seul compte pour cette adresse');
 
+        // LE CONTRÔLE D'UNICITÉ des formulaires (EasyAdmin, inscription) : l'adresse prise à une majuscule près est refusée par la
+        // validation, avant la base ; une adresse libre passe
+        $validator = static::getContainer()->get('validator');
+        $twin = (new User())->setEmail($typed)->setUsername($typed)->setFirstname('Autre')->setLastname('Personne')->setPassword('x');
+        $this->assertContains('email', array_map(static fn ($v) => $v->getPropertyPath(), iterator_to_array($validator->validate($twin))), 'la jumelle à la casse près est refusée');
+        $free = (new User())->setEmail("casse-libre-{$this->tag}@example.invalid")->setUsername("casse-libre-{$this->tag}@example.invalid")->setFirstname('Libre')->setLastname('Compte')->setPassword('x');
+        $this->assertNotContains('email', array_map(static fn ($v) => $v->getPropertyPath(), iterator_to_array($validator->validate($free))));
+
         // la recherche du dépôt : la casse et les espaces de bord ne comptent pas ; une adresse vide ne trouve rien
         $repository = $provider->getEntityManager()->getRepository(User::class);
         $this->assertSame($id, $repository->findOneByEmailCaseless(' ' . strtoupper($stored) . ' ')?->getId());

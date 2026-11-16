@@ -3,33 +3,46 @@
 namespace App\Security;
 
 use App\Entity\User;
+use App\Services\Platform\PlatformAccessJournal;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
 
 /**
  * La validation du code à usage unique, gardée dans la session de l'espace d'administration (EasyAdmin). Lot SÉCURITÉ-2
- * (16/11/2026) : elle est LIÉE AU COMPTE qui a saisi le code. Avant, un simple drapeau « vrai » : une reconnexion dans la même session
- * avec un AUTRE compte (son mot de passe connu) sautait le code de ce compte-là.
- * La marque est l'identifiant du compte (son adresse, en minuscules) : le compte de la plateforme, qui porte la même adresse sur
- * chaque site, garde sa validation en passant d'un site à l'autre ; tout autre compte doit saisir son propre code.
+ * (16/11/2026) : elle est LIÉE AU COMPTE qui a saisi le code, ET AU SITE. Avant, un simple drapeau « vrai » : une reconnexion dans la
+ * même session avec un autre compte sautait le code ; et une session garde ses attributs d'un site à l'autre (`/login?tenant=…`) :
+ * une marque faite de la seule adresse aurait laissé passer le compte de même adresse sur un AUTRE site (relecture du lot).
+ * - Un compte ordinaire : `site|<code du site>|<identifiant>|<adresse>` : valable sur ce site, pour ce compte seulement.
+ * - Le compte de la plateforme (même adresse sur chaque site) : `platform|<adresse>`, accepté seulement pour un compte de la
+ *   plateforme : il garde sa validation en passant d'un site à l'autre ; un compte ordinaire ne peut jamais s'en prévaloir.
  */
 final class OtpSession
 {
     public const KEY = 'otp_validated';
 
-    public static function validated(SessionInterface $session, User $user): bool
+    public static function validated(SessionInterface $session, User $user, ?string $site): bool
     {
         $mark = $session->get(self::KEY);
+        $expected = self::mark($user, $site);
 
-        return is_string($mark) && $mark !== '' && hash_equals($mark, self::mark($user));
+        return is_string($mark) && $mark !== '' && $expected !== null && hash_equals($expected, $mark);
     }
 
-    public static function markValidated(SessionInterface $session, User $user): void
+    public static function markValidated(SessionInterface $session, User $user, ?string $site): void
     {
-        $session->set(self::KEY, self::mark($user));
+        $mark = self::mark($user, $site);
+        $mark === null ? $session->remove(self::KEY) : $session->set(self::KEY, $mark);
     }
 
-    private static function mark(User $user): string
+    private static function mark(User $user, ?string $site): ?string
     {
-        return mb_strtolower(trim($user->getUserIdentifier()));
+        $email = mb_strtolower(trim($user->getUserIdentifier()));
+        if (PlatformAccessJournal::isPlatformAccount($user->getRoles())) {
+            return 'platform|' . $email;
+        }
+        if ($site === null || $site === '' || $user->getId() === null) {
+            return null; // hors d'un site connu : jamais validé
+        }
+
+        return 'site|' . $site . '|' . $user->getId() . '|' . $email;
     }
 }

@@ -51,7 +51,7 @@ class PlatformAccessSubscriber implements EventSubscriberInterface
             return;
         }
         $session = $request->getSession();
-        if ($this->twoFactor->required($user) && !OtpSession::validated($session, $user)) {
+        if ($this->twoFactor->required($user) && !OtpSession::validated($session, $user, $this->tenantProvider->getTenantCode())) {
             return;
         }
         $code = (string) ($this->tenantProvider->getTenantCode() ?? '');

@@ -274,11 +274,15 @@ son code à usage unique (envoyé par le serveur d'envoi du site, qu'il règle l
   - **Une adresse, un compte, à la casse près** : index unique `uniq_user_email_lower` sur `lower(email)` de chaque base (l'ancien
     index reste ; aucune adresse n'est réécrite). La connexion (web, API, EasyAdmin), le mot de passe oublié, les invitations (console
     de Mémoires Vivantes, agence ou plateforme, assistance), l'inscription et les contrôles d'unicité retrouvent le compte quelle que
-    soit la casse saisie (`UserRepository::findOneByEmailCaseless`).
-  - **Code à usage unique d'EasyAdmin** : sa validation est liée au compte qui l'a saisi (`App\Security\OtpSession` : un autre compte
-    dans la même session doit saisir le sien ; le compte de la plateforme garde sa validation d'un site à l'autre) ; la page
-    `/account/otp` limite les essais comme l'API (5 par 10 minutes et par compte), puis efface les codes en attente. Une session
-    ouverte avant ce lot redemande le code une fois.
+    soit la casse saisie (`UserRepository::findOneByEmailCaseless`, comparaison `LOWER` des deux côtés) ; le contrôle d'unicité des
+    formulaires (`UniqueEntity` de `User`) passe par `findByEmailCaseless`.
+  - **Code à usage unique d'EasyAdmin** : sa validation est liée au compte qui l'a saisi ET au site (`App\Security\OtpSession` : la
+    marque porte le site, le numéro et l'adresse du compte ; un autre compte dans la même session, ou le même numéro de compte sur
+    un autre site, doit saisir le sien ; seul le compte de la plateforme garde sa validation d'un site à l'autre) ; la page
+    `/account/otp` limite les essais comme l'API (5 par 10 minutes, par compte et par site), puis efface les codes en attente. Une
+    session sans code en attente (ouverte avant ce lot, ou arrivée d'un autre site) en reçoit un par `PendingOtpSubscriber` ; une
+    fois la connexion validée, tous les codes de connexion en attente du compte sont effacés. Une session ouverte avant ce lot
+    redemande le code une fois. Les entrées d'EasyAdmin par `/admin?routeName=…` restent couvertes par les contrôleurs et l'abonné.
   - **Pages de la plateforme** : `^/admin/plateforme` exige `ROLE_SUPER_ADMIN` dans `access_control`, en plus des contrôleurs.
   - **Avis « adresse changée » du compte de la plateforme** : par le serveur de la plateforme, comme son code.
   - Essais : `CaselessEmailTest`, `OtpSessionTest`.

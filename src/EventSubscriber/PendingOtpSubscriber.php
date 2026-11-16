@@ -25,7 +25,10 @@ final class PendingOtpSubscriber implements EventSubscriberInterface
     public function __construct(
         private readonly Security $security,
         private readonly TwoFactorPolicy $twoFactor,
-        private readonly UrlGeneratorInterface $urls
+        private readonly UrlGeneratorInterface $urls,
+        private readonly ?\App\Services\TenantConnectionProvider $tenants = null,
+        private readonly ?\App\Services\OtpService $otp = null,
+        private readonly ?\App\Services\TenantEntityManagerProvider $emProvider = null,
     ) {
     }
 
@@ -46,10 +49,21 @@ final class PendingOtpSubscriber implements EventSubscriberInterface
             return;
         }
         $session = $request->getSession();
-        if (\App\Security\OtpSession::validated($session, $user)) { // lot SÉCURITÉ-2 : la validation de CE compte
+        if (\App\Security\OtpSession::validated($session, $user, $this->tenants?->getTenantCode())) { // lot SÉCURITÉ-2 : CE compte, sur CE site
             return;
         }
         $session->set('pending_otp_user', $user->getId());
+        // Lot SÉCURITÉ-2 : une session sans code en attente (ouverte avant le lot, ou arrivée d'un autre site) reçoit un code, sinon
+        // la page du code attendrait un courriel qui ne part pas
+        try {
+            $em = $this->emProvider?->getEntityManager();
+            $active = $em?->getConnection()->fetchOne("SELECT COUNT(*) FROM otp_code WHERE user_otp_id = ? AND purpose = 'login' AND expiration > NOW()", [$user->getId()]);
+            if ($em !== null && (int) $active === 0) {
+                $this->otp?->generateAndSendOtp($user, $request);
+            }
+        } catch (\Throwable) {
+            // un échec d'envoi n'ouvre rien : la page du code reste fermée
+        }
         $event->setResponse(new RedirectResponse($this->urls->generate('account_otp')));
     }
 }

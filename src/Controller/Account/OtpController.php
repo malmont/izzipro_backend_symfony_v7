@@ -29,6 +29,7 @@ class OtpController extends AbstractController
         ?\App\Services\MediaUrlResolver $mediaUrlResolver = null,
         // Lot SÉCURITÉ-2 : la même limite que la vérification du code par l'API (5 essais par 10 minutes et par compte)
         #[\Symfony\Component\DependencyInjection\Attribute\Autowire(service: 'limiter.otp_verify_account')] private readonly ?\Symfony\Component\RateLimiter\RateLimiterFactory $attempts = null,
+        private readonly ?\App\Services\TenantConnectionProvider $tenants = null,
     ) {
         $this->tenantEmProvider = $tenantEmProvider;
         $this->session = $requestStack->getSession();
@@ -56,7 +57,9 @@ class OtpController extends AbstractController
                 $otp = trim((string) $request->request->get('otp', ''));
                 // Lot SÉCURITÉ-2 : un code de 6 chiffres valable 5 minutes se devine sans limite. Chaque essai compte, par compte ;
                 // au-delà, refus jusqu'à la fin de la fenêtre, et les codes en attente de ce compte sont effacés (il en redemande un).
-                $limit = $this->attempts?->create('easyadmin|' . $pendingUserId)->consume(1);
+                // (clé du compte SUR CE SITE, comme la vérification par l'API : un même numéro de compte sur un autre site a sa limite)
+                $pendingAccount = $em->getRepository(User::class)->find($pendingUserId);
+                $limit = $this->attempts?->create(($this->tenants?->getTenantCode() ?? $request->getHost()) . '|' . mb_strtolower(trim((string) $pendingAccount?->getUserIdentifier())))->consume(1);
                 if ($limit !== null && !$limit->isAccepted()) {
                     $user = $em->getRepository(User::class)->find($pendingUserId);
                     foreach ($user !== null ? $em->getRepository(OtpCode::class)->findBy(['userOtp' => $user, 'purpose' => OtpCode::PURPOSE_LOGIN]) : [] as $pending) {
@@ -83,9 +86,12 @@ class OtpController extends AbstractController
                         $error = 'Code OTP invalide ou expiré';
                     } else {
                         // Le code est correct : on supprime l'OTP et on marque la session comme validée
-                        $em->remove($otpCode);
+                        // (lot SÉCURITÉ-2 : avec lui, tout autre code de connexion encore en attente pour ce compte ; aucun ne survit à la connexion)
+                        foreach ($em->getRepository(OtpCode::class)->findBy(['userOtp' => $user, 'purpose' => OtpCode::PURPOSE_LOGIN]) as $pending) {
+                            $em->remove($pending);
+                        }
                         $em->flush();
-                        \App\Security\OtpSession::markValidated($this->session, $user); // lot SÉCURITÉ-2 : liée à CE compte
+                        \App\Security\OtpSession::markValidated($this->session, $user, $this->tenants?->getTenantCode()); // lot SÉCURITÉ-2 : CE compte, sur CE site
                         $this->session->remove('pending_otp_user');
                         // Lot AG-2 : une nouvelle entrée ; le compte de la plateforme sera tracé à sa première page de chaque site (PlatformAccessSubscriber)
                         $this->session->remove(\App\Security\PlatformAccessSubscriber::SESSION_KEY);

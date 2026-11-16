@@ -45,19 +45,36 @@ class OtpSessionTest extends WebTestCase
         $a = $this->user('a', ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']);
         $b = $this->user('b', ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']);
         $session = new Session(new MockArraySessionStorage());
-        $this->assertFalse(OtpSession::validated($session, $a));
-        OtpSession::markValidated($session, $a);
-        $this->assertTrue(OtpSession::validated($session, $a));
-        $this->assertFalse(OtpSession::validated($session, $b), 'un autre compte dans la même session n\'est pas validé');
-        // l'ancien drapeau « vrai » d'une session d'avant ce lot ne vaut plus rien : le code se redemande une fois
-        $session->set(OtpSession::KEY, true);
-        $this->assertFalse(OtpSession::validated($session, $a));
-        $session->set(OtpSession::KEY, '1');
-        $this->assertFalse(OtpSession::validated($session, $a));
-        $session->set(OtpSession::KEY, '');
-        $this->assertFalse(OtpSession::validated($session, $a), 'une marque vide ne vaut rien');
-        $session->set(OtpSession::KEY, ['a' => 1]);
-        $this->assertFalse(OtpSession::validated($session, $a));
+        $site = MV_TEST_TENANT_CODE;
+        $this->assertFalse(OtpSession::validated($session, $a, $site));
+        OtpSession::markValidated($session, $a, $site);
+        $this->assertTrue(OtpSession::validated($session, $a, $site));
+        $this->assertFalse(OtpSession::validated($session, $b, $site), 'un autre compte dans la même session n\'est pas validé');
+        // l'ancien drapeau « vrai » d'une session d'avant ce lot ne vaut plus rien ; ni une marque vide ou d'un autre type
+        foreach ([true, '1', '', ['a' => 1]] as $old) {
+            $session->set(OtpSession::KEY, $old);
+            $this->assertFalse(OtpSession::validated($session, $a, $site), var_export($old, true));
+        }
+
+        // UN COMPTE ORDINAIRE : sa validation vaut sur CE site, pour CE compte. Le compte de même adresse sur un AUTRE site (même
+        // session, `/login?tenant=…`) doit saisir son propre code ; un compte sans identifiant ou hors site n'est jamais validé
+        $ordinary = $this->user('ordinaire', ['ROLE_ADMIN']);
+        $twinElsewhere = (new User())->setEmail($ordinary->getEmail())->setUsername($ordinary->getEmail())->setRoles(['ROLE_ADMIN']);
+        (new \ReflectionProperty(User::class, 'id'))->setValue($twinElsewhere, $ordinary->getId());
+        OtpSession::markValidated($session, $ordinary, $site);
+        $this->assertTrue(OtpSession::validated($session, $ordinary, $site));
+        $this->assertFalse(OtpSession::validated($session, $twinElsewhere, MV_TEST_TENANT2_CODE), 'même adresse, même numéro, autre site : refusé');
+        $this->assertFalse(OtpSession::validated($session, $ordinary, null));
+        $this->assertFalse(OtpSession::validated($session, $ordinary, ''));
+        OtpSession::markValidated($session, $ordinary, null);
+        $this->assertFalse($session->has(OtpSession::KEY), 'hors site : aucune marque posée');
+
+        // LE COMPTE DE LA PLATEFORME garde sa validation d'un site à l'autre ; un compte ordinaire de même adresse ne s'en prévaut jamais
+        OtpSession::markValidated($session, $a, $site);
+        $this->assertTrue(OtpSession::validated($session, $a, MV_TEST_TENANT2_CODE));
+        $impostor = (new User())->setEmail($a->getEmail())->setUsername($a->getEmail())->setRoles(['ROLE_ADMIN']);
+        (new \ReflectionProperty(User::class, 'id'))->setValue($impostor, $a->getId());
+        $this->assertFalse(OtpSession::validated($session, $impostor, $site), 'un compte ordinaire à l\'adresse du compte de la plateforme : refusé');
 
         // EN VRAI : le compte A valide son code ; le compte B, connecté ensuite dans la même session, est renvoyé vers la page du code
         $this->login($a);
@@ -87,6 +104,26 @@ class OtpSessionTest extends WebTestCase
         $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM otp_code WHERE user_otp_id = ?', [$user->getId()]));
         $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
         $this->assertSame(302, $this->client->getResponse()->getStatusCode(), 'toujours pas entré');
+    }
+
+    /** Une session ouverte sans code en attente en reçoit un ; une fois la connexion validée, aucun code de connexion ne reste */
+    public function testASessionWithoutCodeReceivesOneAndNoCodeSurvivesTheValidation(): void
+    {
+        $user = $this->user('envoi', ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']);
+        $this->login($user);
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        $this->assertSame(302, $this->client->getResponse()->getStatusCode());
+        $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM otp_code WHERE user_otp_id = ? AND purpose = 'login'", [$user->getId()]), 'un code est envoyé à la session qui n\'en avait pas');
+        $first = (string) $this->db->fetchOne("SELECT id || ':' || code FROM otp_code WHERE user_otp_id = ? AND purpose = 'login'", [$user->getId()]);
+        // une seconde page bloquée n'en envoie pas un autre tant que le premier vaut (le code reçu reste celui à saisir)
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        $this->assertSame($first, (string) $this->db->fetchOne("SELECT id || ':' || code FROM otp_code WHERE user_otp_id = ? AND purpose = 'login'", [$user->getId()]), 'le même code, pas un nouveau');
+        $sent = (string) $this->db->fetchOne("SELECT code FROM otp_code WHERE user_otp_id = ? AND purpose = 'login'", [$user->getId()]);
+        // validée par un autre code valable du compte : le code envoyé est effacé avec lui
+        $this->db->executeStatement("INSERT INTO otp_code (id, user_otp_id, code, expiration, purpose) VALUES (nextval('otp_code_id_seq'), ?, ?, NOW() + INTERVAL '5 minutes', 'login')", [$user->getId(), $sent === '975310' ? '975311' : '975310']);
+        $this->attempt($sent === '975310' ? '975311' : '975310');
+        $this->assertSame(302, $this->client->getResponse()->getStatusCode(), 'code accepté');
+        $this->assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) FROM otp_code WHERE user_otp_id = ? AND purpose = 'login'", [$user->getId()]), 'aucun code ne survit à la connexion');
     }
 
     public function testThePlatformPagesAreGuardedByAnAccessRule(): void

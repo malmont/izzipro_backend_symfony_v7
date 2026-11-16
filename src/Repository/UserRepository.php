@@ -32,8 +32,23 @@ class UserRepository extends EntityRepository implements PasswordUpgraderInterfa
             return null;
         }
 
-        return $this->createQueryBuilder('u')->where('LOWER(u.email) = :email')->setParameter('email', mb_strtolower(trim($email)))
+        // (les minuscules faites par la base, des deux côtés : la même règle que l'index unique)
+        return $this->createQueryBuilder('u')->where('LOWER(u.email) = LOWER(:email)')->setParameter('email', trim($email))
             ->orderBy('u.id', 'ASC')->setMaxResults(1)->getQuery()->getOneOrNullResult();
+    }
+
+    /**
+     * Pour le contrôle d'unicité de l'entité (`UniqueEntity`, lot SÉCURITÉ-2) : les comptes de cette adresse, à la casse près. Un
+     * formulaire (EasyAdmin, inscription) refuse ainsi une adresse prise à une majuscule près, au lieu d'une erreur de la base.
+     *
+     * @param array<string, mixed> $criteria
+     * @return list<User>
+     */
+    public function findByEmailCaseless(array $criteria): array
+    {
+        $user = $this->findOneByEmailCaseless($criteria['email'] ?? null);
+
+        return $user === null ? [] : [$user];
     }
 
     /**
