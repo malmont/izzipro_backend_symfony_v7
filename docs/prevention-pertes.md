@@ -2174,6 +2174,20 @@ n'est remplacée ni indexée.
   datés de la dernière lecture) ; une lecture isolée à travers une cloison ne produit rien ; mémoire bornée.
 - **Ce que le lot ne fait pas** : aucun constat, aucune alerte, rien dans la caisse, rien dans le stock, aucune route nouvelle.
 
+**Codé sous Opus, à faire relire par Fable** (demande du propriétaire, 16/11/2026, vers 13 h 40 UTC ; le chef de projet a
+choisi de basculer sans attendre, Fable relira ensuite). La liste fait foi pour cibler cette relecture ; tout ce qui n'y est pas a
+été codé et relu sous Fable :
+
+| Lot | Dépôt | Commits | Ce qui est à relire |
+|---|---|---|---|
+| L4-a, migration | backend `app_v2` | `3d6e4ce6` | `migrations/Version20270120100000.php`, et le script `scripts/migrate_all_v2_pertes_l4a.sh` (hors dépôt) |
+| L4-a, code | backend `app_v2` | `27e6c73f` | `Entity/LossZonePresence`, le canal (`LossBoxChannelService` : contrôle et écriture des faits de zone, réglages servis), `LossBoxRepository` (présence par zone, antennes en service, effacement de l'exercice), `LossPieceRepository` et `LossPieceService` (dernière zone, compte par zone), conservation (`LossSaleUnitRepository::purgePresences`), santé, assistant, réglages, boîtier simulé, textes, `LossPreventionZoneTest` et les attentes mises à jour de quatre essais, 40 exemples JSON |
+| B5 | boîtier, dépôt local | `2a4ce6f`, `8f0faf7` | `izzibox/appareils.py` (`Antenne`, `Parc.regler`, `Parc.veiller`), `izzibox/service.py`, `izzibox/scenarios.py`, `izzibox/canal.py` (`nom_de_site` aligné sur la règle de la plateforme), `tests/test_zones.py`, le faux serveur, la copie du contrat |
+
+Vérifié sous Opus : `LossPreventionZoneTest` et le dossier du module verts ; 21 mutations sur L4-a (20 tuées, une équivalente :
+le rejeu d'une arrivée est déjà bloqué par la clé du fait et par la requête de présence) ; 12 mutations sur B5, toutes tuées.
+Aucun relecteur indépendant (lot ordinaire).
+
 **Tests** : `LossPreventionZoneTest` (arrivée, départ, ordre des faits, heure douteuse, rejeu, une antenne à la fois, fiche,
 liste, synthèse et ses filtres, réglages et leurs bornes, réglages servis, santé et étape, antenne en panne, pièce retirée,
 conservation ; antennes simulées, scène, exercice étanche au réel, gardes de la base, migration rejouée et son script).
