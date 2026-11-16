@@ -91,6 +91,16 @@ class LossBoxToken
         return $this->keyHash($tenantCode, 'pairing|' . $code);
     }
 
+    /**
+     * La marque du jumelage, écrite une fois pour toutes dans le fait de création du boîtier (`BOX_CREATED { pairing, ref }`). Elle
+     * survit à une remise à zéro de la clé : c'est elle qui prouve, plus tard, que le boîtier lu est bien celui que CE jumelage a
+     * créé, dans la base de CE site. Elle ne donne ni le code ni l'empreinte de la clé.
+     */
+    public function pairingRef(string $tenantCode, string $code): string
+    {
+        return hash('sha256', 'loss-pairing-ref|' . $this->pairingKeyHash($tenantCode, $code));
+    }
+
     private function signature(string $tenantCode, int $boxId, int $generation, int $expires): string
     {
         return hash_hmac('sha256', sprintf('loss-box|%s|%d|%d|%d', $tenantCode, $boxId, $generation, $expires), $this->secret);

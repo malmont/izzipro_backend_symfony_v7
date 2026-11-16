@@ -147,7 +147,8 @@ class LossBoxService
             }
             $now = self::now();
             $id = $repository->create($name, $place, $this->tokens->pairingKeyHash($this->site(), $code), null, false, $userId, $now);
-            $repository->event($id, null, LossBoxEvent::BOX_CREATED, $userId, false, ['pairing' => true], $now);
+            // la marque du jumelage reste dans ce fait (un fait ne se modifie jamais) : elle survit à une remise à zéro de la clé
+            $repository->event($id, null, LossBoxEvent::BOX_CREATED, $userId, false, ['pairing' => true, 'ref' => $this->tokens->pairingRef($this->site(), $code)], $now);
 
             return $id;
         });

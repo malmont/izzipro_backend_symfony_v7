@@ -192,7 +192,7 @@ class LossPreventionPrintTest extends LossPreventionTestCase
         $this->assertSame([], $tagsOf($p1));
         $sheet = $this->json($this->admin('GET', self::PRINTS . "/$id"));
         $this->assertSame(['running', 'En cours', 1, 1, 1, 0, null], [$sheet['status'], $sheet['statusLabel'], $sheet['written'], $sheet['failed'], $sheet['waiting'], $sheet['cancelled'], $sheet['finishedAt']]);
-        $this->assertSame([['written', 'Écrite', null, null, $tags[0]['id']], ['failed', 'En échec', 'write_refused', 'Écriture refusée par la puce', null], ['waiting', 'En attente', null, null, null]],
+        $this->assertSame([['written', 'Écrite', null, null, $tags[0]['id']], ['failed', 'En échec', 'write_refused', 'Écriture refusée par la puce. Ne posez pas cette étiquette : jetez-la, puis relancez l\'impression de cette pièce.', null], ['waiting', 'En attente', null, null, null]],
             array_map(fn (array $l): array => [$l['status'], $l['statusLabel'], $l['reason'], $l['reasonLabel'], $l['tagId']], $sheet['lineItems']));
         $this->assertNotNull($sheet['lineItems'][0]['doneAt']);
         $this->assertSame([[$lines[3]['id']]], array_map(fn (array $j): array => array_column($j['lines'], 'id'), $this->json($this->box('GET', '/travaux', null, $token))['jobs']), 'seules les lignes qui attendent sont servies');
@@ -241,7 +241,7 @@ class LossPreventionPrintTest extends LossPreventionTestCase
         $this->assertSame([['jobId' => $id, 'deviceId' => $printer, 'lines' => 3, 'withPrice' => true], ['jobId' => $id, 'lines' => 1]], array_map(fn (array $j): array => json_decode((string) $j['data'], true), $journal));
         $this->assertNotNull($journal[0]['user_id']);
         // En anglais
-        $this->assertSame(['Cancelled', 'Written', 'Write refused by the tag'], [($en = $this->json($this->admin('GET', self::PRINTS . "/$id?locale=en")))['statusLabel'], $en['lineItems'][0]['statusLabel'], $en['lineItems'][1]['reasonLabel']]);
+        $this->assertSame(['Cancelled', 'Written', 'Write refused by the tag. Do not use this label: throw it away, then print this piece again.'], [($en = $this->json($this->admin('GET', self::PRINTS . "/$id?locale=en")))['statusLabel'], $en['lineItems'][0]['statusLabel'], $en['lineItems'][1]['reasonLabel']]);
     }
 
     public function testAWrittenTagThatCanNoLongerGoOnItsPieceClosesItsLineInFailure(): void
@@ -450,6 +450,9 @@ class LossPreventionPrintTest extends LossPreventionTestCase
         $play = fn (string $scenario, int $status = 200): array => $this->json($this->admin('POST', self::EX . "/boitiers/$sim/scenarios", ['scenario' => $scenario]), $status);
         $line = fn (): array => array_column($this->json($this->admin('GET', self::EX . '/sante'))['devices'], null, 'kind')['printer'];
         $this->assertSame(['pending', 'L\'imprimante simulée n\'a encore rien écrit. Jouez le scénario « Étiquettes imprimées ».'], [$line()['state'], $line()['hint']]);
+        // en exercice, l'imprimante simulée reste une imprimante : la garde des vrais travaux ne touche pas à l'entraînement
+        $exercise = $this->json($this->admin('GET', self::EX . '/impressions'));
+        $this->assertSame([['SIM-IMPRIMANTE'], true, null], [array_column($exercise['printers'], 'serial'), $exercise['ready']['ok'], $exercise['ready']['reason']]);
 
         // Sans pièce d'exercice sans puce, rien à imprimer
         $this->assertSame('EXERCISE_NO_UNTAGGED_PIECE', $play('print_ok', 409)['code']);
@@ -496,6 +499,43 @@ class LossPreventionPrintTest extends LossPreventionTestCase
         $this->flags(true, false);
         $this->assertSame([200, 404, 403, 403, 403], [$this->admin('GET', self::EX . '/impressions')->getStatusCode(), $this->admin('GET', self::EX . '/impressions/999999999')->getStatusCode(),
             $this->admin('GET', self::PRINTS)->getStatusCode(), $this->admin('POST', self::PRINTS, [])->getStatusCode(), $this->admin('POST', self::PRINTS . '/1/annuler')->getStatusCode()]);
+    }
+
+    public function testTheSimulatedPrinterOfARealBoxNeverTakesARealJob(): void
+    {
+        // Un boîtier sans matériel, en démonstration, relié à un vrai site : il annonce une imprimante SIMULÉE. Aucune puce n'existe
+        // derrière elle : elle ne prend aucun vrai travail, et ne reçoit donc jamais le mot de passe des puces
+        $variant = $this->article('Gilet');
+        [$p1, $p2] = $this->pieces($variant, 2);
+        [$boxId, $token, $devices] = $this->enrolled('Démonstration', [['serial' => 'SIM-IMPRIMANTE', 'kind' => 'printer', 'status' => 'ok'], ['serial' => 'sim-imprimante-2', 'kind' => 'printer', 'status' => 'ok']]);
+        $this->assertSame(['SIM-IMPRIMANTE', 'sim-imprimante-2'], array_column($this->json($this->admin('GET', self::BOXES . "/$boxId"))['devices'], 'serial'), 'le boîtier montre bien ses appareils');
+        $list = $this->json($this->admin('GET', self::PRINTS));
+        $this->assertSame([[], 'NO_PRINTER'], [$list['printers'], $list['ready']['reason']], 'aucune imprimante à puce pour un vrai travail');
+        $before = (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_print_job');
+        foreach ($devices as $serial => $device) {
+            $this->assertSame('PRINTER_NOT_FOUND', $this->json($this->admin('POST', self::PRINTS, ['deviceId' => $device, 'pieceIds' => [$p1]]), 404)['code'], $serial);
+        }
+        $this->assertSame($before, (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_print_job'), 'aucun travail créé');
+        // ni ligne « imprimante » au tableau de santé, ni étape de l'assistant : du matériel simulé ne prouve rien
+        $this->assertNotContains('printer', array_column($this->json($this->admin('GET', self::BASE . '/sante'))['devices'], 'kind'));
+        $step = fn (): array => array_column($this->json($this->admin('GET', self::BASE . '/installation'))['optionalSteps'], null, 'code')['tag_printer'];
+        $absent = $step()['state'];
+        // en ceinture : même si un tel travail existait dans la base, rien n'est servi au boîtier pour cette imprimante
+        [, $realToken, $real] = $this->enrolled('Vraie', [['serial' => "IMPR-$this->s", 'kind' => 'printer', 'status' => 'ok']], 'machine-impression-autre-0123456789');
+        $this->json($this->admin('POST', self::PRINTS, ['deviceId' => $real["IMPR-$this->s"], 'pieceIds' => [$p1]]), 201); // le mot de passe du site est tiré
+        $forced = (int) $this->db->fetchOne('INSERT INTO loss_print_job (box_id, device_id, exercise, secret_rank, created_at) VALUES (?, ?, false, 1, NOW()) RETURNING id', [$boxId, $devices['SIM-IMPRIMANTE']]);
+        $this->db->executeStatement('INSERT INTO loss_print_job_line (job_id, position, piece_id, identifier) VALUES (?, 1, ?, ?)', [$forced, $p2, 'F1A7' . str_repeat('7', 20)]);
+        $this->assertSame([[], false], [($served = $this->json($this->box('GET', '/travaux', null, $token)))['jobs'], $served['more']]);
+        $this->assertStringNotContainsString('password', (string) $this->client->getResponse()->getContent());
+        $this->assertCount(1, $this->json($this->box('GET', '/travaux', null, $realToken))['jobs'], 'la vraie imprimante de l\'autre boîtier est servie');
+        // … et son résultat n'est pas reçu : aucune puce n'est posée sur une pièce par du matériel simulé
+        $line = (int) $this->db->fetchOne('SELECT id FROM loss_print_job_line WHERE job_id = ?', [$forced]);
+        $this->assertSame(['refused', 'PRINT_LINE_UNKNOWN'], $this->fact($token, 'TAG_WRITTEN', 'SIM-IMPRIMANTE', ['line' => $line, 'identifier' => 'F1A7' . str_repeat('7', 20)]));
+        $this->assertSame(['refused', 'PRINT_LINE_UNKNOWN'], $this->fact($token, 'TAG_WRITE_FAILED', 'SIM-IMPRIMANTE', ['line' => $line, 'reason' => 'write_refused']));
+        $this->assertSame(['waiting', 0], [$this->db->fetchOne('SELECT status FROM loss_print_job_line WHERE id = ?', [$line]), (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_tag WHERE piece_id = ?', [$p2])]);
+        // une ligne « écrite » d'avant ce correctif ne rend pas l'étape faite non plus
+        $this->db->executeStatement("UPDATE loss_device SET status = 'retired' WHERE id = ?", [$real["IMPR-$this->s"]]);
+        $this->assertSame($absent, $step()['state'], 'sans vraie imprimante, l\'étape reste comme sans imprimante');
     }
 
     public function testTheIdentifierAndTheVaultFollowTheirRules(): void

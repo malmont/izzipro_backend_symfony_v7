@@ -22,6 +22,8 @@ class LossPrintRepository extends EntityRepository
     /** Verrou consultatif de transaction : une seule création de mot de passe à la fois sur un site */
     public const SECRET_LOCK = 7461085;
 
+    /** Un appareil dont le numéro de série ne commence pas par « SIM- » (les appareils simulés d'un boîtier de démonstration) */
+    public const REAL_PRINTER = "LEFT(UPPER(d.serial), 4) <> 'SIM-'";
     private const JOB = 'j.id, j.box_id, j.device_id, j.status, j.with_price, j.exercise, j.secret_rank, j.created_by, j.created_at, j.finished_at, j.cancelled_at';
 
     // ----- Le mot de passe d'accès -----
@@ -66,7 +68,10 @@ class LossPrintRepository extends EntityRepository
     {
         return $this->db()->fetchAllAssociative(
             'SELECT d.id, d.box_id, d.serial, d.model, d.status, d.last_seen_at, b.name AS box_name, b.status AS box_status, b.last_seen_at AS box_seen_at FROM loss_device d JOIN loss_box b ON b.id = d.box_id'
-            . ' WHERE d.kind = :kind AND d.status <> :retired AND b.status <> :revoked AND b.exercise = CAST(:exercise AS boolean)' . ($deviceId !== null ? ' AND d.id = :device' : '') . ' ORDER BY d.id',
+            . ' WHERE d.kind = :kind AND d.status <> :retired AND b.status <> :revoked AND b.exercise = CAST(:exercise AS boolean)'
+            // l'imprimante SIMULÉE d'un vrai boîtier (un boîtier sans matériel, en démonstration) n'est pas une imprimante à puce :
+            // aucune puce n'existe derrière elle. Elle ne prend aucun vrai travail, et ne reçoit donc jamais le mot de passe
+            . ' AND (b.exercise OR ' . self::REAL_PRINTER . ')' . ($deviceId !== null ? ' AND d.id = :device' : '') . ' ORDER BY d.id',
             ['kind' => LossDevice::PRINTER, 'retired' => LossDevice::RETIRED, 'revoked' => LossBox::REVOKED, 'exercise' => $exercise ? 'true' : 'false'] + ($deviceId !== null ? ['device' => $deviceId] : [])
         );
     }
@@ -215,6 +220,7 @@ class LossPrintRepository extends EntityRepository
             . ' FROM loss_print_job_line l JOIN loss_print_job j ON j.id = l.job_id JOIN loss_device d ON d.id = j.device_id JOIN loss_piece p ON p.id = l.piece_id'
             . ' JOIN product_variant v ON v.id = p.variant_id JOIN product a ON a.id = v.product_id'
             . ' WHERE j.box_id = :box AND NOT j.exercise AND j.status IN (:open) AND l.status = :waiting AND d.status <> :retired AND j.secret_rank IN (:ranks) AND p.status <> :gone'
+            . ' AND ' . self::REAL_PRINTER // en ceinture : même si un tel travail existait, rien n'est servi pour une imprimante simulée
             . ' AND (v.barcode IS NOT NULL OR (a.barcode IS NOT NULL AND (SELECT COUNT(*) FROM product_variant x WHERE x.product_id = v.product_id) = 1))'
             . ' ORDER BY j.id, l.position LIMIT ' . max(1, $limit),
             ['box' => $boxId, 'open' => LossPrintJob::OPEN, 'waiting' => LossPrintJobLine::WAITING, 'retired' => LossDevice::RETIRED, 'ranks' => $ranks, 'gone' => LossPiece::RETIRED],
@@ -229,8 +235,9 @@ class LossPrintRepository extends EntityRepository
      */
     public function lineRef(int $lineId, int $boxId, int $deviceId): ?array
     {
-        $row = $this->db()->fetchAssociative('SELECT l.job_id, l.piece_id FROM loss_print_job_line l JOIN loss_print_job j ON j.id = l.job_id WHERE l.id = ? AND j.box_id = ? AND j.device_id = ? AND NOT j.exercise',
-            [$lineId, $boxId, $deviceId]);
+        // une imprimante simulée d'un vrai boîtier n'écrit aucune puce : son résultat ne désigne aucune ligne (rien n'est posé sur une pièce)
+        $row = $this->db()->fetchAssociative('SELECT l.job_id, l.piece_id FROM loss_print_job_line l JOIN loss_print_job j ON j.id = l.job_id JOIN loss_device d ON d.id = j.device_id'
+            . ' WHERE l.id = ? AND j.box_id = ? AND j.device_id = ? AND NOT j.exercise AND ' . self::REAL_PRINTER, [$lineId, $boxId, $deviceId]);
 
         return $row === false ? null : ['job_id' => (int) $row['job_id'], 'piece_id' => (int) $row['piece_id']];
     }

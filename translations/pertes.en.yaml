@@ -623,10 +623,10 @@ prints:
         failed: Failed
         cancelled: Cancelled
     reason:
-        tag_unreadable: 'Tag unreadable'
-        write_refused: 'Write refused by the tag'
-        verify_failed: 'Read-back does not match'
-        printer_stopped: 'Printer stopped'
+        tag_unreadable: 'Tag unreadable. Do not use this label: throw it away, then print this piece again.'
+        write_refused: 'Write refused by the tag. Do not use this label: throw it away, then print this piece again.'
+        verify_failed: 'Read-back does not match. Do not use this label: throw it away, then print this piece again.'
+        printer_stopped: 'Printer stopped. If a label came out for this piece, do not use it: throw it away, then print this piece again.'
         out_of_labels: 'Out of labels'
         piece_retired: 'Piece retired in the meantime'
         tag_limit: 'The piece already carries the maximum number of tags'

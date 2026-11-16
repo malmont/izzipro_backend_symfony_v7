@@ -3,6 +3,7 @@
 namespace App\LossPrevention\Repository;
 
 use App\LossPrevention\Entity\LossBox;
+use App\LossPrevention\Entity\LossBoxEvent;
 use App\LossPrevention\Entity\LossPieceEvent;
 use App\LossPrevention\Entity\LossTag;
 use Doctrine\DBAL\ArrayParameterType;
@@ -44,6 +45,26 @@ class LossBoxRepository extends EntityRepository
     public function box(int $id, bool $lock = false, bool $share = false): ?array
     {
         return $this->db()->fetchAssociative('SELECT ' . self::BOX . ' FROM loss_box WHERE id = ?' . ($lock ? ' FOR UPDATE' : ($share ? ' FOR SHARE' : '')), [$id]) ?: null;
+    }
+
+    /**
+     * Le boîtier qu'un jumelage a créé, par son NUMÉRO, tenu, avec l'empreinte de sa clé : de quoi dire s'il est encore celui du
+     * jumelage (lot « jumelage jamais fermé à tort »).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function boxOfPairing(int $id): ?array
+    {
+        return $this->db()->fetchAssociative('SELECT ' . self::BOX . ', key_hash FROM loss_box WHERE id = ? FOR UPDATE', [$id]) ?: null;
+    }
+
+    /** Ce boîtier porte-t-il, dans son fait de création, la marque de ce jumelage ? (Elle survit à une remise à zéro de sa clé.) */
+    public function createdByPairing(int $id, string $ref): bool
+    {
+        return $this->db()->fetchOne(
+            "SELECT 1 FROM loss_box_event WHERE box_id = :box AND type = :type AND NOT exercise AND (CAST(data AS json) ->> 'ref') = :ref LIMIT 1",
+            ['box' => $id, 'type' => LossBoxEvent::BOX_CREATED, 'ref' => $ref]
+        ) !== false;
     }
 
     /** @return array<string, mixed>|null le boîtier de cette clé, verrouillé (deux inscriptions de la même clé ne se croisent pas) */
@@ -210,7 +231,9 @@ class LossBoxRepository extends EntityRepository
             'SELECT d.id, d.serial, d.model, d.status, d.last_seen_at, b.status AS box_status, b.last_seen_at AS box_seen,'
             . " EXISTS (SELECT 1 FROM loss_print_job_line l JOIN loss_print_job j ON j.id = l.job_id WHERE j.device_id = d.id AND l.status = 'written') AS has_written"
             . ' FROM loss_device d JOIN loss_box b ON b.id = d.box_id'
-            . " WHERE d.kind = 'printer' AND d.status <> 'retired' AND d.exercise = CAST(? AS boolean) AND b.status <> 'revoked' ORDER BY d.id", [$exercise ? 'true' : 'false']);
+            // l'imprimante simulée d'un vrai boîtier (démonstration) n'est pas une imprimante à puce : ni ligne de santé, ni étape faite
+            . " WHERE d.kind = 'printer' AND d.status <> 'retired' AND d.exercise = CAST(? AS boolean) AND b.status <> 'revoked' AND (d.exercise OR " . LossPrintRepository::REAL_PRINTER . ') ORDER BY d.id',
+            [$exercise ? 'true' : 'false']);
     }
 
     /** @return array{id: int, name: string}|null un poste de caisse actif du site (lecture du catalogue de la caisse, jamais d'écriture) */

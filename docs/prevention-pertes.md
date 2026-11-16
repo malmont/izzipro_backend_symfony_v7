@@ -902,7 +902,15 @@ association, échecs, modèles visés). Ce que le plan ajoute :
   Le boîtier le reçoit avec le travail, par HTTPS, le garde en mémoire le temps du travail, ne l'écrit jamais sur son disque.
   Sur la puce : l'identifiant est verrouillé en écriture par ce mot de passe (jamais de verrou définitif), **et la zone qui porte
   le mot de passe est fermée à la lecture** (sans quoi n'importe quel lecteur le lirait). La lecture de l'identifiant reste
-  ouverte à tous. La puce garde le rang du mot de passe utilisé (un nombre), pour un changement de mot de passe futur.
+  ouverte à tous. **Le rang du mot de passe utilisé reste à la plateforme** (un nombre, gardé avec le travail d'impression :
+  `loss_print_job.secret_rank`) ; il n'est pas écrit sur la puce. C'est lui qui servira à un changement de mot de passe futur
+  (décision du chef de projet du 16/11/2026, après la relecture du logiciel du boîtier).
+- **Condition ferme de l'essai du matériel** (chef de projet, 16/11/2026) : avant toute vraie pièce étiquetée, **toute la zone
+  réservée de la puce**, le mot de passe d'accès ET le mot de passe de mise à mort, est verrouillée derrière le mot de passe
+  d'accès. Personne d'autre ne doit pouvoir écrire un mot de passe de mise à mort, puis tuer la puce. Les commandes écrites dans
+  le logiciel du boîtier ferment aujourd'hui la zone du mot de passe d'accès et verrouillent l'identifiant ; le verrou de la zone
+  de mise à mort reste à écrire et à prouver, imprimante en main. Ce n'est pas une option : aucun travail d'impression réel
+  n'est lancé chez un marchand tant que ce verrou n'est pas vérifié sur une puce.
 - **Protection légère, dite telle quelle** : un mot de passe par site arrête la réécriture ordinaire, pas un attaquant équipé.
   Pas de contrôle des copies (décision du propriétaire, § 15).
 - La gamme (`GET /materiel`) change son texte du niveau pro quand ce sous-lot est en ligne.
@@ -1436,8 +1444,33 @@ en secours.
   machine s'y est inscrite par la clé. Le code ne vaut plus rien, pour toujours : le boîtier remet son jumelage à zéro (nouveau
   code, nouveau secret de machine) et redevient jumelable.
 - **`pollSeconds`** (15) : le rythme conseillé des questions. **Sans le module** sur le site jumelé, ou si ce site est introuvable
-  (disparu, ou base maître en panne un instant : la lecture ne distingue pas les deux), rien n'est remis et rien n'est fermé :
-  `waiting`, `expiresAt: null`.
+  (renommé, supprimé), ou si la base maître ne répond pas, rien n'est remis et rien n'est fermé : `waiting`, `expiresAt: null` ;
+  les deux cas sont écrits au journal du serveur, chacun sous son nom.
+- **Un jumelage ne se ferme que sur une preuve sûre** (correctif du 16/11/2026, relevé par la relecture du logiciel du boîtier) :
+  - le site d'un jumelage relié est relu **dans la base maître, sans cache** (`LossPairingRepository::tenant`), et le boîtier est
+    lu **par son numéro** (`box_id` de la demande) dans la base de ce site ;
+  - on vérifie d'abord que le boîtier lu est bien **celui que ce jumelage a créé** : l'empreinte de sa clé est celle du jumelage,
+    ou, si sa clé a été remise à zéro depuis, son fait de création porte la **marque du jumelage**
+    (`BOX_CREATED { pairing: true, ref }`, `LossBoxToken::pairingRef` ; un fait ne se modifie jamais) ;
+  - sur ce boîtier-là, trois preuves ferment : il est révoqué ; sa clé a été remise à zéro ; une autre machine y est inscrite
+    (`LossPairingService::CLOSING`, liste fermée : toute autre raison fait patienter) ;
+  - **un boîtier introuvable, d'exercice, ou qui n'est pas celui du jumelage ne ferme rien**, même révoqué : c'est ce qu'on lirait
+    dans une base qui n'est pas celle du site (fiche de site fausse, base remplacée par la copie d'un autre site), où un boîtier
+    du même numéro existe presque toujours. Le boîtier patiente (`waiting`, `expiresAt: null`) ; comme chaque question compte
+    pour une remise, il reçoit `429` après dix questions par quart d'heure ;
+  - le serveur l'écrit à son journal, **une ligne au plus par jumelage et par heure** (plafond `pairWarning`) : « jumelage N laissé
+    tel quel », avec le numéro du boîtier et le code du site, jamais le code du jumelage. Même ligne quand le site est introuvable
+    dans la base maître, ou que la base maître ne répond pas (le code SQL de l'erreur seulement).
+  - **Ce que l'exploitant fait de cette ligne.** Si la base du site est la mauvaise (ligne `tenants` fausse), il la corrige : le
+    boîtier est servi à sa question suivante. Si la base du site a été reprise d'une sauvegarde plus ancienne que le jumelage, le
+    boîtier n'existe plus et ne reviendra pas : l'exploitant ferme la demande à la main dans la base maître
+    (`UPDATE loss_box_pairing SET status = 'closed', closed_at = NOW() AT TIME ZONE 'UTC' WHERE id = N`) ; le boîtier reçoit
+    `closed`, tire un nouveau code, et l'administrateur le jumelle de nouveau.
+  - Un boîtier jumelé **avant ce correctif** n'a pas la marque dans son fait de création : tant que sa clé n'est pas remise à
+    zéro, rien ne change pour lui (son empreinte le prouve) ; après une remise à zéro, son jumelage n'est plus fermé d'office, le
+    boîtier patiente et l'installateur le relie par sa nouvelle clé. Aucun vrai boîtier n'était jumelé à cette date.
+  - Avant ce correctif, une fiche de site fausse dans le cache menait dans la base d'un autre site, où le boîtier était
+    « introuvable », et fermait pour toujours un jumelage sain : le boîtier devait être rejumelé à la main.
 
 **L'administrateur** (`ROLE_ADMIN`, garde du module) : `POST /api/gestion/pertes/boitiers/jumeler` `{ code, name, place? }` → 201
 `{ box }`, la fiche du boîtier, `status: pending` (il attend sa machine), `paired: true`, `keyHint: null`. Refus : 422
@@ -1449,12 +1482,13 @@ en secours.
   pour mot : « Code inconnu, ou boîtier pas encore branché à Internet. Branchez le boîtier, attendez que son voyant clignote, puis
   réessayez. » **Le code ne sert qu'une fois.**
 - Toute fiche de boîtier gagne `paired` (vrai pour un boîtier ajouté par code tant que personne ne lui a donné de clé). Fait
-  `BOX_CREATED { pairing: true }`. **« Détacher »** est la révocation du boîtier (`POST /boitiers/{id}/revoquer`).
+  `BOX_CREATED { pairing: true, ref }` (`ref` : la marque du jumelage, qu'aucune lecture ne rend). **« Détacher »** est la révocation du boîtier (`POST /boitiers/{id}/revoquer`).
 - **Ce qui lie le boîtier du site à son code** : à la place de l'empreinte d'une clé, le boîtier jumelé porte une empreinte liée
   AU SITE, au code, et à un aléa tiré à chaque jumelage et écrit sur la demande (`link` ; `LossBoxToken::pairingKeyHash`). À la
-  remise du jeton, le boîtier est retrouvé par cette empreinte, dans le site écrit sur la demande par le jumelage : aucun
-  identifiant venu d'une requête ne désigne un boîtier ni un site (le `box_id` de la demande ne sert à aucune recherche). Ce
-  n'est pas une clé `IZ-BOX` : la route d'inscription ne l'accepte pas.
+  remise du jeton, le boîtier est lu par le numéro écrit sur la demande par le jumelage (`box_id`), dans le site écrit sur la
+  demande, puis **reconnu par cette empreinte** (ou, clé remise à zéro, par la marque de son fait de création) : aucun
+  identifiant venu d'une requête ne désigne un boîtier ni un site, et un numéro seul ne décide de rien. Ce n'est pas une clé
+  `IZ-BOX` : la route d'inscription ne l'accepte pas.
 
 **Plafonds** (`LossBoxLimits`) : dépôts, 20 par adresse et par quart d'heure ; **demandes nouvelles** (un code que la
 plateforme ne connaît pas : une ligne de la base maître qui ne s'efface pas, et n'importe qui peut en déposer), **10 par adresse et
@@ -1512,7 +1546,10 @@ sur aucune base avant sa version finale (il ne met pas à niveau une version ant
 
 **Tests** : `LossPreventionPairingTest` (le parcours entier ; refus neutres mot pour mot ; un administrateur d'un second site ; code
 seul sans preuve ; jeton refusé sur un autre site ; réponse perdue ; détacher, clé remise à zéro, module retiré, site introuvable ;
-boîtier orphelin rejumelé ; plafond de boîtiers ; expiration ; code jamais libéré ; chemin encodé ; les six plafonds). Exemples : `tests/Fixtures/pertes/boitier/canal-jumelage-*.json`,
+boîtier orphelin rejumelé ; plafond de boîtiers ; expiration ; code jamais libéré ; chemin encodé ; les six plafonds ;
+`testAPairingIsNeverClosedOnAStaleSiteRecordOrAMissingBox` : fiche de site fausse dans le cache, boîtier introuvable ou d'exercice,
+numéro d'un autre boîtier (en service, révoqué, ou d'un autre jumelage à la clé remise à zéro), clé remise à zéro puis révocation,
+site disparu, une seule ligne au journal par heure). Exemples : `tests/Fixtures/pertes/boitier/canal-jumelage-*.json`,
 `admin-boitier-jumele*.json`, `admin-refus-jumelage.json`.
 
 ### 16.18 Lot L3-b2a codé : la vente reliée aux pièces (16/11/2026)
@@ -1857,6 +1894,34 @@ secret du serveur, dont la rotation rendrait les puces déjà écrites impossibl
   rangés restent lus sous le rang 1. Le rechiffrement sous la nouvelle clé (une commande) est à écrire le jour venu ; la base le
   permet déjà.
 
+**L'imprimante simulée d'un VRAI boîtier ne prend aucun vrai travail** (correctif du 16/11/2026, relevé par la relecture du
+logiciel du boîtier). Un boîtier sans matériel, en démonstration, peut être relié à un vrai site et y annoncer des appareils
+simulés (numéro de série qui commence par `SIM-`). Aucune puce n'existe derrière son imprimante : elle n'est pas comptée parmi
+les imprimantes à puce d'un vrai travail (`LossPrintRepository::printers`), donc absente de `printers`, `ready.reason` vaut
+`NO_PRINTER` si elle est seule, et `POST /impressions` sur elle répond 404 `PRINTER_NOT_FOUND`. En ceinture, `GET /travaux` ne
+sert jamais de ligne pour une telle imprimante : le mot de passe des puces ne lui est jamais remis. Le logiciel du boîtier tient
+la même règle de son côté (son imprimante de démonstration ne demande pas les travaux). Le mode exercice n'est pas touché.
+- **Le préfixe `SIM-` est réservé** aux appareils simulés : c'est une convention tenue avec le logiciel du boîtier, pas une
+  preuve. Une vraie imprimante dont le numéro de série commencerait par `SIM-` serait écartée de la même façon (aucun modèle
+  visé n'en a) ; une imprimante simulée annoncée sous un autre nom ne le serait pas.
+- **Le résultat aussi est refusé** : un `TAG_WRITTEN` ou un `TAG_WRITE_FAILED` pour une ligne d'une telle imprimante reçoit
+  `PRINT_LINE_UNKNOWN` (`LossPrintRepository::lineRef`) ; aucune puce n'est posée sur une pièce par du matériel simulé.
+- **Le tableau de santé et l'assistant d'installation** ne comptent pas non plus cette imprimante
+  (`LossBoxRepository::livePrinters`) : pas de ligne « imprimante », pas de conseil d'imprimer, et l'étape `tag_printer` ne peut
+  pas être « faite » par du matériel simulé (condition ferme du § 16.7). Le boîtier, lui, montre toujours ses appareils.
+- **Avant ce correctif** (étape 87, 16/11/2026), rien n'empêchait de créer un vrai travail sur une telle imprimante. Aucun n'a pu
+  l'être en production : la variable `LOSS_TAG_KEYS` n'y est pas posée, toute création répond `PRINT_KEY_MISSING`. Il n'y a donc
+  rien à annuler à la bascule, et aucun mot de passe n'a été remis à un boîtier de démonstration.
+
+**Le texte d'un motif d'échec dit quoi faire de l'étiquette** (chef de projet, 16/11/2026). Une étiquette dont le résultat est un
+échec peut être sortie de l'imprimante, et sa puce peut même être bonne : le site ne la connaît pas. `reasonLabel` des motifs
+`tag_unreadable`, `write_refused` et `verify_failed` se termine donc par « Ne posez pas cette étiquette : jetez-la, puis relancez
+l'impression de cette pièce. » ; `printer_stopped` dit la même chose « si une étiquette est sortie pour cette pièce » ;
+`out_of_labels` ne change pas (aucune étiquette n'est sortie). Le mode exercice montre les mêmes textes, pour que le gérant
+lise à l'entraînement ce qu'il lira le jour venu, bien qu'aucune étiquette n'y existe. Le boîtier dit `verify_failed` aussi quand il ne sait plus ce
+qu'une étiquette est devenue (service coupé pendant l'impression, résultat qui n'a pas pu être gardé) : il ne réimprime jamais
+une étiquette au sort inconnu, deux puces porteraient le même identifiant.
+
 **Mode exercice : l'imprimante simulée, SANS mot de passe.** Le boîtier simulé gagne un quatrième appareil
 (`SIM-IMPRIMANTE`) et trois scénarios (`POST /exercices/boitiers/{id}/scenarios`) : `print_ok` (trois pièces d'exercice sans
 puce reçoivent leur puce simulée), `print_refused` (la première étiquette échoue, `write_refused`), `print_no_labels` (la
@@ -1899,5 +1964,6 @@ ne garde plus la variable après l'avoir lue.
 **Tests** : `LossPreventionPrintTest` (travail servi à son boîtier et à lui seul, par 50 lignes ; résultats rejoués, refus,
 annulation, réimpression à un autre exemplaire, confirmation d'une pièce déjà équipée, plafonds ; écritures qui ne peuvent plus
 être associées, pièce retirée, article sans code-barres ; le mot de passe remis au boîtier seulement et écrit nulle part ; clé
-absente, illisible, autre ; imprimante simulée ; identifiant et coffre ; gardes de la base et migration rejouée). La clé d'essai
+absente, illisible, autre ; imprimante simulée ; imprimante simulée d'un vrai boîtier, jamais servie ; identifiant et coffre ;
+gardes de la base et migration rejouée). La clé d'essai
 est commune aux classes de la suite (`LossTagKeysTrait`).
