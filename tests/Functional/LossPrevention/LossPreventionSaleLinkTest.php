@@ -378,6 +378,13 @@ class LossPreventionSaleLinkTest extends LossPreventionTestCase
 
         // Tableau de santé : sur un site à plusieurs postes, un tapis dont le poste n'a aucune tablette rattachée ne sert pas aux caissiers.
         // Et la liste des postes pour l'administrateur : leur tapis, leur tablette
+        // Dans la suite complète, un essai d'avant peut avoir laissé une tablette rattachée à ce poste (les clés d'activation vivent dans
+        // la base maître, que les essais se partagent) : celles-là ne comptent pas ici. L'essai en laisse une lui-même, pour le prouver
+        $forgotten = $this->activateTerminal("Tablette oubliée $this->s");
+        $this->json($this->call('PUT', '/api/app-keys/' . $forgotten, ['cashRegisterId' => $this->register], $this->adminToken));
+        $this->terminal = null;
+        static::getContainer()->get(\App\Services\TenantConnectionManager::class)->getPdoMaster()
+            ->prepare("UPDATE tenant_app_keys SET revoked_at = NOW() WHERE tenant_code = ? AND app = 'pos' AND revoked_at IS NULL AND cash_register_id IS NOT NULL")->execute([MV_TEST_TENANT_CODE]);
         $health = fn (): array => array_column($this->json($this->admin('GET', self::BASE . '/sante'))['devices'], null, 'code')["mat-$this->mat"];
         $posts = fn (): array => $this->json($this->admin('GET', self::BASE . '/postes'));
         $post = fn (int $id): array => array_column($posts()['items'], null, 'id')[$id];
