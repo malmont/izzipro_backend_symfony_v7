@@ -72,6 +72,7 @@ class SiteRequestCommandsTest extends KernelTestCase
         $this->master->exec("DELETE FROM agency_events WHERE agency_id IN (SELECT id FROM agencies WHERE code LIKE 'cmd-agence-%')");
         $this->master->exec("DELETE FROM agency_sites WHERE agency_id IN (SELECT id FROM agencies WHERE code LIKE 'cmd-agence-%')");
         $this->master->exec("DELETE FROM agency_plans WHERE agency_id IN (SELECT id FROM agencies WHERE code LIKE 'cmd-agence-%')");
+        $this->master->exec("DELETE FROM assistance_grants WHERE agency_id IN (SELECT id FROM agencies WHERE code LIKE 'cmd-agence-%')"); // lot AG-ASSIST
         $this->master->exec("DELETE FROM agencies WHERE code LIKE 'cmd-agence-%'");
     }
 }

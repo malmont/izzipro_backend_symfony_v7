@@ -294,6 +294,52 @@ de la liste d'ouverture n'existe pas encore (AG-3d) : elle sera réservée au co
 - Clients et commandes ne s'importent pas en entrée : le commerçant les importe lui-même, ou le super administrateur
   (`docs/agences-et-import.md` § 3.5).
 
+## 8. Lot AG-ASSIST : l'accès d'assistance d'une agence (16/11/2026, codé sous Opus, à faire vérifier par Fable)
+
+Contrat validé par le chef de projet et le propriétaire (journal du 16/11/2026). Le **commerçant** (administrateur du site) ouvre UNE
+section fermée à l'agence qui gère son site ; l'agence ne peut ni la demander ni la prolonger. Partie API ; la partie EasyAdmin (bouton
+dans les sections fermées, garde de l'opérateur dans EasyAdmin) entre dans AG-3c sur le même mécanisme.
+
+**Sections** (`App\Services\Agency\Assistance\AssistanceSections`, écrans du registre) : `commandes` (commandes, expéditions,
+abonnements), `clients` (demandes, réservations), `caisse` (EasyAdmin), `stock`, `gestion` (toute la famille), `pertes` (toute la
+famille, **consultation seulement** : `write` → 422 `ASSISTANCE_READ_ONLY`), `assistance` (tickets). Jamais demandables : paiement,
+clés, courriel expéditeur, comptes, Mémoires Vivantes, Boussole.
+
+**Routes du commerçant** (`SiteAssistanceController`, `ROLE_ADMIN` d'un compte DU site ; un opérateur extérieur ou toute entrée par
+jeton : 403 `ASSISTANCE_FORBIDDEN`, et la garde du mode les ferme à l'agence, écran `site.assistance` de la famille `vente`) :
+- `GET /api/site/assistance` → `{ assistance: [{ id, section, mode, state, agency, requestedBy, requestedAt, requestExpiresAt,
+  startedAt, endsAt, closedAt, closedBy }] }` ; `state` : `waiting` | `active` | `ended` | `expired` | `closed` (calculé à la lecture).
+- `POST /api/site/assistance` `{ section, mode?: read | write }` (défaut `read`) → 201 `{ assistance }` (+ `notified`) ; 422
+  `ASSISTANCE_SECTION_INVALID` | `ASSISTANCE_MODE_INVALID` | `ASSISTANCE_READ_ONLY` ; 409 `ASSISTANCE_NO_AGENCY` (aucune agence vivante ne
+  gère le site) | `ASSISTANCE_ALREADY_OPEN` (une demande vivante par section, garantie par un index unique partiel ; une demande échue
+  est fermée d'abord). Le compte de la plateforme lit, mais ne demande ni ne ferme (403).
+- `POST /api/site/assistance/{id}/close` → `{ assistance }` (`closed`, `closedBy`) ; 404 `ASSISTANCE_NOT_FOUND`.
+- `GET /api/site/assistance/{id}/journal` → `{ journal: [{ at, account, action: assistance_read | assistance_write, method, path,
+  status }] }` : chaque écran et chaque fiche consultés, chaque écriture.
+
+**Route de l'agence** : `GET /api/agency/assistance` (site d'attache) → ses demandes `waiting` et `active`, avec `site`, `siteName`.
+
+**Courriel** `assistance_request`, classé indispensable (jamais retenu), par l'expéditeur de la plateforme, à `contact_email` de la fiche
+d'agence, sinon aux responsables (`ROLE_AGENCY`) de son site d'attache ; site, section, mode, demandeur, numéro ; lien vers « Tous mes
+clients » du site d'attache (`/admin/ouvrir?screen=agence.clients`), sans jeton. Langue : celle du site qui demande.
+
+**Fenêtre** : une heure à partir de la PREMIÈRE requête de l'opérateur dans la section (la demande `waiting` démarre alors, une seule
+fois) ; une demande sans requête dans les 24 h expire. Aucun minuteur.
+
+**Garde** (`EntryModeGuardSubscriber::assistanceRefused`) : pour un écran hors construction (raison `family`), une assistance vivante de
+L'agence de l'opérateur sur CE site, pour une section de l'écran, sert la requête. Lecture : toujours, hors comptes et rôles et hors
+`CLOSED_PATHS` (clés, export, Stripe, modules) → `assistance_closed`. Écriture : seulement en `write` (sinon `assistance_read_only`),
+jamais un paiement, un remboursement, un encaissement (`ASSISTANCE_NO_WRITE`), ni un `DELETE` de la section `clients`. La réponse de la
+section est servie entière (elle n'est pas une page de construction). L'auteur au journal devient « Agence X, prénom, pendant
+l'assistance n° N » (`ExternalOperator::duringAssistance`), y compris dans le journal des écritures du site.
+
+**Trace** : une ligne par requête couverte dans `content_audit_log` (`resource` `external_access`, `action` `assistance_read` |
+`assistance_write`, `after_state` : numéro, section, écran, méthode, chemin, paramètres, statut), lue par la route `journal` et par la
+page « Accès extérieurs » d'EasyAdmin.
+
+**Base maître** : table `assistance_grants` (`ops/sql/assistance_master.sql`, script `scripts/migrate_master_v2_assistance.sh <SQL du
+worktree de construction>` AVANT l'échange). Bases des sites : rien. Essai : `tests/Functional/Security/AssistanceTest.php`.
+
 ## Tenir cette fiche à jour
 
 À chaque écran, famille ou liste hors écran ajoutés ; à chaque champ sensible trouvé ; à chaque mode nouveau.

@@ -46,6 +46,8 @@ final class AdminSpaceLinks
         'assistance-reglages' => [],
         // Rapports PDF de la gestion (lot DOC) : la liste, ou la liste ouverte sur un rapport
         'rapports' => ['params' => ['id' => 'id']],
+        // Agences (lot AG-ASSIST) : « Tous mes clients », sur le site d'attache de l'agence (courriel d'une demande d'assistance)
+        'agence.clients' => [],
     ];
 
     /**

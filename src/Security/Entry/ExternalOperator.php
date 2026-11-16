@@ -50,9 +50,25 @@ final class ExternalOperator implements UserInterface
         return 'Plateforme' . ($first !== '' ? ', ' . $first : '');
     }
 
+    /** Lot AG-ASSIST : le numéro de l'assistance qui couvre la requête en cours (son auteur au journal le dit), ou null */
+    private ?int $assistance = null;
+
     public function getUserIdentifier(): string
     {
-        return self::label($this->agencyName, $this->firstName);
+        $label = self::label($this->agencyName, $this->firstName);
+
+        return $this->assistance === null ? $label : $label . ', pendant l\'assistance n° ' . $this->assistance;
+    }
+
+    /** La requête est couverte par l'assistance n° N, ouverte par le commerçant (posé par la garde du mode, pour cette requête seulement) */
+    public function duringAssistance(int $grantId): void
+    {
+        $this->assistance = $grantId;
+    }
+
+    public function getAssistance(): ?int
+    {
+        return $this->assistance;
     }
 
     /** @return list<string> */

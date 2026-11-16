@@ -22,7 +22,7 @@ use Symfony\Component\Routing\Attribute\Route;
 class AgencyController extends AbstractController
 {
     public function __construct(private readonly AgencyContext $context, private readonly AgencyService $agencies, private readonly AgencySiteRequestService $requests,
-        private readonly \App\Services\Storefront\StorefrontService $storefront)
+        private readonly \App\Services\Storefront\StorefrontService $storefront, private readonly \App\Services\Agency\Assistance\AssistanceService $assistance)
     {
     }
 
@@ -49,6 +49,21 @@ class AgencyController extends AbstractController
             $view = $this->agencies->view($agency);
 
             return $this->json(['sites' => $sites, 'maxSites' => $agency['max_sites'], 'used' => count($sites), 'pending' => $view['sitesUsed'] - count($sites)]);
+        } catch (AgencyException $e) {
+            return $this->json($e->body(), $e->status);
+        }
+    }
+
+    /**
+     * Lot AG-ASSIST : les demandes d'assistance EN ATTENTE et EN COURS des sites de mon agence → 200 `{ assistance: [{ id, site, siteName,
+     * section, mode, state, requestedBy, requestedAt, requestExpiresAt, startedAt, endsAt, … }] }`. Lecture seule : l'agence ne demande
+     * ni ne prolonge une assistance, seul le commerçant l'ouvre.
+     */
+    #[Route('/assistance', name: 'api_agency_assistance', methods: ['GET'])]
+    public function assistance(): JsonResponse
+    {
+        try {
+            return $this->json(['assistance' => $this->assistance->forAgency((int) $this->context->current()['id'])]);
         } catch (AgencyException $e) {
             return $this->json($e->body(), $e->status);
         }

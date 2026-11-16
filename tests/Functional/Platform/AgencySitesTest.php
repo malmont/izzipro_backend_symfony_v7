@@ -592,6 +592,7 @@ class AgencySitesTest extends WebTestCase
             $this->master->exec("DELETE FROM $table");
         }
         $this->master->exec('DELETE FROM agency_plans WHERE agency_id IS NOT NULL');
+        $this->master->exec('DELETE FROM assistance_grants'); // lot AG-ASSIST : elles renvoient aux agences
         $this->master->exec('DELETE FROM agencies');
         $this->master->exec("DELETE FROM tenants WHERE code LIKE 'agtest-%'");
         static::getContainer()->get('cache.app.taggable')->invalidateTags(['tenants']);

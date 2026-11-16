@@ -111,4 +111,34 @@ class PlatformAccessJournal
                 'channel' => $agency ? 'entry_agency' : 'entry_platform', 'channelLabel' => $agency ? 'Entrée d\'une agence (15 minutes, renouvelable)' : 'Entrée de la plateforme (15 minutes, renouvelable)'];
         }, $rows);
     }
+
+    /**
+     * Lot AG-ASSIST : chaque requête faite par une agence pendant une assistance ouverte par le commerçant (écran consulté, fiche lue,
+     * écriture), la plus récente d'abord ; avec `$grantId`, celles d'UNE assistance.
+     *
+     * @return list<array{at: \DateTimeImmutable, account: string, channel: string, channelLabel: string, assistance: ?int, section: ?string, method: string, path: string, status: ?int}>
+     */
+    public function assistance(int $limit = 200, ?int $grantId = null): array
+    {
+        $sql = 'SELECT created_at, user_identifier, action, after_state FROM content_audit_log WHERE resource = ? AND action IN (?, ?) AND tenant = ?';
+        $params = [\App\Services\Entry\EntryService::JOURNAL_RESOURCE, 'assistance_read', 'assistance_write', $this->tenant()];
+        if ($grantId !== null) {
+            $sql .= ' AND after_state LIKE ?';
+            $params[] = '{"assistance":' . $grantId . ',%';
+        }
+        $rows = $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative($sql . ' ORDER BY id DESC LIMIT ' . max(1, min(1000, $limit)), $params);
+
+        return array_map(static function (array $row): array {
+            $after = is_string($row['after_state']) ? json_decode($row['after_state'], true) : null;
+            $after = is_array($after) ? $after : [];
+            $write = $row['action'] === 'assistance_write';
+            $method = (string) ($after['method'] ?? '');
+            $path = (string) ($after['path'] ?? '');
+
+            return ['at' => new \DateTimeImmutable((string) $row['created_at'], new \DateTimeZone('UTC')), 'account' => (string) $row['user_identifier'],
+                'channel' => (string) $row['action'], 'channelLabel' => sprintf('Assistance n° %s, %s : %s %s', $after['assistance'] ?? '?', $write ? 'modification' : 'consultation', $method, $path),
+                'assistance' => isset($after['assistance']) ? (int) $after['assistance'] : null, 'section' => isset($after['section']) ? (string) $after['section'] : null,
+                'method' => $method, 'path' => $path, 'status' => isset($after['status']) ? (int) $after['status'] : null];
+        }, $rows);
+    }
 }

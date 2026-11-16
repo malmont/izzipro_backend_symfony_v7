@@ -466,6 +466,7 @@ class EntryTest extends WebTestCase
 
     private function clean(): void
     {
+        $this->master->exec('DELETE FROM assistance_grants'); // lot AG-ASSIST : elles renvoient aux agences effacées ci-dessous
         $this->master->exec('DELETE FROM site_entries');
         foreach (['agency_events', 'agency_sites'] as $table) {
             $this->master->exec("DELETE FROM $table");

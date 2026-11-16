@@ -290,3 +290,14 @@ weekly_digest:
     held_title: 'This week''s follow-up emails'
     held_more: 'and %count% more, to read in your administration space.'
     held_why: 'At the "Essential" level, follow-up emails are not sent one by one: they are gathered here every Monday. You can change this setting in "Notifications".'
+
+# AG-ASSIST lot (16/11/2026): a merchant asks the agency that manages their site for help with one section. Indispensable.
+assistance_request:
+    subject: '%site%: support request (%section%)'
+    title: 'Support request'
+    greeting: 'Hello,'
+    message_read: '%who% asks %agency% for support on the site %site%, section "%section%", VIEW ONLY (support no. %number%). Enter the site from "All my clients": the section will be open to you, read only, for one hour from your first entry.'
+    message_write: '%who% asks %agency% for support on the site %site%, section "%section%", VIEW AND EDIT (support no. %number%). Enter the site from "All my clients": the section will be open to you for one hour from your first entry; every change will be recorded under your name.'
+    button: 'Open "All my clients"'
+    validity: 'Without an entry within 24 hours, the request expires. The merchant can close the support at any time and sees every screen viewed.'
+    ignore: 'Keys, payments, the sender email, accounts and exports stay closed during support.'

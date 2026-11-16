@@ -39,6 +39,25 @@ class AdminSpaceUrl
     }
 
     /**
+     * Le lien vers un écran de l'espace d'administration d'un AUTRE site (lot AG-ASSIST : « Tous mes clients » du site d'attache d'une
+     * agence, dans le courriel d'une demande d'assistance). Domaine principal du site, en https ; son réglage « adresse de l'espace
+     * d'administration » n'est pas relu (il vit dans la base de l'autre site). Jamais de jeton. null : site inconnu, ou code d'écran hors
+     * de la liste de référence.
+     *
+     * @param array<string, mixed> $params
+     */
+    public function onSite(string $tenantCode, string $screen, array $params = []): ?string
+    {
+        $query = AdminSpaceLinks::query($screen, $params);
+        $host = $query === null ? null : ($this->hosts->describe($tenantCode)['host'] ?? null);
+        if (!is_string($host) || $host === '') {
+            return null;
+        }
+
+        return 'https://' . $host . AdminSpaceLinks::PATH . '?' . http_build_query(['screen' => $screen] + $query, '', '&', PHP_QUERY_RFC3986);
+    }
+
+    /**
      * Le lien où un compte invité choisit son mot de passe : `<adresse>/admin/activer#token=<jeton>`. Le jeton (64 caractères
      * hexadécimaux, à usage unique) est dans le fragment, jamais dans les paramètres : voir `AdminSpaceLinks::ACTIVATION_PATH`.
      * null sans adresse connue, ou pour un jeton mal formé.

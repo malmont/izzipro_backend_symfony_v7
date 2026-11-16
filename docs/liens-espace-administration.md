@@ -58,6 +58,7 @@ valeurs** d'une liste fermée séparées par des virgules.
 | `assistance.demande` | `id` (entier, **obligatoire**) | fiche d'une demande |
 | `assistance-reglages` | aucun | réglages de l'Assistance |
 | `rapports` | `id` (entier, facultatif) | « Mes rapports » (lot DOC), ouverte sur un rapport quand `id` est donné |
+| `agence.clients` | aucun | « Tous mes clients » de l'espace d'agence, sur le SITE D'ATTACHE de l'agence (lot AG-ASSIST : courriel d'une demande d'assistance ; `AdminSpaceUrl::onSite`, domaine principal du site d'attache) |
 
 **Codes de l'Assistance.** `assistance` et `assistance-reglages` sont déjà émis par le serveur (« Ma journée », cheminement) : ils
 gardent leur forme, sans point, pour ne rien casser. Une demande seule prend la forme à point, `assistance.demande`.

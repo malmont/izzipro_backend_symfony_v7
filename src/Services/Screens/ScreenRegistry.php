@@ -66,6 +66,8 @@ final class ScreenRegistry
         'site.assistant' => ['family' => self::VENTE, 'module' => null],
         // le journal des modifications garde l'avant / après de tout le site : coûts, commandes, adresses, comptes
         'site.journal' => ['family' => self::VENTE, 'module' => null],
+        // lot AG-ASSIST : l'accès d'assistance de l'agence, ouvert et fermé par le commerçant seul (rangé près du journal du site : jamais à l'agence)
+        'site.assistance' => ['family' => self::VENTE, 'module' => null],
         'imports.commandes' => ['family' => self::VENTE, 'module' => 'module.boutique'],
         'imports.clients' => ['family' => self::CLIENTS, 'module' => 'module.boutique'],
         // --- Clients, assistance, contenus (web)
@@ -270,6 +272,7 @@ final class ScreenRegistry
         ['#^/api/\{resource\}/#', 'pages.contenus'],
         ['#^/videos(/|$)#', ['GET' => '@ancien', '*' => 'pages.contenus']],
         ['#^/api/entreprise(/|$)#', ['GET' => '@public', '*' => 'site.reglages']],
+        ['#^/api/site/assistance(/|$)#', 'site.assistance'],
         ['#^/api/site/assistant(/|$)#', 'site.assistant'],
         ['#^/api/site/domain(/|$)#', 'site.domaine'],
         ['#^/api/site/features(/|$)#', 'site.modules'],

@@ -41,6 +41,13 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
     public const CLOSED = 'closed';
     /** L'écran de la requête, posé pour le filtre de la réponse */
     public const ATTRIBUTE = '_entry_screen';
+    /** Lot AG-ASSIST : l'assistance qui couvre la requête [numéro, section, méthode], posée pour la trace de la réponse */
+    public const ASSISTANCE_ATTRIBUTE = '_entry_assistance';
+    /** Toujours fermés pendant une assistance, en lecture comme en écriture : les comptes et leurs rôles (les clés, l'export, Stripe et les
+     *  modules sont déjà dans CLOSED_PATHS) */
+    private const ASSISTANCE_CLOSED = ['#(^|/)(users?|accounts?|comptes?|roles?|team-roles?)(/|$)#i'];
+    /** Fermés en ÉCRITURE même en mode « modifier » : aucun paiement, remboursement ni encaissement */
+    private const ASSISTANCE_NO_WRITE = ['#(refund|rembours|payment|paiement|encaiss|capture|charge|cash-out|payout)#i'];
     private const WRITE = ['POST', 'PUT', 'PATCH', 'DELETE'];
     /** Fermés même dans la construction : expression du chemin => [méthodes (vide : toutes), raison] */
     private const CLOSED_PATHS = [
@@ -64,6 +71,7 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         private readonly EntryContext $entry,
         private readonly ?ImportJobStore $imports = null,
         private readonly ?\App\Services\TenantConnectionProvider $tenants = null,
+        private readonly ?\App\Services\Agency\Assistance\AssistanceService $assistance = null,
     ) {
     }
 
@@ -127,6 +135,12 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         }
         if ($decision === self::OPEN) {
             $reason = $this->moduleOff((string) $target) ?? $this->bodyRefused($request, (string) $target, $path) ?? $this->storefrontRefused($request, $path, $user);
+        } elseif ($reason === 'family' && is_string($target)) {
+            // lot AG-ASSIST : une section fermée à l'agence, ouverte par le COMMERÇANT pour une heure
+            $reason = $this->assistanceRefused($request, $target, $path, $user);
+            if ($reason === null) {
+                return;
+            }
         }
         if ($decision !== self::OPEN || $reason !== null) {
             $event->setResponse($this->refusal($reason));
@@ -134,6 +148,47 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
             return;
         }
         $request->attributes->set(self::ATTRIBUTE, $target);
+    }
+
+    /**
+     * Lot AG-ASSIST : la requête de l'opérateur est-elle couverte par une assistance vivante de SON agence sur CE site, pour la section
+     * de l'écran ? null : servie (la requête porte alors le numéro de l'assistance, pour sa trace et l'auteur de ses écritures) ; sinon la
+     * raison du refus. Lecture : toujours (hors comptes et listes de CLOSED_PATHS) ; écriture : seulement en mode « modifier », jamais un
+     * paiement, un remboursement, un encaissement, ni la suppression d'un client.
+     */
+    private function assistanceRefused(Request $request, string $target, string $path, ExternalOperator $operator): ?string
+    {
+        if ($this->assistance === null || $this->moduleOff($target) !== null) {
+            return 'family';
+        }
+        $sections = \App\Services\Agency\Assistance\AssistanceSections::of($target, ScreenRegistry::familyOf($target));
+        $grant = $sections === [] ? null : $this->assistance->covering((string) ($this->tenants?->getTenantCode() ?? ''), $operator->getAgencyId(), $sections);
+        if ($grant === null) {
+            return 'family';
+        }
+        $method = $request->getMethod();
+        foreach ([...array_map(static fn (array $c): string => $c[0], self::CLOSED_PATHS), ...self::ASSISTANCE_CLOSED] as $pattern) {
+            if (preg_match($pattern, $path) === 1) {
+                return 'assistance_closed';
+            }
+        }
+        if (in_array($method, self::WRITE, true)) {
+            if ($grant['mode'] !== \App\Services\Agency\Assistance\AssistanceSections::WRITE) {
+                return 'assistance_read_only';
+            }
+            foreach (self::ASSISTANCE_NO_WRITE as $pattern) {
+                if (preg_match($pattern, $path) === 1) {
+                    return 'assistance_closed';
+                }
+            }
+            if ($method === 'DELETE' && $grant['section'] === 'clients') {
+                return 'assistance_closed';
+            }
+        }
+        $operator->duringAssistance((int) $grant['id']);
+        $request->attributes->set(self::ASSISTANCE_ATTRIBUTE, ['id' => (int) $grant['id'], 'section' => (string) $grant['section'], 'screen' => $target]);
+
+        return null;
     }
 
     private function refusal(?string $reason): JsonResponse
@@ -151,6 +206,11 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
     public function onKernelResponse(ResponseEvent $event): void
     {
         $request = $event->getRequest();
+        if ($event->isMainRequest() && is_array($request->attributes->get(self::ASSISTANCE_ATTRIBUTE))) {
+            $this->traceAssistance($request, $event->getResponse()->getStatusCode());
+
+            return; // une section ouverte par le commerçant : servie entière (ni champs sensibles de la construction à retirer, ni filtre)
+        }
         $target = $request->attributes->get(self::ATTRIBUTE);
         $response = $event->getResponse();
         if (!is_string($target) || !$event->isMainRequest()) {
@@ -256,6 +316,31 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
             ]);
         } catch (\Throwable) {
             // la trace manque : la réponse part quand même (l'écriture est faite)
+        }
+    }
+
+    /**
+     * Lot AG-ASSIST : CHAQUE requête faite pendant une assistance (écran consulté, fiche lue, écriture) est écrite au journal du site, lu
+     * par « Accès extérieurs » : l'auteur « Agence X, prénom, pendant l'assistance n° N », la méthode, le chemin, la réponse.
+     */
+    private function traceAssistance(Request $request, int $status): void
+    {
+        $operator = $this->tokens->getToken()?->getUser();
+        $grant = (array) $request->attributes->get(self::ASSISTANCE_ATTRIBUTE);
+        if (!$operator instanceof ExternalOperator) {
+            return;
+        }
+        $write = in_array($request->getMethod(), self::WRITE, true);
+        try {
+            $this->emProvider->getEntityManager()->getConnection()->insert('content_audit_log', [
+                'created_at' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s'), 'user_identifier' => mb_substr($operator->getUserIdentifier(), 0, 180),
+                'tenant' => (string) ($this->tenants?->getTenantCode() ?? ''), 'resource' => \App\Services\Entry\EntryService::JOURNAL_RESOURCE, 'resource_id' => (string) $operator->getEntryId(),
+                'action' => $write ? 'assistance_write' : 'assistance_read', 'fields' => 'request',
+                'after_state' => json_encode(['assistance' => $grant['id'] ?? null, 'section' => $grant['section'] ?? null, 'screen' => $grant['screen'] ?? null,
+                    'method' => $request->getMethod(), 'path' => mb_substr(RequestPath::of($request), 0, 200), 'query' => mb_substr((string) $request->getQueryString(), 0, 200), 'status' => $status], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE),
+            ]);
+        } catch (\Throwable) {
+            // la trace manque : la réponse part quand même
         }
     }
 
