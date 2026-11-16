@@ -51,7 +51,8 @@ class AgencyService
     /**
      * Crée une agence, en essai : `trial_days` jours, `max_sites` sites (forfait commun « essai »).
      *
-     * @param array<string, mixed> $data { code, name, homeTenantCode, contactEmail?, test? }
+     * @param array<string, mixed> $data { code, name, homeTenantCode, contactEmail?, test?, trialDays?, maxSites? } ; `trialDays` (1 à 365)
+     *   et `maxSites` (1 à 1000) remplacent ceux du forfait d'essai quand ils sont donnés (lot TYPE-1)
      * @return array<string, mixed> l'agence
      */
     public function create(array $data, ?string $by): array
@@ -77,6 +78,11 @@ class AgencyService
         if (array_key_exists('test', $data) && !is_bool($data['test'])) {
             $errors[] = ['path' => 'test', 'message' => 'booléen attendu'];
         }
+        foreach (['trialDays' => 365, 'maxSites' => 1000] as $number => $max) {
+            if (array_key_exists($number, $data) && $data[$number] !== null && (!is_int($data[$number]) || $data[$number] < 1 || $data[$number] > $max)) {
+                $errors[] = ['path' => $number, 'message' => "entier de 1 à $max attendu"];
+            }
+        }
         if ($errors !== []) {
             throw new PlatformValidationException($errors);
         }
@@ -93,6 +99,8 @@ class AgencyService
             throw new AgencyException('AGENCY_SITE_SHARES_DATABASE', 409, ['tenantCode' => $site['code']]);
         }
         $plan = $this->repository->commonPlan(self::DEFAULT_PLAN) ?? ['code' => null, 'trial_days' => 60, 'max_sites' => 3]; // max_sites vide : illimité
+        $plan['trial_days'] = $data['trialDays'] ?? $plan['trial_days'];
+        $plan['max_sites'] = $data['maxSites'] ?? $plan['max_sites'];
         $trialEndsAt = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->modify('+' . $plan['trial_days'] . ' days');
         try {
             $agency = $this->repository->insert($code, $name, $site['code'], $trialEndsAt, $plan['max_sites'], $plan['code'], is_string($email) && $email !== '' ? mb_strtolower($email) : null, ($data['test'] ?? false) === true, $by);

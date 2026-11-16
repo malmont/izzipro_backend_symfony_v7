@@ -51,6 +51,7 @@ class AgencySiteRequestService
         private readonly TenantDatabaseConnector $connector,
         private readonly MessageBusInterface $bus,
         private readonly LoggerInterface $logger,
+        private readonly ?\App\Services\Platform\Sites\PlatformSiteRequestRepository $platformRequests = null, // lot TYPE-1 : les demandes de la plateforme retiennent aussi leur code
     ) {
     }
 
@@ -58,7 +59,7 @@ class AgencySiteRequestService
     public function availability(mixed $code): array
     {
         $code = is_string($code) ? mb_strtolower(trim($code)) : '';
-        $reason = !AgencySiteCode::valid($code) ? 'INVALID' : (AgencySiteCode::reserved($code) ? 'RESERVED' : ($this->taken($code) || $this->requests->codeRequested($code) ? 'TAKEN' : null));
+        $reason = !AgencySiteCode::valid($code) ? 'INVALID' : (AgencySiteCode::reserved($code) ? 'RESERVED' : ($this->taken($code) || $this->requests->codeRequested($code) || ($this->platformRequests?->codeRequested($code) ?? false) ? 'TAKEN' : null));
 
         return ['code' => $code, 'available' => $reason === null, 'reason' => $reason];
     }
@@ -77,7 +78,7 @@ class AgencySiteRequestService
         if (AgencySiteCode::reserved($code)) {
             throw new AgencyException('AGENCY_SITE_CODE_RESERVED', 409, ['siteCode' => $code]);
         }
-        if ($this->taken($code)) {
+        if ($this->taken($code) || ($this->platformRequests?->codeRequested($code) ?? false)) {
             throw new AgencyException('AGENCY_SITE_CODE_TAKEN', 409, ['siteCode' => $code]);
         }
         $row = $this->requests->open($agency['id'], $code, $name, $email, $options, $by, $agency['max_sites'], $agency['daily_site_requests']);

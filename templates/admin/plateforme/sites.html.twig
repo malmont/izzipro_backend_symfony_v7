@@ -1,0 +1,96 @@
+{# Page « Plateforme : sites » (PlatformSitesAdminController, lot TYPE-1, 16/11/2026). Habillage EasyAdmin depuis le menu ; ea() dit s'il y a un contexte. #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Plateforme : sites{% endblock %}
+{% block content_title %}Plateforme : sites{% endblock %}
+
+{% block main %}{{ block('sites_panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}
+    <div class="container-fluid py-3">
+        <h1 class="h3 mb-3">Plateforme : sites</h1>
+        {{ block('sites_panel') }}
+    </div>
+{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block sites_panel %}
+{% set labels = {'independent': 'Indépendant', 'agency_home': 'Agence', 'agency_managed': 'Géré par l\'agence', 'creation_incomplete': 'Création à compléter'} %}
+{% set steps = {'site': 'site', 'invitation': 'invitation', 'agency': 'fiche d\'agence', 'manager': 'rôle de responsable'} %}
+{% set states = {'todo': 'à faire', 'done': 'fait', 'failed': 'en échec', 'waiting': 'attend l\'acceptation de l\'invitation', 'skipped': 'non demandé'} %}
+{% set statuses = {'pending': 'en attente', 'building': 'en cours', 'ready': 'faite', 'incomplete': 'à compléter', 'failed': 'en échec', 'abandoned': 'abandonnée'} %}
+<div class="sites-panel">
+    {% for type, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ type }}">{{ message }}</div>{% endfor %}{% endfor %}
+    <p class="text-muted">Les pastilles se calculent depuis les liens réels de la plateforme (agences, sites gérés, demandes en cours) : il n'y a pas de « mode » à régler.</p>
+
+    <h2 class="h5 mt-3">Sites</h2>
+    <p class="sites-filtres">Filtrer :
+        <a href="{{ path('admin_plateforme_sites') }}" class="{{ badge is null ? 'fw-bold' : '' }}">tous</a>
+        {% for b in badges %} · <a href="{{ path('admin_plateforme_sites', {pastille: b}) }}" class="{{ badge == b ? 'fw-bold' : '' }}">{{ labels[b] }}</a>{% endfor %}
+    </p>
+    <table class="table table-sm align-middle sites-liste">
+        <thead><tr><th>Code</th><th>Nom</th><th>Adresse</th><th>Pastilles</th></tr></thead>
+        <tbody>
+        {% for site in sites %}
+            <tr data-site="{{ site.code }}">
+                <td>{{ site.code }}</td><td>{{ site.name }}</td><td>{{ site.host }}</td>
+                <td>{% for b in site.badges %}<span class="badge badge-{{ b.type == 'creation_incomplete' ? 'warning' : 'secondary' }}" data-pastille="{{ b.type }}">{{ labels[b.type] }}{% if b.agencyName is defined %} {{ b.agencyName }}{% endif %}</span> {% endfor %}</td>
+            </tr>
+        {% else %}
+            <tr><td colspan="4" class="text-muted">Aucun site.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h2 class="h5 mt-4">Créer un site</h2>
+    <form method="post" action="{{ path('admin_plateforme_sites_create') }}" class="row g-2 align-items-end sites-creer">
+        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+        <div class="col-md-2"><label class="form-label" for="s-type">Type</label>
+            <select class="form-select" id="s-type" name="type"><option value="normal">Normal</option><option value="agency">Agence (ce site sera son site d'attache)</option></select></div>
+        <div class="col-md-2"><label class="form-label" for="s-code">Code (adresse du site)</label><input class="form-control" id="s-code" name="code" required pattern="[a-z][a-z0-9-]{2,39}" placeholder="ma-boutique"></div>
+        <div class="col-md-3"><label class="form-label" for="s-name">Nom</label><input class="form-control" id="s-name" name="name" required maxlength="160"></div>
+        <div class="col-md-3"><label class="form-label" for="s-email">Courriel de l'administrateur</label><input class="form-control" id="s-email" name="adminEmail" type="email" required></div>
+        <div class="col-md-2"><label class="form-label" for="s-locale">Langue</label><select class="form-select" id="s-locale" name="locale"><option value="fr">Français</option><option value="en">English</option></select></div>
+        <div class="col-md-3"><label class="form-label" for="s-first">Prénom de l'administrateur</label><input class="form-control" id="s-first" name="adminFirstName" maxlength="100"></div>
+        <div class="col-md-3"><label class="form-label" for="s-last">Nom de l'administrateur</label><input class="form-control" id="s-last" name="adminLastName" maxlength="100"></div>
+        <div class="col-12"><span class="form-label d-block">Modules (accordés par la plateforme, sans essai automatique)</span>
+            {% for key, label in modules %}<div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="modules[]" id="s-m-{{ loop.index }}" value="{{ key }}"{{ key in defaults ? ' checked' : '' }}><label class="form-check-label" for="s-m-{{ loop.index }}">{{ label }}</label></div>{% endfor %}
+        </div>
+        <fieldset class="col-12 border rounded p-2 sites-agence">
+            <legend class="h6 float-none w-auto px-1">Pour le type « Agence » seulement</legend>
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3"><label class="form-label" for="s-aname">Nom de l'agence</label><input class="form-control" id="s-aname" name="agencyName" maxlength="160"></div>
+                <div class="col-md-3"><label class="form-label" for="s-acontact">Courriel de contact de l'agence</label><input class="form-control" id="s-acontact" name="agencyContactEmail" type="email"></div>
+                <div class="col-md-2"><label class="form-label" for="s-atrial">Jours d'essai</label><input class="form-control" id="s-atrial" name="agencyTrialDays" type="number" min="1" max="365" placeholder="forfait"></div>
+                <div class="col-md-2"><label class="form-label" for="s-amax">Sites au plus</label><input class="form-control" id="s-amax" name="agencyMaxSites" type="number" min="1" max="1000" placeholder="forfait"></div>
+                <div class="col-md-2"><div class="form-check"><input class="form-check-input" id="s-atest" name="agencyTest" type="checkbox" value="1"><label class="form-check-label" for="s-atest">Agence de test</label></div>
+                    <div class="form-check"><input class="form-check-input" id="s-amanager" name="agencyManagerRole" type="checkbox" value="1" checked><label class="form-check-label" for="s-amanager">L'administrateur devient responsable de l'agence</label></div></div>
+            </div>
+        </fieldset>
+        <div class="col-12"><button class="btn btn-primary" type="submit">Créer le site</button></div>
+    </form>
+    <p class="text-muted small mt-1">Le site naît « en construction ». Son administrateur reçoit un courriel avec un lien de 7 jours pour choisir son mot de passe. Pour une agence, le rôle de responsable lui est donné quand il accepte cette invitation, pas avant.</p>
+
+    <h2 class="h5 mt-4">Demandes de création</h2>
+    <table class="table table-sm align-middle sites-demandes">
+        <thead><tr><th>N°</th><th>Type</th><th>Site</th><th>État</th><th>Étapes</th><th></th></tr></thead>
+        <tbody>
+        {% for r in requests %}
+            <tr data-demande="{{ r.id }}" data-etat="{{ r.status }}">
+                <td>{{ r.id }}</td><td>{{ r.type == 'agency' ? 'agence' : 'normal' }}</td><td>{{ r.siteCode }}{% if r.site is null and r.status in ['abandoned', 'failed'] %} <span class="text-muted">(aucun site créé)</span>{% endif %}</td>
+                <td>{{ statuses[r.status] ?? r.status }}{% if r.failedStep %} : {{ steps[r.failedStep] ?? r.failedStep }} ({{ r.errorCode }}){% endif %}</td>
+                <td>{% for step, state in r.steps %}<span data-etape="{{ step }}" data-etat-etape="{{ state }}">{{ steps[step] ?? step }} : {{ states[state] ?? state }}</span>{% if not loop.last %} · {% endif %}{% endfor %}</td>
+                <td class="text-nowrap">
+                    {% if r.status == 'incomplete' %}
+                        <form method="post" action="{{ path('admin_plateforme_sites_request', {id: r.id, geste: 'reprendre'}) }}" class="d-inline sites-reprendre"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-primary" type="submit">Reprendre</button></form>
+                    {% endif %}
+                    {% if r.status in ['incomplete', 'pending'] %}
+                        <form method="post" action="{{ path('admin_plateforme_sites_request', {id: r.id, geste: 'abandonner'}) }}" class="d-inline sites-abandonner" onsubmit="return confirm('Abandonner cette demande ? Le site, s\'il existe, reste un site normal.');"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-outline-secondary" type="submit">Abandonner</button></form>
+                    {% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="6" class="text-muted">Aucune demande.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

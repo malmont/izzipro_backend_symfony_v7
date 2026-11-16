@@ -32,6 +32,7 @@ class ResetPasswordController extends AbstractController
         private readonly ?\App\Services\AppMembershipService\AppMembershipService $memberships = null, // familles d'applications (APPS-MEMBRES M1, 14/11/2026)
         private readonly ?\App\Services\Site\AdminSpaceUrl $adminSpace = null, // lot SUPPORT-WEB : lien de l'espace d'administration (jeton dans le fragment)
         private readonly ?\App\Import\ImportGuests $importGuests = null, // lot IMP-2 : comptes invités par import
+        private readonly ?\App\Services\Platform\Sites\PlatformSiteService $platformSites = null, // lot TYPE-1 : rôle de responsable d'agence donné à l'acceptation de l'invitation
     ) {}
 
     /**
@@ -172,6 +173,11 @@ class ResetPasswordController extends AbstractController
         }
         $em->flush();
         $this->memberships?->passwordChosen($user, $hadPassword); // APPS-MEMBRES M1 : un compte né d'une commande en invité entre dans la famille boutique
+        // Lot TYPE-1 : l'administrateur désigné d'un site créé comme site d'attache d'une agence vient d'accepter son invitation : le
+        // rôle de responsable de l'agence lui est donné maintenant, pas avant (ne lève jamais, l'acceptation n'en dépend pas)
+        if ($user->getSignupChannel() === User::SIGNUP_ADMIN_INVITE) {
+            $this->platformSites?->adminActivated($this->tenantManager->getCurrentTenantCode(), $user->getEmail());
+        }
         // Nouveau mot de passe = toutes les sessions ouvertes sont closes (01/11/2026) : jetons de rafraîchissement révoqués
         try {
             $em->getConnection()->executeStatement('DELETE FROM refresh_tokens WHERE username = ?', [(string) $user->getUserIdentifier()]);

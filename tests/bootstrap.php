@@ -108,6 +108,8 @@ $master->exec(file_get_contents(__DIR__ . '/../ops/sql/tech_metrics_master.sql')
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_master.sql'));
 // Agences (lot AG-1, 15/11/2026) : agences, sites gérés, forfaits, journal (ops/sql/agency_master.sql, même SQL que la base maître réelle)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/agency_master.sql'));
+// Création d'un site avec son type par la plateforme (lot TYPE-1, 16/11/2026) : demandes à étapes (ops/sql/platform_sites_master.sql, même SQL que la base maître réelle)
+$master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_sites_master.sql'));
 // Prévention des pertes (lot L3-a2, 16/11/2026) : demandes de jumelage des boîtiers (ops/sql/loss_pairing_master.sql, même SQL que la base maître réelle)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/loss_pairing_master.sql'));
 // Codes courts fixes des sites de test (31/10/2026) : MVT001 et MVT002 (alphabet Crockford)

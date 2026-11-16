@@ -91,6 +91,7 @@ framework:
             'App\Import\Message\RunOrderImportMessage': media # import de commandes confirmé, en archive à part (lot IMP-3) : jamais relancé
             'App\Import\Message\SendImportInvitationsMessage': media # invitations des clients repris (lot IMP-2) : une par invité, une seule fois
             'App\Services\Agency\Message\BuildAgencySiteMessage': media # création d'un site par une agence (lot AG-2) : une fabrication à la fois, jamais relancée
+            'App\Services\Platform\Sites\Message\BuildPlatformSiteMessage': media # création d'un site avec son type par la plateforme (lot TYPE-1) : même verrou de fabrication, jamais relancée
             'App\Services\Agency\Message\ResendAgencySiteInvitationMessage': media # invitation de l'administrateur d'un site créé par une agence, renvoyée (lot AG-2)
             'App\Message\SendTenantEmailMessage': email
             'App\MemoiresVivantes\Message\GenerateBookPdfMessage': pdf

@@ -569,6 +569,9 @@ class DashboardController extends AbstractDashboardController
         // Agences (lot AG-1, 15/11/2026) : agences, sites gérés, rôles d'agence, journal
         yield MenuItem::linkToRoute('Plateforme : agences', 'fas fa-handshake', 'admin_plateforme_agences')
             ->setPermission('ROLE_SUPER_ADMIN');
+        // Sites de la plateforme (lot TYPE-1, 16/11/2026) : pastilles calculées, création d'un site avec son type, demandes à étapes
+        yield MenuItem::linkToRoute('Plateforme : sites', 'fas fa-sitemap', 'admin_plateforme_sites')
+            ->setPermission('ROLE_SUPER_ADMIN');
         
         yield MenuItem::section('Boutique : accueil et pages');
         yield MenuItem::linkToCrud('Diaporama de l\'accueil', 'fas fa-images', HomeSlider::class);

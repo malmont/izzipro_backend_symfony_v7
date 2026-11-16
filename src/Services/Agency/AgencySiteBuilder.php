@@ -129,6 +129,12 @@ class AgencySiteBuilder
         $this->rights->cancelAll($code);
     }
 
+    /** Une base porte-t-elle déjà le nom que ce code de site prendrait ? */
+    public function databaseExists(string $code): bool
+    {
+        return $this->tenants->databaseExists(AgencySiteCode::database($code));
+    }
+
     /** Le site est livré : le processus ne peut plus le défaire */
     public function delivered(string $code): void
     {

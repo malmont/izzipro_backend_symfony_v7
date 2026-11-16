@@ -16,7 +16,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'app:agency:sites:build', description: 'Fabrique les sites demandés par les agences restés en attente ; passe en échec les fabrications interrompues.')]
 class AgencySitesBuildCommand extends Command
 {
-    public function __construct(private readonly AgencySiteRequestService $requests)
+    public function __construct(private readonly AgencySiteRequestService $requests, private readonly ?\App\Services\Platform\Sites\PlatformSiteService $platformSites = null)
     {
         parent::__construct();
     }
@@ -25,6 +25,11 @@ class AgencySitesBuildCommand extends Command
     {
         $done = $this->requests->drain();
         $output->writeln(sprintf('Demandes de site : %d fabrication(s) interrompue(s) passée(s) en échec, %d demande(s) en attente traitée(s).', $done['interrupted'], $done['processed']));
+        // lot TYPE-1 : les demandes de la plateforme restées en attente, et les rôles de responsable qui attendaient une acceptation déjà faite
+        if ($this->platformSites !== null) {
+            $platform = $this->platformSites->drain();
+            $output->writeln(sprintf('Demandes de la plateforme : %d demande(s) en attente traitée(s), %d rôle(s) de responsable donné(s).', $platform['processed'], $platform['managers']));
+        }
 
         return Command::SUCCESS;
     }
