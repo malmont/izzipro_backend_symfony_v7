@@ -652,3 +652,25 @@ pertes_boitiers:
             label: 'Simulated box'
             text: 'In practice mode, a simulated box plays scenarios without any hardware.'
     next: 'Add a box, write down its key, then enrol its machine.'
+pertes_impressions:
+    purpose: 'Tag printing: the tag printer prints the label of a piece and writes its tag in one go.'
+    points:
+        imprimante:
+            label: 'Tag printer'
+            text: 'It plugs into a shop box. It shows up here by itself as soon as the box announces it.'
+        travail:
+            label: 'Print job'
+            text: 'You choose pieces and a printer, with or without the price. The box fetches the job by itself.'
+        relecture:
+            label: 'Written'
+            text: 'Each tag is read back after writing. A tag that reads back is put on its piece, with no extra step.'
+        echec:
+            label: 'Failed'
+            text: 'The line says why: tag unreadable, out of labels, piece retired. The piece stays without a tag: start a new job for it.'
+        activation:
+            label: 'Not enabled yet'
+            text: 'If the screen says writing tags is not enabled on the server, contact the platform: it is not a setting of your site.'
+        simule:
+            label: 'Simulated printer'
+            text: 'In practice mode, the simulated box has its printer: it plays its scenarios with no hardware.'
+    next: 'Choose the pieces to label, then start the job.'

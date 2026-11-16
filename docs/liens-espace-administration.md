@@ -53,6 +53,7 @@ valeurs** d'une liste fermée séparées par des virgules.
 | `pertes.pieces` | aucun | pièces et puces (lot L2-a) |
 | `pertes.installation` | aucun | assistant d'installation des étiquettes à puce et gamme de matériel (lot L2-b) |
 | `pertes.boitiers` | aucun | boîtiers de la boutique et leurs appareils (lot L3-a) |
+| `pertes.impressions` | aucun | impressions de puces : travaux de l'imprimante à puce (lot L3-c) |
 | `assistance` | `status` (une valeur : `new`, `open`, `waiting_customer`, `closed`) ; `overdue` (drapeau) ; `awaiting` (drapeau) | boîte des demandes |
 | `assistance.demande` | `id` (entier, **obligatoire**) | fiche d'une demande |
 | `assistance-reglages` | aucun | réglages de l'Assistance |

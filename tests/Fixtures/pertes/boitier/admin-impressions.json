@@ -23,8 +23,8 @@
                 "failed": 1,
                 "waiting": 0,
                 "cancelled": 0,
-                "createdAt": "2026-11-16T09:25:49+00:00",
-                "finishedAt": "2026-11-16T09:25:49+00:00",
+                "createdAt": "2026-11-16T11:15:45+00:00",
+                "finishedAt": "2026-11-16T11:15:45+00:00",
                 "cancelledAt": null,
                 "exercise": false
             }
@@ -38,6 +38,7 @@
                 "serial": "IMPR-EXEMPLE",
                 "model": "ZD621R",
                 "status": "ok",
+                "statusLabel": "En marche",
                 "boxId": 3,
                 "boxName": "Boîtier de l'arrière-boutique",
                 "boxEnrolled": true
@@ -52,6 +53,7 @@
             "lines": 200,
             "openJobs": 20
         },
-        "exercise": false
+        "exercise": false,
+        "screen": "pertes.impressions"
     }
 }

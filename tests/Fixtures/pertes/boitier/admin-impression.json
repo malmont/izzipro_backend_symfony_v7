@@ -21,8 +21,8 @@
         "failed": 1,
         "waiting": 0,
         "cancelled": 0,
-        "createdAt": "2026-11-16T09:25:49+00:00",
-        "finishedAt": "2026-11-16T09:25:49+00:00",
+        "createdAt": "2026-11-16T11:15:45+00:00",
+        "finishedAt": "2026-11-16T11:15:45+00:00",
         "cancelledAt": null,
         "exercise": false,
         "lineItems": [
@@ -32,7 +32,7 @@
                 "piece": {
                     "id": 2,
                     "number": 2,
-                    "name": "Veste en lin (exemple boîtier 4591DE)",
+                    "name": "Veste en lin (exemple boîtier BA9462)",
                     "variantLabel": null
                 },
                 "identifier": "F1A7C63DA5B50000000200C7",
@@ -41,7 +41,7 @@
                 "reason": null,
                 "reasonLabel": null,
                 "tagId": 2,
-                "doneAt": "2026-11-16T09:25:49+00:00"
+                "doneAt": "2026-11-16T11:15:45+00:00"
             },
             {
                 "id": 2,
@@ -49,7 +49,7 @@
                 "piece": {
                     "id": 3,
                     "number": 3,
-                    "name": "Veste en lin (exemple boîtier 4591DE)",
+                    "name": "Veste en lin (exemple boîtier BA9462)",
                     "variantLabel": null
                 },
                 "identifier": "F1A7C63DA5B500000003002A",
@@ -58,8 +58,9 @@
                 "reason": "write_refused",
                 "reasonLabel": "Écriture refusée par la puce",
                 "tagId": null,
-                "doneAt": "2026-11-16T09:25:49+00:00"
+                "doneAt": "2026-11-16T11:15:45+00:00"
             }
-        ]
+        ],
+        "screen": "pertes.impressions"
     }
 }

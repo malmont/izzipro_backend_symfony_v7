@@ -135,6 +135,10 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
 
         // ----- L'administrateur, après : la liste, la fiche, la clé remise à zéro, la révocation
         $this->admin_('admin-boitiers', 'GET', '/boitiers');
+        // « en ordre » pour de bon : l'imprimante annoncée en panne plus haut est retirée (une imprimante qui ne répond pas donnerait
+        // « 1 appareil à vérifier » ; l'exemple d'une imprimante au tableau de santé est `admin-sante-imprimante`)
+        $brokenPrinter = array_column($this->examples['canal-signe-de-vie']['body']['settings']['devices'], 'id', 'serial')['IMPR-0001'];
+        $this->json($this->admin('POST', self::BASE . "/boitiers/$id/appareils/$brokenPrinter/retirer", ['confirm' => true]));
         $this->admin_('admin-sante-en-ordre', 'GET', '/sante');
         $this->db->executeStatement("UPDATE loss_box SET last_seen_at = NOW() AT TIME ZONE 'UTC' - INTERVAL '12 minutes' WHERE id = ?", [$id]);
         $this->admin_('admin-sante-boitier-silencieux', 'GET', '/sante');

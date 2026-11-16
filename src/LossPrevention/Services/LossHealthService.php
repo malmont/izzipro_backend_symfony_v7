@@ -288,7 +288,7 @@ class LossHealthService
         if ($printer['status'] === 'down' || $boxSilent) {
             [$state, $hint] = ['down', $this->texts->t('health.hint.printer.' . ($boxSilent ? 'box_silent' : 'down'), $locale)];
         } elseif ($keyProblem !== null) {
-            [$state, $hint] = ['pending', $this->texts->t('prints.ready.' . $keyProblem, $locale, ['variable' => LossTagVault::VARIABLE])];
+            [$state, $hint] = ['pending', $this->texts->t('prints.ready.' . $keyProblem, $locale)];
         } elseif (!(bool) $printer['has_written']) {
             [$state, $hint] = ['pending', $this->texts->t('health.hint.printer.' . ($exercise ? 'never_written_exercise' : 'never_written'), $locale)];
         } else {

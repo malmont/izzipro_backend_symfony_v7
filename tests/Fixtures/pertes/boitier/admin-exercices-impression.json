@@ -21,8 +21,8 @@
         "failed": 1,
         "waiting": 0,
         "cancelled": 0,
-        "createdAt": "2026-11-16T09:25:51+00:00",
-        "finishedAt": "2026-11-16T09:25:51+00:00",
+        "createdAt": "2026-11-16T11:15:46+00:00",
+        "finishedAt": "2026-11-16T11:15:46+00:00",
         "cancelledAt": null,
         "exercise": true,
         "lineItems": [
@@ -32,16 +32,16 @@
                 "piece": {
                     "id": 6,
                     "number": 2,
-                    "name": "Veste en lin (exemple boîtier 4591DE)",
+                    "name": "Veste en lin (exemple boîtier BA9462)",
                     "variantLabel": null
                 },
-                "identifier": "SIM-04E2B4ABD656",
+                "identifier": "SIM-5F00B1FA1781",
                 "status": "failed",
                 "statusLabel": "En échec",
                 "reason": "write_refused",
                 "reasonLabel": "Écriture refusée par la puce",
                 "tagId": null,
-                "doneAt": "2026-11-16T09:25:51+00:00"
+                "doneAt": "2026-11-16T11:15:46+00:00"
             },
             {
                 "id": 5,
@@ -49,16 +49,16 @@
                 "piece": {
                     "id": 7,
                     "number": 3,
-                    "name": "Veste en lin (exemple boîtier 4591DE)",
+                    "name": "Veste en lin (exemple boîtier BA9462)",
                     "variantLabel": null
                 },
-                "identifier": "SIM-5023B53D303A",
+                "identifier": "SIM-D812F553F117",
                 "status": "written",
                 "statusLabel": "Écrite",
                 "reason": null,
                 "reasonLabel": null,
                 "tagId": 4,
-                "doneAt": "2026-11-16T09:25:51+00:00"
+                "doneAt": "2026-11-16T11:15:46+00:00"
             },
             {
                 "id": 6,
@@ -66,17 +66,18 @@
                 "piece": {
                     "id": 8,
                     "number": 4,
-                    "name": "Veste en lin (exemple boîtier 4591DE)",
+                    "name": "Veste en lin (exemple boîtier BA9462)",
                     "variantLabel": null
                 },
-                "identifier": "SIM-6A8A8D349A58",
+                "identifier": "SIM-5407DEEFA55B",
                 "status": "written",
                 "statusLabel": "Écrite",
                 "reason": null,
                 "reasonLabel": null,
                 "tagId": 5,
-                "doneAt": "2026-11-16T09:25:51+00:00"
+                "doneAt": "2026-11-16T11:15:46+00:00"
             }
-        ]
+        ],
+        "screen": "pertes.impressions"
     }
 }
