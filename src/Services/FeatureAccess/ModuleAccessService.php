@@ -31,6 +31,8 @@ class ModuleAccessService
      * `management` ; son indicateur est vérifié en plus par `App\LossPrevention\LossPreventionModuleSubscriber` (aucun motif dans ROUTES).
      */
     public const LOSS_PREVENTION = 'loss_prevention';
+    /** E-commerce mobile (lot ENT-1, 16/11/2026) : droit app.mobile_shop, gardé sur les débuts de parcours marqués `X-App: mobile` (AppRightRoutes) */
+    public const MOBILE_SHOP = 'mobile_shop';
 
     /** module => colonne de la fiche Entreprise */
     public const COLUMNS = [
@@ -42,13 +44,14 @@ class ModuleAccessService
         self::MANAGEMENT => 'is_management_app_active',
         self::SUPPORT => 'is_support_active',
         self::LOSS_PREVENTION => 'is_loss_prevention_active',
+        self::MOBILE_SHOP => 'is_mobile_shop_active',
     ];
 
     /** module => clé du registre (droit d'usage) qu'on demande depuis « Mon site » ou l'application (403 MODULE_INACTIVE, lot MOD) */
     public const FEATURE_KEYS = [
         self::LANDING => 'module.landing', self::BOUTIQUE => 'module.boutique', self::POS => 'module.pos', self::MEMOIRES => 'module.memoires',
         self::BOUSSOLE => 'module.boussole', self::MANAGEMENT => 'app.management', self::SUPPORT => 'module.support',
-        self::LOSS_PREVENTION => 'module.loss_prevention',
+        self::LOSS_PREVENTION => 'module.loss_prevention', self::MOBILE_SHOP => 'app.mobile_shop',
     ];
 
     public const LABELS = [
@@ -60,6 +63,7 @@ class ModuleAccessService
         self::MANAGEMENT => 'Application de gestion',
         self::SUPPORT => 'Assistance',
         self::LOSS_PREVENTION => 'Prévention des pertes',
+        self::MOBILE_SHOP => 'E-commerce mobile',
     ];
 
     /**

@@ -20,8 +20,16 @@ class AppKeyService
     public const LABELS = ['pos' => 'Caisse (POS)', 'mobile' => 'E-commerce mobile', 'admin' => 'Gestion', 'livingmemory' => 'LivingMemory (Mémoires Vivantes)'];
     private const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-    public function __construct(private readonly TenantAppKeyRepository $keys, private readonly TenantPublicHostResolver $hosts, private readonly ?\App\Services\PosAuditService\PosTerminalService $terminals = null)
-    {
+    /** Lot ENT-1 : application dont l'activation d'une clé exige le droit d'usage du site => clé du droit */
+    private const RIGHTS = ['pos' => 'module.pos', 'mobile' => 'app.mobile_shop'];
+
+    public function __construct(
+        private readonly TenantAppKeyRepository $keys,
+        private readonly TenantPublicHostResolver $hosts,
+        private readonly ?\App\Services\PosAuditService\PosTerminalService $terminals = null,
+        private readonly ?\App\Services\Platform\EntitlementService $entitlements = null,
+        private readonly ?\App\Services\Platform\PlatformModeService $platform = null,
+    ) {
     }
 
     /**
@@ -101,6 +109,12 @@ class AppKeyService
             throw new AppKeyException('APP_KEY_WRONG_APP', sprintf('Cette clé est destinée à l\'application « %s »', $row['app']), 403);
         }
         $tenant = $this->hosts->describe($row['tenant_code']) ?? throw new AppKeyException('APP_KEY_INVALID', 'Le site de cette clé n\'existe plus', 404);
+        // lot ENT-1 : une clé de caisse ou de l'application mobile ne s'active plus quand le droit du site a pris fin (un nouvel appareil
+        // reste dehors) ; rien n'est refusé en mode « demo » de la plateforme
+        $right = self::RIGHTS[$row['app']] ?? null;
+        if ($right !== null && $this->entitlements !== null && $this->platform !== null && !$this->platform->isDemo() && !$this->entitlements->isActive((string) $row['tenant_code'], $right)) {
+            throw new AppKeyException('MODULE_INACTIVE', $row['app'] === 'pos' ? 'Le droit à la caisse de ce site a pris fin.' : 'Le droit à l\'application mobile de ce site a pris fin.', 403);
+        }
         $this->keys->touch((int) $row['id'], $device);
 
         return [

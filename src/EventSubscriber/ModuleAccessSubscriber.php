@@ -40,7 +40,7 @@ class ModuleAccessSubscriber implements EventSubscriberInterface
         if (!str_starts_with($path, '/api/')) {
             return;
         }
-        $module = ModuleAccessService::moduleForPath($path, $request->getMethod());
+        $module = ModuleAccessService::moduleForPath($path, $request->getMethod()) ?? self::appRightModule($request, $path);
         if ($module === null) {
             return;
         }
@@ -62,7 +62,30 @@ class ModuleAccessSubscriber implements EventSubscriberInterface
             'error' => self::CODE,
             'code' => self::CODE,
             'module' => $module,
-            'message' => sprintf('Le module %s n\'est pas activé sur ce site.', ModuleAccessService::LABELS[$module] ?? $module),
+            'message' => self::ENDED[$module] ?? sprintf('Le module %s n\'est pas activé sur ce site.', ModuleAccessService::LABELS[$module] ?? $module),
         ] + ($this->hints?->for($module) ?? []), 403)); // lot MOD : feature, requestable, request, trial (l'écran ne propose pas « Demander » deux fois)
+    }
+
+    /** Lot ENT-1 : message d'une application dont le droit a pris fin (affiché par la caisse à l'ouverture, par l'application mobile) */
+    private const ENDED = [
+        ModuleAccessService::POS => 'Le droit à la caisse de ce site a pris fin.',
+        ModuleAccessService::MOBILE_SHOP => 'Le droit à l\'application mobile de ce site a pris fin.',
+    ];
+
+    /**
+     * Lot ENT-1 : le module d'une route de la caisse (un DÉBUT : ouverture de session, nouvelle vente… ; une suite n'est jamais gardée)
+     * ou d'un début de parcours de l'application mobile (en-tête `X-App: mobile`). Null : la route n'est pas gardée par ces droits.
+     */
+    private static function appRightModule(\Symfony\Component\HttpFoundation\Request $request, string $path): ?string
+    {
+        if (preg_match(\App\Services\FeatureAccess\AppRightRoutes::POS_PATHS, $path) === 1) {
+            $body = json_decode((string) $request->getContent(), true);
+
+            return \App\Services\FeatureAccess\AppRightRoutes::pos($request->getMethod(), $path, is_array($body) ? $body : null) === \App\Services\FeatureAccess\AppRightRoutes::START
+                ? ModuleAccessService::POS : null;
+        }
+
+        return \App\Services\FeatureAccess\AppRightRoutes::mobileStart($request->getMethod(), $path, $request->headers->get(\App\Services\FeatureAccess\AppRightRoutes::MOBILE_HEADER))
+            ? ModuleAccessService::MOBILE_SHOP : null;
     }
 }

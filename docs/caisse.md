@@ -2652,6 +2652,30 @@ Le fuseau horaire de la caisse (`entreprise.pos_timezone`, panneau « Fuseau hor
 (`MODULE_INACTIVE`) : `is_pos_active` est l'indicateur de l'application Caisse, gouverné par les clés d'activation ; le droit
 d'usage du module Caisse viendra avec les droits d'usage (lot 3 de `docs/console-pilotage.md`).
 
+## Droit d'usage de la caisse et de l'e-commerce mobile (lot ENT-1, 16/11/2026, codé sous Opus)
+
+Contrat validé par le chef de projet. Le droit `module.pos` garde la caisse, le droit `app.mobile_shop` l'e-commerce mobile, par la
+garde des modules (`ModuleAccessSubscriber`, `App\Services\FeatureAccess\AppRightRoutes`) : 403 `MODULE_INACTIVE`, `module` (`pos`,
+`mobile_shop`), message « Le droit à la caisse de ce site a pris fin. » ou « Le droit à l'application mobile de ce site a pris fin. ».
+**Seulement en mode `live` de la plateforme ; en mode `demo`, rien n'est refusé.**
+
+- **Jamais de coupure au milieu d'une vente.** Refusés sans droit, parce que ce sont des DÉBUTS : `POST /api/caisse/open` (ouverture de
+  session), `POST /api/pos/terminal/payments` et `/connection-token` (nouveau paiement carte), `POST /api/order/create-multi-payment`
+  SANS référence de paiement déjà autorisé (`paymentMethods[].terminalPaymentId` ou `stripePaymentId` : la garde lit le corps),
+  `POST /api/pos/exchanges`, `/api/pos/rentals/deposits`, `/api/pos/gift-cards` sans `terminalPaymentId`. Toujours servis : la suite d'un
+  paiement commencé (état, annulation, vente avec sa référence), la fermeture de session, les dépôts et retraits, les rapports X et Z,
+  les reçus, les remboursements et retours, la remontée des ventes hors ligne (déjà encaissées), les PIN, les comptes et les lectures.
+- **Fermé par défaut** : chaque route de `/api/caisse`, `/api/pos`, `/api/cash-registers` et `create-multi-payment` est rangée (début ou
+  toujours servie) ; une route non rangée vaut un début, et `AppRightGateTest` échoue sur toute route de la caisse non rangée.
+- **Activation d'une clé** : une clé de caisse ou de l'application mobile ne s'active plus quand le droit du site a pris fin
+  (`AppKeyService::activate`, 403 `MODULE_INACTIVE`) : un nouvel appareil reste dehors.
+- **E-commerce mobile** : rien ne distingue une requête de l'application mobile de celle du web, sauf l'en-tête `X-App: mobile` que
+  l'application envoie (brief remis à l'application Flutter). Avec lui, les débuts de parcours de la boutique (`POST /api/cart/quote`,
+  `/api/stripe/create-intent`, nouvel abonnement, `change-plan`, `resume`) exigent le droit de l'application mobile. **Limite** : ce n'est
+  pas une preuve (notre application l'envoie) ; SANS l'en-tête, une application ancienne est servie comme le web, jusqu'à la version qui
+  l'envoie ; seule l'activation d'une nouvelle clé mobile est alors refusée.
+- Les applications affichent le message (caisse : à l'ouverture ; application mobile : au paiement).
+
 ## Mécanique interne
 
 `HandleCaisseTransactionUseCase` reçoit la session visée, **verrouille sa ligne** (`SELECT … FOR UPDATE`) pendant la
