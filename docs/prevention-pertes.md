@@ -1719,6 +1719,11 @@ ancienne, n'est plus jugée) ; les articles vendus dans la dernière fenêtre de
 clôture suivante de ce poste (dans la semaine) ; un seuil changé ne vaut que pour les journées dont les nombres changent
 ensuite et pour les constats à venir.
 
+**Note pour le plan de L5 (les alertes), décision du chef de projet du 16/11/2026** : cette règle grossit dans la journée. Un
+constat que le gérant a classé à midi (3 sur 6) garde sa décision si la clôture du soir trouve 15 sur 20 : il ne porte que « du
+nouveau depuis la décision », comme pour toute règle, sans courriel ni vignette. C'est voulu pour ce lot (la décision reste au
+gérant). À étudier en L5 : signaler de nouveau un constat classé dont les nombres ont doublé depuis la décision.
+
 **Relecture indépendante** (16/11/2026) : aucune personne dans le constat ni ses preuves, règle bien par poste et par jour du
 magasin, rien d'écrit hors du constat ; corrigés : la règle jugeait avant le rattrapage du même passage ; un constat n'était jamais
 corrigé à la baisse ; la veille rejugée ajoutait une preuve identique à chaque clôture (« du nouveau depuis la décision » pour
