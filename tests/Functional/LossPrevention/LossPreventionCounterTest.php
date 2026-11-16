@@ -155,8 +155,8 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $this->assertSame(1, $sheet()[$mat]['onMat'], 'reposée maintenant : elle est bien là');
         $this->assertSame(['accepted', null], $this->fact($token, 'COUNTER_LEFT', "TAPIS-$this->s", $third, ['key' => "depart-$this->s-0001"]));
         $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $third, ['at' => gmdate('Y-m-d\TH:i:s\Z', time() + 2)]);
-        $this->assertSame(['duplicate', null], $this->fact($token, 'COUNTER_LEFT', "TAPIS-$this->s", $third, ['key' => "depart-$this->s-0001"]));
-        $this->assertSame(1, $sheet()[$mat]['onMat'], 'un départ rejoué ne ferme pas la présence rouverte depuis');
+        $this->assertSame(['duplicate', null], $this->fact($token, 'COUNTER_LEFT', "TAPIS-$this->s", $third, ['key' => "depart-$this->s-0001", 'at' => gmdate('Y-m-d\TH:i:s\Z', time() + 3)]));
+        $this->assertSame(1, $sheet()[$mat]['onMat'], 'un départ rejoué (même clé, quoi qu\'il porte) ne ferme pas la présence rouverte depuis');
         $this->fact($token, 'COUNTER_LEFT', "TAPIS-$this->s", $third, ['at' => gmdate('Y-m-d\TH:i:s\Z', time() + 4)]);
 
         // Tapis débranché : ce qu'on croyait posé ne l'est plus pour nous ; la pastille dit le câble ; revenu, le boîtier doit redire
@@ -243,7 +243,7 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $late($fifth);
         $late($sixth);
         $this->assertSame(2, $sheet()[$mat]['onMat'], 'tapis revenu, boîtier en retard : ce qu\'il redit est bien posé');
-        $token = $this->reenrol($id, $token); // la même machine se réinscrit, les pièces sont restées sur le tapis
+        $token = $this->again($token); // la même machine se réinscrit avec la même clé (aucune remise à zéro), les pièces sont restées sur le tapis
         $this->current = $token;
         $this->assertSame([0, ["TAPIS-$this->s"]], [$sheet()[$mat]['onMat'], $this->beat($token, $mats, 30)['resendMats']]);
         $late($fifth);
@@ -509,6 +509,7 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $this->assertSame([1, 0, 'Reprise du tapis de comptoir'], [$take['written'], $onMat($take), array_slice(array_column($this->json($this->admin('GET', self::EX . "/pieces/$piece"))['events'], 'label'), -1)[0]]);
         // rien de tout cela n'existe pour la caisse : un tapis simulé n'a pas de poste, une pièce d'exercice n'est pas suivie
         $play('counter_put');
+        $this->db->executeStatement("UPDATE loss_device SET cash_register_id = ? WHERE exercise AND kind = 'counter_mat'", [$this->register]); // même si la base lui portait un poste
         $this->loginPos(['ROLE_USER_POS']);
         $this->openSession();
         $answer = $this->json($this->pos('POST', self::UNREAD, ['cashRegisterId' => $this->register, 'items' => [['productVariantId' => $variant, 'quantity' => 1]]]));
@@ -648,6 +649,7 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $enrolment = $this->json($this->box('POST', '/inscription', ['key' => $created['key'], 'machine' => $machine, 'version' => '1.0.0', 'arch' => 'amd64'], null));
         $token = $enrolment['token'];
         $this->machines[$token] = $machine;
+        $this->keys[$token] = $created['key'];
         $this->answered[$token] = $enrolment['serverTime'];
         $settings = $this->beat($token, $devices)['settings'];
 
@@ -663,6 +665,18 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $machine = $this->machines[$oldToken];
         $enrolment = $this->json($this->box('POST', '/inscription', ['key' => $key, 'machine' => $machine, 'version' => '1.0.1', 'arch' => 'amd64'], null));
         $this->machines[$enrolment['token']] = $machine;
+        $this->keys[$enrolment['token']] = $key;
+        $this->answered[$enrolment['token']] = $enrolment['serverTime'];
+
+        return $enrolment['token'];
+    }
+
+    /** La même machine se réinscrit avec la MÊME clé, sans remise à zéro (un boîtier réinstallé) ; rend son nouveau jeton */
+    private function again(string $oldToken): string
+    {
+        $enrolment = $this->json($this->box('POST', '/inscription', ['key' => $this->keys[$oldToken], 'machine' => $this->machines[$oldToken], 'version' => '1.0.2', 'arch' => 'amd64'], null));
+        $this->machines[$enrolment['token']] = $this->machines[$oldToken];
+        $this->keys[$enrolment['token']] = $this->keys[$oldToken];
         $this->answered[$enrolment['token']] = $enrolment['serverTime'];
 
         return $enrolment['token'];
@@ -670,6 +684,9 @@ class LossPreventionCounterTest extends LossPreventionTestCase
 
     /** Le jeton du moment, pour une fonction définie avant une réinscription */
     private string $current = '';
+
+    /** @var array<string, string> la clé du boîtier de chaque jeton */
+    private array $keys = [];
 
     /** @var array<string, string> la machine de chaque jeton */
     private array $machines = [];
