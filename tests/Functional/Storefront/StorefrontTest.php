@@ -546,7 +546,7 @@ class StorefrontTest extends WebTestCase
         $page = $this->client->request('GET', $url);
         $this->assertSame(200, $this->client->getResponse()->getStatusCode(), substr((string) $this->client->getResponse()->getContent(), 0, 500));
         $this->assertSame(['construction', 'site'], [$page->filter('[data-etat]')->attr('data-etat'), $page->filter('[data-etat]')->attr('data-etendue')]);
-        $this->assertSame(['products', 'payment', 'terms'], $page->filter('table.ouverture-controle tr[data-point]')->each(static fn ($row) => $row->attr('data-point')));
+        $this->assertSame(['products', 'payment', 'terms', 'unbuyable'], $page->filter('table.ouverture-controle tr[data-point]')->each(static fn ($row) => $row->attr('data-point')));
         $this->assertCount(0, $page->filter('form.ouverture-refermer'));
         // un lien d'aperçu : rendu dans la réponse du geste, une fois ; il n'est gardé nulle part et ne se relit pas
         $shown = $this->client->submit($page->filter('form.ouverture-apercu')->form());

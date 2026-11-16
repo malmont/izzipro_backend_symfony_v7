@@ -129,7 +129,7 @@ class SiteReadinessPluralsTest extends WebTestCase
             $this->user(['ROLE_USER_POS']);
             $this->user(['ROLE_USER', 'ROLE_ADMIN']);
             $this->product();
-            $this->assertSame([$base['cashiers'] + $more, $base['sellable'] + $more], [$cashiers(), $count('SELECT COUNT(*) FROM product p WHERE EXISTS (SELECT 1 FROM product_variant v WHERE v.product_id = p.id AND v.price > 0)')]);
+            $this->assertSame([$base['cashiers'] + $more, $base['sellable'] + $more], [$cashiers(), $count('SELECT COUNT(*) FROM product p WHERE p.is_web = TRUE AND ' . \App\Services\Storefront\SellableProduct::CONDITION)]);
             $now = $this->steps();
             $nowEn = $this->steps('?locale=en');
             $this->assertSame($cashierText($base['cashiers'] + $more), $now['pos.cashiers']['description'], 'caisse');
@@ -200,7 +200,8 @@ class SiteReadinessPluralsTest extends WebTestCase
     private function product(): void
     {
         $slug = 'pluriels-' . bin2hex(random_bytes(5));
-        $this->db->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type) VALUES (nextval('product_id_seq'), 'Article Pluriels', 1000, false, 0, NOW(), ?, 'standard')", [$slug]);
+        // en ligne : le cheminement compte les produits en ligne qui s'achètent (correctif du 16/11/2026)
+        $this->db->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type, is_web) VALUES (nextval('product_id_seq'), 'Article Pluriels', 1000, false, 0, NOW(), ?, 'standard', true)", [$slug]);
         $id = $this->products[] = (int) $this->db->fetchOne('SELECT id FROM product WHERE slug = ?', [$slug]);
         $em = static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager();
         $variant = (new ProductVariant())->setProduct($em->find(Product::class, $id));
