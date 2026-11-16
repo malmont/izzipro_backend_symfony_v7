@@ -86,7 +86,7 @@ class UnifiedStatisticsApiTest extends WebTestCase
         $this->endOfWrite();
 
         $r = $this->get('/api/gestion/statistiques?from=2006-03-01&to=2006-03-10&locale=fr');
-        $this->assertSame(['CAD', 'all', ['type' => 'custom', 'from' => '2006-03-01', 'to' => '2006-03-10', 'days' => 10, 'granularity' => 'day'], ['from' => '2006-02-19', 'to' => '2006-02-28'], ['from' => '2005-03-01', 'to' => '2005-03-10']],
+        $this->assertSame(['CAD', 'all', ['type' => 'custom', 'from' => '2006-03-01', 'to' => '2006-03-10', 'days' => 10, 'granularity' => 'day'], ['from' => '2006-02-19', 'to' => '2006-02-28'], ['from' => '2005-03-01', 'to' => '2005-03-10', 'source' => 'site']],
             [$r['currency'], $r['source'], $r['range'], $r['previous'], $r['lastYear']]);
         $this->assertSame(['currentLabel' => '1-10 mars 2006', 'previousLabel' => '19-28 févr. 2006', 'lastYearLabel' => '1-10 mars 2005'], $r['comparison']);
         $i = $r['indicators'];
