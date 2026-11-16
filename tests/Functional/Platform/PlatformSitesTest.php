@@ -143,9 +143,15 @@ class PlatformSitesTest extends WebTestCase
         $this->client->submit($form);
         $this->assertSame(302, $this->client->getResponse()->getStatusCode());
         $this->assertSame(['normal', 'pending'], $this->master->query("SELECT type, status FROM platform_site_requests WHERE tenant_code = '$second'")->fetch(\PDO::FETCH_NUM));
-        // un jeton de sécurité faux n'écrit rien
-        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/admin/plateforme/sites/creer', ['_token' => 'faux', 'code' => 'agtest-z' . $this->tag, 'name' => 'Z', 'adminEmail' => 'z@example.invalid'], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        // le même formulaire, avec un jeton de sécurité faux, n'écrit rien
+        $page = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin/plateforme/sites', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        $forged = $page->filter('form.sites-creer')->form(['type' => 'normal', 'code' => 'agtest-z' . $this->tag, 'name' => 'Zone', 'adminEmail' => "z-{$this->tag}@example.invalid"]);
+        $forged['_token'] = 'faux';
+        $this->client->submit($forged);
         $this->assertSame(0, (int) $this->master->query("SELECT COUNT(*) FROM platform_site_requests WHERE tenant_code = 'agtest-z{$this->tag}'")->fetchColumn());
+        $forged['_token'] = $page->filter('form.sites-creer input[name="_token"]')->attr('value');
+        $this->client->submit($forged);
+        $this->assertSame(1, (int) $this->master->query("SELECT COUNT(*) FROM platform_site_requests WHERE tenant_code = 'agtest-z{$this->tag}'")->fetchColumn(), 'avec le vrai jeton, la même saisie est acceptée');
         $this->client->getCookieJar()->clear();
     }
 
@@ -161,6 +167,7 @@ class PlatformSitesTest extends WebTestCase
         // les réglages de l'agence sont contrôlés à la demande
         $bad = $this->json('POST', '/api/platform/sites', ['type' => 'agency', 'code' => 'agtest-q' . $this->tag, 'name' => 'Quai', 'adminEmail' => 'q@example.invalid', 'agency' => ['name' => '', 'trialDays' => 0, 'maxSites' => '3', 'isTest' => 'oui']], 'super', 422)['errors'];
         $this->assertSame(['agency.name', 'agency.isTest', 'agency.trialDays', 'agency.maxSites'], array_column($bad, 'path'));
+        $this->assertContains('agency', array_column($this->json('POST', '/api/platform/sites', ['type' => 'agency', 'code' => 'agtest-q' . $this->tag, 'name' => 'Quai', 'adminEmail' => 'q@example.invalid'], 'super', 422)['errors'], 'path'), 'le type agence exige ses réglages');
 
         // L'INVITATION ÉCHOUE : le site existe, la demande est « à compléter », avec l'étape et son code ; ce compte-là n'est pas touché
         $this->sites()->process($id);
