@@ -276,8 +276,14 @@ class UserCrudController extends BaseTenantCrudController
             ->displayIf(fn ($user) => $isCustomer($user) && !$this->isSelf($user) && $user->getDeletedAt() === null)
             ->setCssClass('text-danger');
 
+        // Lot IMP-3 (16/11/2026) : les commandes que ce client avait passées dans l'ancienne boutique (archive à part, lecture seule)
+        $archive = \EasyCorp\Bundle\EasyAdminBundle\Config\Action::new('archiveOrders', 'Commandes d\'avant la migration', 'fas fa-box-archive')
+            ->linkToRoute('admin_user_archive_orders', fn (User $user) => ['id' => $user->getId()])
+            ->displayIf(fn ($user) => $isCustomer($user) && $user->getDeletedAt() === null);
+
         $actions = parent::configureActions($actions)
             ->disable(\EasyCorp\Bundle\EasyAdminBundle\Config\Action::BATCH_DELETE)
+            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $archive)
             ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $reset)
             ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, $reset)
             ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $erase)

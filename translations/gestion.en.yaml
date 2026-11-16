@@ -330,11 +330,14 @@ fixed_costs:
 
 # Unified statistics (lot S1, 11/11/2026, docs/statistiques-gestion.md)
 statistics:
+    beforeMigration: "before the migration"
+    beforeMigrationTitle: "Sales before the migration"
     caveats:
         UNKNOWN_COST: "%amount% of sales are for items without a known cost: they count in sales, not in the margin."
         STOCK_VALUE_NOW_ONLY: "Today's stock value only: the comparison will come with the daily snapshots, taken since 11/11/2026."
         PARTIAL_DAY: "Today is not over yet: its figures will still change."
         NO_LAST_YEAR_DATA: "No sales over the same range last year: no comparison possible."
+        LAST_YEAR_BEFORE_MIGRATION: "Last year comes from the sales before the migration, taken from your previous shop: revenue and orders only, without margin or returns."
         PAYMENTS_BY_ORDER_DATE: "Receipts are dated by the order date, taxes included. The part paid by gift card, store credit or manufacturer coupon is not included; a return only takes out the money actually given back."
         PAYMENTS_UNMATCHED: "%amount% of receipts match no payment line (sale without a recorded payment): they are shown under “Other”."
         REFUNDS_UNMATCHED: "%amount% of refunds match no payment line (a return with no till record, for example): they are shown under “Other”, as a negative amount."
@@ -382,6 +385,7 @@ year:
     caveats:
         PROJECTION_LAST_YEAR: "Projection: same months last year for sales; variable costs from the planned budget, otherwise last year, otherwise the pace of the last 90 days."
         PROJECTION_PACE: "Projection: pace of the last 30 days for sales; variable costs from the planned budget, otherwise last year, otherwise the pace of the last 90 days."
+        LAST_YEAR_BEFORE_MIGRATION: "Last year comes from the sales before the migration, taken from your previous shop: sales only, without margin, costs or result; the projection does not rely on them."
         NO_PROJECTION: "No sales projection: only the remaining costs are counted."
         PARTIAL_MONTH: "The current month is not over: it is counted up to today, the rest is in the projection."
         UNKNOWN_COST: "Some sales are for items without a known cost: they count in sales, not in the margin."

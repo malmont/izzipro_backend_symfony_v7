@@ -293,7 +293,11 @@ class AnalysisCatalog
     {
         $o = $this->year->overview(isset($params['year']) ? ['year' => $params['year']] : [], $locale);
         $t = $o['totals'];
-        $ly = $o['lastYear']['cumulative'] ?? null;
+        // l'an dernier : le cumul du DERNIER mois de l'exercice précédent (`cumulative` est une liste de douze mois, pas un tableau à
+        // clés : lue comme tel jusqu'au 16/11/2026, la comparaison restait toujours vide). Quand il vient de l'archive des ventes
+        // d'avant la migration (lot IMP-3), seules les ventes sont connues.
+        $cumulative = $o['lastYear']['cumulative'] ?? null;
+        $ly = is_array($cumulative) && $cumulative !== [] ? end($cumulative) : null;
         $lastYear = fn (string $k) => is_array($ly) && isset($ly[$k]) && is_numeric($ly[$k]) ? $ly[$k] : null;
         $figures = [
             $this->figure('sales', $t['sales'] ?? null, 'money', $locale, ['lastYear' => $lastYear('sales')]),

@@ -17,8 +17,36 @@ use Symfony\Component\Routing\Attribute\Route;
  */
 class GestionStatisticsController extends AbstractController
 {
-    public function __construct(private readonly GestionStatisticsUseCase $useCase, private readonly GestionYearUseCase $years, private readonly ?EmailLocale $siteLocale = null)
+    public function __construct(private readonly GestionStatisticsUseCase $useCase, private readonly GestionYearUseCase $years, private readonly ?EmailLocale $siteLocale = null,
+        private readonly ?\App\Import\OrderArchive $archive = null, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null,
+        private readonly ?\Symfony\Contracts\Translation\TranslatorInterface $translator = null)
     {
+    }
+
+    /**
+     * Lot IMP-3 : la série « ventes d'avant la migration » (`?from=&to=`, jours Y-m-d, facultatifs), reprises de l'ancienne boutique du
+     * commerçant. À PART des ventes du site : jamais additionnée à elles. Commandes payées seulement, hors taxes et hors port →
+     * 200 { source: before_migration, label, currency, from, to, firstDay, lastDay, totals { revenue, orders, items, averageBasket },
+     * months [{ month, revenue, orders, items }], states { paid, refunded, cancelled, unpaid } }
+     */
+    #[Route('/api/gestion/statistiques/avant-migration', name: 'gestion_statistiques_avant_migration', methods: ['GET'])]
+    public function beforeMigration(Request $request): JsonResponse
+    {
+        $bounds = [];
+        foreach (['from', 'to'] as $key) {
+            $value = $request->query->get($key);
+            if ($value !== null && $value !== '' && (!is_string($value) || preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) !== 1 || !checkdate((int) substr($value, 5, 2), (int) substr($value, 8, 2), (int) substr($value, 0, 4)))) {
+                throw new \App\Gestion\Services\GestionValidationException([$key => 'INVALID_DATE']);
+            }
+            $bounds[$key] = is_string($value) && $value !== '' ? $value : null;
+        }
+        if ($bounds['from'] !== null && $bounds['to'] !== null && $bounds['from'] > $bounds['to']) {
+            throw new \App\Gestion\Services\GestionValidationException(['to' => 'BEFORE_FROM']);
+        }
+        $locale = $this->locale($request);
+
+        return $this->json(['source' => \App\Import\OrderArchive::SOURCE, 'label' => $this->translator?->trans('statistics.beforeMigrationTitle', [], 'gestion', $locale) ?? 'Ventes d\'avant la migration',
+            'currency' => $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT] + ($this->archive?->series($bounds['from'], $bounds['to']) ?? []));
     }
 
     /** Lot AN : l'année de l'entreprise (séries mensuelles, cumul, an dernier, périodes, rentabilité, leviers, bilan d'une année terminée) */

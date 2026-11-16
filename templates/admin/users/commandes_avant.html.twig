@@ -1,0 +1,40 @@
+{# Commandes d'avant la migration d'un client (lot IMP-3, 16/11/2026) : archive à part, lecture seule.
+   Habillage EasyAdmin depuis le menu, sinon page nue. #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Commandes d'avant la migration{% endblock %}
+{% block content_title %}Commandes d'avant la migration{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}<div class="py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block panel %}
+<div class="container-fluid" style="max-width: 1000px" data-commandes-avant>
+    <p>Client : <strong>{{ customer.firstname }} {{ customer.lastname }}</strong> ({{ customer.email }})</p>
+    <p class="text-muted">Ces commandes viennent de l'ancienne boutique du commerçant. Elles sont gardées à part : elles n'entrent ni dans les commandes du site, ni dans ses factures, ni dans son stock. Le client ne les voit pas dans son compte.</p>
+    {% if archive.total == 0 %}
+        <p data-vide>Aucune commande d'avant la migration pour ce client.</p>
+    {% else %}
+        <p>{{ archive.total }} commande{{ archive.total > 1 ? 's' : '' }}.</p>
+        <table class="table table-sm align-middle commandes-avant">
+            <thead><tr><th>Numéro d'origine</th><th>Date</th><th>État</th><th class="text-end">Total</th><th>Articles</th></tr></thead>
+            <tbody>
+            {% for order in archive.orders %}
+                <tr data-ref="{{ order.ref }}" data-etat="{{ order.state }}">
+                    <td>{{ order.ref }}</td>
+                    <td>{{ order.day }}</td>
+                    <td>{{ {'paid': 'payée', 'refunded': 'remboursée', 'cancelled': 'annulée', 'unpaid': 'non payée'}[order.state] ?? order.state }}</td>
+                    <td class="text-end">{{ (order.total / 100)|number_format(2, ',', ' ') }} {{ order.currency }}</td>
+                    <td>{% for line in order.lines %}{{ line.quantity }} × {{ line.name }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% if archive.pages > 1 %}
+            <p>Page {{ archive.page }} sur {{ archive.pages }}
+                {% if archive.page > 1 %}· <a href="{{ path('admin_user_archive_orders', {id: customer.id, page: archive.page - 1}) }}">précédente</a>{% endif %}
+                {% if archive.page < archive.pages %}· <a href="{{ path('admin_user_archive_orders', {id: customer.id, page: archive.page + 1}) }}">suivante</a>{% endif %}
+            </p>
+        {% endif %}
+    {% endif %}
+</div>
+{% endblock %}

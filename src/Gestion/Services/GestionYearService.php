@@ -35,6 +35,7 @@ class GestionYearService
         private readonly GestionFiscalYearService $fiscal,
         private readonly TranslatorInterface $translator,
         private readonly ?TenantCurrencyProvider $currency = null,
+        private readonly ?\App\Import\OrderArchive $archive = null, // lot IMP-3 : « an dernier » lu de l'archive des ventes d'avant la migration
     ) {
     }
 
@@ -77,6 +78,21 @@ class GestionYearService
                 + $this->block($salesLy, $costs, $lyStart->format('Y-m-d'), $lyStart->modify('last day of this month')->format('Y-m-d'));
         }
         $hasLy = array_sum(array_map(fn ($b) => abs($b['sales']) + $b['variableCosts']['total'] + abs($b['otherRevenue']['total']), $ly)) > 0;
+        // Lot IMP-3 (16/11/2026) : sans aucun chiffre du site sur l'exercice précédent, l'an dernier se lit dans l'archive des ventes
+        // d'avant la migration : les VENTES seulement, mois par mois (marge, frais et résultat y sont inconnus : vides). Jamais mêlé aux
+        // chiffres du site, et marqué (`lastYear.source`). La PROJECTION de l'année ne s'appuie pas sur l'archive.
+        $lyArchive = null;
+        if (!$hasLy && $this->archive !== null && ($archived = $this->archive->dailySales($lyJan, $lyDec)) !== []) {
+            $lyArchive = ['months' => [], 'cumulative' => []];
+            $run = 0;
+            foreach ($ly as $b) {
+                $sold = (int) array_sum(array_map(static fn (array $row): int => (int) $row['sales_amount'], GestionStatisticsService::slice($archived, $b['from'], $b['to'])));
+                $run += $sold;
+                $public = self::publicBlock($b);
+                $lyArchive['months'][] = array_replace(array_fill_keys(array_keys($public), null), ['month' => $b['month'], 'year' => $b['year'], 'from' => $b['from'], 'to' => $b['to'], 'elapsed' => true, 'sales' => $sold]);
+                $lyArchive['cumulative'][] = ['month' => $b['month'], 'sales' => $run, 'grossMargin' => null, 'otherRevenue' => null, 'variableCosts' => null, 'fixedCosts' => null, 'result' => null];
+            }
+        }
         $totals = $this->block($sales, $costs, $jan, $end);
         $periods = $this->periods($jan, $dec, $t, $locale);
         $unit = $totals['tauxMarque'];
@@ -113,6 +129,9 @@ class GestionYearService
         if ($totals['unknownCostRevenue'] != 0) {
             $caveats[] = 'UNKNOWN_COST';
         }
+        if ($lyArchive !== null) {
+            $caveats[] = 'LAST_YEAR_BEFORE_MIGRATION';
+        }
         if ($basis['fixedCosts'] > 0) {
             $caveats[] = 'FIXED_COSTS_PRORATED';
         }
@@ -130,7 +149,10 @@ class GestionYearService
             'fiscalYear' => ['startMonth' => $sm, 'from' => $jan, 'to' => $dec, 'label' => GestionFiscalYearService::label($year, $sm)],
             'months' => array_map(fn ($b) => self::publicBlock($b), $months),
             'cumulative' => self::cumulative($months),
-            'lastYear' => $hasLy ? ['year' => $year - 1, 'label' => GestionFiscalYearService::label($year - 1, $sm), 'from' => $lyJan, 'to' => $lyDec, 'months' => array_map(fn ($b) => self::publicBlock($b), $ly), 'cumulative' => self::cumulative($ly)] : null,
+            // `source` : `site` (les chiffres du site) ou `before_migration` (l'archive des ventes d'avant, lot IMP-3 : ventes seules)
+            'lastYear' => $hasLy ? ['year' => $year - 1, 'label' => GestionFiscalYearService::label($year - 1, $sm), 'from' => $lyJan, 'to' => $lyDec, 'source' => 'site', 'months' => array_map(fn ($b) => self::publicBlock($b), $ly), 'cumulative' => self::cumulative($ly)]
+                : ($lyArchive !== null ? ['year' => $year - 1, 'label' => GestionFiscalYearService::label($year - 1, $sm) . ' (' . $this->translator->trans('statistics.beforeMigration', [], 'gestion', $locale) . ')', 'from' => $lyJan, 'to' => $lyDec,
+                    'source' => \App\Import\OrderArchive::SOURCE] + $lyArchive : null),
             'periods' => $periods,
             'totals' => self::publicBlock($totals) + ['from' => $jan, 'to' => $end],
             'profitability' => [

@@ -333,11 +333,14 @@ fixed_costs:
 
 # Statistiques unifiées (lot S1, 11/11/2026, docs/statistiques-gestion.md)
 statistics:
+    beforeMigration: "avant la migration"
+    beforeMigrationTitle: "Ventes d'avant la migration"
     caveats:
         UNKNOWN_COST: "%amount% de ventes portent sur des articles sans coût connu : elles comptent dans les ventes, pas dans la marge."
         STOCK_VALUE_NOW_ONLY: "Valeur du stock d'aujourd'hui seulement : la comparaison viendra avec les relevés quotidiens, pris depuis le 11/11/2026."
         PARTIAL_DAY: "La journée d'aujourd'hui n'est pas terminée : ses chiffres vont encore bouger."
         NO_LAST_YEAR_DATA: "Aucune vente sur la même plage l'an dernier : pas de comparaison possible."
+        LAST_YEAR_BEFORE_MIGRATION: "L'an dernier vient des ventes d'avant la migration, reprises de votre ancienne boutique : chiffre d'affaires et commandes seulement, sans marge ni retours."
         # Sections (lot S2-a, 14/11/2026, docs/statistiques-gestion.md § 6)
         PAYMENTS_BY_ORDER_DATE: "L'encaissé est daté par la date de la commande, taxes comprises. La part payée par carte-cadeau, avoir client ou coupon du fabricant n'en fait pas partie ; un retour n'en retire que l'argent réellement rendu."
         PAYMENTS_UNMATCHED: "%amount% d'encaissé ne correspondent à aucune ligne de paiement (vente sans paiement enregistré) : ils sont rendus dans « Autre »."
@@ -386,6 +389,7 @@ year:
     caveats:
         PROJECTION_LAST_YEAR: "Projection : les mêmes mois l'an dernier pour les ventes ; frais variables du budget prévu, sinon de l'an dernier, sinon du rythme des 90 derniers jours."
         PROJECTION_PACE: "Projection : le rythme des 30 derniers jours pour les ventes ; frais variables du budget prévu, sinon de l'an dernier, sinon du rythme des 90 derniers jours."
+        LAST_YEAR_BEFORE_MIGRATION: "L'an dernier vient des ventes d'avant la migration, reprises de votre ancienne boutique : les ventes seulement, sans marge, frais ni résultat ; la projection ne s'appuie pas sur elles."
         NO_PROJECTION: "Pas de projection des ventes : seuls les frais restants sont comptés."
         PARTIAL_MONTH: "Le mois en cours n'est pas terminé : il est compté jusqu'à aujourd'hui, le reste est dans la projection."
         UNKNOWN_COST: "Une partie des ventes porte sur des articles sans coût connu : elle compte dans les ventes, pas dans la marge."

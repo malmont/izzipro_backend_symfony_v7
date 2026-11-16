@@ -186,6 +186,8 @@ class ImportGuests
                 $conn->executeStatement('UPDATE "user" SET primary_address_id = NULL WHERE id = ?', [$userId]);
                 $conn->executeStatement('DELETE FROM adress WHERE user_adress_id = ?', [$userId]);
                 $conn->executeStatement("DELETE FROM import_item WHERE kind = 'customer' AND entity_id = ?", [$userId]);
+                // lot IMP-3 : ses commandes d'avant la migration ne le tiennent pas ; elles restent dans la série, sans lien avec lui
+                $conn->executeStatement('UPDATE import_order SET user_id = NULL WHERE user_id = ?', [$userId]);
                 $conn->executeStatement('DELETE FROM "user" WHERE id = ?', [$userId]); // sa ligne d'invitation suit (suppression en cascade)
             } catch (\Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException) {
                 // une donnée que la liste ne connaît pas tient ce compte : on ne force rien, il est gardé comme un compte tenu

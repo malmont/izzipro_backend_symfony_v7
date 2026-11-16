@@ -34,6 +34,7 @@ class GestionStatisticsService
         private readonly ?TenantCurrencyProvider $currency = null,
         private readonly ?GestionFiscalYearService $fiscal = null, // lot AN partie EX : range=year suit l'exercice du site
         private readonly ?GestionStatisticsSections $sections = null, // lot S2 : sections demandées par `sections=`
+        private readonly ?\App\Import\OrderArchive $archive = null, // lot IMP-3 : « an dernier » lu de l'archive des ventes d'avant la migration
     ) {
     }
 
@@ -65,6 +66,21 @@ class GestionStatisticsService
         $mp = $prev === null ? null : self::metrics($dailyPrev);
         $ml = self::metrics($dailyLy);
         $hasLy = $ml['orders'] > 0 || $ml['salesGross'] > 0 || $ml['rentals'] != 0 || $ml['subscriptions'] != 0;
+        // Lot IMP-3 (16/11/2026) : un site qui vient d'une autre boutique n'a aucune vente « l'an dernier ». Si, et seulement si, le site
+        // n'a AUCUNE vraie vente sur cette plage, l'an dernier se lit dans l'archive des commandes d'avant la migration. Jamais mêlé aux
+        // ventes du site ; la réponse le dit (`lastYear.source`, libellé, remarque). L'archive ne connaît ni le coût, ni les retours, ni
+        // le canal : marge, taux de marge, taux de retour, locations et abonnements de l'an dernier restent vides, et un filtre de
+        // canal ne lit pas l'archive.
+        $lyArchive = false;
+        if (!$hasLy && $source === null && $this->archive !== null) {
+            $archived = $this->archive->dailySales($ly[0], $ly[1]);
+            if ($archived !== []) {
+                $dailyLy = $archived;
+                $ml = self::metrics($dailyLy);
+                $hasLy = $lyArchive = true;
+            }
+        }
+        $lyOf = static fn (string $k) => !$hasLy || ($lyArchive && !in_array($k, ['revenue', 'orders', 'averageBasket'], true)) ? null : $ml[$k];
 
         // Points du graphique (jusqu'à aujourd'hui) et l'an dernier aligné (mêmes dates décalées d'un an)
         $points = [];
@@ -74,7 +90,7 @@ class GestionStatisticsService
             $pm = self::metrics(self::slice($daily, $from, $to));
             $pl = self::metrics(self::slice($dailyLy, self::shiftYears($from, -1), self::shiftYears($to, -1)));
             $points[] = ['key' => $key, 'from' => $from, 'to' => $to, 'revenue' => $pm['revenue'], 'grossMargin' => $pm['grossMargin'], 'orders' => $pm['orders'],
-                'lastYear' => ['revenue' => $pl['revenue'], 'grossMargin' => $pl['grossMargin'], 'orders' => $pl['orders']]];
+                'lastYear' => ['revenue' => $pl['revenue'], 'grossMargin' => $lyArchive ? null : $pl['grossMargin'], 'orders' => $pl['orders']]];
             $series[] = $pm;
         }
         $spark = fn (string $k) => array_map(fn ($pm) => $pm[$k], $series);
@@ -82,7 +98,7 @@ class GestionStatisticsService
         $stockNow = $this->stock->current($today);
         $stockPrev = $prev === null ? null : $this->stock->at($prev[1]);
         $stockLy = $this->stock->at($ly[1]);
-        $indicator = fn (string $k, string $unit) => self::indicator($m[$k], $mp[$k] ?? null, $hasLy ? $ml[$k] : null, $unit, $spark($k), $prev !== null);
+        $indicator = fn (string $k, string $unit) => self::indicator($m[$k], $mp[$k] ?? null, $lyOf($k), $unit, $spark($k), $prev !== null);
         $indicators = [
             'revenue' => $indicator('revenue', 'money'),
             'grossMargin' => $indicator('grossMargin', 'money'),
@@ -93,7 +109,7 @@ class GestionStatisticsService
             'stockValue' => self::indicator($stockNow['saleValue'], $stockPrev['saleValue'] ?? null, $stockLy['saleValue'] ?? null, 'money', [], $prev !== null)
                 + ['costValue' => $stockNow['costValue'], 'snapshots' => ['previous' => $stockPrev, 'lastYear' => $stockLy]],
         ];
-        $other = fn (string $k) => self::indicator($m[$k], $mp[$k] ?? null, $hasLy ? $ml[$k] : null, 'money', null, $prev !== null);
+        $other = fn (string $k) => self::indicator($m[$k], $mp[$k] ?? null, $lyOf($k), 'money', null, $prev !== null);
 
         $caveats = [];
         if ($m['unknown'] != 0) {
@@ -108,6 +124,9 @@ class GestionStatisticsService
         if (!$hasLy) {
             $caveats[] = $this->caveat('NO_LAST_YEAR_DATA', $locale);
         }
+        if ($lyArchive) {
+            $caveats[] = $this->caveat('LAST_YEAR_BEFORE_MIGRATION', $locale);
+        }
 
         $sections = $asked === [] || $this->sections === null ? [] : ['sections' => $this->sections->build($asked, [
             'cur' => $cur, 'prev' => $prev, 'ly' => $ly, 'buckets' => $buckets, 'granularity' => $granularity, 'source' => $source, 'sourceKey' => $sourceKey, 'locale' => $locale, 'today' => $today,
@@ -118,11 +137,12 @@ class GestionStatisticsService
             'source' => $sourceKey,
             'range' => ['type' => $type, 'from' => $cur[0], 'to' => $cur[1], 'days' => $days, 'granularity' => $granularity],
             'previous' => $prev === null ? null : ['from' => $prev[0], 'to' => $prev[1]],
-            'lastYear' => ['from' => $ly[0], 'to' => $ly[1]],
+            // `source` : d'où vient l'an dernier : `site` (les ventes du site), ou `before_migration` (l'archive des ventes d'avant, lot IMP-3)
+            'lastYear' => ['from' => $ly[0], 'to' => $ly[1], 'source' => $lyArchive ? \App\Import\OrderArchive::SOURCE : 'site'],
             'comparison' => [
                 'currentLabel' => self::label($cur[0], $cur[1], $locale, $todayKey),
                 'previousLabel' => $prev === null ? null : self::label($prev[0], $prev[1], $locale, $todayKey),
-                'lastYearLabel' => self::label($ly[0], $ly[1], $locale, $todayKey),
+                'lastYearLabel' => self::label($ly[0], $ly[1], $locale, $todayKey) . ($lyArchive ? ' (' . $this->translator->trans('statistics.beforeMigration', [], 'gestion', $locale) . ')' : ''),
             ],
             'indicators' => $indicators,
             'otherRevenue' => ['rentals' => $other('rentals'), 'subscriptions' => $other('subscriptions')],
@@ -264,7 +284,7 @@ class GestionStatisticsService
         return $out;
     }
 
-    private static function slice(array $daily, string $from, string $to): array
+    public static function slice(array $daily, string $from, string $to): array
     {
         return array_filter($daily, fn ($day) => $day >= $from && $day <= $to, ARRAY_FILTER_USE_KEY);
     }

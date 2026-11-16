@@ -75,6 +75,8 @@ class PersonalDataEraser
             [null, 'DELETE FROM otp_code WHERE user_otp_id = ?', [$userId]],
             [null, 'DELETE FROM reset_password_request WHERE user_id = ?', [$userId]],
             [null, 'DELETE FROM user_app_membership WHERE user_id = ?', [$userId]], // appartenances aux familles d'applications (APPS-MEMBRES M1, 14/11/2026)
+            // lot IMP-3 : ses commandes d'avant la migration restent dans la série des ventes d'avant, sans lien avec lui
+            [null, 'UPDATE import_order SET user_id = NULL WHERE user_id = ?', [$userId]],
         ];
         foreach ($statements as [$key, $sql, $params]) {
             try {
