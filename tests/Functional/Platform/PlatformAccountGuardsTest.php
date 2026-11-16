@@ -150,10 +150,18 @@ class PlatformAccountGuardsTest extends WebTestCase
         $this->assertStringContainsString('Compte de la plateforme, pour le dépannage', $detail->filter('body')->text());
 
         // API de la console Mémoires Vivantes : le compte est listé et dit
-        $list = $this->api('GET', '/api/memoires/admin/users?limit=500', null, $admin);
-        $this->assertSame(200, $list->getStatusCode(), substr((string) $list->getContent(), 0, 300));
-        $body = json_decode((string) $list->getContent(), true);
-        $users = array_column($body['users'] ?? $body['data'] ?? $body, null, 'email');
+        // la liste est paginée (200 par page) et la suite complète crée des centaines de comptes avant cet essai : toutes les pages sont lues
+        $users = [];
+        for ($page = 1; $page <= 50; ++$page) {
+            $list = $this->api('GET', '/api/memoires/admin/users?limit=200&page=' . $page, null, $admin);
+            $this->assertSame(200, $list->getStatusCode(), substr((string) $list->getContent(), 0, 300));
+            $body = json_decode((string) $list->getContent(), true);
+            $rows = $body['users'] ?? $body['data'] ?? $body;
+            if (!is_array($rows) || $rows === []) {
+                break;
+            }
+            $users += array_column($rows, null, 'email');
+        }
         $this->assertSame([true, false], [$users[$platform->getEmail()]['platformAccount'], $users[$admin->getEmail()]['platformAccount']]);
     }
 
