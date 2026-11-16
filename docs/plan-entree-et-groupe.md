@@ -1,6 +1,8 @@
 # Entrée dans un autre site (AG-3) et multi-boutiques (GROUPE) : plan commun du 16/11/2026
 
-PLAN SANS CODE, à discuter avec le propriétaire avant tout lancement : rien de ce qui suit n'existe dans le serveur. Il suit les
+PLAN VALIDÉ par le propriétaire le 16/11/2026 (ses réponses au § 7). Rien de ce qui suit n'existe encore dans le serveur, sauf le lot
+TYPE-1 (`docs/agences-et-import.md` § 9). Ordre décidé : TYPE-1, AG-3a, AG-3b, AG-3c, AG-3d, puis les lots G ; le contrat de chaque
+sous-lot est validé par le chef de projet avant son code ; AG-3b, l'entrée dans un autre site, est relu en deux passes au moins. Il suit les
 décisions du propriétaire relayées par le chef de projet le 16/11/2026 (un seul sélecteur décidé par le serveur ; l'agence ne
 connaît jamais les chiffres de ses clients ; seul un groupe réunit les chiffres ; activation à deux niveaux ; pastilles calculées ;
 type d'un site choisi à sa création). Il s'appuie sur une lecture du code à la pointe `acfe957a` : agences (`docs/agences-et-import.md`),
@@ -69,7 +71,7 @@ ne dure aujourd'hui qu'une heure.
 
 ## 3. Mode agence : construction et entretien, jamais un chiffre
 
-Classement des sections pour le mode agence, à montrer au propriétaire avant le code.
+Classement des sections pour le mode agence, validé par le propriétaire le 16/11/2026.
 
 | Section | Classement | Remarque |
 |---|---|---|
@@ -78,7 +80,7 @@ Classement des sections pour le mode agence, à montrer au propriétaire avant l
 | Import du catalogue | ouverte | |
 | Import des clients | **fermée** | données personnelles du commerçant |
 | Pages, site vitrine, menus, charte, apparence | ouverte | |
-| Générateur IA (pages, boutique, fiche produit) | à trancher | il consomme les unités IA du site du client |
+| Générateur IA (pages, boutique, fiche produit) | ouverte | tracé au nom de l'agence ; il consomme les unités IA du site du client |
 | Conditions de vente et mentions légales | ouverte | |
 | Transporteurs, frais de port | ouverte | |
 | Taxes | ouverte | ligne « Taxes vérifiées par le commerçant » à l'ouverture, cochée par un administrateur du site seulement, écrite au journal ; elle avertit sans bloquer |
@@ -91,8 +93,8 @@ Classement des sections pour le mode agence, à montrer au propriétaire avant l
 | Prévention des pertes | **fermée** | |
 | Assistance (tickets des clients) | **fermée** | |
 | Mémoires Vivantes et Boussole (contenus) | **fermée** | livres et réponses : données personnelles |
-| Comptes d'équipe du site | à trancher | l'agence invite déjà l'administrateur ; gérer les autres comptes ? |
-| Stock : quantités | à trancher | une quantité n'est pas un chiffre d'affaires, mais elle dit le rythme des ventes |
+| Comptes d'équipe du site | **fermée** | l'agence n'invite que l'administrateur |
+| Stock : quantités | ouverte | jamais le coût d'achat |
 
 « Tous mes clients » est un tableau technique, lu de la base maître et de l'état de chaque site, sans y entrer : ouvert ou en
 construction, modules, invitations en attente, fins d'essai. Aucun chiffre d'affaires. Les incidents techniques viendront avec AG-6.
@@ -230,28 +232,29 @@ réponses et les outils de groupe.
 7. **Le même article dans deux boutiques.** Aucun identifiant commun n'existe. La correspondance ne naît que d'une copie, d'un
    code-barres égal ou d'un choix à la main.
 
-## 7. Questions au propriétaire, avec ma proposition
+## 7. Réponses du propriétaire (16/11/2026)
 
-1. Qui, dans un groupe, voit toutes les boutiques ? Proposition : les administrateurs du siège seulement ; l'administrateur d'une
-   boutique associée ne voit que la sienne.
-2. Une boutique associée peut-elle quitter le groupe seule ? Proposition : oui, par son administrateur, sans accord du siège.
-3. Devises : total par devise d'abord, conversion indicative ensuite ? Proposition : oui.
-4. Le générateur IA utilisé par l'agence consomme les unités du client. Proposition : ouvert, et tracé au nom de l'agence.
-5. L'agence gère-t-elle les comptes d'équipe du client ? Proposition : non, elle n'invite que l'administrateur.
-6. L'agence voit-elle les quantités en stock ? Proposition : oui pour saisir le stock de départ, jamais le coût d'achat.
-7. Copie du catalogue : copier les prix de vente ? le coût d'achat ? Proposition : les prix oui, le coût oui (même entreprise).
-8. Un transfert exige-t-il l'accord de la boutique source avant l'envoi ? Proposition : la source envoie, donc elle décide.
-9. Durée de la session d'EasyAdmin : la règle des 12 heures demande d'allonger la session ou de redemander le code. Proposition :
-   garder la session courte et redemander le code quand la validation a plus de 12 heures.
-10. Une boutique peut-elle appartenir à un groupe et être gérée par une agence ? Proposition : oui, les deux pastilles s'affichent.
-11. Le directeur du groupe est-il le seul compte du siège à entrer dans une boutique créée, ou tous les administrateurs du siège ?
-    Proposition : tous les administrateurs du siège (même réponse qu'à la question 1).
+1. Seuls les administrateurs du siège voient toutes les boutiques.
+2. Une boutique ASSOCIÉE peut quitter le groupe sur décision de son administrateur. Une boutique CRÉÉE par le groupe ne le quitte que
+   sur décision d'un administrateur du siège.
+3. Les totaux sont donnés par devise d'abord ; la conversion indicative vient ensuite.
+4. Le générateur IA est ouvert à l'agence, et tracé. La console IA lui reste fermée.
+5. L'agence ne crée pas de comptes d'équipe chez son client.
+6. L'agence voit les quantités en stock, jamais le coût.
+7. La copie du catalogue reprend les prix et le coût.
+8. Le transfert est validé par la boutique source.
+9. Après 12 heures de session, EasyAdmin redemande le code à usage unique.
+10. Un même site peut être dans un groupe ET géré par une agence.
+11. Les administrateurs du siège entrent dans les boutiques créées par le groupe.
 
-## 8. Ce qui manque pour « couvrir le max », sans gros chantier
+Le marquage « avant la migration » de l'an dernier dans la console IA et les bilans PDF (`docs/import-boutique.md` § 10.6) prend le
+train d'AG-3a.
+
+## 8. Pour « couvrir le max », sans gros chantier (retenu par le propriétaire)
 
 - Un inventaire tournant de groupe : la liste réunie du stock d'un article dans toutes les boutiques (après la correspondance).
-- Un client reconnu dans toutes les boutiques du groupe : gros chantier (comptes par site), à écarter pour l'instant.
-- Des cartes cadeaux et des avoirs valables dans tout le groupe : gros chantier, à écarter.
+- ÉCARTÉ : un client reconnu dans toutes les boutiques du groupe (gros chantier : comptes par site).
+- ÉCARTÉ : des cartes cadeaux et des avoirs valables dans tout le groupe (gros chantier).
 - Un tableau des transferts en retard, et leur rappel par notification.
 - La copie des réglages d'une boutique vers une autre (taxes, transporteurs, charte) : même mécanique que la copie du catalogue.
 - Un mode « comptable » en lecture seule sur la gestion : une liste de plus dans le registre.
