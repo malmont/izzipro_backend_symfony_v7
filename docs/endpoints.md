@@ -904,7 +904,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (101)
+## Administration (EasyAdmin) (103)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -953,6 +953,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/orders/{id}/livree` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderShipmentAdminController::deliver` |
 | GET, POST | `/admin/orders/{id}/rembourser` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderOperationsAdminController::refund` |
 | GET, POST | `/admin/orders/{id}/retour` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderReturnAdminController::return` |
+| POST | `/admin/ouverture-du-site/{action}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\StorefrontAdminController::action` |
+| GET | `/admin/ouverture-du-site` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\StorefrontAdminController::index` |
 | GET | `/admin/pdf/print-barcode/{id}/{copies}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::printProduct` |
 | POST | `/admin/plateforme/accorder` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::grant` |
 | POST | `/admin/plateforme/agences/creer` | ROLE_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::create` |

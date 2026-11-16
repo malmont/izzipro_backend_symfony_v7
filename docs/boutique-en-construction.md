@@ -75,6 +75,10 @@ Administrateur du site (`ROLE_ADMIN`) :
 | `POST /api/site/storefront/close` | retour en construction |
 | `POST /api/site/storefront/preview-link` | `{ url, expiresAt }` |
 
+Les mêmes gestes sont dans l'espace d'administration du serveur, page **« Ouverture du site »** (`/admin/ouverture-du-site`, menu
+« Mon site ») : état, liste de contrôle, « Ouvrir la boutique », « Refermer le site », « Créer un lien d'aperçu » (le lien est montré
+une fois, sur la page qui suit sa création). Les écrans de « appli de gestion web » viendront ensuite.
+
 La liste de contrôle avertit sans bloquer (articles visibles, conditions de vente remplies), sauf **sans aucun moyen de paiement**
 (un compte de paiement connecté ET actif) quand la boutique en ligne fait partie du site : un site vitrine ou Mémoires Vivantes n'a pas besoin d'un moyen de paiement pour
 ouvrir. Chaque geste est au journal du site (`content_audit_log`, ressource `storefront` : `open`, `close`, `preview_link`).

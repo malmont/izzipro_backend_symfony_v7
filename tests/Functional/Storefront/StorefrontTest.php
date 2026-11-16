@@ -286,6 +286,38 @@ class StorefrontTest extends WebTestCase
         }
     }
 
+    public function testTheAdministratorOpensTheSiteFromTheAdministrationPage(): void
+    {
+        $admin = $this->user(['ROLE_ADMIN']);
+        $this->db()->executeStatement("UPDATE entreprise SET storefront_state = 'construction', is_boutique_active = false");
+        static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateSite(MV_TEST_TENANT_CODE, MV_TEST_TENANT_DB);
+        $this->client->setServerParameter('HTTP_X_TENANT_HOST', MV_TEST_TENANT_HOST);
+        // sans compte : la page renvoie à la connexion ; un client n'y entre pas
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin/ouverture-du-site');
+        $this->assertSame(302, $this->client->getResponse()->getStatusCode());
+        $this->client->loginUser($admin, 'main');
+        $page = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin/ouverture-du-site');
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode(), substr((string) $this->client->getResponse()->getContent(), 0, 500));
+        $this->assertSame('construction', $page->filter('[data-etat]')->attr('data-etat'));
+        $this->assertSame(['products', 'payment', 'terms'], $page->filter('table.ouverture-controle tr[data-point]')->each(static fn ($row) => $row->attr('data-point')));
+        // un lien d'aperçu : montré une fois, puis plus jamais
+        $this->client->submit($page->filter('form.ouverture-apercu')->form());
+        $shown = $this->client->followRedirect();
+        $this->assertMatchesRegularExpression('#https://' . preg_quote(MV_TEST_TENANT_HOST, '#') . '/apercu\#token=[0-9a-f]{64}#', $shown->filter('.ouverture-lien code')->text());
+        $again = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin/ouverture-du-site');
+        $this->assertCount(0, $again->filter('.ouverture-lien'));
+        // un jeton de sécurité faux n'ouvre rien ; le bon ouvre ; puis la page propose de refermer
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/admin/ouverture-du-site/ouvrir', ['_token' => 'faux']);
+        $this->assertSame('construction', $this->db()->fetchOne('SELECT storefront_state FROM entreprise ORDER BY id LIMIT 1'));
+        $this->client->submit($again->filter('form.ouverture-ouvrir')->form());
+        $this->assertSame('open', $this->db()->fetchOne('SELECT storefront_state FROM entreprise ORDER BY id LIMIT 1'));
+        $open = $this->client->followRedirect();
+        $this->assertSame('open', $open->filter('[data-etat]')->attr('data-etat'));
+        $this->client->submit($open->filter('form.ouverture-refermer')->form());
+        $this->assertSame('construction', $this->db()->fetchOne('SELECT storefront_state FROM entreprise ORDER BY id LIMIT 1'));
+        $this->client->getCookieJar()->clear();
+    }
+
     private function reset(): void
     {
         $db = $this->db();

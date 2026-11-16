@@ -1,0 +1,47 @@
+{# Ouverture du site (lot CONSTRUCTION, 16/11/2026) : état public du site, liste de contrôle, ouvrir, refermer, lien d'aperçu.
+   Habillage EasyAdmin depuis le menu, sinon page nue. #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Ouverture du site{% endblock %}
+{% block content_title %}Ouverture du site{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}<div class="py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block panel %}
+<div class="container-fluid" style="max-width: 900px" data-ouverture-site>
+    {% for type, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ type }}">{{ message }}</div>{% endfor %}{% endfor %}
+    {% if checklist is null %}
+        <p class="text-muted">Ce site n'a pas encore de fiche d'entreprise : créez-la d'abord.</p>
+    {% else %}
+        <p>État du site : <strong data-etat="{{ checklist.state }}">{{ checklist.state == 'open' ? 'ouvert au public' : 'en construction' }}</strong>{% if checklist.openedAt %} depuis le {{ checklist.openedAt|slice(0, 10) }} (UTC){% endif %}.</p>
+        {% if checklist.state != 'open' %}
+            <p class="text-muted">Vos visiteurs voient « Bientôt ouvert », au nom de votre boutique. Les commandes et les formulaires sont fermés. Vous, connecté, voyez la vraie boutique.</p>
+        {% endif %}
+        <table class="table table-sm align-middle ouverture-controle">
+            <thead><tr><th>Point de contrôle</th><th>État</th></tr></thead>
+            <tbody>
+            {% for item in checklist.items %}
+                <tr data-point="{{ item.key }}"><td>{{ item.message }}</td><td><span class="badge badge-{{ item.ok ? 'success' : (item.blocking ? 'danger' : 'warning') }}">{{ item.ok ? 'bon' : (item.blocking ? 'bloque l\'ouverture' : 'à voir') }}</span></td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <div class="d-flex gap-2 flex-wrap">
+            {% if checklist.state != 'open' %}
+                <form method="post" action="{{ path('admin_ouverture_site_action', {action: 'ouvrir'}) }}" class="ouverture-ouvrir" onsubmit="return confirm('Ouvrir le site au public ?');">
+                    <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-success" type="submit" {{ checklist.canOpen ? '' : 'disabled' }}>Ouvrir la boutique</button>
+                </form>
+                <form method="post" action="{{ path('admin_ouverture_site_action', {action: 'apercu'}) }}" class="ouverture-apercu">
+                    <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-secondary" type="submit">Créer un lien d'aperçu ({{ days }} jours)</button>
+                </form>
+            {% else %}
+                <form method="post" action="{{ path('admin_ouverture_site_action', {action: 'refermer'}) }}" class="ouverture-refermer" onsubmit="return confirm('Refermer le site ? Les commandes et les formulaires se ferment aussitôt.');">
+                    <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-warning" type="submit">Refermer le site</button>
+                </form>
+            {% endif %}
+        </div>
+        {% if link %}
+            <div class="alert alert-info mt-3 ouverture-lien">Lien d'aperçu, à copier maintenant (il ne sera plus affiché) : <br><code>{{ link.url }}</code><br>Valable jusqu'au {{ link.expiresAt|slice(0, 10) }} (UTC). Il montre la boutique, sans permettre de commander.</div>
+        {% endif %}
+    {% endif %}
+</div>
+{% endblock %}
