@@ -49,6 +49,7 @@ class CatalogImportService
         private readonly TenantCacheService $cache,
         private readonly ContentAuditRecorder $audit,
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
+        private readonly ?\App\Security\Entry\EntryContext $entry = null,
     ) {
     }
 
@@ -114,7 +115,9 @@ class CatalogImportService
         $siteInclusive = $this->taxes->pricesIncludeTax();
         $fileInclusive = (bool) ($body['pricesIncludeTax'] ?? $siteInclusive);
         $options = ['visibility' => $visibility, 'pos' => (bool) ($body['pos'] ?? true), 'pricesIncludeTax' => $fileInclusive, 'sitePricesIncludeTax' => $siteInclusive,
-            'priceFactor' => $this->priceFactor($fileInclusive, $siteInclusive)];
+            'priceFactor' => $this->priceFactor($fileInclusive, $siteInclusive),
+            // lot AG-3b : confirmé par une agence entrée dans le site, l'import n'écrit pas le coût d'achat (il donne la marge du client)
+            'withoutCost' => $this->entry?->active() ?? false];
         if (($job['report']['products']['importable'] ?? 0) < 1) {
             throw new ImportException('IMPORT_NOTHING_TO_IMPORT', 409);
         }
@@ -158,7 +161,7 @@ class CatalogImportService
                     continue;
                 }
                 try {
-                    $written = $this->writer->write($id, $job['source'], $item, ['visibility' => (string) $options['visibility'], 'pos' => (bool) $options['pos']], (float) ($options['priceFactor'] ?? 1.0), $language, $by);
+                    $written = $this->writer->write($id, $job['source'], $item, ['visibility' => (string) $options['visibility'], 'pos' => (bool) $options['pos'], 'withoutCost' => (bool) ($options['withoutCost'] ?? false)], (float) ($options['priceFactor'] ?? 1.0), $language, $by);
                 } catch (\Throwable $e) {
                     ++$result['failed'];
                     if (count($result['failures']) < 200) {

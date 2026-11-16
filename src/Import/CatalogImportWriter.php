@@ -39,7 +39,8 @@ class CatalogImportWriter
 
     /**
      * @param array<string, mixed> $item un article du plan (`CatalogImportPlanner::plan`), état `ok`
-     * @param array{visibility: string, pos: bool} $options choix du gérant à la confirmation
+     * @param array{visibility: string, pos: bool, withoutCost?: bool} $options choix du gérant à la confirmation ; `withoutCost` : confirmé par
+     *        une agence entrée dans le site (lot AG-3b), le coût d'achat du fichier n'est pas écrit
      * @param float $priceFactor 1.0, ou le facteur qui amène les prix du fichier au mode du site (taxes comprises ou hors taxes)
      * @return array{productId: int, variants: int, stock: int, barcodes: int, categoryCreated: bool}
      */
@@ -70,7 +71,7 @@ class CatalogImportWriter
                 ->setSaleEnabled(true)->setRentalEnabled(false)->setSubscriptionEnabled(false)
                 ->setIsbestseller(false)->setIsnewarrival(false)->setIsfeatured(false)->setIsspecialoffer(false)->setIsPreOrder(false)->setIsAccessory(false)->setCustomizable(false)
                 ->setRequiresShipping(true)->setCreatedAt(new \DateTimeImmutable());
-            if ($first['costCents'] !== null && $first['costCents'] > 0) {
+            if ($first['costCents'] !== null && $first['costCents'] > 0 && !($options['withoutCost'] ?? false)) {
                 $product->setPurchasePrice((float) $first['costCents']); // sans coefficient : le prix de vente n'est jamais recalculé
             }
             if ($category !== null) {

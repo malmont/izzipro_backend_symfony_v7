@@ -37,6 +37,9 @@ final class OptionalCustomerResolver
         } catch (\Throwable) {
             return null;
         }
+        if (array_key_exists('entry', $payload)) {
+            return null; // lot AG-3b : un jeton d'entrée (agence ou plateforme dans le site d'un autre) n'est jamais un client
+        }
         $identifier = $payload['username'] ?? $payload['email'] ?? null;
         if (!is_string($identifier) || $identifier === '') {
             return null;

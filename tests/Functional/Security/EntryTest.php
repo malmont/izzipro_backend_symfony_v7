@@ -112,6 +112,9 @@ class EntryTest extends WebTestCase
         // le coût d'un article ne s'écrit pas ; un import de clients ne se dépose pas
         $this->assertSame([403, 'cost'], $this->reason('POST', '/api/products', $token, ['name' => 'Article', 'purchasePrice' => 12]));
         $this->assertSame([403, 'cost'], $this->reason('PATCH', '/api/products/1', $token, ['variants' => [['coefficientMultiplier' => 2]]]));
+        foreach (['commandeCostCents', 'commandeQuantity', 'commandeAttachedAt', 'commandeCostEstimated', 'commande'] as $field) {
+            $this->assertSame([403, 'cost'], $this->reason('PUT', '/api/products/1', $token, ['name' => 'Article', $field => 1]), $field);
+        }
         $this->client->getCookieJar()->clear();
         $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/api/site/imports', ['kind' => 'customers', 'source' => 'shopify'], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST, 'HTTP_ACCEPT' => 'application/json', 'HTTP_AUTHORIZATION' => 'Bearer ' . $token]);
         $this->assertSame([403, 'kind'], [$this->client->getResponse()->getStatusCode(), json_decode((string) $this->client->getResponse()->getContent(), true)['reason'] ?? null]);
@@ -137,6 +140,15 @@ class EntryTest extends WebTestCase
         $response = $this->request('PUT', "/api/entreprise/$sheetId", $token, MV_TEST_TENANT2_HOST, ['metaTitle' => 'Titre posé par l\'agence ' . $this->tag]);
         $this->assertSame(200, $response->getStatusCode(), (string) $response->getContent());
         $this->assertSame('Agence Atelier Web, Julie', $this->pdo(MV_TEST_TENANT2_DB)->query("SELECT user_identifier FROM content_audit_log WHERE resource = 'entreprise' ORDER BY id DESC LIMIT 1")->fetchColumn());
+        $this->assertSame(1, (int) $this->pdo(MV_TEST_TENANT2_DB)->query("SELECT COUNT(*) FROM content_audit_log WHERE resource = 'external_access' AND action = 'write' AND user_identifier = 'Agence Atelier Web, Julie' AND after_state LIKE '%/api/entreprise/%'")->fetchColumn(),
+            'chaque écriture réussie de l\'opérateur est notée à son nom, même là où la route n\'écrit pas au journal');
+        // … l'adresse qui reçoit les commandes et les demandes des clients, la devise, les taxes, le fuseau, les périodes : fermés
+        foreach (['email' => 'agence@example.invalid', 'currency' => 'EUR', 'pricesIncludeTax' => true, 'posTimezone' => 'Europe/Paris', 'purchasePeriodFrequency' => 'monthly'] as $field => $value) {
+            $this->assertSame([403, 'field'], $this->reason('PUT', "/api/entreprise/$sheetId", $token, [$field => $value]), $field);
+        }
+        // … ouvrir ou fermer la boutique : seulement l'agence qui a CRÉÉ le site (celui-ci lui est rattaché)
+        $this->assertSame([403, 'storefront'], $this->reason('POST', '/api/site/storefront/close', $token, []));
+        $this->assertSame([403, 'storefront'], $this->reason('POST', '/api/site/storefront/open', $token, []));
         // … et les drapeaux de modules de la fiche lui restent fermés (réservés au super administrateur)
         $this->assertSame(403, $this->request('PUT', "/api/entreprise/$sheetId", $token, MV_TEST_TENANT2_HOST, ['isBoutiqueActive' => false])->getStatusCode());
 
@@ -193,6 +205,15 @@ class EntryTest extends WebTestCase
         $this->request('POST', '/api/logout', $member, MV_TEST_TENANT_HOST, []);
         $this->assertSame('logout', $this->entryRow($again['entry'])['ended_reason']);
         $this->assertSame(401, $this->request('GET', '/api/media', $again['token'])->getStatusCode());
+        // … par le seul jeton de renouvellement (le jeton d'accès du web a échu) : les entrées ferment aussi, et sans session vivante
+        // sur le site d'attache, plus d'entrée, même avec un jeton d'accès encore lisible
+        $again = $this->enter($member, MV_TEST_TENANT2_CODE);
+        $refresh = (string) $this->pdo(MV_TEST_TENANT_DB)->query("SELECT refresh_token FROM refresh_tokens WHERE username = 'entree-membre-{$this->tag}@example.invalid' ORDER BY id DESC LIMIT 1")->fetchColumn();
+        $this->client->getCookieJar()->clear();
+        $this->client->getCookieJar()->set(new \Symfony\Component\BrowserKit\Cookie('refresh_token_' . MV_TEST_TENANT_CODE, $refresh, null, '/', MV_TEST_TENANT_HOST));
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/api/logout', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json', 'CONTENT_TYPE' => 'application/json'], '{}');
+        $this->assertSame('logout', $this->entryRow($again['entry'])['ended_reason']);
+        $this->assertSame([403, 'ENTRY_FORBIDDEN'], $this->enterRefusal($member, MV_TEST_TENANT2_CODE), 'déconnecté du site d\'attache : plus d\'entrée');
 
         // la page « Accès extérieurs » du client liste les entrées de l'agence
         $this->assertNotSame([], $this->entriesOn(MV_TEST_TENANT2_CODE, MV_TEST_TENANT2_DB));
@@ -212,8 +233,13 @@ class EntryTest extends WebTestCase
         $this->assertNotSame(403, $response->getStatusCode(), (string) $response->getContent());
         $this->assertNotSame(401, $response->getStatusCode());
         $this->assertSame($email, $this->pdo(MV_TEST_TENANT2_DB)->query("SELECT user_identifier FROM content_audit_log WHERE resource = 'external_access' ORDER BY id DESC LIMIT 1")->fetchColumn());
+        // … il n'écrit rien sur un compte (profil, adresse, mot de passe : une telle écriture rendrait un jeton ordinaire)
+        $this->assertSame([403, 'account'], $this->reason('PATCH', '/api/profile', $entered['token'], ['firstname' => 'Autre']));
         // … et lui non plus n'obtient pas d'entrée depuis une entrée
-        $this->assertSame([403, 'ENTRY_FROM_ENTRY'], $this->reason('POST', '/api/me/contexts/enter', $entered['token'], ['site' => MV_TEST_TENANT_CODE], 'code'));
+        // (refusé par la garde avant le contrôleur, qui le refuserait aussi : ENTRY_FROM_ENTRY)
+        $count = $this->entryCount();
+        $this->assertSame([403, 'MODE_FORBIDDEN'], $this->reason('POST', '/api/me/contexts/enter', $entered['token'], ['site' => MV_TEST_TENANT_CODE], 'code'));
+        $this->assertSame($count, $this->entryCount());
         // le rôle retiré sur le site d'attache ferme l'entrée
         $this->pdo(MV_TEST_TENANT_DB)->prepare('UPDATE "user" SET roles = ? WHERE email = ?')->execute(['["ROLE_ADMIN"]', $email]);
         $this->forget($entered['entry']);
@@ -252,6 +278,9 @@ class EntryTest extends WebTestCase
         $this->assertSame(EntryModeGuardSubscriber::CLOSED, EntryModeGuardSubscriber::decision('POST', '/api/products/1/reviews')[0], 'un avis s\'écrit par un compte client');
         $this->assertSame(EntryModeGuardSubscriber::PUBLIC, EntryModeGuardSubscriber::decision('GET', '/api/products/1/reviews')[0]);
         $this->assertSame(EntryModeGuardSubscriber::CLOSED, EntryModeGuardSubscriber::decision('POST', '/api/cart')[0], 'une écriture publique n\'est pas une lecture');
+        // HEAD est une lecture : la règle de GET, jamais celle des écritures
+        $this->assertSame([EntryModeGuardSubscriber::PUBLIC, '@public'], array_slice(EntryModeGuardSubscriber::decision('HEAD', '/api/entreprise/1'), 0, 2));
+        $this->assertSame([EntryModeGuardSubscriber::OPEN, 'site.reglages'], array_slice(EntryModeGuardSubscriber::decision('PUT', '/api/entreprise/1'), 0, 2));
     }
 
     /** Le retrait d'un champ par suffixe de son chemin, à toute profondeur, sans toucher au reste ni à la forme de la réponse */
@@ -260,6 +289,32 @@ class EntryTest extends WebTestCase
         $specs = [['purchasePrice'], ['steps', '[]', 'description'], ['uses', 'sales']];
         $data = json_decode('{"purchasePrice":1,"name":"a","items":[{"purchasePrice":2,"price":3}],"steps":[{"description":"x","title":"t"}],"description":"gardée","uses":{"sales":4,"stock":5},"empty":{}}');
         $this->assertSame('{"name":"a","items":[{"price":3}],"steps":[{"title":"t"}],"description":"gardée","uses":{"stock":5},"empty":{}}', json_encode(EntryModeGuardSubscriber::strip($data, $specs), \JSON_UNESCAPED_UNICODE));
+    }
+
+    /** Les écritures d'API Platform rendent toute l'entité : pour l'opérateur seulement, la sortie reçoit le groupe de lecture borné */
+    public function testTheOutputOfApiPlatformWritesIsBoundedForTheOperatorOnly(): void
+    {
+        $inner = new class () implements \ApiPlatform\Serializer\SerializerContextBuilderInterface {
+            public array $context = [];
+
+            public function createFromRequest(\Symfony\Component\HttpFoundation\Request $request, bool $normalization, ?array $extractedAttributes = null): array
+            {
+                return $this->context;
+            }
+        };
+        $builder = new \App\Security\Entry\EntrySerializerContextBuilder($inner);
+        $operator = new \Symfony\Component\HttpFoundation\Request();
+        $operator->attributes->set(EntryModeGuardSubscriber::ATTRIBUTE, 'catalogue');
+        $cases = [[\App\Entity\Product::class, ['product:list']], [\App\Entity\VehicleProduct::class, ['product:list']], [\App\Entity\Categories::class, ['category:list']],
+            [\App\Entity\ProductVariant::class, [\App\Security\Entry\EntrySerializerContextBuilder::NONE]]];
+        foreach ($cases as [$class, $groups]) {
+            $inner->context = ['resource_class' => $class];
+            $this->assertSame($groups, $builder->createFromRequest($operator, true)['groups'], $class);
+            $this->assertArrayNotHasKey('groups', $builder->createFromRequest($operator, false), 'l\'entrée (dénormalisation) ne change pas');
+            $this->assertArrayNotHasKey('groups', $builder->createFromRequest(new \Symfony\Component\HttpFoundation\Request(), true), 'un compte du site garde la réponse d\'avant');
+        }
+        $inner->context = ['resource_class' => \App\Entity\Product::class, 'groups' => ['vehicle_product:read']];
+        $this->assertSame(['vehicle_product:read'], $builder->createFromRequest($operator, true)['groups'], 'un groupe déjà posé reste');
     }
 
     /** @return array<string, mixed> */
@@ -308,6 +363,8 @@ class EntryTest extends WebTestCase
         $user = (new User())->setEmail($email)->setUsername($email)->setFirstname($firstName)->setLastname('Essai')->setRoles($roles)->setPassword('inutilisable')->setIsVerified(true);
         $em->persist($user);
         $em->flush();
+        // une session vivante : un jeton de renouvellement valable (l'entrée l'exige)
+        $em->getConnection()->executeStatement("INSERT INTO refresh_tokens (id, refresh_token, username, valid) VALUES (nextval('refresh_tokens_id_seq'), ?, ?, NOW() + INTERVAL '1 day')", ['entree-' . bin2hex(random_bytes(30)), $email]);
         $token = static::getContainer()->get('lexik_jwt_authentication.jwt_manager')->create($user);
         $em->clear();
         $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);

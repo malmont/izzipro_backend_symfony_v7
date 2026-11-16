@@ -49,13 +49,19 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         ['#stripe#i', [], 'payment'],
         ['#^/api/site/features(/|$)#', self::WRITE, 'modules'],
     ];
-    /** Champs du coût d'un article, jamais écrits par l'opérateur */
-    private const COST_FIELDS = ['purchasePrice', 'coefficientMultiplier'];
+    /** Champs du coût d'un article, jamais écrits par l'opérateur (le coût d'achat, et le coût de la commande fournisseur que lisent la
+     *  marge, la valeur du stock et le résultat de période) */
+    private const COST_FIELDS = ['purchasePrice', 'coefficientMultiplier', 'commande', 'commandeCostCents', 'commandeQuantity', 'commandeAttachedAt', 'commandeCostEstimated'];
+    /** Champs de la fiche du site fermés à l'opérateur : l'adresse qui reçoit les commandes, les demandes et les réservations des
+     *  clients ; la devise, les prix taxes comprises, le fuseau et la fréquence des périodes, qui changent le sens des montants enregistrés */
+    private const SITE_FIELDS = ['email', 'currency', 'pricesIncludeTax', 'posTimezone', 'purchasePeriodFrequency'];
 
     public function __construct(
         private readonly TokenStorageInterface $tokens,
         private readonly TenantEntityManagerProvider $emProvider,
+        private readonly EntryContext $entry,
         private readonly ?ImportJobStore $imports = null,
+        private readonly ?\App\Services\TenantConnectionProvider $tenants = null,
     ) {
     }
 
@@ -96,10 +102,20 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
 
     public function onKernelRequest(RequestEvent $event): void
     {
-        if (!$event->isMainRequest() || !$this->tokens->getToken()?->getUser() instanceof ExternalOperator) {
+        if (!$event->isMainRequest()) {
             return;
         }
         $request = $event->getRequest();
+        $user = $this->tokens->getToken()?->getUser();
+        if (!$user instanceof ExternalOperator) {
+            // l'entrée du compte de la plateforme garde tous ses écrans de site, mais n'écrit rien sur un compte (profil, adresse, mot
+            // de passe : une telle écriture rendrait un jeton ordinaire)
+            if ($this->entry->active() && !in_array($request->getMethod(), ['GET', 'HEAD'], true) && ScreenRegistry::classify($request->getMethod(), RequestPath::of($request)) === '@compte') {
+                $event->setResponse($this->refusal('account'));
+            }
+
+            return;
+        }
         $path = RequestPath::of($request);
         [$decision, $target, $reason] = self::decision($request->getMethod(), $path);
         if ($decision === self::PUBLIC) {
@@ -108,22 +124,38 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
             return;
         }
         if ($decision === self::OPEN) {
-            $reason = $this->moduleOff((string) $target) ?? $this->bodyRefused($request, (string) $target, $path);
+            $reason = $this->moduleOff((string) $target) ?? $this->bodyRefused($request, (string) $target, $path) ?? $this->storefrontRefused($request, $path, $user);
         }
         if ($decision !== self::OPEN || $reason !== null) {
-            $event->setResponse(new JsonResponse(['error' => self::CODE, 'code' => self::CODE, 'reason' => $reason,
-                'message' => 'Cette page n\'est pas ouverte à une agence dans le site de son client.'], 403));
+            $event->setResponse($this->refusal($reason));
 
             return;
         }
         $request->attributes->set(self::ATTRIBUTE, $target);
     }
 
+    private function refusal(?string $reason): JsonResponse
+    {
+        return new JsonResponse(['error' => self::CODE, 'code' => self::CODE, 'reason' => $reason,
+            'message' => 'Cette page n\'est pas ouverte à une agence dans le site de son client.'], 403);
+    }
+
+    /** Ouvrir ou fermer la boutique : seulement l'agence qui a CRÉÉ le site (un site rattaché en service ne se ferme pas par l'agence) */
+    private function storefrontRefused(Request $request, string $path, ExternalOperator $operator): ?string
+    {
+        return preg_match('#^/api/site/storefront/(open|close)$#', $path) === 1 && $operator->getOrigin() !== 'created' ? 'storefront' : null;
+    }
+
     public function onKernelResponse(ResponseEvent $event): void
     {
-        $target = $event->getRequest()->attributes->get(self::ATTRIBUTE);
+        $request = $event->getRequest();
+        $target = $request->attributes->get(self::ATTRIBUTE);
         $response = $event->getResponse();
-        if (!is_string($target) || !$event->isMainRequest() || !str_contains((string) $response->headers->get('Content-Type'), 'json')) {
+        if (!is_string($target) || !$event->isMainRequest()) {
+            return;
+        }
+        $this->traceWrite($request, $response->getStatusCode());
+        if (!str_contains((string) $response->headers->get('Content-Type'), 'json')) {
             return;
         }
         $specs = array_map(static fn (string $field): array => explode('.', str_replace('[]', '.[]', $field)), ScreenRegistry::SENSITIVE[$target]['fields'] ?? []);
@@ -134,6 +166,9 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         $content = (string) $response->getContent();
         $data = json_decode($content);
         if (json_last_error() !== \JSON_ERROR_NONE) {
+            // une réponse JSON qu'on ne sait pas relire ne part pas sans filtre
+            $event->setResponse(new JsonResponse(['error' => 'ERROR', 'code' => 'ERROR', 'message' => 'Réponse indisponible.'], 500));
+
             return;
         }
         if ($isImportList && $data instanceof \stdClass && is_array($data->imports ?? null)) {
@@ -201,9 +236,36 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         return in_array($value, [true, 't', 'true', 1, '1'], true) ? null : 'module';
     }
 
-    /** Ce que le corps ou l'objet de la requête ferme : le coût d'un article, un import de clients ou de commandes */
+    /**
+     * Chaque écriture réussie de l'opérateur porte son nom au journal du site (« Agence X, prénom »), même quand la route n'écrit pas
+     * elle-même au journal (écritures d'API Platform, médias, apparence, codes-barres…). Ne fait jamais échouer la réponse.
+     */
+    private function traceWrite(Request $request, int $status): void
+    {
+        $operator = $this->tokens->getToken()?->getUser();
+        if (!in_array($request->getMethod(), self::WRITE, true) || $status >= 400 || !$operator instanceof ExternalOperator) {
+            return;
+        }
+        try {
+            $this->emProvider->getEntityManager()->getConnection()->insert('content_audit_log', [
+                'created_at' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s'), 'user_identifier' => mb_substr($operator->getUserIdentifier(), 0, 180),
+                'tenant' => (string) ($this->tenants?->getTenantCode() ?? ''), 'resource' => \App\Services\Entry\EntryService::JOURNAL_RESOURCE, 'resource_id' => (string) $operator->getEntryId(),
+                'action' => 'write', 'fields' => 'request', 'after_state' => json_encode(['method' => $request->getMethod(), 'path' => mb_substr(RequestPath::of($request), 0, 200), 'status' => $status], \JSON_UNESCAPED_SLASHES),
+            ]);
+        } catch (\Throwable) {
+            // la trace manque : la réponse part quand même (l'écriture est faite)
+        }
+    }
+
+    /** Ce que le corps ou l'objet de la requête ferme : le coût d'un article, un champ réservé de la fiche, un import de clients ou de commandes */
     private function bodyRefused(Request $request, string $target, string $path): ?string
     {
+        if ($target === 'site.reglages' && preg_match('#^/api/entreprise(/|$)#', $path) === 1 && in_array($request->getMethod(), self::WRITE, true)) {
+            $body = json_decode((string) $request->getContent(), true);
+            if (is_array($body) && array_intersect(self::SITE_FIELDS, array_keys($body)) !== []) {
+                return 'field';
+            }
+        }
         if ($target === 'catalogue' && in_array($request->getMethod(), self::WRITE, true)) {
             $body = json_decode((string) $request->getContent(), true);
             if ((is_array($body) && self::carriesCost($body)) || array_intersect(self::COST_FIELDS, array_keys($request->request->all())) !== []) {

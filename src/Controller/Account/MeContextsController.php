@@ -50,8 +50,11 @@ class MeContextsController extends AbstractController
     {
         $this->denyAccessUnlessGranted('IS_AUTHENTICATED_FULLY');
         $user = $this->getUser();
-        if (!$user instanceof User || $this->entry->active()) {
+        if ($this->entry->active()) {
             return $this->refused('ENTRY_FROM_ENTRY', 403);
+        }
+        if (!$user instanceof User) {
+            return $this->refused('ENTRY_FORBIDDEN', 403, 'role');
         }
         $home = (string) $this->tenants->getTenantCode();
         if (!$this->enterLimiter->create($home . '|' . $user->getId())->consume(1)->isAccepted()) {

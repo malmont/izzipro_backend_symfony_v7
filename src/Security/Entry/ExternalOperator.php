@@ -24,6 +24,8 @@ final class ExternalOperator implements UserInterface
         private readonly string $agencyName,
         private readonly string $firstName,
         private readonly string $home,
+        /** `created` : l'agence a créé ce site ; `attached` : un site existant rattaché à l'agence */
+        private readonly string $origin = 'attached',
     ) {
     }
 
@@ -75,5 +77,10 @@ final class ExternalOperator implements UserInterface
     public function getHome(): string
     {
         return $this->home;
+    }
+
+    public function getOrigin(): string
+    {
+        return $this->origin;
     }
 }

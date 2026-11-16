@@ -214,7 +214,9 @@ Réponse 200 (jamais en cache partagé) :
 Le front présente ensuite `Authorization: Bearer <token>` avec l'en-tête `X-Tenant-Host` du site visé. Le jeton vaut 15 minutes, pour CE
 site seulement (claim `tenant_code`) : présenté sur le site d'attache ou sous l'hôte d'un autre site, 401. On le RENOUVELLE en
 redemandant l'entrée depuis le site d'attache, ce qui exige une session encore valide là-bas ; un jeton d'entrée n'en obtient jamais un
-autre, ni vers un troisième site (403). Limite : 30 entrées par 10 minutes par compte.
+autre, ni vers un troisième site (403). L'entrée exige une SESSION VIVANTE sur le site d'attache : un jeton de renouvellement valable
+(la déconnexion le révoque) ; sinon 403 `ENTRY_FORBIDDEN` (`reason` : `session`). Limite : 30 entrées par 10 minutes par compte.
+Sans la trace au journal du site visé, pas d'entrée (503 `ENTRY_UNAVAILABLE`, `reason` : `trace`).
 
 Refus : 403 `ENTRY_FORBIDDEN` (`reason` : `role`, `agency`, `site` ; un site inconnu se refuse comme un site non géré), 422
 `ENTRY_SAME_SITE`, 409 `ENTRY_UNAVAILABLE` (plateforme : pas de compte de la plateforme sur ce site), 403 `ENTRY_FROM_ENTRY`, 429
@@ -229,10 +231,15 @@ Refus : 403 `ENTRY_FORBIDDEN` (`reason` : `role`, `agency`, `site` ; un site inc
   commerçant lit au journal de son site et dans « Accès extérieurs ».
 - **Plateforme** : la requête est faite par le compte de la plateforme du site visé, avec tous ses écrans de site.
 
-À chaque requête, le lien est RELU (`EntryService::check`, cache d'une minute au plus) : entrée fermée, échéance passée, compte du site
-d'attache supprimé ou d'une autre adresse, rôle retiré, agence suspendue ou fermée, site détaché → 401 `ENTRY_ENDED` dès la requête
-suivante, et l'entrée est fermée au journal avec sa raison. La DÉCONNEXION du site d'attache (`POST /api/logout`) ferme aussitôt toutes
-les entrées du compte.
+À chaque requête, la ligne de l'entrée est RELUE dans la base maître (fermeture, échéance, site, mode) ; le reste du lien (compte du
+site d'attache supprimé ou d'une autre adresse, rôle retiré, agence suspendue ou fermée, site détaché) est gardé une minute au plus
+(`EntryService::check`). Lien rompu → 401 `ENTRY_ENDED`, et l'entrée est fermée au journal avec sa raison ; site d'attache illisible →
+401 sans fermer. La DÉCONNEXION du site d'attache (`POST /api/logout`) ferme aussitôt toutes les entrées du compte, reconnu par son
+jeton d'accès ou par le jeton de renouvellement qu'elle révoque. Les lecteurs du jeton hors du pare-feu (`StorefrontViewer`,
+`OptionalCustomerResolver`) relisent le lien de même ; un jeton d'entrée n'y est jamais un client.
+
+Le compte de la plateforme en entrée n'écrit rien sur un compte (`@compte` : profil, adresse, mot de passe), car une telle écriture
+rendrait un jeton ordinaire : 403 `MODE_FORBIDDEN` (`reason` : `account`).
 
 ### 7.3 La garde du mode agence (`EntryModeGuardSubscriber`), fermée par défaut
 
@@ -242,12 +249,19 @@ les entrées du compte.
 2. Les **lectures du site public** (`@public`, GET) sont servies comme à un visiteur : l'authentification est retirée (sinon les rôles
    d'administrateur de l'opérateur y ouvriraient ce qu'un administrateur lit). La garde de la CONSTRUCTION, elle, le traite comme un
    compte d'équipe (`StorefrontViewer`) : il voit la vitrine d'un site encore fermé. La garde du mode reste au-dessus.
-3. Fermés même dans la construction (précisions du chef) : clés d'API et d'activation (`keys`), export (`export`), paiement
-   (`payment`), changement des modules du site (`modules` : le forfait de l'agence n'y est pas encore relu) ; l'écriture du coût
-   d'achat et du coefficient d'un article (`cost`) ; l'import des clients et des commandes (`kind`). Comptes et rôles du site, Stripe et
-   paiements, exports, pertes sont d'autres familles : fermés par la règle 1.
+3. Fermés même dans la construction (précisions du chef, relectures) : clés d'API et d'activation (`keys`), export (`export`),
+   paiement (`payment`), changement des modules du site (`modules` : le forfait de l'agence n'y est pas encore relu) ; l'écriture du
+   coût d'un article (`cost` : coût d'achat, coefficient, coût et quantité de la commande fournisseur) ; dans la fiche du site
+   (`field`), l'adresse qui reçoit les commandes, les demandes et les réservations des clients, la devise, les prix taxes comprises, le
+   fuseau et la fréquence des périodes ; ouvrir ou fermer la boutique d'un site que l'agence n'a pas créé (`storefront`) ; l'import des
+   clients et des commandes (`kind`) ; un import du catalogue confirmé en entrée n'écrit pas le coût d'achat du fichier. Comptes et
+   rôles du site, Stripe et paiements, exports, pertes sont d'autres familles : fermés par la règle 1. `HEAD` suit la règle de `GET`.
 4. La réponse d'un écran de construction perd ses **champs sensibles** (§ 5, par suffixe du chemin du champ) ; la liste des imports ne
-   garde que les imports du catalogue.
+   garde que les imports du catalogue ; une réponse JSON illisible ne part pas (500). Les écritures d'API Platform (article, catégorie)
+   rendent toute l'entité et ses relations, jusqu'aux commandes et aux clients : pour l'opérateur, leur sortie reçoit le groupe de lecture
+   borné de la ressource (`product:list`, `category:list`), ou aucun champ pour une autre ressource (`EntrySerializerContextBuilder`).
+5. Chaque écriture réussie de l'opérateur laisse une ligne `external_access` / `write` (méthode, chemin, statut) au journal du site, à
+   son nom, même là où la route n'écrit pas elle-même au journal.
 
 La liste des routes ouvertes à l'agence est figée dans `tests/Fixtures/ecrans/entree-agence.json` (127 au 16/11/2026), comparée par
 `EntryTest` à chaque suite : **une route nouvelle de la construction s'y ajoute en la relisant**. La confirmation « Taxes vérifiées »
@@ -264,6 +278,15 @@ de la liste d'ouverture n'existe pas encore (AG-3d) : elle sera réservée au co
 ### 7.5 Limites connues
 
 - EasyAdmin n'est pas ouvert à l'entrée (AG-3c).
+- `/api/team`, `/api/vehicles` et `/api/vehicle_products` figurent dans la liste figée mais sont hors du pare-feu de l'API : le jeton
+  n'y est pas lu, l'opérateur y reçoit 401. `GET /api/me/contexts` est fermé en entrée : le front lit les écrans d'un site client dans
+  les contextes du site d'attache. La lecture d'administrateur d'API Platform (`GET /api/categories`) est servie comme à un visiteur
+  (401) ; la lecture publique `/api/category` reste ouverte.
+- Le jeton d'entrée est rendu dans le corps de la réponse (le front l'envoie en `Authorization` à l'hôte du site visé) ; il vit 15 minutes.
+- Le domaine propre du site reste réglable par l'agence (plan du propriétaire) ; la construction lui laisse aussi les pixels, les
+  contenus intégrés et le texte des pages : une agence malveillante pourrait y capter les visiteurs (risque signalé au propriétaire).
+- Hors de l'entrée et pour tous (défaut antérieur, signalé) : `PUT /api/entreprise/{id}` change la devise et les prix taxes comprises
+  sans les verrous d'EasyAdmin (`SiteCurrencyService::assertChangeAllowed`, `TaxInclusiveGuard`).
 - Les modules du site ne se changent pas en entrée tant que le forfait de l'agence n'y est pas relu.
 - Clients et commandes ne s'importent pas en entrée : le commerçant les importe lui-même, ou le super administrateur
   (`docs/agences-et-import.md` § 3.5).

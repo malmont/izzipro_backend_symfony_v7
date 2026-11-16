@@ -252,9 +252,11 @@ class SecurityController extends AbstractController
             $data = json_decode($request->getContent(), true) ?? [];
             $refreshValue = $data['refresh_token'] ?? $data['refreshToken'] ?? null;
         }
+        $refreshAccount = null;
         if (is_string($refreshValue) && $refreshValue !== '') {
             $stored = $refreshTokenManager->get($refreshValue);
             if ($stored) {
+                $refreshAccount = $stored->getUsername(); // lot AG-3b : le compte qui se déconnecte, même sans jeton d'accès encore valable
                 // Terminal de caisse identifié (en-tête X-Pos-Terminal) : déconnexion journalisée (C2)
                 if ($this->posTerminals?->current() !== null) {
                     try {
@@ -270,7 +272,7 @@ class SecurityController extends AbstractController
 
         // 1 bis. Lot AG-3b : se déconnecter de son site d'attache ferme ses entrées dans les sites de ses clients (l'entrée ne survit
         //    jamais à la sortie du site d'attache) ; le jeton du site, signé et de CE site, dit quel compte se déconnecte
-        $this->endEntries($request, $tenantCode);
+        $this->endEntries($request, $tenantCode, $refreshAccount);
 
         // 2. Suppression des cookies sous leurs deux formes : sans domaine (« host-only », forme actuelle)
         //    et avec le domaine explicite (forme utilisée avant le 27/09/2026, encore présente dans les navigateurs).
@@ -296,10 +298,21 @@ class SecurityController extends AbstractController
     }
 
     /** Ferme les entrées ouvertes du compte qui se déconnecte de ce site (lot AG-3b). Ne fait jamais échouer la déconnexion. */
-    private function endEntries(Request $request, string $tenantCode): void
+    private function endEntries(Request $request, string $tenantCode, ?string $refreshAccount = null): void
     {
         if ($this->entries === null || $this->jwt === null || $tenantCode === 'default') {
             return;
+        }
+        // par le jeton de renouvellement révoqué : il vit plus longtemps que le jeton d'accès (15 minutes sur le web)
+        if (is_string($refreshAccount) && $refreshAccount !== '') {
+            try {
+                $account = $this->tenantEmProvider->getEntityManager()->getRepository(User::class)->findOneByEmailCaseless($refreshAccount);
+                if ($account instanceof User && $account->getId() !== null) {
+                    $this->entries->endFrom($tenantCode, (int) $account->getId(), 'logout');
+                }
+            } catch (\Throwable) {
+                // la déconnexion n'en dépend pas
+            }
         }
         $token = $request->cookies->get('auth_token_' . $tenantCode);
         if (!is_string($token) || $token === '') {

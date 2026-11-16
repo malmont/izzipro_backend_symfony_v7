@@ -414,8 +414,8 @@ final class ScreenRegistry
         'admin.ia' => ['fields' => ['promptExcerpt'], 'why' => 'l\'historique des demandes garde le début des questions posées à la console de gestion'],
         'site.reglages' => ['fields' => ['charges', 'figures', 'steps[].description'], 'closed' => ['POST /api/app-keys pour les applications admin et pos'],
             'why' => 'achats d\'étiquettes par commande (numéro, référence, suivi, montant) ; nombres d\'articles sans coût, de fournisseurs et de frais fixes des étapes de la gestion, dans `figures` et dans leur description ; une clé d\'application active la gestion ou la caisse'],
-        'pages.ia' => ['fields' => ['history[].promptExcerpt'], 'why' => 'l\'usage de l\'IA garde le début des questions posées à la console de gestion'],
-        'imports' => ['fields' => ['summary.orders', 'summary.customers', 'summary.guests', 'summary.archived', 'report.orders', 'result.cancel.kept[].reason'], 'closed' => ['kind=customers', 'kind=orders'],
+        'pages.ia' => ['fields' => ['history[].promptExcerpt', 'history[].user'], 'why' => 'l\'usage de l\'IA garde le début des questions posées à la console de gestion, et l\'adresse de qui les a posées'],
+        'imports' => ['fields' => ['summary.orders', 'summary.customers', 'summary.guests', 'summary.archived', 'report.orders', 'result.cancel.kept[].reason', 'result.cancel.by', 'createdBy'], 'closed' => ['kind=customers', 'kind=orders'],
             'why' => 'les imports de clients et de commandes passent par les mêmes routes que l\'import du catalogue : leur fiche est nominative ou chiffrée ; la liste mêle les natures ; l\'annulation dit quels articles ont été vendus'],
     ];
 
@@ -435,6 +435,8 @@ final class ScreenRegistry
     public static function classify(string $method, string $path): ?string
     {
         $method = strtoupper($method);
+        // HEAD est une lecture : il suit la règle de GET (lot AG-3b, relecture), jamais celle des écritures (`*`)
+        $method = $method === 'HEAD' ? 'GET' : $method;
         foreach (self::ROUTES as [$pattern, $target]) {
             if (preg_match($pattern, $path) === 1) {
                 return is_array($target) ? ($target[$method] ?? $target['*'] ?? null) : $target;

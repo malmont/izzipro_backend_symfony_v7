@@ -73,6 +73,11 @@ class EntryService
         if ($target === '' || strcasecmp($target, $home) === 0) {
             throw new EntryException('ENTRY_SAME_SITE', 422);
         }
+        // le renouvellement EXIGE une session encore vivante sur le site d'attache : un jeton de renouvellement valable (la déconnexion
+        // le révoque ; un jeton d'accès encore lisible après la déconnexion n'ouvre plus d'entrée)
+        if (!$this->liveSession((string) $account->getEmail())) {
+            throw new EntryException('ENTRY_FORBIDDEN', 403, 'session');
+        }
         $site = $this->agencies->tenant($target);
         $roles = $account->getRoles();
         $expires = new \DateTimeImmutable('+' . self::TTL . ' seconds');
@@ -124,48 +129,96 @@ class EntryService
      */
     public function userFor(array $payload, ?string $current): UserInterface
     {
-        $entry = $payload['entry'] ?? null;
-        $id = is_array($entry) && is_int($entry['id'] ?? null) ? $entry['id'] : 0;
-        $mode = is_array($entry) ? ($entry['mode'] ?? null) : null;
-        $home = is_array($entry) ? ($entry['home'] ?? null) : null;
-        if ($id <= 0 || !in_array($mode, [self::MODE_AGENCY, self::MODE_SUPER_ADMIN], true) || !is_string($home) || $current === null || $current === ''
-            || ($payload['tenant_code'] ?? null) !== $current) {
-            $this->context->fail('malformed');
-            throw new UserNotFoundException('Jeton d\'entrée mal formé.');
-        }
-        $state = $this->check($id);
-        if ($state['reason'] === null && ($state['target'] !== $current || $state['mode'] !== $mode || $state['home'] !== $home)) {
-            $state['reason'] = 'mismatch';
-        }
+        $state = $this->evaluate($payload, $current);
         if ($state['reason'] !== null) {
             $this->context->fail($state['reason']);
-            throw new UserNotFoundException('Entrée fermée.');
+            throw new UserNotFoundException('Entrée fermée ou jeton d\'entrée mal formé.');
         }
-        if ($mode === self::MODE_AGENCY) {
-            if (($payload['username'] ?? null) !== 'entry:' . $id) {
-                $this->context->fail('malformed');
-                throw new UserNotFoundException('Jeton d\'entrée mal formé.');
-            }
-            $this->context->set(['id' => $id, 'mode' => $mode, 'home' => $home]);
+        $entry = ['id' => $state['id'], 'mode' => $state['mode'], 'home' => $state['home']];
+        if ($state['mode'] === self::MODE_AGENCY) {
+            $this->context->set($entry);
 
-            return new ExternalOperator($id, (int) $state['agencyId'], (string) $state['agencyName'], (string) $state['firstName'], $home);
+            return new ExternalOperator($state['id'], (int) $state['agencyId'], (string) $state['agencyName'], (string) $state['firstName'], $state['home'], (string) $state['origin']);
         }
         // compte de la plateforme du site visé : relu par son numéro, et il doit en être encore un, sous la même adresse
-        $user = isset($payload['id']) && is_numeric($payload['id']) ? $this->emProvider->getEntityManager()->find(User::class, (int) $payload['id']) : null;
+        $user = $this->emProvider->getEntityManager()->find(User::class, (int) $payload['id']);
         if (!$user instanceof User || !PlatformAccessJournal::isPlatformAccount($user->getRoles()) || $user->getEmail() !== ($payload['username'] ?? null)) {
             $this->context->fail('account');
             throw new UserNotFoundException('Compte de la plateforme introuvable sur ce site.');
         }
-        $this->context->set(['id' => $id, 'mode' => $mode, 'home' => $home]);
+        $this->context->set($entry);
 
         return $user;
     }
 
     /**
-     * Le lien d'une entrée est-il toujours vivant ? Relu de la base maître et du site d'attache, gardé une minute au plus. Une entrée
-     * dont le lien est rompu est fermée au journal.
+     * Pour les lecteurs du jeton HORS du pare-feu (garde de la construction : voir la vitrine fermée comme un compte d'équipe) : un jeton
+     * d'entrée vivant, présenté sur son site, vaut `ROLE_ADMIN` ; sinon aucun rôle. Ne lève rien, ne touche pas au contexte de la
+     * requête. La garde du mode reste au-dessus : cette réponse n'ouvre aucune route de l'API.
      *
-     * @return array{reason: ?string, target: string, mode: string, home: string, agencyId: ?int, agencyName: ?string, firstName: string}
+     * @param array<string, mixed> $payload
+     * @return list<string>
+     */
+    public function constructionRoles(array $payload, ?string $current): array
+    {
+        try {
+            return $this->evaluate($payload, $current)['reason'] === null ? ['ROLE_ADMIN'] : [];
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * L'état d'un jeton d'entrée sur le site courant. La ligne de l'entrée est relue À CHAQUE FOIS (fermeture, échéance, site, mode,
+     * origine : une déconnexion vaut dès la requête suivante) ; le reste du lien (compte du site d'attache, rôle, agence, site géré) est
+     * gardé une minute au plus.
+     *
+     * @param array<string, mixed> $payload
+     * @return array{reason: ?string, id: int, mode: string, home: string, agencyId: ?int, agencyName: ?string, firstName: string, origin: ?string}
+     */
+    private function evaluate(array $payload, ?string $current): array
+    {
+        $entry = $payload['entry'] ?? null;
+        $id = is_array($entry) && is_int($entry['id'] ?? null) ? $entry['id'] : 0;
+        $mode = is_array($entry) ? ($entry['mode'] ?? null) : null;
+        $home = is_array($entry) ? ($entry['home'] ?? null) : null;
+        $refused = static fn (string $reason): array => ['reason' => $reason, 'id' => $id, 'mode' => (string) $mode, 'home' => (string) $home, 'agencyId' => null, 'agencyName' => null, 'firstName' => '', 'origin' => null];
+        if ($id <= 0 || !in_array($mode, [self::MODE_AGENCY, self::MODE_SUPER_ADMIN], true) || !is_string($home) || $current === null || $current === ''
+            || ($payload['tenant_code'] ?? null) !== $current
+            || ($mode === self::MODE_AGENCY && ($payload['username'] ?? null) !== 'entry:' . $id)
+            || ($mode === self::MODE_SUPER_ADMIN && (!isset($payload['id']) || !is_numeric($payload['id'])))) {
+            return $refused('malformed');
+        }
+        $row = $this->entries->find($id);
+        if ($row === null) {
+            return $refused('unknown');
+        }
+        if ($row['target_tenant_code'] !== $current || $row['mode'] !== $mode || $row['home_tenant_code'] !== $home) {
+            return $refused('mismatch');
+        }
+        if ($row['ended_at'] !== null) {
+            return $refused((string) ($row['ended_reason'] ?? 'ended'));
+        }
+        if (new \DateTimeImmutable((string) $row['expires_at'], new \DateTimeZone('UTC')) <= new \DateTimeImmutable('now', new \DateTimeZone('UTC'))) {
+            $this->entries->end($id, 'expired');
+
+            return $refused('expired');
+        }
+        $link = $this->check($id);
+        if ($link['reason'] !== null) {
+            return $refused($link['reason']);
+        }
+
+        return ['reason' => null, 'id' => $id, 'mode' => $mode, 'home' => $home, 'agencyId' => $row['agency_id'], 'agencyName' => $row['agency_name'],
+            'firstName' => (string) $row['first_name'], 'origin' => $link['origin']];
+    }
+
+    /**
+     * Le LIEN d'une entrée tient-il toujours (compte du site d'attache, rôle, agence, site géré) ? Relu de la base maître et du site
+     * d'attache, gardé une minute au plus. Un lien rompu ferme l'entrée au journal ; un site d'attache illisible refuse sans fermer
+     * (gardé quelques secondes seulement).
+     *
+     * @return array{reason: ?string, origin: ?string}
      */
     public function check(int $id): array
     {
@@ -173,38 +226,22 @@ class EntryService
             $item->expiresAfter(self::CHECK_TTL);
             $row = $this->entries->find($id);
             if ($row === null) {
-                return ['reason' => 'unknown', 'target' => '', 'mode' => '', 'home' => '', 'agencyId' => null, 'agencyName' => null, 'firstName' => ''];
+                return ['reason' => 'unknown', 'origin' => null];
             }
-            $state = ['reason' => null, 'target' => (string) $row['target_tenant_code'], 'mode' => (string) $row['mode'], 'home' => (string) $row['home_tenant_code'],
-                'agencyId' => $row['agency_id'], 'agencyName' => $row['agency_name'], 'firstName' => (string) $row['first_name']];
-            $state['reason'] = $this->broken($row);
-            if ($state['reason'] !== null && $row['ended_at'] === null) {
-                $this->entries->end($id, $state['reason']);
+            try {
+                [$reason, $origin] = $this->broken($row);
+            } catch (\Throwable $e) {
+                $this->logger->warning('Entrée dans un autre site : lien illisible (' . $e::class . ').');
+                $item->expiresAfter(5);
+
+                return ['reason' => 'unavailable', 'origin' => null];
+            }
+            if ($reason !== null && $row['ended_at'] === null) {
+                $this->entries->end($id, $reason);
             }
 
-            return $state;
+            return ['reason' => $reason, 'origin' => $origin];
         });
-    }
-
-    /**
-     * Pour la garde de la CONSTRUCTION seulement (voir la vitrine fermée, comme un compte d'équipe) : un jeton d'entrée d'agence
-     * vivant, présenté sur son site, vaut `ROLE_ADMIN` ; sinon aucun rôle. Ne lève rien, ne touche pas au contexte de la requête.
-     * La garde du mode reste au-dessus : cette réponse n'ouvre aucune route.
-     *
-     * @param array<string, mixed> $payload
-     * @return list<string>
-     */
-    public function constructionRoles(array $payload, ?string $current): array
-    {
-        $entry = $payload['entry'] ?? null;
-        $id = is_array($entry) && is_int($entry['id'] ?? null) ? $entry['id'] : 0;
-        if ($id <= 0 || ($entry['mode'] ?? null) !== self::MODE_AGENCY || $current === null || ($payload['tenant_code'] ?? null) !== $current
-            || ($payload['username'] ?? null) !== 'entry:' . $id) {
-            return [];
-        }
-        $state = $this->check($id);
-
-        return $state['reason'] === null && $state['target'] === $current && $state['mode'] === self::MODE_AGENCY && $state['home'] === ($entry['home'] ?? null) ? ['ROLE_ADMIN'] : [];
     }
 
     /** Ferme les entrées ouvertes d'un compte de ce site d'attache (déconnexion) : refusées dès la requête suivante */
@@ -215,35 +252,36 @@ class EntryService
         }
     }
 
-    /** @param array<string, mixed> $row @return string|null la raison du refus, ou null : le lien tient */
-    private function broken(array $row): ?string
+    /** @param array<string, mixed> $row @return array{0: ?string, 1: ?string} la raison du refus (null : le lien tient), l'origine du site géré */
+    private function broken(array $row): array
     {
-        if ($row['ended_at'] !== null) {
-            return (string) ($row['ended_reason'] ?? 'ended');
-        }
-        if (new \DateTimeImmutable((string) $row['expires_at'], new \DateTimeZone('UTC')) <= new \DateTimeImmutable('now', new \DateTimeZone('UTC'))) {
-            return 'expired';
-        }
         $home = $this->agencies->tenant((string) $row['home_tenant_code']);
         if ($home === null || $this->agencies->tenant((string) $row['target_tenant_code']) === null) {
-            return 'site';
+            return ['site', null];
         }
         $account = $this->accountOn($home['dbname'], (int) $row['account_id']);
         if ($account === null || mb_strtolower(trim($account['email'])) !== mb_strtolower(trim((string) $row['account_email']))) {
-            return 'account';
+            return ['account', null];
         }
         if ($row['mode'] === self::MODE_SUPER_ADMIN) {
-            return PlatformAccessJournal::isPlatformAccount($account['roles']) ? null : 'role';
+            return [PlatformAccessJournal::isPlatformAccount($account['roles']) ? null : 'role', null];
         }
         if (!AgencyRoles::has($account['roles'])) {
-            return 'role';
+            return ['role', null];
         }
         $agency = $row['agency_id'] !== null ? $this->agencies->find((int) $row['agency_id']) : null;
         if ($agency === null || !in_array($agency['status'], self::LIVE_AGENCY, true) || $agency['home_tenant_code'] !== $row['home_tenant_code']) {
-            return 'agency';
+            return ['agency', null];
         }
+        $managed = $this->agencies->site((int) $agency['id'], (string) $row['target_tenant_code']);
 
-        return $this->agencies->site((int) $agency['id'], (string) $row['target_tenant_code']) === null ? 'detached' : null;
+        return $managed === null ? ['detached', null] : [null, (string) $managed['origin']];
+    }
+
+    /** Le compte a-t-il une session vivante sur le site courant (le site d'attache) : un jeton de renouvellement non échu ? */
+    private function liveSession(string $email): bool
+    {
+        return (int) $this->emProvider->getEntityManager()->getConnection()->fetchOne('SELECT COUNT(*) FROM refresh_tokens WHERE lower(username) = lower(?) AND valid > NOW()', [trim($email)]) > 0;
     }
 
     /** @return array{email: string, roles: list<string>}|null le compte, lu dans la base de son site, sans toucher à la connexion de la requête */
@@ -276,7 +314,7 @@ class EntryService
         return null;
     }
 
-    /** Trace de l'entrée au journal du site visé, lue par « Accès extérieurs ». Ne fait jamais échouer l'entrée. */
+    /** Trace de l'entrée au journal du site visé, lue par « Accès extérieurs ». Sans elle, pas d'entrée : la trace est des deux côtés. */
     private function journal(string $dbname, string $code, string $label, int $id, string $mode, ?string $agencyName, string $firstName): void
     {
         try {
@@ -284,7 +322,10 @@ class EntryService
                 ->execute([(new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s'), mb_substr($label, 0, 180), $code, self::JOURNAL_RESOURCE, (string) $id,
                     self::JOURNAL_ACTION, 'mode', json_encode(['mode' => $mode, 'agency' => $agencyName, 'firstName' => $mode === self::MODE_AGENCY ? $firstName : null], \JSON_UNESCAPED_UNICODE)]);
         } catch (\Throwable $e) {
-            $this->logger->error('Entrée dans un autre site : trace non écrite au journal du site visé (' . $e::class . ').');
+            $this->logger->error('Entrée dans un autre site : trace non écrite au journal du site visé (' . $e::class . ') : entrée refusée.');
+            $this->entries->end($id, 'trace');
+
+            throw new EntryException('ENTRY_UNAVAILABLE', 503, 'trace');
         }
     }
 
