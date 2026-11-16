@@ -83,6 +83,14 @@ class PurchasesApiTest extends WebTestCase
         $commandeId = (int) $commande['id'];
         $this->assertSame($commande, $created, 'la réponse 201 a la forme de la liste');
         $this->assertSame([500000, 'Commande G0', $collectionId, $fournisseurId, 'CAD'], [$commande['budget'], $commande['name'], $commande['collectionId'], $commande['fournisseur']['id'], $commande['currency']]);
+        // une commande SANS NOM (la colonne est facultative : anciennes commandes, saisie par EasyAdmin) ne fait pas planter la liste
+        $this->em()->getConnection()->executeStatement('UPDATE commande SET name = NULL WHERE id = ?', [$commandeId]);
+        $forget = fn () => static::getContainer()->get(\App\Services\TenantCacheService::class)->delete('commandes_collection_' . $collectionId); // écriture SQL directe : le cache de la liste ne le sait pas
+        $forget();
+        $unnamed = $this->get("/api/collections/$collectionId/commandes");
+        $this->assertSame([$commandeId, ''], [$unnamed[0]['id'], $unnamed[0]['name']]);
+        $this->em()->getConnection()->executeStatement("UPDATE commande SET name = 'Commande G0' WHERE id = ?", [$commandeId]);
+        $forget();
 
         // Produit de la commande (multipart) : prix d'achat en CENTS, prix de vente dérivé = achat × coefficient
         $this->client->request('POST', "/api/commandes/$commandeId/products", ['name' => 'Sans style', 'description' => 'd', 'purchasePrice' => '1', 'coefficientMultiplier' => '2', 'style_id' => '999999'], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json', 'HTTP_AUTHORIZATION' => 'Bearer ' . $this->token]);
