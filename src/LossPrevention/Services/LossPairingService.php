@@ -15,7 +15,8 @@ use App\Services\TenantPublicHostResolver;
  * boîtier, c'est le boîtier qu'on déclare dans l'application.
  *
  * 1. **Le boîtier dépose sa demande** (`deposit`), sans site ni jeton : l'empreinte du code qu'il a créé, et celle de sa machine.
- *    Il la dépose AVANT de montrer son code (étiquette, terminal) : la première demande déposée pour un code gagne, pour toujours.
+ *    Il la dépose AVANT de montrer son code (étiquette, terminal) : la première demande déposée pour un code gagne, pour toujours
+ *    (une demande n'est jamais supprimée : aucune autre machine ne dépose jamais un code déjà déposé).
  * 2. **Un administrateur jumelle** (`pair`) : il donne le code, et le boîtier est créé dans SON site, celui de sa session, jamais
  *    un autre. Le code ne sert qu'une fois.
  * 3. **Le boîtier demande où il en est** (`state`), toujours avec la preuve de sa machine : jumelé, il reçoit l'adresse de son
@@ -37,8 +38,6 @@ class LossPairingService
     public const WAIT_SECONDS = 2592000;
     /** Une demande en attente est renouvelée au plus une fois par demi-journée (une écriture, pas une par question) */
     public const RENEW_EVERY = 43200;
-    /** Une demande expirée garde son code un an : personne d'autre ne peut le déposer pendant qu'un boîtier attend dans son carton */
-    public const FORGET_AFTER = 31536000;
     /** Ce que la plateforme conseille au boîtier entre deux questions (secondes) */
     public const POLL_SECONDS = 15;
     public const INVALID = 'PAIRING_CODE_INVALID';
@@ -80,12 +79,20 @@ class LossPairingService
         $expires = $serverNow + self::WAIT_SECONDS;
 
         return $this->pairings->transaction(function () use ($codeHash, $machineHash, $body, $serverNow, $now, $expires, $ip): array {
-            $this->pairings->forget(gmdate('Y-m-d H:i:s', $serverNow - self::FORGET_AFTER));
-            if ($this->pairings->insert($codeHash, $machineHash, $body['version'], $body['arch'], $now, gmdate('Y-m-d H:i:s', $expires))) {
-                return self::answer(LossPairingRepository::WAITING, $serverNow, $expires);
+            $row = $this->pairings->byCodeHash($codeHash, true);
+            if ($row === null) {
+                // un code que la plateforme ne connaît pas : une ligne de plus dans la base maître, qui ne s'effacera pas. Leur nombre
+                // par heure est plafonné pour toute la plateforme
+                $wait = $this->limits->pairNew();
+                if ($wait !== null) {
+                    throw self::tooMany($wait);
+                }
+                if ($this->pairings->insert($codeHash, $machineHash, $body['version'], $body['arch'], $now, gmdate('Y-m-d H:i:s', $expires))) {
+                    return self::answer(LossPairingRepository::WAITING, $serverNow, $expires);
+                }
+                $row = $this->pairings->byCodeHash($codeHash, true); // déposé au même instant par un autre appel
             }
             // le code est déjà déposé : seul le boîtier qui l'a déposé peut le redéposer (une autre machine reçoit le refus d'un inconnu)
-            $row = $this->pairings->byCodeHash($codeHash, true);
             if ($row === null || !hash_equals((string) $row['machine_hash'], $machineHash)) {
                 $this->limits->pairFailed($ip);
                 throw self::unknown();
@@ -143,16 +150,21 @@ class LossPairingService
         $site = (string) $row['tenant_code'];
         $config = $this->tenants->findTenantByCode($site);
         if ($config === null) {
-            $this->pairings->close($id, $now); // le site n'existe plus
-
-            return self::answer(LossPairingRepository::CLOSED, $serverNow, null);
+            // site introuvable : il a disparu, ou la base maître a eu une panne d'un instant (la lecture ne distingue pas les deux).
+            // Rien n'est remis et rien n'est fermé : le boîtier patiente
+            return self::answer(LossPairingRepository::WAITING, $serverNow, null);
         }
         $this->tenant->switchTenant((string) $config['dbname'], $site);
         if (!$this->platform->isDemo() && !$this->modules->isEnabled(ModuleAccessService::LOSS_PREVENTION)) {
             // le site n'a plus le module : rien n'est remis, le boîtier patiente (comme ses autres appels, refusés sans le module)
             return self::answer(LossPairingRepository::WAITING, $serverNow, null);
         }
-        $enrolment = $this->channel->enrolPaired($code, $body['machine'], (string) $row['version'], (string) $row['arch']);
+        // chaque remise est une inscription (génération, jeton, fait) : un boîtier qui redemande sans cesse est arrêté
+        $wait = $this->limits->pairDelivery($codeHash);
+        if ($wait !== null) {
+            throw self::tooMany($wait);
+        }
+        $enrolment = $this->channel->enrolPaired(self::linked($code, (string) $row['link']), $body['machine'], (string) $row['version'], (string) $row['arch']);
         if ($enrolment === null) {
             // boîtier révoqué (« détaché »), clé remise à zéro, autre machine inscrite par la clé : ce code ne vaut plus rien
             $this->pairings->close($id, $now);
@@ -196,8 +208,12 @@ class LossPairingService
                 || (new \DateTimeImmutable((string) $row['expires_at'], new \DateTimeZone('UTC')))->getTimestamp() <= $serverNow) {
                 throw $invalid();
             }
-            $boxId = $this->boxes->createPaired($name, $place, $code, $locale, $userId);
-            $this->pairings->pair((int) $row['id'], $site, $boxId, $now);
+            // Le boîtier du site est lié à ce code, à ce site ET à l'aléa de ce jumelage-ci, écrit sur la demande. Si l'écriture de la
+            // demande échoue après la création du boîtier (deux bases, pas de transaction commune), il reste un boîtier « en attente »
+            // que rien ne désigne plus : l'administrateur le révoque et rejumelle le même code, qui crée un autre boîtier
+            $link = bin2hex(random_bytes(16));
+            $boxId = $this->boxes->createPaired($name, $place, self::linked($code, $link), $locale, $userId);
+            $this->pairings->pair((int) $row['id'], $site, $boxId, $link, $now);
 
             return $boxId;
         });
@@ -225,6 +241,12 @@ class LossPairingService
         }
 
         return (string) $code;
+    }
+
+    /** Ce qui désigne le boîtier créé par UN jumelage : le code, et l'aléa de ce jumelage */
+    private static function linked(string $code, string $link): string
+    {
+        return $code . '|' . $link;
     }
 
     /** Une adresse qui a trop présenté de codes inconnus ou de mauvaises preuves est arrêtée avant toute lecture */

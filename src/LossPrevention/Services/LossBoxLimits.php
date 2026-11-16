@@ -28,10 +28,15 @@ use Symfony\Component\RateLimiter\Storage\CacheStorage;
  *
  * Jumelage par code (lot L3-a2, § 16.16) : le boîtier n'a encore ni site ni jeton.
  * - `pairOpen` : dépôts d'une demande de jumelage, par adresse (15 minutes) ;
+ * - `pairNew` : demandes NOUVELLES, pour toute la plateforme (1 heure) : chaque demande est une ligne de la base maître qui ne
+ *   s'efface pas, et n'importe qui peut en déposer. Au-delà, un boîtier neuf attend l'heure suivante pour déposer la sienne ;
+ *   les boîtiers déjà déposés ne sont pas touchés ;
  * - `pairFailed` : appels du boîtier pour un code inconnu ou avec la mauvaise preuve de machine, par adresse (15 minutes), lu
  *   avant la base : un code ne se devine pas à la chaîne. (Par adresse, comme l'inscription : avant son jumelage un boîtier n'a
  *   rien d'autre qui le désigne ; une fois jumelé il parle avec son jeton, que l'adresse ne limite jamais.)
  * - `pairPolls` : questions « où en est mon jumelage ? » d'un boîtier qui a fait sa preuve, par demande (5 minutes) ;
+ * - `pairDelivery` : jetons remis à un boîtier jumelé, par demande (15 minutes) : chaque remise est une inscription (un fait de
+ *   plus au journal du boîtier), un boîtier mal réglé ne le remplit pas ;
  * - `pairAdmin` et `pairAdminSite` : essais de code d'un administrateur, par site et adresse, et par site (15 minutes).
  *
  * Chaque méthode rend null quand l'appel passe, sinon le nombre de secondes à attendre.
@@ -39,9 +44,10 @@ use Symfony\Component\RateLimiter\Storage\CacheStorage;
 class LossBoxLimits
 {
     public const LIMITS = ['open' => 20, 'openGlobal' => 60, 'refused' => 60, 'machine' => 10, 'calls' => 600, 'facts' => 20000, 'till' => 6000,
-        'pairOpen' => 20, 'pairFailed' => 30, 'pairPolls' => 120, 'pairAdmin' => 10, 'pairAdminSite' => 30];
+        'pairOpen' => 20, 'pairNew' => 120, 'pairFailed' => 30, 'pairPolls' => 120, 'pairDelivery' => 10, 'pairAdmin' => 10, 'pairAdminSite' => 30];
     private const INTERVALS = ['open' => '15 minutes', 'openGlobal' => '15 minutes', 'refused' => '15 minutes', 'machine' => '15 minutes', 'calls' => '5 minutes', 'facts' => '1 hour', 'till' => '5 minutes',
-        'pairOpen' => '15 minutes', 'pairFailed' => '15 minutes', 'pairPolls' => '5 minutes', 'pairAdmin' => '15 minutes', 'pairAdminSite' => '15 minutes'];
+        'pairOpen' => '15 minutes', 'pairNew' => '1 hour', 'pairFailed' => '15 minutes', 'pairPolls' => '5 minutes', 'pairDelivery' => '15 minutes', 'pairAdmin' => '15 minutes',
+        'pairAdminSite' => '15 minutes'];
 
     /** @var array<string, RateLimiterFactory> */
     private array $factories = [];
@@ -101,6 +107,18 @@ class LossBoxLimits
     public function pairDeposit(string $ip): ?int
     {
         return $this->consume('pairOpen', $ip, 1);
+    }
+
+    /** Une demande NOUVELLE (un code que la plateforme ne connaît pas encore), pour toute la plateforme */
+    public function pairNew(): ?int
+    {
+        return $this->consume('pairNew', 'plateforme', 1);
+    }
+
+    /** Un jeton remis à un boîtier jumelé */
+    public function pairDelivery(string $codeHash): ?int
+    {
+        return $this->consume('pairDelivery', $codeHash, 1);
     }
 
     /** Cette adresse a-t-elle encore droit à un code inconnu ou à une mauvaise preuve ? Lu avant la base, sans rien compter */

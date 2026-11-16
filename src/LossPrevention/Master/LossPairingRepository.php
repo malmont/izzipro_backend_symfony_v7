@@ -15,10 +15,18 @@ class LossPairingRepository
     public const WAITING = 'waiting';
     public const PAIRED = 'paired';
     public const CLOSED = 'closed';
-    private const COLUMNS = 'id, code_hash, machine_hash, version, arch, status, tenant_code, box_id, created_at, seen_at, expires_at, paired_at, delivered_at, closed_at';
+    private const COLUMNS = 'id, code_hash, machine_hash, version, arch, status, tenant_code, box_id, link, created_at, seen_at, expires_at, paired_at, delivered_at, closed_at';
+
+    /** La connexion de la transaction en cours : la même du début à la fin (jamais une connexion rouverte en route, qui écrirait hors transaction) */
+    private ?\PDO $held = null;
 
     public function __construct(private readonly TenantConnectionManager $connectionManager)
     {
+    }
+
+    private function pdo(): \PDO
+    {
+        return $this->held ?? $this->connectionManager->getPdoMaster();
     }
 
     /**
@@ -32,25 +40,34 @@ class LossPairingRepository
      */
     public function transaction(callable $work): mixed
     {
-        $pdo = $this->connectionManager->getPdoMaster();
-        $pdo->beginTransaction();
+        if ($this->held !== null) {
+            throw new \LogicException('Une transaction de la base maître est déjà ouverte.');
+        }
+        $pdo = $this->held = $this->connectionManager->getPdoMaster();
         try {
+            $pdo->beginTransaction();
             $result = $work();
             $pdo->commit();
 
             return $result;
         } catch (\Throwable $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
+            try {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+            } catch (\Throwable) {
+                // la connexion est perdue : la base a déjà annulé la transaction
             }
             throw $e;
+        } finally {
+            $this->held = null;
         }
     }
 
     /** @return array<string, mixed>|null la demande de ce code ; `$lock` : tenue jusqu'à la fin de la transaction */
     public function byCodeHash(string $codeHash, bool $lock = false): ?array
     {
-        $stmt = $this->connectionManager->getPdoMaster()->prepare('SELECT ' . self::COLUMNS . ' FROM loss_box_pairing WHERE code_hash = ?' . ($lock ? ' FOR UPDATE' : ''));
+        $stmt = $this->pdo()->prepare('SELECT ' . self::COLUMNS . ' FROM loss_box_pairing WHERE code_hash = ?' . ($lock ? ' FOR UPDATE' : ''));
         $stmt->execute([$codeHash]);
 
         return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
@@ -63,7 +80,7 @@ class LossPairingRepository
      */
     public function insert(string $codeHash, string $machineHash, string $version, string $arch, string $now, string $expiresAt): bool
     {
-        $stmt = $this->connectionManager->getPdoMaster()->prepare(
+        $stmt = $this->pdo()->prepare(
             'INSERT INTO loss_box_pairing (code_hash, machine_hash, version, arch, created_at, seen_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (code_hash) DO NOTHING');
         $stmt->execute([$codeHash, $machineHash, $version, $arch, $now, $now, $expiresAt]);
 
@@ -73,36 +90,35 @@ class LossPairingRepository
     /** Le boîtier a donné signe de vie pour sa demande en attente : elle reste jumelable 30 jours de plus */
     public function renew(int $id, ?string $version, ?string $arch, string $now, string $expiresAt): void
     {
-        $this->connectionManager->getPdoMaster()->prepare(
+        $this->pdo()->prepare(
             "UPDATE loss_box_pairing SET seen_at = ?, expires_at = ?, version = COALESCE(?, version), arch = COALESCE(?, arch) WHERE id = ? AND status = 'waiting'")
             ->execute([$now, $expiresAt, $version, $arch, $id]);
     }
 
-    /** Un administrateur a jumelé cette demande à SON site */
-    public function pair(int $id, string $tenantCode, int $boxId, string $now): void
+    /**
+     * Un administrateur a jumelé cette demande à SON site. `$link` : l'aléa de ce jumelage (avec le code et le site, il désigne
+     * le boîtier créé par ce jumelage-là).
+     *
+     * @throws \RuntimeException si la demande n'était plus en attente (rien n'est écrit)
+     */
+    public function pair(int $id, string $tenantCode, int $boxId, string $link, string $now): void
     {
-        $this->connectionManager->getPdoMaster()->prepare(
-            "UPDATE loss_box_pairing SET status = 'paired', tenant_code = ?, box_id = ?, paired_at = ? WHERE id = ? AND status = 'waiting'")->execute([$tenantCode, $boxId, $now, $id]);
+        $stmt = $this->pdo()->prepare("UPDATE loss_box_pairing SET status = 'paired', tenant_code = ?, box_id = ?, link = ?, paired_at = ? WHERE id = ? AND status = 'waiting'");
+        $stmt->execute([$tenantCode, $boxId, $link, $now, $id]);
+        if ($stmt->rowCount() !== 1) {
+            throw new \RuntimeException('Demande de jumelage : elle n\'était plus en attente.');
+        }
     }
 
     /** Le boîtier a reçu son jeton (il peut le redemander avec sa preuve, si la réponse s'est perdue) */
     public function delivered(int $id, string $now): void
     {
-        $this->connectionManager->getPdoMaster()->prepare("UPDATE loss_box_pairing SET delivered_at = ?, seen_at = ? WHERE id = ? AND status = 'paired'")->execute([$now, $now, $id]);
+        $this->pdo()->prepare("UPDATE loss_box_pairing SET delivered_at = ?, seen_at = ? WHERE id = ? AND status = 'paired'")->execute([$now, $now, $id]);
     }
 
-    /** Le boîtier a été détaché de son site (révoqué, clé remise à zéro, site disparu) : ce code ne vaut plus rien, pour toujours */
+    /** Le boîtier a été détaché de son site (révoqué, clé remise à zéro) : ce code ne vaut plus rien, pour toujours */
     public function close(int $id, string $now): void
     {
-        $this->connectionManager->getPdoMaster()->prepare("UPDATE loss_box_pairing SET status = 'closed', closed_at = ? WHERE id = ? AND status <> 'closed'")->execute([$now, $id]);
-    }
-
-    /** Ménage : les demandes en attente dont le boîtier ne s'est plus manifesté depuis `$before` sont oubliées */
-    public function forget(string $before): int
-    {
-        $stmt = $this->connectionManager->getPdoMaster()->prepare("DELETE FROM loss_box_pairing WHERE status = 'waiting' AND expires_at < ?");
-        $stmt->execute([$before]);
-
-        return $stmt->rowCount();
+        $this->pdo()->prepare("UPDATE loss_box_pairing SET status = 'closed', closed_at = ? WHERE id = ? AND status <> 'closed'")->execute([$now, $id]);
     }
 }

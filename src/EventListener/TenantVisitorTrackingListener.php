@@ -20,6 +20,7 @@ class TenantVisitorTrackingListener
         '/robots.txt',
         '/api/tenant/check',
         '/setup/new-store',
+        '/api/pertes/boitier', // le boîtier de la prévention des pertes : une machine qui appelle chaque minute, pas un visiteur (16/11/2026)
     ];
 
     private const EXCLUDED_EXTENSIONS = [

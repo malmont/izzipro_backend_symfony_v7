@@ -51,6 +51,10 @@ class LossPreventionPairingTest extends LossPreventionTestCase
                 $this->provider->switchTenant($db, $code);
                 $this->provider->getEntityManager()->getConnection()->executeStatement("UPDATE loss_box SET status = 'revoked', revoked_at = NOW() WHERE NOT exercise AND status <> 'revoked'");
             }
+            $connection = $this->provider->getEntityManager()->getConnection();
+            $connection->beginTransaction();
+            $this->provider->getEntityManager()->getRepository(\App\LossPrevention\Entity\LossBox::class)->deleteExercise();
+            $connection->commit();
         } finally {
             parent::tearDown();
         }
@@ -109,9 +113,9 @@ class LossPreventionPairingTest extends LossPreventionTestCase
         $back = $this->json($this->box('/etat', $proof));
         $this->assertSame('waiting', $back['status']);
         $this->assertEqualsWithDelta(time() + LossPairingService::WAIT_SECONDS, strtotime($back['expiresAt']), 5);
-        $seen = $this->row($code)['expires_at'];
+        $this->master->exec("UPDATE loss_box_pairing SET seen_at = '2020-01-01 00:00:00'");
         $this->json($this->box('/etat', $proof));
-        $this->assertSame($seen, $this->row($code)['expires_at'], 'une question n\'écrit pas à chaque fois : la demande se renouvelle au plus une fois par demi-journée');
+        $this->assertSame('2020-01-01 00:00:00', $this->row($code)['seen_at'], 'une question n\'écrit pas à chaque fois : la demande se renouvelle au plus une fois par demi-journée');
         $this->assertSame(0, $this->boxes(), 'rien n\'a encore été créé dans le site');
 
         // Jumelé : le boîtier est créé dans le site de la SESSION de l'administrateur, il attend sa machine, personne ne voit de clé
@@ -128,6 +132,7 @@ class LossPreventionPairingTest extends LossPreventionTestCase
         $this->assertSame([$box['id'] => true, $keyed => false], array_intersect_key(array_column($this->json($this->admin('GET', self::BOXES))['items'], 'paired', 'id'), [$box['id'] => 1, $keyed => 1]),
             'un boîtier ajouté par sa clé n\'est pas « jumelé »');
         $this->json($this->admin('POST', self::BOXES . "/$keyed/revoquer", ['confirm' => true]));
+        $this->assertFalse($this->json($this->admin('POST', self::BASE . '/exercices/boitiers'), 201)['box']['paired'], 'un boîtier simulé non plus');
 
         // Le code ne sert qu'une fois : ni le même administrateur, ni celui d'un AUTRE site ne le jumelle de nouveau (même refus)
         $this->assertSame($unknown, $refusal(['code' => $code, 'name' => 'Encore']));
@@ -188,6 +193,10 @@ class LossPreventionPairingTest extends LossPreventionTestCase
         $this->client->request('POST', 'https://' . self::PLATFORM . '/api/pertes/boitier/jumelage/etat', [], [], ['HTTP_X_TENANT_HOST' => 'site-inconnu.example.invalid', 'CONTENT_TYPE' => 'application/json', 'REMOTE_ADDR' => $this->ip],
             json_encode(['code' => $other, 'machine' => self::MACHINE]));
         $this->assertSame(self::NEUTRAL, $this->json($this->client->getResponse(), 404));
+        // un chemin encodé est la même route, pour le routeur comme pour les gardes ; l'en-tête d'un site CONNU ne fait rien résoudre non plus
+        $this->client->request('POST', 'https://' . self::PLATFORM . '/api/pertes/%62oitier/%6aumelage/etat', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST, 'CONTENT_TYPE' => 'application/json', 'REMOTE_ADDR' => $this->ip],
+            json_encode($proof));
+        $this->assertSame('closed', $this->json($this->client->getResponse())['status']);
         $this->client->request('POST', 'https://' . self::PLATFORM . '/api/pertes/boitier/jumelage', [], [], ['CONTENT_TYPE' => 'application/json', 'REMOTE_ADDR' => $this->ip], '{pas du json');
         $this->assertSame(['body' => 'INVALID_JSON'], $this->json($this->client->getResponse(), 422)['fields']);
     }
@@ -219,10 +228,24 @@ class LossPreventionPairingTest extends LossPreventionTestCase
         $this->assertSame(['paired', $id], [($given = $this->json($this->box('/etat', $proof)))['status'], $given['box']['id']]);
         static::getContainer()->get(PlatformModeService::class)->setMode('demo', 'test');
 
-        // Le site n'existe plus : fermé, sans rien chercher ailleurs
-        [$code, , $proof] = $this->pairedBox('Site disparu');
+        // Site introuvable (disparu, ou base maître en panne un instant : la lecture ne distingue pas) : rien n'est remis, RIEN n'est fermé
+        [$code, , $proof, $id] = $this->pairedBox('Site introuvable');
         $this->master->exec("UPDATE loss_box_pairing SET tenant_code = 'site-disparu' WHERE status = 'paired' AND delivered_at IS NULL");
-        $this->assertSame(['closed', 'closed'], [$this->json($this->box('/etat', $proof))['status'], $this->row($code)['status']]);
+        $lost = $this->json($this->box('/etat', $proof));
+        $this->assertSame(['waiting', null, false, 'paired'], [$lost['status'], $lost['expiresAt'], array_key_exists('token', $lost), $this->row($code)['status']]);
+        $this->master->exec("UPDATE loss_box_pairing SET tenant_code = '" . MV_TEST_TENANT_CODE . "' WHERE tenant_code = 'site-disparu'");
+        $this->assertSame(['paired', $id], [($given = $this->json($this->box('/etat', $proof)))['status'], $given['box']['id']]);
+
+        // Deux bases, pas de transaction commune : la demande n'a pas pu être écrite après la création du boîtier. Il reste un boîtier
+        // « en attente » que rien ne désigne ; le même code se rejumelle (un AUTRE boîtier), et c'est celui-là que la machine reçoit
+        [$code, , $proof, $orphan] = $this->pairedBox('Orphelin');
+        $this->master->prepare("UPDATE loss_box_pairing SET status = 'waiting', tenant_code = NULL, box_id = NULL, link = NULL, paired_at = NULL WHERE code_hash = ?")->execute([$this->row($code)['code_hash']]);
+        $this->assertSame('waiting', $this->json($this->box('/etat', $proof))['status']);
+        $this->json($this->admin('POST', self::BOXES . "/$orphan/revoquer", ['confirm' => true]));
+        $second = $this->json($this->pair(['code' => $code, 'name' => "Recommencé $this->s"]), 201)['box']['id'];
+        $this->assertNotSame($orphan, $second);
+        $this->assertSame(['paired', $second, 'revoked'], [($given = $this->json($this->box('/etat', $proof)))['status'], $given['box']['id'], $this->sheet($orphan)['status']]);
+        $this->assertSame(32, strlen((string) $this->row($code)['link']));
 
         // Le plafond des boîtiers du site vaut aussi pour un jumelage ; le refus ne consomme pas le code
         $code = LossPairingCode::generate();
@@ -236,16 +259,17 @@ class LossPreventionPairingTest extends LossPreventionTestCase
         $this->db->executeStatement("UPDATE loss_box SET status = 'revoked', revoked_at = NOW() WHERE id = (SELECT MIN(id) FROM loss_box WHERE NOT exercise AND status <> 'revoked')");
         $this->assertSame('pending', $this->json($this->pair(['code' => $code, 'name' => 'La place rendue']), 201)['box']['status']);
 
-        // Oubliée pour de bon un an après son expiration : son code redevient libre (ménage fait au dépôt suivant)
+        // Un code déposé n'est JAMAIS libéré pour une autre machine : un boîtier resté cinq ans dans son carton garde le sien
         $old = LossPairingCode::generate();
         $this->json($this->box('', ['code' => $old, 'machine' => self::MACHINE, 'version' => '1.0.0', 'arch' => 'amd64']));
-        $almost = gmdate('Y-m-d H:i:s', time() - LossPairingService::FORGET_AFTER + 3600);
-        $this->master->prepare('UPDATE loss_box_pairing SET expires_at = ? WHERE code_hash = ?')->execute([$almost, $this->row($old)['code_hash']]);
-        $this->assertSame(self::NEUTRAL, $this->json($this->box('', ['code' => $old, 'machine' => 'une-autre-machine-0123456789', 'version' => '1.0.0', 'arch' => 'amd64']), 404), 'pas encore un an : le code reste au boîtier');
-        $this->master->prepare('UPDATE loss_box_pairing SET expires_at = ? WHERE code_hash = ?')->execute([gmdate('Y-m-d H:i:s', time() - LossPairingService::FORGET_AFTER - 3600), $this->row($old)['code_hash']]);
         $kept = $this->requests();
-        $this->assertSame('waiting', $this->json($this->box('', ['code' => $old, 'machine' => 'une-autre-machine-0123456789', 'version' => '1.0.0', 'arch' => 'amd64']))['status']);
-        $this->assertSame($kept, $this->requests(), 'l\'ancienne demande est partie, la nouvelle a pris sa place ; une demande jumelée ou fermée ne s\'oublie pas');
+        $this->master->exec("UPDATE loss_box_pairing SET expires_at = NOW() AT TIME ZONE 'UTC' - INTERVAL '5 years', seen_at = NOW() AT TIME ZONE 'UTC' - INTERVAL '5 years'");
+        $this->assertSame(self::NEUTRAL, $this->json($this->box('', ['code' => $old, 'machine' => 'une-autre-machine-0123456789', 'version' => '1.0.0', 'arch' => 'amd64']), 404));
+        $this->assertSame(self::NEUTRAL, $this->json($this->box('/etat', ['code' => $old, 'machine' => 'une-autre-machine-0123456789']), 404));
+        $this->assertSame([$kept, self::MACHINE], [$this->requests(), self::MACHINE], 'aucune demande n\'est supprimée');
+        $this->assertSame('waiting', $this->json($this->box('/etat', ['code' => $old, 'machine' => self::MACHINE]))['status'], 'branché cinq ans après, il redevient jumelable');
+        $this->db->executeStatement("UPDATE loss_box SET status = 'revoked', revoked_at = NOW() WHERE id = (SELECT MIN(id) FROM loss_box WHERE NOT exercise AND status <> 'revoked')"); // une place dans le site
+        $this->assertSame('pending', $this->json($this->pair(['code' => $old, 'name' => "Cinq ans après $this->s"]), 201)['box']['status']);
     }
 
     public function testNoCodeIsGuessedByTryingThemInARow(): void
@@ -292,10 +316,37 @@ class LossPreventionPairingTest extends LossPreventionTestCase
             $this->assertSame(404, $this->box('', ['machine' => "machine-qui-insiste-$i-0123456789"] + $request, $taker)->getStatusCode());
         }
         $this->assertSame(429, $this->box('', ['code' => LossPairingCode::generate()] + $request, $taker)->getStatusCode(), '20 dépôts par adresse et par quart d\'heure');
+        // … et chacun de ces dépôts refusés a compté comme une mauvaise preuve : dix de plus, et l'adresse est arrêtée partout
+        for ($i = LossBoxLimits::LIMITS['pairOpen']; $i < LossBoxLimits::LIMITS['pairFailed']; ++$i) {
+            $this->assertSame(404, $this->box('/etat', ['code' => $code, 'machine' => "mauvaise-machine-$i-0123456789"], $taker)->getStatusCode());
+        }
+        $this->assertSame(429, $this->box('/etat', ['code' => $code, 'machine' => self::MACHINE], $taker)->getStatusCode());
+
+        // Les demandes NOUVELLES de toute la plateforme : 120 par heure (chacune est une ligne de la base maître qui ne s'efface pas).
+        // Au-delà, un code inconnu n'est plus déposé ; un boîtier déjà déposé redépose et demande où il en est comme avant
+        $limiter = self::pairingLimiter('pairNew', '1 hour', 'plateforme');
+        $limiter->reset();
+        $limiter->consume(LossBoxLimits::LIMITS['pairNew'] - 1);
+        $fresh = self::address();
+        $before = $this->requests();
+        $this->assertSame('waiting', $this->json($this->box('', ['code' => LossPairingCode::generate()] + $request, $fresh))['status'], 'la dernière de l\'heure');
+        $full = $this->box('', ['code' => LossPairingCode::generate()] + $request, $fresh);
+        $this->assertSame([429, 'RATE_LIMITED', $before + 1], [$full->getStatusCode(), $this->json($full, 429)['error'], $this->requests()]);
+        $this->assertSame(['waiting', 'waiting'], [$this->json($this->box('', $request, $fresh))['status'], $this->json($this->box('/etat', ['code' => $code, 'machine' => self::MACHINE], $fresh))['status']]);
+        $limiter->reset();
+
+        // Les jetons remis à un boîtier jumelé : 10 par demande et par quart d'heure (chaque remise est une inscription)
+        self::resetPairingSiteLimit(); // les essais du site sont épuisés par ce qui précède
+        [, , $pairedProof, $pairedId] = $this->pairedBox('Insistant');
+        for ($i = 0; $i < LossBoxLimits::LIMITS['pairDelivery']; ++$i) {
+            $this->assertSame('paired', $this->json($this->box('/etat', $pairedProof, $fresh))['status'], "remise $i");
+        }
+        $this->assertSame(429, $this->box('/etat', $pairedProof, $fresh)->getStatusCode());
+        $this->assertSame(LossBoxLimits::LIMITS['pairDelivery'], (int) $this->db->fetchOne("SELECT COUNT(*) FROM loss_box_event WHERE box_id = ? AND type = 'BOX_ENROLLED'", [$pairedId]));
 
         // Les questions d'un boîtier qui a fait sa preuve : 120 par demande et par 5 minutes ; une autre demande n'est pas touchée
         $polls = self::address();
-        $already = 1; // la question posée plus haut depuis l'adresse du test
+        $already = 2; // les deux questions posées plus haut avec la bonne preuve (depuis l'adresse du test, puis pendant l'heure pleine)
         for ($i = $already; $i < LossBoxLimits::LIMITS['pairPolls']; ++$i) {
             if ($this->box('/etat', ['code' => $code, 'machine' => self::MACHINE], $polls)->getStatusCode() !== 200) {
                 $this->fail("question $i");

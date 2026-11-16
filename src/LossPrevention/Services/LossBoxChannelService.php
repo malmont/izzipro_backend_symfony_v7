@@ -131,8 +131,9 @@ class LossBoxChannelService
     }
 
     /**
-     * Inscription de la machine d'un boîtier JUMELÉ par code (lot L3-a2, § 16.16), dans le site de la requête. Le boîtier du site
-     * est retrouvé par l'empreinte qui le lie à CE code et à CE site : aucun identifiant venu d'ailleurs ne désigne un boîtier.
+     * Inscription de la machine d'un boîtier JUMELÉ par code (lot L3-a2, § 16.17), dans le site courant. Le boîtier du site est
+     * retrouvé par l'empreinte qui le lie à CE site et à `$code` (le code, et l'aléa du jumelage qui l'a créé) : aucun identifiant
+     * venu d'ailleurs ne désigne un boîtier.
      * La forme de `$machine`, `$version` et `$arch` est vérifiée par l'appelant (`LossPairingService`).
      *
      * @return array<string, mixed>|null { box, token, expiresAt, serverTime, settings } ; null : ce jumelage ne vaut plus rien

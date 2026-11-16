@@ -258,16 +258,24 @@ abstract class LossPreventionTestCase extends WebTestCase
     }
 
     /**
-     * Le plafond des essais de code de jumelage par SITE (lot L3-a2) est gardé d'un lancement à l'autre, et un site d'essai n'a
-     * qu'un nom : il repart de zéro pour les sites d'essai avant un test qui jumelle.
+     * Deux plafonds du jumelage par code (lot L3-a2) sont gardés d'un lancement à l'autre sous une clé qui ne change pas : les essais
+     * par SITE (un site d'essai n'a qu'un nom) et les demandes nouvelles de toute la plateforme. Ils repartent de zéro avant un
+     * test qui jumelle.
      */
     protected static function resetPairingSiteLimit(): void
     {
         foreach ([MV_TEST_TENANT_CODE, MV_TEST_TENANT2_CODE] as $site) {
-            (new \Symfony\Component\RateLimiter\RateLimiterFactory(['id' => 'loss_box_pairAdminSite', 'policy' => 'sliding_window',
-                'limit' => \App\LossPrevention\Services\LossBoxLimits::LIMITS['pairAdminSite'], 'interval' => '15 minutes'],
-                new \Symfony\Component\RateLimiter\Storage\CacheStorage(static::getContainer()->get('cache.rate_limiter'))))->create($site)->reset();
+            self::pairingLimiter('pairAdminSite', '15 minutes', $site)->reset();
         }
+        self::pairingLimiter('pairNew', '1 hour', 'plateforme')->reset();
+    }
+
+    /** Le compteur d'un plafond du jumelage, tel que `LossBoxLimits` le tient */
+    protected static function pairingLimiter(string $name, string $interval, string $key): \Symfony\Component\RateLimiter\LimiterInterface
+    {
+        return (new \Symfony\Component\RateLimiter\RateLimiterFactory(['id' => 'loss_box_' . $name, 'policy' => 'sliding_window',
+            'limit' => \App\LossPrevention\Services\LossBoxLimits::LIMITS[$name], 'interval' => $interval],
+            new \Symfony\Component\RateLimiter\Storage\CacheStorage(static::getContainer()->get('cache.rate_limiter'))))->create($key);
     }
 
     protected function today(): string

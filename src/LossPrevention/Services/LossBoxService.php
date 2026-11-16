@@ -129,8 +129,9 @@ class LossBoxService
 
     /**
      * Ajouter un boîtier JUMELÉ par code (lot L3-a2, § 16.16) : il attend sa machine, comme un boîtier ajouté par clé, mais
-     * personne ne voit de clé. À la place de l'empreinte d'une clé, il porte celle qui le lie à ce code et à ce site : la machine
-     * qui a déposé ce code, et elle seule, s'y inscrira. Même plafond de boîtiers, compté sous le même verrou.
+     * personne ne voit de clé. À la place de l'empreinte d'une clé, il porte celle qui le lie à ce site et à `$linked` (le code et
+     * l'aléa de ce jumelage) : la machine qui a déposé ce code, et elle seule, s'y inscrira. Même plafond de boîtiers, compté sous
+     * le même verrou.
      *
      * @return int l'identifiant du boîtier
      */

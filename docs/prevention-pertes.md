@@ -1415,17 +1415,20 @@ en secours.
   inutile à qui la lit en chemin.
 - **`waiting`** : la demande est jumelable pendant 30 jours après le dernier signe du boîtier (`expiresAt`) ; chaque question du
   boîtier la fait revivre (écrit au plus une fois par demi-journée). Expirée, elle n'est plus jumelable mais **le code reste au
-  boîtier** : un boîtier resté trois mois dans son carton redevient jumelable dès qu'il est branché. Une demande en attente expirée
-  depuis plus d'un an est oubliée (ménage fait au dépôt suivant) ; une demande jumelée ou fermée ne s'oublie pas.
+  boîtier** : un boîtier resté des mois ou des années dans son carton redevient jumelable dès qu'il est branché. **Une demande
+  n'est jamais supprimée par le code** : tant qu'elle existe, aucune autre machine ne dépose son code (la relecture a montré qu'un
+  « oubli » au bout d'un an rendait le code à qui avait lu l'étiquette). Le ménage de cette table, s'il en faut un jour, est une
+  décision de plateforme (L6), avec cette règle : jamais la demande d'un boîtier vendu.
 - **`paired`** : le boîtier, sur sa preuve, reçoit l'adresse de son site (`host`) et son jeton : il est inscrit à cet appel (fait
   `BOX_ENROLLED { pairing: true }`), puis parle à son site comme tout boîtier. Si la réponse se perd, il redemande : un jeton
   neuf lui est remis, l'ancien ne vaut plus rien. Il cesse de demander dès qu'il a son jeton ; si son jeton expire au-delà du délai
   de grâce, il redemande ici.
-- **`closed`** : le boîtier a été détaché (révoqué sur son site), sa clé a été remise à zéro par l'administrateur, une autre
-  machine s'y est inscrite par la clé, ou le site n'existe plus. Le code ne vaut plus rien, pour toujours : le boîtier remet son
-  jumelage à zéro (nouveau code, nouveau secret de machine) et redevient jumelable.
-- **`pollSeconds`** (15) : le rythme conseillé des questions. **Sans le module** sur le site jumelé, rien n'est remis : `waiting`,
-  `expiresAt: null`, jusqu'au retour du module.
+- **`closed`** : le boîtier a été détaché (révoqué sur son site), sa clé a été remise à zéro par l'administrateur, ou une autre
+  machine s'y est inscrite par la clé. Le code ne vaut plus rien, pour toujours : le boîtier remet son jumelage à zéro (nouveau
+  code, nouveau secret de machine) et redevient jumelable.
+- **`pollSeconds`** (15) : le rythme conseillé des questions. **Sans le module** sur le site jumelé, ou si ce site est introuvable
+  (disparu, ou base maître en panne un instant : la lecture ne distingue pas les deux), rien n'est remis et rien n'est fermé :
+  `waiting`, `expiresAt: null`.
 
 **L'administrateur** (`ROLE_ADMIN`, garde du module) : `POST /api/gestion/pertes/boitiers/jumeler` `{ code, name, place? }` → 201
 `{ box }`, la fiche du boîtier, `status: pending` (il attend sa machine), `paired: true`, `keyHint: null`. Refus : 422
@@ -1438,15 +1441,20 @@ en secours.
   réessayez. » **Le code ne sert qu'une fois.**
 - Toute fiche de boîtier gagne `paired` (vrai pour un boîtier ajouté par code tant que personne ne lui a donné de clé). Fait
   `BOX_CREATED { pairing: true }`. **« Détacher »** est la révocation du boîtier (`POST /boitiers/{id}/revoquer`).
-- **Ce qui lie le boîtier du site à son code** : à la place de l'empreinte d'une clé, le boîtier jumelé porte une empreinte du
-  code liée AU SITE (`LossBoxToken::pairingKeyHash`). À la remise du jeton, le boîtier est retrouvé par cette empreinte, dans le
-  site écrit sur la demande par le jumelage : aucun identifiant venu d'une requête ne désigne un boîtier ni un site. Ce n'est pas
-  une clé `IZ-BOX` : la route d'inscription ne l'accepte pas.
+- **Ce qui lie le boîtier du site à son code** : à la place de l'empreinte d'une clé, le boîtier jumelé porte une empreinte liée
+  AU SITE, au code, et à un aléa tiré à chaque jumelage et écrit sur la demande (`link` ; `LossBoxToken::pairingKeyHash`). À la
+  remise du jeton, le boîtier est retrouvé par cette empreinte, dans le site écrit sur la demande par le jumelage : aucun
+  identifiant venu d'une requête ne désigne un boîtier ni un site (le `box_id` de la demande ne sert à aucune recherche). Ce
+  n'est pas une clé `IZ-BOX` : la route d'inscription ne l'accepte pas.
 
-**Plafonds** (`LossBoxLimits`) : dépôts, 20 par adresse et par quart d'heure ; codes inconnus et mauvaises preuves du boîtier, 30 par
-adresse et par quart d'heure, lus AVANT toute lecture (l'adresse est alors arrêtée, même avec la bonne preuve) ; questions d'un
-boîtier qui a fait sa preuve, 120 par demande et par 5 minutes ; essais d'un administrateur, 10 par site et adresse et 30 par site,
-par quart d'heure (au-delà, même le bon code est refusé). Avant son jumelage un boîtier n'a que son adresse pour le désigner (comme
+**Plafonds** (`LossBoxLimits`) : dépôts, 20 par adresse et par quart d'heure ; **demandes nouvelles, 120 par heure pour toute la
+plateforme** (chaque demande est une ligne de la base maître qui ne s'efface pas, et n'importe qui peut en déposer : au-delà, un
+boîtier NEUF attend l'heure suivante, les boîtiers déjà déposés ne sont pas touchés) ; codes inconnus et mauvaises preuves du
+boîtier, 30 par adresse et par quart d'heure, lus AVANT toute lecture (l'adresse est alors arrêtée, même avec la bonne preuve) ;
+questions d'un boîtier qui a fait sa preuve, 120 par demande et par 5 minutes ; jetons remis à un boîtier jumelé, 10 par demande et
+par quart d'heure (chaque remise est une inscription, avec son fait) ; essais d'un administrateur, 10 par site et adresse et 30 par
+site, par quart d'heure (au-delà, même le bon code est refusé). Ces compteurs ne sont pas verrouillés : une rafale de requêtes
+simultanées peut les dépasser de peu ; c'est la taille du code (45 bits) qui tient la garantie, les plafonds la confortent. Avant son jumelage un boîtier n'a que son adresse pour le désigner (comme
 à l'inscription par clé) ; une fois jumelé il parle avec son jeton, que l'adresse ne limite jamais.
 
 **Les trois points donnés au relecteur** : (1) le site d'un jumelage n'est lu que de la session de l'administrateur ; (2) un code
@@ -1458,14 +1466,33 @@ n'est repris par aucune autre machine ; (3) 45 bits, refus neutre, essais plafon
   commerçant le voit aussitôt (son code est refusé) ; parade : remettre le jumelage à zéro sur le boîtier. L'autre site ne reçoit
   que des lectures de puces qu'il ne connaît pas ;
 - le jumelage écrit dans deux bases (la base maître et celle du site) sans transaction commune : si la base maître tombe juste
-  après la création du boîtier, il reste un boîtier « en attente » sans demande (l'administrateur le révoque et recommence) ;
+  après la création du boîtier, il reste un boîtier « en attente » que rien ne désigne. L'administrateur le révoque et rejumelle le
+  MÊME code : un autre boîtier est créé (aléa neuf), et c'est lui que la machine reçoit ;
+- si la réponse d'un jumelage réussi se perd, un second essai reçoit le refus neutre (le code a servi) : le boîtier est bien
+  dans la liste du site, le web peut la relire ;
+- quelqu'un qui inonde la plateforme de demandes inventées atteint le plafond des demandes nouvelles : pendant l'heure, un
+  boîtier neuf ne peut pas déposer la sienne (il réessaie seul) ; rien d'autre n'est touché. La table grossit d'au plus 120
+  lignes par heure ;
+- **si le secret de l'application change**, toutes les empreintes (codes, machines, boîtiers jumelés) deviennent orphelines,
+  comme les clés `IZ-BOX` (§ 16.13) : chaque boîtier repart d'un jumelage neuf ;
+- le serveur ne peut pas vérifier que le boîtier a déposé AVANT de montrer son code : c'est une règle du logiciel du boîtier et
+  de la préparation, à écrire dans leur guide et à tester là-bas ;
 - du bruit envoyé depuis l'adresse de la boutique (30 mauvais codes en un quart d'heure) retarde le jumelage d'un boîtier de cette
   adresse d'un quart d'heure ; il ne touche aucun boîtier déjà jumelé.
 
 **À la bascule** : passer `ops/sql/loss_pairing_master.sql` sur la base maître AVANT l'échange du code (idempotent), puis
 `cache:clear` (deux routes, un service, deux chemins de plus dans la liste des routes sans site du `TenantDoctrineSwitcherListener`).
+Vérifier que l'adresse de la plateforme que les boîtiers appelleront passe par un relais connu de `TRUSTED_PROXIES` (sinon tous
+les boîtiers partagent une adresse, et les plafonds par adresse deviennent communs). Le canal du boîtier ne compte plus comme une
+visite du site (`TenantVisitorTrackingListener` : préfixe `/api/pertes/boitier` exclu).
+
+**Relecture indépendante** (16/11/2026) : les trois points sont sains ; corrigés : une demande « oubliée » au bout d'un an rendait
+son code à une autre machine (plus aucune suppression) ; écriture anonyme sans plafond global dans la base maître (plafond des
+demandes nouvelles) ; après un boîtier orphelin, le même code rendait 500 sur ce site (aléa par jumelage) ; une panne d'un instant
+de la lecture du site fermait le jumelage pour toujours (le boîtier patiente) ; transaction de la base maître tenue sur une seule
+connexion, et jumelage refusé si la demande n'a pas été écrite ; remises de jeton plafonnées.
 
 **Tests** : `LossPreventionPairingTest` (le parcours entier ; refus neutres mot pour mot ; un administrateur d'un second site ; code
-seul sans preuve ; jeton refusé sur un autre site ; réponse perdue ; détacher, clé remise à zéro, module retiré, site disparu ;
-plafond de boîtiers ; expiration et oubli ; les quatre plafonds). Exemples : `tests/Fixtures/pertes/boitier/canal-jumelage-*.json`,
+seul sans preuve ; jeton refusé sur un autre site ; réponse perdue ; détacher, clé remise à zéro, module retiré, site introuvable ;
+boîtier orphelin rejumelé ; plafond de boîtiers ; expiration ; code jamais libéré ; chemin encodé ; les six plafonds). Exemples : `tests/Fixtures/pertes/boitier/canal-jumelage-*.json`,
 `admin-boitier-jumele*.json`, `admin-refus-jumelage.json`.

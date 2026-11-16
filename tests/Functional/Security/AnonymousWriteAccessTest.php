@@ -42,7 +42,7 @@ class AnonymousWriteAccessTest extends WebTestCase
         '#^/api/tenant/#' => 'vérification de tenant',
         '#^/api/pos/pin-login$#' => 'connexion par PIN : terminal activé exigé, blocage du compte après 5 essais, limite par terminal',
         '#^/api/form-submissions$#' => 'envoi d\'un formulaire à étapes : limite par IP (envois acceptés), champ piège, réponses revalidées sur les réglages enregistrés',
-        '#^/api/pertes/boitier/#' => 'boîtier de la prévention des pertes (lot L3-a) : une machine sans compte ; préfixe fermé par LossBoxGuardSubscriber (jeton signé X-Loss-Box relu à chaque appel ; inscription par la clé du boîtier, limite de débit)',
+        '#^/api/pertes/boitier/#' => 'boîtier de la prévention des pertes (lot L3-a) : une machine sans compte ; préfixe fermé par LossBoxGuardSubscriber (jeton signé X-Loss-Box relu à chaque appel ; inscription par la clé du boîtier, limite de débit ; lot L3-a2 : deux routes de jumelage sans site ni jeton, preuve de la machine vérifiée par LossPairingService, essais plafonnés, rien n\'est écrit dans un site sans cette preuve)',
         '#^/api/app/activate$#' => 'activation d\'une application mobile par clé (empreinte en base maître, 20 essais par IP et 15 min, aucune donnée de site écrite)',
         '#^/(cgu/|product/|shop$|setup/status/)#' => 'pages d\'affichage sans restriction de méthode (aucune écriture)',
     ];
