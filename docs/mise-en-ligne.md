@@ -51,6 +51,9 @@ Puis : compte rendu **court** (5 à 10 lignes : ce qui change, chiffres clés, c
 dans la fiche du lot), et les suites propres au lot (minuteur à installer, worker à relancer, droits à accorder). Une commande
 `systemctl enable` ou `disable` n'est jamais lancée par une session : elle est donnée au propriétaire.
 
+**Repère `{{unique}}`** (16/11/2026) : dans le corps d'une lecture `POST`, il devient une valeur neuve à chaque photo. Une route limitée
+par adresse (« mot de passe oublié » : 3 par heure) ne bute ainsi pas sur les passages de la photo elle-même.
+
 **Une photo ne doit rien écrire.** Avant d'ajouter une lecture à `var/bascule.lectures`, vérifier que la route ne fait que lire :
 `GET /api/pos/receipts?orderId=` compte une réimpression, `GET /api/gestion/pertes` lance une analyse à la lecture.
 

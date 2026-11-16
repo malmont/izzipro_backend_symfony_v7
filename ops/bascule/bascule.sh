@@ -178,8 +178,10 @@ photo)
     case "$name" in ''|\#*) continue;; esac
     AUTH=(-H "Authorization: Bearer $TOK"); BODY=()
     case "$rest" in sans-jeton*) AUTH=(); rest=${rest#sans-jeton}; rest=${rest# };; esac
-    # « POST <corps JSON> » : une requête d'écriture dont on attend le REFUS (401, 400, 403…), jamais une écriture réussie
-    case "$rest" in POST\ *) BODY=(-X POST -H 'Content-Type: application/json' -d "${rest#POST }");; esac
+    # « POST <corps JSON> » : une requête d'écriture dont on attend le REFUS (401, 400, 403…), jamais une écriture réussie.
+    # « {{unique}} » dans le corps : une valeur neuve à chaque passage (16/11/2026 : une adresse inconnue toujours la même butait sur la
+    # limite de 3 demandes par heure et par adresse de « mot de passe oublié » quand les photos se suivaient)
+    case "$rest" in POST\ *) rest=${rest//\{\{unique\}\}/$(date +%s%N)}; BODY=(-X POST -H 'Content-Type: application/json' -d "${rest#POST }");; esac
     curl -s -o "$OUT/$name.json" -w '%{http_code}\n' "${H[@]}" "${AUTH[@]}" "${BODY[@]}" "$BASE_URL$path" > "$OUT/$name.code"
   done < "$READS"
   echo "photo $2 : $(ls "$OUT" | grep -c '\.code$') lecture(s), codes : $(cat "$OUT"/*.code | sort | uniq -c | tr -s ' ' | tr '\n' ';') 5xx : $(cat "$OUT"/*.code | grep -c '^5')"

@@ -18,5 +18,7 @@ g-tresorerie /api/gestion/tresorerie
 g-vignettes /api/gestion/accueil/vignettes
 periode-courante /api/periodes/courante
 refresh-sans-jeton /api/token/refresh sans-jeton POST {"app":"mobile"}
+# « {{unique}} » : une valeur neuve à chaque photo (une route limitée par adresse ne bute pas sur ses propres passages)
+reset-demande-inconnue /api/password-reset/request sans-jeton POST {"email":"photo-{{unique}}@example.invalid"}
 promotion-apercu-sans-jeton /api/gestion/promotions/apercu sans-jeton POST {}
 # … puis les lectures propres au lot : les routes qu'il change (différence attendue) et leurs voisines (identiques attendues)

@@ -517,6 +517,14 @@ sans le module Boutique, le site est en service aussitôt) : l'agence lit son é
   renseignée hors des comptes.
 - Aucune agence n'existe en production : la première sera une agence de test, à la campagne de tests.
 
+### 8.11 Depuis la console du serveur (16/11/2026)
+
+`app:platform:site:request` (TYPE-1, au nom de la plateforme : `--type normal|agency --code --name --admin-email [--agency-name --test]`)
+et `app:agency:site:request` (AG-2, au nom d'une agence : `--agency <code> --code --name --admin-email`) déposent une demande par les
+MÊMES services et contrôles que leurs routes, tracée « console du serveur » ; aucune route ne les expose ; un site existant est refusé ;
+`--admin-email=-` lit l'adresse sur l'entrée standard ; la sortie ne montre ni lien, ni mot de passe, ni l'adresse en clair (masquée).
+La fabrication suit par le worker, ou `app:agency:sites:build`.
+
 ## 9. Lot TYPE-1 : le type d'un site dès sa création (16/11/2026)
 
 Code : `src/Services/Platform/Sites/` (`PlatformSiteService`, `PlatformSiteRequestRepository`), `src/Controller/PlatformController/
