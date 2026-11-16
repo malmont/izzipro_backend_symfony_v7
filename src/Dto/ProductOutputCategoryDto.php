@@ -8,6 +8,10 @@ use App\Entity\ProductVariant;
 use App\Entity\ProductOptionValue;
 use App\Enum\ProductMode; 
 
+/**
+ * Un article dans la liste publique par catégorie (`GET /api/products/by-category`). Lot COST-1 (16/11/2026) : ni coût d'achat ni
+ * coefficient, pour personne (ils y étaient lisibles sans connexion). Garde-fou : `tests/Functional/Security/PublicCostLeakTest.php`.
+ */
 class ProductOutputCategoryDto
 {
     public int $id;
@@ -34,8 +38,6 @@ class ProductOutputCategoryDto
     public string $createdAt;
     public ?string $tags; 
     public ?string $slug;
-    public ?float $purchasePrice;
-    public ?float $coefficientMultiplier;
     public ?string $barcode;
     /** Recherche par code-barres (lot CB-1, `docs/codes-barres.md`) : la variante que le code scanné désigne ; null si le code est celui de l'article ou sans recherche par code */
     public ?int $matchedVariantId = null;
@@ -98,8 +100,6 @@ class ProductOutputCategoryDto
         $this->createdAt = $product->getCreatedAt()->format('Y-m-d H:i:s');
         $this->tags = $productTranslation?->getTags() ?? $product->getTags(); 
         $this->slug = $productTranslation?->getSlug() ?? $product->getSlug();
-        $this->purchasePrice = $product->getPurchasePrice();
-        $this->coefficientMultiplier = $product->getCoefficientMultiplier();
         $this->barcode = $product->getBarcode();
         $this->code = $product->getCode();
  
@@ -174,4 +174,13 @@ class ProductOutputCategoryDto
         $this->categories = $this->category;
         // $this->specifications = $product->getSpecifications();
      }
- }
+ 
+    /**
+     * Lot COST-1 (16/11/2026) : cette réponse est PUBLIQUE et gardée en cache telle quelle. Une entrée de cache écrite avant le lot
+     * porte encore le coût : relue, elle le perd ici, sans attendre la fin de sa durée.
+     */
+    public function __wakeup(): void
+    {
+        unset($this->purchasePrice, $this->coefficientMultiplier);
+    }
+}

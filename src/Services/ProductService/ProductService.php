@@ -8,6 +8,7 @@ use App\Entity\Categories;
 use App\Entity\Style;
 use App\Dto\ProductInputDTO;
 use App\Dto\ProductDetailedOutputDTO;
+use App\Dto\ProductPurchaseOutputDTO;
 use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
 use App\Services\EntityRetrieverService;
 use App\Services\TenantEntityManagerProvider;
@@ -44,8 +45,8 @@ class ProductService
         $ids = $this->lines !== null ? $this->emProvider->getEntityManager()->getRepository(\App\Entity\CommandeLine::class)->productIdsOf($commande) : null;
         $products = $ids === null ? $commande->getProducts() : new \Doctrine\Common\Collections\ArrayCollection($ids === [] ? [] : $this->emProvider->getEntityManager()->getRepository(Product::class)->findBy(['id' => $ids], ['id' => 'ASC']));
         $currency = $this->currency->code();
-        // langue demandée (?locale=) au lieu de « fr » figé (lot G3, 09/11/2026)
-        return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host, $locale, $currency), $products->toArray());
+        // langue demandée (?locale=) au lieu de « fr » figé (lot G3, 09/11/2026) ; lot COST-1 : la réponse de la gestion, avec le coût
+        return array_map(fn($product) => new ProductPurchaseOutputDTO($product, $host, $locale, $currency), $products->toArray());
     }
 
     public function createProductByCommande(Commande $commande, ProductInputDTO $inputDTO, Request $request, string $uploadDir): Product

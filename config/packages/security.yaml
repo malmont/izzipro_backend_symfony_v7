@@ -151,6 +151,9 @@ security:
         # 🔹 Ressources API Platform Product et Categories (S8, 26/10/2026) : lecture réservée à l'administrateur, refusée AVANT toute requête
         #    (401 anonyme, 403 client). Avant : liste des produits publique, relations imbriquées sans limite (incident PHP-FPM du 26/10/2026).
         #    Les fronts lisent les routes dédiées, toujours publiques : /api/products/{id}, /api/products/by-slug|by-category|…, /api/category.
+        # Lot COST-1 (16/11/2026) : la documentation d'API Platform et ses contextes JSON-LD nomment tous les champs des entités (coût
+        # d'achat, coefficient, marge…) ; un simple compte client les lisait par la règle générale ^/api. Réservés à l'administrateur.
+        - { path: '^/api/(docs|contexts)(/|\.|$)', roles: ROLE_ADMIN }
         - { path: ^/api/products(\.[a-z]+)?$, methods: [GET, HEAD], roles: ROLE_ADMIN }
         - { path: ^/api/products/\d+\.[a-z]+$, methods: [GET, HEAD], roles: ROLE_ADMIN }
         - { path: ^/api/categories(/\d+)?(\.[a-z]+)?$, methods: [GET, HEAD], roles: ROLE_ADMIN }

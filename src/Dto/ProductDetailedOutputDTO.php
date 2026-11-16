@@ -14,6 +14,12 @@ use App\Entity\ProductOptionValue;
 use App\Entity\ProductOption;
 use App\Enum\ProductMode; // <-- AJOUT IMPORTANT
 
+/**
+ * La fiche d'un article telle que le site PUBLIC la rend (`/api/products/{id}`, `/by-slug`, `/{offer}`, `/api/productsid/{id}`, réponse
+ * de l'éditeur de contenu). Lot COST-1 (16/11/2026) : elle ne porte NI le coût d'achat NI le coefficient, pour personne ; ces deux
+ * champs y étaient lisibles sans connexion. La gestion, qui en a besoin, a sa propre réponse : `ProductPurchaseOutputDTO`.
+ * Ne jamais ajouter ici un coût, une marge, un fournisseur ou un chiffre de vente : `tests/Functional/Security/PublicCostLeakTest.php`.
+ */
 class ProductDetailedOutputDTO
 {
     public int $id;
@@ -40,8 +46,6 @@ class ProductDetailedOutputDTO
     public string $createdAt;
     public ?string $tags;
     public ?string $slug;
-    public ?float $purchasePrice;
-    public ?float $coefficientMultiplier;
     public ?string $barcode;
     public ?string $code = null;
     public ?array $saleUnit = null;
@@ -102,8 +106,6 @@ class ProductDetailedOutputDTO
         $this->createdAt = $product->getCreatedAt()->format('Y-m-d H:i:s');
         $this->tags = $productTranslation?->getTags() ?? $product->getTags();
         $this->slug = $productTranslation?->getSlug() ?? $product->getSlug();
-        $this->purchasePrice = $product->getPurchasePrice();
-        $this->coefficientMultiplier = $product->getCoefficientMultiplier();
         $this->barcode = $product->getBarcode();
         $this->code = $product->getCode();
 
@@ -178,4 +180,16 @@ class ProductDetailedOutputDTO
         }   
         $this->categories = $this->category;
     }   
+
+    /**
+     * Lot COST-1 (16/11/2026) : cette réponse est PUBLIQUE et gardée en cache telle quelle. Une entrée de cache écrite avant le lot
+     * porte encore le coût : relue, elle le perd ici, sans attendre la fin de sa durée. La réponse de la gestion (classe fille)
+     * garde les siens.
+     */
+    public function __wakeup(): void
+    {
+        if (static::class === self::class) {
+            unset($this->purchasePrice, $this->coefficientMultiplier);
+        }
+    }
 }

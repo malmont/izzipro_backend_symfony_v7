@@ -107,6 +107,29 @@ dédiées, inchangées** : `/api/products/{id}` (fiche, DTO), `/api/products/by-
 Le site ne relit plus jamais la liste complète en repli d'une fiche en erreur (correction côté Next.js). Détail des ressources API
 Platform : `docs/architecture.md`.
 
+## Le coût ne sort pas des routes ouvertes (lot COST-1, 16/11/2026)
+
+Jusqu'à ce lot, les fiches produit publiques rendaient le **prix d'achat** et le **coefficient** (`purchasePrice`,
+`coefficientMultiplier`) à un visiteur sans connexion, depuis l'origine du code. Ils sont retirés, pour tous les lecteurs :
+
+| Réponse | Routes | Coût |
+|---|---|---|
+| `ProductDetailedOutputDTO` | `GET /api/products/{id}`, `/api/productsid/{id}`, `/api/products/by-slug/{slug}`, `/api/products/{offre}`, réponse de `PATCH /api/products/{id}` (éditeur de contenu) | **jamais** |
+| `ProductOutputCategoryDto` | `GET /api/products/by-category` | **jamais** |
+| `ProductPurchaseOutputDTO` (la fiche publique plus les deux champs) | `GET /api/commandes/{id}/products`, `ROLE_ADMIN` (gestion) | oui |
+| `ProductOutputDTO` | réponse de `POST /api/commandes/{id}/products`, `ROLE_ADMIN` (gestion) | oui |
+
+- Les deux champs n'existent plus dans les réponses publiques (pas même à `null`). Aucun front ne les lisait par une route publique.
+- Ces réponses sont gardées en cache sous une clé qui ne dépend pas du lecteur : une entrée écrite avant le lot perd son coût à la
+  relecture (`__wakeup` des deux objets), sans attendre la fin de sa durée ; le cache des sites est tout de même vidé à la bascule.
+- La documentation d'API Platform et ses contextes JSON-LD (`/api/docs`, `/api/contexts/…`), qui nomment tous les champs des entités,
+  sont réservés à l'administrateur (un simple compte client les lisait).
+- **Garde-fou** : `tests/Functional/Security/PublicCostLeakTest.php` crée un article au coût, au coefficient, au coût de commande et
+  au fournisseur reconnaissables, puis appelle TOUTES les routes de lecture de l'application sans connexion et avec un simple compte
+  client : aucune réponse ne porte ces valeurs, ni un nom de champ de coût ou de marge. Une route nouvelle est balayée d'office.
+- Règle : ne jamais ajouter un coût, une marge, un fournisseur ou un chiffre de vente à une réponse lue sans rôle d'administration ;
+  une réponse d'administration qui en a besoin a sa propre classe, jamais celle de la fiche publique.
+
 ## Contrat d'un produit (08/10/2026, `ProductCommerceDto`)
 
 Toutes les routes qui renvoient un produit (`/api/products/by-slug/{slug}`, `/api/productsid/{id}`,
