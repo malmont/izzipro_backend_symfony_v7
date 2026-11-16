@@ -148,10 +148,29 @@ class PlatformSiteService
         }
     }
 
-    /** « Reprendre » une demande à compléter : ses seules étapes manquantes sont rejouées, par le worker */
-    public function resume(int $id, ?string $by): array
+    /**
+     * « Reprendre » une demande à compléter : ses seules étapes manquantes sont rejouées, par le worker. Avec `$adminEmail`, une AUTRE
+     * adresse est désignée pour l'administrateur (la première était fausse, ou déjà celle d'un compte du site neuf) : possible tant
+     * que son invitation n'est pas partie ; l'invitation restée sans suite de la première adresse est retirée par l'étape.
+     */
+    public function resume(int $id, ?string $by, mixed $adminEmail = null): array
     {
         $row = $this->requests->find($id) ?? throw new PlatformSiteException('PLATFORM_SITE_REQUEST_NOT_FOUND', 404);
+        if ($row['status'] !== PlatformSiteRequestRepository::INCOMPLETE) {
+            throw new PlatformSiteException('PLATFORM_SITE_REQUEST_STATE', 409, ['status' => $row['status']]);
+        }
+        if ($adminEmail !== null && $adminEmail !== '') {
+            $email = is_string($adminEmail) ? mb_strtolower(trim($adminEmail)) : '';
+            if ($email === '' || mb_strlen($email) > 180 || filter_var($email, \FILTER_VALIDATE_EMAIL) === false) {
+                throw new PlatformValidationException([['path' => 'adminEmail', 'message' => 'adresse courriel valide attendue']]);
+            }
+            if (($row['steps'][self::STEP_INVITATION] ?? null) === self::DONE) {
+                throw new PlatformSiteException('PLATFORM_SITE_REQUEST_STATE', 409, ['status' => $row['status'], 'step' => self::STEP_INVITATION]);
+            }
+            if ($email !== $row['admin_email']) {
+                $this->requests->changeAdmin($id, $email, (string) $row['admin_email']);
+            }
+        }
         if (!$this->requests->move($id, [PlatformSiteRequestRepository::INCOMPLETE], PlatformSiteRequestRepository::PENDING, ['failed_step' => null, 'error_code' => null])) {
             throw new PlatformSiteException('PLATFORM_SITE_REQUEST_STATE', 409, ['status' => $row['status']]);
         }
@@ -330,7 +349,8 @@ class PlatformSiteService
         }
         // 2. l'invitation de l'administrateur désigné (rejouée : un nouveau lien, l'ancien ne vaut plus)
         if ($steps[self::STEP_INVITATION] !== self::DONE) {
-            $invitation = $this->builder->invite(null, $row, $steps[self::STEP_INVITATION] === self::FAILED);
+            $replaced = is_string($row['options']['replacedAdminEmail'] ?? null) ? $row['options']['replacedAdminEmail'] : null; // une autre personne vient d'être désignée
+            $invitation = $this->builder->invite(null, $row, $steps[self::STEP_INVITATION] === self::FAILED, $replaced);
             $result['invitation'] = $invitation;
             if (!$invitation['sent']) {
                 $stop(self::STEP_INVITATION, (string) ($invitation['reason'] ?? 'INVITATION_FAILED'));

@@ -24,8 +24,11 @@ class PlatformSitesController extends AbstractController
     {
     }
 
-    /** Les sites de la plateforme avec leurs pastilles calculées (`?badge=independent | agency_home | agency_managed | creation_incomplete`) → 200 `{ sites, badges }` */
-    #[Route('/api/platform/sites', name: 'api_platform_sites_list', methods: ['GET'])]
+    /**
+     * Les sites de la plateforme avec leurs pastilles calculées (`?badge=independent | agency_home | agency_managed |
+     * creation_incomplete`) → 200 `{ sites, badges }`. (`GET /api/platform/sites` est déjà la grille sites × fonctionnalités de la console.)
+     */
+    #[Route('/api/platform/sites/badges', name: 'api_platform_sites_badges', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
         $badge = $request->query->get('badge');
@@ -58,11 +61,15 @@ class PlatformSitesController extends AbstractController
         return $this->handle(fn () => $this->json(['request' => $this->sites->show($id)]));
     }
 
-    /** « Reprendre » une demande à compléter : ses seules étapes manquantes sont rejouées → 202 `{ request }` ; 409 `PLATFORM_SITE_REQUEST_STATE` sinon */
+    /**
+     * « Reprendre » une demande à compléter : ses seules étapes manquantes sont rejouées → 202 `{ request }` ; 409
+     * `PLATFORM_SITE_REQUEST_STATE` sinon. Corps facultatif `{ adminEmail }` : désigner une AUTRE adresse pour l'administrateur, tant
+     * que son invitation n'est pas partie (la première était fausse, ou déjà celle d'un compte).
+     */
     #[Route('/api/platform/site-requests/{id}/resume', name: 'api_platform_site_requests_resume', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function resume(int $id): JsonResponse
+    public function resume(int $id, Request $request): JsonResponse
     {
-        return $this->handle(fn () => $this->json(['request' => $this->sites->resume($id, $this->by())], 202));
+        return $this->handle(fn () => $this->json(['request' => $this->sites->resume($id, $this->by(), $this->body($request)['adminEmail'] ?? null)], 202));
     }
 
     /** « Abandonner » une demande à compléter ou pas encore commencée : le site, s'il existe, reste un site normal → 200 `{ request }` */

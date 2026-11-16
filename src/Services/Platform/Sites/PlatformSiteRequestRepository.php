@@ -22,6 +22,8 @@ class PlatformSiteRequestRepository
     public const ABANDONED = 'abandoned';
     /** États où une demande retient son code de site */
     public const LIVE = [self::PENDING, self::BUILDING, self::INCOMPLETE];
+    /** Les étapes, dans l'ordre où elles se font (la base range les clés d'un JSON à sa façon : l'ordre est rendu à la lecture) */
+    public const STEPS = ['site', 'invitation', 'agency', 'manager'];
     private const COLUMNS = 'id, type, tenant_code, name, admin_email, options, steps, status, failed_step, error_code, agency_id, result, requested_by, requested_at, started_at, finished_at';
 
     public function __construct(private readonly TenantConnectionManager $tenants)
@@ -127,6 +129,13 @@ class PlatformSiteRequestRepository
         return $stmt->rowCount() === 1;
     }
 
+    /** Désigne une autre adresse pour l'administrateur d'une demande ; l'ancienne est gardée dans les options, le temps de retirer son invitation */
+    public function changeAdmin(int $id, string $email, string $previous): void
+    {
+        $this->pdo()->prepare("UPDATE platform_site_requests SET admin_email = ?, options = jsonb_set(COALESCE(options, '{}'::jsonb), '{replacedAdminEmail}', to_jsonb(?::text)) WHERE id = ?")
+            ->execute([mb_substr($email, 0, 180), $previous, $id]);
+    }
+
     /** Écrit l'état des étapes (et ce que la fabrication a fait) d'une demande, sans changer son état @param array<string, string> $steps */
     public function saveSteps(int $id, array $steps, ?array $result = null, ?int $agencyId = null): void
     {
@@ -146,6 +155,7 @@ class PlatformSiteRequestRepository
         foreach (['options', 'steps', 'result'] as $column) {
             $row[$column] = is_string($row[$column] ?? null) ? (json_decode($row[$column], true) ?: []) : [];
         }
+        $row['steps'] = array_replace(array_intersect_key(array_flip(self::STEPS), $row['steps']), $row['steps']);
         $row['id'] = (int) $row['id'];
         $row['agency_id'] = $row['agency_id'] !== null ? (int) $row['agency_id'] : null;
 

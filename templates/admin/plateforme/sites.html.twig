@@ -80,7 +80,7 @@
                 <td>{% for step, state in r.steps %}<span data-etape="{{ step }}" data-etat-etape="{{ state }}">{{ steps[step] ?? step }} : {{ states[state] ?? state }}</span>{% if not loop.last %} · {% endif %}{% endfor %}</td>
                 <td class="text-nowrap">
                     {% if r.status == 'incomplete' %}
-                        <form method="post" action="{{ path('admin_plateforme_sites_request', {id: r.id, geste: 'reprendre'}) }}" class="d-inline sites-reprendre"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-primary" type="submit">Reprendre</button></form>
+                        <form method="post" action="{{ path('admin_plateforme_sites_request', {id: r.id, geste: 'reprendre'}) }}" class="d-inline sites-reprendre"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">{% if r.steps.invitation != 'done' %}<input class="form-control form-control-sm d-inline-block w-auto" name="adminEmail" type="email" placeholder="autre adresse (facultatif)" title="Désigner une autre adresse pour l'administrateur">{% endif %} <button class="btn btn-sm btn-primary" type="submit">Reprendre</button></form>
                     {% endif %}
                     {% if r.status in ['incomplete', 'pending'] %}
                         <form method="post" action="{{ path('admin_plateforme_sites_request', {id: r.id, geste: 'abandonner'}) }}" class="d-inline sites-abandonner" onsubmit="return confirm('Abandonner cette demande ? Le site, s\'il existe, reste un site normal.');"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-outline-secondary" type="submit">Abandonner</button></form>

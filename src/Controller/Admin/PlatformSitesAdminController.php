@@ -68,10 +68,10 @@ class PlatformSitesAdminController extends AbstractController
     #[Route('/admin/plateforme/sites/demandes/{id}/{geste}', name: 'admin_plateforme_sites_request', methods: ['POST'], requirements: ['id' => '\d+', 'geste' => 'reprendre|abandonner'])]
     public function gesture(int $id, string $geste, Request $request): Response
     {
-        return $this->action($request, function () use ($id, $geste): void {
+        return $this->action($request, function () use ($id, $geste, $request): void {
             $by = $this->getUser()?->getUserIdentifier();
             if ($geste === 'reprendre') {
-                $this->sites->resume($id, $by);
+                $this->sites->resume($id, $by, $request->request->get('adminEmail') ?: null);
                 $this->addFlash('success', sprintf('Demande n° %d reprise : ses étapes manquantes sont rejouées.', $id));
             } else {
                 $made = $this->sites->abandon($id, $by);
