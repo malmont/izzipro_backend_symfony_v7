@@ -923,7 +923,9 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $schema = fn (): array => [
             $this->db->fetchFirstColumn("SELECT c.relname || '.' || t.tgname FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE NOT t.tgisinternal"
                 . " AND (c.relname IN ('loss_box', 'loss_device', 'loss_box_event') OR t.tgname = 'loss_piece_event_box_guard') ORDER BY 1"),
-            $this->db->fetchFirstColumn("SELECT indexname FROM pg_indexes WHERE tablename IN ('loss_box', 'loss_device', 'loss_box_event') OR indexname = 'idx_loss_piece_event_box' ORDER BY indexname"),
+            // les objets de CE lot seulement, par leur nom : un lot suivant peut poser ses propres index sur ces tables (L3-b1 l'a fait)
+            $this->db->fetchFirstColumn("SELECT indexname FROM pg_indexes WHERE indexname IN ('idx_loss_box_event_box', 'idx_loss_box_event_exercise', 'idx_loss_box_exercise', 'idx_loss_piece_event_box',"
+                . " 'loss_box_event_pkey', 'loss_box_pkey', 'loss_device_pkey', 'uniq_loss_box_key', 'uniq_loss_device_box_serial') ORDER BY indexname"),
             $this->db->fetchFirstColumn("SELECT proname FROM pg_proc WHERE proname IN ('loss_box_guard', 'loss_device_guard', 'loss_box_event_guard', 'loss_box_event_frozen', 'loss_box_rows_kept', 'loss_piece_event_box_guard') ORDER BY proname"),
             $this->db->fetchFirstColumn("SELECT table_name || '.' || column_name FROM information_schema.columns WHERE (table_name = 'loss_piece_event' AND column_name IN ('box_id', 'device_id', 'received_at'))"
                 . " OR (table_name = 'loss_setting' AND column_name = 'silent_after_seconds') ORDER BY 1"),
