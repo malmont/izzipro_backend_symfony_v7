@@ -73,8 +73,8 @@ class ModuleAccessService
      * nouvelle souscription ou changement de formule : METHOD_ROUTES) ; `order/create`, `order/create-guest` et `payment` restent servis pour qu'un paiement Stripe déjà autorisé
      * puisse toujours être finalisé en commande (05/11/2026, question de l'application mobile). `create-multi-payment` est la
      * vente au comptoir (caisse), pas la boutique.
-     * La caisse n'est pas gardée ici : `is_pos_active` est l'indicateur de l'application Caisse (clés d'activation), faux sur
-     * des sites qui l'utilisent ; le droit d'usage du module Caisse viendra avec les entitlements (lot 3).
+     * La caisse n'est pas gardée par ces expressions : depuis le lot ENT-1, ses DÉBUTS sont gardés par `AppRightRoutes` (ouverture,
+     * nouveau paiement, nouvelle vente…), jamais la suite d'une vente commencée.
      * `stripe/webhook` n'est jamais gardé (appel de Stripe).
      */
     public const ROUTES = [

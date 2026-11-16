@@ -27,11 +27,10 @@ final class AppRightRoutes
     public const POS_STARTS = [
         ['POST', '#^/api/caisse/open$#'],
         ['POST', '#^/api/pos/terminal/payments$#'],
-        ['POST', '#^/api/pos/terminal/connection-token$#'],
-        ['POST', '#^/api/order/create-multi-payment$#'], // sauf la suite d'un paiement déjà autorisé (lue dans le corps)
+        ['POST', '#^/api/order/create-multi-payment$#'], // sauf la suite d'une vente commencée (PosRightGuard)
         ['POST', '#^/api/pos/exchanges$#'],
         ['POST', '#^/api/pos/rentals/deposits$#'],
-        ['POST', '#^/api/pos/gift-cards$#'], // sauf la suite d'un paiement déjà autorisé (lue dans le corps)
+        ['POST', '#^/api/pos/gift-cards$#'], // sauf la suite d'une vente commencée (PosRightGuard)
     ];
 
     /** @var list<array{0: string, 1: string}> toujours servis : [méthode (« GET » couvre aussi HEAD), expression du chemin] */
@@ -41,6 +40,9 @@ final class AppRightRoutes
         ['POST', '#^/api/cash-registers$#'],
         ['PUT', '#^/api/cash-registers/[^/]+$#'],
         ['POST', '#^/api/pos/(approvals|pin|pin-login|unlock|quote|returns|offline-sales|pertes/articles-non-lus|exchanges/quote)$#'],
+        // le jeton du lecteur : l'application le redemande à chaque reconnexion du lecteur, aussi pour finir un paiement ou rembourser ;
+        // le vrai début, le nouveau paiement, est gardé (`POST /api/pos/terminal/payments`)
+        ['POST', '#^/api/pos/terminal/connection-token$#'],
         ['POST', '#^/api/pos/coupons/(parse|claims/mark)$#'],
         ['POST', '#^/api/pos/customers$#'],
         ['POST', '#^/api/pos/customers/[^/]+/(erase|link|loyalty/adjust|merge)$#'],
@@ -63,12 +65,11 @@ final class AppRightRoutes
     ];
 
     /**
-     * Le rang d'une route de la caisse : START (refusée sans droit), SERVED (toujours servie), ou null (pas une route de la caisse).
-     * Une route de la caisse non rangée vaut START (fermé par défaut).
-     *
-     * @param array<mixed>|null $body le corps JSON décodé de la requête
+     * Le rang d'une route de la caisse PAR SON CHEMIN : START (un début, refusé sans droit, sauf la suite d'une vente commencée que
+     * vérifie `PosRightGuard`), SERVED (toujours servie), ou null (pas une route de la caisse). Une route de la caisse non rangée vaut
+     * START (fermé par défaut).
      */
-    public static function pos(string $method, string $path, ?array $body = null): ?string
+    public static function pos(string $method, string $path): ?string
     {
         if (preg_match(self::POS_PATHS, $path) !== 1) {
             return null;
@@ -76,7 +77,7 @@ final class AppRightRoutes
         $method = strtoupper($method) === 'HEAD' ? 'GET' : strtoupper($method);
         foreach (self::POS_STARTS as [$m, $pattern]) {
             if ($m === $method && preg_match($pattern, $path) === 1) {
-                return self::continuesAuthorizedPayment($path, $body) ? self::SERVED : self::START;
+                return self::START;
             }
         }
 
@@ -111,33 +112,4 @@ final class AppRightRoutes
         return false;
     }
 
-    /**
-     * La SUITE d'un paiement déjà autorisé : une vente dont une part carte porte la référence du paiement fait au terminal
-     * (`paymentMethods[].terminalPaymentId` ou `stripePaymentId`), ou une carte-cadeau vendue avec `terminalPaymentId`. Le paiement a
-     * commencé avant la fin du droit : il se termine.
-     *
-     * @param array<mixed>|null $body
-     */
-    private static function continuesAuthorizedPayment(string $path, ?array $body): bool
-    {
-        if (!is_array($body)) {
-            return false;
-        }
-        if ($path === '/api/order/create-multi-payment') {
-            foreach (is_array($body['paymentMethods'] ?? null) ? $body['paymentMethods'] : [] as $method) {
-                if (is_array($method) && (self::filled($method['terminalPaymentId'] ?? null) || self::filled($method['stripePaymentId'] ?? null))) {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        return $path === '/api/pos/gift-cards' && self::filled($body['terminalPaymentId'] ?? null);
-    }
-
-    private static function filled(mixed $value): bool
-    {
-        return is_scalar($value) && trim((string) $value) !== '';
-    }
 }

@@ -2660,21 +2660,36 @@ garde des modules (`ModuleAccessSubscriber`, `App\Services\FeatureAccess\AppRigh
 **Seulement en mode `live` de la plateforme ; en mode `demo`, rien n'est refusé.**
 
 - **Jamais de coupure au milieu d'une vente.** Refusés sans droit, parce que ce sont des DÉBUTS : `POST /api/caisse/open` (ouverture de
-  session), `POST /api/pos/terminal/payments` et `/connection-token` (nouveau paiement carte), `POST /api/order/create-multi-payment`
-  SANS référence de paiement déjà autorisé (`paymentMethods[].terminalPaymentId` ou `stripePaymentId` : la garde lit le corps),
-  `POST /api/pos/exchanges`, `/api/pos/rentals/deposits`, `/api/pos/gift-cards` sans `terminalPaymentId`. Toujours servis : la suite d'un
-  paiement commencé (état, annulation, vente avec sa référence), la fermeture de session, les dépôts et retraits, les rapports X et Z,
-  les reçus, les remboursements et retours, la remontée des ventes hors ligne (déjà encaissées), les PIN, les comptes et les lectures.
+  session), `POST /api/pos/terminal/payments` (nouveau paiement carte), `POST /api/order/create-multi-payment`, `POST /api/pos/exchanges`,
+  `/api/pos/rentals/deposits`, `/api/pos/gift-cards`. Le rang se décide par le CHEMIN seul (`AppRightRoutes::pos`). Toujours servis : la
+  suite d'un paiement commencé (état, annulation, remboursement), le jeton du lecteur (`/connection-token` : le lecteur se reconnecte
+  aussi pour finir un paiement ou rembourser), la fermeture de session, les dépôts et retraits, les rapports X et Z, les reçus, les
+  remboursements et retours, la remontée des ventes hors ligne (déjà encaissées), les PIN, les comptes et les lectures.
+- **La suite d'une vente commencée** (`App\Services\FeatureAccess\PosRightGuard`, lu seulement quand le droit manque) : une route
+  « début » est servie si c'est, en fait, la fin d'une vente commencée avant la fin du droit, reconnue par des faits VÉRIFIÉS EN BASE,
+  jamais par la seule présence d'un champ : le rejeu d'une requête déjà reçue (en-tête `Idempotency-Key` connu de
+  `pos_idempotency_key` : la réponse déjà donnée, pas une vente nouvelle) ; un retour libre (`create-multi-payment` avec `typeOrder`
+  autre que 1) ; ou des références de paiement au terminal (`terminalPaymentId`, `stripePaymentId`, à toute profondeur du corps : vente,
+  carte-cadeau, échange, caution) qui désignent TOUTES un paiement au terminal du site sans vente rattachée, ni échoué ni annulé. Une
+  référence inventée, déjà utilisée ou échouée ne vaut rien : refusée comme un début.
+- **Limites connues** (écrites pour la vérification de Fable) : la vente d'un administrateur par `POST /api/order/create` dans une
+  session ouverte n'est pas gardée par ce droit ; la remontée des ventes hors ligne n'est pas bornée (elles sont déjà encaissées) ; une
+  vente payée par lien de paiement (`stripePaymentId` qui n'est pas un paiement au terminal) est refusée sans droit ; le message est le
+  même quand le droit a pris fin et quand le commerçant a éteint la caisse lui-même (interrupteur du lot MOD-1).
 - **Fermé par défaut** : chaque route de `/api/caisse`, `/api/pos`, `/api/cash-registers` et `create-multi-payment` est rangée (début ou
   toujours servie) ; une route non rangée vaut un début, et `AppRightGateTest` échoue sur toute route de la caisse non rangée.
-- **Activation d'une clé** : une clé de caisse ou de l'application mobile ne s'active plus quand le droit du site a pris fin
-  (`AppKeyService::activate`, 403 `MODULE_INACTIVE`) : un nouvel appareil reste dehors.
+- **Activation d'une clé** : une clé de caisse ou de l'application mobile JAMAIS UTILISÉE ne s'active plus quand le droit du site a pris
+  fin (`AppKeyService::activate`, 403 `MODULE_INACTIVE`) : un nouvel appareil reste dehors. Une clé déjà utilisée se réactive (un
+  appareil déjà en service, réinstallé, doit pouvoir finir et fermer sa session).
 - **E-commerce mobile** : rien ne distingue une requête de l'application mobile de celle du web, sauf l'en-tête `X-App: mobile` que
   l'application envoie (brief remis à l'application Flutter). Avec lui, les débuts de parcours de la boutique (`POST /api/cart/quote`,
-  `/api/stripe/create-intent`, nouvel abonnement, `change-plan`, `resume`) exigent le droit de l'application mobile. **Limite** : ce n'est
-  pas une preuve (notre application l'envoie) ; SANS l'en-tête, une application ancienne est servie comme le web, jusqu'à la version qui
-  l'envoie ; seule l'activation d'une nouvelle clé mobile est alors refusée.
-- Les applications affichent le message (caisse : à l'ouverture ; application mobile : au paiement).
+  `/api/stripe/create-intent`, nouvel abonnement, `change-plan`, `resume`) exigent le droit de l'application mobile EN PLUS du module
+  boutique (les deux s'appliquent ; la boutique éteinte refuse d'abord, au nom de la boutique). **Limite** : ce n'est pas une preuve
+  (notre application l'envoie) ; SANS l'en-tête, une application ancienne est servie comme le web, jusqu'à la version qui l'envoie ;
+  seule l'activation d'une nouvelle clé mobile est alors refusée. **À poser par le propriétaire** : l'en-tête `X-App` doit être ajouté à
+  `Access-Control-Allow-Headers` de nginx (`docker/`, hors des livraisons) si une application l'envoie depuis un navigateur.
+- Les applications affichent le message (caisse : à l'ouverture ; application mobile : au paiement ; activation d'une clé :
+  `MODULE_INACTIVE` sur `POST /api/app/activate`).
 
 ## Mécanique interne
 

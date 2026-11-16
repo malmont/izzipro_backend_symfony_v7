@@ -111,8 +111,11 @@ class AppKeyService
         $tenant = $this->hosts->describe($row['tenant_code']) ?? throw new AppKeyException('APP_KEY_INVALID', 'Le site de cette clé n\'existe plus', 404);
         // lot ENT-1 : une clé de caisse ou de l'application mobile ne s'active plus quand le droit du site a pris fin (un nouvel appareil
         // reste dehors) ; rien n'est refusé en mode « demo » de la plateforme
+        // (une clé DÉJÀ utilisée se réactive encore : la tablette en service retrouve son jeton de terminal, pour fermer sa session, remonter
+        // ses ventes hors ligne, rembourser ; seule une clé neuve, un nouvel appareil, est refusée)
         $right = self::RIGHTS[$row['app']] ?? null;
-        if ($right !== null && $this->entitlements !== null && $this->platform !== null && !$this->platform->isDemo() && !$this->entitlements->isActive((string) $row['tenant_code'], $right)) {
+        $used = (int) ($row['use_count'] ?? 0) > 0 || ($row['last_used_at'] ?? null) !== null;
+        if ($right !== null && !$used && $this->entitlements !== null && $this->platform !== null && !$this->platform->isDemo() && !$this->entitlements->isActive((string) $row['tenant_code'], $right)) {
             throw new AppKeyException('MODULE_INACTIVE', $row['app'] === 'pos' ? 'Le droit à la caisse de ce site a pris fin.' : 'Le droit à l\'application mobile de ce site a pris fin.', 403);
         }
         $this->keys->touch((int) $row['id'], $device);

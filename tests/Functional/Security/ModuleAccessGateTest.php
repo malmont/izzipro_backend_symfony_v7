@@ -49,7 +49,7 @@ class ModuleAccessGateTest extends WebTestCase
 
         $this->assertNotSame(403, $this->get('/api/entreprise/1')->getStatusCode(), 'fiche entreprise : hors module');
         $this->assertNotSame(403, $this->get('/api/products')->getStatusCode(), 'catalogue public : servi même sans boutique (site vitrine)');
-        $this->assertNotSame(403, $this->post('/api/order/create-multi-payment', [])->getStatusCode(), 'vente au comptoir : caisse, pas boutique (non gardée dans ce lot)');
+        $this->assertNotSame('boutique', json_decode((string) $this->post('/api/order/create-multi-payment', [])->getContent(), true)['module'] ?? null, 'vente au comptoir : caisse, pas boutique (gardée par le droit de la caisse, lot ENT-1 : AppRightGateTest)');
         $this->assertNotSame(403, $this->post('/api/order/create', [])->getStatusCode(), 'commande : servie même module désactivé (paiement déjà autorisé finalisable)');
         $this->assertNotSame(403, $this->post('/api/order/create-guest', [])->getStatusCode());
         $this->assertSame(403, $this->post('/api/stripe/create-intent', [])->getStatusCode(), 'début du parcours : gardé');

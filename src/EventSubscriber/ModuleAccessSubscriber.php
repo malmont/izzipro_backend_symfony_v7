@@ -21,7 +21,7 @@ class ModuleAccessSubscriber implements EventSubscriberInterface
     public const CODE = 'MODULE_INACTIVE';
 
     public function __construct(private readonly ModuleAccessService $modules, private readonly PlatformModeService $platform, private readonly LoggerInterface $logger,
-        private readonly ?\App\Services\FeatureAccess\ModuleRequestHint $hints = null)
+        private readonly ?\App\Services\FeatureAccess\ModuleRequestHint $hints = null, private readonly ?\App\Services\FeatureAccess\PosRightGuard $posGuard = null)
     {
     }
 
@@ -40,15 +40,29 @@ class ModuleAccessSubscriber implements EventSubscriberInterface
         if (!str_starts_with($path, '/api/')) {
             return;
         }
-        $module = ModuleAccessService::moduleForPath($path, $request->getMethod()) ?? self::appRightModule($request, $path);
-        if ($module === null) {
+        // lot ENT-1 : une route peut relever de DEUX droits (un début de parcours de la boutique, envoyé par l'application mobile :
+        // la boutique, puis l'application mobile) ; le premier éteint refuse
+        $modules = array_values(array_unique(array_filter([ModuleAccessService::moduleForPath($path, $request->getMethod()), self::appRightModule($request, $path)])));
+        if ($modules === []) {
             return;
         }
+        $module = null;
         try {
             if ($this->platform->isDemo()) {
                 return; // mode demo de la plateforme : aucune restriction (PlatformModeService)
             }
-            if ($this->modules->isEnabled($module)) {
+            foreach ($modules as $candidate) {
+                if ($this->modules->isEnabled($candidate)) {
+                    continue;
+                }
+                // la caisse sans droit : la SUITE d'une vente commencée (paiement vérifié, retour, rejeu) est servie
+                if ($candidate === ModuleAccessService::POS && ($this->posGuard?->continues($request, $path) ?? false)) {
+                    continue;
+                }
+                $module = $candidate;
+                break;
+            }
+            if ($module === null) {
                 return;
             }
         } catch (\Throwable $e) {
@@ -79,10 +93,8 @@ class ModuleAccessSubscriber implements EventSubscriberInterface
     private static function appRightModule(\Symfony\Component\HttpFoundation\Request $request, string $path): ?string
     {
         if (preg_match(\App\Services\FeatureAccess\AppRightRoutes::POS_PATHS, $path) === 1) {
-            $body = json_decode((string) $request->getContent(), true);
-
-            return \App\Services\FeatureAccess\AppRightRoutes::pos($request->getMethod(), $path, is_array($body) ? $body : null) === \App\Services\FeatureAccess\AppRightRoutes::START
-                ? ModuleAccessService::POS : null;
+            // par le chemin seul : le corps n'est lu que si le droit est éteint (PosRightGuard)
+            return \App\Services\FeatureAccess\AppRightRoutes::pos($request->getMethod(), $path) === \App\Services\FeatureAccess\AppRightRoutes::START ? ModuleAccessService::POS : null;
         }
 
         return \App\Services\FeatureAccess\AppRightRoutes::mobileStart($request->getMethod(), $path, $request->headers->get(\App\Services\FeatureAccess\AppRightRoutes::MOBILE_HEADER))
