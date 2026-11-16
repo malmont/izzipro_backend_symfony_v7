@@ -12,7 +12,7 @@ security:
 
 
         api:
-            pattern:   ^/api(?!/(login|logout|health|currencies|tenant/check|tenant/hosts|app/activate|pos/pin-login|pos/users|r/|order/create-guest|cart/quote|subscription-plans$|stripe-config|stripe/create-intent|stripe/webhook|webhooks|adresses/autocomplete|adresses/details|Carrier|shipping/rates|shipping/summary|contact/submit|team|vehicles|vehicle_products|vehicle-products|financement|shared-media))
+            pattern:   ^/api(?!/(login|logout|health|currencies|tenant/check|tenant/hosts|app/activate|pos/pin-login|pos/users|r/|order/create-guest|cart/quote|subscription-plans$|stripe-config|stripe/create-intent|stripe/webhook|webhooks|adresses/autocomplete|adresses/details|Carrier|shipping/rates|shipping/summary|contact/submit|team|vehicles|vehicle_products|vehicle-products|financement|shared-media|site/storefront$|site/storefront/preview$))
             stateless: true
             provider:  tenant_user_provider
             jwt: ~

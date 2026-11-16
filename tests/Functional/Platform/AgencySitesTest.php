@@ -138,17 +138,19 @@ class AgencySitesTest extends WebTestCase
         $this->assertSame('mots du modèle', $this->pdo(SITE_TEMPLATE_TEST_DB)->query('SELECT seo_keywords FROM entreprise')->fetchColumn(), 'le modèle porte bien une fiche');
         $this->assertSame([1, null], [(int) $one('SELECT id FROM entreprise'), $one('SELECT seo_keywords FROM entreprise')], 'une fiche neuve, numéro 1 (celui que les fronts lisent), sans rien de celle du modèle');
 
-        // Lot CONSTRUCTION : le site neuf naît « en construction » ; le visiteur n'en lit que le nom, le serveur refuse le reste
-        $this->assertSame('construction', $one('SELECT storefront_state FROM entreprise'));
+        // Lot CONSTRUCTION : le site neuf, né avec sa boutique, est « en construction » EN ENTIER (étendue « site », bien que ses modules
+        // aient été posés un par un) ; le visiteur n'en lit que le nom, le serveur refuse le reste
+        $this->assertSame(['construction', null, true], [$one('SELECT storefront_state FROM entreprise'), $one('SELECT storefront_opened_at FROM entreprise'), (bool) $one('SELECT is_boutique_active FROM entreprise')]);
         $visitor = fn (string $path): array => [$this->api('GET', $path, null, null, $host)->getStatusCode(), json_decode((string) $this->client->getResponse()->getContent(), true)];
         [$status, $state] = $visitor('/api/site/storefront');
-        $this->assertSame([200, 'construction', 'Boutique de Zoé', false], [$status, $state['state'], $state['name'], $state['preview']['active']]);
-        $this->assertSame([403, 'STOREFRONT_UNDER_CONSTRUCTION'], [$visitor('/api/category')[0], $visitor('/api/category')[1]['code']]);
+        $this->assertSame([200, 'construction', 'site', 'Boutique de Zoé', false], [$status, $state['state'], $state['scope'], $state['name'], $state['preview']['active']]);
+        $this->assertSame([403, 'STOREFRONT_UNDER_CONSTRUCTION', 'site'], [$visitor('/api/category')[0], $visitor('/api/category')[1]['code'], $visitor('/api/category')[1]['scope']]);
+        $this->assertSame(403, $visitor('/api/landingpage-settings')[0], 'le site vitrine d\'un site neuf est fermé lui aussi');
         [$status, $legal] = $visitor('/api/entreprise/1');
         $this->assertSame([200, 'Boutique de Zoé', false], [$status, $legal['name'], $legal['isBoutiqueActive']]);
         // L'agence lit l'état de son site, l'ouvre (le responsable seulement) et obtient un lien d'aperçu : elle n'a pas de compte dans ce site
         $store = $this->json('GET', "/api/agency/sites/$code/storefront", null, 'member', 200);
-        $this->assertSame(['construction', false, ['products', 'payment', 'terms']], [$store['state'], $store['canOpen'], array_column($store['items'], 'key')]);
+        $this->assertSame(['construction', 'site', true, false, ['products', 'payment', 'terms']], [$store['state'], $store['scope'], $store['shop'], $store['canOpen'], array_column($store['items'], 'key')]);
         $this->assertSame('AGENCY_MANAGER_ONLY', $this->json('POST', "/api/agency/sites/$code/storefront/open", null, 'member', 403)['code']);
         $this->assertSame('AGENCY_MANAGER_ONLY', $this->json('POST', "/api/agency/sites/$code/storefront/preview-link", null, 'member', 403)['code']);
         $this->assertSame('STOREFRONT_NOT_READY', $this->json('POST', "/api/agency/sites/$code/storefront/open", null, 'manager', 409)['code'], 'boutique sans moyen de paiement : elle n\'ouvre pas');
@@ -351,7 +353,9 @@ class AgencySitesTest extends WebTestCase
         $this->assertSame('AGENCY_NOT_OPEN', $this->json('POST', "/api/agency/sites/$code/invitation", null, 'manager', 409)['code']);
         $this->assertSame('AGENCY_NOT_OPEN', $this->json('POST', "/api/agency/sites/$code/storefront/open", null, 'manager', 409)['code']);
         $this->assertSame('AGENCY_NOT_OPEN', $this->json('POST', "/api/agency/sites/$code/storefront/preview-link", null, 'manager', 409)['code']);
-        $this->assertSame('construction', $this->json('GET', "/api/agency/sites/$code/storefront", null, 'manager', 200)['state'], 'suspendue, l\'agence lit encore');
+        // (la boutique de ce site est suspendue avec l'agence : sans module Boutique, rien n'est « en construction »)
+        $read = $this->json('GET', "/api/agency/sites/$code/storefront", null, 'manager', 200);
+        $this->assertSame(['open', null, false, false], [$read['state'], $read['scope'], $read['shop'], $read['canOpen']], 'suspendue, l\'agence lit encore');
         // Au bout des 30 jours, le balayage des droits suspend la page publique (elle reste marquée par la cascade)
         static::getContainer()->get(EntitlementService::class)->sweep((new \DateTimeImmutable())->modify('+31 days'));
         $this->assertSame(['module.landing', 'suspended', $mark], $rights()[2]);

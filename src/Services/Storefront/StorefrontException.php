@@ -7,6 +7,7 @@ final class StorefrontException extends \RuntimeException
 {
     public const MESSAGES = [
         'STOREFRONT_UNDER_CONSTRUCTION' => 'Cette boutique n\'est pas encore ouverte.',
+        'STOREFRONT_ALREADY_OPEN' => 'Cette boutique est déjà ouverte : il n\'y a rien à montrer en aperçu.',
         'STOREFRONT_NOT_READY' => 'La boutique ne peut pas ouvrir sans moyen de paiement.',
         'STOREFRONT_NO_SHEET' => 'Ce site n\'a pas encore de fiche d\'entreprise.',
         'PREVIEW_LINK_INVALID' => 'Lien d\'aperçu invalide ou expiré : demandez-en un nouveau.',

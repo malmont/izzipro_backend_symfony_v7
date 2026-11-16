@@ -2,41 +2,64 @@
 
 namespace App\Services\Storefront;
 
+use App\Cache\CacheTags;
 use App\Services\Platform\TenantDatabaseConnector;
 use App\Services\TenantCacheService;
 use App\Services\TenantConnectionManager;
+use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantPublicHostResolver;
 use Psr\Log\LoggerInterface;
 
 /**
- * L'état public d'un site (lot CONSTRUCTION, 16/11/2026, `docs/boutique-en-construction.md`) : « en construction » ou « ouvert ».
+ * La boutique « en construction » (lot CONSTRUCTION, 16/11/2026, `docs/boutique-en-construction.md`).
  *
- * Tout site neuf naît en construction : le visiteur n'obtient que « Bientôt ouvert » au nom de la boutique ; les commandes et les
- * formulaires publics sont fermés à tous (`StorefrontGateSubscriber`). L'administrateur du site, ou le responsable de l'agence qui a
- * créé le site, l'ouvre après une liste de contrôle qui avertit sans bloquer, sauf sans aucun moyen de paiement quand la boutique en
- * ligne fait partie du site. Voir la vraie boutique avant l'ouverture : un compte d'équipe connecté, ou un LIEN D'APERÇU (un jeton
- * de 64 caractères, valable `PREVIEW_DAYS` jours ; un nouveau lien remplace l'ancien). Seule l'empreinte du jeton est gardée ; ni le
- * jeton ni l'en-tête qui le porte ne sont écrits dans un journal.
+ * Décisions du propriétaire : la construction ne vaut que si le MODULE BOUTIQUE est actif sur le site ; elle ne ferme que la boutique
+ * en ligne et, pour un site neuf, le site vitrine ; Mémoires Vivantes, Living Memory et Boussole n'en dépendent pas.
  *
- * Quatre colonnes de la fiche du site, en SQL direct : les gestes valent pour le site courant, ou pour un site géré désigné par
- * l'agence (`$site`), sans changer de site courant. L'état est gardé en cache quelques secondes ; un geste vide le cache du site.
+ * L'état gardé sur la fiche du site (`entreprise.storefront_state`) :
+ * - `construction` : la valeur de naissance de tout site neuf. Avec le module Boutique : la boutique ET le site vitrine sont fermés au
+ *   public (étendue `site`). Sans le module, rien n'est fermé ; un site neuf servi sans boutique passe à `open` (`born`,
+ *   `shopDeactivated`) : il est « en service ».
+ * - `boutique` : la boutique a été ajoutée à un site déjà en service (ou refermée) : elle seule est fermée (étendue `shop`).
+ * - `open` : en service. C'est l'état de tout site d'avant ce lot. Avec une heure d'ouverture : la boutique a été ouverte une fois.
+ * `closure()` rend l'étendue effective : `site`, `shop`, ou null (rien de fermé).
+ *
+ * L'administrateur du site, ou le responsable de l'agence qui a créé le site, ouvre après une liste de contrôle qui avertit sans
+ * bloquer, sauf sans moyen de paiement. Voir la vraie boutique avant : un compte d'équipe connecté, ou un LIEN D'APERÇU (jeton de
+ * 64 caractères, `PREVIEW_DAYS` jours, un nouveau lien remplace l'ancien). Seule l'empreinte du jeton est gardée ; ni le jeton ni
+ * l'en-tête qui le porte ne sont écrits dans un journal.
+ *
+ * Colonnes de la fiche lues et écrites en SQL direct. L'état du site COURANT se lit sur la connexion que la requête a déjà (ni base
+ * maître, ni connexion de plus) et se garde en cache quelques secondes ; les gestes valent pour le site courant, ou pour un site géré
+ * désigné par l'agence (`$site`), sans changer de site courant ; un geste vide le cache du site.
  */
 class StorefrontService
 {
     public const CONSTRUCTION = 'construction';
+    public const SHOP_ONLY = 'boutique';
     public const OPEN = 'open';
+    public const SCOPE_SITE = 'site';
+    public const SCOPE_SHOP = 'shop';
     public const PREVIEW_DAYS = 7;
     public const PREVIEW_HEADER = 'X-Storefront-Preview';
     /** Durée de vie de l'état en cache, côté serveur et côté front (`Cache-Control`) */
     public const CACHE_SECONDS = 15;
     public const RESOURCE = 'storefront';
     private const CACHE_KEY = 'storefront_state';
+    private const COLUMNS = 'name, locale, is_boutique_active, storefront_state, storefront_opened_at, storefront_preview_hash, storefront_preview_expires_at';
+
+    /** Ce que le visiteur d'un site neuf en construction lit de la fiche du site : l'identité légale, les textes légaux, le logo, et les indicateurs des applications */
+    public const LEGAL_FIELDS = ['id', 'name', 'logo', 'faviconUrl', 'email', 'tel', 'ein', 'tvaIntracommunautaire', 'conditionOfUse', 'LegalNotice', 'privacyPolicy',
+        'adress', 'street1', 'street2', 'city', 'zip', 'country', 'province', 'currency', 'locale',
+        // les applications lisent leur indicateur avant la connexion ; Mémoires Vivantes et Boussole ne dépendent pas de la boutique
+        'isPosActive', 'isMobileShopActive', 'isManagementAppActive', 'isLivingMemoryActive', 'isMemoireVivanteActive', 'isBoussoleEsgActive'];
 
     /** @var array<string, array<string, mixed>> état lu pendant la requête, par code de site */
     private array $read = [];
 
     public function __construct(
         private readonly TenantConnectionManager $tenants,
+        private readonly TenantEntityManagerProvider $emProvider,
         private readonly TenantDatabaseConnector $connector,
         private readonly TenantCacheService $cache,
         private readonly TenantPublicHostResolver $hosts,
@@ -45,10 +68,11 @@ class StorefrontService
     }
 
     /**
-     * L'état du site courant, en cache quelques secondes. Une base pas encore migrée ou injoignable est tenue pour ouverte, sans cache ; un site sans fiche suit la valeur par défaut de sa base. Rien à
-     * protéger, et jamais un site existant fermé par accident.
+     * L'état du site courant, gardé en cache quelques secondes. Lu sur la connexion du site que la requête a déjà. Une base pas encore
+     * migrée, ou illisible, est tenue pour ouverte (jamais un site existant fermé par accident) : ce repli vaut pour la requête et
+     * n'est gardé dans aucun cache. Un site sans fiche suit la valeur par défaut de sa base.
      *
-     * @return array{state: string, name: string, locale: string, openedAt: ?string, previewHash: ?string, previewExpiresAt: ?string}
+     * @return array{state: string, shop: bool, name: string, locale: string, openedAt: ?string, previewHash: ?string, previewExpiresAt: ?string}
      */
     public function current(): array
     {
@@ -56,27 +80,32 @@ class StorefrontService
         if ($code === '') {
             return self::fallback('');
         }
-
         if (isset($this->read[$code])) {
             return $this->read[$code];
         }
         try {
             return $this->read[$code] = (array) $this->cache->get(self::CACHE_KEY, function () use ($code): array {
-                $site = $this->connector->tenant($code);
+                $db = $this->emProvider->getEntityManager()->getConnection();
 
-                return $site === null ? self::fallback($code) : $this->load($site);
-            }, self::CACHE_SECONDS);
+                return self::state($code, $db->fetchAssociative('SELECT ' . self::COLUMNS . ' FROM entreprise ORDER BY id LIMIT 1') ?: null,
+                    fn (): string => (string) $db->fetchOne("SELECT COALESCE(column_default, '') FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'entreprise' AND column_name = 'storefront_state'"));
+            }, self::CACHE_SECONDS, [...CacheTags::listTags(CacheTags::ENTREPRISE)]);
         } catch (\Throwable $e) {
-            // base injoignable ou pas encore migrée : le site est tenu pour ouvert, et cette réponse n'est gardée nulle part
             $this->logger->warning(sprintf('État public du site %s illisible (%s) : tenu pour ouvert.', $code, $e::class));
 
-            return self::fallback($code);
+            return $this->read[$code] = self::fallback($code);
         }
+    }
+
+    /** L'étendue de la construction du site courant : `site`, `shop`, ou null (rien n'est fermé) */
+    public function closure(): ?string
+    {
+        return self::closureOf($this->current());
     }
 
     public function isUnderConstruction(): bool
     {
-        return $this->current()['state'] === self::CONSTRUCTION;
+        return $this->closure() !== null;
     }
 
     /** Ce jeton d'aperçu est-il celui du site courant, encore valable ? Comparaison à temps constant, sur l'empreinte */
@@ -91,31 +120,33 @@ class StorefrontService
     }
 
     /**
-     * Ce qu'un visiteur lit : l'état, le nom, la langue, et si SA requête est en aperçu. Rien d'autre.
+     * Ce qu'un visiteur lit : l'état, son étendue, le nom, la langue, et si SA requête est en aperçu. Rien d'autre.
      *
-     * @return array{state: string, name: string, locale: string, openedAt: ?string, preview: array{active: bool, expiresAt: ?string}}
+     * @return array{state: string, scope: ?string, name: string, locale: string, openedAt: ?string, preview: array{active: bool, expiresAt: ?string}}
      */
     public function publicView(bool $preview, bool $byLink = false): array
     {
         $state = $this->current();
-        $active = $state['state'] === self::CONSTRUCTION && $preview;
+        $scope = self::closureOf($state);
+        $active = $scope !== null && $preview;
 
-        return ['state' => $state['state'], 'name' => $state['name'], 'locale' => $state['locale'], 'openedAt' => self::iso($state['openedAt']),
+        return ['state' => $scope !== null ? self::CONSTRUCTION : self::OPEN, 'scope' => $scope, 'name' => $state['name'], 'locale' => $state['locale'], 'openedAt' => $scope === null ? self::iso($state['openedAt']) : null,
             'preview' => ['active' => $active, 'expiresAt' => $active && $byLink ? self::iso($state['previewExpiresAt']) : null]];
     }
 
     /**
-     * La liste de contrôle avant d'ouvrir. Elle avertit sans bloquer, sauf sans aucun moyen de paiement quand la boutique en ligne
-     * fait partie du site.
+     * La liste de contrôle avant d'ouvrir. Elle avertit sans bloquer, sauf sans moyen de paiement (un compte de paiement connecté ET
+     * actif). Sans le module Boutique il n'y a rien à ouvrir : `shop` est faux, l'état est « open ».
      *
      * @param array{code: string, dbname: string}|null $site un site géré (agence) ; null : le site courant
-     * @return array{state: string, openedAt: ?string, canOpen: bool, items: list<array{key: string, ok: bool, blocking: bool, message: string}>}
+     * @return array{state: string, scope: ?string, shop: bool, openedAt: ?string, canOpen: bool, items: list<array{key: string, ok: bool, blocking: bool, message: string}>}
      */
     public function checklist(?array $site = null): array
     {
         $site = $this->site($site);
         $pdo = $this->connector->pdo($site['dbname']);
         $state = $this->load($site, $pdo);
+        $scope = self::closureOf($state);
         $one = static function (string $sql) use ($pdo): mixed {
             try {
                 return $pdo->query($sql)->fetchColumn();
@@ -123,31 +154,32 @@ class StorefrontService
                 return null;
             }
         };
-        $shop = in_array($one('SELECT is_boutique_active FROM entreprise ORDER BY id LIMIT 1'), [true, 't', 'true', 1, '1'], true);
         $products = (int) $one('SELECT COUNT(*) FROM product p WHERE p.is_web = TRUE AND EXISTS (SELECT 1 FROM product_variant v WHERE v.product_id = p.id AND v.price > 0)') > 0;
         $payment = $this->tenants->isTenantInternal($site['code']) || (int) $one("SELECT COUNT(*) FROM stripe_config WHERE (COALESCE(account_id, '') <> '' AND is_active) OR (COALESCE(live_account_id, '') <> '' AND live_is_active)") > 0;
         $terms = (int) $one("SELECT COUNT(*) FROM entreprise_translation WHERE COALESCE(TRIM(condition_of_use), '') <> ''") > 0;
         $items = [
             ['key' => 'products', 'ok' => $products, 'blocking' => false, 'message' => $products ? 'Des articles sont visibles sur la boutique.' : 'Aucun article n\'est visible sur la boutique.'],
-            ['key' => 'payment', 'ok' => $payment, 'blocking' => $shop && !$payment, 'message' => $payment ? 'Un moyen de paiement est réglé.' : 'Aucun moyen de paiement n\'est réglé : la boutique ne peut pas encaisser.'],
+            ['key' => 'payment', 'ok' => $payment, 'blocking' => !$payment, 'message' => $payment ? 'Un moyen de paiement est réglé.' : 'Aucun moyen de paiement n\'est réglé : la boutique ne peut pas encaisser.'],
             ['key' => 'terms', 'ok' => $terms, 'blocking' => false, 'message' => $terms ? 'Les conditions de vente sont remplies.' : 'Les conditions de vente sont vides.'],
         ];
 
-        return ['state' => $state['state'], 'openedAt' => self::iso($state['openedAt']), 'canOpen' => array_filter($items, static fn (array $i): bool => $i['blocking']) === [], 'items' => $items];
+        return ['state' => $scope !== null ? self::CONSTRUCTION : self::OPEN, 'scope' => $scope, 'shop' => $state['shop'], 'openedAt' => $scope === null ? self::iso($state['openedAt']) : null,
+            'canOpen' => $scope !== null && array_filter($items, static fn (array $i): bool => $i['blocking']) === [], 'items' => $items];
     }
 
     /**
-     * Ouvre le site au public. Refus `STOREFRONT_NOT_READY` (409) si un point de la liste bloque. Déjà ouvert : rien ne change.
+     * Ouvre la boutique au public. Refus `STOREFRONT_NOT_READY` (409) sans moyen de paiement. Rien à ouvrir (déjà ouverte, ou site
+     * sans boutique) : rien ne change.
      *
      * @param array{code: string, dbname: string}|null $site
-     * @return array{state: string, openedAt: ?string}
+     * @return array{state: string, scope: ?string, openedAt: ?string}
      */
     public function open(?array $site, ?string $by): array
     {
         $site = $this->site($site);
         $checklist = $this->checklist($site);
-        if ($checklist['state'] === self::OPEN) {
-            return ['state' => self::OPEN, 'openedAt' => $checklist['openedAt']];
+        if ($checklist['scope'] === null) {
+            return ['state' => self::OPEN, 'scope' => null, 'openedAt' => $checklist['openedAt']];
         }
         if (!$checklist['canOpen']) {
             throw new StorefrontException('STOREFRONT_NOT_READY', 409, ['items' => $checklist['items']]);
@@ -156,28 +188,88 @@ class StorefrontService
             [(new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s')], 'open', $by);
         $state = $this->load($site);
 
-        return ['state' => $state['state'], 'openedAt' => self::iso($state['openedAt'])];
+        return ['state' => self::OPEN, 'scope' => null, 'openedAt' => self::iso($state['openedAt'])];
     }
 
     /**
-     * Referme le site (retour en construction) : les commandes et les formulaires se ferment aussitôt.
+     * Referme la boutique d'un site en service : la boutique SEULE repasse en construction (ses commandes se ferment aussitôt), le
+     * site vitrine reste servi. Le lien d'aperçu est retiré. Déjà en construction : rien ne change.
      *
      * @param array{code: string, dbname: string}|null $site
-     * @return array{state: string, openedAt: ?string}
+     * @return array{state: string, scope: ?string, openedAt: ?string}
      */
     public function close(?array $site, ?string $by): array
     {
         $site = $this->site($site);
-        if ($this->load($site)['state'] !== self::CONSTRUCTION) {
-            $this->write($site, "UPDATE entreprise SET storefront_state = 'construction', storefront_opened_at = NULL, storefront_preview_hash = NULL, storefront_preview_expires_at = NULL WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1)", [], 'close', $by);
+        $state = $this->load($site);
+        if ($state['state'] === self::OPEN) {
+            $this->write($site, "UPDATE entreprise SET storefront_state = 'boutique', storefront_preview_hash = NULL, storefront_preview_expires_at = NULL WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1)", [], 'close', $by);
+            $state = $this->load($site);
         }
+        $scope = self::closureOf($state);
 
-        return ['state' => self::CONSTRUCTION, 'openedAt' => null];
+        return ['state' => $scope !== null ? self::CONSTRUCTION : self::OPEN, 'scope' => $scope, 'openedAt' => null];
+    }
+
+    /**
+     * Le module Boutique vient d'être activé sur un site DÉJÀ EN SERVICE (droit accordé, indicateur coché) : si sa boutique n'a jamais
+     * été ouverte, elle naît en construction, et elle seule ; le site vitrine reste servi. Un site est « en service » quand son état
+     * gardé est `open` : tout site d'avant ce lot, et tout site neuf qui a été servi sans boutique (`shopDeactivated`, `born`). Une
+     * boutique déjà ouverte une fois n'est pas refermée par un module éteint puis rallumé. Un site neuf pas encore ouvert (état
+     * `construction`) n'est pas touché : avec sa boutique, il reste fermé en entier. Rend vrai si l'état a changé.
+     */
+    public function shopActivated(string $tenantCode): bool
+    {
+        return $this->transition($tenantCode, "UPDATE entreprise SET storefront_state = 'boutique' WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1) AND storefront_opened_at IS NULL AND storefront_state = 'open'", 'boutique activée');
+    }
+
+    /**
+     * Le module Boutique vient d'être éteint sur un site neuf encore en construction : sans boutique, un site n'est jamais fermé, il
+     * est donc servi au public, et il est désormais « en service ». Si la boutique lui revient plus tard, elle seule naîtra en
+     * construction (`shopActivated`) : un site vitrine déjà servi ne se referme pas. Rend vrai si l'état a changé.
+     */
+    public function shopDeactivated(string $tenantCode): bool
+    {
+        return $this->transition($tenantCode, "UPDATE entreprise SET storefront_state = 'open' WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1) AND storefront_opened_at IS NULL AND storefront_state = 'construction'", 'boutique éteinte');
+    }
+
+    /**
+     * La fin de la fabrication d'un site neuf, une fois sa fiche écrite et ses modules posés (ils le sont un par un : les passages
+     * d'un module pendant la fabrication ne disent rien du site). Avec la boutique : le site naît fermé en entier. Sans elle : il
+     * est en service. Rend faux si l'état n'a pas pu être posé.
+     */
+    public function born(string $tenantCode): bool
+    {
+        return $this->transition($tenantCode, "UPDATE entreprise SET storefront_state = CASE WHEN is_boutique_active THEN 'construction' ELSE 'open' END, storefront_opened_at = NULL,"
+            . ' storefront_preview_hash = NULL, storefront_preview_expires_at = NULL WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1)', 'naissance du site');
+    }
+
+    /** Un passage de l'état d'un site désigné par son code, en une instruction ; jamais bloquant pour l'appelant */
+    private function transition(string $tenantCode, string $sql, string $what): bool
+    {
+        $site = $this->connector->tenant($tenantCode);
+        if ($site === null) {
+            return false;
+        }
+        try {
+            $stmt = $this->connector->pdo($site['dbname'])->prepare($sql);
+            $stmt->execute();
+            $changed = $stmt->rowCount() === 1;
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf('Boutique en construction, %s sur %s : état non posé (%s).', $what, $tenantCode, $e::class));
+
+            return false;
+        }
+        unset($this->read[$site['code']]);
+        $this->connector->invalidateSiteCache($site['code'], $site['dbname']);
+
+        return $changed;
     }
 
     /**
      * Un lien d'aperçu neuf, qui remplace l'ancien : `https://<adresse du site>/apercu#token=<jeton>` (jeton dans le fragment, jamais
-     * dans les paramètres). Le jeton n'est rendu qu'ici, une fois ; la base n'en garde que l'empreinte.
+     * dans les paramètres). Le jeton n'est rendu qu'ici, une fois ; la base n'en garde que l'empreinte. Refus sur une boutique
+     * ouverte : il n'y a rien à montrer en aperçu.
      *
      * @param array{code: string, dbname: string}|null $site
      * @return array{url: string, expiresAt: string}
@@ -185,6 +277,9 @@ class StorefrontService
     public function previewLink(?array $site, ?string $by): array
     {
         $site = $this->site($site);
+        if (self::closureOf($this->load($site)) === null) {
+            throw new StorefrontException('STOREFRONT_ALREADY_OPEN', 409);
+        }
         $host = $this->hosts->describe($site['code'])['host'] ?? null;
         if (!is_string($host) || $host === '') {
             throw new StorefrontException('STOREFRONT_NO_SHEET', 409);
@@ -197,15 +292,9 @@ class StorefrontService
         return ['url' => 'https://' . $host . '/apercu#token=' . $token, 'expiresAt' => $expires->format(\DateTimeInterface::ATOM)];
     }
 
-    /** Ce que le visiteur d'un site en construction lit de la fiche du site : l'identité légale, les textes légaux, le logo. Rien d'autre */
-    public const LEGAL_FIELDS = ['id', 'name', 'logo', 'faviconUrl', 'email', 'tel', 'ein', 'tvaIntracommunautaire', 'conditionOfUse', 'LegalNotice', 'privacyPolicy',
-        'adress', 'street1', 'street2', 'city', 'zip', 'country', 'province', 'currency', 'locale',
-        // les applications de l'équipe (caisse, gestion, Living Memory, boutique mobile) lisent leur indicateur avant la connexion
-        'isPosActive', 'isMobileShopActive', 'isManagementAppActive', 'isLivingMemoryActive'];
-
     /**
      * La fiche du site réduite à `LEGAL_FIELDS` : même forme (les fronts lisent les mêmes champs), tout le reste remis à sa valeur vide
-     * (présentation, réseaux sociaux, référencement, pixel de suivi, modules).
+     * (présentation, réseaux sociaux, référencement, pixel de suivi, modules de la boutique et du site vitrine).
      */
     public static function legalOnly(\App\Dto\EntrepriseDto $dto): \App\Dto\EntrepriseDto
     {
@@ -224,6 +313,20 @@ class StorefrontService
         return $out;
     }
 
+    /** @param array<string, mixed> $state l'étendue effective : rien n'est fermé sans le module Boutique */
+    private static function closureOf(array $state): ?string
+    {
+        if (!$state['shop']) {
+            return null;
+        }
+
+        return match ($state['state']) {
+            self::CONSTRUCTION => self::SCOPE_SITE,
+            self::SHOP_ONLY => self::SCOPE_SHOP,
+            default => null,
+        };
+    }
+
     /** @param array{code: string, dbname: string}|null $site @return array{code: string, dbname: string} */
     private function site(?array $site): array
     {
@@ -236,25 +339,37 @@ class StorefrontService
     }
 
     /**
+     * L'état d'un site désigné, lu dans sa base (gestes de l'administrateur et de l'agence : jamais en cache).
+     *
      * @param array{code: string, dbname: string} $site
-     * @return array{state: string, name: string, locale: string, openedAt: ?string, previewHash: ?string, previewExpiresAt: ?string}
+     * @return array{state: string, shop: bool, name: string, locale: string, openedAt: ?string, previewHash: ?string, previewExpiresAt: ?string}
      */
     private function load(array $site, ?\PDO $pdo = null): array
     {
         $pdo ??= $this->connector->pdo($site['dbname']);
-        $row = $pdo->query('SELECT name, locale, storefront_state, storefront_opened_at, storefront_preview_hash, storefront_preview_expires_at FROM entreprise ORDER BY id LIMIT 1')->fetch(\PDO::FETCH_ASSOC);
-        if (!$row) {
-            // Pas encore de fiche : un site neuf est DÉJÀ en construction (la valeur par défaut de la colonne, posée à sa création, le
-            // dit) ; un site d'avant ce lot qui n'aurait pas de fiche reste ouvert
-            $default = (string) $pdo->query("SELECT COALESCE(column_default, '') FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'entreprise' AND column_name = 'storefront_state'")->fetchColumn();
-            $state = self::fallback($site['code'], (string) ($this->hosts->describe($site['code'])['name'] ?? $site['code']));
+        $row = $pdo->query('SELECT ' . self::COLUMNS . ' FROM entreprise ORDER BY id LIMIT 1')->fetch(\PDO::FETCH_ASSOC);
 
-            return str_contains($default, self::CONSTRUCTION) ? ['state' => self::CONSTRUCTION] + $state : $state;
+        return self::state($site['code'], $row ?: null,
+            static fn (): string => (string) $pdo->query("SELECT COALESCE(column_default, '') FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'entreprise' AND column_name = 'storefront_state'")->fetchColumn());
+    }
+
+    /**
+     * @param array<string, mixed>|null $row la fiche du site, ou null s'il n'en a pas encore
+     * @param callable(): string $default la valeur par défaut de la colonne dans la base de ce site
+     * @return array{state: string, shop: bool, name: string, locale: string, openedAt: ?string, previewHash: ?string, previewExpiresAt: ?string}
+     */
+    private static function state(string $code, ?array $row, callable $default): array
+    {
+        if ($row === null) {
+            // Pas encore de fiche : un site neuf est déjà en construction (la valeur par défaut de la colonne, posée à sa création, le dit),
+            // et sa fiche naîtra avec le module Boutique actif ; un site d'avant ce lot sans fiche reste ouvert
+            return str_contains($default(), self::CONSTRUCTION) ? ['state' => self::CONSTRUCTION, 'shop' => true] + self::fallback($code) : self::fallback($code);
         }
 
-        return ['state' => $row['storefront_state'] === self::CONSTRUCTION ? self::CONSTRUCTION : self::OPEN, 'name' => trim((string) $row['name']) !== '' ? (string) $row['name'] : $site['code'],
-            'locale' => in_array($row['locale'], ['fr', 'en'], true) ? (string) $row['locale'] : 'fr', 'openedAt' => $row['storefront_opened_at'],
-            'previewHash' => $row['storefront_preview_hash'], 'previewExpiresAt' => $row['storefront_preview_expires_at']];
+        return ['state' => in_array($row['storefront_state'], [self::CONSTRUCTION, self::SHOP_ONLY], true) ? (string) $row['storefront_state'] : self::OPEN,
+            'shop' => in_array($row['is_boutique_active'], [true, 't', 'true', 1, '1'], true),
+            'name' => trim((string) $row['name']) !== '' ? (string) $row['name'] : $code, 'locale' => in_array($row['locale'], ['fr', 'en'], true) ? (string) $row['locale'] : 'fr',
+            'openedAt' => $row['storefront_opened_at'], 'previewHash' => $row['storefront_preview_hash'], 'previewExpiresAt' => $row['storefront_preview_expires_at']];
     }
 
     /**
@@ -281,10 +396,10 @@ class StorefrontService
         }
     }
 
-    /** @return array{state: string, name: string, locale: string, openedAt: ?string, previewHash: ?string, previewExpiresAt: ?string} */
-    private static function fallback(string $code, ?string $name = null): array
+    /** @return array{state: string, shop: bool, name: string, locale: string, openedAt: ?string, previewHash: ?string, previewExpiresAt: ?string} */
+    private static function fallback(string $code): array
     {
-        return ['state' => self::OPEN, 'name' => $name ?? $code, 'locale' => 'fr', 'openedAt' => null, 'previewHash' => null, 'previewExpiresAt' => null];
+        return ['state' => self::OPEN, 'shop' => false, 'name' => $code, 'locale' => 'fr', 'openedAt' => null, 'previewHash' => null, 'previewExpiresAt' => null];
     }
 
     private static function iso(?string $at): ?string

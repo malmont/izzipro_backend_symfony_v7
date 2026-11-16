@@ -124,6 +124,9 @@ foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
     // voient toujours leurs courriels. Le niveau automatique d'un vrai site (« Essentiel » pour un site d'essai) et chaque autre niveau
     // sont vérifiés par les tests du lot, qui règlent le niveau eux-mêmes (NotificationLevelsTest)
     $tenantDb->exec("UPDATE entreprise SET notification_level = 'all'");
+    // Lot CONSTRUCTION : la boutique des sites de test est tenue pour « déjà ouverte » ; sinon tout essai qui active le module Boutique
+    // (droit accordé, indicateur coché) la ferait naître en construction et fermerait la boutique du site partagé pour les essais suivants
+    $tenantDb->exec("UPDATE entreprise SET storefront_state = 'open', storefront_opened_at = NOW()");
     $tenantDb = null;
 }
 

@@ -15,7 +15,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * Page « Ouverture du site » de l'espace d'administration (lot CONSTRUCTION, 16/11/2026, `docs/boutique-en-construction.md`) :
  * l'administrateur du site y lit l'état public de SON site, la liste de contrôle, et fait les mêmes gestes que par l'API
  * (`/api/site/storefront/*`) : ouvrir, refermer, créer un lien d'aperçu. Chaque geste revérifie le rôle et le jeton CSRF. Le lien
- * d'aperçu est montré UNE fois, sur la page qui suit sa création ; il n'est gardé nulle part en clair.
+ * d'aperçu est montré UNE fois, dans la réponse de sa création ; il n'est gardé nulle part en clair, pas même en session.
  */
 #[IsGranted('ROLE_ADMIN')]
 class StorefrontAdminController extends AbstractController
@@ -35,10 +35,16 @@ class StorefrontAdminController extends AbstractController
             $checklist = null;
             $this->addFlash('warning', $e->getMessage());
         }
-        // le lien d'aperçu créé à l'instant : lu une fois dans la session, puis retiré
-        $link = $request->hasSession() ? $request->getSession()->remove('storefront_preview_link') : null;
+        return $this->page($checklist, null);
+    }
 
-        return $this->render('admin/ouverture_site.html.twig', ['csrf_id' => self::CSRF_ID, 'checklist' => $checklist, 'link' => is_array($link) ? $link : null, 'days' => StorefrontService::PREVIEW_DAYS]);
+    /** @param array<string, mixed>|null $checklist @param array{url: string, expiresAt: string}|null $link */
+    private function page(?array $checklist, ?array $link): Response
+    {
+        $response = $this->render('admin/ouverture_site.html.twig', ['csrf_id' => self::CSRF_ID, 'checklist' => $checklist, 'link' => $link, 'days' => StorefrontService::PREVIEW_DAYS]);
+        $response->headers->set('Cache-Control', 'private, no-store');
+
+        return $response;
     }
 
     #[Route('/admin/ouverture-du-site/{action}', name: 'admin_ouverture_site_action', methods: ['POST'], requirements: ['action' => 'ouvrir|refermer|apercu'])]
@@ -53,13 +59,15 @@ class StorefrontAdminController extends AbstractController
         try {
             if ($action === 'ouvrir') {
                 $this->storefront->open(null, $by);
-                $this->addFlash('success', 'Le site est ouvert au public.');
+                $this->addFlash('success', 'La boutique est ouverte au public.');
             } elseif ($action === 'refermer') {
                 $this->storefront->close(null, $by);
-                $this->addFlash('success', 'Le site est refermé : il est de nouveau « en construction ».');
+                $this->addFlash('success', 'La boutique est refermée : elle est de nouveau « en construction ». Le site vitrine reste servi.');
             } else {
-                $request->getSession()->set('storefront_preview_link', $this->storefront->previewLink(null, $by));
-                $this->addFlash('success', 'Lien d\'aperçu créé : il remplace le précédent.');
+                // le lien est rendu dans CETTE réponse, une fois : il n'est gardé ni en session ni ailleurs
+                $link = $this->storefront->previewLink(null, $by);
+
+                return $this->page($this->storefront->checklist(), $link);
             }
         } catch (StorefrontException $e) {
             $this->addFlash('danger', $e->getMessage());

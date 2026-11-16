@@ -31,6 +31,7 @@ class AgencySiteBuilder
         private readonly AgencySiteInviter $inviter,
         private readonly TenantPublicHostResolver $hosts,
         private readonly LoggerInterface $logger,
+        private readonly \App\Services\Storefront\StorefrontService $storefront,
     ) {
     }
 
@@ -74,6 +75,11 @@ class AgencySiteBuilder
         }
         // la fiche reflète les droits, même quand aucun n'a été posé (demande sans module) : une fiche neuve ouvre des modules par défaut
         $this->rights->project($code);
+        // Lot CONSTRUCTION : l'état de naissance se pose ici, une fois les modules en place (ils sont posés un par un). Avec sa
+        // boutique, le site neuf est fermé en entier jusqu'à son ouverture ; sans elle, il est en service.
+        if (!$this->storefront->born($code)) {
+            $warnings[] = 'STOREFRONT_STATE_NOT_SET';
+        }
 
         return ['modules' => $modules, 'defaults' => $applied, 'warnings' => $warnings];
     }

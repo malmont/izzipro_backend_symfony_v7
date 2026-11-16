@@ -491,8 +491,9 @@ de la plateforme pour dépanner tant qu'AG-3 n'existe pas. Trois garde-fous, sur
 
 Le site de référence porte deux comptes de ce rôle : le propriétaire regarde lui-même le second.
 
-Depuis le lot CONSTRUCTION (16/11/2026, `docs/boutique-en-construction.md`), un site créé par une agence naît « en construction » :
-l'agence lit son état, l'ouvre (`POST /api/agency/sites/{code}/storefront/open`) et obtient un lien d'aperçu
+Depuis le lot CONSTRUCTION (16/11/2026, `docs/boutique-en-construction.md`), un site créé par une agence avec le module Boutique
+naît « en construction », fermé en entier (son état de naissance est posé à la fin de la fabrication, `StorefrontService::born` ;
+sans le module Boutique, le site est en service aussitôt) : l'agence lit son état, l'ouvre (`POST /api/agency/sites/{code}/storefront/open`) et obtient un lien d'aperçu
 (`POST …/storefront/preview-link`). La création d'un site retire aussi le compte de paiement que le modèle porterait.
 
 ### 8.10 Limites connues

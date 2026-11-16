@@ -37,7 +37,13 @@ class StorefrontController extends AbstractController
         $personal = $team || $request->headers->has(StorefrontService::PREVIEW_HEADER) || $request->headers->has('Authorization') || $request->cookies->count() > 0;
         $response->headers->set('Cache-Control', ($personal ? 'private' : 'public') . ', max-age=' . StorefrontService::CACHE_SECONDS);
         $response->headers->set('Vary', 'Authorization, Cookie, ' . StorefrontService::PREVIEW_HEADER . ', X-Tenant-Host');
-        if ($view['state'] === StorefrontService::CONSTRUCTION) {
+        // Cette route est lue hors du pare-feu de l'API (un jeton expiré ne doit pas coûter l'état au visiteur) : elle passe donc par le
+        // pare-feu à session, qui rendrait la réponse privée. Sans cookie reçu, sans session démarrée et sans cookie posé, elle reste
+        // publique (même règle que `PublicReadCacheSubscriber`).
+        if (!$personal && !$request->hasPreviousSession() && !($request->hasSession() && $request->getSession()->isStarted()) && $response->headers->getCookies() === []) {
+            $response->headers->set(\Symfony\Component\HttpKernel\EventListener\AbstractSessionListener::NO_AUTO_CACHE_CONTROL_HEADER, 'true');
+        }
+        if ($view['scope'] === StorefrontService::SCOPE_SITE) {
             $response->headers->set('X-Robots-Tag', 'noindex, nofollow');
         }
 

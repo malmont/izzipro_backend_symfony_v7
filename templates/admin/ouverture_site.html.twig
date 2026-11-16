@@ -13,9 +13,14 @@
     {% if checklist is null %}
         <p class="text-muted">Ce site n'a pas encore de fiche d'entreprise : créez-la d'abord.</p>
     {% else %}
-        <p>État du site : <strong data-etat="{{ checklist.state }}">{{ checklist.state == 'open' ? 'ouvert au public' : 'en construction' }}</strong>{% if checklist.openedAt %} depuis le {{ checklist.openedAt|slice(0, 10) }} (UTC){% endif %}.</p>
-        {% if checklist.state != 'open' %}
-            <p class="text-muted">Vos visiteurs voient « Bientôt ouvert », au nom de votre boutique. Les commandes et les formulaires sont fermés. Vous, connecté, voyez la vraie boutique.</p>
+        {% if not checklist.shop %}
+            <p data-etat="open" data-etendue="">Votre site n'a pas de boutique en ligne : il est servi au public, il n'y a rien à ouvrir ici.</p>
+        {% else %}
+        <p>État de la boutique : <strong data-etat="{{ checklist.state }}" data-etendue="{{ checklist.scope }}">{{ checklist.state == 'open' ? 'ouverte au public' : 'en construction' }}</strong>{% if checklist.openedAt %} depuis le {{ checklist.openedAt|slice(0, 10) }} (UTC){% endif %}.</p>
+        {% if checklist.scope == 'site' %}
+            <p class="text-muted">Vos visiteurs voient « Bientôt ouvert », au nom de votre boutique, sur tout le site. Les commandes et les formulaires sont fermés. Vous, connecté, voyez la vraie boutique.</p>
+        {% elseif checklist.scope == 'shop' %}
+            <p class="text-muted">Votre site vitrine est servi au public ; seule la boutique montre « Bientôt ouvert », et ses commandes sont fermées. Vous, connecté, voyez la vraie boutique.</p>
         {% endif %}
         <table class="table table-sm align-middle ouverture-controle">
             <thead><tr><th>Point de contrôle</th><th>État</th></tr></thead>
@@ -34,11 +39,12 @@
                     <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-secondary" type="submit">Créer un lien d'aperçu ({{ days }} jours)</button>
                 </form>
             {% else %}
-                <form method="post" action="{{ path('admin_ouverture_site_action', {action: 'refermer'}) }}" class="ouverture-refermer" onsubmit="return confirm('Refermer le site ? Les commandes et les formulaires se ferment aussitôt.');">
-                    <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-warning" type="submit">Refermer le site</button>
+                <form method="post" action="{{ path('admin_ouverture_site_action', {action: 'refermer'}) }}" class="ouverture-refermer" onsubmit="return confirm('Refermer la boutique ? Ses commandes se ferment aussitôt ; le site vitrine reste servi.');">
+                    <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-warning" type="submit">Refermer la boutique</button>
                 </form>
             {% endif %}
         </div>
+        {% endif %}
         {% if link %}
             <div class="alert alert-info mt-3 ouverture-lien">Lien d'aperçu, à copier maintenant (il ne sera plus affiché) : <br><code>{{ link.url }}</code><br>Valable jusqu'au {{ link.expiresAt|slice(0, 10) }} (UTC). Il montre la boutique, sans permettre de commander.</div>
         {% endif %}
