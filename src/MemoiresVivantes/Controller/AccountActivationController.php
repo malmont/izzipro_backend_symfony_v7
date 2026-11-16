@@ -42,14 +42,17 @@ class AccountActivationController extends AbstractController
         $user = $userRepo->findOneBy(['verificationToken' => $token]);
 
         // lot IMP-2 : un invité par import ne s'active que par son invitation (conditions de la boutique acceptées)
-        if (!$user || $this->importGuests?->isPending($user)) {
-            return $this->json(['error' => 'Ce lien d\'activation est invalide ou a déjà été utilisé.'], Response::HTTP_NOT_FOUND);
+        // Train de sécurité du 16/11/2026 : cette route POSE UN MOT DE PASSE. Elle ne vaut donc que pour un compte né d'une invitation
+        // de la console, pas encore activé, dont le lien n'a pas expiré (7 jours). Avant, tout compte non vérifié s'y activait par son
+        // jeton, y compris un client inscrit par la boutique (dont le jeton ne sert qu'à vérifier son adresse), et sans échéance.
+        if (!$user || $this->importGuests?->isPending($user) || !$user->canActivateByLink()) {
+            return $this->json(['error' => 'Ce lien d\'activation est invalide, expiré ou a déjà été utilisé.', 'code' => 'ACTIVATION_LINK_INVALID'], Response::HTTP_NOT_FOUND);
         }
 
         $hashedPassword = $this->passwordHasher->hashPassword($user, $password);
         $user->setPassword($hashedPassword)->setPasswordSet(true); // mot de passe choisi à l'activation de l'invitation
         $user->setIsVerified(true);
-        $user->setVerificationToken(null);
+        $user->setVerificationToken(null)->setVerificationTokenExpiresAt(null); // une seule fois
 
         $em->flush();
 

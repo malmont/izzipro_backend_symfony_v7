@@ -46,6 +46,10 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $verificationToken = null;
 
+    /** Fin de validité du lien d'activation d'un compte invité (null : pas de lien d'activation ; le jeton d'un inscrit ne sert qu'à vérifier son adresse) */
+    #[ORM\Column(name: 'verification_token_expires_at', type: 'datetime', nullable: true)]
+    private ?\DateTimeInterface $verificationTokenExpiresAt = null;
+
     #[ORM\OneToMany(mappedBy: 'userAdress', targetEntity: Adress::class, cascade: ['remove'], orphanRemoval: true)]
     private Collection $adresses;
 
@@ -391,6 +395,33 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
+
+    /** Lien d'activation d'un compte invité : valable 7 jours, une seule fois (train de sécurité du 16/11/2026) */
+    public const ACTIVATION_DAYS = 7;
+
+    #[\Symfony\Component\Serializer\Attribute\Ignore]
+    public function getVerificationTokenExpiresAt(): ?\DateTimeInterface
+    {
+        return $this->verificationTokenExpiresAt;
+    }
+
+    public function setVerificationTokenExpiresAt(?\DateTimeInterface $at): self
+    {
+        $this->verificationTokenExpiresAt = $at;
+
+        return $this;
+    }
+
+    /**
+     * Ce compte peut-il s'ACTIVER (choisir son mot de passe) par son lien d'activation ? Seulement s'il est né d'une invitation de la
+     * console (jamais un compte inscrit par la boutique, dont le jeton ne sert qu'à vérifier son adresse), s'il n'est pas encore
+     * activé, et si son lien n'a pas expiré.
+     */
+    public function canActivateByLink(?\DateTimeInterface $now = null): bool
+    {
+        return $this->signupChannel === self::SIGNUP_WEB_INVITE && !$this->isVerified && $this->verificationToken !== null && $this->verificationToken !== ''
+            && $this->verificationTokenExpiresAt !== null && $this->verificationTokenExpiresAt > ($now ?? new \DateTimeImmutable());
+    }
 
     #[\Symfony\Component\Serializer\Attribute\Ignore] // lot SECRETS-1 : jamais dans une réponse sérialisée, quel que soit le groupe
     public function getVerificationToken(): ?string

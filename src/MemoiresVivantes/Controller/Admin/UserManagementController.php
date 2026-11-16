@@ -104,7 +104,11 @@ class UserManagementController extends AbstractController
 
         foreach ($users as $u) {
             $isPending = !$u->isVerified() && !empty($u->getVerificationToken());
-            $activationUrl = $isPending ? $host . '/activer-compte?token=' . $u->getVerificationToken() : null;
+            // Train de sécurité du 16/11/2026 : le lien d'activation POSE UN MOT DE PASSE. Il n'est rendu que pour un compte invité par
+            // la console dont le lien vaut encore, et à l'ADMINISTRATEUR du site seulement : les comptes que la console invite sont des
+            // comptes d'équipe ou d'administrateur, et un responsable des biographes qui lirait leur lien pourrait s'activer à leur
+            // place (devenir administrateur). Avant : le lien de TOUT compte en attente, à l'administrateur comme au responsable.
+            $activationUrl = $u->canActivateByLink() && $this->isGranted('ROLE_ADMIN') ? $host . '/activer-compte?token=' . $u->getVerificationToken() : null;
 
             $data[] = [
                 'id' => $u->getId(),
@@ -200,7 +204,7 @@ class UserManagementController extends AbstractController
             $dummySecret = bin2hex(random_bytes(20));
             $newUser->setPassword($this->passwordHasher->hashPassword($newUser, $dummySecret));
             $newUser->setIsVerified(false);
-            $newUser->setVerificationToken($token);
+            $newUser->setVerificationToken($token)->setVerificationTokenExpiresAt(new \DateTimeImmutable('+' . User::ACTIVATION_DAYS . ' days')); // lien valable 7 jours, une fois
             $activationUrl = $host . '/activer-compte?token=' . $token;
         }
 
@@ -230,8 +234,9 @@ class UserManagementController extends AbstractController
                 'isVerified' => $newUser->isVerified(),
                 'isPending' => !$newUser->isVerified(),
                 'booksCount' => 0,
-                'token' => $token,
-                'activationUrl' => $activationUrl,
+                // (le lien pose un mot de passe : il n'est rendu qu'à l'administrateur du site, comme dans la liste ; le courriel, lui, part toujours)
+                'token' => $this->isGranted('ROLE_ADMIN') ? $token : null,
+                'activationUrl' => $this->isGranted('ROLE_ADMIN') ? $activationUrl : null,
                 'emailSent' => $emailSent,
             ],
             'message' => $activationUrl
