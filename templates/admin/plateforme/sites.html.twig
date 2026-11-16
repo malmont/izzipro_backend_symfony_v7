@@ -85,6 +85,9 @@
                     {% if r.status in ['incomplete', 'pending'] %}
                         <form method="post" action="{{ path('admin_plateforme_sites_request', {id: r.id, geste: 'abandonner'}) }}" class="d-inline sites-abandonner" onsubmit="return confirm('Abandonner cette demande ? Le site, s\'il existe, reste un site normal.');"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-outline-secondary" type="submit">Abandonner</button></form>
                     {% endif %}
+                    {% if r.status == 'ready' and r.steps.manager is defined and r.steps.manager == 'waiting' %}
+                        <form method="post" action="{{ path('admin_plateforme_sites_request', {id: r.id, geste: 'abandonner'}) }}" class="d-inline sites-ne-plus-attendre" onsubmit="return confirm('Ne plus attendre ? Le rôle de responsable de l\'agence ne sera pas donné par cette demande.');"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-outline-secondary" type="submit" title="L'administrateur désigné n'a pas accepté son invitation : le rôle de responsable ne sera plus donné par cette demande">Ne plus attendre</button></form>
+                    {% endif %}
                 </td>
             </tr>
         {% else %}

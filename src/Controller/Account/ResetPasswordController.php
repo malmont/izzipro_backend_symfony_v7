@@ -176,7 +176,7 @@ class ResetPasswordController extends AbstractController
         // Lot TYPE-1 : l'administrateur désigné d'un site créé comme site d'attache d'une agence vient d'accepter son invitation : le
         // rôle de responsable de l'agence lui est donné maintenant, pas avant (ne lève jamais, l'acceptation n'en dépend pas)
         if ($user->getSignupChannel() === User::SIGNUP_ADMIN_INVITE) {
-            $this->platformSites?->adminActivated($this->tenantManager->getCurrentTenantCode(), $user->getEmail());
+            $this->platformSites?->adminActivated($this->tenantManager->getCurrentTenantCode(), $user->getId(), $user->getEmail());
         }
         // Nouveau mot de passe = toutes les sessions ouvertes sont closes (01/11/2026) : jetons de rafraîchissement révoqués
         try {

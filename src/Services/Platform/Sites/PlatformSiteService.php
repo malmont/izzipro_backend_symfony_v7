@@ -62,6 +62,10 @@ class PlatformSiteService
     private const LOCALES = ['fr', 'en'];
     /** Attente du verrou de fabrication : 60 essais espacés de 2 secondes (le même verrou que les fabrications d'agence) */
     private const LOCK_TRIES = 60;
+    /** Une demande « en cours » depuis plus longtemps est tenue pour interrompue (son worker est tombé) */
+    public const STALE_MINUTES = 60;
+    /** Une demande restée en attente depuis plus longtemps est confiée de nouveau au worker */
+    public const REQUEUE_MINUTES = 5;
 
     public function __construct(
         private readonly PlatformSiteRequestRepository $requests,
@@ -132,19 +136,32 @@ class PlatformSiteService
         if ($row === null || $row['status'] !== PlatformSiteRequestRepository::PENDING) {
             return;
         }
-        $steps = $row['steps'];
-        if (($steps[self::STEP_SITE] ?? self::TODO) !== self::DONE && !$this->waitLock()) {
-            $this->logger->warning(sprintf('[Plateforme] demande de site %d : verrou de fabrication occupé, elle reste en attente', $id));
+        $locked = false;
+        if (($row['steps'][self::STEP_SITE] ?? self::TODO) !== self::DONE) {
+            if (!$this->waitLock()) {
+                $this->logger->warning(sprintf('[Plateforme] demande de site %d : verrou de fabrication occupé, elle reste en attente', $id));
 
-            return;
+                return;
+            }
+            $locked = true;
         }
         try {
             if (!$this->requests->move($id, [PlatformSiteRequestRepository::PENDING], PlatformSiteRequestRepository::BUILDING, ['started' => true])) {
                 return; // un autre worker l'a prise
             }
-            $this->run($row);
+            // relue APRÈS le pas d'état : pendant l'attente du verrou, un autre passage a pu la traiter puis la remettre en attente
+            $row = $this->requests->find($id) ?? $row;
+            try {
+                $this->run($row);
+            } catch (\Throwable $e) {
+                // une erreur hors des étapes gardées (base maître, par exemple) : la demande ne reste pas « en cours » sans issue
+                $this->logger->error(sprintf('[Plateforme] demande de site %d : traitement interrompu (%s)', $id, $e::class), ['exception' => $e]);
+                $this->interrupted($this->requests->find($id) ?? $row);
+            }
         } finally {
-            $this->agencyRequests->unlockBuild();
+            if ($locked) {
+                $this->agencyRequests->unlockBuild();
+            }
         }
     }
 
@@ -167,14 +184,15 @@ class PlatformSiteService
             if (($row['steps'][self::STEP_INVITATION] ?? null) === self::DONE) {
                 throw new PlatformSiteException('PLATFORM_SITE_REQUEST_STATE', 409, ['status' => $row['status'], 'step' => self::STEP_INVITATION]);
             }
-            if ($email !== $row['admin_email']) {
-                $this->requests->changeAdmin($id, $email, (string) $row['admin_email']);
+            // en une instruction, sous condition de l'état : deux reprises simultanées n'en laissent passer qu'une
+            if ($email !== $row['admin_email'] && !$this->requests->changeAdmin($id, $email, (string) $row['admin_email'])) {
+                throw new PlatformSiteException('PLATFORM_SITE_REQUEST_STATE', 409, ['status' => (string) ($this->requests->find($id)['status'] ?? $row['status'])]);
             }
         }
         if (!$this->requests->move($id, [PlatformSiteRequestRepository::INCOMPLETE], PlatformSiteRequestRepository::PENDING, ['failed_step' => null, 'error_code' => null])) {
             throw new PlatformSiteException('PLATFORM_SITE_REQUEST_STATE', 409, ['status' => $row['status']]);
         }
-        $this->logger->notice(sprintf('[Plateforme] demande de site %d (%s) reprise par %s', $id, $row['tenant_code'], $by ?? '?'));
+        $this->logger->notice(sprintf('[Plateforme] demande de site %d (%s) reprise', $id, $row['tenant_code'])); // sans l'adresse de l'auteur
         $this->dispatch($id);
 
         return $this->show($id);
@@ -183,30 +201,41 @@ class PlatformSiteService
     /**
      * « Abandonner » une demande à compléter, ou pas encore commencée : ses étapes manquantes ne seront pas faites. Le site, s'il
      * existe, reste un site normal (ni défait, ni supprimé) ; la demande le dit (`site`).
+     * Sur une demande FAITE dont le rôle de responsable attend encore l'acceptation : « ne plus attendre ». Le rôle ne sera plus
+     * donné par cette demande (la personne ne viendra pas, ou l'adresse était fausse) ; rien d'autre ne change.
      */
     public function abandon(int $id, ?string $by): array
     {
         $row = $this->requests->find($id) ?? throw new PlatformSiteException('PLATFORM_SITE_REQUEST_NOT_FOUND', 404);
+        if ($row['status'] === PlatformSiteRequestRepository::READY && ($row['steps'][self::STEP_MANAGER] ?? null) === self::WAITING) {
+            if (!$this->requests->stopWaiting($id)) {
+                throw new PlatformSiteException('PLATFORM_SITE_REQUEST_STATE', 409, ['status' => $row['status']]);
+            }
+
+            return $this->show($id);
+        }
         if (!$this->requests->move($id, [PlatformSiteRequestRepository::INCOMPLETE, PlatformSiteRequestRepository::PENDING], PlatformSiteRequestRepository::ABANDONED, ['finished' => true])) {
             throw new PlatformSiteException('PLATFORM_SITE_REQUEST_STATE', 409, ['status' => $row['status']]);
         }
-        $this->logger->notice(sprintf('[Plateforme] demande de site %d (%s) abandonnée par %s', $id, $row['tenant_code'], $by ?? '?'));
+        $this->logger->notice(sprintf('[Plateforme] demande de site %d (%s) abandonnée', $id, $row['tenant_code']));
 
         return $this->show($id);
     }
 
     /**
-     * L'administrateur désigné d'un site vient de choisir son mot de passe (il a accepté son invitation) : si une demande de type
-     * agence l'attendait, le rôle de responsable de l'agence lui est donné. Ne lève jamais : l'acceptation n'en dépend pas.
+     * L'administrateur désigné d'un site vient de choisir son mot de passe (il a accepté son invitation). Si une demande de type
+     * agence l'attendait, le COMPTE QUI A ACCEPTÉ est noté sur la demande, et le rôle de responsable de l'agence lui est donné, à lui
+     * (par son identifiant) : jamais à un autre compte qui porterait la même adresse. Si les étapes de la demande ne sont pas finies,
+     * le rôle sera donné à leur fin. Ne lève jamais : l'acceptation n'en dépend pas.
      */
-    public function adminActivated(?string $tenantCode, ?string $email): void
+    public function adminActivated(?string $tenantCode, ?int $userId, ?string $email): void
     {
-        if ($tenantCode === null || $tenantCode === '' || $email === null || $email === '') {
+        if ($tenantCode === null || $tenantCode === '' || $userId === null || $userId < 1 || $email === null || $email === '') {
             return;
         }
         try {
-            foreach ($this->requests->waitingManagers($tenantCode) as $row) {
-                if (mb_strtolower((string) $row['admin_email']) === mb_strtolower($email)) {
+            foreach ($this->requests->noteAcceptance($tenantCode, $email, $userId) as $row) {
+                if ($row['status'] === PlatformSiteRequestRepository::READY && ($row['steps'][self::STEP_MANAGER] ?? null) === self::WAITING) {
                     $this->grantManager($row);
                 }
             }
@@ -215,38 +244,67 @@ class PlatformSiteService
         }
     }
 
-    /** Rattrapage : les rôles de responsable qui attendaient une acceptation déjà faite sont donnés (lecture de la liste, passage planifié) */
+    /**
+     * Rattrapage : une acceptation NOTÉE dont le rôle n'a pas pu être donné sur le moment (base du site injoignable) est servie. Un
+     * compte seulement « vérifié » ne suffit jamais : seule l'acceptation notée par `adminActivated` compte.
+     */
     public function settleManagers(): int
     {
         $given = 0;
         try {
-            foreach ($this->requests->waitingManagers() as $row) {
-                $site = $this->agencyRepository->tenant((string) $row['tenant_code']);
-                if ($site === null) {
-                    continue;
-                }
-                $stmt = $this->connector->pdo($site['dbname'])->prepare('SELECT 1 FROM "user" WHERE lower(email) = lower(?) AND is_verified AND deleted_at IS NULL LIMIT 1');
-                $stmt->execute([(string) $row['admin_email']]);
-                if ($stmt->fetchColumn() !== false && $this->grantManager($row)) {
-                    ++$given;
-                }
-            }
+            $rows = $this->requests->acceptedWaiting();
         } catch (\Throwable $e) {
             $this->logger->error(sprintf('[Plateforme] rattrapage des rôles de responsable en échec (%s)', $e::class));
+
+            return 0;
+        }
+        foreach ($rows as $row) {
+            $given += $this->grantManager($row) ? 1 : 0; // une demande en échec n'arrête pas les suivantes
         }
 
         return $given;
     }
 
-    /** Commande de rattrapage : les demandes restées en attente sont déroulées ICI, dans l'ordre @return array{processed: int, managers: int} */
+    /**
+     * Passage horaire (base maître, hors de tout site). Une demande restée « en cours » plus de `STALE_MINUTES` minutes : son worker
+     * est tombé ; elle devient « à compléter » si le site existe, « en échec » sinon, et le site de référence, fermé le temps d'une
+     * copie, est rouvert. Une demande restée en attente est confiée de nouveau au worker. Les acceptations notées sont servies.
+     *
+     * @return array{interrupted: int, requeued: int, managers: int}
+     */
+    public function sweep(): array
+    {
+        $stale = $this->requests->staleBuilding(self::STALE_MINUTES);
+        if ($stale !== []) {
+            $this->builder->reopenTemplate();
+        }
+        foreach ($stale as $row) {
+            $this->interrupted($row);
+        }
+        $ids = $this->requests->pendingIds(self::REQUEUE_MINUTES);
+        foreach ($ids as $id) {
+            $this->dispatch($id);
+        }
+
+        return ['interrupted' => count($stale), 'requeued' => count($ids), 'managers' => $this->settleManagers()];
+    }
+
+    /** Commande de rattrapage : les demandes interrompues sont rendues visibles, celles en attente déroulées ICI, dans l'ordre @return array{interrupted: int, processed: int, managers: int} */
     public function drain(): array
     {
+        $stale = $this->requests->staleBuilding(self::STALE_MINUTES);
+        if ($stale !== []) {
+            $this->builder->reopenTemplate();
+        }
+        foreach ($stale as $row) {
+            $this->interrupted($row);
+        }
         $ids = $this->requests->pendingIds();
         foreach ($ids as $id) {
             $this->process($id);
         }
 
-        return ['processed' => count($ids), 'managers' => $this->settleManagers()];
+        return ['interrupted' => count($stale), 'processed' => count($ids), 'managers' => $this->settleManagers()];
     }
 
     /**
@@ -318,10 +376,11 @@ class PlatformSiteService
         $by = $row['requested_by'];
         $steps = $row['steps'];
         $result = $row['result'];
+        unset($result['acceptedUserId']); // noté par l'acceptation, jamais réécrit par les étapes (le résultat est fondu dans celui de la base)
         $agencyId = $row['agency_id'];
-        $stop = function (string $step, string $error) use ($id, &$steps, &$result, &$agencyId): void {
+        $stop = function (string $step, string $error, bool $exists = false) use ($id, &$steps, &$result, &$agencyId): void {
             $steps[$step] = self::FAILED;
-            $site = ($steps[self::STEP_SITE] ?? null) === self::DONE;
+            $site = $exists || ($steps[self::STEP_SITE] ?? null) === self::DONE;
             // avant que le site existe : rien n'a été créé, la demande est en échec ; après : elle est « à compléter »
             $this->requests->move($id, [PlatformSiteRequestRepository::BUILDING], $site ? PlatformSiteRequestRepository::INCOMPLETE : PlatformSiteRequestRepository::FAILED,
                 ['steps' => $steps, 'failed_step' => $step, 'error_code' => $error, 'result' => $result, 'agency_id' => $agencyId] + ($site ? [] : ['finished' => true]));
@@ -329,6 +388,15 @@ class PlatformSiteService
 
         // 1. le site
         if ($steps[self::STEP_SITE] !== self::DONE) {
+            // une fabrication INTERROMPUE a laissé un site (l'étape est « en échec » et le site existe) : on ne sait pas jusqu'où elle est
+            // allée (comptes hérités nettoyés ou non, modules posés ou non). Ce site n'est jamais adopté tout seul : la plateforme le
+            // regarde, puis abandonne la demande (le site reste) ; la demande reste « à compléter » pour qu'il se voie
+            // (seule une interruption laisse cette étape « en échec » sur une demande qui se reprend : un échec ordinaire la ferme)
+            if ($steps[self::STEP_SITE] === self::FAILED && $this->agencyRepository->tenant($code) !== null) {
+                $stop(self::STEP_SITE, 'SITE_TO_CHECK', true);
+
+                return;
+            }
             // (la demande elle-même retient son code : le contrôle ne regarde que le site, la base et les demandes d'agence)
             if ($this->agencyRepository->tenant($code) !== null || $this->agencyRequests->codeRequested($code) || $this->builder->databaseExists($code)) {
                 $stop(self::STEP_SITE, 'SITE_CODE_TAKEN'); // le code a été pris entre la demande et la fabrication
@@ -352,13 +420,18 @@ class PlatformSiteService
             $replaced = is_string($row['options']['replacedAdminEmail'] ?? null) ? $row['options']['replacedAdminEmail'] : null; // une autre personne vient d'être désignée
             $invitation = $this->builder->invite(null, $row, $steps[self::STEP_INVITATION] === self::FAILED, $replaced);
             $result['invitation'] = $invitation;
-            if (!$invitation['sent']) {
+            // `ALREADY_ACTIVE` : la personne a déjà choisi son mot de passe (par « mot de passe oublié », après une première invitation
+            // dont le courriel n'était pas parti) : il n'y a plus personne à inviter, l'étape est faite
+            if (!$invitation['sent'] && ($invitation['reason'] ?? null) !== 'ALREADY_ACTIVE') {
                 $stop(self::STEP_INVITATION, (string) ($invitation['reason'] ?? 'INVITATION_FAILED'));
 
                 return;
             }
             $steps[self::STEP_INVITATION] = self::DONE;
             $this->requests->saveSteps($id, $steps, $result);
+            if ($replaced !== null) {
+                $this->requests->clearReplacedAdmin($id); // son invitation restée sans suite vient d'être retirée
+            }
         }
         // 3. type agence : la fiche d'agence, avec ce site pour attache (le geste d'AG-1)
         if (($steps[self::STEP_AGENCY] ?? self::DONE) !== self::DONE) {
@@ -378,25 +451,56 @@ class PlatformSiteService
                 }
             }
             $steps[self::STEP_AGENCY] = self::DONE;
-            $this->requests->saveSteps($id, $steps, $result, $agencyId);
+            $this->requests->saveSteps($id, $steps, null, $agencyId);
         }
         // 4. type agence : le rôle de responsable attend l'acceptation de l'invitation
         if (($steps[self::STEP_MANAGER] ?? self::DONE) === self::TODO || ($steps[self::STEP_MANAGER] ?? null) === self::FAILED) {
             $steps[self::STEP_MANAGER] = self::WAITING;
         }
-        $this->requests->move($id, [PlatformSiteRequestRepository::BUILDING], PlatformSiteRequestRepository::READY, ['steps' => $steps, 'result' => $result, 'agency_id' => $agencyId, 'finished' => true]);
+        $this->requests->move($id, [PlatformSiteRequestRepository::BUILDING], PlatformSiteRequestRepository::READY, ['steps' => $steps, 'agency_id' => $agencyId, 'finished' => true]);
+        // l'acceptation a pu arriver AVANT la fin des étapes (elle est alors notée sur la demande) : le rôle est donné maintenant
+        $fresh = $this->requests->find($id);
+        if ($fresh !== null && ($fresh['steps'][self::STEP_MANAGER] ?? null) === self::WAITING && isset($fresh['result']['acceptedUserId'])) {
+            $this->grantManager($fresh);
+        }
     }
 
-    /** Donne le rôle de responsable de l'agence à l'administrateur désigné. Rend vrai si l'étape est faite. @param array<string, mixed> $row */
+    /**
+     * Une demande dont le traitement s'est interrompu : « à compléter » si le site existe (rien n'est défait, il se voit), « en échec »
+     * sinon. L'étape en cause est la première qui n'est pas faite. @param array<string, mixed> $row
+     */
+    private function interrupted(array $row): void
+    {
+        $steps = $row['steps'];
+        $step = null; // toutes les étapes faites : il ne manquait que le dernier pas d'état, « Reprendre » le fera
+        foreach (PlatformSiteRequestRepository::STEPS as $name) {
+            if (isset($steps[$name]) && !in_array($steps[$name], [self::DONE, self::SKIPPED, self::WAITING], true)) {
+                $step = $name;
+                break;
+            }
+        }
+        $exists = ($steps[self::STEP_SITE] ?? null) === self::DONE || $this->agencyRepository->tenant((string) $row['tenant_code']) !== null;
+        if ($step !== null) {
+            $steps[$step] = self::FAILED;
+        }
+        $this->requests->move((int) $row['id'], [PlatformSiteRequestRepository::BUILDING], $exists ? PlatformSiteRequestRepository::INCOMPLETE : PlatformSiteRequestRepository::FAILED,
+            ['steps' => $steps, 'failed_step' => $step, 'error_code' => 'INTERRUPTED'] + ($exists ? [] : ['finished' => true]));
+    }
+
+    /**
+     * Donne le rôle de responsable de l'agence au compte QUI A ACCEPTÉ l'invitation (son identifiant, noté sur la demande), et à lui
+     * seul. Rend vrai si l'étape est faite. @param array<string, mixed> $row
+     */
     private function grantManager(array $row): bool
     {
         $agency = $row['agency_id'] !== null ? $this->agencyRepository->find((int) $row['agency_id']) : null;
-        if ($agency === null) {
+        $userId = $row['result']['acceptedUserId'] ?? null;
+        if ($agency === null || !is_int($userId) || $userId < 1) {
             return false;
         }
         $steps = $row['steps'];
         try {
-            $this->members->set($agency, (string) $row['admin_email'], 'manager', 'plateforme');
+            $this->members->set($agency, (string) $row['admin_email'], 'manager', 'plateforme', $userId);
             $steps[self::STEP_MANAGER] = self::DONE;
         } catch (\Throwable $e) {
             $this->logger->error(sprintf('[Plateforme] demande de site %d : rôle de responsable non donné (%s)', $row['id'], $e::class));
@@ -468,7 +572,7 @@ class PlatformSiteService
         }
         $options['locale'] = in_array($locale, self::LOCALES, true) ? $locale : null;
         $modules = $data['modules'] ?? self::DEFAULT_MODULES;
-        if (!is_array($modules) || array_diff($modules, AgencyEntitlements::features()) !== [] || array_filter($modules, static fn (mixed $m): bool => !is_string($m)) !== []) {
+        if (!is_array($modules) || array_filter($modules, static fn (mixed $m): bool => !is_string($m)) !== [] || array_diff($modules, AgencyEntitlements::features()) !== []) {
             $errors[] = ['path' => 'modules', 'message' => 'liste de modules connus attendue'];
             $modules = [];
         }

@@ -533,7 +533,7 @@ Une demande est une ligne de la base maître, écrite AVANT sa première étape,
 | `site` | la fabrication d'AG-2 (§ 8.2), sans agence : copie du site de référence sous le verrou commun des fabrications, comptes hérités nettoyés, fiche neuve, modules cochés posés comme des **accords de la plateforme** (source `manual`, sans essai automatique, sans courriel), site né en construction s'il a la boutique | jamais refaite une fois faite |
 | `invitation` | l'administrateur désigné est invité par courriel (lien de 7 jours). Le courriel ne nomme aucune agence | un nouveau lien, l'ancien ne vaut plus |
 | `agency` (type agence) | la fiche d'agence naît avec ce site pour attache, par le geste d'AG-1 (§ 7) ; les jours d'essai et le nombre de sites du formulaire remplacent ceux du forfait d'essai | si la fiche existe déjà pour ce site, rien n'est doublé |
-| `manager` (type agence, case cochée par défaut) | le rôle de responsable de l'agence est donné à l'administrateur **quand il accepte son invitation**, pas avant : l'étape attend (`waiting`) | donné à l'acceptation (`/api/password-reset/confirm`), ou au rattrapage (lecture de la liste, `app:agency:sites:build`) |
+| `manager` (type agence, case cochée par défaut) | le rôle de responsable de l'agence est donné à l'administrateur **quand il accepte son invitation**, pas avant : l'étape attend (`waiting`). Il va au **compte qui a accepté**, désigné par son identifiant (noté sur la demande, `result.acceptedUserId`), jamais à un autre compte qui porterait la même adresse | donné à l'acceptation (`/api/password-reset/confirm`) ; si les étapes ne sont pas finies, à leur fin ; sinon au rattrapage (lecture de la liste, passage horaire, `app:agency:sites:build`), qui ne sert que les acceptations NOTÉES : un compte seulement « vérifié » ne suffit jamais |
 
 États d'une demande : `pending` (en attente), `building` (en cours), `ready` (faite ; le rôle de responsable peut encore attendre),
 `incomplete` (**à compléter** : une étape a échoué APRÈS la création du site), `failed` (échec AVANT que le site existe : rien n'a été
@@ -542,9 +542,23 @@ créé, on redemande), `abandoned`.
 - Rien n'est défait en silence : une demande à compléter garde l'étape en cause (`failedStep`) et son code (`errorCode`), et le site
   porte la pastille « Création à compléter ».
 - **Reprendre** rejoue les seules étapes manquantes. Elle peut désigner une autre adresse pour l'administrateur tant que son
-  invitation n'est pas partie (adresse fausse, ou déjà celle d'un compte du site neuf : `ACCOUNT_EXISTS`).
+  invitation n'est pas partie (adresse fausse, ou déjà celle d'un compte du site neuf : `ACCOUNT_EXISTS`) ; le changement se fait en
+  une instruction conditionnée à l'état (deux reprises au même instant : une seule passe), et efface une acceptation notée pour
+  l'ancienne adresse. Si la personne a déjà choisi son mot de passe (`ALREADY_ACTIVE`), il n'y a plus personne à inviter : l'étape
+  est faite, sans courriel.
 - **Abandonner** (demande à compléter, ou pas encore commencée) : le site, s'il existe, reste un site normal, ni défait ni supprimé ;
   la demande le dit (`site`).
+- **Ne plus attendre** (même route que « Abandonner », sur une demande FAITE dont le rôle de responsable attend) : le rôle ne sera
+  plus donné par cette demande (`manager` passe à `skipped`) ; le site, l'agence et la demande restent tels quels. Une acceptation
+  tardive n'est alors plus notée.
+- **Demande interrompue.** Le passage horaire (`app:gestion:notifications:envoyer`, à côté de celui des agences) et
+  `app:agency:sites:build` rendent visible une demande restée « en cours » plus de 60 minutes (son worker est tombé) : « à compléter »
+  si le site existe, « en échec » sinon, code `INTERRUPTED` ; le site de référence, fermé le temps d'une copie, est rouvert. Une
+  erreur imprévue pendant le traitement a le même effet, tout de suite. Une demande restée en attente plus de 5 minutes est confiée
+  de nouveau au worker.
+- **Site laissé par une fabrication coupée** (le site existe, son étape n'est pas notée faite) : on ne sait pas jusqu'où la
+  fabrication est allée (comptes hérités nettoyés ou non). « Reprendre » ne l'adopte pas et ne le refait pas : `SITE_TO_CHECK`, la
+  demande reste à compléter. La plateforme regarde ce site, puis abandonne la demande (le site reste) ou le supprime.
 - Une demande vivante (en attente, en cours, à compléter) retient son code : ni la plateforme ni une agence ne le redemandent.
 
 ### 9.2 Routes (`ROLE_SUPER_ADMIN`, règle `^/api/platform`)
@@ -555,12 +569,13 @@ créé, on redemande), `abandoned`.
 | `GET /api/platform/sites/badges?badge=` | les sites et leurs pastilles → `{ sites: [{ code, name, host, badges: [{ type, agencyId?, agencyCode?, agencyName?, requestId? }] }], badges }` |
 | `GET /api/platform/site-requests`, `GET …/{id}` | `{ id, type, siteCode, name, adminEmail, status, steps, failedStep, errorCode, agencyId, site, invitation, modules, warnings, requestedAt, startedAt, finishedAt }` |
 | `POST /api/platform/site-requests/{id}/resume` | corps facultatif `{ adminEmail }` → 202 |
-| `POST /api/platform/site-requests/{id}/abandon` | → 200 |
+| `POST /api/platform/site-requests/{id}/abandon` | → 200. Sur une demande faite dont le rôle de responsable attend : « ne plus attendre » |
 
 `GET /api/platform/sites` reste la grille sites × fonctionnalités de la console de pilotage : la liste à pastilles a sa propre adresse.
 Refus : 422 `VALIDATION_FAILED { errors: [{ path, message }] }`, 409 `PLATFORM_SITE_CODE_RESERVED`, `PLATFORM_SITE_CODE_TAKEN`,
 `PLATFORM_SITE_REQUEST_STATE`, 404 `PLATFORM_SITE_REQUEST_NOT_FOUND`. Codes d'une étape en échec : `SITE_CODE_TAKEN`, `BUILD_FAILED`,
-`ACCOUNT_EXISTS`, `EMAIL_FAILED`, `NO_LINK`, `INVITATION_FAILED`, et les codes d'agence (`AGENCY_CODE_TAKEN`…).
+`ACCOUNT_EXISTS`, `EMAIL_FAILED`, `NO_LINK`, `INVITATION_FAILED`, `INTERRUPTED`, `SITE_TO_CHECK`, et les codes d'agence
+(`AGENCY_CODE_TAKEN`…).
 
 ### 9.3 Pastilles
 
@@ -579,16 +594,19 @@ liste se filtre :
 ### 9.4 Écran
 
 EasyAdmin, super administrateur : **« Plateforme : sites »** (`/admin/plateforme/sites`) : la liste filtrable, le formulaire de création
-(type, code, nom, administrateur, langue, modules, et le bloc de l'agence), et les demandes avec leurs étapes, « Reprendre » et
-« Abandonner ».
+(type, code, nom, administrateur, langue, modules, et le bloc de l'agence), et les demandes avec leurs étapes, « Reprendre »,
+« Abandonner » et « Ne plus attendre ».
 
 ### 9.5 Limites connues
 
 - Les fabrications d'agence et de la plateforme partagent un seul verrou : une copie du site de référence à la fois.
-- Une fabrication interrompue (worker arrêté pendant la copie) laisse la demande « en cours » : le passage `app:agency:sites:build`
-  ne reprend que les demandes en attente. À voir à la main, comme pour une agence (§ 8.10).
-- Le rôle de responsable n'est donné qu'à l'adresse désignée par la demande ; si une autre personne doit l'être, la page
-  « Plateforme : agences » le fait.
+- Une fabrication interrompue n'est rendue visible qu'au bout de 60 minutes (une copie ne dure jamais aussi longtemps) ; d'ici là la
+  demande se lit « en cours ». Le site qu'elle a pu laisser est à regarder à la main (`SITE_TO_CHECK`, § 9.1).
+- Le rôle de responsable n'est donné qu'au compte qui accepte l'invitation de la demande ; si une autre personne doit l'être, la page
+  « Plateforme : agences » le fait. Une acceptation faite hors du lien d'invitation et du mot de passe oublié (compte vérifié à la
+  main dans le site) n'est pas notée : le rôle se donne alors par la même page.
+- L'adresse de l'administrateur désigné se lit dans la demande (base maître) tant que la demande existe : pas de purge dans ce lot.
+- Les journaux du serveur ne portent ni l'adresse de l'administrateur désigné ni celle de l'auteur d'un geste.
 - Le pays, la devise et le fuseau du site neuf suivent le modèle : ils se règlent ensuite dans le site.
 
 ## Tenir cette fiche à jour

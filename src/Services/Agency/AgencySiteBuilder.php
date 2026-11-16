@@ -129,6 +129,12 @@ class AgencySiteBuilder
         $this->rights->cancelAll($code);
     }
 
+    /** Le site de référence, fermé le temps d'une copie, est rouvert (une fabrication interrompue a pu le laisser fermé) */
+    public function reopenTemplate(): void
+    {
+        $this->tenants->reopenTemplate();
+    }
+
     /** Une base porte-t-elle déjà le nom que ce code de site prendrait ? */
     public function databaseExists(string $code): bool
     {

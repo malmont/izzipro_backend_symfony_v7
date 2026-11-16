@@ -41,6 +41,7 @@ class GestionNotificationsSendCommand extends Command
         private readonly ?\App\Import\CustomerImportService $customerImports = null, // lot IMP-2 : effacement des clients repris d'une ancienne boutique qui n'ont pas accepté à temps
         private readonly ?\App\Import\OrderImportService $orderImports = null, // lot IMP-3 : fichiers de commandes abandonnés
         private readonly ?\App\Services\Agency\AgencySiteRequestService $agencySites = null, // lot AG-2 : rattrapage de la file des sites demandés par les agences
+        private readonly ?\App\Services\Platform\Sites\PlatformSiteService $platformSites = null, // lot TYPE-1 : rattrapage des demandes de création de site de la plateforme
     ) {
         parent::__construct();
     }
@@ -98,6 +99,16 @@ class GestionNotificationsSendCommand extends Command
                 }
             } catch (\Throwable $e) {
                 $this->logger->error(sprintf('Sites demandés par les agences : passage de rattrapage en échec (%s)', $e::class));
+            }
+            // lot TYPE-1 : les demandes de la plateforme (interrompues rendues visibles, en attente remises en file, rôles de responsable
+            // dont l'acceptation est notée). À part : un échec du passage des agences ne l'empêche pas.
+            try {
+                $platform = $this->platformSites?->sweep() ?? ['interrupted' => 0, 'requeued' => 0, 'managers' => 0];
+                if (array_sum($platform) > 0) {
+                    $io->text(sprintf('Sites demandés par la plateforme : %d demande(s) interrompue(s) rendue(s) visible(s), %d confiée(s) de nouveau au worker, %d rôle(s) de responsable donné(s)', $platform['interrupted'], $platform['requeued'], $platform['managers']));
+                }
+            } catch (\Throwable $e) {
+                $this->logger->error(sprintf('Sites demandés par la plateforme : passage de rattrapage en échec (%s)', $e::class));
             }
         }
         $io->success(sprintf('%d site(s) à leur heure, %d notification(s), %d site(s) en erreur.', $sites, $notified, $errors));

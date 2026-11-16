@@ -51,7 +51,7 @@ class PlatformSitesAdminController extends AbstractController
     {
         return $this->action($request, function () use ($request): void {
             $form = $request->request;
-            $number = static fn (string $key): ?int => is_numeric($form->get($key)) ? (int) $form->get($key) : null;
+            $number = static fn (string $key): ?int => is_string($form->get($key)) && ctype_digit($form->get($key)) ? (int) $form->get($key) : null;
             $data = ['type' => (string) $form->get('type', PlatformSiteService::NORMAL), 'code' => $form->get('code'), 'name' => $form->get('name'), 'adminEmail' => $form->get('adminEmail'),
                 'adminFirstName' => (string) $form->get('adminFirstName', ''), 'adminLastName' => (string) $form->get('adminLastName', ''), 'locale' => $form->get('locale') ?: null,
                 'modules' => array_values(array_filter($form->all('modules'), 'is_string'))];
@@ -75,6 +75,11 @@ class PlatformSitesAdminController extends AbstractController
                 $this->addFlash('success', sprintf('Demande n° %d reprise : ses étapes manquantes sont rejouées.', $id));
             } else {
                 $made = $this->sites->abandon($id, $by);
+                if ($made['status'] === 'ready') {
+                    $this->addFlash('success', sprintf('Demande n° %d : le rôle de responsable de l\'agence n\'est plus attendu.', $id));
+
+                    return;
+                }
                 $this->addFlash('success', sprintf('Demande n° %d abandonnée.%s', $id, $made['site'] !== null ? ' Le site « ' . htmlspecialchars((string) $made['site']['code'], ENT_QUOTES) . ' » existe : il reste un site normal.' : ' Aucun site n\'avait été créé.'));
             }
         });

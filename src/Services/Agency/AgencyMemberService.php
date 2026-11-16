@@ -49,12 +49,12 @@ class AgencyMemberService
 
     /**
      * Donne (`manager`, `member`) ou retire (`none`) le rôle d'agence d'un compte du site d'attache, désigné par son adresse. Les
-     * autres rôles du compte ne bougent pas. Sans changement, rien n'est écrit.
+     * autres rôles du compte ne bougent pas. Sans changement, rien n'est écrit. Avec `$userId`, seul CE compte peut le recevoir.
      *
      * @param array<string, mixed> $agency
      * @return array{userId: int, email: string, role: ?string, changed: bool}
      */
-    public function set(array $agency, mixed $email, mixed $role, ?string $by): array
+    public function set(array $agency, mixed $email, mixed $role, ?string $by, ?int $userId = null): array
     {
         $errors = [];
         if (!is_string($email) || filter_var(trim($email), \FILTER_VALIDATE_EMAIL) === false) {
@@ -73,8 +73,10 @@ class AgencyMemberService
         $pdo = $this->connector->pdo($home['dbname']);
         $pdo->beginTransaction();
         try {
-            $find = $pdo->prepare('SELECT id, email, roles FROM "user" WHERE lower(email) = lower(?) AND deleted_at IS NULL ORDER BY id LIMIT 1 FOR UPDATE');
-            $find->execute([trim($email)]);
+            // `$userId` (lot TYPE-1) : le compte est désigné par son identifiant ET son adresse. Deux comptes d'un site peuvent porter la
+            // même adresse à la casse près : sans l'identifiant, le rôle irait au plus ancien, pas forcément à celui qu'on veut.
+            $find = $pdo->prepare('SELECT id, email, roles FROM "user" WHERE lower(email) = lower(?) AND deleted_at IS NULL' . ($userId !== null ? ' AND id = ?' : '') . ' ORDER BY id LIMIT 1 FOR UPDATE');
+            $find->execute($userId !== null ? [trim($email), $userId] : [trim($email)]);
             $user = $find->fetch(\PDO::FETCH_ASSOC);
             if (!$user) {
                 $pdo->rollBack();

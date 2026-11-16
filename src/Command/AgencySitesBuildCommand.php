@@ -28,7 +28,7 @@ class AgencySitesBuildCommand extends Command
         // lot TYPE-1 : les demandes de la plateforme restées en attente, et les rôles de responsable qui attendaient une acceptation déjà faite
         if ($this->platformSites !== null) {
             $platform = $this->platformSites->drain();
-            $output->writeln(sprintf('Demandes de la plateforme : %d demande(s) en attente traitée(s), %d rôle(s) de responsable donné(s).', $platform['processed'], $platform['managers']));
+            $output->writeln(sprintf('Demandes de la plateforme : %d interrompue(s) rendue(s) visible(s), %d en attente traitée(s), %d rôle(s) de responsable donné(s).', $platform['interrupted'], $platform['processed'], $platform['managers']));
         }
 
         return Command::SUCCESS;

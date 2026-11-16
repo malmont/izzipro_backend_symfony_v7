@@ -205,6 +205,9 @@ class PlatformSitesTest extends WebTestCase
         $this->assertSame($untouched, $this->pdo(AgencySiteCode::database($code))->query("SELECT roles::text || '|' || password FROM \"user\" WHERE email = 'plateforme@example.invalid'")->fetchColumn(), 'le compte de la plateforme n\'a pas été touché');
         // une fois l'invitation partie, l'administrateur ne se change plus par la demande
         $this->assertSame('PLATFORM_SITE_REQUEST_STATE', $this->json('POST', "/api/platform/site-requests/$id/resume", ['adminEmail' => 'encore@example.invalid'], 'super', 409)['code']);
+        // … et l'instruction qui change l'adresse le refuse d'elle-même hors de l'état « à compléter » (deux reprises au même instant)
+        $this->assertFalse(static::getContainer()->get(\App\Services\Platform\Sites\PlatformSiteRequestRepository::class)->changeAdmin($id, 'encore@example.invalid', $email));
+        $this->assertSame($email, $this->master->query("SELECT admin_email FROM platform_site_requests WHERE id = $id")->fetchColumn());
         // la fiche d'agence naît avec ce site pour attache, avec l'essai et le nombre de sites du formulaire
         $agency = $this->master->query('SELECT id, code, name, home_tenant_code, status, max_sites, is_test, contact_email, trial_ends_at FROM agencies')->fetchAll(\PDO::FETCH_ASSOC);
         $this->assertCount(1, $agency);
@@ -267,15 +270,125 @@ class PlatformSitesTest extends WebTestCase
         $this->assertSame(1, (int) $this->master->query("SELECT COUNT(*) FROM pg_database WHERE datname = '" . AgencySiteCode::database($free) . "'")->fetchColumn(), 'une base existante n\'est jamais supprimée');
         $this->assertSame('PLATFORM_SITE_REQUEST_STATE', $this->json('POST', "/api/platform/site-requests/$fourth/resume", null, 'super', 409)['code']);
 
-        // RATTRAPAGE : un rôle de responsable qui attendait une acceptation faite par un autre chemin est donné à la lecture de la liste
+        // LE RÔLE VA AU COMPTE QUI ACCEPTE, et seulement sur une acceptation NOTÉE par la demande
         $late = 'agtest-d' . $this->tag;
-        $fifth = (int) $this->json('POST', '/api/platform/sites', ['type' => 'agency', 'code' => $late, 'name' => 'Rattrapé', 'adminEmail' => "tard-{$this->tag}@example.invalid", 'modules' => [], 'agency' => ['name' => 'Agence Tardive']], 'super', 202)['request']['id'];
+        $lateEmail = "tard-{$this->tag}@example.invalid";
+        $fifth = (int) $this->json('POST', '/api/platform/sites', ['type' => 'agency', 'code' => $late, 'name' => 'Rattrapé', 'adminEmail' => $lateEmail, 'modules' => [], 'agency' => ['name' => 'Agence Tardive']], 'super', 202)['request']['id'];
         $this->sites()->process($fifth);
-        $this->assertSame('waiting', $this->json('GET', "/api/platform/site-requests/$fifth", null, 'super', 200)['request']['steps']['manager']);
+        $lateHost = (string) $this->json('GET', "/api/platform/site-requests/$fifth", null, 'super', 200)['request']['site']['host'];
         $lateSite = $this->pdo(AgencySiteCode::database($late));
-        $lateSite->exec("UPDATE \"user\" SET is_verified = true WHERE email = 'tard-{$this->tag}@example.invalid'");
-        $this->assertSame('done', $this->json('GET', '/api/platform/site-requests', null, 'super', 200)['requests'][0]['steps']['manager']);
-        $this->assertStringContainsString('"ROLE_AGENCY"', (string) $lateSite->query("SELECT roles::text FROM \"user\" WHERE email = 'tard-{$this->tag}@example.invalid'")->fetchColumn());
+        $invited = (int) $lateSite->query("SELECT id FROM \"user\" WHERE email = '$lateEmail'")->fetchColumn();
+        $rolesOf = static fn (int $userId): string => (string) $lateSite->query("SELECT roles::text FROM \"user\" WHERE id = $userId")->fetchColumn();
+        $state = fn (int $request): array => $this->master->query("SELECT status, failed_step, error_code, steps->>'site' AS site, steps->>'invitation' AS invitation, steps->>'manager' AS manager, result->>'acceptedUserId' AS accepted FROM platform_site_requests WHERE id = $request")->fetch(\PDO::FETCH_ASSOC);
+        $this->assertSame(['ready', 'waiting', null], [$state($fifth)['status'], $state($fifth)['manager'], $state($fifth)['accepted']]);
+        // un compte seulement « vérifié » (par un autre chemin) n'est pas une acceptation : ni la liste ni le passage horaire ne donnent rien
+        $lateSite->exec("UPDATE \"user\" SET is_verified = true WHERE id = $invited");
+        $this->assertSame('waiting', $this->json('GET', '/api/platform/site-requests', null, 'super', 200)['requests'][0]['steps']['manager']);
+        $this->assertSame(0, $this->sites()->sweep()['managers']);
+        $this->assertStringNotContainsString('ROLE_AGENCY', $rolesOf($invited));
+        $lateSite->exec("UPDATE \"user\" SET is_verified = false WHERE id = $invited");
+        // un JUMEAU plus ancien porte la même adresse à la casse près : le rôle va au compte qui a accepté, jamais au jumeau
+        $twin = (int) $lateSite->query('SELECT MIN(id) - 1 FROM "user"')->fetchColumn();
+        $lateSite->exec("INSERT INTO \"user\" (id, email, username, firstname, lastname, roles, password, is_verified, signup_channel, created_at) VALUES ($twin, 'TARD-{$this->tag}@Example.invalid', 'jumeau-{$this->tag}', 'Jumeau', 'Ancien', '[\"ROLE_ADMIN\"]', 'inutilisable', true, 'web_register', NOW())");
+        $lateToken = (string) $lateSite->query("SELECT reset_token FROM \"user\" WHERE id = $invited")->fetchColumn();
+        $this->assertSame(200, $this->api('POST', '/api/password-reset/confirm', ['token' => $lateToken, 'password' => self::PASSWORD], null, $lateHost)->getStatusCode());
+        $this->assertSame(['done', (string) $invited], [$state($fifth)['manager'], $state($fifth)['accepted']], 'le compte qui a accepté est noté par son identifiant');
+        $this->assertStringContainsString('"ROLE_AGENCY"', $rolesOf($invited));
+        $this->assertStringNotContainsString('ROLE_AGENCY', $rolesOf($twin), 'le jumeau, plus ancien, ne reçoit rien');
+        // RATTRAPAGE : une acceptation notée dont le rôle n'a pas pu être donné sur le moment est servie par le passage suivant
+        $lateSite->exec("UPDATE \"user\" SET roles = '[\"ROLE_ADMIN\"]' WHERE id = $invited");
+        $this->master->exec("UPDATE platform_site_requests SET steps = jsonb_set(steps, '{manager}', '\"waiting\"') WHERE id = $fifth");
+        $this->assertSame(1, $this->sites()->sweep()['managers']);
+        $this->assertSame('done', $state($fifth)['manager']);
+        $this->assertStringContainsString('"ROLE_AGENCY"', $rolesOf($invited));
+        $this->assertStringNotContainsString('ROLE_AGENCY', $rolesOf($twin));
+        $this->assertSame(0, $this->sites()->sweep()['managers'], 'un rôle donné ne se redonne pas');
+
+        // PASSAGE HORAIRE : une demande restée « en cours » est celle d'un worker tombé ; elle redevient visible
+        $lost = 'agtest-e' . $this->tag;
+        $sixth = (int) $this->json('POST', '/api/platform/sites', ['code' => $lost, 'name' => 'Worker tombé', 'adminEmail' => "perdu-{$this->tag}@example.invalid"], 'super', 202)['request']['id'];
+        $this->master->exec("UPDATE platform_site_requests SET status = 'building', started_at = NOW() - INTERVAL '59 minutes' WHERE id = $sixth");
+        $this->assertSame(0, $this->sites()->sweep()['interrupted'], 'une fabrication de moins d\'une heure n\'est pas tenue pour interrompue');
+        $this->assertSame('building', $state($sixth)['status']);
+        // a) avant que le site existe ; b) le site existe et une étape manque (l'acceptation, elle, est déjà notée) ;
+        // c) le site existe mais son étape n'est pas notée faite : la fabrication a été coupée en route
+        $this->master->exec("UPDATE platform_site_requests SET started_at = NOW() - INTERVAL '61 minutes' WHERE id = $sixth");
+        $lateSite->exec("UPDATE \"user\" SET roles = '[\"ROLE_ADMIN\"]' WHERE id = $invited");
+        $this->master->exec("UPDATE platform_site_requests SET status = 'building', started_at = NOW() - INTERVAL '2 hours', finished_at = NULL, steps = steps || '{\"invitation\": \"todo\", \"manager\": \"todo\"}'::jsonb WHERE id = $fifth");
+        $this->master->exec("UPDATE platform_site_requests SET status = 'building', started_at = NOW() - INTERVAL '2 hours', finished_at = NULL, steps = steps || '{\"site\": \"todo\"}'::jsonb WHERE id = $second");
+        $swept = $this->sites()->sweep();
+        $this->assertSame([3, 0], [$swept['interrupted'], $swept['managers']]);
+        $this->assertSame(['failed', 'site', 'INTERRUPTED', 'failed'], array_slice(array_values($state($sixth)), 0, 4), 'aucun site : la demande est en échec');
+        $this->assertNotNull($this->master->query("SELECT finished_at FROM platform_site_requests WHERE id = $sixth")->fetchColumn());
+        $this->assertTrue(static::getContainer()->get(AgencySiteRequestService::class)->availability($lost)['available'], 'son code redevient libre');
+        $this->assertSame(['incomplete', 'invitation', 'INTERRUPTED', 'done', 'failed'], array_slice(array_values($state($fifth)), 0, 5), 'le site existe : la demande est à compléter, à l\'étape qui manquait');
+        $this->assertSame(['incomplete', 'site', 'INTERRUPTED', 'failed'], array_slice(array_values($state($second)), 0, 4));
+        $this->assertSame(0, $this->sites()->sweep()['interrupted'], 'une demande rendue visible ne l\'est pas deux fois');
+        // c) un site laissé par une fabrication coupée n'est JAMAIS adopté ni refait par « Reprendre » : il est à regarder, puis la demande s'abandonne
+        $this->assertSame('pending', $this->json('POST', "/api/platform/site-requests/$second/resume", null, 'super', 202)['request']['status']);
+        $this->sites()->process($second);
+        $this->assertSame(['incomplete', 'site', 'SITE_TO_CHECK', 'failed'], array_slice(array_values($state($second)), 0, 4));
+        $this->assertSame(1, (int) $this->master->query("SELECT COUNT(*) FROM tenants WHERE code = '$other'")->fetchColumn());
+        $this->assertSame('abandoned', $this->json('POST', "/api/platform/site-requests/$second/abandon", null, 'super', 200)['request']['status']);
+        // une demande restée en attente plus de cinq minutes est confiée de nouveau au worker ; une demande fraîche ne l'est pas
+        $seventh = (int) $this->json('POST', '/api/platform/sites', ['code' => 'agtest-f' . $this->tag, 'name' => 'En attente', 'adminEmail' => "attente-{$this->tag}@example.invalid"], 'super', 202)['request']['id'];
+        $this->assertSame(0, $this->sites()->sweep()['requeued']);
+        $this->master->exec("UPDATE platform_site_requests SET requested_at = NOW() - INTERVAL '6 minutes' WHERE id = $seventh");
+        $before = count(static::getContainer()->get('messenger.transport.media')->getSent());
+        $this->assertSame(1, $this->sites()->sweep()['requeued']);
+        $queued = static::getContainer()->get('messenger.transport.media')->getSent();
+        $this->assertCount($before + 1, $queued);
+        $this->assertSame($seventh, end($queued)->getMessage()->requestId);
+        // … et c'est le passage horaire qui le fait : la commande planifiée, sans option (la demande attend toujours son worker)
+        $hourly = new \Symfony\Component\Console\Tester\CommandTester((new \Symfony\Bundle\FrameworkBundle\Console\Application(static::$kernel))->find('app:gestion:notifications:envoyer'));
+        $hourly->execute([]);
+        $this->assertStringContainsString('Sites demandés par la plateforme : 0 demande(s) interrompue(s) rendue(s) visible(s), 1 confiée(s) de nouveau au worker, 0 rôle(s)', $hourly->getDisplay());
+
+        // LA PAGE : ses gestes sont ceux du super administrateur seul
+        $gesture = fn (int $request, string $name): string => 'https://' . MV_TEST_TENANT_HOST . "/admin/plateforme/sites/demandes/$request/$name";
+        $server = ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST];
+        $this->client->getCookieJar()->clear();
+        $this->loginAs(['ROLE_ADMIN']);
+        $this->client->request('POST', $gesture($fifth, 'reprendre'), ['_token' => 'faux'], [], $server);
+        $this->assertSame(403, $this->client->getResponse()->getStatusCode());
+        $this->client->request('POST', $gesture($seventh, 'abandonner'), ['_token' => 'faux'], [], $server);
+        $this->assertSame(403, $this->client->getResponse()->getStatusCode());
+        $this->assertSame(['incomplete', 'pending'], [$state($fifth)['status'], $state($seventh)['status']]);
+        $this->client->getCookieJar()->clear();
+        $this->loginAs(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']);
+        // « Reprendre » : l'administrateur a DÉJÀ choisi son mot de passe, il n'y a plus personne à inviter : l'étape est faite, sans
+        // courriel ; et son acceptation, notée AVANT la fin des étapes, lui donne le rôle de responsable à leur fin
+        $page = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin/plateforme/sites', [], [], $server);
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode(), substr((string) $this->client->getResponse()->getContent(), 0, 600));
+        $this->assertCount(0, $page->filter("tr[data-demande=\"$fifth\"] form.sites-ne-plus-attendre"));
+        $this->client->submit($page->filter("tr[data-demande=\"$fifth\"] form.sites-reprendre")->form());
+        $this->assertSame(302, $this->client->getResponse()->getStatusCode());
+        $this->assertSame('pending', $state($fifth)['status']);
+        $this->sites()->process($fifth);
+        $this->assertCount(0, self::getMailerMessages());
+        $this->assertSame(['ready', null, null, 'done', 'done', 'done', (string) $invited], array_values($state($fifth)));
+        $this->assertStringContainsString('"ROLE_AGENCY"', $rolesOf($invited));
+        $this->assertStringNotContainsString('ROLE_AGENCY', $rolesOf($twin));
+        // « Ne plus attendre » : sur une demande faite dont le rôle attend, le rôle ne sera plus donné par elle ; rien d'autre ne change
+        $lateSite->exec("UPDATE \"user\" SET roles = '[\"ROLE_ADMIN\"]' WHERE id = $invited");
+        $this->master->exec("UPDATE platform_site_requests SET steps = jsonb_set(steps, '{manager}', '\"waiting\"'), result = result - 'acceptedUserId' WHERE id = $fifth");
+        $page = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin/plateforme/sites', [], [], $server);
+        $this->assertCount(0, $page->filter("tr[data-demande=\"$fifth\"] form.sites-reprendre"));
+        $this->client->submit($page->filter("tr[data-demande=\"$fifth\"] form.sites-ne-plus-attendre")->form());
+        $this->assertSame(302, $this->client->getResponse()->getStatusCode());
+        $this->assertSame(['ready', 'skipped'], [$state($fifth)['status'], $state($fifth)['manager']]);
+        $this->sites()->adminActivated($late, $invited, $lateEmail); // une acceptation tardive n'est plus notée, et ne donne rien
+        $this->assertSame([null, 0], [$state($fifth)['accepted'], $this->sites()->sweep()['managers']]);
+        $this->assertStringNotContainsString('ROLE_AGENCY', $rolesOf($invited));
+        $this->assertSame(1, (int) $this->master->query("SELECT COUNT(*) FROM agencies WHERE home_tenant_code = '$late'")->fetchColumn(), 'l\'agence et le site restent');
+        // « Abandonner » une demande en attente, par la page
+        $page = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin/plateforme/sites', [], [], $server);
+        $this->client->submit($page->filter("tr[data-demande=\"$seventh\"] form.sites-abandonner")->form());
+        $this->assertSame(302, $this->client->getResponse()->getStatusCode());
+        $this->assertSame('abandoned', $state($seventh)['status']);
+        $this->client->getCookieJar()->clear();
+        // une demande faite dont rien n'attend ne s'abandonne pas
+        $this->assertSame('PLATFORM_SITE_REQUEST_STATE', $this->json('POST', "/api/platform/site-requests/$fifth/abandon", null, 'super', 409)['code']);
     }
 
     private function sites(): PlatformSiteService

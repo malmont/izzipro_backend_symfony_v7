@@ -86,20 +86,62 @@ class PlatformSiteRequestRepository
         return $out;
     }
 
-    /** @return list<array<string, mixed>> les demandes faites dont le rôle de responsable attend encore l'acceptation de l'invitation */
-    public function waitingManagers(?string $code = null): array
+    /** @return list<array<string, mixed>> les demandes faites dont l'acceptation est NOTÉE et dont le rôle de responsable n'est pas encore donné */
+    public function acceptedWaiting(): array
     {
-        $sql = 'SELECT ' . self::COLUMNS . " FROM platform_site_requests WHERE status IN ('ready', 'incomplete') AND steps->>'manager' = 'waiting'" . ($code !== null ? ' AND tenant_code = ?' : '') . ' ORDER BY id';
-        $stmt = $this->pdo()->prepare($sql);
-        $stmt->execute($code !== null ? [$code] : []);
+        $rows = $this->pdo()->query('SELECT ' . self::COLUMNS . " FROM platform_site_requests WHERE status = 'ready' AND steps->>'manager' = 'waiting' AND result->>'acceptedUserId' IS NOT NULL ORDER BY id")->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+
+        return array_map(self::decode(...), $rows);
+    }
+
+    /** @return list<int> les demandes en attente (depuis au moins `$minutes` minutes), de la plus ancienne à la plus récente */
+    public function pendingIds(int $minutes = 0): array
+    {
+        $stmt = $this->pdo()->prepare("SELECT id FROM platform_site_requests WHERE status = 'pending' AND requested_at <= NOW() - (? * INTERVAL '1 minute') ORDER BY id");
+        $stmt->execute([max(0, $minutes)]);
+
+        return array_map('intval', $stmt->fetchAll(\PDO::FETCH_COLUMN) ?: []);
+    }
+
+    /** @return list<array<string, mixed>> les demandes restées « en cours » depuis plus de `$minutes` minutes : leur worker est tombé */
+    public function staleBuilding(int $minutes): array
+    {
+        $stmt = $this->pdo()->prepare('SELECT ' . self::COLUMNS . " FROM platform_site_requests WHERE status = 'building' AND started_at <= NOW() - (? * INTERVAL '1 minute') ORDER BY id");
+        $stmt->execute([max(1, $minutes)]);
 
         return array_map(self::decode(...), $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: []);
     }
 
-    /** @return list<int> les demandes en attente, de la plus ancienne à la plus récente */
-    public function pendingIds(): array
+    /**
+     * L'administrateur désigné d'une demande de type agence vient d'accepter son invitation : le compte qui a accepté est NOTÉ sur la
+     * demande (son identifiant, jamais son adresse). Seule une acceptation notée ici donne le rôle de responsable. Rend les demandes
+     * touchées (une demande abandonnée ou en échec n'est pas relue).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function noteAcceptance(string $code, string $email, int $userId): array
     {
-        return array_map('intval', $this->pdo()->query("SELECT id FROM platform_site_requests WHERE status = 'pending' ORDER BY id")->fetchAll(\PDO::FETCH_COLUMN) ?: []);
+        $stmt = $this->pdo()->prepare("UPDATE platform_site_requests SET result = jsonb_set(COALESCE(result, '{}'::jsonb), '{acceptedUserId}', to_jsonb(?::int))"
+            . " WHERE tenant_code = ? AND lower(admin_email) = lower(?) AND type = 'agency' AND status IN ('pending', 'building', 'ready', 'incomplete')"
+            . " AND steps->>'manager' IN ('todo', 'waiting', 'failed') RETURNING id");
+        $stmt->execute([$userId, $code, $email]);
+
+        return array_values(array_filter(array_map(fn (mixed $id): ?array => $this->find((int) $id), $stmt->fetchAll(\PDO::FETCH_COLUMN) ?: [])));
+    }
+
+    /** « Ne plus attendre » : le rôle de responsable d'une demande faite n'attend plus l'acceptation. Rend vrai si quelque chose a changé. */
+    public function stopWaiting(int $id): bool
+    {
+        $stmt = $this->pdo()->prepare("UPDATE platform_site_requests SET steps = jsonb_set(steps, '{manager}', '\"skipped\"') WHERE id = ? AND status = 'ready' AND steps->>'manager' = 'waiting'");
+        $stmt->execute([$id]);
+
+        return $stmt->rowCount() === 1;
+    }
+
+    /** L'ancienne adresse d'un administrateur remplacé n'a plus à être gardée : son invitation restée sans suite a été retirée */
+    public function clearReplacedAdmin(int $id): void
+    {
+        $this->pdo()->prepare("UPDATE platform_site_requests SET options = options - 'replacedAdminEmail' WHERE id = ?")->execute([$id]);
     }
 
     /**
@@ -120,7 +162,8 @@ class PlatformSiteRequestRepository
             if (!in_array($column, ['steps', 'failed_step', 'error_code', 'agency_id', 'result'], true)) {
                 throw new \InvalidArgumentException("Colonne de demande inconnue : $column");
             }
-            $sql .= ", $column = ?";
+            // le résultat est FONDU dans celui de la base, jamais remplacé : une acceptation notée entre-temps n'est pas effacée
+            $sql .= $column === 'result' ? ", result = COALESCE(result, '{}'::jsonb) || ?::jsonb" : ", $column = ?";
             $params[] = is_array($value) ? self::json($value) : $value;
         }
         $stmt = $this->pdo()->prepare($sql . ' WHERE id = ? AND status IN (' . implode(',', array_fill(0, count($from), '?')) . ')');
@@ -129,18 +172,29 @@ class PlatformSiteRequestRepository
         return $stmt->rowCount() === 1;
     }
 
-    /** Désigne une autre adresse pour l'administrateur d'une demande ; l'ancienne est gardée dans les options, le temps de retirer son invitation */
-    public function changeAdmin(int $id, string $email, string $previous): void
+    /**
+     * Désigne une autre adresse pour l'administrateur d'une demande À COMPLÉTER dont l'invitation n'est pas partie, en une instruction
+     * (deux reprises simultanées n'en laissent passer qu'une). L'ancienne est gardée dans les options, le temps de retirer son
+     * invitation. Rend vrai si l'adresse a été changée.
+     */
+    public function changeAdmin(int $id, string $email, string $previous): bool
     {
-        $this->pdo()->prepare("UPDATE platform_site_requests SET admin_email = ?, options = jsonb_set(COALESCE(options, '{}'::jsonb), '{replacedAdminEmail}', to_jsonb(?::text)) WHERE id = ?")
-            ->execute([mb_substr($email, 0, 180), $previous, $id]);
+        // l'acceptation notée était celle de l'ancienne adresse : elle ne vaut pas pour la nouvelle
+        $stmt = $this->pdo()->prepare("UPDATE platform_site_requests SET admin_email = ?, result = COALESCE(result, '{}'::jsonb) - 'acceptedUserId', options = jsonb_set(COALESCE(options, '{}'::jsonb), '{replacedAdminEmail}', to_jsonb(?::text))"
+            . " WHERE id = ? AND status = 'incomplete' AND admin_email = ? AND steps->>'invitation' <> 'done'");
+        $stmt->execute([mb_substr($email, 0, 180), $previous, $id, $previous]);
+
+        return $stmt->rowCount() === 1;
     }
 
-    /** Écrit l'état des étapes (et ce que la fabrication a fait) d'une demande, sans changer son état @param array<string, string> $steps */
+    /**
+     * Écrit l'état des étapes (et ce que la fabrication a fait) d'une demande, sans changer son état. Le résultat est FONDU dans celui
+     * de la base, jamais remplacé (une acceptation notée entre-temps n'est pas effacée). @param array<string, string> $steps
+     */
     public function saveSteps(int $id, array $steps, ?array $result = null, ?int $agencyId = null): void
     {
-        $this->pdo()->prepare('UPDATE platform_site_requests SET steps = ?, result = COALESCE(?, result), agency_id = COALESCE(?, agency_id) WHERE id = ?')
-            ->execute([self::json($steps), $result !== null ? self::json($result) : null, $agencyId, $id]);
+        $this->pdo()->prepare("UPDATE platform_site_requests SET steps = ?, result = COALESCE(result, '{}'::jsonb) || COALESCE(?::jsonb, '{}'::jsonb), agency_id = COALESCE(?, agency_id) WHERE id = ?")
+            ->execute([self::json($steps), $result !== null && $result !== [] ? self::json($result) : null, $agencyId, $id]);
     }
 
     /** @param array<string, mixed> $value */
