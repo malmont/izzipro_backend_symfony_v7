@@ -116,6 +116,7 @@ class LossPreventionUnreadSoldTest extends LossPreventionTestCase
 
         // Le gérant décide. Une clôture de plus qui trouve les MÊMES nombres n'ajoute rien : ni preuve, ni « du nouveau depuis la décision »
         $this->json($this->admin('PUT', self::BASE . '/constats/' . $id . '/decision', ['status' => 'watch']));
+        sleep(1); // dates à la seconde : « du nouveau depuis la décision » se lit par une preuve datée APRÈS elle (comme dans LossPreventionApiTest)
         $close = function (): array {
             $this->openSession();
             $this->closeWith(0);
