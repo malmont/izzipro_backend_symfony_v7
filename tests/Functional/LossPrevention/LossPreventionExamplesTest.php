@@ -109,6 +109,9 @@ class LossPreventionExamplesTest extends LossPreventionTestCase
         $this->keep('exercices-avec-un-constat', 'GET', '/exercices');
         $this->keep('refus-exercice-scenario-inconnu', 'POST', '/exercices', ['scenario' => 'inconnu'], 422);
         $this->keep('refus-exercice-vrai-constat', 'GET', '/exercices/' . $id('CASH_DISCREPANCY:z_report:' . $report['id']), null, 404);
+        // Constat qui porte sur un poste de caisse et ne nomme personne (lot L3-b2b) : sa preuve est le décompte de la journée du poste
+        $this->assertSame(201, $this->admin('POST', self::BASE . '/exercices', ['scenario' => 'unread_sold'])->getStatusCode());
+        $this->keep('exercice-constat-poste', 'GET', '/exercices/' . (int) $this->db->fetchOne('SELECT MAX(id) FROM loss_finding WHERE exercise'));
         $this->keep('exercices-effaces', 'DELETE', '/exercices');
 
         // Analyse lancée par la lecture de la synthèse (la dernière a plus de dix minutes)

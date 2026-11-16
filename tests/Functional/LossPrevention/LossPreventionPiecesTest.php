@@ -418,14 +418,14 @@ class LossPreventionPiecesTest extends LossPreventionTestCase
         $beyond = $this->admin('GET', self::PIECES . "?variantId=$v1&limit=2&page=9");
         $this->assertSame([[], '3'], [$this->json($beyond), $beyond->headers->get('X-Total-Count')]);
         $this->assertSame(['variantId' => 'MUST_BE_POSITIVE', 'status' => 'INVALID_VALUE', 'tagged' => 'INVALID_VALUE', 'page' => 'MUST_BE_POSITIVE', 'limit' => 'OUT_OF_RANGE'],
-            $this->json($this->admin('GET', self::PIECES . '?variantId=abc&status=sold&tagged=oui&page=0&limit=101'), 422)['fields']);
+            $this->json($this->admin('GET', self::PIECES . '?variantId=abc&status=perdue&tagged=oui&page=0&limit=101'), 422)['fields']);
         $this->db->executeStatement('UPDATE product_variant SET stock_quantity = 7 WHERE id = ?', [$v1]);
         $synthesis = $this->json($this->admin('GET', self::PIECES . "/synthese?productId=$jacket"));
-        $this->assertSame([[$v1, $v2], 2, 1, 50, ['variants' => 2, 'pieces' => 3, 'retired' => 1, 'tagged' => 1, 'untagged' => 2]],
+        $this->assertSame([[$v1, $v2], 2, 1, 50, ['variants' => 2, 'pieces' => 3, 'sold' => 0, 'retired' => 1, 'tagged' => 1, 'untagged' => 2]],
             [array_column($synthesis['rows'], 'variantId'), $synthesis['total'], $synthesis['page'], $synthesis['limit'], $synthesis['totals']], 'les variantes suivies de l\'article, et leurs totaux');
         $this->assertSame(['variantId' => $v1, 'productId' => $jacket, 'variantMissing' => false, 'name' => "Veste L2-$this->s", 'variantLabel' => null, 'barcode' => "VESTE-M-$this->s", 'barcodeOf' => 'variant',
-            'symbology' => 'code128', 'stock' => 7, 'pieces' => ['active' => 2, 'retired' => 1, 'tagged' => 0, 'untagged' => 2], 'gap' => 5], $synthesis['rows'][0]);
-        $this->assertSame([['active' => 1, 'retired' => 0, 'tagged' => 1, 'untagged' => 0], ['active' => 1, 'retired' => 0, 'tagged' => 0, 'untagged' => 1]],
+            'symbology' => 'code128', 'stock' => 7, 'pieces' => ['active' => 2, 'sold' => 0, 'retired' => 1, 'tagged' => 0, 'untagged' => 2], 'gap' => 5], $synthesis['rows'][0]);
+        $this->assertSame([['active' => 1, 'sold' => 0, 'retired' => 0, 'tagged' => 1, 'untagged' => 0], ['active' => 1, 'sold' => 0, 'retired' => 0, 'tagged' => 0, 'untagged' => 1]],
             [$synthesis['rows'][1]['pieces'], $this->json($this->admin('GET', self::PIECES . "/synthese?variantId=$vBag"))['rows'][0]['pieces']]);
         $page2 = $this->json($this->admin('GET', self::PIECES . "/synthese?productId=$jacket&limit=1&page=2"));
         $this->assertSame([[$v2], 2, $synthesis['totals']], [array_column($page2['rows'], 'variantId'), $page2['total'], $page2['totals']], 'la page suivante ; les totaux ne dépendent pas de la page');

@@ -17,22 +17,22 @@
                 "variantId": 25,
                 "productId": 16,
                 "variantMissing": false,
-                "name": "Sac de plage (exemple 7F95C2)",
+                "name": "Sac de plage (exemple 5D8303)",
                 "variantLabel": null,
-                "barcode": "ABCDEF037F95C2AA",
+                "barcode": "ABCDEF035D8303AA",
                 "barcodeOf": "variant",
                 "symbology": "code128",
                 "tags": [
                     {
                         "id": 6,
-                        "identifier": "SIM-1EC6DF23D22D",
+                        "identifier": "SIM-71BE38EDD39D",
                         "technology": "simulated",
                         "technologyLabel": "Puce simulée",
                         "status": "associated",
                         "statusLabel": "Posée",
                         "pieceId": 4,
                         "exercise": true,
-                        "associatedAt": "2026-11-16T05:31:04+00:00",
+                        "associatedAt": "2026-11-16T07:15:18+00:00",
                         "retiredAt": null,
                         "retiredReason": null,
                         "retiredReasonLabel": null
@@ -42,7 +42,7 @@
                 "commandeId": null,
                 "retiredReason": null,
                 "retiredReasonLabel": null,
-                "createdAt": "2026-11-16T05:31:03+00:00",
+                "createdAt": "2026-11-16T07:15:18+00:00",
                 "retiredAt": null
             }
         ],

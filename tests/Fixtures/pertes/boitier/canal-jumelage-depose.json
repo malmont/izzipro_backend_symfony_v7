@@ -12,8 +12,8 @@
     "status": 200,
     "body": {
         "status": "waiting",
-        "expiresAt": "2026-12-16T06:01:27+00:00",
+        "expiresAt": "2026-12-16T07:14:44+00:00",
         "pollSeconds": 15,
-        "serverTime": "2026-11-16T06:01:27+00:00"
+        "serverTime": "2026-11-16T07:14:44+00:00"
     }
 }

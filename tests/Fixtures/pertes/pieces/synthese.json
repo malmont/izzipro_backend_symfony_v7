@@ -11,14 +11,15 @@
                 "variantId": 23,
                 "productId": 15,
                 "variantMissing": false,
-                "name": "Veste en lin (exemple 7F95C2)",
+                "name": "Veste en lin (exemple 5D8303)",
                 "variantLabel": null,
-                "barcode": "VESTE-LIN-M-7F95C2",
+                "barcode": "VESTE-LIN-M-5D8303",
                 "barcodeOf": "variant",
                 "symbology": "code128",
                 "stock": 6,
                 "pieces": {
                     "active": 2,
+                    "sold": 0,
                     "retired": 0,
                     "tagged": 1,
                     "untagged": 1
@@ -29,14 +30,15 @@
                 "variantId": 24,
                 "productId": 15,
                 "variantMissing": false,
-                "name": "Veste en lin (exemple 7F95C2)",
+                "name": "Veste en lin (exemple 5D8303)",
                 "variantLabel": null,
-                "barcode": "VESTE-LIN-L-7F95C2",
+                "barcode": "VESTE-LIN-L-5D8303",
                 "barcodeOf": "variant",
                 "symbology": "code128",
                 "stock": 6,
                 "pieces": {
                     "active": 1,
+                    "sold": 0,
                     "retired": 0,
                     "tagged": 1,
                     "untagged": 0
@@ -50,6 +52,7 @@
         "totals": {
             "variants": 2,
             "pieces": 3,
+            "sold": 0,
             "retired": 0,
             "tagged": 2,
             "untagged": 1

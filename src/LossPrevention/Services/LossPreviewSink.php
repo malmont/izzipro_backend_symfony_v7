@@ -41,6 +41,11 @@ final class LossPreviewSink implements LossFindingSink
         }
     }
 
+    public function factsOf(string $dedupKey): ?array
+    {
+        return null; // l'aperçu ne lit aucun constat enregistré : il ne compte que ce qui ouvrirait
+    }
+
     public function latestForPerson(string $ruleCode, int $userId, \DateTimeImmutable $since, \DateTimeImmutable $until): ?array
     {
         $found = null;

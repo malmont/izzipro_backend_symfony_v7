@@ -213,6 +213,34 @@
                     }
                 ],
                 "personVariant": null
+            },
+            {
+                "code": "UNREAD_SOLD",
+                "label": "Articles suivis vendus sans lecture",
+                "description": "Sur un même poste de caisse et une même journée, plusieurs articles suivis ont été vendus sans que leur pièce soit lue, ni sur le tapis du comptoir ni à la sortie. Par poste, jamais par personne.",
+                "wave": 3,
+                "enabled": true,
+                "params": [
+                    {
+                        "key": "minCount",
+                        "label": "Nombre d'articles vendus sans lecture dans la journée qui ouvre un constat",
+                        "type": "count",
+                        "value": 5,
+                        "default": 5,
+                        "min": 1,
+                        "max": 500
+                    },
+                    {
+                        "key": "minShare",
+                        "label": "Part minimale de ces articles parmi les articles suivis vendus ce jour-là sur le poste (en %)",
+                        "type": "percent",
+                        "value": 20,
+                        "default": 20,
+                        "min": 1,
+                        "max": 100
+                    }
+                ],
+                "personVariant": null
             }
         ],
         "notice": "Changer un seuil ne ferme ni ne supprime aucun constat : le nouveau réglage ne vaut que pour les analyses suivantes.",

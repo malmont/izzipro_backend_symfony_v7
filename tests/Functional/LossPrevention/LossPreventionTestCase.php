@@ -140,14 +140,15 @@ abstract class LossPreventionTestCase extends WebTestCase
      * la règle donnée) : pour jouer une règle en échec.
      *
      * @param list<\App\LossPrevention\Services\Rule\LossRuleInterface> $replacements
+     * @param \App\LossPrevention\Services\LossSaleLinkService|null         $sales        le lien des ventes aux pièces, si l'essai en a besoin
      */
-    protected function analysisWith(array $replacements): \App\LossPrevention\Services\LossAnalysisService
+    protected function analysisWith(array $replacements, ?\App\LossPrevention\Services\LossSaleLinkService $sales = null): \App\LossPrevention\Services\LossAnalysisService
     {
         $provider = $this->tenant();
         $c = static::getContainer();
         $rules = [];
         foreach (['CashDiscrepancyRule', 'CashShortageSeriesRule', 'DrawerNoSaleRule', 'VoidAfterSaleRule', 'RefundPatternRule', 'RefundSeriesRule', 'DiscountPatternRule', 'DiscountSeriesRule',
-            'PriceOverrideRule', 'ApprovalPatternRule'] as $name) {
+            'PriceOverrideRule', 'ApprovalPatternRule', 'UnreadSoldRule'] as $name) {
             $class = '\\App\\LossPrevention\\Services\\Rule\\' . $name;
             $rules[$class] = new $class();
         }
@@ -157,7 +158,7 @@ abstract class LossPreventionTestCase extends WebTestCase
 
         return new \App\LossPrevention\Services\LossAnalysisService($provider, $c->get(\App\LossPrevention\Services\LossSettingsService::class),
             $c->get(\App\LossPrevention\Services\LossRuleService::class), $c->get(\App\LossPrevention\Services\LossSite::class),
-            new \App\LossPrevention\Services\LossFindingWriter($provider), new \Psr\Log\NullLogger(), array_values($rules));
+            new \App\LossPrevention\Services\LossFindingWriter($provider), new \Psr\Log\NullLogger(), array_values($rules), $sales);
     }
 
     /** Une règle « tiroir » qui échoue sur une erreur SQL (la transaction serait perdue sans point de reprise) */

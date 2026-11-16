@@ -62,6 +62,10 @@ class LossSaleLinkService
 
     /** Le site a-t-il une vraie pièce à puce ? Lu une fois par passage : sans cela, une vente ne coûte aucune lecture */
     private ?bool $tagged = null;
+
+    /** Le tapis a-t-il déjà été retenté dans ce passage ? (une fois suffit : voir `catchUp`) */
+    private bool $counterRetried = false;
+
     /** @var array{counter: int, catchUp: int, presenceDays: int}|null les fenêtres du passage en cours, lues une fois */
     private ?array $pass = null;
 
@@ -74,6 +78,7 @@ class LossSaleLinkService
     {
         $this->tagged = null;
         $this->pass = null;
+        $this->counterRetried = false;
     }
 
     /**
@@ -114,8 +119,10 @@ class LossSaleLinkService
         $windows = $this->passWindows();
         $stamp = gmdate('Y-m-d H:i:s', $now);
         $linked = 0;
-        // 1. Le tapis, de nouveau, pour les articles écrits depuis peu
-        foreach ($units->unitsToRetryOnCounter(gmdate('Y-m-d H:i:s', $now - self::COUNTER_RETRY), self::CATCH_UP_BATCH) as $unit) {
+        // 1. Le tapis, de nouveau, pour les articles écrits depuis peu. Une fois par passage : un article écrit dans ce passage vient
+        // d'être essayé, et rien de neuf n'arrive du boîtier dans la transaction de l'analyse (une reprise d'historique ne refait pas
+        // des centaines de recherches avant chaque clôture)
+        foreach ($this->counterRetried ? [] : $units->unitsToRetryOnCounter(gmdate('Y-m-d H:i:s', $now - self::COUNTER_RETRY), self::CATCH_UP_BATCH) as $unit) {
             $sold = self::stamp((string) $unit['sold_at']);
             // la requête écarte d'elle-même une pièce reliée plus tôt dans ce passage (elle n'est plus « reliée à aucun article »)
             $read = $units->piecesReadOnCounter((int) $unit['cash_register_id'], (int) $unit['variant_id'], gmdate('Y-m-d H:i:s', $sold - $windows['counter']),
@@ -125,6 +132,7 @@ class LossSaleLinkService
                 ++$linked;
             }
         }
+        $this->counterRetried = true;
         // 2. La sortie, pour ceux qui attendent encore
         $horizon = gmdate('Y-m-d H:i:s', $now - self::CATCH_UP_HORIZON);
         $waiting = array_map(static fn (array $u): array => $u + ['sold' => self::stamp((string) $u['sold_at'])], $units->unitsToCatchUp($horizon, self::CATCH_UP_BATCH));

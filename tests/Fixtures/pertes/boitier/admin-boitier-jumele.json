@@ -30,15 +30,15 @@
             "exercise": false,
             "paired": true,
             "devices": [],
-            "createdAt": "2026-11-16T06:01:27+00:00",
+            "createdAt": "2026-11-16T07:14:44+00:00",
             "screen": "pertes.boitiers",
             "events": [
                 {
                     "id": 15,
                     "type": "BOX_CREATED",
                     "label": "Boîtier ajouté",
-                    "at": "2026-11-16T06:01:27+00:00",
-                    "atLabel": "16/11/2026 01 h 01",
+                    "at": "2026-11-16T07:14:44+00:00",
+                    "atLabel": "16/11/2026 02 h 14",
                     "device": null,
                     "silentSeconds": null,
                     "byUser": true

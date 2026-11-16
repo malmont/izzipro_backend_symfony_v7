@@ -17,6 +17,8 @@ La page **Caisse : réglages et cheminement** suit la liste d'ouverture du magas
 5. **Paiements par carte** : en mode test, les cartes sont simulées. Pour encaisser réellement : inscription Stripe du magasin, appairage du lecteur sur la fiche du poste, puis « Passer en réel ».
 6. **Vente d'essai** : ouvrez une session, vendez un article, clôturez (rapport Z).
 7. **Alertes** par courriel et **conservation** des données de vente selon votre pays.
+8. **Avec la prévention des pertes** (tapis de comptoir) : posez les articles suivis sur le tapis avant le paiement ; pour un
+   retour, posez la pièce rendue sur le tapis **avant de valider le retour**. Voir la page « Prévention des pertes ».
 
 ## Au quotidien
 

@@ -255,11 +255,14 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
             'body' => json_decode((string) $response->getContent(), true)];
     }
 
-    /** Les clés de boîtier et les signatures de jeton d'un exemple, masquées : un fichier du dépôt n'en porte pas */
+    /** Les clés de boîtier et les signatures de jeton d'un exemple, masquées : un fichier du dépôt n'en porte pas ; les durées de silence, arrondies à la minute */
     private static function masked(string $json): string
     {
         $json = (string) preg_replace('/IZ-BOX-(?!AAAA-AAAA-AAAA)[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/', 'IZ-BOX-XXXX-XXXX-XXXX', $json);
         $json = (string) preg_replace('/IZ-BOX-(?!XX)[A-Z0-9]{2}\*\*-\*{4}-\*{4}/', 'IZ-BOX-XX**-****-****', $json);
+        // une durée de silence dépend de la seconde où l'exemple est produit (719 ou 720 s) : dans le fichier, elle est arrondie à la
+        // minute, pour que deux générations donnent le même exemple
+        $json = (string) preg_replace_callback('/("silentSeconds": )(\d+)/', static fn (array $m): string => $m[1] . (intdiv((int) $m[2] + 30, 60) * 60), $json);
 
         return (string) preg_replace('/(b\d+\.\d+\.\d{10}\.)(?!0{64})[0-9a-f]{64}/', '${1}' . str_repeat('0', 64), $json);
     }

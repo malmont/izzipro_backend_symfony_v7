@@ -23,6 +23,14 @@ interface LossFindingSink
      */
     public function complete(array $existing, array $facts, array $onDuty, ?int $amountAtStake, \DateTimeImmutable $occurredTo, array $evidence, bool $recent = false): void;
 
+    /**
+     * Les faits du constat de cette clé, s'il existe. L'aperçu d'un réglage ne connaît aucun constat enregistré : il rend `null`
+     * (il ne compte que ce qui ouvrirait un constat).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function factsOf(string $dedupKey): ?array;
+
     /** @return array<string, mixed>|null */
     public function latestForPerson(string $ruleCode, int $userId, \DateTimeImmutable $since, \DateTimeImmutable $until): ?array;
 }

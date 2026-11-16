@@ -191,6 +191,9 @@ class LossFindingReader
         $subject = ['type' => (string) $row['subject_type'], 'id' => (int) $row['subject_id']];
         if ($row['subject_type'] === 'user_window') {
             $subject += ['name' => $names[(int) $row['subject_id']], 'label' => $this->texts->t('subject.user_window', $locale)];
+        } elseif ($row['subject_type'] === 'cash_register') {
+            // un constat par poste et par jour (lot L3-b2b) : son sujet est le poste, jamais une personne
+            $subject += ['name' => $registers[(int) $row['subject_id']] ?? null, 'label' => $this->texts->t('subject.cash_register', $locale)];
         }
 
         return $this->line($row, $registers, $locale) + [
@@ -198,7 +201,8 @@ class LossFindingReader
             'sessionId' => $row['session_id'] !== null ? (int) $row['session_id'] : null,
             'subject' => $subject,
             'onDuty' => array_map(fn (array $p) => ['id' => (int) $p['id'], 'name' => $names[(int) $p['id']], 'role' => (string) $p['role'], 'roleLabel' => $this->texts->t('role.' . $p['role'], $locale)], $onDuty),
-            'onDutyNotice' => $this->texts->t('onDutyNotice', $locale),
+            // un constat par poste et par jour ne liste personne : pas de phrase sur « ces personnes en poste »
+            'onDutyNotice' => $row['subject_type'] === 'cash_register' ? null : $this->texts->t('onDutyNotice', $locale),
             'amountNotice' => $this->texts->t('amountNotice', $locale),
             'evidence' => $evidence,
             'evidenceIntact' => $intact,
@@ -327,6 +331,8 @@ class LossFindingReader
             LossRuleCatalog::DISCOUNT_PATTERN => $this->texts->t("summary.$code.rule", $locale, ['count' => (int) ($facts['count'] ?? 0), 'amount' => $money($facts['total'] ?? 0)]),
             LossRuleCatalog::PRICE_OVERRIDE => $this->texts->t("summary.$code.rule", $locale, ['count' => (int) ($facts['count'] ?? 0), 'amount' => $money($facts['total'] ?? 0)]),
             LossRuleCatalog::APPROVAL_PATTERN => $this->texts->t("summary.$code.rule", $locale, ['count' => (int) ($facts['count'] ?? 0)]),
+            LossRuleCatalog::UNREAD_SOLD => $this->texts->t("summary.$code." . (($facts['below'] ?? false) ? 'below' : 'rule'), $locale,
+                ['unread' => (int) ($facts['unread'] ?? 0), 'tracked' => (int) ($facts['tracked'] ?? 0), 'share' => (int) ($facts['share'] ?? 0)]),
             default => $this->texts->t('summary.default', $locale),
         };
     }
@@ -365,6 +371,9 @@ class LossFindingReader
             LossEvidence::APPROVAL => ['action' => isset($s['action']) ? ($this->texts->has('approval.action.' . $s['action'], $locale) ? $this->texts->t('approval.action.' . $s['action'], $locale) : (string) $s['action']) : null,
                 'refusal' => isset($s['refusal']) ? ($this->texts->has('approval.refusal.' . $s['refusal'], $locale) ? $this->texts->t('approval.refusal.' . $s['refusal'], $locale) : (string) $s['refusal']) : null,
                 'requestedBy' => $user('userId'), 'manager' => $user('managerId')],
+            // des nombres seulement : personne n'est nommé (règle par poste et par jour)
+            LossEvidence::SALE_UNITS => ['saleDay' => isset($s['day']) && self::isDay((string) $s['day']) ? LossTexts::day(new \DateTimeImmutable((string) $s['day']), $locale) : null, 'trackedSold' => $text('tracked'), 'unreadSold' => $text('unread'), 'linkedByCounter' => $text('counter'),
+                'caughtUpAtExit' => $text('catchUp'), 'returnedUnits' => $text('returned')],
             default => [],
         };
         $lines = [];

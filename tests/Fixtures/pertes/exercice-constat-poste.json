@@ -1,0 +1,91 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/exercices/13?locale=fr"
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "id": 13,
+        "number": -2,
+        "rule": {
+            "code": "UNREAD_SOLD",
+            "label": "Articles suivis vendus sans lecture"
+        },
+        "personPattern": false,
+        "status": "open",
+        "statusLabel": "Nouveau",
+        "summary": "Articles suivis vendus sans lecture ce jour-là à ce poste : 6 sur 30 (20 %).",
+        "storeDay": "2026-11-16",
+        "cashRegister": null,
+        "amountAtStake": null,
+        "currency": "CAD",
+        "isNew": false,
+        "newEvidenceSinceDecision": false,
+        "backfill": false,
+        "exercise": true,
+        "updatedAt": "2026-11-16T07:54:13+00:00",
+        "from": "2026-11-16T06:54:13+00:00",
+        "to": "2026-11-16T07:53:13+00:00",
+        "sessionId": null,
+        "subject": {
+            "type": "cash_register",
+            "id": 0,
+            "name": null,
+            "label": "Poste de caisse"
+        },
+        "onDuty": [],
+        "onDutyNotice": null,
+        "amountNotice": "Le montant en jeu est le montant concerné par le constat, pas une perte prouvée.",
+        "evidence": [
+            {
+                "id": 31,
+                "kind": "sale_units",
+                "at": "2026-11-16T07:53:13+00:00",
+                "atLabel": "16/11/2026 02 h 53",
+                "title": "Articles suivis vendus sur le poste ce jour-là",
+                "lines": [
+                    {
+                        "label": "Journée",
+                        "value": "16/11/2026"
+                    },
+                    {
+                        "label": "Articles suivis vendus",
+                        "value": "30"
+                    },
+                    {
+                        "label": "Vendus sans lecture",
+                        "value": "6"
+                    },
+                    {
+                        "label": "Lus sur le tapis du comptoir",
+                        "value": "24"
+                    },
+                    {
+                        "label": "Rattrapés à la sortie",
+                        "value": "0"
+                    },
+                    {
+                        "label": "Revenus (retour ou vente annulée)",
+                        "value": "0"
+                    }
+                ],
+                "ref": {
+                    "type": "exercise",
+                    "id": 1,
+                    "sequence": null,
+                    "hash": null
+                },
+                "screen": null,
+                "fingerprint": "c75fc4dd1abefade95862e765ad702bf016ac7aea4baa86c0a718f60469ec94b"
+            }
+        ],
+        "evidenceIntact": true,
+        "opinion": null,
+        "decision": null,
+        "history": [],
+        "lastEvidenceAt": "2026-11-16T07:54:13+00:00",
+        "createdAt": "2026-11-16T07:54:13+00:00",
+        "screen": "pertes.exercices"
+    }
+}

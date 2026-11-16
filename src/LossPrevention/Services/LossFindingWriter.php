@@ -68,6 +68,12 @@ class LossFindingWriter implements LossFindingSink
         ++$this->completed;
     }
 
+    /** Les faits du constat de cette clé, s'il existe @return array<string, mixed>|null */
+    public function factsOf(string $dedupKey): ?array
+    {
+        return $this->findings()->factsOf($dedupKey);
+    }
+
     /** Constat « par personne » d'une règle dont la fenêtre court encore pour ce compte @return array<string, mixed>|null */
     public function latestForPerson(string $ruleCode, int $userId, \DateTimeImmutable $since, \DateTimeImmutable $until): ?array
     {

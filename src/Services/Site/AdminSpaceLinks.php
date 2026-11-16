@@ -23,7 +23,7 @@ final class AdminSpaceLinks
     public const ACTIVATION_PATH = '/admin/activer';
 
     public const FINDING_STATUSES = ['open', 'watch', 'explained', 'dismissed', 'confirmed'];
-    public const FINDING_RULES = ['CASH_DISCREPANCY', 'DRAWER_NO_SALE', 'VOID_AFTER_SALE', 'REFUND_PATTERN', 'DISCOUNT_PATTERN', 'PRICE_OVERRIDE', 'APPROVAL_PATTERN'];
+    public const FINDING_RULES = ['CASH_DISCREPANCY', 'DRAWER_NO_SALE', 'VOID_AFTER_SALE', 'REFUND_PATTERN', 'DISCOUNT_PATTERN', 'PRICE_OVERRIDE', 'APPROVAL_PATTERN', 'UNREAD_SOLD'];
     public const TICKET_STATUSES = ['new', 'open', 'waiting_customer', 'closed'];
 
     /** Code d'écran => `params` (nom => forme), `required` (paramètres sans lesquels le lien n'a pas de sens) */

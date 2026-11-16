@@ -125,10 +125,15 @@ class LossAnalysisService
                 ['cursor' => $cursor, 'max' => $max, 'types' => $types], ['types' => ArrayParameterType::STRING]);
             $skipped = 0;
             $skippedSequences = [];
+            // Y a-t-il quelque chose à rattraper ? Oui au début du passage (des lectures ont pu arriver depuis le précédent), puis de
+            // nouveau après chaque vente ou retour lu : entre deux clôtures sans vente, rien n'a changé
+            $toCatchUp = true;
+            $settledFirst = $config[LossRuleCatalog::UNREAD_SOLD]['enabled'] ?? false;
             foreach ($rows as $row) {
                 $entry = LossAuditEntry::fromRow($row);
                 if ($this->sales !== null && in_array($entry['type'], LossSaleLinkService::TYPES, true)) {
                     // la vente reliée aux pièces : sous son propre point de reprise, comme une règle (une entrée en échec est sautée et dite)
+                    $toCatchUp = true;
                     $conn->executeStatement('SAVEPOINT loss_entry');
                     try {
                         $this->sales->handle($entry);
@@ -138,6 +143,20 @@ class LossAnalysisService
                         $skippedSequences[$entry['sequence']] = true;
                         $skipped = count($skippedSequences);
                         $this->logger->error(sprintf('Prévention des pertes : vente reliée aux pièces en échec sur l\'entrée %d du journal de caisse, entrée sautée : %s', $entry['sequence'], $e->getMessage()), ['exception' => $e]);
+                    }
+                }
+                if ($this->sales !== null && $toCatchUp && $settledFirst && $entry['type'] === 'Z_REPORT_CREATED') {
+                    // Une clôture : la règle qui compte les articles vendus la juge APRÈS le rattrapage (tapis retenté, sortie), pas
+                    // avant (lot L3-b2b). Seulement si cette règle est allumée et s'il y a du neuf depuis le dernier rattrapage du
+                    // passage (plusieurs postes fermés à la suite : un seul rattrapage) ; sous son point de reprise, un échec n'arrête rien
+                    $toCatchUp = false;
+                    $conn->executeStatement('SAVEPOINT loss_sweep');
+                    try {
+                        $this->sales->catchUp(time());
+                        $conn->executeStatement('RELEASE SAVEPOINT loss_sweep');
+                    } catch (\Throwable $e) {
+                        $conn->executeStatement('ROLLBACK TO SAVEPOINT loss_sweep');
+                        $this->logger->error('Prévention des pertes : rattrapage avant une clôture en échec, passage poursuivi : ' . $e->getMessage(), ['exception' => $e]);
                     }
                 }
                 foreach ($byType[$entry['type']] ?? [] as $rule) {
@@ -158,7 +177,7 @@ class LossAnalysisService
             if ($this->sales !== null) {
                 // rattrapage (tapis, sortie) puis conservation des présences : à chaque passage, chacun sous son point de reprise (un
                 // échec de l'un n'arrête ni l'autre ni l'analyse ; il est écrit au journal du serveur)
-                foreach (['rattrapage' => fn (): int => $this->sales->catchUp(time()), 'conservation des présences' => fn (): int => $this->sales->purge(time())] as $what => $step) {
+                foreach (['rattrapage' => fn (): int => $toCatchUp ? $this->sales->catchUp(time()) : 0, 'conservation des présences' => fn (): int => $this->sales->purge(time())] as $what => $step) {
                     $conn->executeStatement('SAVEPOINT loss_sweep');
                     try {
                         $step();
