@@ -19,7 +19,7 @@
 {% else %}{{ parent() }}{% endif %}{% endblock %}
 
 {% block agences_panel %}
-{% import _self as m %}
+{% import _self as sitelinks %}
 <div class="agences-panel">
     {% for type, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ type }}">{{ message }}</div>{% endfor %}{% endfor %}
     <p class="text-muted">Une agence est d'abord un site : son « site d'attache ». Elle gère d'autres sites, rattachés ici. Rattacher un site ne change rien pour lui : ni ses droits, ni ses comptes. Les rôles d'agence se donnent à des comptes du site d'attache, ici seulement.</p>
@@ -32,7 +32,7 @@
             <tr data-agence="{{ a.id }}">
                 <td><code>{{ a.code }}</code>{% if a.isTest %} <span class="badge badge-warning">test</span>{% endif %}</td>
                 <td>{{ a.name }}</td>
-                <td>{{ a.homeSite.code }}<br>{{ m.liens(a.homeSite.code, a.homeSite.host) }}</td>
+                <td>{{ a.homeSite.code }}<br>{{ sitelinks.liens(a.homeSite.code, a.homeSite.host) }}</td>
                 <td><span class="badge badge-{{ a.status == 'suspended' ? 'danger' : (a.status == 'trial' ? 'info' : 'success') }}">{{ a.status }}</span>{% if a.trialEnded %} <span class="text-danger">essai passé</span>{% endif %}</td>
                 <td>{{ a.trialEndsAt ? a.trialEndsAt|slice(0, 10) : '—' }}</td>
                 <td>{{ a.sitesCount }} / {{ a.maxSites is null ? 'illimité' : a.maxSites }}</td>
@@ -60,7 +60,7 @@
     {% if detail %}
         {% set a = detail.agency %}
         <h2 class="h5 mt-4">Agence « {{ a.name }} » <code>{{ a.code }}</code></h2>
-        <p>Site d'attache : <strong>{{ a.homeSite.code }}</strong> ({{ m.liens(a.homeSite.code, a.homeSite.host) }}) ; état : <strong>{{ a.status }}</strong> ; essai jusqu'au {{ a.trialEndsAt ? a.trialEndsAt|slice(0, 10) : '—' }} ; {{ a.sitesCount }} site(s) sur {{ a.maxSites is null ? 'illimité' : a.maxSites }}{% if a.sitesUsed > a.sitesCount %} ({{ a.sitesUsed - a.sitesCount }} demande(s) de création en cours){% endif %}.</p>
+        <p>Site d'attache : <strong>{{ a.homeSite.code }}</strong> ({{ sitelinks.liens(a.homeSite.code, a.homeSite.host) }}) ; état : <strong>{{ a.status }}</strong> ; essai jusqu'au {{ a.trialEndsAt ? a.trialEndsAt|slice(0, 10) : '—' }} ; {{ a.sitesCount }} site(s) sur {{ a.maxSites is null ? 'illimité' : a.maxSites }}{% if a.sitesUsed > a.sitesCount %} ({{ a.sitesUsed - a.sitesCount }} demande(s) de création en cours){% endif %}.</p>
         <form method="post" action="{{ path('admin_plateforme_agences_state', {id: a.id, to: a.status == 'suspended' ? 'resume' : 'suspend'}) }}" class="row g-2 align-items-end agences-etat">
             <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><input type="hidden" name="agence" value="{{ a.id }}">
             {% if a.status != 'suspended' %}<div class="col-md-4"><input class="form-control" name="reason" maxlength="300" placeholder="Raison de la suspension (facultatif)"></div>{% endif %}
@@ -80,7 +80,7 @@
         <table class="table table-sm align-middle agences-sites">
             <tbody>
             {% for s in detail.sites %}
-                <tr><td><code>{{ s.code }}</code></td><td>{{ s.name }}</td><td>{{ m.liens(s.code, s.host) }}</td><td>rattaché le {{ s.attachedAt|slice(0, 10) }}</td>
+                <tr><td><code>{{ s.code }}</code></td><td>{{ s.name }}</td><td>{{ sitelinks.liens(s.code, s.host) }}</td><td>rattaché le {{ s.attachedAt|slice(0, 10) }}</td>
                     <td><form method="post" action="{{ path('admin_plateforme_agences_detach', {id: a.id}) }}" onsubmit="return confirm('Détacher ce site de l\'agence ?');">
                         <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><input type="hidden" name="agence" value="{{ a.id }}"><input type="hidden" name="tenantCode" value="{{ s.code }}">
                         <button class="btn btn-sm btn-outline-danger" type="submit">Détacher</button></form></td></tr>
