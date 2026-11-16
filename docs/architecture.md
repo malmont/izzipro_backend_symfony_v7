@@ -231,8 +231,13 @@ courriel montrait le mot de passe du serveur d'envoi en clair à l'administrateu
 
 - **EasyAdmin** : tout champ dont le nom dit un secret passe par le gabarit `templates/admin/field/masked_secret.html.twig` (le
   gabarit texte d'EasyAdmin met la valeur brute dans l'attribut `title` : `formatValue` ne suffit pas), ou n'existe que dans le
-  formulaire (`onlyOnForms`). EasyAdmin n'a pas d'export général ; les deux exports qui existent (formulaires reçus, caisse) ne
-  touchent aucun de ces champs.
+  formulaire (`onlyOnForms`). EasyAdmin n'a pas d'export général ; les exports qui existent (formulaires reçus, caisse et
+  comptabilité, achats) ne touchent aucun de ces champs.
+- **La recherche et le tri d'une liste ne lisent jamais un secret.** Sans champs de recherche déclarés, EasyAdmin cherche dans TOUTES
+  les colonnes d'une table, affichées ou non : un fragment tapé dans la recherche disait si le jeton de réinitialisation d'un compte
+  le contenait, et, répété, le reconstituait (de même un mot de passe de serveur d'envoi, une clé). `BaseTenantCrudController`
+  retire de la recherche et du tri toute colonne de secret ou d'empreinte (`SecretKeys::unsearchable` : les noms de secret, et ce
+  qui finit par `hash`). Un écran qui fabrique lui-même sa requête de liste ne porte sur aucune table à secret (vérifié par l'essai).
 - **Quels noms disent un secret** : `App\Security\SecretKeys::names()` (contient `password`, `secret` ou `apikey` ; finit par
   `token`, `accesskey` ou `privatekey`). `inputTokens` ou `memoryKey` n'en sont pas.
 - **Journal des modifications** (`GET /api/landingpage-audit/{id}`) : tout secret qu'une ligne aurait gardé dans son avant ou son
@@ -243,9 +248,31 @@ courriel montrait le mot de passe du serveur d'envoi en clair à l'administrateu
   d'administration et toutes les lectures de l'API de la gestion, du site et de la plateforme sont ouverts par l'administrateur et par
   le super administrateur : aucune ne rend une de ces valeurs. Un second garde-fou relit le code de tous les écrans d'EasyAdmin : un
   champ au nom de secret qui ne serait ni masqué ni réservé au formulaire le fait échouer.
-- **Deux exceptions déclarées**, avec leur raison, dans cet essai : la clé d'un lien de partage de médias (faite pour être copiée) ;
-  le lien d'activation d'un compte en attente, que la console de Mémoires Vivantes rend exprès à l'équipe (`activationUrl` de
-  `GET /api/memoires/admin/users`, qui porte le jeton de vérification : décision du propriétaire en attente).
+- **Une exception déclarée**, avec sa raison, dans cet essai : la clé d'un lien de partage de médias (faite pour être copiée).
+- **Le mot de passe et les jetons d'un compte** (`User`) sont exclus de toute sérialisation (`#[Ignore]` sur leurs accesseurs).
+
+### Compte de la plateforme, liens de réinitialisation et d'activation (train de sécurité du 16/11/2026)
+
+Enchaînement fermé par ce train : un administrateur de site demandait « mot de passe oublié » pour le compte de la plateforme de son
+site, retrouvait le jeton par la recherche de la liste des comptes, choisissait un mot de passe pour ce compte sur son site, recevait
+son code à usage unique (envoyé par le serveur d'envoi du site, qu'il règle lui-même), et devenait super administrateur.
+
+- **Le compte de la plateforme ne se réinitialise jamais par un site** (`ResetPasswordController`) : traité comme un compte inconnu,
+  aucun lien créé (réponse neutre), aucun lien accepté. Son mot de passe ne se pose que par la page de la plateforme.
+- **Son code à usage unique part par le serveur de la PLATEFORME**, jamais par le serveur d'envoi du site (`OtpService`).
+- **Un lien de réinitialisation s'efface quand l'adresse du compte change** (`User::setEmail`, lot RESET-1) : il a été envoyé à
+  l'ancienne adresse. Vaut pour tout chemin (profil, console, EasyAdmin) ; une différence de casse n'est pas un changement.
+  Conséquence : changer l'adresse d'un administrateur invité annule son invitation, qui se renvoie.
+- **Le lien d'activation d'un compte invité** (`POST /api/memoires/auth/activate`, qui pose un mot de passe) ne vaut que pour un
+  compte né d'une invitation de la console (`signup_channel = web_invite`), pas encore activé, pendant 7 jours
+  (`user.verification_token_expires_at`), une seule fois. Un compte inscrit par la boutique n'est jamais activable par cette route :
+  son jeton ne sert qu'à vérifier son adresse. Le lien et le jeton ne sont rendus qu'à l'administrateur du site (liste et création).
+  Un lien expiré ne se renouvelle pas : le compte se supprime et s'invite de nouveau.
+- Essais : `SecretsNeverShownTest` (recherche, tri, compte de la plateforme, code à usage unique), `ResetLinkOnEmailChangeTest`,
+  `ActivationLinkTest`.
+- **À la bascule de ce train** (étape 89) : tous les liens de réinitialisation en attente ont été invalidés sur tous les sites, ainsi
+  que les jetons d'activation qui ne venaient pas d'une invitation de la console ; les invitations de la console en attente ont reçu
+  une échéance de 7 jours.
 
 ### Ressources API Platform (`#[ApiResource]`, audit S8 du 26/10/2026)
 

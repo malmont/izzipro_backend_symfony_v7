@@ -36,11 +36,11 @@ class SecretsNeverShownTest extends WebTestCase
     private const API = '#^/api/(gestion|site|platform|entreprise|boutique-settings|landingpage-settings|landingpage-audit|admin-settings|app-keys|support|shipping|transporteurs|carrier|fournisseurs|collections|periodes|commandes|dashboard|statistiques|payments|memoires/admin|me)(/|$)#';
 
     /**
-     * Exceptions DÉCLARÉES, chacune avec sa raison. Une fuite nouvelle ne s'ajoute pas ici : elle se corrige.
-     * - la console de Mémoires Vivantes rend exprès à l'équipe le LIEN D'ACTIVATION d'un compte en attente (`activationUrl`, qui porte
-     *   le jeton de vérification) pour qu'elle le transmette à la main ; le garder ou non est une décision du propriétaire (lot en pause).
+     * Exceptions DÉCLARÉES de l'API, chacune avec sa raison : aucune. Une fuite nouvelle ne s'ajoute pas ici, elle se corrige. (La
+     * console de Mémoires Vivantes rendait le jeton de vérification de tout compte en attente : fermé par le même train, voir
+     * `ActivationLinkTest`.)
      */
-    private const KNOWN_API = ['GET /api/memoires/admin/users' => ['verification']];
+    private const KNOWN_API = [];
     /** La clé d'un lien de partage de médias est faite pour être copiée et donnée : elle s'affiche */
     private const KNOWN_FIELDS = ['SharedMediaCrudController.php : accessKey'];
 
@@ -308,6 +308,42 @@ class SecretsNeverShownTest extends WebTestCase
         // le compte ordinaire, lui, se réinitialise comme avant
         $token = (string) $db->fetchOne('SELECT reset_token FROM "user" WHERE id = ?', [$ordinary->getId()]);
         $this->assertSame(200, $post('/api/password-reset/confirm', ['token' => $token, 'password' => 'Un-autre-mot-de-passe-9'])[0]);
+    }
+
+    /**
+     * Le code à usage unique du compte de la plateforme part par le serveur de la PLATEFORME, jamais par le serveur d'envoi du site
+     * (que l'administrateur du site règle lui-même : il aurait reçu le code).
+     */
+    public function testTheLoginCodeOfThePlatformAccountNeverGoesThroughTheMailServerOfTheSite(): void
+    {
+        $em = $this->em();
+        $make = function (string $name, array $roles) use ($em): User {
+            $email = "secrets-code-$name-{$this->tag}@example.invalid";
+            $user = (new User())->setEmail($email)->setUsername($email)->setFirstname('Secrets')->setLastname($name)->setRoles($roles)->setPassword('x')->setIsVerified(true);
+            $em->persist($user);
+
+            return $user;
+        };
+        $platform = $make('plateforme', ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']);
+        $ordinary = $make('ordinaire', ['ROLE_ADMIN']);
+        $em->flush();
+        $request = \Symfony\Component\HttpFoundation\Request::create('https://' . MV_TEST_TENANT_HOST . '/account/otp');
+        $provider = static::getContainer()->get(TenantEntityManagerProvider::class);
+
+        $sender = $this->createMock(\App\Services\EmailConfigurationService\EmailSenderService::class);
+        $sender->method('subject')->willReturn('Votre code');
+        $sender->expects($this->once())->method('sendPlatformEmail')->with($platform->getEmail(), 'Votre code', 'security/2fa_email.html.twig', $this->callback(static fn (array $context): bool => isset($context['code'])))->willReturn(true);
+        $sender->expects($this->never())->method('sendCustomerEmail');
+        $sender->expects($this->never())->method('sendTemplatedEmail');
+        (new \App\Services\OtpService($provider, $sender))->generateAndSendOtp($platform, $request);
+        $this->assertSame(1, (int) $em->getConnection()->fetchOne('SELECT COUNT(*) FROM otp_code WHERE user_otp_id = ?', [$platform->getId()]), 'le code est bien créé');
+
+        // un compte ordinaire garde son chemin : le serveur d'envoi du site, avec le repli de la plateforme si le site ne peut pas envoyer
+        $sender = $this->createMock(\App\Services\EmailConfigurationService\EmailSenderService::class);
+        $sender->expects($this->once())->method('sendCustomerEmail')->with($ordinary->getEmail())->willReturn(true);
+        $sender->expects($this->never())->method('sendPlatformEmail');
+        (new \App\Services\OtpService($provider, $sender))->generateAndSendOtp($ordinary, $request);
+        $em->getConnection()->executeStatement('DELETE FROM otp_code WHERE user_otp_id IN (?, ?)', [$platform->getId(), $ordinary->getId()]);
     }
 
     public function testEveryEasyAdminFieldWhoseNameSaysASecretIsMaskedOrLivesInTheFormOnly(): void

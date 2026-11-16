@@ -87,6 +87,16 @@ class OtpService
         // Serveur d'envoi du site ; à défaut (site sans configuration d'envoi, ou envoi en échec), serveur de la
         // plateforme : sans code, l'administrateur ne pourrait plus se connecter. Langue du client (03/11/2026) : `?locale=`
         // (fr, en), sinon celle du site ; avant, $request->getLocale() valait toujours `en` (aucun écouteur ne le fixe)
+        // Train de sécurité du 16/11/2026 : le code du COMPTE DE LA PLATEFORME part par le serveur de la PLATEFORME, jamais par le
+        // serveur d'envoi du site. Ce serveur-là est réglé par l'administrateur du site : en le pointant vers une machine à lui, il
+        // aurait reçu le code de connexion du compte de la plateforme, qui n'aurait plus été un second verrou.
+        if (\App\Services\Platform\PlatformAccessJournal::isPlatformAccount($userManaged->getRoles())) {
+            $language = $request->query->get('locale') === 'en' ? 'en' : 'fr';
+            $this->emailSenderService->sendPlatformEmail($userManaged->getEmail(), $this->emailSenderService->subject('otp.subject_platform', [], $language), 'security/2fa_email.html.twig',
+                $context + ['locale' => $language, 'intlLocale' => $language]);
+
+            return;
+        }
         $this->emailSenderService->sendCustomerEmail($userManaged->getEmail(), 'otp.subject', [], 'security/2fa_email.html.twig', $context, $request->query->get('locale'), $baseUrl, 'otp.subject_platform');
     }
 }

@@ -698,18 +698,20 @@ Détail : `docs/architecture.md`, « Modules et mode de la plateforme » ; `docs
 ## À reprendre avec Mémoires Vivantes (décisions du propriétaire, 16/11/2026)
 
 Mémoires Vivantes est traitée **comme un projet à part** : aucun lot n'y touche sans demande du propriétaire, sauf ce qui relève de
-l'authentification ou des services communs. Deux constats faits par des lots de sécurité de la plateforme sont donc **laissés tels
-quels**, et notés ici pour la reprise :
+l'authentification ou des services communs. Un constat fait par un lot de sécurité de la plateforme est donc **laissé tel quel**,
+et noté ici pour la reprise ; un second, qui touchait à l'authentification, a été corrigé :
 
 - **Coût d'impression.** Le devis et les commandes d'impression rendent au propriétaire d'un livre ce que l'imprimeur nous facture
   (`print_cost`, `shipping_cost`, `tax_cost`, `total_cost`) à côté du prix qu'il paie (`billing`, `total`, `charged_amount`) :
   `POST /api/memoires/books/{id}/print/estimate`, `GET /api/memoires/books/{id}/print/orders`, `GET /api/memoires/print/orders/
   {orderId}`, et la fiche du livre. La différence est la marge d'impression. Trouvé par la relecture du lot COST-1 ; décision : on
   n'y touche pas pour l'instant.
-- **Lien d'activation.** La console de l'équipe (`GET /api/memoires/admin/users`, `ROLE_ADMIN` ou `ROLE_MEMOIRES_RESPONSABLE`) rend
-  `activationUrl` pour tout compte en attente : le lien porte le jeton de vérification du compte, pour que l'équipe le transmette à
-  la main. Exception déclarée du garde-fou des secrets (`tests/Functional/Security/SecretsNeverShownTest.php`, lot SECRETS-1) ; à
-  trancher à la reprise.
+- **Lien d'activation : CORRIGÉ le 16/11/2026** (authentification, accord du propriétaire). La route publique d'activation pose
+  un mot de passe : elle ne vaut plus que pour un compte invité par la console, 7 jours, une fois ; le lien et le jeton
+  (`activationUrl`, `token`) ne sont rendus qu'à l'**administrateur** du site, dans la liste comme à la création. Un responsable des
+  biographes voit le compte « en attente », sans son lien (le courriel d'invitation part toujours). Un lien expiré ne se renouvelle
+  pas : supprimer le compte et l'inviter de nouveau (une action « Renvoyer l'invitation » est à prévoir à la reprise). Détail :
+  `docs/architecture.md`, « Compte de la plateforme, liens de réinitialisation et d'activation ».
 
 ## Tenir cette fiche à jour
 
