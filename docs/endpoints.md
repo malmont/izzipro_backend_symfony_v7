@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (639)
+## Boutique et commun (644)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -291,6 +291,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PUT | `/api/adresses/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::editAdress` |
 | GET | `/api/adresses` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::getUserAdresses` |
 | POST | `/api/adresses` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::createAdress` |
+| GET | `/api/agency/assistance` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::assistance` |
 | GET | `/api/agency/me` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::me` |
 | GET | `/api/agency/site-requests/{id}` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::siteRequest` |
 | GET | `/api/agency/site-requests` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::siteRequests` |
@@ -792,6 +793,10 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/site-content/demo` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::deleteDemo` |
 | GET | `/api/site-content/demo` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::demo` |
 | POST | `/api/site-content/seed` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::seed` |
+| POST | `/api/site/assistance/{id}/close` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteAssistanceController::close` |
+| GET | `/api/site/assistance/{id}/journal` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteAssistanceController::journal` |
+| GET | `/api/site/assistance` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteAssistanceController::list` |
+| POST | `/api/site/assistance` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteAssistanceController::request` |
 | POST | `/api/site/assistant/actions/{id}/confirm` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteAssistantController\SiteAssistantController::confirm` |
 | GET | `/api/site/assistant/credits` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteAssistantController\SiteAssistantController::credits` |
 | POST | `/api/site/assistant` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteAssistantController\SiteAssistantController::chat` |
