@@ -59,6 +59,10 @@ class LossSetting
     #[ORM\Column(name: 'zone_leave_seconds', nullable: true)]
     private ?int $zoneLeaveSeconds = null;
 
+    /** Lot L4-b2 : fenêtre de retrait d'une commande web en boutique (jours) ; nul = 14 */
+    #[ORM\Column(name: 'web_window_days', nullable: true)]
+    private ?int $webWindowDays = null;
+
     /** Lot L4-b : rang du dernier fait de pièce jugé par les règles de la sortie */
     #[ORM\Column(name: 'exit_cursor', nullable: true)]
     private ?int $exitCursor = null;

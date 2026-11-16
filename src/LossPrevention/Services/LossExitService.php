@@ -6,6 +6,7 @@ use App\LossPrevention\Entity\LossEvidence;
 use App\LossPrevention\Entity\LossFinding;
 use App\LossPrevention\Entity\LossJournalEntry;
 use App\LossPrevention\Entity\LossPiece;
+use App\LossPrevention\Entity\LossSaleUnit;
 use App\LossPrevention\Entity\LossTag;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\DBAL\Connection;
@@ -25,6 +26,11 @@ use Psr\Log\LoggerInterface;
  *   entièrement étiqueté reste silencieux : la vente sans pièce ne peut être qu'une lecture manquée.
  * - **Jamais trop tôt** : une lecture n'est jugée que quand l'analyse a lu les ventes jusqu'à son heure plus la fenêtre du
  *   rattrapage (`$horizon`, donné par l'analyse). Sinon le curseur s'arrête devant elle, et elle attend le passage suivant.
+ * - **Commandes web et locations** (lot L4-b2, § 17.14) : un article d'une commande web payée (retirée ou expédiée) explique une sortie
+ *   de sa variante pendant la fenêtre des commandes web, comme une vente qui attend sa pièce ; une location en cours ce jour-là (de la veille de
+ *   son début au lendemain de sa fin, en journées du magasin) explique la sortie d'une pièce de sa variante, au plus autant de pièces
+ *   distinctes ce jour-là que d'unités louées (l'aller et le retour d'une même pièce le même jour comptent une fois). Une location
+ *   n'ouvre jamais de constat faible : aucune pièce n'y est reliée.
  * - Jamais : une pièce d'exercice, une pièce retirée, une puce retirée, une lecture à l'heure douteuse, une lecture d'avant le
  *   plancher de la notice aux salariés, une lecture d'avant la première fois que ces règles ont tourné.
  *
@@ -56,7 +62,7 @@ final class LossExitService
      *
      * @return array{judged: int, pending: bool} lectures jugées ; vrai s'il en reste de mûres derrière la limite du passage
      */
-    public function sweep(LossAnalysisContext $ctx, array $configs, int $horizon, int $catchUpWindow): array
+    public function sweep(LossAnalysisContext $ctx, array $configs, int $horizon, int $catchUpWindow, int $webWindow = LossSaleLinkService::WEB_DAYS * 86400): array
     {
         $conn = $ctx->conn;
         // Le verrou de SESSION se relâche toujours : la lecture se fait sous un point de reprise, et un échec y revient AVANT de relâcher
@@ -109,7 +115,7 @@ final class LossExitService
             $conn->executeStatement('SAVEPOINT loss_exit_read');
             $counters = $ctx->writer->counters();
             try {
-                $this->judge($ctx, $configs, $read, $catchUpWindow);
+                $this->judge($ctx, $configs, $read, $catchUpWindow, $webWindow);
                 $conn->executeStatement('RELEASE SAVEPOINT loss_exit_read');
             } catch (\Throwable $e) {
                 $conn->executeStatement('ROLLBACK TO SAVEPOINT loss_exit_read');
@@ -135,7 +141,7 @@ final class LossExitService
     }
 
     /** @param array<string, mixed> $read */
-    private function judge(LossAnalysisContext $ctx, array $configs, array $read, int $catchUpWindow): void
+    private function judge(LossAnalysisContext $ctx, array $configs, array $read, int $catchUpWindow, int $webWindow): void
     {
         $conn = $ctx->conn;
         $piece = $conn->fetchAssociative('SELECT p.id, p.number, p.status, p.exercise, p.variant_id FROM loss_piece p WHERE p.id = ?', [(int) $read['piece_id']]);
@@ -171,20 +177,25 @@ final class LossExitService
         // trop d'articles en attente, analyse en retard, lot du boîtier arrivé après le rattrapage). Mais une vente n'explique qu'UNE sortie,
         // comme le rattrapage relie une lecture à une seule vente : la lecture n'est expliquée que s'il y a plus de ventes en attente dans
         // sa fenêtre que de pièces de l'article sorties AVANT elle (dans la même fenêtre) sans vente qui les explique. Le compte ne dépend
-        // pas du passage où chaque lecture est jugée. Expliquée, et l'article pas entièrement étiqueté : le doute est dit
+        // pas du passage où chaque lecture est jugée. Expliquée, et l'article pas entièrement étiqueté : le doute est dit. Un article de
+        // commande WEB (lot L4-b2) attend sur la fenêtre des commandes web : les sorties d'avant comptent alors depuis le plus ancien qui attend
         $from = $readAt->modify('-' . $catchUpWindow . ' seconds')->format('Y-m-d H:i:s');
         $waiting = $conn->fetchAllAssociative(
-            'SELECT s.id, s.order_id, s.order_item_id, s.sold_at, s.cash_register_id, s.matched_by FROM loss_sale_unit s'
-            . ' WHERE s.variant_id = :variant AND s.piece_id IS NULL AND s.returned_at IS NULL AND s.sold_at >= :from AND s.sold_at <= :to ORDER BY s.sold_at, s.id',
-            ['variant' => (int) $piece['variant_id'], 'from' => $from, 'to' => $readAt->modify('+' . $before . ' seconds')->format('Y-m-d H:i:s')]);
+            'SELECT s.id, s.order_id, s.order_item_id, s.sold_at, s.cash_register_id, s.matched_by, s.origin FROM loss_sale_unit s'
+            . " WHERE s.variant_id = :variant AND s.piece_id IS NULL AND s.returned_at IS NULL AND s.sold_at <= :to AND (s.sold_at >= :from OR (s.origin = 'web' AND s.sold_at >= :webFrom))"
+            . ' ORDER BY s.sold_at, s.id',
+            ['variant' => (int) $piece['variant_id'], 'from' => $from, 'to' => $readAt->modify('+' . $before . ' seconds')->format('Y-m-d H:i:s'),
+                'webFrom' => $readAt->modify('-' . $webWindow . ' seconds')->format('Y-m-d H:i:s')]);
         if ($waiting !== []) {
+            $since = $readAt->modify('-' . ($catchUpWindow + $before) . ' seconds');
+            $oldest = (new \DateTimeImmutable((string) $waiting[0]['sold_at'], new \DateTimeZone('UTC')))->modify('-' . $before . ' seconds');
             $earlier = (int) $conn->fetchOne(
                 'SELECT COUNT(DISTINCT e.piece_id) FROM loss_piece_event e JOIN loss_piece p ON p.id = e.piece_id'
                 . " WHERE e.type = 'ZONE_SEEN' AND NOT e.exercise AND ((e.data)::jsonb ->> 'zone') = 'exit' AND COALESCE((e.data)::jsonb ->> 'clockDoubt', 'false') <> 'true'"
                 . ' AND p.variant_id = :variant AND NOT p.exercise AND e.piece_id <> :piece AND e.occurred_at >= :from AND (e.occurred_at < :at OR (e.occurred_at = :at AND e.id < :id))'
                 . " AND NOT EXISTS (SELECT 1 FROM loss_sale_unit u WHERE u.piece_id = e.piece_id AND u.sold_at <= e.occurred_at + make_interval(secs => :before)"
                 . " AND (u.returned_at IS NULL OR (u.returned_by = 'return' AND u.returned_at >= e.occurred_at)))",
-                ['variant' => (int) $piece['variant_id'], 'piece' => (int) $piece['id'], 'from' => $readAt->modify('-' . ($catchUpWindow + $before) . ' seconds')->format('Y-m-d H:i:s'),
+                ['variant' => (int) $piece['variant_id'], 'piece' => (int) $piece['id'], 'from' => min($since, $oldest)->format('Y-m-d H:i:s'),
                     'at' => $when, 'id' => (int) $read['id'], 'before' => $before]);
             if ($earlier < count($waiting)) {
                 $this->doubt($ctx, $configs, $piece, $read, $readAt, $day, $waiting[$earlier], true);
@@ -192,7 +203,39 @@ final class LossExitService
                 return;
             }
         }
-        // 3. Aucune vente ne l'explique
+        // 3. Une LOCATION en cours ce jour-là (lot L4-b2) : au plus autant de pièces distinctes de l'article sorties ce jour-là que d'unités
+        // louées. Les autres pièces de l'article lues avant elle ce jour-là, sans vente en cours, prennent leur place d'abord ; celles
+        // qu'une vente en attente explique (cas 2) n'en prennent pas : seules les ventes en attente que des sorties d'AVANT ce jour n'ont
+        // pas déjà prises sont retirées du compte. Silencieuse : aucune pièce n'est reliée à une location
+        $rented = $this->rented($ctx, (int) $piece['variant_id'], $day);
+        if ($rented > 0) {
+            [$dayStart] = $ctx->clock->range($day, $day);
+            $others = (int) $conn->fetchOne(
+                'SELECT COUNT(DISTINCT e.piece_id) FROM loss_piece_event e JOIN loss_piece p ON p.id = e.piece_id'
+                . " WHERE e.type = 'ZONE_SEEN' AND NOT e.exercise AND ((e.data)::jsonb ->> 'zone') = 'exit' AND COALESCE((e.data)::jsonb ->> 'clockDoubt', 'false') <> 'true'"
+                . " AND COALESCE((e.data)::jsonb ->> 'tagRetired', 'false') <> 'true' AND p.status <> 'retired'"
+                . ' AND p.variant_id = :variant AND NOT p.exercise AND e.piece_id <> :piece AND e.occurred_at >= :from AND (e.occurred_at < :at OR (e.occurred_at = :at AND e.id < :id))'
+                . " AND NOT EXISTS (SELECT 1 FROM loss_sale_unit u WHERE u.piece_id = e.piece_id AND u.sold_at <= e.occurred_at + make_interval(secs => :before)"
+                . " AND (u.returned_at IS NULL OR (u.returned_by = 'return' AND u.returned_at >= e.occurred_at)))",
+                ['variant' => (int) $piece['variant_id'], 'piece' => (int) $piece['id'], 'from' => $dayStart->format('Y-m-d H:i:s'), 'at' => $when, 'id' => (int) $read['id'], 'before' => $before]);
+            $free = 0;
+            if ($waiting !== []) {
+                // les ventes en attente déjà prises par des sorties d'avant ce jour (cas 2, même fenêtre) ne libèrent aucune sortie de ce jour
+                $earlierBefore = (int) $conn->fetchOne(
+                    'SELECT COUNT(DISTINCT e.piece_id) FROM loss_piece_event e JOIN loss_piece p ON p.id = e.piece_id'
+                    . " WHERE e.type = 'ZONE_SEEN' AND NOT e.exercise AND ((e.data)::jsonb ->> 'zone') = 'exit' AND COALESCE((e.data)::jsonb ->> 'clockDoubt', 'false') <> 'true'"
+                    . ' AND p.variant_id = :variant AND NOT p.exercise AND e.piece_id <> :piece AND e.occurred_at >= :from AND e.occurred_at < :dayStart'
+                    . " AND NOT EXISTS (SELECT 1 FROM loss_sale_unit u WHERE u.piece_id = e.piece_id AND u.sold_at <= e.occurred_at + make_interval(secs => :before)"
+                    . " AND (u.returned_at IS NULL OR (u.returned_by = 'return' AND u.returned_at >= e.occurred_at)))",
+                    ['variant' => (int) $piece['variant_id'], 'piece' => (int) $piece['id'], 'from' => min($since, $oldest)->format('Y-m-d H:i:s'),
+                        'dayStart' => $dayStart->format('Y-m-d H:i:s'), 'before' => $before]);
+                $free = max(0, count($waiting) - $earlierBefore);
+            }
+            if (max(0, $others - $free) < $rented) {
+                return;
+            }
+        }
+        // 4. Aucune vente ni location ne l'explique
         if ($configs[LossRuleCatalog::EXIT_WITHOUT_SALE]['enabled'] ?? false) {
             $this->withoutSale($ctx, $piece, $read, $readAt, $day);
         }
@@ -286,6 +329,28 @@ final class LossExitService
                 'cashRegisterId' => $sale !== null && $sale['cash_register_id'] !== null ? (int) $sale['cash_register_id'] : null,
                 'saleWaiting' => $waiting ? true : null, // la vente attendait encore sa pièce : elle peut expliquer la sortie
             ], static fn (mixed $v): bool => $v !== null)];
+    }
+
+    /**
+     * Unités louées de cette variante en cours une journée du magasin : réservations non annulées dont la journée tombe entre la veille de
+     * leur début et le lendemain de leur fin (en journées du magasin).
+     */
+    private function rented(LossAnalysisContext $ctx, int $variant, string $day): int
+    {
+        // bornes larges (deux jours de chaque côté, changements d'heure compris), la journée exacte est jugée ensuite
+        [$start, $end] = $ctx->clock->range($day, $day);
+        $rows = $this->emProvider->getEntityManager()->getRepository(LossSaleUnit::class)->rentalsOfVariant($variant,
+            $start->modify('-2 days')->format('Y-m-d H:i:s'), $end->modify('+2 days')->format('Y-m-d H:i:s'));
+        $units = 0;
+        foreach ($rows as $row) {
+            $first = (new \DateTimeImmutable($ctx->clock->day(new \DateTimeImmutable((string) $row['start_at'], new \DateTimeZone('UTC')))))->modify('-1 day')->format('Y-m-d');
+            $last = (new \DateTimeImmutable($ctx->clock->day(new \DateTimeImmutable((string) $row['end_at'], new \DateTimeZone('UTC')))))->modify('+1 day')->format('Y-m-d');
+            if ($day >= $first && $day <= $last) {
+                $units += max(1, (int) $row['quantity']);
+            }
+        }
+
+        return $units;
     }
 
     /**

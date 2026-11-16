@@ -153,7 +153,7 @@ class LossAnalysisService
                     $toCatchUp = false;
                     $conn->executeStatement('SAVEPOINT loss_sweep');
                     try {
-                        $this->sales->catchUp(time());
+                        $this->sales->catchUp(time(), $entry['occurredAt']->getTimestamp());
                         $conn->executeStatement('RELEASE SAVEPOINT loss_sweep');
                     } catch (\Throwable $e) {
                         $conn->executeStatement('ROLLBACK TO SAVEPOINT loss_sweep');
@@ -176,15 +176,33 @@ class LossAnalysisService
                 }
             }
             if ($this->sales !== null) {
-                // rattrapage (tapis, sortie) puis conservation des présences : à chaque passage, chacun sous son point de reprise (un
-                // échec de l'un n'arrête ni l'autre ni l'analyse ; il est écrit au journal du serveur)
-                foreach (['rattrapage' => fn (): int => $toCatchUp ? $this->sales->catchUp(time()) : 0, 'conservation des présences' => fn (): int => $this->sales->purge(time())] as $what => $step) {
+                // commandes web (lot L4-b2 : payées, annulées, articles rapportés), rattrapage (tapis, sortie) puis conservation des
+                // présences : à chaque passage, chacun sous son point de reprise (un échec de l'un n'arrête ni les autres ni l'analyse ; il
+                // est écrit au journal du serveur). Un article de commande web écrit est rattrapé dans le même passage
+                // l'heure jusqu'à laquelle les ventes sont lues (comme pour la sortie, plus bas) : une commande web ne prend pas une lecture que
+                // la caisse peut encore expliquer
+                $readsUntil = count($rows) >= max(1, $limit) ? (new \DateTimeImmutable((string) end($rows)['occurred_at'], new \DateTimeZone('UTC')))->getTimestamp() : time();
+                $steps = [
+                    'commandes web' => function () use (&$toCatchUp): int {
+                        $written = $this->sales->webOrders(time());
+                        $toCatchUp = $toCatchUp || $written > 0;
+
+                        return $written;
+                    },
+                    'rattrapage' => function () use (&$toCatchUp, $readsUntil): int {
+                        return $toCatchUp ? $this->sales->catchUp(time(), $readsUntil) : 0;
+                    },
+                    'conservation des présences' => fn (): int => $this->sales->purge(time()),
+                ];
+                $stepFailed = [];
+                foreach ($steps as $what => $step) {
                     $conn->executeStatement('SAVEPOINT loss_sweep');
                     try {
                         $step();
                         $conn->executeStatement('RELEASE SAVEPOINT loss_sweep');
                     } catch (\Throwable $e) {
                         $conn->executeStatement('ROLLBACK TO SAVEPOINT loss_sweep');
+                        $stepFailed[$what] = true;
                         $this->logger->error(sprintf('Prévention des pertes : %s en échec, passage poursuivi : %s', $what, $e->getMessage()), ['exception' => $e]);
                     }
                 }
@@ -195,7 +213,8 @@ class LossAnalysisService
             $full = count($rows) >= max(1, $limit);
             $newCursor = $full ? (int) end($rows)['sequence'] : $max;
             $exitPending = false;
-            if ($this->sales !== null && $this->exits !== null) {
+            // les commandes web n'ont pas pu être lues (ou rattrapés) : les sorties attendent le passage suivant plutôt que d'ouvrir de faux constats
+            if ($this->sales !== null && $this->exits !== null && !isset($stepFailed['commandes web']) && !isset($stepFailed['rattrapage'])) {
                 // Lot L4-b : les règles de la sortie, APRÈS le rattrapage. Les ventes sont lues jusqu'à maintenant si le journal a été lu
                 // jusqu'au bout, sinon jusqu'à l'heure de la dernière entrée lue ; une lecture plus récente que cela, moins la fenêtre du
                 // rattrapage, attend le passage suivant. Sous son point de reprise : un échec n'arrête pas l'analyse
@@ -207,7 +226,8 @@ class LossAnalysisService
                 $conn->executeStatement('SAVEPOINT loss_sweep');
                 $counters = $this->writer->counters();
                 try {
-                    $exitPending = $this->exits->sweep($ctx, $exitConfigs, $horizon, $this->sales->windows()['catchUp'])['pending'];
+                    $windows = $this->sales->windows();
+                    $exitPending = $this->exits->sweep($ctx, $exitConfigs, $horizon, $windows['catchUp'], $windows['webDays'] * 86400)['pending'];
                     $conn->executeStatement('RELEASE SAVEPOINT loss_sweep');
                 } catch (\Throwable $e) {
                     $conn->executeStatement('ROLLBACK TO SAVEPOINT loss_sweep');

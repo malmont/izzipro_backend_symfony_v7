@@ -2,13 +2,16 @@
 
 namespace App\LossPrevention\Services;
 
+use App\Entity\Order;
 use App\LossPrevention\Entity\LossPiece;
 use App\LossPrevention\Entity\LossPieceEvent;
 use App\LossPrevention\Entity\LossSaleUnit;
 use App\LossPrevention\Entity\LossSetting;
 use App\LossPrevention\Repository\LossPieceRepository;
 use App\LossPrevention\Repository\LossSaleUnitRepository;
+use App\Services\OrderService\OrderPresenter;
 use App\Services\TenantEntityManagerProvider;
+use Psr\Log\LoggerInterface;
 
 /**
  * La vente reliée aux pièces, APRÈS COUP (lot L3-b2a, 16/11/2026, `docs/prevention-pertes.md` § 16.18). Le module ne touche pas à
@@ -32,6 +35,13 @@ use App\Services\TenantEntityManagerProvider;
  *   lecture de la sortie du client qui l'avait achetée, ni parce qu'elle est restée sur le tapis après son retour.
  * - Une ligne de location n'est pas une vente : elle n'est pas lue.
  * - Tous les postes du site sont regardés par le rattrapage (la sortie est commune) ; rien ne sort du site : la base est la sienne.
+ * - **Les commandes web** (lot L4-b2, § 17.14) : une commande de la boutique en ligne ou de l'application, retirée en boutique OU
+ *   expédiée, PAYÉE au sens de la boutique (`OrderPresenter::paymentStatus` = `paid`), est lue dans les commandes (elle n'est pas dans le
+ *   journal de caisse) : chacun de ses articles suivis devient un article à relier d'origine `web`, à l'heure de la commande, sans poste (il ne compte
+ *   pas dans la règle par poste). Le rattrapage lui relie une pièce de sa variante lue à la sortie OU à la porte arrière de la réserve
+ *   (colis remis au transporteur) pendant la fenêtre (14 jours, réglable), parmi celles que la caisse ne peut plus expliquer. Annulée, ses articles sont dits revenus (`cancellation`) ;
+ *   des articles rapportés par un retour de la boutique (`order_return`) le sont ligne par ligne (`return`) ; leurs pièces redeviennent
+ *   vendables. Un remboursement sans retour de marchandise ne libère rien.
  *
  * Rien n'est écrit dans une table de la caisse. Aucun nom de personne n'est lu ni écrit.
  */
@@ -57,6 +67,13 @@ class LossSaleLinkService
     public const PRESENCE_DAYS = 90;
     public const PRESENCE_BOUNDS = ['min' => 30, 'max' => 730];
     public const PURGE_BATCH = 5000;
+    /** Fenêtre d'une commande web, retirée ou expédiée (jours ; réglable) : une pièce lue à la sortie ou à la porte arrière pendant ce temps lui est reliée */
+    public const WEB_DAYS = 14;
+    public const WEB_BOUNDS = ['min' => 1, 'max' => 60];
+    /** Une commande web est guettée (annulation, retours d'articles) jusqu'à ce nombre de jours après sa fenêtre */
+    public const WEB_WATCH_DAYS = 30;
+    /** Commandes web lues au plus par passage, pour chacune des deux lectures (nouvelles, guettées) */
+    public const WEB_ORDERS = 500;
     /** Articles d'une même ligne de vente reliés au plus (une ligne de 5 000 unités n'écrit pas 5 000 lignes) */
     public const MAX_UNITS_PER_ITEM = 200;
 
@@ -66,10 +83,10 @@ class LossSaleLinkService
     /** Le tapis a-t-il déjà été retenté dans ce passage ? (une fois suffit : voir `catchUp`) */
     private bool $counterRetried = false;
 
-    /** @var array{counter: int, catchUp: int, presenceDays: int}|null les fenêtres du passage en cours, lues une fois */
+    /** @var array{counter: int, catchUp: int, presenceDays: int, webDays: int}|null les fenêtres du passage en cours, lues une fois */
     private ?array $pass = null;
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly ?OrderPresenter $orders = null, private readonly ?LoggerInterface $logger = null)
     {
     }
 
@@ -111,9 +128,13 @@ class LossSaleLinkService
      * 2. **la sortie** : une pièce non vendue lue à la sortie peu avant ou peu après la vente. La vente la plus ancienne d'abord, la
      *    première lecture d'abord, une pièce par article. Une seule requête pour toutes les variantes du passage.
      *
+     * `$readsUntil` (lot L4-b2) : l'heure jusqu'à laquelle le journal de caisse a été lu. Un article de RETRAIT ne prend que les lectures
+     * que la caisse ne peut plus expliquer (lue avant cette heure moins la fenêtre du rattrapage), sans quoi la pièce d'une vente au
+     * comptoir pas encore lue lui serait donnée ; nul = maintenant.
+     *
      * @return int nombre d'articles reliés
      */
-    public function catchUp(int $now): int
+    public function catchUp(int $now, ?int $readsUntil = null): int
     {
         $units = $this->units();
         $windows = $this->passWindows();
@@ -133,29 +154,55 @@ class LossSaleLinkService
             }
         }
         $this->counterRetried = true;
-        // 2. La sortie, pour ceux qui attendent encore
+        // 2. La sortie, pour les ventes au comptoir qui attendent encore (sur la fenêtre du rattrapage) ; 3. puis pour les articles de
+        // commande web (lot L4-b2), sur la fenêtre des commandes web. Une pièce reliée à une vente du comptoir dans ce passage ne l'est pas à un retrait
+        $used = [];
         $horizon = gmdate('Y-m-d H:i:s', $now - self::CATCH_UP_HORIZON);
-        $waiting = array_map(static fn (array $u): array => $u + ['sold' => self::stamp((string) $u['sold_at'])], $units->unitsToCatchUp($horizon, self::CATCH_UP_BATCH));
-        if ($waiting === []) {
-            return $linked;
+        $linked += $this->catchUpAtExit($units->unitsToCatchUp($horizon, self::CATCH_UP_BATCH, LossSaleUnit::ORIGIN_SALE), $horizon, $windows['catchUp'], LossSaleUnit::ORIGIN_SALE, $used, $stamp);
+        $webHorizon = gmdate('Y-m-d H:i:s', $now - $windows['webDays'] * 86400);
+
+        $settled = ($readsUntil ?? $now) - $windows['catchUp'];
+
+        return $linked + $this->catchUpAtExit($units->unitsToCatchUp($webHorizon, self::CATCH_UP_BATCH, LossSaleUnit::ORIGIN_WEB), $webHorizon,
+            $windows['webDays'] * 86400, LossSaleUnit::ORIGIN_WEB, $used, $stamp, $settled);
+    }
+
+    /**
+     * Le rattrapage à la sortie pour des articles d'une origine : une pièce non vendue de leur variante lue à la sortie entre
+     * `CATCH_UP_BEFORE` avant et `$window` après l'heure de l'article. L'article le plus ancien d'abord, la première lecture d'abord,
+     * une pièce par article. Une seule requête pour toutes les variantes.
+     *
+     * @param list<array<string, mixed>> $units articles en attente, dans l'ordre de leur heure
+     * @param array<int, true>           $used    pièces déjà reliées dans ce passage
+     * @param int|null                   $settled lectures prises jusqu'à cet instant seulement (commandes web : ce que la caisse ne peut plus expliquer)
+     */
+    private function catchUpAtExit(array $units, string $horizon, int $window, string $origin, array &$used, string $stamp, ?int $settled = null): int
+    {
+        if ($units === []) {
+            return 0;
         }
-        $reads = $units->exitReads(array_values(array_unique(array_map(static fn (array $u): int => (int) $u['variant_id'], $waiting))),
-            gmdate('Y-m-d H:i:s', min(array_column($waiting, 'sold')) - self::CATCH_UP_BEFORE), gmdate('Y-m-d H:i:s', max(array_column($waiting, 'sold')) + $windows['catchUp']),
-            $horizon, self::CATCH_UP_BEFORE, $windows['catchUp'], self::EXIT_READS);
+        $waiting = array_map(static fn (array $u): array => $u + ['sold' => self::stamp((string) $u['sold_at'])], $units);
+        $repository = $this->units();
+        $until = max(array_column($waiting, 'sold')) + $window;
+        $until = $settled !== null ? min($until, $settled) : $until;
+        $web = $origin === LossSaleUnit::ORIGIN_WEB;
+        $reads = $repository->exitReads(array_values(array_unique(array_map(static fn (array $u): int => (int) $u['variant_id'], $waiting))),
+            gmdate('Y-m-d H:i:s', min(array_column($waiting, 'sold')) - self::CATCH_UP_BEFORE), gmdate('Y-m-d H:i:s', $until),
+            $horizon, self::CATCH_UP_BEFORE, $window, self::EXIT_READS, $origin, $web);
         foreach ($reads as $variant => $list) {
             $reads[$variant] = array_map(static fn (array $r): array => $r + ['stamp' => self::stamp($r['at'])], $list);
         }
-        $used = [];
-        foreach ($waiting as $unit) { // la vente la plus ancienne d'abord
+        $linked = 0;
+        foreach ($waiting as $unit) { // l'article le plus ancien d'abord
             foreach ($reads[(int) $unit['variant_id']] ?? [] as $read) { // la première lecture d'abord
-                if ($read['stamp'] > $unit['sold'] + $windows['catchUp']) {
+                if ($read['stamp'] > $unit['sold'] + $window) {
                     break; // les lectures sont dans l'ordre du temps : les suivantes sont plus tardives encore
                 }
                 if (isset($used[$read['piece']]) || $read['stamp'] < $unit['sold'] - self::CATCH_UP_BEFORE) {
                     continue;
                 }
-                if ($units->link((int) $unit['id'], $read['piece'], LossSaleUnit::BY_CATCH_UP, $stamp)) {
-                    $this->sold($read['piece'], $unit, LossSaleUnit::BY_CATCH_UP, $stamp, ['readEventId' => $read['event']]);
+                if ($repository->link((int) $unit['id'], $read['piece'], LossSaleUnit::BY_CATCH_UP, $stamp)) {
+                    $this->sold($read['piece'], $unit, LossSaleUnit::BY_CATCH_UP, $stamp, ['readEventId' => $read['event']] + ($web ? ['origin' => LossSaleUnit::ORIGIN_WEB] : []));
                     $used[$read['piece']] = true;
                     ++$linked;
                 }
@@ -164,6 +211,107 @@ class LossSaleLinkService
         }
 
         return $linked;
+    }
+
+    /**
+     * Lot L4-b2, à chaque passage, dans la transaction de l'analyse : les commandes WEB (boutique en ligne ou application), retirées ou expédiées.
+     * 1. **Guettées** : une commande web dont un article n'est pas revenu. **Annulée** (statut annulé) : tous ses articles sont dits
+     *    revenus (`cancellation`) et leurs pièces redeviennent vendables. **Articles rapportés** par un retour de la boutique
+     *    (`order_return`, la caisse ne reprend pas une commande web) : autant d'articles de la ligne sont dits revenus (`return`), un
+     *    article sans pièce d'abord. Un remboursement sans retour de marchandise (geste commercial) ne libère rien.
+     * 2. **Nouvelles** : une commande web PAYÉE (`OrderPresenter::paymentStatus` = `paid`), passée pendant la fenêtre des commandes web,
+     *    dont aucun article n'est encore écrit : chacun de ses articles suivis à l'heure de la commande devient un article à relier
+     *    d'origine `web`, sans poste. Une commande pas encore payée est relue au passage suivant (les plus récentes d'abord).
+     * Chaque commande sous son point de reprise : une commande en échec est sautée et dite, elle n'arrête pas les autres. Rien n'est écrit
+     * dans les commandes ; leurs entités sont détachées après lecture (une commande relue au passage suivant l'est de la base).
+     *
+     * @return int articles de commandes web écrits
+     */
+    public function webOrders(int $now): int
+    {
+        if ($this->orders === null || !($this->tagged ??= $this->units()->hasTaggedPiece())) {
+            return 0;
+        }
+        $units = $this->units();
+        $days = $this->passWindows()['webDays'];
+        $stamp = gmdate('Y-m-d H:i:s', $now);
+        foreach ($units->openWebOrders(gmdate('Y-m-d H:i:s', $now - ($days + self::WEB_WATCH_DAYS) * 86400), self::WEB_ORDERS) as $orderId) {
+            $this->eachOrder($orderId, function (?Order $order) use ($units, $orderId, $stamp): int {
+                if ($order === null || $this->orders->paymentStatus($order) === OrderPresenter::PAYMENT_CANCELED) {
+                    foreach ($units->openUnitsOfOrder($orderId) as $unit) {
+                        $this->unitReturned($unit, $stamp, 0, LossSaleUnit::CANCELLATION, false);
+                    }
+
+                    return 0;
+                }
+                foreach ($units->webReturnsOf($orderId) as $itemId => $returned) {
+                    $missing = $returned['quantity'] - $units->returnedUnitsOfItem($itemId);
+                    $open = $units->openUnitsOfItem($itemId);
+                    // un article sans pièce (pas encore retiré) revient d'abord
+                    usort($open, static fn (array $a, array $b): int => [$a['piece_id'] !== null, (int) $a['id']] <=> [$b['piece_id'] !== null, (int) $b['id']]);
+                    foreach (array_slice($open, 0, max(0, min($missing, self::MAX_UNITS_PER_ITEM))) as $unit) {
+                        $this->unitReturned($unit, $returned['at'], 0, LossSaleUnit::RETURN, false);
+                    }
+                }
+
+                return 0;
+            });
+        }
+        $written = 0;
+        foreach ($units->webOrdersToRead(gmdate('Y-m-d H:i:s', $now - $days * 86400), self::WEB_ORDERS) as $orderId) {
+            $written += $this->eachOrder($orderId, function (?Order $order) use ($units, $orderId, $stamp): int {
+                $row = $units->order($orderId);
+                if ($order === null || $row === null || $this->orders->paymentStatus($order) !== OrderPresenter::PAYMENT_PAID) {
+                    return 0;
+                }
+                $items = $units->itemsOf($orderId);
+                $tracked = array_flip($units->trackedAt(array_values(array_unique(array_column($items, 'variant'))), $row['sold_at']));
+                $written = 0;
+                foreach ($items as $item) {
+                    if (!isset($tracked[$item['variant']])) {
+                        continue;
+                    }
+                    for ($n = 1; $n <= min($item['quantity'], self::MAX_UNITS_PER_ITEM); ++$n) {
+                        if ($units->insert($orderId, $item['id'], $n, $item['variant'], null, $row['sold_at'], 0, $stamp, LossSaleUnit::ORIGIN_WEB) !== null) {
+                            ++$written;
+                        }
+                    }
+                }
+
+                return $written;
+            });
+        }
+
+        return $written;
+    }
+
+    /**
+     * Une commande web sous son point de reprise : l'entité est lue de la base, l'étape jouée, puis l'entité détachée. Un échec
+     * revient au point de reprise, est écrit au journal du serveur, et rend 0.
+     *
+     * @param callable(?Order): int $step
+     */
+    private function eachOrder(int $orderId, callable $step): int
+    {
+        $em = $this->emProvider->getEntityManager();
+        $conn = $em->getConnection();
+        $conn->executeStatement('SAVEPOINT loss_web_order');
+        $order = null;
+        try {
+            $order = $em->find(Order::class, $orderId);
+            $done = $step($order);
+            $conn->executeStatement('RELEASE SAVEPOINT loss_web_order');
+        } catch (\Throwable $e) {
+            $conn->executeStatement('ROLLBACK TO SAVEPOINT loss_web_order');
+            $this->logger?->error(sprintf('Prévention des pertes : commande web %d en échec, sautée : %s', $orderId, $e->getMessage()), ['exception' => $e]);
+            $done = 0;
+        } finally {
+            if ($order !== null && $em->contains($order)) {
+                $em->detach($order);
+            }
+        }
+
+        return $done;
     }
 
     /**
@@ -179,14 +327,14 @@ class LossSaleLinkService
     /**
      * Les fenêtres en vigueur : celles du site, sinon celles du code.
      *
-     * @return array{counter: int, catchUp: int, presenceDays: int}
+     * @return array{counter: int, catchUp: int, presenceDays: int, webDays: int}
      */
     public function windows(): array
     {
         $row = $this->emProvider->getEntityManager()->getRepository(LossSetting::class)->row();
 
         return ['counter' => (int) ($row['counter_window_seconds'] ?? self::COUNTER_WINDOW), 'catchUp' => (int) ($row['catch_up_seconds'] ?? self::CATCH_UP_WINDOW),
-            'presenceDays' => (int) ($row['presence_retention_days'] ?? self::PRESENCE_DAYS)];
+            'presenceDays' => (int) ($row['presence_retention_days'] ?? self::PRESENCE_DAYS), 'webDays' => (int) ($row['web_window_days'] ?? self::WEB_DAYS)];
     }
 
     /** @param array<string, mixed> $entry */

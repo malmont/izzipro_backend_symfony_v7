@@ -119,6 +119,8 @@ class LossSettingsService
         // lot L4-a : ce que le boîtier attend avant de dire qu'une pièce est arrivée dans une zone, ou qu'elle en est partie (secondes)
         'zoneArriveSeconds' => ['zone_arrive_seconds', LossZonePresence::ARRIVE_SECONDS, LossZonePresence::ARRIVE_BOUNDS, 1],
         'zoneLeaveSeconds' => ['zone_leave_seconds', LossZonePresence::LEAVE_SECONDS, LossZonePresence::LEAVE_BOUNDS, 1],
+        // lot L4-b2 : fenêtre d'une commande web, retirée ou expédiée (jours)
+        'webWindowDays' => ['web_window_days', LossSaleLinkService::WEB_DAYS, LossSaleLinkService::WEB_BOUNDS, 1],
     ];
 
     /**
@@ -140,7 +142,7 @@ class LossSettingsService
 
     /**
      * `{ staffNoticeConfirmed?: bool, personPatterns?: { enabled: bool }, retention?: { findingsMonths?, confirmedMonths? },
-     * pieces?: { counterWindowMinutes?, catchUpMinutes?, presenceRetentionDays? } }` (une valeur nulle remet la valeur par défaut) : seules les clés
+     * pieces?: { counterWindowMinutes?, catchUpMinutes?, presenceRetentionDays?, zoneArriveSeconds?, zoneLeaveSeconds?, webWindowDays? } }` (une valeur nulle remet la valeur par défaut) : seules les clés
      * envoyées changent.
      *
      * @param array<string, mixed> $body

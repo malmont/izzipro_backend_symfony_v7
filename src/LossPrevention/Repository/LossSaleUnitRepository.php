@@ -3,6 +3,7 @@
 namespace App\LossPrevention\Repository;
 
 use App\LossPrevention\Entity\LossSaleUnit;
+use App\Services\PosRentalService\PosRentalService;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityRepository;
@@ -15,6 +16,20 @@ use Doctrine\ORM\EntityRepository;
  */
 class LossSaleUnitRepository extends EntityRepository
 {
+    /** `status_commande` « Annulation » et `order_source` « Pos » (référentiels insérés dans toutes les bases) */
+    private const ORDER_CANCELLED = 7;
+    private const SOURCE_POS = 2;
+
+    /**
+     * Lot L4-b2 : une réservation `b` (de la commande `bo`) qui compte comme une location : confirmée ou rendue au comptoir, ou réservée
+     * en ligne (`PENDING_PAYMENT`, statut que la boutique ne change pas au paiement) dont la commande est payée et non annulée. Les
+     * réservations annulées, remboursées ou de panier abandonné ne comptent pas (comme pour la disponibilité).
+     */
+    private const RENTAL_KEPT = "(b.status IN ('" . PosRentalService::BOOKING_CONFIRMED . "', '" . PosRentalService::BOOKING_RETURNED . "')"
+        . " OR (b.status = 'PENDING_PAYMENT' AND bo.status_id <> " . self::ORDER_CANCELLED
+        . ' AND EXISTS (SELECT 1 FROM payments pay LEFT JOIN status_payment sp ON sp.id = pay.statut_payment_id LEFT JOIN payment_type pt ON pt.id = pay.payment_type_id'
+        . " WHERE pay.order_payment_id = bo.id AND COALESCE(pt.name, '') <> 'RemboursementClient' AND (pay.stripe_status = 'succeeded' OR sp.name = 'Complété'))))";
+
     /** @return array{id: int, sold_at: string}|null la commande d'une vente, avec son heure RÉELLE (une vente hors ligne garde la sienne) */
     public function order(int $id): ?array
     {
@@ -54,12 +69,15 @@ class LossSaleUnitRepository extends EntityRepository
             ['ids' => $variantIds, 'at' => $at], ['ids' => ArrayParameterType::INTEGER]));
     }
 
-    /** Un article suivi vendu ; rend son identifiant, ou null s'il était déjà écrit (la même vente relue) */
-    public function insert(int $orderId, int $orderItemId, int $unitNo, int $variantId, ?int $cashRegisterId, string $soldAt, int $sequence, string $now): ?int
+    /**
+     * Un article suivi vendu ; rend son identifiant, ou null s'il était déjà écrit (la même vente relue). Un article de RETRAIT
+     * (lot L4-b2, origine `web` : une commande web retirée ou expédiée) n'a ni poste ni entrée du journal de caisse (`$sequence` = 0) : la garde de la base le vérifie.
+     */
+    public function insert(int $orderId, int $orderItemId, int $unitNo, int $variantId, ?int $cashRegisterId, string $soldAt, int $sequence, string $now, string $origin = LossSaleUnit::ORIGIN_SALE): ?int
     {
         $id = $this->db()->fetchOne(
-            'INSERT INTO loss_sale_unit (order_id, order_item_id, unit_no, variant_id, cash_register_id, sold_at, audit_sequence, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-            . ' ON CONFLICT (order_item_id, unit_no) DO NOTHING RETURNING id', [$orderId, $orderItemId, $unitNo, $variantId, $cashRegisterId, $soldAt, $sequence, $now]);
+            'INSERT INTO loss_sale_unit (order_id, order_item_id, unit_no, variant_id, cash_register_id, sold_at, audit_sequence, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            . ' ON CONFLICT (order_item_id, unit_no) DO NOTHING RETURNING id', [$orderId, $orderItemId, $unitNo, $variantId, $cashRegisterId, $soldAt, $sequence, $now, $origin]);
 
         return $id === false ? null : (int) $id;
     }
@@ -124,11 +142,12 @@ class LossSaleUnitRepository extends EntityRepository
      *
      * @return list<array{id: int, variant_id: int, sold_at: string, order_id: int, order_item_id: int, cash_register_id: ?int, created_at: string}>
      */
-    public function unitsToCatchUp(string $since, int $limit): array
+    public function unitsToCatchUp(string $since, int $limit, string $origin = LossSaleUnit::ORIGIN_SALE): array
     {
+        // chaque origine a sa fenêtre (30 minutes pour une vente au comptoir, des jours pour une commande web) : elles sont lues à part
         return $this->db()->fetchAllAssociative(
-            'SELECT id, variant_id, sold_at, order_id, order_item_id, cash_register_id, created_at FROM loss_sale_unit WHERE piece_id IS NULL AND returned_at IS NULL AND sold_at > ? ORDER BY sold_at, id LIMIT '
-            . max(1, $limit), [$since]);
+            'SELECT id, variant_id, sold_at, order_id, order_item_id, cash_register_id, created_at FROM loss_sale_unit WHERE piece_id IS NULL AND returned_at IS NULL AND sold_at > ? AND origin = ?'
+            . ' ORDER BY sold_at, id LIMIT ' . max(1, $limit), [$since, $origin]);
     }
 
     /**
@@ -164,7 +183,7 @@ class LossSaleUnitRepository extends EntityRepository
      *
      * @return array<int, list<array{event: int, piece: int, at: string}>> par variante
      */
-    public function exitReads(array $variantIds, string $from, string $until, string $horizon, int $before, int $window, int $limit): array
+    public function exitReads(array $variantIds, string $from, string $until, string $horizon, int $before, int $window, int $limit, string $origin = LossSaleUnit::ORIGIN_SALE, bool $outsideRentals = false): array
     {
         if ($variantIds === []) {
             return [];
@@ -173,19 +192,102 @@ class LossSaleUnitRepository extends EntityRepository
         foreach ($this->db()->fetchAllAssociative(
             "SELECT e.id, e.piece_id, e.occurred_at, p.variant_id FROM loss_piece_event e JOIN loss_piece p ON p.id = e.piece_id WHERE e.type = 'ZONE_SEEN' AND NOT e.exercise AND NOT p.exercise"
             . " AND p.variant_id IN (:variants) AND p.status NOT IN ('sold', 'retired') AND e.occurred_at >= :from AND e.occurred_at <= :until"
-            . " AND (e.data)::jsonb ->> 'zone' = 'exit' AND COALESCE((e.data)::jsonb ->> 'clockDoubt', 'false') <> 'true' AND COALESCE((e.data)::jsonb ->> 'tagRetired', 'false') <> 'true'"
+            // une commande web (lot L4-b2) peut partir par la sortie ou par la porte arrière de la réserve (colis remis au transporteur)
+            . ($origin === LossSaleUnit::ORIGIN_WEB ? " AND (e.data)::jsonb ->> 'zone' IN ('exit', 'back_door')" : " AND (e.data)::jsonb ->> 'zone' = 'exit'")
+            . " AND COALESCE((e.data)::jsonb ->> 'clockDoubt', 'false') <> 'true' AND COALESCE((e.data)::jsonb ->> 'tagRetired', 'false') <> 'true'"
             . ' AND NOT EXISTS (SELECT 1 FROM loss_sale_unit u WHERE u.piece_id = p.id AND u.returned_at IS NULL)'
             . " AND NOT EXISTS (SELECT 1 FROM loss_sale_unit r WHERE r.piece_id = p.id AND r.returned_by = 'return' AND r.returned_at >= e.occurred_at)"
             // seulement les lectures qui tombent dans la fenêtre d'au moins UN article en attente : un portant près de la porte, relu
             // sans cesse, ne remplit pas la limite avec des lectures qui ne servent à aucune vente
-            . ' AND EXISTS (SELECT 1 FROM loss_sale_unit w WHERE w.variant_id = p.variant_id AND w.piece_id IS NULL AND w.returned_at IS NULL AND w.sold_at > :horizon'
+            . ' AND EXISTS (SELECT 1 FROM loss_sale_unit w WHERE w.variant_id = p.variant_id AND w.piece_id IS NULL AND w.returned_at IS NULL AND w.sold_at > :horizon AND w.origin = :origin'
             . ' AND e.occurred_at >= w.sold_at - make_interval(secs => :before) AND e.occurred_at <= w.sold_at + make_interval(secs => :window))'
+            // lot L4-b2 : pour une commande web, pas une lecture d'un article loué autour de ce moment (l'aller ou le retour d'une pièce louée ne
+            // doit pas devenir la pièce retirée : elle resterait « vendue » pour toujours)
+            . ($outsideRentals ? ' AND NOT EXISTS (SELECT 1 FROM booking b JOIN order_items bi ON bi.id = b.order_item_id JOIN "order" bo ON bo.id = bi.order_associated_id'
+                . ' WHERE bi.product_variant_id = p.variant_id AND ' . self::RENTAL_KEPT
+                . " AND e.occurred_at >= b.start_at - interval '36 hours' AND e.occurred_at <= b.end_at + interval '36 hours')" : '')
             . ' ORDER BY e.occurred_at, e.id LIMIT ' . max(1, $limit),
-            ['variants' => $variantIds, 'from' => $from, 'until' => $until, 'horizon' => $horizon, 'before' => $before, 'window' => $window], ['variants' => ArrayParameterType::INTEGER]) as $row) {
+            ['variants' => $variantIds, 'from' => $from, 'until' => $until, 'horizon' => $horizon, 'before' => $before, 'window' => $window, 'origin' => $origin],
+            ['variants' => ArrayParameterType::INTEGER]) as $row) {
             $out[(int) $row['variant_id']][] = ['event' => (int) $row['id'], 'piece' => (int) $row['piece_id'], 'at' => (string) $row['occurred_at']];
         }
 
         return $out;
+    }
+
+    /**
+     * Lot L4-b2 : les commandes WEB (boutique en ligne ou application, jamais une vente de caisse), retirées en boutique ou expédiées, passées
+     * depuis `$since`, ni annulées, dont aucun article n'est encore écrit, et dont une ligne VENDUE porte une variante qui a une vraie pièce à
+     * puce (sans cela, rien à relier). Les plus récentes d'abord. Lues seulement ; leur paiement est jugé ensuite, comme la boutique le montre.
+     *
+     * @return list<int>
+     */
+    public function webOrdersToRead(string $since, int $limit): array
+    {
+        return array_map('intval', $this->db()->fetchFirstColumn(
+            'SELECT o.id FROM "order" o WHERE o.order_date >= :since'
+            // ni annulée, ni vente de caisse (une vente de caisse passe par le journal de caisse) ; retirée ou expédiée, peu importe
+            . ' AND o.status_id <> :cancelled AND o.order_source_id IS DISTINCT FROM :pos'
+            . ' AND NOT EXISTS (SELECT 1 FROM loss_sale_unit u WHERE u.order_id = o.id)'
+            // une ligne VENDUE (pas une location) dont la variante a une vraie pièce à puce
+            . ' AND EXISTS (SELECT 1 FROM order_items i JOIN loss_piece p ON p.variant_id = i.product_variant_id JOIN loss_tag t ON t.piece_id = p.id'
+            . ' WHERE i.order_associated_id = o.id AND NOT p.exercise AND NOT t.exercise AND NOT EXISTS (SELECT 1 FROM booking bk WHERE bk.order_item_id = i.id))'
+            // les plus récentes d'abord : une commande jamais payée ne retient pas les nouvelles derrière elle
+            . ' ORDER BY o.id DESC LIMIT ' . max(1, $limit), ['since' => $since, 'cancelled' => self::ORDER_CANCELLED, 'pos' => self::SOURCE_POS]));
+    }
+
+    /**
+     * Lot L4-b2 : les commandes web qui ont encore un article non revenu, passées depuis `$since`, les plus récentes d'abord : leur
+     * annulation et leurs retours d'articles sont guettés à chaque passage.
+     *
+     * @return list<int>
+     */
+    public function openWebOrders(string $since, int $limit): array
+    {
+        return array_map('intval', $this->db()->fetchFirstColumn(
+            "SELECT DISTINCT order_id FROM loss_sale_unit WHERE origin = 'web' AND returned_at IS NULL AND sold_at >= ? ORDER BY order_id DESC LIMIT " . max(1, $limit), [$since]));
+    }
+
+    /**
+     * Lot L4-b2 : les articles rapportés d'une commande WEB (retours de la boutique, `order_return`), par ligne de commande : la somme des
+     * quantités de tous ses retours, et l'heure du dernier. Lu seulement.
+     *
+     * @return array<int, array{quantity: int, at: string}>
+     */
+    public function webReturnsOf(int $orderId): array
+    {
+        $out = [];
+        foreach ($this->db()->fetchAllAssociative('SELECT lines, created_at FROM order_return WHERE order_id = ? ORDER BY id', [$orderId]) as $row) {
+            foreach (json_decode((string) $row['lines'], true) ?: [] as $line) {
+                $item = is_array($line) && is_int($line['orderItemId'] ?? null) ? $line['orderItemId'] : null;
+                $quantity = is_array($line) && is_int($line['quantity'] ?? null) ? $line['quantity'] : 0;
+                if ($item !== null && $quantity > 0) {
+                    $out[$item] = ['quantity' => ($out[$item]['quantity'] ?? 0) + $quantity, 'at' => (string) $row['created_at']];
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /** Lot L4-b2 : articles d'une ligne de commande déjà dits revenus par un RETOUR (pas par une annulation) */
+    public function returnedUnitsOfItem(int $orderItemId): int
+    {
+        return (int) $this->db()->fetchOne("SELECT COUNT(*) FROM loss_sale_unit WHERE order_item_id = ? AND returned_by = 'return'", [$orderItemId]);
+    }
+
+    /**
+     * Lot L4-b2 : les locations non annulées d'une variante qui peuvent toucher une journée du magasin : elles
+     * commencent avant `$until` et finissent après `$from` (bornes déjà élargies par l'appelant). Lues seulement.
+     *
+     * @return list<array{start_at: string, end_at: string, quantity: int}>
+     */
+    public function rentalsOfVariant(int $variantId, string $from, string $until): array
+    {
+        return $this->db()->fetchAllAssociative(
+            'SELECT b.start_at, b.end_at, b.quantity FROM booking b JOIN order_items bi ON bi.id = b.order_item_id JOIN "order" bo ON bo.id = bi.order_associated_id'
+            . ' WHERE bi.product_variant_id = :variant AND ' . self::RENTAL_KEPT . ' AND b.start_at < :until AND b.end_at > :from ORDER BY b.id',
+            ['variant' => $variantId, 'from' => $from, 'until' => $until]);
     }
 
     /** Efface les présences FERMÉES avant `$before` (jamais une présence ouverte, jamais un fait), par paquets ; rend leur nombre */
