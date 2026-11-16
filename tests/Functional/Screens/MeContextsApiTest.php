@@ -170,6 +170,11 @@ class MeContextsApiTest extends WebTestCase
         $own = array_column($super['sites'], null, 'code')[MV_TEST_TENANT_CODE];
         $this->assertContains('gestion.home', $own['screens']);
         $this->assertNotContains('plateforme.sites', $own['screens'], 'les écrans de la plateforme ne sont pas ceux d\'un site');
+        // les exemples de la fiche (`docs/ecrans-et-contextes.md` § 3) sortent d'ici : EXEMPLES_CONTEXTES=/tmp/contextes.json
+        if (is_string(getenv('EXEMPLES_CONTEXTES')) && getenv('EXEMPLES_CONTEXTES') !== '') {
+            file_put_contents(getenv('EXEMPLES_CONTEXTES'), json_encode(['single' => $single, 'agency' => $agency, 'super_admin' => ['mode' => $super['mode'], 'site' => $super['site'], 'agency' => null,
+                'sites' => [$own], 'all' => $super['all']]], \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
+        }
     }
 
     /** @return array<string, mixed> */

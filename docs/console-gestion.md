@@ -71,6 +71,14 @@ une sortie chiffrée. Le fil d'une facture, le guide quotidien et la console app
 - **Un libellé de plage est rédigé par le serveur** (lot W2-b, `RangeLabel`) : « du 1er au 13 novembre 2026 », « le 13 novembre 2026 »,
   « du 28 octobre au 13 novembre 2026 » ; en anglais « November 1 to 13, 2026 ». Jamais la forme brute « 1-13 nov. ». Une période se
   nomme par son nom. `previousLabel` et `lastYearLabel` nomment de la même façon les plages comparées (`sales.overview`).
+- **Un an dernier venu des ventes d'avant la migration est MARQUÉ** (lot AG-3a, suite d'IMP-3, `docs/import-boutique.md` § 10). Quand
+  le site n'a aucune vente sur la plage de l'an dernier et que l'archive en a, `sales.overview` et `year.overview` (exercice terminé)
+  le transmettent **pour les ventes seulement** (`revenue`, `sales`) : la marge, les commandes et le résultat d'une autre boutique ne
+  se comparent pas. Le chiffre porte `lastYearSource: "before_migration"` et `lastYearNote` (« avant la migration », les mots à
+  afficher à côté de « An dernier ») ; `period.lastYearLabel` finit par « (avant la migration) » et `period.lastYearSource` le dit.
+  Le modèle reçoit la note et doit l'écrire avec le chiffre ; **un texte qui cite cet an dernier, ou sa variation, sans la note est
+  rejeté par le serveur** (nouvel essai, puis texte de repli). Les cartes gardent ces deux clés : les applications affichent
+  « An dernier, avant la migration ».
 - **Le libellé d'un chiffre dit ce qu'il compte** quand deux mesures se ressemblent : « Frais de la période (port, notes de frais,
   publicité), hors achats de marchandise » (résultat de période) et « Dépenses réelles, achats de marchandise compris » (budget) ne
   sont pas le même montant.

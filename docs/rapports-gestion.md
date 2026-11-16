@@ -84,7 +84,7 @@ son titre reste alors tenu « au mieux ».
 | Bloc de la console | Sur le papier |
 |---|---|
 | `text` | paragraphes |
-| `figures` | cartes par rangées de trois : libellé, valeur, et les comparaisons gardées avec la carte (« Période précédente : … (+x %) », « An dernier : … »). Un bloc de cartes est d'un seul tenant : s'il ne tient pas au bas de la page, il passe entier à la suivante (jamais une rangée seule) ; la variation entre parenthèses ne se coupe pas, et le « % » est tenu par une espace insécable (retouches du 15/11/2026) |
+| `figures` | cartes par rangées de trois : libellé, valeur, et les comparaisons gardées avec la carte (« Période précédente : … (+x %) », « An dernier : … » ; « An dernier, avant la migration : … » quand la carte porte `lastYearSource: before_migration`, lot AG-3a). Un bloc de cartes est d'un seul tenant : s'il ne tient pas au bas de la page, il passe entier à la suivante (jamais une rangée seule) ; la variation entre parenthèses ne se coupe pas, et le « % » est tenu par une espace insécable (retouches du 15/11/2026) |
 | `table` | tableau, en-têtes répétés d'une page à l'autre, montants alignés à droite ; « et N autres lignes » (ou « et une autre ligne ») quand la console n'en a gardé qu'une partie (`more.count`) |
 | `verdicts` | les groupes du bilan avec leur compte, puis une ligne par article : nom, verdict, pourquoi |
 | `lesson` | la notion, sa définition, son illustration, les notions liées ; **pas** les questions de vérification (un jeu de l'écran) |

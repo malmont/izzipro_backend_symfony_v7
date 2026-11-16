@@ -355,7 +355,7 @@ Un site qui vient d'une autre boutique n'a aucune vente « l'an dernier ». La c
 |---|---|
 | `GET /api/gestion/statistiques` | `lastYear.source` (toujours présent), indicateurs `revenue`, `orders`, `averageBasket` et points du graphique lus de l'archive |
 | `GET /api/gestion/statistiques/annee` | `lastYear.source` ; mois de l'an dernier réduits aux ventes, le reste vide ; la **projection de l'année ne s'appuie pas sur l'archive** |
-| analyses `sales.overview` et `year.overview` (console IA, bilans PDF) | un an dernier venu de l'archive ne leur est **pas transmis** : elles ne savent pas encore le marquer « avant la migration » |
+| analyses `sales.overview` et `year.overview` (console IA, bilans PDF) | depuis le lot AG-3a (16/11/2026) : un an dernier venu de l'archive leur est transmis **marqué** « avant la migration » et **pour les ventes seulement** ; un texte de la console qui le cite sans le dire est rejeté par le serveur ; les cartes et les PDF écrivent « An dernier, avant la migration » (`docs/console-gestion.md` § 2) |
 | analyse `year.overview` | la comparaison à l'an dernier était toujours vide (le cumul était mal lu) : corrigé. Elle n'est fournie que pour un exercice **terminé** : en cours d'année, dix mois ne se comparent pas à douze |
 
 ### 10.5 Base

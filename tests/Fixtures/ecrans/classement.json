@@ -51,6 +51,7 @@
     ],
     "@boitier": [
         "GET /api/pertes/boitier/reglages",
+        "GET /api/pertes/boitier/travaux",
         "POST /api/pertes/boitier/faits",
         "POST /api/pertes/boitier/inscription",
         "POST /api/pertes/boitier/jeton",
@@ -954,6 +955,8 @@
         "GET /api/gestion/pertes/exercices",
         "GET /api/gestion/pertes/exercices/boitiers",
         "GET /api/gestion/pertes/exercices/boitiers/{id}",
+        "GET /api/gestion/pertes/exercices/impressions",
+        "GET /api/gestion/pertes/exercices/impressions/{id}",
         "GET /api/gestion/pertes/exercices/installation",
         "GET /api/gestion/pertes/exercices/materiel",
         "GET /api/gestion/pertes/exercices/pieces",
@@ -986,10 +989,14 @@
         "POST /api/gestion/pertes/installation/puce-test"
     ],
     "pertes.pieces": [
+        "GET /api/gestion/pertes/impressions",
+        "GET /api/gestion/pertes/impressions/{id}",
         "GET /api/gestion/pertes/pieces",
         "GET /api/gestion/pertes/pieces/synthese",
         "GET /api/gestion/pertes/pieces/{id}",
         "GET /api/gestion/pertes/puces/recherche",
+        "POST /api/gestion/pertes/impressions",
+        "POST /api/gestion/pertes/impressions/{id}/annuler",
         "POST /api/gestion/pertes/pieces",
         "POST /api/gestion/pertes/pieces/etiquettes/pdf",
         "POST /api/gestion/pertes/pieces/{id}/retirer",

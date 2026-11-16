@@ -186,7 +186,7 @@ final class ScreenRegistry
         ['#^/api/gestion/pertes/regles(/|$)#', 'pertes.regles'],
         ['#^/api/gestion/pertes/reglages(/|$)#', 'pertes.reglages'],
         ['#^/api/gestion/pertes/exercices(/|$)#', 'pertes.exercices'],
-        ['#^/api/gestion/pertes/(pieces|puces)(/|$)#', 'pertes.pieces'],
+        ['#^/api/gestion/pertes/(pieces|puces|impressions)(/|$)#', 'pertes.pieces'],
         ['#^/api/gestion/pertes/(installation|materiel)(/|$)#', 'pertes.installation'],
         ['#^/api/gestion/pertes/(boitiers|postes|sante)(/|$)#', 'pertes.boitiers'],
         ['#^/api/gestion/pertes(/|$)#', 'pertes.home'],
