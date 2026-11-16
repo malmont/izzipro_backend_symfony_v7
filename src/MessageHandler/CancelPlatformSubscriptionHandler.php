@@ -47,16 +47,16 @@ final class CancelPlatformSubscriptionHandler
         }
         $current = (string) $this->tenants->getCurrentTenantCode();
         $previous = null;
-        if ($current !== $code) {
-            if ($this->worker?->inWorker() !== true) {
-                $this->logger->warning(sprintf('[Entitlements] résiliation de l\'abonnement %s : hors d\'un worker, aucune bascule vers %s', $id, $code));
+        if ($current !== $code && $this->worker?->inWorker() !== true) {
+            $this->logger->warning(sprintf('[Entitlements] résiliation de l\'abonnement %s : hors d\'un worker, aucune bascule vers %s', $id, $code));
 
-                return;
-            }
-            $previous = $current !== '' ? [(string) ($this->emProvider->getEntityManager()->getConnection()->getParams()['dbname'] ?? ''), $current] : null;
-            $this->emProvider->switchTenant((string) $tenant['dbname'], (string) $tenant['code']);
+            return;
         }
         try {
+            if ($current !== $code) {
+                $previous = $current !== '' ? [(string) ($this->emProvider->getEntityManager()->getConnection()->getParams()['dbname'] ?? ''), $current] : null;
+                $this->emProvider->switchTenant((string) $tenant['dbname'], (string) $tenant['code']);
+            }
             $subscription = $this->emProvider->getEntityManager()->find(Subscription::class, (int) $id);
             if (!$subscription instanceof Subscription || $subscription->getStatus() === Subscription::STATUS_CANCELED) {
                 $this->logger->notice(sprintf('[Entitlements] résiliation : abonnement %s de %s introuvable ou déjà résilié', $id, $code));

@@ -98,7 +98,7 @@ class SiteSetupQuestionnaireService
     {
         $code = $this->tenants->getCurrentTenantCode();
 
-        return $code !== null && $this->entitlements->isEnabled($code, 'module.boutique');
+        return $code !== null && $this->entitlements->isActive($code, 'module.boutique'); // lot MOD-1 : droit ET allumé
     }
 
     /** @return array<string, mixed> réponses actuelles : charte enregistrée, sinon fiche Entreprise et adresse */

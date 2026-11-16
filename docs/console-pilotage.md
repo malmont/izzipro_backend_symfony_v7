@@ -605,6 +605,7 @@ administrateur ; **le commerçant allume et éteint** lui-même un module auquel
 - **Interrupteur** : table maître `tenant_feature_switches` (ligne absente = allumé : aucun site existant ne change). La fiche du site
   reçoit « droit effectif ET allumé » (`EntitlementService::project`, `activeMap`) : le garde-fou des modules et les fronts suivent sans
   changement ; l'IA de la gestion lit « droit et allumé » (`isActive`).
+  - L'assistant IA du site et le cheminement lisent aussi « droit et allumé » (`activeEffective`, `isActive`).
   - `POST /api/site/features/{clé}/enable` et `/disable` (`ROLE_ADMIN` du site) : 200 `{ key, on }`, 409 `NO_ENTITLEMENT` sans droit
     vivant, 422 clé inconnue. Éteindre ne touche JAMAIS au droit (l'essai court, l'abonnement reste) ; rallumer est immédiat tant que le
     droit vaut. Chaque geste est noté au journal des droits (`switched_on`, `switched_off`).
@@ -613,16 +614,23 @@ administrateur ; **le commerçant allume et éteint** lui-même un module auquel
   module sans droit), `entitlement` (le droit, inchangé), **`switch`** (`on` | `off`, l'interrupteur du commerçant) et **`available`**
   `{ trial: { days } | null, requestable, description, howTo }`.
 - **« Essayer » en libre-service** (décision du propriétaire) : `POST /api/site/features/{clé}/trial` (`ROLE_ADMIN`), l'essai seul, sans
-  repli sur une demande : 201 `{ kind: trial, entitlement }`, 409 `ALREADY_ENABLED` | `TRIAL_USED` | `NO_TRIAL`. « Demander »
+  repli sur une demande : 201 `{ kind: trial, entitlement }`, 409 `ALREADY_ENABLED` | `TRIAL_USED` | `NO_TRIAL` | `ENTITLEMENT_SUSPENDED`. « Demander »
   (`/request`) reste. Aucun achat payant dans ce lot.
 - **« Mon site »** : les modules absents en tête (« Essayer », « Demander », « Mettre à jour mon forfait ») ; un interrupteur
   « Allumer » / « Éteindre » par module détenu.
-- **Clés d'application** : à l'octroi ou à l'essai d'une application (`granted`, `trial_started`), si le site n'a aucune clé valable,
-  la clé est créée et part dans le courriel d'octroi (`EntitlementChangedHandler`), au contact du site. Éteindre ne révoque pas les clés
-  (le garde-fou des modules ferme les routes).
+- **Clés d'application** (point 3 révisé par le chef) : AUCUNE clé n'est créée automatiquement (le courriel d'octroi est un courriel de
+  suivi, qui peut être retenu). À l'octroi ou à l'essai d'une application, ce courriel et « Mon site » mènent à « Clés des applications »
+  (menu Caisse) : la clé et son code QR partent par un courriel indispensable. La fiche ne crée plus de clé non plus.
+- **Ce qu'éteindre coupe** : la fiche du site (menus, garde-fou des modules : 403 `MODULE_INACTIVE` en mode `live` de la plateforme pour
+  les modules gardés, jamais en mode `demo`), l'assistant IA, le cheminement. Éteindre la CAISSE ou une APPLICATION mobile la cache des
+  menus, mais ne coupe pas une application qui a sa clé : leurs routes ne sont gardées par aucun droit, comme quand un droit est retiré
+  (trou relevé, lot ENT-1). Un droit NEUF (aucun droit vivant avant lui : achat, essai, octroi après une fin) rallume le module.
+- **Un droit suspendu** (impayé, agence suspendue, suspension manuelle) ne se contourne pas par un essai : 409 `ENTITLEMENT_SUSPENDED`,
+  et `available.trial` est vide.
 - **Console** : « Retirer » un droit d'origine abonnement avertit qu'il se rallumera au renouvellement et propose « Retirer et résilier » :
-  l'abonnement est résilié à la fin de la période payée par un worker placé sur le site vendeur (`CancelPlatformSubscriptionMessage`,
-  file `async`, référence `subscription:<site>:<numéro>`). Hors d'un worker, rien n'est basculé : la résiliation est journalisée.
+  TOUT l'abonnement est résilié à la fin de la période payée (toutes les fonctionnalités de son offre, citées dans le message) par un
+  worker placé sur le site vendeur (`CancelPlatformSubscriptionMessage`, file `email` comme les avis des droits, référence
+  `subscription:<site>:<numéro>`). Hors d'un worker, rien n'est basculé : la résiliation est journalisée.
 - Base maître : `scripts/migrate_master_v2_feature_switches.sh <SQL du worktree de construction>` AVANT l'échange du code.
 
 ## Tenir cette fiche à jour

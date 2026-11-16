@@ -204,16 +204,18 @@ class EntitlementsTest extends WebTestCase
         $features = array_column(json_decode((string) $this->api('GET', '/api/site/features', null, 'admin')->getContent(), true)['features'], null, 'key');
         $this->assertSame(['pending', null], [$features['module.boussole']['request'], $features['module.boussole']['entitlement']]);
 
-        // super administrateur : activation par l'API → droit manuel ; désactivation → droit annulé
+        // lot MOD-1 : le super administrateur NE règle PLUS un module par le registre (403 MODULE_VIA_PLATFORM, rien n'est accordé) ;
+        // le droit passe par la console (service des droits) ; son retrait l'annule
         $r = $this->api('PUT', '/api/site/features', ['values' => ['module.boussole' => true]], 'super');
-        $this->assertSame(200, $r->getStatusCode(), $r->getContent());
+        $this->assertSame([403, 'MODULE_VIA_PLATFORM'], [$r->getStatusCode(), json_decode((string) $r->getContent(), true)['code'] ?? null], $r->getContent());
+        $this->assertFalse($s->isEnabled(MV_TEST_TENANT_CODE, 'module.boussole'));
+        $s->grant(MV_TEST_TENANT_CODE, 'module.boussole', 'manual', null, 'essai', null, null, null, false);
         $eff = $s->effective(MV_TEST_TENANT_CODE)['module.boussole'];
         $this->assertSame([true, 'manual', 'active'], [$eff['enabled'], $eff['source'], $eff['status']]);
-        $features = array_column(json_decode((string) $r->getContent(), true)['features'], null, 'key');
+        $features = array_column(json_decode((string) $this->api('GET', '/api/site/features', null, 'admin')->getContent(), true)['features'], null, 'key');
         $this->assertSame('manual', $features['module.boussole']['entitlement']['source']);
         $this->assertSame(409, $this->api('POST', '/api/site/features/module.boussole/request', [], 'admin')->getStatusCode(), 'déjà active');
-        $r = $this->api('PUT', '/api/site/features', ['values' => ['module.boussole' => false]], 'super');
-        $this->assertSame(200, $r->getStatusCode(), $r->getContent());
+        $s->cancel((int) $eff['id'], 'essai');
         $this->assertFalse($s->isEnabled(MV_TEST_TENANT_CODE, 'module.boussole'));
         $this->assertSame('cancelled', $s->find((int) $eff['id'])['status']);
     }

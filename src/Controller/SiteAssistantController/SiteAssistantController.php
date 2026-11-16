@@ -65,7 +65,7 @@ class SiteAssistantController extends AbstractController
 
             return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => $e->getMessage(), 'errors' => $errors], 422);
         } catch (EntrepriseForbiddenException $e) {
-            return $this->json(['error' => $e::CODE, 'code' => $e::CODE, 'message' => $e->getMessage(), 'fields' => $e->fields], 403);
+            return $this->json(['error' => $e->errorCode, 'code' => $e->errorCode, 'message' => $e->getMessage(), 'fields' => $e->fields], 403);
         } catch (\InvalidArgumentException $e) {
             return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => $e->getMessage(), 'errors' => [['path' => '', 'message' => $e->getMessage()]]], 422);
         } catch (SiteFeatureRequestException $e) {

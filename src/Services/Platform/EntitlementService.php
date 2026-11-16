@@ -99,7 +99,17 @@ class EntitlementService
         if ($endsAt !== null && $endsAt <= new \DateTimeImmutable()) {
             throw new \InvalidArgumentException('endsAt : date future attendue');
         }
+        // lot MOD-1 : un droit NEUF (aucun droit vivant avant lui : achat, essai, octroi après une fin) rallume le module ; un
+        // renouvellement ou un remplacement garde le choix du commerçant
+        $wasLive = $this->effective($tenantCode)[$featureKey]['enabled'] ?? false;
         $row = $this->repository->insert($tenantCode, $featureKey, $source, $endsAt, $by, $note, $offerCode, $reference);
+        if (!$wasLive) {
+            try {
+                $this->switches?->clear($tenantCode, $featureKey);
+            } catch (\Throwable $e) {
+                $this->logger->warning(sprintf('[Entitlements] %s : interrupteur de %s non remis (%s)', $tenantCode, $featureKey, $e::class));
+            }
+        }
         foreach ($this->repository->liveFor($tenantCode, $featureKey) as $previous) {
             if ((int) $previous['id'] !== (int) $row['id']) {
                 $this->repository->update((int) $previous['id'], ['status' => 'cancelled', 'note' => trim(($previous['note'] ?? '') . sprintf(' | remplacé par le droit n° %d', $row['id']))]);
@@ -277,7 +287,13 @@ class EntitlementService
      */
     public function switches(string $tenantCode): array
     {
-        $set = $this->switches?->forTenant($tenantCode) ?? [];
+        try {
+            $set = $this->switches?->forTenant($tenantCode) ?? [];
+        } catch (\Throwable $e) {
+            // table des interrupteurs illisible (ou pas encore posée) : tout est allumé, comme avant le lot
+            $this->logger->warning(sprintf('[Entitlements] %s : interrupteurs illisibles (%s), tout est allumé', $tenantCode, $e::class));
+            $set = [];
+        }
         $out = [];
         foreach (array_keys(FeatureCatalog::GOVERNED) as $key) {
             $out[$key] = $set[$key] ?? true;
@@ -301,6 +317,25 @@ class EntitlementService
         }
 
         return $out;
+    }
+
+    /**
+     * L'état effectif des droits, où un module ÉTEINT par le commerçant compte comme non actif (`enabled` faux) ; le reste du droit
+     * (source, fin…) est rendu tel quel. Pour les lecteurs qui décident d'un usage (assistant IA, cheminement), pas pour la console.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public function activeEffective(string $tenantCode): array
+    {
+        $switches = $this->switches($tenantCode);
+        $effective = $this->effective($tenantCode);
+        foreach ($effective as $key => $entry) {
+            if (!($switches[$key] ?? true)) {
+                $effective[$key]['enabled'] = false;
+            }
+        }
+
+        return $effective;
     }
 
     /** Droit effectif ET interrupteur allumé, pour une fonctionnalité */

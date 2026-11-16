@@ -34,8 +34,9 @@ class RequestSiteFeatureUseCase
         }
         $code = $tenantCode ?? (string) $this->tenants->getCurrentTenantCode();
         foreach ($this->entitlements->listForTenant($code) as $row) {
-            if ($row['feature_key'] === $key && $row['source'] === 'trial') {
-                return ['allowed' => false, 'days' => 0]; // un seul essai par fonctionnalité et par site
+            // un seul essai par fonctionnalité et par site ; et un droit SUSPENDU ne se contourne pas par un essai (lot MOD-1)
+            if ($row['feature_key'] === $key && ($row['source'] === 'trial' || $row['status'] === 'suspended')) {
+                return ['allowed' => false, 'days' => 0];
             }
         }
 
@@ -60,6 +61,7 @@ class RequestSiteFeatureUseCase
             throw new SiteFeatureRequestException('REQUEST_PENDING', 'Une demande est déjà en attente pour cette fonctionnalité.');
         }
         $message = $message !== null ? trim($message) : '';
+        // (un droit SUSPENDU ne se contourne pas par un essai : trialOffer le refuse, la demande part à la plateforme)
         $offer = $this->trialOffer($key, $code);
         if ($offer['allowed']) {
             $entitlement = $this->entitlements->trial($code, $key, null, $by, 'essai demandé depuis Mon site' . ($message !== '' ? ' : ' . $message : ''));
@@ -96,6 +98,9 @@ class RequestSiteFeatureUseCase
         if ($this->entitlements->isEnabled($code, $key)) {
             throw new SiteFeatureRequestException('ALREADY_ENABLED', 'Fonctionnalité déjà active sur ce site.');
         }
+        if ($this->suspended($code, $key)) {
+            throw new SiteFeatureRequestException('ENTITLEMENT_SUSPENDED', 'Le droit à cette fonctionnalité est suspendu sur ce site : un essai ne le remplace pas.');
+        }
         if (!$this->policies->get($key)['trial_allowed']) {
             throw new SiteFeatureRequestException('NO_TRIAL', 'Aucun essai gratuit n\'est prévu pour cette fonctionnalité : la demander à la plateforme.');
         }
@@ -125,5 +130,17 @@ class RequestSiteFeatureUseCase
         }
 
         return ['key' => $done['key'], 'on' => $done['on']];
+    }
+
+    /** Le site a-t-il un droit SUSPENDU pour cette fonctionnalité ? (lot MOD-1, relecture : un essai ne contourne pas une suspension) */
+    public function suspended(string $tenantCode, string $key): bool
+    {
+        foreach ($this->entitlements->listForTenant($tenantCode) as $row) {
+            if ($row['feature_key'] === $key && $row['status'] === 'suspended') {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -313,7 +313,8 @@ class SiteFeatureStateService
         try {
             $trials = [];
             foreach ($this->entitlements->listForTenant($code) as $row) {
-                if ($row['source'] === 'trial') {
+                // un essai déjà eu, ou un droit SUSPENDU (un essai ne le contourne pas) : pas d'essai proposé
+                if ($row['source'] === 'trial' || $row['status'] === 'suspended') {
                     $trials[(string) $row['feature_key']] = true;
                 }
             }

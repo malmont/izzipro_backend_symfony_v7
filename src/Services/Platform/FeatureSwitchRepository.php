@@ -27,6 +27,12 @@ class FeatureSwitchRepository
         return $out;
     }
 
+    /** Retire l'interrupteur réglé (le module redevient allumé) */
+    public function clear(string $tenantCode, string $featureKey): void
+    {
+        $this->tenants->getPdoMaster()->prepare('DELETE FROM tenant_feature_switches WHERE tenant_code = ? AND feature_key = ?')->execute([$tenantCode, $featureKey]);
+    }
+
     public function set(string $tenantCode, string $featureKey, bool $enabled, ?string $by): void
     {
         $this->tenants->getPdoMaster()->prepare('INSERT INTO tenant_feature_switches (tenant_code, feature_key, enabled, updated_at, updated_by) VALUES (?, ?, ?, NOW(), ?)

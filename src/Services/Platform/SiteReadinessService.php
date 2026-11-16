@@ -279,7 +279,7 @@ class SiteReadinessService
         $policies = $this->policies->all(array_keys(FeatureCatalog::GOVERNED));
         $fromEmail = trim((string) $this->one($pdo, 'SELECT from_email FROM email_configuration ORDER BY id LIMIT 1'));
         $commerce = $this->commerce($pdo);
-        $effective = $this->entitlements->effective($code);
+        $effective = $this->entitlements->activeEffective($code); // lot MOD-1 : un module éteint par le commerçant n'a pas d'étape
         $pending = $this->requests->pendingFor($code);
         $shopUrl = $this->platform->shopUrl();
         $host = $this->hosts->describe($code, true);
@@ -512,7 +512,7 @@ class SiteReadinessService
 
         // Assistant IA (cheminement complet, 07/11/2026). Accès réel (08/11/2026) : même règle que SiteAssistantService::tier, pour que la carte
         // « Assistant IA » dise le palier du site au lieu de « prêt » en toute circonstance
-        $tier = $this->entitlements->isEnabled($code, 'ai.full') ? 'full' : ($this->entitlements->isEnabled($code, 'ai.help') ? 'help' : 'none'); // même en mode démo : l'IA suit les droits (IA bornée, 08/11/2026)
+        $tier = $this->entitlements->isActive($code, 'ai.full') ? 'full' : ($this->entitlements->isActive($code, 'ai.help') ? 'help' : 'none'); // lot MOD-1 : droit ET allumé // même en mode démo : l'IA suit les droits (IA bornée, 08/11/2026)
         $add('ai.access', 'ai',
             $this->tr($locale, "steps.ai.access.title.$tier", [], ['full' => 'Assistant IA : IA complète', 'help' => 'Assistant IA : aide IA', 'none' => 'Assistant IA : non activé'][$tier]),
             $this->tr($locale, "steps.ai.access.description.$tier", [], ['full' => 'Le service « IA complète » est accordé : l\'assistant explique, propose des réglages et des opérations, toujours après votre confirmation.',

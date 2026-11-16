@@ -115,7 +115,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 : sprintf('Devise du site : %s.', $outcome['currency']));
         }
 
-        // (lot MOD-1 : plus de clés d'application ni de droit d'usage créés depuis la fiche ; les clés naissent à l'octroi du droit)
+        // (lot MOD-1 : plus de clés d'application ni de droit d'usage créés depuis la fiche ; les clés se créent dans « Clés des applications »)
     }
 
     /**
@@ -247,7 +247,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
 
             FormField::addPanel('Code court de la boutique')->collapsible()->setHelp($this->shortCodeHelp()),
             FormField::addPanel('Applications mobiles')->collapsible()
-                ->setHelp('Lecture seule (lot MOD-1) : le droit à une application vient de la plateforme ; à son octroi, une clé d\'activation est créée et envoyée (clé + code QR) à l\'e-mail de l\'entreprise. Détail : menu Caisse → Clés des applications.'),
+                ->setHelp('Lecture seule (lot MOD-1) : le droit à une application vient de la plateforme ; sa clé d\'activation se crée dans « Clés des applications » (menu Caisse), qui l\'envoie avec son code QR à l\'e-mail de l\'entreprise.'),
             $this->moduleField('isPosActive', 'Caisse (POS)'),
             $this->moduleField('isMobileShopActive', 'E-commerce mobile'),
             $this->moduleField('isManagementAppActive', 'Application de gestion'),

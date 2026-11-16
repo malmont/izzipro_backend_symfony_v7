@@ -124,19 +124,48 @@ class ModuleSwitchTest extends WebTestCase
         $this->assertSame($requests, (int) $this->master->query("SELECT COUNT(*) FROM tenant_feature_requests WHERE tenant_code = '" . MV_TEST_TENANT_CODE . "'")->fetchColumn(), 'aucune demande créée');
     }
 
-    /** Une application accordée à l'essai reçoit sa clé d'activation, dans le courriel d'octroi ; une seule, même au second octroi */
-    public function testAnAppGrantedOnTrialReceivesItsActivationKeyInTheGrantEmail(): void
+    /** Point 3 révisé par le chef : AUCUNE clé n'est créée automatiquement ; le courriel d'octroi d'une application dit où la créer */
+    public function testAnAppOnTrialGetsNoAutomaticKeyButTheGrantEmailSaysWhereToCreateIt(): void
     {
-        $count = fn (): int => (int) $this->master->query("SELECT COUNT(*) FROM tenant_app_keys WHERE tenant_code = '" . MV_TEST_TENANT_CODE . "' AND app = 'livingmemory' AND revoked_at IS NULL AND id > " . $this->lastKey)->fetchColumn();
-        $this->master->prepare("UPDATE tenant_app_keys SET revoked_at = NOW() WHERE tenant_code = ? AND app = 'livingmemory' AND revoked_at IS NULL")->execute([MV_TEST_TENANT_CODE]);
+        $count = fn (): int => (int) $this->master->query("SELECT COUNT(*) FROM tenant_app_keys WHERE tenant_code = '" . MV_TEST_TENANT_CODE . "' AND id > " . $this->lastKey)->fetchColumn();
         $admin = $this->token('cle', ['ROLE_ADMIN']);
         $response = $this->call('POST', '/api/site/features/app.living_memory/trial', $admin);
         $this->assertSame(201, $response->getStatusCode(), (string) $response->getContent());
-        $this->assertSame(1, $count(), 'la clé naît à l\'octroi (le courriel d\'octroi part tout de suite en essai)');
-        $mails = array_filter(self::getMailerMessages(), static fn ($m): bool => str_contains((string) $m->getHtmlBody(), 'IZ-'));
-        $this->assertNotSame([], $mails, 'la clé part dans le courriel d\'octroi');
-        static::getContainer()->get(EntitlementService::class)->grant(MV_TEST_TENANT_CODE, 'app.living_memory', 'manual', null, 'essai-mod1');
-        $this->assertSame(1, $count(), 'une clé encore valable : pas de seconde clé');
+        $this->assertSame(0, $count(), 'aucune clé créée sans le commerçant');
+        $mails = array_filter(self::getMailerMessages(), static fn ($m): bool => str_contains((string) $m->getHtmlBody(), 'Clés des applications'));
+        $this->assertNotSame([], $mails, 'le courriel d\'octroi mène à « Clés des applications »');
+        foreach (self::getMailerMessages() as $mail) {
+            $this->assertDoesNotMatchRegularExpression('/IZ-[A-Z]+-[A-Z0-9]{4}-/', (string) $mail->getHtmlBody(), 'aucune clé dans un courriel de suivi');
+        }
+    }
+
+    /** Un droit NEUF rallume un module éteint ; un droit SUSPENDU ne se contourne pas par un essai */
+    public function testANewRightSwitchesTheModuleBackOnAndASuspendedRightIsNotBypassedByATrial(): void
+    {
+        $admin = $this->token('neuf', ['ROLE_ADMIN']);
+        $rights = static::getContainer()->get(EntitlementService::class);
+        $first = $rights->grant(MV_TEST_TENANT_CODE, 'module.support', 'manual', null, 'essai-mod1', null, null, null, false);
+        $this->call('POST', '/api/site/features/module.support/disable', $admin);
+        $this->assertFalse($this->column('module.support'));
+        // un REMPLACEMENT (droit vivant avant lui) garde le choix du commerçant
+        $rights->grant(MV_TEST_TENANT_CODE, 'module.support', 'manual', null, 'essai-mod1', null, null, null, false);
+        $this->assertFalse($this->column('module.support'), 'renouvellement : toujours éteint');
+        // après une fin, un droit NEUF rallume
+        foreach ($rights->listForTenant(MV_TEST_TENANT_CODE) as $row) {
+            if ($row['feature_key'] === 'module.support' && in_array($row['status'], ['active', 'grace'], true)) {
+                $rights->cancel((int) $row['id'], 'essai-mod1');
+            }
+        }
+        $rights->grant(MV_TEST_TENANT_CODE, 'module.support', 'manual', null, 'essai-mod1', null, null, null, false);
+        $this->assertTrue($this->column('module.support'), 'droit neuf : allumé');
+        $this->assertSame('on', $this->feature('module.support', $admin)['switch']);
+        $this->assertGreaterThan(0, (int) $first['id']);
+
+        // un droit SUSPENDU (impayé, agence suspendue) : ni essai, ni essai proposé
+        $suspended = $rights->grant(MV_TEST_TENANT_CODE, 'module.boussole', 'manual', null, 'essai-mod1', null, null, null, false);
+        $rights->suspend((int) $suspended['id'], 'essai-mod1', null, false);
+        $this->assertNull($this->feature('module.boussole', $admin)['available']['trial']);
+        $this->assertSame([409, 'ENTITLEMENT_SUSPENDED'], $this->refusal('POST', '/api/site/features/module.boussole/trial', $admin));
     }
 
     /** @return array<string, mixed> */

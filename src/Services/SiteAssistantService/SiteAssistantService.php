@@ -70,11 +70,12 @@ class SiteAssistantService
             return 'full';
         }
         try {
-            if ($this->entitlements->isEnabled($tenantCode, 'ai.full')) {
+            // lot MOD-1 : droit ET allumé par le commerçant
+            if ($this->entitlements->isActive($tenantCode, 'ai.full')) {
                 return 'full';
             }
 
-            return $this->entitlements->isEnabled($tenantCode, 'ai.help') ? 'help' : 'none';
+            return $this->entitlements->isActive($tenantCode, 'ai.help') ? 'help' : 'none';
         } catch (\Throwable $e) {
             $this->logger->error('[SiteAssistant] palier illisible : ' . $e->getMessage());
 

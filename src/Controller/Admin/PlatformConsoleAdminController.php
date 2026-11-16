@@ -169,7 +169,11 @@ class PlatformConsoleAdminController extends AbstractController
             // la fin de la période (worker placé sur le site vendeur)
             if ($action === 'cancel' && $request->request->get('resilier') === '1' && ($row['source'] ?? null) === 'subscription' && str_starts_with((string) ($row['reference'] ?? ''), 'subscription:')) {
                 $this->bus?->dispatch(new \App\Message\CancelPlatformSubscriptionMessage((string) $row['reference'], $this->getUser()?->getUserIdentifier()));
-                $this->addFlash('success', 'Résiliation de l\'abonnement demandée : il prendra fin à la fin de la période payée.');
+                $offer = ($row['offer_code'] ?? null) !== null ? $this->offers->find((string) $row['offer_code']) : null;
+                $features = array_map(static fn (string $key): string => FeatureCatalog::label($key), is_array($offer['features'] ?? null) ? $offer['features'] : []);
+                $this->addFlash('success', 'Résiliation de TOUT l\'abonnement demandée : il prendra fin à la fin de la période payée' . ($features !== [] ? ' ; s\'éteindront alors : ' . implode(', ', $features) . '.' : '.'));
+            } elseif ($action === 'cancel' && $request->request->get('resilier') === '1') {
+                $this->addFlash('warning', 'Droit retiré, mais aucun abonnement à résilier n\'a été trouvé pour ce droit.');
             }
         });
     }
