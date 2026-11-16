@@ -191,7 +191,14 @@ class LossSaleUnitRepository extends EntityRepository
     /** Efface les présences FERMÉES avant `$before` (jamais une présence ouverte, jamais un fait), par paquets ; rend leur nombre */
     public function purgePresences(string $before, int $limit): int
     {
-        return (int) $this->db()->executeStatement(
+        // Lot L4-a : les présences par zone suivent la même conservation, sauf la DERNIÈRE de chaque pièce (elle dit où la pièce a été
+        // vue en dernier, même il y a longtemps)
+        $zones = (int) $this->db()->executeStatement(
+            'DELETE FROM loss_zone_presence WHERE id IN (SELECT z.id FROM loss_zone_presence z WHERE z.until IS NOT NULL AND z.until < ? AND NOT z.exercise'
+            . ' AND (z.piece_id IS NULL OR EXISTS (SELECT 1 FROM loss_zone_presence n WHERE n.piece_id = z.piece_id AND n.id <> z.id AND (n.since > z.since OR (n.since = z.since AND n.id > z.id))))'
+            . ' ORDER BY z.id LIMIT ' . max(1, $limit) . ')', [$before]);
+
+        return $zones + (int) $this->db()->executeStatement(
             'DELETE FROM loss_counter_presence WHERE id IN (SELECT id FROM loss_counter_presence WHERE until IS NOT NULL AND until < ? AND NOT exercise ORDER BY id LIMIT ' . max(1, $limit) . ')', [$before]);
     }
 

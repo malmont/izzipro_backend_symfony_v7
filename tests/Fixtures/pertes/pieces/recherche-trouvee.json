@@ -1,24 +1,24 @@
 {
     "request": {
         "method": "GET",
-        "path": "/api/gestion/pertes/puces/recherche?identifier=045D8303C3D4E5&locale=fr"
+        "path": "/api/gestion/pertes/puces/recherche?identifier=04BE4837C3D4E5&locale=fr"
     },
     "status": 200,
     "headers": {},
     "body": {
-        "identifier": "045D8303C3D4E5",
+        "identifier": "04BE4837C3D4E5",
         "found": true,
         "refusal": null,
         "tag": {
             "id": 1,
-            "identifier": "045D8303C3D4E5",
+            "identifier": "04BE4837C3D4E5",
             "technology": "nfc",
             "technologyLabel": "Puce NFC",
             "status": "associated",
             "statusLabel": "Posée",
             "pieceId": 1,
             "exercise": false,
-            "associatedAt": "2026-11-16T07:15:16+00:00",
+            "associatedAt": "2026-11-16T14:49:47+00:00",
             "retiredAt": null,
             "retiredReason": null,
             "retiredReasonLabel": null
@@ -29,40 +29,44 @@
             "status": "created",
             "statusLabel": "En service",
             "zone": null,
+            "zoneLabel": null,
+            "zoneSeenAt": null,
+            "zoneLeftAt": null,
+            "zoneDevice": null,
             "exercise": false,
             "variantId": 23,
             "productId": 15,
             "variantMissing": false,
-            "name": "Veste en lin (exemple 5D8303)",
+            "name": "Veste en lin (exemple BE4837)",
             "variantLabel": null,
-            "barcode": "VESTE-LIN-M-5D8303",
+            "barcode": "VESTE-LIN-M-BE4837",
             "barcodeOf": "variant",
             "symbology": "code128",
             "tags": [
                 {
                     "id": 1,
-                    "identifier": "045D8303C3D4E5",
+                    "identifier": "04BE4837C3D4E5",
                     "technology": "nfc",
                     "technologyLabel": "Puce NFC",
                     "status": "associated",
                     "statusLabel": "Posée",
                     "pieceId": 1,
                     "exercise": false,
-                    "associatedAt": "2026-11-16T07:15:16+00:00",
+                    "associatedAt": "2026-11-16T14:49:47+00:00",
                     "retiredAt": null,
                     "retiredReason": null,
                     "retiredReasonLabel": null
                 },
                 {
                     "id": 3,
-                    "identifier": "015D8303",
+                    "identifier": "01BE4837",
                     "technology": "nfc",
                     "technologyLabel": "Puce NFC",
                     "status": "associated",
                     "statusLabel": "Posée",
                     "pieceId": 1,
                     "exercise": false,
-                    "associatedAt": "2026-11-16T07:15:16+00:00",
+                    "associatedAt": "2026-11-16T14:49:48+00:00",
                     "retiredAt": null,
                     "retiredReason": null,
                     "retiredReasonLabel": null
@@ -72,7 +76,7 @@
             "commandeId": null,
             "retiredReason": null,
             "retiredReasonLabel": null,
-            "createdAt": "2026-11-16T07:15:16+00:00",
+            "createdAt": "2026-11-16T14:49:47+00:00",
             "retiredAt": null
         }
     }

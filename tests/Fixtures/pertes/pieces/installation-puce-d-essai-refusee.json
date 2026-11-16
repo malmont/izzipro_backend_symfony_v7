@@ -89,6 +89,32 @@
                     },
                     "state": "absent",
                     "hint": "Aucun tapis de comptoir. Branchez le tapis sur le boîtier : il apparaît ici de lui-même."
+                },
+                {
+                    "code": "tag_printer",
+                    "title": "Brancher l'imprimante à puce",
+                    "text": "Facultatif (niveau pro). L'imprimante imprime l'étiquette et écrit la puce d'un même geste. Branchez-la sur le boîtier, puis lancez un travail d'impression : la première puce écrite et relue termine cette étape.",
+                    "image": "pertes/installation/tag_printer",
+                    "status": "todo",
+                    "verify": {
+                        "kind": "data",
+                        "label": "Vérifier"
+                    },
+                    "state": "absent",
+                    "hint": "Aucune imprimante à puce. Branchez l'imprimante sur le boîtier : elle apparaît ici d'elle-même."
+                },
+                {
+                    "code": "zone_reader",
+                    "title": "Brancher les antennes de zone",
+                    "text": "Facultatif. Une antenne dit quand une pièce arrive dans sa zone (réserve, porte de la réserve, rayon, sortie) et quand elle en part : la fiche de la pièce dit où elle a été vue en dernier. Branchez chaque antenne sur le boîtier, donnez-lui sa zone dans la fiche du boîtier, puis passez devant elle une pièce qui porte une puce. L'étape est faite quand chaque antenne a vu une puce.",
+                    "image": "pertes/installation/zone_reader",
+                    "status": "todo",
+                    "verify": {
+                        "kind": "data",
+                        "label": "Vérifier"
+                    },
+                    "state": "absent",
+                    "hint": "Aucune antenne de zone. Branchez une antenne sur le boîtier, puis donnez-lui sa zone dans la fiche du boîtier."
                 }
             ],
             "progress": {

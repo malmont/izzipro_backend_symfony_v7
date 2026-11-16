@@ -35,11 +35,14 @@ class LossBoxService
     public const EXERCISE_BOX_LIMIT = 3;
     public const EVENTS_SHOWN = 50;
     /** Scénarios du boîtier simulé */
-    public const SCENARIOS = ['heartbeat', 'network_cut', 'device_down', 'device_up', 'spot_check', 'zone_exit', 'counter_put', 'counter_take', ...LossPrintService::SCENARIOS];
+    public const SCENARIOS = ['heartbeat', 'network_cut', 'device_down', 'device_up', 'spot_check', 'zone_exit', 'counter_put', 'counter_take', ...LossPrintService::SCENARIOS, 'zone_move'];
     private const SIM_EXIT_READER = 'SIM-LECTEUR-SORTIE';
     private const SIM_HAND_READER = 'SIM-LECTEUR-MAIN';
     private const SIM_MAT = 'SIM-TAPIS';
     private const SIM_PRINTER = 'SIM-IMPRIMANTE';
+    /** Lot L4-a : deux antennes de zone simulées, à la réserve et en rayon */
+    private const SIM_STOCKROOM = 'SIM-ANTENNE-RESERVE';
+    private const SIM_FLOOR = 'SIM-ANTENNE-RAYON';
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -370,7 +373,7 @@ class LossBoxService
             $repository->event($id, null, LossBoxEvent::BOX_CREATED, $userId, true, [], $now);
             $repository->event($id, null, LossBoxEvent::BOX_ENROLLED, null, true, ['again' => false], $now);
             foreach ([[self::SIM_EXIT_READER, LossDevice::READER, 'exit'], [self::SIM_HAND_READER, LossDevice::READER, null], [self::SIM_MAT, LossDevice::COUNTER_MAT, null],
-                [self::SIM_PRINTER, LossDevice::PRINTER, null]] as [$serial, $kind, $zone]) {
+                [self::SIM_PRINTER, LossDevice::PRINTER, null], [self::SIM_STOCKROOM, LossDevice::READER, 'stockroom'], [self::SIM_FLOOR, LossDevice::READER, 'floor']] as [$serial, $kind, $zone]) {
                 $device = $repository->insertDevice($id, $serial, $kind, null, LossDevice::OK, $zone, true, $now);
                 $repository->event($id, $device, LossBoxEvent::DEVICE_SEEN, null, true, ['kind' => $kind], $now);
             }
@@ -440,6 +443,27 @@ class LossBoxService
                         $written = 1;
                     }
                     break;
+                case 'zone_move':
+                    // Lot L4-a : une pièce d'exercice est vue à la réserve, en part, puis arrive en rayon. Trois faits, et la présence par
+                    // zone qui en découle : la fiche de la pièce dit où elle a été vue en dernier
+                    $from = $devices[self::SIM_STOCKROOM] ?? null;
+                    $to = $devices[self::SIM_FLOOR] ?? null;
+                    if ($from === null || $to === null) {
+                        throw new GestionConflictException('EXERCISE_NO_ZONE_READER', $this->texts->t('boxes.error.EXERCISE_NO_ZONE_READER', $locale), 409);
+                    }
+                    $pieces = $repository->exercisePiecesWithTag(1);
+                    if ($pieces === []) {
+                        throw new GestionConflictException('EXERCISE_NO_PIECE', $this->texts->t('boxes.error.EXERCISE_NO_PIECE', $locale), 409);
+                    }
+                    [$piece, $tag] = [(int) $pieces[0]['piece_id'], (int) $pieces[0]['tag_id']];
+                    $start = time();
+                    foreach ([[LossPieceEvent::ZONE_SEEN, $from, 'stockroom', -40], [LossPieceEvent::ZONE_LEFT, $from, 'stockroom', -10], [LossPieceEvent::ZONE_SEEN, $to, 'floor', 0]] as [$type, $device, $zone, $shift]) {
+                        $at = gmdate('Y-m-d H:i:s', $start + $shift);
+                        $repository->pieceFact($type, $at, $piece, $tag, $id, (int) $device['id'], null, true, ['zone' => $zone], $now);
+                        $type === LossPieceEvent::ZONE_SEEN ? $repository->openZonePresence((int) $device['id'], $tag, $zone, $at, true) : $repository->closeZonePresence((int) $device['id'], $tag, $zone, $at, false, true);
+                        ++$written;
+                    }
+                    break;
                 case 'counter_put':
                 case 'counter_take':
                     // une pièce d'exercice posée sur le tapis simulé, puis reprise : le fait, et la présence qui en découle
@@ -477,6 +501,9 @@ class LossBoxService
                     foreach ($pieces as $piece) {
                         $repository->pieceFact($spot ? LossPieceEvent::SPOT_CHECK : LossPieceEvent::ZONE_SEEN, $now, (int) $piece['piece_id'], (int) $piece['tag_id'], $id,
                             $device !== null ? (int) $device['id'] : null, null, true, $spot ? [] : ['zone' => 'exit'], $now);
+                        if (!$spot && $device !== null) {
+                            $repository->openZonePresence((int) $device['id'], (int) $piece['tag_id'], 'exit', $now, true); // lot L4-a : vue en dernier à la sortie
+                        }
                         ++$written;
                     }
             }

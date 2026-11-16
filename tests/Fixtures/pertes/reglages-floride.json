@@ -63,17 +63,29 @@
                 "presenceRetentionDays": {
                     "min": 30,
                     "max": 730
+                },
+                "zoneArriveSeconds": {
+                    "min": 1,
+                    "max": 60
+                },
+                "zoneLeaveSeconds": {
+                    "min": 5,
+                    "max": 600
                 }
             },
             "defaults": {
                 "counterWindowMinutes": 10,
                 "catchUpMinutes": 30,
-                "presenceRetentionDays": 90
+                "presenceRetentionDays": 90,
+                "zoneArriveSeconds": 3,
+                "zoneLeaveSeconds": 30
             },
             "counterWindowMinutes": 10,
             "catchUpMinutes": 30,
             "presenceRetentionDays": 90,
-            "note": "Les présences sur le tapis de comptoir fermées depuis plus de 90 jours sont effacées automatiquement. Les faits (lectures, ventes, retours) sont conservés."
+            "zoneArriveSeconds": 3,
+            "zoneLeaveSeconds": 30,
+            "note": "Les présences sur le tapis de comptoir et dans les zones, fermées depuis plus de 90 jours, sont effacées automatiquement ; la dernière zone où chaque pièce a été vue est gardée. Les faits (lectures, ventes, retours) sont conservés."
         },
         "never": [
             {

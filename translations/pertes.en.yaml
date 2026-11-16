@@ -207,7 +207,7 @@ approval:
         APPROVAL_RATE_LIMITED: Too many attempts
 settings:
     pieces:
-        retention: 'Presences on the counter mat closed for more than %days% days are erased automatically. Facts (reads, sales, returns) are kept.'
+        retention: 'Presences on the counter mat and in the zones, closed for more than %days% days, are erased automatically; the last zone where each piece was seen is kept. Facts (reads, sales, returns) are kept.'
     legalNotice: 'These settings follow the country and region of your shop. Have them reviewed by a lawyer before using them for a decision about an employee.'
     personPatterns:
         allowed: 'Rules that count the actions of the same account over time are allowed in your region. You can turn them off.'
@@ -337,6 +337,7 @@ pieces:
         PIECE_SOLD: Sold
         PIECE_RETURNED: Back in store
         ZONE_SEEN: Read in a zone
+        ZONE_LEFT: Left a zone
     error:
         VARIANT_NOT_FOUND: 'Variant not found.'
         PIECE_NOT_FOUND: 'Piece not found.'
@@ -408,6 +409,11 @@ installation:
             text: 'Optional (pro level). The printer prints the label and writes the tag in one go. Plug it into the box, then start a print job: the first tag written and read back completes this step.'
             verify: Check
             hint: 'No tag printer. Plug the printer into the box.'
+        zone_reader:
+            title: Plug in the zone antennas
+            text: 'Optional. An antenna says when a piece arrives in its zone (stockroom, stockroom door, shop floor, exit) and when it leaves: the piece sheet says where it was last seen. Plug each antenna into the box, give it its zone in the box sheet, then walk a tagged piece past it. The step is done when every antenna has seen a tag.'
+            verify: Check
+            hint: 'No zone antenna. Plug an antenna into the box, then give it its zone.'
     hint:
         decimal: 'The reader seems to return a number made of digits only. Set it to return the identifier in hexadecimal (digits and letters A to F).'
         form: 'This read contains something other than digits and letters A to F: it is not a tag. Check that the cursor is in the tag field.'
@@ -554,6 +560,9 @@ boxes:
         print_no_labels:
             label: Out of labels
             text: 'The roll ends after the first label: the following lines fail.'
+        zone_move:
+            label: From the stockroom to the shop floor
+            text: 'An exercise piece is seen by the stockroom antenna, leaves it, then arrives in front of the shop floor antenna: its sheet says where it was last seen.'
     error:
         BOX_NOT_FOUND: 'Box not found.'
         DEVICE_NOT_FOUND: 'Device not found on this box.'
@@ -565,12 +574,14 @@ boxes:
         PAIRING_RATE_LIMITED: 'Too many code attempts. Try again in a quarter of an hour.'
         EXERCISE_LIMIT_REACHED: 'You already have %limit% simulated boxes: delete them before creating more.'
         EXERCISE_NO_PIECE: 'No exercise piece carries a tag: first put a simulated tag on an exercise piece.'
+        EXERCISE_NO_ZONE_READER: 'This simulated box has no zone antennas: create a new one.'
 # Hardware health board (lot L3-a, 2026-11-15, docs/prevention-pertes.md § 16.13)
 health:
     kind:
         box: Box
         mat: Counter mat
         printer: Tag printer
+        zone_reader: 'Antenna: %zone%'
     state:
         ok: All good
         pending: Waiting
@@ -610,6 +621,13 @@ health:
             box_silent: 'Its box no longer gives a sign of life: the print jobs are waiting. Check the box.'
             never_written: 'The printer has not written any tag yet. Start a print job on a piece.'
             never_written_exercise: 'The simulated printer has not written anything yet. Play the "Labels printed" scenario.'
+        zone_reader:
+            absent: 'No zone antenna. Plug an antenna into the box, then give it its zone in the box sheet.'
+            absent_exercise: 'No simulated antenna. Create a simulated box: it has its antennas.'
+            down: 'The "%zone%" antenna no longer answers. Check its cable on the box, then its power.'
+            box_silent: 'The box of the "%zone%" antenna is silent: nothing is read in that zone. Check the box.'
+            never_read: 'The "%zone%" antenna has not seen any tag yet. Walk a tagged piece past it.'
+            never_read_exercise: 'The simulated "%zone%" antenna has seen nothing yet. Play the "From the stockroom to the shop floor" or "Read at the exit" scenario.'
 # Print jobs of the tag printer (lot L3-c, 16/11/2026, docs/prevention-pertes.md § 16.20)
 prints:
     status:

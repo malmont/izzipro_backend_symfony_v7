@@ -221,6 +221,22 @@ class LossBoxRepository extends EntityRepository
     }
 
     /**
+     * Les antennes de zone en service (lot L4-a) : les lecteurs qui ont une zone (un lecteur sans zone est un lecteur à main), avec
+     * l'état de leur boîtier et si elles ont déjà vu une puce arriver.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function liveZoneReaders(bool $exercise): array
+    {
+        return $this->db()->fetchAllAssociative(
+            'SELECT d.id, d.serial, d.zone, d.status, d.last_seen_at, b.status AS box_status, b.last_seen_at AS box_seen,'
+            . ' (EXISTS (SELECT 1 FROM loss_zone_presence z WHERE z.device_id = d.id)'
+            . " OR EXISTS (SELECT 1 FROM loss_piece_event e WHERE e.box_id = d.box_id AND e.device_id = d.id AND e.type = 'ZONE_SEEN')) AS has_read"
+            . ' FROM loss_device d JOIN loss_box b ON b.id = d.box_id'
+            . " WHERE d.kind = 'reader' AND d.zone IS NOT NULL AND d.status <> 'retired' AND d.exercise = CAST(? AS boolean) AND b.status <> 'revoked' ORDER BY d.id", [$exercise ? 'true' : 'false']);
+    }
+
+    /**
      * Les imprimantes à puce en service (lot L3-c), avec l'état de leur boîtier et si elles ont déjà écrit une puce relue conforme.
      *
      * @return list<array<string, mixed>>
@@ -298,6 +314,37 @@ class LossBoxRepository extends EntityRepository
                 . ' WHERE t.id = :tag AND NOT EXISTS (SELECT 1 FROM loss_counter_presence c WHERE c.device_id = :device AND c.tag_id = :tag AND (c.until IS NULL OR c.until >= CAST(:at AS timestamp)))',
                 ['device' => $deviceId, 'tag' => $tagId, 'at' => $until, 'exercise' => $exercise ? 'true' : 'false']);
         }
+    }
+
+    /**
+     * Lot L4-a. Une puce ARRIVE dans la zone d'une antenne : une présence s'ouvre, sauf si elle y est déjà (index unique des présences
+     * ouvertes), et sauf si l'on connaît déjà un départ plus récent que cette arrivée (un lot en retard ne déplace pas la pièce). Une
+     * puce n'est vue que par une antenne à la fois : ce qu'une autre antenne croyait encore voir se ferme à cette heure. La pièce
+     * est celle que porte la puce à cet instant.
+     */
+    public function openZonePresence(int $deviceId, int $tagId, string $zone, string $since, bool $exercise): void
+    {
+        $this->db()->executeStatement('UPDATE loss_zone_presence SET until = CAST(? AS timestamp) WHERE tag_id = ? AND device_id <> ? AND until IS NULL AND since <= CAST(? AS timestamp)',
+            [$since, $tagId, $deviceId, $since]);
+        $this->db()->executeStatement(
+            'INSERT INTO loss_zone_presence (device_id, tag_id, piece_id, zone, since, exercise) SELECT :device, t.id, t.piece_id, :zone, CAST(:since AS timestamp), CAST(:exercise AS boolean) FROM loss_tag t WHERE t.id = :tag'
+            // rien de plus récent n'est connu pour cette puce, à cette antenne ou ailleurs : une arrivée ancienne ne revient pas en tête
+            . ' AND NOT EXISTS (SELECT 1 FROM loss_zone_presence z WHERE z.tag_id = :tag AND (z.since > CAST(:since AS timestamp) OR (z.device_id = :device AND z.until > CAST(:since AS timestamp))))'
+            . ' ON CONFLICT (device_id, tag_id) WHERE until IS NULL DO NOTHING',
+            ['device' => $deviceId, 'tag' => $tagId, 'zone' => $zone, 'since' => $since, 'exercise' => $exercise ? 'true' : 'false']);
+    }
+
+    /**
+     * Lot L4-a. Une puce QUITTE la zone d'une antenne : sa présence ouverte se ferme, si ce départ n'est pas plus ancien que
+     * l'arrivée qu'on connaît. `$late` (heure douteuse) : fermée à l'heure donnée, jamais avant son arrivée. Sans présence ouverte,
+     * rien n'est écrit : un départ seul ne dit pas où est la pièce.
+     */
+    public function closeZonePresence(int $deviceId, int $tagId, string $zone, string $until, bool $late, bool $exercise): void
+    {
+        $this->db()->executeStatement(
+            'UPDATE loss_zone_presence SET until = ' . ($late ? 'GREATEST(CAST(:until AS timestamp), since)' : 'CAST(:until AS timestamp)')
+            . ' WHERE device_id = :device AND tag_id = :tag AND zone = :zone AND until IS NULL AND exercise = CAST(:exercise AS boolean)' . ($late ? '' : ' AND since <= CAST(:until AS timestamp)'),
+            ['until' => $until, 'device' => $deviceId, 'tag' => $tagId, 'zone' => $zone, 'exercise' => $exercise ? 'true' : 'false']);
     }
 
     /** Un départ à l'heure douteuse : la puce n'est plus posée pour nous, à l'heure du serveur (jamais avant son arrivée) */
@@ -478,6 +525,7 @@ class LossBoxRepository extends EntityRepository
         $conn->executeStatement('DELETE FROM loss_print_job WHERE exercise'); // lot L3-c : les travaux de l'imprimante simulée (leurs lignes partent avec eux)
         $conn->executeStatement('DELETE FROM loss_piece_event WHERE exercise AND box_id IS NOT NULL');
         $conn->executeStatement('DELETE FROM loss_counter_presence WHERE exercise');
+        $conn->executeStatement('DELETE FROM loss_zone_presence WHERE exercise'); // lot L4-a : ce que les antennes simulées ont vu
         $conn->executeStatement('DELETE FROM loss_box_event WHERE exercise');
         $conn->executeStatement('DELETE FROM loss_device WHERE exercise');
         $deleted = (int) $conn->executeStatement('DELETE FROM loss_box WHERE exercise');

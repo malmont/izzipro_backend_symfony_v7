@@ -207,7 +207,7 @@ approval:
         APPROVAL_RATE_LIMITED: Trop d'essais
 settings:
     pieces:
-        retention: 'Les présences sur le tapis de comptoir fermées depuis plus de %days% jours sont effacées automatiquement. Les faits (lectures, ventes, retours) sont conservés.'
+        retention: 'Les présences sur le tapis de comptoir et dans les zones, fermées depuis plus de %days% jours, sont effacées automatiquement ; la dernière zone où chaque pièce a été vue est gardée. Les faits (lectures, ventes, retours) sont conservés.'
     legalNotice: 'Ces réglages suivent le pays et la région de votre boutique. Faites-les relire par un avocat avant de vous en servir pour une décision concernant un salarié.'
     personPatterns:
         allowed: 'Les règles qui comptent les actes d''un même compte dans le temps sont permises dans votre région. Vous pouvez les éteindre.'
@@ -336,6 +336,7 @@ pieces:
         PIECE_SOLD: Vendue
         PIECE_RETURNED: Revenue en magasin
         ZONE_SEEN: Lue dans une zone
+        ZONE_LEFT: Partie d'une zone
     error:
         VARIANT_NOT_FOUND: 'Variante introuvable.'
         PIECE_NOT_FOUND: 'Pièce introuvable.'
@@ -407,6 +408,11 @@ installation:
             text: 'Facultatif (niveau pro). L''imprimante imprime l''étiquette et écrit la puce d''un même geste. Branchez-la sur le boîtier, puis lancez un travail d''impression : la première puce écrite et relue termine cette étape.'
             verify: Vérifier
             hint: 'Aucune imprimante à puce. Branchez l''imprimante sur le boîtier.'
+        zone_reader:
+            title: Brancher les antennes de zone
+            text: 'Facultatif. Une antenne dit quand une pièce arrive dans sa zone (réserve, porte de la réserve, rayon, sortie) et quand elle en part : la fiche de la pièce dit où elle a été vue en dernier. Branchez chaque antenne sur le boîtier, donnez-lui sa zone dans la fiche du boîtier, puis passez devant elle une pièce qui porte une puce. L''étape est faite quand chaque antenne a vu une puce.'
+            verify: Vérifier
+            hint: 'Aucune antenne de zone. Branchez une antenne sur le boîtier, puis donnez-lui sa zone.'
     hint:
         decimal: 'Le lecteur semble rendre un numéro en chiffres seulement. Réglez-le pour qu''il rende l''identifiant en hexadécimal (chiffres et lettres de A à F).'
         form: 'Cette lecture contient autre chose que des chiffres et des lettres de A à F : ce n''est pas une puce. Vérifiez que le curseur est dans le champ de la puce.'
@@ -553,6 +559,9 @@ boxes:
         print_no_labels:
             label: Plus d'étiquettes
             text: 'Le rouleau se termine après la première étiquette : les lignes suivantes passent en échec.'
+        zone_move:
+            label: De la réserve au rayon
+            text: 'Une pièce d''exercice est vue par l''antenne de la réserve, en part, puis arrive devant l''antenne du rayon : sa fiche dit où elle a été vue en dernier.'
     error:
         BOX_NOT_FOUND: 'Boîtier introuvable.'
         DEVICE_NOT_FOUND: 'Appareil introuvable sur ce boîtier.'
@@ -564,12 +573,14 @@ boxes:
         PAIRING_RATE_LIMITED: 'Trop d''essais de code. Réessayez dans un quart d''heure.'
         EXERCISE_LIMIT_REACHED: 'Vous avez déjà %limit% boîtiers simulés : effacez-les avant d''en créer d''autres.'
         EXERCISE_NO_PIECE: 'Aucune pièce d''exercice ne porte de puce : posez d''abord une puce simulée sur une pièce d''exercice.'
+        EXERCISE_NO_ZONE_READER: 'Ce boîtier simulé n''a pas d''antennes de zone : créez-en un nouveau.'
 # Tableau de santé du matériel (lot L3-a, 15/11/2026, docs/prevention-pertes.md § 16.13)
 health:
     kind:
         box: Boîtier
         mat: Tapis de comptoir
         printer: Imprimante à puce
+        zone_reader: 'Antenne : %zone%'
     state:
         ok: En ordre
         pending: En attente
@@ -609,6 +620,13 @@ health:
             box_silent: 'Son boîtier ne donne plus signe de vie : les travaux d''impression attendent. Vérifiez le boîtier.'
             never_written: 'L''imprimante n''a encore écrit aucune puce. Lancez un travail d''impression sur une pièce.'
             never_written_exercise: 'L''imprimante simulée n''a encore rien écrit. Jouez le scénario « Étiquettes imprimées ».'
+        zone_reader:
+            absent: 'Aucune antenne de zone. Branchez une antenne sur le boîtier, puis donnez-lui sa zone dans la fiche du boîtier.'
+            absent_exercise: 'Aucune antenne simulée. Créez un boîtier simulé : il a ses antennes.'
+            down: 'L''antenne « %zone% » ne répond plus. Vérifiez son câble sur le boîtier, puis son alimentation.'
+            box_silent: 'Le boîtier de l''antenne « %zone% » ne donne plus signe de vie : rien n''est lu dans cette zone. Vérifiez le boîtier.'
+            never_read: 'L''antenne « %zone% » n''a encore vu aucune puce. Passez devant elle une pièce qui porte une puce.'
+            never_read_exercise: 'L''antenne simulée « %zone% » n''a encore rien vu. Jouez le scénario « De la réserve au rayon » ou « Lecture à la sortie ».'
 # Travaux d'impression de l'imprimante à puce (lot L3-c, 16/11/2026, docs/prevention-pertes.md § 16.20)
 prints:
     status:

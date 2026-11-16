@@ -12,12 +12,12 @@
         "statusLabel": "Inscrit",
         "online": true,
         "onlineLabel": "En ligne",
-        "lastSeenAt": "2026-11-16T11:15:46+00:00",
-        "lastSeenLabel": "16/11/2026 06 h 15",
+        "lastSeenAt": "2026-11-16T14:50:21+00:00",
+        "lastSeenLabel": "16/11/2026 09 h 50",
         "silentSeconds": null,
         "version": null,
         "arch": null,
-        "enrolledAt": "2026-11-16T11:15:45+00:00",
+        "enrolledAt": "2026-11-16T14:50:21+00:00",
         "clockOffsetSeconds": 0,
         "clockDoubt": false,
         "keyHint": null,
@@ -36,7 +36,7 @@
                 "zoneLabel": "Sortie",
                 "cashRegister": null,
                 "onMat": null,
-                "lastSeenAt": "2026-11-16T11:15:45+00:00"
+                "lastSeenAt": "2026-11-16T14:50:21+00:00"
             },
             {
                 "id": 6,
@@ -50,7 +50,7 @@
                 "zoneLabel": null,
                 "cashRegister": null,
                 "onMat": null,
-                "lastSeenAt": "2026-11-16T11:15:45+00:00"
+                "lastSeenAt": "2026-11-16T14:50:21+00:00"
             },
             {
                 "id": 7,
@@ -64,7 +64,7 @@
                 "zoneLabel": null,
                 "cashRegister": null,
                 "onMat": 0,
-                "lastSeenAt": "2026-11-16T11:15:45+00:00"
+                "lastSeenAt": "2026-11-16T14:50:21+00:00"
             },
             {
                 "id": 8,
@@ -78,28 +78,76 @@
                 "zoneLabel": null,
                 "cashRegister": null,
                 "onMat": null,
-                "lastSeenAt": "2026-11-16T11:15:45+00:00"
+                "lastSeenAt": "2026-11-16T14:50:21+00:00"
+            },
+            {
+                "id": 9,
+                "serial": "SIM-ANTENNE-RESERVE",
+                "kind": "reader",
+                "kindLabel": "Lecteur de puces",
+                "model": null,
+                "status": "ok",
+                "statusLabel": "En marche",
+                "zone": "stockroom",
+                "zoneLabel": "Réserve",
+                "cashRegister": null,
+                "onMat": null,
+                "lastSeenAt": "2026-11-16T14:50:21+00:00"
+            },
+            {
+                "id": 10,
+                "serial": "SIM-ANTENNE-RAYON",
+                "kind": "reader",
+                "kindLabel": "Lecteur de puces",
+                "model": null,
+                "status": "ok",
+                "statusLabel": "En marche",
+                "zone": "floor",
+                "zoneLabel": "Rayon",
+                "cashRegister": null,
+                "onMat": null,
+                "lastSeenAt": "2026-11-16T14:50:21+00:00"
             }
         ],
-        "createdAt": "2026-11-16T11:15:45+00:00",
+        "createdAt": "2026-11-16T14:50:21+00:00",
         "screen": "pertes.boitiers",
         "events": [
             {
-                "id": 28,
+                "id": 30,
                 "type": "BOX_BACK",
                 "label": "Boîtier revenu après un silence",
-                "at": "2026-11-16T11:15:46+00:00",
-                "atLabel": "16/11/2026 06 h 15",
+                "at": "2026-11-16T14:50:21+00:00",
+                "atLabel": "16/11/2026 09 h 50",
                 "device": null,
                 "silentSeconds": 7200,
+                "byUser": false
+            },
+            {
+                "id": 29,
+                "type": "DEVICE_SEEN",
+                "label": "Appareil vu pour la première fois",
+                "at": "2026-11-16T14:50:21+00:00",
+                "atLabel": "16/11/2026 09 h 50",
+                "device": "SIM-ANTENNE-RAYON",
+                "silentSeconds": null,
+                "byUser": false
+            },
+            {
+                "id": 28,
+                "type": "DEVICE_SEEN",
+                "label": "Appareil vu pour la première fois",
+                "at": "2026-11-16T14:50:21+00:00",
+                "atLabel": "16/11/2026 09 h 50",
+                "device": "SIM-ANTENNE-RESERVE",
+                "silentSeconds": null,
                 "byUser": false
             },
             {
                 "id": 27,
                 "type": "DEVICE_SEEN",
                 "label": "Appareil vu pour la première fois",
-                "at": "2026-11-16T11:15:45+00:00",
-                "atLabel": "16/11/2026 06 h 15",
+                "at": "2026-11-16T14:50:21+00:00",
+                "atLabel": "16/11/2026 09 h 50",
                 "device": "SIM-IMPRIMANTE",
                 "silentSeconds": null,
                 "byUser": false
@@ -108,8 +156,8 @@
                 "id": 26,
                 "type": "DEVICE_SEEN",
                 "label": "Appareil vu pour la première fois",
-                "at": "2026-11-16T11:15:45+00:00",
-                "atLabel": "16/11/2026 06 h 15",
+                "at": "2026-11-16T14:50:21+00:00",
+                "atLabel": "16/11/2026 09 h 50",
                 "device": "SIM-TAPIS",
                 "silentSeconds": null,
                 "byUser": false
@@ -118,8 +166,8 @@
                 "id": 25,
                 "type": "DEVICE_SEEN",
                 "label": "Appareil vu pour la première fois",
-                "at": "2026-11-16T11:15:45+00:00",
-                "atLabel": "16/11/2026 06 h 15",
+                "at": "2026-11-16T14:50:21+00:00",
+                "atLabel": "16/11/2026 09 h 50",
                 "device": "SIM-LECTEUR-MAIN",
                 "silentSeconds": null,
                 "byUser": false
@@ -128,8 +176,8 @@
                 "id": 24,
                 "type": "DEVICE_SEEN",
                 "label": "Appareil vu pour la première fois",
-                "at": "2026-11-16T11:15:45+00:00",
-                "atLabel": "16/11/2026 06 h 15",
+                "at": "2026-11-16T14:50:21+00:00",
+                "atLabel": "16/11/2026 09 h 50",
                 "device": "SIM-LECTEUR-SORTIE",
                 "silentSeconds": null,
                 "byUser": false
@@ -138,8 +186,8 @@
                 "id": 23,
                 "type": "BOX_ENROLLED",
                 "label": "Machine inscrite",
-                "at": "2026-11-16T11:15:45+00:00",
-                "atLabel": "16/11/2026 06 h 15",
+                "at": "2026-11-16T14:50:21+00:00",
+                "atLabel": "16/11/2026 09 h 50",
                 "device": null,
                 "silentSeconds": null,
                 "byUser": false
@@ -148,8 +196,8 @@
                 "id": 22,
                 "type": "BOX_CREATED",
                 "label": "Boîtier ajouté",
-                "at": "2026-11-16T11:15:45+00:00",
-                "atLabel": "16/11/2026 06 h 15",
+                "at": "2026-11-16T14:50:21+00:00",
+                "atLabel": "16/11/2026 09 h 50",
                 "device": null,
                 "silentSeconds": null,
                 "byUser": true

@@ -203,7 +203,7 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $enrolled = $this->json($enrol($good));
         $this->assertSame(['box', 'token', 'expiresAt', 'serverTime', 'settings'], array_keys($enrolled));
         $this->assertSame(['id' => $id], $enrolled['box'], 'le boîtier ne reçoit même pas son nom');
-        $this->assertSame(['heartbeatSeconds' => 60, 'silentAfterSeconds' => 300, 'facts' => ['types' => ['SPOT_CHECK', 'ZONE_SEEN', 'COUNTER_SEEN', 'COUNTER_LEFT', 'TAG_WRITTEN', 'TAG_WRITE_FAILED'], 'maxBatch' => 200], 'zones' => ['stockroom', 'stockroom_door', 'floor', 'counter', 'exit'], 'devices' => []], $enrolled['settings']);
+        $this->assertSame(['heartbeatSeconds' => 60, 'silentAfterSeconds' => 300, 'facts' => ['types' => ['SPOT_CHECK', 'ZONE_SEEN', 'COUNTER_SEEN', 'COUNTER_LEFT', 'ZONE_LEFT', 'TAG_WRITTEN', 'TAG_WRITE_FAILED'], 'maxBatch' => 200], 'zones' => ['stockroom', 'stockroom_door', 'floor', 'counter', 'exit'], 'zonePresence' => ['arriveSeconds' => 3, 'leaveSeconds' => 30], 'devices' => []], $enrolled['settings']);
         $token = $enrolled['token'];
         $this->assertMatchesRegularExpression('/\Ab' . $id . '\.2\.\d{10}\.[0-9a-f]{64}\z/', $token);
         $this->assertEqualsWithDelta(time() + 86400, strtotime($enrolled['expiresAt']), 5);
@@ -257,7 +257,7 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         }
         // Ses réglages : ce qu'il a le droit de savoir, et rien d'autre
         $settings = $this->json($this->box('GET', '/reglages', null, $token));
-        $this->assertSame(['box', 'serverTime', 'heartbeatSeconds', 'silentAfterSeconds', 'facts', 'zones', 'devices'], array_keys($settings));
+        $this->assertSame(['box', 'serverTime', 'heartbeatSeconds', 'silentAfterSeconds', 'facts', 'zones', 'zonePresence', 'devices'], array_keys($settings));
         $this->assertSame(['id' => $id], $settings['box']);
 
         // ----- Signe de vie
@@ -650,7 +650,7 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $realBefore = array_map('intval', $this->db->fetchNumeric('SELECT (SELECT COUNT(*) FROM loss_box WHERE NOT exercise), (SELECT COUNT(*) FROM loss_box_event WHERE NOT exercise), (SELECT COUNT(*) FROM loss_piece_event WHERE NOT exercise)'));
         $real = $this->json($this->admin('POST', self::BOXES, ['name' => "Réel $this->s"]), 201)['box']['id'];
         $start = $this->json($this->admin('GET', self::EX . '/boitiers'));
-        $this->assertSame([[], 0, 3, true, 'pertes.boitiers', ['heartbeat', 'network_cut', 'device_down', 'device_up', 'spot_check', 'zone_exit', 'counter_put', 'counter_take', 'print_ok', 'print_refused', 'print_no_labels']],
+        $this->assertSame([[], 0, 3, true, 'pertes.boitiers', ['heartbeat', 'network_cut', 'device_down', 'device_up', 'spot_check', 'zone_exit', 'counter_put', 'counter_take', 'print_ok', 'print_refused', 'print_no_labels', 'zone_move']],
             [$start['items'], $start['total'], $start['limit'], $start['exercise'], $start['screen'], array_column($start['scenarios'], 'code')]);
         $this->assertSame(['code' => 'network_cut', 'label' => 'Coupure du réseau', 'text' => 'Le boîtier revient après deux heures sans réseau : un fait dit le trou.'], $start['scenarios'][1]);
         $install = fn (bool $exercise): array => array_intersect_key(array_column($this->json($this->admin('GET', $exercise ? self::EX . '/installation' : self::BASE . '/installation'))['optionalSteps'], 'status', 'code'), ['box' => 0]);
@@ -663,7 +663,8 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $this->assertSame(['Boîtier simulé', 'Exercice', 'active', true, 'En ligne', null, true, ['BOX_CREATED', 'BOX_ENROLLED', 'DEVICE_SEEN', 'DEVICE_SEEN'], 0],
             [$box['name'], $box['place'], $box['status'], $box['online'], $box['onlineLabel'], $box['keyHint'], $box['exercise'], array_slice(array_reverse(array_column($box['events'], 'type')), 0, 4), $box['factsReceived']]);
         $this->assertSame([['SIM-LECTEUR-SORTIE', 'reader', 'ok', 'exit', 'Sortie'], ['SIM-LECTEUR-MAIN', 'reader', 'ok', null, null], ['SIM-TAPIS', 'counter_mat', 'ok', null, null],
-            ['SIM-IMPRIMANTE', 'printer', 'ok', null, null]], // l'imprimante à puce simulée (lot L3-c)
+            ['SIM-IMPRIMANTE', 'printer', 'ok', null, null], // l'imprimante à puce simulée (lot L3-c)
+            ['SIM-ANTENNE-RESERVE', 'reader', 'ok', 'stockroom', 'Réserve'], ['SIM-ANTENNE-RAYON', 'reader', 'ok', 'floor', 'Rayon']], // les antennes de zone simulées (lot L4-a)
             array_map(fn (array $d): array => [$d['serial'], $d['kind'], $d['status'], $d['zone'], $d['zoneLabel']], $box['devices']));
         $this->assertSame([null, null, true], array_values($this->db->fetchNumeric('SELECT key_hash, machine_hash, exercise FROM loss_box WHERE id = ?', [$id])), 'ni clé ni machine : personne ne s\'y inscrit');
         // l'assistant d'exercice voit le boîtier simulé ; l'assistant réel, non (son boîtier attend encore sa machine)
@@ -898,8 +899,9 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $this->assertSame([['absent'], true, false, 'Aucun appareil installé', 'Aucun boîtier simulé. Créez-en un pour voir le tableau vivre, sans aucun matériel.'],
             [array_column(($none = $exercise())['devices'], 'state'), $none['exercise'], $none['summary']['allOk'], $none['summary']['label'], $none['devices'][0]['hint']]);
         $simulated = $this->json($this->admin('POST', self::EX . '/boitiers'), 201)['box']['id'];
-        // le boîtier simulé a son tapis simulé (lot L3-b1) et son imprimante à puce simulée (lot L3-c), qui n'ont encore rien lu ni écrit : deux lignes de plus, en attente
-        $this->assertSame(["box-$simulated", ['box', 'mat', 'printer'], ['ok', 'pending', 'pending'], false], [($sim = $exercise())['devices'][0]['code'], array_column($sim['devices'], 'kind'), array_column($sim['devices'], 'state'), $sim['summary']['allOk']]);
+        // le boîtier simulé a son tapis simulé (lot L3-b1), son imprimante à puce simulée (lot L3-c) et trois antennes de zone (le lecteur
+        // de la sortie, la réserve et le rayon : lot L4-a), qui n'ont encore rien lu ni écrit : cinq lignes de plus, en attente
+        $this->assertSame(["box-$simulated", ['box', 'mat', 'printer', 'zone_reader', 'zone_reader', 'zone_reader'], ['ok', 'pending', 'pending', 'pending', 'pending', 'pending'], false], [($sim = $exercise())['devices'][0]['code'], array_column($sim['devices'], 'kind'), array_column($sim['devices'], 'state'), $sim['summary']['allOk']]);
         $this->assertNotContains("box-$simulated", array_column($board()['devices'], 'code'));
         $this->db->executeStatement("UPDATE loss_box SET last_seen_at = NOW() AT TIME ZONE 'UTC' - INTERVAL '630 seconds' WHERE id = ?", [$simulated]);
         $this->assertSame(['down', 'Silencieux depuis 10 min. Jouez le scénario « Signe de vie » pour le faire revenir.'], [($silent = $exercise()['devices'][0])['state'], $silent['hint']]);
