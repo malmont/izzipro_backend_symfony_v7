@@ -67,7 +67,7 @@ class LoginAuthenticator extends AbstractLoginFormAuthenticator
             new UserBadge($email, function (string $userIdentifier) {
                 // Si besoin de multi-tenant ici aussi, on peut initialiser
                 $em = $this->tenantEmProvider->getEntityManager();
-                $user = $em->getRepository(User::class)->findOneBy(['email' => $userIdentifier]);
+                $user = $em->getRepository(User::class)->findOneByEmailCaseless($userIdentifier);
                 if (!$user) {
                     throw new CustomUserMessageAuthenticationException('Identifiant ou mot de passe incorrect.');
                 }
@@ -91,7 +91,7 @@ class LoginAuthenticator extends AbstractLoginFormAuthenticator
         $session->remove(PlatformAccessSubscriber::SESSION_KEY);
 
         // 1) Si OTP activé et non validé en session -> générer + rediriger vers le formulaire OTP
-        if ($this->twoFactor->required($user) && !$session->get('otp_validated')) {
+        if ($this->twoFactor->required($user) && !OtpSession::validated($session, $user)) { // lot SÉCURITÉ-2 : la validation de CE compte
             $this->otpService->generateAndSendOtp($user, $request);
             $session->set('pending_otp_user', $user->getId());
             $session->remove('otp_validated');

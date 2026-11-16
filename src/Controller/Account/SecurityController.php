@@ -124,7 +124,7 @@ class SecurityController extends AbstractController
         }
 
         $em = $this->tenantEmProvider->getEntityManager();
-        $user = $em->getRepository(User::class)->findOneBy(['email' => $username]); // Assuming username is email in this app logic
+        $user = $em->getRepository(User::class)->findOneByEmailCaseless($username); // Assuming username is email in this app logic
 
         if (!$user instanceof UserInterface) {
             return $this->json(['error' => 'User not found', 'code' => 'USER_NOT_FOUND', 'message' => 'User not found'], Response::HTTP_UNAUTHORIZED);
@@ -256,7 +256,7 @@ class SecurityController extends AbstractController
                 // Terminal de caisse identifié (en-tête X-Pos-Terminal) : déconnexion journalisée (C2)
                 if ($this->posTerminals?->current() !== null) {
                     try {
-                        $posUser = $this->tenantEmProvider->getEntityManager()->getRepository(User::class)->findOneBy(['email' => $stored->getUsername()]);
+                        $posUser = $this->tenantEmProvider->getEntityManager()->getRepository(User::class)->findOneByEmailCaseless($stored->getUsername());
                         $this->posAudit?->record(\App\Services\PosAuditService\PosAuditService::LOGOUT, ['email' => $stored->getUsername()], null, null, 'user', $posUser?->getId(), $posUser);
                     } catch (\Throwable) {
                         // journal indisponible : la déconnexion n'en dépend pas

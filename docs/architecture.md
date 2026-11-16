@@ -270,6 +270,18 @@ son code à usage unique (envoyé par le serveur d'envoi du site, qu'il règle l
   Un lien expiré ne se renouvelle pas : le compte se supprime et s'invite de nouveau.
 - Essais : `SecretsNeverShownTest` (recherche, tri, compte de la plateforme, code à usage unique), `ResetLinkOnEmailChangeTest`,
   `ActivationLinkTest`.
+- **Lot SÉCURITÉ-2 (étape 90, préalable à l'entrée des agences)** :
+  - **Une adresse, un compte, à la casse près** : index unique `uniq_user_email_lower` sur `lower(email)` de chaque base (l'ancien
+    index reste ; aucune adresse n'est réécrite). La connexion (web, API, EasyAdmin), le mot de passe oublié, les invitations (console
+    de Mémoires Vivantes, agence ou plateforme, assistance), l'inscription et les contrôles d'unicité retrouvent le compte quelle que
+    soit la casse saisie (`UserRepository::findOneByEmailCaseless`).
+  - **Code à usage unique d'EasyAdmin** : sa validation est liée au compte qui l'a saisi (`App\Security\OtpSession` : un autre compte
+    dans la même session doit saisir le sien ; le compte de la plateforme garde sa validation d'un site à l'autre) ; la page
+    `/account/otp` limite les essais comme l'API (5 par 10 minutes et par compte), puis efface les codes en attente. Une session
+    ouverte avant ce lot redemande le code une fois.
+  - **Pages de la plateforme** : `^/admin/plateforme` exige `ROLE_SUPER_ADMIN` dans `access_control`, en plus des contrôleurs.
+  - **Avis « adresse changée » du compte de la plateforme** : par le serveur de la plateforme, comme son code.
+  - Essais : `CaselessEmailTest`, `OtpSessionTest`.
 - **À la bascule de ce train** (étape 89) : tous les liens de réinitialisation en attente ont été invalidés sur tous les sites, ainsi
   que les jetons d'activation qui ne venaient pas d'une invitation de la console ; les invitations de la console en attente ont reçu
   une échéance de 7 jours.

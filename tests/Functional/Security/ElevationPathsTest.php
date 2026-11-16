@@ -101,6 +101,27 @@ class ElevationPathsTest extends WebTestCase
     {
         $service = static::getContainer()->get(SuperAdminAccountService::class);
         $owner = "elevation-proprio-{$this->tag}@example.invalid";
+        // Lot SÉCURITÉ-2 : deux comptes de même adresse à la casse près ne peuvent plus exister (index unique sur l'adresse en minuscules)
+        $this->insert($owner, '["ROLE_ADMIN","ROLE_SUPER_ADMIN"]', 'empreinte-proprietaire');
+        try {
+            $this->insert(ucfirst($owner), '["ROLE_USER_INTERNET"]', 'empreinte-client');
+            $this->fail('un second compte de même adresse à la casse près a été accepté');
+        } catch (\Doctrine\DBAL\Exception\UniqueConstraintViolationException) {
+            $this->addToAssertionCount(1);
+        }
+        $this->db->executeStatement('DELETE FROM "user" WHERE lower(email) = lower(?)', [$owner]);
+        // … et la garde d'« Appliquer » reste en défense, pour une base qui n'aurait pas encore l'index : retiré le temps de l'essai
+        $this->db->executeStatement('DROP INDEX IF EXISTS uniq_user_email_lower');
+        try {
+            $this->applyWithoutIndex($service, $owner);
+        } finally {
+            $this->db->executeStatement('DELETE FROM "user" WHERE lower(email) LIKE ?', ['elevation-%@example.invalid']);
+            $this->db->executeStatement('CREATE UNIQUE INDEX IF NOT EXISTS uniq_user_email_lower ON "user" (lower(email))');
+        }
+    }
+
+    private function applyWithoutIndex(SuperAdminAccountService $service, string $owner): void
+    {
         // sur le site d'essai : le vrai compte de la plateforme, et un client qui a pris son adresse à une majuscule près
         $this->insert($owner, '["ROLE_ADMIN","ROLE_SUPER_ADMIN"]', 'empreinte-proprietaire');
         $this->insert(ucfirst($owner), '["ROLE_USER_INTERNET"]', 'empreinte-client');

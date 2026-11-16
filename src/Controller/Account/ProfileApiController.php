@@ -91,7 +91,7 @@ class ProfileApiController extends BaseTenantApiController
             $user->setLastname($data['lastName']);
         }
         if ($emailChanges) {
-            $existingUser = $em->getRepository(User::class)->findOneBy(['email' => $requestedEmail]);
+            $existingUser = $em->getRepository(User::class)->findOneByEmailCaseless($requestedEmail);
             if ($existingUser && $existingUser->getId() !== $user->getId()) {
                 return $this->json(['error' => 'Email already in use', 'code' => 'EMAIL_ALREADY_USED', 'message' => 'Email already in use'], Response::HTTP_CONFLICT);
             }

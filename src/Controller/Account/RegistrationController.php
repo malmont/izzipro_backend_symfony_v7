@@ -157,7 +157,7 @@ class RegistrationController extends AbstractController
             $em->clear();
         }
         // Vérification doublon
-        $existingUser = $em->getRepository(User::class)->findOneBy(['email' => $email]);
+        $existingUser = $em->getRepository(User::class)->findOneByEmailCaseless($email);
         if ($existingUser) {
             return $this->json(['error' => 'User already exists', 'code' => 'EMAIL_ALREADY_USED', 'message' => 'User already exists'], Response::HTTP_CONFLICT);
         }
@@ -349,7 +349,7 @@ class RegistrationController extends AbstractController
         // exactement la même réponse 200 qu'un envoi, sans courriel, pour ne pas révéler si un compte existe (avant : 404
         // USER_NOT_FOUND et 400 ACCOUNT_ALREADY_VERIFIED). Limites par site et courriel, et par site et IP : rate_limiter.yaml.
         /** @var User|null $user */
-        $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
+        $user = $em->getRepository(User::class)->findOneByEmailCaseless($email);
 
         // lot IMP-2 : un invité par import n'a pas de lien de vérification, seulement son invitation : même réponse neutre, aucun courriel
         if (!$user || $user->isVerified() || $this->importGuests?->isPending($user)) {

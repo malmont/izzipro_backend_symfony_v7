@@ -103,6 +103,9 @@ security:
         # Compte super administrateur sur toutes les bases et vidage du cache Redis partagé par tous les sites (03/11/2026)
         - { path: ^/admin/super-admin, roles: ROLE_SUPER_ADMIN }
         - { path: ^/admin/redis, roles: ROLE_SUPER_ADMIN }
+        # Lot SÉCURITÉ-2 (16/11/2026) : les pages de la plateforme (pilotage, agences, sites) étaient gardées par leurs seuls
+        # contrôleurs ; la règle couvre aussi une action future qui oublierait sa garde
+        - { path: ^/admin/plateforme, roles: ROLE_SUPER_ADMIN }
         - { path: ^/admin, roles: ROLE_ADMIN }
         - { path: ^/(account|adress|checkout), roles: [ROLE_USER_INTERNET, ROLE_USER_POS,ROLE_ADMIN] }
         - { path: ^/api/boussole/auth/(register|login), roles: PUBLIC_ACCESS }

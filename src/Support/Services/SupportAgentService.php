@@ -79,7 +79,7 @@ class SupportAgentService
             throw SupportException::validation($errors);
         }
         $em = $this->emProvider->getEntityManager();
-        if ($em->getRepository(User::class)->findOneBy(['email' => $email]) !== null) {
+        if ($em->getRepository(User::class)->findOneByEmailCaseless($email) !== null) {
             // un compte existant n'est jamais transformé en agent : l'agent d'assistance est un compte à part, sans autre rôle
             throw new SupportException('ACCOUNT_EXISTS', 'Un compte existe déjà avec cette adresse : un agent d\'assistance est un compte à part.', 409);
         }

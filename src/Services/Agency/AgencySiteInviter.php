@@ -51,7 +51,7 @@ class AgencySiteInviter
     public function invite(string $email, string $firstName, string $lastName, ?string $locale, ?string $agencyName, ?string $replyTo = null): array
     {
         $em = $this->emProvider->getEntityManager();
-        if ($em->getRepository(User::class)->findOneBy(['email' => $email]) !== null) {
+        if ($em->getRepository(User::class)->findOneByEmailCaseless($email) !== null) {
             return ['sent' => false, 'reason' => 'ACCOUNT_EXISTS', 'expiresAt' => null];
         }
         $user = (new User())->setEmail($email)->setUsername($email)->setFirstname($firstName)->setLastname($lastName)
@@ -72,7 +72,7 @@ class AgencySiteInviter
      */
     public function resend(string $email, string $firstName, string $lastName, ?string $locale, ?string $agencyName, ?string $replyTo = null): array
     {
-        $user = $this->emProvider->getEntityManager()->getRepository(User::class)->findOneBy(['email' => $email]);
+        $user = $this->emProvider->getEntityManager()->getRepository(User::class)->findOneByEmailCaseless($email);
         if (!$user instanceof User) {
             return $this->invite($email, $firstName, $lastName, $locale, $agencyName, $replyTo);
         }
@@ -93,7 +93,7 @@ class AgencySiteInviter
     public function withdraw(string $email): bool
     {
         $em = $this->emProvider->getEntityManager();
-        $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
+        $user = $em->getRepository(User::class)->findOneByEmailCaseless($email);
         if (!$user instanceof User || $user->getSignupChannel() !== User::SIGNUP_ADMIN_INVITE || $user->isVerified()) {
             return false;
         }

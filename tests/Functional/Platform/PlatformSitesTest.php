@@ -292,21 +292,24 @@ class PlatformSitesTest extends WebTestCase
         $this->assertSame(0, $this->sites()->sweep()['managers']);
         $this->assertStringNotContainsString('ROLE_AGENCY', $rolesOf($invited));
         $lateSite->exec("UPDATE \"user\" SET is_verified = false WHERE id = $invited");
-        // un JUMEAU plus ancien porte la même adresse à la casse près : le rôle va au compte qui a accepté, jamais au jumeau
-        $twin = (int) $lateSite->query('SELECT MIN(id) - 1 FROM "user"')->fetchColumn();
-        $lateSite->exec("INSERT INTO \"user\" (id, email, username, firstname, lastname, roles, password, is_verified, signup_channel, created_at) VALUES ($twin, 'TARD-{$this->tag}@Example.invalid', 'jumeau-{$this->tag}', 'Jumeau', 'Ancien', '[\"ROLE_ADMIN\"]', 'inutilisable', true, 'web_register', NOW())");
+        // un JUMEAU de même adresse à la casse près ne peut pas exister (lot SÉCURITÉ-2 : index unique sur l'adresse en minuscules) :
+        // le rôle ne peut aller qu'au compte qui a accepté
+        try {
+            $lateSite->exec("INSERT INTO \"user\" (id, email, username, firstname, lastname, roles, password, is_verified, signup_channel, created_at) VALUES (nextval('user_id_seq'), 'TARD-{$this->tag}@Example.invalid', 'jumeau-{$this->tag}', 'Jumeau', 'Ancien', '[\"ROLE_ADMIN\"]', 'inutilisable', true, 'web_register', NOW())");
+            $this->fail('un second compte de même adresse à la casse près a été accepté');
+        } catch (\PDOException $e) {
+            $this->assertSame('23505', $e->getCode(), 'refusé par l\'index unique');
+        }
         $lateToken = (string) $lateSite->query("SELECT reset_token FROM \"user\" WHERE id = $invited")->fetchColumn();
         $this->assertSame(200, $this->api('POST', '/api/password-reset/confirm', ['token' => $lateToken, 'password' => self::PASSWORD], null, $lateHost)->getStatusCode());
         $this->assertSame(['done', (string) $invited], [$state($fifth)['manager'], $state($fifth)['accepted']], 'le compte qui a accepté est noté par son identifiant');
         $this->assertStringContainsString('"ROLE_AGENCY"', $rolesOf($invited));
-        $this->assertStringNotContainsString('ROLE_AGENCY', $rolesOf($twin), 'le jumeau, plus ancien, ne reçoit rien');
         // RATTRAPAGE : une acceptation notée dont le rôle n'a pas pu être donné sur le moment est servie par le passage suivant
         $lateSite->exec("UPDATE \"user\" SET roles = '[\"ROLE_ADMIN\"]' WHERE id = $invited");
         $this->master->exec("UPDATE platform_site_requests SET steps = jsonb_set(steps, '{manager}', '\"waiting\"') WHERE id = $fifth");
         $this->assertSame(1, $this->sites()->sweep()['managers']);
         $this->assertSame('done', $state($fifth)['manager']);
         $this->assertStringContainsString('"ROLE_AGENCY"', $rolesOf($invited));
-        $this->assertStringNotContainsString('ROLE_AGENCY', $rolesOf($twin));
         $this->assertSame(0, $this->sites()->sweep()['managers'], 'un rôle donné ne se redonne pas');
 
         // PASSAGE HORAIRE : une demande restée « en cours » est celle d'un worker tombé ; elle redevient visible
@@ -386,7 +389,6 @@ class PlatformSitesTest extends WebTestCase
         $this->assertCount(0, self::getMailerMessages());
         $this->assertSame(['ready', null, null, 'done', 'done', 'done', (string) $invited], array_values($state($fifth)));
         $this->assertStringContainsString('"ROLE_AGENCY"', $rolesOf($invited));
-        $this->assertStringNotContainsString('ROLE_AGENCY', $rolesOf($twin));
         // « Ne plus attendre » : sur une demande faite dont le rôle attend, le rôle ne sera plus donné par elle ; rien d'autre ne change
         $lateSite->exec("UPDATE \"user\" SET roles = '[\"ROLE_ADMIN\"]' WHERE id = $invited");
         $this->master->exec("UPDATE platform_site_requests SET steps = jsonb_set(steps, '{manager}', '\"waiting\"'), result = result - 'acceptedUserId' WHERE id = $fifth");

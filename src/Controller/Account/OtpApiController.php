@@ -46,7 +46,7 @@ class OtpApiController extends AbstractController
             return AuthenticationService::invalidPlatformResponse();
         }
         $em = $this->emProvider->getEntityManager();
-        $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
+        $user = $em->getRepository(User::class)->findOneByEmailCaseless($email);
         if (!$user instanceof UserInterface) {
             // Courriel inconnu : même réponse que pour un code faux (B16, 04/11/2026), pour ne pas révéler si un compte existe
             // (avant : 401 UNAUTHORIZED) ; audité comme un code faux

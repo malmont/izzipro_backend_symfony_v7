@@ -48,7 +48,7 @@ final class OptionalCustomerResolver
 
             return $user instanceof User && ($user->getEmail() === $identifier || $user->getUsername() === $identifier) ? self::customer($user) : null;
         }
-        $user = $em->getRepository(User::class)->findOneBy(['email' => $identifier]);
+        $user = $em->getRepository(User::class)->findOneByEmailCaseless($identifier);
 
         return $user instanceof User ? self::customer($user) : null;
     }

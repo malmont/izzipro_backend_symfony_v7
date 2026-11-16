@@ -50,7 +50,7 @@ class BoussoleTeamGrantCommand extends Command
             return Command::FAILURE;
         }
         $this->emProvider->switchTenant((string) $tenant['dbname'], $code);
-        $user = $this->emProvider->getEntityManager()->getRepository(User::class)->findOneBy(['email' => trim((string) $input->getArgument('email'))]);
+        $user = $this->emProvider->getEntityManager()->getRepository(User::class)->findOneByEmailCaseless(trim((string) $input->getArgument('email')));
         if ($user === null) {
             $io->error('Aucun compte avec cette adresse sur ce site.');
 

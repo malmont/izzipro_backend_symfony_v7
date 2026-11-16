@@ -98,7 +98,7 @@ class ResetPasswordController extends AbstractController
 
         // 3. Recherche User
         $em = $this->tenantEmProvider->getEntityManager();
-        $user = $em->getRepository(User::class)->findOneBy(['email' => $emailInput]);
+        $user = $em->getRepository(User::class)->findOneByEmailCaseless($emailInput);
         $user = $this->notImportGuest($user); // lot IMP-2 : un invité par import n'obtient un mot de passe que par son invitation
 
         if (!$user) {

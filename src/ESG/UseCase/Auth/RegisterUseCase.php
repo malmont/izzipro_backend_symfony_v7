@@ -30,7 +30,7 @@ class RegisterUseCase
         // 1. Check if email already exists
         // Défense en profondeur : un e-mail déjà utilisé par un utilisateur classique (admin compris) est refusé
         $existingUser = $em->getRepository(EsgUser::class)->findOneBy(['email' => $dto->email])
-            ?? $em->getRepository(\App\Entity\User::class)->findOneBy(['email' => $dto->email]);
+            ?? $em->getRepository(\App\Entity\User::class)->findOneByEmailCaseless($dto->email);
         if ($existingUser) {
             throw new EmailUnavailableException(); // 409 EMAIL_UNAVAILABLE, même réponse pour les deux cas
         }

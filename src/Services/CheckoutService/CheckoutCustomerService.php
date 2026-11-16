@@ -83,7 +83,7 @@ final class CheckoutCustomerService
         }
 
         $em = $this->emProvider->getEntityManager();
-        $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
+        $user = $em->getRepository(User::class)->findOneByEmailCaseless($email);
         // Requête non authentifiée : un compte existant reçoit la commande mais son profil n'est jamais modifié
         $isNewUser = $user === null;
         if ($isNewUser) {

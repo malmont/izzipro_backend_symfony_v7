@@ -114,6 +114,16 @@ final class EmailChangeGuard
         $context = ['oldEmail' => $oldEmail, 'newEmail' => self::mask($newEmail), 'firstname' => $user->getFirstname(), 'changedAt' => new \DateTimeImmutable(), 'method' => $method];
         $sent = false;
         try {
+            // Lot SÉCURITÉ-2 : l'avis du COMPTE DE LA PLATEFORME part par le serveur de la plateforme, jamais par celui du site (que
+            // l'administrateur du site règle lui-même) : comme son code de connexion
+            if (\App\Services\Platform\PlatformAccessJournal::isPlatformAccount($user->getRoles())) {
+                $language = $request->query->get('locale') === 'en' ? 'en' : 'fr';
+                $sent = $this->mailer->sendPlatformEmail($oldEmail, $this->mailer->subject('email_changed.subject', [], $language), 'emails/email_changed_notice.html.twig',
+                    $context + ['locale' => $language, 'intlLocale' => $language]);
+                $this->securityLogger->info('profile.email_changed', ['userId' => $user->getId(), 'from' => $oldEmail, 'to' => $newEmail, 'method' => $method, 'noticeSent' => $sent, 'ip' => $request->getClientIp()]);
+
+                return;
+            }
             // Langue du client (03/11/2026) : `?locale=` fr ou en, sinon celle du site ; repli par le serveur de la plateforme
             $sent = $this->mailer->sendCustomerEmail($oldEmail, 'email_changed.subject', [], 'emails/email_changed_notice.html.twig', $context, $request->query->get('locale'), $request->getSchemeAndHttpHost(), 'email_changed.subject');
         } catch (\Throwable $e) {

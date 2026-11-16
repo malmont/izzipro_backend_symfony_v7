@@ -26,7 +26,9 @@ class OtpController extends AbstractController
         TenantEntityManagerProvider $tenantEmProvider, 
         RequestStack $requestStack, 
         UrlGeneratorInterface $urlGenerator,
-        ?\App\Services\MediaUrlResolver $mediaUrlResolver = null
+        ?\App\Services\MediaUrlResolver $mediaUrlResolver = null,
+        // Lot SÉCURITÉ-2 : la même limite que la vérification du code par l'API (5 essais par 10 minutes et par compte)
+        #[\Symfony\Component\DependencyInjection\Attribute\Autowire(service: 'limiter.otp_verify_account')] private readonly ?\Symfony\Component\RateLimiter\RateLimiterFactory $attempts = null,
     ) {
         $this->tenantEmProvider = $tenantEmProvider;
         $this->session = $requestStack->getSession();
@@ -52,7 +54,17 @@ class OtpController extends AbstractController
                 $error = 'Jeton CSRF invalide.';
             } else {
                 $otp = trim((string) $request->request->get('otp', ''));
-                if (strlen($otp) < 4 || strlen($otp) > 10 || !preg_match('/^[0-9A-Za-z]+$/', $otp)) {
+                // Lot SÉCURITÉ-2 : un code de 6 chiffres valable 5 minutes se devine sans limite. Chaque essai compte, par compte ;
+                // au-delà, refus jusqu'à la fin de la fenêtre, et les codes en attente de ce compte sont effacés (il en redemande un).
+                $limit = $this->attempts?->create('easyadmin|' . $pendingUserId)->consume(1);
+                if ($limit !== null && !$limit->isAccepted()) {
+                    $user = $em->getRepository(User::class)->find($pendingUserId);
+                    foreach ($user !== null ? $em->getRepository(OtpCode::class)->findBy(['userOtp' => $user, 'purpose' => OtpCode::PURPOSE_LOGIN]) : [] as $pending) {
+                        $em->remove($pending);
+                    }
+                    $em->flush();
+                    $error = 'Trop d\'essais : reconnectez-vous dans quelques minutes pour recevoir un nouveau code.';
+                } elseif (strlen($otp) < 4 || strlen($otp) > 10 || !preg_match('/^[0-9A-Za-z]+$/', $otp)) {
                     $error = 'Format de code OTP invalide.';
                 } else {
                     // Récupérer l'utilisateur et son code OTP
@@ -73,7 +85,7 @@ class OtpController extends AbstractController
                         // Le code est correct : on supprime l'OTP et on marque la session comme validée
                         $em->remove($otpCode);
                         $em->flush();
-                        $this->session->set('otp_validated', true);
+                        \App\Security\OtpSession::markValidated($this->session, $user); // lot SÉCURITÉ-2 : liée à CE compte
                         $this->session->remove('pending_otp_user');
                         // Lot AG-2 : une nouvelle entrée ; le compte de la plateforme sera tracé à sa première page de chaque site (PlatformAccessSubscriber)
                         $this->session->remove(\App\Security\PlatformAccessSubscriber::SESSION_KEY);

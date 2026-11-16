@@ -164,7 +164,7 @@ class AuthenticationService
 
         $em = $this->emProvider->getEntityManager();
 
-        $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
+        $user = $em->getRepository(User::class)->findOneByEmailCaseless($email);
 
         if (!$user instanceof User || $user->isDeleted() || !$this->passwordHasher->isPasswordValid($user, $password)) {
             $this->auditPos($platform, null, $email, 'invalid_credentials');

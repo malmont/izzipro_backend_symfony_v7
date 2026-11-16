@@ -171,7 +171,7 @@ class UserManagementController extends AbstractController
         $userRepo = $em->getRepository(User::class);
 
         // Vérifier l'unicité de l'email
-        $existing = $userRepo->findOneBy(['email' => $email]);
+        $existing = $userRepo->findOneByEmailCaseless($email);
         if ($existing) {
             return $this->json(['error' => 'Un compte existe déjà avec cette adresse email.'], Response::HTTP_CONFLICT);
         }
@@ -321,7 +321,7 @@ class UserManagementController extends AbstractController
                 return $this->json(['error' => 'Format d\'email invalide.'], Response::HTTP_BAD_REQUEST);
             }
             if ($newEmail !== $targetUser->getEmail()) {
-                $conflict = $userRepo->findOneBy(['email' => $newEmail]);
+                $conflict = $userRepo->findOneByEmailCaseless($newEmail);
                 if ($conflict && $conflict->getId() !== $targetUser->getId()) {
                     return $this->json(['error' => 'Cette adresse email est déjà utilisée par un autre compte.'], Response::HTTP_CONFLICT);
                 }

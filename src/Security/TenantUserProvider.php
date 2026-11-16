@@ -36,7 +36,7 @@ class TenantUserProvider implements UserProviderInterface, \Lexik\Bundle\JWTAuth
             $user = $em->getRepository(EsgUser::class)->findOneBy(['email' => substr($identifier, strlen(EsgUser::IDENTIFIER_PREFIX))]);
         } else {
             // Utilisateurs classiques ; repli ESG pour les jetons émis avant le préfixe (e-mail seul)
-            $user = $em->getRepository(User::class)->findOneBy(['email' => $identifier])
+            $user = $em->getRepository(User::class)->findOneByEmailCaseless($identifier)
                  ?? $em->getRepository(User::class)->findOneBy(['username' => $identifier])
                  ?? $em->getRepository(EsgUser::class)->findOneBy(['email' => $identifier]);
         }

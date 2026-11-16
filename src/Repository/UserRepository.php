@@ -21,6 +21,22 @@ class UserRepository extends EntityRepository implements PasswordUpgraderInterfa
 
 
     /**
+     * Le compte d'une adresse, QUELLE QUE SOIT SA CASSE (et ses espaces de bord) : « Paul@Exemple.ca » trouve « paul@exemple.ca ».
+     * Lot SÉCURITÉ-2 (16/11/2026) : une adresse ne désigne qu'un compte, à la casse près (index unique sur l'adresse en minuscules) ;
+     * la connexion, le mot de passe oublié, les invitations et les contrôles d'unicité cherchent ainsi. Rien n'est réécrit dans les
+     * adresses gardées : on compare seulement en minuscules. S'il restait deux lignes (base pas encore migrée), la plus ancienne.
+     */
+    public function findOneByEmailCaseless(mixed $email): ?User
+    {
+        if (!is_string($email) || trim($email) === '') {
+            return null;
+        }
+
+        return $this->createQueryBuilder('u')->where('LOWER(u.email) = :email')->setParameter('email', mb_strtolower(trim($email)))
+            ->orderBy('u.id', 'ASC')->setMaxResults(1)->getQuery()->getOneOrNullResult();
+    }
+
+    /**
      * Comptes portant un rôle (colonne JSON lue en texte), par nom puis prénom ; rôles d'équipe (13/11/2026).
      *
      * @return list<User>

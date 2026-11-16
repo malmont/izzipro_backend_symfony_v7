@@ -46,7 +46,7 @@ final class PendingOtpSubscriber implements EventSubscriberInterface
             return;
         }
         $session = $request->getSession();
-        if ($session->get('otp_validated')) {
+        if (\App\Security\OtpSession::validated($session, $user)) { // lot SÉCURITÉ-2 : la validation de CE compte
             return;
         }
         $session->set('pending_otp_user', $user->getId());
