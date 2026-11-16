@@ -16,7 +16,9 @@ class ImportJobStore
     public const KIND_CATALOG = 'catalog';
     /** Lot IMP-2 : le fichier des clients (comptes invités, `CustomerImportService`) */
     public const KIND_CUSTOMERS = 'customers';
-    public const KINDS = [self::KIND_CATALOG, self::KIND_CUSTOMERS];
+    /** Lot IMP-3 : le fichier des commandes (archive à part, `OrderImportService`) */
+    public const KIND_ORDERS = 'orders';
+    public const KINDS = [self::KIND_CATALOG, self::KIND_CUSTOMERS, self::KIND_ORDERS];
     public const UPLOADED = 'uploaded';
     public const ANALYSED = 'analysed';
     public const RUNNING = 'running';

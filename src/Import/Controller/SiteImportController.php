@@ -6,6 +6,8 @@ use App\Import\CatalogImportService;
 use App\Import\CustomerImportService;
 use App\Import\ImportException;
 use App\Import\ImportJobStore;
+use App\Import\OrderArchive;
+use App\Import\OrderImportService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -19,7 +21,8 @@ use Symfony\Component\Routing\Attribute\Route;
  */
 class SiteImportController extends AbstractController
 {
-    public function __construct(private readonly CatalogImportService $imports, private readonly CustomerImportService $customers, private readonly ImportJobStore $store)
+    public function __construct(private readonly CatalogImportService $imports, private readonly CustomerImportService $customers, private readonly ImportJobStore $store,
+        private readonly OrderImportService $orders, private readonly OrderArchive $archive)
     {
     }
 
@@ -33,10 +36,10 @@ class SiteImportController extends AbstractController
             // la liste se lit quand même
         }
 
-        return $this->json(['imports' => array_map(fn (array $job): array => $job['kind'] === ImportJobStore::KIND_CUSTOMERS ? $this->customers->summary($job) : $this->imports->summary($job), $this->store->latest())]);
+        return $this->json(['imports' => array_map(fn (array $job): array => $this->serviceOf((string) $job['kind'])->summary($job), $this->store->latest())]);
     }
 
-    /** Dépose un fichier d'export (multipart : `file`, `source` = shopify, `kind` = catalog (défaut) | customers) et l'analyse sans rien écrire → 201, l'import analysé */
+    /** Dépose un fichier d'export (multipart : `file`, `source` = shopify, `kind` = catalog (défaut) | customers | orders) et l'analyse sans rien écrire → 201, l'import analysé */
     #[Route('/api/site/imports', name: 'site_imports_upload', methods: ['POST'])]
     public function upload(Request $request): JsonResponse
     {
@@ -46,9 +49,7 @@ class SiteImportController extends AbstractController
                 throw new ImportException('IMPORT_KIND_UNKNOWN', 422, ['kinds' => ImportJobStore::KINDS]);
             }
             $source = (string) $request->request->get('source', ImportJobStore::SOURCE_SHOPIFY);
-            $service = $kind === ImportJobStore::KIND_CUSTOMERS ? $this->customers : $this->imports;
-
-            return $this->json($service->upload($request->files->get('file'), $source, $this->by()), Response::HTTP_CREATED);
+            return $this->json($this->serviceOf($kind)->upload($request->files->get('file'), $source, $this->by()), Response::HTTP_CREATED);
         });
     }
 
@@ -113,12 +114,36 @@ class SiteImportController extends AbstractController
         return $this->guard(fn () => $this->json($this->customers->customers($id, max(1, $request->query->getInt('page', 1)), is_string($state) && $state !== '' ? $state : null)));
     }
 
+    /**
+     * Lot IMP-3 : les commandes d'avant la migration d'un compte du site (`?userId=`, `?page=`), pour sa fiche côté administration →
+     * 200 { orders: [{ ref, orderedAt, day, state, financialStatus, total, net, currency, items, lines: [{ name, quantity, unitPrice, productId }] }], page, pages, total }
+     */
+    #[Route('/api/site/imports/archive/orders', name: 'site_imports_archive_orders', methods: ['GET'])]
+    public function archiveOrders(Request $request): JsonResponse
+    {
+        $userId = $request->query->get('userId');
+        if (!is_string($userId) || preg_match('/^[1-9]\d{0,9}$/', $userId) !== 1) {
+            return $this->json(['error' => 'VALIDATION_FAILED', 'message' => 'userId est attendu.', 'fields' => ['userId' => 'REQUIRED']], 422);
+        }
+
+        return $this->json($this->archive->ordersOf((int) $userId, max(1, $request->query->getInt('page', 1))));
+    }
+
     /** Le service de la nature de cet import ; 404 pour un import inconnu */
-    private function of(int $id): CatalogImportService|CustomerImportService
+    private function of(int $id): CatalogImportService|CustomerImportService|OrderImportService
     {
         $job = $this->store->find($id) ?? throw new ImportException('IMPORT_NOT_FOUND', 404);
 
-        return $job['kind'] === ImportJobStore::KIND_CUSTOMERS ? $this->customers : $this->imports;
+        return $this->serviceOf((string) $job['kind']);
+    }
+
+    private function serviceOf(string $kind): CatalogImportService|CustomerImportService|OrderImportService
+    {
+        return match ($kind) {
+            ImportJobStore::KIND_CUSTOMERS => $this->customers,
+            ImportJobStore::KIND_ORDERS => $this->orders,
+            default => $this->imports,
+        };
     }
 
     private function guard(callable $action): JsonResponse

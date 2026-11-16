@@ -88,6 +88,7 @@ framework:
             'App\Message\PrepareScrollVideoMessage': media
             'App\Import\Message\RunCatalogImportMessage': media # import de catalogue confirmé (lot IMP-1) : téléchargement des images compris
             'App\Import\Message\RunCustomerImportMessage': media # import de clients confirmé (lot IMP-2) : jamais relancé
+            'App\Import\Message\RunOrderImportMessage': media # import de commandes confirmé, en archive à part (lot IMP-3) : jamais relancé
             'App\Import\Message\SendImportInvitationsMessage': media # invitations des clients repris (lot IMP-2) : une par invité, une seule fois
             'App\Services\Agency\Message\BuildAgencySiteMessage': media # création d'un site par une agence (lot AG-2) : une fabrication à la fois, jamais relancée
             'App\Services\Agency\Message\ResendAgencySiteInvitationMessage': media # invitation de l'administrateur d'un site créé par une agence, renvoyée (lot AG-2)
