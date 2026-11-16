@@ -855,6 +855,7 @@ class TenantConnectionManager
         // qui le garantit, quel que soit le chemin qui créera la fiche. Les sites existants gardent « open ». La remise à zéro du
         // compteur donne à la fiche neuve le numéro 1, que les fronts lisent (`GET /api/entreprise/1`)
         $pdo->exec('TRUNCATE entreprise RESTART IDENTITY CASCADE');
+        $pdo->exec('ALTER SEQUENCE IF EXISTS entreprise_id_seq RESTART WITH 1'); // même si la séquence n'est pas rattachée à la colonne
         $pdo->exec("ALTER TABLE entreprise ALTER COLUMN storefront_state SET DEFAULT 'construction'");
         $foreign = (int) $pdo->query('SELECT COUNT(*) FROM "user" WHERE roles::text NOT LIKE \'%"ROLE_SUPER_ADMIN"%\'')->fetchColumn();
         if ($foreign > 0) {

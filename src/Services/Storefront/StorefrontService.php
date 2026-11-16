@@ -45,7 +45,7 @@ class StorefrontService
     }
 
     /**
-     * L'état du site courant, en cache quelques secondes. Un site sans fiche, ou une base pas encore migrée, est « ouvert » : rien à
+     * L'état du site courant, en cache quelques secondes. Une base pas encore migrée ou injoignable est tenue pour ouverte, sans cache ; un site sans fiche suit la valeur par défaut de sa base. Rien à
      * protéger, et jamais un site existant fermé par accident.
      *
      * @return array{state: string, name: string, locale: string, openedAt: ?string, previewHash: ?string, previewExpiresAt: ?string}
@@ -57,11 +57,21 @@ class StorefrontService
             return self::fallback('');
         }
 
-        return $this->read[$code] ??= (array) $this->cache->get(self::CACHE_KEY, function () use ($code): array {
-            $site = $this->connector->tenant($code);
+        if (isset($this->read[$code])) {
+            return $this->read[$code];
+        }
+        try {
+            return $this->read[$code] = (array) $this->cache->get(self::CACHE_KEY, function () use ($code): array {
+                $site = $this->connector->tenant($code);
 
-            return $site === null ? self::fallback($code) : $this->load($site);
-        }, self::CACHE_SECONDS);
+                return $site === null ? self::fallback($code) : $this->load($site);
+            }, self::CACHE_SECONDS);
+        } catch (\Throwable $e) {
+            // base injoignable ou pas encore migrée : le site est tenu pour ouvert, et cette réponse n'est gardée nulle part
+            $this->logger->warning(sprintf('État public du site %s illisible (%s) : tenu pour ouvert.', $code, $e::class));
+
+            return self::fallback($code);
+        }
     }
 
     public function isUnderConstruction(): bool
@@ -115,7 +125,7 @@ class StorefrontService
         };
         $shop = in_array($one('SELECT is_boutique_active FROM entreprise ORDER BY id LIMIT 1'), [true, 't', 'true', 1, '1'], true);
         $products = (int) $one('SELECT COUNT(*) FROM product p WHERE p.is_web = TRUE AND EXISTS (SELECT 1 FROM product_variant v WHERE v.product_id = p.id AND v.price > 0)') > 0;
-        $payment = $this->tenants->isTenantInternal($site['code']) || (int) $one("SELECT COUNT(*) FROM stripe_config WHERE COALESCE(account_id, '') <> '' OR COALESCE(live_account_id, '') <> ''") > 0;
+        $payment = $this->tenants->isTenantInternal($site['code']) || (int) $one("SELECT COUNT(*) FROM stripe_config WHERE (COALESCE(account_id, '') <> '' AND is_active) OR (COALESCE(live_account_id, '') <> '' AND live_is_active)") > 0;
         $terms = (int) $one("SELECT COUNT(*) FROM entreprise_translation WHERE COALESCE(TRIM(condition_of_use), '') <> ''") > 0;
         $items = [
             ['key' => 'products', 'ok' => $products, 'blocking' => false, 'message' => $products ? 'Des articles sont visibles sur la boutique.' : 'Aucun article n\'est visible sur la boutique.'],
@@ -142,7 +152,8 @@ class StorefrontService
         if (!$checklist['canOpen']) {
             throw new StorefrontException('STOREFRONT_NOT_READY', 409, ['items' => $checklist['items']]);
         }
-        $this->write($site, "UPDATE entreprise SET storefront_state = 'open', storefront_opened_at = NOW(), storefront_preview_hash = NULL, storefront_preview_expires_at = NULL WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1)", [], 'open', $by);
+        $this->write($site, "UPDATE entreprise SET storefront_state = 'open', storefront_opened_at = ?, storefront_preview_hash = NULL, storefront_preview_expires_at = NULL WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1)",
+            [(new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s')], 'open', $by);
         $state = $this->load($site);
 
         return ['state' => $state['state'], 'openedAt' => self::iso($state['openedAt'])];
@@ -158,7 +169,7 @@ class StorefrontService
     {
         $site = $this->site($site);
         if ($this->load($site)['state'] !== self::CONSTRUCTION) {
-            $this->write($site, "UPDATE entreprise SET storefront_state = 'construction', storefront_opened_at = NULL WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1)", [], 'close', $by);
+            $this->write($site, "UPDATE entreprise SET storefront_state = 'construction', storefront_opened_at = NULL, storefront_preview_hash = NULL, storefront_preview_expires_at = NULL WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1)", [], 'close', $by);
         }
 
         return ['state' => self::CONSTRUCTION, 'openedAt' => null];
@@ -188,7 +199,9 @@ class StorefrontService
 
     /** Ce que le visiteur d'un site en construction lit de la fiche du site : l'identité légale, les textes légaux, le logo. Rien d'autre */
     public const LEGAL_FIELDS = ['id', 'name', 'logo', 'faviconUrl', 'email', 'tel', 'ein', 'tvaIntracommunautaire', 'conditionOfUse', 'LegalNotice', 'privacyPolicy',
-        'adress', 'street1', 'street2', 'city', 'zip', 'country', 'province', 'currency', 'locale'];
+        'adress', 'street1', 'street2', 'city', 'zip', 'country', 'province', 'currency', 'locale',
+        // les applications de l'équipe (caisse, gestion, Living Memory, boutique mobile) lisent leur indicateur avant la connexion
+        'isPosActive', 'isMobileShopActive', 'isManagementAppActive', 'isLivingMemoryActive'];
 
     /**
      * La fiche du site réduite à `LEGAL_FIELDS` : même forme (les fronts lisent les mêmes champs), tout le reste remis à sa valeur vide
@@ -228,14 +241,15 @@ class StorefrontService
      */
     private function load(array $site, ?\PDO $pdo = null): array
     {
-        try {
-            $row = ($pdo ?? $this->connector->pdo($site['dbname']))->query('SELECT name, locale, storefront_state, storefront_opened_at, storefront_preview_hash, storefront_preview_expires_at FROM entreprise ORDER BY id LIMIT 1')->fetch(\PDO::FETCH_ASSOC);
-        } catch (\Throwable $e) {
-            $this->logger->warning(sprintf('État public du site %s illisible (%s) : tenu pour ouvert.', $site['code'], $e::class));
-            $row = false;
-        }
+        $pdo ??= $this->connector->pdo($site['dbname']);
+        $row = $pdo->query('SELECT name, locale, storefront_state, storefront_opened_at, storefront_preview_hash, storefront_preview_expires_at FROM entreprise ORDER BY id LIMIT 1')->fetch(\PDO::FETCH_ASSOC);
         if (!$row) {
-            return self::fallback($site['code'], (string) ($this->hosts->describe($site['code'])['name'] ?? $site['code']));
+            // Pas encore de fiche : un site neuf est DÉJÀ en construction (la valeur par défaut de la colonne, posée à sa création, le
+            // dit) ; un site d'avant ce lot qui n'aurait pas de fiche reste ouvert
+            $default = (string) $pdo->query("SELECT COALESCE(column_default, '') FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'entreprise' AND column_name = 'storefront_state'")->fetchColumn();
+            $state = self::fallback($site['code'], (string) ($this->hosts->describe($site['code'])['name'] ?? $site['code']));
+
+            return str_contains($default, self::CONSTRUCTION) ? ['state' => self::CONSTRUCTION] + $state : $state;
         }
 
         return ['state' => $row['storefront_state'] === self::CONSTRUCTION ? self::CONSTRUCTION : self::OPEN, 'name' => trim((string) $row['name']) !== '' ? (string) $row['name'] : $site['code'],

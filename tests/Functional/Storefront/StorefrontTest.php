@@ -11,7 +11,6 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
-use Symfony\Component\Yaml\Yaml;
 
 /**
  * Lot CONSTRUCTION (16/11/2026, `docs/boutique-en-construction.md`) : un site « en construction » ne montre au visiteur que son nom ;
@@ -31,7 +30,7 @@ class StorefrontTest extends WebTestCase
     {
         $this->client = static::createClient();
         $db = $this->db();
-        $this->saved = ['boutique' => $db->fetchOne('SELECT is_boutique_active FROM entreprise ORDER BY id LIMIT 1'), 'stripe' => $db->fetchAllAssociative('SELECT id, account_id, live_account_id FROM stripe_config')];
+        $this->saved = ['boutique' => $db->fetchOne('SELECT is_boutique_active FROM entreprise ORDER BY id LIMIT 1'), 'stripe' => $db->fetchAllAssociative('SELECT id, account_id, live_account_id, is_active FROM stripe_config')];
         $this->reset();
     }
 
@@ -41,9 +40,10 @@ class StorefrontTest extends WebTestCase
         $db = $this->db();
         $db->executeStatement('UPDATE entreprise SET is_boutique_active = ?', [$this->saved['boutique'] ? 'true' : 'false']);
         foreach ($this->saved['stripe'] as $row) {
-            $db->executeStatement('UPDATE stripe_config SET account_id = ?, live_account_id = ? WHERE id = ?', [$row['account_id'], $row['live_account_id'], $row['id']]);
+            $db->executeStatement('UPDATE stripe_config SET account_id = ?, live_account_id = ?, is_active = ? WHERE id = ?', [$row['account_id'], $row['live_account_id'], $row['is_active'] ? 'true' : 'false', $row['id']]);
         }
         $db->executeStatement("DELETE FROM refresh_tokens WHERE username LIKE 'vitrine-%@example.invalid'");
+        $db->executeStatement("DELETE FROM \"user\" WHERE email LIKE 'vitrine-%@example.invalid'");
         static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateSite(MV_TEST_TENANT_CODE, MV_TEST_TENANT_DB);
         parent::tearDown();
     }
@@ -80,11 +80,34 @@ class StorefrontTest extends WebTestCase
             $this->assertSame([403, 'STOREFRONT_UNDER_CONSTRUCTION', $name], [$refused->getStatusCode(), $this->json($refused)['code'] ?? null, $this->json($refused)['name'] ?? null], $path);
         }
         $this->assertSame(403, $this->api('GET', '/api/category', null, $customer)->getStatusCode(), 'un compte client n\'en voit pas plus qu\'un visiteur');
+        // FERMÉ PAR DÉFAUT : une autre adresse de la fiche d'un article, un suffixe de format, une lecture d'un autre module, un lien
+        // court, les conditions d'une application… rien ne passe sans avoir été rangé parmi les routes gardées ouvertes
+        foreach (['/api/productsid/12', '/api/vehicles.json', '/api/vehicle_products.json', '/api/memoires/books', '/api/boussole/referentials', '/api/apps/boutique/terms', '/api/offers', '/api/admin-settings', '/api/orders/12'] as $path) {
+            $refused = $this->api('GET', $path);
+            $this->assertSame([403, 'STOREFRONT_UNDER_CONSTRUCTION'], [$refused->getStatusCode(), $this->json($refused)['code'] ?? null], $path);
+            $this->assertSame(403, $this->api('GET', $path, null, $customer)->getStatusCode(), "$path : compte client");
+        }
+        $this->assertSame(403, $this->api('HEAD', '/api/category')->getStatusCode());
+        // les pages du serveur aussi (ancienne boutique, vidéos, médias partagés) : une page sobre, le nom du site, rien d'autre
+        foreach (['/shop', '/product/un-article', '/videos', '/shared-media', '/cart', '/cgu/conditions-generales-utilisation'] as $path) {
+            $page = $this->api('GET', $path);
+            $this->assertSame(403, $page->getStatusCode(), $path);
+            $this->assertStringContainsString('Bientôt ouvert', (string) $page->getContent(), $path);
+            $this->assertStringContainsString(htmlspecialchars($name, ENT_QUOTES), (string) $page->getContent());
+        }
+        // un refus ne se garde dans aucun cache
+        $refused = $this->api('GET', '/api/category');
+        $this->assertStringContainsString('no-store', (string) $refused->headers->get('Cache-Control'));
+        $this->assertStringContainsString('private', (string) $refused->headers->get('Cache-Control'));
 
         // Ce qui reste servi : la connexion, le mot de passe oublié, et la fiche du site réduite aux mentions légales
         $this->assertSame(200, $this->api('POST', '/api/login', ['username' => $admin->getEmail(), 'password' => self::PASSWORD, 'platform' => 'webadmin'])->getStatusCode());
         $this->assertSame(200, $this->api('POST', '/api/password-reset/request', ['email' => 'inconnu@example.invalid'])->getStatusCode());
         $this->assertSame(200, $this->api('GET', '/api/currencies')->getStatusCode());
+        $this->assertSame(200, $this->api('GET', '/api/health')->getStatusCode());
+        $this->assertSame(200, $this->api('GET', '/api/tenant/hosts')->getStatusCode());
+        $this->assertSame(200, $this->api('GET', '/')->getStatusCode(), 'le formulaire de connexion de l\'espace d\'administration');
+        $this->assertNotSame(403, $this->api('GET', '/api/app-profile/pos')->getStatusCode(), 'les applications de l\'équipe lisent leur profil avant la connexion');
         $legal = $this->api('GET', "/api/entreprise/$id");
         $this->assertSame(200, $legal->getStatusCode());
         $reduced = $this->json($legal);
@@ -95,6 +118,9 @@ class StorefrontTest extends WebTestCase
         }
         $this->assertSame([false, false, null, []], [$reduced['isBoutiqueActive'], $reduced['isLandingPageActive'], $reduced['apropos'], $reduced['socialNetworks']]);
         $this->assertSame($full, $this->json($this->api('GET', "/api/entreprise/$id", null, $admin)), 'un compte d\'équipe lit la fiche entière');
+        $this->assertSame($reduced, $this->json($this->api('GET', "/api/entreprise/$id", null, $customer)), 'un compte client lit la fiche réduite, comme un visiteur');
+        $this->assertSame([$full['isPosActive'], $full['isManagementAppActive'], $full['isLivingMemoryActive'], $full['isMobileShopActive']], [$reduced['isPosActive'], $reduced['isManagementAppActive'], $reduced['isLivingMemoryActive'], $reduced['isMobileShopActive']],
+            'les applications de l\'équipe lisent leur indicateur avant la connexion');
 
         // Commandes et formulaires : fermés à TOUS, administrateur compris ; la caisse, elle, vend toujours en magasin
         foreach (['/api/order/create-guest', '/api/cart/quote', '/api/stripe/create-intent', '/api/contacts', '/api/contact/submit', '/api/newsletter/subscribe', '/api/reservations', '/api/form-submissions', '/api/register', '/api/order/create', '/api/payment', '/api/subscriptions'] as $path) {
@@ -105,12 +131,23 @@ class StorefrontTest extends WebTestCase
                 $this->assertSame($expected, $this->json($refused)['code'] ?? $refused->getStatusCode(), $path . ' / ' . ($who?->getRoles()[0] ?? 'visiteur'));
             }
         }
-        foreach (['/api/order/create', '/api/payment'] as $path) {
-            $this->assertNotSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($this->api('POST', $path, ['x' => 1], $cashier))['code'] ?? null, 'la vente en magasin n\'est pas la boutique publique');
+        foreach (['/api/order/create', '/api/payment', '/api/order/create-guest', '/api/subscriptions', '/api/cart/quote', '/api/contacts', '/api/import-invitation/accept'] as $path) {
+            $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($this->api('POST', $path, ['x' => 1], $cashier))['code'] ?? null, "$path : fermé à la caisse comme à tous");
         }
-        foreach (['/api/order/create-guest', '/api/subscriptions', '/api/cart/quote', '/api/contacts'] as $path) {
-            $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($this->api('POST', $path, ['x' => 1], $cashier))['code'] ?? null, "$path : la caisse ne passe que sur ses deux routes");
+        // la vente en magasin a sa propre route, que la construction ne ferme pas
+        $this->assertNotSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($this->api('POST', '/api/order/create-multi-payment', ['x' => 1], $cashier))['code'] ?? null);
+        // les formulaires des pages du serveur aussi, pour tous
+        foreach (['/register', '/contact/', '/cart/add/1'] as $path) {
+            $this->assertSame(403, $this->api('POST', $path, ['x' => 1])->getStatusCode(), $path);
+            $this->assertSame(403, $this->api('POST', $path, ['x' => 1], $admin)->getStatusCode(), "$path : équipe");
         }
+        // un visiteur ne s'inscrit ni n'écrit nulle part : les autres modules sont fermés avec le site
+        foreach (['/api/boussole/auth/register', '/api/import-invitation/verify', '/api/apps/join'] as $path) {
+            $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($this->api('POST', $path, ['x' => 1]))['code'] ?? $this->client->getResponse()->getStatusCode(), $path);
+        }
+        // … et un compte client non plus (application Living Memory comprise) : le site n'est pas ouvert
+        $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($this->api('POST', '/api/memoires/mobile/books', ['x' => 1], $customer))['code'] ?? null);
+        $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($this->api('GET', '/api/memoires/mobile/pricing', null, $customer))['code'] ?? null);
         $this->assertSame(0, (int) $this->db()->fetchOne("SELECT COUNT(*) FROM \"user\" WHERE email = 'nouveau-client@example.invalid'"));
 
         // Un compte d'équipe voit la vraie boutique sans lien d'aperçu, et travaille : il crée ses articles
@@ -119,6 +156,10 @@ class StorefrontTest extends WebTestCase
         $this->assertStringContainsString('private', (string) $team->headers->get('Cache-Control'));
         $this->assertSame(200, $this->api('GET', '/api/category', null, $admin)->getStatusCode());
         $this->assertSame(200, $this->api('GET', '/api/landingpage-settings', null, $admin)->getStatusCode());
+        $this->assertSame(200, $this->api('GET', '/api/category', null, $this->user(['ROLE_SUPPORT']))->getStatusCode(), 'un agent d\'assistance est de l\'équipe');
+        $this->assertSame(200, $this->api('GET', '/api/category', null, $cashier)->getStatusCode(), 'un caissier aussi');
+        $served = $this->api('GET', '/api/category', null, $admin);
+        $this->assertStringContainsString('no-store', (string) $served->headers->get('Cache-Control'), 'une lecture d\'équipe ne se garde dans aucun cache partagé');
         // … y compris sur les lectures que le pare-feu de l'API ne couvre pas (formules, transporteurs, équipe) : son jeton y est lu quand même
         foreach (['/api/subscription-plans', '/api/Carrier', '/api/team'] as $path) {
             $this->assertSame(403, $this->api('GET', $path)->getStatusCode(), "$path : fermé au visiteur");
@@ -139,8 +180,15 @@ class StorefrontTest extends WebTestCase
         }
         $preview = ['HTTP_X_STOREFRONT_PREVIEW' => $token];
         $this->assertSame(['active' => true, 'expiresAt' => $link['expiresAt']], $this->json($this->api('GET', '/api/site/storefront', null, null, $preview))['preview']);
-        $this->assertSame(200, $this->api('GET', '/api/category', null, null, $preview)->getStatusCode());
+        $seen = $this->api('GET', '/api/category', null, null, $preview);
+        $this->assertSame(200, $seen->getStatusCode());
+        $this->assertStringContainsString('no-store', (string) $seen->headers->get('Cache-Control'), 'une lecture d\'aperçu ne se garde dans aucun cache partagé');
+        $this->assertStringNotContainsString('public', (string) $seen->headers->get('Cache-Control'));
+        $this->assertContains(StorefrontService::PREVIEW_HEADER, $seen->getVary());
+        $this->assertSame(200, $this->api('GET', '/api/productsid/999999', null, null, $preview)->getStatusCode() === 403 ? 403 : 200, 'l\'aperçu ouvre toutes les lectures');
         $this->assertSame($full, $this->json($this->api('GET', "/api/entreprise/$id", null, null, $preview)));
+        // … mais aucune écriture, même hors des commandes
+        $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($this->api('POST', '/api/boussole/auth/register', ['x' => 1], null, $preview))['code'] ?? null);
         $this->assertSame(403, $this->api('GET', '/api/category', null, null, ['HTTP_X_STOREFRONT_PREVIEW' => str_repeat('a', 64)])->getStatusCode());
         $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($this->api('POST', '/api/contacts', ['x' => 1], null, $preview))['code']);
         $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($this->api('POST', '/api/order/create-guest', ['x' => 1], null, $preview))['code']);
@@ -175,10 +223,11 @@ class StorefrontTest extends WebTestCase
         $this->assertTrue($this->json($this->api('GET', '/api/site/storefront/checklist', null, $admin))['canOpen']);
         $this->db()->executeStatement('UPDATE entreprise SET is_boutique_active = true');
         // avec un moyen de paiement, la boutique ouvre même si des points de la liste avertissent encore
-        if ((int) $this->db()->fetchOne('SELECT COUNT(*) FROM stripe_config') === 0) {
-            $this->markTestIncomplete('le modèle des tests n\'a pas de ligne stripe_config');
-        }
-        $this->db()->executeStatement("UPDATE stripe_config SET account_id = 'acct_essai_construction'");
+        $this->assertGreaterThan(0, (int) $this->db()->fetchOne('SELECT COUNT(*) FROM stripe_config'), 'le modèle des tests porte une ligne de configuration de paiement');
+        // un compte de paiement connecté mais pas encore actif (inscription abandonnée) ne suffit pas
+        $this->db()->executeStatement("UPDATE stripe_config SET account_id = 'acct_essai_construction', is_active = false, live_account_id = NULL");
+        $this->assertSame(409, $this->api('POST', '/api/site/storefront/open', null, $admin)->getStatusCode());
+        $this->db()->executeStatement('UPDATE stripe_config SET is_active = true');
         $opened = $this->json($this->api('POST', '/api/site/storefront/open', null, $admin));
         $this->assertSame('open', $opened['state']);
         $this->assertNotNull($opened['openedAt']);
@@ -192,38 +241,48 @@ class StorefrontTest extends WebTestCase
         $this->assertNotSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($this->api('POST', '/api/contacts', ['x' => 1]))['code'] ?? null);
         $this->assertNull($this->db()->fetchOne('SELECT storefront_preview_hash FROM entreprise ORDER BY id LIMIT 1'));
         $this->assertSame(['close', 'preview_link', 'preview_link', 'open'], $this->db()->fetchFirstColumn("SELECT action FROM content_audit_log WHERE resource = 'storefront' ORDER BY id"));
+        $this->assertEqualsWithDelta(time(), (new \DateTimeImmutable($opened['openedAt']))->getTimestamp(), 120, 'l\'heure d\'ouverture est écrite en UTC');
+        // refermer retire le lien d'aperçu : un ancien lien ne revit pas
+        $this->api('POST', '/api/site/storefront/preview-link', null, $admin);
+        $this->api('POST', '/api/site/storefront/close', null, $admin);
+        $this->assertNull($this->db()->fetchOne('SELECT storefront_preview_hash FROM entreprise ORDER BY id LIMIT 1'));
     }
 
-    public function testEveryPublicReadOfTheSecurityRulesIsFiledAsClosedOrKeptUnderConstruction(): void
+    public function testOnlyAShortListOfRoutesStaysOpenUnderConstructionAmongAllTheRoutesOfTheApplication(): void
     {
-        $rules = Yaml::parseFile(dirname(__DIR__, 3) . '/config/packages/security.yaml')['security']['access_control'];
-        $public = null;
-        foreach ($rules as $rule) {
-            if (($rule['roles'] ?? null) === 'PUBLIC_ACCESS' && str_starts_with((string) $rule['path'], '^/api/(login|health|')) {
-                $public = (string) $rule['path'];
+        // Fermé par défaut : la garde ne connaît que ce qui reste OUVERT. Toutes les routes de l'application sont relues ; celles qui
+        // restent ouvertes hors de l'espace d'administration sont écrites ici en toutes lettres. Une route nouvelle est fermée sans
+        // qu'on y pense ; une route qui deviendrait ouverte par accident (une expression trop large) fait échouer cet essai.
+        $kept = [];
+        foreach (static::getContainer()->get('router')->getRouteCollection() as $name => $route) {
+            $path = preg_replace('/\.1$/', '', (string) preg_replace('/\{[^}]+\}/', '1', $route->getPath()));
+            if (StorefrontGateSubscriber::kept($path) && !str_starts_with($path, '/admin') && !str_starts_with($path, '/_')) {
+                $kept[] = $name;
             }
         }
-        $this->assertNotNull($public, 'la règle des lectures publiques de security.yaml a changé de forme : relire cet essai');
-        $this->assertSame(1, preg_match('#^\^/api/\((.+)\)$#', $public, $m));
-        $unfiled = [];
-        foreach (explode('|', $m[1]) as $route) {
-            $path = '/api/' . $route;
-            $closed = preg_match(StorefrontGateSubscriber::CONTENT, $path) === 1 || preg_match(StorefrontGateSubscriber::ORDERS, $path) === 1;
-            $kept = in_array($route, StorefrontGateSubscriber::KEPT, true);
-            if ($closed === $kept) {
-                $unfiled[] = $route;
-            }
+        sort($kept);
+        $this->assertSame([
+            'account_otp', 'api_app_activate', 'api_app_profile', 'api_currencies_get', 'api_entreprise_get', 'api_entreprise_update', 'api_landingpage_config_rollback',
+            'api_landingpage_config_status', 'api_landingpage_config_sync', 'api_login', 'api_logout', 'api_mobile_app_theme', 'api_otp_verify', 'api_password_reset_confirm',
+            'api_password_reset_verify', 'api_site_storefront', 'api_site_storefront_preview', 'api_stripe_webhook', 'api_tenant_check', 'api_tenant_check_mobile', 'api_tenant_hosts',
+            'api_token_refresh', 'api_webhook_revenuecat', 'app_home', 'app_login', 'app_logout', 'app_memoiresvivantes_luluwebhook_handleluluwebhook', 'app_password_reset_confirm',
+            'app_password_reset_confirm_form', 'app_password_reset_request', 'app_setup_status', 'app_stripe_connect', 'app_stripe_disconnect', 'app_stripe_success', 'app_tenant_setup',
+            'bucket_simulator', 'health_check', 'legacy_assets_uploads', 'legacy_uploads', 'pertes_boitier_faits', 'pertes_boitier_inscription', 'pertes_boitier_jeton',
+            'pertes_boitier_reglages', 'pertes_boitier_signe_de_vie', 'pos_pin_login', 'pos_users', 'secure_media_delivery', 'stripe_webhook',
+        ], $kept, 'routes gardées ouvertes sur un site en construction : à justifier dans StorefrontGateSubscriber::KEPT et dans la fiche du lot');
+        // aucune lecture du catalogue ou du site, aucune adresse voisine, n'est ouverte
+        foreach (['/api/products/12', '/api/productsid/12', '/api/category', '/api/vehicles.json', '/api/entreprise/12/x', '/api/entreprises', '/api/login/x', '/api/site/storefront/open', '/videos', '/shop', '/api/tenant/hostsx', '/API/login', '/uploadsx', '/administrateur'] as $path) {
+            $this->assertFalse(StorefrontGateSubscriber::kept($path), $path);
         }
-        $this->assertSame([], $unfiled, 'route publique à ranger : fermée en construction (CONTENT ou ORDERS de StorefrontGateSubscriber) ou gardée ouverte (KEPT), jamais les deux');
-        // les routes gardées ouvertes ne sont que celles de la connexion, de la découverte du site et des mentions légales
-        $this->assertSame(['login', 'health', 'currencies', 'login-web', 'token/refresh', 'password-reset/request', 'password-reset/confirm', 'password-reset/verify', 'password-reset/form', 'entreprise', 'otp-verify', 'tenant/check', 'tenant/hosts'], StorefrontGateSubscriber::KEPT);
-        // les écritures de la boutique publique sont toutes dans ORDERS
-        foreach (['order/create', 'order/create-guest', 'payment', 'cart/quote', 'stripe/create-intent', 'contacts', 'contacts/create', 'contact/submit', 'newsletter/subscribe', 'form-submissions', 'reservations', 'candidatures', 'financement/submit', 'register', 'subscriptions', 'subscriptions/12/change-plan', 'subscriptions/12/resume'] as $route) {
-            $this->assertSame(1, preg_match(StorefrontGateSubscriber::ORDERS, '/api/' . $route), $route);
+        // les écritures de la boutique publique et des formulaires sont fermées à tous…
+        foreach (['/api/order/create', '/api/order/create-guest', '/api/payment', '/api/cart/quote', '/api/stripe/create-intent', '/api/contacts', '/api/contacts/create', '/api/contact/submit', '/api/newsletter/subscribe', '/api/form-submissions',
+            '/api/reservations', '/api/candidatures', '/api/financement/submit', '/api/register', '/api/subscriptions', '/api/subscriptions/12/change-plan', '/api/subscriptions/12/resume', '/api/import-invitation/accept', '/api/booking/x',
+            '/register', '/contact/', '/checkout/confirm', '/cart/add/3', '/create-checkout-session/abc'] as $path) {
+            $this->assertTrue(StorefrontGateSubscriber::order($path), $path);
         }
         // … et rien de l'équipe n'y est : ni la vente en caisse, ni la gestion d'une demande ou d'un article
-        foreach (['order/create-multi-payment', 'order/cancel/3', 'contacts/3', 'reservations/3/confirm', 'subscriptions/3/cancel', 'products', 'pos/customers'] as $route) {
-            $this->assertSame(0, preg_match(StorefrontGateSubscriber::ORDERS, '/api/' . $route), $route);
+        foreach (['/api/order/create-multi-payment', '/api/order/cancel/3', '/api/contacts/3', '/api/reservations/3/confirm', '/api/subscriptions/3/cancel', '/api/products', '/api/pos/customers', '/admin/orders/3/capturer'] as $path) {
+            $this->assertFalse(StorefrontGateSubscriber::order($path), $path);
         }
     }
 
