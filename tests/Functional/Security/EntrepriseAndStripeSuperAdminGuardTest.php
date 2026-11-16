@@ -141,7 +141,12 @@ class EntrepriseAndStripeSuperAdminGuardTest extends WebTestCase
             foreach (self::ENTREPRISE_LOCKED_FIELDS as $field) {
                 $input = $crawler->filter(sprintf('input[name="Entreprise[%s]"]', $field));
                 $this->assertCount(1, $input);
-                $this->assertNull($input->attr('disabled'), "champ $field déverrouillé pour ROLE_SUPER_ADMIN");
+                if (str_starts_with($field, 'is')) {
+                    // lot MOD-1 : les activations des modules sont en lecture seule pour TOUS (droit dans la console de pilotage)
+                    $this->assertNotNull($input->attr('disabled'), "champ $field en lecture seule, même pour ROLE_SUPER_ADMIN");
+                } else {
+                    $this->assertNull($input->attr('disabled'), "champ $field déverrouillé pour ROLE_SUPER_ADMIN");
+                }
             }
 
             $form = $crawler->filter('form[name="edit-Entreprise-form"], form[name="Entreprise"]')->form();
@@ -160,8 +165,9 @@ class EntrepriseAndStripeSuperAdminGuardTest extends WebTestCase
             $this->assertIsArray($row);
             $this->assertSame(240, (int) $row['pos_terminal_fee_card_bp']);
             $this->assertSame(190, (int) $row['pos_terminal_fee_interac_bp']);
-            $this->assertTrue((bool) $row['is_boussole_esg_active']);
-            $this->assertTrue((bool) $row['is_memoire_vivante_active']);
+            // lot MOD-1 : même le super administrateur ne règle plus un module par la fiche (envoi forgé : valeurs réimposées)
+            $this->assertFalse((bool) $row['is_boussole_esg_active']);
+            $this->assertFalse((bool) $row['is_memoire_vivante_active']);
             $this->assertTrue((bool) $row['pos_tap_to_pay_allowed']);
             $this->assertTrue((bool) $row['pos_bluetooth_reader_allowed']);
         } finally {

@@ -120,20 +120,19 @@ class SiteFeaturesApiTest extends WebTestCase
         $this->assertSame($this->entrepriseBefore['locale'], $this->db->fetchOne('SELECT locale FROM entreprise WHERE id = ?', [$this->entrepriseId]), 'rien n\'est écrit');
     }
 
-    public function testPlatformKeysAreReservedToTheSuperAdministrator(): void
+    /** Lot MOD-1 : un module ne se règle plus par ce registre, pour personne : droit dans la console, allumage par enable / disable */
+    public function testPlatformKeysAreNoLongerWrittenHereByAnyone(): void
     {
         $current = (bool) $this->entrepriseBefore['is_boutique_active'];
-        $r = $this->call('PUT', ['values' => ['module.boutique' => !$current, 'site.currency' => 'EUR']], 'admin');
-        $this->assertSame(403, $r->getStatusCode(), $r->getContent());
-        $body = json_decode((string) $r->getContent(), true);
-        $this->assertSame(['SUPER_ADMIN_REQUIRED', ['module.boutique']], [$body['code'], $body['fields']]);
-        $this->assertSame($this->entrepriseBefore['currency'], $this->db->fetchOne('SELECT currency FROM entreprise WHERE id = ?', [$this->entrepriseId]), 'tout ou rien : la devise n\'est pas écrite non plus');
-        $this->assertSame(200, $this->call('PUT', ['values' => ['module.boutique' => $current]], 'admin')->getStatusCode(), 'valeur inchangée : ignorée');
-        $r = $this->call('PUT', ['values' => ['module.boutique' => !$current]], 'super');
-        $this->assertSame(200, $r->getStatusCode(), $r->getContent());
-        $byKey = array_column(json_decode((string) $r->getContent(), true)['features'], null, 'key');
-        $this->assertSame(!$current, $byKey['module.boutique']['value']);
-        $this->assertSame(!$current ? 'ready' : 'off', $byKey['module.boutique']['status']);
+        foreach (['admin', 'super'] as $as) {
+            $r = $this->call('PUT', ['values' => ['module.boutique' => !$current, 'site.currency' => 'EUR']], $as);
+            $this->assertSame(403, $r->getStatusCode(), $r->getContent());
+            $body = json_decode((string) $r->getContent(), true);
+            $this->assertSame(['MODULE_VIA_PLATFORM', ['module.boutique']], [$body['code'], $body['fields']], $as);
+            $this->assertSame($this->entrepriseBefore['currency'], $this->db->fetchOne('SELECT currency FROM entreprise WHERE id = ?', [$this->entrepriseId]), 'tout ou rien : la devise n\'est pas écrite non plus');
+            $this->assertSame([$current], [(bool) $this->db->fetchOne('SELECT is_boutique_active FROM entreprise WHERE id = ?', [$this->entrepriseId])]);
+            $this->assertSame(200, $this->call('PUT', ['values' => ['module.boutique' => $current]], $as)->getStatusCode(), 'valeur inchangée : ignorée');
+        }
     }
 
     private function commerceOf(array $body): array

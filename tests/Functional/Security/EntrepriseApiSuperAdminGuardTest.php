@@ -48,7 +48,7 @@ class EntrepriseApiSuperAdminGuardTest extends WebTestCase
     {
         [$status, $body] = $this->put(['isBoutiqueActive' => !$this->boutiqueBefore, 'isBoussoleEsgActive' => $this->esgBefore, 'metaTitle' => 'Titre refusé'], 'admin');
         $this->assertSame(403, $status, json_encode($body));
-        $this->assertSame(['SUPER_ADMIN_REQUIRED', 'SUPER_ADMIN_REQUIRED', ['isBoutiqueActive']], [$body['error'], $body['code'], $body['fields']], 'seule l\'activation réellement modifiée est citée');
+        $this->assertSame(['MODULE_VIA_PLATFORM', 'MODULE_VIA_PLATFORM', ['isBoutiqueActive']], [$body['error'], $body['code'], $body['fields']], 'seule l\'activation réellement modifiée est citée');
         $this->assertSame([$this->boutiqueBefore, $this->metaTitleBefore], $this->current(), 'rien n\'est écrit, pas même les autres champs');
 
         [$status, $body] = $this->put(['isBoutiqueActive' => $this->boutiqueBefore, 'isBoussoleEsgActive' => $this->esgBefore, 'metaTitle' => 'Titre accepté'], 'admin');
@@ -56,12 +56,15 @@ class EntrepriseApiSuperAdminGuardTest extends WebTestCase
         $this->assertSame([$this->boutiqueBefore, 'Titre accepté'], $this->current(), 'activations renvoyées inchangées : ignorées, le reste est écrit');
     }
 
-    public function testTheSuperAdminChangesModuleActivationsThroughTheApi(): void
+    /** Lot MOD-1 : le super administrateur non plus ne règle pas un module sur la fiche ; le droit se gère dans la console */
+    public function testTheSuperAdminNoLongerChangesModuleActivationsThroughTheSheet(): void
     {
-        [$status, $body] = $this->put(['isBoutiqueActive' => !$this->boutiqueBefore], 'super');
-        $this->assertSame(200, $status, json_encode($body));
-        $this->assertSame(!$this->boutiqueBefore, (bool) $body['isBoutiqueActive']);
-        $this->assertSame(!$this->boutiqueBefore, $this->current()[0]);
+        [$status, $body] = $this->put(['isBoutiqueActive' => !$this->boutiqueBefore, 'metaTitle' => 'Titre refusé'], 'super');
+        $this->assertSame(403, $status, json_encode($body));
+        $this->assertSame(['MODULE_VIA_PLATFORM', ['isBoutiqueActive']], [$body['code'], $body['fields']]);
+        $this->assertSame([$this->boutiqueBefore, $this->metaTitleBefore], $this->current(), 'rien n\'est écrit');
+        [$status] = $this->put(['isBoutiqueActive' => $this->boutiqueBefore, 'metaTitle' => 'Titre accepté'], 'super');
+        $this->assertSame([200, 'Titre accepté'], [$status, $this->current()[1]], 'une activation inchangée est ignorée');
     }
 
     /** @return array{0: bool, 1: ?string} */
