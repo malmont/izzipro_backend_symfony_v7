@@ -1192,6 +1192,7 @@ reports:
     guide_next: 'Ensuite :'
     compare_previous: 'Période précédente :'
     compare_last_year: 'An dernier :'
+    compare_last_year_before_migration: 'An dernier, avant la migration :'
     period_kind: 'Bilan de période'
     year_kind: 'Bilan de l''année'
     period_title: 'Bilan de la période %name%'

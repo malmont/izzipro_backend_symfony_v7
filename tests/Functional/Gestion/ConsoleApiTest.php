@@ -1035,6 +1035,82 @@ class ConsoleApiTest extends WebTestCase
     // ---- outils --------------------------------------------------------------------------------------------------------------------
 
     /** Réponse du faux modèle, en sortie structurée */
+    /**
+     * Lot AG-3a (suite d'IMP-3) : quand l'an dernier vient des ventes d'avant la migration, la console le reçoit MARQUÉ. Le modèle a les
+     * mots à écrire avec le chiffre ; un texte qui le cite sans eux est rejeté par le serveur ; la carte et le PDF portent la mention.
+     */
+    public function testALastYearFromBeforeTheMigrationIsNeverCitedWithoutSayingSo(): void
+    {
+        $conn = $this->em()->getConnection();
+        $day = static::getContainer()->get(\App\Services\CaisseService\StoreClock::class)->day(new \DateTimeImmutable('-1 year'));
+        $currency = static::getContainer()->get(\App\Services\BoutiqueSettingsService\TenantCurrencyProvider::class)->code();
+        $conn->executeStatement("INSERT INTO import_order (job_id, source, ref, ordered_at, day, financial_status, state, total_cents, net_cents, currency, items_count) VALUES (0, 'shopify', ?, ?, ?, 'paid', 'paid', 432100, 432100, ?, 1)",
+            ["#CONS-{$this->tag}", "$day 15:00:00", $day, $currency]);
+        try {
+            $this->assertSame('before_migration', $this->get('/api/gestion/statistiques?range=month')['lastYear']['source'], 'le site de test n\'a aucune vente il y a un an');
+            $none = ['periodId' => null, 'productId' => null, 'year' => null, 'days' => null, 'range' => null];
+            $choose = $this->reply(['kind' => 'analyses', 'clarification' => '', 'analyses' => [['key' => 'sales.overview', 'range' => 'month'] + $none]]);
+            $write = fn (string $t, array $more = []): object => $this->reply(['blocks' => array_merge([['type' => 'text', 'text' => $t, 'figureIds' => [], 'analysis' => '', 'items' => []]], $more), 'proposals' => []]);
+            $payload = fn (int $i): array => json_decode(FakeLandingAiClient::$requests[$i]['messages'][0]['content'][0]['text'], true);
+            $last = fn (int $id): array => array_slice($this->get("/api/gestion/console/conversations/$id")['messages'], -1)[0];
+
+            // 1. le modèle reçoit le chiffre de l'an dernier AVEC sa note, et le libellé de la plage comparée la porte aussi
+            $a = $this->post('/api/gestion/console/messages', ['text' => 'Comment vont les ventes de ce mois ?'], 202);
+            FakeLandingAiClient::$queue = [$choose, $write('Voici les ventes du mois.')];
+            $this->runWorker((int) $a['messageId']);
+            $result = $payload(1)['resultats'][0];
+            $sent = array_column($result['figures'], null, 'id');
+            $revenue = $sent['a1.revenue'];
+            $this->assertSame('avant la migration', $revenue['lastYearNote']);
+            $this->assertStringContainsString('4', $revenue['lastYear']);
+            $this->assertStringEndsWith('(avant la migration)', $result['lastYearLabel']);
+            foreach (['a1.orders', 'a1.averageBasket', 'a1.grossMargin'] as $other) {
+                $this->assertSame([false, false], [isset($sent[$other]['lastYear']), isset($sent[$other]['lastYearNote'])], "$other : d'une autre boutique, seules les ventes se comparent");
+            }
+            $this->assertStringContainsString('lastYearNote', (string) FakeLandingAiClient::$requests[1]['system'], 'la consigne du modèle dit quoi faire de la note');
+
+            // 2. un texte qui cite l'an dernier SANS le dire est rejeté : nouvel essai, et le texte gardé porte la note
+            $id = (int) $a['conversationId'];
+            $b = $this->post('/api/gestion/console/messages', ['text' => 'Et par rapport à l\'an dernier ?', 'conversationId' => $id], 202);
+            $figures = [['type' => 'figures', 'text' => '', 'figureIds' => ['a1.revenue'], 'analysis' => '', 'items' => []]];
+            FakeLandingAiClient::$queue = [$choose, $write("L'an dernier, le chiffre d'affaires était de {$revenue['lastYear']}."),
+                $write("Contre {$revenue['lastYear']} l'an dernier, avant la migration.", $figures)];
+            $before = count(FakeLandingAiClient::$requests);
+            $this->runWorker((int) $b['messageId']);
+            $this->assertCount($before + 3, FakeLandingAiClient::$requests, 'un nouvel essai de rédaction');
+            $this->assertStringContainsString('lastYearNote', $payload($before + 2)['correction']);
+            $answer = $last($id);
+            $this->assertSame("Contre {$revenue['lastYear']} l'an dernier, avant la migration.", $answer['blocks'][0]['text']);
+            // la carte du chiffre porte la marque, pour les applications et pour le PDF
+            $cards = array_values(array_filter($answer['blocks'], static fn (array $block): bool => $block['type'] === 'figures'))[0]['items'];
+            $this->assertSame(['before_migration', 'avant la migration', 432100], [$cards[0]['lastYearSource'], $cards[0]['lastYearNote'], $cards[0]['lastYear']]);
+            $this->assertSame('before_migration', $answer['analyses'][0]['period']['lastYearSource']);
+            $renderer = static::getContainer()->get(\App\Gestion\Services\Report\ReportRenderer::class);
+            $html = html_entity_decode(strip_tags($renderer->html($renderer->document($answer, 'Et par rapport à l\'an dernier ?', 'fr', $currency))));
+            $this->assertStringContainsString('An dernier, avant la migration :', $html);
+            $this->assertStringNotContainsString('An dernier :', $html, 'jamais la mention nue pour un chiffre venu d\'ailleurs');
+            $this->assertStringContainsString('Last year, before the migration:', html_entity_decode(strip_tags($renderer->html($renderer->document($answer, 'x', 'en', $currency)))));
+
+            // 3. deux textes de suite sans la note : le serveur écrit le repli, le texte fautif n'est rendu nulle part
+            $c = $this->post('/api/gestion/console/messages', ['text' => 'Redis-moi l\'an dernier.', 'conversationId' => $id], 202);
+            FakeLandingAiClient::$queue = [$choose, $write("L'an dernier : {$revenue['lastYear']}."), $write("C'était {$revenue['lastYear']} l'an dernier.")];
+            $this->runWorker((int) $c['messageId']);
+            $fallback = $last($id);
+            $this->assertSame('Voici les chiffres calculés par votre application pour cette question.', $fallback['blocks'][0]['text'], 'le texte de repli du serveur');
+            foreach ($fallback['blocks'] as $block) {
+                $this->assertStringNotContainsString("L'an dernier :", (string) ($block['text'] ?? ''));
+                $this->assertStringNotContainsString("C'était", (string) ($block['text'] ?? ''));
+            }
+            // un texte qui ne cite pas l'an dernier n'a pas à porter la note
+            $d = $this->post('/api/gestion/console/messages', ['text' => 'Et ce mois-ci ?', 'conversationId' => $id], 202);
+            FakeLandingAiClient::$queue = [$choose, $write('Voici les ventes du mois, sans comparaison.')];
+            $this->runWorker((int) $d['messageId']);
+            $this->assertSame('Voici les ventes du mois, sans comparaison.', $last($id)['blocks'][0]['text']);
+        } finally {
+            $conn->executeStatement('DELETE FROM import_order WHERE ref = ?', ["#CONS-{$this->tag}"]);
+        }
+    }
+
     private function reply(array $output): object
     {
         return json_decode(json_encode([

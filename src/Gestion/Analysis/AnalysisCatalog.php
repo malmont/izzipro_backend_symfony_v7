@@ -268,28 +268,31 @@ class AnalysisCatalog
         $o = $this->statistics->overview($query, $locale);
         // une période se nomme, une plage se rédige (« du 1er au 13 novembre 2026 ») ; les plages comparées aussi, pour que le texte les cite
         $label = isset($params['periodId']) ? PeriodCalendar::displayName($this->period($params), $locale) : RangeLabel::of($o['range']['from'], $o['range']['to'], $locale);
-        // Lot IMP-3 : un an dernier lu de l'archive des ventes d'avant la migration n'est PAS transmis à la console ni aux bilans PDF :
-        // ils ne savent pas encore le marquer « avant la migration », et un chiffre d'une autre boutique ne se cite pas sans le dire
-        $siteLastYear = (($o['lastYear']['source'] ?? 'site') === 'site');
+        // Lot AG-3a (suite d'IMP-3) : un an dernier lu de l'archive des ventes d'avant la migration est transmis à la console et aux
+        // bilans PDF MARQUÉ, et pour les VENTES seulement (le chiffre d'affaires) : le chiffre d'une autre boutique ne se cite jamais
+        // sans le dire. Le libellé de la plage le porte, et le chiffre aussi (`lastYearSource`, `lastYearNote`).
+        $archive = self::beforeMigration($o);
+        $mark = $archive ? $this->beforeMigrationMark($o, $locale) : [];
         $compared = array_filter(['previousLabel' => is_array($o['previous'] ?? null) ? RangeLabel::of($o['previous']['from'], $o['previous']['to'], $locale) : null,
-            'lastYearLabel' => $siteLastYear && is_array($o['lastYear'] ?? null) ? RangeLabel::of($o['lastYear']['from'], $o['lastYear']['to'], $locale) : null]);
+            'lastYearLabel' => is_array($o['lastYear'] ?? null) ? RangeLabel::of($o['lastYear']['from'], $o['lastYear']['to'], $locale) . ($archive ? ' (' . $mark['lastYearNote'] . ')' : '') : null]);
         $figures = [];
         foreach (['revenue', 'grossMargin', 'grossMarginRate', 'orders', 'averageBasket', 'returnRate', 'stockValue'] as $name) {
             $i = $o['indicators'][$name] ?? null;
             if ($i === null) {
                 continue;
             }
-            // les comparaisons sont fournies par l'analyse : le modèle ne calcule rien
+            // les comparaisons sont fournies par l'analyse : le modèle ne calcule rien ; d'une archive, seul le chiffre d'affaires se compare
+            $lastYear = !$archive || $name === 'revenue';
             $figures[] = $this->figure($name, $i['value'], (string) $i['unit'], $locale, [
-                'previous' => $i['previous'] ?? null, 'lastYear' => $siteLastYear ? ($i['lastYear'] ?? null) : null,
+                'previous' => $i['previous'] ?? null, 'lastYear' => $lastYear ? ($i['lastYear'] ?? null) : null,
                 'delta' => isset($i['previous'], $i['value']) ? round($i['value'] - $i['previous'], 2) : null,
                 'deltaPercent' => ($i['changeUnit'] ?? null) === 'percent' ? ($i['changeVsPrevious'] ?? null) : null,
-                'deltaLastYear' => $siteLastYear && isset($i['lastYear'], $i['value']) ? round($i['value'] - $i['lastYear'], 2) : null,
-                'deltaPercentLastYear' => $siteLastYear && ($i['changeUnit'] ?? null) === 'percent' ? ($i['changeVsLastYear'] ?? null) : null,
-            ]);
+                'deltaLastYear' => $lastYear && isset($i['lastYear'], $i['value']) ? round($i['value'] - $i['lastYear'], 2) : null,
+                'deltaPercentLastYear' => $lastYear && ($i['changeUnit'] ?? null) === 'percent' ? ($i['changeVsLastYear'] ?? null) : null,
+            ] + ($lastYear && isset($i['lastYear']) ? $mark : []));
         }
 
-        return ['period' => ['from' => $o['range']['from'], 'to' => $o['range']['to'], 'label' => $label] + $compared, 'params' => $query, 'figures' => $figures];
+        return ['period' => ['from' => $o['range']['from'], 'to' => $o['range']['to'], 'label' => $label] + $compared + array_intersect_key($mark, ['lastYearSource' => 1]), 'params' => $query, 'figures' => $figures];
     }
 
     private function yearOverview(array $params, string $locale): array
@@ -298,14 +301,16 @@ class AnalysisCatalog
         $t = $o['totals'];
         // l'an dernier : le cumul du DERNIER mois de l'exercice précédent (`cumulative` est une liste de douze mois, pas un tableau à
         // clés : lue comme tel jusqu'au 16/11/2026, la comparaison restait toujours vide). Un exercice ENTIER ne se compare qu'à un
-        // exercice TERMINÉ : en cours d'année, dix mois ne se comparent pas à douze, la comparaison reste vide. Et un an dernier lu
-        // de l'archive des ventes d'avant la migration (lot IMP-3) n'est pas transmis : il ne serait pas marqué.
-        $comparable = ($o['status'] ?? null) === 'finished' && (($o['lastYear']['source'] ?? 'site') === 'site');
-        $cumulative = $comparable ? ($o['lastYear']['cumulative'] ?? null) : null;
+        // exercice TERMINÉ : en cours d'année, dix mois ne se comparent pas à douze, la comparaison reste vide. Un an dernier lu de
+        // l'archive des ventes d'avant la migration (lot AG-3a, suite d'IMP-3) est transmis MARQUÉ, et pour les ventes seulement.
+        $cumulative = ($o['status'] ?? null) === 'finished' ? ($o['lastYear']['cumulative'] ?? null) : null;
         $ly = is_array($cumulative) && $cumulative !== [] ? end($cumulative) : null;
-        $lastYear = fn (string $k) => is_array($ly) && isset($ly[$k]) && is_numeric($ly[$k]) ? $ly[$k] : null;
+        $archive = self::beforeMigration($o);
+        // (d'une archive, la marge et le résultat sont inconnus : ils ne se comparent pas)
+        $lastYear = fn (string $k) => is_array($ly) && isset($ly[$k]) && is_numeric($ly[$k]) && (!$archive || $k === 'sales') ? $ly[$k] : null;
+        $mark = $archive && $lastYear('sales') !== null ? $this->beforeMigrationMark($o, $locale) : [];
         $figures = [
-            $this->figure('sales', $t['sales'] ?? null, 'money', $locale, ['lastYear' => $lastYear('sales')]),
+            $this->figure('sales', $t['sales'] ?? null, 'money', $locale, ['lastYear' => $lastYear('sales')] + $mark),
             $this->figure('grossMargin', $t['grossMargin'] ?? null, 'money', $locale, ['lastYear' => $lastYear('grossMargin')]),
             $this->figure('marginRate', $t['grossMarginRate'] ?? null, 'percent', $locale),
             $this->figure('fixedCosts', $t['fixedCosts'] ?? null, 'money', $locale),
@@ -326,7 +331,10 @@ class AnalysisCatalog
             $rows[$i]['rank'] = $i + 1;
         }
 
-        return ['period' => ['from' => $o['fiscalYear']['from'], 'to' => $o['fiscalYear']['to'], 'label' => (string) $o['fiscalYear']['label']], 'params' => ['year' => $o['year']], 'figures' => $figures, 'rows' => $rows];
+        // l'exercice comparé se nomme quand il vient d'ailleurs : son libellé porte « (avant la migration) »
+        $compared = $mark === [] ? [] : ['lastYearLabel' => (string) ($o['lastYear']['label'] ?? $mark['lastYearNote']), 'lastYearSource' => $mark['lastYearSource']];
+
+        return ['period' => ['from' => $o['fiscalYear']['from'], 'to' => $o['fiscalYear']['to'], 'label' => (string) $o['fiscalYear']['label']] + $compared, 'params' => ['year' => $o['year']], 'figures' => $figures, 'rows' => $rows];
     }
 
     private function cashProjection(array $params, string $locale): array
@@ -573,6 +581,21 @@ class AnalysisCatalog
      *
      * @return array<string, mixed>
      */
+    /** L'an dernier de cette réponse vient-il de l'archive des ventes d'avant la migration ? @param array<string, mixed> $overview */
+    private static function beforeMigration(array $overview): bool
+    {
+        return ($overview['lastYear']['source'] ?? 'site') === \App\Import\OrderArchive::SOURCE;
+    }
+
+    /**
+     * La marque d'un an dernier venu d'ailleurs, portée par le chiffre lui-même : `lastYearSource` (le code) et `lastYearNote` (les
+     * mots à écrire à côté du chiffre : « avant la migration »). @param array<string, mixed> $overview @return array<string, string>
+     */
+    private function beforeMigrationMark(array $overview, string $locale): array
+    {
+        return ['lastYearSource' => (string) $overview['lastYear']['source'], 'lastYearNote' => $this->tr('statistics.beforeMigration', $locale)];
+    }
+
     private function figure(string $name, mixed $value, string $unit, string $locale, array $comparisons = [], array $labelParams = []): array
     {
         return ['id' => $name, 'label' => $this->translator->trans("console.figures.$name", $labelParams, 'gestion', $locale === 'en' ? 'en' : 'fr'), 'value' => $value, 'unit' => $unit] + array_filter($comparisons, fn ($v) => $v !== null);

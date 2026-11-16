@@ -323,18 +323,31 @@ class ShopifyOrderImportTest extends WebTestCase
         $this->assertSame(['sales' => 28000, 'grossMargin' => null, 'result' => null], array_intersect_key(end($year['lastYear']['cumulative']), ['sales' => 1, 'grossMargin' => 1, 'result' => 1]));
         $this->assertContains('LAST_YEAR_BEFORE_MIGRATION', array_column($year['caveats'], 'code'));
         $this->assertSame(0, $year['totals']['sales'], 'les ventes d\'avant n\'entrent pas dans l\'année du site');
-        // la console IA et les bilans PDF ne reçoivent PAS un an dernier venu de l'archive : ils ne savent pas le marquer
+        // la console IA et les bilans PDF reçoivent l'an dernier venu de l'archive MARQUÉ « avant la migration » (lot AG-3a), et pour les
+        // VENTES seulement : la marge et le résultat d'une autre boutique sont inconnus, ils ne se comparent pas
         $analysis = static::getContainer()->get(\App\Gestion\Analysis\AnalysisCatalog::class);
-        $figures = array_column($analysis->run('year.overview', ['year' => 2011], 'fr')['figures'], null, 'id');
-        $this->assertSame([false, false, false], [isset($figures['sales']['lastYear']), isset($figures['grossMargin']['lastYear']), isset($figures['netResult']['lastYear'])]);
+        $run = $analysis->run('year.overview', ['year' => 2011], 'fr');
+        $figures = array_column($run['figures'], null, 'id');
+        $this->assertSame([28000, OrderArchive::SOURCE, 'avant la migration'], [$figures['sales']['lastYear'], $figures['sales']['lastYearSource'], $figures['sales']['lastYearNote']]);
+        $this->assertSame([false, false, false, false], [isset($figures['grossMargin']['lastYear']), isset($figures['netResult']['lastYear']), isset($figures['grossMargin']['lastYearSource']), isset($figures['netResult']['lastYearNote'])]);
+        $this->assertSame([OrderArchive::SOURCE, $year['lastYear']['label']], [$run['period']['lastYearSource'], $run['period']['lastYearLabel']]);
+        $this->assertStringEndsWith('(avant la migration)', $run['period']['lastYearLabel']);
 
-        // … de même pour l'analyse des ventes du mois en cours : une vente d'avant, il y a un an jour pour jour, n'y est pas transmise
+        // … de même pour l'analyse des ventes du mois en cours : une vente d'avant, il y a un an jour pour jour, y est transmise marquée
         $lastYearToday = static::getContainer()->get(StoreClock::class)->day(new \DateTimeImmutable('-1 year'));
         $conn->executeStatement("INSERT INTO import_order (job_id, source, ref, ordered_at, day, financial_status, state, total_cents, net_cents, currency, items_count) VALUES (0, 'shopify', ?, ?, ?, 'paid', 'paid', 4000, 4000, ?, 1)",
             ["#A9-$t", "$lastYearToday 15:00:00", $lastYearToday, $currency]);
         $this->assertSame(OrderArchive::SOURCE, $this->get('/api/gestion/statistiques?range=month')['lastYear']['source'], 'le site de test n\'a aucune vente il y a un an');
         $month = $analysis->run('sales.overview', ['range' => 'month'], 'fr');
-        $this->assertSame([false, false, false], [isset($month['period']['lastYearLabel']), isset(array_column($month['figures'], null, 'id')['revenue']['lastYear']), isset(array_column($month['figures'], null, 'id')['revenue']['deltaLastYear'])]);
+        $monthly = array_column($month['figures'], null, 'id');
+        $this->assertSame([4000, OrderArchive::SOURCE, 'avant la migration', true], [$monthly['revenue']['lastYear'], $monthly['revenue']['lastYearSource'], $monthly['revenue']['lastYearNote'], isset($monthly['revenue']['deltaLastYear'])]);
+        $this->assertStringEndsWith('(avant la migration)', $month['period']['lastYearLabel']);
+        $this->assertSame(OrderArchive::SOURCE, $month['period']['lastYearSource']);
+        // les commandes et le panier moyen de l'archive ne passent pas à la console : les ventes seulement
+        foreach (['orders', 'averageBasket', 'grossMargin', 'grossMarginRate'] as $other) {
+            $this->assertSame([false, false, false], [isset($monthly[$other]['lastYear']), isset($monthly[$other]['lastYearSource']), isset($monthly[$other]['deltaLastYear'])], $other);
+        }
+        $this->assertSame(['before the migration'], array_values(array_unique(array_column($analysis->run('sales.overview', ['range' => 'month'], 'en')['figures'], 'lastYearNote'))));
 
         // Un RETOUR seul du site sur la plage de l'an dernier (avril 2010) : c'est une ligne de vente du site, l'archive n'est plus lue
         $conn->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type, purchase_price) VALUES (nextval('product_id_seq'), 'Vraie vente', 2500, false, 0, NOW(), ?, 'standard', 1000)", ["imp3-test-v-$t"]);

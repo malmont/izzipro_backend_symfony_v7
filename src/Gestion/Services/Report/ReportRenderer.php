@@ -159,7 +159,9 @@ class ReportRenderer
                             $unit = $item['unit'] ?? null;
                             $compared = [];
                             // les comparaisons sont celles que l'analyse a gardées avec la carte (clés à plat) : rien n'est recalculé
-                            foreach ([['previous', 'deltaPercent', 'compare_previous'], ['lastYear', 'deltaPercentLastYear', 'compare_last_year']] as [$key, $percent, $label]) {
+                            // lot AG-3a : un an dernier venu des ventes d'avant la migration est nommé comme tel sur la carte
+                            $lastYearLabel = ($item['lastYearSource'] ?? null) === \App\Import\OrderArchive::SOURCE ? 'compare_last_year_before_migration' : 'compare_last_year';
+                            foreach ([['previous', 'deltaPercent', 'compare_previous'], ['lastYear', 'deltaPercentLastYear', $lastYearLabel]] as [$key, $percent, $label]) {
                                 if (isset($item[$key]) && is_numeric($item[$key])) {
                                     // la variation entre parenthèses est rendue à part : le gabarit l'écrit sans coupure possible
                                     $change = isset($item[$percent]) && is_numeric($item[$percent]) ? '(' . ((float) $item[$percent] > 0 ? '+' : '') . $write($item[$percent], 'percent') . ')' : null;

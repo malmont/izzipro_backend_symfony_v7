@@ -1187,6 +1187,7 @@ reports:
     guide_next: 'Next:'
     compare_previous: 'Previous period:'
     compare_last_year: 'Last year:'
+    compare_last_year_before_migration: 'Last year, before the migration:'
     period_kind: 'Period review'
     year_kind: 'Year review'
     period_title: 'Review of the period %name%'

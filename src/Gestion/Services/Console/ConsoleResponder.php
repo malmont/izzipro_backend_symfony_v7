@@ -263,7 +263,7 @@ class ConsoleResponder
             [$blocks, $rejected] = $this->blocks($written['blocks'], $results, $allowed, $locale);
             if ($rejected > 0) {
                 // un nombre inconnu : un nouvel essai, en le disant au modèle
-                $written = $this->model->write($text, $forModel, $actions, $locale, $stats, 'Ta réponse précédente contenait un nombre absent des champs « display ». Recopie les nombres tels quels, sans rien calculer.', $named);
+                $written = $this->model->write($text, $forModel, $actions, $locale, $stats, 'Ta réponse précédente contenait un nombre absent des champs « display », ou citait un « lastYear » sans les mots de son « lastYearNote ». Recopie les nombres tels quels, sans rien calculer, et écris cette note avec le chiffre qu\'elle accompagne.', $named);
                 [$blocks, $rejected] = $this->blocks($written['blocks'], $results, $allowed, $locale);
             }
             $fallback = $rejected > 0 || array_filter($blocks, fn (array $b) => $b['type'] === 'text') === [];
@@ -333,6 +333,10 @@ class ConsoleResponder
                 }
                 if (isset($f['rank'])) {
                     $figure['rank'] = $note((string) $f['rank']);
+                }
+                if (isset($f['lastYearNote'], $figure['lastYear'])) {
+                    // lot AG-3a : cet an dernier vient des ventes d'avant la migration ; les mots à écrire avec lui sont fournis
+                    $figure['lastYearNote'] = $note((string) $f['lastYearNote']);
                 }
                 $figures[] = $figure;
             }
@@ -414,6 +418,12 @@ class ConsoleResponder
                     continue;
                 }
                 if (self::unknown($text, $allowed) !== []) {
+                    ++$rejected;
+                    continue;
+                }
+                // lot AG-3a : un an dernier venu des ventes d'avant la migration ne se cite jamais sans le dire ; un texte qui l'écrit
+                // sans sa note est rejeté (les cartes, elles, portent toujours la note)
+                if ($this->citesUnmarked($text, $results, $locale)) {
                     ++$rejected;
                     continue;
                 }
@@ -900,6 +910,31 @@ class ConsoleResponder
         }
 
         return $blocks;
+    }
+
+    /**
+     * Le texte cite-t-il, sans le dire, un an dernier qui vient des ventes d'avant la migration ? Il le cite s'il écrit sa valeur ou
+     * sa variation ; il le dit s'il porte la note du chiffre (« avant la migration »).
+     *
+     * @param list<array<string, mixed>> $results
+     */
+    private function citesUnmarked(string $text, array $results, string $locale): bool
+    {
+        $written = self::numbers($text);
+        foreach ($results as $r) {
+            foreach ($r['figures'] as $f) {
+                if (!isset($f['lastYearNote']) || mb_stripos($text, (string) $f['lastYearNote']) !== false) {
+                    continue;
+                }
+                foreach (['lastYear' => (string) $f['unit'], 'deltaLastYear' => (string) $f['unit'], 'deltaPercentLastYear' => 'percent'] as $key => $unit) {
+                    if (isset($f[$key]) && array_intersect(self::numbers($this->display($f[$key], $unit, $locale)), $written) !== []) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     /** @param list<string> $ids @param list<array<string, mixed>> $results */
