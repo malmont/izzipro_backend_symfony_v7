@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (601)
+## Boutique et commun (604)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -470,6 +470,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/notifications/preferences` | ROLE_ADMIN | `Gestion\Controller\GestionNotificationController::preferences` |
 | PATCH | `/api/gestion/notifications/preferences` | ROLE_ADMIN | `Gestion\Controller\GestionNotificationController::updatePreferences` |
 | POST | `/api/gestion/pertes/analyse` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::analyse` |
+| POST | `/api/gestion/pertes/boitiers/jumeler` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::pair` |
 | POST | `/api/gestion/pertes/boitiers/{id}/appareils/{deviceId}/retirer` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::retireDevice` |
 | PUT | `/api/gestion/pertes/boitiers/{id}/appareils/{deviceId}` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::assignDevice` |
 | POST | `/api/gestion/pertes/boitiers/{id}/cle` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::resetKey` |
@@ -625,6 +626,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/pertes/boitier/faits` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::facts` |
 | POST | `/api/pertes/boitier/inscription` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::enrol` |
 | POST | `/api/pertes/boitier/jeton` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::renew` |
+| POST | `/api/pertes/boitier/jumelage/etat` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::pairingState` |
+| POST | `/api/pertes/boitier/jumelage` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::pairingDeposit` |
 | GET | `/api/pertes/boitier/reglages` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::settings` |
 | POST | `/api/pertes/boitier/signe-de-vie` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::heartbeat` |
 | PUT | `/api/platform/agencies/{id}/members` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformAgenciesController::member` |
