@@ -54,6 +54,10 @@ class OtpSessionTest extends WebTestCase
         $this->assertFalse(OtpSession::validated($session, $a));
         $session->set(OtpSession::KEY, '1');
         $this->assertFalse(OtpSession::validated($session, $a));
+        $session->set(OtpSession::KEY, '');
+        $this->assertFalse(OtpSession::validated($session, $a), 'une marque vide ne vaut rien');
+        $session->set(OtpSession::KEY, ['a' => 1]);
+        $this->assertFalse(OtpSession::validated($session, $a));
 
         // EN VRAI : le compte A valide son code ; le compte B, connecté ensuite dans la même session, est renvoyé vers la page du code
         $this->login($a);
