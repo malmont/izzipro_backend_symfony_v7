@@ -14,23 +14,36 @@
                 "cashRegisterId": null,
                 "state": "ok",
                 "stateLabel": "En ordre",
-                "lastSeenAt": "2026-11-15T23:33:00+00:00",
+                "lastSeenAt": "2026-11-16T01:40:29+00:00",
                 "silentSince": null,
                 "silentSeconds": null,
                 "hint": null
+            },
+            {
+                "code": "mat-6",
+                "kind": "mat",
+                "label": "Tapis de comptoir",
+                "zone": "counter",
+                "cashRegisterId": null,
+                "state": "pending",
+                "stateLabel": "En attente",
+                "lastSeenAt": "2026-11-16T01:40:28+00:00",
+                "silentSince": null,
+                "silentSeconds": null,
+                "hint": "Le tapis simulé n'a encore rien lu. Jouez le scénario « Pièce posée sur le tapis »."
             }
         ],
         "summary": {
             "ok": 1,
-            "pending": 0,
+            "pending": 1,
             "down": 0,
             "absent": 0,
-            "allOk": true,
-            "label": "Tout est en ordre"
+            "allOk": false,
+            "label": "1 appareil à vérifier"
         },
         "thresholdSeconds": 300,
         "exercise": true,
         "screen": "pertes.boitiers",
-        "checkedAt": "2026-11-15T23:33:01+00:00"
+        "checkedAt": "2026-11-16T01:40:29+00:00"
     }
 }

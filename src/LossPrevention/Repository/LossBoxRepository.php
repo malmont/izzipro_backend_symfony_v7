@@ -173,7 +173,7 @@ class LossBoxRepository extends EntityRepository
     public function matOfRegister(int $cashRegisterId): ?array
     {
         return $this->db()->fetchAssociative(
-            'SELECT d.id, d.status, b.id AS box_id, b.status AS box_status, b.last_seen_at AS box_seen FROM loss_device d JOIN loss_box b ON b.id = d.box_id'
+            'SELECT d.id, d.status, b.id AS box_id, b.status AS box_status, b.last_seen_at AS box_seen, b.clock_offset AS box_clock FROM loss_device d JOIN loss_box b ON b.id = d.box_id'
             . " WHERE d.cash_register_id = ? AND d.kind = 'counter_mat' AND d.status <> 'retired' AND NOT d.exercise AND b.status <> 'revoked' ORDER BY d.id LIMIT 1", [$cashRegisterId]) ?: null;
     }
 
@@ -185,7 +185,7 @@ class LossBoxRepository extends EntityRepository
     public function liveMats(bool $exercise): array
     {
         return $this->db()->fetchAllAssociative(
-            'SELECT d.id, d.serial, d.model, d.status, d.cash_register_id, d.last_seen_at, b.status AS box_status, b.last_seen_at AS box_seen,'
+            'SELECT d.id, d.serial, d.model, d.status, d.cash_register_id, d.last_seen_at, b.status AS box_status, b.last_seen_at AS box_seen, b.clock_offset AS box_clock,'
             . ' EXISTS (SELECT 1 FROM loss_counter_presence c WHERE c.device_id = d.id) AS has_read, r.name AS register_name'
             . ' FROM loss_device d JOIN loss_box b ON b.id = d.box_id LEFT JOIN cash_register r ON r.id = d.cash_register_id'
             . " WHERE d.kind = 'counter_mat' AND d.status <> 'retired' AND d.exercise = CAST(? AS boolean) AND b.status <> 'revoked' ORDER BY d.id", [$exercise ? 'true' : 'false']);
@@ -222,19 +222,41 @@ class LossBoxRepository extends EntityRepository
     // ----- Présence sur un tapis de comptoir (projection des faits COUNTER_SEEN et COUNTER_LEFT)
 
     /**
-     * Une puce arrive sur un tapis : une présence s'ouvre, sauf si elle y est déjà (index unique des présences ouvertes). Une puce
-     * n'est que sur un tapis à la fois : si un autre la croyait encore posée, sa présence se ferme.
+     * Une puce arrive sur un tapis : une présence s'ouvre, sauf si elle y est déjà (index unique des présences ouvertes), et sauf si
+     * l'on connaît déjà un départ PLUS RÉCENT que cette arrivée (un lot arrivé en retard ne pose pas une pièce fantôme). Une puce
+     * n'est que sur un tapis à la fois : si un autre la croyait encore posée, sa présence se ferme. La pièce est celle que porte la
+     * puce à cet instant.
      */
-    public function openPresence(int $deviceId, int $tagId, ?int $pieceId, string $since, bool $exercise): void
+    public function openPresence(int $deviceId, int $tagId, string $since, bool $exercise): void
     {
-        $this->db()->executeStatement('UPDATE loss_counter_presence SET until = GREATEST(CAST(? AS timestamp), since) WHERE tag_id = ? AND device_id <> ? AND until IS NULL', [$since, $tagId, $deviceId]);
+        $this->db()->executeStatement('UPDATE loss_counter_presence SET until = CAST(? AS timestamp) WHERE tag_id = ? AND device_id <> ? AND until IS NULL AND since <= CAST(? AS timestamp)',
+            [$since, $tagId, $deviceId, $since]);
         $this->db()->executeStatement(
-            'INSERT INTO loss_counter_presence (device_id, tag_id, piece_id, since, exercise) VALUES (?, ?, ?, ?, CAST(? AS boolean)) ON CONFLICT (device_id, tag_id) WHERE until IS NULL DO NOTHING',
-            [$deviceId, $tagId, $pieceId, $since, $exercise ? 'true' : 'false']);
+            'INSERT INTO loss_counter_presence (device_id, tag_id, piece_id, since, exercise) SELECT :device, t.id, t.piece_id, CAST(:since AS timestamp), CAST(:exercise AS boolean) FROM loss_tag t WHERE t.id = :tag'
+            . ' AND NOT EXISTS (SELECT 1 FROM loss_counter_presence c WHERE c.device_id = :device AND c.tag_id = :tag AND c.until > CAST(:since AS timestamp))'
+            . ' ON CONFLICT (device_id, tag_id) WHERE until IS NULL DO NOTHING',
+            ['device' => $deviceId, 'tag' => $tagId, 'since' => $since, 'exercise' => $exercise ? 'true' : 'false']);
     }
 
-    /** Une puce quitte un tapis : sa présence ouverte se ferme (jamais avant son début) */
-    public function closePresence(int $deviceId, int $tagId, string $until): void
+    /**
+     * Une puce quitte un tapis : sa présence ouverte se ferme, si ce départ n'est pas plus ancien que l'arrivée qu'on connaît. Sans
+     * présence ouverte, le départ est retenu quand même (une présence d'un instant) : une arrivée plus ancienne, reçue ensuite,
+     * n'ouvrira rien.
+     */
+    public function closePresence(int $deviceId, int $tagId, string $until, bool $exercise): void
+    {
+        $closed = (int) $this->db()->executeStatement('UPDATE loss_counter_presence SET until = CAST(? AS timestamp) WHERE device_id = ? AND tag_id = ? AND until IS NULL AND since <= CAST(? AS timestamp)',
+            [$until, $deviceId, $tagId, $until]);
+        if ($closed === 0) {
+            $this->db()->executeStatement(
+                'INSERT INTO loss_counter_presence (device_id, tag_id, piece_id, since, until, exercise) SELECT :device, t.id, t.piece_id, CAST(:at AS timestamp), CAST(:at AS timestamp), CAST(:exercise AS boolean) FROM loss_tag t'
+                . ' WHERE t.id = :tag AND NOT EXISTS (SELECT 1 FROM loss_counter_presence c WHERE c.device_id = :device AND c.tag_id = :tag AND (c.until IS NULL OR c.until >= CAST(:at AS timestamp)))',
+                ['device' => $deviceId, 'tag' => $tagId, 'at' => $until, 'exercise' => $exercise ? 'true' : 'false']);
+        }
+    }
+
+    /** Un départ à l'heure douteuse : la puce n'est plus posée pour nous, à l'heure du serveur (jamais avant son arrivée) */
+    public function closePresencesOfTag(int $deviceId, int $tagId, string $until): void
     {
         $this->db()->executeStatement('UPDATE loss_counter_presence SET until = GREATEST(CAST(? AS timestamp), since) WHERE device_id = ? AND tag_id = ? AND until IS NULL', [$until, $deviceId, $tagId]);
     }
@@ -251,6 +273,30 @@ class LossBoxRepository extends EntityRepository
             $this->db()->executeStatement('UPDATE loss_counter_presence SET until = GREATEST(CAST(? AS timestamp), since) WHERE device_id IN (?) AND until IS NULL', [$until, $deviceIds],
                 [1 => ArrayParameterType::INTEGER]);
         }
+    }
+
+    /** @return list<int> les tapis d'un boîtier (retirés compris : leurs présences sont déjà fermées) */
+    public function matIdsOf(int $boxId): array
+    {
+        return array_map('intval', $this->db()->fetchFirstColumn("SELECT id FROM loss_device WHERE box_id = ? AND kind = 'counter_mat'", [$boxId]));
+    }
+
+    /** Un boîtier révoqué rend les postes de caisse de ses tapis : un autre tapis peut les prendre */
+    public function releaseRegistersOf(int $boxId): void
+    {
+        $this->db()->executeStatement('UPDATE loss_device SET cash_register_id = NULL WHERE box_id = ? AND cash_register_id IS NOT NULL', [$boxId]);
+    }
+
+    /** @return list<array{tag_id: int, piece_id: ?int}> les puces posées en ce moment sur un tapis, la plus ancienne d'abord */
+    public function openPresencesOf(int $deviceId): array
+    {
+        return $this->db()->fetchAllAssociative('SELECT c.tag_id, t.piece_id FROM loss_counter_presence c JOIN loss_tag t ON t.id = c.tag_id WHERE c.device_id = ? AND c.until IS NULL ORDER BY c.id', [$deviceId]);
+    }
+
+    /** Nombre de postes de caisse actifs du site */
+    public function activeRegisterCount(): int
+    {
+        return (int) $this->db()->fetchOne('SELECT COUNT(*) FROM cash_register WHERE is_active');
     }
 
     /**
@@ -277,7 +323,8 @@ class LossBoxRepository extends EntityRepository
     public function readOnMat(int $deviceId, string $since): array
     {
         return array_map(static fn (array $row): array => ['variant' => (int) $row['variant_id'], 'present' => (bool) $row['present']], $this->db()->fetchAllAssociative(
-            'SELECT p.id, p.variant_id, BOOL_OR(c.until IS NULL) AS present FROM loss_counter_presence c JOIN loss_tag t ON t.id = c.tag_id JOIN loss_piece p ON p.id = c.piece_id'
+            // la pièce est celle que la puce porte AUJOURD'HUI : une puce posée sur le tapis puis associée à sa pièce est lue
+            'SELECT p.id, p.variant_id, BOOL_OR(c.until IS NULL) AS present FROM loss_counter_presence c JOIN loss_tag t ON t.id = c.tag_id JOIN loss_piece p ON p.id = t.piece_id'
             . " WHERE c.device_id = ? AND (c.until IS NULL OR c.until >= ?) AND t.status = 'associated' AND p.status NOT IN ('sold', 'retired') GROUP BY p.id, p.variant_id", [$deviceId, $since]));
     }
 

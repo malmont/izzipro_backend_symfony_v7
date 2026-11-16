@@ -1,0 +1,49 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/sante?locale=fr"
+    },
+    "status": 200,
+    "body": {
+        "devices": [
+            {
+                "code": "box-1",
+                "kind": "box",
+                "label": "Boîtier de la caisse 1",
+                "zone": null,
+                "cashRegisterId": null,
+                "state": "ok",
+                "stateLabel": "En ordre",
+                "lastSeenAt": "2026-11-16T01:40:26+00:00",
+                "silentSince": null,
+                "silentSeconds": null,
+                "hint": null
+            },
+            {
+                "code": "mat-3",
+                "kind": "mat",
+                "label": "Tapis de comptoir",
+                "zone": "counter",
+                "cashRegisterId": null,
+                "state": "pending",
+                "stateLabel": "En attente",
+                "lastSeenAt": "2026-11-16T01:40:26+00:00",
+                "silentSince": null,
+                "silentSeconds": null,
+                "hint": "Le tapis n'a encore lu aucune puce. Posez dessus une pièce qui porte une puce."
+            }
+        ],
+        "summary": {
+            "ok": 1,
+            "pending": 1,
+            "down": 0,
+            "absent": 0,
+            "allOk": false,
+            "label": "1 appareil à vérifier"
+        },
+        "thresholdSeconds": 300,
+        "exercise": false,
+        "screen": "pertes.boitiers",
+        "checkedAt": "2026-11-16T01:40:26+00:00"
+    }
+}

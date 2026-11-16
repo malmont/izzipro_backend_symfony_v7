@@ -63,7 +63,20 @@
                     "label": "Vérifier"
                 },
                 "state": "down",
-                "hint": "Silencieux depuis 11 min. Vérifiez son alimentation, son câble réseau et la connexion Internet de la boutique."
+                "hint": "Silencieux depuis 12 min. Vérifiez son alimentation, son câble réseau et la connexion Internet de la boutique."
+            },
+            {
+                "code": "counter_mat",
+                "title": "Brancher le tapis de comptoir",
+                "text": "Facultatif. Le tapis lit les puces des articles posés au comptoir : la caisse sait quels articles suivis du panier n'ont pas été lus. Branchez-le sur le boîtier, posez une pièce dessus, puis choisissez son poste de caisse.",
+                "image": "pertes/installation/counter_mat",
+                "status": "todo",
+                "verify": {
+                    "kind": "data",
+                    "label": "Vérifier"
+                },
+                "state": "absent",
+                "hint": "Aucun tapis de comptoir. Branchez le tapis sur le boîtier : il apparaît ici de lui-même."
             }
         ],
         "progress": {

@@ -7,8 +7,8 @@ use Doctrine\ORM\Mapping as ORM;
 /**
  * Présence d'une pièce sur un tapis de comptoir (lot L3-b1, `docs/prevention-pertes.md` § 16.15) : la puce est arrivée sur le
  * tapis (`since`), elle l'a quitté ou non (`until`). C'est une PROJECTION des faits `COUNTER_SEEN` et `COUNTER_LEFT` que le boîtier
- * envoie : le serveur la tient à jour, elle se recalcule depuis les faits, elle n'est la preuve de rien. Les heures sont celles du
- * boîtier (un fait à l'heure douteuse ne l'alimente pas). Lue et écrite en SQL par `LossBoxRepository`.
+ * envoie : le serveur la tient à jour, elle n'est la preuve de rien (les faits le sont). Les heures sont celles du boîtier (une
+ * arrivée à l'heure douteuse ne pose rien). Lue et écrite en SQL par `LossBoxRepository`.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'loss_counter_presence')]

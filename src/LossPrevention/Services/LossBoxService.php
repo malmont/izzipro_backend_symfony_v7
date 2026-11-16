@@ -162,6 +162,7 @@ class LossBoxService
             $key = LossBoxKey::generate();
             $now = self::now();
             $repository->resetKey($id, $this->tokens->keyHash($this->site(), $key), LossBoxKey::hint($key), $now);
+            $repository->closePresencesOf($repository->matIdsOf($id), $now); // la machine d'avant est détachée : ce qu'elle disait posé ne l'est plus
             $repository->event($id, null, LossBoxEvent::BOX_KEY_RESET, $userId, false, [], $now);
 
             return ['box' => $this->sheet($id, $locale, false), 'key' => $key, 'enrolment' => $this->enrolment($key, $locale)];
@@ -189,6 +190,9 @@ class LossBoxService
                 $now = self::now();
                 $repository->revoke($id, $now);
                 $repository->event($id, null, LossBoxEvent::BOX_REVOKED, $userId, false, [], $now);
+                // un boîtier révoqué ne dit plus rien de ses tapis, et rend leurs postes de caisse : un autre tapis peut les prendre
+                $repository->closePresencesOf($repository->matIdsOf($id), $now);
+                $repository->releaseRegistersOf($id);
             }
 
             return $this->sheet($id, $locale, false);
@@ -207,7 +211,11 @@ class LossBoxService
     {
         return $this->transaction(function () use ($id, $deviceId, $body, $locale, $userId): array {
             $repository = $this->repository();
-            [, $device] = $this->lockedDevice($id, $deviceId, $locale);
+            [$box, $device] = $this->lockedDevice($id, $deviceId, $locale);
+            if ($device['status'] === LossDevice::RETIRED || $box['status'] === LossBox::REVOKED) {
+                // un appareil retiré, ou celui d'un boîtier révoqué, ne se relie plus à rien
+                throw new GestionConflictException('DEVICE_NOT_FOUND', $this->texts->t('boxes.error.DEVICE_NOT_FOUND', $locale), 404);
+            }
             $mat = $device['kind'] === LossDevice::COUNTER_MAT;
             $key = $mat ? 'cashRegisterId' : 'zone';
             $errors = [];
@@ -241,7 +249,12 @@ class LossBoxService
             $column = $mat ? 'cash_register_id' : 'zone';
             $current = $mat && $device[$column] !== null ? (int) $device[$column] : $device[$column];
             if ($current !== $value) { // la même valeur : rien à écrire
-                $repository->assignDevice($deviceId, $column, $value);
+                try {
+                    $repository->assignDevice($deviceId, $column, $value);
+                } catch (\Doctrine\DBAL\Exception\UniqueConstraintViolationException) {
+                    // deux tapis reliés au même poste au même instant, depuis deux boîtiers : la base n'en garde qu'un
+                    throw new GestionConflictException('REGISTER_ALREADY_HAS_MAT', $this->texts->t('boxes.error.REGISTER_ALREADY_HAS_MAT', $locale), 409, ['deviceId' => $repository->matOfRegisterId((int) $value, $deviceId)]);
+                }
                 $repository->event($id, $deviceId, LossBoxEvent::DEVICE_ASSIGNED, $userId, false, [$key => $value], self::now());
             }
 
@@ -356,6 +369,7 @@ class LossBoxService
                     // deux heures sans réseau, puis le retour : le fait dit le trou
                     $repository->event($id, null, LossBoxEvent::BOX_BACK, null, true, ['silentSeconds' => 7200], $now);
                     $repository->seen($id, $now, null, 0);
+                    $repository->closePresencesOf($repository->matIdsOf($id), $now); // comme un vrai boîtier : ce qui était posé ne l'est plus pour nous
                     $written = 1;
                     break;
                 case 'device_down':
@@ -372,20 +386,26 @@ class LossBoxService
                 case 'counter_take':
                     // une pièce d'exercice posée sur le tapis simulé, puis reprise : le fait, et la présence qui en découle
                     $mat = $devices[self::SIM_MAT] ?? null;
-                    $pieces = $repository->exercisePiecesWithTag(1);
-                    if ($pieces === [] || $mat === null) {
+                    if ($mat === null) {
                         throw new GestionConflictException('EXERCISE_NO_PIECE', $this->texts->t('boxes.error.EXERCISE_NO_PIECE', $locale), 409);
                     }
-                    [$pieceId, $tagId, $matId] = [(int) $pieces[0]['piece_id'], (int) $pieces[0]['tag_id'], (int) $mat['id']];
-                    $onMat = $repository->presentCounts([$matId])[$matId] ?? 0;
-                    if ($scenario === 'counter_put' && $onMat === 0) {
-                        $repository->pieceFact(LossPieceEvent::COUNTER_SEEN, $now, $pieceId, $tagId, $id, $matId, null, true, ['zone' => 'counter'], $now);
-                        $repository->openPresence($matId, $tagId, $pieceId, $now, true);
+                    $matId = (int) $mat['id'];
+                    $onMat = $repository->openPresencesOf($matId);
+                    if ($scenario === 'counter_put' && $onMat === []) {
+                        $pieces = $repository->exercisePiecesWithTag(1);
+                        if ($pieces === []) {
+                            throw new GestionConflictException('EXERCISE_NO_PIECE', $this->texts->t('boxes.error.EXERCISE_NO_PIECE', $locale), 409);
+                        }
+                        $repository->pieceFact(LossPieceEvent::COUNTER_SEEN, $now, (int) $pieces[0]['piece_id'], (int) $pieces[0]['tag_id'], $id, $matId, null, true, ['zone' => 'counter'], $now);
+                        $repository->openPresence($matId, (int) $pieces[0]['tag_id'], $now, true);
                         $written = 1;
-                    } elseif ($scenario === 'counter_take' && $onMat > 0) {
-                        $repository->pieceFact(LossPieceEvent::COUNTER_LEFT, $now, $pieceId, $tagId, $id, $matId, null, true, ['zone' => 'counter'], $now);
+                    } elseif ($scenario === 'counter_take') {
+                        // c'est la pièce POSÉE qui part (pas la dernière créée)
+                        foreach ($onMat as $present) {
+                            $repository->pieceFact(LossPieceEvent::COUNTER_LEFT, $now, $present['piece_id'] !== null ? (int) $present['piece_id'] : null, (int) $present['tag_id'], $id, $matId, null, true, ['zone' => 'counter'], $now);
+                            ++$written;
+                        }
                         $repository->closePresencesOf([$matId], $now);
-                        $written = 1;
                     }
                     break;
                 default:

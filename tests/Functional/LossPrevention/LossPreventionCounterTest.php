@@ -133,9 +133,42 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $this->assertSame(['accepted', null], $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc, ['at' => gmdate('Y-m-d\TH:i:s\Z', time() + 600), 'key' => "futur-$this->s-0001"]));
         $this->assertSame([[[$mat, false]], true], [$presence(), json_decode((string) $this->db->fetchOne('SELECT data FROM loss_piece_event WHERE event_key = ?', ["b$id:futur-$this->s-0001"]), true)['clockDoubt']]);
 
-        // Tapis débranché : ce qu'on croyait posé ne l'est plus pour nous ; la pastille dit le câble
+        // Un départ à l'heure douteuse vaut quand même : on ne garde pas « posée » une pièce qu'on nous dit partie
+        $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc);
+        $this->assertSame(['accepted', null], $this->fact($token, 'COUNTER_LEFT', "TAPIS-$this->s", $nfc, ['at' => gmdate('Y-m-d\TH:i:s\Z', time() + 600)]));
+        $this->assertSame(0, $sheet()[$mat]['onMat']);
+        // Faits arrivés dans le désordre (un lot renvoyé après un autre) : un départ plus ancien que l'arrivée connue ne ferme rien ;
+        // une arrivée plus ancienne qu'un départ déjà connu ne pose pas une pièce fantôme
+        $other = $this->tagged($variant, '02');
+        $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $other, ['at' => gmdate('Y-m-d\TH:i:s\Z', time() - 30)]);
+        $this->fact($token, 'COUNTER_LEFT', "TAPIS-$this->s", $other, ['at' => gmdate('Y-m-d\TH:i:s\Z', time() - 300)]);
+        $this->assertSame(1, $sheet()[$mat]['onMat'], 'le départ d\'il y a cinq minutes ne ferme pas l\'arrivée d\'il y a trente secondes');
+        $this->fact($token, 'COUNTER_LEFT', "TAPIS-$this->s", $other, ['at' => gmdate('Y-m-d\TH:i:s\Z', time() - 10)]);
+        $this->assertSame(0, $sheet()[$mat]['onMat']);
+        $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $other, ['at' => gmdate('Y-m-d\TH:i:s\Z', time() - 120)]);
+        $this->assertSame(0, $sheet()[$mat]['onMat'], 'l\'arrivée d\'il y a deux minutes, reçue après le départ d\'il y a dix secondes, ne pose rien');
+        $third = $this->tagged($variant, '03');
+        $this->fact($token, 'COUNTER_LEFT', "TAPIS-$this->s", $third, ['at' => gmdate('Y-m-d\TH:i:s\Z', time() - 10)]);
+        $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $third, ['at' => gmdate('Y-m-d\TH:i:s\Z', time() - 40)]);
+        $this->assertSame(0, $sheet()[$mat]['onMat'], 'même quand le départ est arrivé seul d\'abord (son arrivée perdue puis renvoyée)');
+        $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $third);
+        $this->assertSame(1, $sheet()[$mat]['onMat'], 'reposée maintenant : elle est bien là');
+        $this->fact($token, 'COUNTER_LEFT', "TAPIS-$this->s", $third);
+
+        // Tapis débranché : ce qu'on croyait posé ne l'est plus pour nous ; la pastille dit le câble ; revenu, le boîtier doit redire
         $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc);
         $this->assertSame(1, $sheet()[$mat]['onMat']);
+        $all = [['serial' => "TAPIS-$this->s", 'kind' => 'counter_mat', 'status' => 'ok'], ['serial' => "LECTEUR-$this->s", 'kind' => 'reader', 'status' => 'ok']];
+        $this->assertSame([], $this->beat($token, $all)['resendMats'], 'rien n\'a été fermé : rien à redire');
+        // un tapis que le boîtier n'annonce plus : débranché, ses présences se ferment ; idem si son genre change
+        $this->beat($token, [$all[1]]);
+        $this->assertSame([0, 'down'], [$sheet()[$mat]['onMat'], $health()["mat-$mat"]['state']]);
+        $this->assertSame(["TAPIS-$this->s"], $this->beat($token, $all)['resendMats'], 'revenu : le boîtier redit ce qui est posé sur ce tapis');
+        $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc);
+        $this->beat($token, [['serial' => "TAPIS-$this->s", 'kind' => 'reader', 'status' => 'ok'], $all[1]]);
+        $this->assertSame([0, 'down'], [$sheet()[$mat]['onMat'], $health()["mat-$mat"]['state']], 'le numéro du tapis annoncé comme un lecteur : le tapis n\'est plus là');
+        $this->beat($token, $all);
+        $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc);
         $this->beat($token, [['serial' => "TAPIS-$this->s", 'kind' => 'counter_mat', 'status' => 'down'], ['serial' => "LECTEUR-$this->s", 'kind' => 'reader', 'status' => 'ok']]);
         $line = $health()["mat-$mat"];
         $this->assertSame([0, 'down', 'Le tapis ne répond plus. Vérifiez son câble sur le boîtier, puis son alimentation.'], [$sheet()[$mat]['onMat'], $line['state'], $line['hint']]);
@@ -144,15 +177,37 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         // Il revient, une puce est posée, puis son BOÎTIER se tait : le tapis est dit silencieux avec lui, et au retour du boîtier les
         // présences d'avant sont fermées (le boîtier redit ce qui est posé)
         $this->beat($token, [['serial' => "TAPIS-$this->s", 'kind' => 'counter_mat', 'status' => 'ok']]);
-        $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc);
+        $fourth = $this->tagged($variant, '04');
+        $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $fourth, ['at' => gmdate('Y-m-d\TH:i:s\Z', time() - 900)]); // posée il y a un quart d'heure
         $this->db->executeStatement("UPDATE loss_box SET last_seen_at = NOW() AT TIME ZONE 'UTC' - INTERVAL '10 minutes' WHERE id = ?", [$id]);
         $line = $health()["mat-$mat"];
         $this->assertSame(['down', 'Son boîtier ne donne plus signe de vie : on ne sait plus ce qui est posé sur le tapis. Vérifiez le boîtier.'], [$line['state'], $line['hint']]);
+        $lastSeen = (string) $this->db->fetchOne('SELECT last_seen_at FROM loss_box WHERE id = ?', [$id]);
+        $this->assertSame(["TAPIS-$this->s"], $this->beat($token, [['serial' => "TAPIS-$this->s", 'kind' => 'counter_mat', 'status' => 'ok']])['resendMats']);
+        $this->assertSame([0, 'ok', $lastSeen], [$sheet()[$mat]['onMat'], $health()["mat-$mat"]['state'], (string) $this->db->fetchOne('SELECT until FROM loss_counter_presence WHERE device_id = ? ORDER BY id DESC LIMIT 1', [$mat])],
+            'fermée au dernier signe de vie d\'avant le silence, pas à l\'heure du retour');
+        // Horloge du boîtier déréglée : ce qu'on croyait posé ne l'est plus, ses arrivées ne posent rien, la pastille le dit ; remise
+        // à l'heure, le boîtier redit
+        $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc);
+        $drift = fn (int $seconds): array => $this->json($this->box('POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z', time() + $seconds), 'machine' => self::MACHINE,
+            'devices' => [['serial' => "TAPIS-$this->s", 'kind' => 'counter_mat', 'status' => 'ok']]], $token));
+        $this->assertSame([true, []], [($d = $drift(-300))['clockDoubt'], $d['resendMats']]);
+        $line = $health()["mat-$mat"];
+        $this->assertSame([0, 'down'], [$sheet()[$mat]['onMat'], $line['state']]);
+        $this->assertStringContainsString('L\'horloge de son boîtier est déréglée', $line['hint']);
+        $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc);
+        $this->assertSame(0, $sheet()[$mat]['onMat']);
+        $this->assertSame([false, ["TAPIS-$this->s"]], [($d = $drift(0))['clockDoubt'], $d['resendMats']]);
+        $this->assertSame('ok', $health()["mat-$mat"]['state']);
+        // Machine réinscrite, clé remise à zéro : ce que la plateforme croyait posé se ferme
+        $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc);
+        $token = $this->reenrol($id, $token);
+        $this->assertSame(0, $sheet()[$mat]['onMat'], 'réinscrite : rien n\'est plus dit posé');
         $this->beat($token, [['serial' => "TAPIS-$this->s", 'kind' => 'counter_mat', 'status' => 'ok']]);
-        $this->assertSame([0, 'ok'], [$sheet()[$mat]['onMat'], $health()["mat-$mat"]['state']]);
+        $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc);
+        $this->assertSame(1, $sheet()[$mat]['onMat']);
 
         // Retirer un appareil remplacé : confirmation ; il ne compte plus, n'envoie plus de faits, rend son poste ; annoncé de nouveau, il revient
-        $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc);
         $retire = fn (int $device, array $body, int $status = 200): array => $this->json($this->admin('POST', self::BOXES . "/$id/appareils/$device/retirer", $body), $status);
         $this->assertSame(['confirm' => 'REQUIRED'], $retire($mat, [], 422)['fields']);
         $this->assertSame('DEVICE_NOT_FOUND', $retire(999999999, ['confirm' => true], 404)['error']);
@@ -160,7 +215,9 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $after = $retire($mat, ['confirm' => true]);
         $this->assertNotContains($mat, array_column($after['devices'], 'id'));
         $retire($mat, ['confirm' => true]);
-        $this->assertSame([[['DEVICE_RETIRED', $mat, []]], 'retired', [[$mat, false], [$mat, false], [$mat, false], [$mat, false]]], [array_slice($events(), $before), $this->db->fetchOne('SELECT status FROM loss_device WHERE id = ?', [$mat]), $presence()]);
+        $this->assertSame([[['DEVICE_RETIRED', $mat, []]], 'retired', 0], [array_slice($events(), $before), $this->db->fetchOne('SELECT status FROM loss_device WHERE id = ?', [$mat]),
+            (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_counter_presence WHERE device_id = ? AND until IS NULL', [$mat])]);
+        $this->assertSame('DEVICE_NOT_FOUND', $assign($mat, ['cashRegisterId' => $this->register], 404)['error'], 'un appareil retiré ne se relie plus');
         $this->assertArrayNotHasKey("mat-$mat", $health());
         $this->assertNotContains($mat, array_column($this->json($this->box('GET', '/reglages', null, $token))['devices'], 'id'));
         $this->assertSame(['refused', 'DEVICE_UNKNOWN'], $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc));
@@ -173,6 +230,12 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $this->assertSame(['ok', null, ['DEVICE_SEEN', $mat, ['kind' => 'counter_mat', 'again' => true]]],
             [$this->db->fetchOne('SELECT status FROM loss_device WHERE id = ?', [$mat]), $this->db->fetchOne('SELECT cash_register_id FROM loss_device WHERE id = ?', [$mat]), $events()[$before]],
             'il revient, sans poste : le sien a été repris par un autre tapis');
+        // Boîtier révoqué : ses tapis rendent leur poste (un autre tapis peut le prendre) et ne se relient plus
+        $otherMat = $otherDevices["TAPIS-B-$this->s"];
+        $this->json($this->admin('POST', self::BOXES . "/$otherBox/revoquer", ['confirm' => true]));
+        $this->assertNull($this->db->fetchOne('SELECT cash_register_id FROM loss_device WHERE id = ?', [$otherMat]));
+        $this->assertSame('DEVICE_NOT_FOUND', $assign($otherMat, ['cashRegisterId' => $this->register], 404, $otherBox)['error']);
+        $this->assertSame($this->register, array_column($assign($mat, ['cashRegisterId' => $this->register])['devices'], null, 'id')[$mat]['cashRegister']['id'], 'le poste du boîtier révoqué est libre');
 
         // Droits : administrateur ; sans le droit du module, fermé
         $this->loginPos(['ROLE_USER_POS']);
@@ -198,7 +261,6 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         [$id, $token, $devices] = $this->enrolled('Caisse 1', [['serial' => "TAPIS-$this->s", 'kind' => 'counter_mat', 'status' => 'ok']]);
         $mat = $devices["TAPIS-$this->s"];
         $this->json($this->admin('PUT', self::BOXES . "/$id/appareils/$mat", ['cashRegisterId' => $this->register]));
-        $second = (int) $this->json($this->admin('POST', '/api/cash-registers', ['name' => "Caisse 2 $this->s"]), 201)['id'];
         $this->loginPos(['ROLE_USER_POS']);
         $this->openSession();
         $basket = [['productVariantId' => $a, 'quantity' => 1], ['productVariantId' => $b, 'quantity' => 1], ['productVariantId' => $c, 'quantity' => 1], ['productVariantId' => $d, 'quantity' => 3],
@@ -264,27 +326,42 @@ class LossPreventionCounterTest extends LossPreventionTestCase
 
         // Le poste : celui où le caissier vend. Inconnu, fermé : refusé comme pour une vente
         $this->assertSame('CASH_REGISTER_NOT_FOUND', $ask($basket, 999999999, 404)['error']);
+        // Un second poste arrive sur le site. Tant que la tablette du caissier n'est rattachée à aucun poste, on ne sait plus lequel est
+        // le sien : pas de contrôle, pour aucun poste (sur un site à un seul poste, la question ne se posait pas)
+        $second = (int) $this->json($this->admin('POST', '/api/cash-registers', ['name' => "Caisse 2 $this->s"]), 201)['id'];
         $this->assertSame('CASH_REGISTER_CLOSED', $ask($basket, $second, 409)['error']);
-        // Un autre poste, ouvert, sans tapis : pas de contrôle. Le tapis du premier poste n'y est pour rien
         $this->json($this->pos('POST', '/api/caisse/open', ['cashRegisterId' => $second, 'cashFund' => 10000]), 201);
-        $this->assertSame([false, 'NO_MAT', 0, 0, [], 0], $short($noMat = $ask($basket, $second)));
-        $this->assertSame($second, $noMat['cashRegisterId']);
-        // Ce poste reçoit son tapis, d'un autre boîtier : chacun ne lit que le sien
+        $this->assertSame([[false, 'TERMINAL_NOT_BOUND', 0, 0, [], 0], [false, 'TERMINAL_NOT_BOUND', 0, 0, [], 0]], [$short($ask($basket)), $short($ask($basket, $second))],
+            'un caissier sans tablette rattachée ne lit le tapis d\'aucun poste');
+        // Le responsable et l'administrateur lisent tous les postes, comme à la caisse
+        $this->assertSame([true, false, 'NO_MAT'], [($byAdmin = $this->json($this->call('POST', self::UNREAD, ['cashRegisterId' => $this->register, 'items' => $basket], $this->adminToken)))['active'],
+            ($noMat = $this->json($this->call('POST', self::UNREAD, ['cashRegisterId' => $second, 'items' => $basket], $this->adminToken)))['active'], $noMat['reason']]);
+        $this->assertSame([$second, 0, []], [$noMat['cashRegisterId'], $noMat['tracked'], $noMat['unread']], 'un poste sans tapis : pas de contrôle ; le tapis du premier poste n\'y est pour rien');
+        $this->assertSame(2, $byAdmin['read']);
+        // Chaque tablette rattachée à son poste : son caissier lit le tapis de CE poste, et lui seul
+        $first = $this->activateTerminal("Tablette 1 $this->s");
+        $firstHeader = $this->terminal;
+        $this->json($this->call('PUT', '/api/app-keys/' . $first, ['cashRegisterId' => $this->register], $this->adminToken));
+        $forbidden = $ask($basket, $second, 403);
+        $this->assertSame(['CASH_REGISTER_FORBIDDEN', false], [$forbidden['error'], array_key_exists('unread', $forbidden)], 'la tablette du poste 1 ne lit pas le tapis du poste 2');
+        $this->assertSame([true, null, 3, 2], array_slice($short($ask($basket)), 0, 4), 'son poste : oui');
+        $this->terminal = null;
+        $this->assertSame('TERMINAL_NOT_BOUND', $ask($basket)['reason'], 'le même caissier, sans l\'en-tête de sa tablette : pas de contrôle');
+        $otherTerminal = $this->activateTerminal("Tablette 2 $this->s");
+        $secondHeader = $this->terminal;
+        $this->json($this->call('PUT', '/api/app-keys/' . $otherTerminal, ['cashRegisterId' => $second], $this->adminToken));
+        $this->assertSame([false, 'NO_MAT'], array_slice($short($ask($basket, $second)), 0, 2));
+        // Le poste 2 reçoit son tapis, d'un autre boîtier : chacun ne lit que le sien
         [$otherBox, $otherToken, $otherDevices] = $this->enrolled('Caisse 2', [['serial' => "TAPIS-2-$this->s", 'kind' => 'counter_mat', 'status' => 'ok']], 'seconde-machine-0123456789abcdef');
         $this->json($this->admin('PUT', self::BOXES . "/$otherBox/appareils/" . $otherDevices["TAPIS-2-$this->s"], ['cashRegisterId' => $second]));
         $this->assertSame([true, null, 3, 0, [[$a, 2, 2], [$b, 1, 1]], 0], $short($ask($basket, $second)), 'les pièces posées sur le tapis du poste 1 ne sont pas lues depuis le poste 2');
         $this->fact($otherToken, 'COUNTER_SEEN', "TAPIS-2-$this->s", $e1);
-        $this->assertSame([[true, null, 1, 1, [], 0], 0], [$short($ask([['productVariantId' => $e, 'quantity' => 1]], $second)), $ask($basket)['extra']],
-            'et l\'inverse ; la pièce posée sur le second tapis n\'est plus comptée sur le premier : une puce n\'est que sur un tapis à la fois');
-        // Une tablette rattachée au poste 1 : son caissier ne lit pas le tapis du poste 2
-        $terminal = $this->activateTerminal("Tablette $this->s");
-        $this->json($this->call('PUT', '/api/app-keys/' . $terminal, ['cashRegisterId' => $this->register], $this->adminToken));
-        $forbidden = $ask($basket, $second, 403);
-        $this->assertSame(['CASH_REGISTER_FORBIDDEN', false], [$forbidden['error'], array_key_exists('unread', $forbidden)]);
-        $this->assertSame([true, null, 3, 2], array_slice($short($ask($basket)), 0, 4), 'son poste : oui');
-        $this->terminal = null;
+        $this->assertSame([true, null, 1, 1, [], 0], $short($ask([['productVariantId' => $e, 'quantity' => 1]], $second)));
+        $this->terminal = $firstHeader;
+        $this->assertSame(0, $ask($basket)['extra'], 'la pièce posée sur le second tapis n\'est plus comptée sur le premier : une puce n\'est que sur un tapis à la fois');
 
-        // Pas de contrôle plutôt qu'un faux avis : tapis en panne, boîtier silencieux, tapis retiré, boîtier révoqué, module absent. Toujours 200
+        // Pas de contrôle plutôt qu'un faux avis : tapis en panne, boîtier silencieux, horloge déréglée, tapis retiré, boîtier révoqué,
+        // module absent. Toujours 200
         $this->beat($token, [['serial' => "TAPIS-$this->s", 'kind' => 'counter_mat', 'status' => 'down']]);
         $this->assertSame([false, 'MAT_SILENT', 0, 0, [], 0], $short($ask($basket)));
         $this->beat($token, [['serial' => "TAPIS-$this->s", 'kind' => 'counter_mat', 'status' => 'ok']]);
@@ -294,19 +371,31 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $this->db->executeStatement("UPDATE loss_box SET last_seen_at = NOW() AT TIME ZONE 'UTC' - INTERVAL '10 minutes' WHERE id = ?", [$id]);
         $this->assertSame([false, 'MAT_SILENT'], array_slice($short($ask($basket)), 0, 2));
         $this->db->executeStatement("UPDATE loss_box SET last_seen_at = NOW() AT TIME ZONE 'UTC' WHERE id = ?", [$id]);
+        foreach ([90, null] as $offset) {
+            $this->db->executeStatement('UPDATE loss_box SET clock_offset = ? WHERE id = ?', [$offset, $id]);
+            $this->assertSame([false, 'MAT_SILENT'], array_slice($short($ask($basket)), 0, 2), 'horloge du boîtier déréglée ou pas encore mesurée : ses faits ne posent rien, donc pas d\'avis');
+        }
+        $this->db->executeStatement('UPDATE loss_box SET clock_offset = 0 WHERE id = ?', [$id]);
+        $this->assertTrue($ask($basket)['active']);
         static::getContainer()->get(PlatformModeService::class)->setMode('live', 'test');
         $this->flags(true, false);
         $this->assertSame([false, 'MODULE_INACTIVE', 0, 0, [], 0], $short($ask($basket)), 'sans le module : 200, jamais un refus qui gênerait la caisse');
+        $this->assertSame([false, 'MODULE_INACTIVE', 999999999], [($closed = $ask($basket, 999999999))['active'], $closed['reason'], $closed['cashRegisterId']], 'ni le poste ni le panier ne sont regardés plus loin');
         $this->flags(true, true);
         static::getContainer()->get(PlatformModeService::class)->setMode('demo', 'test');
         $this->json($this->admin('POST', self::BOXES . "/$id/appareils/$mat/retirer", ['confirm' => true]));
         $this->assertSame([false, 'NO_MAT'], array_slice($short($ask($basket)), 0, 2));
+        $this->terminal = $secondHeader;
         $this->json($this->admin('POST', self::BOXES . "/$otherBox/revoquer", ['confirm' => true]));
         $this->assertSame([false, 'NO_MAT'], array_slice($short($ask($basket, $second)), 0, 2));
+        $this->terminal = null;
 
         // Droits : la caisse et l'administrateur ; ni un anonyme, ni un client du web, ni un boîtier
         $this->assertSame(401, $this->call('POST', self::UNREAD, ['items' => []], null)->getStatusCode());
         $this->assertSame(200, $this->call('POST', self::UNREAD, ['cashRegisterId' => $this->register, 'items' => []], $this->adminToken)->getStatusCode());
+        $this->loginPos(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
+        $this->assertSame(['NO_MAT', 'NO_MAT'], [$this->json($this->pos('POST', self::UNREAD, ['cashRegisterId' => $this->register, 'items' => []]))['reason'], $this->json($this->pos('POST', self::UNREAD, ['cashRegisterId' => $second, 'items' => []]))['reason']],
+            'un responsable de caisse, sans tablette rattachée : tous les postes');
         $customer = $this->user(['ROLE_USER_INTERNET'], 'Cliente');
         $this->assertSame(403, $this->call('POST', self::UNREAD, ['items' => []], static::getContainer()->get('lexik_jwt_authentication.jwt_manager')->create($customer))->getStatusCode());
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . self::UNREAD, [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_X_LOSS_BOX' => $token], '{"items":[]}');
@@ -478,6 +567,17 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $this->machines[$token] = $machine;
 
         return [$created['box']['id'], $token, array_column($settings['devices'], 'id', 'serial')];
+    }
+
+    /** La même machine se réinscrit avec la clé du boîtier (remise à zéro pour l'occasion) ; rend son nouveau jeton */
+    private function reenrol(int $id, string $oldToken): string
+    {
+        $key = $this->json($this->admin('POST', self::BOXES . "/$id/cle", ['confirm' => true]))['key'];
+        $machine = $this->machines[$oldToken];
+        $token = $this->json($this->box('POST', '/inscription', ['key' => $key, 'machine' => $machine, 'version' => '1.0.1', 'arch' => 'amd64'], null))['token'];
+        $this->machines[$token] = $machine;
+
+        return $token;
     }
 
     /** @var array<string, string> la machine de chaque jeton */

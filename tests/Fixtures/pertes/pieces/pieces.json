@@ -20,22 +20,22 @@
             "variantId": 24,
             "productId": 15,
             "variantMissing": false,
-            "name": "Veste en lin (exemple 0A5E69)",
+            "name": "Veste en lin (exemple 4D4FB0)",
             "variantLabel": null,
-            "barcode": "VESTE-LIN-L-0A5E69",
+            "barcode": "VESTE-LIN-L-4D4FB0",
             "barcodeOf": "variant",
             "symbology": "code128",
             "tags": [
                 {
                     "id": 2,
-                    "identifier": "E2800A5E69000000000A5E69",
+                    "identifier": "E2804D4FB0000000004D4FB0",
                     "technology": "uhf",
                     "technologyLabel": "Puce lisible à distance (UHF)",
                     "status": "associated",
                     "statusLabel": "Posée",
                     "pieceId": 3,
                     "exercise": false,
-                    "associatedAt": "2026-11-15T22:54:08+00:00",
+                    "associatedAt": "2026-11-16T01:40:36+00:00",
                     "retiredAt": null,
                     "retiredReason": null,
                     "retiredReasonLabel": null
@@ -45,7 +45,7 @@
             "commandeId": null,
             "retiredReason": null,
             "retiredReasonLabel": null,
-            "createdAt": "2026-11-15T22:54:08+00:00",
+            "createdAt": "2026-11-16T01:40:36+00:00",
             "retiredAt": null
         },
         {
@@ -58,9 +58,9 @@
             "variantId": 23,
             "productId": 15,
             "variantMissing": false,
-            "name": "Veste en lin (exemple 0A5E69)",
+            "name": "Veste en lin (exemple 4D4FB0)",
             "variantLabel": null,
-            "barcode": "VESTE-LIN-M-0A5E69",
+            "barcode": "VESTE-LIN-M-4D4FB0",
             "barcodeOf": "variant",
             "symbology": "code128",
             "tags": [],
@@ -68,7 +68,7 @@
             "commandeId": null,
             "retiredReason": null,
             "retiredReasonLabel": null,
-            "createdAt": "2026-11-15T22:54:08+00:00",
+            "createdAt": "2026-11-16T01:40:36+00:00",
             "retiredAt": null
         },
         {
@@ -81,36 +81,36 @@
             "variantId": 23,
             "productId": 15,
             "variantMissing": false,
-            "name": "Veste en lin (exemple 0A5E69)",
+            "name": "Veste en lin (exemple 4D4FB0)",
             "variantLabel": null,
-            "barcode": "VESTE-LIN-M-0A5E69",
+            "barcode": "VESTE-LIN-M-4D4FB0",
             "barcodeOf": "variant",
             "symbology": "code128",
             "tags": [
                 {
                     "id": 1,
-                    "identifier": "040A5E69C3D4E5",
+                    "identifier": "044D4FB0C3D4E5",
                     "technology": "nfc",
                     "technologyLabel": "Puce NFC",
                     "status": "associated",
                     "statusLabel": "Posée",
                     "pieceId": 1,
                     "exercise": false,
-                    "associatedAt": "2026-11-15T22:54:08+00:00",
+                    "associatedAt": "2026-11-16T01:40:36+00:00",
                     "retiredAt": null,
                     "retiredReason": null,
                     "retiredReasonLabel": null
                 },
                 {
                     "id": 3,
-                    "identifier": "010A5E69",
+                    "identifier": "014D4FB0",
                     "technology": "nfc",
                     "technologyLabel": "Puce NFC",
                     "status": "associated",
                     "statusLabel": "Posée",
                     "pieceId": 1,
                     "exercise": false,
-                    "associatedAt": "2026-11-15T22:54:08+00:00",
+                    "associatedAt": "2026-11-16T01:40:36+00:00",
                     "retiredAt": null,
                     "retiredReason": null,
                     "retiredReasonLabel": null
@@ -120,7 +120,7 @@
             "commandeId": null,
             "retiredReason": null,
             "retiredReasonLabel": null,
-            "createdAt": "2026-11-15T22:54:08+00:00",
+            "createdAt": "2026-11-16T01:40:36+00:00",
             "retiredAt": null
         }
     ]

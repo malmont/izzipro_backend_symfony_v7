@@ -14,12 +14,12 @@
                 "statusLabel": "Inscrit",
                 "online": true,
                 "onlineLabel": "En ligne",
-                "lastSeenAt": "2026-11-15T23:32:59+00:00",
-                "lastSeenLabel": "15/11/2026 18 h 32",
+                "lastSeenAt": "2026-11-16T01:40:26+00:00",
+                "lastSeenLabel": "15/11/2026 20 h 40",
                 "silentSeconds": null,
                 "version": "1.0.0",
                 "arch": "amd64",
-                "enrolledAt": "2026-11-15T23:32:58+00:00",
+                "enrolledAt": "2026-11-16T01:40:25+00:00",
                 "clockOffsetSeconds": 0,
                 "clockDoubt": false,
                 "keyHint": "IZ-BOX-XX**-****-****",
@@ -31,11 +31,13 @@
                         "kind": "reader",
                         "kindLabel": "Lecteur de puces",
                         "model": "Lecteur de bureau (USB)",
-                        "status": "down",
-                        "statusLabel": "En panne ou débranché",
+                        "status": "ok",
+                        "statusLabel": "En marche",
                         "zone": null,
                         "zoneLabel": null,
-                        "lastSeenAt": "2026-11-15T23:32:58+00:00"
+                        "cashRegister": null,
+                        "onMat": null,
+                        "lastSeenAt": "2026-11-16T01:40:26+00:00"
                     },
                     {
                         "id": 2,
@@ -47,10 +49,12 @@
                         "statusLabel": "En panne ou débranché",
                         "zone": null,
                         "zoneLabel": null,
-                        "lastSeenAt": "2026-11-15T23:32:59+00:00"
+                        "cashRegister": null,
+                        "onMat": null,
+                        "lastSeenAt": "2026-11-16T01:40:26+00:00"
                     }
                 ],
-                "createdAt": "2026-11-15T23:32:58+00:00",
+                "createdAt": "2026-11-16T01:40:25+00:00",
                 "screen": "pertes.boitiers"
             }
         ],

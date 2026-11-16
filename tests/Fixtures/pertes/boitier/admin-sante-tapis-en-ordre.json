@@ -1,0 +1,49 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/sante?locale=fr"
+    },
+    "status": 200,
+    "body": {
+        "devices": [
+            {
+                "code": "box-1",
+                "kind": "box",
+                "label": "Boîtier de la caisse 1",
+                "zone": null,
+                "cashRegisterId": null,
+                "state": "ok",
+                "stateLabel": "En ordre",
+                "lastSeenAt": "2026-11-16T01:40:26+00:00",
+                "silentSince": null,
+                "silentSeconds": null,
+                "hint": null
+            },
+            {
+                "code": "mat-3",
+                "kind": "mat",
+                "label": "Tapis de comptoir · Caisse principale",
+                "zone": "counter",
+                "cashRegisterId": 1,
+                "state": "ok",
+                "stateLabel": "En ordre",
+                "lastSeenAt": "2026-11-16T01:40:26+00:00",
+                "silentSince": null,
+                "silentSeconds": null,
+                "hint": null
+            }
+        ],
+        "summary": {
+            "ok": 2,
+            "pending": 0,
+            "down": 0,
+            "absent": 0,
+            "allOk": true,
+            "label": "Tout est en ordre"
+        },
+        "thresholdSeconds": 300,
+        "exercise": false,
+        "screen": "pertes.boitiers",
+        "checkedAt": "2026-11-16T01:40:27+00:00"
+    }
+}

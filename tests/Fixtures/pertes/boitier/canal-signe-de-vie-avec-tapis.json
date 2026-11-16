@@ -1,0 +1,86 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/pertes/boitier/signe-de-vie",
+        "headers": {
+            "X-Loss-Box": "b1.2.1794879625.0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "body": {
+            "now": "2026-11-16T01:40:26Z",
+            "machine": "machine-d-exemple-0123456789abcdef",
+            "devices": [
+                {
+                    "serial": "LECTEUR-0001",
+                    "kind": "reader",
+                    "status": "ok",
+                    "model": "Lecteur de bureau (USB)"
+                },
+                {
+                    "serial": "IMPR-0001",
+                    "kind": "printer",
+                    "status": "down"
+                },
+                {
+                    "serial": "TAPIS-0001",
+                    "kind": "counter_mat",
+                    "status": "ok",
+                    "model": "Tapis de comptoir"
+                }
+            ]
+        }
+    },
+    "status": 200,
+    "body": {
+        "serverTime": "2026-11-16T01:40:26+00:00",
+        "clockOffsetSeconds": 0,
+        "clockDoubt": false,
+        "token": null,
+        "refusedDevices": [],
+        "resendMats": [
+            "TAPIS-0001"
+        ],
+        "settings": {
+            "heartbeatSeconds": 60,
+            "silentAfterSeconds": 300,
+            "facts": {
+                "types": [
+                    "SPOT_CHECK",
+                    "ZONE_SEEN",
+                    "COUNTER_SEEN",
+                    "COUNTER_LEFT"
+                ],
+                "maxBatch": 200
+            },
+            "zones": [
+                "stockroom",
+                "stockroom_door",
+                "floor",
+                "counter",
+                "exit"
+            ],
+            "devices": [
+                {
+                    "id": 1,
+                    "serial": "LECTEUR-0001",
+                    "kind": "reader",
+                    "zone": null,
+                    "cashRegisterId": null
+                },
+                {
+                    "id": 2,
+                    "serial": "IMPR-0001",
+                    "kind": "printer",
+                    "zone": null,
+                    "cashRegisterId": null
+                },
+                {
+                    "id": 3,
+                    "serial": "TAPIS-0001",
+                    "kind": "counter_mat",
+                    "zone": null,
+                    "cashRegisterId": null
+                }
+            ]
+        }
+    }
+}

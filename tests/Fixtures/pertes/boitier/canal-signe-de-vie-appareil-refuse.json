@@ -3,10 +3,10 @@
         "method": "POST",
         "path": "/api/pertes/boitier/signe-de-vie",
         "headers": {
-            "X-Loss-Box": "b1.2.1794871978.0000000000000000000000000000000000000000000000000000000000000000"
+            "X-Loss-Box": "b1.2.1794879625.0000000000000000000000000000000000000000000000000000000000000000"
         },
         "body": {
-            "now": "2026-11-15T23:32:59Z",
+            "now": "2026-11-16T01:40:25Z",
             "machine": "machine-d-exemple-0123456789abcdef",
             "devices": [
                 {
@@ -24,8 +24,8 @@
     },
     "status": 200,
     "body": {
-        "serverTime": "2026-11-15T23:32:59+00:00",
-        "clockOffsetSeconds": 0,
+        "serverTime": "2026-11-16T01:40:26+00:00",
+        "clockOffsetSeconds": -1,
         "clockDoubt": false,
         "token": null,
         "refusedDevices": [
@@ -34,12 +34,16 @@
                 "code": "MISMATCH"
             }
         ],
+        "resendMats": [],
         "settings": {
             "heartbeatSeconds": 60,
+            "silentAfterSeconds": 300,
             "facts": {
                 "types": [
                     "SPOT_CHECK",
-                    "ZONE_SEEN"
+                    "ZONE_SEEN",
+                    "COUNTER_SEEN",
+                    "COUNTER_LEFT"
                 ],
                 "maxBatch": 200
             },
@@ -62,6 +66,13 @@
                     "id": 2,
                     "serial": "IMPR-0001",
                     "kind": "printer",
+                    "zone": null,
+                    "cashRegisterId": null
+                },
+                {
+                    "id": 3,
+                    "serial": "TAPIS-0001",
+                    "kind": "counter_mat",
                     "zone": null,
                     "cashRegisterId": null
                 }

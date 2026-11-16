@@ -177,8 +177,12 @@ class LossHealthService
         $seen = (new \DateTimeImmutable((string) $mat['last_seen_at'], new \DateTimeZone('UTC')))->getTimestamp();
         $boxSilent = $mat['box_status'] !== LossBox::ACTIVE || $boxSeen === null || $now - $boxSeen > $threshold;
         $register = $mat['cash_register_id'] !== null ? (int) $mat['cash_register_id'] : null;
+        // l'horloge du boîtier est déréglée (ou pas encore mesurée, pour un vrai boîtier) : ses faits ne posent rien sur le tapis
+        $clockDoubt = $mat['box_clock'] !== null ? abs((int) $mat['box_clock']) > LossBoxChannelService::CLOCK_TOLERANCE : !$exercise;
         if ($mat['status'] === 'down' || $boxSilent) {
             [$state, $hint] = ['down', $this->texts->t('health.hint.mat.' . ($boxSilent ? 'box_silent' : 'down'), $locale)];
+        } elseif ($clockDoubt) {
+            [$state, $hint] = ['down', $this->texts->t('health.hint.mat.clock', $locale)];
         } elseif (!(bool) $mat['has_read']) {
             [$state, $hint] = ['pending', $this->texts->t('health.hint.mat.' . ($exercise ? 'never_read_exercise' : 'never_read'), $locale)];
         } elseif ($register === null && !$exercise) {

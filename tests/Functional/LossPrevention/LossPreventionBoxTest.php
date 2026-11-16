@@ -203,7 +203,7 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $enrolled = $this->json($enrol($good));
         $this->assertSame(['box', 'token', 'expiresAt', 'serverTime', 'settings'], array_keys($enrolled));
         $this->assertSame(['id' => $id], $enrolled['box'], 'le boîtier ne reçoit même pas son nom');
-        $this->assertSame(['heartbeatSeconds' => 60, 'facts' => ['types' => ['SPOT_CHECK', 'ZONE_SEEN', 'COUNTER_SEEN', 'COUNTER_LEFT'], 'maxBatch' => 200], 'zones' => ['stockroom', 'stockroom_door', 'floor', 'counter', 'exit'], 'devices' => []], $enrolled['settings']);
+        $this->assertSame(['heartbeatSeconds' => 60, 'silentAfterSeconds' => 300, 'facts' => ['types' => ['SPOT_CHECK', 'ZONE_SEEN', 'COUNTER_SEEN', 'COUNTER_LEFT'], 'maxBatch' => 200], 'zones' => ['stockroom', 'stockroom_door', 'floor', 'counter', 'exit'], 'devices' => []], $enrolled['settings']);
         $token = $enrolled['token'];
         $this->assertMatchesRegularExpression('/\Ab' . $id . '\.2\.\d{10}\.[0-9a-f]{64}\z/', $token);
         $this->assertEqualsWithDelta(time() + 86400, strtotime($enrolled['expiresAt']), 5);
@@ -257,7 +257,7 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         }
         // Ses réglages : ce qu'il a le droit de savoir, et rien d'autre
         $settings = $this->json($this->box('GET', '/reglages', null, $token));
-        $this->assertSame(['box', 'serverTime', 'heartbeatSeconds', 'facts', 'zones', 'devices'], array_keys($settings));
+        $this->assertSame(['box', 'serverTime', 'heartbeatSeconds', 'silentAfterSeconds', 'facts', 'zones', 'devices'], array_keys($settings));
         $this->assertSame(['id' => $id], $settings['box']);
 
         // ----- Signe de vie
@@ -278,7 +278,7 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_device WHERE box_id = ?', [$id]), 'un signe de vie refusé n\'écrit rien');
         $devices = [['serial' => "LECTEUR-$this->s", 'kind' => 'reader', 'status' => 'ok', 'model' => 'Lecteur de bureau (USB)'], ['serial' => "IMPR-$this->s", 'kind' => 'printer', 'status' => 'down']];
         $first = $this->json($beat(['now' => $now(), 'version' => '1.0.2', 'devices' => $devices]));
-        $this->assertSame(['serverTime', 'clockOffsetSeconds', 'clockDoubt', 'token', 'refusedDevices', 'settings'], array_keys($first));
+        $this->assertSame(['serverTime', 'clockOffsetSeconds', 'clockDoubt', 'token', 'refusedDevices', 'resendMats', 'settings'], array_keys($first));
         $this->assertSame([false, null, []], [$first['clockDoubt'], $first['token'], $first['refusedDevices']]);
         $this->assertEqualsWithDelta(0, $first['clockOffsetSeconds'], 3);
         $this->assertSame([["LECTEUR-$this->s", 'reader', null, null], ["IMPR-$this->s", 'printer', null, null]], array_map(fn (array $d): array => [$d['serial'], $d['kind'], $d['zone'], $d['cashRegisterId']], $first['settings']['devices']));
@@ -1058,13 +1058,18 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $this->assertSame([$rowsBefore, $outsideBefore], [$rows(), $outside()]);
 
         require_once dirname(__DIR__, 3) . '/migrations/Version20270113100000.php';
-        // La migration se rejoue sur une base qui la porte déjà : rien ne change, ni le schéma, ni les lignes
+        // La migration se rejoue sur une base qui la porte déjà : rien ne change, ni le schéma, ni les lignes. Dans une transaction
+        // ANNULÉE : rejouée pour de bon, elle remettrait ses gardes à la place de celles qu'un lot suivant a élargies (L3-b1), et
+        // les tests qui suivent tourneraient sur les anciennes
         $this->db->beginTransaction();
-        foreach (\DoctrineMigrations\Version20270113100000::STATEMENTS as $sql) {
-            $this->db->executeStatement($sql);
+        try {
+            foreach (\DoctrineMigrations\Version20270113100000::STATEMENTS as $sql) {
+                $this->db->executeStatement($sql);
+            }
+            $this->assertSame([$before, $rowsBefore, $outsideBefore], [$schema(), $rows(), $outside()]);
+        } finally {
+            $this->db->rollBack();
         }
-        $this->db->commit();
-        $this->assertSame([$before, $rowsBefore, $outsideBefore], [$schema(), $rows(), $outside()]);
 
         // Le retour arrière retire ses tables, ses colonnes, ses fonctions, et rien d'autre ; puis la migration repose le même schéma.
         // Le tout dans une transaction annulée à la fin : la base de test garde ses boîtiers

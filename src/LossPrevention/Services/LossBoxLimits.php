@@ -22,12 +22,15 @@ use Symfony\Component\RateLimiter\Storage\CacheStorage;
  * - `facts` : faits ENVOYÉS par un boîtier (1 heure), comptés à l'arrivée du lot, rejeux et faits refusés compris : rien ne se
  *   supprime dans la table des faits, un boîtier déréglé ne la remplit pas.
  *
+ * - `till` : questions de la caisse « articles non lus avant paiement », par compte (5 minutes) : une par paiement suffit très au
+ *   large ; la route ne sert pas à sonder le catalogue (lot L3-b1).
+ *
  * Chaque méthode rend null quand l'appel passe, sinon le nombre de secondes à attendre.
  */
 class LossBoxLimits
 {
-    public const LIMITS = ['open' => 20, 'openGlobal' => 60, 'refused' => 60, 'machine' => 10, 'calls' => 600, 'facts' => 20000];
-    private const INTERVALS = ['open' => '15 minutes', 'openGlobal' => '15 minutes', 'refused' => '15 minutes', 'machine' => '15 minutes', 'calls' => '5 minutes', 'facts' => '1 hour'];
+    public const LIMITS = ['open' => 20, 'openGlobal' => 60, 'refused' => 60, 'machine' => 10, 'calls' => 600, 'facts' => 20000, 'till' => 300];
+    private const INTERVALS = ['open' => '15 minutes', 'openGlobal' => '15 minutes', 'refused' => '15 minutes', 'machine' => '15 minutes', 'calls' => '5 minutes', 'facts' => '1 hour', 'till' => '5 minutes'];
 
     /** @var array<string, RateLimiterFactory> */
     private array $factories = [];
@@ -75,6 +78,12 @@ class LossBoxLimits
     public function call(string $site, int $boxId): ?int
     {
         return $this->consume('calls', $site . '|' . $boxId, 1);
+    }
+
+    /** Une question de la caisse, par compte */
+    public function till(string $site, int $userId): ?int
+    {
+        return $this->consume('till', $site . '|' . $userId, 1);
     }
 
     /** `$count` faits envoyés par un boîtier */

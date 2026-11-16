@@ -551,6 +551,7 @@ health:
             absent_exercise: 'No simulated mat. Create a simulated box: it has its mat.'
             down: 'The mat no longer answers. Check its cable on the box, then its power supply.'
             box_silent: 'Its box no longer gives a sign of life: what is on the mat is unknown. Check the box.'
+            clock: 'The clock of its box is off: the mat cannot tell what is on it. Check that the box can reach the Internet (it sets its clock by itself).'
             never_read: 'The mat has not read any tag yet. Put a tagged piece on it.'
             never_read_exercise: 'The simulated mat has not read anything yet. Play the "Piece put on the mat" scenario.'
             no_register: 'This mat is not linked to any cash register. Choose its register in the box sheet.'
