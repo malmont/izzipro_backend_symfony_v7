@@ -191,6 +191,11 @@ class SecretsNeverShownTest extends WebTestCase
             'services' => [['name' => 'easypost', 'easypost_api_key_prod' => SecretKeys::MASK, 'access-token' => SecretKeys::MASK]]], $read['after']);
         // la ligne gardée n'est pas touchée : c'est la lecture qui masque (le retour arrière relit la ligne entière)
         $this->assertStringContainsString($this->secrets['smtp'], (string) $this->em()->getConnection()->fetchOne('SELECT after_state FROM content_audit_log WHERE id = ?', [$id]));
+        // le masquage vaut aussi pour un état en tableaux : un secret vide ou absent reste tel quel, à toute profondeur
+        $this->assertSame(['apiKey' => '', 'smtpPassword' => SecretKeys::MASK, 'n' => ['token' => null, 'accessToken' => SecretKeys::MASK, 'port' => 587], 'liste' => [['secret' => SecretKeys::MASK], ['secret' => false]]],
+            SecretKeys::mask(['apiKey' => '', 'smtpPassword' => 'x', 'n' => ['token' => null, 'accessToken' => 'y', 'port' => 587], 'liste' => [['secret' => 'z'], ['secret' => false]]]));
+        $this->assertSame('texte', SecretKeys::mask('texte'));
+        $this->assertNull(SecretKeys::mask(null));
         // les noms qui disent un secret, et ceux qui n'en disent pas
         foreach (['password', 'smtpPassword', 'smtp_password', 'plainPassword', 'clientSecret', 'webhook_secret', 'apiKey', 'api_key', 'easypostApiKeyProd', 'googleApiKeyTest', 'accessToken', 'resetToken', 'token', 'accessKey', 'private-key'] as $name) {
             $this->assertTrue(SecretKeys::names($name), $name);
