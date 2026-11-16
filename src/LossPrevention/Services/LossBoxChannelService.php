@@ -568,6 +568,11 @@ class LossBoxChannelService
                     + ($tag['status'] === LossTag::RETIRED ? ['tagRetired' => true] : []) // la puce a été retirée : lue quand même, et dite
                     + ($doubt ? ['clockDoubt' => true] : []);
                 $at = gmdate('Y-m-d H:i:s', $fact['at']);
+                // Lot L4-c : l'arrivée d'une puce DÉJÀ présente dans cette zone (une présence ouverte, d'avant elle) est REDITE : le boîtier a
+                // redémarré et perdu sa mémoire, il annonce de nouveau ce qui est à portée. Gardée et dite (`repeat`), aucune règle ne la juge
+                if ($fact['type'] === LossPieceEvent::ZONE_SEEN && $fact['zone'] !== null && $repository->zonePresent((int) $tag['id'], (string) $fact['zone'], $at)) {
+                    $data['repeat'] = true;
+                }
                 $pieceId = $tag['piece_id'] !== null ? (int) $tag['piece_id'] : null;
                 $written = $repository->pieceFact($fact['type'], $at, $pieceId, (int) $tag['id'], $boxId, $fact['deviceId'], 'b' . $boxId . ':' . $fact['key'], false, $data, $now);
                 // Tapis de comptoir : la présence est la projection de ces faits. Un fait rejoué ne la touche pas une seconde fois. Une

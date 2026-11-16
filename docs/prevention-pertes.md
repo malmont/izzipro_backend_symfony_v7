@@ -104,6 +104,9 @@ analyses suivantes**. Valeurs par défaut validées par le propriétaire.
 | `UNREAD_SOLD` (lot L3-b2b, § 16.19) | 3 | Sur un POSTE de caisse et une JOURNÉE du magasin, `minCount` articles suivis vendus sans lecture (ni sur le tapis, ni rattrapés à la sortie, fenêtre de rattrapage passée), qui font au moins `minShare` % des articles suivis vendus ce jour-là sur ce poste. Jugée à chaque clôture du poste, pour le jour et pour la dernière journée d'activité d'avant. **Jamais par personne : personne n'est listé « en poste »** ; pas de montant en jeu | `minCount` 5 (1 à 500), `minShare` 20 % (1 à 100) | `cash_register` ; `UNREAD_SOLD:register:<poste>:day:<jour>` |
 | `EXIT_WITHOUT_SALE` (lot L4-b, § 17.13) | 4 | une vraie pièce ni vendue ni retirée est lue en arrivée à la sortie, à une heure sûre, et aucune vente ne l'explique une fois passée la fenêtre du rattrapage. Gravité haute | aucun | pièce ; `EXIT_WITHOUT_SALE:piece:<id>:day:<jour>` (les lectures suivantes du jour s'y ajoutent) |
 | `EXIT_COVERED` (lot L4-b, § 17.13) | 4 | une lecture de sortie a été rattrapée sur une vente sans lecture, sur un article pas entièrement étiqueté. Gravité faible, moyenne à `minCount` dans la semaine | `minCount` 3 (2 à 20) | variante ; `EXIT_COVERED:variant:<id>:week:<semaine ISO>` |
+| `STOCKROOM_NOT_SHELVED` (lot L4-c, § 17.15) | 4 | une vraie pièce lue à la porte de la réserve, puis ni revue en rayon, au comptoir (antenne ou tapis) ou dans la réserve, ni vendue, dans le délai ; muette sans antenne du rayon ou du comptoir. Faible, moyenne à `minCount` pièces | `minutes` 30 (5 à 240), `minCount` 5 (2 à 50) | zone ; `STOCKROOM_NOT_SHELVED:zone:stockroom_door:day:<jour>` |
+| `BACK_DOOR` (lot L4-c, § 17.15) | 4 | une vraie pièce, pas retirée, lue à la porte arrière de la réserve ; jugée à la fin de sa journée. Moyenne, haute à `minCount` pièces | `minCount` 5 (2 à 50) | zone ; `BACK_DOOR:zone:back_door:day:<jour>` |
+| `OUT_OF_HOURS` (lot L4-c, § 17.15) | 4 | une arrivée ou un départ de zone d'une vraie pièce hors des heures d'ouverture confirmées, marges comprises ; muette sans heures confirmées. Faible, moyenne à `minCount` pièces | `minCount` 5 (2 à 50) | zone ; `OUT_OF_HOURS:zone:<zone>:day:<jour>` |
 
 - Date d'une annulation : `order.canceled_at` (posé par `CancelOrderUseCase` pour tous les chemins), sinon l'heure de l'entrée REFUND pour
   une annulation d'avant PAYS-1b ; un retour (commande de type 2) n'est pas une annulation.
@@ -2188,6 +2191,8 @@ choisi de basculer sans attendre, Fable relira ensuite). La liste fait foi pour 
 | L4-b, code | backend `app_v2` | (commit du lot, § 17.13) | `LossExitService` (tout), son branchement dans `LossAnalysisService::run` et l'aperçu, `LossFindingRepository` (drapeau de « du nouveau »), `LossFindingReader` (résumé, preuve, drapeau), catalogue, exercice, textes, `LossPreventionExitTest` et les attentes de trois essais |
 | B5 | boîtier, dépôt local | `2a4ce6f`, `8f0faf7` | `izzibox/appareils.py` (`Antenne`, `Parc.regler`, `Parc.veiller`), `izzibox/service.py`, `izzibox/scenarios.py`, `izzibox/canal.py` (`nom_de_site` aligné sur la règle de la plateforme), `tests/test_zones.py`, le faux serveur, la copie du contrat |
 | L4-b2, migration et code | backend `app_v2` | migration `365340ae`, lot : le commit qui la suit (§ 17.14) | `migrations/Version20270123100000.php` (origine, garde `loss_sale_unit_guard_v2`, fenêtre des commandes web) et le script `scripts/migrate_all_v2_pertes_l4b2.sh` (hors dépôt) ; `LossSaleLinkService::webOrders` et `catchUpAtExit`, `LossSaleUnitRepository` (commandes web, locations, lectures par origine), `LossExitService::judge` (cas 2 sur la fenêtre des commandes web, cas 3 des locations, `rented`), le réglage `webWindowDays` |
+| L4-c, migration et code | backend `app_v2` | migration `ccc663f9`, lot : le commit qui la suit (§ 17.15) | `migrations/Version20270124100000.php` (heures, curseurs, index des mouvements, garde des appareils v2) et le script `scripts/migrate_all_v2_pertes_l4c.sh` (hors dépôt) ; `LossDepotService` (tout), son branchement dans `LossAnalysisService::run`, les heures d'ouverture de `LossSettingsService`, l'étape `opening_hours` de l'assistant, les trois scénarios d'exercice, la lecture (sujet `zone`, preuve `zone_move`) |
+| B6, B7 | boîtier, dépôt local | `2f10fce`, `023aac4` | `izzibox/scenarios.py` (antenne `back_door`, scène « par la porte arrière »), guides de l'installateur ; `izzibox/appareils.py` et `izzibox/file.py` (présence gardée sur disque, aucun départ après une panne) |
 
 Vérifié sous Opus : `LossPreventionZoneTest` et le dossier du module verts ; 21 mutations sur L4-a (20 tuées, une équivalente :
 le rejeu d'une arrivée est déjà bloqué par la clé du fait et par la requête de présence) ; 12 mutations sur B5, toutes tuées.
@@ -2358,3 +2363,97 @@ relecteur neuf : 2 bloquants et 4 points, corrigés ci-dessous) :
   dans le jugement (le rattrapage relie toujours avant) ; et trois trous d'essai : journal de caisse en retard (horizon du rattrapage
   web), lecture d'un article loué écartée du rattrapage web, double compte des ventes en attente dans le cas des locations.
 
+### 17.15 Lot L4-c : heures d'ouverture et les trois constats du dépôt (contrat validé par le chef de projet le 16/11/2026)
+
+Relecteur neuf et mutations. **À coder sous Opus, à faire relire par Fable** (§ 17.12).
+
+1. **Heures d'ouverture** : un réglage du module, une plage par jour de la semaine à l'heure du magasin (ou « fermé »), et une marge
+   avant et après (1 h par défaut, de 0 à 4 h). Rien n'est appliqué en silence : sans heures confirmées par le gérant, la règle
+   « hors des heures » est éteinte et l'écran le dit. `GET /reglages` propose seulement un point de départ, « tiré des
+   réservations, à vérifier » (la plage unique de `booking_configuration`, la même chaque jour) ; le gérant confirme jour par jour.
+2. **STOCKROOM_NOT_SHELVED** (« sortie du dépôt sans mise en rayon ») : une vraie pièce lue à `stockroom_door`, puis ni vue en rayon
+   ni au comptoir, ni vendue, dans le délai (30 min par défaut, de 5 à 240) ; jugée après ce délai et la fenêtre du rattrapage.
+   Faible, moyenne à partir de 5 pièces par jour et par zone (réglable).
+3. **BACK_DOOR** (« porte arrière du dépôt ») : nouvelle zone `back_door` ; une vraie pièce lue là, qu'aucun retrait de pièce du
+   même jour n'explique (aucun « retour au fournisseur » n'existe dans la plateforme). Sans antenne à cette porte, la règle est
+   muette et l'écran le dit. Moyenne dès la première pièce, haute à partir de 5 (réglable).
+4. **OUT_OF_HOURS** (« mouvement hors des heures ») : une arrivée ou un départ de zone d'une vraie pièce en dehors des heures
+   confirmées, marges comprises. Faible, moyenne à partir de 5 (réglable) : un inventaire ou une mise en rayon après la fermeture
+   est courant.
+5. Pour les trois : un constat par jour et par zone, jamais par personne ; chaque pièce en est une preuve (un carton ne fait pas
+   vingt constats). Jamais une pièce d'exercice, retirée, ni une lecture à l'heure douteuse.
+6. Moteur : comme la sortie, un curseur propre sur les faits de pièces (`loss_setting.depot_cursor`), sous le même verrou que les
+   lots du boîtier, un point de reprise par lecture, rien d'avant la notice ni d'avant la première fois.
+7. Migration additive (réglages, curseur) ; garde des appareils remplacée par une fonction NOUVELLE qui accepte `back_door`
+   (l'ancienne reste, pour le retour arrière).
+8. Assistant : étape « heures d'ouverture réglées » et une étape d'antenne pour `back_door`. Exercice : trois scénarios. Boîtier
+   B6 : antenne `back_door` dans le simulateur.
+9. Rien dans la caisse, le stock, le catalogue ni les réservations (lus seulement).
+
+**Limite** (ajoutée par le chef de projet) : une antenne ne dit pas le sens du passage. Une pièce qui revient par la porte arrière
+ouvre aussi un constat ; le gérant le classe sans suite.
+
+**Ce qui est codé** (migration `Version20270124100000`, script `scripts/migrate_all_v2_pertes_l4c.sh`, 8 instructions ; code sous Opus) :
+
+- **Schéma** : `loss_setting.opening_hours` (JSON en minutes depuis minuit, par jour ISO 1 à 7 ; nul = pas d'heures confirmées),
+  `hours_margin_minutes`, `depot_cursor`, `back_door_cursor` ; index partiel `idx_loss_piece_event_moves` ; garde des appareils
+  `loss_device_guard_v2` (zone `back_door`), le déclencheur reposé sur elle. Le retour arrière refuse d'abord tant qu'une antenne est
+  réglée sur la porte arrière. **Rejouer la migration du lot L3-a repose le déclencheur sur l'ancienne fonction** : rejouer celle-ci
+  ensuite.
+- **Moteur** (`LossDepotService::sweep`, après la sortie, sous son point de reprise) : **deux curseurs** (tranché : la porte arrière
+  attend la fin de sa journée ; un seul curseur aurait retenu les deux autres règles jusqu'au lendemain). Chacun lit les faits sous le
+  verrou des lectures (`LossExitService::READS_LOCK`), pose son curseur sur le dernier fait au premier passage et à la confirmation de
+  la notice, passe tout de suite une lecture sans objet (heure douteuse, puce retirée, sans pièce, d'avant le plancher), s'arrête
+  devant la première lecture pas mûre, juge les autres chacune sous son point de reprise (une lecture en échec est sautée et dite au
+  journal, `zoneMoves`).
+  - Réserve et heures (`depot_cursor`, arrivées et départs) : une arrivée à `stockroom_door` est mûre après le délai de la règle et la
+    fenêtre du rattrapage, et une fois la caisse lue jusque-là ; les autres mouvements, tout de suite.
+  - Porte arrière (`back_door_cursor`, arrivées à `back_door`) : mûre à la fin de la journée du magasin de la lecture.
+- **STOCKROOM_NOT_SHELVED** : expliquée par une arrivée de la pièce en rayon, au comptoir ou dans la réserve (le sens du passage n'est
+  pas connu : une pièce rentrée est revue dedans), une présence sur un tapis, ou une vente de la pièce, dans le délai. Muette tant
+  qu'aucune antenne du rayon ou du comptoir, ni tapis, n'est en service (tranché : sans elles, toute sortie de la réserve serait un
+  faux constat).
+- **BACK_DOOR** : jamais une pièce retirée au moment du jugement (une pièce retirée le jour même, avant la fin de la journée, n'ouvre
+  donc rien).
+- **OUT_OF_HOURS** : l'heure du magasin du mouvement est comparée à la plage du jour, marge comprise ; une plage qui déborde avec sa
+  marge sur la veille ou le lendemain compte aussi (fermeture à 23 h 30, marge d'une heure : ouvert jusqu'à 0 h 30).
+- **Constat** : un par règle, journée du magasin et zone ; sujet `zone` (`subject_id` 0, la zone dans `facts.zone`), `on_duty` vide ;
+  `facts` : `zone`, `count` (pièces distinctes), `minCount`, `pieces` (200 au plus), `level` ; montant en jeu nul (un mouvement n'est
+  pas une perte) ; chaque mouvement est une preuve `zone_move` (pièce, article, arrivée ou départ, zone, heure, antenne).
+- **Réglages** : `GET/PUT /reglages`, bloc `openingHours` : `confirmed`, `days` (`{ "1": { open: "09:00", close: "19:00" }, …, "7":
+  null }` ou null), `marginMinutes` (60, de 0 à 240), `bounds`, `defaults`, `suggestion` (tirée des réservations, la plage la plus
+  large de `booking_configuration`, la même chaque jour, ou null) et `note`. `PUT { openingHours: { days, marginMinutes } }` : les sept
+  jours sont exigés (`REQUIRED`), une plage invalide ou à l'envers est refusée (`INVALID_RANGE`) ; `openingHours: null` retire les
+  heures (règle muette). Erreurs en 422, comme les autres réglages.
+- **Assistant** : étape facultative `opening_hours`, faite quand des heures sont confirmées ; la porte arrière est une antenne de zone,
+  vérifiée par l'étape `zone_reader`. **Exercice** : scénarios `stockroom_not_shelved`, `back_door`, `out_of_hours` (sujet `zone`).
+  **Aperçu** : les trois règles répondent 409 `RULE_PREVIEW_UNAVAILABLE`, comme celles de la sortie.
+- **Lectures qui changent** : liste des règles (+3, vague 4), liste des exercices (+3), réglages (`openingHours`), assistant (étape
+  `opening_hours`), zones servies au boîtier et permises sur une antenne (`back_door`), fiche d'une antenne (zone `back_door`
+  possible).
+
+
+**Corrections de la relecture neuve** (validées par le chef de projet le 16/11/2026) :
+
+- **Arrivée redite** (bloquant, touchait aussi L4-b) : un boîtier qui redémarre perd sa mémoire et annonce de nouveau chaque puce à
+  portée. Le canal marque `repeat` l'arrivée d'une puce qui a déjà une présence ouverte dans la même zone, commencée avant elle ; la
+  sortie (L4-b), le rattrapage et le dépôt ne la jugent jamais. Le retour d'une antenne après une panne (un départ daté du début de la
+  panne, puis une arrivée) se règle dans le boîtier, lot B7.
+- Une antenne du rayon ou du comptoir **en panne** ne compte pas comme en service (la règle de la réserve se tait).
+- Une lecture à la porte de la réserve est aussi expliquée par une **présence encore ouverte** de la pièce en rayon, au comptoir ou dans
+  la réserve autour de la lecture, et par une **vente de l'article qui attend sa pièce** (une vente par sortie).
+- **Jamais trop tôt, même si le boîtier rattrape son retard** : une sortie de la réserve n'est mûre qu'une fois que le même boîtier a
+  déposé un fait daté après la fin du délai, ou 24 h après. Le délai n'est attendu que si la règle est allumée et parle.
+- **Porte arrière** : un index propre (`idx_loss_piece_event_back_door`, 9 instructions dans la migration) ; seul un retrait **du même
+  jour** l'explique (un retrait d'un autre jour, non) ; une **vente de la pièce** l'explique (colis web remis au transporteur, lot L4-b2),
+  avec le constat faible `EXIT_COVERED` si l'article n'est pas entièrement étiqueté, comme à la sortie (`LossExitService::explainedBySale`).
+- Heures : la suggestion tirée des réservations compare les heures en minutes ; un jour inconnu est refusé (`INVALID_DAY`) ; une heure
+  suivie d'un saut de ligne aussi.
+- **Limites gardées** : une plage qui passe minuit ne se dit pas (la marge, jusqu'à 4 h, compense) ; OUT_OF_HOURS reste par zone (une
+  pièce déplacée la nuit de la réserve au rayon fait un constat par zone traversée) ; au-delà de 200 pièces dans un constat, le compte
+  n'est plus celui des pièces distinctes.
+- **Contrôles** : relecteur neuf (1 bloquant et 8 points, corrigés ou tranchés avec le chef) ; dossier LossPrevention vert ; 29 mutations,
+  23 tuées. Survivantes, expliquées : le rayon et la réserve retirés de la liste des zones qui expliquent une sortie de la réserve
+  (la présence encore ouverte l'explique aussi : double couverture) ; une pièce comptée deux fois (une relecture sans départ est une
+  arrivée redite, jamais jugée) ; et trois trous d'essai : les curseurs posés à la confirmation de la notice, l'explication par le
+  tapis, l'explication par une vente de la pièce.

@@ -24,6 +24,16 @@ final class LossRuleCatalog
     public const EXIT_COVERED = 'EXIT_COVERED';
     /** Les règles de la sortie : elles ne lisent pas le journal de caisse, mais les lectures des antennes (`LossExitService`) */
     public const EXIT_RULES = [self::EXIT_WITHOUT_SALE, self::EXIT_COVERED];
+    /** Lot L4-c : une pièce passée la porte de la réserve, ni vue en rayon ni au comptoir, ni vendue dans le délai ; par jour et par zone */
+    public const STOCKROOM_NOT_SHELVED = 'STOCKROOM_NOT_SHELVED';
+    /** Lot L4-c : une pièce lue à la porte arrière de la réserve, qu'aucun retrait de pièce du jour n'explique ; par jour et par zone */
+    public const BACK_DOOR = 'BACK_DOOR';
+    /** Lot L4-c : une pièce qui arrive dans une zone ou en part hors des heures d'ouverture confirmées ; par jour et par zone */
+    public const OUT_OF_HOURS = 'OUT_OF_HOURS';
+    /** Les règles du dépôt : elles lisent les mouvements de zone des antennes (`LossDepotService`) */
+    public const DEPOT_RULES = [self::STOCKROOM_NOT_SHELVED, self::BACK_DOOR, self::OUT_OF_HOURS];
+    /** Les règles qui lisent les antennes, et non le journal de caisse : l'aperçu ne peut pas les rejouer */
+    public const ANTENNA_RULES = [self::EXIT_WITHOUT_SALE, self::EXIT_COVERED, self::STOCKROOM_NOT_SHELVED, self::BACK_DOOR, self::OUT_OF_HOURS];
 
     /** Types de paramètre : l'écran sait comment saisir et afficher */
     public const COUNT = 'count';
@@ -97,6 +107,23 @@ final class LossRuleCatalog
             'wave' => 4,
             // nombre de sorties rattrapées dans la semaine sur un même article à partir duquel la gravité passe de faible à moyenne
             'params' => ['minCount' => ['type' => self::COUNT, 'default' => 3, 'min' => 2, 'max' => 20]],
+            'person' => null,
+        ],
+        // Vague 4 (lot L4-c) : les antennes de la réserve et les heures d'ouverture ; `minCount` : nombre de pièces du jour et de la zone
+        // à partir duquel la gravité monte d'un cran (faible → moyenne ; porte arrière : moyenne → haute)
+        self::STOCKROOM_NOT_SHELVED => [
+            'wave' => 4,
+            'params' => ['minutes' => ['type' => self::MINUTES, 'default' => 30, 'min' => 5, 'max' => 240], 'minCount' => ['type' => self::COUNT, 'default' => 5, 'min' => 2, 'max' => 50]],
+            'person' => null,
+        ],
+        self::BACK_DOOR => [
+            'wave' => 4,
+            'params' => ['minCount' => ['type' => self::COUNT, 'default' => 5, 'min' => 2, 'max' => 50]],
+            'person' => null,
+        ],
+        self::OUT_OF_HOURS => [
+            'wave' => 4,
+            'params' => ['minCount' => ['type' => self::COUNT, 'default' => 5, 'min' => 2, 'max' => 50]],
             'person' => null,
         ],
     ];

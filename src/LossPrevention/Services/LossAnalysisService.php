@@ -63,6 +63,7 @@ class LossAnalysisService
         #[AutowireIterator('loss_prevention.rule')] iterable $rules,
         private readonly ?LossSaleLinkService $sales = null,
         private readonly ?LossExitService $exits = null,
+        private readonly ?LossDepotService $depot = null,
     ) {
         $list = [...$rules];
         usort($list, fn (LossRuleInterface $a, LossRuleInterface $b) => strcmp($a::class, $b::class));
@@ -234,6 +235,25 @@ class LossAnalysisService
                     $this->writer->restoreCounters($counters);
                     $this->logger->error('Prévention des pertes : règles de la sortie en échec, passage poursuivi : ' . $e->getMessage(), ['exception' => $e]);
                 }
+                if ($this->depot !== null) {
+                    // Lot L4-c : les règles du dépôt et des heures d'ouverture, après la sortie, à la même heure des ventes ; sous leur point
+                    // de reprise : un échec n'arrête pas l'analyse
+                    $depotConfigs = [];
+                    // la porte arrière dit le doute d'une vente rattrapée comme la sortie : la règle EXIT_COVERED est passée aussi
+                    foreach ([...LossRuleCatalog::DEPOT_RULES, LossRuleCatalog::EXIT_COVERED] as $code) {
+                        $depotConfigs[$code] = $this->ruleSettings->effective($code);
+                    }
+                    $conn->executeStatement('SAVEPOINT loss_sweep');
+                    $counters = $this->writer->counters();
+                    try {
+                        $exitPending = $this->depot->sweep($ctx, $depotConfigs, $horizon, $this->sales->windows()['catchUp'])['pending'] || $exitPending;
+                        $conn->executeStatement('RELEASE SAVEPOINT loss_sweep');
+                    } catch (\Throwable $e) {
+                        $conn->executeStatement('ROLLBACK TO SAVEPOINT loss_sweep');
+                        $this->writer->restoreCounters($counters);
+                        $this->logger->error('Prévention des pertes : règles du dépôt en échec, passage poursuivi : ' . $e->getMessage(), ['exception' => $e]);
+                    }
+                }
             }
             $settings->update(['cursor_sequence' => $newCursor, 'backfill_until_sequence' => $backfillUntil, 'last_analysis_at' => (new \DateTimeImmutable())->format('Y-m-d H:i:s')]);
             $conn->commit();
@@ -269,8 +289,8 @@ class LossAnalysisService
         }
         $em = $this->emProvider->getEntityManager();
         $conn = $em->getConnection();
-        if (in_array($code, LossRuleCatalog::EXIT_RULES, true)) {
-            // les règles de la sortie (lot L4-b) lisent les antennes, pas le journal de caisse : l'aperçu n'a rien à rejouer, il le dit
+        if (in_array($code, LossRuleCatalog::ANTENNA_RULES, true)) {
+            // les règles de la sortie et du dépôt (lots L4-b, L4-c) lisent les antennes, pas le journal de caisse : l'aperçu n'a rien à rejouer, il le dit
             return ['status' => 'unavailable', 'reason' => 'READS_NOT_REPLAYED'] + $none;
         }
         $rules = array_values(array_filter($this->rules, fn (LossRuleInterface $r) => $r->code() === $code));

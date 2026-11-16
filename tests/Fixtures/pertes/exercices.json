@@ -152,6 +152,42 @@
                 "available": true
             },
             {
+                "code": "stockroom_not_shelved",
+                "label": "Sortie de la réserve sans mise en rayon",
+                "description": "Plusieurs pièces passent la porte de la réserve, puis ne sont revues ni en rayon, ni au comptoir, ni vendues dans le délai.",
+                "learn": "Regarder l'heure des passages : une mise en rayon en cours, une antenne du rayon en panne, ou des pièces sorties par une autre porte. Le constat ne désigne personne.",
+                "rule": {
+                    "code": "STOCKROOM_NOT_SHELVED",
+                    "label": "Sortie de la réserve sans mise en rayon"
+                },
+                "personPattern": false,
+                "available": true
+            },
+            {
+                "code": "back_door",
+                "label": "Porte arrière de la réserve",
+                "description": "Plusieurs pièces suivies sont lues par l'antenne de la porte arrière de la réserve dans la journée.",
+                "learn": "L'antenne ne dit pas le sens du passage : une livraison qui rentre en ouvre un aussi. Retirer une pièce avant de la sortir (retour, casse) évite le constat. Le constat ne désigne personne.",
+                "rule": {
+                    "code": "BACK_DOOR",
+                    "label": "Porte arrière de la réserve"
+                },
+                "personPattern": false,
+                "available": true
+            },
+            {
+                "code": "out_of_hours",
+                "label": "Mouvement hors des heures d'ouverture",
+                "description": "Plusieurs pièces arrivent dans une zone ou en partent en dehors des heures d'ouverture confirmées.",
+                "learn": "Un inventaire ou une mise en rayon après la fermeture en ouvre un aussi : vérifier qui était prévu, et si les heures confirmées sont justes. Le constat ne désigne personne.",
+                "rule": {
+                    "code": "OUT_OF_HOURS",
+                    "label": "Mouvement hors des heures d'ouverture"
+                },
+                "personPattern": false,
+                "available": true
+            },
+            {
                 "code": "cash_shortage_series",
                 "label": "Manques de caisse répétés par un même compte",
                 "description": "Plusieurs clôtures avec un manque sont fermées par le même compte sur une courte période.",

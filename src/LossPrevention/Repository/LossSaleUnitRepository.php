@@ -195,6 +195,7 @@ class LossSaleUnitRepository extends EntityRepository
             // une commande web (lot L4-b2) peut partir par la sortie ou par la porte arrière de la réserve (colis remis au transporteur)
             . ($origin === LossSaleUnit::ORIGIN_WEB ? " AND (e.data)::jsonb ->> 'zone' IN ('exit', 'back_door')" : " AND (e.data)::jsonb ->> 'zone' = 'exit'")
             . " AND COALESCE((e.data)::jsonb ->> 'clockDoubt', 'false') <> 'true' AND COALESCE((e.data)::jsonb ->> 'tagRetired', 'false') <> 'true'"
+            . " AND COALESCE((e.data)::jsonb ->> 'repeat', 'false') <> 'true'"
             . ' AND NOT EXISTS (SELECT 1 FROM loss_sale_unit u WHERE u.piece_id = p.id AND u.returned_at IS NULL)'
             . " AND NOT EXISTS (SELECT 1 FROM loss_sale_unit r WHERE r.piece_id = p.id AND r.returned_by = 'return' AND r.returned_at >= e.occurred_at)"
             // seulement les lectures qui tombent dans la fenêtre d'au moins UN article en attente : un portant près de la porte, relu

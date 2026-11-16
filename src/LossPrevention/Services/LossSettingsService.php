@@ -106,9 +106,129 @@ class LossSettingsService
                 'bounds' => self::MONTHS, 'defaults' => ['findingsMonths' => LossSetting::DEFAULT_FINDINGS_MONTHS, 'confirmedMonths' => LossSetting::DEFAULT_CONFIRMED_MONTHS]],
             // lot L3-b2a : fenêtres de la vente reliée aux pièces, conservation des présences sur le tapis
             'pieces' => $this->piecesView($row, $locale),
+            // lot L4-c : heures d'ouverture confirmées par le gérant, et un point de départ tiré des réservations, à vérifier
+            'openingHours' => $this->hoursView($locale),
             'never' => array_map(fn (string $code) => ['code' => $code, 'label' => $this->texts->t('never.' . $code, $locale)], LossCountryPolicy::NEVER),
             'legalNotice' => $this->texts->t('settings.legalNotice', $locale),
         ];
+    }
+
+    /**
+     * Lot L4-c : les heures d'ouverture. `days` : les heures CONFIRMÉES par le gérant (une plage par jour ISO, 1 = lundi, ou null pour
+     * fermé), ou null tant qu'il n'en a pas confirmé (la règle « hors des heures » est alors muette) ; `suggestion` : un point de départ
+     * tiré des réservations (leur plage unique, la même chaque jour), jamais appliqué de lui-même.
+     *
+     * @return array<string, mixed>
+     */
+    private function hoursView(string $locale): array
+    {
+        $hours = LossDepotService::hours($this->emProvider->getEntityManager()->getConnection());
+        $format = static fn (?array $range): ?array => $range === null ? null : ['open' => self::clock($range['open']), 'close' => self::clock($range['close'])];
+        $suggestion = null;
+        // la plage la plus large des réservations, comparée en MINUTES (« 9:00 » vient avant « 10:00 », ce que le texte ne sait pas)
+        [$open, $close] = [null, null];
+        foreach ($this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative('SELECT opening_start, opening_end FROM booking_configuration') as $range) {
+            $from = self::minutes(substr(trim((string) $range['opening_start']), 0, 5));
+            $to = self::minutes(substr(trim((string) $range['opening_end']), 0, 5));
+            if ($from !== null && $to !== null && $from < $to) {
+                [$open, $close] = [$open === null ? $from : min($open, $from), $close === null ? $to : max($close, $to)];
+            }
+        }
+        if ($open !== null && $close !== null) {
+            $suggestion = ['source' => 'bookings', 'note' => $this->texts->t('settings.openingHours.suggestion', $locale),
+                'days' => array_fill_keys(['1', '2', '3', '4', '5', '6', '7'], ['open' => self::clock($open), 'close' => self::clock($close)])];
+        }
+
+        return [
+            'confirmed' => $hours !== null,
+            'days' => $hours !== null ? array_combine(array_map('strval', array_keys($hours['days'])), array_map($format, $hours['days'])) : null,
+            'marginMinutes' => $hours['margin'] ?? (int) ($this->row()['hours_margin_minutes'] ?? LossDepotService::MARGIN_MINUTES),
+            'bounds' => ['marginMinutes' => LossDepotService::MARGIN_BOUNDS], 'defaults' => ['marginMinutes' => LossDepotService::MARGIN_MINUTES],
+            'suggestion' => $suggestion,
+            'note' => $this->texts->t($hours !== null ? 'settings.openingHours.confirmed' : 'settings.openingHours.none', $locale),
+        ];
+    }
+
+    /**
+     * Lot L4-c : `openingHours` du corps de PUT /reglages. `null` : plus d'heures (règle muette). Sinon un objet : `days` (les sept jours,
+     * chacun `{open, close}` en « HH:MM » ou null pour fermé ; tous exigés : le gérant confirme jour par jour) et/ou `marginMinutes`.
+     *
+     * @param array<string, string> $errors
+     * @param array<string, mixed>  $fields
+     */
+    private function hoursUpdate(mixed $value, array &$errors, array &$fields): void
+    {
+        if ($value === null) {
+            $fields['opening_hours'] = null;
+
+            return;
+        }
+        if (!is_array($value)) {
+            $errors['openingHours'] = 'MUST_BE_OBJECT';
+
+            return;
+        }
+        if (array_key_exists('marginMinutes', $value)) {
+            $margin = $value['marginMinutes'];
+            if ($margin !== null && !is_int($margin)) {
+                $errors['openingHours.marginMinutes'] = 'MUST_BE_INTEGER';
+            } elseif ($margin !== null && ($margin < LossDepotService::MARGIN_BOUNDS['min'] || $margin > LossDepotService::MARGIN_BOUNDS['max'])) {
+                $errors['openingHours.marginMinutes'] = 'PARAM_OUT_OF_RANGE';
+            } else {
+                $fields['hours_margin_minutes'] = $margin;
+            }
+        }
+        if (!array_key_exists('days', $value)) {
+            return;
+        }
+        if (!is_array($value['days'])) {
+            $errors['openingHours.days'] = 'MUST_BE_OBJECT';
+
+            return;
+        }
+        foreach (array_keys($value['days']) as $key) {
+            if (!in_array((string) $key, ['1', '2', '3', '4', '5', '6', '7'], true)) {
+                $errors['openingHours.days'] = 'INVALID_DAY'; // un jour se dit de 1 (lundi) à 7 (dimanche)
+            }
+        }
+        $days = [];
+        for ($d = 1; $d <= 7; ++$d) {
+            if (!array_key_exists((string) $d, $value['days']) && !array_key_exists($d, $value['days'])) {
+                $errors["openingHours.days.$d"] = 'REQUIRED';
+                continue;
+            }
+            $range = $value['days'][(string) $d] ?? $value['days'][$d] ?? null;
+            if ($range === null) {
+                $days[(string) $d] = null; // fermé
+                continue;
+            }
+            $open = is_array($range) && is_string($range['open'] ?? null) ? self::minutes($range['open']) : null;
+            $close = is_array($range) && is_string($range['close'] ?? null) ? self::minutes($range['close']) : null;
+            if ($open === null || $close === null || $open >= $close) {
+                $errors["openingHours.days.$d"] = 'INVALID_RANGE';
+                continue;
+            }
+            $days[(string) $d] = ['open' => $open, 'close' => $close];
+        }
+        if (count($days) === 7) {
+            $fields['opening_hours'] = json_encode($days, JSON_THROW_ON_ERROR);
+        }
+    }
+
+    /** « HH:MM » (de 00:00 à 24:00) en minutes depuis minuit, ou null */
+    private static function minutes(string $value): ?int
+    {
+        if (!preg_match('/^([01]?\d|2[0-4]):([0-5]\d)\z/', $value, $m)) {
+            return null;
+        }
+        $minutes = (int) $m[1] * 60 + (int) $m[2];
+
+        return $minutes <= 1440 ? $minutes : null;
+    }
+
+    private static function clock(int $minutes): string
+    {
+        return sprintf('%02d:%02d', intdiv($minutes, 60), $minutes % 60);
     }
 
     /** Réglages de la vente reliée aux pièces : `clé de l'API => [colonne, valeur par défaut, bornes, secondes par unité]` */
@@ -173,6 +293,8 @@ class LossSettingsService
                         // lot L4-b : les lectures de la sortie d'avant la notice ne sont pas jugées non plus (le plancher du journal de caisse
                         // ne les borne pas : elles peuvent suivre sa dernière entrée, ou précéder toute vente)
                         $fields['exit_cursor'] = LossExitService::lastExitRead($this->emProvider->getEntityManager()->getConnection());
+                        // lot L4-c : ni les mouvements de zone d'avant la notice
+                        $fields += LossDepotService::lastReads($this->emProvider->getEntityManager()->getConnection());
                         $data = ['floor' => $floor];
                     }
                     $journal[] = [$body['staffNoticeConfirmed'] ? LossJournalEntry::STAFF_NOTICE_CONFIRMED : LossJournalEntry::STAFF_NOTICE_WITHDRAWN, $data];
@@ -216,6 +338,9 @@ class LossSettingsService
         if (array_key_exists('pieces', $body) && !is_array($body['pieces'])) {
             $errors['pieces'] = 'MUST_BE_OBJECT';
         }
+        if (array_key_exists('openingHours', $body)) {
+            $this->hoursUpdate($body['openingHours'], $errors, $fields);
+        }
         if ($errors !== []) {
             throw new GestionValidationException($errors);
         }
@@ -226,7 +351,7 @@ class LossSettingsService
             foreach ($journal as [$type, $data]) {
                 $journalRepo->append($type, $userId, null, $data);
             }
-            $changed = array_values(array_diff(array_keys($fields), ['staff_notice_confirmed_at', 'staff_notice_confirmed_by', 'analysis_floor_sequence', 'cursor_sequence', 'backfill_until_sequence', 'exit_cursor']));
+            $changed = array_values(array_diff(array_keys($fields), ['staff_notice_confirmed_at', 'staff_notice_confirmed_by', 'analysis_floor_sequence', 'cursor_sequence', 'backfill_until_sequence', 'exit_cursor', 'depot_cursor', 'back_door_cursor']));
             if ($changed !== []) {
                 $journalRepo->append(LossJournalEntry::SETTINGS_CHANGED, $userId, null, ['fields' => $changed]);
             }

@@ -1,19 +1,19 @@
 {
     "request": {
         "method": "GET",
-        "path": "/api/gestion/pertes/pieces/synthese?productId=15&locale=fr"
+        "path": "/api/gestion/pertes/pieces/synthese?productId=44&locale=fr"
     },
     "status": 200,
     "headers": {},
     "body": {
         "rows": [
             {
-                "variantId": 23,
-                "productId": 15,
+                "variantId": 59,
+                "productId": 44,
                 "variantMissing": false,
-                "name": "Veste en lin (exemple BE4837)",
+                "name": "Veste en lin (exemple 9B6ED5)",
                 "variantLabel": null,
-                "barcode": "VESTE-LIN-M-BE4837",
+                "barcode": "VESTE-LIN-M-9B6ED5",
                 "barcodeOf": "variant",
                 "symbology": "code128",
                 "stock": 6,
@@ -27,12 +27,12 @@
                 "gap": 4
             },
             {
-                "variantId": 24,
-                "productId": 15,
+                "variantId": 60,
+                "productId": 44,
                 "variantMissing": false,
-                "name": "Veste en lin (exemple BE4837)",
+                "name": "Veste en lin (exemple 9B6ED5)",
                 "variantLabel": null,
-                "barcode": "VESTE-LIN-L-BE4837",
+                "barcode": "VESTE-LIN-L-9B6ED5",
                 "barcodeOf": "variant",
                 "symbology": "code128",
                 "stock": 6,
@@ -73,6 +73,11 @@
             {
                 "zone": "exit",
                 "label": "Sortie",
+                "pieces": 0
+            },
+            {
+                "zone": "back_door",
+                "label": "Porte arrière de la réserve",
                 "pieces": 0
             }
         ],

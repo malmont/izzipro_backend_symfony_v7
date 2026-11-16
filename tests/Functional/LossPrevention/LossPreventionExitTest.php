@@ -86,7 +86,9 @@ class LossPreventionExitTest extends LossPreventionTestCase
         $this->assertArrayNotHasKey('userId', $snapshot);
         $this->assertStringNotContainsString('Gerant', json_encode($detail), 'aucun nom de personne');
 
-        // Elle repasse le même jour : le constat ne se rouvre pas, la lecture s'y ajoute comme preuve
+        // Elle repasse le même jour (l'antenne a dit son départ entre les deux) : le constat ne se rouvre pas, la lecture s'y ajoute comme
+        // preuve. Sans ce départ, la seconde arrivée serait REDITE (lot L4-c : un boîtier qui redémarre) et ne compterait pas
+        $this->assertSame(['accepted', null], $this->exit($p1, -395, 'exit', 'ZONE_LEFT'));
         $this->assertSame(['accepted', null], $this->exit($p1, -390));
         $this->drain();
         $this->assertCount(1, $findings('EXIT_WITHOUT_SALE'));
@@ -100,6 +102,7 @@ class LossPreventionExitTest extends LossPreventionTestCase
         $this->json($this->admin('PUT', self::BASE . "/constats/$id/decision", ['status' => 'watch']));
         $this->assertFalse($this->json($this->admin('GET', self::BASE . "/constats/$id"))['newEvidenceSinceDecision']);
         $this->db->executeStatement("UPDATE loss_finding SET decided_at = decided_at + INTERVAL '1 hour' WHERE id = ?", [$id]);
+        $this->assertSame(['accepted', null], $this->exit($p1, -385, 'exit', 'ZONE_LEFT')); // un départ, puis un nouveau passage (pas une redite)
         $this->assertSame(['accepted', null], $this->exit($p1, -380));
         $this->drain();
         $this->assertTrue($this->json($this->admin('GET', self::BASE . "/constats/$id"))['newEvidenceSinceDecision']);
@@ -120,6 +123,7 @@ class LossPreventionExitTest extends LossPreventionTestCase
 
         // Règle éteinte : rien de nouveau ; le curseur avance quand même (rallumée, elle ne rejuge pas le passé)
         $this->json($this->admin('PUT', self::BASE . '/regles/EXIT_WITHOUT_SALE', ['enabled' => false]));
+        $this->assertSame(['accepted', null], $this->exit($p1, -355, 'exit', 'ZONE_LEFT')); // un nouveau passage, pas une redite
         $this->assertSame(['accepted', null], $this->exit($p1, -350));
         $before = (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_evidence WHERE finding_id = ?', [$id]);
         $this->drain();
@@ -290,9 +294,9 @@ class LossPreventionExitTest extends LossPreventionTestCase
     }
 
     /** @return array{0: string, 1: ?string} une arrivée de la puce devant l'antenne de la sortie (ou d'une autre zone), décalée de `$shift` secondes */
-    private function exit(string $identifier, int $shift, string $zone = 'exit'): array
+    private function exit(string $identifier, int $shift, string $zone = 'exit', string $type = 'ZONE_SEEN'): array
     {
-        $fact = ['key' => 'sortie-' . $this->s . '-' . str_pad((string) ++$this->n, 4, '0', STR_PAD_LEFT), 'type' => 'ZONE_SEEN', 'at' => gmdate('Y-m-d\TH:i:s\Z', time() + $shift),
+        $fact = ['key' => 'sortie-' . $this->s . '-' . str_pad((string) ++$this->n, 4, '0', STR_PAD_LEFT), 'type' => $type, 'at' => gmdate('Y-m-d\TH:i:s\Z', time() + $shift),
             'device' => "SORTIE-$this->s", 'zone' => $zone, 'data' => ['identifier' => $identifier]];
         $result = $this->json($this->channel('POST', '/faits', ['facts' => [$fact]], $this->token))['results'][0];
 

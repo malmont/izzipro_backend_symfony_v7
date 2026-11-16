@@ -14,9 +14,9 @@
         "box": {
             "id": 2
         },
-        "token": "b2.2.1794927018.0000000000000000000000000000000000000000000000000000000000000000",
-        "expiresAt": "2026-11-17T14:50:18+00:00",
-        "serverTime": "2026-11-16T14:50:18+00:00",
+        "token": "b2.2.1794954532.0000000000000000000000000000000000000000000000000000000000000000",
+        "expiresAt": "2026-11-17T22:28:52+00:00",
+        "serverTime": "2026-11-16T22:28:52+00:00",
         "settings": {
             "heartbeatSeconds": 60,
             "silentAfterSeconds": 300,
@@ -37,7 +37,8 @@
                 "stockroom_door",
                 "floor",
                 "counter",
-                "exit"
+                "exit",
+                "back_door"
             ],
             "zonePresence": {
                 "arriveSeconds": 3,

@@ -99,7 +99,8 @@ final class LossExitService
             $data = json_decode((string) $read['data'], true) ?: [];
             // Une lecture sans objet (heure douteuse, puce retirée, sans pièce, d'avant le plancher de la notice aux salariés) est passée
             // tout de suite : une heure douteuse dans le futur ne doit jamais arrêter le curseur jusqu'à ce qu'elle soit atteinte
-            if (($data['clockDoubt'] ?? false) || ($data['tagRetired'] ?? false) || $read['piece_id'] === null || $ctx->beforeFloor((string) $read['occurred_at'])) {
+            // lot L4-c : une arrivée redite (le boîtier a redémarré) n'est pas une sortie
+            if (($data['clockDoubt'] ?? false) || ($data['tagRetired'] ?? false) || ($data['repeat'] ?? false) || $read['piece_id'] === null || $ctx->beforeFloor((string) $read['occurred_at'])) {
                 $cursor = (int) $read['id'];
                 ++$judged;
                 continue;
@@ -156,21 +157,7 @@ final class LossExitService
         // encore rendue à cette heure. Un RETOUR lu plus tard (la cliente qui rapporte l'article passe le portique en entrant) ne fait pas
         // de cette lecture une sortie sans vente ; une ANNULATION lue plus tard, elle, ne prouve pas que la pièce est revenue : la vente
         // annulée n'explique plus rien (`VOID_AFTER_SALE` juge l'annulation elle-même)
-        $sale = $conn->fetchAssociative(
-            'SELECT s.id, s.order_id, s.order_item_id, s.sold_at, s.cash_register_id, s.matched_by FROM loss_sale_unit s'
-            . " WHERE s.piece_id = :piece AND s.sold_at <= :limit AND (s.returned_at IS NULL OR (s.returned_by = 'return' AND s.returned_at >= :at)) ORDER BY s.sold_at DESC, s.id DESC LIMIT 1",
-            ['piece' => (int) $piece['id'], 'limit' => $readAt->modify('+' . $before . ' seconds')->format('Y-m-d H:i:s'), 'at' => $when]);
-        if ($sale !== false) {
-            // C'est CETTE lecture qui a relié la pièce à cette vente (rattrapage) ? Si l'article n'est pas entièrement étiqueté, le
-            // doute est dit (constat faible) ; sinon, rien
-            $byThisRead = $sale['matched_by'] === 'catch_up' && $conn->fetchOne(
-                "SELECT 1 FROM loss_piece_event f WHERE f.piece_id = :piece AND f.type = 'PIECE_SOLD' AND ((f.data)::jsonb ->> 'orderItemId') = :item"
-                . " AND ((f.data)::jsonb ->> 'readEventId') = :read LIMIT 1",
-                ['piece' => (int) $piece['id'], 'item' => (string) $sale['order_item_id'], 'read' => (string) $read['id']]) !== false;
-            if ($byThisRead) {
-                $this->doubt($ctx, $configs, $piece, $read, $readAt, $day, $sale, false);
-            }
-
+        if ($this->explainedBySale($ctx, $configs, $piece, $read, $readAt, $day)) {
             return;
         }
         // 2. Des ventes de cet article encore SANS pièce, autour de la lecture, peuvent l'expliquer (le rattrapage ne les a pas encore vues :
@@ -191,7 +178,7 @@ final class LossExitService
             $oldest = (new \DateTimeImmutable((string) $waiting[0]['sold_at'], new \DateTimeZone('UTC')))->modify('-' . $before . ' seconds');
             $earlier = (int) $conn->fetchOne(
                 'SELECT COUNT(DISTINCT e.piece_id) FROM loss_piece_event e JOIN loss_piece p ON p.id = e.piece_id'
-                . " WHERE e.type = 'ZONE_SEEN' AND NOT e.exercise AND ((e.data)::jsonb ->> 'zone') = 'exit' AND COALESCE((e.data)::jsonb ->> 'clockDoubt', 'false') <> 'true'"
+                . " WHERE e.type = 'ZONE_SEEN' AND NOT e.exercise AND ((e.data)::jsonb ->> 'zone') = 'exit' AND COALESCE((e.data)::jsonb ->> 'clockDoubt', 'false') <> 'true' AND COALESCE((e.data)::jsonb ->> 'repeat', 'false') <> 'true'"
                 . ' AND p.variant_id = :variant AND NOT p.exercise AND e.piece_id <> :piece AND e.occurred_at >= :from AND (e.occurred_at < :at OR (e.occurred_at = :at AND e.id < :id))'
                 . " AND NOT EXISTS (SELECT 1 FROM loss_sale_unit u WHERE u.piece_id = e.piece_id AND u.sold_at <= e.occurred_at + make_interval(secs => :before)"
                 . " AND (u.returned_at IS NULL OR (u.returned_by = 'return' AND u.returned_at >= e.occurred_at)))",
@@ -212,7 +199,7 @@ final class LossExitService
             [$dayStart] = $ctx->clock->range($day, $day);
             $others = (int) $conn->fetchOne(
                 'SELECT COUNT(DISTINCT e.piece_id) FROM loss_piece_event e JOIN loss_piece p ON p.id = e.piece_id'
-                . " WHERE e.type = 'ZONE_SEEN' AND NOT e.exercise AND ((e.data)::jsonb ->> 'zone') = 'exit' AND COALESCE((e.data)::jsonb ->> 'clockDoubt', 'false') <> 'true'"
+                . " WHERE e.type = 'ZONE_SEEN' AND NOT e.exercise AND ((e.data)::jsonb ->> 'zone') = 'exit' AND COALESCE((e.data)::jsonb ->> 'clockDoubt', 'false') <> 'true' AND COALESCE((e.data)::jsonb ->> 'repeat', 'false') <> 'true'"
                 . " AND COALESCE((e.data)::jsonb ->> 'tagRetired', 'false') <> 'true' AND p.status <> 'retired'"
                 . ' AND p.variant_id = :variant AND NOT p.exercise AND e.piece_id <> :piece AND e.occurred_at >= :from AND (e.occurred_at < :at OR (e.occurred_at = :at AND e.id < :id))'
                 . " AND NOT EXISTS (SELECT 1 FROM loss_sale_unit u WHERE u.piece_id = e.piece_id AND u.sold_at <= e.occurred_at + make_interval(secs => :before)"
@@ -223,7 +210,7 @@ final class LossExitService
                 // les ventes en attente déjà prises par des sorties d'avant ce jour (cas 2, même fenêtre) ne libèrent aucune sortie de ce jour
                 $earlierBefore = (int) $conn->fetchOne(
                     'SELECT COUNT(DISTINCT e.piece_id) FROM loss_piece_event e JOIN loss_piece p ON p.id = e.piece_id'
-                    . " WHERE e.type = 'ZONE_SEEN' AND NOT e.exercise AND ((e.data)::jsonb ->> 'zone') = 'exit' AND COALESCE((e.data)::jsonb ->> 'clockDoubt', 'false') <> 'true'"
+                    . " WHERE e.type = 'ZONE_SEEN' AND NOT e.exercise AND ((e.data)::jsonb ->> 'zone') = 'exit' AND COALESCE((e.data)::jsonb ->> 'clockDoubt', 'false') <> 'true' AND COALESCE((e.data)::jsonb ->> 'repeat', 'false') <> 'true'"
                     . ' AND p.variant_id = :variant AND NOT p.exercise AND e.piece_id <> :piece AND e.occurred_at >= :from AND e.occurred_at < :dayStart'
                     . " AND NOT EXISTS (SELECT 1 FROM loss_sale_unit u WHERE u.piece_id = e.piece_id AND u.sold_at <= e.occurred_at + make_interval(secs => :before)"
                     . " AND (u.returned_at IS NULL OR (u.returned_by = 'return' AND u.returned_at >= e.occurred_at)))",
@@ -239,6 +226,39 @@ final class LossExitService
         if ($configs[LossRuleCatalog::EXIT_WITHOUT_SALE]['enabled'] ?? false) {
             $this->withoutSale($ctx, $piece, $read, $readAt, $day);
         }
+    }
+
+    /**
+     * Le cas 1 du jugement, aussi pour la porte arrière (lot L4-c) : une vente EN COURS de la pièce à l'heure de la lecture l'explique ; si
+     * c'est CETTE lecture qui l'a reliée (rattrapage) et que l'article n'est pas entièrement étiqueté, le doute est dit (constat faible).
+     *
+     * @param array<string, array{enabled: bool, params: array<string, int>}> $configs
+     * @param array<string, mixed>                                             $piece
+     * @param array<string, mixed>                                             $read
+     */
+    public function explainedBySale(LossAnalysisContext $ctx, array $configs, array $piece, array $read, \DateTimeImmutable $readAt, string $day): bool
+    {
+        $conn = $ctx->conn;
+        $before = LossSaleLinkService::CATCH_UP_BEFORE;
+        $when = $readAt->format('Y-m-d H:i:s');
+        $sale = $conn->fetchAssociative(
+            'SELECT s.id, s.order_id, s.order_item_id, s.sold_at, s.cash_register_id, s.matched_by FROM loss_sale_unit s'
+            . " WHERE s.piece_id = :piece AND s.sold_at <= :limit AND (s.returned_at IS NULL OR (s.returned_by = 'return' AND s.returned_at >= :at)) ORDER BY s.sold_at DESC, s.id DESC LIMIT 1",
+            ['piece' => (int) $piece['id'], 'limit' => $readAt->modify('+' . $before . ' seconds')->format('Y-m-d H:i:s'), 'at' => $when]);
+        if ($sale === false) {
+            return false;
+        }
+        // C'est CETTE lecture qui a relié la pièce à cette vente (rattrapage) ? Si l'article n'est pas entièrement étiqueté, le
+        // doute est dit (constat faible) ; sinon, rien
+        $byThisRead = $sale['matched_by'] === 'catch_up' && $conn->fetchOne(
+            "SELECT 1 FROM loss_piece_event f WHERE f.piece_id = :piece AND f.type = 'PIECE_SOLD' AND ((f.data)::jsonb ->> 'orderItemId') = :item"
+            . " AND ((f.data)::jsonb ->> 'readEventId') = :read LIMIT 1",
+            ['piece' => (int) $piece['id'], 'item' => (string) $sale['order_item_id'], 'read' => (string) $read['id']]) !== false;
+        if ($byThisRead) {
+            $this->doubt($ctx, $configs, $piece, $read, $readAt, $day, $sale, false);
+        }
+
+        return true;
     }
 
     /**
@@ -372,7 +392,8 @@ final class LossExitService
     }
 
     /** Le nom de l'article et de sa variante, tels que le catalogue les dit au moment du constat (un nom de produit, jamais de personne) */
-    private function article(Connection $conn, int $variant): string
+    /** Le nom d'un article et de sa variante (couleur, taille), lu dans le catalogue ; aussi pour les règles du dépôt (lot L4-c) */
+    public static function article(Connection $conn, int $variant): string
     {
         $row = $conn->fetchAssociative('SELECT a.name, c.name AS color, z.name AS size FROM product_variant v JOIN product a ON a.id = v.product_id'
             . ' LEFT JOIN color c ON c.id = v.color_id LEFT JOIN size z ON z.id = v.size_id WHERE v.id = ?', [$variant]);
