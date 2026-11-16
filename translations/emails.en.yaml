@@ -61,6 +61,7 @@ entitlement:
     greeting: 'Hello %site%,'
     signature: 'The Arkanoa platform'
     row_feature: 'Feature'
+    row_app_key: 'App activation key'
     row_ends_at: 'Ends on'
     row_grace_until: 'Suspension scheduled on'
     subject_granted: 'Your %feature% feature is now active'

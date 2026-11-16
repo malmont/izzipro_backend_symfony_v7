@@ -79,4 +79,51 @@ class RequestSiteFeatureUseCase
 
         return ['kind' => 'request', 'request' => $row];
     }
+
+    /**
+     * Lot MOD-1 : « Essayer » seul, en libre-service (décision du propriétaire, 16/11/2026) : ouvre l'essai gratuit, ou refuse ; jamais de
+     * repli sur une demande. Exceptions : InvalidArgumentException (clé non gouvernée), SiteFeatureRequestException (ALREADY_ENABLED |
+     * TRIAL_USED | NO_TRIAL).
+     *
+     * @return array{kind: 'trial', entitlement: array<string, mixed>}
+     */
+    public function trial(string $key, ?string $by): array
+    {
+        if (!isset(FeatureCatalog::GOVERNED[$key])) {
+            throw new \InvalidArgumentException('clé inconnue ou non accordée par la plateforme');
+        }
+        $code = (string) $this->tenants->getCurrentTenantCode();
+        if ($this->entitlements->isEnabled($code, $key)) {
+            throw new SiteFeatureRequestException('ALREADY_ENABLED', 'Fonctionnalité déjà active sur ce site.');
+        }
+        if (!$this->policies->get($key)['trial_allowed']) {
+            throw new SiteFeatureRequestException('NO_TRIAL', 'Aucun essai gratuit n\'est prévu pour cette fonctionnalité : la demander à la plateforme.');
+        }
+        if (!$this->trialOffer($key, $code)['allowed']) {
+            throw new SiteFeatureRequestException('TRIAL_USED', 'L\'essai gratuit de cette fonctionnalité a déjà été utilisé sur ce site.');
+        }
+        $entitlement = $this->entitlements->trial($code, $key, null, $by, 'essai lancé depuis « Modules disponibles »');
+
+        return ['kind' => 'trial', 'entitlement' => $entitlement + ['endsAtIso' => EntitlementService::toIso($entitlement['ends_at'] ?? null)]];
+    }
+
+    /**
+     * Lot MOD-1 : le commerçant allume ou éteint un module auquel il a droit ; le droit ne change jamais. Sans droit vivant :
+     * SiteFeatureRequestException NO_ENTITLEMENT.
+     *
+     * @return array{key: string, on: bool}
+     */
+    public function switchTo(string $key, bool $on, ?string $by): array
+    {
+        if (!isset(FeatureCatalog::GOVERNED[$key])) {
+            throw new \InvalidArgumentException('clé inconnue ou non accordée par la plateforme');
+        }
+        try {
+            $done = $this->entitlements->switchTo((string) $this->tenants->getCurrentTenantCode(), $key, $on, $by);
+        } catch (\DomainException) {
+            throw new SiteFeatureRequestException('NO_ENTITLEMENT', 'Le site n\'a pas de droit à cette fonctionnalité : l\'essayer ou la demander d\'abord.');
+        }
+
+        return ['key' => $done['key'], 'on' => $done['on']];
+    }
 }

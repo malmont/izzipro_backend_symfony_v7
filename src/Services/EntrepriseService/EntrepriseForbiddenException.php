@@ -9,10 +9,13 @@ namespace App\Services\EntrepriseService;
 final class EntrepriseForbiddenException extends \RuntimeException
 {
     public const CODE = 'SUPER_ADMIN_REQUIRED';
+    /** Lot MOD-1 : un module ne s'allume ni ne s'éteint par la fiche, pour personne : le droit se gère dans la console de pilotage, le
+     *  commerçant allume ou éteint un module détenu par POST /api/site/features/{clé}/enable|disable */
+    public const MODULE_VIA_PLATFORM = 'MODULE_VIA_PLATFORM';
 
     /** @param list<string> $fields */
-    public function __construct(public readonly array $fields)
+    public function __construct(public readonly array $fields, public readonly string $errorCode = self::CODE)
     {
-        parent::__construct('Modification réservée au super administrateur : ' . implode(', ', $fields));
+        parent::__construct(($errorCode === self::MODULE_VIA_PLATFORM ? 'Un module ne se règle pas sur la fiche : droit dans la console de pilotage, allumage par le commerçant dans « Modules ». ' : 'Modification réservée au super administrateur : ') . implode(', ', $fields));
     }
 }

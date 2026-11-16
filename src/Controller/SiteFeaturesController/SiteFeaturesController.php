@@ -57,7 +57,9 @@ class SiteFeaturesController extends AbstractController
         } catch (EntrepriseForbiddenException $e) {
             $fields = array_map(fn ($f) => self::PLATFORM_TO_KEY[$f] ?? FeatureCatalog::keyForStorage($f), $e->fields);
 
-            return $this->json(['error' => $e::CODE, 'code' => $e::CODE, 'message' => 'Modification réservée au super administrateur : ' . implode(', ', $fields), 'fields' => $fields], 403);
+            return $this->json(['error' => $e->errorCode, 'code' => $e->errorCode, 'message' => $e->errorCode === EntrepriseForbiddenException::MODULE_VIA_PLATFORM
+                ? 'Un module ne se règle pas ici : droit dans la console de pilotage, allumage par POST /api/site/features/{clé}/enable|disable : ' . implode(', ', $fields)
+                : 'Modification réservée au super administrateur : ' . implode(', ', $fields), 'fields' => $fields], 403);
         } catch (EntrepriseValidationException $e) {
             return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => $e->getMessage(), 'errors' => $this->mapErrors($e->errors)], 422);
         } catch (BoutiqueSettingsException $e) {
@@ -86,6 +88,44 @@ class SiteFeaturesController extends AbstractController
         }
 
         return $this->json($outcome + ['request' => $outcome['request'] ?? null], 201);
+    }
+
+    /**
+     * Lot MOD-1 : « Essayer » en libre-service : l'essai gratuit seul, jamais une demande. 201 { kind: trial, entitlement } ; 409
+     * ALREADY_ENABLED | TRIAL_USED | NO_TRIAL ; 422 clé inconnue.
+     */
+    #[Route('/{key}/trial', name: 'api_site_features_trial', methods: ['POST'], requirements: ['key' => '[a-z_]+\.[a-z_]+'])]
+    public function trial(string $key): JsonResponse
+    {
+        return $this->outcome($key, fn (): array => $this->requestFeature->trial($key, $this->getUser()?->getUserIdentifier()), 201);
+    }
+
+    /**
+     * Lot MOD-1 : le commerçant ALLUME ou ÉTEINT un module auquel il a droit. Éteindre ne touche jamais au droit (l'essai court,
+     * l'abonnement reste) ; rallumer est immédiat tant que le droit vaut. 200 { key, on } ; 409 NO_ENTITLEMENT ; 422 clé inconnue.
+     */
+    #[Route('/{key}/enable', name: 'api_site_features_enable', methods: ['POST'], requirements: ['key' => '[a-z_]+\.[a-z_]+'])]
+    public function enable(string $key): JsonResponse
+    {
+        return $this->outcome($key, fn (): array => $this->requestFeature->switchTo($key, true, $this->getUser()?->getUserIdentifier()), 200);
+    }
+
+    #[Route('/{key}/disable', name: 'api_site_features_disable', methods: ['POST'], requirements: ['key' => '[a-z_]+\.[a-z_]+'])]
+    public function disable(string $key): JsonResponse
+    {
+        return $this->outcome($key, fn (): array => $this->requestFeature->switchTo($key, false, $this->getUser()?->getUserIdentifier()), 200);
+    }
+
+    /** @param callable(): array<string, mixed> $action */
+    private function outcome(string $key, callable $action, int $status): JsonResponse
+    {
+        try {
+            return $this->json($action(), $status);
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => $e->getMessage(), 'errors' => [['path' => $key, 'message' => $e->getMessage()]]], 422);
+        } catch (SiteFeatureRequestException $e) {
+            return $this->json(['error' => $e->code409, 'code' => $e->code409, 'message' => $e->getMessage()], 409);
+        }
     }
 
     /** @param list<array{path: string, message: string}> $errors */

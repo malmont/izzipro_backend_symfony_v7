@@ -271,7 +271,7 @@ class GestionSimulationCommentService
     {
         $code = (string) $this->tenants->getCurrentTenantCode();
         try {
-            $allowed = $this->entitlements === null || $this->entitlements->isEnabled($code, 'ai.full') || $this->entitlements->isEnabled($code, 'ai.help');
+            $allowed = $this->entitlements === null || $this->entitlements->isActive($code, 'ai.full') || $this->entitlements->isActive($code, 'ai.help'); // lot MOD-1 : droit ET allumé
         } catch (\Throwable) {
             $allowed = false;
         }

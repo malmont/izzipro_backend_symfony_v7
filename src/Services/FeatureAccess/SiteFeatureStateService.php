@@ -47,6 +47,7 @@ class SiteFeatureStateService
         private readonly ?\App\Services\Help\HelpCatalogService $help = null, // aide intégrée (07/11/2026)
         private readonly ?\App\Services\Site\AdminSpaceUrl $adminSpace = null, // lot LIEN (14/11/2026)
         private readonly ?\App\Services\Notification\NotificationLevelResolver $notificationLevels = null, // lot NOTIF-1
+        private readonly ?\App\Services\Platform\FeaturePolicyRepository $policies = null, // lot MOD-1
     ) {
     }
 
@@ -59,6 +60,7 @@ class SiteFeatureStateService
         $activeKeys = $this->activeKeysPerApp();
         $commerce = $this->commerce();
         [$entitlements, $pending] = $this->platformState();
+        [$switches, $pastTrials] = $this->switchState();
         $out = [];
         foreach (FeatureCatalog::FEATURES as $key => $def) {
             $entry = $this->entry($key, $def, $e, $flags, $activeKeys, $commerce);
@@ -67,6 +69,10 @@ class SiteFeatureStateService
                 $ent = $entitlements[$key] ?? null;
                 $entry['entitlement'] = $ent && $ent['enabled'] ? ['id' => $ent['id'], 'source' => $ent['source'], 'status' => $ent['status'], 'endsAt' => $ent['endsAt'], 'endsAtIso' => $ent['endsAtIso'] ?? null, 'graceUntil' => $ent['graceUntil'], 'offerCode' => $ent['offerCode']] : null;
                 $entry['request'] = $pending[$key] ?? null;
+                // lot MOD-1 : l'interrupteur du commerçant, distinct du droit (`value` reste ce qui marche : droit ET allumé, que lisent les
+                // menus) ; et ce qu'il peut faire d'un module qu'il n'a pas : l'essayer, le demander, le découvrir
+                $entry['switch'] = ($switches[$key] ?? true) ? 'on' : 'off';
+                $entry['available'] = $this->available($key, $entry['entitlement'] !== null, isset($pending[$key]), isset($pastTrials[$key]));
             }
             $out[] = $entry;
         }
@@ -293,6 +299,40 @@ class SiteFeatureStateService
     }
 
     /** @return array{0: array<string, array<string, mixed>>, 1: array<string, string>} droits d'usage effectifs et demandes en attente du site (vides sans code de site) */
+    /**
+     * Lot MOD-1 : interrupteurs du commerçant et fonctionnalités dont le site a déjà eu un essai.
+     *
+     * @return array{0: array<string, bool>, 1: array<string, true>}
+     */
+    private function switchState(): array
+    {
+        $code = $this->tenants->getCurrentTenantCode();
+        if ($code === null || $code === '') {
+            return [[], []];
+        }
+        try {
+            $trials = [];
+            foreach ($this->entitlements->listForTenant($code) as $row) {
+                if ($row['source'] === 'trial') {
+                    $trials[(string) $row['feature_key']] = true;
+                }
+            }
+
+            return [$this->entitlements->switches($code), $trials];
+        } catch (\Throwable) {
+            return [[], []];
+        }
+    }
+
+    /** @return array{trial: array{days: int}|null, requestable: bool, description: ?string, howTo: ?string} */
+    private function available(string $key, bool $held, bool $pending, bool $hadTrial): array
+    {
+        $policy = $held || $hadTrial ? null : $this->policies?->get($key);
+
+        return ['trial' => $policy !== null && $policy['trial_allowed'] ? ['days' => (int) $policy['trial_days']] : null, 'requestable' => !$held && !$pending,
+            'description' => FeatureCatalog::DESCRIPTIONS[$key] ?? null, 'howTo' => FeatureCatalog::HOW_TO[$key] ?? null];
+    }
+
     private function platformState(): array
     {
         $code = $this->tenants->getCurrentTenantCode();

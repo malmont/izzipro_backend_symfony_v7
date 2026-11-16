@@ -591,6 +591,40 @@ ajoutent, sur ces écrans seulement, un **panneau de droite** « À quoi ça res
 `Twig/ComponentGuideExtension`). Sections du menu renommées : « Site vitrine (Landing Page) », « Boutique : accueil et pages » ; l'écran « Admin Settings » (ancien front) est retiré du back-office, ses routes API restent. Dix-neuf écrans couverts.
 Pour ajouter un écran : une entrée dans `GUIDES` et son SVG. Test : `tests/Functional/Admin/ComponentGuideTest.php`.
 
+## Lot MOD-1 : le droit d'un côté, l'interrupteur du commerçant de l'autre (16/11/2026, codé sous Opus)
+
+Contrat validé par le chef de projet et le propriétaire le 16/11/2026. **Le droit** à un module vient d'un achat ou du super
+administrateur ; **le commerçant allume et éteint** lui-même un module auquel il a droit.
+
+- **Fiche Entreprise, onglet Applications : lecture seule pour TOUS**, super administrateur compris. Chaque module montre son droit
+  (origine : essai, abonnement, accordé par la plateforme, gratuit, achat, forfait de l'agence ; fin) et s'il est allumé ; le super
+  administrateur a le lien « Gérer dans Plateforme : pilotage ». La fiche n'écrit plus jamais un droit (`EntitlementFlagSync` n'est plus
+  appelé) ni une clé d'application ; les valeurs sont réimposées de la base, même par requête forgée.
+- **`PUT /api/entreprise/{id}` et `PUT /api/site/features`** : une valeur de module CHANGÉE répond **403 `MODULE_VIA_PLATFORM`** pour
+  tous (`fields`) ; une valeur inchangée est ignorée. Le super administrateur passe par la console (`/api/platform/entitlements`).
+- **Interrupteur** : table maître `tenant_feature_switches` (ligne absente = allumé : aucun site existant ne change). La fiche du site
+  reçoit « droit effectif ET allumé » (`EntitlementService::project`, `activeMap`) : le garde-fou des modules et les fronts suivent sans
+  changement ; l'IA de la gestion lit « droit et allumé » (`isActive`).
+  - `POST /api/site/features/{clé}/enable` et `/disable` (`ROLE_ADMIN` du site) : 200 `{ key, on }`, 409 `NO_ENTITLEMENT` sans droit
+    vivant, 422 clé inconnue. Éteindre ne touche JAMAIS au droit (l'essai court, l'abonnement reste) ; rallumer est immédiat tant que le
+    droit vaut. Chaque geste est noté au journal des droits (`switched_on`, `switched_off`).
+  - Une agence entrée dans le site (lot AG-3b) ne change pas les modules (`/api/site/features` en écriture lui est fermé).
+- **`GET /api/site/features`**, par module : `value` (ce qui marche : droit ET allumé ; un module éteint est caché des menus comme un
+  module sans droit), `entitlement` (le droit, inchangé), **`switch`** (`on` | `off`, l'interrupteur du commerçant) et **`available`**
+  `{ trial: { days } | null, requestable, description, howTo }`.
+- **« Essayer » en libre-service** (décision du propriétaire) : `POST /api/site/features/{clé}/trial` (`ROLE_ADMIN`), l'essai seul, sans
+  repli sur une demande : 201 `{ kind: trial, entitlement }`, 409 `ALREADY_ENABLED` | `TRIAL_USED` | `NO_TRIAL`. « Demander »
+  (`/request`) reste. Aucun achat payant dans ce lot.
+- **« Mon site »** : les modules absents en tête (« Essayer », « Demander », « Mettre à jour mon forfait ») ; un interrupteur
+  « Allumer » / « Éteindre » par module détenu.
+- **Clés d'application** : à l'octroi ou à l'essai d'une application (`granted`, `trial_started`), si le site n'a aucune clé valable,
+  la clé est créée et part dans le courriel d'octroi (`EntitlementChangedHandler`), au contact du site. Éteindre ne révoque pas les clés
+  (le garde-fou des modules ferme les routes).
+- **Console** : « Retirer » un droit d'origine abonnement avertit qu'il se rallumera au renouvellement et propose « Retirer et résilier » :
+  l'abonnement est résilié à la fin de la période payée par un worker placé sur le site vendeur (`CancelPlatformSubscriptionMessage`,
+  file `async`, référence `subscription:<site>:<numéro>`). Hors d'un worker, rien n'est basculé : la résiliation est journalisée.
+- Base maître : `scripts/migrate_master_v2_feature_switches.sh <SQL du worktree de construction>` AVANT l'échange du code.
+
 ## Tenir cette fiche à jour
 
 À chaque lot : l'état du tableau ci-dessus, l'inventaire s'il change, et la fiche du module touché (`docs/boutique.md`,

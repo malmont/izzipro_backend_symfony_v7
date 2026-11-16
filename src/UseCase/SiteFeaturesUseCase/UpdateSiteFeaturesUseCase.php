@@ -58,7 +58,7 @@ class UpdateSiteFeaturesUseCase
                 continue;
             }
             if ($def['scope'] === FeatureCatalog::SCOPE_PLATFORM && !in_array($key, FeatureCatalog::PLATFORM_WRITABLE, true)) {
-                $errors[] = ['path' => $key, 'message' => 'en lecture seule : les applications s\'activent sur la fiche Entreprise'];
+                $errors[] = ['path' => $key, 'message' => 'en lecture seule : le droit se gère dans la console de pilotage, l\'allumage par POST /api/site/features/{clé}/enable|disable'];
                 continue;
             }
             // clé platform par un administrateur de site : UpdateEntrepriseUseCase ignore une valeur inchangée et refuse une valeur différente

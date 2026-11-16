@@ -36,7 +36,8 @@ class EntrepriseCrudController extends BaseTenantCrudController
         private readonly ?\App\Services\BoutiqueSettingsService\SiteCurrencyService $siteCurrency = null, // devise du site (F18 partie 1, 01/11/2026)
         private readonly ?\App\Services\OrderService\TaxInclusiveGuard $taxInclusive = null, // prix taxes comprises (F18 partie 2b)
         private readonly ?\App\Services\Platform\EntitlementFlagSync $flagSync = null, // droits d'usage alignés sur les activations (console, lot 3, 04/11/2026)
-        private readonly ?\App\Services\AppMembershipService\AppMembershipService $appMemberships = null // mode du contrôle d'appartenance (APPS-MEMBRES M3, 14/11/2026)
+        private readonly ?\App\Services\AppMembershipService\AppMembershipService $appMemberships = null, // mode du contrôle d'appartenance (APPS-MEMBRES M3, 14/11/2026)
+        private readonly ?\App\Services\Platform\EntitlementService $entitlements = null, // lot MOD-1 : état, origine et fin des droits, en lecture
     ) {
         parent::__construct($emProvider);
         $this->adminUrlGenerator = $adminUrlGenerator;
@@ -46,15 +47,21 @@ class EntrepriseCrudController extends BaseTenantCrudController
     {
         if ($entityInstance instanceof Entreprise) {
             $this->enforceSuperAdminFields($entityInstance);
+            $this->enforceModuleFields($entityInstance);
         }
         parent::persistEntity($entityManager, $entityInstance);
     }
 
-    /** Mise à jour habituelle, puis clés d'activation des applications mobiles selon les interrupteurs changés (15/10/2026) */
+    /**
+     * Mise à jour habituelle. Lot MOD-1 (16/11/2026) : les activations des modules et des applications sont en LECTURE SEULE pour tous,
+     * super administrateur compris : la fiche n'écrit plus jamais un droit (ni droit d'usage, ni clé d'application). Le droit se gère dans
+     * « Plateforme : pilotage », le commerçant allume ou éteint un module détenu dans « Mon site ».
+     */
     public function updateEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
     {
         if ($entityInstance instanceof Entreprise) {
             $this->enforceSuperAdminFields($entityInstance);
+            $this->enforceModuleFields($entityInstance);
         }
         $tenantEm = $this->emProvider->getEntityManager();
         $tenantEm->getUnitOfWork()->computeChangeSets();
@@ -108,12 +115,27 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 : sprintf('Devise du site : %s.', $outcome['currency']));
         }
 
-        $request = $this->requestStack->getCurrentRequest();
-        foreach ($this->appActivation->applyChanges($changeSet, $this->tenant->getTenantCode() ?? '', $this->getUser()?->getUserIdentifier() ?? 'admin', $request?->getSchemeAndHttpHost() ?? '') as $app => $message) {
-            $this->addFlash(str_contains($message, 'non créée') ? 'danger' : 'success', sprintf('%s : %s', \App\Services\AppKeyService\AppKeyService::LABELS[$app] ?? $app, $message));
+        // (lot MOD-1 : plus de clés d'application ni de droit d'usage créés depuis la fiche ; les clés naissent à l'octroi du droit)
+    }
+
+    /**
+     * Lot MOD-1 : réimpose, pour TOUS, les activations des modules et des applications telles qu'en base (projetées des droits d'usage
+     * et des interrupteurs du commerçant), même par requête forgée ; une fiche neuve prend les valeurs par défaut de l'entité.
+     */
+    private function enforceModuleFields(Entreprise $entity): void
+    {
+        $current = null;
+        if ((int) $entity->getId() > 0) {
+            $current = $this->emProvider->getEntityManager()->getConnection()->fetchAssociative('SELECT ' . implode(', ', \App\Services\FeatureAccess\FeatureCatalog::GOVERNED) . ' FROM entreprise WHERE id = ?', [(int) $entity->getId()]);
+            if (!is_array($current)) {
+                throw $this->createAccessDeniedException('Fiche introuvable.');
+            }
         }
-        if ($entityInstance instanceof Entreprise) {
-            $this->flagSync?->afterWrite($entityInstance); // droits d'usage : vrai sans droit → droit manuel, faux avec droit → annulé
+        $defaults = new Entreprise();
+        foreach (\App\Services\FeatureAccess\FeatureCatalog::GOVERNED_GETTERS as $key => $getter) {
+            $setter = 'set' . ucfirst($getter);
+            $value = $current !== null ? in_array($current[\App\Services\FeatureAccess\FeatureCatalog::GOVERNED[$key]], [true, 't', 'true', 1, '1'], true) : (bool) $defaults->{$getter}();
+            $entity->{$setter}($value);
         }
     }
 
@@ -214,29 +236,30 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 ->setColumns('col-md-6'),
 
             FormField::addTab('Applications', 'fa fa-th-large'),
-            FormField::addPanel('Activation des Applications (Multi-Module)')->collapsible(),
-            $this->superAdminBooleanField('isBoutiqueActive', 'Boutique / e-Commerce', 'Activer la boutique et le catalogue e-commerce pour ce tenant.'),
-            $this->superAdminBooleanField('isLandingPageActive', 'Landing Page', 'Activer le site vitrine / landing page.'),
-            $this->superAdminBooleanField('isBoussoleEsgActive', 'Boussole ESG', 'Activer le module de diagnostic et bilans ESG.'),
-            $this->superAdminBooleanField('isSupportActive', 'Assistance', 'Module Assistance : boîte des demandes des clients (lot 1).'),
-            $this->superAdminBooleanField('isLossPreventionActive', 'Prévention des pertes', 'Section « Prévention des pertes » de l\'application de gestion (exige l\'application de gestion).'),
-            $this->superAdminBooleanField('isMemoireVivanteActive', 'Mémoire Vivante', 'Activer l\'application Mémoire Vivante.'),
+            FormField::addPanel('Activation des Applications (Multi-Module)')->collapsible()
+                ->setHelp('Lecture seule (lot MOD-1) : chaque module montre son droit (origine et fin) et s\'il est allumé. Le droit se gère dans « Plateforme : pilotage » ; le commerçant allume ou éteint un module détenu dans « Mon site ».'),
+            $this->moduleField('isBoutiqueActive', 'Boutique / e-Commerce', 'Activer la boutique et le catalogue e-commerce pour ce tenant.'),
+            $this->moduleField('isLandingPageActive', 'Landing Page', 'Activer le site vitrine / landing page.'),
+            $this->moduleField('isBoussoleEsgActive', 'Boussole ESG', 'Activer le module de diagnostic et bilans ESG.'),
+            $this->moduleField('isSupportActive', 'Assistance', 'Module Assistance : boîte des demandes des clients (lot 1).'),
+            $this->moduleField('isLossPreventionActive', 'Prévention des pertes', 'Section « Prévention des pertes » de l\'application de gestion (exige l\'application de gestion).'),
+            $this->moduleField('isMemoireVivanteActive', 'Mémoire Vivante', 'Activer l\'application Mémoire Vivante.'),
 
             FormField::addPanel('Code court de la boutique')->collapsible()->setHelp($this->shortCodeHelp()),
             FormField::addPanel('Applications mobiles')->collapsible()
-                ->setHelp('Activer génère une clé d\'activation et l\'envoie (clé + code QR) à l\'e-mail de l\'entreprise ; désactiver révoque les clés de l\'application. Détail : menu Caisse → Clés des applications.'),
-            $this->superAdminBooleanField('isPosActive', 'Caisse (POS)'),
-            $this->superAdminBooleanField('isMobileShopActive', 'E-commerce mobile'),
-            $this->superAdminBooleanField('isManagementAppActive', 'Application de gestion'),
-            $this->superAdminBooleanField('isLivingMemoryActive', 'LivingMemory (Mémoires Vivantes)'),
+                ->setHelp('Lecture seule (lot MOD-1) : le droit à une application vient de la plateforme ; à son octroi, une clé d\'activation est créée et envoyée (clé + code QR) à l\'e-mail de l\'entreprise. Détail : menu Caisse → Clés des applications.'),
+            $this->moduleField('isPosActive', 'Caisse (POS)'),
+            $this->moduleField('isMobileShopActive', 'E-commerce mobile'),
+            $this->moduleField('isManagementAppActive', 'Application de gestion'),
+            $this->moduleField('isLivingMemoryActive', 'LivingMemory (Mémoires Vivantes)'),
             $this->superAdminBooleanField('variantPromotionsEnabled', 'Promotions par variante', 'Lot VAR : à allumer seulement quand la caisse, la boutique Next et l\'app mobile savent appliquer une promotion de variante (pack hors ligne v4).', true),
             $this->appMembershipModeField(),
             $this->notificationLevelField(),
 
             FormField::addPanel('Assistant IA')->collapsible()
                 ->setHelp('Paliers de l\'assistant IA (console IA, lot 6) : Aide IA explique et guide ; IA complète propose des réglages et des opérations sur les commandes, confirmées par l\'administrateur. Projetés depuis les droits d\'usage de la Plateforme ; en mode démo de la plateforme, tout est ouvert.'),
-            $this->superAdminBooleanField('isAiHelpActive', 'Aide IA'),
-            $this->superAdminBooleanField('isAiFullActive', 'IA complète'),
+            $this->moduleField('isAiHelpActive', 'Aide IA'),
+            $this->moduleField('isAiFullActive', 'IA complète'),
 
             FormField::addTab('Caisse', 'fa fa-cash-register'),
             FormField::addPanel('Réglages généraux de la caisse')->collapsible()
@@ -461,6 +484,50 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 ->onlyOnForms(),
 
         ];
+    }
+
+    /** @var array{0: array<string, array<string, mixed>>, 1: array<string, bool>}|null droits effectifs et interrupteurs du site, lus une fois */
+    private ?array $moduleState = null;
+
+    /**
+     * Lot MOD-1 (16/11/2026) : l'activation d'un module ou d'une application, en LECTURE SEULE pour tous. L'aide dit l'état : droit
+     * (essai, abonnement, manuel…) et sa fin, allumé ou éteint par le commerçant ; le super administrateur a le lien vers la console.
+     */
+    private function moduleField(string $property, string $label, ?string $help = null): BooleanField
+    {
+        $key = array_search($property, \App\Services\FeatureAccess\FeatureCatalog::GOVERNED_GETTERS, true);
+        $parts = $help !== null ? [$help] : [];
+        $parts[] = $this->moduleStateText(is_string($key) ? $key : null);
+        if ($this->isGranted('ROLE_SUPER_ADMIN')) {
+            $parts[] = '<a href="' . htmlspecialchars($this->generateUrl('admin_plateforme'), \ENT_QUOTES) . '">Gérer dans Plateforme : pilotage</a>';
+        } else {
+            $parts[] = 'S\'allume ou s\'éteint dans « Mon site », s\'essaie ou se demande dans « Modules disponibles ».';
+        }
+
+        return BooleanField::new($property, $label)->renderAsSwitch(false)->setFormTypeOption('attr', ['disabled' => 'disabled'])->setFormTypeOption('disabled', true)
+            ->setHelp(implode(' ', $parts));
+    }
+
+    private function moduleStateText(?string $key): string
+    {
+        $code = (string) ($this->tenant->getTenantCode() ?? '');
+        if ($key === null || $this->entitlements === null || $code === '') {
+            return '';
+        }
+        try {
+            $this->moduleState ??= [$this->entitlements->effective($code), $this->entitlements->switches($code)];
+        } catch (\Throwable) {
+            return '';
+        }
+        [$effective, $switches] = $this->moduleState;
+        $right = $effective[$key] ?? null;
+        if (!is_array($right) || !$right['enabled']) {
+            return 'Aucun droit.';
+        }
+        $sources = ['trial' => 'essai', 'subscription' => 'abonnement', 'manual' => 'accordé par la plateforme', 'free' => 'gratuit', 'purchase' => 'achat', 'agency' => 'forfait de l\'agence'];
+        $end = $right['endsAt'] !== null ? ' jusqu\'au ' . substr((string) $right['endsAt'], 0, 10) : ' sans fin';
+
+        return sprintf('Droit : %s%s ; %s.', $sources[$right['source']] ?? (string) $right['source'], $end, ($switches[$key] ?? true) ? 'allumé' : 'éteint par le commerçant');
     }
 
     private function superAdminBooleanField(string $property, string $label, ?string $help = null, bool $hideOnIndex = false): BooleanField

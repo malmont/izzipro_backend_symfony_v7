@@ -149,3 +149,17 @@ CREATE TABLE IF NOT EXISTS platform_shipping_charges (
 CREATE INDEX IF NOT EXISTS idx_platform_shipping_charges_tenant ON platform_shipping_charges (tenant_code, id);
 INSERT INTO platform_settings (key, value) VALUES ('shipping_fee_bp', '0'), ('shipping_fee_fixed_cents', '0') ON CONFLICT (key) DO NOTHING;
 
+
+-- Lot MOD-1 (16/11/2026, docs/console-pilotage.md) : l'INTERRUPTEUR du commerçant, distinct du droit. Le droit vient d'un achat ou du
+-- super administrateur ; le commerçant allume ou éteint lui-même un module auquel il a droit. Éteindre ne touche jamais au droit
+-- (l'essai court, l'abonnement reste) ; rallumer est immédiat tant que le droit vaut. LIGNE ABSENTE = ALLUMÉ : aucun site existant ne
+-- change. La fiche du site reçoit « droit effectif ET allumé » (EntitlementService::project).
+-- Retour arrière : DROP TABLE tenant_feature_switches (la projection suivante rallume tout ce qui a un droit).
+CREATE TABLE IF NOT EXISTS tenant_feature_switches (
+    tenant_code VARCHAR(50) NOT NULL,
+    feature_key VARCHAR(64) NOT NULL,
+    enabled BOOLEAN NOT NULL,
+    updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_by VARCHAR(255) DEFAULT NULL,
+    PRIMARY KEY (tenant_code, feature_key)
+);

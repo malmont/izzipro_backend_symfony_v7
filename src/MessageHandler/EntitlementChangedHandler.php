@@ -55,6 +55,7 @@ final class EntitlementChangedHandler
         private readonly ?TenantEntityManagerProvider $emProvider = null,
         private readonly ?TenantConnectionManager $tenants = null,
         private readonly ?WorkerContext $worker = null,
+        private readonly ?\App\Services\AppKeyService\AppKeyService $appKeys = null,
     ) {
     }
 
@@ -100,6 +101,12 @@ final class EntitlementChangedHandler
             if ($params['%note%'] !== '') {
                 $rows[$this->translator->trans('entitlement.row_message', [], 'emails', $language)] = $params['%note%'];
             }
+        }
+        // Lot MOD-1 : la fiche ne crée plus les clés ; à l'octroi ou à l'essai d'une APPLICATION, sa clé d'activation naît ici, si le site
+        // n'en a aucune encore valable, et part dans ce courriel (au contact du site, comme le faisait l'activation sur la fiche)
+        $appKey = in_array($event, ['granted', 'trial_started'], true) ? $this->provisionAppKey($tenant['code'], $message->featureKey) : null;
+        if ($appKey !== null) {
+            $rows[$this->translator->trans('entitlement.row_app_key', [], 'emails', $language)] = $appKey;
         }
         $nextKey = "entitlement.next_$event";
         if ($shopUrl === null && in_array($event, ['request_received', 'request_refused', 'expired', 'expiring_7', 'expiring_1', 'trial_started', 'suspended'], true)) {
@@ -246,5 +253,29 @@ final class EntitlementChangedHandler
             'US' => EmailLocale::ENGLISH,
             default => EmailLocale::FRENCH,
         };
+    }
+
+    /** La clé d'activation d'une application nouvellement accordée, en clair (une seule fois), ou null : pas une application, ou déjà une clé valable */
+    private function provisionAppKey(string $tenantCode, string $featureKey): ?string
+    {
+        $app = FeatureCatalog::GOVERNED_APP[$featureKey] ?? null;
+        if ($app === null || $this->appKeys === null) {
+            return null;
+        }
+        try {
+            $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            foreach ($this->appKeys->list($tenantCode) as $row) {
+                if (($row['app'] ?? null) === $app && ($row['revoked_at'] ?? null) === null
+                    && (($row['expires_at'] ?? null) === null || new \DateTimeImmutable((string) $row['expires_at'], new \DateTimeZone('UTC')) > $now)) {
+                    return null;
+                }
+            }
+
+            return $this->appKeys->generate($tenantCode, $app, sprintf('Activation %s du %s', \App\Services\AppKeyService\AppKeyService::LABELS[$app] ?? $app, $now->format('d/m/Y')), 'plateforme', null)['key'];
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf('[Entitlements] clé de l\'application %s non créée pour %s (%s)', $app, $tenantCode, $e::class));
+
+            return null;
+        }
     }
 }

@@ -159,21 +159,28 @@
     </div></div>
 
     <h2 class="h5 mt-4">Modules et applications</h2>
-    <p class="text-muted small">Un module ou une application s'obtient de la plateforme : « Essayer » ouvre un essai gratuit immédiat quand il est possible (une fois par fonctionnalité), « Demander » envoie une demande (accusé par courriel, la plateforme répond), « Mettre à jour mon forfait » mène à la boutique de forfaits. Une fois accordé, suivez la colonne « Et ensuite ». Les applications mobiles ont besoin d'une <strong>clé d'activation</strong>{% if appKeysUrl %} : <a href="{{ appKeysUrl }}">ouvrir l'écran des clés</a>{% endif %}.</p>
+    <p class="text-muted small">Les modules que vous n'avez pas sont en tête : « Essayer » ouvre un essai gratuit immédiat quand il est possible (une fois par fonctionnalité), « Demander » envoie une demande (accusé par courriel, la plateforme répond), « Mettre à jour mon forfait » mène à la boutique de forfaits. Un module auquel vous avez droit s'allume et s'éteint ici : l'éteindre ne touche pas à votre droit (un essai continue de courir, un abonnement reste actif). Une fois accordé, suivez la colonne « Et ensuite ». Les applications mobiles ont besoin d'une <strong>clé d'activation</strong>, envoyée par courriel à l'octroi{% if appKeysUrl %} : <a href="{{ appKeysUrl }}">ouvrir l'écran des clés</a>{% endif %}.</p>
     <table class="table table-sm datagrid mon-site-modules">
         <thead><tr><th>Fonctionnalité</th><th>État</th><th>Droit d'usage</th><th>Et ensuite</th><th></th></tr></thead>
         <tbody>
-        {% for e in groups.modules|merge(groups.apps) %}
+        {% set rows = groups.modules|merge(groups.apps) %}
+        {% for e in rows|filter(e => (e.entitlement ?? null) is null)|merge(rows|filter(e => (e.entitlement ?? null) is not null)) %}
             <tr data-key="{{ e.key }}">
                 <td><strong>{{ e.label }}</strong>{% if e.description %}<div class="small text-muted">{{ e.description }}</div>{% endif %}</td>
                 <td>{{ m.status(e) }}</td>
                 <td class="small">{% if e.entitlement %}{{ {manual: 'accordé par la plateforme', trial: 'essai gratuit', free: 'gratuit', subscription: 'abonnement', purchase: 'achat'}[e.entitlement.source] ?? e.entitlement.source }}{% if e.entitlement.status == 'grace' %} (paiement en attente){% endif %}{% if e.entitlement.endsAt %}, jusqu'au {{ e.entitlement.endsAt|slice(0, 10) }}{% else %}, sans fin{% endif %}{% elseif e.value %}<span class="text-muted">activé</span>{% else %}<span class="text-muted">aucun : à demander</span>{% endif %}</td>
                 <td class="small">{% if e.value %}{{ e.howTo }}{% endif %}{{ m.prereqs(e) }}</td>
                 <td class="text-nowrap">
-                    {% if e.request == 'pending' %}<span class="badge bg-warning text-dark">demande en attente</span><div class="small text-muted">la plateforme vous répond par courriel</div>
+                    {% if (e.entitlement ?? null) is not null %}
+                        <form method="post" action="{{ path('admin_mon_site_module', {key: e.key, state: (e.switch ?? 'on') == 'off' ? 'on' : 'off'}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">{% if (e.switch ?? 'on') == 'off' %}<button class="btn btn-sm btn-success">Allumer</button>{% else %}<button class="btn btn-sm btn-outline-secondary" onclick="return confirm('Éteindre {{ e.label|e('js') }} ? Votre droit reste ; vous pourrez le rallumer.')">Éteindre</button>{% endif %}</form>
+                        {% if (e.switch ?? 'on') != 'off' %}
+                            {% if e.key in ['module.pos', 'app.mobile_shop', 'app.management', 'app.living_memory'] and appKeysUrl %}<a class="btn btn-sm btn-primary" href="{{ appKeysUrl }}">Clés d'activation</a>{% endif %}
+                            {% if e.screenUrl and e.screenUrl != appKeysUrl %}<a class="btn btn-sm btn-outline-secondary" href="{{ e.screenUrl }}">Ouvrir</a>{% endif %}
+                        {% endif %}
+                    {% elseif e.request == 'pending' %}<span class="badge bg-warning text-dark">demande en attente</span><div class="small text-muted">la plateforme vous répond par courriel</div>
                     {% elseif not e.value %}
                         {% if e.trial is defined and e.trial.allowed %}
-                            <form method="post" action="{{ path('admin_mon_site_demander', {key: e.key}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-success" onclick="return confirm('Ouvrir un essai gratuit de {{ e.trial.days }} jours de {{ e.label|e('js') }} ? Il s\'active tout de suite.')">Essayer {{ e.trial.days }} jours</button></form>
+                            <form method="post" action="{{ path('admin_mon_site_essayer', {key: e.key}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-success" onclick="return confirm('Ouvrir un essai gratuit de {{ e.trial.days }} jours de {{ e.label|e('js') }} ? Il s\'active tout de suite.')">Essayer {{ e.trial.days }} jours</button></form>
                         {% else %}
                             <form method="post" action="{{ path('admin_mon_site_demander', {key: e.key}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-outline-primary" onclick="return confirm('Demander {{ e.label|e('js') }} à la plateforme ? Vous recevrez un accusé par courriel.')">Demander</button></form>
                         {% endif %}

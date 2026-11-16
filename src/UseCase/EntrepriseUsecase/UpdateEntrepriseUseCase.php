@@ -35,9 +35,7 @@ class UpdateEntrepriseUseCase
         // journal des écritures : valeurs avant / après des seules clés envoyées
         $before = $this->entrepriseService->snapshot($id, array_keys($data), $locale);
         $dto = $this->entrepriseService->updateEntreprise($id, $data, $host, $locale);
-        if ($dto !== null && array_intersect(self::SUPER_ADMIN_FIELDS, array_keys($data)) !== []) {
-            $this->flagSync?->afterEntrepriseId($id); // droits d'usage alignés sur les activations (console, lot 3, 04/11/2026)
-        }
+        // (lot MOD-1 : la fiche n'écrit plus jamais un droit ; les activations y sont en lecture seule pour tous)
         if ($dto !== null && $before !== null) {
             $after = $this->entrepriseService->snapshot($id, array_keys($before), $locale);
             $changed = array_keys(array_filter($after, fn ($value, $key) => $value !== $before[$key], ARRAY_FILTER_USE_BOTH));
@@ -55,8 +53,10 @@ class UpdateEntrepriseUseCase
      */
     private function guardSuperAdminFields(int $id, array $data, string $locale): array
     {
+        // lot MOD-1 : les activations des modules sont en lecture seule pour TOUS, super administrateur compris (le droit se gère dans la
+        // console de pilotage ; le commerçant allume ou éteint un module détenu) : une valeur inchangée est ignorée, une autre refusée
         $sent = array_values(array_intersect(self::SUPER_ADMIN_FIELDS, array_keys($data)));
-        if ($sent === [] || $this->security->isGranted('ROLE_SUPER_ADMIN')) {
+        if ($sent === []) {
             return $data;
         }
         $current = $this->entrepriseService->snapshot($id, $sent, $locale);
@@ -71,7 +71,7 @@ class UpdateEntrepriseUseCase
             unset($data[$field]);
         }
         if ($refused !== []) {
-            throw new EntrepriseForbiddenException($refused);
+            throw new EntrepriseForbiddenException($refused, EntrepriseForbiddenException::MODULE_VIA_PLATFORM);
         }
 
         return $data;

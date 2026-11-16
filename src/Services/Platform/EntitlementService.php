@@ -27,6 +27,9 @@ class EntitlementService
     public const EVENT_RESUMED = 'resumed';
     public const EVENT_CANCELLED = 'cancelled';
     public const EVENT_EXTENDED = 'extended';
+    /** Lot MOD-1 : le commerçant allume ou éteint un module auquel il a droit (le droit ne change pas) */
+    public const EVENT_SWITCHED_ON = 'switched_on';
+    public const EVENT_SWITCHED_OFF = 'switched_off';
 
     public function __construct(
         private readonly EntitlementRepository $repository,
@@ -34,6 +37,7 @@ class EntitlementService
         private readonly EntitlementProjector $projector,
         private readonly MessageBusInterface $bus,
         private readonly LoggerInterface $logger,
+        private readonly ?FeatureSwitchRepository $switches = null,
     ) {
     }
 
@@ -59,7 +63,7 @@ class EntitlementService
         $now = new \DateTimeImmutable();
         $out = [];
         foreach (array_keys(FeatureCatalog::GOVERNED) as $key) {
-            $out[$key] = ['enabled' => false, 'id' => null, 'source' => null, 'status' => null, 'endsAt' => null, 'endsAtIso' => null, 'graceUntil' => null, 'offerCode' => null];
+            $out[$key] = ['enabled' => false, 'id' => null, 'source' => null, 'status' => null, 'endsAt' => null, 'endsAtIso' => null, 'graceUntil' => null, 'offerCode' => null, 'reference' => null];
         }
         foreach ($this->repository->listForTenant($tenantCode, true) as $row) {
             $key = $row['feature_key'];
@@ -70,7 +74,7 @@ class EntitlementService
                 $this->expireNow($row, $now);
                 continue;
             }
-            $out[$key] = ['enabled' => true, 'id' => (int) $row['id'], 'source' => $row['source'], 'status' => $row['status'], 'endsAt' => $row['ends_at'], 'endsAtIso' => self::toIso($row['ends_at']), 'graceUntil' => $row['grace_until'], 'offerCode' => $row['offer_code']];
+            $out[$key] = ['enabled' => true, 'id' => (int) $row['id'], 'source' => $row['source'], 'status' => $row['status'], 'endsAt' => $row['ends_at'], 'endsAtIso' => self::toIso($row['ends_at']), 'graceUntil' => $row['grace_until'], 'offerCode' => $row['offer_code'], 'reference' => $row['reference'] ?? null];
         }
 
         return $out;
@@ -263,7 +267,69 @@ class EntitlementService
     /** Projette les droits effectifs sur la fiche Entreprise du site */
     public function project(string $tenantCode): bool
     {
-        return $this->projector->apply($tenantCode, $this->enabledMap($tenantCode));
+        return $this->projector->apply($tenantCode, $this->activeMap($tenantCode));
+    }
+
+    /**
+     * Lot MOD-1 : l'interrupteur du commerçant pour chaque fonctionnalité gouvernée (ligne absente : allumé).
+     *
+     * @return array<string, bool>
+     */
+    public function switches(string $tenantCode): array
+    {
+        $set = $this->switches?->forTenant($tenantCode) ?? [];
+        $out = [];
+        foreach (array_keys(FeatureCatalog::GOVERNED) as $key) {
+            $out[$key] = $set[$key] ?? true;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Ce qui MARCHE sur le site : droit effectif ET interrupteur allumé. C'est ce que reçoit la fiche du site (colonnes is_*_active), que
+     * lisent le garde-fou des modules et les fronts.
+     *
+     * @return array<string, bool>
+     */
+    public function activeMap(string $tenantCode): array
+    {
+        $switches = $this->switches($tenantCode);
+        $out = [];
+        foreach ($this->enabledMap($tenantCode) as $key => $enabled) {
+            $out[$key] = $enabled && ($switches[$key] ?? true);
+        }
+
+        return $out;
+    }
+
+    /** Droit effectif ET interrupteur allumé, pour une fonctionnalité */
+    public function isActive(string $tenantCode, string $featureKey): bool
+    {
+        return $this->activeMap($tenantCode)[$featureKey] ?? false;
+    }
+
+    /**
+     * Lot MOD-1 : le commerçant allume ou éteint un module auquel il a droit. Le droit ne change JAMAIS (l'essai court, l'abonnement
+     * reste) ; rallumer est immédiat tant que le droit vaut. Sans droit vivant : `\DomainException('NO_ENTITLEMENT')`.
+     *
+     * @return array{key: string, on: bool, entitlement: array<string, mixed>}
+     */
+    public function switchTo(string $tenantCode, string $featureKey, bool $on, ?string $by): array
+    {
+        self::assertGoverned($featureKey);
+        $effective = $this->effective($tenantCode)[$featureKey];
+        if (!$effective['enabled'] || $effective['id'] === null) {
+            throw new \DomainException('NO_ENTITLEMENT');
+        }
+        if ($this->switches === null) {
+            throw new \LogicException('Interrupteurs indisponibles.');
+        }
+        $this->switches->set($tenantCode, $featureKey, $on, $by);
+        $this->repository->recordEvent($effective['id'], $tenantCode, $featureKey, $on ? self::EVENT_SWITCHED_ON : self::EVENT_SWITCHED_OFF, ['by' => $by]);
+        $this->project($tenantCode);
+
+        return ['key' => $featureKey, 'on' => $on, 'entitlement' => $effective];
     }
 
     /**

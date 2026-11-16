@@ -69,7 +69,7 @@ class SiteConsoleAdminController extends AbstractController
             foreach ($entry['prerequisites'] as $i => $p) {
                 $entry['prerequisites'][$i]['url'] = $p['ok'] ? null : $this->screenUrl(self::PREREQ_SCREENS[$p['key']] ?? null);
             }
-            if ($entry['scope'] === FeatureCatalog::SCOPE_PLATFORM && !$entry['value'] && ($entry['request'] ?? null) !== 'pending') {
+            if ($entry['scope'] === FeatureCatalog::SCOPE_PLATFORM && ($entry['entitlement'] ?? null) === null && ($entry['request'] ?? null) !== 'pending') {
                 $entry['trial'] = $this->requestFeature->trialOffer($entry['key']);
             }
             $groups[$entry['group']][] = $entry;
@@ -256,6 +256,46 @@ class SiteConsoleAdminController extends AbstractController
             $this->addFlash('success', $outcome['kind'] === 'trial'
                 ? sprintf('Essai gratuit de %s ouvert jusqu\'au %s : c\'est activé, suivez le cheminement pour le configurer.', FeatureCatalog::label($key), substr((string) ($outcome['entitlement']['ends_at'] ?? ''), 0, 10))
                 : sprintf('Demande envoyée pour %s : la plateforme vous répond par courriel.', FeatureCatalog::label($key)));
+        } catch (\InvalidArgumentException|SiteFeatureRequestException $e) {
+            $this->addFlash('warning', $e->getMessage());
+        }
+
+        return $this->redirect($this->pageUrl());
+    }
+
+    /** Lot MOD-1 : « Essayer » en libre-service, l'essai gratuit seul (jamais une demande) */
+    #[Route('/admin/mon-site/essayer/{key}', name: 'admin_mon_site_essayer', methods: ['POST'], requirements: ['key' => '[a-z_]+\.[a-z_]+'])]
+    public function tryFeature(string $key, Request $request): Response
+    {
+        $this->denyAccessUnlessGranted('ROLE_ADMIN');
+        if (!$this->isCsrfTokenValid(self::CSRF_ID, (string) $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Jeton de sécurité invalide : rien n\'a été modifié.');
+
+            return $this->redirect($this->pageUrl());
+        }
+        try {
+            $outcome = $this->requestFeature->trial($key, $this->getUser()?->getUserIdentifier());
+            $this->addFlash('success', sprintf('Essai gratuit de %s ouvert jusqu\'au %s : c\'est allumé, suivez le cheminement pour le configurer.', FeatureCatalog::label($key), substr((string) ($outcome['entitlement']['ends_at'] ?? ''), 0, 10)));
+        } catch (\InvalidArgumentException|SiteFeatureRequestException $e) {
+            $this->addFlash('warning', $e->getMessage());
+        }
+
+        return $this->redirect($this->pageUrl());
+    }
+
+    /** Lot MOD-1 : le commerçant allume ou éteint un module auquel il a droit ; le droit ne change pas */
+    #[Route('/admin/mon-site/module/{key}/{state}', name: 'admin_mon_site_module', methods: ['POST'], requirements: ['key' => '[a-z_]+\.[a-z_]+', 'state' => 'on|off'])]
+    public function switchFeature(string $key, string $state, Request $request): Response
+    {
+        $this->denyAccessUnlessGranted('ROLE_ADMIN');
+        if (!$this->isCsrfTokenValid(self::CSRF_ID, (string) $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Jeton de sécurité invalide : rien n\'a été modifié.');
+
+            return $this->redirect($this->pageUrl());
+        }
+        try {
+            $this->requestFeature->switchTo($key, $state === 'on', $this->getUser()?->getUserIdentifier());
+            $this->addFlash('success', sprintf($state === 'on' ? '%s est rallumé.' : '%s est éteint : votre droit reste (un essai continue de courir, un abonnement reste actif) ; vous pouvez le rallumer quand vous voulez.', FeatureCatalog::label($key)));
         } catch (\InvalidArgumentException|SiteFeatureRequestException $e) {
             $this->addFlash('warning', $e->getMessage());
         }

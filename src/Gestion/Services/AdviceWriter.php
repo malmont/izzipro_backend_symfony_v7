@@ -242,7 +242,7 @@ class AdviceWriter
             return true;
         }
         try {
-            return $this->entitlements->isEnabled($tenantCode, 'ai.full') || $this->entitlements->isEnabled($tenantCode, 'ai.help');
+            return $this->entitlements->isActive($tenantCode, 'ai.full') || $this->entitlements->isActive($tenantCode, 'ai.help'); // lot MOD-1 : droit ET allumé
         } catch (\Throwable) {
             return false;
         }

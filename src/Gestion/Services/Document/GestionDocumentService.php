@@ -59,7 +59,7 @@ class GestionDocumentService
         }
         $code = (string) $this->tenants->getCurrentTenantCode();
         try {
-            $allowed = $this->entitlements->isEnabled($code, 'ai.full') || $this->entitlements->isEnabled($code, 'ai.help');
+            $allowed = $this->entitlements->isActive($code, 'ai.full') || $this->entitlements->isActive($code, 'ai.help'); // lot MOD-1 : droit ET allumé par le commerçant
         } catch (\Throwable) {
             $allowed = false;
         }

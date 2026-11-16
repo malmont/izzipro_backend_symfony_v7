@@ -38,6 +38,7 @@ class PlatformConsoleAdminController extends AbstractController
         private readonly ?\App\Services\Platform\PlatformShippingService $shipping = null, // étiquettes par la plateforme (lot 2 Livraison, 07/11/2026)
         private readonly ?\App\Services\Platform\ShippingBalanceRepository $balances = null,
         private readonly ?\App\Services\Platform\PlatformAiCreditsService $aiCredits = null, // crédits IA par site (07/11/2026)
+        private readonly ?\Symfony\Component\Messenger\MessageBusInterface $bus = null, // lot MOD-1 : « Retirer et résilier »
     ) {
     }
 
@@ -164,6 +165,12 @@ class PlatformConsoleAdminController extends AbstractController
             }
             $row = $this->manage->act($id, $data, $this->getUser()?->getUserIdentifier());
             $this->addFlash('success', sprintf('Droit n° %d (%s, %s) : %s.', $id, $row['tenant_code'], FeatureCatalog::label($row['feature_key']), $row['status']));
+            // lot MOD-1 : un droit payé par un abonnement se rallumerait au renouvellement ; « Retirer et résilier » résilie l'abonnement à
+            // la fin de la période (worker placé sur le site vendeur)
+            if ($action === 'cancel' && $request->request->get('resilier') === '1' && ($row['source'] ?? null) === 'subscription' && str_starts_with((string) ($row['reference'] ?? ''), 'subscription:')) {
+                $this->bus?->dispatch(new \App\Message\CancelPlatformSubscriptionMessage((string) $row['reference'], $this->getUser()?->getUserIdentifier()));
+                $this->addFlash('success', 'Résiliation de l\'abonnement demandée : il prendra fin à la fin de la période payée.');
+            }
         });
     }
 
