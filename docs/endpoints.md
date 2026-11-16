@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (606)
+## Boutique et commun (607)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -518,6 +518,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/pertes/pieces/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::piece` |
 | GET | `/api/gestion/pertes/pieces` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::pieces` |
 | POST | `/api/gestion/pertes/pieces` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::create` |
+| GET | `/api/gestion/pertes/postes` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::registers` |
 | POST | `/api/gestion/pertes/puces/associer` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::associate` |
 | GET | `/api/gestion/pertes/puces/recherche` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::search` |
 | POST | `/api/gestion/pertes/puces/{id}/retirer` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::retireTag` |
