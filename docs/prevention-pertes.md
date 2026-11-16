@@ -1968,9 +1968,13 @@ absente, illisible, autre ; imprimante simulée ; imprimante simulée d'un vrai 
 gardes de la base et migration rejouée). La clé d'essai
 est commune aux classes de la suite (`LossTagKeysTrait`).
 
-## 17. Lot L4 : antennes de zone, portique, dépôt et comptage (PLAN du 16/11/2026, SANS CODE, à valider)
+## 17. Lot L4 : antennes de zone, portique, dépôt et comptage (plan validé par le propriétaire le 16/11/2026 ; rien n'est codé)
 
-Plan demandé par le chef de projet, à valider par le propriétaire avant tout code. Il reprend le § 14 (points 1 et 3), le
+**Plan validé par le propriétaire le 16/11/2026, tel quel, avec les huit propositions du point 17.11** (relayé par le chef de
+projet), plus un ajout sur les heures d'ouverture (17.4). Ordre : L4-a, L4-b, L4-c, L4-d, puis L4-e après l'avis de l'avocat. Le
+contrat de chaque sous-lot va au chef de projet en dix lignes avant son code ; L4-b et L4-c passent par un relecteur neuf.
+
+Il reprend le § 14 (points 1 et 3), le
 § 16.14 (une étape de l'assistant par antenne, une ligne de santé par appareil), la réserve du § 16.6 (rattrapage qui absorbe une
 sortie) et les deux notes laissées pour la suite (§ 16.18, index des lectures de zone ; § 16.19, « du nouveau depuis la
 décision »). Rien n'est codé. La caméra du dépôt (§ 14, point 2) reste avec L3-d, après l'avis de l'avocat : elle n'est pas dans
@@ -2034,7 +2038,13 @@ ce lot.
   dans la journée. Sans antenne à cette porte, la règle est éteinte et l'écran le dit.
 - **« Mouvement hors des heures d'ouverture »** : une pièce qui change de zone, ou passe une porte, alors que le magasin est
   fermé. Les heures sont un réglage du module (une plage par jour de la semaine, à l'heure du magasin) ; sans heures réglées,
-  la règle est éteinte. Le comptage et la mise en rayon du matin ne doivent pas déclencher : une marge réglable avant
+  la règle est éteinte. **Ajout du chef de projet (16/11/2026)** : si la boutique a déjà saisi ses heures ailleurs, le module
+  les reprend par défaut et son réglage ne sert qu'à les remplacer. **Relevé du 16/11/2026, en lecture** : aucune heure
+  d'ouverture du magasin n'existe aujourd'hui dans la plateforme. La fiche de l'entreprise n'en a pas ; les réservations ont une
+  seule plage pour tous les jours (`booking_configuration.opening_start / opening_end` : les heures où une réservation peut
+  commencer, pas celles du magasin) ; l'assistance a des jours ouvrés (`support_setting.business_days`), sans heures. À trancher
+  au contrat de L4-c : proposer ces valeurs comme point de départ à confirmer par le gérant, plutôt que les appliquer en
+  silence (des heures fausses feraient de faux constats). Le comptage et la mise en rayon du matin ne doivent pas déclencher : une marge réglable avant
   l'ouverture et après la fermeture (par défaut 1 heure).
 - Les trois sont **par pièce et par lieu**, avec un regroupement par jour et par zone quand plusieurs pièces bougent ensemble
   (un carton entier ne fait pas vingt constats).
