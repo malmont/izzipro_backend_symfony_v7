@@ -39,7 +39,8 @@ class PosStatisticsScopeTest extends WebTestCase
             // sa source, la caisse : lue
             $this->assertSame(200, $this->status($route . 'pos', $cashier), $route . 'pos');
             // toute autre source, ou aucune : refusée au caissier, lue par l'administrateur
-            foreach (['ecommerce', 'mobile_app', 'toutes'] as $source) {
+            // (« posx », « pos_tout » : un mot qui COMMENCE par « pos » n'est pas la caisse ; inconnu, il vaut « toutes les sources »)
+            foreach (['ecommerce', 'mobile_app', 'toutes', 'posx', 'pos_tout'] as $source) {
                 $this->assertSame(403, $this->status($route . $source, $cashier), "$route$source pour un caissier");
                 $this->assertSame(200, $this->status($route . $source, $admin), "$route$source pour l'administrateur");
             }
