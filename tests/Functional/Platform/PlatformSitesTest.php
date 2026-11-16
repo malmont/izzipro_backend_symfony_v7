@@ -214,6 +214,11 @@ class PlatformSitesTest extends WebTestCase
         $this->assertStringNotContainsString('ROLE_AGENCY', $roles(), 'avant l\'acceptation : administrateur du site, rien de plus');
         $this->json('GET', '/api/platform/site-requests', null, 'super', 200); // le rattrapage ne donne rien à un compte qui n'a pas accepté
         $this->assertStringNotContainsString('ROLE_AGENCY', $roles());
+        // … et l'acceptation d'UNE AUTRE invitation sur ce site (un second administrateur invité) ne le donne pas à sa place
+        $site->exec("INSERT INTO \"user\" (id, email, username, firstname, lastname, roles, password, is_verified, signup_channel, reset_token, reset_token_expires_at, created_at) SELECT nextval('user_id_seq'), 'second-{$this->tag}@example.invalid', 'second-{$this->tag}@example.invalid', 'Second', 'Invité', '[\"ROLE_ADMIN\"]', 'inutilisable', false, '" . User::SIGNUP_ADMIN_INVITE . "', 'jeton-second-{$this->tag}', NOW() + INTERVAL '1 day', NOW()");
+        $this->assertSame(200, $this->api('POST', '/api/password-reset/confirm', ['token' => "jeton-second-{$this->tag}", 'password' => self::PASSWORD], null, (string) $ready['site']['host'])->getStatusCode());
+        $this->assertStringNotContainsString('ROLE_AGENCY', $roles(), 'l\'administrateur désigné n\'a pas encore accepté');
+        $this->assertStringNotContainsString('ROLE_AGENCY', (string) $site->query("SELECT roles::text FROM \"user\" WHERE email = 'second-{$this->tag}@example.invalid'")->fetchColumn());
         $token = (string) $site->query("SELECT reset_token FROM \"user\" WHERE email = '$email'")->fetchColumn();
         $accepted = $this->api('POST', '/api/password-reset/confirm', ['token' => $token, 'password' => self::PASSWORD], null, (string) $ready['site']['host']);
         $this->assertSame(200, $accepted->getStatusCode(), (string) $accepted->getContent());
