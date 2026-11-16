@@ -27,6 +27,18 @@ final class SecretKeys
     }
 
     /**
+     * Une colonne qu'une liste ne doit ni CHERCHER ni TRIER : un secret, ou une empreinte (mot de passe, code, jeton). Une recherche
+     * par fragment dit si le fragment est dans la colonne : répétée, elle reconstitue la valeur ; un tri la range. Lot SECRETS-1 :
+     * la recherche d'EasyAdmin portait sur toutes les colonnes d'une table, affichées ou non.
+     */
+    public static function unsearchable(string $property): bool
+    {
+        $last = ($pos = strrpos($property, '.')) === false ? $property : substr($property, $pos + 1);
+
+        return self::names($last) || preg_match('/hash$/i', $last) === 1;
+    }
+
+    /**
      * Un état (tableau ou objet décodé d'un JSON) dont chaque valeur de secret est masquée, à toute profondeur. Rien n'est effacé de
      * ce qui est gardé : c'est la LECTURE qui masque. Une valeur vide reste vide (on voit qu'il n'y avait rien).
      */

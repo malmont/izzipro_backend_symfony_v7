@@ -41,6 +41,14 @@ class ResetPasswordController extends AbstractController
      */
     private function notImportGuest(?User $user): ?User
     {
+        // Train de sécurité du 16/11/2026 : le COMPTE DE LA PLATEFORME ne se réinitialise jamais par un site. Son mot de passe ne se
+        // pose que par la page de la plateforme ; un lien créé ici aurait vécu dans la base du site, où son administrateur pouvait le
+        // retrouver, puis choisir le mot de passe du compte de la plateforme sur son site. Traité comme un compte inconnu, partout :
+        // aucun lien créé (réponse neutre), aucun lien accepté.
+        if ($user !== null && \App\Services\Platform\PlatformAccessJournal::isPlatformAccount($user->getRoles())) {
+            return null;
+        }
+
         return $user !== null && $this->importGuests?->isPending($user) ? null : $user;
     }
 

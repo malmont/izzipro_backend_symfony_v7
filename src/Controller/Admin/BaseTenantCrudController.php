@@ -48,9 +48,18 @@ abstract class BaseTenantCrudController extends AbstractCrudController
      */
     public function createIndexQueryBuilder(SearchDto $searchDto, EntityDto $entityDto, FieldCollection $fields, FilterCollection $filters): QueryBuilder
     {
-        $sort = array_filter($searchDto->getSort(), fn (string $property) => !\App\Services\Admin\UnsortableFieldConfigurator::isUnsortable($entityDto, $property), ARRAY_FILTER_USE_KEY);
-        if ($sort !== $searchDto->getSort()) {
-            $searchDto = new SearchDto($searchDto->getRequest(), $searchDto->getSearchableProperties(), $searchDto->getQuery(), $sort, [], $searchDto->getAppliedFilters(), $searchDto->getSearchMode());
+        // Lot SECRETS-1 (16/11/2026) : ni la recherche ni le tri ne portent sur une colonne de secret ou d'empreinte. Sans champs de
+        // recherche déclarés, EasyAdmin cherche dans TOUTES les colonnes de la table, affichées ou non : un fragment tapé dans la
+        // recherche disait si un jeton de réinitialisation ou un mot de passe de serveur d'envoi le contenait. Les colonnes cherchées
+        // sont donc toujours une liste explicite, sans les secrets (`SecretKeys::unsearchable`).
+        $hidden = static fn (string $property): bool => \App\Security\SecretKeys::unsearchable($property);
+        $sort = array_filter($searchDto->getSort(), fn (string $property) => !$hidden($property) && !\App\Services\Admin\UnsortableFieldConfigurator::isUnsortable($entityDto, $property), ARRAY_FILTER_USE_KEY);
+        $configured = $searchDto->getSearchableProperties();
+        $searchable = array_values(array_filter($configured === null || $configured === [] ? $entityDto->getClassMetadata()->getFieldNames() : $configured, static fn (string $property): bool => !$hidden($property)));
+        // (une liste vide vaudrait « toutes les colonnes » pour EasyAdmin : il reste toujours au moins l'identifiant)
+        $searchable = $searchable === [] ? $entityDto->getClassMetadata()->getIdentifierFieldNames() : $searchable;
+        if ($sort !== $searchDto->getSort() || $searchable !== $configured) {
+            $searchDto = new SearchDto($searchDto->getRequest(), $searchable, $searchDto->getQuery(), $sort, [], $searchDto->getAppliedFilters(), $searchDto->getSearchMode());
         }
 
         return parent::createIndexQueryBuilder($searchDto, $entityDto, $fields, $filters);

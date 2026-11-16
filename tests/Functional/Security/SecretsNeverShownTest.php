@@ -51,6 +51,7 @@ class SecretsNeverShownTest extends WebTestCase
     /** @var list<array{0: string, 1: int, 2: array<string, mixed>|null}> table, identifiant, ligne d'origine (null : ligne créée par l'essai) */
     private array $rows = [];
     private int $userId = 0;
+    private string $mail = '';
 
     protected function setUp(): void
     {
@@ -74,7 +75,9 @@ class SecretsNeverShownTest extends WebTestCase
         $square = $em->getRepository(SquareConfig::class)->findOneBy([]) ?? (new SquareConfig())->setApplicationId('app-' . $this->tag)->setIsActive(false)->setAccessToken('x');
         $this->keep($em, $square, 'square_config');
         $square->setAccessToken($this->secrets['square']);
-        $account = (new User())->setEmail('secrets-compte-' . $this->tag . '@example.invalid')->setUsername('secrets-compte-' . $this->tag . '@example.invalid')->setFirstname('Secrets')->setLastname('Compte')
+        // (l'adresse du compte ne porte aucun fragment des secrets : une recherche par un fragment de secret ne doit le trouver par rien d'autre)
+        $this->mail = 'compte' . random_int(100000, 999999);
+        $account = (new User())->setEmail('secrets-' . $this->mail . '@example.invalid')->setUsername('secrets-' . $this->mail . '@example.invalid')->setFirstname('Secrets')->setLastname('Compte')
             ->setRoles(['ROLE_USER_INTERNET'])->setPassword('inutilisable')->setIsVerified(false)->setResetToken($this->secrets['reset'])->setVerificationToken($this->secrets['verification']);
         $em->persist($account);
         $em->flush();
@@ -203,6 +206,108 @@ class SecretsNeverShownTest extends WebTestCase
         foreach (['inputTokens', 'cacheReadTokens', 'memoryKey', 'componentKey', 'periodKey', 'idempotencyKey', 'tokenCount', 'keywords', 'name', 'smtpHost', 'smtpUser'] as $name) {
             $this->assertFalse(SecretKeys::names($name), $name);
         }
+    }
+
+    /**
+     * LA RECHERCHE ET LE TRI d'une liste ne lisent jamais un secret. Sans champs de recherche déclarés, EasyAdmin cherchait dans toutes
+     * les colonnes d'une table : un fragment tapé dans la recherche disait si le jeton de réinitialisation d'un compte le contenait,
+     * et, répété, le reconstituait. Enchaîné avec « mot de passe oublié » sur le compte de la plateforme, un administrateur de site
+     * devenait super administrateur.
+     */
+    public function testTheSearchAndTheSortOfAListNeverReadASecret(): void
+    {
+        $ids = array_column(array_map(static fn (array $row): array => ['table' => $row[0], 'id' => $row[1]], $this->rows), 'id', 'table');
+        $db = $this->em()->getConnection();
+        $db->executeStatement('UPDATE "user" SET password = ? WHERE id = ?', ['EMPREINTE-' . $this->tag, $this->userId]);
+        $found = function (string $controller, int $id, string $query): bool {
+            $crawler = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin?' . http_build_query(['crudAction' => 'index', 'crudControllerFqcn' => $controller, 'query' => $query]), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+            $this->assertSame(200, $this->client->getResponse()->getStatusCode(), "$controller ?query=$query");
+
+            return $crawler->filter('tr[data-id="' . $id . '"]')->count() > 0;
+        };
+        foreach ([['ROLE_ADMIN'], ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']] as $roles) {
+            $this->loginAs($roles);
+            // la recherche marche : le compte se trouve par son adresse, la configuration du courriel par son expéditeur
+            $this->assertTrue($found(UserCrudController::class, $this->userId, 'secrets-' . $this->mail), 'un compte se cherche par son adresse');
+            // … mais par AUCUN fragment d'un secret : début, milieu ou fin du jeton, de l'empreinte du mot de passe, du mot de passe du serveur d'envoi, d'une clé
+            foreach ([[UserCrudController::class, $this->userId, $this->secrets['reset']], [UserCrudController::class, $this->userId, $this->secrets['verification']],
+                [UserCrudController::class, $this->userId, 'EMPREINTE-' . $this->tag], [EmailConfigurationCrudController::class, $ids['email_configuration'], $this->secrets['smtp']],
+                [EasyPostConfigurationCrudController::class, $ids['easy_post_configuration'], $this->secrets['easypostTest']],
+                [GooglePlacesConfigCrudController::class, $ids['google_places_config'], $this->secrets['googleTest']]] as [$controller, $id, $secret]) {
+                foreach ([$secret, substr($secret, 0, 9), substr($secret, 3, 8), substr($secret, -6), strtolower($secret)] as $fragment) {
+                    $this->assertFalse($found($controller, $id, $fragment), implode('+', $roles) . " : $controller se trouve par « $fragment »");
+                }
+            }
+            // le tri par un secret est ignoré : l'ordre de la liste ne dépend pas de lui
+            $order = function (string $direction, string $property): array {
+                $crawler = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin?' . http_build_query(['crudAction' => 'index', 'crudControllerFqcn' => UserCrudController::class, 'query' => 'secrets-', 'sort' => [$property => $direction]]), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+                $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+
+                return $crawler->filter('tr[data-id]')->each(static fn ($row) => $row->attr('data-id'));
+            };
+            foreach (['resetToken', 'verificationToken', 'password'] as $property) {
+                $this->assertSame($order('ASC', $property), $order('DESC', $property), "tri par $property ignoré");
+            }
+            $this->assertNotSame($order('ASC', 'id'), $order('DESC', 'id'), 'le tri par une colonne ordinaire, lui, change l\'ordre');
+            $this->client->getCookieJar()->clear();
+        }
+        // les noms de colonne qu'une liste ne cherche ni ne trie
+        foreach (['resetToken', 'verificationToken', 'password', 'smtpPassword', 'easypostApiKeySandbox', 'guestToken', 'accessToken', 'pinHash', 'tokenHash', 'keyHash', 'user.resetToken'] as $property) {
+            $this->assertTrue(SecretKeys::unsearchable($property), $property);
+        }
+        foreach (['email', 'username', 'firstname', 'smtpHost', 'smtpUser', 'id', 'user.email', 'periodKey'] as $property) {
+            $this->assertFalse(SecretKeys::unsearchable($property), $property);
+        }
+        // un écran qui fabrique lui-même sa requête de liste ne passe pas par ce filtre : aucun ne porte sur une table à secret
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(dirname(__DIR__, 3) . '/src', \FilesystemIterator::SKIP_DOTS));
+        $metadata = $this->em()->getMetadataFactory();
+        foreach ($files as $file) {
+            $source = $file->getExtension() === 'php' ? (string) file_get_contents($file->getPathname()) : '';
+            if (!str_contains($source, 'function createIndexQueryBuilder') || str_contains($source, 'parent::createIndexQueryBuilder') || !preg_match('/return\s+\\?([\w\\\\]+)::class;/', $source, $m)) {
+                continue;
+            }
+            $entity = str_contains($m[1], '\\') ? ltrim($m[1], '\\') : 'App\\Entity\\' . $m[1];
+            if (class_exists($entity) && $metadata->hasMetadataFor($entity)) {
+                $this->assertSame([], array_values(array_filter($metadata->getMetadataFor($entity)->getFieldNames(), [SecretKeys::class, 'unsearchable'])), $file->getFilename() . ' : liste faite à la main sur une table à secret');
+            }
+        }
+    }
+
+    /** Le compte de la plateforme ne se réinitialise jamais par un site : aucun lien créé, aucun lien accepté */
+    public function testThePlatformAccountIsNeverResetFromASite(): void
+    {
+        $em = $this->em();
+        $make = function (string $name, array $roles) use ($em): User {
+            $email = "secrets-$name-{$this->tag}@example.invalid";
+            $user = (new User())->setEmail($email)->setUsername($email)->setFirstname('Secrets')->setLastname($name)->setRoles($roles)->setPassword('mot-de-passe-de-la-plateforme')->setIsVerified(true);
+            $em->persist($user);
+
+            return $user;
+        };
+        $platform = $make('plateforme', ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']);
+        $ordinary = $make('ordinaire', ['ROLE_ADMIN']);
+        $em->flush();
+        $db = $em->getConnection();
+        $post = function (string $path, array $body): array {
+            $this->client->getCookieJar()->clear();
+            $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . $path, [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json',
+                'REMOTE_ADDR' => '10.82.' . random_int(1, 254) . '.' . random_int(1, 254)], json_encode($body));
+
+            return [$this->client->getResponse()->getStatusCode(), json_decode((string) $this->client->getResponse()->getContent(), true)['code'] ?? null];
+        };
+        // la demande : réponse neutre, la même pour les deux comptes ; un lien n'est créé que pour le compte ordinaire
+        $this->assertSame(200, $post('/api/password-reset/request', ['email' => $ordinary->getEmail()])[0]);
+        $this->assertSame(200, $post('/api/password-reset/request', ['email' => $platform->getEmail()])[0]);
+        $this->assertNotNull($db->fetchOne('SELECT reset_token FROM "user" WHERE id = ?', [$ordinary->getId()]));
+        $this->assertNull($db->fetchOne('SELECT reset_token FROM "user" WHERE id = ?', [$platform->getId()]) ?: null, 'aucun lien pour le compte de la plateforme');
+        // un lien qui existerait quand même (posé avant ce lot) n'est accepté ni à la vérification ni à la confirmation
+        $db->executeStatement("UPDATE \"user\" SET reset_token = ?, reset_token_expires_at = NOW() + INTERVAL '1 hour' WHERE id = ?", ['lien-force-' . $this->tag, $platform->getId()]);
+        $this->assertSame([400, 'RESET_LINK_INVALID'], $post('/api/password-reset/verify', ['token' => 'lien-force-' . $this->tag]));
+        $this->assertNotSame(200, $post('/api/password-reset/confirm', ['token' => 'lien-force-' . $this->tag, 'password' => 'Un-autre-mot-de-passe-9'])[0]);
+        $this->assertSame('mot-de-passe-de-la-plateforme', $db->fetchOne('SELECT password FROM "user" WHERE id = ?', [$platform->getId()]), 'le mot de passe du compte de la plateforme n\'a pas changé');
+        // le compte ordinaire, lui, se réinitialise comme avant
+        $token = (string) $db->fetchOne('SELECT reset_token FROM "user" WHERE id = ?', [$ordinary->getId()]);
+        $this->assertSame(200, $post('/api/password-reset/confirm', ['token' => $token, 'password' => 'Un-autre-mot-de-passe-9'])[0]);
     }
 
     public function testEveryEasyAdminFieldWhoseNameSaysASecretIsMaskedOrLivesInTheFormOnly(): void

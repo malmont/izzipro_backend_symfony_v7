@@ -122,8 +122,19 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->email;
     }
 
+    /**
+     * Lot RESET-1 (16/11/2026) : quand l'adresse CHANGE, le lien de réinitialisation en attente est effacé. Ce lien (mot de passe
+     * oublié, invitation d'un administrateur) a été envoyé à l'ANCIENNE adresse : celui qui l'a reçu ne doit pas pouvoir choisir le
+     * mot de passe du compte une fois l'adresse passée à quelqu'un d'autre (ni un administrateur mettre un instant sa propre boîte
+     * sur un compte, demander un lien, puis remettre l'adresse). Vaut pour tout chemin, puisque c'est l'entité qui le fait ; une
+     * simple différence de casse ou d'espaces n'est pas un changement. Garde-fou : `tests/Functional/Security/ResetLinkOnEmailChangeTest.php`.
+     */
     public function setEmail(string $email): self
     {
+        if ($this->email !== null && mb_strtolower(trim($this->email)) !== mb_strtolower(trim($email))) {
+            $this->resetToken = null;
+            $this->resetTokenExpiresAt = null;
+        }
         $this->email = $email;
 
         return $this;
@@ -149,6 +160,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
+    #[\Symfony\Component\Serializer\Attribute\Ignore] // lot SECRETS-1 : jamais dans une réponse sérialisée, quel que soit le groupe
     public function getPassword(): string
     {
         return $this->password;
@@ -161,6 +173,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
+    #[\Symfony\Component\Serializer\Attribute\Ignore] // lot SECRETS-1 : jamais dans une réponse sérialisée, quel que soit le groupe
     public function getPlainPassword(): ?string
     {
         return $this->plainPassword;
@@ -379,6 +392,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     }
 
 
+    #[\Symfony\Component\Serializer\Attribute\Ignore] // lot SECRETS-1 : jamais dans une réponse sérialisée, quel que soit le groupe
     public function getVerificationToken(): ?string
     {
         return $this->verificationToken;
@@ -390,6 +404,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
+    #[\Symfony\Component\Serializer\Attribute\Ignore] // lot SECRETS-1 : jamais dans une réponse sérialisée, quel que soit le groupe
    public function getResetToken(): ?string
     {
         return $this->resetToken;
@@ -401,6 +416,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
+    #[\Symfony\Component\Serializer\Attribute\Ignore] // lot SECRETS-1 : jamais dans une réponse sérialisée, quel que soit le groupe
     public function getResetTokenExpiresAt(): ?\DateTimeInterface
     {
         return $this->resetTokenExpiresAt;
