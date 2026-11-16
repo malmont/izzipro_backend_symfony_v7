@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (604)
+## Boutique et commun (606)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -567,6 +567,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/sequences` | ROLE_ADMIN | `Gestion\Controller\GestionSequenceController::list` |
 | POST | `/api/gestion/statistiques/annee/avis` | ROLE_ADMIN | `Gestion\Controller\GestionStatisticsController::yearAdvice` |
 | GET | `/api/gestion/statistiques/annee` | ROLE_ADMIN | `Gestion\Controller\GestionStatisticsController::year` |
+| GET | `/api/gestion/statistiques/avant-migration` | ROLE_ADMIN | `Gestion\Controller\GestionStatisticsController::beforeMigration` |
 | GET | `/api/gestion/statistiques` | ROLE_ADMIN | `Gestion\Controller\GestionStatisticsController::overview` |
 | DELETE | `/api/gestion/tresorerie/mouvements/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionCashController::deleteMovement` |
 | PATCH | `/api/gestion/tresorerie/mouvements/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionCashController::updateMovement` |
@@ -777,6 +778,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PUT | `/api/site/features` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteFeaturesController::update` |
 | GET | `/api/site/help/{key}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\HelpController\HelpController::page` |
 | GET | `/api/site/help` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\HelpController\HelpController::list` |
+| GET | `/api/site/imports/archive/orders` | ROLE_ADMIN | `Import\Controller\SiteImportController::archiveOrders` |
 | POST | `/api/site/imports/{id}/cancel` | ROLE_ADMIN | `Import\Controller\SiteImportController::cancel` |
 | POST | `/api/site/imports/{id}/confirm` | ROLE_ADMIN | `Import\Controller\SiteImportController::confirm` |
 | GET | `/api/site/imports/{id}/customers` | ROLE_ADMIN | `Import\Controller\SiteImportController::customers` |
@@ -910,7 +912,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (103)
+## Administration (EasyAdmin) (104)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -926,6 +928,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/admin/barcode-management/search` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::search` |
 | GET | `/admin/barcode-management` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::index` |
 | GET | `/admin/caisse` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\PosConsoleAdminController::index` |
+| GET | `/admin/clients/{id}/commandes-avant` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\UserArchiveOrdersController::index` |
 | GET | `/admin/commandes/a-traiter` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderDeskAdminController::todo` |
 | GET | `/admin/commandes/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderDeskAdminController::sheet` |
 | POST | `/admin/configuration/courriel-essai` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ConfigurationConsoleAdminController::emailTest` |
