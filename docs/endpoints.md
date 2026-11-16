@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (621)
+## Boutique et commun (622)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -600,6 +600,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/import-invitation/accept` | PUBLIC_ACCESS | `Import\Controller\ImportInvitationController::accept` |
 | POST | `/api/import-invitation/decline` | PUBLIC_ACCESS | `Import\Controller\ImportInvitationController::decline` |
 | POST | `/api/import-invitation/verify` | PUBLIC_ACCESS | `Import\Controller\ImportInvitationController::verify` |
+| POST | `/api/me/contexts/enter` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\Account\MeContextsController::enter` |
 | GET | `/api/me/contexts` | IS_AUTHENTICATED_FULLY | `App\Controller\Account\MeContextsController` |
 | DELETE | `/api/media/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::delete` |
 | PATCH | `/api/media/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::rename` |

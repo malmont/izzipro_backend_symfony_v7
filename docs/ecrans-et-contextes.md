@@ -186,10 +186,87 @@ COST-1 (`docs/boutique.md`, « Le coût ne sort pas des routes ouvertes ») : il
 
 ## 6. Suite
 
-- **AG-3b** : entrée dans le site d'un client par un jeton tracé des deux côtés, garde du mode agence fermée par défaut d'après ce
-  registre, retrait des champs sensibles, essai sur toutes les routes.
+- **AG-3b** : codé, voir § 7.
 - **AG-3c** : menu d'EasyAdmin piloté par le registre (mode et modules), garde sur toutes les sections.
 - **AG-3d** : « Tous mes clients ».
+
+## 7. Lot AG-3b : l'entrée dans le site d'un autre (16/11/2026, codé sous Opus, à faire vérifier par Fable)
+
+Contrat validé par le chef de projet le 16/11/2026, avec six précisions. API seulement : EasyAdmin est AG-3c ; le mode groupe est G-1.
+
+### 7.1 Entrer
+
+`POST /api/me/contexts/enter`, corps `{ "site": "<code du site>" }`, depuis le SITE D'ATTACHE (jeton ou cookie de ce site). Le lien
+est vérifié dans la base maître :
+
+- **agence** (compte portant `ROLE_AGENCY` ou `ROLE_AGENCY_MEMBER`) : l'agence dont ce site est l'attache, à l'état `trial` ou
+  `active` (ni suspendue, ni fermée), et le site visé géré par elle, non détaché ;
+- **plateforme** (compte de la plateforme, `ROLE_SUPER_ADMIN`) : tout site qui porte son compte de la plateforme (il existe sur chaque
+  site, § 8.9 de `docs/agences-et-import.md`).
+
+Réponse 200 (jamais en cache partagé) :
+
+```json
+{ "token": "<jeton d'entrée>", "expiresAt": "2026-11-16T19:42:10+00:00", "mode": "agency", "site": "boutique-du-client",
+  "entry": 42, "operator": "Agence Atelier Web, Julie" }
+```
+
+Le front présente ensuite `Authorization: Bearer <token>` avec l'en-tête `X-Tenant-Host` du site visé. Le jeton vaut 15 minutes, pour CE
+site seulement (claim `tenant_code`) : présenté sur le site d'attache ou sous l'hôte d'un autre site, 401. On le RENOUVELLE en
+redemandant l'entrée depuis le site d'attache, ce qui exige une session encore valide là-bas ; un jeton d'entrée n'en obtient jamais un
+autre, ni vers un troisième site (403). Limite : 30 entrées par 10 minutes par compte.
+
+Refus : 403 `ENTRY_FORBIDDEN` (`reason` : `role`, `agency`, `site` ; un site inconnu se refuse comme un site non géré), 422
+`ENTRY_SAME_SITE`, 409 `ENTRY_UNAVAILABLE` (plateforme : pas de compte de la plateforme sur ce site), 403 `ENTRY_FROM_ENTRY`, 429
+`RATE_LIMITED`.
+
+### 7.2 Dans le site visé
+
+- **Agence** : la requête est faite par un OPÉRATEUR EXTÉRIEUR (`App\Security\Entry\ExternalOperator`) : rien n'est créé dans la base du
+  client, aucun mot de passe n'y existe. Il porte les rôles d'un administrateur (pour passer les règles d'accès des écrans de
+  construction) et le rôle `ROLE_ENTRY_AGENCY`, jamais `ROLE_SUPER_ADMIN` : le générateur IA consomme les unités du client, et les
+  drapeaux de modules de la fiche du site lui restent fermés. Son identifiant est « Agence X, prénom » (sans arobase) : c'est ce que le
+  commerçant lit au journal de son site et dans « Accès extérieurs ».
+- **Plateforme** : la requête est faite par le compte de la plateforme du site visé, avec tous ses écrans de site.
+
+À chaque requête, le lien est RELU (`EntryService::check`, cache d'une minute au plus) : entrée fermée, échéance passée, compte du site
+d'attache supprimé ou d'une autre adresse, rôle retiré, agence suspendue ou fermée, site détaché → 401 `ENTRY_ENDED` dès la requête
+suivante, et l'entrée est fermée au journal avec sa raison. La DÉCONNEXION du site d'attache (`POST /api/logout`) ferme aussitôt toutes
+les entrées du compte.
+
+### 7.3 La garde du mode agence (`EntryModeGuardSubscriber`), fermée par défaut
+
+1. La route se classe par ce registre (`classify`, sur le chemin décodé). Ouverte seulement si son écran est de la famille
+   **construction** et que son module est actif chez le client. Route non rangée, liste hors écran, autre famille, module éteint,
+   chemin hors de `/api/` : 403 `MODE_FORBIDDEN` (`reason` : `unclassified`, `off_screen`, `family`, `module`, `surface`).
+2. Les **lectures du site public** (`@public`, GET) sont servies comme à un visiteur : l'authentification est retirée (sinon les rôles
+   d'administrateur de l'opérateur y ouvriraient ce qu'un administrateur lit). La garde de la CONSTRUCTION, elle, le traite comme un
+   compte d'équipe (`StorefrontViewer`) : il voit la vitrine d'un site encore fermé. La garde du mode reste au-dessus.
+3. Fermés même dans la construction (précisions du chef) : clés d'API et d'activation (`keys`), export (`export`), paiement
+   (`payment`), changement des modules du site (`modules` : le forfait de l'agence n'y est pas encore relu) ; l'écriture du coût
+   d'achat et du coefficient d'un article (`cost`) ; l'import des clients et des commandes (`kind`). Comptes et rôles du site, Stripe et
+   paiements, exports, pertes sont d'autres familles : fermés par la règle 1.
+4. La réponse d'un écran de construction perd ses **champs sensibles** (§ 5, par suffixe du chemin du champ) ; la liste des imports ne
+   garde que les imports du catalogue.
+
+La liste des routes ouvertes à l'agence est figée dans `tests/Fixtures/ecrans/entree-agence.json` (127 au 16/11/2026), comparée par
+`EntryTest` à chaque suite : **une route nouvelle de la construction s'y ajoute en la relisant**. La confirmation « Taxes vérifiées »
+de la liste d'ouverture n'existe pas encore (AG-3d) : elle sera réservée au commerçant.
+
+### 7.4 Trace des deux côtés
+
+- **Base maître**, table `site_entries` (`ops/sql/agency_master.sql`, `scripts/migrate_master_v2_entries.sh`) : qui (compte du site
+  d'attache, adresse, prénom), de quel site, vers quel site, agence, mode, quand, échéance, fin et sa raison.
+- **Site visé** : une ligne `external_access` au journal du site à chaque entrée ; la page « Accès de la plateforme » devient
+  « **Accès extérieurs** » (`/admin/acces-plateforme`) et liste les connexions du compte de la plateforme et les entrées ; chaque
+  écriture faite en entrée porte « Agence X, prénom » au journal du site (rien de plus : ni adresse, ni nom de famille).
+
+### 7.5 Limites connues
+
+- EasyAdmin n'est pas ouvert à l'entrée (AG-3c).
+- Les modules du site ne se changent pas en entrée tant que le forfait de l'agence n'y est pas relu.
+- Clients et commandes ne s'importent pas en entrée : le commerçant les importe lui-même, ou le super administrateur
+  (`docs/agences-et-import.md` § 3.5).
 
 ## Tenir cette fiche à jour
 

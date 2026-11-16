@@ -20,7 +20,9 @@ class TenantUserProvider implements UserProviderInterface, \Lexik\Bundle\JWTAuth
 {
     public function __construct(
         private readonly TenantEntityManagerProvider $tenantEmProvider,
-        private readonly LoggerInterface $logger
+        private readonly LoggerInterface $logger,
+        private readonly ?\App\Services\Entry\EntryService $entries = null,
+        private readonly ?\App\Services\TenantConnectionProvider $tenants = null,
     ) {
     }
 
@@ -56,6 +58,11 @@ class TenantUserProvider implements UserProviderInterface, \Lexik\Bundle\JWTAuth
 
     public function refreshUser(UserInterface $user): UserInterface
     {
+        if ($user instanceof Entry\ExternalOperator) {
+            // l'opérateur extérieur n'existe que le temps d'une requête de l'API, sans session : jamais relu d'une session
+            throw new \Symfony\Component\Security\Core\Exception\UnsupportedUserException('Opérateur extérieur : aucune session.');
+        }
+
         return $this->loadUserByIdentifier($user->getUserIdentifier());
     }
 
@@ -63,6 +70,7 @@ class TenantUserProvider implements UserProviderInterface, \Lexik\Bundle\JWTAuth
     {
         return $class === User::class 
             || is_subclass_of($class, User::class)
+            || $class === Entry\ExternalOperator::class
             || $class === EsgUser::class
             || is_subclass_of($class, EsgUser::class);
     }
@@ -70,6 +78,15 @@ class TenantUserProvider implements UserProviderInterface, \Lexik\Bundle\JWTAuth
     /** Jeton d'accès : compte désigné par le claim « id », qui doit encore porter l'adresse ou le nom d'utilisateur du jeton */
     public function loadUserByIdentifierAndPayload(string $identifier, array $payload): UserInterface
     {
+        // Lot AG-3b : un jeton d'ENTRÉE (claim `entry`) n'ouvre jamais un compte par le chemin ordinaire : son lien est relu, puis il
+        // désigne l'opérateur extérieur (agence) ou le compte de la plateforme du site visé. Sans le service : refusé.
+        if (array_key_exists('entry', $payload)) {
+            if ($this->entries === null) {
+                throw new UserNotFoundException('Jeton d\'entrée refusé.');
+            }
+
+            return $this->entries->userFor($payload, $this->tenants?->getTenantCode());
+        }
         if (str_starts_with($identifier, EsgUser::IDENTIFIER_PREFIX) || !isset($payload['id']) || !is_numeric($payload['id'])) {
             return $this->loadUserByIdentifier($identifier);
         }

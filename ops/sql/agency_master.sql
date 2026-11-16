@@ -100,3 +100,32 @@ CREATE TABLE IF NOT EXISTS agency_site_requests (
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_agency_site_request_open ON agency_site_requests (tenant_code) WHERE status IN ('pending', 'building');
 CREATE INDEX IF NOT EXISTS idx_agency_site_requests_agency ON agency_site_requests (agency_id, id);
 CREATE INDEX IF NOT EXISTS idx_agency_site_requests_status ON agency_site_requests (status, id);
+
+-- ============================================================================================================================
+-- Lot AG-3b (16/11/2026, docs/ecrans-et-contextes.md § 7) : JOURNAL DES ENTRÉES dans le site d'un autre. Une ligne par jeton
+-- d'entrée remis : qui (compte du site d'attache, son prénom ; agence), d'où (site d'attache), vers où (site visé), quand, dans
+-- quel mode (agency | super_admin), jusqu'à quand. ended_at : l'entrée est fermée avant son échéance (déconnexion du site
+-- d'attache, rôle retiré, agence suspendue, site détaché) ; la garde relit cette ligne à chaque requête (cache d'une minute au plus).
+-- Le journal ne dépend d'aucune autre ligne (pas de clé étrangère) : il garde le nom de l'agence tel qu'il était à l'entrée.
+-- Retour arrière : DROP TABLE site_entries (aucune autre table n'en dépend).
+CREATE TABLE IF NOT EXISTS site_entries (
+    id BIGSERIAL PRIMARY KEY,
+    mode VARCHAR(20) NOT NULL,
+    home_tenant_code VARCHAR(50) NOT NULL,
+    target_tenant_code VARCHAR(50) NOT NULL,
+    account_id INT NOT NULL,
+    account_email VARCHAR(180) NOT NULL,
+    first_name VARCHAR(100) NOT NULL DEFAULT '',
+    agency_id INT DEFAULT NULL,
+    agency_name VARCHAR(160) DEFAULT NULL,
+    created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL,
+    ended_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL,
+    ended_reason VARCHAR(30) DEFAULT NULL,
+    CONSTRAINT site_entries_mode CHECK (mode IN ('agency', 'super_admin')),
+    CONSTRAINT site_entries_agency CHECK ((mode = 'agency') = (agency_id IS NOT NULL)),
+    CONSTRAINT site_entries_elsewhere CHECK (home_tenant_code <> target_tenant_code)
+);
+CREATE INDEX IF NOT EXISTS idx_site_entries_account ON site_entries (home_tenant_code, account_id) WHERE ended_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_site_entries_target ON site_entries (target_tenant_code, id);
+CREATE INDEX IF NOT EXISTS idx_site_entries_agency ON site_entries (agency_id, id);

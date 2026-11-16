@@ -26,6 +26,7 @@ class StorefrontViewer
         private readonly JWTTokenManagerInterface $jwt,
         private readonly TenantConnectionProvider $tenantProvider,
         private readonly TenantEntityManagerProvider $emProvider,
+        private readonly ?\App\Services\Entry\EntryService $entries = null,
     ) {
     }
 
@@ -46,6 +47,10 @@ class StorefrontViewer
         }
         try {
             $payload = $this->jwt->parse($token);
+            if (array_key_exists('entry', $payload) && !isset($payload['id'])) {
+                // lot AG-3b : l'opérateur d'une agence entré dans ce site voit la vitrine fermée comme un compte d'équipe
+                return $this->entries?->constructionRoles($payload, $code) ?? [];
+            }
             if (!isset($payload['id']) || !is_numeric($payload['id'])) {
                 return [];
             }

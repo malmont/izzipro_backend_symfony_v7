@@ -156,7 +156,7 @@ final class ScreenRegistry
      */
     public const ROUTES = [
         // --- hors écran : connexion, compte, applications, technique
-        ['#^/api/me/contexts$#', '@compte'],
+        ['#^/api/me/contexts(/enter)?$#', '@compte'],
         ['#^/api/(login|logout|token|otp-verify|register|resend-verification|validate-token|password-reset|import-invitation)(/|$)#', '@compte'],
         ['#^/api/(profile|account|adresses|ordersuser|notifications|subscriptions|reviews|payment)(/|$)#', '@compte'],
         // (les commandes, les paiements, l'achat d'une étiquette, l'annulation : un administrateur y agit sur TOUT le site : ventes)

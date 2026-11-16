@@ -27,7 +27,13 @@ class JwtFailureCodeListener
 
     public function onJwtInvalid(JWTInvalidEvent $event): void
     {
-        $this->addCode($event->getResponse(), 'JWT_INVALID');
+        // lot AG-3b : un jeton d'entrée dont le lien est rompu (entrée fermée, rôle retiré, agence suspendue, site détaché) : l'application
+        // redemande l'entrée depuis le site d'attache, ou revient au site d'attache
+        $this->addCode($event->getResponse(), $this->entries?->failure() !== null ? 'ENTRY_ENDED' : 'JWT_INVALID');
+    }
+
+    public function __construct(private readonly ?\App\Security\Entry\EntryContext $entries = null)
+    {
     }
 
     public function onAuthenticationFailure(AuthenticationFailureEvent $event): void

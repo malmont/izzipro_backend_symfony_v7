@@ -29,6 +29,13 @@ framework:
             limit: 5
             interval: '10 minutes'
             lock_factory: null
+        # Lot AG-3b (16/11/2026) : entrées dans un autre site, par compte et par site d'attache. Un front renouvelle l'entrée toutes les
+        # 15 minutes au plus ; la limite borne seulement un appel en boucle (chaque entrée écrit une ligne au journal des deux côtés).
+        entry_enter_account:
+            policy: fixed_window
+            limit: 30
+            interval: '10 minutes'
+            lock_factory: null
         # Changement d'adresse courriel du compte (PATCH /api/profile, S7) : essais de mot de passe ou de code, comme la connexion
         profile_email_change_account:
             policy: sliding_window

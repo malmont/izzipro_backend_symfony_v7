@@ -88,6 +88,12 @@ ligne `agency_sites`, droits de source `agency`, invitation du commerçant s'il 
 
 ### 3.5 Entrer dans le site d'un client
 
+**Remplacé par le lot AG-3b (16/11/2026, `docs/ecrans-et-contextes.md` § 7)** : l'agence entre par un jeton d'entrée de 15 minutes,
+sans aucun compte chez le client, comme opérateur extérieur borné à la construction ; chaque entrée est tracée dans la base maître et
+dans « Accès extérieurs » du site. Le texte ci-dessous est le plan d'origine. **Migration faite par une agence** : les clients et les
+commandes ne s'importent pas en entrée ; le commerçant les importe lui-même, ou le super administrateur (le catalogue, lui, s'importe
+en entrée).
+
 Le jeton d'un compte ne vaut que pour son site. Pour passer du site d'attache au site d'un client : `POST /api/agency/sites/{code}/enter`
 rend un code de passage à usage unique, valable une minute ; le site du client l'échange contre une session d'administrateur ordinaire,
 ouverte au nom d'un compte « opérateur d'agence » propre à ce collaborateur (sans mot de passe : on n'y entre que par le passage).

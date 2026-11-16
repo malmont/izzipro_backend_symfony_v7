@@ -89,4 +89,26 @@ class PlatformAccessJournal
             return ['at' => new \DateTimeImmutable((string) $row['created_at'], new \DateTimeZone('UTC')), 'account' => (string) $row['user_identifier'], 'channel' => $channel, 'channelLabel' => self::CHANNELS[$channel] ?? $channel];
         }, $rows);
     }
+
+    /**
+     * Lot AG-3b : les dernières ENTRÉES dans ce site (agence ou plateforme, jeton d'entrée), de la plus récente à la plus ancienne.
+     * L'agence se lit « Agence X, prénom » ; la plateforme, par l'adresse de son compte.
+     *
+     * @return list<array{at: \DateTimeImmutable, account: string, channel: string, channelLabel: string}> `at` en UTC
+     */
+    public function entries(int $limit = 100): array
+    {
+        $rows = $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
+            'SELECT created_at, user_identifier, after_state FROM content_audit_log WHERE resource = ? AND action = ? AND tenant = ? ORDER BY id DESC LIMIT ' . max(1, min(500, $limit)),
+            [\App\Services\Entry\EntryService::JOURNAL_RESOURCE, \App\Services\Entry\EntryService::JOURNAL_ACTION, $this->tenant()]
+        );
+
+        return array_map(static function (array $row): array {
+            $after = is_string($row['after_state']) ? json_decode($row['after_state'], true) : null;
+            $agency = is_array($after) && ($after['mode'] ?? null) === \App\Services\Entry\EntryService::MODE_AGENCY;
+
+            return ['at' => new \DateTimeImmutable((string) $row['created_at'], new \DateTimeZone('UTC')), 'account' => (string) $row['user_identifier'],
+                'channel' => $agency ? 'entry_agency' : 'entry_platform', 'channelLabel' => $agency ? 'Entrée d\'une agence (15 minutes, renouvelable)' : 'Entrée de la plateforme (15 minutes, renouvelable)'];
+        }, $rows);
+    }
 }

@@ -39,7 +39,9 @@ class SecurityController extends AbstractController
         TokenService $tokenService,
         OtpService $otpService,
         private readonly ?\App\Services\PosAuditService\PosTerminalService $posTerminals = null,
-        private readonly ?\App\Services\PosAuditService\PosAuditService $posAudit = null
+        private readonly ?\App\Services\PosAuditService\PosAuditService $posAudit = null,
+        private readonly ?\App\Services\Entry\EntryService $entries = null,
+        private readonly ?\Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface $jwt = null,
     ) {
         $this->tenantEmProvider = $tenantEmProvider;
         $this->tenantConnProvider = $tenantConnProvider;
@@ -266,6 +268,10 @@ class SecurityController extends AbstractController
             }
         }
 
+        // 1 bis. Lot AG-3b : se déconnecter de son site d'attache ferme ses entrées dans les sites de ses clients (l'entrée ne survit
+        //    jamais à la sortie du site d'attache) ; le jeton du site, signé et de CE site, dit quel compte se déconnecte
+        $this->endEntries($request, $tenantCode);
+
         // 2. Suppression des cookies sous leurs deux formes : sans domaine (« host-only », forme actuelle)
         //    et avec le domaine explicite (forme utilisée avant le 27/09/2026, encore présente dans les navigateurs).
         //    Pour un navigateur ce sont deux cookies distincts : effacer l'un ne supprime pas l'autre.
@@ -287,5 +293,29 @@ class SecurityController extends AbstractController
         }
 
         return $response;
+    }
+
+    /** Ferme les entrées ouvertes du compte qui se déconnecte de ce site (lot AG-3b). Ne fait jamais échouer la déconnexion. */
+    private function endEntries(Request $request, string $tenantCode): void
+    {
+        if ($this->entries === null || $this->jwt === null || $tenantCode === 'default') {
+            return;
+        }
+        $token = $request->cookies->get('auth_token_' . $tenantCode);
+        if (!is_string($token) || $token === '') {
+            $token = preg_match('/^Bearer\s+(\S+)$/i', (string) $request->headers->get('Authorization'), $m) === 1 ? $m[1] : null;
+        }
+        if (!is_string($token) || $token === '') {
+            return;
+        }
+        try {
+            $payload = $this->jwt->parse($token);
+            // un jeton d'entrée ne ferme rien : il n'est pas une session du site d'attache
+            if (!array_key_exists('entry', $payload) && ($payload['tenant_code'] ?? null) === $tenantCode && isset($payload['id']) && is_numeric($payload['id'])) {
+                $this->entries->endFrom($tenantCode, (int) $payload['id'], 'logout');
+            }
+        } catch (\Throwable) {
+            // jeton expiré ou illisible : ses entrées s'éteignent d'elles-mêmes (15 minutes au plus)
+        }
     }
 }

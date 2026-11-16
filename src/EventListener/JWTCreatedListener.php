@@ -25,6 +25,12 @@ class JWTCreatedListener
         if (!$user instanceof UserInterface) {
             return;
         }
+        if ($user instanceof \App\Security\Entry\ExternalOperator) {
+            // lot AG-3b : un opérateur extérieur n'obtient jamais un jeton ordinaire ; sans site, ce jeton ne vaudrait sur aucun site
+            $event->setData(['username' => 'refused']);
+
+            return;
+        }
 
         $payload = $event->getData();
 

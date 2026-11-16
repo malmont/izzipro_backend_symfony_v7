@@ -189,6 +189,7 @@
         "POST /api/import-invitation/verify",
         "POST /api/login",
         "POST /api/logout",
+        "POST /api/me/contexts/enter",
         "POST /api/notifications/appareils",
         "POST /api/order/create",
         "POST /api/otp-verify",

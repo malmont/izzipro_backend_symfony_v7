@@ -10,8 +10,9 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
- * Page « Accès de la plateforme » (lot AG-2, 15/11/2026, décision du propriétaire) : l'administrateur d'un site y lit chaque connexion
- * du compte de la plateforme sur SON site (journal du site, `PlatformAccessJournal`). Lecture seule. Heures à l'heure du magasin.
+ * Page « Accès extérieurs » (lot AG-2, 15/11/2026, décision du propriétaire ; nommée « Accès de la plateforme » jusqu'au lot AG-3b) :
+ * l'administrateur d'un site y lit chaque connexion du compte de la plateforme sur SON site, et chaque entrée d'une agence ou de la
+ * plateforme par un jeton d'entrée (« Agence X, prénom ») (journal du site, `PlatformAccessJournal`). Lecture seule. Heures à l'heure du magasin.
  */
 #[IsGranted('ROLE_ADMIN')]
 class PlatformAccessAdminController extends AbstractController
@@ -24,7 +25,10 @@ class PlatformAccessAdminController extends AbstractController
     public function index(): Response
     {
         $timezone = $this->clock->timezone();
-        $lines = array_map(static fn (array $line): array => ['at' => $line['at']->setTimezone($timezone)->format('Y-m-d H:i'), 'account' => $line['account'], 'channel' => $line['channelLabel']], $this->journal->recent(200));
+        // lot AG-3b : « Accès extérieurs » : les connexions du compte de la plateforme ET les entrées d'une agence ou de la plateforme
+        $all = [...$this->journal->recent(200), ...$this->journal->entries(200)];
+        usort($all, static fn (array $a, array $b): int => $b['at'] <=> $a['at']);
+        $lines = array_map(static fn (array $line): array => ['at' => $line['at']->setTimezone($timezone)->format('Y-m-d H:i'), 'account' => $line['account'], 'channel' => $line['channelLabel']], array_slice($all, 0, 200));
 
         return $this->render('admin/acces_plateforme.html.twig', ['lines' => $lines, 'label' => PlatformAccessJournal::LABEL, 'timezone' => $timezone->getName()]);
     }
