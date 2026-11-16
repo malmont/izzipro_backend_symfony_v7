@@ -194,6 +194,10 @@ class LossFindingReader
         } elseif ($row['subject_type'] === 'cash_register') {
             // un constat par poste et par jour (lot L3-b2b) : son sujet est le poste, jamais une personne
             $subject += ['name' => $registers[(int) $row['subject_id']] ?? null, 'label' => $this->texts->t('subject.cash_register', $locale)];
+        } elseif ($row['subject_type'] === 'zone') {
+            // un constat par zone et par jour (lot L4-c) : son sujet est un lieu, jamais une personne
+            $zone = (string) ((json_decode((string) $row['facts'], true) ?: [])['zone'] ?? '');
+            $subject += ['name' => $this->texts->has('boxes.zone.' . $zone, $locale) ? $this->texts->t('boxes.zone.' . $zone, $locale) : null, 'label' => $this->texts->t('subject.zone', $locale)];
         }
 
         return $this->line($row, $registers, $locale) + [
@@ -203,7 +207,7 @@ class LossFindingReader
             'onDuty' => array_map(fn (array $p) => ['id' => (int) $p['id'], 'name' => $names[(int) $p['id']], 'role' => (string) $p['role'], 'roleLabel' => $this->texts->t('role.' . $p['role'], $locale)], $onDuty),
             // un constat par poste et par jour ne liste personne : pas de phrase sur « ces personnes en poste »
             // un constat par poste, par pièce ou par article (lots L3-b2b, L4-b) ne liste personne : pas de phrase sur « ces personnes en poste »
-            'onDutyNotice' => in_array($row['subject_type'], ['cash_register', 'piece', 'product_variant'], true) ? null : $this->texts->t('onDutyNotice', $locale),
+            'onDutyNotice' => in_array($row['subject_type'], ['cash_register', 'piece', 'product_variant', 'zone'], true) ? null : $this->texts->t('onDutyNotice', $locale),
             'amountNotice' => $this->texts->t('amountNotice', $locale),
             'evidence' => $evidence,
             'evidenceIntact' => $intact,
@@ -338,6 +342,11 @@ class LossFindingReader
             // lot L4-b : par pièce, par article ; aucun nom
             LossRuleCatalog::EXIT_WITHOUT_SALE => $this->texts->t("summary.$code.rule", $locale, ['number' => (int) ($facts['pieceNumber'] ?? 0), 'reads' => (int) ($facts['reads'] ?? 1),
                 'article' => $this->articleOf($facts, $locale)]),
+            // lot L4-c : par zone et par jour ; aucun nom
+            LossRuleCatalog::STOCKROOM_NOT_SHELVED, LossRuleCatalog::BACK_DOOR, LossRuleCatalog::OUT_OF_HOURS => $this->texts->t(
+                "summary.$code." . ((int) ($facts['count'] ?? 0) >= (int) ($facts['minCount'] ?? PHP_INT_MAX) ? 'raised' : 'base'), $locale,
+                ['count' => (int) ($facts['count'] ?? 0), 'minCount' => (int) ($facts['minCount'] ?? 0),
+                    'zone' => $this->texts->has('boxes.zone.' . ($facts['zone'] ?? ''), $locale) ? $this->texts->t('boxes.zone.' . $facts['zone'], $locale) : (string) ($facts['zone'] ?? '')]),
             LossRuleCatalog::EXIT_COVERED => $this->texts->t("summary.$code." . (($facts['level'] ?? '') === 'medium' ? 'medium' : 'low'), $locale,
                 ['count' => (int) ($facts['count'] ?? 0), 'minCount' => (int) ($facts['minCount'] ?? 0), 'article' => $this->articleOf($facts, $locale)]),
             default => $this->texts->t('summary.default', $locale),
@@ -397,6 +406,11 @@ class LossFindingReader
             LossEvidence::EXIT_READ => ['pieceNumber' => $text('pieceNumber'), 'readAt' => $when('readAt'), 'antenna' => $text('device'),
                 'lastZone' => isset($s['lastZone']) && $this->texts->has('boxes.zone.' . $s['lastZone'], $locale) ? $this->texts->t('boxes.zone.' . $s['lastZone'], $locale) : null,
                 'lastZoneAt' => $when('lastZoneAt'), 'matchedSaleAt' => $when('soldAt')],
+            // lot L4-c : un mouvement de zone d'une pièce (arrivée ou départ), son article, son antenne
+            LossEvidence::ZONE_MOVE => ['pieceNumber' => $text('pieceNumber'), 'article' => $text('article'),
+                'move' => isset($s['move']) && in_array($s['move'], ['ZONE_SEEN', 'ZONE_LEFT'], true) ? $this->texts->t('evidence.move.' . $s['move'], $locale) : null,
+                'zoneMoved' => isset($s['zone']) && $this->texts->has('boxes.zone.' . $s['zone'], $locale) ? $this->texts->t('boxes.zone.' . $s['zone'], $locale) : null,
+                'movedAt' => $when('at'), 'antenna' => $text('device')],
             default => [],
         };
         $lines = [];

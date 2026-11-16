@@ -316,6 +316,13 @@ class LossBoxRepository extends EntityRepository
         }
     }
 
+    /** Lot L4-c : la puce a-t-elle une présence ouverte dans cette zone, commencée avant cet instant ? (une arrivée redite) */
+    public function zonePresent(int $tagId, string $zone, string $at): bool
+    {
+        return (bool) $this->db()->fetchOne('SELECT EXISTS (SELECT 1 FROM loss_zone_presence z WHERE z.tag_id = ? AND z.zone = ? AND z.until IS NULL AND z.since <= CAST(? AS timestamp))',
+            [$tagId, $zone, $at]);
+    }
+
     /**
      * Lot L4-a. Une puce ARRIVE dans la zone d'une antenne : une présence s'ouvre, sauf si elle y est déjà (index unique des présences
      * ouvertes), et sauf si l'on connaît déjà un départ plus récent que cette arrivée (un lot en retard ne déplace pas la pièce). Une

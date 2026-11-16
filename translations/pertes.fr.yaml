@@ -17,6 +17,7 @@ subject:
     cash_register: Poste de caisse
     user_window: Série d'actes d'un même compte
     terminal: Tablette de caisse
+    zone: Zone de la boutique
 onDutyNotice: 'Ces personnes étaient en poste au moment des faits. Ce n''est pas une accusation : la décision vous revient, après vérification.'
 amountNotice: 'Le montant en jeu est le montant concerné par le constat, pas une perte prouvée.'
 caveats:
@@ -95,6 +96,22 @@ rules:
         description: 'Une pièce lue à la sortie a été reliée à une vente dont la puce n''avait pas été lue. Comme toutes les pièces de cet article ne portent pas de puce, on ne peut pas être sûr que ce soit la pièce vendue. Étiqueter tout l''article lève le doute.'
         params:
             minCount: Nombre de sorties rattrapées dans la semaine sur un même article à partir duquel la gravité passe de faible à moyenne
+    STOCKROOM_NOT_SHELVED:
+        label: Sortie de la réserve sans mise en rayon
+        description: 'Une pièce suivie a passé la porte de la réserve, puis n''a été revue ni en rayon, ni au comptoir, ni dans la réserve, ni vendue dans le délai. Un constat par jour et par zone, chaque pièce en est une preuve. Muette tant qu''aucune antenne du rayon ou du comptoir n''est en service. Jamais par personne.'
+        params:
+            minutes: Délai pour revoir la pièce en rayon, au comptoir ou dans la réserve (minutes)
+            minCount: Nombre de pièces du jour à partir duquel la gravité passe de faible à moyenne
+    BACK_DOOR:
+        label: Porte arrière de la réserve
+        description: 'Une pièce suivie, pas retirée, a été lue par l''antenne de la porte arrière de la réserve. Jugée à la fin de la journée : une pièce retirée ce jour-là n''ouvre rien. L''antenne ne dit pas le sens du passage : une pièce qui revient par cette porte ouvre aussi un constat, à classer sans suite. Un constat par jour, jamais par personne.'
+        params:
+            minCount: Nombre de pièces du jour à partir duquel la gravité passe de moyenne à haute
+    OUT_OF_HOURS:
+        label: Mouvement hors des heures d'ouverture
+        description: 'Une pièce suivie est arrivée dans une zone ou en est partie en dehors des heures d''ouverture que vous avez confirmées, marges comprises. Sans heures confirmées, la règle ne dit rien. Un inventaire ou une mise en rayon après la fermeture en ouvre un aussi. Un constat par jour et par zone, jamais par personne.'
+        params:
+            minCount: Nombre de pièces du jour à partir duquel la gravité passe de faible à moyenne
 summary:
     default: Constat relevé dans l'activité de la caisse.
     exerciseArticle: article d'exercice
@@ -127,6 +144,15 @@ summary:
     EXIT_COVERED:
         low: 'Sorties rattrapées cette semaine sur « %article% », pas entièrement étiqueté : %count%.'
         medium: 'Sorties rattrapées cette semaine sur « %article% », pas entièrement étiqueté : %count% (seuil de %minCount% atteint).'
+    STOCKROOM_NOT_SHELVED:
+        base: 'Pièces sorties de la réserve sans être revues en rayon ni vendues ce jour-là (%zone%) : %count%.'
+        raised: 'Pièces sorties de la réserve sans être revues en rayon ni vendues ce jour-là (%zone%) : %count% (seuil de %minCount% atteint).'
+    BACK_DOOR:
+        base: 'Pièces lues à la porte arrière de la réserve ce jour-là : %count%.'
+        raised: 'Pièces lues à la porte arrière de la réserve ce jour-là : %count% (seuil de %minCount% atteint).'
+    OUT_OF_HOURS:
+        base: 'Pièces déplacées hors des heures d''ouverture ce jour-là (%zone%) : %count%.'
+        raised: 'Pièces déplacées hors des heures d''ouverture ce jour-là (%zone%) : %count% (seuil de %minCount% atteint).'
 evidence:
     noReason: Aucun motif saisi
     z_report:
@@ -149,6 +175,11 @@ evidence:
         title: Articles suivis vendus sur le poste ce jour-là
     exit_read:
         title: Lecture à la sortie
+    zone_move:
+        title: Mouvement de zone d'une pièce
+    move:
+        ZONE_SEEN: Arrivée
+        ZONE_LEFT: Départ
     'yes': Oui
     'no': Non
     lines:
@@ -158,6 +189,9 @@ evidence:
         lastZone: Vue avant dans la zone
         lastZoneAt: Vue dans cette zone le
         matchedSaleAt: Reliée à la vente du
+        move: Mouvement
+        zoneMoved: Zone
+        movedAt: Le
         saleDay: Journée
         trackedSold: Articles suivis vendus
         unreadSold: Vendus sans lecture
@@ -233,6 +267,10 @@ approval:
 settings:
     pieces:
         retention: 'Les présences sur le tapis de comptoir et dans les zones, fermées depuis plus de %days% jours, sont effacées automatiquement ; la dernière zone où chaque pièce a été vue est gardée. Les faits (lectures, ventes, retours) sont conservés.'
+    openingHours:
+        suggestion: 'Tiré des réservations, à vérifier : la plage où une réservation peut commencer, la même chaque jour. Ce ne sont pas forcément vos heures d''ouverture ; confirmez-les jour par jour.'
+        confirmed: 'Heures confirmées : une pièce déplacée en dehors, marges comprises, ouvre un constat « hors des heures ».'
+        none: 'Aucune heure d''ouverture confirmée : la règle « mouvement hors des heures » ne dit rien tant que vous ne les avez pas confirmées jour par jour.'
     legalNotice: 'Ces réglages suivent le pays et la région de votre boutique. Faites-les relire par un avocat avant de vous en servir pour une décision concernant un salarié.'
     personPatterns:
         allowed: 'Les règles qui comptent les actes d''un même compte dans le temps sont permises dans votre région. Vous pouvez les éteindre.'
@@ -313,6 +351,18 @@ exercise:
             label: Sortie rattrapée sur un article pas entièrement étiqueté
             description: 'Plusieurs pièces lues à la sortie ont été reliées à des ventes dont la puce n''avait pas été lue, sur un article dont toutes les pièces ne portent pas de puce.'
             learn: 'Étiqueter toutes les pièces de l''article lève le doute : une vente sans lecture ne peut alors être qu''une lecture manquée. Le constat ne désigne personne.'
+        stockroom_not_shelved:
+            label: Sortie de la réserve sans mise en rayon
+            description: 'Plusieurs pièces passent la porte de la réserve, puis ne sont revues ni en rayon, ni au comptoir, ni vendues dans le délai.'
+            learn: 'Regarder l''heure des passages : une mise en rayon en cours, une antenne du rayon en panne, ou des pièces sorties par une autre porte. Le constat ne désigne personne.'
+        back_door:
+            label: Porte arrière de la réserve
+            description: 'Plusieurs pièces suivies sont lues par l''antenne de la porte arrière de la réserve dans la journée.'
+            learn: 'L''antenne ne dit pas le sens du passage : une livraison qui rentre en ouvre un aussi. Retirer une pièce avant de la sortir (retour, casse) évite le constat. Le constat ne désigne personne.'
+        out_of_hours:
+            label: Mouvement hors des heures d'ouverture
+            description: 'Plusieurs pièces arrivent dans une zone ou en partent en dehors des heures d''ouverture confirmées.'
+            learn: 'Un inventaire ou une mise en rayon après la fermeture en ouvre un aussi : vérifier qui était prévu, et si les heures confirmées sont justes. Le constat ne désigne personne.'
         cash_shortage_series:
             label: Manques de caisse répétés par un même compte
             description: 'Plusieurs clôtures avec un manque sont fermées par le même compte sur une courte période.'
@@ -446,6 +496,11 @@ installation:
             text: 'Facultatif. Une antenne dit quand une pièce arrive dans sa zone (réserve, porte de la réserve, rayon, sortie) et quand elle en part : la fiche de la pièce dit où elle a été vue en dernier. Branchez chaque antenne sur le boîtier, donnez-lui sa zone dans la fiche du boîtier, puis passez devant elle une pièce qui porte une puce. L''étape est faite quand chaque antenne a vu une puce.'
             verify: Vérifier
             hint: 'Aucune antenne de zone. Branchez une antenne sur le boîtier, puis donnez-lui sa zone.'
+        opening_hours:
+            title: Confirmer les heures d'ouverture
+            text: 'Facultatif. Dites, jour par jour, à quelle heure le magasin ouvre et ferme (ou qu''il est fermé), dans les réglages du module. Une pièce déplacée en dehors de ces heures, marges comprises, ouvre un constat « hors des heures ». Les heures des réservations vous sont proposées comme point de départ : vérifiez-les.'
+            verify: Vérifier
+            hint: 'Aucune heure d''ouverture confirmée. Ouvrez les réglages du module, puis confirmez vos heures jour par jour.'
     hint:
         decimal: 'Le lecteur semble rendre un numéro en chiffres seulement. Réglez-le pour qu''il rende l''identifiant en hexadécimal (chiffres et lettres de A à F).'
         form: 'Cette lecture contient autre chose que des chiffres et des lettres de A à F : ce n''est pas une puce. Vérifiez que le curseur est dans le champ de la puce.'
@@ -542,6 +597,7 @@ boxes:
         floor: Rayon
         counter: Comptoir
         exit: Sortie
+        back_door: Porte arrière de la réserve
     event:
         BOX_CREATED: Boîtier ajouté
         BOX_ENROLLED: Machine inscrite

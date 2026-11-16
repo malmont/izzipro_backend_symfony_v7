@@ -101,6 +101,8 @@ class LossPreventionExerciseTest extends LossPreventionTestCase
                 'unread_sold' => $this->assertSame([[], 'cash_register'], [$f['onDuty'], $f['subject']['type']], $code),
                 'exit_without_sale' => $this->assertSame([[], 'piece', null], [$f['onDuty'], $f['subject']['type'], $f['onDutyNotice']], $code),
                 'exit_covered' => $this->assertSame([[], 'product_variant', null], [$f['onDuty'], $f['subject']['type'], $f['onDutyNotice']], $code),
+                // ni une règle du dépôt, par zone et par jour (lot L4-c)
+                'stockroom_not_shelved', 'back_door', 'out_of_hours' => $this->assertSame([[], 'zone', null], [$f['onDuty'], $f['subject']['type'], $f['onDutyNotice']], $code),
                 default => $this->assertNotEmpty($f['onDuty'], $code),
             };
             foreach ($f['onDuty'] as $p) {
@@ -148,12 +150,12 @@ class LossPreventionExerciseTest extends LossPreventionTestCase
         // Rien dans la caisse, ni dans son journal ; l'analyse réelle n'a pas été lancée
         $this->assertSame($before, $cash(), 'aucune ligne écrite dans les tables de la caisse');
         $this->assertSame($analysisBefore, $analysis(), 'ni analyse, ni curseur déplacé');
-        // La liste de l'écran : les quinze (un scénario par règle ou variante ; le treizième est venu avec le lot L3-b2b, les deux
-        // derniers avec le lot L4-b), sans aucun nom
+        // La liste de l'écran : les dix-huit (un scénario par règle ou variante ; le treizième est venu avec le lot L3-b2b, les deux
+        // suivants avec le lot L4-b, les trois derniers avec le lot L4-c), sans aucun nom
         $after = $this->json($this->admin('GET', self::EX));
-        $this->assertSame([15, 15, 15], [$after['count'], $after['remaining'], count($after['findings'])]);
+        $this->assertSame([18, LossExerciseService::DAILY_LIMIT - 18, 18], [$after['count'], $after['remaining'], count($after['findings'])]); // `remaining` : lancements restants du jour
         $this->assertStringNotContainsString('exercice"', (string) json_encode($after['findings'], JSON_UNESCAPED_UNICODE), 'la liste ne porte pas les noms fictifs non plus');
-        $this->assertSame(array_fill(0, 15, true), array_column($after['findings'], 'exercise'));
+        $this->assertSame(array_fill(0, 18, true), array_column($after['findings'], 'exercise'));
     }
 
     public function testNoRealFigureEverCountsAnExerciseAndTheTwoKindsNeverCrossOnARoute(): void

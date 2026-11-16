@@ -61,6 +61,9 @@ class LossExerciseService
         'unread_sold' => ['rule' => LossRuleCatalog::UNREAD_SOLD, 'person' => false],
         'exit_without_sale' => ['rule' => LossRuleCatalog::EXIT_WITHOUT_SALE, 'person' => false],
         'exit_covered' => ['rule' => LossRuleCatalog::EXIT_COVERED, 'person' => false],
+        'stockroom_not_shelved' => ['rule' => LossRuleCatalog::STOCKROOM_NOT_SHELVED, 'person' => false],
+        'back_door' => ['rule' => LossRuleCatalog::BACK_DOOR, 'person' => false],
+        'out_of_hours' => ['rule' => LossRuleCatalog::OUT_OF_HOURS, 'person' => false],
         'cash_shortage_series' => ['rule' => LossRuleCatalog::CASH_DISCREPANCY, 'person' => true],
         'refund_series' => ['rule' => LossRuleCatalog::REFUND_PATTERN, 'person' => true],
         'discount_series' => ['rule' => LossRuleCatalog::DISCOUNT_PATTERN, 'person' => true],
@@ -504,6 +507,24 @@ class LossExerciseService
                 $amount = 4500 * $count;
                 $onDuty = [];
                 $subject = $covered ? 'product_variant' : 'piece';
+                $from = $evidence[0]['at'];
+                break;
+            case 'stockroom_not_shelved':
+            case 'back_door':
+            case 'out_of_hours':
+                // lot L4-c : des pièces fictives qui bougent dans une zone ; un constat par zone et par jour, aucune personne
+                $zone = ['stockroom_not_shelved' => 'stockroom_door', 'back_door' => 'back_door', 'out_of_hours' => 'stockroom'][$code];
+                $count = (int) $params['minCount'];
+                foreach (range(1, $count) as $i) {
+                    $movedAt = $ago(($count + 1 - $i) * 3);
+                    $evidence[] = ['kind' => LossEvidence::ZONE_MOVE, 'at' => $movedAt, 'snapshot' => ['pieceNumber' => 900 + $i, 'move' => 'ZONE_SEEN', 'zone' => $zone,
+                        'at' => $iso($movedAt), 'device' => 'SIM-LECTEUR-' . strtoupper($zone)]];
+                }
+                $facts = ['zone' => $zone, 'practice' => true, 'count' => $count, 'minCount' => $count, 'pieces' => [],
+                    'level' => $code === 'back_door' ? LossExitService::LEVEL_HIGH : LossExitService::LEVEL_MEDIUM];
+                $amount = null;
+                $onDuty = [];
+                $subject = 'zone';
                 $from = $evidence[0]['at'];
                 break;
             case 'cash_shortage_series':

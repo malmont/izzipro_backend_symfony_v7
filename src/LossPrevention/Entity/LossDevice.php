@@ -25,7 +25,8 @@ class LossDevice
     /** Retiré par l'administrateur (appareil remplacé) : il ne compte plus ; s'il est annoncé de nouveau, il revient (lot L3-b1) */
     public const RETIRED = 'retired';
     /** Zones de la boutique (§ 11) */
-    public const ZONES = ['stockroom', 'stockroom_door', 'floor', 'counter', 'exit'];
+    /** `back_door` : la porte arrière du dépôt (lot L4-c) */
+    public const ZONES = ['stockroom', 'stockroom_door', 'floor', 'counter', 'exit', 'back_door'];
     /** Appareils qu'un boîtier peut annoncer dans un signe de vie, au plus */
     public const MAX_PER_BOX = 16;
     /** Appareils qu'un boîtier peut avoir annoncés au fil du temps (les remplacés comptent : rien ne se supprime) ; au-delà, un nouveau est refusé */

@@ -16,6 +16,8 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\UniqueConstraint(name: 'uniq_loss_piece_event_key', columns: ['event_key'], options: ['where' => 'event_key IS NOT NULL'])]
 #[ORM\Index(name: 'idx_loss_piece_event_exercise', columns: ['id'], options: ['where' => 'exercise'])]
 #[ORM\Index(name: 'idx_loss_piece_event_box', columns: ['box_id', 'id'], options: ['where' => 'box_id IS NOT NULL'])]
+#[ORM\Index(name: 'idx_loss_piece_event_back_door', columns: ['id'], options: ['where' => "type = 'ZONE_SEEN' AND NOT exercise AND ((data)::jsonb ->> 'zone') = 'back_door'"])]
+#[ORM\Index(name: 'idx_loss_piece_event_moves', columns: ['id'], options: ['where' => "type IN ('ZONE_SEEN', 'ZONE_LEFT') AND NOT exercise"])]
 #[ORM\Index(name: 'idx_loss_piece_event_exit', columns: ['id'], options: ['where' => "type = 'ZONE_SEEN' AND NOT exercise AND ((data)::jsonb ->> 'zone') = 'exit'"])]
 class LossPieceEvent
 {

@@ -104,6 +104,19 @@
                 },
                 "state": "absent",
                 "hint": "Aucune antenne simulée. Créez un boîtier simulé : il a ses antennes."
+            },
+            {
+                "code": "opening_hours",
+                "title": "Confirmer les heures d'ouverture",
+                "text": "Facultatif. Dites, jour par jour, à quelle heure le magasin ouvre et ferme (ou qu'il est fermé), dans les réglages du module. Une pièce déplacée en dehors de ces heures, marges comprises, ouvre un constat « hors des heures ». Les heures des réservations vous sont proposées comme point de départ : vérifiez-les.",
+                "image": "pertes/installation/opening_hours",
+                "status": "todo",
+                "verify": {
+                    "kind": "data",
+                    "label": "Vérifier"
+                },
+                "state": "absent",
+                "hint": "Aucune heure d'ouverture confirmée. Ouvrez les réglages du module, puis confirmez vos heures jour par jour."
             }
         ],
         "progress": {

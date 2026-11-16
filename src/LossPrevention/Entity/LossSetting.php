@@ -63,6 +63,21 @@ class LossSetting
     #[ORM\Column(name: 'web_window_days', nullable: true)]
     private ?int $webWindowDays = null;
 
+    /** Lot L4-c : heures d'ouverture confirmées par le gérant (JSON, une plage par jour ISO 1 à 7, ou fermé) ; nul = pas d'heures, règle éteinte */
+    #[ORM\Column(name: 'opening_hours', type: 'text', nullable: true)]
+    private ?string $openingHours = null;
+
+    /** Lot L4-c : marge avant l'ouverture et après la fermeture (minutes) ; nul = 60 */
+    #[ORM\Column(name: 'hours_margin_minutes', nullable: true)]
+    private ?int $hoursMarginMinutes = null;
+
+    /** Lot L4-c : rangs des derniers faits de pièce jugés par les règles du dépôt, et par celle de la porte arrière */
+    #[ORM\Column(name: 'depot_cursor', nullable: true)]
+    private ?int $depotCursor = null;
+
+    #[ORM\Column(name: 'back_door_cursor', nullable: true)]
+    private ?int $backDoorCursor = null;
+
     /** Lot L4-b : rang du dernier fait de pièce jugé par les règles de la sortie */
     #[ORM\Column(name: 'exit_cursor', nullable: true)]
     private ?int $exitCursor = null;

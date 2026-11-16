@@ -29,6 +29,8 @@ class LossEvidence
     public const SALE_UNITS = 'sale_units';
     /** Lot L4-b : une pièce lue à la sortie (l'antenne, l'heure, la dernière zone d'avant ; aucune personne) */
     public const EXIT_READ = 'exit_read';
+    /** Lot L4-c : un mouvement de zone d'une pièce (arrivée ou départ), pour les règles du dépôt et des heures d'ouverture */
+    public const ZONE_MOVE = 'zone_move';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

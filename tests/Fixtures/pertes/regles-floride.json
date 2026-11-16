@@ -269,6 +269,72 @@
                     }
                 ],
                 "personVariant": null
+            },
+            {
+                "code": "STOCKROOM_NOT_SHELVED",
+                "label": "Sortie de la réserve sans mise en rayon",
+                "description": "Une pièce suivie a passé la porte de la réserve, puis n'a été revue ni en rayon, ni au comptoir, ni dans la réserve, ni vendue dans le délai. Un constat par jour et par zone, chaque pièce en est une preuve. Muette tant qu'aucune antenne du rayon ou du comptoir n'est en service. Jamais par personne.",
+                "wave": 4,
+                "enabled": true,
+                "params": [
+                    {
+                        "key": "minutes",
+                        "label": "Délai pour revoir la pièce en rayon, au comptoir ou dans la réserve (minutes)",
+                        "type": "minutes",
+                        "value": 30,
+                        "default": 30,
+                        "min": 5,
+                        "max": 240
+                    },
+                    {
+                        "key": "minCount",
+                        "label": "Nombre de pièces du jour à partir duquel la gravité passe de faible à moyenne",
+                        "type": "count",
+                        "value": 5,
+                        "default": 5,
+                        "min": 2,
+                        "max": 50
+                    }
+                ],
+                "personVariant": null
+            },
+            {
+                "code": "BACK_DOOR",
+                "label": "Porte arrière de la réserve",
+                "description": "Une pièce suivie, pas retirée, a été lue par l'antenne de la porte arrière de la réserve. Jugée à la fin de la journée : une pièce retirée ce jour-là n'ouvre rien. L'antenne ne dit pas le sens du passage : une pièce qui revient par cette porte ouvre aussi un constat, à classer sans suite. Un constat par jour, jamais par personne.",
+                "wave": 4,
+                "enabled": true,
+                "params": [
+                    {
+                        "key": "minCount",
+                        "label": "Nombre de pièces du jour à partir duquel la gravité passe de moyenne à haute",
+                        "type": "count",
+                        "value": 5,
+                        "default": 5,
+                        "min": 2,
+                        "max": 50
+                    }
+                ],
+                "personVariant": null
+            },
+            {
+                "code": "OUT_OF_HOURS",
+                "label": "Mouvement hors des heures d'ouverture",
+                "description": "Une pièce suivie est arrivée dans une zone ou en est partie en dehors des heures d'ouverture que vous avez confirmées, marges comprises. Sans heures confirmées, la règle ne dit rien. Un inventaire ou une mise en rayon après la fermeture en ouvre un aussi. Un constat par jour et par zone, jamais par personne.",
+                "wave": 4,
+                "enabled": true,
+                "params": [
+                    {
+                        "key": "minCount",
+                        "label": "Nombre de pièces du jour à partir duquel la gravité passe de faible à moyenne",
+                        "type": "count",
+                        "value": 5,
+                        "default": 5,
+                        "min": 2,
+                        "max": 50
+                    }
+                ],
+                "personVariant": null
             }
         ],
         "notice": "Changer un seuil ne ferme ni ne supprime aucun constat : le nouveau réglage ne vaut que pour les analyses suivantes.",

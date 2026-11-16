@@ -203,7 +203,7 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $enrolled = $this->json($enrol($good));
         $this->assertSame(['box', 'token', 'expiresAt', 'serverTime', 'settings'], array_keys($enrolled));
         $this->assertSame(['id' => $id], $enrolled['box'], 'le boîtier ne reçoit même pas son nom');
-        $this->assertSame(['heartbeatSeconds' => 60, 'silentAfterSeconds' => 300, 'facts' => ['types' => ['SPOT_CHECK', 'ZONE_SEEN', 'COUNTER_SEEN', 'COUNTER_LEFT', 'ZONE_LEFT', 'TAG_WRITTEN', 'TAG_WRITE_FAILED'], 'maxBatch' => 200], 'zones' => ['stockroom', 'stockroom_door', 'floor', 'counter', 'exit'], 'zonePresence' => ['arriveSeconds' => 3, 'leaveSeconds' => 30], 'devices' => []], $enrolled['settings']);
+        $this->assertSame(['heartbeatSeconds' => 60, 'silentAfterSeconds' => 300, 'facts' => ['types' => ['SPOT_CHECK', 'ZONE_SEEN', 'COUNTER_SEEN', 'COUNTER_LEFT', 'ZONE_LEFT', 'TAG_WRITTEN', 'TAG_WRITE_FAILED'], 'maxBatch' => 200], 'zones' => ['stockroom', 'stockroom_door', 'floor', 'counter', 'exit', 'back_door'], 'zonePresence' => ['arriveSeconds' => 3, 'leaveSeconds' => 30], 'devices' => []], $enrolled['settings']);
         $token = $enrolled['token'];
         $this->assertMatchesRegularExpression('/\Ab' . $id . '\.2\.\d{10}\.[0-9a-f]{64}\z/', $token);
         $this->assertEqualsWithDelta(time() + 86400, strtotime($enrolled['expiresAt']), 5);

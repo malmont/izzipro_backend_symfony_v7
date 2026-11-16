@@ -107,7 +107,7 @@ class LossPreventionZoneTest extends LossPreventionTestCase
 
         // Aucune antenne n'a rien vu : la fiche ne dit aucune zone
         $this->assertSame([null, null, null, null, null, 'created'], [($p = $sheet($pieceA))['zone'], $p['zoneLabel'], $p['zoneSeenAt'], $p['zoneLeftAt'], $p['zoneDevice'], $p['status']]);
-        $this->assertSame(['stockroom' => 0, 'stockroom_door' => 0, 'floor' => 0, 'counter' => 0, 'exit' => 0], $zones());
+        $this->assertSame(['stockroom' => 0, 'stockroom_door' => 0, 'floor' => 0, 'counter' => 0, 'exit' => 0, 'back_door' => 0], $zones());
         // une pièce d'un AUTRE article, vue à la réserve : elle ne compte pas dans la synthèse filtrée sur celui-ci
         [$other, $otherPiece] = $this->tagged($this->article('Bonnet'), '07');
         $this->assertSame(['accepted', null], $this->fact($token, 'ZONE_SEEN', $serials['res'], $other, ['zone' => 'stockroom', 'at' => $at(-90)]));
@@ -160,7 +160,7 @@ class LossPreventionZoneTest extends LossPreventionTestCase
         // Chaque antenne a vu une puce : toutes en ordre, l'étape est faite
         $this->assertSame(['ok', 'ok', 'ok'], array_map(fn (string $key): string => $health()['reader-' . $devices[$serials[$key]]]['state'], ['res', 'ray', 'sortie']));
         $this->assertSame(['done', 'ok', null], [($s = $step())['status'], $s['state'], $s['hint']]);
-        $this->assertSame(['stockroom' => 0, 'stockroom_door' => 0, 'floor' => 1, 'counter' => 0, 'exit' => 1], $zones());
+        $this->assertSame(['stockroom' => 0, 'stockroom_door' => 0, 'floor' => 1, 'counter' => 0, 'exit' => 1, 'back_door' => 0], $zones());
         // Une antenne en panne : sa ligne et l'étape le disent, avec sa zone
         $down = $announced;
         $down[1]['status'] = 'down';

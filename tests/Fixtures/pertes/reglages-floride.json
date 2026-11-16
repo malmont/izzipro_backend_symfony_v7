@@ -93,6 +93,55 @@
             "webWindowDays": 14,
             "note": "Les présences sur le tapis de comptoir et dans les zones, fermées depuis plus de 90 jours, sont effacées automatiquement ; la dernière zone où chaque pièce a été vue est gardée. Les faits (lectures, ventes, retours) sont conservés."
         },
+        "openingHours": {
+            "confirmed": false,
+            "days": null,
+            "marginMinutes": 60,
+            "bounds": {
+                "marginMinutes": {
+                    "min": 0,
+                    "max": 240
+                }
+            },
+            "defaults": {
+                "marginMinutes": 60
+            },
+            "suggestion": {
+                "source": "bookings",
+                "note": "Tiré des réservations, à vérifier : la plage où une réservation peut commencer, la même chaque jour. Ce ne sont pas forcément vos heures d'ouverture ; confirmez-les jour par jour.",
+                "days": {
+                    "1": {
+                        "open": "08:00",
+                        "close": "19:00"
+                    },
+                    "2": {
+                        "open": "08:00",
+                        "close": "19:00"
+                    },
+                    "3": {
+                        "open": "08:00",
+                        "close": "19:00"
+                    },
+                    "4": {
+                        "open": "08:00",
+                        "close": "19:00"
+                    },
+                    "5": {
+                        "open": "08:00",
+                        "close": "19:00"
+                    },
+                    "6": {
+                        "open": "08:00",
+                        "close": "19:00"
+                    },
+                    "7": {
+                        "open": "08:00",
+                        "close": "19:00"
+                    }
+                }
+            },
+            "note": "Aucune heure d'ouverture confirmée : la règle « mouvement hors des heures » ne dit rien tant que vous ne les avez pas confirmées jour par jour."
+        },
         "never": [
             {
                 "code": "faces",

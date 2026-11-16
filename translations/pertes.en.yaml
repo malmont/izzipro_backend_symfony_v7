@@ -17,6 +17,7 @@ subject:
     cash_register: Till
     user_window: Series of actions by the same account
     terminal: Cash register tablet
+    zone: Shop zone
 onDutyNotice: 'These people were on duty when the events took place. This is not an accusation: the decision is yours, after checking.'
 amountNotice: 'The amount at stake is the amount the finding is about, not a proven loss.'
 caveats:
@@ -95,6 +96,22 @@ rules:
         description: 'A piece read at the exit was matched to a sale whose tag had not been read. As not every piece of this item carries a tag, we cannot be sure it is the piece that was sold. Tagging the whole item removes the doubt.'
         params:
             minCount: Number of matched exits in the week on the same item from which the severity goes from low to medium
+    STOCKROOM_NOT_SHELVED:
+        label: Left the stockroom without being shelved
+        description: 'A tracked piece went through the stockroom door, then was seen neither on the shop floor, at the counter nor back in the stockroom, and was not sold, within the delay. One finding per day and per zone, each piece being evidence. Silent while no shop-floor or counter antenna is in service. Never per person.'
+        params:
+            minutes: Delay to see the piece again on the shop floor, at the counter or in the stockroom (minutes)
+            minCount: Number of pieces in the day from which the severity goes from low to medium
+    BACK_DOOR:
+        label: Stockroom back door
+        description: 'A tracked piece, not retired, was read by the antenna at the stockroom back door. Judged at the end of the day: a piece retired that day opens nothing. The antenna does not tell the direction: a piece coming back through this door also opens a finding, to be dismissed. One finding per day, never per person.'
+        params:
+            minCount: Number of pieces in the day from which the severity goes from medium to high
+    OUT_OF_HOURS:
+        label: Movement outside opening hours
+        description: 'A tracked piece arrived in or left a zone outside the opening hours you confirmed, margins included. Without confirmed hours, the rule says nothing. A stock count or shelving after closing also opens one. One finding per day and per zone, never per person.'
+        params:
+            minCount: Number of pieces in the day from which the severity goes from low to medium
 summary:
     default: Finding raised from cash register activity.
     exerciseArticle: practice item
@@ -127,6 +144,15 @@ summary:
     EXIT_COVERED:
         low: 'Matched exits this week on "%article%", partly tagged: %count%.'
         medium: 'Matched exits this week on "%article%", partly tagged: %count% (threshold of %minCount% reached).'
+    STOCKROOM_NOT_SHELVED:
+        base: 'Pieces that left the stockroom without being seen on the shop floor or sold that day (%zone%): %count%.'
+        raised: 'Pieces that left the stockroom without being seen on the shop floor or sold that day (%zone%): %count% (threshold of %minCount% reached).'
+    BACK_DOOR:
+        base: 'Pieces read at the stockroom back door that day: %count%.'
+        raised: 'Pieces read at the stockroom back door that day: %count% (threshold of %minCount% reached).'
+    OUT_OF_HOURS:
+        base: 'Pieces moved outside opening hours that day (%zone%): %count%.'
+        raised: 'Pieces moved outside opening hours that day (%zone%): %count% (threshold of %minCount% reached).'
 evidence:
     noReason: No reason entered
     z_report:
@@ -149,6 +175,11 @@ evidence:
         title: Tracked items sold on the till that day
     exit_read:
         title: Read at the exit
+    zone_move:
+        title: Zone movement of a piece
+    move:
+        ZONE_SEEN: Arrival
+        ZONE_LEFT: Departure
     'yes': 'Yes'
     'no': 'No'
     lines:
@@ -158,6 +189,9 @@ evidence:
         lastZone: Seen before in the zone
         lastZoneAt: Seen in that zone on
         matchedSaleAt: Matched to the sale of
+        move: Movement
+        zoneMoved: Zone
+        movedAt: On
         saleDay: Day
         trackedSold: Tracked items sold
         unreadSold: Sold without a read
@@ -233,6 +267,10 @@ approval:
 settings:
     pieces:
         retention: 'Presences on the counter mat and in the zones, closed for more than %days% days, are erased automatically; the last zone where each piece was seen is kept. Facts (reads, sales, returns) are kept.'
+    openingHours:
+        suggestion: 'Taken from bookings, to be checked: the range in which a booking can start, the same every day. These are not necessarily your opening hours; confirm them day by day.'
+        confirmed: 'Hours confirmed: a piece moved outside them, margins included, opens an "outside opening hours" finding.'
+        none: 'No opening hours confirmed: the "movement outside opening hours" rule says nothing until you confirm them day by day.'
     legalNotice: 'These settings follow the country and region of your shop. Have them reviewed by a lawyer before using them for a decision about an employee.'
     personPatterns:
         allowed: 'Rules that count the actions of the same account over time are allowed in your region. You can turn them off.'
@@ -314,6 +352,18 @@ exercise:
             label: Exit matched on a partly tagged item
             description: 'Several pieces read at the exit were matched to sales whose tag had not been read, on an item whose pieces do not all carry a tag.'
             learn: 'Tagging every piece of the item removes the doubt: a sale without a read can then only be a missed read. The finding names no one.'
+        stockroom_not_shelved:
+            label: Left the stockroom without being shelved
+            description: 'Several pieces go through the stockroom door, then are seen neither on the shop floor nor at the counter, and are not sold, within the delay.'
+            learn: 'Look at the times: shelving in progress, a shop-floor antenna down, or pieces taken out through another door. The finding names no one.'
+        back_door:
+            label: Stockroom back door
+            description: 'Several tracked pieces are read by the stockroom back door antenna during the day.'
+            learn: 'The antenna does not tell the direction: an incoming delivery also opens one. Retiring a piece before taking it out (return, breakage) avoids the finding. The finding names no one.'
+        out_of_hours:
+            label: Movement outside opening hours
+            description: 'Several pieces arrive in or leave a zone outside the confirmed opening hours.'
+            learn: 'A stock count or shelving after closing also opens one: check what was planned, and whether the confirmed hours are right. The finding names no one.'
         cash_shortage_series:
             label: Repeated cash shortages by the same account
             description: 'Several closings with a shortage are closed by the same account over a short period.'
@@ -447,6 +497,11 @@ installation:
             text: 'Optional. An antenna says when a piece arrives in its zone (stockroom, stockroom door, shop floor, exit) and when it leaves: the piece sheet says where it was last seen. Plug each antenna into the box, give it its zone in the box sheet, then walk a tagged piece past it. The step is done when every antenna has seen a tag.'
             verify: Check
             hint: 'No zone antenna. Plug an antenna into the box, then give it its zone.'
+        opening_hours:
+            title: Confirm the opening hours
+            text: 'Optional. Say, day by day, when the shop opens and closes (or that it is closed), in the module settings. A piece moved outside these hours, margins included, opens an "outside opening hours" finding. The booking hours are offered as a starting point: check them.'
+            verify: Check
+            hint: 'No opening hours confirmed. Open the module settings, then confirm your hours day by day.'
     hint:
         decimal: 'The reader seems to return a number made of digits only. Set it to return the identifier in hexadecimal (digits and letters A to F).'
         form: 'This read contains something other than digits and letters A to F: it is not a tag. Check that the cursor is in the tag field.'
@@ -543,6 +598,7 @@ boxes:
         floor: Shop floor
         counter: Counter
         exit: Exit
+        back_door: Stockroom back door
     event:
         BOX_CREATED: Box added
         BOX_ENROLLED: Machine enrolled
