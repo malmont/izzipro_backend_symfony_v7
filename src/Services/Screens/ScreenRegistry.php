@@ -93,7 +93,7 @@ final class ScreenRegistry
         'stock' => self::G, 'tresorerie.rapprochements' => self::G, 'documents' => self::G, 'simulateur' => self::G, 'console' => self::G,
         // --- Prévention des pertes
         'pertes.home' => self::P, 'pertes.constats' => self::P, 'pertes.constat' => self::P, 'pertes.regles' => self::P, 'pertes.reglages' => self::P,
-        'pertes.exercices' => self::P, 'pertes.pieces' => self::P, 'pertes.installation' => self::P, 'pertes.boitiers' => self::P,
+        'pertes.exercices' => self::P, 'pertes.pieces' => self::P, 'pertes.installation' => self::P, 'pertes.boitiers' => self::P, 'pertes.impressions' => self::P,
         // --- Plateforme (web)
         'plateforme.pilotage' => ['family' => self::PLATEFORME, 'module' => null, 'roles' => ['ROLE_SUPER_ADMIN']],
         'plateforme.agences' => ['family' => self::PLATEFORME, 'module' => null, 'roles' => ['ROLE_SUPER_ADMIN']],
@@ -194,7 +194,8 @@ final class ScreenRegistry
         ['#^/api/gestion/pertes/regles(/|$)#', 'pertes.regles'],
         ['#^/api/gestion/pertes/reglages(/|$)#', 'pertes.reglages'],
         ['#^/api/gestion/pertes/exercices(/|$)#', 'pertes.exercices'],
-        ['#^/api/gestion/pertes/(pieces|puces|impressions)(/|$)#', 'pertes.pieces'],
+        ['#^/api/gestion/pertes/impressions(/|$)#', 'pertes.impressions'],
+        ['#^/api/gestion/pertes/(pieces|puces)(/|$)#', 'pertes.pieces'],
         ['#^/api/gestion/pertes/(installation|materiel)(/|$)#', 'pertes.installation'],
         ['#^/api/gestion/pertes/(boitiers|postes|sante)(/|$)#', 'pertes.boitiers'],
         ['#^/api/gestion/pertes(/|$)#', 'pertes.home'],

@@ -77,8 +77,11 @@ une sortie chiffrée. Le fil d'une facture, le guide quotidien et la console app
   se comparent pas. Le chiffre porte `lastYearSource: "before_migration"` et `lastYearNote` (« avant la migration », les mots à
   afficher à côté de « An dernier ») ; `period.lastYearLabel` finit par « (avant la migration) » et `period.lastYearSource` le dit.
   Le modèle reçoit la note et doit l'écrire avec le chiffre ; **un texte qui cite cet an dernier, ou sa variation, sans la note est
-  rejeté par le serveur** (nouvel essai, puis texte de repli). Les cartes gardent ces deux clés : les applications affichent
-  « An dernier, avant la migration ».
+  rejeté par le serveur** (nouvel essai, puis texte de repli). **Sur une CARTE** (bloc `figures`), cet an dernier n'est jamais sous
+  les clés `lastYear`, `deltaLastYear`, `deltaPercentLastYear` (une application qui ne connaît pas la marque l'afficherait « An
+  dernier ») : il est rangé à part, `lastYearBeforeMigration: { value, delta, deltaPercent, note }`, que les applications affichent
+  « An dernier, avant la migration ». Limite connue : le serveur surveille les NOMBRES ; une phrase qui compare sans chiffre (« les
+  ventes ont doublé depuis l'an dernier ») n'est tenue que par la consigne donnée au modèle.
 - **Le libellé d'un chiffre dit ce qu'il compte** quand deux mesures se ressemblent : « Frais de la période (port, notes de frais,
   publicité), hors achats de marchandise » (résultat de période) et « Dépenses réelles, achats de marchandise compris » (budget) ne
   sont pas le même montant.

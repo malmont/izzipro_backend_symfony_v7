@@ -17,8 +17,8 @@ Un écran a un **code**, une **famille**, un **module** (clé de `FeatureCatalog
 | Famille | Ce qu'elle réunit |
 |---|---|
 | `construction` | catalogue, codes-barres, médias, pages, apparence, réglages du site, domaine, modules, ouverture, import du catalogue, générateur IA de pages et de fiches |
-| `vente` | commandes, paiements, caisse, expéditions, abonnements, mouvements de stock, **assistant du site**, **journal des modifications**, import des commandes |
-| `clients` | comptes, demandes reçues, candidatures, avis, réservations, infolettre, import des clients |
+| `vente` | commandes et paiements (EasyAdmin, et les routes `/api/orders`, `/api/payments`, achat d'une étiquette, annulation : `ventes.commandes`), connexion Stripe et Square, caisse, expéditions, abonnements, mouvements de stock, **assistant du site**, **journal des modifications**, import des commandes |
+| `clients` | comptes, demandes reçues, candidatures, avis, rendez-vous (`clients.reservations`), infolettre, import des clients |
 | `gestion` | achats, périodes, trésorerie, statistiques, console IA, bilans |
 | `pertes` | prévention des pertes |
 | `assistance` | demandes des clients (module Assistance) |
@@ -39,8 +39,8 @@ une **liste hors écran** nommée ; quand lecture et écriture n'ont pas le mêm
 
 | Liste hors écran | Contenu |
 |---|---|
-| `@public` | lectures et envois d'un visiteur ou d'un client : catalogue, pages, panier, paiement, formulaires |
-| `@compte` | connexion et compte de la personne connectée, dont `GET /api/me/contexts` |
+| `@public` | LECTURES du site public (catalogue, pages, référentiels) et envois d'un visiteur (devis du panier, paiement, formulaires, prise de rendez-vous). Aucune écriture d'administration : sur ces mêmes chemins, une écriture est celle de l'écran de contenu |
+| `@compte` | connexion et compte de la personne connectée (profil, adresses, ses commandes passées, ses abonnements, ses avis), dont `GET /api/me/contexts`. Les routes où un administrateur agit sur tout le site n'y sont pas |
 | `@apps` | démarrage des applications : recherche du site, activation, profil, thème |
 | `@caisse` | application de caisse |
 | `@memoires`, `@boussole` | Mémoires Vivantes / Living Memory, espace des entreprises de la Boussole |
@@ -49,14 +49,21 @@ une **liste hors écran** nommée ; quand lecture et écriture n'ont pas le mêm
 | `@ancien` | anciennes pages de la boutique servies par le backend |
 
 Les écrans CRUD d'EasyAdmin passent tous par l'adresse `/admin` : `ScreenRegistry::ADMIN_CRUDS` range chaque contrôleur CRUD par
-son nom court.
+son nom court, quel que soit ce nom (cinq s'appellent `…ListController`).
+
+**Une requête d'EasyAdmin ne se classe jamais par son chemin.** `/admin?crudControllerFqcn=…` ouvre un écran CRUD, et
+`/admin?routeName=…` exécute n'importe quelle route nommée sous le chemin `/admin` (une page de remboursement, par exemple).
+`ScreenRegistry::adminTarget($crud, $cheminDeLaRoute, $méthode)` rend l'écran de la requête ; un écran ou une route inconnus n'ont
+pas d'écran, donc seront fermés. Les gardes d'AG-3b et d'AG-3c passent par elle.
 
 ### Tenir le registre
 
 `tests/Functional/Screens/ScreenRegistryTest.php` relit **toutes les routes** de l'application (API Platform comprise) et **tous les
-écrans CRUD** d'EasyAdmin :
+écrans CRUD** d'EasyAdmin (toute classe qui hérite du contrôleur CRUD, trouvée par son héritage et non par son nom) :
 
 - une route rangée nulle part fait échouer l'essai ; une règle qui ne range plus rien aussi ;
+- le classement fige des GABARITS de route : la route générique `PATCH /api/{resource}/{id}` s'exécute, elle, sous le chemin de
+  chaque ressource ; l'essai vérifie donc aussi que chacune de ses ressources, par son vrai chemin, est une écriture de construction ;
 - le classement entier est figé dans `tests/Fixtures/ecrans/classement.json` (cible → routes). **Toute route nouvelle change ce
   fichier : son diff se relit**, car une route de vente rangée en construction s'ouvrirait à une agence. Régénérer :
 
@@ -79,7 +86,13 @@ Le mode se **calcule** depuis les liens réels, jamais d'un champ tenu à la mai
 Le mode `group` viendra avec le lot G-1.
 
 **Un compte ne voit que les sites qu'il peut ouvrir.** L'administrateur d'un site ne voit que son site, même quand ce site est
-l'attache d'une agence ou qu'une agence le gère. Un site détaché sort de la liste ; une agence fermée n'ouvre plus le mode agence.
+l'attache d'une agence ou qu'une agence le gère. Un site détaché sort de la liste ; une agence fermée n'ouvre plus le mode agence ;
+une agence **suspendue** garde la liste de ses clients, sans aucun écran chez eux (son site d'attache reste le sien).
+
+**Un compte client n'apprend rien** que le site public ne dise déjà : son site, son état, aucun écran, et ni les modules actifs ni
+les liens d'agence (`modules: []`, `badges: []`). Sur un site en construction, la garde de la boutique lui refuse cette route comme
+toute autre (`docs/boutique-en-construction.md`). Le numéro d'une demande de création à compléter (`requestId`) n'est rendu qu'au
+super administrateur.
 
 ## 3. `GET /api/me/contexts`
 
@@ -93,7 +106,7 @@ Toute personne connectée (`IS_AUTHENTICATED_FULLY`), lecture seule, `Cache-Cont
   sites: [{ code, name, host, current, home?,
             badges: [{ type: "independent" | "agency_home" | "agency_managed" | "creation_incomplete", agencyId?, agencyCode?, agencyName?, requestId? }],
             state: "open" | "construction" | null, scope: "site" | "shop" | null,
-            modules: ["module.boutique", …],        // clés des modules actifs sur ce site
+            modules: ["module.boutique", …],        // clés des modules actifs sur ce site ([] pour un compte sans rôle d'équipe)
             screens: ["catalogue", "pages", …] }],  // codes des écrans que le menu peut montrer
   all: { key: "clients" | "sites", screens: [...] } | null }
 ```
@@ -143,6 +156,9 @@ Sortis de la construction parce que leur réponse ENTIÈRE porte des ventes ou d
 | `site.journal` | `/api/landingpage-audit` | le journal garde l'avant / après de tout le site : coûts, commandes, adresses, comptes |
 | `imports.clients` | `/api/site/imports/{id}/customers`, `/{id}/invitations` | nominatif |
 | `imports.commandes` | `/api/site/imports/archive/orders` | commandes d'avant, lignes et montants |
+| `ventes.commandes` | `GET /api/orders`, `GET /api/payments`, `POST /api/shipping/buy`, `POST /api/order/cancel/{id}` | un client y lit ou annule les siens, un administrateur ceux de tout le site |
+| `clients.reservations` | `GET /api/reservations`, `…/{id}/confirm` | tous les rendez-vous du site |
+| `admin.paiement` | Stripe (`/admin/stripe`, `/stripe/connect`…), Square | le commerçant connecte lui-même son compte de paiement |
 | `admin.stock` | mouvements de stock | l'historique des mouvements dit les ventes |
 | `admin.utilisateurs` | comptes, adresses | l'agence ne crée pas de comptes d'équipe chez son client |
 
@@ -154,16 +170,19 @@ fermera ce qui ne se filtre pas (`closed`).
 
 | Écran | Champs à retirer | À fermer |
 |---|---|---|
-| `catalogue` | `purchasePrice`, `coefficientMultiplier`, `commande` ; dans le refus de suppression `PRODUCT_IN_USE` : `uses.sales`, `uses.purchaseLines`, `uses.bookings` | |
+| `catalogue` | `purchasePrice`, `coefficientMultiplier`, `commande`, `commandeCostCents`, `commandeQuantity`, `commandeAttachedAt`, `commandeCostEstimated`, `bookings`, `reviewsProducts` (les écritures d'API Platform d'un article rendent toute l'entité) ; dans le refus de suppression `PRODUCT_IN_USE` : `uses.sales`, `uses.purchaseLines`, `uses.bookings`, `uses.openCheckouts` | écrire `purchasePrice` ou `coefficientMultiplier` par `POST`, `PUT`, `PATCH /api/products` |
 | `admin.catalogue` | colonnes « Prix d'achat », « Coefficient », « Dernière commande fournisseur » | |
-| `admin.accueil` | `totalSales`, `totalOrders`, `totalCustomers`, courbes, dernières commandes (nom, courriel, montant) | la console flottante de l'assistant |
-| `admin.entreprise` | compte des paiements par carte de la page Configuration ; chiffres des étapes de la gestion sur « Mon site » | créer une clé pour les applications `admin` et `pos` |
+| `admin.accueil` | toutes les variables de ventes du tableau de bord (`totalSales`, `salesThisMonth`, `totalOrders`, `avgOrderValue`, `totalCustomers`, `totalTaxes`, `ordersTodo`, séries des courbes, `recentOrders`…) | **la page d'accueil entière** (une page de construction la remplacera) ; la console flottante de l'assistant ; toute requête `/admin?routeName=…` se classe par sa route |
+| `admin.entreprise` | `figures` et le texte `description` des étapes de la gestion (« Mon site », Configuration) ; le mot de passe du serveur d'envoi, visible dans la fiche de la configuration du courriel | l'étape `stripe.first_payment` (sa description compte les paiements par carte) ; créer une clé pour les applications `admin` et `pos` |
+| `admin.vitrine` | `candidatures` : le compte des candidatures reçues, sur l'écran des offres d'emploi | |
+| `admin.commandes-reglages` | `orders` (références des commandes d'un statut ou d'un type), `payments` (identifiants des paiements d'un type) dans les fiches détail | |
+| `admin.taxes` | `orderTaxes` : le compte des lignes de taxe des commandes | |
 | `admin.ia`, `pages.ia` | `promptExcerpt` : début des questions posées à la console de gestion | |
-| `site.reglages` | `charges` de `/api/site/shipping` (achats d'étiquettes par commande) ; `figures` de `/api/site/readiness` | `POST /api/app-keys` pour les applications `admin` et `pos` |
-| `imports` | `summary.orders`, `report.orders`, `result.cancel.kept[].reason` | les imports `kind=customers` et `kind=orders` |
+| `site.reglages` | `charges` de `/api/site/shipping` (achats d'étiquettes par commande) ; `figures` et `description` des étapes de `/api/site/readiness` | `POST /api/app-keys` pour les applications `admin` et `pos` |
+| `imports` | `summary.orders`, `summary.customers`, `summary.guests`, `summary.archived`, `report.orders`, `result.cancel.kept[].reason` | les imports `kind=customers` et `kind=orders` |
 
 Le coût d'achat et le coefficient des fiches produit PUBLIQUES, trouvés par ce même inventaire, ont été retirés pour tous par le lot
-COST-1 (`docs/boutique.md`, « Le coût ne sort pas des routes ouvertes »).
+COST-1 (`docs/boutique.md`, « Le coût ne sort pas des routes ouvertes ») : ils n'ont plus à être nommés ici.
 
 ## 6. Suite
 

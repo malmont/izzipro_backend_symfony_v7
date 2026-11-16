@@ -978,6 +978,12 @@
         "GET /api/gestion/pertes",
         "POST /api/gestion/pertes/analyse"
     ],
+    "pertes.impressions": [
+        "GET /api/gestion/pertes/impressions",
+        "GET /api/gestion/pertes/impressions/{id}",
+        "POST /api/gestion/pertes/impressions",
+        "POST /api/gestion/pertes/impressions/{id}/annuler"
+    ],
     "pertes.installation": [
         "GET /api/gestion/pertes/installation",
         "GET /api/gestion/pertes/materiel",
@@ -986,14 +992,10 @@
         "POST /api/gestion/pertes/installation/puce-test"
     ],
     "pertes.pieces": [
-        "GET /api/gestion/pertes/impressions",
-        "GET /api/gestion/pertes/impressions/{id}",
         "GET /api/gestion/pertes/pieces",
         "GET /api/gestion/pertes/pieces/synthese",
         "GET /api/gestion/pertes/pieces/{id}",
         "GET /api/gestion/pertes/puces/recherche",
-        "POST /api/gestion/pertes/impressions",
-        "POST /api/gestion/pertes/impressions/{id}/annuler",
         "POST /api/gestion/pertes/pieces",
         "POST /api/gestion/pertes/pieces/etiquettes/pdf",
         "POST /api/gestion/pertes/pieces/{id}/retirer",
