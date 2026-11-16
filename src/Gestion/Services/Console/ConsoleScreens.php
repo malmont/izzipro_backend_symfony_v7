@@ -94,6 +94,7 @@ final class ConsoleScreens
         'pertes.exercices' => ['theme' => 'accueil'], // mode exercice (lot EX-1) : constats fictifs, aucune analyse propre
         'pertes.pieces' => ['theme' => 'accueil'], // pièces et puces (lot L2-a) : aucune analyse propre
         'pertes.installation' => ['theme' => 'reglages'], // assistant d'installation et gamme de matériel (lot L2-b)
+        'pertes.boitiers' => ['theme' => 'reglages'], // boîtiers de la boutique et leurs appareils (lot L3-a) : aucune analyse propre
 
         // Codes de la première version du contrat (lot W2), gardés
         'accueil' => ['theme' => 'accueil', 'analyses' => self::HOME],

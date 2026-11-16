@@ -1,0 +1,36 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/exercices/sante?locale=fr"
+    },
+    "status": 200,
+    "body": {
+        "devices": [
+            {
+                "code": "box-2",
+                "kind": "box",
+                "label": "Boîtier simulé",
+                "zone": null,
+                "cashRegisterId": null,
+                "state": "ok",
+                "stateLabel": "En ordre",
+                "lastSeenAt": "2026-11-15T23:33:00+00:00",
+                "silentSince": null,
+                "silentSeconds": null,
+                "hint": null
+            }
+        ],
+        "summary": {
+            "ok": 1,
+            "pending": 0,
+            "down": 0,
+            "absent": 0,
+            "allOk": true,
+            "label": "Tout est en ordre"
+        },
+        "thresholdSeconds": 300,
+        "exercise": true,
+        "screen": "pertes.boitiers",
+        "checkedAt": "2026-11-15T23:33:01+00:00"
+    }
+}

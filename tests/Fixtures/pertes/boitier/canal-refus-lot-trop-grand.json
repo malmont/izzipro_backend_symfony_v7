@@ -1,0 +1,20 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/pertes/boitier/faits",
+        "headers": {
+            "X-Loss-Box": "b1.2.1794871978.0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "body": {
+            "facts": "(201 faits)"
+        }
+    },
+    "status": 422,
+    "body": {
+        "error": "FACTS_LIMIT_EXCEEDED",
+        "code": "FACTS_LIMIT_EXCEEDED",
+        "message": "Au plus 200 faits par lot.",
+        "max": 200,
+        "received": 201
+    }
+}

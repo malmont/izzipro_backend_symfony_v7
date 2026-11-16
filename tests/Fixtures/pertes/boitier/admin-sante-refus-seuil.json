@@ -1,0 +1,18 @@
+{
+    "request": {
+        "method": "PUT",
+        "path": "/api/gestion/pertes/sante/seuil?locale=fr",
+        "body": {
+            "silentAfterSeconds": 30
+        }
+    },
+    "status": 422,
+    "body": {
+        "error": "VALIDATION_FAILED",
+        "code": "VALIDATION_FAILED",
+        "message": "Entrée invalide : silentAfterSeconds (PARAM_OUT_OF_RANGE)",
+        "fields": {
+            "silentAfterSeconds": "PARAM_OUT_OF_RANGE"
+        }
+    }
+}

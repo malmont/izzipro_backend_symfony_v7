@@ -1,0 +1,55 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/boitiers?locale=fr",
+        "body": {
+            "name": "Boîtier du comptoir",
+            "place": "Près de la caisse"
+        }
+    },
+    "status": 201,
+    "body": {
+        "box": {
+            "id": 1,
+            "name": "Boîtier du comptoir",
+            "place": "Près de la caisse",
+            "status": "pending",
+            "statusLabel": "En attente de sa machine",
+            "online": false,
+            "onlineLabel": "—",
+            "lastSeenAt": null,
+            "lastSeenLabel": null,
+            "silentSeconds": null,
+            "version": null,
+            "arch": null,
+            "enrolledAt": null,
+            "clockOffsetSeconds": null,
+            "clockDoubt": false,
+            "keyHint": "IZ-BOX-XX**-****-****",
+            "exercise": false,
+            "devices": [],
+            "createdAt": "2026-11-15T23:32:58+00:00",
+            "screen": "pertes.boitiers",
+            "events": [
+                {
+                    "id": 1,
+                    "type": "BOX_CREATED",
+                    "label": "Boîtier ajouté",
+                    "at": "2026-11-15T23:32:58+00:00",
+                    "atLabel": "15/11/2026 18 h 32",
+                    "device": null,
+                    "silentSeconds": null,
+                    "byUser": true
+                }
+            ],
+            "factsReceived": 0
+        },
+        "key": "IZ-BOX-XXXX-XXXX-XXXX",
+        "enrolment": {
+            "host": "mvtest.test",
+            "key": "IZ-BOX-XXXX-XXXX-XXXX",
+            "code": "mvtest.test#IZ-BOX-XXXX-XXXX-XXXX",
+            "text": "Sur le boîtier, lancez la commande d'inscription et donnez l'adresse du site puis cette clé. La clé n'est montrée qu'une fois : notez-la maintenant."
+        }
+    }
+}

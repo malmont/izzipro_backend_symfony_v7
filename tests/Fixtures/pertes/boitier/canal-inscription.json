@@ -1,0 +1,39 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/pertes/boitier/inscription",
+        "body": {
+            "key": "IZ-BOX-XXXX-XXXX-XXXX",
+            "machine": "machine-d-exemple-0123456789abcdef",
+            "version": "1.0.0",
+            "arch": "amd64"
+        }
+    },
+    "status": 200,
+    "body": {
+        "box": {
+            "id": 1
+        },
+        "token": "b1.2.1794871978.0000000000000000000000000000000000000000000000000000000000000000",
+        "expiresAt": "2026-11-16T23:32:58+00:00",
+        "serverTime": "2026-11-15T23:32:58+00:00",
+        "settings": {
+            "heartbeatSeconds": 60,
+            "facts": {
+                "types": [
+                    "SPOT_CHECK",
+                    "ZONE_SEEN"
+                ],
+                "maxBatch": 200
+            },
+            "zones": [
+                "stockroom",
+                "stockroom_door",
+                "floor",
+                "counter",
+                "exit"
+            ],
+            "devices": []
+        }
+    }
+}

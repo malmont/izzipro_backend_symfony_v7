@@ -20,6 +20,9 @@ class LossPieceRepository extends EntityRepository
     /** Verrou consultatif des pièces d'exercice : création et effacement ne se croisent pas (comme les constats d'exercice) */
     public const EXERCISE_LOCK = 7461081;
 
+    /** Lectures par un boîtier montrées dans la fiche d'une pièce, au plus (les dernières) ; les faits de sa vie y sont toujours tous */
+    public const EVENTS_SHOWN = 200;
+
     /** Suite des numéros des vraies pièces, et celle des pièces d'exercice (un exercice ne creuse pas de trou dans la première) */
     private const NUMBERS = 'loss_piece_number_seq';
     private const EXERCISE_NUMBERS = 'loss_piece_exercise_number_seq';
@@ -210,7 +213,15 @@ class LossPieceRepository extends EntityRepository
     /** @return list<array<string, mixed>> les faits d'une pièce (les siens et ceux de ses puces), du plus ancien au plus récent */
     public function eventsOf(int $pieceId): array
     {
-        return $this->db()->fetchAllAssociative('SELECT id, type, occurred_at, user_id, piece_id, tag_id, source, data FROM loss_piece_event WHERE piece_id = ? ORDER BY id', [$pieceId]);
+        // Toute la vie de la pièce (créée, puce posée, retirée…), et ses 200 dernières LECTURES seulement : depuis le lot L3-a un
+        // lecteur de boîtier peut relire une puce des milliers de fois, la création et la pose ne doivent pas sortir de la fiche
+        $columns = 'id, type, occurred_at, user_id, piece_id, tag_id, source, data';
+
+        return $this->db()->fetchAllAssociative(
+            "SELECT * FROM ((SELECT $columns FROM loss_piece_event WHERE piece_id = :piece AND type NOT IN (:reads))"
+            . " UNION ALL (SELECT $columns FROM loss_piece_event WHERE piece_id = :piece AND type IN (:reads) ORDER BY id DESC LIMIT " . self::EVENTS_SHOWN . ')) e ORDER BY id',
+            ['piece' => $pieceId, 'reads' => \App\LossPrevention\Entity\LossPieceEvent::FROM_BOX], ['reads' => ArrayParameterType::STRING]
+        );
     }
 
     /**

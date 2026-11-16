@@ -37,6 +37,7 @@ final class AdminSpaceLinks
         'pertes.exercices' => [],
         'pertes.pieces' => [],
         'pertes.installation' => [],
+        'pertes.boitiers' => [],
         // Assistance (`docs/assistance.md`) : `assistance` et `assistance-reglages` sont les codes déjà émis par « Ma journée » et par le
         // cheminement, gardés tels quels ; une demande s'ouvre par `assistance.demande`
         'assistance' => ['params' => ['status' => self::TICKET_STATUSES, 'overdue' => 'flag', 'awaiting' => 'flag']],

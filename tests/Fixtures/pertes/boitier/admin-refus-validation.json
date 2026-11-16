@@ -1,0 +1,19 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/boitiers?locale=fr",
+        "body": {
+            "place": 12
+        }
+    },
+    "status": 422,
+    "body": {
+        "error": "VALIDATION_FAILED",
+        "code": "VALIDATION_FAILED",
+        "message": "Entrée invalide : name (REQUIRED), place (MUST_BE_STRING)",
+        "fields": {
+            "name": "REQUIRED",
+            "place": "MUST_BE_STRING"
+        }
+    }
+}

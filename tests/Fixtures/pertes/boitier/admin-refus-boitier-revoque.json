@@ -1,0 +1,15 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/boitiers/1/cle?locale=fr",
+        "body": {
+            "confirm": true
+        }
+    },
+    "status": 409,
+    "body": {
+        "error": "BOX_REVOKED",
+        "code": "BOX_REVOKED",
+        "message": "Ce boîtier est révoqué : ajoutez-en un autre."
+    }
+}

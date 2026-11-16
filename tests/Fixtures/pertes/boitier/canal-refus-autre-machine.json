@@ -1,0 +1,18 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/pertes/boitier/inscription",
+        "body": {
+            "machine": "une-autre-machine-0123456789",
+            "key": "IZ-BOX-XXXX-XXXX-XXXX",
+            "version": "1.0.0",
+            "arch": "amd64"
+        }
+    },
+    "status": 409,
+    "body": {
+        "error": "BOX_KEY_ALREADY_ENROLLED",
+        "code": "BOX_KEY_ALREADY_ENROLLED",
+        "message": "Cette clé est déjà liée à une autre machine : l'administrateur doit la remettre à zéro."
+    }
+}

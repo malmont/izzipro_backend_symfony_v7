@@ -1,0 +1,16 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/boitiers/1/revoquer?locale=fr",
+        "body": []
+    },
+    "status": 422,
+    "body": {
+        "error": "VALIDATION_FAILED",
+        "code": "VALIDATION_FAILED",
+        "message": "Entrée invalide : confirm (REQUIRED)",
+        "fields": {
+            "confirm": "REQUIRED"
+        }
+    }
+}

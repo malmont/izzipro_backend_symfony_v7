@@ -1,0 +1,45 @@
+{
+    "request": {
+        "method": "PUT",
+        "path": "/api/gestion/pertes/boitiers/1?locale=fr",
+        "body": {
+            "name": "Boîtier de la caisse 1"
+        }
+    },
+    "status": 200,
+    "body": {
+        "id": 1,
+        "name": "Boîtier de la caisse 1",
+        "place": "Près de la caisse",
+        "status": "pending",
+        "statusLabel": "En attente de sa machine",
+        "online": false,
+        "onlineLabel": "—",
+        "lastSeenAt": null,
+        "lastSeenLabel": null,
+        "silentSeconds": null,
+        "version": null,
+        "arch": null,
+        "enrolledAt": null,
+        "clockOffsetSeconds": null,
+        "clockDoubt": false,
+        "keyHint": "IZ-BOX-XX**-****-****",
+        "exercise": false,
+        "devices": [],
+        "createdAt": "2026-11-15T23:32:58+00:00",
+        "screen": "pertes.boitiers",
+        "events": [
+            {
+                "id": 1,
+                "type": "BOX_CREATED",
+                "label": "Boîtier ajouté",
+                "at": "2026-11-15T23:32:58+00:00",
+                "atLabel": "15/11/2026 18 h 32",
+                "device": null,
+                "silentSeconds": null,
+                "byUser": true
+            }
+        ],
+        "factsReceived": 0
+    }
+}

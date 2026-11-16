@@ -1,0 +1,21 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/pertes/boitier/faits",
+        "headers": {
+            "X-Loss-Box": "b1.2.1794871978.0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "body": {
+            "facts": []
+        }
+    },
+    "status": 422,
+    "body": {
+        "error": "VALIDATION_FAILED",
+        "code": "VALIDATION_FAILED",
+        "message": "Lot de faits invalide.",
+        "fields": {
+            "facts": "MUST_BE_LIST"
+        }
+    }
+}

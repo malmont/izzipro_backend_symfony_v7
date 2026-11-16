@@ -26,7 +26,11 @@ use App\Services\TenantEntityManagerProvider;
  *   posée sur une pièce, avec la technologie donnée ce jour-là (une lecture d'essai ne fige rien).
  * - `$exercise` : le même assistant sur des puces simulées, ouvert sans le droit du module ; ses faits s'effacent avec les pièces
  *   d'exercice et n'avancent jamais l'installation réelle.
- * Les étapes du boîtier (L3) et des antennes (L4) s'ajouteront à `STEPS`.
+ * - Étapes facultatives (`OPTIONAL`, lot L3-a) : le boîtier. Une boutique peut poser et lire ses puces sans boîtier ; ces étapes
+ *   sont donc rendues à part (`optionalSteps`), elles ne comptent ni dans l'avancement ni dans « terminé », et aucune étape ne
+ *   dépend d'elles. `box` est faite quand un boîtier est inscrit et donne signe de vie (un boîtier simulé, en exercice) : elle
+ *   reprend l'état du boîtier au tableau de santé (`LossHealthService`) et dit quoi essayer quand il n'est pas en ordre.
+ * Les étapes du tapis de comptoir (L3-b) et des antennes (L4) s'ajouteront de la même façon.
  */
 class LossInstallationService
 {
@@ -38,6 +42,8 @@ class LossInstallationService
         'test_tag' => LossPieceEvent::TEST_TAG_READ,
         'first_piece' => null, // prouvée par l'état : une pièce porte une puce
     ];
+    /** Étapes facultatives, rendues à part : elles ne comptent pas dans l'avancement */
+    public const OPTIONAL = ['box'];
     /** Code imprimé sur l'étiquette d'essai : sous le préfixe réservé aux documents de la caisse, il ne peut désigner aucun article */
     public const TEST_BARCODE = 'IZ-ESSAI-ETIQUETTE';
 
@@ -47,13 +53,14 @@ class LossInstallationService
         private readonly CatalogBarcodeService $barcodes,
         private readonly BarcodeLabelPrinter $printer,
         private readonly LossTexts $texts,
+        private readonly LossHealthService $health,
     ) {
     }
 
     /**
      * L'assistant : ses étapes et où l'on en est.
      *
-     * @return array{steps: list<array<string, mixed>>, progress: array{done: int, total: int}, complete: bool, exercise: bool, screen: string}
+     * @return array{steps: list<array<string, mixed>>, optionalSteps: list<array<string, mixed>>, progress: array{done: int, total: int}, complete: bool, exercise: bool, screen: string}
      */
     public function steps(string $locale, bool $exercise): array
     {
@@ -81,7 +88,22 @@ class LossInstallationService
             ];
         }
 
-        return ['steps' => $steps, 'progress' => ['done' => count(array_filter($done)), 'total' => count($done)], 'complete' => !in_array(false, $done, true),
+        $optional = [];
+        foreach ($this->optionalStates($locale, $exercise) as $code => $device) {
+            $optional[] = [
+                'code' => $code,
+                'title' => $this->texts->t("installation.steps.$code.title", $locale),
+                'text' => $this->texts->t("installation.steps.$code.text", $locale),
+                'image' => 'pertes/installation/' . $code,
+                'status' => $device['state'] === 'ok' ? 'done' : 'todo', // jamais « en cours » : rien n'oblige à la faire
+                'verify' => ['kind' => 'data', 'label' => $this->texts->t("installation.steps.$code.verify", $locale)],
+                // l'état de l'appareil de l'étape, celui du tableau de santé, et quoi essayer s'il n'est pas en ordre
+                'state' => $device['state'],
+                'hint' => $device['hint'],
+            ];
+        }
+
+        return ['steps' => $steps, 'optionalSteps' => $optional, 'progress' => ['done' => count(array_filter($done)), 'total' => count($done)], 'complete' => !in_array(false, $done, true),
             'exercise' => $exercise, 'screen' => self::SCREEN];
     }
 
@@ -92,13 +114,15 @@ class LossInstallationService
      */
     public function verify(string $code, string $locale, bool $exercise): array
     {
-        if (!array_key_exists($code, self::STEPS)) {
+        if (!array_key_exists($code, self::STEPS) && !in_array($code, self::OPTIONAL, true)) {
             throw new GestionConflictException('STEP_NOT_FOUND', $this->texts->t('installation.error.STEP_NOT_FOUND', $locale), 404);
         }
-        $step = array_values(array_filter($this->steps($locale, $exercise)['steps'], static fn (array $s): bool => $s['code'] === $code))[0];
+        $installation = $this->steps($locale, $exercise);
+        $step = array_values(array_filter([...$installation['steps'], ...$installation['optionalSteps']], static fn (array $s): bool => $s['code'] === $code))[0];
         $verified = $step['status'] === 'done';
 
-        return ['code' => $code, 'verified' => $verified, 'hint' => $verified ? null : $this->texts->t("installation.steps.$code.hint", $locale)];
+        // une étape d'appareil dit quoi essayer d'après l'état de l'appareil (câble, alimentation, silence depuis N minutes)
+        return ['code' => $code, 'verified' => $verified, 'hint' => $verified ? null : ($step['hint'] ?? $this->texts->t("installation.steps.$code.hint", $locale))];
     }
 
     /**
@@ -206,6 +230,17 @@ class LossInstallationService
         $done['first_piece'] = $repository->associatedTagExists($exercise);
 
         return $done;
+    }
+
+    /**
+     * L'état des appareils des étapes facultatives, lu au tableau de santé : `box` est faite quand un boîtier de ce genre est
+     * inscrit ET donne signe de vie ; sinon l'étape dit quoi essayer.
+     *
+     * @return array<string, array{state: string, hint: ?string}>
+     */
+    private function optionalStates(string $locale, bool $exercise): array
+    {
+        return ['box' => $this->health->boxState($locale, $exercise)];
     }
 
     /**

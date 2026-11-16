@@ -52,6 +52,7 @@ valeurs** d'une liste fermée séparées par des virgules.
 | `pertes.exercices` | aucun | mode exercice (lot EX-1) |
 | `pertes.pieces` | aucun | pièces et puces (lot L2-a) |
 | `pertes.installation` | aucun | assistant d'installation des étiquettes à puce et gamme de matériel (lot L2-b) |
+| `pertes.boitiers` | aucun | boîtiers de la boutique et leurs appareils (lot L3-a) |
 | `assistance` | `status` (une valeur : `new`, `open`, `waiting_customer`, `closed`) ; `overdue` (drapeau) ; `awaiting` (drapeau) | boîte des demandes |
 | `assistance.demande` | `id` (entier, **obligatoire**) | fiche d'une demande |
 | `assistance-reglages` | aucun | réglages de l'Assistance |

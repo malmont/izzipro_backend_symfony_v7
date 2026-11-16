@@ -17,22 +17,22 @@
                 "variantId": 25,
                 "productId": 16,
                 "variantMissing": false,
-                "name": "Sac de plage (exemple AA72C4)",
+                "name": "Sac de plage (exemple 0A5E69)",
                 "variantLabel": null,
-                "barcode": "ABCDEF03AA72C4AA",
+                "barcode": "ABCDEF030A5E69AA",
                 "barcodeOf": "variant",
                 "symbology": "code128",
                 "tags": [
                     {
                         "id": 6,
-                        "identifier": "SIM-A5867D744F22",
+                        "identifier": "SIM-54374BF29591",
                         "technology": "simulated",
                         "technologyLabel": "Puce simulée",
                         "status": "associated",
                         "statusLabel": "Posée",
                         "pieceId": 4,
                         "exercise": true,
-                        "associatedAt": "2026-11-15T19:03:23+00:00",
+                        "associatedAt": "2026-11-15T22:54:10+00:00",
                         "retiredAt": null,
                         "retiredReason": null,
                         "retiredReasonLabel": null
@@ -42,7 +42,7 @@
                 "commandeId": null,
                 "retiredReason": null,
                 "retiredReasonLabel": null,
-                "createdAt": "2026-11-15T19:03:22+00:00",
+                "createdAt": "2026-11-15T22:54:10+00:00",
                 "retiredAt": null
             }
         ],

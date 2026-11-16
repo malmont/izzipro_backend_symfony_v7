@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (570)
+## Boutique et commun (589)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -467,9 +467,20 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/notifications/preferences` | ROLE_ADMIN | `Gestion\Controller\GestionNotificationController::preferences` |
 | PATCH | `/api/gestion/notifications/preferences` | ROLE_ADMIN | `Gestion\Controller\GestionNotificationController::updatePreferences` |
 | POST | `/api/gestion/pertes/analyse` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::analyse` |
+| POST | `/api/gestion/pertes/boitiers/{id}/cle` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::resetKey` |
+| POST | `/api/gestion/pertes/boitiers/{id}/revoquer` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::revoke` |
+| GET | `/api/gestion/pertes/boitiers/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::sheet` |
+| PUT | `/api/gestion/pertes/boitiers/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::update` |
+| GET | `/api/gestion/pertes/boitiers` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::list` |
+| POST | `/api/gestion/pertes/boitiers` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::create` |
 | PUT | `/api/gestion/pertes/constats/{id}/decision` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::decide` |
 | GET | `/api/gestion/pertes/constats/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::finding` |
 | GET | `/api/gestion/pertes/constats` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::findings` |
+| POST | `/api/gestion/pertes/exercices/boitiers/{id}/scenarios` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::exercisePlay` |
+| GET | `/api/gestion/pertes/exercices/boitiers/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::exerciseSheet` |
+| DELETE | `/api/gestion/pertes/exercices/boitiers` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::exerciseDelete` |
+| GET | `/api/gestion/pertes/exercices/boitiers` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::exerciseList` |
+| POST | `/api/gestion/pertes/exercices/boitiers` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::exerciseCreate` |
 | POST | `/api/gestion/pertes/exercices/installation/etapes/{code}/verifier` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::exerciseVerify` |
 | POST | `/api/gestion/pertes/exercices/installation/etiquette-test` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::exerciseTestLabel` |
 | POST | `/api/gestion/pertes/exercices/installation/puce-test` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::exerciseTestRead` |
@@ -484,6 +495,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/gestion/pertes/exercices/puces/associer` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::associateExercise` |
 | GET | `/api/gestion/pertes/exercices/puces/recherche` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::searchExercise` |
 | POST | `/api/gestion/pertes/exercices/puces/{id}/retirer` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::retireExerciseTag` |
+| GET | `/api/gestion/pertes/exercices/sante` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::exerciseHealth` |
 | PUT | `/api/gestion/pertes/exercices/{id}/decision` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::decideExercise` |
 | GET | `/api/gestion/pertes/exercices/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::exercise` |
 | DELETE | `/api/gestion/pertes/exercices` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::deleteExercises` |
@@ -508,6 +520,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/gestion/pertes/regles/apercu` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::previewRule` |
 | PUT | `/api/gestion/pertes/regles/{code}` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::putRule` |
 | GET | `/api/gestion/pertes/regles` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::rules` |
+| PUT | `/api/gestion/pertes/sante/seuil` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::healthThreshold` |
+| GET | `/api/gestion/pertes/sante` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::health` |
 | GET | `/api/gestion/pertes` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::summary` |
 | POST | `/api/gestion/preparation/avis` | ROLE_ADMIN | `Gestion\Controller\GestionPreparationController::advise` |
 | GET | `/api/gestion/preparation/estimations` | ROLE_ADMIN | `Gestion\Controller\GestionPreparationController::estimations` |
@@ -603,6 +617,11 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/periodes/{id}/simulation` | ROLE_ADMIN | `Gestion\Controller\GestionSimulationController::simulate` |
 | PATCH | `/api/periodes/{id}` | ROLE_ADMIN | `Gestion\Controller\PeriodeController::patch` |
 | GET | `/api/periodes` | ROLE_ADMIN | `Gestion\Controller\PeriodeController::list` |
+| POST | `/api/pertes/boitier/faits` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::facts` |
+| POST | `/api/pertes/boitier/inscription` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::enrol` |
+| POST | `/api/pertes/boitier/jeton` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::renew` |
+| GET | `/api/pertes/boitier/reglages` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::settings` |
+| POST | `/api/pertes/boitier/signe-de-vie` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::heartbeat` |
 | PUT | `/api/platform/agencies/{id}/members` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformAgenciesController::member` |
 | POST | `/api/platform/agencies/{id}/resume` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformAgenciesController::resume` |
 | DELETE | `/api/platform/agencies/{id}/sites/{tenantCode}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformAgenciesController::detach` |

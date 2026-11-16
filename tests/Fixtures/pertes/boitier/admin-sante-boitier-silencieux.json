@@ -1,0 +1,36 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/sante?locale=fr"
+    },
+    "status": 200,
+    "body": {
+        "devices": [
+            {
+                "code": "box-1",
+                "kind": "box",
+                "label": "Boîtier de la caisse 1",
+                "zone": null,
+                "cashRegisterId": null,
+                "state": "down",
+                "stateLabel": "Silencieux",
+                "lastSeenAt": "2026-11-15T23:21:00+00:00",
+                "silentSince": "2026-11-15T23:21:00+00:00",
+                "silentSeconds": 719,
+                "hint": "Silencieux depuis 11 min. Vérifiez son alimentation, son câble réseau et la connexion Internet de la boutique."
+            }
+        ],
+        "summary": {
+            "ok": 0,
+            "pending": 0,
+            "down": 1,
+            "absent": 0,
+            "allOk": false,
+            "label": "1 appareil à vérifier"
+        },
+        "thresholdSeconds": 300,
+        "exercise": false,
+        "screen": "pertes.boitiers",
+        "checkedAt": "2026-11-15T23:32:59+00:00"
+    }
+}

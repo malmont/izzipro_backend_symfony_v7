@@ -303,6 +303,8 @@ pieces:
         PIECE_RETIRED: Pièce retirée
         TEST_TAG_READ: Puce lue à l'essai
         TEST_LABEL_PRINTED: Étiquette d'essai produite
+        SPOT_CHECK: Lue par le lecteur à main du boîtier
+        ZONE_SEEN: Lue dans une zone
     error:
         VARIANT_NOT_FOUND: 'Variante introuvable.'
         PIECE_NOT_FOUND: 'Pièce introuvable.'
@@ -359,6 +361,11 @@ installation:
             text: 'Lisez le code-barres d''un article, puis sa puce : la pièce est créée et porte sa puce.'
             verify: Vérifier
             hint: 'Aucune pièce ne porte encore de puce. Lisez le code-barres d''un article, puis une puce libre.'
+        box:
+            title: Brancher un boîtier
+            text: 'Facultatif. Le boîtier relie à la plateforme le tapis de comptoir, l''imprimante à puce et la caméra. Ajoutez-le dans « Boîtiers », puis inscrivez sa machine avec la clé.'
+            verify: Vérifier
+            hint: 'Aucun boîtier n''est inscrit. Ajoutez un boîtier, puis lancez sur sa machine la commande d''inscription avec l''adresse du site et la clé.'
     hint:
         decimal: 'Le lecteur semble rendre un numéro en chiffres seulement. Réglez-le pour qu''il rende l''identifiant en hexadécimal (chiffres et lettres de A à F).'
         form: 'Cette lecture contient autre chose que des chiffres et des lettres de A à F : ce n''est pas une puce. Vérifiez que le curseur est dans le champ de la puce.'
@@ -430,3 +437,91 @@ hardware:
                 what: 'Les mêmes puces autocollantes, en NFC ou en UHF selon votre lecteur.'
                 allows: 'Commencer avec quelques dizaines de puces.'
                 limits: 'Deux gestes : coller, puis lire.'
+# Boîtiers de la boutique (lot L3-a, 15/11/2026, docs/prevention-pertes.md § 16)
+boxes:
+    status:
+        pending: En attente de sa machine
+        active: Inscrit
+        revoked: Révoqué
+    online:
+        online: En ligne
+        silent: Silencieux
+        none: '—'
+    device:
+        counter_mat: Tapis de comptoir
+        reader: Lecteur de puces
+        printer: Imprimante à puce
+        camera: Caméra
+    deviceStatus:
+        ok: En marche
+        down: En panne ou débranché
+    zone:
+        stockroom: Réserve
+        stockroom_door: Porte de la réserve
+        floor: Rayon
+        counter: Comptoir
+        exit: Sortie
+    event:
+        BOX_CREATED: Boîtier ajouté
+        BOX_ENROLLED: Machine inscrite
+        BOX_KEY_RESET: Clé remise à zéro
+        BOX_REVOKED: Boîtier révoqué
+        BOX_BACK: Boîtier revenu après un silence
+        DEVICE_SEEN: Appareil vu pour la première fois
+        SOURCE_DOWN: Appareil en panne ou débranché
+        SOURCE_UP: Appareil revenu
+    enrolment:
+        text: 'Sur le boîtier, lancez la commande d''inscription et donnez l''adresse du site puis cette clé. La clé n''est montrée qu''une fois : notez-la maintenant.'
+    exercise:
+        name: Boîtier simulé
+        place: Exercice
+    scenario:
+        heartbeat:
+            label: Signe de vie
+            text: 'Le boîtier dit qu''il est là : il repasse « en ligne ».'
+        network_cut:
+            label: Coupure du réseau
+            text: 'Le boîtier revient après deux heures sans réseau : un fait dit le trou.'
+        device_down:
+            label: Lecteur débranché
+            text: 'Le lecteur de la sortie tombe en panne : il est noté, une seule fois.'
+        device_up:
+            label: Lecteur rebranché
+            text: 'Le lecteur de la sortie revient.'
+        spot_check:
+            label: Contrôle au lecteur à main
+            text: 'Le lecteur à main lit jusqu''à trois pièces d''exercice : chaque lecture s''ajoute à l''histoire de la pièce.'
+        zone_exit:
+            label: Lecture à la sortie
+            text: 'Le lecteur de la sortie lit une pièce d''exercice.'
+    error:
+        BOX_NOT_FOUND: 'Boîtier introuvable.'
+        BOX_REVOKED: 'Ce boîtier est révoqué : ajoutez-en un autre.'
+        BOX_LIMIT_REACHED: 'Ce site a déjà %limit% boîtiers : révoquez ceux qui ne servent plus.'
+        EXERCISE_LIMIT_REACHED: 'Vous avez déjà %limit% boîtiers simulés : effacez-les avant d''en créer d''autres.'
+        EXERCISE_NO_PIECE: 'Aucune pièce d''exercice ne porte de puce : posez d''abord une puce simulée sur une pièce d''exercice.'
+# Tableau de santé du matériel (lot L3-a, 15/11/2026, docs/prevention-pertes.md § 16.13)
+health:
+    kind:
+        box: Boîtier
+    state:
+        ok: En ordre
+        pending: En attente
+        down: Silencieux
+        absent: Pas installé
+    summary:
+        all_ok: Tout est en ordre
+        none: Aucun appareil installé
+        to_check_one: '%count% appareil à vérifier'
+        to_check_many: '%count% appareils à vérifier'
+    duration:
+        minutes: '%count% min'
+        hours: '%count% h'
+        days: '%count% j'
+    hint:
+        box:
+            absent: 'Aucun boîtier n''est installé. Ajoutez un boîtier, puis inscrivez sa machine avec la clé.'
+            absent_exercise: 'Aucun boîtier simulé. Créez-en un pour voir le tableau vivre, sans aucun matériel.'
+            pending: 'Ce boîtier attend sa machine. Lancez sur elle la commande d''inscription, avec l''adresse du site et la clé du boîtier.'
+            down: 'Silencieux depuis %duration%. Vérifiez son alimentation, son câble réseau et la connexion Internet de la boutique.'
+            down_exercise: 'Silencieux depuis %duration%. Jouez le scénario « Signe de vie » pour le faire revenir.'
