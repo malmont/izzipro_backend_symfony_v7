@@ -208,7 +208,9 @@ class AdviceApiTest extends WebTestCase
         $this->assertSame(2, $r1['manualRefreshesLeft']);
         $this->request('POST', '/api/gestion/conseils/actualiser', ['periodId' => $pid]);
         $this->assertSame([409, 'ADVICE_GENERATING'], [$this->status(), $this->body()['error']]);
-        FakeLandingAiClient::$queue[] = $this->aiResponse(['headline' => 'Total des frais : 25 $.', 'advices' => [['id' => $a['id'], 'title' => 'Frais', 'text' => 'Prévu 10 $ et dépensé 15 $, soit 25 $ en tout.']], 'order' => []]);
+        // (le chiffre inventé ne doit jamais tomber sur un nombre que le serveur fournit : « 25 » était aussi le jour du début de la
+        // période le 16/11/2026, et la synthèse passait ce jour-là)
+        FakeLandingAiClient::$queue[] = $this->aiResponse(['headline' => 'Total des frais : 7 919 $.', 'advices' => [['id' => $a['id'], 'title' => 'Frais', 'text' => 'Prévu 10 $ et dépensé 15 $, soit 7 919 $ en tout.']], 'order' => []]);
         $this->runWorker($r1['runId']);
         $this->assertSame(2, (int) $conn->fetchOne('SELECT rejected FROM gestion_advice_run WHERE id = ?', [$r1['runId']]), 'texte et synthèse rejetés');
         $l3 = $this->get("/api/gestion/conseils?periodId=$pid");
