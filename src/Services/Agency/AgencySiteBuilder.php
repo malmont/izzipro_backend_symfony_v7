@@ -77,7 +77,7 @@ class AgencySiteBuilder
         $this->rights->project($code);
         // Lot CONSTRUCTION : l'état de naissance se pose ici, une fois les modules en place (ils sont posés un par un). Avec sa
         // boutique, le site neuf est fermé en entier jusqu'à son ouverture ; sans elle, il est en service.
-        if (!$this->storefront->born($code)) {
+        if (!$this->storefront->born($code, in_array('module.boutique', $features, true))) {
             $warnings[] = 'STOREFRONT_STATE_NOT_SET';
         }
 

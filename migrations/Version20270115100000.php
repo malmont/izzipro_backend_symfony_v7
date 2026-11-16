@@ -18,11 +18,14 @@ final class Version20270115100000 extends AbstractMigration
 {
     public const STATEMENTS = [
         "ALTER TABLE entreprise ADD COLUMN IF NOT EXISTS storefront_state VARCHAR(12) NOT NULL DEFAULT 'open'",
-        'ALTER TABLE entreprise ADD COLUMN IF NOT EXISTS storefront_opened_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL',
+        // l'heure d'ouverture de la boutique, posée avec la colonne et UNE FOIS : une boutique déjà active sur un site existant est
+        // tenue pour « déjà ouverte ». Rejouée plus tard, cette instruction ne touche plus rien : sur un site en service, une
+        // boutique active sans heure d'ouverture est une boutique EN CONSTRUCTION (`StorefrontService::closureOf`), à ne pas ouvrir.
+        "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'entreprise' AND column_name = 'storefront_opened_at') THEN"
+        . ' ALTER TABLE entreprise ADD COLUMN storefront_opened_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL;'
+        . " UPDATE entreprise SET storefront_opened_at = (NOW() AT TIME ZONE 'UTC') WHERE is_boutique_active; END IF; END \$\$",
         'ALTER TABLE entreprise ADD COLUMN IF NOT EXISTS storefront_preview_hash VARCHAR(64) DEFAULT NULL',
         'ALTER TABLE entreprise ADD COLUMN IF NOT EXISTS storefront_preview_expires_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL',
-        // une boutique déjà active sur un site existant est tenue pour « déjà ouverte » : son module éteint puis rallumé ne la referme pas
-        "UPDATE entreprise SET storefront_opened_at = (NOW() AT TIME ZONE 'UTC') WHERE storefront_opened_at IS NULL AND storefront_state = 'open' AND is_boutique_active",
     ];
 
     public function getDescription(): string

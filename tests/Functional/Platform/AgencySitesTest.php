@@ -389,6 +389,18 @@ class AgencySitesTest extends WebTestCase
         $opened = $public();
         $this->assertSame(['open', null, 200], [$opened[0], $opened[1], $opened[3]], 'ouvert par le geste, et par lui seul');
         $this->assertNotSame(403, $opened[2]);
+
+        // Un site créé SANS boutique n'est jamais bloqué : il est en service dès sa naissance (état posé à la fin de la fabrication)
+        $plain = 'agtest-v' . $this->tag;
+        $asked = (int) $this->json('POST', '/api/agency/sites', ['code' => $plain, 'name' => 'Vitrine seule', 'adminEmail' => "vitrine-{$this->tag}@example.invalid", 'modules' => ['module.landing']], 'manager', 202)['request']['id'];
+        $this->service()->process($asked);
+        $built = $this->json('GET', "/api/agency/site-requests/$asked", null, 'manager', 200)['request'];
+        $this->assertSame('ready', $built['status']);
+        $born = $this->pdo(AgencySiteCode::database($plain))->query('SELECT storefront_state, is_boutique_active, storefront_opened_at FROM entreprise')->fetch(\PDO::FETCH_NUM);
+        $this->assertSame(['open', false, null], [$born[0], (bool) $born[1], $born[2]]);
+        $seen = json_decode((string) $this->api('GET', '/api/site/storefront', null, null, (string) $built['site']['host'])->getContent(), true);
+        $this->assertSame(['open', null], [$seen['state'], $seen['scope']]);
+        $this->assertNotSame(403, $this->api('GET', '/api/landingpage-settings', null, null, (string) $built['site']['host'])->getStatusCode());
     }
 
     public function testLimitsFailuresAndInterruptedBuildsNeverLeaveAHalfMadeSiteNorDropAnExistingDatabase(): void

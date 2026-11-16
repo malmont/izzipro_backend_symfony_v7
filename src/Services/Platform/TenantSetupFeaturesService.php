@@ -84,7 +84,7 @@ class TenantSetupFeaturesService
         $this->entitlements->project($tenantCode);
         // Lot CONSTRUCTION (16/11/2026) : l'état de naissance du site, une fois ses modules posés : fermé en entier avec sa boutique,
         // en service s'il naît sans elle (`docs/boutique-en-construction.md` § 1)
-        if ($this->storefront?->born($tenantCode) === false) {
+        if ($this->storefront?->born($tenantCode, in_array('module.boutique', $features, true)) === false) {
             $result['errors'][] = 'état de naissance du site non posé : le site reste fermé au public jusqu\'à son ouverture';
         }
 

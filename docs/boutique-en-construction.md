@@ -44,12 +44,16 @@ l'extinction d'un module, donc rien à rater entre deux écritures.
 Qui écrit l'état :
 
 - **Site existant** : la colonne naît à `open` ; la migration pose l'heure d'ouverture sur toute boutique ACTIVE ce jour-là (tenue
-  pour « déjà ouverte »). Aucun site existant n'est fermé par la migration.
+  pour « déjà ouverte »), AVEC la colonne et une seule fois : rejouée, elle ne touche plus rien (une boutique active sans heure
+  d'ouverture est ensuite une boutique en construction, à ne pas ouvrir). Aucun site existant n'est fermé par la migration ; le
+  script s'arrête si une boutique active d'un site existant reste sans heure.
 - **Site neuf** : `TenantConnectionManager::createTenant` règle la valeur par défaut de la colonne, dans la base de CE site, sur
   `construction` : sa fiche, quel que soit le chemin qui la crée, naît fermée en entier. Une fois ses modules posés, sa fabrication
   pose son état de naissance (`StorefrontService::born`, appelé par `AgencySiteBuilder` et par `TenantSetupFeaturesService`) :
-  `construction` avec sa boutique, `open` s'il naît SANS elle (jamais bloqué).
-- **Ouvrir** (`open`) : état `open` ; l'heure d'ouverture n'est posée que si la boutique est active (c'est l'heure de la BOUTIQUE).
+  `construction` avec sa boutique, `open` s'il naît SANS elle (jamais bloqué). Si la boutique était demandée mais que son droit
+  n'a pas pu être posé, le site reste `construction` : jamais servi par défaut.
+- **Ouvrir** (`open`) : état `open` ; l'heure d'ouverture n'est posée que si la boutique est active (c'est l'heure de la BOUTIQUE),
+  d'après la boutique lue par la liste de contrôle, celle dont le paiement vient d'être vérifié.
   Un site ouvert sans boutique garde donc une heure vide : si la boutique lui vient plus tard, elle naît en construction.
 - **Refermer** (`close`) : état `boutique`, pour une boutique ouverte seulement ; le site vitrine reste servi. Sans module Boutique,
   ou déjà en construction : rien n'est écrit.
@@ -103,6 +107,10 @@ Pour une route fermée :
 
 À savoir :
 
+- `/api/reservations` sert deux choses : le formulaire de réservation du site vitrine et les rendez-vous de Mémoires Vivantes. Une
+  demande qui porte un livre (`book_id`, dans l'adresse ou le corps), la liste des rendez-vous du compte et leur confirmation ne
+  sont jamais fermées (`StorefrontGateSubscriber::memoiresAppointment`) ; les services proposés, les créneaux et la réservation
+  sans livre suivent le site vitrine.
 - `GET /api/entreprise/{id}` : dans l'étendue `site`, le visiteur et le compte client la reçoivent **réduite** à l'identité légale,
   aux textes légaux, au logo et aux indicateurs des applications (`StorefrontService::LEGAL_FIELDS`) ; même forme, le reste vide.
   Dans l'étendue `shop`, elle est entière : le site est en service. Le profil d'application (`/api/app-profile/{app}`) cache de même

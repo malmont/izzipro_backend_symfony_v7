@@ -34,6 +34,7 @@ class StorefrontTest extends WebTestCase
         $this->client = static::createClient();
         $db = $this->db();
         $this->saved = ['flags' => $db->fetchAssociative('SELECT ' . implode(', ', array_values(\App\Services\FeatureAccess\FeatureCatalog::GOVERNED)) . ' FROM entreprise ORDER BY id LIMIT 1') ?: [],
+            'website' => $db->fetchOne('SELECT website FROM entreprise ORDER BY id LIMIT 1'),
             'stripe' => $db->fetchAllAssociative('SELECT id, account_id, live_account_id, is_active FROM stripe_config')];
         $this->reset();
     }
@@ -42,6 +43,7 @@ class StorefrontTest extends WebTestCase
     {
         $this->reset();
         $db = $this->db();
+        $db->executeStatement('UPDATE entreprise SET website = ?', [$this->saved['website'] ?: null]);
         foreach ($this->saved['flags'] as $column => $value) {
             $db->executeStatement("UPDATE entreprise SET $column = ?", [in_array($value, [true, 't', 'true', 1, '1'], true) ? 'true' : 'false']);
         }
@@ -64,7 +66,10 @@ class StorefrontTest extends WebTestCase
         $code = fn (Response $r): mixed => $this->json($r)['code'] ?? $r->getStatusCode();
 
         // Une boutique ouverte : tout est servi comme avant, et l'état se lit sans connexion, avec un cache court
+        $this->db()->executeStatement("UPDATE entreprise SET website = 'https://vitrine-essai.example.invalid'");
         $this->state('open', true);
+        $shown = fn (string $app): ?string => $this->json($this->api('GET', "/api/app-profile/$app"))['website'] ?? null;
+        $this->assertSame(['https://vitrine-essai.example.invalid', 'https://vitrine-essai.example.invalid'], [$shown('mobile'), $shown('livingmemory')], 'le profil d\'une application reprend l\'adresse de la fiche');
         $open = $this->api('GET', '/api/site/storefront');
         $this->assertSame(200, $open->getStatusCode(), (string) $open->getContent());
         $this->assertSame(['state' => 'open', 'scope' => null, 'name' => $name, 'preview' => ['active' => false, 'expiresAt' => null]], array_intersect_key($this->json($open), ['state' => 1, 'scope' => 1, 'name' => 1, 'preview' => 1]));
@@ -114,6 +119,8 @@ class StorefrontTest extends WebTestCase
         $this->assertSame($reduced, $this->json($this->api('GET', "/api/entreprise/$id", null, $customer)), 'un compte client lit la fiche réduite, comme un visiteur');
         $profile = $this->json($this->api('GET', '/api/app-profile/mobile'));
         $this->assertSame([null, null, null], [$profile['apropos'] ?? null, $profile['tagline'] ?? null, $profile['website'] ?? null], 'le profil de l\'application de la boutique ne dit pas ce que la fiche réduite cache');
+        $this->assertSame('https://vitrine-essai.example.invalid', $shown('livingmemory'), 'le profil de Living Memory, lui, ne dépend pas de la boutique');
+        $this->assertSame('https://vitrine-essai.example.invalid', $this->json($this->api('GET', '/api/app-profile/mobile', null, $admin))['website'], 'l\'équipe lit le profil entier');
 
         // MÉMOIRES VIVANTES, LIVING MEMORY ET BOUSSOLE ne dépendent pas de la boutique : leurs routes, et les routes de compte qu'elles
         // partagent, répondent comme sur un site ouvert, pour le visiteur comme pour le compte client
@@ -126,6 +133,17 @@ class StorefrontTest extends WebTestCase
         $this->assertSame([$answers(null), $answers($customer)], $underConstruction, 'mêmes réponses qu\'un site ouvert');
         $this->state('construction', true);
         $this->assertNotContains(403, $underConstruction[1], 'rien n\'est refusé au compte client sur ces routes');
+        // les rendez-vous de Mémoires Vivantes passent par la route des réservations du site vitrine : avec un livre, la liste du compte
+        // et la confirmation ne sont pas fermées ; le formulaire de réservation du site vitrine (sans livre), lui, l'est
+        $book = '0190a0a0-0000-7000-8000-000000000001';
+        foreach ([['POST', '/api/reservations', ['book_id' => $book, 'x' => 1]], ['GET', "/api/reservations/booked-slots?book_id=$book"], ['GET', '/api/reservations'], ['POST', '/api/reservations/12/confirm', ['x' => 1]]] as $call) {
+            foreach ([null, $customer] as $who) {
+                $this->assertNotSame('STOREFRONT_UNDER_CONSTRUCTION', $code($this->api($call[0], $call[1], $call[2] ?? null, $who)), $call[0] . ' ' . $call[1]);
+            }
+        }
+        foreach ([['POST', '/api/reservations', ['x' => 1]], ['POST', '/api/reservations', ['book_id' => ' ']], ['GET', '/api/reservations/services'], ['GET', '/api/reservations/booked-slots'], ['GET', "/api/contacts?book_id=$book"]] as $call) {
+            $this->assertSame(403, $this->api($call[0], $call[1], $call[2] ?? null, $customer)->getStatusCode(), $call[0] . ' ' . $call[1]);
+        }
         // s'inscrire ou adhérer : fermé pour la boutique, servi pour une autre application
         foreach ([[], ['app' => 'mobile'], ['app' => 'web'], ['app' => 'inconnue']] as $body) {
             $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $code($this->api('POST', '/api/register', $body + ['email' => "vitrine-b-{$id}@example.invalid", 'password' => self::PASSWORD])), json_encode($body));
@@ -408,6 +426,10 @@ class StorefrontTest extends WebTestCase
         $this->assertTrue($storefront->born(MV_TEST_TENANT_CODE));
         $this->assertSame(['open', ['state' => 'open', 'scope' => null]], [$stored(), $state()], 'né sans boutique : le site est en service (et le cache de l\'état est vidé par le geste)');
         $this->assertFalse($storefront->born('un-site-qui-n-existe-pas'));
+        // la boutique était demandée mais son droit n'a pas pu être posé : le site reste fermé, jamais servi par défaut
+        $this->db()->executeStatement("UPDATE entreprise SET storefront_state = 'open', is_boutique_active = false");
+        $this->assertTrue($storefront->born(MV_TEST_TENANT_CODE, true));
+        $this->assertSame(['construction', ['state' => 'construction', 'scope' => 'site']], [$stored(), $state()]);
     }
 
     public function testEveryRouteOfTheApplicationIsFiledAndOnlyTheShopAndTheShowcaseCloseUnderConstruction(): void

@@ -133,6 +133,10 @@ class StorefrontGateSubscriber implements EventSubscriberInterface
         $request = $event->getRequest();
         $path = RequestPath::of($request);
         $write = !in_array($request->getMethod(), ['GET', 'HEAD', 'OPTIONS'], true);
+        // 0. les rendez-vous de Mémoires Vivantes passent par la route des réservations du site vitrine : ce n'est pas le site vitrine
+        if (self::memoiresAppointment($path, $request)) {
+            return;
+        }
         // 1. écritures fermées à tous
         if (preg_match(self::SHOP_ORDER_PAGES, $path) === 1 || ($write && (self::matches(self::SHOP_ORDERS, $path) || (preg_match(self::SHOP_SIGNUP, $path) === 1 && $this->signsUpForShop($path, $request))))
             || ($write && $scope === StorefrontService::SCOPE_SITE && self::matches(self::SHOWCASE_ORDERS, $path))) {
@@ -159,13 +163,33 @@ class StorefrontGateSubscriber implements EventSubscriberInterface
         }
         $scope = $this->storefront->closure();
         $path = RequestPath::of($event->getRequest());
-        if ($scope === null || !self::closed($path, $scope)) {
+        if ($scope === null || !self::closed($path, $scope) || self::memoiresAppointment($path, $event->getRequest())) {
             return;
         }
         $response = $event->getResponse();
         $response->headers->set('X-Robots-Tag', 'noindex, nofollow');
         $response->headers->set('Cache-Control', 'private, no-store');
         $response->setVary(array_values(array_unique([...$response->getVary(), StorefrontService::PREVIEW_HEADER, 'Authorization', 'Cookie'])));
+    }
+
+    /**
+     * `/api/reservations` sert deux choses : le formulaire de réservation du site vitrine, et les rendez-vous de Mémoires Vivantes
+     * (un livre, un biographe). Mémoires Vivantes n'est jamais fermée : une demande qui porte un livre (`book_id`, dans l'adresse ou
+     * dans le corps), la liste des rendez-vous du compte et leur confirmation ne sont pas le site vitrine. Le reste (services
+     * proposés, créneaux et réservation sans livre) l'est.
+     */
+    public static function memoiresAppointment(string $path, Request $request): bool
+    {
+        if (preg_match('#^/api/reservations(/|$)#', $path) !== 1) {
+            return false;
+        }
+        if (preg_match('#^/api/reservations(/\d+/confirm)?$#', $path) === 1 && ($request->isMethod('GET') || str_ends_with($path, '/confirm'))) {
+            return true; // la liste des rendez-vous du compte, la confirmation d'un rendez-vous
+        }
+        $body = json_decode((string) $request->getContent(), true);
+        $book = $request->query->get('book_id') ?? (is_array($body) ? ($body['book_id'] ?? null) : null);
+
+        return is_scalar($book) && trim((string) $book) !== '';
     }
 
     /** Ce chemin (décodé) est-il fermé au visiteur dans cette étendue ? Tout ce qui n'est rangé nulle part est de la boutique : fermé */

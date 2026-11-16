@@ -193,9 +193,10 @@ class StorefrontService
             throw new StorefrontException('STOREFRONT_NOT_READY', 409, ['items' => $checklist['items']]);
         }
         // l'heure d'ouverture est celle de la BOUTIQUE : un site ouvert sans elle la laisse vide, et sa boutique, activée plus tard,
-        // naîtra en construction (`closureOf`)
-        $this->write($site, "UPDATE entreprise SET storefront_state = 'open', storefront_opened_at = CASE WHEN is_boutique_active THEN CAST(? AS TIMESTAMP) ELSE NULL END, storefront_preview_hash = NULL, storefront_preview_expires_at = NULL WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1)",
-            [(new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s')], 'open', $by);
+        // naîtra en construction (`closureOf`). Elle suit la boutique LUE par la liste de contrôle (celle dont le paiement a été
+        // vérifié), pas la colonne au moment de l'écriture : une boutique rendue entre les deux n'est pas ouverte sans contrôle
+        $this->write($site, "UPDATE entreprise SET storefront_state = 'open', storefront_opened_at = ?, storefront_preview_hash = NULL, storefront_preview_expires_at = NULL WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1)",
+            [$checklist['shop'] ? (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s') : null], 'open', $by);
         $state = $this->load($site);
 
         return ['state' => self::OPEN, 'scope' => null, 'openedAt' => self::iso($state['openedAt'])];
@@ -228,9 +229,10 @@ class StorefrontService
      * plus tard, elle seule sera en construction. Rend faux si l'état n'a pas pu être posé (le site reste alors fermé en entier, sa
      * valeur de naissance : son administrateur l'ouvre d'un geste).
      */
-    public function born(string $tenantCode): bool
+    public function born(string $tenantCode, bool $shopAsked = false): bool
     {
-        return $this->transition($tenantCode, "UPDATE entreprise SET storefront_state = CASE WHEN is_boutique_active THEN 'construction' ELSE 'open' END, storefront_opened_at = NULL,"
+        // la boutique était demandée mais son droit n'a pas pu être posé : le site reste fermé (son administrateur l'ouvre d'un geste)
+        return $this->transition($tenantCode, 'UPDATE entreprise SET storefront_state = CASE WHEN is_boutique_active OR ' . ($shopAsked ? 'TRUE' : 'FALSE') . " THEN 'construction' ELSE 'open' END, storefront_opened_at = NULL,"
             . ' storefront_preview_hash = NULL, storefront_preview_expires_at = NULL WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1)', 'naissance du site');
     }
 
