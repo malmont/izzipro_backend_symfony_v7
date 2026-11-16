@@ -187,7 +187,10 @@ class PlatformSitesTest extends WebTestCase
         $this->assertSame('PLATFORM_SITE_CODE_TAKEN', $this->json('POST', '/api/platform/sites', ['code' => $code, 'name' => 'Autre', 'adminEmail' => 'autre@example.invalid'], 'super', 409)['code']);
         // reprise alors que la cause dure : toujours à compléter, toujours un seul site
         $this->assertSame('pending', $this->json('POST', "/api/platform/site-requests/$id/resume", null, 'super', 202)['request']['status']);
+        // (une acceptation notée entre-temps n'est pas effacée par l'étape qui échoue : le résultat est fondu, jamais remplacé)
+        $this->master->exec("UPDATE platform_site_requests SET result = COALESCE(result, '{}'::jsonb) || '{\"acceptedUserId\": 999}'::jsonb WHERE id = $id");
         $this->sites()->process($id);
+        $this->assertSame(['999', 'ACCOUNT_EXISTS'], $this->master->query("SELECT result->>'acceptedUserId', result->'invitation'->>'reason' FROM platform_site_requests WHERE id = $id")->fetch(\PDO::FETCH_NUM));
         $this->assertSame(['incomplete', 'invitation'], array_values(array_intersect_key($this->json('GET', "/api/platform/site-requests/$id", null, 'super', 200)['request'], ['status' => 1, 'failedStep' => 1])));
         $this->assertSame(1, (int) $this->master->query("SELECT COUNT(*) FROM tenants WHERE code = '$code'")->fetchColumn());
 
@@ -195,6 +198,7 @@ class PlatformSitesTest extends WebTestCase
         $this->assertSame(403, $this->api('POST', "/api/platform/site-requests/$id/resume", ['adminEmail' => $email], 'admin')->getStatusCode());
         $this->assertSame('adminEmail', $this->json('POST', "/api/platform/site-requests/$id/resume", ['adminEmail' => 'pas-une-adresse'], 'super', 422)['errors'][0]['path']);
         $this->assertSame($email, $this->json('POST', "/api/platform/site-requests/$id/resume", ['adminEmail' => strtoupper($email)], 'super', 202)['request']['adminEmail']);
+        $this->assertNull($this->master->query("SELECT result->>'acceptedUserId' FROM platform_site_requests WHERE id = $id")->fetchColumn() ?: null, 'l\'acceptation notée était celle de l\'ancienne adresse : elle ne vaut pas pour la nouvelle');
         $untouched = $this->pdo(AgencySiteCode::database($code))->query("SELECT roles::text || '|' || password FROM \"user\" WHERE email = 'plateforme@example.invalid'")->fetchColumn();
         $this->sites()->process($id);
         $sent = self::getMailerMessages();
