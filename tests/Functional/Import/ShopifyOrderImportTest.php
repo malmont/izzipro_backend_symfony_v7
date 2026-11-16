@@ -110,8 +110,9 @@ class ShopifyOrderImportTest extends WebTestCase
         $id = (int) $job['id'];
         $this->assertSame(['orders', 'analysed', 12, 0], [$job['kind'], $job['status'], $job['rows'], $job['archived']]);
         $o = $job['report']['orders'];
-        $this->assertSame(['total' => 11, 'importable' => 6, 'paid' => 3, 'refunded' => 1, 'cancelled' => 1, 'unpaid' => 1, 'already' => 0, 'tooOld' => 1, 'refused' => 4, 'linkedToAccount' => 2,
+        $this->assertEquals(['total' => 11, 'importable' => 6, 'paid' => 3, 'refunded' => 1, 'cancelled' => 1, 'unpaid' => 1, 'already' => 0, 'tooOld' => 1, 'refused' => 4, 'linkedToAccount' => 2,
             'withoutAccount' => 4, 'lines' => 7, 'linesWithProduct' => 2, 'netCents' => 20000], array_diff_key($o, ['firstDay' => 1, 'lastDay' => 1]));
+        $this->assertSame([substr($ago('-3 months'), 0, 4), substr($ago('-10 days'), 0, 4)], [substr((string) $o['firstDay'], 0, 4), substr((string) $o['lastDay'], 0, 4)]);
         $this->assertSame([OrderImportService::MONTHS, $currency], [$job['report']['months'], $job['report']['currency']]);
         $codes = array_column($job['report']['issues'], 'code', 'line');
         $this->assertSame([10 => 'CURRENCY_MISMATCH', 11 => 'DATE_INVALID', 12 => 'AMOUNT_INVALID', 13 => 'REF_MISSING'], $codes);
@@ -137,7 +138,7 @@ class ShopifyOrderImportTest extends WebTestCase
         $this->assertSame([$id, MV_TEST_TENANT_CODE], [end($queued)->getMessage()->jobId, end($queued)->getMessage()->tenantCode]);
         $this->runImport($id);
         $done = $this->get("/api/site/imports/$id");
-        $this->assertSame(['done', 6, ['created' => 6, 'paid' => 3, 'linkedToAccount' => 2, 'lines' => 7, 'skipped' => 0, 'failed' => 0, 'failures' => []]], [$done['status'], $done['archived'], $done['result']]);
+        $this->assertEquals(['done', 6, ['created' => 6, 'paid' => 3, 'linkedToAccount' => 2, 'lines' => 7, 'skipped' => 0, 'failed' => 0, 'failures' => []]], [$done['status'], $done['archived'], $done['result']]);
         $this->assertSame([], glob(static::getContainer()->getParameter('kernel.project_dir') . '/var/storage/private_media/imports/' . MV_TEST_TENANT_CODE . '/*.csv') ?: [], 'le fichier est supprimé du serveur');
         $rows = array_column($conn->fetchAllAssociative('SELECT ref, state, financial_status, total_cents, tax_cents, shipping_cents, refunded_cents, net_cents, currency, user_id, items_count, day, ordered_at FROM import_order ORDER BY ref'), null, 'ref');
         $this->assertSame(['#1001', '#1002', '#1003', '#1004', '#1005', '#1006'], array_keys($rows));
@@ -195,7 +196,7 @@ class ShopifyOrderImportTest extends WebTestCase
         $this->assertSame([1, 6], [$more['report']['orders']['importable'], $more['report']['orders']['already']]);
         $this->request('POST', "/api/site/imports/{$more['id']}/confirm", []);
         $this->runImport((int) $more['id']);
-        $this->assertSame([7, ['created' => 1, 'skipped' => 6]], [(int) $conn->fetchOne('SELECT COUNT(*) FROM import_order'), array_intersect_key($this->get("/api/site/imports/{$more['id']}")['result'], ['created' => 1, 'skipped' => 1])]);
+        $this->assertEquals([7, ['created' => 1, 'skipped' => 6]], [(int) $conn->fetchOne('SELECT COUNT(*) FROM import_order'), array_intersect_key($this->get("/api/site/imports/{$more['id']}")['result'], ['created' => 1, 'skipped' => 1])]);
 
         // EFFACEMENT du compte à sa demande : ses commandes d'avant restent dans la série, sans lien avec lui
         static::getContainer()->get(PersonalDataEraser::class)->erase($this->em()->find(User::class, $alice));
@@ -220,19 +221,19 @@ class ShopifyOrderImportTest extends WebTestCase
         $t = $this->tag;
         $conn = $this->em()->getConnection();
         $currency = strtoupper(static::getContainer()->get(TenantCurrencyProvider::class)->code(true));
-        // Trois commandes d'avant en mars 1995 (deux payées, une remboursée) et une payée en juin 1995 : très loin de toute vente du site
-        foreach ([['#A1', '1995-03-10', 'paid', 12000, 3], ['#A2', '1995-03-20', 'paid', 8000, 1], ['#A3', '1995-03-21', 'refunded', 0, 1], ['#A4', '1995-06-02', 'paid', 5000, 2]] as [$ref, $day, $state, $net, $items]) {
+        // Trois commandes d'avant en mars 2010 (deux payées, une remboursée) et une payée en juin 2010 : très loin de toute vente du site
+        foreach ([['#A1', '2010-03-10', 'paid', 12000, 3], ['#A2', '2010-03-20', 'paid', 8000, 1], ['#A3', '2010-03-21', 'refunded', 0, 1], ['#A4', '2010-06-02', 'paid', 5000, 2]] as [$ref, $day, $state, $net, $items]) {
             $conn->executeStatement("INSERT INTO import_order (job_id, source, ref, ordered_at, day, financial_status, state, total_cents, net_cents, currency, items_count) VALUES (0, 'shopify', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 ["$ref-$t", "$day 15:00:00", $day, $state, $state, $net, $net, $currency, $items]);
         }
         $archive = static::getContainer()->get(OrderArchive::class);
-        $this->assertSame([true, false], [$archive->hasSales('1995-03-01', '1995-03-31'), $archive->hasSales('1995-04-01', '1995-04-30')]);
-        $this->assertSame(['1995-03-10' => [12000, 1, 3, 12000], '1995-03-20' => [8000, 1, 1, 8000]],
-            array_map(static fn (array $r): array => [$r['sales_amount'], $r['orders_sold'], $r['items_sold'], $r['unknown_revenue']], $archive->dailySales('1995-03-01', '1995-03-31')));
+        $this->assertSame([true, false], [$archive->hasSales('2010-03-01', '2010-03-31'), $archive->hasSales('2010-04-01', '2010-04-30')]);
+        $this->assertSame(['2010-03-10' => [12000, 1, 3, 12000], '2010-03-20' => [8000, 1, 1, 8000]],
+            array_map(static fn (array $r): array => [$r['sales_amount'], $r['orders_sold'], $r['items_sold'], $r['unknown_revenue']], $archive->dailySales('2010-03-01', '2010-03-31')));
 
-        // STATISTIQUES de mars 1996 : le site n'a aucune vente en mars 1995 ; l'an dernier vient de l'archive, et la réponse le dit
-        $stats = $this->get('/api/gestion/statistiques?from=1996-03-01&to=1996-03-31&locale=fr');
-        $this->assertSame(['from' => '1995-03-01', 'to' => '1995-03-31', 'source' => OrderArchive::SOURCE], $stats['lastYear']);
+        // STATISTIQUES de mars 2011 : le site n'a aucune vente en mars 2010 ; l'an dernier vient de l'archive, et la réponse le dit
+        $stats = $this->get('/api/gestion/statistiques?from=2011-03-01&to=2011-03-31&locale=fr');
+        $this->assertSame(['from' => '2010-03-01', 'to' => '2010-03-31', 'source' => OrderArchive::SOURCE], $stats['lastYear']);
         $this->assertStringEndsWith('(avant la migration)', $stats['comparison']['lastYearLabel']);
         $i = $stats['indicators'];
         $this->assertSame([20000, 2, 10000], [$i['revenue']['lastYear'], $i['orders']['lastYear'], $i['averageBasket']['lastYear']]);
@@ -241,20 +242,20 @@ class ShopifyOrderImportTest extends WebTestCase
         $codes = array_column($stats['caveats'], 'code');
         $this->assertContains('LAST_YEAR_BEFORE_MIGRATION', $codes);
         $this->assertNotContains('NO_LAST_YEAR_DATA', $codes);
-        // les ventes d'avant ne sont JAMAIS dans les chiffres du site : la plage de mars 1995 elle-même ne les compte pas
-        $itself = $this->get('/api/gestion/statistiques?from=1995-03-01&to=1995-03-31');
+        // les ventes d'avant ne sont JAMAIS dans les chiffres du site : la plage de mars 2010 elle-même ne les compte pas
+        $itself = $this->get('/api/gestion/statistiques?from=2010-03-01&to=2010-03-31');
         $this->assertSame([0, 0], [$itself['indicators']['revenue']['value'], $itself['indicators']['orders']['value']]);
         // un filtre de canal ne lit pas l'archive (elle n'a pas de canal)
-        $pos = $this->get('/api/gestion/statistiques?from=1996-03-01&to=1996-03-31&source=pos');
+        $pos = $this->get('/api/gestion/statistiques?from=2011-03-01&to=2011-03-31&source=pos');
         $this->assertSame(['site', null], [$pos['lastYear']['source'], $pos['indicators']['revenue']['lastYear']]);
         $this->assertContains('NO_LAST_YEAR_DATA', array_column($pos['caveats'], 'code'));
         // une plage sans archive : rien ne change, la réponse dit « site »
-        $empty = $this->get('/api/gestion/statistiques?from=1996-04-01&to=1996-04-30');
+        $empty = $this->get('/api/gestion/statistiques?from=2011-04-01&to=2011-04-30');
         $this->assertSame(['site', null], [$empty['lastYear']['source'], $empty['indicators']['revenue']['lastYear']]);
 
-        // L'ANNÉE 1996 : l'an dernier est réduit aux VENTES de l'archive, mois par mois ; le reste est vide ; marqué
-        $year = $this->get('/api/gestion/statistiques/annee?year=1996&locale=fr');
-        $this->assertSame([OrderArchive::SOURCE, 1995], [$year['lastYear']['source'], $year['lastYear']['year']]);
+        // L'ANNÉE 2011 : l'an dernier est réduit aux VENTES de l'archive, mois par mois ; le reste est vide ; marqué
+        $year = $this->get('/api/gestion/statistiques/annee?year=2011&locale=fr');
+        $this->assertSame([OrderArchive::SOURCE, 2010], [$year['lastYear']['source'], $year['lastYear']['year']]);
         $this->assertStringEndsWith('(avant la migration)', $year['lastYear']['label']);
         $months = array_column($year['lastYear']['months'], null, 'month');
         $this->assertSame([20000, 5000, 0], [$months[3]['sales'], $months[6]['sales'], $months[4]['sales']]);
@@ -266,7 +267,7 @@ class ShopifyOrderImportTest extends WebTestCase
         // Dès que le site a UNE vraie vente sur la plage de l'an dernier, l'archive n'est plus lue : jamais de mélange
         $conn->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type, purchase_price) VALUES (nextval('product_id_seq'), 'Vraie vente', 2500, false, 0, NOW(), ?, 'standard', 1000)", ["imp3-test-v-$t"]);
         $variant = (int) $this->create(ProductVariant::class, ['product' => $this->em()->find(Product::class, (int) $conn->fetchOne('SELECT id FROM product WHERE slug = ?', ["imp3-test-v-$t"]))])->getId();
-        $at = (new \DateTimeImmutable('1995-03-15 12:00', static::getContainer()->get(StoreClock::class)->timezone()))->setTimezone(new \DateTimeZone('UTC'));
+        $at = (new \DateTimeImmutable('2010-03-15 12:00', static::getContainer()->get(StoreClock::class)->timezone()))->setTimezone(new \DateTimeZone('UTC'));
         $order = $this->create(Order::class, ['totalAmount' => 1.0, 'reference' => 'IMP3-TEST'], function (Order $o, EntityManagerInterface $em) use ($at): void {
             $o->setOrderDate(\DateTime::createFromImmutable($at))->setStatus($em->find(StatusCommande::class, 3))->setOrderType($em->find(OrderType::class, 1))->setOrderSource($em->find(OrderSource::class, 2))->setUserId($em->find(User::class, $this->adminId));
         });
@@ -274,12 +275,12 @@ class ShopifyOrderImportTest extends WebTestCase
             $item->setOrderAssociated($em->find(Order::class, $order->getId()))->setProductVariant($em->find(ProductVariant::class, $variant));
         });
         $this->endOfWrite();
-        $real = $this->get('/api/gestion/statistiques?from=1996-03-01&to=1996-03-31&locale=fr');
+        $real = $this->get('/api/gestion/statistiques?from=2011-03-01&to=2011-03-31&locale=fr');
         $this->assertSame(['site', 1], [$real['lastYear']['source'], $real['indicators']['orders']['lastYear']]);
         $this->assertLessThan(20000, $real['indicators']['revenue']['lastYear'], 'la vraie vente seule, sans les 200 de l\'archive');
         $this->assertStringEndsNotWith('(avant la migration)', $real['comparison']['lastYearLabel']);
         $this->assertNotContains('LAST_YEAR_BEFORE_MIGRATION', array_column($real['caveats'], 'code'));
-        $this->assertSame('site', $this->get('/api/gestion/statistiques/annee?year=1996')['lastYear']['source']);
+        $this->assertSame('site', $this->get('/api/gestion/statistiques/annee?year=2011')['lastYear']['source']);
 
         // Un invité d'import effacé (délai passé, ou annulation de l'import des clients) : ses commandes d'avant ne le tiennent pas
         $guest = $this->account("guest-imp3-$t@example.invalid", 'Invitée', []);
