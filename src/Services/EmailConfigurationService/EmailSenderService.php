@@ -112,6 +112,18 @@ class EmailSenderService
 
             $emailContent = $this->twig->render($template, $context);
 
+            // Un site SANS serveur d'envoi complet (un site neuf, par exemple) passe par le serveur de la plateforme : celui-ci refuse
+            // d'envoyer au nom d'une adresse qui n'est pas la sienne (553 « Sender address rejected », incident du 16/11/2026 : code de
+            // connexion d'un site neuf jamais parti). L'expéditeur devient alors l'adresse de la plateforme, au NOM du site, et
+            // l'adresse du site passe en « Répondre à » (sauf réponse déjà choisie par l'appelant).
+            $platformFrom = !TenantEmailDelivery::isComplete($emailConfig) ? $this->platformSender() : null;
+            if ($platformFrom !== null && strcasecmp($platformFrom, $fromEmail) !== 0) {
+                if (!$replyTo && filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
+                    $replyTo = $fromEmail;
+                }
+                $fromEmail = $platformFrom;
+            }
+
             $emailMessage = (new Email())
                 ->from(new \Symfony\Component\Mime\Address($fromEmail, $fromName))
                 ->to($to)
