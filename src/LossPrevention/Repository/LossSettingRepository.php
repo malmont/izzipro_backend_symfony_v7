@@ -16,7 +16,7 @@ class LossSettingRepository extends EntityRepository
     private const DEFAULTS = ['id' => null, 'staff_notice_confirmed_at' => null, 'staff_notice_confirmed_by' => null, 'person_patterns_enabled' => null,
         'retention_findings_months' => 24, 'retention_confirmed_months' => 60, 'cursor_sequence' => null, 'backfill_until_sequence' => null, 'analysis_floor_sequence' => null,
         'last_analysis_at' => null, 'last_digest_day' => null, 'last_digest_finding_id' => null, 'updated_at' => null, 'updated_by' => null, 'silent_after_seconds' => null,
-        'counter_window_seconds' => null, 'catch_up_seconds' => null, 'presence_retention_days' => null, 'zone_arrive_seconds' => null, 'zone_leave_seconds' => null, 'exit_cursor' => null];
+        'counter_window_seconds' => null, 'catch_up_seconds' => null, 'presence_retention_days' => null, 'zone_arrive_seconds' => null, 'zone_leave_seconds' => null, 'exit_cursor' => null, 'web_window_days' => null];
 
     /**
      * La ligne du site. Lecture simple : les valeurs par défaut si elle n'existe pas encore, sans rien écrire. `$forUpdate` (l'analyse, un

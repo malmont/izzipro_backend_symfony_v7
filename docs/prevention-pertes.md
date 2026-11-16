@@ -1604,7 +1604,7 @@ qui attendent la sortie).
 `exit`, heure sûre) entre 2 minutes avant et la fenêtre du rattrapage après une vente de SA variante encore sans pièce, lui est
 reliée : `PIECE_SOLD { by: catch_up, readEventId, … }`. **La vente la plus ancienne d'abord, la première lecture d'abord, une
 pièce par article.** Ne comptent pas : une lecture par une puce retirée, et **une lecture d'AVANT le dernier retour d'articles de
-la pièce** (la sortie du client qui l'a rapportée depuis ne vaut pas pour une autre vente). Une seule requête par passage, pour
+la pièce** (la sortie du client qui l'a rapportée depuis ne vaut pas pour une autre vente). Une seule requête par passage et par origine (lot L4-b2 : ventes au comptoir, puis retraits), pour
 toutes les variantes : elle ne rend que les lectures qui tombent dans la fenêtre d'au moins un article en attente (5 000 au plus),
 si bien qu'un portant près de la porte, relu sans cesse, n'empêche pas les ventes du jour d'être rattrapées. Dans les deux sens : que la vente soit lue après la lecture, ou la lecture après la vente. Tous les postes
 du site sont regardés (la sortie est commune) ; rien ne sort du site (la base est la sienne, la table n'a pas de colonne de site).
@@ -2187,6 +2187,7 @@ choisi de basculer sans attendre, Fable relira ensuite). La liste fait foi pour 
 | L4-b, migration | backend `app_v2` | `65a02c5b` | `migrations/Version20270122100000.php`, et le script `scripts/migrate_all_v2_pertes_l4b.sh` (hors dépôt) |
 | L4-b, code | backend `app_v2` | (commit du lot, § 17.13) | `LossExitService` (tout), son branchement dans `LossAnalysisService::run` et l'aperçu, `LossFindingRepository` (drapeau de « du nouveau »), `LossFindingReader` (résumé, preuve, drapeau), catalogue, exercice, textes, `LossPreventionExitTest` et les attentes de trois essais |
 | B5 | boîtier, dépôt local | `2a4ce6f`, `8f0faf7` | `izzibox/appareils.py` (`Antenne`, `Parc.regler`, `Parc.veiller`), `izzibox/service.py`, `izzibox/scenarios.py`, `izzibox/canal.py` (`nom_de_site` aligné sur la règle de la plateforme), `tests/test_zones.py`, le faux serveur, la copie du contrat |
+| L4-b2, migration et code | backend `app_v2` | migration `365340ae`, lot : le commit qui la suit (§ 17.14) | `migrations/Version20270123100000.php` (origine, garde `loss_sale_unit_guard_v2`, fenêtre des commandes web) et le script `scripts/migrate_all_v2_pertes_l4b2.sh` (hors dépôt) ; `LossSaleLinkService::webOrders` et `catchUpAtExit`, `LossSaleUnitRepository` (commandes web, locations, lectures par origine), `LossExitService::judge` (cas 2 sur la fenêtre des commandes web, cas 3 des locations, `rented`), le réglage `webWindowDays` |
 
 Vérifié sous Opus : `LossPreventionZoneTest` et le dossier du module verts ; 21 mutations sur L4-a (20 tuées, une équivalente :
 le rejeu d'une arrivée est déjà bloqué par la clé du fait et par la requête de présence) ; 12 mutations sur B5, toutes tuées.
@@ -2268,7 +2269,7 @@ depuis la décision, pièce retirée, heure douteuse, lecture en rayon, jamais t
 constat faible, compté, gravité moyenne au seuil, article entièrement étiqueté silencieux, règle éteinte, catalogue, aperçu,
 exercice, migration rejouée et son script).
 
-### 17.14 Lot L4-b2 : retraits en boutique et locations (contrat validé par le chef de projet le 16/11/2026 ; non codé)
+### 17.14 Lot L4-b2 : retraits en boutique et locations (contrat validé par le chef de projet le 16/11/2026 ; codé sous Opus le 16/11/2026)
 
 Demandé par le chef de projet après la relecture de L4-b : un retrait en boutique d'une commande web et une location sont des cas
 normaux, qui ne doivent pas ouvrir de « sortie sans vente » chez un vrai client. Part après L4-b, avec relecteur neuf et mutations.
@@ -2292,3 +2293,68 @@ normaux, qui ne doivent pas ouvrir de « sortie sans vente » chez un vrai clien
   prendre la place d'une pièce louée dans le compte.
 - **Aucune écriture** dans les commandes, leurs lignes ni les réservations. Une migration additive : l'origine sur `loss_sale_unit`
   (avec sa garde, une fonction nouvelle) et le réglage de la fenêtre.
+
+**Extension validée par le chef de projet (16/11/2026, avant le départ du lot)** : les commandes web EXPÉDIÉES (pas seulement retirées
+en boutique) ouvraient elles aussi de fausses « sorties sans vente » : le colis remis au transporteur passe la sortie ou la porte
+arrière sans vente reliée. Désormais **toute commande de la boutique en ligne ou de l'application** (jamais une vente de caisse, qui
+passe par le journal), payée et non annulée, quel que soit son transporteur, devient un article à relier d'origine **`web`** (le nom
+`pickup` des versions de travail n'a jamais été livré) ; le réglage s'appelle `webWindowDays` (colonne `web_window_days`, 14 jours, 1 à
+60) ; le rattrapage d'une commande web prend les lectures de la sortie ET de la porte arrière de la réserve (`back_door`, lot L4-c).
+L'essai « colis expédié par le portique » est dans ce lot ; « colis expédié par la porte arrière » vient avec L4-c. Ce qui suit dit
+« retrait » pour l'histoire du contrat : lire « commande web, retirée ou expédiée ».
+
+**Ce qui est codé** (migration `Version20270123100000`, script `scripts/migrate_all_v2_pertes_l4b2.sh`, 7 instructions ; relu par un
+relecteur neuf : 2 bloquants et 4 points, corrigés ci-dessous) :
+
+- **Schéma** : `loss_sale_unit.origin` (`sale` par défaut, ou `web`) ; garde nouvelle `loss_sale_unit_guard_v2` (celle du lot
+  L3-b2a, plus : origine permise, un article de retrait n'a ni poste ni entrée du journal de caisse (`audit_sequence` = 0),
+  l'origine ne change pas) sur laquelle le déclencheur est reposé, l'ancienne fonction gardée pour le retour arrière ;
+  `loss_setting.web_window_days` ; index partiels `idx_loss_sale_unit_web_open` (en attente d'une pièce) et
+  `idx_loss_sale_unit_web_watch` (pas revenus). Le retour arrière refuse d'abord, avant toute autre instruction, d'ôter l'origine
+  tant qu'un article de retrait existe. **Rejouer la migration du lot L3-b2a repose le déclencheur sur l'ancienne fonction** : rejouer
+  celle-ci ensuite.
+- **Lecture des commandes** (`LossSaleLinkService::webOrders`, à chaque passage, avant le rattrapage ; **chaque commande sous son point
+  de reprise** : une commande en échec est sautée et écrite au journal du serveur ; si l'étape entière échoue, les sorties ne sont pas
+  jugées dans ce passage) :
+  1. les commandes de retrait dont un article n'est pas revenu, passées depuis la fenêtre plus 30 jours (les plus récentes d'abord),
+     sont relues. **Annulée** (`paymentStatus` = `canceled`) : tous ses articles sont dits revenus (`cancellation`,
+     `return_sequence` = 0, heure du passage). **Articles rapportés** : la caisse ne reprend pas une commande web, ses retours passent
+     par la boutique (`order_return`, lignes et quantités) ; autant d'articles de chaque ligne sont dits revenus (`return`, heure du
+     retour), un article sans pièce d'abord, sans jamais en libérer deux fois. **Un remboursement sans retour de marchandise** (geste
+     commercial) ne libère rien. Les pièces revenues redeviennent vendables ;
+  2. les commandes de retrait passées pendant la fenêtre, ni annulées ni ventes de caisse, dont aucun article n'est écrit et dont une
+     ligne VENDUE (pas une location) porte une variante à vraie pièce à puce, sont lues, les plus récentes d'abord (une commande jamais
+     payée ne retient pas les nouvelles) ; **payées**, chacun de leurs articles suivis à l'heure de la commande devient un article de
+     retrait (heure de la commande, aucun poste) ; pas encore payées, elles sont relues au passage suivant. 500 au plus par lecture.
+     Les entités des commandes sont détachées après lecture : une commande relue l'est de la base.
+- **Rattrapage** (`catchUpAtExit`) : les ventes au comptoir d'abord, sur leur fenêtre, puis les articles de retrait, sur la fenêtre
+  de retrait ; une pièce reliée à l'une ne l'est pas à l'autre dans le même passage. Un retrait ne prend que les lectures que la
+  caisse ne peut plus expliquer (lues avant l'heure jusqu'à laquelle le journal est lu, moins la fenêtre du rattrapage), et jamais une
+  lecture d'un article loué autour de ce moment (de 36 h avant le début à 36 h après la fin d'une location) : l'aller d'une pièce
+  louée ne devient pas la pièce retirée. Le fait `PIECE_SOLD` d'une commande web porte `origin: web`. Une pièce reliée à un retrait par
+  une lecture, l'article pas entièrement étiqueté : constat faible (`EXIT_COVERED`), comme pour une vente au comptoir.
+- **Jugement d'une sortie** (`LossExitService::judge`) : (2) un article de retrait en attente dans sa fenêtre explique la sortie
+  comme une vente qui attend sa pièce ; les sorties d'avant comptent alors depuis le plus ancien article qui attend. (3) **Location** :
+  une réservation non annulée de la variante (lue par la ligne de commande de la réservation) : `CONFIRMED` ou `RETURNED` (caisse),
+  ou `PENDING_PAYMENT` (boutique en ligne, qui ne change pas ce statut au paiement) dont la commande est payée et non annulée ; les
+  statuts `CANCELLED`, `REFUNDED`, `CART_ABANDONED` ne comptent pas, comme pour la disponibilité. Elle compte si la journée du magasin
+  de la lecture tombe entre la veille du début et le lendemain de la fin ; unités louées = somme de leurs quantités. La sortie est
+  expliquée si les autres pièces distinctes de la variante lues à la sortie plus tôt ce jour-là (sans vente en cours, ni puce ni
+  pièce retirée), moins les ventes en attente du cas 2 que des sorties d'avant ce jour n'ont pas déjà prises, sont moins nombreuses
+  que les unités louées. Au-delà, la sortie ouvre le constat normal. **Tranché, validé par le chef** : on compte des pièces DISTINCTES
+  (l'aller et le retour d'une même pièce le même jour comptent une fois) ; une location n'ouvre jamais de constat faible (aucune pièce
+  n'y est reliée, la pièce reste en service).
+- **Réglage** : `GET/PUT /reglages`, bloc `pieces`, `webWindowDays` (14 par défaut, 1 à 60 ; nul remet la valeur par défaut).
+- **Règle par poste** (`UNREAD_SOLD`) : inchangée ; elle lit les articles par poste, un article de retrait n'en a pas.
+- **Limites** : une pièce lue à la sortie pendant la fenêtre d'une commande de retrait lui est reliée, la première lecture
+  d'abord, même si ce n'est pas la pièce retirée : la sortie suivante de la variante ouvre alors le constat, et la pièce prise reste
+  « vendue » (ses sorties suivantes sont expliquées) jusqu'à un retour ou une annulation ; une commande payée hors de la boutique
+  sans transporteur de retrait n'est pas lue ; plus de 500 commandes de retrait pas encore payées dans la fenêtre : les plus anciennes
+  attendent ; une fenêtre élargie après coup relie des lectures déjà jugées, et le constat déjà ouvert reste ouvert (le gérant le
+  classe).
+- **Contrôles** : relecteur neuf (2 bloquants et 4 points, corrigés) ; dossier LossPrevention vert ; 33 mutations, 26 tuées. Survivantes,
+  expliquées : la porte arrière (vient avec L4-c, son essai y est) ; le filtre des commandes annulées (redondant avec l'état de
+  paiement) ; le filtre d'origine des lectures (efficacité seulement : chaque vente revérifie sa fenêtre) ; l'attente d'une commande web
+  dans le jugement (le rattrapage relie toujours avant) ; et trois trous d'essai : journal de caisse en retard (horizon du rattrapage
+  web), lecture d'un article loué écartée du rattrapage web, double compte des ventes en attente dans le cas des locations.
+

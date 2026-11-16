@@ -175,11 +175,11 @@ class LossPreventionUnreadSoldTest extends LossPreventionTestCase
         $sales = new class($this->tenant()) extends \App\LossPrevention\Services\LossSaleLinkService {
             public int $calls = 0;
 
-            public function catchUp(int $now): int
+            public function catchUp(int $now, ?int $readsUntil = null): int
             {
                 ++$this->calls;
 
-                return parent::catchUp($now);
+                return parent::catchUp($now, $readsUntil);
             }
         };
         $analysis = $this->analysisWith([], $sales);

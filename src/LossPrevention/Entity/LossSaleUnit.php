@@ -19,6 +19,8 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Index(name: 'idx_loss_sale_unit_open', columns: ['sold_at', 'id'], options: ['where' => 'piece_id IS NULL AND returned_at IS NULL'])]
 #[ORM\Index(name: 'idx_loss_sale_unit_order', columns: ['order_id'])]
 #[ORM\Index(name: 'idx_loss_sale_unit_register', columns: ['cash_register_id', 'sold_at'])]
+#[ORM\Index(name: 'idx_loss_sale_unit_web_open', columns: ['sold_at', 'id'], options: ['where' => "origin = 'web' AND piece_id IS NULL AND returned_at IS NULL"])]
+#[ORM\Index(name: 'idx_loss_sale_unit_web_watch', columns: ['sold_at', 'order_id'], options: ['where' => "origin = 'web' AND returned_at IS NULL"])]
 class LossSaleUnit
 {
     /** Par quoi la pièce a été reliée : lue sur le tapis du poste avant la vente, ou lue à la sortie après elle */
@@ -26,6 +28,9 @@ class LossSaleUnit
     public const BY_CATCH_UP = 'catch_up';
     public const RETURN = 'return';
     public const CANCELLATION = 'cancellation';
+    /** D'où vient l'article (lot L4-b2) : une vente au comptoir lue dans le journal de caisse, ou une commande web payée à retirer en boutique */
+    public const ORIGIN_SALE = 'sale';
+    public const ORIGIN_WEB = 'web';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -74,4 +79,8 @@ class LossSaleUnit
 
     #[ORM\Column(name: 'created_at', type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
+
+    /** Lot L4-b2 : `sale` ou `web` (un article d'une commande web n'a ni poste ni entrée du journal de caisse : `audit_sequence` = 0) */
+    #[ORM\Column(name: 'origin', length: 8, options: ['default' => 'sale'])]
+    private string $origin = self::ORIGIN_SALE;
 }
