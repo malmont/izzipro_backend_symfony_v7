@@ -108,7 +108,9 @@ class StorefrontTest extends WebTestCase
         foreach (['/api/order/create', '/api/payment'] as $path) {
             $this->assertNotSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($this->api('POST', $path, ['x' => 1], $cashier))['code'] ?? null, 'la vente en magasin n\'est pas la boutique publique');
         }
-        $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($this->api('POST', '/api/order/create-guest', ['x' => 1], $cashier))['code'] ?? null);
+        foreach (['/api/order/create-guest', '/api/subscriptions', '/api/cart/quote', '/api/contacts'] as $path) {
+            $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $this->json($this->api('POST', $path, ['x' => 1], $cashier))['code'] ?? null, "$path : la caisse ne passe que sur ses deux routes");
+        }
         $this->assertSame(0, (int) $this->db()->fetchOne("SELECT COUNT(*) FROM \"user\" WHERE email = 'nouveau-client@example.invalid'"));
 
         // Un compte d'équipe voit la vraie boutique sans lien d'aperçu, et travaille : il crée ses articles
@@ -117,6 +119,13 @@ class StorefrontTest extends WebTestCase
         $this->assertStringContainsString('private', (string) $team->headers->get('Cache-Control'));
         $this->assertSame(200, $this->api('GET', '/api/category', null, $admin)->getStatusCode());
         $this->assertSame(200, $this->api('GET', '/api/landingpage-settings', null, $admin)->getStatusCode());
+        // … y compris sur les lectures que le pare-feu de l'API ne couvre pas (formules, transporteurs, équipe) : son jeton y est lu quand même
+        foreach (['/api/subscription-plans', '/api/Carrier', '/api/team'] as $path) {
+            $this->assertSame(403, $this->api('GET', $path)->getStatusCode(), "$path : fermé au visiteur");
+            $this->assertSame(403, $this->api('GET', $path, null, $customer)->getStatusCode(), "$path : fermé au compte client");
+            $this->assertNotSame(403, $this->api('GET', $path, null, $admin)->getStatusCode(), "$path : servi à l'équipe");
+            $this->assertSame(403, $this->api('GET', $path, null, null, ['HTTP_AUTHORIZATION' => 'Bearer jeton.faux.forgé'])->getStatusCode(), "$path : un jeton forgé n'ouvre rien");
+        }
 
         // Le lien d'aperçu : 7 jours, jeton dans le fragment ; il ouvre les LECTURES, jamais une commande ni un formulaire
         $this->assertSame(401, $this->api('POST', '/api/site/storefront/preview-link')->getStatusCode());

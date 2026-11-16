@@ -2,7 +2,6 @@
 
 namespace App\Controller\StorefrontController;
 
-use App\Security\StorefrontGateSubscriber;
 use App\Services\Storefront\StorefrontException;
 use App\Services\Storefront\StorefrontService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -19,7 +18,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[Route('/api/site/storefront')]
 class StorefrontController extends AbstractController
 {
-    public function __construct(private readonly StorefrontService $storefront)
+    public function __construct(private readonly StorefrontService $storefront, private readonly \App\Security\StorefrontViewer $viewer)
     {
     }
 
@@ -31,7 +30,7 @@ class StorefrontController extends AbstractController
     #[Route('', name: 'api_site_storefront', methods: ['GET'])]
     public function state(Request $request): JsonResponse
     {
-        $team = StorefrontGateSubscriber::isTeam($this->getUser()?->getRoles() ?? []);
+        $team = $this->viewer->isTeam($request);
         $link = !$team && $this->storefront->previewValid($request->headers->get(StorefrontService::PREVIEW_HEADER));
         $view = $this->storefront->publicView($team || $link, $link);
         $response = $this->json($view);

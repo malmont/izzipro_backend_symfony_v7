@@ -5,7 +5,6 @@ namespace App\Security;
 use App\Services\Http\RequestPath;
 use App\Services\Storefront\StorefrontException;
 use App\Services\Storefront\StorefrontService;
-use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
@@ -23,7 +22,8 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * - Tout le reste est servi : connexion, mot de passe, fiche du site réduite aux mentions légales (`EntrepriseController`), état du
  *   site, applications de l'équipe, Mémoires Vivantes, Boussole, webhooks.
  *
- * Refus : 403 `STOREFRONT_UNDER_CONSTRUCTION { name }`. Après le pare-feu (priorité 8) : le compte est connu. Le chemin est lu
+ * Refus : 403 `STOREFRONT_UNDER_CONSTRUCTION { name }`. Après le pare-feu (priorité 8) : le compte est connu ; sur les routes que le
+ * pare-feu de l'API ne couvre pas, `StorefrontViewer` lit lui-même le jeton du site. Le chemin est lu
  * décodé (`RequestPath`), jamais brut. Le jeton d'aperçu n'est écrit nulle part. Un site « ouvert » ne passe par aucune de ces règles.
  *
  * `tests/Functional/Storefront/StorefrontGuardTest` relit la règle des lectures publiques de `security.yaml` : chaque route publique
@@ -42,7 +42,7 @@ class StorefrontGateSubscriber implements EventSubscriberInterface
     public const KEPT = ['login', 'health', 'currencies', 'login-web', 'token/refresh', 'password-reset/request', 'password-reset/confirm', 'password-reset/verify', 'password-reset/form',
         'entreprise', 'otp-verify', 'tenant/check', 'tenant/hosts'];
 
-    public function __construct(private readonly StorefrontService $storefront, private readonly Security $security)
+    public function __construct(private readonly StorefrontService $storefront, private readonly StorefrontViewer $viewer)
     {
     }
 
@@ -64,7 +64,8 @@ class StorefrontGateSubscriber implements EventSubscriberInterface
         if ((!$orders && !$content) || !$this->storefront->isUnderConstruction()) {
             return;
         }
-        $roles = $this->security->getUser()?->getRoles() ?? [];
+        // les rôles du compte, même sur une route hors du pare-feu de l'API (`StorefrontViewer`)
+        $roles = $this->viewer->roles($request);
         if ($orders) {
             if (preg_match(self::POS_SHARED, $path) === 1 && array_intersect(['ROLE_USER_POS', 'ROLE_POS_MANAGER'], $roles) !== []) {
                 return;

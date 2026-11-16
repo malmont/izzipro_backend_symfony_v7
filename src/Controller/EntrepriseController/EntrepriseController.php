@@ -28,7 +28,8 @@ class EntrepriseController extends AbstractController
         UpdateEntrepriseUseCase $updateEntrepriseUseCase,
         TenantCacheService $cache,
         ?MediaUrlResolver $mediaUrlResolver = null,
-        private readonly ?\App\Services\Storefront\StorefrontService $storefront = null // lot CONSTRUCTION : fiche réduite aux mentions légales pour le visiteur d'un site en construction
+        private readonly ?\App\Services\Storefront\StorefrontService $storefront = null, // lot CONSTRUCTION : fiche réduite aux mentions légales pour le visiteur d'un site en construction
+        private readonly ?\App\Security\StorefrontViewer $viewer = null
     ) {
         $this->createEntrepriseUseCase = $createEntrepriseUseCase;
         $this->getEntrepriseUseCase = $getEntrepriseUseCase;
@@ -64,7 +65,7 @@ class EntrepriseController extends AbstractController
         }
         // Lot CONSTRUCTION (16/11/2026) : sur un site en construction, le visiteur (ni compte d'équipe, ni lien d'aperçu) ne reçoit de
         // la fiche que ce dont les pages légales et la page de connexion ont besoin ; la forme de la réponse ne change pas
-        if ($this->storefront?->isUnderConstruction() && !\App\Security\StorefrontGateSubscriber::isTeam($this->getUser()?->getRoles() ?? [])
+        if ($this->storefront?->isUnderConstruction() && !($this->viewer?->isTeam($request) ?? false)
             && !$this->storefront->previewValid($request->headers->get(\App\Services\Storefront\StorefrontService::PREVIEW_HEADER))) {
             $entrepriseDto = \App\Services\Storefront\StorefrontService::legalOnly($entrepriseDto);
         }
