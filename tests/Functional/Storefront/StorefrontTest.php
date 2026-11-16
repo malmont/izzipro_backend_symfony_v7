@@ -141,8 +141,8 @@ class StorefrontTest extends WebTestCase
                 $this->assertNotSame('STOREFRONT_UNDER_CONSTRUCTION', $code($this->api($call[0], $call[1], $call[2] ?? null, $who)), $call[0] . ' ' . $call[1]);
             }
         }
-        foreach ([['POST', '/api/reservations', ['x' => 1]], ['POST', '/api/reservations', ['book_id' => ' ']], ['GET', '/api/reservations/services'], ['GET', '/api/reservations/booked-slots'], ['GET', "/api/contacts?book_id=$book"]] as $call) {
-            $this->assertSame(403, $this->api($call[0], $call[1], $call[2] ?? null, $customer)->getStatusCode(), $call[0] . ' ' . $call[1]);
+        foreach ([['POST', '/api/reservations', ['x' => 1]], ['POST', '/api/reservations', ['book_id' => ' ']], ['GET', '/api/reservations/services'], ['GET', '/api/reservations/booked-slots'], ['GET', "/api/category?book_id=$book"], ['GET', "/api/landingpage-settings?book_id=$book"]] as $call) {
+            $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $code($this->api($call[0], $call[1], $call[2] ?? null, $customer)), $call[0] . ' ' . $call[1]);
         }
         // s'inscrire ou adhérer : fermé pour la boutique, servi pour une autre application
         foreach ([[], ['app' => 'mobile'], ['app' => 'web'], ['app' => 'inconnue']] as $body) {
