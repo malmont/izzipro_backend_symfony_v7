@@ -45,5 +45,8 @@ class ReportKeepTitlesTest extends TestCase
         $this->assertStringContainsString('{% if section.keepClose|default(false) %}</td></tr></table>{% endif %}', $template);
         $this->assertMatchesRegularExpression('/table\.keep \{[^}]*page-break-inside: avoid;/', $template);
         $this->assertLessThan(strpos($template, "{% if section.type == 'heading' %}"), strpos($template, 'section.keepOpen'), 'le cadre s\'ouvre avant le titre');
+        // les deux documents (réponse de la console, bilan de période ou d'année) appliquent la règle à leurs sections
+        $renderer = (string) file_get_contents(dirname(__DIR__, 3) . '/src/Gestion/Services/Report/ReportRenderer.php');
+        $this->assertSame(2, substr_count($renderer, "'sections' => self::keepTitles("));
     }
 }
