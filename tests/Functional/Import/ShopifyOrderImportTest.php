@@ -76,8 +76,9 @@ class ShopifyOrderImportTest extends WebTestCase
         // la lecture d'un montant et d'une date du fichier
         // (un séparateur de milliers n'est jamais deviné : « 1,234.50 » et « 1.234 » sont refusés plutôt que lus mille fois trop haut ou trop bas)
         $this->assertSame([123450, 123450, 1250, 1200, 0, null, null, null, null, null, null, null], array_map(OrderImportService::cents(...), ['1 234,50', '1234.50', '12,5', '12', '0.00', '', '-5', 'abc', '1.2.3', '1,234.50', '1.234', '1234567890']));
-        $this->assertSame(['2025-03-05 19:23:11', '2025-03-05 00:00:00', '2025-03-05 14:23:00', null, null, null, null], array_map(static fn (string $d): ?string => OrderImportService::date($d)?->format('Y-m-d H:i:s'),
-            ['2025-03-05 14:23:11 -0500', '2025-03-05', '2025-03-05T14:23Z', 'hier', '05/03/2025', '', '2025-02-30 10:00']));
+        // (une date du fichier n'est jamais une expression : « 2025-03-05 +1 week » serait lue comme le 12 mars)
+        $this->assertSame(['2025-03-05 19:23:11', '2025-03-05 00:00:00', '2025-03-05 14:23:00', null, null, null, null, null, null], array_map(static fn (string $d): ?string => OrderImportService::date($d)?->format('Y-m-d H:i:s'),
+            ['2025-03-05 14:23:11 -0500', '2025-03-05', '2025-03-05T14:23Z', 'hier', '05/03/2025', '', '2025-02-30 10:00', '2025-03-05 +1 week', '2025-03-05 tomorrow']));
         // LE PLAN, cas par cas (sans rien déposer) : états retenus, refus, repli sur la date de création, part remboursée, lignes bornées
         $line = ['line' => 2, 'name' => "Carte\x00 cadeau\x1F", 'quantity' => '2', 'price' => '5.00', 'sku' => ''];
         $base = ['line' => 2, 'email' => '', 'paidAt' => $ago('-2 days'), 'createdAt' => $ago('-2 days'), 'cancelledAt' => '', 'currency' => $currency, 'total' => '10.00', 'taxes' => '', 'shipping' => '', 'refunded' => '', 'lines' => [$line]];
