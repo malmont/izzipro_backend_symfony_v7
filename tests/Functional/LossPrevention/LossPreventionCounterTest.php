@@ -153,7 +153,11 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $this->assertSame(0, $sheet()[$mat]['onMat'], 'même quand le départ est arrivé seul d\'abord (son arrivée perdue puis renvoyée)');
         $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $third);
         $this->assertSame(1, $sheet()[$mat]['onMat'], 'reposée maintenant : elle est bien là');
-        $this->fact($token, 'COUNTER_LEFT', "TAPIS-$this->s", $third);
+        $this->assertSame(['accepted', null], $this->fact($token, 'COUNTER_LEFT', "TAPIS-$this->s", $third, ['key' => "depart-$this->s-0001"]));
+        $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $third, ['at' => gmdate('Y-m-d\TH:i:s\Z', time() + 2)]);
+        $this->assertSame(['duplicate', null], $this->fact($token, 'COUNTER_LEFT', "TAPIS-$this->s", $third, ['key' => "depart-$this->s-0001"]));
+        $this->assertSame(1, $sheet()[$mat]['onMat'], 'un départ rejoué ne ferme pas la présence rouverte depuis');
+        $this->fact($token, 'COUNTER_LEFT', "TAPIS-$this->s", $third, ['at' => gmdate('Y-m-d\TH:i:s\Z', time() + 4)]);
 
         // Tapis débranché : ce qu'on croyait posé ne l'est plus pour nous ; la pastille dit le câble ; revenu, le boîtier doit redire
         $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $nfc);
@@ -402,6 +406,23 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $this->assertSame(401, $this->client->getResponse()->getStatusCode());
     }
 
+    public function testTheTillQuestionHasACeilingPerAccount(): void
+    {
+        $this->loginPos(['ROLE_USER_POS']);
+        $this->openSession();
+        $ask = fn (): array => $this->json($this->pos('POST', self::UNREAD, ['cashRegisterId' => $this->register, 'items' => []]));
+        for ($i = 0; $i < \App\LossPrevention\Services\LossBoxLimits::LIMITS['till']; ++$i) {
+            if ($ask()['reason'] !== 'NO_MAT') {
+                $this->fail("question $i : " . json_encode($ask()));
+            }
+        }
+        $this->assertSame([false, 'TOO_MANY_REQUESTS', $this->register, 0, []], [($over = $ask())['active'], $over['reason'], $over['cashRegisterId'], $over['tracked'], $over['unread']],
+            'au-delà du plafond : pas de contrôle, toujours 200 (la caisse n\'est jamais gênée)');
+        // un autre compte n'est pas touché
+        $this->loginPos(['ROLE_USER_POS']);
+        $this->assertSame('NO_MAT', $ask()['reason']);
+    }
+
     public function testTheSimulatedMatPlaysItsScenariosAndIsErasedWithTheExercise(): void
     {
         $health = fn (): array => array_column($this->json($this->admin('GET', self::EX . '/sante'))['devices'], null, 'kind');
@@ -422,6 +443,9 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $this->assertSame([1, 1, 0], [$put['written'], $onMat($put), $play('counter_put')['written']]);
         $this->assertSame([['ok', null], ['done', 'ok']], [[($line = $health()['mat'])['state'], $line['hint']], [($s = $step())['status'], $s['state']]], 'un tapis simulé n\'a pas de poste de caisse : lu, il est en ordre');
         $this->assertSame('Posée sur le tapis de comptoir', array_slice(array_column($this->json($this->admin('GET', self::EX . "/pieces/$piece"))['events'], 'label'), -1)[0]);
+        $play('counter_put');
+        $this->assertSame([1, 0], [$onMat($play('heartbeat')), $onMat($play('network_cut'))], 'comme un vrai boîtier : au retour d\'une coupure, ce qui était posé ne l\'est plus pour nous');
+        $play('counter_put');
         $take = $play('counter_take');
         $this->assertSame([1, 0, 'Reprise du tapis de comptoir'], [$take['written'], $onMat($take), array_slice(array_column($this->json($this->admin('GET', self::EX . "/pieces/$piece"))['events'], 'label'), -1)[0]]);
         // rien de tout cela n'existe pour la caisse : un tapis simulé n'a pas de poste, une pièce d'exercice n'est pas suivie
@@ -572,7 +596,9 @@ class LossPreventionCounterTest extends LossPreventionTestCase
     /** La même machine se réinscrit avec la clé du boîtier (remise à zéro pour l'occasion) ; rend son nouveau jeton */
     private function reenrol(int $id, string $oldToken): string
     {
-        $key = $this->json($this->admin('POST', self::BOXES . "/$id/cle", ['confirm' => true]))['key'];
+        $reset = $this->json($this->admin('POST', self::BOXES . "/$id/cle", ['confirm' => true]));
+        $this->assertSame([], array_filter(array_column($reset['box']['devices'], 'onMat')), 'clé remise à zéro : la machine d\'avant est détachée, rien n\'est plus dit posé');
+        $key = $reset['key'];
         $machine = $this->machines[$oldToken];
         $token = $this->json($this->box('POST', '/inscription', ['key' => $key, 'machine' => $machine, 'version' => '1.0.1', 'arch' => 'amd64'], null))['token'];
         $this->machines[$token] = $machine;
