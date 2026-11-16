@@ -301,6 +301,19 @@ class LossBoxRepository extends EntityRepository
         return $this->db()->fetchAllAssociative('SELECT c.tag_id, t.piece_id FROM loss_counter_presence c JOIN loss_tag t ON t.id = c.tag_id WHERE c.device_id = ? AND c.until IS NULL ORDER BY c.id', [$deviceId]);
     }
 
+    /** @return list<array{id: int, name: string, is_active: bool}> tous les postes de caisse du site, actifs ou non (lecture du catalogue de la caisse, jamais d'écriture) */
+    public function cashRegisters(): array
+    {
+        return $this->db()->fetchAllAssociative('SELECT id, name, is_active FROM cash_register ORDER BY id');
+    }
+
+    /** @return array<int, int> le tapis en service de chaque poste de caisse qui en a un : poste => appareil */
+    public function matsByRegister(): array
+    {
+        return array_map('intval', $this->db()->fetchAllKeyValue("SELECT d.cash_register_id, MIN(d.id) FROM loss_device d JOIN loss_box b ON b.id = d.box_id WHERE d.kind = 'counter_mat'"
+            . " AND d.status <> 'retired' AND NOT d.exercise AND b.status <> 'revoked' AND d.cash_register_id IS NOT NULL GROUP BY d.cash_register_id"));
+    }
+
     /** Nombre de postes de caisse actifs du site */
     public function activeRegisterCount(): int
     {

@@ -50,6 +50,31 @@
                 "confirmedMonths": 60
             }
         },
+        "pieces": {
+            "bounds": {
+                "counterWindowMinutes": {
+                    "min": 1,
+                    "max": 60
+                },
+                "catchUpMinutes": {
+                    "min": 5,
+                    "max": 120
+                },
+                "presenceRetentionDays": {
+                    "min": 30,
+                    "max": 730
+                }
+            },
+            "defaults": {
+                "counterWindowMinutes": 10,
+                "catchUpMinutes": 30,
+                "presenceRetentionDays": 90
+            },
+            "counterWindowMinutes": 10,
+            "catchUpMinutes": 30,
+            "presenceRetentionDays": 90,
+            "note": "Les présences sur le tapis de comptoir fermées depuis plus de 90 jours sont effacées automatiquement. Les faits (lectures, ventes, retours) sont conservés."
+        },
         "never": [
             {
                 "code": "faces",

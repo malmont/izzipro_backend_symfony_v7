@@ -100,6 +100,16 @@ class LossBoxController extends AbstractController
         return $this->json($this->useCase->retireDevice($id, $deviceId, $this->body($request), $this->locale($request), $this->userId()));
     }
 
+    /**
+     * Postes de caisse du site (lot L3-b2a) → 200 { items [{ id, name, active, matDeviceId, terminalBound }], terminalNeeded } : pour
+     * relier un tapis à son poste depuis l'administration, sans passer par la garde de la tablette ; une lecture
+     */
+    #[Route('/postes', name: 'gestion_pertes_postes', methods: ['GET'])]
+    public function registers(): JsonResponse
+    {
+        return $this->json($this->useCase->registers());
+    }
+
     /** Tableau de santé du matériel → 200 { devices, summary, thresholdSeconds, exercise, screen, checkedAt } ; une lecture légère, relue par l'écran toutes les quelques secondes */
     #[Route('/sante', name: 'gestion_pertes_sante', methods: ['GET'])]
     public function health(Request $request): JsonResponse

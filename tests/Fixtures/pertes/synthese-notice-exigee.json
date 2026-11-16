@@ -1,17 +1,17 @@
 {
     "request": {
         "method": "GET",
-        "path": "/api/gestion/pertes?from=2026-11-14&to=2026-11-14&locale=fr"
+        "path": "/api/gestion/pertes?from=2026-11-16&to=2026-11-16&locale=fr"
     },
     "status": 200,
     "headers": {},
     "body": {
         "period": {
-            "from": "2026-11-14",
-            "to": "2026-11-14"
+            "from": "2026-11-16",
+            "to": "2026-11-16"
         },
         "lastAnalysis": {
-            "at": "2026-11-15T00:35:05+00:00",
+            "at": "2026-11-16T05:30:16+00:00",
             "pending": false,
             "blocked": "STAFF_NOTICE_REQUIRED",
             "skipped": null,

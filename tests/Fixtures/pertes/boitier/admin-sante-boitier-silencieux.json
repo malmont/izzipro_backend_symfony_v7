@@ -14,10 +14,10 @@
                 "cashRegisterId": null,
                 "state": "down",
                 "stateLabel": "Silencieux",
-                "lastSeenAt": "2026-11-16T03:00:18+00:00",
-                "silentSince": "2026-11-16T03:00:18+00:00",
-                "silentSeconds": 720,
-                "hint": "Silencieux depuis 12 min. Vérifiez son alimentation, son câble réseau et la connexion Internet de la boutique."
+                "lastSeenAt": "2026-11-16T05:49:27+00:00",
+                "silentSince": "2026-11-16T05:49:27+00:00",
+                "silentSeconds": 719,
+                "hint": "Silencieux depuis 11 min. Vérifiez son alimentation, son câble réseau et la connexion Internet de la boutique."
             }
         ],
         "summary": {
@@ -31,6 +31,6 @@
         "thresholdSeconds": 300,
         "exercise": false,
         "screen": "pertes.boitiers",
-        "checkedAt": "2026-11-16T03:12:18+00:00"
+        "checkedAt": "2026-11-16T06:01:26+00:00"
     }
 }

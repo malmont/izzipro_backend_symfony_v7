@@ -3,26 +3,26 @@
         "method": "POST",
         "path": "/api/pertes/boitier/faits",
         "headers": {
-            "X-Loss-Box": "b1.2.1794885136.0000000000000000000000000000000000000000000000000000000000000000"
+            "X-Loss-Box": "b1.2.1794895284.0000000000000000000000000000000000000000000000000000000000000000"
         },
         "body": {
             "facts": [
                 {
-                    "key": "exemple-553101-0010",
+                    "key": "exemple-67906A-0010",
                     "type": "COUNTER_SEEN",
-                    "at": "2026-11-16T03:12:17Z",
+                    "at": "2026-11-16T06:01:25Z",
                     "device": "TAPIS-0001",
                     "data": {
-                        "identifier": "04553101C3D4E5"
+                        "identifier": "0467906AC3D4E5"
                     }
                 },
                 {
-                    "key": "exemple-553101-0011",
+                    "key": "exemple-67906A-0011",
                     "type": "COUNTER_SEEN",
-                    "at": "2026-11-16T03:12:17Z",
+                    "at": "2026-11-16T06:01:25Z",
                     "device": "LECTEUR-0001",
                     "data": {
-                        "identifier": "04553101C3D4E5"
+                        "identifier": "0467906AC3D4E5"
                     }
                 }
             ]
@@ -37,17 +37,17 @@
         "results": [
             {
                 "index": 0,
-                "key": "exemple-553101-0010",
+                "key": "exemple-67906A-0010",
                 "status": "accepted",
                 "code": null
             },
             {
                 "index": 1,
-                "key": "exemple-553101-0011",
+                "key": "exemple-67906A-0011",
                 "status": "refused",
                 "code": "DEVICE_KIND_INVALID"
             }
         ],
-        "serverTime": "2026-11-16T03:12:17+00:00"
+        "serverTime": "2026-11-16T06:01:25+00:00"
     }
 }

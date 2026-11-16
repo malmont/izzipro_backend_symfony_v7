@@ -188,6 +188,8 @@ approval:
         APPROVER_NOT_ALLOWED: This account is not allowed to approve
         APPROVAL_RATE_LIMITED: Too many attempts
 settings:
+    pieces:
+        retention: 'Presences on the counter mat closed for more than %days% days are erased automatically. Facts (reads, sales, returns) are kept.'
     legalNotice: 'These settings follow the country and region of your shop. Have them reviewed by a lawyer before using them for a decision about an employee.'
     personPatterns:
         allowed: 'Rules that count the actions of the same account over time are allowed in your region. You can turn them off.'
@@ -271,6 +273,9 @@ exercise:
             learn: 'See what the cashier limit lets through without approval, and decide whether to change it.'
 # Pieces and tags (lot L2-a, 2026-11-15, docs/prevention-pertes.md § 13)
 pieces:
+    sale:
+        counter: Read on the counter mat
+        catch_up: Caught up at the exit
     status:
         created: In service
         in_stockroom: In the stockroom
@@ -307,6 +312,8 @@ pieces:
         SPOT_CHECK: Read by the handheld reader of the box
         COUNTER_SEEN: Put on the counter mat
         COUNTER_LEFT: Taken off the counter mat
+        PIECE_SOLD: Sold
+        PIECE_RETURNED: Back in store
         ZONE_SEEN: Read in a zone
     error:
         VARIANT_NOT_FOUND: 'Variant not found.'
@@ -558,3 +565,4 @@ health:
             never_read: 'The mat has not read any tag yet. Put a tagged piece on it.'
             never_read_exercise: 'The simulated mat has not read anything yet. Play the "Piece put on the mat" scenario.'
             no_register: 'This mat is not linked to any cash register. Choose its register in the box sheet.'
+            no_terminal: 'No till tablet is bound to register "%register%": the check before payment is off for the cashiers of this register. Bind a tablet to this register (till activation keys).'

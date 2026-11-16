@@ -21,9 +21,9 @@
                 "variantId": 25,
                 "productId": 16,
                 "variantMissing": false,
-                "name": "Sac de plage (exemple 4D4FB0)",
+                "name": "Sac de plage (exemple 7F95C2)",
                 "variantLabel": null,
-                "barcode": "ABCDEF034D4FB0AA",
+                "barcode": "ABCDEF037F95C2AA",
                 "barcodeOf": "variant",
                 "symbology": "code128",
                 "tags": [],
@@ -31,7 +31,7 @@
                 "commandeId": null,
                 "retiredReason": null,
                 "retiredReasonLabel": null,
-                "createdAt": "2026-11-16T01:40:38+00:00",
+                "createdAt": "2026-11-16T05:31:03+00:00",
                 "retiredAt": null
             }
         ],

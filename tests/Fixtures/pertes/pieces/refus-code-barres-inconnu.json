@@ -3,7 +3,7 @@
         "method": "POST",
         "path": "/api/gestion/pertes/pieces?locale=fr",
         "body": {
-            "barcode": "INCONNU-4D4FB0"
+            "barcode": "INCONNU-7F95C2"
         }
     },
     "status": 404,
@@ -12,6 +12,6 @@
         "error": "BARCODE_NOT_FOUND",
         "code": "BARCODE_NOT_FOUND",
         "message": "Ce code-barres ne désigne aucun article : posez-le d'abord sur la variante.",
-        "barcode": "INCONNU-4D4FB0"
+        "barcode": "INCONNU-7F95C2"
     }
 }

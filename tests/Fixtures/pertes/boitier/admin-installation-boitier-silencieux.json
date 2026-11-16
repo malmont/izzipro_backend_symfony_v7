@@ -63,7 +63,7 @@
                     "label": "Vérifier"
                 },
                 "state": "down",
-                "hint": "Silencieux depuis 12 min. Vérifiez son alimentation, son câble réseau et la connexion Internet de la boutique."
+                "hint": "Silencieux depuis 11 min. Vérifiez son alimentation, son câble réseau et la connexion Internet de la boutique."
             },
             {
                 "code": "counter_mat",

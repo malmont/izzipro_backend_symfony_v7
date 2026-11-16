@@ -42,6 +42,16 @@ class LossSetting
     #[ORM\Column(name: 'silent_after_seconds', nullable: true)]
     private ?int $silentAfterSeconds = null;
 
+    /** Lot L3-b2a : fenêtre du tapis, fenêtre du rattrapage (secondes), conservation des présences fermées (jours) ; nul = la valeur du code */
+    #[ORM\Column(name: 'counter_window_seconds', nullable: true)]
+    private ?int $counterWindowSeconds = null;
+
+    #[ORM\Column(name: 'catch_up_seconds', nullable: true)]
+    private ?int $catchUpSeconds = null;
+
+    #[ORM\Column(name: 'presence_retention_days', nullable: true)]
+    private ?int $presenceRetentionDays = null;
+
     /** Dernière séquence du journal de caisse lue par l'analyse ; null = analyse jamais lancée */
     #[ORM\Column(name: 'cursor_sequence', nullable: true)]
     private ?int $cursorSequence = null;

@@ -1,7 +1,7 @@
 {
     "request": {
         "method": "GET",
-        "path": "/api/gestion/pertes/constats?from=2026-11-14&to=2026-11-14&status=open,watch&sort=date&page=1&limit=20&locale=fr"
+        "path": "/api/gestion/pertes/constats?from=2026-11-16&to=2026-11-16&status=open,watch&sort=date&page=1&limit=20&locale=fr"
     },
     "status": 200,
     "headers": {
@@ -21,7 +21,7 @@
             "status": "open",
             "statusLabel": "Nouveau",
             "summary": "Clôture n° 1 : il manque 12,00 $ dans la caisse (attendu 132,75 $, compté 120,75 $).",
-            "storeDay": "2026-11-14",
+            "storeDay": "2026-11-16",
             "cashRegister": {
                 "id": 1,
                 "name": "Caisse principale"
@@ -32,7 +32,7 @@
             "newEvidenceSinceDecision": false,
             "backfill": false,
             "exercise": false,
-            "updatedAt": "2026-11-15T00:35:05+00:00"
+            "updatedAt": "2026-11-16T05:30:16+00:00"
         },
         {
             "id": 5,
@@ -45,7 +45,7 @@
             "status": "open",
             "statusLabel": "Nouveau",
             "summary": "3 ventes annulées pendant une même session, 98,31 $ au total.",
-            "storeDay": "2026-11-14",
+            "storeDay": "2026-11-16",
             "cashRegister": {
                 "id": 1,
                 "name": "Caisse principale"
@@ -56,7 +56,7 @@
             "newEvidenceSinceDecision": false,
             "backfill": false,
             "exercise": false,
-            "updatedAt": "2026-11-15T00:35:05+00:00"
+            "updatedAt": "2026-11-16T05:30:16+00:00"
         },
         {
             "id": 4,
@@ -69,7 +69,7 @@
             "status": "open",
             "statusLabel": "Nouveau",
             "summary": "Vente de 32,77 $ avec une part en espèces, annulée 0 min après l'encaissement.",
-            "storeDay": "2026-11-14",
+            "storeDay": "2026-11-16",
             "cashRegister": {
                 "id": 1,
                 "name": "Caisse principale"
@@ -80,7 +80,7 @@
             "newEvidenceSinceDecision": false,
             "backfill": false,
             "exercise": false,
-            "updatedAt": "2026-11-15T00:35:05+00:00"
+            "updatedAt": "2026-11-16T05:30:16+00:00"
         },
         {
             "id": 3,
@@ -93,7 +93,7 @@
             "status": "open",
             "statusLabel": "Nouveau",
             "summary": "Vente de 32,77 $ avec une part en espèces, annulée 0 min après l'encaissement.",
-            "storeDay": "2026-11-14",
+            "storeDay": "2026-11-16",
             "cashRegister": {
                 "id": 1,
                 "name": "Caisse principale"
@@ -104,7 +104,7 @@
             "newEvidenceSinceDecision": false,
             "backfill": false,
             "exercise": false,
-            "updatedAt": "2026-11-15T00:35:05+00:00"
+            "updatedAt": "2026-11-16T05:30:16+00:00"
         },
         {
             "id": 2,
@@ -117,7 +117,7 @@
             "status": "open",
             "statusLabel": "Nouveau",
             "summary": "Vente de 32,77 $ avec une part en espèces, annulée 0 min après l'encaissement.",
-            "storeDay": "2026-11-14",
+            "storeDay": "2026-11-16",
             "cashRegister": {
                 "id": 1,
                 "name": "Caisse principale"
@@ -128,7 +128,7 @@
             "newEvidenceSinceDecision": false,
             "backfill": false,
             "exercise": false,
-            "updatedAt": "2026-11-15T00:35:05+00:00"
+            "updatedAt": "2026-11-16T05:30:16+00:00"
         },
         {
             "id": 1,
@@ -141,7 +141,7 @@
             "status": "open",
             "statusLabel": "Nouveau",
             "summary": "4 ouvertures du tiroir sans vente pendant une même session (toléré : 3).",
-            "storeDay": "2026-11-14",
+            "storeDay": "2026-11-16",
             "cashRegister": {
                 "id": 1,
                 "name": "Caisse principale"
@@ -152,7 +152,7 @@
             "newEvidenceSinceDecision": false,
             "backfill": false,
             "exercise": false,
-            "updatedAt": "2026-11-15T00:35:05+00:00"
+            "updatedAt": "2026-11-16T05:30:16+00:00"
         }
     ]
 }
