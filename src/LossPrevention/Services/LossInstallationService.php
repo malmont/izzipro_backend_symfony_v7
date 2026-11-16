@@ -43,7 +43,7 @@ class LossInstallationService
         'first_piece' => null, // prouvée par l'état : une pièce porte une puce
     ];
     /** Étapes facultatives, rendues à part : elles ne comptent pas dans l'avancement */
-    public const OPTIONAL = ['box', 'counter_mat'];
+    public const OPTIONAL = ['box', 'counter_mat', 'tag_printer'];
     /** Code imprimé sur l'étiquette d'essai : sous le préfixe réservé aux documents de la caisse, il ne peut désigner aucun article */
     public const TEST_BARCODE = 'IZ-ESSAI-ETIQUETTE';
 
@@ -241,7 +241,9 @@ class LossInstallationService
      */
     private function optionalStates(string $locale, bool $exercise): array
     {
-        return ['box' => $this->health->kindState('box', $locale, $exercise), 'counter_mat' => $this->health->kindState('mat', $locale, $exercise)];
+        // `tag_printer` (lot L3-c) : faite quand une imprimante à puce a écrit et relu une puce
+        return ['box' => $this->health->kindState('box', $locale, $exercise), 'counter_mat' => $this->health->kindState('mat', $locale, $exercise),
+            'tag_printer' => $this->health->kindState('printer', $locale, $exercise)];
     }
 
     /**

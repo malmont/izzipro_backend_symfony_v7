@@ -1,0 +1,34 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/impressions?locale=fr"
+    },
+    "status": 200,
+    "body": {
+        "items": [],
+        "total": 0,
+        "page": 1,
+        "limit": 50,
+        "printers": [
+            {
+                "deviceId": 4,
+                "serial": "IMPR-EXEMPLE",
+                "model": "ZD621R",
+                "status": "ok",
+                "boxId": 3,
+                "boxName": "Boîtier de l'arrière-boutique",
+                "boxEnrolled": true
+            }
+        ],
+        "ready": {
+            "ok": true,
+            "reason": null,
+            "message": null
+        },
+        "limits": {
+            "lines": 200,
+            "openJobs": 20
+        },
+        "exercise": false
+    }
+}

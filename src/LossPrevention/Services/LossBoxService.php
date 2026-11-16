@@ -35,10 +35,11 @@ class LossBoxService
     public const EXERCISE_BOX_LIMIT = 3;
     public const EVENTS_SHOWN = 50;
     /** Scénarios du boîtier simulé */
-    public const SCENARIOS = ['heartbeat', 'network_cut', 'device_down', 'device_up', 'spot_check', 'zone_exit', 'counter_put', 'counter_take'];
+    public const SCENARIOS = ['heartbeat', 'network_cut', 'device_down', 'device_up', 'spot_check', 'zone_exit', 'counter_put', 'counter_take', ...LossPrintService::SCENARIOS];
     private const SIM_EXIT_READER = 'SIM-LECTEUR-SORTIE';
     private const SIM_HAND_READER = 'SIM-LECTEUR-MAIN';
     private const SIM_MAT = 'SIM-TAPIS';
+    private const SIM_PRINTER = 'SIM-IMPRIMANTE';
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -48,6 +49,7 @@ class LossBoxService
         private readonly LossTexts $texts,
         private readonly LossHealthService $health,
         private readonly LossBoxToken $tokens,
+        private readonly ?LossPrintService $prints = null,
     ) {
     }
 
@@ -348,7 +350,8 @@ class LossBoxService
     // ----- Mode exercice : le boîtier simulé -----
 
     /**
-     * Un boîtier simulé, déjà « inscrit », avec deux lecteurs simulés (la sortie, le lecteur à main).
+     * Un boîtier simulé, déjà « inscrit », avec ses appareils simulés : deux lecteurs (la sortie, le lecteur à main), un tapis de
+     * comptoir et une imprimante à puce (lot L3-c).
      *
      * @return array<string, mixed> { box, scenarios }
      */
@@ -365,7 +368,8 @@ class LossBoxService
             $id = $repository->create($this->texts->t('boxes.exercise.name', $locale), $this->texts->t('boxes.exercise.place', $locale), null, null, true, $userId, $now);
             $repository->event($id, null, LossBoxEvent::BOX_CREATED, $userId, true, [], $now);
             $repository->event($id, null, LossBoxEvent::BOX_ENROLLED, null, true, ['again' => false], $now);
-            foreach ([[self::SIM_EXIT_READER, LossDevice::READER, 'exit'], [self::SIM_HAND_READER, LossDevice::READER, null], [self::SIM_MAT, LossDevice::COUNTER_MAT, null]] as [$serial, $kind, $zone]) {
+            foreach ([[self::SIM_EXIT_READER, LossDevice::READER, 'exit'], [self::SIM_HAND_READER, LossDevice::READER, null], [self::SIM_MAT, LossDevice::COUNTER_MAT, null],
+                [self::SIM_PRINTER, LossDevice::PRINTER, null]] as [$serial, $kind, $zone]) {
                 $device = $repository->insertDevice($id, $serial, $kind, null, LossDevice::OK, $zone, true, $now);
                 $repository->event($id, $device, LossBoxEvent::DEVICE_SEEN, null, true, ['kind' => $kind], $now);
             }
@@ -381,14 +385,14 @@ class LossBoxService
      *
      * @return array<string, mixed> { scenario, written, box }
      */
-    public function play(int $id, array $body, string $locale): array
+    public function play(int $id, array $body, string $locale, int $userId = 0): array
     {
         $scenario = $body['scenario'] ?? null;
         if (!is_string($scenario) || !in_array($scenario, self::SCENARIOS, true)) {
             throw new GestionValidationException(['scenario' => array_key_exists('scenario', $body) ? 'INVALID_VALUE' : 'REQUIRED']);
         }
 
-        return $this->transaction(function () use ($id, $scenario, $locale): array {
+        return $this->transaction(function () use ($id, $scenario, $locale, $userId): array {
             $this->exerciseLock();
             $repository = $this->repository();
             $box = $repository->box($id, true);
@@ -401,7 +405,20 @@ class LossBoxService
             }
             $now = self::now();
             $written = 0;
+            $job = null;
             switch ($scenario) {
+                case 'print_ok':
+                case 'print_refused':
+                case 'print_no_labels':
+                    // l'imprimante à puce simulée : un travail d'exercice sur des pièces d'exercice sans puce, et son résultat
+                    $printer = $devices[self::SIM_PRINTER] ?? null;
+                    if ($printer === null || $this->prints === null) {
+                        throw new GestionConflictException('EXERCISE_NO_PRINTER', $this->texts->t('prints.error.EXERCISE_NO_PRINTER', $locale), 409);
+                    }
+                    $played = $this->prints->play($id, $printer, $scenario, $locale, $userId, $now);
+                    $written = $played['written'];
+                    $job = $played['jobId'];
+                    break;
                 case 'heartbeat':
                     $repository->seen($id, $now, null, 0);
                     break;
@@ -463,7 +480,7 @@ class LossBoxService
                     }
             }
 
-            return ['scenario' => $scenario, 'written' => $written, 'box' => $this->sheet($id, $locale, true)];
+            return ['scenario' => $scenario, 'written' => $written, 'box' => $this->sheet($id, $locale, true)] + ($job !== null ? ['printJobId' => $job] : []);
         });
     }
 

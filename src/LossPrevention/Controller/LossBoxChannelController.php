@@ -77,6 +77,19 @@ class LossBoxChannelController extends AbstractController
         return $this->answer(fn (): array => $this->channel->settings($this->box($request)));
     }
 
+    /**
+     * Travaux d'impression à faire (lot L3-c) → 200 { serverTime, jobs [{ id, printer, withPrice, access { rank, password }, lines }], more }.
+     * Une lecture. La réponse porte le mot de passe d'accès des puces : elle n'est jamais gardée en cache ni écrite dans un journal.
+     */
+    #[Route('/travaux', name: 'pertes_boitier_travaux', methods: ['GET'])]
+    public function jobs(Request $request): JsonResponse
+    {
+        $response = $this->answer(fn (): array => $this->channel->jobs($this->box($request)));
+        $response->headers->set('Cache-Control', 'no-store, private');
+
+        return $response;
+    }
+
     /** Lot de faits `{ facts }` (1 à 200) → 200 { received, accepted, duplicates, refused, results, serverTime } ; rejouable ; 429 RATE_LIMITED (plafond de faits par heure) */
     #[Route('/faits', name: 'pertes_boitier_faits', methods: ['POST'])]
     public function facts(Request $request): JsonResponse

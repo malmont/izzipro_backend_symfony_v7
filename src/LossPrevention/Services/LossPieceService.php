@@ -377,6 +377,8 @@ class LossPieceService
             }
             $repository->retirePiece($id, $reason, $now);
             $repository->event(LossPieceEvent::PIECE_RETIRED, $userId, $id, null, $exercise, ['reason' => $reason], $now);
+            // lot L3-c : rien ne sera imprimé pour une pièce retirée ; ses lignes en attente se closent en échec, leurs travaux suivent
+            $this->emProvider->getEntityManager()->getRepository(\App\LossPrevention\Entity\LossPrintJob::class)->failWaitingOfPiece($id, \App\LossPrevention\Entity\LossPrintJobLine::PIECE_RETIRED, $now);
 
             return true;
         });

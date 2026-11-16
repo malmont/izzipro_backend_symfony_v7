@@ -38,6 +38,12 @@ class LossBoxChannelUseCase
         return $this->channel->settings($box);
     }
 
+    /** @param array<string, mixed> $box @return array<string, mixed> */
+    public function jobs(array $box): array
+    {
+        return $this->channel->jobs($box);
+    }
+
     /** @param array<string, mixed> $box @param array<string, mixed> $body @return array<string, mixed> */
     public function facts(array $box, array $body): array
     {

@@ -14,23 +14,36 @@
                 "cashRegisterId": null,
                 "state": "down",
                 "stateLabel": "Silencieux",
-                "lastSeenAt": "2026-11-16T07:02:44+00:00",
-                "silentSince": "2026-11-16T07:02:44+00:00",
+                "lastSeenAt": "2026-11-16T09:13:48+00:00",
+                "silentSince": "2026-11-16T09:13:48+00:00",
                 "silentSeconds": 720,
                 "hint": "Silencieux depuis 11 min. Vérifiez son alimentation, son câble réseau et la connexion Internet de la boutique."
+            },
+            {
+                "code": "printer-2",
+                "kind": "printer",
+                "label": "Imprimante à puce",
+                "zone": null,
+                "cashRegisterId": null,
+                "state": "down",
+                "stateLabel": "Silencieux",
+                "lastSeenAt": "2026-11-16T09:25:46+00:00",
+                "silentSince": "2026-11-16T09:13:48+00:00",
+                "silentSeconds": 720,
+                "hint": "Son boîtier ne donne plus signe de vie : les travaux d'impression attendent. Vérifiez le boîtier."
             }
         ],
         "summary": {
             "ok": 0,
             "pending": 0,
-            "down": 1,
+            "down": 2,
             "absent": 0,
             "allOk": false,
-            "label": "1 appareil à vérifier"
+            "label": "2 appareils à vérifier"
         },
         "thresholdSeconds": 300,
         "exercise": false,
         "screen": "pertes.boitiers",
-        "checkedAt": "2026-11-16T07:14:43+00:00"
+        "checkedAt": "2026-11-16T09:25:47+00:00"
     }
 }

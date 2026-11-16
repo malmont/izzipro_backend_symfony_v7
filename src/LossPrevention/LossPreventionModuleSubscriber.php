@@ -38,7 +38,9 @@ class LossPreventionModuleSubscriber implements EventSubscriberInterface
             // lot L2-b : assistant d'installation et gamme de matériel
             '#^/api/gestion/pertes/exercices/installation\z#', '#^/api/gestion/pertes/exercices/materiel\z#',
             // lot L3-a : boîtier simulé
-            '#^/api/gestion/pertes/exercices/boitiers\z#', '#^/api/gestion/pertes/exercices/boitiers/\d+\z#', '#^/api/gestion/pertes/exercices/sante\z#'],
+            '#^/api/gestion/pertes/exercices/boitiers\z#', '#^/api/gestion/pertes/exercices/boitiers/\d+\z#', '#^/api/gestion/pertes/exercices/sante\z#',
+            // lot L3-c : travaux de l'imprimante simulée
+            '#^/api/gestion/pertes/exercices/impressions\z#', '#^/api/gestion/pertes/exercices/impressions/\d+\z#'],
         'POST' => ['#^/api/gestion/pertes/exercices\z#',
             '#^/api/gestion/pertes/exercices/pieces\z#', '#^/api/gestion/pertes/exercices/pieces/\d+/retirer\z#',
             '#^/api/gestion/pertes/exercices/puces/associer\z#', '#^/api/gestion/pertes/exercices/puces/\d+/retirer\z#',

@@ -58,9 +58,9 @@ class LossBoxUseCase
     }
 
     /** @param array<string, mixed> $body @return array<string, mixed> */
-    public function play(int $id, array $body, string $locale): array
+    public function play(int $id, array $body, string $locale, int $userId = 0): array
     {
-        return $this->boxes->play($id, $body, $locale);
+        return $this->boxes->play($id, $body, $locale, $userId);
     }
 
     /** @param array<string, mixed> $body @return array<string, mixed> */

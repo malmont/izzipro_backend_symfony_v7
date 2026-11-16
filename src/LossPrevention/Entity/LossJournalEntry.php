@@ -43,6 +43,10 @@ class LossJournalEntry
     public const EXERCISE_PIECES_CREATED = 'EXERCISE_PIECES_CREATED';
     /** Pièces d'exercice effacées par le gérant (lot L2-a) : leur nombre, avec leurs puces et leurs faits */
     public const EXERCISE_PIECES_DELETED = 'EXERCISE_PIECES_DELETED';
+    /** Lot L3-c : travail d'impression de puces créé ou annulé ; mot de passe d'accès des puces tiré (son RANG seulement, jamais lui) */
+    public const PRINT_JOB_CREATED = 'PRINT_JOB_CREATED';
+    public const PRINT_JOB_CANCELLED = 'PRINT_JOB_CANCELLED';
+    public const TAG_SECRET_CREATED = 'TAG_SECRET_CREATED';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

@@ -199,6 +199,20 @@ class LossBoxRepository extends EntityRepository
             . " WHERE d.kind = 'counter_mat' AND d.status <> 'retired' AND d.exercise = CAST(? AS boolean) AND b.status <> 'revoked' ORDER BY d.id", [$exercise ? 'true' : 'false']);
     }
 
+    /**
+     * Les imprimantes à puce en service (lot L3-c), avec l'état de leur boîtier et si elles ont déjà écrit une puce relue conforme.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function livePrinters(bool $exercise): array
+    {
+        return $this->db()->fetchAllAssociative(
+            'SELECT d.id, d.serial, d.model, d.status, d.last_seen_at, b.status AS box_status, b.last_seen_at AS box_seen,'
+            . " EXISTS (SELECT 1 FROM loss_print_job_line l JOIN loss_print_job j ON j.id = l.job_id WHERE j.device_id = d.id AND l.status = 'written') AS has_written"
+            . ' FROM loss_device d JOIN loss_box b ON b.id = d.box_id'
+            . " WHERE d.kind = 'printer' AND d.status <> 'retired' AND d.exercise = CAST(? AS boolean) AND b.status <> 'revoked' ORDER BY d.id", [$exercise ? 'true' : 'false']);
+    }
+
     /** @return array{id: int, name: string}|null un poste de caisse actif du site (lecture du catalogue de la caisse, jamais d'écriture) */
     public function cashRegister(int $id): ?array
     {
@@ -438,6 +452,7 @@ class LossBoxRepository extends EntityRepository
     {
         $conn = $this->db();
         $conn->executeStatement("SET LOCAL loss.purge = 'exercise'");
+        $conn->executeStatement('DELETE FROM loss_print_job WHERE exercise'); // lot L3-c : les travaux de l'imprimante simulée (leurs lignes partent avec eux)
         $conn->executeStatement('DELETE FROM loss_piece_event WHERE exercise AND box_id IS NOT NULL');
         $conn->executeStatement('DELETE FROM loss_counter_presence WHERE exercise');
         $conn->executeStatement('DELETE FROM loss_box_event WHERE exercise');

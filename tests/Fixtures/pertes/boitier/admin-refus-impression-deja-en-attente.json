@@ -1,0 +1,22 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/impressions?locale=fr",
+        "body": {
+            "deviceId": 4,
+            "pieceIds": [
+                3,
+                4
+            ]
+        }
+    },
+    "status": 409,
+    "body": {
+        "error": "PIECES_ALREADY_QUEUED",
+        "code": "PIECES_ALREADY_QUEUED",
+        "message": "Certaines pièces attendent déjà dans un travail d'impression.",
+        "pieceIds": [
+            3
+        ]
+    }
+}

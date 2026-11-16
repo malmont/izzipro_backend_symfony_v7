@@ -153,11 +153,11 @@ class LossBoxController extends AbstractController
         return $this->json($this->useCase->sheet($id, $this->locale($request), true));
     }
 
-    /** Jouer un scénario `{ scenario }` → 200 { scenario, written, box } ; 409 EXERCISE_NO_PIECE */
+    /** Jouer un scénario `{ scenario }` → 200 { scenario, written, box, printJobId? } ; 409 EXERCISE_NO_PIECE, EXERCISE_NO_UNTAGGED_PIECE (imprimante simulée) */
     #[Route('/exercices/boitiers/{id}/scenarios', name: 'gestion_pertes_exercices_boitier_scenarios', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function exercisePlay(int $id, Request $request): JsonResponse
     {
-        return $this->json($this->useCase->play($id, $this->body($request), $this->locale($request)));
+        return $this->json($this->useCase->play($id, $this->body($request), $this->locale($request), $this->userId()));
     }
 
     /** Effacer tous les boîtiers simulés → 200 { deleted } */

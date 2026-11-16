@@ -402,6 +402,11 @@ installation:
             text: 'Facultatif. Le tapis lit les puces des articles posés au comptoir : la caisse sait quels articles suivis du panier n''ont pas été lus. Branchez-le sur le boîtier, posez une pièce dessus, puis choisissez son poste de caisse.'
             verify: Vérifier
             hint: 'Aucun tapis de comptoir. Branchez le tapis sur le boîtier.'
+        tag_printer:
+            title: Brancher l'imprimante à puce
+            text: 'Facultatif (niveau pro). L''imprimante imprime l''étiquette et écrit la puce d''un même geste. Branchez-la sur le boîtier, puis lancez un travail d''impression : la première puce écrite et relue termine cette étape.'
+            verify: Vérifier
+            hint: 'Aucune imprimante à puce. Branchez l''imprimante sur le boîtier.'
     hint:
         decimal: 'Le lecteur semble rendre un numéro en chiffres seulement. Réglez-le pour qu''il rende l''identifiant en hexadécimal (chiffres et lettres de A à F).'
         form: 'Cette lecture contient autre chose que des chiffres et des lettres de A à F : ce n''est pas une puce. Vérifiez que le curseur est dans le champ de la puce.'
@@ -450,7 +455,7 @@ hardware:
             pro:
                 what: 'Une imprimante qui imprime l''étiquette et écrit la puce d''un même geste.'
                 allows: 'Une seule étiquette, code-barres et puce ensemble.'
-                limits: 'Matériel spécialisé ; l''application ne propose pas encore l''écriture de la puce.'
+                limits: 'Matériel spécialisé, branché sur un boîtier. L''écriture de la puce se demande dans « Impressions de puces ».'
             standard:
                 what: 'Une imprimante thermique ordinaire, à rouleau d''étiquettes de 50 × 30 mm.'
                 allows: 'Une étiquette par pièce, à la demande, sans encre.'
@@ -539,6 +544,15 @@ boxes:
         counter_take:
             label: Pièce reprise du tapis
             text: 'La pièce quitte le tapis de comptoir simulé.'
+        print_ok:
+            label: Étiquettes imprimées
+            text: 'L''imprimante simulée imprime les étiquettes de pièces d''exercice sans puce, écrit leur puce et la relit.'
+        print_refused:
+            label: Écriture refusée
+            text: 'Une puce refuse l''écriture : sa pièce reste sans puce, les autres étiquettes passent.'
+        print_no_labels:
+            label: Plus d'étiquettes
+            text: 'Le rouleau se termine après la première étiquette : les lignes suivantes passent en échec.'
     error:
         BOX_NOT_FOUND: 'Boîtier introuvable.'
         DEVICE_NOT_FOUND: 'Appareil introuvable sur ce boîtier.'
@@ -555,6 +569,7 @@ health:
     kind:
         box: Boîtier
         mat: Tapis de comptoir
+        printer: Imprimante à puce
     state:
         ok: En ordre
         pending: En attente
@@ -587,3 +602,49 @@ health:
             never_read_exercise: 'Le tapis simulé n''a encore rien lu. Jouez le scénario « Pièce posée sur le tapis ».'
             no_register: 'Ce tapis n''est relié à aucun poste de caisse. Choisissez son poste dans la fiche du boîtier.'
             no_terminal: 'Aucune tablette de caisse n''est rattachée au poste « %register% » : le contrôle avant paiement est arrêté pour les caissiers de ce poste. Rattachez une tablette à ce poste (clés d''activation de la caisse).'
+        printer:
+            absent: 'Aucune imprimante à puce. Branchez l''imprimante sur le boîtier : elle apparaît ici d''elle-même.'
+            absent_exercise: 'Aucune imprimante simulée. Créez un boîtier simulé : il a son imprimante.'
+            down: 'L''imprimante ne répond plus. Vérifiez son câble sur le boîtier, puis son alimentation et son rouleau.'
+            box_silent: 'Son boîtier ne donne plus signe de vie : les travaux d''impression attendent. Vérifiez le boîtier.'
+            never_written: 'L''imprimante n''a encore écrit aucune puce. Lancez un travail d''impression sur une pièce.'
+            never_written_exercise: 'L''imprimante simulée n''a encore rien écrit. Jouez le scénario « Étiquettes imprimées ».'
+# Travaux d'impression de l'imprimante à puce (lot L3-c, 16/11/2026, docs/prevention-pertes.md § 16.20)
+prints:
+    status:
+        waiting: En attente
+        running: En cours
+        done: Terminé
+        cancelled: Annulé
+    line:
+        waiting: En attente
+        written: Écrite
+        failed: En échec
+        cancelled: Annulée
+    reason:
+        tag_unreadable: 'Puce illisible'
+        write_refused: 'Écriture refusée par la puce'
+        verify_failed: 'Relecture non conforme'
+        printer_stopped: 'Imprimante arrêtée'
+        out_of_labels: 'Plus d''étiquettes'
+        piece_retired: 'Pièce retirée entre-temps'
+        tag_limit: 'La pièce porte déjà le nombre maximal de puces'
+        identifier_taken: 'Identifiant déjà connu sur le site'
+    ready:
+        PRINT_KEY_MISSING: 'L''écriture des puces n''est pas encore activée sur ce serveur : la clé de chiffrement du mot de passe des puces (%variable%) n''est pas posée. Contactez la plateforme.'
+        PRINT_KEY_INVALID: 'La clé de chiffrement du mot de passe des puces (%variable%) est illisible : aucun travail d''impression ne peut être créé. Contactez la plateforme.'
+        PRINT_KEY_MISMATCH: 'La clé de chiffrement posée n''est pas celle du mot de passe des puces de ce site : aucun travail d''impression ne peut être créé. Contactez la plateforme.'
+        NO_PRINTER: 'Aucune imprimante à puce n''est branchée sur un boîtier de ce site.'
+    error:
+        PRINT_KEY_MISSING: 'L''écriture des puces n''est pas encore activée sur ce serveur. Contactez la plateforme.'
+        PRINT_KEY_INVALID: 'La clé de chiffrement du mot de passe des puces est illisible. Contactez la plateforme.'
+        PRINT_KEY_MISMATCH: 'La clé de chiffrement posée n''est pas celle du mot de passe des puces de ce site. Contactez la plateforme.'
+        PRINT_ON_REFERENCE_SITE: 'Le site de référence, que les nouveaux sites copient, ne reçoit pas de travail d''impression de puces.'
+        PRINT_JOB_NOT_FOUND: 'Travail d''impression introuvable.'
+        PRINTER_NOT_FOUND: 'Imprimante à puce introuvable.'
+        PRINT_JOBS_LIMIT: 'Trop de travaux d''impression ouverts (%limit% au plus). Attendez la fin d''un travail, ou annulez-en un.'
+        PIECES_ALREADY_QUEUED: 'Certaines pièces attendent déjà dans un travail d''impression.'
+        PIECES_ALREADY_TAGGED: 'Certaines pièces portent déjà une puce. Confirmez pour leur en imprimer une de plus.'
+        PIECE_LABELS_EXHAUSTED: 'Cette pièce a déjà reçu trop d''étiquettes à puce.'
+        EXERCISE_NO_UNTAGGED_PIECE: 'Aucune pièce d''exercice sans puce : créez d''abord des pièces d''exercice.'
+        EXERCISE_NO_PRINTER: 'Ce boîtier simulé n''a pas d''imprimante : créez-en un nouveau.'

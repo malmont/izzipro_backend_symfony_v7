@@ -20,6 +20,8 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class LossPreventionBoxExamplesTest extends LossPreventionTestCase
 {
+    use LossTagKeysTrait;
+
     private const DIR = __DIR__ . '/../../Fixtures/pertes/boitier';
     private const MACHINE = 'machine-d-exemple-0123456789abcdef';
     /** @var array<string, array<string, mixed>> */
@@ -40,7 +42,10 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
     protected function tearDown(): void
     {
         try {
+            $this->tagKeys(null);
             static::getContainer()->get(\App\Services\TenantConnectionManager::class)->getPdoMaster()->exec('DELETE FROM loss_box_pairing');
+            $this->db->executeStatement("UPDATE loss_print_job_line SET status = 'cancelled', done_at = NOW() WHERE status = 'waiting'");
+            $this->db->executeStatement("UPDATE loss_print_job SET status = 'cancelled', cancelled_at = NOW() WHERE status IN ('waiting', 'running')");
             $this->db->executeStatement("UPDATE loss_box SET status = 'revoked', revoked_at = NOW() WHERE NOT exercise AND status <> 'revoked'");
             $this->db->executeStatement("UPDATE loss_device SET status = 'retired', cash_register_id = NULL WHERE NOT exercise AND status <> 'retired'");
             $this->db->executeStatement('UPDATE loss_setting SET silent_after_seconds = NULL');
@@ -162,6 +167,36 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
         $this->json($this->admin('POST', self::BASE . '/boitiers/' . $this->examples['admin-boitier-jumele']['body']['box']['id'] . '/revoquer', ['confirm' => true]));
         $this->pairing('canal-jumelage-ferme', '/etat', $proof);
 
+        // ----- Lot L3-c : l'imprimante à puce. Un boîtier et son imprimante, un travail, ce que le boîtier vient chercher, ses résultats
+        $this->tagKeys(self::tagKey(1)); // la clé d'essai commune aux classes de la suite, jamais une vraie
+        $printBox = $this->json($this->admin('POST', self::BASE . '/boitiers', ['name' => 'Boîtier de l\'arrière-boutique']), 201);
+        $printMachine = 'machine-de-l-imprimante-0123456789';
+        $this->channel('tmp', 'POST', '/inscription', ['key' => $printBox['key'], 'machine' => $printMachine, 'version' => '1.0.0', 'arch' => 'amd64'], null);
+        $printToken = $this->examples['tmp']['body']['token'];
+        $this->channel('tmp', 'POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => $printMachine, 'devices' => [['serial' => 'IMPR-EXEMPLE', 'kind' => 'printer', 'status' => 'ok', 'model' => 'ZD621R']],
+            'lastServerTime' => $this->examples['tmp']['body']['serverTime']], $printToken);
+        $printer = array_column($this->examples['tmp']['body']['settings']['devices'], 'id', 'serial')['IMPR-EXEMPLE'];
+        unset($this->examples['tmp']);
+        $toPrint = array_column($this->json($this->admin('POST', self::BASE . '/pieces', ['variantId' => $variant, 'count' => 3]), 201)['pieces'], 'id');
+        $this->admin_('admin-impressions-au-depart', 'GET', '/impressions');
+        $this->admin_('admin-impression-creee', 'POST', '/impressions', ['deviceId' => $printer, 'pieceIds' => [$toPrint[0], $toPrint[1]], 'withPrice' => true], 201);
+        $print = $this->examples['admin-impression-creee']['body'];
+        $this->admin_('admin-refus-impression-deja-en-attente', 'POST', '/impressions', ['deviceId' => $printer, 'pieceIds' => [$toPrint[1], $toPrint[2]]], 409);
+        $this->channel('canal-travaux', 'GET', '/travaux', null, $printToken);
+        $this->channel('canal-faits-impression', 'POST', '/faits', ['facts' => [
+            ['key' => "impr-$this->s-0001", 'type' => 'TAG_WRITTEN', 'at' => gmdate('Y-m-d\TH:i:s\Z'), 'device' => 'IMPR-EXEMPLE', 'data' => ['line' => $print['lineItems'][0]['id'], 'identifier' => $print['lineItems'][0]['identifier']]],
+            ['key' => "impr-$this->s-0002", 'type' => 'TAG_WRITE_FAILED', 'at' => gmdate('Y-m-d\TH:i:s\Z'), 'device' => 'IMPR-EXEMPLE', 'data' => ['line' => $print['lineItems'][1]['id'], 'reason' => 'write_refused']],
+        ]], $printToken);
+        $this->admin_('admin-impression', 'GET', '/impressions/' . $print['id']);
+        $this->admin_('admin-impressions', 'GET', '/impressions');
+        $this->admin_('admin-impression-a-annuler', 'POST', '/impressions', ['deviceId' => $printer, 'pieceIds' => [$toPrint[2]]], 201);
+        $this->admin_('admin-impression-annulee', 'POST', '/impressions/' . $this->examples['admin-impression-a-annuler']['body']['id'] . '/annuler');
+        $this->admin_('admin-sante-imprimante', 'GET', '/sante');
+        // la clé de chiffrement n'est pas posée : aucun vrai travail ne se crée, l'écran le dit
+        $this->tagKeys(null);
+        $this->admin_('admin-refus-impression-cle-absente', 'POST', '/impressions', ['deviceId' => $printer, 'pieceIds' => [$toPrint[2]]], 409);
+        $this->admin_('admin-impressions-cle-absente', 'GET', '/impressions');
+
         // ----- Mode exercice : le boîtier simulé
         $this->admin_('admin-exercices-boitiers-au-depart', 'GET', '/exercices/boitiers');
         $this->admin_('admin-exercices-boitier-cree', 'POST', '/exercices/boitiers', null, 201);
@@ -171,6 +206,10 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
         $this->admin_('admin-exercices-scenario-lecture', 'POST', "/exercices/boitiers/$simulated/scenarios", ['scenario' => 'spot_check']);
         $this->admin_('admin-exercices-scenario-coupure', 'POST', "/exercices/boitiers/$simulated/scenarios", ['scenario' => 'network_cut']);
         $this->admin_('admin-exercices-refus-scenario', 'POST', "/exercices/boitiers/$simulated/scenarios", ['scenario' => 'incendie'], 422);
+        // l'imprimante à puce simulée (lot L3-c) : des pièces d'exercice sans puce, puis le scénario
+        $this->json($this->admin('POST', self::BASE . '/exercices/pieces', ['variantId' => $variant, 'count' => 3]), 201);
+        $this->admin_('admin-exercices-scenario-impression', 'POST', "/exercices/boitiers/$simulated/scenarios", ['scenario' => 'print_refused']);
+        $this->admin_('admin-exercices-impression', 'GET', '/exercices/impressions/' . $this->examples['admin-exercices-scenario-impression']['body']['printJobId']);
         $this->admin_('admin-exercices-boitier', 'GET', "/exercices/boitiers/$simulated");
         $this->admin_('admin-exercices-installation', 'GET', '/exercices/installation');
         $this->admin_('admin-exercices-sante', 'GET', '/exercices/sante');
@@ -260,6 +299,8 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
     {
         $json = (string) preg_replace('/IZ-BOX-(?!AAAA-AAAA-AAAA)[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/', 'IZ-BOX-XXXX-XXXX-XXXX', $json);
         $json = (string) preg_replace('/IZ-BOX-(?!XX)[A-Z0-9]{2}\*\*-\*{4}-\*{4}/', 'IZ-BOX-XX**-****-****', $json);
+        // le mot de passe d'accès des puces (lot L3-c), que seul le boîtier reçoit : jamais dans un fichier du dépôt
+        $json = (string) preg_replace('/("password": ?")[0-9A-F]{8}"/', '${1}XXXXXXXX"', $json);
         // une durée de silence dépend de la seconde où l'exemple est produit (719 ou 720 s) : dans le fichier, elle est arrondie à la
         // minute, pour que deux générations donnent le même exemple
         $json = (string) preg_replace_callback('/("silentSeconds": )(\d+)/', static fn (array $m): string => $m[1] . (intdiv((int) $m[2] + 30, 60) * 60), $json);

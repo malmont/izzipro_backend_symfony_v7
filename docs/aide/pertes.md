@@ -27,6 +27,18 @@ constat se vérifie, et la décision vous revient. Il ne bloque jamais une vente
    contrôle avant paiement est arrêté pour les caissiers de ce poste. Le tableau de santé vous le dit.
 4. Le **tableau de santé** montre chaque appareil : en ordre, en attente, en panne, avec le conseil qui convient.
 
+## L'imprimante à puce (niveau pro)
+
+1. Elle se branche sur le boîtier. Elle **imprime l'étiquette et écrit la puce d'un même geste** : la pièce reçoit sa puce sans
+   geste de plus.
+2. Dans « Impressions de puces », choisissez les pièces et l'imprimante, avec ou sans le prix. Le boîtier vient chercher le
+   travail de lui-même.
+3. Chaque étiquette est **relue** après l'écriture. Une puce relue est posée sur sa pièce ; sinon la ligne dit pourquoi (puce
+   illisible, plus d'étiquettes…) et la pièce reste sans puce : relancez un travail pour elle.
+4. Une pièce qui porte déjà une puce demande une confirmation avant d'en recevoir une de plus.
+5. Si l'écran dit que l'écriture des puces n'est pas encore activée sur le serveur, contactez la plateforme : ce n'est pas un
+   réglage de votre site.
+
 ## Au comptoir
 
 1. Le caissier **pose les articles suivis sur le tapis** avant le paiement. La caisse lui dit ceux qui n'ont pas été lus ; il les

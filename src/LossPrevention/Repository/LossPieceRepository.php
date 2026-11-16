@@ -268,6 +268,7 @@ class LossPieceRepository extends EntityRepository
     {
         $conn = $this->db();
         $conn->executeStatement("SET LOCAL loss.purge = 'exercise'");
+        $conn->executeStatement('DELETE FROM loss_print_job WHERE exercise'); // lot L3-c : les travaux de l'imprimante simulée portent sur ces pièces
         $conn->executeStatement('DELETE FROM loss_counter_presence WHERE exercise'); // lot L3-b1 : une pièce d'exercice posée sur un tapis simulé
         $conn->executeStatement('DELETE FROM loss_piece_event WHERE exercise');
         $conn->executeStatement('DELETE FROM loss_tag WHERE exercise');

@@ -50,6 +50,21 @@
                 "code": "counter_take",
                 "label": "Pièce reprise du tapis",
                 "text": "La pièce quitte le tapis de comptoir simulé."
+            },
+            {
+                "code": "print_ok",
+                "label": "Étiquettes imprimées",
+                "text": "L'imprimante simulée imprime les étiquettes de pièces d'exercice sans puce, écrit leur puce et la relit."
+            },
+            {
+                "code": "print_refused",
+                "label": "Écriture refusée",
+                "text": "Une puce refuse l'écriture : sa pièce reste sans puce, les autres étiquettes passent."
+            },
+            {
+                "code": "print_no_labels",
+                "label": "Plus d'étiquettes",
+                "text": "Le rouleau se termine après la première étiquette : les lignes suivantes passent en échec."
             }
         ]
     }

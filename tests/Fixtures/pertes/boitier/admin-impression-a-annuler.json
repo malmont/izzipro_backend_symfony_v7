@@ -1,0 +1,54 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/impressions?locale=fr",
+        "body": {
+            "deviceId": 4,
+            "pieceIds": [
+                4
+            ]
+        }
+    },
+    "status": 201,
+    "body": {
+        "id": 2,
+        "status": "waiting",
+        "statusLabel": "En attente",
+        "printer": {
+            "deviceId": 4,
+            "serial": "IMPR-EXEMPLE",
+            "model": "ZD621R",
+            "boxId": 3,
+            "boxName": "Boîtier de l'arrière-boutique"
+        },
+        "withPrice": false,
+        "lines": 1,
+        "written": 0,
+        "failed": 0,
+        "waiting": 1,
+        "cancelled": 0,
+        "createdAt": "2026-11-16T09:25:50+00:00",
+        "finishedAt": null,
+        "cancelledAt": null,
+        "exercise": false,
+        "lineItems": [
+            {
+                "id": 3,
+                "position": 1,
+                "piece": {
+                    "id": 4,
+                    "number": 4,
+                    "name": "Veste en lin (exemple boîtier 4591DE)",
+                    "variantLabel": null
+                },
+                "identifier": "F1A7C63DA5B500000004007F",
+                "status": "waiting",
+                "statusLabel": "En attente",
+                "reason": null,
+                "reasonLabel": null,
+                "tagId": null,
+                "doneAt": null
+            }
+        ]
+    }
+}

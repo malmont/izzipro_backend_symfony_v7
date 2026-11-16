@@ -29,7 +29,8 @@ class LossHealthService
     public const STATES = ['ok', 'pending', 'down', 'absent'];
 
     public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly LossTexts $texts,
-        private readonly ?\App\Repository\TenantAppKeyRepository $appKeys = null, private readonly ?\App\Services\TenantConnectionProvider $tenant = null)
+        private readonly ?\App\Repository\TenantAppKeyRepository $appKeys = null, private readonly ?\App\Services\TenantConnectionProvider $tenant = null,
+        private readonly ?LossPrintService $prints = null)
     {
     }
 
@@ -120,7 +121,10 @@ class LossHealthService
                 'stateLabel' => $this->texts->t('health.state.absent', $locale), 'lastSeenAt' => null, 'silentSince' => null, 'silentSeconds' => null,
                 'hint' => $this->texts->t('health.hint.box.' . ($exercise ? 'absent_exercise' : 'absent'), $locale)];
         }
-        $devices = [...$devices, ...$mats]; // les tapis de comptoir (lot L3-b1) : facultatifs, aucune ligne tant qu'aucun n'est branché
+        // les tapis de comptoir (lot L3-b1) et les imprimantes à puce (lot L3-c) : facultatifs, aucune ligne tant qu'aucun n'est branché
+        $keyProblem = $exercise ? null : $this->prints?->keyProblem(); // un exercice n'emploie aucun mot de passe : il n'a besoin d'aucune clé
+        $printers = array_map(fn (array $printer): array => $this->printerLine($printer, $threshold, $now, $locale, $exercise, $keyProblem), $repository->livePrinters($exercise));
+        $devices = [...$devices, ...$mats, ...$printers];
         $counts = array_fill_keys(self::STATES, 0);
         foreach ($devices as $device) {
             ++$counts[$device['state']];
@@ -263,6 +267,36 @@ class LossHealthService
         $label = $this->texts->t('health.kind.mat', $locale) . ($mat['register_name'] !== null ? ' · ' . $mat['register_name'] : '');
 
         return ['code' => 'mat-' . $mat['id'], 'kind' => 'mat', 'label' => $label, 'zone' => 'counter', 'cashRegisterId' => $register, 'state' => $state,
+            'stateLabel' => $this->texts->t('health.state.' . $state, $locale), 'lastSeenAt' => gmdate('Y-m-d\TH:i:s\+00:00', $seen),
+            'silentSince' => $since !== null ? gmdate('Y-m-d\TH:i:s\+00:00', $since) : null, 'silentSeconds' => $since !== null ? max(0, $now - $since) : null, 'hint' => $hint];
+    }
+
+    /**
+     * La ligne d'une imprimante à puce : en panne si elle ou son boîtier se tait ; en attente tant que la clé de chiffrement du mot de
+     * passe des puces manque (aucun vrai travail ne peut se créer : le tableau le dit à l'administrateur), ou tant qu'elle n'a écrit
+     * aucune puce relue conforme.
+     *
+     * @param array<string, mixed> $printer
+     *
+     * @return array<string, mixed>
+     */
+    private function printerLine(array $printer, int $threshold, int $now, string $locale, bool $exercise, ?string $keyProblem): array
+    {
+        $boxSeen = $printer['box_seen'] !== null ? (new \DateTimeImmutable((string) $printer['box_seen'], new \DateTimeZone('UTC')))->getTimestamp() : null;
+        $seen = (new \DateTimeImmutable((string) $printer['last_seen_at'], new \DateTimeZone('UTC')))->getTimestamp();
+        $boxSilent = $printer['box_status'] !== LossBox::ACTIVE || $boxSeen === null || $now - $boxSeen > $threshold;
+        if ($printer['status'] === 'down' || $boxSilent) {
+            [$state, $hint] = ['down', $this->texts->t('health.hint.printer.' . ($boxSilent ? 'box_silent' : 'down'), $locale)];
+        } elseif ($keyProblem !== null) {
+            [$state, $hint] = ['pending', $this->texts->t('prints.ready.' . $keyProblem, $locale, ['variable' => LossTagVault::VARIABLE])];
+        } elseif (!(bool) $printer['has_written']) {
+            [$state, $hint] = ['pending', $this->texts->t('health.hint.printer.' . ($exercise ? 'never_written_exercise' : 'never_written'), $locale)];
+        } else {
+            [$state, $hint] = ['ok', null];
+        }
+        $since = $state === 'down' ? ($boxSilent && $boxSeen !== null ? min($boxSeen, $seen) : $seen) : null;
+
+        return ['code' => 'printer-' . $printer['id'], 'kind' => 'printer', 'label' => $this->texts->t('health.kind.printer', $locale), 'zone' => null, 'cashRegisterId' => null, 'state' => $state,
             'stateLabel' => $this->texts->t('health.state.' . $state, $locale), 'lastSeenAt' => gmdate('Y-m-d\TH:i:s\+00:00', $seen),
             'silentSince' => $since !== null ? gmdate('Y-m-d\TH:i:s\+00:00', $since) : null, 'silentSeconds' => $since !== null ? max(0, $now - $since) : null, 'hint' => $hint];
     }

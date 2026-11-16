@@ -1,0 +1,49 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/sante?locale=fr"
+    },
+    "status": 200,
+    "body": {
+        "devices": [
+            {
+                "code": "box-3",
+                "kind": "box",
+                "label": "Boîtier de l'arrière-boutique",
+                "zone": null,
+                "cashRegisterId": null,
+                "state": "ok",
+                "stateLabel": "En ordre",
+                "lastSeenAt": "2026-11-16T09:25:49+00:00",
+                "silentSince": null,
+                "silentSeconds": null,
+                "hint": null
+            },
+            {
+                "code": "printer-4",
+                "kind": "printer",
+                "label": "Imprimante à puce",
+                "zone": null,
+                "cashRegisterId": null,
+                "state": "ok",
+                "stateLabel": "En ordre",
+                "lastSeenAt": "2026-11-16T09:25:49+00:00",
+                "silentSince": null,
+                "silentSeconds": null,
+                "hint": null
+            }
+        ],
+        "summary": {
+            "ok": 2,
+            "pending": 0,
+            "down": 0,
+            "absent": 0,
+            "allOk": true,
+            "label": "Tout est en ordre"
+        },
+        "thresholdSeconds": 300,
+        "exercise": false,
+        "screen": "pertes.boitiers",
+        "checkedAt": "2026-11-16T09:25:50+00:00"
+    }
+}

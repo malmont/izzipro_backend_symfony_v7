@@ -403,6 +403,11 @@ installation:
             text: 'Optional. The mat reads the tags of the items put on the counter: the till knows which tracked items of the basket were not read. Plug it into the box, put a piece on it, then choose its cash register.'
             verify: Check
             hint: 'No counter mat. Plug the mat into the box.'
+        tag_printer:
+            title: Plug in the tag printer
+            text: 'Optional (pro level). The printer prints the label and writes the tag in one go. Plug it into the box, then start a print job: the first tag written and read back completes this step.'
+            verify: Check
+            hint: 'No tag printer. Plug the printer into the box.'
     hint:
         decimal: 'The reader seems to return a number made of digits only. Set it to return the identifier in hexadecimal (digits and letters A to F).'
         form: 'This read contains something other than digits and letters A to F: it is not a tag. Check that the cursor is in the tag field.'
@@ -451,7 +456,7 @@ hardware:
             pro:
                 what: 'A printer that prints the label and writes the tag in the same move.'
                 allows: 'A single label, barcode and tag together.'
-                limits: 'Specialised hardware; the app does not offer writing the tag yet.'
+                limits: 'Specialised hardware, plugged into a box. Writing the tag is requested in "Tag printing".'
             standard:
                 what: 'An ordinary thermal printer, with a roll of 50 × 30 mm labels.'
                 allows: 'One label per piece, on demand, without ink.'
@@ -540,6 +545,15 @@ boxes:
         counter_take:
             label: Piece taken off the mat
             text: 'The piece leaves the simulated counter mat.'
+        print_ok:
+            label: Labels printed
+            text: 'The simulated printer prints the labels of practice pieces without a tag, writes their tag and reads it back.'
+        print_refused:
+            label: Write refused
+            text: 'One tag refuses the write: its piece stays without a tag, the other labels go through.'
+        print_no_labels:
+            label: Out of labels
+            text: 'The roll ends after the first label: the following lines fail.'
     error:
         BOX_NOT_FOUND: 'Box not found.'
         DEVICE_NOT_FOUND: 'Device not found on this box.'
@@ -556,6 +570,7 @@ health:
     kind:
         box: Box
         mat: Counter mat
+        printer: Tag printer
     state:
         ok: All good
         pending: Waiting
@@ -588,3 +603,49 @@ health:
             never_read_exercise: 'The simulated mat has not read anything yet. Play the "Piece put on the mat" scenario.'
             no_register: 'This mat is not linked to any cash register. Choose its register in the box sheet.'
             no_terminal: 'No till tablet is bound to register "%register%": the check before payment is off for the cashiers of this register. Bind a tablet to this register (till activation keys).'
+        printer:
+            absent: 'No tag printer. Plug the printer into the box: it shows up here by itself.'
+            absent_exercise: 'No simulated printer. Create a simulated box: it has its printer.'
+            down: 'The printer no longer answers. Check its cable on the box, then its power and its roll.'
+            box_silent: 'Its box no longer gives a sign of life: the print jobs are waiting. Check the box.'
+            never_written: 'The printer has not written any tag yet. Start a print job on a piece.'
+            never_written_exercise: 'The simulated printer has not written anything yet. Play the "Labels printed" scenario.'
+# Print jobs of the tag printer (lot L3-c, 16/11/2026, docs/prevention-pertes.md § 16.20)
+prints:
+    status:
+        waiting: Waiting
+        running: In progress
+        done: Done
+        cancelled: Cancelled
+    line:
+        waiting: Waiting
+        written: Written
+        failed: Failed
+        cancelled: Cancelled
+    reason:
+        tag_unreadable: 'Tag unreadable'
+        write_refused: 'Write refused by the tag'
+        verify_failed: 'Read-back does not match'
+        printer_stopped: 'Printer stopped'
+        out_of_labels: 'Out of labels'
+        piece_retired: 'Piece retired in the meantime'
+        tag_limit: 'The piece already carries the maximum number of tags'
+        identifier_taken: 'Identifier already known on this site'
+    ready:
+        PRINT_KEY_MISSING: 'Writing tags is not enabled on this server yet: the encryption key of the tag password (%variable%) is not set. Contact the platform.'
+        PRINT_KEY_INVALID: 'The encryption key of the tag password (%variable%) cannot be read: no print job can be created. Contact the platform.'
+        PRINT_KEY_MISMATCH: 'The encryption key that is set is not the one of this site''s tag password: no print job can be created. Contact the platform.'
+        NO_PRINTER: 'No tag printer is plugged into a box of this site.'
+    error:
+        PRINT_KEY_MISSING: 'Writing tags is not enabled on this server yet. Contact the platform.'
+        PRINT_KEY_INVALID: 'The encryption key of the tag password cannot be read. Contact the platform.'
+        PRINT_KEY_MISMATCH: 'The encryption key that is set is not the one of this site''s tag password. Contact the platform.'
+        PRINT_ON_REFERENCE_SITE: 'The reference site, which new sites are copied from, does not take tag print jobs.'
+        PRINT_JOB_NOT_FOUND: 'Print job not found.'
+        PRINTER_NOT_FOUND: 'Tag printer not found.'
+        PRINT_JOBS_LIMIT: 'Too many open print jobs (%limit% at most). Wait for a job to finish, or cancel one.'
+        PIECES_ALREADY_QUEUED: 'Some pieces are already waiting in a print job.'
+        PIECES_ALREADY_TAGGED: 'Some pieces already carry a tag. Confirm to print one more for them.'
+        PIECE_LABELS_EXHAUSTED: 'This piece has already received too many tag labels.'
+        EXERCISE_NO_UNTAGGED_PIECE: 'No practice piece without a tag: create practice pieces first.'
+        EXERCISE_NO_PRINTER: 'This simulated box has no printer: create a new one.'

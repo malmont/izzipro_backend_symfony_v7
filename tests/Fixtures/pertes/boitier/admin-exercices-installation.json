@@ -77,6 +77,19 @@
                 },
                 "state": "pending",
                 "hint": "Le tapis simulé n'a encore rien lu. Jouez le scénario « Pièce posée sur le tapis »."
+            },
+            {
+                "code": "tag_printer",
+                "title": "Brancher l'imprimante à puce",
+                "text": "Facultatif (niveau pro). L'imprimante imprime l'étiquette et écrit la puce d'un même geste. Branchez-la sur le boîtier, puis lancez un travail d'impression : la première puce écrite et relue termine cette étape.",
+                "image": "pertes/installation/tag_printer",
+                "status": "done",
+                "verify": {
+                    "kind": "data",
+                    "label": "Vérifier"
+                },
+                "state": "ok",
+                "hint": null
             }
         ],
         "progress": {
