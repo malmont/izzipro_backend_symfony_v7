@@ -16,7 +16,8 @@ class PaymentsController extends AbstractController
         $this->getPaymentsStatisticsUseCase = $getPaymentsStatisticsUseCase;
     }
 
-    #[Route('/api/payments/statistics/{source}', name: 'get_payments_statistics', methods: ['GET'])]
+    // (la source est un mot : lot COST-1, voir StatistiqueGeneraleController)
+    #[Route('/api/payments/statistics/{source}', name: 'get_payments_statistics', methods: ['GET'], requirements: ['source' => '[A-Za-z_]+'])]
     public function getPaymentStatistics( ?string $source = null): JsonResponse
     {
         $sourceMap = [

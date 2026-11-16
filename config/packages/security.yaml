@@ -154,6 +154,8 @@ security:
         # Lot COST-1 (16/11/2026) : la documentation d'API Platform et ses contextes JSON-LD nomment tous les champs des entités (coût
         # d'achat, coefficient, marge…) ; un simple compte client les lisait par la règle générale ^/api. Réservés à l'administrateur.
         - { path: '^/api/(docs|contexts)(/|\.|$)', roles: ROLE_ADMIN }
+        # … de même son point d'entrée (`/api`, `/api/index.html`), qui sert la page Swagger avec tout le document dedans
+        - { path: '^/api(/|/index(\.[a-z]+)?)?$', roles: ROLE_ADMIN }
         - { path: ^/api/products(\.[a-z]+)?$, methods: [GET, HEAD], roles: ROLE_ADMIN }
         - { path: ^/api/products/\d+\.[a-z]+$, methods: [GET, HEAD], roles: ROLE_ADMIN }
         - { path: ^/api/categories(/\d+)?(\.[a-z]+)?$, methods: [GET, HEAD], roles: ROLE_ADMIN }
@@ -232,8 +234,10 @@ security:
         # Thème de l'application e-commerce mobile (31/10/2026) : lecture sans connexion, route dédiée (le profil ne change pas)
         - { path: ^/api/mobile/app-theme$, methods: [GET], roles: PUBLIC_ACCESS }
         - { path: ^/api/app-keys(/|$), roles: ROLE_ADMIN }
-        - { path: ^/api/statistiques/(chiffre-affaires|nombre-commandes|panier-moyen)/pos$, roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
-        - { path: ^/api/payments/statistics/pos$, roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
+        # (`\z` et non `$` : `$` accepte un saut de ligne final, et « pos%0A » passait cette règle pour arriver au contrôleur avec une
+        # source inconnue, lue comme « toutes les sources » : un caissier lisait les ventes du site entier. Lot COST-1, 16/11/2026.)
+        - { path: '^/api/statistiques/(chiffre-affaires|nombre-commandes|panier-moyen)/pos\z', roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
+        - { path: '^/api/payments/statistics/pos\z', roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
         # Gestion (lot G4, 09/11/2026) : notes de frais, référentiels et transporteurs d'achat réservés aux administrateurs (avant : tout utilisateur connecté, transporteurs publics)
         # Module Assistance (lot 1, 12/11/2026) : ROLE_SUPPORT n'ouvre QUE ces routes (aucune autre règle ne le cite) ; l'admin du site y accède aussi
         - { path: ^/api/support(/|$), roles: [ROLE_SUPPORT, ROLE_ADMIN] }

@@ -27,7 +27,8 @@ class StatistiqueGeneraleController extends AbstractController
     ) {
     }
 
-    #[Route('/api/statistiques/chiffre-affaires/{source}', name: 'statistiques_chiffre_affaires', methods: ['GET'])]
+    // (la source est un mot : lot COST-1, un saut de ligne collé à « pos » passait la règle d'accès de la caisse puis valait « toutes les sources »)
+    #[Route('/api/statistiques/chiffre-affaires/{source}', name: 'statistiques_chiffre_affaires', methods: ['GET'], requirements: ['source' => '[A-Za-z_]+'])]
     public function getChiffreAffaires(Request $request, ?string $source = null): JsonResponse
     {
         $orderSource = self::SOURCES[$source] ?? null;
@@ -51,13 +52,13 @@ class StatistiqueGeneraleController extends AbstractController
         return $this->json($this->revenue->execute($orderSource));
     }
 
-    #[Route('/api/statistiques/nombre-commandes/{source}', name: 'statistiques_nombre_commandes', methods: ['GET'], defaults: ['source' => null])]
+    #[Route('/api/statistiques/nombre-commandes/{source}', name: 'statistiques_nombre_commandes', methods: ['GET'], defaults: ['source' => null], requirements: ['source' => '[A-Za-z_]+'])]
     public function getOrderStatistics(?string $source = null): JsonResponse
     {
         return $this->json($this->orderCount->execute(self::SOURCES[$source] ?? null));
     }
 
-    #[Route('/api/statistiques/panier-moyen/{source}', name: 'statistiques_panier_moyen', methods: ['GET'])]
+    #[Route('/api/statistiques/panier-moyen/{source}', name: 'statistiques_panier_moyen', methods: ['GET'], requirements: ['source' => '[A-Za-z_]+'])]
     public function getAverageOrderValueStatistics(?string $source = null): JsonResponse
     {
         return $this->json($this->averageOrderValue->execute(self::SOURCES[$source] ?? null));

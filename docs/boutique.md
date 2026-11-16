@@ -122,8 +122,13 @@ Jusqu'à ce lot, les fiches produit publiques rendaient le **prix d'achat** et l
 - Les deux champs n'existent plus dans les réponses publiques (pas même à `null`). Aucun front ne les lisait par une route publique.
 - Ces réponses sont gardées en cache sous une clé qui ne dépend pas du lecteur : une entrée écrite avant le lot perd son coût à la
   relecture (`__wakeup` des deux objets), sans attendre la fin de sa durée ; le cache des sites est tout de même vidé à la bascule.
-- La documentation d'API Platform et ses contextes JSON-LD (`/api/docs`, `/api/contexts/…`), qui nomment tous les champs des entités,
-  sont réservés à l'administrateur (un simple compte client les lisait).
+- La documentation d'API Platform, ses contextes JSON-LD et son point d'entrée (`/api/docs`, `/api/contexts/…`, `/api`,
+  `/api/index.html` : la page Swagger), qui nomment tous les champs des entités, sont réservés à l'administrateur (un simple compte
+  client les lisait).
+- Trouvé par la relecture du lot : un caissier lisait les statistiques de vente du SITE ENTIER en collant un saut de ligne à sa source
+  (`/api/statistiques/chiffre-affaires/pos%0A`, de même `nombre-commandes`, `panier-moyen` et `/api/payments/statistics/`). La règle
+  d'accès de la caisse finit maintenant par `\z` (un `$` accepte un saut de ligne final), et la source d'une route de statistiques
+  est un mot (`[A-Za-z_]+`). Garde-fou : `tests/Functional/Security/PosStatisticsScopeTest.php`.
 - **Garde-fou** : `tests/Functional/Security/PublicCostLeakTest.php` crée un article au coût, au coefficient, au coût de commande et
   au fournisseur reconnaissables, puis appelle TOUTES les routes de lecture de l'application sans connexion et avec un simple compte
   client : aucune réponse ne porte ces valeurs, ni un nom de champ de coût ou de marge. Une route nouvelle est balayée d'office.

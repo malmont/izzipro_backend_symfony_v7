@@ -30,7 +30,7 @@ class PublicCostLeakTest extends WebTestCase
     /** Valeurs posées sur l'article : leur écriture en cents et en unités, le coefficient, le coût de commande, le fournisseur, la commande */
     private const MARKERS = ['791913', '7919.13', '3.14159', '654321', '6543.21', 'Fournisseur-Secret-COST1', 'Commande-Secrete-COST1'];
     /** Noms de champs qui disent un coût ou une marge, quelle que soit leur valeur */
-    private const KEYS = '/"(purchase_?price|coefficient_?multiplier|commande_?cost\w*|cost_?price|prix_?achat|marge\w*|margin\w*)"\s*:/i';
+    private const KEYS = '/"(purchase_?price|coefficient_?multiplier|coefficient|commande_?cost\w*|cost_?price|unit_?cost|cost_?cents|prix_?achat|marge\w*|margin\w*|supplier\w*|fournisseur\w*)"\s*:/i';
     /** Chemins qui ne rendent pas une réponse de l'application : outils du cadre, fichiers, pages d'administration (fermées par leur garde), sorties vers un tiers */
     private const SKIPPED = '#^/(_|admin(/|$)|assets/|uploads/|media/|bucket-simulator/|logout|stripe/|setup/|create-checkout-session/|stripe-payment)#';
 
@@ -125,11 +125,15 @@ class PublicCostLeakTest extends WebTestCase
         }
         $this->assertSame([], $leaking, 'Réponse(s) ouverte(s) qui rendent un coût, un coefficient, un coût de commande ou un fournisseur.');
         // la documentation d'API Platform nomme tous les champs des entités, coût compris : elle n'est plus lue que par l'administrateur
-        foreach (['/api/docs.json', '/api/docs', '/api/contexts/Product.jsonld'] as $path) {
-            $this->read($path, null);
-            $this->assertSame(401, $this->client->getResponse()->getStatusCode(), $path);
-            $this->read($path, $customer);
-            $this->assertSame(403, $this->client->getResponse()->getStatusCode(), $path);
+        // (son point d'entrée aussi : demandé en HTML, il sert la page Swagger avec tout le document dedans)
+        foreach (['/api/docs.json', '/api/docs', '/api/docs.jsonld', '/api/docs.html', '/api/contexts/Product.jsonld', '/api', '/api/', '/api/index.html', '/api/index.json'] as $path) {
+            foreach (['application/json', 'text/html'] as $accept) {
+                $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . $path, [], [], ['HTTP_ACCEPT' => $accept] + $this->server(null));
+                $this->assertSame(401, $this->client->getResponse()->getStatusCode(), "$path ($accept) sans connexion");
+                $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . $path, [], [], ['HTTP_ACCEPT' => $accept] + $this->server($customer));
+                $this->assertSame(403, $this->client->getResponse()->getStatusCode(), "$path ($accept) pour un compte client");
+                $this->assertSame([], self::leaks((string) $this->client->getResponse()->getContent()), $path);
+            }
         }
         // le balayage a bien lu des réponses : sans cela il ne prouverait rien
         $this->assertGreaterThan(40, $answered['visiteur'], 'réponses 200 lues sans connexion');
