@@ -33,3 +33,5 @@ CREATE TABLE IF NOT EXISTS loss_box_pairing (
 
 -- Les demandes jumelées d'un site (lecture de contrôle)
 CREATE INDEX IF NOT EXISTS idx_loss_box_pairing_site ON loss_box_pairing (tenant_code, box_id) WHERE tenant_code IS NOT NULL;
+-- Le plafond des demandes nouvelles de la plateforme se compte sur la dernière heure, à chaque dépôt d'un code inconnu
+CREATE INDEX IF NOT EXISTS idx_loss_box_pairing_created ON loss_box_pairing (created_at);

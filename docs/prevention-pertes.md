@@ -1447,14 +1447,17 @@ en secours.
   identifiant venu d'une requête ne désigne un boîtier ni un site (le `box_id` de la demande ne sert à aucune recherche). Ce
   n'est pas une clé `IZ-BOX` : la route d'inscription ne l'accepte pas.
 
-**Plafonds** (`LossBoxLimits`) : dépôts, 20 par adresse et par quart d'heure ; **demandes nouvelles, 120 par heure pour toute la
-plateforme** (chaque demande est une ligne de la base maître qui ne s'efface pas, et n'importe qui peut en déposer : au-delà, un
-boîtier NEUF attend l'heure suivante, les boîtiers déjà déposés ne sont pas touchés) ; codes inconnus et mauvaises preuves du
+**Plafonds** (`LossBoxLimits`) : dépôts, 20 par adresse et par quart d'heure ; **demandes nouvelles** (un code que la
+plateforme ne connaît pas : une ligne de la base maître qui ne s'efface pas, et n'importe qui peut en déposer), **10 par adresse et
+par heure, et 300 par heure pour toute la plateforme** (`LossPairingService::NEW_PER_HOUR`, compté dans la base sous verrou
+consultatif : ce plafond-là est exact, il ne dépend ni du cache ni des appels simultanés ; au-delà, un boîtier NEUF ne dépose plus,
+les boîtiers déjà déposés ne sont pas touchés) ; codes inconnus et mauvaises preuves du
 boîtier, 30 par adresse et par quart d'heure, lus AVANT toute lecture (l'adresse est alors arrêtée, même avec la bonne preuve) ;
 questions d'un boîtier qui a fait sa preuve, 120 par demande et par 5 minutes ; jetons remis à un boîtier jumelé, 10 par demande et
 par quart d'heure (chaque remise est une inscription, avec son fait) ; essais d'un administrateur, 10 par site et adresse et 30 par
-site, par quart d'heure (au-delà, même le bon code est refusé). Ces compteurs ne sont pas verrouillés : une rafale de requêtes
-simultanées peut les dépasser de peu ; c'est la taille du code (45 bits) qui tient la garantie, les plafonds la confortent. Avant son jumelage un boîtier n'a que son adresse pour le désigner (comme
+site, par quart d'heure (au-delà, même le bon code est refusé). Hors celui de la plateforme, ces compteurs vivent dans le cache
+et ne sont pas verrouillés : des requêtes simultanées peuvent les dépasser, d'autant plus qu'elles sont nombreuses ; c'est la
+taille du code (45 bits) qui tient la garantie, les plafonds la confortent. Avant son jumelage un boîtier n'a que son adresse pour le désigner (comme
 à l'inscription par clé) ; une fois jumelé il parle avec son jeton, que l'adresse ne limite jamais.
 
 **Les trois points donnés au relecteur** : (1) le site d'un jumelage n'est lu que de la session de l'administrateur ; (2) un code
@@ -1470,9 +1473,12 @@ n'est repris par aucune autre machine ; (3) 45 bits, refus neutre, essais plafon
   MÊME code : un autre boîtier est créé (aléa neuf), et c'est lui que la machine reçoit ;
 - si la réponse d'un jumelage réussi se perd, un second essai reçoit le refus neutre (le code a servi) : le boîtier est bien
   dans la liste du site, le web peut la relire ;
-- quelqu'un qui inonde la plateforme de demandes inventées atteint le plafond des demandes nouvelles : pendant l'heure, un
-  boîtier neuf ne peut pas déposer la sienne (il réessaie seul) ; rien d'autre n'est touché. La table grossit d'au plus 120
-  lignes par heure ;
+- quelqu'un qui inonde la plateforme de demandes inventées, depuis des dizaines d'adresses (10 par adresse et par heure), atteint
+  le plafond de la plateforme : **tant que ce bruit dure**, un boîtier NEUF ne peut pas déposer sa demande (ni un logiciel seul,
+  ni une préparation ; la clé `IZ-BOX` reste en secours) ; les boîtiers déjà déposés ou jumelés ne sont pas touchés. La table
+  grossit d'au plus 300 lignes par heure. À surveiller (nombre de demandes en attente) ; à terme (L6), une preuve de fabrication
+  dispensera les boîtiers vendus de ce plafond. Une préparation de plus de 10 boîtiers par heure depuis la même adresse attend
+  l'heure suivante : à relever en L6 avec la préparation ;
 - **si le secret de l'application change**, toutes les empreintes (codes, machines, boîtiers jumelés) deviennent orphelines,
   comme les clés `IZ-BOX` (§ 16.13) : chaque boîtier repart d'un jumelage neuf ;
 - le serveur ne peut pas vérifier que le boîtier a déposé AVANT de montrer son code : c'est une règle du logiciel du boîtier et
@@ -1490,7 +1496,10 @@ visite du site (`TenantVisitorTrackingListener` : préfixe `/api/pertes/boitier`
 son code à une autre machine (plus aucune suppression) ; écriture anonyme sans plafond global dans la base maître (plafond des
 demandes nouvelles) ; après un boîtier orphelin, le même code rendait 500 sur ce site (aléa par jumelage) ; une panne d'un instant
 de la lecture du site fermait le jumelage pour toujours (le boîtier patiente) ; transaction de la base maître tenue sur une seule
-connexion, et jumelage refusé si la demande n'a pas été écrite ; remises de jeton plafonnées.
+connexion, et jumelage refusé si la demande n'a pas été écrite ; remises de jeton plafonnées. **Seconde passe** : tout est
+corrigé, les trois points sont sains ; le plafond global posé à la première passe se remplissait depuis deux adresses et n'était
+pas exact : il est maintenant précédé d'un plafond par adresse et compté dans la base sous verrou. Le fichier SQL n'a été passé
+sur aucune base avant sa version finale (il ne met pas à niveau une version antérieure de la table).
 
 **Tests** : `LossPreventionPairingTest` (le parcours entier ; refus neutres mot pour mot ; un administrateur d'un second site ; code
 seul sans preuve ; jeton refusé sur un autre site ; réponse perdue ; détacher, clé remise à zéro, module retiré, site introuvable ;

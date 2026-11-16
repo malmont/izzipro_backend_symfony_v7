@@ -64,6 +64,22 @@ class LossPairingRepository
         }
     }
 
+    /** Verrou consultatif des demandes NOUVELLES (base maître) : leur nombre par heure se compte sans course */
+    public const NEW_LOCK = 7461084;
+
+    /**
+     * Combien de demandes ont été créées depuis `$since`, compté sous verrou : deux dépôts de codes inconnus ne se croisent pas, le
+     * plafond de la plateforme est exact (il ne dépend ni du cache ni du nombre d'appels simultanés). À appeler dans une transaction.
+     */
+    public function createdSince(string $since): int
+    {
+        $this->pdo()->exec('SELECT pg_advisory_xact_lock(' . self::NEW_LOCK . ')');
+        $stmt = $this->pdo()->prepare('SELECT COUNT(*) FROM loss_box_pairing WHERE created_at > ?');
+        $stmt->execute([$since]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
     /** @return array<string, mixed>|null la demande de ce code ; `$lock` : tenue jusqu'à la fin de la transaction */
     public function byCodeHash(string $codeHash, bool $lock = false): ?array
     {

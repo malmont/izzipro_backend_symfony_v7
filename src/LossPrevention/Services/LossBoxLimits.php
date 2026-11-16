@@ -28,9 +28,9 @@ use Symfony\Component\RateLimiter\Storage\CacheStorage;
  *
  * Jumelage par code (lot L3-a2, § 16.16) : le boîtier n'a encore ni site ni jeton.
  * - `pairOpen` : dépôts d'une demande de jumelage, par adresse (15 minutes) ;
- * - `pairNew` : demandes NOUVELLES, pour toute la plateforme (1 heure) : chaque demande est une ligne de la base maître qui ne
- *   s'efface pas, et n'importe qui peut en déposer. Au-delà, un boîtier neuf attend l'heure suivante pour déposer la sienne ;
- *   les boîtiers déjà déposés ne sont pas touchés ;
+ * - `pairNew` : demandes NOUVELLES (un code que la plateforme ne connaît pas), par adresse (1 heure) : chaque demande est une
+ *   ligne de la base maître qui ne s'efface pas, et n'importe qui peut en déposer. Le plafond de TOUTE la plateforme, lui, n'est
+ *   pas ici : il se compte dans la base, sous verrou (`LossPairingService::NEW_PER_HOUR`) ;
  * - `pairFailed` : appels du boîtier pour un code inconnu ou avec la mauvaise preuve de machine, par adresse (15 minutes), lu
  *   avant la base : un code ne se devine pas à la chaîne. (Par adresse, comme l'inscription : avant son jumelage un boîtier n'a
  *   rien d'autre qui le désigne ; une fois jumelé il parle avec son jeton, que l'adresse ne limite jamais.)
@@ -44,7 +44,7 @@ use Symfony\Component\RateLimiter\Storage\CacheStorage;
 class LossBoxLimits
 {
     public const LIMITS = ['open' => 20, 'openGlobal' => 60, 'refused' => 60, 'machine' => 10, 'calls' => 600, 'facts' => 20000, 'till' => 6000,
-        'pairOpen' => 20, 'pairNew' => 120, 'pairFailed' => 30, 'pairPolls' => 120, 'pairDelivery' => 10, 'pairAdmin' => 10, 'pairAdminSite' => 30];
+        'pairOpen' => 20, 'pairNew' => 10, 'pairFailed' => 30, 'pairPolls' => 120, 'pairDelivery' => 10, 'pairAdmin' => 10, 'pairAdminSite' => 30];
     private const INTERVALS = ['open' => '15 minutes', 'openGlobal' => '15 minutes', 'refused' => '15 minutes', 'machine' => '15 minutes', 'calls' => '5 minutes', 'facts' => '1 hour', 'till' => '5 minutes',
         'pairOpen' => '15 minutes', 'pairNew' => '1 hour', 'pairFailed' => '15 minutes', 'pairPolls' => '5 minutes', 'pairDelivery' => '15 minutes', 'pairAdmin' => '15 minutes',
         'pairAdminSite' => '15 minutes'];
@@ -109,10 +109,10 @@ class LossBoxLimits
         return $this->consume('pairOpen', $ip, 1);
     }
 
-    /** Une demande NOUVELLE (un code que la plateforme ne connaît pas encore), pour toute la plateforme */
-    public function pairNew(): ?int
+    /** Une demande NOUVELLE (un code que la plateforme ne connaît pas encore) depuis cette adresse */
+    public function pairNew(string $ip): ?int
     {
-        return $this->consume('pairNew', 'plateforme', 1);
+        return $this->consume('pairNew', $ip, 1);
     }
 
     /** Un jeton remis à un boîtier jumelé */

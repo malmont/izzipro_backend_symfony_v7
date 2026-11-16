@@ -38,6 +38,11 @@ class LossPairingService
     public const WAIT_SECONDS = 2592000;
     /** Une demande en attente est renouvelée au plus une fois par demi-journée (une écriture, pas une par question) */
     public const RENEW_EVERY = 43200;
+    /**
+     * Demandes NOUVELLES acceptées par heure pour toute la plateforme, comptées dans la base sous verrou. Avec 10 par adresse et par
+     * heure (`LossBoxLimits`), il faut des dizaines d'adresses pour l'atteindre.
+     */
+    public const NEW_PER_HOUR = 300;
     /** Ce que la plateforme conseille au boîtier entre deux questions (secondes) */
     public const POLL_SECONDS = 15;
     public const INVALID = 'PAIRING_CODE_INVALID';
@@ -82,10 +87,13 @@ class LossPairingService
             $row = $this->pairings->byCodeHash($codeHash, true);
             if ($row === null) {
                 // un code que la plateforme ne connaît pas : une ligne de plus dans la base maître, qui ne s'effacera pas. Leur nombre
-                // par heure est plafonné pour toute la plateforme
-                $wait = $this->limits->pairNew();
+                // par heure est plafonné par adresse, puis pour toute la plateforme (compté ici, dans la base, sous verrou)
+                $wait = $this->limits->pairNew($ip);
                 if ($wait !== null) {
                     throw self::tooMany($wait);
+                }
+                if ($this->pairings->createdSince(gmdate('Y-m-d H:i:s', $serverNow - 3600)) >= self::NEW_PER_HOUR) {
+                    throw self::tooMany(900);
                 }
                 if ($this->pairings->insert($codeHash, $machineHash, $body['version'], $body['arch'], $now, gmdate('Y-m-d H:i:s', $expires))) {
                     return self::answer(LossPairingRepository::WAITING, $serverNow, $expires);

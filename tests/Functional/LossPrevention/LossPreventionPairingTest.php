@@ -296,8 +296,10 @@ class LossPreventionPairingTest extends LossPreventionTestCase
         }
         $this->assertSame(LossBoxLimits::LIMITS['pairAdminSite'], 3 * LossBoxLimits::LIMITS['pairAdmin']);
         $this->assertSame([429, 'waiting'], [$guess($fourth, $code)->getStatusCode(), $this->row($code)['status']]);
-        // le plafond d'un site n'arrête pas un autre site
-        $this->assertSame(404, $this->pair(['code' => LossPairingCode::generate(), 'name' => 'Essai'], $this->adminOfSecondSite(), MV_TEST_TENANT2_HOST, $fourth)->getStatusCode());
+        // les plafonds d'un site n'arrêtent pas un autre site, même depuis l'adresse qui a épuisé les siens sur le premier
+        $elsewhere = $this->adminOfSecondSite();
+        $this->assertSame([404, 404], [$this->pair(['code' => LossPairingCode::generate(), 'name' => 'Essai'], $elsewhere, MV_TEST_TENANT2_HOST, $first)->getStatusCode(),
+            $this->pair(['code' => LossPairingCode::generate(), 'name' => 'Essai'], $elsewhere, MV_TEST_TENANT2_HOST, $fourth)->getStatusCode()]);
 
         // Le boîtier : 30 codes inconnus ou mauvaises preuves par adresse ; au-delà, l'adresse est arrêtée avant toute lecture
         $noisy = self::address();
@@ -322,18 +324,30 @@ class LossPreventionPairingTest extends LossPreventionTestCase
         }
         $this->assertSame(429, $this->box('/etat', ['code' => $code, 'machine' => self::MACHINE], $taker)->getStatusCode());
 
-        // Les demandes NOUVELLES de toute la plateforme : 120 par heure (chacune est une ligne de la base maître qui ne s'efface pas).
-        // Au-delà, un code inconnu n'est plus déposé ; un boîtier déjà déposé redépose et demande où il en est comme avant
-        $limiter = self::pairingLimiter('pairNew', '1 hour', 'plateforme');
-        $limiter->reset();
-        $limiter->consume(LossBoxLimits::LIMITS['pairNew'] - 1);
+        // Les demandes NOUVELLES (un code que la plateforme ne connaît pas : une ligne de la base maître qui ne s'efface pas) :
+        // 10 par adresse et par heure ; une autre adresse n'est pas touchée ; un code déjà déposé se redépose sans compter
+        $prolific = self::address();
+        for ($i = 0; $i < LossBoxLimits::LIMITS['pairNew']; ++$i) {
+            $this->assertSame('waiting', $this->json($this->box('', ['code' => LossPairingCode::generate()] + $request, $prolific))['status'], "demande $i");
+        }
+        $before = $this->requests();
+        $this->assertSame([429, $before], [$this->box('', ['code' => LossPairingCode::generate()] + $request, $prolific)->getStatusCode(), $this->requests()]);
+        $this->assertSame('waiting', $this->json($this->box('', $request, $prolific))['status']);
+        // … et 300 par heure pour TOUTE la plateforme, comptées dans la base : au-delà, un code inconnu n'est plus déposé, d'où
+        // qu'il vienne ; un boîtier déjà déposé redépose et demande où il en est comme avant
         $fresh = self::address();
+        $missing = LossPairingService::NEW_PER_HOUR - 1 - (int) $this->master->query("SELECT COUNT(*) FROM loss_box_pairing WHERE created_at > NOW() AT TIME ZONE 'UTC' - INTERVAL '1 hour'")->fetchColumn();
+        $this->master->exec("INSERT INTO loss_box_pairing (code_hash, machine_hash, version, arch, created_at, seen_at, expires_at) SELECT 'bruit-' || n, 'x', '1.0.0', 'amd64', NOW() AT TIME ZONE 'UTC', NOW() AT TIME ZONE 'UTC', NOW() AT TIME ZONE 'UTC' FROM generate_series(1, $missing) n");
         $before = $this->requests();
         $this->assertSame('waiting', $this->json($this->box('', ['code' => LossPairingCode::generate()] + $request, $fresh))['status'], 'la dernière de l\'heure');
         $full = $this->box('', ['code' => LossPairingCode::generate()] + $request, $fresh);
         $this->assertSame([429, 'RATE_LIMITED', $before + 1], [$full->getStatusCode(), $this->json($full, 429)['error'], $this->requests()]);
+        $this->assertGreaterThan(0, (int) $full->headers->get('Retry-After'));
         $this->assertSame(['waiting', 'waiting'], [$this->json($this->box('', $request, $fresh))['status'], $this->json($this->box('/etat', ['code' => $code, 'machine' => self::MACHINE], $fresh))['status']]);
-        $limiter->reset();
+        // les demandes de plus d'une heure ne comptent plus
+        $this->master->exec("UPDATE loss_box_pairing SET created_at = NOW() AT TIME ZONE 'UTC' - INTERVAL '61 minutes' WHERE code_hash LIKE 'bruit-%'");
+        $this->assertSame('waiting', $this->json($this->box('', ['code' => LossPairingCode::generate()] + $request, $fresh))['status']);
+        $this->master->exec("DELETE FROM loss_box_pairing WHERE code_hash LIKE 'bruit-%'");
 
         // Les jetons remis à un boîtier jumelé : 10 par demande et par quart d'heure (chaque remise est une inscription)
         self::resetPairingSiteLimit(); // les essais du site sont épuisés par ce qui précède

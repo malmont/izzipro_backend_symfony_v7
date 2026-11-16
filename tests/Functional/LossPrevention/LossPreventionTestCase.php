@@ -258,16 +258,14 @@ abstract class LossPreventionTestCase extends WebTestCase
     }
 
     /**
-     * Deux plafonds du jumelage par code (lot L3-a2) sont gardés d'un lancement à l'autre sous une clé qui ne change pas : les essais
-     * par SITE (un site d'essai n'a qu'un nom) et les demandes nouvelles de toute la plateforme. Ils repartent de zéro avant un
-     * test qui jumelle.
+     * Le plafond des essais de code de jumelage par SITE (lot L3-a2) est gardé d'un lancement à l'autre, et un site d'essai n'a
+     * qu'un nom : il repart de zéro pour les sites d'essai avant un test qui jumelle.
      */
     protected static function resetPairingSiteLimit(): void
     {
         foreach ([MV_TEST_TENANT_CODE, MV_TEST_TENANT2_CODE] as $site) {
             self::pairingLimiter('pairAdminSite', '15 minutes', $site)->reset();
         }
-        self::pairingLimiter('pairNew', '1 hour', 'plateforme')->reset();
     }
 
     /** Le compteur d'un plafond du jumelage, tel que `LossBoxLimits` le tient */
