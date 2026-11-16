@@ -3,36 +3,36 @@
         "method": "POST",
         "path": "/api/pertes/boitier/faits",
         "headers": {
-            "X-Loss-Box": "b1.2.1794882485.0000000000000000000000000000000000000000000000000000000000000000"
+            "X-Loss-Box": "b1.2.1794885136.0000000000000000000000000000000000000000000000000000000000000000"
         },
         "body": {
             "facts": [
                 {
-                    "key": "exemple-D6130B-0001",
+                    "key": "exemple-553101-0001",
                     "type": "SPOT_CHECK",
-                    "at": "2026-11-16T02:27:35Z",
+                    "at": "2026-11-16T03:11:46Z",
                     "device": "LECTEUR-0001",
                     "seq": 1,
                     "data": {
-                        "identifier": "04D6130BC3D4E5",
+                        "identifier": "04553101C3D4E5",
                         "technology": "nfc"
                     }
                 },
                 {
-                    "key": "exemple-D6130B-0002",
+                    "key": "exemple-553101-0002",
                     "type": "ZONE_SEEN",
-                    "at": "2026-11-16T02:27:35Z",
+                    "at": "2026-11-16T03:11:46Z",
                     "device": "LECTEUR-0001",
                     "zone": "exit",
                     "seq": 2,
                     "data": {
-                        "identifier": "04D6130BC3D4E5"
+                        "identifier": "04553101C3D4E5"
                     }
                 },
                 {
-                    "key": "exemple-D6130B-0003",
+                    "key": "exemple-553101-0003",
                     "type": "ZONE_SEEN",
-                    "at": "2026-11-16T02:27:35Z",
+                    "at": "2026-11-16T03:11:46Z",
                     "device": "LECTEUR-0001",
                     "zone": "exit",
                     "data": {
@@ -41,12 +41,12 @@
                     }
                 },
                 {
-                    "key": "exemple-D6130B-0004",
+                    "key": "exemple-553101-0004",
                     "type": "SPOT_CHECK",
-                    "at": "2026-11-16T02:27:35Z",
+                    "at": "2026-11-16T03:11:46Z",
                     "device": "IMPR-0001",
                     "data": {
-                        "identifier": "04D6130BC3D4E5"
+                        "identifier": "04553101C3D4E5"
                     }
                 }
             ]
@@ -61,29 +61,29 @@
         "results": [
             {
                 "index": 0,
-                "key": "exemple-D6130B-0001",
+                "key": "exemple-553101-0001",
                 "status": "accepted",
                 "code": null
             },
             {
                 "index": 1,
-                "key": "exemple-D6130B-0002",
+                "key": "exemple-553101-0002",
                 "status": "accepted",
                 "code": null
             },
             {
                 "index": 2,
-                "key": "exemple-D6130B-0003",
+                "key": "exemple-553101-0003",
                 "status": "refused",
                 "code": "TAG_UNKNOWN"
             },
             {
                 "index": 3,
-                "key": "exemple-D6130B-0004",
+                "key": "exemple-553101-0004",
                 "status": "refused",
                 "code": "DEVICE_KIND_INVALID"
             }
         ],
-        "serverTime": "2026-11-16T02:28:05+00:00"
+        "serverTime": "2026-11-16T03:12:16+00:00"
     }
 }

@@ -108,6 +108,8 @@ $master->exec(file_get_contents(__DIR__ . '/../ops/sql/tech_metrics_master.sql')
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_master.sql'));
 // Agences (lot AG-1, 15/11/2026) : agences, sites gérés, forfaits, journal (ops/sql/agency_master.sql, même SQL que la base maître réelle)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/agency_master.sql'));
+// Prévention des pertes (lot L3-a2, 16/11/2026) : demandes de jumelage des boîtiers (ops/sql/loss_pairing_master.sql, même SQL que la base maître réelle)
+$master->exec(file_get_contents(__DIR__ . '/../ops/sql/loss_pairing_master.sql'));
 // Codes courts fixes des sites de test (31/10/2026) : MVT001 et MVT002 (alphabet Crockford)
 $insertTenant = $master->prepare('INSERT INTO tenants (code, name, dbname, custom_domain, short_code) VALUES (?, ?, ?, ?, ?)');
 $insertTenant->execute([MV_TEST_TENANT_CODE, 'Tenant de test', MV_TEST_TENANT_DB, MV_TEST_TENANT_HOST, 'MVT001']);

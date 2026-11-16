@@ -27,7 +27,9 @@ class TenantDoctrineSwitcherListener
         $request = $event->getRequest();
 
         // Routes qui reçoivent volontairement un site inconnu : elles répondent elles-mêmes (vérification, création)
-        $excludedPaths = ['/api/tenant/check', '/api/tenant/check-mobile', '/api/tenant/hosts', '/setup/new-store'];
+        // (16/11/2026, prévention des pertes, lot L3-a2 : le boîtier qui attend son jumelage n'a pas encore de site ; aucun n'est résolu)
+        $excludedPaths = ['/api/tenant/check', '/api/tenant/check-mobile', '/api/tenant/hosts', '/setup/new-store',
+            '/api/pertes/boitier/jumelage', '/api/pertes/boitier/jumelage/etat'];
         if (in_array(\App\Services\Http\RequestPath::of($request), $excludedPaths)) {
             return;
         }

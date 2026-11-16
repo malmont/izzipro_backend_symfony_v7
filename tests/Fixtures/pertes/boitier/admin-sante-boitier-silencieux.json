@@ -14,8 +14,8 @@
                 "cashRegisterId": null,
                 "state": "down",
                 "stateLabel": "Silencieux",
-                "lastSeenAt": "2026-11-16T02:16:07+00:00",
-                "silentSince": "2026-11-16T02:16:07+00:00",
+                "lastSeenAt": "2026-11-16T03:00:18+00:00",
+                "silentSince": "2026-11-16T03:00:18+00:00",
                 "silentSeconds": 720,
                 "hint": "Silencieux depuis 12 min. Vérifiez son alimentation, son câble réseau et la connexion Internet de la boutique."
             }
@@ -31,6 +31,6 @@
         "thresholdSeconds": 300,
         "exercise": false,
         "screen": "pertes.boitiers",
-        "checkedAt": "2026-11-16T02:28:07+00:00"
+        "checkedAt": "2026-11-16T03:12:18+00:00"
     }
 }

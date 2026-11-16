@@ -116,6 +116,41 @@ class LossBoxService
     }
 
     /**
+     * Le nom et le lieu d'un boîtier à ajouter, vérifiés (lot L3-a2 : avant de regarder un code de jumelage).
+     *
+     * @param array<string, mixed> $body
+     *
+     * @return array{0: string, 1: ?string}
+     */
+    public function checkedNames(array $body): array
+    {
+        return $this->names($body, true);
+    }
+
+    /**
+     * Ajouter un boîtier JUMELÉ par code (lot L3-a2, § 16.16) : il attend sa machine, comme un boîtier ajouté par clé, mais
+     * personne ne voit de clé. À la place de l'empreinte d'une clé, il porte celle qui le lie à ce code et à ce site : la machine
+     * qui a déposé ce code, et elle seule, s'y inscrira. Même plafond de boîtiers, compté sous le même verrou.
+     *
+     * @return int l'identifiant du boîtier
+     */
+    public function createPaired(string $name, ?string $place, string $code, string $locale, int $userId): int
+    {
+        return $this->transaction(function () use ($name, $place, $code, $locale, $userId): int {
+            $repository = $this->repository();
+            $this->emProvider->getEntityManager()->getConnection()->executeStatement('SELECT pg_advisory_xact_lock(' . LossBoxRepository::CREATE_LOCK . ')');
+            if ($repository->liveCount(false) >= self::BOX_LIMIT) {
+                throw new GestionConflictException('BOX_LIMIT_REACHED', $this->texts->t('boxes.error.BOX_LIMIT_REACHED', $locale, ['limit' => self::BOX_LIMIT]), 409, ['limit' => self::BOX_LIMIT]);
+            }
+            $now = self::now();
+            $id = $repository->create($name, $place, $this->tokens->pairingKeyHash($this->site(), $code), null, false, $userId, $now);
+            $repository->event($id, null, LossBoxEvent::BOX_CREATED, $userId, false, ['pairing' => true], $now);
+
+            return $id;
+        });
+    }
+
+    /**
      * Renommer un boîtier, dire où il est `{ name?, place? }`.
      *
      * @param array<string, mixed> $body
@@ -480,6 +515,8 @@ class LossBoxService
             'enrolledAt' => ($enrolled = $stamp($box['enrolled_at'])) !== null ? LossAuditEntry::iso($enrolled) : null,
             'clockOffsetSeconds' => $offset, 'clockDoubt' => $active && $offset !== null && abs($offset) > LossBoxChannelService::CLOCK_TOLERANCE,
             'keyHint' => $box['key_hint'], 'exercise' => (bool) $box['exercise'],
+            // ajouté par un code de jumelage (lot L3-a2) : personne n'a vu de clé ; faux dès qu'un administrateur lui en donne une
+            'paired' => !(bool) $box['exercise'] && $box['key_hint'] === null,
             'devices' => array_map(function (array $device) use ($locale, $stamp, $extras): array {
                 $register = $device['cash_register_id'] !== null ? (int) $device['cash_register_id'] : null;
                 $mat = $device['kind'] === LossDevice::COUNTER_MAT;

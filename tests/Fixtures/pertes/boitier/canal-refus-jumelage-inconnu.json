@@ -1,0 +1,16 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/pertes/boitier/jumelage/etat",
+        "body": {
+            "code": "ABC-DEF-GHJ",
+            "machine": "machine-jumelee-d-exemple-0123456789"
+        }
+    },
+    "status": 404,
+    "body": {
+        "error": "PAIRING_CODE_INVALID",
+        "code": "PAIRING_CODE_INVALID",
+        "message": "Code de jumelage inconnu."
+    }
+}

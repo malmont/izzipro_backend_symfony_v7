@@ -6,6 +6,7 @@ use App\LossPrevention\LossBoxGuardSubscriber;
 use App\LossPrevention\Services\LossBoxException;
 use App\LossPrevention\Services\LossBoxToken;
 use App\LossPrevention\UseCase\LossBoxChannelUseCase;
+use App\LossPrevention\UseCase\LossPairingUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -23,8 +24,29 @@ class LossBoxChannelController extends AbstractController
     /** Corps accepté au plus (octets) : 200 faits tiennent très au large */
     private const MAX_BODY = 262144;
 
-    public function __construct(private readonly LossBoxChannelUseCase $channel)
+    public function __construct(private readonly LossBoxChannelUseCase $channel, private readonly LossPairingUseCase $pairing)
     {
+    }
+
+    /**
+     * Jumelage par code (lot L3-a2), SANS site ni jeton : le boîtier dépose sa demande `{ code, machine, version, arch }` → 200
+     * { status: waiting | paired | closed, expiresAt, pollSeconds, serverTime } ; 404 PAIRING_CODE_INVALID (code déjà déposé par une
+     * autre machine), 422, 429
+     */
+    #[Route('/jumelage', name: 'pertes_boitier_jumelage', methods: ['POST'])]
+    public function pairingDeposit(Request $request): JsonResponse
+    {
+        return $this->answer(fn (): array => $this->pairing->deposit($this->body($request), $request->getClientIp() ?? 'unknown'));
+    }
+
+    /**
+     * Où en est le jumelage `{ code, machine }`, SANS site ni jeton → 200 { status: waiting | closed, … } ou
+     * { status: paired, host, box, token, expiresAt, serverTime, settings } ; 404 PAIRING_CODE_INVALID (code inconnu ou mauvaise machine)
+     */
+    #[Route('/jumelage/etat', name: 'pertes_boitier_jumelage_etat', methods: ['POST'])]
+    public function pairingState(Request $request): JsonResponse
+    {
+        return $this->answer(fn (): array => $this->pairing->state($this->body($request), $request->getClientIp() ?? 'unknown'));
     }
 
     /** Inscription d'une machine `{ key, machine, version, arch }` → 200 { box, token, expiresAt, serverTime, settings } ; 404 BOX_KEY_INVALID, 403 BOX_REVOKED, 409 BOX_KEY_ALREADY_ENROLLED */

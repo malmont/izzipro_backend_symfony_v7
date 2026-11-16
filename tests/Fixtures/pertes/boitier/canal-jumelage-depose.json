@@ -1,0 +1,19 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/pertes/boitier/jumelage",
+        "body": {
+            "code": "KX7-42P-9QM",
+            "machine": "machine-jumelee-d-exemple-0123456789",
+            "version": "1.0.0",
+            "arch": "arm64"
+        }
+    },
+    "status": 200,
+    "body": {
+        "status": "waiting",
+        "expiresAt": "2026-12-16T03:12:19+00:00",
+        "pollSeconds": 15,
+        "serverTime": "2026-11-16T03:12:19+00:00"
+    }
+}

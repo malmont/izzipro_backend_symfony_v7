@@ -1,7 +1,7 @@
 {
     "request": {
         "method": "POST",
-        "path": "/api/gestion/pertes/exercices/boitiers/2/scenarios?locale=fr",
+        "path": "/api/gestion/pertes/exercices/boitiers/3/scenarios?locale=fr",
         "body": {
             "scenario": "incendie"
         }

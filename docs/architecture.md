@@ -34,7 +34,7 @@ Ce qui est commun à tout le backend. Chaque module a sa fiche (voir « Modules 
 | Élément | Où |
 |---|---|
 | Base maître (table `tenants` : `code`, `dbname`, `custom_domain`, `short_code`…) | `MASTER_DATABASE_URL` → base `app_v2_db` (l'ancienne base `master` n'est plus lue par rien : ne pas y écrire) |
-| Résolution du tenant d'une requête | `EventListener/TenantDoctrineSwitcherListener` : en-tête `X-Tenant-Host`, sinon `?tenant=`/`?t=` ou session (EasyAdmin), sinon l'hôte ; domaine principal du backend → `tenantdefaut`. Site demandé par l'en-tête ou `?tenant=` mais inconnu → **404 `TENANT_NOT_FOUND`** avant toute lecture (17/10/2026 ; sauf `tenant/check`, `tenant/check-mobile`, `setup/new-store` et le domaine du backend) ; sans site, base maître comme avant |
+| Résolution du tenant d'une requête | `EventListener/TenantDoctrineSwitcherListener` : en-tête `X-Tenant-Host`, sinon `?tenant=`/`?t=` ou session (EasyAdmin), sinon l'hôte ; domaine principal du backend → `tenantdefaut`. Site demandé par l'en-tête ou `?tenant=` mais inconnu → **404 `TENANT_NOT_FOUND`** avant toute lecture (17/10/2026 ; sauf `tenant/check`, `tenant/check-mobile`, `setup/new-store`, les deux routes du jumelage d'un boîtier `pertes/boitier/jumelage` et `…/etat` qui n'ont pas encore de site, et le domaine du backend) ; sans site, base maître comme avant |
 | Hôte → tenant | `TenantConnectionManager::findTenantConfigByHost` (cache Redis 1 h, hôte en minuscules) : 1) `custom_domain` (avec ou sans `www.`), 2) `code` par `codeFromHost` (règle resserrée le 17/10/2026) : code nu, `<code>.<FRONTEND_BASE_DOMAIN>`, `<code>.<…>.<BACKEND_BASE_DOMAIN>`, `<code>.localhost`, ou le domaine du frontend lui-même ; suffixe `-v2` ignoré, `-`/`_` équivalents. Un autre domaine ne désigne plus un site. `GET /api/tenant/check` suit la même règle (site inconnu : 404 « Ce site n'existe pas. », sans proposition de création depuis le 17/10/2026 ; création réservée à l'administrateur de la plateforme, formulaire `/setup/new-store` protégé par `TENANT_CREATION_SECRET_KEY`). Liste publique de ces hôtes pour le frontend : `GET /api/tenant/hosts` (`TenantPublicHostResolver::listPublicHosts`, cache 60 s, tag `tenants`). Depuis le 05/11/2026 l'administrateur d'un site enregistre lui-même son domaine propre (`/api/site/domain`, page Mon site, assistant ; `TenantConnectionManager::setCustomDomain` invalide `tenants`), avec vérification DNS et HTTPS et procédure : `docs/console-pilotage.md` « Domaine propre » |
 | Base du tenant courant | `TenantConnectionProvider` (bascule la connexion Doctrine par défaut) ; code du tenant : `getTenantCode()` |
 
@@ -105,7 +105,8 @@ dont le contenu d'exemple de la landing page et de la boutique, marqué `is_demo
   - Les scripts lisent la liste des bases dans `app_v2_db` (comme l'application) depuis le 30/09/2026.
   - La base modèle `gmasuite` est dans `tenants` : un nouveau tenant hérite donc du schéma à jour.
 - Tables de plateforme (pas dans les bases tenant) : dans `app_v2_db`, via `TenantConnectionManager::getPdoMaster()`
-  (ex. `landing_config_sync`, `tenant_app_keys` : `scripts/migrate_master_app_keys.sh`). L'hôte public d'un site
+  (ex. `landing_config_sync`, `tenant_app_keys` : `scripts/migrate_master_app_keys.sh` ; `loss_box_pairing`, demandes de jumelage des
+  boîtiers de la prévention des pertes : `ops/sql/loss_pairing_master.sql`). L'hôte public d'un site
   (`custom_domain`, sinon `<code>.FRONTEND_BASE_DOMAIN`) est calculé par `Services/TenantPublicHostResolver`.
 
 ## Authentification et sécurité

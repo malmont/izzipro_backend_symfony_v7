@@ -1,0 +1,21 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/pertes/boitier/jumelage",
+        "body": {
+            "code": "pas un code",
+            "machine": "machine-jumelee-d-exemple-0123456789"
+        }
+    },
+    "status": 422,
+    "body": {
+        "error": "VALIDATION_FAILED",
+        "code": "VALIDATION_FAILED",
+        "message": "Demande de jumelage invalide.",
+        "fields": {
+            "version": "REQUIRED",
+            "arch": "REQUIRED",
+            "code": "INVALID_VALUE"
+        }
+    }
+}

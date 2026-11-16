@@ -106,15 +106,7 @@ class LossBoxChannelService
     public function enrol(array $body): array
     {
         $site = $this->tenantCode(); // avant toute lecture : sans site résolu, rien n'est cherché
-        $errors = [];
-        foreach (['machine' => self::MACHINE, 'version' => self::VERSION] as $field => $pattern) {
-            if (!is_string($body[$field] ?? null) || preg_match($pattern, $body[$field]) !== 1) {
-                $errors[$field] = array_key_exists($field, $body) ? 'INVALID_VALUE' : 'REQUIRED';
-            }
-        }
-        if (!in_array($body['arch'] ?? null, self::ARCHS, true)) {
-            $errors['arch'] = array_key_exists('arch', $body) ? 'INVALID_VALUE' : 'REQUIRED';
-        }
+        $errors = self::machineErrors($body);
         if (!array_key_exists('key', $body)) {
             $errors['key'] = 'REQUIRED';
         }
@@ -126,31 +118,92 @@ class LossBoxChannelService
         $machine = $this->tokens->machineHash($site, $body['machine']);
 
         return $this->transaction(function () use ($site, $key, $machine, $body): array {
-            $repository = $this->repository();
-            $box = $repository->boxByKeyHash($this->tokens->keyHash($site, $key)) ?? throw new LossBoxException('BOX_KEY_INVALID', 'Clé de boîtier inconnue.', 404);
+            $box = $this->repository()->boxByKeyHash($this->tokens->keyHash($site, $key)) ?? throw new LossBoxException('BOX_KEY_INVALID', 'Clé de boîtier inconnue.', 404);
             if ($box['status'] === LossBox::REVOKED) {
                 throw new LossBoxException('BOX_REVOKED', 'Ce boîtier a été révoqué.', 403);
             }
             if ($box['machine_hash'] !== null && !hash_equals((string) $box['machine_hash'], $machine)) {
                 throw new LossBoxException('BOX_KEY_ALREADY_ENROLLED', 'Cette clé est déjà liée à une autre machine : l\'administrateur doit la remettre à zéro.', 409);
             }
-            $serverNow = time();
-            $now = gmdate('Y-m-d H:i:s', $serverNow);
-            $boxId = (int) $box['id'];
-            $again = $box['machine_hash'] !== null;
-            // une machine qui se réinscrit après un silence : le trou est un fait, comme au retour d'un signe de vie
-            $silent = $again && $box['last_seen_at'] !== null ? $serverNow - self::stamp((string) $box['last_seen_at']) : 0;
-            if ($silent > $this->health->silentAfter()) {
-                $repository->event($boxId, null, LossBoxEvent::BOX_BACK, null, false, ['silentSeconds' => $silent, 'since' => self::iso(self::stamp((string) $box['last_seen_at']))], $now);
-            }
-            // une machine (ré)inscrite ne sait plus ce que la plateforme croyait posé sur ses tapis : tout se ferme, elle le redira
-            $repository->closePresencesOf($repository->matIdsOf($boxId), self::boxTime($serverNow, $box['clock_offset']));
-            $generation = $repository->enrol($boxId, $machine, $body['version'], $body['arch'], $now);
-            $repository->event($boxId, null, LossBoxEvent::BOX_ENROLLED, null, false, ['version' => $body['version'], 'arch' => $body['arch'], 'again' => $again], $now);
-            $token = $this->tokens->issue($site, $boxId, $generation, $serverNow);
 
-            return ['box' => ['id' => $boxId], 'token' => $token['token'], 'expiresAt' => self::iso($token['expiresAt']), 'serverTime' => self::iso($serverNow), 'settings' => $this->settingsOf($boxId)];
+            return $this->enrolLocked($box, $site, $machine, $body['version'], $body['arch'], false);
         });
+    }
+
+    /**
+     * Inscription de la machine d'un boîtier JUMELÉ par code (lot L3-a2, § 16.16), dans le site de la requête. Le boîtier du site
+     * est retrouvé par l'empreinte qui le lie à CE code et à CE site : aucun identifiant venu d'ailleurs ne désigne un boîtier.
+     * La forme de `$machine`, `$version` et `$arch` est vérifiée par l'appelant (`LossPairingService`).
+     *
+     * @return array<string, mixed>|null { box, token, expiresAt, serverTime, settings } ; null : ce jumelage ne vaut plus rien
+     *                                   (boîtier révoqué, clé remise à zéro depuis, autre machine inscrite)
+     */
+    public function enrolPaired(string $code, string $machine, string $version, string $arch): ?array
+    {
+        $site = $this->tenantCode();
+        $machineHash = $this->tokens->machineHash($site, $machine);
+
+        return $this->transaction(function () use ($site, $code, $machineHash, $version, $arch): ?array {
+            $box = $this->repository()->boxByKeyHash($this->tokens->pairingKeyHash($site, $code));
+            if ($box === null || (bool) $box['exercise'] || $box['status'] === LossBox::REVOKED
+                || ($box['machine_hash'] !== null && !hash_equals((string) $box['machine_hash'], $machineHash))) {
+                return null;
+            }
+
+            return $this->enrolLocked($box, $site, $machineHash, $version, $arch, true);
+        });
+    }
+
+    /**
+     * Le boîtier, tenu par l'appelant dans sa transaction, reçoit sa machine : il devient actif, sa génération avance, ses
+     * présences se ferment, et il reçoit son jeton.
+     *
+     * @param array<string, mixed> $box la ligne du boîtier, verrouillée
+     *
+     * @return array<string, mixed> { box, token, expiresAt, serverTime, settings }
+     */
+    private function enrolLocked(array $box, string $site, string $machine, string $version, string $arch, bool $paired): array
+    {
+        $repository = $this->repository();
+        $serverNow = time();
+        $now = gmdate('Y-m-d H:i:s', $serverNow);
+        $boxId = (int) $box['id'];
+        $again = $box['machine_hash'] !== null;
+        // une machine qui se réinscrit après un silence : le trou est un fait, comme au retour d'un signe de vie
+        $silent = $again && $box['last_seen_at'] !== null ? $serverNow - self::stamp((string) $box['last_seen_at']) : 0;
+        if ($silent > $this->health->silentAfter()) {
+            $repository->event($boxId, null, LossBoxEvent::BOX_BACK, null, false, ['silentSeconds' => $silent, 'since' => self::iso(self::stamp((string) $box['last_seen_at']))], $now);
+        }
+        // une machine (ré)inscrite ne sait plus ce que la plateforme croyait posé sur ses tapis : tout se ferme, elle le redira
+        $repository->closePresencesOf($repository->matIdsOf($boxId), self::boxTime($serverNow, $box['clock_offset']));
+        $generation = $repository->enrol($boxId, $machine, $version, $arch, $now);
+        $repository->event($boxId, null, LossBoxEvent::BOX_ENROLLED, null, false, ['version' => $version, 'arch' => $arch, 'again' => $again] + ($paired ? ['pairing' => true] : []), $now);
+        $token = $this->tokens->issue($site, $boxId, $generation, $serverNow);
+
+        return ['box' => ['id' => $boxId], 'token' => $token['token'], 'expiresAt' => self::iso($token['expiresAt']), 'serverTime' => self::iso($serverNow), 'settings' => $this->settingsOf($boxId)];
+    }
+
+    /**
+     * La forme de ce qu'une machine dit d'elle : son empreinte, sa version, son architecture (aussi pour le jumelage par code).
+     *
+     * @param array<string, mixed> $body
+     * @param list<string>         $fields parmi `machine`, `version`, `arch`
+     *
+     * @return array<string, string> erreurs par champ
+     */
+    public static function machineErrors(array $body, array $fields = ['machine', 'version', 'arch']): array
+    {
+        $errors = [];
+        foreach (array_intersect_key(['machine' => self::MACHINE, 'version' => self::VERSION], array_flip($fields)) as $field => $pattern) {
+            if (!is_string($body[$field] ?? null) || preg_match($pattern, $body[$field]) !== 1) {
+                $errors[$field] = array_key_exists($field, $body) ? 'INVALID_VALUE' : 'REQUIRED';
+            }
+        }
+        if (in_array('arch', $fields, true) && !in_array($body['arch'] ?? null, self::ARCHS, true)) {
+            $errors['arch'] = array_key_exists('arch', $body) ? 'INVALID_VALUE' : 'REQUIRED';
+        }
+
+        return $errors;
     }
 
     /**

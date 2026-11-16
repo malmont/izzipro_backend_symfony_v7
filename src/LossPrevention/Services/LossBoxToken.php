@@ -67,6 +67,30 @@ class LossBoxToken
         return hash_hmac('sha256', 'loss-box-machine|' . $tenantCode . '|' . $machine, $this->secret);
     }
 
+    /**
+     * Empreinte gardée d'un code de jumelage (lot L3-a2), dans la base maître : le code n'a pas encore de site. Liée au secret de
+     * l'application : une copie de la table ne rend aucun code.
+     */
+    public function pairingCodeHash(string $code): string
+    {
+        return hash_hmac('sha256', 'loss-pairing-code|' . $code, $this->secret);
+    }
+
+    /** Empreinte gardée de la machine qui a déposé une demande de jumelage : la preuve qu'elle présente à chaque appel */
+    public function pairingMachineHash(string $machine): string
+    {
+        return hash_hmac('sha256', 'loss-pairing-machine|' . $machine, $this->secret);
+    }
+
+    /**
+     * Empreinte posée à la place de la clé d'un boîtier JUMELÉ par code : elle lie le boîtier du site au code qui l'a créé, et à
+     * ce site. Elle ne peut pas être celle d'une clé `IZ-BOX` (la forme d'une clé ne commence jamais par « pairing| »).
+     */
+    public function pairingKeyHash(string $tenantCode, string $code): string
+    {
+        return $this->keyHash($tenantCode, 'pairing|' . $code);
+    }
+
     private function signature(string $tenantCode, int $boxId, int $generation, int $expires): string
     {
         return hash_hmac('sha256', sprintf('loss-box|%s|%d|%d|%d', $tenantCode, $boxId, $generation, $expires), $this->secret);

@@ -23,6 +23,9 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * - **Deux routes seulement s'ouvrent sans jeton vérifié ici**, écrites en toutes lettres (méthode POST, chemin exact) :
  *   l'inscription (elle demande la clé du boîtier) et l'échange de jeton (elle vérifie elle-même un jeton, même expiré). Toutes
  *   deux sont limitées en débit par adresse.
+ * - **Deux autres, pour le jumelage par code** (lot L3-a2 : `PAIRING_ROUTES`), s'ouvrent sans site ni jeton : le boîtier qui attend
+ *   son jumelage n'a encore ni l'un ni l'autre. Elles ne lisent ni n'écrivent rien d'un site tant que la preuve de la machine n'est
+ *   pas faite (`LossPairingService`).
  * - Le boîtier authentifié est posé dans l'attribut `_loss_box` de la requête ; le contrôleur refuse de travailler sans lui (une
  *   garde débranchée ne laisse donc rien passer). Plafonds (`LossBoxLimits`) : essais des deux routes ouvertes par adresse ;
  *   appels d'un jeton bien signé mais refusé, par boîtier et par génération (arrêtés avant toute lecture de la base, sans jamais
@@ -34,6 +37,11 @@ class LossBoxGuardSubscriber implements EventSubscriberInterface
     public const PATH = '#^/api/pertes/boitier(/|$)#';
     /** Routes ouvertes sans jeton vérifié par la garde : POST, chemin exact (`\z`, jamais `$`) */
     public const OPEN_ROUTES = ['#^/api/pertes/boitier/inscription\z#', '#^/api/pertes/boitier/jeton\z#'];
+    /**
+     * Jumelage par code (lot L3-a2) : POST, chemin exact. Le boîtier n'a encore NI site NI jeton ; sa preuve est l'empreinte de sa
+     * machine, vérifiée par `LossPairingService`, qui tient aussi ses plafonds. Aucun site n'est résolu pour ces deux routes.
+     */
+    public const PAIRING_ROUTES = ['#^/api/pertes/boitier/jumelage\z#', '#^/api/pertes/boitier/jumelage/etat\z#'];
     public const ATTRIBUTE = '_loss_box';
 
     public function __construct(private readonly LossBoxChannelService $channel, private readonly TenantConnectionProvider $tenant, private readonly LossBoxLimits $limits)
@@ -52,6 +60,9 @@ class LossBoxGuardSubscriber implements EventSubscriberInterface
         $path = RequestPath::of($request);
         if (!$event->isMainRequest() || $event->hasResponse() || !preg_match(self::PATH, $path)) {
             return;
+        }
+        if ($request->getMethod() === 'POST' && self::isPairing($path)) {
+            return; // la route vérifie elle-même la preuve de la machine, et compte ses essais
         }
         $site = (string) $this->tenant->getTenantCode();
         if ($request->getMethod() === 'POST' && self::isOpen($path)) {
@@ -93,6 +104,18 @@ class LossBoxGuardSubscriber implements EventSubscriberInterface
             return;
         }
         $request->attributes->set(self::ATTRIBUTE, $box);
+    }
+
+    /** Les deux routes du jumelage par code : sans site, sans jeton */
+    public static function isPairing(string $path): bool
+    {
+        foreach (self::PAIRING_ROUTES as $open) {
+            if (preg_match($open, $path)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function isOpen(string $path): bool

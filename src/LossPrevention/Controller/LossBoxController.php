@@ -4,7 +4,9 @@ namespace App\LossPrevention\Controller;
 
 use App\Entity\User;
 use App\Gestion\Services\GestionValidationException;
+use App\Gestion\Services\GestionConflictException;
 use App\LossPrevention\UseCase\LossBoxUseCase;
+use App\LossPrevention\UseCase\LossPairingUseCase;
 use App\Services\EmailConfigurationService\EmailLocale;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -20,8 +22,26 @@ use Symfony\Component\Routing\Attribute\Route;
 #[Route('/api/gestion/pertes')]
 class LossBoxController extends AbstractController
 {
-    public function __construct(private readonly LossBoxUseCase $useCase, private readonly ?EmailLocale $siteLocale = null)
+    public function __construct(private readonly LossBoxUseCase $useCase, private readonly LossPairingUseCase $pairing, private readonly ?EmailLocale $siteLocale = null)
     {
+    }
+
+    /**
+     * Jumeler un boîtier par son code `{ code, name, place? }` (lot L3-a2) → 201 { box } : le boîtier est relié au site de la
+     * session, il attend sa machine ; 404 PAIRING_CODE_INVALID (inconnu, expiré, déjà servi : même refus), 409 BOX_LIMIT_REACHED, 429
+     */
+    #[Route('/boitiers/jumeler', name: 'gestion_pertes_boitiers_jumeler', methods: ['POST'])]
+    public function pair(Request $request): JsonResponse
+    {
+        try {
+            return $this->json($this->pairing->pair($this->body($request), $this->locale($request), $this->userId(), $request->getClientIp() ?? 'unknown'), 201);
+        } catch (GestionConflictException $e) {
+            if ($e->status !== 429) {
+                throw $e;
+            }
+
+            return $this->json($e->toArray(), 429, ['Retry-After' => (string) ($e->details['retryAfterSeconds'] ?? 60)]);
+        }
     }
 
     /** Boîtiers du site → 200 { items, total, limit, exercise, screen } ; une lecture */

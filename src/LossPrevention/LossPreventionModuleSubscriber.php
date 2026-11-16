@@ -66,6 +66,11 @@ class LossPreventionModuleSubscriber implements EventSubscriberInterface
         if (!$event->isMainRequest() || $event->hasResponse() || !preg_match(self::PATH, $path)) {
             return;
         }
+        // Jumelage par code (lot L3-a2) : le boîtier n'a pas encore de site, il n'y a pas de droit de module à lire. Le droit est
+        // vérifié plus loin, dans le site jumelé, avant de lui remettre son jeton (`LossPairingService::state`)
+        if ($event->getRequest()->getMethod() === 'POST' && LossBoxGuardSubscriber::isPairing($path)) {
+            return;
+        }
         foreach (self::OPEN_ROUTES[strtoupper($event->getRequest()->getMethod())] ?? [] as $open) {
             if (preg_match($open, $path)) {
                 return; // mode exercice : ouvert sans le droit du module

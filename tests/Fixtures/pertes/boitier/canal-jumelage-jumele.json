@@ -1,0 +1,42 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/pertes/boitier/jumelage/etat",
+        "body": {
+            "code": "KX7-42P-9QM",
+            "machine": "machine-jumelee-d-exemple-0123456789"
+        }
+    },
+    "status": 200,
+    "body": {
+        "status": "paired",
+        "host": "mvtest.test",
+        "box": {
+            "id": 2
+        },
+        "token": "b2.2.1794885139.0000000000000000000000000000000000000000000000000000000000000000",
+        "expiresAt": "2026-11-17T03:12:19+00:00",
+        "serverTime": "2026-11-16T03:12:19+00:00",
+        "settings": {
+            "heartbeatSeconds": 60,
+            "silentAfterSeconds": 300,
+            "facts": {
+                "types": [
+                    "SPOT_CHECK",
+                    "ZONE_SEEN",
+                    "COUNTER_SEEN",
+                    "COUNTER_LEFT"
+                ],
+                "maxBatch": 200
+            },
+            "zones": [
+                "stockroom",
+                "stockroom_door",
+                "floor",
+                "counter",
+                "exit"
+            ],
+            "devices": []
+        }
+    }
+}

@@ -1,0 +1,16 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/boitiers/jumeler?locale=fr",
+        "body": {
+            "code": "ABC-DEF-GHJ",
+            "name": "Boîtier de la réserve"
+        }
+    },
+    "status": 404,
+    "body": {
+        "error": "PAIRING_CODE_INVALID",
+        "code": "PAIRING_CODE_INVALID",
+        "message": "Code inconnu, ou boîtier pas encore branché à Internet. Branchez le boîtier, attendez que son voyant clignote, puis réessayez."
+    }
+}

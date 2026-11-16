@@ -1,0 +1,53 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/boitiers/2?locale=fr"
+    },
+    "status": 200,
+    "body": {
+        "id": 2,
+        "name": "Boîtier de la réserve",
+        "place": "Réserve",
+        "status": "active",
+        "statusLabel": "Inscrit",
+        "online": true,
+        "onlineLabel": "En ligne",
+        "lastSeenAt": "2026-11-16T03:12:19+00:00",
+        "lastSeenLabel": "15/11/2026 22 h 12",
+        "silentSeconds": null,
+        "version": "1.0.0",
+        "arch": "arm64",
+        "enrolledAt": "2026-11-16T03:12:19+00:00",
+        "clockOffsetSeconds": null,
+        "clockDoubt": false,
+        "keyHint": null,
+        "exercise": false,
+        "paired": true,
+        "devices": [],
+        "createdAt": "2026-11-16T03:12:19+00:00",
+        "screen": "pertes.boitiers",
+        "events": [
+            {
+                "id": 16,
+                "type": "BOX_ENROLLED",
+                "label": "Machine inscrite",
+                "at": "2026-11-16T03:12:19+00:00",
+                "atLabel": "15/11/2026 22 h 12",
+                "device": null,
+                "silentSeconds": null,
+                "byUser": false
+            },
+            {
+                "id": 15,
+                "type": "BOX_CREATED",
+                "label": "Boîtier ajouté",
+                "at": "2026-11-16T03:12:19+00:00",
+                "atLabel": "15/11/2026 22 h 12",
+                "device": null,
+                "silentSeconds": null,
+                "byUser": true
+            }
+        ],
+        "factsReceived": 0
+    }
+}

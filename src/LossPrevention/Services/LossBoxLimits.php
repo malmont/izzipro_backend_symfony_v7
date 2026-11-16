@@ -26,12 +26,22 @@ use Symfony\Component\RateLimiter\Storage\CacheStorage;
  *   compte pour ses lignes, au moins une) : une question par paiement suffit très au large ; la route ne sert pas à sonder le
  *   catalogue (lot L3-b1).
  *
+ * Jumelage par code (lot L3-a2, § 16.16) : le boîtier n'a encore ni site ni jeton.
+ * - `pairOpen` : dépôts d'une demande de jumelage, par adresse (15 minutes) ;
+ * - `pairFailed` : appels du boîtier pour un code inconnu ou avec la mauvaise preuve de machine, par adresse (15 minutes), lu
+ *   avant la base : un code ne se devine pas à la chaîne. (Par adresse, comme l'inscription : avant son jumelage un boîtier n'a
+ *   rien d'autre qui le désigne ; une fois jumelé il parle avec son jeton, que l'adresse ne limite jamais.)
+ * - `pairPolls` : questions « où en est mon jumelage ? » d'un boîtier qui a fait sa preuve, par demande (5 minutes) ;
+ * - `pairAdmin` et `pairAdminSite` : essais de code d'un administrateur, par site et adresse, et par site (15 minutes).
+ *
  * Chaque méthode rend null quand l'appel passe, sinon le nombre de secondes à attendre.
  */
 class LossBoxLimits
 {
-    public const LIMITS = ['open' => 20, 'openGlobal' => 60, 'refused' => 60, 'machine' => 10, 'calls' => 600, 'facts' => 20000, 'till' => 6000];
-    private const INTERVALS = ['open' => '15 minutes', 'openGlobal' => '15 minutes', 'refused' => '15 minutes', 'machine' => '15 minutes', 'calls' => '5 minutes', 'facts' => '1 hour', 'till' => '5 minutes'];
+    public const LIMITS = ['open' => 20, 'openGlobal' => 60, 'refused' => 60, 'machine' => 10, 'calls' => 600, 'facts' => 20000, 'till' => 6000,
+        'pairOpen' => 20, 'pairFailed' => 30, 'pairPolls' => 120, 'pairAdmin' => 10, 'pairAdminSite' => 30];
+    private const INTERVALS = ['open' => '15 minutes', 'openGlobal' => '15 minutes', 'refused' => '15 minutes', 'machine' => '15 minutes', 'calls' => '5 minutes', 'facts' => '1 hour', 'till' => '5 minutes',
+        'pairOpen' => '15 minutes', 'pairFailed' => '15 minutes', 'pairPolls' => '5 minutes', 'pairAdmin' => '15 minutes', 'pairAdminSite' => '15 minutes'];
 
     /** @var array<string, RateLimiterFactory> */
     private array $factories = [];
@@ -85,6 +95,36 @@ class LossBoxLimits
     public function till(string $site, int $userId, int $lines): ?int
     {
         return $this->consume('till', $site . '|' . $userId, max(1, $lines));
+    }
+
+    /** Un dépôt de demande de jumelage depuis cette adresse */
+    public function pairDeposit(string $ip): ?int
+    {
+        return $this->consume('pairOpen', $ip, 1);
+    }
+
+    /** Cette adresse a-t-elle encore droit à un code inconnu ou à une mauvaise preuve ? Lu avant la base, sans rien compter */
+    public function pairFailedLeft(string $ip): ?int
+    {
+        return $this->left('pairFailed', $ip);
+    }
+
+    /** Un code inconnu, ou la mauvaise preuve de machine */
+    public function pairFailed(string $ip): void
+    {
+        $this->factories['pairFailed']->create($ip)->consume(1);
+    }
+
+    /** Une question « où en est mon jumelage ? » d'un boîtier qui a fait sa preuve */
+    public function pairPoll(string $codeHash): ?int
+    {
+        return $this->consume('pairPolls', $codeHash, 1);
+    }
+
+    /** Un essai de code par un administrateur */
+    public function pairAdmin(string $site, string $ip): ?int
+    {
+        return $this->consume('pairAdmin', $site . '|' . $ip, 1) ?? $this->consume('pairAdminSite', $site, 1);
     }
 
     /** `$count` faits envoyés par un boîtier */

@@ -518,6 +518,8 @@ boxes:
         REGISTER_ALREADY_HAS_MAT: 'This cash register already has a mat: unlink or retire it first.'
         BOX_REVOKED: 'This box is revoked: add another one.'
         BOX_LIMIT_REACHED: 'This site already has %limit% boxes: revoke those no longer in use.'
+        PAIRING_CODE_INVALID: 'Unknown code, or the box is not connected to the Internet yet. Plug the box in, wait for its light to blink, then try again.'
+        PAIRING_RATE_LIMITED: 'Too many code attempts. Try again in a quarter of an hour.'
         EXERCISE_LIMIT_REACHED: 'You already have %limit% simulated boxes: delete them before creating more.'
         EXERCISE_NO_PIECE: 'No exercise piece carries a tag: first put a simulated tag on an exercise piece.'
 # Hardware health board (lot L3-a, 2026-11-15, docs/prevention-pertes.md § 16.13)

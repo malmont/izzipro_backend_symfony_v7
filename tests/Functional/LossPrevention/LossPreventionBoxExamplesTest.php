@@ -33,11 +33,14 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
         $this->s = strtoupper(bin2hex(random_bytes(3)));
         $this->ip = '10.' . random_int(1, 250) . '.' . random_int(1, 250) . '.' . random_int(1, 250);
         $this->flags(true, true);
+        static::getContainer()->get(\App\Services\TenantConnectionManager::class)->getPdoMaster()->exec('DELETE FROM loss_box_pairing');
+        self::resetPairingSiteLimit();
     }
 
     protected function tearDown(): void
     {
         try {
+            static::getContainer()->get(\App\Services\TenantConnectionManager::class)->getPdoMaster()->exec('DELETE FROM loss_box_pairing');
             $this->db->executeStatement("UPDATE loss_box SET status = 'revoked', revoked_at = NOW() WHERE NOT exercise AND status <> 'revoked'");
             $this->db->executeStatement("UPDATE loss_device SET status = 'retired', cash_register_id = NULL WHERE NOT exercise AND status <> 'retired'");
             $this->db->executeStatement('UPDATE loss_setting SET silent_after_seconds = NULL');
@@ -143,6 +146,21 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
         $this->admin_('admin-refus-introuvable', 'GET', '/boitiers/999999999', null, 404);
         $this->admin_('admin-installation', 'GET', '/installation');
 
+        // ----- Lot L3-a2 : le jumelage par code. Le boîtier, SANS site ni jeton, à l'adresse de la plateforme ; puis l'administrateur
+        $code = 'KX7-42P-9QM';
+        $deposit = ['code' => $code, 'machine' => 'machine-jumelee-d-exemple-0123456789', 'version' => '1.0.0', 'arch' => 'arm64'];
+        $proof = ['code' => $code, 'machine' => $deposit['machine']];
+        $this->pairing('canal-jumelage-depose', '', $deposit);
+        $this->pairing('canal-jumelage-en-attente', '/etat', $proof);
+        $this->pairing('canal-refus-jumelage-inconnu', '/etat', ['code' => 'ABC-DEF-GHJ'] + $proof, 404);
+        $this->pairing('canal-refus-jumelage-invalide', '', ['code' => 'pas un code', 'machine' => $deposit['machine']], 422);
+        $this->pairer('admin-refus-jumelage', ['code' => 'ABC-DEF-GHJ', 'name' => 'Boîtier de la réserve'], 404);
+        $this->pairer('admin-boitier-jumele', ['code' => 'kx7 42p 9qm', 'name' => 'Boîtier de la réserve', 'place' => 'Réserve'], 201);
+        $this->pairing('canal-jumelage-jumele', '/etat', $proof);
+        $this->admin_('admin-boitier-jumele-inscrit', 'GET', '/boitiers/' . $this->examples['admin-boitier-jumele']['body']['box']['id']);
+        $this->json($this->admin('POST', self::BASE . '/boitiers/' . $this->examples['admin-boitier-jumele']['body']['box']['id'] . '/revoquer', ['confirm' => true]));
+        $this->pairing('canal-jumelage-ferme', '/etat', $proof);
+
         // ----- Mode exercice : le boîtier simulé
         $this->admin_('admin-exercices-boitiers-au-depart', 'GET', '/exercices/boitiers');
         $this->admin_('admin-exercices-boitier-cree', 'POST', '/exercices/boitiers', null, 201);
@@ -207,6 +225,25 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
             $body = ['facts' => '(201 faits)'];
         }
         $this->remember($name, $method, $path, $token !== null ? ['X-Loss-Box' => $token] : [], $body, $status, $this->client->getResponse());
+    }
+
+    /** Un appel du boîtier qui attend son jumelage (lot L3-a2) : à la plateforme, sans site ni jeton ; gardé comme exemple */
+    private function pairing(string $name, string $path, array $body, int $status = 200): void
+    {
+        $path = '/api/pertes/boitier/jumelage' . $path;
+        $this->client->getCookieJar()->clear();
+        $this->client->request('POST', 'https://plateforme.example.invalid' . $path, [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json', 'REMOTE_ADDR' => $this->ip], json_encode($body));
+        $this->remember($name, 'POST', $path, [], $body, $status, $this->client->getResponse());
+    }
+
+    /** « Jumeler un boîtier » par l'administrateur, depuis l'adresse du test (ses essais sont plafonnés par adresse) ; gardé comme exemple */
+    private function pairer(string $name, array $body, int $status): void
+    {
+        $path = self::BASE . '/boitiers/jumeler?locale=fr';
+        $this->client->getCookieJar()->clear();
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . $path, [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json',
+            'HTTP_AUTHORIZATION' => 'Bearer ' . $this->adminToken, 'REMOTE_ADDR' => $this->ip], json_encode($body));
+        $this->remember($name, 'POST', $path, [], $body, $status, $this->client->getResponse());
     }
 
     /** @param array<string, string> $headers */

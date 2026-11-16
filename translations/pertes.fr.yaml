@@ -517,6 +517,8 @@ boxes:
         REGISTER_ALREADY_HAS_MAT: 'Ce poste de caisse a déjà un tapis : déliez-le ou retirez-le d''abord.'
         BOX_REVOKED: 'Ce boîtier est révoqué : ajoutez-en un autre.'
         BOX_LIMIT_REACHED: 'Ce site a déjà %limit% boîtiers : révoquez ceux qui ne servent plus.'
+        PAIRING_CODE_INVALID: 'Code inconnu, ou boîtier pas encore branché à Internet. Branchez le boîtier, attendez que son voyant clignote, puis réessayez.'
+        PAIRING_RATE_LIMITED: 'Trop d''essais de code. Réessayez dans un quart d''heure.'
         EXERCISE_LIMIT_REACHED: 'Vous avez déjà %limit% boîtiers simulés : effacez-les avant d''en créer d''autres.'
         EXERCISE_NO_PIECE: 'Aucune pièce d''exercice ne porte de puce : posez d''abord une puce simulée sur une pièce d''exercice.'
 # Tableau de santé du matériel (lot L3-a, 15/11/2026, docs/prevention-pertes.md § 16.13)
