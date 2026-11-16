@@ -154,6 +154,19 @@ class EntryTest extends WebTestCase
 
         // UNE LECTURE PUBLIQUE est servie comme à un visiteur
         $this->assertSame(200, $this->request('GET', "/api/entreprise/$sheetId", $token)->getStatusCode());
+        // … sans son identité : la lecture d'administrateur d'API Platform (rangée publique en lecture) lui reste fermée
+        $this->assertNotSame(200, $this->request('GET', '/api/categories', $token)->getStatusCode(), 'servie comme à un visiteur, jamais sous les rôles de l\'opérateur');
+
+        // LES IMPORTS DE CLIENTS du site ne se voient pas et ne se touchent pas, même déposés par le commerçant
+        $provider = static::getContainer()->get(TenantEntityManagerProvider::class);
+        $provider->switchTenant(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE);
+        $customersJob = static::getContainer()->get(\App\Import\ImportJobStore::class)->create('shopify', 'customers', 'clients.csv', 'entree-' . $this->tag . '.csv', str_repeat('a', 64), 3, 'entree-essai');
+        $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $kinds = static fn (array $list): array => array_values(array_unique(array_column($list['imports'] ?? [], 'kind')));
+        $this->assertContains('customers', $kinds(json_decode((string) $this->request('GET', '/api/site/imports', $admin2)->getContent(), true)), 'le commerçant le voit');
+        $this->assertNotContains('customers', $kinds(json_decode((string) $this->request('GET', '/api/site/imports', $token)->getContent(), true)), 'l\'agence ne le voit pas');
+        $this->assertSame([403, 'kind'], $this->reason('GET', "/api/site/imports/$customersJob", $token));
+        $this->assertSame([403, 'kind'], $this->reason('POST', "/api/site/imports/$customersJob/confirm", $token, []));
 
         // LE JETON vaut sur CE site seulement : ni sur le site d'attache, ni sous l'en-tête d'un autre site
         $this->assertSame(401, $this->request('GET', '/api/media', $token, MV_TEST_TENANT_HOST)->getStatusCode());
@@ -197,6 +210,12 @@ class EntryTest extends WebTestCase
         $again = $this->enter($member, MV_TEST_TENANT2_CODE);
         $this->master->prepare("UPDATE site_entries SET expires_at = NOW() - INTERVAL '1 minute' WHERE id = ?")->execute([$again['entry']]);
         $this->forget($again['entry']);
+        $this->assertSame(401, $this->request('GET', '/api/media', $again['token'])->getStatusCode());
+
+        // … la ligne de l'entrée relue à chaque requête : un autre site visé, même avec le lien gardé en cache, ferme la porte
+        $again = $this->enter($member, MV_TEST_TENANT2_CODE);
+        $this->assertSame(200, $this->request('GET', '/api/media', $again['token'])->getStatusCode());
+        $this->master->prepare('UPDATE site_entries SET target_tenant_code = ? WHERE id = ?')->execute(['ailleurs-' . $this->tag, $again['entry']]);
         $this->assertSame(401, $this->request('GET', '/api/media', $again['token'])->getStatusCode());
 
         // … DÉCONNEXION du site d'attache : toutes ses entrées ferment aussitôt (sans attendre la minute)
@@ -423,6 +442,7 @@ class EntryTest extends WebTestCase
             $this->pdo($db)->exec("DELETE FROM refresh_tokens WHERE username LIKE 'entree-%@example.invalid'");
             $this->pdo($db)->exec("DELETE FROM \"user\" WHERE email LIKE 'entree-%@example.invalid'");
             $this->pdo($db)->exec("DELETE FROM content_audit_log WHERE resource = 'external_access'");
+            $this->pdo($db)->exec("DELETE FROM import_job WHERE created_by = 'entree-essai'");
         }
     }
 
