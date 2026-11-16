@@ -236,6 +236,8 @@ site_admin_invitation:
     greeting: 'Bonjour %name%,'
     greeting_plain: 'Bonjour,'
     message: '%agency% a créé le site %site% pour vous et vous en confie l''administration. Choisissez votre mot de passe pour ouvrir votre espace d''administration.'
+    message_platform: 'Le site %site% a été créé pour vous et son administration vous est confiée. Choisissez votre mot de passe pour ouvrir votre espace d''administration.'
+    validity_platform: 'Ce lien ne sert qu''une fois et reste valable %days% jours. Passé ce délai, demandez-en un nouveau à la personne qui a créé votre site.'
     button: 'Choisir mon mot de passe'
     validity: 'Ce lien ne sert qu''une fois et reste valable %days% jours. Passé ce délai, demandez un nouveau lien à %agency%.'
     ignore: 'Si vous n''attendiez pas ce courriel, ignorez-le : aucun accès n''est ouvert tant que le mot de passe n''est pas choisi.'

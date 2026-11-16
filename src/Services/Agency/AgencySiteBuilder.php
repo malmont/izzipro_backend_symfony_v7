@@ -40,7 +40,7 @@ class AgencySiteBuilder
      * @param array<string, mixed> $request la demande (tenant_code, name, admin_email, options)
      * @return array<string, mixed> { modules: { opened, failed }, defaults: list<string>, warnings: list<string> }
      */
-    public function build(array $agency, array $request, ?string $by): array
+    public function build(?array $agency, array $request, ?string $by): array
     {
         $code = (string) $request['tenant_code'];
         $dbname = AgencySiteCode::database($code);
@@ -61,14 +61,15 @@ class AgencySiteBuilder
             $warnings[] = 'CHARTER_NOT_RESET';
         }
         $features = is_array($options['modules'] ?? null) ? $options['modules'] : AgencyEntitlements::features();
-        $modules = $this->rights->open($code, $features, $agency, $by);
+        // sans agence (lot TYPE-1) : le site est créé par la plateforme, ses modules sont des accords de la plateforme
+        $modules = $agency !== null ? $this->rights->open($code, $features, $agency, $by) : $this->rights->openByPlatform($code, $features, $by);
         if ($modules['failed'] !== []) {
             $warnings[] = 'MODULES_NOT_OPENED';
         }
         $applied = [];
         try {
             // taxes d'après le pays, expéditeur des courriels, profils des applications ouvertes, essai « Aide IA » de la plateforme
-            $applied = $this->defaults->apply('agence ' . $agency['code'])['applied'] ?? [];
+            $applied = $this->defaults->apply($agency !== null ? 'agence ' . $agency['code'] : 'plateforme')['applied'] ?? [];
         } catch (\Throwable $e) {
             $warnings[] = 'DEFAULTS_NOT_APPLIED';
             $this->logger->error(sprintf('[Agences] site %s : référentiels automatiques non posés (%s)', $code, $e::class));
@@ -92,7 +93,7 @@ class AgencySiteBuilder
      * @param string|null $replaced l'adresse de la personne désignée avant, quand l'agence vient d'en désigner une autre
      * @return array{sent: bool, reason: ?string, expiresAt: ?string}
      */
-    public function invite(array $agency, array $request, bool $again = false, ?string $replaced = null): array
+    public function invite(?array $agency, array $request, bool $again = false, ?string $replaced = null): array
     {
         $code = (string) $request['tenant_code'];
         $options = $request['options'];
@@ -101,13 +102,14 @@ class AgencySiteBuilder
             $locale = is_string($options['locale'] ?? null) ? $options['locale'] : null;
             $names = [(string) ($options['adminFirstName'] ?? ''), (string) ($options['adminLastName'] ?? '')];
             $replyTo = is_string($agency['contact_email'] ?? null) ? $agency['contact_email'] : null;
+            $sender = $agency !== null ? (string) $agency['name'] : null; // sans agence : le courriel ne nomme personne
             if ($replaced !== null && $replaced !== $request['admin_email']) {
                 $this->inviter->withdraw($replaced);
             }
 
             return $again
-                ? $this->inviter->resend((string) $request['admin_email'], $names[0], $names[1], $locale, (string) $agency['name'], $replyTo)
-                : $this->inviter->invite((string) $request['admin_email'], $names[0], $names[1], $locale, (string) $agency['name'], $replyTo);
+                ? $this->inviter->resend((string) $request['admin_email'], $names[0], $names[1], $locale, $sender, $replyTo)
+                : $this->inviter->invite((string) $request['admin_email'], $names[0], $names[1], $locale, $sender, $replyTo);
         } catch (\Throwable $e) {
             $this->logger->error(sprintf('[Agences] site %s : invitation de l\'administrateur en échec (%s)', $code, $e::class), ['exception' => $e]);
 

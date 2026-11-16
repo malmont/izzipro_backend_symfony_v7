@@ -232,6 +232,8 @@ site_admin_invitation:
     greeting: 'Hello %name%,'
     greeting_plain: 'Hello,'
     message: '%agency% created the site %site% for you and entrusts you with its administration. Choose your password to open your administration space.'
+    message_platform: 'The site %site% was created for you and you are entrusted with its administration. Choose your password to open your administration space.'
+    validity_platform: 'This link works once and stays valid for %days% days. After that, ask the person who created your site for a new one.'
     button: 'Choose my password'
     validity: 'This link works once and stays valid for %days% days. After that, ask %agency% for a new link.'
     ignore: 'If you were not expecting this e-mail, ignore it: no access is opened until the password is chosen.'

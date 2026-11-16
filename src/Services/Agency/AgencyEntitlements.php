@@ -63,6 +63,29 @@ class AgencyEntitlements
     }
 
     /**
+     * Lot TYPE-1 : ouvre des modules sur un site que la PLATEFORME vient de créer (super administrateur), comme des accords de la
+     * plateforme (source `manual`), sans essai automatique et sans courriel au site. Un module qui ne s'ouvre pas est signalé.
+     *
+     * @param list<string> $features
+     * @return array{opened: list<string>, failed: list<string>}
+     */
+    public function openByPlatform(string $tenantCode, array $features, ?string $by): array
+    {
+        $out = ['opened' => [], 'failed' => []];
+        foreach (array_values(array_intersect(self::features(), $features)) as $feature) {
+            try {
+                $this->entitlements->grant($tenantCode, $feature, 'manual', null, $by, 'création du site par la plateforme', null, null, false);
+                $out['opened'][] = $feature;
+            } catch (\Throwable $e) {
+                $out['failed'][] = $feature;
+                $this->logger->error(sprintf('[Plateforme] %s : %s non ouvert (%s)', $tenantCode, $feature, $e::class));
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * Les modules d'un site créé par l'agence, tels que l'agence les voit.
      *
      * @param array<string, mixed> $agency

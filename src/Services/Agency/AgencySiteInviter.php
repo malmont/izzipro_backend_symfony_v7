@@ -48,7 +48,7 @@ class AgencySiteInviter
      *
      * @return array{sent: bool, reason: ?string, expiresAt: ?string} reason : ACCOUNT_EXISTS | NO_LINK | EMAIL_FAILED | null
      */
-    public function invite(string $email, string $firstName, string $lastName, ?string $locale, string $agencyName, ?string $replyTo = null): array
+    public function invite(string $email, string $firstName, string $lastName, ?string $locale, ?string $agencyName, ?string $replyTo = null): array
     {
         $em = $this->emProvider->getEntityManager();
         if ($em->getRepository(User::class)->findOneBy(['email' => $email]) !== null) {
@@ -70,7 +70,7 @@ class AgencySiteInviter
      *
      * @return array{sent: bool, reason: ?string, expiresAt: ?string} reason : ACCOUNT_EXISTS | ALREADY_ACTIVE | NO_LINK | EMAIL_FAILED | null
      */
-    public function resend(string $email, string $firstName, string $lastName, ?string $locale, string $agencyName, ?string $replyTo = null): array
+    public function resend(string $email, string $firstName, string $lastName, ?string $locale, ?string $agencyName, ?string $replyTo = null): array
     {
         $user = $this->emProvider->getEntityManager()->getRepository(User::class)->findOneBy(['email' => $email]);
         if (!$user instanceof User) {
@@ -104,7 +104,7 @@ class AgencySiteInviter
     }
 
     /** @return array{sent: bool, reason: ?string, expiresAt: ?string} */
-    private function send(User $user, ?string $locale, string $agencyName, ?string $replyTo = null): array
+    private function send(User $user, ?string $locale, ?string $agencyName, ?string $replyTo = null): array
     {
         $token = bin2hex(random_bytes(32));
         $expires = new \DateTimeImmutable('+' . self::INVITATION_DAYS . ' days');
@@ -119,13 +119,15 @@ class AgencySiteInviter
         }
         $language = $this->locale->language($locale);
         $t = fn (string $key, array $params = []) => $this->translator->trans('site_admin_invitation.' . $key, $params, 'emails', $language);
-        $params = ['%site%' => $this->siteName->name(), '%agency%' => $agencyName, '%days%' => self::INVITATION_DAYS];
+        $params = ['%site%' => $this->siteName->name(), '%agency%' => (string) $agencyName, '%days%' => self::INVITATION_DAYS];
+        // lot TYPE-1 : un site créé par la plateforme, sans agence : le même courriel, sans nommer d'agence
+        $own = $agencyName === null ? '_platform' : '';
         $name = trim((string) $user->getFirstname());
         try {
             // par l'expéditeur de la plateforme, envoi direct : le worker sait si le courriel est vraiment parti
             $sent = $this->mailer->sendPlatformEmail((string) $user->getEmail(), $t('subject', $params), self::TEMPLATE, [
-                'title' => $t('title', $params), 'greeting' => $name !== '' ? $t('greeting', ['%name%' => $name]) : $t('greeting_plain'), 'message' => $t('message', $params),
-                'button' => $t('button'), 'link' => $link, 'validity' => $t('validity', $params), 'ignore' => $t('ignore'), 'siteLine' => $params['%site%'],
+                'title' => $t('title', $params), 'greeting' => $name !== '' ? $t('greeting', ['%name%' => $name]) : $t('greeting_plain'), 'message' => $t('message' . $own, $params),
+                'button' => $t('button'), 'link' => $link, 'validity' => $t('validity' . $own, $params), 'ignore' => $t('ignore'), 'siteLine' => $params['%site%'],
             ], $replyTo !== null && filter_var($replyTo, \FILTER_VALIDATE_EMAIL) !== false ? $replyTo : null);
         } catch (\Throwable $e) {
             $this->logger->error('Agences : courriel d\'invitation d\'un administrateur en échec (' . $e::class . ').');
