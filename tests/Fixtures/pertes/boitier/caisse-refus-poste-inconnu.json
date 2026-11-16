@@ -1,0 +1,16 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/pos/pertes/articles-non-lus",
+        "body": {
+            "cashRegisterId": 999999999,
+            "items": []
+        }
+    },
+    "status": 404,
+    "body": {
+        "error": "CASH_REGISTER_NOT_FOUND",
+        "code": "CASH_REGISTER_NOT_FOUND",
+        "message": "Poste de caisse introuvable ou inactif"
+    }
+}

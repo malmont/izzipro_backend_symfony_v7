@@ -1,0 +1,34 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/pos/pertes/articles-non-lus",
+        "body": {
+            "cashRegisterId": 1,
+            "items": [
+                {
+                    "productVariantId": 23,
+                    "quantity": 2
+                }
+            ]
+        }
+    },
+    "status": 200,
+    "body": {
+        "active": true,
+        "reason": null,
+        "cashRegisterId": 1,
+        "tracked": 2,
+        "read": 1,
+        "unread": [
+            {
+                "productVariantId": 23,
+                "name": "Veste en lin (exemple boîtier D6130B)",
+                "variantLabel": null,
+                "quantity": 2,
+                "missing": 1
+            }
+        ],
+        "extra": 0,
+        "checkedAt": "2026-11-16T02:28:06+00:00"
+    }
+}

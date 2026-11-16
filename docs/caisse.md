@@ -1426,6 +1426,19 @@ absent = le poste du terminal (`CashRegisterResolver::resolve`). **Retours, éch
 tickets restent possibles pour toute vente du site** (le retour s'enregistre sur le poste du caissier). Responsable et
 administrateur : tous les postes. Clé sans poste : comportement inchangé.
 
+### Articles suivis non lus avant le paiement (prévention des pertes, lot L3-b1, 16/11/2026)
+
+`POST /api/pos/pertes/articles-non-lus` `{ cashRegisterId?, items: [{ productVariantId, quantity }] }` (caisse) : avant le
+paiement, la caisse demande au module Prévention des pertes quels articles **suivis** du panier n'ont pas été lus sur le tapis de
+comptoir de ce poste. Réponse 200 `{ active, reason, cashRegisterId, tracked, read, unread [{ productVariantId, name,
+variantLabel, quantity, missing }], extra, checkedAt }`. C'est une **lecture** : rien n'est écrit, et la vente n'est **jamais
+bloquée** ; `active: false` (`MODULE_INACTIVE`, `TERMINAL_NOT_BOUND` : sur un site à plusieurs postes, la tablette du caissier
+doit être rattachée à ce poste ; `NO_MAT`, `MAT_SILENT`, `TOO_MANY_REQUESTS`) veut dire « pas de contrôle ». Le poste se résout comme pour
+une vente et doit avoir une session ouverte (mêmes refus : `CASH_REGISTER_NOT_FOUND`, `CASH_REGISTER_REQUIRED`,
+`CASH_REGISTER_CLOSED`, `CASH_REGISTER_FORBIDDEN`). La caisse traite toute autre réponse, et tout retard de plus de 2 secondes,
+comme « pas de contrôle » ; hors ligne, elle n'appelle pas. La route est dans le module (`src/LossPrevention/`) : aucun code de
+caisse n'est touché. Contrat complet : `docs/prevention-pertes.md` § 16.15.
+
 ### Cartes-cadeaux : réponse uniforme et limite de codes refusés (S2.8)
 
 - Carte **inconnue, annulée ou remplacée** : même réponse 404 `GIFT_CARD_NOT_FOUND` « Carte-cadeau ou avoir inconnu ou

@@ -1076,7 +1076,7 @@ change pas. `POST /installation/etapes/box/verifier` répond `{ code, verified, 
 |---|---|---|
 | `POST /inscription` `{ key, machine, version, arch: amd64 \| arm64 }` (sans jeton) | `{ box { id }, token, expiresAt, serverTime, settings }` | 422 `VALIDATION_FAILED { fields }` ; 404 `BOX_KEY_INVALID` (clé inconnue, ou saisie qui n'en est pas une : même réponse) ; 403 `BOX_REVOKED` ; 409 `BOX_KEY_ALREADY_ENROLLED` (la clé est liée à une autre machine) |
 | `POST /jeton` `{ machine }` (jeton encore bon, ou expiré depuis moins de 30 jours) | `{ token, expiresAt, serverTime }` | 401 `BOX_TOKEN_INVALID` (il faut une nouvelle inscription) ; 403 `BOX_REVOKED` |
-| `POST /signe-de-vie` `{ now, machine, version?, devices [{ serial, kind, model?, status }] }` | `{ serverTime, clockOffsetSeconds, clockDoubt, token: { token, expiresAt } \| null, refusedDevices [{ serial, code }], settings }` | 422 `VALIDATION_FAILED { fields }` (`now`, `machine`, `version`, `devices` : liste obligatoire, `devices[i].serial \| kind \| status \| model`) ; 401 `BOX_TOKEN_INVALID` (ce n'est pas la machine inscrite) ; 429 `RATE_LIMITED` (trop d'empreintes de machine fausses) |
+| `POST /signe-de-vie` `{ now, machine, version?, lastServerTime?, devices [{ serial, kind, model?, status }] }` (`lastServerTime` : lot L3-b1, § 16.15) | `{ serverTime, clockOffsetSeconds, clockDoubt, token: { token, expiresAt } \| null, refusedDevices [{ serial, code }], resendMats, settings }` | 422 `VALIDATION_FAILED { fields }` (`now`, `machine`, `version`, `lastServerTime`, `devices` : liste obligatoire, `devices[i].serial \| kind \| status \| model`) ; 401 `BOX_TOKEN_INVALID` (ce n'est pas la machine inscrite) ; 429 `RATE_LIMITED` (trop d'empreintes de machine fausses) |
 | `GET /reglages` | `{ box { id }, serverTime, heartbeatSeconds: 60, facts { types, maxBatch: 200 }, zones, devices [{ id, serial, kind, zone, cashRegisterId }] }` | |
 | `POST /faits` `{ facts [{ key, type, at, device, zone?, seq?, data { identifier, technology? } }] }` (1 à 200) | `{ received, accepted, duplicates, refused, results [{ index, key, status: accepted \| duplicate \| refused, code }], serverTime }` | 422 `VALIDATION_FAILED { fields.facts }`, `FACTS_LIMIT_EXCEEDED { max, received }` ; 413 `PAYLOAD_TOO_LARGE` (256 Ko) ; 429 `RATE_LIMITED` (20 000 faits par boîtier et par heure) |
 
@@ -1200,3 +1200,193 @@ personne, ni même le nom que l'administrateur a donné au boîtier.
    - la formulation de cet avertissement est à faire valider par l'avocat ; les prix sont fixés en L6 par le propriétaire ;
    - le guide de l'installateur du dépôt du boîtier sert les deux offres : une version courte pour le boîtier prêt à brancher, la
      version complète, avec les commandes, pour le logiciel seul.
+
+### 16.15 Lot L3-b1 codé : tapis de comptoir et route de la caisse (16/11/2026)
+
+L3-b est coupé en deux (découpage validé par le chef de projet) : **L3-b1**, ci-dessous, et **L3-b2** (la vente reliée aux pièces
+après coup par l'analyse, le rattrapage au portique, la règle « articles suivis vendus sans lecture » et ses fenêtres réglables).
+Code : `Services/LossCounterService` (la question de la caisse), `Controller/LossPosController`, et les ajouts à
+`LossBoxChannelService` (faits du tapis, présence), `LossBoxService` (relier, retirer un appareil, tapis simulé),
+`LossHealthService` (ligne du tapis), `LossInstallationService` (étape `counter_mat`). Migration `Version20270114100000` (script
+`scripts/migrate_all_v2_pertes_l3b1.sh`) : table `loss_counter_presence` ; index unique « un poste a au plus un tapis en service » ;
+trois gardes du lot L3-a remplacées par leur version élargie. **Aucune vente n'est lue ni écrite, aucun état de pièce ne change.**
+
+**Le tapis, vu du boîtier** (même canal, § 16.13) :
+- il se déclare dans le signe de vie comme un appareil `counter_mat` ;
+- il envoie deux faits de plus, que ses réglages annoncent (`facts.types`) : `COUNTER_SEEN` (une puce arrive sur le tapis) et
+  `COUNTER_LEFT` (elle le quitte). Même forme que les autres faits ; `zone` vaut `counter` (facultative, toute autre valeur :
+  `ZONE_INVALID`). **Chacun ses faits** : un tapis n'envoie que ceux-là, un lecteur que `SPOT_CHECK` et `ZONE_SEEN`
+  (`DEVICE_KIND_INVALID` sinon). Une arrivée, un départ : le tapis ne redit pas à chaque seconde ce qu'il voit ;
+- **quand la plateforme a fermé ce qu'elle croyait posé, elle le dit au boîtier** : la réponse du signe de vie porte `resendMats`,
+  la liste des numéros de série des tapis dont le boîtier doit REDIRE le contenu (`COUNTER_SEEN` pour chaque puce encore posée) :
+  au retour d'un silence, d'une panne ou d'un retrait du tapis, ou quand l'horloge du boîtier redevient juste. Le boîtier lit
+  aussi dans ses réglages `silentAfterSeconds`, le délai de silence du site ;
+- **une réponse perdue ne perd pas cette demande** : dans chaque signe de vie, le boîtier renvoie dans `lastServerTime` le
+  `serverTime` de la DERNIÈRE réponse qu'il a lue à une inscription ou à un signe de vie (et à rien d'autre). S'il ne correspond
+  pas au dernier signe de vie que la plateforme a traité (la réponse s'est perdue en route), ou s'il manque (le boîtier vient de
+  redémarrer : il ne le garde pas d'un démarrage à l'autre), on ne sait plus ce que le boîtier sait : les présences de ses tapis
+  se ferment et `resendMats` les nomme tous, à chaque signe de vie, jusqu'à ce qu'il ait lu une réponse. Un boîtier qui n'envoie
+  jamais `lastServerTime` redit donc tout à chaque signe de vie : le champ est à envoyer dès qu'un tapis est branché ;
+- une puce refusée `TAG_UNKNOWN` sur un tapis (posée avant d'être associée) n'est pas à renvoyer : elle sera redite au prochain
+  `resendMats`, ou quand on la reposera.
+
+**La présence** (`loss_counter_presence`) est la projection de ces faits, tenue par le serveur : une puce est sur un tapis depuis
+`since`, jusqu'à `until` (nul tant qu'elle y est). Elle n'est la preuve de rien : les faits le sont. Règles :
+- une arrivée ouvre une présence, sauf si la puce y est déjà ; un départ la ferme ; un fait rejoué ne la touche pas deux fois ;
+- **faits arrivés dans le désordre** (un lot renvoyé après un autre) : un départ plus ancien que l'arrivée connue ne ferme rien ;
+  une arrivée plus ancienne qu'un départ déjà connu ne pose rien (un départ reçu seul est retenu pour cela) : pas de pièce fantôme ;
+- **une ARRIVÉE à l'heure douteuse (`clockDoubt`) est gardée mais ne pose rien** : la présence sert à dire ce qui est posé avant un
+  paiement, les heures sont celles du boîtier. Un DÉPART vaut toujours (à l'heure du serveur s'il est douteux) ;
+- la pièce d'une présence est celle que sa puce porte au moment où l'on regarde ;
+- une puce n'est que sur un tapis à la fois : arrivée sur un autre, sa présence sur le premier se ferme (règle tenue par le code) ;
+- les présences ouvertes d'un tapis se ferment quand on ne sait plus ce qui est posé dessus : tapis noté en panne (annoncé `down`,
+  plus annoncé, genre changé) ou retiré ; boîtier revenu d'un silence (fermées au dernier signe de vie), réinscrit, à la clé
+  remise à zéro, révoqué ; horloge du boîtier qui se dérègle ; réponse d'un signe de vie perdue, ou boîtier redémarré ;
+- **une fermeture décidée par le serveur est datée à l'horloge du BOÎTIER** (heure du serveur plus l'écart mesuré au dernier signe
+  de vie ; écart inconnu ou douteux : la tolérance de 60 secondes est retirée ; jamais avant l'arrivée) : les arrivées sont datées
+  par le boîtier, et ce qu'il redit juste après ne doit pas être jugé « plus ancien qu'un départ connu » parce qu'il retarde de
+  quelques secondes (`LossBoxChannelService::boxTime`). Restent hors de portée : une horloge de boîtier qui recule d'un coup, et
+  une puce qui passe d'un tapis à l'autre puis revient en moins que l'écart entre les horloges de deux boîtiers ;
+- **un départ reçu seul vaut lecture** : le tapis a bien vu la puce. La pièce compte comme lue pendant la fenêtre de 10 minutes,
+  elle n'est pas dite posée (ni `onMat`, ni `extra`), et le tapis n'est plus « en attente d'une première lecture ».
+- À savoir : rien ne recalcule la présence depuis les faits, et la table n'est pas purgée (une ligne par pose) ; le lot L3-b2, qui
+  s'en sert pour relier les ventes, réglera sa conservation.
+
+**Routes de l'administrateur** (`/api/gestion/pertes`, `ROLE_ADMIN`, garde du module) :
+
+| Route | Réponse | Refus |
+|---|---|---|
+| `PUT /boitiers/{id}/appareils/{appareil}` `{ cashRegisterId }` pour un tapis, `{ zone }` pour un lecteur (`null` délie) | la fiche du boîtier | 422 `fields` : `REQUIRED`, `MUST_BE_POSITIVE_INTEGER`, `INVALID_VALUE`, `NOT_FOR_THIS_DEVICE` (un poste pour un tapis, une zone pour un lecteur), `device: NOT_ASSIGNABLE` (imprimante, caméra) ; 404 `BOX_NOT_FOUND`, `DEVICE_NOT_FOUND`, `CASH_REGISTER_NOT_FOUND` (poste inconnu ou inactif) ; 409 `REGISTER_ALREADY_HAS_MAT { deviceId }` |
+| `POST /boitiers/{id}/appareils/{appareil}/retirer` `{ confirm: true }` | la fiche du boîtier | 422 `fields.confirm` ; 404 |
+
+- **Un tapis par poste, un poste par tapis** (deux liaisons au même instant : la seconde attend la première sur un verrou
+  consultatif du poste, puis reçoit le 409 ; l'index unique de la base reste la ceinture, son 409 porte alors `deviceId: null`). Fait
+  `DEVICE_ASSIGNED { cashRegisterId | zone }` ; relier au même poste n'écrit rien. Un appareil retiré, ou celui d'un boîtier
+  révoqué, ne se relie plus (404 `DEVICE_NOT_FOUND`). **Révoquer un boîtier rend les postes de ses tapis.**
+- **Retirer un appareil remplacé** : il sort de la fiche, du tableau de santé et des réglages du boîtier, ne compte plus dans le
+  plafond des 64 appareils, ses faits reçoivent `DEVICE_UNKNOWN`, et il rend son poste de caisse pour de bon. Fait
+  `DEVICE_RETIRED`. Si le boîtier l'annonce de nouveau, il revient (`DEVICE_SEEN { again: true }`), sans poste.
+- La fiche d'un boîtier montre pour chaque appareil `cashRegister { id, name } | null` et, pour un tapis, `onMat` (le nombre de
+  puces posées dessus en ce moment ; `null` pour les autres appareils).
+
+**Tableau de santé** (§ 16.13) : une ligne par tapis en service, `code: mat-<id>`, `kind: mat`, `zone: counter`,
+`cashRegisterId`, libellé « Tapis de comptoir · <nom du poste> ». États : `down` s'il est débranché (conseil : le câble, puis
+l'alimentation), si son boîtier se tait (conseil : vérifier le boîtier) ou si l'horloge de son boîtier est déréglée (conseil :
+l'accès du boîtier à Internet ; ce n'est pas un silence : `silentSince` et `silentSeconds` restent nuls) ; `pending` tant que
+l'horloge d'un boîtier tout juste réinscrit n'est pas mesurée (prêt à son premier signe de vie), tant qu'il n'a lu aucune puce
+(conseil : poser une pièce dessus), puis tant qu'il n'est relié à aucun poste (conseil : choisir son poste) ; sinon `ok`. Le tapis est
+facultatif : aucune ligne tant qu'aucun n'est branché, et le bandeau ne s'alarme pas. La lecture fait maintenant trois requêtes.
+
+**Assistant** : `optionalSteps` gagne `counter_mat` (« Brancher le tapis de comptoir »), faite quand un tapis a lu une puce et qu'il
+est relié à son poste ; `state` et `hint` reprennent la pastille du tapis ; sans tapis : `absent`, « branchez le tapis sur le
+boîtier ».
+
+**Exercice** : le boîtier simulé a un tapis simulé (`SIM-TAPIS`, sans poste de caisse : lu, il est en ordre) et deux scénarios de
+plus, `counter_put` (une pièce d'exercice est posée sur le tapis) et `counter_take` (elle le quitte) ; 409 `EXERCISE_NO_PIECE` sans
+pièce d'exercice qui porte une puce. Rien de cela n'existe pour la caisse.
+
+**La route de la caisse** : `POST /api/pos/pertes/articles-non-lus` (droit du caissier : `ROLE_USER_POS`, `ROLE_POS_MANAGER`,
+`ROLE_ADMIN` ; en-tête de la tablette comme toute la caisse), appelée AVANT le paiement.
+
+- Corps : `{ cashRegisterId?, items: [{ productVariantId, quantity }] }` (200 lignes au plus ; deux lignes de la même variante
+  s'additionnent ; un article libre, sans variante, n'est pas envoyé).
+- Réponse 200 : `{ active, reason, cashRegisterId, tracked, read, unread [{ productVariantId, name, variantLabel, quantity,
+  missing }], extra, checkedAt }`. `tracked` : articles suivis du panier ; `read` : combien sont lus ; `unread` : ceux qui manquent,
+  avec `missing` ; `extra` : le nombre de pièces ENCORE posées sur le tapis qui ne sont pas dans le panier (un nombre, sans dire
+  lesquelles).
+- **Un article est suivi** quand sa variante a au moins une vraie pièce en service qui porte une puce. **Une pièce est lue** si elle
+  est sur le tapis de ce poste, ou l'a quitté depuis moins de 10 minutes (`LossCounterService::READ_WINDOW` ; réglable en L3-b2).
+  Une pièce vendue ou retirée ne compte pas ; une puce retirée ne lit plus sa pièce.
+- **Pas de contrôle plutôt qu'un faux avis** : `active: false`, listes vides, toujours 200, avec `reason` :
+  - `MODULE_INACTIVE` : le site n'a pas le droit du module, quel que soit le mode de la plateforme (vérifié en premier : ni le
+    poste ni le panier ne sont alors regardés) ;
+  - `TERMINAL_NOT_BOUND` : sur un site à plusieurs postes, l'appel d'un caissier ne vient pas d'une tablette rattachée à ce poste ;
+  - `NO_MAT` : ce poste n'a pas de tapis en service ;
+  - `MAT_SILENT` : tapis en panne, boîtier silencieux depuis plus longtemps que le délai du site, ou horloge du boîtier déréglée
+    (ses arrivées ne posent alors rien : dire « non lu » serait un faux avis) ;
+  - `TOO_MANY_REQUESTS` : plus de 6 000 LIGNES de panier en 5 minutes pour ce compte (une question compte pour ses lignes, au
+    moins une ; une question par paiement suffit très au large ; la route ne sert pas à sonder le catalogue). Si le compteur
+    lui-même est en panne, la question passe.
+- **Un caissier ne lit que le tapis de SON poste** (consigne du chef de projet). Le poste se résout comme pour une vente
+  (`CashRegisterResolver`) et doit avoir une session ouverte ; refus de la caisse, à la forme de la caisse : 404
+  `CASH_REGISTER_NOT_FOUND`, 400 `CASH_REGISTER_REQUIRED`, 409 `CASH_REGISTER_CLOSED`, 403 `CASH_REGISTER_FORBIDDEN` (tablette
+  rattachée à un autre poste), 422 `VALIDATION_FAILED { errors [{ path, message }] }`. **En plus**, pour un caissier (ni
+  responsable ni administrateur) : sa tablette doit être rattachée à CE poste et envoyer son en-tête ; sinon, sur un site à
+  plusieurs postes, pas de contrôle (`TERMINAL_NOT_BOUND`) : on ne sait pas quel poste est le sien. Sur un site à un seul poste, la
+  question ne se pose pas. Le responsable et l'administrateur lisent tous les postes, comme à la caisse. Seul le tapis du poste
+  résolu est lu ; les données sont celles du site de la requête.
+- **À savoir** : en envoyant des paniers au hasard, un caissier peut apprendre quels articles sont suivis (c'est ce que la route
+  lui dit de son panier) ; le plafond, compté en lignes, borne la chose à 6 000 variantes par 5 minutes, et le catalogue lui est
+  déjà ouvert. Sur un site qui gagne un second poste, le contrôle s'arrête pour toute tablette non rattachée
+  (`TERMINAL_NOT_BOUND`) : rien ne le dit encore à l'administrateur (à montrer par le web ou la caisse ; étape d'assistant à voir
+  en L3-b2).
+- **Une lecture : le module n'écrit rien** (ni fait, ni constat, ni journal du module, ni journal de caisse). Comme sur toute route
+  de caisse, la garde de la tablette note son dernier usage dans les clés d'activation, au plus une fois par 5 minutes.
+- **Pour la caisse, à voir à sa reprise** : un indicateur dans ses réglages (`/api/pos/settings`) lui éviterait l'appel sur un site
+  sans le module ; d'ici là l'appel coûte une lecture. **Elle ne bloque jamais la
+  vente** : la caisse affiche un avis, le caissier pose l'article ou continue ; la caisse traite toute réponse autre que 200, et
+  tout retard, comme « pas de contrôle » ; hors ligne, elle n'appelle pas.
+- **Ordre des migrations** : celle de ce lot REMPLACE trois fonctions de garde du lot L3-a. Rejouer le script de L3-a
+  (`migrate_all_v2_pertes_l3a.sh`) sur une base qui porte déjà L3-b1 remettrait les anciennes : le script s'y refuse désormais, et
+  le test de la migration de L3-a rejoue la sienne dans une transaction annulée.
+- **Ce que la base ne garde pas** (le code le tient) : une présence peut être supprimée ou rouverte en SQL direct, une puce
+  ouverte sur deux tapis, un appareil retiré relié à un poste ; `cash_register_id` n'a pas de clé étrangère.
+- **Relecture indépendante** (16/11/2026) : la route n'écrit rien et ne peut pas bloquer une vente ; corrigés : un caissier sans
+  tablette rattachée lisait le tapis de n'importe quel poste ouvert ; un boîtier à l'horloge déréglée donnait un faux avis à
+  chaque vente ; présences jamais fermées après une réinscription ; boîtier révoqué qui gardait le poste de ses tapis ; le serveur
+  fermait des présences sans que le boîtier le sache (`resendMats`) ; faits dans le désordre ; appareil retiré qu'on pouvait
+  relier ; liaisons simultanées ; lecture des appareils avant le verrou ; plafond des questions. **Seconde passe** : aucun chemin
+  par lequel un caissier lit le tapis d'un autre poste ; corrigés : deux liaisons simultanées rendaient encore 500 (verrou du
+  poste) ; un `resendMats` perdu avec sa réponse n'était jamais redit (`lastServerTime`) ; ce qu'un boîtier en retard redisait
+  après une fermeture du serveur n'était pas posé (fermetures datées à l'horloge du boîtier) ; le plafond comptait les questions,
+  pas les lignes ; pastille « horloge » qui annonçait un silence, ou une panne juste après une réinscription.
+- **Tests** : `LossPreventionCounterTest` (tapis lu, relié, retiré, pastille, étape, horloge, désordre, réinscription, révocation ;
+  la question de la caisse, poste par poste, sans rien écrire ; tapis simulé ; gardes de la base et rejeu de la migration).
+
+### 16.16 Lot L3-a2 : jumelage du boîtier par code (décision du propriétaire, 16/11/2026 ; PLAN, sans code ; après L3-b1)
+
+On ne tape plus la clé dans le boîtier : **c'est le boîtier qu'on déclare dans l'application**, comme un appareil de maison
+connectée. La clé `IZ-BOX` (§ 16.13) reste, en secours, pour les installateurs avancés. **Contrat validé par le chef de projet le
+16/11/2026** (une table dans la base maître acceptée ; remise à zéro du jumelage et détachement acceptés) ; à coder après L3-b1.
+
+- **Le code de jumelage** : court et lisible, trois groupes de trois caractères (exemple `KX7-42P-9QM` ; alphabet sans caractères
+  ambigus, 45 bits), avec son code QR (le QR porte le code, rien d'autre). **C'est le boîtier qui le crée**, avec un secret de
+  machine qu'il garde pour lui : à la préparation pour un boîtier vendu (le code est imprimé sur son étiquette), par la commande
+  d'installation pour le logiciel seul (elle l'affiche dans le terminal).
+- **Le boîtier attend son jumelage** : branché, il appelle une route publique de la plateforme (appel sortant, aucun port ouvert,
+  aucun site encore) et y dépose sa demande : l'empreinte de son code et une **preuve liée à sa machine**. Il revient demander où
+  il en est, toujours avec cette preuve : **le code seul ne donne rien**. Une demande non jumelée dans les 30 jours est oubliée.
+- **L'administrateur jumelle** : dans la gestion, « Ajouter un boîtier », il scanne le code QR (mobile) ou tape le code (web).
+  Seul un administrateur connecté le fait, et le boîtier est relié à SON site (celui de sa session), jamais à un autre. Le boîtier
+  reçoit son jeton à son appel suivant ; sa pastille passe au vert.
+- **Le code ne sert qu'une fois.** Essais plafonnés par site et par adresse ; **refus neutre** : un code inconnu, expiré ou déjà
+  servi rendent la même réponse.
+- **Où cela vit** : la demande d'un boîtier qui n'a pas encore de site ne peut pas être rangée dans la base d'un site. Elle va dans
+  une table de la base maître (la seule table du module hors des bases de site, comme les clés d'activation des applications) ; le
+  boîtier, lui, reste une ligne de `loss_box` dans la base du site, comme aujourd'hui.
+- **Points à donner en premier au relecteur neuf** : personne ne peut jumeler un boîtier à un autre site que le sien ; un code volé
+  sur l'étiquette ne permet pas de détourner un boîtier déjà jumelé ; aucun code ne se devine par force brute.
+- **Risque qui reste, à dire** : celui qui lit l'étiquette AVANT le commerçant (pendant la livraison) et qui administre un autre site
+  de la plateforme peut jumeler le boîtier chez lui. Le commerçant le voit aussitôt (son code est refusé) ; parade : remettre le
+  jumelage à zéro sur le boîtier (nouveau code), et l'autre site ne reçoit que des lectures de puces inconnues de lui.
+- **Remettre le jumelage à zéro, sur le boîtier** : une commande, et un bouton sur le boîtier vendu, créent un nouveau code (et un
+  nouveau secret de machine) ; l'ancien code ne vaut plus rien. **Détacher, dans l'application** : un administrateur qui a jumelé
+  chez lui un boîtier par erreur le détache (c'est une révocation du boîtier sur son site) ; la machine, refusée à son appel
+  suivant, remet son jumelage à zéro et redevient jumelable ailleurs. Les deux gestes sont à écrire dans le guide.
+- **Routes prévues** : boîtier, sans site ni jeton : `POST /api/pertes/boitier/jumelage { code, machine, version, arch }` (dépôt :
+  `{ status: waiting, expiresAt }` ; la première demande déposée pour un code gagne) et `POST /api/pertes/boitier/jumelage/etat
+  { code, machine }` (`waiting`, ou `{ status: paired, host, box { id }, token, expiresAt, settings }`) ; administrateur :
+  `POST /api/gestion/pertes/boitiers/jumeler { code, name, place? }` → 201 la fiche (en attente de sa machine, puis inscrite à
+  l'appel suivant du boîtier) ; 404 `PAIRING_CODE_INVALID` neutre ; 429 au-delà des plafonds (10 essais par site et par adresse
+  et par quart d'heure).
+- **À la bascule** : « appli degestion backend » pose la table des demandes de jumelage sur la base maître (fichier SQL fourni
+  avec le lot, et sa ligne dans l'amorce des tests).
+- **Emballage** (réponse du propriétaire, 16/11/2026) : l'étiquette du code est sur le boîtier, À L'INTÉRIEUR de l'emballage
+  scellé, jamais sur le carton ; pas de volet à gratter. À écrire dans le guide.
+- **Pour L6, sans code aujourd'hui** (décisions du propriétaire, 16/11/2026) :
+  - « Renvoyer le code par courriel », depuis la gestion, pour un boîtier VENDU : le code part à l'administrateur du site
+    acheteur, jamais à une autre adresse. Cela dépend de la vente du boîtier, donc de L6 ;
+  - à l'expédition, le numéro de série d'un boîtier vendu est relié au site acheteur. Au premier branchement, la plateforme le
+    reconnaît ; l'administrateur reçoit un courriel et une notification « Votre boîtier est branché », confirme d'un clic « C'est
+    bien mon boîtier », et la pastille passe au vert. Aucun code à saisir ; le code reste en secours.
+- **Dans le dépôt du boîtier** (à sa création) : le guide de l'installateur commence par « branchez, puis scannez l'étiquette ».

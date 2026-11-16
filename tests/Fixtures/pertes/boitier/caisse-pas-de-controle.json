@@ -1,0 +1,26 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/pos/pertes/articles-non-lus",
+        "body": {
+            "cashRegisterId": 1,
+            "items": [
+                {
+                    "productVariantId": 23,
+                    "quantity": 2
+                }
+            ]
+        }
+    },
+    "status": 200,
+    "body": {
+        "active": false,
+        "reason": "NO_MAT",
+        "cashRegisterId": 1,
+        "tracked": 0,
+        "read": 0,
+        "unread": [],
+        "extra": 0,
+        "checkedAt": "2026-11-16T02:28:06+00:00"
+    }
+}

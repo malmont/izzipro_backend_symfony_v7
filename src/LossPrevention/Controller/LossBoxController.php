@@ -66,6 +66,20 @@ class LossBoxController extends AbstractController
         return $this->json($this->useCase->revoke($id, $this->body($request), $this->locale($request), $this->userId()));
     }
 
+    /** Relier un tapis à un poste de caisse `{ cashRegisterId }`, ou donner sa zone à un lecteur `{ zone }` → 200 la fiche du boîtier ; 404 DEVICE_NOT_FOUND, CASH_REGISTER_NOT_FOUND ; 409 REGISTER_ALREADY_HAS_MAT */
+    #[Route('/boitiers/{id}/appareils/{deviceId}', name: 'gestion_pertes_boitier_appareil', methods: ['PUT'], requirements: ['id' => '\d+', 'deviceId' => '\d+'])]
+    public function assignDevice(int $id, int $deviceId, Request $request): JsonResponse
+    {
+        return $this->json($this->useCase->assignDevice($id, $deviceId, $this->body($request), $this->locale($request), $this->userId()));
+    }
+
+    /** Retirer un appareil remplacé `{ confirm: true }` → 200 la fiche du boîtier */
+    #[Route('/boitiers/{id}/appareils/{deviceId}/retirer', name: 'gestion_pertes_boitier_appareil_retirer', methods: ['POST'], requirements: ['id' => '\d+', 'deviceId' => '\d+'])]
+    public function retireDevice(int $id, int $deviceId, Request $request): JsonResponse
+    {
+        return $this->json($this->useCase->retireDevice($id, $deviceId, $this->body($request), $this->locale($request), $this->userId()));
+    }
+
     /** Tableau de santé du matériel → 200 { devices, summary, thresholdSeconds, exercise, screen, checkedAt } ; une lecture légère, relue par l'écran toutes les quelques secondes */
     #[Route('/sante', name: 'gestion_pertes_sante', methods: ['GET'])]
     public function health(Request $request): JsonResponse

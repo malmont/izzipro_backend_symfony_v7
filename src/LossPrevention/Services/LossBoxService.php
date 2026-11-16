@@ -35,9 +35,10 @@ class LossBoxService
     public const EXERCISE_BOX_LIMIT = 3;
     public const EVENTS_SHOWN = 50;
     /** Scénarios du boîtier simulé */
-    public const SCENARIOS = ['heartbeat', 'network_cut', 'device_down', 'device_up', 'spot_check', 'zone_exit'];
+    public const SCENARIOS = ['heartbeat', 'network_cut', 'device_down', 'device_up', 'spot_check', 'zone_exit', 'counter_put', 'counter_take'];
     private const SIM_EXIT_READER = 'SIM-LECTEUR-SORTIE';
     private const SIM_HAND_READER = 'SIM-LECTEUR-MAIN';
+    private const SIM_MAT = 'SIM-TAPIS';
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -55,9 +56,10 @@ class LossBoxService
     {
         $repository = $this->repository();
         $boxes = $repository->boxes($exercise);
-        $devices = $repository->devicesOf(array_map(static fn (array $b): int => (int) $b['id'], $boxes));
+        $devices = $repository->devicesOf(array_map(static fn (array $b): int => (int) $b['id'], $boxes), false);
         $silentAfter = $this->health->silentAfter();
-        $items = array_map(fn (array $box): array => $this->view($box, $devices[(int) $box['id']], $locale, $silentAfter), $boxes);
+        $extras = $this->deviceExtras(array_merge(...array_values($devices)));
+        $items = array_map(fn (array $box): array => $this->view($box, $devices[(int) $box['id']], $locale, $silentAfter, $extras), $boxes);
 
         return ['items' => $items, 'total' => count($items), 'limit' => $exercise ? self::EXERCISE_BOX_LIMIT : self::BOX_LIMIT, 'exercise' => $exercise, 'screen' => self::SCREEN];
     }
@@ -67,11 +69,12 @@ class LossBoxService
     {
         $repository = $this->repository();
         $box = $this->find($id, $exercise, $locale);
-        $devices = $repository->devicesOf([$id])[$id];
+        $all = $repository->devicesOf([$id])[$id];
         $serials = [];
-        foreach ($devices as $device) {
+        foreach ($all as $device) { // un fait peut désigner un appareil retiré depuis
             $serials[(int) $device['id']] = (string) $device['serial'];
         }
+        $devices = array_values(array_filter($all, static fn (array $d): bool => $d['status'] !== LossDevice::RETIRED));
         $events = [];
         foreach ($repository->eventsOf($id, self::EVENTS_SHOWN) as $row) {
             $at = new \DateTimeImmutable((string) $row['occurred_at'], new \DateTimeZone('UTC'));
@@ -82,7 +85,7 @@ class LossBoxService
                 'silentSeconds' => isset($data['silentSeconds']) ? (int) $data['silentSeconds'] : null, 'byUser' => $row['user_id'] !== null];
         }
 
-        return $this->view($box, $devices, $locale, $this->health->silentAfter()) + ['events' => $events, 'factsReceived' => $repository->pieceFactCount($id)];
+        return $this->view($box, $devices, $locale, $this->health->silentAfter(), $this->deviceExtras($devices)) + ['events' => $events, 'factsReceived' => $repository->pieceFactCount($id)];
     }
 
     /**
@@ -159,6 +162,8 @@ class LossBoxService
             $key = LossBoxKey::generate();
             $now = self::now();
             $repository->resetKey($id, $this->tokens->keyHash($this->site(), $key), LossBoxKey::hint($key), $now);
+            // la machine d'avant est détachée : ce qu'elle disait posé ne l'est plus (fermé à l'heure de SON horloge, comme ses faits)
+            $repository->closePresencesOf($repository->matIdsOf($id), LossBoxChannelService::boxTime(time(), $box['clock_offset']));
             $repository->event($id, null, LossBoxEvent::BOX_KEY_RESET, $userId, false, [], $now);
 
             return ['box' => $this->sheet($id, $locale, false), 'key' => $key, 'enrolment' => $this->enrolment($key, $locale)];
@@ -186,10 +191,122 @@ class LossBoxService
                 $now = self::now();
                 $repository->revoke($id, $now);
                 $repository->event($id, null, LossBoxEvent::BOX_REVOKED, $userId, false, [], $now);
+                // un boîtier révoqué ne dit plus rien de ses tapis, et rend leurs postes de caisse : un autre tapis peut les prendre
+                $repository->closePresencesOf($repository->matIdsOf($id), LossBoxChannelService::boxTime(time(), $box['clock_offset']));
+                $repository->releaseRegistersOf($id);
             }
 
             return $this->sheet($id, $locale, false);
         });
+    }
+
+    /**
+     * Relier un tapis de comptoir à un poste de caisse `{ cashRegisterId }` (un tapis par poste, un poste par tapis ; `null` le
+     * délie), ou donner sa zone à un lecteur `{ zone }` (`null` : aucune). Une seule des deux clés, selon le genre de l'appareil.
+     *
+     * @param array<string, mixed> $body
+     *
+     * @return array<string, mixed> la fiche du boîtier
+     */
+    public function assignDevice(int $id, int $deviceId, array $body, string $locale, int $userId): array
+    {
+        return $this->transaction(function () use ($id, $deviceId, $body, $locale, $userId): array {
+            $repository = $this->repository();
+            [$box, $device] = $this->lockedDevice($id, $deviceId, $locale);
+            if ($device['status'] === LossDevice::RETIRED || $box['status'] === LossBox::REVOKED) {
+                // un appareil retiré, ou celui d'un boîtier révoqué, ne se relie plus à rien
+                throw new GestionConflictException('DEVICE_NOT_FOUND', $this->texts->t('boxes.error.DEVICE_NOT_FOUND', $locale), 404);
+            }
+            $mat = $device['kind'] === LossDevice::COUNTER_MAT;
+            $key = $mat ? 'cashRegisterId' : 'zone';
+            $errors = [];
+            foreach (array_diff(['cashRegisterId', 'zone'], [$key]) as $other) {
+                if (array_key_exists($other, $body)) {
+                    $errors[$other] = 'NOT_FOR_THIS_DEVICE'; // un poste pour un tapis, une zone pour un lecteur
+                }
+            }
+            if ($device['kind'] !== LossDevice::COUNTER_MAT && $device['kind'] !== LossDevice::READER) {
+                $errors['device'] = 'NOT_ASSIGNABLE';
+            } elseif (!array_key_exists($key, $body)) {
+                $errors[$key] = 'REQUIRED';
+            } elseif ($mat && $body[$key] !== null && (!is_int($body[$key]) || $body[$key] < 1 || $body[$key] > 2147483647)) {
+                $errors[$key] = 'MUST_BE_POSITIVE_INTEGER';
+            } elseif (!$mat && $body[$key] !== null && !in_array($body[$key], LossDevice::ZONES, true)) {
+                $errors[$key] = 'INVALID_VALUE';
+            }
+            if ($errors !== []) {
+                throw new GestionValidationException($errors);
+            }
+            $value = $body[$key];
+            if ($mat && $value !== null) {
+                if ($repository->cashRegister($value) === null) {
+                    throw new GestionConflictException('CASH_REGISTER_NOT_FOUND', $this->texts->t('boxes.error.CASH_REGISTER_NOT_FOUND', $locale), 404);
+                }
+                // deux tapis reliés au même poste au même instant, depuis deux boîtiers : le second attend ici, puis lit le premier
+                $repository->lockRegister($value);
+                $holder = $repository->matOfRegisterId($value, $deviceId);
+                if ($holder !== null) {
+                    throw new GestionConflictException('REGISTER_ALREADY_HAS_MAT', $this->texts->t('boxes.error.REGISTER_ALREADY_HAS_MAT', $locale), 409, ['deviceId' => $holder]);
+                }
+            }
+            $column = $mat ? 'cash_register_id' : 'zone';
+            $current = $mat && $device[$column] !== null ? (int) $device[$column] : $device[$column];
+            if ($current !== $value) { // la même valeur : rien à écrire
+                try {
+                    $repository->assignDevice($deviceId, $column, $value);
+                } catch (\Doctrine\DBAL\Exception\UniqueConstraintViolationException) {
+                    // ceinture : l'index de la base a refusé malgré le verrou du poste. La transaction est perdue (aucune lecture de
+                    // plus n'y est possible) : le refus part sans dire quel tapis tient le poste
+                    throw new GestionConflictException('REGISTER_ALREADY_HAS_MAT', $this->texts->t('boxes.error.REGISTER_ALREADY_HAS_MAT', $locale), 409, ['deviceId' => null]);
+                }
+                $repository->event($id, $deviceId, LossBoxEvent::DEVICE_ASSIGNED, $userId, false, [$key => $value], self::now());
+            }
+
+            return $this->sheet($id, $locale, false);
+        });
+    }
+
+    /**
+     * Retirer un appareil remplacé `{ confirm: true }` : il ne compte plus, n'envoie plus de faits et rend son poste de caisse.
+     * Si le boîtier l'annonce de nouveau, il revient. Retirer deux fois ne fait rien.
+     *
+     * @param array<string, mixed> $body
+     *
+     * @return array<string, mixed> la fiche du boîtier
+     */
+    public function retireDevice(int $id, int $deviceId, array $body, string $locale, int $userId): array
+    {
+        $this->confirmed($body);
+
+        return $this->transaction(function () use ($id, $deviceId, $locale, $userId): array {
+            $repository = $this->repository();
+            [$box, $device] = $this->lockedDevice($id, $deviceId, $locale);
+            if ($device['status'] !== LossDevice::RETIRED) {
+                $now = self::now();
+                $repository->closePresencesOf([$deviceId], LossBoxChannelService::boxTime(time(), $box['clock_offset']));
+                $repository->retireDevice($deviceId);
+                $repository->event($id, $deviceId, LossBoxEvent::DEVICE_RETIRED, $userId, false, [], $now);
+            }
+
+            return $this->sheet($id, $locale, false);
+        });
+    }
+
+    /**
+     * Un vrai boîtier et un de SES appareils, verrouillés (le boîtier d'abord, comme partout).
+     *
+     * @return array{0: array<string, mixed>, 1: array<string, mixed>}
+     */
+    private function lockedDevice(int $id, int $deviceId, string $locale): array
+    {
+        $repository = $this->repository();
+        $box = $repository->box($id, true);
+        if ($box === null || (bool) $box['exercise']) {
+            throw new GestionConflictException('BOX_NOT_FOUND', $this->texts->t('boxes.error.BOX_NOT_FOUND', $locale), 404);
+        }
+        $device = $repository->device($id, $deviceId, true) ?? throw new GestionConflictException('DEVICE_NOT_FOUND', $this->texts->t('boxes.error.DEVICE_NOT_FOUND', $locale), 404);
+
+        return [$box, $device];
     }
 
     // ----- Mode exercice : le boîtier simulé -----
@@ -212,9 +329,9 @@ class LossBoxService
             $id = $repository->create($this->texts->t('boxes.exercise.name', $locale), $this->texts->t('boxes.exercise.place', $locale), null, null, true, $userId, $now);
             $repository->event($id, null, LossBoxEvent::BOX_CREATED, $userId, true, [], $now);
             $repository->event($id, null, LossBoxEvent::BOX_ENROLLED, null, true, ['again' => false], $now);
-            foreach ([[self::SIM_EXIT_READER, 'exit'], [self::SIM_HAND_READER, null]] as [$serial, $zone]) {
-                $device = $repository->insertDevice($id, $serial, LossDevice::READER, null, LossDevice::OK, $zone, true, $now);
-                $repository->event($id, $device, LossBoxEvent::DEVICE_SEEN, null, true, ['kind' => LossDevice::READER], $now);
+            foreach ([[self::SIM_EXIT_READER, LossDevice::READER, 'exit'], [self::SIM_HAND_READER, LossDevice::READER, null], [self::SIM_MAT, LossDevice::COUNTER_MAT, null]] as [$serial, $kind, $zone]) {
+                $device = $repository->insertDevice($id, $serial, $kind, null, LossDevice::OK, $zone, true, $now);
+                $repository->event($id, $device, LossBoxEvent::DEVICE_SEEN, null, true, ['kind' => $kind], $now);
             }
 
             return ['box' => $this->sheet($id, $locale, true), 'scenarios' => $this->scenarios($locale)];
@@ -256,6 +373,7 @@ class LossBoxService
                     // deux heures sans réseau, puis le retour : le fait dit le trou
                     $repository->event($id, null, LossBoxEvent::BOX_BACK, null, true, ['silentSeconds' => 7200], $now);
                     $repository->seen($id, $now, null, 0);
+                    $repository->closePresencesOf($repository->matIdsOf($id), $now); // comme un vrai boîtier : ce qui était posé ne l'est plus pour nous
                     $written = 1;
                     break;
                 case 'device_down':
@@ -266,6 +384,32 @@ class LossBoxService
                         $repository->event($id, (int) $device['id'], $target === LossDevice::DOWN ? LossBoxEvent::SOURCE_DOWN : LossBoxEvent::SOURCE_UP, null, true, ['reason' => 'reported'], $now);
                         $repository->deviceStatus((int) $device['id'], $target, null, true, $now);
                         $written = 1;
+                    }
+                    break;
+                case 'counter_put':
+                case 'counter_take':
+                    // une pièce d'exercice posée sur le tapis simulé, puis reprise : le fait, et la présence qui en découle
+                    $mat = $devices[self::SIM_MAT] ?? null;
+                    if ($mat === null) {
+                        throw new GestionConflictException('EXERCISE_NO_PIECE', $this->texts->t('boxes.error.EXERCISE_NO_PIECE', $locale), 409);
+                    }
+                    $matId = (int) $mat['id'];
+                    $onMat = $repository->openPresencesOf($matId);
+                    if ($scenario === 'counter_put' && $onMat === []) {
+                        $pieces = $repository->exercisePiecesWithTag(1);
+                        if ($pieces === []) {
+                            throw new GestionConflictException('EXERCISE_NO_PIECE', $this->texts->t('boxes.error.EXERCISE_NO_PIECE', $locale), 409);
+                        }
+                        $repository->pieceFact(LossPieceEvent::COUNTER_SEEN, $now, (int) $pieces[0]['piece_id'], (int) $pieces[0]['tag_id'], $id, $matId, null, true, ['zone' => 'counter'], $now);
+                        $repository->openPresence($matId, (int) $pieces[0]['tag_id'], $now, true);
+                        $written = 1;
+                    } elseif ($scenario === 'counter_take') {
+                        // c'est la pièce POSÉE qui part (pas la dernière créée)
+                        foreach ($onMat as $present) {
+                            $repository->pieceFact(LossPieceEvent::COUNTER_LEFT, $now, $present['piece_id'] !== null ? (int) $present['piece_id'] : null, (int) $present['tag_id'], $id, $matId, null, true, ['zone' => 'counter'], $now);
+                            ++$written;
+                        }
+                        $repository->closePresencesOf([$matId], $now);
                     }
                     break;
                 default:
@@ -316,7 +460,7 @@ class LossBoxService
      *
      * @return array<string, mixed> ce que l'administrateur voit d'un boîtier ; jamais la clé, ni l'empreinte de la machine
      */
-    private function view(array $box, array $devices, string $locale, int $silentAfter): array
+    private function view(array $box, array $devices, string $locale, int $silentAfter, array $extras = ['registers' => [], 'onMat' => []]): array
     {
         $tz = $this->site->clock()->timezone();
         $stamp = static fn (mixed $stored): ?\DateTimeImmutable => $stored === null ? null : new \DateTimeImmutable((string) $stored, new \DateTimeZone('UTC'));
@@ -336,10 +480,16 @@ class LossBoxService
             'enrolledAt' => ($enrolled = $stamp($box['enrolled_at'])) !== null ? LossAuditEntry::iso($enrolled) : null,
             'clockOffsetSeconds' => $offset, 'clockDoubt' => $active && $offset !== null && abs($offset) > LossBoxChannelService::CLOCK_TOLERANCE,
             'keyHint' => $box['key_hint'], 'exercise' => (bool) $box['exercise'],
-            'devices' => array_map(function (array $device) use ($locale, $stamp): array {
+            'devices' => array_map(function (array $device) use ($locale, $stamp, $extras): array {
+                $register = $device['cash_register_id'] !== null ? (int) $device['cash_register_id'] : null;
+                $mat = $device['kind'] === LossDevice::COUNTER_MAT;
+
                 return ['id' => (int) $device['id'], 'serial' => (string) $device['serial'], 'kind' => (string) $device['kind'], 'kindLabel' => $this->texts->t('boxes.device.' . $device['kind'], $locale),
                     'model' => $device['model'], 'status' => (string) $device['status'], 'statusLabel' => $this->texts->t('boxes.deviceStatus.' . $device['status'], $locale),
                     'zone' => $device['zone'], 'zoneLabel' => $device['zone'] !== null ? $this->texts->t('boxes.zone.' . $device['zone'], $locale) : null,
+                    // un tapis de comptoir : son poste de caisse, et combien de puces sont posées dessus en ce moment
+                    'cashRegister' => $register !== null ? ['id' => $register, 'name' => $extras['registers'][$register] ?? null] : null,
+                    'onMat' => $mat ? ($extras['onMat'][(int) $device['id']] ?? 0) : null,
                     'lastSeenAt' => LossAuditEntry::iso($stamp($device['last_seen_at']))];
             }, $devices),
             'createdAt' => LossAuditEntry::iso($stamp($box['created_at'])),
@@ -356,6 +506,30 @@ class LossBoxService
         }
 
         return $code;
+    }
+
+    /**
+     * Ce que les appareils montrent en plus : le nom du poste d'un tapis, et le nombre de puces posées sur chaque tapis.
+     *
+     * @param list<array<string, mixed>> $devices
+     *
+     * @return array{registers: array<int, string>, onMat: array<int, int>}
+     */
+    private function deviceExtras(array $devices): array
+    {
+        $registers = [];
+        $mats = [];
+        foreach ($devices as $device) {
+            if ($device['cash_register_id'] !== null) {
+                $registers[] = (int) $device['cash_register_id'];
+            }
+            if ($device['kind'] === LossDevice::COUNTER_MAT) {
+                $mats[] = (int) $device['id'];
+            }
+        }
+        $repository = $this->repository();
+
+        return ['registers' => $repository->cashRegisterNames(array_values(array_unique($registers))), 'onMat' => $repository->presentCounts($mats)];
     }
 
     /** @return array{host: ?string, key: string, code: ?string, text: string} ce qu'il faut donner à la machine pour l'inscrire */

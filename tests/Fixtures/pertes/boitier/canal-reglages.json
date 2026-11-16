@@ -3,7 +3,7 @@
         "method": "GET",
         "path": "/api/pertes/boitier/reglages",
         "headers": {
-            "X-Loss-Box": "b1.2.1794871978.0000000000000000000000000000000000000000000000000000000000000000"
+            "X-Loss-Box": "b1.2.1794882485.0000000000000000000000000000000000000000000000000000000000000000"
         }
     },
     "status": 200,
@@ -11,12 +11,15 @@
         "box": {
             "id": 1
         },
-        "serverTime": "2026-11-15T23:32:59+00:00",
+        "serverTime": "2026-11-16T02:28:05+00:00",
         "heartbeatSeconds": 60,
+        "silentAfterSeconds": 300,
         "facts": {
             "types": [
                 "SPOT_CHECK",
-                "ZONE_SEEN"
+                "ZONE_SEEN",
+                "COUNTER_SEEN",
+                "COUNTER_LEFT"
             ],
             "maxBatch": 200
         },
@@ -39,6 +42,13 @@
                 "id": 2,
                 "serial": "IMPR-0001",
                 "kind": "printer",
+                "zone": null,
+                "cashRegisterId": null
+            },
+            {
+                "id": 3,
+                "serial": "TAPIS-0001",
+                "kind": "counter_mat",
                 "zone": null,
                 "cashRegisterId": null
             }

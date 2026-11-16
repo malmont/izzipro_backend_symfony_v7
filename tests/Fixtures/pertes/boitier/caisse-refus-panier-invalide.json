@@ -1,0 +1,26 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/pos/pertes/articles-non-lus",
+        "body": {
+            "items": [
+                {
+                    "productVariantId": 23,
+                    "quantity": 0
+                }
+            ]
+        }
+    },
+    "status": 422,
+    "body": {
+        "error": "VALIDATION_FAILED",
+        "code": "VALIDATION_FAILED",
+        "message": "Panier invalide",
+        "errors": [
+            {
+                "path": "items[0].quantity",
+                "message": "entier de 1 à 9999 attendu"
+            }
+        ]
+    }
+}

@@ -63,6 +63,18 @@ class LossBoxUseCase
         return $this->boxes->play($id, $body, $locale);
     }
 
+    /** @param array<string, mixed> $body @return array<string, mixed> */
+    public function assignDevice(int $id, int $deviceId, array $body, string $locale, int $userId): array
+    {
+        return $this->boxes->assignDevice($id, $deviceId, $body, $locale, $userId);
+    }
+
+    /** @param array<string, mixed> $body @return array<string, mixed> */
+    public function retireDevice(int $id, int $deviceId, array $body, string $locale, int $userId): array
+    {
+        return $this->boxes->retireDevice($id, $deviceId, $body, $locale, $userId);
+    }
+
     /** @return array<string, mixed> le tableau de santé du matériel */
     public function health(string $locale, bool $exercise = false): array
     {

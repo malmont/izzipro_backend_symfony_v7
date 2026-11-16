@@ -22,6 +22,8 @@ class LossDevice
     public const KINDS = [self::COUNTER_MAT, self::READER, self::PRINTER, self::CAMERA];
     public const OK = 'ok';
     public const DOWN = 'down';
+    /** Retiré par l'administrateur (appareil remplacé) : il ne compte plus ; s'il est annoncé de nouveau, il revient (lot L3-b1) */
+    public const RETIRED = 'retired';
     /** Zones de la boutique (§ 11) */
     public const ZONES = ['stockroom', 'stockroom_door', 'floor', 'counter', 'exit'];
     /** Appareils qu'un boîtier peut annoncer dans un signe de vie, au plus */

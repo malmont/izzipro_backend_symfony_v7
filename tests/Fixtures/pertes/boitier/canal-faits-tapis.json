@@ -1,0 +1,53 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/pertes/boitier/faits",
+        "headers": {
+            "X-Loss-Box": "b1.2.1794882485.0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "body": {
+            "facts": [
+                {
+                    "key": "exemple-D6130B-0010",
+                    "type": "COUNTER_SEEN",
+                    "at": "2026-11-16T02:28:06Z",
+                    "device": "TAPIS-0001",
+                    "data": {
+                        "identifier": "04D6130BC3D4E5"
+                    }
+                },
+                {
+                    "key": "exemple-D6130B-0011",
+                    "type": "COUNTER_SEEN",
+                    "at": "2026-11-16T02:28:06Z",
+                    "device": "LECTEUR-0001",
+                    "data": {
+                        "identifier": "04D6130BC3D4E5"
+                    }
+                }
+            ]
+        }
+    },
+    "status": 200,
+    "body": {
+        "received": 2,
+        "accepted": 1,
+        "duplicates": 0,
+        "refused": 1,
+        "results": [
+            {
+                "index": 0,
+                "key": "exemple-D6130B-0010",
+                "status": "accepted",
+                "code": null
+            },
+            {
+                "index": 1,
+                "key": "exemple-D6130B-0011",
+                "status": "refused",
+                "code": "DEVICE_KIND_INVALID"
+            }
+        ],
+        "serverTime": "2026-11-16T02:28:06+00:00"
+    }
+}

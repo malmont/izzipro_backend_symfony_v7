@@ -8,7 +8,7 @@
     "headers": {},
     "body": {
         "ok": true,
-        "identifier": "SIM-1724EC2FAC29",
+        "identifier": "SIM-9DE3B72A43F7",
         "technology": "simulated",
         "refusal": null,
         "hint": null,
@@ -72,7 +72,20 @@
                         "label": "Vérifier"
                     },
                     "state": "absent",
-                    "hint": "Aucun boîtier n'est installé. Ajoutez un boîtier, puis inscrivez sa machine avec la clé."
+                    "hint": "Aucun boîtier simulé. Créez-en un pour voir le tableau vivre, sans aucun matériel."
+                },
+                {
+                    "code": "counter_mat",
+                    "title": "Brancher le tapis de comptoir",
+                    "text": "Facultatif. Le tapis lit les puces des articles posés au comptoir : la caisse sait quels articles suivis du panier n'ont pas été lus. Branchez-le sur le boîtier, posez une pièce dessus, puis choisissez son poste de caisse.",
+                    "image": "pertes/installation/counter_mat",
+                    "status": "todo",
+                    "verify": {
+                        "kind": "data",
+                        "label": "Vérifier"
+                    },
+                    "state": "absent",
+                    "hint": "Aucun tapis simulé. Créez un boîtier simulé : il a son tapis."
                 }
             ],
             "progress": {

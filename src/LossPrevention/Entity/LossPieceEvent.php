@@ -33,8 +33,15 @@ class LossPieceEvent
     public const SPOT_CHECK = 'SPOT_CHECK';
     /** Puce lue dans une zone par un appareil d'un boîtier (lot L3-a) : gardé tel quel, aucun état ne change avant les lots L3-b et L4 */
     public const ZONE_SEEN = 'ZONE_SEEN';
-    /** Faits qu'un boîtier peut envoyer par son canal */
+    /** Une puce arrive sur un tapis de comptoir, puis le quitte (lot L3-b1) : la présence sur le tapis en est la projection */
+    public const COUNTER_SEEN = 'COUNTER_SEEN';
+    public const COUNTER_LEFT = 'COUNTER_LEFT';
+    /** Faits qu'un LECTEUR de boîtier peut envoyer par le canal */
     public const FROM_BOX = [self::SPOT_CHECK, self::ZONE_SEEN];
+    /** Faits qu'un TAPIS de comptoir peut envoyer par le canal */
+    public const FROM_MAT = [self::COUNTER_SEEN, self::COUNTER_LEFT];
+    /** Lectures de puces par un appareil : nombreuses, la fiche d'une pièce n'en montre que les dernières */
+    public const READS = [self::SPOT_CHECK, self::ZONE_SEEN, self::COUNTER_SEEN, self::COUNTER_LEFT];
 
     public const SOURCE_APP = 'app';
     public const SOURCE_EXERCISE = 'exercise';

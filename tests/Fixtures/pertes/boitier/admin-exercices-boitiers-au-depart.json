@@ -40,6 +40,16 @@
                 "code": "zone_exit",
                 "label": "Lecture à la sortie",
                 "text": "Le lecteur de la sortie lit une pièce d'exercice."
+            },
+            {
+                "code": "counter_put",
+                "label": "Pièce posée sur le tapis",
+                "text": "Une pièce d'exercice est posée sur le tapis de comptoir simulé : le tapis la voit."
+            },
+            {
+                "code": "counter_take",
+                "label": "Pièce reprise du tapis",
+                "text": "La pièce quitte le tapis de comptoir simulé."
             }
         ]
     }

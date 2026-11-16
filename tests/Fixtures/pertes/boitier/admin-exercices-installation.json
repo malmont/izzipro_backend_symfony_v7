@@ -64,6 +64,19 @@
                 },
                 "state": "ok",
                 "hint": null
+            },
+            {
+                "code": "counter_mat",
+                "title": "Brancher le tapis de comptoir",
+                "text": "Facultatif. Le tapis lit les puces des articles posés au comptoir : la caisse sait quels articles suivis du panier n'ont pas été lus. Branchez-le sur le boîtier, posez une pièce dessus, puis choisissez son poste de caisse.",
+                "image": "pertes/installation/counter_mat",
+                "status": "todo",
+                "verify": {
+                    "kind": "data",
+                    "label": "Vérifier"
+                },
+                "state": "pending",
+                "hint": "Le tapis simulé n'a encore rien lu. Jouez le scénario « Pièce posée sur le tapis »."
             }
         ],
         "progress": {

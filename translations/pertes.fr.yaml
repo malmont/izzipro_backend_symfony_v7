@@ -304,6 +304,8 @@ pieces:
         TEST_TAG_READ: Puce lue à l'essai
         TEST_LABEL_PRINTED: Étiquette d'essai produite
         SPOT_CHECK: Lue par le lecteur à main du boîtier
+        COUNTER_SEEN: Posée sur le tapis de comptoir
+        COUNTER_LEFT: Reprise du tapis de comptoir
         ZONE_SEEN: Lue dans une zone
     error:
         VARIANT_NOT_FOUND: 'Variante introuvable.'
@@ -366,6 +368,11 @@ installation:
             text: 'Facultatif. Le boîtier relie à la plateforme le tapis de comptoir, l''imprimante à puce et la caméra. Ajoutez-le dans « Boîtiers », puis inscrivez sa machine avec la clé.'
             verify: Vérifier
             hint: 'Aucun boîtier n''est inscrit. Ajoutez un boîtier, puis lancez sur sa machine la commande d''inscription avec l''adresse du site et la clé.'
+        counter_mat:
+            title: Brancher le tapis de comptoir
+            text: 'Facultatif. Le tapis lit les puces des articles posés au comptoir : la caisse sait quels articles suivis du panier n''ont pas été lus. Branchez-le sur le boîtier, posez une pièce dessus, puis choisissez son poste de caisse.'
+            verify: Vérifier
+            hint: 'Aucun tapis de comptoir. Branchez le tapis sur le boîtier.'
     hint:
         decimal: 'Le lecteur semble rendre un numéro en chiffres seulement. Réglez-le pour qu''il rende l''identifiant en hexadécimal (chiffres et lettres de A à F).'
         form: 'Cette lecture contient autre chose que des chiffres et des lettres de A à F : ce n''est pas une puce. Vérifiez que le curseur est dans le champ de la puce.'
@@ -455,6 +462,7 @@ boxes:
     deviceStatus:
         ok: En marche
         down: En panne ou débranché
+        retired: Retiré
     zone:
         stockroom: Réserve
         stockroom_door: Porte de la réserve
@@ -470,6 +478,8 @@ boxes:
         DEVICE_SEEN: Appareil vu pour la première fois
         SOURCE_DOWN: Appareil en panne ou débranché
         SOURCE_UP: Appareil revenu
+        DEVICE_ASSIGNED: Appareil relié
+        DEVICE_RETIRED: Appareil retiré
     enrolment:
         text: 'Sur le boîtier, lancez la commande d''inscription et donnez l''adresse du site puis cette clé. La clé n''est montrée qu''une fois : notez-la maintenant.'
     exercise:
@@ -494,8 +504,17 @@ boxes:
         zone_exit:
             label: Lecture à la sortie
             text: 'Le lecteur de la sortie lit une pièce d''exercice.'
+        counter_put:
+            label: Pièce posée sur le tapis
+            text: 'Une pièce d''exercice est posée sur le tapis de comptoir simulé : le tapis la voit.'
+        counter_take:
+            label: Pièce reprise du tapis
+            text: 'La pièce quitte le tapis de comptoir simulé.'
     error:
         BOX_NOT_FOUND: 'Boîtier introuvable.'
+        DEVICE_NOT_FOUND: 'Appareil introuvable sur ce boîtier.'
+        CASH_REGISTER_NOT_FOUND: 'Poste de caisse introuvable ou inactif.'
+        REGISTER_ALREADY_HAS_MAT: 'Ce poste de caisse a déjà un tapis : déliez-le ou retirez-le d''abord.'
         BOX_REVOKED: 'Ce boîtier est révoqué : ajoutez-en un autre.'
         BOX_LIMIT_REACHED: 'Ce site a déjà %limit% boîtiers : révoquez ceux qui ne servent plus.'
         EXERCISE_LIMIT_REACHED: 'Vous avez déjà %limit% boîtiers simulés : effacez-les avant d''en créer d''autres.'
@@ -504,6 +523,7 @@ boxes:
 health:
     kind:
         box: Boîtier
+        mat: Tapis de comptoir
     state:
         ok: En ordre
         pending: En attente
@@ -525,3 +545,13 @@ health:
             pending: 'Ce boîtier attend sa machine. Lancez sur elle la commande d''inscription, avec l''adresse du site et la clé du boîtier.'
             down: 'Silencieux depuis %duration%. Vérifiez son alimentation, son câble réseau et la connexion Internet de la boutique.'
             down_exercise: 'Silencieux depuis %duration%. Jouez le scénario « Signe de vie » pour le faire revenir.'
+        mat:
+            absent: 'Aucun tapis de comptoir. Branchez le tapis sur le boîtier : il apparaît ici de lui-même.'
+            absent_exercise: 'Aucun tapis simulé. Créez un boîtier simulé : il a son tapis.'
+            down: 'Le tapis ne répond plus. Vérifiez son câble sur le boîtier, puis son alimentation.'
+            box_silent: 'Son boîtier ne donne plus signe de vie : on ne sait plus ce qui est posé sur le tapis. Vérifiez le boîtier.'
+            clock: 'L''horloge de son boîtier est déréglée : le tapis ne peut pas dire ce qui est posé. Vérifiez que le boîtier a accès à Internet (il se met à l''heure tout seul).'
+            clock_pending: 'Son boîtier vient d''être inscrit : le tapis sera prêt à son premier signe de vie, dans la minute.'
+            never_read: 'Le tapis n''a encore lu aucune puce. Posez dessus une pièce qui porte une puce.'
+            never_read_exercise: 'Le tapis simulé n''a encore rien lu. Jouez le scénario « Pièce posée sur le tapis ».'
+            no_register: 'Ce tapis n''est relié à aucun poste de caisse. Choisissez son poste dans la fiche du boîtier.'

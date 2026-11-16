@@ -13,8 +13,9 @@ use App\Services\TenantEntityManagerProvider;
  * pastille par appareil, relue par l'écran toutes les quelques secondes. La réponse reste légère : deux lectures, aucune écriture.
  *
  * États : `ok` (un signe de vie depuis moins que le délai de silence), `pending` (branché mais pas encore vérifié : un boîtier qui
- * attend sa machine), `down` (silencieux : depuis quand, et quoi essayer), `absent` (pas encore installé). En L3-a le tableau ne
- * connaît que le BOÎTIER ; le tapis (L3-b), l'imprimante (L3-c), la caméra (L3-d) et les antennes (L4) y ajouteront leurs lignes.
+ * attend sa machine), `down` (silencieux : depuis quand, et quoi essayer), `absent` (pas encore installé). Le tableau connaît le
+ * BOÎTIER (lot L3-a) et le TAPIS de comptoir (lot L3-b1) ; l'imprimante (L3-c), la caméra (L3-d) et les antennes (L4) y ajouteront
+ * leurs lignes. Trois lectures (les boîtiers, les tapis, le délai), aucune écriture.
  *
  * Le délai de silence (5 minutes par défaut) se règle par site. C'est le même délai partout : la pastille, « en ligne » dans la
  * fiche d'un boîtier, l'étape de l'assistant d'installation, et le fait `BOX_BACK` écrit au retour d'un silence.
@@ -49,14 +50,17 @@ class LossHealthService
         $threshold = $this->silentAfter();
         $now = time();
         $devices = [];
-        foreach ($this->emProvider->getEntityManager()->getRepository(LossBox::class)->liveBoxes($exercise) as $box) {
+        $repository = $this->emProvider->getEntityManager()->getRepository(LossBox::class);
+        foreach ($repository->liveBoxes($exercise) as $box) {
             $devices[] = $this->boxLine($box, $threshold, $now, $locale, $exercise);
         }
+        $mats = array_map(fn (array $mat): array => $this->matLine($mat, $threshold, $now, $locale, $exercise), $repository->liveMats($exercise));
         if ($devices === []) {
             $devices[] = ['code' => 'box', 'kind' => 'box', 'label' => $this->texts->t('health.kind.box', $locale), 'zone' => null, 'cashRegisterId' => null, 'state' => 'absent',
                 'stateLabel' => $this->texts->t('health.state.absent', $locale), 'lastSeenAt' => null, 'silentSince' => null, 'silentSeconds' => null,
                 'hint' => $this->texts->t('health.hint.box.' . ($exercise ? 'absent_exercise' : 'absent'), $locale)];
         }
+        $devices = [...$devices, ...$mats]; // les tapis de comptoir (lot L3-b1) : facultatifs, aucune ligne tant qu'aucun n'est branché
         $counts = array_fill_keys(self::STATES, 0);
         foreach ($devices as $device) {
             ++$counts[$device['state']];
@@ -74,20 +78,27 @@ class LossHealthService
     }
 
     /**
-     * L'état du boîtier vu par l'assistant d'installation : le meilleur des boîtiers du site (un seul en ordre suffit), sinon celui
-     * qui demande un geste.
+     * L'état d'un genre d'appareil vu par l'assistant d'installation : le meilleur de ceux du site (un seul en ordre suffit), sinon
+     * celui qui demande un geste. Sans aucun appareil de ce genre : pas installé, et quoi faire.
      *
      * @return array{state: string, hint: ?string}
      */
-    public function boxState(string $locale, bool $exercise): array
+    public function kindState(string $kind, string $locale, bool $exercise): array
     {
         $best = null;
         foreach ($this->board($locale, $exercise)['devices'] as $device) {
+            if ($device['kind'] !== $kind) {
+                continue;
+            }
             // ordre : en ordre, en panne (à réparer), en attente, pas installé
             $rank = array_search($device['state'], ['ok', 'down', 'pending', 'absent'], true);
             if ($best === null || $rank < $best[0]) {
                 $best = [$rank, $device];
             }
+        }
+
+        if ($best === null) {
+            return ['state' => 'absent', 'hint' => $this->texts->t("health.hint.$kind." . ($exercise ? 'absent_exercise' : 'absent'), $locale)];
         }
 
         return ['state' => $best[1]['state'], 'hint' => $best[1]['hint']];
@@ -150,6 +161,47 @@ class LossHealthService
         return ['code' => 'box-' . $box['id'], 'kind' => 'box', 'label' => (string) $box['name'], 'zone' => null, 'cashRegisterId' => null, 'state' => $state,
             'stateLabel' => $this->texts->t('health.state.' . $state, $locale), 'lastSeenAt' => $iso, 'silentSince' => $state === 'down' ? $iso : null,
             'silentSeconds' => $state === 'down' ? $silent : null, 'hint' => $hint];
+    }
+
+    /**
+     * Un tapis de comptoir : en panne si lui ou son boîtier ne répond pas ; en attente tant qu'il n'a lu aucune puce ou qu'il n'est
+     * pas relié à un poste de caisse ; sinon en ordre.
+     *
+     * @param array<string, mixed> $mat
+     *
+     * @return array<string, mixed>
+     */
+    private function matLine(array $mat, int $threshold, int $now, string $locale, bool $exercise): array
+    {
+        $boxSeen = $mat['box_seen'] !== null ? (new \DateTimeImmutable((string) $mat['box_seen'], new \DateTimeZone('UTC')))->getTimestamp() : null;
+        $seen = (new \DateTimeImmutable((string) $mat['last_seen_at'], new \DateTimeZone('UTC')))->getTimestamp();
+        $boxSilent = $mat['box_status'] !== LossBox::ACTIVE || $boxSeen === null || $now - $boxSeen > $threshold;
+        $register = $mat['cash_register_id'] !== null ? (int) $mat['cash_register_id'] : null;
+        // l'horloge du boîtier est déréglée : ses faits ne posent rien sur le tapis. Pas encore mesurée (un vrai boîtier tout juste
+        // inscrit, avant son premier signe de vie) : rien n'est en panne, on attend
+        $clockDoubt = $mat['box_clock'] !== null && abs((int) $mat['box_clock']) > LossBoxChannelService::CLOCK_TOLERANCE;
+        $clockUnknown = $mat['box_clock'] === null && !$exercise;
+        if ($mat['status'] === 'down' || $boxSilent) {
+            [$state, $hint] = ['down', $this->texts->t('health.hint.mat.' . ($boxSilent ? 'box_silent' : 'down'), $locale)];
+        } elseif ($clockDoubt) {
+            [$state, $hint] = ['down', $this->texts->t('health.hint.mat.clock', $locale)];
+        } elseif ($clockUnknown) {
+            [$state, $hint] = ['pending', $this->texts->t('health.hint.mat.clock_pending', $locale)];
+        } elseif (!(bool) $mat['has_read']) {
+            [$state, $hint] = ['pending', $this->texts->t('health.hint.mat.' . ($exercise ? 'never_read_exercise' : 'never_read'), $locale)];
+        } elseif ($register === null && !$exercise) {
+            [$state, $hint] = ['pending', $this->texts->t('health.hint.mat.no_register', $locale)]; // un tapis simulé n'a pas de poste
+        } else {
+            [$state, $hint] = ['ok', null];
+        }
+        // depuis quand il se tait : le dernier signe de vie de son boîtier s'il s'est tu, sinon la dernière fois que le tapis a été
+        // annoncé. Une horloge déréglée n'est pas un silence : le tapis parle, aucune durée n'est dite
+        $since = $state === 'down' && ($mat['status'] === 'down' || $boxSilent) ? ($boxSilent && $boxSeen !== null ? min($boxSeen, $seen) : $seen) : null;
+        $label = $this->texts->t('health.kind.mat', $locale) . ($mat['register_name'] !== null ? ' · ' . $mat['register_name'] : '');
+
+        return ['code' => 'mat-' . $mat['id'], 'kind' => 'mat', 'label' => $label, 'zone' => 'counter', 'cashRegisterId' => $register, 'state' => $state,
+            'stateLabel' => $this->texts->t('health.state.' . $state, $locale), 'lastSeenAt' => gmdate('Y-m-d\TH:i:s\+00:00', $seen),
+            'silentSince' => $since !== null ? gmdate('Y-m-d\TH:i:s\+00:00', $since) : null, 'silentSeconds' => $since !== null ? max(0, $now - $since) : null, 'hint' => $hint];
     }
 
     /** « 12 minutes », « 3 heures », « 2 jours » : depuis combien de temps, arrondi vers le bas */

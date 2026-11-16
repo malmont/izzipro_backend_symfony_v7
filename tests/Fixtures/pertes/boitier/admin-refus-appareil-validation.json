@@ -1,0 +1,19 @@
+{
+    "request": {
+        "method": "PUT",
+        "path": "/api/gestion/pertes/boitiers/1/appareils/3?locale=fr",
+        "body": {
+            "zone": "counter"
+        }
+    },
+    "status": 422,
+    "body": {
+        "error": "VALIDATION_FAILED",
+        "code": "VALIDATION_FAILED",
+        "message": "Entrée invalide : zone (NOT_FOR_THIS_DEVICE), cashRegisterId (REQUIRED)",
+        "fields": {
+            "zone": "NOT_FOR_THIS_DEVICE",
+            "cashRegisterId": "REQUIRED"
+        }
+    }
+}

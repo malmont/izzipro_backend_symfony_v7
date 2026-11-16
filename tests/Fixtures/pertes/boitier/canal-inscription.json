@@ -14,15 +14,18 @@
         "box": {
             "id": 1
         },
-        "token": "b1.2.1794871978.0000000000000000000000000000000000000000000000000000000000000000",
-        "expiresAt": "2026-11-16T23:32:58+00:00",
-        "serverTime": "2026-11-15T23:32:58+00:00",
+        "token": "b1.2.1794882485.0000000000000000000000000000000000000000000000000000000000000000",
+        "expiresAt": "2026-11-17T02:28:05+00:00",
+        "serverTime": "2026-11-16T02:28:05+00:00",
         "settings": {
             "heartbeatSeconds": 60,
+            "silentAfterSeconds": 300,
             "facts": {
                 "types": [
                     "SPOT_CHECK",
-                    "ZONE_SEEN"
+                    "ZONE_SEEN",
+                    "COUNTER_SEEN",
+                    "COUNTER_LEFT"
                 ],
                 "maxBatch": 200
             },

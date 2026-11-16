@@ -220,7 +220,7 @@ class LossPieceRepository extends EntityRepository
         return $this->db()->fetchAllAssociative(
             "SELECT * FROM ((SELECT $columns FROM loss_piece_event WHERE piece_id = :piece AND type NOT IN (:reads))"
             . " UNION ALL (SELECT $columns FROM loss_piece_event WHERE piece_id = :piece AND type IN (:reads) ORDER BY id DESC LIMIT " . self::EVENTS_SHOWN . ')) e ORDER BY id',
-            ['piece' => $pieceId, 'reads' => \App\LossPrevention\Entity\LossPieceEvent::FROM_BOX], ['reads' => ArrayParameterType::STRING]
+            ['piece' => $pieceId, 'reads' => \App\LossPrevention\Entity\LossPieceEvent::READS], ['reads' => ArrayParameterType::STRING]
         );
     }
 
@@ -266,6 +266,7 @@ class LossPieceRepository extends EntityRepository
     {
         $conn = $this->db();
         $conn->executeStatement("SET LOCAL loss.purge = 'exercise'");
+        $conn->executeStatement('DELETE FROM loss_counter_presence WHERE exercise'); // lot L3-b1 : une pièce d'exercice posée sur un tapis simulé
         $conn->executeStatement('DELETE FROM loss_piece_event WHERE exercise');
         $conn->executeStatement('DELETE FROM loss_tag WHERE exercise');
         $deleted = (int) $conn->executeStatement('DELETE FROM loss_piece WHERE exercise');
