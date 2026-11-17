@@ -122,7 +122,8 @@ class ConsoleApiTest extends WebTestCase
             ['type' => 'verdicts', 'text' => '', 'figureIds' => [], 'analysis' => 'a1', 'items' => [
                 ['id' => $raise, 'why' => 'Ses semblables se sont vendus à 90 % sans rabais.', 'figureIds' => ['a1.verdictRaise']],
                 ['id' => $keep, 'why' => 'Son prix est déjà au bon niveau.', 'figureIds' => []],
-                ['id' => $lower, 'why' => 'Baissez-le de 17 % pour le vendre.', 'figureIds' => []],
+                // un pourcentage qu'aucun résultat ne peut contenir (avant : 17, qui tombait sur le nombre d'articles nouveaux quand d'autres essais en laissaient)
+                ['id' => $lower, 'why' => 'Baissez-le de 7919 % pour le vendre.', 'figureIds' => []],
                 ['id' => 2147483000, 'why' => 'Article inventé.', 'figureIds' => []],
             ]],
             ['type' => 'figures', 'text' => '', 'figureIds' => ['a1.verdictRaise', 'a1.verdictLower'], 'analysis' => '', 'items' => []],
@@ -156,7 +157,7 @@ class ConsoleApiTest extends WebTestCase
         $this->assertSame(['type', 'items', 'groups', 'source'], array_keys($answer['blocks'][2]), 'le bloc des verdicts porte ses groupes (lot W2-b)');
         $this->assertSame([['type' => 'product', 'id' => $raise, 'name' => "000 Console monter $tag"], 'Ses semblables se sont vendus à 90 % sans rabais.', ['a1.verdictRaise']], [$verdicts['raise']['subject'], $verdicts['raise']['why'], $verdicts['raise']['figureIds']]);
         $this->assertSame('Son prix est déjà au bon niveau.', $verdicts['keep']['why']);
-        $this->assertStringStartsWith('2,7 : 5 semblables de ce fournisseur affichés à 2,5, vendus à 90 %', $verdicts['lower']['why'], '« 17 % » n\'est dans aucun résultat : l\'explication chiffrée du serveur prend sa place');
+        $this->assertStringStartsWith('2,7 : 5 semblables de ce fournisseur affichés à 2,5, vendus à 90 %', $verdicts['lower']['why'], '« 7919 % » n\'est dans aucun résultat : l\'explication chiffrée du serveur prend sa place');
         // Chiffres et tableau : assemblés par le serveur, avec leur source
         $this->assertSame(['a1.verdictRaise', 'a1.verdictLower'], array_column($answer['blocks'][3]['items'], 'id'));
         $this->assertSame(['id', 'label', 'value', 'unit', 'source'], array_keys($answer['blocks'][3]['items'][0]), 'un compte du bilan dit ce qu\'il compte : il ne porte pas de notion du lexique');
