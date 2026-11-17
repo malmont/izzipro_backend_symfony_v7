@@ -150,6 +150,29 @@ class OrderRepository extends EntityRepository
             ->getOneOrNullResult();
     }
 
+    /**
+     * Lot PERF-PAGINATION (18/11/2026) : une page des commandes d'une source, la plus récente d'abord (date, puis numéro), lue en base (LIMIT,
+     * OFFSET, COUNT). Une commande créée entre deux pages décale la suite (une ligne peut se répéter ou manquer) : un curseur viendra si besoin.
+     *
+     * @return array{items: list<Order>, total: int}
+     */
+    public function findWithDetailsBySourcePage(int $orderSourceId, ?DateTime $since, int $page, int $limit): array
+    {
+        $qb = $this->createDetailsQueryBuilder()
+            ->andWhere('o.orderSource = :orderSourceId')
+            ->setParameter('orderSourceId', $orderSourceId)
+            ->orderBy('o.orderDate', 'DESC')
+            ->addOrderBy('o.id', 'DESC')
+            ->setFirstResult(($page - 1) * $limit)
+            ->setMaxResults($limit);
+        if ($since) {
+            $qb->andWhere('o.orderDate >= :since')->setParameter('since', $since);
+        }
+        $paginator = new \Doctrine\ORM\Tools\Pagination\Paginator($qb, true);
+
+        return ['items' => iterator_to_array($paginator, false), 'total' => count($paginator)];
+    }
+
     public function findWithDetailsBySource(int $orderSourceId, ?DateTime $since = null): array
     {
         $qb = $this->createDetailsQueryBuilder()

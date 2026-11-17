@@ -588,6 +588,18 @@ class OrderController extends AbstractController
         $days = $request->query->get('days');
         $host = $this->mediaUrlResolver->getPublicHost($request->getSchemeAndHttpHost());
         $cacheKey = 'orders_source_' . $orderSourceId . ($days ? '_days_' . (int)$days : '');
+        // lot PERF-PAGINATION (18/11/2026) : `?page=&limit=` facultatifs ; sans page, la réponse est celle d'avant (plus X-Total-Count)
+        $paging = \App\Services\Http\ListPage::fromRequest($request);
+        if ($paging !== null) {
+            $found = $this->cache->get(
+                $cacheKey . '_page_' . $paging->page . '_' . $paging->limit,
+                fn () => $this->getOrdersBySourceUseCase->executePage((int) $orderSourceId, $host, $days ? (int) $days : null, $paging->page, $paging->limit),
+                300,
+                CacheTags::listTags(CacheTags::ORDERS)
+            );
+
+            return $this->json(array_map(fn ($dto) => $dto->toArray(), $found['items']), JsonResponse::HTTP_OK, $paging->headers($found['total']));
+        }
 
         // 300 s, vidé par toute écriture d'une commande, d'un paiement ou de ce qu'elles affichent (registre CacheTags)
         $orderDTOs = $this->cache->get(
@@ -598,7 +610,7 @@ class OrderController extends AbstractController
         );
 
         $orderData = array_map(fn($dto) => $dto->toArray(), $orderDTOs);
-        return $this->json($orderData);
+        return $this->json($orderData, JsonResponse::HTTP_OK, ['X-Total-Count' => (string) count($orderData)]);
     }
 
     #[Route("api/ordersuser", name: "get_user_orders", methods: ["GET"])]

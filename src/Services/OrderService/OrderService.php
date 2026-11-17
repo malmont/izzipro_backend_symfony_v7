@@ -34,6 +34,18 @@ class OrderService
         return $orderRepository->findWithDetailsBySource($orderSourceId, $date);
     }
 
+    /** Lot PERF-PAGINATION : une page des commandes d'une source @return array{items: list<\App\Entity\Order>, total: int} */
+    public function getOrdersByOrderSourcePage(int $orderSourceId, ?int $days, int $page, int $limit): array
+    {
+        $date = null;
+        if ($days) {
+            $date = new DateTime();
+            $date->modify("-$days days");
+        }
+
+        return $this->getOrderRepository()->findWithDetailsBySourcePage($orderSourceId, $date, $page, $limit);
+    }
+
     public function getOrdersByUser(int $userId): array
     {
         $orderRepository = $this->getOrderRepository();

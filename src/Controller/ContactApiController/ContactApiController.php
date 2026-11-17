@@ -30,11 +30,18 @@ class ContactApiController extends AbstractController
 
     /** Liste d'administration de données personnelles : lue en base, jamais en cache (28/10/2026) */
     #[Route('', name: 'api_contact_list', methods: ['GET'])]
-    public function list(): JsonResponse
+    public function list(Request $request): JsonResponse
     {
+        // lot PERF-PAGINATION (18/11/2026) : `?page=&limit=` facultatifs ; sans page, la liste entière comme avant (plus X-Total-Count)
+        $paging = \App\Services\Http\ListPage::fromRequest($request);
+        if ($paging !== null) {
+            $found = $this->getAllContactsUseCase->executePage($paging->offset(), $paging->limit);
+
+            return $this->json(array_map(fn ($contact) => new ContactOutputDto($contact), $found['items']), Response::HTTP_OK, $paging->headers($found['total']));
+        }
         $contacts = $this->getAllContactsUseCase->execute();
 
-        return $this->json(array_map(fn($contact) => new ContactOutputDto($contact), $contacts));
+        return $this->json(array_map(fn($contact) => new ContactOutputDto($contact), $contacts), Response::HTTP_OK, ['X-Total-Count' => (string) count($contacts)]);
     }
 
     #[Route('/{id}', name: 'api_contact_get_one', methods: ['GET'])]

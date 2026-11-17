@@ -18,7 +18,20 @@ class GetOrdersBySourceUseCase
 
     public function execute(int $orderSourceId, string $host, ?int $days = null): array
     {
-        $orders = $this->orderService->getOrdersByOrderSource($orderSourceId, $days);
+        return $this->dtos($this->orderService->getOrdersByOrderSource($orderSourceId, $days), $orderSourceId, $host);
+    }
+
+    /** Lot PERF-PAGINATION : une page, mêmes objets que la liste entière @return array{items: list<OrderDTO>, total: int} */
+    public function executePage(int $orderSourceId, string $host, ?int $days, int $page, int $limit): array
+    {
+        $found = $this->orderService->getOrdersByOrderSourcePage($orderSourceId, $days, $page, $limit);
+
+        return ['items' => $this->dtos($found['items'], $orderSourceId, $host), 'total' => $found['total']];
+    }
+
+    /** @param list<\App\Entity\Order> $orders @return list<OrderDTO> */
+    private function dtos(array $orders, int $orderSourceId, string $host): array
+    {
         $orderDTOs = [];
         // Ventes au comptoir (source 2) : numéros de ticket et d'avoir (C2) ; aucune autre source ne change
         $receipts = $orderSourceId === 2 && $this->emProvider

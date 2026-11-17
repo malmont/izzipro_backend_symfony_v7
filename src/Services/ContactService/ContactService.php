@@ -14,6 +14,19 @@ class ContactService
         $this->emProvider = $emProvider;
     }
 
+    /**
+     * Lot PERF-PAGINATION : une page des demandes de contact, la plus récente d'abord (date, puis numéro), lue en base.
+     *
+     * @return array{items: list<Contact>, total: int}
+     */
+    public function getContactsPage(int $offset, int $limit): array
+    {
+        $repository = $this->emProvider->getEntityManager()->getRepository(Contact::class);
+        $items = $repository->createQueryBuilder('c')->orderBy('c.createdAt', 'DESC')->addOrderBy('c.id', 'DESC')->setFirstResult($offset)->setMaxResults($limit)->getQuery()->getResult();
+
+        return ['items' => $items, 'total' => (int) $repository->count([])];
+    }
+
     public function getAllContacts(): array
     {
         $tenantEm = $this->emProvider->getEntityManager();

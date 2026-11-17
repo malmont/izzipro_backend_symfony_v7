@@ -436,6 +436,21 @@ de bord affichent leurs dates à l'heure du magasin (`|store_time('…')` et `st
 techniques (clés d'application, workers, tableau technique, quotas IA, composition du site, coupons de caisse, Stripe de la caisse)
 restent en UTC et l'écrivent.
 
+### Pagination des listes (lot PERF-PAGINATION, 18/11/2026)
+
+`GET /api/contacts` et `GET /api/orders` (et déjà `GET /api/ordersuser`, les listes de la gestion) acceptent `?page=&limit=`, FACULTATIFS
+(`App\Services\Http\ListPage`) :
+- sans `page` : la réponse d'avant (le tableau entier), plus l'en-tête `X-Total-Count` ; rien n'est borné pour l'instant (un plafond viendra
+  en lot à part, sur ordre du chef, quand les fronts paginent) ;
+- avec `page` : la même forme (un tableau des mêmes objets) limitée à la page, en-têtes `X-Total-Count`, `X-Page`, `X-Limit` ; `page` ≥ 1,
+  `limit` de 1 à 200 (50 par défaut), une valeur hors bornes est ramenée aux bornes sans erreur ;
+- ordre stable, le plus récent d'abord (contacts : date puis numéro ; commandes : date de commande puis numéro) ; la base ne lit que la page
+  (LIMIT, OFFSET, COUNT) ; le cache de `/api/orders` (300 s) a une clé par page ;
+- avec OFFSET, une ligne créée entre deux pages décale la suite : une ligne peut se répéter ou manquer d'une page à l'autre. Accepté pour
+  ce lot ; un curseur (`beforeId`) viendra si le besoin en vient ;
+- les trois en-têtes sont exposés au navigateur par nginx (`Access-Control-Expose-Headers`, `docker/nginx/default.conf`).
+Essai : `tests/Functional/Http/ListPaginationTest.php`.
+
 ## Tâches de fond (Messenger)
 
 Une file et un worker par projet, dans la base Redis 1 (`config/packages/messenger.yaml`, `docker-compose.yml`) :
