@@ -112,6 +112,8 @@ $master->exec(file_get_contents(__DIR__ . '/../ops/sql/agency_master.sql'));
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_sites_master.sql'));
 // Prévention des pertes (lot L3-a2, 16/11/2026) : demandes de jumelage des boîtiers (ops/sql/loss_pairing_master.sql, même SQL que la base maître réelle)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/loss_pairing_master.sql'));
+// Prévention des pertes (lot L6-a, 17/11/2026) : matériel vendu et offres du module (ops/sql/loss_hardware_master.sql, même SQL que la base maître réelle)
+$master->exec(file_get_contents(__DIR__ . '/../ops/sql/loss_hardware_master.sql'));
 // Accès d'assistance d'une agence (lot AG-ASSIST, 16/11/2026) : demandes du commerçant (ops/sql/assistance_master.sql, même SQL que la base maître réelle)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/assistance_master.sql'));
 // Codes courts fixes des sites de test (31/10/2026) : MVT001 et MVT002 (alphabet Crockford)

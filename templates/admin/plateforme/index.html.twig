@@ -228,6 +228,31 @@
         </tbody>
     </table>
 
+    {# Lot L6-a (17/11/2026) : le matériel de la prévention des pertes, vendu dans la boutique de forfaits (docs/prevention-pertes.md § 19.4) #}
+    <h2 class="h5 mt-4" id="materiel-pertes">Matériel de la prévention des pertes</h2>
+    <p class="text-muted small">Prix et lien de la fiche dans la boutique de forfaits. Un article n'est montré aux sites (gamme de matériel, bouton « Acheter » du web) que mis en vente, avec un prix. Rien n'est en vente au départ. Le mobile ne montre ni prix ni lien d'achat.</p>
+    <table class="table table-sm datagrid plateforme-materiel">
+        <thead><tr><th>Code</th><th>Article</th><th>Niveau</th><th>Prix</th><th>Lien de la fiche (https)</th><th>En vente</th><th></th></tr></thead>
+        <tbody>
+        {% for h in lossHardware %}
+            <tr>
+                <form method="post" action="{{ path('admin_plateforme_loss_hardware', {code: h.code}) }}">
+                <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+                <td><code>{{ h.code }}</code></td>
+                <td>{{ h.labelFr }}<div class="small text-muted">{{ h.labelEn }}</div></td>
+                <td>{{ h.level }}</td>
+                <td><div class="input-group input-group-sm" style="width:9em"><input type="text" name="price" class="form-control" value="{{ h.priceCents is not null ? (h.priceCents / 100)|number_format(2, '.', '') : '' }}" placeholder="—"><span class="input-group-text">{{ h.currency }}</span></div></td>
+                <td><input type="url" name="buyUrl" class="form-control form-control-sm" style="min-width:18em" value="{{ h.buyUrl ?? '' }}" placeholder="https://"></td>
+                <td><input type="checkbox" name="isActive" value="1" {{ h.isActive ? 'checked' : '' }}></td>
+                <td><button class="btn btn-sm btn-outline-primary">Enregistrer</button></td>
+                </form>
+            </tr>
+        {% else %}
+            <tr><td colspan="7" class="text-muted">Aucun article : la table du matériel n'est pas posée sur la base maître.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
     <h2 class="h5 mt-4">Journal{% if selected %} de {{ selected }}{% endif %}</h2>
     <table class="table table-sm datagrid plateforme-journal">
         <thead><tr><th>Le</th><th>Site</th><th>Fonctionnalité</th><th>Événement</th><th>Détail</th></tr></thead>

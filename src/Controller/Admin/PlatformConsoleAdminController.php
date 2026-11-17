@@ -39,6 +39,7 @@ class PlatformConsoleAdminController extends AbstractController
         private readonly ?\App\Services\Platform\ShippingBalanceRepository $balances = null,
         private readonly ?\App\Services\Platform\PlatformAiCreditsService $aiCredits = null, // crédits IA par site (07/11/2026)
         private readonly ?\Symfony\Component\Messenger\MessageBusInterface $bus = null, // lot MOD-1 : « Retirer et résilier »
+        private readonly ?\App\LossPrevention\Master\LossHardwareProductRepository $hardware = null, // lot L6-a : matériel de la prévention des pertes
     ) {
     }
 
@@ -115,6 +116,7 @@ class PlatformConsoleAdminController extends AbstractController
             'sites' => $sites,
             'policies' => $this->console->policies(),
             'offers' => $this->offers->all(false),
+            'lossHardware' => $this->hardware?->all(false) ?? [],
             'requests' => $this->requests->listPending(),
             'events' => $this->repository->events($tenant !== '' ? $tenant : null, 50),
             'selected' => $tenant,
@@ -199,6 +201,29 @@ class PlatformConsoleAdminController extends AbstractController
                 throw new PlatformValidationException($errors);
             }
             $this->addFlash('success', sprintf('Offre %s enregistrée.', $code));
+        });
+    }
+
+    /**
+     * Lot L6-a (17/11/2026, `docs/prevention-pertes.md` § 19.4) : le prix, le lien de la fiche dans la boutique de forfaits et la mise en
+     * vente d'un article de matériel ; la même validation que `PUT /api/platform/pertes/materiel/{code}`. Prix vide : pas de prix.
+     */
+    #[Route('/admin/plateforme/materiel/{code}', name: 'admin_plateforme_loss_hardware', methods: ['POST'], requirements: ['code' => '[a-z0-9_]{2,64}'])]
+    public function lossHardware(string $code, Request $request): Response
+    {
+        return $this->action($request, function () use ($code, $request) {
+            if ($this->hardware === null || $this->hardware->find($code) === null) {
+                throw new \InvalidArgumentException(sprintf('Article de matériel %s inconnu.', $code));
+            }
+            $price = trim((string) $request->request->get('price', ''));
+            $url = trim((string) $request->request->get('buyUrl', ''));
+            $values = ['priceCents' => $price === '' ? null : (is_numeric(str_replace(',', '.', $price)) ? (int) round(((float) str_replace(',', '.', $price)) * 100) : -1),
+                'buyUrl' => $url === '' ? null : $url, 'isActive' => $request->request->getBoolean('isActive')];
+            $errors = $this->hardware->upsert($code, $values, $this->getUser()?->getUserIdentifier());
+            if ($errors !== []) {
+                throw new PlatformValidationException($errors);
+            }
+            $this->addFlash('success', sprintf('Matériel %s enregistré.', $code));
         });
     }
 

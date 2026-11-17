@@ -87,6 +87,44 @@ class PlatformConsolePageTest extends WebTestCase
         $this->assertStringContainsString('Plateforme : pilotage', $this->client->getResponse()->getContent());
     }
 
+    /** Lot L6-a (17/11/2026, `docs/prevention-pertes.md` § 19.4) : le propriétaire saisit le prix du matériel de la prévention des pertes */
+    public function testTheLossPreventionHardwareIsPricedFromThePage(): void
+    {
+        $saved = $this->master->query('SELECT code, price_cents, buy_url, is_active FROM loss_hardware_products')->fetchAll(\PDO::FETCH_ASSOC);
+        $box = fn (): array => $this->master->query("SELECT price_cents, buy_url, is_active FROM loss_hardware_products WHERE code = 'box'")->fetch(\PDO::FETCH_ASSOC);
+        try {
+            $this->loginAs(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']);
+            $crawler = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin/plateforme', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+            $this->assertSame(1, $crawler->filter('table.plateforme-materiel')->count());
+            $this->assertSame(7, $crawler->filter('table.plateforme-materiel form')->count(), 'les sept articles, rien en vente au départ');
+            $this->assertSame(0, $crawler->filter('table.plateforme-materiel input[name="isActive"][checked]')->count());
+            $token = $crawler->filter('table.plateforme-materiel input[name="_token"]')->first()->attr('value');
+            $post = fn (string $code, array $fields) => $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . "/admin/plateforme/materiel/$code", ['_token' => $token] + $fields, [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+            // en vente sans prix, adresse en http, prix illisible : refusés, rien n'est écrit
+            foreach ([['price' => '', 'isActive' => '1'], ['price' => '499', 'buyUrl' => 'http://forfaits.example.invalid/boitier'], ['price' => 'cher']] as $wrong) {
+                $post('box', $wrong);
+                $this->assertSame(302, $this->client->getResponse()->getStatusCode());
+                $this->assertSame([null, null, false], [$box()['price_cents'], $box()['buy_url'], in_array($box()['is_active'], [true, 't', 1, '1'], true)], json_encode($wrong));
+            }
+            $post('inconnu', ['price' => '1']);
+            $this->assertStringContainsString('inconnu', (string) $this->client->followRedirect()->filter('body')->text());
+            // le prix, le lien, la mise en vente
+            $post('box', ['price' => '499,00', 'buyUrl' => 'https://forfaits.example.invalid/boitier', 'isActive' => '1']);
+            $this->assertSame([49900, 'https://forfaits.example.invalid/boitier', true], [(int) $box()['price_cents'], $box()['buy_url'], in_array($box()['is_active'], [true, 't', 1, '1'], true)]);
+            $this->assertStringContainsString('Matériel box enregistré', (string) $this->client->followRedirect()->filter('body')->text());
+            // un administrateur de site n'y touche pas
+            $this->loginAs(['ROLE_ADMIN', 'ROLE_USER_INTERNET']);
+            $post('box', ['price' => '1', 'isActive' => '1']);
+            $this->assertSame(403, $this->client->getResponse()->getStatusCode());
+            $this->assertSame(49900, (int) $box()['price_cents']);
+        } finally {
+            $restore = $this->master->prepare('UPDATE loss_hardware_products SET price_cents = ?, buy_url = ?, is_active = ? WHERE code = ?');
+            foreach ($saved as $row) {
+                $restore->execute([$row['price_cents'], $row['buy_url'], in_array($row['is_active'], [true, 't', 1, '1'], true) ? 'true' : 'false', $row['code']]);
+            }
+        }
+    }
+
     private function clean(): void
     {
         foreach (['tenant_entitlement_events', 'tenant_entitlements', 'tenant_feature_requests'] as $table) {
