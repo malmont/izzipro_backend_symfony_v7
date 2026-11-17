@@ -8,6 +8,7 @@ use App\LossPrevention\Services\LossOpinionService;
 use App\Services\TenantConnectionManager;
 use App\Tests\Fake\FakeLandingAiClient;
 use App\Tests\Functional\Support\AiRightTestHelper;
+use Doctrine\DBAL\ArrayParameterType;
 
 /**
  * Lot L5-c (17/11/2026, `docs/prevention-pertes.md` § 18.3 et § 18.10) : l'avis de l'IA sur un constat. Le pourcentage est calculé par le
@@ -40,6 +41,25 @@ class LossPreventionOpinionTest extends LossPreventionTestCase
         }
         $stored = json_decode((string) file_get_contents($file), true);
         $this->assertSame(array_keys($stored['body']['opinion'] ?? $stored['body']), array_keys($kept['body']['opinion'] ?? $kept['body']), "forme de l'exemple $name");
+    }
+
+    /**
+     * Un compte de l'équipe laissé par un autre essai de la suite ne porte aucun mot du texte type : le serveur refuserait ce texte, à bon
+     * droit, comme nommant une personne (train 97 : l'administrateur « Session Client » d'un essai de la boutique, joué avant, et « la même
+     * session » dans le texte type ; l'avis échouait en AI_UNAVAILABLE, la file du faux modèle étant vide au second essai). Ces comptes sont
+     * renommés sur la base d'essai ; ceux de cet essai (`$keep`) restent tels quels, le refus d'un nom de la boutique est vérifié plus bas.
+     *
+     * @param array<string, mixed> $out
+     * @param list<int>            $keep
+     */
+    private function noStaffNamedLike(array $out, array $keep): void
+    {
+        preg_match_all('/\p{L}{3,}/u', mb_strtolower(json_encode($out, JSON_UNESCAPED_UNICODE)), $found);
+        $words = array_values(array_unique($found[0]));
+        $this->db->executeStatement('UPDATE "user" SET firstname = CASE WHEN LOWER(TRIM(firstname)) IN (:w) THEN \'Zqx\' ELSE firstname END,'
+            . ' lastname = CASE WHEN LOWER(TRIM(lastname)) IN (:w) THEN \'Zqx\' ELSE lastname END'
+            . ' WHERE id NOT IN (:keep) AND (LOWER(TRIM(firstname)) IN (:w) OR LOWER(TRIM(lastname)) IN (:w))',
+            ['w' => $words, 'keep' => $keep], ['w' => ArrayParameterType::STRING, 'keep' => ArrayParameterType::INTEGER]);
     }
 
     protected function tearDown(): void
@@ -109,11 +129,13 @@ class LossPreventionOpinionTest extends LossPreventionTestCase
         $this->assertSame('OPINION_PENDING', $ask(409)['code'], 'un avis à la fois');
 
         // Le worker : le modèle rédige, le serveur vérifie, l'unité est décomptée
+        $this->noStaffNamedLike($good, [(int) $cashier->getId(), $this->adminId]);
         FakeLandingAiClient::$queue[] = $reply($good);
         $worker();
         $this->example('avis-redige', 'GET', '/api/gestion/pertes/constats/{id}', 200, $detail());
         $done = $detail()['opinion'];
-        $this->assertSame(['done', $percent, $good['summary'], $good['factors'], $good['alternatives'], 1, false, null], [$done['state'], $done['percent'], $done['summary'], $done['factors'], $done['alternatives'], $done['creditsUsed'], $done['stale'], $done['error']]);
+        $this->assertSame(['done', $percent, $good['summary'], $good['factors'], $good['alternatives'], 1, false, null], [$done['state'], $done['percent'], $done['summary'], $done['factors'], $done['alternatives'], $done['creditsUsed'], $done['stale'], $done['error']],
+            'avis : ' . json_encode(['state' => $done['state'], 'error' => $done['error']]));
         $this->assertNotNull($done['generatedAt']);
         $this->assertSame(['success' => 1], $usage());
         $this->assertStringContainsString('la décision vous appartient', $done['notice']);
