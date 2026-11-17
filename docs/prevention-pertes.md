@@ -2514,7 +2514,12 @@ Risque ordinaire (§ 17.9) : je me vérifie, avec mutations. **À coder sous Opu
   c'est ce qui dit « le comptage précédent qui la couvrait ».
 
 
-## 18. Lot L5 : alertes et avis de l'IA (PLAN, SANS CODE, 17/11/2026 ; à valider par le chef de projet puis par le propriétaire)
+## 18. Lot L5 : alertes et avis de l'IA (plan validé par le propriétaire le 17/11/2026 ; rien n'est codé)
+
+**Décision du propriétaire du 17/11/2026** (relayée par le chef de projet) : les 14 propositions du § 18.7 sont validées, **sauf la
+question 2** : le signal sonore du portique devient un réglage du gérant, éteint par défaut, dans L5-d (18.2, « C »). La question 13
+part à la liste de l'avocat. Ordre : L5-a, L5-b, L5-c, L5-d, L5-e ; L5-f après l'essai du matériel. Contrat en dix lignes au chef
+avant chaque sous-lot ; L5-c, L5-d et L5-e passent par un relecteur neuf.
 
 Demande du chef de projet du 17/11/2026. L5 apporte trois choses : une **alerte à la sortie** en temps réel, une **alerte en caisse**
 qui s'appuie sur la route déjà en ligne, et un **avis de l'IA** sur un constat, avec un pourcentage calculé par le serveur. Il traite
@@ -2529,7 +2534,8 @@ vente du boîtier) vient après.
   du constat, qui attend le rattrapage) ; l'affichage en caisse des articles suivis non lus, avant le paiement ; un avis de l'IA,
   demandé par le gérant sur la fiche d'un constat ; un constat classé qui grossit fortement se signale de nouveau, une fois ; un
   jeton du boîtier mieux protégé ; le changement du mot de passe des puces, après l'essai du matériel.
-- **N'apporte pas** : aucune sonnerie ni lumière au portique (question 2) ; aucune vente bloquée ; aucune alerte au caissier sur une
+- **Apporte aussi** (décision du 17/11/2026) : un signal sonore au portique, réglage du gérant éteint par défaut (18.2, « C »).
+- **N'apporte pas** : aucune vente bloquée ; aucune alerte au caissier sur une
   personne ; aucun avis de l'IA sur une règle « par personne » (question 8) ; aucune lecture d'un extrait vidéo par l'IA (L3-d,
   après l'avocat) ; aucune décision prise par l'IA ; aucun courriel en temps réel.
 
@@ -2588,8 +2594,28 @@ vente du boîtier) vient après.
 - **Contrat de la caisse** à envoyer par le chef à l'application de caisse (Flutter) avant le code : `display`, le message, les deux
   boutons, la route de suite, et le comportement hors ligne (rien n'est affiché, rien n'est envoyé).
 
-**Délais** : alerte en caisse, la réponse de la route (déjà moins de 300 ms) ; alerte à la sortie, le délai de la pré-alerte
-(2 minutes) plus l'envoi au téléphone ; constat, inchangé (après le rattrapage).
+**C. Signal sonore au portique** (décision du propriétaire du 17/11/2026 : « les portiques sonnent dans la plupart des magasins »).
+
+- **Un réglage du gérant, éteint par défaut** (`exitSignal.enabled`), dans L5-d. Allumé, il ne change rien à la pré-alerte au gérant
+  (« A », 2 minutes), qui part que le portique sonne ou non.
+- **Le boîtier décide sur place**, sans attendre la plateforme ni les 2 minutes : une pièce lue à la sortie fait sonner si elle
+  n'est pas sur la **liste des pièces payées** que la plateforme lui sert. La puce n'est jamais désactivée (§ 16) : la liste dit
+  quelles pièces peuvent sortir. Le boîtier ne fait qu'appeler (§ 2 : il n'ouvre aucun port) ; il relit la liste à chaque tour de
+  service, par une route nouvelle du canal (lecture, depuis un rang). **Proposition à confirmer au contrat de L5-d** : la liste
+  porte aussi, par variante, le nombre de ventes encore sans pièce (une pièce de cette variante peut sortir, une par vente, comme le
+  rattrapage du § 14, point 5) ; et une pièce lue sur le tapis du comptoir dans les 10 dernières minutes ne fait pas sonner (le
+  boîtier le sait seul, sans attendre que la vente soit reliée par l'analyse).
+- **Appareil** : un genre d'appareil nouveau du boîtier, `signal` (avertisseur branché en USB), avec sa santé et son étape
+  d'installation ; un avertisseur simulé pour l'exercice et le simulateur. Le boîtier sans avertisseur en service ne sonne pas, et le
+  réglage le dit.
+- **La limite, dite dans l'aide et sur l'écran du réglage** : une pièce vendue mais non lue au comptoir fera sonner un client
+  honnête, comme un antivol classique oublié en caisse. L'alerte en caisse (L5-a) réduit ce risque. Le texte rappelle de ne jamais
+  retenir ni accuser un client sur un signal (à faire relire par l'avocat).
+- Le signal reste une affaire du boîtier : il n'est jamais une preuve et n'ouvre aucun constat ; le boîtier envoie un fait
+  `EXIT_SIGNAL` (pièce, heure), que la fiche du constat « sortie sans vente » montre s'il en naît un.
+
+**Délais** : alerte en caisse, la réponse de la route (déjà moins de 300 ms) ; signal du portique, sur place, aussitôt la lecture ;
+alerte à la sortie, le délai de la pré-alerte (2 minutes) plus l'envoi au téléphone ; constat, inchangé (après le rattrapage).
 
 ### 18.3 L'avis de l'IA sur un constat
 
@@ -2658,7 +2684,7 @@ generatedAt, creditsUsed }`, aujourd'hui `null`.
 | **L5-a** | alerte en caisse : `cashierAlerts` par pays, `display`, route de suite, compte par poste et par jour au bilan ; contrat de la caisse | ordinaire : je me vérifie, avec mutations |
 | **L5-b** | constat classé qui grossit (réserve 1) | ordinaire |
 | **L5-c** | avis de l'IA : pourcentage du serveur, entrée sans personne, texte vérifié, unités, journal, exercice, porte `clip` fermée | **à risque** (vie privée, IA) : relecteur neuf et mutations |
-| **L5-d** | alerte à la sortie : file avec délai, contrôle léger, type `loss_exit`, plafond, regroupement, liste en direct, exercice ; boîtier simulé | **à risque** (fausses alertes) : relecteur neuf |
+| **L5-d** | alerte à la sortie : file avec délai, contrôle léger, type `loss_exit`, plafond, regroupement, liste en direct, exercice ; signal du portique (réglage éteint, liste des pièces payées servie au boîtier, appareil `signal`, fait `EXIT_SIGNAL`) ; boîtier simulé et lot du boîtier | **à risque** (fausses alertes) : relecteur neuf |
 | **L5-e** | jeton d'une heure et preuve de la machine (réserve 2), avec le lot B8 du boîtier | **à risque** (sécurité) : relecteur neuf |
 | **L5-f** | changement du mot de passe des puces (réserve 3) | après l'essai du matériel |
 
@@ -2671,7 +2697,8 @@ liste en direct.
 ### 18.6 Risques
 
 1. **Fausse alerte à la sortie, et confrontation** : un employé qui va au-devant d'un client innocent. Parades : pré-alerte
-   seulement après le contrôle léger, texte « à vérifier », jamais « vol », aucun son, plafond, et l'aide qui dit de ne jamais
+   seulement après le contrôle léger, texte « à vérifier », jamais « vol », signal du portique éteint par défaut et sa limite dite
+   sur l'écran du réglage, plafond, et l'aide qui dit de ne jamais
    retenir ni accuser un client sur une alerte (texte à faire relire par l'avocat).
 2. **L'IA prise pour un juge** : pourcentage du serveur seulement, mention « non étalonné », sous les preuves, à la demande,
    jamais dans une liste ni une alerte.
@@ -2685,7 +2712,9 @@ liste en direct.
 1. **Alerte à la sortie : urgente ou de suivi ?** *Urgente (elle part au niveau « Essentiel »), avec son plafond propre de 3 par
    jour et par gérant.*
 2. **Sonnerie ou lumière au portique ?** *Non en L5 : un signal public pousse à retenir un client, avec le risque d'une fausse
-   accusation ; à revoir avec l'avocat, et le boîtier n'a pas d'appareil pour cela.*
+   accusation ; à revoir avec l'avocat, et le boîtier n'a pas d'appareil pour cela.* **Décision du propriétaire (17/11/2026) :
+   un réglage du gérant, éteint par défaut, dans L5-d ; le boîtier décide sur place avec la liste des pièces payées ; la limite
+   est dite dans l'aide et sur l'écran (18.2, « C »).**
 3. **Délai de la pré-alerte** : *2 minutes après la lecture à la sortie.*
 4. **Qui reçoit l'alerte à la sortie** : *les administrateurs du site seulement ; le responsable de caisse plus tard si vous le
    voulez.*
@@ -2702,5 +2731,7 @@ liste en direct.
 12. **Mot de passe des puces** : *changement par l'administrateur seulement, après l'essai du matériel ; les pièces passent au
     nouveau rang quand elles sont réimprimées.*
 13. **L'IA et l'extrait vidéo** (L3-d) : *rien en L5 ; à l'avocat de dire si une lecture limitée à l'objet est permise, au regard
-    de l'interdiction de l'analyse de gestes.*
+    de l'interdiction de l'analyse de gestes.* **Ajoutée à la liste de l'avocat (17/11/2026).**
 14. **Ordre** : *L5-a, L5-b, L5-c, L5-d, L5-e ; L5-f après l'essai du matériel.*
+
+Les questions 1 et 3 à 14 sont validées telles quelles par le propriétaire le 17/11/2026.
