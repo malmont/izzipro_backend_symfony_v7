@@ -296,6 +296,58 @@ class AdminEntryTest extends WebTestCase
         return ['name' => $name, 'cost' => '987654'];
     }
 
+    public function testTheSiteSheetClosesTheSameFieldsOnBothPathsAndAMerchantStillDeletesByBatch(): void
+    {
+        // UNE liste pour l'API et EasyAdmin : chaque propriété de la fiche du site est fermée ou ouverte de la même façon par les deux chemins
+        $meta = static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager()->getClassMetadata(\App\Entity\Entreprise::class);
+        $closed = 0;
+        foreach ([...$meta->getFieldNames(), ...$meta->getAssociationNames()] as $property) {
+            $api = \App\Security\Entry\SiteSheetClosedFields::closed($property);
+            $this->assertSame($api, \App\Security\Entry\AdminFieldGuard::hidden('admin.entreprise', $property), $property);
+            $closed += $api ? 1 : 0;
+        }
+        $this->assertGreaterThan(20, $closed, 'l\'onglet Caisse entier est fermé');
+        foreach (['name', 'metaTitle', 'pricesIncludeTax', 'LegalNotice'] as $open) {
+            $this->assertFalse(\App\Security\Entry\SiteSheetClosedFields::closed($open), $open);
+        }
+
+        // le formulaire de la fiche de l'opérateur suit la liste
+        $this->agencyManaging();
+        $this->login($this->user(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'agence', ['ROLE_ADMIN', 'ROLE_AGENCY'], 'Julie', true), MV_TEST_TENANT_HOST, MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin/entree?tenant=' . MV_TEST_TENANT2_CODE, ['pass' => $this->passFor(MV_TEST_TENANT2_CODE)], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
+        $sheet = (int) $this->sheets[MV_TEST_TENANT2_DB]['id'];
+        $form = $this->page('GET', '/admin?crudAction=edit&entityId=' . $sheet . '&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\EntrepriseCrudController'), MV_TEST_TENANT2_HOST);
+        $this->assertStringContainsString('Entreprise[metaTitle]', $form);
+        foreach (['posPinMaxAttempts', 'posApprovalRefund', 'dataRetentionYears', 'notificationLevel', 'currency', 'email'] as $field) {
+            $this->assertStringNotContainsString('Entreprise[' . $field . ']', $form, $field);
+        }
+
+        // un commerçant supprime par lot ses couleurs ; une autre entité glissée dans le corps est refusée
+        $this->login($this->user(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'commercant', ['ROLE_ADMIN'], 'Claire', false), MV_TEST_TENANT2_HOST, MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE);
+        $colors = [];
+        foreach (['Lot A', 'Lot B'] as $label) {
+            $colors[] = (int) $this->pdo(MV_TEST_TENANT2_DB)->query("INSERT INTO color (id, name) VALUES (nextval('color_id_seq'), 'entree-ea-$label-{$this->tag}') RETURNING id")->fetchColumn();
+        }
+        $color = rawurlencode('App\\Controller\\Admin\\ColorCrudController');
+        $list = $this->page('GET', '/admin?crudAction=index&crudControllerFqcn=' . $color, MV_TEST_TENANT2_HOST);
+        $token = (string) (new \Symfony\Component\DomCrawler\Crawler($list))->filter('[data-action-name="batchDelete"]')->attr('data-action-csrf-token');
+        $this->assertNotSame('', $token);
+        $batch = fn (string $entity, array $ids): Response => $this->batch($color, $entity, $ids, $token);
+        $this->assertSame(403, $batch('App\\Entity\\Size', $colors)->getStatusCode(), 'une autre entité que celle de l\'écran');
+        $this->assertSame(2, (int) $this->pdo(MV_TEST_TENANT2_DB)->query('SELECT COUNT(*) FROM color WHERE id IN (' . implode(',', $colors) . ')')->fetchColumn());
+        $this->assertSame(302, $batch('App\\Entity\\Color', $colors)->getStatusCode());
+        $this->assertSame(0, (int) $this->pdo(MV_TEST_TENANT2_DB)->query('SELECT COUNT(*) FROM color WHERE id IN (' . implode(',', $colors) . ')')->fetchColumn(), 'la suppression légitime marche toujours');
+    }
+
+    /** @param list<int> $ids */
+    private function batch(string $controller, string $entity, array $ids, string $token): Response
+    {
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin?crudAction=batchDelete&crudControllerFqcn=' . $controller,
+            ['batchActionName' => 'batchDelete', 'entityFqcn' => $entity, 'batchActionEntityIds' => $ids, 'batchActionCsrfToken' => $token, 'batchActionUrl' => '/admin'], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
+
+        return $this->client->getResponse();
+    }
+
     private function agencyManaging(): int
     {
         $agencies = static::getContainer()->get(AgencyService::class);
@@ -379,6 +431,7 @@ class AdminEntryTest extends WebTestCase
         foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
             $this->pdo($db)->exec("DELETE FROM otp_code WHERE user_otp_id IN (SELECT id FROM \"user\" WHERE email LIKE 'entree-ea-%@example.invalid')");
             $this->pdo($db)->exec("DELETE FROM product WHERE slug LIKE 'entree-ea-%'");
+            $this->pdo($db)->exec("DELETE FROM color WHERE name LIKE 'entree-ea-%'");
             $this->pdo($db)->exec("DELETE FROM \"user\" WHERE email LIKE 'entree-ea-%@example.invalid'");
             $this->pdo($db)->exec("DELETE FROM content_audit_log WHERE resource = 'external_access'");
         }

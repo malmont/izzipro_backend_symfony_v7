@@ -431,7 +431,9 @@ final class ScreenRegistry
         'admin.commandes-reglages' => ['fields' => ['orders', 'payments'], 'why' => 'la fiche d\'un statut ou d\'un type de commande cite les références de ses commandes ; celle d\'un type de paiement, les identifiants de ses paiements'],
         'admin.taxes' => ['fields' => ['orderTaxes'], 'why' => 'l\'écran des taxes compte les lignes de taxe des commandes'],
         'admin.ia' => ['fields' => ['promptExcerpt'], 'why' => 'l\'historique des demandes garde le début des questions posées à la console de gestion'],
-        'site.reglages' => ['fields' => ['charges', 'figures', 'steps[].description'], 'closed' => ['POST /api/app-keys pour les applications admin et pos'],
+        // décision du chef (17/11/2026) : le solde prépayé d'expédition est un montant d'argent, jamais servi à l'agence (`balanceCents`)
+        'site.modules' => ['fields' => ['balanceCents'], 'why' => 'le registre des fonctionnalités donne le solde prépayé d\'expédition dans le détail du prérequis de la livraison par la plateforme'],
+        'site.reglages' => ['fields' => ['charges', 'figures', 'steps[].description', 'balanceCents'], 'closed' => ['POST /api/app-keys pour les applications admin et pos'],
             'why' => 'achats d\'étiquettes par commande (numéro, référence, suivi, montant) ; nombres d\'articles sans coût, de fournisseurs et de frais fixes des étapes de la gestion, dans `figures` et dans leur description ; une clé d\'application active la gestion ou la caisse'],
         'pages.ia' => ['fields' => ['history[].promptExcerpt', 'history[].user'], 'why' => 'l\'usage de l\'IA garde le début des questions posées à la console de gestion, et l\'adresse de qui les a posées'],
         'imports' => ['fields' => ['summary.orders', 'summary.customers', 'summary.guests', 'summary.archived', 'report.orders', 'result.cancel.kept[].reason', 'result.cancel.by', 'createdBy'], 'closed' => ['kind=customers', 'kind=orders'],

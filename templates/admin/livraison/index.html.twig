@@ -73,7 +73,8 @@
             </div>
         </div>
         <div class="col-lg-5">
-            {% if s.mode == 'platform' %}
+            {# décision du chef (17/11/2026) : le solde prépayé, un montant d'argent, n'est jamais montré à l'agence entrée #}
+            {% if s.mode == 'platform' and not is_granted('ROLE_ENTRY_AGENCY') %}
             <div class="card mb-3" data-livraison-solde>
                 <div class="card-body">
                     <h2 class="h5">Étiquettes par la plateforme</h2>

@@ -69,7 +69,8 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
     /** Champs de la fiche du site fermés à l'opérateur : l'adresse qui reçoit les commandes, les demandes et les réservations des
      *  clients ; la devise, le fuseau et la fréquence des périodes, qui changent le sens des montants enregistrés. Les TAXES (prix taxes
      *  comprises) restent ouvertes à l'agence : décision du propriétaire du 15/11/2026, le commerçant confirme « Taxes vérifiées » (AG-3d) */
-    private const SITE_FIELDS = ['email', 'currency', 'posTimezone', 'purchasePeriodFrequency'];
+    // (lot AG-3c, décision du chef : la liste est PARTAGÉE avec EasyAdmin, `SiteSheetClosedFields` ; l'onglet Caisse et les réglages hors
+    // construction de la fiche s'y ajoutent)
 
     public function __construct(
         private readonly TokenStorageInterface $tokens,
@@ -486,7 +487,7 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         }
         if ($target === 'site.reglages' && preg_match('#^/api/entreprise(/|$)#', $path) === 1 && in_array($request->getMethod(), self::WRITE, true)) {
             $body = json_decode((string) $request->getContent(), true);
-            if (is_array($body) && array_intersect(self::SITE_FIELDS, array_keys($body)) !== []) {
+            if (is_array($body) && array_filter(array_map('strval', array_keys($body)), [SiteSheetClosedFields::class, 'closed']) !== []) {
                 return 'field';
             }
         }

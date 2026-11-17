@@ -25,18 +25,14 @@ final class AdminFieldGuard implements AuthorizationCheckerInterface
     /** Écran du registre => propriétés retirées à l'opérateur (inventaire `ScreenRegistry::SENSITIVE`, et la fiche du site comme dans l'API) */
     public const FIELDS = [
         'admin.catalogue' => ['purchasePrice', 'coefficientMultiplier', 'commande', 'commandeCostCents', 'commandeQuantity', 'commandeAttachedAt', 'commandeCostEstimated'],
-        // l'adresse qui reçoit commandes et demandes, la devise, le fuseau et le découpage des périodes ; les adresses d'alerte ; le mode Stripe ;
-        // relecture d'AG-3c : conservation des données, comptes comptables, appartenance aux applications, niveau des courriels (hors construction)
-        'admin.entreprise' => ['email', 'currency', 'posTimezone', 'purchasePeriodFrequency', 'formSubmissionsEmail', 'posAlertsEmail', 'posStripeMode', 'password',
-            'dataRetentionYears', 'retentionWriteMode', 'accountingAccounts', 'appMembershipMode', 'notificationLevel'],
+        // la fiche du site : la liste PARTAGÉE avec l'API (`SiteSheetClosedFields`, voir hidden()) ; ici seulement le mot de passe du serveur d'envoi
+        'admin.entreprise' => ['password'],
         'admin.vitrine' => ['candidatures'],
         'admin.commandes-reglages' => ['orders', 'payments'],
         'admin.taxes' => ['orderTaxes'],
         // relecture d'AG-3c : le résumé de la réponse (commandes, clients, chiffres), son issue et la clé de mémoire
         'admin.ia' => ['promptExcerpt', 'user', 'summary', 'outcome', 'memoryKey'],
     ];
-    /** Relecture d'AG-3c : préfixes fermés de l'écran (la consigne : jamais la caisse ; tout l'onglet Caisse de la fiche du site) */
-    public const PREFIXES = ['admin.entreprise' => ['pos']];
 
     /** Le champ (ou `association.champ`) est-il fermé à l'opérateur sur cet écran ? Sert à l'affichage, à la recherche et au tri */
     public static function hidden(?string $screen, string $property): bool
@@ -48,13 +44,8 @@ final class AdminFieldGuard implements AuthorizationCheckerInterface
         if (in_array($head, self::FIELDS[$screen] ?? [], true)) {
             return true;
         }
-        foreach (self::PREFIXES[$screen] ?? [] as $prefix) {
-            if (str_starts_with($head, $prefix) && strlen($head) > strlen($prefix) && ctype_upper($head[strlen($prefix)])) {
-                return true;
-            }
-        }
-
-        return false;
+        // la fiche du site : la même liste que `PUT /api/entreprise` (décision du chef : une seule liste pour les deux chemins)
+        return $screen === 'admin.entreprise' && SiteSheetClosedFields::closed($head);
     }
 
     public function __construct(

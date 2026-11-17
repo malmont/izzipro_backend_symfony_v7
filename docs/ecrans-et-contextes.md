@@ -413,16 +413,19 @@ vide la session et renvoie à la connexion du site d'attache (`/?tenant=<site d'
 - **Suppression par lot** (`BaseTenantCrudController::batchDelete`, pour TOUT compte) : seule l'entité de l'écran ; l'entité lue dans le corps
   du formulaire ne passe plus.
 - **Recherche et tri** : pour l'opérateur, les champs fermés de l'écran ne se cherchent ni ne se trient (`AdminFieldGuard::hidden`).
-- **Champs fermés en plus** : l'onglet Caisse entier de la fiche du site (préfixe `pos`), la conservation des données, les comptes comptables,
-  l'appartenance aux applications, le niveau des courriels ; le résumé, l'issue et la clé de mémoire des demandes à l'IA. À confirmer par le
-  propriétaire (l'API garde pour l'instant ses 4 champs fermés de la fiche).
+- **Champs fermés de la fiche du site** (décision du chef du 17/11/2026, principes « jamais la caisse » et « jamais un chiffre ») : UNE liste
+  partagée par `PUT /api/entreprise` et la fiche d'EasyAdmin (`SiteSheetClosedFields`) : l'onglet Caisse entier (propriétés `pos…`), l'adresse
+  des commandes et des demandes, la devise, le fuseau, le découpage des périodes, les adresses d'alerte, la conservation des données, les comptes
+  comptables, l'appartenance aux applications, le niveau des courriels. Rien ne change pour le commerçant ni pour le super administrateur.
+  Aussi fermés dans EasyAdmin : le résumé, l'issue et la clé de mémoire des demandes à l'IA.
+- **Solde prépayé d'expédition** (décision du chef) : jamais servi à l'agence (`balanceCents` retiré de `/api/site/shipping` et de
+  `/api/site/features`, carte masquée sur `/admin/livraison`) ; le commerçant le lit toujours.
 - **Console de l'assistant** : jamais servie à l'opérateur.
 - **Laissez-passer lié à la session** qui l'a demandé (`sid`, HMAC de l'identifiant de session) : volé, il ne sert pas ailleurs ; il ne
   connecte pas non plus le navigateur d'un tiers (`pass_session`).
 - **Super administrateur entré** : un bandeau sur l'accueil dit l'entrée et porte « Quitter » ; « Quitter » et la déconnexion ne sont plus
   refusés par la règle des écritures sur un compte.
 - Redis du cache : `noeviction`, la marque d'usage unique n'est jamais évincée.
-- Reste à trancher : le solde prépayé d'expédition affiché sur `/admin/livraison` (montant d'argent sur un écran ouvert à l'agence).
 
 Essai : `tests/Functional/Security/AdminEntryTest.php` (5 essais ; 7 mutations des correctifs, toutes tuées).
 
