@@ -31,11 +31,12 @@ class LossJournalRepository extends EntityRepository
      * Rang (identifiant de ligne du journal) jusqu'où le dernier courriel du jour a annoncé les constats redevenus « nouveaux » ; 0 si aucun
      * courriel n'en a encore annoncé. Lu dans la dernière ligne « courriel envoyé » (index type, id).
      */
-    public function digestRenewedMark(): int
+    public function digestRenewedMark(string $key = 'renewedUpTo'): int
     {
+        // `$key` : `renewedUpTo` (constats redevenus « nouveaux »), `grownUpTo` (lot L5-b : constats décidés qui ont grossi)
         $data = $this->getEntityManager()->getConnection()->fetchOne('SELECT data FROM loss_journal WHERE type = ? ORDER BY id DESC LIMIT 1', [\App\LossPrevention\Entity\LossJournalEntry::DIGEST_SENT]);
 
-        return $data === false ? 0 : max(0, (int) ((json_decode((string) $data, true) ?: [])['renewedUpTo'] ?? 0));
+        return $data === false ? 0 : max(0, (int) ((json_decode((string) $data, true) ?: [])[$key] ?? 0));
     }
 
     /**
@@ -44,10 +45,11 @@ class LossJournalRepository extends EntityRepository
      *
      * @return array{findingIds: list<int>, lastId: int}
      */
-    public function renewedAfter(int $journalId): array
+    public function renewedAfter(int $journalId, string $type = \App\LossPrevention\Entity\LossJournalEntry::FINDING_RENEWED): array
     {
+        // `$type` : FINDING_RENEWED, ou FINDING_GREW (lot L5-b) ; la même lecture bornée
         $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative('SELECT id, finding_id FROM loss_journal WHERE type = ? AND id > ? ORDER BY id LIMIT 1000',
-            [\App\LossPrevention\Entity\LossJournalEntry::FINDING_RENEWED, $journalId]);
+            [$type, $journalId]);
 
         return ['findingIds' => array_values(array_unique(array_map('intval', array_filter(array_column($rows, 'finding_id'), fn ($v) => $v !== null)))),
             'lastId' => $rows === [] ? $journalId : (int) end($rows)['id']];

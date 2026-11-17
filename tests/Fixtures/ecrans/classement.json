@@ -145,6 +145,7 @@
         "POST /api/pos/gift-cards/{code}/cash-out",
         "POST /api/pos/offline-sales",
         "POST /api/pos/pertes/articles-non-lus",
+        "POST /api/pos/pertes/articles-non-lus/suite",
         "POST /api/pos/pin",
         "POST /api/pos/pin-login",
         "POST /api/pos/quote",
@@ -943,6 +944,8 @@
     ],
     "pertes.constat": [
         "GET /api/gestion/pertes/constats/{id}",
+        "GET /api/gestion/pertes/constats/{id}/avis",
+        "POST /api/gestion/pertes/constats/{id}/avis",
         "PUT /api/gestion/pertes/constats/{id}/decision"
     ],
     "pertes.constats": [
@@ -953,8 +956,11 @@
         "DELETE /api/gestion/pertes/exercices/boitiers",
         "DELETE /api/gestion/pertes/exercices/pieces",
         "GET /api/gestion/pertes/exercices",
+        "GET /api/gestion/pertes/exercices/bilan",
         "GET /api/gestion/pertes/exercices/boitiers",
         "GET /api/gestion/pertes/exercices/boitiers/{id}",
+        "GET /api/gestion/pertes/exercices/comptages",
+        "GET /api/gestion/pertes/exercices/comptages/{id}",
         "GET /api/gestion/pertes/exercices/impressions",
         "GET /api/gestion/pertes/exercices/impressions/{id}",
         "GET /api/gestion/pertes/exercices/installation",
@@ -967,6 +973,8 @@
         "POST /api/gestion/pertes/exercices",
         "POST /api/gestion/pertes/exercices/boitiers",
         "POST /api/gestion/pertes/exercices/boitiers/{id}/scenarios",
+        "POST /api/gestion/pertes/exercices/comptages",
+        "POST /api/gestion/pertes/exercices/comptages/{id}/fermer",
         "POST /api/gestion/pertes/exercices/installation/etapes/{code}/verifier",
         "POST /api/gestion/pertes/exercices/installation/etiquette-test",
         "POST /api/gestion/pertes/exercices/installation/puce-test",
@@ -975,10 +983,12 @@
         "POST /api/gestion/pertes/exercices/pieces/{id}/retirer",
         "POST /api/gestion/pertes/exercices/puces/associer",
         "POST /api/gestion/pertes/exercices/puces/{id}/retirer",
+        "POST /api/gestion/pertes/exercices/{id}/avis",
         "PUT /api/gestion/pertes/exercices/{id}/decision"
     ],
     "pertes.home": [
         "GET /api/gestion/pertes",
+        "GET /api/gestion/pertes/bilan",
         "POST /api/gestion/pertes/analyse"
     ],
     "pertes.impressions": [
@@ -995,10 +1005,14 @@
         "POST /api/gestion/pertes/installation/puce-test"
     ],
     "pertes.pieces": [
+        "GET /api/gestion/pertes/comptages",
+        "GET /api/gestion/pertes/comptages/{id}",
         "GET /api/gestion/pertes/pieces",
         "GET /api/gestion/pertes/pieces/synthese",
         "GET /api/gestion/pertes/pieces/{id}",
         "GET /api/gestion/pertes/puces/recherche",
+        "POST /api/gestion/pertes/comptages",
+        "POST /api/gestion/pertes/comptages/{id}/fermer",
         "POST /api/gestion/pertes/pieces",
         "POST /api/gestion/pertes/pieces/etiquettes/pdf",
         "POST /api/gestion/pertes/pieces/{id}/retirer",

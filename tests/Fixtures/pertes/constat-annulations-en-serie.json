@@ -1,13 +1,13 @@
 {
     "request": {
         "method": "GET",
-        "path": "/api/gestion/pertes/constats/5?locale=fr"
+        "path": "/api/gestion/pertes/constats/67?locale=fr"
     },
     "status": 200,
     "headers": {},
     "body": {
-        "id": 5,
-        "number": 5,
+        "id": 67,
+        "number": 67,
         "rule": {
             "code": "VOID_AFTER_SALE",
             "label": "Vente annulée après l'encaissement"
@@ -25,25 +25,26 @@
         "currency": "CAD",
         "isNew": false,
         "newEvidenceSinceDecision": false,
+        "grewSinceDecision": null,
         "backfill": false,
         "exercise": false,
-        "updatedAt": "2026-11-16T07:32:44+00:00",
-        "from": "2026-11-16T07:32:43+00:00",
-        "to": "2026-11-16T07:32:44+00:00",
-        "sessionId": 1,
+        "updatedAt": "2026-11-17T02:06:52+00:00",
+        "from": "2026-11-17T02:06:51+00:00",
+        "to": "2026-11-17T02:06:51+00:00",
+        "sessionId": 59,
         "subject": {
             "type": "session",
-            "id": 1
+            "id": 59
         },
         "onDuty": [
             {
-                "id": 19,
+                "id": 90,
                 "name": "Caisse Nom",
                 "role": "seller",
                 "roleLabel": "Vente"
             },
             {
-                "id": 19,
+                "id": 90,
                 "name": "Caisse Nom",
                 "role": "operator",
                 "roleLabel": "Auteur de l'acte"
@@ -53,27 +54,27 @@
         "amountNotice": "Le montant en jeu est le montant concerné par le constat, pas une perte prouvée.",
         "evidence": [
             {
-                "id": 11,
+                "id": 375,
                 "kind": "credit_note",
-                "at": "2026-11-16T07:32:43+00:00",
-                "atLabel": "16/11/2026 02 h 32",
+                "at": "2026-11-17T02:06:51+00:00",
+                "atLabel": "16/11/2026 21 h 06",
                 "title": "Annulation de la vente",
                 "lines": [
                     {
                         "label": "Vente",
-                        "value": "REF#6afab19b5e32a"
+                        "value": "REF#6afbb6bace00c"
                     },
                     {
                         "label": "Encaissée le",
-                        "value": "16/11/2026 02 h 32"
+                        "value": "16/11/2026 21 h 06"
                     },
                     {
                         "label": "Annulée le",
-                        "value": "16/11/2026 02 h 32"
+                        "value": "16/11/2026 21 h 06"
                     },
                     {
                         "label": "Avoir n°",
-                        "value": "1"
+                        "value": "7"
                     },
                     {
                         "label": "Montant remboursé",
@@ -90,35 +91,35 @@
                 ],
                 "ref": {
                     "type": "pos_audit",
-                    "id": 8,
-                    "sequence": 8,
-                    "hash": "a4ed28689c5ae83d64a23f65c2ceec886a13f7d7dfb3ce7a174f87d434c80aeb"
+                    "id": 298,
+                    "sequence": 298,
+                    "hash": "6fe25248d369f239ad84dc71c0abaf06ea70f2dd03e050ddf19bcfc08f652835"
                 },
                 "screen": null,
-                "fingerprint": "2e7e434164c75ea137168db65788efb9a9f66ae394bbff645b34ceddf59b9ee5"
+                "fingerprint": "a0ef1e49f69d6b4b81c6867ea48e20b29410b33ad415a634e15b51aaa824aa50"
             },
             {
-                "id": 12,
+                "id": 376,
                 "kind": "credit_note",
-                "at": "2026-11-16T07:32:43+00:00",
-                "atLabel": "16/11/2026 02 h 32",
+                "at": "2026-11-17T02:06:51+00:00",
+                "atLabel": "16/11/2026 21 h 06",
                 "title": "Annulation de la vente",
                 "lines": [
                     {
                         "label": "Vente",
-                        "value": "REF#6afab19bc1590"
+                        "value": "REF#6afbb6bb36932"
                     },
                     {
                         "label": "Encaissée le",
-                        "value": "16/11/2026 02 h 32"
+                        "value": "16/11/2026 21 h 06"
                     },
                     {
                         "label": "Annulée le",
-                        "value": "16/11/2026 02 h 32"
+                        "value": "16/11/2026 21 h 06"
                     },
                     {
                         "label": "Avoir n°",
-                        "value": "2"
+                        "value": "8"
                     },
                     {
                         "label": "Montant remboursé",
@@ -135,35 +136,35 @@
                 ],
                 "ref": {
                     "type": "pos_audit",
-                    "id": 10,
-                    "sequence": 10,
-                    "hash": "d8c296c5d9229c563539f098079ee607b0ea77eb2de026cb123c7f5e93afb117"
+                    "id": 300,
+                    "sequence": 300,
+                    "hash": "5ede9b5d3237864cb8b819b709f42eb8688869d0c24eca1d5286d54960d41b32"
                 },
                 "screen": null,
-                "fingerprint": "82378883a70be0e59b0dc6c4b01c89bea2e0bc736bfc16180824066a4c74dec0"
+                "fingerprint": "e0163a184042094c7ea82ca9d72ca9b23cede28f90472333dc2beca96da7883d"
             },
             {
-                "id": 13,
+                "id": 377,
                 "kind": "credit_note",
-                "at": "2026-11-16T07:32:44+00:00",
-                "atLabel": "16/11/2026 02 h 32",
+                "at": "2026-11-17T02:06:51+00:00",
+                "atLabel": "16/11/2026 21 h 06",
                 "title": "Annulation de la vente",
                 "lines": [
                     {
                         "label": "Vente",
-                        "value": "REF#6afab19c14824"
+                        "value": "REF#6afbb6bb917d5"
                     },
                     {
                         "label": "Encaissée le",
-                        "value": "16/11/2026 02 h 32"
+                        "value": "16/11/2026 21 h 06"
                     },
                     {
                         "label": "Annulée le",
-                        "value": "16/11/2026 02 h 32"
+                        "value": "16/11/2026 21 h 06"
                     },
                     {
                         "label": "Avoir n°",
-                        "value": "3"
+                        "value": "9"
                     },
                     {
                         "label": "Montant remboursé",
@@ -180,20 +181,20 @@
                 ],
                 "ref": {
                     "type": "pos_audit",
-                    "id": 12,
-                    "sequence": 12,
-                    "hash": "68a8bbf00faed93b7c3c8c9cf8b0d5b1858ff4e23df28d1d41102eaface2708e"
+                    "id": 302,
+                    "sequence": 302,
+                    "hash": "2f04e09ad38353eaa9d0e5128bc01cfbd0c911974429ce524ba911e24e334dd3"
                 },
                 "screen": null,
-                "fingerprint": "c2361d7a5044f84551f7ae02419d2dd5f77440853c2397fb6109d90cbddbf818"
+                "fingerprint": "db75d3867d7151abaa7ab05f38cb5f0a27e7d0c4ee61b688b8fa83ba84ac81de"
             }
         ],
         "evidenceIntact": true,
         "opinion": null,
         "decision": null,
         "history": [],
-        "lastEvidenceAt": "2026-11-16T07:32:44+00:00",
-        "createdAt": "2026-11-16T07:32:44+00:00",
+        "lastEvidenceAt": "2026-11-17T02:06:52+00:00",
+        "createdAt": "2026-11-17T02:06:52+00:00",
         "screen": "pertes.constat"
     }
 }

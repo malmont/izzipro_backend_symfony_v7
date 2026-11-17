@@ -107,6 +107,7 @@ analyses suivantes**. Valeurs par défaut validées par le propriétaire.
 | `STOCKROOM_NOT_SHELVED` (lot L4-c, § 17.15) | 4 | une vraie pièce lue à la porte de la réserve, puis ni revue en rayon, au comptoir (antenne ou tapis) ou dans la réserve, ni vendue, dans le délai ; muette sans antenne du rayon ou du comptoir. Faible, moyenne à `minCount` pièces | `minutes` 30 (5 à 240), `minCount` 5 (2 à 50) | zone ; `STOCKROOM_NOT_SHELVED:zone:stockroom_door:day:<jour>` |
 | `BACK_DOOR` (lot L4-c, § 17.15) | 4 | une vraie pièce, pas retirée, lue à la porte arrière de la réserve ; jugée à la fin de sa journée. Moyenne, haute à `minCount` pièces | `minCount` 5 (2 à 50) | zone ; `BACK_DOOR:zone:back_door:day:<jour>` |
 | `OUT_OF_HOURS` (lot L4-c, § 17.15) | 4 | une arrivée ou un départ de zone d'une vraie pièce hors des heures d'ouverture confirmées, marges comprises ; muette sans heures confirmées. Faible, moyenne à `minCount` pièces | `minCount` 5 (2 à 50) | zone ; `OUT_OF_HOURS:zone:<zone>:day:<jour>` |
+| `PIECE_MISSING` (lot L4-d, § 17.16) | 4 | une vraie pièce non lue à un comptage fermé ni au comptage fermé précédent qui la couvrait ; elle passe à `missing`. Moyenne, haute à `minCount` pièces | `minCount` 10 (2 à 500) | comptage ; `PIECE_MISSING:count:<id>` (preuve « retrouvée » quand elle est relue) |
 
 - Date d'une annulation : `order.canceled_at` (posé par `CancelOrderUseCase` pour tous les chemins), sinon l'heure de l'entrée REFUND pour
   une annulation d'avant PAYS-1b ; un retour (commande de type 2) n'est pas une annulation.
@@ -2193,6 +2194,10 @@ choisi de basculer sans attendre, Fable relira ensuite). La liste fait foi pour 
 | L4-b2, migration et code | backend `app_v2` | migration `365340ae`, lot : le commit qui la suit (§ 17.14) | `migrations/Version20270123100000.php` (origine, garde `loss_sale_unit_guard_v2`, fenêtre des commandes web) et le script `scripts/migrate_all_v2_pertes_l4b2.sh` (hors dépôt) ; `LossSaleLinkService::webOrders` et `catchUpAtExit`, `LossSaleUnitRepository` (commandes web, locations, lectures par origine), `LossExitService::judge` (cas 2 sur la fenêtre des commandes web, cas 3 des locations, `rented`), le réglage `webWindowDays` |
 | L4-c, migration et code | backend `app_v2` | migration `ccc663f9`, lot : le commit qui la suit (§ 17.15) | `migrations/Version20270124100000.php` (heures, curseurs, index des mouvements, garde des appareils v2) et le script `scripts/migrate_all_v2_pertes_l4c.sh` (hors dépôt) ; `LossDepotService` (tout), son branchement dans `LossAnalysisService::run`, les heures d'ouverture de `LossSettingsService`, l'étape `opening_hours` de l'assistant, les trois scénarios d'exercice, la lecture (sujet `zone`, preuve `zone_move`) |
 | B6, B7 | boîtier, dépôt local | `2f10fce`, `023aac4` | `izzibox/scenarios.py` (antenne `back_door`, scène « par la porte arrière »), guides de l'installateur ; `izzibox/appareils.py` et `izzibox/file.py` (présence gardée sur disque, aucun départ après une panne) |
+| L4-d, migration et code | backend `app_v2` | migration `55080132`, lot : le commit qui la suit (§ 17.16) | `migrations/Version20270125100000.php` (tables du comptage, gardes) et le script `scripts/migrate_all_v2_pertes_l4d.sh` (hors dépôt) ; `LossCountService` et `LossCountRepository` (tout), `LossCountController`, le passage des comptages dans `LossAnalysisService::run`, le bilan joint à `LossDigestService`, le scénario `piece_missing` |
+| L5-a, migration et code | backend `app_v2` | migration `a98654af`, lot : le commit qui la suit (§ 18.8) | `migrations/Version20270126100000.php` et le script `scripts/migrate_all_v2_pertes_l5a.sh` (hors dépôt) ; `LossCounterService` (alerte, vérification, suite), `LossCounterAlertDayRepository`, `LossPosController::after`, le réglage `cashierAlerts` de `LossSettingsService`, `counterAlerts` du bilan (`LossCountService`) et du résumé (`LossDigestService`) |
+| L5-b, migration et code | backend `app_v2` | migration `9212172e`, lot : le commit qui la suit (§ 18.9) | `migrations/Version20270127100000.php` et le script `scripts/migrate_all_v2_pertes_l5b.sh` (hors dépôt) ; `LossFindingWriter::growth`, `LossFindingRepository` (`decide`, `grew`, `keepReference`, `grownAmong`), `LossRuleCatalog::trackedNumber`, la décision et la lecture de `LossFindingReader` (`grewSinceDecision`, historique), l'annonce du résumé (`LossDigestService`) |
+| L5-c, migration et code (**à risque**) | backend `app_v2` | migration `d082b35b`, lot : le commit qui la suit (§ 18.10) | `migrations/Version20270128100000.php` et le script `scripts/migrate_all_v2_pertes_l5c.sh` (hors dépôt) ; `LossOpinionService` (tout : entrée par liste blanche, contrôle de la sortie, unités, délai, numéro de demande), `LossOpinionRepository`, `WriteLossOpinionHandler`, `LossDepotService::outside`, les routes de l'avis et la fiche (`LossFindingReader`) ; relu par un relecteur neuf en trois passes (17/11/2026) |
 
 Vérifié sous Opus : `LossPreventionZoneTest` et le dossier du module verts ; 21 mutations sur L4-a (20 tuées, une équivalente :
 le rejeu d'une arrivée est déjà bloqué par la clé du fait et par la requête de présence) ; 12 mutations sur B5, toutes tuées.
@@ -2457,3 +2462,392 @@ ouvre aussi un constat ; le gérant le classe sans suite.
   (la présence encore ouverte l'explique aussi : double couverture) ; une pièce comptée deux fois (une relecture sans départ est une
   arrivée redite, jamais jugée) ; et trois trous d'essai : les curseurs posés à la confirmation de la notice, l'explication par le
   tapis, l'explication par une vente de la pièce.
+
+### 17.16 Lot L4-d : comptage, pièce absente, bilan du soir (contrat validé par le chef de projet le 16/11/2026)
+
+Risque ordinaire (§ 17.9) : je me vérifie, avec mutations. **À coder sous Opus, à faire relire par Fable** (§ 17.12).
+
+1. **Comptage** : le gérant l'ouvre (`POST /api/gestion/pertes/comptages { scope: all | <zone> }`), passe le lecteur à main, puis le
+   ferme (`POST …/comptages/{id}/fermer`) ; liste et détail en `GET`. **Un seul comptage ouvert à la fois** (par genre : vrai ou
+   exercice), garanti par la base.
+2. **Les lectures d'un comptage** : toute lecture du lecteur à main (`SPOT_CHECK`) entre l'ouverture et la fermeture. **Condition**
+   (chef de projet) : cette fenêtre de temps remplace le marquage des lectures par le boîtier ; elle ne tient que parce qu'un seul
+   comptage est ouvert à la fois. Rien ne change dans le boîtier.
+3. **Comptage oublié** (ajout du chef de projet) : un comptage resté ouvert plus de 12 heures se ferme seul, **sans compter
+   d'absences** (« fermé sans conclusion ») ; sinon, un comptage oublié la veille avalerait les lectures du lecteur à main du lendemain.
+4. **À la fermeture** : les pièces attendues (vraies pièces à puce, ni vendues ni retirées, posées avant l'ouverture ; pour une zone,
+   celles vues en dernier dans cette zone) et celles non lues. Rien n'est écrit dans le stock : l'écart par article entre le stock du
+   catalogue et les pièces comptées est seulement lu ; la correction reste un geste de la gestion.
+5. **Pièce absente à deux comptages fermés de suite qui la couvrent** : elle passe à l'état `missing` (l'état d'avant est gardé) ;
+   constat `PIECE_MISSING`, un par comptage, chaque pièce en preuve, jamais par personne ; moyenne, haute à partir de 10 pièces
+   (réglable). Relue ensuite par n'importe quelle lecture : elle reprend son état, et le constat reçoit une preuve « retrouvée ».
+6. **Bilan du soir** (`GET /api/gestion/pertes/bilan?day=`) : articles suivis vendus avec et sans lecture, sorties sans vente, pièces
+   sorties de la réserve, pièces non vues depuis N jours (30 par défaut), antennes tombées dans la journée ; aucun nom, aucun
+   classement ; joint au résumé du jour qui existe, sans courriel de plus.
+7. Migration additive : tables `loss_count` et des pièces d'un comptage, avec leurs gardes (fermé = figé, jamais supprimé) ; colonne
+   `loss_piece.missing_from` (état d'avant).
+8. Exercice : un scénario « pièce absente au comptage », et un comptage simulé sur des pièces d'exercice.
+9. Routes nouvelles, rôle d'administration du module comme les autres, annoncées au web (par le chef) avant la bascule. Rien dans la
+   caisse, le stock ni le catalogue.
+
+**Ce qui est codé** (migration `Version20270125100000`, script `scripts/migrate_all_v2_pertes_l4d.sh`, 22 instructions ; code sous Opus) :
+
+- **Routes** (rôle d'administration, garde de la gestion puis du module ; écran `pertes.pieces`, bilan `pertes.home`) :
+  `GET /api/gestion/pertes/comptages` → `{ counts, open, expireHours }` ; `POST /comptages { scope }` → 201 (409 `COUNT_ALREADY_OPEN`,
+  422 `scope: INVALID_SCOPE`) ; `GET /comptages/{id}` (fermé : `absentPieces`, `stockGap`, `stockNotice`) ; `POST /comptages/{id}/fermer`
+  (404 `COUNT_NOT_FOUND`, 409 `COUNT_NOT_OPEN`) ; `GET /bilan?day=&days=` (422 `day: INVALID_DATE`, `days: PARAM_OUT_OF_RANGE`, 1 à
+  365). Les mêmes en exercice sous `/exercices/comptages…` et `/exercices/bilan` (les nombres de l'exercice ; les ventes reliées n'existent
+  qu'en vrai et y valent 0), ouvertes sans le droit du module ; l'effacement de l'exercice efface ses comptages. Le bilan porte
+  `exercise`. `devicesDown` est un NOMBRE d'appareils. Le sujet d'un constat `PIECE_MISSING` est `{ type: count, id: <comptage>, name,
+  label }` : l'identifiant mène à la fiche du comptage. Exemples JSON : `tests/Fixtures/pertes/pieces/comptage*.json`, `bilan.json`,
+  `exercices-bilan.json`, et `tests/Fixtures/pertes/exercice-constat-piece-absente.json`.
+- **Un comptage** : `{ id, scope, scopeLabel, status (open | closed | expired), statusLabel, exercise, openedAt, closedAt, expected, found,
+  absent, missing, expiresAt }`. Un seul ouvert par genre (index unique partiel) ; fermé, il est figé et ne se supprime pas (gardes).
+- **Fermer** : dans une transaction, les pièces attendues et lues sont écrites (`loss_count_piece`) ; une pièce non lue qui ne l'avait
+  pas été au comptage FERMÉ précédent qui la couvrait (une ligne pour elle) passe à `missing` (`missing_from`, `missing_since`,
+  `missing_count_id`) ; une pièce déjà absente, vendue ou retirée ne change pas. Le constat `PIECE_MISSING` s'ouvre pour les vraies pièces,
+  si la règle est allumée et l'analyse permise (droit du module, notice) ; sujet `count`, preuves `count_absence`, montant nul.
+- **À chaque passage de l'analyse** (`LossCountService::sweep`) : un comptage ouvert depuis plus de 12 h passe à `expired` (fin :
+  ouverture + 12 h), sans pièce écrite ; une pièce `missing` relue depuis (n'importe quelle lecture à une heure sûre) reprend son état
+  d'avant, et le constat de son comptage reçoit une preuve `count_found` et `facts.found`.
+- **Bilan** : `{ day, trackedSold, soldWithoutRead, exitsWithoutSale, leftStockroom, unseenDays, unseenPieces, missingPieces,
+  devicesDown, countsClosed, notice }`. Le résumé du jour (courriel de 8 h) y joint le bilan de la VEILLE, dans un tableau à part ; s'il
+  ne se calcule pas, le résumé part sans lui.
+- **Écart de choix** : la table des pièces d'un comptage garde TOUTES les pièces attendues (lues ou non), pas seulement les absences :
+  c'est ce qui dit « le comptage précédent qui la couvrait ».
+
+
+## 18. Lot L5 : alertes et avis de l'IA (plan validé par le propriétaire le 17/11/2026 ; rien n'est codé)
+
+**Décision du propriétaire du 17/11/2026** (relayée par le chef de projet) : les 14 propositions du § 18.7 sont validées, **sauf la
+question 2** : le signal sonore du portique devient un réglage du gérant, éteint par défaut, dans L5-d (18.2, « C »). La question 13
+part à la liste de l'avocat. Ordre : L5-a, L5-b, L5-c, L5-d, L5-e ; L5-f après l'essai du matériel. Contrat en dix lignes au chef
+avant chaque sous-lot ; L5-c, L5-d et L5-e passent par un relecteur neuf.
+
+Demande du chef de projet du 17/11/2026. L5 apporte trois choses : une **alerte à la sortie** en temps réel, une **alerte en caisse**
+qui s'appuie sur la route déjà en ligne, et un **avis de l'IA** sur un constat, avec un pourcentage calculé par le serveur. Il traite
+aussi trois réserves déjà notées. Il reste dans les limites du § 1 : aucune suite automatique ; jamais une personne nommée dans une
+alerte ; jamais de reconnaissance des visages, de son enregistré, de caméra en cabine ni d'analyse de gestes. La caméra et ses
+extraits restent avec L3-d, après l'avis de l'avocat : L5 prévoit seulement la porte d'entrée (18.3). L6 (offre, étapes d'EasyAdmin,
+vente du boîtier) vient après.
+
+### 18.1 Ce que L5 apporte, et ce qu'il n'apporte pas
+
+- **Apporte** : une alerte au gérant quand une pièce passe la sortie sans vente probable, quelques minutes après (pas au jugement
+  du constat, qui attend le rattrapage) ; l'affichage en caisse des articles suivis non lus, avant le paiement ; un avis de l'IA,
+  demandé par le gérant sur la fiche d'un constat ; un constat classé qui grossit fortement se signale de nouveau, une fois ; un
+  jeton du boîtier mieux protégé ; le changement du mot de passe des puces, après l'essai du matériel.
+- **Apporte aussi** (décision du 17/11/2026) : un signal sonore au portique, réglage du gérant éteint par défaut (18.2, « C »).
+- **N'apporte pas** : aucune vente bloquée ; aucune alerte au caissier sur une
+  personne ; aucun avis de l'IA sur une règle « par personne » (question 8) ; aucune lecture d'un extrait vidéo par l'IA (L3-d,
+  après l'avocat) ; aucune décision prise par l'IA ; aucun courriel en temps réel.
+
+### 18.2 Les alertes
+
+**Règles communes à toute alerte.**
+
+- **Jamais nominative** : une alerte dit l'article (nom, variante), la zone, l'heure du magasin et le poste de caisse s'il y en a un.
+  Elle ne porte jamais le nom, le rôle ni l'identifiant d'une personne, même pas « le caissier en poste ». Garde-fou : un test lit
+  chaque alerte (texte, données de la notification, ligne du journal) et échoue s'il y trouve un nom, un courriel ou un
+  identifiant de compte.
+- **Une alerte n'est pas un constat** : elle annonce une chose à vérifier tout de suite ; le constat naît ou non plus tard, par
+  l'analyse, avec ses preuves. L'alerte est écrite au journal du module (`ALERT_SENT`, sans nom) et la fiche du constat qui en
+  naît dit « alerte envoyée à 14 h 32 ».
+- **Pièces d'exercice** : alerte d'exercice, marquée telle, envoyée seulement au gérant qui a lancé l'exercice ; jamais comptée
+  dans le plafond.
+- **Rien ne part quand l'analyse est arrêtée** (droit du module retiré, notice exigée et non confirmée), comme le résumé du jour.
+
+**A. Alerte à la sortie** (pièce lue à la sortie ou à la porte arrière, sans vente probable).
+
+- **Quand** : une **pré-alerte**, pas le jugement du constat. À l'arrivée d'un lot de faits (le boîtier envoie sa file à chaque
+  tour de service, en quelques secondes), chaque arrivée `exit` ou `back_door` d'une vraie pièce en service, non redite (`repeat`),
+  part dans une file Messenger avec un délai (proposition : **2 minutes**, question 3). À l'échéance, un contrôle léger, sans
+  passer par l'analyse entière : la pièce n'est pas vendue, aucune vente de sa variante n'attend de pièce (caisse depuis
+  15 minutes, commande web payée de la fenêtre web), aucune location du jour ne l'explique, la boutique est ouverte ou non (les deux
+  alertent, avec un texte différent). Si tout cela tient, l'alerte part. Le constat « sortie sans vente » reste jugé après le
+  rattrapage (§ 17.13), indépendamment.
+- **Canal** : notification sur téléphone de l'application de gestion (`PushSenderInterface` ; Firebase n'est pas encore branché :
+  tant qu'il ne l'est pas, le journal note `not_configured` et l'alerte n'est visible que dans l'application) ; et une liste en
+  direct dans l'application, `GET /api/gestion/pertes/alertes?since=` (lecture, l'écran la relit toutes les 30 secondes), qui
+  garde les alertes du jour. **Jamais par courriel** (trop lent pour servir ; le bilan du soir les compte déjà).
+- **Niveaux (lot NOTIF)** : type nouveau `loss_exit`, classé **urgent** (question 1) : il part à partir du niveau « Essentiel »,
+  rien au niveau « Aucune », coupable par gérant dans « Avancé ». **Plafond propre** : 3 alertes de sortie par jour du magasin et
+  par gérant (proposition) ; au-delà, plus de notification, la liste en direct continue et la dernière notification dit
+  « d'autres sorties ce jour : voir la liste ». Les alertes sont regroupées : plusieurs pièces dans la même minute et la même
+  zone font une seule alerte (« 3 articles à la sortie »).
+- **À qui** : les administrateurs du site (le module est réservé à `ROLE_ADMIN`, § 2), sauf le compte de la plateforme. Pas le
+  responsable de caisse ni le caissier (question 4).
+- **Heures** : la règle « rien avant 8 h » des courriels ne s'applique pas à une alerte (elle n'a de sens que tout de suite) ; hors
+  des heures d'ouverture, elle part aussi (c'est le cas le plus grave), sauf si le gérant l'a coupée pour la nuit (réglage
+  `exitAlerts.night`, allumé par défaut, question 5).
+
+**B. Alerte en caisse** (article suivi du panier non lu sur le tapis, avant le paiement).
+
+- **Déjà en ligne** : `POST /api/pos/pertes/articles-non-lus` (lot L3-b1, § 16.15) rend `unread` avant le paiement et dit
+  `active: false` quand il ne peut pas juger. L5 n'en change pas la réponse ; il allume l'**affichage** en caisse.
+- **Réglage** `cashierAlerts` (forme réservée au § 7, `availableFrom: "L5"`) : `allowed` par pays et région ; **proposition :
+  permis partout**, car l'alerte parle d'un article et jamais d'une personne ; `enabled` **éteint par défaut**, le gérant l'allume
+  (question 6). La route rend en plus `display: true | false` : la caisse n'affiche le message que si `display` est vrai.
+- **Ce que voit le caissier** : « 2 articles suivis non lus : posez-les sur le tapis », la liste des articles (nom, variante,
+  quantité manquante), un bouton « Relire » et un bouton « Continuer quand même ». **Le paiement n'est jamais bloqué.** Aucun son.
+- **Ce qui est gardé** : la caisse renvoie une fois par vente `POST /api/pos/pertes/articles-non-lus/suite { cashRegisterId,
+  unreadCount, proceeded }` ; le serveur ne garde qu'un **compte par poste et par jour du magasin** (alertes montrées,
+  « continuer quand même »), jamais par personne ni par vente, et l'ajoute au bilan du soir. La règle « articles suivis vendus sans
+  lecture » (L3-b2b) reste la seule source des constats. Question 7.
+- **Contrat de la caisse** à envoyer par le chef à l'application de caisse (Flutter) avant le code : `display`, le message, les deux
+  boutons, la route de suite, et le comportement hors ligne (rien n'est affiché, rien n'est envoyé).
+
+**C. Signal sonore au portique** (décision du propriétaire du 17/11/2026 : « les portiques sonnent dans la plupart des magasins »).
+
+- **Un réglage du gérant, éteint par défaut** (`exitSignal.enabled`), dans L5-d. Allumé, il ne change rien à la pré-alerte au gérant
+  (« A », 2 minutes), qui part que le portique sonne ou non.
+- **Le boîtier décide sur place**, sans attendre la plateforme ni les 2 minutes : une pièce lue à la sortie fait sonner si elle
+  n'est pas sur la **liste des pièces payées** que la plateforme lui sert. La puce n'est jamais désactivée (§ 16) : la liste dit
+  quelles pièces peuvent sortir. Le boîtier ne fait qu'appeler (§ 2 : il n'ouvre aucun port) ; il relit la liste à chaque tour de
+  service, par une route nouvelle du canal (lecture, depuis un rang). **Proposition à confirmer au contrat de L5-d** : la liste
+  porte aussi, par variante, le nombre de ventes encore sans pièce (une pièce de cette variante peut sortir, une par vente, comme le
+  rattrapage du § 14, point 5) ; et une pièce lue sur le tapis du comptoir dans les 10 dernières minutes ne fait pas sonner (le
+  boîtier le sait seul, sans attendre que la vente soit reliée par l'analyse).
+- **Appareil** : un genre d'appareil nouveau du boîtier, `signal` (avertisseur branché en USB), avec sa santé et son étape
+  d'installation ; un avertisseur simulé pour l'exercice et le simulateur. Le boîtier sans avertisseur en service ne sonne pas, et le
+  réglage le dit.
+- **La limite, dite dans l'aide et sur l'écran du réglage** : une pièce vendue mais non lue au comptoir fera sonner un client
+  honnête, comme un antivol classique oublié en caisse. L'alerte en caisse (L5-a) réduit ce risque. Le texte rappelle de ne jamais
+  retenir ni accuser un client sur un signal (à faire relire par l'avocat).
+- Le signal reste une affaire du boîtier : il n'est jamais une preuve et n'ouvre aucun constat ; le boîtier envoie un fait
+  `EXIT_SIGNAL` (pièce, heure), que la fiche du constat « sortie sans vente » montre s'il en naît un.
+
+**Délais** : alerte en caisse, la réponse de la route (déjà moins de 300 ms) ; signal du portique, sur place, aussitôt la lecture ;
+alerte à la sortie, le délai de la pré-alerte (2 minutes) plus l'envoi au téléphone ; constat, inchangé (après le rattrapage).
+
+### 18.3 L'avis de l'IA sur un constat
+
+Forme déjà réservée (§ 6) : `opinion { percent | null, calibrated, measures, factors [{ label, effect }], summary, alternatives [],
+generatedAt, creditsUsed }`, aujourd'hui `null`.
+
+- **Le pourcentage est calculé par le serveur, jamais par l'IA** (décision 11 du § 12) : part des constats SEMBLABLES qui ont été
+  confirmés parmi ceux qui ont été tranchés (confirmés, expliqués, classés sans suite). « Semblable » : même règle, même site,
+  12 derniers mois, même gravité (proposition). Il n'est donné que s'il y a au moins **20 cas tranchés** (proposition, question 9) ;
+  sinon `percent: null` et « pas assez de cas tranchés pour estimer ». Toujours avec la mention « estimation non étalonnée »
+  (`calibrated: false`) tant que la plateforme n'a pas mesuré l'écart entre l'estimation et les décisions. **Jamais les constats
+  d'un autre site** (les décisions d'un autre client ne servent pas ici). `measures` dit sur quoi il repose (`{ similar, decided,
+  confirmed }`).
+- **Ce que l'IA lit** : la règle et son texte ; les nombres du constat (`facts`) ; les preuves, réduites à leur genre, leur heure du
+  magasin et leurs nombres (vente, retour, lecture de puce, zone, comptage) ; les nombres de `measures`. **Jamais une personne** :
+  ni nom, ni rôle, ni identifiant de compte, ni « qui était en poste », ni motif saisi à la caisse (texte libre). Garde-fou : un
+  test lit l'entrée envoyée au modèle et échoue s'il y trouve un nom, un courriel, un identifiant de compte ou un motif.
+- **Ce que l'IA écrit** : `summary` (ce que disent les preuves, en deux ou trois phrases), `factors` (ce qui pèse pour ou contre,
+  avec `effect` `up` | `down`), `alternatives` (les explications sans faute : erreur de caisse, pièce rangée près de la sortie,
+  retour mal saisi, antenne qui lit à travers une cloison). **Elle ne cite aucun nombre que le serveur ne lui a pas donné** (même
+  règle que la console W2, vérifiée par le serveur ; un texte qui en porte un autre est refusé et l'unité rendue).
+- **Ce qu'elle ne fait jamais** : désigner, soupçonner ou nommer quelqu'un ; proposer une sanction, un licenciement, une plainte,
+  une fouille ou une confrontation ; reconnaître un visage ; analyser un geste ; donner son propre pourcentage ; décider. Les
+  instructions du modèle le disent, et le serveur rejette un texte qui parle d'une personne ou d'une sanction (liste de mots
+  refusés, testée).
+- **Coût** : **1 unité IA par avis** (décision déjà notée au § 6), réservée à la demande, décomptée quand l'avis est rédigé,
+  rendue si l'IA échoue ou dépasse le délai ; mêmes refus que la console (403 `AI_NOT_INCLUDED`, 402 `AI_CREDITS_EXHAUSTED`,
+  429 `AI_DAILY_LIMIT`). **À la demande seulement** : bouton « Demander l'avis » sur la fiche (`POST
+  /api/gestion/pertes/constats/{id}/avis`), jamais automatique. Un avis reste attaché au constat ; quand une preuve nouvelle
+  arrive, la fiche dit « avis antérieur aux dernières preuves » et propose « Actualiser » (1 unité). Un avis d'exercice est servi
+  par le serveur sans appel au modèle, marqué « exemple », à 0 unité.
+- **Sa place dans la décision** : sous les preuves, jamais au-dessus ; titre « Avis indicatif : la décision vous appartient ».
+  Les boutons de décision ne dépendent pas de l'avis ; la note obligatoire de « confirmé » reste à écrire par le gérant (l'IA ne la
+  pré-remplit jamais). L'avis ne paraît ni dans la liste, ni dans le résumé du jour, ni dans une alerte. Le journal du module garde
+  `OPINION_REQUESTED` et `OPINION_WRITTEN` (constat, pourcentage, unités ; jamais le texte).
+- **Porte d'entrée de la caméra** : l'entrée envoyée au modèle porte une liste `sources`, où le genre `clip` est réservé et
+  aujourd'hui refusé par le serveur. Il ne s'ouvrira qu'avec L3-d, après l'avis de l'avocat. **À trancher alors** (question 13) : le
+  § 14, point 4, dit que l'IA « analyse l'extrait », le § 1 interdit l'analyse de gestes par vidéo ; lire un extrait sans analyser
+  aucun geste se limiterait à des faits sur l'objet (l'article est-il passé sur le tapis ?), et c'est à l'avocat d'en juger.
+
+### 18.4 Les trois réserves
+
+1. **Constat classé qui grossit** (note du § 16.19, rappelée au § 17.8) : aujourd'hui, un constat décidé ne porte que « du nouveau
+   depuis la décision », sans courriel ni vignette. **Proposition** : un constat `explained`, `dismissed` ou `watch` dont le nombre
+   principal (`facts`, celui qui compare au seuil) a **au moins doublé depuis la décision, avec au moins 3 de plus**, redevient
+   « nouveau » **une seule fois par décision** : il paraît dans le résumé du jour suivant (« a grossi depuis votre décision »), dans
+   la vignette, et son historique reçoit une ligne `GREW_SINCE_DECISION`. **Sa décision est gardée** : le gérant la confirme ou en
+   change. Un constat `confirmed` ne se signale pas de nouveau. Il faut garder le nombre au moment de la décision : une colonne
+   additive. Question 10.
+2. **Protection légère du jeton du boîtier** (§ 16.13 et § 16.20) : un jeton copié peut envoyer des faits et lire les travaux
+   d'impression, avec le mot de passe des puces, jusqu'à 24 heures. **Proposition** : jeton d'**une heure** (le signe de vie le
+   renouvelle déjà à mi-vie : aucun trou de service) ; **preuve de la machine exigée aussi sur `/faits` et `/travaux`**, comme
+   sur le signe de vie (le boîtier l'envoie déjà à l'inscription : un lot du boîtier, B8, l'ajoute à chaque appel) ; le mot de
+   passe des puces n'est rendu qu'avec cette preuve. Passage sans coupure : le serveur accepte les deux formes pendant une version du
+   boîtier, puis exige la preuve. Question 11.
+3. **Changement du mot de passe des puces, par rang** (§ 16.7) : **seulement après l'essai du matériel** (condition ferme : le
+   verrou de la zone de mise à mort vérifié sur une puce). **Proposition** : un geste de l'administrateur « changer le mot de passe
+   des puces » tire un rang nouveau ; les impressions suivantes l'utilisent ; une pièce déjà écrite garde le sien (connu par son
+   travail d'impression) et passe au rang nouveau quand elle est réimprimée (le boîtier ouvre la puce avec l'ancien, écrit le
+   nouveau, relit). Les anciens rangs restent rangés chiffrés tant qu'une pièce en service les porte. Rien d'automatique. Question 12.
+
+### 18.5 Découpage proposé
+
+| Sous-lot | Contenu | Risque |
+|---|---|---|
+| **L5-a** | alerte en caisse : `cashierAlerts` par pays, `display`, route de suite, compte par poste et par jour au bilan ; contrat de la caisse | ordinaire : je me vérifie, avec mutations |
+| **L5-b** | constat classé qui grossit (réserve 1) | ordinaire |
+| **L5-c** | avis de l'IA : pourcentage du serveur, entrée sans personne, texte vérifié, unités, journal, exercice, porte `clip` fermée | **à risque** (vie privée, IA) : relecteur neuf et mutations |
+| **L5-d** | alerte à la sortie : file avec délai, contrôle léger, type `loss_exit`, plafond, regroupement, liste en direct, exercice ; signal du portique (réglage éteint, liste des pièces payées servie au boîtier, appareil `signal`, fait `EXIT_SIGNAL`) ; boîtier simulé et lot du boîtier | **à risque** (fausses alertes) : relecteur neuf |
+| **L5-e** | jeton d'une heure et preuve de la machine (réserve 2), avec le lot B8 du boîtier | **à risque** (sécurité) : relecteur neuf |
+| **L5-f** | changement du mot de passe des puces (réserve 3) | après l'essai du matériel |
+
+Une migration additive par sous-lot qui en a besoin (L5-a : compte par poste ; L5-b : nombre à la décision ; L5-c : avis ; L5-d :
+alertes du jour), annoncée au chaperon avec son empreinte. Tout se joue sans matériel (exercice et boîtier simulé). Le contrat de
+chaque sous-lot va au chef en dix lignes avant son code ; les routes nouvelles vont au web, à la caisse et au mobile avant la
+bascule. L5-d dépend de Firebase pour le téléphone (projet et clés à créer par le propriétaire) ; sans lui, il est servi par la
+liste en direct.
+
+### 18.6 Risques
+
+1. **Fausse alerte à la sortie, et confrontation** : un employé qui va au-devant d'un client innocent. Parades : pré-alerte
+   seulement après le contrôle léger, texte « à vérifier », jamais « vol », signal du portique éteint par défaut et sa limite dite
+   sur l'écran du réglage, plafond, et l'aide qui dit de ne jamais
+   retenir ni accuser un client sur une alerte (texte à faire relire par l'avocat).
+2. **L'IA prise pour un juge** : pourcentage du serveur seulement, mention « non étalonné », sous les preuves, à la demande,
+   jamais dans une liste ni une alerte.
+3. **Une personne qui fuit vers l'IA** : entrée sans aucun nom ni identifiant, testée ; aucun avis sur une règle par personne.
+4. **Trop d'alertes** : regroupement par minute et par zone, plafond par jour, coupure par gérant et pour la nuit.
+5. **Coût de l'IA** : 1 unité, à la demande, rendue en cas d'échec ; jamais en boucle.
+6. **Changement de jeton** : passage en deux temps pour qu'aucun boîtier ne tombe.
+
+### 18.7 Questions au propriétaire, avec la proposition
+
+1. **Alerte à la sortie : urgente ou de suivi ?** *Urgente (elle part au niveau « Essentiel »), avec son plafond propre de 3 par
+   jour et par gérant.*
+2. **Sonnerie ou lumière au portique ?** *Non en L5 : un signal public pousse à retenir un client, avec le risque d'une fausse
+   accusation ; à revoir avec l'avocat, et le boîtier n'a pas d'appareil pour cela.* **Décision du propriétaire (17/11/2026) :
+   un réglage du gérant, éteint par défaut, dans L5-d ; le boîtier décide sur place avec la liste des pièces payées ; la limite
+   est dite dans l'aide et sur l'écran (18.2, « C »).**
+3. **Délai de la pré-alerte** : *2 minutes après la lecture à la sortie.*
+4. **Qui reçoit l'alerte à la sortie** : *les administrateurs du site seulement ; le responsable de caisse plus tard si vous le
+   voulez.*
+5. **La nuit** : *l'alerte part aussi hors des heures d'ouverture ; le gérant peut la couper pour la nuit.*
+6. **Alerte en caisse par pays** : *permise partout (elle parle d'un article) ; éteinte par défaut, le gérant l'allume.*
+7. **« Continuer quand même » en caisse** : *compté par poste et par jour, au bilan du soir, jamais par personne ni par vente.*
+8. **Avis de l'IA sur une règle « par personne »** (permise aux États-Unis) : *non, jamais ; l'avis ne porte que sur les règles
+   par poste, par pièce, par zone ou par jour.*
+9. **Seuil du pourcentage** : *au moins 20 constats semblables tranchés sur le site en 12 mois ; sinon pas de pourcentage, seulement
+   le texte.*
+10. **Constat classé qui grossit** : *revient « nouveau » une fois quand son nombre a doublé, avec au moins 3 de plus ; sa décision
+    est gardée ; jamais pour un constat confirmé.*
+11. **Jeton du boîtier** : *une heure, et la preuve de la machine sur chaque appel, en deux temps.*
+12. **Mot de passe des puces** : *changement par l'administrateur seulement, après l'essai du matériel ; les pièces passent au
+    nouveau rang quand elles sont réimprimées.*
+13. **L'IA et l'extrait vidéo** (L3-d) : *rien en L5 ; à l'avocat de dire si une lecture limitée à l'objet est permise, au regard
+    de l'interdiction de l'analyse de gestes.* **Ajoutée à la liste de l'avocat (17/11/2026).**
+14. **Ordre** : *L5-a, L5-b, L5-c, L5-d, L5-e ; L5-f après l'essai du matériel.*
+
+Les questions 1 et 3 à 14 sont validées telles quelles par le propriétaire le 17/11/2026.
+
+### 18.8 Lot L5-a codé : l'alerte en caisse (17/11/2026 ; contrat validé par le chef de projet le 17/11/2026)
+
+Risque ordinaire (§ 18.5) : je me vérifie, avec mutations. **Codé sous Opus, à faire relire par Fable** (§ 17.12). Migration
+`Version20270126100000` (3 instructions), script `scripts/migrate_all_v2_pertes_l5a.sh` (contrôle « 1 table, 1 colonne, 1 index »).
+
+- **Réglage** : `GET /api/gestion/pertes/reglages` rend `cashierAlerts { allowed: true, enabled, availableFrom: null, note }`
+  (permis dans tous les pays : l'alerte parle d'un article, jamais d'une personne ; éteint par défaut,
+  `loss_setting.cashier_alerts_enabled`). Il s'écrit par le **PUT** des réglages, comme les autres :
+  `PUT /api/gestion/pertes/reglages { cashierAlerts: { enabled } }` → la même forme que la lecture ; 422
+  `fields["cashierAlerts.enabled"] = "MUST_BE_BOOLEAN"` (rien n'est écrit) ; journal `SETTINGS_CHANGED { fields:
+  ["cashier_alerts_enabled"] }`.
+- **La route de la caisse** (`POST /api/pos/pertes/articles-non-lus`, § 16.15) garde toute sa réponse et ajoute `display`,
+  `notice`, `checkId`. `display` est vrai seulement si le contrôle est actif, l'alerte allumée et `unread` non vide ; `notice` est le
+  texte du serveur (« 2 articles suivis non lus : posez-les sur le tapis. », au singulier pour un seul ; `?locale=fr|en`, sinon la
+  langue du site) ; `checkId` est une vérification tirée au hasard (32 caractères hexadécimaux), gardée 15 minutes
+  (`LossCounterService::CHECK_TTL`) dans le pool des limites de débit, rien en base. Sinon : `false`, `null`, `null`.
+- **La suite** : `POST /api/pos/pertes/articles-non-lus/suite { checkId, proceeded }`, mêmes droits que la caisse
+  (`access_control` `^/api/pos/pertes`). Toujours **204** : une vérification inconnue, expirée, déjà comptée, ou un site sans le droit
+  du module (lu en base, quel que soit le mode de la plateforme) ne comptent rien, et la caisse n'en sait rien. 422 `VALIDATION_FAILED`
+  pour un corps invalide (`errors[].path` : `checkId`, `proceeded`, `body`). Une vérification compte UNE fois (retirée du pool avant
+  d'écrire), pour le poste où l'alerte a été montrée et le jour du magasin du paiement.
+- **Ce qui est gardé** : `loss_counter_alert_day (cash_register_id, store_day, shown, proceeded, updated_at)`, une ligne par poste et
+  par jour, écrite par une seule instruction (`ON CONFLICT … DO UPDATE`) ; une contrainte garde `0 ≤ proceeded ≤ shown`. Ni personne, ni
+  vente, ni article. Aucun constat ne naît de l'alerte : la règle « articles suivis vendus sans lecture » (§ 16.19) reste la seule source.
+- **Bilan du soir** (`/bilan`, `/exercices/bilan`) : `counterAlerts { shown, proceeded, byRegister [{ cashRegisterId, name, shown,
+  proceeded }] }` ; en exercice, `0`, `0`, `[]` (la caisse ne joue pas d'exercice). Le résumé du jour y ajoute deux lignes : « Alertes
+  montrées en caisse », « Dont « continuer quand même » » (les deux nombres, pas le détail par poste).
+- **Exemples** : `tests/Fixtures/pertes/boitier/caisse-alerte-montree.json`, `caisse-suite-alerte.json`,
+  `caisse-refus-suite-invalide.json` (la vérification y est masquée par des zéros) ; `docs/caisse.md` porte le contrat pour l'application
+  de caisse (en pause : le chef de projet le range dans les consignes de sa reprise).
+- Tests : `LossPreventionCounterTest::testTheTillShowsTheAlertOnlyWhenTheManagerTurnsItOnAndCountsEachCheckOncePerRegisterAndDay`.
+
+### 18.9 Lot L5-b codé : le constat classé qui grossit (17/11/2026 ; contrat validé par le chef de projet le 17/11/2026)
+
+Risque ordinaire (§ 18.5) : je me vérifie, avec mutations. **Codé sous Opus, à faire relire par Fable** (§ 17.12). Migration
+`Version20270127100000` (2 instructions), script `scripts/migrate_all_v2_pertes_l5b.sh` (contrôle « 2 colonnes »).
+
+- **Le nombre suivi** (`LossRuleCatalog::trackedNumber`) : celui que la règle compare à son seuil, lu dans les faits du constat :
+  `count` pour la plupart, `unread` pour « vendus sans lecture » (`GROWTH_FACT`). Un constat d'événement unique (écart d'une
+  clôture, annulation rapide, retour, sortie d'une pièce) n'a pas ce nombre : il n'est jamais concerné.
+- **À la décision** (`PUT /constats/{id}/decision`) : le nombre du moment est gardé (`loss_finding.decided_count`) ; revenir à
+  « nouveau » l'efface. La même décision redite après que le constat a grossi compte comme une nouvelle décision : la référence
+  repart du nombre du moment et « a grossi » s'efface.
+- **À la complétion par l'analyse** (`LossFindingWriter::growth`, seulement pour un fait postérieur à la première analyse) : un VRAI
+  constat `watch`, `explained` ou `dismissed` (jamais `confirmed`, jamais l'exercice) dont le nombre suivi a **au moins doublé ET
+  compte au moins 3 de plus** (`GROWTH_MIN`) que la référence a grossi : `grew_at` est posé, `seen_at` effacé (il redevient
+  « nouveau » : liste, filtre `isNew`, vignette), sa décision et sa note sont gardées. Une fois par décision (`grew_at` déjà posé : rien).
+  Journal du module : `FINDING_GREW { before, after }`.
+- **Décisions d'avant le lot** : sans nombre gardé, la référence est le nombre d'avant leur première complétion, alors gardé (choix
+  technique du contrat, point 8).
+- **Lecture** : `grewSinceDecision: { at, before, after } | null` dans la liste et la fiche (`before` : la référence, `after` : le
+  nombre du jour). L'historique de la fiche porte une ligne de plus, `kind: "grew"` (`before`, `after`, `statusLabel` « A grossi depuis
+  votre décision : 4 à la décision, 8 maintenant. », `by: null`) ; les lignes de décision portent `kind: "decision"` (et `before`,
+  `after` nuls).
+- **Résumé du jour** : les constats qui ont grossi depuis le courriel précédent, encore jamais consultés, sont annoncés à part, une
+  fois (ligne « Dont grossis depuis votre décision », phrase « Parmi eux, N constats déjà décidés, qui ont grossi depuis votre
+  décision. »), comptés dans le total ; la ligne `DIGEST_SENT` porte `grown` et `grownUpTo` (rang du journal, comme `renewedUpTo`).
+  Aucun courriel de plus.
+- Tests : `LossPreventionGrowthTest` ; `LossPreventionGestionLinksTest::testDailyDigestStopsWithTheAnalysisReservesItsDayAndNeverCarriesTheSiteSignature`.
+
+### 18.10 Lot L5-c codé : l'avis de l'IA sur un constat (17/11/2026 ; contrat validé par le chef de projet le 17/11/2026)
+
+**Lot à risque** (§ 18.5) : relecteur neuf en deux passes (la première sur l'entrée du modèle) et mutations. **Codé sous Opus, à faire
+relire par Fable** (§ 17.12). Migration `Version20270128100000` (3 instructions), script `scripts/migrate_all_v2_pertes_l5c.sh`
+(contrôle « 1 table, 1 index, 1 colonne »). Code : `Services/LossOpinionService`, `Repository/LossOpinionRepository`, `Message/WriteLossOpinionMessage`,
+`MessageHandler/WriteLossOpinionHandler` (file `gestion_ai`, worker `messenger_worker_gestion` : `messenger:stop-workers` à la bascule).
+
+- **Routes** : `POST /api/gestion/pertes/constats/{id}/avis` → 202, la fiche avec `opinion` en préparation ; `POST /exercices/{id}/avis`
+  (ouverte sans le droit du module, comme les autres routes d'exercice) → 202, un avis d'exemple écrit par le serveur, sans le modèle,
+  à 0 unité (`example: true`). Refus : 403 `AI_NOT_INCLUDED` (palier d'IA du site), 402 `AI_CREDITS_EXHAUSTED`, 429 `AI_DAILY_LIMIT`
+  (`limit`, `resetAt` ; 30 avis par jour du magasin et par site, comptés au journal du module), 409 `OPINION_PENDING`, 422
+  `OPINION_NOT_ALLOWED` (règle « par personne »), 404 `FINDING_NOT_FOUND` (vrais constats et exercices ne se croisent jamais).
+- **La fiche** porte `opinion` (null tant qu'aucun avis n'a été demandé) : `{ state: pending | done | failed, percent | null, calibrated: false,
+  calibrationNotice, measures { similar, decided, confirmed }, factors [{ label, effect: up | down }], summary, alternatives [], generatedAt,
+  creditsUsed, stale, example, error, notice }`. **Lecture légère** (demande du web, 17/11/2026) : `GET /constats/{id}/avis` → `{ opinion }`,
+  relue toutes les 3 s tant que `pending`, sans journal de consultation et sans éteindre « nouveau » (vrais constats seulement ; 404
+  sinon) ; la fiche se relit UNE fois à la fin. `stale` : une preuve est arrivée
+  après la demande, la fiche propose « Actualiser » (la même route, 1 unité). `error` : `OPINION_REJECTED` (texte refusé deux fois),
+  `AI_UNAVAILABLE`, `OPINION_TIMEOUT` (300 s : deux essais de 60 s et l'attente dans la file partagée `gestion_ai` ; relecture du
+  17/11/2026, au lieu des 120 s du contrat). Jamais dans la liste, le résumé du jour ni une alerte ; la note de décision n'est jamais
+  pré-remplie.
+- **Le pourcentage** (`LossOpinionService::measure`) : semblables = même règle et même variante, ce site, 12 mois, sans l'exercice ni le
+  constat ; tranchés = confirmés, expliqués, classés sans suite ; `percent` = confirmés × 100 / tranchés, arrondi, à partir de 20 tranchés
+  (`MIN_DECIDED`), sinon null. Il est figé à la demande.
+- **L'entrée du modèle** (`input`), construite par liste blanche : `sources` (`finding`, `evidence` ; `clip` réservé et refusé, § 18.3),
+  `rule` (code, libellé), `finding` (jour de la semaine, état, nombres des faits, montant en jeu, devise), `evidence` (genre, minutes
+  écoulées depuis la première preuve, nombres de la preuve), `measures` (avec `percent` et `minDecided`), `numbers` (les nombres admis :
+  ceux de l'entrée, plus les dérivés évidents donnés par le serveur : montants en unités, nombre de preuves, non confirmés, complément du
+  pourcentage, total des faits). **Ni date ni heure** (relecture du 17/11/2026 : la chronologie d'une session dessinerait celle de la
+  personne en poste). **Liste blanche des clés numériques** (`NUMBER_KEYS` : des mesures, jamais un identifiant ; une clé nouvelle d'une
+  règle n'entre dans l'avis qu'ajoutée là) et des textes d'une liste fermée (`TEXT_KEYS` : `zone`, `case`, `scope`, `level`, `origin`,
+  `kind`, `channel`) ; tout le reste (identifiants, textes libres, tableaux imbriqués, booléens) est écarté (`numbersOf`). Le worker
+  revérifie au moment d'appeler le modèle qu'il ne s'agit ni d'un constat sur une personne ni d'un exercice (`OPINION_NOT_ALLOWED`).
+- **La sortie** (sortie structurée json_schema, `claude-sonnet-5-5`, sans `tool_choice` imposé) : `summary`, `factors`, `alternatives`,
+  coupés à leur longueur PUIS contrôlés. Le serveur la refuse (`rejected`) si elle cite un nombre hors de `numbers` (en chiffres OU en
+  lettres : `NUMBER_WORDS`), porte une expression de `FORBIDDEN` (motifs bornés en mode Unicode : une suite ou une sanction, une faute ou
+  un vol, une personne désignée — employé, caissier, vendeur, client… —, une proportion que le serveur n'a pas calculée — moitié, tiers,
+  pour cent), ou le nom d'un compte de la boutique, quelles que soient ses majuscules (sauf un mot que le serveur emploie lui-même dans
+  l'entrée ou les consignes : un compte nommé « Porte » n'empêche pas « porte arrière ») ; un seul nouvel essai avec la remarque (`correction`), puis l'échec. Un texte refusé par le serveur
+  n'est pas un échec de l'IA : rien n'est décompté (`completeWithoutCharge`) et il ne compte pas dans le plafond d'échecs du site, qui
+  suspendrait toute son IA.
+- **Une demande, un numéro** (`attempt`, relecture du 17/11/2026) : « Actualiser » incrémente le numéro ; un passage du worker n'écrit
+  l'avis ou l'échec que sur la demande qu'il a lue, et relit la réservation en base avant de la décompter : la réponse tardive d'une
+  demande dépassée ne s'écrit jamais sur la suivante et ne décompte pas une unité déjà rendue. La limite du jour se compte sous un verrou.
+- **Règle d'heures d'ouverture** (`OUT_OF_HOURS`, chef de projet) : chaque preuve porte `minutesOutsideHours` et `side`
+  (`before_opening` | `after_closing`), l'écart avec les heures confirmées sans la marge (`LossDepotService::outside`), jamais l'heure.
+- **Unités** : 1, réservée à la demande (le compte de la plateforme n'est pas décompté), décomptée à l'avis écrit, rendue à l'échec ou
+  au délai ; une réponse tardive n'écrase pas un échec. Journal du module : `OPINION_REQUESTED` et `OPINION_WRITTEN { percent, credits }`,
+  jamais le texte.
+- **Table** `loss_opinion` : un avis courant par constat (remplacé par « Actualiser »), effacé avec l'exercice (par l'effacement de
+  l'exercice ; pas de clé étrangère : un `TRUNCATE` de `loss_finding` doit rester refusé par la garde du module). Aide : « L'avis de l'IA » et « Données envoyées à l'IA » dans `docs/aide/pertes.md`.
+- Tests : `LossPreventionOpinionTest`.

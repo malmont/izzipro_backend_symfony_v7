@@ -32,6 +32,10 @@ class LossSetting
     #[ORM\Column(name: 'person_patterns_enabled', nullable: true)]
     private ?bool $personPatternsEnabled = null;
 
+    /** Lot L5-a : la caisse montre les articles suivis non lus avant le paiement (éteint par défaut ; permis partout) */
+    #[ORM\Column(name: 'cashier_alerts_enabled', options: ['default' => false])]
+    private bool $cashierAlertsEnabled = false;
+
     #[ORM\Column(name: 'retention_findings_months', type: 'smallint', options: ['default' => self::DEFAULT_FINDINGS_MONTHS])]
     private int $retentionFindingsMonths = self::DEFAULT_FINDINGS_MONTHS;
 
@@ -119,6 +123,7 @@ class LossSetting
     public function getStaffNoticeConfirmedAt(): ?\DateTimeImmutable { return $this->staffNoticeConfirmedAt; }
     public function getStaffNoticeConfirmedBy(): ?int { return $this->staffNoticeConfirmedBy; }
     public function getPersonPatternsEnabled(): ?bool { return $this->personPatternsEnabled; }
+    public function getCashierAlertsEnabled(): bool { return $this->cashierAlertsEnabled; }
     public function getRetentionFindingsMonths(): int { return $this->retentionFindingsMonths; }
     public function getRetentionConfirmedMonths(): int { return $this->retentionConfirmedMonths; }
     public function getCursorSequence(): ?int { return $this->cursorSequence; }

@@ -115,14 +115,51 @@ class LossFindingRepository extends EntityRepository
             [(new \DateTimeImmutable())->format('Y-m-d H:i:s'), $userId, $id]);
     }
 
-    public function decide(int $id, string $status, ?string $note, int $userId): void
+    /** `$decidedCount` (lot L5-b) : le nombre suivi du constat au moment de la décision ; la décision efface « a grossi » */
+    public function decide(int $id, string $status, ?string $note, int $userId, ?int $decidedCount = null): void
     {
         $now = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
         $open = $status === LossFinding::OPEN;
         $this->getEntityManager()->getConnection()->executeStatement(
-            // une décision (ou sa reprise) remet à zéro « du nouveau depuis la décision » (lot L4-b)
-            'UPDATE loss_finding SET status = ?, decision_note = ?, decided_by = ?, decided_at = ?, updated_at = ?, evidence_after_decision = false WHERE id = ?',
-            [$status, $note, $open ? null : $userId, $open ? null : $now, $now, $id]);
+            // une décision (ou sa reprise) remet à zéro « du nouveau depuis la décision » (lot L4-b) et « a grossi depuis la décision » (lot L5-b)
+            'UPDATE loss_finding SET status = ?, decision_note = ?, decided_by = ?, decided_at = ?, updated_at = ?, evidence_after_decision = false, decided_count = ?, grew_at = NULL WHERE id = ?',
+            [$status, $note, $open ? null : $userId, $open ? null : $now, $now, $open ? null : $decidedCount, $id]);
+    }
+
+    /**
+     * Lot L5-b : le constat décidé a grossi. Il redevient « nouveau » (jamais consulté depuis), garde sa décision et sa note, et la
+     * référence de la comparaison. Une fois par décision : sans effet s'il a déjà grossi. Rend vrai si la ligne a changé.
+     */
+    public function grew(int $id, int $reference): bool
+    {
+        return $this->getEntityManager()->getConnection()->executeStatement(
+            'UPDATE loss_finding SET grew_at = ?, decided_count = ?, seen_at = NULL, seen_by = NULL WHERE id = ? AND grew_at IS NULL AND decided_at IS NOT NULL',
+            [(new \DateTimeImmutable())->format('Y-m-d H:i:s'), $reference, $id]) > 0;
+    }
+
+    /** Lot L5-b : un constat décidé avant le lot n'a pas de nombre gardé : le premier nombre connu devient sa référence */
+    public function keepReference(int $id, int $reference): void
+    {
+        $this->getEntityManager()->getConnection()->executeStatement(
+            'UPDATE loss_finding SET decided_count = ? WHERE id = ? AND decided_count IS NULL AND decided_at IS NOT NULL', [$reference, $id]);
+    }
+
+    /**
+     * Lot L5-b : parmi des constats qui ont grossi, ceux encore à annoncer (vrais, jamais consultés depuis, toujours décidés et grossis).
+     *
+     * @param list<int> $ids
+     * @return array{count: int, amount: int}
+     */
+    public function grownAmong(array $ids): array
+    {
+        if ($ids === []) {
+            return ['count' => 0, 'amount' => 0];
+        }
+        $row = $this->getEntityManager()->getConnection()->fetchAssociative(
+            'SELECT COUNT(*) AS n, COALESCE(SUM(amount_at_stake), 0) AS amount FROM loss_finding WHERE id IN (' . implode(',', array_map('intval', $ids)) . ')'
+            . " AND exercise = false AND seen_at IS NULL AND grew_at IS NOT NULL AND status IN ('watch', 'explained', 'dismissed')") ?: [];
+
+        return ['count' => (int) ($row['n'] ?? 0), 'amount' => (int) ($row['amount'] ?? 0)];
     }
 
     /**
@@ -244,6 +281,7 @@ class LossFindingRepository extends EntityRepository
             $conn->executeStatement("SET LOCAL loss.purge = 'exercise'");
             $conn->executeStatement('DELETE FROM loss_evidence WHERE finding_id IN (SELECT id FROM loss_finding WHERE exercise)');
             $conn->executeStatement('DELETE FROM loss_journal WHERE finding_id IN (SELECT id FROM loss_finding WHERE exercise)');
+            $conn->executeStatement('DELETE FROM loss_opinion WHERE exercise'); // lot L5-c : les avis d'exemple de l'exercice
             $deleted = (int) $conn->executeStatement('DELETE FROM loss_finding WHERE exercise');
             $conn->commit();
 

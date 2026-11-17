@@ -78,7 +78,8 @@ abstract class LossPreventionTestCase extends WebTestCase
         // Réglages du module remis à leurs valeurs de départ (tables de réglages : modifiables ; preuves et journal : jamais touchés)
         $this->db->executeStatement('DELETE FROM loss_rule');
         $this->db->executeStatement('INSERT INTO loss_setting (retention_findings_months, retention_confirmed_months) VALUES (24, 60) ON CONFLICT DO NOTHING');
-        $this->db->executeStatement('UPDATE loss_setting SET staff_notice_confirmed_at = NULL, staff_notice_confirmed_by = NULL, person_patterns_enabled = NULL, analysis_floor_sequence = NULL, last_digest_day = NULL, last_digest_finding_id = NULL');
+        $this->db->executeStatement('UPDATE loss_setting SET staff_notice_confirmed_at = NULL, staff_notice_confirmed_by = NULL, person_patterns_enabled = NULL, cashier_alerts_enabled = false, analysis_floor_sequence = NULL, last_digest_day = NULL, last_digest_finding_id = NULL');
+        $this->db->executeStatement('DELETE FROM loss_counter_alert_day'); // lot L5-a : des compteurs, pas des preuves
         $this->provider->getEntityManager()->clear();
         $this->mark = static::FIXED_MARK ?? 'Zq' . bin2hex(random_bytes(4));
         $admin = $this->user(['ROLE_ADMIN'], 'Gerant');

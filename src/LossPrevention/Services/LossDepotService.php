@@ -175,6 +175,40 @@ final class LossDepotService
     }
 
     /**
+     * Lot L5-c (demande du chef de projet, 17/11/2026) : à quelle distance des heures d'ouverture CONFIRMÉES (sans la marge) tombe un instant,
+     * pour l'avis de l'IA, qui ne reçoit jamais l'heure elle-même. Null quand l'instant est dans une plage ; sinon le côté le plus proche
+     * (`before_opening` : avant une ouverture, `after_closing` : après une fermeture) et l'écart en minutes. Plages de la veille et du
+     * lendemain comprises, comme `open`.
+     *
+     * @param array{days: array<int, array{open: int, close: int}|null>, margin: int} $hours
+     *
+     * @return array{side: string, minutes: int}|null
+     */
+    public static function outside(array $hours, \DateTimeImmutable $at, \DateTimeZone $zone): ?array
+    {
+        $local = $at->setTimezone($zone);
+        $minute = (int) $local->format('G') * 60 + (int) $local->format('i');
+        $today = (int) $local->format('N');
+        $best = null;
+        foreach ([[$today, 0], [$today === 1 ? 7 : $today - 1, -1440], [$today === 7 ? 1 : $today + 1, 1440]] as [$day, $shift]) {
+            $range = $hours['days'][$day];
+            if ($range === null) {
+                continue;
+            }
+            [$open, $close] = [$range['open'] + $shift, $range['close'] + $shift];
+            if ($minute >= $open && $minute < $close) {
+                return null;
+            }
+            $candidate = $minute < $open ? ['side' => 'before_opening', 'minutes' => $open - $minute] : ['side' => 'after_closing', 'minutes' => $minute - $close];
+            if ($best === null || $candidate['minutes'] < $best['minutes']) {
+                $best = $candidate;
+            }
+        }
+
+        return $best;
+    }
+
+    /**
      * Un passage d'un curseur : lit les mouvements après le curseur (sous le verrou des lectures, comme la sortie), passe ceux qui sont
      * sans objet, s'arrête devant le premier pas encore mûr, juge les autres chacun sous son point de reprise.
      *

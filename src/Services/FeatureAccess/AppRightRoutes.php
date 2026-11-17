@@ -39,7 +39,7 @@ final class AppRightRoutes
         ['POST', '#^/api/caisse/(close|deposit|withdraw|cashfunddeposit|cashfundwithdraw|drawer-open)$#'],
         ['POST', '#^/api/cash-registers$#'],
         ['PUT', '#^/api/cash-registers/[^/]+$#'],
-        ['POST', '#^/api/pos/(approvals|pin|pin-login|unlock|quote|returns|offline-sales|pertes/articles-non-lus|exchanges/quote)$#'],
+        ['POST', '#^/api/pos/(approvals|pin|pin-login|unlock|quote|returns|offline-sales|pertes/articles-non-lus|pertes/articles-non-lus/suite|exchanges/quote)$#'], // lot L5-a : la suite de l'alerte en caisse, servie comme la question
         // le jeton du lecteur : l'application le redemande à chaque reconnexion du lecteur, aussi pour finir un paiement ou rembourser ;
         // le vrai début, le nouveau paiement, est gardé (`POST /api/pos/terminal/payments`)
         ['POST', '#^/api/pos/terminal/connection-token$#'],

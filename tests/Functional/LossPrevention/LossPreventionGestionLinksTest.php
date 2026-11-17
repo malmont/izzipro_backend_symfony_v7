@@ -122,7 +122,7 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
         // (lot NOTIF-1 : le journal porte aussi les courriels, sur le canal « email » ; la notification du jour du téléphone ne compte que « push »)
         $this->assertSame($pushLog, (int) $this->db->fetchOne("SELECT COUNT(*) FROM notification_log WHERE channel = 'push'"), 'rien dans le journal des notifications du téléphone');
         $sent = json_decode((string) $this->db->fetchOne("SELECT data FROM loss_journal WHERE type = 'DIGEST_SENT' ORDER BY id DESC LIMIT 1"), true);
-        $this->assertSame(['day', 'count', 'amount', 'recipients', 'renewed', 'renewedUpTo'], array_keys($sent), 'au journal du module : des nombres, aucune adresse');
+        $this->assertSame(['day', 'count', 'amount', 'recipients', 'renewed', 'renewedUpTo', 'grown', 'grownUpTo'], array_keys($sent), 'au journal du module : des nombres, aucune adresse');
 
         // Les textes anglais existent (un site anglophone reçoit le courriel en anglais : la langue du site est lue par EmailLocale)
         $translator = static::getContainer()->get('translator');
@@ -343,6 +343,33 @@ class LossPreventionGestionLinksTest extends LossPreventionTestCase
         $this->json($this->admin('POST', self::BASE . '/analyse'));
         $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM loss_journal WHERE type = 'FINDING_RENEWED' AND finding_id = ?", [$old]));
         $this->assertSame('nothing_new', $digest()->sendIfDue($at('08:00'))['status']);
+        $this->closeWith(0);
+        // Lot L5-b : un constat DÉCIDÉ qui a grossi (doublé, et au moins 3 de plus) est annoncé à part dans le courriel suivant, une fois
+        $session = $this->openSession();
+        foreach (range(1, 4) as $i) {
+            $this->pos('POST', '/api/caisse/drawer-open', ['cashRegisterId' => $this->register, 'reason' => 'Grossit ' . $i]);
+        }
+        $this->assertSame(1, $this->json($this->admin('POST', self::BASE . '/analyse'))['opened']);
+        $decided = (int) $this->db->fetchOne('SELECT id FROM loss_finding WHERE dedup_key = ?', ['DRAWER_NO_SALE:session:' . $session]);
+        $this->json($this->admin('PUT', self::BASE . "/constats/$decided/decision", ['status' => 'dismissed']));
+        $this->db->executeStatement("UPDATE loss_setting SET last_digest_day = '2020-02-01'");
+        $this->assertSame('nothing_new', $digest()->sendIfDue($at('08:00'))['status'], 'décidé : rien à annoncer');
+        foreach (range(5, 8) as $i) {
+            $this->pos('POST', '/api/caisse/drawer-open', ['cashRegisterId' => $this->register, 'reason' => 'Grossit ' . $i]);
+        }
+        $this->json($this->admin('POST', self::BASE . '/analyse'));
+        $this->assertNotNull($this->db->fetchOne('SELECT grew_at FROM loss_finding WHERE id = ?', [$decided]));
+        $this->db->executeStatement("UPDATE loss_setting SET last_digest_day = '2020-02-02'");
+        $calls = [];
+        $this->assertSame('sent', $digest()->sendIfDue($at('08:00'))['status']);
+        $context = $mine()[0]['context'];
+        $this->assertSame(['Nouveaux constats' => '1', 'Dont grossis depuis votre décision' => '1'], array_slice($context['rows'], 0, 2, true));
+        $this->assertStringContainsString('Parmi eux, 1 constat déjà décidé, qui a grossi depuis votre décision.', $context['message']);
+        $line = json_decode((string) $this->db->fetchOne("SELECT data FROM loss_journal WHERE type = 'DIGEST_SENT' ORDER BY id DESC LIMIT 1"), true);
+        $this->assertSame([1, 1], [$line['count'], $line['grown']]);
+        $this->assertGreaterThan(0, $line['grownUpTo']);
+        $this->db->executeStatement("UPDATE loss_setting SET last_digest_day = '2020-02-03'");
+        $this->assertSame('nothing_new', $digest()->sendIfDue($at('08:00'))['status'], 'annoncé une fois');
         $this->closeWith(0);
         // Un courriel qui n'annonce QUE des constats redevenus « nouveaux », tous plus anciens que la borne : rien n'est né, la réservation
         // reçoit « pas de borne » et GARDE celle qu'elle a. Vidée, le courriel suivant ré-annoncerait tous les constats nés depuis toujours

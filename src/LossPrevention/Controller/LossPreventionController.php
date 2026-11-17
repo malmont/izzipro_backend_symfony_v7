@@ -6,6 +6,7 @@ use App\Entity\User;
 use App\Gestion\Services\GestionValidationException;
 use App\LossPrevention\UseCase\LossPreventionUseCase;
 use App\Services\EmailConfigurationService\EmailLocale;
+use App\Services\LandingAiService\LandingAiException;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -112,6 +113,44 @@ class LossPreventionController extends AbstractController
     public function decideExercise(int $id, Request $request): JsonResponse
     {
         return $this->json($this->useCase->decideExercise($id, $this->body($request), $this->locale($request), $this->userId()));
+    }
+
+    /**
+     * Lot L5-c : l'avis de l'IA sur un constat → 202, la fiche avec `opinion` en préparation (relire la fiche jusqu'à `done` ou `failed`).
+     * 403 `AI_NOT_INCLUDED`, 402 `AI_CREDITS_EXHAUSTED`, 429 `AI_DAILY_LIMIT`, 409 `OPINION_PENDING`, 422 `OPINION_NOT_ALLOWED`, 404.
+     */
+    #[Route('/constats/{id}/avis', name: 'gestion_pertes_constat_avis', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function opinion(int $id, Request $request): JsonResponse
+    {
+        return $this->opinionOf($id, $request, false);
+    }
+
+    /**
+     * Lot L5-c (demande du web, 17/11/2026) : la lecture LÉGÈRE de l'avis, relue toutes les 3 s tant qu'il est en préparation → `{ opinion }`.
+     * Aucun journal de consultation, et « nouveau » n'est pas éteint (la fiche, elle, se relit UNE fois à la fin). Vrais constats seulement.
+     */
+    #[Route('/constats/{id}/avis', name: 'gestion_pertes_constat_avis_lire', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function readOpinion(int $id, Request $request): JsonResponse
+    {
+        return $this->json($this->useCase->opinion($id, $this->locale($request)));
+    }
+
+    /** Lot L5-c : en exercice, un avis d'exemple écrit par le serveur, sans le modèle, à 0 unité (route ouverte sans le droit du module) */
+    #[Route('/exercices/{id}/avis', name: 'gestion_pertes_exercice_avis', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function exerciseOpinion(int $id, Request $request): JsonResponse
+    {
+        return $this->opinionOf($id, $request, true);
+    }
+
+    private function opinionOf(int $id, Request $request, bool $exercise): JsonResponse
+    {
+        try {
+            return $this->json($this->useCase->requestOpinion($id, $this->locale($request), $this->userId(), $this->getUser()?->getUserIdentifier(), $this->isGranted('ROLE_SUPER_ADMIN'), $exercise), 202);
+        } catch (LandingAiException $e) {
+            $code = match ($e->getStatusCode()) { 402 => 'AI_CREDITS_EXHAUSTED', 403 => 'AI_NOT_INCLUDED', 429 => 'AI_TOO_MANY_FAILURES', default => 'AI_UNAVAILABLE' };
+
+            return $this->json(['error' => $code, 'code' => $code, 'message' => $e->getMessage()], $e->getStatusCode());
+        }
     }
 
     #[Route('/analyse', name: 'gestion_pertes_analyse', methods: ['POST'])]

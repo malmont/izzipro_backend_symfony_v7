@@ -1,0 +1,28 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/bilan?locale=fr"
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "day": "2026-11-16",
+        "exercise": false,
+        "trackedSold": 7,
+        "soldWithoutRead": 1,
+        "exitsWithoutSale": 8,
+        "leftStockroom": 2,
+        "unseenDays": 30,
+        "unseenPieces": 1,
+        "missingPieces": 0,
+        "devicesDown": 23,
+        "countsClosed": 5,
+        "counterAlerts": {
+            "shown": 0,
+            "proceeded": 0,
+            "byRegister": []
+        },
+        "notice": "Des nombres de la journée, sans aucun nom. Une pièce non vue n'est pas une pièce perdue : un comptage le dira.",
+        "screen": "pertes.home"
+    }
+}

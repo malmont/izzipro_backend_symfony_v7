@@ -211,6 +211,8 @@ loss_digest:
     row_renewed: 'Dont complétés par une nouvelle preuve'
     row_amount: 'Montant en jeu'
     message_renewed: "{1}Parmi eux, 1 constat plus ancien, complété par une nouvelle preuve.|]1,Inf[Parmi eux, %count% constats plus anciens, complétés par une nouvelle preuve."
+    row_grown: 'Dont grossis depuis votre décision'
+    message_grown: "{1}Parmi eux, 1 constat déjà décidé, qui a grossi depuis votre décision.|]1,Inf[Parmi eux, %count% constats déjà décidés, qui ont grossi depuis votre décision."
     row_day: 'Journée du magasin'
     next: 'Ouvrez la section « Prévention des pertes » de votre application de gestion pour lire leurs preuves et décider.'
     notice: 'Le montant en jeu est le montant concerné par les constats, pas une perte prouvée. Vous recevez ce courriel au plus une fois par jour ; vous pouvez l''arrêter dans les préférences de notification de la gestion.'
@@ -219,6 +221,17 @@ loss_digest:
     exercise_link: 'Ouvrir les exercices'
     exercise_subject: '[Exercice] %subject%'
     exercise_banner: 'EXERCICE : ce courriel montre l''alerte que vous recevriez pour un vrai constat. Le constat est fictif : il ne touche pas à la caisse et ne concerne aucune personne réelle.'
+    evening_title: 'Le bilan d''hier'
+    evening_day: 'Journée'
+    evening_tracked: 'Articles suivis vendus'
+    evening_unread: 'Dont vendus sans lecture'
+    evening_exits: 'Sorties sans vente'
+    evening_stockroom: 'Pièces sorties de la réserve'
+    evening_unseen: 'Pièces non vues depuis %days% jours'
+    evening_missing: 'Pièces absentes au comptage'
+    evening_down: 'Appareils tombés dans la journée'
+    evening_counter_shown: 'Alertes montrées en caisse'
+    evening_counter_proceeded: 'Dont « continuer quand même »'
 
 # Assistance, lot SUPPORT-WEB : invitation d'un agent par l'administrateur du site (un lien à usage unique, valable %hours% heures)
 support_agent_invitation:

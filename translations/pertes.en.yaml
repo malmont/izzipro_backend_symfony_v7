@@ -1,5 +1,15 @@
 # Loss prevention (lot L1-a, 2026-11-14, `docs/prevention-pertes.md`): texts written by the server, served according to ?locale=.
 # Rule: a summary (`summary.*`) never names anyone; it only uses counts and amounts.
+opinion:
+    notice: 'Indicative opinion: the decision is yours. The AI only reads the kind of evidence, the time between items and their numbers, never a person.'
+    notCalibrated: 'Uncalibrated estimate: the share of similar findings in your shop that you confirmed, over 12 months.'
+    example:
+        summary: 'Example opinion: the evidence shows several drawer openings without a sale in the same session, more than the set threshold.'
+        factorUp: 'The openings follow each other closely in the same session.'
+        factorDown: 'Each opening carries a reason entered at the till.'
+        alternative: 'A float to redo or change to give back at the start of the day.'
+history:
+    grew: 'Grew since your decision: %before% at the decision, %after% now.'
 status:
     open: New
     watch: To watch
@@ -18,6 +28,8 @@ subject:
     user_window: Series of actions by the same account
     terminal: Cash register tablet
     zone: Shop zone
+    count: Stock count
+    countNumber: 'Count no. %number%'
 onDutyNotice: 'These people were on duty when the events took place. This is not an accusation: the decision is yours, after checking.'
 amountNotice: 'The amount at stake is the amount the finding is about, not a proven loss.'
 caveats:
@@ -112,6 +124,11 @@ rules:
         description: 'A tracked piece arrived in or left a zone outside the opening hours you confirmed, margins included. Without confirmed hours, the rule says nothing. A stock count or shelving after closing also opens one. One finding per day and per zone, never per person.'
         params:
             minCount: Number of pieces in the day from which the severity goes from low to medium
+    PIECE_MISSING:
+        label: Piece missing at the count
+        description: 'A tracked piece was read neither at this count nor at the previous closed count that covered it: it becomes "missing". One finding per count, each piece being evidence. Read again later, it gets its state back and the finding says so. Never per person.'
+        params:
+            minCount: Number of missing pieces in the same count from which the severity goes from medium to high
 summary:
     default: Finding raised from cash register activity.
     exerciseArticle: practice item
@@ -153,6 +170,9 @@ summary:
     OUT_OF_HOURS:
         base: 'Pieces moved outside opening hours that day (%zone%): %count%.'
         raised: 'Pieces moved outside opening hours that day (%zone%): %count% (threshold of %minCount% reached).'
+    PIECE_MISSING:
+        base: 'Pieces missing at two counts in a row (count no. %countId%): %count%. Found since: %found%.'
+        raised: 'Pieces missing at two counts in a row (count no. %countId%): %count% (threshold of %minCount% reached). Found since: %found%.'
 evidence:
     noReason: No reason entered
     z_report:
@@ -180,6 +200,10 @@ evidence:
     move:
         ZONE_SEEN: Arrival
         ZONE_LEFT: Departure
+    count_absence:
+        title: Piece missing at the count
+    count_found:
+        title: Piece found again
     'yes': 'Yes'
     'no': 'No'
     lines:
@@ -192,6 +216,8 @@ evidence:
         move: Movement
         zoneMoved: Zone
         movedAt: On
+        countNumber: Count no.
+        foundAt: Read again on
         saleDay: Day
         trackedSold: Tracked items sold
         unreadSold: Sold without a read
@@ -272,6 +298,8 @@ settings:
         confirmed: 'Hours confirmed: a piece moved outside them, margins included, opens an "outside opening hours" finding.'
         none: 'No opening hours confirmed: the "movement outside opening hours" rule says nothing until you confirm them day by day.'
     legalNotice: 'These settings follow the country and region of your shop. Have them reviewed by a lawyer before using them for a decision about an employee.'
+    cashierAlerts:
+        note: 'Before payment, the till shows the tracked items in the basket that were not read on the mat. It never blocks the sale.'
     personPatterns:
         allowed: 'Rules that count the actions of the same account over time are allowed in your region. You can turn them off.'
         notAllowed: 'Rules that count the actions of the same account over time are not offered in your region.'
@@ -364,6 +392,10 @@ exercise:
             label: Movement outside opening hours
             description: 'Several pieces arrive in or leave a zone outside the confirmed opening hours.'
             learn: 'A stock count or shelving after closing also opens one: check what was planned, and whether the confirmed hours are right. The finding names no one.'
+        piece_missing:
+            label: Piece missing at the count
+            description: 'Several pieces are read neither at a count nor at the previous one.'
+            learn: 'Look at where each piece was last seen: put away elsewhere, sold without a read, or gone. A piece read again gets its state back. The finding names no one.'
         cash_shortage_series:
             label: Repeated cash shortages by the same account
             description: 'Several closings with a shortage are closed by the same account over a short period.'
@@ -756,3 +788,21 @@ prints:
         PIECE_LABELS_EXHAUSTED: 'This piece has already received too many tag labels.'
         EXERCISE_NO_UNTAGGED_PIECE: 'No practice piece without a tag: create practice pieces first.'
         EXERCISE_NO_PRINTER: 'This simulated box has no printer: create a new one.'
+
+counter:
+    notice:
+        one: '1 tracked item not read: place it on the mat.'
+        many: '%count% tracked items not read: place them on the mat.'
+counts:
+    scope:
+        all: Whole shop
+    status:
+        open: Open
+        closed: Closed
+        expired: Closed without conclusion
+    stockNotice: 'The gap between the catalogue stock and the pieces read is only shown: the stock is corrected in the management app.'
+    eveningNotice: 'Numbers of the day, with no names. A piece not seen is not a lost piece: a count will tell.'
+    error:
+        COUNT_ALREADY_OPEN: 'A count is already open: close it before opening another one.'
+        COUNT_NOT_FOUND: Count not found.
+        COUNT_NOT_OPEN: 'This count is already closed.'

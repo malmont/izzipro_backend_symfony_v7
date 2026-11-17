@@ -21,6 +21,9 @@
         "read": 0,
         "unread": [],
         "extra": 0,
-        "checkedAt": "2026-11-16T11:15:43+00:00"
+        "checkedAt": "2026-11-17T01:27:13+00:00",
+        "display": false,
+        "notice": null,
+        "checkId": null
     }
 }

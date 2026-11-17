@@ -207,6 +207,8 @@ loss_digest:
     row_renewed: 'Of which completed by new evidence'
     row_amount: 'Amount at stake'
     message_renewed: "{1}Among them, 1 older finding, completed by new evidence.|]1,Inf[Among them, %count% older findings, completed by new evidence."
+    row_grown: 'Of which grew since your decision'
+    message_grown: "{1}Among them, 1 finding already decided, which grew since your decision.|]1,Inf[Among them, %count% findings already decided, which grew since your decision."
     row_day: 'Shop day'
     next: 'Open the “Loss prevention” section of your management app to read their evidence and decide.'
     notice: 'The amount at stake is the amount the findings are about, not a proven loss. You receive this email at most once a day; you can stop it in the notification preferences of the management app.'
@@ -215,6 +217,17 @@ loss_digest:
     exercise_link: 'Open Practice'
     exercise_subject: '[Exercise] %subject%'
     exercise_banner: 'EXERCISE: this email shows the alert you would receive for a real finding. The finding is fictitious: it does not touch the register and concerns no real person.'
+    evening_title: 'Yesterday''s summary'
+    evening_day: 'Day'
+    evening_tracked: 'Tracked items sold'
+    evening_unread: 'Of which sold without a read'
+    evening_exits: 'Exits without a sale'
+    evening_stockroom: 'Pieces that left the stockroom'
+    evening_unseen: 'Pieces not seen for %days% days'
+    evening_missing: 'Pieces missing at the count'
+    evening_down: 'Devices that went down during the day'
+    evening_counter_shown: 'Alerts shown at the till'
+    evening_counter_proceeded: 'Of which "continue anyway"'
 
 # Support, SUPPORT-WEB: an agent invited by the site administrator (a single-use link, valid for %hours% hours)
 support_agent_invitation:

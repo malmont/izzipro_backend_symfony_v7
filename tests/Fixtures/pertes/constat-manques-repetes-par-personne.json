@@ -1,13 +1,13 @@
 {
     "request": {
         "method": "GET",
-        "path": "/api/gestion/pertes/constats/8?locale=fr"
+        "path": "/api/gestion/pertes/constats/70?locale=fr"
     },
     "status": 200,
     "headers": {},
     "body": {
-        "id": 8,
-        "number": 8,
+        "id": 70,
+        "number": 70,
         "rule": {
             "code": "CASH_DISCREPANCY",
             "label": "Manques de caisse répétés par un même compte"
@@ -22,21 +22,22 @@
         "currency": "CAD",
         "isNew": false,
         "newEvidenceSinceDecision": false,
+        "grewSinceDecision": null,
         "backfill": false,
         "exercise": false,
-        "updatedAt": "2026-11-16T07:32:46+00:00",
-        "from": "2026-11-16T07:32:46+00:00",
-        "to": "2026-11-16T07:32:46+00:00",
+        "updatedAt": "2026-11-17T02:06:54+00:00",
+        "from": "2026-11-17T02:06:54+00:00",
+        "to": "2026-11-17T02:06:54+00:00",
         "sessionId": null,
         "subject": {
             "type": "user_window",
-            "id": 20,
+            "id": 91,
             "name": "Caisse Nom",
             "label": "Série d'actes d'un même compte"
         },
         "onDuty": [
             {
-                "id": 20,
+                "id": 91,
                 "name": "Caisse Nom",
                 "role": "closer",
                 "roleLabel": "Fermeture de la caisse"
@@ -46,19 +47,19 @@
         "amountNotice": "Le montant en jeu est le montant concerné par le constat, pas une perte prouvée.",
         "evidence": [
             {
-                "id": 16,
+                "id": 380,
                 "kind": "z_report",
-                "at": "2026-11-16T07:32:46+00:00",
-                "atLabel": "16/11/2026 02 h 32",
+                "at": "2026-11-17T02:06:54+00:00",
+                "atLabel": "16/11/2026 21 h 06",
                 "title": "Rapport de clôture",
                 "lines": [
                     {
                         "label": "Rapport de clôture n°",
-                        "value": "2"
+                        "value": "54"
                     },
                     {
                         "label": "Caisse fermée le",
-                        "value": "16/11/2026 02 h 32"
+                        "value": "16/11/2026 21 h 06"
                     },
                     {
                         "label": "Fermée par",
@@ -91,27 +92,27 @@
                 ],
                 "ref": {
                     "type": "z_report",
-                    "id": 2,
-                    "sequence": 21,
-                    "hash": "6da8078ac3e445da808c40d683da9702249c7f869bb099846f900b70b9dafd08"
+                    "id": 54,
+                    "sequence": 311,
+                    "hash": "3101c61f202225387fd10368243aa803ec2d173cf2b84c2f1f799561238c007b"
                 },
                 "screen": null,
-                "fingerprint": "13b1dbd51abee66fc5a2a0959d5aa9c4300f673f7ebf667471700cd98e3219c1"
+                "fingerprint": "531ee950d3db6a6392058dfdb93e48ad500e087a81ae42dcadf4a2fb503b4e3e"
             },
             {
-                "id": 17,
+                "id": 381,
                 "kind": "z_report",
-                "at": "2026-11-16T07:32:46+00:00",
-                "atLabel": "16/11/2026 02 h 32",
+                "at": "2026-11-17T02:06:54+00:00",
+                "atLabel": "16/11/2026 21 h 06",
                 "title": "Rapport de clôture",
                 "lines": [
                     {
                         "label": "Rapport de clôture n°",
-                        "value": "3"
+                        "value": "55"
                     },
                     {
                         "label": "Caisse fermée le",
-                        "value": "16/11/2026 02 h 32"
+                        "value": "16/11/2026 21 h 06"
                     },
                     {
                         "label": "Fermée par",
@@ -144,27 +145,27 @@
                 ],
                 "ref": {
                     "type": "z_report",
-                    "id": 3,
+                    "id": 55,
                     "sequence": null,
                     "hash": null
                 },
                 "screen": null,
-                "fingerprint": "6fb46c1cac15df03b3cbb66581209930eff25d79a492287c978a78955dfebdb0"
+                "fingerprint": "9d4005c5d32608cc800edc2d8eeb31fca51171b29d347f9bcb7ec3f3aff2678c"
             },
             {
-                "id": 18,
+                "id": 382,
                 "kind": "z_report",
-                "at": "2026-11-16T07:32:46+00:00",
-                "atLabel": "16/11/2026 02 h 32",
+                "at": "2026-11-17T02:06:54+00:00",
+                "atLabel": "16/11/2026 21 h 06",
                 "title": "Rapport de clôture",
                 "lines": [
                     {
                         "label": "Rapport de clôture n°",
-                        "value": "4"
+                        "value": "56"
                     },
                     {
                         "label": "Caisse fermée le",
-                        "value": "16/11/2026 02 h 32"
+                        "value": "16/11/2026 21 h 06"
                     },
                     {
                         "label": "Fermée par",
@@ -197,20 +198,20 @@
                 ],
                 "ref": {
                     "type": "z_report",
-                    "id": 4,
+                    "id": 56,
                     "sequence": null,
                     "hash": null
                 },
                 "screen": null,
-                "fingerprint": "9e68202d2795a95ef10c71505e017516c1740bdef578e8d6c2b1632bc8355568"
+                "fingerprint": "f7b7ceff20a42a3271aa4b455207d254b5ca4068a5bb8a16a1a08f94a4b0ef4a"
             }
         ],
         "evidenceIntact": true,
         "opinion": null,
         "decision": null,
         "history": [],
-        "lastEvidenceAt": "2026-11-16T07:32:46+00:00",
-        "createdAt": "2026-11-16T07:32:46+00:00",
+        "lastEvidenceAt": "2026-11-17T02:06:54+00:00",
+        "createdAt": "2026-11-17T02:06:54+00:00",
         "screen": "pertes.constat"
     }
 }

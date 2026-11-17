@@ -28,7 +28,8 @@ class LossFindingReader
     private const LIMIT_MAX = 100;
     private const PAGE_MAX = 100000;
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly LossTexts $texts, private readonly LossSite $site)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly LossTexts $texts, private readonly LossSite $site,
+        private readonly ?LossOpinionService $opinions = null) // lot L5-c : l'avis de l'IA, dans la fiche seulement
     {
     }
 
@@ -180,11 +181,16 @@ class LossFindingReader
         }
         $history = [];
         foreach ($journal as $j) {
+            $data = json_decode((string) $j['data'], true) ?: [];
             if ($j['type'] === LossJournalEntry::DECISION_CHANGED) {
-                $data = json_decode((string) $j['data'], true) ?: [];
-                $history[] = ['at' => LossAuditEntry::iso(LossAuditEntry::utc((string) $j['occurred_at'])), 'status' => $data['status'] ?? null, 'previous' => $data['previous'] ?? null,
+                $history[] = ['kind' => 'decision', 'at' => LossAuditEntry::iso(LossAuditEntry::utc((string) $j['occurred_at'])), 'status' => $data['status'] ?? null, 'previous' => $data['previous'] ?? null,
                     'statusLabel' => isset($data['status']) ? $this->texts->t('status.' . $data['status'], $locale) : null, 'hasNote' => (bool) ($data['hasNote'] ?? false),
-                    'by' => $j['user_id'] !== null ? ['id' => (int) $j['user_id'], 'name' => $names[(int) $j['user_id']]] : null];
+                    'by' => $j['user_id'] !== null ? ['id' => (int) $j['user_id'], 'name' => $names[(int) $j['user_id']]] : null, 'before' => null, 'after' => null];
+            } elseif ($j['type'] === LossJournalEntry::FINDING_GREW) {
+                // lot L5-b : « a grossi depuis votre décision » (avant, après), écrit par l'analyse : sans personne
+                $history[] = ['kind' => 'grew', 'at' => LossAuditEntry::iso(LossAuditEntry::utc((string) $j['occurred_at'])), 'status' => null, 'previous' => null,
+                    'statusLabel' => $this->texts->t('history.grew', $locale, ['before' => (int) ($data['before'] ?? 0), 'after' => (int) ($data['after'] ?? 0)]), 'hasNote' => false,
+                    'by' => null, 'before' => (int) ($data['before'] ?? 0), 'after' => (int) ($data['after'] ?? 0)];
             }
         }
         $registers = $this->registerNames([$row['cash_register_id']]);
@@ -194,6 +200,9 @@ class LossFindingReader
         } elseif ($row['subject_type'] === 'cash_register') {
             // un constat par poste et par jour (lot L3-b2b) : son sujet est le poste, jamais une personne
             $subject += ['name' => $registers[(int) $row['subject_id']] ?? null, 'label' => $this->texts->t('subject.cash_register', $locale)];
+        } elseif ($row['subject_type'] === 'count') {
+            // un constat par comptage (lot L4-d) : son sujet est un comptage, jamais une personne
+            $subject += ['name' => $this->texts->t('subject.countNumber', $locale, ['number' => (int) $row['subject_id']]), 'label' => $this->texts->t('subject.count', $locale)];
         } elseif ($row['subject_type'] === 'zone') {
             // un constat par zone et par jour (lot L4-c) : son sujet est un lieu, jamais une personne
             $zone = (string) ((json_decode((string) $row['facts'], true) ?: [])['zone'] ?? '');
@@ -207,11 +216,11 @@ class LossFindingReader
             'onDuty' => array_map(fn (array $p) => ['id' => (int) $p['id'], 'name' => $names[(int) $p['id']], 'role' => (string) $p['role'], 'roleLabel' => $this->texts->t('role.' . $p['role'], $locale)], $onDuty),
             // un constat par poste et par jour ne liste personne : pas de phrase sur « ces personnes en poste »
             // un constat par poste, par pièce ou par article (lots L3-b2b, L4-b) ne liste personne : pas de phrase sur « ces personnes en poste »
-            'onDutyNotice' => in_array($row['subject_type'], ['cash_register', 'piece', 'product_variant', 'zone'], true) ? null : $this->texts->t('onDutyNotice', $locale),
+            'onDutyNotice' => in_array($row['subject_type'], ['cash_register', 'piece', 'product_variant', 'zone', 'count'], true) ? null : $this->texts->t('onDutyNotice', $locale),
             'amountNotice' => $this->texts->t('amountNotice', $locale),
             'evidence' => $evidence,
             'evidenceIntact' => $intact,
-            'opinion' => null, // avis (lot L5)
+            'opinion' => $this->opinions?->view($row, $locale), // lot L5-c : l'avis courant de l'IA (null : jamais demandé) ; jamais dans la liste
             'decision' => $row['decided_at'] === null ? null : [
                 'status' => (string) $row['status'], 'note' => $row['decision_note'], 'at' => LossAuditEntry::iso(LossAuditEntry::utc((string) $row['decided_at'])),
                 'by' => $row['decided_by'] !== null ? ['id' => (int) $row['decided_by'], 'name' => $names[(int) $row['decided_by']]] : null],
@@ -253,8 +262,9 @@ class LossFindingReader
         }
         $note = $status === LossFinding::OPEN || $note === '' ? null : $note;
         $this->findings()->markSeen($id, $userId); // décider, c'est avoir vu : un constat décidé n'est plus « nouveau »
-        if ($status !== $row['status'] || $note !== $row['decision_note']) {
-            $this->findings()->decide($id, $status, $note, $userId);
+        // une nouvelle décision, ou la même redite après que le constat a grossi (lot L5-b) : la référence repart du nombre du moment
+        if ($status !== $row['status'] || $note !== $row['decision_note'] || ($row['grew_at'] ?? null) !== null) {
+            $this->findings()->decide($id, $status, $note, $userId, LossRuleCatalog::trackedNumber((string) $row['rule_code'], json_decode((string) $row['facts'], true) ?: []));
             // Au journal (inaltérable) : qui, quand, avant, après, avec ou sans note. Le TEXTE de la note (libre) n'y entre pas : il ne vit que
             // sur le constat, dans sa dernière version, où il reste corrigeable (choix C du 14/11/2026)
             $this->emProvider->getEntityManager()->getRepository(LossJournalEntry::class)->append(LossJournalEntry::DECISION_CHANGED, $userId, $id, ['previous' => (string) $row['status'], 'status' => $status, 'hasNote' => $note !== null]);
@@ -300,6 +310,10 @@ class LossFindingReader
             'isNew' => $row['seen_at'] === null && !$row['backfill'],
             // lot L4-b : le drapeau posé quand une preuve s'ajoute après la décision ; la comparaison des dates reste pour une décision d'avant
             'newEvidenceSinceDecision' => $row['decided_at'] !== null && ((bool) ($row['evidence_after_decision'] ?? false) || (string) $row['last_evidence_at'] > (string) $row['decided_at']),
+            // lot L5-b : le constat décidé a grossi (au moins doublé, et au moins 3 de plus) ; avant : le nombre à la décision, après : le nombre du jour
+            'grewSinceDecision' => ($row['grew_at'] ?? null) === null ? null : ['at' => LossAuditEntry::iso(LossAuditEntry::utc((string) $row['grew_at'])),
+                'before' => $row['decided_count'] !== null ? (int) $row['decided_count'] : null,
+                'after' => LossRuleCatalog::trackedNumber((string) $row['rule_code'], json_decode((string) $row['facts'], true) ?: [])],
             'backfill' => (bool) $row['backfill'],
             'exercise' => (bool) ($row['exercise'] ?? false), // constat d'exercice (fictif) : l'écran porte le bandeau « Exercice »
             'updatedAt' => LossAuditEntry::iso(LossAuditEntry::utc((string) $row['updated_at'])),
@@ -347,6 +361,9 @@ class LossFindingReader
                 "summary.$code." . ((int) ($facts['count'] ?? 0) >= (int) ($facts['minCount'] ?? PHP_INT_MAX) ? 'raised' : 'base'), $locale,
                 ['count' => (int) ($facts['count'] ?? 0), 'minCount' => (int) ($facts['minCount'] ?? 0),
                     'zone' => $this->texts->has('boxes.zone.' . ($facts['zone'] ?? ''), $locale) ? $this->texts->t('boxes.zone.' . $facts['zone'], $locale) : (string) ($facts['zone'] ?? '')]),
+            // lot L4-d : par comptage ; aucun nom
+            LossRuleCatalog::PIECE_MISSING => $this->texts->t("summary.$code." . ((int) ($facts['count'] ?? 0) >= (int) ($facts['minCount'] ?? PHP_INT_MAX) ? 'raised' : 'base'), $locale,
+                ['count' => (int) ($facts['count'] ?? 0), 'minCount' => (int) ($facts['minCount'] ?? 0), 'countId' => (int) ($facts['countId'] ?? 0), 'found' => (int) ($facts['found'] ?? 0)]),
             LossRuleCatalog::EXIT_COVERED => $this->texts->t("summary.$code." . (($facts['level'] ?? '') === 'medium' ? 'medium' : 'low'), $locale,
                 ['count' => (int) ($facts['count'] ?? 0), 'minCount' => (int) ($facts['minCount'] ?? 0), 'article' => $this->articleOf($facts, $locale)]),
             default => $this->texts->t('summary.default', $locale),
@@ -411,6 +428,10 @@ class LossFindingReader
                 'move' => isset($s['move']) && in_array($s['move'], ['ZONE_SEEN', 'ZONE_LEFT'], true) ? $this->texts->t('evidence.move.' . $s['move'], $locale) : null,
                 'zoneMoved' => isset($s['zone']) && $this->texts->has('boxes.zone.' . $s['zone'], $locale) ? $this->texts->t('boxes.zone.' . $s['zone'], $locale) : null,
                 'movedAt' => $when('at'), 'antenna' => $text('device')],
+            // lot L4-d : une pièce non lue à deux comptages de suite ; la lecture qui l'a retrouvée
+            LossEvidence::COUNT_ABSENCE => ['pieceNumber' => $text('pieceNumber'), 'article' => $text('article'), 'countNumber' => $text('countId')],
+            LossEvidence::COUNT_FOUND => ['pieceNumber' => $text('pieceNumber'), 'foundAt' => $when('foundAt'),
+                'zoneMoved' => isset($s['zone']) && $this->texts->has('boxes.zone.' . $s['zone'], $locale) ? $this->texts->t('boxes.zone.' . $s['zone'], $locale) : null],
             default => [],
         };
         $lines = [];

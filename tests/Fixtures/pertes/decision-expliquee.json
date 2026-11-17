@@ -1,7 +1,7 @@
 {
     "request": {
         "method": "PUT",
-        "path": "/api/gestion/pertes/constats/1/decision?locale=fr",
+        "path": "/api/gestion/pertes/constats/63/decision?locale=fr",
         "body": {
             "status": "explained",
             "note": "Rouleaux de monnaie remis en caisse, vérifié avec le responsable."
@@ -10,8 +10,8 @@
     "status": 200,
     "headers": {},
     "body": {
-        "id": 1,
-        "number": 1,
+        "id": 63,
+        "number": 63,
         "rule": {
             "code": "DRAWER_NO_SALE",
             "label": "Tiroir ouvert sans vente"
@@ -29,19 +29,20 @@
         "currency": "CAD",
         "isNew": false,
         "newEvidenceSinceDecision": false,
+        "grewSinceDecision": null,
         "backfill": false,
         "exercise": false,
-        "updatedAt": "2026-11-16T07:32:45+00:00",
-        "from": "2026-11-16T07:32:43+00:00",
-        "to": "2026-11-16T07:32:43+00:00",
-        "sessionId": 1,
+        "updatedAt": "2026-11-17T02:06:52+00:00",
+        "from": "2026-11-17T02:06:50+00:00",
+        "to": "2026-11-17T02:06:50+00:00",
+        "sessionId": 59,
         "subject": {
             "type": "session",
-            "id": 1
+            "id": 59
         },
         "onDuty": [
             {
-                "id": 19,
+                "id": 90,
                 "name": "Caisse Nom",
                 "role": "operator",
                 "roleLabel": "Auteur de l'acte"
@@ -51,10 +52,10 @@
         "amountNotice": "Le montant en jeu est le montant concerné par le constat, pas une perte prouvée.",
         "evidence": [
             {
-                "id": 1,
+                "id": 365,
                 "kind": "drawer",
-                "at": "2026-11-16T07:32:43+00:00",
-                "atLabel": "16/11/2026 02 h 32",
+                "at": "2026-11-17T02:06:50+00:00",
+                "atLabel": "16/11/2026 21 h 06",
                 "title": "Ouverture du tiroir sans vente",
                 "lines": [
                     {
@@ -68,18 +69,18 @@
                 ],
                 "ref": {
                     "type": "pos_audit",
-                    "id": 3,
-                    "sequence": 3,
-                    "hash": "57462aee964f4d23c8cdd2d13972c4332266781526a3bd657f86f65c83b5a1ed"
+                    "id": 293,
+                    "sequence": 293,
+                    "hash": "2c71545fb5e67343e3f8ff39fffe284779d70992e786ef52bd339a1592af8e33"
                 },
                 "screen": null,
-                "fingerprint": "deb5708c494deb11c63e4e961817f7e1b9ab2122fa993464afcf26c767e18020"
+                "fingerprint": "3477f3384a89aa588d5c4c05d487c85e1fe63522c69ee416f92c79fd7f95a68a"
             },
             {
-                "id": 2,
+                "id": 366,
                 "kind": "drawer",
-                "at": "2026-11-16T07:32:43+00:00",
-                "atLabel": "16/11/2026 02 h 32",
+                "at": "2026-11-17T02:06:50+00:00",
+                "atLabel": "16/11/2026 21 h 06",
                 "title": "Ouverture du tiroir sans vente",
                 "lines": [
                     {
@@ -93,18 +94,18 @@
                 ],
                 "ref": {
                     "type": "pos_audit",
-                    "id": 4,
-                    "sequence": 4,
-                    "hash": "59cd55cb22ce7d10f94e72df4cc02c276282be644382ce600e8247d0f803ad0a"
+                    "id": 294,
+                    "sequence": 294,
+                    "hash": "af2603ab8832a039e59224a113c5a0c89712db733b3c8cceb6dd8b688246e19a"
                 },
                 "screen": null,
-                "fingerprint": "deb5708c494deb11c63e4e961817f7e1b9ab2122fa993464afcf26c767e18020"
+                "fingerprint": "3477f3384a89aa588d5c4c05d487c85e1fe63522c69ee416f92c79fd7f95a68a"
             },
             {
-                "id": 3,
+                "id": 367,
                 "kind": "drawer",
-                "at": "2026-11-16T07:32:43+00:00",
-                "atLabel": "16/11/2026 02 h 32",
+                "at": "2026-11-17T02:06:50+00:00",
+                "atLabel": "16/11/2026 21 h 06",
                 "title": "Ouverture du tiroir sans vente",
                 "lines": [
                     {
@@ -118,18 +119,18 @@
                 ],
                 "ref": {
                     "type": "pos_audit",
-                    "id": 5,
-                    "sequence": 5,
-                    "hash": "27570d9923786b8b03672f66d0419b35c79847736afff0394dc4e1dbbfccb06a"
+                    "id": 295,
+                    "sequence": 295,
+                    "hash": "9a232142a41922d777b5edc003627478956e2fef5c4fcdd4d51f8aa550dd725f"
                 },
                 "screen": null,
-                "fingerprint": "deb5708c494deb11c63e4e961817f7e1b9ab2122fa993464afcf26c767e18020"
+                "fingerprint": "3477f3384a89aa588d5c4c05d487c85e1fe63522c69ee416f92c79fd7f95a68a"
             },
             {
-                "id": 4,
+                "id": 368,
                 "kind": "drawer",
-                "at": "2026-11-16T07:32:43+00:00",
-                "atLabel": "16/11/2026 02 h 32",
+                "at": "2026-11-17T02:06:50+00:00",
+                "atLabel": "16/11/2026 21 h 06",
                 "title": "Ouverture du tiroir sans vente",
                 "lines": [
                     {
@@ -143,12 +144,12 @@
                 ],
                 "ref": {
                     "type": "pos_audit",
-                    "id": 6,
-                    "sequence": 6,
-                    "hash": "6efab7f6237c86513a9aa95829b5a1bba54e90e36dc9a9f1a0f5668eada0f0f6"
+                    "id": 296,
+                    "sequence": 296,
+                    "hash": "e40a31cab5d54da9f88b56d7df8ee8415284937a305de3e7fcebfbd7afcdbf6f"
                 },
                 "screen": null,
-                "fingerprint": "deb5708c494deb11c63e4e961817f7e1b9ab2122fa993464afcf26c767e18020"
+                "fingerprint": "3477f3384a89aa588d5c4c05d487c85e1fe63522c69ee416f92c79fd7f95a68a"
             }
         ],
         "evidenceIntact": true,
@@ -156,38 +157,44 @@
         "decision": {
             "status": "explained",
             "note": "Rouleaux de monnaie remis en caisse, vérifié avec le responsable.",
-            "at": "2026-11-16T07:32:45+00:00",
+            "at": "2026-11-17T02:06:52+00:00",
             "by": {
-                "id": 18,
+                "id": 89,
                 "name": "Gerant Nom"
             }
         },
         "history": [
             {
-                "at": "2026-11-16T07:32:45+00:00",
+                "kind": "decision",
+                "at": "2026-11-17T02:06:52+00:00",
                 "status": "watch",
                 "previous": "open",
                 "statusLabel": "À suivre",
                 "hasNote": false,
                 "by": {
-                    "id": 18,
+                    "id": 89,
                     "name": "Gerant Nom"
-                }
+                },
+                "before": null,
+                "after": null
             },
             {
-                "at": "2026-11-16T07:32:45+00:00",
+                "kind": "decision",
+                "at": "2026-11-17T02:06:52+00:00",
                 "status": "explained",
                 "previous": "watch",
                 "statusLabel": "Expliqué",
                 "hasNote": true,
                 "by": {
-                    "id": 18,
+                    "id": 89,
                     "name": "Gerant Nom"
-                }
+                },
+                "before": null,
+                "after": null
             }
         ],
-        "lastEvidenceAt": "2026-11-16T07:32:44+00:00",
-        "createdAt": "2026-11-16T07:32:44+00:00",
+        "lastEvidenceAt": "2026-11-17T02:06:52+00:00",
+        "createdAt": "2026-11-17T02:06:52+00:00",
         "screen": "pertes.constat"
     }
 }

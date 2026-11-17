@@ -41,8 +41,10 @@ constat se vérifie, et la décision vous revient. Il ne bloque jamais une vente
 
 ## Au comptoir
 
-1. Le caissier **pose les articles suivis sur le tapis** avant le paiement. La caisse lui dit ceux qui n'ont pas été lus ; il les
-   pose, ou il continue : la vente n'est jamais bloquée.
+1. Le caissier **pose les articles suivis sur le tapis** avant le paiement. Si vous avez allumé **l'alerte en caisse** (Réglages du
+   module, éteinte au départ), la caisse lui dit ceux qui n'ont pas été lus ; il les pose et relit, ou il continue quand même : la
+   vente n'est jamais bloquée. Le bilan du soir compte, poste par poste, les alertes montrées et les « continuer quand même »,
+   jamais par personne.
 2. Après la vente, le module relie chaque article vendu à la pièce lue sur le tapis : la pièce devient « Vendue ».
 3. Une pièce qui n'a pas été posée peut être **rattrapée à la sortie**, si un lecteur y est installé.
 4. **Retour d'un article** : posez la pièce rendue sur le tapis **avant de valider le retour**. Elle passe à « Retournée », de
@@ -57,6 +59,17 @@ constat se vérifie, et la décision vous revient. Il ne bloque jamais une vente
 3. Vous **décidez** de la suite à donner au constat (à suivre, expliqué, classé sans suite, confirmé). Votre décision est gardée,
    avec sa date.
 4. Les seuils se règlent règle par règle, avec un **aperçu** sur les trente derniers jours avant d'enregistrer.
+
+## L'avis de l'IA
+
+Sur la fiche d'un constat, **« Demander l'avis »** (1 unité IA) donne un avis indicatif : ce que disent les preuves, ce qui pèse pour
+ou contre, et les explications sans faute. **Le pourcentage est calculé par la plateforme**, pas par l'IA : c'est la part des constats
+semblables de votre boutique que vous avez confirmés sur 12 mois, donnée à partir de 20 constats tranchés. La décision vous appartient :
+l'avis ne propose jamais de suite et ne nomme personne. Il n'existe pas pour les règles qui portent sur une personne.
+
+**Données envoyées à l'IA** : la règle, le genre des preuves, le temps écoulé entre elles (en minutes, sans date ni heure) et leurs
+nombres (montants, quantités, durées). Jamais une personne : ni nom, ni rôle, ni compte, ni motif saisi à la caisse, ni qui était en
+poste. Aucune image ni vidéo.
 
 ## Ce qui est gardé, et combien de temps
 

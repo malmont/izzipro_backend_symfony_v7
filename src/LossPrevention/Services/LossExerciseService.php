@@ -64,6 +64,7 @@ class LossExerciseService
         'stockroom_not_shelved' => ['rule' => LossRuleCatalog::STOCKROOM_NOT_SHELVED, 'person' => false],
         'back_door' => ['rule' => LossRuleCatalog::BACK_DOOR, 'person' => false],
         'out_of_hours' => ['rule' => LossRuleCatalog::OUT_OF_HOURS, 'person' => false],
+        'piece_missing' => ['rule' => LossRuleCatalog::PIECE_MISSING, 'person' => false],
         'cash_shortage_series' => ['rule' => LossRuleCatalog::CASH_DISCREPANCY, 'person' => true],
         'refund_series' => ['rule' => LossRuleCatalog::REFUND_PATTERN, 'person' => true],
         'discount_series' => ['rule' => LossRuleCatalog::DISCOUNT_PATTERN, 'person' => true],
@@ -526,6 +527,19 @@ class LossExerciseService
                 $onDuty = [];
                 $subject = 'zone';
                 $from = $evidence[0]['at'];
+                break;
+            case 'piece_missing':
+                // lot L4-d : des pièces fictives non lues à deux comptages de suite ; un constat par comptage, aucune personne
+                $count = (int) $params['minCount'];
+                foreach (range(1, $count) as $i) {
+                    $evidence[] = ['kind' => LossEvidence::COUNT_ABSENCE, 'at' => $to, 'snapshot' => ['pieceNumber' => 900 + $i, 'countId' => 2]];
+                }
+                $facts = ['countId' => 2, 'scope' => 'all', 'practice' => true, 'count' => $count, 'minCount' => $count, 'pieces' => [], 'found' => 0, 'level' => LossExitService::LEVEL_HIGH];
+                $amount = null;
+                $onDuty = [];
+                $subject = 'count';
+                $subjectId = 2;
+                $from = $ago(60);
                 break;
             case 'cash_shortage_series':
                 $count = (int) $personParams['count'];

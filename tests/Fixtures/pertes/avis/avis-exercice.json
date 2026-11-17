@@ -1,0 +1,41 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/exercices/{id}/avis"
+    },
+    "status": 202,
+    "body": {
+        "id": 27,
+        "opinion": {
+            "state": "done",
+            "percent": null,
+            "calibrated": false,
+            "calibrationNotice": "Estimation non étalonnée : la part des constats semblables de votre boutique que vous avez confirmés, sur 12 mois.",
+            "measures": {
+                "similar": 0,
+                "decided": 0,
+                "confirmed": 0
+            },
+            "factors": [
+                {
+                    "label": "Les ouvertures se suivent de près dans la même session.",
+                    "effect": "up"
+                },
+                {
+                    "label": "Chaque ouverture porte un motif saisi à la caisse.",
+                    "effect": "down"
+                }
+            ],
+            "summary": "Exemple d'avis : les preuves montrent plusieurs ouvertures du tiroir sans vente dans la même session, plus que le seuil réglé.",
+            "alternatives": [
+                "Un fond de caisse à refaire ou de la monnaie à rendre en début de journée."
+            ],
+            "generatedAt": "2026-11-17T02:38:24+00:00",
+            "creditsUsed": 0,
+            "stale": false,
+            "example": true,
+            "error": null,
+            "notice": "Avis indicatif : la décision vous appartient. L'IA ne lit que le genre des preuves, le temps écoulé entre elles et leurs nombres, jamais une personne."
+        }
+    }
+}

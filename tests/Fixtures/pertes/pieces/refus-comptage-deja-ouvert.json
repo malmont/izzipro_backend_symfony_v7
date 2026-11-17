@@ -1,0 +1,16 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/comptages?locale=fr",
+        "body": {
+            "scope": "floor"
+        }
+    },
+    "status": 409,
+    "headers": {},
+    "body": {
+        "error": "COUNT_ALREADY_OPEN",
+        "code": "COUNT_ALREADY_OPEN",
+        "message": "Un comptage est déjà ouvert : fermez-le avant d'en ouvrir un autre."
+    }
+}

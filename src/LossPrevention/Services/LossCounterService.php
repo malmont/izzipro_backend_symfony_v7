@@ -12,7 +12,10 @@ use App\Services\PosAuditService\PosApprovalService;
 use App\Services\PosAuditService\PosTerminalService;
 use App\Services\TenantConnectionProvider;
 use App\Services\TenantEntityManagerProvider;
+use App\LossPrevention\Entity\LossCounterAlertDay;
+use Psr\Cache\CacheItemPoolInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * Ce que la CAISSE demande au module avant un paiement (lot L3-b1, 16/11/2026, `docs/prevention-pertes.md` § 16.15) : parmi les
@@ -32,6 +35,10 @@ use Symfony\Bundle\SecurityBundle\Security;
  *   qu'un nombre). Aucun nom de personne.
  * - Un article est SUIVI quand sa variante a au moins une vraie pièce en service qui porte une puce. Une pièce est LUE si elle
  *   est sur le tapis, ou l'a quitté depuis moins de `READ_WINDOW` secondes.
+ * - **Alerte en caisse** (lot L5-a, 17/11/2026, § 18.2, « B ») : quand le gérant l'a allumée et qu'il manque des articles, la réponse
+ *   porte `display: true`, le texte à montrer (`notice`) et une vérification (`checkId`, gardée `CHECK_TTL` secondes dans le pool des
+ *   limites de débit, rien en base). Au paiement, la caisse rend la vérification (`after`) : le serveur ajoute UN aux compteurs du
+ *   poste et du jour (montrée ; « continuer quand même »), une fois par vérification. Ni personne, ni vente, ni article ne sont gardés.
  */
 class LossCounterService
 {
@@ -39,6 +46,8 @@ class LossCounterService
     public const READ_WINDOW = 600;
     public const MAX_ITEMS = 200;
     public const REASONS = ['MODULE_INACTIVE', 'TERMINAL_NOT_BOUND', 'NO_MAT', 'MAT_SILENT', 'TOO_MANY_REQUESTS'];
+    /** Durée de vie d'une vérification montrée en caisse, le temps d'un paiement (secondes) */
+    public const CHECK_TTL = 900;
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -49,12 +58,16 @@ class LossCounterService
         private readonly Security $security,
         private readonly LossBoxLimits $limits,
         private readonly TenantConnectionProvider $tenant,
+        #[Autowire(service: 'cache.rate_limiter')] private readonly CacheItemPoolInterface $checks,
+        private readonly LossSite $site,
+        private readonly LossTexts $texts,
         private readonly ?LossSaleLinkService $sales = null,
     ) {
     }
 
     /**
-     * `{ cashRegisterId?, items: [{ productVariantId, quantity }] }` → `{ active, reason, cashRegisterId, tracked, read, unread, extra, checkedAt }`.
+     * `{ cashRegisterId?, items: [{ productVariantId, quantity }] }` → `{ active, reason, cashRegisterId, tracked, read, unread, extra, checkedAt,
+     * display, notice, checkId }` (les trois derniers : lot L5-a).
      *
      * @param array<string, mixed> $body
      *
@@ -62,7 +75,7 @@ class LossCounterService
      *
      * @throws CashRegisterException poste refusé, introuvable ou fermé ; corps invalide
      */
-    public function unread(array $body): array
+    public function unread(array $body, string $locale = 'fr'): array
     {
         $items = $this->items($body);
         $lines = count($body['items']);
@@ -72,7 +85,8 @@ class LossCounterService
         }
         $now = time();
         $answer = static fn (?int $register, bool $active, ?string $reason, int $tracked = 0, int $read = 0, array $unread = [], int $extra = 0): array => ['active' => $active, 'reason' => $reason,
-            'cashRegisterId' => $register, 'tracked' => $tracked, 'read' => $read, 'unread' => $unread, 'extra' => $extra, 'checkedAt' => gmdate('Y-m-d\TH:i:s\+00:00', $now)];
+            'cashRegisterId' => $register, 'tracked' => $tracked, 'read' => $read, 'unread' => $unread, 'extra' => $extra, 'checkedAt' => gmdate('Y-m-d\TH:i:s\+00:00', $now),
+            'display' => false, 'notice' => null, 'checkId' => null];
         // sans le module, la caisse n'a rien d'autre à savoir : ni le poste ni le panier ne sont regardés plus loin
         if (!$this->settings->moduleGranted()) {
             return $answer($registerId, false, 'MODULE_INACTIVE');
@@ -146,7 +160,64 @@ class LossCounterService
         }
 
         // ce qui est ENCORE posé sur le tapis et n'est pas dans le panier : un nombre, sans dire quoi
-        return $answer($registerId, true, null, $trackedCount, $readCount, $unread, array_sum($presentByVariant) - $usedPresent);
+        $result = $answer($registerId, true, null, $trackedCount, $readCount, $unread, array_sum($presentByVariant) - $usedPresent);
+        // lot L5-a : la caisse ne montre l'alerte que si le gérant l'a allumée, et seulement quand il manque des articles
+        if ($unread !== [] && $this->settings->cashierAlertsOn()) {
+            $checkId = bin2hex(random_bytes(16));
+            $item = $this->checks->getItem($this->checkKey($checkId));
+            $item->set($registerId)->expiresAfter(self::CHECK_TTL);
+            if ($this->checks->save($item)) { // sans le pool, pas de vérification : l'alerte se montre quand même, elle ne se comptera pas
+                $result['checkId'] = $checkId;
+            }
+            $missingTotal = array_sum($missing);
+            $result['display'] = true;
+            $result['notice'] = $this->texts->t($missingTotal > 1 ? 'counter.notice.many' : 'counter.notice.one', $locale, ['count' => $missingTotal]);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Lot L5-a : la caisse rend la vérification d'une alerte montrée, au paiement `{ checkId, proceeded }`. Une vérification ne compte
+     * qu'UNE fois, pour le poste où elle a été montrée et le jour du magasin du paiement. Inconnue, expirée, déjà comptée, ou module
+     * retiré : rien n'est compté, et la caisse n'en sait rien (204 dans tous ces cas : elle n'est jamais gênée).
+     *
+     * @param array<string, mixed> $body
+     *
+     * @throws CashRegisterException corps invalide (422)
+     */
+    public function after(array $body): void
+    {
+        $checkId = $body['checkId'] ?? null;
+        $proceeded = $body['proceeded'] ?? null;
+        $errors = [];
+        if (!is_string($checkId) || preg_match('/^[0-9a-f]{32}$/', $checkId) !== 1) {
+            $errors[] = ['path' => 'checkId', 'message' => 'vérification attendue (32 caractères hexadécimaux)'];
+        }
+        if (!is_bool($proceeded)) {
+            $errors[] = ['path' => 'proceeded', 'message' => 'booléen attendu'];
+        }
+        if ($errors !== []) {
+            throw new CashRegisterException('VALIDATION_FAILED', 'Suite d\'alerte invalide', 422, $errors);
+        }
+        if (!$this->settings->moduleGranted()) {
+            return;
+        }
+        $key = $this->checkKey($checkId);
+        $item = $this->checks->getItem($key);
+        if (!$item->isHit() || !is_int($item->get())) {
+            return;
+        }
+        // retirée AVANT de compter : une suite rejouée (réseau lent, double appui) ne compte pas deux fois
+        $this->checks->deleteItem($key);
+        $this->emProvider->getEntityManager()->getRepository(LossCounterAlertDay::class)
+            ->bump($item->get(), $this->site->clock()->day(new \DateTimeImmutable()), $proceeded);
+    }
+
+    /** Clé d'une vérification : propre au site (le pool est commun à toute la plateforme) */
+    private function checkKey(string $checkId): string
+    {
+        return 'loss_check.' . preg_replace('/[^A-Za-z0-9_]/', '_', (string) $this->tenant->getTenantCode()) . '.' . $checkId;
     }
 
     /**

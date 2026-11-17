@@ -1,0 +1,27 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/comptages?locale=fr",
+        "body": {
+            "scope": "all"
+        }
+    },
+    "status": 201,
+    "headers": {},
+    "body": {
+        "id": 10,
+        "scope": "all",
+        "scopeLabel": "Tout le magasin",
+        "status": "open",
+        "statusLabel": "Ouvert",
+        "exercise": false,
+        "openedAt": "2026-11-17T00:34:48+00:00",
+        "closedAt": null,
+        "expected": null,
+        "found": null,
+        "absent": null,
+        "missing": null,
+        "expiresAt": "2026-11-17T12:34:48+00:00",
+        "screen": "pertes.pieces"
+    }
+}

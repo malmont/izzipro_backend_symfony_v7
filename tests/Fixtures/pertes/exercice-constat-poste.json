@@ -1,12 +1,12 @@
 {
     "request": {
         "method": "GET",
-        "path": "/api/gestion/pertes/exercices/13?locale=fr"
+        "path": "/api/gestion/pertes/exercices/75?locale=fr"
     },
     "status": 200,
     "headers": {},
     "body": {
-        "id": 13,
+        "id": 75,
         "number": -2,
         "rule": {
             "code": "UNREAD_SOLD",
@@ -22,11 +22,12 @@
         "currency": "CAD",
         "isNew": false,
         "newEvidenceSinceDecision": false,
+        "grewSinceDecision": null,
         "backfill": false,
         "exercise": true,
-        "updatedAt": "2026-11-16T07:54:13+00:00",
-        "from": "2026-11-16T06:54:13+00:00",
-        "to": "2026-11-16T07:53:13+00:00",
+        "updatedAt": "2026-11-17T02:06:56+00:00",
+        "from": "2026-11-17T01:06:56+00:00",
+        "to": "2026-11-17T02:05:56+00:00",
         "sessionId": null,
         "subject": {
             "type": "cash_register",
@@ -39,10 +40,10 @@
         "amountNotice": "Le montant en jeu est le montant concerné par le constat, pas une perte prouvée.",
         "evidence": [
             {
-                "id": 31,
+                "id": 395,
                 "kind": "sale_units",
-                "at": "2026-11-16T07:53:13+00:00",
-                "atLabel": "16/11/2026 02 h 53",
+                "at": "2026-11-17T02:05:56+00:00",
+                "atLabel": "16/11/2026 21 h 05",
                 "title": "Articles suivis vendus sur le poste ce jour-là",
                 "lines": [
                     {
@@ -84,8 +85,8 @@
         "opinion": null,
         "decision": null,
         "history": [],
-        "lastEvidenceAt": "2026-11-16T07:54:13+00:00",
-        "createdAt": "2026-11-16T07:54:13+00:00",
+        "lastEvidenceAt": "2026-11-17T02:06:56+00:00",
+        "createdAt": "2026-11-17T02:06:56+00:00",
         "screen": "pertes.exercices"
     }
 }

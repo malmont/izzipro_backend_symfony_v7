@@ -1439,6 +1439,17 @@ une vente et doit avoir une session ouverte (mêmes refus : `CASH_REGISTER_NOT_F
 comme « pas de contrôle » ; hors ligne, elle n'appelle pas. La route est dans le module (`src/LossPrevention/`) : aucun code de
 caisse n'est touché. Contrat complet : `docs/prevention-pertes.md` § 16.15.
 
+**Alerte en caisse (lot L5-a, 17/11/2026, `docs/prevention-pertes.md` § 18.8)** : la réponse porte aussi `display`, `notice` et
+`checkId`. La caisse **ne montre l'alerte que si `display` est vrai** (le gérant l'a allumée, le contrôle est actif et il manque des
+articles) : le texte `notice` écrit par le serveur (`?locale=fr|en`, sinon la langue du site), la liste `unread`, un bouton
+« Relire » (la même question, de nouveau) et un bouton « Continuer quand même ». Le paiement n'est jamais bloqué, aucun son. Au
+paiement, si une alerte a été montrée, la caisse appelle une fois `POST /api/pos/pertes/articles-non-lus/suite { checkId,
+proceeded }` (le `checkId` de la DERNIÈRE réponse montrée ; `proceeded` : vrai si des articles manquaient encore au paiement) :
+204, toujours (une vérification inconnue, expirée après 15 minutes, déjà comptée, ou un site sans le module ne comptent rien) ;
+422 `VALIDATION_FAILED` seulement pour un corps invalide (`checkId` : 32 caractères hexadécimaux minuscules ; `proceeded` :
+booléen). Hors ligne : rien n'est montré, rien n'est envoyé. Exemples : `tests/Fixtures/pertes/boitier/caisse-alerte-montree.json`,
+`caisse-suite-alerte.json`, `caisse-refus-suite-invalide.json`.
+
 **Gestes au comptoir** (lots L3-b2a et L3-b2b, 16/11/2026 ; à reprendre dans le guide du caissier de l'application) :
 - avant le paiement, **poser les articles suivis sur le tapis** ; la caisse affiche ceux qui n'ont pas été lus, le caissier les
   pose ou continue ;

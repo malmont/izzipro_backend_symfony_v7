@@ -121,6 +121,13 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
         $this->channel('canal-faits-tapis', 'POST', '/faits', ['facts' => [['key' => "exemple-$this->s-0010", 'type' => 'COUNTER_SEEN', 'at' => gmdate('Y-m-d\TH:i:s\Z'), 'device' => 'TAPIS-0001', 'data' => ['identifier' => $nfc]],
             ['key' => "exemple-$this->s-0011", 'type' => 'COUNTER_SEEN', 'at' => gmdate('Y-m-d\TH:i:s\Z'), 'device' => 'LECTEUR-0001', 'data' => ['identifier' => $nfc]]]], $token);
         $this->till('caisse-un-article-lu-un-manquant', $basket);
+        // lot L5-a : le gérant allume l'alerte en caisse ; la caisse la montre, puis rend la vérification au paiement
+        $this->json($this->admin('PUT', self::BASE . '/reglages', ['cashierAlerts' => ['enabled' => true]]));
+        $this->till('caisse-alerte-montree', $basket);
+        $this->remember('caisse-suite-alerte', 'POST', '/api/pos/pertes/articles-non-lus/suite', [], $suite = ['checkId' => $this->examples['caisse-alerte-montree']['body']['checkId'], 'proceeded' => true], 204,
+            $this->pos('POST', '/api/pos/pertes/articles-non-lus/suite', $suite));
+        $this->remember('caisse-refus-suite-invalide', 'POST', '/api/pos/pertes/articles-non-lus/suite', [], $wrong = ['checkId' => 'XYZ', 'proceeded' => 'oui'], 422,
+            $this->pos('POST', '/api/pos/pertes/articles-non-lus/suite', $wrong));
         $this->till('caisse-refus-panier-invalide', ['items' => [['productVariantId' => $variant, 'quantity' => 0]]], 422);
         $this->till('caisse-refus-poste-inconnu', ['cashRegisterId' => 999999999, 'items' => []], 404);
         $this->admin_('admin-sante-tapis-en-ordre', 'GET', '/sante');
@@ -307,6 +314,8 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
         $json = (string) preg_replace('/("password": ?")[0-9A-F]{8}"/', '${1}XXXXXXXX"', $json);
         // une durée de silence dépend de la seconde où l'exemple est produit (719 ou 720 s) : dans le fichier, elle est arrondie à la
         // minute, pour que deux générations donnent le même exemple
+        // la vérification d'une alerte en caisse (lot L5-a) est tirée au hasard à chaque question : dans le fichier, des zéros
+        $json = (string) preg_replace('/("checkId": ?")[0-9a-f]{32}"/', '${1}' . str_repeat('0', 32) . '"', $json);
         $json = (string) preg_replace_callback('/("silentSeconds": )(\d+)/', static fn (array $m): string => $m[1] . (intdiv((int) $m[2] + 30, 60) * 60), $json);
 
         return (string) preg_replace('/(b\d+\.\d+\.\d{10}\.)(?!0{64})[0-9a-f]{64}/', '${1}' . str_repeat('0', 64), $json);

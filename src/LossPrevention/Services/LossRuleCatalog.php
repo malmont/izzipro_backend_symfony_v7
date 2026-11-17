@@ -32,10 +32,19 @@ final class LossRuleCatalog
     public const OUT_OF_HOURS = 'OUT_OF_HOURS';
     /** Les règles du dépôt : elles lisent les mouvements de zone des antennes (`LossDepotService`) */
     public const DEPOT_RULES = [self::STOCKROOM_NOT_SHELVED, self::BACK_DOOR, self::OUT_OF_HOURS];
-    /** Les règles qui lisent les antennes, et non le journal de caisse : l'aperçu ne peut pas les rejouer */
-    public const ANTENNA_RULES = [self::EXIT_WITHOUT_SALE, self::EXIT_COVERED, self::STOCKROOM_NOT_SHELVED, self::BACK_DOOR, self::OUT_OF_HOURS];
+    /** Lot L4-d : pièces absentes à deux comptages fermés de suite qui les couvrent ; un constat par comptage */
+    public const PIECE_MISSING = 'PIECE_MISSING';
+    /** Les règles qui ne lisent pas le journal de caisse (antennes, comptages) : l'aperçu ne peut pas les rejouer */
+    public const ANTENNA_RULES = [self::EXIT_WITHOUT_SALE, self::EXIT_COVERED, self::STOCKROOM_NOT_SHELVED, self::BACK_DOOR, self::OUT_OF_HOURS, self::PIECE_MISSING];
 
     /** Types de paramètre : l'écran sait comment saisir et afficher */
+    /**
+     * Lot L5-b : le nombre SUIVI d'un constat, celui que la règle compare à son seuil, lu dans ses faits : `count` pour la plupart,
+     * `unread` pour « vendus sans lecture ». Une règle d'événement unique (écart d'une clôture, annulation rapide, retour, sortie d'une
+     * pièce) n'a pas ce nombre dans ses faits : elle n'est jamais concernée.
+     */
+    public const GROWTH_FACT = [self::UNREAD_SOLD => 'unread'];
+
     public const COUNT = 'count';
     public const CENTS = 'cents';
     public const MINUTES = 'minutes';
@@ -126,6 +135,12 @@ final class LossRuleCatalog
             'params' => ['minCount' => ['type' => self::COUNT, 'default' => 5, 'min' => 2, 'max' => 50]],
             'person' => null,
         ],
+        // Lot L4-d : le comptage ; moyenne, haute à `minCount` pièces dites absentes dans un même comptage
+        self::PIECE_MISSING => [
+            'wave' => 4,
+            'params' => ['minCount' => ['type' => self::COUNT, 'default' => 10, 'min' => 2, 'max' => 500]],
+            'person' => null,
+        ],
     ];
 
     public static function exists(string $code): bool
@@ -137,5 +152,13 @@ final class LossRuleCatalog
     public static function defaults(string $code, bool $person = false): array
     {
         return array_map(fn (array $p) => $p['default'], ($person ? self::RULES[$code]['person'] : self::RULES[$code]['params']) ?? []);
+    }
+
+    /** Lot L5-b : le nombre suivi d'un constat de cette règle, lu dans ses faits ; null quand la règle n'en a pas @param array<string, mixed> $facts */
+    public static function trackedNumber(string $rule, array $facts): ?int
+    {
+        $value = $facts[self::GROWTH_FACT[$rule] ?? 'count'] ?? null;
+
+        return is_int($value) ? $value : null;
     }
 }

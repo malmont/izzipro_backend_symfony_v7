@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (625)
+## Boutique et commun (639)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -470,6 +470,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/notifications/preferences` | ROLE_ADMIN | `Gestion\Controller\GestionNotificationController::preferences` |
 | PATCH | `/api/gestion/notifications/preferences` | ROLE_ADMIN | `Gestion\Controller\GestionNotificationController::updatePreferences` |
 | POST | `/api/gestion/pertes/analyse` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::analyse` |
+| GET | `/api/gestion/pertes/bilan` | ROLE_ADMIN | `LossPrevention\Controller\LossCountController::evening` |
 | POST | `/api/gestion/pertes/boitiers/jumeler` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::pair` |
 | POST | `/api/gestion/pertes/boitiers/{id}/appareils/{deviceId}/retirer` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::retireDevice` |
 | PUT | `/api/gestion/pertes/boitiers/{id}/appareils/{deviceId}` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::assignDevice` |
@@ -479,14 +480,25 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PUT | `/api/gestion/pertes/boitiers/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::update` |
 | GET | `/api/gestion/pertes/boitiers` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::list` |
 | POST | `/api/gestion/pertes/boitiers` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::create` |
+| POST | `/api/gestion/pertes/comptages/{id}/fermer` | ROLE_ADMIN | `LossPrevention\Controller\LossCountController::close` |
+| GET | `/api/gestion/pertes/comptages/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossCountController::detail` |
+| GET | `/api/gestion/pertes/comptages` | ROLE_ADMIN | `LossPrevention\Controller\LossCountController::list` |
+| POST | `/api/gestion/pertes/comptages` | ROLE_ADMIN | `LossPrevention\Controller\LossCountController::open` |
+| GET | `/api/gestion/pertes/constats/{id}/avis` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::readOpinion` |
+| POST | `/api/gestion/pertes/constats/{id}/avis` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::opinion` |
 | PUT | `/api/gestion/pertes/constats/{id}/decision` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::decide` |
 | GET | `/api/gestion/pertes/constats/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::finding` |
 | GET | `/api/gestion/pertes/constats` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::findings` |
+| GET | `/api/gestion/pertes/exercices/bilan` | ROLE_ADMIN | `LossPrevention\Controller\LossCountController::exerciseEvening` |
 | POST | `/api/gestion/pertes/exercices/boitiers/{id}/scenarios` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::exercisePlay` |
 | GET | `/api/gestion/pertes/exercices/boitiers/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::exerciseSheet` |
 | DELETE | `/api/gestion/pertes/exercices/boitiers` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::exerciseDelete` |
 | GET | `/api/gestion/pertes/exercices/boitiers` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::exerciseList` |
 | POST | `/api/gestion/pertes/exercices/boitiers` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::exerciseCreate` |
+| POST | `/api/gestion/pertes/exercices/comptages/{id}/fermer` | ROLE_ADMIN | `LossPrevention\Controller\LossCountController::exerciseClose` |
+| GET | `/api/gestion/pertes/exercices/comptages/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossCountController::exerciseDetail` |
+| GET | `/api/gestion/pertes/exercices/comptages` | ROLE_ADMIN | `LossPrevention\Controller\LossCountController::exerciseList` |
+| POST | `/api/gestion/pertes/exercices/comptages` | ROLE_ADMIN | `LossPrevention\Controller\LossCountController::exerciseOpen` |
 | GET | `/api/gestion/pertes/exercices/impressions/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPrintController::exerciseSheet` |
 | GET | `/api/gestion/pertes/exercices/impressions` | ROLE_ADMIN | `LossPrevention\Controller\LossPrintController::exerciseList` |
 | POST | `/api/gestion/pertes/exercices/installation/etapes/{code}/verifier` | ROLE_ADMIN | `LossPrevention\Controller\LossInstallationController::exerciseVerify` |
@@ -504,6 +516,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/pertes/exercices/puces/recherche` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::searchExercise` |
 | POST | `/api/gestion/pertes/exercices/puces/{id}/retirer` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::retireExerciseTag` |
 | GET | `/api/gestion/pertes/exercices/sante` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::exerciseHealth` |
+| POST | `/api/gestion/pertes/exercices/{id}/avis` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::exerciseOpinion` |
 | PUT | `/api/gestion/pertes/exercices/{id}/decision` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::decideExercise` |
 | GET | `/api/gestion/pertes/exercices/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::exercise` |
 | DELETE | `/api/gestion/pertes/exercices` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::deleteExercises` |
@@ -600,7 +613,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/import-invitation/accept` | PUBLIC_ACCESS | `Import\Controller\ImportInvitationController::accept` |
 | POST | `/api/import-invitation/decline` | PUBLIC_ACCESS | `Import\Controller\ImportInvitationController::decline` |
 | POST | `/api/import-invitation/verify` | PUBLIC_ACCESS | `Import\Controller\ImportInvitationController::verify` |
-| POST | `/api/me/contexts/enter` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\Account\MeContextsController::enter` |
+| POST | `/api/me/contexts/enter` | IS_AUTHENTICATED_FULLY | `Controller\Account\MeContextsController::enter` |
 | GET | `/api/me/contexts` | IS_AUTHENTICATED_FULLY | `App\Controller\Account\MeContextsController` |
 | DELETE | `/api/media/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::delete` |
 | PATCH | `/api/media/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::rename` |
@@ -711,6 +724,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/pos/offline-pack` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosOfflineController::pack` |
 | GET | `/api/pos/offline-sales` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosOfflineController::history` |
 | POST | `/api/pos/offline-sales` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosOfflineController::sales` |
+| POST | `/api/pos/pertes/articles-non-lus/suite` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `LossPrevention\Controller\LossPosController::after` |
 | POST | `/api/pos/pertes/articles-non-lus` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `LossPrevention\Controller\LossPosController::unread` |
 | POST | `/api/pos/pin-login` | PUBLIC_ACCESS | `Controller\PosController\PosPinController::pinLogin` |
 | POST | `/api/pos/pin` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosPinController::setPin` |
@@ -986,28 +1000,28 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/ouverture-du-site/{action}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\StorefrontAdminController::action` |
 | GET | `/admin/ouverture-du-site` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\StorefrontAdminController::index` |
 | GET | `/admin/pdf/print-barcode/{id}/{copies}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::printProduct` |
-| POST | `/admin/plateforme/accorder` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::grant` |
-| POST | `/admin/plateforme/agences/creer` | ROLE_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::create` |
-| POST | `/admin/plateforme/agences/{id}/detacher` | ROLE_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::detach` |
-| POST | `/admin/plateforme/agences/{id}/etat/{to}` | ROLE_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::state` |
-| POST | `/admin/plateforme/agences/{id}/limites` | ROLE_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::limits` |
-| POST | `/admin/plateforme/agences/{id}/rattacher` | ROLE_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::attach` |
-| POST | `/admin/plateforme/agences/{id}/role` | ROLE_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::member` |
-| GET | `/admin/plateforme/agences` | ROLE_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::index` |
-| POST | `/admin/plateforme/boutique` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shop` |
-| POST | `/admin/plateforme/demande/{id}/{decision}` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::request` |
-| POST | `/admin/plateforme/droit/{id}/{action}` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::act` |
-| POST | `/admin/plateforme/ia-credits` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::aiCredits` |
-| POST | `/admin/plateforme/ia-defauts` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::aiDefaults` |
-| POST | `/admin/plateforme/livraison/credit` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shippingCredit` |
-| POST | `/admin/plateforme/livraison/frais` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shippingFees` |
-| POST | `/admin/plateforme/mode` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::switchMode` |
-| POST | `/admin/plateforme/offre/{code}` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::offer` |
-| POST | `/admin/plateforme/politique/{feature}` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::policy` |
-| POST | `/admin/plateforme/sites/creer` | ROLE_ADMIN | `Controller\Admin\PlatformSitesAdminController::create` |
-| POST | `/admin/plateforme/sites/demandes/{id}/{geste}` | ROLE_ADMIN | `Controller\Admin\PlatformSitesAdminController::gesture` |
-| GET | `/admin/plateforme/sites` | ROLE_ADMIN | `Controller\Admin\PlatformSitesAdminController::index` |
-| GET | `/admin/plateforme` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::index` |
+| POST | `/admin/plateforme/accorder` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::grant` |
+| POST | `/admin/plateforme/agences/creer` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::create` |
+| POST | `/admin/plateforme/agences/{id}/detacher` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::detach` |
+| POST | `/admin/plateforme/agences/{id}/etat/{to}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::state` |
+| POST | `/admin/plateforme/agences/{id}/limites` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::limits` |
+| POST | `/admin/plateforme/agences/{id}/rattacher` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::attach` |
+| POST | `/admin/plateforme/agences/{id}/role` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::member` |
+| GET | `/admin/plateforme/agences` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::index` |
+| POST | `/admin/plateforme/boutique` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shop` |
+| POST | `/admin/plateforme/demande/{id}/{decision}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::request` |
+| POST | `/admin/plateforme/droit/{id}/{action}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::act` |
+| POST | `/admin/plateforme/ia-credits` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::aiCredits` |
+| POST | `/admin/plateforme/ia-defauts` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::aiDefaults` |
+| POST | `/admin/plateforme/livraison/credit` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shippingCredit` |
+| POST | `/admin/plateforme/livraison/frais` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shippingFees` |
+| POST | `/admin/plateforme/mode` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::switchMode` |
+| POST | `/admin/plateforme/offre/{code}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::offer` |
+| POST | `/admin/plateforme/politique/{feature}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::policy` |
+| POST | `/admin/plateforme/sites/creer` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformSitesAdminController::create` |
+| POST | `/admin/plateforme/sites/demandes/{id}/{geste}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformSitesAdminController::gesture` |
+| GET | `/admin/plateforme/sites` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformSitesAdminController::index` |
+| GET | `/admin/plateforme` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::index` |
 | GET, POST | `/admin/pos/archive` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\PosArchiveAdminController::index` |
 | GET, POST | `/admin/pos/coupons` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\PosCouponAdminController::index` |
 | GET, POST | `/admin/pos/exports` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\PosAccountingExportController::index` |

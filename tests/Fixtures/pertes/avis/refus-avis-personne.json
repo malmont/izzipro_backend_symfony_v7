@@ -1,0 +1,12 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/constats/{id}/avis"
+    },
+    "status": 422,
+    "body": {
+        "error": "OPINION_NOT_ALLOWED",
+        "code": "OPINION_NOT_ALLOWED",
+        "message": "Aucun avis de l'IA sur un constat qui porte sur une personne."
+    }
+}

@@ -195,7 +195,7 @@ final class ScreenRegistry
         ['#^/api/gestion/pertes/reglages(/|$)#', 'pertes.reglages'],
         ['#^/api/gestion/pertes/exercices(/|$)#', 'pertes.exercices'],
         ['#^/api/gestion/pertes/impressions(/|$)#', 'pertes.impressions'],
-        ['#^/api/gestion/pertes/(pieces|puces)(/|$)#', 'pertes.pieces'],
+        ['#^/api/gestion/pertes/(pieces|puces|comptages)(/|$)#', 'pertes.pieces'], // lot L4-d : les comptages vont avec les pièces
         ['#^/api/gestion/pertes/(installation|materiel)(/|$)#', 'pertes.installation'],
         ['#^/api/gestion/pertes/(boitiers|postes|sante)(/|$)#', 'pertes.boitiers'],
         ['#^/api/gestion/pertes(/|$)#', 'pertes.home'],

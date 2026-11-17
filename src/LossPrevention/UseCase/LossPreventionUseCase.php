@@ -36,6 +36,7 @@ class LossPreventionUseCase
         private readonly LossTexts $texts,
         private readonly LoggerInterface $logger,
         private readonly ?LossExerciseService $exercises = null, // lot EX-1 : mode exercice
+        private readonly ?\App\LossPrevention\Services\LossOpinionService $opinions = null, // lot L5-c : avis de l'IA
     ) {
     }
 
@@ -127,6 +128,38 @@ class LossPreventionUseCase
     public function decide(int $id, array $body, string $locale, int $userId): array
     {
         return $this->reader->decide($id, $body, $userId, $locale);
+    }
+
+    /**
+     * Lot L5-c : l'avis seul, sans la fiche : aucune consultation journalisée, rien n'éteint « nouveau » (relu toutes les 3 s par le web)
+     *
+     * @return array{opinion: array<string, mixed>|null}
+     */
+    public function opinion(int $id, string $locale): array
+    {
+        $row = $this->emProvider->getEntityManager()->getConnection()->fetchAssociative('SELECT * FROM loss_finding WHERE id = ?', [$id]) ?: null;
+        if ($row === null || (bool) $row['exercise'] || $this->opinions === null) {
+            throw new GestionConflictException('FINDING_NOT_FOUND', 'Constat inconnu.', 404);
+        }
+
+        return ['opinion' => $this->opinions->view($row, $locale)];
+    }
+
+    /**
+     * Lot L5-c : le gérant demande l'avis de l'IA sur un constat (ou l'actualise) ; rend la fiche, l'avis en préparation (ou, en
+     * exercice, l'avis d'exemple déjà écrit). Vrais constats et exercices ne se croisent jamais.
+     *
+     * @return array<string, mixed>
+     */
+    public function requestOpinion(int $id, string $locale, int $userId, ?string $user, bool $platformOwner, bool $exercise = false): array
+    {
+        $row = $this->emProvider->getEntityManager()->getConnection()->fetchAssociative('SELECT * FROM loss_finding WHERE id = ?', [$id]) ?: null;
+        if ($row === null || (bool) $row['exercise'] !== $exercise || $this->opinions === null) {
+            throw new GestionConflictException('FINDING_NOT_FOUND', 'Constat inconnu.', 404);
+        }
+        $this->opinions->request($row, $userId, $user, $platformOwner, $locale);
+
+        return $this->reader->detail($id, $locale, null, $exercise);
     }
 
     // ----- Mode exercice (lot EX-1) : routes ouvertes SANS le droit du module ; elles ne servent et ne décident que des constats d'exercice,

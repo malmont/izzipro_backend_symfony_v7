@@ -13,7 +13,7 @@ use Doctrine\ORM\EntityRepository;
 class LossSettingRepository extends EntityRepository
 {
     /** Valeurs d'un site qui n'a pas encore sa ligne : une LECTURE ne la crée pas (rien n'est écrit sur un site qui ne se sert pas du module) */
-    private const DEFAULTS = ['id' => null, 'staff_notice_confirmed_at' => null, 'staff_notice_confirmed_by' => null, 'person_patterns_enabled' => null,
+    private const DEFAULTS = ['id' => null, 'staff_notice_confirmed_at' => null, 'staff_notice_confirmed_by' => null, 'person_patterns_enabled' => null, 'cashier_alerts_enabled' => false,
         'retention_findings_months' => 24, 'retention_confirmed_months' => 60, 'cursor_sequence' => null, 'backfill_until_sequence' => null, 'analysis_floor_sequence' => null,
         'last_analysis_at' => null, 'last_digest_day' => null, 'last_digest_finding_id' => null, 'updated_at' => null, 'updated_by' => null, 'silent_after_seconds' => null,
         'counter_window_seconds' => null, 'catch_up_seconds' => null, 'presence_retention_days' => null, 'zone_arrive_seconds' => null, 'zone_leave_seconds' => null, 'exit_cursor' => null, 'web_window_days' => null, 'opening_hours' => null, 'hours_margin_minutes' => null, 'depot_cursor' => null, 'back_door_cursor' => null];

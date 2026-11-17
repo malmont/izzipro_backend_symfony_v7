@@ -1,0 +1,694 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/comptages/10/fermer?locale=fr",
+        "body": []
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "id": 10,
+        "scope": "all",
+        "scopeLabel": "Tout le magasin",
+        "status": "closed",
+        "statusLabel": "Fermé",
+        "exercise": false,
+        "openedAt": "2026-11-17T00:34:48+00:00",
+        "closedAt": "2026-11-17T00:34:48+00:00",
+        "expected": 52,
+        "found": 0,
+        "absent": 52,
+        "missing": 0,
+        "expiresAt": null,
+        "absentPieces": [
+            {
+                "pieceId": 18,
+                "number": 6,
+                "article": "",
+                "missing": false,
+                "lastZone": null,
+                "lastZoneLabel": null,
+                "lastSeenAt": "2026-11-17T00:42:41+00:00"
+            },
+            {
+                "pieceId": 19,
+                "number": 7,
+                "article": "",
+                "missing": false,
+                "lastZone": null,
+                "lastZoneLabel": null,
+                "lastSeenAt": "2026-11-17T00:32:41+00:00"
+            },
+            {
+                "pieceId": 20,
+                "number": 8,
+                "article": "",
+                "missing": false,
+                "lastZone": null,
+                "lastZoneLabel": null,
+                "lastSeenAt": "2026-11-17T00:32:46+00:00"
+            },
+            {
+                "pieceId": 21,
+                "number": 9,
+                "article": "",
+                "missing": false,
+                "lastZone": null,
+                "lastZoneLabel": null,
+                "lastSeenAt": "2026-11-17T00:32:44+00:00"
+            },
+            {
+                "pieceId": 22,
+                "number": 10,
+                "article": "",
+                "missing": false,
+                "lastZone": null,
+                "lastZoneLabel": null,
+                "lastSeenAt": "2026-11-17T00:32:47+00:00"
+            },
+            {
+                "pieceId": 23,
+                "number": 11,
+                "article": "",
+                "missing": false,
+                "lastZone": null,
+                "lastZoneLabel": null,
+                "lastSeenAt": "2026-11-17T00:32:47+00:00"
+            },
+            {
+                "pieceId": 25,
+                "number": 13,
+                "article": "",
+                "missing": false,
+                "lastZone": null,
+                "lastZoneLabel": null,
+                "lastSeenAt": "2026-11-17T00:32:51+00:00"
+            },
+            {
+                "pieceId": 26,
+                "number": 14,
+                "article": "",
+                "missing": false,
+                "lastZone": null,
+                "lastZoneLabel": null,
+                "lastSeenAt": "2026-11-17T00:32:51+00:00"
+            },
+            {
+                "pieceId": 28,
+                "number": 16,
+                "article": "",
+                "missing": false,
+                "lastZone": null,
+                "lastZoneLabel": null,
+                "lastSeenAt": "2026-11-17T00:32:54+00:00"
+            },
+            {
+                "pieceId": 29,
+                "number": 17,
+                "article": "",
+                "missing": false,
+                "lastZone": null,
+                "lastZoneLabel": null,
+                "lastSeenAt": "2026-11-17T00:32:50+00:00"
+            },
+            {
+                "pieceId": 30,
+                "number": 18,
+                "article": "",
+                "missing": false,
+                "lastZone": null,
+                "lastZoneLabel": null,
+                "lastSeenAt": "2026-11-17T00:32:54+00:00"
+            },
+            {
+                "pieceId": 31,
+                "number": 19,
+                "article": "",
+                "missing": false,
+                "lastZone": null,
+                "lastZoneLabel": null,
+                "lastSeenAt": "2026-11-17T00:32:57+00:00"
+            },
+            {
+                "pieceId": 35,
+                "number": 20,
+                "article": "",
+                "missing": false,
+                "lastZone": null,
+                "lastZoneLabel": null,
+                "lastSeenAt": "2026-11-17T00:33:03+00:00"
+            },
+            {
+                "pieceId": 74,
+                "number": 25,
+                "article": "",
+                "missing": false,
+                "lastZone": null,
+                "lastZoneLabel": null,
+                "lastSeenAt": "2026-11-17T00:34:18+00:00"
+            },
+            {
+                "pieceId": 91,
+                "number": 28,
+                "article": "Veste en lin (exemple 1FA0AB)",
+                "missing": false,
+                "lastZone": null,
+                "lastZoneLabel": null,
+                "lastSeenAt": "2026-11-17T00:34:46+00:00"
+            },
+            {
+                "pieceId": 64,
+                "number": 904241502,
+                "article": "Bonnet L4B-DEC4E3",
+                "missing": false,
+                "lastZone": "exit",
+                "lastZoneLabel": "Sortie",
+                "lastSeenAt": "2026-11-14T23:34:43+00:00"
+            },
+            {
+                "pieceId": 38,
+                "number": 905367068,
+                "article": "Pull L4C-53AF7A",
+                "missing": false,
+                "lastZone": "floor",
+                "lastZoneLabel": "Rayon",
+                "lastSeenAt": "2026-11-15T17:51:42+00:00"
+            },
+            {
+                "pieceId": 79,
+                "number": 912669260,
+                "article": "Sac L4B2-35B294",
+                "missing": false,
+                "lastZone": null,
+                "lastZoneLabel": null,
+                "lastSeenAt": null
+            },
+            {
+                "pieceId": 86,
+                "number": 912766393,
+                "article": "Vélo apres-demain L4B2-A85DF0",
+                "missing": false,
+                "lastZone": "exit",
+                "lastZoneLabel": "Sortie",
+                "lastSeenAt": "2026-11-17T00:28:05+00:00"
+            },
+            {
+                "pieceId": 87,
+                "number": 916629149,
+                "article": "Vélo web L4B2-A85DF0",
+                "missing": false,
+                "lastZone": "exit",
+                "lastZoneLabel": "Sortie",
+                "lastSeenAt": "2026-11-17T00:28:05+00:00"
+            },
+            {
+                "pieceId": 66,
+                "number": 918747741,
+                "article": "Chapeau L4B-DEC4E3",
+                "missing": false,
+                "lastZone": "exit",
+                "lastZoneLabel": "Sortie",
+                "lastSeenAt": "2026-11-17T00:33:45+00:00"
+            },
+            {
+                "pieceId": 41,
+                "number": 927775885,
+                "article": "Pull L4C-53AF7A",
+                "missing": false,
+                "lastZone": "stockroom_door",
+                "lastZoneLabel": "Porte de la réserve",
+                "lastSeenAt": "2026-11-17T00:19:45+00:00"
+            },
+            {
+                "pieceId": 42,
+                "number": 928943098,
+                "article": "Pull L4C-53AF7A",
+                "missing": false,
+                "lastZone": "stockroom_door",
+                "lastZoneLabel": "Porte de la réserve",
+                "lastSeenAt": "2026-11-15T17:00:01+00:00"
+            },
+            {
+                "pieceId": 39,
+                "number": 931451217,
+                "article": "Pull L4C-53AF7A",
+                "missing": false,
+                "lastZone": "floor",
+                "lastZoneLabel": "Rayon",
+                "lastSeenAt": "2026-11-15T17:50:12+00:00"
+            },
+            {
+                "pieceId": 47,
+                "number": 934587842,
+                "article": "Veste L4C-52CEFC",
+                "missing": false,
+                "lastZone": "back_door",
+                "lastZoneLabel": "Porte arrière de la réserve",
+                "lastSeenAt": "2026-11-15T23:00:00+00:00"
+            },
+            {
+                "pieceId": 65,
+                "number": 935767087,
+                "article": "Bonnet L4B-DEC4E3",
+                "missing": false,
+                "lastZone": "exit",
+                "lastZoneLabel": "Sortie",
+                "lastSeenAt": "2026-11-14T23:35:13+00:00"
+            },
+            {
+                "pieceId": 54,
+                "number": 937997561,
+                "article": "Manteau L4B-DDE881",
+                "missing": false,
+                "lastZone": "exit",
+                "lastZoneLabel": "Sortie",
+                "lastSeenAt": "2026-11-17T00:27:50+00:00"
+            },
+            {
+                "pieceId": 82,
+                "number": 942483375,
+                "article": "Vélo deux L4B2-A85DF0",
+                "missing": false,
+                "lastZone": "exit",
+                "lastZoneLabel": "Sortie",
+                "lastSeenAt": "2026-11-17T00:28:05+00:00"
+            },
+            {
+                "pieceId": 40,
+                "number": 943083808,
+                "article": "Pull L4C-53AF7A",
+                "missing": false,
+                "lastZone": "stockroom_door",
+                "lastZoneLabel": "Porte de la réserve",
+                "lastSeenAt": "2026-11-17T00:18:05+00:00"
+            },
+            {
+                "pieceId": 75,
+                "number": 945095111,
+                "article": "Sac L4B2-35B294",
+                "missing": false,
+                "lastZone": "exit",
+                "lastZoneLabel": "Sortie",
+                "lastSeenAt": "2026-11-17T00:34:44+00:00"
+            },
+            {
+                "pieceId": 84,
+                "number": 946949628,
+                "article": "Vélo avant-hier L4B2-A85DF0",
+                "missing": false,
+                "lastZone": "exit",
+                "lastZoneLabel": "Sortie",
+                "lastSeenAt": "2026-11-17T00:28:05+00:00"
+            },
+            {
+                "pieceId": 46,
+                "number": 949445858,
+                "article": "Pull L4C-53AF7A",
+                "missing": false,
+                "lastZone": "stockroom_door",
+                "lastZoneLabel": "Porte de la réserve",
+                "lastSeenAt": "2026-11-15T17:40:01+00:00"
+            },
+            {
+                "pieceId": 81,
+                "number": 957766803,
+                "article": "Vélo deux L4B2-A85DF0",
+                "missing": false,
+                "lastZone": "exit",
+                "lastZoneLabel": "Sortie",
+                "lastSeenAt": "2026-11-17T00:28:04+00:00"
+            },
+            {
+                "pieceId": 53,
+                "number": 958546663,
+                "article": "Écharpe L4C-52CEFC",
+                "missing": false,
+                "lastZone": "back_door",
+                "lastZoneLabel": "Porte arrière de la réserve",
+                "lastSeenAt": "2026-11-17T00:33:09+00:00"
+            },
+            {
+                "pieceId": 56,
+                "number": 960177173,
+                "article": "Manteau L4B-DDE881",
+                "missing": false,
+                "lastZone": "floor",
+                "lastZoneLabel": "Rayon",
+                "lastSeenAt": "2026-11-17T01:33:39+00:00"
+            },
+            {
+                "pieceId": 76,
+                "number": 963927826,
+                "article": "Sac L4B2-35B294",
+                "missing": false,
+                "lastZone": "exit",
+                "lastZoneLabel": "Sortie",
+                "lastSeenAt": "2026-11-17T00:34:44+00:00"
+            },
+            {
+                "pieceId": 63,
+                "number": 965139428,
+                "article": "Ceinture L4B-DEC4E3",
+                "missing": false,
+                "lastZone": null,
+                "lastZoneLabel": null,
+                "lastSeenAt": null
+            },
+            {
+                "pieceId": 78,
+                "number": 967428035,
+                "article": "Ceinture L4B2-35B294",
+                "missing": false,
+                "lastZone": "exit",
+                "lastZoneLabel": "Sortie",
+                "lastSeenAt": "2026-11-17T00:34:44+00:00"
+            },
+            {
+                "pieceId": 83,
+                "number": 967949601,
+                "article": "Vélo hier L4B2-A85DF0",
+                "missing": false,
+                "lastZone": "exit",
+                "lastZoneLabel": "Sortie",
+                "lastSeenAt": "2026-11-17T00:28:05+00:00"
+            },
+            {
+                "pieceId": 59,
+                "number": 969072963,
+                "article": "Gilet L4B-DEC4E3",
+                "missing": false,
+                "lastZone": "exit",
+                "lastZoneLabel": "Sortie",
+                "lastSeenAt": "2026-11-17T00:33:43+00:00"
+            },
+            {
+                "pieceId": 45,
+                "number": 969924617,
+                "article": "Pull L4C-53AF7A",
+                "missing": false,
+                "lastZone": "stockroom",
+                "lastZoneLabel": "Réserve",
+                "lastSeenAt": "2026-11-17T00:32:35+00:00"
+            },
+            {
+                "pieceId": 43,
+                "number": 974192212,
+                "article": "Gilet L4C-53AF7A",
+                "missing": false,
+                "lastZone": "stockroom_door",
+                "lastZoneLabel": "Porte de la réserve",
+                "lastSeenAt": "2026-11-15T17:00:01+00:00"
+            },
+            {
+                "pieceId": 51,
+                "number": 977733227,
+                "article": "Veste L4C-52CEFC",
+                "missing": false,
+                "lastZone": "stockroom_door",
+                "lastZoneLabel": "Porte de la réserve",
+                "lastSeenAt": "2026-11-15T23:03:30+00:00"
+            },
+            {
+                "pieceId": 88,
+                "number": 977931313,
+                "article": "Vélo web-impayee L4B2-A85DF0",
+                "missing": false,
+                "lastZone": "exit",
+                "lastZoneLabel": "Sortie",
+                "lastSeenAt": "2026-11-17T00:28:05+00:00"
+            },
+            {
+                "pieceId": 37,
+                "number": 978173047,
+                "article": "Pull L4C-53AF7A",
+                "missing": false,
+                "lastZone": "stockroom_door",
+                "lastZoneLabel": "Porte de la réserve",
+                "lastSeenAt": "2026-11-15T17:00:11+00:00"
+            },
+            {
+                "pieceId": 85,
+                "number": 979855935,
+                "article": "Vélo demain L4B2-A85DF0",
+                "missing": false,
+                "lastZone": "exit",
+                "lastZoneLabel": "Sortie",
+                "lastSeenAt": "2026-11-17T00:28:05+00:00"
+            },
+            {
+                "pieceId": 77,
+                "number": 983235650,
+                "article": "Sac L4B2-35B294",
+                "missing": false,
+                "lastZone": "exit",
+                "lastZoneLabel": "Sortie",
+                "lastSeenAt": "2026-11-17T00:34:44+00:00"
+            },
+            {
+                "pieceId": 50,
+                "number": 985122119,
+                "article": "Veste L4C-52CEFC",
+                "missing": false,
+                "lastZone": "back_door",
+                "lastZoneLabel": "Porte arrière de la réserve",
+                "lastSeenAt": "2026-11-16T05:00:01+00:00"
+            },
+            {
+                "pieceId": 48,
+                "number": 987396269,
+                "article": "Veste L4C-52CEFC",
+                "missing": false,
+                "lastZone": "back_door",
+                "lastZoneLabel": "Porte arrière de la réserve",
+                "lastSeenAt": "2026-11-15T23:02:00+00:00"
+            },
+            {
+                "pieceId": 44,
+                "number": 993451508,
+                "article": "Pull L4C-53AF7A",
+                "missing": false,
+                "lastZone": null,
+                "lastZoneLabel": null,
+                "lastSeenAt": null
+            },
+            {
+                "pieceId": 80,
+                "number": 996248004,
+                "article": "Vélo deux L4B2-A85DF0",
+                "missing": false,
+                "lastZone": "exit",
+                "lastZoneLabel": "Sortie",
+                "lastSeenAt": "2026-11-17T00:28:04+00:00"
+            },
+            {
+                "pieceId": 36,
+                "number": 999251029,
+                "article": "Pull L4C-53AF7A",
+                "missing": false,
+                "lastZone": "floor",
+                "lastZoneLabel": "Rayon",
+                "lastSeenAt": "2026-11-15T17:01:41+00:00"
+            }
+        ],
+        "stockGap": [
+            {
+                "variantId": 38,
+                "article": "Pull L4C-53AF7A",
+                "catalogStock": 40,
+                "expectedPieces": 10,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 27,
+                "article": "",
+                "catalogStock": null,
+                "expectedPieces": 6,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 40,
+                "article": "Veste L4C-52CEFC",
+                "catalogStock": 40,
+                "expectedPieces": 4,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 50,
+                "article": "Sac L4B2-35B294",
+                "catalogStock": 50,
+                "expectedPieces": 4,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 53,
+                "article": "Vélo deux L4B2-A85DF0",
+                "catalogStock": 20,
+                "expectedPieces": 3,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 42,
+                "article": "Manteau L4B-DDE881",
+                "catalogStock": 50,
+                "expectedPieces": 2,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 45,
+                "article": "Bonnet L4B-DEC4E3",
+                "catalogStock": 49,
+                "expectedPieces": 2,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 28,
+                "article": "",
+                "catalogStock": null,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 29,
+                "article": "",
+                "catalogStock": null,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 32,
+                "article": "",
+                "catalogStock": null,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 33,
+                "article": "",
+                "catalogStock": null,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 34,
+                "article": "",
+                "catalogStock": null,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 35,
+                "article": "",
+                "catalogStock": null,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 37,
+                "article": "",
+                "catalogStock": null,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 39,
+                "article": "Gilet L4C-53AF7A",
+                "catalogStock": 40,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 41,
+                "article": "Écharpe L4C-52CEFC",
+                "catalogStock": 40,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 43,
+                "article": "Gilet L4B-DEC4E3",
+                "catalogStock": 48,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 44,
+                "article": "Ceinture L4B-DEC4E3",
+                "catalogStock": 1,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 46,
+                "article": "Chapeau L4B-DEC4E3",
+                "catalogStock": 50,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 49,
+                "article": "",
+                "catalogStock": null,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 51,
+                "article": "Ceinture L4B2-35B294",
+                "catalogStock": 50,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 54,
+                "article": "Vélo hier L4B2-A85DF0",
+                "catalogStock": 20,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 55,
+                "article": "Vélo avant-hier L4B2-A85DF0",
+                "catalogStock": 20,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 56,
+                "article": "Vélo demain L4B2-A85DF0",
+                "catalogStock": 20,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 57,
+                "article": "Vélo apres-demain L4B2-A85DF0",
+                "catalogStock": 20,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 58,
+                "article": "Vélo web L4B2-A85DF0",
+                "catalogStock": 20,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 59,
+                "article": "Vélo web-impayee L4B2-A85DF0",
+                "catalogStock": 20,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            },
+            {
+                "variantId": 61,
+                "article": "Veste en lin (exemple 1FA0AB)",
+                "catalogStock": 6,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            }
+        ],
+        "stockNotice": "L'écart entre le stock du catalogue et les pièces lues est seulement montré : la correction du stock se fait dans la gestion.",
+        "screen": "pertes.pieces"
+    }
+}
