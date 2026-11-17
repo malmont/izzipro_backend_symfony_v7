@@ -28,7 +28,8 @@ use Twig\Environment;
  * - Mode `agency` : la session porte l'OPÉRATEUR EXTÉRIEUR (aucun compte chez le client) ; l'entrée est relue à chaque requête.
  * - Mode `super_admin` : la session porte LE compte de la plateforme du site visé, sans reconnexion ni code : la validation du code
  *   faite sur le site d'attache (moins de 12 h, heure d'origine gardée) vaut ici.
- * Refusé : page 403, rien n'est ouvert. Le laissez-passer est consumé seulement quand tout le reste est vérifié.
+ * Refusé : page 403, rien n'est ouvert. Le laissez-passer est consumé dès qu'il est reconnu (signature, échéance, site, session) : un refus
+ * ensuite (code trop ancien, entrée fermée) le brûle aussi, ce qui est le sens sûr.
  */
 final class AdminPassAuthenticator extends AbstractAuthenticator
 {
@@ -54,7 +55,7 @@ final class AdminPassAuthenticator extends AbstractAuthenticator
     {
         $current = $this->tenants->getTenantCode();
         try {
-            $claims = $this->passes->consume($request->request->get('pass'), $current);
+            $claims = $this->passes->consume($request->request->get('pass'), $current, $request->hasSession() ? $request->getSession()->getId() : null);
         } catch (EntryException $e) {
             throw new CustomUserMessageAuthenticationException((string) ($e->reason ?? $e->errorCode));
         }

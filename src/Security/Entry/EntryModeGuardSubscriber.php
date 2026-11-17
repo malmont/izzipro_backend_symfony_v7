@@ -140,7 +140,9 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         if (!$user instanceof ExternalOperator) {
             // l'entrée du compte de la plateforme garde tous ses écrans de site, mais n'écrit rien sur un compte (profil, adresse, mot
             // de passe : une telle écriture rendrait un jeton ordinaire)
-            if ($this->entry->active() && !in_array($request->getMethod(), ['GET', 'HEAD'], true) && ScreenRegistry::classify($request->getMethod(), RequestPath::of($request)) === '@compte') {
+            // (relecture d'AG-3c : « Quitter » et la déconnexion restent permis, sinon l'entrée du super administrateur ne se fermait pas)
+            if ($this->entry->active() && !in_array($request->getMethod(), ['GET', 'HEAD'], true) && !in_array(RequestPath::of($request), self::ADMIN_EXITS, true)
+                && ScreenRegistry::classify($request->getMethod(), RequestPath::of($request)) === '@compte') {
                 $event->setResponse($this->refusal('account'));
             }
 
@@ -152,16 +154,17 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         }
         $adminTarget = null;
         if ($path === '/admin') {
-            // le chemin /admin sert tous les écrans d'EasyAdmin : écran CRUD (crudControllerFqcn) ou page nommée (routeName)
-            $routeName = $request->query->get('routeName');
-            $routePath = null;
-            if (is_string($routeName) && $routeName !== '') {
-                $routePath = $this->router?->getRouteCollection()->get($routeName)?->getPath() ?? '';
+            // le chemin /admin sert tous les écrans d'EasyAdmin : écran CRUD (crudControllerFqcn) ou page nommée (routeName). Relecture
+            // d'AG-3c : EasyAdmin exécute `routeName` même quand `crudControllerFqcn` est là, et une page nommée se juge sur SON chemin
+            [$adminPath, $adminTarget, $refused] = $this->adminRequest($request);
+            if ($refused !== null) {
+                $event->setResponse($this->adminRefusal($refused));
+
+                return;
             }
-            $crud = $request->query->get('crudControllerFqcn');
-            $adminTarget = ScreenRegistry::adminTarget(is_string($crud) ? $crud : null, $routePath, $request->getMethod()) ?? '';
+            $path = $adminPath;
         }
-        [$decision, $target, $reason] = self::decision($request->getMethod(), $path, $adminTarget === '' ? '?' : $adminTarget);
+        [$decision, $target, $reason] = self::decision($request->getMethod(), $path, $adminTarget);
         if ($decision === self::PUBLIC) {
             $this->tokens->setToken(null); // servie EXACTEMENT comme à un visiteur
 
@@ -199,7 +202,8 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         }
         $sections = \App\Services\Agency\Assistance\AssistanceSections::of($target, ScreenRegistry::familyOf($target));
         $method = $request->getMethod();
-        $write = in_array($method, self::WRITE, true);
+        // relecture d'AG-3c : dans EasyAdmin, une action GET peut écrire (rembourser, confirmer, exporter) ; seule une liste ou une fiche lit
+        $write = self::isAdmin($path) ? !(bool) $request->attributes->get(self::EA_READ, false) : in_array($method, self::WRITE, true);
         $tenant = (string) ($this->tenants?->getTenantCode() ?? '');
         $grant = $sections === [] ? null : $this->assistance->covering($tenant, $operator->getAgencyId(), $sections, $write);
         if ($grant === null) {
@@ -233,6 +237,52 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         $request->attributes->set(self::ASSISTANCE_ATTRIBUTE, ['id' => (int) $grant['id'], 'section' => (string) $grant['section'], 'screen' => $target, 'trace' => $traceId]);
 
         return null;
+    }
+
+    /** Lot AG-3c : les actions d'un écran CRUD d'EasyAdmin qui ne font que LIRE (une assistance en consultation n'ouvre qu'elles) */
+    private const EA_READS = ['index', 'detail'];
+    /** Attribut posé sur une requête d'EasyAdmin : vrai si elle ne fait que lire */
+    private const EA_READ = '_entry_ea_read';
+
+    /**
+     * Lot AG-3c (après la double relecture) : une requête `/admin` de l'opérateur, ramenée à ce qu'EasyAdmin va réellement exécuter.
+     * - `routeName` : la page nommée, jugée sur SON chemin (règles par chemin, corps, ouverture de la boutique, assistance) ; seulement une
+     *   route d'EasyAdmin (chemin `/admin/…`), jamais avec `crudControllerFqcn` (EasyAdmin exécuterait l'une sous l'étiquette de l'autre).
+     * - `crudControllerFqcn` : l'écran CRUD ; une action par lot est refusée (la suppression par lot lit l'entité dans le corps).
+     * Rend [chemin jugé, cible du registre ou null, raison du refus ou null], et pose l'attribut de lecture seule.
+     *
+     * @return array{0: string, 1: ?string, 2: ?string}
+     */
+    private function adminRequest(Request $request): array
+    {
+        $routeName = $request->query->get('routeName');
+        $crud = $request->query->get('crudControllerFqcn');
+        if (is_string($routeName) && $routeName !== '') {
+            if ($crud !== null && $crud !== '') {
+                return ['/admin', null, 'ambiguous'];
+            }
+            try {
+                $params = $request->query->all('routeParams');
+                $generated = $this->router?->getRouteCollection()->get($routeName) !== null ? $this->router->generate($routeName, $params) : null;
+            } catch (\Throwable) {
+                $generated = null;
+            }
+            $routePath = is_string($generated) ? (string) parse_url($generated, \PHP_URL_PATH) : '';
+            if (!str_starts_with($routePath, '/admin/')) {
+                return ['/admin', null, 'surface'];
+            }
+            $request->attributes->set(self::EA_READ, in_array($request->getMethod(), ['GET', 'HEAD'], true));
+
+            return [$routePath, null, null];
+        }
+        $action = $request->query->get('crudAction');
+        $action = is_string($action) && $action !== '' ? $action : 'index';
+        if (str_starts_with(strtolower($action), 'batch') || $request->request->has('batchActionName') || $request->request->has('batchActionEntityIds')) {
+            return ['/admin', null, 'batch'];
+        }
+        $request->attributes->set(self::EA_READ, ($crud === null || $crud === '' || in_array($action, self::EA_READS, true)) && in_array($request->getMethod(), ['GET', 'HEAD'], true));
+
+        return ['/admin', ScreenRegistry::adminTarget(is_string($crud) ? $crud : null, null, $request->getMethod()) ?? '?', null];
     }
 
     /** Lot AG-3c : le refus d'une page d'EasyAdmin, en page HTML */

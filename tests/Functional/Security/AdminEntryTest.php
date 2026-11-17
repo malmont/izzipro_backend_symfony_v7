@@ -124,7 +124,8 @@ class AdminEntryTest extends WebTestCase
         // le même laissez-passer ne ressert jamais
         $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin/entree?tenant=' . MV_TEST_TENANT2_CODE, ['pass' => $pass], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
         $this->assertSame(403, $this->client->getResponse()->getStatusCode());
-        $this->assertStringContainsString('pass_replayed', (string) $this->client->getResponse()->getContent());
+        // la connexion réussie a renouvelé la session : le lien à la session tombe avant la marque d'usage unique
+        $this->assertMatchesRegularExpression('/pass_(replayed|session)/', (string) $this->client->getResponse()->getContent());
 
         // agence suspendue : la requête suivante de la session est refusée, la session vidée
         $this->login($this->user(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'agence2', ['ROLE_ADMIN', 'ROLE_AGENCY'], 'Paul', true), MV_TEST_TENANT_HOST, MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
@@ -148,16 +149,26 @@ class AdminEntryTest extends WebTestCase
         [$body] = explode('.', $pass);
         foreach ([
             'pass_signature' => $body . '.' . str_repeat('A', 43),
-            'pass_site' => $service->issue(['entry' => 1, 'mode' => 'agency', 'home' => MV_TEST_TENANT_CODE, 'target' => 'autre-site', 'otpAt' => time()]),
-            'pass_expired' => $service->issue(['entry' => 1, 'mode' => 'agency', 'home' => MV_TEST_TENANT_CODE, 'target' => MV_TEST_TENANT2_CODE, 'otpAt' => time(), 'exp' => time() - 1]),
+            'pass_site' => $service->issue(['entry' => 1, 'mode' => 'agency', 'home' => MV_TEST_TENANT_CODE, 'target' => 'autre-site', 'otpAt' => time()], 'une-session'),
+            'pass_expired' => $service->issue(['entry' => 1, 'mode' => 'agency', 'home' => MV_TEST_TENANT_CODE, 'target' => MV_TEST_TENANT2_CODE, 'otpAt' => time(), 'exp' => time() - 1], 'une-session'),
+            'pass_session' => $service->issue(['entry' => 1, 'mode' => 'agency', 'home' => MV_TEST_TENANT_CODE, 'target' => MV_TEST_TENANT2_CODE, 'otpAt' => time()], 'la-session-d-un-autre'),
             'pass_malformed' => 'pas-un-laissez-passer',
         ] as $reason => $forged) {
             $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin/entree?tenant=' . MV_TEST_TENANT2_CODE, ['pass' => $forged], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
             $this->assertSame(403, $this->client->getResponse()->getStatusCode(), $reason);
             $this->assertStringContainsString($reason, (string) $this->client->getResponse()->getContent());
         }
+        // usage unique, à session égale : la seconde présentation est refusée
+        $once = $service->issue(['entry' => 1, 'mode' => 'agency', 'home' => MV_TEST_TENANT_CODE, 'target' => MV_TEST_TENANT2_CODE, 'otpAt' => time()], 'meme-session');
+        $this->assertSame(1, $service->consume($once, MV_TEST_TENANT2_CODE, 'meme-session')['entry']);
+        try {
+            $service->consume($once, MV_TEST_TENANT2_CODE, 'meme-session');
+            $this->fail('un laissez-passer ne sert qu\'une fois');
+        } catch (\App\Services\Entry\EntryException $e) {
+            $this->assertSame('pass_replayed', $e->reason);
+        }
         // un code vieux de plus de 12 heures : le laissez-passer est refusé au passage
-        $old = $service->issue(['entry' => 1, 'mode' => 'agency', 'home' => MV_TEST_TENANT_CODE, 'target' => MV_TEST_TENANT2_CODE, 'otpAt' => time() - 43201]);
+        $old = $service->issue(['entry' => 1, 'mode' => 'agency', 'home' => MV_TEST_TENANT_CODE, 'target' => MV_TEST_TENANT2_CODE, 'otpAt' => time() - 43201], 'une-session');
         $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin/entree?tenant=' . MV_TEST_TENANT2_CODE, ['pass' => $old], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
         $this->assertSame(403, $this->client->getResponse()->getStatusCode());
 
@@ -205,6 +216,84 @@ class AdminEntryTest extends WebTestCase
         // un module éteint : ses entrées quittent le menu du commerçant
         $this->pdo(MV_TEST_TENANT2_DB)->exec('UPDATE entreprise SET ' . FeatureCatalog::GOVERNED['module.memoires'] . ' = false');
         $this->assertStringNotContainsString('Mémoires Vivantes', $this->menu($this->page('GET', '/admin', MV_TEST_TENANT2_HOST)));
+    }
+
+    public function testTheOperatorIsJudgedOnWhatEasyAdminRunsAndReadsOnlyDuringAReadAssistance(): void
+    {
+        $this->agencyManaging();
+        $merchant = $this->user(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'commercant', ['ROLE_ADMIN'], 'Claire', false);
+        $hidden = $this->hiddenCostProduct();
+        $this->login($this->user(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'agence', ['ROLE_ADMIN', 'ROLE_AGENCY'], 'Julie', true), MV_TEST_TENANT_HOST, MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin/entree?tenant=' . MV_TEST_TENANT2_CODE, ['pass' => $this->passFor(MV_TEST_TENANT2_CODE)], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
+        $this->assertSame(302, $this->client->getResponse()->getStatusCode());
+        // le site a l'assistant (sinon la console n'est servie à personne) : l'opérateur ne la reçoit pas pour autant
+        // (le droit posé à la main : le service resynchroniserait toutes les colonnes de modules du site, que l'essai a allumées)
+        $this->master->prepare("INSERT INTO tenant_entitlements (tenant_code, feature_key, source, status, granted_by, note) VALUES (?, 'ai.full', 'manual', 'active', 'essai', 'AG-3c')")->execute([MV_TEST_TENANT2_CODE]);
+        $product = rawurlencode('App\\Controller\\Admin\\ProductCrudController');
+        $this->assertStringNotContainsString('id="arkanoa-assistant"', $this->page('GET', '/admin?crudAction=index&crudControllerFqcn=' . $product, MV_TEST_TENANT2_HOST), 'pas de console de l\'assistant pour l\'opérateur');
+
+        // une page nommée se juge sur SON chemin ; jamais avec un écran CRUD ; jamais une route hors d'EasyAdmin
+        foreach ([
+            'GET /admin?routeName=admin_mon_site' => 'figures',
+            'GET /admin?crudAction=index&crudControllerFqcn=' . $product . '&routeName=admin_orders_todo' => 'ambiguous',
+            'GET /admin?routeName=api_site_features_get' => 'surface',
+            'POST /admin?routeName=admin_ouverture_site_action&routeParams%5Baction%5D=refermer' => 'storefront',
+            'POST /admin?crudAction=batchDelete&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\ColorCrudController') => 'batch',
+        ] as $request => $reason) {
+            [$method, $path] = explode(' ', $request);
+            $this->client->request($method, 'https://' . MV_TEST_TENANT2_HOST . $path, $method === 'POST' ? ['entityFqcn' => 'App\\Entity\\Reservation', 'batchActionEntityIds' => [1]] : [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
+            $this->assertSame(403, $this->client->getResponse()->getStatusCode(), $request);
+            $this->assertStringContainsString($reason, (string) $this->client->getResponse()->getContent(), $request);
+        }
+        // une action par lot, même sans les champs de lot dans le corps
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin?crudAction=batchDelete&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\ColorCrudController'), ['x' => '1'], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
+        $this->assertSame(403, $this->client->getResponse()->getStatusCode());
+        $this->assertStringContainsString('batch', (string) $this->client->getResponse()->getContent());
+        $this->page('GET', '/admin?routeName=admin_aide', MV_TEST_TENANT2_HOST); // une page de construction par son nom : ouverte
+
+        // un champ fermé ne se cherche ni ne se trie
+        $this->assertStringNotContainsString($hidden['name'], $this->page('GET', '/admin?crudAction=index&crudControllerFqcn=' . $product . '&query=' . $hidden['cost'], MV_TEST_TENANT2_HOST), 'le coût d\'achat ne se cherche pas');
+        $this->assertStringContainsString($hidden['name'], $this->page('GET', '/admin?crudAction=index&crudControllerFqcn=' . $product . '&query=' . rawurlencode($hidden['name']), MV_TEST_TENANT2_HOST));
+        $this->page('GET', '/admin?crudAction=index&crudControllerFqcn=' . $product . '&sort%5BpurchasePrice%5D=DESC', MV_TEST_TENANT2_HOST); // tri écarté, page servie
+
+        // assistance « clients » en CONSULTATION : la liste se lit, une action GET qui écrit ou exporte est refusée
+        static::getContainer()->get(\App\Services\Agency\Assistance\AssistanceService::class)->request(MV_TEST_TENANT2_CODE, 'clients', 'read', $merchant);
+        $this->page('GET', '/admin?crudAction=index&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\ReservationCrudController'), MV_TEST_TENANT2_HOST);
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT2_HOST . '/admin?crudAction=exportCsv&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\FormSubmissionCrudController'), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
+        $this->assertSame(403, $this->client->getResponse()->getStatusCode(), 'une action d\'EasyAdmin autre qu\'une liste ou une fiche est une écriture');
+    }
+
+    public function testThePlatformAccountEntersFromTheSelectorSeesItsEntryAndQuitsIt(): void
+    {
+        $platform = $this->user(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'plateforme', ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'], 'Plateforme', true);
+        $this->user(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'plateforme', ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'], 'Plateforme', true);
+        $this->login($platform, MV_TEST_TENANT_HOST, MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $this->assertStringContainsString('Tous les sites', $this->page('GET', '/admin', MV_TEST_TENANT_HOST));
+        $pass = $this->passFor(MV_TEST_TENANT2_CODE);
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin/entree?tenant=' . MV_TEST_TENANT2_CODE, ['pass' => $pass], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
+        $this->assertSame(302, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
+        $home = $this->page('GET', '/admin', MV_TEST_TENANT2_HOST);
+        $this->assertStringContainsString('data-entry-banner', $home, 'l\'entrée se voit');
+        $this->assertSame('super_admin', $this->master->query('SELECT mode FROM site_entries ORDER BY id DESC LIMIT 1')->fetchColumn());
+        $token = $this->csrf($home, 'form[action="/admin/entree/quitter"] input[name="_token"]');
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin/entree/quitter', ['_token' => $token], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
+        $this->assertSame(302, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
+        $this->assertSame('left', $this->master->query('SELECT ended_reason FROM site_entries ORDER BY id DESC LIMIT 1')->fetchColumn());
+    }
+
+    /** @return array{name: string, cost: string} un article du second site au coût d'achat reconnaissable */
+    private function hiddenCostProduct(): array
+    {
+        $provider = static::getContainer()->get(TenantEntityManagerProvider::class);
+        $provider->switchTenant(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE);
+        $em = $provider->getEntityManager();
+        $name = 'Cout-cache-' . $this->tag;
+        $em->persist((new \App\Entity\Product())->setName($name)->setSlug('entree-ea-' . $this->tag)->setPrice(1990)->setPurchasePrice(987654)->setIsWeb(true)->setSaleEnabled(true));
+        $em->flush();
+        $em->clear();
+        $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+
+        return ['name' => $name, 'cost' => '987654'];
     }
 
     private function agencyManaging(): int
@@ -280,6 +369,7 @@ class AdminEntryTest extends WebTestCase
     private function clean(): void
     {
         $this->master->exec('DELETE FROM assistance_grants');
+        $this->master->prepare("DELETE FROM tenant_entitlements WHERE tenant_code = ? AND feature_key = 'ai.full' AND granted_by = 'essai'")->execute([MV_TEST_TENANT2_CODE]);
         $this->master->exec('DELETE FROM site_entries');
         foreach (['agency_events', 'agency_sites'] as $table) {
             $this->master->exec("DELETE FROM $table");
@@ -288,6 +378,7 @@ class AdminEntryTest extends WebTestCase
         $this->master->exec('DELETE FROM agencies');
         foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
             $this->pdo($db)->exec("DELETE FROM otp_code WHERE user_otp_id IN (SELECT id FROM \"user\" WHERE email LIKE 'entree-ea-%@example.invalid')");
+            $this->pdo($db)->exec("DELETE FROM product WHERE slug LIKE 'entree-ea-%'");
             $this->pdo($db)->exec("DELETE FROM \"user\" WHERE email LIKE 'entree-ea-%@example.invalid'");
             $this->pdo($db)->exec("DELETE FROM content_audit_log WHERE resource = 'external_access'");
         }

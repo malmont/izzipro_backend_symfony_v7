@@ -24,14 +24,38 @@ final class AdminFieldGuard implements AuthorizationCheckerInterface
 {
     /** Écran du registre => propriétés retirées à l'opérateur (inventaire `ScreenRegistry::SENSITIVE`, et la fiche du site comme dans l'API) */
     public const FIELDS = [
-        'admin.catalogue' => ['purchasePrice', 'coefficientMultiplier', 'commande'],
-        // l'adresse qui reçoit commandes et demandes, la devise, le fuseau et le découpage des périodes ; les adresses d'alerte ; le mode Stripe
-        'admin.entreprise' => ['email', 'currency', 'posTimezone', 'purchasePeriodFrequency', 'formSubmissionsEmail', 'posAlertsEmail', 'posStripeMode', 'password'],
+        'admin.catalogue' => ['purchasePrice', 'coefficientMultiplier', 'commande', 'commandeCostCents', 'commandeQuantity', 'commandeAttachedAt', 'commandeCostEstimated'],
+        // l'adresse qui reçoit commandes et demandes, la devise, le fuseau et le découpage des périodes ; les adresses d'alerte ; le mode Stripe ;
+        // relecture d'AG-3c : conservation des données, comptes comptables, appartenance aux applications, niveau des courriels (hors construction)
+        'admin.entreprise' => ['email', 'currency', 'posTimezone', 'purchasePeriodFrequency', 'formSubmissionsEmail', 'posAlertsEmail', 'posStripeMode', 'password',
+            'dataRetentionYears', 'retentionWriteMode', 'accountingAccounts', 'appMembershipMode', 'notificationLevel'],
         'admin.vitrine' => ['candidatures'],
         'admin.commandes-reglages' => ['orders', 'payments'],
         'admin.taxes' => ['orderTaxes'],
-        'admin.ia' => ['promptExcerpt', 'user'],
+        // relecture d'AG-3c : le résumé de la réponse (commandes, clients, chiffres), son issue et la clé de mémoire
+        'admin.ia' => ['promptExcerpt', 'user', 'summary', 'outcome', 'memoryKey'],
     ];
+    /** Relecture d'AG-3c : préfixes fermés de l'écran (la consigne : jamais la caisse ; tout l'onglet Caisse de la fiche du site) */
+    public const PREFIXES = ['admin.entreprise' => ['pos']];
+
+    /** Le champ (ou `association.champ`) est-il fermé à l'opérateur sur cet écran ? Sert à l'affichage, à la recherche et au tri */
+    public static function hidden(?string $screen, string $property): bool
+    {
+        if ($screen === null) {
+            return true;
+        }
+        $head = explode('.', $property)[0];
+        if (in_array($head, self::FIELDS[$screen] ?? [], true)) {
+            return true;
+        }
+        foreach (self::PREFIXES[$screen] ?? [] as $prefix) {
+            if (str_starts_with($head, $prefix) && strlen($head) > strlen($prefix) && ctype_upper($head[strlen($prefix)])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     public function __construct(
         #[AutowireDecorated] private readonly AuthorizationCheckerInterface $inner,
@@ -45,7 +69,7 @@ final class AdminFieldGuard implements AuthorizationCheckerInterface
         if ($attribute === Permission::EA_VIEW_FIELD && $subject instanceof FieldDto && $this->security->getUser() instanceof ExternalOperator) {
             $screen = $this->screen();
             // un écran que le registre ne connaît pas : aucun champ (la garde du mode l'a déjà fermé)
-            if ($screen === null || in_array($subject->getProperty(), self::FIELDS[$screen] ?? [], true)) {
+            if (self::hidden($screen, $subject->getProperty())) {
                 return false;
             }
         }

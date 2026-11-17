@@ -73,7 +73,7 @@ class AdminEntryController extends AbstractController
             return $this->refusal((string) ($e->reason ?? $e->errorCode));
         }
         $pass = $this->passes->issue(['entry' => $opened['entry'], 'mode' => $opened['mode'], 'home' => $home, 'target' => $opened['site'], 'otpAt' => time() - $age]
-            + ($opened['account'] !== null ? ['account' => $opened['account'], 'email' => (string) $opened['email']] : []));
+            + ($opened['account'] !== null ? ['account' => $opened['account'], 'email' => (string) $opened['email']] : []), $request->getSession()->getId());
 
         $response = $this->render('admin/entree/passage.html.twig', ['action' => AdminPassAuthenticator::PATH . '?tenant=' . rawurlencode($opened['site']), 'pass' => $pass,
             'site' => $opened['site'], 'operator' => $opened['operator']]);

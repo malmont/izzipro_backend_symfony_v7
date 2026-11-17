@@ -46,13 +46,30 @@ abstract class BaseTenantCrudController extends AbstractCrudController
      * Un tri demandé dans l'adresse sur une colonne sans ordre possible (JSON, association vue du côté inverse) est écarté : la liste
      * s'affiche avec ses autres tris, au lieu d'une erreur de la base (`UnsortableFieldConfigurator`).
      */
+    /**
+     * Relecture d'AG-3c : la suppression par lot lit l'entité visée dans le CORPS du formulaire (`entityFqcn`) ; sans ce contrôle, une liste de
+     * couleurs supprimait une réservation ou un client. Seule l'entité de CET écran se supprime par lot, pour tout compte.
+     */
+    public function batchDelete(\EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext $context, \EasyCorp\Bundle\EasyAdminBundle\Dto\BatchActionDto $batchActionDto): \Symfony\Component\HttpFoundation\Response
+    {
+        if ($batchActionDto->getEntityFqcn() !== static::getEntityFqcn()) {
+            throw new \Symfony\Component\Security\Core\Exception\AccessDeniedException('Suppression par lot d\'une autre entité que celle de l\'écran.');
+        }
+
+        return parent::batchDelete($context, $batchActionDto);
+    }
+
     public function createIndexQueryBuilder(SearchDto $searchDto, EntityDto $entityDto, FieldCollection $fields, FilterCollection $filters): QueryBuilder
     {
         // Lot SECRETS-1 (16/11/2026) : ni la recherche ni le tri ne portent sur une colonne de secret ou d'empreinte. Sans champs de
         // recherche déclarés, EasyAdmin cherche dans TOUTES les colonnes de la table, affichées ou non : un fragment tapé dans la
         // recherche disait si un jeton de réinitialisation ou un mot de passe de serveur d'envoi le contenait. Les colonnes cherchées
         // sont donc toujours une liste explicite, sans les secrets (`SecretKeys::unsearchable`).
-        $hidden = static fn (string $property): bool => \App\Security\SecretKeys::unsearchable($property);
+        // Relecture d'AG-3c : pour l'opérateur d'une agence entrée, les champs fermés de l'écran ne se cherchent ni ne se trient (une égalité
+        // exacte ou un tri par le coût d'achat le dirait sans l'afficher)
+        $operator = $this->getUser() instanceof \App\Security\Entry\ExternalOperator;
+        $screen = \App\Services\Screens\ScreenRegistry::adminCrud(static::class);
+        $hidden = static fn (string $property): bool => \App\Security\SecretKeys::unsearchable($property) || ($operator && \App\Security\Entry\AdminFieldGuard::hidden($screen, $property));
         $sort = self::safeSort($searchDto->getSort(), fn (string $property): bool => $hidden($property) || \App\Services\Admin\UnsortableFieldConfigurator::isUnsortable($entityDto, $property));
         $configured = $searchDto->getSearchableProperties();
         $searchable = array_values(array_filter($configured === null || $configured === [] ? $entityDto->getClassMetadata()->getFieldNames() : $configured, static fn (string $property): bool => !$hidden($property)));
