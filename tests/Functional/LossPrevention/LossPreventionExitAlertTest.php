@@ -297,9 +297,11 @@ class LossPreventionExitAlertTest extends LossPreventionTestCase
     /** Relecture 2 : une base passée par la première version du lot garde un index sans COALESCE ; la migration le remplace, et son script la suit */
     public function testTheMigrationReplacesAnIndexOfTheOldShapeAndItsScriptCarriesTheSameStatements(): void
     {
+        require_once dirname(__DIR__, 3) . '/migrations/Version20270129100000.php';
         $shape = fn (): string => (string) $this->db->fetchOne("SELECT indexdef FROM pg_indexes WHERE schemaname = current_schema() AND indexname = 'uniq_loss_alert_minute'");
         $this->db->beginTransaction();
         try {
+            $this->db->executeStatement('DELETE FROM loss_alert'); // des alertes d'exercice de la même minute (gérants différents) empêcheraient l'ancienne forme
             $this->db->executeStatement('DROP INDEX uniq_loss_alert_minute');
             $this->db->executeStatement('CREATE UNIQUE INDEX uniq_loss_alert_minute ON loss_alert (exercise, zone, minute)');
             $this->assertStringNotContainsStringIgnoringCase('coalesce', $shape());
