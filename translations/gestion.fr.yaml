@@ -1146,6 +1146,7 @@ console:
         pertes_pieces: 'Pièces et puces'
         pertes_installation: 'Installation des étiquettes à puce'
         pertes_boitiers: 'Boîtiers de la boutique'
+        pertes_alertes: 'Alertes de sortie'
         pertes_impressions: 'Impressions de puces'
         accueil: 'Accueil de la gestion'
         journee: 'Ma journée'

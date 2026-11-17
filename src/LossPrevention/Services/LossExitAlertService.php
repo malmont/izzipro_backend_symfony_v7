@@ -58,7 +58,7 @@ class LossExitAlertService
     /** Une lecture à la sortie vient d'arriver : son contrôle part dans `DELAY_SECONDS` (`$requestedBy` : l'exercice d'un administrateur) */
     public function schedule(int $eventId, ?int $requestedBy = null): void
     {
-        $this->bus->dispatch(new CheckLossExitMessage($eventId, (string) $this->tenants->getCurrentTenantCode(), $requestedBy),
+        $this->bus->dispatch(new CheckLossExitMessage($eventId, (string) $this->tenants->getCurrentTenantCode(), $requestedBy, time() + self::DELAY_SECONDS),
             [new DelayStamp(self::DELAY_SECONDS * 1000), new TransportNamesStamp([self::TRANSPORT])]);
     }
 

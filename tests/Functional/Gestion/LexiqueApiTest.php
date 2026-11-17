@@ -613,7 +613,7 @@ class LexiqueApiTest extends WebTestCase
         $dir = static::getContainer()->getParameter('kernel.project_dir') . '/translations';
         $files = ['fr' => Yaml::parseFile("$dir/ecrans.fr.yaml"), 'en' => Yaml::parseFile("$dir/ecrans.en.yaml")];
         $this->assertSame(array_keys($files['fr']), array_keys($files['en']));
-        $this->assertCount(47, $guides->codes(), 'les 36 écrans relevés dans l\'application web, les 5 de la prévention des pertes (lot L1-b), celui de ses exercices (lot EX-1), ceux des pièces et de l\'installation (lots L2-a et L2-b), la liste des rapports (lot DOC-2), les boîtiers (lot L3-a) et les impressions de puces (lot L3-c)');
+        $this->assertCount(48, $guides->codes(), 'les 36 écrans relevés dans l\'application web, les 5 de la prévention des pertes (lot L1-b), celui de ses exercices (lot EX-1), ceux des pièces et de l\'installation (lots L2-a et L2-b), la liste des rapports (lot DOC-2), les boîtiers (lot L3-a), les impressions de puces (lot L3-c) et les alertes de sortie (lot L5-d)');
         $linked = 0;
         foreach (array_keys(ConsoleScreens::SCREENS) as $code) {
             $this->assertTrue($guides->has($code), "$code : un guide (le sien, ou celui de l'écran du web qu'il reprend)");

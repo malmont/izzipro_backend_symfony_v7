@@ -1142,6 +1142,7 @@ console:
         pertes_pieces: 'Pieces and tags'
         pertes_installation: 'Tag label installation'
         pertes_boitiers: 'Shop boxes'
+        pertes_alertes: 'Exit alerts'
         pertes_impressions: 'Tag printing'
         accueil: 'Management home'
         journee: 'My day'
