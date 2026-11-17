@@ -253,12 +253,16 @@ class EntryTest extends WebTestCase
         $this->assertSame([409, 'ENTRY_UNAVAILABLE'], $this->enterRefusal($home, MV_TEST_TENANT2_CODE));
         $this->account(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'plateforme', ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'], 'Plateforme');
         $entered = $this->enter($home, MV_TEST_TENANT2_CODE);
-        $this->assertSame(['super_admin', $email], [$entered['mode'], $entered['operator']]);
+        $this->assertSame(['super_admin', 'Plateforme, Plateforme'], [$entered['mode'], $entered['operator']], 'jamais une adresse dans le libellé de la plateforme');
         // tous ses écrans de site, sans la garde du mode agence
         $response = $this->request('GET', '/api/gestion/journee', $entered['token']);
         $this->assertNotSame(403, $response->getStatusCode(), (string) $response->getContent());
         $this->assertNotSame(401, $response->getStatusCode());
-        $this->assertSame($email, $this->pdo(MV_TEST_TENANT2_DB)->query("SELECT user_identifier FROM content_audit_log WHERE resource = 'external_access' ORDER BY id DESC LIMIT 1")->fetchColumn());
+        $this->assertSame('Plateforme, Plateforme', $this->pdo(MV_TEST_TENANT2_DB)->query("SELECT user_identifier FROM content_audit_log WHERE resource = 'external_access' ORDER BY id DESC LIMIT 1")->fetchColumn());
+        // le nom d'une agence qui commence par « Agence » ne la répète pas
+        $this->assertSame(["Agence d'essai, Julie", 'Agence Atelier, Julie', 'AGENCE Nord', 'Agence ?'], [\App\Security\Entry\ExternalOperator::label("Agence d'essai", 'Julie'),
+            \App\Security\Entry\ExternalOperator::label('Atelier', 'Julie'), \App\Security\Entry\ExternalOperator::label('AGENCE Nord', ''), \App\Security\Entry\ExternalOperator::label('', '')]);
+        $this->assertSame('Agence Agencement Pro', \App\Security\Entry\ExternalOperator::label('Agencement Pro', ''), 'un nom qui commence par « Agencement » garde le mot « Agence »');
         // … il n'écrit rien sur un compte (profil, adresse, mot de passe : une telle écriture rendrait un jeton ordinaire)
         $this->assertSame([403, 'account'], $this->reason('PATCH', '/api/profile', $entered['token'], ['firstname' => 'Autre']));
         // … et lui non plus n'obtient pas d'entrée depuis une entrée

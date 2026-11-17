@@ -36,7 +36,18 @@ final class ExternalOperator implements UserInterface
         $agency = $clean($agencyName, 80);
         $first = $clean($firstName, 40);
 
-        return 'Agence ' . ($agency !== '' ? $agency : '?') . ($first !== '' ? ', ' . $first : '');
+        // un nom qui commence déjà par « Agence » ne la répète pas (« Agence d'essai », pas « Agence Agence d'essai ») ; correction du 17/11/2026
+        $named = $agency === '' ? 'Agence ?' : (preg_match('/^agence\b/iu', $agency) === 1 ? $agency : 'Agence ' . $agency);
+
+        return $named . ($first !== '' ? ', ' . $first : '');
+    }
+
+    /** L'entrée du compte de la plateforme, telle que le commerçant la lit : « Plateforme », suivi du prénom ; jamais une adresse */
+    public static function platformLabel(string $firstName): string
+    {
+        $first = mb_substr(trim((string) preg_replace('/\s+/u', ' ', (string) preg_replace('/[\x00-\x1F\x7F@]/u', ' ', $firstName))), 0, 40);
+
+        return 'Plateforme' . ($first !== '' ? ', ' . $first : '');
     }
 
     public function getUserIdentifier(): string

@@ -93,7 +93,7 @@ class EntryService
             }
             $id = $this->entries->open(self::MODE_SUPER_ADMIN, $home, $site['code'], (int) $account->getId(), (string) $account->getEmail(), $firstName, null, null, $expires);
             $payload = ['username' => $platform['email'], 'id' => $platform['id'], 'email' => $platform['email'], 'roles' => $platform['roles']];
-            $label = $platform['email'];
+            $label = ExternalOperator::platformLabel($firstName); // jamais une adresse au journal du site visé (17/11/2026)
             $mode = self::MODE_SUPER_ADMIN;
             $agencyName = null;
         } elseif (AgencyRoles::has($roles)) {

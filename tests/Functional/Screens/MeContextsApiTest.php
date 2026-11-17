@@ -36,6 +36,8 @@ class MeContextsApiTest extends WebTestCase
     protected function setUp(): void
     {
         $this->client = static::createClient();
+        // les écrans suivent les modules ACTIFS en mode « live » ; en « demo », rien n'est refusé (essai plus bas)
+        static::getContainer()->get(\App\Services\Platform\PlatformModeService::class)->setMode('live', 'test');
         $this->master = static::getContainer()->get(TenantConnectionManager::class)->getPdoMaster();
         $this->tag = bin2hex(random_bytes(3));
         $this->clean();
@@ -59,6 +61,7 @@ class MeContextsApiTest extends WebTestCase
             }
         }
         $this->clean();
+        static::getContainer()->get(\App\Services\Platform\PlatformModeService::class)->setMode('demo', 'test');
         parent::tearDown();
     }
 
@@ -108,6 +111,10 @@ class MeContextsApiTest extends WebTestCase
         $this->assertSame([403, 'SUPPORT_SCOPE_ONLY'], $this->refusal('/api/profile', $support));
         $this->modules(MV_TEST_TENANT_DB, ['module.support' => false]);
         $this->assertSame([], $this->contexts($support)['sites'][0]['screens'], 'module Assistance éteint : plus d\'écran');
+        // en mode « demo » de la plateforme, comme la garde des modules qui n'y refuse rien : l'écran reste (17/11/2026)
+        static::getContainer()->get(\App\Services\Platform\PlatformModeService::class)->setMode('demo', 'test');
+        $this->assertSame(['assistance', 'assistance.demande'], $this->contexts($support)['sites'][0]['screens'], 'mode demo : module éteint mais servi');
+        static::getContainer()->get(\App\Services\Platform\PlatformModeService::class)->setMode('live', 'test');
         $this->modules(MV_TEST_TENANT_DB, ['module.support' => true]);
 
         // UNE AGENCE : le premier site de test est son attache, elle gère le second

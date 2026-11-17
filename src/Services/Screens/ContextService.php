@@ -39,6 +39,7 @@ class ContextService
         private readonly PlatformSiteService $platformSites,
         private readonly SiteSnapshotReader $snapshots,
         private readonly RoleHierarchyInterface $hierarchy,
+        private readonly ?\App\Services\Platform\PlatformModeService $platformMode = null,
     ) {
     }
 
@@ -104,6 +105,8 @@ class ContextService
 
         return ['code' => $site['code'], 'name' => $site['name'], 'host' => $site['host'], 'current' => $site['code'] === $current, 'badges' => $this->team ? $badges : [],
             'state' => $snapshot['state'], 'scope' => $snapshot['scope'], 'modules' => $this->team ? array_keys(array_filter($snapshot['modules'])) : [],
-            'screens' => ScreenRegistry::visible($families, $snapshot['modules'], $hasRole)];
+            // la règle de la garde des modules (ModuleAccessSubscriber) : en mode « demo » de la plateforme, rien n'est refusé, un module compte
+            // donc comme actif pour les écrans (la famille, construction pour l'agence, reste au-dessus) ; `modules` dit toujours l'état réel
+            'screens' => ScreenRegistry::visible($families, ($this->platformMode?->isDemo() ?? false) ? array_map(static fn (): bool => true, $snapshot['modules']) : $snapshot['modules'], $hasRole)];
     }
 }
