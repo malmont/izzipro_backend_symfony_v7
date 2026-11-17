@@ -2513,3 +2513,194 @@ Risque ordinaire (§ 17.9) : je me vérifie, avec mutations. **À coder sous Opu
 - **Écart de choix** : la table des pièces d'un comptage garde TOUTES les pièces attendues (lues ou non), pas seulement les absences :
   c'est ce qui dit « le comptage précédent qui la couvrait ».
 
+
+## 18. Lot L5 : alertes et avis de l'IA (PLAN, SANS CODE, 17/11/2026 ; à valider par le chef de projet puis par le propriétaire)
+
+Demande du chef de projet du 17/11/2026. L5 apporte trois choses : une **alerte à la sortie** en temps réel, une **alerte en caisse**
+qui s'appuie sur la route déjà en ligne, et un **avis de l'IA** sur un constat, avec un pourcentage calculé par le serveur. Il traite
+aussi trois réserves déjà notées. Il reste dans les limites du § 1 : aucune suite automatique ; jamais une personne nommée dans une
+alerte ; jamais de reconnaissance des visages, de son enregistré, de caméra en cabine ni d'analyse de gestes. La caméra et ses
+extraits restent avec L3-d, après l'avis de l'avocat : L5 prévoit seulement la porte d'entrée (18.3). L6 (offre, étapes d'EasyAdmin,
+vente du boîtier) vient après.
+
+### 18.1 Ce que L5 apporte, et ce qu'il n'apporte pas
+
+- **Apporte** : une alerte au gérant quand une pièce passe la sortie sans vente probable, quelques minutes après (pas au jugement
+  du constat, qui attend le rattrapage) ; l'affichage en caisse des articles suivis non lus, avant le paiement ; un avis de l'IA,
+  demandé par le gérant sur la fiche d'un constat ; un constat classé qui grossit fortement se signale de nouveau, une fois ; un
+  jeton du boîtier mieux protégé ; le changement du mot de passe des puces, après l'essai du matériel.
+- **N'apporte pas** : aucune sonnerie ni lumière au portique (question 2) ; aucune vente bloquée ; aucune alerte au caissier sur une
+  personne ; aucun avis de l'IA sur une règle « par personne » (question 8) ; aucune lecture d'un extrait vidéo par l'IA (L3-d,
+  après l'avocat) ; aucune décision prise par l'IA ; aucun courriel en temps réel.
+
+### 18.2 Les alertes
+
+**Règles communes à toute alerte.**
+
+- **Jamais nominative** : une alerte dit l'article (nom, variante), la zone, l'heure du magasin et le poste de caisse s'il y en a un.
+  Elle ne porte jamais le nom, le rôle ni l'identifiant d'une personne, même pas « le caissier en poste ». Garde-fou : un test lit
+  chaque alerte (texte, données de la notification, ligne du journal) et échoue s'il y trouve un nom, un courriel ou un
+  identifiant de compte.
+- **Une alerte n'est pas un constat** : elle annonce une chose à vérifier tout de suite ; le constat naît ou non plus tard, par
+  l'analyse, avec ses preuves. L'alerte est écrite au journal du module (`ALERT_SENT`, sans nom) et la fiche du constat qui en
+  naît dit « alerte envoyée à 14 h 32 ».
+- **Pièces d'exercice** : alerte d'exercice, marquée telle, envoyée seulement au gérant qui a lancé l'exercice ; jamais comptée
+  dans le plafond.
+- **Rien ne part quand l'analyse est arrêtée** (droit du module retiré, notice exigée et non confirmée), comme le résumé du jour.
+
+**A. Alerte à la sortie** (pièce lue à la sortie ou à la porte arrière, sans vente probable).
+
+- **Quand** : une **pré-alerte**, pas le jugement du constat. À l'arrivée d'un lot de faits (le boîtier envoie sa file à chaque
+  tour de service, en quelques secondes), chaque arrivée `exit` ou `back_door` d'une vraie pièce en service, non redite (`repeat`),
+  part dans une file Messenger avec un délai (proposition : **2 minutes**, question 3). À l'échéance, un contrôle léger, sans
+  passer par l'analyse entière : la pièce n'est pas vendue, aucune vente de sa variante n'attend de pièce (caisse depuis
+  15 minutes, commande web payée de la fenêtre web), aucune location du jour ne l'explique, la boutique est ouverte ou non (les deux
+  alertent, avec un texte différent). Si tout cela tient, l'alerte part. Le constat « sortie sans vente » reste jugé après le
+  rattrapage (§ 17.13), indépendamment.
+- **Canal** : notification sur téléphone de l'application de gestion (`PushSenderInterface` ; Firebase n'est pas encore branché :
+  tant qu'il ne l'est pas, le journal note `not_configured` et l'alerte n'est visible que dans l'application) ; et une liste en
+  direct dans l'application, `GET /api/gestion/pertes/alertes?since=` (lecture, l'écran la relit toutes les 30 secondes), qui
+  garde les alertes du jour. **Jamais par courriel** (trop lent pour servir ; le bilan du soir les compte déjà).
+- **Niveaux (lot NOTIF)** : type nouveau `loss_exit`, classé **urgent** (question 1) : il part à partir du niveau « Essentiel »,
+  rien au niveau « Aucune », coupable par gérant dans « Avancé ». **Plafond propre** : 3 alertes de sortie par jour du magasin et
+  par gérant (proposition) ; au-delà, plus de notification, la liste en direct continue et la dernière notification dit
+  « d'autres sorties ce jour : voir la liste ». Les alertes sont regroupées : plusieurs pièces dans la même minute et la même
+  zone font une seule alerte (« 3 articles à la sortie »).
+- **À qui** : les administrateurs du site (le module est réservé à `ROLE_ADMIN`, § 2), sauf le compte de la plateforme. Pas le
+  responsable de caisse ni le caissier (question 4).
+- **Heures** : la règle « rien avant 8 h » des courriels ne s'applique pas à une alerte (elle n'a de sens que tout de suite) ; hors
+  des heures d'ouverture, elle part aussi (c'est le cas le plus grave), sauf si le gérant l'a coupée pour la nuit (réglage
+  `exitAlerts.night`, allumé par défaut, question 5).
+
+**B. Alerte en caisse** (article suivi du panier non lu sur le tapis, avant le paiement).
+
+- **Déjà en ligne** : `POST /api/pos/pertes/articles-non-lus` (lot L3-b1, § 16.15) rend `unread` avant le paiement et dit
+  `active: false` quand il ne peut pas juger. L5 n'en change pas la réponse ; il allume l'**affichage** en caisse.
+- **Réglage** `cashierAlerts` (forme réservée au § 7, `availableFrom: "L5"`) : `allowed` par pays et région ; **proposition :
+  permis partout**, car l'alerte parle d'un article et jamais d'une personne ; `enabled` **éteint par défaut**, le gérant l'allume
+  (question 6). La route rend en plus `display: true | false` : la caisse n'affiche le message que si `display` est vrai.
+- **Ce que voit le caissier** : « 2 articles suivis non lus : posez-les sur le tapis », la liste des articles (nom, variante,
+  quantité manquante), un bouton « Relire » et un bouton « Continuer quand même ». **Le paiement n'est jamais bloqué.** Aucun son.
+- **Ce qui est gardé** : la caisse renvoie une fois par vente `POST /api/pos/pertes/articles-non-lus/suite { cashRegisterId,
+  unreadCount, proceeded }` ; le serveur ne garde qu'un **compte par poste et par jour du magasin** (alertes montrées,
+  « continuer quand même »), jamais par personne ni par vente, et l'ajoute au bilan du soir. La règle « articles suivis vendus sans
+  lecture » (L3-b2b) reste la seule source des constats. Question 7.
+- **Contrat de la caisse** à envoyer par le chef à l'application de caisse (Flutter) avant le code : `display`, le message, les deux
+  boutons, la route de suite, et le comportement hors ligne (rien n'est affiché, rien n'est envoyé).
+
+**Délais** : alerte en caisse, la réponse de la route (déjà moins de 300 ms) ; alerte à la sortie, le délai de la pré-alerte
+(2 minutes) plus l'envoi au téléphone ; constat, inchangé (après le rattrapage).
+
+### 18.3 L'avis de l'IA sur un constat
+
+Forme déjà réservée (§ 6) : `opinion { percent | null, calibrated, measures, factors [{ label, effect }], summary, alternatives [],
+generatedAt, creditsUsed }`, aujourd'hui `null`.
+
+- **Le pourcentage est calculé par le serveur, jamais par l'IA** (décision 11 du § 12) : part des constats SEMBLABLES qui ont été
+  confirmés parmi ceux qui ont été tranchés (confirmés, expliqués, classés sans suite). « Semblable » : même règle, même site,
+  12 derniers mois, même gravité (proposition). Il n'est donné que s'il y a au moins **20 cas tranchés** (proposition, question 9) ;
+  sinon `percent: null` et « pas assez de cas tranchés pour estimer ». Toujours avec la mention « estimation non étalonnée »
+  (`calibrated: false`) tant que la plateforme n'a pas mesuré l'écart entre l'estimation et les décisions. **Jamais les constats
+  d'un autre site** (les décisions d'un autre client ne servent pas ici). `measures` dit sur quoi il repose (`{ similar, decided,
+  confirmed }`).
+- **Ce que l'IA lit** : la règle et son texte ; les nombres du constat (`facts`) ; les preuves, réduites à leur genre, leur heure du
+  magasin et leurs nombres (vente, retour, lecture de puce, zone, comptage) ; les nombres de `measures`. **Jamais une personne** :
+  ni nom, ni rôle, ni identifiant de compte, ni « qui était en poste », ni motif saisi à la caisse (texte libre). Garde-fou : un
+  test lit l'entrée envoyée au modèle et échoue s'il y trouve un nom, un courriel, un identifiant de compte ou un motif.
+- **Ce que l'IA écrit** : `summary` (ce que disent les preuves, en deux ou trois phrases), `factors` (ce qui pèse pour ou contre,
+  avec `effect` `up` | `down`), `alternatives` (les explications sans faute : erreur de caisse, pièce rangée près de la sortie,
+  retour mal saisi, antenne qui lit à travers une cloison). **Elle ne cite aucun nombre que le serveur ne lui a pas donné** (même
+  règle que la console W2, vérifiée par le serveur ; un texte qui en porte un autre est refusé et l'unité rendue).
+- **Ce qu'elle ne fait jamais** : désigner, soupçonner ou nommer quelqu'un ; proposer une sanction, un licenciement, une plainte,
+  une fouille ou une confrontation ; reconnaître un visage ; analyser un geste ; donner son propre pourcentage ; décider. Les
+  instructions du modèle le disent, et le serveur rejette un texte qui parle d'une personne ou d'une sanction (liste de mots
+  refusés, testée).
+- **Coût** : **1 unité IA par avis** (décision déjà notée au § 6), réservée à la demande, décomptée quand l'avis est rédigé,
+  rendue si l'IA échoue ou dépasse le délai ; mêmes refus que la console (403 `AI_NOT_INCLUDED`, 402 `AI_CREDITS_EXHAUSTED`,
+  429 `AI_DAILY_LIMIT`). **À la demande seulement** : bouton « Demander l'avis » sur la fiche (`POST
+  /api/gestion/pertes/constats/{id}/avis`), jamais automatique. Un avis reste attaché au constat ; quand une preuve nouvelle
+  arrive, la fiche dit « avis antérieur aux dernières preuves » et propose « Actualiser » (1 unité). Un avis d'exercice est servi
+  par le serveur sans appel au modèle, marqué « exemple », à 0 unité.
+- **Sa place dans la décision** : sous les preuves, jamais au-dessus ; titre « Avis indicatif : la décision vous appartient ».
+  Les boutons de décision ne dépendent pas de l'avis ; la note obligatoire de « confirmé » reste à écrire par le gérant (l'IA ne la
+  pré-remplit jamais). L'avis ne paraît ni dans la liste, ni dans le résumé du jour, ni dans une alerte. Le journal du module garde
+  `OPINION_REQUESTED` et `OPINION_WRITTEN` (constat, pourcentage, unités ; jamais le texte).
+- **Porte d'entrée de la caméra** : l'entrée envoyée au modèle porte une liste `sources`, où le genre `clip` est réservé et
+  aujourd'hui refusé par le serveur. Il ne s'ouvrira qu'avec L3-d, après l'avis de l'avocat. **À trancher alors** (question 13) : le
+  § 14, point 4, dit que l'IA « analyse l'extrait », le § 1 interdit l'analyse de gestes par vidéo ; lire un extrait sans analyser
+  aucun geste se limiterait à des faits sur l'objet (l'article est-il passé sur le tapis ?), et c'est à l'avocat d'en juger.
+
+### 18.4 Les trois réserves
+
+1. **Constat classé qui grossit** (note du § 16.19, rappelée au § 17.8) : aujourd'hui, un constat décidé ne porte que « du nouveau
+   depuis la décision », sans courriel ni vignette. **Proposition** : un constat `explained`, `dismissed` ou `watch` dont le nombre
+   principal (`facts`, celui qui compare au seuil) a **au moins doublé depuis la décision, avec au moins 3 de plus**, redevient
+   « nouveau » **une seule fois par décision** : il paraît dans le résumé du jour suivant (« a grossi depuis votre décision »), dans
+   la vignette, et son historique reçoit une ligne `GREW_SINCE_DECISION`. **Sa décision est gardée** : le gérant la confirme ou en
+   change. Un constat `confirmed` ne se signale pas de nouveau. Il faut garder le nombre au moment de la décision : une colonne
+   additive. Question 10.
+2. **Protection légère du jeton du boîtier** (§ 16.13 et § 16.20) : un jeton copié peut envoyer des faits et lire les travaux
+   d'impression, avec le mot de passe des puces, jusqu'à 24 heures. **Proposition** : jeton d'**une heure** (le signe de vie le
+   renouvelle déjà à mi-vie : aucun trou de service) ; **preuve de la machine exigée aussi sur `/faits` et `/travaux`**, comme
+   sur le signe de vie (le boîtier l'envoie déjà à l'inscription : un lot du boîtier, B8, l'ajoute à chaque appel) ; le mot de
+   passe des puces n'est rendu qu'avec cette preuve. Passage sans coupure : le serveur accepte les deux formes pendant une version du
+   boîtier, puis exige la preuve. Question 11.
+3. **Changement du mot de passe des puces, par rang** (§ 16.7) : **seulement après l'essai du matériel** (condition ferme : le
+   verrou de la zone de mise à mort vérifié sur une puce). **Proposition** : un geste de l'administrateur « changer le mot de passe
+   des puces » tire un rang nouveau ; les impressions suivantes l'utilisent ; une pièce déjà écrite garde le sien (connu par son
+   travail d'impression) et passe au rang nouveau quand elle est réimprimée (le boîtier ouvre la puce avec l'ancien, écrit le
+   nouveau, relit). Les anciens rangs restent rangés chiffrés tant qu'une pièce en service les porte. Rien d'automatique. Question 12.
+
+### 18.5 Découpage proposé
+
+| Sous-lot | Contenu | Risque |
+|---|---|---|
+| **L5-a** | alerte en caisse : `cashierAlerts` par pays, `display`, route de suite, compte par poste et par jour au bilan ; contrat de la caisse | ordinaire : je me vérifie, avec mutations |
+| **L5-b** | constat classé qui grossit (réserve 1) | ordinaire |
+| **L5-c** | avis de l'IA : pourcentage du serveur, entrée sans personne, texte vérifié, unités, journal, exercice, porte `clip` fermée | **à risque** (vie privée, IA) : relecteur neuf et mutations |
+| **L5-d** | alerte à la sortie : file avec délai, contrôle léger, type `loss_exit`, plafond, regroupement, liste en direct, exercice ; boîtier simulé | **à risque** (fausses alertes) : relecteur neuf |
+| **L5-e** | jeton d'une heure et preuve de la machine (réserve 2), avec le lot B8 du boîtier | **à risque** (sécurité) : relecteur neuf |
+| **L5-f** | changement du mot de passe des puces (réserve 3) | après l'essai du matériel |
+
+Une migration additive par sous-lot qui en a besoin (L5-a : compte par poste ; L5-b : nombre à la décision ; L5-c : avis ; L5-d :
+alertes du jour), annoncée au chaperon avec son empreinte. Tout se joue sans matériel (exercice et boîtier simulé). Le contrat de
+chaque sous-lot va au chef en dix lignes avant son code ; les routes nouvelles vont au web, à la caisse et au mobile avant la
+bascule. L5-d dépend de Firebase pour le téléphone (projet et clés à créer par le propriétaire) ; sans lui, il est servi par la
+liste en direct.
+
+### 18.6 Risques
+
+1. **Fausse alerte à la sortie, et confrontation** : un employé qui va au-devant d'un client innocent. Parades : pré-alerte
+   seulement après le contrôle léger, texte « à vérifier », jamais « vol », aucun son, plafond, et l'aide qui dit de ne jamais
+   retenir ni accuser un client sur une alerte (texte à faire relire par l'avocat).
+2. **L'IA prise pour un juge** : pourcentage du serveur seulement, mention « non étalonné », sous les preuves, à la demande,
+   jamais dans une liste ni une alerte.
+3. **Une personne qui fuit vers l'IA** : entrée sans aucun nom ni identifiant, testée ; aucun avis sur une règle par personne.
+4. **Trop d'alertes** : regroupement par minute et par zone, plafond par jour, coupure par gérant et pour la nuit.
+5. **Coût de l'IA** : 1 unité, à la demande, rendue en cas d'échec ; jamais en boucle.
+6. **Changement de jeton** : passage en deux temps pour qu'aucun boîtier ne tombe.
+
+### 18.7 Questions au propriétaire, avec la proposition
+
+1. **Alerte à la sortie : urgente ou de suivi ?** *Urgente (elle part au niveau « Essentiel »), avec son plafond propre de 3 par
+   jour et par gérant.*
+2. **Sonnerie ou lumière au portique ?** *Non en L5 : un signal public pousse à retenir un client, avec le risque d'une fausse
+   accusation ; à revoir avec l'avocat, et le boîtier n'a pas d'appareil pour cela.*
+3. **Délai de la pré-alerte** : *2 minutes après la lecture à la sortie.*
+4. **Qui reçoit l'alerte à la sortie** : *les administrateurs du site seulement ; le responsable de caisse plus tard si vous le
+   voulez.*
+5. **La nuit** : *l'alerte part aussi hors des heures d'ouverture ; le gérant peut la couper pour la nuit.*
+6. **Alerte en caisse par pays** : *permise partout (elle parle d'un article) ; éteinte par défaut, le gérant l'allume.*
+7. **« Continuer quand même » en caisse** : *compté par poste et par jour, au bilan du soir, jamais par personne ni par vente.*
+8. **Avis de l'IA sur une règle « par personne »** (permise aux États-Unis) : *non, jamais ; l'avis ne porte que sur les règles
+   par poste, par pièce, par zone ou par jour.*
+9. **Seuil du pourcentage** : *au moins 20 constats semblables tranchés sur le site en 12 mois ; sinon pas de pourcentage, seulement
+   le texte.*
+10. **Constat classé qui grossit** : *revient « nouveau » une fois quand son nombre a doublé, avec au moins 3 de plus ; sa décision
+    est gardée ; jamais pour un constat confirmé.*
+11. **Jeton du boîtier** : *une heure, et la preuve de la machine sur chaque appel, en deux temps.*
+12. **Mot de passe des puces** : *changement par l'administrateur seulement, après l'essai du matériel ; les pièces passent au
+    nouveau rang quand elles sont réimprimées.*
+13. **L'IA et l'extrait vidéo** (L3-d) : *rien en L5 ; à l'avocat de dire si une lecture limitée à l'objet est permise, au regard
+    de l'interdiction de l'analyse de gestes.*
+14. **Ordre** : *L5-a, L5-b, L5-c, L5-d, L5-e ; L5-f après l'essai du matériel.*
