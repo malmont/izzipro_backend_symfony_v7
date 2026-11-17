@@ -206,8 +206,9 @@ class TestSiteDataSeeder
 
             return;
         }
+        $existing = (int) $connection->fetchOne('SELECT COUNT(*) FROM booking b JOIN order_items oi ON oi.id = b.order_item_id JOIN "order" o ON o.id = oi.order_associated_id JOIN "user" u ON u.id = o.user_id_id WHERE u.email LIKE ?', [self::EMAIL_PREFIX . '%' . self::EMAIL_DOMAIN]);
         $made = 0;
-        for ($n = 0; $n < self::RENTALS; ++$n) {
+        for ($n = $existing; $n < self::RENTALS; ++$n) { // rejouable : seulement les réservations qui manquent
             $start = (new \DateTimeImmutable(sprintf('+%d days', 7 + 7 * $n)))->setTime(10, 0);
             $item = ['productVariantId' => (int) $rental['variant'], 'quantity' => 1,
                 'booking' => ['start' => $start->format('Y-m-d\TH:i:s'), 'end' => $start->modify('+1 day')->format('Y-m-d\TH:i:s'), 'rentalPackId' => (int) $rental['pack']]];
@@ -219,7 +220,7 @@ class TestSiteDataSeeder
                 $this->emProvider->getEntityManager()->clear();
             }
         }
-        $this->report[] = sprintf('Locations : %d réservations (sur %d visées)', $made, self::RENTALS);
+        $this->report[] = sprintf('Locations : %d réservations créées (%d existaient, %d visées)', $made, $existing, self::RENTALS);
     }
 
     /**
