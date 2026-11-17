@@ -9,12 +9,12 @@
     "clients": {
         "allowed": [
             "PATCH /api/form-submissions/{id}",
-            "POST /api/reservations/{id}/confirm",
             "PUT /api/contacts/{id}"
         ],
         "refused": [
             "DELETE /api/contacts/{id}",
-            "DELETE /api/form-submissions/{id}"
+            "DELETE /api/form-submissions/{id}",
+            "POST /api/reservations/{id}/confirm"
         ]
     },
     "commandes": {

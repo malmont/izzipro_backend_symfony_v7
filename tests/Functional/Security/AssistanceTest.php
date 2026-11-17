@@ -175,6 +175,23 @@ class AssistanceTest extends WebTestCase
         // l'agence DÉTACHÉE du site n'a plus rien, même une demande ouverte d'avant
         static::getContainer()->get(AgencyService::class)->detach($agencyId, MV_TEST_TENANT2_CODE, 'essai');
         $this->assertSame([], json_decode((string) $this->call('GET', '/api/agency/assistance', $member, null, MV_TEST_TENANT_HOST)->getContent(), true)['assistance'] ?? null);
+        $this->assertNotSame(200, $this->call('GET', '/api/orders', $operator)->getStatusCode(), 'l\'opérateur d\'une agence détachée ne lit plus rien');
+    }
+
+    /** Gestion en « modifier » : une écriture de la liste blanche passe, la console IA (unités du commerçant) non ; pertes : lecture seule */
+    public function testTheManagementWhitelistAndTheLossPreventionReadOnly(): void
+    {
+        $merchant = $this->account(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'commercant', ['ROLE_ADMIN'], 'Claire');
+        [, $operator] = $this->agencyInside();
+        $this->assertSame(201, $this->call('POST', '/api/site/assistance', $merchant, ['section' => 'gestion', 'mode' => 'write'])->getStatusCode());
+        $this->assertSame([403, 'assistance_closed'], $this->reason('POST', '/api/gestion/console/messages', $operator, ['question' => 'Mes ventes ?']), 'unités IA du commerçant');
+        $this->assertSame([403, 'assistance_closed'], $this->reason('GET', '/api/gestion/documents/999999/fichier/1', $operator), 'un fichier entier : export de fait');
+        $patched = $this->call('PATCH', '/api/fournisseurs/999999', $operator, ['name' => 'Essai']);
+        $this->assertNotSame('MODE_FORBIDDEN', json_decode((string) $patched->getContent(), true)['code'] ?? null, (string) $patched->getContent());
+
+        $this->assertSame(201, $this->call('POST', '/api/site/assistance', $merchant, ['section' => 'pertes'])->getStatusCode());
+        $this->assertNotSame(403, $this->call('GET', '/api/gestion/pertes/constats', $operator)->getStatusCode(), 'les pertes se lisent');
+        $this->assertSame([403, 'assistance_read_only'], $this->reason('PUT', '/api/gestion/pertes/reglages', $operator, []), 'décider ou régler reste au commerçant');
     }
 
     /**

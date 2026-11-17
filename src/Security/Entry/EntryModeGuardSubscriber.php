@@ -47,7 +47,7 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
      *  modules sont déjà dans CLOSED_PATHS) */
     private const ASSISTANCE_CLOSED = ['#(^|/)(users?|accounts?|comptes?|roles?|team-roles?)(/|$)#i',
         // des exports de fait : la liste des adresses des abonnés, le fichier entier d'un rapport
-        '#^/api/newsletter(/|$)#', '#/fichier$#'];
+        '#^/api/newsletter(/|$)#', '#/fichier(/|$)#'];
     private const WRITE = ['POST', 'PUT', 'PATCH', 'DELETE'];
     /** Fermés même dans la construction : expression du chemin => [méthodes (vide : toutes), raison] */
     private const CLOSED_PATHS = [
@@ -190,12 +190,12 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
 
             return $reason;
         }
-        $grant = $this->assistance->start($grant); // la première requête ACCEPTÉE ouvre la fenêtre d'une heure
         $operator->duringAssistance((int) $grant['id']);
         $traceId = $this->traceAssistance($request, $operator, $grant, $target, $write ? 'assistance_write' : 'assistance_read', null);
         if ($traceId === null) {
-            return 'assistance_trace'; // pas de lecture sans trace
+            return 'assistance_trace'; // pas de lecture sans trace (et la fenêtre ne s'ouvre pas)
         }
+        $grant = $this->assistance->start($grant); // la première requête ACCEPTÉE et tracée ouvre la fenêtre d'une heure
         $request->attributes->set(self::ASSISTANCE_ATTRIBUTE, ['id' => (int) $grant['id'], 'section' => (string) $grant['section'], 'screen' => $target, 'trace' => $traceId]);
 
         return null;

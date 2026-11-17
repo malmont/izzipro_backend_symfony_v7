@@ -123,7 +123,9 @@ class AssistanceService
             if (in_array($view['state'], [self::WAITING, self::ACTIVE], true)) {
                 $site = $this->agencies->tenant((string) $row['tenant_code']);
                 // l'agence ne lit que le prénom de la personne qui demande (jamais son adresse)
-                $first = str_contains($view['requestedBy'], '@') ? '' : (string) strtok($view['requestedBy'], ' ');
+                // (un seul mot : peut-être un nom de famille ; rien n'est donné)
+                $words = str_contains($view['requestedBy'], '@') ? [] : (preg_split('/\s+/u', trim($view['requestedBy'])) ?: []);
+                $first = count($words) >= 2 ? (string) $words[0] : '';
                 $out[] = ['site' => (string) $row['tenant_code'], 'siteName' => (string) ($site['name'] ?? $row['tenant_code'])] + ['requestedBy' => $first] + $view;
             }
         }

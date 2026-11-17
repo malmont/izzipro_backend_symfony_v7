@@ -328,12 +328,12 @@ fois) ; une demande sans requête dans les 24 h expire. Aucun minuteur.
 
 **Garde** (`EntryModeGuardSubscriber::assistanceRefused`, après la double relecture) : pour un écran hors construction (raison `family`),
 une assistance vivante (en cours avant en attente ; pour une écriture, « modifier » d'abord) de L'agence de l'opérateur, qui gère ENCORE ce
-site, pour une section de l'écran, sert la requête. Lecture : toujours, hors comptes et rôles, exports de fait (`/api/newsletter`, fichier
-d'un rapport) et `CLOSED_PATHS` (clés, export, Stripe, modules) → `assistance_closed`. Écriture : seulement en `write` (sinon
+site, pour une section de l'écran, sert la requête. Lecture : toujours, hors comptes et rôles, exports de fait (`/api/newsletter`, tout
+`/fichier` : rapport, justificatif d'un document) et `CLOSED_PATHS` (clés, export, Stripe, modules) → `assistance_closed`. Écriture : seulement en `write` (sinon
 `assistance_read_only`) ET si la route est dans la **liste blanche** de la section (`AssistanceSections::WRITES`, fermé par défaut ;
 témoin `tests/Fixtures/ecrans/assistance-ecritures.json`, essai `testEveryWriteOfASectionIsListed`) : commandes = préparer un colis (jamais
-annuler une vente, qui la rembourse, ni acheter une étiquette, capturer, rembourser) ; clients = statut d'un contact ou d'une demande,
-confirmer un rendez-vous (jamais supprimer) ; gestion = tout sauf la console IA, les fils d'action, les documents lus par l'IA, les
+annuler une vente, qui la rembourse, ni acheter une étiquette, capturer, rembourser) ; clients = la fiche d'un contact (`PUT`, la fiche entière) ou le statut d'une demande
+(jamais supprimer ; confirmer un rendez-vous exige un compte du site) ; gestion = tout sauf la console IA, les fils d'action, les documents lus par l'IA, les
 rapports, les avis rédigés (unités IA du commerçant), le lexique, les préférences de notification et les réglages ; pertes = rien. La
 fenêtre d'une heure ne démarre que sur une requête ACCEPTÉE. La réponse de la section est servie entière. L'auteur au journal devient
 « Agence X, prénom, pendant l'assistance n° N » (`ExternalOperator::duringAssistance`). Sections demandables aujourd'hui par l'API :

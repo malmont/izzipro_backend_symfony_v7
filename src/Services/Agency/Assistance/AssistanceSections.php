@@ -51,9 +51,9 @@ final class AssistanceSections
             ['POST', '/api/shipping/parcels'],
         ],
         'clients' => [
+            // (confirmer un rendez-vous n'est pas permis : la route exige un compte du site)
             ['PUT', '/api/contacts/{id}'],
             ['PATCH', '/api/form-submissions/{id}'],
-            ['POST', '/api/reservations/{id}/confirm'],
         ],
         'gestion' => [
             ['DELETE', '/api/collections/{id}'],
