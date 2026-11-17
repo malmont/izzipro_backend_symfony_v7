@@ -335,6 +335,25 @@
                     }
                 ],
                 "personVariant": null
+            },
+            {
+                "code": "PIECE_MISSING",
+                "label": "Pièce absente au comptage",
+                "description": "Une pièce suivie n'a été lue ni à ce comptage ni au comptage fermé précédent qui la couvrait : elle passe à l'état « absente ». Un constat par comptage, chaque pièce en est une preuve. Relue ensuite, elle reprend son état et le constat le dit. Jamais par personne.",
+                "wave": 4,
+                "enabled": true,
+                "params": [
+                    {
+                        "key": "minCount",
+                        "label": "Nombre de pièces absentes dans un même comptage à partir duquel la gravité passe de moyenne à haute",
+                        "type": "count",
+                        "value": 10,
+                        "default": 10,
+                        "min": 2,
+                        "max": 500
+                    }
+                ],
+                "personVariant": null
             }
         ],
         "notice": "Changer un seuil ne ferme ni ne supprime aucun constat : le nouveau réglage ne vaut que pour les analyses suivantes.",

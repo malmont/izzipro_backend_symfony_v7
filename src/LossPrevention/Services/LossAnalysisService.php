@@ -64,6 +64,7 @@ class LossAnalysisService
         private readonly ?LossSaleLinkService $sales = null,
         private readonly ?LossExitService $exits = null,
         private readonly ?LossDepotService $depot = null,
+        private readonly ?LossCountService $counts = null,
     ) {
         $list = [...$rules];
         usort($list, fn (LossRuleInterface $a, LossRuleInterface $b) => strcmp($a::class, $b::class));
@@ -253,6 +254,20 @@ class LossAnalysisService
                         $this->writer->restoreCounters($counters);
                         $this->logger->error('Prévention des pertes : règles du dépôt en échec, passage poursuivi : ' . $e->getMessage(), ['exception' => $e]);
                     }
+                }
+            }
+            if ($this->counts !== null) {
+                // Lot L4-d : les comptages oubliés se ferment sans conclusion ; les pièces absentes relues reprennent leur état (le constat de
+                // leur comptage le dit). Sous son point de reprise : un échec n'arrête pas l'analyse
+                $conn->executeStatement('SAVEPOINT loss_sweep');
+                $counters = $this->writer->counters();
+                try {
+                    $this->counts->sweep($this->writer);
+                    $conn->executeStatement('RELEASE SAVEPOINT loss_sweep');
+                } catch (\Throwable $e) {
+                    $conn->executeStatement('ROLLBACK TO SAVEPOINT loss_sweep');
+                    $this->writer->restoreCounters($counters);
+                    $this->logger->error('Prévention des pertes : comptages en échec, passage poursuivi : ' . $e->getMessage(), ['exception' => $e]);
                 }
             }
             $settings->update(['cursor_sequence' => $newCursor, 'backfill_until_sequence' => $backfillUntil, 'last_analysis_at' => (new \DateTimeImmutable())->format('Y-m-d H:i:s')]);

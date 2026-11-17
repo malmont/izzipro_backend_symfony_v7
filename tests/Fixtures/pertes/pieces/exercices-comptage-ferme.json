@@ -1,0 +1,46 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/exercices/comptages/12/fermer?locale=fr",
+        "body": []
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "id": 12,
+        "scope": "all",
+        "scopeLabel": "Tout le magasin",
+        "status": "closed",
+        "statusLabel": "Fermé",
+        "exercise": true,
+        "openedAt": "2026-11-17T00:34:49+00:00",
+        "closedAt": "2026-11-17T00:34:49+00:00",
+        "expected": 1,
+        "found": 0,
+        "absent": 1,
+        "missing": 0,
+        "expiresAt": null,
+        "absentPieces": [
+            {
+                "pieceId": 92,
+                "number": 17,
+                "article": "Sac de plage (exemple 1FA0AB)",
+                "missing": false,
+                "lastZone": null,
+                "lastZoneLabel": null,
+                "lastSeenAt": "2026-11-17T00:34:49+00:00"
+            }
+        ],
+        "stockGap": [
+            {
+                "variantId": 62,
+                "article": "Sac de plage (exemple 1FA0AB)",
+                "catalogStock": 6,
+                "expectedPieces": 1,
+                "foundPieces": 0
+            }
+        ],
+        "stockNotice": "L'écart entre le stock du catalogue et les pièces lues est seulement montré : la correction du stock se fait dans la gestion.",
+        "screen": "pertes.pieces"
+    }
+}

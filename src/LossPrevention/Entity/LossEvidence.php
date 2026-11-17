@@ -31,6 +31,9 @@ class LossEvidence
     public const EXIT_READ = 'exit_read';
     /** Lot L4-c : un mouvement de zone d'une pièce (arrivée ou départ), pour les règles du dépôt et des heures d'ouverture */
     public const ZONE_MOVE = 'zone_move';
+    /** Lot L4-d : une pièce non lue à deux comptages de suite (son numéro, son article, le comptage) ; et la lecture qui l'a retrouvée */
+    public const COUNT_ABSENCE = 'count_absence';
+    public const COUNT_FOUND = 'count_found';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

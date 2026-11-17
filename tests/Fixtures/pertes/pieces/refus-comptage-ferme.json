@@ -1,0 +1,14 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/comptages/10/fermer?locale=fr",
+        "body": []
+    },
+    "status": 409,
+    "headers": {},
+    "body": {
+        "error": "COUNT_NOT_OPEN",
+        "code": "COUNT_NOT_OPEN",
+        "message": "Ce comptage est déjà fermé."
+    }
+}

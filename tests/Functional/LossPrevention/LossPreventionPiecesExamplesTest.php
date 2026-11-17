@@ -94,6 +94,21 @@ class LossPreventionPiecesExamplesTest extends LossPreventionTestCase
         $this->keep('installation-puce-d-essai-refusee', 'POST', '/installation/puce-test', ['identifier' => '0012345678', 'technology' => 'nfc']);
         $this->keep('materiel', 'GET', '/materiel');
 
+        // ----- L4-d : comptage au lecteur à main et bilan du soir (un seul comptage : aucune pièce n'est dite absente ici)
+        $this->db->executeStatement("UPDATE loss_count SET status = 'expired', closed_at = opened_at WHERE status = 'open'"); // un comptage laissé ouvert par un autre essai
+        $this->keep('comptage-ouvert', 'POST', '/comptages', ['scope' => 'all'], 201);
+        $count = $this->examples['comptage-ouvert']['body']['id'];
+        $this->keep('refus-comptage-deja-ouvert', 'POST', '/comptages', ['scope' => 'floor'], 409);
+        $this->keep('refus-comptage-perimetre', 'POST', '/comptages', ['scope' => 'jardin'], 422);
+        $this->keep('comptage-ferme', 'POST', "/comptages/$count/fermer", []);
+        $this->keep('comptage', 'GET', "/comptages/$count");
+        $this->keep('comptages', 'GET', '/comptages');
+        $this->keep('refus-comptage-ferme', 'POST', "/comptages/$count/fermer", [], 409);
+        $this->keep('refus-comptage-inconnu', 'GET', '/comptages/2000000000', null, 404);
+        // `devicesDown` est un NOMBRE d'appareils (pas une liste)
+        $this->keep('bilan', 'GET', '/bilan');
+        $this->keep('refus-bilan-date', 'GET', '/bilan?day=demain', null, 422);
+
         // ----- Mode exercice : pièces d'exercice, puce simulée, assistant depuis zéro, effacement
         $this->keep('exercices-pieces-vide', 'GET', '/exercices/pieces');
         $this->keep('exercices-pieces-creees', 'POST', '/exercices/pieces', ['variantId' => $vBag, 'count' => 1], 201);
@@ -103,6 +118,10 @@ class LossPreventionPiecesExamplesTest extends LossPreventionTestCase
         $this->keep('exercices-pieces', 'GET', '/exercices/pieces');
         $this->keep('exercices-installation-puce-d-essai', 'POST', '/exercices/installation/puce-test', []);
         $this->keep('refus-exercice-vraie-piece', 'GET', "/exercices/pieces/$b", null, 404);
+        // comptage et bilan d'exercice (lot L4-d)
+        $this->keep('exercices-comptage-ouvert', 'POST', '/exercices/comptages', [], 201);
+        $this->keep('exercices-comptage-ferme', 'POST', '/exercices/comptages/' . $this->examples['exercices-comptage-ouvert']['body']['id'] . '/fermer', []);
+        $this->keep('exercices-bilan', 'GET', '/exercices/bilan');
         $this->keep('exercices-pieces-effacees', 'DELETE', '/exercices/pieces');
 
         if (getenv('UPDATE_LOSS_EXAMPLES') === '1') {

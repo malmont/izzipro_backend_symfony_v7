@@ -194,6 +194,9 @@ class LossFindingReader
         } elseif ($row['subject_type'] === 'cash_register') {
             // un constat par poste et par jour (lot L3-b2b) : son sujet est le poste, jamais une personne
             $subject += ['name' => $registers[(int) $row['subject_id']] ?? null, 'label' => $this->texts->t('subject.cash_register', $locale)];
+        } elseif ($row['subject_type'] === 'count') {
+            // un constat par comptage (lot L4-d) : son sujet est un comptage, jamais une personne
+            $subject += ['name' => $this->texts->t('subject.countNumber', $locale, ['number' => (int) $row['subject_id']]), 'label' => $this->texts->t('subject.count', $locale)];
         } elseif ($row['subject_type'] === 'zone') {
             // un constat par zone et par jour (lot L4-c) : son sujet est un lieu, jamais une personne
             $zone = (string) ((json_decode((string) $row['facts'], true) ?: [])['zone'] ?? '');
@@ -207,7 +210,7 @@ class LossFindingReader
             'onDuty' => array_map(fn (array $p) => ['id' => (int) $p['id'], 'name' => $names[(int) $p['id']], 'role' => (string) $p['role'], 'roleLabel' => $this->texts->t('role.' . $p['role'], $locale)], $onDuty),
             // un constat par poste et par jour ne liste personne : pas de phrase sur « ces personnes en poste »
             // un constat par poste, par pièce ou par article (lots L3-b2b, L4-b) ne liste personne : pas de phrase sur « ces personnes en poste »
-            'onDutyNotice' => in_array($row['subject_type'], ['cash_register', 'piece', 'product_variant', 'zone'], true) ? null : $this->texts->t('onDutyNotice', $locale),
+            'onDutyNotice' => in_array($row['subject_type'], ['cash_register', 'piece', 'product_variant', 'zone', 'count'], true) ? null : $this->texts->t('onDutyNotice', $locale),
             'amountNotice' => $this->texts->t('amountNotice', $locale),
             'evidence' => $evidence,
             'evidenceIntact' => $intact,
@@ -347,6 +350,9 @@ class LossFindingReader
                 "summary.$code." . ((int) ($facts['count'] ?? 0) >= (int) ($facts['minCount'] ?? PHP_INT_MAX) ? 'raised' : 'base'), $locale,
                 ['count' => (int) ($facts['count'] ?? 0), 'minCount' => (int) ($facts['minCount'] ?? 0),
                     'zone' => $this->texts->has('boxes.zone.' . ($facts['zone'] ?? ''), $locale) ? $this->texts->t('boxes.zone.' . $facts['zone'], $locale) : (string) ($facts['zone'] ?? '')]),
+            // lot L4-d : par comptage ; aucun nom
+            LossRuleCatalog::PIECE_MISSING => $this->texts->t("summary.$code." . ((int) ($facts['count'] ?? 0) >= (int) ($facts['minCount'] ?? PHP_INT_MAX) ? 'raised' : 'base'), $locale,
+                ['count' => (int) ($facts['count'] ?? 0), 'minCount' => (int) ($facts['minCount'] ?? 0), 'countId' => (int) ($facts['countId'] ?? 0), 'found' => (int) ($facts['found'] ?? 0)]),
             LossRuleCatalog::EXIT_COVERED => $this->texts->t("summary.$code." . (($facts['level'] ?? '') === 'medium' ? 'medium' : 'low'), $locale,
                 ['count' => (int) ($facts['count'] ?? 0), 'minCount' => (int) ($facts['minCount'] ?? 0), 'article' => $this->articleOf($facts, $locale)]),
             default => $this->texts->t('summary.default', $locale),
@@ -411,6 +417,10 @@ class LossFindingReader
                 'move' => isset($s['move']) && in_array($s['move'], ['ZONE_SEEN', 'ZONE_LEFT'], true) ? $this->texts->t('evidence.move.' . $s['move'], $locale) : null,
                 'zoneMoved' => isset($s['zone']) && $this->texts->has('boxes.zone.' . $s['zone'], $locale) ? $this->texts->t('boxes.zone.' . $s['zone'], $locale) : null,
                 'movedAt' => $when('at'), 'antenna' => $text('device')],
+            // lot L4-d : une pièce non lue à deux comptages de suite ; la lecture qui l'a retrouvée
+            LossEvidence::COUNT_ABSENCE => ['pieceNumber' => $text('pieceNumber'), 'article' => $text('article'), 'countNumber' => $text('countId')],
+            LossEvidence::COUNT_FOUND => ['pieceNumber' => $text('pieceNumber'), 'foundAt' => $when('foundAt'),
+                'zoneMoved' => isset($s['zone']) && $this->texts->has('boxes.zone.' . $s['zone'], $locale) ? $this->texts->t('boxes.zone.' . $s['zone'], $locale) : null],
             default => [],
         };
         $lines = [];

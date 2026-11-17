@@ -1,0 +1,105 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/comptages?locale=fr"
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "counts": [
+            {
+                "id": 10,
+                "scope": "all",
+                "scopeLabel": "Tout le magasin",
+                "status": "closed",
+                "statusLabel": "Fermé",
+                "exercise": false,
+                "openedAt": "2026-11-17T00:34:48+00:00",
+                "closedAt": "2026-11-17T00:34:48+00:00",
+                "expected": 52,
+                "found": 0,
+                "absent": 52,
+                "missing": 0,
+                "expiresAt": null
+            },
+            {
+                "id": 8,
+                "scope": "all",
+                "scopeLabel": "Tout le magasin",
+                "status": "closed",
+                "statusLabel": "Fermé",
+                "exercise": false,
+                "openedAt": "2026-11-17T00:32:37+00:00",
+                "closedAt": "2026-11-17T00:32:38+00:00",
+                "expected": 0,
+                "found": 0,
+                "absent": 0,
+                "missing": 0,
+                "expiresAt": null
+            },
+            {
+                "id": 4,
+                "scope": "floor",
+                "scopeLabel": "Rayon",
+                "status": "closed",
+                "statusLabel": "Fermé",
+                "exercise": false,
+                "openedAt": "2026-11-17T00:32:36+00:00",
+                "closedAt": "2026-11-17T00:32:36+00:00",
+                "expected": 0,
+                "found": 0,
+                "absent": 0,
+                "missing": 0,
+                "expiresAt": null
+            },
+            {
+                "id": 3,
+                "scope": "all",
+                "scopeLabel": "Tout le magasin",
+                "status": "closed",
+                "statusLabel": "Fermé",
+                "exercise": false,
+                "openedAt": "2026-11-17T00:32:35+00:00",
+                "closedAt": "2026-11-17T00:32:35+00:00",
+                "expected": 4,
+                "found": 2,
+                "absent": 2,
+                "missing": 1,
+                "expiresAt": null
+            },
+            {
+                "id": 1,
+                "scope": "all",
+                "scopeLabel": "Tout le magasin",
+                "status": "closed",
+                "statusLabel": "Fermé",
+                "exercise": false,
+                "openedAt": "2026-11-17T00:32:32+00:00",
+                "closedAt": "2026-11-17T00:32:33+00:00",
+                "expected": 4,
+                "found": 2,
+                "absent": 2,
+                "missing": 0,
+                "expiresAt": null
+            },
+            {
+                "id": 5,
+                "scope": "all",
+                "scopeLabel": "Tout le magasin",
+                "status": "expired",
+                "statusLabel": "Fermé sans conclusion",
+                "exercise": false,
+                "openedAt": "2026-11-16T11:32:37+00:00",
+                "closedAt": "2026-11-16T23:32:37+00:00",
+                "expected": null,
+                "found": null,
+                "absent": null,
+                "missing": null,
+                "expiresAt": null
+            }
+        ],
+        "open": null,
+        "expireHours": 12,
+        "screen": "pertes.pieces"
+    }
+}

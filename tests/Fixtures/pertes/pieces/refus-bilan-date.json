@@ -1,0 +1,16 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/bilan?day=demain&locale=fr"
+    },
+    "status": 422,
+    "headers": {},
+    "body": {
+        "error": "VALIDATION_FAILED",
+        "code": "VALIDATION_FAILED",
+        "message": "Entrée invalide : day (INVALID_DATE)",
+        "fields": {
+            "day": "INVALID_DATE"
+        }
+    }
+}

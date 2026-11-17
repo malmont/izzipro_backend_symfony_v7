@@ -24,6 +24,8 @@ class LossPiece
     public const SOLD = 'sold';
     public const RETURNED = 'returned';
     /** États de la pièce ; `sold` et `returned` viennent avec la vente reliée aux pièces (L3-b2a), les autres avec les lots suivants (L4) */
+    /** Lot L4-d : absente à deux comptages de suite (l'état d'avant est gardé, la pièce le reprend quand elle est relue) */
+    public const MISSING = 'missing';
     public const STATUSES = [self::CREATED, 'in_stockroom', 'on_floor', 'at_counter', self::SOLD, self::RETURNED, 'missing', self::RETIRED];
     /** Motifs du retrait d'une pièce */
     public const RETIRE_REASONS = ['damaged', 'lost', 'sold', 'error'];
@@ -59,6 +61,16 @@ class LossPiece
 
     #[ORM\Column(name: 'retired_at', type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $retiredAt = null;
+
+    /** Lot L4-d : l'état d'une pièce avant qu'elle soit dite absente à deux comptages de suite, depuis quand, et par quel comptage */
+    #[ORM\Column(name: 'missing_from', length: 16, nullable: true)]
+    private ?string $missingFrom = null;
+
+    #[ORM\Column(name: 'missing_since', type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $missingSince = null;
+
+    #[ORM\Column(name: 'missing_count_id', nullable: true)]
+    private ?int $missingCountId = null;
 
     #[ORM\Column(name: 'created_by', nullable: true)]
     private ?int $createdBy = null;

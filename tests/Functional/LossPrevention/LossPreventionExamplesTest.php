@@ -112,6 +112,9 @@ class LossPreventionExamplesTest extends LossPreventionTestCase
         // Constat qui porte sur un poste de caisse et ne nomme personne (lot L3-b2b) : sa preuve est le décompte de la journée du poste
         $this->assertSame(201, $this->admin('POST', self::BASE . '/exercices', ['scenario' => 'unread_sold'])->getStatusCode());
         $this->keep('exercice-constat-poste', 'GET', '/exercices/' . (int) $this->db->fetchOne('SELECT MAX(id) FROM loss_finding WHERE exercise'));
+        // Constat qui porte sur un comptage (lot L4-d) : `subject` = { type: count, id : le comptage, pour un lien vers sa fiche }
+        $this->assertSame(201, $this->admin('POST', self::BASE . '/exercices', ['scenario' => 'piece_missing'])->getStatusCode());
+        $this->keep('exercice-constat-piece-absente', 'GET', '/exercices/' . (int) $this->db->fetchOne('SELECT MAX(id) FROM loss_finding WHERE exercise'));
         $this->keep('exercices-effaces', 'DELETE', '/exercices');
 
         // Analyse lancée par la lecture de la synthèse (la dernière a plus de dix minutes)

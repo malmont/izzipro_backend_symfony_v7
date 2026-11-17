@@ -18,6 +18,8 @@ subject:
     user_window: Série d'actes d'un même compte
     terminal: Tablette de caisse
     zone: Zone de la boutique
+    count: Comptage
+    countNumber: 'Comptage n° %number%'
 onDutyNotice: 'Ces personnes étaient en poste au moment des faits. Ce n''est pas une accusation : la décision vous revient, après vérification.'
 amountNotice: 'Le montant en jeu est le montant concerné par le constat, pas une perte prouvée.'
 caveats:
@@ -112,6 +114,11 @@ rules:
         description: 'Une pièce suivie est arrivée dans une zone ou en est partie en dehors des heures d''ouverture que vous avez confirmées, marges comprises. Sans heures confirmées, la règle ne dit rien. Un inventaire ou une mise en rayon après la fermeture en ouvre un aussi. Un constat par jour et par zone, jamais par personne.'
         params:
             minCount: Nombre de pièces du jour à partir duquel la gravité passe de faible à moyenne
+    PIECE_MISSING:
+        label: Pièce absente au comptage
+        description: 'Une pièce suivie n''a été lue ni à ce comptage ni au comptage fermé précédent qui la couvrait : elle passe à l''état « absente ». Un constat par comptage, chaque pièce en est une preuve. Relue ensuite, elle reprend son état et le constat le dit. Jamais par personne.'
+        params:
+            minCount: Nombre de pièces absentes dans un même comptage à partir duquel la gravité passe de moyenne à haute
 summary:
     default: Constat relevé dans l'activité de la caisse.
     exerciseArticle: article d'exercice
@@ -153,6 +160,9 @@ summary:
     OUT_OF_HOURS:
         base: 'Pièces déplacées hors des heures d''ouverture ce jour-là (%zone%) : %count%.'
         raised: 'Pièces déplacées hors des heures d''ouverture ce jour-là (%zone%) : %count% (seuil de %minCount% atteint).'
+    PIECE_MISSING:
+        base: 'Pièces absentes à deux comptages de suite (comptage n° %countId%) : %count%. Retrouvées depuis : %found%.'
+        raised: 'Pièces absentes à deux comptages de suite (comptage n° %countId%) : %count% (seuil de %minCount% atteint). Retrouvées depuis : %found%.'
 evidence:
     noReason: Aucun motif saisi
     z_report:
@@ -180,6 +190,10 @@ evidence:
     move:
         ZONE_SEEN: Arrivée
         ZONE_LEFT: Départ
+    count_absence:
+        title: Pièce absente au comptage
+    count_found:
+        title: Pièce retrouvée
     'yes': Oui
     'no': Non
     lines:
@@ -192,6 +206,8 @@ evidence:
         move: Mouvement
         zoneMoved: Zone
         movedAt: Le
+        countNumber: Comptage n°
+        foundAt: Relue le
         saleDay: Journée
         trackedSold: Articles suivis vendus
         unreadSold: Vendus sans lecture
@@ -363,6 +379,10 @@ exercise:
             label: Mouvement hors des heures d'ouverture
             description: 'Plusieurs pièces arrivent dans une zone ou en partent en dehors des heures d''ouverture confirmées.'
             learn: 'Un inventaire ou une mise en rayon après la fermeture en ouvre un aussi : vérifier qui était prévu, et si les heures confirmées sont justes. Le constat ne désigne personne.'
+        piece_missing:
+            label: Pièce absente au comptage
+            description: 'Plusieurs pièces ne sont lues ni à un comptage ni au précédent.'
+            learn: 'Regarder où chaque pièce a été vue en dernier : rangée ailleurs, vendue sans lecture, ou partie. Une pièce relue reprend son état. Le constat ne désigne personne.'
         cash_shortage_series:
             label: Manques de caisse répétés par un même compte
             description: 'Plusieurs clôtures avec un manque sont fermées par le même compte sur une courte période.'
@@ -755,3 +775,17 @@ prints:
         PIECE_LABELS_EXHAUSTED: 'Cette pièce a déjà reçu trop d''étiquettes à puce.'
         EXERCISE_NO_UNTAGGED_PIECE: 'Aucune pièce d''exercice sans puce : créez d''abord des pièces d''exercice.'
         EXERCISE_NO_PRINTER: 'Ce boîtier simulé n''a pas d''imprimante : créez-en un nouveau.'
+
+counts:
+    scope:
+        all: Tout le magasin
+    status:
+        open: Ouvert
+        closed: Fermé
+        expired: Fermé sans conclusion
+    stockNotice: 'L''écart entre le stock du catalogue et les pièces lues est seulement montré : la correction du stock se fait dans la gestion.'
+    eveningNotice: 'Des nombres de la journée, sans aucun nom. Une pièce non vue n''est pas une pièce perdue : un comptage le dira.'
+    error:
+        COUNT_ALREADY_OPEN: 'Un comptage est déjà ouvert : fermez-le avant d''en ouvrir un autre.'
+        COUNT_NOT_FOUND: Comptage introuvable.
+        COUNT_NOT_OPEN: 'Ce comptage est déjà fermé.'

@@ -188,6 +188,18 @@
                 "available": true
             },
             {
+                "code": "piece_missing",
+                "label": "Pièce absente au comptage",
+                "description": "Plusieurs pièces ne sont lues ni à un comptage ni au précédent.",
+                "learn": "Regarder où chaque pièce a été vue en dernier : rangée ailleurs, vendue sans lecture, ou partie. Une pièce relue reprend son état. Le constat ne désigne personne.",
+                "rule": {
+                    "code": "PIECE_MISSING",
+                    "label": "Pièce absente au comptage"
+                },
+                "personPattern": false,
+                "available": true
+            },
+            {
                 "code": "cash_shortage_series",
                 "label": "Manques de caisse répétés par un même compte",
                 "description": "Plusieurs clôtures avec un manque sont fermées par le même compte sur une courte période.",
@@ -226,7 +238,7 @@
         ],
         "findings": [
             {
-                "id": 73,
+                "id": 74,
                 "number": -1,
                 "rule": {
                     "code": "CASH_DISCREPANCY",
@@ -244,7 +256,7 @@
                 "newEvidenceSinceDecision": false,
                 "backfill": false,
                 "exercise": true,
-                "updatedAt": "2026-11-16T22:29:58+00:00"
+                "updatedAt": "2026-11-17T00:33:16+00:00"
             }
         ],
         "count": 1,

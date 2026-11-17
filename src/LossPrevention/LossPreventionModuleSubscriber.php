@@ -40,13 +40,16 @@ class LossPreventionModuleSubscriber implements EventSubscriberInterface
             // lot L3-a : boîtier simulé
             '#^/api/gestion/pertes/exercices/boitiers\z#', '#^/api/gestion/pertes/exercices/boitiers/\d+\z#', '#^/api/gestion/pertes/exercices/sante\z#',
             // lot L3-c : travaux de l'imprimante simulée
-            '#^/api/gestion/pertes/exercices/impressions\z#', '#^/api/gestion/pertes/exercices/impressions/\d+\z#'],
+            '#^/api/gestion/pertes/exercices/impressions\z#', '#^/api/gestion/pertes/exercices/impressions/\d+\z#',
+            // lot L4-d : comptages d'exercice
+            '#^/api/gestion/pertes/exercices/comptages\z#', '#^/api/gestion/pertes/exercices/comptages/\d+\z#', '#^/api/gestion/pertes/exercices/bilan\z#'],
         'POST' => ['#^/api/gestion/pertes/exercices\z#',
             '#^/api/gestion/pertes/exercices/pieces\z#', '#^/api/gestion/pertes/exercices/pieces/\d+/retirer\z#',
             '#^/api/gestion/pertes/exercices/puces/associer\z#', '#^/api/gestion/pertes/exercices/puces/\d+/retirer\z#',
             '#^/api/gestion/pertes/exercices/pieces/etiquettes/pdf\z#', '#^/api/gestion/pertes/exercices/installation/etapes/[a-z_]{1,30}/verifier\z#',
             '#^/api/gestion/pertes/exercices/installation/puce-test\z#', '#^/api/gestion/pertes/exercices/installation/etiquette-test\z#',
-            '#^/api/gestion/pertes/exercices/boitiers\z#', '#^/api/gestion/pertes/exercices/boitiers/\d+/scenarios\z#'],
+            '#^/api/gestion/pertes/exercices/boitiers\z#', '#^/api/gestion/pertes/exercices/boitiers/\d+/scenarios\z#',
+            '#^/api/gestion/pertes/exercices/comptages\z#', '#^/api/gestion/pertes/exercices/comptages/\d+/fermer\z#'],
         'DELETE' => ['#^/api/gestion/pertes/exercices\z#', '#^/api/gestion/pertes/exercices/pieces\z#', '#^/api/gestion/pertes/exercices/boitiers\z#'],
         'PUT' => ['#^/api/gestion/pertes/exercices/\d+/decision\z#'],
     ];

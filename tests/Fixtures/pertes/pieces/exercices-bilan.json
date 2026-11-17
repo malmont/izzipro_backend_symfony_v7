@@ -1,0 +1,23 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/exercices/bilan?locale=fr"
+    },
+    "status": 200,
+    "headers": {},
+    "body": {
+        "day": "2026-11-16",
+        "exercise": true,
+        "trackedSold": 0,
+        "soldWithoutRead": 0,
+        "exitsWithoutSale": 0,
+        "leftStockroom": 0,
+        "unseenDays": 30,
+        "unseenPieces": 0,
+        "missingPieces": 0,
+        "devicesDown": 0,
+        "countsClosed": 1,
+        "notice": "Des nombres de la journée, sans aucun nom. Une pièce non vue n'est pas une pièce perdue : un comptage le dira.",
+        "screen": "pertes.exercices"
+    }
+}

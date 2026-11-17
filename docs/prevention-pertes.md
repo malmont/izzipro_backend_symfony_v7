@@ -107,6 +107,7 @@ analyses suivantes**. Valeurs par défaut validées par le propriétaire.
 | `STOCKROOM_NOT_SHELVED` (lot L4-c, § 17.15) | 4 | une vraie pièce lue à la porte de la réserve, puis ni revue en rayon, au comptoir (antenne ou tapis) ou dans la réserve, ni vendue, dans le délai ; muette sans antenne du rayon ou du comptoir. Faible, moyenne à `minCount` pièces | `minutes` 30 (5 à 240), `minCount` 5 (2 à 50) | zone ; `STOCKROOM_NOT_SHELVED:zone:stockroom_door:day:<jour>` |
 | `BACK_DOOR` (lot L4-c, § 17.15) | 4 | une vraie pièce, pas retirée, lue à la porte arrière de la réserve ; jugée à la fin de sa journée. Moyenne, haute à `minCount` pièces | `minCount` 5 (2 à 50) | zone ; `BACK_DOOR:zone:back_door:day:<jour>` |
 | `OUT_OF_HOURS` (lot L4-c, § 17.15) | 4 | une arrivée ou un départ de zone d'une vraie pièce hors des heures d'ouverture confirmées, marges comprises ; muette sans heures confirmées. Faible, moyenne à `minCount` pièces | `minCount` 5 (2 à 50) | zone ; `OUT_OF_HOURS:zone:<zone>:day:<jour>` |
+| `PIECE_MISSING` (lot L4-d, § 17.16) | 4 | une vraie pièce non lue à un comptage fermé ni au comptage fermé précédent qui la couvrait ; elle passe à `missing`. Moyenne, haute à `minCount` pièces | `minCount` 10 (2 à 500) | comptage ; `PIECE_MISSING:count:<id>` (preuve « retrouvée » quand elle est relue) |
 
 - Date d'une annulation : `order.canceled_at` (posé par `CancelOrderUseCase` pour tous les chemins), sinon l'heure de l'entrée REFUND pour
   une annulation d'avant PAYS-1b ; un retour (commande de type 2) n'est pas une annulation.
@@ -2193,6 +2194,7 @@ choisi de basculer sans attendre, Fable relira ensuite). La liste fait foi pour 
 | L4-b2, migration et code | backend `app_v2` | migration `365340ae`, lot : le commit qui la suit (§ 17.14) | `migrations/Version20270123100000.php` (origine, garde `loss_sale_unit_guard_v2`, fenêtre des commandes web) et le script `scripts/migrate_all_v2_pertes_l4b2.sh` (hors dépôt) ; `LossSaleLinkService::webOrders` et `catchUpAtExit`, `LossSaleUnitRepository` (commandes web, locations, lectures par origine), `LossExitService::judge` (cas 2 sur la fenêtre des commandes web, cas 3 des locations, `rented`), le réglage `webWindowDays` |
 | L4-c, migration et code | backend `app_v2` | migration `ccc663f9`, lot : le commit qui la suit (§ 17.15) | `migrations/Version20270124100000.php` (heures, curseurs, index des mouvements, garde des appareils v2) et le script `scripts/migrate_all_v2_pertes_l4c.sh` (hors dépôt) ; `LossDepotService` (tout), son branchement dans `LossAnalysisService::run`, les heures d'ouverture de `LossSettingsService`, l'étape `opening_hours` de l'assistant, les trois scénarios d'exercice, la lecture (sujet `zone`, preuve `zone_move`) |
 | B6, B7 | boîtier, dépôt local | `2f10fce`, `023aac4` | `izzibox/scenarios.py` (antenne `back_door`, scène « par la porte arrière »), guides de l'installateur ; `izzibox/appareils.py` et `izzibox/file.py` (présence gardée sur disque, aucun départ après une panne) |
+| L4-d, migration et code | backend `app_v2` | migration `55080132`, lot : le commit qui la suit (§ 17.16) | `migrations/Version20270125100000.php` (tables du comptage, gardes) et le script `scripts/migrate_all_v2_pertes_l4d.sh` (hors dépôt) ; `LossCountService` et `LossCountRepository` (tout), `LossCountController`, le passage des comptages dans `LossAnalysisService::run`, le bilan joint à `LossDigestService`, le scénario `piece_missing` |
 
 Vérifié sous Opus : `LossPreventionZoneTest` et le dossier du module verts ; 21 mutations sur L4-a (20 tuées, une équivalente :
 le rejeu d'une arrivée est déjà bloqué par la clé du fait et par la requête de présence) ; 12 mutations sur B5, toutes tuées.
@@ -2457,3 +2459,57 @@ ouvre aussi un constat ; le gérant le classe sans suite.
   (la présence encore ouverte l'explique aussi : double couverture) ; une pièce comptée deux fois (une relecture sans départ est une
   arrivée redite, jamais jugée) ; et trois trous d'essai : les curseurs posés à la confirmation de la notice, l'explication par le
   tapis, l'explication par une vente de la pièce.
+
+### 17.16 Lot L4-d : comptage, pièce absente, bilan du soir (contrat validé par le chef de projet le 16/11/2026)
+
+Risque ordinaire (§ 17.9) : je me vérifie, avec mutations. **À coder sous Opus, à faire relire par Fable** (§ 17.12).
+
+1. **Comptage** : le gérant l'ouvre (`POST /api/gestion/pertes/comptages { scope: all | <zone> }`), passe le lecteur à main, puis le
+   ferme (`POST …/comptages/{id}/fermer`) ; liste et détail en `GET`. **Un seul comptage ouvert à la fois** (par genre : vrai ou
+   exercice), garanti par la base.
+2. **Les lectures d'un comptage** : toute lecture du lecteur à main (`SPOT_CHECK`) entre l'ouverture et la fermeture. **Condition**
+   (chef de projet) : cette fenêtre de temps remplace le marquage des lectures par le boîtier ; elle ne tient que parce qu'un seul
+   comptage est ouvert à la fois. Rien ne change dans le boîtier.
+3. **Comptage oublié** (ajout du chef de projet) : un comptage resté ouvert plus de 12 heures se ferme seul, **sans compter
+   d'absences** (« fermé sans conclusion ») ; sinon, un comptage oublié la veille avalerait les lectures du lecteur à main du lendemain.
+4. **À la fermeture** : les pièces attendues (vraies pièces à puce, ni vendues ni retirées, posées avant l'ouverture ; pour une zone,
+   celles vues en dernier dans cette zone) et celles non lues. Rien n'est écrit dans le stock : l'écart par article entre le stock du
+   catalogue et les pièces comptées est seulement lu ; la correction reste un geste de la gestion.
+5. **Pièce absente à deux comptages fermés de suite qui la couvrent** : elle passe à l'état `missing` (l'état d'avant est gardé) ;
+   constat `PIECE_MISSING`, un par comptage, chaque pièce en preuve, jamais par personne ; moyenne, haute à partir de 10 pièces
+   (réglable). Relue ensuite par n'importe quelle lecture : elle reprend son état, et le constat reçoit une preuve « retrouvée ».
+6. **Bilan du soir** (`GET /api/gestion/pertes/bilan?day=`) : articles suivis vendus avec et sans lecture, sorties sans vente, pièces
+   sorties de la réserve, pièces non vues depuis N jours (30 par défaut), antennes tombées dans la journée ; aucun nom, aucun
+   classement ; joint au résumé du jour qui existe, sans courriel de plus.
+7. Migration additive : tables `loss_count` et des pièces d'un comptage, avec leurs gardes (fermé = figé, jamais supprimé) ; colonne
+   `loss_piece.missing_from` (état d'avant).
+8. Exercice : un scénario « pièce absente au comptage », et un comptage simulé sur des pièces d'exercice.
+9. Routes nouvelles, rôle d'administration du module comme les autres, annoncées au web (par le chef) avant la bascule. Rien dans la
+   caisse, le stock ni le catalogue.
+
+**Ce qui est codé** (migration `Version20270125100000`, script `scripts/migrate_all_v2_pertes_l4d.sh`, 22 instructions ; code sous Opus) :
+
+- **Routes** (rôle d'administration, garde de la gestion puis du module ; écran `pertes.pieces`, bilan `pertes.home`) :
+  `GET /api/gestion/pertes/comptages` → `{ counts, open, expireHours }` ; `POST /comptages { scope }` → 201 (409 `COUNT_ALREADY_OPEN`,
+  422 `scope: INVALID_SCOPE`) ; `GET /comptages/{id}` (fermé : `absentPieces`, `stockGap`, `stockNotice`) ; `POST /comptages/{id}/fermer`
+  (404 `COUNT_NOT_FOUND`, 409 `COUNT_NOT_OPEN`) ; `GET /bilan?day=&days=` (422 `day: INVALID_DATE`, `days: PARAM_OUT_OF_RANGE`, 1 à
+  365). Les mêmes en exercice sous `/exercices/comptages…` et `/exercices/bilan` (les nombres de l'exercice ; les ventes reliées n'existent
+  qu'en vrai et y valent 0), ouvertes sans le droit du module ; l'effacement de l'exercice efface ses comptages. Le bilan porte
+  `exercise`. `devicesDown` est un NOMBRE d'appareils. Le sujet d'un constat `PIECE_MISSING` est `{ type: count, id: <comptage>, name,
+  label }` : l'identifiant mène à la fiche du comptage. Exemples JSON : `tests/Fixtures/pertes/pieces/comptage*.json`, `bilan.json`,
+  `exercices-bilan.json`, et `tests/Fixtures/pertes/exercice-constat-piece-absente.json`.
+- **Un comptage** : `{ id, scope, scopeLabel, status (open | closed | expired), statusLabel, exercise, openedAt, closedAt, expected, found,
+  absent, missing, expiresAt }`. Un seul ouvert par genre (index unique partiel) ; fermé, il est figé et ne se supprime pas (gardes).
+- **Fermer** : dans une transaction, les pièces attendues et lues sont écrites (`loss_count_piece`) ; une pièce non lue qui ne l'avait
+  pas été au comptage FERMÉ précédent qui la couvrait (une ligne pour elle) passe à `missing` (`missing_from`, `missing_since`,
+  `missing_count_id`) ; une pièce déjà absente, vendue ou retirée ne change pas. Le constat `PIECE_MISSING` s'ouvre pour les vraies pièces,
+  si la règle est allumée et l'analyse permise (droit du module, notice) ; sujet `count`, preuves `count_absence`, montant nul.
+- **À chaque passage de l'analyse** (`LossCountService::sweep`) : un comptage ouvert depuis plus de 12 h passe à `expired` (fin :
+  ouverture + 12 h), sans pièce écrite ; une pièce `missing` relue depuis (n'importe quelle lecture à une heure sûre) reprend son état
+  d'avant, et le constat de son comptage reçoit une preuve `count_found` et `facts.found`.
+- **Bilan** : `{ day, trackedSold, soldWithoutRead, exitsWithoutSale, leftStockroom, unseenDays, unseenPieces, missingPieces,
+  devicesDown, countsClosed, notice }`. Le résumé du jour (courriel de 8 h) y joint le bilan de la VEILLE, dans un tableau à part ; s'il
+  ne se calcule pas, le résumé part sans lui.
+- **Écart de choix** : la table des pièces d'un comptage garde TOUTES les pièces attendues (lues ou non), pas seulement les absences :
+  c'est ce qui dit « le comptage précédent qui la couvrait ».
+

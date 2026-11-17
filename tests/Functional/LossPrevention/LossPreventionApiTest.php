@@ -216,8 +216,8 @@ class LossPreventionApiTest extends LossPreventionTestCase
         $this->drain();
         $rules = $this->json($this->admin('GET', self::BASE . '/regles'));
         $this->assertSame(['CASH_DISCREPANCY', 'DRAWER_NO_SALE', 'VOID_AFTER_SALE', 'REFUND_PATTERN', 'DISCOUNT_PATTERN', 'PRICE_OVERRIDE', 'APPROVAL_PATTERN', 'UNREAD_SOLD', 'EXIT_WITHOUT_SALE', 'EXIT_COVERED',
-            'STOCKROOM_NOT_SHELVED', 'BACK_DOOR', 'OUT_OF_HOURS'], array_column($rules['rules'], 'code'));
-        $this->assertSame([1, 1, 1, 2, 2, 2, 2, 3, 4, 4, 4, 4, 4], array_column($rules['rules'], 'wave'));
+            'STOCKROOM_NOT_SHELVED', 'BACK_DOOR', 'OUT_OF_HOURS', 'PIECE_MISSING'], array_column($rules['rules'], 'code'));
+        $this->assertSame([1, 1, 1, 2, 2, 2, 2, 3, 4, 4, 4, 4, 4, 4], array_column($rules['rules'], 'wave'));
         $cash = $rules['rules'][0];
         $this->assertSame(['key' => 'minAmount', 'type' => 'cents', 'value' => 500, 'default' => 500, 'min' => 0, 'max' => 1000000], array_diff_key($cash['params'][0], ['label' => 1]));
         $this->assertSame([false, false, [3, 30]], [$cash['personVariant']['allowed'], $cash['personVariant']['enabled'], array_column($cash['personVariant']['params'], 'value')]);

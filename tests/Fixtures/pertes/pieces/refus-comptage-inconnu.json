@@ -1,0 +1,13 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/comptages/2000000000?locale=fr"
+    },
+    "status": 404,
+    "headers": {},
+    "body": {
+        "error": "COUNT_NOT_FOUND",
+        "code": "COUNT_NOT_FOUND",
+        "message": "Comptage introuvable."
+    }
+}

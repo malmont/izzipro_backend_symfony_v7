@@ -215,6 +215,15 @@ loss_digest:
     exercise_link: 'Open Practice'
     exercise_subject: '[Exercise] %subject%'
     exercise_banner: 'EXERCISE: this email shows the alert you would receive for a real finding. The finding is fictitious: it does not touch the register and concerns no real person.'
+    evening_title: 'Yesterday''s summary'
+    evening_day: 'Day'
+    evening_tracked: 'Tracked items sold'
+    evening_unread: 'Of which sold without a read'
+    evening_exits: 'Exits without a sale'
+    evening_stockroom: 'Pieces that left the stockroom'
+    evening_unseen: 'Pieces not seen for %days% days'
+    evening_missing: 'Pieces missing at the count'
+    evening_down: 'Devices that went down during the day'
 
 # Support, SUPPORT-WEB: an agent invited by the site administrator (a single-use link, valid for %hours% hours)
 support_agent_invitation:

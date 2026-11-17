@@ -32,8 +32,10 @@ final class LossRuleCatalog
     public const OUT_OF_HOURS = 'OUT_OF_HOURS';
     /** Les règles du dépôt : elles lisent les mouvements de zone des antennes (`LossDepotService`) */
     public const DEPOT_RULES = [self::STOCKROOM_NOT_SHELVED, self::BACK_DOOR, self::OUT_OF_HOURS];
-    /** Les règles qui lisent les antennes, et non le journal de caisse : l'aperçu ne peut pas les rejouer */
-    public const ANTENNA_RULES = [self::EXIT_WITHOUT_SALE, self::EXIT_COVERED, self::STOCKROOM_NOT_SHELVED, self::BACK_DOOR, self::OUT_OF_HOURS];
+    /** Lot L4-d : pièces absentes à deux comptages fermés de suite qui les couvrent ; un constat par comptage */
+    public const PIECE_MISSING = 'PIECE_MISSING';
+    /** Les règles qui ne lisent pas le journal de caisse (antennes, comptages) : l'aperçu ne peut pas les rejouer */
+    public const ANTENNA_RULES = [self::EXIT_WITHOUT_SALE, self::EXIT_COVERED, self::STOCKROOM_NOT_SHELVED, self::BACK_DOOR, self::OUT_OF_HOURS, self::PIECE_MISSING];
 
     /** Types de paramètre : l'écran sait comment saisir et afficher */
     public const COUNT = 'count';
@@ -124,6 +126,12 @@ final class LossRuleCatalog
         self::OUT_OF_HOURS => [
             'wave' => 4,
             'params' => ['minCount' => ['type' => self::COUNT, 'default' => 5, 'min' => 2, 'max' => 50]],
+            'person' => null,
+        ],
+        // Lot L4-d : le comptage ; moyenne, haute à `minCount` pièces dites absentes dans un même comptage
+        self::PIECE_MISSING => [
+            'wave' => 4,
+            'params' => ['minCount' => ['type' => self::COUNT, 'default' => 10, 'min' => 2, 'max' => 500]],
             'person' => null,
         ],
     ];

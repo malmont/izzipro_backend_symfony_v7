@@ -56,6 +56,7 @@ class LossDigestService
         private readonly TenantPublicHostResolver $hosts,
         private readonly AdminSpaceUrl $links,
         private readonly \App\Services\Notification\NotificationGate $gate, // lot NOTIF-1 : niveau des courriels de suivi de chaque destinataire
+        private readonly ?LossCountService $counts = null, // lot L4-d : le bilan de la veille, joint au résumé
     ) {
     }
 
@@ -67,6 +68,30 @@ class LossDigestService
      *                                          (`held`, lot NOTIF-1 : aucun courriel parti, tous les destinataires servis sont retenus par leur niveau ; le jour est posé ;
      *                                          la clé `held` donne alors leur nombre)
      */
+    /**
+     * Lot L4-d : le bilan d'une journée en lignes du courriel ; vide si le service n'est pas là ou si le calcul échoue (le résumé part quand même).
+     *
+     * @return array<string, string>
+     */
+    private function evening(string $day, string $language, callable $t): array
+    {
+        if ($this->counts === null) {
+            return [];
+        }
+        try {
+            $b = $this->counts->eveningOf($day, LossCountService::UNSEEN_DAYS, $language);
+        } catch (\Throwable $e) {
+            $this->logger->error('Prévention des pertes : bilan de la veille non calculé, résumé envoyé sans lui : ' . $e->getMessage(), ['exception' => $e]);
+
+            return [];
+        }
+
+        return [$t('evening_day') => LossTexts::day(new \DateTimeImmutable($day), $language), $t('evening_tracked') => (string) $b['trackedSold'],
+            $t('evening_unread') => (string) $b['soldWithoutRead'], $t('evening_exits') => (string) $b['exitsWithoutSale'], $t('evening_stockroom') => (string) $b['leftStockroom'],
+            $t('evening_unseen', ['%days%' => $b['unseenDays']]) => (string) $b['unseenPieces'], $t('evening_missing') => (string) $b['missingPieces'],
+            $t('evening_down') => (string) $b['devicesDown']];
+    }
+
     public function sendIfDue(?\DateTimeImmutable $now = null, bool $anyHour = false): array
     {
         $now ??= new \DateTimeImmutable();
@@ -144,6 +169,9 @@ class LossDigestService
             // Lien direct vers la liste des constats nouveaux (lot LIEN) : la seule adresse du courriel ; null (site sans adresse connue) : pas de lien
             'linkUrl' => $this->links->to('pertes.constats', ['isNew' => true]), 'linkLabel' => $t('link'),
             'locale' => $language, 'intlLocale' => $language === 'en' ? 'en_CA' : 'fr_CA',
+            // lot L4-d : le bilan de la veille, des nombres seulement (aucun nom, aucun classement), dans un tableau à part
+            'evening' => $this->evening((new \DateTimeImmutable($day))->modify('-1 day')->format('Y-m-d'), $language, $t),
+            'eveningTitle' => $t('evening_title'),
         ];
         $subject = $this->mailer->subject('loss_digest.subject', $params, $language);
         $host = $this->host();

@@ -219,6 +219,15 @@ loss_digest:
     exercise_link: 'Ouvrir les exercices'
     exercise_subject: '[Exercice] %subject%'
     exercise_banner: 'EXERCICE : ce courriel montre l''alerte que vous recevriez pour un vrai constat. Le constat est fictif : il ne touche pas à la caisse et ne concerne aucune personne réelle.'
+    evening_title: 'Le bilan d''hier'
+    evening_day: 'Journée'
+    evening_tracked: 'Articles suivis vendus'
+    evening_unread: 'Dont vendus sans lecture'
+    evening_exits: 'Sorties sans vente'
+    evening_stockroom: 'Pièces sorties de la réserve'
+    evening_unseen: 'Pièces non vues depuis %days% jours'
+    evening_missing: 'Pièces absentes au comptage'
+    evening_down: 'Appareils tombés dans la journée'
 
 # Assistance, lot SUPPORT-WEB : invitation d'un agent par l'administrateur du site (un lien à usage unique, valable %hours% heures)
 support_agent_invitation:
