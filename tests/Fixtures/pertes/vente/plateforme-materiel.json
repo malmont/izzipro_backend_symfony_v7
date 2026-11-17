@@ -1,0 +1,123 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/platform/pertes/materiel"
+    },
+    "status": 200,
+    "body": {
+        "products": [
+            {
+                "code": "box",
+                "kind": "box",
+                "level": "standard",
+                "labelFr": "Boîtier prêt à brancher",
+                "labelEn": "Plug-and-play box",
+                "descriptionFr": "Le mini-ordinateur de la boutique, préinstallé, livré avec sa clé : branchez-le, il se relie à votre site.",
+                "descriptionEn": "The shop's mini computer, preinstalled, shipped with its key: plug it in, it links to your site.",
+                "priceCents": 49900,
+                "currency": "CAD",
+                "buyUrl": "https://boutique.example/produits/boitier",
+                "isActive": true,
+                "position": 10,
+                "updatedAt": "2026-11-17 18:47:24",
+                "updatedBy": "pertes-b2e0bf89@example.invalid"
+            },
+            {
+                "code": "hand_reader",
+                "kind": "hand_reader",
+                "level": "standard",
+                "labelFr": "Lecteur de puces à main",
+                "labelEn": "Handheld tag reader",
+                "descriptionFr": "Pour associer une puce à une pièce, vérifier une pièce et faire les comptages.",
+                "descriptionEn": "To associate a tag with a piece, check a piece and run counts.",
+                "priceCents": null,
+                "currency": "CAD",
+                "buyUrl": null,
+                "isActive": false,
+                "position": 20,
+                "updatedAt": "2026-11-17 18:47:11",
+                "updatedBy": null
+            },
+            {
+                "code": "counter_mat",
+                "kind": "counter_mat",
+                "level": "standard",
+                "labelFr": "Tapis de comptoir",
+                "labelEn": "Counter mat",
+                "descriptionFr": "Posé sous la caisse : il voit les pièces présentées au paiement.",
+                "descriptionEn": "Placed at the till: it sees the pieces presented for payment.",
+                "priceCents": null,
+                "currency": "CAD",
+                "buyUrl": null,
+                "isActive": false,
+                "position": 30,
+                "updatedAt": "2026-11-17 18:47:11",
+                "updatedBy": null
+            },
+            {
+                "code": "zone_antenna",
+                "kind": "zone_antenna",
+                "level": "pro",
+                "labelFr": "Antenne de zone",
+                "labelEn": "Zone antenna",
+                "descriptionFr": "Pour la réserve, le rayon ou la porte arrière : elle dit où une pièce a été vue en dernier.",
+                "descriptionEn": "For the stockroom, the shop floor or the back door: it tells where a piece was last seen.",
+                "priceCents": null,
+                "currency": "CAD",
+                "buyUrl": null,
+                "isActive": false,
+                "position": 40,
+                "updatedAt": "2026-11-17 18:47:11",
+                "updatedBy": null
+            },
+            {
+                "code": "printer",
+                "kind": "printer",
+                "level": "pro",
+                "labelFr": "Imprimante à puce",
+                "labelEn": "Tag printer",
+                "descriptionFr": "Imprime l'étiquette et écrit la puce en un seul geste.",
+                "descriptionEn": "Prints the label and writes the tag in one step.",
+                "priceCents": null,
+                "currency": "CAD",
+                "buyUrl": null,
+                "isActive": false,
+                "position": 50,
+                "updatedAt": "2026-11-17 18:47:11",
+                "updatedBy": null
+            },
+            {
+                "code": "signal",
+                "kind": "signal",
+                "level": "pro",
+                "labelFr": "Avertisseur du portique",
+                "labelEn": "Exit gate sounder",
+                "descriptionFr": "Branché sur le boîtier : le portique sonne quand un article suivi passe sans être payé (réglage éteint au départ).",
+                "descriptionEn": "Plugged into the box: the gate sounds when a tracked item passes without being paid (setting off at first).",
+                "priceCents": null,
+                "currency": "CAD",
+                "buyUrl": null,
+                "isActive": false,
+                "position": 60,
+                "updatedAt": "2026-11-17 18:47:11",
+                "updatedBy": null
+            },
+            {
+                "code": "tags",
+                "kind": "tags",
+                "level": "standard",
+                "labelFr": "Étiquettes à puce (rouleau)",
+                "labelEn": "Tag labels (roll)",
+                "descriptionFr": "Un rouleau d'étiquettes à puce pour l'imprimante.",
+                "descriptionEn": "A roll of tag labels for the printer.",
+                "priceCents": null,
+                "currency": "CAD",
+                "buyUrl": null,
+                "isActive": false,
+                "position": 70,
+                "updatedAt": "2026-11-17 18:47:11",
+                "updatedBy": null
+            }
+        ]
+    }
+}

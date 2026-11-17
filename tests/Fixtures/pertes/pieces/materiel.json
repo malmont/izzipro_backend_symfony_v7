@@ -47,7 +47,7 @@
                         "technology": null,
                         "what": "Une imprimante qui imprime l'étiquette et écrit la puce d'un même geste.",
                         "allows": "Une seule étiquette, code-barres et puce ensemble.",
-                        "limits": "Matériel spécialisé ; l'application ne propose pas encore l'écriture de la puce."
+                        "limits": "Matériel spécialisé, branché sur un boîtier. L'écriture de la puce se demande dans « Impressions de puces »."
                     },
                     {
                         "level": "standard",
@@ -103,21 +103,25 @@
                 "code": "pro",
                 "label": "Pro",
                 "summary": "Tout d'un geste : l'imprimante écrit la puce en imprimant l'étiquette, le lecteur à main lit à distance.",
-                "soldWithHardware": true
+                "soldWithHardware": true,
+                "forSale": false
             },
             {
                 "code": "standard",
                 "label": "Standard",
                 "summary": "Des puces autocollantes déjà numérotées, une imprimante thermique ordinaire, un lecteur de bureau.",
-                "soldWithHardware": true
+                "soldWithHardware": true,
+                "forSale": false
             },
             {
                 "code": "diy",
                 "label": "Bricoleur",
                 "summary": "Les mêmes puces autocollantes, des étiquettes sur feuilles A4, le téléphone ou une carte à monter soi-même pour lire.",
-                "soldWithHardware": false
+                "soldWithHardware": false,
+                "forSale": false
             }
         ],
+        "products": [],
         "note": "Le niveau bricoleur se vend sans matériel : vous achetez vous-même les pièces. Les trois niveaux donnent les mêmes pièces et les mêmes puces dans l'application.",
         "screen": "pertes.installation"
     }

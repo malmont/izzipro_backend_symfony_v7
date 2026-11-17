@@ -73,6 +73,10 @@ compris ». Un droit d'usage issu d'un abonnement porte l'offre souscrite (`offe
 offres comme des formules d'abonnement et enverra les événements de facturation (`billing-events`). Le catalogue public des
 offres (`GET /api/offers`, public, lecture) servira aussi au formulaire de création et au bouton « demander » de « Mon site ».
 
+**Prévention des pertes (lot L6-a, 17/11/2026, `docs/prevention-pertes.md` § 19.4)** : deux offres `loss_prevention` et
+`loss_prevention_hardware`, posées inactives et à 0 par `ops/sql/loss_hardware_master.sql` ; le matériel vendu (table maître
+`loss_hardware_products`) se règle dans la section « Matériel de la prévention des pertes » de la page « Plateforme : pilotage ».
+
 **Offres par défaut posées le 04/11/2026 (CAD par mois, 30 jours d'essai, à affiner dans la console)** : Landing Page 29, Boutique
 en ligne 59, Landing Page + Boutique 79, Application e-commerce mobile 29, Caisse 49, Application de gestion 39, Caisse +
 Application de gestion 79, Mémoires Vivantes 49, Application Living Memory 29, Boussole ESG 49, Tout compris 199. Un droit

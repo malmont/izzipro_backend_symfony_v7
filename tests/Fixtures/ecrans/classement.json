@@ -502,6 +502,7 @@
         "POST /admin/plateforme/ia-defauts",
         "POST /admin/plateforme/livraison/credit",
         "POST /admin/plateforme/livraison/frais",
+        "POST /admin/plateforme/materiel/{code}",
         "POST /admin/plateforme/mode",
         "POST /admin/plateforme/offre/{code}",
         "POST /admin/plateforme/politique/{feature}",
@@ -1047,6 +1048,7 @@
         "GET /api/platform/entitlements",
         "GET /api/platform/events",
         "GET /api/platform/offers",
+        "GET /api/platform/pertes/materiel",
         "GET /api/platform/policies",
         "GET /api/platform/requests",
         "GET /api/platform/settings",
@@ -1058,6 +1060,7 @@
         "POST /api/platform/entitlements",
         "POST /api/platform/shipping/balances/{code}/credit",
         "PUT /api/platform/offers/{code}",
+        "PUT /api/platform/pertes/materiel/{code}",
         "PUT /api/platform/policies/{feature}",
         "PUT /api/platform/settings",
         "PUT /api/platform/shipping/settings"

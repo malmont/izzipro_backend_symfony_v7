@@ -20,6 +20,7 @@ class LossPreventionInstallationTest extends LossPreventionTestCase
     private const TAGS = self::BASE . '/puces';
     private const INSTALL = self::BASE . '/installation';
     private const EX = self::BASE . '/exercices';
+    private const SALE = '/api/platform/pertes/materiel';
 
     private string $s;
 
@@ -350,6 +351,92 @@ class LossPreventionInstallationTest extends LossPreventionTestCase
             }
             $other->close();
         }
+    }
+
+    /**
+     * Lot L6-a (17/11/2026, `docs/prevention-pertes.md` § 19) : le matériel vendu par la plateforme. Posé inactif et sans prix ; seul le
+     * super administrateur fixe le prix, le lien de la fiche et le met en vente ; les sites le lisent dans la gamme, dans leur langue.
+     */
+    public function testThePlatformSellsTheHardwareAtThePricesOnlyTheSuperAdminSets(): void
+    {
+        $master = static::getContainer()->get(\App\Services\TenantConnectionManager::class)->getPdoMaster();
+        $saved = $master->query('SELECT code, price_cents, buy_url, is_active FROM loss_hardware_products')->fetchAll(\PDO::FETCH_ASSOC);
+        try {
+            $platform = static::getContainer()->get('lexik_jwt_authentication.jwt_manager')->create($this->user(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'], 'Plateforme'));
+            $put = fn (string $code, mixed $body, ?string $token): \Symfony\Component\HttpFoundation\Response => $this->call('PUT', self::SALE . "/$code", $body, $token);
+            // Au départ : tout est inactif et sans prix ; rien n'est en vente ; les deux offres du module existent, inactives, hors du catalogue public
+            $range = $this->json($this->admin('GET', self::BASE . '/materiel'));
+            $this->assertSame([[], [false, false, false]], [$range['products'], array_column($range['levels'], 'forSale')]);
+            $all = $this->json($this->call('GET', self::SALE, null, $platform))['products'];
+            $this->assertSame(['box', 'hand_reader', 'counter_mat', 'zone_antenna', 'printer', 'signal', 'tags'], array_column($all, 'code'));
+            $this->assertSame([[false], [null]], [array_values(array_unique(array_column($all, 'isActive'))), array_values(array_unique(array_column($all, 'priceCents')))]);
+            $offers = $master->query("SELECT code, is_active, features FROM platform_offers WHERE code LIKE 'loss_prevention%' ORDER BY code")->fetchAll(\PDO::FETCH_ASSOC);
+            $this->assertSame([['loss_prevention', false], ['loss_prevention_hardware', false]], array_map(fn (array $o): array => [$o['code'], in_array($o['is_active'], [true, 't', 1, '1'], true)], $offers));
+            $this->assertSame([['module.loss_prevention'], ['module.loss_prevention']], array_map(fn (array $o): array => json_decode((string) $o['features'], true), $offers));
+            $this->assertSame([], array_values(array_filter(array_column($this->json($this->call('GET', '/api/offers', null, null))['offers'], 'code'), fn (string $c): bool => str_starts_with($c, 'loss_prevention'))));
+            // Seul le super administrateur lit et écrit
+            $this->assertSame([403, 403, 401], [$this->call('GET', self::SALE, null, $this->adminToken)->getStatusCode(), $put('box', ['priceCents' => 1], $this->adminToken)->getStatusCode(),
+                $put('box', ['priceCents' => 1], null)->getStatusCode()]);
+            // Ce qu'il refuse
+            foreach (['buyUrl' => [['buyUrl' => 'http://boutique.example/boitier'], ['buyUrl' => 'https://moi:secret@boutique.example/b'], ['buyUrl' => 'https:///sans-hote'], ['buyUrl' => 'https://boutique.example/a b']],
+                'priceCents' => [['priceCents' => -1], ['priceCents' => 12.5], ['priceCents' => '4900']], 'isActive' => [['isActive' => true], ['isActive' => 'oui']],
+                'kind' => [['kind' => 'grille-pain']], 'level' => [['level' => 'diy']], 'currency' => [['currency' => 'cad']], 'labelFr' => [['labelFr' => ' ']], 'bidule' => [['bidule' => 1]]] as $path => $bodies) {
+                foreach ($bodies as $body) {
+                    $refused = $this->json($put('box', $body, $platform), 422);
+                    $this->assertSame(['VALIDATION_FAILED', $path], [$refused['error'], $refused['errors'][0]['path']], json_encode($body));
+                }
+            }
+            $this->assertSame('VALIDATION_FAILED', $this->json($put('box', [1, 2], $platform), 422)['error'], 'une liste n\'est pas un objet');
+            $this->assertNull($this->json($this->call('GET', self::SALE, null, $platform))['products'][0]['priceCents'], 'rien n\'a été écrit');
+            // Le prix, le lien, la mise en vente : la gamme du site les montre, dans sa langue ; un niveau en vente le dit
+            $box = $this->json($put('box', ['priceCents' => 49900, 'buyUrl' => 'https://boutique.example/produits/boitier', 'isActive' => true], $platform))['product'];
+            $this->assertSame([49900, 'https://boutique.example/produits/boitier', true, 'Boîtier prêt à brancher'], [$box['priceCents'], $box['buyUrl'], $box['isActive'], $box['labelFr']]);
+            $range = $this->json($this->admin('GET', self::BASE . '/materiel'));
+            $this->assertSame([['code', 'kind', 'level', 'label', 'description', 'price', 'buyUrl']], array_values(array_unique(array_map('array_keys', $range['products']), SORT_REGULAR)));
+            $this->assertSame(['box', 'standard', 'Boîtier prêt à brancher', ['amountCents' => 49900, 'currency' => 'CAD'], 'https://boutique.example/produits/boitier'],
+                [$range['products'][0]['code'], $range['products'][0]['level'], $range['products'][0]['label'], array_slice($range['products'][0]['price'], 0, 2), $range['products'][0]['buyUrl']]);
+            $this->assertMatchesRegularExpression('/499,00\s?\$/u', $range['products'][0]['price']['display']);
+            $this->assertSame([false, true, false], array_column($range['levels'], 'forSale'));
+            $en = $this->json($this->admin('GET', self::BASE . '/materiel?locale=en'));
+            $this->assertSame(['Plug-and-play box', '$499.00'], [$en['products'][0]['label'], $en['products'][0]['price']['display']]);
+            // les exemples du contrat pour le web : la gamme d'un site avec un article en vente, et la liste du super administrateur
+            $this->saleExample('gamme-avec-materiel-en-vente', 'GET', '/api/gestion/pertes/materiel', $range);
+            $this->saleExample('plateforme-materiel', 'GET', self::SALE, $this->json($this->call('GET', self::SALE, null, $platform)));
+            // Un article neuf, sans lien : en vente sans bouton « Acheter » ; retiré de la vente, il disparaît
+            $this->json($put('cable_test', ['kind' => 'tags', 'level' => 'pro', 'labelFr' => 'Essai', 'labelEn' => 'Trial', 'priceCents' => 0, 'isActive' => true, 'position' => 5], $platform));
+            $range = $this->json($this->admin('GET', self::BASE . '/materiel'));
+            $this->assertSame([['cable_test', null], ['box', 'https://boutique.example/produits/boitier']], array_map(fn (array $p): array => [$p['code'], $p['buyUrl']], $range['products']), 'par position');
+            $this->assertSame([true, true, false], array_column($range['levels'], 'forSale'));
+            $this->json($put('cable_test', ['isActive' => false], $platform));
+            $this->assertSame(['box'], array_column($this->json($this->admin('GET', self::BASE . '/materiel'))['products'], 'code'));
+        } finally {
+            $master->exec("DELETE FROM loss_hardware_products WHERE code = 'cable_test'");
+            $restore = $master->prepare('UPDATE loss_hardware_products SET price_cents = ?, buy_url = ?, is_active = ? WHERE code = ?');
+            foreach ($saved as $row) {
+                $restore->execute([$row['price_cents'], $row['buy_url'], in_array($row['is_active'], [true, 't', 1, '1'], true) ? 'true' : 'false', $row['code']]);
+            }
+        }
+    }
+
+    /**
+     * Un exemple JSON du lot L6-a (`tests/Fixtures/pertes/vente/`) : réécrit avec `UPDATE_LOSS_EXAMPLES=1`, sinon sa forme (clés) est comparée.
+     *
+     * @param array<string, mixed> $body
+     */
+    private function saleExample(string $name, string $method, string $path, array $body): void
+    {
+        $file = dirname(__DIR__, 2) . "/Fixtures/pertes/vente/$name.json";
+        if (getenv('UPDATE_LOSS_EXAMPLES') === '1') {
+            if (!is_dir(dirname($file))) {
+                mkdir(dirname($file), 0775, true);
+            }
+            file_put_contents($file, json_encode(['request' => ['method' => $method, 'path' => $path], 'status' => 200, 'body' => $body], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n");
+
+            return;
+        }
+        $stored = json_decode((string) file_get_contents($file), true);
+        $keys = fn (array $b): array => [array_keys($b), array_keys(($b['products'] ?? [])[0] ?? [])];
+        $this->assertSame($keys($stored['body']), $keys($body), "forme de l'exemple $name");
     }
 
     public function testTheHardwareRangeHasThreeLevelsForEachNeedAndNoPrice(): void

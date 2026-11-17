@@ -2209,6 +2209,7 @@ choisi de basculer sans attendre, Fable relira ensuite). La liste fait foi pour 
 | B8 | boîtier, dépôt local | `4a9ea4d` | `izzibox/portique.py` (sorties permises gardées sur disque, deltas, groupes d'attente et de location), `izzibox/appareils.py` (avertisseur, passage, grâce du comptoir), `izzibox/service.py` (relève des sorties) ; contrat resynchronisé sur L5-d |
 | L5-e (**à risque**, sécurité) | backend `app_v2` | le commit du lot L5-e, sans migration (§ 18.13) | `LossBoxToken` (durées), `LossBoxGuardSubscriber` (preuve de la machine sur toute route au jeton), `LossBoxChannelService::proveMachine` et `sameMachine` (la bonne machine passe toujours, les fausses comptent) ; relu par un relecteur neuf |
 | B9 | boîtier, dépôt local | le commit B9 | `izzibox/canal.py` (en-tête `X-Loss-Box-Machine` avec chaque jeton), `izzibox/boitier.py` (`_canal_du_site`), faux serveur (jeton d'une heure, preuve exigée) |
+| L6-a | backend `app_v2` | le commit du lot L6-a (§ 19.4) | `ops/sql/loss_hardware_master.sql` (base maître : matériel vendu, deux offres inactives), `LossHardwareProductRepository` (validation), `LossHardwareSaleController`, `LossHardwareCatalog::forSale` |
 
 Vérifié sous Opus : `LossPreventionZoneTest` et le dossier du module verts ; 21 mutations sur L4-a (20 tuées, une équivalente :
 le rejeu d'une arrivée est déjà bloqué par la clé du fait et par la requête de présence) ; 12 mutations sur B5, toutes tuées.
@@ -2960,3 +2961,96 @@ période d'acceptation n'apporterait que de la faiblesse).
 - Tests : `LossPreventionPrintTest::testACopiedTokenIsUselessWithoutItsMachineOnEveryRouteAndThePasswordNeverLeavesWithoutIt` (5 routes,
   sans preuve et avec une autre machine, aucun fait écrit, aucun mot de passe, limiteur), `LossPreventionBoxTest` (une heure,
   renouvellement à mi-vie sans trou, échange à 29 jours et refus au-delà de 30) ; toutes les aides du canal envoient la preuve.
+
+## 19. Lot L6 : l'offre et la vente du matériel (PLAN VALIDÉ par le propriétaire le 17/11/2026 ; L6-a codé)
+
+Ce plan reprend les décisions déjà prises par le propriétaire : § 2 « Offre », § 16.13 point 5 « L'offre du boîtier », § 16.17 « Pour
+L6 ». **Les prix sont fixés par le propriétaire** ; le plan n'en propose aucun.
+
+### 19.1 Ce que L6 apporte, et ce qu'il n'apporte pas
+
+- **Deux offres de la plateforme** dans `platform_offers` (console de pilotage, `docs/console-pilotage.md`) : `loss_prevention`
+  (« sans matériel ») et `loss_prevention_hardware` (« avec matériel »). Toutes deux accordent la même clé `module.loss_prevention` :
+  le logiciel est le même, l'offre « avec matériel » ajoute le support du matériel vendu.
+- **Le matériel est une vente à part**, dans la boutique de forfaits de la plateforme (le site `shopTenant`) : une fiche produit par
+  article (boîtier prêt à brancher, lecteur à main, tapis de comptoir, antennes de zone, imprimante à puce, avertisseur du portique,
+  rouleaux d'étiquettes à puce). La commande, le paiement et la livraison sont ceux de la boutique existante : L6 n'écrit ni paiement
+  ni livraison.
+- **La gamme servie par le serveur** (`GET /api/gestion/pertes/materiel`, § 13.10) reçoit pour chaque niveau vendu son prix et un
+  lien « Acheter » vers la fiche de la boutique de forfaits. Le niveau bricoleur reste `soldWithHardware: false`, avec la liste du
+  matériel essayé.
+- **Le boîtier vendu est reconnu au premier branchement** (décision du 16/11/2026) :
+  - à l'expédition, un écran du super administrateur, « Boîtiers à expédier », relie le numéro de série et le code de l'étiquette
+    d'un boîtier à la commande, donc au site acheteur (une table de la base maître) ;
+  - au premier branchement, le boîtier dépose sa demande de jumelage avec ce code (lot L3-a2, inchangé). La plateforme reconnaît un
+    code réservé à un site : elle crée dans ce site un boîtier « à confirmer », sans rien inscrire ;
+  - l'administrateur reçoit un courriel et une notification « Votre boîtier est branché ». Il confirme d'un clic « C'est bien mon
+    boîtier » : le jumelage se fait, la pastille passe au vert. Aucun code à saisir ; le code reste en secours ;
+  - un code réservé ne se jumelle jamais à un autre site.
+- **« Renvoyer le code par courriel »** depuis la gestion, pour un boîtier vendu : le code part à l'administrateur du site acheteur,
+  jamais à une autre adresse.
+- **Le logiciel seul** (offre « sans matériel », gamme bricoleur) : une page de téléchargement du paquet `.deb` et de l'image
+  Raspberry Pi, avec leur empreinte, et le guide complet. L'avertissement « Installation à vos risques… » est visible sur la page, dans
+  le guide et dans les conditions de vente. **Sa formulation attend l'avocat.**
+- **Pas dans L6** : le service après-vente du matériel (retour, échange) ; la location de matériel ; un paiement autre que celui de
+  la boutique de forfaits.
+
+### 19.2 Découpage proposé
+
+| Sous-lot | Contenu | Risque |
+|---|---|---|
+| **L6-a** | les deux offres ; prix et lien « Acheter » dans la gamme servie ; fiches produits du matériel (contenu, posé par le super administrateur) | ordinaire |
+| **L6-b** | expédition : table maître des boîtiers vendus, écran « Boîtiers à expédier », reconnaissance au premier branchement, « C'est bien mon boîtier », courriel et notification | **à risque** (un boîtier sur le mauvais site) : relecteur neuf et mutations |
+| **L6-c** | « Renvoyer le code par courriel », réservé à l'administrateur du site acheteur | ordinaire |
+| **L6-d** | logiciel seul : page de téléchargement, empreintes, avertissement ; côté boîtier (lot B10) : guide court (prêt à brancher) et guide complet | ordinaire ; texte après l'avocat |
+
+### 19.3 Questions au propriétaire : TOUTES les propositions validées le 17/11/2026
+
+1. **Prix** des deux offres, par mois, et de chaque article de matériel. *Proposition : aucune ; à fixer par vous.*
+2. **Pays de vente du matériel** et devise. *Proposition : le Canada d'abord, en CAD, comme les offres par défaut ; les États-Unis et
+   la France plus tard.*
+3. **Qui expédie**, et d'où ; un stock tenu dans la boutique de forfaits ? *Proposition : vous expédiez ; le stock est celui des
+   fiches produits de la boutique de forfaits.*
+4. **La boutique de forfaits n'existe pas encore** (`docs/console-pilotage.md`, « Quand la boutique de forfaits de la plateforme
+   sera créée »). *Proposition : L6-a et L6-b se codent et s'essaient sur un site d'essai qui joue la boutique de forfaits ; la mise en
+   vente réelle attend sa création.* **Le propriétaire la créera lui-même au moment des essais** (avec l'IA et le panneau de réglages de
+   la boutique) : rien dans L6 n'en dépend, les prix et les liens d'achat se règlent à part.
+5. **Garantie** du boîtier prêt à brancher : durée, et ce qu'elle couvre. *Proposition : un an, matériel et logiciel ; le texte
+   passe par l'avocat.*
+6. **Le boîtier vendu à un site, puis revendu ou déplacé** : *Proposition : l'administrateur le détache (geste existant) ; le
+   boîtier se jumelle alors par un code neuf, comme tout boîtier.*
+7. **Hébergement des téléchargements** du logiciel seul. *Proposition : servis par la plateforme, derrière la connexion de
+   l'administrateur d'un site qui a le module, avec leur empreinte SHA-256.*
+
+### 19.4 Lot L6-a codé : les offres et les prix du matériel (17/11/2026 ; plan validé par le propriétaire)
+
+**Lot ordinaire** : essais et mutations. **Codé sous Opus, à faire relire par Fable** (§ 17.12). Pas de migration de base de site :
+un SQL de la **base maître**, `ops/sql/loss_hardware_master.sql` (idempotent, relu par `tests/bootstrap.php`), posé par le chaperon.
+
+- **Deux offres** dans `platform_offers` : `loss_prevention` (« sans matériel ») et `loss_prevention_hardware` (« avec matériel »), toutes
+  deux `["module.loss_prevention"]`, posées **inactives, à 0** (`ON CONFLICT DO NOTHING`) : le propriétaire fixe leur prix et les active
+  dans la console « Plateforme », onglet Offres (existant). Inactives, elles ne paraissent pas dans `GET /api/offers`.
+- **Table maître `loss_hardware_products`** : `code`, `kind` (box, hand_reader, counter_mat, zone_antenna, printer, signal, tags), `level`
+  (pro | standard), libellés et descriptions fr / en, `price_cents` (NULL tant qu'il n'est pas fixé), `currency`, `buy_url` (https),
+  `is_active`, `position`. Sept lignes posées inactives et sans prix. La base garde : un article actif a un prix ; l'adresse commence
+  par `https://`.
+- **Super administrateur** (`Master/LossHardwareProductRepository`, `Controller/LossHardwareSaleController`) :
+  `GET /api/platform/pertes/materiel` → `{ products [{ code, kind, level, labelFr, labelEn, descriptionFr, descriptionEn, priceCents,
+  currency, buyUrl, isActive, position, updatedAt, updatedBy }] }` ; `PUT /api/platform/pertes/materiel/{code}` (crée ou modifie) →
+  `{ product }` ; 422 `VALIDATION_FAILED { errors [{ path, message }] }` (champ inconnu, genre, niveau, libellé de 1 à 160, description de
+  600 au plus, prix entier ≥ 0 ou null, devise ISO, adresse https complète sans identifiants, article actif sans prix, position).
+- **La saisie par le propriétaire** (chef de projet, validation du contrat) : page « Plateforme : pilotage » d'EasyAdmin (super
+  administrateur seul), section « Matériel de la prévention des pertes », sous les offres : prix (vide : pas de prix), lien de la fiche,
+  « En vente » ; `POST /admin/plateforme/materiel/{code}` (jeton CSRF), même validation que l'API. Les deux offres se règlent dans la
+  section « Offres et prix » existante. **Rien n'est posé par le code** : tout reste inactif et à 0 jusqu'au propriétaire.
+- **La gamme des sites** (`GET /api/gestion/pertes/materiel` et `/exercices/materiel`, en ajout) : `products [{ code, kind, level, label,
+  description, price { amountCents, currency, display }, buyUrl | null }]` (actifs seulement, par position ; `price` toujours présent) et
+  `levels[].forSale`. Le web affiche le prix et le bouton « Acheter » (`buyUrl`, nouvel onglet) ; sans `buyUrl`, pas de bouton.
+  **Le mobile n'affiche ni prix ni lien d'achat du matériel** (règle d'Apple hors des États-Unis, chef de projet) : rien n'est prévu pour
+  lui ; le bouton « Acheter » est pour le web seulement.
+- Tests : `LossPreventionInstallationTest::testThePlatformSellsTheHardwareAtThePricesOnlyTheSuperAdminSets`. Exemples pour le web :
+  `tests/Fixtures/pertes/vente/gamme-avec-materiel-en-vente.json` (la gamme d'un site, un article en vente) et `plateforme-materiel.json`
+  (la liste du super administrateur) ; `tests/Fixtures/pertes/pieces/materiel.json` porte les clés nouvelles (`products` vide).
+- **Ce que la photo verra changer** : `GET /api/gestion/pertes/materiel` et `/exercices/materiel` (clés `products`, vide tant que rien
+  n'est en vente, et `levels[].forSale`) ; `GET /api/platform/offers` (deux offres inactives de plus) ; deux routes nouvelles du super
+  administrateur. Le catalogue public `GET /api/offers` ne change pas (offres inactives).

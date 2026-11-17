@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (649)
+## Boutique et commun (651)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -674,6 +674,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/platform/events` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::events` |
 | PUT | `/api/platform/offers/{code}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformOffersController::put` |
 | GET | `/api/platform/offers` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformOffersController::list` |
+| PUT | `/api/platform/pertes/materiel/{code}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `LossPrevention\Controller\LossHardwareSaleController::put` |
+| GET | `/api/platform/pertes/materiel` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `LossPrevention\Controller\LossHardwareSaleController::list` |
 | PUT | `/api/platform/policies/{feature}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::policy` |
 | GET | `/api/platform/policies` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::policies` |
 | PATCH | `/api/platform/requests/{id}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::decide` |
@@ -955,7 +957,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (109)
+## Administration (EasyAdmin) (110)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -1025,6 +1027,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/plateforme/ia-defauts` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::aiDefaults` |
 | POST | `/admin/plateforme/livraison/credit` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shippingCredit` |
 | POST | `/admin/plateforme/livraison/frais` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shippingFees` |
+| POST | `/admin/plateforme/materiel/{code}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::lossHardware` |
 | POST | `/admin/plateforme/mode` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::switchMode` |
 | POST | `/admin/plateforme/offre/{code}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::offer` |
 | POST | `/admin/plateforme/politique/{feature}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::policy` |
