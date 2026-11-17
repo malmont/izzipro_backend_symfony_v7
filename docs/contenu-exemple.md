@@ -139,3 +139,12 @@ Les dates de CES commandes (commande, statut, expédition, annulation, paiements
 Rejouable : il complète jusqu'aux nombres visés, n'efface et n'écrase rien ; `--dry-run` compte sans écrire. Hors du lot (dit au chef) : le
 retour d'une commande web (il exige un paiement Stripe capturé) et la session de caisse en espèces (le journal de caisse, inaltérable et
 chaîné, ne se date pas dans le passé). Essai : `tests/Functional/Platform/TestSiteDataSeederTest.php`.
+
+**Depuis le web** (bouton à poser par le front, par exemple dans la livraison) : `POST /api/site/essai/remplir` (administrateur du site,
+`App\Controller\SiteFeaturesController\SiteEssaiController`) met le même remplissage en file sur le worker `media` (`RunEssaiMessage`,
+jamais relancé) → 202 `{ job }` ; 422 `ESSAI_NOT_A_TEST_SITE` hors site d'essai, rien en file ; 409 `ESSAI_RUNNING` si un remplissage est
+déjà en attente ou en cours (tenu pour perdu après une heure). `GET /api/site/essai/remplir` → 200 `{ allowed, job: null | { state:
+queued | running | done | failed, requestedAt, requestedBy (prénom), startedAt, finishedAt, report: [lignes], error } }` : le bouton ne
+s'affiche que si `allowed`. L'état est gardé 7 jours dans le cache partagé (`EssaiJobStore`, aucune table) ; commande et worker passent par
+le même `EssaiRunner`, qui relit le verrou au moment d'écrire. Écran `site.essai` du registre (famille ventes : jamais ouvert à une agence
+entrée). Essai : `tests/Functional/Platform/SiteEssaiRoutesTest.php`.

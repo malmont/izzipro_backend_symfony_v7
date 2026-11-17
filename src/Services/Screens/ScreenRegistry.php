@@ -68,6 +68,8 @@ final class ScreenRegistry
         'site.journal' => ['family' => self::VENTE, 'module' => null],
         // lot AG-ASSIST : l'accès d'assistance de l'agence, ouvert et fermé par le commerçant seul (rangé près du journal du site : jamais à l'agence)
         'site.assistance' => ['family' => self::VENTE, 'module' => null],
+        // lot ESSAI-DONNÉES : remplir un site d'essai de clients et de commandes fictifs (refusé hors site d'essai)
+        'site.essai' => ['family' => self::VENTE, 'module' => null],
         'imports.commandes' => ['family' => self::VENTE, 'module' => 'module.boutique'],
         'imports.clients' => ['family' => self::CLIENTS, 'module' => 'module.boutique'],
         // --- Clients, assistance, contenus (web)
@@ -274,6 +276,7 @@ final class ScreenRegistry
         ['#^/api/entreprise(/|$)#', ['GET' => '@public', '*' => 'site.reglages']],
         ['#^/api/site/assistance(/|$)#', 'site.assistance'],
         ['#^/api/site/assistant(/|$)#', 'site.assistant'],
+        ['#^/api/site/essai(/|$)#', 'site.essai'],
         ['#^/api/site/domain(/|$)#', 'site.domaine'],
         ['#^/api/site/features(/|$)#', 'site.modules'],
         ['#^/api/site/help(/|$)#', 'site.aide'],
