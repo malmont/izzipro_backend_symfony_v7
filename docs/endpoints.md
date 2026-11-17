@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (635)
+## Boutique et commun (636)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -721,6 +721,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/pos/offline-pack` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosOfflineController::pack` |
 | GET | `/api/pos/offline-sales` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosOfflineController::history` |
 | POST | `/api/pos/offline-sales` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosOfflineController::sales` |
+| POST | `/api/pos/pertes/articles-non-lus/suite` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `LossPrevention\Controller\LossPosController::after` |
 | POST | `/api/pos/pertes/articles-non-lus` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `LossPrevention\Controller\LossPosController::unread` |
 | POST | `/api/pos/pin-login` | PUBLIC_ACCESS | `Controller\PosController\PosPinController::pinLogin` |
 | POST | `/api/pos/pin` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosPinController::setPin` |

@@ -89,7 +89,9 @@ class LossDigestService
         return [$t('evening_day') => LossTexts::day(new \DateTimeImmutable($day), $language), $t('evening_tracked') => (string) $b['trackedSold'],
             $t('evening_unread') => (string) $b['soldWithoutRead'], $t('evening_exits') => (string) $b['exitsWithoutSale'], $t('evening_stockroom') => (string) $b['leftStockroom'],
             $t('evening_unseen', ['%days%' => $b['unseenDays']]) => (string) $b['unseenPieces'], $t('evening_missing') => (string) $b['missingPieces'],
-            $t('evening_down') => (string) $b['devicesDown']];
+            $t('evening_down') => (string) $b['devicesDown'],
+            // lot L5-a : l'alerte en caisse, en deux nombres (jamais par poste ni par personne dans le courriel)
+            $t('evening_counter_shown') => (string) $b['counterAlerts']['shown'], $t('evening_counter_proceeded') => (string) $b['counterAlerts']['proceeded']];
     }
 
     public function sendIfDue(?\DateTimeImmutable $now = null, bool $anyHour = false): array

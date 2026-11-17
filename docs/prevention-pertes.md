@@ -2195,6 +2195,7 @@ choisi de basculer sans attendre, Fable relira ensuite). La liste fait foi pour 
 | L4-c, migration et code | backend `app_v2` | migration `ccc663f9`, lot : le commit qui la suit (§ 17.15) | `migrations/Version20270124100000.php` (heures, curseurs, index des mouvements, garde des appareils v2) et le script `scripts/migrate_all_v2_pertes_l4c.sh` (hors dépôt) ; `LossDepotService` (tout), son branchement dans `LossAnalysisService::run`, les heures d'ouverture de `LossSettingsService`, l'étape `opening_hours` de l'assistant, les trois scénarios d'exercice, la lecture (sujet `zone`, preuve `zone_move`) |
 | B6, B7 | boîtier, dépôt local | `2f10fce`, `023aac4` | `izzibox/scenarios.py` (antenne `back_door`, scène « par la porte arrière »), guides de l'installateur ; `izzibox/appareils.py` et `izzibox/file.py` (présence gardée sur disque, aucun départ après une panne) |
 | L4-d, migration et code | backend `app_v2` | migration `55080132`, lot : le commit qui la suit (§ 17.16) | `migrations/Version20270125100000.php` (tables du comptage, gardes) et le script `scripts/migrate_all_v2_pertes_l4d.sh` (hors dépôt) ; `LossCountService` et `LossCountRepository` (tout), `LossCountController`, le passage des comptages dans `LossAnalysisService::run`, le bilan joint à `LossDigestService`, le scénario `piece_missing` |
+| L5-a, migration et code | backend `app_v2` | migration `a98654af`, lot : le commit qui la suit (§ 18.8) | `migrations/Version20270126100000.php` et le script `scripts/migrate_all_v2_pertes_l5a.sh` (hors dépôt) ; `LossCounterService` (alerte, vérification, suite), `LossCounterAlertDayRepository`, `LossPosController::after`, le réglage `cashierAlerts` de `LossSettingsService`, `counterAlerts` du bilan (`LossCountService`) et du résumé (`LossDigestService`) |
 
 Vérifié sous Opus : `LossPreventionZoneTest` et le dossier du module verts ; 21 mutations sur L4-a (20 tuées, une équivalente :
 le rejeu d'une arrivée est déjà bloqué par la clé du fait et par la requête de présence) ; 12 mutations sur B5, toutes tuées.
@@ -2735,3 +2736,35 @@ liste en direct.
 14. **Ordre** : *L5-a, L5-b, L5-c, L5-d, L5-e ; L5-f après l'essai du matériel.*
 
 Les questions 1 et 3 à 14 sont validées telles quelles par le propriétaire le 17/11/2026.
+
+### 18.8 Lot L5-a codé : l'alerte en caisse (17/11/2026 ; contrat validé par le chef de projet le 17/11/2026)
+
+Risque ordinaire (§ 18.5) : je me vérifie, avec mutations. **Codé sous Opus, à faire relire par Fable** (§ 17.12). Migration
+`Version20270126100000` (3 instructions), script `scripts/migrate_all_v2_pertes_l5a.sh` (contrôle « 1 table, 1 colonne, 1 index »).
+
+- **Réglage** : `GET /api/gestion/pertes/reglages` rend `cashierAlerts { allowed: true, enabled, availableFrom: null, note }`
+  (permis dans tous les pays : l'alerte parle d'un article, jamais d'une personne ; éteint par défaut,
+  `loss_setting.cashier_alerts_enabled`). Il s'écrit par le **PUT** des réglages, comme les autres :
+  `PUT /api/gestion/pertes/reglages { cashierAlerts: { enabled } }` → la même forme que la lecture ; 422
+  `fields["cashierAlerts.enabled"] = "MUST_BE_BOOLEAN"` (rien n'est écrit) ; journal `SETTINGS_CHANGED { fields:
+  ["cashier_alerts_enabled"] }`.
+- **La route de la caisse** (`POST /api/pos/pertes/articles-non-lus`, § 16.15) garde toute sa réponse et ajoute `display`,
+  `notice`, `checkId`. `display` est vrai seulement si le contrôle est actif, l'alerte allumée et `unread` non vide ; `notice` est le
+  texte du serveur (« 2 articles suivis non lus : posez-les sur le tapis. », au singulier pour un seul ; `?locale=fr|en`, sinon la
+  langue du site) ; `checkId` est une vérification tirée au hasard (32 caractères hexadécimaux), gardée 15 minutes
+  (`LossCounterService::CHECK_TTL`) dans le pool des limites de débit, rien en base. Sinon : `false`, `null`, `null`.
+- **La suite** : `POST /api/pos/pertes/articles-non-lus/suite { checkId, proceeded }`, mêmes droits que la caisse
+  (`access_control` `^/api/pos/pertes`). Toujours **204** : une vérification inconnue, expirée, déjà comptée, ou un site sans le droit
+  du module (lu en base, quel que soit le mode de la plateforme) ne comptent rien, et la caisse n'en sait rien. 422 `VALIDATION_FAILED`
+  pour un corps invalide (`errors[].path` : `checkId`, `proceeded`, `body`). Une vérification compte UNE fois (retirée du pool avant
+  d'écrire), pour le poste où l'alerte a été montrée et le jour du magasin du paiement.
+- **Ce qui est gardé** : `loss_counter_alert_day (cash_register_id, store_day, shown, proceeded, updated_at)`, une ligne par poste et
+  par jour, écrite par une seule instruction (`ON CONFLICT … DO UPDATE`) ; une contrainte garde `0 ≤ proceeded ≤ shown`. Ni personne, ni
+  vente, ni article. Aucun constat ne naît de l'alerte : la règle « articles suivis vendus sans lecture » (§ 16.19) reste la seule source.
+- **Bilan du soir** (`/bilan`, `/exercices/bilan`) : `counterAlerts { shown, proceeded, byRegister [{ cashRegisterId, name, shown,
+  proceeded }] }` ; en exercice, `0`, `0`, `[]` (la caisse ne joue pas d'exercice). Le résumé du jour y ajoute deux lignes : « Alertes
+  montrées en caisse », « Dont « continuer quand même » » (les deux nombres, pas le détail par poste).
+- **Exemples** : `tests/Fixtures/pertes/boitier/caisse-alerte-montree.json`, `caisse-suite-alerte.json`,
+  `caisse-refus-suite-invalide.json` (la vérification y est masquée par des zéros) ; `docs/caisse.md` porte le contrat pour l'application
+  de caisse (en pause : le chef de projet le range dans les consignes de sa reprise).
+- Tests : `LossPreventionCounterTest::testTheTillShowsTheAlertOnlyWhenTheManagerTurnsItOnAndCountsEachCheckOncePerRegisterAndDay`.

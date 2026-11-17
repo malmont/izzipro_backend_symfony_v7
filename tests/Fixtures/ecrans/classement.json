@@ -145,6 +145,7 @@
         "POST /api/pos/gift-cards/{code}/cash-out",
         "POST /api/pos/offline-sales",
         "POST /api/pos/pertes/articles-non-lus",
+        "POST /api/pos/pertes/articles-non-lus/suite",
         "POST /api/pos/pin",
         "POST /api/pos/pin-login",
         "POST /api/pos/quote",

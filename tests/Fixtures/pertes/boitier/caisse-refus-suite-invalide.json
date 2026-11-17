@@ -1,0 +1,26 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/pos/pertes/articles-non-lus/suite",
+        "body": {
+            "checkId": "XYZ",
+            "proceeded": "oui"
+        }
+    },
+    "status": 422,
+    "body": {
+        "error": "VALIDATION_FAILED",
+        "code": "VALIDATION_FAILED",
+        "message": "Suite d'alerte invalide",
+        "errors": [
+            {
+                "path": "checkId",
+                "message": "vérification attendue (32 caractères hexadécimaux)"
+            },
+            {
+                "path": "proceeded",
+                "message": "booléen attendu"
+            }
+        ]
+    }
+}

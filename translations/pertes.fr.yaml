@@ -288,6 +288,8 @@ settings:
         confirmed: 'Heures confirmées : une pièce déplacée en dehors, marges comprises, ouvre un constat « hors des heures ».'
         none: 'Aucune heure d''ouverture confirmée : la règle « mouvement hors des heures » ne dit rien tant que vous ne les avez pas confirmées jour par jour.'
     legalNotice: 'Ces réglages suivent le pays et la région de votre boutique. Faites-les relire par un avocat avant de vous en servir pour une décision concernant un salarié.'
+    cashierAlerts:
+        note: 'La caisse montre les articles suivis du panier qui n''ont pas été lus sur le tapis, avant le paiement. Elle ne bloque jamais la vente.'
     personPatterns:
         allowed: 'Les règles qui comptent les actes d''un même compte dans le temps sont permises dans votre région. Vous pouvez les éteindre.'
         notAllowed: 'Les règles qui comptent les actes d''un même compte dans le temps ne sont pas proposées dans votre région.'
@@ -776,6 +778,10 @@ prints:
         EXERCISE_NO_UNTAGGED_PIECE: 'Aucune pièce d''exercice sans puce : créez d''abord des pièces d''exercice.'
         EXERCISE_NO_PRINTER: 'Ce boîtier simulé n''a pas d''imprimante : créez-en un nouveau.'
 
+counter:
+    notice:
+        one: '1 article suivi non lu : posez-le sur le tapis.'
+        many: '%count% articles suivis non lus : posez-les sur le tapis.'
 counts:
     scope:
         all: Tout le magasin

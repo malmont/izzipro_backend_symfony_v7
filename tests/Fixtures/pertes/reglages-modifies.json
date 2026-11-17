@@ -31,9 +31,10 @@
             "note": "Les règles qui comptent les actes d'un même compte dans le temps ne sont pas proposées dans votre région."
         },
         "cashierAlerts": {
-            "allowed": false,
+            "allowed": true,
             "enabled": false,
-            "availableFrom": "L5"
+            "availableFrom": null,
+            "note": "La caisse montre les articles suivis du panier qui n'ont pas été lus sur le tapis, avant le paiement. Elle ne bloque jamais la vente."
         },
         "video": {
             "allowed": false,

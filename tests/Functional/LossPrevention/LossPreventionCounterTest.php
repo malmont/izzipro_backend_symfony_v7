@@ -325,7 +325,8 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         // Rien sur le tapis : les deux articles suivis du panier manquent ; l'article sans pièce et celui dont la pièce n'a pas de puce ne sont pas suivis
         $before = $writes();
         $empty = $ask($basket);
-        $this->assertSame(['active', 'reason', 'cashRegisterId', 'tracked', 'read', 'unread', 'extra', 'checkedAt'], array_keys($empty));
+        $this->assertSame(['active', 'reason', 'cashRegisterId', 'tracked', 'read', 'unread', 'extra', 'checkedAt', 'display', 'notice', 'checkId'], array_keys($empty));
+        $this->assertSame([false, null, null], [$empty['display'], $empty['notice'], $empty['checkId']], 'l\'alerte en caisse est éteinte par défaut (lot L5-a)');
         $this->assertSame([true, null, 3, 0, [[$a, 2, 2], [$b, 1, 1]], 0], $short($empty));
         $this->assertSame([$this->register, ['productVariantId' => $a, 'name' => "Veste L3B-$this->s", 'variantLabel' => null, 'quantity' => 2, 'missing' => 2]], [$empty['cashRegisterId'], $empty['unread'][0]]);
         $this->assertEqualsWithDelta(time(), strtotime($empty['checkedAt']), 5);
@@ -460,6 +461,116 @@ class LossPreventionCounterTest extends LossPreventionTestCase
         $this->assertSame(403, $this->call('POST', self::UNREAD, ['items' => []], static::getContainer()->get('lexik_jwt_authentication.jwt_manager')->create($customer))->getStatusCode());
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . self::UNREAD, [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_X_LOSS_BOX' => $token], '{"items":[]}');
         $this->assertSame(401, $this->client->getResponse()->getStatusCode());
+    }
+
+    public function testTheTillShowsTheAlertOnlyWhenTheManagerTurnsItOnAndCountsEachCheckOncePerRegisterAndDay(): void
+    {
+        // Lot L5-a (17/11/2026, docs/prevention-pertes.md § 18.2, « B ») : l'alerte en caisse
+        [$a] = $this->article('Gilet');
+        $a1 = $this->tagged($a, '11');
+        $a2 = $this->tagged($a, '12');
+        [$id, $token, $devices] = $this->enrolled('Caisse 1', [['serial' => "TAPIS-$this->s", 'kind' => 'counter_mat', 'status' => 'ok']]);
+        $mat = $devices["TAPIS-$this->s"];
+        $this->json($this->admin('PUT', self::BOXES . "/$id/appareils/$mat", ['cashRegisterId' => $this->register]));
+        $this->loginPos(['ROLE_USER_POS']);
+        $this->openSession();
+        $basket = ['cashRegisterId' => $this->register, 'items' => [['productVariantId' => $a, 'quantity' => 2]]];
+        $ask = fn (string $query = ''): array => $this->json($this->pos('POST', self::UNREAD . $query, $basket));
+        $after = function (mixed $body, int $status = 204): Response {
+            $response = $this->pos('POST', self::UNREAD . '/suite', $body);
+            $this->assertSame($status, $response->getStatusCode(), (string) $response->getContent());
+
+            return $response;
+        };
+        $counters = fn (): array => array_map(fn (array $r): array => array_map('intval', $r), $this->db->fetchAllAssociative('SELECT cash_register_id, shown, proceeded FROM loss_counter_alert_day ORDER BY 1'));
+        $writes = fn (): array => array_map('intval', $this->db->fetchNumeric('SELECT (SELECT COUNT(*) FROM loss_journal), (SELECT COUNT(*) FROM loss_finding), (SELECT COUNT(*) FROM pos_audit_log),'
+            . ' (SELECT COUNT(*) FROM "order"), (SELECT COUNT(*) FROM inventory_movements)'));
+
+        // Le réglage : permis partout, éteint par défaut ; la caisse ne montre rien
+        $settings = $this->json($this->admin('GET', self::BASE . '/reglages'));
+        $this->assertSame(['allowed', 'enabled', 'availableFrom', 'note'], array_keys($settings['cashierAlerts']));
+        $this->assertSame([true, false, null], [$settings['cashierAlerts']['allowed'], $settings['cashierAlerts']['enabled'], $settings['cashierAlerts']['availableFrom']]);
+        $this->assertStringContainsString('ne bloque jamais la vente', $settings['cashierAlerts']['note']);
+        $off = $ask();
+        $this->assertSame([true, 2, false, null, null], [$off['active'], $off['unread'][0]['missing'], $off['display'], $off['notice'], $off['checkId']], 'éteinte : rien à montrer, même s\'il manque des articles');
+        // Écrit par le PUT des réglages, comme les autres ; une valeur qui n'est pas un booléen est refusée, rien n'est écrit
+        foreach ([['enabled' => 'oui'], true, ['enabled' => null], []] as $wrong) {
+            $this->assertSame(['cashierAlerts.enabled' => 'MUST_BE_BOOLEAN'], $this->json($this->admin('PUT', self::BASE . '/reglages', ['cashierAlerts' => $wrong]), 422)['fields']);
+        }
+        $this->assertFalse((bool) $this->db->fetchOne('SELECT cashier_alerts_enabled FROM loss_setting ORDER BY id LIMIT 1'));
+        $this->assertTrue($this->json($this->admin('PUT', self::BASE . '/reglages', ['cashierAlerts' => ['enabled' => true]]))['cashierAlerts']['enabled']);
+        $this->assertSame(['cashier_alerts_enabled'], json_decode((string) $this->db->fetchOne("SELECT data FROM loss_journal WHERE type = 'SETTINGS_CHANGED' ORDER BY id DESC LIMIT 1"), true)['fields']);
+
+        // Allumée : il manque deux articles, la caisse montre le texte du serveur et reçoit une vérification
+        $before = $writes();
+        $first = $ask('?locale=fr');
+        $this->assertSame([true, '2 articles suivis non lus : posez-les sur le tapis.'], [$first['display'], $first['notice']]);
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $first['checkId']);
+        $this->assertSame('2 tracked items not read: place them on the mat.', $ask('?locale=en')['notice']);
+        $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $a1);
+        $one = $ask('?locale=fr');
+        $this->assertSame([true, '1 article suivi non lu : posez-le sur le tapis.'], [$one['display'], $one['notice']]);
+        $this->assertNotSame($first['checkId'], $one['checkId'], 'une vérification par question');
+        $this->fact($token, 'COUNTER_SEEN', "TAPIS-$this->s", $a2);
+        $all = $ask();
+        $this->assertSame([[], false, null, null], [$all['unread'], $all['display'], $all['notice'], $all['checkId']], 'tout est lu : rien à montrer');
+
+        // La suite, au paiement : une fois par vérification, pour son poste et le jour du magasin
+        $this->assertSame([], $counters());
+        $after(['checkId' => $first['checkId'], 'proceeded' => true]);
+        $this->assertSame([['cash_register_id' => $this->register, 'shown' => 1, 'proceeded' => 1]], $counters());
+        $after(['checkId' => $first['checkId'], 'proceeded' => true]);
+        $after(['checkId' => str_repeat('ab', 16), 'proceeded' => true]);
+        $this->assertSame([['cash_register_id' => $this->register, 'shown' => 1, 'proceeded' => 1]], $counters(), 'rejouée ou inconnue : 204, rien n\'est compté');
+        $after(['checkId' => $one['checkId'], 'proceeded' => false]);
+        $this->assertSame([['cash_register_id' => $this->register, 'shown' => 2, 'proceeded' => 1]], $counters(), 'relu puis payé : montrée, sans « continuer quand même »');
+        $this->assertSame(['cash_register_id', 'store_day', 'shown', 'proceeded', 'updated_at'], array_keys($this->db->fetchAssociative('SELECT * FROM loss_counter_alert_day LIMIT 1')),
+            'des compteurs : ni personne, ni vente, ni article');
+        $this->assertSame($this->today(), (string) $this->db->fetchOne('SELECT store_day FROM loss_counter_alert_day LIMIT 1'));
+        $this->assertSame($before, $writes(), 'ni journal du module, ni constat, ni journal de caisse, ni vente, ni stock (les deux faits du tapis viennent du boîtier)');
+        // Corps invalide : 422, rien n'est compté
+        $paths = fn (mixed $body): array => array_column($this->json($after($body, 422), 422)['errors'], 'path');
+        $this->assertSame(['checkId', 'proceeded'], $paths([]));
+        $this->assertSame(['checkId'], $paths(['checkId' => 'XYZ', 'proceeded' => true]));
+        $this->assertSame(['checkId'], $paths(['checkId' => strtoupper(str_repeat('ab', 16)), 'proceeded' => true]));
+        $this->assertSame(['proceeded'], $paths(['checkId' => str_repeat('ab', 16), 'proceeded' => 'oui']));
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . self::UNREAD . '/suite', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => 'Bearer ' . $this->posToken], '{pas du json');
+        $this->assertSame('VALIDATION_FAILED', $this->json($this->client->getResponse(), 422)['error']);
+        $this->assertSame(2, (int) $this->db->fetchOne('SELECT shown FROM loss_counter_alert_day'));
+
+        // Le bilan du soir : des postes, jamais une personne ; rien en exercice
+        $evening = $this->json($this->admin('GET', self::BASE . '/bilan'))['counterAlerts'];
+        $name = (string) $this->db->fetchOne('SELECT name FROM cash_register WHERE id = ?', [$this->register]);
+        $this->assertSame(['shown' => 2, 'proceeded' => 1, 'byRegister' => [['cashRegisterId' => $this->register, 'name' => $name, 'shown' => 2, 'proceeded' => 1]]], $evening);
+        $this->assertSame(['shown' => 0, 'proceeded' => 0, 'byRegister' => []], $this->json($this->admin('GET', self::BASE . '/bilan?day=' . (new \DateTimeImmutable('-3 days'))->format('Y-m-d')))['counterAlerts']);
+        $this->assertSame(['shown' => 0, 'proceeded' => 0, 'byRegister' => []], $this->json($this->admin('GET', self::BASE . '/exercices/bilan'))['counterAlerts']);
+
+        // Une vérification encore valable, gardée pour la suite (trois articles, deux pièces : il en manque une)
+        $spare = $this->json($this->pos('POST', self::UNREAD, ['cashRegisterId' => $this->register, 'items' => [['productVariantId' => $a, 'quantity' => 3]]]))['checkId'];
+        $this->assertNotNull($spare);
+        // Éteinte de nouveau : plus rien à montrer ; rallumée ensuite
+        $this->assertFalse($this->json($this->admin('PUT', self::BASE . '/reglages', ['cashierAlerts' => ['enabled' => false]]))['cashierAlerts']['enabled']);
+        $this->assertSame([false, null], array_values(array_intersect_key($this->json($this->pos('POST', self::UNREAD, ['cashRegisterId' => $this->register, 'items' => [['productVariantId' => $a, 'quantity' => 3]]])),
+            ['display' => 0, 'checkId' => 0])));
+        $this->json($this->admin('PUT', self::BASE . '/reglages', ['cashierAlerts' => ['enabled' => true]]));
+        // Pas de contrôle : rien à montrer, même allumée
+        $this->json($this->admin('POST', self::BOXES . "/$id/appareils/$mat/retirer", ['confirm' => true]));
+        $noMat = $ask();
+        $this->assertSame([false, 'NO_MAT', false, null, null], [$noMat['active'], $noMat['reason'], $noMat['display'], $noMat['notice'], $noMat['checkId']]);
+        // Sans le module : la suite d'une vérification encore valable ne compte rien (et ne gêne pas la caisse)
+        // (le droit du module se lit en base quel que soit le mode de la plateforme : en mode « demo », aucune garde ne refuse avant)
+        $this->flags(true, false);
+        $after(['checkId' => $spare, 'proceeded' => true]);
+        $this->flags(true, true);
+        $this->assertSame(2, (int) $this->db->fetchOne('SELECT shown FROM loss_counter_alert_day'), 'sans le module : rien n\'est compté');
+        $after(['checkId' => $spare, 'proceeded' => true]);
+        $this->assertSame(3, (int) $this->db->fetchOne('SELECT shown FROM loss_counter_alert_day'), 'le module revenu : la vérification restée valable compte, une fois');
+
+        // Droits : la caisse et l'administrateur ; ni un anonyme, ni un client du web
+        $this->assertSame(401, $this->call('POST', self::UNREAD . '/suite', ['checkId' => str_repeat('ab', 16), 'proceeded' => true], null)->getStatusCode());
+        $customer = $this->user(['ROLE_USER_INTERNET'], 'Cliente');
+        $this->assertSame(403, $this->call('POST', self::UNREAD . '/suite', ['checkId' => str_repeat('ab', 16), 'proceeded' => true], static::getContainer()->get('lexik_jwt_authentication.jwt_manager')->create($customer))->getStatusCode());
+        $this->assertSame(204, $this->call('POST', self::UNREAD . '/suite', ['checkId' => str_repeat('ab', 16), 'proceeded' => true], $this->adminToken)->getStatusCode());
     }
 
     public function testABoxAndATillWorkOnASiteStillUnderConstruction(): void

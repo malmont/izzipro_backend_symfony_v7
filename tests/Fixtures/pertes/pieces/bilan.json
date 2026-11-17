@@ -17,6 +17,11 @@
         "missingPieces": 0,
         "devicesDown": 23,
         "countsClosed": 5,
+        "counterAlerts": {
+            "shown": 0,
+            "proceeded": 0,
+            "byRegister": []
+        },
         "notice": "Des nombres de la journée, sans aucun nom. Une pièce non vue n'est pas une pièce perdue : un comptage le dira.",
         "screen": "pertes.home"
     }

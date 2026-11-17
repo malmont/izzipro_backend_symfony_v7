@@ -5,6 +5,7 @@ namespace App\LossPrevention\Services;
 use App\Gestion\Services\GestionConflictException;
 use App\Gestion\Services\GestionValidationException;
 use App\LossPrevention\Entity\LossCount;
+use App\LossPrevention\Entity\LossCounterAlertDay;
 use App\LossPrevention\Entity\LossDevice;
 use App\LossPrevention\Entity\LossEvidence;
 use App\LossPrevention\Entity\LossFinding;
@@ -234,8 +235,20 @@ class LossCountService
             'devicesDown' => (int) $conn->fetchOne("SELECT COUNT(DISTINCT e.device_id) FROM loss_box_event e WHERE e.type = 'SOURCE_DOWN' AND e.exercise = CAST(:ex AS boolean) AND e.device_id IS NOT NULL"
                 . ' AND e.occurred_at >= :from AND e.occurred_at < :to', $range),
             'countsClosed' => (int) $conn->fetchOne("SELECT COUNT(*) FROM loss_count WHERE exercise = CAST(:ex AS boolean) AND status = 'closed' AND closed_at >= :from AND closed_at < :to", $range),
+            // lot L5-a : alertes montrées en caisse et « continuer quand même », par poste (jamais par personne) ; la caisse ne joue pas d'exercice
+            'counterAlerts' => $this->counterAlerts($exercise ? [] : $this->emProvider->getEntityManager()->getRepository(LossCounterAlertDay::class)->ofDay($day)),
             'notice' => $this->texts->t('counts.eveningNotice', $locale),
         ];
+    }
+
+    /**
+     * @param list<array{cashRegisterId: int, name: string, shown: int, proceeded: int}> $byRegister
+     *
+     * @return array{shown: int, proceeded: int, byRegister: list<array{cashRegisterId: int, name: string, shown: int, proceeded: int}>}
+     */
+    private function counterAlerts(array $byRegister): array
+    {
+        return ['shown' => array_sum(array_column($byRegister, 'shown')), 'proceeded' => array_sum(array_column($byRegister, 'proceeded')), 'byRegister' => $byRegister];
     }
 
     /** Ferme sans conclusion les comptages ouverts depuis plus de `EXPIRE_HOURS` heures */

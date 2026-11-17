@@ -288,6 +288,8 @@ settings:
         confirmed: 'Hours confirmed: a piece moved outside them, margins included, opens an "outside opening hours" finding.'
         none: 'No opening hours confirmed: the "movement outside opening hours" rule says nothing until you confirm them day by day.'
     legalNotice: 'These settings follow the country and region of your shop. Have them reviewed by a lawyer before using them for a decision about an employee.'
+    cashierAlerts:
+        note: 'Before payment, the till shows the tracked items in the basket that were not read on the mat. It never blocks the sale.'
     personPatterns:
         allowed: 'Rules that count the actions of the same account over time are allowed in your region. You can turn them off.'
         notAllowed: 'Rules that count the actions of the same account over time are not offered in your region.'
@@ -777,6 +779,10 @@ prints:
         EXERCISE_NO_UNTAGGED_PIECE: 'No practice piece without a tag: create practice pieces first.'
         EXERCISE_NO_PRINTER: 'This simulated box has no printer: create a new one.'
 
+counter:
+    notice:
+        one: '1 tracked item not read: place it on the mat.'
+        many: '%count% tracked items not read: place them on the mat.'
 counts:
     scope:
         all: Whole shop

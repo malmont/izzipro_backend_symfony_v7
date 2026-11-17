@@ -41,8 +41,10 @@ constat se vérifie, et la décision vous revient. Il ne bloque jamais une vente
 
 ## Au comptoir
 
-1. Le caissier **pose les articles suivis sur le tapis** avant le paiement. La caisse lui dit ceux qui n'ont pas été lus ; il les
-   pose, ou il continue : la vente n'est jamais bloquée.
+1. Le caissier **pose les articles suivis sur le tapis** avant le paiement. Si vous avez allumé **l'alerte en caisse** (Réglages du
+   module, éteinte au départ), la caisse lui dit ceux qui n'ont pas été lus ; il les pose et relit, ou il continue quand même : la
+   vente n'est jamais bloquée. Le bilan du soir compte, poste par poste, les alertes montrées et les « continuer quand même »,
+   jamais par personne.
 2. Après la vente, le module relie chaque article vendu à la pièce lue sur le tapis : la pièce devient « Vendue ».
 3. Une pièce qui n'a pas été posée peut être **rattrapée à la sortie**, si un lecteur y est installé.
 4. **Retour d'un article** : posez la pièce rendue sur le tapis **avant de valider le retour**. Elle passe à « Retournée », de

@@ -1,0 +1,12 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/pos/pertes/articles-non-lus/suite",
+        "body": {
+            "checkId": "00000000000000000000000000000000",
+            "proceeded": true
+        }
+    },
+    "status": 204,
+    "body": null
+}

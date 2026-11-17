@@ -63,6 +63,12 @@ class LossSettingsService
         return $chosen === null ? LossCountryPolicy::personPatternsDefault($place['country'], $place['region']) : (bool) $chosen;
     }
 
+    /** Lot L5-a : la caisse montre-t-elle les articles suivis non lus avant le paiement ? (permis partout ; éteint par défaut) */
+    public function cashierAlertsOn(): bool
+    {
+        return (bool) $this->row()['cashier_alerts_enabled'];
+    }
+
     /**
      * Bloc `staffNotice`. Synthèse (`$full` faux) : exigée ou non, et la date de la confirmation, SANS le nom (la synthèse ne nomme personne).
      * Réglages (`$full` vrai) : en plus, qui a confirmé et le texte modèle de la notice.
@@ -99,8 +105,10 @@ class LossSettingsService
             'staffNotice' => $this->staffNotice($locale, true),
             'personPatterns' => ['allowed' => $allowed, 'enabled' => $this->personPatternsOn(), 'default' => LossCountryPolicy::personPatternsDefault($place['country'], $place['region']),
                 'note' => $this->texts->t($allowed ? 'settings.personPatterns.allowed' : 'settings.personPatterns.notAllowed', $locale)],
-            // réservés aux lots suivants : rendus pour que l'écran les montre, non réglables dans ce lot
-            'cashierAlerts' => ['allowed' => false, 'enabled' => false, 'availableFrom' => 'L5'],
+            // lot L5-a : la caisse montre les articles suivis non lus avant le paiement ; permis partout (l'alerte parle d'un article,
+            // jamais d'une personne), éteint par défaut
+            'cashierAlerts' => ['allowed' => true, 'enabled' => $this->cashierAlertsOn(), 'availableFrom' => null, 'note' => $this->texts->t('settings.cashierAlerts.note', $locale)],
+            // réservé aux lots suivants : rendu pour que l'écran le montre, non réglable dans ce lot
             'video' => ['allowed' => false, 'enabled' => false, 'clipDays' => 30, 'clipDaysMax' => 30, 'availableFrom' => 'L3'],
             'retention' => ['findingsMonths' => (int) $row['retention_findings_months'], 'confirmedMonths' => (int) $row['retention_confirmed_months'], 'purge' => 'none',
                 'bounds' => self::MONTHS, 'defaults' => ['findingsMonths' => LossSetting::DEFAULT_FINDINGS_MONTHS, 'confirmedMonths' => LossSetting::DEFAULT_CONFIRMED_MONTHS]],
@@ -309,6 +317,14 @@ class LossSettingsService
                 $errors['personPatterns.enabled'] = 'NOT_ALLOWED_IN_COUNTRY';
             } else {
                 $fields['person_patterns_enabled'] = $enabled;
+            }
+        }
+        if (array_key_exists('cashierAlerts', $body)) {
+            $enabled = is_array($body['cashierAlerts']) ? ($body['cashierAlerts']['enabled'] ?? null) : null;
+            if (!is_bool($enabled)) {
+                $errors['cashierAlerts.enabled'] = 'MUST_BE_BOOLEAN';
+            } else {
+                $fields['cashier_alerts_enabled'] = $enabled;
             }
         }
         foreach (['findingsMonths' => 'retention_findings_months', 'confirmedMonths' => 'retention_confirmed_months'] as $key => $column) {

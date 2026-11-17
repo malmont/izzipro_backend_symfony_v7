@@ -224,6 +224,8 @@ loss_digest:
     evening_unseen: 'Pieces not seen for %days% days'
     evening_missing: 'Pieces missing at the count'
     evening_down: 'Devices that went down during the day'
+    evening_counter_shown: 'Alerts shown at the till'
+    evening_counter_proceeded: 'Of which "continue anyway"'
 
 # Support, SUPPORT-WEB: an agent invited by the site administrator (a single-use link, valid for %hours% hours)
 support_agent_invitation:

@@ -137,7 +137,7 @@ class LossPreventionCountTest extends LossPreventionTestCase
 
         // Le bilan du soir : des nombres, sans nom
         $evening = $this->json($this->admin('GET', self::BASE . '/bilan'));
-        $this->assertSame(['day', 'exercise', 'trackedSold', 'soldWithoutRead', 'exitsWithoutSale', 'leftStockroom', 'unseenDays', 'unseenPieces', 'missingPieces', 'devicesDown', 'countsClosed', 'notice', 'screen'],
+        $this->assertSame(['day', 'exercise', 'trackedSold', 'soldWithoutRead', 'exitsWithoutSale', 'leftStockroom', 'unseenDays', 'unseenPieces', 'missingPieces', 'devicesDown', 'countsClosed', 'counterAlerts', 'notice', 'screen'],
             array_keys($evening));
         $this->assertSame([30, 0, 3], [$evening['unseenDays'], $evening['missingPieces'], $evening['countsClosed']]);
         $this->assertSame('INVALID_DATE', $this->json($this->admin('GET', self::BASE . '/bilan?day=demain'), 422)['fields']['day']);
