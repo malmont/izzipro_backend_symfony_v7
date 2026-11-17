@@ -136,6 +136,7 @@ class TestSiteDataSeeder
         }
         $created = [];
         $failed = [];
+        $firstReason = null;
         $missing = max(0, self::ORDERS - $this->existingOrders());
         for ($n = 0; $n < $missing; ++$n) {
             $customer = $customers[$n % count($customers)];
@@ -154,14 +155,16 @@ class TestSiteDataSeeder
             if ($result instanceof Order) {
                 $created[] = (int) $result->getId();
             } else {
-                $failed[] = $result instanceof JsonResponse ? (string) (json_decode((string) $result->getContent(), true)['code'] ?? 'refus') : 'refus';
+                $body = $result instanceof JsonResponse ? (json_decode((string) $result->getContent(), true) ?? []) : [];
+                $failed[] = (string) ($body['code'] ?? 'refus');
+                $firstReason ??= mb_substr((string) ($body['message'] ?? ''), 0, 160);
             }
         }
         $reasons = [];
         foreach (array_count_values($failed) as $reason => $times) {
             $reasons[] = "$reason × $times";
         }
-        $this->report[] = sprintf('Commandes web : %d créées par le chemin normal (paiement hors Stripe)%s', count($created), $failed === [] ? '' : sprintf(', %d refusées (%s)', count($failed), implode(', ', $reasons)));
+        $this->report[] = sprintf('Commandes web : %d créées par le chemin normal (paiement hors Stripe)%s', count($created), $failed === [] ? '' : sprintf(', %d refusées (%s ; ex. « %s »)', count($failed), implode(', ', $reasons), $firstReason));
 
         return $created;
     }
@@ -212,10 +215,11 @@ class TestSiteDataSeeder
         }
         $existing = (int) $connection->fetchOne('SELECT COUNT(*) FROM booking b JOIN order_items oi ON oi.id = b.order_item_id JOIN "order" o ON o.id = oi.order_associated_id JOIN "user" u ON u.id = o.user_id_id WHERE u.email LIKE ?', [self::EMAIL_PREFIX . '%' . self::EMAIL_DOMAIN]);
         $made = 0;
+        $reason = null;
         for ($n = $existing; $n < self::RENTALS; ++$n) { // rejouable : seulement les réservations qui manquent
             $start = (new \DateTimeImmutable(sprintf('+%d days', 7 + 7 * $n)))->setTime(10, 0);
             $item = ['productVariantId' => (int) $rental['variant'], 'quantity' => 1,
-                'booking' => ['start' => $start->format('Y-m-d\TH:i:s'), 'end' => $start->modify('+1 day')->format('Y-m-d\TH:i:s'), 'rentalPackId' => (int) $rental['pack']]];
+                'booking' => ['start' => $start->format('Y-m-d\TH:i:s'), 'end' => $start->modify('+2 hours')->format('Y-m-d\TH:i:s'), 'rentalPackId' => (int) $rental['pack']]];
             $customer = $this->emProvider->getEntityManager()->find(User::class, (int) $customers[$n % count($customers)]->getId()); // relu : la mémoire a été vidée
             if (!$customer instanceof User) {
                 continue;
@@ -223,11 +227,15 @@ class TestSiteDataSeeder
             try {
                 $result = $this->createOrder->execute(new CreateOrderDTO((int) $customer->getId(), 1, self::PAYMENT_METHOD, $customer->getPrimaryAddress()?->getId(), $this->fixedCarrier(), 1, [$item]), $customer);
                 $made += $result instanceof Order ? 1 : 0;
+                if (!$result instanceof Order) {
+                    $reason ??= mb_substr((string) (json_decode((string) $result->getContent(), true)['message'] ?? 'refus'), 0, 160);
+                }
             } catch (\Throwable $e) {
+                $reason ??= $e::class . ' : ' . mb_substr($e->getMessage(), 0, 120);
                 $this->emProvider->getEntityManager()->clear();
             }
         }
-        $this->report[] = sprintf('Locations : %d réservations créées (%d existaient, %d visées)', $made, $existing, self::RENTALS);
+        $this->report[] = sprintf('Locations : %d réservations créées (%d existaient, %d visées)%s', $made, $existing, self::RENTALS, $reason !== null ? ' ; refus : ' . $reason : '');
     }
 
     /**
@@ -278,7 +286,7 @@ class TestSiteDataSeeder
     private function sellableVariants(): array
     {
         return array_map('intval', $this->emProvider->getEntityManager()->getConnection()->fetchFirstColumn('SELECT v.id FROM product_variant v JOIN product p ON p.id = v.product_id
-            WHERE COALESCE(p.rental_enabled, FALSE) = FALSE AND COALESCE(v.stock_quantity, 0) >= 5 AND COALESCE(v.price, p.price) > 0 ORDER BY v.id LIMIT 12'));
+            WHERE COALESCE(p.rental_enabled, FALSE) = FALSE AND COALESCE(p.sale_enabled, TRUE) = TRUE AND COALESCE(v.stock_quantity, 0) >= 5 AND COALESCE(v.price, p.price) > 0 ORDER BY v.id LIMIT 12'));
     }
 
     /** Un transporteur à prix fixe (sans compte EasyPost : aucun tarif demandé dehors), sinon aucun */

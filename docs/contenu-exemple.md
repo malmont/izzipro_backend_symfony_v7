@@ -118,3 +118,24 @@ commande et de paiement, types et méthodes de paiement, sources et types de com
 fixe, quatre types de livre Mémoires Vivantes. Encore vides, à décider : devises, réglage des avis, configurations de réservation,
 crédits IA, profils d'application, formules d'abonnement.
 
+
+## Données fictives d'un site d'essai (lot ESSAI-DONNÉES, 17/11/2026)
+
+`php bin/console app:essai:remplir --tenant=<code> [--dry-run]` (`App\Command\EssaiRemplirCommand`, `App\Services\Platform\Essai\TestSiteDataSeeder`).
+**Verrou**, relu dans la base maître à chaque passage (`App\Services\Platform\TestSites`) : `demo`, ou le site d'attache ou un site géré d'une
+agence marquée de test (`agencies.is_test`) ; tout autre site est refusé, rien n'est écrit. Les deux jeux d'exemple (`app:boutique:seed-demo`,
+`app:gestion:seed-demo`) suivent la même règle.
+
+La commande enchaîne : le jeu de la boutique (catalogue, transporteurs, stock), le jeu de la gestion, puis :
+- 20 clients `essai-client-01…20@example.invalid` (domaine réservé : aucun courriel ne part jamais), mot de passe inutilisable, adresse
+  fictive, appartenance `boutique` ;
+- environ 30 commandes web passées par le CHEMIN NORMAL (`CreateOrderUseCase` : devis, création, stock décompté, paiement par un moyen hors
+  Stripe), dont 10 expédiées (`OrderShipmentService`, sans transporteur réel ni courriel) et 1 annulée (`CancelOrderUseCase`, stock rendu) ;
+- 3 locations (réservations de 2 heures, par la création de commande) ;
+- un exercice de la prévention des pertes (constat fictif, effaçable par le gérant).
+Les dates de CES commandes (commande, statut, expédition, annulation, paiements) sont ensuite reculées sur les 60 derniers jours : seule
+écriture hors chemin normal, pour que statistiques, périodes et « Ma journée » aient de la matière.
+
+Rejouable : il complète jusqu'aux nombres visés, n'efface et n'écrase rien ; `--dry-run` compte sans écrire. Hors du lot (dit au chef) : le
+retour d'une commande web (il exige un paiement Stripe capturé) et la session de caisse en espèces (le journal de caisse, inaltérable et
+chaîné, ne se date pas dans le passé). Essai : `tests/Functional/Platform/TestSiteDataSeederTest.php`.
