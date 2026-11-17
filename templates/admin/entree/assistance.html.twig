@@ -1,0 +1,42 @@
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+{# Lots AG-ASSIST et AG-3c : l'assistance de l'agence, demandée et fermée par le commerçant #}
+{% block title %}Assistance de mon agence{% endblock %}
+{% block content_title %}Assistance de mon agence{% endblock %}
+
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}<div class="container py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block panel %}
+    {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+    <p class="text-muted">L'agence qui gère votre site ne voit jamais vos ventes ni vos clients. Pour un coup de main sur une section, ouvrez-la lui une heure : en consultation (par défaut) ou en modification. Restent toujours fermés : les clés, Stripe et les paiements, les comptes, les exports. Chaque page qu'elle consulte est écrite au journal (« Accès extérieurs »).</p>
+    {% if canAsk %}
+    <form method="post" action="{{ path('admin_assistance_demander') }}" class="card card-body mb-4">
+        <input type="hidden" name="_token" value="{{ csrf_token('admin_assistance') }}">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4"><label class="form-label">Section</label>
+                <select name="section" class="form-select">{% for s in sections %}<option value="{{ s.key }}">{{ s.label }}{{ s.writable ? '' : ' (consultation seulement)' }}</option>{% endfor %}</select></div>
+            <div class="col-md-4"><label class="form-label">Accès</label>
+                <select name="mode" class="form-select"><option value="read">Consulter seulement</option><option value="write">Consulter et modifier</option></select></div>
+            <div class="col-md-4"><button type="submit" class="btn btn-primary">Demander l'assistance de mon agence</button></div>
+        </div>
+    </form>
+    {% endif %}
+    <table class="table">
+        <thead><tr><th>Section</th><th>Accès</th><th>État</th><th>Agence</th><th>Demandée par</th><th></th></tr></thead>
+        <tbody>
+        {% set labels = {} %}{% for s in sections %}{% set labels = labels|merge({(s.key): s.label}) %}{% endfor %}
+        {% set states = {'waiting': 'en attente de l\'agence', 'active': 'en cours', 'ended': 'terminée', 'expired': 'expirée', 'closed': 'fermée'} %}
+        {% for g in grants %}
+            <tr>
+                <td>{{ labels[g.section] ?? g.section }}</td><td>{{ g.mode == 'write' ? 'consulter et modifier' : 'consulter' }}</td>
+                <td>{{ states[g.state] ?? g.state }}</td><td>{{ g.agency ?? '' }}</td><td>{{ g.requestedBy ?? '' }}</td>
+                <td>{% if canAsk and g.state in ['waiting', 'active'] %}
+                    <form method="post" action="{{ path('admin_assistance_fermer', {id: g.id}) }}"><input type="hidden" name="_token" value="{{ csrf_token('admin_assistance') }}"><button class="btn btn-sm btn-outline-danger">Fermer</button></form>
+                {% endif %}</td>
+            </tr>
+        {% else %}
+            <tr><td colspan="6" class="text-muted">Aucune demande.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

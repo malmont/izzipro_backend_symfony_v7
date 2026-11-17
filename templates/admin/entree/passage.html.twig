@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+{# Lot AG-3c : le laissez-passer part dans le CORPS d'un formulaire POST auto-soumis, jamais dans une adresse ; page jamais gardée en cache #}
+<html lang="fr">
+<head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex"><title>Entrée dans {{ site }}</title></head>
+<body style="font-family: sans-serif; padding: 2em">
+    <form id="entree" method="post" action="{{ action }}">
+        <input type="hidden" name="pass" value="{{ pass }}">
+        <p>Entrée dans le site <strong>{{ site }}</strong> ({{ operator }})…</p>
+        <noscript><button type="submit">Continuer</button></noscript>
+    </form>
+    <script>document.getElementById('entree').submit();</script>
+</body>
+</html>

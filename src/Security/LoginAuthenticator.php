@@ -96,6 +96,7 @@ class LoginAuthenticator extends AbstractLoginFormAuthenticator
             $this->otpService->generateAndSendOtp($user, $request);
             $session->set('pending_otp_user', $user->getId());
             $session->remove('otp_validated');
+            $session->remove(OtpSession::AT_KEY); // lot AG-3c : l'heure de la validation part avec elle
 
             return new RedirectResponse(
                 $this->urlGenerator->generate('account_otp')

@@ -26,7 +26,11 @@ security:
             pattern:                ^/             # prend tout le reste
             stateless:              false          # si vous utilisez des sessions
             provider:               tenant_user_provider  # ← impératif !
-            custom_authenticator:   App\Security\LoginAuthenticator
+            # lot AG-3c (17/11/2026) : l'entrée dans le site d'un client depuis EasyAdmin, par laissez-passer (POST /admin/entree)
+            custom_authenticators:
+                - App\Security\LoginAuthenticator
+                - App\Security\Entry\AdminPassAuthenticator
+            entry_point:            App\Security\LoginAuthenticator
             logout:
                 path: app_logout
             user_checker:           App\Security\UserChecker

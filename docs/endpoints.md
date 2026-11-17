@@ -955,7 +955,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (109)
+## Administration (EasyAdmin) (116)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -966,6 +966,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/app-keys/generate` | ROLE_ADMIN | `Controller\Admin\AppKeyAdminController::generate` |
 | POST | `/admin/app-keys/{id}/revoke` | ROLE_ADMIN | `Controller\Admin\AppKeyAdminController::revoke` |
 | GET | `/admin/app-keys` | ROLE_ADMIN | `Controller\Admin\AppKeyAdminController::index` |
+| POST | `/admin/assistance/demander` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\Entry\AdminAssistanceController::ask` |
+| POST | `/admin/assistance/{id}/fermer` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\Entry\AdminAssistanceController::close` |
+| GET | `/admin/assistance` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\Entry\AdminAssistanceController::index` |
 | POST | `/admin/barcode-management/generate-missing` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::generateMissing` |
 | POST | `/admin/barcode-management/print` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::printSelection` |
 | GET | `/admin/barcode-management/search` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::search` |
@@ -978,7 +981,11 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/configuration/referentiels` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ConfigurationConsoleAdminController::defaults` |
 | GET | `/admin/configuration` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ConfigurationConsoleAdminController::index` |
 | POST | `/admin/contenu-exemple/effacer/{resource}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\SiteDemoContentAdminController::delete` |
+| POST | `/admin/contextes/entrer` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\Entry\AdminEntryController::enter` |
+| GET | `/admin/contextes` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\Entry\AdminEntryController::index` |
 | GET | `/admin/controles` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ControlsConsoleAdminController::index` |
+| POST | `/admin/entree/quitter` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\Entry\AdminEntryController::leave` |
+| POST | `/admin/entree` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\Entry\AdminEntryController::pass` |
 | GET | `/admin/gestion` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\GestionConsoleAdminController::index` |
 | GET, POST | `/admin/livraison/poids` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ShippingConsoleAdminController::weights` |
 | POST | `/admin/livraison/regler` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ShippingConsoleAdminController::settle` |

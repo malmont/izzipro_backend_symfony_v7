@@ -26,7 +26,7 @@ class ContextService
     public const MODE_SUPER_ADMIN = 'super_admin';
     /** Familles d'un site que voit le compte de ce site (ses rôles tranchent ensuite, écran par écran) */
     private const SITE_FAMILIES = [ScreenRegistry::CONSTRUCTION, ScreenRegistry::VENTE, ScreenRegistry::CLIENTS, ScreenRegistry::GESTION, ScreenRegistry::PERTES,
-        ScreenRegistry::ASSISTANCE, ScreenRegistry::CONTENUS];
+        ScreenRegistry::ASSISTANCE, ScreenRegistry::CONTENUS, ScreenRegistry::SECURITE];
     /** Mode agence chez un client : construction et entretien, jamais un chiffre */
     private const AGENCY_FAMILIES = [ScreenRegistry::CONSTRUCTION];
     /** Le compte de la requête porte-t-il un rôle d'équipe ? est-il celui de la plateforme ? (posés par `contexts`, lus par `site`) */
@@ -90,6 +90,34 @@ class ContextService
         }
 
         return ['mode' => self::MODE_SINGLE, 'site' => $current, 'agency' => null, 'sites' => $sites, 'all' => null];
+    }
+
+    /**
+     * Lot AG-3c : les écrans du SITE COURANT pour le compte de la requête, par la même règle que `/api/me/contexts` (famille du mode,
+     * module actif, rôle) : le menu d'EasyAdmin s'en sert. L'opérateur d'une agence entrée : la construction seule, son rôle d'agence
+     * tenant lieu d'administrateur. Le super administrateur garde aussi les écrans de la plateforme.
+     *
+     * @return list<string>
+     */
+    public function currentScreens(\Symfony\Component\Security\Core\User\UserInterface $user): array
+    {
+        $current = (string) $this->tenants->getCurrentTenantCode();
+        $site = $current === '' ? null : ($this->platformSites->sites(null, [$current])[0] ?? null);
+        if ($site === null) {
+            return [];
+        }
+        if ($user instanceof \App\Security\Entry\ExternalOperator) {
+            $this->team = true;
+            $this->platform = false;
+
+            return $this->site($site, $current, self::AGENCY_FAMILIES, static fn (string $role): bool => $role === 'ROLE_ADMIN')['screens'];
+        }
+        $reachable = $this->hierarchy->getReachableRoleNames($user->getRoles());
+        $hasRole = static fn (string $role): bool => in_array($role, $reachable, true);
+        $this->team = array_intersect(ScreenRegistry::teamRoles(), $reachable) !== [];
+        $this->platform = $hasRole('ROLE_SUPER_ADMIN');
+
+        return $this->site($site, $current, $this->platform ? [...self::SITE_FAMILIES, ScreenRegistry::PLATEFORME] : self::SITE_FAMILIES, $hasRole)['screens'];
     }
 
     /**

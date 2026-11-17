@@ -349,6 +349,86 @@ encore ; une demande d'une autre agence est fermée à la demande suivante (rais
 **Base maître** : table `assistance_grants` (`ops/sql/assistance_master.sql`, script `scripts/migrate_master_v2_assistance.sh <SQL du
 worktree de construction>` AVANT l'échange). Bases des sites : rien. Essai : `tests/Functional/Security/AssistanceTest.php`.
 
+## 9. Lot AG-3c : EasyAdmin par mode (17/11/2026, codé sous Opus, à faire vérifier par Fable)
+
+Contrat validé par le propriétaire le 16/11/2026 (classement des sections, sélecteur du super administrateur, laissez-passer par formulaire POST).
+
+### 9.1 Une session pour tous les sites
+
+EasyAdmin sert tous les sites depuis le même domaine : le site actif est choisi par `?tenant=<code>` et gardé dans la session
+(`_active_admin_tenant`). Entrer dans le site d'un client REMPLACE donc, dans cette session, la connexion du site d'attache ; « Quitter »
+vide la session et renvoie à la connexion du site d'attache (`/?tenant=<site d'attache>`).
+
+### 9.2 Le sélecteur et l'entrée
+
+- `GET /admin/contextes` (menu « Les sites de mes clients » ou « Tous les sites ») : la même liste que `/api/me/contexts` ; agence = ses
+  sites gérés, super administrateur = tous les sites ; un site seul n'a pas de sélecteur. Jamais pendant une entrée.
+- `POST /admin/contextes/entrer` (jeton CSRF, champ `site`) : compte d'agence ou compte de la plateforme du site d'attache, **code validé
+  depuis moins de 12 heures** (`OtpSession::validatedSince`, heure posée à la validation du code ; une session validée avant ce lot redemande
+  le code). Un compte d'agence sans code (ni activé sur le compte, ni imposé par `ADMIN_OTP_REQUIRED`) n'entre pas. L'entrée est ouverte par
+  `EntryService::enterFromAdmin` (mêmes vérifications du lien et mêmes traces que l'API : `site_entries` et journal du site visé), pour
+  **1 heure** (`ADMIN_TTL`).
+- Le serveur rend une page qui porte un **laissez-passer** (`AdminPassService`) dans le CORPS d'un formulaire POST auto-soumis vers
+  `/admin/entree?tenant=<site visé>` : jamais dans une adresse ; page `no-store`, `no-referrer`. Le laissez-passer est signé (HMAC, clé du
+  noyau), vaut 60 secondes, pour ce site seulement, une seule fois (marque `SET NX` dans Redis ; Redis injoignable = refus).
+- `POST /admin/entree` : authentificateur `AdminPassAuthenticator` du pare-feu `main`. Mode agence : la session porte l'**opérateur
+  extérieur** (aucun compte chez le client). Mode super administrateur : la session porte LE compte de la plateforme du site visé, sans
+  reconnexion ni code (la validation du site d'attache vaut, à son heure d'origine). Refus : page HTML 403 avec la raison (`pass_signature`,
+  `pass_expired`, `pass_site`, `pass_replayed`, `pass_malformed`, `otp`, `entry`).
+- À chaque requête de la session, l'entrée est **relue** (`AdminEntrySubscriber`, `TenantUserProvider::refreshUser` pour l'opérateur) :
+  fermée, échue, agence suspendue, site détaché, rôle retiré → session vidée, retour à la connexion du site d'attache. Changer de site par
+  `?tenant=`, se déconnecter ou « Quitter » ferme l'entrée (`left`, `logout`).
+
+### 9.3 Ce que voit l'opérateur
+
+- La garde du mode (`EntryModeGuardSubscriber`) couvre `/admin` : une requête se classe par son écran CRUD (`crudControllerFqcn`) ou sa
+  route (`routeName`), jamais par le chemin ; même règle que l'API (famille construction, module actif, `CLOSED_PATHS`) ; refus en page
+  HTML 403. Ses seules sorties hors des écrans : `/admin/entree/quitter` et `/logout`.
+- L'accueil (tableau des ventes) est remplacé par une page de construction (son entrée, son échéance, « Quitter »).
+- Champs sensibles retirés des listes, fiches et formulaires (`AdminFieldGuard`, décorateur de l'autorisation des champs d'EasyAdmin) :
+  coût d'achat, coefficient et commande fournisseur d'un article ; courriel, devise, fuseau, découpage des périodes, adresses d'alerte et
+  mode Stripe de la fiche Entreprise ; candidatures, références de commandes et de paiements, lignes de taxe des commandes, questions posées
+  à l'IA.
+- Réglages sensibles sortis de la construction, nouvelle famille `securite` : `admin.courriel` (serveur d'envoi), `admin.devises`,
+  `admin.cles` (`/admin/app-keys`), `admin.ia-reglage` (consignes et crédits IA). L'historique de l'IA reste ouvert (consommation).
+- Pendant une assistance ouverte par le commerçant, la section couverte s'ouvre aussi dans EasyAdmin, EN LECTURE ; les écritures d'EasyAdmin
+  restent fermées en mode « modifier » (la liste blanche ne connaît que les routes de l'API).
+
+### 9.4 Pour tous les comptes
+
+- **Menu piloté par le registre** (`ContextService::currentScreens`) : une entrée n'est montrée que si son écran est ouvert à ce compte sur ce
+  site (famille du mode, module actif = droit ET interrupteur, rôle). DIFFÉRENCE : un module éteint ou sans droit ne montre plus ses entrées.
+- Tuile « Modules disponibles » sur l'accueil.
+- « Assistance de mon agence » (`/admin/assistance`, écran `site.assistance`) : le commerçant demande, suit et ferme l'assistance ; depuis
+  EasyAdmin, toutes les sections se demandent (caisse, stock et assistance aux clients compris).
+
+### 9.5 Après la double relecture (17/11/2026)
+
+- **Une requête `/admin` se juge sur ce qu'EasyAdmin exécute** (`EntryModeGuardSubscriber::adminRequest`) : `routeName` avec
+  `crudControllerFqcn` est refusé (`ambiguous` : EasyAdmin exécutait la route sous l'étiquette de l'écran) ; une page nommée se juge sur SON
+  chemin (`router->generate`), règles par chemin, corps, ouverture de la boutique et assistance comprises, et seulement une route d'EasyAdmin
+  (`/admin/…`, sinon `surface`) ; une action par lot est refusée à l'opérateur (`batch`).
+- **Assistance dans EasyAdmin** : seules une liste ou une fiche (`index`, `detail` en GET) lisent ; toute autre action (rembourser, confirmer,
+  exporter, même en GET) compte comme écriture, donc refusée en consultation et, faute de liste blanche, en modification.
+- **Suppression par lot** (`BaseTenantCrudController::batchDelete`, pour TOUT compte) : seule l'entité de l'écran ; l'entité lue dans le corps
+  du formulaire ne passe plus.
+- **Recherche et tri** : pour l'opérateur, les champs fermés de l'écran ne se cherchent ni ne se trient (`AdminFieldGuard::hidden`).
+- **Champs fermés de la fiche du site** (décision du chef du 17/11/2026, principes « jamais la caisse » et « jamais un chiffre ») : UNE liste
+  partagée par `PUT /api/entreprise` et la fiche d'EasyAdmin (`SiteSheetClosedFields`) : l'onglet Caisse entier (propriétés `pos…`), l'adresse
+  des commandes et des demandes, la devise, le fuseau, le découpage des périodes, les adresses d'alerte, la conservation des données, les comptes
+  comptables, l'appartenance aux applications, le niveau des courriels. Rien ne change pour le commerçant ni pour le super administrateur.
+  Aussi fermés dans EasyAdmin : le résumé, l'issue et la clé de mémoire des demandes à l'IA.
+- **Solde prépayé d'expédition** (décision du chef) : jamais servi à l'agence (`balanceCents` retiré de `/api/site/shipping` et de
+  `/api/site/features`, carte masquée sur `/admin/livraison`) ; le commerçant le lit toujours.
+- **Console de l'assistant** : jamais servie à l'opérateur.
+- **Laissez-passer lié à la session** qui l'a demandé (`sid`, HMAC de l'identifiant de session) : volé, il ne sert pas ailleurs ; il ne
+  connecte pas non plus le navigateur d'un tiers (`pass_session`).
+- **Super administrateur entré** : un bandeau sur l'accueil dit l'entrée et porte « Quitter » ; « Quitter » et la déconnexion ne sont plus
+  refusés par la règle des écritures sur un compte.
+- Redis du cache : `noeviction`, la marque d'usage unique n'est jamais évincée.
+
+Essai : `tests/Functional/Security/AdminEntryTest.php` (5 essais ; 7 mutations des correctifs, toutes tuées).
+
 ## Tenir cette fiche à jour
 
 À chaque écran, famille ou liste hors écran ajoutés ; à chaque champ sensible trouvé ; à chaque mode nouveau.

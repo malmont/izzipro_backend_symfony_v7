@@ -173,6 +173,7 @@
         "DELETE /api/adresses/{id}",
         "DELETE /api/notifications/appareils/{token}",
         "DELETE /api/reviews/{id}",
+        "GET /admin/contextes",
         "GET /api/account/memberships",
         "GET /api/adresses",
         "GET /api/adresses/",
@@ -185,6 +186,9 @@
         "GET /api/subscriptions",
         "GET /api/subscriptions/{id}",
         "GET /api/validate-token",
+        "POST /admin/contextes/entrer",
+        "POST /admin/entree",
+        "POST /admin/entree/quitter",
         "POST /api/adresses",
         "POST /api/import-invitation/accept",
         "POST /api/import-invitation/decline",
@@ -431,6 +435,11 @@
         "POST /admin/produits/{id}/ia/{action}",
         "POST /admin/produits/{id}/photos/{action}"
     ],
+    "admin.cles": [
+        "GET /admin/app-keys",
+        "POST /admin/app-keys/generate",
+        "POST /admin/app-keys/{id}/revoke"
+    ],
     "admin.commandes": [
         "GET /admin/commandes/a-traiter",
         "GET /admin/commandes/{id}",
@@ -451,15 +460,12 @@
         "GET /admin/acces-plateforme",
         "GET /admin/aide",
         "GET /admin/aide/{key}",
-        "GET /admin/app-keys",
         "GET /admin/configuration",
         "GET /admin/mobile-theme",
         "GET /admin/mon-site",
         "GET /admin/mon-site/forfait",
         "GET /admin/ouverture-du-site",
         "GET|POST /admin/short-code",
-        "POST /admin/app-keys/generate",
-        "POST /admin/app-keys/{id}/revoke",
         "POST /admin/configuration/courriel-essai",
         "POST /admin/configuration/referentiels",
         "POST /admin/contenu-exemple/effacer/{resource}",
@@ -1134,8 +1140,11 @@
         "GET /api/site/help/{key}"
     ],
     "site.assistance": [
+        "GET /admin/assistance",
         "GET /api/site/assistance",
         "GET /api/site/assistance/{id}/journal",
+        "POST /admin/assistance/demander",
+        "POST /admin/assistance/{id}/fermer",
         "POST /api/site/assistance",
         "POST /api/site/assistance/{id}/close"
     ],

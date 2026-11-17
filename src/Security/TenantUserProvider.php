@@ -59,8 +59,15 @@ class TenantUserProvider implements UserProviderInterface, \Lexik\Bundle\JWTAuth
     public function refreshUser(UserInterface $user): UserInterface
     {
         if ($user instanceof Entry\ExternalOperator) {
-            // l'opérateur extérieur n'existe que le temps d'une requête de l'API, sans session : jamais relu d'une session
-            throw new \Symfony\Component\Security\Core\Exception\UnsupportedUserException('Opérateur extérieur : aucune session.');
+            // Lot AG-3c : l'opérateur d'une entrée ouverte dans EasyAdmin vit dans la session ; à CHAQUE requête son entrée est relue
+            // (ligne de la base maître, site courant, lien de l'agence) : refusée, la session perd son compte (retour à la connexion)
+            if ($this->entries === null) {
+                throw new UserNotFoundException('Opérateur extérieur : entrée illisible.');
+            }
+            $current = $this->tenants?->getTenantCode();
+
+            return $this->entries->userFor(['entry' => ['id' => $user->getEntryId(), 'mode' => \App\Services\Entry\EntryService::MODE_AGENCY, 'home' => $user->getHome()],
+                'username' => 'entry:' . $user->getEntryId(), 'tenant_code' => $current], $current);
         }
 
         return $this->loadUserByIdentifier($user->getUserIdentifier());
