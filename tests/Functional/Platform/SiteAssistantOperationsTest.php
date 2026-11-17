@@ -150,7 +150,8 @@ class SiteAssistantOperationsTest extends WebTestCase
         $this->assertSame(200, $r->getStatusCode(), $r->getContent());
         $body = json_decode((string) $r->getContent(), true);
         $this->assertSame(['site', 'help', []], [$body['access'], $body['tier'], $body['actions']]);
-        $this->assertSame(\App\Services\SiteAssistantService\SiteAssistantTools::HELP_TOOLS, array_column(FakeLandingAiClient::$requests[0]['tools'], 'name'));
+        // lot IA-A : les lectures d'un module éteint sur le site de test (codes-barres, pertes) ne sont pas données
+        $this->assertSame(array_values(array_diff(\App\Services\SiteAssistantService\SiteAssistantTools::HELP_TOOLS, ['get_missing_barcodes', 'get_loss_health', 'get_loss_finding'])), array_column(FakeLandingAiClient::$requests[0]['tools'], 'name'));
         $this->assertStringContainsString('Aide IA', FakeLandingAiClient::$requests[0]['system']);
         $results = FakeLandingAiClient::$requests[1]['messages'][2]['content'];
         $this->assertStringContainsString('IA complète', json_decode($results[0]['content'], true)['error']);
@@ -166,7 +167,7 @@ class SiteAssistantOperationsTest extends WebTestCase
         FakeLandingAiClient::$queue[] = (object) ['content' => [(object) ['type' => 'text', 'text' => 'Tout est possible.']], 'usage' => (object) ['input_tokens' => 1, 'output_tokens' => 1]];
         $body = json_decode((string) $this->api('POST', '/api/site/assistant', ['messages' => [['role' => 'user', 'content' => 'Bonjour']]], 'admin')->getContent(), true);
         $this->assertSame('full', $body['tier']);
-        $this->assertCount(21, FakeLandingAiClient::$requests[0]['tools']);
+        $this->assertCount(27, FakeLandingAiClient::$requests[0]['tools']); // lot IA-A : 21 + 6 outils sans module (ouverture, modules, exercice, allumer, essayer, assistance)
     }
 
     private function api(string $method, string $path, ?array $body, ?string $as): Response

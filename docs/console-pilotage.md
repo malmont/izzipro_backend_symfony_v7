@@ -392,6 +392,27 @@ lots 1 à 3 (`OrderOperationsService`, `OrderShipmentService`) : mêmes refus qu
 vente au comptoir. `get_configuration_paths` lit la page Configuration (lot 5). Écran `orders` = « À traiter ».
 Tests : `tests/Functional/Platform/SiteAssistantOperationsTest.php` (remboursement puis annulation confirmés, refus, paliers en mode réel).
 
+## Lot IA-A : l'assistant du site sur les fonctions ajoutées (17/11/2026, contrat validé par le chef)
+
+Même route, mêmes unités, même geste « proposer puis Confirmer » (`/api/site/assistant`, `/actions/{id}/confirm`, 15 min). Aucune route nouvelle.
+
+- **Outils donnés selon le module** (`SiteAssistantTools::MODULE_OF`) : un outil n'est donné au modèle que si son module est actif sur le site
+  (droit ET interrupteur, `ModuleAccessService`) ; inventé quand même, il est refusé. Pertes : `loss_prevention` (sauf l'exercice, ouvert
+  sans le droit, règle du module) ; codes-barres : boutique ou gestion ; variante : boutique.
+- **Lectures** (palier « Aide IA » compris) : `get_storefront_checklist` (liste d'ouverture), `get_modules`, `get_missing_barcodes`,
+  `get_loss_health` (santé du matériel et installation), `get_loss_finding` (un vrai constat, par l'entrée en LISTE BLANCHE de l'avis L5-c :
+  ni nom, ni identifiant de salarié, ni note libre, ni date ni heure ; l'assistant explique et aide à décider, il ne décide JAMAIS).
+- **Propositions** (palier « IA complète »), appliquées par le service de leur écran après confirmation, tout relu à ce moment :
+  `add_default_variant` (articles en ligne avec un prix et sans variante, 50 au plus, nommés dans l'aperçu), `start_loss_exercise`,
+  `start_loss_count`, `toggle_module` (l'aperçu dit ce qui quitte les écrans), `start_module_trial`, `generate_missing_barcodes` (200 au plus,
+  aperçu : le nombre et les 10 premiers, « les codes seront définitifs »), `request_agency_assistance` (l'aperçu nomme l'agence, la section,
+  le mode et l'heure ; refusée au compte de la plateforme et à toute entrée par jeton : seul un administrateur DU site).
+- **Injection** : les textes lus par les outils sont des DONNÉES (consigne dans le texte système) ; aucune écriture sans confirmation.
+- **Trace** : chaque action confirmée laisse une ligne `site_assistant` / `confirm` au journal du site (outil, « par l'assistant », prénom de
+  qui a confirmé, résumé, résultat).
+- Écrans cités nouveaux : `mon_site`, `ouverture`, `codes_barres`, `assistance_agence`, `pertes`, `pertes_sante`, `pertes_exercice` (les
+  trois derniers sont des pages de la gestion web). Essai : `tests/Functional/Platform/SiteAssistantAddedToolsTest.php`.
+
 ## Console IA flottante du back-office (07/11/2026)
 
 Sur **toutes les pages EasyAdmin**, un administrateur du site a un bouton « ✦ Assistant IA » en bas à droite qui ouvre le même assistant

@@ -632,7 +632,7 @@ TXT;
      */
     private function runAddedTool(string $name, array $input, array $registry, string $tenantCode): array
     {
-        $screen = static fn (string $key): array => ['label' => SiteAssistantTools::SCREENS[$key], 'screen' => $key];
+        $linkTo = static fn (string $key): array => ['label' => SiteAssistantTools::SCREENS[$key], 'screen' => $key];
         $proposed = static fn (array $action, array $extra = []): array => ['proposed' => true, 'actionId' => $action['id'], 'summary' => $action['summary']] + $extra
             + ['note' => 'Proposé à l\'administrateur ; appliqué seulement s\'il confirme.'];
         $modules = [];
@@ -648,31 +648,31 @@ TXT;
                 }
                 $list = $this->storefront->checklist();
 
-                return [['state' => $list['state'], 'scope' => $list['scope'], 'canOpen' => $list['canOpen'], 'items' => $list['items']], null, $screen('ouverture')];
+                return [['state' => $list['state'], 'scope' => $list['scope'], 'canOpen' => $list['canOpen'], 'items' => $list['items']], null, $linkTo('ouverture')];
             case 'get_modules':
                 return [array_values(array_map(fn (array $e): array => array_filter(['key' => $e['key'], 'label' => $e['label'], 'value' => $e['value'], 'effective' => $e['effective'], 'status' => $e['status'],
-                    'entitlement' => $e['entitlement'] ?? null, 'request' => $e['request'] ?? null, 'switch' => $e['switch'] ?? null, 'available' => $e['available'] ?? null], fn ($v) => $v !== null), $modules)), null, $screen('mon_site')];
+                    'entitlement' => $e['entitlement'] ?? null, 'request' => $e['request'] ?? null, 'switch' => $e['switch'] ?? null, 'available' => $e['available'] ?? null], fn ($v) => $v !== null), $modules)), null, $linkTo('mon_site')];
             case 'get_missing_barcodes':
-                return [$this->barcodes?->missingCount() ?? ['error' => 'codes-barres indisponibles'], null, $screen('codes_barres')];
+                return [$this->barcodes?->missingCount() ?? ['error' => 'codes-barres indisponibles'], null, $linkTo('codes_barres')];
             case 'get_loss_health':
                 if ($this->lossHealth === null || $this->lossInstallation === null) {
                     return [['error' => 'santé du matériel indisponible'], null, null];
                 }
 
-                return [['health' => $this->lossHealth->board('fr', false), 'installation' => $this->lossInstallation->steps('fr', false)], null, $screen('pertes_sante')];
+                return [['health' => $this->lossHealth->board('fr', false), 'installation' => $this->lossInstallation->steps('fr', false)], null, $linkTo('pertes_sante')];
             case 'get_loss_finding':
-                return [$this->lossFinding((int) ($input['findingId'] ?? 0)), null, $screen('pertes')];
+                return [$this->lossFinding((int) ($input['findingId'] ?? 0)), null, $linkTo('pertes')];
             case 'add_default_variant':
                 $rows = $this->unbuyableWithPrice(SiteAssistantTools::MAX_VARIANTS + 1);
                 if ($rows === []) {
-                    return [['proposals' => [], 'note' => 'Aucun article en ligne sans variante et avec un prix : rien à ajouter. Un article sans prix demande d\'abord un prix (écran Produits).'], null, $screen('products')];
+                    return [['proposals' => [], 'note' => 'Aucun article en ligne sans variante et avec un prix : rien à ajouter. Un article sans prix demande d\'abord un prix (écran Produits).'], null, $linkTo('products')];
                 }
                 $more = count($rows) > SiteAssistantTools::MAX_VARIANTS;
                 $rows = array_slice($rows, 0, SiteAssistantTools::MAX_VARIANTS);
                 $action = $this->remember($tenantCode, 'add_default_variant', ['productIds' => array_column($rows, 'id')],
                     sprintf('Ajouter une variante au prix de l\'article à %d article(s) en ligne : %s%s', count($rows), implode(', ', array_slice(array_column($rows, 'name'), 0, 10)), count($rows) > 10 ? '…' : ''));
 
-                return [$proposed($action, ['products' => $rows, 'more' => $more]), $action, $screen('products')];
+                return [$proposed($action, ['products' => $rows, 'more' => $more]), $action, $linkTo('products')];
             case 'start_loss_exercise':
                 if ($this->lossExercise === null) {
                     return [['error' => 'exercices indisponibles'], null, null];
@@ -684,11 +684,11 @@ TXT;
                 }
                 $action = $this->remember($tenantCode, 'start_loss_exercise', ['scenario' => $code], 'Lancer l\'exercice « ' . (string) ($scenarios[$code]['title'] ?? $code) . ' » (constat fictif, effaçable)');
 
-                return [$proposed($action), $action, $screen('pertes_exercice')];
+                return [$proposed($action), $action, $linkTo('pertes_exercice')];
             case 'start_loss_count':
                 $action = $this->remember($tenantCode, 'start_loss_count', [], 'Ouvrir un comptage au lecteur à main (un seul ouvert à la fois, fermé sans conclusion après 12 heures)');
 
-                return [$proposed($action), $action, $screen('pertes')];
+                return [$proposed($action), $action, $linkTo('pertes')];
             case 'toggle_module':
             case 'start_module_trial':
                 $feature = (string) ($input['feature'] ?? '');
@@ -699,7 +699,7 @@ TXT;
                 if ($name === 'start_module_trial') {
                     $action = $this->remember($tenantCode, 'start_module_trial', ['feature' => $feature], 'Lancer l\'essai gratuit de « ' . $label . ' »');
 
-                    return [$proposed($action), $action, $screen('mon_site')];
+                    return [$proposed($action), $action, $linkTo('mon_site')];
                 }
                 $on = ($input['enabled'] ?? null) === true;
                 $gone = FeatureCatalog::DESCRIPTIONS[$feature] ?? $label;
@@ -707,21 +707,21 @@ TXT;
                     ? 'Allumer « ' . $label . ' »'
                     : 'Éteindre « ' . $label . ' » : ses écrans quittent le menu et l\'application (' . $gone . ') ; le droit reste, rallumer est immédiat');
 
-                return [$proposed($action, ['whenOff' => $on ? null : $gone]), $action, $screen('mon_site')];
+                return [$proposed($action, ['whenOff' => $on ? null : $gone]), $action, $linkTo('mon_site')];
             case 'generate_missing_barcodes':
                 if ($this->barcodes === null) {
                     return [['error' => 'codes-barres indisponibles'], null, null];
                 }
                 $count = $this->barcodes->missingCount();
                 if ((int) $count['total'] === 0) {
-                    return [['note' => 'Tous les articles et variantes ont un code-barres.'], null, $screen('codes_barres')];
+                    return [['note' => 'Tous les articles et variantes ont un code-barres.'], null, $linkTo('codes_barres')];
                 }
                 $first = $this->missingBarcodeNames(10);
                 $batch = min((int) $count['total'], SiteAssistantTools::MAX_BARCODES);
                 $action = $this->remember($tenantCode, 'generate_missing_barcodes', ['limit' => SiteAssistantTools::MAX_BARCODES],
                     sprintf('Générer %d code(s)-barres (sur %d manquants) ; les codes seront définitifs. Premiers : %s', $batch, (int) $count['total'], implode(', ', $first)));
 
-                return [$proposed($action, ['missing' => $count, 'first' => $first, 'definitive' => true]), $action, $screen('codes_barres')];
+                return [$proposed($action, ['missing' => $count, 'first' => $first, 'definitive' => true]), $action, $linkTo('codes_barres')];
             case 'request_agency_assistance':
                 $section = (string) ($input['section'] ?? '');
                 $mode = (string) ($input['mode'] ?? 'read');
@@ -736,7 +736,7 @@ TXT;
                 $action = $this->remember($tenantCode, 'request_agency_assistance', ['section' => $section, 'mode' => $mode],
                     sprintf('Demander l\'assistance de l\'agence « %s » pour « %s », %s, pendant une heure à partir de sa première visite', (string) $agency['name'], $sectionLabel, $mode === 'write' ? 'en consultation et modification' : 'en consultation seulement'));
 
-                return [$proposed($action), $action, $screen('assistance_agence')];
+                return [$proposed($action), $action, $linkTo('assistance_agence')];
         }
 
         return [['error' => 'outil inconnu'], null, null];
