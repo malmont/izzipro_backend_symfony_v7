@@ -28,7 +28,12 @@ class TaxCrudController extends BaseTenantCrudController
         $crud = parent::configureCrud($crud)->setEntityLabelInSingular('Tax')->setEntityLabelInPlural('Taxes')->setSearchFields(['name', 'province', 'type']);
         $warning = $this->audit->warning();
 
-        return $crud->setHelp('index', ($warning !== null ? '⚠️ ' . $warning . ' — ' : '') . 'Taxes du site par pays et région ; une taxe sans catégorie frappe tous les produits non exonérés.');
+        // lot AG-3d : « Taxes vérifiées par le commerçant » (une taxe modifiée redemande la vérification)
+        $verified = \App\Services\Storefront\TaxVerificationService::checklistItem(\App\Services\Storefront\TaxVerificationService::fromPdo($this->emProvider->getEntityManager()->getConnection()->getNativeConnection()));
+        $link = $this->getUser() instanceof \App\Security\Entry\ExternalOperator ? '' : ' <a href="' . htmlspecialchars($this->generateUrl('admin_taxes_verifier'), \ENT_QUOTES) . '">' . ($verified['ok'] ? 'Vérifier à nouveau' : 'J\'ai vérifié mes taxes') . '</a>';
+
+        return $crud->setHelp('index', ($warning !== null ? '⚠️ ' . $warning . ' — ' : '') . 'Taxes du site par pays et région ; une taxe sans catégorie frappe tous les produits non exonérés.'
+            . ' — ' . htmlspecialchars($verified['message'], \ENT_QUOTES) . $link);
     }
 
     public function configureFields(string $pageName): iterable

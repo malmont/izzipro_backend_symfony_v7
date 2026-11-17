@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (651)
+## Boutique et commun (653)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -292,6 +292,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/adresses` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::getUserAdresses` |
 | POST | `/api/adresses` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::createAdress` |
 | GET | `/api/agency/assistance` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::assistance` |
+| GET | `/api/agency/clients` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::clients` |
 | GET | `/api/agency/me` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::me` |
 | GET | `/api/agency/site-requests/{id}` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::siteRequest` |
 | GET | `/api/agency/site-requests` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::siteRequests` |
@@ -840,6 +841,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/site/storefront/preview-link` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\StorefrontController\StorefrontController::previewLink` |
 | POST | `/api/site/storefront/preview` | PUBLIC_ACCESS | `Controller\StorefrontController\StorefrontController::preview` |
 | GET | `/api/site/storefront` | PUBLIC_ACCESS | `Controller\StorefrontController\StorefrontController::state` |
+| POST | `/api/site/taxes/verify` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteTaxesController::verify` |
 | GET | `/api/sizes` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\SizesController\SizeController::getSizes` |
 | POST | `/api/sizes` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::createSize` |
 | GET | `/api/social-networks` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\SocialNetworkController\SocialNetworkController::list` |
@@ -957,7 +959,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (117)
+## Administration (EasyAdmin) (118)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -1070,6 +1072,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/admin/stripe/success` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\AdminStripeController::success` |
 | POST | `/admin/super-admin/appliquer` | ROLE_SUPER_ADMIN | `Controller\Admin\SuperAdminAccountController::apply` |
 | GET | `/admin/super-admin` | ROLE_SUPER_ADMIN | `Controller\Admin\SuperAdminAccountController::index` |
+| GET, POST | `/admin/taxes/verifier` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\TaxesVerificationAdminController::verify` |
 | POST | `/admin/technique/seuils` | ROLE_SUPER_ADMIN | `Controller\Admin\TechDashboardAdminController::thresholds` |
 | GET | `/admin/technique` | ROLE_SUPER_ADMIN | `Controller\Admin\TechDashboardAdminController::index` |
 | GET, POST | `/admin/users/{id}/effacer` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\CustomerAccountEraseAdminController::confirm` |

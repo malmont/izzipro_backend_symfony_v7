@@ -158,6 +158,9 @@ class EntryService
         }
 
         $this->journal($site['dbname'], $site['code'], $label, $id, $mode, $agencyName, $firstName);
+        if ($this->cache instanceof \Symfony\Contracts\Cache\TagAwareCacheInterface) {
+            $this->cache->invalidateTags([\App\Services\Agency\AgencyClientsService::tag($site['code'])]); // lot AG-3d : « dernière entrée » de « Tous mes clients »
+        }
 
         return ['entry' => $id, 'mode' => $mode, 'site' => $site['code'], 'label' => $label, 'payload' => $payload, 'expires' => $expires];
     }

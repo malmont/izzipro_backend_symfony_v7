@@ -1,0 +1,18 @@
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+{# Lot AG-3d : « J'ai vérifié mes taxes », geste du commerçant #}
+{% block title %}Vérification des taxes{% endblock %}
+{% block content_title %}Vérification des taxes{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}<div class="container py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block panel %}
+    {% for message in app.flashes('success') %}<div class="alert alert-success">{{ message }}</div>{% endfor %}
+    <p>{% if state.verified %}Taxes vérifiées par <strong>{{ state.by }}</strong> le {{ state.at|date('d/m/Y') }}.{% else %}Vos taxes ne sont pas encore marquées vérifiées.{% endif %}</p>
+    <p class="text-muted small">Votre agence peut régler vos taxes ; vous seul confirmez qu'elles sont justes. Toute modification d'une taxe redemande cette confirmation. Elle avertit sans bloquer l'ouverture.</p>
+    {% if allowed %}
+        <form method="post">
+            <input type="hidden" name="_token" value="{{ csrf_token('admin_taxes_verifier') }}">
+            <button type="submit" class="btn btn-primary">J'ai vérifié mes taxes</button>
+        </form>
+    {% endif %}
+{% endblock %}

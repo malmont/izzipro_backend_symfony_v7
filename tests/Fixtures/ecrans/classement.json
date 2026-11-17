@@ -547,6 +547,7 @@
     ],
     "agence.clients": [
         "GET /api/agency/assistance",
+        "GET /api/agency/clients",
         "GET /api/agency/me",
         "GET /api/agency/site-requests",
         "GET /api/agency/site-requests/{id}",
@@ -1196,6 +1197,10 @@
         "POST /api/entreprise",
         "PUT /api/app-keys/{id}",
         "PUT /api/entreprise/{id}"
+    ],
+    "site.taxes": [
+        "GET|POST /admin/taxes/verifier",
+        "POST /api/site/taxes/verify"
     ],
     "statistiques": [
         "GET /api/gestion/statistiques",

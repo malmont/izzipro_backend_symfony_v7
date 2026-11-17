@@ -69,7 +69,18 @@ class StorefrontService
         private readonly TenantCacheService $cache,
         private readonly TenantPublicHostResolver $hosts,
         private readonly LoggerInterface $logger,
+        // lot AG-3d : ouvrir ou fermer un site change sa ligne de « Tous mes clients » (gardée 5 minutes)
+        #[\Symfony\Component\DependencyInjection\Attribute\Autowire(service: 'cache.app')] private readonly ?\Symfony\Contracts\Cache\TagAwareCacheInterface $tagCache = null,
     ) {
+    }
+
+    private function forgetClientRow(string $code): void
+    {
+        try {
+            $this->tagCache?->invalidateTags([\App\Services\Agency\AgencyClientsService::tag($code)]);
+        } catch (\Throwable) {
+            // la ligne se relira à son échéance
+        }
     }
 
     /**
@@ -193,6 +204,8 @@ class StorefrontService
             ['key' => 'terms', 'ok' => $terms, 'blocking' => false, 'message' => $terms ? 'Les conditions de vente sont remplies.' : ($termsMissing === ['?'] ? 'Les conditions de vente sont vides.' : 'Les conditions de vente sont vides en : ' . implode(', ', $termsMissing) . '.')],
             ['key' => 'unbuyable', 'ok' => $unbuyable === 0, 'blocking' => false, 'message' => $unbuyable === 0 ? 'Tous les articles en ligne peuvent être achetés.'
                 : sprintf($unbuyable === 1 ? '%d article en ligne ne peut pas être acheté : ajoutez-lui une variante avec un prix.' : '%d articles en ligne ne peuvent pas être achetés : ajoutez-leur une variante avec un prix.', $unbuyable)],
+            // lot AG-3d : « Taxes vérifiées par le commerçant », qui avertit sans bloquer
+            TaxVerificationService::checklistItem(TaxVerificationService::fromPdo($pdo)),
         ];
 
         return ['state' => $scope !== null ? self::CONSTRUCTION : self::OPEN, 'scope' => $scope, 'shop' => $state['shop'], 'openedAt' => $scope === null ? self::iso($state['openedAt']) : null,
@@ -208,6 +221,7 @@ class StorefrontService
      */
     public function open(?array $site, ?string $by): array
     {
+        $this->forgetClientRow((string) $this->site($site)['code']);
         $site = $this->site($site);
         $checklist = $this->checklist($site);
         if ($checklist['scope'] === null) {
@@ -235,6 +249,7 @@ class StorefrontService
      */
     public function close(?array $site, ?string $by): array
     {
+        $this->forgetClientRow((string) $this->site($site)['code']);
         $site = $this->site($site);
         $state = $this->load($site);
         // seule une boutique ouverte se referme : sans module Boutique, ou déjà en construction, rien n'est écrit

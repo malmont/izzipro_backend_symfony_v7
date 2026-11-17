@@ -22,7 +22,8 @@ use Symfony\Component\Routing\Attribute\Route;
 class AgencyController extends AbstractController
 {
     public function __construct(private readonly AgencyContext $context, private readonly AgencyService $agencies, private readonly AgencySiteRequestService $requests,
-        private readonly \App\Services\Storefront\StorefrontService $storefront, private readonly \App\Services\Agency\Assistance\AssistanceService $assistance)
+        private readonly \App\Services\Storefront\StorefrontService $storefront, private readonly \App\Services\Agency\Assistance\AssistanceService $assistance,
+        private readonly ?\App\Services\Agency\AgencyClientsService $clientsList = null) // lot AG-3d : « Tous mes clients »
     {
     }
 
@@ -49,6 +50,25 @@ class AgencyController extends AbstractController
             $view = $this->agencies->view($agency);
 
             return $this->json(['sites' => $sites, 'maxSites' => $agency['max_sites'], 'used' => count($sites), 'pending' => $view['sitesUsed'] - count($sites)]);
+        } catch (AgencyException $e) {
+            return $this->json($e->body(), $e->status);
+        }
+    }
+
+    /**
+     * Lot AG-3d : « Tous mes clients » → 200 `{ clients: [{ code, name, host, origin, attachedAt, state, scope, openedAt, modules,
+     * checklist: { blocking, improvements, canOpen }, invitation: null | { state: pending | accepted | expired | not_sent, sentAt, expiresAt },
+     * trials: [{ feature, endsAt }], assistance, lastEntry: null | { at, firstName } }], canEnter }`. Un tableau technique, lu sans entrer dans
+     * les sites : JAMAIS un chiffre d'affaires, un nombre de commandes, de clients ou d'avis, un montant. Agence suspendue : lisible,
+     * `canEnter` faux.
+     */
+    #[Route('/clients', name: 'api_agency_clients', methods: ['GET'])]
+    public function clients(): JsonResponse
+    {
+        try {
+            $agency = $this->context->current();
+
+            return $this->json(['clients' => $this->clientsList->rows($agency), 'canEnter' => $agency['status'] !== 'suspended']);
         } catch (AgencyException $e) {
             return $this->json($e->body(), $e->status);
         }
@@ -117,7 +137,12 @@ class AgencyController extends AbstractController
     #[Route('/sites/{code}/modules/{feature}', name: 'api_agency_site_module_set', methods: ['PUT'], requirements: ['code' => '[a-z0-9-]{1,50}', 'feature' => '[a-z_.]{1,40}'])]
     public function setModule(string $code, string $feature, Request $request): JsonResponse
     {
-        return $this->handle(fn () => $this->json(['modules' => $this->requests->setModule($this->manager(), $code, $feature, $this->body($request)['enabled'] ?? null, $this->by())]));
+        return $this->handle(function () use ($code, $feature, $request) {
+            $modules = $this->requests->setModule($this->manager(), $code, $feature, $this->body($request)['enabled'] ?? null, $this->by());
+            $this->clientsList?->forget($code); // lot AG-3d : la ligne de « Tous mes clients » montre les modules
+
+            return $this->json(['modules' => $modules]);
+        });
     }
 
     /**

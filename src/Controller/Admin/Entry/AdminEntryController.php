@@ -34,6 +34,9 @@ class AdminEntryController extends AbstractController
         private readonly EntryService $entries,
         private readonly AdminPassService $passes,
         private readonly TenantConnectionProvider $tenants,
+        // lot AG-3d : pour l'agence, le sélecteur est « Tous mes clients »
+        private readonly ?\App\Services\Agency\AgencyClientsService $clients = null,
+        private readonly ?\App\Services\Agency\AgencyRepository $agencies = null,
     ) {
     }
 
@@ -46,8 +49,17 @@ class AdminEntryController extends AbstractController
             return $this->redirect('/admin');
         }
         $contexts = $this->contexts->contexts($user->getRoles());
+        $rows = [];
+        $agency = $contexts['mode'] === ContextService::MODE_AGENCY ? $this->agencies?->findByHome((string) ($this->tenants->getTenantCode() ?? '')) : null;
+        if ($agency !== null && $this->clients !== null) {
+            foreach ($this->clients->rows($agency) as $row) {
+                $rows[$row['code']] = $row;
+            }
+        }
 
         return $this->render('admin/entree/contextes.html.twig', [
+            'clients' => $rows,
+            'canEnter' => $agency === null || $agency['status'] !== 'suspended',
             'mode' => $contexts['mode'],
             'sites' => array_values(array_filter($contexts['sites'], static fn (array $site): bool => !($site['current'] ?? false))),
             'otpFresh' => $this->otpAge($request, $user) !== null,

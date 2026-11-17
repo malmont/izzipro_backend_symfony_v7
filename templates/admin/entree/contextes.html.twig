@@ -15,15 +15,21 @@
     {% else %}
         <div class="table-responsive">
             <table class="table table-hover align-middle">
-                <thead><tr><th>Site</th><th>État</th><th>Modules</th><th></th></tr></thead>
+                <thead><tr><th>Site</th><th>État</th><th>Modules</th>{% if clients is not empty %}<th>Ouverture</th><th>Invitation</th><th>Essais</th><th>Dernière entrée</th>{% endif %}<th></th></tr></thead>
                 <tbody>
                 {% for site in sites %}
                     <tr>
                         <td><strong>{{ site.name }}</strong><br><small class="text-muted">{{ site.code }}</small></td>
                         <td>{{ site.state ?? '' }}{% for badge in site.badges ?? [] %} <span class="badge bg-secondary">{{ badge.label ?? badge.key ?? '' }}</span>{% endfor %}</td>
                         <td><small>{{ site.modules|join(', ') }}</small></td>
+                        {% if clients is not empty %}{% set c = clients[site.code] ?? null %}
+                        <td><small>{% if c and c.checklist %}{{ c.checklist.blocking }} bloquant(s), {{ c.checklist.improvements }} amélioration(s){% endif %}{% if c and c.assistance %}<br>{{ c.assistance }} assistance(s){% endif %}</small></td>
+                        <td><small>{% if c and c.invitation %}{{ {'pending': 'en attente', 'accepted': 'acceptée', 'expired': 'expirée', 'not_sent': 'non envoyée'}[c.invitation.state] ?? c.invitation.state }}{% if c.invitation.expiresAt %} (jusqu'au {{ c.invitation.expiresAt|date('d/m') }}){% endif %}{% endif %}</small></td>
+                        <td><small>{% for t in c.trials ?? [] %}{{ t.feature }} → {{ t.endsAt|date('d/m') }}<br>{% endfor %}</small></td>
+                        <td><small>{% if c and c.lastEntry %}{{ c.lastEntry.at|date('d/m H:i') }}, {{ c.lastEntry.firstName }}{% endif %}</small></td>
+                        {% endif %}
                         <td class="text-end">
-                            {% if site.screens is not empty %}
+                            {% if site.screens is not empty and canEnter %}
                                 <form method="post" action="{{ path('admin_contextes_entrer') }}" class="d-inline">
                                     <input type="hidden" name="_token" value="{{ csrf_token('admin_contextes_entrer') }}">
                                     <input type="hidden" name="site" value="{{ site.code }}">

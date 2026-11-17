@@ -429,6 +429,38 @@ vide la session et renvoie à la connexion du site d'attache (`/?tenant=<site d'
 
 Essai : `tests/Functional/Security/AdminEntryTest.php` (5 essais ; 7 mutations des correctifs, toutes tuées).
 
+## 10. Lot AG-3d : « Tous mes clients » et « Taxes vérifiées par le commerçant » (18/11/2026, contrat validé par le chef)
+
+### 10.1 « Tous mes clients »
+
+- `GET /api/agency/clients` (compte d'agence, depuis son site d'attache ; écran `agence.clients`) → `{ clients: [...], canEnter }`. Un tableau
+  TECHNIQUE, lu de la base maître et de l'état de chaque site, SANS y entrer (`AgencyClientsService`). Par site géré : code, nom, adresse WEB,
+  origine, rattachement ; état (construction / ouvert, étendue, date d'ouverture) ; modules actifs ; liste d'ouverture en nombres
+  (`checklist: { blocking, improvements, canOpen }`) ; invitation de l'administrateur (état `pending | accepted | expired | not_sent` et dates,
+  JAMAIS le destinataire) ; essais qui finissent dans les 30 jours ; assistances en attente ou en cours ; dernière entrée de l'agence (date,
+  prénom). Jamais un chiffre d'affaires, un nombre de commandes, de clients ou d'avis, un montant, un solde (liste blanche `KEYS`, sondée par
+  l'essai). Agence suspendue : lisible, `canEnter` faux ; agence fermée : 403.
+- Chaque ligne lit une base de site : gardée 5 minutes dans le cache partagé (étiquette du site), vidée par l'entrée de l'agence, l'ouverture
+  ou la fermeture du site et le geste de module de l'agence ; les essais et l'invitation se relisent à l'échéance. Mesure sur l'agence
+  d'essai : une ligne en 113 ms sans cache, 5 ms avec (50 clients : environ 5 s à froid, une fois toutes les 5 minutes).
+- EasyAdmin : pour l'agence, le sélecteur (`/admin/contextes`) est ce tableau, avec « Entrer » par ligne (sans « Entrer » si l'agence est
+  suspendue).
+
+### 10.2 « Taxes vérifiées par le commerçant »
+
+- Fiche du site : `taxes_verified_at`, `taxes_verified_by` (prénom) ; migration `Version20270130300000`, script
+  `scripts/migrate_all_v2_taxes_verifiees.sh`.
+- `POST /api/site/taxes/verify` → 200 `{ taxes: { verified, at, by } }` ; 403 `TAXES_VERIFY_FORBIDDEN` à l'opérateur d'une agence, à toute
+  entrée par jeton et au compte de la plateforme (écran `site.taxes`, famille ventes : la garde du mode le ferme aussi à l'agence). Écrit au
+  journal du site. Dans EasyAdmin : `/admin/taxes/verifier`, signalé en tête de l'écran Taxes.
+- TOUTE écriture d'une taxe la fait tomber : un déclencheur de la base sur `tax` (`taxes_verification_falls`, par instruction), qui couvre
+  EasyAdmin, Doctrine, les requêtes directes, les imports, la console de l'IA et les valeurs d'un site neuf.
+- Liste d'ouverture (`GET /api/site/storefront/checklist`, vue de l'agence comprise) : une ligne `taxes` `{ ok, blocking: false, message }`
+  (« Taxes vérifiées par <prénom> le <date> » ou « Taxes à vérifier par le commerçant ») ; elle avertit sans bloquer, et n'existe que quand
+  la boutique est allumée, comme les autres lignes.
+
+Essai : `tests/Functional/Platform/AgencyClientsTest.php`.
+
 ## Tenir cette fiche à jour
 
 À chaque écran, famille ou liste hors écran ajoutés ; à chaque champ sensible trouvé ; à chaque mode nouveau.

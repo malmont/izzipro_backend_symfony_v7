@@ -73,6 +73,8 @@ final class ScreenRegistry
         'site.assistance' => ['family' => self::VENTE, 'module' => null],
         // lot ESSAI-DONNÉES : remplir un site d'essai de clients et de commandes fictifs (refusé hors site d'essai)
         'site.essai' => ['family' => self::VENTE, 'module' => null],
+        // lot AG-3d : « J'ai vérifié mes taxes », un geste du commerçant seul (jamais de l'agence, qui garde les taxes en construction)
+        'site.taxes' => ['family' => self::VENTE, 'module' => null],
         'imports.commandes' => ['family' => self::VENTE, 'module' => 'module.boutique'],
         'imports.clients' => ['family' => self::CLIENTS, 'module' => 'module.boutique'],
         // --- Clients, assistance, contenus (web)
@@ -287,6 +289,7 @@ final class ScreenRegistry
         ['#^/api/site/assistance(/|$)#', 'site.assistance'],
         ['#^/api/site/assistant(/|$)#', 'site.assistant'],
         ['#^/api/site/essai(/|$)#', 'site.essai'],
+        ['#^/api/site/taxes(/|$)#', 'site.taxes'],
         ['#^/api/site/domain(/|$)#', 'site.domaine'],
         ['#^/api/site/features(/|$)#', 'site.modules'],
         ['#^/api/site/help(/|$)#', 'site.aide'],
@@ -319,6 +322,8 @@ final class ScreenRegistry
         // --- EasyAdmin : les pages qui ont leur propre adresse (les écrans CRUD passent par `/admin`, voir ADMIN_CRUDS)
         // lot AG-3c : le sélecteur de sites d'EasyAdmin, l'entrée par laissez-passer et sa sortie (la personne connectée, ses contextes)
         ['#^/admin/(contextes|entree)(/|$)#', '@compte'],
+        // lot AG-3d : « J'ai vérifié mes taxes » dans EasyAdmin, geste du commerçant seul
+        ['#^/admin/taxes/verifier(/|$)#', 'site.taxes'],
         // lot AG-3c : l'assistance de l'agence, demandée par le commerçant depuis EasyAdmin (jamais à l'agence)
         ['#^/admin/assistance(/|$)#', 'site.assistance'],
         ['#^/admin/(redis|workers|technique|super-admin|plateforme)(/|$)#', 'admin.maintenance'],
