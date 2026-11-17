@@ -1150,6 +1150,10 @@
         "POST /api/site/domain/check",
         "PUT /api/site/domain"
     ],
+    "site.essai": [
+        "GET /api/site/essai/remplir",
+        "POST /api/site/essai/remplir"
+    ],
     "site.journal": [
         "GET /api/landingpage-audit",
         "GET /api/landingpage-audit/{id}",
