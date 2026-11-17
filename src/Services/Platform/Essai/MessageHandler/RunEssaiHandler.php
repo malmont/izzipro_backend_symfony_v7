@@ -25,7 +25,9 @@ final class RunEssaiHandler
             $this->jobs->put($message->tenantCode, ['state' => 'done', 'since' => time(), 'finishedAt' => gmdate(\DATE_ATOM), 'report' => $report, 'error' => null] + $state + ['startedAt' => gmdate(\DATE_ATOM)]);
         } catch (\Throwable $e) {
             $this->logger->error(sprintf('[Essai] remplissage de %s en échec (%s)', $message->tenantCode, $e::class), ['exception' => $e]);
-            $this->jobs->put($message->tenantCode, ['state' => 'failed', 'since' => time(), 'finishedAt' => gmdate(\DATE_ATOM), 'report' => [], 'error' => $e instanceof \InvalidArgumentException ? $e->getMessage() : 'Le remplissage a échoué ; rien d\'autre n\'a été modifié que ce que le compte rendu ne dit pas.'] + $state);
+            $this->jobs->put($message->tenantCode, ['state' => 'failed', 'since' => time(), 'finishedAt' => gmdate(\DATE_ATOM), 'report' => [], 'error' => $e instanceof \InvalidArgumentException
+                ? 'Site refusé : seulement demo ou un site d\'une agence de test. Rien n\'est écrit.'
+                : 'Le remplissage a échoué en cours de route : ce qui a déjà été posé reste en place (il se complète au rejeu).'] + $state);
         }
     }
 }

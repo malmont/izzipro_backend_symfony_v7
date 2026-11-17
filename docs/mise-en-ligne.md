@@ -69,6 +69,16 @@ dans chaque photo) : un site vitrine qui ne répond plus est l'incident le plus 
   sites, `gmasuite` (le modèle des nouveaux sites) et le modèle des tests. Le modèle des tests la reçoit dès le développement.
 - Si le nouveau code lit une colonne nouvelle à chaque requête (garde des modules, fiche du site), l'ordre inverse casse tous les
   sites : la migration d'abord, toujours.
+- **Garde des scripts de production** (17/11/2026, demande du chef après un script maître glissé dans une chaîne d'essais) : chaque
+  script de `scripts/` source `scripts/lib/garde-production.sh` en tête. Les bases de TEST passent sans rien demander (modèle des tests,
+  sites et base maître des tests). Toute autre cible exige la variable `CONFIRMER_PRODUCTION`, posée À LA MAIN, égale à la cible tapée en
+  entier, sinon le script s'arrête avant toute écriture (code 3) :
+  - script maître (`migrate_master_*`) : le nom de la base maître visée (`MASTER_DB`, par défaut `app_v2_db`) ;
+  - script de sites sans argument : `toutes` ;
+  - script de sites avec des arguments : les arguments, séparés par des virgules, dans l'ordre.
+  Exemple : `CONFIRMER_PRODUCTION='db_demo,gmasuite' scripts/migrate_all_v2_x.sh db_demo gmasuite`. Une chaîne d'essais ou de mutations
+  ne pose jamais cette variable et n'appelle que des scripts et des bases de test. Copie des scripts d'avant la garde :
+  `var/sauvegardes/scripts-avant-garde-20261117.tgz`.
 
 ## 4. Photo avant / après
 
