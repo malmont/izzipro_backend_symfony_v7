@@ -28,6 +28,18 @@
 {% endblock %}
 
 {% block main %}
+    {# Lot AG-3c : les modules du site et leur état (droit ET interrupteur) ; le menu ne montre que les écrans des modules actifs #}
+    {% if modulesTile is defined and modulesTile %}
+    <div class="card border-0 shadow-sm rounded-lg mb-4 p-3 bg-white" data-modules-tile>
+        <h6 class="mb-2"><i class="fas fa-puzzle-piece mr-1"></i> Modules disponibles</h6>
+        <div class="d-flex flex-wrap gap-2">
+        {% for m in modulesTile %}
+            <span class="badge {{ m.active ? 'bg-success' : 'bg-light text-muted border' }}" title="{{ m.key }}">{{ m.label }} · {{ m.active ? 'actif' : 'inactif' }}</span>
+        {% endfor %}
+        </div>
+        {% if is_granted('ROLE_ADMIN') %}<small class="text-muted mt-2">Allumer, éteindre ou demander un module : « Mon site : pilotage ».</small>{% endif %}
+    </div>
+    {% endif %}
 <div class="container-fluid px-0">
     {% if readiness is defined and readiness and readiness.total > 0 %}
     {# Cheminement complet (07/11/2026) : par produit actif ; rouge = indispensable à faire, orange = amélioration ou facultatif, vert = fait, gris = plateforme #}

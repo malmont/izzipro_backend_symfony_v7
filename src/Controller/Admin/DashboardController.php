@@ -155,12 +155,68 @@ class DashboardController extends AbstractDashboardController
         private readonly ?\App\Services\OrderService\OrderDeskService $orderDesk = null, // commandes à traiter (lot 4, 07/11/2026)
         private readonly ?\Symfony\Component\Security\Csrf\CsrfTokenManagerInterface $csrf = null, // console IA flottante (07/11/2026)
         private readonly ?\App\Services\SiteAssistantService\SiteAssistantService $assistant = null,
-        private readonly ?\App\Services\Platform\AdminStepUrlResolver $stepUrls = null // cheminement complet sur l'accueil (07/11/2026)
+        private readonly ?\App\Services\Platform\AdminStepUrlResolver $stepUrls = null, // cheminement complet sur l'accueil (07/11/2026)
+        // lot AG-3c (17/11/2026) : menu piloté par le registre des écrans, accueil de construction de l'agence entrée, tuile des modules
+        private readonly ?\App\Services\Screens\ContextService $contexts = null,
+        private readonly ?\App\Services\Screens\SiteSnapshotReader $snapshots = null,
+        private readonly ?\Symfony\Component\Routing\RouterInterface $router = null,
+        private readonly ?\EasyCorp\Bundle\EasyAdminBundle\Registry\CrudControllerRegistry $cruds = null,
     ) {}
+
+    /** Lot AG-3c : les écrans du site courant pour ce compte (null : registre illisible, le menu reste entier pour un compte du site) */
+    private ?array $screens = null;
+    private bool $screensRead = false;
+
+    /** @return list<string>|null */
+    private function screens(): ?array
+    {
+        if (!$this->screensRead) {
+            $this->screensRead = true;
+            $user = $this->getUser();
+            try {
+                $this->screens = $user !== null && $this->contexts !== null ? $this->contexts->currentScreens($user) : null;
+            } catch (\Throwable) {
+                // un registre illisible : l'opérateur d'une agence ne voit rien ; un compte du site garde son menu entier
+                $this->screens = $user instanceof \App\Security\Entry\ExternalOperator ? [] : null;
+            }
+        }
+
+        return $this->screens;
+    }
+
+    /** Lot AG-3c : l'écran du registre derrière une entrée du menu (null : lien externe ou séparateur, toujours montré) */
+    private function menuTarget(\EasyCorp\Bundle\EasyAdminBundle\Contracts\Menu\MenuItemInterface $item): ?string
+    {
+        $dto = $item->getAsDto();
+        $params = $dto->getRouteParameters() ?? [];
+        if ($dto->getType() === \EasyCorp\Bundle\EasyAdminBundle\Dto\MenuItemDto::TYPE_DASHBOARD) {
+            return 'admin.accueil';
+        }
+        if ($dto->getType() === \EasyCorp\Bundle\EasyAdminBundle\Dto\MenuItemDto::TYPE_CRUD) {
+            $controller = $params[\EasyCorp\Bundle\EasyAdminBundle\Config\Option\EA::CRUD_CONTROLLER_FQCN] ?? null;
+            if (!is_string($controller) || $controller === '') {
+                $entity = $params[\EasyCorp\Bundle\EasyAdminBundle\Config\Option\EA::ENTITY_FQCN] ?? null;
+                $controller = is_string($entity) ? $this->cruds?->findCrudFqcnByEntityFqcn($entity) : null;
+            }
+
+            return is_string($controller) ? (\App\Services\Screens\ScreenRegistry::adminCrud($controller) ?? '?') : '?';
+        }
+        if ($dto->getType() === \EasyCorp\Bundle\EasyAdminBundle\Dto\MenuItemDto::TYPE_ROUTE) {
+            $route = $this->router?->getRouteCollection()->get((string) $dto->getRouteName());
+
+            return $route === null ? '?' : (\App\Services\Screens\ScreenRegistry::classify('GET', $route->getPath()) ?? '?');
+        }
+
+        return null;
+    }
 
     #[Route('/admin', name: 'admin')]
     public function index(): Response
     {
+        // lot AG-3c : l'accueil est un tableau de ventes ; l'opérateur d'une agence entrée a une page de construction à la place
+        if ($this->getUser() instanceof \App\Security\Entry\ExternalOperator) {
+            return $this->entryHome();
+        }
         $em = $this->emProvider->getEntityManager();
 
         // Journées et mois dans le fuseau du magasin (réglage de la caisse, sinon pays et province), bornes converties en UTC pour la base
@@ -394,6 +450,7 @@ class DashboardController extends AbstractDashboardController
         }
 
         return $this->render('admin/dashboard.html.twig', [
+            'modulesTile' => $this->modulesTile($currentTenantCode ?? null),
             'ordersTodo' => $ordersTodo,
             'ordersTodoUrl' => $ordersTodoUrl,
             'readiness' => $readiness,
@@ -430,6 +487,37 @@ class DashboardController extends AbstractDashboardController
             'carrierSeries' => json_encode($carrierSeries),
             'recentOrders' => $recentOrders,
         ]);
+    }
+
+    /** Lot AG-3c : la page d'accueil de l'opérateur d'une agence entrée : son entrée, et les écrans de construction ouverts */
+    private function entryHome(): Response
+    {
+        $user = $this->getUser();
+        $session = $this->requestStack->getSession();
+        $entry = $session->get(\App\Security\Entry\AdminEntrySession::KEY);
+
+        return $this->render('admin/entree/accueil.html.twig', [
+            'operator' => $user?->getUserIdentifier(),
+            'expiresAt' => is_array($entry) ? ($entry['expiresAt'] ?? null) : null,
+            'home' => is_array($entry) ? ($entry['home'] ?? null) : null,
+            'site' => $this->tenantConnectionManager->getCurrentTenantCode(),
+            'screens' => $this->screens() ?? [],
+        ]);
+    }
+
+    /** @return list<array{key: string, label: string, active: bool}>|null les modules du site et leur état (droit ET interrupteur) */
+    private function modulesTile(?string $code): ?array
+    {
+        if ($code === null || $code === '' || $this->snapshots === null) {
+            return null;
+        }
+        $modules = $this->snapshots->read($code)['modules'] ?? [];
+        $tile = [];
+        foreach ($modules as $key => $active) {
+            $tile[] = ['key' => (string) $key, 'label' => (string) (\App\Services\FeatureAccess\FeatureCatalog::FEATURES[$key]['label'] ?? $key), 'active' => (bool) $active];
+        }
+
+        return $tile;
     }
 
     public function configureDashboard(): Dashboard
@@ -528,7 +616,7 @@ class DashboardController extends AbstractDashboardController
 
             return $subMenu;
         };
-        foreach ($this->menuEntries() as $entry) {
+        foreach ($this->visibleMenuEntries() as $entry) {
             if ($entry instanceof \EasyCorp\Bundle\EasyAdminBundle\Config\Menu\SectionMenuItem) {
                 if (($done = $flush()) !== null) {
                     yield $done;
@@ -545,10 +633,45 @@ class DashboardController extends AbstractDashboardController
         }
     }
 
+    /**
+     * Lot AG-3c : le menu suit le REGISTRE DES ÉCRANS : une entrée n'est montrée que si son écran est ouvert à ce compte sur ce site (famille
+     * du mode, module actif, rôle). Un module éteint ou sans droit ne montre plus ses entrées. Une section restée vide disparaît.
+     */
+    private function visibleMenuEntries(): iterable
+    {
+        $screens = $this->screens();
+        $section = null;
+        foreach ($this->menuEntries() as $entry) {
+            if ($entry instanceof \EasyCorp\Bundle\EasyAdminBundle\Config\Menu\SectionMenuItem) {
+                $section = $entry;
+                continue;
+            }
+            if ($screens !== null) {
+                $target = $this->menuTarget($entry);
+                // une page de la personne connectée (`@compte` : le sélecteur de sites) : jamais pour l'opérateur d'une agence entrée
+                $own = $target !== null && str_starts_with($target, '@') && !$this->getUser() instanceof \App\Security\Entry\ExternalOperator;
+                if ($target !== null && !$own && !in_array($target, $screens, true)) {
+                    continue;
+                }
+            }
+            if ($section !== null) {
+                yield $section;
+                $section = null;
+            }
+            yield $entry;
+        }
+    }
+
     /** Entrées du menu à plat : une section (`MenuItem::section`) ouvre un groupe, les liens qui suivent en font partie */
     private function menuEntries(): iterable
     {
         yield MenuItem::linkToDashboard('Dashboard', 'fa fa-home');
+        // lot AG-3c : le sélecteur de sites (agence : ses sites gérés ; plateforme : tous les sites), hors d'une entrée en cours
+        $user = $this->getUser();
+        if ($user instanceof \App\Entity\User && (\App\Security\AgencyRoles::has($user->getRoles()) || \App\Services\Platform\PlatformAccessJournal::isPlatformAccount($user->getRoles()))
+            && \App\Security\Entry\AdminEntrySession::get($this->requestStack->getSession()) === null) {
+            yield MenuItem::linkToRoute(\App\Services\Platform\PlatformAccessJournal::isPlatformAccount($user->getRoles()) ? 'Tous les sites' : 'Les sites de mes clients', 'fas fa-exchange-alt', 'admin_contextes');
+        }
         
         yield MenuItem::section('Maintenance');
         // Cache Redis partagé par tous les sites : propriétaire de la plateforme seulement (03/11/2026)

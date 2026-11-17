@@ -315,6 +315,8 @@ final class ScreenRegistry
         ['#^/api/orders/[^/]+$#', '@public'],
         ['#^/api/(shipping|order|orders)(/|$)#', '@compte'],
         // --- EasyAdmin : les pages qui ont leur propre adresse (les écrans CRUD passent par `/admin`, voir ADMIN_CRUDS)
+        // lot AG-3c : le sélecteur de sites d'EasyAdmin, l'entrée par laissez-passer et sa sortie (la personne connectée, ses contextes)
+        ['#^/admin/(contextes|entree)(/|$)#', '@compte'],
         ['#^/admin/(redis|workers|technique|super-admin|plateforme)(/|$)#', 'admin.maintenance'],
         ['#^/admin/mon-site/assistant(/|$)#', 'admin.assistant'],
         ['#^/admin/app-keys(/|$)#', 'admin.cles'],

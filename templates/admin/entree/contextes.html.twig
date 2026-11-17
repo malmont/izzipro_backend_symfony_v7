@@ -1,0 +1,39 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+{# Lot AG-3c : le sélecteur de sites d'EasyAdmin, même liste que la gestion web (/api/me/contexts) #}
+{% block page_title %}{{ mode == 'super_admin' ? 'Tous les sites' : 'Les sites de mes clients' }}{% endblock %}
+
+{% block main %}
+    {% if not otpFresh %}
+        <div class="alert alert-warning">Entrer dans un autre site demande un code validé depuis moins de 12 heures. Déconnectez-vous puis reconnectez-vous avec votre code. Si aucun code ne vous est demandé à la connexion, activez-le sur votre compte.</div>
+    {% endif %}
+    {% if sites is empty %}
+        <p class="text-muted">Aucun site à ouvrir.</p>
+    {% else %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead><tr><th>Site</th><th>État</th><th>Modules</th><th></th></tr></thead>
+                <tbody>
+                {% for site in sites %}
+                    <tr>
+                        <td><strong>{{ site.name }}</strong><br><small class="text-muted">{{ site.code }}</small></td>
+                        <td>{{ site.state ?? '' }}{% for badge in site.badges ?? [] %} <span class="badge bg-secondary">{{ badge.label ?? badge.key ?? '' }}</span>{% endfor %}</td>
+                        <td><small>{{ site.modules|join(', ') }}</small></td>
+                        <td class="text-end">
+                            {% if site.screens is not empty %}
+                                <form method="post" action="{{ path('admin_contextes_entrer') }}" class="d-inline">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('admin_contextes_entrer') }}">
+                                    <input type="hidden" name="site" value="{{ site.code }}">
+                                    <button type="submit" class="btn btn-primary btn-sm" {{ otpFresh ? '' : 'disabled' }}>Entrer</button>
+                                </form>
+                            {% else %}
+                                <span class="text-muted small">aucun écran ouvert</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="small text-muted">Chaque entrée est tracée dans la base de la plateforme et au journal du site visé (« Accès extérieurs »). Elle dure une heure au plus.</p>
+    {% endif %}
+{% endblock %}

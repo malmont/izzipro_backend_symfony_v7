@@ -10,6 +10,7 @@ use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
@@ -72,6 +73,9 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         private readonly ?ImportJobStore $imports = null,
         private readonly ?\App\Services\TenantConnectionProvider $tenants = null,
         private readonly ?\App\Services\Agency\Assistance\AssistanceService $assistance = null,
+        // lot AG-3c : la route nommée d'une requête d'EasyAdmin (`routeName`), et la page HTML d'un refus
+        private readonly ?\Symfony\Component\Routing\RouterInterface $router = null,
+        private readonly ?\Twig\Environment $twig = null,
     ) {
     }
 
@@ -85,18 +89,20 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
      *
      * @return array{0: string, 1: ?string, 2: ?string} [open|public|closed, cible du registre, raison du refus]
      */
-    public static function decision(string $method, string $path): array
+    public static function decision(string $method, string $path, ?string $adminTarget = null): array
     {
         $method = strtoupper($method);
-        $target = ScreenRegistry::classify($method, $path);
-        if (!str_starts_with($path, '/api/')) {
-            return [self::CLOSED, $target, 'surface']; // l'API seulement : EasyAdmin est le lot AG-3c
+        // lot AG-3c : EasyAdmin suit la même règle que l'API ; une requête sur `/admin` se classe par son écran ou sa route (adminTarget)
+        $admin = self::isAdmin($path);
+        $target = $admin && $adminTarget !== null ? $adminTarget : ScreenRegistry::classify($method, $path);
+        if (!str_starts_with($path, '/api/') && !$admin) {
+            return [self::CLOSED, $target, 'surface'];
         }
-        if ($target === null) {
+        if ($target === null || $target === '?') {
             return [self::CLOSED, null, 'unclassified'];
         }
         if (str_starts_with($target, '@')) {
-            return $target === '@public' && in_array($method, ['GET', 'HEAD'], true) ? [self::PUBLIC, $target, null] : [self::CLOSED, $target, 'off_screen'];
+            return $target === '@public' && in_array($method, ['GET', 'HEAD'], true) && !$admin ? [self::PUBLIC, $target, null] : [self::CLOSED, $target, 'off_screen'];
         }
         if (ScreenRegistry::familyOf($target) !== ScreenRegistry::CONSTRUCTION) {
             return [self::CLOSED, $target, 'family'];
@@ -109,6 +115,15 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
 
         return [self::OPEN, $target, null];
     }
+
+    /** Lot AG-3c : une page d'EasyAdmin (`/admin` et ses pages à adresse propre) */
+    public static function isAdmin(string $path): bool
+    {
+        return $path === '/admin' || str_starts_with($path, '/admin/');
+    }
+
+    /** Lot AG-3c : les seules sorties de l'opérateur d'une entrée d'EasyAdmin hors des écrans : quitter l'entrée, se déconnecter */
+    private const ADMIN_EXITS = ['/admin/entree/quitter', '/logout'];
 
     public function onKernelRequest(RequestEvent $event): void
     {
@@ -127,7 +142,21 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
             return;
         }
         $path = RequestPath::of($request);
-        [$decision, $target, $reason] = self::decision($request->getMethod(), $path);
+        if (in_array($path, self::ADMIN_EXITS, true)) {
+            return;
+        }
+        $adminTarget = null;
+        if ($path === '/admin') {
+            // le chemin /admin sert tous les écrans d'EasyAdmin : écran CRUD (crudControllerFqcn) ou page nommée (routeName)
+            $routeName = $request->query->get('routeName');
+            $routePath = null;
+            if (is_string($routeName) && $routeName !== '') {
+                $routePath = $this->router?->getRouteCollection()->get($routeName)?->getPath() ?? '';
+            }
+            $crud = $request->query->get('crudControllerFqcn');
+            $adminTarget = ScreenRegistry::adminTarget(is_string($crud) ? $crud : null, $routePath, $request->getMethod()) ?? '';
+        }
+        [$decision, $target, $reason] = self::decision($request->getMethod(), $path, $adminTarget === '' ? '?' : $adminTarget);
         if ($decision === self::PUBLIC) {
             $this->tokens->setToken(null); // servie EXACTEMENT comme à un visiteur
 
@@ -143,7 +172,7 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
             }
         }
         if ($decision !== self::OPEN || $reason !== null) {
-            $event->setResponse($this->refusal($reason));
+            $event->setResponse(self::isAdmin($path) ? $this->adminRefusal($reason) : $this->refusal($reason));
 
             return;
         }
@@ -199,6 +228,15 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         $request->attributes->set(self::ASSISTANCE_ATTRIBUTE, ['id' => (int) $grant['id'], 'section' => (string) $grant['section'], 'screen' => $target, 'trace' => $traceId]);
 
         return null;
+    }
+
+    /** Lot AG-3c : le refus d'une page d'EasyAdmin, en page HTML */
+    private function adminRefusal(?string $reason): Response
+    {
+        $html = $this->twig?->render('admin/entree/refus.html.twig', ['reason' => (string) $reason])
+            ?? '<!DOCTYPE html><html lang="fr"><meta charset="utf-8"><title>Accès refusé</title><p>Cette page n\'est pas ouverte à une agence dans le site de son client.</p></html>';
+
+        return new Response($html, $reason === 'assistance_trace' ? 503 : 403, ['Content-Type' => 'text/html; charset=UTF-8']);
     }
 
     private function refusal(?string $reason): JsonResponse

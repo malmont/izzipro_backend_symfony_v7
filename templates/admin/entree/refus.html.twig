@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+{# Lot AG-3c : refus d'une entrée ou d'une page d'EasyAdmin fermée au mode ; la raison est un code, jamais une donnée #}
+<html lang="fr">
+<head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Accès refusé</title></head>
+<body style="font-family: sans-serif; padding: 2em; max-width: 40em">
+    <h1>Accès refusé</h1>
+    {% set texts = {
+        'otp': 'Entrer dans un autre site demande un code validé depuis moins de 12 heures : reconnectez-vous avec votre code.',
+        'family': 'Cette page n\'est pas ouverte à une agence dans le site de son client.',
+        'module': 'Ce module est éteint sur ce site.',
+        'pass_expired': 'Le passage a expiré : recommencez depuis la liste des sites.',
+        'pass_replayed': 'Ce passage a déjà servi : recommencez depuis la liste des sites.',
+        'pass_site': 'Ce passage ne vaut pas pour ce site.',
+    } %}
+    <p>{{ texts[reason] ?? 'Cette entrée ou cette page n\'est pas ouverte.' }}</p>
+    <p><small>Raison : {{ reason }}</small></p>
+    <p><a href="/admin">Retour</a></p>
+</body>
+</html>
