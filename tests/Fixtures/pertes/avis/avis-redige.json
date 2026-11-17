@@ -1,0 +1,41 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/gestion/pertes/constats/{id}"
+    },
+    "status": 200,
+    "body": {
+        "id": 1,
+        "opinion": {
+            "state": "done",
+            "percent": 29,
+            "calibrated": false,
+            "calibrationNotice": "Estimation non étalonnée : la part des constats semblables de votre boutique que vous avez confirmés, sur 12 mois.",
+            "measures": {
+                "similar": 23,
+                "decided": 21,
+                "confirmed": 6
+            },
+            "factors": [
+                {
+                    "label": "Plus que le seuil réglé.",
+                    "effect": "up"
+                },
+                {
+                    "label": "Une seule session.",
+                    "effect": "down"
+                }
+            ],
+            "summary": "Les 4 ouvertures du tiroir se suivent dans la même session.",
+            "alternatives": [
+                "De la monnaie à rendre en début de journée."
+            ],
+            "generatedAt": "2026-11-17T02:38:20+00:00",
+            "creditsUsed": 1,
+            "stale": false,
+            "example": false,
+            "error": null,
+            "notice": "Avis indicatif : la décision vous appartient. L'IA ne lit que le genre des preuves, le temps écoulé entre elles et leurs nombres, jamais une personne."
+        }
+    }
+}

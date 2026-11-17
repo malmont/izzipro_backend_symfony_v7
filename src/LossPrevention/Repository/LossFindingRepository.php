@@ -281,6 +281,7 @@ class LossFindingRepository extends EntityRepository
             $conn->executeStatement("SET LOCAL loss.purge = 'exercise'");
             $conn->executeStatement('DELETE FROM loss_evidence WHERE finding_id IN (SELECT id FROM loss_finding WHERE exercise)');
             $conn->executeStatement('DELETE FROM loss_journal WHERE finding_id IN (SELECT id FROM loss_finding WHERE exercise)');
+            $conn->executeStatement('DELETE FROM loss_opinion WHERE exercise'); // lot L5-c : les avis d'exemple de l'exercice
             $deleted = (int) $conn->executeStatement('DELETE FROM loss_finding WHERE exercise');
             $conn->commit();
 

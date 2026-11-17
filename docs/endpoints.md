@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (636)
+## Boutique et commun (638)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -484,6 +484,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/pertes/comptages/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossCountController::detail` |
 | GET | `/api/gestion/pertes/comptages` | ROLE_ADMIN | `LossPrevention\Controller\LossCountController::list` |
 | POST | `/api/gestion/pertes/comptages` | ROLE_ADMIN | `LossPrevention\Controller\LossCountController::open` |
+| POST | `/api/gestion/pertes/constats/{id}/avis` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::opinion` |
 | PUT | `/api/gestion/pertes/constats/{id}/decision` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::decide` |
 | GET | `/api/gestion/pertes/constats/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::finding` |
 | GET | `/api/gestion/pertes/constats` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::findings` |
@@ -514,6 +515,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/pertes/exercices/puces/recherche` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::searchExercise` |
 | POST | `/api/gestion/pertes/exercices/puces/{id}/retirer` | ROLE_ADMIN | `LossPrevention\Controller\LossPieceController::retireExerciseTag` |
 | GET | `/api/gestion/pertes/exercices/sante` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::exerciseHealth` |
+| POST | `/api/gestion/pertes/exercices/{id}/avis` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::exerciseOpinion` |
 | PUT | `/api/gestion/pertes/exercices/{id}/decision` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::decideExercise` |
 | GET | `/api/gestion/pertes/exercices/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::exercise` |
 | DELETE | `/api/gestion/pertes/exercices` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::deleteExercises` |

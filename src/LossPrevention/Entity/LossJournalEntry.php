@@ -35,6 +35,9 @@ class LossJournalEntry
     public const FINDING_RENEWED = 'FINDING_RENEWED';
     /** Lot L5-b : un constat décidé a grossi (avant, après) ; il redevient « nouveau », sa décision est gardée */
     public const FINDING_GREW = 'FINDING_GREW';
+    /** Lot L5-c : un avis de l'IA demandé (pourcentage, unités), puis rédigé ; jamais le texte de l'avis */
+    public const OPINION_REQUESTED = 'OPINION_REQUESTED';
+    public const OPINION_WRITTEN = 'OPINION_WRITTEN';
     /** Exercice lancé (lot EX-1) : son numéro (qui ne redescend jamais) et son scénario ; sans constat rattaché, donc jamais supprimé */
     public const EXERCISE_STARTED = 'EXERCISE_STARTED';
     /** Exercices effacés par le gérant (lot EX-1) : leur nombre ; sans constat rattaché */

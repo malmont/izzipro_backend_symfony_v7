@@ -99,6 +99,7 @@ framework:
             'App\Gestion\Message\ReadGestionDocumentMessage': gestion_ai # lecture de documents de la gestion (lot L1, 10/11/2026)
             'App\Gestion\Message\GenerateGestionAdviceMessage': gestion_ai # rédaction des conseils du guide de la gestion (lot G1a, 11/11/2026)
             'App\Gestion\Message\AnswerConsoleQuestionMessage': gestion_ai # réponses de la console IA de la gestion (lot W2, 13/11/2026)
+            'App\LossPrevention\Message\WriteLossOpinionMessage': gestion_ai # avis de l'IA sur un constat de la prévention des pertes (lot L5-c, 17/11/2026)
             'App\Message\EntitlementChangedMessage': email # courriels des droits d'usage (console de pilotage, lot 3, 04/11/2026)
             'App\Message\CancelPlatformSubscriptionMessage': email # lot MOD-1 : « Retirer et résilier » ; même file que les avis des droits (la file async est celle de Mémoires Vivantes)
 

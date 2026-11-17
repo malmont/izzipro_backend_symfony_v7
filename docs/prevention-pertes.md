@@ -2197,6 +2197,7 @@ choisi de basculer sans attendre, Fable relira ensuite). La liste fait foi pour 
 | L4-d, migration et code | backend `app_v2` | migration `55080132`, lot : le commit qui la suit (§ 17.16) | `migrations/Version20270125100000.php` (tables du comptage, gardes) et le script `scripts/migrate_all_v2_pertes_l4d.sh` (hors dépôt) ; `LossCountService` et `LossCountRepository` (tout), `LossCountController`, le passage des comptages dans `LossAnalysisService::run`, le bilan joint à `LossDigestService`, le scénario `piece_missing` |
 | L5-a, migration et code | backend `app_v2` | migration `a98654af`, lot : le commit qui la suit (§ 18.8) | `migrations/Version20270126100000.php` et le script `scripts/migrate_all_v2_pertes_l5a.sh` (hors dépôt) ; `LossCounterService` (alerte, vérification, suite), `LossCounterAlertDayRepository`, `LossPosController::after`, le réglage `cashierAlerts` de `LossSettingsService`, `counterAlerts` du bilan (`LossCountService`) et du résumé (`LossDigestService`) |
 | L5-b, migration et code | backend `app_v2` | migration `9212172e`, lot : le commit qui la suit (§ 18.9) | `migrations/Version20270127100000.php` et le script `scripts/migrate_all_v2_pertes_l5b.sh` (hors dépôt) ; `LossFindingWriter::growth`, `LossFindingRepository` (`decide`, `grew`, `keepReference`, `grownAmong`), `LossRuleCatalog::trackedNumber`, la décision et la lecture de `LossFindingReader` (`grewSinceDecision`, historique), l'annonce du résumé (`LossDigestService`) |
+| L5-c, migration et code (**à risque**) | backend `app_v2` | migration `d082b35b`, lot : le commit qui la suit (§ 18.10) | `migrations/Version20270128100000.php` et le script `scripts/migrate_all_v2_pertes_l5c.sh` (hors dépôt) ; `LossOpinionService` (tout : entrée par liste blanche, contrôle de la sortie, unités, délai, numéro de demande), `LossOpinionRepository`, `WriteLossOpinionHandler`, `LossDepotService::outside`, les routes de l'avis et la fiche (`LossFindingReader`) ; relu par un relecteur neuf en trois passes (17/11/2026) |
 
 Vérifié sous Opus : `LossPreventionZoneTest` et le dossier du module verts ; 21 mutations sur L4-a (20 tuées, une équivalente :
 le rejeu d'une arrivée est déjà bloqué par la clé du fait et par la requête de présence) ; 12 mutations sur B5, toutes tuées.
@@ -2797,3 +2798,54 @@ Risque ordinaire (§ 18.5) : je me vérifie, avec mutations. **Codé sous Opus, 
   décision. »), comptés dans le total ; la ligne `DIGEST_SENT` porte `grown` et `grownUpTo` (rang du journal, comme `renewedUpTo`).
   Aucun courriel de plus.
 - Tests : `LossPreventionGrowthTest` ; `LossPreventionGestionLinksTest::testDailyDigestStopsWithTheAnalysisReservesItsDayAndNeverCarriesTheSiteSignature`.
+
+### 18.10 Lot L5-c codé : l'avis de l'IA sur un constat (17/11/2026 ; contrat validé par le chef de projet le 17/11/2026)
+
+**Lot à risque** (§ 18.5) : relecteur neuf en deux passes (la première sur l'entrée du modèle) et mutations. **Codé sous Opus, à faire
+relire par Fable** (§ 17.12). Migration `Version20270128100000` (3 instructions), script `scripts/migrate_all_v2_pertes_l5c.sh`
+(contrôle « 1 table, 1 index, 1 colonne »). Code : `Services/LossOpinionService`, `Repository/LossOpinionRepository`, `Message/WriteLossOpinionMessage`,
+`MessageHandler/WriteLossOpinionHandler` (file `gestion_ai`, worker `messenger_worker_gestion` : `messenger:stop-workers` à la bascule).
+
+- **Routes** : `POST /api/gestion/pertes/constats/{id}/avis` → 202, la fiche avec `opinion` en préparation ; `POST /exercices/{id}/avis`
+  (ouverte sans le droit du module, comme les autres routes d'exercice) → 202, un avis d'exemple écrit par le serveur, sans le modèle,
+  à 0 unité (`example: true`). Refus : 403 `AI_NOT_INCLUDED` (palier d'IA du site), 402 `AI_CREDITS_EXHAUSTED`, 429 `AI_DAILY_LIMIT`
+  (`limit`, `resetAt` ; 30 avis par jour du magasin et par site, comptés au journal du module), 409 `OPINION_PENDING`, 422
+  `OPINION_NOT_ALLOWED` (règle « par personne »), 404 `FINDING_NOT_FOUND` (vrais constats et exercices ne se croisent jamais).
+- **La fiche** porte `opinion` (null tant qu'aucun avis n'a été demandé) : `{ state: pending | done | failed, percent | null, calibrated: false,
+  calibrationNotice, measures { similar, decided, confirmed }, factors [{ label, effect: up | down }], summary, alternatives [], generatedAt,
+  creditsUsed, stale, example, error, notice }`. Le web relit la fiche toutes les 3 s tant que `pending`. `stale` : une preuve est arrivée
+  après la demande, la fiche propose « Actualiser » (la même route, 1 unité). `error` : `OPINION_REJECTED` (texte refusé deux fois),
+  `AI_UNAVAILABLE`, `OPINION_TIMEOUT` (300 s : deux essais de 60 s et l'attente dans la file partagée `gestion_ai` ; relecture du
+  17/11/2026, au lieu des 120 s du contrat). Jamais dans la liste, le résumé du jour ni une alerte ; la note de décision n'est jamais
+  pré-remplie.
+- **Le pourcentage** (`LossOpinionService::measure`) : semblables = même règle et même variante, ce site, 12 mois, sans l'exercice ni le
+  constat ; tranchés = confirmés, expliqués, classés sans suite ; `percent` = confirmés × 100 / tranchés, arrondi, à partir de 20 tranchés
+  (`MIN_DECIDED`), sinon null. Il est figé à la demande.
+- **L'entrée du modèle** (`input`), construite par liste blanche : `sources` (`finding`, `evidence` ; `clip` réservé et refusé, § 18.3),
+  `rule` (code, libellé), `finding` (jour de la semaine, état, nombres des faits, montant en jeu, devise), `evidence` (genre, minutes
+  écoulées depuis la première preuve, nombres de la preuve), `measures` (avec `percent` et `minDecided`), `numbers` (les nombres admis :
+  ceux de l'entrée, plus les dérivés évidents donnés par le serveur : montants en unités, nombre de preuves, non confirmés, complément du
+  pourcentage, total des faits). **Ni date ni heure** (relecture du 17/11/2026 : la chronologie d'une session dessinerait celle de la
+  personne en poste). **Liste blanche des clés numériques** (`NUMBER_KEYS` : des mesures, jamais un identifiant ; une clé nouvelle d'une
+  règle n'entre dans l'avis qu'ajoutée là) et des textes d'une liste fermée (`TEXT_KEYS` : `zone`, `case`, `scope`, `level`, `origin`,
+  `kind`, `channel`) ; tout le reste (identifiants, textes libres, tableaux imbriqués, booléens) est écarté (`numbersOf`). Le worker
+  revérifie au moment d'appeler le modèle qu'il ne s'agit ni d'un constat sur une personne ni d'un exercice (`OPINION_NOT_ALLOWED`).
+- **La sortie** (sortie structurée json_schema, `claude-sonnet-5-5`, sans `tool_choice` imposé) : `summary`, `factors`, `alternatives`,
+  coupés à leur longueur PUIS contrôlés. Le serveur la refuse (`rejected`) si elle cite un nombre hors de `numbers` (en chiffres OU en
+  lettres : `NUMBER_WORDS`), porte une expression de `FORBIDDEN` (motifs bornés en mode Unicode : une suite ou une sanction, une faute ou
+  un vol, une personne désignée — employé, caissier, vendeur, client… —, une proportion que le serveur n'a pas calculée — moitié, tiers,
+  pour cent), ou le nom d'un compte de la boutique, quelles que soient ses majuscules (sauf un mot que le serveur emploie lui-même dans
+  l'entrée ou les consignes : un compte nommé « Porte » n'empêche pas « porte arrière ») ; un seul nouvel essai avec la remarque (`correction`), puis l'échec. Un texte refusé par le serveur
+  n'est pas un échec de l'IA : rien n'est décompté (`completeWithoutCharge`) et il ne compte pas dans le plafond d'échecs du site, qui
+  suspendrait toute son IA.
+- **Une demande, un numéro** (`attempt`, relecture du 17/11/2026) : « Actualiser » incrémente le numéro ; un passage du worker n'écrit
+  l'avis ou l'échec que sur la demande qu'il a lue, et relit la réservation en base avant de la décompter : la réponse tardive d'une
+  demande dépassée ne s'écrit jamais sur la suivante et ne décompte pas une unité déjà rendue. La limite du jour se compte sous un verrou.
+- **Règle d'heures d'ouverture** (`OUT_OF_HOURS`, chef de projet) : chaque preuve porte `minutesOutsideHours` et `side`
+  (`before_opening` | `after_closing`), l'écart avec les heures confirmées sans la marge (`LossDepotService::outside`), jamais l'heure.
+- **Unités** : 1, réservée à la demande (le compte de la plateforme n'est pas décompté), décomptée à l'avis écrit, rendue à l'échec ou
+  au délai ; une réponse tardive n'écrase pas un échec. Journal du module : `OPINION_REQUESTED` et `OPINION_WRITTEN { percent, credits }`,
+  jamais le texte.
+- **Table** `loss_opinion` : un avis courant par constat (remplacé par « Actualiser »), effacé avec l'exercice (par l'effacement de
+  l'exercice ; pas de clé étrangère : un `TRUNCATE` de `loss_finding` doit rester refusé par la garde du module). Aide : « L'avis de l'IA » et « Données envoyées à l'IA » dans `docs/aide/pertes.md`.
+- Tests : `LossPreventionOpinionTest`.

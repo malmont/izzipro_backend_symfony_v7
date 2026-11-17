@@ -28,7 +28,8 @@ class LossFindingReader
     private const LIMIT_MAX = 100;
     private const PAGE_MAX = 100000;
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly LossTexts $texts, private readonly LossSite $site)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly LossTexts $texts, private readonly LossSite $site,
+        private readonly ?LossOpinionService $opinions = null) // lot L5-c : l'avis de l'IA, dans la fiche seulement
     {
     }
 
@@ -219,7 +220,7 @@ class LossFindingReader
             'amountNotice' => $this->texts->t('amountNotice', $locale),
             'evidence' => $evidence,
             'evidenceIntact' => $intact,
-            'opinion' => null, // avis (lot L5)
+            'opinion' => $this->opinions?->view($row, $locale), // lot L5-c : l'avis courant de l'IA (null : jamais demandé) ; jamais dans la liste
             'decision' => $row['decided_at'] === null ? null : [
                 'status' => (string) $row['status'], 'note' => $row['decision_note'], 'at' => LossAuditEntry::iso(LossAuditEntry::utc((string) $row['decided_at'])),
                 'by' => $row['decided_by'] !== null ? ['id' => (int) $row['decided_by'], 'name' => $names[(int) $row['decided_by']]] : null],

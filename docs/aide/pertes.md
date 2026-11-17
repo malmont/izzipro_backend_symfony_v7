@@ -60,6 +60,17 @@ constat se vérifie, et la décision vous revient. Il ne bloque jamais une vente
    avec sa date.
 4. Les seuils se règlent règle par règle, avec un **aperçu** sur les trente derniers jours avant d'enregistrer.
 
+## L'avis de l'IA
+
+Sur la fiche d'un constat, **« Demander l'avis »** (1 unité IA) donne un avis indicatif : ce que disent les preuves, ce qui pèse pour
+ou contre, et les explications sans faute. **Le pourcentage est calculé par la plateforme**, pas par l'IA : c'est la part des constats
+semblables de votre boutique que vous avez confirmés sur 12 mois, donnée à partir de 20 constats tranchés. La décision vous appartient :
+l'avis ne propose jamais de suite et ne nomme personne. Il n'existe pas pour les règles qui portent sur une personne.
+
+**Données envoyées à l'IA** : la règle, le genre des preuves, le temps écoulé entre elles (en minutes, sans date ni heure) et leurs
+nombres (montants, quantités, durées). Jamais une personne : ni nom, ni rôle, ni compte, ni motif saisi à la caisse, ni qui était en
+poste. Aucune image ni vidéo.
+
 ## Ce qui est gardé, et combien de temps
 
 1. Les **faits** (lectures, ventes reliées, retours) et les **preuves** d'un constat ne se modifient pas.

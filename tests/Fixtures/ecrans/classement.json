@@ -944,6 +944,7 @@
     ],
     "pertes.constat": [
         "GET /api/gestion/pertes/constats/{id}",
+        "POST /api/gestion/pertes/constats/{id}/avis",
         "PUT /api/gestion/pertes/constats/{id}/decision"
     ],
     "pertes.constats": [
@@ -981,6 +982,7 @@
         "POST /api/gestion/pertes/exercices/pieces/{id}/retirer",
         "POST /api/gestion/pertes/exercices/puces/associer",
         "POST /api/gestion/pertes/exercices/puces/{id}/retirer",
+        "POST /api/gestion/pertes/exercices/{id}/avis",
         "PUT /api/gestion/pertes/exercices/{id}/decision"
     ],
     "pertes.home": [

@@ -1,5 +1,13 @@
 # Loss prevention (lot L1-a, 2026-11-14, `docs/prevention-pertes.md`): texts written by the server, served according to ?locale=.
 # Rule: a summary (`summary.*`) never names anyone; it only uses counts and amounts.
+opinion:
+    notice: 'Indicative opinion: the decision is yours. The AI only reads the kind of evidence, the time between items and their numbers, never a person.'
+    notCalibrated: 'Uncalibrated estimate: the share of similar findings in your shop that you confirmed, over 12 months.'
+    example:
+        summary: 'Example opinion: the evidence shows several drawer openings without a sale in the same session, more than the set threshold.'
+        factorUp: 'The openings follow each other closely in the same session.'
+        factorDown: 'Each opening carries a reason entered at the till.'
+        alternative: 'A float to redo or change to give back at the start of the day.'
 history:
     grew: 'Grew since your decision: %before% at the decision, %after% now.'
 status:

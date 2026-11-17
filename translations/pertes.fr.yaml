@@ -1,5 +1,13 @@
 # Prévention des pertes (lot L1-a, 14/11/2026, `docs/prevention-pertes.md`) : textes rédigés par le serveur, servis selon ?locale=.
 # Règle : un résumé (`summary.*`) ne nomme jamais personne ; il n'emploie que des nombres et des montants.
+opinion:
+    notice: 'Avis indicatif : la décision vous appartient. L''IA ne lit que le genre des preuves, le temps écoulé entre elles et leurs nombres, jamais une personne.'
+    notCalibrated: 'Estimation non étalonnée : la part des constats semblables de votre boutique que vous avez confirmés, sur 12 mois.'
+    example:
+        summary: 'Exemple d''avis : les preuves montrent plusieurs ouvertures du tiroir sans vente dans la même session, plus que le seuil réglé.'
+        factorUp: 'Les ouvertures se suivent de près dans la même session.'
+        factorDown: 'Chaque ouverture porte un motif saisi à la caisse.'
+        alternative: 'Un fond de caisse à refaire ou de la monnaie à rendre en début de journée.'
 history:
     grew: 'A grossi depuis votre décision : %before% à la décision, %after% maintenant.'
 status:

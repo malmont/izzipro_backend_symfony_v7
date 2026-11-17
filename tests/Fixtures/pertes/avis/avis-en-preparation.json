@@ -1,0 +1,30 @@
+{
+    "request": {
+        "method": "POST",
+        "path": "/api/gestion/pertes/constats/{id}/avis"
+    },
+    "status": 202,
+    "body": {
+        "id": 1,
+        "opinion": {
+            "state": "pending",
+            "percent": 29,
+            "calibrated": false,
+            "calibrationNotice": "Estimation non étalonnée : la part des constats semblables de votre boutique que vous avez confirmés, sur 12 mois.",
+            "measures": {
+                "similar": 23,
+                "decided": 21,
+                "confirmed": 6
+            },
+            "factors": [],
+            "summary": null,
+            "alternatives": [],
+            "generatedAt": null,
+            "creditsUsed": 0,
+            "stale": false,
+            "example": false,
+            "error": null,
+            "notice": "Avis indicatif : la décision vous appartient. L'IA ne lit que le genre des preuves, le temps écoulé entre elles et leurs nombres, jamais une personne."
+        }
+    }
+}

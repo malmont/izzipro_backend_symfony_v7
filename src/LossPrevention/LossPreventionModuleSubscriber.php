@@ -49,7 +49,9 @@ class LossPreventionModuleSubscriber implements EventSubscriberInterface
             '#^/api/gestion/pertes/exercices/pieces/etiquettes/pdf\z#', '#^/api/gestion/pertes/exercices/installation/etapes/[a-z_]{1,30}/verifier\z#',
             '#^/api/gestion/pertes/exercices/installation/puce-test\z#', '#^/api/gestion/pertes/exercices/installation/etiquette-test\z#',
             '#^/api/gestion/pertes/exercices/boitiers\z#', '#^/api/gestion/pertes/exercices/boitiers/\d+/scenarios\z#',
-            '#^/api/gestion/pertes/exercices/comptages\z#', '#^/api/gestion/pertes/exercices/comptages/\d+/fermer\z#'],
+            '#^/api/gestion/pertes/exercices/comptages\z#', '#^/api/gestion/pertes/exercices/comptages/\d+/fermer\z#',
+            // lot L5-c : l'avis d'exemple sur un constat d'exercice
+            '#^/api/gestion/pertes/exercices/\d+/avis\z#'],
         'DELETE' => ['#^/api/gestion/pertes/exercices\z#', '#^/api/gestion/pertes/exercices/pieces\z#', '#^/api/gestion/pertes/exercices/boitiers\z#'],
         'PUT' => ['#^/api/gestion/pertes/exercices/\d+/decision\z#'],
     ];
