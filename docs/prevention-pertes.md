@@ -1092,7 +1092,8 @@ et quoi essayer (aucun boîtier, boîtier qui attend sa machine, boîtier silenc
 qu'une boutique peut poser et lire ses puces sans boîtier : elle ne compte ni dans `progress` ni dans `complete`, et `steps` ne
 change pas. `POST /installation/etapes/box/verifier` répond `{ code, verified, hint }` avec le même conseil.
 
-**Routes du boîtier** (`/api/pertes/boitier`, jamais appelées par une personne ; en-tête `X-Loss-Box: <jeton>` ; en-tête
+**Routes du boîtier** (`/api/pertes/boitier`, jamais appelées par une personne ; en-tête `X-Loss-Box: <jeton>` et, depuis le lot
+L5-e, `X-Loss-Box-Machine: <machine>` sur tout appel au jeton ; en-tête
 `X-Tenant-Host` du site, comme toute l'API ; erreurs `{ error, code, message, … }`) :
 
 | Route | Réponse | Refus |
@@ -1103,7 +1104,9 @@ change pas. `POST /installation/etapes/box/verifier` répond `{ code, verified, 
 | `GET /reglages` | `{ box { id }, serverTime, heartbeatSeconds: 60, facts { types, maxBatch: 200 }, zones, devices [{ id, serial, kind, zone, cashRegisterId }] }` | |
 | `POST /faits` `{ facts [{ key, type, at, device, zone?, seq?, data { identifier, technology? } }] }` (1 à 200) | `{ received, accepted, duplicates, refused, results [{ index, key, status: accepted \| duplicate \| refused, code }], serverTime }` | 422 `VALIDATION_FAILED { fields.facts }`, `FACTS_LIMIT_EXCEEDED { max, received }` ; 413 `PAYLOAD_TOO_LARGE` (256 Ko) ; 429 `RATE_LIMITED` (20 000 faits par boîtier et par heure) |
 
-Toute route du canal : 401 `BOX_TOKEN_REQUIRED` (pas d'en-tête), `BOX_TOKEN_INVALID` (signature, site, boîtier, génération),
+Toute route du canal : 401 `BOX_TOKEN_REQUIRED` (pas d'en-tête), `BOX_TOKEN_INVALID` (signature, site, boîtier, génération ; depuis
+le lot L5-e, preuve de la machine `X-Loss-Box-Machine` absente ou fausse : message « preuve de la machine absente ou fausse », le
+boîtier corrige son en-tête, il ne se réinscrit pas),
 `BOX_TOKEN_EXPIRED` (appeler `/jeton`) ; 403 `BOX_REVOKED` (le boîtier s'arrête) ; 403 `MODULE_INACTIVE` (le site n'a plus le droit du
 module : le boîtier garde sa file et réessaie ; sur ce préfixe la réponse est nue, `{ error, code, message }`, sans rien dire de
 l'offre du site) ; 429 `RATE_LIMITED { retryAfterSeconds }`. **Aucune réponse faite au boîtier ne porte de nom** : ni article, ni
@@ -1117,13 +1120,14 @@ personne, ni même le nom que l'administrateur a donné au boîtier.
   première machine ; la même machine peut se réinscrire (la génération avance, l'ancien jeton meurt ; si elle se taisait depuis plus
   longtemps que le délai de silence, le fait `BOX_BACK` dit le trou) ; une autre machine est refusée tant que l'administrateur n'a
   pas remis la clé à zéro.
-- **Jeton** : `b<boîtier>.<génération>.<échéance>.<signature>`, signé avec le secret de l'application pour ce site ; 24 heures ; le
-  signe de vie en rend un neuf dès la mi-vie. **Chaque appel relit le boîtier** (réel, actif, même génération) : une révocation ou une
+- **Jeton** : `b<boîtier>.<génération>.<échéance>.<signature>`, signé avec le secret de l'application pour ce site ; une heure
+  depuis le lot L5-e (24 heures avant) ; le signe de vie en rend un neuf dès la mi-vie. **Chaque appel relit le boîtier** (réel, actif, même génération) : une révocation ou une
   remise à zéro de la clé vaut à l'appel suivant ; le signe de vie et un lot de faits le relisent encore SOUS VERROU avant d'écrire
-  (un appel en route pendant une révocation n'écrit rien). Le jeton ne donne que les cinq routes ci-dessus : présenté à une route de
+  (un appel en route pendant une révocation n'écrit rien). Le jeton ne donne que les routes du canal (signe de vie, réglages, faits,
+  travaux, sorties permises ; l'échange de jeton) : présenté à une route de
   la gestion ou de la caisse, seul ou comme jeton d'utilisateur, il reçoit 401 (test). **Un jeton copié ne tient pas un boîtier en
-  vie** : le signe de vie et l'échange de jeton exigent l'empreinte de la machine inscrite. `/faits` et `/reglages` ne la demandent
-  pas : un jeton copié peut encore envoyer des faits jusqu'à son échéance (24 heures au plus), dans la limite de 20 000 par heure.
+  vie** : le signe de vie et l'échange de jeton exigent l'empreinte de la machine inscrite. Depuis le lot L5-e (§ 18.13), TOUT appel
+  au jeton porte la preuve de la machine (`X-Loss-Box-Machine`) : un jeton copié ne sert à rien ailleurs que sur sa machine.
 - **Si le secret de l'application change**, les jetons meurent, et avec eux les empreintes des clés et des machines : chaque
   boîtier de chaque site doit alors recevoir une nouvelle clé (remise à zéro par l'administrateur) et se réinscrire. **Avant toute
   rotation de ce secret** (elle est prévue dans la campagne de mise en production) : prévoir une nouvelle clé pour chaque boîtier,
@@ -1164,8 +1168,9 @@ personne, ni même le nom que l'administrateur a donné au boîtier.
   par boîtier ET par génération, 60 sur 15 minutes, puis arrêté avant la lecture de la base. **Jamais par adresse** : les boîtiers
   d'une boutique sortent par la même adresse que le Wi-Fi de ses visiteurs, et du bruit envoyé de là ne doit pas les faire taire ;
   une ancienne machine qui insiste avec le jeton d'avant ne gêne pas celle qui l'a remplacée. **Empreintes de machine fausses**
-  présentées avec un bon jeton (signe de vie, échange de jeton) : 10 par boîtier sur 15 minutes, puis le boîtier attend, même avec
-  la bonne (un jeton copié ne sert pas à deviner la machine).
+  présentées avec un bon jeton (toute route au jeton depuis le lot L5-e, et l'échange de jeton) : 10 par boîtier sur 15 minutes, puis
+  les empreintes fausses attendent (429) ; la bonne passe toujours depuis la relecture de L5-e (un voleur de jeton qui insiste ne fait
+  pas taire le vrai boîtier ; deviner reste sans objet : au moins 16 signes parmi 66, 64 tirés au hasard par le boîtier).
 - **La base garde elle-même** (migration) : une clé pour un seul boîtier ; un vrai boîtier a une clé, un boîtier d'exercice n'en a
   pas ; un boîtier actif réel est lié à une machine ; un boîtier révoqué ne revient pas, et porte sa date de révocation ; la
   génération commence à 1, ne recule pas, et avance quand la clé ou la machine change ; un appareil et un fait sont du même genre
@@ -1835,9 +1840,9 @@ neuf copie, ne reçoit jamais de vrai travail : voir le mot de passe). Un refus 
   (clé retirée ou autre clé : elle repart quand la bonne clé revient), celle d'un article qui n'a plus de code-barres, celle
   d'une imprimante retirée (ces deux-là attendent : annuler le travail). **Retirer une pièce clôt aussitôt ses lignes en
   attente** (`failed`, `piece_retired`) : rien ne sera imprimé pour elle, et son travail n'attend pas après elle.
-- **Le jeton du boîtier suffit** pour lire ses travaux et le mot de passe (pas de preuve de la machine sur cet appel, comme pour
-  les réglages) : un jeton copié, valable 24 heures, l'obtient, et révoquer le boîtier ne change pas un mot de passe déjà connu.
-  C'est la protection légère du plan (§ 16.7) ; le rang prépare un changement de mot de passe.
+- **Le jeton et la preuve de la machine** (lot L5-e, § 18.13 ; avant lui, le jeton seul suffisait) lisent ses travaux et le mot de
+  passe : sans la preuve, aucun travail ni mot de passe. Révoquer le boîtier ne change pas un mot de passe déjà connu ; le rang
+  prépare un changement de mot de passe (§ 16.7).
 - Deux faits de plus dans `POST /faits`, envoyés par un appareil de genre `printer` :
   `TAG_WRITTEN { key, type, at, device, data { line, identifier } }` (puce écrite et relue conforme) et
   `TAG_WRITE_FAILED { …, data { line, reason } }`, `reason` : `tag_unreadable`, `write_refused`, `verify_failed`,
@@ -2202,6 +2207,8 @@ choisi de basculer sans attendre, Fable relira ensuite). La liste fait foi pour 
 | Contrat du boîtier | boîtier, dépôt local | `12cd927` | exemples du canal resynchronisés sur L4-c (zone `back_door`) |
 | L5-d, migration et code (**à risque**) | backend `app_v2` | migration : le commit « migration seule » de L5-d, lot : le commit qui la suit (§ 18.11) | `migrations/Version20270129100000.php` (alertes, sold_changed_at, garde des appareils v3, index de l'ancienne forme retiré) et le script `scripts/migrate_all_v2_pertes_l5d.sh` (hors dépôt) ; `LossExitAlertService`, `LossExitPermitService`, `LossAlertRepository`, `CheckLossExitHandler`, le type `loss_exit` de `GestionNotificationService` et `NotificationLogRepository` (plafond propre, exercice hors plafond), `LossSaleUnitRepository::waitingSales` (web payé seulement, retours écartés, ventes hors ligne) et `rentedBetween`, le canal (`EXIT_SIGNAL`, `exitSignal`, `sorties-permises`), la garde `loss_device_guard_v3`, l'avertisseur au tableau de santé et simulé ; relu par un relecteur neuf en deux passes (17/11/2026) |
 | B8 | boîtier, dépôt local | `4a9ea4d` | `izzibox/portique.py` (sorties permises gardées sur disque, deltas, groupes d'attente et de location), `izzibox/appareils.py` (avertisseur, passage, grâce du comptoir), `izzibox/service.py` (relève des sorties) ; contrat resynchronisé sur L5-d |
+| L5-e (**à risque**, sécurité) | backend `app_v2` | le commit du lot L5-e, sans migration (§ 18.13) | `LossBoxToken` (durées), `LossBoxGuardSubscriber` (preuve de la machine sur toute route au jeton), `LossBoxChannelService::proveMachine` et `sameMachine` (la bonne machine passe toujours, les fausses comptent) ; relu par un relecteur neuf |
+| B9 | boîtier, dépôt local | le commit B9 | `izzibox/canal.py` (en-tête `X-Loss-Box-Machine` avec chaque jeton), `izzibox/boitier.py` (`_canal_du_site`), faux serveur (jeton d'une heure, preuve exigée) |
 
 Vérifié sous Opus : `LossPreventionZoneTest` et le dossier du module verts ; 21 mutations sur L4-a (20 tuées, une équivalente :
 le rejeu d'une arrivée est déjà bloqué par la clé du fait et par la requête de présence) ; 12 mutations sur B5, toutes tuées.
@@ -2918,6 +2925,38 @@ locations du jour comptent dans les sorties permises ; la pré-alerte passe par 
   (`scripts/migrate_all_v2_pertes_l5d.sh`) ; `cache:clear` (services, routes) et `messenger:stop-workers` (handler nouveau sur la file
   `email`) après l'échange.
 - **B8** committé dans le dépôt local du boîtier (`4a9ea4d`) : 86 essais, contrat resynchronisé sur L5-d.
-- **Pas commencés** : L5-e (jeton d'une heure, contrat à envoyer au chef), B9, L5-f (après l'essai du matériel).
+- **L5-e codé** (§ 18.13, contrat validé : preuve exigée tout de suite, partout), relu par un relecteur neuf ; B9 dans le dépôt du
+  boîtier. À remettre après L5-d.
+- **Pas commencé** : L5-f (après l'essai du matériel).
 - Le bloc PROVISOIRE du `LossPreventionTestCase` (non committé) rejoue les migrations jusqu'à L5-d (L4-b à L5-c déjà posées au modèle
   des tests par le train 97 : rejouées sans effet) ; à retirer quand le chaperon a posé L5-d au modèle des tests.
+
+### 18.13 Lot L5-e codé : jeton d'une heure et preuve de la machine (17/11/2026 ; contrat validé par le chef de projet le 17/11/2026)
+
+**Lot à risque** (sécurité) : relecteur neuf et mutations. **Codé sous Opus, à faire relire par Fable** (§ 17.12). Sans migration. Le
+chef de projet a tranché la question 11 : la preuve est exigée **tout de suite, partout** (aucun boîtier n'est en production : une
+période d'acceptation n'apporterait que de la faiblesse).
+
+- **Jeton d'une heure** (`LossBoxToken::LIFETIME` 3 600 s ; `RENEW_BEFORE` 1 800 s) : le signe de vie, chaque minute, rend un jeton neuf
+  dès la mi-vie, et l'ancien reste bon jusqu'à son échéance : aucun trou de service. L'échange `POST /jeton` (avec la machine dans le
+  corps) reste ouvert 30 jours après l'expiration ; au-delà, une nouvelle inscription.
+- **Preuve de la machine sur TOUT appel au jeton** : l'en-tête `X-Loss-Box-Machine` porte la même valeur que `machine` à
+  l'inscription. La garde du canal (`LossBoxGuardSubscriber`) la vérifie pour toute route du préfixe, signe de vie compris, et pour
+  toute route future (fermée par défaut) ; seules l'inscription, l'échange de jeton et le jumelage, qui la portent dans leur corps,
+  n'en ont pas besoin. Comparée à l'empreinte gardée en temps constant (`hash_equals`) ; ni la valeur reçue ni son empreinte ne sont
+  journalisées. Absente ou fausse : 401 `BOX_TOKEN_INVALID`, et l'essai compte au plafond des empreintes fausses du boîtier (10 par
+  quart d'heure, puis 429 pour les empreintes fausses ; la bonne passe toujours). **Contrat du boîtier** : la machine est un secret d'au
+  moins 128 bits tirés au hasard (le boîtier en tire 256 : 64 signes hexadécimaux), jamais une adresse MAC ni un numéro de série.
+- **Le mot de passe des puces** ne part donc jamais sans la preuve : `/travaux` est refusé par la garde, avant toute lecture des
+  travaux (seule la ligne du boîtier est lue, pour comparer l'empreinte).
+- **Un voleur de jeton ne fait pas taire le vrai boîtier** (relecture) : la bonne preuve passe toujours ; seules les empreintes
+  fausses sont comptées, puis refusées en 429 au-delà de 10 par quart d'heure. Reste signalé, antérieur au lot : un jeton expiré de la
+  génération en cours qui insiste remplit le compteur `refused` de cette génération, lu avant tout (le remède reste la remise à zéro
+  de la clé, qui change de génération).
+- **Le boîtier simulé** ne passe pas par le canal (ses scènes écrivent en base) : rien ne change pour lui ; ses exercices tournent.
+- **Côté boîtier** : le lot B9 du dépôt local envoie l'en-tête sur chaque appel au jeton (le plan du § 18 rattachait ce travail à
+  B8 ; B8 a servi au portique, celui-ci est B9).
+- Rien ne change pour le web, la caisse et le mobile.
+- Tests : `LossPreventionPrintTest::testACopiedTokenIsUselessWithoutItsMachineOnEveryRouteAndThePasswordNeverLeavesWithoutIt` (5 routes,
+  sans preuve et avec une autre machine, aucun fait écrit, aucun mot de passe, limiteur), `LossPreventionBoxTest` (une heure,
+  renouvellement à mi-vie sans trou, échange à 29 jours et refus au-delà de 30) ; toutes les aides du canal envoient la preuve.

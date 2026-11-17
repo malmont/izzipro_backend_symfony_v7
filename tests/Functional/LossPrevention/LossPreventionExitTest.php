@@ -18,6 +18,8 @@ class LossPreventionExitTest extends LossPreventionTestCase
     private const BOXES = self::BASE . '/boitiers';
     private const EX = self::BASE . '/exercices';
     private const MACHINE = 'machine-de-sortie-0123456789abcdef';
+    /** @var array<string, string> lot L5-e : la machine d'un jeton qui n'est pas celle de `MACHINE` */
+    private array $machines = [];
 
     private string $s;
     private string $ip;
@@ -339,6 +341,7 @@ class LossPreventionExitTest extends LossPreventionTestCase
         $this->client->getCookieJar()->clear();
         $this->client->request($method, 'https://' . MV_TEST_TENANT_HOST . '/api/pertes/boitier' . $path, [], [], array_filter([
             'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json', 'HTTP_X_LOSS_BOX' => $token,
+            'HTTP_X_LOSS_BOX_MACHINE' => $token !== null ? ($this->machines[$token] ?? self::MACHINE) : null, // lot L5-e : la preuve de la machine
         ]) + ['REMOTE_ADDR' => $this->ip], $body !== null ? json_encode($body) : null);
 
         return $this->client->getResponse();

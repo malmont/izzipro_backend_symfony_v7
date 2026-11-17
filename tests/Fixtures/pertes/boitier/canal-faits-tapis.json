@@ -3,26 +3,27 @@
         "method": "POST",
         "path": "/api/pertes/boitier/faits",
         "headers": {
-            "X-Loss-Box": "b1.2.1794914141.0000000000000000000000000000000000000000000000000000000000000000"
+            "X-Loss-Box": "b1.2.1794941484.0000000000000000000000000000000000000000000000000000000000000000",
+            "X-Loss-Box-Machine": "machine-d-exemple-0123456789abcdef"
         },
         "body": {
             "facts": [
                 {
-                    "key": "exemple-BA9462-0010",
+                    "key": "exemple-D0901D-0010",
                     "type": "COUNTER_SEEN",
-                    "at": "2026-11-16T11:15:42Z",
+                    "at": "2026-11-17T17:51:25Z",
                     "device": "TAPIS-0001",
                     "data": {
-                        "identifier": "04BA9462C3D4E5"
+                        "identifier": "04D0901DC3D4E5"
                     }
                 },
                 {
-                    "key": "exemple-BA9462-0011",
+                    "key": "exemple-D0901D-0011",
                     "type": "COUNTER_SEEN",
-                    "at": "2026-11-16T11:15:42Z",
+                    "at": "2026-11-17T17:51:25Z",
                     "device": "LECTEUR-0001",
                     "data": {
-                        "identifier": "04BA9462C3D4E5"
+                        "identifier": "04D0901DC3D4E5"
                     }
                 }
             ]
@@ -37,17 +38,17 @@
         "results": [
             {
                 "index": 0,
-                "key": "exemple-BA9462-0010",
+                "key": "exemple-D0901D-0010",
                 "status": "accepted",
                 "code": null
             },
             {
                 "index": 1,
-                "key": "exemple-BA9462-0011",
+                "key": "exemple-D0901D-0011",
                 "status": "refused",
                 "code": "DEVICE_KIND_INVALID"
             }
         ],
-        "serverTime": "2026-11-16T11:15:42+00:00"
+        "serverTime": "2026-11-17T17:51:26+00:00"
     }
 }

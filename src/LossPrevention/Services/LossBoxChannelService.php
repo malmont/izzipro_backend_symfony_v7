@@ -765,7 +765,23 @@ class LossBoxChannelService
     }
 
     /**
+     * La preuve de la machine d'un appel au jeton (lot L5-e, `docs/prevention-pertes.md` § 18.13) : l'en-tête `X-Loss-Box-Machine` doit
+     * désigner la machine inscrite. Absente ou fausse : 401 `BOX_TOKEN_INVALID`, et l'essai compte au plafond des empreintes fausses de
+     * ce boîtier. Comparée en temps constant ; ni la valeur reçue ni son empreinte ne sont journalisées.
+     *
+     * @param array<string, mixed> $box le boîtier authentifié par son jeton
+     */
+    public function proveMachine(array $box, mixed $machine): void
+    {
+        $this->sameMachine($box, ['machine' => $machine], $this->tenantCode());
+    }
+
+    /**
      * La machine qui appelle est-elle celle qui s'est inscrite ? Un jeton copié ne suffit pas à tenir un boîtier en vie.
+     *
+     * La BONNE machine passe toujours (relecture de L5-e, 17/11/2026) : un jeton copié qui insiste avec des empreintes fausses ne fait
+     * pas taire le vrai boîtier. Seules les empreintes fausses sont comptées, et refusées en 429 au-delà du plafond. Deviner reste sans
+     * objet : une machine a au moins 16 signes parmi 66 à l'inscription (le boîtier en tire 64 au hasard).
      *
      * @param array<string, mixed> $box
      * @param array<string, mixed> $body
@@ -773,15 +789,15 @@ class LossBoxChannelService
     private function sameMachine(array $box, array $body, string $site): void
     {
         $boxId = (int) $box['id'];
-        // un jeton copié ne sert pas à deviner la machine : quelques empreintes fausses, et ce boîtier attend
+        if (is_string($body['machine'] ?? null) && hash_equals((string) $box['machine_hash'], $this->tokens->machineHash($site, $body['machine']))) {
+            return;
+        }
         $wait = $this->limits->machineLeft($site, $boxId);
         if ($wait !== null) {
             throw new LossBoxException('RATE_LIMITED', 'Trop d\'essais. Réessayez plus tard.', 429, ['retryAfterSeconds' => $wait]);
         }
-        if (!is_string($body['machine'] ?? null) || !hash_equals((string) $box['machine_hash'], $this->tokens->machineHash($site, $body['machine']))) {
-            $this->limits->machineFailed($site, $boxId);
-            throw new LossBoxException('BOX_TOKEN_INVALID', 'Jeton de boîtier invalide : il faut une nouvelle inscription.', 401);
-        }
+        $this->limits->machineFailed($site, $boxId);
+        throw new LossBoxException('BOX_TOKEN_INVALID', 'Jeton de boîtier invalide : preuve de la machine absente ou fausse.', 401);
     }
 
     private function tenantCode(): string

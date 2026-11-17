@@ -3,12 +3,13 @@
         "method": "POST",
         "path": "/api/pertes/boitier/signe-de-vie",
         "headers": {
-            "X-Loss-Box": "b1.2.1794973484.0000000000000000000000000000000000000000000000000000000000000000"
+            "X-Loss-Box": "b1.2.1794941484.0000000000000000000000000000000000000000000000000000000000000000",
+            "X-Loss-Box-Machine": "machine-d-exemple-0123456789abcdef"
         },
         "body": {
-            "now": "2026-11-17T03:44:44Z",
+            "now": "2026-11-17T17:51:24Z",
             "machine": "machine-d-exemple-0123456789abcdef",
-            "lastServerTime": "2026-11-17T03:44:44+00:00",
+            "lastServerTime": "2026-11-17T17:51:24+00:00",
             "devices": [
                 {
                     "serial": "LECTEUR-0001",
@@ -25,7 +26,7 @@
     },
     "status": 200,
     "body": {
-        "serverTime": "2026-11-17T03:44:44+00:00",
+        "serverTime": "2026-11-17T17:51:24+00:00",
         "clockOffsetSeconds": 0,
         "clockDoubt": false,
         "token": null,
