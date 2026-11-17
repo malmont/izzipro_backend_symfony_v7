@@ -26,6 +26,8 @@ class LossPreventionBoxTest extends LossPreventionTestCase
     private const EX = self::BASE . '/exercices';
     private const CHANNEL = '/api/pertes/boitier';
     private const MACHINE = 'machine-de-test-0123456789abcdef';
+    /** @var array<string, string> lot L5-e : la machine d'un jeton qui n'est pas celle de `MACHINE` */
+    private array $machines = [];
 
     private string $s;
     /** Adresse d'où ce test appelle le canal du boîtier : au hasard, pour que les plafonds d'essais (gardés d'un lancement à l'autre) ne se cumulent pas */
@@ -184,6 +186,7 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         [$id, $key] = [$created['box']['id'], $created['key']];
         $watched = fn (): array => array_map('intval', $this->db->fetchNumeric('SELECT (SELECT COUNT(*) FROM "order"), (SELECT COUNT(*) FROM pos_audit_log), (SELECT COUNT(*) FROM loss_finding), (SELECT COUNT(*) FROM loss_journal),'
             . ' (SELECT COUNT(*) FROM loss_tag), (SELECT COUNT(*) FROM loss_piece), (SELECT COUNT(*) FROM inventory_movements)'));
+        $alertsBefore = (int) $this->db->fetchOne("SELECT COUNT(*) FROM loss_journal WHERE type = 'ALERT_SENT'");
         $watchedBefore = $watched();
         $events = fn (int $box): array => array_map(fn (array $r): array => [$r['type'], json_decode((string) $r['data'], true)],
             $this->db->fetchAllAssociative('SELECT type, data FROM loss_box_event WHERE box_id = ? ORDER BY id', [$box]));
@@ -203,10 +206,10 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $enrolled = $this->json($enrol($good));
         $this->assertSame(['box', 'token', 'expiresAt', 'serverTime', 'settings'], array_keys($enrolled));
         $this->assertSame(['id' => $id], $enrolled['box'], 'le boîtier ne reçoit même pas son nom');
-        $this->assertSame(['heartbeatSeconds' => 60, 'silentAfterSeconds' => 300, 'facts' => ['types' => ['SPOT_CHECK', 'ZONE_SEEN', 'COUNTER_SEEN', 'COUNTER_LEFT', 'ZONE_LEFT', 'TAG_WRITTEN', 'TAG_WRITE_FAILED'], 'maxBatch' => 200], 'zones' => ['stockroom', 'stockroom_door', 'floor', 'counter', 'exit', 'back_door'], 'zonePresence' => ['arriveSeconds' => 3, 'leaveSeconds' => 30], 'devices' => []], $enrolled['settings']);
+        $this->assertSame(['heartbeatSeconds' => 60, 'silentAfterSeconds' => 300, 'facts' => ['types' => ['SPOT_CHECK', 'ZONE_SEEN', 'COUNTER_SEEN', 'COUNTER_LEFT', 'ZONE_LEFT', 'TAG_WRITTEN', 'TAG_WRITE_FAILED', 'EXIT_SIGNAL'], 'maxBatch' => 200], 'zones' => ['stockroom', 'stockroom_door', 'floor', 'counter', 'exit', 'back_door'], 'zonePresence' => ['arriveSeconds' => 3, 'leaveSeconds' => 30], 'devices' => [], 'exitSignal' => ['enabled' => false, 'counterGraceSeconds' => 600, 'fullRefreshSeconds' => 3600]], $enrolled['settings']);
         $token = $enrolled['token'];
         $this->assertMatchesRegularExpression('/\Ab' . $id . '\.2\.\d{10}\.[0-9a-f]{64}\z/', $token);
-        $this->assertEqualsWithDelta(time() + 86400, strtotime($enrolled['expiresAt']), 5);
+        $this->assertEqualsWithDelta(time() + 3600, strtotime($enrolled['expiresAt']), 5, 'lot L5-e : un jeton d\'une heure');
         $row = $this->db->fetchAssociative('SELECT status, generation, machine_hash, version, arch, enrolled_at IS NOT NULL AS enrolled, last_seen_at IS NOT NULL AS seen FROM loss_box WHERE id = ?', [$id]);
         $tokens = static::getContainer()->get(LossBoxToken::class);
         $this->assertNotSame(hash('sha256', self::MACHINE), $row['machine_hash']);
@@ -257,7 +260,7 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         }
         // Ses réglages : ce qu'il a le droit de savoir, et rien d'autre
         $settings = $this->json($this->box('GET', '/reglages', null, $token));
-        $this->assertSame(['box', 'serverTime', 'heartbeatSeconds', 'silentAfterSeconds', 'facts', 'zones', 'zonePresence', 'devices'], array_keys($settings));
+        $this->assertSame(['box', 'serverTime', 'heartbeatSeconds', 'silentAfterSeconds', 'facts', 'zones', 'zonePresence', 'devices', 'exitSignal'], array_keys($settings));
         $this->assertSame(['id' => $id], $settings['box']);
 
         // ----- Signe de vie
@@ -332,19 +335,27 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $this->assertEqualsWithDelta(600, $back[0][1]['silentSeconds'], 5);
         $this->assertSame(array_values(array_filter(array_column($this->json($this->admin('GET', self::BOXES . "/$id"))['events'], 'silentSeconds')))[0], $back[0][1]['silentSeconds']);
         $this->assertTrue($this->json($this->admin('GET', self::BOXES . "/$id"))['online']);
-        // Jeton : renouvelé au signe de vie dès la mi-vie ; un jeton expiré s'échange, avec la machine, pendant 30 jours
-        $halfLife = $tokens->issue(MV_TEST_TENANT_CODE, $id, 3, time() - 13 * 3600)['token'];
+        // Jeton : renouvelé au signe de vie dès la mi-vie ; un jeton expiré s'échange, avec la machine, pendant 30 jours. Lot L5-e : une
+        // heure, renouvelé à la demi-heure ; l'ancien jeton reste bon jusqu'à son échéance (aucun trou de service)
+        $halfLife = $tokens->issue(MV_TEST_TENANT_CODE, $id, 3, time() - 31 * 60)['token'];
         $renewed = $this->json($beat(['now' => $now(), 'devices' => $devices], $halfLife))['token'];
-        $this->assertEqualsWithDelta(time() + 86400, strtotime($renewed['expiresAt']), 5);
-        $this->assertSame(200, $this->box('GET', '/reglages', null, $renewed['token'])->getStatusCode());
-        $this->assertNull($this->json($beat(['now' => $now(), 'devices' => $devices], $tokens->issue(MV_TEST_TENANT_CODE, $id, 3, time() - 11 * 3600)['token']))['token'], 'avant la mi-vie : le jeton reste');
+        $this->assertEqualsWithDelta(time() + 3600, strtotime($renewed['expiresAt']), 5);
+        $this->assertSame([200, 200], [$this->box('GET', '/reglages', null, $renewed['token'])->getStatusCode(), $this->box('GET', '/reglages', null, $halfLife)->getStatusCode()],
+            'le neuf et l\'ancien, encore bon 29 minutes : le boîtier passe de l\'un à l\'autre sans trou');
+        $this->assertNull($this->json($beat(['now' => $now(), 'devices' => $devices], $tokens->issue(MV_TEST_TENANT_CODE, $id, 3, time() - 29 * 60)['token']))['token'], 'avant la mi-vie : le jeton reste');
+        $this->assertSame('BOX_TOKEN_EXPIRED', $this->json($this->box('GET', '/reglages', null, $tokens->issue(MV_TEST_TENANT_CODE, $id, 3, time() - 3601)['token']), 401)['error'], 'une heure passée : expiré');
         $this->ip = self::randomIp(); // les essais d'inscription de ce test ont déjà entamé le plafond de son adresse
         $renew = fn (?string $with, array $body): Response => $this->box('POST', '/jeton', $body, $with);
+        $this->machines[$expired] = ''; // l'échange porte la machine dans son corps : sans l'en-tête, il passe (lot L5-e)
         $fresh = $this->json($renew($expired, ['machine' => self::MACHINE]));
+        unset($this->machines[$expired]);
+        $this->assertSame(200, $this->box('GET', '/reglages', null, $this->json($renew($tokens->issue(MV_TEST_TENANT_CODE, $id, 3, time() - 29 * 86400 - 3600)['token'], ['machine' => self::MACHINE]))['token'])->getStatusCode(),
+            'expiré depuis 29 jours : il s\'échange encore');
         $this->assertSame(['token', 'expiresAt', 'serverTime'], array_keys($fresh));
         $this->assertSame(200, $this->box('GET', '/reglages', null, $fresh['token'])->getStatusCode());
         foreach (['sans jeton' => [null, ['machine' => self::MACHINE]], 'une autre machine' => [$expired, ['machine' => 'une-autre-machine-0123456789']], 'sans machine' => [$expired, []],
             'expiré depuis plus de 30 jours' => [$tokens->issue(MV_TEST_TENANT_CODE, $id, 3, time() - 32 * 86400)['token'], ['machine' => self::MACHINE]],
+            'expiré depuis 30 jours et une heure' => [$tokens->issue(MV_TEST_TENANT_CODE, $id, 3, time() - 30 * 86400 - 7200)['token'], ['machine' => self::MACHINE]],
             'une génération passée' => [$tokens->issue(MV_TEST_TENANT_CODE, $id, 2)['token'], ['machine' => self::MACHINE]],
             'un autre site' => [$tokens->issue('un-autre-site', $id, 3)['token'], ['machine' => self::MACHINE]]] as $what => [$with, $body]) {
             $this->assertSame('BOX_TOKEN_INVALID', $this->json($renew($with, $body), 401)['error'], $what);
@@ -428,9 +439,9 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $this->assertSame(['facts' => 'MUST_BE_LIST'], $this->json($this->box('POST', '/faits', ['facts' => ['a' => $fact('q')]], $token), 422)['fields']);
         $tooMany = $this->json($this->box('POST', '/faits', ['facts' => array_fill(0, 201, $fact('r'))], $token), 422);
         $this->assertSame(['FACTS_LIMIT_EXCEEDED', 200, 201], [$tooMany['error'], $tooMany['max'], $tooMany['received']]);
-        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . self::CHANNEL . '/faits', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_X_LOSS_BOX' => $token], '{pas du json');
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . self::CHANNEL . '/faits', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_X_LOSS_BOX' => $token, 'HTTP_X_LOSS_BOX_MACHINE' => self::MACHINE], '{pas du json');
         $this->assertSame(['body' => 'INVALID_JSON'], $this->json($this->client->getResponse(), 422)['fields']);
-        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . self::CHANNEL . '/faits', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_X_LOSS_BOX' => $token],
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . self::CHANNEL . '/faits', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_X_LOSS_BOX' => $token, 'HTTP_X_LOSS_BOX_MACHINE' => self::MACHINE],
             json_encode(['facts' => [$fact('s')], 'bourrage' => str_repeat('x', 262144)]));
         $this->assertSame('PAYLOAD_TOO_LARGE', $this->json($this->client->getResponse(), 413)['error']);
         $this->assertSame($before + 3, $pieceEvents());
@@ -446,6 +457,7 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $this->ip = self::randomIp();
         $other = $this->json($this->admin('POST', self::BOXES, ['name' => "Second $this->s"]), 201);
         $otherToken = $this->json($enrol(['key' => $other['key'], 'machine' => 'seconde-machine-0123456789abcdef'] + $good))['token'];
+        $this->machines[$otherToken] = 'seconde-machine-0123456789abcdef'; // lot L5-e : la preuve de SA machine
         $this->json($this->box('POST', '/signe-de-vie', ['now' => $now(), 'machine' => 'seconde-machine-0123456789abcdef', 'devices' => [['serial' => "LECTEUR-$this->s", 'kind' => 'reader', 'status' => 'ok']]], $otherToken));
         $this->assertSame('DEVICE_UNKNOWN', $this->json($this->box('POST', '/faits', ['facts' => [$fact('w', ['device' => "IMPR-$this->s"])]], $otherToken))['results'][0]['code'], 'l\'appareil d\'un autre boîtier');
         $this->assertSame('accepted', $this->json($this->box('POST', '/faits', ['facts' => [$fact('a')]], $otherToken))['results'][0]['status']);
@@ -467,8 +479,11 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $this->assertSame([$life, 200, 'PIECE_CREATED'], [array_values(array_filter($full, fn (string $t): bool => !in_array($t, ['SPOT_CHECK', 'ZONE_SEEN'], true))),
             count(array_filter($full, fn (string $t): bool => in_array($t, ['SPOT_CHECK', 'ZONE_SEEN'], true))), $full[0]]);
 
-        // ----- Rien d'autre n'a bougé : ni vente, ni journal de caisse, ni constat, ni journal du module, ni pièce, ni stock (une puce de plus : celle retirée plus haut)
-        $this->assertSame(array_replace($watchedBefore, [4 => $watchedBefore[4] + 1]), $watched());
+        // ----- Rien d'autre n'a bougé : ni vente, ni journal de caisse, ni constat, ni pièce, ni stock (une puce de plus : celle retirée plus haut) ;
+        // au journal du module, seulement l'alerte de sortie (lot L5-d) de la pièce non vendue lue à la sortie plus haut
+        $alertsLogged = (int) $this->db->fetchOne("SELECT COUNT(*) FROM loss_journal WHERE type = 'ALERT_SENT'") - ($alertsBefore ?? 0);
+        $this->assertSame(array_replace($watchedBefore, [3 => $watchedBefore[3] + $alertsLogged, 4 => $watchedBefore[4] + 1]), $watched());
+        $this->assertLessThanOrEqual(1, $alertsLogged);
 
         // ----- Sans le droit du module : tout le canal est fermé, inscription comprise ; rien n'est écrit
         static::getContainer()->get(PlatformModeService::class)->setMode('live', 'test');
@@ -578,7 +593,8 @@ class LossPreventionBoxTest extends LossPreventionTestCase
             $this->assertGreaterThan(0, $e->details['retryAfterSeconds']);
         }
 
-        // Un jeton copié ne sert pas à deviner la machine : deux empreintes fausses, et ce boîtier attend (même avec la bonne)
+        // Un jeton copié ne sert pas à deviner la machine : deux empreintes fausses, et les suivantes attendent. La bonne passe toujours
+        // (lot L5-e, relecture : un voleur de jeton qui insiste ne fait pas taire le vrai boîtier)
         $guessing = new LossBoxChannelService($c->get(\App\Services\TenantEntityManagerProvider::class), $c->get(\App\Services\TenantConnectionProvider::class), $c->get(LossBoxToken::class),
             $c->get(\App\LossPrevention\Services\LossHealthService::class), new LossBoxLimits($c->get('cache.rate_limiter'), ['machine' => 2]));
         $beatAs = function (string $machine) use ($guessing, $authenticated): array {
@@ -590,7 +606,7 @@ class LossPreventionBoxTest extends LossPreventionTestCase
                 return [$e->error, $e->status];
             }
         };
-        $this->assertSame([['ok', 200], ['BOX_TOKEN_INVALID', 401], ['BOX_TOKEN_INVALID', 401], ['RATE_LIMITED', 429], ['RATE_LIMITED', 429]],
+        $this->assertSame([['ok', 200], ['BOX_TOKEN_INVALID', 401], ['BOX_TOKEN_INVALID', 401], ['RATE_LIMITED', 429], ['ok', 200]],
             [$beatAs(self::MACHINE), $beatAs('une-fausse-machine-0000000001'), $beatAs('une-fausse-machine-0000000002'), $beatAs('une-fausse-machine-0000000003'), $beatAs(self::MACHINE)]);
 
         // La garde applique ces plafonds. Appels d'un boîtier : le quatrième est arrêté, sans boîtier posé
@@ -600,7 +616,7 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $guardIp = self::randomIp();
         $guardWith = fn (array $low): \Closure => function (?string $with) use ($c, $low, $guardIp): \Symfony\Component\HttpKernel\Event\RequestEvent {
             $guard = new LossBoxGuardSubscriber($c->get(LossBoxChannelService::class), $c->get(\App\Services\TenantConnectionProvider::class), new LossBoxLimits($c->get('cache.rate_limiter'), $low));
-            $request = \Symfony\Component\HttpFoundation\Request::create('/api/pertes/boitier/reglages', 'GET', [], [], [], ['REMOTE_ADDR' => $guardIp] + ($with !== null ? ['HTTP_X_LOSS_BOX' => $with] : []));
+            $request = \Symfony\Component\HttpFoundation\Request::create('/api/pertes/boitier/reglages', 'GET', [], [], [], ['REMOTE_ADDR' => $guardIp] + ($with !== null ? ['HTTP_X_LOSS_BOX' => $with, 'HTTP_X_LOSS_BOX_MACHINE' => self::MACHINE] : []));
             $event = new \Symfony\Component\HttpKernel\Event\RequestEvent(static::$kernel, $request, \Symfony\Component\HttpKernel\HttpKernelInterface::MAIN_REQUEST);
             $guard->onKernelRequest($event);
 
@@ -664,7 +680,8 @@ class LossPreventionBoxTest extends LossPreventionTestCase
             [$box['name'], $box['place'], $box['status'], $box['online'], $box['onlineLabel'], $box['keyHint'], $box['exercise'], array_slice(array_reverse(array_column($box['events'], 'type')), 0, 4), $box['factsReceived']]);
         $this->assertSame([['SIM-LECTEUR-SORTIE', 'reader', 'ok', 'exit', 'Sortie'], ['SIM-LECTEUR-MAIN', 'reader', 'ok', null, null], ['SIM-TAPIS', 'counter_mat', 'ok', null, null],
             ['SIM-IMPRIMANTE', 'printer', 'ok', null, null], // l'imprimante à puce simulée (lot L3-c)
-            ['SIM-ANTENNE-RESERVE', 'reader', 'ok', 'stockroom', 'Réserve'], ['SIM-ANTENNE-RAYON', 'reader', 'ok', 'floor', 'Rayon']], // les antennes de zone simulées (lot L4-a)
+            ['SIM-ANTENNE-RESERVE', 'reader', 'ok', 'stockroom', 'Réserve'], ['SIM-ANTENNE-RAYON', 'reader', 'ok', 'floor', 'Rayon'], // les antennes de zone simulées (lot L4-a)
+            ['SIM-AVERTISSEUR', 'signal', 'ok', null, null]], // l'avertisseur du portique simulé (lot L5-d)
             array_map(fn (array $d): array => [$d['serial'], $d['kind'], $d['status'], $d['zone'], $d['zoneLabel']], $box['devices']));
         $this->assertSame([null, null, true], array_values($this->db->fetchNumeric('SELECT key_hash, machine_hash, exercise FROM loss_box WHERE id = ?', [$id])), 'ni clé ni machine : personne ne s\'y inscrit');
         // l'assistant d'exercice voit le boîtier simulé ; l'assistant réel, non (son boîtier attend encore sa machine)
@@ -711,14 +728,15 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $spot = $play('spot_check');
         $this->assertSame([3, 3], [$spot['written'], $spot['box']['factsReceived']]);
         $exit = $play('zone_exit');
-        $this->assertSame([1, 4], [$exit['written'], $exit['box']['factsReceived']]);
+        $this->assertSame([1, 5], [$exit['written'], $exit['box']['factsReceived']], 'la lecture à la sortie, et l\'avertisseur simulé qui sonne (lot L5-d)');
         $facts = $this->db->fetchAllAssociative('SELECT type, piece_id, source, event_key, exercise, data, box_id, device_id FROM loss_piece_event WHERE box_id = ? ORDER BY id', [$id]);
         $reader = array_column($exit['box']['devices'], 'id', 'serial');
         $this->assertSame([['SPOT_CHECK', $pieces[3], 'exercise', null, true, [], $reader['SIM-LECTEUR-MAIN']], ['SPOT_CHECK', $pieces[2], 'exercise', null, true, [], $reader['SIM-LECTEUR-MAIN']],
-            ['SPOT_CHECK', $pieces[1], 'exercise', null, true, [], $reader['SIM-LECTEUR-MAIN']], ['ZONE_SEEN', $pieces[3], 'exercise', null, true, ['zone' => 'exit'], $reader['SIM-LECTEUR-SORTIE']]],
+            ['SPOT_CHECK', $pieces[1], 'exercise', null, true, [], $reader['SIM-LECTEUR-MAIN']], ['ZONE_SEEN', $pieces[3], 'exercise', null, true, ['zone' => 'exit'], $reader['SIM-LECTEUR-SORTIE']],
+            ['EXIT_SIGNAL', $pieces[3], 'exercise', null, true, ['zone' => 'exit'], $reader['SIM-AVERTISSEUR']]],
             array_map(fn (array $f): array => [$f['type'], (int) $f['piece_id'], $f['source'], $f['event_key'], (bool) $f['exercise'], json_decode($f['data'], true), (int) $f['device_id']], $facts));
-        $this->assertSame(['Lue par le lecteur à main du boîtier', 'Lue dans une zone'],
-            array_slice(array_column($this->json($this->admin('GET', self::EX . "/pieces/$pieces[3]"))['events'], 'label'), -2), 'la fiche de la pièce d\'exercice raconte les lectures');
+        $this->assertSame(['Lue par le lecteur à main du boîtier', 'Lue dans une zone', 'Le portique a sonné'],
+            array_slice(array_column($this->json($this->admin('GET', self::EX . "/pieces/$pieces[3]"))['events'], 'label'), -3), 'la fiche de la pièce d\'exercice raconte les lectures');
         $this->assertSame('created', $this->db->fetchOne('SELECT status FROM loss_piece WHERE id = ?', [$pieces[3]]), 'aucun état ne change');
 
         // Plafond : trois boîtiers simulés ; listes étanches ; ouvert sans le droit du module
@@ -901,7 +919,7 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $simulated = $this->json($this->admin('POST', self::EX . '/boitiers'), 201)['box']['id'];
         // le boîtier simulé a son tapis simulé (lot L3-b1), son imprimante à puce simulée (lot L3-c) et trois antennes de zone (le lecteur
         // de la sortie, la réserve et le rayon : lot L4-a), qui n'ont encore rien lu ni écrit : cinq lignes de plus, en attente
-        $this->assertSame(["box-$simulated", ['box', 'mat', 'printer', 'zone_reader', 'zone_reader', 'zone_reader'], ['ok', 'pending', 'pending', 'pending', 'pending', 'pending'], false], [($sim = $exercise())['devices'][0]['code'], array_column($sim['devices'], 'kind'), array_column($sim['devices'], 'state'), $sim['summary']['allOk']]);
+        $this->assertSame(["box-$simulated", ['box', 'mat', 'printer', 'zone_reader', 'zone_reader', 'zone_reader', 'signal'], ['ok', 'pending', 'pending', 'pending', 'pending', 'pending', 'ok'], false], [($sim = $exercise())['devices'][0]['code'], array_column($sim['devices'], 'kind'), array_column($sim['devices'], 'state'), $sim['summary']['allOk']]);
         $this->assertNotContains("box-$simulated", array_column($board()['devices'], 'code'));
         $this->db->executeStatement("UPDATE loss_box SET last_seen_at = NOW() AT TIME ZONE 'UTC' - INTERVAL '630 seconds' WHERE id = ?", [$simulated]);
         $this->assertSame(['down', 'Silencieux depuis 10 min. Jouez le scénario « Signe de vie » pour le faire revenir.'], [($silent = $exercise()['devices'][0])['state'], $silent['hint']]);
@@ -1106,6 +1124,7 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         $this->client->getCookieJar()->clear();
         $this->client->request($method, 'https://' . MV_TEST_TENANT_HOST . self::CHANNEL . $path, [], [], array_filter([
             'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json', 'HTTP_X_LOSS_BOX' => $token,
+            'HTTP_X_LOSS_BOX_MACHINE' => $token !== null ? ($this->machines[$token] ?? self::MACHINE) : null, // lot L5-e : la preuve de la machine
         ]) + $server + ['REMOTE_ADDR' => $this->ip], $body !== null ? json_encode($body) : null);
 
         return $this->client->getResponse();

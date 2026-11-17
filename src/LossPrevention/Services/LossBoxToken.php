@@ -10,15 +10,19 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  * signature prouve que c'est le serveur qui l'a écrit. Il ne suffit jamais seul : chaque appel relit le boîtier (actif, même
  * génération), donc une révocation ou une remise à zéro de la clé vaut tout de suite.
  *
- * Durée courte (24 h), renouvelé au signe de vie dès la mi-vie. Un boîtier resté coupé du réseau plus longtemps échange son jeton
- * expiré contre un neuf (30 jours de grâce, avec l'empreinte de sa machine) ; au-delà il faut une nouvelle inscription.
+ * Durée courte (une heure depuis le lot L5-e, 17/11/2026 ; 24 h avant), renouvelé au signe de vie dès la mi-vie : le signe de vie
+ * passe toutes les minutes, aucun trou de service. Un boîtier resté coupé du réseau plus longtemps échange son jeton expiré contre un
+ * neuf (30 jours de grâce, avec l'empreinte de sa machine) ; au-delà il faut une nouvelle inscription. Le jeton ne suffit jamais : chaque
+ * appel porte aussi la preuve de la machine (`MACHINE_HEADER`, lot L5-e), vérifiée par la garde du canal.
  */
 class LossBoxToken
 {
     public const HEADER = 'X-Loss-Box';
-    public const LIFETIME = 86400;
-    /** Le signe de vie rend un jeton neuf quand il reste moins que cette durée */
-    public const RENEW_BEFORE = 43200;
+    /** Lot L5-e : la preuve de la machine, sur chaque appel au jeton (la même valeur que `machine` à l'inscription) */
+    public const MACHINE_HEADER = 'X-Loss-Box-Machine';
+    public const LIFETIME = 3600;
+    /** Le signe de vie rend un jeton neuf quand il reste moins que cette durée (la mi-vie) */
+    public const RENEW_BEFORE = 1800;
     /** Délai pendant lequel un jeton expiré s'échange encore contre un neuf */
     public const GRACE = 2592000;
 

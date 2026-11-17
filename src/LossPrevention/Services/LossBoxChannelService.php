@@ -60,6 +60,7 @@ class LossBoxChannelService
         private readonly LossHealthService $health,
         private readonly LossBoxLimits $limits,
         private readonly ?LossPrintService $prints = null,
+        private readonly ?LossExitAlertService $exitAlerts = null,
     ) {
     }
 
@@ -509,8 +510,9 @@ class LossBoxChannelService
         }
         $repository = $this->repository();
         $serverNow = time();
+        $toCheck = []; // lot L5-d : les lectures neuves à la sortie, contrôlées deux minutes plus tard, APRÈS la validation du lot
 
-        return $this->transaction(function () use ($facts, $boxId, $box, $repository, $serverNow): array {
+        $result = $this->transaction(function () use ($facts, $boxId, $box, $repository, $serverNow, &$toCheck): array {
             // lot L4-b : un lot de faits tient en partage le verrou des lectures de la sortie ; le balayage de l'analyse le prend en exclusif
             // le temps de sa lecture, et ne saute donc jamais une lecture validée après une autre de rang plus grand
             $this->emProvider->getEntityManager()->getConnection()->fetchOne('SELECT pg_advisory_xact_lock_shared(?)', [LossExitService::READS_LOCK]);
@@ -587,6 +589,9 @@ class LossBoxChannelService
                 // fait rejoué ne la touche pas deux fois, une arrivée à l'heure douteuse ne pose rien, un départ vaut toujours
                 if ($written && !$doubt && $fact['type'] === LossPieceEvent::ZONE_SEEN) {
                     $repository->openZonePresence($fact['deviceId'], (int) $tag['id'], (string) $fact['zone'], $at, false);
+                    if ($pieceId !== null && empty($data['repeat']) && in_array($fact['zone'], LossExitAlertService::ZONES, true)) {
+                        $toCheck[] = 'b' . $boxId . ':' . $fact['key'];
+                    }
                 } elseif ($written && $fact['type'] === LossPieceEvent::ZONE_LEFT) {
                     $repository->closeZonePresence($fact['deviceId'], (int) $tag['id'], (string) $fact['zone'], $doubt ? self::boxTime($serverNow, $current['clock_offset']) : $at, $doubt, false);
                 }
@@ -598,6 +603,19 @@ class LossBoxChannelService
             return ['received' => count($checked), 'accepted' => $counts['accepted'], 'duplicates' => $counts['duplicate'], 'refused' => $counts['refused'], 'results' => $results,
                 'serverTime' => self::iso($serverNow)];
         });
+        // lot L5-d : la pré-alerte de chaque lecture neuve à la sortie ; une panne ici ne refuse jamais le lot (les faits sont écrits)
+        if ($this->exitAlerts !== null && $toCheck !== []) {
+            try {
+                foreach ($this->emProvider->getEntityManager()->getConnection()->fetchFirstColumn('SELECT id FROM loss_piece_event WHERE event_key IN (?)', [$toCheck],
+                    [\Doctrine\DBAL\ArrayParameterType::STRING]) as $eventId) {
+                    $this->exitAlerts->schedule((int) $eventId);
+                }
+            } catch (\Throwable) {
+                // le constat « sortie sans vente » reste jugé après le rattrapage : rien n'est perdu
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -618,10 +636,11 @@ class LossBoxChannelService
         if (is_string($type) && in_array($type, LossPieceEvent::PRINTS, true)) {
             return $this->checkPrintFact($fact, $key, $type, $devices);
         }
-        if (!is_string($type) || !in_array($type, LossPieceEvent::READS, true)) {
+        if (!is_string($type) || !in_array($type, [...LossPieceEvent::READS, LossPieceEvent::EXIT_SIGNAL], true)) {
             return $refused('FACT_TYPE_UNKNOWN');
         }
         $fromMat = in_array($type, LossPieceEvent::FROM_MAT, true);
+        $signal = $type === LossPieceEvent::EXIT_SIGNAL; // lot L5-d : le portique a sonné
         $at = self::time($fact['at'] ?? null);
         $seq = $fact['seq'] ?? null;
         if ($at === null || ($seq !== null && (!is_int($seq) || $seq < 0))) {
@@ -632,11 +651,16 @@ class LossBoxChannelService
             return $refused('DEVICE_UNKNOWN'); // le boîtier annonce ses appareils dans son signe de vie, avant leurs faits
         }
         // un tapis dit ce qui arrive sur lui et ce qui en part ; un lecteur dit ce qu'il lit : chacun ses faits
-        if ($device['kind'] !== ($fromMat ? LossDevice::COUNTER_MAT : LossDevice::READER)) {
+        if ($device['kind'] !== ($signal ? LossDevice::SIGNAL : ($fromMat ? LossDevice::COUNTER_MAT : LossDevice::READER))) {
             return $refused('DEVICE_KIND_INVALID');
         }
         $zone = $fact['zone'] ?? null;
-        if ($fromMat) {
+        if ($signal) {
+            $zone ??= 'exit'; // un avertisseur est à la sortie, ou à la porte arrière
+            if (!in_array($zone, LossExitAlertService::ZONES, true)) {
+                return $refused('ZONE_INVALID');
+            }
+        } elseif ($fromMat) {
             if ($zone !== null && $zone !== 'counter') {
                 return $refused('ZONE_INVALID');
             }
@@ -708,10 +732,13 @@ class LossBoxChannelService
 
         $row = $this->emProvider->getEntityManager()->getRepository(LossSetting::class)->row();
 
-        return ['heartbeatSeconds' => self::HEARTBEAT_SECONDS, 'silentAfterSeconds' => $this->health->silentAfter(), 'facts' => ['types' => [...LossPieceEvent::READS, ...LossPieceEvent::PRINTS], 'maxBatch' => self::MAX_FACTS], 'zones' => LossDevice::ZONES,
+        return ['heartbeatSeconds' => self::HEARTBEAT_SECONDS, 'silentAfterSeconds' => $this->health->silentAfter(), 'facts' => ['types' => [...LossPieceEvent::READS, ...LossPieceEvent::PRINTS, LossPieceEvent::EXIT_SIGNAL], 'maxBatch' => self::MAX_FACTS], 'zones' => LossDevice::ZONES,
             // lot L4-a : ce que le boîtier attend avant de dire qu'une pièce est arrivée dans une zone, ou qu'elle en est partie
             'zonePresence' => ['arriveSeconds' => (int) ($row['zone_arrive_seconds'] ?? LossZonePresence::ARRIVE_SECONDS), 'leaveSeconds' => (int) ($row['zone_leave_seconds'] ?? LossZonePresence::LEAVE_SECONDS)],
-            'devices' => $devices];
+            'devices' => $devices,
+            // lot L5-d : le signal du portique (réglage du gérant, éteint par défaut) ; le boîtier décide sur place avec les sorties permises
+            'exitSignal' => ['enabled' => (bool) ($row['exit_signal_enabled'] ?? false), 'counterGraceSeconds' => LossExitPermitService::COUNTER_GRACE_SECONDS,
+                'fullRefreshSeconds' => LossExitPermitService::FULL_REFRESH_SECONDS]];
     }
 
     /**
@@ -738,7 +765,23 @@ class LossBoxChannelService
     }
 
     /**
+     * La preuve de la machine d'un appel au jeton (lot L5-e, `docs/prevention-pertes.md` § 18.13) : l'en-tête `X-Loss-Box-Machine` doit
+     * désigner la machine inscrite. Absente ou fausse : 401 `BOX_TOKEN_INVALID`, et l'essai compte au plafond des empreintes fausses de
+     * ce boîtier. Comparée en temps constant ; ni la valeur reçue ni son empreinte ne sont journalisées.
+     *
+     * @param array<string, mixed> $box le boîtier authentifié par son jeton
+     */
+    public function proveMachine(array $box, mixed $machine): void
+    {
+        $this->sameMachine($box, ['machine' => $machine], $this->tenantCode());
+    }
+
+    /**
      * La machine qui appelle est-elle celle qui s'est inscrite ? Un jeton copié ne suffit pas à tenir un boîtier en vie.
+     *
+     * La BONNE machine passe toujours (relecture de L5-e, 17/11/2026) : un jeton copié qui insiste avec des empreintes fausses ne fait
+     * pas taire le vrai boîtier. Seules les empreintes fausses sont comptées, et refusées en 429 au-delà du plafond. Deviner reste sans
+     * objet : une machine a au moins 16 signes parmi 66 à l'inscription (le boîtier en tire 64 au hasard).
      *
      * @param array<string, mixed> $box
      * @param array<string, mixed> $body
@@ -746,15 +789,15 @@ class LossBoxChannelService
     private function sameMachine(array $box, array $body, string $site): void
     {
         $boxId = (int) $box['id'];
-        // un jeton copié ne sert pas à deviner la machine : quelques empreintes fausses, et ce boîtier attend
+        if (is_string($body['machine'] ?? null) && hash_equals((string) $box['machine_hash'], $this->tokens->machineHash($site, $body['machine']))) {
+            return;
+        }
         $wait = $this->limits->machineLeft($site, $boxId);
         if ($wait !== null) {
             throw new LossBoxException('RATE_LIMITED', 'Trop d\'essais. Réessayez plus tard.', 429, ['retryAfterSeconds' => $wait]);
         }
-        if (!is_string($body['machine'] ?? null) || !hash_equals((string) $box['machine_hash'], $this->tokens->machineHash($site, $body['machine']))) {
-            $this->limits->machineFailed($site, $boxId);
-            throw new LossBoxException('BOX_TOKEN_INVALID', 'Jeton de boîtier invalide : il faut une nouvelle inscription.', 401);
-        }
+        $this->limits->machineFailed($site, $boxId);
+        throw new LossBoxException('BOX_TOKEN_INVALID', 'Jeton de boîtier invalide : preuve de la machine absente ou fausse.', 401);
     }
 
     private function tenantCode(): string

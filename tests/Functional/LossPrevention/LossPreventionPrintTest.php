@@ -359,6 +359,47 @@ class LossPreventionPrintTest extends LossPreventionTestCase
         $this->assertSame($stored, $secrets());
     }
 
+    /**
+     * Lot L5-e (17/11/2026) : un jeton copié sur une autre machine ne sert à rien, sur aucune route du boîtier, et le mot de passe des
+     * puces ne part jamais sans la preuve de la machine. Chaque essai compte au plafond des empreintes fausses de ce boîtier.
+     */
+    public function testACopiedTokenIsUselessWithoutItsMachineOnEveryRouteAndThePasswordNeverLeavesWithoutIt(): void
+    {
+        $variant = $this->article('Gilet');
+        [$p1] = $this->pieces($variant, 1);
+        [$boxId, $token, $devices] = $this->enrolled('Copie', [['serial' => "IMPR-$this->s", 'kind' => 'printer', 'status' => 'ok']]);
+        $this->json($this->admin('POST', self::PRINTS, ['deviceId' => $devices["IMPR-$this->s"], 'pieceIds' => [$p1]]), 201);
+        $this->assertArrayHasKey('access', $this->json($this->box('GET', '/travaux', null, $token))['jobs'][0], 'avec la preuve : le mot de passe part');
+        $routes = [
+            'GET /reglages' => ['GET', '/reglages', null],
+            'POST /faits' => ['POST', '/faits', ['facts' => [['key' => "copie-$this->s", 'type' => 'SPOT_CHECK', 'at' => gmdate('Y-m-d\TH:i:s\Z'), 'device' => "IMPR-$this->s", 'data' => ['identifier' => '04AABBCCDDEEFF']]]]],
+            'GET /travaux' => ['GET', '/travaux', null],
+            'GET /sorties-permises' => ['GET', '/sorties-permises', null],
+            'POST /signe-de-vie' => ['POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => self::MACHINE, 'devices' => []]],
+        ];
+        $facts = (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_piece_event');
+        foreach (['sans preuve' => '', 'une autre machine' => 'machine-du-voleur-0123456789abcd'] as $what => $proof) {
+            $this->machines[$token] = $proof; // vide : l'en-tête n'est pas envoyé
+            foreach ($routes as $route => [$method, $path, $body]) {
+                $response = $this->box($method, $path, $body, $token);
+                $this->assertSame([401, 'BOX_TOKEN_INVALID'], [$response->getStatusCode(), json_decode((string) $response->getContent(), true)['error'] ?? null], "$route, $what");
+                $this->assertStringNotContainsString('access', (string) $response->getContent(), "$route, $what : rien du mot de passe");
+            }
+        }
+        $this->assertSame($facts, (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_piece_event'), 'aucun fait écrit');
+        // les dix essais sont comptés : une empreinte fausse de plus attend (429, avec l'heure de reprise) ; la vraie machine passe toujours,
+        // le voleur qui insiste ne fait pas taire le boîtier
+        $this->machines[$token] = 'machine-du-voleur-0123456789abce';
+        $limited = $this->box('GET', '/reglages', null, $token);
+        $this->assertSame(['RATE_LIMITED', true], [$this->json($limited, 429)['error'], (int) $limited->headers->get('Retry-After') > 0]);
+        $this->machines[$token] = self::MACHINE;
+        $this->assertSame(200, $this->box('GET', '/reglages', null, $token)->getStatusCode());
+        $this->assertArrayHasKey('access', $this->json($this->box('GET', '/travaux', null, $token))['jobs'][0]);
+        // le compteur des empreintes fausses de ce boîtier est remis à zéro : la base des essais est recréée à chaque lancement, un
+        // relancement dans le quart d'heure redonnerait ce numéro de boîtier (relecture de L5-e)
+        self::pairingLimiter('machine', '15 minutes', MV_TEST_TENANT_CODE . '|' . $boxId)->reset();
+    }
+
     public function testWithoutTheEncryptionKeyNoRealJobIsCreatedAndTheHealthBoardSaysSo(): void
     {
         $variant = $this->article('Gilet');
@@ -734,6 +775,7 @@ class LossPreventionPrintTest extends LossPreventionTestCase
         $this->client->getCookieJar()->clear();
         $this->client->request($method, 'https://' . MV_TEST_TENANT_HOST . '/api/pertes/boitier' . $path, [], [], array_filter([
             'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json', 'HTTP_X_LOSS_BOX' => $token,
+            'HTTP_X_LOSS_BOX_MACHINE' => $token !== null ? ($this->machines[$token] ?? self::MACHINE) : null, // lot L5-e : la preuve de la machine
         ]) + ['REMOTE_ADDR' => $this->ip], $body !== null ? json_encode($body) : null);
 
         return $this->client->getResponse();

@@ -3,7 +3,8 @@
         "method": "POST",
         "path": "/api/pertes/boitier/jeton",
         "headers": {
-            "X-Loss-Box": "b1.2.1794914141.0000000000000000000000000000000000000000000000000000000000000000"
+            "X-Loss-Box": "b1.2.1794941484.0000000000000000000000000000000000000000000000000000000000000000",
+            "X-Loss-Box-Machine": "machine-d-exemple-0123456789abcdef"
         },
         "body": {
             "machine": "une-autre-machine-0123456789"
@@ -13,6 +14,6 @@
     "body": {
         "error": "BOX_TOKEN_INVALID",
         "code": "BOX_TOKEN_INVALID",
-        "message": "Jeton de boîtier invalide : il faut une nouvelle inscription."
+        "message": "Jeton de boîtier invalide : preuve de la machine absente ou fausse."
     }
 }

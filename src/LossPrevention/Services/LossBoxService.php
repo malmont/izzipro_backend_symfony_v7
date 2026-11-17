@@ -43,6 +43,8 @@ class LossBoxService
     /** Lot L4-a : deux antennes de zone simulées, à la réserve et en rayon */
     private const SIM_STOCKROOM = 'SIM-ANTENNE-RESERVE';
     private const SIM_FLOOR = 'SIM-ANTENNE-RAYON';
+    /** Lot L5-d : l'avertisseur du portique simulé ; il sonne quand une pièce d'exercice passe la sortie (une pièce d'exercice n'est jamais vendue) */
+    private const SIM_SIGNAL = 'SIM-AVERTISSEUR';
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -53,6 +55,7 @@ class LossBoxService
         private readonly LossHealthService $health,
         private readonly LossBoxToken $tokens,
         private readonly ?LossPrintService $prints = null,
+        private readonly ?LossExitAlertService $exitAlerts = null,
     ) {
     }
 
@@ -373,7 +376,7 @@ class LossBoxService
             $repository->event($id, null, LossBoxEvent::BOX_CREATED, $userId, true, [], $now);
             $repository->event($id, null, LossBoxEvent::BOX_ENROLLED, null, true, ['again' => false], $now);
             foreach ([[self::SIM_EXIT_READER, LossDevice::READER, 'exit'], [self::SIM_HAND_READER, LossDevice::READER, null], [self::SIM_MAT, LossDevice::COUNTER_MAT, null],
-                [self::SIM_PRINTER, LossDevice::PRINTER, null], [self::SIM_STOCKROOM, LossDevice::READER, 'stockroom'], [self::SIM_FLOOR, LossDevice::READER, 'floor']] as [$serial, $kind, $zone]) {
+                [self::SIM_PRINTER, LossDevice::PRINTER, null], [self::SIM_STOCKROOM, LossDevice::READER, 'stockroom'], [self::SIM_FLOOR, LossDevice::READER, 'floor'], [self::SIM_SIGNAL, LossDevice::SIGNAL, null]] as [$serial, $kind, $zone]) {
                 $device = $repository->insertDevice($id, $serial, $kind, null, LossDevice::OK, $zone, true, $now);
                 $repository->event($id, $device, LossBoxEvent::DEVICE_SEEN, null, true, ['kind' => $kind], $now);
             }
@@ -396,7 +399,9 @@ class LossBoxService
             throw new GestionValidationException(['scenario' => array_key_exists('scenario', $body) ? 'INVALID_VALUE' : 'REQUIRED']);
         }
 
-        return $this->transaction(function () use ($id, $scenario, $locale, $userId): array {
+        $toCheck = []; // lot L5-d : les lectures à la sortie du boîtier simulé, contrôlées comme les vraies (alerte d'exercice)
+
+        $result = $this->transaction(function () use ($id, $scenario, $locale, $userId, &$toCheck): array {
             $this->exerciseLock();
             $repository = $this->repository();
             $box = $repository->box($id, true);
@@ -408,6 +413,15 @@ class LossBoxService
                 $devices[(string) $row['serial']] = $row;
             }
             $now = self::now();
+            // relecture 2 de L5-d : un boîtier simulé créé avant l'avertisseur le reçoit à la première scène jouée (sinon l'étape d'exercice
+            // « avertisseur » resterait absente, sans autre geste que d'effacer le boîtier)
+            if (!isset($devices[self::SIM_SIGNAL])) {
+                $signal = $repository->insertDevice($id, self::SIM_SIGNAL, LossDevice::SIGNAL, null, LossDevice::OK, null, true, $now);
+                $repository->event($id, $signal, LossBoxEvent::DEVICE_SEEN, null, true, ['kind' => LossDevice::SIGNAL], $now);
+                foreach ($repository->devicesOf([$id])[$id] as $row) {
+                    $devices[(string) $row['serial']] = $row;
+                }
+            }
             $written = 0;
             $job = null;
             switch ($scenario) {
@@ -504,12 +518,27 @@ class LossBoxService
                         if (!$spot && $device !== null) {
                             $repository->openZonePresence((int) $device['id'], (int) $piece['tag_id'], 'exit', $now, true); // lot L4-a : vue en dernier à la sortie
                         }
+                        // lot L5-d : l'avertisseur simulé sonne pour une pièce d'exercice qui passe la sortie
+                        $signal = $devices[self::SIM_SIGNAL] ?? null;
+                        if (!$spot && $signal !== null && $signal['status'] === LossDevice::OK) {
+                            $repository->pieceFact(LossPieceEvent::EXIT_SIGNAL, $now, (int) $piece['piece_id'], (int) $piece['tag_id'], $id, (int) $signal['id'], null, true, ['zone' => 'exit'], $now);
+                        }
+                        if (!$spot) {
+                            $toCheck[] = (int) $this->emProvider->getEntityManager()->getConnection()->fetchOne(
+                                "SELECT MAX(id) FROM loss_piece_event WHERE piece_id = ? AND type = 'ZONE_SEEN' AND exercise", [(int) $piece['piece_id']]);
+                        }
                         ++$written;
                     }
             }
 
             return ['scenario' => $scenario, 'written' => $written, 'box' => $this->sheet($id, $locale, true)] + ($job !== null ? ['printJobId' => $job] : []);
         });
+        // lot L5-d : l'alerte d'exercice part au seul administrateur qui joue la scène
+        foreach (array_filter($toCheck) as $eventId) {
+            $this->exitAlerts?->schedule($eventId, $userId > 0 ? $userId : null);
+        }
+
+        return $result;
     }
 
     /** @return array<string, mixed> { items, total, limit, exercise, screen, scenarios } */

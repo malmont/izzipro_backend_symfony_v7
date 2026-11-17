@@ -3,13 +3,14 @@
         "method": "POST",
         "path": "/api/pertes/boitier/signe-de-vie",
         "headers": {
-            "X-Loss-Box": "b1.2.1794954529.0000000000000000000000000000000000000000000000000000000000000000"
+            "X-Loss-Box": "b1.2.1794941484.0000000000000000000000000000000000000000000000000000000000000000",
+            "X-Loss-Box-Machine": "machine-d-exemple-0123456789abcdef"
         },
         "body": {
-            "now": "2026-11-16T22:28:49Z",
+            "now": "2026-11-17T17:51:24Z",
             "machine": "machine-d-exemple-0123456789abcdef",
             "version": "1.0.0",
-            "lastServerTime": "2026-11-16T22:28:49+00:00",
+            "lastServerTime": "2026-11-17T17:51:24+00:00",
             "devices": [
                 {
                     "serial": "LECTEUR-0001",
@@ -33,7 +34,7 @@
     },
     "status": 200,
     "body": {
-        "serverTime": "2026-11-16T22:28:49+00:00",
+        "serverTime": "2026-11-17T17:51:24+00:00",
         "clockOffsetSeconds": 0,
         "clockDoubt": false,
         "token": null,
@@ -50,7 +51,8 @@
                     "COUNTER_LEFT",
                     "ZONE_LEFT",
                     "TAG_WRITTEN",
-                    "TAG_WRITE_FAILED"
+                    "TAG_WRITE_FAILED",
+                    "EXIT_SIGNAL"
                 ],
                 "maxBatch": 200
             },
@@ -88,7 +90,12 @@
                     "zone": null,
                     "cashRegisterId": null
                 }
-            ]
+            ],
+            "exitSignal": {
+                "enabled": false,
+                "counterGraceSeconds": 600,
+                "fullRefreshSeconds": 3600
+            }
         }
     }
 }

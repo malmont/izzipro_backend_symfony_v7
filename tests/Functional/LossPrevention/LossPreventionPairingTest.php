@@ -25,6 +25,8 @@ class LossPreventionPairingTest extends LossPreventionTestCase
     /** Adresse de la plateforme : aucun site ne porte ce nom, et les deux routes du jumelage n'en résolvent aucun */
     private const PLATFORM = 'boitiers.example.invalid';
     private const MACHINE = 'machine-jumelee-0123456789abcdef';
+    /** @var array<string, string> lot L5-e : la machine d'un jeton qui n'est pas celle de `MACHINE` */
+    private array $machines = [];
     private const NEUTRAL = ['error' => 'PAIRING_CODE_INVALID', 'code' => 'PAIRING_CODE_INVALID', 'message' => 'Code de jumelage inconnu.'];
 
     private string $s;
@@ -500,6 +502,7 @@ class LossPreventionPairingTest extends LossPreventionTestCase
         $this->client->getCookieJar()->clear();
         $this->client->request($method, 'https://' . $host . '/api/pertes/boitier' . $path, [], [], array_filter([
             'HTTP_X_TENANT_HOST' => $host, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json', 'HTTP_X_LOSS_BOX' => $token,
+            'HTTP_X_LOSS_BOX_MACHINE' => $token !== null ? ($this->machines[$token] ?? self::MACHINE) : null, // lot L5-e : la preuve de la machine
         ]) + ['REMOTE_ADDR' => $this->ip], $body !== null ? json_encode($body) : null);
 
         return $this->client->getResponse();

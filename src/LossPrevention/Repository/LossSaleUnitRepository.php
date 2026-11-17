@@ -19,6 +19,11 @@ class LossSaleUnitRepository extends EntityRepository
     /** `status_commande` « Annulation » et `order_source` « Pos » (référentiels insérés dans toutes les bases) */
     private const ORDER_CANCELLED = 7;
     private const SOURCE_POS = 2;
+    /** Une commande de retour au comptoir (`PosReturnService::ORDER_TYPE_RETURN`) */
+    private const ORDER_TYPE_RETURN = 2;
+    /** Lot L5-d : une commande payée (règle de L4-b2 : un paiement Stripe réussi ou « Complété », hors remboursement) */
+    private const ORDER_PAID = "EXISTS (SELECT 1 FROM payments pay LEFT JOIN status_payment sp ON sp.id = pay.statut_payment_id LEFT JOIN payment_type pt ON pt.id = pay.payment_type_id"
+        . " WHERE pay.order_payment_id = o.id AND COALESCE(pt.name, '') <> 'RemboursementClient' AND (pay.stripe_status = 'succeeded' OR sp.name = 'Complété'))";
 
     /**
      * Lot L4-b2 : une réservation `b` (de la commande `bo`) qui compte comme une location : confirmée ou rendue au comptoir, ou réservée
@@ -112,10 +117,15 @@ class LossSaleUnitRepository extends EntityRepository
         return $this->db()->executeStatement('UPDATE loss_sale_unit SET piece_id = ?, matched_by = ?, matched_at = ? WHERE id = ? AND piece_id IS NULL AND returned_at IS NULL', [$pieceId, $by, $now, $unitId]) === 1;
     }
 
-    /** L'état d'une pièce : `sold` quand elle est reliée à une vente, `returned` quand elle revient (de nouveau vendable) */
+    /**
+     * L'état d'une pièce : `sold` quand elle est reliée à une vente, `returned` quand elle revient (de nouveau vendable). Lot L5-d : l'entrée
+     * dans « vendue » ou la sortie de « vendue » est datée à l'heure RÉELLE de l'écriture (`sold_changed_at`, jamais l'heure de la vente) :
+     * le boîtier en reçoit les deltas de la liste des pièces qui sortent sans sonner.
+     */
     public function pieceStatus(int $pieceId, string $status, string $now): void
     {
-        $this->db()->executeStatement("UPDATE loss_piece SET status = ?, updated_at = ? WHERE id = ? AND status <> 'retired'", [$status, $now, $pieceId]);
+        $this->db()->executeStatement("UPDATE loss_piece SET sold_changed_at = CASE WHEN (status = 'sold') <> (? = 'sold') THEN clock_timestamp() AT TIME ZONE 'UTC' ELSE sold_changed_at END,"
+            . " status = ?, updated_at = ? WHERE id = ? AND status <> 'retired'", [$status, $status, $now, $pieceId]);
     }
 
     /** @return list<array{id: int, piece_id: ?int, order_item_id: int, variant_id: int}> les articles d'une commande pas encore revenus */
@@ -289,6 +299,46 @@ class LossSaleUnitRepository extends EntityRepository
             'SELECT b.start_at, b.end_at, b.quantity FROM booking b JOIN order_items bi ON bi.id = b.order_item_id JOIN "order" bo ON bo.id = bi.order_associated_id'
             . ' WHERE bi.product_variant_id = :variant AND ' . self::RENTAL_KEPT . ' AND b.start_at < :until AND b.end_at > :from ORDER BY b.id',
             ['variant' => $variantId, 'from' => $from, 'until' => $until]);
+    }
+
+    /**
+     * Lot L5-d : par variante suivie, les articles VENDUS qui n'ont pas encore de pièce, lus DANS LES COMMANDES (pas dans ce que l'analyse a
+     * déjà relié : deux minutes après un paiement, l'analyse n'est peut-être pas encore passée) : ventes de caisse depuis `$posSince`,
+     * commandes web depuis `$webSince` ; ni annulées, ni locations. Ce qui est déjà relié à une pièce est retiré du compte.
+     *
+     * @return array<int, int> variante => articles encore sans pièce
+     */
+    public function waitingSales(string $posSince, string $webSince, ?int $variantId = null): array
+    {
+        $rows = $this->db()->fetchAllKeyValue(
+            'SELECT i.product_variant_id, SUM(GREATEST(0, i.quantity - (SELECT COUNT(*) FROM loss_sale_unit u WHERE u.order_item_id = i.id AND u.piece_id IS NOT NULL))) AS waiting'
+            . ' FROM order_items i JOIN "order" o ON o.id = i.order_associated_id WHERE o.status_id <> :cancelled'
+            // relecture du 17/11/2026 : ni une commande de retour (RetourClient), ni une commande web IMPAYÉE (un panier ou une commande non
+            // payée ne laisse pas sortir la variante) ; une vente hors ligne a aussi son heure d'enregistrement (`synced_at`, en UTC : sa
+            // `order_date` garde l'heure du magasin)
+            . ' AND o.order_type_id IS DISTINCT FROM ' . self::ORDER_TYPE_RETURN
+            . ' AND ((o.order_source_id = :pos AND (o.order_date >= :posSince OR o.synced_at >= :posSince))'
+            . ' OR (o.order_source_id IS DISTINCT FROM :pos AND o.order_date >= :webSince AND ' . self::ORDER_PAID . '))'
+            . ' AND NOT EXISTS (SELECT 1 FROM booking bk WHERE bk.order_item_id = i.id)'
+            . ' AND EXISTS (SELECT 1 FROM loss_piece p JOIN loss_tag t ON t.piece_id = p.id WHERE p.variant_id = i.product_variant_id AND NOT p.exercise AND NOT t.exercise AND t.status = \'associated\')'
+            . ($variantId !== null ? ' AND i.product_variant_id = :variant' : '')
+            . ' GROUP BY i.product_variant_id',
+            ['cancelled' => self::ORDER_CANCELLED, 'pos' => self::SOURCE_POS, 'posSince' => $posSince, 'webSince' => $webSince] + ($variantId !== null ? ['variant' => $variantId] : []));
+
+        return array_filter(array_map('intval', $rows), static fn (int $n): bool => $n > 0);
+    }
+
+    /**
+     * Lot L5-d : par variante, les unités louées qui expliquent une sortie ce jour-là (même règle que L4-b2 : une location gardée qui
+     * recouvre la plage `[$from, $until[`, de la veille de son début au lendemain de sa fin).
+     *
+     * @return array<int, int> variante => unités louées
+     */
+    public function rentedBetween(string $from, string $until): array
+    {
+        return array_filter(array_map('intval', $this->db()->fetchAllKeyValue(
+            'SELECT bi.product_variant_id, SUM(GREATEST(1, b.quantity)) FROM booking b JOIN order_items bi ON bi.id = b.order_item_id JOIN "order" bo ON bo.id = bi.order_associated_id'
+            . ' WHERE ' . self::RENTAL_KEPT . ' AND b.start_at < :until AND b.end_at > :from GROUP BY bi.product_variant_id', ['from' => $from, 'until' => $until])), static fn (int $n): bool => $n > 0);
     }
 
     /** Efface les présences FERMÉES avant `$before` (jamais une présence ouverte, jamais un fait), par paquets ; rend leur nombre */

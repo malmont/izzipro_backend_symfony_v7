@@ -51,6 +51,8 @@ class LossPieceEvent
     /** Faits qu'un TAPIS de comptoir peut envoyer par le canal */
     public const FROM_MAT = [self::COUNTER_SEEN, self::COUNTER_LEFT];
     /** Lectures de puces par un appareil : nombreuses, la fiche d'une pièce n'en montre que les dernières */
+    /** Lot L5-d : le portique a sonné pour cette puce (fait d'un avertisseur) ; jamais une preuve, il n'ouvre rien */
+    public const EXIT_SIGNAL = 'EXIT_SIGNAL';
     public const READS = [self::SPOT_CHECK, self::ZONE_SEEN, self::COUNTER_SEEN, self::COUNTER_LEFT, self::ZONE_LEFT];
     /**
      * Résultats d'une imprimante à puce (lot L3-c), envoyés par le boîtier avec ses autres faits : puce écrite et RELUE conforme, ou

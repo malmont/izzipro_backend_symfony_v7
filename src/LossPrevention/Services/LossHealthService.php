@@ -126,7 +126,10 @@ class LossHealthService
         $printers = array_map(fn (array $printer): array => $this->printerLine($printer, $threshold, $now, $locale, $exercise, $keyProblem), $repository->livePrinters($exercise));
         // les antennes de zone (lot L4-a) : une ligne par lecteur qui a une zone
         $readers = array_map(fn (array $reader): array => $this->zoneReaderLine($reader, $threshold, $now, $locale, $exercise), $repository->liveZoneReaders($exercise));
-        $devices = [...$devices, ...$mats, ...$printers, ...$readers];
+        // l'avertisseur du portique (lot L5-d) : une ligne par avertisseur branché
+        $signalOn = $exercise || (bool) ($this->emProvider->getEntityManager()->getConnection()->fetchOne('SELECT exit_signal_enabled FROM loss_setting ORDER BY id LIMIT 1') ?: false);
+        $signals = array_map(fn (array $signal): array => $this->signalLine($signal, $threshold, $now, $locale, $signalOn), $repository->liveSignals($exercise));
+        $devices = [...$devices, ...$mats, ...$printers, ...$readers, ...$signals];
         $counts = array_fill_keys(self::STATES, 0);
         foreach ($devices as $device) {
             ++$counts[$device['state']];
@@ -353,6 +356,33 @@ class LossHealthService
         $since = $state === 'down' ? ($boxSilent && $boxSeen !== null ? min($boxSeen, $seen) : $seen) : null;
 
         return ['code' => 'printer-' . $printer['id'], 'kind' => 'printer', 'label' => $this->texts->t('health.kind.printer', $locale), 'zone' => null, 'cashRegisterId' => null, 'state' => $state,
+            'stateLabel' => $this->texts->t('health.state.' . $state, $locale), 'lastSeenAt' => gmdate('Y-m-d\TH:i:s\+00:00', $seen),
+            'silentSince' => $since !== null ? gmdate('Y-m-d\TH:i:s\+00:00', $since) : null, 'silentSeconds' => $since !== null ? max(0, $now - $since) : null, 'hint' => $hint];
+    }
+
+    /**
+     * Lot L5-d : la ligne d'un avertisseur du portique. En attente tant que le signal est éteint dans les réglages (il ne sonnerait
+     * jamais) ; silencieux si lui ou son boîtier ne répond plus.
+     *
+     * @param array<string, mixed> $signal
+     *
+     * @return array<string, mixed>
+     */
+    private function signalLine(array $signal, int $threshold, int $now, string $locale, bool $signalOn): array
+    {
+        $boxSeen = $signal['box_seen'] !== null ? (new \DateTimeImmutable((string) $signal['box_seen'], new \DateTimeZone('UTC')))->getTimestamp() : null;
+        $seen = (new \DateTimeImmutable((string) $signal['last_seen_at'], new \DateTimeZone('UTC')))->getTimestamp();
+        $boxSilent = $signal['box_status'] !== LossBox::ACTIVE || $boxSeen === null || $now - $boxSeen > $threshold;
+        if ($signal['status'] === 'down' || $boxSilent) {
+            [$state, $hint] = ['down', $this->texts->t('health.hint.signal.' . ($boxSilent ? 'box_silent' : 'down'), $locale)];
+        } elseif (!$signalOn) {
+            [$state, $hint] = ['pending', $this->texts->t('health.hint.signal.setting_off', $locale)];
+        } else {
+            [$state, $hint] = ['ok', null];
+        }
+        $since = $state === 'down' ? ($boxSilent && $boxSeen !== null ? min($boxSeen, $seen) : $seen) : null;
+
+        return ['code' => 'signal-' . $signal['id'], 'kind' => 'signal', 'label' => $this->texts->t('health.kind.signal', $locale), 'zone' => null, 'cashRegisterId' => null, 'state' => $state,
             'stateLabel' => $this->texts->t('health.state.' . $state, $locale), 'lastSeenAt' => gmdate('Y-m-d\TH:i:s\+00:00', $seen),
             'silentSince' => $since !== null ? gmdate('Y-m-d\TH:i:s\+00:00', $since) : null, 'silentSeconds' => $since !== null ? max(0, $now - $since) : null, 'hint' => $hint];
     }

@@ -16,6 +16,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\UniqueConstraint(name: 'uniq_loss_piece_kind_number', columns: ['exercise', 'number'])]
 #[ORM\Index(name: 'idx_loss_piece_variant', columns: ['variant_id', 'status'])]
 #[ORM\Index(name: 'idx_loss_piece_exercise', columns: ['id'], options: ['where' => 'exercise'])]
+#[ORM\Index(name: 'idx_loss_piece_sold_changed', columns: ['sold_changed_at'], options: ['where' => 'sold_changed_at IS NOT NULL'])]
 class LossPiece
 {
     public const CREATED = 'created';
@@ -81,10 +82,15 @@ class LossPiece
     #[ORM\Column(name: 'updated_at', type: 'datetime_immutable')]
     private \DateTimeImmutable $updatedAt;
 
+    /** Lot L5-d : quand la pièce est entrée dans « vendue » ou en est sortie, à l'heure réelle (deltas des sorties permises du boîtier) */
+    #[ORM\Column(name: 'sold_changed_at', type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $soldChangedAt = null;
+
     public function getId(): ?int { return $this->id; }
     public function getNumber(): int { return $this->number; }
     public function getVariantId(): int { return $this->variantId; }
     public function getProductId(): int { return $this->productId; }
     public function getStatus(): string { return $this->status; }
     public function isExercise(): bool { return $this->exercise; }
+    public function getSoldChangedAt(): ?\DateTimeImmutable { return $this->soldChangedAt; }
 }

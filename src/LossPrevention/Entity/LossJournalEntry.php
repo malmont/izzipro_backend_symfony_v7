@@ -38,6 +38,8 @@ class LossJournalEntry
     /** Lot L5-c : un avis de l'IA demandé (pourcentage, unités), puis rédigé ; jamais le texte de l'avis */
     public const OPINION_REQUESTED = 'OPINION_REQUESTED';
     public const OPINION_WRITTEN = 'OPINION_WRITTEN';
+    /** Lot L5-d : une alerte de sortie ouverte (zone, hors des heures, exercice) ; jamais une personne */
+    public const ALERT_SENT = 'ALERT_SENT';
     /** Exercice lancé (lot EX-1) : son numéro (qui ne redescend jamais) et son scénario ; sans constat rattaché, donc jamais supprimé */
     public const EXERCISE_STARTED = 'EXERCISE_STARTED';
     /** Exercices effacés par le gérant (lot EX-1) : leur nombre ; sans constat rattaché */

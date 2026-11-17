@@ -213,6 +213,8 @@ evidence:
         lastZone: Vue avant dans la zone
         lastZoneAt: Vue dans cette zone le
         matchedSaleAt: Reliée à la vente du
+        signalAt: Le portique a sonné le
+        alertAt: Alerte envoyée le
         move: Mouvement
         zoneMoved: Zone
         movedAt: Le
@@ -298,6 +300,11 @@ settings:
         confirmed: 'Heures confirmées : une pièce déplacée en dehors, marges comprises, ouvre un constat « hors des heures ».'
         none: 'Aucune heure d''ouverture confirmée : la règle « mouvement hors des heures » ne dit rien tant que vous ne les avez pas confirmées jour par jour.'
     legalNotice: 'Ces réglages suivent le pays et la région de votre boutique. Faites-les relire par un avocat avant de vous en servir pour une décision concernant un salarié.'
+    exitAlerts:
+        note: 'Une alerte part sur le téléphone des administrateurs quand un article suivi passe la sortie sans vente reliée, deux minutes après. Hors des heures d''ouverture aussi, sauf si vous coupez la nuit. À vérifier : ne retenez ni n''accusez jamais un client sur une alerte.'
+    exitSignal:
+        note: 'Le portique sonne quand un article suivi passe sans être payé. Le boîtier décide sur place, avec la liste des articles payés que la plateforme lui envoie. Il faut un avertisseur branché sur le boîtier.'
+        limit: 'Limite : un article vendu mais non lu au comptoir fera sonner un client honnête, comme un antivol oublié en caisse. L''alerte en caisse réduit ce risque. Ne retenez ni n''accusez jamais un client sur un signal.'
     cashierAlerts:
         note: 'La caisse montre les articles suivis du panier qui n''ont pas été lus sur le tapis, avant le paiement. Elle ne bloque jamais la vente.'
     personPatterns:
@@ -452,6 +459,7 @@ pieces:
         PIECE_RETURNED: Revenue en magasin
         ZONE_SEEN: Lue dans une zone
         ZONE_LEFT: Partie d'une zone
+        EXIT_SIGNAL: Le portique a sonné
     error:
         VARIANT_NOT_FOUND: 'Variante introuvable.'
         PIECE_NOT_FOUND: 'Pièce introuvable.'
@@ -523,6 +531,11 @@ installation:
             text: 'Facultatif (niveau pro). L''imprimante imprime l''étiquette et écrit la puce d''un même geste. Branchez-la sur le boîtier, puis lancez un travail d''impression : la première puce écrite et relue termine cette étape.'
             verify: Vérifier
             hint: 'Aucune imprimante à puce. Branchez l''imprimante sur le boîtier.'
+        exit_signal:
+            title: Brancher l'avertisseur du portique
+            text: 'Facultatif. Le portique sonne quand un article suivi passe sans être payé ; le boîtier décide sur place. Branchez l''avertisseur sur le boîtier, puis allumez le signal dans les réglages. Limite : un article vendu mais non lu au comptoir fera sonner un client honnête.'
+            verify: Vérifier
+            hint: 'Aucun avertisseur. Branchez l''avertisseur du portique sur le boîtier.'
         zone_reader:
             title: Brancher les antennes de zone
             text: 'Facultatif. Une antenne dit quand une pièce arrive dans sa zone (réserve, porte de la réserve, rayon, sortie) et quand elle en part : la fiche de la pièce dit où elle a été vue en dernier. Branchez chaque antenne sur le boîtier, donnez-lui sa zone dans la fiche du boîtier, puis passez devant elle une pièce qui porte une puce. L''étape est faite quand chaque antenne a vu une puce.'
@@ -619,6 +632,7 @@ boxes:
         reader: Lecteur de puces
         printer: Imprimante à puce
         camera: Caméra
+        signal: Avertisseur du portique
     deviceStatus:
         ok: En marche
         down: En panne ou débranché
@@ -702,6 +716,7 @@ health:
         mat: Tapis de comptoir
         printer: Imprimante à puce
         zone_reader: 'Antenne : %zone%'
+        signal: Avertisseur du portique
     state:
         ok: En ordre
         pending: En attente
@@ -734,6 +749,12 @@ health:
             never_read_exercise: 'Le tapis simulé n''a encore rien lu. Jouez le scénario « Pièce posée sur le tapis ».'
             no_register: 'Ce tapis n''est relié à aucun poste de caisse. Choisissez son poste dans la fiche du boîtier.'
             no_terminal: 'Aucune tablette de caisse n''est rattachée au poste « %register% » : le contrôle avant paiement est arrêté pour les caissiers de ce poste. Rattachez une tablette à ce poste (clés d''activation de la caisse).'
+        signal:
+            absent: 'Aucun avertisseur. Branchez l''avertisseur du portique sur le boîtier : il apparaît ici de lui-même.'
+            absent_exercise: 'Aucun avertisseur simulé. Créez un boîtier simulé, ou jouez une scène sur le vôtre : il reçoit son avertisseur.'
+            down: 'L''avertisseur ne répond plus. Vérifiez son câble sur le boîtier.'
+            box_silent: 'Le boîtier de l''avertisseur ne donne plus signe de vie.'
+            setting_off: 'L''avertisseur est branché, mais le signal du portique est éteint dans les réglages : il ne sonnera pas.'
         printer:
             absent: 'Aucune imprimante à puce. Branchez l''imprimante sur le boîtier : elle apparaît ici d''elle-même.'
             absent_exercise: 'Aucune imprimante simulée. Créez un boîtier simulé : il a son imprimante.'
@@ -788,6 +809,8 @@ prints:
         EXERCISE_NO_UNTAGGED_PIECE: 'Aucune pièce d''exercice sans puce : créez d''abord des pièces d''exercice.'
         EXERCISE_NO_PRINTER: 'Ce boîtier simulé n''a pas d''imprimante : créez-en un nouveau.'
 
+alerts:
+    notice: 'Des articles à vérifier, pas des constats : le constat « sortie sans vente » est jugé plus tard, avec le rattrapage. Aucune alerte ne désigne une personne.'
 counter:
     notice:
         one: '1 article suivi non lu : posez-le sur le tapis.'

@@ -24,6 +24,8 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
 
     private const DIR = __DIR__ . '/../../Fixtures/pertes/boitier';
     private const MACHINE = 'machine-d-exemple-0123456789abcdef';
+    /** @var array<string, string> lot L5-e : la machine d'un jeton qui n'est pas celle de `MACHINE` */
+    private array $machines = [];
     /** @var array<string, array<string, mixed>> */
     private array $examples = [];
     private string $s;
@@ -106,6 +108,15 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
         ];
         $this->channel('canal-faits', 'POST', '/faits', ['facts' => $facts], $token);
         $this->channel('canal-faits-rejoues', 'POST', '/faits', ['facts' => $facts], $token);
+        // ----- Lot L5-d : les sorties permises. La pièce de l'exemple passe « vendue » (comme l'analyse le ferait), le boîtier lit la liste
+        // complète, puis les deltas ; la pièce revient à son état d'avant
+        $piece = (int) $this->db->fetchOne('SELECT piece_id FROM loss_tag WHERE identifier = ? AND NOT exercise', [$nfc]);
+        $before = (string) $this->db->fetchOne('SELECT status FROM loss_piece WHERE id = ?', [$piece]);
+        $this->db->executeStatement("UPDATE loss_piece SET status = 'sold', sold_changed_at = clock_timestamp() WHERE id = ?", [$piece]);
+        $this->channel('canal-sorties-permises', 'GET', '/sorties-permises', null, $token);
+        $this->channel('canal-sorties-permises-deltas', 'GET', '/sorties-permises?since=' . rawurlencode($this->examples['canal-sorties-permises']['body']['serverTime']), null, $token);
+        $this->channel('canal-refus-sorties-permises-depuis', 'GET', '/sorties-permises?since=hier', null, $token, 422);
+        $this->db->executeStatement('UPDATE loss_piece SET status = ?, sold_changed_at = clock_timestamp() WHERE id = ?', [$before, $piece]);
         // ----- Lot L3-b1 : le tapis de comptoir, relié à un poste, et la question de la caisse avant un paiement
         $this->channel('canal-signe-de-vie-avec-tapis', 'POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => self::MACHINE,
             'lastServerTime' => $this->examples['canal-signe-de-vie-appareil-refuse']['body']['serverTime'], 'devices' => $devices], $token);
@@ -184,6 +195,7 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
         $printMachine = 'machine-de-l-imprimante-0123456789';
         $this->channel('tmp', 'POST', '/inscription', ['key' => $printBox['key'], 'machine' => $printMachine, 'version' => '1.0.0', 'arch' => 'amd64'], null);
         $printToken = $this->examples['tmp']['body']['token'];
+        $this->machines[$printToken] = $printMachine;
         $this->channel('tmp', 'POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => $printMachine, 'devices' => [['serial' => 'IMPR-EXEMPLE', 'kind' => 'printer', 'status' => 'ok', 'model' => 'ZD621R']],
             'lastServerTime' => $this->examples['tmp']['body']['serverTime']], $printToken);
         $printer = array_column($this->examples['tmp']['body']['settings']['devices'], 'id', 'serial')['IMPR-EXEMPLE'];
@@ -270,12 +282,14 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
         $path = '/api/pertes/boitier' . $path;
         $this->client->getCookieJar()->clear();
         $this->client->request($method, 'https://' . MV_TEST_TENANT_HOST . $path, [], [], array_filter([
-            'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json', 'HTTP_X_LOSS_BOX' => $token, 'REMOTE_ADDR' => $this->ip,
+            'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json', 'HTTP_X_LOSS_BOX' => $token,
+            'HTTP_X_LOSS_BOX_MACHINE' => $token !== null ? ($this->machines[$token] ?? self::MACHINE) : null, // lot L5-e : la preuve de la machine
+            'REMOTE_ADDR' => $this->ip,
         ]), $body !== null ? json_encode($body) : null);
         if (isset($body['facts']) && count($body['facts']) > 4) {
             $body = ['facts' => '(201 faits)'];
         }
-        $this->remember($name, $method, $path, $token !== null ? ['X-Loss-Box' => $token] : [], $body, $status, $this->client->getResponse());
+        $this->remember($name, $method, $path, $token !== null ? ['X-Loss-Box' => $token, 'X-Loss-Box-Machine' => $this->machines[$token] ?? self::MACHINE] : [], $body, $status, $this->client->getResponse());
     }
 
     /** Un appel du boîtier qui attend son jumelage (lot L3-a2) : à la plateforme, sans site ni jeton ; gardé comme exemple */

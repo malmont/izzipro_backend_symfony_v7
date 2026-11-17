@@ -14,9 +14,9 @@
         "box": {
             "id": 2
         },
-        "token": "b2.2.1794954532.0000000000000000000000000000000000000000000000000000000000000000",
-        "expiresAt": "2026-11-17T22:28:52+00:00",
-        "serverTime": "2026-11-16T22:28:52+00:00",
+        "token": "b2.2.1794973488.0000000000000000000000000000000000000000000000000000000000000000",
+        "expiresAt": "2026-11-18T03:44:48+00:00",
+        "serverTime": "2026-11-17T03:44:48+00:00",
         "settings": {
             "heartbeatSeconds": 60,
             "silentAfterSeconds": 300,
@@ -28,7 +28,8 @@
                     "COUNTER_LEFT",
                     "ZONE_LEFT",
                     "TAG_WRITTEN",
-                    "TAG_WRITE_FAILED"
+                    "TAG_WRITE_FAILED",
+                    "EXIT_SIGNAL"
                 ],
                 "maxBatch": 200
             },
@@ -44,7 +45,12 @@
                 "arriveSeconds": 3,
                 "leaveSeconds": 30
             },
-            "devices": []
+            "devices": [],
+            "exitSignal": {
+                "enabled": false,
+                "counterGraceSeconds": 600,
+                "fullRefreshSeconds": 3600
+            }
         }
     }
 }

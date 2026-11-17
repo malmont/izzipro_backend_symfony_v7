@@ -78,6 +78,19 @@ class LossBoxChannelController extends AbstractController
     }
 
     /**
+     * Lot L5-d : les sorties permises → 200 { serverTime, full, sold, released, waiting, rentals }. Sans `since`, la liste complète des puces
+     * vendues ; avec `since` (le `serverTime` d'une réponse d'avant), ses deltas. Une lecture ; jamais gardée en cache.
+     */
+    #[Route('/sorties-permises', name: 'pertes_boitier_sorties_permises', methods: ['GET'])]
+    public function permits(Request $request): JsonResponse
+    {
+        $response = $this->answer(fn (): array => $this->channel->permits($this->box($request), $request->query->get('since')));
+        $response->headers->set('Cache-Control', 'no-store, private');
+
+        return $response;
+    }
+
+    /**
      * Travaux d'impression à faire (lot L3-c) → 200 { serverTime, jobs [{ id, printer, withPrice, access { rank, password }, lines }], more }.
      * Une lecture. La réponse porte le mot de passe d'accès des puces : elle n'est jamais gardée en cache ni écrite dans un journal.
      */

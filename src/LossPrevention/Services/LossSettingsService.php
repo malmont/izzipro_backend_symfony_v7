@@ -63,6 +63,25 @@ class LossSettingsService
         return $chosen === null ? LossCountryPolicy::personPatternsDefault($place['country'], $place['region']) : (bool) $chosen;
     }
 
+    /** Lot L5-d : l'alerte de sortie part-elle aussi hors des heures d'ouverture ? (allumé par défaut) */
+    public function exitAlertsNight(): bool
+    {
+        return (bool) $this->row()['exit_alerts_night'];
+    }
+
+    /** Lot L5-d : le boîtier fait-il sonner le portique ? (éteint par défaut ; il lui faut aussi un avertisseur en service) */
+    public function exitSignalOn(): bool
+    {
+        return (bool) $this->row()['exit_signal_enabled'];
+    }
+
+    /** Lot L5-d : les avertisseurs en service sur un vrai boîtier actif */
+    public function signalDevicesInService(): int
+    {
+        return (int) $this->emProvider->getEntityManager()->getConnection()->fetchOne(
+            "SELECT COUNT(*) FROM loss_device d JOIN loss_box b ON b.id = d.box_id WHERE d.kind = 'signal' AND d.status = 'ok' AND NOT d.exercise AND NOT b.exercise AND b.status = 'active'");
+    }
+
     /** Lot L5-a : la caisse montre-t-elle les articles suivis non lus avant le paiement ? (permis partout ; éteint par défaut) */
     public function cashierAlertsOn(): bool
     {
@@ -108,6 +127,10 @@ class LossSettingsService
             // lot L5-a : la caisse montre les articles suivis non lus avant le paiement ; permis partout (l'alerte parle d'un article,
             // jamais d'une personne), éteint par défaut
             'cashierAlerts' => ['allowed' => true, 'enabled' => $this->cashierAlertsOn(), 'availableFrom' => null, 'note' => $this->texts->t('settings.cashierAlerts.note', $locale)],
+            // lot L5-d : l'alerte de sortie la nuit (allumée par défaut) et le signal sonore du portique (éteint par défaut), avec sa limite
+            'exitAlerts' => ['night' => $this->exitAlertsNight(), 'note' => $this->texts->t('settings.exitAlerts.note', $locale)],
+            'exitSignal' => ['enabled' => $this->exitSignalOn(), 'available' => $this->signalDevicesInService() > 0,
+                'note' => $this->texts->t('settings.exitSignal.note', $locale), 'limit' => $this->texts->t('settings.exitSignal.limit', $locale)],
             // réservé aux lots suivants : rendu pour que l'écran le montre, non réglable dans ce lot
             'video' => ['allowed' => false, 'enabled' => false, 'clipDays' => 30, 'clipDaysMax' => 30, 'availableFrom' => 'L3'],
             'retention' => ['findingsMonths' => (int) $row['retention_findings_months'], 'confirmedMonths' => (int) $row['retention_confirmed_months'], 'purge' => 'none',
@@ -317,6 +340,16 @@ class LossSettingsService
                 $errors['personPatterns.enabled'] = 'NOT_ALLOWED_IN_COUNTRY';
             } else {
                 $fields['person_patterns_enabled'] = $enabled;
+            }
+        }
+        foreach (['exitAlerts' => ['night', 'exit_alerts_night'], 'exitSignal' => ['enabled', 'exit_signal_enabled']] as $block => [$key, $column]) {
+            if (array_key_exists($block, $body)) { // lot L5-d
+                $value = is_array($body[$block]) ? ($body[$block][$key] ?? null) : null;
+                if (!is_bool($value)) {
+                    $errors["$block.$key"] = 'MUST_BE_BOOLEAN';
+                } else {
+                    $fields[$column] = $value;
+                }
             }
         }
         if (array_key_exists('cashierAlerts', $body)) {

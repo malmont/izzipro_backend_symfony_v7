@@ -101,7 +101,9 @@ class LossPieceRepository extends EntityRepository
 
     public function retirePiece(int $id, string $reason, string $now): void
     {
-        $this->db()->executeStatement("UPDATE loss_piece SET status = 'retired', retired_reason = ?, retired_at = ?, updated_at = ? WHERE id = ?", [$reason, $now, $now, $id]);
+        // lot L5-d : une pièce vendue puis retirée sort de la liste des sorties permises du boîtier (delta daté à l'heure réelle)
+        $this->db()->executeStatement("UPDATE loss_piece SET sold_changed_at = CASE WHEN status = 'sold' THEN clock_timestamp() AT TIME ZONE 'UTC' ELSE sold_changed_at END,"
+            . " status = 'retired', retired_reason = ?, retired_at = ?, updated_at = ? WHERE id = ?", [$reason, $now, $now, $id]);
     }
 
     /** @return array<string, mixed>|null la puce qui porte cet identifiant (forme canonique) */

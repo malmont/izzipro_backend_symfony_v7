@@ -19,7 +19,9 @@ class LossDevice
     public const READER = 'reader';
     public const PRINTER = 'printer';
     public const CAMERA = 'camera';
-    public const KINDS = [self::COUNTER_MAT, self::READER, self::PRINTER, self::CAMERA];
+    /** Lot L5-d : l'avertisseur du portique (le boîtier le fait sonner, il envoie le fait EXIT_SIGNAL) */
+    public const SIGNAL = 'signal';
+    public const KINDS = [self::COUNTER_MAT, self::READER, self::PRINTER, self::CAMERA, self::SIGNAL];
     public const OK = 'ok';
     public const DOWN = 'down';
     /** Retiré par l'administrateur (appareil remplacé) : il ne compte plus ; s'il est annoncé de nouveau, il revient (lot L3-b1) */

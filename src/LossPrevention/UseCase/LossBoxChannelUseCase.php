@@ -10,7 +10,7 @@ use App\LossPrevention\Services\LossBoxChannelService;
  */
 class LossBoxChannelUseCase
 {
-    public function __construct(private readonly LossBoxChannelService $channel)
+    public function __construct(private readonly LossBoxChannelService $channel, private readonly \App\LossPrevention\Services\LossExitPermitService $permits)
     {
     }
 
@@ -36,6 +36,12 @@ class LossBoxChannelUseCase
     public function settings(array $box): array
     {
         return $this->channel->settings($box);
+    }
+
+    /** Lot L5-d : les sorties permises (le boîtier décide sur place si le portique sonne) @param array<string, mixed> $box @return array<string, mixed> */
+    public function permits(array $box, mixed $since): array
+    {
+        return $this->permits->permits($box, $since);
     }
 
     /** @param array<string, mixed> $box @return array<string, mixed> */

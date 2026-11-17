@@ -26,6 +26,9 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * - **Deux autres, pour le jumelage par code** (lot L3-a2 : `PAIRING_ROUTES`), s'ouvrent sans site ni jeton : le boîtier qui attend
  *   son jumelage n'a encore ni l'un ni l'autre. Elles ne lisent ni n'écrivent rien d'un site tant que la preuve de la machine n'est
  *   pas faite (`LossPairingService`).
+ * - **La preuve de la machine** (lot L5-e, 17/11/2026) : tout appel au jeton porte aussi `X-Loss-Box-Machine`, l'empreinte de la
+ *   machine inscrite, vérifiée ici pour TOUTE route du préfixe (signe de vie compris, et toute route future) : un jeton copié sur une
+ *   autre machine ne sert à rien. Absente ou fausse : 401 `BOX_TOKEN_INVALID`, l'essai compte au plafond des empreintes fausses.
  * - Le boîtier authentifié est posé dans l'attribut `_loss_box` de la requête ; le contrôleur refuse de travailler sans lui (une
  *   garde débranchée ne laisse donc rien passer). Plafonds (`LossBoxLimits`) : essais des deux routes ouvertes par adresse ;
  *   appels d'un jeton bien signé mais refusé, par boîtier et par génération (arrêtés avant toute lecture de la base, sans jamais
@@ -94,6 +97,13 @@ class LossBoxGuardSubscriber implements EventSubscriberInterface
         } catch (LossBoxException $e) {
             $this->limits->refused($site, $claims['boxId'], $claims['generation']);
             $event->setResponse(new JsonResponse($e->body(), $e->status));
+
+            return;
+        }
+        try {
+            $this->channel->proveMachine($box, $request->headers->get(LossBoxToken::MACHINE_HEADER));
+        } catch (LossBoxException $e) {
+            $event->setResponse(new JsonResponse($e->body(), $e->status, isset($e->details['retryAfterSeconds']) ? ['Retry-After' => (string) $e->details['retryAfterSeconds']] : []));
 
             return;
         }

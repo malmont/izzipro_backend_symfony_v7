@@ -1,0 +1,19 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/pertes/boitier/sorties-permises?since=hier",
+        "headers": {
+            "X-Loss-Box": "b1.2.1794941484.0000000000000000000000000000000000000000000000000000000000000000",
+            "X-Loss-Box-Machine": "machine-d-exemple-0123456789abcdef"
+        }
+    },
+    "status": 422,
+    "body": {
+        "error": "VALIDATION_FAILED",
+        "code": "VALIDATION_FAILED",
+        "message": "Paramètre since invalide.",
+        "fields": {
+            "since": "INVALID_DATE"
+        }
+    }
+}

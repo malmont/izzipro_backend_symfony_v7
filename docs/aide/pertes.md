@@ -60,6 +60,17 @@ constat se vérifie, et la décision vous revient. Il ne bloque jamais une vente
    avec sa date.
 4. Les seuils se règlent règle par règle, avec un **aperçu** sur les trente derniers jours avant d'enregistrer.
 
+## L'alerte à la sortie et le portique
+
+Quand un article suivi passe la sortie (ou la porte arrière) sans vente reliée, **une alerte part sur votre téléphone deux minutes
+après** : l'article, la zone et l'heure, jamais une personne. Trois par jour au plus ; les suivantes restent dans la liste des alertes.
+Hors des heures d'ouverture aussi, sauf si vous coupez la nuit dans les réglages. Une alerte est **à vérifier** : ne retenez ni
+n'accusez jamais un client sur une alerte.
+
+Le **signal sonore du portique** est un réglage, éteint au départ. Allumé, et avec un avertisseur branché sur le boîtier, le portique
+sonne quand un article suivi passe sans être payé. **Limite** : un article vendu mais non lu au comptoir fera sonner un client honnête,
+comme un antivol oublié en caisse ; l'alerte en caisse réduit ce risque.
+
 ## L'avis de l'IA
 
 Sur la fiche d'un constat, **« Demander l'avis »** (1 unité IA) donne un avis indicatif : ce que disent les preuves, ce qui pèse pour
