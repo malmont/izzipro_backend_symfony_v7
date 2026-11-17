@@ -20,20 +20,38 @@ class ConfirmSiteAssistantActionUseCase
     public function __construct(private readonly SiteAssistantService $assistant, private readonly UpdateSiteFeaturesUseCase $update, private readonly RequestSiteFeatureUseCase $request, private readonly CustomDomainService $domains, private readonly TenantConnectionManager $tenants, private readonly ?\App\Services\ShippingService\ProductDimensionsService $dimensions = null,
         // opérations sur les commandes (console IA, lot 6, 07/11/2026)
         private readonly ?\App\Services\OrderService\OrderOperationsService $operations = null, private readonly ?\App\Services\OrderService\OrderShipmentService $shipments = null, private readonly ?\App\Services\TenantEntityManagerProvider $emProvider = null,
-        private readonly ?\App\UseCase\EntrepriseUsecase\UpdateEntrepriseUseCase $entreprise = null) // fiche Entreprise (cheminement complet, 07/11/2026)
-    {
+        private readonly ?\App\UseCase\EntrepriseUsecase\UpdateEntrepriseUseCase $entreprise = null, // fiche Entreprise (cheminement complet, 07/11/2026)
+        // lot IA-A (17/11/2026) : actions des fonctions ajoutées, chacune par le service de son écran ; tracées « par l'assistant »
+        private readonly ?\App\Services\FeatureAccess\ModuleAccessService $modules = null,
+        private readonly ?\App\Services\LandingContentService\BoutiqueCatalogEditor $catalog = null,
+        private readonly ?\App\LossPrevention\Services\LossExerciseService $lossExercise = null,
+        private readonly ?\App\LossPrevention\Services\LossCountService $lossCount = null,
+        private readonly ?\App\Services\BarcodeService\CatalogBarcodeService $barcodes = null,
+        private readonly ?\App\Services\Agency\Assistance\AssistanceService $assistance = null,
+        private readonly ?\App\Services\ContentAuditService\ContentAuditRecorder $audit = null,
+        private readonly ?\App\Security\Entry\EntryContext $entry = null,
+    ) {
     }
 
     /**
      * @return array{tool: string, input: array<string, mixed>, result: array<string, mixed>}
      * @throws \OutOfBoundsException action inconnue ou expirée
      */
-    public function execute(string $id, string $host, ?string $user): array
+    public function execute(string $id, string $host, ?string $user, ?\App\Entity\User $actor = null): array
     {
         $tenant = (string) $this->tenants->getCurrentTenantCode();
         $action = $this->assistant->pendingAction($tenant, $id);
         if ($action === null) {
             throw new \OutOfBoundsException('Action inconnue ou expirée : demandez à nouveau à l\'assistant.');
+        }
+        if (in_array($action['tool'], SiteAssistantTools::IAA_ACTIONS, true)) {
+            // lot IA-A : tout est relu à la confirmation (module, état, compte) ; un refus ne consume pas l'action, la trace dit qui a confirmé
+            $result = $this->added($action['tool'], $action['input'], $tenant, $user, $actor);
+            $this->audit?->record('site_assistant', $id, 'confirm', null, ['tool' => $action['tool'], 'by' => 'assistant', 'confirmedBy' => trim((string) $actor?->getFirstname()) ?: 'administrateur',
+                'summary' => $action['summary'], 'result' => array_intersect_key($result, array_flip(['created', 'written', 'remaining', 'scenario', 'countId', 'feature', 'on', 'kind', 'assistance']))], ['assistant']);
+            $this->assistant->forgetAction($tenant, $id);
+
+            return ['tool' => $action['tool'], 'input' => $action['input'], 'result' => $result];
         }
         $result = $action['tool'] === 'setup_batch'
             ? $this->batch(is_array($action['input']['steps'] ?? null) ? $action['input']['steps'] : [], $tenant, $host, $user)
@@ -134,6 +152,67 @@ class ConfirmSiteAssistantActionUseCase
         }
 
         return ['applied' => array_keys($fields), 'entrepriseId' => $id];
+    }
+
+    /**
+     * Lot IA-A : une action des fonctions ajoutées, relue et appliquée par le service de son écran. Un refus métier devient
+     * `\\InvalidArgumentException` (422, message clair) ; un outil sans service : `\\OutOfBoundsException`.
+     *
+     * @param array<string, mixed> $input
+     * @return array<string, mixed>
+     */
+    private function added(string $tool, array $input, string $tenant, ?string $user, ?\App\Entity\User $actor): array
+    {
+        $needs = SiteAssistantTools::MODULE_OF[$tool] ?? [];
+        if ($needs !== [] && ($this->modules === null || array_filter($needs, fn (string $m): bool => $this->modules->isEnabled($m)) === [])) {
+            throw new \InvalidArgumentException('Le module de cette action n\'est plus actif sur ce site.');
+        }
+        $userId = (int) ($actor?->getId() ?? 0);
+        try {
+            switch ($tool) {
+                case 'add_default_variant':
+                    if ($this->catalog === null || $this->emProvider === null) {
+                        throw new \OutOfBoundsException('Outil indisponible');
+                    }
+                    $ids = array_slice(array_values(array_filter(array_map('intval', is_array($input['productIds'] ?? null) ? $input['productIds'] : []))), 0, SiteAssistantTools::MAX_VARIANTS);
+                    $em = $this->emProvider->getEntityManager();
+                    $created = [];
+                    foreach ($ids as $productId) {
+                        // relu : toujours en ligne, toujours avec un prix, toujours sans variante (sinon laissé tel quel)
+                        $product = $em->getRepository(\App\Entity\Product::class)->find($productId);
+                        if ($product === null || !$product->isWeb() || (float) $product->getPrice() <= 0 || count($product->getVariants()) > 0) {
+                            continue;
+                        }
+                        $this->catalog->createVariant($product, (object) ['stockQuantity' => 0]);
+                        $created[] = $productId;
+                    }
+
+                    return ['created' => count($created), 'productIds' => $created];
+                case 'start_loss_exercise':
+                    return ($this->lossExercise ?? throw new \OutOfBoundsException('Outil indisponible'))->start(['scenario' => (string) ($input['scenario'] ?? '')], $userId, 'fr') + ['scenario' => (string) ($input['scenario'] ?? '')];
+                case 'start_loss_count':
+                    $count = ($this->lossCount ?? throw new \OutOfBoundsException('Outil indisponible'))->open([], $userId, false, 'fr');
+
+                    return $count + ['countId' => $count['id'] ?? ($count['count']['id'] ?? null)];
+                case 'toggle_module':
+                    return $this->request->switchTo((string) ($input['feature'] ?? ''), ($input['enabled'] ?? false) === true, $user) + ['feature' => (string) ($input['feature'] ?? '')];
+                case 'start_module_trial':
+                    return $this->request->trial((string) ($input['feature'] ?? ''), $user) + ['feature' => (string) ($input['feature'] ?? '')];
+                case 'generate_missing_barcodes':
+                    return ($this->barcodes ?? throw new \OutOfBoundsException('Outil indisponible'))->generateMissing(SiteAssistantTools::MAX_BARCODES, ['source' => 'assistant', 'confirmedBy' => trim((string) $actor?->getFirstname()) ?: 'administrateur']);
+                case 'request_agency_assistance':
+                    // seul un administrateur DU site : ni le compte de la plateforme, ni une entrée par jeton
+                    if ($this->assistance === null || $actor === null || ($this->entry?->active() ?? false) || \App\Services\Platform\PlatformAccessJournal::isPlatformAccount($actor->getRoles())) {
+                        throw new \InvalidArgumentException('Seul un administrateur du site demande l\'assistance de son agence.');
+                    }
+
+                    return ['assistance' => $this->assistance->request($tenant, $input['section'] ?? null, $input['mode'] ?? null, $actor)];
+            }
+        } catch (\App\Gestion\Services\GestionConflictException|\App\Gestion\Services\GestionValidationException|\App\Services\Agency\Assistance\AssistanceException|\App\UseCase\LandingContentUseCase\LandingContentException $e) {
+            throw new \InvalidArgumentException($e->getMessage() !== '' ? $e->getMessage() : 'Action refusée.', 0, $e);
+        }
+
+        throw new \OutOfBoundsException('Outil inconnu');
     }
 
     /** @param array<string, mixed> $values */

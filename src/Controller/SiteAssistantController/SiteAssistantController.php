@@ -57,7 +57,8 @@ class SiteAssistantController extends AbstractController
     public function confirm(string $id, Request $request): JsonResponse
     {
         try {
-            $result = $this->confirm->execute($id, $request->getSchemeAndHttpHost(), $this->getUser()?->getUserIdentifier());
+            $actor = $this->getUser();
+            $result = $this->confirm->execute($id, $request->getSchemeAndHttpHost(), $actor?->getUserIdentifier(), $actor instanceof \App\Entity\User ? $actor : null); // lot IA-A : le compte qui confirme
         } catch (\OutOfBoundsException $e) {
             return $this->json(['error' => 'ACTION_NOT_FOUND', 'code' => 'ACTION_NOT_FOUND', 'message' => $e->getMessage()], 404);
         } catch (SiteFeaturesValidationException|EntrepriseValidationException|BoutiqueSettingsException $e) {

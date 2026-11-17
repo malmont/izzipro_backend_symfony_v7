@@ -27,6 +27,8 @@ class AdminStepUrlResolver
         'esg_questions' => ['crud' => \App\Controller\Admin\ESG\DiagnosticQuestionCrudController::class], 'fournisseurs' => ['crud' => \App\Controller\Admin\FournisseurCrudController::class], 'type_fournisseurs' => ['crud' => \App\Controller\Admin\TypeFournisseurCrudController::class], 'gestion' => ['route' => 'admin_gestion'], // lot CHE (12/11/2026)
         // 'short_code' : resté derrière le commentaire ci-dessus du lot CHE jusqu'au correctif du 12/11/2026, les étapes « code court » n'avaient plus de lien
         'short_code' => ['route' => 'admin_short_code'],
+        // lot IA-A (17/11/2026) : écrans des fonctions ajoutées que l'assistant du site cite (les pages des pertes sont dans la gestion web)
+        'ouverture' => ['route' => 'admin_ouverture_site'], 'codes_barres' => ['route' => 'admin_barcode_management'],
         'product_photo' => ['route' => 'admin_product_photo'], 'product_ai_bulk' => ['route' => 'admin_product_ai_bulk'], 'rental' => ['route' => 'admin_location'], 'rental_configurator' => ['route' => 'admin_location_configurer'], 'site_setup' => ['route' => 'admin_site_configurer'], 'bookings' => ['crud' => \App\Controller\Admin\BookingCrudController::class], 'controles' => ['route' => 'admin_controles'], 'aide' => ['route' => 'admin_aide'], 'pos' => ['route' => 'admin_caisse'], 'denominations' => ['crud' => \App\Controller\Admin\TypeCashCrudController::class], // cheminement Caisse (07/11/2026)
     ];
 
