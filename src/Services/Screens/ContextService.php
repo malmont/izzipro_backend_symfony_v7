@@ -26,7 +26,7 @@ class ContextService
     public const MODE_SUPER_ADMIN = 'super_admin';
     /** Familles d'un site que voit le compte de ce site (ses rôles tranchent ensuite, écran par écran) */
     private const SITE_FAMILIES = [ScreenRegistry::CONSTRUCTION, ScreenRegistry::VENTE, ScreenRegistry::CLIENTS, ScreenRegistry::GESTION, ScreenRegistry::PERTES,
-        ScreenRegistry::ASSISTANCE, ScreenRegistry::CONTENUS];
+        ScreenRegistry::ASSISTANCE, ScreenRegistry::CONTENUS, ScreenRegistry::SECURITE];
     /** Mode agence chez un client : construction et entretien, jamais un chiffre */
     private const AGENCY_FAMILIES = [ScreenRegistry::CONSTRUCTION];
     /** Le compte de la requête porte-t-il un rôle d'équipe ? est-il celui de la plateforme ? (posés par `contexts`, lus par `site`) */

@@ -2,6 +2,7 @@
 
 namespace App\Security\Entry;
 
+use Symfony\Component\Security\Core\User\EquatableInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
@@ -13,7 +14,7 @@ use Symfony\Component\Security\Core\User\UserInterface;
  * Son identifiant est ce que le commerçant lit au journal de son site et dans « Accès extérieurs » : « Agence X, prénom », rien de
  * plus (ni adresse, ni nom de famille). Il ne porte jamais d'arobase : il ne se confond avec l'adresse d'aucun compte du site.
  */
-final class ExternalOperator implements UserInterface
+final class ExternalOperator implements UserInterface, EquatableInterface
 {
     /** Le rôle qui marque l'opérateur : il n'est donné à aucun compte et ne s'attribue nulle part */
     public const ROLE = 'ROLE_ENTRY_AGENCY';
@@ -109,5 +110,14 @@ final class ExternalOperator implements UserInterface
     public function getOrigin(): string
     {
         return $this->origin;
+    }
+
+    /**
+     * Lot AG-3c : dans une session d'EasyAdmin, l'opérateur relu à chaque requête est LE MÊME s'il porte la même entrée, la même agence
+     * et le même site d'attache. Son libellé change pendant une assistance (« pendant l'assistance n° N ») : il ne compte pas.
+     */
+    public function isEqualTo(UserInterface $user): bool
+    {
+        return $user instanceof self && $user->entryId === $this->entryId && $user->agencyId === $this->agencyId && $user->home === $this->home;
     }
 }

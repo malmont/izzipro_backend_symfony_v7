@@ -38,6 +38,8 @@ use Symfony\Contracts\Cache\ItemInterface;
 class EntryService
 {
     public const TTL = 900;
+    /** Lot AG-3c : une entrée ouverte depuis EasyAdmin vaut 1 heure (la durée d'une session d'EasyAdmin) ; le lien reste relu à chaque requête */
+    public const ADMIN_TTL = 3600;
     public const CHECK_TTL = 60;
     public const MODE_AGENCY = 'agency';
     public const MODE_SUPER_ADMIN = 'super_admin';
@@ -66,21 +68,62 @@ class EntryService
      */
     public function enter(User $account, string $home, string $target): array
     {
-        $target = trim($target);
-        if ($home === '' || $account->getId() === null) {
-            throw new EntryException('ENTRY_FORBIDDEN', 403, 'home');
-        }
-        if ($target === '' || strcasecmp($target, $home) === 0) {
-            throw new EntryException('ENTRY_SAME_SITE', 422);
-        }
+        $this->precheck($account, $home, $target);
         // le renouvellement EXIGE une session encore vivante sur le site d'attache : un jeton de renouvellement valable (la déconnexion
         // le révoque ; un jeton d'accès encore lisible après la déconnexion n'ouvre plus d'entrée)
         if (!$this->liveSession((string) $account->getEmail())) {
             throw new EntryException('ENTRY_FORBIDDEN', 403, 'session');
         }
+        $opened = $this->open($account, $home, $target, self::TTL);
+        $token = $this->encoder->encode($opened['payload'] + ['tenant_code' => $opened['site'], 'entry' => ['id' => $opened['entry'], 'mode' => $opened['mode'], 'home' => $home],
+            'exp' => $opened['expires']->getTimestamp()]);
+
+        return ['token' => $token, 'expiresAt' => $opened['expires']->setTimezone(new \DateTimeZone('UTC'))->format(\DATE_ATOM), 'mode' => $opened['mode'],
+            'site' => $opened['site'], 'entry' => $opened['entry'], 'operator' => $opened['label']];
+    }
+
+    /**
+     * Lot AG-3c : l'entrée ouverte depuis EasyAdmin (bouton « Entrer » du sélecteur de sites). Mêmes vérifications du lien que l'API, mêmes
+     * traces des deux côtés ; la preuve de la session est celle d'EasyAdmin (compte connecté sur son site d'attache, code validé depuis
+     * moins de 12 heures : vérifié par l'appelant), pas un jeton de renouvellement. Rend de quoi émettre le laissez-passer.
+     *
+     * @return array{entry: int, mode: string, site: string, operator: string, expiresAt: string, account: ?int, email: ?string}
+     * @throws EntryException
+     */
+    public function enterFromAdmin(User $account, string $home, string $target): array
+    {
+        $this->precheck($account, $home, $target);
+        $opened = $this->open($account, $home, $target, self::ADMIN_TTL);
+
+        return ['entry' => $opened['entry'], 'mode' => $opened['mode'], 'site' => $opened['site'], 'operator' => $opened['label'],
+            'expiresAt' => $opened['expires']->setTimezone(new \DateTimeZone('UTC'))->format(\DATE_ATOM),
+            'account' => isset($opened['payload']['id']) ? (int) $opened['payload']['id'] : null, 'email' => isset($opened['payload']['email']) ? (string) $opened['payload']['email'] : null];
+    }
+
+    /** @throws EntryException */
+    private function precheck(User $account, string $home, string $target): void
+    {
+        if ($home === '' || $account->getId() === null) {
+            throw new EntryException('ENTRY_FORBIDDEN', 403, 'home');
+        }
+        $target = trim($target);
+        if ($target === '' || strcasecmp($target, $home) === 0) {
+            throw new EntryException('ENTRY_SAME_SITE', 422);
+        }
+    }
+
+    /**
+     * Ouvre l'entrée (lien vérifié, ligne de la base maître, trace au journal du site visé).
+     *
+     * @return array{entry: int, mode: string, site: string, label: string, payload: array<string, mixed>, expires: \DateTimeImmutable}
+     * @throws EntryException
+     */
+    private function open(User $account, string $home, string $target, int $ttl): array
+    {
+        $target = trim($target);
         $site = $this->agencies->tenant($target);
         $roles = $account->getRoles();
-        $expires = new \DateTimeImmutable('+' . self::TTL . ' seconds');
+        $expires = new \DateTimeImmutable('+' . $ttl . ' seconds');
         $firstName = trim((string) $account->getFirstname());
 
         if (PlatformAccessJournal::isPlatformAccount($roles)) {
@@ -115,10 +158,41 @@ class EntryService
         }
 
         $this->journal($site['dbname'], $site['code'], $label, $id, $mode, $agencyName, $firstName);
-        $token = $this->encoder->encode($payload + ['tenant_code' => $site['code'], 'entry' => ['id' => $id, 'mode' => $mode, 'home' => $home], 'exp' => $expires->getTimestamp()]);
 
-        return ['token' => $token, 'expiresAt' => $expires->setTimezone(new \DateTimeZone('UTC'))->format(\DATE_ATOM), 'mode' => $mode,
-            'site' => $site['code'], 'entry' => $id, 'operator' => $label];
+        return ['entry' => $id, 'mode' => $mode, 'site' => $site['code'], 'label' => $label, 'payload' => $payload, 'expires' => $expires];
+    }
+
+    /**
+     * Lot AG-3c : l'entrée gardée dans une SESSION d'EasyAdmin tient-elle encore sur le site courant ? Même relecture que pour un jeton
+     * (ligne de l'entrée à chaque fois, lien gardé une minute au plus). Pose le contexte de la requête si oui ; rend la raison du refus
+     * sinon (la session est alors vidée par l'appelant).
+     *
+     * @param array{id: int, mode: string, home: string, account?: ?int, email?: ?string} $entry
+     */
+    public function sessionEntry(array $entry, ?string $current): ?string
+    {
+        $payload = ['entry' => ['id' => $entry['id'] ?? 0, 'mode' => $entry['mode'] ?? null, 'home' => $entry['home'] ?? null], 'tenant_code' => $current];
+        $payload += ($entry['mode'] ?? null) === self::MODE_AGENCY ? ['username' => 'entry:' . ($entry['id'] ?? 0)] : ['id' => $entry['account'] ?? null, 'username' => $entry['email'] ?? null];
+        try {
+            $state = $this->evaluate($payload, $current);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Entrée d\'EasyAdmin : lien illisible (' . $e::class . ').');
+
+            return 'unavailable';
+        }
+        if ($state['reason'] !== null) {
+            return $state['reason'];
+        }
+        $this->context->set(['id' => $state['id'], 'mode' => $state['mode'], 'home' => $state['home']]);
+
+        return null;
+    }
+
+    /** Lot AG-3c : « Quitter » l'entrée depuis EasyAdmin, ou la session qui la porte se termine */
+    public function endEntry(int $id, string $reason): void
+    {
+        $this->entries->end($id, $reason);
+        $this->cache->delete(self::cacheKey($id));
     }
 
     /**

@@ -18,6 +18,9 @@ use Symfony\Component\HttpFoundation\Session\SessionInterface;
 final class OtpSession
 {
     public const KEY = 'otp_validated';
+    /** Lot AG-3c : l'heure (UTC, secondes) de la validation du code, gardée avec la marque ; l'entrée dans un autre site depuis
+     *  EasyAdmin exige un code validé depuis moins de 12 heures */
+    public const AT_KEY = 'otp_validated_at';
 
     public static function validated(SessionInterface $session, User $user, ?string $site): bool
     {
@@ -30,7 +33,37 @@ final class OtpSession
     public static function markValidated(SessionInterface $session, User $user, ?string $site): void
     {
         $mark = self::mark($user, $site);
-        $mark === null ? $session->remove(self::KEY) : $session->set(self::KEY, $mark);
+        if ($mark === null) {
+            $session->remove(self::KEY);
+            $session->remove(self::AT_KEY);
+
+            return;
+        }
+        $session->set(self::KEY, $mark);
+        $session->set(self::AT_KEY, time());
+    }
+
+    /**
+     * Lot AG-3c : la validation vaut-elle pour CE compte sur CE site, et depuis combien de secondes ? null : pas validé (ou validé sans
+     * heure connue, avant ce lot : on redemande le code).
+     */
+    public static function validatedSince(SessionInterface $session, User $user, ?string $site): ?int
+    {
+        $at = $session->get(self::AT_KEY);
+        if (!self::validated($session, $user, $site) || !is_int($at) || $at > time()) {
+            return null;
+        }
+
+        return time() - $at;
+    }
+
+    /** Lot AG-3c : marque posée par un laissez-passer d'entrée (compte de la plateforme), à l'heure de la validation d'origine */
+    public static function markValidatedAt(SessionInterface $session, User $user, ?string $site, int $at): void
+    {
+        self::markValidated($session, $user, $site);
+        if ($session->has(self::KEY)) {
+            $session->set(self::AT_KEY, min($at, time()));
+        }
     }
 
     private static function mark(User $user, ?string $site): ?string

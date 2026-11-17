@@ -24,6 +24,8 @@ final class ScreenRegistry
     public const CONTENUS = 'contenus';
     public const PLATEFORME = 'plateforme';
     public const AGENCE = 'agence';
+    /** Lot AG-3c : les réglages sensibles d'un site, jamais ouverts à une agence (serveur d'envoi, clés, devise, unités IA) */
+    public const SECURITE = 'securite';
     /** La route des contextes : toute personne connectée la lit, même un compte borné à un seul espace (agence, assistance) */
     public const CONTEXTS_PATH = '/api/me/contexts';
 
@@ -38,6 +40,7 @@ final class ScreenRegistry
         self::CONTENUS => 'Contenus personnels : Mémoires Vivantes et Boussole',
         self::PLATEFORME => 'Plateforme : écrans du super administrateur',
         self::AGENCE => 'Espace de l\'agence : ses sites clients, lus de son site d\'attache',
+        self::SECURITE => 'Réglages sensibles du site : serveur d\'envoi des courriels, clés des applications, devise, réglage des unités IA',
     ];
 
     private const ADMIN = ['ROLE_ADMIN'];
@@ -130,6 +133,11 @@ final class ScreenRegistry
         'admin.achats' => self::G + ['surface' => 'easyadmin'],
         'admin.memoires' => ['family' => self::CONTENUS, 'module' => 'module.memoires', 'surface' => 'easyadmin'],
         'admin.boussole' => ['family' => self::CONTENUS, 'module' => 'module.boussole', 'surface' => 'easyadmin'],
+        // lot AG-3c : réglages sensibles, sortis des écrans de construction (décision du propriétaire du 16/11/2026)
+        'admin.courriel' => ['family' => self::SECURITE, 'module' => null, 'surface' => 'easyadmin'],
+        'admin.devises' => ['family' => self::SECURITE, 'module' => null, 'surface' => 'easyadmin'],
+        'admin.cles' => ['family' => self::SECURITE, 'module' => null, 'surface' => 'easyadmin'],
+        'admin.ia-reglage' => ['family' => self::SECURITE, 'module' => null, 'surface' => 'easyadmin'],
         'admin.maintenance' => ['family' => self::PLATEFORME, 'module' => null, 'roles' => ['ROLE_SUPER_ADMIN'], 'surface' => 'easyadmin'],
     ];
 
@@ -309,7 +317,8 @@ final class ScreenRegistry
         // --- EasyAdmin : les pages qui ont leur propre adresse (les écrans CRUD passent par `/admin`, voir ADMIN_CRUDS)
         ['#^/admin/(redis|workers|technique|super-admin|plateforme)(/|$)#', 'admin.maintenance'],
         ['#^/admin/mon-site/assistant(/|$)#', 'admin.assistant'],
-        ['#^/admin/(mon-site|ouverture-du-site|configuration|aide|mobile-theme|short-code|contenu-exemple|app-keys|acces-plateforme)(/|$)#', 'admin.entreprise'],
+        ['#^/admin/app-keys(/|$)#', 'admin.cles'],
+        ['#^/admin/(mon-site|ouverture-du-site|configuration|aide|mobile-theme|short-code|contenu-exemple|acces-plateforme)(/|$)#', 'admin.entreprise'],
         ['#^/admin/(site|apercu)(/|$)#', 'admin.vitrine'],
         ['#^/admin/(produits|product|product-variant|barcode-management|print-barcode|pdf)(/|$)#', 'admin.catalogue'],
         ['#^/admin/livraison(/|$)#', 'admin.livraison'],
@@ -336,7 +345,7 @@ final class ScreenRegistry
     public const ADMIN_CRUDS = [
         // entreprise et réglages
         'EntrepriseCrudController' => 'admin.entreprise', 'AddressEntrepriseCrudController' => 'admin.entreprise', 'SocialNetworkCrudController' => 'admin.entreprise',
-        'AppProfileCrudController' => 'admin.entreprise', 'TeamCrudController' => 'admin.entreprise', 'EmailConfigurationCrudController' => 'admin.entreprise',
+        'AppProfileCrudController' => 'admin.entreprise', 'TeamCrudController' => 'admin.entreprise', 'EmailConfigurationCrudController' => 'admin.courriel',
         'GooglePlacesConfigCrudController' => 'admin.entreprise',
         // site vitrine
         'BanniereCrudController' => 'admin.vitrine', 'EmploiCrudController' => 'admin.vitrine', 'MarqueCrudController' => 'admin.vitrine', 'CategorieMarqueCrudController' => 'admin.vitrine',
@@ -347,7 +356,7 @@ final class ScreenRegistry
         'HomeSliderCrudController' => 'admin.boutique-pages', 'FeatureCrudController' => 'admin.boutique-pages', 'ExploreCardCrudController' => 'admin.boutique-pages',
         'SubscriptionPlanCrudController' => 'admin.boutique-pages',
         'LandingPageSettingCrudController' => 'admin.pages-avancees', 'BoutiqueSettingCrudController' => 'admin.pages-avancees',
-        'AiUsageCrudController' => 'admin.ia', 'AiCreditSettingCrudController' => 'admin.ia',
+        'AiUsageCrudController' => 'admin.ia', 'AiCreditSettingCrudController' => 'admin.ia-reglage',
         'SharedMediaCrudController' => 'admin.medias',
         // catalogue
         'ProductCrudController' => 'admin.catalogue', 'ProductVariantCrudController' => 'admin.catalogue', 'ColorCrudController' => 'admin.catalogue', 'StyleCrudController' => 'admin.catalogue',
@@ -364,7 +373,7 @@ final class ScreenRegistry
         // référentiels des commandes : des listes de réglage ; leur fiche détail cite pourtant les commandes et les paiements (SENSITIVE)
         'StatusCommandeCrudController' => 'admin.commandes-reglages', 'OrderSourceCrudController' => 'admin.commandes-reglages', 'OrderTypeCrudController' => 'admin.commandes-reglages',
         'PaymentTypeCrudController' => 'admin.commandes-reglages', 'StatusPaymentCrudController' => 'admin.commandes-reglages', 'PaymentMethodCrudController' => 'admin.commandes-reglages',
-        'CurrencyCrudController' => 'admin.commandes-reglages',
+        'CurrencyCrudController' => 'admin.devises',
         // ventes
         'OrderCrudController' => 'admin.commandes', 'OrderAllCrudController' => 'admin.commandes', 'OrderItemsCrudController' => 'admin.commandes', 'CartCrudController' => 'admin.commandes',
         'PaymentsCrudController' => 'admin.commandes', 'OrderTaxCrudController' => 'admin.commandes', 'OrderItemsListController' => 'admin.commandes',
