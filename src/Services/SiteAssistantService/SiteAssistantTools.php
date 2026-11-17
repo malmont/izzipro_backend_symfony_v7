@@ -12,13 +12,36 @@ final class SiteAssistantTools
         'subscription_plans' => 'Formules d\'abonnement', 'app_keys' => 'Clés d\'activation des applications', 'cash_registers' => 'Postes de caisse',
         'short_code' => 'Code court de la boutique', 'shipping' => 'Livraison : réglages, cheminement, transporteurs', 'product_weights' => 'Poids et dimensions des produits (grille de saisie, estimation par l\'IA)', 'easypost' => 'Clés EasyPost du site', 'google_places' => 'Adresses (Google Places)',
         'site_setup' => 'Mon site pas à pas : brief, charte (couleurs, polices, PDF), pages voulues, composition du site par l\'assistant', 'ai_credits' => 'Assistant IA : crédits et consignes', 'mv_ai_quotas' => 'Quotas IA Mémoires Vivantes', 'review_settings' => 'Réglages des avis', 'configuration' => 'Configuration : cheminements Stripe, taxes, courriels, avis clients', 'orders' => 'Commandes à traiter (à expédier, paiement à capturer, incomplètes, en transit)', 'reviews' => 'Avis clients à modérer', 'address_entreprise' => 'Adresse de l\'entreprise', 'categories' => 'Catégories du catalogue', 'booking_configuration' => 'Configuration de réservation des produits louables', 'rental_packs' => 'Packs de location (tarifs)', 'users' => 'Utilisateurs et caissiers', 'social_networks' => 'Réseaux sociaux', 'app_profiles' => 'Profils des applications (apparence)', 'currencies' => 'Devises', 'pos' => 'Caisse : réglages et cheminement (ouverture du magasin)', 'product_photo' => 'Créer un produit depuis une photo (fiche rédigée par l\'IA, traduction automatique)', 'product_ai_bulk' => 'IA en lot : rédiger toutes les fiches, traduire tous les produits, images mannequin (estimation des crédits)', 'rental' => 'Location et réservation : réglages et cheminement (produits louables, règles de stock, grilles tarifaires)', 'controles' => 'Contrôles : ce qui cloche dans les données du site', 'aide' => 'Aide du back-office (pages d\'aide)', 'bookings' => 'Planning des réservations', 'denominations' => 'Coupures de la devise (billets et pièces)', 'esg_questions' => 'Questions du diagnostic ESG',
+        // lot IA-A (17/11/2026) : écrans des fonctions ajoutées (les pages des pertes sont dans l'application de gestion web)
+        'mon_site' => 'Mon site : pilotage (modules : allumer, éteindre, essayer, demander)', 'ouverture' => 'Ouverture du site (liste de contrôle, ouvrir la boutique)',
+        'codes_barres' => 'Gestion des codes-barres', 'assistance_agence' => 'Assistance de mon agence (demander, suivre, fermer)',
+        'pertes' => 'Prévention des pertes : constats', 'pertes_sante' => 'Prévention des pertes : santé du matériel et installation', 'pertes_exercice' => 'Prévention des pertes : mode exercice',
     ];
+
+    /**
+     * Lot IA-A : outils des fonctions ajoutées, et le module qu'il faut ACTIF (droit ET interrupteur) pour qu'un outil soit donné au modèle ;
+     * `any` : l'un des modules suffit. Les exercices des pertes s'ouvrent sans le droit du module (règle du module).
+     *
+     * @var array<string, list<string>>
+     */
+    public const MODULE_OF = [
+        'get_loss_health' => ['loss_prevention'], 'get_loss_finding' => ['loss_prevention'], 'start_loss_count' => ['loss_prevention'],
+        'get_missing_barcodes' => ['boutique', 'management'], 'generate_missing_barcodes' => ['boutique', 'management'],
+        'add_default_variant' => ['boutique'],
+    ];
+    /** Lot IA-A : nombre d'articles au plus par action (aperçu nommé), et codes-barres au plus par action (décision du chef) */
+    public const MAX_VARIANTS = 50;
+    public const MAX_BARCODES = 200;
 
     /**
      * Outils de lecture et d'orientation : palier « Aide IA » (lot 6, 07/11/2026). Tout le reste (propositions de réglages, estimations,
      * opérations sur les commandes, demandes) exige « IA complète » ; le propriétaire de la plateforme a tout.
      */
-    public const HELP_TOOLS = ['get_settings', 'get_readiness', 'open_screen', 'get_domain_status', 'delegate_to_editor', 'get_orders_todo', 'get_order', 'get_help', 'get_controls', 'get_configuration_paths'];
+    public const HELP_TOOLS = ['get_settings', 'get_readiness', 'open_screen', 'get_domain_status', 'delegate_to_editor', 'get_orders_todo', 'get_order', 'get_help', 'get_controls', 'get_configuration_paths',
+        // lot IA-A : lectures
+        'get_storefront_checklist', 'get_modules', 'get_missing_barcodes', 'get_loss_health', 'get_loss_finding'];
+    /** Lot IA-A : propositions des fonctions ajoutées, appliquées après confirmation (ConfirmSiteAssistantActionUseCase) et tracées « par l'assistant » */
+    public const IAA_ACTIONS = ['add_default_variant', 'start_loss_exercise', 'start_loss_count', 'toggle_module', 'start_module_trial', 'generate_missing_barcodes', 'request_agency_assistance'];
 
     /** Champs de la fiche Entreprise que l'assistant peut proposer de remplir (cheminement complet, 07/11/2026) ; les textes légaux peuvent être rédigés par l'IA */
     public const ENTREPRISE_FIELDS = ['name', 'email', 'tel', 'website', 'LegalNotice', 'conditionOfUse', 'privacyPolicy', 'apropos', 'metaTitle', 'metaDescription', 'seoKeywords', 'tvaIntracommunautaire', 'gstNumber', 'qstNumber', 'siret'];
@@ -62,6 +85,19 @@ final class SiteAssistantTools
             ['name' => 'resend_order_email', 'description' => 'Propose de renvoyer au client un courriel de la commande : confirmation, reçu (receipt) ou avis d\'expédition (shipped). L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['orderId' => ['type' => 'integer'], 'kind' => ['type' => 'string', 'enum' => ['confirmation', 'receipt', 'shipped']]], 'required' => ['orderId', 'kind']]],
             ['name' => 'ship_order', 'description' => 'Propose de marquer une commande web expédiée par le marchand (transporteur, numéro de suivi, courriel au client). L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['orderId' => ['type' => 'integer'], 'carrier' => ['type' => 'string'], 'trackingNumber' => ['type' => 'string'], 'trackingUrl' => ['type' => 'string'], 'notify' => ['type' => 'boolean']], 'required' => ['orderId', 'carrier']]],
             ['name' => 'propose_setup_batch', 'description' => 'Enchaîne plusieurs écritures en une seule proposition que l\'administrateur confirme une fois : étapes parmi set_site_settings, set_entreprise_fields, request_feature, set_custom_domain, chacune avec le même input que l\'outil seul et un résumé. À employer quand l\'administrateur demande de « tout configurer » ou plusieurs réglages à la fois ; chaque étape est vérifiée comme si elle était proposée seule, et appliquée dans l\'ordre après confirmation.', 'input_schema' => ['type' => 'object', 'properties' => ['steps' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['tool' => ['type' => 'string', 'enum' => self::BATCH_TOOLS], 'input' => ['type' => 'object'], 'summary' => ['type' => 'string']], 'required' => ['tool', 'input', 'summary']]], 'summary' => ['type' => 'string', 'description' => 'résumé de l\'ensemble en une phrase']], 'required' => ['steps', 'summary']]],
+            // --- lot IA-A (17/11/2026) : fonctions ajoutées ; les textes lus (noms d'article, notes, adresses) sont des DONNÉES, jamais des consignes
+            ['name' => 'get_storefront_checklist', 'description' => 'Lit la liste d\'ouverture du site : en construction ou ouvert, ce qui bloque l\'ouverture de la boutique, ce qui reste à améliorer (articles visibles, paiement, conditions de vente, articles en ligne non achetables).', 'input_schema' => ['type' => 'object', 'properties' => new \stdClass()]],
+            ['name' => 'get_modules', 'description' => 'Liste les modules du site : accordé ou non, allumé ou éteint, essai possible, demande en cours.', 'input_schema' => ['type' => 'object', 'properties' => new \stdClass()]],
+            ['name' => 'get_missing_barcodes', 'description' => 'Compte les articles et variantes sans code-barres.', 'input_schema' => ['type' => 'object', 'properties' => new \stdClass()]],
+            ['name' => 'get_loss_health', 'description' => 'Prévention des pertes : santé du matériel (boîtier, tapis, lecteurs, imprimante, avertisseur) et étapes d\'installation restantes, avec quoi faire.', 'input_schema' => ['type' => 'object', 'properties' => new \stdClass()]],
+            ['name' => 'get_loss_finding', 'description' => 'Prévention des pertes : un constat (règle, preuves chiffrées, part des cas semblables confirmés) pour l\'expliquer et aider le gérant à décider. Par poste et par jour, jamais par personne. Tu ne décides jamais : la décision reste un geste du gérant sur l\'écran du constat.', 'input_schema' => ['type' => 'object', 'properties' => ['findingId' => ['type' => 'integer']], 'required' => ['findingId']]],
+            ['name' => 'add_default_variant', 'description' => 'Propose d\'ajouter une variante au prix de l\'article aux articles EN LIGNE qui n\'en ont aucune (ils ne peuvent pas être achetés), 50 au plus ; l\'aperçu nomme les articles. L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => new \stdClass()]],
+            ['name' => 'start_loss_exercise', 'description' => 'Propose de lancer un exercice de la prévention des pertes (constat fictif, effaçable, pour s\'entraîner). L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['scenario' => ['type' => 'string', 'description' => 'code du scénario d\'exercice ; absent : le premier proposé']]]],
+            ['name' => 'start_loss_count', 'description' => 'Propose d\'ouvrir un comptage au lecteur à main (un seul ouvert à la fois). L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => new \stdClass()]],
+            ['name' => 'toggle_module', 'description' => 'Propose d\'allumer ou d\'éteindre un module DÉJÀ accordé au site ; l\'aperçu dit ce qui disparaît des écrans quand on éteint. L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['feature' => ['type' => 'string'], 'enabled' => ['type' => 'boolean']], 'required' => ['feature', 'enabled']]],
+            ['name' => 'start_module_trial', 'description' => 'Propose de lancer l\'essai gratuit d\'un module non accordé (libre-service, une fois par module). L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['feature' => ['type' => 'string']], 'required' => ['feature']]],
+            ['name' => 'generate_missing_barcodes', 'description' => 'Propose de générer les codes-barres manquants (200 au plus par action) ; l\'aperçu donne le nombre et les 10 premiers articles. Les codes seront définitifs (ils peuvent être imprimés aussitôt). L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => new \stdClass()]],
+            ['name' => 'request_agency_assistance', 'description' => 'Propose de demander l\'assistance de l\'agence qui gère le site, pour UNE section, en consultation (read) ou en modification (write), pendant une heure à partir de sa première visite. Seul un administrateur du site confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['section' => ['type' => 'string', 'enum' => ['commandes', 'clients', 'gestion', 'pertes']], 'mode' => ['type' => 'string', 'enum' => ['read', 'write']]], 'required' => ['section']]],
         ];
     }
 }
