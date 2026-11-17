@@ -42,7 +42,7 @@ class AssistanceService
      * @return array<string, mixed> la demande, telle que la lit l'écran du commerçant (+ `notified` : le nombre de courriels partis)
      * @throws AssistanceException
      */
-    public function request(string $tenantCode, mixed $section, mixed $mode, User $merchant): array
+    public function request(string $tenantCode, mixed $section, mixed $mode, User $merchant, bool $easyAdmin = false): array
     {
         $section = is_string($section) ? trim($section) : '';
         $mode = $mode === null || $mode === '' ? AssistanceSections::READ : (is_string($mode) ? trim($mode) : '');
@@ -52,7 +52,8 @@ class AssistanceService
         if (!in_array($mode, AssistanceSections::MODES, true)) {
             throw new AssistanceException('ASSISTANCE_MODE_INVALID', 422, 'mode : read ou write attendu');
         }
-        if (!in_array($section, AssistanceSections::API_AVAILABLE, true)) {
+        // lot AG-3c : depuis EasyAdmin, toutes les sections se demandent (caisse, stock et assistance aux clients n'ont d'écrans que là)
+        if (!$easyAdmin && !in_array($section, AssistanceSections::API_AVAILABLE, true)) {
             throw new AssistanceException('ASSISTANCE_SECTION_UNAVAILABLE', 422, 'Cette section ne s\'ouvre pas encore à l\'agence depuis l\'espace d\'administration du web : elle viendra avec l\'espace d\'administration (EasyAdmin).');
         }
         if ($mode === AssistanceSections::WRITE && !AssistanceSections::SECTIONS[$section]['writable']) {

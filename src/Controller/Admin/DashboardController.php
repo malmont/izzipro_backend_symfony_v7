@@ -746,6 +746,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToRoute('Configuration : Stripe, taxes, courriels, avis', 'fas fa-tasks', 'admin_configuration'); // cheminements de configuration (lot 5, 07/11/2026)
         yield MenuItem::linkToRoute('Contrôles : ce qui cloche', 'fas fa-stethoscope', 'admin_controles'); // contrôles du quotidien (07/11/2026)
         yield MenuItem::linkToRoute('Aide', 'fas fa-question-circle', 'admin_aide'); // aide intégrée (07/11/2026)
+        yield MenuItem::linkToRoute('Assistance de mon agence', 'fas fa-hands-helping', 'admin_assistance'); // lots AG-ASSIST et AG-3c (17/11/2026)
         yield MenuItem::linkToCrud('Entreprise', 'fa fa-building', Entreprise::class);
         yield MenuItem::linkToCrud('Profils des applications', 'fas fa-id-card', \App\Entity\AppProfile::class)->setController(AppProfileCrudController::class);
         yield MenuItem::linkToRoute('Apparence de l\'app mobile', 'fas fa-mobile-alt', 'admin_mobile_theme'); // thème de l'application e-commerce mobile (31/10/2026)

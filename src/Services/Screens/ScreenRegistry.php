@@ -317,6 +317,8 @@ final class ScreenRegistry
         // --- EasyAdmin : les pages qui ont leur propre adresse (les écrans CRUD passent par `/admin`, voir ADMIN_CRUDS)
         // lot AG-3c : le sélecteur de sites d'EasyAdmin, l'entrée par laissez-passer et sa sortie (la personne connectée, ses contextes)
         ['#^/admin/(contextes|entree)(/|$)#', '@compte'],
+        // lot AG-3c : l'assistance de l'agence, demandée par le commerçant depuis EasyAdmin (jamais à l'agence)
+        ['#^/admin/assistance(/|$)#', 'site.assistance'],
         ['#^/admin/(redis|workers|technique|super-admin|plateforme)(/|$)#', 'admin.maintenance'],
         ['#^/admin/mon-site/assistant(/|$)#', 'admin.assistant'],
         ['#^/admin/app-keys(/|$)#', 'admin.cles'],
