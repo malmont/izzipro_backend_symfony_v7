@@ -125,6 +125,16 @@ class LossPreventionController extends AbstractController
         return $this->opinionOf($id, $request, false);
     }
 
+    /**
+     * Lot L5-c (demande du web, 17/11/2026) : la lecture LÉGÈRE de l'avis, relue toutes les 3 s tant qu'il est en préparation → `{ opinion }`.
+     * Aucun journal de consultation, et « nouveau » n'est pas éteint (la fiche, elle, se relit UNE fois à la fin). Vrais constats seulement.
+     */
+    #[Route('/constats/{id}/avis', name: 'gestion_pertes_constat_avis_lire', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function readOpinion(int $id, Request $request): JsonResponse
+    {
+        return $this->json($this->useCase->opinion($id, $this->locale($request)));
+    }
+
     /** Lot L5-c : en exercice, un avis d'exemple écrit par le serveur, sans le modèle, à 0 unité (route ouverte sans le droit du module) */
     #[Route('/exercices/{id}/avis', name: 'gestion_pertes_exercice_avis', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function exerciseOpinion(int $id, Request $request): JsonResponse

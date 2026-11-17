@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (638)
+## Boutique et commun (639)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -484,6 +484,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/pertes/comptages/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossCountController::detail` |
 | GET | `/api/gestion/pertes/comptages` | ROLE_ADMIN | `LossPrevention\Controller\LossCountController::list` |
 | POST | `/api/gestion/pertes/comptages` | ROLE_ADMIN | `LossPrevention\Controller\LossCountController::open` |
+| GET | `/api/gestion/pertes/constats/{id}/avis` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::readOpinion` |
 | POST | `/api/gestion/pertes/constats/{id}/avis` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::opinion` |
 | PUT | `/api/gestion/pertes/constats/{id}/decision` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::decide` |
 | GET | `/api/gestion/pertes/constats/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::finding` |

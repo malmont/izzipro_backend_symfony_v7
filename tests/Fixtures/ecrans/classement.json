@@ -944,6 +944,7 @@
     ],
     "pertes.constat": [
         "GET /api/gestion/pertes/constats/{id}",
+        "GET /api/gestion/pertes/constats/{id}/avis",
         "POST /api/gestion/pertes/constats/{id}/avis",
         "PUT /api/gestion/pertes/constats/{id}/decision"
     ],

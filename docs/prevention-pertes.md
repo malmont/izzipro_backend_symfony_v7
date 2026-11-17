@@ -2813,7 +2813,9 @@ relire par Fable** (§ 17.12). Migration `Version20270128100000` (3 instructions
   `OPINION_NOT_ALLOWED` (règle « par personne »), 404 `FINDING_NOT_FOUND` (vrais constats et exercices ne se croisent jamais).
 - **La fiche** porte `opinion` (null tant qu'aucun avis n'a été demandé) : `{ state: pending | done | failed, percent | null, calibrated: false,
   calibrationNotice, measures { similar, decided, confirmed }, factors [{ label, effect: up | down }], summary, alternatives [], generatedAt,
-  creditsUsed, stale, example, error, notice }`. Le web relit la fiche toutes les 3 s tant que `pending`. `stale` : une preuve est arrivée
+  creditsUsed, stale, example, error, notice }`. **Lecture légère** (demande du web, 17/11/2026) : `GET /constats/{id}/avis` → `{ opinion }`,
+  relue toutes les 3 s tant que `pending`, sans journal de consultation et sans éteindre « nouveau » (vrais constats seulement ; 404
+  sinon) ; la fiche se relit UNE fois à la fin. `stale` : une preuve est arrivée
   après la demande, la fiche propose « Actualiser » (la même route, 1 unité). `error` : `OPINION_REJECTED` (texte refusé deux fois),
   `AI_UNAVAILABLE`, `OPINION_TIMEOUT` (300 s : deux essais de 60 s et l'attente dans la file partagée `gestion_ai` ; relecture du
   17/11/2026, au lieu des 120 s du contrat). Jamais dans la liste, le résumé du jour ni une alerte ; la note de décision n'est jamais

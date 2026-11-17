@@ -95,6 +95,17 @@ class LossPreventionOpinionTest extends LossPreventionTestCase
         $this->assertSame(['state', 'percent', 'calibrated', 'calibrationNotice', 'measures', 'factors', 'summary', 'alternatives', 'generatedAt', 'creditsUsed', 'stale', 'example', 'error', 'notice'], array_keys($pending));
         $this->assertSame(['pending', $percent, false, $expected, null, 0, false], [$pending['state'], $pending['percent'], $pending['calibrated'], $pending['measures'], $pending['summary'], $pending['creditsUsed'], $pending['example']]);
         $this->assertSame([['reserved' => 1], 0], [$usage(), count(FakeLandingAiClient::$requests)]);
+        // La lecture légère, relue toutes les 3 s par le web : l'avis seul ; aucune ligne de journal, « nouveau » n'est pas éteint
+        $this->db->executeStatement('UPDATE loss_finding SET seen_at = NULL, seen_by = NULL WHERE id = ?', [$id]);
+        $journalBefore = (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_journal');
+        foreach (range(1, 3) as $ignored) {
+            $light = $this->json($this->admin('GET', self::BASE . "/constats/$id/avis?locale=fr"));
+            $this->assertSame(['opinion'], array_keys($light));
+            $this->assertSame('pending', $light['opinion']['state']);
+        }
+        $this->assertSame([$journalBefore, null], [(int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_journal'), $this->db->fetchOne('SELECT seen_at FROM loss_finding WHERE id = ?', [$id])],
+            'aucune ligne de journal, toujours « nouveau »');
+        $this->assertSame('FINDING_NOT_FOUND', $this->json($this->admin('GET', self::BASE . '/constats/999999999/avis'), 404)['code']);
         $this->assertSame('OPINION_PENDING', $ask(409)['code'], 'un avis à la fois');
 
         // Le worker : le modèle rédige, le serveur vérifie, l'unité est décomptée
@@ -288,6 +299,7 @@ class LossPreventionOpinionTest extends LossPreventionTestCase
         $this->assertSame(0, count(FakeLandingAiClient::$requests));
         $this->assertSame('FINDING_NOT_FOUND', $this->json($this->admin('POST', self::BASE . "/constats/$exercise/avis"), 404)['code'], 'les vrais et les exercices ne se croisent pas');
         $this->assertSame('FINDING_NOT_FOUND', $this->json($this->admin('POST', self::BASE . "/exercices/$id/avis"), 404)['code']);
+        $this->assertSame('FINDING_NOT_FOUND', $this->json($this->admin('GET', self::BASE . "/constats/$exercise/avis"), 404)['code'], 'la lecture légère : vrais constats seulement');
         $service = static::getContainer()->get(LossOpinionService::class);
         $real = $this->db->fetchAssociative('SELECT * FROM loss_finding WHERE id = ?', [$id]);
         $since = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->modify('-12 months')->format('Y-m-d H:i:s');
