@@ -5,14 +5,14 @@
     },
     "status": 200,
     "headers": {
-        "X-Total-Count": "6",
+        "X-Total-Count": "56",
         "X-Page": "1",
         "X-Limit": "20"
     },
     "body": [
         {
-            "id": 6,
-            "number": 6,
+            "id": 68,
+            "number": 68,
             "rule": {
                 "code": "CASH_DISCREPANCY",
                 "label": "Écart de caisse à la clôture"
@@ -20,7 +20,7 @@
             "personPattern": false,
             "status": "open",
             "statusLabel": "Nouveau",
-            "summary": "Clôture n° 1 : il manque 12,00 $ dans la caisse (attendu 132,75 $, compté 120,75 $).",
+            "summary": "Clôture n° 53 : il manque 12,00 $ dans la caisse (attendu 132,75 $, compté 120,75 $).",
             "storeDay": "2026-11-16",
             "cashRegister": {
                 "id": 1,
@@ -30,13 +30,14 @@
             "currency": "CAD",
             "isNew": true,
             "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
             "backfill": false,
             "exercise": false,
-            "updatedAt": "2026-11-16T07:32:44+00:00"
+            "updatedAt": "2026-11-17T02:06:52+00:00"
         },
         {
-            "id": 5,
-            "number": 5,
+            "id": 67,
+            "number": 67,
             "rule": {
                 "code": "VOID_AFTER_SALE",
                 "label": "Vente annulée après l'encaissement"
@@ -54,13 +55,14 @@
             "currency": "CAD",
             "isNew": true,
             "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
             "backfill": false,
             "exercise": false,
-            "updatedAt": "2026-11-16T07:32:44+00:00"
+            "updatedAt": "2026-11-17T02:06:52+00:00"
         },
         {
-            "id": 4,
-            "number": 4,
+            "id": 66,
+            "number": 66,
             "rule": {
                 "code": "VOID_AFTER_SALE",
                 "label": "Vente annulée après l'encaissement"
@@ -78,13 +80,14 @@
             "currency": "CAD",
             "isNew": true,
             "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
             "backfill": false,
             "exercise": false,
-            "updatedAt": "2026-11-16T07:32:44+00:00"
+            "updatedAt": "2026-11-17T02:06:52+00:00"
         },
         {
-            "id": 3,
-            "number": 3,
+            "id": 65,
+            "number": 65,
             "rule": {
                 "code": "VOID_AFTER_SALE",
                 "label": "Vente annulée après l'encaissement"
@@ -102,13 +105,14 @@
             "currency": "CAD",
             "isNew": true,
             "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
             "backfill": false,
             "exercise": false,
-            "updatedAt": "2026-11-16T07:32:44+00:00"
+            "updatedAt": "2026-11-17T02:06:52+00:00"
         },
         {
-            "id": 2,
-            "number": 2,
+            "id": 64,
+            "number": 64,
             "rule": {
                 "code": "VOID_AFTER_SALE",
                 "label": "Vente annulée après l'encaissement"
@@ -126,13 +130,14 @@
             "currency": "CAD",
             "isNew": true,
             "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
             "backfill": false,
             "exercise": false,
-            "updatedAt": "2026-11-16T07:32:44+00:00"
+            "updatedAt": "2026-11-17T02:06:52+00:00"
         },
         {
-            "id": 1,
-            "number": 1,
+            "id": 63,
+            "number": 63,
             "rule": {
                 "code": "DRAWER_NO_SALE",
                 "label": "Tiroir ouvert sans vente"
@@ -150,9 +155,351 @@
             "currency": "CAD",
             "isNew": true,
             "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
             "backfill": false,
             "exercise": false,
-            "updatedAt": "2026-11-16T07:32:44+00:00"
+            "updatedAt": "2026-11-17T02:06:52+00:00"
+        },
+        {
+            "id": 59,
+            "number": 59,
+            "rule": {
+                "code": "STOCKROOM_NOT_SHELVED",
+                "label": "Sortie de la réserve sans mise en rayon"
+            },
+            "personPattern": false,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "Pièces sorties de la réserve sans être revues en rayon ni vendues ce jour-là (Porte de la réserve) : 2 (seuil de 2 atteint).",
+            "storeDay": "2026-11-16",
+            "cashRegister": null,
+            "amountAtStake": null,
+            "currency": "CAD",
+            "isNew": true,
+            "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
+            "backfill": false,
+            "exercise": false,
+            "updatedAt": "2026-11-17T02:06:46+00:00"
+        },
+        {
+            "id": 57,
+            "number": 57,
+            "rule": {
+                "code": "PIECE_MISSING",
+                "label": "Pièce absente au comptage"
+            },
+            "personPattern": false,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "Pièces absentes à deux comptages de suite (comptage n° 3) : 1. Retrouvées depuis : 1.",
+            "storeDay": "2026-11-16",
+            "cashRegister": null,
+            "amountAtStake": null,
+            "currency": "CAD",
+            "isNew": false,
+            "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
+            "backfill": false,
+            "exercise": false,
+            "updatedAt": "2026-11-17T02:06:14+00:00"
+        },
+        {
+            "id": 56,
+            "number": 56,
+            "rule": {
+                "code": "CASH_DISCREPANCY",
+                "label": "Écart de caisse à la clôture"
+            },
+            "personPattern": false,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "Clôture n° 51 : il manque 25,00 $ dans la caisse (attendu 100,00 $, compté 75,00 $).",
+            "storeDay": "2026-11-16",
+            "cashRegister": {
+                "id": 1,
+                "name": "Caisse principale"
+            },
+            "amountAtStake": 2500,
+            "currency": "CAD",
+            "isNew": true,
+            "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
+            "backfill": false,
+            "exercise": false,
+            "updatedAt": "2026-11-17T02:05:21+00:00"
+        },
+        {
+            "id": 55,
+            "number": 55,
+            "rule": {
+                "code": "CASH_DISCREPANCY",
+                "label": "Écart de caisse à la clôture"
+            },
+            "personPattern": false,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "Clôture n° 50 : il manque 15,00 $ dans la caisse (attendu 100,00 $, compté 85,00 $).",
+            "storeDay": "2026-11-16",
+            "cashRegister": {
+                "id": 1,
+                "name": "Caisse principale"
+            },
+            "amountAtStake": 1500,
+            "currency": "CAD",
+            "isNew": true,
+            "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
+            "backfill": false,
+            "exercise": false,
+            "updatedAt": "2026-11-17T02:05:20+00:00"
+        },
+        {
+            "id": 54,
+            "number": 54,
+            "rule": {
+                "code": "CASH_DISCREPANCY",
+                "label": "Écart de caisse à la clôture"
+            },
+            "personPattern": false,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "Clôture n° 49 : il manque 6,00 $ dans la caisse (attendu 100,00 $, compté 94,00 $).",
+            "storeDay": "2026-11-16",
+            "cashRegister": {
+                "id": 1,
+                "name": "Caisse principale"
+            },
+            "amountAtStake": 600,
+            "currency": "CAD",
+            "isNew": true,
+            "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
+            "backfill": false,
+            "exercise": false,
+            "updatedAt": "2026-11-17T02:05:16+00:00"
+        },
+        {
+            "id": 53,
+            "number": 53,
+            "rule": {
+                "code": "CASH_DISCREPANCY",
+                "label": "Écart de caisse à la clôture"
+            },
+            "personPattern": false,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "Clôture n° 48 : il manque 7,00 $ dans la caisse (attendu 100,00 $, compté 93,00 $).",
+            "storeDay": "2026-11-16",
+            "cashRegister": {
+                "id": 1,
+                "name": "Caisse principale"
+            },
+            "amountAtStake": 700,
+            "currency": "CAD",
+            "isNew": true,
+            "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
+            "backfill": false,
+            "exercise": false,
+            "updatedAt": "2026-11-17T02:05:15+00:00"
+        },
+        {
+            "id": 52,
+            "number": 52,
+            "rule": {
+                "code": "CASH_DISCREPANCY",
+                "label": "Manques de caisse répétés par un même compte"
+            },
+            "personPattern": true,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "3 clôtures avec un manque en 30 jours pour un même compte, 27,00 $ au total.",
+            "storeDay": "2026-11-16",
+            "cashRegister": null,
+            "amountAtStake": 2700,
+            "currency": "CAD",
+            "isNew": false,
+            "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
+            "backfill": false,
+            "exercise": false,
+            "updatedAt": "2026-11-17T02:05:15+00:00"
+        },
+        {
+            "id": 51,
+            "number": 51,
+            "rule": {
+                "code": "CASH_DISCREPANCY",
+                "label": "Écart de caisse à la clôture"
+            },
+            "personPattern": false,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "Clôture n° 47 : il manque 11,00 $ dans la caisse (attendu 100,00 $, compté 89,00 $).",
+            "storeDay": "2026-11-16",
+            "cashRegister": {
+                "id": 1,
+                "name": "Caisse principale"
+            },
+            "amountAtStake": 1100,
+            "currency": "CAD",
+            "isNew": true,
+            "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
+            "backfill": false,
+            "exercise": false,
+            "updatedAt": "2026-11-17T02:05:15+00:00"
+        },
+        {
+            "id": 50,
+            "number": 50,
+            "rule": {
+                "code": "CASH_DISCREPANCY",
+                "label": "Écart de caisse à la clôture"
+            },
+            "personPattern": false,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "Clôture n° 46 : il manque 9,00 $ dans la caisse (attendu 100,00 $, compté 91,00 $).",
+            "storeDay": "2026-11-16",
+            "cashRegister": {
+                "id": 1,
+                "name": "Caisse principale"
+            },
+            "amountAtStake": 900,
+            "currency": "CAD",
+            "isNew": true,
+            "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
+            "backfill": false,
+            "exercise": false,
+            "updatedAt": "2026-11-17T02:05:15+00:00"
+        },
+        {
+            "id": 49,
+            "number": 49,
+            "rule": {
+                "code": "CASH_DISCREPANCY",
+                "label": "Écart de caisse à la clôture"
+            },
+            "personPattern": false,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "Clôture n° 44 : il manque 16,00 $ dans la caisse (attendu 100,00 $, compté 84,00 $).",
+            "storeDay": "2026-11-16",
+            "cashRegister": {
+                "id": 1,
+                "name": "Caisse principale"
+            },
+            "amountAtStake": 1600,
+            "currency": "CAD",
+            "isNew": true,
+            "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
+            "backfill": false,
+            "exercise": false,
+            "updatedAt": "2026-11-17T02:05:12+00:00"
+        },
+        {
+            "id": 48,
+            "number": 48,
+            "rule": {
+                "code": "CASH_DISCREPANCY",
+                "label": "Écart de caisse à la clôture"
+            },
+            "personPattern": false,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "Clôture n° 40 : il manque 12,00 $ dans la caisse (attendu 100,00 $, compté 88,00 $).",
+            "storeDay": "2026-11-16",
+            "cashRegister": {
+                "id": 1,
+                "name": "Caisse principale"
+            },
+            "amountAtStake": 1200,
+            "currency": "CAD",
+            "isNew": true,
+            "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
+            "backfill": false,
+            "exercise": false,
+            "updatedAt": "2026-11-17T02:05:08+00:00"
+        },
+        {
+            "id": 46,
+            "number": 46,
+            "rule": {
+                "code": "VOID_AFTER_SALE",
+                "label": "Vente annulée après l'encaissement"
+            },
+            "personPattern": false,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "3 ventes annulées pendant une même session, 98,31 $ au total.",
+            "storeDay": "2026-11-16",
+            "cashRegister": {
+                "id": 1,
+                "name": "Caisse principale"
+            },
+            "amountAtStake": 9831,
+            "currency": "CAD",
+            "isNew": false,
+            "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
+            "backfill": false,
+            "exercise": false,
+            "updatedAt": "2026-11-17T02:05:04+00:00"
+        },
+        {
+            "id": 45,
+            "number": 45,
+            "rule": {
+                "code": "VOID_AFTER_SALE",
+                "label": "Vente annulée après l'encaissement"
+            },
+            "personPattern": false,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "Vente de 32,77 $ avec une part en espèces, annulée 0 min après l'encaissement.",
+            "storeDay": "2026-11-16",
+            "cashRegister": {
+                "id": 1,
+                "name": "Caisse principale"
+            },
+            "amountAtStake": 3277,
+            "currency": "CAD",
+            "isNew": true,
+            "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
+            "backfill": false,
+            "exercise": false,
+            "updatedAt": "2026-11-17T02:05:04+00:00"
+        },
+        {
+            "id": 44,
+            "number": 44,
+            "rule": {
+                "code": "VOID_AFTER_SALE",
+                "label": "Vente annulée après l'encaissement"
+            },
+            "personPattern": false,
+            "status": "open",
+            "statusLabel": "Nouveau",
+            "summary": "Vente de 32,77 $ avec une part en espèces, annulée 0 min après l'encaissement.",
+            "storeDay": "2026-11-16",
+            "cashRegister": {
+                "id": 1,
+                "name": "Caisse principale"
+            },
+            "amountAtStake": 3277,
+            "currency": "CAD",
+            "isNew": true,
+            "newEvidenceSinceDecision": false,
+            "grewSinceDecision": null,
+            "backfill": false,
+            "exercise": false,
+            "updatedAt": "2026-11-17T02:05:03+00:00"
         }
     ]
 }

@@ -14,6 +14,9 @@ use App\Services\TenantEntityManagerProvider;
  */
 class LossFindingWriter implements LossFindingSink
 {
+    /** Lot L5-b : un constat décidé qui a doublé ne se signale de nouveau qu'avec au moins ce nombre de plus */
+    public const GROWTH_MIN = 3;
+
     private int $opened = 0;
     private int $completed = 0;
 
@@ -65,7 +68,41 @@ class LossFindingWriter implements LossFindingSink
             // un constat de reprise vient de redevenir « nouveau » : noté une fois, pour que le courriel du jour suivant l'annonce
             $this->journal()->append(LossJournalEntry::FINDING_RENEWED, null, (int) $existing['id']);
         }
+        if ($recent) {
+            $this->growth($existing, $facts);
+        }
         ++$this->completed;
+    }
+
+    /**
+     * Lot L5-b (§ 18.4, réserve 1) : un VRAI constat décidé « à suivre », « expliqué » ou « classé sans suite » dont le nombre suivi a au
+     * moins doublé depuis la décision, ET compte au moins `GROWTH_MIN` de plus, redevient « nouveau », une fois par décision. Sa décision
+     * et sa note sont gardées. Référence : le nombre gardé à la décision ; pour un constat décidé avant le lot, le nombre d'avant sa
+     * première complétion (choix du contrat, faute de mieux), alors gardé.
+     *
+     * @param array<string, mixed> $existing ligne du constat AVANT la complétion
+     * @param array<string, mixed> $facts faits après la complétion
+     */
+    private function growth(array $existing, array $facts): void
+    {
+        if ($existing['exercise'] || $existing['decided_at'] === null || $existing['grew_at'] !== null || !in_array($existing['status'], LossFinding::GROWTH_WATCHED, true)) {
+            return;
+        }
+        $rule = (string) $existing['rule_code'];
+        $after = LossRuleCatalog::trackedNumber($rule, $facts);
+        $reference = $existing['decided_count'] !== null ? (int) $existing['decided_count']
+            : LossRuleCatalog::trackedNumber($rule, json_decode((string) $existing['facts'], true) ?: []);
+        if ($after === null || $reference === null) {
+            return;
+        }
+        $id = (int) $existing['id'];
+        if ($after >= 2 * $reference && $after >= $reference + self::GROWTH_MIN) {
+            if ($this->findings()->grew($id, $reference)) {
+                $this->journal()->append(LossJournalEntry::FINDING_GREW, null, $id, ['before' => $reference, 'after' => $after]);
+            }
+        } elseif ($existing['decided_count'] === null) {
+            $this->findings()->keepReference($id, $reference);
+        }
     }
 
     /** Les faits du constat de cette clé, s'il existe @return array<string, mixed>|null */

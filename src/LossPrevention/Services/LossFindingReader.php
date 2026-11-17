@@ -180,11 +180,16 @@ class LossFindingReader
         }
         $history = [];
         foreach ($journal as $j) {
+            $data = json_decode((string) $j['data'], true) ?: [];
             if ($j['type'] === LossJournalEntry::DECISION_CHANGED) {
-                $data = json_decode((string) $j['data'], true) ?: [];
-                $history[] = ['at' => LossAuditEntry::iso(LossAuditEntry::utc((string) $j['occurred_at'])), 'status' => $data['status'] ?? null, 'previous' => $data['previous'] ?? null,
+                $history[] = ['kind' => 'decision', 'at' => LossAuditEntry::iso(LossAuditEntry::utc((string) $j['occurred_at'])), 'status' => $data['status'] ?? null, 'previous' => $data['previous'] ?? null,
                     'statusLabel' => isset($data['status']) ? $this->texts->t('status.' . $data['status'], $locale) : null, 'hasNote' => (bool) ($data['hasNote'] ?? false),
-                    'by' => $j['user_id'] !== null ? ['id' => (int) $j['user_id'], 'name' => $names[(int) $j['user_id']]] : null];
+                    'by' => $j['user_id'] !== null ? ['id' => (int) $j['user_id'], 'name' => $names[(int) $j['user_id']]] : null, 'before' => null, 'after' => null];
+            } elseif ($j['type'] === LossJournalEntry::FINDING_GREW) {
+                // lot L5-b : « a grossi depuis votre décision » (avant, après), écrit par l'analyse : sans personne
+                $history[] = ['kind' => 'grew', 'at' => LossAuditEntry::iso(LossAuditEntry::utc((string) $j['occurred_at'])), 'status' => null, 'previous' => null,
+                    'statusLabel' => $this->texts->t('history.grew', $locale, ['before' => (int) ($data['before'] ?? 0), 'after' => (int) ($data['after'] ?? 0)]), 'hasNote' => false,
+                    'by' => null, 'before' => (int) ($data['before'] ?? 0), 'after' => (int) ($data['after'] ?? 0)];
             }
         }
         $registers = $this->registerNames([$row['cash_register_id']]);
@@ -256,8 +261,9 @@ class LossFindingReader
         }
         $note = $status === LossFinding::OPEN || $note === '' ? null : $note;
         $this->findings()->markSeen($id, $userId); // décider, c'est avoir vu : un constat décidé n'est plus « nouveau »
-        if ($status !== $row['status'] || $note !== $row['decision_note']) {
-            $this->findings()->decide($id, $status, $note, $userId);
+        // une nouvelle décision, ou la même redite après que le constat a grossi (lot L5-b) : la référence repart du nombre du moment
+        if ($status !== $row['status'] || $note !== $row['decision_note'] || ($row['grew_at'] ?? null) !== null) {
+            $this->findings()->decide($id, $status, $note, $userId, LossRuleCatalog::trackedNumber((string) $row['rule_code'], json_decode((string) $row['facts'], true) ?: []));
             // Au journal (inaltérable) : qui, quand, avant, après, avec ou sans note. Le TEXTE de la note (libre) n'y entre pas : il ne vit que
             // sur le constat, dans sa dernière version, où il reste corrigeable (choix C du 14/11/2026)
             $this->emProvider->getEntityManager()->getRepository(LossJournalEntry::class)->append(LossJournalEntry::DECISION_CHANGED, $userId, $id, ['previous' => (string) $row['status'], 'status' => $status, 'hasNote' => $note !== null]);
@@ -303,6 +309,10 @@ class LossFindingReader
             'isNew' => $row['seen_at'] === null && !$row['backfill'],
             // lot L4-b : le drapeau posé quand une preuve s'ajoute après la décision ; la comparaison des dates reste pour une décision d'avant
             'newEvidenceSinceDecision' => $row['decided_at'] !== null && ((bool) ($row['evidence_after_decision'] ?? false) || (string) $row['last_evidence_at'] > (string) $row['decided_at']),
+            // lot L5-b : le constat décidé a grossi (au moins doublé, et au moins 3 de plus) ; avant : le nombre à la décision, après : le nombre du jour
+            'grewSinceDecision' => ($row['grew_at'] ?? null) === null ? null : ['at' => LossAuditEntry::iso(LossAuditEntry::utc((string) $row['grew_at'])),
+                'before' => $row['decided_count'] !== null ? (int) $row['decided_count'] : null,
+                'after' => LossRuleCatalog::trackedNumber((string) $row['rule_code'], json_decode((string) $row['facts'], true) ?: [])],
             'backfill' => (bool) $row['backfill'],
             'exercise' => (bool) ($row['exercise'] ?? false), // constat d'exercice (fictif) : l'écran porte le bandeau « Exercice »
             'updatedAt' => LossAuditEntry::iso(LossAuditEntry::utc((string) $row['updated_at'])),

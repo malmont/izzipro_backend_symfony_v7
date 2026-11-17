@@ -28,6 +28,8 @@ class LossFinding
     public const STATUSES = [self::OPEN, self::WATCH, self::EXPLAINED, self::DISMISSED, self::CONFIRMED];
     /** États dont la décision exige une note */
     public const NOTE_REQUIRED = [self::EXPLAINED, self::CONFIRMED];
+    /** Lot L5-b : les décisions après lesquelles un constat qui grossit se signale de nouveau (jamais « confirmé », déjà tranché) */
+    public const GROWTH_WATCHED = [self::WATCH, self::EXPLAINED, self::DISMISSED];
 
     public const VARIANT_RULE = 'rule';
     public const VARIANT_PERSON = 'person';
@@ -43,6 +45,14 @@ class LossFinding
     /** Lot L4-b : une preuve s'est ajoutée après la décision du gérant (remis à faux par chaque décision) */
     #[ORM\Column(name: 'evidence_after_decision', options: ['default' => false])]
     private bool $evidenceAfterDecision = false;
+
+    /** Lot L5-b : le nombre suivi du constat au moment de la décision (null : pas de décision, ou règle sans nombre suivi) */
+    #[ORM\Column(name: 'decided_count', nullable: true)]
+    private ?int $decidedCount = null;
+
+    /** Lot L5-b : le constat décidé a grossi (au moins doublé, et au moins 3 de plus) ; une fois par décision */
+    #[ORM\Column(name: 'grew_at', type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $grewAt = null;
 
     #[ORM\Column(name: 'rule_code', length: 40)]
     private string $ruleCode;
@@ -154,4 +164,7 @@ class LossFinding
     public function getLastEvidenceAt(): \DateTimeImmutable { return $this->lastEvidenceAt; }
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
     public function getUpdatedAt(): \DateTimeImmutable { return $this->updatedAt; }
+
+    public function getDecidedCount(): ?int { return $this->decidedCount; }
+    public function getGrewAt(): ?\DateTimeImmutable { return $this->grewAt; }
 }

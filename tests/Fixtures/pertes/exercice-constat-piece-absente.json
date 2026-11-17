@@ -22,11 +22,12 @@
         "currency": "CAD",
         "isNew": false,
         "newEvidenceSinceDecision": false,
+        "grewSinceDecision": null,
         "backfill": false,
         "exercise": true,
-        "updatedAt": "2026-11-17T00:33:16+00:00",
-        "from": "2026-11-16T23:33:16+00:00",
-        "to": "2026-11-17T00:32:16+00:00",
+        "updatedAt": "2026-11-17T02:06:56+00:00",
+        "from": "2026-11-17T01:06:56+00:00",
+        "to": "2026-11-17T02:05:56+00:00",
         "sessionId": null,
         "subject": {
             "type": "count",
@@ -39,10 +40,10 @@
         "amountNotice": "Le montant en jeu est le montant concerné par le constat, pas une perte prouvée.",
         "evidence": [
             {
-                "id": 393,
+                "id": 396,
                 "kind": "count_absence",
-                "at": "2026-11-17T00:32:16+00:00",
-                "atLabel": "16/11/2026 19 h 32",
+                "at": "2026-11-17T02:05:56+00:00",
+                "atLabel": "16/11/2026 21 h 05",
                 "title": "Pièce absente au comptage",
                 "lines": [
                     {
@@ -64,10 +65,10 @@
                 "fingerprint": "7e833e1d77ad4b2310d9f91efbf51a570b446f69c82e75d0efde33d77eb13bd5"
             },
             {
-                "id": 394,
+                "id": 397,
                 "kind": "count_absence",
-                "at": "2026-11-17T00:32:16+00:00",
-                "atLabel": "16/11/2026 19 h 32",
+                "at": "2026-11-17T02:05:56+00:00",
+                "atLabel": "16/11/2026 21 h 05",
                 "title": "Pièce absente au comptage",
                 "lines": [
                     {
@@ -89,10 +90,10 @@
                 "fingerprint": "8270db4728a2edd60b613ad6ab3441bab09f88f2493b9b5c8a4f3b73469571aa"
             },
             {
-                "id": 395,
+                "id": 398,
                 "kind": "count_absence",
-                "at": "2026-11-17T00:32:16+00:00",
-                "atLabel": "16/11/2026 19 h 32",
+                "at": "2026-11-17T02:05:56+00:00",
+                "atLabel": "16/11/2026 21 h 05",
                 "title": "Pièce absente au comptage",
                 "lines": [
                     {
@@ -114,10 +115,10 @@
                 "fingerprint": "224362949ea45ea29ec7868b2df8fce3d2f8edcabe4e5467cf5b39f38bfd9a90"
             },
             {
-                "id": 396,
+                "id": 399,
                 "kind": "count_absence",
-                "at": "2026-11-17T00:32:16+00:00",
-                "atLabel": "16/11/2026 19 h 32",
+                "at": "2026-11-17T02:05:56+00:00",
+                "atLabel": "16/11/2026 21 h 05",
                 "title": "Pièce absente au comptage",
                 "lines": [
                     {
@@ -139,10 +140,10 @@
                 "fingerprint": "8d7b3f471a4d8e0a7ad86eea3f316551ad665ac2ab856570e3bed176a44213bc"
             },
             {
-                "id": 397,
+                "id": 400,
                 "kind": "count_absence",
-                "at": "2026-11-17T00:32:16+00:00",
-                "atLabel": "16/11/2026 19 h 32",
+                "at": "2026-11-17T02:05:56+00:00",
+                "atLabel": "16/11/2026 21 h 05",
                 "title": "Pièce absente au comptage",
                 "lines": [
                     {
@@ -164,10 +165,10 @@
                 "fingerprint": "ed026f908e6f5924173df97291c352abd4715a1510a28cc86c2736559c901158"
             },
             {
-                "id": 398,
+                "id": 401,
                 "kind": "count_absence",
-                "at": "2026-11-17T00:32:16+00:00",
-                "atLabel": "16/11/2026 19 h 32",
+                "at": "2026-11-17T02:05:56+00:00",
+                "atLabel": "16/11/2026 21 h 05",
                 "title": "Pièce absente au comptage",
                 "lines": [
                     {
@@ -189,10 +190,10 @@
                 "fingerprint": "aa9e155b598949d2243fdca89dae6b0ed65105413e608cd054842862d99ef8e7"
             },
             {
-                "id": 399,
+                "id": 402,
                 "kind": "count_absence",
-                "at": "2026-11-17T00:32:16+00:00",
-                "atLabel": "16/11/2026 19 h 32",
+                "at": "2026-11-17T02:05:56+00:00",
+                "atLabel": "16/11/2026 21 h 05",
                 "title": "Pièce absente au comptage",
                 "lines": [
                     {
@@ -214,10 +215,10 @@
                 "fingerprint": "f3652ce93c7d6106cd5c9c81328d435cdbadeb75d3f2c796471b63d1a80a4445"
             },
             {
-                "id": 400,
+                "id": 403,
                 "kind": "count_absence",
-                "at": "2026-11-17T00:32:16+00:00",
-                "atLabel": "16/11/2026 19 h 32",
+                "at": "2026-11-17T02:05:56+00:00",
+                "atLabel": "16/11/2026 21 h 05",
                 "title": "Pièce absente au comptage",
                 "lines": [
                     {
@@ -239,10 +240,10 @@
                 "fingerprint": "a32795cc36413c2875830ff9098583705bb5bb223be4fe5f1fdbaae9c028a877"
             },
             {
-                "id": 401,
+                "id": 404,
                 "kind": "count_absence",
-                "at": "2026-11-17T00:32:16+00:00",
-                "atLabel": "16/11/2026 19 h 32",
+                "at": "2026-11-17T02:05:56+00:00",
+                "atLabel": "16/11/2026 21 h 05",
                 "title": "Pièce absente au comptage",
                 "lines": [
                     {
@@ -264,10 +265,10 @@
                 "fingerprint": "d0ada196efca8d5ccd8a46f163344fe240e798ee956d88f7ac474647eb1919a7"
             },
             {
-                "id": 402,
+                "id": 405,
                 "kind": "count_absence",
-                "at": "2026-11-17T00:32:16+00:00",
-                "atLabel": "16/11/2026 19 h 32",
+                "at": "2026-11-17T02:05:56+00:00",
+                "atLabel": "16/11/2026 21 h 05",
                 "title": "Pièce absente au comptage",
                 "lines": [
                     {
@@ -293,8 +294,8 @@
         "opinion": null,
         "decision": null,
         "history": [],
-        "lastEvidenceAt": "2026-11-17T00:33:16+00:00",
-        "createdAt": "2026-11-17T00:33:16+00:00",
+        "lastEvidenceAt": "2026-11-17T02:06:56+00:00",
+        "createdAt": "2026-11-17T02:06:56+00:00",
         "screen": "pertes.exercices"
     }
 }

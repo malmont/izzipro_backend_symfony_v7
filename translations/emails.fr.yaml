@@ -211,6 +211,8 @@ loss_digest:
     row_renewed: 'Dont complétés par une nouvelle preuve'
     row_amount: 'Montant en jeu'
     message_renewed: "{1}Parmi eux, 1 constat plus ancien, complété par une nouvelle preuve.|]1,Inf[Parmi eux, %count% constats plus anciens, complétés par une nouvelle preuve."
+    row_grown: 'Dont grossis depuis votre décision'
+    message_grown: "{1}Parmi eux, 1 constat déjà décidé, qui a grossi depuis votre décision.|]1,Inf[Parmi eux, %count% constats déjà décidés, qui ont grossi depuis votre décision."
     row_day: 'Journée du magasin'
     next: 'Ouvrez la section « Prévention des pertes » de votre application de gestion pour lire leurs preuves et décider.'
     notice: 'Le montant en jeu est le montant concerné par les constats, pas une perte prouvée. Vous recevez ce courriel au plus une fois par jour ; vous pouvez l''arrêter dans les préférences de notification de la gestion.'

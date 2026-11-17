@@ -1,5 +1,7 @@
 # Loss prevention (lot L1-a, 2026-11-14, `docs/prevention-pertes.md`): texts written by the server, served according to ?locale=.
 # Rule: a summary (`summary.*`) never names anyone; it only uses counts and amounts.
+history:
+    grew: 'Grew since your decision: %before% at the decision, %after% now.'
 status:
     open: New
     watch: To watch

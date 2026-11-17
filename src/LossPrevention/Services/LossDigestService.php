@@ -128,6 +128,9 @@ class LossDigestService
             $renewedMark = $journal->digestRenewedMark();
             $renewed = $journal->renewedAfter($renewedMark);
             $again = $findings->renewedAmong($renewed['findingIds']);
+            // lot L5-b : les constats décidés qui ont grossi depuis le courriel précédent, annoncés à part, une fois (`grownUpTo`)
+            $grown = $journal->renewedAfter($journal->digestRenewedMark('grownUpTo'), LossJournalEntry::FINDING_GREW);
+            $grew = $findings->grownAmong($grown['findingIds']);
             $new = $findings->bornAfter((int) ($row['last_digest_finding_id'] ?? 0), $renewed['findingIds']);
             $conn->commit();
         } catch (\Throwable $e) {
@@ -136,7 +139,7 @@ class LossDigestService
             }
             throw $e;
         }
-        $total = ['count' => $new['count'] + $again['count'], 'amount' => $new['amount'] + $again['amount']];
+        $total = ['count' => $new['count'] + $again['count'] + $grew['count'], 'amount' => $new['amount'] + $again['amount'] + $grew['amount']];
         if ($total['count'] === 0) {
             return ['status' => 'nothing_new', 'sent' => 0];
         }
@@ -164,8 +167,10 @@ class LossDigestService
             // la mention « complété par une nouvelle preuve » distingue un constat plus ancien qui revient d'un constat né depuis
             // le montant en jeu est la somme des constats qui en portent un ; quand aucun n'en porte (tiroir ouvert sans vente, validations
             // refusées), ni la phrase ni le tableau ne disent « 0,00 $ »
-            'message' => $t($total['amount'] > 0 ? 'message' : 'message_no_amount', $params) . ($again['count'] > 0 ? ' ' . $t('message_renewed', ['%count%' => $again['count']]) : ''),
+            'message' => $t($total['amount'] > 0 ? 'message' : 'message_no_amount', $params) . ($again['count'] > 0 ? ' ' . $t('message_renewed', ['%count%' => $again['count']]) : '')
+                . ($grew['count'] > 0 ? ' ' . $t('message_grown', ['%count%' => $grew['count']]) : ''),
             'rows' => [$t('row_count') => (string) $total['count']] + ($again['count'] > 0 ? [$t('row_renewed') => (string) $again['count']] : [])
+                + ($grew['count'] > 0 ? [$t('row_grown') => (string) $grew['count']] : [])
                 + ($total['amount'] > 0 ? [$t('row_amount') => $params['%amount%']] : []) + [$t('row_day') => LossTexts::day(new \DateTimeImmutable($day), $language)],
             'nextStep' => $t('next'), 'notice' => $t('notice'), 'siteLine' => $t('signature', $params),
             // Lien direct vers la liste des constats nouveaux (lot LIEN) : la seule adresse du courriel ; null (site sans adresse connue) : pas de lien
@@ -241,7 +246,7 @@ class LossDigestService
         }
         if ($sent === 0 && $held > 0) {
             $journal->append(LossJournalEntry::DIGEST_SENT, null, null, ['day' => $day, 'count' => $total['count'], 'amount' => $total['amount'], 'recipients' => 0, 'held' => $held,
-                'renewed' => $again['count'], 'renewedUpTo' => $renewed['lastId']]);
+                'renewed' => $again['count'], 'renewedUpTo' => $renewed['lastId'], 'grown' => $grew['count'], 'grownUpTo' => $grown['lastId']]);
 
             return ['status' => 'held', 'sent' => 0, 'held' => $held];
         }
@@ -252,7 +257,7 @@ class LossDigestService
         }
         // `renewedUpTo` : rang du journal jusqu'où les constats redevenus « nouveaux » sont annoncés ; le courriel suivant repart de là
         $journal->append(LossJournalEntry::DIGEST_SENT, null, null, ['day' => $day, 'count' => $total['count'], 'amount' => $total['amount'], 'recipients' => $sent,
-            'renewed' => $again['count'], 'renewedUpTo' => $renewed['lastId']]);
+            'renewed' => $again['count'], 'renewedUpTo' => $renewed['lastId'], 'grown' => $grew['count'], 'grownUpTo' => $grown['lastId']]);
 
         return ['status' => 'sent', 'sent' => $sent];
     }

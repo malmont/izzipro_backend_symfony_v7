@@ -2196,6 +2196,7 @@ choisi de basculer sans attendre, Fable relira ensuite). La liste fait foi pour 
 | B6, B7 | boîtier, dépôt local | `2f10fce`, `023aac4` | `izzibox/scenarios.py` (antenne `back_door`, scène « par la porte arrière »), guides de l'installateur ; `izzibox/appareils.py` et `izzibox/file.py` (présence gardée sur disque, aucun départ après une panne) |
 | L4-d, migration et code | backend `app_v2` | migration `55080132`, lot : le commit qui la suit (§ 17.16) | `migrations/Version20270125100000.php` (tables du comptage, gardes) et le script `scripts/migrate_all_v2_pertes_l4d.sh` (hors dépôt) ; `LossCountService` et `LossCountRepository` (tout), `LossCountController`, le passage des comptages dans `LossAnalysisService::run`, le bilan joint à `LossDigestService`, le scénario `piece_missing` |
 | L5-a, migration et code | backend `app_v2` | migration `a98654af`, lot : le commit qui la suit (§ 18.8) | `migrations/Version20270126100000.php` et le script `scripts/migrate_all_v2_pertes_l5a.sh` (hors dépôt) ; `LossCounterService` (alerte, vérification, suite), `LossCounterAlertDayRepository`, `LossPosController::after`, le réglage `cashierAlerts` de `LossSettingsService`, `counterAlerts` du bilan (`LossCountService`) et du résumé (`LossDigestService`) |
+| L5-b, migration et code | backend `app_v2` | migration `9212172e`, lot : le commit qui la suit (§ 18.9) | `migrations/Version20270127100000.php` et le script `scripts/migrate_all_v2_pertes_l5b.sh` (hors dépôt) ; `LossFindingWriter::growth`, `LossFindingRepository` (`decide`, `grew`, `keepReference`, `grownAmong`), `LossRuleCatalog::trackedNumber`, la décision et la lecture de `LossFindingReader` (`grewSinceDecision`, historique), l'annonce du résumé (`LossDigestService`) |
 
 Vérifié sous Opus : `LossPreventionZoneTest` et le dossier du module verts ; 21 mutations sur L4-a (20 tuées, une équivalente :
 le rejeu d'une arrivée est déjà bloqué par la clé du fait et par la requête de présence) ; 12 mutations sur B5, toutes tuées.
@@ -2768,3 +2769,31 @@ Risque ordinaire (§ 18.5) : je me vérifie, avec mutations. **Codé sous Opus, 
   `caisse-refus-suite-invalide.json` (la vérification y est masquée par des zéros) ; `docs/caisse.md` porte le contrat pour l'application
   de caisse (en pause : le chef de projet le range dans les consignes de sa reprise).
 - Tests : `LossPreventionCounterTest::testTheTillShowsTheAlertOnlyWhenTheManagerTurnsItOnAndCountsEachCheckOncePerRegisterAndDay`.
+
+### 18.9 Lot L5-b codé : le constat classé qui grossit (17/11/2026 ; contrat validé par le chef de projet le 17/11/2026)
+
+Risque ordinaire (§ 18.5) : je me vérifie, avec mutations. **Codé sous Opus, à faire relire par Fable** (§ 17.12). Migration
+`Version20270127100000` (2 instructions), script `scripts/migrate_all_v2_pertes_l5b.sh` (contrôle « 2 colonnes »).
+
+- **Le nombre suivi** (`LossRuleCatalog::trackedNumber`) : celui que la règle compare à son seuil, lu dans les faits du constat :
+  `count` pour la plupart, `unread` pour « vendus sans lecture » (`GROWTH_FACT`). Un constat d'événement unique (écart d'une
+  clôture, annulation rapide, retour, sortie d'une pièce) n'a pas ce nombre : il n'est jamais concerné.
+- **À la décision** (`PUT /constats/{id}/decision`) : le nombre du moment est gardé (`loss_finding.decided_count`) ; revenir à
+  « nouveau » l'efface. La même décision redite après que le constat a grossi compte comme une nouvelle décision : la référence
+  repart du nombre du moment et « a grossi » s'efface.
+- **À la complétion par l'analyse** (`LossFindingWriter::growth`, seulement pour un fait postérieur à la première analyse) : un VRAI
+  constat `watch`, `explained` ou `dismissed` (jamais `confirmed`, jamais l'exercice) dont le nombre suivi a **au moins doublé ET
+  compte au moins 3 de plus** (`GROWTH_MIN`) que la référence a grossi : `grew_at` est posé, `seen_at` effacé (il redevient
+  « nouveau » : liste, filtre `isNew`, vignette), sa décision et sa note sont gardées. Une fois par décision (`grew_at` déjà posé : rien).
+  Journal du module : `FINDING_GREW { before, after }`.
+- **Décisions d'avant le lot** : sans nombre gardé, la référence est le nombre d'avant leur première complétion, alors gardé (choix
+  technique du contrat, point 8).
+- **Lecture** : `grewSinceDecision: { at, before, after } | null` dans la liste et la fiche (`before` : la référence, `after` : le
+  nombre du jour). L'historique de la fiche porte une ligne de plus, `kind: "grew"` (`before`, `after`, `statusLabel` « A grossi depuis
+  votre décision : 4 à la décision, 8 maintenant. », `by: null`) ; les lignes de décision portent `kind: "decision"` (et `before`,
+  `after` nuls).
+- **Résumé du jour** : les constats qui ont grossi depuis le courriel précédent, encore jamais consultés, sont annoncés à part, une
+  fois (ligne « Dont grossis depuis votre décision », phrase « Parmi eux, N constats déjà décidés, qui ont grossi depuis votre
+  décision. »), comptés dans le total ; la ligne `DIGEST_SENT` porte `grown` et `grownUpTo` (rang du journal, comme `renewedUpTo`).
+  Aucun courriel de plus.
+- Tests : `LossPreventionGrowthTest` ; `LossPreventionGestionLinksTest::testDailyDigestStopsWithTheAnalysisReservesItsDayAndNeverCarriesTheSiteSignature`.

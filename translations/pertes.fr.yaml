@@ -1,5 +1,7 @@
 # Prévention des pertes (lot L1-a, 14/11/2026, `docs/prevention-pertes.md`) : textes rédigés par le serveur, servis selon ?locale=.
 # Règle : un résumé (`summary.*`) ne nomme jamais personne ; il n'emploie que des nombres et des montants.
+history:
+    grew: 'A grossi depuis votre décision : %before% à la décision, %after% maintenant.'
 status:
     open: Nouveau
     watch: À suivre

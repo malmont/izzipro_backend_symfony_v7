@@ -1,13 +1,13 @@
 {
     "request": {
         "method": "GET",
-        "path": "/api/gestion/pertes/constats/11?locale=fr"
+        "path": "/api/gestion/pertes/constats/73?locale=fr"
     },
     "status": 200,
     "headers": {},
     "body": {
-        "id": 11,
-        "number": 11,
+        "id": 73,
+        "number": 73,
         "rule": {
             "code": "PRICE_OVERRIDE",
             "label": "Prix baissés à la main"
@@ -25,19 +25,20 @@
         "currency": "CAD",
         "isNew": false,
         "newEvidenceSinceDecision": false,
+        "grewSinceDecision": null,
         "backfill": false,
         "exercise": false,
-        "updatedAt": "2026-11-16T07:32:48+00:00",
-        "from": "2026-11-16T07:32:47+00:00",
-        "to": "2026-11-16T07:32:47+00:00",
-        "sessionId": 5,
+        "updatedAt": "2026-11-17T02:06:56+00:00",
+        "from": "2026-11-17T02:06:55+00:00",
+        "to": "2026-11-17T02:06:55+00:00",
+        "sessionId": 63,
         "subject": {
             "type": "session",
-            "id": 5
+            "id": 63
         },
         "onDuty": [
             {
-                "id": 21,
+                "id": 92,
                 "name": "Caisse Nom",
                 "role": "operator",
                 "roleLabel": "Auteur de l'acte"
@@ -47,15 +48,15 @@
         "amountNotice": "Le montant en jeu est le montant concerné par le constat, pas une perte prouvée.",
         "evidence": [
             {
-                "id": 27,
+                "id": 391,
                 "kind": "price_change",
-                "at": "2026-11-16T07:32:47+00:00",
-                "atLabel": "16/11/2026 02 h 32",
+                "at": "2026-11-17T02:06:55+00:00",
+                "atLabel": "16/11/2026 21 h 06",
                 "title": "Prix saisi à la main",
                 "lines": [
                     {
                         "label": "Vente",
-                        "value": "REF#6afab19f710c2"
+                        "value": "REF#6afbb6bf6475a"
                     },
                     {
                         "label": "Article",
@@ -88,23 +89,23 @@
                 ],
                 "ref": {
                     "type": "pos_audit",
-                    "id": 33,
-                    "sequence": 33,
-                    "hash": "aa9779ae33733d05ee0f9419848cd8983a36614f8512beffeacf4980b3530c22"
+                    "id": 323,
+                    "sequence": 323,
+                    "hash": "f1da1f2b3f177312f9e457426b1d3e2bfb71c2284fd8e1a40c022822411db345"
                 },
                 "screen": null,
-                "fingerprint": "d50280bab9dd2fe778baf0abd8897960b4e3b75d685ee61dd8b1bc758271b8c9"
+                "fingerprint": "283f4c44462cdc2878fa81167bb86f1a7d8ef581d6020c95d04682c7c2499bad"
             },
             {
-                "id": 28,
+                "id": 392,
                 "kind": "price_change",
-                "at": "2026-11-16T07:32:47+00:00",
-                "atLabel": "16/11/2026 02 h 32",
+                "at": "2026-11-17T02:06:55+00:00",
+                "atLabel": "16/11/2026 21 h 06",
                 "title": "Prix saisi à la main",
                 "lines": [
                     {
                         "label": "Vente",
-                        "value": "REF#6afab19fa9042"
+                        "value": "REF#6afbb6bfa27e0"
                     },
                     {
                         "label": "Article",
@@ -137,23 +138,23 @@
                 ],
                 "ref": {
                     "type": "pos_audit",
-                    "id": 35,
-                    "sequence": 35,
-                    "hash": "3df16ac25dca1571344ab13deb4a74f80844a675385ef63ddde23c4205f584c6"
+                    "id": 325,
+                    "sequence": 325,
+                    "hash": "6518e8b07d75d9c80125cac8836e9c8bc7fe3192b0654d1d61a5ac515b614cf9"
                 },
                 "screen": null,
-                "fingerprint": "c00259ad9cbddf90b6e956bb62bb2e2ff244647211c46984df9295440cd9a2e1"
+                "fingerprint": "3c6e57eb146e2973e763dd3560c312540b7b56e3ddc7acff8cff95a33d283254"
             },
             {
-                "id": 29,
+                "id": 393,
                 "kind": "price_change",
-                "at": "2026-11-16T07:32:47+00:00",
-                "atLabel": "16/11/2026 02 h 32",
+                "at": "2026-11-17T02:06:55+00:00",
+                "atLabel": "16/11/2026 21 h 06",
                 "title": "Prix saisi à la main",
                 "lines": [
                     {
                         "label": "Vente",
-                        "value": "REF#6afab19fdfd58"
+                        "value": "REF#6afbb6bfe06dc"
                     },
                     {
                         "label": "Article",
@@ -186,20 +187,20 @@
                 ],
                 "ref": {
                     "type": "pos_audit",
-                    "id": 37,
-                    "sequence": 37,
-                    "hash": "31c867c30af80f0d4c529b71069965352cae4d749f3d5b6d753c30969c9ed97d"
+                    "id": 327,
+                    "sequence": 327,
+                    "hash": "1eea90c09ef0b9e72d7ec728d9e9997c9522e32702f4b684f065310211f98621"
                 },
                 "screen": null,
-                "fingerprint": "797c47357c82e8cdc329b5714cee6265a2d9d8e80557c6775f476c4905ce5e1e"
+                "fingerprint": "b0032bc35744f15701d24a455fe2e8e39af45e04db5572ca13a99a888b1d7a0a"
             }
         ],
         "evidenceIntact": true,
         "opinion": null,
         "decision": null,
         "history": [],
-        "lastEvidenceAt": "2026-11-16T07:32:48+00:00",
-        "createdAt": "2026-11-16T07:32:48+00:00",
+        "lastEvidenceAt": "2026-11-17T02:06:56+00:00",
+        "createdAt": "2026-11-17T02:06:56+00:00",
         "screen": "pertes.constat"
     }
 }

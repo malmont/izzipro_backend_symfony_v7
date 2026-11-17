@@ -207,6 +207,8 @@ loss_digest:
     row_renewed: 'Of which completed by new evidence'
     row_amount: 'Amount at stake'
     message_renewed: "{1}Among them, 1 older finding, completed by new evidence.|]1,Inf[Among them, %count% older findings, completed by new evidence."
+    row_grown: 'Of which grew since your decision'
+    message_grown: "{1}Among them, 1 finding already decided, which grew since your decision.|]1,Inf[Among them, %count% findings already decided, which grew since your decision."
     row_day: 'Shop day'
     next: 'Open the “Loss prevention” section of your management app to read their evidence and decide.'
     notice: 'The amount at stake is the amount the findings are about, not a proven loss. You receive this email at most once a day; you can stop it in the notification preferences of the management app.'

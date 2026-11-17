@@ -1,13 +1,13 @@
 {
     "request": {
         "method": "GET",
-        "path": "/api/gestion/pertes/constats/6?locale=fr"
+        "path": "/api/gestion/pertes/constats/68?locale=fr"
     },
     "status": 200,
     "headers": {},
     "body": {
-        "id": 6,
-        "number": 6,
+        "id": 68,
+        "number": 68,
         "rule": {
             "code": "CASH_DISCREPANCY",
             "label": "Écart de caisse à la clôture"
@@ -15,7 +15,7 @@
         "personPattern": false,
         "status": "open",
         "statusLabel": "Nouveau",
-        "summary": "Clôture n° 1 : il manque 12,00 $ dans la caisse (attendu 132,75 $, compté 120,75 $).",
+        "summary": "Clôture n° 53 : il manque 12,00 $ dans la caisse (attendu 132,75 $, compté 120,75 $).",
         "storeDay": "2026-11-16",
         "cashRegister": {
             "id": 1,
@@ -25,25 +25,26 @@
         "currency": "CAD",
         "isNew": false,
         "newEvidenceSinceDecision": false,
+        "grewSinceDecision": null,
         "backfill": false,
         "exercise": false,
-        "updatedAt": "2026-11-16T07:32:44+00:00",
-        "from": "2026-11-16T07:32:43+00:00",
-        "to": "2026-11-16T07:32:44+00:00",
-        "sessionId": 1,
+        "updatedAt": "2026-11-17T02:06:52+00:00",
+        "from": "2026-11-17T02:06:50+00:00",
+        "to": "2026-11-17T02:06:52+00:00",
+        "sessionId": 59,
         "subject": {
             "type": "z_report",
-            "id": 1
+            "id": 53
         },
         "onDuty": [
             {
-                "id": 19,
+                "id": 90,
                 "name": "Caisse Nom",
                 "role": "closer",
                 "roleLabel": "Fermeture de la caisse"
             },
             {
-                "id": 19,
+                "id": 90,
                 "name": "Caisse Nom",
                 "role": "seller",
                 "roleLabel": "Vente"
@@ -53,19 +54,19 @@
         "amountNotice": "Le montant en jeu est le montant concerné par le constat, pas une perte prouvée.",
         "evidence": [
             {
-                "id": 14,
+                "id": 378,
                 "kind": "z_report",
-                "at": "2026-11-16T07:32:44+00:00",
-                "atLabel": "16/11/2026 02 h 32",
+                "at": "2026-11-17T02:06:52+00:00",
+                "atLabel": "16/11/2026 21 h 06",
                 "title": "Rapport de clôture",
                 "lines": [
                     {
                         "label": "Rapport de clôture n°",
-                        "value": "1"
+                        "value": "53"
                     },
                     {
                         "label": "Caisse fermée le",
-                        "value": "16/11/2026 02 h 32"
+                        "value": "16/11/2026 21 h 06"
                     },
                     {
                         "label": "Fermée par",
@@ -98,20 +99,20 @@
                 ],
                 "ref": {
                     "type": "z_report",
-                    "id": 1,
-                    "sequence": 16,
-                    "hash": "13becef1900a4367fe225b9679fd8ada58f33e1e395d48fea26d63afea90a939"
+                    "id": 53,
+                    "sequence": 306,
+                    "hash": "f8bbb1bb68c220a53ac0431f8915ae553a3938222b0c92b98cc0511157f02ed9"
                 },
                 "screen": null,
-                "fingerprint": "035a96ca766e1b1d1ac7d6cecc42c6759410cd2ff381583460ab2074565599bd"
+                "fingerprint": "bc7358e7eae3ede32dbd18aa68cd101ee4e16fac7fc4668fb1ccde8e868d21d4"
             }
         ],
         "evidenceIntact": true,
         "opinion": null,
         "decision": null,
         "history": [],
-        "lastEvidenceAt": "2026-11-16T07:32:44+00:00",
-        "createdAt": "2026-11-16T07:32:44+00:00",
+        "lastEvidenceAt": "2026-11-17T02:06:52+00:00",
+        "createdAt": "2026-11-17T02:06:52+00:00",
         "screen": "pertes.constat"
     }
 }

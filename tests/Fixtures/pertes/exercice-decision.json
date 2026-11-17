@@ -1,7 +1,7 @@
 {
     "request": {
         "method": "PUT",
-        "path": "/api/gestion/pertes/exercices/12/decision?locale=fr",
+        "path": "/api/gestion/pertes/exercices/74/decision?locale=fr",
         "body": {
             "status": "explained",
             "note": "Exercice : erreur de monnaie reconnue par la personne."
@@ -10,7 +10,7 @@
     "status": 200,
     "headers": {},
     "body": {
-        "id": 12,
+        "id": 74,
         "number": -1,
         "rule": {
             "code": "CASH_DISCREPANCY",
@@ -26,11 +26,12 @@
         "currency": "CAD",
         "isNew": false,
         "newEvidenceSinceDecision": false,
+        "grewSinceDecision": null,
         "backfill": false,
         "exercise": true,
-        "updatedAt": "2026-11-16T07:32:48+00:00",
-        "from": "2026-11-15T23:32:48+00:00",
-        "to": "2026-11-16T07:31:48+00:00",
+        "updatedAt": "2026-11-17T02:06:56+00:00",
+        "from": "2026-11-16T18:06:56+00:00",
+        "to": "2026-11-17T02:05:56+00:00",
         "sessionId": null,
         "subject": {
             "type": "z_report",
@@ -54,10 +55,10 @@
         "amountNotice": "Le montant en jeu est le montant concerné par le constat, pas une perte prouvée.",
         "evidence": [
             {
-                "id": 30,
+                "id": 394,
                 "kind": "z_report",
-                "at": "2026-11-16T07:31:48+00:00",
-                "atLabel": "16/11/2026 02 h 31",
+                "at": "2026-11-17T02:05:56+00:00",
+                "atLabel": "16/11/2026 21 h 05",
                 "title": "Rapport de clôture",
                 "lines": [
                     {
@@ -66,7 +67,7 @@
                     },
                     {
                         "label": "Caisse fermée le",
-                        "value": "16/11/2026 02 h 31"
+                        "value": "16/11/2026 21 h 05"
                     },
                     {
                         "label": "Fermée par",
@@ -104,7 +105,7 @@
                     "hash": null
                 },
                 "screen": null,
-                "fingerprint": "74e8b4d1ad6a972208feefbc19f1ccc8a605b52a563f320dafb6e004e838ca2f"
+                "fingerprint": "4f8c317cbf0f51925a9a87065f9fe2ea69e6228cbe656ffb84a6ba92f6859750"
             }
         ],
         "evidenceIntact": true,
@@ -112,27 +113,30 @@
         "decision": {
             "status": "explained",
             "note": "Exercice : erreur de monnaie reconnue par la personne.",
-            "at": "2026-11-16T07:32:48+00:00",
+            "at": "2026-11-17T02:06:56+00:00",
             "by": {
-                "id": 18,
+                "id": 89,
                 "name": "Gerant Nom"
             }
         },
         "history": [
             {
-                "at": "2026-11-16T07:32:48+00:00",
+                "kind": "decision",
+                "at": "2026-11-17T02:06:56+00:00",
                 "status": "explained",
                 "previous": "open",
                 "statusLabel": "Expliqué",
                 "hasNote": true,
                 "by": {
-                    "id": 18,
+                    "id": 89,
                     "name": "Gerant Nom"
-                }
+                },
+                "before": null,
+                "after": null
             }
         ],
-        "lastEvidenceAt": "2026-11-16T07:32:48+00:00",
-        "createdAt": "2026-11-16T07:32:48+00:00",
+        "lastEvidenceAt": "2026-11-17T02:06:56+00:00",
+        "createdAt": "2026-11-17T02:06:56+00:00",
         "screen": "pertes.exercices"
     }
 }
