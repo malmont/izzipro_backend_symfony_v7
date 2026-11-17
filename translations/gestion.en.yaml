@@ -63,6 +63,7 @@ notifications:
         trip_budget: Trip budget exceeded
         loss_digest: 'Loss prevention: daily summary by email'
         weekly_digest: 'Weekly update by email'
+        loss_exit: 'Loss prevention: item at the exit without a sale'
     # NOTIF-1: follow-up e-mail levels ("Notifications" screen)
     levels:
         site: 'Same as the site'
@@ -95,6 +96,21 @@ notifications:
     cash_critical:
         title: Low cash
         body: 'Your expected balance drops to %amount% on %date%.'
+    loss_exit:
+        title: 'Item at the exit, to check'
+        body: '%zone%, %time%: a tracked item passes without a linked sale. To check, without holding or accusing anyone.'
+    loss_exit_last:
+        title: 'Item at the exit, to check'
+        body: '%zone%, %time%: a tracked item passes without a linked sale. More exits today: see the list in the app.'
+    loss_exit_night:
+        title: 'Item at the exit, outside opening hours'
+        body: '%zone%, %time%, shop closed: a tracked item passes without a linked sale. To check, without holding or accusing anyone.'
+    loss_exit_night_last:
+        title: 'Item at the exit, outside opening hours'
+        body: '%zone%, %time%, shop closed: a tracked item passes without a linked sale. More exits today: see the list in the app.'
+    loss_exit_exercise:
+        title: 'Exercise: item at the exit'
+        body: 'Exercise, %zone%, %time%: a simulated item passes the exit. Nothing real.'
 # Budget by item and buying trips (lot B1a, 11/11/2026, docs/budgets-gestion.md)
 budget:
     categories:

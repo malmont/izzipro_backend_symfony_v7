@@ -32,8 +32,24 @@ class NotificationLogRepository extends EntityRepository
     /** Notifications de téléphone comptées aujourd'hui pour ce compte (lot NOTIF-2 : plafond de 3 au niveau « Tout ») */
     public function countToday(int $userId, string $storeDay): int
     {
+        // lot L5-d : les types à plafond propre (alerte de sortie) ne comptent pas dans le compte commun du téléphone
+        $own = array_keys(\App\Gestion\Services\GestionNotificationService::OWN_DAILY_CAP);
+
         return (int) $this->getEntityManager()->getConnection()->fetchOne(
-            "SELECT COUNT(*) FROM notification_log WHERE channel = 'push' AND user_id = ? AND store_day = ? AND status IN (?, ?, ?)", [$userId, $storeDay, ...self::COUNTED]
+            "SELECT COUNT(*) FROM notification_log WHERE channel = 'push' AND user_id = ? AND store_day = ? AND status IN (?, ?, ?)"
+            . ($own !== [] ? ' AND kind NOT IN (' . implode(', ', array_fill(0, count($own), '?')) . ')' : ''), [$userId, $storeDay, ...self::COUNTED, ...$own]
+        );
+    }
+
+    /**
+     * Lot L5-d : les notifications d'UN type tentées aujourd'hui (son plafond propre : chaque alerte notifiée compte, appareil ou non) ;
+     * celles d'un exercice (sujet `loss_alert_exercise`) ne comptent pas.
+     */
+    public function countKindToday(int $userId, string $storeDay, string $kind): int
+    {
+        return (int) $this->getEntityManager()->getConnection()->fetchOne(
+            "SELECT COUNT(*) FROM notification_log WHERE channel = 'push' AND user_id = ? AND store_day = ? AND kind = ? AND (subject IS NULL OR CAST(subject AS TEXT) NOT LIKE ?)",
+            [$userId, $storeDay, $kind, '%"loss_alert_exercise"%']
         );
     }
 

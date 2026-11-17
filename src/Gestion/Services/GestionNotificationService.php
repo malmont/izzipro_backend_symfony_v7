@@ -30,21 +30,28 @@ class GestionNotificationService
     /** type → disponible (cash_critical et trip_budget arrivent avec B1 ; coupables dès maintenant) */
     public const TRIP_BUDGET = 'trip_budget';
     public const CASH_CRITICAL = 'cash_critical';
+    /** Prévention des pertes (lot L5-d) : alerte de sortie, une pièce passe la sortie sans vente probable ; urgente, plafond propre */
+    public const LOSS_EXIT = 'loss_exit';
     /** Notifications de téléphone urgentes : les seules qui partent au niveau « Essentiel » (lot NOTIF-2) */
-    public const PUSH_URGENT = [self::CASH_CRITICAL];
+    public const PUSH_URGENT = [self::CASH_CRITICAL, self::LOSS_EXIT];
+    /**
+     * Lot L5-d : les types qui ont leur PROPRE plafond par jour et par gérant, tenu à part du compte commun du téléphone (une alerte de
+     * sortie n'empêche pas la notification de stock bas du jour, et l'inverse). La dernière du jour dit « d'autres : voir la liste ».
+     */
+    public const OWN_DAILY_CAP = [self::LOSS_EXIT => 3];
     /** Prévention des pertes (lot L1-b) : courriel de résumé du jour, « N nouveaux constats, X en jeu ». Envoyé par le module, par COURRIEL :
      *  il n'entre pas dans la règle « une notification par jour » du téléphone. Depuis NOTIF-1 il suit le niveau des courriels de suivi
      *  et s'écrit au journal des notifications sur le canal `email` (`docs/notifications-courriels.md`). */
     public const LOSS_DIGEST = 'loss_digest';
     /** Point de la semaine (lot NOTIF) : courriel de suivi qui se coupe ici, indépendamment du niveau */
     public const WEEKLY_DIGEST = 'weekly_digest';
-    public const KINDS = [self::LOW_STOCK => true, self::DUPLICATE_INVOICE => true, self::CASH_CRITICAL => true, self::TRIP_BUDGET => true, self::LOSS_DIGEST => true, self::WEEKLY_DIGEST => true]; // trip_budget : lot B1a ; cash_critical : lot B1b-1
+    public const KINDS = [self::LOW_STOCK => true, self::DUPLICATE_INVOICE => true, self::CASH_CRITICAL => true, self::TRIP_BUDGET => true, self::LOSS_DIGEST => true, self::WEEKLY_DIGEST => true, self::LOSS_EXIT => true]; // trip_budget : lot B1a ; cash_critical : lot B1b-1 ; loss_exit : lot L5-d
     /** Canal d'un type : `push` (téléphone) par défaut ; `email` pour ceux listés ici */
     public const EMAIL_KINDS = [self::LOSS_DIGEST, self::WEEKLY_DIGEST];
     /** Lot NOTIF-1, type → [famille, sujet] : `urgent` part dès le niveau « Essentiel », `followup` (suivi) est regroupé par les niveaux */
     public const FAMILIES = [
         self::LOW_STOCK => ['followup', 'management'], self::DUPLICATE_INVOICE => ['followup', 'management'], self::CASH_CRITICAL => ['urgent', 'management'],
-        self::TRIP_BUDGET => ['followup', 'management'], self::LOSS_DIGEST => ['followup', 'loss'], self::WEEKLY_DIGEST => ['followup', null],
+        self::TRIP_BUDGET => ['followup', 'management'], self::LOSS_DIGEST => ['followup', 'loss'], self::WEEKLY_DIGEST => ['followup', null], self::LOSS_EXIT => ['urgent', 'loss'],
     ];
     public const CASH_REPEAT_DAYS = 7;
     public const DAILY_HOUR = 10;
@@ -80,7 +87,7 @@ class GestionNotificationService
         $prefs = $this->log()->preferences($userId);
         $kinds = [];
         foreach (self::KINDS as $kind => $available) {
-            if ($kind === self::LOSS_DIGEST) { // disponible seulement si le droit du module Prévention des pertes est accordé au site
+            if (in_array($kind, [self::LOSS_DIGEST, self::LOSS_EXIT], true)) { // disponibles seulement si le droit du module Prévention des pertes est accordé au site
                 $available = $this->modules !== null && $this->lossPreventionGranted();
             }
             $kinds[] = ['kind' => $kind, 'label' => $this->translator->trans("notifications.kinds.$kind", [], 'gestion', $locale), 'enabled' => $prefs[$kind] ?? true, 'available' => $available,
@@ -256,24 +263,31 @@ class GestionNotificationService
      *
      * @param array<string, mixed> $action { screen, params }
      */
-    public function notify(int $userId, string $kind, array $params, array $action, array $subject, ?\DateTimeImmutable $now = null): ?string
+    public function notify(int $userId, string $kind, array $params, array $action, array $subject, ?\DateTimeImmutable $now = null, bool $exercise = false, string $textVariant = ''): ?string
     {
         $now ??= new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
         $day = $this->clock->day($now);
-        if (!($this->log()->preferences($userId)[$kind] ?? true) || !$this->isAdmin($userId) || !$this->levelAllows($userId, $kind, $day)) {
+        if (!($this->log()->preferences($userId)[$kind] ?? true) || !$this->isAdmin($userId) || !$this->levelAllows($userId, $kind, $day, $exercise)) {
             return null;
+        }
+        // lot L5-d : la dernière notification du plafond propre d'un type dit qu'il y en a d'autres (« voir la liste ») ; jamais en exercice
+        // `$textVariant` (lot L5-d) : un autre texte du même type (« exercise », « night ») ; la dernière du plafond garde sa variante
+        // (relecture 2 : la dernière de la nuit dit encore « boutique fermée », `loss_exit_night_last`)
+        $textKind = $textVariant !== '' ? $kind . '_' . $textVariant : $kind;
+        if (!$exercise && isset(self::OWN_DAILY_CAP[$kind]) && $this->log()->countKindToday($userId, $day, $kind) === self::OWN_DAILY_CAP[$kind] - 1) {
+            $textKind .= '_last';
         }
         $devices = $this->devices()->activeFor($userId, self::PLATFORM);
         $siteLocale = $this->siteLocale?->language(null) ?? 'fr';
         $data = ['kind' => $kind, 'screen' => (string) $action['screen'], 'params' => json_encode($action['params'] ?: new \stdClass())];
         $statuses = [];
         $error = null;
-        $title = $this->translator->trans("notifications.$kind.title", $params, 'gestion', $siteLocale);
-        $body = $this->translator->trans("notifications.$kind.body", $params, 'gestion', $siteLocale);
+        $title = $this->translator->trans("notifications.$textKind.title", $params, 'gestion', $siteLocale);
+        $body = $this->translator->trans("notifications.$textKind.body", $params, 'gestion', $siteLocale);
         foreach ($devices as $i => $device) {
             $locale = in_array($device['locale'], ['fr', 'en'], true) ? $device['locale'] : $siteLocale;
-            $t = $this->translator->trans("notifications.$kind.title", $params, 'gestion', $locale);
-            $b = $this->translator->trans("notifications.$kind.body", $params, 'gestion', $locale);
+            $t = $this->translator->trans("notifications.$textKind.title", $params, 'gestion', $locale);
+            $b = $this->translator->trans("notifications.$textKind.body", $params, 'gestion', $locale);
             if ($i === 0) {
                 [$title, $body] = [$t, $b];
             }
@@ -308,11 +322,15 @@ class GestionNotificationService
      * au plus `NotificationLevel::DAILY_CAP` par jour, l'urgent passant au-dessus du plafond. Ce compte est tenu à part de celui des
      * courriels.
      */
-    private function levelAllows(int $userId, string $kind, string $day): bool
+    private function levelAllows(int $userId, string $kind, string $day, bool $exercise = false): bool
     {
         $level = $this->levels?->forUser($userId)['value'] ?? NotificationLevel::NORMAL;
         if ($level === NotificationLevel::NONE || ($level === NotificationLevel::ESSENTIAL && !in_array($kind, self::PUSH_URGENT, true))) {
             return false;
+        }
+        // lot L5-d : un type à plafond propre ne lit que son propre compte du jour (l'exercice n'en a pas)
+        if (isset(self::OWN_DAILY_CAP[$kind])) {
+            return $exercise || $this->log()->countKindToday($userId, $day, $kind) < self::OWN_DAILY_CAP[$kind];
         }
 
         if ($level === NotificationLevel::ALL) {

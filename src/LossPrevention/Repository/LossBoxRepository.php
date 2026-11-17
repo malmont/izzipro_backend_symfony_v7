@@ -241,6 +241,18 @@ class LossBoxRepository extends EntityRepository
      *
      * @return list<array<string, mixed>>
      */
+    /**
+     * Lot L5-d : les avertisseurs du portique qui ne sont pas retirés, d'un boîtier non révoqué, et leur boîtier.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function liveSignals(bool $exercise): array
+    {
+        return $this->db()->fetchAllAssociative(
+            'SELECT d.id, d.serial, d.status, d.last_seen_at, b.status AS box_status, b.last_seen_at AS box_seen FROM loss_device d JOIN loss_box b ON b.id = d.box_id'
+            . " WHERE d.kind = 'signal' AND d.status <> 'retired' AND d.exercise = CAST(? AS boolean) AND b.status <> 'revoked' ORDER BY d.id", [$exercise ? 'true' : 'false']);
+    }
+
     public function livePrinters(bool $exercise): array
     {
         return $this->db()->fetchAllAssociative(

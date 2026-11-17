@@ -48,6 +48,7 @@
     ],
     "@boitier": [
         "GET /api/pertes/boitier/reglages",
+        "GET /api/pertes/boitier/sorties-permises",
         "GET /api/pertes/boitier/travaux",
         "POST /api/pertes/boitier/faits",
         "POST /api/pertes/boitier/inscription",
@@ -957,6 +958,7 @@
         "DELETE /api/gestion/pertes/exercices/boitiers",
         "DELETE /api/gestion/pertes/exercices/pieces",
         "GET /api/gestion/pertes/exercices",
+        "GET /api/gestion/pertes/exercices/alertes",
         "GET /api/gestion/pertes/exercices/bilan",
         "GET /api/gestion/pertes/exercices/boitiers",
         "GET /api/gestion/pertes/exercices/boitiers/{id}",
@@ -989,6 +991,7 @@
     ],
     "pertes.home": [
         "GET /api/gestion/pertes",
+        "GET /api/gestion/pertes/alertes",
         "GET /api/gestion/pertes/bilan",
         "POST /api/gestion/pertes/analyse"
     ],

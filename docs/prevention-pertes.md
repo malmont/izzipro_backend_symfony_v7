@@ -2198,6 +2198,10 @@ choisi de basculer sans attendre, Fable relira ensuite). La liste fait foi pour 
 | L5-a, migration et code | backend `app_v2` | migration `a98654af`, lot : le commit qui la suit (§ 18.8) | `migrations/Version20270126100000.php` et le script `scripts/migrate_all_v2_pertes_l5a.sh` (hors dépôt) ; `LossCounterService` (alerte, vérification, suite), `LossCounterAlertDayRepository`, `LossPosController::after`, le réglage `cashierAlerts` de `LossSettingsService`, `counterAlerts` du bilan (`LossCountService`) et du résumé (`LossDigestService`) |
 | L5-b, migration et code | backend `app_v2` | migration `9212172e`, lot : le commit qui la suit (§ 18.9) | `migrations/Version20270127100000.php` et le script `scripts/migrate_all_v2_pertes_l5b.sh` (hors dépôt) ; `LossFindingWriter::growth`, `LossFindingRepository` (`decide`, `grew`, `keepReference`, `grownAmong`), `LossRuleCatalog::trackedNumber`, la décision et la lecture de `LossFindingReader` (`grewSinceDecision`, historique), l'annonce du résumé (`LossDigestService`) |
 | L5-c, migration et code (**à risque**) | backend `app_v2` | migration `d082b35b`, lot : le commit qui la suit (§ 18.10) | `migrations/Version20270128100000.php` et le script `scripts/migrate_all_v2_pertes_l5c.sh` (hors dépôt) ; `LossOpinionService` (tout : entrée par liste blanche, contrôle de la sortie, unités, délai, numéro de demande), `LossOpinionRepository`, `WriteLossOpinionHandler`, `LossDepotService::outside`, les routes de l'avis et la fiche (`LossFindingReader`) ; relu par un relecteur neuf en trois passes (17/11/2026) |
+| L5-c, lecture légère | backend `app_v2` | `754c3b23` | `GET /constats/{id}/avis` (`LossPreventionController::readOpinion`, `LossPreventionUseCase::opinion`) : aucune consultation journalisée, « nouveau » non éteint |
+| Contrat du boîtier | boîtier, dépôt local | `12cd927` | exemples du canal resynchronisés sur L4-c (zone `back_door`) |
+| L5-d, migration et code (**à risque**) | backend `app_v2` | migration : le commit « migration seule » de L5-d, lot : le commit qui la suit (§ 18.11) | `migrations/Version20270129100000.php` (alertes, sold_changed_at, garde des appareils v3, index de l'ancienne forme retiré) et le script `scripts/migrate_all_v2_pertes_l5d.sh` (hors dépôt) ; `LossExitAlertService`, `LossExitPermitService`, `LossAlertRepository`, `CheckLossExitHandler`, le type `loss_exit` de `GestionNotificationService` et `NotificationLogRepository` (plafond propre, exercice hors plafond), `LossSaleUnitRepository::waitingSales` (web payé seulement, retours écartés, ventes hors ligne) et `rentedBetween`, le canal (`EXIT_SIGNAL`, `exitSignal`, `sorties-permises`), la garde `loss_device_guard_v3`, l'avertisseur au tableau de santé et simulé ; relu par un relecteur neuf en deux passes (17/11/2026) |
+| B8 | boîtier, dépôt local | `4a9ea4d` | `izzibox/portique.py` (sorties permises gardées sur disque, deltas, groupes d'attente et de location), `izzibox/appareils.py` (avertisseur, passage, grâce du comptoir), `izzibox/service.py` (relève des sorties) ; contrat resynchronisé sur L5-d |
 
 Vérifié sous Opus : `LossPreventionZoneTest` et le dossier du module verts ; 21 mutations sur L4-a (20 tuées, une équivalente :
 le rejeu d'une arrivée est déjà bloqué par la clé du fait et par la requête de présence) ; 12 mutations sur B5, toutes tuées.
@@ -2851,3 +2855,69 @@ relire par Fable** (§ 17.12). Migration `Version20270128100000` (3 instructions
 - **Table** `loss_opinion` : un avis courant par constat (remplacé par « Actualiser »), effacé avec l'exercice (par l'effacement de
   l'exercice ; pas de clé étrangère : un `TRUNCATE` de `loss_finding` doit rester refusé par la garde du module). Aide : « L'avis de l'IA » et « Données envoyées à l'IA » dans `docs/aide/pertes.md`.
 - Tests : `LossPreventionOpinionTest`.
+
+### 18.11 Lot L5-d codé : l'alerte à la sortie et le signal du portique (17/11/2026 ; contrat validé par le chef de projet le 17/11/2026)
+
+**Lot à risque** (§ 18.5, fausses alertes) : relecteur neuf et mutations. **Codé sous Opus, à faire relire par Fable** (§ 17.12).
+Migration `Version20270129100000` (12 instructions), script `scripts/migrate_all_v2_pertes_l5d.sh` (contrôle « 1 table, 3 colonnes, 1
+garde, 1 index » : l'index unique a la forme avec `COALESCE(requested_by, 0)`). Trois changements du chef de projet au contrat : une pièce VENDUE ne sonne jamais, quelle que soit la date de la vente ; les
+locations du jour comptent dans les sorties permises ; la pré-alerte passe par la file `email`, jamais par celle de l'IA.
+
+- **La pré-alerte** (`Services/LossExitAlertService`) : chaque lecture `exit` ou `back_door` NEUVE d'une pièce réelle, ni redite ni à
+  l'heure douteuse, part après la validation du lot de faits dans un message différé de 120 s (`CheckLossExitMessage`, file `email`,
+  worker des courriels ; synchrone en essai). Le contrôle est léger et lu DANS LES COMMANDES (deux minutes après un paiement, l'analyse
+  n'est peut-être pas passée) : pièce ni vendue ni retirée ; aucune vente de sa variante encore sans pièce (caisse dans la fenêtre de
+  rattrapage, commandes web dans leur fenêtre, `LossSaleUnitRepository::waitingSales`) ; aucune location du jour (`rentedBetween`, règle de
+  L4-b2). Sinon la pièce rejoint l'alerte de sa zone et de sa minute (`loss_alert`, une ligne verrouillée le temps d'y ajouter la pièce).
+  Rien sans le droit du module ni avec l'analyse arrêtée (notice). Le constat « sortie sans vente » reste jugé après le rattrapage.
+- **La notification** : type `loss_exit` de la gestion, urgent (il part au niveau « Essentiel »), coupable dans « Avancé », disponible
+  avec le droit du module. **Plafond propre** de 3 par jour et par gérant (`GestionNotificationService::OWN_DAILY_CAP`), tenu à part du
+  compte commun du téléphone (une alerte n'empêche pas la notification de stock bas du jour) ; la 3e dit « d'autres sorties : voir la
+  liste » (`loss_exit_last`). Aux administrateurs du site, jamais au compte de la plateforme ; seulement à la naissance de l'alerte (une
+  pièce de plus dans la même minute ne renotifie pas). Hors des heures d'ouverture confirmées, seulement si `exitAlerts.night` (allumé par
+  défaut). Exercice : au seul administrateur qui joue la scène du boîtier simulé, hors plafond. Jamais par courriel.
+- **Jamais nominative** : l'alerte, la notification et la ligne `ALERT_SENT` du journal (sans compte) portent l'article, la zone, l'heure.
+- **Liste en direct** : `GET /api/gestion/pertes/alertes?since=` (et `/exercices/alertes`, ouverte sans le droit du module) →
+  `{ day, exercise, alerts [{ id, at, atLabel, zone, zoneLabel, outOfHours, articles [{ variantId, name, variantLabel, count }] }],
+  pushedToday, cap, notice, serverTime }` ; `since` : ce qui a changé depuis (422 `since: INVALID_DATE`).
+- **Les sorties permises** (`Services/LossExitPermitService`) : `GET /api/pertes/boitier/sorties-permises?since=` (jeton du boîtier,
+  `no-store`) → `{ serverTime, full, sold, released, waiting [{ variantId, count, identifiers }], rentals [{ … }] }`. `sold` : les puces des
+  pièces vendues non revenues, en liste COMPLÈTE sans `since`, en deltas avec (`loss_piece.sold_changed_at`, posé à l'heure RÉELLE de
+  l'entrée dans « vendue » ou de la sortie : retour, retrait, `clock_timestamp()` ; recouvrement de 1 800 s pour une écriture validée en retard ; le boîtier refait
+  une liste complète toutes les heures). `waiting` et `rentals` : par variante, le nombre de ventes encore sans pièce ou d'unités louées du
+  jour, et les puces de ses pièces en service (500 au plus). Les commandes web éligibles sont dans `waiting` (lues dans les commandes).
+- **Le signal** : réglage `exitSignal.enabled` (éteint par défaut), servi au boîtier dans `/reglages` (`exitSignal { enabled,
+  counterGraceSeconds: 600, fullRefreshSeconds: 3600 }`) ; le boîtier décide sur place (puce vendue, sortie permise de sa variante, pièce
+  lue sur le tapis depuis moins de 10 minutes : silence ; sinon il sonne et envoie `EXIT_SIGNAL`). Genre d'appareil `signal` (avertisseur
+  du portique ; garde de la base `loss_device_guard_v3`) ; le fait `EXIT_SIGNAL` ne vient que d'un avertisseur, à la sortie ou à la porte
+  arrière. La fiche d'une « sortie sans vente » porte « le portique a sonné le » et « alerte envoyée le » s'il y a lieu (`signalAt`,
+  `alertAt` dans la preuve) : jamais une preuve de plus, rien ne s'ouvre sur un signal.
+- **Réglages** : `exitAlerts { night, note }`, `exitSignal { enabled, available (un avertisseur en service), note, limit }` ; écrits par
+  le PUT des réglages (422 `MUST_BE_BOOLEAN`). Le texte « ne jamais retenir ni accuser un client sur une alerte ou un signal » part à la
+  liste de l'avocat.
+- **L'avertisseur au tableau de santé** (`LossHealthService::signalLine`) : « en attente » tant que le signal est éteint dans les réglages
+  (il ne sonnerait jamais), « silencieux » si lui ou son boîtier ne répond plus ; étape facultative `exit_signal` de l'assistant
+  d'installation. **L'avertisseur simulé** (`SIM-AVERTISSEUR`) du boîtier simulé sonne quand une pièce d'exercice passe la sortie (scène
+  `zone_exit` : un fait `EXIT_SIGNAL` d'exercice). Le fait a son libellé dans la fiche d'une pièce (« Le portique a sonné »).
+- **Côté boîtier** : le lot B8 du dépôt local (lecture des sorties permises, décision sur place, avertisseur, fait `EXIT_SIGNAL`).
+- **Relecture (relecteur neuf, deux passes)** : seules les commandes web PAYÉES attendent leur pièce (règle de L4-b2), jamais une
+  commande de retour ; une vente hors ligne compte par son heure de synchronisation ; une lecture de plus de 15 minutes (lot rejoué après
+  une coupure), une puce retirée et une pièce revenue n'alertent pas ; les fenêtres partent de l'heure de la lecture ; l'exercice est hors
+  plafond, marqué « Exercice : » et regroupé par gérant (`/exercices/alertes` ne montre que les siens) ; la dernière notification de la
+  nuit garde « boutique fermée » (`loss_exit_night_last`) ; un index unique de l'ancienne forme est retiré par la migration ; un boîtier
+  simulé créé avant l'avertisseur le reçoit à la première scène jouée. Reste signalé, accepté : une pièce revenue juste avant sa lecture
+  puis volée n'alerte pas ; la liste complète `sold` grandit avec les ventes (relue une fois l'heure) ; le plafond se lit sans verrou
+  (une notification de plus au pire, deux lots simultanés).
+- **Mutations** : 29 sur le lot, 28 tuées ; la survivante (lecture redite planifiée par le canal) est équivalente, le contrôle l'écarte.
+- Tests : `LossPreventionExitAlertTest` (5 essais), exemples `canal-sorties-permises`, `-deltas`, `canal-refus-sorties-permises-depuis`.
+
+### 18.12 État du lot L5 au 17/11/2026
+
+- **En ligne, train 97** (`2be21608`) : L4-d, L5-a, L5-b, L5-c, et le correctif de l'essai de l'avis (indépendant de l'ordre de la suite).
+- **L5-d remis au chaperon** : branche `lot-l5d-97` sur `2be21608`, un commit « migration seule » puis le lot. Migration à poser
+  (`scripts/migrate_all_v2_pertes_l5d.sh`) ; `cache:clear` (services, routes) et `messenger:stop-workers` (handler nouveau sur la file
+  `email`) après l'échange.
+- **B8** committé dans le dépôt local du boîtier (`4a9ea4d`) : 86 essais, contrat resynchronisé sur L5-d.
+- **Pas commencés** : L5-e (jeton d'une heure, contrat à envoyer au chef), B9, L5-f (après l'essai du matériel).
+- Le bloc PROVISOIRE du `LossPreventionTestCase` (non committé) rejoue les migrations jusqu'à L5-d (L4-b à L5-c déjà posées au modèle
+  des tests par le train 97 : rejouées sans effet) ; à retirer quand le chaperon a posé L5-d au modèle des tests.

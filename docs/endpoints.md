@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (644)
+## Boutique et commun (647)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -470,6 +470,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/notifications/journal` | ROLE_ADMIN | `Gestion\Controller\GestionNotificationController::journal` |
 | GET | `/api/gestion/notifications/preferences` | ROLE_ADMIN | `Gestion\Controller\GestionNotificationController::preferences` |
 | PATCH | `/api/gestion/notifications/preferences` | ROLE_ADMIN | `Gestion\Controller\GestionNotificationController::updatePreferences` |
+| GET | `/api/gestion/pertes/alertes` | ROLE_ADMIN | `LossPrevention\Controller\LossAlertController::today` |
 | POST | `/api/gestion/pertes/analyse` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::analyse` |
 | GET | `/api/gestion/pertes/bilan` | ROLE_ADMIN | `LossPrevention\Controller\LossCountController::evening` |
 | POST | `/api/gestion/pertes/boitiers/jumeler` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::pair` |
@@ -490,6 +491,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PUT | `/api/gestion/pertes/constats/{id}/decision` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::decide` |
 | GET | `/api/gestion/pertes/constats/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::finding` |
 | GET | `/api/gestion/pertes/constats` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::findings` |
+| GET | `/api/gestion/pertes/exercices/alertes` | ROLE_ADMIN | `LossPrevention\Controller\LossAlertController::exerciseToday` |
 | GET | `/api/gestion/pertes/exercices/bilan` | ROLE_ADMIN | `LossPrevention\Controller\LossCountController::exerciseEvening` |
 | POST | `/api/gestion/pertes/exercices/boitiers/{id}/scenarios` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::exercisePlay` |
 | GET | `/api/gestion/pertes/exercices/boitiers/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::exerciseSheet` |
@@ -654,6 +656,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/pertes/boitier/jumelage` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::pairingDeposit` |
 | GET | `/api/pertes/boitier/reglages` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::settings` |
 | POST | `/api/pertes/boitier/signe-de-vie` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::heartbeat` |
+| GET | `/api/pertes/boitier/sorties-permises` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::permits` |
 | GET | `/api/pertes/boitier/travaux` | PUBLIC_ACCESS | `LossPrevention\Controller\LossBoxChannelController::jobs` |
 | PUT | `/api/platform/agencies/{id}/members` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformAgenciesController::member` |
 | POST | `/api/platform/agencies/{id}/resume` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformAgenciesController::resume` |

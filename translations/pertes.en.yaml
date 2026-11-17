@@ -213,6 +213,8 @@ evidence:
         lastZone: Seen before in the zone
         lastZoneAt: Seen in that zone on
         matchedSaleAt: Matched to the sale of
+        signalAt: The gate sounded on
+        alertAt: Alert sent on
         move: Movement
         zoneMoved: Zone
         movedAt: On
@@ -298,6 +300,11 @@ settings:
         confirmed: 'Hours confirmed: a piece moved outside them, margins included, opens an "outside opening hours" finding.'
         none: 'No opening hours confirmed: the "movement outside opening hours" rule says nothing until you confirm them day by day.'
     legalNotice: 'These settings follow the country and region of your shop. Have them reviewed by a lawyer before using them for a decision about an employee.'
+    exitAlerts:
+        note: 'An alert goes to the administrators'' phones when a tracked item passes the exit without a linked sale, two minutes later. Outside opening hours too, unless you turn the night off. To check: never hold or accuse a customer on an alert.'
+    exitSignal:
+        note: 'The gate sounds when a tracked item passes without being paid. The box decides on the spot, with the list of paid items the platform sends it. A sounder plugged into the box is needed.'
+        limit: 'Limit: an item sold but not read at the counter will make an honest customer sound the gate, like an anti-theft tag left at the till. The till alert reduces this risk. Never hold or accuse a customer on a signal.'
     cashierAlerts:
         note: 'Before payment, the till shows the tracked items in the basket that were not read on the mat. It never blocks the sale.'
     personPatterns:
@@ -453,6 +460,7 @@ pieces:
         PIECE_RETURNED: Back in store
         ZONE_SEEN: Read in a zone
         ZONE_LEFT: Left a zone
+        EXIT_SIGNAL: The gate sounded
     error:
         VARIANT_NOT_FOUND: 'Variant not found.'
         PIECE_NOT_FOUND: 'Piece not found.'
@@ -524,6 +532,11 @@ installation:
             text: 'Optional (pro level). The printer prints the label and writes the tag in one go. Plug it into the box, then start a print job: the first tag written and read back completes this step.'
             verify: Check
             hint: 'No tag printer. Plug the printer into the box.'
+        exit_signal:
+            title: Plug in the gate sounder
+            text: 'Optional. The gate sounds when a tracked item passes without being paid; the box decides on the spot. Plug the sounder into the box, then turn the signal on in the settings. Limit: an item sold but not read at the counter will make an honest customer sound the gate.'
+            verify: Check
+            hint: 'No sounder. Plug the gate sounder into the box.'
         zone_reader:
             title: Plug in the zone antennas
             text: 'Optional. An antenna says when a piece arrives in its zone (stockroom, stockroom door, shop floor, exit) and when it leaves: the piece sheet says where it was last seen. Plug each antenna into the box, give it its zone in the box sheet, then walk a tagged piece past it. The step is done when every antenna has seen a tag.'
@@ -620,6 +633,7 @@ boxes:
         reader: Tag reader
         printer: Tag printer
         camera: Camera
+        signal: Gate sounder
     deviceStatus:
         ok: Working
         down: Down or unplugged
@@ -703,6 +717,7 @@ health:
         mat: Counter mat
         printer: Tag printer
         zone_reader: 'Antenna: %zone%'
+        signal: Gate sounder
     state:
         ok: All good
         pending: Waiting
@@ -735,6 +750,12 @@ health:
             never_read_exercise: 'The simulated mat has not read anything yet. Play the "Piece put on the mat" scenario.'
             no_register: 'This mat is not linked to any cash register. Choose its register in the box sheet.'
             no_terminal: 'No till tablet is bound to register "%register%": the check before payment is off for the cashiers of this register. Bind a tablet to this register (till activation keys).'
+        signal:
+            absent: 'No sounder. Plug the gate sounder into the box: it appears here by itself.'
+            absent_exercise: 'No simulated sounder. Create a simulated box, or play a scene on yours: it gets its sounder.'
+            down: 'The sounder no longer answers. Check its cable on the box.'
+            box_silent: 'The sounder''s box no longer gives signs of life.'
+            setting_off: 'The sounder is plugged in, but the gate signal is off in the settings: it will not sound.'
         printer:
             absent: 'No tag printer. Plug the printer into the box: it shows up here by itself.'
             absent_exercise: 'No simulated printer. Create a simulated box: it has its printer.'
@@ -789,6 +810,8 @@ prints:
         EXERCISE_NO_UNTAGGED_PIECE: 'No practice piece without a tag: create practice pieces first.'
         EXERCISE_NO_PRINTER: 'This simulated box has no printer: create a new one.'
 
+alerts:
+    notice: 'Items to check, not findings: the "exit without a sale" finding is judged later, with the catch-up. No alert designates a person.'
 counter:
     notice:
         one: '1 tracked item not read: place it on the mat.'

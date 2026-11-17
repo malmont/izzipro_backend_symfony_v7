@@ -113,15 +113,16 @@ class GestionNotificationsApiTest extends WebTestCase
         $p = $this->get('/api/gestion/notifications/preferences');
         // lot NOTIF-1 : un sixième type, le point de la semaine (courriel), et le bloc `level` en tête (vérifié par NotificationLevelsTest)
         $this->assertSame(['level', 'kinds'], array_keys($p));
-        $this->assertSame(['low_stock', 'duplicate_invoice', 'cash_critical', 'trip_budget', 'loss_digest', 'weekly_digest'], array_column($p['kinds'], 'kind'));
-        $this->assertSame([true, true, true, true, true, true], array_column($p['kinds'], 'enabled'), 'tout est actif par défaut');
-        $this->assertSame([true, true, true, true, false, true], array_column($p['kinds'], 'available'), 'trip_budget disponible depuis B1a, cash_critical depuis B1b-1 ; loss_digest seulement si le module Prévention des pertes est accordé');
-        $this->assertSame(['push', 'push', 'push', 'push', 'email', 'email'], array_column($p['kinds'], 'channel'), 'canal de chaque type : le résumé de la prévention des pertes et le point de la semaine partent par courriel');
+        // lot L5-d : un septième type, l'alerte de sortie de la prévention des pertes (téléphone, disponible avec le droit du module)
+        $this->assertSame(['low_stock', 'duplicate_invoice', 'cash_critical', 'trip_budget', 'loss_digest', 'weekly_digest', 'loss_exit'], array_column($p['kinds'], 'kind'));
+        $this->assertSame([true, true, true, true, true, true, true], array_column($p['kinds'], 'enabled'), 'tout est actif par défaut');
+        $this->assertSame([true, true, true, true, false, true, false], array_column($p['kinds'], 'available'), 'trip_budget disponible depuis B1a, cash_critical depuis B1b-1 ; loss_digest et loss_exit seulement si le module Prévention des pertes est accordé');
+        $this->assertSame(['push', 'push', 'push', 'push', 'email', 'email', 'push'], array_column($p['kinds'], 'channel'), 'canal de chaque type : le résumé de la prévention des pertes et le point de la semaine partent par courriel');
         $this->assertSame('Articles qui vont manquer', $p['kinds'][0]['label']);
         $this->assertSame('Items about to run out', $this->get('/api/gestion/notifications/preferences?locale=en')['kinds'][0]['label']);
         $u = $this->send('PATCH', '/api/gestion/notifications/preferences', ['kinds' => ['low_stock' => false, 'trip_budget' => false]], 200);
-        $this->assertSame([false, true, true, false, true, true], array_column($u['kinds'], 'enabled'));
-        $this->assertSame([true, true, true, false, true, true], array_column($this->send('PATCH', '/api/gestion/notifications/preferences', ['kinds' => ['low_stock' => true, 'duplicate_invoice' => true]], 200)['kinds'], 'enabled'), 'rétabli ; les autres types gardent leur réglage');
+        $this->assertSame([false, true, true, false, true, true, true], array_column($u['kinds'], 'enabled'));
+        $this->assertSame([true, true, true, false, true, true, true], array_column($this->send('PATCH', '/api/gestion/notifications/preferences', ['kinds' => ['low_stock' => true, 'duplicate_invoice' => true]], 200)['kinds'], 'enabled'), 'rétabli ; les autres types gardent leur réglage');
         $this->request('PATCH', '/api/gestion/notifications/preferences', ['kinds' => ['pigeon' => true, 'low_stock' => 'non']]);
         $this->assertSame([422, ['kinds.pigeon' => 'UNKNOWN_KIND', 'kinds.low_stock' => 'MUST_BE_BOOLEAN']], [$this->status(), $this->body()['fields']]);
         $this->request('PATCH', '/api/gestion/notifications/preferences', ['kinds' => ['a', 'b']]);

@@ -36,6 +36,14 @@ class LossSetting
     #[ORM\Column(name: 'cashier_alerts_enabled', options: ['default' => false])]
     private bool $cashierAlertsEnabled = false;
 
+    /** Lot L5-d : l'alerte de sortie part aussi hors des heures d'ouverture (allumé par défaut) */
+    #[ORM\Column(name: 'exit_alerts_night', options: ['default' => true])]
+    private bool $exitAlertsNight = true;
+
+    /** Lot L5-d : le signal sonore du portique, décidé par le boîtier (éteint par défaut) */
+    #[ORM\Column(name: 'exit_signal_enabled', options: ['default' => false])]
+    private bool $exitSignalEnabled = false;
+
     #[ORM\Column(name: 'retention_findings_months', type: 'smallint', options: ['default' => self::DEFAULT_FINDINGS_MONTHS])]
     private int $retentionFindingsMonths = self::DEFAULT_FINDINGS_MONTHS;
 
@@ -124,6 +132,8 @@ class LossSetting
     public function getStaffNoticeConfirmedBy(): ?int { return $this->staffNoticeConfirmedBy; }
     public function getPersonPatternsEnabled(): ?bool { return $this->personPatternsEnabled; }
     public function getCashierAlertsEnabled(): bool { return $this->cashierAlertsEnabled; }
+    public function getExitAlertsNight(): bool { return $this->exitAlertsNight; }
+    public function getExitSignalEnabled(): bool { return $this->exitSignalEnabled; }
     public function getRetentionFindingsMonths(): int { return $this->retentionFindingsMonths; }
     public function getRetentionConfirmedMonths(): int { return $this->retentionConfirmedMonths; }
     public function getCursorSequence(): ?int { return $this->cursorSequence; }

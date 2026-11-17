@@ -382,6 +382,7 @@ final class CacheTags
         \App\LossPrevention\Entity\LossCounterPresence::class, // lot L3-b1 : présence sur un tapis de comptoir, projection tenue en SQL
         \App\LossPrevention\Entity\LossCounterAlertDay::class, // lot L5-a : compteurs de l'alerte en caisse par poste et par jour, tenus en SQL
         \App\LossPrevention\Entity\LossOpinion::class, // lot L5-c : avis de l'IA sur un constat, lu et écrit en SQL
+        \App\LossPrevention\Entity\LossAlert::class, // lot L5-d : alertes de sortie du jour, lues et écrites en SQL
         \App\LossPrevention\Entity\LossZonePresence::class, // lot L4-a : présence dans une zone (où une pièce a été vue en dernier), projection tenue en SQL
         \App\LossPrevention\Entity\LossSaleUnit::class, // lot L3-b2a : articles suivis vendus et pièces reliées, écrits en SQL par l'analyse
         // lot L3-c : travaux d'impression des puces et mot de passe d'accès rangé chiffré, lus et écrits en SQL par `LossPrintRepository`

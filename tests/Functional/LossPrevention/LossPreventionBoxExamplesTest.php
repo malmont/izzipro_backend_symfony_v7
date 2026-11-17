@@ -106,6 +106,15 @@ class LossPreventionBoxExamplesTest extends LossPreventionTestCase
         ];
         $this->channel('canal-faits', 'POST', '/faits', ['facts' => $facts], $token);
         $this->channel('canal-faits-rejoues', 'POST', '/faits', ['facts' => $facts], $token);
+        // ----- Lot L5-d : les sorties permises. La pièce de l'exemple passe « vendue » (comme l'analyse le ferait), le boîtier lit la liste
+        // complète, puis les deltas ; la pièce revient à son état d'avant
+        $piece = (int) $this->db->fetchOne('SELECT piece_id FROM loss_tag WHERE identifier = ? AND NOT exercise', [$nfc]);
+        $before = (string) $this->db->fetchOne('SELECT status FROM loss_piece WHERE id = ?', [$piece]);
+        $this->db->executeStatement("UPDATE loss_piece SET status = 'sold', sold_changed_at = clock_timestamp() WHERE id = ?", [$piece]);
+        $this->channel('canal-sorties-permises', 'GET', '/sorties-permises', null, $token);
+        $this->channel('canal-sorties-permises-deltas', 'GET', '/sorties-permises?since=' . rawurlencode($this->examples['canal-sorties-permises']['body']['serverTime']), null, $token);
+        $this->channel('canal-refus-sorties-permises-depuis', 'GET', '/sorties-permises?since=hier', null, $token, 422);
+        $this->db->executeStatement('UPDATE loss_piece SET status = ?, sold_changed_at = clock_timestamp() WHERE id = ?', [$before, $piece]);
         // ----- Lot L3-b1 : le tapis de comptoir, relié à un poste, et la question de la caisse avant un paiement
         $this->channel('canal-signe-de-vie-avec-tapis', 'POST', '/signe-de-vie', ['now' => gmdate('Y-m-d\TH:i:s\Z'), 'machine' => self::MACHINE,
             'lastServerTime' => $this->examples['canal-signe-de-vie-appareil-refuse']['body']['serverTime'], 'devices' => $devices], $token);

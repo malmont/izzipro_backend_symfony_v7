@@ -36,6 +36,16 @@
             "availableFrom": null,
             "note": "La caisse montre les articles suivis du panier qui n'ont pas été lus sur le tapis, avant le paiement. Elle ne bloque jamais la vente."
         },
+        "exitAlerts": {
+            "night": true,
+            "note": "Une alerte part sur le téléphone des administrateurs quand un article suivi passe la sortie sans vente reliée, deux minutes après. Hors des heures d'ouverture aussi, sauf si vous coupez la nuit. À vérifier : ne retenez ni n'accusez jamais un client sur une alerte."
+        },
+        "exitSignal": {
+            "enabled": false,
+            "available": false,
+            "note": "Le portique sonne quand un article suivi passe sans être payé. Le boîtier décide sur place, avec la liste des articles payés que la plateforme lui envoie. Il faut un avertisseur branché sur le boîtier.",
+            "limit": "Limite : un article vendu mais non lu au comptoir fera sonner un client honnête, comme un antivol oublié en caisse. L'alerte en caisse réduit ce risque. Ne retenez ni n'accusez jamais un client sur un signal."
+        },
         "video": {
             "allowed": false,
             "enabled": false,

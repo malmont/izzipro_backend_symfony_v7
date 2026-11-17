@@ -1,0 +1,20 @@
+{
+    "request": {
+        "method": "GET",
+        "path": "/api/pertes/boitier/sorties-permises?since=2026-11-17T16%3A44%3A26%2B00%3A00",
+        "headers": {
+            "X-Loss-Box": "b1.2.1795020265.0000000000000000000000000000000000000000000000000000000000000000"
+        }
+    },
+    "status": 200,
+    "body": {
+        "serverTime": "2026-11-17T16:44:26+00:00",
+        "full": false,
+        "sold": [
+            "04FCCD31C3D4E5"
+        ],
+        "released": [],
+        "waiting": [],
+        "rentals": []
+    }
+}

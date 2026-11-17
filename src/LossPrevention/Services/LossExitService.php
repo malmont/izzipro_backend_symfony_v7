@@ -338,6 +338,11 @@ final class LossExitService
         $before = $conn->fetchAssociative(
             "SELECT zone, since FROM loss_zone_presence WHERE piece_id = ? AND zone <> 'exit' AND since <= ? ORDER BY since DESC, id DESC LIMIT 1",
             [(int) $piece['id'], $readAt->format('Y-m-d H:i:s')]);
+        // lot L5-d : le portique a-t-il sonné pour cette pièce (fait d'un avertisseur, ± 2 minutes), une alerte est-elle partie ? Dits, jamais une preuve de plus
+        $window = [$readAt->modify('-2 minutes')->format('Y-m-d H:i:s'), $readAt->modify('+2 minutes')->format('Y-m-d H:i:s')];
+        $signal = $conn->fetchOne("SELECT MIN(occurred_at) FROM loss_piece_event WHERE piece_id = ? AND type = 'EXIT_SIGNAL' AND occurred_at BETWEEN ? AND ?", [(int) $piece['id'], ...$window]);
+        $alert = $conn->fetchOne('SELECT MIN(minute) FROM loss_alert WHERE NOT exercise AND minute BETWEEN ? AND ? AND (pieces)::jsonb @> to_jsonb(CAST(? AS INT))',
+            [$readAt->modify('-1 minute')->format('Y-m-d H:i:s'), $window[1], (int) $piece['id']]);
 
         return ['kind' => LossEvidence::EXIT_READ, 'at' => $readAt, 'refType' => 'piece_event', 'refId' => (int) $read['id'], 'sequence' => null, 'hash' => null,
             'snapshot' => array_filter([
@@ -348,6 +353,8 @@ final class LossExitService
                 'soldAt' => $sale !== null ? LossAuditEntry::iso(new \DateTimeImmutable((string) $sale['sold_at'], new \DateTimeZone('UTC'))) : null,
                 'cashRegisterId' => $sale !== null && $sale['cash_register_id'] !== null ? (int) $sale['cash_register_id'] : null,
                 'saleWaiting' => $waiting ? true : null, // la vente attendait encore sa pièce : elle peut expliquer la sortie
+                'signalAt' => is_string($signal) ? LossAuditEntry::iso(new \DateTimeImmutable($signal, new \DateTimeZone('UTC'))) : null,
+                'alertAt' => is_string($alert) ? LossAuditEntry::iso(new \DateTimeImmutable($alert, new \DateTimeZone('UTC'))) : null,
             ], static fn (mixed $v): bool => $v !== null)];
     }
 

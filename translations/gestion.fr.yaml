@@ -66,6 +66,7 @@ notifications:
         trip_budget: Budget du voyage dépassé
         loss_digest: 'Prévention des pertes : résumé du jour par courriel'
         weekly_digest: 'Point de la semaine par courriel'
+        loss_exit: 'Prévention des pertes : article à la sortie sans vente'
     # Lot NOTIF-1 : niveaux des courriels de suivi (écran « Notifications »)
     levels:
         site: 'Comme le site'
@@ -98,6 +99,21 @@ notifications:
     cash_critical:
         title: Trésorerie basse
         body: 'Le solde prévu descend à %amount% le %date%.'
+    loss_exit:
+        title: 'Article à la sortie, à vérifier'
+        body: '%zone%, %time% : un article suivi passe sans vente reliée. À vérifier, sans retenir ni accuser personne.'
+    loss_exit_last:
+        title: 'Article à la sortie, à vérifier'
+        body: '%zone%, %time% : un article suivi passe sans vente reliée. D''autres sorties aujourd''hui : voir la liste dans l''application.'
+    loss_exit_night:
+        title: 'Article à la sortie, hors des heures d''ouverture'
+        body: '%zone%, %time%, boutique fermée : un article suivi passe sans vente reliée. À vérifier, sans retenir ni accuser personne.'
+    loss_exit_night_last:
+        title: 'Article à la sortie, hors des heures d''ouverture'
+        body: '%zone%, %time%, boutique fermée : un article suivi passe sans vente reliée. D''autres sorties aujourd''hui : voir la liste dans l''application.'
+    loss_exit_exercise:
+        title: 'Exercice : article à la sortie'
+        body: 'Exercice, %zone%, %time% : un article simulé passe la sortie. Rien de réel.'
 # Budget par poste et voyages d'achat (lot B1a, 11/11/2026, docs/budgets-gestion.md)
 budget:
     categories:

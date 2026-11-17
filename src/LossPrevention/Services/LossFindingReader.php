@@ -422,7 +422,9 @@ class LossFindingReader
             // lot L4-b : la lecture à la sortie, l'antenne, la dernière zone d'avant, et la vente qui l'a rattrapée s'il y en a une
             LossEvidence::EXIT_READ => ['pieceNumber' => $text('pieceNumber'), 'readAt' => $when('readAt'), 'antenna' => $text('device'),
                 'lastZone' => isset($s['lastZone']) && $this->texts->has('boxes.zone.' . $s['lastZone'], $locale) ? $this->texts->t('boxes.zone.' . $s['lastZone'], $locale) : null,
-                'lastZoneAt' => $when('lastZoneAt'), 'matchedSaleAt' => $when('soldAt')],
+                'lastZoneAt' => $when('lastZoneAt'), 'matchedSaleAt' => $when('soldAt'),
+                // lot L5-d : « le portique a sonné » et « alerte envoyée », s'il y a lieu
+                'signalAt' => $when('signalAt'), 'alertAt' => $when('alertAt')],
             // lot L4-c : un mouvement de zone d'une pièce (arrivée ou départ), son article, son antenne
             LossEvidence::ZONE_MOVE => ['pieceNumber' => $text('pieceNumber'), 'article' => $text('article'),
                 'move' => isset($s['move']) && in_array($s['move'], ['ZONE_SEEN', 'ZONE_LEFT'], true) ? $this->texts->t('evidence.move.' . $s['move'], $locale) : null,

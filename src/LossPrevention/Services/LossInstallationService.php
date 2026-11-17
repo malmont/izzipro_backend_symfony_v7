@@ -43,7 +43,7 @@ class LossInstallationService
         'first_piece' => null, // prouvée par l'état : une pièce porte une puce
     ];
     /** Étapes facultatives, rendues à part : elles ne comptent pas dans l'avancement */
-    public const OPTIONAL = ['box', 'counter_mat', 'tag_printer', 'zone_reader', 'opening_hours'];
+    public const OPTIONAL = ['box', 'counter_mat', 'tag_printer', 'zone_reader', 'opening_hours', 'exit_signal'];
     /** Code imprimé sur l'étiquette d'essai : sous le préfixe réservé aux documents de la caisse, il ne peut désigner aucun article */
     public const TEST_BARCODE = 'IZ-ESSAI-ETIQUETTE';
 
@@ -249,7 +249,9 @@ class LossInstallationService
             // `opening_hours` (lot L4-c) : faite quand le gérant a confirmé ses heures d'ouverture (la porte arrière est une antenne de
             // zone : `zone_reader` la vérifie comme les autres)
             'opening_hours' => LossDepotService::hours($this->emProvider->getEntityManager()->getConnection()) !== null
-                ? ['state' => 'ok', 'hint' => null] : ['state' => 'absent', 'hint' => $this->texts->t('installation.steps.opening_hours.hint', $locale)]];
+                ? ['state' => 'ok', 'hint' => null] : ['state' => 'absent', 'hint' => $this->texts->t('installation.steps.opening_hours.hint', $locale)],
+            // `exit_signal` (lot L5-d) : faite quand un avertisseur est branché, en marche, et le signal allumé dans les réglages
+            'exit_signal' => $this->health->kindState('signal', $locale, $exercise)];
     }
 
     /**
