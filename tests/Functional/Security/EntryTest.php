@@ -301,6 +301,11 @@ class EntryTest extends WebTestCase
         }
         $open = array_values(array_unique($open));
         sort($open);
+        if (is_string(getenv('REGENERER_ENTREE')) && getenv('REGENERER_ENTREE') !== '') {
+            // lot AG-3c : régénérer la liste, puis la RELIRE avant de la copier dans tests/Fixtures/ecrans/entree-agence.json
+            file_put_contents(getenv('REGENERER_ENTREE'), json_encode($open, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) . "\n");
+            $this->markTestIncomplete('Liste écrite dans ' . getenv('REGENERER_ENTREE') . ' : la relire, puis la copier dans tests/Fixtures/ecrans/entree-agence.json');
+        }
         $this->assertSame(json_decode((string) file_get_contents(__DIR__ . '/../../Fixtures/ecrans/entree-agence.json'), true), $open,
             'routes ouvertes à une agence dans le site de son client : tests/Fixtures/ecrans/entree-agence.json, à régénérer et RELIRE');
         // la décision ne dépend que du chemin décodé : un encodage ou une casse différente ne rouvre rien

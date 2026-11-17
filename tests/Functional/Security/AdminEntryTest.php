@@ -73,7 +73,7 @@ class AdminEntryTest extends WebTestCase
 
         // « Entrer » : l'entrée est ouverte et tracée ; le laissez-passer part dans le CORPS d'un formulaire POST, jamais dans une adresse
         $passage = $this->page('POST', '/admin/contextes/entrer', MV_TEST_TENANT_HOST, ['_token' => $token, 'site' => MV_TEST_TENANT2_CODE]);
-        $this->assertSame('no-store', explode(',', (string) $this->client->getResponse()->headers->get('Cache-Control'))[0]);
+        $this->assertStringContainsString('no-store', (string) $this->client->getResponse()->headers->get('Cache-Control'));
         $crawler = $this->client->getCrawler();
         $this->assertSame('/admin/entree?tenant=' . MV_TEST_TENANT2_CODE, $crawler->filter('form#entree')->attr('action'));
         $this->assertSame('post', strtolower((string) $crawler->filter('form#entree')->attr('method')));
@@ -96,10 +96,12 @@ class AdminEntryTest extends WebTestCase
         $this->assertStringNotContainsString('Commandes', $this->menu($welcome), 'le menu suit le registre : pas de ventes');
 
         // écrans : construction ouverte (sans les champs sensibles), ventes et réglages sensibles fermés en page HTML
-        $products = $this->page('GET', '/admin?crudAction=index&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\ProductCrudController'), MV_TEST_TENANT2_HOST);
-        $this->assertStringContainsString('data-column="name"', $products);
-        $this->assertStringNotContainsString('data-column="purchasePrice"', $products, 'le coût d\'achat est retiré');
-        $this->assertStringNotContainsString('data-column="coefficientMultiplier"', $products);
+        $this->page('GET', '/admin?crudAction=index&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\ProductCrudController'), MV_TEST_TENANT2_HOST);
+        // le formulaire de création montre tous les champs, même sans article : le coût d'achat et le coefficient n'y sont plus
+        $form = $this->page('GET', '/admin?crudAction=new&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\ProductCrudController'), MV_TEST_TENANT2_HOST);
+        $this->assertStringContainsString('Product[name]', $form);
+        $this->assertStringNotContainsString('Product[purchasePrice]', $form, 'le coût d\'achat est retiré');
+        $this->assertStringNotContainsString('Product[coefficientMultiplier]', $form);
         foreach (['OrderCrudController', 'UserCrudController', 'EmailConfigurationCrudController', 'CurrencyCrudController', 'AiCreditSettingCrudController', 'InventoryMovementsCrudController'] as $closed) {
             $this->client->request('GET', 'https://' . MV_TEST_TENANT2_HOST . '/admin?crudAction=index&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\' . $closed), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
             $this->assertSame(403, $this->client->getResponse()->getStatusCode(), $closed);
@@ -107,6 +109,15 @@ class AdminEntryTest extends WebTestCase
         }
         $this->client->request('GET', 'https://' . MV_TEST_TENANT2_HOST . '/admin/contextes', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
         $this->assertSame(403, $this->client->getResponse()->getStatusCode(), 'le sélecteur n\'est pas ouvert à l\'opérateur');
+        // pages dont l'équivalent de l'API est fermé : chiffres et gestes de module, paiements comptés, journal des accès, ouvrir la boutique d'un
+        // site rattaché (seule l'agence qui l'a créé l'ouvre)
+        foreach (['GET /admin/mon-site', 'POST /admin/mon-site/essayer/module.pos', 'GET /admin/configuration', 'POST /admin/configuration/courriel-essai', 'GET /admin/acces-plateforme', 'POST /admin/ouverture-du-site/ouvrir'] as $closed) {
+            [$method, $path] = explode(' ', $closed);
+            $this->client->request($method, 'https://' . MV_TEST_TENANT2_HOST . $path, [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
+            $this->assertSame(403, $this->client->getResponse()->getStatusCode(), $closed);
+        }
+        $this->assertStringNotContainsString('Mon site : pilotage', $this->menu($welcome), 'une page fermée quitte aussi le menu');
+        $this->page('GET', '/admin/ouverture-du-site', MV_TEST_TENANT2_HOST); // la liste d'ouverture reste ouverte
         $this->client->request('GET', 'https://' . MV_TEST_TENANT2_HOST . '/admin?crudAction=index&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\Inconnu'), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
         $this->assertSame(403, $this->client->getResponse()->getStatusCode(), 'un écran inconnu du registre est fermé');
 

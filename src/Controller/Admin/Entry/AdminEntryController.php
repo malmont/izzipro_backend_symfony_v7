@@ -78,6 +78,8 @@ class AdminEntryController extends AbstractController
         $response = $this->render('admin/entree/passage.html.twig', ['action' => AdminPassAuthenticator::PATH . '?tenant=' . rawurlencode($opened['site']), 'pass' => $pass,
             'site' => $opened['site'], 'operator' => $opened['operator']]);
         $response->headers->set('Cache-Control', 'no-store');
+        // la session ouverte ferait réécrire l'en-tête par Symfony (« private, max-age=0 ») : le laissez-passer ne se garde nulle part
+        $response->headers->set(\Symfony\Component\HttpKernel\EventListener\AbstractSessionListener::NO_AUTO_CACHE_CONTROL_HEADER, 'true');
         $response->headers->set('Referrer-Policy', 'no-referrer');
 
         return $response;

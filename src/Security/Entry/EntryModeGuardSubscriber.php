@@ -57,6 +57,11 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         ['#stripe#i', [], 'payment'],
         // les gestes de module (demander, essayer, allumer, éteindre) ; `PUT /api/site/features` se filtre par ses clés (bodyRefused)
         ['#^/api/site/features/[^/]+/(request|trial|enable|disable)$#', [], 'modules'],
+        // lot AG-3c : pages d'EasyAdmin dont l'équivalent de l'API est fermé ou filtré pour l'agence. « Mon site » montre les chiffres
+        // des étapes de la gestion et porte les gestes de module et les réglages sans filtre de clé ; « Configuration » compte les paiements
+        // par carte et envoie un courriel d'essai par le serveur d'envoi ; « Accès de la plateforme » est le journal des accès du site
+        ['#^/admin/(mon-site|configuration)(/|$)#', [], 'figures'],
+        ['#^/admin/acces-plateforme(/|$)#', [], 'journal'],
     ];
     /** Champs du coût d'un article, jamais écrits par l'opérateur (le coût d'achat, et le coût de la commande fournisseur que lisent la
      *  marge, la valeur du stock et le résultat de période) */
@@ -253,7 +258,10 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
     /** Ouvrir ou fermer la boutique : seulement l'agence qui a CRÉÉ le site (un site rattaché en service ne se ferme pas par l'agence) */
     private function storefrontRefused(Request $request, string $path, ExternalOperator $operator): ?string
     {
-        return preg_match('#^/api/site/storefront/(open|close)$#', $path) === 1 && $operator->getOrigin() !== 'created' ? 'storefront' : null;
+        $gesture = preg_match('#^/api/site/storefront/(open|close)$#', $path) === 1
+            || (preg_match('#^/admin/ouverture-du-site/(ouvrir|refermer)$#', $path) === 1 && $request->isMethod('POST')); // lot AG-3c : le même geste dans EasyAdmin
+
+        return $gesture && $operator->getOrigin() !== 'created' ? 'storefront' : null;
     }
 
     public function onKernelResponse(ResponseEvent $event): void

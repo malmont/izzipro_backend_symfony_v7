@@ -1,8 +1,12 @@
-{% extends '@EasyAdmin/page/content.html.twig' %}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
 {# Lot AG-3c : l'accueil de l'opérateur d'une agence entrée (le tableau des ventes du site lui reste fermé) #}
-{% block page_title %}Construction du site {{ site }}{% endblock %}
+{% block title %}Construction du site {{ site }}{% endblock %}
+{% block content_title %}Construction du site {{ site }}{% endblock %}
 
-{% block main %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}<div class="container py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block panel %}
     <div class="alert alert-info">
         Vous êtes entré dans ce site en tant que <strong>{{ operator }}</strong>{% if expiresAt %}, jusqu'à {{ expiresAt|date('H:i', 'UTC') }} (UTC){% endif %}.
         Seuls les écrans de construction et d'entretien des modules actifs vous sont ouverts ; chaque écriture est tracée au journal du site.

@@ -1,8 +1,12 @@
-{% extends '@EasyAdmin/page/content.html.twig' %}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
 {# Lots AG-ASSIST et AG-3c : l'assistance de l'agence, demandée et fermée par le commerçant #}
-{% block page_title %}Assistance de mon agence{% endblock %}
+{% block title %}Assistance de mon agence{% endblock %}
+{% block content_title %}Assistance de mon agence{% endblock %}
 
-{% block main %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}<div class="container py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block panel %}
     {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
     <p class="text-muted">L'agence qui gère votre site ne voit jamais vos ventes ni vos clients. Pour un coup de main sur une section, ouvrez-la lui une heure : en consultation (par défaut) ou en modification. Restent toujours fermés : les clés, Stripe et les paiements, les comptes, les exports. Chaque page qu'elle consulte est écrite au journal (« Accès extérieurs »).</p>
     {% if canAsk %}

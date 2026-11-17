@@ -646,6 +646,13 @@ class DashboardController extends AbstractDashboardController
                 $section = $entry;
                 continue;
             }
+            // lot AG-3c : pour l'opérateur d'une agence entrée, une page fermée par la garde du mode (chemin fermé) ne s'affiche pas non plus
+            if ($this->getUser() instanceof \App\Security\Entry\ExternalOperator && $entry->getAsDto()->getType() === \EasyCorp\Bundle\EasyAdminBundle\Dto\MenuItemDto::TYPE_ROUTE) {
+                $path = $this->router?->getRouteCollection()->get((string) $entry->getAsDto()->getRouteName())?->getPath();
+                if ($path === null || \App\Security\Entry\EntryModeGuardSubscriber::decision('GET', $path)[0] !== \App\Security\Entry\EntryModeGuardSubscriber::OPEN) {
+                    continue;
+                }
+            }
             if ($screens !== null) {
                 $target = $this->menuTarget($entry);
                 // une page de la personne connectée (`@compte` : le sélecteur de sites) : jamais pour l'opérateur d'une agence entrée
