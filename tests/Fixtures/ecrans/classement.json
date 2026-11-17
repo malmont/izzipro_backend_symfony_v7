@@ -931,6 +931,9 @@
         "PATCH /api/periodes/{id}",
         "POST /api/createcollections"
     ],
+    "pertes.alertes": [
+        "GET /api/gestion/pertes/alertes"
+    ],
     "pertes.boitiers": [
         "GET /api/gestion/pertes/boitiers",
         "GET /api/gestion/pertes/boitiers/{id}",
@@ -992,7 +995,6 @@
     ],
     "pertes.home": [
         "GET /api/gestion/pertes",
-        "GET /api/gestion/pertes/alertes",
         "GET /api/gestion/pertes/bilan",
         "POST /api/gestion/pertes/analyse"
     ],

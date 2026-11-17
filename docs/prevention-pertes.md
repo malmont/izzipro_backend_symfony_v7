@@ -2908,6 +2908,10 @@ locations du jour comptent dans les sorties permises ; la pré-alerte passe par 
   d'installation. **L'avertisseur simulé** (`SIM-AVERTISSEUR`) du boîtier simulé sonne quand une pièce d'exercice passe la sortie (scène
   `zone_exit` : un fait `EXIT_SIGNAL` d'exercice). Le fait a son libellé dans la fiche d'une pièce (« Le portique a sonné »).
 - **Côté boîtier** : le lot B8 du dépôt local (lecture des sorties permises, décision sur place, avertisseur, fait `EXIT_SIGNAL`).
+- **Suites de la mise en ligne (17/11/2026, demandes du chef de projet)** : l'écran `pertes.alertes` (registre des écrans, famille des
+  pertes, fermé aux agences ; `ConsoleScreens`, thème accueil ; guide qui renvoie à la section « L'alerte à la sortie et le portique » de
+  l'aide `pertes`) ; le retard RÉEL de chaque contrôle (`CheckLossExitMessage::dueAt`) écrit au journal du serveur par
+  `CheckLossExitHandler` (`info`, `warning` au-delà de 60 s) : la décision d'une file à elle se prendra sur ces chiffres.
 - **Relecture (relecteur neuf, deux passes)** : seules les commandes web PAYÉES attendent leur pièce (règle de L4-b2), jamais une
   commande de retour ; une vente hors ligne compte par son heure de synchronisation ; une lecture de plus de 15 minutes (lot rejoué après
   une coupure), une puce retirée et une pièce revenue n'alertent pas ; les fenêtres partent de l'heure de la lecture ; l'exercice est hors

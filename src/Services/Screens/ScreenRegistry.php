@@ -98,6 +98,7 @@ final class ScreenRegistry
         // --- Prévention des pertes
         'pertes.home' => self::P, 'pertes.constats' => self::P, 'pertes.constat' => self::P, 'pertes.regles' => self::P, 'pertes.reglages' => self::P,
         'pertes.exercices' => self::P, 'pertes.pieces' => self::P, 'pertes.installation' => self::P, 'pertes.boitiers' => self::P, 'pertes.impressions' => self::P,
+        'pertes.alertes' => self::P, // lot L5-d : les alertes de sortie du jour (demande du chef de projet, 17/11/2026)
         // --- Plateforme (web)
         'plateforme.pilotage' => ['family' => self::PLATEFORME, 'module' => null, 'roles' => ['ROLE_SUPER_ADMIN']],
         'plateforme.agences' => ['family' => self::PLATEFORME, 'module' => null, 'roles' => ['ROLE_SUPER_ADMIN']],
@@ -202,6 +203,7 @@ final class ScreenRegistry
         ['#^/api/gestion/pertes/(pieces|puces|comptages)(/|$)#', 'pertes.pieces'], // lot L4-d : les comptages vont avec les pièces
         ['#^/api/gestion/pertes/(installation|materiel)(/|$)#', 'pertes.installation'],
         ['#^/api/gestion/pertes/(boitiers|postes|sante)(/|$)#', 'pertes.boitiers'],
+        ['#^/api/gestion/pertes/alertes(/|$)#', 'pertes.alertes'], // (celles de l'exercice restent à `pertes.exercices`)
         ['#^/api/gestion/pertes(/|$)#', 'pertes.home'],
         // --- gestion
         ['#^/api/gestion/codes-barres(/|$)#', 'codes-barres'],

@@ -633,6 +633,22 @@ pertes_installation:
             label: 'Without hardware'
             text: 'In practice mode, tags are simulated: you follow the whole path before buying anything.'
     next: 'Start with the test label, in your printer''s format.'
+pertes_alertes:
+    purpose: 'Today''s exit alerts: a tracked item went through the exit or the back door without a linked sale. An alert is to be checked; it names nobody.'
+    points:
+        minute:
+            label: 'One alert per minute'
+            text: 'Items that went through the same exit in the same minute make a single alert: you see how many of each item.'
+        plafond:
+            label: 'Three notifications a day'
+            text: 'Your phone receives at most three alerts a day; the next ones stay in this list.'
+        nuit:
+            label: 'Outside opening hours'
+            text: 'An alert outside opening hours says so. You can turn off its night notifications in the settings.'
+        jamais-accuser:
+            label: 'Never accuse'
+            text: 'Never hold or accuse a customer on an alert or on the gate sounding.'
+    next: 'To learn more: the section « L''alerte à la sortie et le portique » of the loss prevention help.'
 pertes_boitiers:
     purpose: 'The shop boxes: the small machine that links the counter mat, the readers, the tag printer and the camera to the platform.'
     points:

@@ -633,6 +633,22 @@ pertes_installation:
             label: 'Sans matériel'
             text: 'En mode exercice, les puces sont simulées : vous suivez tout le parcours avant d''acheter quoi que ce soit.'
     next: 'Commencez par l''étiquette d''essai, dans le format de votre imprimante.'
+pertes_alertes:
+    purpose: 'Les alertes de sortie du jour : un article suivi est passé par la sortie ou la porte arrière sans vente reliée. Une alerte se vérifie ; elle ne désigne personne.'
+    points:
+        minute:
+            label: 'Une alerte par minute'
+            text: 'Les articles passés dans la même minute, par la même sortie, forment une seule alerte : vous voyez combien de chaque article.'
+        plafond:
+            label: 'Trois notifications par jour'
+            text: 'Votre téléphone reçoit au plus trois alertes par jour ; les suivantes restent dans cette liste.'
+        nuit:
+            label: 'Hors des heures'
+            text: 'Une alerte hors des heures d''ouverture le dit. Vous pouvez couper ses notifications de nuit dans les réglages.'
+        jamais-accuser:
+            label: 'Ne jamais accuser'
+            text: 'Ne retenez ni n''accusez jamais un client sur une alerte ou sur la sonnerie du portique.'
+    next: 'Pour en savoir plus : la section « L''alerte à la sortie et le portique » de l''aide de la prévention des pertes.'
 pertes_boitiers:
     purpose: 'Les boîtiers de la boutique : la petite machine qui relie à la plateforme le tapis de comptoir, les lecteurs, l''imprimante à puce et la caméra.'
     points:

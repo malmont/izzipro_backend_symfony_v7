@@ -13,6 +13,9 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 #[AsMessageHandler]
 final class CheckLossExitHandler
 {
+    /** Au-delà, le retard du contrôle est un avertissement */
+    public const LATE_SECONDS = 60;
+
     public function __construct(private readonly TenantConnectionManager $tenantManager, private readonly TenantEntityManagerProvider $emProvider, private readonly LossExitAlertService $alerts, private readonly LoggerInterface $logger)
     {
     }
@@ -26,6 +29,13 @@ final class CheckLossExitHandler
             return;
         }
         $this->emProvider->switchTenant((string) $tenant['dbname'], $message->tenantCode);
+        // le retard RÉEL du contrôle, à chaque passage (demande du chef de projet, 17/11/2026) : de quoi décider, chiffres en main, si
+        // l'alerte mérite une file à elle. En avertissement au-delà de 60 s ; jamais une donnée du site (le site, le nombre de secondes)
+        if ($message->dueAt !== null) {
+            $late = max(0, time() - $message->dueAt);
+            $this->logger->log($late > self::LATE_SECONDS ? 'warning' : 'info', sprintf('Prévention des pertes : contrôle d\'alerte de sortie avec %d s de retard (file email).', $late),
+                ['tenant' => $message->tenantCode, 'lateSeconds' => $late, 'exercise' => $message->requestedBy !== null]);
+        }
         try {
             $this->alerts->check($message->eventId, $message->requestedBy);
         } catch (\Throwable $e) {
