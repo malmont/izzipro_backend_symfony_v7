@@ -74,6 +74,9 @@ class TestSiteDataSeeder
             return $this->report;
         }
         $created = $this->orders($customers);
+        // les commandes créées sont relues de la base (paiements, lignes) : les objets gardés en mémoire depuis leur création n'ont pas
+        // toutes leurs collections remplies
+        $this->emProvider->getEntityManager()->clear();
         $this->ship($created);
         $this->cancelOne($created);
         $this->rentals($customers);
@@ -190,6 +193,7 @@ class TestSiteDataSeeder
         if ($candidate === null) {
             return;
         }
+        $this->emProvider->getEntityManager()->clear();
         $response = $this->cancelOrder->execute($candidate);
         $this->report[] = $response->getStatusCode() < 300 ? 'Annulation : 1 commande annulée (stock rendu)' : 'Annulation : refusée (' . $response->getStatusCode() . ')';
     }
@@ -212,7 +216,10 @@ class TestSiteDataSeeder
             $start = (new \DateTimeImmutable(sprintf('+%d days', 7 + 7 * $n)))->setTime(10, 0);
             $item = ['productVariantId' => (int) $rental['variant'], 'quantity' => 1,
                 'booking' => ['start' => $start->format('Y-m-d\TH:i:s'), 'end' => $start->modify('+1 day')->format('Y-m-d\TH:i:s'), 'rentalPackId' => (int) $rental['pack']]];
-            $customer = $customers[$n];
+            $customer = $this->emProvider->getEntityManager()->find(User::class, (int) $customers[$n % count($customers)]->getId()); // relu : la mémoire a été vidée
+            if (!$customer instanceof User) {
+                continue;
+            }
             try {
                 $result = $this->createOrder->execute(new CreateOrderDTO((int) $customer->getId(), 1, self::PAYMENT_METHOD, $customer->getPrimaryAddress()?->getId(), $this->fixedCarrier(), 1, [$item]), $customer);
                 $made += $result instanceof Order ? 1 : 0;
