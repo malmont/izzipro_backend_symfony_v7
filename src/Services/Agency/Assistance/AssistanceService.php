@@ -28,7 +28,10 @@ class AssistanceService
     public function __construct(
         private readonly AssistanceGrantRepository $grants,
         private readonly AgencyRepository $agencies,
-        private readonly AssistanceMailer $mailer,
+        // construit seulement au premier courriel : la garde du mode (abonné de chaque requête) lit ce service, le courriel n'a pas à
+        // naître à chaque requête (sinon l'envoi des courriels est construit trop tôt, et ne peut plus être remplacé par un essai)
+        #[\Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure(AssistanceMailer::class)]
+        private readonly \Closure $mailer,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -71,7 +74,7 @@ class AssistanceService
         }
         $notified = 0;
         try {
-            $notified = $this->mailer->notify($agency, $row);
+            $notified = ($this->mailer)()->notify($agency, $row);
         } catch (\Throwable $e) {
             $this->logger->error('Assistance : prévenir l\'agence a échoué (' . $e::class . ').');
         }

@@ -178,6 +178,25 @@ class AssistanceTest extends WebTestCase
         $this->assertNotSame(200, $this->call('GET', '/api/orders', $operator)->getStatusCode(), 'l\'opérateur d\'une agence détachée ne lit plus rien');
     }
 
+    /** PAS DE LECTURE SANS TRACE : si la ligne du journal ne s'écrit pas, la requête n'est pas servie (503) et l'heure ne part pas */
+    public function testARequestThatCannotBeTracedIsNotServed(): void
+    {
+        $merchant = $this->account(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'commercant', ['ROLE_ADMIN'], 'Claire');
+        [, $operator] = $this->agencyInside();
+        $this->assertSame(201, $this->call('POST', '/api/site/assistance', $merchant, ['section' => 'commandes'])->getStatusCode());
+        $id = (int) $this->grantOf('commandes')['id'];
+        // la base du site refuse, le temps de l'essai, toute ligne « assistance_read » de son journal
+        $this->pdo(MV_TEST_TENANT2_DB)->exec("ALTER TABLE content_audit_log ADD CONSTRAINT essai_assist_trace CHECK (action <> 'assistance_read') NOT VALID");
+        try {
+            $refused = $this->call('GET', '/api/orders', $operator);
+            $this->assertSame([503, 'assistance_trace'], [$refused->getStatusCode(), json_decode((string) $refused->getContent(), true)['reason'] ?? null]);
+            $this->assertNull($this->grant($id)['started_at'], 'une requête non tracée n\'ouvre pas la fenêtre');
+        } finally {
+            $this->pdo(MV_TEST_TENANT2_DB)->exec('ALTER TABLE content_audit_log DROP CONSTRAINT IF EXISTS essai_assist_trace');
+        }
+        $this->assertNotSame(503, $this->call('GET', '/api/orders', $operator)->getStatusCode(), 'la trace revenue, la section se lit');
+    }
+
     /** Gestion en « modifier » : une écriture de la liste blanche passe, la console IA (unités du commerçant) non ; pertes : lecture seule */
     public function testTheManagementWhitelistAndTheLossPreventionReadOnly(): void
     {
