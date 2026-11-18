@@ -37,7 +37,8 @@ signalement d'acheteur ne remonte jamais à la plateforme, un bogue de la platef
 - `platform_incident_event` : occurrences détaillées (bornées à N par incident, les plus anciennes purgées), `occurred_at`, `user_hash`
   (empreinte, jamais le courriel), `request_id`.
 - `platform_bug_report` : signalement d'un utilisateur : `tenant_code`, `app`, `app_version`, `screen`, `description`, `screenshot_path`
-  (stockage privé, 5 Mo), `reporter_kind` (`site_admin`, `cashier`, `partner`, `customer`), `reporter_hash`, `status` (`received`,
+  (stockage privé, 5 Mo), `reporter_kind` (`site_admin`, `cashier`, `partner`, `customer` ; codé au lot INC-3 : `site_admin`, `manager`,
+  `cashier`, `support_agent`, et `partner` à INC-5, jamais `customer`), `reporter_hash`, `status` (`received`,
   `in_progress`, `fixed`, `wont_fix`), `incident_id` (nullable, rattaché à un incident), `answer` (texte montré au signaleur), dates.
 - Purge : événements au-delà de 90 jours, incidents `fixed` ou `ignored` au-delà d'un an ; signalements gardés.
 
@@ -102,7 +103,8 @@ aux utilisateurs.
    Chaque incident porte le site, l'application, la version, la gravité, une SIGNATURE qui regroupe les doublons (l'empreinte du modèle,
    calculée par le serveur, jamais fournie telle quelle par la source) et un état (`new`, `acknowledged`, `fixed`, `ignored`).
 3. **Escalade depuis l'Assistance** : un ticket du module Assistance (`docs/assistance.md`) qui est en fait un bogue s'attribue d'un geste
-   à la plateforme (« Transmettre à l'équipe technique », agent du site) : un incident `app: support`, lié au ticket d'origine
+   à la plateforme (« Transmettre à l'équipe technique », agent du site) : un incident `app: support` (codé au lot INC-3 comme un
+   SIGNALEMENT `app: support`, décision du chef : il appelle une réponse publique et ses états), lié au ticket d'origine
    (`support_ticket_id` + site), sans copie du fil ni des pièces jointes du client (un résumé écrit par l'agent, masqué comme DON-1). Le
    commerçant lit seulement l'ÉTAT sur son ticket (« transmis à l'équipe technique », « corrigé », « ne sera pas corrigé ») et la réponse
    publique de la plateforme ; jamais l'onglet, ni la note interne, ni les autres sites. Ceci précise la règle « un signalement d'acheteur
@@ -202,8 +204,12 @@ application, version, écran, description masquée, contexte, capture, genre et 
 `fixed` / `wont_fix`, incident rattaché, réponse publique, note interne, ticket d'Assistance d'origine, dates ; un seul signalement ouvert
 par ticket). Code : `src/Incident/` (`PlatformBugReportService`, `BugReportScreenshotStorage`, `BugReportMailer`).
 
-- **Qui signale** : le PERSONNEL du site seul (règle `^/api/incidents/bug-reports$` : `ROLE_ADMIN`, `ROLE_POS_MANAGER`, `ROLE_USER_POS`) ;
-  genre tiré des rôles (`site_admin`, `manager`, `cashier`), jamais du corps. Un client reçoit 403 : il passe par l'Assistance du commerçant.
+- **Qui signale** (décision du chef du 18/11/2026, alignée sur le code) : EXACTEMENT les comptes qui ont `ROLE_ADMIN` (genre `site_admin` ;
+  c'est aussi le compte du gérant dans l'application de gestion, web et MAUI), `ROLE_POS_MANAGER` (`manager`) ou `ROLE_USER_POS` (`cashier`) :
+  règle `^/api/incidents/bug-reports$` d'`access_control`, puis le genre tiré des rôles par le service, jamais du corps. Tout autre compte
+  reçoit 403 : un client (`ROLE_USER_INTERNET`) s'adresse à l'Assistance du commerçant ; un compte de l'Assistance seul (`ROLE_SUPPORT`,
+  confiné à `/api/support`) passe par l'**escalade** d'un ticket ci-dessous ; l'**agence** entrée dans un site viendra au lot INC-5, avec le
+  genre `partner` (la garde du mode agence ne lui ouvre pas cette route aujourd'hui).
 - **`POST /api/incidents/bug-reports`** (multipart) : `description` (10 à 2 000 caractères, masquée), `app` (valeurs d'INC-1a et INC-2),
   `appVersion?`, `screen?`, `context?` (JSON, liste blanche d'INC-1a), `screenshot?` (PNG, JPEG ou WebP, 5 Mo, 8 000 pixels de côté) →
   201 `{ report }` ; 422 `{ fields }` (`REQUIRED`, `INVALID_LENGTH`, `INVALID_VALUE`, `TOO_LARGE`, `FORMAT`) ; 429 `BUG_REPORT_LIMIT`
