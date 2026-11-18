@@ -90,7 +90,8 @@ class GroupEntryTest extends WebTestCase
         foreach (['/api/order/cancel/5%20', '/api/order/cancel/+5', '/api/order/cancel/5.', '//api/order/cancel/5', '/api/order/cancel//5', '/api/order/cancel/5%2F', '/api/order//cancel/5'] as $odd) {
             $this->assertContains($this->request('POST', $odd, $token, MV_TEST_TENANT2_HOST, [])->getStatusCode(), [403, 404, 405], $odd);
         }
-        $this->assertSame([403, 'GROUP_FORBIDDEN'], $this->reason('POST', '/api/group/leave', $token, null, 'code'), 'le directeur ne retire pas la boutique depuis la boutique');
+        // le groupe et la vérification des taxes : fermés par la garde (droits) avant même leur contrôleur, qui les refuse aussi à toute entrée
+        $this->assertSame([403, 'rights'], $this->reason('POST', '/api/group/leave', $token), 'le directeur ne retire pas la boutique depuis la boutique');
         // la fiche du site : ni l'adresse qui reçoit les commandes, ni la devise ; le reste s'écrit
         $sheet = (int) $this->pdo(MV_TEST_TENANT2_DB)->query('SELECT id FROM entreprise ORDER BY id LIMIT 1')->fetchColumn();
         $this->assertSame([403, 'rights'], $this->reason('PUT', "/api/entreprise/$sheet", $token, ['email' => 'detourne@example.invalid']));
@@ -106,7 +107,7 @@ class GroupEntryTest extends WebTestCase
         } finally {
             static::getContainer()->get('security.token_storage')->setToken(null);
         }
-        $this->assertSame([403, 'TAXES_VERIFY_FORBIDDEN'], $this->reason('POST', '/api/site/taxes/verify', $token, null, 'code'));
+        $this->assertSame([403, 'rights'], $this->reason('POST', '/api/site/taxes/verify', $token));
 
         // la boutique quitte le groupe : la requête suivante du directeur est refusée
         $shopAdmin = $this->account(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'boutique', ['ROLE_ADMIN'], 'Marc');
