@@ -63,14 +63,15 @@ final class GroupScope
             'product', 'product_variant', 'size', 'support_ticket'],
         // lot G-3 : ventes et marge (statistiques), frais variables à leur date (port d'achat, publicité, notes, voyages), frais fixes
         // (mouvements prévus), budgets des périodes (projection), archive d'avant la migration, fiche et calendrier du site
-        'gestion_statistiques_annee' => ['address_entreprise', 'booking', 'collections', 'commande', 'commande_line', 'entreprise', 'frais_de_port',
-            'gestion_advice', 'gestion_budget_line', 'gestion_cash_balance', 'gestion_cash_movement', 'gestion_cash_setting', 'gestion_reprise', 'gestion_stock_snapshot',
-            'gestion_trip', 'import_order', 'import_order_line', 'marketing_campaign', 'note_de_frais', 'order', 'order_items', 'payments', 'period_result',
-            'pos_gift_card', 'pos_gift_card_transaction', 'product', 'product_variant'],
-        'gestion_groupe_resultat' => ['address_entreprise', 'booking', 'collections', 'commande', 'commande_line', 'entreprise', 'frais_de_port',
-            'gestion_cash_balance', 'gestion_cash_movement', 'gestion_cash_setting', 'gestion_stock_snapshot', 'gestion_trip', 'import_order',
-            'import_order_line', 'marketing_campaign', 'note_de_frais', 'order', 'order_items', 'payments', 'pos_gift_card', 'pos_gift_card_transaction',
-            'product', 'product_variant'],
+        // une base d'essai RICHE lit davantage (jointures non vides) : la suite complète l'a montré ; même liste large pour les deux routes
+        'gestion_statistiques_annee' => ['address_entreprise', 'booking', 'collections', 'color', 'commande', 'commande_line', 'entreprise', 'frais_de_port',
+            'gestion_advice', 'gestion_budget_line', 'gestion_cash_balance', 'gestion_cash_movement', 'gestion_cash_setting', 'gestion_reprise',
+            'gestion_stock_snapshot', 'gestion_trip', 'import_order', 'import_order_line', 'marketing_campaign', 'note_de_frais', 'order', 'order_items',
+            'payments', 'period_result', 'pos_gift_card', 'pos_gift_card_transaction', 'pos_return', 'product', 'product_variant', 'size'],
+        'gestion_groupe_resultat' => ['address_entreprise', 'booking', 'collections', 'color', 'commande', 'commande_line', 'entreprise', 'frais_de_port',
+            'gestion_advice', 'gestion_budget_line', 'gestion_cash_balance', 'gestion_cash_movement', 'gestion_cash_setting', 'gestion_reprise',
+            'gestion_stock_snapshot', 'gestion_trip', 'import_order', 'import_order_line', 'marketing_campaign', 'note_de_frais', 'order', 'order_items',
+            'payments', 'period_result', 'pos_gift_card', 'pos_gift_card_transaction', 'pos_return', 'product', 'product_variant', 'size'],
     ];
 
     /** Plafond de boutiques lues par réponse ; au-delà, `truncated` */
