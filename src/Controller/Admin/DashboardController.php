@@ -451,8 +451,6 @@ class DashboardController extends AbstractDashboardController
 
         return $this->render('admin/dashboard.html.twig', [
             'modulesTile' => $this->modulesTile($currentTenantCode ?? null),
-            // relecture d'AG-3c : le compte de la plateforme entré par le sélecteur voit son entrée et peut la quitter
-            'entryBanner' => \App\Security\Entry\AdminEntrySession::get($this->requestStack->getSession()),
             'ordersTodo' => $ordersTodo,
             'ordersTodoUrl' => $ordersTodoUrl,
             'readiness' => $readiness,

@@ -429,6 +429,34 @@ vide la session et renvoie à la connexion du site d'attache (`/?tenant=<site d'
 
 Essai : `tests/Functional/Security/AdminEntryTest.php` (5 essais ; 7 mutations des correctifs, toutes tuées).
 
+### 9.1 Lot BANDEAU (18/11/2026, demande du propriétaire)
+
+Pendant une entrée, TOUTES les pages d'EasyAdmin (mise en page surchargée `templates/bundles/EasyAdminBundle/layout.html.twig`, bloc
+`content_header_wrapper`) et les pages d'administration hors d'EasyAdmin (`base_admin.html.twig`) portent le bandeau
+`admin/entree/_bandeau.html.twig` : « Vous êtes dans <nom du site> (<adresse>) en tant que <Plateforme, prénom | Agence X, prénom | Groupe X,
+prénom> », le site d'attache, l'échéance, et « Quitter » (fermeture de l'entrée, retour à la connexion du site d'attache). Données :
+`App\Twig\AdminEntryBannerExtension` (`admin_entry_banner()`), lues de l'entrée de la session et de la base maître ; jamais une adresse de
+courriel. L'ancien bandeau, posé sur le seul accueil, est retiré.
+
+**Lot RETOUR (18/11/2026, lot à risque, règles du chef)** : le bouton du bandeau devient « Revenir à <site d'attache> ». À l'ouverture de
+l'entrée (`/admin/contextes/entrer`), la SESSION seule garde le retour (`AdminEntrySession::RETURN_KEY` : compte d'attache, son adresse, l'heure
+d'origine de son code, l'empreinte de son mot de passe, le numéro de l'entrée ; jamais dans un paramètre ni un cookie lisible). « Revenir »
+(POST `/admin/entree/quitter`, jeton CSRF) ferme l'entrée puis `EntryService::returningAccount` relit le compte SUR SON SITE : même numéro,
+même adresse, mot de passe inchangé, contrôles du compte (`UserChecker`), encore autorisé à entrer (rôle d'agence ou compte de la plateforme) ;
+la session le reprend alors sous un NOUVEL identifiant, avec l'heure d'origine de son code (jamais rajeunie), et une ligne `return` est
+écrite au journal des deux sites. Sinon : session vidée, retour à la connexion du site d'attache. Le retour sert une fois (lu et retiré).
+Essais : `AdminEntryTest::testReturningHomeKeepsTheSessionOnlyForTheSameUnchangedAccount` (retour normal, compte désactivé, mot de passe
+changé, GET refusé, deux onglets).
+
+**Correctif de sécurité (relecture neuve de RETOUR, 18/11/2026, défaut EN LIGNE depuis l'étape 100)** : quand une entrée d'EasyAdmin se fermait
+en vidant la session (« Quitter », entrée refusée ou fermée, session qui quitte le site visé), le jeton restait dans `TokenStorage` et le
+pare-feu le réécrivait dans la session neuve ; le compte de la plateforme, qui porte le même mot de passe sur chaque site, pouvait ainsi
+rester connecté au site d'attache même désactivé, avec un seul code. Corrigé : le jeton est retiré AVANT tout vidage de session
+(`AdminEntryController::leave`, `AdminEntrySubscriber`, 4 endroits) ; essai : un retour refusé ramène à la connexion, jamais à la page du code.
+Autres corrections de la même relecture : aucune adresse au journal (« Plateforme, prénom »), session neuve au retour, lien de l'agence relu
+sans cache, retour refusé si une trace manque.
+Essai : `AdminEntryTest::testTheBannerNamesTheSiteAndTheOperatorOnAListAndADetailPage` (liste, fiche, page nommée).
+
 ## 10. Lot AG-3d : « Tous mes clients » et « Taxes vérifiées par le commerçant » (18/11/2026, contrat validé par le chef)
 
 ### 10.1 « Tous mes clients »

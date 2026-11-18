@@ -221,6 +221,37 @@ class EmailSenderService
         }
     }
 
+    /**
+     * Envoi IMMÉDIAT par le serveur de la plateforme, sans AUCUNE file (lot L6-c, `docs/prevention-pertes.md` § 19.6) : pour un courriel qui
+     * porte un secret (le code d'un boîtier), qui ne doit être écrit ni dans une file de messages ni dans la table des échecs. En cas
+     * d'échec, seule la classe de l'exception est journalisée (son message pourrait porter l'adresse ou un extrait du courriel).
+     *
+     * @param array<string, mixed> $context
+     */
+    public function sendPlatformEmailNow(string $to, string $subject, string $template, array $context): bool
+    {
+        $from = $this->platformSender();
+        if ($from === null) {
+            $this->logger->error('E-mail immédiat de la plateforme impossible : pas de compte expéditeur dans MAILER_DSN.');
+
+            return false;
+        }
+        try {
+            $email = (new Email())
+                ->from(new \Symfony\Component\Mime\Address($from, 'Arkanoa'))
+                ->to($to)
+                ->subject($subject)
+                ->html($this->twig->render($template, $context + ['fromName' => 'Arkanoa', 'signature' => '', 'logoUrl' => null, 'domain' => '']));
+            $this->tenantMailerFactory->createDirectMailer(null)->send($email); // le transport de la plateforme, en direct
+
+            return true;
+        } catch (\Throwable $e) {
+            $this->logger->error('E-mail immédiat de la plateforme en échec (' . $e::class . ').');
+
+            return false;
+        }
+    }
+
     /** Le site courant a-t-il son propre serveur d'envoi (configuration complète) ? Sinon ses courriels passent par la plateforme */
     public function siteHasOwnServer(string $locale = 'fr'): bool
     {

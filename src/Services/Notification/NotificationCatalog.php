@@ -67,8 +67,11 @@ final class NotificationCatalog
         'memoires_account_invitation' => [self::INDISPENSABLE, null],
         'support_agent_invitation' => [self::INDISPENSABLE, null],
         'site_admin_invitation' => [self::INDISPENSABLE, null],
-        'assistance_request' => [self::INDISPENSABLE, null], // lot AG-ASSIST : l'agence apprend qu'un commerçant demande son aide ; jamais retenu
-        'group_invitation' => [self::INDISPENSABLE, null], // lot G-1a : un groupe invite la boutique, qui doit consentir ; jamais retenu // lot AG-2 : l'administrateur désigné d'un site créé par une agence choisit son mot de passe
+        'loss_box_plugged' => [self::INDISPENSABLE, null], // lot L6-b : un boîtier vendu est branché dans la boutique, à confirmer ; jamais retenu
+        'loss_box_cancelled' => [self::INDISPENSABLE, null], // lot L6-b : la plateforme a annulé l'expédition d'un boîtier déjà branché
+        'loss_box_code' => [self::INDISPENSABLE, null], // lot L6-c : le code de l'étiquette d'un boîtier vendu, envoyé une fois, jamais gardé
+        'assistance_request' => [self::INDISPENSABLE, null], // lot AG-ASSIST : l'agence apprend qu'un commerçant demande son aide ; jamais retenu // lot AG-2 : l'administrateur désigné d'un site créé par une agence choisit son mot de passe
+        'group_invitation' => [self::INDISPENSABLE, null], // lot G-1a : un groupe invite la boutique, qui doit consentir ; jamais retenu
         'customer_import_invitation' => [self::INDISPENSABLE, null], // lot IMP-2 : un seul courriel par client repris d'une ancienne boutique, décidé par le commerçant, jamais relancé
         'chapter_invitation' => [self::INDISPENSABLE, null], // garde son propre lien de désabonnement
         // Avis au CLIENT propriétaire d'un livre (invitation épuisée sans réponse) : il parle de son livre à un client du site, pas à
@@ -114,6 +117,8 @@ final class NotificationCatalog
         'src/Services/Notification/NotificationWeeklyService.php' => [self::WEEKLY_DIGEST],
         'src/Services/Agency/AgencySiteInviter.php' => ['site_admin_invitation'],
         'src/Services/Agency/Assistance/AssistanceMailer.php' => ['assistance_request'],
+        'src/LossPrevention/Services/LossBoxPluggedNotifier.php' => ['loss_box_plugged', 'loss_box_cancelled'],
+        'src/LossPrevention/Services/LossBoxCodeMailer.php' => ['loss_box_code'],
         'src/Services/Group/GroupInvitationMailer.php' => ['group_invitation'],
         'src/Services/OrderService/OrderMailerService.php' => ['order_confirmation', self::ORDER_TO_SHIP, 'order_notice'],
         'src/Services/OrderService/OrderShipmentService.php' => ['order_shipped'],

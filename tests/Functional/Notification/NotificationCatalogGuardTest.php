@@ -16,7 +16,7 @@ use PHPUnit\Framework\TestCase;
 class NotificationCatalogGuardTest extends TestCase
 {
     /** Ce qui trahit un envoi de courriel dans un fichier */
-    private const SEND = '/->(sendTemplatedEmail|sendCustomerEmail|sendPlatformEmail)\(|MailerInterface|TenantMailerFactory|->createMailer\(|createPlatformMailer\(/';
+    private const SEND = '/->(sendTemplatedEmail|sendCustomerEmail|sendPlatformEmail|sendPlatformEmailNow)\(|MailerInterface|TenantMailerFactory|->createMailer\(|createPlatformMailer\(/';
 
     /**
      * Fichiers qui envoient un courriel urgent ou de suivi SANS passer encore par la décision d'envoi, avec la raison. Toute entrée est une

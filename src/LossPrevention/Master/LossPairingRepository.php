@@ -15,7 +15,7 @@ class LossPairingRepository
     public const WAITING = 'waiting';
     public const PAIRED = 'paired';
     public const CLOSED = 'closed';
-    private const COLUMNS = 'id, code_hash, machine_hash, version, arch, status, tenant_code, box_id, link, created_at, seen_at, expires_at, paired_at, delivered_at, closed_at';
+    private const COLUMNS = 'id, code_hash, machine_hash, version, arch, status, tenant_code, box_id, link, created_at, seen_at, expires_at, paired_at, delivered_at, closed_at, serial';
 
     /** La connexion de la transaction en cours : la même du début à la fin (jamais une connexion rouverte en route, qui écrirait hors transaction) */
     private ?\PDO $held = null;
@@ -111,21 +111,22 @@ class LossPairingRepository
      *
      * @return bool vrai si la demande a été créée par cet appel
      */
-    public function insert(string $codeHash, string $machineHash, string $version, string $arch, string $now, string $expiresAt): bool
+    public function insert(string $codeHash, string $machineHash, string $version, string $arch, string $now, string $expiresAt, ?string $serial = null): bool
     {
         $stmt = $this->pdo()->prepare(
-            'INSERT INTO loss_box_pairing (code_hash, machine_hash, version, arch, created_at, seen_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (code_hash) DO NOTHING');
-        $stmt->execute([$codeHash, $machineHash, $version, $arch, $now, $now, $expiresAt]);
+            'INSERT INTO loss_box_pairing (code_hash, machine_hash, version, arch, created_at, seen_at, expires_at, serial) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (code_hash) DO NOTHING');
+        $stmt->execute([$codeHash, $machineHash, $version, $arch, $now, $now, $expiresAt, $serial]);
 
         return $stmt->rowCount() === 1;
     }
 
     /** Le boîtier a donné signe de vie pour sa demande en attente : elle reste jumelable 30 jours de plus */
-    public function renew(int $id, ?string $version, ?string $arch, string $now, string $expiresAt): void
+    public function renew(int $id, ?string $version, ?string $arch, string $now, string $expiresAt, ?string $serial = null): void
     {
+        // lot L6-b : la série dite par la machine est gardée la première fois, jamais remplacée (comme le code)
         $this->pdo()->prepare(
-            "UPDATE loss_box_pairing SET seen_at = ?, expires_at = ?, version = COALESCE(?, version), arch = COALESCE(?, arch) WHERE id = ? AND status = 'waiting'")
-            ->execute([$now, $expiresAt, $version, $arch, $id]);
+            "UPDATE loss_box_pairing SET seen_at = ?, expires_at = ?, version = COALESCE(?, version), arch = COALESCE(?, arch), serial = COALESCE(serial, ?) WHERE id = ? AND status = 'waiting'")
+            ->execute([$now, $expiresAt, $version, $arch, $serial, $id]);
     }
 
     /**
@@ -153,5 +154,123 @@ class LossPairingRepository
     public function close(int $id, string $now): void
     {
         $this->pdo()->prepare("UPDATE loss_box_pairing SET status = 'closed', closed_at = ? WHERE id = ? AND status <> 'closed'")->execute([$now, $id]);
+    }
+
+    // ----- Lot L6-b (17/11/2026, § 19.5) : les expéditions des boîtiers vendus, dans la même base et la même transaction que les demandes
+
+    public const SHIPMENT_RESERVED = 'reserved';
+    public const SHIPMENT_PLUGGED = 'plugged';
+    public const SHIPMENT_CONFIRMED = 'confirmed';
+    public const SHIPMENT_CANCELLED = 'cancelled';
+    private const SHIPMENT_COLUMNS = 'id, serial, code_hash, tenant_code, order_ref, status, key_hash, ref, link, box_id, created_at, created_by, plugged_at, confirmed_at, confirmed_by, cancelled_at, cancelled_by';
+
+    /** @return array<string, mixed>|null l'expédition vivante de ce code (jamais une annulée) ; `$lock` : tenue jusqu'à la fin de la transaction */
+    public function shipmentByCodeHash(string $codeHash, bool $lock = false): ?array
+    {
+        $stmt = $this->pdo()->prepare('SELECT ' . self::SHIPMENT_COLUMNS . " FROM loss_box_shipment WHERE code_hash = ? AND status <> 'cancelled'" . ($lock ? ' FOR UPDATE' : ''));
+        $stmt->execute([$codeHash]);
+
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /** @return array{code: string, name: string, customDomain: ?string}|null la fiche d'un site, relue sans cache */
+    public function tenantInfo(string $code): ?array
+    {
+        $stmt = $this->pdo()->prepare('SELECT code, name, custom_domain FROM tenants WHERE code = ?');
+        $stmt->execute([$code]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+        return is_array($row) ? ['code' => (string) $row['code'], 'name' => (string) $row['name'], 'customDomain' => $row['custom_domain'] !== null ? (string) $row['custom_domain'] : null] : null;
+    }
+
+    /** @return array<string, mixed>|null */
+    public function shipment(int $id, bool $lock = false): ?array
+    {
+        $stmt = $this->pdo()->prepare('SELECT ' . self::SHIPMENT_COLUMNS . ' FROM loss_box_shipment WHERE id = ?' . ($lock ? ' FOR UPDATE' : ''));
+        $stmt->execute([$id]);
+
+        return $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /** @return list<array<string, mixed>> les expéditions, les plus récentes d'abord ; d'un seul site si `$tenantCode` */
+    public function shipments(?string $tenantCode = null, ?string $status = null, int $limit = 200): array
+    {
+        $where = [];
+        $params = [];
+        if ($tenantCode !== null) {
+            $where[] = 'tenant_code = ?';
+            $params[] = $tenantCode;
+        }
+        if ($status !== null) {
+            $where[] = 'status = ?';
+            $params[] = $status;
+        }
+        $stmt = $this->pdo()->prepare('SELECT ' . self::SHIPMENT_COLUMNS . ' FROM loss_box_shipment' . ($where !== [] ? ' WHERE ' . implode(' AND ', $where) : '') . ' ORDER BY id DESC LIMIT ' . max(1, min(500, $limit)));
+        $stmt->execute($params);
+
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /** @return int|null l'identifiant de l'expédition créée ; null si ce numéro de série ou ce code est déjà expédié */
+    public function insertShipment(string $serial, string $codeHash, string $tenantCode, string $orderRef, string $by, string $now): ?int
+    {
+        $stmt = $this->pdo()->prepare('INSERT INTO loss_box_shipment (serial, code_hash, tenant_code, order_ref, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING RETURNING id');
+        // (ON CONFLICT sans cible : l'un ou l'autre des deux index uniques partiels, code ou numéro de série d'une expédition vivante)
+        $stmt->execute([$serial, $codeHash, $tenantCode, $orderRef, $now, $by]);
+        $id = $stmt->fetchColumn();
+
+        return $id === false ? null : (int) $id;
+    }
+
+    /** Le boîtier est branché : les empreintes qui relieront son futur boîtier de site sont préparées (d'une expédition réservée) */
+    public function plugShipment(int $id, string $keyHash, string $ref, string $link, string $now): bool
+    {
+        $stmt = $this->pdo()->prepare("UPDATE loss_box_shipment SET status = 'plugged', key_hash = ?, ref = ?, link = ?, plugged_at = ? WHERE id = ? AND status = 'reserved'");
+        $stmt->execute([$keyHash, $ref, $link, $now, $id]);
+
+        return $stmt->rowCount() === 1;
+    }
+
+    /** Non confirmée à temps : l'expédition revient à `reserved`, ses empreintes sont effacées (un nouveau branchement relance l'avis) */
+    public function unplugShipment(int $id): bool
+    {
+        $stmt = $this->pdo()->prepare("UPDATE loss_box_shipment SET status = 'reserved', key_hash = NULL, ref = NULL, link = NULL, plugged_at = NULL WHERE id = ? AND status = 'plugged'");
+        $stmt->execute([$id]);
+
+        return $stmt->rowCount() === 1;
+    }
+
+    /** Confirmée par le site acheteur (ou jumelée par la saisie de son code) : le boîtier du site est créé, les empreintes s'effacent */
+    public function confirmShipment(int $id, int $boxId, ?int $userId, string $now): bool
+    {
+        $stmt = $this->pdo()->prepare("UPDATE loss_box_shipment SET status = 'confirmed', box_id = ?, confirmed_at = ?, confirmed_by = ?, key_hash = NULL, ref = NULL, link = NULL WHERE id = ? AND status IN ('reserved', 'plugged')");
+        $stmt->execute([$boxId, $now, $userId, $id]);
+
+        return $stmt->rowCount() === 1;
+    }
+
+    /** Annulée par la plateforme : le code est libéré ; un boîtier déjà jumelé n'est pas touché (rien ici ne le désigne) */
+    public function cancelShipment(int $id, string $by, string $now): bool
+    {
+        $stmt = $this->pdo()->prepare("UPDATE loss_box_shipment SET status = 'cancelled', cancelled_at = ?, cancelled_by = ?, key_hash = NULL, ref = NULL, link = NULL WHERE id = ? AND status IN ('reserved', 'plugged')");
+        $stmt->execute([$now, $by, $id]);
+
+        return $stmt->rowCount() === 1;
+    }
+
+    /** @param array<string, mixed> $data jamais le code ni une empreinte */
+    public function shipmentEvent(int $id, string $type, ?string $actor, ?string $tenantCode, array $data, string $now): void
+    {
+        $this->pdo()->prepare('INSERT INTO loss_box_shipment_event (shipment_id, type, actor, tenant_code, data, created_at) VALUES (?, ?, ?, ?, ?::jsonb, ?)')
+            ->execute([$id, $type, $actor, $tenantCode, json_encode($data ?: new \stdClass()), $now]);
+    }
+
+    /** @return list<array<string, mixed>> le journal d'une expédition, dans l'ordre */
+    public function shipmentEvents(int $id): array
+    {
+        $stmt = $this->pdo()->prepare('SELECT type, actor, tenant_code, data, created_at FROM loss_box_shipment_event WHERE shipment_id = ? ORDER BY id');
+        $stmt->execute([$id]);
+
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 }

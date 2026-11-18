@@ -49,8 +49,20 @@ class AgencyClientsService
     /** Oublier la ligne d'un site (un geste qui la change vient d'avoir lieu) ; ne fait jamais échouer le geste */
     public function forget(string $code): void
     {
+        self::forgetIn($this->cache, $code);
+    }
+
+    /**
+     * Le SEUL endroit qui vide la ligne d'un site (convention des étiquettes : `CacheTagConventionTest`). Les services que ce service lit
+     * (état de la boutique, entrées) l'appellent sans dépendre de lui. Ne fait jamais échouer le geste.
+     */
+    public static function forgetIn(?object $cache, string $code): void
+    {
+        if (!$cache instanceof \Symfony\Contracts\Cache\TagAwareCacheInterface) {
+            return;
+        }
         try {
-            $this->cache->invalidateTags([self::tag($code)]);
+            $cache->invalidateTags([self::tag($code)]);
         } catch (\Throwable) {
             // la ligne se relira à son échéance (5 minutes)
         }

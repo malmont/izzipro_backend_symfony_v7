@@ -141,6 +141,7 @@
             "DELETE /api/gestion/pertes/exercices/pieces",
             "POST /api/gestion/pertes/analyse",
             "POST /api/gestion/pertes/boitiers",
+            "POST /api/gestion/pertes/boitiers/a-confirmer/{id}",
             "POST /api/gestion/pertes/boitiers/jumeler",
             "POST /api/gestion/pertes/boitiers/{id}/appareils/{deviceId}/retirer",
             "POST /api/gestion/pertes/boitiers/{id}/cle",

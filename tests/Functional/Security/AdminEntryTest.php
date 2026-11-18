@@ -172,13 +172,13 @@ class AdminEntryTest extends WebTestCase
         $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin/entree?tenant=' . MV_TEST_TENANT2_CODE, ['pass' => $old], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
         $this->assertSame(403, $this->client->getResponse()->getStatusCode());
 
-        // le vrai passage, puis « Quitter » : entrée fermée, session vidée, retour au site d'attache
+        // le vrai passage, puis « Revenir » (lot RETOUR) : entrée fermée, la session revient au compte d'attache sur son site
         $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin/entree?tenant=' . MV_TEST_TENANT2_CODE, ['pass' => $pass], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
         $this->assertSame(302, $this->client->getResponse()->getStatusCode());
         $welcome = $this->page('GET', '/admin', MV_TEST_TENANT2_HOST);
         $token = $this->csrf($welcome, 'form[action="/admin/entree/quitter"] input[name="_token"]');
         $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin/entree/quitter', ['_token' => $token], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
-        $this->assertSame('/?tenant=' . MV_TEST_TENANT_CODE, $this->client->getResponse()->headers->get('Location'));
+        $this->assertSame('/admin?tenant=' . MV_TEST_TENANT_CODE, $this->client->getResponse()->headers->get('Location'));
         $this->assertSame('left', $this->master->query("SELECT ended_reason FROM site_entries WHERE mode = 'agency' ORDER BY id DESC LIMIT 1")->fetchColumn());
         $this->client->request('GET', 'https://' . MV_TEST_TENANT2_HOST . '/admin', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
         $this->assertSame(302, $this->client->getResponse()->getStatusCode(), 'plus de session sur le site visé');
@@ -279,6 +279,106 @@ class AdminEntryTest extends WebTestCase
         $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin/entree/quitter', ['_token' => $token], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
         $this->assertSame(302, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
         $this->assertSame('left', $this->master->query('SELECT ended_reason FROM site_entries ORDER BY id DESC LIMIT 1')->fetchColumn());
+    }
+
+    /** Lot BANDEAU (18/11/2026) : pendant une entrée, chaque page d'EasyAdmin (liste, fiche, page nommée) dit où l'on est et en tant que qui */
+    public function testTheBannerNamesTheSiteAndTheOperatorOnAListAndADetailPage(): void
+    {
+        $platform = $this->user(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'plateforme', ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'], 'Paul', true);
+        $this->user(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'plateforme', ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'], 'Paul', true);
+        $this->login($platform, MV_TEST_TENANT_HOST, MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $this->assertStringNotContainsString('data-entry-banner', $this->page('GET', '/admin', MV_TEST_TENANT_HOST), 'hors entrée : aucun bandeau');
+        $pass = $this->passFor(MV_TEST_TENANT2_CODE);
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin/entree?tenant=' . MV_TEST_TENANT2_CODE, ['pass' => $pass], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
+        $this->assertSame(302, $this->client->getResponse()->getStatusCode());
+
+        $described = static::getContainer()->get(\App\Services\TenantPublicHostResolver::class)->describe(MV_TEST_TENANT2_CODE);
+        $made = $this->hiddenCostProduct();
+        $stmt = $this->pdo(MV_TEST_TENANT2_DB)->prepare('SELECT id FROM product WHERE name = ?');
+        $stmt->execute([$made['name']]);
+        $product = (int) $stmt->fetchColumn();
+        $this->assertGreaterThan(0, $product, 'un article du second site');
+        $crud = rawurlencode('App\\Controller\\Admin\\ProductCrudController');
+        foreach (['liste' => '/admin?crudAction=index&crudControllerFqcn=' . $crud, 'fiche' => '/admin?crudAction=detail&entityId=' . $product . '&crudControllerFqcn=' . $crud,
+            'page nommée' => '/admin/acces-plateforme'] as $kind => $path) {
+            $html = $this->page('GET', $path, MV_TEST_TENANT2_HOST);
+            $banner = (new \Symfony\Component\DomCrawler\Crawler($html))->filter('[data-entry-banner]');
+            $this->assertSame(1, $banner->count(), "bandeau sur la $kind");
+            $this->assertSame([(string) $described['name'], 'Plateforme, Paul'], [trim($banner->filter('[data-entry-site]')->text()), trim($banner->filter('[data-entry-as]')->text())], "$kind : le site et qui");
+            $this->assertStringContainsString((string) $described['host'], $banner->text(), "$kind : l'adresse du site");
+            $this->assertSame(1, $banner->filter('form[action="/admin/entree/quitter"]')->count(), "$kind : le bouton pour quitter");
+            $this->assertStringNotContainsString('@', $banner->text(), "$kind : jamais une adresse de courriel");
+        }
+    }
+
+    /**
+     * Lot RETOUR (18/11/2026, règles du chef) : « Revenir à <site d'attache> » ferme l'entrée et rend la session au compte d'attache sans
+     * nouvelle connexion ni nouveau code, sous un nouvel identifiant de session, tracé aux deux journaux ; refusé (retour à la connexion) si
+     * le compte a été désactivé ou son mot de passe changé entre-temps ; POST seulement ; un second onglet ne rouvre rien.
+     */
+    public function testReturningHomeKeepsTheSessionOnlyForTheSameUnchangedAccount(): void
+    {
+        foreach (['normal', 'desactive', 'mot_de_passe'] as $case) {
+            $this->clean();
+            $platform = $this->user(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'plateforme', ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'], 'Paul', true);
+            $this->user(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'plateforme', ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'], 'Paul', true);
+            $this->login($platform, MV_TEST_TENANT_HOST, MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+            $this->page('GET', '/admin', MV_TEST_TENANT_HOST);
+            $pass = $this->passFor(MV_TEST_TENANT2_CODE);
+            $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin/entree?tenant=' . MV_TEST_TENANT2_CODE, ['pass' => $pass], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
+            $this->assertSame(302, $this->client->getResponse()->getStatusCode(), $case);
+            $inside = $this->page('GET', '/admin', MV_TEST_TENANT2_HOST);
+            $token = $this->csrf($inside, 'form[action="/admin/entree/quitter"] input[name="_token"]');
+            $this->assertStringContainsString('Revenir à', $inside);
+            // GET refusé : seule une requête POST avec son jeton revient
+            $this->client->request('GET', 'https://' . MV_TEST_TENANT2_HOST . '/admin/entree/quitter', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
+            $this->assertSame(405, $this->client->getResponse()->getStatusCode(), $case . ' : GET');
+            $this->assertNull($this->master->query('SELECT ended_at FROM site_entries ORDER BY id DESC LIMIT 1')->fetchColumn(), $case . ' : un GET ne ferme rien');
+            if ($case === 'desactive') {
+                $this->pdo(MV_TEST_TENANT_DB)->exec("UPDATE \"user\" SET is_verified = FALSE WHERE id = " . (int) $platform->getId());
+            } elseif ($case === 'mot_de_passe') {
+                $this->pdo(MV_TEST_TENANT_DB)->exec("UPDATE \"user\" SET password = 'change-entre-temps' WHERE id = " . (int) $platform->getId());
+            }
+            $sessionBefore = $this->client->getRequest()->getSession()->getId();
+            $codesBefore = (int) $this->pdo(MV_TEST_TENANT_DB)->query('SELECT COUNT(*) FROM otp_code WHERE user_otp_id = ' . (int) $platform->getId())->fetchColumn();
+            $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin/entree/quitter', ['_token' => $token], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
+            $this->assertSame(302, $this->client->getResponse()->getStatusCode(), $case);
+            $this->assertSame('left', $this->master->query('SELECT ended_reason FROM site_entries ORDER BY id DESC LIMIT 1')->fetchColumn(), $case . ' : l\'entrée est fermée');
+            if ($case !== 'normal') {
+                $this->assertSame('/?tenant=' . MV_TEST_TENANT_CODE, $this->client->getResponse()->headers->get('Location'), $case . ' : retour à la connexion');
+                $this->sameDomain('/admin?tenant=' . MV_TEST_TENANT_CODE, 302);
+                // relecture de RETOUR : la connexion, jamais la page du code (le compte n'est plus du tout dans la session)
+                $this->assertSame('/', parse_url((string) $this->client->getResponse()->headers->get('Location'), \PHP_URL_PATH), $case . ' : retour à la connexion, pas au code');
+                continue;
+            }
+            // retour normal : le compte d'attache, sans nouvelle connexion ni nouveau code, sous un nouvel identifiant de session
+            $this->assertSame('/admin?tenant=' . MV_TEST_TENANT_CODE, $this->client->getResponse()->headers->get('Location'));
+            $this->assertNotSame($sessionBefore, $this->client->getRequest()->getSession()->getId(), 'nouvel identifiant de session');
+            $back = $this->sameDomain('/admin?tenant=' . MV_TEST_TENANT_CODE, 200);
+            $this->assertStringContainsString('Tous les sites', $back, 'la session est celle du compte d\'attache');
+            $this->assertStringNotContainsString('data-entry-banner', $back);
+            $this->assertSame($codesBefore, (int) $this->pdo(MV_TEST_TENANT_DB)->query('SELECT COUNT(*) FROM otp_code WHERE user_otp_id = ' . (int) $platform->getId())->fetchColumn(), 'aucun nouveau code envoyé');
+            foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
+                $this->assertSame(['Plateforme, Paul'], $this->pdo($db)->query("SELECT user_identifier FROM content_audit_log WHERE resource = 'external_access' AND action = 'return'")->fetchAll(\PDO::FETCH_COLUMN), "$db : le retour au journal, sans adresse");
+            }
+            // un second onglet (même session) renvoie l'ancien formulaire : rien ne se rouvre, la session reste au site d'attache
+            $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin/entree/quitter', ['_token' => $token], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
+            $this->assertSame([302, '/admin'], [$this->client->getResponse()->getStatusCode(), $this->client->getResponse()->headers->get('Location')]);
+            $this->assertStringContainsString('Tous les sites', $this->sameDomain('/admin?tenant=' . MV_TEST_TENANT_CODE, 200));
+            $this->assertSame(1, (int) $this->master->query('SELECT COUNT(*) FROM site_entries')->fetchColumn());
+        }
+    }
+
+    /**
+     * Lot RETOUR : une requête d'EasyAdmin comme en production, sur le MÊME domaine que la session (un seul domaine pour tous les sites, le site
+     * choisi par `?tenant=`), sans l'en-tête de site des essais d'API ; en essai, chaque domaine a son propre cookie de session.
+     */
+    private function sameDomain(string $path, int $status): string
+    {
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT2_HOST . $path);
+        $this->assertSame($status, $this->client->getResponse()->getStatusCode(), $path . ' : ' . mb_substr((string) $this->client->getResponse()->getContent(), 0, 300));
+
+        return (string) $this->client->getResponse()->getContent();
     }
 
     /** @return array{name: string, cost: string} un article du second site au coût d'achat reconnaissable */

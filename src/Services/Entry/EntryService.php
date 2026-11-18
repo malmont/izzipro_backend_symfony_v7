@@ -61,6 +61,7 @@ class EntryService
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly LoggerInterface $logger,
         private readonly ?\App\Services\Group\GroupRepository $groups = null,
+        private readonly ?\App\Security\UserChecker $userChecker = null,
     ) {
     }
 
@@ -170,9 +171,7 @@ class EntryService
         }
 
         $this->journal($site['dbname'], $site['code'], $label, $id, $mode, $agencyName, $firstName);
-        if ($this->cache instanceof \Symfony\Contracts\Cache\TagAwareCacheInterface) {
-            $this->cache->invalidateTags([\App\Services\Agency\AgencyClientsService::tag($site['code'])]); // lot AG-3d : « dernière entrée » de « Tous mes clients »
-        }
+        \App\Services\Agency\AgencyClientsService::forgetIn($this->cache, $site['code']); // lot AG-3d : « dernière entrée » de « Tous mes clients »
 
         return ['entry' => $id, 'mode' => $mode, 'site' => $site['code'], 'label' => $label, 'payload' => $payload, 'expires' => $expires];
     }
@@ -336,6 +335,67 @@ class EntryService
 
             return ['reason' => $reason, 'origin' => $origin];
         });
+    }
+
+    /**
+     * Lot RETOUR (18/11/2026) : le compte d'attache que la session peut reprendre en revenant, ou null. Relu sur SON site : même numéro, même
+     * adresse, mot de passe inchangé depuis l'ouverture de l'entrée (empreinte), contrôles du compte (`UserChecker`), encore autorisé à entrer
+     * (rôle d'agence ou compte de la plateforme). Laisse le site courant sur le site d'attache quand il rend un compte.
+     *
+     * @param array{home: string, account: int, email: string, otpAt: int, password: string, entry: int} $back
+     */
+    public function returningAccount(array $back): ?User
+    {
+        $home = $this->agencies->tenant($back['home']);
+        $row = $this->entries->find($back['entry']);
+        if ($home === null || $back['otpAt'] > time() || $row === null || $row['home_tenant_code'] !== $back['home'] || (int) $row['account_id'] !== $back['account']) {
+            return null;
+        }
+        try {
+            // relecture de RETOUR : le lien (agence vivante, site encore géré, rôle) relu SANS le cache d'une minute
+            if ($this->broken($row)[0] !== null) {
+                return null;
+            }
+            $this->emProvider->switchTenant((string) $home['dbname'], (string) $home['code']);
+            $user = $this->emProvider->getEntityManager()->find(User::class, $back['account']);
+            if (!$user instanceof User || mb_strtolower(trim((string) $user->getEmail())) !== mb_strtolower(trim($back['email']))
+                || !hash_equals($back['password'], hash('sha256', (string) $user->getPassword()))
+                || !(AgencyRoles::has($user->getRoles()) || PlatformAccessJournal::isPlatformAccount($user->getRoles())
+                    // lot G-1b : le directeur d'un groupe (le lien du groupe, du module et de la boutique est relu par `broken` ci-dessus)
+                    || ($row['mode'] === self::MODE_GROUP && in_array('ROLE_ADMIN', $user->getRoles(), true)))) {
+                return null;
+            }
+            $this->userChecker?->checkPreAuth($user);
+            $this->userChecker?->checkPostAuth($user);
+
+            return $user;
+        } catch (\Throwable $e) {
+            $this->logger->warning('Retour au site d\'attache refusé (' . $e::class . ').');
+
+            return null;
+        }
+    }
+
+    /** Lot RETOUR : une ligne au journal du site quitté ET à celui du site d'attache ; faux si l'une manque (le retour est alors refusé) */
+    public function traceReturn(int $entryId, string $target, string $home, string $label): bool
+    {
+        foreach ([$target, $home] as $code) {
+            $site = $this->agencies->tenant($code);
+            if ($site === null) {
+                return false;
+            }
+            try {
+                $this->databases->pdo((string) $site['dbname'])->prepare('INSERT INTO content_audit_log (created_at, user_identifier, tenant, resource, resource_id, action, fields, after_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+                    ->execute([(new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s'), mb_substr($label !== '' ? $label : 'Entrée', 0, 180), (string) $site['code'],
+                        self::JOURNAL_RESOURCE, (string) $entryId, 'return', 'site', json_encode(['from' => $target, 'to' => $home], \JSON_UNESCAPED_UNICODE)]);
+            } catch (\Throwable $e) {
+                $this->logger->error('Retour au site d\'attache : trace non écrite (' . $e::class . ') : retour refusé.');
+
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /** Ferme les entrées ouvertes d'un compte de ce site d'attache (déconnexion) : refusées dès la requête suivante */

@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (662)
+## Boutique et commun (668)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -476,6 +476,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/pertes/alertes` | ROLE_ADMIN | `LossPrevention\Controller\LossAlertController::today` |
 | POST | `/api/gestion/pertes/analyse` | ROLE_ADMIN | `LossPrevention\Controller\LossPreventionController::analyse` |
 | GET | `/api/gestion/pertes/bilan` | ROLE_ADMIN | `LossPrevention\Controller\LossCountController::evening` |
+| POST | `/api/gestion/pertes/boitiers/a-confirmer/{id}` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::confirmShipment` |
+| GET | `/api/gestion/pertes/boitiers/a-confirmer` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::pendingShipments` |
 | POST | `/api/gestion/pertes/boitiers/jumeler` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::pair` |
 | POST | `/api/gestion/pertes/boitiers/{id}/appareils/{deviceId}/retirer` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::retireDevice` |
 | PUT | `/api/gestion/pertes/boitiers/{id}/appareils/{deviceId}` | ROLE_ADMIN | `LossPrevention\Controller\LossBoxController::assignDevice` |
@@ -681,6 +683,10 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/platform/events` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::events` |
 | PUT | `/api/platform/offers/{code}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformOffersController::put` |
 | GET | `/api/platform/offers` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformOffersController::list` |
+| POST | `/api/platform/pertes/expeditions/{id}/annuler` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `LossPrevention\Controller\LossShipmentPlatformController::cancel` |
+| POST | `/api/platform/pertes/expeditions/{id}/code` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `LossPrevention\Controller\LossShipmentPlatformController::resendCode` |
+| GET | `/api/platform/pertes/expeditions` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `LossPrevention\Controller\LossShipmentPlatformController::list` |
+| POST | `/api/platform/pertes/expeditions` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `LossPrevention\Controller\LossShipmentPlatformController::create` |
 | PUT | `/api/platform/pertes/materiel/{code}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `LossPrevention\Controller\LossHardwareSaleController::put` |
 | GET | `/api/platform/pertes/materiel` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `LossPrevention\Controller\LossHardwareSaleController::list` |
 | PUT | `/api/platform/policies/{feature}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::policy` |
@@ -968,7 +974,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (118)
+## Administration (EasyAdmin) (121)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -1041,6 +1047,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/plateforme/boutique` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shop` |
 | POST | `/admin/plateforme/demande/{id}/{decision}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::request` |
 | POST | `/admin/plateforme/droit/{id}/{action}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::act` |
+| POST | `/admin/plateforme/expedition/{id}/annuler` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::lossShipmentCancel` |
+| POST | `/admin/plateforme/expedition/{id}/code` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::lossShipmentCode` |
+| POST | `/admin/plateforme/expedition` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::lossShipment` |
 | POST | `/admin/plateforme/ia-credits` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::aiCredits` |
 | POST | `/admin/plateforme/ia-defauts` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::aiDefaults` |
 | POST | `/admin/plateforme/livraison/credit` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shippingCredit` |

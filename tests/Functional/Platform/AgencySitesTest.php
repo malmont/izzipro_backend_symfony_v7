@@ -171,7 +171,7 @@ class AgencySitesTest extends WebTestCase
 
         // Les droits de source « agence » : les modules et les applications, pas l'IA ; projetés sur la fiche du site
         $features = AgencyEntitlements::features();
-        $this->assertCount(10, $features);
+        $this->assertCount(11, $features); // lot G-1 : module.multi_shop
         $this->assertSame([], array_values(array_filter($features, static fn (string $k): bool => str_starts_with($k, 'ai.'))));
         $rights = $this->master->query("SELECT feature_key, source, status, reference FROM tenant_entitlements WHERE tenant_code = '$code' AND source = 'agency' ORDER BY feature_key")->fetchAll(\PDO::FETCH_ASSOC);
         $sorted = $features;
@@ -287,7 +287,7 @@ class AgencySitesTest extends WebTestCase
         $this->assertSame([true, true, true, true, true, false], $flags(), 'seuls les modules demandés sont ouverts');
         $modules = fn (string $as = 'member'): array => array_column($this->json('GET', "/api/agency/sites/$code/modules", null, $as, 200)['modules'], null, 'key');
         $state = fn (string $key): array => [$modules()[$key]['enabled'], $modules()[$key]['byAgency'], $modules()[$key]['status']];
-        $this->assertCount(10, $modules());
+        $this->assertCount(11, $modules()); // lot G-1 : module.multi_shop
         $this->assertSame([[true, true, 'active'], [false, false, null], 'Boutique'], [$state('module.boutique'), $state('module.boussole'), $modules()['module.boutique']['label']]);
 
         // Ouvrir, fermer : le responsable seulement ; rien pour un module inconnu ou pour l'IA

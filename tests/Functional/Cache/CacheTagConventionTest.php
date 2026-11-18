@@ -20,6 +20,9 @@ class CacheTagConventionTest extends TestCase
         'src/Command/TenantCacheClearCommand.php',
         // annuaire des sites (base maître, étiquette `tenants` sur cache.app) : hors du registre par nature
         'src/Controller/TenantSetupController/TenantController.php',
+        // lot AG-3d : « Tous mes clients » d'une agence, lignes de plusieurs sites lues de la base maître (cache.app), hors du registre par
+        // nature ; seul ce service pose et vide l'étiquette (`forgetIn`), les autres l'appellent
+        'src/Services/Agency/AgencyClientsService.php',
     ];
 
     /** `$item->tag(…)` encore écrit dans une fonction de calcul : plus aucun depuis le lot 4 (28/10/2026) */

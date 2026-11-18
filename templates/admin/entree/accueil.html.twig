@@ -12,8 +12,5 @@
         Seuls les écrans de construction et d'entretien des modules actifs vous sont ouverts ; chaque écriture est tracée au journal du site.
     </div>
     <p>Écrans ouverts : {{ screens|length }}. Utilisez le menu de gauche.</p>
-    <form method="post" action="{{ path('admin_entree_quitter') }}">
-        <input type="hidden" name="_token" value="{{ csrf_token('admin_entree_quitter') }}">
-        <button type="submit" class="btn btn-outline-danger">Quitter ce site{% if home %} et revenir à {{ home }}{% endif %}</button>
-    </form>
+    {# lot RETOUR : « Revenir à <site d'attache> » est dans le bandeau de toutes les pages #}
 {% endblock %}

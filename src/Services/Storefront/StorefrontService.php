@@ -76,11 +76,7 @@ class StorefrontService
 
     private function forgetClientRow(string $code): void
     {
-        try {
-            $this->tagCache?->invalidateTags([\App\Services\Agency\AgencyClientsService::tag($code)]);
-        } catch (\Throwable) {
-            // la ligne se relira à son échéance
-        }
+        \App\Services\Agency\AgencyClientsService::forgetIn($this->tagCache, $code);
     }
 
     /**

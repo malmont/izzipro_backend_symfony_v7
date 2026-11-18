@@ -7,6 +7,7 @@ use App\Gestion\Services\GestionValidationException;
 use App\Gestion\Services\GestionConflictException;
 use App\LossPrevention\UseCase\LossBoxUseCase;
 use App\LossPrevention\UseCase\LossPairingUseCase;
+use App\LossPrevention\UseCase\LossShipmentUseCase;
 use App\Services\EmailConfigurationService\EmailLocale;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -22,8 +23,47 @@ use Symfony\Component\Routing\Attribute\Route;
 #[Route('/api/gestion/pertes')]
 class LossBoxController extends AbstractController
 {
-    public function __construct(private readonly LossBoxUseCase $useCase, private readonly LossPairingUseCase $pairing, private readonly ?EmailLocale $siteLocale = null)
+    public function __construct(private readonly LossBoxUseCase $useCase, private readonly LossPairingUseCase $pairing, private readonly ?EmailLocale $siteLocale = null, private readonly ?LossShipmentUseCase $shipments = null)
     {
+    }
+
+    /**
+     * Lot L6-b : les boîtiers vendus, branchés dans la boutique, à confirmer → 200 { boxes [{ id, serial, pluggedAt, pluggedAgo,
+     * confirmBefore }], notice } ; 429 RATE_LIMITED
+     */
+    #[Route('/boitiers/a-confirmer', name: 'gestion_pertes_boitiers_a_confirmer', methods: ['GET'])]
+    public function pendingShipments(Request $request): JsonResponse
+    {
+        return $this->limited(fn (): JsonResponse => $this->json($this->shipments()->pending($this->locale($request), $request->getClientIp() ?? 'unknown')));
+    }
+
+    /**
+     * Lot L6-b : « C'est bien mon boîtier » `{ name?, place? }` → 201 { box } : le boîtier branché est relié au site de la session ; 404
+     * SHIPMENT_NOT_FOUND (inconnu, d'un autre site, déjà confirmé ou passé les 72 h : le même refus), 409 BOX_LIMIT_REACHED, 429
+     */
+    #[Route('/boitiers/a-confirmer/{id}', name: 'gestion_pertes_boitiers_confirmer', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function confirmShipment(int $id, Request $request): JsonResponse
+    {
+        return $this->limited(fn (): JsonResponse => $this->json($this->shipments()->confirm($id, $this->body($request), $this->locale($request), $this->userId(), $request->getClientIp() ?? 'unknown', $this->isGranted('ROLE_SUPER_ADMIN')), 201));
+    }
+
+    private function shipments(): LossShipmentUseCase
+    {
+        return $this->shipments ?? throw new \LogicException('Expéditions des boîtiers indisponibles.');
+    }
+
+    /** Un refus de plafond rend son heure de reprise (`Retry-After`), comme le jumelage */
+    private function limited(callable $do): JsonResponse
+    {
+        try {
+            return $do();
+        } catch (GestionConflictException $e) {
+            if ($e->status !== 429) {
+                throw $e;
+            }
+
+            return $this->json($e->toArray(), 429, ['Retry-After' => (string) ($e->details['retryAfterSeconds'] ?? 60)]);
+        }
     }
 
     /**

@@ -1549,7 +1549,7 @@ prouve (`tests/Functional/...`, « — » = aucun test dédié).
 | POST | `/api/pos/customers/{id}/merge` | caisse | **responsable** | PosCustomerApiTest, PosRoleMatrixTest |
 | GET | `/api/pos/customers/{id}` | caisse | fiche du site ; masquage caissier ; journal `CUSTOMER_VIEWED` | PosCustomerApiTest |
 | PATCH | `/api/pos/customers/{id}` | caisse | fiche du site ; consentements | PosCustomerApiTest |
-| GET | `/api/pos/customers` | caisse | recherche : courriel/téléphone exacts, nom ≥ 3 ; 30/min/utilisateur (429) ; journal masqué | PosCustomerApiTest |
+| GET | `/api/pos/customers` | caisse | recherche : courriel/téléphone exacts, nom ≥ 3 ; 30/min/utilisateur (429) ; journal masqué (courriel « m***@domaine », téléphone « •••• 1234 » ; depuis DON-1, 18/11/2026 : nom « t*** », code de fidélité « •••• » et ses 4 derniers caractères, courriel illisible comme un nom ; masques communs `App\Services\Privacy\PersonalDataMask`) | PosCustomerApiTest |
 | POST | `/api/pos/customers` | caisse | création ; téléphone E.164 | PosCustomerApiTest |
 | POST | `/api/pos/exchanges/quote` | caisse | lecture (simulation) ; toute vente du site | PosReturnApiTest |
 | POST | `/api/pos/exchanges` | caisse | toute vente du site ; session du poste du caissier ; C3 `return` selon seuil | PosReturnApiTest, PosRoleMatrixTest |

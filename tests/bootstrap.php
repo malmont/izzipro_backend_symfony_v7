@@ -114,6 +114,8 @@ $master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_sites_master.sql
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/loss_pairing_master.sql'));
 // Prévention des pertes (lot L6-a, 17/11/2026) : matériel vendu et offres du module (ops/sql/loss_hardware_master.sql, même SQL que la base maître réelle)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/loss_hardware_master.sql'));
+// Prévention des pertes (lot L6-b, 17/11/2026) : boîtiers vendus, expédiés, reconnus au premier branchement (ops/sql/loss_shipment_master.sql)
+$master->exec(file_get_contents(__DIR__ . '/../ops/sql/loss_shipment_master.sql'));
 // Accès d'assistance d'une agence (lot AG-ASSIST, 16/11/2026) : demandes du commerçant (ops/sql/assistance_master.sql, même SQL que la base maître réelle)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/assistance_master.sql'));
 // Multi-boutiques (lot G-1a, 18/11/2026) : groupes, boutiques, invitations, journal (ops/sql/groups_master.sql, même SQL que la base maître réelle)

@@ -45,7 +45,7 @@ class PlatformConsoleApiTest extends WebTestCase
         $r = $this->api('GET', '/api/platform/sites', null, 'super');
         $this->assertSame(200, $r->getStatusCode(), $r->getContent());
         $body = json_decode((string) $r->getContent(), true);
-        $this->assertSame(12, count($body['features']), 'sept modules (Assistance et Prévention des pertes comprises), trois applications, deux paliers IA');
+        $this->assertSame(13, count($body['features']), 'huit modules (Assistance, Prévention des pertes et Multi-boutiques comprises), trois applications, deux paliers IA');
         $sites = array_column($body['sites'], null, 'code');
         $this->assertArrayHasKey(MV_TEST_TENANT_CODE, $sites);
         $this->assertArrayNotHasKey('gmasuite', $sites, 'le modèle n\'est pas un site');
@@ -84,7 +84,7 @@ class PlatformConsoleApiTest extends WebTestCase
     public function testPoliciesAndRequestsDecisions(): void
     {
         $r = $this->api('GET', '/api/platform/policies', null, 'super');
-        $this->assertSame(12, count(json_decode((string) $r->getContent(), true)['policies']));
+        $this->assertSame(13, count(json_decode((string) $r->getContent(), true)['policies'])); // lot G-1 : module.multi_shop
         $r = $this->api('PUT', '/api/platform/policies/module.memoires', ['trialAllowed' => false, 'graceDays' => 3], 'super');
         $this->assertSame(200, $r->getStatusCode(), $r->getContent());
         $this->assertSame([false, 3, 30], [json_decode((string) $r->getContent(), true)['policy']['trial_allowed'], json_decode((string) $r->getContent(), true)['policy']['grace_days'], json_decode((string) $r->getContent(), true)['policy']['trial_days']]);

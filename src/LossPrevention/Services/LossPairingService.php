@@ -47,6 +47,10 @@ class LossPairingService
     public const POLL_SECONDS = 15;
     public const INVALID = 'PAIRING_CODE_INVALID';
     /** Les seules raisons qui ferment un jumelage relié : des preuves lues sur le boîtier que ce jumelage a créé */
+    /** @var list<array{site: string, userId: int, shipment: ?int}> lot L6-b : les saisies refusées de cette requête, tracées après la réponse */
+    private array $refusals = [];
+    /** Train 102 : vrai si une requête a noté un refus ; lu par `LossPairingTraceSubscriber` sans construire ce service */
+    private static bool $pending = false;
     private const CLOSING = [LossBoxChannelService::PAIRED_REVOKED, LossBoxChannelService::PAIRED_KEY_RESET, LossBoxChannelService::PAIRED_OTHER_MACHINE];
 
     public function __construct(
@@ -61,6 +65,7 @@ class LossPairingService
         private readonly PlatformModeService $platform,
         private readonly LossTexts $texts,
         private readonly ?LoggerInterface $logger = null,
+        private readonly ?LossShipmentService $shipments = null, // lot L6-b : les boîtiers vendus, reconnus au premier branchement
     ) {
     }
 
@@ -73,7 +78,8 @@ class LossPairingService
      */
     public function deposit(array $body, string $ip): array
     {
-        $code = $this->boxInput($body, ['machine', 'version', 'arch']);
+        $code = $this->boxInput($body, ['machine', 'version', 'arch', 'serial']);
+        $serial = isset($body['serial']) ? strtoupper((string) $body['serial']) : null; // lot L6-b : la série du boîtier, s'il la connaît
         $this->guardAddress($ip);
         $wait = $this->limits->pairDeposit($ip);
         if ($wait !== null) {
@@ -85,7 +91,9 @@ class LossPairingService
         $now = gmdate('Y-m-d H:i:s', $serverNow);
         $expires = $serverNow + self::WAIT_SECONDS;
 
-        return $this->pairings->transaction(function () use ($codeHash, $machineHash, $body, $serverNow, $now, $expires, $ip): array {
+        $notify = null;
+        $answer = $this->pairings->transaction(function () use ($code, $codeHash, $machineHash, $body, $serverNow, $now, $expires, $ip, $serial, &$notify): array {
+            $this->shipments?->lockFor($codeHash); // lot L6-b : l'expédition du code, puis la demande (le même ordre partout)
             $row = $this->pairings->byCodeHash($codeHash, true);
             if ($row === null) {
                 // un code que la plateforme ne connaît pas : une ligne de plus dans la base maître, qui ne s'effacera pas. Leur nombre
@@ -97,7 +105,9 @@ class LossPairingService
                 if ($this->pairings->createdSince(gmdate('Y-m-d H:i:s', $serverNow - 3600)) >= self::NEW_PER_HOUR) {
                     throw self::tooMany(900);
                 }
-                if ($this->pairings->insert($codeHash, $machineHash, $body['version'], $body['arch'], $now, gmdate('Y-m-d H:i:s', $expires))) {
+                if ($this->pairings->insert($codeHash, $machineHash, $body['version'], $body['arch'], $now, gmdate('Y-m-d H:i:s', $expires), $serial)) {
+                    $notify = $this->shipments?->plugged($code, $codeHash, $now); // lot L6-b : un boîtier vendu est branché
+
                     return self::answer(LossPairingRepository::WAITING, $serverNow, $expires);
                 }
                 $row = $this->pairings->byCodeHash($codeHash, true); // déposé au même instant par un autre appel
@@ -108,13 +118,17 @@ class LossPairingService
                 throw self::unknown();
             }
             if ($row['status'] === LossPairingRepository::WAITING) {
-                $this->pairings->renew((int) $row['id'], $body['version'], $body['arch'], $now, gmdate('Y-m-d H:i:s', $expires));
+                $this->pairings->renew((int) $row['id'], $body['version'], $body['arch'], $now, gmdate('Y-m-d H:i:s', $expires), $serial);
+                $notify = $this->shipments?->plugged($code, $codeHash, $now); // lot L6-b : rebranché (après 72 h sans confirmation, l'avis repart)
 
                 return self::answer(LossPairingRepository::WAITING, $serverNow, $expires);
             }
 
             return self::answer((string) $row['status'], $serverNow, null);
         });
+        $this->shipments?->dispatch($notify); // après la transaction : l'avis ne part que pour un branchement écrit
+
+        return $answer;
     }
 
     /**
@@ -144,6 +158,13 @@ class LossPairingService
         $now = gmdate('Y-m-d H:i:s', $serverNow);
         $id = (int) $row['id'];
         if ($row['status'] === LossPairingRepository::WAITING) {
+            // lot L6-b : un boîtier vendu qui pose sa question après la réservation est branché (son premier contact dans la boutique)
+            try {
+                $this->shipments?->dispatch($this->shipments->pluggedOnPoll($code, $codeHash));
+            } catch (\Throwable $e) {
+                // une panne du branchement ne fait jamais échouer la question du boîtier : il redemandera
+                $this->warn($id, 'branchement d\'une expédition non écrit (' . $e::class . ')');
+            }
             // le boîtier est là : sa demande reste jumelable (écrit au plus une fois par demi-journée)
             $expires = (new \DateTimeImmutable((string) $row['expires_at'], new \DateTimeZone('UTC')))->getTimestamp();
             if ($expires - $serverNow < self::WAIT_SECONDS - self::RENEW_EVERY) {
@@ -236,16 +257,28 @@ class LossPairingService
         if ($wait !== null) {
             throw new GestionConflictException('RATE_LIMITED', $this->texts->t('boxes.error.PAIRING_RATE_LIMITED', $locale), 429, ['retryAfterSeconds' => $wait]);
         }
-        $invalid = fn (): GestionConflictException => new GestionConflictException(self::INVALID, $this->texts->t('boxes.error.' . self::INVALID, $locale), 404);
+        // lot L6-b : chaque refus est noté ici, puis écrit APRÈS la réponse (`flushRefusals`, à `kernel.terminate`), le même pour un code
+        // inconnu et pour un code réservé à un autre site : la réponse garde la même durée, et l'on garde la trace des tentatives
+        $invalid = function (?int $shipment = null) use ($locale, $site, $userId): GestionConflictException {
+            $this->refusals[] = ['site' => $site, 'userId' => $userId, 'shipment' => $shipment];
+            self::$pending = true;
+
+            return new GestionConflictException(self::INVALID, $this->texts->t('boxes.error.' . self::INVALID, $locale), 404);
+        };
         $code = LossPairingCode::canonical($body['code'] ?? null) ?? throw $invalid();
         $serverNow = time();
         $now = gmdate('Y-m-d H:i:s', $serverNow);
-        $boxId = $this->pairings->transaction(function () use ($code, $name, $place, $locale, $userId, $site, $serverNow, $now, $invalid): int {
+        $confirmed = null;
+        $boxId = $this->pairings->transaction(function () use ($code, $name, $place, $locale, $userId, $site, $serverNow, $now, $invalid, &$confirmed): int {
             // la demande est tenue jusqu'au bout : deux administrateurs qui donnent le même code au même instant ne jumellent pas deux fois
-            $row = $this->pairings->byCodeHash($this->tokens->pairingCodeHash($code), true);
-            if ($row === null || $row['status'] !== LossPairingRepository::WAITING
+            $codeHash = $this->tokens->pairingCodeHash($code);
+            // lot L6-b : un code réservé à un AUTRE site reçoit le refus d'un code inconnu. La garde est lue AVANT la demande, et pour
+            // tout code : le refus coûte la même chose, réservé ailleurs ou inconnu
+            $guard = $this->shipments?->guardPair($codeHash, $site) ?? ['refused' => false, 'shipment' => null];
+            $row = $this->pairings->byCodeHash($codeHash, true);
+            if ($guard['refused'] || $row === null || $row['status'] !== LossPairingRepository::WAITING
                 || (new \DateTimeImmutable((string) $row['expires_at'], new \DateTimeZone('UTC')))->getTimestamp() <= $serverNow) {
-                throw $invalid();
+                throw $invalid($guard['refused'] ? $guard['shipment'] : null);
             }
             // Le boîtier du site est lié à ce code, à ce site ET à l'aléa de ce jumelage-ci, écrit sur la demande. Si l'écriture de la
             // demande échoue après la création du boîtier (deux bases, pas de transaction commune), il reste un boîtier « en attente »
@@ -253,11 +286,42 @@ class LossPairingService
             $link = bin2hex(random_bytes(16));
             $boxId = $this->boxes->createPaired($name, $place, self::linked($code, $link), $locale, $userId);
             $this->pairings->pair((int) $row['id'], $site, $boxId, $link, $now);
+            if ($guard['shipment'] !== null) {
+                $this->shipments?->pairedByCode($guard['shipment'], $boxId, $userId, $site, $now); // le secours du site acheteur
+                $confirmed = $guard['shipment'];
+            }
 
             return $boxId;
         });
 
+        if ($confirmed !== null) {
+            $this->shipments?->journalConfirmedByCode($confirmed, $boxId, $userId);
+        }
+
         return ['box' => $this->boxes->sheet($boxId, $locale, false)];
+    }
+
+    /**
+     * Lot L6-b : les saisies de code refusées de cette requête, écrites après la réponse (`LossPairingTraceSubscriber`) : au journal du
+     * module du site qui a saisi (la même ligne pour un code inconnu et pour un code réservé ailleurs : le site n'apprend rien de plus), et
+     * au journal des expéditions de la plateforme quand le code était réservé à un autre site.
+     */
+    public static function hasPendingRefusals(): bool
+    {
+        return self::$pending;
+    }
+
+    public function flushRefusals(): void
+    {
+        self::$pending = false;
+        [$refusals, $this->refusals] = [$this->refusals, []];
+        foreach ($refusals as $refusal) {
+            try {
+                $this->shipments?->traceRefusal($refusal['site'], $refusal['userId'], $refusal['shipment']);
+            } catch (\Throwable $e) {
+                $this->logger?->warning('Prévention des pertes : saisie de code refusée non tracée (' . $e::class . ').');
+            }
+        }
     }
 
     /**
@@ -270,7 +334,11 @@ class LossPairingService
      */
     private function boxInput(array $body, array $fields): string
     {
-        $errors = LossBoxChannelService::machineErrors($body, $fields);
+        $errors = LossBoxChannelService::machineErrors($body, array_values(array_diff($fields, ['serial'])));
+        // lot L6-b : la série du boîtier, facultative (un boîtier qui ne la connaît pas encore la tait), à la forme d'une série d'expédition
+        if (in_array('serial', $fields, true) && array_key_exists('serial', $body) && (!is_string($body['serial']) || preg_match(LossShipmentService::SERIAL, $body['serial']) !== 1)) {
+            $errors['serial'] = 'INVALID_VALUE';
+        }
         $code = LossPairingCode::canonical($body['code'] ?? null);
         if ($code === null) {
             $errors['code'] = array_key_exists('code', $body) ? 'INVALID_VALUE' : 'REQUIRED';
