@@ -1,6 +1,7 @@
 # Incidents et signalements : relevé des erreurs de toutes les applications et bogues signalés par les clients
 
-Cadrage du 10/11/2026, décidé par le propriétaire. Chantier à lancer **après la fin de l'application de gestion**. Rien n'est codé.
+Cadrage du 10/11/2026, décidé par le propriétaire ; ajouts du 18/11/2026 (§ « Ajouts du propriétaire »). Nom du lot : **INCIDENTS** (INC-1 à
+INC-5). Rien n'est codé ; contrat à proposer au chef quand son tour vient.
 Deux circuits, deux publics, deux outils déjà en place : pas de nouvelle plateforme.
 
 ## Principe
@@ -88,6 +89,29 @@ aux utilisateurs.
 - Un seul outil pour les traiter : EasyAdmin. Un outil de tickets externe (GitHub ou autre) ne reçoit que des liens, jamais l'original.
 - Non-régression : les suites existantes passent sans modification ; les nouvelles routes ont leurs tests ; la limite par site protège
   contre une application en boucle d'erreurs.
+
+## Ajouts du propriétaire du 18/11/2026 (relayés par le chef), à intégrer au contrat du lot INCIDENTS
+
+1. **Sources** : toutes les applications, pas seulement la caisse (« Signaler un problème » de la caisse aujourd'hui) : application de
+   gestion MAUI, applications Flutter (caisse, boutique mobile, Living Memory), fronts web (Next) et backend (gestionnaire Monolog). Le lot 2
+   (un prompt par session) les branche une à une sur `POST /api/incidents/report`.
+2. **EasyAdmin, onglet réservé au super administrateur** : une BOÎTE UNIQUE des incidents techniques, qui reçoit aussi ceux d'une
+   application tierce de suivi des erreurs par une ENTRÉE AUTHENTIFIÉE (`POST /api/incidents/ingest/{source}` : clé propre à la source,
+   rangée chiffrée, signature du corps vérifiée, limite par source ; la source n'écrit qu'un incident, jamais un compte ni un réglage).
+   Chaque incident porte le site, l'application, la version, la gravité, une SIGNATURE qui regroupe les doublons (l'empreinte du modèle,
+   calculée par le serveur, jamais fournie telle quelle par la source) et un état (`new`, `acknowledged`, `fixed`, `ignored`).
+3. **Escalade depuis l'Assistance** : un ticket du module Assistance (`docs/assistance.md`) qui est en fait un bogue s'attribue d'un geste
+   à la plateforme (« Transmettre à l'équipe technique », agent du site) : un incident `app: support`, lié au ticket d'origine
+   (`support_ticket_id` + site), sans copie du fil ni des pièces jointes du client (un résumé écrit par l'agent, masqué comme DON-1). Le
+   commerçant lit seulement l'ÉTAT sur son ticket (« transmis à l'équipe technique », « corrigé », « ne sera pas corrigé ») et la réponse
+   publique de la plateforme ; jamais l'onglet, ni la note interne, ni les autres sites. Ceci précise la règle « un signalement d'acheteur
+   ne remonte jamais à la plateforme » : il ne remonte que par ce geste explicite du commerçant.
+4. **Données** : aucune donnée personnelle d'un client final dans un incident (masquage commun avec DON-1 : courriel « m***@domaine »,
+   téléphone « •••• 1234 », nom retiré, corps des requêtes jamais repris) ; un site ne lit que SES incidents et signalements (routes du
+   site filtrées par le site du jeton, essai de cloisonnement) ; l'agence (quand elle lira) seulement ceux de ses sites.
+
+Effet sur les lots : lot 1 + entrée authentifiée de la source tierce et onglet super administrateur ; lot 3 + escalade depuis
+l'Assistance (une route du site et un état lu sur le ticket) ; un essai de cloisonnement par site et un garde-fou du masquage dans chacun.
 
 ## Décisions à prendre au lancement
 
