@@ -281,6 +281,36 @@ class AdminEntryTest extends WebTestCase
         $this->assertSame('left', $this->master->query('SELECT ended_reason FROM site_entries ORDER BY id DESC LIMIT 1')->fetchColumn());
     }
 
+    /** Lot BANDEAU (18/11/2026) : pendant une entrée, chaque page d'EasyAdmin (liste, fiche, page nommée) dit où l'on est et en tant que qui */
+    public function testTheBannerNamesTheSiteAndTheOperatorOnAListAndADetailPage(): void
+    {
+        $platform = $this->user(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'plateforme', ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'], 'Paul', true);
+        $this->user(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'plateforme', ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'], 'Paul', true);
+        $this->login($platform, MV_TEST_TENANT_HOST, MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $this->assertStringNotContainsString('data-entry-banner', $this->page('GET', '/admin', MV_TEST_TENANT_HOST), 'hors entrée : aucun bandeau');
+        $pass = $this->passFor(MV_TEST_TENANT2_CODE);
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin/entree?tenant=' . MV_TEST_TENANT2_CODE, ['pass' => $pass], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
+        $this->assertSame(302, $this->client->getResponse()->getStatusCode());
+
+        $described = static::getContainer()->get(\App\Services\TenantPublicHostResolver::class)->describe(MV_TEST_TENANT2_CODE);
+        $made = $this->hiddenCostProduct();
+        $stmt = $this->pdo(MV_TEST_TENANT2_DB)->prepare('SELECT id FROM product WHERE name = ?');
+        $stmt->execute([$made['name']]);
+        $product = (int) $stmt->fetchColumn();
+        $this->assertGreaterThan(0, $product, 'un article du second site');
+        $crud = rawurlencode('App\\Controller\\Admin\\ProductCrudController');
+        foreach (['liste' => '/admin?crudAction=index&crudControllerFqcn=' . $crud, 'fiche' => '/admin?crudAction=detail&entityId=' . $product . '&crudControllerFqcn=' . $crud,
+            'page nommée' => '/admin/acces-plateforme'] as $kind => $path) {
+            $html = $this->page('GET', $path, MV_TEST_TENANT2_HOST);
+            $banner = (new \Symfony\Component\DomCrawler\Crawler($html))->filter('[data-entry-banner]');
+            $this->assertSame(1, $banner->count(), "bandeau sur la $kind");
+            $this->assertSame([(string) $described['name'], 'Plateforme, Paul'], [trim($banner->filter('[data-entry-site]')->text()), trim($banner->filter('[data-entry-as]')->text())], "$kind : le site et qui");
+            $this->assertStringContainsString((string) $described['host'], $banner->text(), "$kind : l'adresse du site");
+            $this->assertSame(1, $banner->filter('form[action="/admin/entree/quitter"]')->count(), "$kind : le bouton pour quitter");
+            $this->assertStringNotContainsString('@', $banner->text(), "$kind : jamais une adresse de courriel");
+        }
+    }
+
     /** @return array{name: string, cost: string} un article du second site au coût d'achat reconnaissable */
     private function hiddenCostProduct(): array
     {
