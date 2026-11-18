@@ -21,14 +21,25 @@ use Symfony\Component\Routing\Attribute\Route;
 #[Route('/api/gestion/pertes')]
 class LossPreventionController extends AbstractController
 {
-    public function __construct(private readonly LossPreventionUseCase $useCase, private readonly ?EmailLocale $siteLocale = null)
+    public function __construct(private readonly LossPreventionUseCase $useCase, private readonly ?EmailLocale $siteLocale = null,
+        private readonly ?\App\Services\Group\AllShops\AllShopsReader $allShops = null)
     {
     }
 
     #[Route('', name: 'gestion_pertes', methods: ['GET'])]
     public function summary(Request $request): JsonResponse
     {
-        return $this->json($this->useCase->summary($request->query->all(), $this->locale($request)));
+        // lot G-2 : « Toutes les boutiques » (en-tête X-Group-Scope) : jamais d'analyse lancée ; par poste et par jour, jamais par personne
+        $locale = $this->locale($request);
+        $query = ['analyse' => '0'] + $request->query->all();
+        $query['analyse'] = '0';
+        $group = $this->allShops?->forRequest($request, 'gestion_pertes', [], fn (): array => ['data' => \App\Services\Group\AllShops\AllShopsMerger::lossPart($this->useCase->summary($query, $locale))],
+            \App\Services\Group\AllShops\AllShopsMerger::losses(...));
+        if ($group !== null) {
+            return $this->json($group);
+        }
+
+        return $this->json($this->useCase->summary($request->query->all(), $locale));
     }
 
     #[Route('/constats', name: 'gestion_pertes_constats', methods: ['GET'])]
