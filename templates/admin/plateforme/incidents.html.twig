@@ -41,7 +41,8 @@
             <thead><tr><th>Dernière fois</th><th>Site</th><th>Application</th><th>Gravité</th><th>Message</th><th>Fois</th><th>État</th><th></th></tr></thead>
             <tbody>
             {% for i in result.incidents %}
-                <tr class="{{ i.status == 'new' ? 'table-warning' }}">
+                {# ligne « nouveau » : filet à gauche et badge, jamais un fond clair (illisible sous le thème sombre d'EasyAdmin) #}
+                <tr{% if i.status == 'new' %} style="box-shadow: inset 4px 0 0 var(--bs-warning)"{% endif %}>
                     <td class="small">{{ i.lastSeenAt|slice(0, 16)|replace({'T': ' '}) }}</td>
                     <td>{{ i.tenantCode ?? '—' }}</td>
                     <td>{{ i.app }}{% if i.appVersion %} <span class="small text-muted">{{ i.appVersion }}</span>{% endif %}</td>
@@ -51,7 +52,7 @@
                         {% if i.note %}<div class="small">Note : {{ i.note }}</div>{% endif %}
                         {% if i.externalUrl %}<div class="small"><a href="{{ i.externalUrl }}" rel="noopener noreferrer" target="_blank">lien externe</a></div>{% endif %}</td>
                     <td>{{ i.count }}</td>
-                    <td>{{ i.status }}{% if i.reopened %} <span class="badge bg-danger">revenu</span>{% endif %}{% if i.fixedIn %}<div class="small text-muted">{{ i.fixedIn }}</div>{% endif %}</td>
+                    <td>{% if i.status == 'new' %}<span class="badge bg-warning text-dark">nouveau</span>{% else %}{{ i.status }}{% endif %}{% if i.reopened %} <span class="badge bg-danger">revenu</span>{% endif %}{% if i.fixedIn %}<div class="small text-muted">{{ i.fixedIn }}</div>{% endif %}</td>
                     <td>
                         <form method="post" action="{{ path('admin_plateforme_incident', {id: i.id}) }}" class="d-flex flex-column gap-1">
                             <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
@@ -61,7 +62,7 @@
                             <input name="fixedIn" value="{{ i.fixedIn }}" placeholder="corrigé dans (commit, version)" class="form-control form-control-sm" maxlength="80">
                             <input name="externalUrl" value="{{ i.externalUrl }}" placeholder="lien externe (https://…)" class="form-control form-control-sm" maxlength="500">
                             <input name="note" value="{{ i.note }}" placeholder="note interne" class="form-control form-control-sm" maxlength="2000">
-                            <button class="btn btn-sm btn-outline-primary">Enregistrer</button>
+                            <button class="btn btn-sm" style="background:#1e3a8a;color:#ffffff;border:1px solid #1e3a8a;font-weight:600">Enregistrer</button>
                         </form>
                     </td>
                 </tr>

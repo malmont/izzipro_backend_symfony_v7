@@ -477,6 +477,61 @@ que ce site existait : souscrire, même sans payer, puis résilier sur le site d
   0. L'essai reste celui de la plateforme (« Demander », une fois par site).
 - Essais : `tests/Functional/Platform/PlanLinkTest.php`.
 
+## Paiements des offres : webhook Stripe solide (lot PROVISION-3, 18/11/2026, contrat validé par le chef)
+
+Avant ce lot, un événement Stripe rejoué était refait, un événement arrivé en retard pouvait défaire un état plus récent, et un échec de
+pose des droits d'une formule branchée n'était que journalisé. Tout vaut pour TOUS les abonnements de la boutique, branchés ou non.
+
+- **Journal** (base maître `stripe_event_log`, `ops/sql/platform_offer_payments_master.sql`) : identifiant Stripe, type, compte, site,
+  abonnement visé, date de l'événement chez Stripe, reçu le, état (`received`, `processed`, `ignored`, `failed`), essais, classe de la
+  dernière erreur. **Jamais le contenu de l'événement.** Un événement déjà traité ou ignoré répond 200 `duplicate` sans rien refaire ;
+  un événement encore EN COURS ailleurs, ou dont l'abonnement est tenu plus de 10 secondes par un autre traitement, répond **409**
+  `in_progress` (Stripe livre de nouveau ; un 200 le tiendrait pour livré) ; un événement de moins de 10 minutes d'un abonnement pas
+  encore enregistré (course à la création) aussi ; un événement en échec, resté « reçu » plus de 5 minutes, ou ignoré pour « abonnement
+  inconnu » ou « site inconnu » est repris à la livraison suivante ; un échec est noté puis remonté (500 : Stripe livre de nouveau). Journal injoignable (table absente, base maître
+  en panne) : l'événement est traité sans journal, journalisé en critique, jamais refusé. Conservation 90 jours.
+- **Un seul traitement à la fois par abonnement** (`SubscriptionLock` : verrou de session PostgreSQL de la base du site, clé site +
+  abonnement Stripe, l'abonnement relu sous le verrou, attente bornée à 10 secondes, réentrant) : webhook, file de reprise,
+  réconciliation, « Rejouer » et les gestes locaux (résilier, mettre en pause, reprendre, changer de formule). Deux événements livrés en
+  même temps ne s'écrasent plus ; `invoice.paid` et `invoice.payment_succeeded` de la même facture ne créent qu'une commande.
+- **Ordre** (`subscription.stripe_event_at`, migration `Version20270201300000`) : la date du dernier INSTANTANÉ de l'abonnement
+  appliqué : événement `customer.subscription.*`, relecture chez Stripe, ou geste local (souscription, résiliation, pause, reprise,
+  changement de formule : l'état que Stripe vient de rendre, daté de maintenant moins une minute pour absorber un écart d'horloge). Une
+  facture ne fait jamais avancer cette date. Un événement d'abonnement plus ancien est ignoré (`out_of_order`) ; la résiliation
+  (`customer.subscription.deleted`), état final, s'applique toujours. Une facture payée crée toujours sa commande d'échéance (l'argent est
+  encaissé) mais, en retard, ne touche pas à l'état ; elle ne fait **jamais reculer la fin de période** et ne **ressuscite jamais un
+  abonnement résilié**. Un échec de paiement d'une facture déjà payée est toujours ignoré, quel que soit l'ordre d'arrivée ; en retard
+  sur un instantané plus récent, il est traité si l'abonnement est encore impayé (impayé, courriel et résiliation au dernier essai ne se
+  perdent pas), ignoré sinon ; l'échec d'un essai plus ancien que celui déjà noté n'écrase pas l'impayé.
+- **« Période payée »** : `SubscriptionPeriodPaidEvent` (abonnement, site, facture, début et fin de période, montant en centimes) est
+  émis **au plus une fois par facture** (registre `subscription_period_paid` de la base maître : `invoice.paid` et
+  `invoice.payment_succeeded` de la même facture n'en font qu'un), avec le motif de facturation (`billingReason` : création, cycle,
+  prorata…) ; `dispatched_at` note qu'il a été traité (une période notée sans cette date est à réémettre, lot ABO-1). Émis aussi pour une
+  facture à 0, de prorata ou en retard : l'écouteur trie. Aucun écouteur aujourd'hui ; le lot ABO-1 y fera naître les droits de la période
+  (`docs/plan-abo-universel.md`).
+- **File de reprise** (`platform_offer_retry`) : un échec de pose des droits d'une formule branchée y met l'abonnement. La reprise relit
+  l'état chez Stripe puis recalcule les droits **voulus** (`OfferFulfillmentService::resync` : actif ou essai → actifs jusqu'à la fin de
+  période + grâce ; impayé → grâce ; pause → suspendus ; résilié ou jamais payé → retirés), sans rejouer d'événement ; sans danger à
+  répéter. **Une fonctionnalité déjà couverte par un droit vivant d'une autre origine qui dure au moins autant** (sans fin, ou jusqu'à la
+  fin de période + grâce : manuel, gratuit, agence, autre abonnement) n'est pas accordée : accorder annule tout autre droit de la même
+  fonctionnalité (`EntitlementService::grant`), la reprise ne doit donc jamais le faire (action `covered`). Un essai qui finit avant est
+  remplacé, comme par le chemin ordinaire : le client payant garde son module. La couverture ne vaut que pour accorder : retirer,
+  suspendre ou mettre en grâce ne touche que les droits de l'abonnement. Stripe injoignable : les droits sont recalculés depuis l'état local, et l'échec compte.
+  Paliers 5 min, 15 min, 1 h, 3 h, puis 6 h ; au 5e échec, **incident de la plateforme** (INC-1a, niveau `error`, un par
+  abonnement : `offres/abonnement/<id>`), qui figure dans le courriel du jour.
+- **Réconciliation** (`app:platform:offers:reconcile`, une seule exécution à la fois : verrou de la base maître, la seconde sort sans rien
+  faire) : sans option, la file (minuteur `ops/systemd/platform-offers-retry.timer`, toutes
+  les 15 minutes) ; `--all`, chaque nuit à 05 h 40 UTC (`platform-offers-reconcile.timer`) : chaque abonnement branché de la boutique de
+  la plateforme (résiliés depuis moins de 40 jours compris) est relu chez Stripe, puis ses droits comparés à son état
+  (`OfferFulfillmentService::drift` ; une fonctionnalité couverte par une autre origine n'est jamais un écart) ; un écart est corrigé et
+  devient un incident (`warning`). Un échec pendant l'écriture rouvre l'EntityManager pour les abonnements suivants. **Seuls les droits de l'abonnement
+  concerné** (référence `subscription:<site>:<id>`) sont touchés, jamais un droit d'une autre origine (manuel, essai, agence). Un droit
+  d'abonnement éteint à la main est donc rallumé la nuit suivante : on règle un droit d'abonnement par l'abonnement (résilier, mettre en
+  pause), pas par le droit. Purge du journal à 90 jours.
+- **Écran** : section « Paiements des offres » de la page Plateforme (`/admin/plateforme#paiements-offres`) : la file de reprise avec
+  « Rejouer » (`POST /admin/plateforme/offres/reprise/{id}`, super administrateur, jeton CSRF), et les 50 derniers événements.
+- Essais : `tests/Functional/Platform/OfferPaymentsTest.php`.
+
 ## Domaine propre d'un site (05/11/2026)
 
 `Services/Platform/CustomDomainService` : l'administrateur enregistre son domaine (acheté chez un registraire) depuis Mon site

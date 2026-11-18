@@ -25,7 +25,7 @@
             <label class="form-label small mb-0">Conservation des captures (jours, provisoire)</label>
             <input name="screenshotDays" value="{{ screenshotDays }}" class="form-control form-control-sm" inputmode="numeric" maxlength="4">
         </div>
-        <div class="col-auto"><button class="btn btn-sm btn-outline-primary">Enregistrer</button></div>
+        <div class="col-auto"><button class="btn btn-sm" style="background:#1e3a8a;color:#ffffff;border:1px solid #1e3a8a;font-weight:600">Enregistrer</button></div>
     </form>
 
     <form method="get" class="row g-2 align-items-end mb-3">
@@ -47,7 +47,8 @@
             <thead><tr><th>Reçu</th><th>Site</th><th>Application</th><th>Signalement</th><th>État</th><th></th></tr></thead>
             <tbody>
             {% for r in result.reports %}
-                <tr class="{{ r.status == 'received' ? 'table-warning' }}">
+                {# ligne « reçu » : filet à gauche et badge, jamais un fond clair (illisible sous le thème sombre d'EasyAdmin) #}
+                <tr{% if r.status == 'received' %} style="box-shadow: inset 4px 0 0 var(--bs-warning)"{% endif %}>
                     <td class="small">{{ r.createdAt|slice(0, 16)|replace({'T': ' '}) }}</td>
                     <td>{{ r.tenantCode }}</td>
                     <td>{{ r.app }}{% if r.appVersion %} <span class="small text-muted">{{ r.appVersion }}</span>{% endif %}<div class="small text-muted">{{ r.reporterKind }}{% if r.supportTicketId %} · ticket n° {{ r.supportTicketId }}{% endif %}</div></td>
@@ -56,7 +57,7 @@
                         {% if r.context %}<details class="small"><summary>contexte</summary><pre class="mb-0">{{ r.context|json_encode(constant('JSON_PRETTY_PRINT') b-or constant('JSON_UNESCAPED_UNICODE') b-or constant('JSON_UNESCAPED_SLASHES')) }}</pre></details>{% endif %}
                         {% if r.answer %}<div class="small">Réponse : {{ r.answer }}</div>{% endif %}
                         {% if r.note %}<div class="small text-muted">Note interne : {{ r.note }}</div>{% endif %}</td>
-                    <td>{{ r.status }}{% if r.incidentId %}<div class="small text-muted">incident n° {{ r.incidentId }}</div>{% endif %}</td>
+                    <td>{% if r.status == 'received' %}<span class="badge bg-warning text-dark">reçu</span>{% else %}{{ r.status }}{% endif %}{% if r.incidentId %}<div class="small text-muted">incident n° {{ r.incidentId }}</div>{% endif %}</td>
                     <td>
                         <form method="post" action="{{ path('admin_plateforme_bug_report', {id: r.id}) }}" class="d-flex flex-column gap-1">
                             <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
@@ -66,7 +67,7 @@
                             <textarea name="answer" placeholder="réponse au signaleur (envoyée par courriel)" class="form-control form-control-sm" maxlength="4000" rows="2">{{ r.answer }}</textarea>
                             <input name="note" value="{{ r.note }}" placeholder="note interne" class="form-control form-control-sm" maxlength="4000">
                             <input name="incidentId" value="{{ r.incidentId }}" placeholder="incident n°" class="form-control form-control-sm" inputmode="numeric">
-                            <button class="btn btn-sm btn-outline-primary">Enregistrer</button>
+                            <button class="btn btn-sm" style="background:#1e3a8a;color:#ffffff;border:1px solid #1e3a8a;font-weight:600">Enregistrer</button>
                         </form>
                     </td>
                 </tr>

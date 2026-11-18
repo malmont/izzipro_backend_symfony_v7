@@ -931,6 +931,9 @@ retire les droits d'usage du site cible (`Services/Platform/OfferFulfillmentServ
   `invoice.payment_failed` → voir « Paiement refusé » ; `customer.subscription.*` → état recopié, courriel de
   résiliation (`paused`/`resumed` arrivent aussi par `updated` : seuls `invoice.paid`, `invoice.payment_failed`,
   `customer.subscription.updated` et `deleted` sont déclarés sur l'écouteur Connect, vérifié le 13/10/2026).
+  Depuis le lot PROVISION-3 (18/11/2026, `docs/console-pilotage.md`, « Paiements des offres ») : journal des événements sans contenu
+  (un événement déjà traité répond `duplicate`), événement plus ancien que le dernier appliqué ignoré (`out_of_order`), fin de période
+  jamais reculée, abonnement résilié jamais ressuscité par une facture, « période payée » émise une fois par facture.
 - **Paiement refusé** (13/10/2026, `HandleSubscriptionWebhookUseCase::paymentFailed`) :
   - première facture (`incomplete`, `billing_reason` `subscription_create`) : l'abonnement reste `incomplete`, le client
     réessaie (`POST /api/subscriptions` reprend le même abonnement et son `clientSecret`) ; Stripe l'expire au bout de

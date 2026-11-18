@@ -992,7 +992,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (127)
+## Administration (EasyAdmin) (128)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -1077,6 +1077,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/plateforme/materiel/{code}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::lossHardware` |
 | POST | `/admin/plateforme/mode` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::switchMode` |
 | POST | `/admin/plateforme/offre/{code}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::offer` |
+| POST | `/admin/plateforme/offres/reprise/{id}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::offerRetry` |
 | POST | `/admin/plateforme/politique/{feature}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::policy` |
 | POST | `/admin/plateforme/signalements/conservation` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformBugReportsAdminController::retention` |
 | GET | `/admin/plateforme/signalements/{id}/capture` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformBugReportsAdminController::capture` |

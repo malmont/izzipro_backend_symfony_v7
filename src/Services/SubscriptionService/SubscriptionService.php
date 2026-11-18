@@ -37,6 +37,9 @@ final class SubscriptionService
         'canceled' => Subscription::STATUS_CANCELED, 'paused' => Subscription::STATUS_PAUSED,
     ];
 
+    /** Lot PROVISION-3 : marge de l'état rendu par Stripe (voir applyFreshState) */
+    public const FRESH_MARGIN_SECONDS = 60;
+
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly TenantConnectionProvider $tenantProvider,
@@ -161,7 +164,7 @@ final class SubscriptionService
             if ($open->getStatus() === Subscription::STATUS_TRIALING && $open->hasPaymentMethod() !== true && $open->getStripeSubscriptionId()
                 && $open->getPlan()?->getId() === $plan->getId() && $open->getQuantity() === $quantity && $open->getFulfillmentTarget() === $fulfillmentTarget) {
                 $state = $this->stripe->retrieve($open->getStripeSubscriptionId());
-                $this->applyStripeState($open, $state);
+                $this->applyFreshState($open, $state);
                 $em->flush();
                 if ($state['status'] === 'trialing' && $state['hasPaymentMethod'] !== true && ($state['intentType'] ?? null) === 'setup' && $state['clientSecret']) {
                     return ['subscription' => $open, 'clientSecret' => $state['clientSecret'], 'intentType' => 'setup', 'reused' => true];
@@ -175,13 +178,13 @@ final class SubscriptionService
             $state = $open->getStripeSubscriptionId() ? $this->stripe->retrieve($open->getStripeSubscriptionId()) : null;
             // lot PROVISION-1 (relecture) : un abonnement repris garde son site servi ; visé sur un AUTRE site, il est annulé et remplacé
             if ($state !== null && $state['status'] === 'incomplete' && $open->getPlan()?->getId() === $plan->getId() && $open->getQuantity() === $quantity && $open->getFulfillmentTarget() === $fulfillmentTarget && $state['clientSecret']) {
-                $this->applyStripeState($open, $state);
+                $this->applyFreshState($open, $state);
                 $em->flush();
 
                 return ['subscription' => $open, 'clientSecret' => $state['clientSecret'], 'intentType' => $state['intentType'] ?? 'payment', 'reused' => true];
             }
             if ($state !== null && $state['status'] === 'incomplete') {
-                $this->applyStripeState($open, $this->stripe->cancel($open->getStripeSubscriptionId(), false));
+                $this->applyFreshState($open, $this->stripe->cancel($open->getStripeSubscriptionId(), false));
             }
             $open->setStatus(Subscription::STATUS_CANCELED)->setCanceledAt($open->getCanceledAt() ?? new \DateTimeImmutable());
             $em->flush();
@@ -207,7 +210,7 @@ final class SubscriptionService
             'tenant_code' => (string) $this->tenantProvider->getTenantCode(), 'subscription_id' => (string) $subscription->getId(), 'user_id' => (string) $user->getId(),
         ], $taxRateIds, $automaticTax, $shippingPriceId);
         $subscription->setStripeSubscriptionId($state['id']);
-        $this->applyStripeState($subscription, $state);
+        $this->applyFreshState($subscription, $state);
         $em->flush();
 
         return ['subscription' => $subscription, 'clientSecret' => $state['clientSecret'], 'intentType' => $state['intentType'] ?? null, 'reused' => false];
@@ -226,8 +229,15 @@ final class SubscriptionService
 
     public function cancel(Subscription $subscription, bool $atPeriodEnd): Subscription
     {
+        // lot PROVISION-3 : un geste local et un webhook du même abonnement ne se croisent jamais
+        return SubscriptionLock::run($this->emProvider->getEntityManager()->getConnection(), SubscriptionLock::key((string) $this->tenantProvider->getTenantCode(), $subscription->getStripeSubscriptionId(), $subscription->getId()),
+            fn () => $this->cancelLocked($subscription, $atPeriodEnd));
+    }
+
+    private function cancelLocked(Subscription $subscription, bool $atPeriodEnd): Subscription
+    {
         $this->requireStripe($subscription);
-        $this->applyStripeState($subscription, $this->stripe->cancel($subscription->getStripeSubscriptionId(), $atPeriodEnd));
+        $this->applyFreshState($subscription, $this->stripe->cancel($subscription->getStripeSubscriptionId(), $atPeriodEnd));
         if (!$atPeriodEnd) {
             $subscription->setStatus(Subscription::STATUS_CANCELED)->setCanceledAt(new \DateTimeImmutable());
         }
@@ -238,11 +248,18 @@ final class SubscriptionService
 
     public function resume(Subscription $subscription): Subscription
     {
+        // lot PROVISION-3 : un geste local et un webhook du même abonnement ne se croisent jamais
+        return SubscriptionLock::run($this->emProvider->getEntityManager()->getConnection(), SubscriptionLock::key((string) $this->tenantProvider->getTenantCode(), $subscription->getStripeSubscriptionId(), $subscription->getId()),
+            fn () => $this->resumeLocked($subscription));
+    }
+
+    private function resumeLocked(Subscription $subscription): Subscription
+    {
         $this->requireStripe($subscription);
         if ($subscription->getStatus() === Subscription::STATUS_CANCELED) {
             throw new SubscriptionException(409, 'Abonnement déjà résilié : souscrivez de nouveau.', [], [], 'SUBSCRIPTION_CANCELED');
         }
-        $this->applyStripeState($subscription, $this->stripe->resume($subscription->getStripeSubscriptionId()));
+        $this->applyFreshState($subscription, $this->stripe->resume($subscription->getStripeSubscriptionId()));
         $subscription->setPausedAt(null);
         $this->emProvider->getEntityManager()->flush();
 
@@ -251,11 +268,18 @@ final class SubscriptionService
 
     public function pause(Subscription $subscription): Subscription
     {
+        // lot PROVISION-3 : un geste local et un webhook du même abonnement ne se croisent jamais
+        return SubscriptionLock::run($this->emProvider->getEntityManager()->getConnection(), SubscriptionLock::key((string) $this->tenantProvider->getTenantCode(), $subscription->getStripeSubscriptionId(), $subscription->getId()),
+            fn () => $this->pauseLocked($subscription));
+    }
+
+    private function pauseLocked(Subscription $subscription): Subscription
+    {
         $this->requireStripe($subscription);
         if (!in_array($subscription->getStatus(), [Subscription::STATUS_ACTIVE, Subscription::STATUS_TRIALING], true)) {
             throw new SubscriptionException(409, 'Seul un abonnement actif peut être mis en pause.', [], [], 'SUBSCRIPTION_NOT_ACTIVE');
         }
-        $this->applyStripeState($subscription, $this->stripe->pause($subscription->getStripeSubscriptionId()));
+        $this->applyFreshState($subscription, $this->stripe->pause($subscription->getStripeSubscriptionId()));
         $subscription->setStatus(Subscription::STATUS_PAUSED)->setPausedAt(new \DateTimeImmutable());
         $this->emProvider->getEntityManager()->flush();
 
@@ -264,6 +288,13 @@ final class SubscriptionService
 
     /** @throws SubscriptionException 404 formule, 409 abonnement résilié, 422 autre produit */
     public function changePlan(Subscription $subscription, int $planId): Subscription
+    {
+        // lot PROVISION-3 : un geste local et un webhook du même abonnement ne se croisent jamais
+        return SubscriptionLock::run($this->emProvider->getEntityManager()->getConnection(), SubscriptionLock::key((string) $this->tenantProvider->getTenantCode(), $subscription->getStripeSubscriptionId(), $subscription->getId()),
+            fn () => $this->changePlanLocked($subscription, $planId));
+    }
+
+    private function changePlanLocked(Subscription $subscription, int $planId): Subscription
     {
         $this->requireStripe($subscription);
         if ($subscription->getStatus() === Subscription::STATUS_CANCELED) {
@@ -278,7 +309,7 @@ final class SubscriptionService
         }
         [, $priceId] = $this->stripe->ensurePrice($plan);
         $state = $this->stripe->retrieve($subscription->getStripeSubscriptionId());
-        $this->applyStripeState($subscription, $this->stripe->changePlan($subscription->getStripeSubscriptionId(), (string) $state['itemId'], $priceId, $subscription->getQuantity()));
+        $this->applyFreshState($subscription, $this->stripe->changePlan($subscription->getStripeSubscriptionId(), (string) $state['itemId'], $priceId, $subscription->getQuantity()));
         $subscription->setPlan($plan)->touch();
         $this->emProvider->getEntityManager()->flush();
 
@@ -289,7 +320,7 @@ final class SubscriptionService
     public function sync(Subscription $subscription): Subscription
     {
         $this->requireStripe($subscription);
-        $this->applyStripeState($subscription, $this->stripe->retrieve($subscription->getStripeSubscriptionId()));
+        $this->applyFreshState($subscription, $this->stripe->retrieve($subscription->getStripeSubscriptionId()));
         $this->emProvider->getEntityManager()->flush();
 
         return $subscription;
@@ -334,6 +365,17 @@ final class SubscriptionService
         }
 
         return $paymentMethod;
+    }
+
+    /**
+     * Lot PROVISION-3 : un état que Stripe vient de rendre (souscription, résiliation, pause, reprise, changement de formule, relecture)
+     * vaut jusqu'à maintenant : un événement plus ancien arrivé ensuite ne le défait pas. Marge d'une minute : un écart d'horloge avec
+     * Stripe ne fait jamais ignorer un événement émis juste après (il porte le même état ou un plus récent).
+     */
+    private function applyFreshState(Subscription $subscription, array $state): void
+    {
+        $this->applyStripeState($subscription, $state);
+        $subscription->noteStripeEventAt(new \DateTimeImmutable('-' . self::FRESH_MARGIN_SECONDS . ' seconds'));
     }
 
     public function applyStripeState(Subscription $subscription, array $state): void

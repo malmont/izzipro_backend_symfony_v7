@@ -101,6 +101,28 @@ class PlatformIncidentService
     }
 
     /**
+     * Lot PROVISION-3 : un incident du serveur hors d'une requête (paiements des offres : abonnement en échec après 5 reprises, écart
+     * corrigé par la réconciliation). `$place` le distingue (un incident par abonnement), le message ne porte aucune donnée personnelle.
+     * Jamais d'exception : un incident non noté est seulement journalisé.
+     *
+     * @param array<string, scalar|null> $context
+     */
+    public function recordPlatformIssue(?string $site, string $place, string $level, string $message, array $context = []): void
+    {
+        try {
+            $now = gmdate('Y-m-d H:i:s');
+            $message = mb_substr($message, 0, 200);
+            $place = mb_substr($place, 0, 160);
+            $saved = $this->incidents->upsert(['fingerprint' => self::fingerprint($site, 'backend', $place, $message), 'tenant' => $site, 'app' => 'backend', 'appVersion' => null,
+                'screen' => null, 'route' => $place, 'level' => in_array($level, PlatformIncidentRepository::LEVELS, true) ? $level : 'error', 'message' => $message,
+                'context' => $context !== [] ? (string) json_encode($context) : null, 'anonymous' => false], 1, $now);
+            $this->incidents->addEvent($saved['id'], $now, null, null, null, 1);
+        } catch (\Throwable $e) {
+            $this->logger->error('[Incidents] incident de la plateforme non noté', ['place' => $place, 'exception' => $e::class]);
+        }
+    }
+
+    /**
      * @param array{status?: ?string, app?: ?string, tenant?: ?string, level?: ?string} $filters
      *
      * @return array{incidents: list<array<string, mixed>>, total: int, page: int, limit: int}
