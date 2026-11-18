@@ -5,7 +5,10 @@
 {% block main %}{{ block('forfait_panel') }}{% endblock %}
 {% block body %}{% if ea() is null %}<div class="container-fluid py-3"><h1 class="h3 mb-3">Mettre à jour mon forfait</h1>{{ block('forfait_panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}
 {% block forfait_panel %}
+    {% set refusals = app.flashes('danger') %}
+    {% for message in refusals %}<div class="alert alert-danger">{{ message }}</div>{% endfor %}
     <div class="card"><div class="card-body">
+        {% if refusals is not empty %}<p><a class="btn btn-primary btn-sm" href="{{ path('admin_mon_site_forfait') }}">Réessayer</a></p>{% endif %}
         <p>La boutique des forfaits de la plateforme ouvre bientôt : vous pourrez y choisir, changer ou arrêter votre forfait, et vos services suivront automatiquement.</p>
         <p class="mb-2">En attendant, un essai gratuit de chaque fonctionnalité s'ouvre d'un clic depuis <a href="{{ monSiteUrl }}">Mon site</a>, et « Demander » prévient la plateforme, qui vous répond par courriel.</p>
         <a class="btn btn-outline-secondary btn-sm" href="{{ monSiteUrl }}">Retour à Mon site</a>

@@ -126,6 +126,8 @@ $master->exec(file_get_contents(__DIR__ . '/../ops/sql/groups_master.sql'));
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_incident_master.sql'));
 // Signalements de la plateforme (lot INC-3, 18/11/2026) : après les incidents, qu'ils référencent (ops/sql/platform_bug_report_master.sql)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_bug_report_master.sql'));
+// Lien prouvé « Mettre à jour mon forfait » (lot PROVISION-1, 18/11/2026) (ops/sql/platform_plan_link_master.sql)
+$master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_plan_link_master.sql'));
 // Codes courts fixes des sites de test (31/10/2026) : MVT001 et MVT002 (alphabet Crockford)
 $insertTenant = $master->prepare('INSERT INTO tenants (code, name, dbname, custom_domain, short_code) VALUES (?, ?, ?, ?, ?)');
 $insertTenant->execute([MV_TEST_TENANT_CODE, 'Tenant de test', MV_TEST_TENANT_DB, MV_TEST_TENANT_HOST, 'MVT001']);

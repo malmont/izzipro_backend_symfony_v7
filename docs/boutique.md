@@ -893,8 +893,11 @@ Stripe Billing sur le compte connecté du site. Code : `Controller/SubscriptionC
 formule porte `fulfillmentType` (champs réservés au super administrateur dans EasyAdmin ; seul le site désigné `shop_tenant` de la
 plateforme produit des droits, 05/11/2026) (`none` par défaut ; `platform_offer` : la formule vend une offre de la plateforme dont `fulfillmentRef`
 est le code ; `webhook` : réservé) ; `GET /api/subscription-plans` rend `fulfillmentType`. Pour une formule branchée, `POST
-/api/subscriptions` exige `fulfillmentTarget` (code du site à activer, existant) : 422 `FULFILLMENT_TARGET_REQUIRED` |
-`FULFILLMENT_TARGET_UNKNOWN`. Le cycle de vie de tout abonnement émet `Event\SubscriptionStatusChangedEvent` après le flush
+/api/subscriptions` exige depuis le lot PROVISION-1 (18/11/2026, `docs/console-pilotage.md`) **`fulfillmentLink`**, le lien signé de
+« Mettre à jour mon forfait » : 422 `FULFILLMENT_LINK_REQUIRED` | `FULFILLMENT_LINK_INVALID` | `FULFILLMENT_LINK_EXPIRED` |
+`FULFILLMENT_LINK_USED` | `FULFILLMENT_LINK_NOT_ADMIN` ; `fulfillmentTarget` (code du site à activer, existant) n'est plus accepté que d'un
+super administrateur : 422 `FULFILLMENT_TARGET_REQUIRED` | `FULFILLMENT_TARGET_UNKNOWN`. Une formule branchée n'a jamais de jours d'essai
+Stripe (`trialDays` rendu à 0). Le cycle de vie de tout abonnement émet `Event\SubscriptionStatusChangedEvent` après le flush
 (`EventSubscriber\SubscriptionLifecycleSubscriber`, écouteur Doctrine : aucun des points d'écriture du statut n'est modifié) ; seul
 `EventSubscriber\PlatformOfferFulfillmentSubscriber` traite `platform_offer` et accorde, prolonge, met en grâce, suspend, rétablit ou
 retire les droits d'usage du site cible (`Services/Platform/OfferFulfillmentService`). Une formule `none` n'est pas concernée. Test :

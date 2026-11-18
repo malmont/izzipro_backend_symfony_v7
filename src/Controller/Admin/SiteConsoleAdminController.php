@@ -54,6 +54,7 @@ class SiteConsoleAdminController extends AbstractController
         private readonly TenantConnectionManager $tenants,
         private readonly \App\Services\Platform\AdminStepUrlResolver $screens,
         private readonly ?\App\Services\LandingAiService\LandingAiQuotaService $quota = null, // crédits restants rendus à la console flottante (07/11/2026)
+        private readonly ?\App\Services\Platform\PlanLink\PlatformPlanLinkService $planLinks = null, // lot PROVISION-1 : lien prouvé du forfait
     ) {
     }
 
@@ -229,12 +230,35 @@ class SiteConsoleAdminController extends AbstractController
         return $this->json($result);
     }
 
-    /** Page de forfait : la boutique de la plateforme si son adresse est réglée, sinon une page d'attente (le bouton existe dès maintenant, 05/11/2026) */
+    /**
+     * Page de forfait : la boutique de la plateforme si son adresse est réglée, sinon une page d'attente (le bouton existe dès maintenant, 05/11/2026).
+     * Lot PROVISION-1 (18/11/2026) : la boutique reçoit un LIEN SIGNÉ en ancre (`#lien=`, 30 minutes, un seul achat) qui prouve que
+     * l'acheteur administre CE site ; l'ancre n'est jamais envoyée à un serveur ; la redirection ne garde rien en cache et ne transmet pas
+     * l'adresse de la page d'origine. La boutique retire l'ancre de l'adresse dès l'arrivée (contrat du front).
+     */
     #[Route('/admin/mon-site/forfait', name: 'admin_mon_site_forfait', methods: ['GET'])]
     public function plan(): Response
     {
         $this->denyAccessUnlessGranted('ROLE_ADMIN');
         $shop = $this->platform->shopUrl();
+        $user = $this->getUser();
+        $site = $this->tenants->getCurrentTenantCode();
+        if ($shop !== null && $this->planLinks !== null && $user instanceof \App\Entity\User && $site !== null) {
+            try {
+                $link = $this->planLinks->issue($site, (int) $user->getId());
+            } catch (\App\Services\Platform\PlanLink\PlanLinkException $e) {
+                $this->addFlash('danger', $e->getMessage());
+
+                return $this->render('admin/mon_site/forfait.html.twig', ['monSiteUrl' => $this->pageUrl()]);
+            }
+            // le lien en ANCRE (#lien=) : jamais envoyé à un serveur, donc absent de tout journal d'accès (relecture) ; une ancre déjà
+            // présente dans l'adresse de la boutique est remplacée
+            $response = $this->redirect(explode('#', $shop, 2)[0] . '#lien=' . rawurlencode($link));
+            $response->headers->set('Referrer-Policy', 'no-referrer');
+            $response->headers->set('Cache-Control', 'no-store, private');
+
+            return $response;
+        }
         if ($shop !== null) {
             return $this->redirect($shop);
         }

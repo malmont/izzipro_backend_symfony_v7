@@ -438,7 +438,44 @@ cause des pages « blanches » vues avant). Modèle : `templates/admin/configura
 `RequestSiteFeatureUseCase` : si la politique de la fonctionnalité autorise l'essai et que le site n'en a jamais eu pour elle, le clic
 ouvre aussitôt un essai gratuit (`trial`, durée de la politique, courriel) ; sinon une demande part à la plateforme. Mon site affiche
 « Essayer N jours » ou « Demander », et toujours « Mettre à jour mon forfait » (`/admin/mon-site/forfait` : la boutique de forfaits
-si `shop_url` est réglée, sinon une page d'attente). Le cheminement porte l'action `trial` (`days`, `shopUrl`) sur les étapes « Obtenir ».
+si `shop_url` est réglée, avec un lien signé depuis PROVISION-1, sinon une page d'attente). Le cheminement porte l'action `trial` (`days`, `shopUrl`) sur les étapes « Obtenir ».
+
+## Lien prouvé du forfait : l'acheteur administre le site servi (lot PROVISION-1, 18/11/2026, contrat validé par le chef)
+
+Avant ce lot, l'acheteur d'une formule branchée tapait le code du site à servir (`fulfillmentTarget`) et le serveur vérifiait seulement
+que ce site existait : souscrire, même sans payer, puis résilier sur le site d'un autre éteignait son module (`docs/audit-provision.md`).
+
+- **« Mettre à jour mon forfait »** (`/admin/mon-site/forfait`, administrateur du site X) émet un **lien signé** (`PlatformPlanLinkService`,
+  HMAC-SHA256, clé dérivée du secret de l'application pour ce seul usage) : site X, compte administrateur, émission, **expiration 30
+  minutes**, identifiant unique. La page redirige vers `shop_url#lien=<jeton>` : le jeton en **ancre** (jamais envoyé à un serveur, donc
+  dans aucun journal d'accès) ; une ancre déjà présente dans `shop_url` est remplacée. En-têtes `Referrer-Policy: no-referrer` et
+  `Cache-Control: no-store`. Sans boutique réglée : page d'attente, comme avant. **30 liens par heure et par compte** au plus : au-delà,
+  la page du forfait affiche le refus (`FULFILLMENT_LINK_RATE`) et « Réessayer ». Les lignes de plus de **90 jours** sont effacées à
+  chaque émission.
+- **Le jeton n'est gardé nulle part** : la base maître (`platform_plan_link`, `ops/sql/platform_plan_link_master.sql`) garde son identifiant,
+  le site, le compte, les dates, l'achat qui l'a employé et l'abonnement créé (preuve, lue par le super administrateur). Aucun message ni
+  journal ne le porte.
+- **La boutique** (front Next du site boutique) lit le jeton dans `location.hash` dès l'arrivée, le garde en mémoire de la session
+  (`sessionStorage`) et retire l'ancre de l'adresse (`history.replaceState`), sert ses pages avec `Referrer-Policy: same-origin`, et l'envoie dans `POST /api/subscriptions` en
+  **`fulfillmentLink`**.
+- **Une formule branchée EXIGE ce lien.** Le serveur vérifie la forme et la signature, l'expiration, l'identifiant connu, que le compte est
+  **toujours administrateur** de X (relu dans la base de X par une connexion à part), et que le lien n'a pas servi à un **autre achat**
+  (même site boutique, même compte client, même formule : un nouvel essai de paiement du même achat est accepté ; une autre formule ou
+  un autre client : `USED`). Le lien n'est accepté **que sur la boutique de la plateforme** (`PlatformModeService::shopTenant()`) :
+  ailleurs il est refusé `INVALID` **sans être employé**. Le site servi est **celui du lien**, jamais le site boutique. Refus 422 :
+  `FULFILLMENT_LINK_REQUIRED`, `FULFILLMENT_LINK_INVALID`, `FULFILLMENT_LINK_EXPIRED` (le message renvoie vers « Mettre à jour mon
+  forfait »), `FULFILLMENT_LINK_USED`, `FULFILLMENT_LINK_NOT_ADMIN`.
+- **Le code tapé** (`fulfillmentTarget`) n'est plus accepté que d'un **super administrateur** (vente faite à la main) ; un site inconnu reste
+  `FULFILLMENT_TARGET_UNKNOWN`.
+- **Reprise d'un abonnement ouvert** (essai ou paiement incomplet de la même formule) : seulement s'il sert **le même site** ; visant un
+  autre site, il est annulé et un nouvel abonnement est créé pour le site du lien. La preuve (`shop_tenant`, `subscription_id`) garde le
+  **premier** abonnement créé avec le lien (jamais écrasée).
+- **Statut d'administrateur vérifié à l'achat, pas après** : un compte retiré après l'achat ne défait pas l'abonnement (la résiliation suit
+  les règles ordinaires) ; un compte non vérifié ou supprimé n'est plus administrateur. La règle des sources de droits (une souscription
+  ne retire jamais un droit d'une autre origine) est le lot PROVISION-2.
+- **Pas d'essai Stripe sur une formule branchée** : ses jours d'essai ne sont jamais envoyés à Stripe, et la liste des formules les montre à
+  0. L'essai reste celui de la plateforme (« Demander », une fois par site).
+- Essais : `tests/Functional/Platform/PlanLinkTest.php`.
 
 ## Domaine propre d'un site (05/11/2026)
 
