@@ -64,6 +64,10 @@ final class GroupScope
     public const ERROR = 'error';
     public const TIMEOUT = 'timeout';
     public const SKIPPED = 'skipped';
+    /** deux codes de site sur la même base : lue et comptée une fois, sous le premier code (`sameAs`) */
+    public const DUPLICATE = 'duplicate';
+    /** Paramètres des statistiques qui entrent dans la lecture et dans la clé du cache (tout autre est ignoré : pas de contournement du cache) */
+    public const STATISTICS_PARAMS = ['range', 'from', 'to', 'source', 'locale'];
 
     /** @return list<string> les chemins des routes qui savent fusionner (lus par `/api/me/contexts`, `group.allShops`) */
     public static function routes(): array

@@ -25,8 +25,9 @@ use Symfony\Contracts\Cache\TagAwareCacheInterface;
  * - **Retour au siège quoi qu'il arrive** : le site de départ est repris dans un `finally`, même si une boutique lève une exception.
  * - **Aucune écriture** : chaque boutique est lue dans une transaction `READ ONLY`, annulée à la fin ; une lecture qui tenterait d'écrire
  *   échoue (statut `error`), elle n'écrit jamais.
- * - **Délai** : `statement_timeout` local à la transaction (3 s, ou ce qui reste du budget) ; une boutique plus lente passe en `timeout`.
- *   Budget de la réponse : 15 s, les boutiques restantes passent en `skipped`.
+ * - **Délai** : échéance de la lecture ENTIÈRE de la boutique (3 s, ou ce qui reste du budget), tenue par l'intergiciel `ShopDeadline`
+ *   (aucune requête après l'échéance, `statement_timeout` resserré à mesure) ; une boutique plus lente passe en `timeout`. Budget de la
+ *   réponse : 15 s, les boutiques restantes passent en `skipped`. Deux codes de site sur la même base : lue une fois (`duplicate`).
  * - **Cache court** : la part d'une boutique (5 min) sous les étiquettes du site et de sa base (toute invalidation du site la vide), et
  *   dans la clé l'EMPREINTE des tables lues (compteurs d'écritures de PostgreSQL) et le jour de la boutique : une écriture dans une table
  *   lue, par Doctrine ou en SQL, la périme dès que PostgreSQL l'a comptée (quelques secondes au plus).
@@ -89,8 +90,16 @@ class AllShopsReader
         $shops = array_slice($shops, 0, GroupScope::MAX_SHOPS);
         $start = hrtime(true);
         $parts = [];
+        $databases = [];
         try {
             foreach ($shops as $shop) {
+                // deux codes de site peuvent partager une base (alias) : elle n'est lue, et comptée, qu'une fois
+                $db = (string) ($shop['dbname'] ?? '');
+                if ($db !== '' && isset($databases[$db])) {
+                    $parts[] = self::part($shop, GroupScope::DUPLICATE) + ['sameAs' => $databases[$db]];
+                    continue;
+                }
+                $databases[$db] = (string) $shop['tenant_code'];
                 $remaining = $this->budgetMs - self::since($start);
                 if ($remaining <= 0) {
                     $parts[] = self::part($shop, GroupScope::SKIPPED);
@@ -126,7 +135,7 @@ class AllShopsReader
             }
             $read = fn (): array => $this->readOnly($one, $timeoutMs);
             $result = $config['cache'] ? $this->cached($shop, $route, $keyParts, $read) : $read();
-            if (self::since($started) > $this->shopTimeoutMs) {
+            if (self::since($started) > $timeoutMs) {
                 return self::part($shop, GroupScope::TIMEOUT) + $identity; // trop lente cette fois : la part reste en cache pour la suivante
             }
 
@@ -134,7 +143,9 @@ class AllShopsReader
         } catch (GestionValidationException|HttpExceptionInterface $e) {
             throw $e; // la requête elle-même est fausse : 422 ou refus, comme la route seule
         } catch (\Throwable $e) {
-            if ($e instanceof DriverException && $e->getSQLState() === '57014') {
+            // délai : échéance de la boutique (`ShopDeadline`), requête annulée par la base (57014), ou toute panne survenue après
+            // l'échéance (un service qui aurait attrapé l'annulation, puis une transaction avortée : 25P02)
+            if ($e instanceof ShopDeadlineExceeded || ($e instanceof DriverException && $e->getSQLState() === '57014') || self::since($started) >= $timeoutMs) {
                 return self::part($shop, GroupScope::TIMEOUT);
             }
             $this->logger->error(sprintf('Toutes les boutiques : %s illisible pour %s (%s : %s)', (string) $shop['tenant_code'], $route, $e::class, $e->getMessage()));
@@ -166,9 +177,16 @@ class AllShopsReader
         try {
             $conn->executeStatement('SET TRANSACTION READ ONLY');
             $conn->executeStatement('SET LOCAL statement_timeout = ' . max(1, $timeoutMs));
+            // l'échéance de la boutique entière, pas seulement de chaque requête (relecture neuve) : voir `ShopDeadline`
+            ShopDeadline::start(max(1, $timeoutMs));
+            $result = $one();
+            if (ShopDeadline::tripped()) {
+                throw new ShopDeadlineExceeded('échéance atteinte pendant la lecture'); // jamais des chiffres partiels
+            }
 
-            return $one();
+            return $result;
         } finally {
+            ShopDeadline::stop();
             try {
                 $conn->rollBack();
             } catch (\Throwable) {

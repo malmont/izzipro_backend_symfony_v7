@@ -52,14 +52,15 @@ final class AllShopsMerger
         foreach (self::byCurrency($shops) as $currency => $parts) {
             $sums = array_map(static fn (array $p): array => $p['sums'], $parts);
             $data = array_map(static fn (array $p): array => $p['data'], $parts);
-            $partial = false;
-            $all = static function (string $k) use ($sums, &$partial): ?array {
-                $rows = array_values(array_filter(array_map(static fn (array $s) => $s[$k], $sums), static fn ($r) => $r !== null));
+            $partial = []; // boutiques à qui manque une comparaison que d'autres ont
+            $sites = array_map(static fn (array $p): string => $p['site'], $parts);
+            $all = static function (string $k) use ($sums, $sites, &$partial): ?array {
+                $rows = array_filter(array_map(static fn (array $s) => $s[$k], $sums), static fn ($r) => $r !== null);
                 if ($rows !== [] && count($rows) < count($sums)) {
-                    $partial = true;
+                    array_push($partial, ...array_values(array_diff_key($sites, $rows)));
                 }
 
-                return $rows === [] ? null : $rows;
+                return $rows === [] ? null : array_values($rows);
             };
             $m = GestionStatisticsService::metrics(array_map(static fn (array $s): array => $s['current'], $sums));
             $prevRows = $all('previous');
@@ -77,21 +78,25 @@ final class AllShopsMerger
                     $byKey[$point['key']]['from'] = min($byKey[$point['key']]['from'] ?? $point['from'], $point['from']);
                     $byKey[$point['key']]['to'] = max($byKey[$point['key']]['to'] ?? $point['to'], $point['to']);
                     $byKey[$point['key']]['rows'][] = $point;
+                    $byKey[$point['key']]['lastYear'][] = $point['lastYear'];
                 }
             }
             ksort($byKey);
             $series = array_map(static fn (array $b): array => GestionStatisticsService::metrics($b['rows']), $byKey);
             $points = [];
             foreach ($byKey as $key => $b) {
-                $points[] = ['key' => (string) $key, 'from' => $b['from'], 'to' => $b['to'], 'revenue' => $series[$key]['revenue'], 'grossMargin' => $series[$key]['grossMargin'], 'orders' => $series[$key]['orders']];
+                $pl = GestionStatisticsService::metrics($b['lastYear']);
+                // comme la route seule : une archive d'avant la migration ne connaît pas la marge
+                $points[] = ['key' => (string) $key, 'from' => $b['from'], 'to' => $b['to'], 'revenue' => $series[$key]['revenue'], 'grossMargin' => $series[$key]['grossMargin'], 'orders' => $series[$key]['orders'],
+                    'lastYear' => ['revenue' => $pl['revenue'], 'grossMargin' => $archive ? null : $pl['grossMargin'], 'orders' => $pl['orders']]];
             }
             $spark = static fn (string $k): array => array_values(array_map(static fn (array $pm) => $pm[$k], $series));
             $indicator = static fn (string $k, string $unit) => GestionStatisticsService::indicator($m[$k], $mp[$k] ?? null, $lyOf($k), $unit, $spark($k), $hasPrevious);
-            $stock = static function (string $k) use ($sums, &$partial): ?int {
+            $stock = static function (string $k) use ($sums, $sites, &$partial): ?int {
                 $values = array_map(static fn (array $s) => $s['stock'][$k], $sums);
                 $known = array_filter($values, static fn ($v) => $v !== null);
                 if ($known !== [] && count($known) < count($values)) {
-                    $partial = true;
+                    array_push($partial, ...array_values(array_diff_key($sites, $known)));
                 }
 
                 return $known === [] ? null : (int) array_sum($known);
@@ -116,8 +121,8 @@ final class AllShopsMerger
                 'chart' => ['granularity' => $data[0]['range']['granularity'], 'points' => $points],
                 'caveats' => array_map(static fn (array $c): array => $c['code'] === 'UNKNOWN_COST' ? ['amount' => $m['unknown']] + $c : $c, self::caveats($parts)),
             ];
-            if ($partial) {
-                $total['caveats'][] = ['code' => 'PARTIAL_COMPARISON', 'shops' => []];
+            if ($partial !== []) {
+                $total['caveats'][] = ['code' => 'PARTIAL_COMPARISON', 'text' => null, 'shops' => array_values(array_unique($partial))];
             }
             $totals[] = $total;
         }

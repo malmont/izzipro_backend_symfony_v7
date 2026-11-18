@@ -98,6 +98,7 @@ class GestionStatisticsService
         // Points du graphique (jusqu'à aujourd'hui) et l'an dernier aligné (mêmes dates décalées d'un an)
         $points = [];
         $series = [];
+        $lyPoints = [];
         $buckets = self::buckets($cur[0], min($cur[1], $todayKey), $granularity);
         foreach ($buckets as [$key, $from, $to]) {
             $pm = self::metrics(self::slice($daily, $from, $to));
@@ -105,6 +106,7 @@ class GestionStatisticsService
             $points[] = ['key' => $key, 'from' => $from, 'to' => $to, 'revenue' => $pm['revenue'], 'grossMargin' => $pm['grossMargin'], 'orders' => $pm['orders'],
                 'lastYear' => ['revenue' => $pl['revenue'], 'grossMargin' => $lyArchive ? null : $pl['grossMargin'], 'orders' => $pl['orders']]];
             $series[] = $pm;
+            $lyPoints[] = $pl;
         }
         $spark = fn (string $k) => array_map(fn ($pm) => $pm[$k], $series);
 
@@ -167,7 +169,9 @@ class GestionStatisticsService
         $lyRaw = !$hasLy ? null : ($lyArchive ? ['archive' => true] + self::sums($ml) : self::sums($ml));
         $sums = [
             'current' => $raw($m), 'previous' => $raw($mp), 'lastYear' => $lyRaw,
-            'points' => array_map(static fn (array $p, array $pm): array => ['key' => $p['key'], 'from' => $p['from'], 'to' => $p['to']] + self::sums($pm), $points, $series),
+            'points' => array_map(static fn (array $p, array $pm, array $pl): array => ['key' => $p['key'], 'from' => $p['from'], 'to' => $p['to']] + self::sums($pm)
+                + ['lastYear' => self::sums($pl)], $points, $series, $lyPoints),
+            'archive' => $lyArchive,
             'stock' => ['now' => $stockNow['saleValue'], 'cost' => $stockNow['costValue'], 'previous' => $stockPrev['saleValue'] ?? null, 'lastYear' => $stockLy['saleValue'] ?? null],
         ];
 

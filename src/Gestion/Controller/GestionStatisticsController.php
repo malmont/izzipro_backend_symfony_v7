@@ -70,8 +70,11 @@ class GestionStatisticsController extends AbstractController
         $query = $request->query->all();
         $locale = $this->locale($request);
         // lot G-2 : « Toutes les boutiques » (en-tête X-Group-Scope, garde GroupScopeSubscriber) : chaque boutique, puis les totaux par devise
-        $group = $this->allShops?->forRequest($request, 'gestion_statistiques', ['query' => $query, 'locale' => $locale],
-            fn (): array => $this->useCase->overviewWithSums($query, $locale), \App\Services\Group\AllShops\AllShopsMerger::statistics(...));
+        // seuls les paramètres qui changent la lecture entrent dans la clé du cache (un paramètre de plus ne force pas une relecture)
+        $groupQuery = array_intersect_key($query, array_flip(\App\Services\Group\AllShops\GroupScope::STATISTICS_PARAMS));
+        ksort($groupQuery);
+        $group = $this->allShops?->forRequest($request, 'gestion_statistiques', ['query' => $groupQuery, 'locale' => $locale],
+            fn (): array => $this->useCase->overviewWithSums($groupQuery, $locale), \App\Services\Group\AllShops\AllShopsMerger::statistics(...));
         if ($group !== null) {
             return $this->json($group);
         }

@@ -69,8 +69,11 @@ class GroupAllShopsTest extends WebTestCase
         $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/contacts', $director));
         $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/gestion/statistiques?sections=payments', $director), 'une section');
         $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/gestion/statistiques?periodId=1', $director), 'une période est propre à un site');
-        // l'administrateur d'une boutique du groupe, chez lui : pas le directeur
+        // l'administrateur d'une boutique du groupe, chez lui : pas le directeur, même si sa boutique a le module
         $this->assertSame([403, GroupScope::FORBIDDEN], $this->refusal('GET', '/api/gestion/journee', $shopAdmin, MV_TEST_TENANT2_HOST));
+        $this->module(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'is_multi_shop_active', true);
+        $this->assertSame([403, GroupScope::FORBIDDEN], $this->refusal('GET', '/api/gestion/journee', $shopAdmin, MV_TEST_TENANT2_HOST));
+        $this->module(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'is_multi_shop_active', false);
         // le directeur ENTRÉ dans la boutique : un opérateur, jamais « toutes les boutiques »
         $entered = $this->json('POST', '/api/me/contexts/enter', $director, MV_TEST_TENANT_HOST, null, ['site' => MV_TEST_TENANT2_CODE]);
         $this->assertSame([403, GroupScope::FORBIDDEN], $this->refusal('GET', '/api/gestion/journee', (string) $entered['token'], MV_TEST_TENANT2_HOST));
@@ -149,12 +152,16 @@ class GroupAllShopsTest extends WebTestCase
         $groupId = $this->group(false);
         $broken = 'g2-casse-' . $this->tag;
         $this->master->exec("INSERT INTO tenants (code, name, dbname) VALUES ('$broken', 'Boutique en panne', 'db_absente_{$this->tag}')");
-        $this->master->exec("INSERT INTO shop_group_sites (group_id, tenant_code, origin) VALUES ($groupId, '$broken', 'associated'), ($groupId, '" . MV_TEST_TENANT2_CODE . "', 'associated')");
+        $alias = 'g2-alias-' . $this->tag; // un second code de site sur la base de la boutique : lue et comptée une fois
+        $this->master->exec("INSERT INTO tenants (code, name, dbname) VALUES ('$alias', 'Alias', '" . MV_TEST_TENANT2_DB . "')");
+        $this->master->exec("INSERT INTO shop_group_sites (group_id, tenant_code, origin) VALUES ($groupId, '$broken', 'associated'), ($groupId, '" . MV_TEST_TENANT2_CODE . "', 'associated'), ($groupId, '$alias', 'associated')");
         $director = $this->account(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'directeur', ['ROLE_ADMIN']);
         $baseline = $this->json('GET', '/api/gestion/journee', $director, MV_TEST_TENANT_HOST, null);
 
         $all = $this->json('GET', '/api/gestion/journee', $director, MV_TEST_TENANT_HOST, GroupScope::VALUE);
-        $this->assertSame([[MV_TEST_TENANT_CODE, 'ok'], [$broken, 'error'], [MV_TEST_TENANT2_CODE, 'ok']], array_map(static fn (array $s): array => [$s['site'], $s['status']], $all['shops']));
+        $this->assertSame([[MV_TEST_TENANT_CODE, 'ok'], [$broken, 'error'], [MV_TEST_TENANT2_CODE, 'ok'], [$alias, 'duplicate']], array_map(static fn (array $s): array => [$s['site'], $s['status']], $all['shops']));
+        $this->assertSame(MV_TEST_TENANT2_CODE, $all['shops'][3]['sameAs']);
+        $this->assertSame([MV_TEST_TENANT_CODE, MV_TEST_TENANT2_CODE], array_merge(...array_column($all['totals'], 'shops')));
         $this->assertSame(['site', 'name', 'head', 'status', 'code'], array_keys($all['shops'][1]), 'en panne : le code seul, jamais le détail');
         $this->assertSame('SHOP_UNAVAILABLE', $all['shops'][1]['code']);
         $this->assertStringNotContainsString('db_absente', (string) json_encode($all));
@@ -228,8 +235,36 @@ class GroupAllShopsTest extends WebTestCase
         $group = ['id' => $groupId, 'name' => 'Siège'];
         $slow = fn (): array => ['data' => ['slept' => $provider->getEntityManager()->getConnection()->fetchOne('SELECT pg_sleep(2)')]];
 
+        $started = hrtime(true);
         $read = $reader(10_000, 200)->read($group, 'gestion_pertes', '/api/gestion/pertes', [], $slow);
         $this->assertSame([GroupScope::TIMEOUT, GroupScope::TIMEOUT], array_column($read['shops'], 'status'), 'au-delà du délai d\'une boutique');
+        $this->assertLessThan(1500, (hrtime(true) - $started) / 1e6, 'la requête lente est coupée au délai, pas attendue');
+        // le délai vaut pour la boutique ENTIÈRE : beaucoup de requêtes courtes (chacune sous le délai) sont arrêtées à l'échéance
+        $many = function () use ($provider): array {
+            for ($i = 0; $i < 40; ++$i) {
+                $provider->getEntityManager()->getConnection()->fetchOne('SELECT pg_sleep(0.05)');
+            }
+
+            return ['data' => ['done' => true]];
+        };
+        $started = hrtime(true);
+        $read = $reader(10_000, 300)->read($group, 'gestion_pertes', '/api/gestion/pertes', [], $many);
+        $this->assertSame([GroupScope::TIMEOUT, GroupScope::TIMEOUT], array_column($read['shops'], 'status'));
+        $this->assertLessThan(1500, (hrtime(true) - $started) / 1e6, 'deux boutiques de 300 ms au plus');
+        // un service qui avale l'annulation et rend des chiffres : la boutique reste en `timeout`, jamais servie à moitié
+        $swallow = function () use ($provider): array {
+            for ($i = 0; $i < 40; ++$i) {
+                try {
+                    $provider->getEntityManager()->getConnection()->fetchOne('SELECT pg_sleep(0.05)');
+                } catch (\Throwable) {
+                }
+            }
+
+            return ['data' => ['partial' => true]];
+        };
+        $read = $reader(10_000, 300)->read($group, 'gestion_pertes', '/api/gestion/pertes', [], $swallow);
+        $this->assertSame([GroupScope::TIMEOUT, GroupScope::TIMEOUT], array_column($read['shops'], 'status'));
+        $this->assertArrayNotHasKey('data', $read['shops'][0]);
         $read = $reader(1, 1000)->read($group, 'gestion_pertes', '/api/gestion/pertes', [], $slow);
         $this->assertSame([GroupScope::TIMEOUT, GroupScope::SKIPPED], array_column($read['shops'], 'status'), 'budget épuisé : la suivante n\'est pas lue');
         // une part en cache n'est calculée qu'une fois par boutique ; une autre clé (paramètres) la recalcule
@@ -250,6 +285,88 @@ class GroupAllShopsTest extends WebTestCase
         $this->assertSame([GroupScope::ERROR, GroupScope::ERROR], array_column($read['shops'], 'status'));
         $this->assertStringEndsNotWith(' g2', (string) $this->pdo(MV_TEST_TENANT2_DB)->query('SELECT name FROM entreprise ORDER BY id LIMIT 1')->fetchColumn());
         $this->assertSame(MV_TEST_TENANT_DB, $provider->getEntityManager()->getConnection()->getParams()['dbname']);
+    }
+
+    public function testTheLossReadNeverStartsTheAnalysisEvenWhenItIsDue(): void
+    {
+        $this->group();
+        $director = $this->account(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'directeur', ['ROLE_ADMIN']);
+        $spy = new class extends \App\LossPrevention\Services\LossAnalysisService {
+            public int $runs = 0;
+
+            public function __construct()
+            {
+            }
+
+            public function isStale(): bool
+            {
+                return true;
+            }
+
+            public function run(int $limit = self::BATCH): array
+            {
+                ++$this->runs;
+
+                return ['status' => 'done', 'read' => 0, 'opened' => 0, 'completed' => 0, 'skipped' => 0];
+            }
+
+            public function state(): array
+            {
+                return ['at' => null, 'pending' => true, 'blocked' => null, 'skipped' => null];
+            }
+        };
+        $this->client->disableReboot();
+        static::getContainer()->set(\App\LossPrevention\Services\LossAnalysisService::class, $spy);
+        $this->json('GET', '/api/gestion/pertes?analyse=1', $director, MV_TEST_TENANT_HOST, GroupScope::VALUE);
+        $this->assertSame(0, $spy->runs, 'toutes les boutiques : l\'analyse due n\'est jamais lancée, même demandée');
+        $this->json('GET', '/api/gestion/pertes?analyse=1', $director, MV_TEST_TENANT_HOST, null);
+        $this->assertSame(1, $spy->runs, 'contrôle : la route seule la lance');
+    }
+
+    public function testAnOperatorEnteredIntoTheHeadIsNeverTheDirector(): void
+    {
+        $this->group();
+        $container = static::getContainer();
+        $container->get(TenantEntityManagerProvider::class)->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $guard = $container->get(\App\Services\Group\AllShops\GroupScopeSubscriber::class);
+        $tokens = $container->get('security.token_storage');
+        $decide = function (?\Symfony\Component\Security\Core\User\UserInterface $user) use ($guard, $tokens): ?int {
+            $tokens->setToken($user === null ? null : new \Symfony\Component\Security\Http\Authenticator\Token\PostAuthenticationToken($user, 'main', ['ROLE_ADMIN']));
+            $request = \Symfony\Component\HttpFoundation\Request::create('https://' . MV_TEST_TENANT_HOST . '/api/gestion/journee', 'GET', [], [], [], ['HTTP_X_GROUP_SCOPE' => GroupScope::VALUE]);
+            $request->attributes->set('_route', 'gestion_journee');
+            $event = new \Symfony\Component\HttpKernel\Event\RequestEvent(static::$kernel, $request, \Symfony\Component\HttpKernel\HttpKernelInterface::MAIN_REQUEST);
+            $guard->onKernelRequest($event);
+
+            return $event->getResponse()?->getStatusCode() ?? ($request->attributes->has(GroupScope::ATTRIBUTE) ? 200 : null);
+        };
+        try {
+            // un opérateur entré dans le siège (groupe, agence, plateforme) : jamais « toutes les boutiques », même avec le rôle d'administrateur
+            $this->assertSame(403, $decide(new \App\Security\Entry\GroupOperator(1, 1, 'Siège', 'Hélène', MV_TEST_TENANT_CODE)));
+            $this->assertSame(403, $decide(null));
+            // contrôle : un administrateur du siège, avec son compte
+            $admin = (new User())->setEmail('g2-temoin@example.invalid')->setUsername('g2-temoin@example.invalid')->setRoles(['ROLE_ADMIN']);
+            $this->assertSame(200, $decide($admin));
+        } finally {
+            $tokens->setToken(null);
+        }
+    }
+
+    public function testTheTotalsRecomputeRatesFromTheSumsOfEveryShop(): void
+    {
+        $sums = static fn (int $sales, int $cogs, int $orders): array => ['sales_amount' => $sales, 'returns_amount' => 0, 'unknown_revenue' => 0, 'cogs' => $cogs,
+            'orders_sold' => $orders, 'orders_returned' => 0, 'rentals' => 0, 'subscriptions' => 0];
+        $part = static fn (string $site, array $current): array => ['site' => $site, 'status' => GroupScope::OK, 'currency' => 'CAD',
+            'data' => ['previous' => null, 'range' => ['from' => '2026-11-01', 'to' => '2026-11-18', 'type' => 'month', 'granularity' => 'day'], 'caveats' => []],
+            'sums' => ['current' => $current, 'previous' => null, 'lastYear' => null, 'archive' => false,
+                'points' => [['key' => '2026-11-18', 'from' => '2026-11-18', 'to' => '2026-11-18'] + $current + ['lastYear' => $sums(0, 0, 0)]],
+                'stock' => ['now' => 100, 'cost' => 40, 'previous' => null, 'lastYear' => 7]]];
+        $totals = AllShopsMerger::statistics([$part('a', $sums(10000, 4000, 2)), $part('b', $sums(30000, 15000, 3)), ['site' => 'c', 'status' => GroupScope::ERROR]]);
+        $this->assertCount(1, $totals);
+        $i = $totals[0]['indicators'];
+        $this->assertSame([40000, 21000, 52.5, 5, 8000], [$i['revenue']['value'], $i['grossMargin']['value'], $i['grossMarginRate']['value'], $i['orders']['value'], $i['averageBasket']['value']]);
+        $this->assertSame([200, 80, 14], [$i['stockValue']['value'], $i['stockValue']['costValue'], $i['stockValue']['lastYear']]);
+        $this->assertSame([40000], array_column($totals[0]['chart']['points'], 'revenue'));
+        $this->assertSame(['a', 'b'], $totals[0]['shops']);
     }
 
     /** Champs datés de l'instant de la lecture : hors de la comparaison */
@@ -337,7 +454,7 @@ class GroupAllShopsTest extends WebTestCase
         foreach (['shop_group_events', 'shop_group_invitations', 'shop_group_sites', 'shop_groups'] as $table) {
             $this->master->exec("DELETE FROM $table");
         }
-        $this->master->exec("DELETE FROM tenants WHERE code LIKE 'g2-casse-%'");
+        $this->master->exec("DELETE FROM tenants WHERE code LIKE 'g2-casse-%' OR code LIKE 'g2-alias-%'");
         foreach ([[MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE], [MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE]] as [$db, $code]) {
             $this->pdo($db)->exec("DELETE FROM refresh_tokens WHERE username LIKE 'g2-%@example.invalid'");
             $this->pdo($db)->exec("DELETE FROM \"user\" WHERE email LIKE 'g2-%@example.invalid'");
