@@ -24,7 +24,9 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 class PlatformIncidentService
 {
     /** Applications qui signalent (le serveur écrit lui-même `backend`) */
-    public const APPS = ['web', 'boutique', 'pos', 'mobile', 'livingmemory', 'gestion'];
+    public const APPS = ['web', 'boutique', 'pos', 'mobile', 'livingmemory', 'gestion', 'boussole', 'memoires']; // boussole, memoires : INC-2 (18/11/2026)
+    /** INC-2 : `context.repeats`, les répétitions de la minute regroupées par l'application, ajoutées au compte de l'incident */
+    public const MAX_REPEATS = 1000;
     public const DAILY_NEW_ANONYMOUS = 50;
     public const WRITE_EVERY_SECONDS = 60;
     /** Champs permis du contexte, valeurs simples seulement ; tout autre champ (un nom, un courriel, un corps de requête) est retiré */
@@ -59,10 +61,10 @@ class PlatformIncidentService
         $now = gmdate('Y-m-d H:i:s');
         if ($userId === null && !$this->incidents->exists($row['fingerprint'])
             && $this->incidents->anonymousCreatedSince($site, gmdate('Y-m-d 00:00:00')) >= self::DAILY_NEW_ANONYMOUS) {
-            $row = $this->overflow($site); // plafond du jour atteint : on compte sans créer
+            $row = ['repeats' => $row['repeats']] + $this->overflow($site); // plafond du jour atteint : on compte sans créer
         }
-        $saved = $this->incidents->upsert($row, 1, $now);
-        $this->incidents->addEvent($saved['id'], $now, $row['appVersion'], $userId !== null ? $this->userHash($userId) : null, self::requestId($requestId));
+        $saved = $this->incidents->upsert($row, $row['repeats'], $now);
+        $this->incidents->addEvent($saved['id'], $now, $row['appVersion'], $userId !== null ? $this->userHash($userId) : null, self::requestId($requestId), $row['repeats']);
 
         return ['incidentId' => $saved['id'], 'fingerprint' => $row['fingerprint']];
     }
@@ -202,7 +204,7 @@ class PlatformIncidentService
     /**
      * @param array<string, mixed> $body
      *
-     * @return array{fingerprint: string, tenant: ?string, app: string, appVersion: ?string, screen: ?string, route: ?string, level: string, message: string, context: ?string, anonymous: bool}
+     * @return array{fingerprint: string, tenant: ?string, app: string, appVersion: ?string, screen: ?string, route: ?string, level: string, message: string, context: ?string, anonymous: bool, repeats: int}
      */
     private function checked(array $body, ?string $site, bool $anonymous): array
     {
@@ -234,8 +236,14 @@ class PlatformIncidentService
             $places[$key] = is_string($value) && trim($value) !== '' ? PersonalDataMask::text(self::path($value), 160) : null;
         }
         $context = $body['context'] ?? null;
+        $repeats = 1;
         if ($context !== null && !is_array($context)) {
             $errors['context'] = 'INVALID_VALUE';
+        } elseif (is_array($context) && array_key_exists('repeats', $context)) {
+            $repeats = $context['repeats'];
+            if (!is_int($repeats) || $repeats < 1 || $repeats > self::MAX_REPEATS) {
+                $errors['context.repeats'] = 'INVALID_VALUE';
+            }
         }
         if ($errors !== []) {
             throw new GestionValidationException($errors);
@@ -244,7 +252,7 @@ class PlatformIncidentService
 
         return ['fingerprint' => self::fingerprint($site, (string) $app, $places['screen'] ?? $places['route'], $masked), 'tenant' => $site, 'app' => (string) $app,
             'appVersion' => $version, 'screen' => $places['screen'], 'route' => $places['route'], 'level' => (string) $level, 'message' => $masked,
-            'context' => is_array($context) ? self::context($context) : null, 'anonymous' => $anonymous];
+            'context' => is_array($context) ? self::context($context) : null, 'anonymous' => $anonymous, 'repeats' => (int) $repeats];
     }
 
     /** Liste blanche, valeurs simples masquées ; 2 Ko au plus (la pile d'appels part la première) */
