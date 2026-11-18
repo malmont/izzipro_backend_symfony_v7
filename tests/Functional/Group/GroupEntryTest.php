@@ -80,7 +80,7 @@ class GroupEntryTest extends WebTestCase
             ['POST', '/api/pos/gift-cards/ABC/cash-out', 'refund'],
             // relecture neuve, passe 2 : l'assistant IA du site, les clés des applications, le domaine personnalisé
             ['POST', '/api/site/assistant', 'assistant'], ['POST', '/api/site/assistant/actions/abcdef0123456789/confirm', 'assistant'], ['GET', '/api/app-keys', 'security'],
-            ['POST', '/api/site/domain', 'security'],
+            ['PUT', '/api/site/domain', 'security'],
             // décisions du chef : IA fermée (unités de la boutique), import des clients finaux fermé
             ['POST', '/api/gestion/console/messages', 'ai'], ['POST', '/api/gestion/conversations/1/messages', 'ai'], ['POST', '/api/products/ai/sheet', 'ai'],
             ['POST', '/api/site/imports', 'customers'], ['POST', '/api/site/imports/1/invitations', 'customers']] as [$method, $path, $reason]) {
