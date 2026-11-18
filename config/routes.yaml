@@ -29,3 +29,8 @@ loss_prevention_controllers:
 import_controllers:
     resource: ../src/Import/Controller/
     type: attribute
+
+# Incidents de la plateforme (lot INC-1a, 18/11/2026)
+incident_controllers:
+    resource: ../src/Incident/Controller/
+    type: attribute

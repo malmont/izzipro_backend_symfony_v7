@@ -1,7 +1,8 @@
 # Incidents et signalements : relevé des erreurs de toutes les applications et bogues signalés par les clients
 
 Cadrage du 10/11/2026, décidé par le propriétaire ; ajouts du 18/11/2026 (§ « Ajouts du propriétaire »). Nom du lot : **INCIDENTS** (INC-1 à
-INC-5). Rien n'est codé ; contrat à proposer au chef quand son tour vient.
+INC-5). **INC-1a codé le 18/11/2026** (§ « Lot INC-1a », sous Opus, à faire vérifier par Fable) ; INC-1b (entrée d'une source tierce)
+reporté par le propriétaire (pas d'outil tiers pour l'instant) ; INC-2 à INC-5 à venir.
 Deux circuits, deux publics, deux outils déjà en place : pas de nouvelle plateforme.
 
 ## Principe
@@ -120,3 +121,67 @@ l'Assistance (une route du site et un état lu sur le ticket) ; un essai de cloi
 2. Le courriel quotidien part-il au propriétaire seul ou à tout le support plateforme ?
 3. Outil de tickets externe de l'équipe, pour le lien `external_url`.
 4. Durée de conservation des captures d'écran (proposé : 180 jours).
+
+## Lot INC-1a : relevé des erreurs et boîte unique du super administrateur (codé le 18/11/2026, contrat validé par le chef)
+
+Base maître, `ops/sql/platform_incident_master.sql` (SQL seul, idempotent, relu par `tests/bootstrap.php`) : `platform_incident` (empreinte
+unique, site, application, version, écran ou route, gravité, message de 200 caractères, contexte, compte, sans jeton ou non, dates, état
+`new` / `acknowledged` / `fixed` / `ignored`, marque `reopened`, note, lien externe, `fixed_in`) et `platform_incident_event` (50 dernières
+occurrences par incident : date, version, empreinte du compte, identifiant de requête, répétitions). Code : `src/Incident/`.
+
+- **`POST /api/incidents/report`** `{ app, appVersion?, screen?, route?, level?, message, context? }` → 202 `{ incidentId, fingerprint }`.
+  - `app` : `web`, `boutique`, `pos`, `mobile`, `livingmemory`, `gestion` (`backend` est réservé au serveur) ; `level` : `error` (défaut),
+    `crash`, `warning` ; `appVersion` : 40 caractères `[\w.+-]`.
+  - Le **site** est celui de la requête (hôte ou jeton), jamais celui du corps ; l'**empreinte** est calculée par le serveur (site,
+    application, écran ou route, message normalisé : chiffres, identifiants et jetons sans effet), jamais reprise du corps.
+  - **Masquage** (`App\Services\Privacy\PersonalDataMask::text`, commun avec DON-1) : courriel « m***@domaine », numéro de 7 chiffres ou
+    plus « •••• 1234 », JWT et longues suites remplacés par « [jeton] », valeur de `password`, `token`, `secret`, `authorization`, `pin`…
+    remplacée par « [masqué] » ; requête et ancre retirées d'une adresse.
+  - **Contexte** : liste blanche `url`, `method`, `httpStatus`, `errorCode`, `component`, `action`, `os`, `osVersion`, `device`, `locale`,
+    `online`, `durationMs`, `stack` (1 500 caractères), valeurs simples seulement, 2 Ko au plus (la pile part la première). Tout autre
+    champ (un nom, un courriel, un corps de requête) est retiré.
+  - **Avec le jeton** de l'utilisateur : 120 rapports par site et par compte en 5 minutes ; le compte n'est gardé que par une empreinte
+    (16 caractères). Un jeton expiré : 401 du pare-feu, renvoyer sans jeton.
+  - **Sans jeton** : 30 rapports par site et par adresse IP en 5 minutes (429 `RATE_LIMITED`, `Retry-After`), et au plus **50 incidents
+    nouveaux par site et par jour** (UTC) ; au-delà, un seul incident « Plafond du jour atteint » du site (`app: backend`, `warning`)
+    compte les rapports, rien d'autre n'est créé. Un incident déjà connu compte toujours.
+  - 422 `VALIDATION_FAILED { fields }` (`REQUIRED`, `INVALID_VALUE`). Route ouverte pendant la construction d'une boutique
+    (`StorefrontGateSubscriber`).
+- **Pannes du serveur** (`ServerErrorIncidentSubscriber`) : toute réponse **5xx** devient un incident `app: backend` (route nommée, site,
+  classe et texte masqué de la panne, sans paramètres SQL ni texte entre guillemets ; jamais le corps ni les en-têtes). Une 4xx, 429
+  compris, n'est pas une panne. **Au plus une écriture par empreinte et par minute** : les autres sont comptées en cache et écrites avec
+  la suivante (rien n'est perdu). L'écriture se fait en fin de requête, après la réponse ; une panne de l'incident ne change jamais la
+  réponse.
+- **`framework.handle_all_throwables: true`** (décision du chef, 18/11/2026) : une `\Error` (TypeError…) levée pendant une requête passe par
+  `kernel.exception` comme une exception : réponse JSON neutre (`{"error":"Internal Server Error"}`, `ApiExceptionListener`) au lieu d'une
+  500 brute, et incident. Lu par le seul noyau HTTP : la console et les workers ne changent pas.
+- **Super administrateur seul** (`ROLE_PLATFORM_SUPPORT` reporté) :
+  - `GET /api/platform/incidents?status=&app=&tenant=&level=&page=&limit=` → `{ incidents [...], total, page, limit }` (50 par défaut,
+    100 au plus) ; 422 pour un filtre inconnu ;
+  - `GET /api/platform/incidents/{id}` → l'incident et ses 20 dernières occurrences (`events`) ; 404 `INCIDENT_NOT_FOUND` ;
+  - `PATCH /api/platform/incidents/{id}` `{ status?, note?, externalUrl? (http ou https), fixedIn? (80 caractères) }`. Un incident corrigé
+    qui revient redevient `new`, marqué `reopened` ; un incident ignoré reste ignoré et compte.
+  - EasyAdmin : **`/admin/plateforme/incidents`**, ouvert depuis la page « Plateforme » (bouton « Incidents de la plateforme ») : liste
+    filtrée, contexte, actions (état, corrigé dans, lien externe, note). Aucun changement du menu (compteur après le lot G-1).
+- **Courriel du jour** : `app:platform:incidents-digest` (minuteur `ops/systemd/platform-incidents-digest.timer`, 07:00 UTC, **à installer
+  par le propriétaire**) : incidents nouveaux des dernières 24 heures et incidents revenus, à l'adresse de la plateforme (variable
+  `POS_ALERT_PLATFORM_EMAIL`, la même que les alertes de la caisse, posée hors dépôt ; sans elle, rien ne part) ; aucun courriel sans
+  incident ; `--dry-run` compte sans envoyer. Puis **purge** : occurrences de plus de 90 jours, incidents corrigés ou ignorés depuis plus
+  d'un an.
+- Essais : `tests/Functional/Incident/PlatformIncidentTest.php` (masquage et garde-fou, regroupement, site de la requête, limites,
+  plafond du jour, \Error et rafale, cloisonnement, écran, courriel et purge). Une \Error naît dans un contrôleur par
+  `tests/Fake/FakeControllerErrorListener` (environnement de test seulement, en-tête `X-Test-Raise`).
+
+## Point de reprise (18/11/2026, arrêt du soir demandé par le propriétaire)
+
+- **Fait** : INC-1a codé, essais et mutations joués, remis au chaperon sur la branche `lot-inc1a` (au-dessus de DON-1, `lot-don1`). Il
+  part à la bascule de demain. Il y aura deux commits : `framework.handle_all_throwables: true` à part (changement global, limité aux
+  `\Error`), puis le lot.
+- **À la bascule** : SQL maître `ops/sql/platform_incident_master.sql` avant l'échange du code, puis `cache:clear` (routes, services,
+  écouteur nouveau). Le propriétaire installe le minuteur `ops/systemd/platform-incidents-digest.{service,timer}`. La variable
+  `POS_ALERT_PLATFORM_EMAIL` est déjà posée pour la caisse.
+- **À suivre : INC-2**, le branchement des sources une à une : caisse, application de gestion MAUI, Flutter (boutique mobile, Living
+  Memory), fronts web Next. On commence par le contrat de ce que chaque front envoie à `POST /api/incidents/report`, relayé par le chef.
+- **Reporté : INC-1b** (entrée authentifiée d'un outil tiers), décision du propriétaire du 18/11/2026 : pas d'outil tiers pour l'instant.
+- **Ensuite** : INC-3 (signalements, escalade depuis l'Assistance), INC-4 (bouton « Signaler un problème »), INC-5 (espace partenaire).
+  `ROLE_PLATFORM_SUPPORT` et le compteur du menu viendront après le lot G-1.

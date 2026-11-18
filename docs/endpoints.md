@@ -961,7 +961,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (118)
+## Administration (EasyAdmin) (120)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -1036,6 +1036,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/plateforme/droit/{id}/{action}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::act` |
 | POST | `/admin/plateforme/ia-credits` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::aiCredits` |
 | POST | `/admin/plateforme/ia-defauts` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::aiDefaults` |
+| POST | `/admin/plateforme/incidents/{id}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformIncidentsAdminController::update` |
+| GET | `/admin/plateforme/incidents` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformIncidentsAdminController::index` |
 | POST | `/admin/plateforme/livraison/credit` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shippingCredit` |
 | POST | `/admin/plateforme/livraison/frais` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shippingFees` |
 | POST | `/admin/plateforme/materiel/{code}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::lossHardware` |
