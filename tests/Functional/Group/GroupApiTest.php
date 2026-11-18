@@ -103,7 +103,11 @@ class GroupApiTest extends WebTestCase
         $this->master->exec("INSERT INTO shop_group_events (group_id, event, tenant_code) SELECT $group, 'invitation_asked', 'x' FROM generate_series(1, 9)");
         $this->call('POST', '/api/group/invitations', ['site' => 'site-inconnu'], 'siege', 202);
         $this->assertSame([429, 'GROUP_INVITE_LIMIT'], $this->refusal('POST', '/api/group/invitations', ['site' => MV_TEST_TENANT2_CODE], 'siege'));
-        $this->master->exec("UPDATE shop_group_events SET created_at = NOW() - INTERVAL '25 hours' WHERE group_id = $group");
+        // relecture neuve, passe 2 : dissoudre puis recréer le groupe ne remet pas la limite à zéro (comptée par siège)
+        $this->call('POST', '/api/group/leave', null, 'siege', 200);
+        $this->call('POST', '/api/group', null, 'siege', 201);
+        $this->assertSame([429, 'GROUP_INVITE_LIMIT'], $this->refusal('POST', '/api/group/invitations', ['site' => MV_TEST_TENANT2_CODE], 'siege'));
+        $this->master->exec("UPDATE shop_group_events SET created_at = NOW() - INTERVAL '25 hours'");
         $this->call('POST', '/api/group/invitations', ['site' => MV_TEST_TENANT2_CODE], 'siege', 202);
     }
 

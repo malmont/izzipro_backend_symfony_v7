@@ -41,7 +41,8 @@ final class LandingAiQuotaService
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly TenantConnectionProvider $tenantProvider,
-        private readonly ?\App\Services\Platform\PlatformModeService $platform = null // crédits par défaut de la plateforme (IA bornée, 08/11/2026)
+        private readonly ?\App\Services\Platform\PlatformModeService $platform = null, // crédits par défaut de la plateforme (IA bornée, 08/11/2026)
+        private readonly ?\Symfony\Bundle\SecurityBundle\Security $security = null,
     ) {
     }
 
@@ -55,6 +56,11 @@ final class LandingAiQuotaService
      */
     public function reserve(string $mode, string $componentKey, int $cost, ?string $user, string $prompt, int $ttlSeconds = self::RESERVATION_TTL_SECONDS, ?string $memoryKey = null): AiUsage
     {
+        // lot G-1 (décision du chef du 18/11/2026) : le directeur d'un groupe ne consomme jamais les unités IA de la boutique où il est entré
+        // (le débit au siège viendra dans un lot suivant) ; point unique, quel que soit l'outil (403 : AI_NOT_INCLUDED chez les appelants)
+        if ($this->security?->getUser() instanceof \App\Security\Entry\GroupOperator) {
+            throw new LandingAiException(403, 'IA non incluse', 'Les outils d\'IA ne sont pas ouverts au directeur du groupe dans une boutique.');
+        }
         $em = $this->emProvider->getEntityManager();
         $connection = $em->getConnection();
         $now = new \DateTimeImmutable();

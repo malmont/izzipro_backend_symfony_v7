@@ -77,7 +77,13 @@ class GroupEntryTest extends WebTestCase
             ['POST', '/api/me/contexts/enter', 'account'],
             // relecture neuve : un identifiant mal formé ne passe plus à côté de la règle ; les comptes et les cartes-cadeaux
             ['POST', '/api/order/cancel/5', 'refund'], ['POST', '/api/support/agents', 'accounts'],
-            ['POST', '/api/pos/gift-cards/ABC/cash-out', 'refund']] as [$method, $path, $reason]) {
+            ['POST', '/api/pos/gift-cards/ABC/cash-out', 'refund'],
+            // relecture neuve, passe 2 : l'assistant IA du site, les clés des applications, le domaine personnalisé
+            ['POST', '/api/site/assistant', 'assistant'], ['POST', '/api/site/assistant/actions/1/confirm', 'assistant'], ['GET', '/api/app-keys', 'security'],
+            ['POST', '/api/site/domain', 'security'],
+            // décisions du chef : IA fermée (unités de la boutique), import des clients finaux fermé
+            ['POST', '/api/gestion/console/messages', 'ai'], ['POST', '/api/gestion/conversations/1/messages', 'ai'], ['POST', '/api/products/ai/sheet', 'ai'],
+            ['POST', '/api/site/imports', 'customers'], ['POST', '/api/site/imports/1/invitations', 'customers']] as [$method, $path, $reason]) {
             $this->assertSame([403, $reason], $this->reason($method, $path, $token), "$method $path");
         }
         // formes déformées d'une route d'argent : jamais servies (refus de la garde ou route introuvable)
@@ -85,6 +91,21 @@ class GroupEntryTest extends WebTestCase
             $this->assertContains($this->request('POST', $odd, $token, MV_TEST_TENANT2_HOST, [])->getStatusCode(), [403, 404, 405], $odd);
         }
         $this->assertSame([403, 'GROUP_FORBIDDEN'], $this->reason('POST', '/api/group/leave', $token, null, 'code'), 'le directeur ne retire pas la boutique depuis la boutique');
+        // la fiche du site : ni l'adresse qui reçoit les commandes, ni la devise ; le reste s'écrit
+        $sheet = (int) $this->pdo(MV_TEST_TENANT2_DB)->query('SELECT id FROM entreprise ORDER BY id LIMIT 1')->fetchColumn();
+        $this->assertSame([403, 'rights'], $this->reason('PUT', "/api/entreprise/$sheet", $token, ['email' => 'detourne@example.invalid']));
+        $this->assertSame([403, 'payment'], $this->reason('PUT', "/api/entreprise/$sheet", $token, ['currency' => 'EUR']));
+        // le point unique des unités IA refuse le directeur, quel que soit l'outil
+        static::getContainer()->get('security.token_storage')->setToken(new \Symfony\Component\Security\Http\Authenticator\Token\PostAuthenticationToken(
+            new \App\Security\Entry\GroupOperator(1, 1, 'Siège', 'Hélène', MV_TEST_TENANT_CODE), 'main', ['ROLE_ADMIN']));
+        try {
+            static::getContainer()->get(\App\Services\LandingAiService\LandingAiQuotaService::class)->reserve('assistant', 'essai', 1, 'Groupe Siège, Hélène', 'essai');
+            $this->fail('une réservation d\'unités par le directeur doit être refusée');
+        } catch (\App\Services\LandingAiService\LandingAiException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+        } finally {
+            static::getContainer()->get('security.token_storage')->setToken(null);
+        }
         $this->assertSame([403, 'TAXES_VERIFY_FORBIDDEN'], $this->reason('POST', '/api/site/taxes/verify', $token, null, 'code'));
 
         // la boutique quitte le groupe : la requête suivante du directeur est refusée
@@ -161,7 +182,10 @@ class GroupEntryTest extends WebTestCase
             'GET /admin?crudAction=index&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\BookCrudController'),
             'GET /admin?crudAction=refundLatest&entityId=1&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\SubscriptionCrudController'),
             'GET /admin?crudAction=uneActionPropre&entityId=1&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\ProductCrudController'),
-            'GET /admin/memoires/ai-quotas', 'POST /admin/mon-site/module/module.boutique/off'] as $line) {
+            'GET /admin/memoires/ai-quotas', 'POST /admin/mon-site/module/module.boutique/off',
+            'GET /admin?crudAction=edit&entityId=1&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\CashRegisterCrudController'),
+            'GET /admin?crudAction=new&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\CashRegisterCrudController'),
+            'POST /admin/mon-site/assistant', 'POST /admin/mon-site/domaine'] as $line) {
             [$method, $url] = explode(' ', $line, 2);
             $this->client->request($method, 'https://' . MV_TEST_TENANT2_HOST . $url, [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
             $this->assertSame(403, $this->client->getResponse()->getStatusCode(), $line);

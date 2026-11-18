@@ -136,7 +136,9 @@ class PlatformAccessJournal
             $after = is_array($after) ? $after : [];
 
             return ['at' => new \DateTimeImmutable((string) $row['created_at'], new \DateTimeZone('UTC')), 'account' => (string) $row['user_identifier'],
-                'channel' => 'group_write', 'channelLabel' => sprintf('Modification par le directeur du groupe : %s %s', (string) ($after['method'] ?? ''), (string) ($after['path'] ?? ''))];
+                'channel' => 'group_write', 'channelLabel' => sprintf('Modification par le directeur du groupe : %s %s%s', (string) ($after['method'] ?? ''), (string) ($after['path'] ?? ''),
+                    // une écriture d'EasyAdmin : l'écran, l'action et la fiche (relecture neuve, passe 2)
+                    isset($after['screen']) ? sprintf(' (%s%s%s)', (string) preg_replace('/^.*\\\\/', '', (string) $after['screen']), isset($after['action']) ? ', ' . $after['action'] : '', isset($after['entityId']) ? ' n° ' . $after['entityId'] : '') : '')];
         }, $rows);
     }
 

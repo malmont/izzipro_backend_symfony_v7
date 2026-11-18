@@ -90,6 +90,45 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         ['#(^|/)(users?|accounts?|comptes?|roles?|team-roles?)(/|$)#i', [], 'accounts'],
         ['#^/api/support/agents(/|$)#', [], 'accounts'],
         ['#^/admin/memoires(/|$)#', [], 'memoires'],
+        // relecture neuve, passe 2 : l'assistant IA du site confirme des remboursements et des gestes de module ; les clés des applications
+        // (activer ou révoquer une caisse) ; le domaine personnalisé (l'adresse de la boutique)
+        ['#^/api/site/assistant(/|$)#', [], 'assistant'],
+        ['#^/admin/mon-site/assistant(/|$)#', [], 'assistant'],
+        ['#^/api/app-keys(/|$)#', [], 'security'],
+        ['#^/api/site/domain(/|$)#', [], 'security'],
+        ['#^/admin/mon-site/domaine(/|$)#', [], 'security'],
+        // garde-fou du chef (toutes les écritures classées une à une, `GroupWritesClassificationTest`) : ce que la liste noire laissait encore
+        // la plateforme et les agences (déjà refusées par leur rôle : fermées ici aussi, en clair)
+        ['#^/(api/platform|admin/(plateforme|super-admin|redis|workers|technique|short-code))(/|$)#', [], 'platform'],
+        ['#^/api/admin-settings/presets(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'platform'],
+        ['#^/api/agency(/|$)#', [], 'rights'],
+        // la caisse (tiroir, fonds, ventes, cartes-cadeaux, cautions, NIP, clients et fidélité) : gestes d'un caissier, jamais du directeur
+        ['#^/api/(caisse|pos)(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'cash'],
+        ['#^/api/cash-registers(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'payment'],
+        // les achats d'un client (commande, panier) et l'achat d'une étiquette de transport (crédit de livraison)
+        ['#^/api/(order|cart)(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'payment'],
+        ['#^/api/shipping/buy(/|$)#', [], 'payment'],
+        ['#^/admin/orders/[^/]+/etiquette(/|$)#', [], 'payment'],
+        // les droits : demander l'assistance d'une agence, le groupe lui-même, la vérification des taxes, l'adhésion et l'activation des applications
+        ['#^/(api/site|admin)/assistance(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'rights'],
+        ['#^/api/(group|site/group-invitations|site/taxes)(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'rights'],
+        ['#^/admin/taxes/verifier(/|$)#', ['POST'], 'rights'],
+        ['#^/api/(apps/join|app/activate)(/|$)#', [], 'keys'],
+        // le boîtier réel de la prévention des pertes (jumelage, clé, révocation, appareils) ; l'exercice simulé reste ouvert
+        ['#^/api/gestion/pertes/boitiers(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'keys'],
+        // les appels des machines (boîtier, webhooks signés) et les autres applications (Boussole ESG)
+        ['#^/api/(pertes/boitier|webhooks)(/|$)#', [], 'technical'],
+        ['#^/api/boussole(/|$)#', [], 'app'],
+        // décisions du chef (18/11/2026) : les outils d'IA (unités de la BOUTIQUE ; débit au siège dans un lot suivant) — fermés aussi au point
+        // unique de réservation des unités (`LandingAiQuotaService::reserve`) — et l'import des clients finaux et leurs invitations
+        ['#^/api/gestion/(console|conseils/actualiser|preparation/avis|statistiques/annee/avis)(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'ai'],
+        ['#^/api/gestion/conversations/[^/]+/messages(/|$)#', [], 'ai'],
+        ['#^/api/gestion/documents(/[^/]+/relire)?/?$#', ['POST'], 'ai'],
+        ['#^/api/gestion/pertes/(constats|exercices)/[^/]+/avis(/|$)#', [], 'ai'],
+        ['#^/api/periodes/[^/]+/simulation/commentaire(/|$)#', [], 'ai'],
+        ['#^/api/(products/ai|landingpage-ai)(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'ai'],
+        ['#^/admin/produits/(depuis-photo|ia-en-lot|[^/]+/ia)(/|$)#', [], 'ai'],
+        ['#^/api/site/imports(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'customers'],
         // Mémoires Vivantes : un projet à part (décision du propriétaire du 16/11/2026), outil de l'équipe et de ses clients, jamais du
         // directeur d'un groupe (ses routes attendent un compte du site : trouvé par la sonde de G-1b)
         ['#^/api/memoires(/|$)#', [], 'memoires'],
@@ -280,6 +319,20 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         if ($reason === null && $path === '/admin' && $adminTarget !== null && is_string($crudAction) && $crudAction !== '' && !in_array($crudAction, self::GROUP_EA_ACTIONS, true)) {
             $reason = 'action';
         }
+        // garde-fou du chef : la fiche du site ne change ni sa devise ni son terminal de paiement (champs du corps)
+        if ($reason === null && preg_match('#^/api/entreprise(/|$)#', $path) === 1 && in_array($request->getMethod(), ['POST', 'PUT', 'PATCH'], true)) {
+            $body = json_decode((string) $request->getContent(), true);
+            foreach (is_array($body) ? array_keys($body) : [] as $key) {
+                if (preg_match(self::GROUP_SHEET_CLOSED, (string) $key) === 1) {
+                    $reason = preg_match('/email$/i', (string) $key) === 1 ? 'rights' : 'payment';
+                }
+            }
+        }
+        // relecture neuve, passe 2, et classement du chef : les écrans d'argent, de caisse, de journaux et de clés sont en LECTURE SEULE
+        $crud = $request->query->get('crudControllerFqcn');
+        if ($reason === null && $path === '/admin' && is_string($crud) && $crud !== '') {
+            $reason = self::groupScreenDecision($crud, is_string($crudAction) && $crudAction !== '' ? $crudAction : 'index');
+        }
         if ($reason !== null) {
             $event->setResponse(self::isAdmin($path) ? $this->adminRefusal($reason) : $this->refusal($reason));
 
@@ -342,8 +395,44 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
 
     /** Lot AG-3c : les actions d'un écran CRUD d'EasyAdmin qui ne font que LIRE (une assistance en consultation n'ouvre qu'elles) */
     private const EA_READS = ['index', 'detail'];
+    /** Lot G-1 : champs de la fiche du site (API et EasyAdmin) que le directeur ne voit ni n'écrit : devise, terminal et paiements Stripe */
+    // (décision du chef : l'adresse qui reçoit les commandes, et celle des demandes, sont fermées : rediriger les commandes revient à les détourner)
+    public const GROUP_SHEET_CLOSED = '/^(pos(Terminal|TapToPay|Bluetooth|Stripe)|currency$|stripe|email$|formSubmissionsEmail$)/i';
     /** Lot G-1b : les seules actions d'un écran CRUD servies au directeur d'un groupe */
-    private const GROUP_EA_ACTIONS = ['index', 'detail', 'new', 'edit', 'delete', 'autocomplete', 'renderFilters'];
+    public const GROUP_EA_ACTIONS = ['index', 'detail', 'new', 'edit', 'delete', 'autocomplete', 'renderFilters'];
+    /**
+     * Lot G-1 (garde-fou du chef, classement des écrans un à un) : écrans d'EasyAdmin servis au directeur EN LECTURE SEULE (ni créer, ni
+     * modifier, ni supprimer), avec la raison : l'argent (paiements, caisse, commandes, étiquettes achetées, formules d'abonnement, journal
+     * des unités IA), les journaux inaltérables, les clés de services tiers.
+     */
+    public const GROUP_EA_READ_ONLY = [
+        'PaymentsCrudController' => 'payment', 'PaymentMethodCrudController' => 'payment', 'PaymentTypeCrudController' => 'payment', 'StatusPaymentCrudController' => 'payment',
+        'OrderCrudController' => 'payment', 'OrderAllCrudController' => 'payment', 'OrderItemsCrudController' => 'payment', 'OrderItemsListController' => 'payment', 'OrderTaxCrudController' => 'payment',
+        'SubscriptionPlanCrudController' => 'payment', 'ShippingLabelCrudController' => 'payment', 'AiUsageCrudController' => 'payment',
+        'CaisseCrudController' => 'cash', 'CashDetailsCrudController' => 'cash', 'CashDetailsListController' => 'cash', 'CashRegisterCrudController' => 'cash',
+        'CashRegisterReportCrudController' => 'cash', 'TransactionCaisseCrudController' => 'cash', 'TransactionCaisseListController' => 'cash',
+        'TransactionTypeCrudController' => 'cash', 'TypeCashCrudController' => 'cash', 'PosAuditLogCrudController' => 'cash',
+        'EasyPostConfigurationCrudController' => 'keys', 'GooglePlacesConfigCrudController' => 'keys',
+    ];
+
+    /** Lot G-1 : la décision pour une action d'un écran CRUD d'EasyAdmin servie au directeur ; null = servie */
+    public static function groupScreenDecision(string $crudFqcn, string $action): ?string
+    {
+        $target = ScreenRegistry::adminCrud($crudFqcn);
+        if ($target === null) {
+            return 'unclassified';
+        }
+        $reason = self::groupDecision('GET', '/admin', $target);
+        if ($reason !== null) {
+            return $reason;
+        }
+        if (!in_array($action, self::GROUP_EA_ACTIONS, true)) {
+            return 'action';
+        }
+        $short = substr($crudFqcn, (int) strrpos($crudFqcn, '\\') + 1);
+
+        return in_array($action, ['new', 'edit', 'delete'], true) ? (self::GROUP_EA_READ_ONLY[$short] ?? null) : null;
+    }
     /** Attribut posé sur une requête d'EasyAdmin : vrai si elle ne fait que lire */
     private const EA_READ = '_entry_ea_read';
 

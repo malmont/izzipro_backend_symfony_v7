@@ -550,7 +550,7 @@ class DashboardController extends AbstractDashboardController
     {
         try {
             // relecture d'AG-3c : jamais pour l'opérateur d'une agence entrée (l'assistant lit les ventes ; son jeton ouvre « Mon site »)
-            if ($this->csrf === null || !$this->isGranted('ROLE_ADMIN') || $this->getUser() instanceof \App\Security\Entry\ExternalOperator) {
+            if ($this->csrf === null || !$this->isGranted('ROLE_ADMIN') || $this->getUser() instanceof \App\Security\Entry\ExternalOperator || $this->getUser() instanceof \App\Security\Entry\GroupOperator) {
                 return '';
             }
             $code = (string) ($this->tenantConnectionManager->getCurrentTenantCode() ?? '');

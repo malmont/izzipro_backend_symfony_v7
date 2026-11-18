@@ -64,7 +64,7 @@ class GroupService
         }
         $name = (string) ($this->tenantName($site) ?? $site);
         try {
-            $id = $this->groups->create(mb_substr('groupe-' . $site, 0, 42) . '-' . bin2hex(random_bytes(3)), $name, $site, self::DEFAULT_MAX_SHOPS, $by->getUserIdentifier());
+            $id = $this->groups->create(mb_substr('groupe-' . $site, 0, 42) . '-' . bin2hex(random_bytes(3)), $name, $site, self::DEFAULT_MAX_SHOPS, self::who($by));
         } catch (\PDOException $e) {
             if ($e->getCode() === '23505') {
                 throw new GroupException('GROUP_ALREADY_MEMBER', 409, 'Ce site appartient déjà à un groupe.');
@@ -118,7 +118,7 @@ class GroupService
         if ($consent !== self::CONSENT_VERSION) {
             throw new GroupException('GROUP_CONSENT_REQUIRED', 422, 'Pour rejoindre le groupe, acceptez le texte qui vous est présenté.', ['consentVersion' => self::CONSENT_VERSION]);
         }
-        $outcome = $this->groups->addShop((int) $invitation['group_id'], $site, 'associated', $by->getUserIdentifier());
+        $outcome = $this->groups->addShop((int) $invitation['group_id'], $site, 'associated', self::who($by));
         if ($outcome === 'gone') {
             throw new GroupException('GROUP_INVITATION_NOT_FOUND', 404, 'Invitation inconnue, échue ou déjà traitée.');
         }
@@ -128,7 +128,7 @@ class GroupService
         if ($outcome === 'limit') {
             throw new GroupException('GROUP_SHOP_LIMIT', 409, 'Le groupe a atteint son nombre de boutiques.');
         }
-        $this->groups->answer($id, true, $by->getUserIdentifier());
+        $this->groups->answer($id, true, self::who($by));
         $this->groups->event((int) $invitation['group_id'], 'joined', $site, ['invitation' => $id, 'consentVersion' => self::CONSENT_VERSION], self::who($by));
 
         return $this->mine($site);
@@ -138,7 +138,7 @@ class GroupService
     public function refuse(string $site, int $id, User $by): void
     {
         $invitation = $this->openInvitation($site, $id);
-        $this->groups->answer($id, false, $by->getUserIdentifier());
+        $this->groups->answer($id, false, self::who($by));
         $this->groups->event((int) $invitation['group_id'], 'refused', $site, ['invitation' => $id], self::who($by));
     }
 
@@ -161,7 +161,7 @@ class GroupService
             throw new GroupException('GROUP_HEAD_ONLY', 403, 'Seul le siège retire une autre boutique du groupe.');
         }
         if ($target === $group['head_tenant_code']) {
-            if (!$this->groups->dissolve((int) $group['id'], (string) $group['head_tenant_code'], $by->getUserIdentifier())) {
+            if (!$this->groups->dissolve((int) $group['id'], (string) $group['head_tenant_code'], self::who($by))) {
                 throw new GroupException('GROUP_NOT_EMPTY', 409, 'Le siège dissout le groupe quand il n\'a plus d\'autre boutique.');
             }
             $this->entries?->endForGroup((int) $group['id'], null, 'dissolved'); // lot G-1b : plus aucune entrée du directeur
@@ -169,7 +169,7 @@ class GroupService
 
             return $this->mine($site);
         }
-        if (!$this->groups->leave((int) $group['id'], $target, $by->getUserIdentifier())) {
+        if (!$this->groups->leave((int) $group['id'], $target, self::who($by))) {
             throw new GroupException('GROUP_NOT_MEMBER', 404, 'Cette boutique n\'est pas dans le groupe.');
         }
         $this->entries?->endForGroup((int) $group['id'], $target, 'left'); // lot G-1b : les entrées du directeur dans cette boutique se ferment tout de suite

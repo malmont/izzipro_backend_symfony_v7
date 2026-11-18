@@ -57,6 +57,11 @@ final class AdminFieldGuard implements AuthorizationCheckerInterface
 
     public function isGranted(mixed $attribute, mixed $subject = null): bool
     {
+        // lot G-1, relecture neuve (passe 2) : le directeur d'un groupe ne voit ni ne règle le terminal de paiement Stripe ni la devise de la fiche
+        if ($attribute === Permission::EA_VIEW_FIELD && $subject instanceof FieldDto && $this->security->getUser() instanceof GroupOperator
+            && preg_match(EntryModeGuardSubscriber::GROUP_SHEET_CLOSED, (string) $subject->getProperty()) === 1) {
+            return false;
+        }
         if ($attribute === Permission::EA_VIEW_FIELD && $subject instanceof FieldDto && $this->security->getUser() instanceof ExternalOperator) {
             $screen = $this->screen();
             // un écran que le registre ne connaît pas : aucun champ (la garde du mode l'a déjà fermé)

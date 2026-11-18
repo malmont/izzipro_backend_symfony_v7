@@ -142,7 +142,9 @@ class GroupRepository
         $pdo->beginTransaction();
         try {
             $pdo->prepare('SELECT id FROM shop_groups WHERE id = ? FOR UPDATE')->execute([$groupId]);
-            $count = $pdo->prepare("SELECT COUNT(*) FROM shop_group_events WHERE group_id = ? AND event = 'invitation_asked' AND created_at > NOW() - INTERVAL '1 day'");
+            // relecture neuve, passe 2 : compté par SIÈGE (tous ses groupes, dissous compris) : dissoudre et recréer ne remet pas la limite à zéro
+            $count = $pdo->prepare("SELECT COUNT(*) FROM shop_group_events e JOIN shop_groups g ON g.id = e.group_id WHERE g.head_tenant_code = (SELECT head_tenant_code FROM shop_groups WHERE id = ?)
+                AND e.event = 'invitation_asked' AND e.created_at > NOW() - INTERVAL '1 day'");
             $count->execute([$groupId]);
             if ((int) $count->fetchColumn() >= $perDay) {
                 $pdo->rollBack();
