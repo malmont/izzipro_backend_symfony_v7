@@ -44,7 +44,6 @@ class GroupAllShopsTest extends WebTestCase
 
     protected function tearDown(): void
     {
-        static::getContainer()->get(PlatformModeService::class)->setMode('demo', 'test');
         $this->clean();
         parent::tearDown();
     }
@@ -181,18 +180,36 @@ class GroupAllShopsTest extends WebTestCase
 
     public function testAShopWithoutTheModuleIsListedAsSuchInLiveMode(): void
     {
-        $this->group();
-        $director = $this->account(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'directeur', ['ROLE_ADMIN']);
-        static::getContainer()->get(PlatformModeService::class)->setMode('live', 'test');
-        $this->module(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'is_management_app_active', true);
-        $this->module(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'is_management_app_active', false);
+        // La plateforme entière n'est PAS passée en mode réel (cela changerait les droits de module des autres essais) : le lecteur reçoit
+        // une plateforme simulée « réelle », et la boutique perd le module de gestion le temps de l'essai.
+        $groupId = $this->group();
+        $container = static::getContainer();
+        $provider = $container->get(TenantEntityManagerProvider::class);
+        $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $live = new class ($container->get(TenantConnectionManager::class), $container->get(\Symfony\Contracts\Cache\CacheInterface::class), $container->get(\Psr\Log\LoggerInterface::class)) extends PlatformModeService {
+            public function isDemo(): bool
+            {
+                return false;
+            }
+        };
+        $reader = new AllShopsReader($provider, $container->get(TenantConnectionProvider::class), $container->get(\App\Services\Group\GroupRepository::class),
+            $container->get(\App\Services\FeatureAccess\ModuleAccessService::class), $live, $container->get(\App\Services\CaisseService\StoreClock::class),
+            $container->get(\App\Services\BoutiqueSettingsService\TenantCurrencyProvider::class), $container->get(\Symfony\Contracts\Cache\TagAwareCacheInterface::class),
+            $container->get(\Psr\Log\LoggerInterface::class));
+        $read = static fn (): array => ['data' => ['n' => 1]];
+        $columns = 'is_management_app_active';
+        $before = [$this->pdo(MV_TEST_TENANT_DB)->query("SELECT $columns FROM entreprise ORDER BY id LIMIT 1")->fetchColumn(), $this->pdo(MV_TEST_TENANT2_DB)->query("SELECT $columns FROM entreprise ORDER BY id LIMIT 1")->fetchColumn()];
         try {
-            $all = $this->json('GET', '/api/gestion/journee', $director, MV_TEST_TENANT_HOST, GroupScope::VALUE);
-            $this->assertSame([GroupScope::OK, GroupScope::MODULE_OFF], array_column($all['shops'], 'status'));
-            $this->assertArrayNotHasKey('data', $all['shops'][1]);
-            $this->assertSame([[MV_TEST_TENANT_CODE]], array_column($all['totals'], 'shops'), 'les totaux ne portent que les boutiques lues');
+            $this->module(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, $columns, true);
+            $this->module(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, $columns, false);
+            $out = $reader->read(['id' => $groupId, 'name' => 'Siège'], 'gestion_journee', '/api/gestion/journee', ['essai' => $this->tag], $read);
+            $this->assertSame([GroupScope::OK, GroupScope::MODULE_OFF], array_column($out['shops'], 'status'));
+            $this->assertArrayNotHasKey('data', $out['shops'][1]);
+            $this->assertSame([[MV_TEST_TENANT_CODE]], array_column(AllShopsMerger::losses(array_map(static fn (array $s): array => $s + ($s['status'] === GroupScope::OK
+                ? ['data' => AllShopsMerger::lossPart([])] : []), $out['shops'])), 'shops'), 'les totaux ne portent que les boutiques lues');
         } finally {
-            $this->module(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'is_management_app_active', true);
+            $this->module(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, $columns, in_array($before[0], [true, 1, '1', 't'], true));
+            $this->module(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, $columns, in_array($before[1], [true, 1, '1', 't'], true));
         }
     }
 
