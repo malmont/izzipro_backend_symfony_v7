@@ -241,7 +241,7 @@
                 <td><code>{{ r.tenant_code }}</code></td><td>n° {{ r.subscription_id }}</td>
                 <td>{{ r.attempts }}{% if r.alerted %} <span class="badge bg-danger">incident</span>{% endif %}</td>
                 <td>{{ r.next_retry_at }}</td><td class="small"><code>{{ r.last_error_class ?? '—' }}</code></td>
-                <td><form method="post" action="{{ path('admin_plateforme_offer_retry', {id: r.id}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-outline-primary">Rejouer</button></form></td>
+                <td><form method="post" action="{{ path('admin_plateforme_offer_retry', {id: r.id}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm" style="background:#1e3a8a;color:#ffffff;border:1px solid #1e3a8a;font-weight:600">Rejouer</button></form></td>
             </tr>
         {% else %}<tr><td colspan="6" class="text-muted">File vide : tous les droits vendus sont posés.</td></tr>{% endfor %}
         </tbody>
